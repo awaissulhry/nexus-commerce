@@ -51,8 +51,9 @@ const lineFields = {
   /** On the version's price basis: net for a business, VAT included for a consumer. */
   unitPrice: money.price(unitPrice().nullish()),
   listUnitPrice: money.price(unitPrice().nullish()),
-  /** A discount off the list price, percent: the unit price follows (never with a unit price). */
-  discountPct: pct.nullish(),
+  /** A discount off the list price, percent: the unit price follows (never with a unit price). B-CP-011/012 (the money wall,
+   * review A8): a percent of the price is a price: money.price, so a caller without the grain cannot change a price blind. */
+  discountPct: money.price(pct.nullish()),
   description: text(MAX_TEXT.description).nullish(),
   note: text(MAX_TEXT.note).nullish(),
 }
@@ -79,7 +80,8 @@ const lineView = output({
   quantity: z.number().int(),
   listUnitPrice: money.price(z.string().nullable()),
   unitPrice: money.price(z.string()),
-  discountPct: z.string().nullable(),
+  // B-CP-012: a percent of the price is a price.
+  discountPct: money.price(z.string().nullable()),
   netAmount: money.price(z.number().int()),
   vatRatePct: z.string(),
   vatNature: z.string().nullable(),
@@ -634,7 +636,8 @@ const customerLineView = output({
   quantity: z.number().int(),
   /** On the version's basis: VAT included for a consumer. */
   unitPrice: money.price(z.string()),
-  discountPct: z.string().nullable(),
+  // B-CP-012: a percent of the price is a price (the link holds the price grain: unchanged for the customer).
+  discountPct: money.price(z.string().nullable()),
   netAmount: money.price(z.number().int()),
   vatAmount: money.price(z.number().int()),
   vatRatePct: z.string(),

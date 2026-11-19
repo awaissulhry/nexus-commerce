@@ -67,11 +67,13 @@ async function as(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, body?:
 const refused = async (method: 'GET' | 'POST', url: string, body: unknown, status: number): Promise<Json> => (await as(method, url, body, status)).error
 
 const SHIPPING: Permission[] = ['shipping.view', 'shipping.manage', 'shipping.pack', 'shipping.ddt.issue', 'shipping.ddt.cancel', 'files.read']
-const SALES: Permission[] = ['orders.view', 'orders.manage', 'money.price']
+// B-CP-011: Sales holds no price grain (the money wall); the Owner (every grain) reads the amounts.
+const SALES: Permission[] = ['orders.view', 'orders.manage']
 const grant = (permissions: Permission[], companies: Grant['companies'] = 'all'): Grant => ({ permissions, companies, sites: 'all', parties: 'all' })
 const office = (tenantId: string, grants: Grant[]): SessionContext => ({ audience: 'office', tenantId, actorId: newId(), grants })
 const SESSIONS: Record<string, () => SessionContext> = {
   sales: () => office(A.tenant, [grant(SALES)]),
+  owner: () => office(A.tenant, [grant([...SALES, 'money.price', 'money.cost', 'money.margin'])]),
   viewer: () => office(A.tenant, [grant(['orders.view', 'money.price'])]),
   warehouse: () => office(A.tenant, [grant(SHIPPING)]),
   quality: () => office(A.tenant, [grant(TRAVEL_DOCUMENT_PERMISSIONS)]),
@@ -219,7 +221,11 @@ describe('the office opens the balance before shipping: a deposit request of its
     const due = addDays(TODAY(), 10)
     const opened = (await wall('sales', 'POST', `${scheduleUrl()}/${ids.balanceStep}/request`, { version: balance.version, dueDate: due }, 201)).body
     S.balanceRequest = opened.depositRequestId
-    expect(opened.steps.map((entry: Json) => [entry.kind, entry.status, entry.amount, entry.dueDate, entry.depositRequestId])).toEqual([
+    // B-CP-011: Sales opens it but sees no amount (the keys are absent); the Owner reads the step's amount.
+    expect(opened).not.toHaveProperty('grossAmount')
+    expect(opened.steps.every((entry: Json) => !('amount' in entry))).toBe(true)
+    const priced = (await wall('owner', 'GET', scheduleUrl(), undefined, 200)).body
+    expect(priced.steps.map((entry: Json) => [entry.kind, entry.status, entry.amount, entry.dueDate, entry.depositRequestId])).toEqual([
       ['DEPOSIT', 'OPEN', 30000, null, ids.deposit],
       ['BEFORE_SHIPPING', 'OPEN', 50000, due, S.balanceRequest],
       ['ON_INVOICE', 'OPEN', 22480, null, null],
@@ -284,7 +290,11 @@ describe('art. 6 c.4: the deposit and the balance paid before the goods leave, e
   it('the step follows its request (PAID with the payment); invoicing the step again finds nothing left to invoice', async () => {
     await followDeposit(ids.deposit)
     await followDeposit(S.balanceRequest)
-    const schedule = (await wall('sales', 'GET', scheduleUrl(), undefined, 200)).body
+    // B-CP-011: the amounts are the Owner's read; Sales reads the steps without them.
+    const schedule = (await wall('owner', 'GET', scheduleUrl(), undefined, 200)).body
+    const salesSchedule = (await wall('sales', 'GET', scheduleUrl(), undefined, 200)).body
+    expect(salesSchedule).not.toHaveProperty('paidAmount')
+    expect(salesSchedule).not.toHaveProperty('openAmount')
     expect(schedule.steps.map((entry: Json) => [entry.kind, entry.status])).toEqual([
       ['DEPOSIT', 'PAID'],
       ['BEFORE_SHIPPING', 'PAID'],

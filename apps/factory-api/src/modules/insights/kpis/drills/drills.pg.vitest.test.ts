@@ -35,14 +35,17 @@ const SEED_DIR = fileURLToPath(new URL('../../../../../../../packages/factory-db
 const NS = 'insights-kpis429'
 const T = seedUuid(NS, 'tenant')
 
-const PEOPLE = { owner: newId(), planner: newId(), sales: newId(), narrow: newId(), production: newId(), buyer: newId(), finance: newId(), admin: newId() } as const
+const PEOPLE = { owner: newId(), planner: newId(), sales: newId(), salesPriced: newId(), narrow: newId(), production: newId(), buyer: newId(), finance: newId(), admin: newId() } as const
 type Person = keyof typeof PEOPLE
-const ROLE_OF: Record<Person, string> = { owner: 'owner', planner: 'planner', sales: 'sales', narrow: 'sales', production: 'production_manager', buyer: 'buyer', finance: 'finance', admin: 'admin' }
+const ROLE_OF: Record<Person, string> = { owner: 'owner', planner: 'planner', sales: 'sales', salesPriced: 'sales', narrow: 'sales', production: 'production_manager', buyer: 'buyer', finance: 'finance', admin: 'admin' }
 const SESSIONS: Record<string, SessionContext> = {}
-const grantOf = (role: string, parties: Grant['parties'] = 'all'): Grant => {
+const grantOf = (role: string, parties: Grant['parties'] = 'all', extra: readonly Permission[] = []): Grant => {
   const template = templateOf(role)!
-  return { permissions: [...template.permissions, ...template.grains.map((grain) => grainPermission(grain) as Permission)], companies: 'all', sites: 'all', parties }
+  return { permissions: [...template.permissions, ...template.grains.map((grain) => grainPermission(grain) as Permission), ...extra], companies: 'all', sites: 'all', parties }
 }
+// B-CP-011 (the money wall): Sales holds no grain now. `salesPriced` is a Sales person the Owner named to see prices (the price and
+// margin grains added, as the Sales template had them): percents and prices, never a cost.
+const NAMED_GRAINS: Partial<Record<Person, readonly Permission[]>> = { salesPriced: [grainPermission('price') as Permission, grainPermission('margin') as Permission] }
 
 let h: Harness
 let app: FastifyInstance
@@ -101,7 +104,7 @@ beforeAll(async () => {
   const partyNarrow = (await admin<{ id: string }>(`SELECT id FROM "Party" WHERE "tenantId" = $1 AND id <> $2 ORDER BY code LIMIT 1`, [T, customer]))[0]!.id
   for (const [person, role] of Object.entries(ROLE_OF) as Array<[Person, string]>) {
     await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [PEOPLE[person], T, `k429-${person}-${run}@example.com`, `Made-up ${person}`])
-    SESSIONS[person] = { audience: 'office', tenantId: T, actorId: PEOPLE[person], grants: [grantOf(role, person === 'narrow' ? [partyNarrow] : 'all')] }
+    SESSIONS[person] = { audience: 'office', tenantId: T, actorId: PEOPLE[person], grants: [grantOf(role, person === 'narrow' ? [partyNarrow] : 'all', NAMED_GRAINS[person])] }
   }
 
   // --- Made-up recent history on the seeded rows -----------------------------------------------------------------------------
@@ -262,13 +265,15 @@ describe('margin quoted against actual (ANA-021)', () => {
     expect(drill.byStyle.length).toBeGreaterThan(0)
     await sameAsKpi('finance', 'sales.margin_actual', '/insights/kpis/drills/margin', '', (answer) => answer.overall.actualPct)
     await sameAsKpi('finance', 'sales.margin_quoted', '/insights/kpis/drills/margin', '', (answer) => answer.overall.quotedPct)
-    // Sales: margin and price, no cost: percents, no cost, no margin amount (with the price it would give the cost).
-    const sales = (await ok('sales', `/insights/kpis/drills/margin?${span(20)}`)).rows.find((row: Json) => row.order.number === 'SEED-SO-0002')
+    // A role named to see prices (margin and price, no cost; B-CP-011: no longer Sales): percents, no cost, no margin amount (with
+    // the price it would give the cost).
+    const sales = (await ok('salesPriced', `/insights/kpis/drills/margin?${span(20)}`)).rows.find((row: Json) => row.order.number === 'SEED-SO-0002')
     expect(sales).toMatchObject({ value: 80000, quotedPct: '37.5', quotedMargin: null, actualMargin: null })
     expect(sales.quotedCost).toBeUndefined()
-    // No costing list, or no margin grain: refused in words.
+    // No costing list, or no margin grain: refused in words (B-CP-011: Sales holds no margin grain now).
     expect(await no('planner', `/insights/kpis/drills/margin?${span(20)}`, 403)).toEqual(['permission/costing.view'])
     expect(await no('production', `/insights/kpis/drills/margin?${span(20)}`, 403)).toEqual(['grain/margin'])
+    expect(await no('sales', `/insights/kpis/drills/margin?${span(20)}`, 403)).toEqual(['grain/margin'])
   })
 })
 

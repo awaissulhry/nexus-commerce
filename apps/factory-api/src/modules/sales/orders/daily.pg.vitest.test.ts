@@ -37,7 +37,9 @@ afterAll(() => vi.useRealTimers())
  * before shipping) from its list SEED-PL-P1 (SEED-JKT-01 420.00, its RED 430.00; SEED-JKT-02 from the base list,
  * 410.00); SEED-SO-0001 (CONFIRMED, deposit PAID, schedule, amendment 1), SEED-SO-0002 (WO-0001 released, WO-0002 a
  * draft, SH-0001 SHIPPED with 2 of its 7 jackets, a DRAFT TD24), SEED-Q-0001 (ACCEPTED). Every name, price and number is
- * made up. Run with `node scripts/factory/run-pg-tests.mjs sales/orders/daily`.
+ * made up. B-CP-011 (the money wall; the order lead agreed "Sales = no price"): the Sales session holds no money grain, so a
+ * typed price and every amount are the Owner's; Sales still amends sizes, closes, reopens, cancels and puts back.
+ * Run with `node scripts/factory/run-pg-tests.mjs sales/orders/daily`.
  */
 
 let h: Harness
@@ -67,13 +69,19 @@ const key = (label = 'k'): string => `daily-${label}-${++counter}-${newId()}`
 
 const grant = (permissions: Permission[]): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all' })
 const office = (permissions: Permission[], actorId = newId()): (() => SessionContext) => () => ({ audience: 'office', tenantId: T, actorId, grants: [grant(permissions)] })
-const SALES: Permission[] = ['orders.view', 'orders.manage', 'quotes.view', 'quotes.manage', 'paymentterms.view', 'money.price', 'money.cost']
+// B-CP-011 (the money wall): Sales holds no money grain (no money.price, no money.cost any more).
+const SALES: Permission[] = ['orders.view', 'orders.manage', 'quotes.view', 'quotes.manage', 'paymentterms.view']
 const SALES_ACTOR = newId()
 // B-OP-013: the Owner (every right of the order and its work orders) and a Sales person limited to another customer (P3).
 const OWNER_ACTOR = newId()
+// B-CP-011: a person the Owner gave a role with the price grain (a custom role from the Sales template plus the price grain,
+// Owner decision O3) and no work-order right: their office changes propose the gap to the work orders, as Sales's do.
+const PRICED_ACTOR = newId()
 const SESSIONS: Record<string, () => SessionContext> = {
   sales: office(SALES, SALES_ACTOR),
-  owner: office([...SALES, 'workorders.view', 'workorders.manage'], OWNER_ACTOR),
+  // B-CP-011: the Owner holds the money grains (price and cost) itself now, no longer through SALES.
+  owner: office([...SALES, 'money.price', 'money.cost', 'workorders.view', 'workorders.manage'], OWNER_ACTOR),
+  pricedSales: office([...SALES, 'money.price'], PRICED_ACTOR),
   salesP3: () => ({ audience: 'office', tenantId: T, actorId: newId(), grants: [{ permissions: SALES, companies: 'all', sites: 'all', parties: [P3] }] }),
   pricesOnly: office(['orders.view', 'orders.manage', 'quotes.view', 'quotes.manage', 'money.price']),
   viewer: office(['orders.view']),
@@ -127,6 +135,8 @@ beforeAll(async () => {
   await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, 'daily-sales@example.com', 'Made-up Sales', 'ACTIVE')`, [SALES_ACTOR, T])
   // B-OP-013: the Owner proposes (and carries along) too.
   await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, 'daily-owner@example.com', 'Made-up Owner', 'ACTIVE')`, [OWNER_ACTOR, T])
+  // B-CP-011: the person with the price role is an active office person too (its changes propose to the work orders).
+  await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, 'daily-priced@example.com', 'Made-up Price holder', 'ACTIVE')`, [PRICED_ACTOR, T])
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
@@ -143,7 +153,9 @@ let manual: Json
 describe('manual order entry (SAL-202): an order without a quote, for repeat business', () => {
   it('shows the number it will get and prices the draft from the customer’s terms and list', async () => {
     expect(await ok('sales', 'GET', `/sales/order-numbers/next?companyId=${companyA}`)).toEqual({ number: `SO-${YEAR}-0001` })
-    const preview = await ok('sales', 'POST', '/sales/orders/manual/preview', MANUAL)
+    // B-CP-011: the seller may not send the typed price (refused); the Owner previews the priced draft.
+    await refused('sales', 'POST', '/sales/orders/manual/preview', MANUAL, 403)
+    const preview = await ok('owner', 'POST', '/sales/orders/manual/preview', MANUAL)
     expect(preview).toMatchObject({ ok: true, number: `SO-${YEAR}-0001`, problems: [] })
     expect(preview.order).toMatchObject({ taxMode: 'IT_B2B', priceBasis: 'NET', paymentTermsId: seeded.paymentTermsIds.DEP30, depositPct: '30', netAmount: 288_000, vatAmount: 63_360, grossAmount: 351_360, depositAmount: 105_408 })
     expect(preview.order.lines.map((line: Json) => [line.seq, line.unitPrice, line.quantity, line.netAmount])).toEqual([
@@ -174,7 +186,8 @@ describe('manual order entry (SAL-202): an order without a quote, for repeat bus
   })
 
   it('Confirm order makes it CONFIRMED in one command: number, lines, deposit request, payment schedule, audit, event', async () => {
-    const made = await ok('sales', 'POST', '/sales/orders/manual', MANUAL, 201)
+    // B-CP-011: the typed price is the Owner's (the seller is refused it above).
+    const made = await ok('owner', 'POST', '/sales/orders/manual', MANUAL, 201)
     manual = made.order
     expect(manual).toMatchObject({
       number: `SO-${YEAR}-0001`,
@@ -210,16 +223,21 @@ describe('manual order entry (SAL-202): an order without a quote, for repeat bus
 
 describe('the payment schedule (SAL-216)', () => {
   it('the deposit and the balance before shipping, with their state; the deposit step follows its request', async () => {
-    const schedule = await ok('sales', 'GET', `${orderUrl(manual.id)}/schedule`)
+    // B-CP-011: the amounts are the Owner's read.
+    const schedule = await ok('owner', 'GET', `${orderUrl(manual.id)}/schedule`)
     expect(schedule.steps.map((step: Json) => [step.seq, step.kind, step.amount, step.status, step.dueDate, step.depositRequestId])).toEqual([
       [10, 'DEPOSIT', 105_408, 'OPEN', manual.chain.depositRequests[0].dueDate, manual.chain.depositRequests[0].id],
       [20, 'BEFORE_SHIPPING', 245_952, 'OPEN', PROMISE, manual.chain.depositRequests[1].id],
     ])
     expect(schedule).toMatchObject({ grossAmount: 351_360, openAmount: 351_360, paidAmount: 0, cancelled: [] })
-    // A viewer without the price grain sees the steps, not their amounts.
+    // A viewer without the price grain sees the steps, not their amounts — B-CP-011: so does Sales.
     const viewer = await ok('viewer', 'GET', `${orderUrl(manual.id)}/schedule`)
     expect(viewer.steps[0]).not.toHaveProperty('amount')
     expect(viewer).not.toHaveProperty('grossAmount')
+    const seller = await ok('sales', 'GET', `${orderUrl(manual.id)}/schedule`)
+    expect(seller.steps.map((step: Json) => step.kind)).toEqual(['DEPOSIT', 'BEFORE_SHIPPING'])
+    expect(seller.steps[0]).not.toHaveProperty('amount')
+    expect(seller).not.toHaveProperty('grossAmount')
 
     // The money module marks the request PAID (payments markDepositPaid) and emits payment.deposit_paid.
     const requestId = manual.chain.depositRequests[0].id
@@ -227,7 +245,7 @@ describe('the payment schedule (SAL-216)', () => {
     for (let attempt = 1; attempt <= 2; attempt++) {
       await handler('sales.ordersFollowDeposits').handle(envelope('payment.deposit_paid', { depositRequestId: requestId, partyId: P1, orderId: manual.id }), { caller: systemCaller(), attempt })
     }
-    const paid = await ok('sales', 'GET', `${orderUrl(manual.id)}/schedule`)
+    const paid = await ok('owner', 'GET', `${orderUrl(manual.id)}/schedule`)
     expect(paid.steps.map((step: Json) => [step.kind, step.status])).toEqual([['DEPOSIT', 'PAID'], ['BEFORE_SHIPPING', 'OPEN']])
     expect(paid).toMatchObject({ paidAmount: 105_408, openAmount: 245_952 })
     expect((await events('sales_order.schedule_changed', manual.id)).map((row) => row.payload.change)).toEqual(['MADE', 'PAID'])
@@ -260,7 +278,11 @@ describe('amendments (SAL-209, SAL-217): a confirmed order changes only through 
       ['ADDED', 30, 0, 1, [{ size: '54', before: 0, after: 1 }]],
     ])
     // P1's list: 430.00 for the RED colourway; the net goes 2880.00 → 3880.00 (+2 × 420 + 430).
-    expect(review.diff).toMatchObject({ netAmountBefore: 288_000, netAmountAfter: 415_000, reacceptanceNeeded: true })
+    // B-CP-011: the money change is the Owner's read; the seller's review says the same without it (the keys left out).
+    expect(review.diff).toMatchObject({ reacceptanceNeeded: true })
+    expect(review.diff).not.toHaveProperty('netAmountBefore')
+    const priced = await ok('owner', 'POST', `${orderUrl(manual.id)}/amendments/preview`, { version: manual.version, ...change() })
+    expect(priced.diff).toMatchObject({ netAmountBefore: 288_000, netAmountAfter: 415_000, reacceptanceNeeded: true })
     const noReason = await ok('sales', 'POST', `${orderUrl(manual.id)}/amendments/preview`, { ...change(), reason: '' })
     expect(noReason).toMatchObject({ ok: false, diff: null })
     expect(noReason.problems.map((issue: Json) => issue.path)).toEqual(['body/reason'])
@@ -271,7 +293,8 @@ describe('amendments (SAL-209, SAL-217): a confirmed order changes only through 
   it('applies it in one command: lines, totals, re-acceptance, the amendment with before / after, the schedule made again', async () => {
     await refused('sales', 'POST', `${orderUrl(manual.id)}/amendments`, { version: manual.version + 3, ...change() }, 409)
     await refused('viewer', 'POST', `${orderUrl(manual.id)}/amendments`, { version: manual.version, ...change() }, 403)
-    const applied = await ok('sales', 'POST', `${orderUrl(manual.id)}/amendments`, { version: manual.version, ...change() }, 201)
+    // B-CP-011: the totals and prices of the answer are the Owner's read (an order without work orders: the same apply).
+    const applied = await ok('owner', 'POST', `${orderUrl(manual.id)}/amendments`, { version: manual.version, ...change() }, 201)
     expect(applied.order).toMatchObject({ netAmount: 415_000, grossAmount: 506_300, amendments: { count: 1, latestRevision: 1 } })
     expect(applied.order.reapprovalNeededAt).not.toBeNull()
     expect(applied.order.lines.map((line: Json) => [line.seq, line.colourway.code, line.unitPrice, line.quantity])).toEqual([
@@ -287,7 +310,7 @@ describe('amendments (SAL-209, SAL-217): a confirmed order changes only through 
     // The snapshot never carries a cost.
     expect(JSON.stringify(row.before) + JSON.stringify(row.after)).not.toMatch(/cost/i)
     // The deposit (PAID) stays; the balance is made again for the new total: 5063.00 − 1054.08.
-    const schedule = await ok('sales', 'GET', `${orderUrl(manual.id)}/schedule`)
+    const schedule = await ok('owner', 'GET', `${orderUrl(manual.id)}/schedule`)
     expect(schedule.steps.map((step: Json) => [step.kind, step.status, step.amount])).toEqual([
       ['DEPOSIT', 'PAID', 105_408],
       ['BEFORE_SHIPPING', 'OPEN', 400_892],
@@ -487,7 +510,11 @@ describe('B-OP-014: a line work orders make, left out of an amendment, is closed
     expect(preview).toMatchObject({ ok: false, problems: [], workOrders: { needsOutcome: true, words: { en: 'Choose what happens to the 2 extra pieces' } } })
     expect(preview.diff.lines.map((line: Json) => [line.change, line.lineId, line.piecesBefore, line.piecesAfter, line.closedShort])).toEqual([['REMOVED', order.blk.id, 4, 0, true]])
     // Closing short moves no money: the line keeps its price (a closed line is not billed); no new acceptance for it.
-    expect(preview.diff).toMatchObject({ netAmountBefore: preview.diff.netAmountAfter, reacceptanceNeeded: false })
+    // B-CP-011: the money is the Owner's read (the same preview, nothing written); the seller's leaves it out.
+    expect(preview.diff).toMatchObject({ reacceptanceNeeded: false })
+    expect(preview.diff).not.toHaveProperty('netAmountBefore')
+    const pricedPreview = await ok('owner', 'POST', `${orderUrl(order.id)}/amendments/preview`, body)
+    expect(pricedPreview.diff).toMatchObject({ netAmountBefore: pricedPreview.diff.netAmountAfter, reacceptanceNeeded: false })
     expect(preview.workOrders.extra.map((entry: Json) => [entry.size, entry.count])).toEqual([['52', 2]])
 
     const held = await refused('sales', 'POST', `${orderUrl(order.id)}/amendments`, { version: order.version, ...body }, 409)
@@ -527,10 +554,13 @@ describe('B-OP-014: a line work orders make, left out of an amendment, is closed
 describe('B-OP-014: the put-back of a change that closed a line short reopens it', () => {
   it('the customer refused the change: its put-back reopens the line, the price comes back, the waiting work-order change goes stale', async () => {
     const order = await orderInWork()
-    const before = await recordOf(order.id)
+    // B-CP-011: the price is read by the Owner and typed by the person with the price role (no work-order right, as Sales: the
+    // work order in progress waits); the seller may not send it.
+    const before = await recordOf(order.id, 'owner')
     const red = before.lines.find((line: Json) => line.id === order.red.id)
     const body = { reason: 'The customer drops the black jackets; the red ones at a new price.', lines: [{ id: order.red.id, unitPrice: '1.00' }] }
-    const applied = await ok('sales', 'POST', `${orderUrl(order.id)}/amendments`, { version: order.version, ...body }, 201)
+    await refused('sales', 'POST', `${orderUrl(order.id)}/amendments`, { version: order.version, ...body }, 403)
+    const applied = await ok('pricedSales', 'POST', `${orderUrl(order.id)}/amendments`, { version: order.version, ...body }, 201)
     expect(applied.amendment).toMatchObject({ reacceptance: 'NEEDED' })
     expect(await one('SELECT "closedShortQuantity" AS closed FROM "SalesOrderLine" WHERE id = $1', [order.blk.id])).toEqual({ closed: 4 })
     const waiting = await one<{ id: string; status: string }>(`SELECT id::text AS id, status::text AS status FROM "WorkOrderChange" WHERE "amendmentId" = $1 AND "workOrderId" = $2`, [applied.amendment.id, order.inProgress])
@@ -546,7 +576,8 @@ describe('B-OP-014: the put-back of a change that closed a line short reopens it
     const put = await ok('sales', 'POST', `${orderUrl(order.id)}/changes/${applied.amendment.id}/put-back`, { version: applied.order.version }, 201)
     // Reopened as Reopen lines reopens it: the four columns and the code cleared; the order as it was before the change.
     expect(await one('SELECT "closedShortQuantity" AS closed, "closedShortAt" AS at, "closedShortById" AS by, "closeShortReason" AS reason, "closedShortReasonCode" AS code FROM "SalesOrderLine" WHERE id = $1', [order.blk.id])).toEqual({ closed: null, at: null, by: null, reason: null, code: null })
-    expect(put.order.lines.find((line: Json) => line.id === order.red.id)).toMatchObject({ unitPrice: red.unitPrice })
+    // B-CP-011: the price that came back is the Owner's read.
+    expect((await recordOf(order.id, 'owner')).lines.find((line: Json) => line.id === order.red.id)).toMatchObject({ unitPrice: red.unitPrice })
     expect(put.order.lines.find((line: Json) => line.id === order.blk.id)).toMatchObject({ closedShort: null })
     expect(put.change.diff.lines).toEqual(expect.arrayContaining([expect.objectContaining({ lineId: order.blk.id, change: 'CHANGED', reopened: true, closedShort: false, piecesBefore: 0, piecesAfter: 4 })]))
     expect((await events('sales_order.lines_closed', order.id)).map((event) => [event.payload.change, event.payload.lineIds])).toEqual([
@@ -575,7 +606,8 @@ describe('the cancel with its impact check (SAL-211)', () => {
 
   it('a typed order: its open deposit and steps are cancelled with it, the typed number confirms it', async () => {
     const second = (await ok('sales', 'POST', '/sales/orders/manual', { ...MANUAL, customerRef: 'PO-REPEAT-78', lines: [MANUAL.lines[0]] }, 201)).order
-    const check = await ok('sales', 'GET', `${orderUrl(second.id)}/cancel-check`)
+    // B-CP-011: the amounts it touches are the Owner's read.
+    const check = await ok('owner', 'GET', `${orderUrl(second.id)}/cancel-check`)
     expect(check.impact).toMatchObject({ cancellable: true, blocks: [], leavesBehind: [] })
     // B-W2a-F2: the deposit and the balance's own request, both open, are cancelled with it.
     expect(check.impact.touches.map((item: Json) => [item.code, item.amount, item.message])).toEqual([
@@ -603,7 +635,12 @@ describe('the cancel with its impact check (SAL-211)', () => {
     const copy = await ok('sales', 'POST', `${orderUrl(so1.id)}/copy-as-quote`, {}, 201)
     expect(copy.quote).toMatchObject({ status: 'DRAFT', partyId: P1 })
     expect(copy.quote.lines.length).toBe(so1.lines.length)
-    expect(copy.quote.lines.map((line: Json) => line.unitPrice)).toEqual(so1.lines.map((line: Json) => line.unitPrice))
+    // B-CP-011: the prices copied are the Owner's read; the seller's answer leaves them out.
+    expect(copy.quote.lines[0]).not.toHaveProperty('unitPrice')
+    const pricedCopy = (await ok('owner', 'GET', `/sales/quotes/${copy.quote.id}`)).quote
+    const pricedSource = await recordOf(so1.id, 'owner')
+    expect(pricedCopy.lines.map((line: Json) => line.unitPrice)).toEqual(pricedSource.lines.map((line: Json) => line.unitPrice))
+    expect(pricedCopy.lines.every((line: Json) => typeof line.unitPrice === 'string')).toBe(true)
     expect((await one(`SELECT after FROM "AuditLog" WHERE action = 'quotes.duplicate' AND "recordId" = $1`, [copy.quote.id])).after).toMatchObject({ from: { orderId: so1.id }, sameCustomer: true })
   })
 })

@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
+// B-CP-011: the Owner's grants, from his template.
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import type { Actor, Grant, Permission } from '@nexus/factory-domain/core/permissions'
 // B-SA-004b: the office's live wall.
 import { EVENT_CATALOGUE } from '@nexus/factory-domain/events/catalogue'
@@ -56,12 +58,17 @@ const sha = (body: Buffer): string => createHash('sha256').update(body).digest('
 
 const grant = (permissions: Permission[]): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all' })
 const office = (permissions: Permission[], actorId = newId()): (() => SessionContext) => () => ({ audience: 'office', tenantId: T, actorId, grants: [grant(permissions)] })
-const SALES: Permission[] = ['sales.returns.view', 'sales.returns.manage', 'sales.returns.decide', 'sales.returns.receive', 'sales.returns.inspect', 'orders.view', 'orders.manage', 'files.upload', 'files.read', 'money.price']
+// B-CP-011 (the money wall): Sales holds no price grain any more (was money.price here): the values and credits are the
+// Owner's to read and send; Sales still makes, receives and decides returns (the default credit, unseen).
+const SALES: Permission[] = ['sales.returns.view', 'sales.returns.manage', 'sales.returns.decide', 'sales.returns.receive', 'sales.returns.inspect', 'orders.view', 'orders.manage', 'files.upload', 'files.read']
+const OWNER = templateOf('owner')!
 const OTHER_SITE = newId()
 const floorSession = (siteId: string, permissions: Permission[]) => () => ({ audience: 'floor' as const, tenantId: T, actorId: newId(), siteId, deviceId: newId(), grants: [{ permissions: ['floor.work' as Permission, ...permissions], companies: [companyA], sites: [siteId], parties: 'all' as const }] })
 const SESSIONS: Record<string, () => SessionContext> = {
   sales: office(SALES),
-  noPrice: office(SALES.filter((permission) => permission !== 'money.price')),
+  // B-CP-011: the price holder.
+  owner: office([...OWNER.permissions, ...OWNER.grains.map((grain) => `money.${grain}` as Permission)]),
+  noPrice: office(SALES.filter((permission) => permission !== 'money.price')), // B-CP-011: the same as Sales now
   viewer: office(['sales.returns.view']),
   settings: office(['sales.returns.view', 'sales.settings.manage']),
   dock: floorSession(siteA, ['sales.returns.receive', 'sales.returns.inspect']),
@@ -146,16 +153,19 @@ let rma2: Json
 
 describe('an RMA from what the customer was invoiced or shipped (SAL-333, SAL-335, SAL-340)', () => {
   it('lists what may come back: sold, already on other returns, left', async () => {
-    const { lines } = await ok('sales', 'GET', `/sales/returns/returnable?companyId=${companyA}&partyId=${P1}`)
+    // B-CP-011: the prices are read as the Owner (was Sales).
+    const { lines } = await ok('owner', 'GET', `/sales/returns/returnable?companyId=${companyA}&partyId=${P1}`)
     const sample = lines.find((line: Json) => line.invoiceLineId === SAMPLE_LINE)
     expect(sample).toMatchObject({ kind: 'INVOICED', sold: 2, taken: 1, left: 1, unitPrice: '250', pieceValue: 25_000, ppe: false })
     const red = lines.find((line: Json) => line.salesOrderLineId === RED_LINE)
     expect(red).toMatchObject({ kind: 'SHIPPED', size: '52', sold: 1, taken: 0, left: 1, ppe: true, batchNumbers: ['SEED-BT-0001'], siteId: siteA, pieceValue: 40_000 })
     expect(lines.find((line: Json) => line.salesOrderLineId === BLK_LINE && line.size === '50')).toMatchObject({ sold: 1, taken: 1, left: 0 })
-    // Prices only with the price grain.
-    const blind = (await ok('noPrice', 'GET', `/sales/returns/returnable?companyId=${companyA}&partyId=${P1}`)).lines.find((line: Json) => line.salesOrderLineId === RED_LINE)
-    expect(blind).not.toHaveProperty('unitPrice')
-    expect(blind).not.toHaveProperty('pieceValue')
+    // Prices only with the price grain (B-CP-011: Sales holds none).
+    for (const who of ['noPrice', 'sales']) {
+      const blind = (await ok(who, 'GET', `/sales/returns/returnable?companyId=${companyA}&partyId=${P1}`)).lines.find((line: Json) => line.salesOrderLineId === RED_LINE)
+      expect(blind, who).not.toHaveProperty('unitPrice')
+      expect(blind, who).not.toHaveProperty('pieceValue')
+    }
   })
 
   it('refuses more than was sold, with the sold number, at the cell', async () => {
@@ -177,7 +187,10 @@ describe('an RMA from what the customer was invoiced or shipped (SAL-333, SAL-33
     expect(first.status, JSON.stringify(first.body)).toBe(201)
     rma1 = first.body.return
     expect(rma1).toMatchObject({ number: `RMA-${YEAR}-0001`, status: 'AUTHORISED', siteId: siteA, goodsDueBy: addDays(TODAY, 20), salesOrder: { number: 'SEED-SO-0002' }, customerRef: 'P1-RET-9', version: 1 })
-    expect(rma1.lines).toMatchObject([{ seq: 10, size: '52', quantity: 1, ppe: true, safety: true, batchNumber: 'SEED-BT-0001', unitPrice: '400', reason: { code: 'DEFECT', labelEn: 'Defect' } }])
+    expect(rma1.lines).toMatchObject([{ seq: 10, size: '52', quantity: 1, ppe: true, safety: true, batchNumber: 'SEED-BT-0001', reason: { code: 'DEFECT', labelEn: 'Defect' } }])
+    // B-CP-011: Sales' answer holds no price; the Owner reads the line's 400.
+    expect(rma1.lines[0]).not.toHaveProperty('unitPrice')
+    expect((await recordOf(rma1.id, 'owner')).lines[0].unitPrice).toBe('400')
     expect(rma1.tracking.map((row: Json) => [row.step, row.state])).toEqual([['REQUESTED', 'DONE'], ['AUTHORISED', 'DONE'], ['GOODS_BACK', 'CURRENT'], ['INSPECTED', 'WAITING'], ['OUTCOME', 'WAITING']])
     expect(first.body.registerEntries).toMatchObject([{ seq: 10, opened: true }])
     const [entry] = await admin(`SELECT kind, "sourceType", "sourceId", "partyId", "styleId", "shipmentIds"::text[] AS "shipmentIds" FROM "PpeRegisterEntry" WHERE id = $1`, [first.body.registerEntries[0].entryId])
@@ -194,7 +207,10 @@ describe('an RMA from what the customer was invoiced or shipped (SAL-333, SAL-33
     const made = await ok('sales', 'POST', '/sales/returns', { companyId: companyA, partyId: P1, siteId: siteA, lines: [{ invoiceLineId: SAMPLE_LINE, quantity: 1, reasonCode: 'WRONG_ITEM' }] }, 201)
     rma2 = made.return
     const line = rma2.lines[0]
-    expect(line).toMatchObject({ invoice: { number: 'FT-2026-00001' }, ppe: false, receivedValue: 0 })
+    expect(line).toMatchObject({ invoice: { number: 'FT-2026-00001' }, ppe: false })
+    // B-CP-011: the value is a price: the Owner reads it; Sales' answer holds none.
+    expect(line).not.toHaveProperty('receivedValue')
+    expect((await recordOf(rma2.id, 'owner')).lines[0].receivedValue).toBe(0)
     expect((await refused('sales', 'PATCH', `/sales/returns/${rma2.id}/lines/${line.id}`, { version: rma2.version, quantity: 2 }, 409)).issues).toEqual([{ path: 'body/quantity', message: 'At most 1 can come back: 2 sold, 1 already on other returns.' }])
     const changed = await ok('sales', 'PATCH', `/sales/returns/${rma2.id}/lines/${line.id}`, { version: rma2.version, reasonCode: 'WRONG_SIZE', serial: 'S-0042' })
     expect(changed.return.lines[0]).toMatchObject({ reasonCode: 'WRONG_SIZE', serial: 'S-0042' })
@@ -259,7 +275,10 @@ describe('the decision: money, stock and work in one step (SAL-341), the replace
   it('decides REPLACE with the goods to quarantine: the stock move, INSPECTED, then the replacement order', async () => {
     const record = await recordOf(rma1.id)
     const decided = await ok('sales', 'POST', `/sales/returns/${rma1.id}/decisions`, { version: record.version, lines: [{ lineId: record.lines[0].id, disposition: 'REPLACE', goodsOutcome: 'QUARANTINE' }] })
-    expect(decided.return).toMatchObject({ status: 'INSPECTED', lines: [{ disposition: 'REPLACE', goodsOutcome: 'QUARANTINE', creditAmount: 0, followUp: 'REPLACEMENT_ORDER', stock: [{ locationCode: 'A1-QUA', quantity: '1' }] }] })
+    expect(decided.return).toMatchObject({ status: 'INSPECTED', lines: [{ disposition: 'REPLACE', goodsOutcome: 'QUARANTINE', followUp: 'REPLACEMENT_ORDER', stock: [{ locationCode: 'A1-QUA', quantity: '1' }] }] })
+    // B-CP-011: no credit, read as the Owner (Sales' answer holds no amount).
+    expect(decided.return.lines[0]).not.toHaveProperty('creditAmount')
+    expect((await recordOf(rma1.id, 'owner')).lines[0].creditAmount).toBe(0)
     expect(decided.return.lines[0].effect).toBe('No credit; goods are held in quarantine at A1-QUA; on the replacement order')
     // B-W2b-16: a CUSTOMER_RETURN move of its own, naming the return line and its customer (an ADJUSTMENT before W2b).
     const [move] = await admin(`SELECT m.reason, m.quantity::text, m.reference, m."returnLineId", m."returnPartyId", i.code, i.kind FROM "StockMove" m JOIN "Item" i ON i.id = m."itemId" WHERE m.id = $1`, [decided.moves[0].moveId])
@@ -291,11 +310,15 @@ describe('the decision: money, stock and work in one step (SAL-341), the replace
     const graded = await ok('sales', 'POST', `/sales/returns/${rma2.id}/grades`, { version: received.return.version, lines: [{ lineId: rma2.lines[0].id, grade: 'NEW', cause: 'NO_FAULT' }] })
     const stock = await refused('sales', 'POST', `/sales/returns/${rma2.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma2.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'RESTOCK' }] }, 400)
     expect(stock.issues).toEqual([{ path: 'body/lines/0/goodsOutcome', message: 'Line 10 names no style, colour and size, so it cannot go into stock: repair, scrap or send it back.' }])
-    expect((await refused('sales', 'POST', `/sales/returns/${rma2.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma2.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP', creditAmount: 25_001 }] }, 400)).issues).toEqual([{ path: 'body/lines/0/creditAmount', message: 'Never more than what came back is worth.' }])
-    // A caller without the price grain cannot send a credit value.
-    await refused('noPrice', 'POST', `/sales/returns/${rma2.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma2.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP', creditAmount: 100 }] }, 403)
+    // B-CP-011: a credit value sent is the Owner's (was Sales').
+    expect((await refused('owner', 'POST', `/sales/returns/${rma2.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma2.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP', creditAmount: 25_001 }] }, 400)).issues).toEqual([{ path: 'body/lines/0/creditAmount', message: 'Never more than what came back is worth.' }])
+    // A caller without the price grain cannot send a credit value (B-CP-011: Sales neither).
+    for (const who of ['noPrice', 'sales']) await refused(who, 'POST', `/sales/returns/${rma2.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma2.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP', creditAmount: 100 }] }, 403)
+    // B-CP-011: Sales decides the default credit unseen; the Owner reads its amount.
     const decided = await ok('sales', 'POST', `/sales/returns/${rma2.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma2.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP' }] })
-    expect(decided.return).toMatchObject({ status: 'INSPECTED', creditTotal: 25_000, lines: [{ creditAmount: 25_000, receivedValue: 25_000, followUp: 'CREDIT_NOTE', stock: [], effectWithAmount: 'Credit 250.00 EUR; goods are scrapped; a credit note to make (Finance)' }] })
+    expect(decided.return).toMatchObject({ status: 'INSPECTED', lines: [{ followUp: 'CREDIT_NOTE', stock: [] }] })
+    expect(decided.return).not.toHaveProperty('creditTotal')
+    expect(await recordOf(rma2.id, 'owner')).toMatchObject({ status: 'INSPECTED', creditTotal: 25_000, lines: [{ creditAmount: 25_000, receivedValue: 25_000, followUp: 'CREDIT_NOTE', stock: [], effectWithAmount: 'Credit 250.00 EUR; goods are scrapped; a credit note to make (Finance)' }] })
     expect((await events('return.credit_due', rma2.id))[0]?.payload).toEqual({ returnId: rma2.id, number: rma2.number, partyId: P1, lineIds: [rma2.lines[0].id] })
     // Without the price grain the record shows the effect without its amount.
     const blind = await recordOf(rma2.id, 'noPrice')

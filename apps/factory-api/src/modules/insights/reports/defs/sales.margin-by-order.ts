@@ -7,8 +7,9 @@ import { defineReport } from '../report'
 /**
  * Sales › Margin by order (design home.reports library "Sales: Margin by order"): each order's margin quoted, estimated
  * now and so far, through the margins read as the person (costing.view over the order's company and customer). The
- * report is about margins: without the margin grain it stays listed and says "Needs margin rights" (S2: sales see the
- * margin %, never cost amounts — the cost column is left out for them and named).
+ * report is about margins: without the margin grain it stays listed and says "Needs margin rights" (a margin holder without
+ * the cost grain sees the margin %, never cost amounts — the cost column is left out and named). B-CP-011 (Owner O1): Sales
+ * holds no margin grain any more, so it reads "Needs margin rights".
  */
 
 const STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED'] as const

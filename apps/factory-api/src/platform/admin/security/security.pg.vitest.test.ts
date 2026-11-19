@@ -313,3 +313,76 @@ describe('All settings › Needs attention', () => {
     expect(betaItems.find((entry) => entry.kind === 'drill')).toMatchObject({ state: 'none' })
   })
 })
+
+// ── B-CP-013 (customer page lane, the money wall; Owner O3): "Who sees prices" ───────────────────────────────────────────
+describe('B-CP-013: who sees prices (GET /admin/security/price-holders)', () => {
+  let prices: TestTenant
+  let pricesOwner: Browser
+  const ids = { finance: '', ended: '', custom: '', sales: '', guest: '', guestGone: '', firm: newId() }
+
+  beforeAll(async () => {
+    prices = await addTenant(h, 'prices')
+    const ownerUser = await addUser(h, prices, { email: 'owner.prices@example.com', role: 'owner' })
+    pricesOwner = await signedIn('prices', ownerUser)
+    await enrolTotp(h, pricesOwner)
+    // Finance (a price role), a Finance assignment that ended, a custom "Accountant (prices)", Sales (no grain since B-CP-011).
+    ids.finance = (await addUser(h, prices, { email: 'fiona.finance@example.com', role: 'finance' })).id
+    ids.ended = (await addUser(h, prices, { email: 'eric.ended@example.com' })).id
+    ids.custom = (await addUser(h, prices, { email: 'ada.accountant@example.com' })).id
+    ids.sales = (await addUser(h, prices, { email: 'sam.sales@example.com', role: 'sales' })).id
+    const companyId = prices.companies[0]!.id
+    await h.database.withScope({ audience: 'office', tenantId: prices.id, actorId: ownerUser.id }, async (client) => {
+      const finance = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: prices.id, key: 'finance' } }, select: { id: true } })
+      await client.roleAssignment.create({ data: { id: newId(), userId: ids.ended, roleId: finance.id, allCompanies: true, validFrom: new Date(START), endedAt: h.clock.now(), endedById: ownerUser.id } })
+      const custom = await client.role.create({ data: { id: newId(), key: 'custom.accountant_prices', name: 'Accountant (prices)', basedOn: 'finance', permissions: ['invoices.view', 'orders.view'], grains: ['price'], requireMfa: true }, select: { id: true } })
+      // Limited to two made-up customers (Brand Alpha, Brand Beta) of the company.
+      const brands = [newId(), newId()]
+      for (const [index, brand] of brands.entries()) {
+        await client.party.create({ data: { id: brand, companyId, code: `BRAND-${index + 1}`, kind: 'ORGANISATION', legalName: `Brand ${index === 0 ? 'Alpha' : 'Beta'} (made up)`, roles: ['CUSTOMER'] }, select: { id: true } })
+      }
+      await client.roleAssignment.create({ data: { id: newId(), userId: ids.custom, roleId: custom.id, allCompanies: false, companyIds: [companyId], partyIds: brands, validFrom: new Date(START) } })
+      // An adviser firm and its two accountants: one live, one whose access has passed.
+      await client.party.create({ data: { id: ids.firm, companyId, code: 'STUDIO-PROVA', kind: 'ORGANISATION', legalName: 'Studio Prova Commercialisti (made up)', tradeName: 'Studio Prova', roles: ['CONSULTANT'] }, select: { id: true } })
+      const accountant = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: prices.id, key: 'guest-accountant' } }, select: { id: true } })
+      for (const [key, email, until] of [['guest', 'anna.conti@studio-prova.example', 30], ['guestGone', 'bruno.conti@studio-prova.example', -1]] as const) {
+        const id = newId()
+        ids[key] = id
+        await client.user.create({ data: { id, email, displayName: email.split('@')[0]!, locale: 'it', status: 'ACTIVE', audience: 'PARTNER', partyId: ids.firm, partnerKind: 'GUEST', accessUntil: new Date(h.clock.now().getTime() + until * 86_400_000) }, select: { id: true } })
+        await client.roleAssignment.create({ data: { id: newId(), userId: id, roleId: accountant.id, allCompanies: true, partyIds: [ids.firm], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+      }
+    })
+  }, 90_000)
+
+  it('the Owner reads every office price holder and the live guest Accountants; Sales and an ended assignment are not listed', async () => {
+    const answer = await pricesOwner.get('/admin/security/price-holders')
+    expect(answer.status, JSON.stringify(answer.body)).toBe(200)
+    const people = answer.body.people as { userId: string; name: string; status: string; twoFactor: boolean; roles: { key: string; grains: string[]; requireMfa: boolean; allCustomers: boolean; customers: number; allCompanies: boolean; companies: number; until: string | null }[] }[]
+    const userIds = people.map((person) => person.userId)
+    expect(userIds).toEqual(expect.arrayContaining([ids.finance, ids.custom]))
+    expect(userIds).not.toContain(ids.sales)
+    expect(userIds).not.toContain(ids.ended)
+    expect(people.find((person) => person.name === 'owner prices')).toMatchObject({ twoFactor: true, roles: [{ key: 'owner', grains: ['price', 'cost', 'margin', 'wages', 'pay'], allCustomers: true }] })
+    expect(people.find((person) => person.userId === ids.finance)).toMatchObject({ status: 'ACTIVE', twoFactor: false, roles: [{ key: 'finance', grains: ['price', 'cost', 'margin', 'wages'], requireMfa: true, allCustomers: true, customers: 0, allCompanies: true }] })
+    expect(people.find((person) => person.userId === ids.custom)).toMatchObject({ roles: [{ key: 'custom.accountant_prices', grains: ['price'], requireMfa: true, allCustomers: false, customers: 2, allCompanies: false, companies: 1, until: null }] })
+    expect(answer.body.guests).toEqual([{ userId: ids.guest, name: 'anna.conti', status: 'ACTIVE', firm: { id: ids.firm, name: 'Studio Prova' }, roleKey: 'guest-accountant', until: expect.any(String) }])
+    // Never a price on the card.
+    expect(JSON.stringify(answer.body)).not.toMatch(/unitPrice|netAmount|grossAmount|amount/i)
+  })
+
+  it('is behind the price grain: an Administrator, a Sales worker and a Production manager are refused', async () => {
+    for (const [email, role] of [['adam.admin@example.com', 'admin'], ['sara.sales@example.com', 'sales'], ['paul.production@example.com', 'production_manager']] as const) {
+      const user = await addUser(h, prices, { email, role })
+      const browser = await signedIn('prices', user)
+      if (role !== 'production_manager') await enrolTotp(h, browser)
+      const refused = await browser.get('/admin/security/price-holders')
+      expect(refused.status, `${role}: ${JSON.stringify(refused.body)}`).toBe(403)
+      expect(JSON.stringify(refused.body)).not.toContain('Studio Prova')
+    }
+    // The Administrator holds users.view: refused by the price grain, in words.
+    const admin = await addUser(h, prices, { email: 'alba.admin@example.com', role: 'admin' })
+    const adminBrowser = await signedIn('prices', admin)
+    await enrolTotp(h, adminBrowser)
+    expect((await adminBrowser.get('/admin/security/price-holders')).body.error.message).toBe('Shown to people who see prices.')
+  })
+})
+// ── end B-CP-013 ──

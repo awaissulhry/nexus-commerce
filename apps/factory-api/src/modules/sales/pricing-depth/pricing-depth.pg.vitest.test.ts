@@ -95,11 +95,13 @@ const fromTemplate = (key: string, extra: readonly Permission[] = [], companies:
   return { permissions: [...role.permissions, ...extra], grains: role.grains, companies }
 }
 const PEOPLE: Record<string, Person> = {
-  // Sales keeps the price lists and sees prices and margin; here also the imports.
+  // B-CP-011 (the money wall): the Owner keeps the price lists and sees every money figure; here also the imports (was Sales).
+  owner: fromTemplate('owner', IMPORTS),
+  // Sales: B-CP-011: keeps no price list any more (no pricelists.manage) and sees no price nor margin (no grain).
   sales: fromTemplate('sales', IMPORTS),
   // A buyer sees no price list.
   buyer: fromTemplate('buyer'),
-  // A copy of the sales role without the price grain (a custom role may be).
+  // A copy of the sales role without the price grain (a custom role may be). B-CP-011: the same as Sales now.
   salesNoPrice: { ...fromTemplate('sales', IMPORTS), grains: fromTemplate('sales').grains.filter((grain) => grain !== 'price' && grain !== 'margin') },
   // Sales over company A only: a list of every company is not theirs to change.
   salesA: fromTemplate('sales', IMPORTS, [companyA]),
@@ -129,7 +131,7 @@ async function refused(session: string, method: Method, url: string, payload: un
 const system = (): CommandCaller => callerFor(database, systemContext(tenant, newId()))
 const eventsOf = async (subject: string) => (await admin<{ type: string; payload: Json }>('SELECT type, payload FROM "OutboxEvent" WHERE subject = $1 ORDER BY "occurredAt", id', [subject]))
 const v = (versionId: string) => `/sales/price-lists/${P1_LIST}/versions/${versionId}`
-const versionOf = async (versionId: string): Promise<number> => (await ok('sales', 'GET', v(versionId))).version.version
+const versionOf = async (versionId: string): Promise<number> => (await ok('owner', 'GET', v(versionId))).version.version
 
 /**
  * B-W2b-F32: a write of the values there already, sent twice (the second with an Idempotency-Key of its own), answers 200
@@ -141,9 +143,9 @@ async function sameTwice(url: string, payload: Json, read: string, audit: { acti
   const events = async () => (await eventsOf(audit.recordId)).filter((row) => row.type === event).length
   const [auditsBefore, eventsBefore] = [await audits(), await events()]
   expect(auditsBefore).toBeGreaterThan(0)
-  const current = await ok('sales', 'GET', read)
-  expect(await ok('sales', 'PUT', url, payload)).toEqual(current)
-  const keyed = await app.inject({ method: 'PUT', url, headers: { 'x-test-session': 'sales', 'idempotency-key': `f32-same-${newId()}` }, payload: payload as object })
+  const current = await ok('owner', 'GET', read)
+  expect(await ok('owner', 'PUT', url, payload)).toEqual(current)
+  const keyed = await app.inject({ method: 'PUT', url, headers: { 'x-test-session': 'owner', 'idempotency-key': `f32-same-${newId()}` }, payload: payload as object })
   expect(keyed.statusCode, keyed.body).toBe(200)
   expect(keyed.json()).toEqual(current)
   expect(await audits()).toBe(auditsBefore)
@@ -190,9 +192,10 @@ afterAll(async () => {
   if (localRoot) rmSync(localRoot, { recursive: true, force: true })
 }, 60_000)
 
+// B-CP-011: every price list write and price read below is the Owner's (was Sales'); Sales' reads show no price.
 describe('quantity breaks and size surcharges of a draft version (SAL-166, SAL-180)', () => {
   it('reads the seeded breaks and surcharges, prices only with the price grain', async () => {
-    const rules = await ok('sales', 'GET', `${v(P1_V2)}/rules`)
+    const rules = await ok('owner', 'GET', `${v(P1_V2)}/rules`)
     expect(rules.list).toMatchObject({ code: 'SEED-PL-P1', showDiscount: false })
     expect(rules.breaks.map((row: Json) => [row.entry?.style.code ?? '*', row.minQuantity, row.unitPrice, row.discountPct])).toEqual([
       ['SEED-JKT-01', 10, '425', null],
@@ -200,17 +203,20 @@ describe('quantity breaks and size surcharges of a draft version (SAL-166, SAL-1
       ['*', 100, null, '3'],
     ])
     expect(rules.sizeSurcharges).toMatchObject([{ styleId: null, size: '56', amount: '20', currency: 'EUR', pct: null }])
-    const blind = await ok('salesNoPrice', 'GET', `${v(P1_V2)}/rules`)
-    expect(blind.breaks[0]).not.toHaveProperty('unitPrice')
-    expect(blind.sizeSurcharges[0]).not.toHaveProperty('amount')
+    // B-CP-011: the Sales role reads the rules as the copy without the price grain does.
+    for (const who of ['salesNoPrice', 'sales']) {
+      const blind = await ok(who, 'GET', `${v(P1_V2)}/rules`)
+      expect(blind.breaks[0], who).not.toHaveProperty('unitPrice')
+      expect(blind.sizeSurcharges[0], who).not.toHaveProperty('amount')
+    }
     await refused('buyer', 'GET', `${v(P1_V2)}/rules`, undefined, 403)
   })
 
   it('sets and removes breaks in one write, refused in words when a break does not lower the price', async () => {
     const version = await versionOf(P1_V2)
-    const error = await refused('sales', 'PUT', `${v(P1_V2)}/breaks`, { version, breaks: [{ entryId: JKT01_V2, minQuantity: 20, unitPrice: '435', discountPct: null }, { entryId: null, minQuantity: 200, unitPrice: '400', discountPct: null }] }, 400)
+    const error = await refused('owner', 'PUT', `${v(P1_V2)}/breaks`, { version, breaks: [{ entryId: JKT01_V2, minQuantity: 20, unitPrice: '435', discountPct: null }, { entryId: null, minQuantity: 200, unitPrice: '400', discountPct: null }] }, 400)
     expect(error.issues.map((issue: Json) => issue.message)).toEqual(['A break lowers the price: below 435.', 'A break for every price of the version gives a discount, not one unit price.'])
-    const rules = await ok('sales', 'PUT', `${v(P1_V2)}/breaks`, { version, breaks: [{ entryId: JKT01_V2, minQuantity: 20, unitPrice: '420', discountPct: null }, { entryId: JKT01_V2, minQuantity: 50, unitPrice: null, discountPct: null }] })
+    const rules = await ok('owner', 'PUT', `${v(P1_V2)}/breaks`, { version, breaks: [{ entryId: JKT01_V2, minQuantity: 20, unitPrice: '420', discountPct: null }, { entryId: JKT01_V2, minQuantity: 50, unitPrice: null, discountPct: null }] })
     expect(rules.breaks.map((row: Json) => [row.minQuantity, row.unitPrice ?? `${row.discountPct}%`])).toEqual([
       [10, '425'],
       [20, '420'],
@@ -218,15 +224,17 @@ describe('quantity breaks and size surcharges of a draft version (SAL-166, SAL-1
     ])
     expect(rules.version.version).toBe(version + 1)
     // The version moved: the same write again is stale.
-    expect((await refused('sales', 'PUT', `${v(P1_V2)}/breaks`, { version, breaks: [{ entryId: JKT01_V2, minQuantity: 30, unitPrice: '419', discountPct: null }] }, 409)).message).toMatch(/version/i)
+    expect((await refused('owner', 'PUT', `${v(P1_V2)}/breaks`, { version, breaks: [{ entryId: JKT01_V2, minQuantity: 30, unitPrice: '419', discountPct: null }] }, 409)).message).toMatch(/version/i)
     expect((await eventsOf(P1_LIST)).filter((event) => event.type === 'price_list.rules_changed').map((event) => event.payload)).toEqual([{ listId: P1_LIST, versionId: P1_V2, revision: 2, change: 'BREAKS', rows: 2 }])
     const [audit] = await admin(`SELECT after FROM "AuditLog" WHERE action = 'priceLists.setBreaks' AND "recordId" = $1`, [P1_LIST])
     expect(JSON.stringify(audit!.after)).toContain('"$money":"price"')
     // Without the price grain a break's price cannot be sent; without pricelists.manage nothing.
     await refused('salesNoPrice', 'PUT', `${v(P1_V2)}/breaks`, { version: version + 1, breaks: [{ entryId: JKT01_V2, minQuantity: 30, unitPrice: '419', discountPct: null }] }, 403)
     await refused('buyer', 'PUT', `${v(P1_V2)}/breaks`, { version: version + 1, breaks: [{ entryId: null, minQuantity: 30, unitPrice: null, discountPct: '1' }] }, 403)
+    // B-CP-011: nor a Sales worker (no pricelists.manage any more).
+    await refused('sales', 'PUT', `${v(P1_V2)}/breaks`, { version: version + 1, breaks: [{ entryId: null, minQuantity: 30, unitPrice: null, discountPct: '1' }] }, 403)
     // An active version's breaks are fixed.
-    expect((await refused('sales', 'PUT', `${v(P1_V1)}/breaks`, { version: await versionOf(P1_V1), breaks: [{ entryId: null, minQuantity: 30, unitPrice: null, discountPct: '1' }] }, 409)).message).toBe('Version 1 is active: its quantity breaks are fixed. Make the next version to change them.')
+    expect((await refused('owner', 'PUT', `${v(P1_V1)}/breaks`, { version: await versionOf(P1_V1), breaks: [{ entryId: null, minQuantity: 30, unitPrice: null, discountPct: '1' }] }, 409)).message).toBe('Version 1 is active: its quantity breaks are fixed. Make the next version to change them.')
   })
 
   it('the same breaks again change nothing: 200 with the rules, no audit row, no event, the version stays (B-W2b-F32)', async () => {
@@ -239,16 +247,16 @@ describe('quantity breaks and size surcharges of a draft version (SAL-166, SAL-1
 
   it("sets a version's surcharge for one style and a style's own, the list's word first", async () => {
     const version = await versionOf(P1_V2)
-    expect((await refused('sales', 'PUT', `${v(P1_V2)}/size-surcharges`, { version, surcharges: [{ styleId: jkt01, size: '60', amount: null, pct: '5' }] }, 400)).message).toBe('60 is not a size of SEED-JKT-01 (50, 52, 54).')
-    const rules = await ok('sales', 'PUT', `${v(P1_V2)}/size-surcharges`, { version, surcharges: [{ styleId: jkt01, size: '54', amount: null, pct: '5' }] })
+    expect((await refused('owner', 'PUT', `${v(P1_V2)}/size-surcharges`, { version, surcharges: [{ styleId: jkt01, size: '60', amount: null, pct: '5' }] }, 400)).message).toBe('60 is not a size of SEED-JKT-01 (50, 52, 54).')
+    const rules = await ok('owner', 'PUT', `${v(P1_V2)}/size-surcharges`, { version, surcharges: [{ styleId: jkt01, size: '54', amount: null, pct: '5' }] })
     expect(rules.sizeSurcharges.map((row: Json) => [row.style?.code ?? '*', row.size, row.amount, row.pct])).toEqual([
       ['SEED-JKT-01', '54', null, '5'],
       ['*', '56', '20', null],
     ])
-    const own = await ok('sales', 'PUT', `/sales/styles/${jkt01}/size-surcharges`, { surcharges: [{ size: '54', amount: '15', currency: 'EUR', pct: null }] })
+    const own = await ok('owner', 'PUT', `/sales/styles/${jkt01}/size-surcharges`, { surcharges: [{ size: '54', amount: '15', currency: 'EUR', pct: null }] })
     expect(own.surcharges).toMatchObject([{ size: '54', amount: '15', currency: 'EUR' }])
-    expect((await refused('sales', 'PUT', `/sales/styles/${jkt01}/size-surcharges`, { surcharges: [{ size: '54', amount: '15', pct: null }] }, 400)).message).toBe('An amount names its currency (ISO 4217: EUR, CHF…).')
-    expect((await ok('sales', 'GET', `${v(P1_V2)}/rules`)).styleSurcharges).toMatchObject([{ style: { code: 'SEED-JKT-01' }, size: '54', amount: '15' }])
+    expect((await refused('owner', 'PUT', `/sales/styles/${jkt01}/size-surcharges`, { surcharges: [{ size: '54', amount: '15', pct: null }] }, 400)).message).toBe('An amount names its currency (ISO 4217: EUR, CHF…).')
+    expect((await ok('owner', 'GET', `${v(P1_V2)}/rules`)).styleSurcharges).toMatchObject([{ style: { code: 'SEED-JKT-01' }, size: '54', amount: '15' }])
     expect((await eventsOf(jkt01)).filter((event) => event.type === 'style.size_surcharges_changed').map((event) => event.payload)).toEqual([{ styleId: jkt01, code: 'SEED-JKT-01', sizes: ['54'] }])
   })
 
@@ -274,9 +282,9 @@ describe('dated prices (SAL-167)', () => {
     const until = addDays(TODAY, 20)
     const from = addDays(TODAY, 21)
     // The later price from `from` while the earlier still runs open: they overlap on every day from `from`.
-    const error = await refused('sales', 'PUT', `${v(P1_V2)}/dated-prices`, { version, prices: [{ styleId: jkt02, colourwayId: null, validFrom: from, validTo: null, unitPrice: '415' }, { styleId: jkt02, colourwayId: null, validFrom: '2027-02-01', validTo: null, unitPrice: null }] }, 400)
+    const error = await refused('owner', 'PUT', `${v(P1_V2)}/dated-prices`, { version, prices: [{ styleId: jkt02, colourwayId: null, validFrom: from, validTo: null, unitPrice: '415' }, { styleId: jkt02, colourwayId: null, validFrom: '2027-02-01', validTo: null, unitPrice: null }] }, 400)
     expect(error.message).toBe(`SEED-JKT-02 has two prices on the same days (to 2027-01-31 and from ${from}): the days of one style's prices never overlap.`)
-    const answer = await ok('sales', 'PUT', `${v(P1_V2)}/dated-prices`, {
+    const answer = await ok('owner', 'PUT', `${v(P1_V2)}/dated-prices`, {
       version,
       prices: [
         { styleId: jkt02, colourwayId: null, validFrom: null, validTo: until, unitPrice: '400' },
@@ -292,7 +300,7 @@ describe('dated prices (SAL-167)', () => {
       ['RED', '430', from, null],
     ])
     // W2a's price cell keys a style by colourway only: a style with dated prices goes through the dated prices.
-    expect((await refused('sales', 'PUT', `${v(P1_V2)}/entries`, { version: answer.version.version, entries: [{ styleId: jkt02, colourwayId: null, unitPrice: '405' }] }, 400)).message).toMatch(/prices by date/)
+    expect((await refused('owner', 'PUT', `${v(P1_V2)}/entries`, { version: answer.version.version, entries: [{ styleId: jkt02, colourwayId: null, unitPrice: '405' }] }, 400)).message).toMatch(/prices by date/)
   })
 
   it('the same dated prices again change nothing: 200 with the version, no audit row, no event, the version stays (B-W2b-F32)', async () => {
@@ -310,12 +318,12 @@ describe('dated prices (SAL-167)', () => {
   })
 
   it('shows the discount or the net price only on the customer documents (SAL-170)', async () => {
-    const list = (await ok('sales', 'GET', `/sales/price-lists/${P1_LIST}`)).list
+    const list = (await ok('owner', 'GET', `/sales/price-lists/${P1_LIST}`)).list
     expect(list.showDiscount).toBe(false)
-    const shown = await ok('sales', 'PUT', `/sales/price-lists/${P1_LIST}/discount-display`, { version: list.version, showDiscount: true })
+    const shown = await ok('owner', 'PUT', `/sales/price-lists/${P1_LIST}/discount-display`, { version: list.version, showDiscount: true })
     expect(shown.list).toMatchObject({ showDiscount: true, version: list.version + 1 })
-    await refused('sales', 'PUT', `/sales/price-lists/${P1_LIST}/discount-display`, { version: list.version, showDiscount: false }, 409)
-    await ok('sales', 'PUT', `/sales/price-lists/${P1_LIST}/discount-display`, { version: list.version + 1, showDiscount: false })
+    await refused('owner', 'PUT', `/sales/price-lists/${P1_LIST}/discount-display`, { version: list.version, showDiscount: false }, 409)
+    await ok('owner', 'PUT', `/sales/price-lists/${P1_LIST}/discount-display`, { version: list.version + 1, showDiscount: false })
     expect((await eventsOf(P1_LIST)).filter((event) => event.type === 'price_list.changed').map((event) => event.payload.fields)).toEqual([['showDiscount'], ['showDiscount']])
   })
 })
@@ -324,16 +332,16 @@ let v3 = ''
 
 describe('the next version takes everything (prices with their days, breaks, surcharges)', () => {
   it('activates version 2 from today, then makes version 3 from it', async () => {
-    const activated = await ok('sales', 'POST', `${v(P1_V2)}/activate`, { version: await versionOf(P1_V2), validFrom: TODAY, validTo: null })
+    const activated = await ok('owner', 'POST', `${v(P1_V2)}/activate`, { version: await versionOf(P1_V2), validFrom: TODAY, validTo: null })
     expect(activated.version).toMatchObject({ status: 'ACTIVE', validFrom: TODAY })
-    const next = await ok('sales', 'POST', `/sales/price-lists/${P1_LIST}/versions`, {}, 201)
+    const next = await ok('owner', 'POST', `/sales/price-lists/${P1_LIST}/versions`, {}, 201)
     v3 = next.version.id
     expect(next.entries.filter((row: Json) => row.styleId === jkt02).map((row: Json) => [row.colourway?.code ?? '*', row.unitPrice, row.validFrom, row.validTo])).toEqual([
       ['*', '400', null, addDays(TODAY, 20)],
       ['*', '415', addDays(TODAY, 21), null],
       ['RED', '430', addDays(TODAY, 21), null],
     ])
-    const rules = await ok('sales', 'GET', `${v(v3)}/rules`)
+    const rules = await ok('owner', 'GET', `${v(v3)}/rules`)
     expect(rules.breaks.map((row: Json) => [row.entry?.style.code ?? '*', row.minQuantity])).toEqual([
       ['SEED-JKT-01', 10],
       ['SEED-JKT-01', 20],
@@ -346,20 +354,21 @@ describe('the next version takes everything (prices with their days, breaks, sur
 
 let quote: Json = {}
 const quoteUrl = (id: string) => `/sales/quotes/${id}`
+// B-CP-011: the quote whose list prices are read is the Owner's (was Sales').
 const addLine = async (body: Json) => {
-  quote = (await ok('sales', 'POST', `${quoteUrl(quote.id)}/lines`, { version: quote.version, ...body }, 201)).quote
+  quote = (await ok('owner', 'POST', `${quoteUrl(quote.id)}/lines`, { version: quote.version, ...body }, 201)).quote
   return quote.lines.at(-1)
 }
 
 describe("a quote's lines priced from the list (SAL-166, SAL-167, SAL-180)", () => {
   it('takes the dated price of its day, the break of its pieces and the size surcharge; the steps are a waterfall the database takes', async () => {
-    quote = (await ok('sales', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1 }, 201)).quote
+    quote = (await ok('owner', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1 }, 201)).quote
     const jacketLine = await addLine({ styleId: jkt01, colourwayId: BLK, sizes: [{ size: '50', quantity: 4 }, { size: '52', quantity: 4 }, { size: '54', quantity: 4 }] })
     expect(jacketLine).toMatchObject({ listUnitPrice: '435' })
     await addLine({ styleId: jkt02, colourwayId: BLK2, sizes: [{ size: '52', quantity: 3 }] })
     // RED's own price starts in 21 days: today's quote takes the style's price for every colourway (400).
     expect(await addLine({ styleId: jkt02, colourwayId: RED2, sizes: [{ size: '52', quantity: 1 }] })).toMatchObject({ listUnitPrice: '400' })
-    const priced = await ok('sales', 'GET', `${quoteUrl(quote.id)}/list-prices`)
+    const priced = await ok('owner', 'GET', `${quoteUrl(quote.id)}/list-prices`)
     expect(priced).toMatchObject({ day: TODAY, priceBasis: 'NET', showDiscount: false })
     const [first, second] = priced.lines
     // 12 pieces reach the 10-piece break (425); size 54 takes the version's 5 % for SEED-JKT-01 (21.25), not the style's own 15.
@@ -372,11 +381,13 @@ describe("a quote's lines priced from the list (SAL-166, SAL-167, SAL-180)", () 
     await admin(`UPDATE "QuoteLine" SET "unitPrice" = $2, "priceSteps" = $3::jsonb WHERE id = $1`, [first.lineId, first.unitPrice, JSON.stringify(first.steps)])
     const [stored] = await admin(`SELECT "priceSteps" FROM "QuoteLine" WHERE id = $1`, [first.lineId])
     expect(stored!.priceSteps.map((step: Json) => step.kind)).toEqual(['LIST', 'BREAK', 'SIZE_SURCHARGE', 'NET'])
-    // Without the price grain: no figure.
-    const blind = (await ok('salesNoPrice', 'GET', `${quoteUrl(quote.id)}/list-prices`)).lines[0]
-    expect(blind).not.toHaveProperty('listPrice')
-    expect(blind).not.toHaveProperty('steps')
-    quote = (await ok('sales', 'GET', quoteUrl(quote.id))).quote
+    // Without the price grain: no figure (B-CP-011: the Sales role neither).
+    for (const who of ['salesNoPrice', 'sales']) {
+      const blind = (await ok(who, 'GET', `${quoteUrl(quote.id)}/list-prices`)).lines[0]
+      expect(blind, who).not.toHaveProperty('listPrice')
+      expect(blind, who).not.toHaveProperty('steps')
+    }
+    quote = (await ok('owner', 'GET', quoteUrl(quote.id))).quote
   })
 })
 
@@ -384,13 +395,15 @@ let blockRule: Json = {}
 
 describe('minimum order quantities at the send and on an office order (SAL-178)', () => {
   it('a WARN, a SURCHARGE and a BLOCK minimum, in words; the BLOCK stops the send', async () => {
-    const error = await refused('sales', 'POST', '/sales/minimums', { companyId: companyA, styleId: jkt02, productType: 'JACKET', minQuantity: 5, per: 'LINE', action: 'BLOCK' }, 400)
+    const error = await refused('owner', 'POST', '/sales/minimums', { companyId: companyA, styleId: jkt02, productType: 'JACKET', minQuantity: 5, per: 'LINE', action: 'BLOCK' }, 400)
     expect(error.message).toBe('A minimum is about one style, one kind of garment or one material: exactly one.')
-    blockRule = (await ok('sales', 'POST', '/sales/minimums', { companyId: companyA, styleId: jkt02, minQuantity: 5, per: 'LINE', action: 'BLOCK', note: 'Below 5 the leather lot is not cut.' }, 201)).minimum
+    blockRule = (await ok('owner', 'POST', '/sales/minimums', { companyId: companyA, styleId: jkt02, minQuantity: 5, per: 'LINE', action: 'BLOCK', note: 'Below 5 the leather lot is not cut.' }, 201)).minimum
     expect(blockRule).toMatchObject({ subject: 'STYLE', style: { code: 'SEED-JKT-02' }, per: 'LINE', action: 'BLOCK', status: 'ACTIVE' })
-    expect((await refused('sales', 'POST', '/sales/minimums', { companyId: companyA, styleId: jkt02, minQuantity: 8, per: 'LINE', action: 'WARN' }, 409)).message).toMatch(/already counts this subject/)
+    expect((await refused('owner', 'POST', '/sales/minimums', { companyId: companyA, styleId: jkt02, minQuantity: 8, per: 'LINE', action: 'WARN' }, 409)).message).toMatch(/already counts this subject/)
     await refused('buyer', 'POST', '/sales/minimums', { companyId: companyA, styleId: jkt02, minQuantity: 8, per: 'ORDER', action: 'WARN' }, 403)
-    const checks = await ok('sales', 'GET', `${quoteUrl(quote.id)}/line-checks`)
+    // B-CP-011: the minimums are kept with the price lists: by the Owner, not by a Sales worker.
+    await refused('sales', 'POST', '/sales/minimums', { companyId: companyA, styleId: jkt02, minQuantity: 8, per: 'ORDER', action: 'WARN' }, 403)
+    const checks = await ok('owner', 'GET', `${quoteUrl(quote.id)}/line-checks`)
     expect(checks.priceListId).toBe(P1_LIST)
     expect(checks.findings.map((finding: Json) => [finding.severity, finding.seqs, finding.message])).toEqual([
       ['BLOCKS', [20], 'SEED-JKT-02: 3 pieces on line 20 (SEED-JKT-02 BLK); the minimum is 5 per line. The quote cannot go out below it. Below 5 the leather lot is not cut.'],
@@ -400,34 +413,34 @@ describe('minimum order quantities at the send and on an office order (SAL-178)'
     expect(checks.findings[2].details).toMatchObject({ action: 'SURCHARGE', minQuantity: 20, quantity: 16, surcharge: { amount: '12', currency: 'EUR', pct: null } })
     const blind = (await ok('salesNoPrice', 'GET', `${quoteUrl(quote.id)}/line-checks`)).findings[2].details
     expect(blind.surcharge).toEqual({ currency: 'EUR' })
-    const send = await ok('sales', 'GET', `${quoteUrl(quote.id)}/send-check`)
+    const send = await ok('owner', 'GET', `${quoteUrl(quote.id)}/send-check`)
     expect(send.ready).toBe(false)
     expect(send.checks.filter((check: Json) => check.code === 'BELOW_MINIMUM').map((check: Json) => check.severity)).toEqual(['BLOCKS', 'BLOCKS', 'WARNING'])
     // The send itself is refused with the minimum in its words (beside the quote's other open checks).
-    const sent = await refused('sales', 'POST', `${quoteUrl(quote.id)}/send`, { version: quote.version }, 409)
+    const sent = await refused('owner', 'POST', `${quoteUrl(quote.id)}/send`, { version: quote.version }, 409)
     expect(sent.message).toContain('the minimum is 5 per line. The quote cannot go out below it.')
     // An office order of 3 pieces of SEED-JKT-02 is refused too (its preview names the problem).
-    const preview = await ok('sales', 'POST', '/sales/orders/manual/preview', { companyId: companyA, partyId: P1, lines: [{ styleId: jkt02, colourwayId: BLK2, sizes: [{ size: '52', quantity: 3 }] }] })
+    const preview = await ok('owner', 'POST', '/sales/orders/manual/preview', { companyId: companyA, partyId: P1, lines: [{ styleId: jkt02, colourwayId: BLK2, sizes: [{ size: '52', quantity: 3 }] }] })
     expect(preview.ok).toBe(false)
     expect(preview.problems.map((problem: Json) => problem.message)).toContain('SEED-JKT-02: 3 pieces on line 10 (SEED-JKT-02 BLK); the minimum is 5 per line. The order cannot go out below it. Below 5 the leather lot is not cut.')
   })
 
   it('archived, the BLOCK stops nothing; an edit keeps the subject; the order line checks read the same rules', async () => {
-    const archived = await ok('sales', 'POST', `/sales/minimums/${blockRule.id}/archive`, { version: blockRule.version })
+    const archived = await ok('owner', 'POST', `/sales/minimums/${blockRule.id}/archive`, { version: blockRule.version })
     expect(archived.minimum.status).toBe('ARCHIVED')
-    const send = await ok('sales', 'GET', `${quoteUrl(quote.id)}/send-check`)
+    const send = await ok('owner', 'GET', `${quoteUrl(quote.id)}/send-check`)
     expect(send.checks.filter((check: Json) => check.code === 'BELOW_MINIMUM').map((check: Json) => check.severity)).toEqual(['WARNING'])
-    const back = await ok('sales', 'POST', `/sales/minimums/${blockRule.id}/reactivate`, { version: archived.minimum.version })
-    const edited = await ok('sales', 'PATCH', `/sales/minimums/${blockRule.id}`, { version: back.minimum.version, minQuantity: 3, action: 'WARN' })
+    const back = await ok('owner', 'POST', `/sales/minimums/${blockRule.id}/reactivate`, { version: archived.minimum.version })
+    const edited = await ok('owner', 'PATCH', `/sales/minimums/${blockRule.id}`, { version: back.minimum.version, minQuantity: 3, action: 'WARN' })
     expect(edited.minimum).toMatchObject({ minQuantity: 3, action: 'WARN', style: { code: 'SEED-JKT-02' } })
     // At least 3 per line, a warning: line 20 (3 pieces) meets it, line 30 (1) does not.
-    expect((await ok('sales', 'GET', `${quoteUrl(quote.id)}/line-checks`)).findings.map((finding: Json) => finding.seqs)).toEqual([[10, 20, 30], [30]])
-    await ok('sales', 'DELETE', `/sales/minimums/${blockRule.id}?version=${edited.minimum.version}`)
+    expect((await ok('owner', 'GET', `${quoteUrl(quote.id)}/line-checks`)).findings.map((finding: Json) => finding.seqs)).toEqual([[10, 20, 30], [30]])
+    await ok('owner', 'DELETE', `/sales/minimums/${blockRule.id}?version=${edited.minimum.version}`)
     expect((await eventsOf(blockRule.id)).map((event) => event.payload.change)).toEqual(['CREATED', 'ARCHIVED', 'REACTIVATED', 'UPDATED', 'DELETED'])
     const order = await admin<{ id: string }>(`SELECT id FROM "SalesOrder" WHERE number = 'SEED-SO-0004'`)
-    const orderChecks = await ok('sales', 'GET', `/sales/orders/${order[0]!.id}/line-checks`)
+    const orderChecks = await ok('owner', 'GET', `/sales/orders/${order[0]!.id}/line-checks`)
     expect(orderChecks.findings.map((finding: Json) => finding.message)).toEqual(['Jackets: 4 pieces on this order; the minimum is 20 per order. Below it a small-run surcharge per piece applies.'])
-    expect((await ok('sales', 'GET', '/sales/minimums?priceListId=' + P1_LIST)).minimums.map((row: Json) => row.productType)).toEqual(['JACKET'])
+    expect((await ok('owner', 'GET', '/sales/minimums?priceListId=' + P1_LIST)).minimums.map((row: Json) => row.productType)).toEqual(['JACKET'])
   })
 })
 
@@ -471,7 +484,7 @@ async function uploadSoon(session: string, body: Buffer, fields: Json = {}): Pro
 describe('the export of a version and its import into the next draft (SAL-183)', () => {
   let exported = ''
   it('writes the import columns as CSV (Italian numbers) and Excel; without the price grain it is refused', async () => {
-    const response = await call('sales', 'GET', `${v(P1_V2)}/export?format=csv`)
+    const response = await call('owner', 'GET', `${v(P1_V2)}/export?format=csv`)
     expect(response.statusCode, response.body).toBe(200)
     expect(response.headers['content-disposition']).toContain('price-list-SEED-PL-P1-v2.csv')
     exported = response.body
@@ -486,16 +499,17 @@ describe('the export of a version and its import into the next draft (SAL-183)',
       `SEED-PL-P1;SEED-JKT-02;*;${addDays(TODAY, 21)};-;415;;`,
       `SEED-PL-P1;SEED-JKT-02;RED;${addDays(TODAY, 21)};-;430;;`,
     ])
-    const xlsx = await call('sales', 'GET', `${v(P1_V2)}/export?format=xlsx&numberFormat=en`)
+    const xlsx = await call('owner', 'GET', `${v(P1_V2)}/export?format=xlsx&numberFormat=en`)
     const workbook = new ExcelJS.Workbook()
     await workbook.xlsx.load(xlsx.rawPayload as unknown as ArrayBuffer)
     expect(workbook.getWorksheet('Prices')!.getRow(3).getCell(6).value).toBe(435)
     expect(workbook.getWorksheet('Columns')!.rowCount).toBe(9)
-    expect((await refused('salesNoPrice', 'GET', `${v(P1_V2)}/export?format=csv`, undefined, 403)).message).toBe("A price list's file holds its prices: your role does not see prices.")
+    // B-CP-011: the Sales role is refused as the copy without the price grain is.
+    for (const who of ['salesNoPrice', 'sales']) expect((await refused(who, 'GET', `${v(P1_V2)}/export?format=csv`, undefined, 403)).message).toBe("A price list's file holds its prices: your role does not see prices.")
   })
 
   it('reads its own file back unchanged; an edited file updates the draft, refusing in words what it cannot', async () => {
-    const same = await upload('sales', Buffer.from(exported, 'utf8'), { companyId: companyA })
+    const same = await upload('owner', Buffer.from(exported, 'utf8'), { companyId: companyA })
     expect(same).toMatchObject({ status: 'PLANNED', rowCount: 5, unchangedCount: 5, errorCount: 0 })
     const edited = Buffer.from(
       [
@@ -508,9 +522,9 @@ describe('the export of a version and its import into the next draft (SAL-183)',
       ].join('\r\n'),
       'utf8',
     )
-    const job = await upload('sales', edited, { companyId: companyA })
+    const job = await upload('owner', edited, { companyId: companyA })
     expect(job).toMatchObject({ status: 'PLANNED', rowCount: 5, createCount: 1, updateCount: 1, errorCount: 3 })
-    const rows = await rowsOf('sales', job.id)
+    const rows = await rowsOf('owner', job.id)
     expect(rows.map((row) => [row.rowNumber, row.action])).toEqual([
       [2, 'UPDATE'],
       [3, 'CREATE'],
@@ -521,15 +535,15 @@ describe('the export of a version and its import into the next draft (SAL-183)',
     expect(rows[2]!.errors[0].message).toBe(`The style has another price on these days (to ${addDays(TODAY, 20)}): the days of one style's prices never overlap.`)
     expect(rows[3]!.errors[0].message).toBe("SEED-PL-BASE has no draft version (an active version's prices are fixed): make the next version, then import into it.")
     expect(rows[4]!.errors[0].message).toBe('A new price needs its unit price.')
-    const applied = await call('sales', 'POST', `/imports/${job.id}/apply`, { version: job.version })
+    const applied = await call('owner', 'POST', `/imports/${job.id}/apply`, { version: job.version })
     expect(applied.statusCode, applied.body).toBe(200)
     await applyPlan(system(), job.id, { lastAttempt: true })
-    const draft = await ok('sales', 'GET', v(v3))
+    const draft = await ok('owner', 'GET', v(v3))
     expect(draft.entries.filter((row: Json) => row.styleId === jkt01).map((row: Json) => [row.colourway?.code ?? '*', row.unitPrice])).toEqual([
       ['*', '440'],
       ['BLK', '445'],
     ])
-    const rules = await ok('sales', 'GET', `${v(v3)}/rules`)
+    const rules = await ok('owner', 'GET', `${v(v3)}/rules`)
     expect(rules.breaks.filter((row: Json) => row.entry?.style.code === 'SEED-JKT-01').map((row: Json) => [row.minQuantity, row.unitPrice])).toEqual([[10, '430']])
     // A person without the price grain may not map the price columns at all.
     const blind = await call('salesNoPrice', 'POST', '/imports', { importerKey: 'sales.priceLists', file: { originalName: 'p.csv', contentType: SHEET_TYPES.csv, sizeBytes: edited.length, sha256: sha256(edited) } })
@@ -553,8 +567,8 @@ describe('the export of a version and its import into the next draft (SAL-183)',
       ].join('\r\n'),
       'utf8',
     )
-    const job = await uploadSoon('sales', file, { companyId: companyA })
-    const rows = await rowsOf('sales', job.id)
+    const job = await uploadSoon('owner', file, { companyId: companyA })
+    const rows = await rowsOf('owner', job.id)
     expect(rows.map((row) => [row.rowNumber, row.action])).toEqual([
       [2, 'UPDATE'],
       [3, 'UPDATE'],
@@ -566,10 +580,10 @@ describe('the export of a version and its import into the next draft (SAL-183)',
     expect(rows[3]!.errors[0].message).toBe("Size surcharges go on the style's row with colourway * and first day -.")
     expect(rows[4]!.errors.map((error: Json) => error.column)).toEqual(['colourway', 'unitPrice'])
     expect(rows[5]!.errors[0].message).toMatch(/^99 is not a size of SEED-JKT-02/)
-    const applied = await call('sales', 'POST', `/imports/${job.id}/apply`, { version: job.version })
+    const applied = await call('owner', 'POST', `/imports/${job.id}/apply`, { version: job.version })
     expect(applied.statusCode, applied.body).toBe(200)
     await applyPlan(system(), job.id, { lastAttempt: true })
-    const rules = await ok('sales', 'GET', `${v(v3)}/rules`)
+    const rules = await ok('owner', 'GET', `${v(v3)}/rules`)
     expect(rules.breaks.filter((row: Json) => row.entryId === null).map((row: Json) => [row.minQuantity, row.discountPct])).toEqual([[100, '4']])
     expect(rules.sizeSurcharges.map((row: Json) => [row.style?.code ?? '*', row.size, row.amount, row.pct]).sort()).toEqual([
       ['*', '56', '25', null],
@@ -579,9 +593,9 @@ describe('the export of a version and its import into the next draft (SAL-183)',
     ])
     expect((await eventsOf(P1_LIST)).filter((event) => event.type === 'price_list.rules_changed' && event.payload.versionId === v3).map((event) => event.payload.change).sort()).toEqual(['BREAKS', 'SIZE_SURCHARGES', 'SIZE_SURCHARGES', 'SIZE_SURCHARGES'])
     // The draft exported and imported again changes nothing: every row (the version's own, the surcharges alone) reads back.
-    const exported = await call('sales', 'GET', `${v(v3)}/export?format=csv`)
+    const exported = await call('owner', 'GET', `${v(v3)}/export?format=csv`)
     expect(exported.body.split('\r\n').filter((line) => line.startsWith('SEED-PL-P1;*;') || line.startsWith('SEED-PL-P1;SEED-JKT-05;'))).toEqual(['SEED-PL-P1;*;*;-;;;100=4%;56=25', 'SEED-PL-P1;SEED-JKT-05;*;-;;;;54=7'])
-    const again = await uploadSoon('sales', Buffer.from(exported.body, 'utf8'), { companyId: companyA })
+    const again = await uploadSoon('owner', Buffer.from(exported.body, 'utf8'), { companyId: companyA })
     expect(again).toMatchObject({ status: 'PLANNED', errorCount: 0, createCount: 0, updateCount: 0 })
   })
 })

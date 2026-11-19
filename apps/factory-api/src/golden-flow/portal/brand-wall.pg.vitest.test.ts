@@ -286,7 +286,10 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
     await ok(P.manager, 'POST', `/product/styles/${style.id}/revisions`, { changeNote: 'First revision of the Brand Beta city jacket' }, 201)
     // A draft quote of Beta's (its own reference); the office keeps it to cost.
     let { quote } = await ok(P.sales, 'POST', '/sales/quotes', { companyId: companyA(), partyId: P3(), customerRef: BRAND_BETA.customerRef, promiseDate: addDays(today(), 60) }, 201)
-    ;({ quote } = await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: style.id, colourwayId: style.colourways[0].id, sizes: [{ size: '52', quantity: 4 }], unitPrice: '80' }, 201))
+    // B-CP-011 (the money wall): the line's typed price is the Owner's; Sales may not send it (403).
+    const priced = (version: number) => ({ version, styleId: style.id, colourwayId: style.colourways[0].id, sizes: [{ size: '52', quantity: 4 }], unitPrice: '80' })
+    await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/lines`, priced(quote.version), 403)
+    ;({ quote } = await ok(P.owner, 'POST', `/sales/quotes/${quote.id}/lines`, priced(quote.version), 201))
     G.betaQuote = quote
     // Beta's size chart on its quote, shared with Beta's portal and links; the quote shared with Beta's contact by link (a
     // tenant-wide style is shared on its quote or order).

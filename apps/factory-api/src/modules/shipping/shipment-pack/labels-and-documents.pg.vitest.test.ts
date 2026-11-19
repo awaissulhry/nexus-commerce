@@ -80,7 +80,9 @@ const SESSIONS: Record<string, SessionContext> = {
   warehouse: office([...SHIPPING, ...PRINTING, 'files.read']),
   // Sees prices: its pack carries a proforma; it makes them.
   priced: office([...SHIPPING, ...PRINTING, 'files.read', 'shipping.proforma.issue', 'money.price']),
-  sales: office(['shipping.view', 'shipping.proforma.issue', 'money.price']),
+  // B-CP-011: a proforma shows prices: the Owner makes it; Sales (shipping.proforma.issue, no price grain) is refused.
+  owner: office(['shipping.view', 'shipping.proforma.issue', 'money.price', 'money.cost', 'money.margin']),
+  sales: office(['shipping.view', 'shipping.proforma.issue']),
   noPrice: office(['shipping.view', 'shipping.proforma.issue']),
   quality: office(TRAVEL_DOCUMENT_PERMISSIONS),
   packerA1: { audience: 'floor', tenantId: A.tenant, actorId: A.operator, siteId: A.siteA1, deviceId: newId(), grants: [{ permissions: ['shipping.pack', 'print.view', 'print.labels'], companies: [A.companyA], sites: [A.siteA1], parties: 'all' }] },
@@ -287,19 +289,21 @@ describe('one PDF per shipment (LOG-031)', () => {
 describe('the proforma invoice (LOG-058)', () => {
   it('needs the price grain', async () => {
     expect((await refused('noPrice', 'GET', `/shipping/proformas?recordType=Shipment&recordId=${sh2()}`, undefined, 403)).message).toBe('A proforma shows prices: it needs the price grain.')
+    // B-CP-011: Sales sees no prices now: no proforma either.
+    expect((await refused('sales', 'POST', '/shipping/proformas', { recordType: 'Shipment', recordId: sh2() }, 403)).message).toBe('A proforma shows prices: it needs the price grain.')
     expect((await refused('warehouse', 'POST', '/shipping/proformas', { recordType: 'Shipment', recordId: sh2() }, 403)).code).toBe('forbidden')
   })
 
   it("makes the shipment's proforma (customs) with its own number; the same contents give it back; English is a version with the same number", async () => {
-    expect(await ok('sales', 'GET', `/shipping/proformas?recordType=Shipment&recordId=${sh2()}`)).toMatchObject({ purpose: 'CUSTOMS', number: null, versions: [], problems: [], label: 'SEED-SH-0002' })
-    const made = (await ok('sales', 'POST', '/shipping/proformas', { recordType: 'Shipment', recordId: sh2() }, 201)).proforma
+    expect(await ok('owner', 'GET', `/shipping/proformas?recordType=Shipment&recordId=${sh2()}`)).toMatchObject({ purpose: 'CUSTOMS', number: null, versions: [], problems: [], label: 'SEED-SH-0002' })
+    const made = (await ok('owner', 'POST', '/shipping/proformas', { recordType: 'Shipment', recordId: sh2() }, 201)).proforma
     expect(made).toMatchObject({ version: 1, made: true, current: true, number: `PF-${YEAR}-0001` })
-    expect((await ok('sales', 'POST', '/shipping/proformas', { recordType: 'Shipment', recordId: sh2() })).proforma).toMatchObject({ version: 1, made: false })
-    const english = (await ok('sales', 'POST', '/shipping/proformas', { recordType: 'Shipment', recordId: sh2(), language: 'en' }, 201)).proforma
+    expect((await ok('owner', 'POST', '/shipping/proformas', { recordType: 'Shipment', recordId: sh2() })).proforma).toMatchObject({ version: 1, made: false })
+    const english = (await ok('owner', 'POST', '/shipping/proformas', { recordType: 'Shipment', recordId: sh2(), language: 'en' }, 201)).proforma
     expect(english).toMatchObject({ version: 2, number: `PF-${YEAR}-0001`, language: 'en' })
     const [file] = await admin(`SELECT f.visibility::text[] AS visibility, f."partyId" IS NOT NULL AS "forTheCustomer", a.formatted FROM "StoredFile" f, "NumberAllocation" a WHERE f.id = $1 AND a.kind = 'PROFORMA' AND a."recordId" = $2`, [english.fileId, sh2()])
     expect(file).toEqual({ visibility: expect.arrayContaining(['OFFICE', 'PARTNER']), forTheCustomer: true, formatted: `PF-${YEAR}-0001` })
-    expect((await ok('sales', 'GET', `/shipping/proformas?recordType=Shipment&recordId=${sh2()}`)).versions.map((entry: Json) => [entry.version, entry.current])).toEqual([
+    expect((await ok('owner', 'GET', `/shipping/proformas?recordType=Shipment&recordId=${sh2()}`)).versions.map((entry: Json) => [entry.version, entry.current])).toEqual([
       [2, true],
       [1, false],
     ])
@@ -316,7 +320,7 @@ describe('the proforma invoice (LOG-058)', () => {
 
   it("makes a deposit request's proforma (prepayment) with the next number; a paid one is refused in words", async () => {
     const paid = (await admin<{ id: string; orderId: string; partyId: string }>(`SELECT id, "orderId", "partyId" FROM "DepositRequest" WHERE "tenantId" = $1 AND status = 'PAID' LIMIT 1`, [A.tenant]))[0]!
-    expect((await refused('sales', 'POST', '/shipping/proformas', { recordType: 'DepositRequest', recordId: paid.id }, 409)).message).toBe('This deposit is paid: its invoice is the document now.')
+    expect((await refused('owner', 'POST', '/shipping/proformas', { recordType: 'DepositRequest', recordId: paid.id }, 409)).message).toBe('This deposit is paid: its invoice is the document now.')
     // A made-up open request on the same order (past the guards: the deposit flow is not this test's).
     const open = newId()
     await admin('SET session_replication_role = replica')
@@ -328,7 +332,7 @@ describe('the proforma invoice (LOG-058)', () => {
     } finally {
       await admin('SET session_replication_role = DEFAULT')
     }
-    const made = (await ok('sales', 'POST', '/shipping/proformas', { recordType: 'DepositRequest', recordId: open }, 201)).proforma
+    const made = (await ok('owner', 'POST', '/shipping/proformas', { recordType: 'DepositRequest', recordId: open }, 201)).proforma
     expect(made).toMatchObject({ version: 1, number: `PF-${YEAR}-0002` })
     const [row] = await admin(`SELECT g."siteId", g.layout, a.after->>'purpose' AS purpose FROM "GeneratedDocument" g JOIN "AuditLog" a ON a."recordId" = g."recordId" AND a.action = 'shipping.proformaMade' WHERE g.id = $1`, [made.documentId])
     expect(row).toEqual({ siteId: null, layout: 'PROFORMA/1', purpose: 'PREPAYMENT' })
