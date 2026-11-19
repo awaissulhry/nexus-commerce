@@ -1,3 +1,5 @@
+// B-OP-033 (order page N5): the paper DDTs an invoice cites.
+import { citedDdts } from '@nexus/factory-domain/invoicing/fatturapa/build'
 import { freightProblems } from '@nexus/factory-domain/invoicing/charges/charges'
 import type { IssueProblem } from '@nexus/factory-domain/invoicing/checks'
 import { creditProblems } from '@nexus/factory-domain/invoicing/credit-note/credit-note'
@@ -46,7 +48,8 @@ export async function issueReferences(db: Reader, invoice: InvoiceRow, lines: re
   const depositIds = [...new Set(lines.flatMap((line) => (line.depositInvoiceId ? [line.depositInvoiceId] : [])))]
   const deposits = depositIds.length > 0 ? await db.invoice.findMany({ where: { id: { in: depositIds } }, select: { id: true, number: true, issueDate: true } }) : []
   return {
-    ddts: ddts.map((ddt) => ({ number: ddt.number, date: ddt.date })),
+    // B-OP-033 (order page N5): beside its lines' Nexus DDTs, the paper DDTs it cites (goods recorded as made elsewhere).
+    ddts: citedDdts(ddts.map((ddt) => ({ number: ddt.number, date: ddt.date })), invoice.documentRefs),
     ddtNumbers,
     credits: credited && credited.number && credited.issueDate ? { number: credited.number, issueDate: credited.issueDate.toISOString().slice(0, 10) } : await depthRelatedOf(db, invoice),
     deposits: new Map(deposits.flatMap((row) => (row.number && row.issueDate ? [[row.id, { number: row.number, issueDate: row.issueDate.toISOString().slice(0, 10) }] as const] : []))),

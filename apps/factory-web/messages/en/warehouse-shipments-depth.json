@@ -566,7 +566,9 @@
       "pickStatus": "Pick what happened.",
       "when": "The time is not a time.",
       "future": "The time is in the future.",
-      "beforeLeft": "The time is before the goods left."
+      "beforeLeft": "The time is before the goods left.",
+      "linkNeedsNumber": "A tracking link is typed only with its tracking number.",
+      "trackingLink": "An https address of at most {max} characters on one line, with no name or password in it."
     },
     "refusal": {
       "LEFT": "The goods have left.",
@@ -578,7 +580,9 @@
       "CARRIER_TRACKED": "The carrier's own tracking follows it: nothing to type.",
       "CUSTOMER_COLLECTS": "The customer collects: no status to type.",
       "ARRIVED": "It has arrived already."
-    }
+    },
+    "trackingLink": "Link (optional, https)",
+    "trackingLinkHint": "The carrier’s tracking page; the customer opens it with Track ›. Typed only with its number."
   },
   "check": {
     "title": "Check before printing",
@@ -964,6 +968,25 @@
     "takeOffGo": "Take them off",
     "gone": "None of its garments is on this shipment any more.",
     "progressTitle": "{order} on this shipment",
-    "packField": "Orders"
+    "packField": "Orders",
+    "why": {
+      "CUSTOMER": "Not an order of this customer",
+      "COMPANY": "Sold by another company",
+      "SITE": "Made at another site",
+      "SHIP_TO": "Another delivery address",
+      "CURRENCY": "Another currency",
+      "TAX_MODE": "Another VAT treatment",
+      "INCOTERM": "Another Incoterm",
+      "BILL_TO_VAT": "Bills another VAT number",
+      "ORDER_STATE": "Not an open order",
+      "SHIPMENT_STATE": "The shipment is no longer a draft",
+      "CUSTOMER_HOLD": "The customer is on hold"
+    }
+  },
+  "elsewhere": {
+    "tag": "Made elsewhere · DDT {ddt}",
+    "tagInvoice": "Made elsewhere · immediate invoice",
+    "noNexusDdt": "Recorded as made elsewhere: it left with paper DDT n. {ddt} of {date}; Nexus issues no DDT of it.",
+    "noNexusDdtInvoice": "Recorded as made elsewhere: an immediate invoice travelled with the goods; Nexus issues no DDT of it."
   }
 }

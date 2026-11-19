@@ -386,9 +386,9 @@ function shipmentRowOf(link: ShipmentLink, details: ShipmentDetails, viewer: Act
   const tracking = !sees
     ? null
     : typed !== null
-      ? { number: typed, source: 'TYPED' as const, parcels: [], live: false }
+      ? { number: typed, source: 'TYPED' as const, parcels: [], live: false, /* F-OP-135: the link typed beside it (Track ›, https only) */ url: trackingPageOf(row.manualTrackingUrl) }
       : labelled.length > 0
-        ? { number: null, source: 'PARCELS' as const, parcels: labelled.map((parcel) => ({ number: parcel.trackingNumber!, url: trackingPageOf(parcel.trackingUrl) })), live: true }
+        ? { number: null, source: 'PARCELS' as const, parcels: labelled.map((parcel) => ({ number: parcel.trackingNumber!, url: trackingPageOf(parcel.trackingUrl) })), live: true, url: null }
         : null
   const refusal = trackingRefusal({ status: row.status, transportBy: row.transportBy, manualTrackingNumber: typed, parcels: parcels.map((parcel) => ({ trackingNumber: parcel.trackingNumber, providerId: parcel.carrierParcelId })), liveDdts: 0 })
   const mayTypeTracking: MayTrack = !sees ? NO_TRACKING_RIGHT : refusal ? { allowed: false, code: refusal.code, why: refusal.message } : viewer !== null && can(viewer, SHIPPING_MANAGE, place) ? { allowed: true, code: null, why: null } : NO_TRACKING_RIGHT

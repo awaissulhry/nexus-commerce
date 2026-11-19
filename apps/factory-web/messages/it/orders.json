@@ -246,7 +246,8 @@
   "step": {
     "makeWorkOrders": "Crea ordini di lavoro",
     "changePromise": "Cambia data promessa…",
-    "close": "Chiudi ordine…"
+    "close": "Chiudi ordine…",
+    "createShipment": "Crea spedizione…"
   },
   "action": {
     "promise": "Cambia data promessa…",
@@ -583,7 +584,18 @@
         "shipment": "Apri la spedizione ›",
         "arrange": "Cambia come viaggia…"
       }
-    }
+    },
+    "created": "{number} creata (bozza)",
+    "createdDoor": "Imballala e spediscila in Magazzino ›",
+    "alsoCarries": "Porta anche {number}",
+    "join": {
+      "title": "Spedizioni in bozza a cui aggiungere questo ordine",
+      "add": "Aggiungi i capi di questo ordine…"
+    },
+    "joined_one": "{count} capo aggiunto a {number} (bozza)",
+    "joined_other": "{count} capi aggiunti a {number} (bozza)",
+    "track": "Segui ›",
+    "trackLink": "Segui la spedizione {number} sul sito del corriere"
   },
   "shipStatus": {
     "DRAFT": "Bozza",
@@ -1838,5 +1850,74 @@
     "ownDates": "Le date dell'ordine",
     "backupFor": "per tutti gli ordini di {customer}",
     "backupElsewhere": "Cambialo nella pagina di {customer} ›"
+  },
+  "elsewhere": {
+    "title": "Registra una spedizione fatta altrove…",
+    "subtitle": "{order} · {customer}",
+    "lines": "Capi partiti",
+    "cap": "Fino a {count}",
+    "releasedOn": "rilasciati il {date}",
+    "minus": "Un capo in meno di {cell}",
+    "plus": "Un capo in più di {cell}",
+    "serials": "Matricole, una per capo",
+    "serialsHint": "Scrivile o leggile, separate da spazi o virgole.",
+    "waitQuality_one": "Solo capi rilasciati: {count} pezzo attende la qualità",
+    "waitQuality_other": "Solo capi rilasciati: {count} pezzi attendono la qualità",
+    "noneReleased": "Niente di questo ordine è rilasciato e fuori da una spedizione.",
+    "reading": "Lettura di ciò che la qualità ha rilasciato…",
+    "readFailed": "Non è stato possibile leggere cosa ha rilasciato la qualità.",
+    "retry": "Riprova",
+    "paper": "Il DDT cartaceo",
+    "ddtNumber": "Numero DDT esterno",
+    "ddtDate": "Data DDT",
+    "invoiceInstead": "Al posto del DDT ha viaggiato una fattura immediata",
+    "noNexusDdt": "Non si emette nessun numero DDT di Nexus: il documento è il DDT cartaceo partito con la merce",
+    "notCitable": "La fattura elettronica cita un numero DDT di al massimo 20 caratteri semplici: questa spedizione si fattura a mano.",
+    "leftOn": "Partita il",
+    "beforeRelease": "Non prima del rilascio dei capi ({date})",
+    "future": "Non nel futuro",
+    "tooOld": "Al massimo {days} giorni indietro",
+    "ddtRequired": "Scrivi numero e data del DDT cartaceo, oppure indica che ha viaggiato una fattura immediata",
+    "ddtNumberRule": "Da 1 a {max} caratteri su una riga, come stampato",
+    "ddtAfter": "Il DDT è datato entro il giorno in cui la merce è partita",
+    "ddtUsed": "Quel numero e data DDT sono già registrati.",
+    "notReleased": "Partono solo capi rilasciati: di questa taglia non ne può partire di più",
+    "serialsMissing": "Indica la matricola di ogni capo ({count} di {total})",
+    "noLines": "Scegli almeno un capo",
+    "how": "Come ha viaggiato",
+    "by": {
+      "CARRIER": "Un corriere prenotato a mano",
+      "SENDER": "Il nostro furgone",
+      "RECIPIENT": "Ha ritirato il cliente"
+    },
+    "trackingNumber": "Numero di tracciamento (facoltativo)",
+    "tellOn": "{customer} riceve l'avviso di spedizione: la sede avvisa il cliente quando la merce parte.",
+    "tellOff": "Nessun avviso di spedizione a {customer}: l'avviso della sede è spento.",
+    "heldCustomer": "{customer} è bloccato",
+    "creditHeld": "Il credito di {customer} è bloccato.",
+    "reason": "Perché la merce è partita comunque",
+    "reasonHint": "Registrato con la spedizione e scritto nella conversazione dell'ordine.",
+    "note": "Nota interna (facoltativa)",
+    "cancel": "Annulla",
+    "record_one": "Registra spedizione ({count} capo)",
+    "record_other": "Registra spedizione ({count} capi)",
+    "done": "{number} è registrata come fatta altrove e spedita.",
+    "doneClose": "Fatto",
+    "open": "Apri {number} ›",
+    "warnings": "Registrata senza tutti i documenti DPI in archivio (c'è una riga nella conversazione dell'ordine):",
+    "chip": "Fatta altrove · DDT {ddt}",
+    "chipInvoice": "Fatta altrove · fattura immediata",
+    "held": {
+      "state": "Solo un ordine aperto registra una spedizione fatta altrove",
+      "noRight": "La registra una persona del magazzino: servono i diritti di gestire le spedizioni ed emettere DDT",
+      "reading": "Controllo di cosa direbbe la spedizione…",
+      "problems": "Sistema prima ciò che dicono i campi",
+      "customer": "{customer} è bloccato: la registra una persona che può sbloccare, con il motivo",
+      "reason": "Di' perché la merce è partita comunque"
+    },
+    "refusal": {
+      "state": "Non è stato possibile registrare la spedizione",
+      "failed": "Non è stato possibile registrare la spedizione: riprova"
+    }
   }
 }

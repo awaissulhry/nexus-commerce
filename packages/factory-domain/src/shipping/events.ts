@@ -208,7 +208,7 @@ export const events = [
     type: 'shipment.tracking_changed',
     context: 'shipping',
     description: "The tracking number of a shipment's carrier booked by hand was typed, corrected or cleared, before or after the goods left.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), status, hasNumber: z.boolean(), salesOrderIds: z.array(z.uuid()).min(1), partyId: livePartyId() }),
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), status, hasNumber: z.boolean(), /* B-OP-034: a typed tracking link beside it */ hasLink: z.boolean(), salesOrderIds: z.array(z.uuid()).min(1), partyId: livePartyId() }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'status', 'salesOrderIds'] },
   }),
   // ── end B-OP-030 ──

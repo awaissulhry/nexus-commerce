@@ -29,14 +29,31 @@ import { assertCollectedInCommand } from '../collection/collection'
  *
  * One audit row (`shipping.left`) says what came from stock and what from the release, cell by cell.
  */
-export async function whenShipped(tools: CommandTools, shipment: ShipmentHeader, periodLockOverride?: PeriodLockOverride | null): Promise<void> {
+// ---- B-OP-032 (order page N5; R-2, R-9): how the goods leave --------------------------------------------------------------
+export interface LeaveOptions {
+  readonly periodLockOverride?: PeriodLockOverride | null | undefined
+  /**
+   * B-OP-032: recorded as made ELSEWHERE — the fact already happened outside Nexus: the customer collecting is not asked who
+   * collected (the paper DDT carries it), and the customer's account hold and credit hold were overridden by a person who
+   * may release holds, with a reason (`holdsOverridden`; R-9: else the recording is refused before this, in words).
+   */
+  readonly elsewhere?: { readonly holdsOverridden: boolean } | undefined
+  /** When the goods left (the audit names it beside the recording time; stock and cost of sales post now, D5). */
+  readonly shippedAt?: Date | undefined
+}
+// ---- end B-OP-032
+
+export async function whenShipped(tools: CommandTools, shipment: ShipmentHeader, options: LeaveOptions = {}): Promise<void> {
+  const periodLockOverride = options.periodLockOverride
+  const overridden = options.elsewhere?.holdsOverridden === true // B-OP-032 (R-9)
   // B-W2b-290 (SAL-023): a shipment does not leave while its customer is on hold for its company (409 in words).
-  await assertNotOnHold(tools.tx, { partyId: shipment.partyId, companyId: shipment.companyId }, 'SHIPMENT')
+  if (!overridden) await assertNotOnHold(tools.tx, { partyId: shipment.partyId, companyId: shipment.companyId }, 'SHIPMENT')
   // B-W2b-395 (LOG-053): the customer collecting: who collected, the plate and the signed DDT first (409 in words).
-  await assertCollectedInCommand(tools, shipment)
+  // B-OP-032: not for goods recorded as made elsewhere (they left with their paper DDT, signed outside Nexus).
+  if (!options.elsewhere) await assertCollectedInCommand(tools, shipment)
   // B-W2b-304: over the credit limit where the company holds, the shipment waits for a yes (409 in words; the caller's
   // withCreditHolds writes the hold and asks for the yes after the rollback).
-  await creditGateInCommand(tools, { step: 'SHIPMENT', recordType: 'Shipment', recordId: shipment.id, label: `Shipment ${shipment.number}`, companyId: shipment.companyId, partyIds: [shipment.partyId] })
+  if (!overridden) await creditGateInCommand(tools, { step: 'SHIPMENT', recordType: 'Shipment', recordId: shipment.id, label: `Shipment ${shipment.number}`, companyId: shipment.companyId, partyIds: [shipment.partyId] })
   const tenantId = tenantOf(tools.context)
   const cells = await shippedCells(tools.tx, shipment.id)
   const repairs = cells.filter((cell) => cell.repair)
@@ -61,6 +78,8 @@ export async function whenShipped(tools: CommandTools, shipment: ShipmentHeader,
       stockMoveIds: stock.moveIds,
       freightBasis: freight?.basis ?? null,
       transportEvidence: evidence,
+      // B-OP-032 (D5): goods recorded as made elsewhere left on this day; their stock moved at the recording (tools.now).
+      ...(options.elsewhere ? { madeElsewhere: true, shippedAt: (options.shippedAt ?? tools.now).toISOString(), recordedAt: tools.now.toISOString(), holdsOverridden: overridden } : {}),
     },
   })
 }

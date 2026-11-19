@@ -211,7 +211,7 @@ describe('B-OP-040: candidates and joinable answer the same customer only, each 
     const { orders, number } = await ok('warehouse', 'GET', `/shipping/shipments/${ids.draft}/orders/candidates`)
     expect(number).toMatch(/^SH-/)
     const alpha2 = (orders as Json[]).find((row) => row.salesOrderId === ids.alpha2)
-    expect(alpha2).toEqual({ salesOrderId: ids.alpha2, number: 'SO-ALPHA-2', customerRef: 'SO-ALPHA-2-PO', status: 'CONFIRMED', joinable: { allowed: false, why: MULTI_ORDER_OFF } })
+    expect(alpha2).toEqual({ salesOrderId: ids.alpha2, number: 'SO-ALPHA-2', customerRef: 'SO-ALPHA-2-PO', status: 'CONFIRMED', joinable: { allowed: false, code: 'MULTI_ORDER_OFF', why: MULTI_ORDER_OFF } })
     expect((orders as Json[]).map((row) => row.salesOrderId)).not.toContain(so2())
     expect((orders as Json[]).every((row) => row.joinable.allowed === false)).toBe(true)
     // Never Brand Beta's order, also for a person who sees every customer.
@@ -245,7 +245,7 @@ describe('B-OP-070: ship together — the ready read lists the same customer\'s 
     const rows = ready.orders as Json[]
     expect(rows[0]).toMatchObject({ salesOrderId: so2(), shipsWith: null })
     const other = rows.find((row) => row.salesOrderId === so3())
-    expect(other).toMatchObject({ partyId: A.alpha, shipsWith: { allowed: false, why: expect.any(String) } })
+    expect(other).toMatchObject({ partyId: A.alpha, shipsWith: { allowed: false, code: expect.any(String), why: expect.any(String) } }) // F-OP-121: a code per reason
     // Held off: every other order is refused, MULTI_ORDER_OFF at the latest.
     expect(rows.slice(1).every((row) => row.shipsWith.allowed === false)).toBe(true)
     expect(rows.every((row) => row.partyId === A.alpha)).toBe(true)

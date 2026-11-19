@@ -207,6 +207,8 @@ const shipment = output({
   expectedDeliveryAt: instant().nullable(),
   /** B-OP-031: the number typed for a carrier booked by hand; no carrier feeds it ("No live tracking"). null: none. */
   typedTrackingNumber: z.string().nullable(),
+  /** B-OP-034: the tracking link typed beside it ("Track ›", https only); null: none. */
+  typedTrackingUrl: z.string().nullable(),
   ddt: output({ number: z.string(), date: day }).nullable(),
   milestones: z.array(output({ key: z.enum(SHIPMENT_MILESTONES), words, done: z.boolean(), at: instant().nullable() })),
   parcels: z.array(
@@ -261,6 +263,8 @@ export const inTransitContract = defineContract({
           expectedDeliveryAt: instant().nullable(),
           /** B-OP-031: the number typed for a carrier booked by hand ("No live tracking"); null: none. */
           typedTrackingNumber: z.string().nullable(),
+          /** B-OP-034: the tracking link typed beside it (https only); null: none. */
+          typedTrackingUrl: z.string().nullable(),
           trackingNumbers: z.array(z.string()),
           /** B-W2b-F14: "Track on the carrier's site" per tracking number (https pages only). */
           trackingLinks: z.array(output({ trackingNumber: z.string(), url: z.string(), words })),

@@ -98,8 +98,10 @@ export const shippedNotInvoicedContract = defineContract({
               valueAmount: money.price(z.number().int()),
               depositPaidAmount: money.price(z.number().int()),
               drafts: z.array(id()),
-              /** Its immediate invoice's limit: 12 days after it left. */
+              /** Its immediate invoice's limit: 12 days after it left. B-OP-033: made elsewhere with a paper DDT — by the customer's terms (TD24 by the 15th of the next month, else TD01 within 12 days of the DDT). */
               deadline,
+              /** B-OP-033 (order page N5): recorded as made elsewhere, the paper DDT it left with (its invoice cites it); null: none. */
+              paperDdt: output({ number: z.string(), date: z.string() }).nullable(),
               freight: output({ amount: money.price(z.number().int().nullable()), currency: z.string() }),
             }),
           ),
