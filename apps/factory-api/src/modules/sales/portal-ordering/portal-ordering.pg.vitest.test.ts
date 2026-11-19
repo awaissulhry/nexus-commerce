@@ -23,6 +23,7 @@ import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/aut
 import { startHarness, type Answer, type Browser, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 // B-CP-076: an office person of the ready-made roles through the app (the grain filter: M-CP-1).
 import { addUser, Browser as OfficeBrowser, enrolTotp } from '../../../platform/auth/sessions/testing/harness'
+import { readPriceCheck, takeOverBrandPrices } from '../brand-prices/prices' // B-CP-076: the take-over by the line map
 import { processImporters } from '../../../platform/imports/registry'
 import { SOURCES } from '../../insights/sources'
 import { acceptRequest, listOfficeRequests, officeRequestView, refuseRequest } from './office'
@@ -722,6 +723,56 @@ describe('B-CP-076: "Your price" in the draft, frozen at Send, carried onto the 
     expect(accepted.status, JSON.stringify(accepted.body)).toBe(200)
     expect(JSON.stringify(accepted.body)).not.toMatch(CUSTOMER_PRICE_KEYS)
     expect((await admin('SELECT id FROM "OrderBrandPrice" WHERE "salesOrderId" = $1', [accepted.body.made.salesOrderId])).length).toBe(2)
+  })
+
+  // ---- B-CP-076 (lead, 11-19): the take-over pairs by the accept's line map only — never by place ----------------------------------
+  it('a request of 12 lines accepted as a QUOTE, its order made later: the take-over gives each line its own price (line 10 never gets line 1’s)', async () => {
+    // Triggers off for one statement (as orders-depth): the quote's acceptance is written as it stands (the link page is not this test's).
+    const force = async (sql: string, values: unknown[] = []) => {
+      await admin('SET session_replication_role = replica')
+      try {
+        await admin(sql, values)
+      } finally {
+        await admin('SET session_replication_role = DEFAULT')
+      }
+    }
+    // Twelve described lines, each of one piece, the customer's own price 101.00 … 112.00 (its place + 100).
+    const made = await ok(browsers.buyer, 'POST', '/portal/order-requests', { customerRef: 'PO-T-076-12' }, 201)
+    const url = `/portal/order-requests/${made.request.id}`
+    let version = made.request.version as number
+    for (let place = 1; place <= 12; place++) {
+      const added = await ok(browsers.buyer, 'POST', `${url}/custom-lines`, { version, line: { kind: 'DESCRIBED', description: `Made-up team item ${place}`, quantity: 1, brandUnitPrice: String(100 + place) } })
+      version = added.request.version
+    }
+    const read = await ok(browsers.buyer, 'GET', url)
+    const lines = (read.request.customLines as Json[]).sort((a, b) => a.seq - b.seq)
+    expect(lines.map((line) => line.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    const sent = await ok(browsers.buyer, 'POST', `${url}/send`, { version })
+    const quoted = await acceptRequest(office(), made.request.id, { version: sent.request.version, as: 'QUOTE', map: lines.map((line) => ({ lineId: line.id, into: [{ styleId: jkt02, colourwayId: blk02, sizes: [{ size: '50', quantity: 1 }] }] })) })
+    expect(quoted.made.brandPrices).toBe(0)
+    // The quote accepted (as the customer's link would) and the office makes its order: lines 10, 20 … 120 of the quote.
+    const versionId = (await one<{ id: string }>('SELECT id FROM "QuoteVersion" WHERE "quoteId" = $1 ORDER BY revision DESC LIMIT 1', [quoted.made.quoteId])).id
+    const snapshot = await one<{ billTo: Json; shipTo: Json }>('SELECT "billTo", "shipTo" FROM "SalesOrder" WHERE id = $1', [await orderId('SEED-SO-0001')])
+    await force(`UPDATE "QuoteVersion" SET status = 'ACCEPTED', "billTo" = $2, "shipTo" = $3 WHERE id = $1`, [versionId, snapshot.billTo, snapshot.shipTo])
+    await force(`UPDATE "Quote" SET status = 'ACCEPTED' WHERE id = $1`, [quoted.made.quoteId])
+    const ordered = await salesDesk.send('POST', '/sales/orders', { quoteVersionId: versionId })
+    expect(ordered.status, JSON.stringify(ordered.body)).toBe(201)
+    const order = ordered.body.order.id as string
+    // The check offers the take-over of all twelve; the take-over pairs through the quote lines, by the accept's map.
+    expect((await readPriceCheck(office(), order)).fromRequest).toMatchObject({ requestId: made.request.id, lines: 12 })
+    await takeOverBrandPrices(office(), order, { requestId: made.request.id })
+    const rows = await admin<{ orderSeq: number; quoteSeq: number; unitPrice: string }>(
+      `SELECT l.seq AS "orderSeq", q.seq AS "quoteSeq", b."unitPrice"::text AS "unitPrice" FROM "OrderBrandPrice" b JOIN "SalesOrderLine" l ON l.id = b."salesOrderLineId" JOIN "QuoteLine" q ON q.id = l."quoteLineId" WHERE b."salesOrderId" = $1 ORDER BY q.seq`,
+      [order],
+    )
+    expect(rows).toHaveLength(12)
+    // Quote line 10 × k was made from request line k: its own price 100 + k — never the price of the request line whose place is 10.
+    for (const row of rows) expect(row.unitPrice, `quote line ${row.quoteSeq}`).toBe(`${100 + row.quoteSeq / 10}.000000`)
+    const first = rows.find((row) => row.quoteSeq === 10)!
+    expect(first.unitPrice).toBe('101.000000')
+    expect(first.unitPrice).not.toBe('110.000000')
+    // Nothing left to take over.
+    expect((await readPriceCheck(office(), order)).fromRequest).toBeNull()
   })
 })
 // ---- end B-CP-076

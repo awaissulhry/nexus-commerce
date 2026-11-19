@@ -137,3 +137,21 @@ export async function markEdited(tx: CommandTx, requestId: string, userId: strin
   await tx.portalOrderRequest.update({ where: { id: requestId }, data: { lastEditedById: userId, lastEditedAt: now }, select: { id: true } })
 }
 // ---- end B-CP-075
+
+// ---- B-CP-076 (lead, 11-19: the take-over by the line map): the accept's ONE map as its audit row keeps it (B-CP-077) ----------
+/**
+ * Each request line and the lines the accept made from it (the order's, accepted as an order; the quote's, accepted as a quote),
+ * from the accept's own audit row (`portalOrdering.accept` `after.lineMap`). null: no accept, or one made before the map was kept
+ * (the take-over then pairs nothing: better empty than wrong).
+ */
+export async function readAcceptedLineMap(db: Reader, requestId: string): Promise<{ readonly requestLineId: string; readonly into: readonly string[] }[] | null> {
+  const row = await db.auditLog.findFirst({ where: { recordType: 'PortalOrderRequest', recordId: requestId, action: 'portalOrdering.accept' }, select: { after: true }, orderBy: [{ at: 'desc' }, { id: 'desc' }] })
+  const map = (row?.after as { readonly lineMap?: unknown } | null | undefined)?.lineMap
+  if (!Array.isArray(map)) return null
+  return map.flatMap((entry: unknown) => {
+    const item = entry as { readonly requestLineId?: unknown; readonly into?: unknown } | null
+    if (!item || typeof item.requestLineId !== 'string' || !Array.isArray(item.into)) return []
+    return [{ requestLineId: item.requestLineId, into: item.into.filter((lineId: unknown): lineId is string => typeof lineId === 'string') }]
+  })
+}
+// ---- end B-CP-076

@@ -12,6 +12,9 @@ import { officeOrder } from '../orders/moves'
 import { lockOrder, readOrder, type OrderRow, type Reader } from '../orders/store'
 import { decimal } from '../quotes/store'
 import { announceBrandPrices, auditBrandPrice, brandPriceAuditView, brandPriceRowsOf, checkOfOrder, markSourceFilesPriced, NOT_A_PRICE_HOLDER, PRICE_PERMISSION, type BrandPriceRecord, type PricedOrder } from './store'
+// B-CP-076 (lead): the take-over by the accept's line map (its audit row), and the customer's amount of a line total.
+import { brandAmountOf } from '@nexus/factory-domain/sales/brand-prices/match'
+import { readAcceptedLineMap } from '../portal-ordering/store'
 
 /**
  * The customer's price of an order and the price check (customer page plan C2d, C3, B-CP-017; design customer-page 11 §1.2, §2;
@@ -34,8 +37,9 @@ import { announceBrandPrices, auditBrandPrice, brandPriceAuditView, brandPriceRo
  *                                                     is marked priced (StoredFile.priced, audited: the priced-file lock)
  *   POST /sales/orders/:orderId/brand-prices/from-request   the same rights: the customer's own prices of its portal request
  *                                                     (accepted as a QUOTE whose order came later, or an order the accept did not
- *                                                     carry them to) copied to the lines without a row, by the line's place
- *                                                     (seq), source PORTAL (the customer's own: no one in the office typed it)
+ *                                                     carry them to) copied to the lines without a row — B-CP-076: paired by
+ *                                                     the accept's line map, never by place (seq) — source PORTAL (the
+ *                                                     customer's own: no one in the office typed it)
  *
  * Computed on every read, never stored (D5): nothing closes a NOT_EQUAL but a change of one of the two prices. "No customer price
  * yet" is never EQUAL. Without VAT, in the order's currency, exact to the cent. The history is the audit under OrderBrandPrice (./store).
@@ -91,10 +95,57 @@ async function pricedOrder(caller: CommandCaller, orderId: string, permission: P
 
 // ---- the read -----------------------------------------------------------------------------------------------------------------
 
-const LINE_COLUMNS = { id: true, seq: true, styleId: true, colourwayId: true, description: true, quantity: true, unitPrice: true, netAmount: true } as const
+const LINE_COLUMNS = { id: true, seq: true, styleId: true, colourwayId: true, description: true, quantity: true, unitPrice: true, netAmount: true, quoteLineId: true /* B-CP-076 */ } as const
 
-/** The customer's own portal request of this order whose prices may be taken over (lines without a row yet), or null. */
-async function takeOverOf(db: Reader, order: OrderRow, lines: readonly { readonly id: string; readonly seq: number }[], rows: readonly BrandPriceRecord[]) {
+// ---- B-CP-076 (lead, 11-19; review E3): the take-over pairs a request line with an order line ONLY through the accept's line map ---
+/**
+ * The accept keeps ONE map, request line → the lines made from it (B-CP-077; portal-ordering/store readAcceptedLineMap): this order's
+ * lines when the request was accepted as an order, the quote's lines when it was accepted as a quote. An order line pairs with a
+ * request line when it is one of the lines made from it, or — an order made from the quote — when its quote line is one of them,
+ * or the same line (its place and style) on another version of that quote (a revised quote keeps a line's place, as its artwork
+ * travels: configurator artworkOf). Never by the request line's own place: a request's lines are 1, 2, 3 …, an order's 10, 20,
+ * 30 …. A line with no pair takes nothing, and a request accepted before the map was kept takes nothing (better empty than wrong).
+ * Returns each request line's order lines, in the order's line order.
+ */
+type TakeLine = { readonly id: string; readonly seq: number; readonly quantity: number; readonly quoteLineId: string | null }
+async function pairsByMap(db: Reader, requestId: string, lines: readonly TakeLine[]): Promise<Map<string, TakeLine[]>> {
+  const out = new Map<string, TakeLine[]>()
+  const map = await readAcceptedLineMap(db, requestId)
+  if (!map) return out
+  const pair = (requestLineId: string, line: TakeLine) => {
+    const into = out.get(requestLineId) ?? []
+    if (!into.some((entry) => entry.id === line.id)) into.push(line)
+    out.set(requestLineId, into)
+  }
+  // Accepted as an order: the lines made are this order's own.
+  const byId = new Map(lines.map((line) => [line.id, line]))
+  for (const entry of map) for (const lineId of entry.into) if (byId.has(lineId)) pair(entry.requestLineId, byId.get(lineId)!)
+  // Made from the quote: through the order line's quote line (the one the accept made, or its place and style on another version).
+  const fromQuote = lines.filter((line) => line.quoteLineId !== null)
+  if (fromQuote.length > 0) {
+    const made = map.flatMap((entry) => entry.into.map((lineId) => ({ requestLineId: entry.requestLineId, lineId })))
+    const ids = [...new Set([...fromQuote.map((line) => line.quoteLineId!), ...made.map((entry) => entry.lineId)])]
+    const quoteLines = new Map((await db.quoteLine.findMany({ where: { id: { in: ids } }, select: { id: true, seq: true, styleId: true, quoteVersion: { select: { quoteId: true } } } })).map((row) => [row.id, row]))
+    const placeOf = (row: { readonly seq: number; readonly styleId: string | null; readonly quoteVersion: { readonly quoteId: string } }) => `${row.quoteVersion.quoteId}|${row.seq}|${row.styleId ?? ''}`
+    const byQuoteLine = new Map(made.filter((entry) => quoteLines.has(entry.lineId)).map((entry) => [entry.lineId, entry.requestLineId]))
+    const byPlace = new Map(made.flatMap((entry) => (quoteLines.has(entry.lineId) ? [[placeOf(quoteLines.get(entry.lineId)!), entry.requestLineId] as const] : [])))
+    for (const line of fromQuote) {
+      const quoteLine = quoteLines.get(line.quoteLineId!)
+      const requestLineId = byQuoteLine.get(line.quoteLineId!) ?? (quoteLine ? byPlace.get(placeOf(quoteLine)) : undefined)
+      if (requestLineId) pair(requestLineId, line)
+    }
+  }
+  for (const into of out.values()) into.sort((a, b) => a.seq - b.seq)
+  return out
+}
+// ---- end B-CP-076
+
+/**
+ * The customer's own portal request of this order whose prices may be taken over (lines without a row yet), or null. B-CP-076:
+ * paired by the accept's line map (pairsByMap), never by place: a request line made into one order line takes its unit price; made
+ * into several, its amount (its price × their pieces) as a line total on the first of them — and only while none of them has a row.
+ */
+async function takeOverOf(db: Reader, order: OrderRow, lines: readonly TakeLine[], rows: readonly BrandPriceRecord[]) {
   const quoteId = order.quoteVersionId ? ((await db.quoteVersion.findUnique({ where: { id: order.quoteVersionId }, select: { quoteId: true } }))?.quoteId ?? null) : null
   const request = await db.portalOrderRequest.findFirst({
     where: { partyId: order.partyId, status: 'ACCEPTED', OR: [{ salesOrderId: order.id }, ...(quoteId ? [{ quoteId }] : [])] },
@@ -103,10 +154,19 @@ async function takeOverOf(db: Reader, order: OrderRow, lines: readonly { readonl
   })
   // Its prices are in its own currency: one in another currency is never taken over (no exchange rate, ever).
   if (!request || request.currency !== order.currency) return null
-  const priced = await db.portalOrderRequestLine.findMany({ where: { requestId: request.id, brandUnitPrice: { not: null } }, select: { seq: true, brandUnitPrice: true } })
-  const bySeq = new Map(priced.map((line) => [line.seq, line.brandUnitPrice!]))
+  const priced = await db.portalOrderRequestLine.findMany({ where: { requestId: request.id, brandUnitPrice: { not: null } }, select: { id: true, brandUnitPrice: true }, orderBy: { seq: 'asc' } })
   const typed = new Set(rows.flatMap((row) => (row.salesOrderLineId ? [row.salesOrderLineId] : [])))
-  const takes = lines.filter((line) => !typed.has(line.id) && bySeq.has(line.seq)).map((line) => ({ lineId: line.id, unitPrice: bySeq.get(line.seq)! }))
+  // ---- B-CP-076: by the accept's map (not by seq)
+  const pairs = priced.length === 0 ? new Map<string, TakeLine[]>() : await pairsByMap(db, request.id, lines)
+  const takes: { lineId: string; unitPrice: string | null; netAmount: number | null; requestLineId: string }[] = []
+  for (const line of priced) {
+    const into = pairs.get(line.id) ?? []
+    if (into.length === 0 || into.some((entry) => typed.has(entry.id))) continue
+    const price = line.brandUnitPrice!.toString()
+    if (into.length === 1) takes.push({ lineId: into[0]!.id, unitPrice: price, netAmount: null, requestLineId: line.id })
+    else takes.push({ lineId: into[0]!.id, unitPrice: null, netAmount: brandAmountOf({ unitPrice: price, netAmount: null }, into.reduce((total, entry) => total + entry.quantity, 0), order.currency) ?? 0, requestLineId: line.id })
+  }
+  // ---- end B-CP-076
   return takes.length === 0 ? null : { requestId: request.id, number: request.number, takes }
 }
 
@@ -338,7 +398,7 @@ export async function takeOverBrandPrices(caller: CommandCaller, orderId: string
       const { tx, now } = tools
       const locked = await lockOrder(tx, order.id)
       if (isClosed(locked.status)) throw new ValidationError(BRAND_PRICE_WORDS.closedOrder, [{ path: 'body', message: BRAND_PRICE_WORDS.closedOrder }])
-      const lines = await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true, seq: true } })
+      const lines = await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true, seq: true, quantity: true, quoteLineId: true /* B-CP-076 */ } })
       const take = await takeOverOf(tx, order, lines, await brandPriceRowsOf(tx, [order.id]))
       if (take && body.requestId !== undefined && take.requestId !== body.requestId) throw new ValidationError(BRAND_PRICE_WORDS.notTheRequest, [{ path: 'body/requestId', message: BRAND_PRICE_WORDS.notTheRequest }])
       if (!take) throw new NothingToSave()
@@ -346,9 +406,9 @@ export async function takeOverBrandPrices(caller: CommandCaller, orderId: string
       for (const entry of take.takes) {
         const id = newId()
         // The customer's own price, carried from its request: PORTAL, no one in the office typed it (the guard's carry).
-        const row = { id, companyId: order.companyId, partyId: order.partyId, salesOrderId: order.id, salesOrderLineId: entry.lineId, unitPrice: entry.unitPrice, netAmount: null, currency: order.currency, source: 'PORTAL' as const, sourceFileId: null, note: null, enteredById: null, enteredAt: now }
+        const row = { id, companyId: order.companyId, partyId: order.partyId, salesOrderId: order.id, salesOrderLineId: entry.lineId, unitPrice: entry.unitPrice, netAmount: entry.netAmount /* B-CP-076: a line total when the request line was made into several */, currency: order.currency, source: 'PORTAL' as const, sourceFileId: null, note: null, enteredById: null, enteredAt: now }
         await tx.orderBrandPrice.create({ data: { ...row, createdAt: now, updatedAt: now }, select: { id: true } })
-        auditBrandPrice(tools, priced, { action: 'brandPrices.takeOver', after: { ...brandPriceAuditView({ ...row, version: 1 }), requestId: take.requestId } })
+        auditBrandPrice(tools, priced, { action: 'brandPrices.takeOver', after: { ...brandPriceAuditView({ ...row, version: 1 }), requestId: take.requestId, requestLineIds: [entry.requestLineId] /* B-CP-076 */ } })
       }
       announceBrandPrices(tools, priced)
       return null
