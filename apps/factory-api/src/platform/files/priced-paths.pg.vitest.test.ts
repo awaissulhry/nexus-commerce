@@ -98,7 +98,7 @@ let artwork: Json
 let noteId = ''
 
 beforeAll(async () => {
-  h = await startHarness('files_cp023_priced_paths')
+  h = await startHarness('files_cp023_paths')
   h.clock.set(new Date())
   for (const seed of [seedCore, seedNumbering, seedParties, seedFiles, seedEmail, seedProduct, seedSales]) await seed({ db: h.database, namespace: NS })
   await admin(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE "tenantId" = $1 AND provider IN ('R2', 'SES')`, [T])
@@ -137,7 +137,7 @@ describe('on a message: the priced file is locked for a reader who does not see 
     }
     const asOwner = messageOf((await call('owner', 'GET', `/threads/SalesOrder/${SO1}`)).body, noteId)
     expect(asOwner.attachments).toEqual(expect.arrayContaining([expect.objectContaining({ id: confirmation.id, originalName: CONFIRMATION })]))
-    expect((asOwner.attachments as Json[]).find((file) => file.id === confirmation.id).locked).toBeUndefined()
+    expect((asOwner.attachments as Json[]).find((file) => file.id === confirmation.id)!.locked).toBeUndefined()
   })
 })
 
