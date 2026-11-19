@@ -143,7 +143,7 @@ export default defineStage({
       const at = new URL(page.url())
       const activity = await routerActivity(page, 4_000, async () => {
         await press(page.getByRole('button', { name: P('customers.band.newOrder'), exact: true }).first())
-        const form = page.getByRole('dialog', { name: O('newOrder.title') }).last()
+        const form = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: O('newOrder.addLines'), exact: true }) }).last()
         await seen(form, 30_000)
         // The customer is the page's: picked on open, no search, no Change.
         await expect(form.getByText(CUSTOMER.legalName).first()).toBeVisible({ timeout: 30_000 })
