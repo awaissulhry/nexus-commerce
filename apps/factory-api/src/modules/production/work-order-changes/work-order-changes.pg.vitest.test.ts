@@ -236,8 +236,8 @@ describe('a work-order change: proposed, applied, left as is, stale (B-SA-041)',
     // An amendment of the order, its change proposed, then put back: the change is STALE, decided by nobody but the one who put it back.
     const amendmentId = newId()
     await force(
-      `INSERT INTO "SalesOrderAmendment" (id, "tenantId", "companyId", "orderId", "partyId", revision, reason, before, after, "netAmountBefore", "netAmountAfter", "grossAmountBefore", "grossAmountAfter") VALUES ($1, $2, $3, $4, $5, 1, 'Made-up', '{}', '{}', 0, 0, 0, 0)`,
-      [amendmentId, A.tenant, A.companyA, order.orderId, A.brand],
+      `INSERT INTO "SalesOrderAmendment" (id, "tenantId", "companyId", "orderId", "partyId", revision, reason, before, after, "netAmountBefore", "netAmountAfter", "grossAmountBefore", "grossAmountAfter", "requestId") VALUES ($1, $2, $3, $4, $5, 1, 'Made-up', '{}', '{}', 0, 0, 0, 0, $6)`,
+      [amendmentId, A.tenant, A.companyA, order.orderId, A.brand, newId() /* the command's request, as every amendment names */],
     )
     const waiting = (await propose(lowering(order, workOrder, '52', 1, { amendmentId }))).change
     const planner = callerFor(database, { ...(SESSIONS.planner as Extract<SessionContext, { audience: 'office' }>), requestId: newId() })
@@ -291,7 +291,8 @@ describe('a work-order change: proposed, applied, left as is, stale (B-SA-041)',
       await fanOut(system, { eventId: proposed!.id, type: proposed!.type, payload: { changeId: change.id, salesOrderId: order.orderId, workOrderId: workOrder.id, partyId: A.brand, kind: 'LOWER_TO_ORDER', requestId: null, amendmentId: null, hasExtra: false } } as never)
       expect(await admin(`SELECT "userId", category::text AS category, "messageKey" FROM "Notification" WHERE "eventId" = $1`, [proposed!.id])).toEqual([{ userId: A.actor, category: 'ASSIGNMENT', messageKey: 'notifications.production.workOrderChangeProposed' }])
     } finally {
-      if (before.length === 0) await admin(`DELETE FROM "PortalSettings" WHERE id = $1`, [A.brand])
+      // The world as it was: a PortalSettings row is never deleted by the app (its guard), so the test's own row goes with the rules off.
+      if (before.length === 0) await force(`DELETE FROM "PortalSettings" WHERE id = $1`, [A.brand])
       else await admin(`UPDATE "PortalSettings" SET "productionSupervisorId" = $2::uuid, "productionSupervisorSetAt" = CASE WHEN $2::uuid IS NULL THEN NULL ELSE now() END WHERE id = $1`, [A.brand, before[0]!.productionSupervisorId])
     }
   })

@@ -137,7 +137,8 @@ export async function previewPricedChange(caller: CommandCaller, orderId: string
 export async function applyPricedChange(caller: CommandCaller, orderId: string, body: PricedBody, idempotencyKey?: string) {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
-  const { result } = await command(caller, { name: 'orders.pricedChange', idempotencyKey, input: { orderId, ...body } }, (tools) => amendInCommand(tools, context.tenantId, order, amendOf(body), { priced: pricedOf(body) }))
+  // The command's result is plain JSON (a replay answers from its receipt): the amendment's id, never amendInCommand's `before` Map.
+  const { result } = await command(caller, { name: 'orders.pricedChange', idempotencyKey, input: { orderId, ...body } }, async (tools) => ({ amendmentId: (await amendInCommand(tools, context.tenantId, order, amendOf(body), { priced: pricedOf(body) })).amendmentId }))
   const change = await caller.withClient(async (client) => (await changesOf(client, (await readOrder(client, order.id))!, context)).find((entry) => entry.id === result.amendmentId)!)
   return { order: await recordAfter(caller, order.id), change }
 }
