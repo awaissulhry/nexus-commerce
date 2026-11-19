@@ -20,6 +20,7 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { findMarkers, markersOf, productionTwoBrands, twoBrandIds, twoBrandSessions, type Marker, type ProductionTwoBrands } from '../../production/testing/two-brands'
 import { forgetProgress } from '../portal-orders/progress'
 import { FINISH_SOURCES } from '@nexus/factory-domain/planning/promise-keep/risk' // F-SA-234b
+import { SHARED_WORK_ORDER_WORDS } from './production-read' // B-OP-021
 
 /**
  * B-SA-031 / B-SA-032 — the office's read of one sales order's production (`GET /sales/orders/:orderId/production`) and its
@@ -368,3 +369,120 @@ describe('B-SA-043: the order’s lines name the pieces made extra per size (off
   })
 })
 // ── end B-SA-043 ──
+
+// ── B-OP-021 (order page plan N1; 13-backend §3 B4, B6; review R-11, R-16) ──
+/**
+ * What the order page acts on in place: each work order with its version, kind, release, priority, its cells of THIS order's lines
+ * only and the reader's rights by can() over it — one made before the one-customer rule read-only, in words; the ONE waiting list:
+ * each blocker names its record (a work order only for a reader who reaches it) and what a customer request waiting on us is (an
+ * open request, a counter-offer agreed or lapsed, a reported problem). The test adds to SO-A1 an open request and two countered ones
+ * (the customer agreed to one counter-offer, the other lapsed), and a plain production hold on the mixed work order.
+ */
+describe('B-OP-021: work orders with version, own cells and rights; the ONE waiting list names each record', { timeout: 60_000 }, () => {
+  const ask = { open: newId(), agreed: newId(), lapsed: newId(), counterAgreed: newId(), counterLapsed: newId() }
+  const hold = newId()
+
+  beforeAll(async () => {
+    SESSIONS['office.release'] = session(grant(['orders.view', 'workorders.view', 'workorders.release', 'workorders.hold'], 'all'))
+    const actorId = seedUuid(ns, 'actor')
+    const t = lit(ids.tenantId)
+    const company = lit(w.companyId)
+    const alphaParty = lit(ids.a)
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "ApprovalRequest" (id, "tenantId", "companyId", "recordType", "recordId", "partyId", kind, question, "dueAt", status, "answeredAt") VALUES
+         (${lit(ask.counterAgreed)}, ${t}, ${company}, 'OrderChangeRequest', ${lit(ask.agreed)}, ${alphaParty}, 'REVISED_ORDER', 'T-OP021 counter-offer (made up)', now() + interval '3 days', 'APPROVED', now() - interval '1 day'),
+         (${lit(ask.counterLapsed)}, ${t}, ${company}, 'OrderChangeRequest', ${lit(ask.lapsed)}, ${alphaParty}, 'REVISED_ORDER', 'T-OP021 counter-offer (made up)', now() - interval '1 day', 'EXPIRED', NULL);
+       INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status, "createdAt", "counterApprovalId", "counteredAt") VALUES
+         (${lit(ask.open)}, ${t}, ${company}, ${alphaParty}, ${lit(alpha.so1)}, 'CHANGE', 'OPEN', now() - interval '3 days', NULL, NULL),
+         (${lit(ask.agreed)}, ${t}, ${company}, ${alphaParty}, ${lit(alpha.so1)}, 'CHANGE', 'COUNTERED', now() - interval '6 days', ${lit(ask.counterAgreed)}, now() - interval '5 days'),
+         (${lit(ask.lapsed)}, ${t}, ${company}, ${alphaParty}, ${lit(alpha.so1)}, 'CHANGE', 'COUNTERED', now() - interval '6 days', ${lit(ask.counterLapsed)}, now() - interval '5 days');
+       INSERT INTO "WorkOrderHold" (id, "tenantId", "companyId", "siteId", "workOrderId", kind, "reasonCode", status, "placedAt", "placedById")
+         SELECT ${lit(hold)}, ${t}, "companyId", "siteId", id, 'PRODUCTION', 'OTHER', 'ACTIVE', now() - interval '1 day', ${lit(actorId)} FROM "WorkOrder" WHERE id = ${lit(w.mixed.workOrderId)};
+       COMMIT;`,
+    )
+    forgetProgress()
+  })
+
+  it('a work order carries its version, kind, release and priority, and its cells of THIS order only (never SO-A2’s)', async () => {
+    const answer = await ok('office.all', production(alpha.so1, 'work'))
+    const row = workOrderOf(answer, alpha.workOrderId)!
+    const [stored] = await admin<{ version: number; kind: string; priority: number; releasedAt: Date | null }>(`SELECT version, kind::text AS kind, priority, "releasedAt" FROM "WorkOrder" WHERE id = $1`, [alpha.workOrderId])
+    expect(row).toMatchObject({ version: stored!.version, kind: stored!.kind, priority: stored!.priority, releasedAt: stored!.releasedAt ? stored!.releasedAt.toISOString() : null })
+    const own = await admin<{ id: string; size: string; quantity: number }>(`SELECT id, size, quantity FROM "WorkOrderSize" WHERE "workOrderId" = $1 AND "salesOrderLineId" = $2 ORDER BY size`, [alpha.workOrderId, alpha.line1])
+    expect((row.cells as Json[]).map((cell) => [cell.id, cell.size, cell.quantity]).sort()).toEqual(own.map((cell) => [cell.id, cell.size, cell.quantity]).sort())
+    for (const cell of row.cells as Json[]) {
+      expect(cell.salesOrderLineId).toBe(alpha.line1)
+      expect(cell.cut === null || typeof cell.cut === 'number').toBe(true)
+    }
+    // SO-A2's cell of the same work order (its 54) is never one of SO-A1's.
+    expect((row.cells as Json[]).map((cell) => cell.size)).not.toContain('54')
+    const other = workOrderOf(await ok('office.all', production(alpha.so2, 'work')), alpha.workOrderId)!
+    expect((other.cells as Json[]).map((cell) => [cell.salesOrderLineId, cell.size])).toEqual([[alpha.line2, '54']])
+  })
+
+  it('rights by can() over the work order: manage for the manager, release and hold for the release desk, nothing for the Sales template', async () => {
+    const manager = workOrderOf(await ok('office.all', production(alpha.so1, 'work')), alpha.workOrderId)!
+    expect(manager.rights).toEqual({ manage: true, release: false, hold: false, why: null })
+    const desk = workOrderOf(await ok('office.release', production(alpha.so1, 'work')), alpha.workOrderId)!
+    expect(desk.rights).toEqual({ manage: false, release: true, hold: true, why: null })
+    // A person limited to Alpha reaches Alpha's own work order with the same rights.
+    expect(workOrderOf(await ok('office.p1', production(alpha.so1, 'work')), alpha.workOrderId)!.rights).toEqual({ manage: true, release: false, hold: false, why: null })
+  })
+
+  it('a work order shared with other customers (R-11) is read-only from the order, in words; it shows only this order’s cells', async () => {
+    const answer = await ok('office.all', production(w.a.salesOrderId, 'work'))
+    const mixed = workOrderOf(answer, w.mixed.workOrderId)!
+    expect(mixed.sharedWithOtherCustomers).toBe(true)
+    expect(mixed.rights).toEqual({ manage: false, release: false, hold: false, why: SHARED_WORK_ORDER_WORDS })
+    expect(SHARED_WORK_ORDER_WORDS).toEqual({ en: 'Shared with other customers: change it on its page.', it: 'Condiviso con altri clienti: cambialo dalla sua pagina.' })
+    expect((mixed.cells as Json[]).length).toBeGreaterThan(0)
+    for (const cell of mixed.cells as Json[]) expect(cell.salesOrderLineId).toBe(w.a.salesOrderLineId)
+    expect(findMarkers(mixed, bMarkers)).toEqual([])
+  })
+
+  it('the ONE waiting list: an open request, an agreed and a lapsed counter-offer wait on us, each naming its request', async () => {
+    const { headline } = await ok('office.all', production(alpha.so1, 'headline'))
+    const brandRequests = (headline.waiting.blockers as Json[]).filter((blocker) => blocker.kind === 'BRAND_REQUEST')
+    expect(brandRequests).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ on: 'US', sub: 'REQUEST', ref: { type: 'OrderChangeRequest', id: ask.open } }),
+        expect.objectContaining({ on: 'US', sub: 'COUNTER', ref: { type: 'OrderChangeRequest', id: ask.agreed } }),
+        expect.objectContaining({ on: 'US', sub: 'COUNTER', ref: { type: 'OrderChangeRequest', id: ask.lapsed } }),
+      ]),
+    )
+    expect(brandRequests).toHaveLength(3)
+    // Every other kind names no sub.
+    for (const blocker of headline.waiting.blockers as Json[]) if (blocker.kind !== 'BRAND_REQUEST') expect(blocker.sub).toBeNull()
+  })
+
+  it('a gate names its record; a hold names its work order only for a reader who reaches it; a reported problem names the issue', async () => {
+    const all = (await ok('office.all', production(w.a.salesOrderId, 'headline'))).headline.waiting.blockers as Json[]
+    expect(all).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'GATE', ref: { type: 'OrderGate', id: alpha.gate }, sub: null }), expect.objectContaining({ kind: 'NO_MOVE', on: 'US', ref: { type: 'WorkOrder', id: w.mixed.workOrderId }, sub: null })]))
+    // A person limited to Alpha does not reach the mixed work order: the blocker stays (it waits on us), with no door to it.
+    const limited = await ok('office.p1', production(w.a.salesOrderId, 'headline'))
+    const held = (limited.headline.waiting.blockers as Json[]).filter((blocker) => blocker.kind === 'NO_MOVE')
+    expect(held.some((blocker) => blocker.ref === null)).toBe(true)
+    for (const blocker of held) expect(blocker.ref?.id).not.toBe(w.mixed.workOrderId)
+    expect(JSON.stringify(limited)).not.toContain(w.mixed.workOrderId)
+    // The Sales template reads no work order at all: no work order named either.
+    const sales = await ok('sales.all', production(w.a.salesOrderId, 'headline'))
+    expect((sales.headline.waiting.blockers as Json[]).filter((blocker) => blocker.ref?.type === 'WorkOrder')).toEqual([])
+    // Beta's own order: its reported problem names the issue; nothing of Alpha, and no door to the mixed work order.
+    const beta = await ok('office.p2', production(w.b.salesOrderId, 'headline'))
+    expect(beta.headline.waiting.blockers).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'BRAND_REQUEST', on: 'US', sub: 'PROBLEM', ref: { type: 'ProductionIssue', id: w.production.issue.id } })]))
+    expect(findMarkers(beta, aMarkers)).toEqual([])
+    expect(JSON.stringify(beta)).not.toContain(w.mixed.workOrderId)
+  })
+
+  it('R-16: each line and each of its sizes says what shipped (the edit floor), already in the read', async () => {
+    const answer = await ok('office.all', production(alpha.so1, 'lines'))
+    for (const line of answer.lines as Json[]) {
+      expect(typeof line.shipped).toBe('number')
+      for (const size of line.sizes as Json[]) expect(typeof size.shipped).toBe('number')
+      expect((line.sizes as Json[]).reduce((sum, size) => sum + size.shipped, 0)).toBe(line.shipped)
+    }
+  })
+})
+// ── end B-OP-021 ──

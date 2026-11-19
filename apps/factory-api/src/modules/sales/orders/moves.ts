@@ -68,7 +68,8 @@ export async function recordAfter(caller: CommandCaller, orderId: string): Promi
   const viewer = context && context.audience === 'office' ? actorOf(context) : null
   const { view, pictures } = await caller.withClient(async (client) => {
     const order = (await readOrder(client, orderId))!
-    const view = await orderView(client, order, businessDate(serverClock.now()), await orderSettlement().settlementOf(client, order), viewer)
+    // B-OP-020: and the office reader, so the open requests for a yes are the ones it may see and decide.
+    const view = await orderView(client, order, businessDate(serverClock.now()), await orderSettlement().settlementOf(client, order), viewer, context && context.audience === 'office' ? context : null)
     // B-SA-035: each colour line's picture the reader may open (files.read), read with the order.
     return { view, pictures: viewer ? await linePictureFiles(client, viewer, view.lines) : new Map<string, LinePictureFile>() }
   })

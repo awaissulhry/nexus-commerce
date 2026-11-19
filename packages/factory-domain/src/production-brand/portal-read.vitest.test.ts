@@ -18,6 +18,8 @@ import {
   type BrandGate,
   type ReportedProblem,
 } from './portal-read'
+// B-OP-021: the office's blockers (their record and request kind) beside what the customer reads of them.
+import { BLOCKER_SUBS, waitingOn, type Blocker } from './waiting'
 
 /**
  * B-PR-18: what a customer reads of its orders in production beyond the stage, health, waiting and urgency rules (production plan
@@ -163,4 +165,22 @@ describe('the wall: keys a customer read never holds (PW-15, PW-P03)', () => {
     expect(forbiddenKeysIn({ supervisorId: 'x', planned: { laneId: 'y', minutes: 3 }, order: { position: 4, workOrders: [] } })).toEqual(['/supervisorId', '/planned/laneId', '/planned/minutes', '/order/position', '/order/workOrders'])
     expect(forbiddenKeysIn({ stage: { code: 'SEWING' }, urgency: { urgentRank: 1 }, gates: { planned: { cutStart: '2026-11-19' } }, progress: { lines: [{ lineId: 'order line' }] } })).toEqual([])
   })
+
+  // ── B-OP-021 (order page plan N1; 13-backend §3 B4): the office's blockers name their record and what a request is — never the customer's
+  it('B-OP-021: the customer reads who acts next and since when only — no blocker, no record it is about, no request kind', () => {
+    const office: Blocker[] = [
+      { kind: 'BRAND_REQUEST', since: at('2026-11-10T09:00:00.000Z'), ref: { type: 'OrderChangeRequest', id: A }, sub: 'REQUEST' },
+      { kind: 'BRAND_REQUEST', since: at('2026-11-11T09:00:00.000Z'), ref: { type: 'ProductionIssue', id: B }, sub: 'PROBLEM' },
+      { kind: 'GATE', since: null, ref: { type: 'OrderGate', id: order(1) }, sub: null },
+    ]
+    // What the portal takes from the office's facts (production/brand facts `waiting`): who and since when, nothing else.
+    const waiting = waitingOn(office)
+    expect(waiting).toEqual({ on: 'US', since: at('2026-11-10T09:00:00.000Z') })
+    expect(Object.keys(waiting).sort()).toEqual(['on', 'since'])
+    expect(JSON.stringify(waiting)).not.toMatch(/ref|sub|OrderChangeRequest|ProductionIssue/)
+    expect(BLOCKER_SUBS).toEqual(['REQUEST', 'COUNTER', 'PROBLEM', 'REPROMISE'])
+    // The office's list itself never passes a customer read: the wall walks every portal answer for it.
+    expect(forbiddenKeysIn({ order: { waiting: { code: 'US', blockers: office } } })).toEqual(['/order/waiting/blockers'])
+  })
+  // ── end B-OP-021
 })

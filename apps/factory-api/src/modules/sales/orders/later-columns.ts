@@ -2,7 +2,7 @@ import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
 import type { Actor } from '@nexus/factory-domain/core/permissions'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, type Money } from '@nexus/factory-domain/money/marked'
-import { atRiskOf, openUnitsOf, orderMoneyOf, riskDaysFor, type AtRisk } from '@nexus/factory-domain/sales/orders/later-columns'
+import { atRiskOf, openUnitsOf, orderMoneyOf, riskDaysFor, type AtRisk, type OrderMoneyFacts, type OrderMoneyInvoice } from '@nexus/factory-domain/sales/orders/later-columns' // B-OP-022: + the facts' types
 import type { SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
 import { PRIORITY_WORDS, type SalesOrderPriorityLevel } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { cutCountsOf } from '../../production/cutting/views'
@@ -119,7 +119,7 @@ export async function orderLaterColumns(client: Reader, actor: Actor, orders: re
   }
 
   // ---- paid and balance (the price grain only) ----------------------------------------------------------------------------
-  const money = heldGrains(actor).has('price') ? await moneyFacts(client, orderIds, lines, orderOfLine) : null
+  const money = heldGrains(actor).has('price') ? await orderMoneyFactsOf(client, orderIds, lines) : null // B-OP-022: the one reading
 
   // ---- at risk, customer urgency ------------------------------------------------------------------------------------------
   const rules = await riskRulesOf(client)
@@ -143,15 +143,7 @@ export async function orderLaterColumns(client: Reader, actor: Actor, orders: re
             sewn: sumOrNull(ownCounting.map((cell) => progressOf.get(cell.id)?.sewn ?? null)),
             finished: sumOrNull(ownCounting.map((cell) => progressOf.get(cell.id)?.finished ?? null)),
           }
-    const answer = money
-      ? orderMoneyOf({
-          grossAmount: order.grossAmount,
-          lines: own.map((line) => ({ quantity: line.quantity, closedShortQuantity: line.closedShortQuantity, netAmount: line.netAmount, vatAmount: line.vatAmount, feeCredited: line.kind === 'FEE' && line.feeCreditedAt !== null })),
-          depositPlaced: money.depositPlaced.get(order.id) ?? 0,
-          depositRefunded: money.depositRefunded.get(order.id) ?? 0,
-          invoices: money.invoicesOf(order.id),
-        })
-      : { paid: 0, balance: 0 }
+    const answer = money ? orderMoneyOf(money.factsOf(order)) : { paid: 0, balance: 0 }
     out.set(order.id, {
       openUnits: openUnitsOf(order.status, ordered, closedShort, shipped.get(order.id) ?? 0),
       ...(options.progress ? { progress } : {}),
@@ -167,13 +159,34 @@ export async function orderLaterColumns(client: Reader, actor: Actor, orders: re
   return out
 }
 
+// ── B-OP-022 (order page plan N3; 13-backend §3): ONE reading of an order's money — the list's row and the order page's Money ──
+/** An order line as the money rule reads it: its order, its pieces and amounts, a fee credited against the bulk order. */
+export interface MoneyLine {
+  readonly id: string
+  readonly orderId: string
+  readonly kind: string
+  readonly quantity: number
+  readonly closedShortQuantity: number | null
+  readonly feeCreditedAt: Date | null
+  readonly netAmount: number
+  readonly vatAmount: number
+}
+
+/** One issued invoice that bills an order: what the rule reads of it (orderMoneyOf's), and its id and gross total. */
+export interface OrderInvoiceShare extends OrderMoneyInvoice {
+  readonly id: string
+  readonly grossTotal: number
+}
+
 /**
- * The money facts of the page's orders (factory-domain orderMoneyOf's inputs), read once for the page: what is placed on
- * their deposit requests; the issued TD01/TD24/TD05 that bill them (by the order, or by a line of it) with what is placed on
- * each, the net of every order line each bills (the share of each order) and its credit notes' gross; the PAID refunds of
- * those credit notes and of the deposit invoices' credit notes.
+ * The money facts of some orders (factory-domain orderMoneyOf's inputs), read once: what is placed on their deposit requests;
+ * the issued TD01/TD24/TD05 that bill them (by the order, or by a line of it) with what is placed on each, the net of every
+ * order line each bills (the share of each order) and its credit notes' gross; the PAID refunds of those credit notes and of the
+ * deposit invoices' credit notes. `lines`: every line of these orders. The list's later columns and the order page's settlement
+ * (invoicing/from-shipment settlement.ts) ask this one reading, so a row and its page say the same paid and balance.
  */
-async function moneyFacts(client: Reader, orderIds: readonly string[], lines: readonly { readonly id: string; readonly orderId: string }[], orderOfLine: ReadonlyMap<string, string>) {
+export async function orderMoneyFactsOf(client: Reader, orderIds: readonly string[], lines: readonly MoneyLine[]) {
+  const orderOfLine = new Map(lines.map((line) => [line.id, line.orderId]))
   const lineIds = lines.map((line) => line.id)
   const requests = await client.depositRequest.findMany({ where: { orderId: { in: [...orderIds] } }, select: { id: true, orderId: true } })
   const orderOfRequest = new Map(requests.flatMap((request) => (request.orderId ? [[request.id, request.orderId] as const] : [])))
@@ -181,7 +194,7 @@ async function moneyFacts(client: Reader, orderIds: readonly string[], lines: re
   const onRequests = requestIds.length > 0 ? await client.paymentAllocation.groupBy({ by: ['depositRequestId'], where: { depositRequestId: { in: requestIds } }, _sum: { amount: true } }) : []
   const invoices = await client.invoice.findMany({
     where: { docType: { in: [...GOODS_BILLS] }, status: { not: 'DRAFT' }, OR: [{ salesOrderId: { in: [...orderIds] } }, ...(lineIds.length > 0 ? [{ lines: { some: { salesOrderLineId: { in: lineIds } } } }] : [])] },
-    select: { id: true, salesOrderId: true },
+    select: { id: true, salesOrderId: true, grossTotal: true /* B-OP-022 */ },
   })
   const invoiceIds = invoices.map((invoice) => invoice.id)
   const billing = invoiceIds.length > 0 ? await client.invoiceLine.findMany({ where: { invoiceId: { in: invoiceIds }, salesOrderLineId: { not: null } }, select: { invoiceId: true, salesOrderLineId: true, netAmount: true } }) : []
@@ -214,17 +227,28 @@ async function moneyFacts(client: Reader, orderIds: readonly string[], lines: re
       if (orderId) partOf.set(orderId, (partOf.get(orderId) ?? 0) + line.netAmount)
     }
     const theirs = creditsOf(invoice.id)
-    return { id: invoice.id, salesOrderId: invoice.salesOrderId, whole, partOf, placed: placedOn.get(invoice.id) ?? 0, creditedGross: sumOf(theirs, (credit) => credit.grossTotal), refunded: sumOf(theirs, (credit) => refundOf.get(credit.id) ?? 0) }
+    return { id: invoice.id, salesOrderId: invoice.salesOrderId, grossTotal: invoice.grossTotal, whole, partOf, placed: placedOn.get(invoice.id) ?? 0, creditedGross: sumOf(theirs, (credit) => credit.grossTotal), refunded: sumOf(theirs, (credit) => refundOf.get(credit.id) ?? 0) }
   })
+  /** The invoices that bill an order, with its share: its lines' net over every order line's (none names a line: its own order's whole). */
+  const invoicesOf = (orderId: string): OrderInvoiceShare[] =>
+    perInvoice.flatMap((invoice) => {
+      const share = invoice.whole !== 0 ? { part: invoice.partOf.get(orderId) ?? 0, whole: invoice.whole } : { part: invoice.salesOrderId === orderId ? 1 : 0, whole: 1 }
+      return share.part === 0 ? [] : [{ id: invoice.id, grossTotal: invoice.grossTotal, placed: invoice.placed, creditedGross: invoice.creditedGross, refunded: invoice.refunded, ...share }]
+    })
   return {
-    depositPlaced,
-    depositRefunded,
-    /** The invoices that bill an order, with its share: its lines' net over every order line's (none names a line: its own order's whole). */
-    invoicesOf(orderId: string) {
-      return perInvoice.flatMap((invoice) => {
-        const share = invoice.whole !== 0 ? { part: invoice.partOf.get(orderId) ?? 0, whole: invoice.whole } : { part: invoice.salesOrderId === orderId ? 1 : 0, whole: 1 }
-        return share.part === 0 ? [] : [{ placed: invoice.placed, creditedGross: invoice.creditedGross, refunded: invoice.refunded, ...share }]
-      })
+    invoicesOf,
+    /** The deposits received for an order: what is placed on its deposit requests less the PAID refunds of its deposit invoices' credit notes. */
+    depositsPaidOf: (orderId: string): number => (depositPlaced.get(orderId) ?? 0) - (depositRefunded.get(orderId) ?? 0),
+    /** An order's money facts (orderMoneyOf's input): its gross, its lines, its deposits and its share of each invoice. */
+    factsOf(order: { readonly id: string; readonly grossAmount: number }): OrderMoneyFacts {
+      return {
+        grossAmount: order.grossAmount,
+        lines: lines.filter((line) => line.orderId === order.id).map((line) => ({ quantity: line.quantity, closedShortQuantity: line.closedShortQuantity, netAmount: line.netAmount, vatAmount: line.vatAmount, feeCredited: line.kind === 'FEE' && line.feeCreditedAt !== null })),
+        depositPlaced: depositPlaced.get(order.id) ?? 0,
+        depositRefunded: depositRefunded.get(order.id) ?? 0,
+        invoices: invoicesOf(order.id),
+      }
     },
   }
 }
+// ── end B-OP-022 ──
