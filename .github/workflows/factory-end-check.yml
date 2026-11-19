@@ -133,7 +133,8 @@ jobs:
       - uses: ./.github/actions/factory-setup
       - name: npm run typecheck -w @nexus/${{ matrix.workspace }}
         env:
-          # As the Mac end check; factory-api's script caps its own heap (typecheck.mjs, 7 GB).
+          # As the Mac end check; factory-api's and factory-web's scripts cap their own heap (typecheck.mjs, 7 GB: checked in batches,
+          # scripts/factory/typecheck-in-batches.mjs).
           NODE_OPTIONS: --max-old-space-size=12288
           WORKSPACE: ${{ matrix.workspace }}
         run: |

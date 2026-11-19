@@ -223,6 +223,34 @@ export function foldedOf(box: { readonly top: number; readonly right: number; re
   return items.map((item) => item.top >= box.bottom - 1 || item.right > box.right + 1)
 }
 
+// ---- op-fx11 (end check run 7, the browser golden flow's 07-order): a folded pill stays in the track only to be measured again. It is
+// hidden, inert AND aria-hidden="true", as the app's other stand-in (DockedStage: inert + aria-hidden), so nothing reads it as the real
+// pill: the real one is in Details. A pill that fits again loses all three (aria-hidden only where the fold put it).
+export interface FoldItem {
+  inert: boolean
+  readonly style: { visibility: string }
+  getAttribute(name: string): string | null
+  setAttribute(name: string, value: string): void
+  removeAttribute(name: string): void
+}
+const FOLDED_BY_US = new WeakSet<FoldItem>()
+export function applyFold(items: readonly FoldItem[], folded: readonly boolean[]): void {
+  items.forEach((item, index) => {
+    item.inert = folded[index]!
+    if (folded[index]) {
+      item.style.visibility = 'hidden'
+      if (item.getAttribute('aria-hidden') !== 'true') {
+        item.setAttribute('aria-hidden', 'true')
+        FOLDED_BY_US.add(item)
+      }
+    } else {
+      item.style.visibility = ''
+      if (FOLDED_BY_US.delete(item)) item.removeAttribute('aria-hidden')
+    }
+  })
+}
+// ---- end op-fx11
+
 function useFoldedPills(): [(node: HTMLElement | null) => void, number] {
   const [count, setCount] = useState(0)
   const stop = useRef<(() => void) | null>(null)
@@ -234,10 +262,7 @@ function useFoldedPills(): [(node: HTMLElement | null) => void, number] {
       const items = [...node.children] as HTMLElement[]
       for (const item of items) item.style.visibility = ''
       const folded = foldedOf(node.getBoundingClientRect(), items.map((item) => item.getBoundingClientRect()))
-      items.forEach((item, index) => {
-        item.inert = folded[index]!
-        if (folded[index]) item.style.visibility = 'hidden'
-      })
+      applyFold(items, folded) // op-fx11: hidden, inert and aria-hidden
       setCount(folded.filter(Boolean).length)
     }
     measure()

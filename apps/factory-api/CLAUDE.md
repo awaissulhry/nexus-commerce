@@ -107,7 +107,8 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
                                                 # store account's rate limit (about 2 minutes on a fresh seed)
     npm run typecheck -w @nexus/factory-api     # B-W2b-F52: typecheck.mjs = `tsc --noEmit -p tsconfig.json`, the same
                                                 # program and options, parsed once and checked in batches (a fresh checker
-                                                # each), heap capped at 7 GB; `-- --listFiles` = the files it checked
+                                                # each), heap capped at 7 GB; `-- --listFiles` = the files it checked;
+                                                # engine: scripts/factory/typecheck-in-batches.mjs (factory-web's too)
     cd apps/factory-api && npx vitest run       # needs FACTORY_DATABASE_URL: factory_test… or factory_<branch>;
                                                 # *.redis.vitest.test.ts and the outbox pg test need the local Redis
     node scripts/factory/run-pg-tests.mjs apps/factory-api   # the *.pg.vitest.test.ts files, on throwaway databases

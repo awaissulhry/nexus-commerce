@@ -7,7 +7,7 @@
     "dev": "next dev -p 3200",
     "build": "next build",
     "start": "next start -p 3200",
-    "typecheck": "next typegen && tsc --noEmit -p tsconfig.json",
+    "typecheck": "next typegen && node --max-old-space-size=7168 --expose-gc typecheck.mjs",
     "test": "vitest run"
   },
   "dependencies": {

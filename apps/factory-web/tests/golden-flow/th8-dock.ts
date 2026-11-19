@@ -76,7 +76,8 @@ async function expectCard(page: Page, where: string, kind: 'thread' | 'all'): Pr
 
 /** The body scrolls on its own: its overflow is the card's (auto, contained) and a wheel over it never moves the page. */
 async function expectBodyScrolls(page: Page, where: string, kind: 'thread' | 'all'): Promise<void> {
-  const body = kind === 'all' ? cardOf(page).locator('.fw-rt-body') : cardOf(page).locator('.fw-rt-feed')
+  // op-fx11: F-OP-304 (#1753, walk #12) renamed the dock card's scroller .fw-rt-body → .fw-rt-scroll (.fw-rt-body is a message's words).
+  const body = kind === 'all' ? cardOf(page).locator('.fw-rt-scroll') : cardOf(page).locator('.fw-rt-feed')
   await seen(body)
   const style = await body.evaluate((element) => ({ overflowY: getComputedStyle(element).overflowY, overscroll: getComputedStyle(element).overscrollBehaviorY }))
   expect(style.overflowY, `${where}: the body scrolls`).toMatch(/auto|scroll/)
