@@ -604,6 +604,22 @@ async function statusInCommand(tools: CommandTools, context: OfficeContext, row:
   return next
 }
 
+// ── B-OP-025 (order page plan N1; review R-12): a task marked done by a module that checked the right itself ──
+/**
+ * An OPEN task marked DONE inside the caller's command, as POST /tasks/:id/status DONE marks it (the machine, the one writer, the
+ * audit row, task.completed), for a module whose own check stands in for the task's access rule: the order's Still to do (the
+ * task's own right over its work order, or its assignee) and a promise change closing a refused re-promise's follow-up. The row
+ * locked; `version` the one the person read (409 on a stale one), null: as it is now.
+ */
+export async function markTaskDoneInCommand(tools: CommandTools, context: OfficeContext, taskId: string, version: number | null): Promise<TaskRow> {
+  await tools.tx.$queryRaw`SELECT id FROM "Task" WHERE id = ${taskId}::uuid FOR UPDATE`
+  const row = await tools.tx.task.findUnique({ where: { id: taskId }, select: TASK_COLUMNS })
+  if (!row) throw new NotFoundError(NOT_FOUND)
+  if (version !== null && row.version !== version) throw new StaleVersionError('Task', taskId, row.version, version)
+  return statusInCommand(tools, context, row, 'DONE')
+}
+// ── end B-OP-025 ──
+
 /** POST /tasks/:id/snooze: off Today until a time (an OPEN task), or (null) awake again. */
 export async function snoozeTask(caller: CommandCaller, id: string, body: { readonly version: number; readonly until: string | null }, idempotencyKey?: string) {
   const context = officeOf(caller)
