@@ -5,7 +5,7 @@ import { readMigrations } from '../policies'
 import { assertTestDatabaseUrl } from '../test-database'
 import { MIGRATIONS_DIR } from '../tools'
 import { testKitApplicationName, withMigrationLock } from './migration-lock'
-import { createFromTemplate, templateSwitch } from './template'
+import { createFromTemplate, ensureTemplate, templateSwitch } from './template'
 // ---- B-W2b-F53: the seeds' calendar, for tests that name a seeded date (seedDay, seedAt) or fix their clock in the seeds' story
 export { SEED_DAY, seedAlong, seedAt, seedDay, seedDayText, seedIso, seedShiftDays, seedsAsWritten, seedToday, seedYear } from '../seed-calendar'
 // ---- end B-W2b-F53
@@ -57,6 +57,25 @@ function runId(): string {
   const run = process.env.FACTORY_PG_TEST_RUN ?? 'adhoc'
   if (!/^[a-z0-9]{1,16}$/.test(run)) throw new Error(`FACTORY_PG_TEST_RUN must be 1-16 lower-case letters or digits, not ${JSON.stringify(run)}.`)
   return run
+}
+
+/**
+ * The migrated template of this migration set, ready before any test file starts (end check 11-19): a PostgreSQL run's
+ * vitest globalSetup calls it, where no timeout applies. On a fresh server (GitHub's runners: ~395 migrations in ~120 s)
+ * the first files built it inside their own set-up, which timed out (60 s, even 180 s while waiting for the lock) and
+ * lost the build; the next file built it again. Returns what it found or built; nothing with the template switch off.
+ */
+export async function prepareTemplate(): Promise<{ template: string; built: boolean } | undefined> {
+  if (!templateSwitch()) return undefined
+  const server = testServerUrl()
+  const tag = `${runId()}_setup`
+  const root = new pg.Client({ connectionString: server.href, application_name: testKitApplicationName('root', tag) })
+  await root.connect()
+  try {
+    return await ensureTemplate({ root, server, migrations: readMigrations(MIGRATIONS_DIR), lockKey: MIGRATION_LOCK, tag })
+  } finally {
+    await root.end().catch(() => {})
+  }
 }
 
 /** Creates `factory_test_<run>_<label>_<hex>`: a copy of the migrated template, or migrated from zero with the switch off. */
