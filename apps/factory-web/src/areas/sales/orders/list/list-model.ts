@@ -1,6 +1,7 @@
 import type { CompanyRef } from '../../../../lib/session/session'
 import type { PartyDetail, PartyRow } from '../../quotes/api'
 import type { OrderBoard, OrderRow, OrderSort } from '../api'
+import type { PriceMatch } from '../api' // F-CP-140
 import type { OrderCustomer } from '../api' // F-SA-224: the switcher's customers carry Orders' counts
 import type { LiveState } from '../hooks'
 import type { Lane, Layout, OrderAbilities, Phrase, RowView } from '../model'
@@ -240,6 +241,9 @@ export interface OrdersListActions {
   onClearExtra?: (key: keyof ExtraTerms | null) => void
   /** A door term set from a cell (At risk narrows the sheet). */
   onExtra?: (extra: ExtraTerms) => void
+  // F-CP-140: the Price check cell's funnel — narrows the sheet to the orders whose check reads so (the host gives it with the
+  // `priceMatch` term, F-CP-141; without it the cell's words stand alone).
+  onPriceMatch?: (match: PriceMatch) => void
   /** The columns on screen changed (the Progress column reads the floor only while shown). */
   onShownColumns?: (ids: readonly string[]) => void
   onInvoiceShipped?: (ids: readonly string[]) => void

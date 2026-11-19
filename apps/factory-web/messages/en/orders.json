@@ -1980,5 +1980,19 @@
   },
   "pricedPdf": {
     "held": "It shows prices: it is sent by someone who sees prices."
+  },
+  "priceCheck": {
+    "EQUAL": "Equal",
+    "NOT_EQUAL": "Not equal",
+    "NO_BRAND_PRICE": "— No customer price yet",
+    "lines_one": "{count} line",
+    "lines_other": "{count} lines",
+    "more": "we ask more",
+    "less": "we ask less",
+    "filter": {
+      "EQUAL": "Show only the orders whose prices are equal",
+      "NOT_EQUAL": "Show only the orders whose prices differ",
+      "NO_BRAND_PRICE": "Show only the orders without the customer's price"
+    }
   }
 }

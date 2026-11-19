@@ -26,10 +26,12 @@ export interface ToolColumn {
    * existed keep their columns.
    */
   readonly optIn?: boolean
+  /** F-CP-140: the Customise heading the column sits under (ColDef `context.toolGroup`, its stable key `context.toolGroupKey`). */
+  readonly group?: { readonly label: string; readonly key: string }
 }
 
 // ── B-TH-241: a column's tools facts from its ColDef context (opt-in, and its name in Customise) ──
-const contextOf = (column: ColDef<unknown>): { optIn?: unknown; toolLabel?: unknown } => (column.context as { optIn?: unknown; toolLabel?: unknown } | undefined) ?? {}
+const contextOf = (column: ColDef<unknown>): { optIn?: unknown; toolLabel?: unknown; toolGroup?: unknown; toolGroupKey?: unknown } => (column.context as { optIn?: unknown; toolLabel?: unknown; toolGroup?: unknown; toolGroupKey?: unknown } | undefined) ?? {}
 /** An opt-in column (hidden until a layout shows it). */
 export const isOptIn = (column: ColDef<unknown>): boolean => contextOf(column).optIn === true
 // ── end B-TH-241 ──
@@ -52,7 +54,10 @@ export function toolColumnsOf(columns: readonly ColDef<unknown>[]): ToolColumn[]
     const toolLabel = contextOf(column).toolLabel
     const label = typeof toolLabel === 'string' && toolLabel.trim() !== '' ? toolLabel : typeof column.headerName === 'string' && column.headerName.trim() !== '' ? column.headerName : id
     const fixed = column.pinned === 'right' && index === known.length - 1 ? 'end' : index === 0 ? 'first' : null
-    return { id, label, fixed, ...(isOptIn(column) && fixed === null ? { optIn: true } : {}) }
+    // F-CP-140: a column may sit under its own heading in Customise (the Orders sheet's "Price check").
+    const { toolGroup, toolGroupKey } = contextOf(column)
+    const group = typeof toolGroup === 'string' && toolGroup.trim() !== '' ? { label: toolGroup, key: typeof toolGroupKey === 'string' && toolGroupKey !== '' ? toolGroupKey : toolGroup } : null
+    return { id, label, fixed, ...(isOptIn(column) && fixed === null ? { optIn: true } : {}), ...(group && fixed === null ? { group } : {}) }
   })
 }
 
@@ -106,6 +111,7 @@ export function preferenceColumnsOf(tools: readonly ToolColumn[]): PreferencesCo
     label: column.label,
     ...(column.fixed === 'first' ? { alwaysShown: true } : {}),
     ...(column.fixed === 'end' ? { locked: true, lockSide: 'right' as const } : {}),
+    ...(column.group ? { group: column.group.label, groupKey: column.group.key } : {}), // F-CP-140: its own heading (the rest: the list's)
   }))
 }
 

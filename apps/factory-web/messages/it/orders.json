@@ -1980,5 +1980,19 @@
   },
   "pricedPdf": {
     "held": "Mostra dei prezzi: lo invia chi vede i prezzi."
+  },
+  "priceCheck": {
+    "EQUAL": "Uguale",
+    "NOT_EQUAL": "Diverso",
+    "NO_BRAND_PRICE": "— Prezzo del cliente non ancora dato",
+    "lines_one": "{count} riga",
+    "lines_other": "{count} righe",
+    "more": "chiediamo di più",
+    "less": "chiediamo di meno",
+    "filter": {
+      "EQUAL": "Mostra solo gli ordini con prezzi uguali",
+      "NOT_EQUAL": "Mostra solo gli ordini con prezzi diversi",
+      "NO_BRAND_PRICE": "Mostra solo gli ordini senza il prezzo del cliente"
+    }
   }
 }

@@ -74,6 +74,10 @@ import { Globe } from 'lucide-react'
 import { replyManyHeld, replyManyLabel } from '../reply-many'
 import { ReplyManyDialog } from './ReplyManyDialog'
 // ---- end F-SA-282
+// ---- F-CP-140: the price check columns (ONE spec: ../price-check-columns.ts) and their cells ----
+import { PRICE_CHECK_IDS, priceCheckColDefs, priceCheckText, type PriceCheckId } from '../price-check-columns'
+import { PriceDiffCell, PriceMatchCell } from './PriceMatchCell'
+// ---- end F-CP-140
 
 export type { OrdersListActions, OrdersListModel } from '../list-model'
 
@@ -768,7 +772,7 @@ const cardFieldsOf = (picture: (row: OrderRow) => ReactNode) => ({
   promised: { role: 'field' as const },
   madeToMeasure: { role: 'field' as const }, // F-SA-221: the mark on the phone card (never a rider's name)
   whereItIs: { role: 'field' as const }, // F-SA-275: the stage and the health on the phone card
-  ...Object.fromEntries(['deposit', 'units', 'orderDate', 'shipped', 'invoiced', 'net', 'gross', 'margin', 'priority', 'season', 'quote', 'company', /* B-TH-244 */ 'openUnits', 'progress', 'paid', 'balance', 'site', 'note', 'atRisk', 'customerUrgency', /* F-SA-221 */ 'riders', /* F-SA-275 */ 'waitingOn', 'supervisor'].map((id) => [id, { role: 'hidden' as const }])),
+  ...Object.fromEntries(['deposit', 'units', 'orderDate', 'shipped', 'invoiced', 'net', 'gross', 'margin', 'priority', 'season', 'quote', 'company', /* B-TH-244 */ 'openUnits', 'progress', 'paid', 'balance', 'site', 'note', 'atRisk', 'customerUrgency', /* F-SA-221 */ 'riders', /* F-SA-275 */ 'waitingOn', 'supervisor', /* F-CP-140 */ ...PRICE_CHECK_IDS].map((id) => [id, { role: 'hidden' as const }])),
 })
 
 interface ColumnsInput {
@@ -1074,6 +1078,20 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer 
         {s(`urgency.${data.customerUrgency}`)}
       </FunnelButton>
     ) : null
+  // ── F-CP-140 (customer page plan C2d; design 11-money §3.1; review F6, G1): the price check — the ONE spec's four columns, opt-in in
+  // Customise under "Price check" (none shown by default until the Owner's sheet), each the export's own id; only with the price
+  // grain (priceCheckColumnsFor: none without it — no column, no Customise entry, no chip, no export column). Our price = the Net. ──
+  const BrandPriceColumn = ({ data }: ICellRendererParams<OrderRow>) => (data && data.brandPrice !== undefined ? <span>{money(data.brandPrice, data.currency, locale)}</span> : null)
+  const PriceMatchColumn = ({ data }: ICellRendererParams<OrderRow>) => {
+    if (!data) return null
+    const match = data.priceMatch
+    const narrow = act()?.onPriceMatch
+    return <PriceMatchCell row={data} t={t} onNarrow={narrow && match ? () => narrow(match) : undefined} />
+  }
+  const PriceDiffColumn = ({ data }: ICellRendererParams<OrderRow>) => (data ? <PriceDiffCell row={data} t={t} locale={locale} /> : null)
+  const priceCells: Record<PriceCheckId, (params: ICellRendererParams<OrderRow>) => ReactNode> = { ourPrice: NetCell, brandPrice: BrandPriceColumn, priceMatch: PriceMatchColumn, priceDiff: PriceDiffColumn }
+  const priceColumns: ColDef<OrderRow>[] = priceCheckColDefs(can, s, priceCells, (id, row) => priceCheckText(id, row, t, locale)).map(later)
+  // ── end F-CP-140 ──
   const laterColumns: ColDef<OrderRow>[] = [
     later({ colId: 'openUnits', headerName: s('col.openUnits'), headerTooltip: s('col.openUnitsHint'), minWidth: 88, flex: 0.5, type: 'rightAligned', valueGetter: ({ data }: { data?: OrderRow }) => data?.openUnits ?? null }),
     later({ colId: 'progress', headerName: s('col.progress'), headerTooltip: s('col.progressHint'), minWidth: 150, flex: 1, cellRenderer: ProgressCell, valueGetter: ({ data }: { data?: OrderRow }) => (data ? progressWords(data, s) : '') }),
@@ -1091,6 +1109,7 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer 
     // opt-in, shown at once when the sheet shows made-to-measure orders only (the built-in view, the Made-to-measure page).
     { ...later({ colId: 'madeToMeasure', headerName: s('mtm.mark'), minWidth: 150, flex: 0.9, valueGetter: ({ data }: { data?: OrderRow }) => (data ? mtmText(data, s) : '') }), hide: !model.kind },
     ...(can.measurements ? [{ ...later({ colId: 'riders', headerName: s('col.riders'), minWidth: 140, flex: 1, valueGetter: ({ data }: { data?: OrderRow }) => (data ? ridersText(data) : '') }), hide: !model.kind }] : []),
+    ...priceColumns, // F-CP-140
   ]
   // ── end B-TH-244 ──
   return serverSorted(model.sort ?? null, [
