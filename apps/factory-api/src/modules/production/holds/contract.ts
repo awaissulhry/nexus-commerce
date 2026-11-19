@@ -108,3 +108,24 @@ export const liftContract = defineContract({
     }),
   },
 })
+
+// ---- B-OO-006 (order overview N5, 13-backend §5): ONE Lift for a pause on N work orders ---------------------------------------
+/**
+ * Each plain hold at its version read (the one hold dialog reads each work order's holds), lifted with one reason, work order by
+ * work order in id order, in ONE command: all or none. A hold lifted meanwhile, or changed since it was read: 409 naming its work
+ * order, nothing lifted.
+ */
+export const liftManyContract = defineContract({
+  body: input({
+    holds: z.array(input({ workOrderId: id(), holdId: id(), version: z.number().int().min(1) })).min(1).max(HOLD_LIMITS.subjects),
+    reason: z.string().max(HOLD_LIFT_REASON_MAX),
+  }),
+  response: {
+    200: output({
+      holds: z.array(workOrderHoldView),
+      /** Each work order named, in the body's order: its status now; `lifted`: it left ON_HOLD now (false: another hold still names it). */
+      workOrders: z.array(output({ id: id(), number: z.string(), status: workOrderStatus, lifted: z.boolean() })),
+    }),
+  },
+})
+// ---- end B-OO-006

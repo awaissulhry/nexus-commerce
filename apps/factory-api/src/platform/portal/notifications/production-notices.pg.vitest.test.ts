@@ -341,6 +341,28 @@ describe('B-PR-31: the customer is told of its own production', { timeout: SLOW_
   })
   // ---- end B-OO-005
 
+  // ---- B-OO-006 (order overview N5): ONE Lift for the pause on its N work orders — one act, ONE "resumed" ---------------------------
+  it('B-OO-006 one Lift for the pause on the order’s three work orders: three lifts in one act, ONE resumed', async () => {
+    expect(wholeOrder).toHaveLength(3)
+    const placed = await office('POST', '/production/work-orders/holds', { workOrderIds: wholeOrder, reasonCode: 'CAPACITY', versions: await versionsOf(wholeOrder) }, 201)
+    await keepHolds()
+    await fanOut()
+    expect((await fresh(alphaBuyer)).filter((notice) => notice.eventType === 'brand_production.hold_changed').map(shortOf)).toEqual([{ messageKey: 'portal.production.on_hold', recordId: world.w.a.salesOrderId }])
+    const lifted = await office('POST', '/production/work-orders/holds/lift', { holds: (placed.holds as Json[]).map((hold) => ({ workOrderId: hold.workOrderId, holdId: hold.id, version: hold.version })), reason: 'Made-up: capacity found.' })
+    expect(lifted.workOrders.map((entry: Json) => [entry.id, entry.lifted])).toEqual(wholeOrder.map((id) => [id, true]))
+    await keepHolds()
+    // The keeper reads the order after the act: three events, each "no longer on hold" — told once.
+    const causes = (await outbox('work_order_hold.lifted')).filter((row) => (placed.holds as Json[]).some((hold) => hold.id === row.payload.holdId))
+    expect(causes).toHaveLength(3)
+    const kept = (await outbox('brand_production.hold_changed')).filter((row) => causes.some((cause) => cause.id === row.causationId))
+    expect(kept.map((row) => [row.subject, row.payload.held])).toEqual(causes.map(() => [world.w.a.salesOrderId, false]))
+    await fanOut()
+    expect((await fresh(alphaBuyer)).filter((notice) => notice.eventType === 'brand_production.hold_changed').map(shortOf)).toEqual([{ messageKey: 'portal.production.hold_lifted', recordId: world.w.a.salesOrderId }])
+    expect(await fresh(betaProduction)).toEqual([])
+    expect(await fresh(alphaFinance)).toEqual([])
+  })
+  // ---- end B-OO-006
+
   it('a stage reached and a health worse: told while the order is there, never its first, never stale, never of another customer', async () => {
     const row = `brand-production:${orders.a2}`
     await world.replica([{ sql: `UPDATE "BrandOrderProduction" SET stage = 'CUTTING', health = 'AT_RISK', version = version + 1 WHERE key = $1`, values: [row] }])
