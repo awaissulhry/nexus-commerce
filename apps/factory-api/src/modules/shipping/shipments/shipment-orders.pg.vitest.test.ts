@@ -270,7 +270,7 @@ describe('B-OP-070: ship together — the ready read lists the same customer\'s 
 describe('B-OP-040: ordersOfShipment — the orders of its lines, the first order first', () => {
   it('one order per shipment: its first order; a shared shipment made by a raw line: both, the first first; one query for many', async () => {
     const draft = (await ok('warehouse', 'GET', `/shipping/shipments/${ids.draft}`)).shipment
-    expect(await scoped((client) => orderIdsOfShipments(client, [{ id: ids.draft, salesOrderId: so2() }]))).toEqual(new Map([[ids.draft, [so2()]]]))
+    expect(await scoped((client) => orderIdsOfShipments(client, [{ id: ids.draft!, salesOrderId: so2() }]))).toEqual(new Map([[ids.draft, [so2()]]]))
     // A shared shipment of Brand Alpha's two orders (SEED-SO-0002 first, then SEED-SO-0003's jacket), made past the API.
     const shared = (await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: so2(), lines: [{ workOrderSizeId: cells().blk52, quantity: 1 }] }, 201)).shipment
     ids.shared = shared.id
