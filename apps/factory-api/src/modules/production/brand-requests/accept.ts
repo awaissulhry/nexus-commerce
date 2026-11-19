@@ -45,6 +45,12 @@ import { BATCH_ANSWER_WORDS, BATCH_RUSH_FLOOR_ONLY } from '@nexus/factory-domain
 import { acceptRequest } from '../../sales/change-requests/office'
 import { answerEach, type BatchItem } from './answer'
 import { readableBatch } from './read'
+// B-CP-026: a priced counter-offer the customer agreed is accepted by a price holder only.
+import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
+import { can, type Permission } from '@nexus/factory-domain/core/permissions'
+import { blindPriceHeld } from '@nexus/factory-domain/sales/blind-price'
+import { counterPriced } from '@nexus/factory-domain/sales/change-requests/counter'
+import { counterOfRow } from '../../sales/change-requests/counter'
 // ── end B-PR-46a ──
 
 /**
@@ -278,6 +284,10 @@ export async function acceptBrandRequest(caller: CommandCaller, requestId: strin
   const kind = found.kind as OrderRequestKind
   if (!isProductionAccept(kind)) throw new DomainError('invalid_state', SALES_ACCEPT_WORDS.en, [{ path: 'request/SALES_ASK', message: SALES_ACCEPT_WORDS.en }])
   assertAnswers(actor, found)
+  // ── B-CP-026 (Owner answer A, the money wall): a counter-offer the customer agreed that carries a price (its fee) is carried out
+  // by a price holder only (403 in words, nothing changes); a counter of a date or words is accepted as before.
+  if (found.status === 'COUNTERED' && counterPriced(counterOfRow(found)) && !can(actor, grainPermission('price') as Permission, { companyId: found.companyId, partyId: found.partyId })) throw blindPriceHeld('request/counterFee')
+  // ── end B-CP-026 ──
   const problems = answerProblems('ACCEPTED', body.answer)
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
   // B-PR-27b: "rush the floor" names only an "Urgent – asked".

@@ -178,7 +178,8 @@ describe('split lines on a partial receipt (SAL-350) and the credit note of a li
 
   it('the part that arrived is decided; the rest is credited without coming back; ONE credit note credits both (lead fix F28)', async () => {
     await grade(splitRma.id, parentId)
-    await ok('sales', 'POST', `/sales/returns/${splitRma.id}/decisions`, { version: await versionOf(splitRma.id), lines: [{ lineId: parentId, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP' }] })
+    // B-CP-026 (Owner answer A): a credit-only decision is a price holder's (Sales is held in words).
+    await ok('owner', 'POST', `/sales/returns/${splitRma.id}/decisions`, { version: await versionOf(splitRma.id), lines: [{ lineId: parentId, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP' }] })
     expect(await lineRow(parentId)).toMatchObject({ disposition: 'CREDIT_ONLY', creditAmount: 25_000 })
     // B-CP-011: the credit's amount is the Owner's to send (a Sales worker's is refused by the money wall).
     await refused('sales', 'POST', `/sales/returns/${splitRma.id}/lines/${childId}/credit-without-return`, { version: await versionOf(splitRma.id), creditAmount: 20_000, note: 'Made-up: the second jacket stays with the customer.' }, 403)

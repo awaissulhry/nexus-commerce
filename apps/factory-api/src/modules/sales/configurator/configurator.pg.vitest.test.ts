@@ -344,7 +344,13 @@ describe('the picks travel: to the order and the work order (CF1:03)', () => {
     // B-CP-011: what the change costs, and keeping the accepted price, are the owner's (the sales role reads no price).
     const check = await ok('owner', 'POST', `${o(orderId, orderLineId)}/configurator/check`, { picks: more })
     expect(check.pricing).toMatchObject({ repriced: false, change: '25' })
-    const held = await refused('seller', 'PUT', `${o(orderId, orderLineId)}/options`, { version: view.document.version, picks: more }, 409)
+    // B-CP-026 (Owner answer A): for the seller (no price grain) the change is held in words — keeping the accepted price gives
+    // a surcharge away and the amendment's words name the amount: 403, nothing written, no amount said.
+    const blind = await refused('seller', 'PUT', `${o(orderId, orderLineId)}/options`, { version: view.document.version, picks: more }, 403)
+    expect(blind.issues[0]).toMatchObject({ path: 'refusal/BLIND_PRICE', message: 'It changes a price you cannot see: someone who sees prices does it.' })
+    expect(blind.issues.map((issue: Json) => issue.message).join(' ')).not.toMatch(/\d/)
+    expect(await valueCodes('SalesOrderLineOption', orderLineId)).toEqual(['FRONT', 'NAME', 'NONE'])
+    const held = await refused('owner', 'PUT', `${o(orderId, orderLineId)}/options`, { version: view.document.version, picks: more }, 409)
     expect(held.message).toMatch(/keep the accepted price, or amend the order/)
     view = (await ok('owner', 'PUT', `${o(orderId, orderLineId)}/options`, { version: view.document.version, picks: more, keepPrice: true })).line
     expect(view.line.unitPrice).toBe((await admin<{ p: string }>(`SELECT trim(trailing '.' from trim(trailing '0' from "unitPrice"::text)) AS p FROM "SalesOrderLine" WHERE id = $1`, [orderLineId]))[0]!.p)
