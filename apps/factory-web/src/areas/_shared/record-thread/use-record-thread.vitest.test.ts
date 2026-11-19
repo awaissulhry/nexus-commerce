@@ -515,12 +515,14 @@ describe('F-SA-260 — ThreadPick: which ONE thread the dock shows, and the one 
       const picked = render(createElement(WorkOrderThreads, { choices: orders, pick: 'order-1', children: createElement(Card) }), locale)
       expect(picked, locale).toContain(`aria-label="${escaped(t('thread.pickLabel'))}"`)
       expect(picked, locale).toContain(escaped(t('thread.orderShared', { number: 'SO-0142', customer: 'Brand Alpha' })))
-      expect(picked, locale).toMatch(/aria-checked="true"[^>]*><span class="fw-thread-pick-long">SO-0142 · Brand Alpha</)
+      // F-OP-203: each order with its icon (the bag), the work order's notes with the Lock.
+      expect(picked, locale).toMatch(/aria-checked="true"[^>]*><span class="nds-seg-icon"><svg[^>]*lucide-shopping-bag[^>]*>.*?<\/svg><\/span><span class="fw-thread-pick-long">SO-0142 · Brand Alpha</)
+      expect(picked, locale).toMatch(/aria-checked="false"[^>]*><span class="nds-seg-icon"><svg[^>]*lucide-lock[^>]*>/)
       expect(picked, locale).toContain(`title="${escaped(`${t('thread.workOrder')} · ${t('thread.workOrderHint')}`)}"`)
       const unknown = render(createElement(WorkOrderThreads, { choices: orders, pick: 'gone', children: createElement(Card) }), locale)
       expect(unknown, locale).toContain(`aria-checked="true" tabindex="0" class="nds-seg-opt on" title="${escaped(`${t('thread.workOrder')} · ${t('thread.workOrderHint')}`)}"`)
-      // The work order's notes: their line under the pick.
-      expect(unknown, locale).toContain('<p class="fw-thread-pick-line" aria-live="polite">')
+      // The work order's notes: office only, their line under the pick in the office tone (F-OP-203).
+      expect(unknown, locale).toContain('<p class="fw-thread-pick-line is-office" aria-live="polite">')
       expect(unknown, locale).toContain(`<span>${escaped(t('thread.workOrderHint'))}</span></p>`)
       // No order thread the reader may read: the work order's notes alone, no pick.
       expect(render(createElement(WorkOrderThreads, { choices: [], pick: 'workOrder', children: createElement(Card) }), locale), locale).not.toContain('radiogroup')
@@ -681,3 +683,73 @@ describe('F-SA-282a — a portal reply whose text names another customer: back i
   })
 })
 // ── end F-SA-282a
+
+// ── F-OP-203 (order page plan N4; 11-dock §0.1, §1): the three hosts adopt the card, with no new props; the old dock CSS goes ─────────
+describe('F-OP-203 — the order dock, the customer dock and the work order’s threads draw every scope in the one card', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const order = read('../../sales/orders/record/dock/OrderDock.tsx')
+  const customer = read('../../sales/customers/record/view/WorkTab.tsx')
+  const workOrder = read('../../production/work-orders/record/view/WorkOrderThreads.tsx')
+
+  it('the hosts keep their shape: <ThreadPick …>{thread}</ThreadPick>, the same props as before', () => {
+    expect(order).toMatch(/<ThreadPick label=\{t\('record\.dock\.label'\)\} choices=\{choices\} value=\{choiceOfScope\(scope\)\} onPick=\{[^}]*\} extra=\{extra\}>\s*\{shown\}\s*<\/ThreadPick>/)
+    expect(customer).toContain("<ThreadPick label={t('customers.work.dock.label')} choices={choices} value={dock.scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>")
+    expect(workOrder).toMatch(/<ThreadPick label=\{t\('thread\.pickLabel'\)\} choices=\{threads\} value=\{pick\} onPick=\{onPick\}>\s*\{children\}\s*<\/ThreadPick>/)
+    expect(workOrder).toContain('export function WorkOrderThreads({ choices, pick, onPick, children }: { choices: readonly OrderThreadChoice[]; pick: OrderFilesPick; onPick?: (pick: OrderFilesPick) => void; children: ReactNode })')
+  })
+
+  it('All of <customer> is the same card (PickedDockColumn: the pick band on top, the feed in the body, the order page’s write-in at the foot)', () => {
+    const all = order.slice(order.indexOf("} else if (scope.kind === 'all') {"), order.indexOf('} else {', order.indexOf("} else if (scope.kind === 'all') {")))
+    expect(all).toContain('<PickedDockColumn')
+    expect(all).toContain("label={`${t('record.dock.all', { customer })} · ${t('record.dock.readOnly')}`}")
+    expect(all).toContain('body={<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />}')
+    expect(all).toMatch(/foot=\{[\s\S]*t\('record\.dock\.writeIn'\)[\s\S]*go\(ORDER_SCOPE\)[\s\S]*go\(\{ kind: 'general' \}\)/)
+    expect(all).not.toContain('className=')
+    const dock = customer.slice(customer.indexOf('function Dock('))
+    expect(dock).toContain("<PickedDockColumn label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} body={<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />} />")
+  })
+
+  it('the segments: icons, short words, "N new" as the pick’s pill (never glued into the words), the office tone on work orders', () => {
+    // The order page: This order · <Customer> (general) · Projects · Work orders · All of <Customer>.
+    for (const icon of ['ShoppingBag', 'Building2', 'FolderKanban', 'Lock', 'Eye']) expect(order).toContain(`icon: <${icon} size={14} aria-hidden />`)
+    expect(order).toContain("short: t('record.dock.writeGeneral')")
+    expect(order).toContain("short: t('record.dock.projects')")
+    expect(order).toContain("short: rt('allOfCustomer.view.all')")
+    expect(order).toContain('count: fresh(order.id)')
+    expect(order).toContain('count: fresh(order.partyId)')
+    expect(order).toContain('count: freshOf(offer.projects)')
+    expect(order).toContain('count: freshOf(offer.workOrders)')
+    expect(order).toMatch(/value: 'workOrders'[^\n]*tone: 'office'/)
+    const choices = order.slice(order.indexOf('const choices: ThreadChoice<ScopeChoice>[]'), order.indexOf('const extra ='))
+    expect(choices).not.toContain('withNew(')
+    // The customer page: <Customer> (general) · the record (its own icon) · All of <Customer>.
+    expect(customer).toContain("short: o('record.dock.writeGeneral'), icon: <Building2 size={14} aria-hidden />")
+    expect(customer).toContain('icon: <RecordTypeIcon type={pick.type} size={14} />')
+    expect(customer).toContain("short: rt('allOfCustomer.view.all')")
+    expect(customer).toContain("const CUSTOMER_DOCK_NS = [...ALL_OF_CUSTOMER_NS, 'orders'] as const")
+    // The work order: its notes office only (Lock, office tone), each order with its bag.
+    expect(workOrder).toContain("icon: <Lock size={14} aria-hidden />, tone: 'office'")
+    expect(workOrder).toContain('icon: <ShoppingBag size={14} aria-hidden />')
+  })
+
+  it('the old dock CSS went (.fw-so-dock-all, .fw-so-dock-write): nothing draws or styles it any more', () => {
+    const css = read('../../sales/orders/orders.css')
+    expect(css).not.toMatch(/\.fw-so-dock-all\s*\{/)
+    expect(css).not.toMatch(/\.fw-so-dock-write\s*\{/)
+    for (const source of [order, customer, workOrder]) {
+      expect(source).not.toContain('fw-so-dock-all')
+      expect(source).not.toContain('fw-so-dock-write')
+    }
+  })
+
+  it('the short words exist in both languages (the catalogue’s own: General, Projects, All)', () => {
+    for (const locale of LOCALES) {
+      const o = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      const rt = createTranslator(locale, messagesFor(locale, ['record-thread'])['record-thread']!)
+      for (const key of ['record.dock.writeGeneral', 'record.dock.projects', 'record.dock.workOrders']) expect(o(key), `${locale} ${key}`).not.toBe(key)
+      expect(rt('allOfCustomer.view.all'), locale).not.toBe('allOfCustomer.view.all')
+      expect(rt('dock.newCount', { count: 3 }), locale).toBe(locale === 'it' ? '3 nuovi' : '3 new')
+    }
+  })
+})
+// ── end F-OP-203
