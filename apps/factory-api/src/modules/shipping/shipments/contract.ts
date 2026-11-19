@@ -9,7 +9,7 @@ import { FREIGHT_RULES, MAX_FREIGHT } from '@nexus/factory-domain/shipping/shipm
 import { CARRIER_RETURN_STATES } from '@nexus/factory-domain/shipping/shipments/stock'
 import { TRANSPORT_MODES } from '@nexus/factory-domain/shipping/shipments/transport'
 import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
-import { freightSchema, oneShipment, statusSchema, transportBySchema } from '../views'
+import { freightSchema, oneShipment, shipmentOrdersSchema, statusSchema, transportBySchema } from '../views'
 // B-W2b-386: the ready list's ship-by day, cut-off and risk.
 import { businessDate as businessDateSchema } from '@nexus/factory-domain/core/contracts'
 import { AT_RISK_MINUTES_RANGE, QUEUE_RISKS } from '@nexus/factory-domain/shipping/queue/risk'
@@ -126,6 +126,8 @@ export const listShipmentsContract = defineContract({
           partyName: z.string(),
           salesOrderId: id(),
           salesOrderNumber: z.string(),
+          /** B-OP-041 (N6): every order it carries (its lines' orders), the first (salesOrderId) first. */
+          salesOrders: shipmentOrdersSchema,
           transportBy: transportBySchema,
           carrierCode: z.string().nullable(),
           carrierName: z.string().nullable(),

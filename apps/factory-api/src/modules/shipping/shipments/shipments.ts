@@ -10,7 +10,7 @@ import { carrierNameFor } from '@nexus/factory-domain/shipping/labels/labels'
 import { lineProblems, lineQuantityProblems, shipmentMachine, type ShipmentStatus, type TransportBy } from '@nexus/factory-domain/shipping/shipments'
 // B-OP-040 (order page N6, lines-derived): several orders of one customer, held off by MULTI_ORDER_OFF until B-OP-047.
 import { joinProblems, type JoinShipment } from '@nexus/factory-domain/shipping/shipments'
-import { joinOrderOf, joinOrdersOf, joinShipmentFacts, ordersChanged, ordersOfShipment } from './orders-of'
+import { joinOrderOf, joinOrdersOf, joinShipmentFacts, orderRefsOfShipment, orderRefsOfShipments, ordersChanged, ordersOfShipment, shipmentsOfOrderWhere } from './orders-of'
 import { repairCellWords } from '@nexus/factory-domain/shipping/shipments/backorder'
 import { transportModeProblems, type TransportMode } from '@nexus/factory-domain/shipping/shipments/transport'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
@@ -38,6 +38,8 @@ import { assertNotOnHold } from '../../parties/holds/stops'
 export async function shipmentDetail(db: CommandTx, shipment: ShipmentHeader) {
   // One query after another (B-W2a-48): a transaction's client has one connection.
   const order = await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { number: true, customerRef: true, status: true } })
+  // B-OP-041 (N6): every order it carries (its lines' orders), the first first.
+  const orders = await orderRefsOfShipment(db, shipment)
   const party = await db.party.findUnique({ where: { id: shipment.partyId }, select: { code: true, legalName: true } })
   const contents = await contentsView(db, shipment.id)
   // B-W2a-48: the freight charged (money.price) and the intra-EU transport evidence's state; office reads only.
@@ -47,6 +49,7 @@ export async function shipmentDetail(db: CommandTx, shipment: ShipmentHeader) {
     ...headerView(shipment),
     party: party ?? { code: '', legalName: '' },
     salesOrder: { number: order?.number ?? '', customerRef: order?.customerRef ?? null, status: order?.status ?? '' },
+    salesOrders: orders.map((row) => ({ id: row.id, number: row.number, customerRef: row.customerRef, status: row.status })), // B-OP-041
     ...contents,
     freight,
     transportEvidence: { status: evidence?.transportEvidence ?? 'NOT_NEEDED', completedAt: evidence?.transportEvidenceAt ? toUtcIso(evidence.transportEvidenceAt) : null },
@@ -99,11 +102,15 @@ export async function listShipments(caller: CommandCaller, query: ListShipmentsQ
               { salesOrder: { customerRef: { contains: query.q, mode: 'insensitive' } } },
               { salesOrder: { party: { legalName: { contains: query.q, mode: 'insensitive' } } } },
               { parcels: { some: { trackingNumber: { contains: query.q, mode: 'insensitive' } } } },
+              // B-OP-041 (N6): the number or PO of any order it carries (its lines' orders; the customer is the shipment's).
+              { lines: { some: { salesOrderLine: { order: { number: { contains: query.q, mode: 'insensitive' } } } } } },
+              { lines: { some: { salesOrderLine: { order: { customerRef: { contains: query.q, mode: 'insensitive' } } } } } },
             ],
           }
         : {},
       query.siteId ? { siteId: query.siteId } : {},
-      query.salesOrderId ? { salesOrderId: query.salesOrderId } : {},
+      // B-OP-041: an order's shipments are those made for it and those that carry its garments.
+      query.salesOrderId ? shipmentsOfOrderWhere(query.salesOrderId) : {},
       query.partyId ? { partyId: query.partyId } : {},
       query.evidence === 'open' ? { transportEvidence: { in: ['AWAITED', 'PARTIAL'] } } : query.evidence ? { transportEvidence: query.evidence } : {},
       query.cursor ? { id: { lt: query.cursor } } : {},
@@ -143,6 +150,8 @@ export async function listShipments(caller: CommandCaller, query: ListShipmentsQ
     }),
   )
   const page = rows.slice(0, query.limit)
+  // B-OP-041: every order each shipment carries, the first first (one query for the page).
+  const ordersOf = await caller.withClient((client) => orderRefsOfShipments(client, page))
   const at = (value: Date | null) => (value ? toUtcIso(value) : null)
   const place = (shipTo: unknown) => {
     const value = shipTo && typeof shipTo === 'object' ? (shipTo as Record<string, unknown>) : {}
@@ -168,6 +177,8 @@ export async function listShipments(caller: CommandCaller, query: ListShipmentsQ
       partyName: row.salesOrder.party.legalName,
       salesOrderId: row.salesOrderId,
       salesOrderNumber: row.salesOrder.number,
+      // B-OP-041: every order it carries (partyName and currency stay the first order's: one customer, one currency).
+      salesOrders: (ordersOf.get(row.id) ?? []).map((ref) => ({ id: ref.id, number: ref.number, customerRef: ref.customerRef })),
       transportBy: row.transportBy,
       carrierCode: row.carrierCode,
       carrierName: row.carrierName,
