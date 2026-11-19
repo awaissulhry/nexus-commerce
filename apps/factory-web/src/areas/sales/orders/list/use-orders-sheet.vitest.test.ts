@@ -6,7 +6,7 @@ import { I18nProvider } from '../../../../lib/i18n/provider'
 import { LIST_ROWS } from '../_demo/fixtures'
 import type { OrderRow } from '../api'
 import { listAddress } from '../model'
-import { lockedEntry, ORDERS_LIST_KEY, sheetAddress, sheetPartyOf, useOrdersSheet, type OrdersSheetHost } from './use-orders-sheet'
+import { CLEAR_DROPS, lockedEntry, ORDERS_LIST_KEY, sheetAddress, sheetPartyOf, useOrdersSheet, type OrdersSheetHost } from './use-orders-sheet'
 
 /**
  * F-SA-220 (sales page plan N7 / N5, picks R9, P10, P12, P18; 17-review C-2 and the SHEET-G02 lesson): the ONE Orders sheet. A host's
@@ -168,3 +168,85 @@ describe('Sales › Orders behaves as before (F-SA-220)', () => {
     expect(page.split('\n').length).toBeLessThan(30)
   })
 })
+
+// ---- F-CP-102 (customer page plan C1; 10-customer-page §1): Clear all goes back to the host's default ------------------------------
+// The host says its default view (`clearTo`, default Open orders): Clear all writes it (All orders on the customer page, Open orders on
+// Sales › Orders), drops the Work · Money columns term (CLEAR_DROPS) and the door terms, never the lock or the host's tab; the model's
+// `defaultRows` is the host's (no chip, the "Showing" line compares with it).
+describe('F-CP-102: Clear all goes back to the host\'s default view', () => {
+  it('the customer page: rows=all, the columns term and every narrowing gone; the lock, the tab and the dock stay', () => {
+    const host: OrdersSheetHost = { basePath: `/sales/customers/${ALPHA}`, locked: { party: ALPHA }, keep: ['tab', 'dock', 'cols'], clearTo: 'all' }
+    const { actions, model } = draw(host, `party=${ALPHA}&tab=work&dock=all&status=IN_PRODUCTION&cols=money&q=giacca&atRisk=true`)
+    expect(model.defaultRows).toBe('all')
+    actions.onClearAll?.()
+    const written = new URL(nav.replaced[0]!, 'https://factory.example.com').searchParams
+    expect(written.get('rows')).toBe('all')
+    for (const gone of ['status', 'cols', 'q', 'atRisk']) expect(written.has(gone), gone).toBe(false)
+    expect([written.get('party'), written.get('tab'), written.get('dock')]).toEqual([ALPHA, 'work', 'all'])
+  })
+
+  it('Sales › Orders keeps Open orders: Clear all writes no rows term (Open is its default), its model has no host default', () => {
+    const { actions, model } = draw({ basePath: '/sales/orders' }, 'late=true&q=SO-1')
+    expect(model.defaultRows).toBeNull()
+    actions.onClearAll?.()
+    expect(nav.replaced).toEqual(['/w/DEMO/sales/orders'])
+  })
+
+  it('a kept term is dropped only where a write names it (CLEAR_DROPS); every other write keeps it', () => {
+    expect(CLEAR_DROPS).toEqual(['cols'])
+    const host = { locked: { party: ALPHA }, keep: ['tab', 'cols'] }
+    const now = params(`tab=work&cols=money&party=${ALPHA}`)
+    const next = { rows: 'late' as const, q: '', layout: 'list' as const, party: null }
+    expect(new URL(sheetAddress('/w/DEMO/x', host, now, next), 'https://x').searchParams.get('cols')).toBe('money')
+    const cleared = new URL(sheetAddress('/w/DEMO/x', host, now, next, CLEAR_DROPS), 'https://x').searchParams
+    expect(cleared.has('cols')).toBe(false)
+    expect([cleared.get('tab'), cleared.get('party')]).toEqual(['work', ALPHA])
+  })
+})
+// ---- end F-CP-102
+
+// ---- F-CP-104 (customer page plan C2a; review A9): the New order window on a host that holds the customer ---------------------------
+describe('F-CP-104: New order on the customer page holds its customer', () => {
+  it('an old ?new=1 opens the window on arrival; on the customer page it holds the customer (no Change), on Sales › Orders it does not', () => {
+    const customer = draw({ basePath: `/sales/customers/${ALPHA}`, locked: { party: ALPHA }, keep: ['tab'] }, `party=${ALPHA}&tab=work&new=1`).model
+    expect(customer.newOrder?.partyLocked).toBe(true)
+    const orders = draw({ basePath: '/sales/orders' }, `party=${BETA}&new=1`).model
+    expect(orders.newOrder?.partyLocked).toBe(false)
+    expect(draw({ basePath: `/sales/customers/${ALPHA}`, locked: { party: ALPHA } }, `party=${ALPHA}`).model.newOrder).toBeNull()
+  })
+
+  it('New order on a host that holds the customer reads that customer at once (no search); nothing is written into the address', () => {
+    const asked: string[] = []
+    const before = world.api.get
+    world.api.get = ((path: string) => (asked.push(path), new Promise(() => undefined))) as typeof world.api.get
+    try {
+      draw({ basePath: `/sales/customers/${ALPHA}`, locked: { party: ALPHA }, keep: ['tab'] }, `party=${ALPHA}&tab=work`).actions.onNewOrder?.(true)
+    } finally {
+      world.api.get = before
+    }
+    expect(asked.some((path) => path.includes(ALPHA))).toBe(true)
+    expect(nav.replaced).toEqual([])
+    expect(nav.pushed).toEqual([])
+  })
+
+  it('the window: no Change and no search while it holds the customer; its button says "Add the lines" (draft stays the portal\'s word)', () => {
+    const window = readFileSync(new URL('./view/NewOrderDialog.tsx', import.meta.url), 'utf8')
+    expect(window).toContain('{!model.partyLocked && (')
+    expect(window).toContain('{!party && model.partyLocked ? (')
+    expect(window).toContain("t('newOrder.addLines')")
+    const sheet = readFileSync(new URL('./use-orders-sheet.ts', import.meta.url), 'utf8')
+    expect(sheet).toContain('party: current.partyLocked ? current.party : null')
+    for (const locale of ['en', 'it'] as const) {
+      const catalogue = JSON.parse(readFileSync(new URL(`../../../../../messages/${locale}/orders.json`, import.meta.url), 'utf8')) as { newOrder: Record<string, unknown> }
+      expect(catalogue.newOrder.addLines, locale).toBe(locale === 'en' ? 'Add the lines' : 'Aggiungi le righe')
+      expect(catalogue.newOrder.create, `${locale}: the old words are gone`).toBeUndefined()
+    }
+  })
+
+  it('All orders with none yet offers New order in place, held with why without orders.manage', () => {
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain(") : hostEmpty.newOrder ? (")
+    expect(view).toContain("heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewOrder?.(true)}")
+  })
+})
+// ---- end F-CP-104

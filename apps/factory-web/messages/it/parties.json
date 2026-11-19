@@ -221,7 +221,8 @@
           "for": "Per",
           "due": "Scadenza"
         }
-      }
+      },
+      "emptyAll": "{customer} non ha ancora ordini."
     },
     "quotesTab": {
       "quotes": "Preventivi",

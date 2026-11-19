@@ -1358,7 +1358,7 @@
     "numberLoading": "Lettura del prossimo numero…",
     "numberUnknown": "Il numero si dà alla conferma dell'ordine.",
     "number": "Avrà il numero {number} (se un altro ordine non lo prende prima).",
-    "create": "Crea l'ordine in bozza",
+    "addLines": "Aggiungi le righe",
     "partyStatus": {
       "PROSPECT": "un potenziale cliente",
       "ACTIVE": "attivo",
@@ -1966,5 +1966,11 @@
       "state": "Non è stato possibile registrare la spedizione",
       "failed": "Non è stato possibile registrare la spedizione: riprova"
     }
+  },
+  "priced": {
+    "fromList": "Prezzi dal listino di {customer}"
+  },
+  "pricedPdf": {
+    "held": "Mostra dei prezzi: lo invia chi vede i prezzi."
   }
 }

@@ -167,10 +167,10 @@ function NewOrderContainer() {
       return
     }
     setPreview((current) => ({ ...current, phase: 'reading', problem: null }))
-    previewManualOrder(api, manualBody(header, draft))
+    previewManualOrder(api, manualBody(header, draft, can /* F-CP-146: no price key without the price grain */))
       .then((value) => mine === previewSeq.current && setPreview({ phase: 'ready', value, problem: null }))
       .catch((error: unknown) => mine === previewSeq.current && setPreview({ phase: 'failed', value: null, problem: writeProblem(error).key }))
-  }, [api, header, draft])
+  }, [api, header, draft, can])
   useEffect(() => {
     const timer = setTimeout(runPreview, 400)
     return () => clearTimeout(timer)
@@ -183,7 +183,7 @@ function NewOrderContainer() {
     // One key per confirm attempt of this draft: a repeat after a lost answer is answered from the receipt.
     confirmKey.current ??= newIdempotencyKey()
     try {
-      const order = await createManualOrder(api, manualBody(header, draft), confirmKey.current)
+      const order = await createManualOrder(api, manualBody(header, draft, can /* F-CP-146 */), confirmKey.current)
       store.write(draftKey(header), null)
       const href = `${prefix}/sales/orders/${order.id}`
       // B-TH-231: the held files go now; when some do not, the order stays made and the page says so (Retry, Open the order).

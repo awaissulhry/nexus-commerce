@@ -221,7 +221,8 @@
           "for": "For",
           "due": "Due"
         }
-      }
+      },
+      "emptyAll": "{customer} has no order yet."
     },
     "quotesTab": {
       "quotes": "Quotes",

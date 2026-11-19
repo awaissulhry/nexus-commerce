@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 // F-SA-271: the band's ⋯ "Add task for <customer>…" — the record's ONE New task dialog (the Party record's task).
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import type { PanelRead } from '../../../../record-panels/model'
@@ -25,6 +25,7 @@ import { partyName } from '../../../parties/_shared/model'
 import { useCustomerWork, useReacceptOrders, type WorkCan } from './use-customer-work'
 import { CustomerDock, WorkTab, type DockPick } from './view/WorkTab'
 import { useCustomerDock } from './use-customer-work' // F-SA-279: the dock follows the row (`dock=`), All of <customer>
+import { workAskAddress, type WorkAsk } from './use-customer-work' // F-CP-104: New order and Import orders in place
 import { useAllOfCustomer } from '../../../_shared/record-thread/all-of-customer/use-all-of-customer' // F-SA-279: All of <customer>, read by the page
 import { readUnreadWith } from '../../../../lib/last-message-cell/api' // F-OP-213: whether the customer's thread may be read
 import { useUnread } from '../../../../lib/last-message-cell/use-unread' // F-OP-213
@@ -117,9 +118,21 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
       <OpenTasksDialog customer={named.name} tasks={work.reads.tasks} onPick={pickOrGeneral} onClose={() => setWin(null)} />
     ) : null
   // ---- end F-SA-278
+  // ---- F-CP-104 (C2a): the band's New order and ⋯ Import orders for <customer>… open on this page — the ask is kept in memory (never an
+  // address term: nothing to loop on, a reload does not reopen it); on another tab the page writes `tab=work` first (one replace), the
+  // Work sheet serves the ask once it is here. Without the Work tab (no orders.view) the old doors stay.
+  const router = useRouter()
+  const [ask, setAsk] = useState<WorkAsk | null>(null)
+  const askWork = (what: WorkAsk) => {
+    setAsk(what)
+    const address = workAskAddress(`${prefix}/sales/customers/${encodeURIComponent(partyId)}`, tab)
+    if (address) router.replace(address, { scroll: false })
+  }
+  const doors = can.orders ? { onNewOrder: () => askWork('new'), onImport: () => askWork('import') } : {}
+  // ---- end F-CP-104
   // F-SA-277: Quotes & incoming — a row's click docks its quote's or request's thread.
   const quotesTab = named && tab === 'quotes' ? <QuotesIncomingTab party={named} onPick={onPick} onFocus={customerDock.onFocus} shown={customerDock.shown} /> : null
-  const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={customerDock.shown /* F-SA-279: the row marked = the record docked */} onPick={onPick} onFocus={customerDock.onFocus} onWindow={setWin /* F-SA-278 */} /> : null
+  const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={customerDock.shown /* F-SA-279: the row marked = the record docked */} onPick={onPick} onFocus={customerDock.onFocus} onWindow={setWin /* F-SA-278 */} ask={ask} onAsked={() => setAsk(null) /* F-CP-104 */} /> : null
   // ---- end F-SA-276
   // ---- F-SA-274: People & addresses — the people with portal access (Portal access's people part), tagged against the contacts.
   const [portalEmails, setPortalEmails] = useState<ReadonlySet<string>>(new Set())
@@ -133,7 +146,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   return (
     <>
       {windows /* F-SA-278 */}
-      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} />
+      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} {...doors /* F-CP-104 */} />
     </>
   )
 }

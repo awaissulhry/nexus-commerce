@@ -89,3 +89,18 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+
+/* F-CP-103: a built-in view's count at the item's end (Views ▾: "All orders · 24"), muted, in figures that line up. */
+.fw-lt-builtin {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-lt-builtin-count {
+  color: var(--nds-text-muted);
+  font-variant-numeric: tabular-nums;
+}
