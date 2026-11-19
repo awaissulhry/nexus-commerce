@@ -400,7 +400,10 @@ describe('F-SA-279: a click picks at once, the keys after 300 ms of rest', () =>
 
 describe('F-SA-279: the page wires it (the sources)', () => {
   const hook = readFileSync(new URL('./use-customer-work.ts', import.meta.url), 'utf8')
-  const block = hook.slice(hook.indexOf('export function useCustomerDock'))
+  // F-CP-111 (end-check fix): the dock's own history writes only — the docked order's "All files" after them opens ANOTHER page
+  // (the order's Files tab), a navigation Back returns from, not a write of `dock=`.
+  const dockStart = hook.indexOf('export function useCustomerDock')
+  const block = hook.slice(dockStart, hook.indexOf('// ---- F-CP-111', dockStart))
   it('a replace, never a push (Back leaves the page); the summary read checks an address\'s record', () => {
     // F-OP-211: the record pages' ONE history writer (a replace, only a different address); no router write of `dock=` any more.
     expect(block).toContain('writeSearch(dockAddress(pathname, window.location.search, next, messageId))')
@@ -409,6 +412,7 @@ describe('F-SA-279: the page wires it (the sources)', () => {
     expect(block).not.toContain('push: true')
     expect(block).toContain('readRecordSummary(api, { type: term.type, id: term.id }, controller.signal)')
     expect(block).toContain('if (!checked) return write(GENERAL_DOCK)')
+    expect(hook).toContain('onAll: () => router.push(orderFilesHref(prefix, order.id))') // F-CP-111: a page of its own
   })
   it('the Work tab marks the docked order, reports the keys\' row and gives a phone card its door; Quotes & incoming too', () => {
     const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')

@@ -76,7 +76,9 @@ export const draftsNav = (rows: readonly Pick<DraftRow, 'id'>[], current: string
  * anyone else (the key is absent, never 0), so a list whose rows carry none draws no such column.
  */
 // F-CP-141 (follow-up 6): + the draft's own value (B-CP-076's `draft.draftValueAmount`, the price grain too).
-export const showsValue = (rows: readonly Pick<DraftRow, 'netShown' | 'draft'>[] | null): boolean => !!rows && rows.some((row) => row.netShown !== undefined || (row.draft?.draftValueAmount ?? undefined) !== undefined)
+// F-CP-141 (end-check fix): a null value is a price holder's "not known" (the field came), so it shows the column too; only a reader
+// without the price grain gets no field at all.
+export const showsValue = (rows: readonly Pick<DraftRow, 'netShown' | 'draft'>[] | null): boolean => !!rows && rows.some((row) => row.netShown !== undefined || row.draft?.draftValueAmount !== undefined)
 
 /**
  * F-CP-141 (follow-up 6; the API's B-CP-076): a draft's value — `draft.draftValueAmount` (minor units) when the API sends it, else
