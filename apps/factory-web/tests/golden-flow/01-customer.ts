@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test'
 import { defineStage } from './_harness/stages'
-import { answerOf, dialog, press } from './_harness/ui'
+import { answerOf, dialog, press, routerActivity } from './_harness/ui'
 
 /** The customer of the first order (made up): an Italian brand that sells under its own label. */
 export const CUSTOMER = {
@@ -36,6 +36,17 @@ export default defineStage({
     })
     flow.state.party = { id: party.id, code: party.code }
     expect(party.roles).toEqual(expect.arrayContaining(['CUSTOMER', 'BRAND']))
+
+    // fx-12 (the Owner's test server, 2026-11-19: the customer page asked its tabs ~480 times each): the page opens and rests —
+    // over 10 s one document, the Work tab's one address write, a handful of the router's requests; never a loop.
+    await flow.step('the customer page rests: over 10 s a handful of navigations at most (no loop)', async () => {
+      const seen = await routerActivity(page, 10_000, () => sales.go(`/sales/customers/${party.id}`))
+      const said = seen.lines.join('\n')
+      expect(seen.documents, said).toBe(1)
+      expect(seen.navigations, said).toBeLessThanOrEqual(5)
+      expect(seen.router, said).toBeLessThanOrEqual(8)
+      await expect(page).toHaveURL(new RegExp(`tab=work.*party=${party.id}`))
+    })
 
     await flow.step('payment terms on the identity card', async () => {
       // F-SA-271 (sales page plan, pick R5): a customer opens on Work for Sales; the identity card is the Overview's.
