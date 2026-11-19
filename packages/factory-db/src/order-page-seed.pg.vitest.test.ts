@@ -11,6 +11,8 @@ import { migratedDatabase, type MigratedDatabase } from './testing/database'
  * a line of SEED-SO-0003 too, of the seed's OWN released garments (SEED-WO-0101 / 0102) — written through the real login and the guards (schema wave "order page 1/1": a line of another
  * open order of the same customer, company, currency and tax mode joins a DRAFT), twice (idempotent). It is on both orders by
  * the database's own helper (factory_order_shipments), and only ever of its own customer. Every name and number is made up.
+ * B-OP-046 (P16): and the monthly invoice of two orders — one ISSUED TD24 of P1 billing the shipped goods of SEED-SO-0101 and
+ * SEED-SO-0102 (the seed's own garments, shipments and DDTs), partly paid by one payment.
  * Run with `node scripts/factory/run-pg-tests.mjs order-page-seed`.
  */
 
@@ -85,3 +87,72 @@ describe('B-OP-046: the seed holds one shipment of two orders of one customer', 
     ])
   })
 })
+
+// ---- B-OP-046 (P16): the monthly invoice of two orders (order page plan N3, B-OP-022) --------------------------------------------
+describe('B-OP-046 (P16): the seed holds one ISSUED TD24 that bills two orders of one customer, partly paid', () => {
+  const P1 = () => seedUuid(NS, 'party:P1')
+
+  it('the TD24 exists once, ISSUED with the INVOICE series\' next number after the money seed\'s, and names no order of its own', async () => {
+    const issued = await admin(`SELECT id::text AS id FROM "Invoice" WHERE "tenantId" = $1 AND "docType" = 'TD24' AND status::text <> 'DRAFT'`, [tenantId])
+    expect(issued).toEqual([{ id: seeded.monthly.invoiceId }])
+    const [invoice] = await admin(
+      `SELECT number, status::text AS status, "issueDate"::text AS "issueDate", "salesOrderId", "buyerPartyId"::text AS buyer, "partyId"::text AS party,
+              "netTotal", "vatTotal", "grossTotal", "xmlFileId", (SELECT count(*)::int FROM "NumberAllocation" a WHERE a."recordType" = 'Invoice' AND a."recordId" = i.id) AS allocations
+         FROM "Invoice" i WHERE id = $1`,
+      [seeded.monthly.invoiceId],
+    )
+    expect(invoice).toEqual({ number: 'FT-2026-00004', status: 'ISSUED', issueDate: '2026-10-31', salesOrderId: null, buyer: P1(), party: P1(), netTotal: 120000, vatTotal: 26400, grossTotal: 146400, xmlFileId: null, allocations: 1 })
+    const [series] = await admin(`SELECT "nextValue" FROM "NumberSeries" WHERE "tenantId" = $1 AND kind = 'INVOICE' AND code = 'MAIN' AND "scopeKey" = '2026' AND "companyId" = $2`, [tenantId, seedUuid(NS, 'company:A')])
+    expect(series).toEqual({ nextValue: 5 })
+  })
+
+  it('bills the shipped goods of two orders of P1, each line with its own order line and its issued Nexus DDT', async () => {
+    const lines = await admin(
+      `SELECT l.seq, l.kind::text AS kind, l.quantity::text AS quantity, l."netAmount", o.id::text AS "orderId", o.number AS "order", o.status::text AS "orderStatus", o."partyId"::text AS party,
+              d.id::text AS "ddtId", d.number AS ddt, d."documentDate"::text AS "ddtDate", s.status::text AS shipment,
+              EXISTS (SELECT 1 FROM "DdtCancellation" x WHERE x."ddtId" = d.id) AS cancelled,
+              EXISTS (SELECT 1 FROM "ShipmentLine" sl WHERE sl."shipmentId" = s.id AND sl."salesOrderLineId" = l."salesOrderLineId" AND sl.quantity::numeric = l.quantity) AS carried
+         FROM "InvoiceLine" l JOIN "SalesOrderLine" ol ON ol.id = l."salesOrderLineId" JOIN "SalesOrder" o ON o.id = ol."orderId"
+         JOIN "Ddt" d ON d.id = l."ddtId" JOIN "Shipment" s ON s.id = d."shipmentId"
+        WHERE l."invoiceId" = $1 ORDER BY l.seq`,
+      [seeded.monthly.invoiceId],
+    )
+    expect(lines.map(({ ddt, ...line }) => line)).toEqual([
+      { seq: 1, kind: 'GOODS', quantity: '1.0000', netAmount: 40000, orderId: seeded.monthly.salesOrderIds[0], order: 'SEED-SO-0101', orderStatus: 'SHIPPED', party: P1(), ddtId: seeded.monthly.ddtIds[0], ddtDate: '2026-10-30', shipment: 'SHIPPED', cancelled: false, carried: true },
+      { seq: 2, kind: 'GOODS', quantity: '2.0000', netAmount: 80000, orderId: seeded.monthly.salesOrderIds[1], order: 'SEED-SO-0102', orderStatus: 'SHIPPED', party: P1(), ddtId: seeded.monthly.ddtIds[1], ddtDate: '2026-10-30', shipment: 'SHIPPED', cancelled: false, carried: true },
+    ])
+    // The two DDTs follow each other in company A's series (the shipping seed's 143/144 before them).
+    const numbers = lines.map((line) => Number(String(line.ddt).split('/')[0]))
+    expect(numbers[1]).toBe(numbers[0]! + 1)
+    expect(numbers[0]).toBeGreaterThan(144)
+  })
+
+  it('is partly paid: one payment placed on it whole, less than its gross', async () => {
+    const placed = await admin(`SELECT a."paymentId"::text AS "paymentId", a.amount, p.amount AS "paymentAmount", p."externalRef" FROM "PaymentAllocation" a JOIN "Payment" p ON p.id = a."paymentId" WHERE a."invoiceId" = $1`, [seeded.monthly.invoiceId])
+    expect(placed).toEqual([{ paymentId: seeded.monthly.paymentId, amount: 60000, paymentAmount: 60000, externalRef: 'SEED-TRN-0000101' }])
+  })
+
+  it('is self-contained: its own garments, released and shipped once each; written once (the seed ran twice)', async () => {
+    for (const [index, cellId] of seeded.monthly.cellIds.entries()) {
+      const [counts] = await admin(
+        `SELECT (SELECT COALESCE(SUM(quantity), 0) FROM "QualityRelease" WHERE "workOrderSizeId" = $1)::int AS released,
+                (SELECT COALESCE(SUM(sl.quantity), 0) FROM "ShipmentLine" sl JOIN "Shipment" s ON s.id = sl."shipmentId" WHERE sl."workOrderSizeId" = $1 AND s.status::text <> 'CANCELLED')::int AS shipped`,
+        [cellId],
+      )
+      expect(counts, cellId).toEqual({ released: index + 1, shipped: index + 1 })
+    }
+    expect(await admin(`SELECT number, status::text AS status FROM "WorkOrder" WHERE id = ANY($1::uuid[]) ORDER BY number`, [[...seeded.monthly.workOrderIds]])).toEqual([
+      { number: 'SEED-WO-0103', status: 'COMPLETED' },
+      { number: 'SEED-WO-0104', status: 'COMPLETED' },
+    ])
+    const [written] = await admin(
+      `SELECT (SELECT count(*)::int FROM "SalesOrder" WHERE "tenantId" = $1 AND number IN ('SEED-SO-0101', 'SEED-SO-0102')) AS orders,
+              (SELECT count(*)::int FROM "Shipment" WHERE "tenantId" = $1 AND number IN ('SEED-SH-0101', 'SEED-SH-0102')) AS shipments,
+              (SELECT count(*)::int FROM "Ddt" WHERE id = ANY($2::uuid[])) AS ddts,
+              (SELECT count(*)::int FROM "Payment" WHERE "tenantId" = $1 AND "externalRef" = 'SEED-TRN-0000101') AS payments`,
+      [tenantId, [...seeded.monthly.ddtIds]],
+    )
+    expect(written).toEqual({ orders: 2, shipments: 2, ddts: 2, payments: 1 })
+  })
+})
+// ---- end B-OP-046 (P16)

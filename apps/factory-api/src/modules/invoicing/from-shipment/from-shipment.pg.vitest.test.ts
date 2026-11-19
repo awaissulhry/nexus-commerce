@@ -9,6 +9,7 @@ import { businessDate } from '@nexus/factory-domain/core/time'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedMoney, type MoneySeed } from '../../../../../../packages/factory-db/seed/money'
+import { seed as seedOrderPage } from '../../../../../../packages/factory-db/seed/order-page' // B-OP-046 (P16)
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { FakeSdi } from '../../../adapters/sdi/fake'
 import { buildApp } from '../../../core/app'
@@ -688,3 +689,51 @@ describe('B-OP-033: a shipment made elsewhere is invoiced citing its paper DDT �
   })
 })
 // ---- end B-OP-033
+
+// ---- B-OP-046 (P16; order page plan N3): the SEEDED monthly invoice of two orders, read by each order -------------------------------
+/**
+ * The order page seed's TD24 (seed/order-page.ts, written through the database's rules), in a tenant of its own so this file's
+ * series and orders stay as they are: SEED-SO-0101 (1 jacket, 488.00) and SEED-SO-0102 (2 jackets, 976.00) on one ISSUED TD24
+ * of 1,464.00, 600.00 paid. Each order's settlement says its own share, the invoice's whole and the other order it bills — the
+ * same paid and still to pay as its row in Sales › Orders.
+ */
+describe('B-OP-046 (P16): the seeded monthly invoice — each of its two orders reads its own share, the whole and the other order', () => {
+  const NS_C = 'invs-c'
+  const C = { tenant: seedUuid(NS_C, 'tenant') }
+  let monthly: Awaited<ReturnType<typeof seedOrderPage>>['monthly']
+  const settlementOf = async (orderId: string): Promise<Json> => (await wall('monthlyReader', 'GET', `/invoicing/orders/${orderId}/settlement`, undefined, 200)).body.settlement
+
+  beforeAll(async () => {
+    await seedCore({ db: h.database, namespace: NS_C })
+    monthly = (await seedOrderPage({ db: h.database, namespace: NS_C })).monthly
+    SESSIONS['monthlyReader'] = () => office(C.tenant, [grant(['orders.view', 'invoices.view', 'money.price'])])
+  }, 240_000)
+
+  it('each order: its own share of the TD24, what of it is open, and the other order it bills', async () => {
+    const [o1, o2] = monthly.salesOrderIds
+    const one = await settlementOf(o1)
+    expect(one.number).toBe('SEED-SO-0101')
+    expect(one.invoices).toEqual([
+      expect.objectContaining({ id: monthly.invoiceId, docType: 'TD24', number: 'FT-2026-00004', status: 'ISSUED', grossTotal: 146400, paidAmount: 60000, share: 48800, openShare: 28800, freight: 0, otherOrders: [{ id: o2, number: 'SEED-SO-0102' }], otherOrdersHidden: 0 }),
+    ])
+    expect(one.thisOrder).toEqual({ paid: 20000, stillToPay: 28800, invoicedShare: 48800, depositsPaid: 0 })
+    const two = await settlementOf(o2)
+    expect(two.invoices).toEqual([
+      expect.objectContaining({ id: monthly.invoiceId, grossTotal: 146400, paidAmount: 60000, share: 97600, openShare: 57600, freight: 0, otherOrders: [{ id: o1, number: 'SEED-SO-0101' }], otherOrdersHidden: 0 }),
+    ])
+    expect(two.thisOrder).toEqual({ paid: 40000, stillToPay: 57600, invoicedShare: 97600, depositsPaid: 0 })
+    // The two shares make the whole (no freight on it); both orders shipped and invoiced, not settled (partly paid, not delivered to SDI).
+    expect(one.invoices[0].share + two.invoices[0].share).toBe(146400)
+    for (const settlement of [one, two]) expect(settlement).toMatchObject({ settled: false, fullyShipped: true, fullyInvoiced: true })
+  })
+
+  it('the same paid and still to pay as each order’s row in Sales › Orders', async () => {
+    const list = (await wall('monthlyReader', 'GET', `/sales/orders?ids=${monthly.salesOrderIds.join(',')}`, undefined, 200)).body.orders as Json[]
+    for (const orderId of monthly.salesOrderIds) {
+      const row = list.find((entry) => entry.id === orderId)!
+      const { thisOrder } = await settlementOf(orderId)
+      expect([thisOrder.paid, thisOrder.stillToPay], orderId).toEqual([row.paid, row.balance])
+    }
+  })
+})
+// ---- end B-OP-046 (P16)
