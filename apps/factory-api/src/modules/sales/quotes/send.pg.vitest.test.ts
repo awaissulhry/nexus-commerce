@@ -37,6 +37,8 @@ let h: Harness
 let walls: FastifyInstance
 let sales: Browser
 let finance: Browser
+// B-CP-011 (the money wall): the Owner prices the quotes' lines and reads their money; Sales makes, sends and reads them without it.
+let owner: Browser
 let financeSecret: string
 let other: TestTenant
 
@@ -85,10 +87,11 @@ const RED_GRID = grid([['50', 1], ['52', 3], ['54', 2]])
 const quoteUrl = (id: string) => `/sales/quotes/${id}`
 
 /** A quote for P1 with two size-grid lines: 8 × 450 + 6 × 440 = 6240.00 net, 7612.80 gross, deposit 30 % = 2283.84. */
+// B-CP-011: Sales makes the quote, the Owner adds the priced lines (Sales sends no unitPrice any more).
 async function newQuote(extra: Json = {}): Promise<Json> {
   let quote = (await as(sales, 'POST', '/sales/quotes', { companyId: companyA, partyId: P1, customerRef: 'RFQ-0042', ...extra }, 201)).quote
-  quote = (await as(sales, 'POST', `${quoteUrl(quote.id)}/lines`, { version: quote.version, styleId: jacket, colourwayId: BLK, sizes: BLK_GRID, unitPrice: '450' }, 201)).quote
-  quote = (await as(sales, 'POST', `${quoteUrl(quote.id)}/lines`, { version: quote.version, styleId: jacket, colourwayId: RED, sizes: RED_GRID, unitPrice: '440' }, 201)).quote
+  quote = (await as(owner, 'POST', `${quoteUrl(quote.id)}/lines`, { version: quote.version, styleId: jacket, colourwayId: BLK, sizes: BLK_GRID, unitPrice: '450' }, 201)).quote
+  quote = (await as(owner, 'POST', `${quoteUrl(quote.id)}/lines`, { version: quote.version, styleId: jacket, colourwayId: RED, sizes: RED_GRID, unitPrice: '440' }, 201)).quote
   return quote
 }
 
@@ -144,6 +147,11 @@ beforeAll(async () => {
   finance = new Browser(h.app)
   expect((await finance.signIn(NS, financeUser.email, financeUser.password)).status).toBe(200)
   financeSecret = await enrolTotp(h, finance)
+  // B-CP-011: the Owner, signed in for real as Sales and Finance are.
+  const ownerUser = await addUser(h, seedTenant, { email: 'olga.owner@seed-a.example.com', role: 'owner' })
+  owner = new Browser(h.app)
+  expect((await owner.signIn(NS, ownerUser.email, ownerUser.password)).status).toBe(200)
+  await enrolTotp(h, owner)
   walls = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
@@ -314,7 +322,8 @@ describe('the link: open, accept with a typed name, the evidence, the deposit (S
   })
 
   it('the office reads every version with its PDF, its links and the evidence pack', async () => {
-    const { versions } = await as(sales, 'GET', `${quoteUrl(first.id)}/versions`)
+    // B-CP-011: the deposit's amount is a price: read as the Owner (was Sales); Sales reads the same versions without it.
+    const { versions } = await as(owner, 'GET', `${quoteUrl(first.id)}/versions`)
     expect(versions).toHaveLength(1)
     expect(versions[0]).toMatchObject({
       revision: 1,
@@ -324,6 +333,9 @@ describe('the link: open, accept with a typed name, the evidence, the deposit (S
       acceptance: { signerName: 'Anna Finta', emailCheck: 'MATCHED', documentMatches: true, termsVersion: 'default-business-1', evidence: { action: 'ACCEPTED', userAgent: 'Mozilla/5.0 (Customer test browser)' } },
       deposit: { status: 'OPEN', amount: 228384 },
     })
+    const bySales = (await as(sales, 'GET', `${quoteUrl(first.id)}/versions`)).versions
+    expect(bySales[0]).toMatchObject({ revision: 1, status: 'ACCEPTED', deposit: { status: 'OPEN' } })
+    expect(bySales[0].deposit).not.toHaveProperty('amount')
   })
 
   it('a deposit received through payments still marks the request PAID (markDepositPaid moved to sales)', async () => {
@@ -347,7 +359,10 @@ describe('a new version: the old link waits, then says it was replaced; only the
     tokens.push(v1Token)
     quote = sent.answer.quote
     quote = (await as(sales, 'POST', `${quoteUrl(quote.id)}/revise`, { version: quote.version, changeNote: 'Prezzo rivisto' })).quote
-    expect(quote).toMatchObject({ status: 'DRAFT', currentRevision: 2, current: { revision: 2, status: 'DRAFT', changeNote: 'Prezzo rivisto', netAmount: 624000 } })
+    // B-CP-011: Sales revises without seeing the money; the Owner reads the copied total.
+    expect(quote).toMatchObject({ status: 'DRAFT', currentRevision: 2, current: { revision: 2, status: 'DRAFT', changeNote: 'Prezzo rivisto' } })
+    expect(quote.current).not.toHaveProperty('netAmount')
+    expect((await as(owner, 'GET', quoteUrl(quote.id))).quote.current).toMatchObject({ revision: 2, netAmount: 624000 })
     expect(quote.lines.map((line: Json) => [line.colourway.code, line.quantity, line.sizes.length])).toEqual([
       ['BLK', 8, 3],
       ['RED', 6, 3],

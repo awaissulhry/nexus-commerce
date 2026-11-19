@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ApiClient } from '../../../../../lib/api/client'
-import { isApiError, issuePath } from '../../../../../lib/api/errors'
+import { isApiError } from '../../../../../lib/api/errors'
 import { downloadLink } from '../../../../../record-panels/api'
 import { storeUrl } from '../../../../../record-panels/store'
 import type { QuoteDetail } from '../../api'
 import type { Grains } from '../../model'
 import { checkLine, readLineConfigurator, removeArtwork, saveOrderOptions, saveQuoteOptions, uploadArtwork, type ArtworkFile, type CheckAnswer, type LineConfigurator, type LineTarget } from './api'
-import { artworkRefusal, draftChanged, draftKey, draftOf, picksBody, saveHeld, setPick, togglePick, type DraftPick, type Say, type Tone } from './model'
+import { artworkRefusal, draftChanged, draftKey, draftOf, picksBody, saveHeld, saveProblemOf, setPick, togglePick, type DraftPick, type Say, type Tone } from './model'
 import type { ConfiguratorActions, ConfiguratorModel } from './view/ConfiguratorView'
 // B-W2b-374: an order line's artwork in the portal.
 import { shareArtwork } from '../../../_shared/options-entry/api'
@@ -48,6 +48,8 @@ export function useLineConfigurator(input: LineConfiguratorInput): { model: Conf
   const [artworkProblem, setArtworkProblem] = useState<Say | null>(null)
   const [tries, setTries] = useState(0)
   const [online, setOnline] = useState(true)
+  // F-CP-160: the draft (its key) the API held because its options move a price this reader cannot see (B-CP-026).
+  const [blindKey, setBlindKey] = useState<string | null>(null)
   const lineKey = target.kind === 'QUOTE' ? `Q:${target.quoteId}:${target.lineId}` : `O:${target.orderId}:${target.lineId}`
 
   useEffect(() => {
@@ -127,9 +129,11 @@ export function useLineConfigurator(input: LineConfiguratorInput): { model: Conf
         setNotice({ tone: 'success', words: { key: 'save.done' } })
       }
     } catch (error) {
-      const stale = isApiError(error) && error.kind === 'conflict' && (error.code === 'version_conflict' || error.issues.some((issue) => issuePath(issue).split(/[./]/).includes('version')))
-      setNotice({ tone: 'danger', words: { key: stale ? 'problem.stale' : isApiError(error) && error.kind === 'forbidden' ? 'problem.forbidden' : 'problem.write' } })
-      if (stale) setTries((value) => value + 1)
+      // F-CP-160: a blind-price hold keeps the draft and holds Save for it in the API's words (a new choice tries again).
+      const problem = saveProblemOf(error)
+      setNotice({ tone: problem.blind ? 'warning' : 'danger', words: problem.words })
+      if (problem.blind) setBlindKey(draftKey(draft, groups))
+      if (problem.stale) setTries((value) => value + 1)
     } finally {
       setSaving(false)
     }
@@ -199,7 +203,8 @@ export function useLineConfigurator(input: LineConfiguratorInput): { model: Conf
   )
 
   const previewValue: CheckAnswer | null = preview.status === 'ready' ? preview.value : null
-  const held = saveHeld({ held: view && !view.may.configure ? view.may.held : null, changed, checking: preview.status === 'checking', preview: previewValue, saving, offline: !online, keepPrice, kind: target.kind }, draft, groups)
+  // F-CP-160: `blind` while the draft is the one the API held.
+  const held = saveHeld({ held: view && !view.may.configure ? view.may.held : null, changed, checking: preview.status === 'checking', preview: previewValue, saving, offline: !online, keepPrice, kind: target.kind, blind: blindKey !== null && blindKey === key }, draft, groups)
 
   const model: ConfiguratorModel = useMemo(
     () => ({

@@ -10,7 +10,9 @@ import { seedUuid, type SeedContext } from '../src/seeding'
  * a worker's template sync ran: "the portal roles are not set up in this tenant yet"),
  * one custom role copied from a template, and assignments for the synthetic people of seed/auth.ts:
  *   - the owner holds `owner` over every company (two-factor required: nothing until proved on a session);
- *   - the member holds `sales` limited to company A and its site A1, and the custom role over every company;
+ *   - the member holds `sales` limited to company A and its site A1, and the custom role over every company (B-CP-011,
+ *     the money wall: Sales sees no price, margin or price list edit, so this is the no-price persona; the owner is the
+ *     price persona);
  *   - the invited person holds `planner` limited to company B (live once the invitation is accepted).
  * Runs after seed/_core.ts and seed/auth.ts (name order) and writes in the tenant's office scope as the app does.
  * Made-up data only; idempotent (stable ids, upserts). The API's syncSystemRoles does the same for a real tenant.

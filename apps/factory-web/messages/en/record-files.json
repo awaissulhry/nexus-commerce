@@ -198,6 +198,21 @@
     "locked": "Priced document — you cannot open it",
     "lockedWhy": "Only people who see prices open it.",
     "lockedCount_one": "Priced document — you cannot open it",
-    "lockedCount_other": "{count} priced documents — you cannot open them"
+    "lockedCount_other": "{count} priced documents — you cannot open them",
+    "tick": "This file shows prices",
+    "tickHint": "Then only people who see prices open it.",
+    "floor": "A priced document is never shared with a floor: the floor sees no prices.",
+    "isPriced": "Priced document: only people who see prices open it.",
+    "mark": "Mark as priced",
+    "markFor": "Mark {name} as priced",
+    "unmark": "Take the price mark off",
+    "unmarkFor": "Take the price mark off {name}",
+    "unmarkHint": "Then everyone who reaches this record opens it.",
+    "unmarkHeld": "Only people who see prices take the \"shows prices\" mark off a file.",
+    "marked": "Marked as priced: from now on only people who see prices open it.",
+    "unmarked": "The price mark is off: everyone who reaches this record opens it.",
+    "stale": "Someone changed this file meanwhile. Here it is now.",
+    "gone": "This file is not on this record any more.",
+    "markFailed": "The price mark could not be changed now. Try again."
   }
 }

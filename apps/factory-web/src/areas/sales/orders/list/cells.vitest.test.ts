@@ -1,4 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs' // F-SA-212
+import { createElement } from 'react' // F-CP-140
+import { renderToStaticMarkup } from 'react-dom/server' // F-CP-140
 import { describe, expect, it } from 'vitest'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { CATALOGUE, createTranslator, messagesFor } from '../../../../lib/i18n/messages'
@@ -196,3 +198,87 @@ describe('F-SA-275: the production columns', () => {
   })
 })
 // ---- end F-SA-275
+
+// ---- F-CP-140 (customer page plan C2d; design 11-money §3.1; review G1): the Price check cell and the Difference — three states,
+// never "Equal" without the customer's price; a mark beside each word (never colour alone); a signed difference in words.
+describe('F-CP-140: the Price check cell and the Difference', () => {
+  const words = (locale: (typeof LOCALES)[number]) => createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+  const en = words('en')
+  const draw = (node: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(node)
+  const textOfHtml = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&#x27;/g, "'").replace(/\s+/g, ' ').trim()
+
+  it('the three states as the cell draws them (pure)', async () => {
+    const { priceMatchCellOf } = await import('./price-check-columns')
+    expect(priceMatchCellOf({ priceMatch: 'EQUAL', priceNotEqualLines: 0 })).toEqual({ state: 'EQUAL', tone: 'neutral', words: { key: 'priceCheck.EQUAL' } })
+    expect(priceMatchCellOf({ priceMatch: 'NOT_EQUAL', priceNotEqualLines: 2 })).toEqual({ state: 'NOT_EQUAL', tone: 'danger', words: { key: 'priceCheck.NOT_EQUAL' }, lines: { key: 'priceCheck.lines', params: { count: 2 } } })
+    // A known difference of the whole order with no line apart (a total row only): Not equal, no line count.
+    expect(priceMatchCellOf({ priceMatch: 'NOT_EQUAL', priceNotEqualLines: 0 })).toMatchObject({ state: 'NOT_EQUAL', lines: null })
+    expect(priceMatchCellOf({ priceMatch: 'NO_BRAND_PRICE' })).toEqual({ state: 'NO_BRAND_PRICE', words: { key: 'priceCheck.NO_BRAND_PRICE' } })
+    // No check on the row (a reader without the price grain, an older answer): nothing — never "Equal", never a guess.
+    expect(priceMatchCellOf({})).toBeNull()
+  })
+
+  it('Equal: a neutral DS Tag with the Equal mark; Not equal: a danger Tag with the EqualNot mark and "{count} lines" under it', async () => {
+    const { PriceMatchCell } = await import('./view/PriceMatchCell')
+    const equal = draw(createElement(PriceMatchCell, { row: { priceMatch: 'EQUAL', priceNotEqualLines: 0 }, t: en }))
+    expect(equal).toContain('nds-tag neutral')
+    expect(equal).toContain('lucide-equal')
+    expect(textOfHtml(equal)).toBe('Equal')
+    const differ = draw(createElement(PriceMatchCell, { row: { priceMatch: 'NOT_EQUAL', priceNotEqualLines: 2 }, t: en }))
+    expect(differ).toContain('nds-tag danger')
+    expect(differ).toContain('lucide-equal-not')
+    expect(textOfHtml(differ)).toBe('Not equal 2 lines')
+    expect(textOfHtml(draw(createElement(PriceMatchCell, { row: { priceMatch: 'NOT_EQUAL', priceNotEqualLines: 1 }, t: en })))).toBe('Not equal 1 line')
+  })
+
+  it('"— No customer price yet" is plain text (the DS Tag has no plain tone: review G1), never a Tag, never "Equal"', async () => {
+    const { PriceMatchCell } = await import('./view/PriceMatchCell')
+    const none = draw(createElement(PriceMatchCell, { row: { priceMatch: 'NO_BRAND_PRICE' }, t: en }))
+    expect(none).not.toContain('nds-tag')
+    expect(textOfHtml(none)).toBe('— No customer price yet')
+    expect(textOfHtml(none)).not.toMatch(/\bEqual\b/)
+    expect(draw(createElement(PriceMatchCell, { row: {}, t: en }))).toBe('')
+  })
+
+  it('a funnel only where the host narrows by the check (its words per state); without one the words stand alone', async () => {
+    const { PriceMatchCell } = await import('./view/PriceMatchCell')
+    const plain = draw(createElement(PriceMatchCell, { row: { priceMatch: 'NOT_EQUAL', priceNotEqualLines: 2 }, t: en }))
+    expect(plain).not.toContain('fw-sheet-funnel')
+    const funnel = draw(createElement(PriceMatchCell, { row: { priceMatch: 'NOT_EQUAL', priceNotEqualLines: 2 }, t: en, onNarrow: () => undefined }))
+    expect(funnel).toContain('fw-sheet-funnel')
+    expect(funnel).toContain('title="Show only the orders whose prices differ"')
+    const none = draw(createElement(PriceMatchCell, { row: { priceMatch: 'NO_BRAND_PRICE' }, t: en, onNarrow: () => undefined }))
+    expect(none).toContain("title=\"Show only the orders without the customer&#x27;s price\"")
+  })
+
+  it('the Difference: our price − the customer\'s, + we ask more, − we ask less (a true minus sign), 0 plain, unknown —', async () => {
+    const { priceDiffOf, signedMoney } = await import('./price-check-columns')
+    const { PriceDiffCell } = await import('./view/PriceMatchCell')
+    expect(priceDiffOf({ priceDiff: 6000 })).toEqual({ sign: 'more', minor: 6000, words: { key: 'priceCheck.more' } })
+    expect(priceDiffOf({ priceDiff: -1000 })).toEqual({ sign: 'less', minor: 1000, words: { key: 'priceCheck.less' } })
+    expect(priceDiffOf({ priceDiff: 0 })).toEqual({ sign: 'same', minor: 0, words: null })
+    expect(priceDiffOf({ priceDiff: null })).toBeNull()
+    expect(signedMoney(priceDiffOf({ priceDiff: 6000 }), 'EUR', 'en')).toBe('+€60.00')
+    expect(signedMoney(priceDiffOf({ priceDiff: -1000 }), 'EUR', 'en')).toBe('−€10.00')
+    expect(signedMoney(priceDiffOf({ priceDiff: 0 }), 'EUR', 'en')).toBe('€0.00')
+    expect(signedMoney(priceDiffOf({ priceDiff: null }), 'EUR', 'en')).toBe('—')
+    expect(textOfHtml(draw(createElement(PriceDiffCell, { row: { priceDiff: 6000, currency: 'EUR' }, t: en, locale: 'en' })))).toBe('+€60.00 we ask more')
+    expect(textOfHtml(draw(createElement(PriceDiffCell, { row: { priceDiff: -1000, currency: 'EUR' }, t: en, locale: 'en' })))).toBe('−€10.00 we ask less')
+    expect(textOfHtml(draw(createElement(PriceDiffCell, { row: { priceDiff: null, currency: 'EUR' }, t: en, locale: 'en' })))).toBe('—')
+    // No price grain: the field is absent, the cell draws nothing (never 0).
+    expect(draw(createElement(PriceDiffCell, { row: { currency: 'EUR' }, t: en, locale: 'en' }))).toBe('')
+  })
+
+  it('every word in both languages, the line count in pairs', () => {
+    for (const locale of LOCALES) {
+      const t = words(locale)
+      for (const key of ['priceCheck.EQUAL', 'priceCheck.NOT_EQUAL', 'priceCheck.NO_BRAND_PRICE', 'priceCheck.more', 'priceCheck.less', 'priceCheck.filter.EQUAL', 'priceCheck.filter.NOT_EQUAL', 'priceCheck.filter.NO_BRAND_PRICE']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('priceCheck.lines', { count: 1 }), locale).toMatch(/^1 /)
+      expect(t('priceCheck.lines', { count: 3 }), locale).toMatch(/^3 /)
+      expect(t('priceCheck.NO_BRAND_PRICE'), locale).not.toMatch(/equal|uguale/i)
+    }
+    expect(words('it')('priceCheck.NOT_EQUAL')).toBe('Diverso')
+    expect(words('it')('priceCheck.lines', { count: 2 })).toBe('2 righe')
+  })
+})
+// ---- end F-CP-140

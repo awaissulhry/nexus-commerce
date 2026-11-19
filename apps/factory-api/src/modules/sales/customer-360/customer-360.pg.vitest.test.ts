@@ -82,11 +82,12 @@ beforeAll(async () => {
   }
   await h.database.withScope({ audience: 'office', tenantId: A.tenant, actorId: newId() }, async (client) => applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId: newId() }))
   office('sales', 'sales')
+  // B-CP-011 (the money wall): the sales role holds no price grain; the credit amounts are the owner's read.
+  office('owner', 'owner')
   office('finance', 'finance')
   office('reader', 'read_only')
   office('salesB', 'sales', [A.companyB])
   office('noSamples', 'sales', 'all', ['sales.samples.view', 'sales.repairs.view', 'orders.view'])
-  office('noPrice', 'sales', 'all', ['money.price'])
   for (const [key, actorId] of Object.entries(ACTORS)) await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [actorId, A.tenant, `w2b324-${key}-${run}@example.com`, `Made-up ${key}`])
   SESSIONS.floor = { audience: 'floor', tenantId: A.tenant, actorId: newId(), siteId: id('site:A1'), deviceId: newId(), grants: [{ permissions: ['parties.view' as Permission], companies: 'all', sites: 'all', parties: 'all' }] } as SessionContext
   r2 = (await one<{ id: string }>(`SELECT id FROM "Party" WHERE "tenantId" = $1 AND code = 'SEED-R2'`, [A.tenant])).id
@@ -126,8 +127,11 @@ describe('the customer at a glance (SAL-019)', () => {
     expect(body.promises.late + body.promises.noPromise).toBeLessThanOrEqual(open)
 
     // The seed's limit with company A: 50 000.00 EUR (B-W2b-279); free credit = the limit less open orders and invoices.
-    expect(body.credit).toMatchObject({ currency: 'EUR', limit: 5_000_000, state: expect.stringMatching(/^(WITHIN|OVER)$/) })
-    expect(body.credit.available).toBe(body.credit.limit - body.credit.used)
+    // B-CP-011: the amounts are the owner's read (the seller's glance leaves them out: below).
+    const priced = await glance('owner', A.p1)
+    expect(priced.credit).toMatchObject({ currency: 'EUR', limit: 5_000_000, state: expect.stringMatching(/^(WITHIN|OVER)$/) })
+    expect(priced.credit.available).toBe(priced.credit.limit - priced.credit.used)
+    expect(body.credit.state).toMatch(/^(WITHIN|OVER)$/)
 
     const rounds = await count(`SELECT count(*) AS n FROM "SampleRound" WHERE "tenantId" = $1 AND "partyId" = $2 AND "companyId" = $3 AND stage IN ('REQUESTED', 'IN_MAKING', 'SENT', 'UNDER_REVIEW')`, [A.tenant, A.p1, A.companyA])
     expect(rounds).toBeGreaterThan(0)
@@ -181,7 +185,8 @@ describe('the customer at a glance (SAL-019)', () => {
     expect(partial.promises).toBeNull()
     expect(partial.credit).not.toBeNull()
 
-    const noPrice = await glance('noPrice', A.p1)
+    // B-CP-011: the sales role itself holds no price grain now.
+    const noPrice = await glance('sales', A.p1)
     expect(noPrice.credit.state).toMatch(/^(WITHIN|OVER)$/)
     expect(noPrice.credit).not.toHaveProperty('limit')
     expect(noPrice.credit).not.toHaveProperty('available')

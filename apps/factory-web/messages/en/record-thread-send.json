@@ -95,5 +95,10 @@
       "NOT_SENT": "Not taken back: the mail did not go, so there is nothing to undo.",
       "NOT_YOURS": "Not taken back: only the person who sent this mail can undo it."
     }
+  },
+  "namesPrice": {
+    "note": "This message names a price. People who do not see prices read this thread too. Use the Amount field, or send it anyway.",
+    "reply": "This reply names a price. Our people who do not see prices read this thread too. Send it anyway?",
+    "send": "Send anyway"
   }
 }

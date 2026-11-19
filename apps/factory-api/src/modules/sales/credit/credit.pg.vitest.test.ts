@@ -27,6 +27,8 @@ import { recheckAfterPayment } from './handlers'
  * …_sales_orders_depth_w2b_guards triggers on CreditCheck are real), tenant A from EVERY seed (SEED-C1 with a 50,000.00
  * limit with company A; the seeded CREDIT_OVERRIDE rule "Orders over the credit limit", OFF). Test sessions hold the role
  * templates' grants; the approver is a person with the finance role assignment. Every name and number is made up.
+ * B-CP-011 (the money wall): an order typed with a price is the Owner's (the sales role sends and reads no price); the seller
+ * still checks again and asks, and reads a check without its amounts.
  *
  * What it walks: no limit → no check; the list of limits with and without the price grain; a limit changed (refusals in
  * words); an order over the limit with no rule on → WARN and CONFIRMED; the rule on → PENDING_APPROVAL, a HOLD and a
@@ -137,7 +139,8 @@ describe('no limit, no check (as before)', () => {
     // (the seed offers none of its sizes yet: one made-up SKU).
     const open = await one<{ styleId: string; colourwayId: string; size: string }>(`SELECT s.id AS "styleId", c.id AS "colourwayId", s.sizes[1] AS size FROM "Style" s JOIN "Colourway" c ON c."styleId" = s.id WHERE s."tenantId" = $1 AND s."brandPartyId" IS NULL AND s.status = 'ACTIVE' AND c.status = 'ACTIVE' ORDER BY s.code, c.code LIMIT 1`, [A.tenant])
     await admin(`INSERT INTO "Variant" (id, "tenantId", "styleId", "colourwayId", size, sku) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, [newId(), A.tenant, open.styleId, open.colourwayId, open.size, `W2B294-OPEN-${run}`])
-    const made = await ok('sales', 'POST', '/sales/orders/manual', { ...typedOrder('PO-304-NOLIMIT', '100', p3), lines: [{ styleId: open.styleId, colourwayId: open.colourwayId, sizes: [{ size: open.size, quantity: 1 }], unitPrice: '100' }] }, 201)
+    // B-CP-011: the typed price is the Owner's.
+    const made = await ok('owner', 'POST', '/sales/orders/manual', { ...typedOrder('PO-304-NOLIMIT', '100', p3), lines: [{ styleId: open.styleId, colourwayId: open.colourwayId, sizes: [{ size: open.size, quantity: 1 }], unitPrice: '100' }] }, 201)
     expect(made.order.status).toBe('CONFIRMED')
     expect(await checksOf(made.order.id)).toEqual([])
   })
@@ -178,30 +181,35 @@ let held: { orderId: string; checkId: string; taskId: string }
 
 describe('an order over the limit (SAL-237)', () => {
   it('no credit rule switched on: shown (WARN) and let through, nothing asked', async () => {
-    const made = await ok('sales', 'POST', '/sales/orders/manual', typedOrder('PO-304-WARN'), 201)
+    // B-CP-011: the seller may not send a typed price (refused, nothing written); the Owner types the order.
+    await no('sales', 'POST', '/sales/orders/manual', typedOrder('PO-304-NOPRICE'), 403)
+    const made = await ok('owner', 'POST', '/sales/orders/manual', typedOrder('PO-304-WARN'), 201)
     expect(made.order.status).toBe('CONFIRMED')
     const checks = await checksOf(made.order.id)
-    expect(checks).toMatchObject([{ step: 'ORDER', result: 'WARN', createdById: PEOPLE.sales, limitAmount: 100 }])
+    expect(checks).toMatchObject([{ step: 'ORDER', result: 'WARN', createdById: PEOPLE.owner, limitAmount: 100 }])
     expect(await tasksOf(checks[0]!.id)).toEqual([])
   })
 
   it('the company holds (its CREDIT_OVERRIDE rule on): the order waits as PENDING_APPROVAL with a HOLD and a request for Finance', async () => {
     await switchRule(true)
-    const made = await ok('sales', 'POST', '/sales/orders/manual', typedOrder('PO-304-HOLD'), 201)
+    // B-CP-011: the Owner types the order (its price); the seller reads the hold.
+    const made = await ok('owner', 'POST', '/sales/orders/manual', typedOrder('PO-304-HOLD'), 201)
     expect(made.order.status).toBe('PENDING_APPROVAL')
     const check = (await checksOf(made.order.id))[0]!
     expect(check).toMatchObject({ step: 'ORDER', result: 'HOLD', overridesCheckId: null })
     const task = (await tasksOf(check.id))[0]!
-    expect(task).toMatchObject({ status: 'PENDING', requestedById: PEOPLE.sales })
+    expect(task).toMatchObject({ status: 'PENDING', requestedById: PEOPLE.owner })
     held = { orderId: made.order.id, checkId: check.id, taskId: task.id }
     const read = await ok('sales', 'GET', `/sales/credit/records/SalesOrder/${made.order.id}`)
     expect(read.customers[0]).toMatchObject({ wouldBe: 'HOLD', held: { checkId: check.id, request: { taskId: task.id, status: 'PENDING', approver: 'Finance' } }, may: { checkAgain: true, ask: false } })
     expect(read.customers[0].checks[0]).toMatchObject({ result: 'HOLD', words: expect.stringMatching(/^Over the credit limit.*: held until a yes\.$/) })
   })
 
-  it('nobody approves their own request: the seller is refused; Finance says yes, the override names the HOLD and the order goes on', async () => {
-    const { task } = await ok('sales', 'GET', `/approvals/tasks/${held.taskId}`)
+  it('nobody approves their own request: the asker (the Owner) is refused, the seller too; Finance says yes, the override names the HOLD and the order goes on', async () => {
+    // B-CP-011: the Owner typed the order, so the Owner asked: refused, the Owner included; the seller is no approver.
+    const { task } = await ok('owner', 'GET', `/approvals/tasks/${held.taskId}`)
     expect(task.approve.allowed).toBe(false)
+    await no('owner', 'POST', `/approvals/tasks/${held.taskId}/approve`, { version: task.version }, 403)
     await no('sales', 'POST', `/approvals/tasks/${held.taskId}/approve`, { version: task.version }, 403)
     await ok('finance', 'POST', `/approvals/tasks/${held.taskId}/approve`, { version: task.version, comment: 'A good payer (made-up).' })
     const checks = await checksOf(held.orderId)
@@ -215,7 +223,8 @@ describe('an order over the limit (SAL-237)', () => {
   })
 
   it('a raised limit lets a waiting order go on by itself; its request is withdrawn', async () => {
-    const made = await ok('sales', 'POST', '/sales/orders/manual', typedOrder('PO-304-RAISE'), 201)
+    // B-CP-011: the typed price is the Owner's.
+    const made = await ok('owner', 'POST', '/sales/orders/manual', typedOrder('PO-304-RAISE'), 201)
     expect(made.order.status).toBe('PENDING_APPROVAL')
     const hold = (await checksOf(made.order.id))[0]!
     const changed = await setLimit(900_000_000, 'Raised after the bank guarantee (made-up).')
@@ -229,12 +238,14 @@ describe('an order over the limit (SAL-237)', () => {
   })
 
   it('check again: still over → a new HOLD and a new request; refused when nothing is held', async () => {
-    const made = await ok('sales', 'POST', '/sales/orders/manual', typedOrder('PO-304-AGAIN'), 201)
+    // B-CP-011: the Owner types the order (its price); the seller checks it again.
+    const made = await ok('owner', 'POST', '/sales/orders/manual', typedOrder('PO-304-AGAIN'), 201)
     const first = (await checksOf(made.order.id))[0]!
     const again = await ok('sales', 'POST', `/sales/credit/records/SalesOrder/${made.order.id}/check`, { note: 'They say they paid (made-up).' })
     expect(again).toMatchObject({ result: 'HOLD', asked: true, orderGoesOn: false })
     expect((await tasksOf(first.id))[0]!.status).toBe('WITHDRAWN')
-    expect((await tasksOf(again.checkId))[0]).toMatchObject({ status: 'PENDING', requestedById: PEOPLE.sales })
+    // B-CP-011: the new request is asked for the person whose step was held (the Owner who typed the order), not the checker.
+    expect((await tasksOf(again.checkId))[0]).toMatchObject({ status: 'PENDING', requestedById: PEOPLE.owner })
     await no('sales', 'POST', `/sales/credit/records/SalesOrder/${held.orderId}/check`, {}, 409)
     await no('reader', 'POST', `/sales/credit/records/SalesOrder/${made.order.id}/check`, {}, 403)
   })
@@ -250,9 +261,14 @@ describe('the quote (SAL-148)', () => {
     })
     expect(checkId).not.toBeNull()
     expect(await one<Json>(`SELECT step::text, result::text FROM "CreditCheck" WHERE id = $1`, [checkId])).toEqual({ step: 'QUOTE', result: 'WARN' })
-    const read = await ok('sales', 'GET', `/sales/credit/records/QuoteVersion/${version.id}`)
+    // B-CP-011: the amounts are the Owner's read; the seller reads the same check without them (the keys left out).
+    const read = await ok('owner', 'GET', `/sales/credit/records/QuoteVersion/${version.id}`)
     expect(read.customers[0]).toMatchObject({ limit: 100, wouldBe: 'WARN', findings: expect.arrayContaining(['OVER_LIMIT']) })
     expect(read.customers[0].subject).toBeGreaterThanOrEqual(0)
+    const seller = (await ok('sales', 'GET', `/sales/credit/records/QuoteVersion/${version.id}`)).customers[0]
+    expect(seller).toMatchObject({ wouldBe: 'WARN' })
+    expect(seller).not.toHaveProperty('limit')
+    expect(seller).not.toHaveProperty('subject')
     expect((await ok('reader', 'GET', `/sales/credit/records/QuoteVersion/${version.id}`)).customers[0]).not.toHaveProperty('exposure')
   })
 })

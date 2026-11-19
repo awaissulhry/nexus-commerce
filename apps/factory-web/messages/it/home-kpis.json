@@ -179,7 +179,8 @@
     "hr": "Personale",
     "safety_officer": "Responsabile sicurezza",
     "company_doctor": "Medico competente",
-    "read_only": "Sola lettura"
+    "read_only": "Sola lettura",
+    "designer": "Designer della fabbrica"
   },
   "owner": {
     "unknown": "Un ruolo d’ufficio"

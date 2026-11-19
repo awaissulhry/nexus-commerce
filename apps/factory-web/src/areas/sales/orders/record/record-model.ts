@@ -36,6 +36,9 @@ import type { WorkOrderActsActions, WorkOrderActsModel } from '../../../../lib/p
 import type { RejectReason } from '../../../home/approvals/api' // F-OP-101
 import type { WorkOrderChange } from '../../../home/approvals/work-order-changes/api' // F-OP-116
 import type { ChangeReviewActions, ChangeReviewModel } from '../../../home/approvals/work-order-changes/model' // F-OP-116
+// F-CP-142: Money's "Price check" card and the ONE customer's-price window it opens (so/price-check, F-CP-114).
+import type { PriceCheckCardActions, PriceCheckCardModel } from './price-check-card'
+import type { PriceCheckDialogActions, PriceCheckDialogModel } from '../price-check/use-price-check'
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -296,6 +299,11 @@ export interface OrderRecordModel {
   overviewLine?: string | null
   /** F-SA-232: the page's live stream (the freshness line says "Live · as of 10:42" only when pushed). */
   liveState?: LiveState
+  // ---- F-CP-142 (customer page plan C3): Money's "Price check" card — a price holder's read (use-price-check-card.ts); without the
+  // price grain the card is one line of words whatever this holds; absent: not read here (a design case). The window while open.
+  priceCheck?: PriceCheckCardModel | null
+  priceCheckDialog?: PriceCheckDialogModel | null
+  // ---- end F-CP-142
   /** Design cases: what a dialog holds typed. */
   draft?: { date?: string; reason?: string; reasonCode?: string; lineIds?: string[]; scope?: 'order' | 'lines'; amount?: string; reference?: string; receivedOn?: string; issue?: boolean; message?: string; typed?: string }
 }
@@ -397,6 +405,9 @@ export interface OrderRecordActions {
   onRequestedChange?: () => void
   /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
   people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
+  /** F-CP-142: the Price check card (Customer's price…, Take them over, Try again) and the ONE window's own actions. */
+  priceCheck?: PriceCheckCardActions
+  priceCheckDialog?: PriceCheckDialogActions
 }
 
 /** The lines editor's own actions (the amendment and the typed New order share it). */

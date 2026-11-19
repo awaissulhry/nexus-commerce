@@ -3,8 +3,11 @@ import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { render, textOf } from '../../../../../lib/record-thread/parts/testing'
 import { workOrder } from '../../../_shared/fixtures'
-import { filesReady, orderFilesOf, orderGroup, twoGroupsOf, twoOrdersOf } from './fixtures'
-import { lookOf, orderNameOf, orderThreadDoor, sectionsOf, threadChoices, type OrderFilesModel, type OrderThreadChoice } from './model'
+import { filesReady, onlyPricedFor, orderFilesOf, orderGroup, pricedLeftOutFor, twoGroupsOf, twoOrdersOf } from './fixtures'
+import { lookOf, orderFilesCount, orderNameOf, orderThreadDoor, pricedLeftOutOf, sectionsOf, threadChoices, type OrderFilesModel, type OrderThreadChoice } from './model'
+// F-CP-161: the priced documents left out (the API's pricedLeftOut) and the record's design cases.
+import { orderFilesSchema } from './api'
+import { designScreen as recordScreen } from '../fixtures'
 import { OrderFilesBody, OrderThreadButton } from './view/OrderFiles'
 
 /**
@@ -130,3 +133,45 @@ describe('F-PR-25 — "Order thread" in the band', () => {
     expect(view).toContain('<OrderThreadButton choices={model.threadChoices ?? []} actions={actions?.orderFiles} />')
   })
 })
+
+// ── F-CP-161 (customer page lane, the money wall; the API's B-CP-023) ──
+describe('F-CP-161 — a priced document left out of the work order’s Order files: ONE counted line, never named', () => {
+  const raw = (over: Record<string, unknown> = {}) => ({
+    workOrder: { id: 'wo-demo', number: 'WO-DEMO-1' },
+    groups: [{ order: { id: 'o-demo', number: 'SO-DEMO-1', customerRef: null, status: 'CONFIRMED', orderDate: '2026-10-02', companyId: 'c-demo' }, thread: null, files: [], worksheets: [], measurementsLeftOut: 0, filesLeftOut: 0, ...over }],
+    ordersLeftOut: 0,
+  })
+
+  it('parses pricedLeftOut (0 from an API that does not send it yet)', () => {
+    expect(orderFilesSchema.parse(raw({ pricedLeftOut: 2 })).groups[0]!.pricedLeftOut).toBe(2)
+    expect(orderFilesSchema.parse(raw()).groups[0]!.pricedLeftOut).toBe(0)
+    expect(pricedLeftOutOf({ pricedLeftOut: 2 })).toBe(2)
+    expect(pricedLeftOutOf({ pricedLeftOut: 0 })).toBe(0)
+  })
+
+  it('as Production manager: "2 priced documents — you cannot open them · Only people who see prices open it.", in Italian too; the file never named', () => {
+    const model = filesReady(pricedLeftOutFor(WO))
+    const en = body(model, [])
+    expect(en).toContain('2 priced documents — you cannot open them · Only people who see prices open it.')
+    expect(body(model, [], 'it')).toContain('2 documenti con prezzi — non puoi aprirli · Lo aprono solo le persone che vedono i prezzi.')
+    expect(en).not.toContain('Conferma ordine')
+    // the artwork and the worksheet open as before; the band counts only what opens
+    expect(en).toContain('Ricamo petto logo.png')
+    expect(orderFilesCount(model.files)).toBe(3)
+  })
+
+  it('as Sales worker with only a priced document: the line, never "no files"; none of it without one', () => {
+    const only = body(filesReady(onlyPricedFor(WO)), [])
+    expect(only).toContain('Priced document — you cannot open it · Only people who see prices open it.')
+    expect(only).not.toContain('This order has no files yet.')
+    expect(body(filesReady(orderFilesOf(WO)), [])).not.toContain('priced document')
+  })
+
+  it('the design cases name the reader (as Production manager / as Sales worker) and carry no price', () => {
+    const ids = recordScreen.cases.map((entry) => entry.id)
+    expect(ids).toEqual(expect.arrayContaining(['order-files-priced', 'order-files-only-priced']))
+    const text = JSON.stringify(recordScreen.cases.filter((entry) => entry.id === 'order-files-priced' || entry.id === 'order-files-only-priced').map((entry) => [entry.model.role, entry.model.record.orderFiles]))
+    expect(text).not.toMatch(/€\s?\d|unitPrice|netAmount/)
+  })
+})
+// ── end F-CP-161 ──

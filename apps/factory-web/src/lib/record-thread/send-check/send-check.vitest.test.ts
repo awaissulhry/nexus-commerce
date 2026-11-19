@@ -1,4 +1,5 @@
-import { createElement } from 'react'
+import { readFileSync } from 'node:fs'
+import { createElement, type ComponentType } from 'react'
 import { describe, expect, it } from 'vitest'
 import { BRAND_ALPHA, BRAND_BETA } from '../../testing/two-brands'
 import { scanText } from '../../testing/brand-scan'
@@ -21,6 +22,15 @@ import {
   type SendCheck,
 } from './model'
 import { Recipients } from './view/Recipients'
+// ---- F-CP-147: the NAMES_A_PRICE flow (the send check's words, the composer's draft, the container's send)
+import { ApiError } from '../../api/errors'
+import type { ApiClient } from '../../api/client'
+import { createTranslator, messagesFor } from '../../i18n/messages'
+import { NAMES_A_PRICE, NAMES_PRICE_SEND, namesPriceRefused, namesPriceWords } from './model'
+import { draftAfter, heldForNamesPrice, heldReason, namesPriceAsked, pricesInWordsOkOf, switchMode, withSavedReply, type ComposerDraft } from '../composer/model'
+import { designScreen as composerScreen } from '../composer/fixtures'
+import { refusalCode } from '../../../areas/_shared/record-thread/state'
+import { postPortalReplyKeyed } from '../../../areas/_shared/record-thread/api'
 
 /** B-TH-207 — To and Cc, the send check with its 6 warnings, another customer's address refused unless ticked, the text kept. */
 
@@ -126,3 +136,72 @@ describe('SCR-006-send in both languages', () => {
     }
   })
 })
+
+// ── F-CP-147 (customer page plan C4, the money wall L3; Owner O5 "warn, never block"; design 11-money §4.6, §6; B-CP-020) ──────────
+// Our own people typing a price in words: the API holds an office note or a message in the portal once (409 NAMES_A_PRICE); the
+// box warns without repeating any amount, the typed text stays, and "Send anyway" sends the same words with pricesInWordsOk.
+describe('F-CP-147: the composer\'s NAMES_A_PRICE flow', () => {
+  const note: ComposerDraft = { mode: 'note', body: 'The customer agreed 92,50 a jacket.', forFloor: false, amount: '', currency: 'EUR' }
+
+  it('409 refusal/NAMES_A_PRICE is the warning; any other code is not', () => {
+    expect(NAMES_A_PRICE).toBe('NAMES_A_PRICE')
+    expect(namesPriceRefused(refusalCode(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/NAMES_A_PRICE', message: 'x' }])))).toBe(true)
+    expect(namesPriceRefused(refusalCode(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/FLOOR_PRICE', message: 'x' }])))).toBe(false)
+    expect(namesPriceRefused(null)).toBe(false)
+    expect(namesPriceWords('note')).toEqual({ key: 'namesPrice.note' })
+    expect(namesPriceWords('portal')).toEqual({ key: 'namesPrice.reply' })
+    expect(NAMES_PRICE_SEND).toBe('namesPrice.send')
+  })
+
+  it('the text stays: the box gets the same words and audience back, warned; Send anyway carries the flag for THESE words only', () => {
+    expect(pricesInWordsOkOf(note)).toBe(false) // a first try never carries it
+    const held = heldForNamesPrice(note)
+    expect(held).toMatchObject({ mode: 'note', body: note.body, amount: '', currency: 'EUR', namesPrice: true })
+    expect(namesPriceAsked(held)).toBe(true)
+    expect(pricesInWordsOkOf(held)).toBe(true)
+    // Warn, never block: Send is not held by the warning.
+    expect(heldReason(held, { offline: false, prospect: null, party: { name: BRAND_ALPHA.tradeName } })).toBeNull()
+    // New words, another audience, a saved reply: checked again (the warning goes).
+    expect(pricesInWordsOkOf(draftAfter(held, { body: `${note.body} Thanks.` }))).toBe(false)
+    expect(pricesInWordsOkOf(draftAfter(held, { amount: '9250' }))).toBe(true)
+    expect(pricesInWordsOkOf(switchMode(held, 'portal', []).draft)).toBe(false)
+    expect(pricesInWordsOkOf(switchMode({ ...held, mode: 'portal' }, 'note', []).draft)).toBe(false)
+    expect(pricesInWordsOkOf(withSavedReply(held, { body: 'See you Monday.' }))).toBe(false)
+    // An e-mail reply is checked by the send check (MENTIONS_COST), not here.
+    expect(namesPriceAsked({ mode: 'reply', namesPrice: true })).toBe(false)
+  })
+
+  it('the warning repeats no amount, in it and en; the box draws it with Send anyway', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-send'])['record-thread-send'] ?? {})
+      for (const key of ['namesPrice.note', 'namesPrice.reply', 'namesPrice.send']) {
+        expect(t(key), `${locale} ${key}`).not.toBe(key)
+        expect(t(key), `${locale} ${key}`).not.toMatch(/\d|€/)
+      }
+    }
+    const en = createTranslator('en', messagesFor('en', ['record-thread-send'])['record-thread-send'] ?? {})
+    expect(en('namesPrice.note')).toBe('This message names a price. People who do not see prices read this thread too. Use the Amount field, or send it anyway.')
+    expect(en('namesPrice.reply')).toBe('This reply names a price. Our people who do not see prices read this thread too. Send it anyway?')
+    const drawn = (id: string, locale: 'en' | 'it') => textOf(render(createElement(composerScreen.view as ComponentType<{ model: unknown }>, { model: composerScreen.cases.find((item) => item.id === id)!.model }), locale))
+    const noteBox = drawn('names-price-note', 'en')
+    expect(noteBox).toContain('This message names a price.')
+    expect(noteBox).toContain('Send anyway')
+    expect(drawn('names-price-portal', 'en')).toContain('Send it anyway?')
+    expect(drawn('names-price-note', 'it')).toContain('Invia comunque')
+    for (const [locale, id, html] of everyCase(composerScreen)) if (id.startsWith('names-price')) expect(leftKeys(html, ['namesPrice']), `${locale} ${id}`).toEqual([])
+  })
+
+  it('Send anyway sends pricesInWordsOk with the note and with the portal message; a first try never does', async () => {
+    const calls: Array<{ path: string; body?: unknown }> = []
+    const api = { post: async (path: string, options: { body?: unknown; schema: { parse: (v: unknown) => unknown } }) => (calls.push({ path, body: options.body }), options.schema.parse({ thread: { id: 't1', partyId: null, status: 'OPEN', version: 1 }, message: { id: 'm1' } })) } as unknown as ApiClient
+    await postPortalReplyKeyed(api, { type: 'SalesOrder', id: 'o1' }, { body: 'Confirmed: 92,50 each.', attachments: [] }, 'key-1')
+    await postPortalReplyKeyed(api, { type: 'SalesOrder', id: 'o1' }, { body: 'Confirmed: 92,50 each.', attachments: [], pricesInWordsOk: true }, 'key-2')
+    expect(calls.map((call) => (call.body as Record<string, unknown>).pricesInWordsOk)).toEqual([undefined, true])
+    const container = readFileSync(new URL('../../../areas/_shared/record-thread/use-record-thread.ts', import.meta.url), 'utf8')
+    expect(container.match(/pricesInWordsOk: pricesInWordsOkOf\(now\.draft\)/g)?.length).toBe(2)
+    expect(container.match(/draft: heldForNamesPrice\(snapshot\.draft\), files: snapshot\.files/g)?.length).toBe(2)
+    const api2 = readFileSync(new URL('../../../areas/_shared/record-thread/api.ts', import.meta.url), 'utf8')
+    expect(api2.match(/\.\.\.\(input\.pricesInWordsOk \? \{ pricesInWordsOk: true \} : \{\}\)/g)?.length).toBe(2)
+  })
+})
+// ── end F-CP-147 ─────────────────────────────────────────────────────────────────────────────────────────────────────────

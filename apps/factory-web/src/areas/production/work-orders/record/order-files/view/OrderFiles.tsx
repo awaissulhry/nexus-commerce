@@ -10,8 +10,10 @@ import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { pdfViewerLabels } from '../../../../../../lib/pdf/labels'
 import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
+// F-CP-161: the priced documents' lock line in MW1's words (record-files `priced.*`).
+import { WithMessages } from '../../../../../../record-panels/i18n'
 import type { OrderFile, OrderFilesGroup, OrderWorksheet } from '../api'
-import { leftOutOf, lookOf, openableOf, orderFilesCount, orderNameOf, orderThreadDoor, sectionsOf, type OrderFilesActions, type OrderFilesEntry, type OrderFilesModel, type OrderThreadChoice, type ShownFile } from '../model'
+import { leftOutOf, lookOf, openableOf, orderFilesCount, orderNameOf, orderThreadDoor, pricedLeftOutOf, sectionsOf, type OrderFilesActions, type OrderFilesEntry, type OrderFilesModel, type OrderThreadChoice, type ShownFile } from '../model'
 import '../order-files.css'
 
 /**
@@ -175,6 +177,8 @@ function Group({ group, model, thread, actions, onThread }: { group: OrderFilesG
   const locale = useLocale()
   const leftOut = leftOutOf(group).filter((entry) => entry.key !== 'orderFiles.measurementsLeftOut')
   const sections = sectionsOf(group)
+  // F-CP-161: the priced documents this reader may not open (counted, never named).
+  const priced = pricedLeftOutOf(group)
   return (
     <section className="fw-pr-stack" aria-label={orderWords(t, group.order)}>
       <div className="fw-pr-card-head">
@@ -189,7 +193,7 @@ function Group({ group, model, thread, actions, onThread }: { group: OrderFilesG
           </Button>
         )}
       </div>
-      {openableOf(group) === 0 && group.measurementsLeftOut === 0 && leftOut.length === 0 && <p className="fw-pr-hint">{t('orderFiles.none')}</p>}
+      {openableOf(group) === 0 && group.measurementsLeftOut === 0 && leftOut.length === 0 && priced === 0 && <p className="fw-pr-hint">{t('orderFiles.none')}</p>}
       {sections.map((section) => (
         <div key={section.key} className="fw-pr-of-section">
           <h4 className="fw-pr-of-part">{t(`orderFiles.section.${section.key}`)}</h4>
@@ -205,6 +209,8 @@ function Group({ group, model, thread, actions, onThread }: { group: OrderFilesG
           </div>
         </div>
       ))}
+      {/* F-CP-161: ONE counted line for the priced documents (MW1's words). */}
+      {priced > 0 && <PricedLeftOut count={priced} />}
       {leftOut.map((entry) => (
         <p key={entry.key} className="fw-pr-hint">
           {t(entry.key, { count: entry.count })}
@@ -213,6 +219,25 @@ function Group({ group, model, thread, actions, onThread }: { group: OrderFilesG
     </section>
   )
 }
+
+// ── F-CP-161: "2 priced documents — you cannot open them · Only people who see prices open it." (record-files `priced.*`) ──
+function PricedLeftOut({ count }: { count: number }) {
+  return (
+    <WithMessages namespaces={['record-files']}>
+      <PricedLeftOutLine count={count} />
+    </WithMessages>
+  )
+}
+
+function PricedLeftOutLine({ count }: { count: number }) {
+  const words = useT('record-files')
+  return (
+    <p className="fw-pr-of-locked" role="note" data-priced-left-out="">
+      <Lock size={13} aria-hidden /> {words('priced.lockedCount', { count })} · {words('priced.lockedWhy')}
+    </p>
+  )
+}
+// ── end F-CP-161 ──
 
 function Entry({ entry, model, actions }: { entry: OrderFilesEntry; model: OrderFilesModel; actions?: OrderFilesActions }) {
   const t = useT('production')

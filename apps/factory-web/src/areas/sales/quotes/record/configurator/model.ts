@@ -1,5 +1,8 @@
 import { surchargeText, type Surcharge } from '../../../../products/options/model'
 import type { Chosen, CheckAnswer, LineConfigurator, OptionGroupView, OptionValueView, PickBody, StyleConfigurator, Words2 } from './api'
+// F-CP-160: the money wall's hold of an options save that moves a price the person cannot see.
+import { isApiError, issuePath } from '../../../../../lib/api/errors'
+import { BLIND_PRICE_KEY, isBlindPriceRefusal } from '../../../_shared/blind-price'
 
 /**
  * The configurator's rules without a screen (B-W2b-340; SAL-133, SAL-136, SAL-139, SAL-140): the person's draft of the
@@ -117,6 +120,11 @@ export interface SaveState {
   /** An order: the options change what they add, and the person has not chosen to keep the accepted price. */
   keepPrice: boolean
   kind: 'QUOTE' | 'ORDER' | 'BENCH'
+  /**
+   * F-CP-160: the API held this very draft (B-CP-026): what its options add moves a price this reader cannot see. A reader
+   * without the price grain never sees the surcharges, so the screen learns it from the first refusal; a new choice tries again.
+   */
+  blind?: boolean
 }
 
 /** Why Save waits, in words (null: it can be pressed). */
@@ -126,6 +134,8 @@ export function saveHeld(state: SaveState, draft: readonly DraftPick[], groups: 
   if (state.offline) return { key: 'save.held.offline' }
   if (state.saving) return { key: 'save.saving' }
   if (!state.changed) return { key: 'save.held.unchanged' }
+  // F-CP-160: a price holder saves these options (the API's words).
+  if (state.blind) return { key: BLIND_PRICE_KEY }
   const values = new Map(groups.flatMap((group) => group.values.map((value) => [value.id, value] as const)))
   for (const pick of draft) {
     const value = values.get(pick.valueId)
@@ -138,6 +148,19 @@ export function saveHeld(state: SaveState, draft: readonly DraftPick[], groups: 
   if (state.kind === 'ORDER' && orderChange(state.preview) !== null && !state.keepPrice) return { key: 'save.held.keepPrice' }
   return null
 }
+
+// ── F-CP-160 (customer page lane, the money wall; the API's B-CP-026) ──────────────────────────────────────────────────────
+/**
+ * A refused save in this screen's words: a stale version (read again), the money wall's hold (this draft moves a price the reader
+ * cannot see: "It changes a price you cannot see: someone who sees prices does it."; the draft stays and Save waits), a missing
+ * right, anything else.
+ */
+export function saveProblemOf(error: unknown): { words: Say; stale: boolean; blind: boolean } {
+  if (isBlindPriceRefusal(error)) return { words: { key: BLIND_PRICE_KEY }, stale: false, blind: true }
+  const stale = isApiError(error) && error.kind === 'conflict' && (error.code === 'version_conflict' || error.issues.some((issue) => issuePath(issue).split(/[./]/).includes('version')))
+  return { words: { key: stale ? 'problem.stale' : isApiError(error) && error.kind === 'forbidden' ? 'problem.forbidden' : 'problem.write' }, stale, blind: false }
+}
+// ── end F-CP-160 ──
 
 /** On an order: what the draft's options add a piece more (or less) than accepted, or null when nothing changes. */
 export function orderChange(preview: CheckAnswer | null): string | null {

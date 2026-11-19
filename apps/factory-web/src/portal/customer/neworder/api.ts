@@ -5,6 +5,7 @@ import type { ServerDraftBody } from '../../../lib/request-compose/server-draft'
 import { DRAFT_PARTS } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { MEASURE_BY } from '@nexus/factory-domain/sales/portal-ordering/people'
 import { CUSTOM_LINE_KINDS } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import { PROBLEM_CODES } from '@nexus/factory-domain/sales/portal-ordering/rules' // B-CP-075: the domain's codes, one source
 
 /**
  * New order & reorder in the portal (apps/factory-api modules/sales/portal-ordering, B-W2b-190; SAL-072, SAL-073, SAL-074;
@@ -20,24 +21,9 @@ export const STATUSES = ['DRAFT', 'SENT', 'ACCEPTED', 'REFUSED', 'WITHDRAWN'] as
 export type RequestStatus = (typeof STATUSES)[number]
 export const SOURCES = ['PICKER', 'REORDER', 'UPLOAD'] as const
 export type RequestSource = (typeof SOURCES)[number]
-export const PROBLEM_CODES = [
-  'NO_LINES',
-  'TOO_MANY_LINES',
-  'DATE_PAST',
-  'SHIP_TO_ARCHIVED',
-  'STYLE_NOT_SOLD',
-  'COLOUR_DISCONTINUED',
-  'SIZE_NOT_OFFERED',
-  'NO_SIZES',
-  'PRICE_CHANGED',
-  // F-CP-154 (B-CP-075, follow-up 7): a described or made-to-measure line's own problems — without them a draft holding such a line
-  // would not parse.
-  'NO_TOTAL',
-  'SIZES_NOT_TOTAL',
-  'NO_PEOPLE',
-  'MTM_CLOSED',
-  'GARMENT_TYPE_GONE',
-] as const
+// B-CP-075: the problem codes are the domain's own list (one source): a described or made-to-measure line's codes (NO_TOTAL,
+// SIZES_NOT_TOTAL, NO_PEOPLE, MTM_CLOSED, GARMENT_TYPE_GONE) parse too, so a draft with such a line never fails to read.
+export { PROBLEM_CODES }
 export type ProblemCode = (typeof PROBLEM_CODES)[number]
 export const NOTICE_CODES = ['PRICE_CHANGED', 'REVISION_CHANGED', 'SIZES_DROPPED', 'COLOUR_DISCONTINUED', 'STYLE_NOT_SOLD', 'MADE_TO_MEASURE', 'NO_SIZES_LEFT'] as const
 export type NoticeCode = (typeof NOTICE_CODES)[number]

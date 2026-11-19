@@ -19,6 +19,7 @@ import type { Drill, FingerprintAnswer, SecurityFacts, StatusLine, TwoFactorList
 import { bulkHeld, drillWords, grouped, matchedOf, overallOf, rowHeld, STATUS_LINKS, STATUS_TONE, statusWords, withoutTwoFactor, type Read, type SecurityViewModel } from '../model'
 import { DayTimeField, DrillDialog, TwoFactorDialog, type DrillActions, type TwoFactorActions } from './SecurityDialogs'
 import { SecurityDepth, type SecurityDepthActions } from '../sessions/view/SecurityDepth'
+import { PriceHoldersCard } from './PriceHoldersCard' // F-CP-145
 import '../security.css'
 
 export type { SecurityViewModel } from '../model'
@@ -37,6 +38,8 @@ export interface SecurityActions extends DrillActions, TwoFactorActions {
   onStepUpClose?: () => void
   /** B-W2b-413: Session lengths, Actions that ask for a fresh code, Security events. */
   depth?: SecurityDepthActions
+  /** F-CP-145: "Who sees prices" read again (Try again). */
+  onRetryPrices?: () => void
 }
 
 /** The words of the page: the shared Admin text and the page's own (`admin-security.json`, prefix `sec.`). */
@@ -99,6 +102,8 @@ function Security({ model, actions, stepUp, jobs }: { model: SecurityViewModel; 
       {/* B-W2b-415: Jobs and integrations (security/jobs; absent without security.view). */}
       {jobs}
       <SignInCard model={model} actions={actions} />
+      {/* F-CP-145 (the money wall, Owner O3): beside the two-factor rules — absent for a reader who does not see prices (no call). */}
+      {model.priceHolders && <PriceHoldersCard read={model.priceHolders} prefix={model.prefix} canMakeRole={model.canMakeRole ?? false} onRetry={actions?.onRetryPrices} />}
       {model.depth && <SecurityDepth model={model.depth} actions={actions?.depth} />}
       <BackupsCard model={model} actions={actions} />
       <p className="fw-adm-hint">{t('sec.later')}</p>

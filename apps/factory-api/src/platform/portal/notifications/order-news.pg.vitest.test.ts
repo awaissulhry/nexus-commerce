@@ -113,7 +113,8 @@ const newsAbout = (orderId: string) => admin<{ userId: string; partyId: string; 
 const statusOf = async (orderId: string) => (await one<{ status: string }>('SELECT status::text FROM "SalesOrder" WHERE id = $1', [orderId])).status
 
 const typedOrder = (customerRef: string) => ({ companyId: companyA, partyId: partyA, customerRef, lines: [{ styleId: line.styleId, colourwayId: line.colourwayId, sizes: line.sizes, unitPrice: '100' }] })
-const madeOrder = async (customerRef: string) => (await ok('sales', 'POST', '/sales/orders/manual', typedOrder(customerRef), 201)).order as Json
+// B-CP-011 (the money wall): a typed order sends its unit price, so a price holder (the Owner) makes it; Sales may not send one.
+const madeOrder = async (customerRef: string) => (await ok('owner', 'POST', '/sales/orders/manual', typedOrder(customerRef), 201)).order as Json
 /** Finance's yes on the order's credit request. */
 async function approve(orderId: string): Promise<void> {
   const check = await one<{ id: string }>('SELECT id FROM "CreditCheck" WHERE "recordId" = $1 AND result = \'HOLD\' ORDER BY "checkedAt" DESC, id DESC LIMIT 1', [orderId])
@@ -197,6 +198,8 @@ let waiting: Json
 describe('T06: the portal says "confirmed" only for a confirmed order (B-TH-006, L2-G06)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('an order made waiting for our yes is "received, waiting for our approval" to its own customer only — never "confirmed"', async () => {
     await switchRule(true)
+    // B-CP-011: the same typed order with its unit price from Sales is refused (a money field Sales may not send).
+    expect((await call('sales', 'POST', '/sales/orders/manual', typedOrder('PO-TH006-SALES'))).statusCode).toBe(403)
     waiting = await madeOrder('PO-TH006-WAIT')
     expect(waiting.status).toBe('PENDING_APPROVAL')
     const before = h.ses.mails.length

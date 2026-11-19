@@ -163,7 +163,7 @@
       "lock": {
         "none": "Can be changed",
         "floor": "A floor role: the tablet and the PIN are its factors",
-        "money": "Sees costs or margins: always asked",
+        "money": "Sees prices, costs or margins: always asked",
         "template": "The ready-made role always asks for it"
       },
       "held": {
@@ -184,7 +184,7 @@
       "toRoles": "Roles & permissions",
       "refusal": {
         "floor": "A floor role never asks for two-factor: the tablet and the PIN are the floor's factors.",
-        "money": "A role that sees costs or margins always asks for two-factor.",
+        "money": "A role that sees prices, costs or margins always asks for two-factor.",
         "template": "This ready-made role always asks for two-factor.",
         "already": "This role asks for two-factor already.",
         "notAsked": "This role does not ask for two-factor.",
@@ -410,6 +410,47 @@
       "day": "{label}: day",
       "time": "{label}: time",
       "pickDay": "Choose a day"
+    },
+    "priceHolders": {
+      "title": "Who sees prices",
+      "hint": "Only the Owner gives a role that sees prices.",
+      "foot": "Only you and the people listed here see our prices.",
+      "make": "Make a role that sees prices only ›",
+      "makeHeld": "Making a role needs the right to change roles.",
+      "failed": "The people who see prices could not be read now. The other sections keep working.",
+      "count_one": "1 person sees our prices",
+      "count_other": "{count} people see our prices",
+      "tableLabel": "People who see our prices",
+      "col": {
+        "person": "Person",
+        "role": "Role",
+        "sees": "Sees",
+        "reach": "Reach",
+        "since": "Since",
+        "twoFactor": "Two-factor"
+      },
+      "reach": {
+        "all": "All customers",
+        "some_one": "1 customer",
+        "some_other": "{count} customers",
+        "companies_one": "1 company",
+        "companies_other": "{count} companies"
+      },
+      "since": "Since {since}",
+      "sinceUntil": "Since {since} · until {until}",
+      "twoFactor": {
+        "yes": "Set up",
+        "no": "Not set up yet"
+      },
+      "guests": {
+        "title": "Outside accountants",
+        "label": "Outside accountants who see our prices",
+        "none": "No outside accountant sees our prices.",
+        "firm": "Accountant · {firm}",
+        "noFirm": "Accountant",
+        "until": "Until {date}",
+        "noEnd": "No end set"
+      }
     }
   }
 }

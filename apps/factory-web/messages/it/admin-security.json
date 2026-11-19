@@ -163,7 +163,7 @@
       "lock": {
         "none": "Si può cambiare",
         "floor": "Un ruolo di reparto: i suoi fattori sono il tablet e il PIN",
-        "money": "Vede costi o margini: sempre richiesto",
+        "money": "Vede prezzi, costi o margini: sempre richiesto",
         "template": "Il ruolo predefinito lo chiede sempre"
       },
       "held": {
@@ -184,7 +184,7 @@
       "toRoles": "Ruoli e permessi",
       "refusal": {
         "floor": "Un ruolo di reparto non chiede mai il doppio fattore: i fattori del reparto sono il tablet e il PIN.",
-        "money": "Un ruolo che vede costi o margini chiede sempre il doppio fattore.",
+        "money": "Un ruolo che vede prezzi, costi o margini chiede sempre il doppio fattore.",
         "template": "Questo ruolo predefinito chiede sempre il doppio fattore.",
         "already": "Questo ruolo chiede già il doppio fattore.",
         "notAsked": "Questo ruolo non chiede il doppio fattore.",
@@ -410,6 +410,47 @@
       "day": "{label}: giorno",
       "time": "{label}: ora",
       "pickDay": "Scegli un giorno"
+    },
+    "priceHolders": {
+      "title": "Chi vede i prezzi",
+      "hint": "Solo il titolare dà un ruolo che vede i prezzi.",
+      "foot": "Solo tu e le persone elencate qui vedete i nostri prezzi.",
+      "make": "Crea un ruolo che vede solo i prezzi ›",
+      "makeHeld": "Per creare un ruolo serve il diritto di modificare i ruoli.",
+      "failed": "Le persone che vedono i prezzi non si possono leggere ora. Le altre sezioni continuano a funzionare.",
+      "count_one": "1 persona vede i nostri prezzi",
+      "count_other": "{count} persone vedono i nostri prezzi",
+      "tableLabel": "Persone che vedono i nostri prezzi",
+      "col": {
+        "person": "Persona",
+        "role": "Ruolo",
+        "sees": "Vede",
+        "reach": "Portata",
+        "since": "Dal",
+        "twoFactor": "Doppio fattore"
+      },
+      "reach": {
+        "all": "Tutti i clienti",
+        "some_one": "1 cliente",
+        "some_other": "{count} clienti",
+        "companies_one": "1 società",
+        "companies_other": "{count} società"
+      },
+      "since": "Dal {since}",
+      "sinceUntil": "Dal {since} · fino al {until}",
+      "twoFactor": {
+        "yes": "Attivo",
+        "no": "Non ancora attivo"
+      },
+      "guests": {
+        "title": "Commercialisti esterni",
+        "label": "Commercialisti esterni che vedono i nostri prezzi",
+        "none": "Nessun commercialista esterno vede i nostri prezzi.",
+        "firm": "Commercialista · {firm}",
+        "noFirm": "Commercialista",
+        "until": "Fino al {date}",
+        "noEnd": "Nessuna fine indicata"
+      }
     }
   }
 }

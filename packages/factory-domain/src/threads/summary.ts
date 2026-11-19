@@ -61,7 +61,8 @@ export const RECORD_TYPE_WORDS: Readonly<Record<string, Words>> = Object.freeze(
   ServiceCase: { it: 'Pratica di assistenza', en: 'Service case' },
   ProductSafetyReport: { it: 'Segnalazione di sicurezza', en: 'Safety report' },
   MeasurementProfile: { it: 'Misure', en: 'Measurements' },
-  PortalOrderRequest: { it: "Richiesta d'ordine dal catalogo", en: 'Catalogue order' },
+  // B-CP-077 (customer page plan 12 §7): a portal draft may hold described and made-to-measure lines, not only catalogue styles.
+  PortalOrderRequest: { it: 'Ordine dal portale', en: 'Portal order' },
   TechnicalFile: { it: 'Fascicolo tecnico', en: 'Technical file' },
   Project: { it: 'Progetto', en: 'Project' },
 })

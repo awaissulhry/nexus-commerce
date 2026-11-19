@@ -49,6 +49,7 @@ import { mayOpenPriced, PRICED_LOCK, seesPrices } from '@nexus/factory-domain/fi
 import { DomainError } from '@nexus/factory-domain/core/errors'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { AMOUNT_WORDS, amountProblems, floorPriceRefusal, type MessageAmount } from '@nexus/factory-domain/threads/price-check'
+import { pricesInWordsRefusal, type PricesInWordsKind } from '@nexus/factory-domain/threads/price-check' // B-CP-020
 // ---- B-TH-050: messages that point at messages (reply, correct).
 import { excerptOf } from '@nexus/factory-domain/threads/rules'
 // ---- end B-TH-049 / B-TH-050
@@ -850,7 +851,18 @@ export interface NoteInput {
   readonly correctsMessageId?: string | undefined
   // ---- B-SA-061: the part of its order the note is about (a sales order's note only).
   readonly about?: About | undefined
+  // ---- B-CP-020: the writer's "Send it anyway" for words that look like a price (never for a note for the floor).
+  readonly pricesInWordsOk?: boolean | undefined
 }
+
+// ---- B-CP-020 (customer page plan O5, L3; review F5): an office note or reply whose words look like a price is held once with a
+// warning (409 refusal/NAMES_A_PRICE; the words repeat no amount) until the writer sends it anyway (`pricesInWordsOk`); a purchase's
+// thread is not warned (factory-domain threads/price-check pricesInWordsRefusal). Shared with ./replies.ts.
+export function pricesInWordsHeld(bodyText: string, kind: PricesInWordsKind, recordType: string, pricesInWordsOk: boolean | undefined): DomainError | null {
+  const refusal = pricesInWordsRefusal(bodyText, { kind, recordType, pricesInWordsOk: pricesInWordsOk === true })
+  return refusal ? new DomainError('conflict', refusal.words.en, [{ path: `refusal/${refusal.code}`, message: refusal.words.en }]) : null
+}
+// ---- end B-CP-020
 
 // ---- B-TH-049: a note for the floor whose words look like a price is held (409 refusal/FLOOR_PRICE, the reason named).
 export function floorPriceHeld(bodyText: string): DomainError | null {
@@ -881,11 +893,15 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
   const held = draft.forFloor ? floorPriceHeld(draft.bodyText) : null
   if (held) throw held
   // ---- end B-TH-049
+  // ---- B-CP-020: an office note whose words look priced is held once (a note for the floor was held above, whatever the tick).
+  const priced = draft.forFloor ? null : pricesInWordsHeld(draft.bodyText, 'note', record.type, input.pricesInWordsOk)
+  if (priced) throw priced
+  // ---- end B-CP-020
   const links: MessageLinkInput = { replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null } // B-TH-050
 
   const { result } = await command(
     caller,
-    { name: 'threads.postNote', idempotencyKey, input: { recordType: record.type, recordId: record.id, ...draft, amount: input.amount ?? null, ...links, /* B-SA-061 */ about: input.about ?? null } },
+    { name: 'threads.postNote', idempotencyKey, input: { recordType: record.type, recordId: record.id, ...draft, amount: input.amount ?? null, ...links, /* B-SA-061 */ about: input.about ?? null, /* B-CP-020 */ pricesInWordsOk: input.pricesInWordsOk === true } },
     async (tools) => {
       const { thread } = await ensureThread(tools, record, context.actorId)
       // The thread as it is now (made by this command or a racing one): its scope decides (B-PR-08a part 2: with its wall party).

@@ -49,7 +49,8 @@ const roleOf = (key: string): Permission[] => {
 }
 const grant = (permissions: Permission[]): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all' })
 const office = (permissions: Permission[]): SessionContext => ({ audience: 'office', tenantId: T, actorId: newId(), grants: [grant(permissions)] })
-const SESSIONS: Record<string, SessionContext> = { sales: office(roleOf('sales')), noPrice: office(roleOf('sales').filter((name) => name !== 'money.price')) }
+// B-CP-011 (the money wall): the Owner sends the lines' prices (a Sales worker sends no unitPrice any more).
+const SESSIONS: Record<string, SessionContext> = { sales: office(roleOf('sales')), owner: office(roleOf('owner')), noPrice: office(roleOf('sales').filter((name) => name !== 'money.price')) }
 
 let h: Harness
 let app: FastifyInstance
@@ -67,9 +68,10 @@ async function ok(session: string, method: Method, url: string, payload?: unknow
 
 let user = ''
 
+// B-CP-011: Sales makes the quote, the Owner adds the priced line.
 async function quoteFor(partyId: string, styleId: string, colourwayId: string): Promise<Json> {
   let { quote } = await ok('sales', 'POST', '/sales/quotes', { companyId: companyA, partyId, customerRef: `PO-${run}-${++serial}` }, 201)
-  ;({ quote } = await ok('sales', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId, colourwayId, sizes: GRID, unitPrice: '450' }, 201))
+  ;({ quote } = await ok('owner', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId, colourwayId, sizes: GRID, unitPrice: '450' }, 201))
   return quote
 }
 const warningsOf = async (quoteId: string, session = 'sales') => ok(session, 'GET', `/sales/quotes/${quoteId}/warnings`)
@@ -109,7 +111,8 @@ describe("another customer's private-label style (QT1:02)", () => {
   })
 
   it("refuses an office order of P3 for P1's jacket, in the rule's words", async () => {
-    const preview = await ok('sales', 'POST', '/sales/orders/manual/preview', { companyId: companyA, partyId: P3, customerRef: `PO-${run}`, lines: [{ styleId: JKT02, colourwayId: JKT02_BLK, sizes: [{ size: '52', quantity: 1 }], unitPrice: '450' }] })
+    // B-CP-011: the line's unitPrice is the Owner's to send (was Sales').
+    const preview = await ok('owner', 'POST', '/sales/orders/manual/preview', { companyId: companyA, partyId: P3, customerRef: `PO-${run}`, lines: [{ styleId: JKT02, colourwayId: JKT02_BLK, sizes: [{ size: '52', quantity: 1 }], unitPrice: '450' }] })
     expect(preview.ok).toBe(false)
     expect(preview.problems).toContainEqual({ path: 'body/lines', message: "Line 10 (SEED-JKT-02 BLK): SEED-JKT-02 is another customer's private-label style; it is made and sold for that brand only." })
   })
@@ -129,7 +132,8 @@ describe('a colourway or size its revision is not released for (QT1:01)', () => 
       message: "Line 10 (SEED-JKT-01 BLK): SEED-JKT-01 revision 1 is not released for size 54 yet. Release it for them first (the style's release), or quote what is released.",
     })
     const inside = await ok('sales', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1, customerRef: `PO-${run}-in` }, 201)
-    const lined = (await ok('sales', 'POST', `/sales/quotes/${inside.quote.id}/lines`, { version: inside.quote.version, styleId: JKT01, colourwayId: JKT01_BLK, sizes: [{ size: '50', quantity: 1 }, { size: '52', quantity: 1 }], unitPrice: '450' }, 201)).quote
+    // B-CP-011: the priced line is the Owner's.
+    const lined = (await ok('owner', 'POST', `/sales/quotes/${inside.quote.id}/lines`, { version: inside.quote.version, styleId: JKT01, colourwayId: JKT01_BLK, sizes: [{ size: '50', quantity: 1 }, { size: '52', quantity: 1 }], unitPrice: '450' }, 201)).quote
     expect(codes(await warningsOf(lined.id)).map(([code]) => code)).not.toContain('OUTSIDE_RELEASED_SCOPE')
   })
 })

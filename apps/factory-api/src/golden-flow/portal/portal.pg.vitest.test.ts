@@ -1053,11 +1053,15 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
     await settle()
   })
 
-  it('L07 the accountant’s time-boxed access: finance invites the payroll studio’s accountant; she signs in by code and reads the shared month’s exports and downloads one; a month not shared refused', async () => {
+  it('L07 the accountant’s time-boxed access: the Owner invites the payroll studio’s accountant (finance may not: B-CP-011); she signs in by code and reads the shared month’s exports and downloads one; a month not shared refused', async () => {
     R.accountant = await partnerOf('accountant', 'guest', id('party:CONSULTANT'), 'anna.golden@studio-prova.example')
     await ok(P.sales, 'POST', '/accounting/accountants', { companyId: companyA(), partyId: id('party:CONSULTANT'), email: R.accountant.email, displayName: 'Anna Golden', locale: 'it', accessUntil: new Date(Date.now() + 30 * 86_400_000).toISOString() }, 403)
+    // B-CP-011 (the money wall, Owner O3): the accountant sees our prices: only the Owner gives the access.
     await stepped(w, P.finance)
-    const invited = await ok(P.finance, 'POST', '/accounting/accountants', { companyId: companyA(), partyId: id('party:CONSULTANT'), email: R.accountant.email, displayName: 'Anna Golden', locale: 'it', accessUntil: new Date(Date.now() + 30 * 86_400_000).toISOString() }, 201)
+    const byFinance = await ok(P.finance, 'POST', '/accounting/accountants', { companyId: companyA(), partyId: id('party:CONSULTANT'), email: R.accountant.email, displayName: 'Anna Golden', locale: 'it', accessUntil: new Date(Date.now() + 30 * 86_400_000).toISOString() }, 403)
+    expect(pathsOf(byFinance)).toEqual(['roleKey/onlyOwnerGivesPrices'])
+    await stepped(w, P.owner)
+    const invited = await ok(P.owner, 'POST', '/accounting/accountants', { companyId: companyA(), partyId: id('party:CONSULTANT'), email: R.accountant.email, displayName: 'Anna Golden', locale: 'it', accessUntil: new Date(Date.now() + 30 * 86_400_000).toISOString() }, 201)
     expect(invited).toMatchObject({ delivery: 'sent', invitation: { email: R.accountant.email } })
     await signIn(R.accountant)
     expect(await as(R.accountant, 'GET', '/portal/access')).toMatchObject({ kind: 'GUEST', role: { key: 'guest-accountant' } })

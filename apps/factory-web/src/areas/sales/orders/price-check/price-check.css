@@ -1,0 +1,85 @@
+/*
+ * F-CP-114 — the ONE customer's-price window (and its door in the Orders sheet's Customer's price cell): LAYOUT only. The controls
+ * are the design system's; semantic tokens only. On a phone the lines table stacks (SummaryTable stackOnPhone) and the two field rows
+ * go one under the other: nothing scrolls sideways.
+ */
+.fw-pc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pc-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nds-space-12) var(--nds-space-16);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .fw-pc-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pc-line,
+.fw-pc-value {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-pc-error {
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-pc-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pc-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* The Customer's price cell of the Orders sheet: a button with the link's look (it opens the window, never a page). */
+.fw-pc-door {
+  all: unset;
+  box-sizing: border-box;
+  max-width: 100%;
+  cursor: pointer;
+  border-radius: var(--nds-radius-sm);
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-pc-door:hover,
+.fw-pc-door:focus-visible {
+  text-decoration: underline;
+}
+.fw-pc-door:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+
+/* F-CP-105: "Columns: Work · Money" at the Orders sheet toolbar's start — its visible label beside the DS SegmentedControl. */
+.fw-pc-cols {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-pc-cols-label {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  white-space: nowrap;
+}

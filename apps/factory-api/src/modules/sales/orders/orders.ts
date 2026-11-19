@@ -36,6 +36,9 @@ import { asDay, dayOf, dayOrNull, LEFT } from './store'
 import type { OrderView } from './views'
 // B-OP-043 (order page N6, lines-derived): the orders a shipment carries.
 import { orderIdsOfShipments, piecesByOrderOf, shipmentsOfOrdersWhere } from '../../shipping/shipments/orders-of'
+// B-CP-018 (customer page plan C2d): the price check's term and columns (the price grain only).
+import type { PriceMatch } from '@nexus/factory-domain/sales/brand-prices/match'
+import { orderPriceColumns, priceMatchWhere } from '../brand-prices/columns'
 
 /**
  * The office's sales orders (B-W1-25; SAL-200, SAL-204, SAL-206, SAL-214; A2 SCR-038 "Orders", SCR-039 "Order record"):
@@ -91,6 +94,8 @@ export interface ListFilters {
   readonly profile?: string | undefined
   /** B-SA-070: `us` — the keeper says the order waits on us, or a customer request on it is still OPEN ("Waiting on us"). */
   readonly waiting?: 'us' | undefined
+  /** B-CP-018: the orders whose price check reads so (a price holder's term: 403 in words otherwise). */
+  readonly priceMatch?: PriceMatch | undefined
 }
 
 export interface ListQuery extends ListFilters {
@@ -208,7 +213,7 @@ async function customWhere(client: Reader, context: OfficeContext, cf: string | 
  * this one filter, so a total opens exactly the rows it counts.
  */
 export async function viewWhere(client: Reader, context: OfficeContext, filters: ListFilters, today: BusinessDate): Promise<Prisma.SalesOrderWhereInput> {
-  const base: Prisma.SalesOrderWhereInput = {
+  const terms: Prisma.SalesOrderWhereInput = {
     AND: [
       whereOf(context, filters, today),
       await customWhere(client, context, filters.cf),
@@ -216,6 +221,9 @@ export async function viewWhere(client: Reader, context: OfficeContext, filters:
       filters.profile ? await profileWhere(client, context, filters.profile) : {}, // B-SA-021
     ],
   }
+  // ── B-CP-018: the price check term narrows the terms' own orders (403 in words without the price grain; ≤ 2 000 checked) ──
+  const base = filters.priceMatch ? await priceMatchWhere(client, actorOf(context), terms, filters.priceMatch) : terms
+  // ── end B-CP-018 ──
   // B-TH-244: + shipped goods not invoiced yet (the Orders sheet's built-in view "Shipped, not invoiced").
   const uninvoiced = filters.shippedNotInvoiced === 'true'
   if (!filters.invoiced && !uninvoiced) return base
@@ -374,6 +382,8 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
     )
     // B-SA-070: the production columns, only when asked (the Work tab, or the file).
     const production = query.production === 'true' ? await orderProductionColumns(client, actorOf(context), context.actorId, page, today) : null
+    // B-CP-018: the price check of each row, only for a price holder (null otherwise: the fields stay absent).
+    const prices = await orderPriceColumns(client, actorOf(context), ids)
     return {
       orders: page.map((row) => {
         const own = deposits.filter((deposit) => deposit.orderId === row.id && deposit.status !== 'CANCELLED')
@@ -412,6 +422,8 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
           ...later.get(row.id)!,
           // B-SA-070
           ...(production ? { production: production.get(row.id)! } : {}),
+          // B-CP-018
+          ...(prices?.get(row.id) ?? {}),
         }
       }),
       nextCursor, // B-TH-057

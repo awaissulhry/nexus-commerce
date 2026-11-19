@@ -15,6 +15,7 @@ import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import type { ReturnLine } from '../../api'
 import {
+  creditsBlind, // F-CP-160
   decisionDraftProblems,
   effectOf,
   garmentOf,
@@ -41,6 +42,8 @@ import { DepthDialogs } from '../../depth/view/DepthDialogs'
 import { policyHeld, printHeld } from '../../depth/model'
 import { CreditWithoutReturnSection, DepthNotices, depthFacts, FeeSection, LineDepth } from '../../depth/view/DepthParts'
 import { AddLinesModal } from './AddLinesModal'
+// F-CP-160: the money wall's words (a credit-only line is a price holder's decision).
+import { BLIND_PRICE_KEY } from '../../../_shared/blind-price'
 import { RmaDialogs } from './RmaDialogs'
 
 /**
@@ -506,7 +509,8 @@ function InspectionLine({ line, model, actions, decideHeld }: { line: ReturnLine
                 <Input inputMode="decimal" value={draft.credit} disabled={!!decideHeld || !draft.disposition} placeholder={option?.defaultCredit !== undefined ? minorText(option.defaultCredit) : minorText(typeof line.receivedValue === 'number' && draft.disposition === 'CREDIT_ONLY' ? line.receivedValue : 0)} onChange={(event) => actions?.onDecision?.(line.id, { credit: event.target.value })} aria-label={t('decide.creditOf', { seq: line.seq })} />
               </label>
             ) : (
-              <span className="fw-q-hint">{t('decide.creditNoGrain')}</span>
+              // F-CP-160: a credit-only line is a price holder's decision (Decide waits in the same words).
+              <span className="fw-q-hint">{t(creditsBlind(draft, can.price) ? BLIND_PRICE_KEY : 'decide.creditNoGrain')}</span>
             )}
           </div>
         )}

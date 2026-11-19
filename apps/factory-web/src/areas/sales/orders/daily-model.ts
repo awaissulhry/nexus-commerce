@@ -481,6 +481,11 @@ export interface AmendStrip {
   readonly pieces: StripChange | null
   /** The net before → after (the price grain only; never shown without it). */
   readonly net: StripChange | null
+  /**
+   * F-CP-149 (customer page plan C4, the money wall; review A8, D5): the net may change but this reader does not see prices — the
+   * strip says "Net: shown to people who see prices" in its place (never a blank). False with the price grain or nothing to say.
+   */
+  readonly netHeld: boolean
   readonly workOrders: readonly StripWorkOrder[]
   /** The API's refusals by place, in this app's words (the freeze rules' apart, below). */
   readonly problems: readonly Phrase[]
@@ -494,7 +499,7 @@ export interface AmendStrip {
   readonly extra: ExtraPiecesView | null
 }
 
-const EMPTY_STRIP = { problem: null, pieces: null, net: null, workOrders: [], problems: [], frozen: [], reaccept: null, diff: null, extra: null } as const
+const EMPTY_STRIP = { problem: null, pieces: null, net: null, netHeld: false /* F-CP-149 */, workOrders: [], problems: [], frozen: [], reaccept: null, diff: null, extra: null } as const
 
 /** A work order of the preview's plan as the strip says it. */
 export function stripWorkOrderOf(plan: WorkOrderPlan, index: number): StripWorkOrder {
@@ -524,6 +529,7 @@ export function stripOf(input: { readonly order: Pick<Order, 'lines'>; readonly 
     problem: null,
     pieces: diff ? { before: ordered, after: ordered + delta, delta } : null,
     net: input.price && diff ? moneyChange(diff) : null,
+    netHeld: !input.price && diff !== null, // F-CP-149: the held words in the net's place
     workOrders: (preview.workOrders?.plan ?? []).map(stripWorkOrderOf),
     problems: preview.ok ? [] : issuePhrases(preview.problems.filter((issue) => !frozenPaths.has(issue.path)), input.label),
     frozen: preview.ok ? [] : preview.problems.filter((issue) => frozenPaths.has(issue.path)),
@@ -551,13 +557,17 @@ export const heldWordsOf = (held: HeldWords, t: (key: string, params?: Record<st
  * Why Apply waits, or null: the work, the draft's own hold, the preview (reading, failed, refused), the extra pieces' outcome not
  * picked yet (F-OP-107, B2: when the preview says it is needed), the reason.
  */
-export function stripHeld(strip: AmendStrip, input: { readonly reason: string; readonly busy: boolean; readonly local: Phrase | null; readonly extraOutcome?: ExtraOutcome | null; readonly offer?: PricedOffer; readonly fee?: string }): HeldWords | null {
+export function stripHeld(strip: AmendStrip, input: { readonly reason: string; readonly busy: boolean; readonly local: Phrase | null; readonly extraOutcome?: ExtraOutcome | null; readonly offer?: PricedOffer; readonly fee?: string; /* F-CP-149 */ readonly price?: boolean }): HeldWords | null {
   if (input.busy) return phrase('held.busy')
   if (input.local) return input.local
   if (strip.phase === 'reading' || strip.phase === 'idle') return phrase('amend.held.reading')
   if (strip.phase === 'failed') return phrase('amend.held.failed')
   // F-OP-108: a frozen field holds Apply only when it is frozen for good; else Apply is "Apply as a priced change" (its fee checked).
   if (strip.problems.length > 0 || (strip.frozen.length > 0 && input.offer !== 'priced')) return phrase('amend.held.problems')
+  // ---- F-CP-149 (the money wall; review A8): a priced change is made by a price holder — a reader without the price grain never
+  // makes one blind (no fee field, no deposit, no amount), held in words whatever else is typed.
+  if (input.offer === 'priced' && input.price === false) return phrase('edit.pricedHeld.apply')
+  // ---- end F-CP-149
   if (input.offer === 'priced' && feeHeld(input.fee ?? '')) return phrase('edit.held.fee')
   const outcome = outcomeHeld(strip.extra, input.extraOutcome ?? null)
   if (outcome) return outcome

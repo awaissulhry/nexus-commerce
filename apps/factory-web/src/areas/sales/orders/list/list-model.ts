@@ -1,6 +1,7 @@
 import type { CompanyRef } from '../../../../lib/session/session'
 import type { PartyDetail, PartyRow } from '../../quotes/api'
 import type { OrderBoard, OrderRow, OrderSort } from '../api'
+import type { PriceMatch } from '../api' // F-CP-140
 import type { OrderCustomer } from '../api' // F-SA-224: the switcher's customers carry Orders' counts
 import type { LiveState } from '../hooks'
 import type { Lane, Layout, OrderAbilities, Phrase, RowView } from '../model'
@@ -24,6 +25,9 @@ import type { NoteDialogActions, NoteDialogModel } from '../../../production/_sh
 import type { Assignable, BatchAnswer, BatchAssignee, BatchRecord, TaskDraft } from '../../../../record-panels/tasks/model' // F-SA-281
 import type { PanelRead } from '../../../../record-panels/model' // F-SA-281
 import type { ReplyManyActions, ReplyManyModel } from './reply-many' // F-SA-282
+import type { PriceCheckDialogActions, PriceCheckDialogModel } from '../price-check/use-price-check' // F-CP-114
+import type { OrderCommandActions, OrderCommandModel, WindowCommand, Words } from './commands/model' // F-CP-108
+import type { ManyCommand, OrderCommandManyActions, OrderCommandManyModel } from './commands/model' // F-CP-109
 
 /** SCR-038 — the orders list's view model (OrdersListView draws it and fetches nothing). */
 
@@ -122,6 +126,11 @@ export interface OrdersListModel {
   group?: 'party' | null
   /** The door terms beside the rows view (a total opened exactly its rows): each a chip with ✕. */
   extra?: ExtraTerms | null
+  /**
+   * F-CP-141 (money wall): the address names the price check term and the reader sees no price (a shared saved view, a link): no read
+   * carries it, no rows are read — the sheet says so in ONE line ("Amounts are shown to people who see prices") with Show all orders.
+   */
+  priceHeld?: boolean
   /** The view's figures from the server (null while read or not asked; the problem in words when it failed). */
   summary?: { value: OrderSummary | null; problem: string | null } | null
   /** The grouped view: each customer's rows read so far (by customer id), and the groups folded shut. */
@@ -171,6 +180,11 @@ export interface OrdersListModel {
   preset?: { readonly shown: readonly string[]; readonly wide?: readonly string[] } | null
   /** A real link on the toolbar's right ("Work orders of <customer> ›"). */
   toolbarLink?: { readonly href: string; readonly label: string } | null
+  /**
+   * F-CP-105: "Columns: Work · Money" at the toolbar's start — the columns shown now (the host's view preset, or the money columns);
+   * the host gives it only with the price grain (absent: no toggle at all). Picked through `actions.onColumnSet`.
+   */
+  columnSet?: { readonly value: 'work' | 'money' } | null
   // ---- end F-SA-276
   // ---- F-SA-280 (bulk on the sheet's own bar): production's assign and note dialogs while open, and the rights they need ----
   assign?: AssignSupervisorModel | null
@@ -183,6 +197,20 @@ export interface OrdersListModel {
   // ---- end F-SA-281
   // ---- F-SA-282: Reply to <customer> on N… while open (one customer, ≤ 50, one batchId; each order's own conversation)
   replyMany?: ReplyManyModel | null
+  // F-CP-114: the ONE customer's-price window while open (row ⋯ "Set customer's price…", the Customer's price cell; price holders only).
+  priceCheck?: PriceCheckDialogModel | null
+  // ---- F-CP-108: the order page's own commands on the sheet — the ONE window a row's ⋯ "Next steps" opens (null: none open), the rows a
+  // command moved out of the view on screen (they stay, greyed, until "N updates · Show"), and the last command's toast.
+  commands?: {
+    readonly window: OrderCommandModel | null
+    readonly moved: readonly string[]
+    readonly receipt: { readonly words: Words; readonly at: number } | null
+    /** F-CP-109: the bulk window over the ticked orders (Mark N ready… · Close N… · Confirm N…) while open; null: closed. */
+    readonly many?: OrderCommandManyModel | null
+    /** F-CP-109: the reader decides yeses (approvals.decide): Confirm N… is on the bar. */
+    readonly decide?: boolean
+  } | null
+  // ---- end F-CP-108
   // ---- F-SA-279 (the customer page: a row drives the dock) ----
   /** The order the page's dock shows (marked; null: none), and the words of a phone card's door to its conversation; absent: not a dock list. */
   active?: { readonly id: string | null; readonly cardDoor?: string | null } | null
@@ -240,6 +268,11 @@ export interface OrdersListActions {
   onClearExtra?: (key: keyof ExtraTerms | null) => void
   /** A door term set from a cell (At risk narrows the sheet). */
   onExtra?: (extra: ExtraTerms) => void
+  // F-CP-140: the Price check cell's funnel — narrows the sheet to the orders whose check reads so (the host gives it with the
+  // `priceMatch` term, F-CP-141; without it the cell's words stand alone).
+  // F-CP-141: the term in ONE write — no `view`: the funnel (narrows the view shown); with `view`: that view and the term alone (the
+  // Not equal view: rows=all); null drops it (leaving the Not equal view for `view`). A price holder's only (absent otherwise).
+  onPriceMatch?: (match: PriceMatch | null, view?: { readonly rows: RowView; readonly waiting?: 'us' | null }) => void
   /** The columns on screen changed (the Progress column reads the floor only while shown). */
   onShownColumns?: (ids: readonly string[]) => void
   onInvoiceShipped?: (ids: readonly string[]) => void
@@ -262,6 +295,10 @@ export interface OrdersListActions {
   onWaiting?: (waiting: 'us' | null, rows?: RowView) => void
   /** F-CP-102: one of the host's own views picked in Views ▾ (model.hostViews). */
   onHostView?: (id: string) => void
+  /** F-CP-105: "Columns: Work · Money" picked (the host writes its page term `cols`). */
+  onColumnSet?: (set: 'work' | 'money') => void
+  /** F-CP-105: a host's own kept page term set (null: dropped) in one write through the sheet (every other term kept). */
+  onPageTerm?: (name: string, value: string | null) => void
   // ---- F-SA-280 ----
   onAssignSupervisor?: (ids: readonly string[]) => void
   supervisor?: AssignSupervisorActions
@@ -271,6 +308,17 @@ export interface OrdersListActions {
   // ---- F-SA-282: Reply to <customer> on N… on the ticked orders, and the window's own actions
   onReplyMany?: (ids: readonly string[]) => void
   replyMany?: ReplyManyActions
+  // F-CP-114: open the customer's-price window of one order (given only to a price holder: no door, no call for anyone else).
+  onPriceCheck?: (orderId: string) => void
+  priceCheck?: PriceCheckDialogActions
+  // ---- F-CP-108: a row's ⋯ "Next steps" opens the order page's command in place (the ONE window), and the window's own actions.
+  onCommand?: (orderId: string, command: WindowCommand) => void
+  command?: OrderCommandActions
+  // ---- end F-CP-108
+  // ---- F-CP-109: the bar's Mark N ready… · Close N… · Confirm N… on the ticked orders (≤ 50), and the bulk window's own actions.
+  onCommandMany?: (ids: readonly string[], command: ManyCommand) => void
+  commandMany?: OrderCommandManyActions
+  // ---- end F-CP-109
   // ---- F-SA-279: the keys moved the focus to a row (the page's dock follows after its rest); a phone card's conversation door ----
   onFocusRow?: (row: OrderRow) => void
   onCardThread?: (row: OrderRow) => void

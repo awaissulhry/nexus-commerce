@@ -1,11 +1,13 @@
-import { isAdminAssignment, isLive, scopeProblems, uncoveredScope } from '@nexus/factory-domain/auth/roles/roles'
+import { isAdminAssignment, isLive, ONLY_OWNER_GIVES_PRICES, priceGiverProblems, scopeProblems, seesPrices, uncoveredScope } from '@nexus/factory-domain/auth/roles/roles'
+import { OWNER_TEMPLATE } from '@nexus/factory-domain/auth/roles/custom'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { DomainError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import type { FactoryClient } from '@nexus/factory-db'
 import type { CommandTx } from '../../../core/command'
-import { activeAdmins, liveAssignment } from './access'
+import { activeAdmins, heldRoles, liveAssignment } from './access'
 import type { AssignmentInput, AssignmentView } from './contract'
 
 /**
@@ -14,7 +16,9 @@ import type { AssignmentInput, AssignmentView } from './contract'
  * other tenants' roles; the foreign key includes tenantId) and a valid scope: every company or a list of the tenant's
  * active companies, sites of those companies, any parties. The assigner gives roles only within their own roles.assign
  * scope (factory-domain uncoveredScope): a wider assignment is a 403, and so is ending one whose scope that scope does
- * not wholly reach. It is never deleted: ending it sets endedAt.
+ * not wholly reach. It is never deleted: ending it sets endedAt. B-CP-011 (the money wall, Owner O3): a role that sees prices
+ * (the price grain: Finance, a custom price role) is given only by a holder of the Owner role (`assertOwnerGivesPrices`), on
+ * every path that gives one (an assignment, an invitation's roles, the guest Accountant's portal); ending stays free.
  */
 
 export const ASSIGNMENT_SELECT = {
@@ -92,7 +96,7 @@ export async function createAssignment(
   const path = options.path ?? ''
   const scope = { allCompanies: input.allCompanies, companyIds: input.companyIds, siteIds: input.siteIds, partyIds: input.partyIds }
   const problems = at(path, scopeProblems(scope))
-  const role = await tx.role.findUnique({ where: { id: input.roleId }, select: { key: true, system: true, audience: true } })
+  const role = await tx.role.findUnique({ where: { id: input.roleId }, select: { key: true, system: true, audience: true, grains: true } })
   if (!role) problems.push({ path: `${path}roleId`, message: 'No role of the tenant has this id.' })
   // B-W2b-162: a partner role goes to a partner's people from its Portal access (platform/auth/partners), never here.
   else if (role.audience === 'PARTNER') problems.push({ path: `${path}roleId`, message: "A portal role is given to a customer's or supplier's people in its Portal access, not to office people." })
@@ -113,6 +117,8 @@ export async function createAssignment(
   if (problems.length > 0) throw new ValidationError('The role assignment is not valid.', problems)
   const wider = at(path, uncoveredScope(options.assignerGrants, scope, siteCompanies))
   if (wider.length > 0) throw new DomainError('forbidden', 'You can give roles only where your own right to give roles reaches.', wider)
+  // B-CP-011: a role that sees prices only from the Owner (403 `<path>roleId/onlyOwnerGivesPrices`).
+  await assertOwnerGivesPrices(tx, role!.grains, options.grantedById, options.now, `${path}roleId`)
 
   const row = await tx.roleAssignment.create({
     data: { id: newId(), userId: options.userId, roleId: input.roleId, ...scope, companyIds: [...scope.companyIds], siteIds: [...scope.siteIds], partyIds: [...scope.partyIds], validFrom, validTo, grantedById: options.grantedById, createdAt: options.now },
@@ -120,6 +126,23 @@ export async function createAssignment(
   })
   return assignmentViewOf(row, options.now)
 }
+
+// ── B-CP-011 (customer page lane, the money wall; Owner O3): only the Owner gives prices ─────────────────────────────────
+/** The person holds the Owner role now (a live assignment of the ready-made `owner` role). */
+export async function holdsOwnerRole(client: FactoryClient | CommandTx, userId: string, now: Date): Promise<boolean> {
+  return (await heldRoles(client, userId, now)).some((held) => held.system && held.roleKey === OWNER_TEMPLATE)
+}
+
+/**
+ * Refuses (403, `<path>/onlyOwnerGivesPrices`, "Only the Owner gives a role that sees prices.") giving a role with these
+ * grains when it holds the price grain and the giver does not hold the Owner role. Lowering and ending never ask this.
+ */
+export async function assertOwnerGivesPrices(tx: CommandTx, grains: readonly string[], giverId: string, now: Date, path: string): Promise<void> {
+  if (!seesPrices(grains)) return
+  const problems = priceGiverProblems(grains, await holdsOwnerRole(tx, giverId, now), path)
+  if (problems.length > 0) throw new DomainError('forbidden', ONLY_OWNER_GIVES_PRICES.message, problems)
+}
+// ── end B-CP-011 ──
 
 /**
  * Ends the person's assignments that are live or still to start (a deactivation, a revoked or a new invitation), and

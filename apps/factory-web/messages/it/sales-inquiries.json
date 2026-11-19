@@ -211,7 +211,7 @@
     "declined_one": "{count} richiesta rifiutata ({reason})",
     "declined_other": "{count} richieste rifiutate ({reason})",
     "reachOthers": "{open} richieste aperte · {others} di altri tipi lasciate fuori (ognuna si risponde a sé)",
-    "noneRequests": "Assegna e Rifiuta agiscono sulle richieste: un ordine dal catalogo si decide nel suo riquadro, una richiesta di modifica in Home › Approvazioni"
+    "noneRequests": "Assegna e Rifiuta agiscono sulle richieste: un ordine dal portale si decide nel suo riquadro, una richiesta di modifica in Home › Approvazioni"
   },
   "held": {
     "right": "Serve il permesso delle vendite ({right})",
@@ -720,7 +720,7 @@
   },
   "export": {
     "heading": "Esporta · {view}",
-    "note": "Tutte le righe di questa vista, pagina dopo pagina fino alla fine: richieste, ordini dal catalogo e richieste di modifica che puoi aprire. I nomi dei potenziali clienti ne fanno dati personali.",
+    "note": "Tutte le righe di questa vista, pagina dopo pagina fino alla fine: richieste, ordini dal portale e richieste di modifica che puoi aprire. I nomi dei potenziali clienti ne fanno dati personali.",
     "notePrice": "Tutte le righe di questa vista, pagina dopo pagina fino alla fine; il prezzo obiettivo resta fuori (serve il permesso sui prezzi). I nomi dei potenziali clienti ne fanno dati personali."
   },
   "pane": {
@@ -906,16 +906,16 @@
   },
   "kind": {
     "REQUEST": "Richiesta",
-    "CATALOGUE_ORDER": "Ordine dal catalogo",
+    "CATALOGUE_ORDER": "Ordine dal portale",
     "CHANGE_REQUEST": "Richiesta di modifica",
     "plural": {
       "REQUEST": "Richieste",
-      "CATALOGUE_ORDER": "Ordini dal catalogo",
+      "CATALOGUE_ORDER": "Ordini dal portale",
       "CHANGE_REQUEST": "Richieste di modifica"
     },
     "hint": {
       "REQUEST": "Una richiesta da portale, e-mail, telefono, fiera o visita",
-      "CATALOGUE_ORDER": "Modelli scelti dal cliente nel catalogo del suo portale: accettalo come ordine o come offerta, oppure rifiutalo",
+      "CATALOGUE_ORDER": "Quello che il cliente chiede nel suo portale (modelli del suo catalogo, a parole sue, su misura): accettalo come ordine o come offerta, oppure rifiutalo",
       "CHANGE_REQUEST": "Il cliente chiede di modificare o annullare un ordine confermato: si risponde in Home › Approvazioni"
     }
   },
@@ -969,23 +969,23 @@
     "ApprovalRequest": "Approvazione"
   },
   "catalogue": {
-    "reading": "Lettura dell'ordine dal catalogo…",
-    "failed": "Impossibile caricare l'ordine dal catalogo",
-    "noRight": "Gli ordini dal catalogo richiedono il permesso sugli ordini",
+    "reading": "Lettura dell'ordine dal portale…",
+    "failed": "Impossibile caricare l'ordine dal portale",
+    "noRight": "Gli ordini dal portale richiedono il permesso sugli ordini",
     "noRightBody": "Chiedi a un amministratore il permesso di vedere gli ordini di questo cliente.",
-    "notFound": "Ordine dal catalogo non trovato",
+    "notFound": "Ordine dal portale non trovato",
     "notFoundBody": "Non c’è, oppure non puoi aprirlo.",
-    "title": "Ordine dal catalogo {number}",
+    "title": "Ordine dal portale {number}",
     "acceptOrder": "Accetta come ordine",
     "acceptQuote": "Accetta come offerta",
     "refuse": "Rifiuta",
-    "handled": "Qualcun altro ha cambiato quest'ordine dal catalogo alle {time}",
+    "handled": "Qualcun altro ha cambiato quest'ordine dal portale alle {time}",
     "held": {
       "DRAFT": "Il cliente lo sta ancora scrivendo",
       "ACCEPTED": "Già accettato",
       "REFUSED": "Già rifiutato",
       "WITHDRAWN": "Ritirato dal cliente",
-      "right": "Solo le vendite possono accettare o rifiutare un ordine dal catalogo ({right})"
+      "right": "Solo le vendite possono accettare o rifiutare un ordine dal portale ({right})"
     },
     "accept": {
       "badPrice": "Riga {n}: il prezzo non è un prezzo (es. 38,50)"
@@ -1280,6 +1280,62 @@
       "savedOk": "Risposta della produzione su {number}: OK.",
       "savedWeek": "Risposta della produzione su {number}: non prima della settimana {week}.",
       "takenBack": "Risposta della produzione su {number} ritirata."
+    }
+  },
+  "catalogueMap": {
+    "title": "Righe da abbinare",
+    "hint": "Il cliente ha descritto queste righe, o le ha chieste su misura: ognuna diventa uno o più dei nostri modelli. Scegli il modello e la variante colore; le taglie sono quelle della riga, se non le scrivi tu.",
+    "line": "Riga {n} · {kind}",
+    "kind": {
+      "DESCRIBED": "Con le parole del cliente",
+      "MADE_TO_MEASURE": "Su misura"
+    },
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "people_one": "{count} persona sulla richiesta (il nome resta lì)",
+    "people_other": "{count} persone sulla richiesta (i nomi restano lì)",
+    "peopleInSheet": "Persone: nel foglio misure sulla richiesta",
+    "ownSizes": "Le sue taglie: {sizes}",
+    "noSizes": "Ancora nessuna taglia: scrivile sulla riga modello",
+    "note": "La loro nota: {note}",
+    "into": "Riga modello {m} della riga {n}",
+    "sizesHint": "Vuoto: le taglie della riga (ad es. 50:5 52:10)",
+    "add": "Aggiungi una riga modello",
+    "addMax": "Al massimo {max} righe modello per una riga",
+    "remove": "Togli la riga modello {m} della riga {n}",
+    "noStylesRight": "Il tuo ruolo non legge i modelli: abbina queste righe chi li legge.",
+    "stylesReading": "Leggo i modelli…",
+    "colourFirst": "Scegli prima il modello",
+    "mapOrder": "La mappa delle righe: cosa riceve l'ordine",
+    "mapQuote": "La mappa delle righe: cosa riceve il preventivo",
+    "mapLabel": "Ogni riga della richiesta e cosa diventa",
+    "col": {
+      "asked": "Richiesto",
+      "becomes": "Diventa"
+    },
+    "notMapped": "Non ancora abbinata",
+    "mtmHint": "Su misura: si accetta prima come preventivo (gli ordini su misura non sono ancora partiti). Non si crea nessun profilo misure: le persone restano sulla richiesta, che il preventivo collega.",
+    "held": {
+      "madeToMeasure_one": "La riga {lines} è su misura: accetta la richiesta come preventivo. Le sue persone restano sulla richiesta.",
+      "madeToMeasure_other": "Le righe {lines} sono su misura: accetta la richiesta come preventivo. Le loro persone restano sulla richiesta.",
+      "quoteOnly": "Questo ordine dal portale si accetta prima come preventivo.",
+      "unmapped_one": "La riga {lines} non è ancora abbinata: scegli il modello e la variante colore in cui si fa.",
+      "unmapped_other": "Le righe {lines} non sono ancora abbinate: scegli il modello e la variante colore di ognuna.",
+      "half": "Riga {n}: ogni riga modello ha bisogno del modello e della variante colore.",
+      "tooMany": "La riga {n} diventa al massimo {max} righe modello.",
+      "badSizes": "Riga {n}: le taglie non si leggono (ad es. 50:5 52:10).",
+      "sizesOfEach": "La riga {n} diventa più righe modello: scrivi le taglie di ognuna.",
+      "sizesOfPeople": "Riga {n}: le sue persone non hanno ancora una taglia (un foglio misure, o le manda dopo): scrivi le taglie.",
+      "sizesOfTotal": "La riga {n} chiede {pieces} pezzi in tutto, non ancora per taglia: scrivi le taglie.",
+      "badPrice": "Riga {n}: il prezzo non è un prezzo (ad es. 38,50)."
+    },
+    "done": {
+      "logos_one": "{count} logo del cliente riportato su {made}",
+      "logos_other": "{count} loghi del cliente riportati su {made}",
+      "logosNot_one": "{count} logo non si è potuto riportare: aggiungilo a mano",
+      "logosNot_other": "{count} loghi non si sono potuti riportare: aggiungili a mano",
+      "brandPrices_one": "{count} prezzo del cliente ripreso su {made}",
+      "brandPrices_other": "{count} prezzi del cliente ripresi su {made}"
     }
   }
 }
