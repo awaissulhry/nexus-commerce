@@ -26,6 +26,7 @@ import { useCustomerWork, useReacceptOrders, type WorkCan } from './use-customer
 import { CustomerDock, WorkTab, type DockPick } from './view/WorkTab'
 import { useCustomerDock } from './use-customer-work' // F-SA-279: the dock follows the row (`dock=`), All of <customer>
 import { workAskAddress, type WorkAsk } from './use-customer-work' // F-CP-104: New order and Import orders in place
+import { priceDifferOf } from './use-customer-work' // F-CP-141: the Money tab's "Prices differ on {count} orders ›"
 import { useAllOfCustomer } from '../../../_shared/record-thread/all-of-customer/use-all-of-customer' // F-SA-279: All of <customer>, read by the page
 import { readUnreadWith } from '../../../../lib/last-message-cell/api' // F-OP-213: whether the customer's thread may be read
 import { useUnread } from '../../../../lib/last-message-cell/use-unread' // F-OP-213
@@ -83,7 +84,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // ---- F-SA-276: the Work tab's reads (its strip and the tab's count, on every tab), the row the dock follows on Work (and on Quotes &
   // incoming): leaving those tabs drops it (the other tabs are about the account).
   const can = record.model.can
-  const workCan: WorkCan = { orders: can.orders, workorders: can.workorders === true, threads: can.threads, partners: can.partners }
+  const workCan: WorkCan = { orders: can.orders, workorders: can.workorders === true, threads: can.threads, partners: can.partners, price: can.price /* F-CP-141 */ }
   const work = useCustomerWork(partyId, workCan)
   const tab = record.model.tab
   // ---- F-SA-279: the dock follows the row — a click at once, the keys after 300 ms of rest; `dock=` in the address (a replace: Back
@@ -146,7 +147,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   return (
     <>
       {windows /* F-SA-278 */}
-      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} {...doors /* F-CP-104 */} />
+      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} {...doors /* F-CP-104 */} priceDiffer={priceDifferOf(work.prices) /* F-CP-141 */} />
     </>
   )
 }

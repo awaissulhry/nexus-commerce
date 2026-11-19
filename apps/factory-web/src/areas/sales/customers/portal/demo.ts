@@ -6,6 +6,8 @@ import type { LimitsModel, SupervisorModel } from './limits/model' // F-PR-07; F
 import { limitsDraftOf } from './limits/model' // F-SA-272
 import type { PartnerCan } from '../../../admin/users/partners/model'
 import type { PortalAccessModel, RequestRow } from './model'
+import type { DesignerSlot } from './designer/api' // F-CP-155
+import type { DesignerModel } from './designer/model' // F-CP-155
 
 /**
  * Made-up partner portals for the design review (B-W2b-180): never a real customer, supplier, person or address. The roles
@@ -267,3 +269,43 @@ export const SUPERVISOR_CASES: Readonly<Record<'saved' | 'first' | 'held' | 'eve
   nobody: supervisorModel({ pick: { status: 'ready', people: [], complete: true, ordersOnDefault: 0 } }),
   refused: supervisorModel({ saveProblem: { key: 'skip.NO_MEASUREMENTS', ns: 'production-supervisor' } }),
 }
+
+// ── F-CP-155: the factory designer rows on "Who looks after <customer>" (made-up office people; the customer's portal people never) ──
+export const DESIGNERS = Object.freeze({
+  giulia: { id: uid(83), name: 'Giulia Verdi', me: false },
+  elena: { id: uid(84), name: 'Elena Rossi', me: false },
+})
+
+export function designerSlot(over: Partial<DesignerSlot> = {}): DesignerSlot {
+  return {
+    partyId: customerAccess().party.id,
+    designer: { id: DESIGNERS.giulia.id, name: DESIGNERS.giulia.name, state: 'OK' },
+    backup: { id: DESIGNERS.elena.id, name: DESIGNERS.elena.name, state: 'OK' },
+    since: at(12, 9, 0, 10),
+    portalOn: true,
+    version: 5,
+    mayManage: true,
+    ...over,
+  }
+}
+
+const CHOICES = { people: [OFFICE_PEOPLE.me, DESIGNERS.giulia, DESIGNERS.elena, OFFICE_PEOPLE.bea], complete: true }
+
+export function designerModel(over: Partial<DesignerModel> = {}, slot: DesignerSlot = designerSlot()): DesignerModel {
+  return { read: { status: 'ready', slot }, manage: true, dialog: null, notice: null, ...over }
+}
+
+/** The states of the designer rows (the customer record's design cases draw them under the supervisor). */
+export const DESIGNER_CASES: Readonly<Record<'set' | 'empty' | 'lost' | 'portalOff' | 'held' | 'everyCompany' | 'change' | 'refused' | 'loading' | 'error', DesignerModel>> = {
+  set: designerModel(),
+  empty: designerModel({}, designerSlot({ designer: null, backup: null, since: null, version: 0 })),
+  lost: designerModel({}, designerSlot({ designer: { id: DESIGNERS.giulia.id, name: DESIGNERS.giulia.name, state: 'NO_REACH' } })),
+  portalOff: designerModel({}, designerSlot({ portalOn: false })),
+  held: designerModel({ manage: false }),
+  everyCompany: designerModel({}, designerSlot({ mayManage: false })),
+  change: designerModel({ dialog: { draft: { designerId: DESIGNERS.giulia.id, backupId: DESIGNERS.elena.id }, choices: { status: 'ready', choices: CHOICES }, busy: false, fields: {}, problem: null } }),
+  refused: designerModel({ dialog: { draft: { designerId: OFFICE_PEOPLE.bea.id, backupId: null }, choices: { status: 'ready', choices: CHOICES }, busy: false, fields: { designerId: { key: 'customers.designer.refusal.NO_REACH' } }, problem: null } }),
+  loading: designerModel({ read: { status: 'loading' } }),
+  error: designerModel({ read: { status: 'error', key: 'problem.unavailable' } }),
+}
+// ── end F-CP-155 ──

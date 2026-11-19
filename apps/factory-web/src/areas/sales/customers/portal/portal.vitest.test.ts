@@ -235,3 +235,117 @@ describe('F-SA-272: who looks after the customer moved to its Overview', () => {
   })
 })
 // ---- end F-SA-272
+
+// ---- F-CP-155 (customer page plan C7, D12, C5; design 10 §7, picture 23; review F1; lead picks: no step-up, made-to-measure drafts ON
+// by default; the API's B-CP-078): the Factory designer + Backup rows on "Who looks after <customer>", ONE Change… window, refusals
+// at the field, lost reach, the portal off, held without the right; the made-to-measure drafts switch on the Portal card.
+describe('F-CP-155: the factory designer rows and the made-to-measure drafts switch', () => {
+  const customer = 'Moda Demo'
+  const drawCase = (id: string, locale: 'en' | 'it' = 'en') => {
+    const View = customerRecordScreen.view as ComponentType<{ model: unknown }>
+    const item = (customerRecordScreen as DesignScreen<unknown>).cases.find((entry) => entry.id === id)
+    if (!item) throw new Error(id)
+    return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model: item.model })))
+  }
+  const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&#x27;/g, "'").replace(/\s+/g, ' ')
+
+  it('the rows: each name with "<customer> sees this name", or why the portal no longer names them (they stay named until changed)', async () => {
+    const { personTagOf, portalLineOf } = await import('./designer/model')
+    const { designerSlot, DESIGNERS } = await import('./demo')
+    expect(personTagOf({ state: 'OK' })).toEqual({ tone: 'info', words: { key: 'customers.designer.seen' } })
+    expect(personTagOf({ state: 'NO_REACH' })).toEqual({ tone: 'warning', words: { key: 'customers.designer.lostReach' } })
+    expect(personTagOf({ state: 'NOT_ACTIVE' })).toEqual({ tone: 'warning', words: { key: 'customers.designer.notActive' } })
+    expect(portalLineOf(designerSlot())).toEqual({ key: 'customers.designer.hint' })
+    expect(portalLineOf(designerSlot({ portalOn: false }))).toEqual({ key: 'customers.designer.portalOff' })
+    const lost = designerSlot({ designer: { id: DESIGNERS.giulia.id, name: DESIGNERS.giulia.name, state: 'NO_REACH' } })
+    expect(portalLineOf(lost)).toEqual({ key: 'customers.designer.backupNamed', params: { name: DESIGNERS.elena.name } })
+    expect(portalLineOf({ ...lost, backup: { ...lost.backup!, state: 'NOT_ACTIVE' } })).toEqual({ key: 'customers.designer.nobodyNamed' })
+    const html = plain(drawCase('overview-designer'))
+    expect(html).toContain('Factory designer')
+    expect(html).toContain('Giulia Verdi')
+    expect(html).toContain('Elena Rossi')
+    expect(html).toContain(`${customer} sees this name`)
+    expect(html).toContain(`${customer} sees only this person's name when it asks for design help.`)
+    // The supervisor keeps "Office only": the one difference a reader must see.
+    expect(html).toContain('Office only')
+    expect(plain(drawCase('overview-designer-lost'))).toContain(`No longer reaches ${customer}`)
+    expect(plain(drawCase('overview-designer-lost'))).toContain('The portal now names the backup, Elena Rossi.')
+    expect(plain(drawCase('overview-designer-portal-off'))).toContain(`${customer} has no portal yet: the name shows once the portal is on.`)
+    expect(plain(drawCase('overview-designer-empty'))).toContain('Not set')
+  })
+
+  it('Change… held in words without the right (partners.manage), or not at every company the customer works with; no step-up', async () => {
+    const { changeHeldOf } = await import('./designer/model')
+    const { designerSlot } = await import('./demo')
+    expect(changeHeldOf(false, { status: 'ready', slot: designerSlot() })).toEqual({ key: 'right.manage', ns: 'portal-access' })
+    expect(changeHeldOf(true, { status: 'ready', slot: designerSlot({ mayManage: false }) })).toEqual({ key: 'customers.designer.heldEveryCompany' })
+    expect(changeHeldOf(true, { status: 'ready', slot: designerSlot() })).toBeNull()
+    const words = messagesFor('en', ['portal-access'])['portal-access']!
+    expect(words['held.needs']).toBe('Needs the right: {right}.')
+    expect(words['right.manage']).toBeTruthy()
+    // No fresh code: the hook writes with the stored version and an Idempotency-Key only (a name, no money, no access).
+    const hook = readFileSync(new URL('./designer/use-factory-designer.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('setFactoryDesigner(api, partyId, { ...open.draft, version: now.slot.version }, key.current ?? newIdempotencyKey())')
+    expect(hook).not.toMatch(/guard\(|stepUp/)
+  })
+
+  it('ONE Change… window: the pick lists name only eligible office people (a named one no longer listed is said so); the backup never the designer', async () => {
+    const { choicesOf, draftProblems, applyHeldOf, designerDraftOf } = await import('./designer/model')
+    const { designerSlot, DESIGNERS, OFFICE_PEOPLE: PEOPLE } = await import('./demo')
+    const choices = { people: [PEOPLE.me, DESIGNERS.elena], complete: true }
+    const slot = designerSlot()
+    expect(choicesOf(choices, slot.designer, null).map((entry) => entry.value)).toEqual([DESIGNERS.giulia.id, PEOPLE.me.id, DESIGNERS.elena.id])
+    expect(choicesOf(choices, slot.designer, null)[0]!.label).toEqual({ key: 'customers.designer.notListed', params: { name: DESIGNERS.giulia.name } })
+    expect(choicesOf(choices, slot.designer, null)[1]!.label).toEqual({ key: 'customers.designer.me', params: { name: PEOPLE.me.name } })
+    expect(choicesOf(choices, slot.backup, DESIGNERS.elena.id).map((entry) => entry.value)).toEqual([PEOPLE.me.id])
+    expect(draftProblems({ designerId: null, backupId: DESIGNERS.elena.id })).toEqual({ backupId: { key: 'customers.designer.refusal.BACKUP_ALONE' } })
+    expect(draftProblems({ designerId: DESIGNERS.elena.id, backupId: DESIGNERS.elena.id })).toEqual({ backupId: { key: 'customers.designer.refusal.SAME_PERSON' } })
+    expect(draftProblems({ designerId: DESIGNERS.giulia.id, backupId: null })).toEqual({})
+    const open = { draft: designerDraftOf(slot), choices: { status: 'ready' as const, choices }, busy: false, fields: {}, problem: null }
+    expect(applyHeldOf(open, slot)).toEqual({ key: 'customers.designer.nothing' })
+    expect(applyHeldOf({ ...open, draft: { designerId: PEOPLE.me.id, backupId: null } }, slot)).toBeNull()
+    expect(applyHeldOf({ ...open, busy: true }, slot)).toEqual({ key: 'customers.designer.saving' })
+    expect(applyHeldOf({ ...open, choices: { status: 'loading' } }, slot)).toEqual({ key: 'customers.designer.reading' })
+  })
+
+  it('refusals at the field in the card\'s words (the API\'s English matched to its code, whatever the customer\'s spelling)', async () => {
+    const { designerRefusalOf } = await import('./designer/model')
+    const { DESIGNER_WORDS } = await import('@nexus/factory-domain/auth/partners/designer')
+    const invalid = (path: string, message: string) => new ApiError('invalid', 400, 'validation_failed', message, 'req', [{ path, message }])
+    expect(designerRefusalOf(invalid('body/designerId', DESIGNER_WORDS.NO_REACH.en.replace('{customer}', 'Moda Demo S.r.l.'))).fields).toEqual({ designerId: { key: 'customers.designer.refusal.NO_REACH' } })
+    expect(designerRefusalOf(invalid('body/designerId', DESIGNER_WORDS.NOT_OFFICE.en)).fields).toEqual({ designerId: { key: 'customers.designer.refusal.NOT_OFFICE' } })
+    expect(designerRefusalOf(invalid('body/backupId', DESIGNER_WORDS.SAME_PERSON.en)).fields).toEqual({ backupId: { key: 'customers.designer.refusal.SAME_PERSON' } })
+    expect(designerRefusalOf(invalid('body/backupId', 'Something new.')).fields).toEqual({ backupId: { key: 'customers.designer.refusal.other' } })
+    expect(designerRefusalOf(new ApiError('conflict', 409, 'conflict', 'stale', 'req', [{ path: 'version', message: 'The current version is 6.' }]))).toEqual({ fields: {}, problem: { key: 'customers.designer.stale' }, reread: true })
+    // A customer out of reach: the neutral words of an unknown id (the brand wall), never a hint that it exists.
+    expect(designerRefusalOf(new ApiError('not_found', 404, 'not_found', 'Customer not found.')).problem).toEqual({ key: 'customers.designer.notFound' })
+    expect(messagesFor('en', ['parties']).parties!['customers.designer.notFound']).toBe('Customer not found.')
+  })
+
+  it('the made-to-measure drafts switch: on by default, saved with the Portal card (its version, a fresh code); customers only', () => {
+    const saved = customerAccess().settings
+    expect(settingsDraftOf(saved).mtmDraftsOn).toBe(true)
+    expect(settingsDraftOf({ ...saved, mtmDraftsOn: false }).mtmDraftsOn).toBe(false)
+    expect(settingsBody(saved, settingsDraftOf(saved))).toBeNull()
+    expect(settingsBody(saved, { ...settingsDraftOf(saved), mtmDraftsOn: false })).toEqual({ version: saved.version, mtmDraftsOn: false })
+    const view = readFileSync(new URL('./view/PortalAccessView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("model.side === 'customers' && access.kinds.includes('CUSTOMER') && <MtmDraftsSwitch checked={draft.mtmDraftsOn ?? true} held={held}")
+    const container = readFileSync(new URL('./PortalAccess.tsx', import.meta.url), 'utf8')
+    expect(container).toContain("write('stepUp.sentence.settings', () => changeSettings(api, party.id, body, newIdempotencyKey())")
+  })
+
+  it('the design cases (light / dark, 1440 / 375 in the design index) and every word in both languages', () => {
+    const ids = (customerRecordScreen as DesignScreen<unknown>).cases.map((entry) => entry.id)
+    for (const id of ['overview-designer', 'overview-designer-change', 'overview-designer-refused', 'overview-designer-lost', 'overview-designer-portal-off', 'overview-designer-empty', 'overview-designer-held', 'overview-designer-every-company', 'overview-designer-loading', 'overview-designer-error']) expect(ids, id).toContain(id)
+    expect(plain(drawCase('overview-designer-held'))).toContain('Factory designer')
+    expect(plain(drawCase('overview-designer-error'))).toContain("Couldn't read the factory designer")
+    for (const locale of ['it', 'en'] as const) {
+      const words = messagesFor(locale, ['parties']).parties!
+      for (const key of ['label', 'backup', 'none', 'seen', 'lostReach', 'notActive', 'hint', 'portalOff', 'backupNamed', 'nobodyNamed', 'change', 'title', 'backupHint', 'search', 'me', 'notListed', 'partial', 'nobodyEligible', 'apply', 'saving', 'reading', 'readFailed', 'choicesFailed', 'done', 'stale', 'nothing', 'fixFirst', 'failed', 'notFound', 'heldEveryCompany', 'refusal.NOT_OFFICE', 'refusal.NOT_ACTIVE', 'refusal.NO_REACH', 'refusal.BACKUP_ALONE', 'refusal.SAME_PERSON', 'refusal.other', 'mtm.label', 'mtm.onHint', 'mtm.offHint'])
+        expect(words[`customers.designer.${key}`], `${locale} ${key}`).toBeTruthy()
+      expect(plain(drawCase('overview-designer', locale)), locale).not.toMatch(/customers\.designer\./)
+    }
+    expect(messagesFor('it', ['parties']).parties!['customers.designer.seen']).toBe('{customer} vede questo nome')
+  })
+})
+// ---- end F-CP-155

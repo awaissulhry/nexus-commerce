@@ -137,6 +137,8 @@ export interface WorkCan {
   readonly workorders: boolean
   readonly threads: boolean
   readonly partners: boolean
+  /** F-CP-141: the price grain (money.price): the Not equal view, its count and the Money tab's line; absent / false: none of them. */
+  readonly price?: boolean
 }
 
 export function tilesShown(can: WorkCan): StripTile[] {
@@ -286,6 +288,31 @@ export async function readCustomerRequests(api: ApiClient, partyId: string, sign
 const OFF: Read<never> = { status: 'off' }
 const READING: Read<never> = { status: 'reading' }
 
+// ---- F-CP-141 (customer page plan C2d; 11-money §3.2; money wall O1–O3): one customer's price check counts --------------------------
+const priceSummarySchema = z.object({ partyId: z.string(), priceNotEqualCount: z.number(), priceMissingCount: z.number() })
+/** How many of the customer's orders (every status) read Not equal, and No customer price yet. */
+export type PriceSummary = z.infer<typeof priceSummarySchema>
+
+/**
+ * GET /sales/brand-prices/summary?partyId= (orders.view + the price grain over the customer; 403 in words otherwise): THIS customer's
+ * counts only — the API walls them to the customer (one out of reach answers like an unknown one), never a filter in the browser.
+ */
+export function readPriceSummary(api: ApiClient, partyId: string, signal?: AbortSignal): Promise<PriceSummary> {
+  return api.get('/sales/brand-prices/summary', { query: { partyId }, schema: priceSummarySchema, signal })
+}
+
+/** The Not equal view's terms (the Work tab's view, the Money tab's line opens it): every order whose prices differ. */
+export const NOT_EQUAL_TERMS = 'rows=all&priceMatch=NOT_EQUAL'
+/** The Money tab's door to the Work tab's Not equal view (the entry then adds the lock, once; no default beside the view). */
+export const notEqualDoor = (recordHref: string): string => `${recordHref}?tab=work&${NOT_EQUAL_TERMS}`
+
+/** The Not equal count once read; null while read, after a failed read, and always for a reader without the price grain (off). */
+export const priceDifferOf = (read: Read<PriceSummary>): number | null => (read.status === 'ready' ? read.value.priceNotEqualCount : null)
+
+/** A live change that may move the counts: any order event (a customer's price saved is `sales_order.brand_price_changed`). */
+export const pricesTouched = (type: string): boolean => type.startsWith('sales_order.')
+// ---- end F-CP-141
+
 /** The Work tab's reads for one customer (each only with its right), their live re-reads, and the marks of the sheet. */
 export function useCustomerWork(partyId: string, can: WorkCan) {
   const api = useOfficeApi()
@@ -303,6 +330,19 @@ export function useCustomerWork(partyId: string, can: WorkCan) {
     tasks: allowed.tasks ? READING : OFF,
   }))
   const turn = useRef<Record<keyof WorkReads, number>>({ board: 0, requests: 0, replies: 0, asks: 0, tasks: 0 })
+  // ---- F-CP-141: the price check counts, only with orders.view and the price grain (no read at all otherwise: no number anywhere)
+  const pricesAllowed = can.orders && can.price === true
+  const [prices, setPrices] = useState<Read<PriceSummary>>(pricesAllowed ? READING : OFF)
+  const pricesTurn = useRef(0)
+  const readPrices = useCallback(() => {
+    if (!pricesAllowed) return setPrices(OFF)
+    const mine = ++pricesTurn.current
+    readPriceSummary(api, partyId).then(
+      (value) => mine === pricesTurn.current && setPrices({ status: 'ready', value }),
+      () => mine === pricesTurn.current && setPrices({ status: 'failed' }),
+    )
+  }, [api, partyId, pricesAllowed])
+  // ---- end F-CP-141
 
   const run = useCallback(
     <K extends keyof WorkReads>(source: K, read: () => Promise<WorkReads[K] extends Read<infer T> ? T : never>) => {
@@ -342,21 +382,30 @@ export function useCustomerWork(partyId: string, can: WorkCan) {
   )
   const readAll = useCallback(() => {
     for (const read of Object.values(readers)) read()
-  }, [readers])
+    readPrices() // F-CP-141
+  }, [readers, readPrices])
   useEffect(() => readAll(), [readAll])
 
   // Live: each source on its own events, coalesced; everything again after a reconnect.
   const pending = useRef(new Set<keyof WorkReads>())
+  const pricesPending = useRef(false) // F-CP-141
   const flush = useCoalesced(() => {
     const sources = [...pending.current]
     pending.current.clear()
     for (const source of sources) readers[source]()
+    // F-CP-141: the counts again on an order's change (coalesced with the strip's reads).
+    if (pricesPending.current) {
+      pricesPending.current = false
+      readPrices()
+    }
   }, 800)
   const live = useLiveBus({
     onChange: (change) => {
       const touched = sourcesTouched(change.type)
-      if (touched.length === 0) return
+      const pricesMoved = pricesAllowed && pricesTouched(change.type) // F-CP-141
+      if (touched.length === 0 && !pricesMoved) return
       for (const source of touched) pending.current.add(source)
+      if (pricesMoved) pricesPending.current = true
       flush()
     },
     onReconnect: readAll,
@@ -375,7 +424,7 @@ export function useCustomerWork(partyId: string, can: WorkCan) {
       readers.board()
     } else readers.board()
   }
-  return { reads, live, marks, retry, reload: readAll, attention: workAttention(reads) }
+  return { reads, live, marks, retry, reload: readAll, attention: workAttention(reads), prices /* F-CP-141 */ }
 }
 
 // ---- F-SA-279 (sales page plan N5, N4, N6; picks R5, R9, P9, P11; 11-customer-page §3.7, §9.1; review C-13) ---------------------

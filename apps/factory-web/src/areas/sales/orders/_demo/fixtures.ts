@@ -53,6 +53,8 @@ export function forRole<T>(value: T, role: Role): T {
   const can = canOf(role)
   const drop = new Set<string>([
     ...(can.price ? [] : ['unitPrice', 'netAmount', 'vatAmount', 'grossAmount', 'amount', 'paidAmount', 'grossTotal', 'openAmount', 'invoicedAmount', 'creditedAmount', 'balanceDueAmount']),
+    // F-CP-140: the price check of a list row (the API's B-CP-018: the price grain only — absent, never zero, never "Equal").
+    ...(can.price ? [] : ['brandPrice', 'priceMatch', 'priceDiff', 'priceNotEqualLines']),
     ...(can.cost ? [] : ['unitCost', 'costAmount']),
     ...(can.margin ? [] : ['marginPct']),
   ])

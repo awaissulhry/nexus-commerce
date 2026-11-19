@@ -24,6 +24,7 @@ import {
   type TileKey,
 } from './api'
 import { CUSTOMER_URGENCIES, INVOICED_STATES, type CustomerUrgency, type InvoicedState } from './api' // B-TH-244
+import { PRICE_MATCHES, type PriceMatch } from './api' // F-CP-141: the price check term (the Not equal view)
 import type { DockDefault } from '../../_shared/record-frame/model' // F-SA-263
 // ---- F-OP-111: Split into new orders… (the API's own limits; the body the split sends) ----
 import { ORDERS_DEPTH_LIMITS } from '@nexus/factory-domain/sales/orders-depth/rules'
@@ -950,6 +951,11 @@ export interface ExtraTerms {
   readonly atRisk?: boolean
   readonly currency?: string | null
   readonly customerUrgency?: CustomerUrgency | null
+  // F-CP-141 (customer page plan C2d; 11-money §3.2): the price check term — the orders whose check reads Equal, Not equal or No
+  // customer price yet (`?priceMatch=`: the list, its totals and its file read it; never the board). A price holder's only: the API
+  // refuses it in words without the price grain, and the sheet carries it in no read for such a person (it holds the view in words).
+  readonly priceMatch?: PriceMatch | null
+  // ---- end F-CP-141
 }
 
 const CURRENCY = /^[A-Z]{3}$/
@@ -961,6 +967,7 @@ export function extraFromAddress(params: { get(name: string): string | null } | 
   const invoiced = params.get('invoiced')
   const currency = params.get('currency')?.trim() ?? ''
   const urgency = params.get('customerUrgency')
+  const priceMatch = params.get('priceMatch') // F-CP-141
   return {
     ...(isStatus(status) && rows !== status ? { status } : {}),
     ...(params.get('late') === 'true' && rows !== 'late' ? { late: true } : {}),
@@ -971,6 +978,7 @@ export function extraFromAddress(params: { get(name: string): string | null } | 
     ...(params.get('atRisk') === 'true' ? { atRisk: true } : {}),
     ...(CURRENCY.test(currency) ? { currency } : {}),
     ...(urgency && (CUSTOMER_URGENCIES as readonly string[]).includes(urgency) ? { customerUrgency: urgency as CustomerUrgency } : {}),
+    ...(priceMatch && (PRICE_MATCHES as readonly string[]).includes(priceMatch) ? { priceMatch: priceMatch as PriceMatch } : {}), // F-CP-141
   }
 }
 
@@ -989,6 +997,7 @@ function extraEntries(extra: ExtraTerms, rows: RowView): Array<[string, string]>
   if (extra.atRisk) out.push(['atRisk', 'true'])
   if (extra.currency) out.push(['currency', extra.currency])
   if (extra.customerUrgency) out.push(['customerUrgency', extra.customerUrgency])
+  if (extra.priceMatch) out.push(['priceMatch', extra.priceMatch]) // F-CP-141
   return out
 }
 
@@ -1005,6 +1014,7 @@ function extraQueryOf(extra: ExtraTerms | null): OrderQuery {
     ...(extra.atRisk ? { atRisk: true } : {}),
     ...(extra.currency ? { currency: extra.currency } : {}),
     ...(extra.customerUrgency ? { customerUrgency: extra.customerUrgency } : {}),
+    ...(extra.priceMatch ? { priceMatch: extra.priceMatch } : {}), // F-CP-141: the list and its totals (never the board: boardNarrowOf)
   }
 }
 
@@ -1014,6 +1024,28 @@ export function withoutExtra(extra: ExtraTerms, key: keyof ExtraTerms): ExtraTer
   delete next[key]
   return next
 }
+
+// ── F-CP-141 (customer page plan C4, money wall O1–O3; 10 §5): the price check term is a price holder's only ──
+/**
+ * The terms a reader's reads carry: without the price grain the price check term goes from every read (a shared saved view or a
+ * link that names it reads nothing with it, and writes no address either); `held` says the address asked for it — the sheet then
+ * holds the view in ONE line ("Amounts are shown to people who see prices" + Show all orders), never an answer about prices.
+ */
+export function priceTermOf(extra: ExtraTerms, can: Pick<OrderAbilities, 'price'>): { readonly extra: ExtraTerms; readonly held: boolean } {
+  if (!extra.priceMatch || can.price) return { extra, held: false }
+  return { extra: withoutExtra(extra, 'priceMatch'), held: true }
+}
+
+/**
+ * The price check term set or dropped by a person's pick, in ONE write: the cell's funnel narrows the view shown (`view` absent);
+ * a view picked with it (the Not equal view: `rows=all` and the term alone) stands alone; null drops it (leaving that view, the
+ * next view keeps the other door terms).
+ */
+export function withPriceMatch(extra: ExtraTerms, match: PriceMatch | null, alone = false): ExtraTerms {
+  if (!match) return withoutExtra(extra, 'priceMatch')
+  return alone ? { priceMatch: match } : { ...extra, priceMatch: match }
+}
+// ── end F-CP-141 ──
 
 /**
  * A total's door: the list's address for exactly the rows it counts, from the filter the API gave it (GET /sales/orders/summary;
@@ -1032,7 +1064,7 @@ export function doorAddress(path: string, filter: Readonly<Record<string, string
   if (!rowsTerm && filter.open !== 'true') query.set('rows', 'all')
   if (filter.partyId) query.set('party', filter.partyId)
   if (filter.companyId) query.set('company', filter.companyId)
-  for (const name of ['brand', 'cf', 'invoiced', 'atRisk', 'currency', 'customerUrgency', 'kind' /* F-SA-221 */, 'profile' /* F-SA-222 */, 'q'] as const) if (filter[name] && !(name === 'atRisk' && filter[name] !== 'true')) query.set(name, filter[name]!)
+  for (const name of ['brand', 'cf', 'invoiced', 'atRisk', 'currency', 'customerUrgency', 'kind' /* F-SA-221 */, 'profile' /* F-SA-222 */, 'priceMatch' /* F-CP-141 */, 'q'] as const) if (filter[name] && !(name === 'atRisk' && filter[name] !== 'true')) query.set(name, filter[name]!)
   const qs = query.toString()
   return `${path}${qs ? `?${qs}` : ''}`
 }

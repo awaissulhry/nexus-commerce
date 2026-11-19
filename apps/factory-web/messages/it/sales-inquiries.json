@@ -1281,5 +1281,61 @@
       "savedWeek": "Risposta della produzione su {number}: non prima della settimana {week}.",
       "takenBack": "Risposta della produzione su {number} ritirata."
     }
+  },
+  "catalogueMap": {
+    "title": "Righe da abbinare",
+    "hint": "Il cliente ha descritto queste righe, o le ha chieste su misura: ognuna diventa uno o più dei nostri modelli. Scegli il modello e la variante colore; le taglie sono quelle della riga, se non le scrivi tu.",
+    "line": "Riga {n} · {kind}",
+    "kind": {
+      "DESCRIBED": "Con le parole del cliente",
+      "MADE_TO_MEASURE": "Su misura"
+    },
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "people_one": "{count} persona sulla richiesta (il nome resta lì)",
+    "people_other": "{count} persone sulla richiesta (i nomi restano lì)",
+    "peopleInSheet": "Persone: nel foglio misure sulla richiesta",
+    "ownSizes": "Le sue taglie: {sizes}",
+    "noSizes": "Ancora nessuna taglia: scrivile sulla riga modello",
+    "note": "La loro nota: {note}",
+    "into": "Riga modello {m} della riga {n}",
+    "sizesHint": "Vuoto: le taglie della riga (ad es. 50:5 52:10)",
+    "add": "Aggiungi una riga modello",
+    "addMax": "Al massimo {max} righe modello per una riga",
+    "remove": "Togli la riga modello {m} della riga {n}",
+    "noStylesRight": "Il tuo ruolo non legge i modelli: abbina queste righe chi li legge.",
+    "stylesReading": "Leggo i modelli…",
+    "colourFirst": "Scegli prima il modello",
+    "mapOrder": "La mappa delle righe: cosa riceve l'ordine",
+    "mapQuote": "La mappa delle righe: cosa riceve il preventivo",
+    "mapLabel": "Ogni riga della richiesta e cosa diventa",
+    "col": {
+      "asked": "Richiesto",
+      "becomes": "Diventa"
+    },
+    "notMapped": "Non ancora abbinata",
+    "mtmHint": "Su misura: si accetta prima come preventivo (gli ordini su misura non sono ancora partiti). Non si crea nessun profilo misure: le persone restano sulla richiesta, che il preventivo collega.",
+    "held": {
+      "madeToMeasure_one": "La riga {lines} è su misura: accetta la richiesta come preventivo. Le sue persone restano sulla richiesta.",
+      "madeToMeasure_other": "Le righe {lines} sono su misura: accetta la richiesta come preventivo. Le loro persone restano sulla richiesta.",
+      "quoteOnly": "Questo ordine dal portale si accetta prima come preventivo.",
+      "unmapped_one": "La riga {lines} non è ancora abbinata: scegli il modello e la variante colore in cui si fa.",
+      "unmapped_other": "Le righe {lines} non sono ancora abbinate: scegli il modello e la variante colore di ognuna.",
+      "half": "Riga {n}: ogni riga modello ha bisogno del modello e della variante colore.",
+      "tooMany": "La riga {n} diventa al massimo {max} righe modello.",
+      "badSizes": "Riga {n}: le taglie non si leggono (ad es. 50:5 52:10).",
+      "sizesOfEach": "La riga {n} diventa più righe modello: scrivi le taglie di ognuna.",
+      "sizesOfPeople": "Riga {n}: le sue persone non hanno ancora una taglia (un foglio misure, o le manda dopo): scrivi le taglie.",
+      "sizesOfTotal": "La riga {n} chiede {pieces} pezzi in tutto, non ancora per taglia: scrivi le taglie.",
+      "badPrice": "Riga {n}: il prezzo non è un prezzo (ad es. 38,50)."
+    },
+    "done": {
+      "logos_one": "{count} logo del cliente riportato su {made}",
+      "logos_other": "{count} loghi del cliente riportati su {made}",
+      "logosNot_one": "{count} logo non si è potuto riportare: aggiungilo a mano",
+      "logosNot_other": "{count} loghi non si sono potuti riportare: aggiungili a mano",
+      "brandPrices_one": "{count} prezzo del cliente ripreso su {made}",
+      "brandPrices_other": "{count} prezzi del cliente ripresi su {made}"
+    }
   }
 }

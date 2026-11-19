@@ -36,7 +36,15 @@
     "waitingOn": "Waiting on",
     "waitingOnHint": "The most urgent: a request to answer, a reply that waits on us, who acts next",
     "supervisor": "Supervisor",
-    "supervisorHint": "Me, someone else or not set: never a name on a list"
+    "supervisorHint": "Me, someone else or not set: never a name on a list",
+    "ourPrice": "Our price",
+    "ourPriceHint": "Our order total without VAT",
+    "brandPrice": "Customer's price",
+    "brandPriceHint": "The customer's own price for this order, without VAT (its PO or the portal)",
+    "priceMatch": "Price check",
+    "priceMatchHint": "Our price beside the customer's, line by line, without VAT: Equal, Not equal or No customer price yet",
+    "priceDiff": "Difference",
+    "priceDiffHint": "Our price minus the customer's: + we ask more, − we ask less"
   },
   "door": {
     "order": "Open order {number} · its thread on the right",
@@ -75,6 +83,11 @@
   },
   "status": {
     "filter": "Show only “{status}” (filters the sheet)"
+  },
+  "cols": {
+    "label": "Columns",
+    "work": "Work",
+    "money": "Money"
   },
   "company": {
     "filter": "Show only {name} (filters the sheet)",
