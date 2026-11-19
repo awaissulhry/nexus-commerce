@@ -13,6 +13,7 @@ import type { Order } from '../../api'
 import { amountText, closeHeld, closeNeedsReason, dayInstant, linePromisesAllowed, mayIssueDepositInvoice, parseAmount, paymentProblems, promiseProblems, settlementWords, stillToPay } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { AmendReviewDialog, CancelDialog, CloseLinesDialog, CompareDialog, CopyQuoteDialog, ReopenLinesDialog } from './DailyDialogs'
+import { SplitOrderDialog } from './SplitOrderDialog' // F-OP-111
 
 /**
  * The order studio's dialogs: Change promise date (the order or chosen lines, the reason; the first promise never
@@ -45,6 +46,8 @@ export function OrderDialogs({ order, model, actions }: { order: Order; model: O
       return <ReopenLinesDialog order={order} model={model} actions={actions} />
     case 'cancel':
       return <CancelDialog order={order} model={model} actions={actions} />
+    case 'split': // F-OP-111
+      return <SplitOrderDialog order={order} model={model} actions={actions} />
     // Money (use-money-acts).
     case 'depositLink':
       return <LinkDialog order={order} requestId={dialog.requestId} model={model} actions={actions} />

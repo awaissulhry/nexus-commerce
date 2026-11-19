@@ -329,6 +329,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
       if (tab !== 'lines') router.replace(`${pathname}?tab=lines`)
     },
     pricedStart: (amendment) => depth.actions.onPricedStart?.(amendment),
+    permissions: session.permissions, // F-OP-111: the split's Ship to reads the customer's addresses (parties.view)
   })
   const productionActs = useProductionActs({ api, order: ready, tab, can, permissions: session.permissions, setNotice })
   const shipments = useShipmentsActs({ order: ready, prefix })

@@ -1032,3 +1032,153 @@ describe('B-SA-070b: the Discuss chip to the customer reads "your order 12", the
   })
 })
 // ---- end B-SA-070b
+
+// ---- F-OP-111 (10-order-page §4.6): Split into new orders… — caps, whole lines, the body, refusals by place ----------------------
+describe('F-OP-111: Split into new orders — each size capped at what may move, the order keeps the rest, refusals at their place', () => {
+  const split = () => import('./model')
+  /** The order with line 10's size 48 half on a work order, line 20 closed short or not. */
+  const withWork = (base = order('CONFIRMED')) => ({ ...base, lines: base.lines.map((line) => (line.seq === 10 ? { ...line, sizes: line.sizes.map((size) => (size.size === '48' ? { ...size, progress: { ...size.progress, inWorkOrders: 1 } } : size)) } : line)) })
+  const lineId = (o: ReturnType<typeof order>, seq: number) => o.lines.find((line) => line.seq === seq)!.id
+
+  it('the lines that may move: size-grid lines not closed short, each size less what work orders make; a fee, a unit or a closed line stays', async () => {
+    const { splitLinesOf, splitStays } = await split()
+    const o = withWork()
+    const lines = splitLinesOf(o)
+    expect(lines.map((line) => line.seq)).toEqual([10, 20])
+    expect(lines[0]!.sizes.find((size) => size.size === '48')).toEqual({ size: '48', quantity: 2, open: 1 })
+    expect(lines[0]!.style).toBe('DEMO-JKT-01')
+    // Every piece on work orders: nothing can move (the work orders keep making them for this order).
+    expect(splitLinesOf(order('IN_PRODUCTION'))).toEqual([])
+    const closed = { ...o, lines: o.lines.map((line) => (line.seq === 20 ? { ...line, closedShort: { quantity: 2, at: null, byId: null, reason: null, reasonCode: null } } : line)) }
+    expect(splitLinesOf(closed).map((line) => line.seq)).toEqual([10])
+    expect(splitStays(closed)).toBe(1)
+    const fee = { ...o, lines: [...o.lines, { ...o.lines[0]!, id: 'fee', seq: 90, kind: 'FEE' }] }
+    expect(splitLinesOf(fee).map((line) => line.seq)).toEqual([10, 20])
+    expect(splitStays(fee)).toBe(1)
+  })
+
+  it('⋯ Edit holds it in words: no right to manage orders, a state that does not split, nothing that may move', async () => {
+    const { splitHeld } = await split()
+    expect(splitHeld(order('CONFIRMED'), canOf('sales'))).toBeNull()
+    expect(splitHeld(order('READY'), canOf('sales'))).toBeNull()
+    expect(splitHeld(order('CONFIRMED'), canOf('manager'))).toEqual({ key: 'held.noManage' })
+    for (const status of ['SHIPPED', 'CLOSED', 'CANCELLED', 'PARTLY_SHIPPED'] as const) expect(splitHeld(order(status), canOf('sales')), status).toEqual({ key: 'split.held.state' })
+    expect(splitHeld(order('IN_PRODUCTION'), canOf('sales'))).toEqual({ key: 'split.held.nothing' })
+    const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("{ id: 'split', label: t('split.action'), disabled: !!splitWait, description: held(splitWait), onSelect: () => actions?.onDialog?.({ kind: 'split' }) }")
+    const edit = view.slice(view.indexOf('    edit: ['), view.indexOf('    people: people'))
+    expect(edit).toContain("id: 'split'")
+  })
+
+  it('the caps hold across the parts: what one part takes, another may not; the grid marks the cell with its room', async () => {
+    const { splitLinesOf, splitOver, splitPartOf, splitRoom, splitProblem } = await split()
+    const o = withWork()
+    const lines = splitLinesOf(o)
+    const ten = lineId(o, 10)
+    const first = { ...splitPartOf(o), grid: { [ten]: { '48': 1 } } }
+    const second = { ...splitPartOf(o), grid: { [ten]: { '48': 1, '50': 2 } } }
+    expect(splitRoom(lines[0]!, '48', [first, second], 1)).toBe(0)
+    expect(splitOver(lines, [first, second], 1)).toEqual([{ lineId: ten, size: '48', room: 0 }])
+    expect(splitOver(lines, [first, second], 0)).toEqual([{ lineId: ten, size: '48', room: 0 }])
+    expect(splitProblem({ order: o, parts: [first, second], reason: '', today: TODAY })).toEqual({ key: 'split.held.over' })
+    expect(splitProblem({ order: o, parts: [first], reason: '', today: TODAY })).toBeNull()
+    expect(splitProblem({ order: o, parts: [first, splitPartOf(o)], reason: '', today: TODAY })).toEqual({ key: 'split.held.empty' })
+  })
+
+  it('the order keeps at least one line; a date typed before today and a reason too long hold it (the order\'s own date never does)', async () => {
+    const { splitPartOf, splitProblem, SPLIT_LIMITS } = await split()
+    const o = order('CONFIRMED')
+    const all = { ...splitPartOf(o), grid: Object.fromEntries(o.lines.map((line) => [line.id, Object.fromEntries(line.sizes.map((size) => [size.size!, size.quantity]))])) }
+    expect(splitProblem({ order: o, parts: [all], reason: '', today: TODAY })).toEqual({ key: 'amend.held.empty' })
+    const some = { ...splitPartOf(o), grid: { [lineId(o, 20)]: { '50': 2, '52': 2, '54': 2 } } }
+    expect(splitProblem({ order: o, parts: [{ ...some, promiseDate: '2026-10-01' }], reason: '', today: TODAY })).toEqual({ key: 'issue.promiseDate' })
+    expect(splitProblem({ order: o, parts: [{ ...some, requestedDate: '2026-10-01' }], reason: '', today: TODAY })).toEqual({ key: 'issue.requestedDate' })
+    const late = { ...o, promiseDate: '2026-10-01' }
+    expect(splitProblem({ order: late, parts: [{ ...splitPartOf(late), grid: some.grid }], reason: '', today: TODAY })).toBeNull()
+    expect(splitProblem({ order: o, parts: [some], reason: 'x'.repeat(SPLIT_LIMITS.reason + 1), today: TODAY })).toEqual({ key: 'split.problem.reason', params: { count: SPLIT_LIMITS.reason } })
+    expect(SPLIT_LIMITS).toEqual({ parts: 20, reason: 500 })
+  })
+
+  it('the body: the sizes that move (every piece of a line: it goes whole), and only what differs from the order', async () => {
+    const { splitBodyOf, splitPartOf } = await split()
+    const o = order('CONFIRMED')
+    const twenty = lineId(o, 20)
+    const ten = lineId(o, 10)
+    const whole = { ...splitPartOf(o), grid: { [twenty]: { '50': 2, '52': 2, '54': 2 } } }
+    const some = { ...splitPartOf(o), grid: { [ten]: { '48': 1, '50': 0 } }, shipToAddressId: 'addr-2', customerRef: '  ', promiseDate: '2027-01-10' }
+    const body = splitBodyOf(o, [whole, some], '  Two shops  ', o.version)
+    expect(body).toEqual({
+      version: o.version,
+      reason: 'Two shops',
+      parts: [
+        { lines: [{ lineId: twenty, sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 2 }, { size: '54', quantity: 2 }] }] },
+        { lines: [{ lineId: ten, sizes: [{ size: '48', quantity: 1 }] }], shipToAddressId: 'addr-2', customerRef: null, promiseDate: '2027-01-10' },
+      ],
+    })
+    expect(splitBodyOf(o, [whole], '', 7)).toEqual({ version: 7, parts: [body.parts[0]] })
+  })
+
+  it('refusals at their place (by the path only, never the API\'s English): the part and its line; the split as a whole above', async () => {
+    const { splitBodyOf, splitPartOf, splitRefusals } = await split()
+    const o = order('CONFIRMED')
+    const ten = lineId(o, 10)
+    const twenty = lineId(o, 20)
+    const body = splitBodyOf(o, [{ ...splitPartOf(o), grid: { [ten]: { '48': 1 } } }, { ...splitPartOf(o), grid: { [twenty]: { '50': 1, '52': 1 } } }], '', o.version)
+    const issue = (path: string) => ({ path, message: 'English for the logs.' })
+    expect(splitRefusals([issue('body/parts/1/lines/0/sizes')], body, o)).toEqual([{ part: 1, words: { key: 'split.problem.whole', params: { line: 20 } } }])
+    expect(splitRefusals([issue('body/parts/1/lines/0/sizes/1/quantity')], body, o)).toEqual([{ part: 1, words: { key: 'split.problem.more', params: { line: 20, size: '52' } } }])
+    expect(splitRefusals([issue('body/parts/0/lines/0/sizes/0/size')], body, o)).toEqual([{ part: 0, words: { key: 'split.problem.noSize', params: { line: 10, size: '48' } } }])
+    expect(splitRefusals([issue('body/parts/0/lines/0/lineId')], body, o)).toEqual([{ part: 0, words: { key: 'split.problem.stays', params: { line: 10 } } }])
+    expect(splitRefusals([issue('body/parts/0/lines')], body, o)).toEqual([{ part: 0, words: { key: 'split.problem.empty' } }])
+    expect(splitRefusals([issue('body/parts/1/shipToAddressId')], body, o)).toEqual([{ part: 1, words: { key: 'split.problem.shipTo' } }])
+    expect(splitRefusals([issue('body/parts/0/promiseDate'), issue('body/parts/0/requestedDate'), issue('body/parts/0/customerRef')], body, o).map((refusal) => refusal.words.key)).toEqual(['issue.promiseDate', 'issue.requestedDate', 'issue.customerRef'])
+    expect(splitRefusals([issue('body/parts')], body, o)).toEqual([{ part: null, words: { key: 'amend.held.empty' } }])
+    expect(splitRefusals([issue('body/reason')], body, o)).toEqual([{ part: null, words: { key: 'split.problem.reason', params: { count: 500 } } }])
+    expect(splitRefusals([issue('body/lines/0/sizes')], body, o)).toEqual([{ part: null, words: { key: 'split.problem.inWork' } }])
+    expect(splitRefusals([issue('body/somewhere')], body, o)).toEqual([{ part: null, words: { key: 'problem.write.invalid' } }])
+    // Dotted paths read the same; each refusal said once.
+    expect(splitRefusals([issue('parts.1.lines.0.sizes'), issue('body/parts/1/lines/0/sizes')], body, o)).toEqual([{ part: 1, words: { key: 'split.problem.whole', params: { line: 20 } } }])
+  })
+
+  it('the page: the dialog by its owner (Lines), the write with the version and one key, refusals kept beside the dialog\'s problem line', () => {
+    const dialogs = readFileSync(new URL('./record/view/Dialogs.tsx', import.meta.url), 'utf8')
+    expect(dialogs).toContain("case 'split': // F-OP-111\n      return <SplitOrderDialog order={order} model={model} actions={actions} />")
+    expect(dialogs.indexOf("case 'split'")).toBeGreaterThan(dialogs.indexOf('// Lines (use-lines-acts).'))
+    expect(dialogs.indexOf("case 'split'")).toBeLessThan(dialogs.indexOf('// Money (use-money-acts).'))
+    const acts = readFileSync(new URL('./record/use-lines-acts.ts', import.meta.url), 'utf8')
+    expect(acts).toContain('const body = splitBodyOf(value, parts, reason, value.version)')
+    expect(acts).toContain('const answer = await splitOrder(api, orderId, body, key)')
+    expect(acts).toContain("if (isApiError(error) && error.kind === 'invalid') setRefusals(splitRefusals(error.issues, body, value))")
+    expect(acts).toContain('if (value && mayAddresses) readAddresses(value.partyId)')
+    const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
+    expect(api).toContain("return api.post(`${orderPath(orderId)}/split`, { body, schema: splitAnswerSchema, idempotencyKey })")
+    const dialog = readFileSync(new URL('./record/view/SplitOrderDialog.tsx', import.meta.url), 'utf8')
+    expect(dialog).not.toMatch(/from '[^']*(lib\/api|lib\/session|use-lines-acts)/)
+    expect(dialog).toContain("<Link key={entry.id} className=\"fw-so-link\" href={`${model.prefix}/sales/orders/${entry.id}`}>")
+  })
+
+  it('the customer\'s delivery addresses a part may ship to: active, SHIP_TO, ours or approved (a waiting or refused one never)', async () => {
+    const { listShipToAddresses } = await import('./api')
+    const address = (id: string, over: Record<string, unknown> = {}) => ({ id, kinds: ['SHIP_TO'], name: null, line1: 'Via Esempio 1', postalCode: '50100', city: 'Firenze', country: 'IT', status: 'ACTIVE', isDefaultShipTo: false, approval: null, ...over })
+    const rows = [address('a1'), address('a2', { approval: { status: 'APPROVED' } }), address('a3', { approval: { status: 'WAITING' } }), address('a4', { approval: { status: 'REFUSED' } }), address('a5', { status: 'ARCHIVED' }), address('a6', { kinds: ['BILL_TO'] })]
+    const asked: string[] = []
+    const api = { get: async (path: string, options: { schema: { parse: (value: unknown) => unknown } }) => (asked.push(path), options.schema.parse({ party: { addresses: rows } })) } as unknown as Parameters<typeof listShipToAddresses>[0]
+    expect((await listShipToAddresses(api, 'p1')).map((row) => row.id)).toEqual(['a1', 'a2'])
+    expect(asked).toEqual(['/parties/p1'])
+  })
+
+  it('every split word in it + en, the same placeholders, plural pairs; no word names a customer', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      const keys = ['split.action', 'split.title', 'split.body', 'split.keeps', 'split.part', 'split.addPart', 'split.removePart', 'split.sizes', 'split.room', 'split.line', 'split.shipTo', 'split.shipToSame', 'split.shipToReading', 'split.shipToHeld', 'split.shipToFailed', 'split.reason', 'split.reasonHint', 'split.open', 'split.notice', 'split.held.state', 'split.held.nothing', 'split.held.empty', 'split.held.over', 'split.held.parts', 'split.problem.stays', 'split.problem.whole', 'split.problem.more', 'split.problem.noSize', 'split.problem.line', 'split.problem.empty', 'split.problem.shipTo', 'split.problem.reason', 'split.problem.inWork']
+      for (const key of keys) expect(t(key, { number: 'SO-1', n: 1, room: 2, seq: 10, style: 'S', colour: 'C', count: 2, numbers: 'SO-2', line: 10, size: '48' }), `${locale} ${key}`).not.toBe(key)
+      for (const key of ['split.stays', 'split.pieces', 'split.go', 'split.done']) expect(t(key, { count: 2, numbers: 'SO-2, SO-3' }), `${locale} ${key}`).not.toBe(key)
+    }
+    for (const locale of LOCALES) {
+      const words = Object.entries(messagesFor(locale, ['orders']).orders!).filter(([key]) => key.startsWith('split.'))
+      expect(words.length, locale).toBeGreaterThan(40)
+      for (const [key, text] of words) expect(text, `${locale} ${key}`).not.toMatch(/\{(customer|party|brand)\}/)
+    }
+  })
+})
+// ---- end F-OP-111

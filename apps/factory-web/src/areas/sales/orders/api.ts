@@ -959,3 +959,52 @@ export type CancelReason = z.infer<typeof reasonOption>
 export async function listCancelReasons(api: ApiClient, signal?: AbortSignal): Promise<CancelReason[]> {
   return (await api.get('/reasons', { query: { list: 'CANCEL' }, schema: z.object({ reasons: z.array(reasonOption) }), signal })).reasons
 }
+
+// ---- F-OP-111: Split into new orders… (POST /sales/orders/:id/split, orders.manage; the order's customer only) -----------------
+
+/** One part as the split sends it: its lines (some sizes, or every piece), and where it differs from the order (else as the order). */
+export interface SplitPartBody {
+  lines: { lineId: string; sizes: SizeInput[] }[]
+  shipToAddressId?: string
+  customerRef?: string | null
+  requestedDate?: string | null
+  promiseDate?: string | null
+}
+
+export interface SplitBody {
+  version: number
+  reason?: string
+  parts: SplitPartBody[]
+}
+
+const splitAnswerSchema = z.object({ order: orderSchema, amendment: z.object({ id: z.string(), revision: z.number() }), orders: z.array(z.object({ id: z.string(), number: z.string() })) })
+export type SplitAnswer = z.infer<typeof splitAnswerSchema>
+
+/** The parts become orders of their own (same customer, prices, terms and season; no deposit); the order keeps the rest. */
+export function splitOrder(api: ApiClient, orderId: string, body: SplitBody, idempotencyKey: string): Promise<SplitAnswer> {
+  return api.post(`${orderPath(orderId)}/split`, { body, schema: splitAnswerSchema, idempotencyKey })
+}
+
+const shipToAddressSchema = z.object({
+  id: z.string(),
+  kinds: z.array(z.string()),
+  name: z.string().nullable(),
+  line1: z.string(),
+  postalCode: z.string(),
+  city: z.string(),
+  country: z.string(),
+  status: z.string(),
+  isDefaultShipTo: z.boolean(),
+  approval: z.object({ status: z.string() }).nullable().optional(),
+})
+export type ShipToAddress = z.infer<typeof shipToAddressSchema>
+
+/**
+ * The order's customer's delivery addresses a part may ship to (GET /parties/:id, parties.view: the API's wall): active, SHIP_TO,
+ * and ours or approved by us (one the customer added that waits for our check, or was refused, is never offered).
+ */
+export async function listShipToAddresses(api: ApiClient, partyId: string, signal?: AbortSignal): Promise<ShipToAddress[]> {
+  const { party } = await api.get(`/parties/${encodeURIComponent(partyId)}`, { schema: z.object({ party: z.object({ addresses: z.array(shipToAddressSchema) }) }), signal })
+  return party.addresses.filter((address) => address.status === 'ACTIVE' && address.kinds.includes('SHIP_TO') && (!address.approval || address.approval.status === 'APPROVED'))
+}
+// ---- end F-OP-111

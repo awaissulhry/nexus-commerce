@@ -23,6 +23,8 @@ import type { OrderFilesModel } from '../../../../lib/record-thread/files-view/m
 import type { FilesViewActions } from '../../../../lib/record-thread/files-view/view/FilesView' // F-SA-237
 import type { ToldChanges } from './told' // F-SA-244
 import type { ApiClient } from '../../../../lib/api/client' // F-OP-134: the tab acts hooks' base (RecordActsBase)
+import type { ShipToAddress } from '../api' // F-OP-111
+import type { SplitPartDraft, SplitRefusal } from '../model' // F-OP-111
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -40,8 +42,8 @@ export const PART_LOADING = { value: null, problem: null } as const
 // at a time: RecordDialog is the container's one slot, and each hook's `opened` clears what its own dialog showed last.
 /** use-band-acts: the band's primary and its ⋯ (Change promise date, Mark ready, Close order; B-W2a-50: Copy as a new quote). */
 export type BandDialog = { kind: 'promise' } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' }
-/** use-lines-acts: the lines (B-W2a-50: the amendment's review, close and reopen lines, the cancel). */
-export type LinesDialog = { kind: 'amendReview' } | { kind: 'closeLines' } | { kind: 'reopenLines' } | { kind: 'cancel' }
+/** use-lines-acts: the lines (B-W2a-50: the amendment's review, close and reopen lines, the cancel; F-OP-111: the split). */
+export type LinesDialog = { kind: 'amendReview' } | { kind: 'closeLines' } | { kind: 'reopenLines' } | { kind: 'cancel' } | { kind: 'split' }
 /** use-money-acts: the deposits and payments (the bank-details page, the payment, the TD02's send to SDI). */
 export type MoneyDialog = { kind: 'depositLink'; requestId: string } | { kind: 'depositPayment'; requestId: string } | { kind: 'sdiSend'; invoiceId: string }
 /** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
@@ -95,7 +97,20 @@ export interface AmendState {
   review: { phase: 'reading' | 'ready' | 'failed'; preview: AmendPreview | null; problem: Phrase | null } | null
 }
 
+// ---- F-OP-111: Split into new orders… (use-lines-acts) ----
+export interface SplitState {
+  /** The customer's delivery addresses a part may ship to (active, ours or approved by us); null: no right to read them (parties.view). */
+  readonly addresses: Part<ShipToAddress[]> | null
+  /** The API's refusals, each at its place (a part; null: the split as a whole). */
+  readonly refusals: readonly SplitRefusal[]
+  /** The new orders the split made (the dialog's done state, each a link); null: not split yet. */
+  readonly made: readonly { readonly id: string; readonly number: string }[] | null
+}
+// ---- end F-OP-111
+
 export interface OrderRecordModel {
+  /** F-OP-111: Split into new orders… — the dialog's addresses, refusals and the orders made; absent: not open here (a design case). */
+  split?: SplitState | null
   /** B-W2b-180: ⋯ "See it in the customer's portal" (held: why); null/absent: not offered. */
   portal?: { held: Phrase | null; opening: boolean } | null
   /** F-SA-242: the portal said nobody of the customer reads this order there (NO_PORTAL): the conversation tick is held. */
@@ -205,6 +220,8 @@ export interface PaymentInput {
 }
 
 export interface OrderRecordActions {
+  /** F-OP-111: split the parts off into new orders (the dialog's parts as typed, the optional reason). */
+  onSplit?: (input: { parts: readonly SplitPartDraft[]; reason: string }) => void
   /** B-W2b-180 (design sales.orders conn "Portal › Orders & tracking"): open the order in the customer's portal, read-only. */
   onPortal?: () => void
   /** F-SA-244: Who was told of one change (by its system line). */

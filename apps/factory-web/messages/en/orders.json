@@ -1589,5 +1589,52 @@
     "open": "Who was told",
     "aboutChanges_one": "Told about changes: {count} person",
     "aboutChanges_other": "Told about changes: {count} people"
+  },
+  "split": {
+    "action": "Split into new orders…",
+    "title": "Split {number} into new orders",
+    "body": "Move lines, or some of their sizes, to new orders of their own — each with its own delivery address, customer PO and dates. A line with a delivery schedule or options moves whole.",
+    "keeps": "The new orders keep the prices, terms and season; the deposit stays here.",
+    "part": "Part {n}",
+    "addPart": "Another part",
+    "removePart": "Remove part {n}",
+    "sizes": "Pieces that move to part {n}",
+    "room": "At most {room}: the rest is on work orders or in another part",
+    "line": "{seq} · {style} {colour}",
+    "stays_one": "{count} line stays here: a fee, a made-to-measure unit or a line closed short.",
+    "stays_other": "{count} lines stay here: fees, made-to-measure units or lines closed short.",
+    "pieces_one": "{count} piece moves",
+    "pieces_other": "{count} pieces move",
+    "shipTo": "Ship to",
+    "shipToSame": "As on this order",
+    "shipToReading": "Reading the delivery addresses…",
+    "shipToHeld": "Another delivery address needs the right to see customers: this part ships as this order.",
+    "shipToFailed": "The delivery addresses could not be read: this part ships as this order.",
+    "reason": "Why (optional)",
+    "reasonHint": "Written in the order's history with the new orders' numbers.",
+    "go_one": "Split into {count} new order",
+    "go_other": "Split into {count} new orders",
+    "done_one": "{count} new order made: {numbers}. The deposit stays here.",
+    "done_other": "{count} new orders made: {numbers}. The deposit stays here.",
+    "open": "Open {number}",
+    "notice": "Order split: {numbers} made from it; the deposit stays here.",
+    "held": {
+      "state": "An order is split while it is confirmed, in production or ready",
+      "nothing": "Nothing on this order can move: its pieces are on work orders, or its lines stay here",
+      "empty": "Give each part at least one piece",
+      "over": "A size asks more than can move",
+      "parts": "One split makes at most {count} orders"
+    },
+    "problem": {
+      "stays": "Line {line} stays on this order: a fee, a made-to-measure unit or a line closed short.",
+      "whole": "Line {line} has a delivery schedule or options: it moves whole or stays here.",
+      "more": "Line {line}, size {size}: more than it has left to move.",
+      "noSize": "Line {line} has no size {size}.",
+      "line": "Line {line} cannot move like this.",
+      "empty": "This part takes no line: give it at least one piece.",
+      "shipTo": "This delivery address cannot be used (archived, or not approved by us): choose another.",
+      "reason": "The reason is at most {count} characters.",
+      "inWork": "Pieces of these lines are on work orders: what stays here cannot go below them."
+    }
   }
 }

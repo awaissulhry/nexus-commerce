@@ -3,9 +3,13 @@
 import { createElement, useCallback, useRef, useState, type ReactNode } from 'react'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { findStyles, getStyle } from '../../quotes/api'
+import { isApiError } from '../../../../lib/api/errors'
 import { applyAmendment, cancelOrder, closeLines, getCancelCheck, previewAmendment, reopenLines, type CancelCheck, type CloseLinesAnswer, type Order } from '../api'
 import { amendLines, draftOf, namesOf, newKey, withCells, type DraftLine } from '../daily-model'
 import { readProblem, writeProblem, type Phrase } from '../model'
+// ---- F-OP-111: Split into new orders… (POST …/split; the customer's delivery addresses for a part's Ship to) ----
+import { listShipToAddresses, splitOrder, type ShipToAddress } from '../api'
+import { splitBodyOf, splitRefusals, type SplitRefusal } from '../model'
 // B-W2b-374: an amendment's new line's options.
 import { NewLineOptions } from '../../_shared/options-entry/NewLineOptions'
 // F-SA-242: the Amend review's tick writes the customer's words through the thread's own portal send.
@@ -13,7 +17,7 @@ import { postPortalReplyKeyed } from '../../../_shared/record-thread/api'
 import { portalRefusal } from '../../../_shared/record-thread/state'
 import { COMPOSER_EMPTY, PART_LOADING, type AmendState, type OrderRecordActions, type OrderRecordModel, type Part, type RecordActsBase, type RecordDialog } from './record-model'
 
-export type LinesActsModel = Pick<OrderRecordModel, 'amend' | 'closedLines' | 'cancelCheck' | 'portalGone' | 'newLineOptions'>
+export type LinesActsModel = Pick<OrderRecordModel, 'amend' | 'closedLines' | 'cancelCheck' | 'portalGone' | 'newLineOptions' | 'split' /* F-OP-111 */>
 export type LinesActsActions = Pick<
   OrderRecordActions,
   | 'onAmendStart'
@@ -31,6 +35,7 @@ export type LinesActsActions = Pick<
   | 'onReopenLines'
   | 'onCancelOrder'
   | 'onPricedOffer'
+  | 'onSplit' // F-OP-111
 >
 
 /** The amendment's body as the API reads it (the preview, Apply, and the priced change it may become). */
@@ -53,7 +58,8 @@ function amendBodyOf(draft: AmendState, value: Order) {
 /**
  * F-OP-134 (N-5): the Lines tab's acts — B-W2a-50: "Amend order" holds the draft here (each style read for its sizes and colourways;
  * Review asks the API's preview, Apply sends the version as read; F-SA-242: the customer's words through the thread's portal send),
- * close and reopen lines, the cancel's impact check when its dialog opens, then the cancel with the typed number. Mounted by the
+ * close and reopen lines, the cancel's impact check when its dialog opens, then the cancel with the typed number; F-OP-111: Split
+ * into new orders (the customer's delivery addresses read as it opens, parties.view; a refusal said at its place). Mounted by the
  * container (OrderRecord.tsx), which hands what it returns to the view as plain props; a view never imports it.
  */
 export function useLinesActs(
@@ -68,6 +74,8 @@ export function useLinesActs(
     readonly showLines: () => void
     /** B-W2b-323: "Send as a priced change" from Review amendment — the draft's lines go with it. */
     readonly pricedStart: (amendment: AmendBody) => void
+    /** F-OP-111: the person's rights (a part's Ship to reads the customer's addresses with parties.view). */
+    readonly permissions: readonly string[]
   },
 ): {
   model: LinesActsModel
@@ -79,7 +87,7 @@ export function useLinesActs(
   readCancelCheck: () => void
   opened: (next: RecordDialog | null) => void
 } {
-  const { api, orderId, current, write, version, setNotice, load, order, setDialog, setDialogProblem, clearChanged, showLines, pricedStart } = input
+  const { api, orderId, current, write, version, setNotice, load, order, setDialog, setDialogProblem, clearChanged, showLines, pricedStart, permissions } = input
   const [amend, setAmend] = useState<AmendState | null>(null)
   const amendRef = useRef<AmendState | null>(null)
   amendRef.current = amend
@@ -87,6 +95,18 @@ export function useLinesActs(
   const [closedLines, setClosedLines] = useState<CloseLinesAnswer | null>(null)
   const [portalGone, setPortalGone] = useState(false) // F-SA-242
   const searchSeq = useRef(0)
+  // ---- F-OP-111: the split's addresses (null: no right to read them), its refusals by place, the orders it made ----
+  const mayAddresses = permissions.includes('parties.view')
+  const [addresses, setAddresses] = useState<Part<ShipToAddress[]> | null>(null)
+  const [refusals, setRefusals] = useState<readonly SplitRefusal[]>([])
+  const [made, setMade] = useState<readonly { id: string; number: string }[] | null>(null)
+  const readAddresses = (partyId: string) => {
+    setAddresses(PART_LOADING)
+    listShipToAddresses(api, partyId)
+      .then((rows) => setAddresses(part(rows)))
+      .catch((error: unknown) => setAddresses({ value: null, problem: readProblem(error) }))
+  }
+  // ---- end F-OP-111
 
   // ---- B-W2a-50: the amendment draft --------------------------------------------------------------------------------
   const readStyle = useCallback(
@@ -222,6 +242,31 @@ export function useLinesActs(
       ),
     onReopenLines: (lineIds, reason) => void write(async () => (await reopenLines(api, orderId, { version: version(), reason, ...(lineIds.length > 0 ? { lineIds } : {}) })).order, 'notice.reopened'),
     onCancelOrder: (reason, typed) => void write(async () => (await cancelOrder(api, orderId, { version: version(), reason, confirmNumber: typed })).order, 'notice.cancelled'),
+    // ---- F-OP-111: the parts become orders of their own (the order's version as read); the dialog then shows them, each a link, and
+    // the page stays. A refusal is said at its place (a part, or the split as a whole) beside the dialog's one problem line.
+    onSplit: ({ parts, reason }) => {
+      const value = current.current
+      if (!value) return
+      const body = splitBodyOf(value, parts, reason, value.version)
+      const key = newIdempotencyKey()
+      setRefusals([])
+      void write(
+        async () => {
+          try {
+            const answer = await splitOrder(api, orderId, body, key)
+            setMade(answer.orders)
+            setNotice({ tone: 'success', words: { key: 'split.notice', params: { numbers: answer.orders.map((entry) => entry.number).join(', ') } } })
+            return answer.order
+          } catch (error) {
+            if (isApiError(error) && error.kind === 'invalid') setRefusals(splitRefusals(error.issues, body, value))
+            throw error
+          }
+        },
+        null,
+        true,
+      )
+    },
+    // ---- end F-OP-111
     // B-W2b-323: "Send as a priced change" from Review amendment (the draft's lines go with it).
     onPricedOffer: () => {
       const draft = amendRef.current
@@ -245,7 +290,7 @@ export function useLinesActs(
     })
 
   return {
-    model: { amend, closedLines, cancelCheck, portalGone, newLineOptions },
+    model: { amend, closedLines, cancelCheck, portalGone, newLineOptions, split: { addresses, refusals, made } /* F-OP-111 */ },
     actions,
     amendRef,
     endAmend: () => setAmend(null),
@@ -254,6 +299,14 @@ export function useLinesActs(
     opened: (next) => {
       setClosedLines(null)
       if (next?.kind === 'cancel') readCancelCheck()
+      // F-OP-111: the split opens with nothing said yet; its Ship to reads the customer's delivery addresses (parties.view).
+      setRefusals([])
+      setMade(null)
+      if (next?.kind === 'split') {
+        const value = current.current
+        if (value && mayAddresses) readAddresses(value.partyId)
+        else setAddresses(null)
+      }
     },
   }
 }
