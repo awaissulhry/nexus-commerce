@@ -218,7 +218,12 @@
     "NO_SIZES": "La riga non chiede nessuna taglia.",
     "PRICE_CHANGED": "Prezzo ora {now} (era {was}).",
     "PRICE_NEW": "Prezzo ora {now}: prendete i prezzi di oggi.",
-    "PRICE_ANY": "Il prezzo è cambiato: prendete i prezzi di oggi."
+    "PRICE_ANY": "Il prezzo è cambiato: prendete i prezzi di oggi.",
+    "NO_TOTAL": "Indicate quanti pezzi in tutto (le taglie possono seguire).",
+    "SIZES_NOT_TOTAL": "Le taglie non fanno il totale dei pezzi.",
+    "NO_PEOPLE": "Indicate le persone, o allegate la loro scheda misure.",
+    "MTM_CLOSED": "Il su misura non è ancora aperto per voi: chiedeteci nei messaggi.",
+    "GARMENT_TYPE_GONE": "Questo tipo di capo su misura non è più offerto: scegliete un altro tipo di capo."
   },
   "notice": {
     "PRICE_CHANGED": "Prezzo ora {now} (era {was})",

@@ -312,7 +312,12 @@ describe('the customer’s own prices of its request, taken over (source PORTAL)
     order = await alphaOrder('PO-CP017-REQ')
     // Brand Alpha's accepted portal request whose order the accept did not price (made up; written as it stands).
     await force(`INSERT INTO "PortalOrderRequest" (id, "tenantId", "companyId", "partyId", number, status, currency, "salesOrderId", "decidedAt") VALUES ($1, $2, $3, $4, 'PR-CP017-1', 'ACCEPTED', 'EUR', $5, now())`, [requestId, T, companyA, alpha, order.id])
-    await force(`INSERT INTO "PortalOrderRequestLine" (id, "tenantId", "partyId", "requestId", seq, "brandUnitPrice") VALUES ($1, $2, $3, $4, 10, 100), ($5, $2, $3, $4, 20, 105)`, [newId(), T, alpha, requestId, newId()])
+    // B-CP-076 (lead): the take-over pairs by the accept's line map only (its audit row), never by place: the made-up accept's map.
+    const [first, second] = [newId(), newId()]
+    await force(`INSERT INTO "PortalOrderRequestLine" (id, "tenantId", "partyId", "requestId", seq, "brandUnitPrice") VALUES ($1, $2, $3, $4, 10, 100), ($5, $2, $3, $4, 20, 105)`, [first, T, alpha, requestId, second])
+    const lineOf = (seq: number) => order.lines.find((line) => line.seq === seq)!.id
+    const lineMap = [{ requestLineId: first, requestSeq: 10, into: [lineOf(10)] }, { requestLineId: second, requestSeq: 20, into: [lineOf(20)] }]
+    await force(`INSERT INTO "AuditLog" (id, "tenantId", "companyId", at, audience, "actorId", action, "recordType", "recordId", after, "requestId") VALUES ($1, $2, $3, now(), 'OFFICE', $4, 'portalOrdering.accept', 'PortalOrderRequest', $5, $6::jsonb, 'cp-076-made-up')`, [newId(), T, companyA, newId(), requestId, JSON.stringify({ status: 'ACCEPTED', as: 'ORDER', lineMap })])
   })
 
   it('the check names the request; the take-over writes PORTAL rows (no office person) and reads the difference', async () => {

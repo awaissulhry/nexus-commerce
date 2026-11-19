@@ -644,7 +644,8 @@ describe('F-CP-103: each tile opens the rows it counts; the Views counts come fr
 
   it('no second read: the Work tab hands the sheet the strip\'s read (brand wall: the API walls it to this customer)', () => {
     const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain('viewCounts: workViewCounts(work.reads.board)')
+    // F-CP-107 adds the Drafts view's count (the drafts the tab already read) beside the strip's counts: still no second read.
+    expect(tab).toContain('viewCounts: { ...(workViewCounts(work.reads.board) ?? {})')
     expect(tab).not.toMatch(/getBoard\(/)
     const hook = readFileSync(new URL('./use-customer-work.ts', import.meta.url), 'utf8')
     expect(hook).toContain("board: () => run('board', () => getBoard(api, '', undefined, partyId))")

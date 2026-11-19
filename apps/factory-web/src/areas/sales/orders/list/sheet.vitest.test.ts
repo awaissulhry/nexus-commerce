@@ -355,3 +355,109 @@ describe('F-SA-281: Add task to N', () => {
   })
 })
 // ---- end F-SA-281
+
+// ---- F-CP-140 (customer page plan C2d, C4; design 11-money §3.1, §3.5; review F6): the price check columns — ONE spec drives the
+// sheet, Customise ("Price check") and the file; opt-in until the Owner's sheet; only with the price grain. Money wall "as Sales worker
+// / as Production manager": no column, no Customise entry, no chip, no export column, no field in the row.
+describe('F-CP-140: the price check columns of the Orders sheet', () => {
+  const OWNER = canOf('owner')
+  const SALES_WORKER = { ...canOf('sales'), price: false } // the Sales role after B-CP-011
+  const en = tFor('en')
+  const cells = { ourPrice: () => null, brandPrice: () => null, priceMatch: () => null, priceDiff: () => null }
+  const colsFor = async (can: ReturnType<typeof canOf>) => (await import('./price-check-columns')).priceCheckColDefs(can, en, cells, () => '')
+  const frame = (cols: ColDef<OrderRow>[]): ColDef<OrderRow>[] => [{ colId: 'number', headerName: 'Number' }, { colId: 'status', headerName: 'Status' }, ...cols, { colId: 'more', headerName: '⋯', pinned: 'right' }]
+
+  it('the ids are fixed, in the picture\'s order (ours first): the Owner\'s sheet maps onto them', async () => {
+    const { PRICE_CHECK_IDS, PRICE_CHECK_COLUMNS } = await import('./price-check-columns')
+    expect([...PRICE_CHECK_IDS]).toEqual(['ourPrice', 'brandPrice', 'priceMatch', 'priceDiff'])
+    expect(PRICE_CHECK_COLUMNS.map((column) => column.id)).toEqual([...PRICE_CHECK_IDS])
+    expect((await colsFor(OWNER)).map((column) => column.colId)).toEqual([...PRICE_CHECK_IDS])
+    expect((await colsFor(OWNER)).map((column) => column.headerName)).toEqual(["Our price", "Customer's price", 'Price check', 'Difference'])
+  })
+
+  it('opt-in (review F6): hidden until Customise or a view shows them, no header sort, the amounts right-aligned', async () => {
+    const { isOptIn } = await import('../../../../list-frame/tools/model')
+    for (const column of await colsFor(OWNER)) {
+      expect(column.hide, column.colId).toBe(true)
+      expect(column.sortable, column.colId).toBe(false)
+      expect(isOptIn(column as ColDef<unknown>), column.colId).toBe(true)
+    }
+    expect((await colsFor(OWNER)).filter((column) => column.type === 'rightAligned').map((column) => column.colId)).toEqual(['ourPrice', 'brandPrice', 'priceDiff'])
+  })
+
+  it('Customise: the four under their own heading "Price check"; the rest under the list\'s', async () => {
+    const { preferenceColumnsOf, toolColumnsOf } = await import('../../../../list-frame/tools/model')
+    const specs = preferenceColumnsOf(toolColumnsOf(frame(await colsFor(OWNER)) as ColDef<unknown>[]))
+    expect(specs.filter((spec) => spec.group === 'Price check').map((spec) => spec.key)).toEqual(['ourPrice', 'brandPrice', 'priceMatch', 'priceDiff'])
+    expect(specs.filter((spec) => spec.group === 'Price check').every((spec) => spec.groupKey === 'priceCheck')).toBe(true)
+    expect(specs.filter((spec) => spec.group === undefined).map((spec) => spec.key)).toEqual(['number', 'status', 'more'])
+    // A list that names no heading keeps exactly one section (nothing changes for the other lists).
+    expect(preferenceColumnsOf(toolColumnsOf(frame([]) as ColDef<unknown>[])).some((spec) => 'group' in spec)).toBe(false)
+  })
+
+  it('the file writes them by id once shown — the API\'s sales.orders ids, each of the price grain (screen = file)', async () => {
+    const shown = (await colsFor(OWNER)).map((column) => ({ ...column, hide: false }))
+    expect(exportColumnsOf(frame(shown) as ColDef<unknown>[]).map((column) => column.key)).toEqual(['number', 'status', 'ourPrice', 'brandPrice', 'priceMatch', 'priceDiff'])
+    expect(exportColumnsOf(frame(await colsFor(OWNER)) as ColDef<unknown>[]).map((column) => column.key)).toEqual(['number', 'status'])
+    const source = readFileSync(new URL('../../../../../../factory-api/src/modules/sales/brand-prices/columns.ts', import.meta.url), 'utf8')
+    for (const id of ['ourPrice', 'brandPrice', 'priceMatch', 'priceDiff']) expect(source, id).toMatch(new RegExp(`\\b${id}: \\{ grain: 'price'`))
+  })
+
+  it('as Sales worker / as Production manager: no column, no Customise entry, no export column (the money wall)', async () => {
+    const { preferenceColumnsOf, toolColumnsOf } = await import('../../../../list-frame/tools/model')
+    for (const can of [SALES_WORKER, manager]) {
+      const cols = await colsFor(can)
+      expect(cols).toEqual([])
+      expect(preferenceColumnsOf(toolColumnsOf(frame(cols) as ColDef<unknown>[])).some((spec) => spec.group === 'Price check')).toBe(false)
+      expect(exportColumnsOf(frame(cols) as ColDef<unknown>[]).map((column) => column.key)).toEqual(['number', 'status'])
+    }
+    // A saved layout that names them (a view shared by the Owner) shows nothing to them: the column does not exist.
+    const { applyLayout } = await import('../../../../list-frame/tools/model')
+    const laid = applyLayout(frame(await colsFor(SALES_WORKER)), { order: ['number', 'ourPrice', 'brandPrice', 'priceMatch', 'priceDiff'], hidden: [], pinned: [] })
+    expect(laid.map((column) => column.colId)).toEqual(['number', 'status', 'more'])
+  })
+
+  it('the row: the four fields parse for a price holder; a reader without the grain gets none (absent, never zero, never Equal)', async () => {
+    const { orderRowSchema } = await import('../api')
+    const priced = orderRowSchema.parse({ ...row(0), brandPrice: 618000, priceMatch: 'NOT_EQUAL', priceDiff: 6000, priceNotEqualLines: 2 })
+    expect(priced).toMatchObject({ brandPrice: 618000, priceMatch: 'NOT_EQUAL', priceDiff: 6000, priceNotEqualLines: 2 })
+    expect(orderRowSchema.parse({ ...row(0), brandPrice: null, priceMatch: 'NO_BRAND_PRICE', priceDiff: null }).priceMatch).toBe('NO_BRAND_PRICE')
+    const plain = orderRowSchema.parse(row(0))
+    for (const key of ['brandPrice', 'priceMatch', 'priceDiff', 'priceNotEqualLines'] as const) expect(plain[key], key).toBeUndefined()
+    // The design data follows the API's wall: a no-price role's rows lose the fields.
+    const seen = forRole({ ...row(0), brandPrice: 618000, priceMatch: 'NOT_EQUAL' as const, priceDiff: 6000, priceNotEqualLines: 2 }, 'manager')
+    for (const key of ['brandPrice', 'priceMatch', 'priceDiff', 'priceNotEqualLines', 'netAmount'] as const) expect(seen[key], key).toBeUndefined()
+  })
+
+  it('the sheet builds them from the ONE spec inside its later columns (with the price grain), its phone card hides them', () => {
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('priceCheckColDefs(can, s, priceCells, (id, row) => priceCheckText(id, row, t, locale)).map(later)')
+    expect(view).toContain('...priceColumns, // F-CP-140')
+    expect(view).toContain("/* F-CP-140 */ ...PRICE_CHECK_IDS].map((id) => [id, { role: 'hidden' as const }])")
+    // Our price is the Net (the row's netAmount: one figure, two names).
+    expect(view).toContain('ourPrice: NetCell')
+    const spec = readFileSync(new URL('./price-check-columns.ts', import.meta.url), 'utf8')
+    expect(spec).toContain("return can.price ? PRICE_CHECK_COLUMNS : []")
+  })
+
+  it('the design cases: the Owner sees the four; as Sales worker and as Production manager the same layout shows none', async () => {
+    const { designScreen } = await import('./fixtures')
+    const ids = designScreen.cases.map((entry) => entry.id)
+    for (const id of ['cp-140-price-check', 'cp-140-sales-worker', 'cp-140-manager']) expect(ids, id).toContain(id)
+    const sales = designScreen.cases.find((entry) => entry.id === 'cp-140-sales-worker')!.model
+    expect(sales.list.can.price).toBe(false)
+    expect((sales.list.list.items ?? []).every((entry) => entry.priceMatch === undefined && entry.brandPrice === undefined)).toBe(true)
+    const owner = designScreen.cases.find((entry) => entry.id === 'cp-140-price-check')!.model
+    expect(new Set((owner.list.list.items ?? []).map((entry) => entry.priceMatch))).toEqual(new Set(['NOT_EQUAL', 'EQUAL', 'NO_BRAND_PRICE']))
+  })
+
+  it('the words in both languages (no key left)', () => {
+    for (const locale of LOCALES) {
+      const t = tFor(locale)
+      for (const key of ['col.ourPrice', 'col.ourPriceHint', 'col.brandPrice', 'col.brandPriceHint', 'col.priceMatch', 'col.priceMatchHint', 'col.priceDiff', 'col.priceDiffHint']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+    expect(tFor('it')('col.brandPrice')).toBe('Prezzo del cliente')
+    expect(tFor('it')('col.priceMatch')).toBe('Verifica prezzi')
+  })
+})
+// ---- end F-CP-140

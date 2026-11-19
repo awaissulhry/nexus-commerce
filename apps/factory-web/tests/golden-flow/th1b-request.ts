@@ -3,7 +3,7 @@ import { BRAND_ALPHA, BRAND_BETA, type BrandFixture } from '../../src/lib/testin
 import { expectNothingOf, pageWords } from './_harness/brand-scan'
 import { seen, type Flow } from './_harness/flow'
 import { defineStage } from './_harness/stages'
-import { setUpBrand, signInToPortal, type PortalDesk } from './_harness/two-brands'
+import { ensureBrand, signInToPortal, type PortalDesk } from './_harness/two-brands'
 import { words } from './_harness/words'
 
 /**
@@ -56,6 +56,9 @@ function wantedDay(): { iso: string; label: RegExp } {
 async function sendRequest(desk: PortalDesk, input: { subject: string; message: string; customerRef: string; wanted?: boolean }): Promise<{ seq: number; id: string }> {
   const { page } = desk
   await desk.go('/orders/new')
+  // F-CP-152 (customer page PW1, #1728): New order opens on the draft order's start; the request like an e-mail is behind
+  // "Just write it in words".
+  await page.getByRole('link', { name: ORDERING('draftPage.start.words'), exact: true }).click()
   await page.getByLabel(COMPOSE('subject.label'), { exact: true }).fill(input.subject)
   // The message is required: its label carries a mark (the field's accessible name is the label alone).
   await page.getByRole('textbox', { name: COMPOSE('message.label'), exact: true }).fill(input.message)
@@ -94,8 +97,10 @@ export default defineStage({
     const run = {} as Run
 
     await flow.step('the sales office makes P1 Brand Alpha and P3 Brand Beta, each with its portal and its buyer', async () => {
-      await setUpBrand(flow, sales, BRAND_ALPHA, alphaId)
-      await setUpBrand(flow, sales, BRAND_BETA, betaId)
+      // op-fx4: made once per run (ensureBrand, as th4 / th5 do): th8-dock and th9-order-page, earlier in the run, already made P1
+      // Brand Alpha and P3 Brand Beta — a second set-up was refused (the contact's address is already the party's).
+      await ensureBrand(flow, sales, BRAND_ALPHA, alphaId)
+      await ensureBrand(flow, sales, BRAND_BETA, betaId)
       await flow.settle()
     })
 

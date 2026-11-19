@@ -35,7 +35,7 @@ import { acceptRequest, listOfficeRequests, officeRequestView } from './office'
  *   - made to measure switched off for the customer: no new made-to-measure line, an existing one holds the send in its words;
  *   - a line taken out takes its roster; a discarded draft takes all of its people;
  *   - the office reads the roster, the parts sent later and who saved it; a sheet is named only with sales.measurements.view; an
- *     accept stays held while a described or made-to-measure line is on the request (B-CP-077 maps it);
+ *     accept stays held while a described or made-to-measure line is not mapped (B-CP-077: accept-kinds.pg maps it);
  *   - W-CP-1: customer B adds, changes, removes or reads nobody of A's; M-CP-2: the Designer's answers carry no price;
  *   - the party's privacy export lists the roster names (the erasure keeps them: CUSTOMER), never another customer's.
  * Every name and figure is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/sales/portal-ordering/people`.
@@ -307,8 +307,11 @@ describe('B-CP-075: every kind of draft line and the people on it', { timeout: S
     expect(JSON.stringify(locked)).not.toContain('made-up-office-measures.pdf')
     const open = await officeRequestView(officeWith(['orders.view', 'threads.read', 'files.read', 'sales.measurements.view']), sentDraft.id)
     expect(open.request.customLines[0]!.people[0]!.sheet).toEqual({ id: sheet.id, originalName: 'made-up-office-measures.pdf', locked: false })
-    // Accept stays held while a described or made-to-measure line is on the request (B-CP-077 maps it first).
-    await expect(acceptRequest(officeWith(['orders.view', 'orders.manage', 'quotes.manage', 'money.price']), sentDraft.id, { version: sent.request.version, as: 'ORDER' })).rejects.toThrow(/described or made to measure/)
+    // Accept stays held while a described or made-to-measure line is not mapped (B-CP-077: map it first); a made-to-measure line is
+    // never an order while made-to-measure has not started (a quote first). accept-kinds.pg holds the rest.
+    const decider = officeWith(['orders.view', 'orders.manage', 'quotes.manage', 'money.price'])
+    await expect(acceptRequest(decider, sentDraft.id, { version: sent.request.version, as: 'QUOTE' })).rejects.toThrow(/described or made to measure/)
+    await expect(acceptRequest(decider, sentDraft.id, { version: sent.request.version, as: 'ORDER' })).rejects.toThrow(/made to measure: accept the request as a quote/)
   })
 
   it('a line taken out takes its roster; a discarded draft takes all of its people (personal data)', async () => {

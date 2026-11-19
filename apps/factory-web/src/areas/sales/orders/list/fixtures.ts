@@ -171,6 +171,18 @@ function sheet(role: Role, over: Partial<OrdersListModel> = {}): ListCase {
 }
 // ── end B-TH-225 / B-TH-226 ──
 
+// ── F-CP-140: made-up price checks (ours = the row's Net; the customer's typed from its PO or the portal) ──
+/** The Sales role after the money wall (B-CP-011): no price grain. */
+const SALES_WORKER = { ...canOf('sales'), price: false }
+const PRICE_LAYOUT = ['picture', 'number', 'customer', 'status', 'ourPrice', 'brandPrice', 'priceMatch', 'priceDiff']
+const PRICED_ROWS = OPEN_ROWS.map((entry, index) => {
+  const net = entry.netAmount ?? 0
+  if (index % 3 === 0) return { ...entry, brandPrice: net - 6000, priceMatch: 'NOT_EQUAL' as const, priceDiff: 6000, priceNotEqualLines: 2 }
+  if (index % 3 === 1) return { ...entry, brandPrice: net, priceMatch: 'EQUAL' as const, priceDiff: 0, priceNotEqualLines: 0 }
+  return { ...entry, brandPrice: null, priceMatch: 'NO_BRAND_PRICE' as const, priceDiff: null, priceNotEqualLines: 0 }
+})
+// ── end F-CP-140 ──
+
 export const designScreen = defineDesignScreen<ListCase>({
   screen: 'SCR-038',
   title: 'Orders (Sales): list and board by state',
@@ -304,6 +316,13 @@ export const designScreen = defineDesignScreen<ListCase>({
     },
     { id: 'th4-cells-manager', label: 'TH-4 · Production manager · Every cell reads only (no right to change orders: said on Edit N)', model: { ...sheet('manager', { selected: OPEN_ROWS.slice(0, 1).map((entry) => entry.id) }), tools: tools({ layout: { columns: { order: ['picture', 'number', 'customer', 'status', 'note'], hidden: [], pinned: [] } } }) } },
     // ── end B-TH-245 ──
+    // ── F-CP-140 (customer page plan C2d; design 11-money §3.1): the price check columns — opt-in in Customise under "Price check"; a
+    // layout shows them here. The same layout as Sales worker (the Sales role without the price grain) and as Production manager: no
+    // money column at all (no Customise entry, nothing in the file), the rows carry no price field. ──
+    { id: 'cp-140-price-check', label: 'CP · Owner · The price check: Our price, Customer\'s price, Price check (Equal · Not equal · 2 lines · — No customer price yet), Difference', model: { ...sheet('owner', { list: { items: rowsFor('owner', PRICED_ROWS), more: false, problem: null } }), tools: tools({ layout: { columns: { order: PRICE_LAYOUT, hidden: [], pinned: [] } } }) }, note: 'Customise ▸ the heading "Price check" holds the four; none is shown until a view or Customise shows it. Export writes them by their ids.' },
+    { id: 'cp-140-sales-worker', label: 'CP · As Sales worker (no price grain): the same layout, no money column; Customise has no "Price check"', model: { ...sheet('sales', { can: SALES_WORKER, list: { items: forRole(PRICED_ROWS, 'manager'), more: false, problem: null } }), tools: tools({ layout: { columns: { order: PRICE_LAYOUT, hidden: [], pinned: [] } } }) } },
+    { id: 'cp-140-manager', label: 'CP · As Production manager: the same layout, no money column, no price check', model: { ...sheet('manager', { list: { items: rowsFor('manager', PRICED_ROWS), more: false, problem: null } }), tools: tools({ layout: { columns: { order: PRICE_LAYOUT, hidden: [], pinned: [] } } }) } },
+    // ── end F-CP-140 ──
   ],
 })
 

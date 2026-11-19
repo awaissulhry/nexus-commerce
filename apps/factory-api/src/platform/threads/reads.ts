@@ -15,8 +15,11 @@ import { THREAD_PLACES, threadPlaceOf } from './records'
 import { officeRecord } from './threads'
 // B-CP-071 residual (customer page lead addition 5): a portal person counts only the records its portal opens.
 import type { FastifyRequest } from 'fastify'
-import { kindsOfSession, partnerCallerOf, partnerReaderOf } from '../search/partner/session'
 import { partnerViewOf, viewFits } from '../search/partner/views'
+// B-CP-071 residual, end-check fix: the kinds and the reader from the request's own partner context (no portal session needed).
+import { isPartnerKind, partnerKindsOf, type PartnerKind } from '@nexus/factory-domain/auth/partners/kinds'
+import { officeAuthOf } from '../auth/sessions/office-auth'
+import type { PartnerReader } from '../search/partner/view'
 
 /**
  * B-TH-027 (threads plan TH-2, G10; design T1-F04 "2 new", T4-F04 "New since your last visit", PL3-F08, the lists' "New
@@ -133,13 +136,29 @@ const THREAD_SCOPE = { id: true, companyId: true, siteId: true, partyId: true, r
 // party's people who keep drafts). Its party's row-level security lets every colleague read the thread row; without this a Viewer
 // read a 0/N count for a draft it cannot open. Such a record is left out exactly like an unknown id: no count, no hint (and, asked,
 // readable false). The partner callers of this read are portal requests (POST /threads/unread, GET /portal/threads).
+//
+// End-check fix (B-OP-061's contract, T08): the read asks nothing of the portal session (a partner context is enough: the person and
+// their party, as every other step of this read). Its kinds are the session's own rule (search/partner/session kindsOfSession): the
+// person's partner kind on their User row (read in the partner scope, their own party's row), else — an office preview of the
+// portal — every kind the party's roles fit. The reader's tenant read is resolved only when a view uses it.
 type ThreadScope = Prisma.ThreadGetPayload<{ select: typeof THREAD_SCOPE }>
+async function partnerKindsOfContext(client: FactoryClient, context: { readonly actorId: string; readonly partyId: string }): Promise<PartnerKind[]> {
+  const kind = (await client.user.findUnique({ where: { id: context.actorId }, select: { partnerKind: true } }))?.partnerKind
+  if (isPartnerKind(kind)) return [kind]
+  const party = await client.party.findUnique({ where: { id: context.partyId }, select: { roles: true } })
+  return party ? partnerKindsOf(party.roles) : []
+}
 async function openedByPartner(caller: CommandCaller, client: FactoryClient, threads: readonly ThreadScope[]): Promise<ThreadScope[]> {
   if (threads.length === 0) return []
+  const context = contextOf(caller)
+  if (context.audience !== 'partner') return []
   const request = caller as unknown as FastifyRequest
-  const partner = partnerCallerOf(request)
-  const kinds = await kindsOfSession(client, partner)
-  const reader = partnerReaderOf(request, partner)
+  const kinds = await partnerKindsOfContext(client, context)
+  const reader: PartnerReader = {
+    userId: context.actorId,
+    actor: actorOf(context),
+    inTenant: (work) => officeAuthOf(request.server).inTenant(context.tenantId, context.actorId, work),
+  }
   const opened = new Set<string>()
   for (const type of new Set(threads.map((thread) => thread.recordType))) {
     const view = partnerViewOf(type)
