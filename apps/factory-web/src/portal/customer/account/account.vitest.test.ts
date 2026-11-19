@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { PARTNER_ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
-import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
+import { CATALOGUE, createTranslator, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
 import type { Handover } from '../../shared/account/api'
 import { ApiError } from '../../../lib/api/errors'
@@ -13,6 +13,10 @@ import { colleagueHeld, colleagueRows, deviceOf, handoverSummary, inviteProblems
 import type { DeliveryAddress } from './api'
 import { designScreen } from './fixtures'
 import { addressBody, addressLine, addressProblems, addressRows, addressState, companyRows, defaultHeld, EMPTY_ADDRESS, profileBody, profileChanges, profileProblem, removeHeld } from './model'
+// F-CP-153: "Your team".
+import type { ApiClient } from '../../../lib/api/client'
+import { addProjectPerson, giveAccessBack, pauseAccess, resendInvitation, revokeInvitation } from '../../shared/account/api'
+import { BULK_ACTS, bulkPreview, CUSTOMER_ACTS, projectsByPerson, seatsFullOf, TEAM_ACTS, teamActHeld, versionOf, type TeamFacts } from '../../shared/account/model'
 
 /**
  * The customer's Account page (B-W2b-196, SCR-188): the pure rules of each section, the words of every role the invite offers,
@@ -197,7 +201,7 @@ describe('the page’s words', () => {
   })
 })
 
-const KEY = /\b(state|status|keys|unsaved|receipt|failed|held|profile|emails|users|role|invite|roleDialog|raise|deactivate|addresses|address|remove|company|security|endOthers|stepUp|dialog|closed)\.[a-zA-Z_-]+/
+const KEY = /\b(team|state|status|keys|unsaved|receipt|failed|held|profile|emails|users|role|invite|roleDialog|raise|deactivate|addresses|address|remove|company|security|endOthers|stepUp|dialog|closed)\.[a-zA-Z_-]+/
 
 describe('SCR-188 design cases', () => {
   it('every case draws in Italian and English with no raw key and made-up data only', () => {
@@ -221,3 +225,109 @@ describe('SCR-188 design cases', () => {
     expect(html).not.toContain('My profile')
   })
 })
+
+// ---- F-CP-153 (customer page plan C6, D13; review G2, F4): "Your team" ------------------------------------------------------------
+describe('F-CP-153 — Your team: acts by role and status, seats, the bulk preview, the version sent, the supplier portal held', () => {
+  const CUSTOMER: TeamFacts = { customer: true, seatsFull: false, projects: 2, readOnly: false }
+  const row = (status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' | 'DEACTIVATED', over: Partial<{ id: string; name: string; you: boolean }> = {}) => ({ id: over.id ?? `u-${status}`, name: over.name ?? status, you: over.you ?? false, status })
+  const held = (status: Parameters<typeof row>[0], facts: TeamFacts = CUSTOMER) => Object.fromEntries(TEAM_ACTS.map((act) => [act, teamActHeld(act, row(status), facts)]))
+
+  it('acts by status: invited → send again / withdraw; active → pause / add to a project; paused → give back; never one’s own row', () => {
+    expect([...TEAM_ACTS]).toEqual(['role', 'resend', 'revoke', 'pause', 'giveBack', 'addToProject', 'deactivate'])
+    expect([...BULK_ACTS]).toEqual(['pause', 'giveBack', 'addToProject', 'deactivate'])
+    expect(held('INVITED')).toEqual({ role: null, resend: null, revoke: null, pause: 'team.held.notActive', giveBack: 'team.held.notPaused', addToProject: 'team.held.notActive', deactivate: null })
+    expect(held('ACTIVE')).toEqual({ role: null, resend: 'team.held.notInvited', revoke: 'team.held.notInvited', pause: null, giveBack: 'team.held.notPaused', addToProject: null, deactivate: null })
+    expect(held('SUSPENDED')).toMatchObject({ pause: 'team.held.notActive', giveBack: null, addToProject: 'team.held.notActive' })
+    expect(held('DEACTIVATED')).toMatchObject({ role: 'held.deactivated', deactivate: 'held.deactivated', giveBack: 'team.held.notPaused' })
+    for (const act of TEAM_ACTS) {
+      expect(teamActHeld(act, row('ACTIVE', { you: true }), CUSTOMER), act).toBe('held.yourself')
+      expect(teamActHeld(act, row('ACTIVE'), { ...CUSTOMER, readOnly: true }), act).toBe('held.preview')
+    }
+    // No project of the admin's own: nothing to add a colleague to.
+    expect(teamActHeld('addToProject', row('ACTIVE'), { ...CUSTOMER, projects: 0 })).toBe('team.held.noProjects')
+  })
+
+  it('seats full: Give access back is held with the seats’ words (it, en)', () => {
+    expect(seatsFullOf({ taken: 8, max: 8 })).toBe(true)
+    expect(seatsFullOf({ taken: 7, max: 8 })).toBe(false)
+    expect(seatsFullOf({ taken: 30, max: null })).toBe(false)
+    expect(seatsFullOf(null)).toBe(false)
+    expect(teamActHeld('giveBack', row('SUSPENDED'), { ...CUSTOMER, seatsFull: true })).toBe('team.seatsFull')
+    expect(CATALOGUE.en['portal-account']?.['team.seatsFull']).toBe('All {max} places are taken: deactivate someone or ask us for more places.')
+    expect(CATALOGUE.it['portal-account']?.['team.seatsFull']).toBe('Tutti i {max} posti sono occupati: disattivate qualcuno o chiedeteci più posti.')
+  })
+
+  it('the bulk preview: who an act reaches and who it leaves out (with why), said before anything is sent', () => {
+    const rows = [row('ACTIVE', { id: 'a', name: 'Luca' }), row('SUSPENDED', { id: 'b', name: 'Marco' }), row('ACTIVE', { id: 'me', name: 'Anna', you: true }), row('INVITED', { id: 'c', name: 'Sara' })]
+    const pause = bulkPreview('pause', rows, CUSTOMER)
+    expect(pause.apply.map((entry) => entry.id)).toEqual(['a'])
+    expect(pause.skip.map((entry) => [entry.row.id, entry.why])).toEqual([['b', 'team.held.notActive'], ['me', 'held.yourself'], ['c', 'team.held.notActive']])
+    expect(bulkPreview('giveBack', rows, CUSTOMER).apply.map((entry) => entry.id)).toEqual(['b'])
+    expect(bulkPreview('giveBack', rows, { ...CUSTOMER, seatsFull: true }).skip.find((entry) => entry.row.id === 'b')?.why).toBe('team.seatsFull')
+    expect(bulkPreview('deactivate', rows, CUSTOMER).apply.map((entry) => entry.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('the supplier portal shares the one section: the customer’s acts show held with why — role and deactivate stay', () => {
+    const supplier: TeamFacts = { customer: false, seatsFull: false, projects: 0, readOnly: false }
+    expect([...CUSTOMER_ACTS]).toEqual(['resend', 'revoke', 'pause', 'giveBack', 'addToProject'])
+    for (const act of ['resend', 'revoke', 'pause', 'giveBack', 'addToProject'] as const) expect(teamActHeld(act, row(act === 'giveBack' ? 'SUSPENDED' : act === 'pause' || act === 'addToProject' ? 'ACTIVE' : 'INVITED'), supplier), act).toBe('team.held.customersOnly')
+    expect(teamActHeld('role', row('ACTIVE'), supplier)).toBeNull()
+    expect(teamActHeld('deactivate', row('ACTIVE'), supplier)).toBeNull()
+    for (const locale of ['it', 'en'] as const) expect(CATALOGUE[locale]['portal-account']?.['team.held.customersOnly'], locale).toBeTruthy()
+  })
+
+  it('W-CP-4 / review G2: every act sends the colleague’s version (and, for a project, the colleague’s id) — never a party', async () => {
+    const calls: { path: string; body: unknown }[] = []
+    const api = { post: async (path: string, options: { body?: unknown }) => {
+      calls.push({ path, body: options.body })
+      return path.includes('/projects/') ? { members: [], choices: [] } : path.endsWith('/invitation') ? { invitation: { id: 'i', userId: 'u1', email: 'x@example.com', expiresAt: '2026-11-26T00:00:00Z' }, delivery: 'sent' } : { id: 'u1', status: 'ACTIVE', version: 4, sessionsEnded: 0 }
+    } } as unknown as ApiClient
+    await resendInvitation(api, 'u1', 3)
+    await revokeInvitation(api, 'u1', 3)
+    await pauseAccess(api, 'u1', { version: 3 })
+    await giveAccessBack(api, 'u1', 4)
+    await addProjectPerson(api, 'p1', { userId: 'u1', version: 4 })
+    expect(calls.map((call) => call.path)).toEqual(['/portal/colleagues/u1/invitation', '/portal/colleagues/u1/invitation/revoke', '/portal/colleagues/u1/suspend', '/portal/colleagues/u1/reactivate', '/portal/projects/p1/people'])
+    expect(calls.map((call) => call.body)).toEqual([{ version: 3 }, { version: 3 }, { version: 3 }, { version: 4 }, { userId: 'u1', version: 4 }])
+    expect(JSON.stringify(calls)).not.toMatch(/party|company/i)
+    expect(versionOf({ people: [{ id: 'u1', version: 7 } as never] }, 'u1')).toBe(7)
+    expect(versionOf(null, 'u1')).toBeNull()
+  })
+
+  it('the Projects column names only the reader’s own projects each colleague is in', () => {
+    const byPerson = projectsByPerson([
+      { project: { id: 'p1', name: 'Rain line' }, members: [{ userId: 'u1' }, { userId: 'u2' }] },
+      { project: { id: 'p2', name: 'Kit 2027' }, members: [{ userId: 'u1' }] },
+    ])
+    expect(byPerson).toEqual({ u1: ['Kit 2027', 'Rain line'], u2: ['Rain line'] })
+    expect(projectsByPerson([])).toEqual({})
+  })
+
+  it('the team’s pop-ups draw in it and en: who is reached, who is left out and why, the step-up; Add to a project', () => {
+    for (const locale of ['it', 'en'] as const) {
+      for (const id of ['team-pause', 'team-resend', 'team-project', 'team-selected', 'team-seats-full']) {
+        const entry = designScreen.cases.find((item) => item.id === id)!
+        const html = renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(designScreen.view, { model: entry.model })))
+        expect(html, `${id} (${locale})`).not.toMatch(KEY)
+        expect(scanText(html, BRAND_BETA), `${id} (${locale})`).toEqual([])
+      }
+    }
+    const draw = (id: string) => renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell', 'portal']) }, createElement(designScreen.view, { model: designScreen.cases.find((item) => item.id === id)!.model })))
+    expect(draw('team-selected')).toContain('Your team')
+    // The pop-ups open in the browser only (the DS Modal draws after hydration): their words, from the catalogue.
+    for (const locale of ['it', 'en'] as const) {
+      const t = createTranslator(locale, CATALOGUE[locale]['portal-account'] ?? {})
+      for (const act of ['resend', 'revoke', 'pause', 'giveBack'] as const) {
+        for (const key of [`team.act.${act}`, `team.confirm.${act}.what`, `team.confirm.${act}.back`]) expect(t(key, { names: 'Luca Bianchi' }), `${key} ${locale}`).not.toMatch(/^team\.|\{/)
+        expect(t(`team.confirm.${act}.titleN`, { count: 2 }), `${act} ${locale}`).toContain('2')
+        expect(t(`team.receipt.${act}`, { names: 'Luca Bianchi', count: 1 }), `${act} ${locale}`).toContain('Luca Bianchi')
+      }
+    }
+    const en = createTranslator('en', CATALOGUE.en['portal-account'] ?? {})
+    expect(en('team.confirm.pause.titleN', { count: 2 })).toBe('Pause the access of 2 colleagues?')
+    expect(en('team.skipped', { name: 'Marco Prova', why: en('team.held.notActive') })).toBe('Left out — Marco Prova: Only for an active colleague.')
+    expect(en('team.project.told')).toBe('Each one is told once, in their portal.')
+  })
+})
+// ---- end F-CP-153
+

@@ -329,7 +329,7 @@
     "newOrderHint": "Write what you need, like an e-mail.",
     "ask": "Ask a question",
     "askHint": "A question for us that is not about one order.",
-    "draft": "Draft: {subject}",
+    "draft": "Message not sent yet: {subject}",
     "draftKept": "kept on this device · {time}",
     "draftSaved": "saved {time}",
     "continue": "Continue",
@@ -339,5 +339,16 @@
   },
   "waiting": {
     "all": "All {count} waiting"
+  },
+  "draftOrders": {
+    "newOrderHint": "Start a draft order with your colleagues; it goes to the factory when you send it.",
+    "title_one": "Draft orders ({count})",
+    "title_other": "Draft orders ({count})",
+    "untitled": "Untitled draft",
+    "facts_one": "{count} line · changed {day}",
+    "facts_other": "{count} lines · changed {day}",
+    "continueOne": "Continue {title}",
+    "all_one": "All {count} draft orders",
+    "all_other": "All {count} draft orders"
   }
 }

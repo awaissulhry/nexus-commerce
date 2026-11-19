@@ -114,6 +114,12 @@ function colleaguesOf(locale: Locale, people: readonly Colleague[], admin: boole
     seats: answer.seats,
     selected,
     readOnly: false,
+    // ---- F-CP-153: a customer's admin — its further acts, the seats, the Projects column (the reader's own projects only).
+    customer: true,
+    seatsFull: false,
+    projectCount: admin ? 2 : 0,
+    projects: admin ? { [ME]: ['Kit 2027', 'Rain line'], [id(2)]: ['Kit 2027'], [id(3)]: [] } : null,
+    // ---- end F-CP-153
   }
 }
 
@@ -332,6 +338,23 @@ export const designScreen = defineDesignScreen<AccountCaseBuilder>({
     { id: 'remove', label: 'Pop-up: Remove addresses', model: dialogCase(() => ({ kind: 'remove', lines: ['Negozio Firenze — Piazza Esempio 3, 50100 Firenze (FI), IT'], busy: false, failed: null })) },
     { id: 'end-others', label: 'Pop-up: Sign out the others', model: dialogCase(() => ({ kind: 'endOthers', count: 2, busy: false, failed: null })) },
     { id: 'step-up', label: 'Pop-up: Confirm it’s you (code by e-mail)', model: dialogCase(() => ({ kind: 'stepUp', to: 'a…a@brand-alpha.example', busy: false, error: null })), note: 'Asked before an admin act when the session has no fresh code (5 minutes).' },
+    // ---- F-CP-153 (customer page plan C6, D13): "Your team" — the admin's further acts, seats full, the bulk preview, Add to a project.
+    { id: 'team-selected', label: 'Your team: three chosen — Pause · Give access back · Add to a project · Deactivate', model: admin((locale) => page(locale, { colleagues: colleaguesOf(locale, PEOPLE, true, [id(2), id(4), id(5)]) })), note: 'Each bulk act says who it leaves out (and why) before anything is sent; every act sends the row’s version (a change meanwhile: read again).' },
+    { id: 'team-seats-full', label: 'Your team: every place taken — Give access back held with words', model: admin((locale) => page(locale, { colleagues: { ...colleaguesOf(locale, PEOPLE, true), seats: { taken: 8, max: 8 }, seatsFull: true } })), note: '“All 8 places are taken: deactivate someone or ask us for more places.” on the paused colleague’s ⋯.' },
+    {
+      id: 'team-pause',
+      label: 'Pop-up: Pause the access of 2 colleagues (one left out, with why)',
+      model: dialogCase((locale) => ({ kind: 'team', act: 'pause', people: [{ id: id(2), name: 'Luca Bianchi' }, { id: id(3), name: 'Giulia Finta' }], skipped: [{ name: 'Marco Prova', why: words(locale)('team.held.notActive') }], busy: false, failed: null })),
+      note: 'Their sessions end at once; the place stays theirs. The code by e-mail first.',
+    },
+    { id: 'team-resend', label: 'Pop-up: Send the invitation again', model: dialogCase(() => ({ kind: 'team', act: 'resend', people: [{ id: id(5), name: 'Sara Campione' }], skipped: [], busy: false, failed: null })) },
+    {
+      id: 'team-project',
+      label: 'Pop-up: Add to a project (its own projects, its own colleagues)',
+      model: dialogCase(() => ({ kind: 'project', people: [{ id: id(2), name: 'Luca Bianchi' }], skipped: [], projects: [{ id: id(900), name: 'Kit 2027' }, { id: id(901), name: 'Rain line' }], choice: id(900), busy: false, failed: null })),
+      note: 'Only the projects the admin is in; each one added is told once, in their portal.',
+    },
+    // ---- end F-CP-153
     { id: 'step-up-wrong', label: 'Pop-up: a wrong code', model: dialogCase((locale) => ({ kind: 'stepUp', to: 'a…a@brand-alpha.example', busy: false, error: words(locale)('stepUp.wrong') })) },
   ],
 })

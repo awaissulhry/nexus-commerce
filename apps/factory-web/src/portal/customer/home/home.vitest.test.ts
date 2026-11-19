@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { messagesFor } from '../../../lib/i18n/messages'
+import { CATALOGUE, createTranslator } from '../../../lib/i18n/messages' // F-CP-152
 import { I18nProvider } from '../../../lib/i18n/provider'
 import type { ApprovalRead, DocumentsRead, HomeRead, OrdersRead } from './api'
 import { homeBandOf } from './band'
@@ -22,6 +23,8 @@ import { BETA_PROJECTS } from '../projects/design-data'
 import { messagesCardOf, messagesCountsOf, messagesEmpty } from './model'
 // F-PR-15: What waits for you's first five, My production's tile, topic PRODUCTION.
 import { firstWaiting, HOME_WAITING_SHOWN, productionHintOf } from './model'
+// F-CP-152: the draft orders on the Start card.
+import { draftOrdersOf } from './model'
 import { fetchHome } from './api'
 import { emailTopicNoteKey, backOnFrequency } from '../../shell/model'
 import { isTransactional, PARTNER_EMAIL_TOPICS, TOPIC_WORDS } from '@nexus/factory-domain/portal/notifications/topics'
@@ -326,10 +329,10 @@ describe('B-TH-223 — Start: New order like an e-mail, or a question', () => {
     expect(view({ newOrderHref: null, buyer: false, admins: [], draft: null })).toContain('Ask us to add a buyer for your company.')
   })
 
-  it('a draft kept on this device: "Draft: … · Continue"; Brand Beta’s Home holds nothing of Brand Alpha', () => {
+  it('a message kept on this device: "Message not sent yet: … · Continue" (F-CP-152); Brand Beta’s Home holds nothing of Brand Alpha', () => {
     for (const locale of ['it', 'en'] as const) {
       const html = view({ newOrderHref: '/p/BRAND-BETA/orders/new', buyer: true, admins: [BRAND_BETA.portalPerson.name], draft: { subject: BRAND_BETA.customerRef, at: '10:42' } }, locale)
-      expect(html).toContain(locale === 'en' ? `Draft: ${BRAND_BETA.customerRef}` : `Bozza: ${BRAND_BETA.customerRef}`)
+      expect(html).toContain(locale === 'en' ? `Message not sent yet: ${BRAND_BETA.customerRef}` : `Messaggio non ancora inviato: ${BRAND_BETA.customerRef}`)
       expect(html).toContain(locale === 'en' ? 'Continue' : 'Continua')
       expect(html).not.toMatch(KEY)
       expect(scanText(html, BRAND_ALPHA)).toEqual([])
@@ -529,7 +532,7 @@ describe('B-TH-287 — Home: "Draft: … · saved 10:42 · Continue" from the se
   })
 
   it('no right to order, or a preview (no New order address): no draft line at all', () => {
-    expect(draw({ newOrderHref: null, buyer: false, admins: [], draft: { subject: 'x', at: '10:42', where: 'server' } })).not.toContain('Draft:')
+    expect(draw({ newOrderHref: null, buyer: false, admins: [], draft: { subject: 'x', at: '10:42', where: 'server' } })).not.toContain('Message not sent yet:')
   })
 
   it('the design case draws in Italian and English with no raw key', () => {
@@ -675,3 +678,65 @@ describe('F-PR-15 — Home: the first five of What waits for you and "All N wait
   })
 })
 // ---- end F-PR-15
+
+// ---- F-CP-152 (customer page plan C5, 12 §2 Doors): Home's Start card — New order for who keeps drafts, the draft orders --------
+describe('F-CP-152 — Home: New order opens the draft order; "Draft orders (n) — Continue"; door A’s "Message not sent yet"', () => {
+  const DRAFT_KEY = /\bdraftOrders\.[a-zA-Z_-]+/
+  const draw = (start: StartModel, locale: 'it' | 'en' = 'en') => {
+    const model = { prefix: '/p/BRAND-BETA', search: null, welcome: null, tiles: null, orders: null, documents: null, messages: null, approve: null, document: null, start } as CustomerHomeViewModel
+    return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['portal-customer-home', 'ds-words']) }, createElement(CustomerHomeView, { model, tasks: null })))
+  }
+  const t = (key: string, params?: Readonly<Record<string, string | number>>) => `${key}${params ? JSON.stringify(params) : ''}`
+  const rows = [
+    { id: 'd1', customerRef: 'BETA-PO-1', lines: 2, updatedAt: '2026-11-18T09:00:00Z' },
+    { id: 'd2', customerRef: null, lines: 1, updatedAt: '2026-11-19T09:00:00Z' },
+    { id: 'd3', customerRef: 'BETA-PO-3', lines: 5, updatedAt: '2026-11-17T09:00:00Z' },
+    { id: 'd4', customerRef: 'BETA-PO-4', lines: 3, updatedAt: '2026-11-10T09:00:00Z' },
+  ]
+
+  it('the draft orders: the newest three of the party’s, how many there are, each continuing its own draft', () => {
+    const drafts = draftOrdersOf(rows, '/p/BRAND-BETA', t, (iso) => iso.slice(0, 10))
+    expect(drafts.count).toBe(4)
+    expect(drafts.items.map((row) => row.id)).toEqual(['d2', 'd1', 'd3'])
+    expect(drafts.items[0]).toEqual({ id: 'd2', href: '/p/BRAND-BETA/orders/new?draft=d2', title: 'draftOrders.untitled', facts: 'draftOrders.facts{"count":1,"day":"2026-11-19"}' })
+    expect(drafts.items[1]!.title).toBe('BETA-PO-1')
+    expect(draftOrdersOf([], '/p/X', t, String)).toEqual({ count: 0, items: [] })
+  })
+
+  it('a brand Designer (drafts, no ordering): New order opens the draft order — never the "only the buyers" note', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const html = draw({ newOrderHref: '/p/BRAND-BETA/orders/new', buyer: false, mayDraft: true, admins: [BRAND_BETA.portalPerson.name], draft: null }, locale)
+      expect(html).toMatch(/<a class="fw-pch-door is-primary" href="\/p\/BRAND-BETA\/orders\/new">/)
+      expect(html).toContain(locale === 'en' ? 'Start a draft order with your colleagues' : 'Iniziate una bozza d&#x27;ordine')
+      expect(html).not.toContain(locale === 'en' ? 'Only the buyers of your company send orders.' : 'Solo i buyer della vostra azienda inviano ordini.')
+    }
+  })
+
+  it('"Draft orders (4)": three rows, each Continue to its draft, and "All 4 draft orders" to New order (it, en); Brand Beta only', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const words = createTranslator(locale, CATALOGUE[locale]['portal-customer-home'] ?? {})
+      const html = draw({ newOrderHref: '/p/BRAND-BETA/orders/new', buyer: true, mayDraft: true, admins: [], draft: null, draftOrders: draftOrdersOf(rows, '/p/BRAND-BETA', words, (iso) => iso.slice(0, 10)) }, locale)
+      expect(html).not.toMatch(DRAFT_KEY)
+      expect(html).toContain(locale === 'en' ? 'Untitled draft' : 'Bozza senza titolo')
+      expect(html).toContain(locale === 'en' ? 'Draft orders (4)' : 'Bozze d&#x27;ordine (4)')
+      for (const id of ['d2', 'd1', 'd3']) expect(html).toContain(`href="/p/BRAND-BETA/orders/new?draft=${id}"`)
+      expect(html).not.toContain('?draft=d4')
+      expect(html).toContain(locale === 'en' ? 'All 4 draft orders' : 'Tutte le 4 bozze d&#x27;ordine')
+      expect(scanText(html, BRAND_ALPHA)).toEqual([])
+    }
+    // No drafts: no list at all.
+    expect(draw({ newOrderHref: '/p/BRAND-BETA/orders/new', buyer: true, mayDraft: true, admins: [], draft: null, draftOrders: { count: 0, items: [] } })).not.toContain('Draft orders')
+  })
+
+  it('door A’s unsent message: "Message not sent yet: …" continues on the request like an e-mail (?way=words)', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const html = draw({ newOrderHref: '/p/BRAND-BETA/orders/new', buyer: true, mayDraft: true, admins: [], draft: { subject: BRAND_BETA.customerRef, at: '10:42', where: 'server' }, wordsHref: '/p/BRAND-BETA/orders/new?way=words' }, locale)
+      expect(html).toContain(locale === 'en' ? `Message not sent yet: ${BRAND_BETA.customerRef}` : `Messaggio non ancora inviato: ${BRAND_BETA.customerRef}`)
+      expect(html).toMatch(/href="\/p\/BRAND-BETA\/orders\/new\?way=words"[^>]*>[^<]*(Continue|Continua)/)
+      expect(html).not.toMatch(KEY)
+      expect(html).not.toMatch(DRAFT_KEY)
+    }
+  })
+})
+// ---- end F-CP-152
+

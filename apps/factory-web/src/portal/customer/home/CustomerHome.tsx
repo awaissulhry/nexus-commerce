@@ -10,6 +10,11 @@ import { composeDraftKey, readKeptCompose, subjectUsed } from '../../../lib/requ
 // B-TH-287: the New order draft on the server (the newer of it and this device's copy).
 import { fromServerDraft, newerDraft } from '../../../lib/request-compose/server-draft'
 import { fetchNewRequestDraft } from '../neworder/api'
+// ---- F-CP-152 (customer page plan C5, 12 §2 Doors): the party's draft orders on the Start card; door A's line back to the words.
+import { fetchDrafts, type DraftRow } from '../neworder/api'
+import { wordsHref } from '../neworder/request-model'
+import { draftOrdersOf } from './model'
+// ---- end F-CP-152
 import { fetchRequests, type RequestList } from '../requests/api'
 // B-TH-238: the Messages card — the waiting requests' new messages (POST /threads/unread, the portal's own client).
 import { readUnreadWith } from '../../../lib/last-message-cell/api'
@@ -176,6 +181,22 @@ function HomeContainer() {
     }
   }, [api, asksServer, frame.me.user.id, frame.me.party.code, locale])
   // ---- end B-TH-287
+
+  // ---- F-CP-152: the party's draft orders (any colleague's; newest first) for who keeps drafts, outside a preview.
+  const mayDraft = can('portal.orderDrafts.edit')
+  const [draftRows, setDraftRows] = useState<DraftRow[] | null>(null)
+  useEffect(() => {
+    if (!mayDraft || frame.me.preview) return
+    let gone = false
+    fetchDrafts(api).then(
+      (rows) => !gone && setDraftRows(rows),
+      () => !gone && setDraftRows(null),
+    )
+    return () => {
+      gone = true
+    }
+  }, [api, mayDraft, frame.me.preview])
+  // ---- end F-CP-152
 
   const keep = <T,>(set: (update: (current: Async<T>) => Async<T>) => void) => () => set((current) => ({ state: current.value ? 'ready' : 'error', value: current.value }))
   const readHome = useCallback(() => {
@@ -479,7 +500,8 @@ function HomeContainer() {
   const counts = orderCounts(orders.value)
   const first = isFirstVisit({ tasks: tasks.model.state, openTasks, seesOrders, ordersAll: seesOrders ? (orders.state === 'ready' ? counts.all : null) : 0, newDocuments: seesDocuments ? (documents.value?.items.length ?? null) : 0, requestsAll })
   const buyer = can('portal.orderRequests.manage')
-  const newOrderHref = buyer && pageBuilt('orders.new') ? `${prefix}/orders/new` : null
+  // F-CP-152: New order for who may order and for who keeps drafts (the brand's Designer starts one there).
+  const newOrderHref = (buyer || mayDraft) && pageBuilt('orders.new') ? `${prefix}/orders/new` : null
   // B-TH-223: New order is the page's main button (not in a preview: nothing is sent from one).
   const tileDefs = tilesFor(built, can)
   const queue = approvalIds(tasks.model.groups)
@@ -497,7 +519,17 @@ function HomeContainer() {
         prefix,
         search: can('portal.search') ? { ...search, recent } : null,
         // B-TH-223
-        start: { newOrderHref: preview ? null : newOrderHref, buyer, admins, draft: buyer && !preview ? draft : null },
+        start: {
+          newOrderHref: preview ? null : newOrderHref,
+          buyer,
+          admins,
+          draft: buyer && !preview ? draft : null,
+          // ---- F-CP-152
+          mayDraft,
+          draftOrders: mayDraft && !preview && draftRows ? draftOrdersOf(draftRows, prefix, t, words.day) : null,
+          wordsHref: buyer ? wordsHref(prefix) : null,
+          // ---- end F-CP-152
+        },
         welcome: first
           ? {
               name: frame.me.user.displayName.split(' ')[0] ?? frame.me.user.displayName,

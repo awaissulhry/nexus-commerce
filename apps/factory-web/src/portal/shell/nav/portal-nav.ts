@@ -40,6 +40,11 @@ export interface PortalPageDef {
   kinds?: readonly PortalKind[]
   /** The page exists on main: until then it is hidden (the step that builds it sets this). */
   built: boolean
+  /**
+   * F-CP-152: a page that opens with any of these permissions (its `permission` is the first of them): New order opens for who
+   * keeps drafts (portal.orderDrafts.edit: the brand's Buyer and Designer) and for who may order (portal.orderRequests.manage).
+   */
+  anyOf?: readonly string[]
 }
 
 /** One area of the portal: a rail row, a bottom-bar slot, and — with two or more pages — the band's Pages button. */
@@ -99,9 +104,13 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     label: 'nav.orders',
     href: '/orders',
     icon: ShoppingBag,
-    permission: 'portal.salesOrders.view',
+    // F-CP-152 (customer page plan C5, 12 §2 Doors): the area is any of its pages (as Quotes & samples is) — the brand's Designer
+    // keeps New order only (its start lists the drafts); Orders & requests keeps portal.salesOrders.view.
+    permission: 'portal.home.view',
     kinds: ['CUSTOMER'],
     badge: 'orders',
+    // F-CP-152: the count is of orders and requests: it shows where Orders & requests does (a Designer's New order carries none).
+    badgePages: ['orders.list'],
     phone: 'tab',
     key: 'o',
     // B-W2b-191: the customer's Orders & tracking.
@@ -109,8 +118,9 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     pages: [
       // B-W2b-191: the customer's Orders & tracking (SCR-184). B-TH-223: "Orders & requests" (its requests beside its orders).
       { id: 'orders.list', label: 'nav.ordersRequests', href: '/orders', permission: 'portal.salesOrders.view', built: true },
-      // B-W2b-194: New order & reorder (SCR-185). B-TH-220: New order as an e-mail.
-      { id: 'orders.new', label: 'nav.newOrder', href: '/orders/new', permission: 'portal.orderRequests.manage', built: true },
+      // B-W2b-194: New order & reorder (SCR-185). B-TH-220: New order as an e-mail. F-CP-152: the draft order's start for who keeps
+      // drafts, the request like an e-mail for who may order.
+      { id: 'orders.new', label: 'nav.newOrder', href: '/orders/new', permission: 'portal.orderDrafts.edit', anyOf: ['portal.orderDrafts.edit', 'portal.orderRequests.manage'], built: true },
     ],
   },
   // ── F-PR-10 (production plan §5; 06-tree B.0; 09-design (d)) ──
@@ -261,9 +271,11 @@ const badgeLeads = (area: AreaNavArea, def: PortalAreaDef | undefined): AreaNavA
 
 /** The navigation this person may open, in rail order (fails closed; unbuilt pages hidden unless `everyPage`). */
 export function portalNavFor(access: PortalAccess, defs: readonly PortalAreaDef[] = PORTAL_AREAS): AreaNav {
+  // F-CP-152: a page that opens with any of several permissions asks the one the person holds (else its own: fails closed).
+  const held = (page: PortalPageDef): PortalPageDef => (page.anyOf ? { ...page, permission: page.anyOf.find((name) => access.can(name)) ?? page.permission } : page)
   const built = defs.flatMap((def): PortalAreaDef[] => {
-    if (access.everyPage) return [def]
-    const pages = def.pages?.filter((page) => page.built)
+    const pages = def.pages?.filter((page) => access.everyPage || page.built).map(held)
+    if (access.everyPage) return [pages ? { ...def, pages } : def]
     if (def.pages) return pages && pages.length > 0 ? [{ ...def, pages }] : []
     return def.built ? [def] : []
   })
@@ -312,7 +324,7 @@ export function recordPageOf(kinds: readonly PortalKind[], type: string, id: str
 
 /** Every permission the manifest names (the test checks each is declared, or pending). */
 export function portalNavPermissions(defs: readonly PortalAreaDef[] = PORTAL_AREAS): string[] {
-  return [...new Set(defs.flatMap((def) => [def.permission, ...(def.pages ?? []).map((page) => page.permission)]))]
+  return [...new Set(defs.flatMap((def) => [def.permission, ...(def.pages ?? []).flatMap((page) => [page.permission, ...(page.anyOf ?? [])])]))]
 }
 
 /** Every label key the manifest uses. */

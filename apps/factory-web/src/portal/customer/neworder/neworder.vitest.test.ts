@@ -11,6 +11,13 @@ import { designScreen as catalogueScreen } from '../catalogue/fixtures'
 import { pickerLineCount, pickerStyles } from './view/Dialogs'
 import { LIMITS, NOTICE_CODES, PROBLEM_CODES, SOURCES, STATUSES } from './api'
 import { ADDRESSES, catalogueRead, draftRecord, lineOf, pastOrder, styleDetail, STYLES } from './design-data'
+// F-CP-150: the draft order page.
+import { LINE_TROUSERS } from './design-data'
+import { closedOf, draftBannerOf, draftChips, draftDiscardHeld, draftFactsOf, draftSendHeld, draftStateOf, draftTitleOf, laterPartsOf, linesInOrder, mayOf, partTone, peopleLineWords, reorderHeldKey, savedWords, whoMayOrder } from './model'
+import { OrderingCase } from './view/OrderingCase'
+// F-CP-151: the draft's files.
+import { announceDraftFile, completeDraftFile, removeDraftFile } from './api'
+import { DRAFT_FILES_MAX, draftFileCount, draftMailName, fileHeldKey, fileKindOf, fileWhereWords, filesAddHeld, laterToggleOf, uploadsOpenOf } from './model'
 import { designScreen as newOrderScreen, REQUEST_CASES } from './fixtures'
 // B-TH-220, B-TH-303: New order as an e-mail.
 import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
@@ -29,6 +36,8 @@ import { requestBandOf } from './band'
 import { discardNewRequestDraft, fetchNewRequestDraft, saveNewRequestDraft } from './api'
 import { serverDraftBody } from '../../../lib/request-compose/server-draft'
 import { CATALOGUE_DOOR_OPEN, closedRefusal, failedKey, goesToOf, openItems, opensCatalogueDoor, receiptOf, reorderText, shipToChoices, stylesText, withCarried } from './request-model'
+// F-CP-152: which page /orders/new opens.
+import { newOrderDoorOf, WORDS_WAY, wordsHref } from './request-model'
 // B-TH-304: the catalogue door open again.
 import { catalogueDoorOf, catalogueStartHref } from './request-model'
 import { fromOrderText, orderLinesLabel, ownOrderRef } from './model'
@@ -248,7 +257,7 @@ describe('the catalogue', () => {
   })
 })
 
-const KEY = /\b(?:ref|band|keys|start|head|lines|size|reorder|upload|summary|problem|notice|done|sent|closed|missing|draft|address|picker|discard|catalogue|filters|card|col|type|ppe|detail|sheet|prices|held|refusal|unsaved|offline|dialog|state|noAccess|nav|request|receipt|compose|to|subject|message|kept|files|details|same|send)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
+const KEY = /\b(?:draftPage|ref|band|keys|start|head|lines|size|reorder|upload|summary|problem|notice|done|sent|closed|missing|draft|address|picker|discard|catalogue|filters|card|col|type|ppe|detail|sheet|prices|held|refusal|unsaved|offline|dialog|state|noAccess|nav|request|receipt|compose|to|subject|message|kept|files|details|same|send)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 
 describe('SCR-185 and SCR-226 design cases', () => {
   for (const screen of [newOrderScreen, catalogueScreen] as unknown as DesignScreen<unknown>[]) {
@@ -279,6 +288,7 @@ describe('SCR-185 and SCR-226 design cases', () => {
 })
 
 // ── B-TH-220, B-TH-303: New order as an e-mail ─────────────────────────────────────────────────────────────────────────
+const PREFIX_ALPHA = '/p/BRAND-ALPHA' // F-CP-152: the made-up prefix of the catalogue door's cases
 const OFFICE_SERIES = /\b(?:INQ|QT|SO|RQ)-\d{4}-\d{2,}/
 const API_UPLOADS_CLOSED = 'Uploads from outside are closed for now: the virus scanner is not running here yet. Please send the file to your contact by e-mail.'
 const renderCase = (locale: 'it' | 'en', id: string) => {
@@ -614,3 +624,293 @@ describe('B-TH-287 — the New order draft saves itself on the server', () => {
   })
 })
 // ---- end B-TH-287
+
+// ---- F-CP-150 (customer page plan C5, D9–D11; 12 §2; picture 22): the draft order page v1 ------------------------------------
+describe('F-CP-150 — the draft order page: checklist, held Send, one banner, rows by seq, every state', () => {
+  const FACTS = { preview: false, offline: false, busy: false, emptyLine: false }
+  const stateOf = (chips: ReturnType<typeof draftChips>, part: string) => chips.find((chip) => chip.part === part)!.state
+
+  it('the checklist: seven chips in the page’s order, each state by the domain’s own rule (the office reads the same)', () => {
+    const chips = draftChips(draftRecord())
+    expect(chips.map((chip) => chip.part)).toEqual(['NEED', 'LOGOS', 'REFERENCES', 'PEOPLE', 'DATE', 'PRICE', 'NOTES'])
+    expect(chips.map((chip) => chip.n)).toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(chips.map((chip) => chip.target)).toEqual(['lines', 'part-logos', 'part-references', 'part-people', 'order-head', 'part-price', 'part-notes'])
+    expect(stateOf(chips, 'NEED')).toBe('READY')
+    expect(stateOf(chips, 'PEOPLE')).toBe('READY')
+    expect(stateOf(chips, 'DATE')).toBe('READY')
+    expect(stateOf(chips, 'LOGOS')).toBe('OPTIONAL')
+    expect(stateOf(chips, 'NOTES')).toBe('OPTIONAL')
+    expect(stateOf(draftChips(draftRecord({ request: { note: 'Numbers on the sleeve.' } })), 'NOTES')).toBe('READY')
+    // Nothing yet: what you need and its pieces are missing; the date is optional.
+    const empty = draftChips(draftRecord({ lines: [], request: { requestedDate: null } }))
+    expect([stateOf(empty, 'NEED'), stateOf(empty, 'PEOPLE'), stateOf(empty, 'DATE')]).toEqual(['MISSING', 'MISSING', 'OPTIONAL'])
+    // A line with no piece yet: missing — or "Sending later" when the customer marked it (an unknown word left out).
+    expect(stateOf(draftChips(draftRecord({ lines: [lineOf(1, { sizes: [], pieces: 0 })] })), 'PEOPLE')).toBe('MISSING')
+    expect(stateOf(draftChips(draftRecord({ lines: [lineOf(1, { sizes: [], pieces: 0 })], request: { laterParts: ['PEOPLE', 'SOMETHING'] } })), 'PEOPLE')).toBe('LATER')
+    expect(laterPartsOf({ laterParts: ['PEOPLE', 'SOMETHING', 'LOGOS'] })).toEqual(['PEOPLE', 'LOGOS'])
+    expect(laterPartsOf({})).toEqual([])
+    // The header's own problem (a date that passed): the date part is missing.
+    expect(stateOf(draftChips(draftRecord({ request: { problems: [{ code: 'DATE_PAST', lineId: null, size: null }] } })), 'DATE')).toBe('MISSING')
+    expect([partTone('READY'), partTone('LATER'), partTone('MISSING'), partTone('OPTIONAL')]).toEqual(['success', 'warning', 'danger', 'neutral'])
+  })
+
+  it('M-CP-2: a reader without prices still sees part 6 in the strip, Optional — never counted, no money fact', () => {
+    expect(draftFactsOf(draftRecord({ seesPrices: false })).pricedLines).toBeNull()
+    expect(draftFactsOf(draftRecord()).pricedLines).toBe(0)
+    expect(stateOf(draftChips(draftRecord({ seesPrices: false })), 'PRICE')).toBe('OPTIONAL')
+    for (const locale of ['it', 'en'] as const) {
+      for (const id of ['cp150-designer', 'cp150-discard-held', 'cp150-accepted-designer']) expect(renderCase(locale, id), `${id} (${locale})`).not.toMatch(/€|EUR/)
+    }
+    expect(renderCase('en', 'cp150-designer')).toContain('Prices are not part of your access.')
+  })
+
+  it('the states: empty, partly filled, held (problems, or no right to send), sent, refused, withdrawn, accepted', () => {
+    expect(draftStateOf(draftRecord({ lines: [] }).request)).toBe('empty')
+    expect(draftStateOf(draftRecord().request)).toBe('partly')
+    expect(draftStateOf(draftRecord({ request: { problems: [{ code: 'DATE_PAST', lineId: null, size: null }] } }).request)).toBe('held')
+    expect(draftStateOf(draftRecord({ request: { may: { send: false, withdraw: false, discard: true } } }).request)).toBe('held')
+    for (const [status, state] of [['SENT', 'sent'], ['REFUSED', 'refused'], ['WITHDRAWN', 'withdrawn'], ['ACCEPTED', 'accepted']] as const) expect(draftStateOf(draftRecord({ request: { status } }).request)).toBe(state)
+  })
+
+  it('Send is held, never hidden: a Designer reads who may order; then problems; a preview, offline or saving first', () => {
+    const designer = draftRecord({ request: { may: { send: false, withdraw: false, discard: true } } }).request
+    expect(draftSendHeld(designer, FACTS, ['Dora Esempio', 'Marta Esempio'])).toEqual({ key: 'draftPage.sendHeld', names: 'Dora Esempio, Marta Esempio' })
+    expect(draftSendHeld(designer, FACTS, [])).toEqual({ key: 'draftPage.sendHeldNone' })
+    expect(draftSendHeld(designer, { ...FACTS, preview: true }, ['Marta Esempio'])).toEqual({ key: 'held.preview' })
+    expect(draftSendHeld(designer, { ...FACTS, offline: true }, [])).toEqual({ key: 'held.offline' })
+    const problems = draftRecord({ request: { problems: [{ code: 'DATE_PAST', lineId: null, size: null }, { code: 'NO_SIZES', lineId: null, size: null }] } }).request
+    expect(draftSendHeld(problems, FACTS, [])).toEqual({ key: 'held.problems', count: 2 })
+    expect(draftSendHeld(draftRecord().request, { ...FACTS, emptyLine: true }, [])).toEqual({ key: 'lines.held.empty' })
+    expect(draftSendHeld(draftRecord({ request: { status: 'SENT' } }).request, FACTS, [])).toEqual({ key: 'held.notDraft' })
+    // An answer from before B-CP-070 (no `may`): the Buyer's page as before.
+    expect(draftSendHeld(draftRecord().request, FACTS, [])).toBeNull()
+    expect(mayOf({})).toEqual({ send: true, withdraw: false, discard: true })
+    for (const locale of ['it', 'en'] as const) {
+      expect(t(locale)('draftPage.sendHeld', { names: 'Marta Esempio' })).toContain('Marta Esempio')
+      for (const key of ['draftPage.sendHeldNone', 'draftPage.discardHeld', 'draftPage.reorderHeld', 'draftPage.shared']) expect(t(locale)(key), `${key} ${locale}`).not.toMatch(/^draftPage\.|\{/)
+    }
+    expect(t('en')('draftPage.shared')).toBe('The factory can read this draft. Work starts only when you send it.')
+    expect(t('it')('draftPage.shared')).toBe('La fabbrica può leggere questa bozza. Il lavoro parte solo quando la inviate.')
+  })
+
+  it('who may send it: the active buyers and admins of the reader’s own organisation, never the reader; else its admins', () => {
+    const people = [
+      { id: 'u1', displayName: 'Marta Esempio', status: 'ACTIVE', roleKey: 'customer-admin', admin: true },
+      { id: 'u2', displayName: 'Dora Esempio', status: 'ACTIVE', roleKey: 'customer-buyer', admin: false },
+      { id: 'u3', displayName: 'Luca Esempio', status: 'ACTIVE', roleKey: 'customer-designer', admin: false },
+      { id: 'u4', displayName: 'Ugo Esempio', status: 'SUSPENDED', roleKey: 'customer-buyer', admin: false },
+      { id: 'me', displayName: 'Io Esempio', status: 'ACTIVE', roleKey: 'customer-buyer', admin: false },
+    ]
+    expect(whoMayOrder(people, 'me', ['Marta Esempio'])).toEqual(['Dora Esempio', 'Marta Esempio'])
+    expect(whoMayOrder(null, 'me', ['Marta Esempio'])).toEqual(['Marta Esempio'])
+    expect(whoMayOrder([], 'me', [])).toEqual([])
+  })
+
+  it('Discard… is held for one who neither orders nor started the draft, and in a preview; Reorder for an access without orders', () => {
+    expect(draftDiscardHeld(draftRecord({ request: { may: { send: false, withdraw: false, discard: false } } }).request, FACTS)).toBe('draftPage.discardHeld')
+    expect(draftDiscardHeld(draftRecord({ request: { may: { send: false, withdraw: false, discard: true } } }).request, FACTS)).toBeNull()
+    expect(draftDiscardHeld(draftRecord().request, { ...FACTS, preview: true })).toBe('held.preview')
+    expect(reorderHeldKey(false)).toBe('draftPage.reorderHeld')
+    expect(reorderHeldKey(true)).toBeNull()
+  })
+
+  it('a 409 keeps what was typed: ONE banner says the draft changed and who changed it (once the API names them)', () => {
+    expect(draftBannerOf({ offline: false, stale: true, refused: true, notice: true, problems: 2 })).toBe('stale')
+    expect(draftBannerOf({ offline: true, stale: true, refused: true, notice: true, problems: 2 })).toBe('offline')
+    expect(draftBannerOf({ offline: false, stale: false, refused: true, notice: true, problems: 2 })).toBe('refused')
+    expect(draftBannerOf({ offline: false, stale: false, refused: false, notice: true, problems: 2 })).toBe('notice')
+    expect(draftBannerOf({ offline: false, stale: false, refused: false, notice: false, problems: 2 })).toBe('problems')
+    expect(draftBannerOf({ offline: false, stale: false, refused: false, notice: false, problems: 0 })).toBeNull()
+    const html = renderCase('en', 'cp150-stale')
+    expect(html).toContain('This draft changed elsewhere')
+    expect(html).toContain('Changed by Marta Esempio a moment ago.')
+    // One banner: the refusal words of the same 409 are not drawn beside it.
+    expect(renderCase('en', 'draft-stale')).not.toContain(t('en')('refusal.conflict'))
+  })
+
+  it('rows keep their seq: lines are drawn and named by seq, never by the order they were read in', () => {
+    const one = lineOf(1)
+    const two = { ...LINE_TROUSERS(), seq: 2 }
+    expect(linesInOrder([two, one]).map((line) => line.seq)).toEqual([1, 2])
+    expect(draftTitleOf({ lines: [two, one] }, t('en'))).toBe(`${one.style.code} ${one.style.name}`)
+    expect(draftTitleOf({ lines: [] }, t('en'))).toBe('Untitled draft')
+    expect(draftTitleOf({ lines: [] }, t('it'))).toBe('Bozza senza titolo')
+    // Drawn: the draft's case with its lines read in the other order — line 1 is still above line 2.
+    const build = newOrderScreen.cases.find((entry) => entry.id === 'draft')!.model as OrderingCaseBuilder
+    const swapped: OrderingCaseBuilder = (locale) => {
+      const built = build(locale)
+      return built.body.kind === 'neworder' ? { ...built, body: { ...built.body, model: { ...built.body.model, record: draftRecord({ lines: [two, one] }) } } } : built
+    }
+    const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell', 'portal']) }, createElement(OrderingCase, { model: swapped })))
+    expect(html.indexOf(`line-${one.id}`)).toBeLessThan(html.indexOf(`line-${two.id}`))
+  })
+
+  it('saved: “Saved 10:42 by Marta Esempio · v7” once the API names who changed it, else “Saved 10:42 · v7”', () => {
+    const time = () => '10:42'
+    expect(savedWords({ updatedAt: '2026-11-19T09:42:00Z', version: 7 }, t('en'), time)).toBe('Saved 10:42 · v7')
+    expect(savedWords({ updatedAt: '2026-11-19T09:42:00Z', version: 7, lastEditedBy: 'Marta Esempio', lastEditedAt: '2026-11-19T09:42:00Z' }, t('en'), time)).toBe('Saved 10:42 by Marta Esempio · v7')
+    expect(savedWords({ updatedAt: '2026-11-19T09:42:00Z', version: 7, lastEditedBy: 'Marta Esempio' }, t('it'), time)).toBe('Salvata alle 10:42 da Marta Esempio · v7')
+    expect(peopleLineWords({ seq: 1, pieces: 24 }, t('en'), String)).toBe('Line 1: size grid, 24 pieces')
+    expect(peopleLineWords({ seq: 2, pieces: 0 }, t('en'), String)).toBe('Line 2: no pieces yet')
+  })
+
+  it('a draft no longer a draft leads where the reader may go: its order or Orders, or — no orders in the access — who follows it', () => {
+    expect(closedOf('ACCEPTED', true)).toEqual({ body: 'closed.ACCEPTED', open: 'order', startNew: false })
+    expect(closedOf('ACCEPTED', false)).toEqual({ body: 'draftPage.acceptedNoOrders', open: null, startNew: false })
+    expect(closedOf('REFUSED', true)).toEqual({ body: 'closed.REFUSED', open: 'orders', startNew: true })
+    expect(closedOf('REFUSED', false)).toEqual({ body: 'draftPage.refusedNoOrders', open: null, startNew: true })
+    expect(closedOf('SENT', false)).toEqual({ body: 'draftPage.sentNoOrders', open: null, startNew: false })
+    expect(closedOf('WITHDRAWN', true)).toEqual({ body: 'closed.WITHDRAWN', open: null, startNew: true })
+    const designer = renderCase('en', 'cp150-accepted-designer')
+    expect(designer).toContain('The factory made it an order: your buyer follows it.')
+    expect(designer).not.toContain('/orders/0194f0e2-1940-7000-8000-000000000777')
+    expect(renderCase('en', 'cp150-refused')).toContain('Start a new draft')
+  })
+
+  it('the page: the factory reads the draft (said), its conversation docked, keys in one information icon, every case in it and en', () => {
+    for (const locale of ['it', 'en'] as const) {
+      for (const id of ['draft', 'cp150-designer', 'cp150-saved-by', 'cp150-later', 'cp150-narrow', 'cp150-offline', 'cp150-sent', 'cp150-refused', 'cp150-withdrawn']) {
+        const html = renderCase(locale, id)
+        expect(html.match(KEY)?.[0] ?? null, `${id} (${locale})`).toBeNull()
+        expect(html, `${id} (${locale})`).toContain('id="messages"')
+      }
+      const draft = renderCase(locale, 'draft')
+      expect(draft).toContain(t(locale)('draftPage.shared'))
+      for (const part of ['NEED', 'LOGOS', 'REFERENCES', 'PEOPLE', 'DATE', 'PRICE', 'NOTES']) expect(draft).toContain(t(locale)(`draftPage.part.${part}`))
+      expect(draft).toContain('fw-list-keys-trigger')
+    }
+    expect(renderCase('en', 'cp150-saved-by')).toContain('by Marta Esempio · v7')
+    // The start draws no conversation.
+    expect(renderCase('en', 'start')).not.toContain('id="messages"')
+  })
+})
+// ---- end F-CP-150
+
+// ---- F-CP-151 (customer page plan C5; 12 §2 parts 2–4; D14): the draft's files cards --------------------------------------------
+describe('F-CP-151 — the draft’s files: logos, references, measurement sheets; the e-mail way while uploads are closed', () => {
+  const file = (over: Record<string, unknown> = {}) => ({ id: 'f1', lineId: null, originalName: 'logo-front.ai', kind: 'DOCUMENT', contentType: 'application/postscript', sizeBytes: 9, status: 'AVAILABLE', version: 1, createdAt: '2026-11-19T09:00:00Z', ...over })
+  const FACTS = { preview: false, offline: false, busy: false }
+
+  it('closed-gate words: files go up only where the API says so; on live the cards say to e-mail them, naming the draft (it, en)', () => {
+    expect(uploadsOpenOf({})).toBe(false)
+    expect(uploadsOpenOf({ uploads: { open: false, words: 'closed' } })).toBe(false)
+    expect(uploadsOpenOf({ uploads: { open: true, words: null } })).toBe(true)
+    expect(draftMailName({ customerRef: 'BA-PO-4521', lines: [] }, t('en'))).toBe('BA-PO-4521')
+    expect(draftMailName({ customerRef: null, lines: [] }, t('en'))).toBe('Untitled draft')
+    for (const locale of ['it', 'en'] as const) {
+      const html = renderCase(locale, 'cp151-closed')
+      expect(html, locale).toContain(t(locale)('draftPage.files.closed', { draft: 'BA-PO-4521' }))
+      expect(html, locale).toContain(t(locale)('draftPage.files.sheetsClosed', { draft: 'BA-PO-4521' }))
+      // The API's English sentence is never drawn; no drop area while closed.
+      expect(html, locale).not.toContain('Uploads from outside are closed for now.')
+      expect(html, locale).not.toContain('nds-dropzone')
+      expect(html.match(KEY)?.[0] ?? null, locale).toBeNull()
+    }
+  })
+
+  it('cap 50: the 51st file is held with words; a preview or offline holds every file first', () => {
+    expect(DRAFT_FILES_MAX).toBe(50)
+    const files = (count: number) => ({ logos: [], references: Array.from({ length: count }, (_, index) => file({ id: `r${index}` })), sheets: [] })
+    expect(draftFileCount({ files: files(49) })).toBe(49)
+    expect(filesAddHeld({ files: files(49) }, FACTS)).toBeNull()
+    expect(filesAddHeld({ files: files(50) }, FACTS)).toBe('draftPage.files.full')
+    expect(filesAddHeld({ files: files(0) }, { ...FACTS, preview: true })).toBe('held.preview')
+    expect(filesAddHeld({}, { ...FACTS, offline: true })).toBe('held.offline')
+    expect(renderCase('en', 'cp151-full')).toContain('This draft already holds 50 files')
+  })
+
+  it('"Sending later": shown only once the API keeps the mark; on and off say which parts the change sends', () => {
+    expect(laterToggleOf({}, 'LOGOS')).toBeNull()
+    expect(laterToggleOf({ laterParts: [] }, 'LOGOS')).toEqual({ on: false, next: ['LOGOS'] })
+    expect(laterToggleOf({ laterParts: ['LOGOS'] }, 'LOGOS')).toEqual({ on: true, next: [] })
+    expect(laterToggleOf({ laterParts: ['PEOPLE'] }, 'LOGOS')).toEqual({ on: false, next: ['LOGOS', 'PEOPLE'] })
+    const later = renderCase('en', 'cp151-later')
+    expect(later).toContain('We send these later')
+    expect(later).toContain('Sending later')
+    expect(renderCase('en', 'cp151-files')).not.toContain('We send these later')
+  })
+
+  it('each file says what it is and where it sits; a file waiting for the virus scan says so; the chips count the files', () => {
+    const lines = [{ id: 'l1', seq: 1 }, { id: 'l2', seq: 2 }]
+    expect(fileKindOf(file())).toBe('vector')
+    expect(fileKindOf(file({ originalName: 'stripes.pdf', contentType: 'application/pdf' }))).toBe('vector')
+    expect(fileKindOf(file({ originalName: 'sponsor.png', contentType: 'image/png', kind: 'PHOTO' }))).toBe('picture')
+    expect(fileKindOf(file({ originalName: 'brief.docx', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }))).toBe('document')
+    expect(fileWhereWords(file({ lineId: 'l2' }), lines, t('en'))).toBe('on line 2')
+    expect(fileWhereWords(file(), lines, t('it'))).toBe('sulla bozza')
+    expect(fileHeldKey(file())).toBeNull()
+    expect(fileHeldKey(file({ status: 'QUARANTINED' }))).toBe('draftPage.files.scanning')
+    const record = draftRecord({ request: { files: { logos: [file()], references: [file({ id: 'f2' })], sheets: [] }, uploads: { open: true, words: null } } })
+    expect(draftFactsOf(record)).toMatchObject({ logos: 1, references: 1 })
+    const chips = draftChips(record)
+    expect(chips.find((chip) => chip.part === 'LOGOS')!.state).toBe('READY')
+    expect(chips.find((chip) => chip.part === 'REFERENCES')!.state).toBe('READY')
+    for (const locale of ['it', 'en'] as const) {
+      const html = renderCase(locale, 'cp151-files')
+      expect(html, locale).toContain(t(locale)('draftPage.files.logoHint'))
+      expect(html, locale).toContain(`${t(locale)('draftPage.files.kind.vector')} · ${t(locale)('draftPage.files.onDraft')}`)
+      expect(html, locale).toContain(`${t(locale)('draftPage.files.kind.picture')} · ${t(locale)('draftPage.files.onLine', { seq: 2 })}`)
+      expect(html, locale).toContain(t(locale)('draftPage.files.sheetsPrivacy'))
+      expect(html.match(KEY)?.[0] ?? null, locale).toBeNull()
+    }
+    const uploading = renderCase('en', 'cp151-uploading')
+    expect(uploading).toContain('Uploading…')
+    expect(uploading).toContain('Not uploaded:')
+  })
+
+  it('W-CP-1 / W-CP-3: a file goes onto the session’s own draft by its id (and its line’s) only — never a party or a company', async () => {
+    const calls: { method: string; path: string; body?: unknown; query?: unknown }[] = []
+    const answer = { file: file({ status: 'PENDING_UPLOAD' }), upload: { method: 'PUT', url: '/store/x', headers: {}, expiresAt: '2026-11-19T10:05:00Z' } }
+    const api = {
+      post: async (path: string, options: { body?: unknown }) => {
+        calls.push({ method: 'POST', path, body: options.body })
+        return path.endsWith('/complete') ? { file: file() } : answer
+      },
+      request: async (method: string, path: string, options: { query?: unknown }) => {
+        calls.push({ method, path, query: options.query })
+        return draftRecord()
+      },
+    } as unknown as ApiClient
+    await announceDraftFile(api, 'd1', { part: 'LOGO', lineId: 'l2', originalName: 'logo-front.ai', contentType: 'application/postscript', sizeBytes: 9, sha256: 'a'.repeat(64) })
+    await completeDraftFile(api, 'd1', 'f1')
+    await removeDraftFile(api, 'd1', 'f1', 3)
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(['POST /portal/order-requests/d1/files', 'POST /portal/order-requests/d1/files/f1/complete', 'DELETE /portal/order-requests/d1/files/f1'])
+    expect(calls[0]!.body).toEqual({ part: 'LOGO', lineId: 'l2', originalName: 'logo-front.ai', contentType: 'application/postscript', sizeBytes: 9, sha256: 'a'.repeat(64) })
+    expect(calls[2]!.query).toEqual({ version: 3 })
+    expect(JSON.stringify(calls)).not.toMatch(/party|company/i)
+  })
+})
+// ---- end F-CP-151
+
+// ---- F-CP-152 (customer page plan C5, 12 §2 Doors): /orders/new opens the draft start; "Just write it in words" → door A ---------
+describe('F-CP-152 — the doors: /orders/new is the draft order for who keeps drafts; ?way=words is the request like an e-mail', () => {
+  const q = (text: string) => new URLSearchParams(text)
+
+  it('which page /orders/new opens', () => {
+    expect(WORDS_WAY).toBe('words')
+    expect(wordsHref('/p/X')).toBe('/p/X/orders/new?way=words')
+    // Who keeps drafts: the draft start with no term; a draft, a way, a past order: the draft order.
+    expect(newOrderDoorOf(q(''), { mayDraft: true })).toBe('draft')
+    for (const text of ['draft=d1', 'way=pick', 'way=reorder', 'way=upload', 'reorder=o1', 'way=pick&styles=abc']) expect(newOrderDoorOf(q(text), { mayDraft: true }), text).toBe('draft')
+    // "Just write it in words", and who may order but keeps no drafts: the request like an e-mail.
+    expect(newOrderDoorOf(q('way=words'), { mayDraft: true })).toBe('words')
+    expect(newOrderDoorOf(q(''), { mayDraft: false })).toBe('words')
+    expect(opensCatalogueDoor(q('way=words'))).toBe(false)
+    // The catalogue door closed: always the e-mail.
+    expect(newOrderDoorOf(q('draft=d1'), { mayDraft: true }, false)).toBe('words')
+  })
+
+  it('the draft start: three ways, "Just write it in words" for who may order; for a Designer Reorder held with why and no words door', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const buyer = renderCase(locale, 'start')
+      expect(buyer).toContain(`href="${PREFIX_ALPHA}/orders/new?way=words"`)
+      expect(buyer).toContain(t(locale)('draftPage.start.words'))
+      const designer = renderCase(locale, 'cp152-start-designer')
+      expect(designer).not.toContain('way=words')
+      expect(designer).toContain(t(locale)('draftPage.reorderHeld'))
+      expect(designer.match(KEY)?.[0] ?? null, locale).toBeNull()
+    }
+  })
+})
+// ---- end F-CP-152
+

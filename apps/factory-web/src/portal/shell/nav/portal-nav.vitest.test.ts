@@ -78,11 +78,13 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
     ])
   })
 
-  it('fails closed: a role sees only the areas its permissions open (the Designer has no orders, documents or returns)', () => {
+  it('fails closed: a role sees only the areas its permissions open (the Designer has no orders list, documents or returns)', () => {
     const designer = portalNavFor({ can: roleCan('customer-designer'), kinds: ['CUSTOMER'], everyPage: true })
     // The Designer holds the catalogue and the samples (B-W2b-262; Quotes & samples keeps both) and its colleagues (Account).
+    // F-CP-152: and New order (it keeps drafts, portal.orderDrafts.edit): the Orders area left with that one page takes its name.
     expect(designer.areas.map((area) => [area.id, area.label])).toEqual([
       ['home', 'nav.home'],
+      ['orders', 'nav.newOrder'],
       ['quotes', 'nav.quotesSamples'],
       ['account', 'nav.account'],
     ])
@@ -202,8 +204,8 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
       'customer-buyer': customerFull,
       'customer-finance': customerFinance,
       'customer-quality': customerRead,
-      // The Designer: the catalogue, the samples (B-W2b-262) and its colleagues only.
-      'customer-designer': ['home:nav.home#home', 'quotes:nav.quotesSamples#quotes', 'account:nav.account#account'],
+      // The Designer: the catalogue, the samples (B-W2b-262) and its colleagues; F-CP-152: New order (its drafts), no count.
+      'customer-designer': ['home:nav.home#home', 'orders:nav.newOrder', 'quotes:nav.quotesSamples#quotes', 'account:nav.account#account'],
       // B-PR-13: the Production role — its orders, the samples (no catalogue), the shared files; its Production area (F-PR-10
       // declared it, F-PR-11 built My production).
       'customer-production': ['home:nav.home#home', 'orders:nav.ordersRequests#orders', 'production:nav.production', 'quotes:nav.samples#quotes', 'documents:nav.documents#documents', 'account:nav.account#account'],
@@ -245,7 +247,7 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
     // F-PR-11: My production is a tab after Orders for the buyer, so Returns goes under More.
     expect(asSigned('customer-buyer')).toMatchObject({ tabs: ['home', 'orders', 'production', 'documents'], more: ['quotes', 'returns', 'account'] })
     expect(asSigned('customer-finance')).toMatchObject({ tabs: ['home', 'orders', 'documents', 'returns'], more: ['quotes', 'account'] })
-    expect(asSigned('customer-designer')).toMatchObject({ tabs: ['home'], more: ['quotes', 'account'] })
+    expect(asSigned('customer-designer')).toMatchObject({ tabs: ['home', 'orders'], more: ['quotes', 'account'] }) // F-CP-152
     // Design portal.frame bottom-bar: "Supplier: Home · Orders (or Jobs) · Deliveries · Documents + More (Profile)"; the DS bar turns a
     // More of one row into a fifth tab (bottomBarModel: a sheet with one row is a wasted tap); Sign out is in the person menu.
     expect(asSigned('supplier-orders')).toMatchObject({ tabs: ['home', 'work', 'deliveries', 'supplier-documents', 'profile'], more: [] })
@@ -258,7 +260,7 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
     // F-PR-11: g p opens My production.
     expect(asSigned('customer-buyer').keys).toEqual({ h: '/', o: '/orders', p: '/production', d: '/documents' })
     expect(asSigned('customer-finance').keys).toEqual({ h: '/', o: '/orders', d: '/documents' })
-    expect(asSigned('customer-designer').keys).toEqual({ h: '/' })
+    expect(asSigned('customer-designer').keys).toEqual({ h: '/', o: '/orders/new' }) // F-CP-152
     expect(asSigned('supplier-invoices').keys).toEqual({ h: '/', d: '/documents' })
     expect(asSigned('subcontractor-jobs').keys).toEqual({ h: '/', o: '/jobs', d: '/documents' })
     expect(asSigned('guest-accountant').keys).toEqual({ h: '/', d: '/accounting' })
@@ -371,7 +373,7 @@ describe('the Production area and Waiting for you (F-PR-10)', () => {
     expect(signedAs('customer-production')).toMatchObject({ tabs: ['home', 'orders', 'production', 'documents'], more: ['quotes', 'account'] })
     // Without Production nothing moves: Returns stays a tab.
     expect(signedAs('customer-finance')).toMatchObject({ tabs: ['home', 'orders', 'documents', 'returns'], more: ['quotes', 'account'] })
-    expect(signedAs('customer-designer')).toMatchObject({ tabs: ['home'], more: ['quotes', 'account'] })
+    expect(signedAs('customer-designer')).toMatchObject({ tabs: ['home', 'orders'], more: ['quotes', 'account'] }) // F-CP-152
     // My production lights the Production tab.
     expect(bottomBarLayout(signedAs('customer-buyer').nav, '/production').current).toBe('production')
   })
@@ -410,7 +412,7 @@ describe('the Production area and Waiting for you (F-PR-10)', () => {
     expect(signedAs('customer-buyer').keys).toEqual({ h: '/', o: '/orders', p: '/production', d: '/documents' })
     expect(signedAs('customer-production').keys).toEqual({ h: '/', o: '/orders', p: '/production', d: '/documents' })
     expect(signedAs('customer-finance').keys).toEqual({ h: '/', o: '/orders', d: '/documents' })
-    expect(signedAs('customer-designer').keys).toEqual({ h: '/' })
+    expect(signedAs('customer-designer').keys).toEqual({ h: '/', o: '/orders/new' }) // F-CP-152
   })
 
   it('names the areas in both languages, and the roles that see production say so', () => {
@@ -455,3 +457,36 @@ describe("B-SA-054b: a workshop's \"Order changed — check quantities\" opens i
   })
 })
 // ── end B-SA-054b ──
+
+// ── F-CP-152 (customer page plan C5, 12 §2 Doors): the Orders area is any of its pages ──────────────────────────────────────────
+describe('F-CP-152 — Orders is any of its pages: a brand Designer sees New order only; the Buyer is unchanged', () => {
+  const signed = (permissions: readonly string[]) => portalNavFor({ can: (permission) => permissions.includes(permission), kinds: ['CUSTOMER'] })
+  const orders = (permissions: readonly string[]) => signed(['portal.home.view', ...permissions]).areas.find((area) => area.id === 'orders')
+
+  it('the Designer (drafts, no orders): one page, New order, its address and name, no count, key g o', () => {
+    const area = orders(['portal.orderDrafts.edit'])!
+    expect([area.label, area.href, area.badge, area.sections]).toEqual(['nav.newOrder', '/orders/new', undefined, undefined])
+    expect(portalChords(signed(['portal.home.view', 'portal.orderDrafts.edit'])).o).toBe('/orders/new')
+  })
+
+  it('the Buyer (orders, drafts, ordering): both pages, the area’s own name and address, its count', () => {
+    const area = orders(['portal.salesOrders.view', 'portal.orderDrafts.edit', 'portal.orderRequests.manage'])!
+    expect([area.label, area.href, area.badge]).toEqual(['nav.orders', '/orders', 'orders'])
+    expect(area.sections!.flatMap((section) => section.items).map((item) => [item.id, item.href])).toEqual([
+      ['orders.list', '/orders'],
+      ['orders.new', '/orders/new'],
+    ])
+  })
+
+  it('New order opens with either right: who keeps drafts, or who may order (the request like an e-mail); neither: no door', () => {
+    expect(orders(['portal.salesOrders.view', 'portal.orderRequests.manage'])!.sections!.flatMap((section) => section.items).map((item) => item.id)).toEqual(['orders.list', 'orders.new'])
+    expect(orders(['portal.orderRequests.manage'])!.href).toBe('/orders/new')
+    // Orders only (Quality, Viewer, Production, Finance): the list, its name "Orders & requests", its count.
+    expect([orders(['portal.salesOrders.view'])!.label, orders(['portal.salesOrders.view'])!.badge]).toEqual(['nav.ordersRequests', 'orders'])
+    // Neither orders nor drafts nor ordering: no Orders area at all (fails closed), whatever home.view says.
+    expect(orders([])).toBeUndefined()
+    expect(portalNavPermissions()).toEqual(expect.arrayContaining(['portal.orderDrafts.edit', 'portal.orderRequests.manage']))
+  })
+})
+// ── end F-CP-152 ──
+

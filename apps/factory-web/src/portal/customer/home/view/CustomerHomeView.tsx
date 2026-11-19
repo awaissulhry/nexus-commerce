@@ -11,6 +11,7 @@ import { Button, Input, Pill, Skeleton, Tag } from '@nexus/ui/primitives'
 import { FileRow, useDsWords } from '../../../../lib/i18n/ds-parts'
 import type { SearchGroupRow } from '../../../shell/view/SearchView'
 import type { DocumentRow, NextOrderRow, Tile } from '../model'
+import type { DraftOrderRow } from '../model' // F-CP-152
 // B-TH-238: the Messages card.
 import { messagesEmpty, type MessageRow, type MessagesCard } from '../model'
 import { useHomeWords } from '../words'
@@ -66,6 +67,15 @@ export interface StartModel {
   // ---- B-TH-287: `where` — saved on the server ("saved 10:42"), or kept on this device only (absent: this device).
   draft: { subject: string; at: string; where?: 'server' | 'device' } | null
   // ---- end B-TH-287
+  // ---- F-CP-152 (customer page plan C5, 12 §2 Doors): New order opens the draft order for who keeps drafts (the brand's Designer
+  // too), the party's draft orders to continue (newest 3), door A's unsent message leads back to the request like an e-mail.
+  /** The person keeps drafts (portal.orderDrafts.edit): New order, never the "only the buyers" note. */
+  mayDraft?: boolean
+  /** The party's draft orders (newest 3) and how many; null: none to show (no drafts kept, a preview, not read yet). */
+  draftOrders?: { readonly count: number; readonly items: readonly DraftOrderRow[] } | null
+  /** Where door A's unsent message continues (`?way=words`); absent: New order's address. */
+  wordsHref?: string | null
+  // ---- end F-CP-152
 }
 
 export interface CustomerHomeViewModel {
@@ -320,16 +330,17 @@ function StartCard({ model, onAsk }: { model: StartModel; onAsk?: () => void }) 
         {t('start.label')}
       </h2>
       <div className="fw-pch-start-doors">
-        {model.buyer && model.newOrderHref ? (
+        {(model.buyer || model.mayDraft) && model.newOrderHref ? (
           <a className="fw-pch-door is-primary" href={model.newOrderHref}>
             <PenLine size={20} aria-hidden />
             <span className="fw-pch-door-text">
               <strong>{t('start.newOrder')}</strong>
-              <span>{t('start.newOrderHint')}</span>
+              {/* F-CP-152: who keeps drafts starts a draft order; who only orders writes the request like an e-mail. */}
+              <span>{t(model.mayDraft ? 'draftOrders.newOrderHint' : 'start.newOrderHint')}</span>
             </span>
           </a>
         ) : null}
-        {!model.buyer ? (
+        {!model.buyer && !model.mayDraft ? (
           <div className="fw-pch-door is-held" role="note">
             <Lock size={20} aria-hidden />
             <span className="fw-pch-door-text">
@@ -353,9 +364,35 @@ function StartCard({ model, onAsk }: { model: StartModel; onAsk?: () => void }) 
             <strong>{t('start.draft', { subject: model.draft.subject })}</strong> <span className="fw-pch-sub">{t(model.draft.where === 'server' ? 'start.draftSaved' /* B-TH-287 */ : 'start.draftKept', { time: model.draft.at })}</span>
           </span>
           <Button size="sm" asChild>
-            <a href={model.newOrderHref}>{t('start.continue')}</a>
+            <a href={model.wordsHref ?? model.newOrderHref /* F-CP-152: door A's message continues there */}>{t('start.continue')}</a>
           </Button>
         </p>
+      ) : null}
+      {/* F-CP-152: the party's draft orders to continue — a team's drafts, any colleague's (newest 3; all on New order). */}
+      {model.draftOrders && model.draftOrders.count > 0 ? (
+        <div className="fw-pch-drafts">
+          <h3 className="fw-pch-drafts-title">{t('draftOrders.title', { count: model.draftOrders.count })}</h3>
+          <ul className="fw-pch-drafts-list">
+            {model.draftOrders.items.map((row) => (
+              <li key={row.id} className="fw-pch-draft">
+                <FilePen size={16} aria-hidden />
+                <span className="fw-pch-draft-text">
+                  <strong>{row.title}</strong> <span className="fw-pch-sub">{row.facts}</span>
+                </span>
+                <Button size="sm" asChild>
+                  <a href={row.href} aria-label={t('draftOrders.continueOne', { title: row.title })}>
+                    {t('start.continue')}
+                  </a>
+                </Button>
+              </li>
+            ))}
+          </ul>
+          {model.draftOrders.count > model.draftOrders.items.length && model.newOrderHref ? (
+            <a className="fw-pch-drafts-all" href={model.newOrderHref}>
+              {t('draftOrders.all', { count: model.draftOrders.count })}
+            </a>
+          ) : null}
+        </div>
       ) : null}
     </section>
   )

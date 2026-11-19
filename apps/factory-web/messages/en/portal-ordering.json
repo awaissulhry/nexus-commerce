@@ -305,9 +305,9 @@
     "confirm": "Discard draft",
     "lines_one": "{count} line will be deleted.",
     "lines_other": "{count} lines will be deleted.",
-    "noNumber": "The draft was never sent: we never saw it.",
+    "noNumber": "The draft was never sent: work never started on it.",
     "back": "start a new order",
-    "acknowledge": "I understand: the draft and its lines are deleted."
+    "acknowledge": "I understand: the draft, its lines and its files are deleted."
   },
   "catalogue": {
     "title": "Catalogue",
@@ -527,5 +527,88 @@
     "newOrder": "New order",
     "returns": "Returns, complaints, repairs and safety reports have their own page: Returns & claims.",
     "bandTitle": "Request sent"
+  },
+  "draftPage": {
+    "title": "Draft order",
+    "titleOf": "Draft order · {title}",
+    "untitled": "Untitled draft",
+    "back": "New order",
+    "shared": "The factory can read this draft. Work starts only when you send it.",
+    "saved": "Saved {time}",
+    "savedBy": "Saved {time} by {name}",
+    "version": "v{n}",
+    "changedBy": "Changed by {name} a moment ago.",
+    "send": "Send to the factory",
+    "sendHeld": "Only colleagues who may order send it: {names}.",
+    "sendHeldNone": "Only colleagues who may order send it: ask your admin.",
+    "discard": "Discard…",
+    "discardHeld": "Only the colleague who started this draft, or one who may send orders, discards it.",
+    "checklist": "What the draft holds",
+    "part": {
+      "NEED": "What you need",
+      "LOGOS": "Logos",
+      "REFERENCES": "References",
+      "PEOPLE": "People and sizes",
+      "DATE": "Date and delivery",
+      "PRICE": "Your price",
+      "NOTES": "Notes"
+    },
+    "state": {
+      "READY": "Ready",
+      "LATER": "Sending later",
+      "MISSING": "Missing",
+      "OPTIONAL": "Optional"
+    },
+    "chip": "{n}. {part}: {state}",
+    "addLine": "Add a line",
+    "reorderHeld": "Your access does not show orders.",
+    "people": {
+      "grid": "Line {seq}: size grid, {pieces} pieces",
+      "none": "Line {seq}: no pieces yet",
+      "empty": "Add a line first: its sizes show here."
+    },
+    "price": {
+      "line": "Line",
+      "ours": "Our list price"
+    },
+    "thread": "Messages · this draft",
+    "sentThread": "The factory answers here and by e-mail.",
+    "startNew": "Start a new draft",
+    "acceptedNoOrders": "The factory made it an order: your buyer follows it.",
+    "refusedNoOrders": "The factory did not accept this request: your buyer has the reason.",
+    "sentNoOrders": "This draft was sent to the factory: your buyer follows it.",
+    "problems_one": "{count} problem to fix before you send",
+    "problems_other": "{count} problems to fix before you send",
+    "keySend": "Send to the factory",
+    "keyThread": "Show or hide the conversation",
+    "files": {
+      "logoHint": "Vector files (AI, EPS, PDF) print best; a picture is fine to start.",
+      "addLogos": "Add logos: drop them here or choose them",
+      "addReferences": "Add pictures or PDFs: drop them here or choose them",
+      "addSheets": "Add a measurement sheet: drop it here or choose it",
+      "onDraft": "on the draft",
+      "onLine": "on line {seq}",
+      "kind": {
+        "vector": "vector",
+        "picture": "picture",
+        "document": "document"
+      },
+      "scanning": "held for the virus scan: it reaches the factory once it is clean",
+      "uploading": "Uploading…",
+      "failed": "Not uploaded: {reason}",
+      "full": "This draft already holds 50 files: remove one, or write to us in the messages for the rest.",
+      "closed": "Files cannot be uploaded here yet: e-mail them to your contact at the factory, naming «{draft}». We add them to the request when you send it.",
+      "sheetsClosed": "Measurement sheets: e-mail them to your contact at the factory, naming «{draft}».",
+      "notNow": "Files cannot be uploaded here right now: e-mail them to your contact at the factory.",
+      "later": "We send these later",
+      "noLogos": "No logos yet.",
+      "noReferences": "No references yet.",
+      "noSheets": "No measurement sheets yet.",
+      "sheetsTitle": "Measurement sheets",
+      "sheetsPrivacy": "Measurement sheets are personal data: at the factory only the people who handle measurements open them."
+    },
+    "start": {
+      "words": "Just write it in words"
+    }
   }
 }

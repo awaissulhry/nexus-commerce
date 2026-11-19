@@ -73,6 +73,32 @@ export const changeColleague = (api: ApiClient, userId: string, body: { roleKey?
 export const deactivateColleague = (api: ApiClient, userId: string, version: number) =>
   api.post(`/portal/colleagues/${encodeURIComponent(userId)}/deactivate`, { body: { version }, schema: z.object({ id: z.string(), status: z.string(), sessionsEnded: z.number() }), idempotencyKey: newIdempotencyKey() })
 
+// ---- F-CP-153 (customer page plan C6, D13; review G2, F4): a CUSTOMER's admin runs its own team further — the invitation sent
+// again or withdrawn, access paused or given back (each with the person row's version: a stale one is 409), and its own people
+// added to the projects it is in (the colleague's version). Step-up by e-mail code (the page asks first). A supplier's or a
+// workshop's admin reaches none of these (the API is the customer's: the shared section shows them held).
+const statusChanged = z.object({ id: z.string(), status: z.enum(STATUSES), version: z.number() })
+export const resendInvitation = (api: ApiClient, userId: string, version: number, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(`/portal/colleagues/${encodeURIComponent(userId)}/invitation`, { body: { version }, schema: invited, idempotencyKey })
+export const revokeInvitation = (api: ApiClient, userId: string, version: number, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(`/portal/colleagues/${encodeURIComponent(userId)}/invitation/revoke`, { body: { version }, schema: statusChanged, idempotencyKey })
+export const pauseAccess = (api: ApiClient, userId: string, body: { version: number; reason?: string }, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(`/portal/colleagues/${encodeURIComponent(userId)}/suspend`, { body, schema: statusChanged.extend({ sessionsEnded: z.number() }), idempotencyKey })
+export const giveAccessBack = (api: ApiClient, userId: string, version: number, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(`/portal/colleagues/${encodeURIComponent(userId)}/reactivate`, { body: { version }, schema: statusChanged.extend({ sessionsEnded: z.number() }), idempotencyKey })
+
+/** A project's people of the admin's own company (members) and the active colleagues who may be added (choices), each with its version. */
+export const projectPeopleSchema = z.object({
+  members: z.array(z.object({ userId: z.string(), name: z.string(), version: z.number(), you: z.boolean(), since: z.string() })),
+  choices: z.array(z.object({ userId: z.string(), name: z.string(), version: z.number() })),
+})
+export type ProjectPeople = z.infer<typeof projectPeopleSchema>
+export const fetchProjectPeople = (api: ApiClient, projectId: string, signal?: AbortSignal) =>
+  api.get(`/portal/projects/${encodeURIComponent(projectId)}/people/choices`, { schema: projectPeopleSchema, signal })
+export const addProjectPerson = (api: ApiClient, projectId: string, body: { userId: string; version: number }, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(`/portal/projects/${encodeURIComponent(projectId)}/people`, { body, schema: projectPeopleSchema, idempotencyKey })
+// ---- end F-CP-153
+
 // ── a colleague's open requests (B-W2b-167, F14) ─────────────────────────────────────────────────────────────────────────
 export const handoverSchema = z.object({
   open: z.number(),
