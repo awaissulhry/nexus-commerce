@@ -226,9 +226,11 @@ export interface SettingsDraft {
   maxUsers: string
   /** The roles the portal offers ([] = every role of its kinds). */
   allowedRoleKeys: string[]
+  /** F-CP-155: made-to-measure lines in a customer's portal drafts (on by default). */
+  mtmDraftsOn?: boolean
 }
 
-export const settingsDraftOf = (settings: PortalSettings): SettingsDraft => ({ portalOn: settings.portalOn, maxUsers: settings.maxUsers === null ? '' : String(settings.maxUsers), allowedRoleKeys: [...settings.allowedRoleKeys] })
+export const settingsDraftOf = (settings: PortalSettings): SettingsDraft => ({ portalOn: settings.portalOn, maxUsers: settings.maxUsers === null ? '' : String(settings.maxUsers), allowedRoleKeys: [...settings.allowedRoleKeys], mtmDraftsOn: settings.mtmDraftsOn ?? true /* F-CP-155 */ })
 
 export function settingsProblems(draft: SettingsDraft, seats: Seats): Record<string, string> {
   const out: Record<string, string> = {}
@@ -247,6 +249,7 @@ export function settingsBody(saved: PortalSettings, draft: SettingsDraft): Setti
   if (draft.portalOn !== before.portalOn) body.portalOn = draft.portalOn
   if (draft.maxUsers.trim() !== before.maxUsers) body.maxUsers = draft.maxUsers.trim() === '' ? null : Number(draft.maxUsers)
   if ([...draft.allowedRoleKeys].sort().join() !== [...before.allowedRoleKeys].sort().join()) body.allowedRoleKeys = [...draft.allowedRoleKeys]
+  if (draft.mtmDraftsOn !== undefined && draft.mtmDraftsOn !== before.mtmDraftsOn) body.mtmDraftsOn = draft.mtmDraftsOn // F-CP-155
   return Object.keys(body).length === 1 ? null : body
 }
 

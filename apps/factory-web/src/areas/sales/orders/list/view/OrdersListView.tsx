@@ -74,6 +74,12 @@ import { Globe } from 'lucide-react'
 import { replyManyHeld, replyManyLabel } from '../reply-many'
 import { ReplyManyDialog } from './ReplyManyDialog'
 // ---- end F-SA-282
+// ---- F-CP-140: the price check columns (ONE spec: ../price-check-columns.ts) and their cells ----
+import { PRICE_CHECK_IDS, priceCheckColDefs, priceCheckText, type PriceCheckId } from '../price-check-columns'
+import { PriceDiffCell, PriceMatchCell } from './PriceMatchCell'
+// ---- end F-CP-140
+import { PriceCheckDialog } from '../../price-check/PriceCheckDialog' // F-CP-114: the ONE customer's-price window
+import '../../price-check/price-check.css' // F-CP-114: the Customer's price cell's door
 
 export type { OrdersListActions, OrdersListModel } from '../list-model'
 
@@ -127,7 +133,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       // B-TH-225 (grid-F28, F29): o opens the focused cell's door; ⌘ / Ctrl + Enter opens it (or the row's order) in a new tab.
       const cell = target?.closest('.ag-cell')
       if (cell && !help && !model.newOrder && !target?.closest('input, textarea, select')) {
-        const door = cell.querySelector<HTMLElement>('a[data-door], button.fw-sheet-funnel, button[data-picture]') // F-SA-212: the picture part
+        const door = cell.querySelector<HTMLElement>('a[data-door], button[data-door], button.fw-sheet-funnel, button[data-picture]') // F-SA-212: the picture part; F-CP-114: a window's door
         if (event.key === 'o' && !event.metaKey && !event.ctrlKey && !event.altKey && door) {
           event.preventDefault()
           door.click()
@@ -545,6 +551,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       {model.note && <NoteDialog model={model.note} actions={actions?.note} />}
       {/* F-SA-282: Reply to <customer> on N… (one line per order after Send: posted, or not with why). */}
       {model.replyMany && <ReplyManyDialog model={model.replyMany} actions={actions?.replyMany} />}
+      {/* F-CP-114: the ONE customer's-price window (the order page's Money tab mounts the same one, F-CP-142). */}
+      {model.priceCheck && <PriceCheckDialog model={model.priceCheck} actions={actions?.priceCheck} />}
       {/* F-SA-281: the one New task window — on one order (a row's ⋯), or on N orders in one batch (the selection). */}
       {model.task && (
         <TaskNewDialog
@@ -768,7 +776,7 @@ const cardFieldsOf = (picture: (row: OrderRow) => ReactNode) => ({
   promised: { role: 'field' as const },
   madeToMeasure: { role: 'field' as const }, // F-SA-221: the mark on the phone card (never a rider's name)
   whereItIs: { role: 'field' as const }, // F-SA-275: the stage and the health on the phone card
-  ...Object.fromEntries(['deposit', 'units', 'orderDate', 'shipped', 'invoiced', 'net', 'gross', 'margin', 'priority', 'season', 'quote', 'company', /* B-TH-244 */ 'openUnits', 'progress', 'paid', 'balance', 'site', 'note', 'atRisk', 'customerUrgency', /* F-SA-221 */ 'riders', /* F-SA-275 */ 'waitingOn', 'supervisor'].map((id) => [id, { role: 'hidden' as const }])),
+  ...Object.fromEntries(['deposit', 'units', 'orderDate', 'shipped', 'invoiced', 'net', 'gross', 'margin', 'priority', 'season', 'quote', 'company', /* B-TH-244 */ 'openUnits', 'progress', 'paid', 'balance', 'site', 'note', 'atRisk', 'customerUrgency', /* F-SA-221 */ 'riders', /* F-SA-275 */ 'waitingOn', 'supervisor', /* F-CP-140 */ ...PRICE_CHECK_IDS].map((id) => [id, { role: 'hidden' as const }])),
 })
 
 interface ColumnsInput {
@@ -1030,6 +1038,8 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer 
           { id: 'open', label: t('list.open'), href: orderHref(prefix, data) },
           { id: 'tab', label: t('list.openNewTab'), href: orderHref(prefix, data), target: '_blank' },
           { id: 'deposit', label: t('tab.money'), href: orderHref(prefix, data, 'money') },
+          // F-CP-114: Set customer's price… — the ONE window, here (a price holder only: the host gives the door with the price grain).
+          ...(can.price && act()?.onPriceCheck ? [{ id: 'priceCheck', label: t('priceCheck.edit'), onSelect: () => act()?.onPriceCheck?.(data.id) }] : []),
           ...(data.status === 'CONFIRMED' && can.makeWorkOrders ? [{ id: 'make', label: t('step.makeWorkOrders'), href: `${prefix}/production/work-orders?new=1&order=${encodeURIComponent(data.number)}` }] : []),
           // B-W2b-323: Print confirmation (the confirmation PDF in a new tab; held while it waits for a yes or was cancelled).
           ...(model.depth ? [printVerb(data, prefix, d)] : []),
@@ -1074,6 +1084,32 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer 
         {s(`urgency.${data.customerUrgency}`)}
       </FunnelButton>
     ) : null
+  // ── F-CP-140 (customer page plan C2d; design 11-money §3.1; review F6, G1): the price check — the ONE spec's four columns, opt-in in
+  // Customise under "Price check" (none shown by default until the Owner's sheet), each the export's own id; only with the price
+  // grain (priceCheckColumnsFor: none without it — no column, no Customise entry, no chip, no export column). Our price = the Net. ──
+  // F-CP-114: the Customer's price cell is the window's door for a price holder (a click, or o on the focused cell).
+  const BrandPriceColumn = ({ data }: ICellRendererParams<OrderRow>) => {
+    if (!data || data.brandPrice === undefined) return null
+    const amount = money(data.brandPrice, data.currency, locale)
+    const open = act()?.onPriceCheck
+    if (!open) return <span>{amount}</span>
+    const label = t('priceCheck.door', { number: data.number })
+    return (
+      <button type="button" className="fw-pc-door" data-door="" title={label} aria-label={`${label}: ${amount}`} onClick={() => open(data.id)}>
+        {amount}
+      </button>
+    )
+  }
+  const PriceMatchColumn = ({ data }: ICellRendererParams<OrderRow>) => {
+    if (!data) return null
+    const match = data.priceMatch
+    const narrow = act()?.onPriceMatch
+    return <PriceMatchCell row={data} t={t} onNarrow={narrow && match ? () => narrow(match) : undefined} />
+  }
+  const PriceDiffColumn = ({ data }: ICellRendererParams<OrderRow>) => (data ? <PriceDiffCell row={data} t={t} locale={locale} /> : null)
+  const priceCells: Record<PriceCheckId, (params: ICellRendererParams<OrderRow>) => ReactNode> = { ourPrice: NetCell, brandPrice: BrandPriceColumn, priceMatch: PriceMatchColumn, priceDiff: PriceDiffColumn }
+  const priceColumns: ColDef<OrderRow>[] = priceCheckColDefs(can, s, priceCells, (id, row) => priceCheckText(id, row, t, locale)).map(later)
+  // ── end F-CP-140 ──
   const laterColumns: ColDef<OrderRow>[] = [
     later({ colId: 'openUnits', headerName: s('col.openUnits'), headerTooltip: s('col.openUnitsHint'), minWidth: 88, flex: 0.5, type: 'rightAligned', valueGetter: ({ data }: { data?: OrderRow }) => data?.openUnits ?? null }),
     later({ colId: 'progress', headerName: s('col.progress'), headerTooltip: s('col.progressHint'), minWidth: 150, flex: 1, cellRenderer: ProgressCell, valueGetter: ({ data }: { data?: OrderRow }) => (data ? progressWords(data, s) : '') }),
@@ -1091,6 +1127,7 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer 
     // opt-in, shown at once when the sheet shows made-to-measure orders only (the built-in view, the Made-to-measure page).
     { ...later({ colId: 'madeToMeasure', headerName: s('mtm.mark'), minWidth: 150, flex: 0.9, valueGetter: ({ data }: { data?: OrderRow }) => (data ? mtmText(data, s) : '') }), hide: !model.kind },
     ...(can.measurements ? [{ ...later({ colId: 'riders', headerName: s('col.riders'), minWidth: 140, flex: 1, valueGetter: ({ data }: { data?: OrderRow }) => (data ? ridersText(data) : '') }), hide: !model.kind }] : []),
+    ...priceColumns, // F-CP-140
   ]
   // ── end B-TH-244 ──
   return serverSorted(model.sort ?? null, [

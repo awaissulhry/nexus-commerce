@@ -36,7 +36,15 @@
     "waitingOn": "In attesa di",
     "waitingOnHint": "La più urgente: una richiesta da rispondere, una risposta che tocca a noi, chi deve agire",
     "supervisor": "Supervisore",
-    "supervisorHint": "Io, un'altra persona o non impostato: mai un nome in un elenco"
+    "supervisorHint": "Io, un'altra persona o non impostato: mai un nome in un elenco",
+    "ourPrice": "Nostro prezzo",
+    "ourPriceHint": "Il totale del nostro ordine, IVA esclusa",
+    "brandPrice": "Prezzo del cliente",
+    "brandPriceHint": "Il prezzo del cliente per questo ordine, IVA esclusa (dall'ordine del cliente o dal portale)",
+    "priceMatch": "Verifica prezzi",
+    "priceMatchHint": "Il nostro prezzo accanto a quello del cliente, riga per riga, IVA esclusa: Uguale, Diverso o Prezzo del cliente non ancora dato",
+    "priceDiff": "Differenza",
+    "priceDiffHint": "Il nostro prezzo meno quello del cliente: + chiediamo di più, − chiediamo di meno"
   },
   "door": {
     "order": "Apri l'ordine {number} · la conversazione a destra",

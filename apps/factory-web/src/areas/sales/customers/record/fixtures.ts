@@ -11,6 +11,8 @@ import { CustomerRecordView } from './view/CustomerRecordView'
 // F-SA-272: the supervisor card's states (made-up people of the portal demo).
 import { CustomerSupervisorCard } from '../portal/view/CustomerSupervisorCard'
 import { SUPERVISOR_CASES } from '../portal/demo'
+import { DESIGNER_CASES } from '../portal/demo' // F-CP-155
+import type { DesignerModel } from '../portal/designer/model' // F-CP-155
 import type { OpenOrderMoney } from '../money/api' // F-SA-273
 import type { SupervisorModel } from '../portal/limits/model'
 // B-W2b-324: the customer in depth (made-up data in ../depth/_demo/fixtures.ts).
@@ -51,6 +53,7 @@ import type { RowView } from '../../orders/model'
 import type { OrdersListModel } from '../../orders/list/list-model'
 import { OrdersListView } from '../../orders/list/view/OrdersListView'
 import { WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
+import { priceWindowOf, type PriceWindowCase } from '../../orders/price-check/fixtures' // F-CP-114
 import { workViewCounts } from './use-customer-work' // F-CP-103: the Views ▾ counts
 import { WaitingStrip } from './view/WaitingStrip'
 import { workEmptyOf, workPreset, workViewsOf } from './view/WorkTab' // F-CP-101: the views and empty states per view
@@ -85,7 +88,7 @@ const OPEN_ORDER_MONEY: OpenOrderMoney[] = [
 /** A case: the record, (B-W2a-49) the Commercial terms card of its Terms & requirements tab (B-TH-260), (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
 // F-SA-272: + the Overview's "Who looks after <customer>" card (the supervisor and backup, moved from Portal settings).
 // F-SA-274: + the e-mails of the people with portal access (the contacts' "Has portal access").
-type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[]; work?: WorkCase /* F-SA-276 */ }
+type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[]; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */ }
 
 // ---- F-SA-276: the Work tab's cases — the strip's reads and the sheet's rows (made-up; the production part as the API sends it) ----
 interface WorkCase {
@@ -99,6 +102,8 @@ interface WorkCase {
   readonly linesWindow?: 'lines' | 'discard'
   /** F-CP-107: "Drafts of <customer>" shown (its list, none yet, or one draft open in its window). */
   readonly drafts?: 'list' | 'empty' | 'window'
+  /** F-CP-114: the ONE customer's-price window open over the sheet (typing, changed meanwhile, a closed order). */
+  readonly priceWindow?: PriceWindowCase
 }
 
 /** F-CP-107: made-up portal drafts of the customer (one ready to send, one just started). */
@@ -193,7 +198,7 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
       ? createElement(CustomerDraftsList, {
           model: { customer: name, read: { status: 'ready', rows: work.drafts === 'empty' ? [] : draftRowsOf(party, work.price !== false) }, updates: work.drafts === 'list' ? 1 : 0, activeId: null, views: { model: { ...list, hostViews: [{ id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: name }), active: true }], views: workViewsOf({ price: work.price !== false }, { drafts: true }) } } },
         })
-      : createElement(OrdersListView, { model: list }),
+      : createElement(OrdersListView, { model: work.priceWindow && work.price !== false ? { ...list, priceCheck: priceWindowOf(work.priceWindow) } : list /* F-CP-114 */ }),
     work.drafts === 'window'
       ? createElement(DraftWindow, {
           model: {
@@ -236,7 +241,7 @@ function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDept
 }
 
 function CustomerDesign({ model }: { model: CustomerCase }) {
-  const { terms, money, depth, supervisor, portalEmails, work, ...record } = model
+  const { terms, money, depth, supervisor, portalEmails, work, designer, ...record } = model
   const party = record.party
   const id = party?.id ?? 'x'
   return inShell(
@@ -245,7 +250,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
       // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
-      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WorkDesign, { work, party }) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null }),
+      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName, designer: designer ?? null /* F-CP-155 */ }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WorkDesign, { work, party }) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null }),
     ),
   )
 }
@@ -356,6 +361,11 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'work-drafts-empty', label: 'F-CP-107 · Drafts: none in the portal yet', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'empty' }) },
     { id: 'work-drafts-window', label: 'F-CP-107 · A draft open in its window: read only, Accept and Refuse held with why, J / K between drafts', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'window' }) },
     { id: 'work-new-order-discard', label: 'F-CP-113 · Discard asks first when something is typed', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), linesWindow: 'discard' }) },
+    // ---- F-CP-114: "Set customer's price…" (row ⋯, or the Customer's price cell) — the ONE window, price holders only.
+    { id: 'work-price-window', label: 'F-CP-114 · Work: Set customer\'s price… — per line a unit price or a line total, the PO file, an optional order total', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'edit' }) },
+    { id: 'work-price-window-stale', label: 'F-CP-114 · Changed meanwhile (409): "Someone changed these prices meanwhile. Here they are now."', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'stale' }) },
+    { id: 'work-price-window-closed', label: 'F-CP-114 · A closed order keeps its prices: read only, Save held with why', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'closed' }) },
+    { id: 'work-price-window-no-price', label: 'F-CP-114 · As Sales worker (no price grain): no door, no window, no call', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined })), price: false, priceWindow: 'edit' }, { can: { ...RECORD_CAN, price: false } }) },
     { id: 'quotes-orders-empty-production', label: 'F-CP-101 · Work: In production, nothing (the way to All orders)', model: workCase('NUOVO-PROVA', { reads: STRIP_READY, rows: [], view: 'IN_PRODUCTION' }) },
     { id: 'quotes-orders-reading', label: 'F-SA-276 · Work: the strip and the rows reading ("—", never 0)', model: workCase('MODA-DEMO', { reads: STRIP_READING, rows: null }) },
     { id: 'quotes-orders-error', label: "F-SA-276 · Work: the orders couldn't be read (the strip stays usable)", model: workCase('MODA-DEMO', { reads: { ...STRIP_READY, requests: { status: 'failed' } }, rows: [], problem: 'problem.read.unavailable' }) },
@@ -375,6 +385,17 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'overview-supervisor-every-company', label: 'F-SA-272 · The supervisor held — the reader does not manage this customer at every company', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.everyCompany } },
     { id: 'overview-supervisor-nobody', label: 'F-SA-272 · Nobody may supervise yet (what a supervisor needs, in words)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.nobody } },
     { id: 'overview-supervisor-refused', label: 'F-SA-272 · Apply refused: the supervisor cannot open measurement sheets', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.refused } },
+    // ---- F-CP-155: the Factory designer + Backup under Supervisor / Backup (the only names of ours the customer sees) ----
+    { id: 'overview-designer', label: 'F-CP-155 · Who looks after <customer>: Factory designer Giulia Verdi + Backup Elena Rossi — "<customer> sees this name"', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.set } },
+    { id: 'overview-designer-change', label: 'F-CP-155 · Change…: ONE window, two pick lists (office people who read and answer its conversations), Apply with the version', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.change } },
+    { id: 'overview-designer-refused', label: 'F-CP-155 · Apply refused at the field: "This person does not work with <customer>…"', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.refused } },
+    { id: 'overview-designer-lost', label: 'F-CP-155 · The designer no longer reaches the customer: the portal names the backup', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.lost } },
+    { id: 'overview-designer-portal-off', label: 'F-CP-155 · Portal off: the name shows once the portal is on', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.portalOff } },
+    { id: 'overview-designer-empty', label: 'F-CP-155 · No factory designer named yet', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.empty } },
+    { id: 'overview-designer-held', label: 'F-CP-155 · Change… held: "Needs the right: …" (no partners.manage)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.held, designer: DESIGNER_CASES.held } },
+    { id: 'overview-designer-every-company', label: 'F-CP-155 · Change… held: not at every company the customer works with', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.everyCompany } },
+    { id: 'overview-designer-loading', label: 'F-CP-155 · The designer rows reading (the supervisor is drawn)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.loading } },
+    { id: 'overview-designer-error', label: "F-CP-155 · The designer couldn't be read: Try again (the supervisor stays)", model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.error } },
     // ---- F-SA-274: People & addresses — a contact with portal access is tagged (an exact e-mail match), the others offer Invite.
     { id: 'people-portal', label: 'F-SA-274 · People & addresses: contacts tagged "Has portal access" on the same e-mail; ⋯ Invite to the portal… for the others', model: { ...record('MODA-DEMO', { tab: 'people', can: { ...RECORD_CAN, partners: true } }), portalEmails: by('MODA-DEMO').contacts.slice(0, 1).flatMap((contact) => (contact.email ? [contact.email.toLowerCase()] : [])) } },
     // ---- B-TH-260: the thread docked (the rule of picture 38); Activity and Documents are gone, their tools in the thread's "⋯" (R-ACT)

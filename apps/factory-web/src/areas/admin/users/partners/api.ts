@@ -50,7 +50,9 @@ const partnerPerson = z.object({
 })
 export type PartnerPerson = z.infer<typeof partnerPerson>
 
-const settings = z.object({ portalOn: z.boolean(), maxUsers: z.number().nullable(), allowedRoleKeys: z.array(z.string()), version: z.number() })
+// F-CP-155: + mtmDraftsOn (the API's B-CP-078: a customer may keep made-to-measure lines in its portal drafts; on by default — absent
+// from an older answer: on, the column's default).
+const settings = z.object({ portalOn: z.boolean(), maxUsers: z.number().nullable(), allowedRoleKeys: z.array(z.string()), mtmDraftsOn: z.boolean().optional(), version: z.number() })
 export type PortalSettings = z.infer<typeof settings>
 const seats = z.object({ taken: z.number(), max: z.number().nullable() })
 export type Seats = z.infer<typeof seats>
@@ -98,6 +100,8 @@ export interface SettingsBody {
   portalOn?: boolean
   maxUsers?: number | null
   allowedRoleKeys?: string[]
+  /** F-CP-155: made-to-measure lines in the customer's portal drafts (the same save, the same fresh code). */
+  mtmDraftsOn?: boolean
   /** The version read (0: no settings row yet). */
   version: number
 }
