@@ -27,9 +27,11 @@ import { previewFrozenProblems } from '../order-changes/freeze'
 // B-W2b-374 (XF3:02): a new line's options.
 import { entryOptionsAudit, planEntryOptions, writeEntryOptions, type EntryOptions } from './lines/options-entry'
 // B-SA-042 (P6', R1): an amendment under what work orders make proposes the gap to them in its command; extra pieces need an outcome.
-import { CHANGE_WORDS, chargeFeeOf, extraOf as extraOfPlanned, type ExtraOutcome, type ExtraPieces, type PlannedChange, type PricedSize } from '@nexus/factory-domain/order-apply/rules'
+import { chargeFeeOf, extraOf as extraOfPlanned, type ExtraOutcome, type ExtraPieces, type PlannedChange, type PricedSize, type WorkCell } from '@nexus/factory-domain/order-apply/rules'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
-import { gapOf, proposeGapsInCommand, raisesOf, workCellsOf, type GapLine } from '../../production/work-order-changes/propose'
+import { proposeGapsInCommand, type GapLine } from '../../production/work-order-changes/propose'
+// B-OP-013 (order page plan N2): the previews say what the work orders will do, read as the command reads it.
+import { plannedChangesOf, workOrderPreviewOf } from './work-order-plan'
 // B-OP-012 (order page plan N2, D1): the work orders follow the amendment in its command where the person may.
 import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../production/work-order-changes/auto'
 
@@ -91,19 +93,21 @@ const sizesOf = (snapshot: OrderSnapshot): Map<string, Map<string, number>> => n
 const pricesOf = (after: OrderSnapshot): PricedSize[] => after.lines.flatMap((line) => line.sizes.map((size) => ({ lineId: line.id, size: size.size, unitPrice: size.unitPrice ?? line.unitPrice })))
 
 /** The extra pieces an amendment's plan would leave (cut beyond the new figures), with the order's work orders as they are. */
-export async function plannedExtra(db: Reader, tenantId: string, plan: Pick<AmendmentPlan, 'before' | 'after'>, stored: readonly LineRecord[]): Promise<ExtraPieces[]> {
-  return extraOfPlanned(await plannedGap(db, tenantId, plan, stored))
+export async function plannedExtra(db: Reader, tenantId: string, order: Pick<OrderRow, 'id' | 'status'>, plan: Pick<AmendmentPlan, 'before' | 'after' | 'diff'>, stored: readonly LineRecord[]): Promise<ExtraPieces[]> {
+  return extraOfPlanned((await plannedGap(db, tenantId, order, plan, stored)).changes)
 }
 
 /**
  * B-SA-045: the work-order changes an amendment's plan would propose (the apply plan shows them before Accept), with the order's
  * work orders as they are; `closing` replaces the plan's own line of the same id (a colourway change's old line, closed short after).
+ * B-OP-013: read as the command proposes them — the lines the amendment changes (the diff's), the waiting changes they replace with
+ * theirs (./work-order-plan.ts plannedChangesOf) — and with the cells read (what is cut), for the plan rows.
  */
-export async function plannedGap(db: Reader, tenantId: string, plan: Pick<AmendmentPlan, 'before' | 'after'>, stored: readonly LineRecord[], closing: readonly GapLine[] = []): Promise<PlannedChange[]> {
+export async function plannedGap(db: Reader, tenantId: string, order: Pick<OrderRow, 'id' | 'status'>, plan: Pick<AmendmentPlan, 'before' | 'after' | 'diff'>, stored: readonly LineRecord[], closing: readonly GapLine[] = []): Promise<{ changes: PlannedChange[]; cells: WorkCell[] }> {
   const replaced = new Set(closing.map((line) => line.id))
-  const lines = [...gapLinesAfter(plan.after, stored).filter((line) => !replaced.has(line.id)), ...closing]
-  const cells = await workCellsOf(db, tenantId, lines.map((line) => line.id))
-  return gapOf(lines, cells, raisesOf(sizesOf(plan.before), lines, []))
+  const changed = new Set(plan.diff.lines.map((line) => line.lineId))
+  const lines = [...gapLinesAfter(plan.after, stored).filter((line) => changed.has(line.id) && !replaced.has(line.id)), ...closing]
+  return plannedChangesOf(db, tenantId, order, lines, sizesOf(plan.before))
 }
 
 /** A fee in major units plus another (either may be absent), 2 places. */
@@ -357,8 +361,9 @@ export async function previewAmendment(caller: CommandCaller, orderId: string, b
     // B-W2b-309 (SAL-218): what the company's freeze rules hold at the stage production reached, said before Apply.
     const frozen = await previewFrozenProblems(client, order, plan.diff, false)
     // B-SA-042 (R1, Round 4): the extra pieces it would leave, shown before Apply; Apply stays held until their outcome is chosen.
-    const extra = await plannedExtra(client, officeContextOf(caller).tenantId, plan, facts.lines)
-    const workOrders = { extra: extra.map((entry) => ({ ...entry, words: CHANGE_WORDS.extra(entry.count, entry.size) })), needsOutcome: extra.length > 0 && !body.extraOutcome, words: extra.length > 0 ? CHANGE_WORDS.chooseExtra(extra.reduce((sum, entry) => sum + entry.count, 0)) : null }
+    // B-OP-013: and what each work order will do — in the same click or waiting, and why (the command's own rule).
+    const context = officeContextOf(caller)
+    const workOrders = await workOrderPreviewOf(client, context, order, await plannedGap(client, context.tenantId, order, plan, facts.lines), { requireOutcome: true, outcomeChosen: Boolean(body.extraOutcome) })
     if (frozen.length > 0) return { ok: false, revision, version: order.version, problems: frozen, diff: diffView(plan.diff), workOrders }
     return { ok: !workOrders.needsOutcome, revision, version: order.version, problems: [] as Issue[], diff: diffView(plan.diff), workOrders }
   })
@@ -422,7 +427,7 @@ export async function amendInCommand(
   // a priced change (its fee: each extra piece at its size's price). The outcome is checked when the gap is proposed.
   let priced = options.priced ?? null
   if (body.extraOutcome === 'CHARGE' && options.reacceptance !== false && options.putBack !== true) {
-    const fee = chargeFeeOf(await plannedExtra(tx, tenantId, plan, facts.lines), pricesOf(plan.after))
+    const fee = chargeFeeOf(await plannedExtra(tx, tenantId, { id: fresh.id, status: locked.status }, plan, facts.lines), pricesOf(plan.after))
     if (fee) priced = { ...(priced ?? {}), fee: addFee(priced?.fee, fee) }
   }
   // B-W2b-309: one change at a time, the freeze rules, the customer's materials of removed lines (before any write).

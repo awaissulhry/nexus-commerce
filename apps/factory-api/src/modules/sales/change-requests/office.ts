@@ -398,7 +398,7 @@ export async function acceptPreviewOf(db: Reader, tenantId: string, row: OfficeR
         // The old line of a colourway change is closed short after the amendment (it wants what shipped of it).
         const coloured = colourLinesOf(cells).filter((colour) => colour.sizes.length > 0).map((colour) => colour.fromLineId)
         const closing = coloured.length > 0 ? await storedGapLines(db, order, coloured, new Set(coloured)) : []
-        changes = await plannedGap(db, tenantId, plan, facts.lines, closing)
+        changes = (await plannedGap(db, tenantId, order, plan, facts.lines, closing)).changes
       }
     }
     if (row.shipToAddressId) {

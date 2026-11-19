@@ -4,7 +4,9 @@ import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { PARTY_TAX_MODES } from '@nexus/factory-domain/parties/tax'
 import { LINE_CHANGES } from '@nexus/factory-domain/sales/amendments/amendments'
 // B-SA-042: what happens to extra pieces already cut.
-import { EXTRA_OUTCOMES } from '@nexus/factory-domain/order-apply/rules'
+import { EXTRA_OUTCOMES, WORK_ORDER_CHANGE_KINDS } from '@nexus/factory-domain/order-apply/rules'
+// B-OP-013: the previews' plan of the work orders.
+import { APPLY_ROUTES } from '@nexus/factory-domain/order-apply/plan'
 import { IMPACT_CODES } from '@nexus/factory-domain/sales/orders/daily'
 import { MAX_REASON, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { MILESTONE_KINDS, MILESTONE_STATUSES } from '@nexus/factory-domain/sales/orders/schedule'
@@ -167,6 +169,30 @@ export const extraPiecesView = output({
   words: words.nullable(),
 })
 
+// ── B-OP-013 (order page plan N2, D1 + D3; 13-backend §1.3): what each work order will do, said before the change is applied ──
+/**
+ * One work order (or a new DRAFT) of a preview's plan: its cells from → to with what is cut (never below it), whether the change
+ * follows in the same click (`appliesNow`) or waits and why (`held`), and whether its traveller is reprinted once applied. A work
+ * order the reader does not reach with workorders.view: no id, no number, no status (words that name none).
+ */
+export const workOrderPlanView = output({
+  kind: z.enum(WORK_ORDER_CHANGE_KINDS),
+  workOrderId: id().nullable(),
+  number: z.string().nullable(),
+  status: z.string().nullable(),
+  route: z.enum(APPLY_ROUTES).nullable(),
+  cells: z.array(output({ lineId: id(), size: z.string(), from: z.number().int(), to: z.number().int(), cut: z.number().int() })),
+  /** Pieces already cut beyond the new figures (a count). */
+  extra: z.number().int(),
+  appliesNow: z.boolean(),
+  held: words.nullable(),
+  reprint: z.boolean(),
+})
+
+/** A preview's work orders: the extra pieces (as before) and the plan of each work order. */
+export const workOrderPreviewView = extraPiecesView.extend({ plan: z.array(workOrderPlanView) })
+// ── end B-OP-013 ──
+
 export const diffView = output({
   lines: z.array(
     output({
@@ -212,7 +238,7 @@ const amendmentView = output({
 export const previewAmendmentContract = defineContract({
   params: orderParams,
   body: input({ version: version.optional(), ...amendFields }),
-  response: { 200: output({ ok: z.boolean(), revision: z.number().int(), version: z.number().int(), problems: z.array(issue), diff: diffView.nullable(), /* B-SA-042 */ workOrders: extraPiecesView.nullable() }) },
+  response: { 200: output({ ok: z.boolean(), revision: z.number().int(), version: z.number().int(), problems: z.array(issue), diff: diffView.nullable(), /* B-SA-042, B-OP-013 */ workOrders: workOrderPreviewView.nullable() }) },
 })
 
 export const applyAmendmentContract = defineContract({
@@ -254,6 +280,27 @@ export const closeLinesContract = defineContract({
 })
 
 export const reopenLinesContract = defineContract({ params: orderParams, body: linesBody, response: { 200: output({ order: orderView, reopened: z.array(id()) }) } })
+
+// B-OP-013 (order page plan N2; 13-backend §1.3): the close's preview — what it closes, and what each work order will do.
+export const closeLinesPreviewContract = defineContract({
+  params: orderParams,
+  body: input({
+    /** None: every open line with something left. */
+    lineIds: z.array(id()).max(MAX_QUOTE_LINES).optional(),
+    /** The extra pieces' outcome the office would name (none: they stay production's to decide). */
+    extraOutcome: z.enum(EXTRA_OUTCOMES).nullish(),
+  }),
+  response: {
+    200: output({
+      ok: z.boolean(),
+      version: z.number().int(),
+      problems: z.array(issue),
+      closed: z.array(output({ lineId: id(), seq: z.number().int(), closedShortQuantity: z.number().int() })),
+      stillInWorkOrders: z.array(output({ lineId: id(), pieces: z.number().int() })),
+      workOrders: workOrderPreviewView.nullable(),
+    }),
+  },
+})
 
 // ---- cancel ------------------------------------------------------------------------------------------------------------------
 
@@ -299,6 +346,8 @@ export const cancelCheckContract = defineContract({
       impact: impactView,
       /** The leather cut for its work orders: hides and area in the hide's base unit (no worker, no money). */
       leatherCut: z.array(output({ workOrderId: id(), number: z.string(), hides: z.number().int(), area: z.string().nullable() })),
+      /** B-OP-013: the pieces already cut (their outcome is the cancel's `extraOutcome`) and what each work order will do. */
+      workOrders: workOrderPreviewView,
     }),
   },
 })

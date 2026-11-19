@@ -4,7 +4,7 @@ import { MAX_ANSWER, ORDER_REQUEST_KINDS, REQUEST_STATUSES, VERDICT_CODES, CUTOF
 import { MAX_REASON, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { MAX_SIZE_QUANTITY, SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
-import { diffView, extraPiecesView, impactView } from '../orders/daily-contract'
+import { diffView, extraPiecesView, impactView, workOrderPlanView } from '../orders/daily-contract'
 // B-OP-012: what Accept's work orders did in its command, and what waits.
 import { followedView } from '../../production/work-order-changes/contract'
 // B-SA-042 (P6', R1): Accept runs the change at once; the extra pieces' outcome, the work-order changes it proposed.
@@ -522,6 +522,11 @@ export const applyPlanContract = defineContract({
           bundles: z.number().int().nullable(),
         }),
       ),
+      /**
+       * B-OP-013 (order page plan N2, D1): before Accept, what each work order will do — in Accept's own command for this reader, or
+       * waiting with why; [] once the request is answered (`next` says what was done).
+       */
+      workOrderPlan: z.array(workOrderPlanView),
       live,
     }),
   },

@@ -5,13 +5,14 @@ import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { copyOrderAsQuoteContract } from '../quotes/contract'
 import { copyOrderAsQuote } from '../quotes/duplicate'
 import { applyAmendment, listAmendments, previewAmendment } from './amend'
-import { closeLines, reopenLines } from './close-lines'
+import { closeLines, previewCloseLines, reopenLines } from './close-lines'
 import { boardContract, closeContract, customersContract, getOrderContract, listOrdersContract, makeOrderContract, promiseContract, readyContract, summaryContract } from './contract'
 import {
   applyAmendmentContract,
   cancelCheckContract,
   cancelContract,
   closeLinesContract,
+  closeLinesPreviewContract, // B-OP-013
   createManualContract,
   listAmendmentsContract,
   nextOrderNumberContract,
@@ -106,6 +107,9 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
   app.post('/sales/orders/:orderId/amendments', { schema: applyAmendmentContract }, async (request, reply) => reply.code(201).send(await applyAmendment(request, request.params.orderId, request.body, idempotencyKeyFrom(request))))
 
   app.post('/sales/orders/:orderId/close-lines', { schema: closeLinesContract }, async (request) => closeLines(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
+
+  // B-OP-013 (order page plan N2): the close's preview (nothing written).
+  app.post('/sales/orders/:orderId/close-lines/preview', { schema: closeLinesPreviewContract }, async (request) => previewCloseLines(request, request.params.orderId, request.body))
 
   app.post('/sales/orders/:orderId/reopen-lines', { schema: reopenLinesContract }, async (request) => reopenLines(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
 

@@ -24,6 +24,8 @@ export const manifest = defineManifest({
   'POST /sales/orders/:orderId/amendments/preview': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/orders/:orderId/amendments': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/orders/:orderId/close-lines': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  // B-OP-013 (order page plan N2): the close's preview — what each work order will do (can() on the order, as the close).
+  'POST /sales/orders/:orderId/close-lines/preview': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/orders/:orderId/reopen-lines': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'GET /sales/orders/:orderId/cancel-check': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'GET /sales/orders/:orderId/schedule': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
