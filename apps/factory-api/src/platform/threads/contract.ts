@@ -249,6 +249,11 @@ export const postNoteContract = defineContract({
     ...messageLinkInput,
     // B-SA-061: the part of its order the note is about (a sales order's note only).
     about: aboutInput.optional(),
+    /**
+     * B-CP-020 (customer page plan O5, L3): the writer's "Send it anyway" — an office note whose words look like a price is held once
+     * (409 refusal/NAMES_A_PRICE, the warning names no amount) and goes with this; a note for the floor stays held (FLOOR_PRICE).
+     */
+    pricesInWordsOk: z.boolean().optional(),
   }),
   response: { 201: output({ thread: threadView, message: messageView }) },
 })
@@ -270,6 +275,8 @@ export const postReplyContract = defineContract({
     namesNoOtherCustomer: z.boolean().optional(),
     /** B-SA-061: the part of its order the reply is about (a sales order's only; never a work order: office only). */
     about: aboutInput.optional(),
+    /** B-CP-020 (customer page plan O5, L3): "Send it anyway" for a reply whose words look like a price (409 refusal/NAMES_A_PRICE without it). */
+    pricesInWordsOk: z.boolean().optional(),
   }),
   response: { 201: output({ thread: threadView, message: messageView }) },
 })
