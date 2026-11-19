@@ -396,7 +396,7 @@ describe('B-SA-033 one sales order’s NCRs (GET /quality/ncr?salesOrderId=)', (
     await admin(
       `BEGIN;
        SET LOCAL session_replication_role = replica;
-       INSERT INTO "WorkOrder" SELECT (jsonb_populate_record(NULL::"WorkOrder", to_jsonb(w) || jsonb_build_object('id', '${made.mixedWorkOrder}', 'number', 'T-SA033-MIX-${run}', 'partyId', NULL))).* FROM "WorkOrder" w WHERE w.id = '${A.wo1}';
+       INSERT INTO "WorkOrder" SELECT (jsonb_populate_record(NULL::"WorkOrder", to_jsonb(w) || jsonb_build_object('id', '${made.mixedWorkOrder}', 'number', 'T-SA033-MIX-${run}', 'partyId', NULL, 'batchNumber', CASE WHEN w."batchNumber" IS NULL THEN NULL ELSE 'T-SA033-MIX-${run}' END /* fx-7: a batch number names one work order */))).* FROM "WorkOrder" w WHERE w.id = '${A.wo1}';
        INSERT INTO "WorkOrderSize" SELECT (jsonb_populate_record(NULL::"WorkOrderSize", to_jsonb(c) || jsonb_build_object('id', '${newId()}', 'workOrderId', '${made.mixedWorkOrder}'))).* FROM "WorkOrderSize" c WHERE c."workOrderId" = '${A.wo1}' ORDER BY c.id LIMIT 1;
        ${copyNcr(made.onWorkOrder, `T-SA033-1-${run}`, `jsonb_build_object('workOrderId', '${A.wo1}')`)}
        ${copyNcr(made.fromOrder, `T-SA033-2-${run}`, `jsonb_build_object('sourceType', 'SalesOrder', 'sourceId', '${so2}')`)}

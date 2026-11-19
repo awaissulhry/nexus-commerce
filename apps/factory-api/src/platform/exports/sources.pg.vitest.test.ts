@@ -138,8 +138,13 @@ describe('every list exports (the W1 and W2a lists)', { timeout: SLOW_TEST_TIMEO
   })
 
   it('for the planner, without the money they lack: the columns are named, never written', async () => {
+    const planner = templateOf('planner')!
     for (const source of EXPORT_SOURCES) {
-      const money = Object.entries(source.columns).filter(([, column]) => column.grain && !templateOf('planner')!.grains.includes(column.grain)).map(([key]) => key)
+      // B-SA-020 (plan N7): a column of a right the planner lacks (Sales › Orders' Riders: sales.measurements.view) is left out
+      // and named the same way as a money column of a grain they lack.
+      const money = Object.entries(source.columns)
+        .filter(([, column]) => (column.grain && !planner.grains.includes(column.grain)) || (column.permission && !planner.permissions.includes(column.permission)))
+        .map(([key]) => key)
       const allowed = await call('planner', 'POST', '/exports', { listKey: source.listKey, format: 'CSV', query: '', columns: columnsOf(source.listKey), title: source.listKey, locale: 'en' })
       if (allowed.status === 403 || (allowed.status === 400 && money.length === Object.keys(source.columns).length)) continue
       expect(allowed.status, `${source.listKey}: ${JSON.stringify(allowed.body).slice(0, 300)}`).toBe(201)

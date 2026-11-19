@@ -362,7 +362,7 @@ describe('the remake order of a returned unit (SAL-353)', { timeout: SLOW_TEST_T
     expect(line.description).toContain('Remake for RMA-360-0001 line 10')
     expect((await one(`SELECT count(*)::int AS n FROM "SalesOrderLineSize" s JOIN "SalesOrderLine" l ON l.id = s."lineId" WHERE l."orderId" = $1`, [made.order.id])).n).toBe(0)
     expect((await one(`SELECT "customerRef" FROM "SalesOrder" WHERE id = $1`, [made.order.id])).customerRef).toBe('RMA-360-0001')
-    expect((await outbox('remake_order.made')).at(-1)).toEqual({ returnId: rma, number: 'RMA-360-0001', orderId: made.order.id, orderNumber: made.order.number, lineIds: [rmaLine], waits: true })
+    expect((await outbox('remake_order.made')).at(-1)).toEqual({ returnId: rma, number: 'RMA-360-0001', orderId: made.order.id, orderNumber: made.order.number, lineIds: [rmaLine], waits: true, partyId: S.r1 /* B-SA-004: the return's customer */ })
     expect((await no('sales', 'POST', `/sales/returns/${rma}/remake-order`, { version: made.remake.version }, 409)).message).toContain('waits for its remake order')
     const confirmed = await ok('pm', 'POST', `/sales/mtm/profiles/${rev2}/review`, { decision: 'CONFIRM' })
     expect(confirmed.ordersGoneOn.map((order: Json) => order.id)).toContain(made.order.id)
