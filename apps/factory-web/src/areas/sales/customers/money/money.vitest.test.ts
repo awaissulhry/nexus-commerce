@@ -30,7 +30,9 @@ describe('the lists mirror factory-domain', () => {
 
 describe('the numbers', () => {
   it('who sees what', () => {
-    expect(customerMoneyCanOf(['receivables.view', 'money.price'])).toEqual({ receivables: true, price: true, returns: false, complaints: false })
+    expect(customerMoneyCanOf(['receivables.view', 'money.price'])).toEqual({ receivables: true, price: true, returns: false, complaints: false, orders: false, credit: false, creditLimits: false })
+    // F-SA-273: the Money tab's cards each by their own right — the open orders' deposits, the credit, and Change limit….
+    expect(customerMoneyCanOf(['orders.view', 'sales.credit.view', 'sales.credit.limits'])).toEqual({ receivables: false, price: false, returns: false, complaints: false, orders: true, credit: true, creditLimits: true })
   })
 
   it('overdue per customer and currency; a customer owing nothing late is absent', () => {
@@ -87,9 +89,11 @@ describe('the W2a design cases draw in both languages with no key on screen', ()
     const full = render(screen, screen.cases.find((entry) => entry.id === 'w2a-numbers')!.model, 'en')
     expect(full).toContain('Overdue')
     expect(full).toContain('€4,270.00')
-    expect(full).toContain('Returns in 2026')
     expect(full).toContain('Open returns and claims')
     expect(full).toContain('/finance/receivables?party=')
+    // F-SA-273: "Returns in <year>" is a key number of the Money tab now (F-SA-272: the Overview keeps at most six doors).
+    const money = render(screen, screen.cases.find((entry) => entry.id === 'tab-money')!.model, 'en')
+    expect(money).toContain('Returns in 2026')
     const none = render(screen, screen.cases.find((entry) => entry.id === 'w2a-numbers-no-receivables')!.model, 'en')
     expect(none).not.toContain('€4,270.00')
     expect(none).not.toContain('/finance/receivables?party=')
