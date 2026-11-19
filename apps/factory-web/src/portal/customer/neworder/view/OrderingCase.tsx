@@ -12,6 +12,8 @@ import { useOrderingWords } from '../words'
 import { NewOrderView, type NewOrderViewModel } from './NewOrderView'
 import { NotInAccess } from './parts'
 import { RequestPageView, type RequestPageModel } from './RequestPageView'
+// F-CP-150: the draft's conversation, docked beside the draft in the design too.
+import { ThreadView, type ThreadViewModel } from '../../../shell/view/ThreadView'
 
 /**
  * SCR-185 and SCR-226 as one case of the design review (B-W2b-194): the portal frame (B-W2b-173's PortalShellView, its band
@@ -21,7 +23,7 @@ import { RequestPageView, type RequestPageModel } from './RequestPageView'
 export type OrderingCaseBody =
   // B-TH-220: New order as an e-mail.
   | { kind: 'request'; model: RequestPageModel }
-  | { kind: 'neworder'; model: NewOrderViewModel }
+  | { kind: 'neworder'; model: NewOrderViewModel; thread?: ThreadViewModel | null }
   | { kind: 'catalogue'; model: CatalogueViewModel }
   | { kind: 'sheet'; model: StyleSheetModel }
   | { kind: 'noAccess'; admins: readonly string[] }
@@ -44,7 +46,7 @@ export function OrderingCase({ model: build }: { model: OrderingCaseBuilder }) {
         {body.kind === 'request' ? (
           <RequestCaseBody model={body.model} />
         ) : body.kind === 'neworder' ? (
-          <NewOrderView model={body.model} />
+          <NewOrderView model={body.model}>{body.thread ? <ThreadView model={body.thread} /> : null}</NewOrderView>
         ) : body.kind === 'catalogue' ? (
           <CatalogueView model={body.model} />
         ) : body.kind === 'sheet' ? (

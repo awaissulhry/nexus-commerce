@@ -305,7 +305,7 @@
     "confirm": "Elimina la bozza",
     "lines_one": "{count} riga verrà eliminata.",
     "lines_other": "{count} righe verranno eliminate.",
-    "noNumber": "La bozza non è mai stata inviata: non l'abbiamo mai vista.",
+    "noNumber": "La bozza non è mai stata inviata: il lavoro non è mai partito.",
     "back": "inizia un nuovo ordine",
     "acknowledge": "Ho capito: la bozza e le sue righe vengono eliminate."
   },
@@ -527,5 +527,59 @@
     "newOrder": "Nuovo ordine",
     "returns": "Resi, reclami, riparazioni e segnalazioni di sicurezza hanno una pagina loro: Resi e reclami.",
     "bandTitle": "Richiesta inviata"
+  },
+  "draftPage": {
+    "title": "Bozza d'ordine",
+    "titleOf": "Bozza d'ordine · {title}",
+    "untitled": "Bozza senza titolo",
+    "back": "Nuovo ordine",
+    "shared": "La fabbrica può leggere questa bozza. Il lavoro parte solo quando la inviate.",
+    "saved": "Salvata alle {time}",
+    "savedBy": "Salvata alle {time} da {name}",
+    "version": "v{n}",
+    "changedBy": "Modificata da {name} poco fa.",
+    "send": "Invia alla fabbrica",
+    "sendHeld": "Solo chi può ordinare la invia: {names}.",
+    "sendHeldNone": "Solo chi può ordinare la invia: chiedete al vostro amministratore.",
+    "discard": "Elimina…",
+    "discardHeld": "La elimina solo il collega che ha iniziato questa bozza o chi può inviare ordini.",
+    "checklist": "Cosa contiene la bozza",
+    "part": {
+      "NEED": "Cosa vi serve",
+      "LOGOS": "Loghi",
+      "REFERENCES": "Riferimenti",
+      "PEOPLE": "Persone e taglie",
+      "DATE": "Data e consegna",
+      "PRICE": "Il vostro prezzo",
+      "NOTES": "Note"
+    },
+    "state": {
+      "READY": "Pronto",
+      "LATER": "Lo mandiamo dopo",
+      "MISSING": "Manca",
+      "OPTIONAL": "Facoltativo"
+    },
+    "chip": "{n}. {part}: {state}",
+    "addLine": "Aggiungi una riga",
+    "reorderHeld": "Il vostro accesso non mostra gli ordini.",
+    "people": {
+      "grid": "Riga {seq}: griglia taglie, {pieces} pezzi",
+      "none": "Riga {seq}: ancora nessun pezzo",
+      "empty": "Prima aggiungete una riga: qui compaiono le sue taglie."
+    },
+    "price": {
+      "line": "Riga",
+      "ours": "Il nostro prezzo di listino"
+    },
+    "thread": "Messaggi · questa bozza",
+    "sentThread": "La fabbrica risponde qui e per e-mail.",
+    "startNew": "Inizia una nuova bozza",
+    "acceptedNoOrders": "La fabbrica ne ha fatto un ordine: lo segue il vostro buyer.",
+    "refusedNoOrders": "La fabbrica non ha accettato questa richiesta: il motivo lo ha il vostro buyer.",
+    "sentNoOrders": "Questa bozza è stata inviata alla fabbrica: la segue il vostro buyer.",
+    "problems_one": "{count} problema da sistemare prima di inviare",
+    "problems_other": "{count} problemi da sistemare prima di inviare",
+    "keySend": "Invia alla fabbrica",
+    "keyThread": "Mostra o nascondi la conversazione"
   }
 }

@@ -52,7 +52,6 @@ import {
   refusalOf,
   reorderBody,
   reorderStart,
-  sendHeld,
   sizesBody,
   stylesOf,
   todayIn,
@@ -69,6 +68,11 @@ import type { ReorderModel } from './view/ReorderPanel'
 import type { SheetState } from './view/UploadPanel'
 import { NotInAccess } from './view/parts'
 import { useOrderingWords } from './words'
+// ---- F-CP-150 (customer page plan C5, D9–D11): the draft order page — its conversation docked, who may send, who changed it.
+import { PortalThread } from '../../shell/thread/PortalThread'
+import { fetchColleagues } from './api'
+import { draftDiscardHeld, draftSendHeld, draftTitleOf, mayOf, whoMayOrder } from './model'
+// ---- end F-CP-150
 
 /**
  * `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=&reorder=&line=` for a customer (B-W2b-194, SCR-185, on
@@ -81,6 +85,12 @@ import { useOrderingWords } from './words'
  * …/send → the EndState. Writes run one after another (each takes the version the last one left), each with ONE
  * Idempotency-Key per body. No partner live event names an order request: the draft is read again when the tab comes back
  * or the live channel reconnects, and typed work is never overwritten ("it changed elsewhere — read it again").
+ *
+ * F-CP-150 (customer page plan C5, D9–D11): the ONE draft order. A draft is kept with portal.orderDrafts.edit (the brand's Buyer
+ * and Designer; the Admin follows): its Designer starts and fills it without prices, and reads Send held with the names of who may
+ * order (the API's `may`); Reorder a past order needs an access that shows orders. The draft's conversation is docked beside it
+ * from its first save (`PortalOrderRequest`; the factory reads the draft and may answer there) and stays once it is sent. A 409
+ * keeps what was typed and says who changed the draft when the API names them (B-CP-075).
  */
 export function CustomerNewOrderPage() {
   return (
@@ -138,7 +148,10 @@ function NewOrderContainer() {
   const { t, locale } = words
   const offline = useOffline()
   const can = useCallback((permission: string) => frame.me.permissions.includes(permission), [frame.me.permissions])
-  const allowed = frame.kinds.includes('CUSTOMER') && can('portal.orderRequests.manage')
+  // F-CP-150 (D11): the draft is kept with portal.orderDrafts.edit; sending and reordering stay with who may order.
+  const allowed = frame.kinds.includes('CUSTOMER') && can('portal.orderDrafts.edit')
+  const mayOrder = can('portal.orderRequests.manage')
+  const seesOrders = can('portal.salesOrders.view')
   const preview = frame.me.preview
   const draftId = search?.get('draft') ?? null
   const wayParam = search?.get('way')
@@ -172,6 +185,10 @@ function NewOrderContainer() {
   const [address, setAddress] = useState<AddressState | null>(null)
   const [discard, setDiscard] = useState<{ busy: boolean; failed: string | null } | null>(null)
   const [offlineSince, setOfflineSince] = useState<string | null>(null)
+  // ---- F-CP-150: who changed the draft meanwhile (a 409's re-read, once the API names them), and who may send it.
+  const [staleBy, setStaleBy] = useState<string | null>(null)
+  const [orderers, setOrderers] = useState<string[] | null>(null)
+  // ---- end F-CP-150
 
   const recordRef = useRef<DraftRecord | null>(null)
   recordRef.current = record
@@ -215,6 +232,7 @@ function NewOrderContainer() {
     setCells({})
     setNotes({})
     setStale(false)
+    setStaleBy(null) // F-CP-150
   }, [])
 
   const apply = useCallback((next: DraftRecord) => {
@@ -224,11 +242,21 @@ function NewOrderContainer() {
     setProblem(null)
   }, [])
 
-  const refused = useCallback((error: unknown) => {
-    const kind = kindOf(error)
-    setProblem(refusalOf(kind))
-    if (kind === 'conflict') setStale(true)
-  }, [])
+  const refused = useCallback(
+    (error: unknown) => {
+      const kind = kindOf(error)
+      setProblem(refusalOf(kind))
+      if (kind !== 'conflict') return
+      setStale(true)
+      // F-CP-150: who changed it ("Changed by Marta Bianchi a moment ago") — read, never applied: what was typed stays.
+      const id = recordRef.current?.request.id
+      if (id)
+        fetchDraft(api, id)
+          .then((next) => setStaleBy(next.request.lastEditedBy ?? null))
+          .catch(() => undefined)
+    },
+    [api],
+  )
 
   // ── reads ───────────────────────────────────────────────────────────────────────────────────────────────────────────
   const readDrafts = useCallback(() => {
@@ -268,6 +296,21 @@ function NewOrderContainer() {
     else setOfflineSince(null)
   }, [offline])
 
+  // ---- F-CP-150 (D11): a colleague who fills drafts but may not order reads who may send it (their names; else the admins).
+  const maySend = record ? mayOf(record.request).send : true
+  useEffect(() => {
+    if (maySend || orderers !== null) return
+    if (!can('portal.colleagues.view')) {
+      setOrderers(whoMayOrder(null, frame.me.user.id, admins))
+      return
+    }
+    fetchColleagues(api)
+      .then((answer) => setOrderers(whoMayOrder(answer.people, answer.me, admins)))
+      .catch(() => setOrderers(whoMayOrder(null, frame.me.user.id, admins)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maySend, orderers, api])
+  // ---- end F-CP-150
+
   // ── the start: a way makes a draft ──────────────────────────────────────────────────────────────────────────────────
   const startDraft = useCallback(
     async (chosen: Way, extra: { styles?: readonly string[]; reorder?: string | null; line?: string | null; reuse?: boolean } = {}) => {
@@ -292,7 +335,7 @@ function NewOrderContainer() {
   useEffect(() => {
     if (!allowed || draftId || choosing) return
     if (stylesParam.length > 0) void startDraft('pick', { styles: stylesParam, reuse: true })
-    else if (reorderParam) void startDraft('reorder', { reorder: reorderParam, line: lineParam, reuse: true })
+    else if (reorderParam && mayOrder) void startDraft('reorder', { reorder: reorderParam, line: lineParam, reuse: true }) // F-CP-150
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowed, draftId, stylesParam.join(','), reorderParam])
 
@@ -624,7 +667,7 @@ function NewOrderContainer() {
       return
     }
     const now = recordRef.current!
-    const heldNow = sendHeld(now.request, { preview, offline, busy: false, emptyLine: false })
+    const heldNow = draftSendHeld(now.request, { preview, offline, busy: false, emptyLine: false }, orderers ?? []) // F-CP-150
     if (heldNow) {
       if (heldNow.key === 'held.problems') showMe()
       return
@@ -661,8 +704,9 @@ function NewOrderContainer() {
     const marker = `${record.request.id}|${way}|${stylesParam.join(',')}|${reorderParam ?? ''}`
     if (handled.current === marker) return
     handled.current = marker
-    if (way === 'reorder' && reorder.orders.state === 'loading' && reorder.orders.rows.length === 0) readPastOrders('')
-    if (way === 'reorder' && reorderParam) openPastOrder(reorderParam, lineParam)
+    // F-CP-150 (D11): past orders only for one whose access shows orders (the way is held for anyone else).
+    if (mayOrder && way === 'reorder' && reorder.orders.state === 'loading' && reorder.orders.rows.length === 0) readPastOrders('')
+    if (mayOrder && way === 'reorder' && reorderParam) openPastOrder(reorderParam, lineParam)
     if (stylesParam.length > 0) openPicker(stylesParam)
     // "Pick styles" chosen for an empty draft: the picker opens by itself.
     else if (way === 'pick' && record.request.lines.length === 0) openPicker()
@@ -671,6 +715,7 @@ function NewOrderContainer() {
   }, [phase, record?.request.id, way, stylesParam.join(','), reorderParam])
 
   const chooseWay = (next: Way) => {
+    if (next === 'reorder' && !mayOrder) return // F-CP-150 (D11): held with why on the page
     if (phase === 'start') {
       void startDraft(next)
       return
@@ -715,8 +760,13 @@ function NewOrderContainer() {
   usePortalUnsaved('neworder', { dirty, what: t('unsaved.what'), save: flush })
 
   // ── the band ────────────────────────────────────────────────────────────────────────────────────────────────────────
-  const sendHeldNow = record ? sendHeld(record.request, { preview, offline, busy: busy || saving.length > 0, emptyLine: typedEmpty }) : { key: 'held.busy' }
-  const sendWords = sendHeldNow ? t(sendHeldNow.key, sendHeldNow.count !== undefined ? { count: sendHeldNow.count } : undefined) : null
+  // F-CP-150: held, never hidden — a Designer reads the names of who may order; Discard… held for a colleague who neither orders
+  // nor started the draft.
+  const sendHeldNow = record ? draftSendHeld(record.request, { preview, offline, busy: busy || saving.length > 0, emptyLine: typedEmpty }, orderers ?? []) : ({ key: 'held.busy' } as { key: string; count?: number; names?: string })
+  const sendWords = sendHeldNow ? t(sendHeldNow.key, sendHeldNow.count !== undefined ? { count: sendHeldNow.count } : sendHeldNow.names !== undefined ? { names: sendHeldNow.names } : undefined) : null
+  const discardKey = record ? draftDiscardHeld(record.request, { preview, offline, busy: false }) : held
+  const discardWords = discardKey ? t(discardKey) : null
+  const draftAsk = record ? { type: 'PortalOrderRequest', id: record.request.id, label: draftTitleOf(record.request, t) } : null
   usePortalBand(
     allowed
       ? newOrderBandOf({
@@ -726,7 +776,9 @@ function NewOrderContainer() {
           template: templateHref(locale),
           customerRef: sent?.customerRef ?? record?.request.customerRef ?? null,
           sendHeld: sendWords,
-          discardHeld: heldWords,
+          discardHeld: discardWords,
+          title: record ? draftTitleOf(record.request, t) : null, // F-CP-150
+          ask: draftAsk, // F-CP-150
           onSend: () => void send(),
           onDiscard: () => setDiscard({ busy: false, failed: null }),
         })
@@ -756,7 +808,7 @@ function NewOrderContainer() {
         saving,
         writeHeld: heldWords,
         addAddressHeld,
-        reorder: way === 'reorder' ? { ...reorder, currency: record?.request.currency ?? 'EUR', writeHeld: heldWords } : null,
+        reorder: way === 'reorder' && mayOrder ? { ...reorder, currency: record?.request.currency ?? 'EUR', writeHeld: heldWords } : null, // F-CP-150
         upload: way === 'upload' ? { sheet, templateHref: templateHref(locale), writeHeld: heldWords } : null,
         problem,
         stale,
@@ -766,6 +818,11 @@ function NewOrderContainer() {
         sent,
         closed: record && record.request.status !== 'DRAFT' && !sent ? { status: record.request.status, salesOrder: record.request.salesOrder ? { id: record.request.salesOrder.id } : null } : null, // B-TH-304: no office number
         offlineSince,
+        // ---- F-CP-150
+        staleBy,
+        seesOrders,
+        mayOrder,
+        // ---- end F-CP-150
         dialogs: {
           picker: picker ? { ...picker, onDraft, prefix: frame.prefix, writeHeld: heldWords } : null,
           address: address ? { ...address, problems: addressProblems(address.draft) } : null,
@@ -807,7 +864,6 @@ function NewOrderContainer() {
             setCells((now) => ({ ...now, [lineId]: rest }))
             void saveLine(lineId)
           },
-          onAddStyles: () => openPicker(),
         },
         reorder: {
           onSearch: (q) => readPastOrders(q),
@@ -861,7 +917,16 @@ function NewOrderContainer() {
           onClose: () => setAddress((now) => (now?.busy ? now : null)),
         },
         discard: { onConfirm: () => void confirmDiscard(), onCancel: () => setDiscard((now) => (now?.busy ? now : null)) },
+        // F-CP-150: a chip of the checklist — its part's card, scrolled into view and focused.
+        onChip: (target) => {
+          const element = document.getElementById(target)
+          element?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+          element?.focus({ preventScroll: true })
+        },
       }}
-    />
+    >
+      {/* F-CP-150 (D10): the draft's ONE conversation, docked from its first save; it stays once the draft is sent. */}
+      {record && draftId && phase !== 'start' ? <PortalThread type="PortalOrderRequest" id={record.request.id} showRecord={false} /> : null}
+    </NewOrderView>
   )
 }

@@ -85,6 +85,15 @@ export const requestSchema = z.object({
   summary: z.object({ lines: z.number(), pieces: z.number(), net: z.string().nullable().optional() }),
   problems: z.array(problemSchema),
   pricesChanged: z.number(),
+  // ---- F-CP-150 (customer page plan C5, D9–D11): what the reader may do beside filling the draft (B-CP-070: a Designer fills,
+  // never sends; a draft is discarded by one who may order or by the colleague who started it) — absent from an older answer: as
+  // before (the Buyer's page). The parts marked "we send it later" and who changed it last come with B-CP-075 (PA2): read as
+  // optional until then (the band says "Saved 10:42" without a name).
+  may: z.object({ send: z.boolean(), withdraw: z.boolean(), discard: z.boolean() }).optional(),
+  laterParts: z.array(z.string()).optional(),
+  lastEditedBy: z.string().nullable().optional(),
+  lastEditedAt: z.string().nullable().optional(),
+  // ---- end F-CP-150
 })
 export type DraftRequest = z.infer<typeof requestSchema>
 
@@ -129,6 +138,11 @@ export const draftsSchema = z.object({ requests: z.array(draftRowSchema), seesPr
 /** The party's drafts, newest first. */
 export const fetchDrafts = async (api: ApiClient, signal?: AbortSignal): Promise<DraftRow[]> =>
   (await api.get('/portal/order-requests', { query: { status: 'DRAFT' }, schema: draftsSchema, signal })).requests
+
+// ---- F-CP-150 (D11): who may send a draft, for the held Send's words (a Designer reads "Only colleagues who may order send it:
+// Marta Bianchi, …"): the organisation's people (portal.colleagues.view), each row's role and status. Nothing else is used.
+export { fetchColleagues } from '../../shared/account/api'
+// ---- end F-CP-150
 
 export interface HeaderBody {
   customerRef?: string | null

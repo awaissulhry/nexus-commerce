@@ -4,6 +4,9 @@ import { addressLine } from '../account/model'
 import { LIMITS, type DraftLine, type DraftRecord, type DraftRequest, type HeaderBody, type NoticeCode, type PastLine, type Problem, type RequestSource, type ShipTo, type SizeAsk, type Verdict } from './api'
 // B-TH-304: the customer's own order numbers.
 import type { OwnNumber } from './api'
+// F-CP-150: the draft's checklist is the domain's (the office's Drafts view reads the same rule, B-CP-071).
+import { DRAFT_LATER_PARTS, DRAFT_PARTS, draftReadiness, type DraftFacts, type DraftLaterPart, type DraftPart, type DraftPartState } from '@nexus/factory-domain/sales/portal-ordering/office'
+import type { RequestStatus } from './api'
 
 /**
  * New order & reorder (B-W2b-194; design portal.customer.neworder, SCR-185), pure: the page's address, the three ways in,
@@ -359,3 +362,156 @@ export function refusalOf(kind: string | null): string {
       return 'refusal.other'
   }
 }
+
+// ---- F-CP-150 (customer page plan C5, D9–D11; 12 §2): the draft order page v1 ----------------------------------------------
+// The ONE draft (PortalOrderRequest, D9): a band ("Draft order · <title>", Discard…, Send to the factory), ONE banner, the
+// checklist of seven parts as chips (the domain's own `draftReadiness`, the rule the office's Drafts view reads too), section
+// cards, "The factory can read this draft. Work starts only when you send it." Lines and people keep their `seq` (rows never jump
+// under the cursor). What only the schema wave and B-CP-075 add (line kinds, the roster, laterParts, "by <name>") is read as
+// optional: absent, the page says less, never something false.
+
+/** The seven parts of a draft, in the page's order (the domain's: factory-domain sales/portal-ordering/office DRAFT_PARTS). */
+export { DRAFT_PARTS }
+export type { DraftPart, DraftPartState }
+
+/** Where a chip scrolls to (each part's card; the page focuses it). "Show me" goes to the same places (`problemPlace`). */
+export const DRAFT_PART_TARGET: Readonly<Record<DraftPart, string>> = Object.freeze({
+  NEED: 'lines',
+  LOGOS: 'part-logos',
+  REFERENCES: 'part-references',
+  PEOPLE: 'part-people',
+  DATE: 'order-head',
+  PRICE: 'part-price',
+  NOTES: 'part-notes',
+})
+
+/** The parts the customer marked "we send it later" (B-CP-075; an older answer: none; an unknown word is left out). */
+export const laterPartsOf = (request: Pick<DraftRequest, 'laterParts'>): DraftLaterPart[] => (request.laterParts ?? []).filter((part): part is DraftLaterPart => (DRAFT_LATER_PARTS as readonly string[]).includes(part))
+
+/** The header's own problems (a date that passed, an address no longer in use): the date part is missing while one is left. */
+const HEADER_CODES: readonly Problem['code'][] = ['DATE_PAST', 'SHIP_TO_ARCHIVED']
+
+/** The lines in their order (by `seq`, never by when they were read: a row never jumps under the cursor). */
+export const linesInOrder = <Line extends Pick<DraftLine, 'seq'>>(lines: readonly Line[]): Line[] => [...lines].sort((a, b) => a.seq - b.seq)
+
+/** What the checklist counts, from the draft as read (the files with F-CP-151; the customer's own prices with F-CP-154). */
+export function draftFactsOf(record: Pick<DraftRecord, 'request' | 'seesPrices'>): DraftFacts {
+  const request = record.request
+  return {
+    lines: request.lines.length,
+    linesWithoutPieces: request.lines.filter((line) => line.pieces === 0).length,
+    logos: 0,
+    references: 0,
+    requestedDate: request.requestedDate !== null && request.requestedDate !== '',
+    headerProblems: request.problems.filter((problem) => problem.lineId === null && HEADER_CODES.includes(problem.code)).length,
+    note: (request.note ?? '').trim() !== '',
+    later: laterPartsOf(request),
+    // Part 6 is not counted for a reader without the price grain (review B4); a price holder types the customer's own price
+    // with F-CP-154 (PW2): until then no line carries one.
+    pricedLines: record.seesPrices ? 0 : null,
+    problems: request.problems.length,
+  }
+}
+
+export interface DraftChip {
+  part: DraftPart
+  /** 1–7, the card's number. */
+  n: number
+  state: DraftPartState
+  /** The card's element id (a chip scrolls to it and focuses it). */
+  target: string
+}
+
+/**
+ * The checklist strip: the seven parts with their states. A reader without prices still sees part 6 in the strip, "Optional"
+ * (picture 22, the brand's Designer: its card says prices are not part of the access) — it is never counted for them.
+ */
+export function draftChips(record: Pick<DraftRecord, 'request' | 'seesPrices'>): DraftChip[] {
+  const readiness = draftReadiness(draftFactsOf(record))
+  const states = new Map(readiness.parts.map((entry) => [entry.part, entry.state]))
+  return DRAFT_PARTS.map((part, index) => ({ part, n: index + 1, state: states.get(part) ?? 'OPTIONAL', target: DRAFT_PART_TARGET[part] }))
+}
+
+/** A part's state as a DS tone: Ready green, Sending later amber, Missing red, Optional plain. */
+export const partTone = (state: DraftPartState): 'success' | 'warning' | 'danger' | 'neutral' => (state === 'READY' ? 'success' : state === 'LATER' ? 'warning' : state === 'MISSING' ? 'danger' : 'neutral')
+
+/** The draft's name: its first line (by seq) — the style's code and name —, else "Untitled draft". */
+export function draftTitleOf(request: Pick<DraftRequest, 'lines'>, t: Translate): string {
+  const first = linesInOrder(request.lines)[0]
+  return first ? `${first.style.code} ${first.style.name}` : t('draftPage.untitled')
+}
+
+/** "Saved 14:02 by Marta Bianchi · v14" (the name once B-CP-075 says who changed it last; else "Saved 14:02 · v14"). */
+export function savedWords(request: Pick<DraftRequest, 'updatedAt' | 'version' | 'lastEditedAt' | 'lastEditedBy'>, t: Translate, time: (iso: string) => string): string {
+  const when = time(request.lastEditedAt ?? request.updatedAt)
+  const saved = request.lastEditedBy ? t('draftPage.savedBy', { time: when, name: request.lastEditedBy }) : t('draftPage.saved', { time: when })
+  return `${saved} · ${t('draftPage.version', { n: request.version })}`
+}
+
+/** What the reader may do beside filling the draft (B-CP-070); an older answer without `may`: as before (the Buyer's page). */
+export const mayOf = (request: Pick<DraftRequest, 'may'>): { send: boolean; withdraw: boolean; discard: boolean } => request.may ?? { send: true, withdraw: false, discard: true }
+
+/** The people who may send orders, for the held Send's words: ACTIVE buyers and admins (never the reader); else the admins. */
+export function whoMayOrder(people: readonly { readonly id: string; readonly displayName: string; readonly status: string; readonly roleKey: string | null; readonly admin: boolean }[] | null, me: string, admins: readonly string[]): string[] {
+  const named = (people ?? []).filter((person) => person.id !== me && person.status === 'ACTIVE' && (person.admin || person.roleKey === 'customer-buyer')).map((person) => person.displayName)
+  return [...new Set(named.length > 0 ? named : admins)].sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * Why "Send to the factory" cannot go now (key, count, names), or null — held, never hidden: a preview, offline, saving; not a
+ * draft any more; a colleague who fills drafts but may not order (the names of who can); a line with no piece; problems.
+ */
+export function draftSendHeld(request: Pick<DraftRequest, 'problems' | 'status' | 'may'>, facts: WriteFacts & { emptyLine: boolean }, names: readonly string[]): { key: string; count?: number; names?: string } | null {
+  const held = writeHeld(facts)
+  if (held) return { key: held }
+  if (request.status !== 'DRAFT') return { key: 'held.notDraft' }
+  if (!mayOf(request).send) return names.length > 0 ? { key: 'draftPage.sendHeld', names: names.join(', ') } : { key: 'draftPage.sendHeldNone' }
+  return sendHeld(request, facts)
+}
+
+/** Why Discard… cannot go (a key), or null: a preview or offline, or neither one who may order nor the one who started it. */
+export function draftDiscardHeld(request: Pick<DraftRequest, 'may'>, facts: WriteFacts): string | null {
+  return writeHeld(facts) ?? (mayOf(request).discard ? null : 'draftPage.discardHeld')
+}
+
+/** Reorder copies a past order: a colleague whose access shows no orders sees it held with why (D11). */
+export const reorderHeldKey = (mayOrder: boolean): string | null => (mayOrder ? null : 'draftPage.reorderHeld')
+
+export type DraftBannerKind = 'offline' | 'stale' | 'refused' | 'notice' | 'problems'
+
+/** The page's ONE banner, by weight: offline, changed elsewhere, a refusal, a done line (with Undo), the problems that hold Send. */
+export function draftBannerOf(input: { offline: boolean; stale: boolean; refused: boolean; notice: boolean; problems: number }): DraftBannerKind | null {
+  if (input.offline) return 'offline'
+  if (input.stale) return 'stale'
+  if (input.refused) return 'refused'
+  if (input.notice) return 'notice'
+  return input.problems > 0 ? 'problems' : null
+}
+
+/** The draft as one of the page's states (the view draws one banner and the right cards for each). */
+export type DraftState = 'empty' | 'partly' | 'held' | 'sent' | 'refused' | 'withdrawn' | 'accepted'
+
+export function draftStateOf(request: Pick<DraftRequest, 'status' | 'lines' | 'problems' | 'may'>): DraftState {
+  if (request.status === 'SENT') return 'sent'
+  if (request.status === 'REFUSED') return 'refused'
+  if (request.status === 'WITHDRAWN') return 'withdrawn'
+  if (request.status === 'ACCEPTED') return 'accepted'
+  if (request.lines.length === 0) return 'empty'
+  return request.problems.length > 0 || !mayOf(request).send ? 'held' : 'partly'
+}
+
+/**
+ * A draft no longer a draft, in words, with where it leads: the order for one whose access shows orders; a colleague who does
+ * not see orders reads who follows it instead (never a door that leads nowhere). Refused: "Start a new draft".
+ */
+export function closedOf(status: RequestStatus, seesOrders: boolean): { body: string; open: 'order' | 'orders' | null; startNew: boolean } {
+  if (status === 'ACCEPTED') return seesOrders ? { body: 'closed.ACCEPTED', open: 'order', startNew: false } : { body: 'draftPage.acceptedNoOrders', open: null, startNew: false }
+  if (status === 'REFUSED') return { body: seesOrders ? 'closed.REFUSED' : 'draftPage.refusedNoOrders', open: seesOrders ? 'orders' : null, startNew: true }
+  if (status === 'SENT') return { body: seesOrders ? 'closed.SENT' : 'draftPage.sentNoOrders', open: seesOrders ? 'orders' : null, startNew: false }
+  return { body: `closed.${status}`, open: null, startNew: true }
+}
+
+/** "Line 1: size grid, 24 pieces" — the People and sizes card of v1 (the roster comes with F-CP-154). */
+export const peopleLineWords = (line: Pick<DraftLine, 'seq' | 'pieces'>, t: Translate, pieces: (n: number) => string): string =>
+  line.pieces > 0 ? t('draftPage.people.grid', { seq: line.seq, pieces: pieces(line.pieces) }) : t('draftPage.people.none', { seq: line.seq })
+// ---- end F-CP-150

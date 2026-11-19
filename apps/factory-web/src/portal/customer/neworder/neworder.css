@@ -499,3 +499,198 @@
 .fw-pno-failed > svg {
   flex: 0 0 auto;
 }
+
+/* ---- F-CP-150 (customer page plan C5; 12 §2; picture 22): the draft order page — the checklist strip, the part cards, the one
+   meta line, the keys at the foot. Tokens only; no dead space (the cards fill the body column the record frame leaves). */
+.fw-pno-draft {
+  gap: var(--nds-space-16);
+}
+
+.fw-pno-draftmeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-pno-shared {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pno-chips {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.fw-pno-chips ol {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(112px, 1fr));
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pno-chip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  width: 100%;
+  height: 100%;
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-pno-chip:hover {
+  background: var(--nds-surface-hover);
+}
+
+.fw-pno-chip:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+}
+
+.fw-pno-chip.is-missing {
+  border-color: var(--nds-danger);
+}
+
+.fw-pno-chip.is-optional {
+  border-style: dashed;
+}
+
+.fw-pno-chiptop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-4);
+}
+
+.fw-pno-chipname {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pno-partnum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pno-chipstate {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-pno-chipstate.is-ready {
+  color: var(--nds-success-text);
+}
+
+.fw-pno-chipstate.is-later {
+  color: var(--nds-warning-text);
+}
+
+.fw-pno-chipstate.is-missing {
+  color: var(--nds-danger-text);
+}
+
+.fw-pno-parthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-pno-parthead .fw-pno-h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-pno-partaction {
+  margin-left: auto;
+}
+
+.fw-pno-partstate {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-pno-menulabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-pno-linecard + .fw-pno-linecard,
+.fw-pno-lines > li + li .fw-pno-linecard {
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-pno-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: stretch;
+}
+
+@media (min-width: 960px) {
+  .fw-pno-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fw-pno-peoplelines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pno-peoplelines .is-missing a {
+  color: var(--nds-danger-text);
+}
+
+.fw-pno-locked {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pno-draftfoot {
+  display: flex;
+  justify-content: flex-end;
+}
+/* ---- end F-CP-150 */

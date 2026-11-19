@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { AlertTriangle, Info, MoreHorizontal, Plus, ShoppingBag } from 'lucide-react'
-import { Card, EmptyState, Menu, type MenuItemDef } from '@nexus/ui/components'
+import { EmptyState, Menu, type MenuItemDef } from '@nexus/ui/components'
 import { SizeGridEditor, type SizeGridCopy } from '@nexus/ui/grid/size-grid/index'
 import { Button, Input, Select } from '@nexus/ui/primitives'
 import { Field } from '@nexus/ui/components'
@@ -11,6 +11,10 @@ import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import type { DraftLine, DraftRecord } from '../api'
 import { columnsOf, fromOrderText, noticeTone, noticeWords, piecesOfCells, problemWords, type Cells } from '../model'
 import { useOrderingWords, type OrderingWords } from '../words'
+// F-CP-150: the lines are part 1 of the draft ("What you need"): the part's heading and "Add a line ▾" (the ways in).
+import { ChevronDown } from 'lucide-react'
+import { linesInOrder, type DraftChip } from '../model'
+import { PartHeading } from './DraftChecklist'
 
 /**
  * sec:lines (design portal.customer.neworder "One line per style and colourway, with the whole size run in one grid"): each
@@ -30,6 +34,11 @@ export interface LinesModel {
   saving: readonly string[]
   /** Why nothing can be written now (words), or null. */
   writeHeld: string | null
+  // ---- F-CP-150: part 1's chip (its state on the heading) and "Add a line ▾": the ways in (Pick styles, Reorder — held with why
+  // for a colleague whose access shows no orders —, Upload a sheet; the described and made-to-measure kinds come with F-CP-154).
+  chip: DraftChip
+  addLine: readonly MenuItemDef[]
+  // ---- end F-CP-150
 }
 
 export interface LinesActions {
@@ -41,7 +50,6 @@ export interface LinesActions {
   onRemove?: (lineId: string) => void
   /** Leave a size no longer offered out of the line (and save it). */
   onDropSize?: (lineId: string, size: string) => void
-  onAddStyles?: () => void
 }
 
 /** The DS size grid's words in the page's language (this catalogue's `size.*`, the stacked layout's from ds-words). */
@@ -72,19 +80,35 @@ export function LinesSection({ model, actions }: { model: LinesModel; actions?: 
   const request = model.record.request
   return (
     <section className="fw-pno-section" id="lines" tabIndex={-1} aria-labelledby="lines-title">
-      <div className="fw-pno-headrow">
-        <h2 id="lines-title" className="fw-pno-h2">
-          {t('lines.title', { count: request.lines.length })}
-        </h2>
-        <Button size="sm" variant="secondary" heldReason={model.writeHeld} onClick={() => actions?.onAddStyles?.()}>
-          <Plus size={14} aria-hidden /> {t('lines.addStyles')}
-        </Button>
-      </div>
+      {/* F-CP-150: part 1 "What you need" — its state, and "Add a line ▾" with the ways in. */}
+      <PartHeading
+        chip={model.chip}
+        id="lines-title"
+        action={
+          model.writeHeld ? (
+            <Button size="sm" variant="secondary" heldReason={model.writeHeld}>
+              <Plus size={14} aria-hidden /> {t('draftPage.addLine')}
+            </Button>
+          ) : (
+            <Menu
+              align="right"
+              label={
+                <span className="fw-pno-menulabel">
+                  <Plus size={14} aria-hidden /> {t('draftPage.addLine')} <ChevronDown size={14} aria-hidden />
+                </span>
+              }
+              triggerProps={{ className: 'nds-btn sm secondary' }}
+              items={[...model.addLine]}
+            />
+          )
+        }
+      />
       {request.lines.length === 0 ? (
         <EmptyState icon={<ShoppingBag size={24} aria-hidden />} title={t('lines.empty')} description={t('lines.emptyBody')} />
       ) : (
         <ol className="fw-pno-lines">
-          {request.lines.map((line) => (
+          {/* F-CP-150: by seq — a row never jumps under the cursor when the draft is read again. */}
+          {linesInOrder(request.lines).map((line) => (
             <li key={line.id}>
               <LineCard line={line} model={model} actions={actions} />
             </li>
@@ -115,7 +139,8 @@ function LineCard({ line, model, actions }: { line: DraftLine; model: LinesModel
   const more: MenuItemDef[] = [{ id: 'remove', label: t('lines.remove'), disabled: model.writeHeld !== null, description: model.writeHeld ?? undefined, onSelect: () => actions?.onRemove?.(line.id) }]
   const title = `${line.style.code} · ${line.style.name}`
   return (
-    <Card padded>
+    // F-CP-150: a row of part 1's card (the card is the part; a line is no card of its own).
+    <div className="fw-pno-linecard">
       <div
         className="fw-pno-line"
         id={`line-${line.id}`}
@@ -206,6 +231,6 @@ function LineCard({ line, model, actions }: { line: DraftLine; model: LinesModel
         </div>
         {model.saving.includes(line.id) ? <p className="fw-pno-quiet" role="status">{t('state.saving')}</p> : null}
       </div>
-    </Card>
+    </div>
   )
 }
