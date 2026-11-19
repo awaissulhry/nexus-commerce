@@ -5,6 +5,7 @@ import { rolePermissions } from '../../../shell/design-data'
 import { STEP_UP_CLOSED, type StepUpModel } from '../shared/model'
 import { inShell, PREFIX } from '../shared/fixtures'
 import type { Drill, DrillStatus, FingerprintAnswer, SecurityFacts, TwoFactorList, TwoFactorPreview, TwoFactorRole } from './api'
+import type { PriceHolders, PriceHolderRole } from './api' // F-CP-145
 import { emptyDrillForm, LOADING, NO_DIALOG, type Dialog, type Read, type SecurityViewModel } from './model'
 import { SecurityView } from './view/SecurityView'
 import { DEMO_EVENTS, DEMO_SETTINGS } from './sessions/fixtures'
@@ -175,6 +176,42 @@ const drillDialog = (form: Partial<ReturnType<typeof emptyDrillForm>> = {}, extr
 })
 const filled = { environment: 'una copia locale', backupAt: at(29, 2), durationMinutes: '18', restored: LINE, evidence: { name: 'registro-ripristino.pdf', size: 48_000 } }
 
+// ---- F-CP-145 (the money wall, Owner O3): "Who sees prices" — made-up people, roles and an outside accountant's firm ----
+const holderRole = (n: number, key: string, name: string, extra: Partial<PriceHolderRole> = {}): PriceHolderRole => ({
+  assignmentId: uid('6161', n),
+  roleId: uid('4444', n),
+  key,
+  name,
+  system: !key.startsWith('custom.'),
+  grains: ['price'],
+  requireMfa: true,
+  allCustomers: true,
+  customers: 0,
+  allCompanies: true,
+  companies: 0,
+  since: '2026-09-01T07:30:00.000Z',
+  until: null,
+  ...extra,
+})
+export const PRICE_HOLDERS: PriceHolders = {
+  asOf: NOW,
+  people: [
+    { userId: people.anna.userId, name: people.anna.name, status: 'ACTIVE', twoFactor: true, roles: [holderRole(1, 'owner', 'Owner', { grains: ['price', 'cost', 'margin', 'wages', 'pay'] })] },
+    { userId: people.lucia.userId, name: people.lucia.name, status: 'ACTIVE', twoFactor: true, roles: [holderRole(3, 'finance', 'Finance', { grains: ['price', 'cost', 'margin', 'wages'], since: '2026-09-15T08:00:00.000Z' })] },
+    {
+      userId: people.paolo.userId,
+      name: people.paolo.name,
+      status: 'ACTIVE',
+      twoFactor: false,
+      roles: [holderRole(10, 'custom.accountant_prices', 'Contabile (prezzi) — esempio', { allCustomers: false, customers: 3, allCompanies: false, companies: 1, since: '2026-10-20T08:00:00.000Z', until: '2026-12-31T23:00:00.000Z' })],
+    },
+    { userId: uid('3333', 5), name: 'Sofia Prova', status: 'INVITED', twoFactor: false, roles: [holderRole(11, 'finance', 'Finance', { grains: ['price', 'cost', 'margin', 'wages'], since: '2026-10-29T10:00:00.000Z' })] },
+  ],
+  guests: [{ userId: uid('3333', 6), name: 'Carla Esempio', status: 'ACTIVE', firm: { id: uid('7171', 1), name: 'Studio Contabile Esempio' }, roleKey: 'accountant', until: '2027-01-31T23:00:00.000Z' }],
+}
+const prices = (read: Read<PriceHolders>, canMakeRole = true): Partial<SecurityViewModel> => ({ priceHolders: read, canMakeRole })
+// ---- end F-CP-145
+
 type Case = { model: SecurityViewModel; permissions?: readonly string[]; stepUp?: StepUpModel }
 
 const OWNER = rolePermissions('owner')
@@ -249,6 +286,18 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'w2b-413-events-loading', label: 'Security events: loading', model: { model: model({ depth: depth({ events: { ...EVENTS, events: null } }) }) } },
     { id: 'w2b-413-events-error', label: 'Security events: refused (one company only)', model: { model: model({ depth: depth({ events: { ...EVENTS, events: [], problem: 'problem.forbidden' } }) }) } },
     { id: 'w2b-413-events-no-right', label: 'Security events: no right (absent)', model: { model: model({ depth: depth({ events: null }) }) } },
+    // ---- F-CP-145 (the money wall, Owner O3): "Who sees prices" (beside the two-factor rules; price holders only) ----
+    { id: 'prices', label: 'Who sees prices: the Owner, Finance, a custom price role, an invited person, an outside accountant', model: { model: model(prices(ok(PRICE_HOLDERS))) }, note: '"Only the Owner gives a role that sees prices." Each role with the money it sees, its reach, since / until, two-factor set up or not. Make a role that sees prices only › opens New role on Finance.' },
+    { id: 'prices-loading', label: 'Who sees prices: loading', model: { model: model(prices(LOADING)) } },
+    { id: 'prices-error', label: 'Who sees prices: could not be read', model: { model: model(prices({ state: 'failed', problem: 'problem.unavailable' })) }, note: 'The other sections keep working; Try again.' },
+    { id: 'prices-no-guests', label: 'Who sees prices: no outside accountant; Make a role held (no right to change roles)', model: { model: model(prices(ok({ ...PRICE_HOLDERS, people: PRICE_HOLDERS.people.slice(0, 2), guests: [] }), false)) } },
+    {
+      id: 'prices-as-admin',
+      label: 'As Administrator (no price grain): no "Who sees prices" card, no call',
+      model: { model: model(), permissions: rolePermissions('admin') },
+      note: 'The money wall: the list of price holders is itself behind the price grain (the API answers 403 to anyone else; the page does not ask).',
+    },
+    // ---- end F-CP-145
     { id: 'notice', label: 'After a drill that passed', model: { model: model({ facts: ok(facts(OK, [drill(4, { drilledOn: '2026-10-30', result: 'PASSED' }), PASSED_AUG])), notice: { key: 'sec.notice.drillPassed', tone: 'success' } }) } },
   ],
 })

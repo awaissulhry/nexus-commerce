@@ -8,6 +8,7 @@ import { useCoalesced, useLive } from '../../_shared/buying/hooks'
 import { problemKey } from '../shared/model'
 import { isStepUpCancelled, useStepUp } from '../shared/step-up'
 import { changeTwoFactor, previewTwoFactor, readFingerprint, recordDrill, securityFacts, twoFactorRoles, type FingerprintAnswer, type SecurityFacts, type TwoFactorList } from './api'
+import { readPriceHolders, type PriceHolders } from './api' // F-CP-145
 import { changesFor, drillFormErrors, emptyDrillForm, LOADING, NO_DIALOG, securityCan, type Dialog, type DrillForm, type Read, type SecurityViewModel } from './model'
 import { SecurityView } from './view/SecurityView'
 import { useSecuritySettings } from './sessions/use-security-settings'
@@ -39,6 +40,8 @@ export function SecurityPage() {
   const prefix = companyPrefix(session.company?.code ?? '')
   const [facts, setFacts] = useState<Read<SecurityFacts>>(can.view ? LOADING : { state: 'no-right' })
   const [twoFactor, setTwoFactor] = useState<Read<TwoFactorList>>(can.roles ? LOADING : { state: 'no-right' })
+  // F-CP-145: "Who sees prices" — read only by a person who sees prices (and may see users); anyone else: no card, no call.
+  const [priceHolders, setPriceHolders] = useState<Read<PriceHolders>>(can.prices ? LOADING : { state: 'no-right' })
   const [fingerprint, setFingerprint] = useState<Read<FingerprintAnswer> | null>(null)
   const [dialog, setDialog] = useState<Dialog>(NO_DIALOG)
   const [notice, setNotice] = useState<SecurityViewModel['notice']>(null)
@@ -63,7 +66,14 @@ export function SecurityPage() {
         (error: unknown) => setTwoFactor({ state: 'failed', problem: problemKey(error) }),
       )
     }
-  }, [api, can.view, can.roles])
+    // F-CP-145: the price holders, read again with the page (a role given or ended elsewhere shows on "Check again").
+    if (can.prices) {
+      readPriceHolders(api).then(
+        (value) => setPriceHolders({ state: 'ok', value }),
+        (error: unknown) => setPriceHolders({ state: 'failed', problem: problemKey(error) }),
+      )
+    }
+  }, [api, can.view, can.roles, can.prices])
 
   useEffect(() => {
     void load()
@@ -158,6 +168,8 @@ export function SecurityPage() {
         dialog,
         notice,
         live,
+        // F-CP-145: absent for a reader who does not see prices.
+        ...(can.prices ? { priceHolders, canMakeRole: can.changeRoles } : {}),
         depth: { lengths: { prefix, read: settings.read, card: settings.lengths }, stepUp: { read: settings.read, card: settings.rules }, events: events.model, freshCode: settings.stepUp },
       }}
       stepUp={stepUp}
@@ -168,6 +180,7 @@ export function SecurityPage() {
           jobs.reload()
         },
         onRetry: () => void load(),
+        onRetryPrices: () => void load(), // F-CP-145
         onDismissNotice: () => setNotice(null),
         onRecordDrill: () => {
           evidence.current = null
