@@ -1721,5 +1721,41 @@
   "wo": {
     "makeNext": "Make the next one: {style}",
     "made": "{number} made (draft)"
+  },
+  "approval": {
+    "confirm": "Confirm the order",
+    "approveKind": "Approve: {kind}",
+    "refuse": "Refuse…",
+    "selfAsked": "You asked for this yes: another person decides",
+    "whoDecides": "Who decides: {who}",
+    "stepUp": "Your yes is recorded with your code. Type the code from your authenticator app.",
+    "confirmed": "Order confirmed",
+    "approved": "Approved",
+    "refusedDone": "Refused: the person who asked reads why",
+    "refuseTitle": "Refuse the yes for {number}",
+    "refuseGo": "Refuse",
+    "kind": "Request",
+    "askedBy": "Asked by",
+    "askedByOn": "{who} · {date}",
+    "no": {
+      "reason": "Why (from the list)",
+      "pick": "Pick a reason",
+      "words": "In your words",
+      "wordsHint": "The person who asked reads them. 1 to 2000 characters.",
+      "pickReason": "Pick a reason from the list",
+      "wordsNeeded": "Say why in your words",
+      "tooLong": "At most {max} characters",
+      "reading": "Reading the reasons…"
+    },
+    "refused": {
+      "STALE": "This yes cannot be given: the request was asked about another version of the order. Refuse it here, or take it back and ask again.",
+      "SUBJECT_GONE": "The record of this request is gone or out of your reach.",
+      "NO_KIND": "This kind of request cannot be re-read yet, so it cannot be approved here.",
+      "NOT_PENDING": "This request was decided, withdrawn or found changed already: the order was read again.",
+      "OWN_REQUEST": "You asked for this yes: another person decides",
+      "NOT_APPROVER": "This yes waits for another approver.",
+      "NOT_REQUESTER": "Only the person who asked takes it back.",
+      "other": "Refused by a rule of the approval: the order was read again."
+    }
   }
 }

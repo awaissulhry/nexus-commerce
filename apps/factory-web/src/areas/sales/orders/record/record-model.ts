@@ -30,6 +30,7 @@ import type { SplitPartDraft, SplitRefusal } from '../model' // F-OP-111
 // F-OP-112: Make work orders… in place — the Production page's New work order dialog (its model, its actions, the lane's rights).
 import type { NewWorkOrderModel, WorkOrdersListActions } from '../../../production/work-orders/list-model'
 import type { ProductionCan } from '../../../production/_shared/model'
+import type { RejectReason } from '../../../home/approvals/api' // F-OP-101
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -46,7 +47,8 @@ export const PART_LOADING = { value: null, problem: null } as const
 // ---- F-OP-134 (N-5): the dialogs split by the tab acts hook that owns them (record/use-*-acts.ts). The page still opens ONE dialog
 // at a time: RecordDialog is the container's one slot, and each hook's `opened` clears what its own dialog showed last.
 /** use-band-acts: the band's primary and its ⋯ (Change promise date, Mark ready, Close order; B-W2a-50: Copy as a new quote). */
-export type BandDialog = { kind: 'promise' } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' }
+// F-OP-101: Refuse… of an open yes (its task; the words are typed in the dialog).
+export type BandDialog = { kind: 'promise' } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' } | { kind: 'refuseYes'; taskId: string }
 /** use-lines-acts: the lines (close and reopen lines, the cancel; F-OP-111: the split; F-OP-106: the amendment has no dialog — its strip). */
 export type LinesDialog = { kind: 'closeLines' } | { kind: 'reopenLines' } | { kind: 'cancel' } | { kind: 'split' }
 /** use-money-acts: the deposits and payments (the bank-details page, the payment, the TD02's send to SDI). */
@@ -138,7 +140,22 @@ export interface MakeWorkOrdersActions {
 }
 // ---- end F-OP-112
 
+// ---- F-OP-101: the approver's yes in place (use-band-acts) ----
+export interface YesActions {
+  /** Confirm the order (or Approve another yes of it): the task's version sent; a fresh step-up first when its rule asks one. */
+  readonly onConfirm?: (taskId: string) => void
+  /** Refuse…: the dialog opens and reads the reasons a no names. */
+  readonly onRefuse?: (taskId: string) => void
+  /** The dialog's Refuse: the reason picked and the words typed (required). */
+  readonly onRefuseConfirm?: (taskId: string, reasonCode: string, words: string) => void
+  /** Read the reasons again (Try again). */
+  readonly onRefuseReasons?: () => void
+}
+// ---- end F-OP-101
+
 export interface OrderRecordModel {
+  /** F-OP-101: the reasons a no names (the tenant's APPROVAL_REJECT list) while Refuse… is open; null: not open or not read. */
+  refuseReasons?: Part<RejectReason[]> | null
   /** F-OP-112: Make work orders… on Production (the dialog, the next style); absent: not here (a design case). */
   makeWorkOrders?: MakeWorkOrdersModel | null
   /** F-OP-111: Split into new orders… — the dialog's addresses, refusals and the orders made; absent: not open here (a design case). */
@@ -256,6 +273,8 @@ export interface PaymentInput {
 }
 
 export interface OrderRecordActions {
+  /** F-OP-101: the approver's yes in place (the band's "Waiting for a yes", an old change's waiting row). */
+  yes?: YesActions
   /** F-OP-112: Make work orders… on Production (open it; the dialog's own actions). */
   makeWorkOrders?: MakeWorkOrdersActions
   /** F-OP-119: open the tracking number of a shipment of the order (Shipments: row ⋯, or Enter on its Tracking cell). */

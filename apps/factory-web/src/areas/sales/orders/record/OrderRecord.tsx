@@ -317,7 +317,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // ---- F-OP-134 (N-5): the tabs' acts, one container hook per tab, each with the one write and the order as last read ----------------
   const ready = order.status === 'ready' ? order.value : null
   const actsBase: RecordActsBase = { api, orderId, current, write, version, setNotice, load, loadParts }
-  const band = useBandActs({ ...actsBase, order: ready, permissions: session.permissions })
+  const band = useBandActs({ ...actsBase, order: ready, permissions: session.permissions, stepUp: { ensureFresh, guard }, setDialog /* F-OP-101: the yes in place */ })
   const overview = useOverviewActs()
   const lines = useLinesActs({
     ...actsBase,
