@@ -587,6 +587,12 @@
     },
     "created": "{number} made (draft)",
     "createdDoor": "Pack and ship it in Warehouse ›",
+    "create": {
+      "held": {
+        "noRight": "Making a shipment needs the warehouse's shipping right",
+        "nothing": "No released garment waits to ship: quality releases the garments first"
+      }
+    },
     "alsoCarries": "Also carries {number}",
     "join": {
       "title": "Draft shipments this order can join",

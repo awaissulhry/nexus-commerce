@@ -19,6 +19,7 @@ import { PointsAtOrder } from '../links/view/OrderLinks' // F-SA-230: Complaints
 // F-OP-119 (order page plan N5): each row's carrier and tracking, the tracking door, the cancelled rows behind "Show N".
 import { carrierOf, shownShipments, trackingDoorOf, trackingOf, type ShipmentRow } from '../shipments/model'
 import { createShipmentDoor } from '../shipments/model' // F-OP-121
+import { createShipmentHeld } from '../shipments/model' // F-OP-308
 // F-OP-122: shared shipments — the other orders a shipment carries, and the customer's DRAFTs this order may join (held with why).
 import { alsoCarries } from '../shipments/model'
 import { typedLinkOf } from '../shipments/model' // F-OP-135: the typed link's Track ›
@@ -59,6 +60,7 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
   const search = useSearchParams()?.toString() ?? ''
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
   const createDoor = createShipmentDoor(order, model.can, model.prefix, !!actions?.onCreateShipment) // F-OP-121
+  const createHeld = createDoor ? null : createShipmentHeld(order, model.can) // F-OP-308: held with words, never hidden
   const carrierText = (row: ShipmentRow): string => {
     const carrier = carrierOf(row)
     return carrier ? t(carrier.key, carrier.params) : '—'
@@ -90,23 +92,33 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
       <Card padded>
         <div className="fw-so-card-head">
           <h2 className="fw-so-h2">{t('ship.listTitle')}</h2>
-          {/* F-OP-121: Create shipment… in place (this order and the customer's others); without the container, Warehouse's page. */}
-          {createDoor?.kind === 'inPlace' && (
-            <Button size="sm" variant="primary" onClick={() => actions?.onCreateShipment?.()}>
-              {t('step.createShipment')}
-            </Button>
-          )}
-          {createDoor?.kind === 'warehouse' && (
-            <Button size="sm" variant="primary" asChild>
-              <Link href={createDoor.href}>{t('action.createShipment')}</Link>
-            </Button>
-          )}
-          {/* F-OP-123: goods that left with a paper DDT written outside Nexus — held with words for who may not (D4). */}
-          {model.elsewhere && (
-            <Button size="sm" heldReason={model.elsewhere.held ? t(model.elsewhere.held.key, model.elsewhere.held.params) : null} onClick={() => actions?.onRecordElsewhere?.()}>
-              {t('elsewhere.title')}
-            </Button>
-          )}
+          {/* F-OP-308 (walk #14): the card's doors side by side at the head's end (three children under space-between put Create
+              shipment… in the middle). */}
+          <span className="fw-so-actions">
+            {/* F-OP-121: Create shipment… in place (this order and the customer's others); without the container, Warehouse's page.
+                F-OP-308 (walk #16): where it may not open, drawn held with why — never hidden. */}
+            {createDoor?.kind === 'inPlace' && (
+              <Button size="sm" variant="primary" onClick={() => actions?.onCreateShipment?.()}>
+                {t('step.createShipment')}
+              </Button>
+            )}
+            {createDoor?.kind === 'warehouse' && (
+              <Button size="sm" variant="primary" asChild>
+                <Link href={createDoor.href}>{t('action.createShipment')}</Link>
+              </Button>
+            )}
+            {createHeld && (
+              <Button size="sm" variant="primary" heldReason={t(createHeld.key, createHeld.params)}>
+                {t('step.createShipment')}
+              </Button>
+            )}
+            {/* F-OP-123: goods that left with a paper DDT written outside Nexus — held with words for who may not (D4). */}
+            {model.elsewhere && (
+              <Button size="sm" heldReason={model.elsewhere.held ? t(model.elsewhere.held.key, model.elsewhere.held.params) : null} onClick={() => actions?.onRecordElsewhere?.()}>
+                {t('elsewhere.title')}
+              </Button>
+            )}
+          </span>
         </div>
         {order.chain.shipments.length === 0 ? (
           <EmptyState title={t('ship.empty.title')} description={t('ship.empty.body')} />

@@ -587,6 +587,12 @@
     },
     "created": "{number} creata (bozza)",
     "createdDoor": "Imballala e spediscila in Magazzino ›",
+    "create": {
+      "held": {
+        "noRight": "Creare una spedizione richiede il diritto di spedizione del magazzino",
+        "nothing": "Nessun capo rilasciato attende la spedizione: prima la qualità rilascia i capi"
+      }
+    },
     "alsoCarries": "Porta anche {number}",
     "join": {
       "title": "Spedizioni in bozza a cui aggiungere questo ordine",
