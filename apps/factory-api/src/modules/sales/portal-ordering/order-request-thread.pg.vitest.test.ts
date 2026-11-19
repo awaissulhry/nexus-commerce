@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto' // B-CP-023
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
@@ -333,3 +334,47 @@ describe('B-CP-071: a draft has its thread from its first save — its party’s
   })
 })
 // ---- end B-CP-071
+
+// ---- B-CP-023 (customer page plan, the money wall D6, L1; lead, PA2): a PRICED file on a portal message — the brand's Buyer (price
+// grain) reads it by name; a Designer (no price grain) reads it locked, with no name, and cannot attach it.
+describe('B-CP-023: a priced file on a portal message', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('as Brand Alpha Designer: a priced file on a message shows locked, no name; the Buyer reads its name', async () => {
+    const designer: Person = { id: newId(), email: `dora.designer.${NS}@studio-alpha.example`, name: 'Made-up Dora Designer' }
+    await inTenant(h, world, async (client) => {
+      await client.user.create({ data: { id: designer.id, email: designer.email, displayName: designer.name, status: 'ACTIVE', audience: 'PARTNER', partyId: world.p1, partnerKind: 'CUSTOMER', locale: 'en' }, select: { id: true } })
+      const grant = async (userId: string, key: string) => {
+        const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: world.tenantId, key } }, select: { id: true } })
+        await client.roleAssignment.create({ data: { id: newId(), userId, roleId: role.id, allCompanies: true, partyIds: [world.p1], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+      }
+      for (const key of ['customer-designer', 'partner-comment']) await grant(designer.id, key)
+      await grant(world.people.buyer.id, 'partner-upload') // the buyer sends the file
+    })
+    const buyer = await signIn(h, world, world.people.buyer)
+    const asDesigner = await signIn(h, world, designer)
+    // The buyer's PO on the catalogue order's thread, shared with A, then marked "this file shows prices".
+    const bytes = Buffer.from('%PDF-1.4\n% made-up purchase order of the CP-023 test\n%%EOF\n')
+    const base = `/portal/threads/PortalOrderRequest/${sent}/files`
+    const announced = await buyer.send('POST', base, { originalName: 'made-up-alpha-po-7001.pdf', contentType: 'application/pdf', sizeBytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }, { headers: { 'idempotency-key': `cp023-${newId()}` } })
+    expect(announced.status, JSON.stringify(announced.body)).toBe(201)
+    const put = await h.app.inject({ method: 'PUT', url: announced.body.upload.url, headers: announced.body.upload.headers, payload: bytes })
+    expect(put.statusCode, put.body).toBeLessThan(300)
+    const fileId = announced.body.file.id as string
+    expect((await buyer.send('POST', `${base}/${fileId}/complete`, {}, { headers: { 'idempotency-key': `cp023-${newId()}` } })).status).toBe(200)
+    await admin('UPDATE "StoredFile" SET priced = true WHERE id = $1', [fileId])
+    const posted = await buyer.send('POST', `/portal/threads/PortalOrderRequest/${sent}/messages`, { body: 'Made-up: our PO with our prices.', attachments: [fileId] }, { headers: { 'idempotency-key': `cp023-${newId()}` } })
+    expect(posted.status, JSON.stringify(posted.body)).toBe(201)
+    const attachmentOf = (body: Json) => body.messages.find((message: Json) => message.id === posted.body.message.id)?.attachments as Json[]
+    // The Buyer (the price grain) reads its name.
+    expect(attachmentOf((await thread(buyer, sent)).body)).toEqual([expect.objectContaining({ id: fileId, originalName: 'made-up-alpha-po-7001.pdf' })])
+    // The Designer reads it locked: counted, no name (opening it is 404 already).
+    const seen = await thread(asDesigner, sent)
+    expect(seen.status, JSON.stringify(seen.body)).toBe(200)
+    expect(attachmentOf(seen.body)).toEqual([expect.objectContaining({ id: fileId, originalName: '', locked: 'PRICED' })])
+    expect(JSON.stringify(seen.body)).not.toContain('made-up-alpha-po-7001')
+    // Nor can the Designer attach it to a message of theirs (as a wrong id).
+    const attach = await asDesigner.send('POST', `/portal/threads/PortalOrderRequest/${sent}/messages`, { body: 'Made-up: see the PO.', attachments: [fileId] }, { headers: { 'idempotency-key': `cp023-${newId()}` } })
+    expect(attach.status).toBe(400)
+    expect(JSON.stringify(attach.body)).toContain('File not found.')
+  })
+})
+// ---- end B-CP-023
