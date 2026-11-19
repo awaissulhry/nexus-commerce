@@ -4,6 +4,7 @@ import { PRICED_WORDS } from '@nexus/factory-domain/files/priced'
 import type { ErrorReport } from '@nexus/factory-domain/observability/report'
 import { addDays } from '@nexus/factory-domain/planning/buy'
 import { BLIND_PRICE_WORDS } from '@nexus/factory-domain/sales/blind-price'
+import { useServerClock } from '../../core/time' // B-CP-022 (fix wave cp-fx8)
 import { createErrorTracker, useErrorTracker } from '../../observability/tracker'
 import { useAbuseGuard } from '../../platform/abuse/guard'
 import { usePortalOptions } from '../../platform/auth/portal/service'
@@ -90,6 +91,15 @@ let w: World
 let handlers: readonly EventHandler[]
 let indexers: readonly SearchIndexer[]
 let settle: () => Promise<string[]>
+/** B-CP-022 (fix wave cp-fx8): one call with the commands on the harness clock too (testing/world.ts oneClock, for that call only). */
+async function onOneClock<T>(work: () => Promise<T>): Promise<T> {
+  useServerClock(w.h.clock)
+  try {
+    return await work()
+  } finally {
+    useServerClock(undefined)
+  }
+}
 type Json = Record<string, any>
 const P = {} as Record<OfficeKey, Person>
 /** Brand Alpha's people (its Buyer is its main portal person). */
@@ -497,7 +507,11 @@ describe('B-CP-022 the money wall: every persona, every surface, as Sales worker
       const note = await as(who, 'POST', `/threads/SalesOrder/${SO2()}/notes`, { body: 'Forwarding the paper to the pattern room.', attachments: [G.po] })
       expect(note.status, `${who.key}: ${JSON.stringify(note.body)}`).toBe(400)
       expect(note.body.error.issues, who.key).toEqual([NOT_FOUND])
-      const reply = await as(who, 'POST', `/threads/SalesOrder/${SO2()}/replies`, { body: 'Made-up: the paper you sent us.', attachments: [G.po] })
+      // B-CP-022 (fix wave cp-fx8): the portal reply on ONE clock, as in production. This flow's commands run on the server clock, the
+      // office sign-in, the portal and the invitations on the harness clock, which every two-factor act moves 30 s on (about 13 minutes
+      // ahead by here): Brand Alpha's portal roles are dated by it, so at the server's instant nobody of Alpha held one yet and the
+      // reply was refused NO_PORTAL before its attachment was read. Refused, the call writes nothing.
+      const reply = await onOneClock(() => as(who, 'POST', `/threads/SalesOrder/${SO2()}/replies`, { body: 'Made-up: the paper you sent us.', attachments: [G.po] }))
       expect([400, 403], `${who.key}: ${JSON.stringify(reply.body)}`).toContain(reply.status)
       if (reply.status === 400) expect(reply.body.error.issues, who.key).toContainEqual(NOT_FOUND)
       // A link of it (both hold links.manage through "Links sender", a role without prices): refused in words, the file never named.
@@ -671,6 +685,11 @@ describe('B-CP-022 the money wall: every persona, every surface, as Sales worker
     await blindHeld(P.sales, 'PUT', `${optionsUrl}/options`, { version: view.document.version, picks: more, keepPrice: true }, 'body/keepPrice')
     // 3. A priced counter-offer: Brand Alpha asks a design change of its own-label jacket; the Owner counters with a fee; the Sales
     // worker's accept would agree a price it cannot see.
+    // B-CP-026 (fix wave cp-fx8): a customer's design ask is off until its production card opens it (B-SA-005b; the sales-page flow's
+    // S0): the Owner opens it for Brand Alpha first — else Alpha's ask is refused NOT_OPEN before any price is in play.
+    await stepped(w, P.owner)
+    const card = await ok(P.owner, 'GET', `/partners/${P1()}/production`)
+    expect((await ok(P.owner, 'PUT', `/partners/${P1()}/production`, { productionAskKinds: ['DESIGN'], version: card.production.version })).production.askKinds).toEqual(['DESIGN'])
     const asked = (await asBrand(A.buyer, seen, 'POST', `/portal/sales-orders/${SO2()}/change-requests`, { kind: 'DESIGN', note: 'Made-up: a darker yellow piping on the collar.', lineIds: [LINE10()] }, 201)).request
     await stepped(w, P.owner)
     const countered = (await ok(P.owner, 'POST', `/production/brand-requests/${asked.id}/counter`, { version: asked.version, fee: 15_000, note: 'Made-up: possible with a fee for the new piping.' })).request

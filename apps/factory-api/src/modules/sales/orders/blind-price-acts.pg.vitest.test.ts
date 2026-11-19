@@ -113,7 +113,9 @@ beforeAll(async () => {
   }
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
-    { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
+    // B-CP-026 (fix wave cp-fx8): the accept routes take their clock from the office sign-in (platform/portal/tasks/clock.ts,
+    // appClock): without it they answered 503 before the hold was reached. The harness's, as brand-wall.pg and boards.pg do.
+    { database: h.database, officeAuth: h.auth, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
 }, 900_000)
 
@@ -217,6 +219,9 @@ describe('B-CP-026 2. a line’s options whose surcharges move while its price i
   it('a quote line typed by hand (not priced again): as Sales worker 403, nothing changes; the Owner saves it and the price stays', async () => {
     const jkt05 = (await one<{ id: string }>(`SELECT id FROM "Style" WHERE "tenantId" = $1 AND code = 'SEED-JKT-05'`, [T])).id
     const blk = (await one<{ id: string }>(`SELECT id FROM "Colourway" WHERE "styleId" = $1 AND code = 'BLK'`, [jkt05])).id
+    // B-CP-026 (fix wave cp-fx8): the seeds give SEED-JKT-05 no SKU, and a quote line takes only a size with an active SKU (B-W2a);
+    // the Owner makes its SKUs first, as the W2b-5 golden flow's A01 does.
+    await ok('owner', 'POST', `/product/styles/${jkt05}/skus/generate`, {})
     let quote = (await ok('owner', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1 }, 201)).quote
     quote = (await ok('owner', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jkt05, colourwayId: blk, unitPrice: '455', sizes: [{ size: '52', quantity: 2 }] }, 201)).quote
     const line = quote.lines[0]
@@ -236,6 +241,9 @@ describe('B-CP-026 2. a line’s options whose surcharges move while its price i
 })
 
 describe('B-CP-026 3. accepting a request whose agreed counter-offer carries a price', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  // B-CP-026 (fix wave cp-fx8): the accepts run on the office sign-in's clock; one clock with the planted rows' now(), as in production.
+  beforeAll(() => h.clock.set(new Date()))
+
   /** A request of Brand Alpha's order, COUNTERED as planted (the counter flow's own tests are change-requests' and brand-requests'). */
   async function countered(kind: 'CHANGE' | 'RUSH', counter: { fee: number | null; date: string | null }): Promise<{ id: string; version: number }> {
     const order = await one<{ id: string }>(`SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND "companyId" = $2 AND "partyId" = $3 AND status::text = 'CONFIRMED' ORDER BY number LIMIT 1`, [T, companyA, P1])

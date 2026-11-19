@@ -150,8 +150,12 @@ async function alphaOrder(ref: string): Promise<{ id: string; lines: { id: strin
 
 const rowsOf = (orderId: string) =>
   admin<Json>(`SELECT id, "salesOrderLineId" AS "lineId", "unitPrice"::text AS "unitPrice", "netAmount", source::text AS source, note, "enteredById", version FROM "OrderBrandPrice" WHERE "salesOrderId" = $1 ORDER BY "salesOrderLineId" NULLS LAST, id`, [orderId])
-const audits = (orderId: string) => admin<Json>(`SELECT action, before, after FROM "AuditLog" WHERE "tenantId" = $1 AND "recordType" = 'OrderBrandPrice' AND "recordId" = $2 ORDER BY at, id`, [T, orderId])
-const announced = (orderId: string) => admin<Json>(`SELECT type, payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'sales_order.brand_price_changed' AND subject = $2 ORDER BY "occurredAt", id`, [T, orderId])
+const audits = (orderId: string) => admin<Json>(`SELECT id, action, before, after FROM "AuditLog" WHERE "tenantId" = $1 AND "recordType" = 'OrderBrandPrice' AND "recordId" = $2 ORDER BY at, id`, [T, orderId])
+const announced = (orderId: string) => admin<Json>(`SELECT id, type, payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'sales_order.brand_price_changed' AND subject = $2 ORDER BY "occurredAt", id`, [T, orderId])
+/** B-CP-019 (fix wave cp-fx8): the rows a step wrote, by id — never by time order: the portal writes on the harness clock (set a little
+ *  behind the system clock in beforeAll), the office on the system clock, so the office's earlier row can sort after the portal's.
+ *  Production has one clock. */
+const writtenSince = (before: readonly Json[], now: readonly Json[]): Json[] => now.filter((row) => !before.some((old) => old.id === row.id))
 
 beforeAll(async () => {
   h = await startHarness('cp019_portal_check') // B-CP-022: test-database labels are at most 20 characters
@@ -233,24 +237,24 @@ describe('B-CP-019 the customer’s own price check in its portal', { timeout: S
   })
 
   it('as Alpha Buyer: its own unit price with a note reads Equal — source PORTAL, no office person, audited and announced', async () => {
-    const auditsBefore = (await audits(order.id)).length
-    const eventsBefore = (await announced(order.id)).length
+    const auditsBefore = await audits(order.id)
+    const eventsBefore = await announced(order.id)
     const check = await ok(portal.buyer, 'PUT', `/portal/sales-orders/${order.id}/brand-prices`, { currency: 'EUR', rows: [{ lineId: order.lines[0]!.id, unitPrice: '420', note: 'Our PO 88, page 1' }] })
     expect(check.lines[0]).toMatchObject({ brandAmount: order.lines[0]!.netAmount, priceMatch: 'EQUAL', priceDiff: 0 })
     expect(check.lines[0].row).toMatchObject({ unitPrice: '420', source: 'PORTAL', sourceWords: { en: 'Typed by you', it: 'Inserito da voi' }, note: 'Our PO 88, page 1', version: 1 })
     expect(check.total).toMatchObject({ priceMatch: 'EQUAL', priceDiff: 0, priceMissingLines: 0 })
     const stored = (await rowsOf(order.id)).find((row) => row.lineId === order.lines[0]!.id)!
     expect(stored).toMatchObject({ unitPrice: '420.000000', source: 'PORTAL', note: 'Our PO 88, page 1', enteredById: null, version: 1 })
-    const written = (await audits(order.id)).slice(auditsBefore)
+    const written = writtenSince(auditsBefore, await audits(order.id))
     expect(written.map((row) => row.action)).toEqual(['brandPrices.portalSet'])
     expect(written[0]!.after).toMatchObject({ rowId: stored.id, source: 'PORTAL', enteredById: null, unitPrice: { $money: 'price', value: '420' }, note: { $money: 'price', value: 'Our PO 88, page 1' } })
-    const events = (await announced(order.id)).slice(eventsBefore)
+    const events = writtenSince(eventsBefore, await announced(order.id))
     expect(events).toHaveLength(1)
     expect(Object.keys(events[0]!.payload).sort()).toEqual(['orderId', 'partyId'])
     // The same body again changes nothing (no audit, no event).
     await ok(portal.buyer, 'PUT', `/portal/sales-orders/${order.id}/brand-prices`, { rows: [{ lineId: order.lines[0]!.id, unitPrice: '420', note: 'Our PO 88, page 1', version: 1 }] })
-    expect((await audits(order.id)).length).toBe(auditsBefore + 1)
-    expect((await announced(order.id)).length).toBe(eventsBefore + 1)
+    expect((await audits(order.id)).length).toBe(auditsBefore.length + 1)
+    expect((await announced(order.id)).length).toBe(eventsBefore.length + 1)
   })
 
   it('the factory’s row is replaced (delete + insert), never only taken away; a cent off reads Not equal', async () => {

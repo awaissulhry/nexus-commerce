@@ -60,6 +60,11 @@ const SELECT = {
   supersededAt: true,
   seriesId: true,
   sourceFileId: true,
+  // B-CP-014 (fix wave cp-fx8): a scanned file's view says it shows prices, as every other file view does (files.ts SELECT_FOR):
+  // with a scanner, the upload's confirm answers through this view, and a file ticked "shows prices" came back without its mark.
+  priced: true,
+  // B-TH-083 (fix wave cp-fx8): and whether it is a measurement sheet, as every other file view says (files.ts SELECT_FOR CATEGORY).
+  category: true,
 } as const satisfies Prisma.StoredFileSelect
 
 type ScanRow = Prisma.StoredFileGetPayload<{ select: typeof SELECT }>
