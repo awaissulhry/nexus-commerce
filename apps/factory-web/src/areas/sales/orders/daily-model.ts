@@ -17,6 +17,11 @@ import type {
   PathIssue,
 } from './api'
 import type { Followed, FollowRoute, WorkOrderPlan } from './api' // F-OP-106
+// F-OP-107 (B2): the extra pieces' outcomes, in the review window's words (factory-domain's).
+import type { ExtraPiecesView } from './api'
+import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
+import { outcomeOptionsOf } from '@nexus/factory-domain/sales/change-requests/apply-plan'
+import type { ExtraChoice, ExtraPiece } from '../../home/approvals/requests/view/ExtraPieces' // the picker's props (types only)
 import { isFinal, type OrderAbilities, type Phrase, type Tone } from './model'
 import { frozenProblemsOf } from './depth/model' // F-OP-106: the freeze rules' refusals are the strip's own part
 // B-W2b-374: a new line's options.
@@ -288,53 +293,72 @@ export function manualLines(lines: readonly DraftLine[]): NewLineInput[] {
 
 /**
  * Pieces work orders already make, per line and size. F-SA-231 (lead note after B-SA-042, R1): an amendment MAY go under them now —
- * the work order follows as a work-order change ("Still to do"); the editor says so in words (a warning, never a hold). The floor is
- * what is already CUT (`cutFloorsOf`): a cut piece is never un-cut.
+ * the work order follows as a work-order change ("Still to do"); the editor says so in words (a warning, never a hold). F-OP-107: under
+ * what is CUT its extra pieces get an outcome (`cellIssuesOf`); under what SHIPPED it never goes.
  */
 export function minimumsOf(order: Pick<Order, 'lines'>): Record<string, Record<string, number>> {
   return Object.fromEntries(order.lines.map((line) => [line.id, Object.fromEntries(line.sizes.flatMap((size) => (size.size !== null && size.progress.inWorkOrders > 0 ? [[size.size, size.progress.inWorkOrders]] : [])))]))
 }
 
-/**
- * Cells typed under what work orders already make (F-SA-231: said, not held — the work order follows the change as "Still to do").
- * A cell under what is already cut is `underCut` (held), never listed here too.
- */
-export function underWorkOrders(lines: readonly DraftLine[], minimums: Readonly<Record<string, Readonly<Record<string, number>>>>, floors: Readonly<Record<string, Readonly<Record<string, number>>>> = {}): { key: string; size: string; made: number }[] {
-  const out: { key: string; size: string; made: number }[] = []
+// ── F-OP-107 (B2; 10-order-page §4.2; review R-16): the floors of each cell — what shipped, what is cut, what work orders make ──
+/** One cell's floors: pieces of the order's own cells already cut and already shipped (a step not counted there: 0). */
+export interface CellFloor {
+  readonly cut: number
+  readonly shipped: number
+}
+export type CellFloors = Readonly<Record<string, Readonly<Record<string, CellFloor>>>>
+
+type ReadLine = { readonly lineId: string; readonly cut: number | null; readonly sewn: number | null; readonly shipped: number; readonly sizes: readonly { readonly size: string | null; readonly cut: number | null; readonly shipped: number }[] }
+
+/** The floors per line and size from the production read's own cells (shipped per size is in the read: R-16). */
+export function cellFloorsOf(lines: readonly ReadLine[]): CellFloors {
+  return Object.fromEntries(lines.map((line) => [line.lineId, Object.fromEntries(line.sizes.flatMap((size) => (size.size !== null && ((size.cut ?? 0) > 0 || size.shipped > 0) ? [[size.size, { cut: size.cut ?? 0, shipped: size.shipped }]] : [])))]))
+}
+
+/** "Cut 40 · Sewn 32 · Shipped 0" of a colour line (null: the step is not counted there — never a made-up 0). */
+export interface LineFigures {
+  readonly cut: number | null
+  readonly sewn: number | null
+  readonly shipped: number
+}
+export const lineFiguresOf = (lines: readonly ReadLine[]): Record<string, LineFigures> => Object.fromEntries(lines.map((line) => [line.lineId, { cut: line.cut, sewn: line.sewn, shipped: line.shipped }]))
+
+export type CellIssueKind = 'shipped' | 'cut' | 'inWork'
+/** One cell typed under a floor: under what shipped (held: it cannot go lower), under what is cut (the extra pieces get an outcome), under what work orders make (the work order follows). */
+export interface CellIssue {
+  readonly key: string
+  readonly size: string
+  readonly kind: CellIssueKind
+  /** shipped: the pieces shipped; cut: the pieces cut beyond the figure typed; inWork: what work orders make. */
+  readonly count: number
+}
+
+/** Each cell's strongest floor it is typed under (shipped, then cut, then in work orders); a line kept as it is never has one. */
+export function cellIssuesOf(lines: readonly DraftLine[], floors: CellFloors, minimums: Readonly<Record<string, Readonly<Record<string, number>>>> = {}): CellIssue[] {
+  const out: CellIssue[] = []
   for (const line of lines) {
-    const mins = line.lineId ? minimums[line.lineId] : undefined
-    if (!mins || line.locked) continue
-    const cut = line.lineId ? (floors[line.lineId] ?? {}) : {}
-    for (const [size, made] of Object.entries(mins)) {
+    if (!line.lineId || line.locked) continue
+    const own = floors[line.lineId] ?? {}
+    const made = minimums[line.lineId] ?? {}
+    for (const size of [...new Set([...Object.keys(own), ...Object.keys(made)])]) {
       const typed = line.sizes[size] ?? 0
-      if (typed < made && typed >= (cut[size] ?? 0)) out.push({ key: line.key, size, made })
+      const floor = own[size]
+      if (floor && typed < floor.shipped) out.push({ key: line.key, size, kind: 'shipped', count: floor.shipped })
+      else if (floor && typed < floor.cut) out.push({ key: line.key, size, kind: 'cut', count: floor.cut - typed })
+      else if (typed < (made[size] ?? 0)) out.push({ key: line.key, size, kind: 'inWork', count: made[size]! })
     }
   }
   return out
 }
+// ── end F-OP-107
 
-// ── F-SA-231 (lead note after B-SA-042): the floor of a size is what is already CUT of the order's own cells ──
-/** The pieces already cut per line and size, from the production read's own cells (a step not counted: no floor known, 0). */
-export function cutFloorsOf(lines: readonly { readonly lineId: string; readonly sizes: readonly { readonly size: string | null; readonly cut: number | null }[] }[]): Record<string, Record<string, number>> {
-  return Object.fromEntries(lines.map((line) => [line.lineId, Object.fromEntries(line.sizes.flatMap((size) => (size.size !== null && size.cut !== null && size.cut > 0 ? [[size.size, size.cut]] : [])))]))
-}
-
-/** Cells typed under what is already cut (a cut piece is never un-cut: the API refuses it; Review waits, said per cell). */
-export function underCut(lines: readonly DraftLine[], floors: Readonly<Record<string, Readonly<Record<string, number>>>>): { key: string; size: string; cut: number }[] {
-  const out: { key: string; size: string; cut: number }[] = []
-  for (const line of lines) {
-    const cut = line.lineId ? floors[line.lineId] : undefined
-    if (!cut || line.locked) continue
-    for (const [size, pieces] of Object.entries(cut)) if ((line.sizes[size] ?? 0) < pieces) out.push({ key: line.key, size, cut: pieces })
-  }
-  return out
-}
-// ── end F-SA-231
-
-/** Why the draft cannot be reviewed yet (in this app's words), or null. F-SA-231: under the cut floor holds; under work orders does not. */
-export function reviewHeld(lines: readonly DraftLine[], order: Pick<Order, 'lines'>, header: { changed: boolean }, floors: Readonly<Record<string, Readonly<Record<string, number>>>> = {}): Phrase | null {
+/**
+ * Why the draft cannot be applied yet (in this app's words), or null. F-OP-107 (B2): under what already shipped holds; under what is
+ * cut no longer does — its extra pieces get an outcome in the strip; under work orders never did.
+ */
+export function reviewHeld(lines: readonly DraftLine[], order: Pick<Order, 'lines'>, header: { changed: boolean }, floors: CellFloors = {}): Phrase | null {
   if (lines.some(badPrice)) return phrase('amend.held.price')
-  if (underCut(lines, floors).length > 0) return phrase('amend.held.cut')
+  if (cellIssuesOf(lines, floors).some((issue) => issue.kind === 'shipped')) return phrase('edit.held.shipped')
   if (amendLines(lines, order).length === 0) return phrase('amend.held.empty')
   if (changeCount(lines, order) === 0 && !header.changed) return phrase('amend.held.nothing')
   return null
@@ -418,9 +442,11 @@ export interface AmendStrip {
   readonly reaccept: boolean | null
   /** The preview's lines old → new and its header (Show all changes). */
   readonly diff: AmendmentDiff | null
+  /** F-OP-107 (B2): pieces already cut beyond the new figures (their outcome is picked in the strip); null: none. */
+  readonly extra: ExtraPiecesView | null
 }
 
-const EMPTY_STRIP = { problem: null, pieces: null, net: null, workOrders: [], problems: [], frozen: [], reaccept: null, diff: null } as const
+const EMPTY_STRIP = { problem: null, pieces: null, net: null, workOrders: [], problems: [], frozen: [], reaccept: null, diff: null, extra: null } as const
 
 /** A work order of the preview's plan as the strip says it. */
 export function stripWorkOrderOf(plan: WorkOrderPlan, index: number): StripWorkOrder {
@@ -455,22 +481,64 @@ export function stripOf(input: { readonly order: Pick<Order, 'lines'>; readonly 
     frozen: preview.ok ? [] : preview.problems.filter((issue) => frozenPaths.has(issue.path)),
     reaccept: diff ? diff.reacceptanceNeeded : null,
     diff,
+    extra: preview.workOrders && preview.workOrders.extra.length > 0 ? preview.workOrders : null, // F-OP-107
   }
 }
 
-/** Why Apply waits, in this app's words, or null: the work, the draft's own hold, the preview (reading, failed, refused), the reason. */
-export function stripHeld(strip: AmendStrip, input: { readonly reason: string; readonly busy: boolean; readonly local: Phrase | null }): Phrase | null {
+/** Words of a hold: a phrase of this app, or the API's own words (F-OP-107: "Choose what happens to the 4 extra pieces"). */
+export type HeldWords = Phrase | { readonly words: { readonly it: string; readonly en: string } }
+
+/** A hold said in the reader's language. */
+export const heldWordsOf = (held: HeldWords, t: (key: string, params?: Record<string, string | number>) => string, locale: 'it' | 'en'): string => ('words' in held ? (locale === 'it' ? held.words.it : held.words.en) : t(held.key, held.params))
+
+/**
+ * Why Apply waits, or null: the work, the draft's own hold, the preview (reading, failed, refused), the extra pieces' outcome not
+ * picked yet (F-OP-107, B2: when the preview says it is needed), the reason.
+ */
+export function stripHeld(strip: AmendStrip, input: { readonly reason: string; readonly busy: boolean; readonly local: Phrase | null; readonly extraOutcome?: ExtraOutcome | null }): HeldWords | null {
   if (input.busy) return phrase('held.busy')
   if (input.local) return input.local
   if (strip.phase === 'reading' || strip.phase === 'idle') return phrase('amend.held.reading')
   if (strip.phase === 'failed') return phrase('amend.held.failed')
   if (strip.problems.length > 0 || strip.frozen.length > 0) return phrase('amend.held.problems')
+  const outcome = outcomeHeld(strip.extra, input.extraOutcome ?? null)
+  if (outcome) return outcome
   if (input.reason.trim() === '') return phrase('amend.held.reason')
   return null
 }
 
+// ---- F-OP-107 (B2): the extra-pieces picker — the strip's, Close remaining lines' and Cancel's (the review window's part) ----
+
+/** Apply waits for the extra pieces' outcome when the preview says it is needed and none is picked: the API's words. */
+export function outcomeHeld(extra: ExtraPiecesView | null, chosen: ExtraOutcome | null): HeldWords | null {
+  if (!extra || !extra.needsOutcome || chosen !== null || extra.extra.length === 0) return null
+  return extra.words ? { words: extra.words } : phrase('edit.held.extra', { count: extra.extra.reduce((sum, entry) => sum + entry.count, 0) })
+}
+
+/**
+ * The picker of an office change: its pieces by order line, and the three outcomes in the review window's order and words
+ * (factory-domain outcomeOptionsOf) — charging the customer needs the price grain (held, said why); none is picked for the reader.
+ */
+export function extraChoicesOf(view: ExtraPiecesView, order: Pick<Order, 'lines' | 'party'>, seesPrices: boolean): { readonly pieces: ExtraPiece[]; readonly outcomes: ExtraChoice[] } {
+  return {
+    pieces: view.extra.map((piece) => ({ key: piece.workOrderSizeId, line: order.lines.find((line) => line.id === piece.salesOrderLineId)?.seq ?? 0, words: piece.words })),
+    outcomes: outcomeOptionsOf({ customer: order.party?.legalName ?? '', seesPrices }).map((option) => ({ outcome: option.outcome, words: option.words, held: option.mayChoose ? null : option.needsWords })),
+  }
+}
+
+type Translate = (key: string, params?: Record<string, string | number>) => string
+const saidIn = (words: { readonly it: string; readonly en: string }, locale: 'it' | 'en'): string => (locale === 'it' ? words.it : words.en)
+
+/** One work order in words (the strip, Close remaining lines, Cancel): "WO-0311 40 → 28 · follows now" / "… · waits for production — decide on this page". */
+export function workOrderWords(wo: StripWorkOrder, t: Translate, locale: 'it' | 'en'): string {
+  const number = wo.number ?? t('edit.strip.wo.someone')
+  const what = wo.route === 'NEW_DRAFT' ? t('edit.strip.wo.new', { after: wo.after }) : wo.route === 'CANCEL_WORK_ORDER' ? t('edit.strip.wo.cancel', { number }) : t('edit.strip.wo.change', { number, before: wo.before, after: wo.after })
+  return [what, t(wo.now ? 'edit.strip.wo.now' : 'edit.strip.wo.waits'), ...(wo.held ? [saidIn(wo.held, locale)] : []), ...(wo.reprint ? [t('edit.strip.wo.reprint')] : [])].join(' · ')
+}
+// ---- end F-OP-107 (the picker)
+
 /** The work orders an answer names, as numbers ("WO-0311, WO-0312"); one this reader does not reach reads "WO-…". */
-const numbersOf = (entries: readonly { readonly number: string | null }[]): string => entries.map((entry) => entry.number ?? 'WO-…').join(', ')
+export const followedNumbers = (entries: readonly { readonly number: string | null }[]): string => entries.map((entry) => entry.number ?? 'WO-…').join(', ')
 
 /**
  * The notice after Apply: "Amendment 3 applied · WO-0311 changed · WO-0312 waits for production — decide on this page · <Customer>
@@ -478,8 +546,8 @@ const numbersOf = (entries: readonly { readonly number: string | null }[]): stri
  * reached them (null: not told).
  */
 export function appliedNotice(revision: number, followed: Followed, told: string | null): Phrase {
-  const changed = numbersOf(followed.applied)
-  const waits = numbersOf(followed.waiting)
+  const changed = followedNumbers(followed.applied)
+  const waits = followedNumbers(followed.waiting)
   const which = changed && waits ? 'both' : changed ? 'changed' : waits ? 'waits' : 'plain'
   return phrase(`edit.done.${which}${told ? 'Told' : ''}`, { revision, ...(changed ? { changed } : {}), ...(waits ? { waits } : {}), ...(told ? { customer: told } : {}) })
 }

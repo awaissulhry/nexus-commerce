@@ -848,8 +848,7 @@
       "reading": "Checking the amendment first",
       "failed": "The check failed: try again",
       "problems": "Fix what stops the amendment first",
-      "reason": "Say why the order changes",
-      "cut": "A size is under what is already cut: raise it to the pieces cut"
+      "reason": "Say why the order changes"
     },
     "tell": {
       "words": "Words for the customer (optional)",
@@ -884,6 +883,27 @@
       "waitsTold": "Amendment {revision} applied · waiting for production: {waits} — decide on this page · {customer} told.",
       "both": "Amendment {revision} applied · {changed} changed · waiting for production: {waits} — decide on this page.",
       "bothTold": "Amendment {revision} applied · {changed} changed · waiting for production: {waits} — decide on this page · {customer} told."
+    },
+    "floor": {
+      "shipped": "{count} already shipped: it cannot go lower",
+      "cut": "{count} already cut beyond this",
+      "inWork": "the work order follows"
+    },
+    "figures": {
+      "cut": "Cut {count}",
+      "sewn": "Sewn {count}",
+      "shipped": "Shipped {count}"
+    },
+    "held": {
+      "shipped": "A size is under what already shipped: raise it to the pieces shipped",
+      "extra_one": "Choose what happens to the {count} extra piece",
+      "extra_other": "Choose what happens to the {count} extra pieces"
+    },
+    "workOrders": "What happens to the work orders",
+    "planNotRead": "What happens to the work orders could not be read now: it still applies at once, and they follow by the same rules.",
+    "followed": {
+      "changed": "{numbers} changed",
+      "waits": "Waiting for production: {numbers} — decide on this page"
     }
   },
   "editor": {
@@ -928,14 +948,12 @@
       "none": "Unchanged",
       "empty": "Type its sizes"
     },
-    "underWorkOrders": "Size {size}: work orders make {made} — the work order follows the change (Still to do)",
     "styleReading": "Reading the style…",
     "styleUnread": "The style could not be read: only its sizes on the order",
     "lockedLabel": "Lines kept as they are",
     "lockedClosed_one": "{colour}: closed short ({count} piece): reopen it first to change it",
     "lockedClosed_other": "{colour}: closed short ({count} pieces): reopen it first to change it",
-    "lockedMtm": "{colour}: a made-to-measure unit, kept as it is",
-    "underCut": "Size {size}: {cut} already cut — it never goes under what is cut"
+    "lockedMtm": "{colour}: a made-to-measure unit, kept as it is"
   },
   "issue": {
     "state": "The order does not take this change in its state now.",

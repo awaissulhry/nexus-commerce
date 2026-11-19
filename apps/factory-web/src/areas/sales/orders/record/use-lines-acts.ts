@@ -5,6 +5,7 @@ import { newIdempotencyKey } from '../../../../lib/api/client'
 import { findStyles, getStyle } from '../../quotes/api'
 import { isApiError } from '../../../../lib/api/errors'
 import { applyAmendment, cancelOrder, closeLines, getCancelCheck, previewAmendment, reopenLines, type CancelCheck, type CloseLinesAnswer, type Order } from '../api'
+import { previewCloseLines, type ClosePreview } from '../api' // F-OP-107
 import { draftOf, namesOf, newKey, withCells, type DraftLine } from '../daily-model'
 // F-OP-106: the strip's preview (one body, one key; a stale answer dropped), the notice after Apply.
 import { amendBodyOf, amendKeyOf, appliedNotice, reviewHeld, tookPreview } from '../daily-model'
@@ -20,7 +21,7 @@ import { postPortalReplyKeyed } from '../../../_shared/record-thread/api'
 import { portalRefusal } from '../../../_shared/record-thread/state'
 import { COMPOSER_EMPTY, PART_LOADING, type AmendState, type OrderRecordActions, type OrderRecordModel, type Part, type RecordActsBase, type RecordDialog } from './record-model'
 
-export type LinesActsModel = Pick<OrderRecordModel, 'amend' | 'closedLines' | 'cancelCheck' | 'portalGone' | 'newLineOptions' | 'split' /* F-OP-111 */>
+export type LinesActsModel = Pick<OrderRecordModel, 'amend' | 'closedLines' | 'cancelCheck' | 'portalGone' | 'newLineOptions' | 'split' /* F-OP-111 */ | 'closePreview' /* F-OP-107 */>
 export type LinesActsActions = Pick<
   OrderRecordActions,
   | 'onAmendStart'
@@ -32,6 +33,8 @@ export type LinesActsActions = Pick<
   | 'onAmendReason' // F-OP-106
   | 'onAmendTell' // F-OP-106
   | 'onAmendApply'
+  | 'onAmendOutcome' // F-OP-107
+  | 'onClosePreview' // F-OP-107
   | 'onComposerQuery'
   | 'onComposerPick'
   | 'onComposerToggle'
@@ -96,6 +99,9 @@ export function useLinesActs(
   amendRef.current = amend
   const [cancelCheck, setCancelCheck] = useState<Part<CancelCheck> | null>(null)
   const [closedLines, setClosedLines] = useState<CloseLinesAnswer | null>(null)
+  // ---- F-OP-107: Close remaining lines' preview (the latest ask wins: an answer for other lines is dropped) ----
+  const [closePreview, setClosePreview] = useState<Part<ClosePreview> | null>(null)
+  const closeSeq = useRef(0)
   const [portalGone, setPortalGone] = useState(false) // F-SA-242
   const searchSeq = useRef(0)
   // ---- F-OP-111: the split's addresses (null: no right to read them), its refusals by place, the orders it made ----
@@ -134,6 +140,7 @@ export function useLinesActs(
       review: null,
       reason: '', // F-OP-106
       tell: { words: '', chosen: null }, // F-OP-106
+      extraOutcome: null, // F-OP-107
     })
     showLines()
     for (const styleId of styleIds) void readStyle(styleId)
@@ -232,7 +239,9 @@ export function useLinesActs(
       const tell = tickOn(tick, draft.tell.words) && tellHeld(tick, draft.tell.words) === null ? draft.tell.words.trim() : null
       void write(async () => {
         const value = current.current!
-        const answer = await applyAmendment(api, orderId, { version: value.version, reason, ...amendBodyOf(draft, value) }, key)
+        // F-OP-107 (B2): the extra pieces' outcome goes only while the preview names extra pieces.
+        const extra = (draft.review?.preview?.workOrders?.extra.length ?? 0) > 0 && draft.extraOutcome ? { extraOutcome: draft.extraOutcome } : {}
+        const answer = await applyAmendment(api, orderId, { version: value.version, reason, ...amendBodyOf(draft, value), ...extra }, key)
         setAmend(null)
         clearChanged()
         // "Amendment 3 applied · WO-0311 changed · WO-0312 waits for production": the work orders followed in the same command.
@@ -255,14 +264,24 @@ export function useLinesActs(
         return answer.order
       }, null)
     },
+    onAmendOutcome: (outcome) => setAmend((known) => (known ? { ...known, extraOutcome: outcome } : known)), // F-OP-107
+    // ---- F-OP-107: Close remaining lines' preview of the lines chosen (nothing written) ----
+    onClosePreview: (lineIds) => {
+      const mine = ++closeSeq.current
+      if (lineIds.length === 0) return setClosePreview(null)
+      setClosePreview(PART_LOADING)
+      previewCloseLines(api, orderId, lineIds)
+        .then((answer) => mine === closeSeq.current && setClosePreview(part(answer)))
+        .catch((error: unknown) => mine === closeSeq.current && setClosePreview({ value: null, problem: readProblem(error) }))
+    },
     onComposerQuery: composerQuery,
     onComposerPick: composerPick,
     onComposerToggle: (colourwayId) => setAmend((known) => (known ? { ...known, composer: { ...known.composer, picked: known.composer.picked.includes(colourwayId) ? known.composer.picked.filter((id) => id !== colourwayId) : [...known.composer.picked, colourwayId] } } : known)),
     onComposerAdd: composerAdd,
-    onCloseLines: (lineIds, reason, reasonCode) =>
+    onCloseLines: (lineIds, reason, reasonCode, extraOutcome) =>
       void write(
         async () => {
-          const answer = await closeLines(api, orderId, { version: version(), reason, ...(reasonCode ? { reasonCode } : {}), ...(lineIds.length > 0 ? { lineIds } : {}) })
+          const answer = await closeLines(api, orderId, { version: version(), reason, ...(reasonCode ? { reasonCode } : {}), ...(lineIds.length > 0 ? { lineIds } : {}), ...(extraOutcome ? { extraOutcome } : {}) /* F-OP-107 */ })
           setClosedLines(answer)
           return answer.order
         },
@@ -270,7 +289,7 @@ export function useLinesActs(
         true,
       ),
     onReopenLines: (lineIds, reason) => void write(async () => (await reopenLines(api, orderId, { version: version(), reason, ...(lineIds.length > 0 ? { lineIds } : {}) })).order, 'notice.reopened'),
-    onCancelOrder: (reason, typed) => void write(async () => (await cancelOrder(api, orderId, { version: version(), reason, confirmNumber: typed })).order, 'notice.cancelled'),
+    onCancelOrder: (reason, typed, extraOutcome) => void write(async () => (await cancelOrder(api, orderId, { version: version(), reason, confirmNumber: typed, ...(extraOutcome ? { extraOutcome } : {}) /* F-OP-107 */ })).order, 'notice.cancelled'),
     // ---- F-OP-111: the parts become orders of their own (the order's version as read); the dialog then shows them, each a link, and
     // the page stays. A refusal is said at its place (a part, or the split as a whole) beside the dialog's one problem line.
     onSplit: ({ parts, reason }) => {
@@ -319,7 +338,7 @@ export function useLinesActs(
     })
 
   return {
-    model: { amend, closedLines, cancelCheck, portalGone, newLineOptions, split: { addresses, refusals, made } /* F-OP-111 */ },
+    model: { amend, closedLines, cancelCheck, portalGone, newLineOptions, split: { addresses, refusals, made } /* F-OP-111 */, closePreview /* F-OP-107 */ },
     actions,
     amendRef,
     endAmend: () => setAmend(null),
@@ -327,6 +346,9 @@ export function useLinesActs(
     // A dialog opens or closes: the lines the last close closed are not said again; the cancel reads its impact check as it opens.
     opened: (next) => {
       setClosedLines(null)
+      // F-OP-107: Close remaining lines reads its preview as its lines are chosen (the dialog asks); nothing of an older one stays.
+      closeSeq.current += 1
+      setClosePreview(null)
       if (next?.kind === 'cancel') readCancelCheck()
       // F-OP-111: the split opens with nothing said yet; its Ship to reads the customer's delivery addresses (parties.view).
       setRefusals([])

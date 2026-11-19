@@ -3,6 +3,8 @@ import type { ApiClient } from '../../../lib/api/client'
 import { newIdempotencyKey } from '../../../lib/api/client'
 // B-W2b-374: a typed line's options.
 import type { PickBody } from '../quotes/record/configurator/api'
+// F-OP-107 (B2): the three outcomes of pieces already cut beyond the new figures.
+import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
 
 /**
  * Every call of the sales order screens (SCR-038 list and board, SCR-039 the order studio), with the answer's shape
@@ -773,6 +775,8 @@ export interface AmendBody {
   requestedDate?: string | null
   /** Every line the order keeps (a line left out is removed). */
   lines: AmendLineInput[]
+  /** F-OP-107 (B2): what happens to pieces already cut beyond the new figures (sent only when the preview names some). */
+  extraOutcome?: ExtraOutcome | null
 }
 
 // ---- F-OP-106 (order page N2; 13-backend §1.2–1.3, B-OP-012 / B-OP-013): what an office change does to the work orders ----
@@ -908,13 +912,29 @@ const closeLinesSchema = z.object({
   closed: z.array(z.object({ lineId: z.string(), seq: z.number(), closedShortQuantity: z.number() })),
   reducesDone: z.array(z.string()),
   stillInWorkOrders: z.array(z.object({ lineId: z.string(), pieces: z.number() })),
+  /** F-OP-107: the work orders that followed in the close's command, and those that wait (B-OP-012). */
+  workOrders: followedSchema.default(NOTHING_FOLLOWED),
 })
 export type CloseLinesAnswer = z.infer<typeof closeLinesSchema>
 
 /** "Close remaining lines": what is left of the lines named (none: every open line) will not be made or shipped. */
-export function closeLines(api: ApiClient, orderId: string, body: { version: number; reason: string; reasonCode?: string; lineIds?: string[] }): Promise<CloseLinesAnswer> {
+export function closeLines(api: ApiClient, orderId: string, body: { version: number; reason: string; reasonCode?: string; lineIds?: string[]; /* F-OP-107 */ extraOutcome?: ExtraOutcome }): Promise<CloseLinesAnswer> {
   return api.post(`${orderPath(orderId)}/close-lines`, { body, schema: closeLinesSchema, idempotencyKey: newIdempotencyKey() })
 }
+
+// ---- F-OP-107 (B2; 13-backend §1.3, B-OP-013): what closing these lines would do to the work orders, before the click ----
+export const closePreviewSchema = z.object({
+  plan: z.array(workOrderPlanSchema).default([]),
+  /** The pieces already cut of them beyond what stays (their outcome is picked in the dialog). */
+  workOrders: extraPiecesSchema.nullable().default(null),
+})
+export type ClosePreview = z.infer<typeof closePreviewSchema>
+
+/** POST …/close-lines/preview (orders.manage; nothing written): each work order's plan and the extra pieces of the lines named. */
+export function previewCloseLines(api: ApiClient, orderId: string, lineIds: readonly string[], signal?: AbortSignal): Promise<ClosePreview> {
+  return api.post(`${orderPath(orderId)}/close-lines/preview`, { body: { lineIds: [...lineIds] }, schema: closePreviewSchema, signal })
+}
+// ---- end F-OP-107
 
 /** "Reopen lines" (the close's reversal). */
 export function reopenLines(api: ApiClient, orderId: string, body: { version: number; reason: string; lineIds?: string[] }): Promise<{ order: Order; reopened: string[] }> {
@@ -939,6 +959,9 @@ export const cancelCheckSchema = z.object({
   impact: impactSchema,
   /** The leather cut for its work orders: hides and area in the hide's base unit (no money, no worker). */
   leatherCut: z.array(z.object({ workOrderId: z.string(), number: z.string(), hides: z.number(), area: z.string().nullable() })),
+  // F-OP-107 (B-OP-013): what the cancel would do to each work order, and the pieces already cut (their outcome picked before it).
+  plan: z.array(workOrderPlanSchema).default([]),
+  workOrders: extraPiecesSchema.nullable().default(null),
 })
 export type CancelCheck = z.infer<typeof cancelCheckSchema>
 
@@ -948,8 +971,8 @@ export function getCancelCheck(api: ApiClient, orderId: string, signal?: AbortSi
 }
 
 /** "Cancel order" with the reason and the number typed to confirm it. */
-export function cancelOrder(api: ApiClient, id: string, body: { version: number; reason: string; confirmNumber: string }): Promise<{ order: Order; paidDepositRequestIds: string[]; impact: Impact | null }> {
-  return api.post(`${orderPath(id)}/cancel`, { body, schema: z.object({ order: orderSchema, paidDepositRequestIds: z.array(z.string()), impact: impactSchema.nullable().default(null) }), idempotencyKey: newIdempotencyKey() })
+export function cancelOrder(api: ApiClient, id: string, body: { version: number; reason: string; confirmNumber: string; /* F-OP-107 */ extraOutcome?: ExtraOutcome }): Promise<{ order: Order; paidDepositRequestIds: string[]; impact: Impact | null; workOrders: Followed }> {
+  return api.post(`${orderPath(id)}/cancel`, { body, schema: z.object({ order: orderSchema, paidDepositRequestIds: z.array(z.string()), impact: impactSchema.nullable().default(null), /* F-OP-107 */ workOrders: followedSchema.default(NOTHING_FOLLOWED) }), idempotencyKey: newIdempotencyKey() })
 }
 
 export const milestoneSchema = z.object({

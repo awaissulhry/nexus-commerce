@@ -14,14 +14,16 @@ import { RecordPicture } from '../../../../../lib/record-picture/view/RecordPict
 import { money, percent, unitPrice } from '../../../quotes/model'
 import { sizeGridWords } from '../../../quotes/record/view/grid-copy'
 import type { Order, OrderLine } from '../../api'
-import { amendHeld, changeCount, closeLinesHeld, cutFloorsOf, minimumsOf, reopenHeld, reviewHeld } from '../../daily-model'
+import { amendHeld, changeCount, closeLinesHeld, minimumsOf, reopenHeld, reviewHeld } from '../../daily-model'
 import { dayInstant, gridOf, isFinal, styleGroups, type Phrase } from '../../model'
 // ---- F-OP-106: the "What changes" strip (the preview's pieces, net, work orders), ONE Apply; Review amendment folded in ----
-import { amendKeyOf, amendPairs, changeLabel, namesOf, sizesText, stripHeld, stripOf, type AmendStrip, type StripChange, type StripWorkOrder } from '../../daily-model'
+import { amendKeyOf, amendPairs, changeLabel, namesOf, sizesText, stripHeld, stripOf, workOrderWords, type AmendStrip, type StripChange } from '../../daily-model'
+// ---- F-OP-107 (B2): each cell's floors and the line's figures; the extra-pieces picker (the review window's part) ----
+import { cellFloorsOf, extraChoicesOf, heldWordsOf, lineFiguresOf } from '../../daily-model'
+import { ExtraPieces } from '../../../../home/approvals/requests/view/ExtraPieces'
 import { ConversationTick } from '../../../../home/approvals/requests/view/ConversationTick'
 import { tellHeld, tickOn } from '../../../../home/approvals/requests/model'
 import { FrozenOffer } from '../../changes-depth/view/ChangesDepth'
-import type { Locale } from '../../../../../lib/i18n/locales'
 // ---- F-OP-210 (lead, in A08): an in-page tab link keeps the dock's scope (tabHref + TabLink) ----
 import { tabHref } from '../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../lib/tab-link/TabLink'
@@ -228,8 +230,10 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
   const minimums = minimumsOf(order)
   const headerChanged = (amend.customerRef.trim() || null) !== (order.customerRef ?? null) || (amend.requestedDate || null) !== (order.requestedDate ?? null)
   const count = changeCount(amend.lines, order) + (headerChanged ? 1 : 0)
-  // F-SA-231: the floor of a size is what is already cut (the production read's own cells); under work orders is said, not held.
-  const floors = cutFloorsOf(readOf(model.production)?.lines ?? [])
+  // F-OP-107 (B2): each cell's floors (the production read's own cells): under what shipped holds; under what is cut its extra pieces
+  // get an outcome; under work orders the work order follows. Each colour line says "Cut 40 · Sewn 32 · Shipped 0".
+  const read = readOf(model.production)?.lines ?? []
+  const floors = cellFloorsOf(read)
   const local = reviewHeld(amend.lines, order, { changed: headerChanged }, floors)
   // F-OP-106: the strip of THIS draft (an answer for an older one is never drawn), and why Apply waits.
   const pairs = amendPairs(amend.lines, order)
@@ -240,8 +244,8 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
     return `${names.style} · ${names.colour}`
   }
   const strip = stripOf({ order, review: amend.review, key: amendKeyOf(amend, order), local, price: model.can.price, label })
-  const held = stripHeld(strip, { reason: amend.reason, busy: model.busy, local })
-  const heldText = held ? t(held.key, held.params) : null
+  const held = stripHeld(strip, { reason: amend.reason, busy: model.busy, local, extraOutcome: amend.extraOutcome })
+  const heldText = held ? heldWordsOf(held, t, locale) : null
   useEffect(() => {
     if (count === 0) return
     const onLeave = (event: BeforeUnloadEvent) => {
@@ -297,7 +301,7 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
         </div>
       </Card>
       <LinesEditor
-        model={{ mode: 'amend', lines: amend.lines, order, styles: amend.styles, composer: amend.composer, price: model.can.price, currency: order.currency, priceBasis: order.priceBasis, minimums, floors /* F-SA-231 */, busy: model.busy, frozen: frozenIssues(model.depth, d) /* B-W2b-323 */, newLineOptions: model.newLineOptions /* B-W2b-374 */ }}
+        model={{ mode: 'amend', lines: amend.lines, order, styles: amend.styles, composer: amend.composer, price: model.can.price, currency: order.currency, priceBasis: order.priceBasis, minimums, floors /* F-OP-107 */, figures: lineFiguresOf(read) /* F-OP-107 */, busy: model.busy, frozen: frozenIssues(model.depth, d) /* B-W2b-323 */, newLineOptions: model.newLineOptions /* B-W2b-374 */ }}
         actions={{ onCells: actions?.onAmendCells, onPrice: actions?.onAmendPrice, onComposerQuery: actions?.onComposerQuery, onComposerPick: actions?.onComposerPick, onComposerToggle: actions?.onComposerToggle, onComposerAdd: actions?.onComposerAdd }}
       />
     </div>
@@ -312,15 +316,7 @@ const tellOn = (amend: AmendState, model: OrderRecordModel): boolean => {
   return tickOn(tick, amend.tell.words) && tellHeld(tick, amend.tell.words) === null
 }
 
-const said = (words: { readonly it: string; readonly en: string }, locale: Locale): string => (locale === 'it' ? words.it : words.en)
 const signed = (delta: number, text: string): string => `${delta >= 0 ? '+' : '−'}${text}`
-
-/** One work order of the strip in words: "WO-0311 40 → 28 · follows now" / "… · waits for production — decide on this page". */
-export function workOrderWords(wo: StripWorkOrder, t: (key: string, params?: Record<string, string | number>) => string, locale: Locale): string {
-  const number = wo.number ?? t('edit.strip.wo.someone')
-  const what = wo.route === 'NEW_DRAFT' ? t('edit.strip.wo.new', { after: wo.after }) : wo.route === 'CANCEL_WORK_ORDER' ? t('edit.strip.wo.cancel', { number }) : t('edit.strip.wo.change', { number, before: wo.before, after: wo.after })
-  return [what, t(wo.now ? 'edit.strip.wo.now' : 'edit.strip.wo.waits'), ...(wo.held ? [said(wo.held, locale)] : []), ...(wo.reprint ? [t('edit.strip.wo.reprint')] : [])].join(' · ')
-}
 
 /** The strip's second line: pieces · net · each work order — or the draft's own hold, "Working out what changes…", the failure. */
 function StripFacts({ order, strip, local, model, actions }: { order: Order; strip: AmendStrip; local: Phrase | null; model: OrderRecordModel; actions?: OrderRecordActions }) {
@@ -397,6 +393,8 @@ function WhatChanges({ order, amend, strip, model, actions }: { order: Order; am
           </ul>
         </Banner>
       )}
+      {/* F-OP-107 (B2): pieces already cut beyond the new figures — what happens to them, picked before Apply (none for the reader). */}
+      {strip.extra && <ExtraPieces name={`fw-so-extra-${order.id}`} {...extraChoicesOf(strip.extra, order, model.can.price)} chosen={amend.extraOutcome} onChoose={actions?.onAmendOutcome} />}
       {strip.reaccept !== null && (strip.reaccept ? <Banner tone="info" title={t('amend.reaccept')} /> : <p className="fw-so-hint">{t('amend.noReaccept')}</p>)}
       <Field label={t('amend.reason')} hint={t('amend.reasonHint')} required>
         <Textarea value={amend.reason} onChange={(event) => actions?.onAmendReason?.(event.target.value)} rows={2} maxLength={1000} />

@@ -28,7 +28,7 @@ import '../../approvals.css'
 import { DoneSteps, FloorNow, NextSteps } from './NextSteps'
 import { ConversationTick } from './ConversationTick'
 import { ExtraPieces } from './ExtraPieces'
-import { designOptionsOffered, NO_CHOICES, planHeld, type TellTick } from '../model'
+import { designOptionsOffered, NO_CHOICES, outcomeHeld, planHeld, type TellTick } from '../model' // F-OP-107: outcomeHeld (the picker's props)
 import {
   answerHeld,
   cardInputOf,
@@ -295,8 +295,18 @@ function OneReview({ review, grains, offline, busy = false, nav, actions }: Requ
             {review.impact.status === 'error' && <p className="fw-apv-hint">{t(`${CR}.impact.notRead`)}</p>}
             {/* F-SA-241: On the floor now (the order's own cells; without workorders.view "—" and "Needs work-order access"). */}
             {plan && <FloorNow plan={plan} />}
-            {/* F-SA-241 (R1, Round 4): extra pieces cut beyond the new figure — one outcome required before Accept. */}
-            {plan && plan.extra.total > 0 && <ExtraPieces plan={plan} choices={choices} accepted={accepted} onChoose={actions?.onExtraOutcome} />}
+            {/* F-SA-241 (R1, Round 4): extra pieces cut beyond the new figure — one outcome required before Accept. F-OP-107: the part's
+                plain props (the order page's strip, Close remaining lines and Cancel use the same). */}
+            {plan && plan.extra.total > 0 && (
+              <ExtraPieces
+                name={`fw-apv-extra-${plan.request.id}`}
+                pieces={plan.extra.pieces.map((piece) => ({ key: `${piece.lineId}:${piece.size}`, line: piece.seq, words: piece.words }))}
+                outcomes={plan.extra.outcomes.map((option) => ({ outcome: option.outcome, words: option.words, held: outcomeHeld(option) }))}
+                chosen={accepted ? plan.extra.chosen : choices.extraOutcome}
+                done={accepted}
+                onChoose={actions?.onExtraOutcome}
+              />
+            )}
             {request.counter && (
               <Banner tone={request.counter.state === 'AGREED' ? 'success' : request.counter.state === 'WAITING' ? 'info' : 'warning'} title={said(request.counter.offer, locale)}>
                 {[said(request.counter.words, locale), record?.counterApproval?.answer ? t(`${CR}.counter.theirWords`, { words: record.counterApproval.answer }) : null].filter(Boolean).join(' · ')}

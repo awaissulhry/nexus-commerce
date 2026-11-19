@@ -2,6 +2,8 @@ import type { ReactNode } from 'react' // B-W2b-340
 import type { StyleDetail, StyleRow, VersionsAnswer } from '../../quotes/api'
 import type { AmendmentsAnswer, CancelCheck, CancelReason, CloseLinesAnswer, CopyAnswer, DepositLinkAnswer, DepositReceived, Order, OrderWorkOrder, Schedule, SdiStatus, Settlement } from '../api'
 import type { AmendReview, DraftLine } from '../daily-model' // F-OP-106: the strip's preview
+import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules' // F-OP-107 (B2)
+import type { ClosePreview } from '../api' // F-OP-107
 import type { MarginTabModel } from './margin/model'
 import type { StepUpState } from '../hooks'
 import type { OrderAbilities, Phrase, RecordTab } from '../model'
@@ -101,6 +103,8 @@ export interface AmendState {
   // ---- F-OP-106: the strip's Why (required) and the words for the customer with their tick (null: not touched) ----
   reason: string
   tell: { readonly words: string; readonly chosen: boolean | null }
+  /** F-OP-107 (B2): what happens to pieces already cut beyond the new figures (null: not picked yet). */
+  extraOutcome: ExtraOutcome | null
 }
 
 // ---- F-OP-111: Split into new orders… (use-lines-acts) ----
@@ -187,6 +191,8 @@ export interface OrderRecordModel {
   cancelCheck: Part<CancelCheck> | null
   /** Close remaining lines just ran: what it closed, what work orders still make. */
   closedLines: CloseLinesAnswer | null
+  /** F-OP-107: Close remaining lines' preview of the lines chosen (each work order's plan, the extra pieces); absent: not read. */
+  closePreview?: Part<ClosePreview> | null
   /** Copy as new quote just ran: the new quote and what it left out. */
   copied: CopyAnswer | null
   /** B-W2a-72: the Margin tab (the order's margin quoted → now → so far; margin grain only). */
@@ -280,13 +286,18 @@ export interface OrderRecordActions {
   onAmendReason?: (text: string) => void
   onAmendTell?: (next: { readonly words?: string; readonly chosen?: boolean }) => void
   onAmendApply?: () => void
+  /** F-OP-107 (B2): the extra pieces' outcome (the strip's picker). */
+  onAmendOutcome?: (outcome: ExtraOutcome) => void
+  /** F-OP-107: read Close remaining lines' preview of the lines chosen. */
+  onClosePreview?: (lineIds: readonly string[]) => void
   onComposerQuery?: (query: string) => void
   onComposerPick?: (styleId: string | null) => void
   onComposerToggle?: (colourwayId: string) => void
   onComposerAdd?: () => void
-  onCloseLines?: (lineIds: string[], reason: string, reasonCode: string) => void
+  // F-OP-107: with the extra pieces' outcome picked in the dialog (null: none — production decides).
+  onCloseLines?: (lineIds: string[], reason: string, reasonCode: string, extraOutcome?: ExtraOutcome | null) => void
   onReopenLines?: (lineIds: string[], reason: string) => void
-  onCancelOrder?: (reason: string, typed: string) => void
+  onCancelOrder?: (reason: string, typed: string, extraOutcome?: ExtraOutcome | null) => void
   onCopyAsQuote?: () => void
   /** B-W2a-72: read the Margin tab again. */
   onRetryMargin?: () => void

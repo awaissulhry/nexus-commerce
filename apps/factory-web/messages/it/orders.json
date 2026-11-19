@@ -848,8 +848,7 @@
       "reading": "Prima la verifica della modifica",
       "failed": "La verifica non è riuscita: riprova",
       "problems": "Prima sistema ciò che blocca la modifica",
-      "reason": "Scrivi perché l'ordine cambia",
-      "cut": "Una taglia è sotto il già tagliato: portala ai capi tagliati"
+      "reason": "Scrivi perché l'ordine cambia"
     },
     "tell": {
       "words": "Parole per il cliente (facoltative)",
@@ -884,6 +883,27 @@
       "waitsTold": "Modifica {revision} applicata · in attesa della produzione: {waits} — decidi in questa pagina · {customer} avvisato.",
       "both": "Modifica {revision} applicata · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina.",
       "bothTold": "Modifica {revision} applicata · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina · {customer} avvisato."
+    },
+    "floor": {
+      "shipped": "{count} già spediti: non può scendere",
+      "cut": "{count} già tagliati oltre",
+      "inWork": "l'ordine di lavoro segue"
+    },
+    "figures": {
+      "cut": "Tagliati {count}",
+      "sewn": "Cuciti {count}",
+      "shipped": "Spediti {count}"
+    },
+    "held": {
+      "shipped": "Una taglia è sotto il già spedito: portala ai capi spediti",
+      "extra_one": "Scegli cosa fare del {count} pezzo in più",
+      "extra_other": "Scegli cosa fare dei {count} pezzi in più"
+    },
+    "workOrders": "Cosa succede agli ordini di lavoro",
+    "planNotRead": "Non è stato possibile leggere ora cosa succede agli ordini di lavoro: si applica comunque subito e seguono con le stesse regole.",
+    "followed": {
+      "changed": "Ordini di lavoro cambiati: {numbers}",
+      "waits": "In attesa della produzione: {numbers} — decidi in questa pagina"
     }
   },
   "editor": {
@@ -928,14 +948,12 @@
       "none": "Invariata",
       "empty": "Scrivi le taglie"
     },
-    "underWorkOrders": "Taglia {size}: gli ordini di lavoro ne fanno {made} — l'ordine di lavoro segue la modifica (Ancora da fare)",
     "styleReading": "Lettura del modello…",
     "styleUnread": "Non è stato possibile leggere il modello: solo le taglie dell'ordine",
     "lockedLabel": "Righe tenute come sono",
     "lockedClosed_one": "{colour}: chiusa in anticipo ({count} pezzo): riaprila prima di cambiarla",
     "lockedClosed_other": "{colour}: chiusa in anticipo ({count} pezzi): riaprila prima di cambiarla",
-    "lockedMtm": "{colour}: un capo su misura, tenuto com'è",
-    "underCut": "Taglia {size}: {cut} già tagliati — non si scende sotto il tagliato"
+    "lockedMtm": "{colour}: un capo su misura, tenuto com'è"
   },
   "issue": {
     "state": "Nel suo stato di ora l'ordine non accetta questo cambiamento.",

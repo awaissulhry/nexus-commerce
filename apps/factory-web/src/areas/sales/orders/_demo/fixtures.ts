@@ -575,6 +575,9 @@ export const CANCEL_CHECK: CancelCheck = {
     ],
   },
   leatherCut: [{ workOrderId: WO_21.id, number: WO_21.number, hides: 3, area: '61.5' }],
+  // F-OP-107 (B-OP-013): the older answer's shape (no plan read, no extra pieces); the design cases add their own.
+  plan: [],
+  workOrders: null,
 }
 
 /** An order the cancel stops at: a draft work order, a shipment being packed, an invoice issued. */

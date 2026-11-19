@@ -53,9 +53,8 @@ import {
   reopenHeld,
   reviewHeld,
   sizesText,
-  underWorkOrders,
-  cutFloorsOf, // F-SA-231
-  underCut, // F-SA-231
+  cellFloorsOf, // F-OP-107
+  cellIssuesOf, // F-OP-107
   withCells,
   type DraftLine,
 } from './daily-model'
@@ -472,25 +471,31 @@ describe('the amendment draft: what it sends, what it changes, why Review waits'
     // Every line at 0: an order keeps at least one line.
     expect(reviewHeld(withCells(draftOf(value), { [black.id]: {}, [red.id]: {} }), value, { changed: false })?.key).toBe('amend.held.empty')
   })
-  // F-SA-231 (lead note after B-SA-042, R1): a size may go under what work orders make (the work order follows as "Still to do"), never
-  // under what is already CUT.
-  it('under what work orders make: said in words, Review stays open; under what is cut: an error and Review waits', () => {
+  // F-OP-107 (B2; lead note after B-SA-042, R1): a size may go under what work orders make (the work order follows) and under what is
+  // already CUT (its extra pieces get an outcome in the strip) — never under what already SHIPPED.
+  it('per cell: under what shipped holds Apply; under what is cut a warning (no hold); under what work orders make the work order follows', () => {
     const production = order('IN_PRODUCTION')
     const black = lineOf(production, 10)
     const draft = withCells(draftOf(production), { [black.id]: { '48': 1, '50': 2, '52': 2, '54': 2 } })
-    expect(underWorkOrders(draft, minimumsOf(production))).toEqual([{ key: black.id, size: '48', made: 2 }])
+    expect(cellIssuesOf(draft, {}, minimumsOf(production))).toEqual([{ key: black.id, size: '48', kind: 'inWork', count: 2 }])
     expect(reviewHeld(draft, production, { changed: false })).toBeNull()
-    // 2 already cut in 48: 1 is under the cut floor — held, and not also said as "under work orders".
-    const floors = cutFloorsOf([{ lineId: black.id, sizes: [{ size: '48', cut: 2 }, { size: '50', cut: null }, { size: '52', cut: 0 }] }])
-    expect(floors).toEqual({ [black.id]: { '48': 2 } })
-    expect(underCut(draft, floors)).toEqual([{ key: black.id, size: '48', cut: 2 }])
-    expect(underWorkOrders(draft, minimumsOf(production), floors)).toEqual([])
-    expect(reviewHeld(draft, production, { changed: false }, floors)?.key).toBe('amend.held.cut')
-    // At the cut floor: open again.
-    expect(reviewHeld(withCells(draftOf(production), { [black.id]: { '48': 2, '50': 2, '52': 2, '54': 1 } }), production, { changed: false }, floors)).toBeNull()
+    // 2 already cut in 48: 1 is 1 under the cut — a warning (the extra piece's outcome is picked in the strip), not also "in work orders".
+    const read = (sizes: { size: string | null; cut: number | null; shipped: number }[]) => [{ lineId: black.id, cut: 2, sewn: null, shipped: 0, sizes }]
+    const floors = cellFloorsOf(read([{ size: '48', cut: 2, shipped: 0 }, { size: '50', cut: null, shipped: 0 }, { size: '52', cut: 0, shipped: 0 }]))
+    expect(floors).toEqual({ [black.id]: { '48': { cut: 2, shipped: 0 } } })
+    expect(cellIssuesOf(draft, floors, minimumsOf(production))).toEqual([{ key: black.id, size: '48', kind: 'cut', count: 1 }])
+    expect(reviewHeld(draft, production, { changed: false }, floors)).toBeNull()
+    // 2 shipped in 48: under it is an error and Apply waits.
+    const shipped = cellFloorsOf(read([{ size: '48', cut: 2, shipped: 2 }]))
+    expect(cellIssuesOf(draft, shipped)).toEqual([{ key: black.id, size: '48', kind: 'shipped', count: 2 }])
+    expect(reviewHeld(draft, production, { changed: false }, shipped)?.key).toBe('edit.held.shipped')
+    // At the floor: open again; a line kept as it is (closed short) never has one.
+    expect(reviewHeld(withCells(draftOf(production), { [black.id]: { '48': 2, '50': 2, '52': 2, '54': 1 } }), production, { changed: false }, shipped)).toBeNull()
+    expect(cellIssuesOf(draft.map((line) => ({ ...line, locked: true })), shipped)).toEqual([])
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['amend.held.cut', 'editor.underCut', 'editor.underWorkOrders']) expect(t(key, { size: '48', cut: 2, made: 2 }), `${locale}: ${key}`).not.toBe(key)
+      for (const key of ['edit.held.shipped', 'edit.floor.shipped', 'edit.floor.cut', 'edit.floor.inWork', 'edit.figures.cut', 'edit.figures.sewn', 'edit.figures.shipped']) expect(t(key, { count: 2 }), `${locale}: ${key}`).not.toBe(key)
+      for (const gone of ['amend.held.cut', 'editor.underCut', 'editor.underWorkOrders']) expect(t(gone, { size: '48', cut: 2, made: 2 }), `${locale}: ${gone}`).toBe(gone)
     }
   })
   it('a closed-short line stays as it is (sent by id only) and is not in the grid', () => {
@@ -1201,8 +1206,7 @@ describe('F-OP-106: the What changes strip — fed by the preview of THIS draft,
   const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
 
   it('a DRAFT work order follows now for Sales, a RELEASED one waits for production — said with the API\'s why; a planner\'s follows', async () => {
-    const { amendKeyOf, stripOf } = await import('./daily-model')
-    const { workOrderWords } = await import('./record/view/LinesTab')
+    const { amendKeyOf, stripOf, workOrderWords } = await import('./daily-model')
     const draft = draftOfTyped()
     const key = amendKeyOf(draft, production)
     const strip = stripOf({ order: production, review: { phase: 'ready', key, preview: previewOf(), problem: null }, key, local: null, price: true, label: () => null })
@@ -1262,8 +1266,13 @@ describe('F-OP-106: the What changes strip — fed by the preview of THIS draft,
   })
 
   it('Apply waits while it reads, when the read failed, when the API refuses by place, without a reason; the draft\'s own hold first', async () => {
-    const { amendKeyOf, stripHeld, stripOf } = await import('./daily-model')
+    const { amendKeyOf, stripHeld: heldOf, stripOf } = await import('./daily-model')
     const { AMEND_PREVIEW_PROBLEMS } = await import('./_demo/fixtures')
+    // A hold's key (an API-worded hold has none: F-OP-107's outcome).
+    const stripHeld = (...args: Parameters<typeof heldOf>) => {
+      const held = heldOf(...args)
+      return held && 'key' in held ? held : null
+    }
     const draft = draftOfTyped()
     const key = amendKeyOf(draft, production)
     const of = (review: Parameters<typeof stripOf>[0]['review'], local: { key: string } | null = null) => stripOf({ order: production, review, key, local, price: true, label: () => 'DEMO-JKT-01 · BLK' })
@@ -1321,3 +1330,75 @@ describe('F-OP-106: the What changes strip — fed by the preview of THIS draft,
   })
 })
 // ---- end F-OP-106
+
+// ---- F-OP-107 (order page B2; 10-order-page §4.2): floors per cell, the extra-pieces picker, Apply waits for an outcome ----------
+describe('F-OP-107: below the cut the strip asks what happens to the extra pieces; Close remaining lines and Cancel the same', () => {
+  const production = order('IN_PRODUCTION')
+  const black = lineOf(production, 10)
+  const chooseWords = { en: 'Choose what happens to the 1 extra pieces', it: 'Scegli cosa fare dei 1 pezzi in più' }
+  const extra = { extra: [{ workOrderSizeId: 'ws-1', salesOrderLineId: black.id, size: '48', count: 1, words: { en: 'Extra pieces: 1 48 already cut', it: 'Pezzi in più: 1 48 già tagliati' } }], needsOutcome: true, words: chooseWords }
+
+  it('the strip carries the preview\'s extra pieces; Apply waits for an outcome (the API\'s words) until one is picked, then for the reason', async () => {
+    const { amendKeyOf, heldWordsOf, stripHeld, stripOf } = await import('./daily-model')
+    const draft = { lines: withCells(draftOf(production), { [black.id]: { '48': 1, '50': 2, '52': 2, '54': 2 } }), customerRef: '', requestedDate: '' }
+    const key = amendKeyOf(draft, production)
+    const strip = stripOf({ order: production, review: { phase: 'ready', key, preview: { ...AMEND_PREVIEW, workOrders: extra }, problem: null }, key, local: null, price: true, label: () => null })
+    expect(strip.extra?.extra).toHaveLength(1)
+    const held = stripHeld(strip, { reason: 'Fewer 48.', busy: false, local: null, extraOutcome: null })
+    expect(held).toEqual({ words: chooseWords })
+    const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    expect(heldWordsOf(held!, en, 'it')).toBe(chooseWords.it)
+    expect(stripHeld(strip, { reason: 'Fewer 48.', busy: false, local: null, extraOutcome: 'LEFTOVER' })).toBeNull()
+    expect(stripHeld(strip, { reason: '', busy: false, local: null, extraOutcome: 'LEFTOVER' })).toEqual({ key: 'amend.held.reason' })
+    // No extra pieces (or the API says none is needed): nothing waits for an outcome.
+    const none = stripOf({ order: production, review: { phase: 'ready', key, preview: { ...AMEND_PREVIEW, workOrders: { extra: [], needsOutcome: false, words: null } }, problem: null }, key, local: null, price: true, label: () => null })
+    expect(none.extra).toBeNull()
+    expect(stripHeld(none, { reason: 'x', busy: false, local: null, extraOutcome: null })).toBeNull()
+  })
+
+  it('the picker: its pieces by order line, the three outcomes in the review window\'s words — charging held without the price grain', async () => {
+    const { extraChoicesOf, outcomeHeld } = await import('./daily-model')
+    const priced = extraChoicesOf(extra, production, true)
+    expect(priced.pieces).toEqual([{ key: 'ws-1', line: 10, words: extra.extra[0]!.words }])
+    expect(priced.outcomes.map((option) => [option.outcome, option.held === null])).toEqual([
+      ['CHARGE', true],
+      ['LEFTOVER', true],
+      ['SCRAP', true],
+    ])
+    expect(priced.outcomes[1]!.words.en).toBe(`Keep as leftover for ${production.party?.legalName}`)
+    const unpriced = extraChoicesOf(extra, production, false)
+    expect(unpriced.outcomes[0]!.held?.en).toBe('Charging the customer needs the right to see prices')
+    // Close remaining lines and Cancel: the same rule (an outcome needed and none picked: their words; else nothing).
+    expect(outcomeHeld(extra, null)).toEqual({ words: chooseWords })
+    expect(outcomeHeld({ ...extra, words: null }, null)).toEqual({ key: 'edit.held.extra', params: { count: 1 } })
+    expect(outcomeHeld(extra, 'SCRAP')).toBeNull()
+    expect(outcomeHeld({ ...extra, needsOutcome: false }, null)).toBeNull()
+    expect(outcomeHeld(null, null)).toBeNull()
+  })
+
+  it('the page: the outcome goes with Apply only while the preview names extra pieces; Close and Cancel ask their preview and send theirs', () => {
+    const acts = readFileSync(new URL('./record/use-lines-acts.ts', import.meta.url), 'utf8')
+    expect(acts).toContain('const extra = (draft.review?.preview?.workOrders?.extra.length ?? 0) > 0 && draft.extraOutcome ? { extraOutcome: draft.extraOutcome } : {}')
+    expect(acts).toContain('previewCloseLines(api, orderId, lineIds)')
+    expect(acts).toContain('mine === closeSeq.current && setClosePreview(part(answer))')
+    const dialogs = readFileSync(new URL('./record/view/DailyDialogs.tsx', import.meta.url), 'utf8')
+    expect(dialogs).toContain("askPreview?.(chosenKey === '' ? [] : chosenKey.split(','))")
+    expect(dialogs).toContain('preview?.workOrders?.extra.length ? outcome : null)')
+    expect(dialogs).toContain('check?.workOrders?.extra.length ? outcome : null)')
+    expect(dialogs).toContain("<p className=\"fw-so-hint\">{t('edit.appliesAtOnce')}</p>")
+    const editor = readFileSync(new URL('./record/view/LinesEditor.tsx', import.meta.url), 'utf8')
+    expect(editor).toContain("FLOOR_TONE: Readonly<Record<CellIssueKind, 'error' | 'warning'>> = Object.freeze({ shipped: 'error', cut: 'warning', inWork: 'warning' })")
+  })
+
+  it('each colour line says "Cut 40 · Sewn 32 · Shipped 0" from the production read (a step not counted is left out)', async () => {
+    const { lineFiguresOf } = await import('./daily-model')
+    const figures = lineFiguresOf([{ lineId: black.id, cut: 40, sewn: 32, shipped: 0, sizes: [] }, { lineId: 'l2', cut: null, sewn: null, shipped: 3, sizes: [] }])
+    expect(figures).toEqual({ [black.id]: { cut: 40, sewn: 32, shipped: 0 }, l2: { cut: null, sewn: null, shipped: 3 } })
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['edit.workOrders', 'edit.planNotRead', 'edit.followed.changed', 'edit.followed.waits']) expect(t(key, { numbers: 'WO-0311' }), `${locale} ${key}`).not.toBe(key)
+      expect(t('edit.held.extra', { count: 2 }), locale).not.toBe('edit.held.extra')
+    }
+  })
+})
+// ---- end F-OP-107

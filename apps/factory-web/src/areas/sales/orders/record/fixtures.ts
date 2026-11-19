@@ -212,6 +212,7 @@ function amendOf(value: Order, change: (lines: DraftLine[]) => DraftLine[] = (li
     review: null,
     reason: '',
     tell: { words: '', chosen: null },
+    extraOutcome: null, // F-OP-107
     ...over,
   }
   return seen ? { ...draft, review: { ...seen, key: amendKeyOf(draft, value), problem: null } } : draft
@@ -453,7 +454,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'amend-held-shipped', label: 'W2a · Sales · Partly shipped: Amend order held — the lines are fixed once anything shipped', model: base('sales', order('PARTLY_SHIPPED')) },
     { id: 'amended-band', label: 'W2a · Sales · An amended order: “Amended · rev 2”, waiting for the customer to accept again', model: base('sales', amended(production)) },
     { id: 'close-lines-dialog', label: 'W2a · Sales · Close remaining lines: what will not be made or shipped, the reason, the reversal', model: base('sales', order('PARTLY_SHIPPED'), { dialog: { kind: 'closeLines' }, draft: { reason: 'Il cliente non vuole il resto.' } }) },
-    { id: 'close-lines-done', label: 'W2a · Sales · Lines closed: what work orders still make is Production’s', model: base('sales', closedShort, { dialog: { kind: 'closeLines' }, closedLines: { order: closedShort, closed: [{ lineId: LINE_RED, seq: 20, closedShortQuantity: 2 }], reducesDone: [], stillInWorkOrders: [{ lineId: LINE_RED, pieces: 2 }] } }) },
+    { id: 'close-lines-done', label: 'W2a · Sales · Lines closed: what work orders still make is Production’s', model: base('sales', closedShort, { dialog: { kind: 'closeLines' }, closedLines: { order: closedShort, closed: [{ lineId: LINE_RED, seq: 20, closedShortQuantity: 2 }], reducesDone: [], stillInWorkOrders: [{ lineId: LINE_RED, pieces: 2 }], workOrders: { applied: [], waiting: [] } } }) },
     { id: 'closed-short', label: 'W2a · Sales · Lines: the red line closed short (2 pieces) with its reason', model: base('sales', closedShort) },
     { id: 'reopen-dialog', label: 'W2a · Sales · Reopen lines (the close’s reversal)', model: base('sales', closedShort, { dialog: { kind: 'reopenLines' }, draft: { reason: 'Arrivata altra pelle rossa.' } }) },
     { id: 'cancel-dialog', label: 'W2a · Sales · Cancel order in production: what it changes and leaves behind; reason; the number typed', model: base('sales', production, { dialog: { kind: 'cancel' }, cancelCheck: { value: CANCEL_CHECK, problem: null }, draft: { reason: 'Il cliente ha chiuso la stagione.', typed: 'SO-2026-0088' } }), note: 'Cancel order waits for the reason and the number typed exactly.' },
