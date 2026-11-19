@@ -23,7 +23,7 @@ import { readShipment, type ShipmentHeader } from '../store'
  * The brand wall: a line's FK carries partyId ([tenantId, partyId, salesOrderLineId] → SalesOrderLine), so a shipment's orders
  * are only ever of its own customer, for every login. Never call it as the floor: the floor reads no sales order (R-8).
  *
- * Until B-OP-047 deletes MULTI_ORDER_OFF (factory-domain shipping/shipments), no shipment carries a second order: every answer
+ * Since B-OP-047 deleted MULTI_ORDER_OFF (factory-domain shipping/shipments), a shipment may carry a second order: every answer
  * here is then the first order alone, so moving a reader changes nothing visible.
  */
 
@@ -67,7 +67,7 @@ export async function orderIdsOfShipments(db: Reader, shipments: readonly Shipme
   return out
 }
 
-/** One shipment's orders: the first order first (one, while N6 is held off). */
+/** One shipment's orders: the first order first (B-OP-047: one or several). */
 export async function ordersOfShipment(db: Reader, shipment: ShipmentKey): Promise<string[]> {
   return (await orderIdsOfShipments(db, [shipment])).get(shipment.id)!
 }
@@ -225,7 +225,7 @@ const MAX_CANDIDATES = 50
 
 /**
  * shipping.view: the shipment's customer's other open orders, each with its verdict `joinable {allowed, why}` (joinProblems,
- * MULTI_ORDER_OFF until the switch). Only the shipment's own customer (by query and by the line FK), only orders the caller
+ * B-OP-047: no hold of several orders any more). Only the shipment's own customer (by query and by the line FK), only orders the caller
  * may see; never another customer's order, also for a person who sees every customer.
  */
 export async function shipmentOrderCandidates(caller: CommandCaller, shipmentId: string) {

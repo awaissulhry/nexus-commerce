@@ -1,5 +1,6 @@
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { YES_REFUSALS } from './depth/model' // F-OP-101
+import { bannerYesOf, yesDoorOf } from './depth/model' // F-OP-102
 import type { Locale } from '../../../lib/i18n/locales'
 import {
   BOARD_LANES,
@@ -520,12 +521,15 @@ export const DOCK_DEFAULTS: Readonly<Record<RecordTab, DockDefault>> = Object.fr
 // ---- end F-SA-263
 
 /** What a tab counts (null draws nothing; 0 is an answer): lines · work orders · amendments · invoices · shipments. */
-export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments'>): number | null {
+// F-OP-117 (10-order-page §6, §7, §8; review R-22): Changes counts the ONE waiting list's rows (`changes`: changesBadgeOf of the card,
+// null before the production read — never a made-up 0); Money and Shipments the order read's own badges (B-OP-020: issued invoices and
+// credit notes + open deposit requests; shipments not cancelled carrying this order's lines), the chain's counts in an older answer.
+export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments' | 'badges'>, counts: { readonly changes?: number | null } = {}): number | null {
   if (tab === 'lines') return order.lines.length
   if (tab === 'production') return order.chain.workOrders.length
-  if (tab === 'changes') return order.amendments.count
-  if (tab === 'money') return order.chain.invoices.length
-  if (tab === 'shipments') return order.chain.shipments.length
+  if (tab === 'changes') return counts.changes ?? null
+  if (tab === 'money') return order.badges ? order.badges.money.invoices + order.badges.money.openDeposits : order.chain.invoices.length
+  if (tab === 'shipments') return order.badges ? order.badges.shipments : order.chain.shipments.length
   // F-SA-237: the files the reader may open come with the files read (none before it: no number that is not true).
   return null
 }
@@ -577,11 +581,14 @@ export function depositGate(order: Pick<Order, 'depositRequired' | 'chain'>): { 
   return { state: 'MISSING', request: null }
 }
 
-export type StepKind = 'makeWorkOrders' | 'changePromise' | 'close' | /* F-OP-121 */ 'createShipment'
+// F-OP-102: + PENDING_APPROVAL — the approver's Confirm the order (its task), anyone else's Ask for a yes / Take the request back.
+export type StepKind = 'makeWorkOrders' | 'changePromise' | 'close' | /* F-OP-121 */ 'createShipment' | 'confirmYes' | 'askYes'
 
 export interface NextStep {
   kind: StepKind | null
   held: Phrase | null
+  /** F-OP-102: Confirm the order's task (the order read's open yes, B-OP-020). */
+  taskId?: string
 }
 
 // F-SA-201: a Delivered order closes as a Shipped one does (the machine: SHIPPED → CLOSED and DELIVERED → CLOSED; the
@@ -598,6 +605,17 @@ export const isShippedInFull = (order: Pick<Order, 'status'>): boolean => CLOSE_
  * Warehouse pages (no dead control): its promise is the step meanwhile.
  */
 export function nextStep(order: Order, can: OrderAbilities): NextStep {
+  // ---- F-OP-102 (10-order-page §2.1): the yes the order waits for — an approver who did not ask confirms it here (F-OP-101's door);
+  // anyone else asks for it or takes their request back (the banner's own words say which).
+  if (order.status === 'PENDING_APPROVAL') {
+    const decide = bannerYesOf(order.openApprovals)
+      .filter((task) => task.kind === 'SALES_ORDER')
+      .map((task) => yesDoorOf(task))
+      .find((door) => door.kind === 'decide')
+    if (decide && decide.kind === 'decide') return { kind: 'confirmYes', held: decide.confirmHeld, taskId: decide.task.taskId }
+    return { kind: 'askYes', held: can.manage ? null : phrase('held.noManage') }
+  }
+  // ---- end F-OP-102
   if (order.status === 'CONFIRMED') {
     if (!can.makeWorkOrders) return { kind: 'makeWorkOrders', held: phrase('held.noWorkOrders') }
     const gate = depositGate(order)
@@ -841,8 +859,9 @@ export function writeProblem(error: unknown): WriteProblem {
   if (!isApiError(error)) return { key: 'problem.write.internal', reload: false }
   // F-OP-101: the approval engine's refusal of a yes or a no decided here (`refusal/STALE` …): its own words, and the order read again
   // (W39-02's seeded request answers STALE on a yes — its no still clears it).
+  // F-OP-116: only the approval engine's own codes — another route's refusal (PRODUCTION_DOES_THIS, CUT_PIECES …) keeps its words.
   const refusal = error.issues.map(issuePath).find((path) => path.startsWith('refusal/'))?.slice('refusal/'.length) ?? null
-  if (refusal) return { key: YES_REFUSALS.has(refusal) ? `approval.refused.${refusal}` : 'approval.refused.other', reload: true }
+  if (refusal && YES_REFUSALS.has(refusal)) return { key: `approval.refused.${refusal}`, reload: true }
   if (error.kind === 'conflict') {
     const moved = error.issues.some((issue) => issuePath(issue).split(/[./]/).includes('version'))
     if (moved) return { key: 'problem.write.moved', reload: true }
@@ -1205,3 +1224,10 @@ export function splitRefusals(issues: readonly ApiIssue[], body: SplitBody, orde
   return out
 }
 // ---- end F-OP-111
+
+// ---- F-OP-102 (10-order-page §2.2): the ⋯'s Make work orders… also while in production with lines not in work orders yet ----
+/** Make work orders… in the ⋯: CONFIRMED (when it is not already the primary) and IN_PRODUCTION while a line is not in work orders. */
+export function makeInMenu(order: Pick<Order, 'status'>, notInProduction: number): boolean {
+  return order.status === 'IN_PRODUCTION' && notInProduction > 0
+}
+// ---- end F-OP-102

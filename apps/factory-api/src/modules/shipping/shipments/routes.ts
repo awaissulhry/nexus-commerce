@@ -47,7 +47,7 @@ export default defineRoutes('shipping.shipments', manifest, async (app) => {
 
   app.get('/shipping/shipments/:shipmentId', { schema: getShipmentContract }, async (request) => getShipment(request, request.params.shipmentId))
 
-  // B-OP-040 (order page N6, held off by MULTI_ORDER_OFF until B-OP-047): an order joins a shipment by its lines.
+  // B-OP-040 (order page N6, on since B-OP-047): an order joins a shipment by its lines.
   app.get('/shipping/shipments/joinable', { schema: joinableShipmentsContract }, async (request) => joinableShipments(request, request.query))
 
   app.get('/shipping/shipments/:shipmentId/orders/candidates', { schema: shipmentOrderCandidatesContract }, async (request) => shipmentOrderCandidates(request, request.params.shipmentId))

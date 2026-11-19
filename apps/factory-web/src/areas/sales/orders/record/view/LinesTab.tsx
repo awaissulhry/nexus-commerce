@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation' // F-OP-210 (lead, in A08): th
 import { FileImage, PencilLine } from 'lucide-react'
 import { Banner, Card, Disclosure, Field, KeyValue, MetricStrip, SummaryTable } from '@nexus/ui/components'
 import { SizeGridView } from '@nexus/ui/grid/size-grid/index'
-import { Button, Input, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Input, Select, Spinner, Tag } from '@nexus/ui/primitives' // F-OP-110: Select
 import { DateField, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
@@ -44,6 +44,7 @@ import { artworkOfGroup } from '../production'
 import { DiscussDoor } from './Discuss'
 import { rowAnchor } from '../dock/discuss'
 import { REQUESTED_FIELD_ID } from '../overview/model' // F-OP-104
+import { addressLineOf, headerChangedOf, SHIP_TO_FIELD_ID } from '../../daily-model' // F-OP-110
 
 /**
  * F-SA-231 (sales page plan N2, picks P2, R9; 10-order-page §2.2) — Lines, the commercial truth: a totals strip (lines · units · net ·
@@ -228,12 +229,36 @@ function Totals({ order, model }: { order: Order; model: OrderRecordModel }) {
  * customer with their tick, what stops it by place, what froze, re-acceptance, and Show all changes (the old review's before → after
  * table, in place). Then the order's customer PO and requested date, and the lines editor. Leaving the page with changes asks first.
  */
+/**
+ * F-OP-110 (10-order-page §4.5): Ship to — a Select of the order's customer's active delivery addresses (ours or approved by us; the
+ * API's wall: never another customer's); the first choice keeps the order's own. Without the right to see customers it is held in
+ * words (the order keeps its address). A shipment being prepared for the old address is the strip's refusal, naming it.
+ */
+function ShipToField({ order, amend, actions }: { order: Order; amend: AmendState; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const addresses = amend.addresses ?? null
+  const now = addressLineOf(order.shipTo as Record<string, unknown> | null | undefined) ?? '—'
+  const hint = addresses === null ? t('edit.shipToHeld') : addresses.problem ? t('edit.shipToFailed') : addresses.value === null ? t('split.shipToReading') : undefined
+  return (
+    <Field label={t('edit.shipTo')} hint={hint}>
+      <Select id={SHIP_TO_FIELD_ID} value={amend.shipToAddressId ?? ''} onChange={(event) => actions?.onAmendHeader?.('shipToAddressId', event.target.value)} aria-label={t('edit.shipTo')}>
+        <option value="">{t('edit.shipToKeep', { address: now })}</option>
+        {(addresses?.value ?? []).map((address) => (
+          <option key={address.id} value={address.id}>
+            {addressLineOf(address) ?? address.id}
+          </option>
+        ))}
+      </Select>
+    </Field>
+  )
+}
+
 function AmendLines({ order, amend, model, actions }: { order: Order; amend: AmendState; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const d = useT(DEPTH) // B-W2b-323
   const locale = useLocale()
   const minimums = minimumsOf(order)
-  const headerChanged = (amend.customerRef.trim() || null) !== (order.customerRef ?? null) || (amend.requestedDate || null) !== (order.requestedDate ?? null)
+  const headerChanged = headerChangedOf(amend, order) // F-OP-110: the ship-to counts too
   const count = changeCount(amend.lines, order) + (headerChanged ? 1 : 0)
   // F-OP-107 (B2): each cell's floors (the production read's own cells): under what shipped holds; under what is cut its extra pieces
   // get an outcome; under work orders the work order follows. Each colour line says "Cut 40 · Sewn 32 · Shipped 0".
@@ -314,6 +339,7 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
             <DateField id={REQUESTED_FIELD_ID} value={amend.requestedDate} onChange={(value) => actions?.onAmendHeader?.('requestedDate', value)} min={model.today} locale={INTL_LOCALE[locale]} ariaLabel={t('amend.requestedDate')} />
           </Field>
         </div>
+        <ShipToField order={order} amend={amend} actions={actions} />
       </Card>
       <LinesEditor
         model={{ mode: 'amend', lines: amend.lines, order, styles: amend.styles, composer: amend.composer, price: model.can.price, currency: order.currency, priceBasis: order.priceBasis, minimums, floors /* F-OP-107 */, figures: lineFiguresOf(read) /* F-OP-107 */, losing /* F-OP-109 */, busy: model.busy, frozen: frozenIssues(model.depth, d) /* B-W2b-323 */, newLineOptions: model.newLineOptions /* B-W2b-374 */ }}

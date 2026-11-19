@@ -186,7 +186,7 @@ function JoinableDrafts({ rows, shipmentHref, onJoin }: { rows: readonly Joinabl
             </Link>
             <Pill tone="neutral">{t('shipStatus.DRAFT')}</Pill>
           </span>
-          {/* Held, never hidden: while several orders in one shipment are held off, it says so in words. */}
+          {/* Held, never hidden: a held row says why in words (B-OP-047: the offered rows may join). */}
           <Button size="sm" heldReason={row.held ? depth(row.held.key, row.held.params) : null} onClick={() => onJoin?.(row.shipmentId)}>
             {t('ship.join.add')}
           </Button>

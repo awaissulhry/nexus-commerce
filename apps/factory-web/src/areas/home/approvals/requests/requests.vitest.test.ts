@@ -482,16 +482,32 @@ describe('F-SA-241: the window’s new parts from the apply plan — On the floo
     expect(stoppable(PLAN.next[0]!)).toBe(false)
   })
 
-  it('after Accept: the stops go first, then each work-order change this reader may carry out now — every one its own command', () => {
+  // F-OP-116 (B1): the applies go first, the stops after — a hold placed first made its own work order refuse the change (ON_HOLD).
+  it('after Accept (B1): each work-order change this reader may carry out now first, then the stops — every one its own command', () => {
     const commands = doneCommandsOf(PLAN_AFTER, [WO])
-    expect(commands.map((command) => command.key)).toEqual([`stop:${WO.id}`, `apply:${PLAN_AFTER.next[1]!.ref!.id}`])
+    expect(commands.map((command) => command.key)).toEqual([`apply:${PLAN_AFTER.next[1]!.ref!.id}`, `stop:${WO.id}`])
     // A proposal not this reader's (no workorders.manage over it) is a door, never a command.
     expect(doneCommandsOf({ next: PLAN_AFTER.next.map((step) => ({ ...step, mayDoNow: false })) }, [])).toEqual([])
-    expect(leftToRun(commands, { [`stop:${WO.id}`]: { phase: 'done' } }).map((command) => command.kind)).toEqual(['apply'])
+    expect(leftToRun(commands, { [`apply:${PLAN_AFTER.next[1]!.ref!.id}`]: { phase: 'done' } }).map((command) => command.kind)).toEqual(['stop'])
+  })
+
+  // F-OP-116 (R-17): with auto-apply on, Accept carried the change out in its own command — the window never applies it again.
+  it('after an auto-applying Accept (R-17): a change in the answer\'s workOrders.applied[] is no command; the stops then go at once', async () => {
+    const { atAcceptOf } = await import('./model')
+    const applied = [PLAN_AFTER.next[1]!.ref!.id]
+    const commands = doneCommandsOf(PLAN_AFTER, [WO], applied)
+    expect(commands.map((command) => command.key)).toEqual([`stop:${WO.id}`])
+    expect(atAcceptOf(commands).map((command) => command.key)).toEqual([`stop:${WO.id}`])
+    // A change still to carry out by this reader: nothing runs by itself ("Do the next steps" runs the apply first, the stop after).
+    expect(atAcceptOf(doneCommandsOf(PLAN_AFTER, [WO]))).toEqual([])
+    expect(atAcceptOf(doneCommandsOf(PLAN_AFTER, []))).toEqual([])
+    const source = readFileSync(new URL('./use-request-review.ts', import.meta.url), 'utf8')
+    expect(source).toContain('doneCommandsOf(after, stops, (accepted.workOrders?.applied ?? []).map((entry) => entry.changeId))')
+    expect(source).toContain('const stopNow = atAcceptOf(commands)')
   })
 
   it('"Do the next steps" runs one after another and stops at the FIRST refusal (the rest stay to do, nothing rolled back)', async () => {
-    const commands = [...doneCommandsOf(PLAN_AFTER, [WO]), { key: 'apply:other', kind: 'apply' as const, changeId: 'other', workOrder: null, words: { en: 'x', it: 'y' } }]
+    const commands = [{ key: `stop:${WO.id}`, kind: 'stop' as const, workOrder: { id: WO.id, number: WO.number } }, { key: 'apply:other', kind: 'apply' as const, changeId: 'other', workOrder: null, words: { en: 'x', it: 'y' } }]
     const seen: string[] = []
     const states: Record<string, string> = {}
     const result = await runInOrder(

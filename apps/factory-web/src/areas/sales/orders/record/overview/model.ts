@@ -8,6 +8,8 @@ import type { BrandRequest } from '../../../../home/approvals/requests/api'
 import type { OpenApproval } from '../../api'
 import { stillRowsOf, type StillRowOf } from '../changes/model'
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-104: the tab links keep the dock's scope (F-OP-210)
+import { yesDoorOf } from '../../depth/model' // F-OP-117: the Changes dot
+import { waitsForMe } from '../../../../home/approvals/requests/model' // F-OP-117
 
 /**
  * F-SA-232 (sales page plan N2, picks P2, P3, P4, P15, R9; 10-order-page §2.1 O1, O2; review OW-6, OW-7) — Overview's rules, without
@@ -320,7 +322,8 @@ export function nextDatesOf(dates: Dates | null | undefined, promise: string | n
  *   an open yes of the order              Confirm / Refuse… for an approver who did not ask; held for the asker; who decides (F-OP-101)
  *   APPROVAL · PARTNER_TASK               Changes › (what we asked the customer: it decides)
  *   DEPOSIT                               Record the payment (payments.record, the request open) or Money ›
- *   BRAND_PAUSE · holds · quality · work  Production › #holds (F-OP-116 wires "Lift the customer's pause…" in place)
+ *   BRAND_PAUSE                           Lift the customer's pause… in place (F-OP-116: the shared Lift; no ref: Production › #holds)
+ *   holds · quality · work                Production › #holds
  *   MATERIAL_SHORT · GATE                 Production › #dates
  *
  * Oldest first (a row with no known start last). Nothing here names another customer: every row is this order's own read.
@@ -331,6 +334,8 @@ export type WaitingDoor =
   | { readonly kind: 'yes'; readonly task: OpenApproval }
   | { readonly kind: 'payment'; readonly requestId: string }
   | { readonly kind: 'tab'; readonly tab: 'production' | 'money' | 'changes'; readonly anchor: string | null }
+  /** F-OP-116: the customer's pause on a work order this reader reaches: "Lift the customer's pause…" (the shared Lift, F-OP-114). */
+  | { readonly kind: 'lift'; readonly workOrderId: string }
 
 /** A row's words: the API's own (it + en), or the page's phrase (its `{customer}` and the request's kind as `{what}` filled in: rowWordsOf). */
 export type WaitingWords = { readonly kind: 'api'; readonly words: Words } | { readonly kind: 'phrase'; readonly phrase: Phrase; readonly requestKind?: string | null }
@@ -373,6 +378,8 @@ function doorOf(blocker: Blocker, inputs: WaitingInputs): WaitingDoor {
   }
   if (blocker.kind === 'DEPOSIT') return inputs.recordPayment && ref?.type === 'DepositRequest' ? { kind: 'payment', requestId: ref.id } : { kind: 'tab', tab: 'money', anchor: null }
   if (blocker.kind === 'APPROVAL' || blocker.kind === 'PARTNER_TASK') return { kind: 'tab', tab: 'changes', anchor: null }
+  // F-OP-116: the customer's pause is lifted in place (a work order the reader does not reach has no ref: Production › holds).
+  if (blocker.kind === 'BRAND_PAUSE' && ref?.type === 'WorkOrder') return { kind: 'lift', workOrderId: ref.id }
   if (DATE_KINDS.has(blocker.kind)) return { kind: 'tab', tab: 'production', anchor: 'dates' }
   return { kind: 'tab', tab: 'production', anchor: HOLD_KINDS.has(blocker.kind) ? 'holds' : null }
 }
@@ -441,6 +448,15 @@ export function waitingCardOf(rows: readonly WaitingRow[], read: OrderProduction
 
 /** R-22: the Changes tab's badge counts the card's own rows (waiting on us, on the customer, still to do) — never a second rule. */
 export const changesBadgeOf = (card: Pick<WaitingCard, 'onUs' | 'onCustomer' | 'still'>): number => card.onUs.length + card.onCustomer.length + card.still.length
+
+/**
+ * F-OP-117 (10-order-page §6): the Changes tab's dot — one of the card's rows waits on THIS reader: a yes they decide, a request
+ * their team answers, a Still to do row that is their turn.
+ */
+export function changesDotOf(card: Pick<WaitingCard, 'onUs' | 'still'>): boolean {
+  if (card.still.some((row) => row.mayAct)) return true
+  return card.onUs.some((row) => (row.door.kind === 'yes' && yesDoorOf(row.door.task).kind === 'decide') || (row.door.kind === 'answer' && !!row.door.request && waitsForMe(row.door.request)))
+}
 // ---- end F-OP-103
 
 /** One linked record, a count button that is a real link — or, without its right, held in words with no number. */

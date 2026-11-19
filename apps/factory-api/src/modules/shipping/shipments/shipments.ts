@@ -8,7 +8,7 @@ import { addressUseProblem } from '@nexus/factory-domain/parties/address-approva
 import { SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { carrierNameFor } from '@nexus/factory-domain/shipping/labels/labels'
 import { lineProblems, lineQuantityProblems, shipmentMachine, type ShipmentStatus, type TransportBy } from '@nexus/factory-domain/shipping/shipments'
-// B-OP-040 (order page N6, lines-derived): several orders of one customer, held off by MULTI_ORDER_OFF until B-OP-047.
+// B-OP-040 (order page N6, lines-derived): several orders of one customer (on since B-OP-047).
 import { joinProblems, type JoinShipment } from '@nexus/factory-domain/shipping/shipments'
 import { joinOrderOf, joinOrdersOf, joinShipmentFacts, orderRefsOfShipment, orderRefsOfShipments, ordersChanged, ordersOfShipment, shipmentsOfOrderWhere } from './orders-of'
 import { repairCellWords } from '@nexus/factory-domain/shipping/shipments/backorder'
@@ -244,7 +244,7 @@ function garmentsByCell(lines: readonly { readonly workOrderSizeId: string; read
 /**
  * Reads the cells and checks each against the shipment (party, order, site, DRAFT): 400 with every problem. B-OP-040: a
  * cell of another customer reads as an unknown one; a cell of another order of the customer joins only as joinProblems
- * allows against `join` (the shipment's first order; MULTI_ORDER_OFF until the switch).
+ * allows against `join` (the shipment's first order; B-OP-047: the real join rules only).
  */
 async function cellsFor(
   db: CommandTx,
@@ -357,7 +357,7 @@ const blankToNull = (value: string | null | undefined): string | null => (value 
 /**
  * B-OP-040: the other orders of a new shipment (salesOrderIds less the first), each checked against the first: an order
  * the caller may not see, or another customer's, 404 as an unknown one; any other join problem 409 in words
- * (MULTI_ORDER_OFF until the switch). The answer: the other orders that may join (none while N6 is held off).
+ * (B-OP-047: the real join rules only). The answer: the other orders that may join.
  */
 async function otherOrdersOf(db: CommandTx, context: ReturnType<typeof officeContextOf>, body: CreateShipmentInput, firstId: string, join: JoinShipment | null): Promise<string[]> {
   const asked = body.salesOrderIds ?? []
@@ -384,7 +384,7 @@ const changed = (tools: CommandTools, shipment: { id: string; number: string; co
 
 export interface CreateShipmentInput {
   readonly salesOrderId: string
-  /** B-OP-040: every order of the new shipment, the first = salesOrderId (refused by MULTI_ORDER_OFF until the switch). */
+  /** B-OP-040: every order of the new shipment, the first = salesOrderId (each checked against it; B-OP-047: N6 on). */
   readonly salesOrderIds?: readonly string[] | undefined
   readonly siteId?: string | undefined
   readonly shipToAddressId?: string | undefined
@@ -493,7 +493,7 @@ async function onShipment<Result>(
 export async function addLines(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; lines: readonly { workOrderSizeId: string; quantity: number }[] }, idempotencyKey?: string) {
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
   const byCell = garmentsByCell(body.lines)
-  // B-OP-040: the orders it carries now, and what another order of the customer would join (MULTI_ORDER_OFF until the switch).
+  // B-OP-040: the orders it carries now, and what another order of the customer would join (B-OP-047: N6 on).
   const cells = await caller.withClient(async (client) =>
     cellsFor(client, { ...shipment, status: 'DRAFT', salesOrderIds: await ordersOfShipment(client, shipment), join: await joinShipmentFacts(client, { ...shipment, status: 'DRAFT' }) }, byCell, 'body/lines'),
   )

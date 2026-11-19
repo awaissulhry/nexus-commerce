@@ -811,9 +811,17 @@ describe('F-SA-230: the tab counts, the band’s health chip, Made to measure', 
     const value = order('SHIPPED')
     expect(tabCountOf('lines', value)).toBe(value.lines.length)
     expect(tabCountOf('production', value)).toBe(value.chain.workOrders.length)
-    expect(tabCountOf('changes', value)).toBe(value.amendments.count)
+    // F-OP-117 (R-22): Changes is the ONE waiting list's count, null until the production read gives it (never a made-up 0).
+    expect(tabCountOf('changes', value)).toBeNull()
+    expect(tabCountOf('changes', value, { changes: 0 })).toBe(0)
+    expect(tabCountOf('changes', value, { changes: 3 })).toBe(3)
+    // An older answer without badges: the chain's own counts.
     expect(tabCountOf('money', value)).toBe(value.chain.invoices.length)
     expect(tabCountOf('shipments', value)).toBe(value.chain.shipments.length)
+    // F-OP-117 (B-OP-020): with the read's badges, Money = issued invoices and credit notes + open deposits; Shipments = not cancelled.
+    const badged = { ...value, badges: { money: { invoices: 2, openDeposits: 1 }, shipments: 4 } }
+    expect(tabCountOf('money', badged)).toBe(3)
+    expect(tabCountOf('shipments', badged)).toBe(4)
   })
 
   it('the health chip only for a late order still to ship (never On track), from the order read until the production read comes', () => {
@@ -862,7 +870,7 @@ describe('F-SA-236: Changes — waiting on us, waiting on the customer, the hist
     expect(entries.map((entry) => entry.kind)).toEqual(['amendment', 'amendment', 'requestAnswered', 'requestAsked', 'confirmationSent', 'confirmationMade'])
     const priced = entries[0]!
     expect(priced.kind === 'amendment' && priced.putBack).toBe(true)
-    expect(HISTORY_CHIPS).toEqual(['all', 'requests', 'amendments', 'confirmations'])
+    expect(HISTORY_CHIPS).toEqual(['all', 'requests', 'amendments', 'workOrders', 'confirmations']) // F-OP-117: + Work orders
     expect(historyFor(entries, 'requests').map((entry) => entry.kind)).toEqual(['requestAnswered', 'requestAsked'])
     expect(historyFor(entries, 'amendments')).toHaveLength(2)
     expect(historyFor(entries, 'confirmations')).toHaveLength(2)
@@ -1592,7 +1600,9 @@ describe('F-OP-101: the yes in place — Confirm the order / Refuse… for an ap
     const { writeProblem } = await import('./model')
     expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/STALE' }]))).toEqual({ key: 'approval.refused.STALE', reload: true })
     expect(writeProblem(new ApiError('forbidden', 403, 'forbidden', 'x', null, [{ path: 'refusal/OWN_REQUEST' }]))).toEqual({ key: 'approval.refused.OWN_REQUEST', reload: true })
-    expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/SOMETHING_NEW' }]))).toEqual({ key: 'approval.refused.other', reload: true })
+    // F-OP-116: another route's refusal keeps its own words (only the approval engine's codes are said as a yes's).
+    expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/SOMETHING_NEW' }]))).toEqual({ key: 'problem.write.state', reload: true })
+    expect(writeProblem(new ApiError('forbidden', 403, 'forbidden', 'x', null, [{ path: 'refusal/PRODUCTION_DOES_THIS' }]))).toEqual({ key: 'problem.write.forbidden', reload: false })
     // A plain version move keeps its words.
     expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'version' }]))).toEqual({ key: 'problem.write.moved', reload: true })
   })
@@ -1645,3 +1655,215 @@ describe('F-OP-101: the yes in place — Confirm the order / Refuse… for an ap
   })
 })
 // ---- end F-OP-101
+
+// ---- F-OP-110 (order page N2; 10-order-page §4.5; B-OP-015): Ship to in the edit header ---------------------------------------
+describe('F-OP-110: Ship to in the edit header — the customer\'s own delivery addresses, the prepared shipment named, one edit path', () => {
+  const value = order('CONFIRMED')
+  const draft = (over: Record<string, unknown> = {}) => ({ lines: draftOf(value), customerRef: value.customerRef ?? '', requestedDate: value.requestedDate ?? '', ...over })
+
+  it('the body sends shipToAddressId only when another address is picked; the preview key moves with it; the header counts as changed', async () => {
+    const { amendBodyOf: bodyOf, amendKeyOf: keyOf, headerChangedOf } = await import('./daily-model')
+    expect(bodyOf(draft(), value)).not.toHaveProperty('shipToAddressId')
+    expect(bodyOf(draft({ shipToAddressId: '' }), value)).not.toHaveProperty('shipToAddressId')
+    expect(bodyOf(draft({ shipToAddressId: 'addr-2' }), value)).toMatchObject({ shipToAddressId: 'addr-2' })
+    expect(keyOf(draft({ shipToAddressId: 'addr-2' }), value)).not.toBe(keyOf(draft(), value))
+    expect(headerChangedOf(draft(), value)).toBe(false)
+    expect(headerChangedOf(draft({ shipToAddressId: 'addr-2' }), value)).toBe(true)
+    // Only the address moved: nothing else changed, yet the draft is not "nothing changed" (the API moves it alone, B-OP-015).
+    expect(reviewHeld(draft().lines, value, { changed: headerChangedOf(draft({ shipToAddressId: 'addr-2' }), value) })).toBeNull()
+  })
+
+  it('SHIPMENT_PREPARED is said with that shipment; any other ship-to refusal keeps its words', async () => {
+    const { issueWords: wordsOf, preparedShipmentOf } = await import('./daily-model')
+    const message = "Shipment SHP-2026-0091 is being prepared for the order's address: change it on the shipment first."
+    expect(preparedShipmentOf(message)).toBe('SHP-2026-0091')
+    expect(preparedShipmentOf('Something else')).toBeNull()
+    expect(wordsOf({ path: 'body/shipToAddressId/SHIPMENT_PREPARED', message }, () => null)).toEqual({ key: 'edit.shipToPreparedOf', params: { number: 'SHP-2026-0091' } })
+    expect(wordsOf({ path: 'body/shipToAddressId/SHIPMENT_PREPARED', message: 'x' }, () => null)).toEqual({ key: 'edit.shipToPrepared' })
+    expect(wordsOf({ path: 'body/shipToAddressId', message: 'Not an active delivery address of this customer.' }, () => null)).toEqual({ key: 'issue.shipTo' })
+  })
+
+  it('an address in one line (name · street · postal code town); the order\'s own as written on it', async () => {
+    const { addressLineOf } = await import('./daily-model')
+    expect(addressLineOf({ name: 'Brand Alpha — Magazzino', line1: 'Via Esempio 1', postalCode: '20100', city: 'Milano' })).toBe('Brand Alpha — Magazzino · Via Esempio 1 · 20100 Milano')
+    expect(addressLineOf({ name: null, line1: 'Via Esempio 1', postalCode: '', city: 'Milano' })).toBe('Via Esempio 1 · Milano')
+    expect(addressLineOf(null)).toBeNull()
+    expect(addressLineOf({})).toBeNull()
+  })
+
+  it('the wiring: the addresses are the order\'s customer\'s (parties.view) read with edit mode; ⋯ Change ship-to… opens it with Ship to focused', () => {
+    const acts = readFileSync(new URL('./record/use-lines-acts.ts', import.meta.url), 'utf8')
+    expect(acts).toContain('listShipToAddresses(api, value.partyId)')
+    expect(acts).toContain('addresses: mayAddresses ? PART_LOADING : null')
+    expect(acts).toContain('focus?.(SHIP_TO_FIELD_ID)')
+    expect(acts).toContain("'addressOnly' in done && done.addressOnly ? { key: 'edit.shipToDone' }")
+    const tab = readFileSync(new URL('./record/view/LinesTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("<Select id={SHIP_TO_FIELD_ID} value={amend.shipToAddressId ?? ''}")
+    const container = readFileSync(new URL('./record/OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), // F-OP-110')
+    // The list is the API's wall: GET /parties/:id of the order's own customer, active SHIP_TO addresses ours or approved by us.
+    const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
+    expect(api).toContain("address.status === 'ACTIVE' && address.kinds.includes('SHIP_TO') && (!address.approval || address.approval.status === 'APPROVED')")
+  })
+
+  it('the words exist in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['edit.shipTo', 'edit.shipToHeld', 'edit.shipToFailed', 'edit.shipToPrepared', 'edit.shipToDone']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('edit.shipToKeep', { address: 'x' }), locale).not.toBe('edit.shipToKeep')
+      expect(t('edit.shipToPreparedOf', { number: 'SHP-1' }), locale).toContain('SHP-1')
+    }
+  })
+})
+// ---- end F-OP-110
+
+// ---- F-OP-117 (order page N1; 10-order-page §6; review R-22): the Changes tab — work-order changes, the Work orders chip, the badges ----
+describe('F-OP-117: the Changes tab — work-order changes of this order, the History chip Work orders, the badges from the ONE list', () => {
+  const change = (over: Record<string, unknown> = {}) =>
+    ({
+      id: 'c1',
+      status: 'PROPOSED',
+      kind: 'LOWER_TO_ORDER',
+      partyId: 'p1',
+      salesOrder: { id: 'o1', number: 'SO-DEMO-0150' },
+      workOrder: { id: 'wo-1', number: 'WO-DEMO-0311', status: 'RELEASED' },
+      requestId: null,
+      amendmentId: null,
+      cells: [{ salesOrderLineId: 'l1', lineSeq: 10, size: 'M', from: 40, to: 28, workOrderSizeId: 's1' }],
+      extra: [],
+      extraOutcome: null,
+      reason: 'x',
+      lastError: null,
+      proposedBy: null,
+      proposedAt: '2026-11-17T09:00:00Z',
+      decidedAt: null,
+      decidedBy: null,
+      decisionNote: null,
+      madeWorkOrder: null,
+      version: 1,
+      mayDecide: true,
+      words: { title: { en: 'x', it: 'x' }, status: { en: 'Waiting', it: 'In attesa' }, cells: 'M 40 → 28' },
+      ...over,
+    }) as never
+
+  it('the section: waiting first (oldest first), then decided newest first; only this order\'s; the floor told once carried out', async () => {
+    const { workOrderChangeRowsOf, floorToldOfChange } = await import('./record/changes/model')
+    const list = [
+      change({ id: 'applied', status: 'APPLIED', decidedAt: '2026-11-18T10:00:00Z' }),
+      change({ id: 'late', proposedAt: '2026-11-18T09:00:00Z' }),
+      change({ id: 'early' }),
+      change({ id: 'declined', status: 'DECLINED', decidedAt: '2026-11-19T10:00:00Z' }),
+      change({ id: 'other-order', salesOrder: { id: 'o2', number: 'SO-2' } }),
+    ]
+    expect(workOrderChangeRowsOf(list, 'o1').map((entry: { id: string }) => entry.id)).toEqual(['early', 'late', 'declined', 'applied'])
+    expect(floorToldOfChange(change({ status: 'APPLIED', decidedAt: '2026-11-18T10:00:00Z' }))).toBe('2026-11-18T10:00:00Z')
+    expect(floorToldOfChange(change())).toBeNull()
+    expect(floorToldOfChange(change({ status: 'DECLINED', decidedAt: '2026-11-18T10:00:00Z' }))).toBeNull()
+  })
+
+  it('History: a decided work-order change is an entry at its decision under the chip Work orders; a waiting one is not history yet', () => {
+    const entries = historyOf({ requests: [], changes: [], amendments: null, confirmation: null, workOrderChanges: [change(), change({ id: 'done', status: 'APPLIED', decidedAt: '2026-11-18T10:00:00Z' })] })
+    expect(entries.map((entry) => entry.kind)).toEqual(['workOrderChange'])
+    expect(entries[0]).toMatchObject({ id: 'woc-done', at: '2026-11-18T10:00:00Z' })
+    expect(historyFor(entries, 'workOrders')).toHaveLength(1)
+    expect(historyFor(entries, 'amendments')).toHaveLength(0)
+  })
+
+  it('the Changes dot: a Still to do row that is this reader\'s, or a yes they decide, waits on them', async () => {
+    const { changesDotOf } = await import('./record/overview/model')
+    const still = (mayAct: boolean) => ({ kind: 'WORK_ORDER_CHANGE', ref: null, words: { en: 'x', it: 'x' }, since: '2026-11-17T09:00:00Z', waitingOn: 'PLANNER', mayAct, requestId: null })
+    expect(changesDotOf({ onUs: [], still: [still(false)] })).toBe(false)
+    expect(changesDotOf({ onUs: [], still: [still(true)] })).toBe(true)
+    const yes = (allowed: boolean, me = false) => ({ key: 'YES:t', kind: 'YES', sub: null, on: 'US' as const, since: null, words: { kind: 'api' as const, words: { en: 'x', it: 'x' } }, door: { kind: 'yes' as const, task: { taskId: 't', kind: 'SALES_ORDER', kindLabel: { en: 'x', it: 'x' }, requestedAt: '2026-11-17T09:00:00Z', requester: { name: 'Luca Prova', me }, approver: { kind: 'ROLE' as const, name: 'Finance', me: false }, version: 1, requireStepUp: false, approve: { allowed, why: null }, reject: { allowed, why: null }, withdraw: { allowed: false, why: null } } } })
+    expect(changesDotOf({ onUs: [yes(true)], still: [] })).toBe(true)
+    expect(changesDotOf({ onUs: [yes(false)], still: [] })).toBe(false)
+    expect(changesDotOf({ onUs: [yes(true, true)], still: [] })).toBe(false)
+  })
+
+  it('the wiring: the tabs count Changes from the ONE waiting list (R-22), the section and the chip are drawn, words in it + en', () => {
+    const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('const changesCount = waitingCard ? changesBadgeOf(waitingCard) : null')
+    expect(view).toContain('tabCountOf(tab, order, { changes: changesCount /* F-OP-117 */ })')
+    const tab = readFileSync(new URL('./record/changes/view/ChangesTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('<WorkOrderChanges order={order} model={model} actions={actions} />')
+    expect(tab).toContain('workOrderChanges: model.orderChanges?.list?.value ?? null')
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['wocs.title', 'wocs.none', 'wocs.newDraft', 'badge.yourTurn', 'changes.history.chips.workOrders']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-OP-117
+
+// ---- F-OP-102 (order page N1; 10-order-page §2.1, §2.2; set A part): the band's primary by state, the ⋯ re-cut ---------------------
+describe('F-OP-102: the band primary by state, in place, and the ⋯ re-cut (set A)', () => {
+  const yes = (over: Record<string, unknown> = {}) => ({
+    taskId: 't-1',
+    kind: 'SALES_ORDER',
+    kindLabel: { en: 'Sales order', it: 'Ordine di vendita' },
+    requestedAt: '2026-11-18T09:30:00Z',
+    requester: { name: 'Luca Prova', me: false },
+    approver: { kind: 'ROLE' as const, name: 'Finance', me: false },
+    version: 1,
+    requireStepUp: false,
+    approve: { allowed: true, why: null },
+    reject: { allowed: true, why: null },
+    withdraw: { allowed: false, why: null },
+    ...over,
+  })
+
+  it('PENDING_APPROVAL: the approver who did not ask confirms the order; the asker and anyone else ask for it / take it back', () => {
+    const waiting = (approvals: unknown[]) => ({ ...order('CONFIRMED', { status: 'PENDING_APPROVAL' }), openApprovals: approvals }) as never
+    expect(nextStep(waiting([yes()]), canOf('owner'))).toEqual({ kind: 'confirmYes', held: null, taskId: 't-1' })
+    // W39-02-like: the yes held with the engine's words (STALE), still the approver's primary.
+    expect(nextStep(waiting([yes({ approve: { allowed: false, why: 'It changed since you looked: …' } })]), canOf('owner'))).toMatchObject({ kind: 'confirmYes', held: { key: 'approval.refused.STALE' } })
+    // Rule 42: the asker never confirms; nobody else decides it here.
+    expect(nextStep(waiting([yes({ requester: { name: 'Giulia Esempio', me: true } })]), canOf('owner'))).toEqual({ kind: 'askYes', held: null })
+    expect(nextStep(waiting([yes({ approve: { allowed: false, why: 'This request waits for another approver: …' }, reject: { allowed: false, why: 'x' } })]), canOf('owner')).kind).toBe('askYes')
+    // A credit hold's yes is not "Confirm the order" (its banner pair says Approve: <kind>).
+    expect(nextStep(waiting([yes({ kind: 'CREDIT_OVERRIDE' })]), canOf('owner')).kind).toBe('askYes')
+    expect(nextStep(waiting([]), canOf('manager')).held?.key).toBe('held.noManage')
+  })
+
+  it('every other state as before: Confirmed → Make work orders… (held words), in work → Change promise date, shipped → Close order', () => {
+    expect(nextStep(order('CONFIRMED'), canOf('owner')).kind).toBe('makeWorkOrders')
+    expect(nextStep(order('IN_PRODUCTION'), canOf('owner')).kind).toBe('changePromise')
+    // F-OP-121 (set C, merged): ready with released garments and the shipping right is Create shipment…; else Change promise date.
+    expect(['changePromise', 'createShipment']).toContain(nextStep(order('READY'), canOf('owner')).kind)
+    expect(nextStep(order('DELIVERED', { settled: true }), canOf('owner')).kind).toBe('close')
+  })
+
+  it('the ⋯: Make work orders… while in production with lines not in work orders yet; never before or after', async () => {
+    const { makeInMenu } = await import('./model')
+    expect(makeInMenu(order('IN_PRODUCTION'), 1)).toBe(true)
+    expect(makeInMenu(order('IN_PRODUCTION'), 0)).toBe(false)
+    expect(makeInMenu(order('CONFIRMED'), 2)).toBe(false) // the primary already
+    expect(makeInMenu(order('SHIPPED'), 2)).toBe(false)
+  })
+
+  it('the band: one primary in place (no page change), ⌘↵ runs it; the ⋯ items of set A; no re-confirm item (deferred)', () => {
+    const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).not.toContain('?new=1&order=')
+    expect(view).toContain("if (step.kind === 'makeWorkOrders') return actions?.makeWorkOrders?.onOpen?.()")
+    expect(view).toContain("if (step.kind === 'confirmYes' && step.taskId) return actions?.yes?.onConfirm?.(step.taskId)")
+    expect(view).toContain('runPrimary() // F-OP-102: the primary, in place')
+    expect(view).toContain("onSelect: () => actions?.onChangeShipTo?.()")
+    expect(view).toContain("onSelect: () => frameRef.current?.openDoor?.('owner')")
+    expect(view).toContain('planningHref(model.prefix, firstWorkOrder.id)')
+    expect(view).not.toMatch(/reconfirm/i)
+    // Edit's order: Amend · Change ship-to… · Split… · Close remaining lines… · Reopen lines… · (Set priority…, Set season…).
+    const at = (id: string) => view.indexOf(`id: '${id}'`)
+    expect(at('amend')).toBeLessThan(at('shipTo'))
+    expect(at('shipTo')).toBeLessThan(at('split'))
+    expect(at('split')).toBeLessThan(at('closeLines'))
+    expect(at('closeLines')).toBeLessThan(at('reopenLines'))
+  })
+
+  it('the words exist in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['bandMenu.makeWorkOrders', 'bandMenu.changeShipTo', 'bandMenu.whoAnswers', 'wo.link.planning', 'approval.confirm']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-OP-102
