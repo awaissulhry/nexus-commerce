@@ -365,8 +365,13 @@ export type QuoteDetail = Awaited<ReturnType<typeof quoteDetail>>
  * margin grain alone shows percentages against the floor, never a cost (design question S2, answer a).
  */
 export function forCaller<Answer extends { quote: QuoteDetail }>(answer: Answer, grains: ReadonlySet<Grain>): Answer {
-  if (grains.has('cost')) return answer
-  const { marginAmount: _version, ...current } = answer.quote.current
-  const lines = answer.quote.lines.map(({ marginAmount: _line, ...line }) => line)
-  return { ...answer, quote: { ...answer.quote, current, lines } as unknown as QuoteDetail }
+  // B-CP-012 (the money wall, Owner O1: Sales never sees a margin % or "under the floor"): an approval rule is itself a money
+  // flag — the margin floor one is the margin grain's, the discount and amount limits the price grain's: a caller without the
+  // grain does not read that the rule breaks (it still reads that an approval is needed, and the requests' own words).
+  const hidden = new Set<string>([...(grains.has('margin') ? [] : ['MARGIN_FLOOR']), ...(grains.has('price') ? [] : ['DISCOUNT_LIMIT', 'AMOUNT_LIMIT'])])
+  const shown = hidden.size === 0 ? answer : { ...answer, quote: { ...answer.quote, approval: { ...answer.quote.approval, rules: answer.quote.approval.rules.filter((rule) => !hidden.has(rule.reason)) } } as QuoteDetail }
+  if (grains.has('cost')) return shown
+  const { marginAmount: _version, ...current } = shown.quote.current
+  const lines = shown.quote.lines.map(({ marginAmount: _line, ...line }) => line)
+  return { ...shown, quote: { ...shown.quote, current, lines } as unknown as QuoteDetail }
 }

@@ -35,19 +35,22 @@ const SEED_DIR = fileURLToPath(new URL('../../../../../../packages/factory-db/se
 type Json = Record<string, any>
 const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
 
-const PEOPLE = { owner: newId(), planner: newId(), sales: newId(), inspector: newId(), admin: newId() } as const
+const PEOPLE = { owner: newId(), planner: newId(), sales: newId(), salesPriced: newId(), inspector: newId(), admin: newId() } as const
 type Person = keyof typeof PEOPLE
-const ROLES: Record<Person, { readonly role: string; readonly companies: Grant['companies'] }> = {
+const ROLES: Record<Person, { readonly role: string; readonly companies: Grant['companies']; readonly extra?: readonly Permission[] }> = {
   owner: { role: 'owner', companies: 'all' },
   planner: { role: 'planner', companies: 'all' },
   sales: { role: 'sales', companies: [companyA] },
+  // B-CP-011 (the money wall): Sales holds no grain now; a Sales person the Owner named to see prices (the price and margin grains
+  // added, as the Sales template had them): the margin %, never a cost.
+  salesPriced: { role: 'sales', companies: [companyA], extra: [grainPermission('price') as Permission, grainPermission('margin') as Permission] },
   inspector: { role: 'quality_inspector', companies: 'all' },
   admin: { role: 'admin', companies: 'all' },
 }
 function grantOf(person: Person): Grant {
-  const { role, companies } = ROLES[person]
+  const { role, companies, extra = [] } = ROLES[person]
   const template = templateOf(role)!
-  return { permissions: [...template.permissions, ...template.grains.map((grain) => grainPermission(grain) as Permission)], companies, sites: 'all', parties: 'all' }
+  return { permissions: [...template.permissions, ...template.grains.map((grain) => grainPermission(grain) as Permission), ...extra], companies, sites: 'all', parties: 'all' }
 }
 const session = (person: Person): SessionContext => ({ audience: 'office', tenantId: T, actorId: PEOPLE[person], grants: [grantOf(person)] })
 
@@ -105,6 +108,8 @@ describe('the library says what each person may run (ANA-029, ANA-034)', () => {
     expect(state('finance.stock-value')).toMatchObject({ state: 'NEEDS_GRAIN', grain: 'cost' })
     expect(state('sales.margin-by-order')).toMatchObject({ state: 'NO_ACCESS', grain: null })
     expect(state('sales.open-orders')).toMatchObject({ state: 'READY' })
+    // B-CP-011 (the money wall): Sales holds no margin grain: the margin report stays listed and says what it needs.
+    expect(((await ok('sales', '/reports')).reports as Json[]).find((report) => report.key === 'sales.margin-by-order')).toMatchObject({ state: 'NEEDS_GRAIN', grain: 'margin' })
     expect((await call('admin', '/reports')).status).toBe(403)
   })
 })
@@ -120,7 +125,7 @@ describe('every report of the pack runs, as its readers see it', () => {
     }
   })
 
-  it('leaves out the columns of grains the person lacks and says so (planner: no price; sales: no cost)', async () => {
+  it('leaves out the columns of grains the person lacks and says so (planner and sales: no price; a role named to see prices: no cost)', async () => {
     const owner = await ok('owner', '/reports/sales.open-orders/results')
     expect(columnsOf(owner)).toContain('netAmount')
     expect((owner.rows as Json[]).some((row) => typeof row.cells.netAmount === 'number')).toBe(true)
@@ -129,7 +134,12 @@ describe('every report of the pack runs, as its readers see it', () => {
     expect((planner.rows as Json[]).every((row) => !('netAmount' in row.cells))).toBe(true)
     expect(planner.totals.sums).not.toHaveProperty('netAmount')
     expect(planner.rights).toEqual({ leftOut: ['price'], hiddenGroups: 0 })
-    const sales = await ok('sales', '/reports/sales.margin-by-order/results')
+    // B-CP-011 (the money wall): Sales sees no price either.
+    const salesOpen = await ok('sales', '/reports/sales.open-orders/results')
+    expect(columnsOf(salesOpen)).not.toContain('netAmount')
+    expect((salesOpen.rows as Json[]).every((row) => !('netAmount' in row.cells))).toBe(true)
+    expect(salesOpen.rights.leftOut).toContain('price')
+    const sales = await ok('salesPriced', '/reports/sales.margin-by-order/results')
     expect(columnsOf(sales)).toEqual(expect.arrayContaining(['netAmount', 'quotedMarginPct', 'estimateMarginPct']))
     expect(columnsOf(sales)).not.toContain('estimateCost')
     expect(sales.rights.leftOut).toEqual(['cost'])
@@ -142,6 +152,10 @@ describe('every report of the pack runs, as its readers see it', () => {
     const grain = await call('planner', '/reports/finance.stock-value/results')
     expect(grain.status).toBe(403)
     expect(issuePaths(grain.body)).toEqual(['grain/cost'])
+    // B-CP-011: Sales holds costing.view but no margin grain: the margin report is refused for the grain.
+    const margin = await call('sales', '/reports/sales.margin-by-order/results')
+    expect(margin.status).toBe(403)
+    expect(issuePaths(margin.body)).toEqual(['grain/margin'])
     expect((await call('planner', '/reports/finance.stock-value/schedule')).status).toBe(403)
     // About stays readable: the definition is not data.
     expect((await ok('planner', '/reports/finance.stock-value')).leftOut.grains).toEqual(['cost'])

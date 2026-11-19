@@ -50,6 +50,9 @@ import {
 
 let w: World
 const P = {} as Record<'sales' | 'finance' | 'planner' | 'buyer' | 'warehouse' | 'manager' | 'inspector' | 'supervisor' | 'admin', Person>
+/** B-CP-011 (the money wall): the Owner prices what Sales may not (a new customer's quote line). Signed in as the others are, and
+ *  kept out of P so the Home end checks (steps 35, E08) stay the flow's own roles. */
+let owner: Person
 type Json = Record<string, any>
 /** What the flow made, step by step (ids, versions, documents). */
 const G = {} as Record<string, any>
@@ -85,6 +88,7 @@ beforeAll(async () => {
   ] as const) {
     P[key] = await person(w, key, role)
   }
+  owner = await person(w, 'owner', 'owner')
 }, 1_200_000)
 
 afterAll(async () => {
@@ -293,28 +297,30 @@ describe('the golden flow: a brand size run from the customer to the paid invoic
 
   // ---- 08-11 quote, acceptance, deposit, order -------------------------------------------------------------------------------
 
-  it('08 sales quotes the size run; the discount over the limit asks finance, who approves it (Home shows it to finance meanwhile)', async () => {
+  it('08 sales quotes the size run (the Owner prices its line); the discount over the limit asks finance, who approves it (Home shows it to finance meanwhile)', async () => {
     let { quote } = await ok(P.sales, 'POST', '/sales/quotes', { companyId: companyA(), partyId: G.party.id, customerRef: 'RFQ-GOLDEN-1', promiseDate: addDays(today(), 60) }, 201)
     keep(quote.id, quote.current?.id)
-    ;({ quote } = await ok(
-      P.sales,
-      'POST',
-      `/sales/quotes/${quote.id}/lines`,
-      {
-        version: quote.version,
-        styleId: G.style.id,
-        colourwayId: G.colourway.id,
-        sizes: Object.entries(SIZES).map(([size, quantity]) => ({ size, quantity })),
-        listUnitPrice: '500',
-        discountPct: '20',
-      },
-      201,
-    ))
+    // B-CP-011 (the money wall): a new brand has no price list, so the line's list price and discount are the Owner's; Sales may
+    // not send them (403).
+    const priced = (version: number) => ({
+      version,
+      styleId: G.style.id,
+      colourwayId: G.colourway.id,
+      sizes: Object.entries(SIZES).map(([size, quantity]) => ({ size, quantity })),
+      listUnitPrice: '500',
+      discountPct: '20',
+    })
+    await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/lines`, priced(quote.version), 403)
+    ;({ quote } = await ok(owner, 'POST', `/sales/quotes/${quote.id}/lines`, priced(quote.version), 201))
     expect(quote.approval.needed).toBe(true)
     expect(quote.sendBlockers.map((issue: Json) => issue.code ?? issue)).toEqual(['APPROVAL_NEEDED'])
-    // Money grains: sales sees the price and the margin %, never a cost; finance sees the cost and the margin amount.
-    expect(keysOf(quote).filter((key) => MONEY_KEYS.includes(key))).toEqual([])
     expect(quote.current.marginPct).toEqual(expect.any(String))
+    // Money grains (B-CP-011): sales sees no price, no margin %, no cost; the Owner sees the margin % (above); finance sees the
+    // cost and the margin amount.
+    quote = (await ok(P.sales, 'GET', `/sales/quotes/${quote.id}`)).quote
+    expect(keysOf(quote).filter((key) => MONEY_KEYS.includes(key))).toEqual([])
+    expect(keysOf(quote).filter((key) => ['unitPrice', 'listUnitPrice', 'discountPct', 'netAmount', 'grossAmount', 'marginPct'].includes(key))).toEqual([])
+    expect(quote.approval.needed).toBe(true)
     const forFinance = (await ok(P.finance, 'GET', `/sales/quotes/${quote.id}`)).quote
     expect(forFinance.current.costAmount).toEqual(expect.any(Number))
     expect(forFinance.current.marginAmount).toBe(forFinance.current.netAmount - forFinance.current.costAmount)
@@ -402,12 +408,15 @@ describe('the golden flow: a brand size run from the customer to the paid invoic
     await drain(w)
   })
 
-  it('12 the order reads as one record: lines per size, the deposit paid, the TD02 in its chain; sales sees no cost', async () => {
+  it('12 the order reads as one record: lines per size, the deposit paid, the TD02 in its chain; sales sees no cost (and no price)', async () => {
     const order = (await ok(P.sales, 'GET', `/sales/orders/${G.order.id}`)).order
     expect(order.chain.depositRequests.map((request: Json) => request.status)).toEqual(['PAID'])
     expect(order.chain.invoices.map((invoice: Json) => invoice.id ?? invoice.invoiceId)).toContain(G.td02.id)
     expect(order).not.toHaveProperty('costAmount')
     expect(order.lines[0]).not.toHaveProperty('unitCost')
+    // B-CP-011 (the money wall): nor a price.
+    expect(order).not.toHaveProperty('netAmount')
+    expect(order.lines[0]).not.toHaveProperty('unitPrice')
     const forFinance = (await ok(P.finance, 'GET', `/sales/orders/${G.order.id}`)).order
     expect(forFinance.costAmount).toEqual(expect.any(Number))
   })
@@ -864,7 +873,10 @@ describe('the EU variant: a German business customer, VIES, N3.2, no deposit inv
   it('E02 the quote is taxed as an intra-EU supply (N3.2) and needs no approval; sent and accepted by link', async () => {
     let { quote } = await ok(P.sales, 'POST', '/sales/quotes', { companyId: companyA(), partyId: EU.party.id, customerRef: 'PO-EU-77', promiseDate: addDays(today(), 60) }, 201)
     keepEu(quote.id)
-    ;({ quote } = await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: G.style.id, colourwayId: G.colourway.id, sizes: Object.entries(EU_SIZES).map(([size, quantity]) => ({ size, quantity })), unitPrice: '450' }, 201))
+    // B-CP-011 (the money wall): the typed price is the Owner's; Sales may not send it (403).
+    const euLine = (version: number) => ({ version, styleId: G.style.id, colourwayId: G.colourway.id, sizes: Object.entries(EU_SIZES).map(([size, quantity]) => ({ size, quantity })), unitPrice: '450' })
+    await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/lines`, euLine(quote.version), 403)
+    ;({ quote } = await ok(owner, 'POST', `/sales/quotes/${quote.id}/lines`, euLine(quote.version), 201))
     expect(quote.current).toMatchObject({ taxMode: 'EU_B2B', vatAmount: 0 })
     expect(quote.approval.needed).toBe(false)
     const sent = await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/send`, { version: quote.version })

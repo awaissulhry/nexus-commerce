@@ -1,5 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
-import { InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { ConflictError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors' // B-CP-024: + ConflictError
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
@@ -39,6 +39,8 @@ import { reducesDoneInCommand, shortLinesOf } from './close-lines'
 import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../production/work-order-changes/auto'
 // B-OP-015 (order page plan N1): the delivery address changes with the amendment, by the rule of an accepted request's.
 import { moveShipTo, shipToProblem } from '../change-requests/office'
+// B-CP-024 (customer page plan C3; review G5): a removed line takes the customer's price with it.
+import { removeBrandPricesOfLines } from '../brand-prices/store'
 
 /**
  * Order amendments (B-W2a-30; SAL-209, SAL-217; the design's "Amend order" → "Review amendment" → Changes tab). A
@@ -163,6 +165,22 @@ const lineSnapshot = (line: LineRecord): SnapshotLine => ({
   closedShortQuantity: line.closedShortQuantity,
   sizes: line.sizes.map((size) => ({ size: size.size, quantity: size.quantity, unitPrice: priceOf(size.unitPrice) })),
 })
+
+// ── B-CP-024 (customer page plan C3; review G5) ──
+/** The words of a line the customer's price still holds (a price given between the plan and the delete). */
+export const LINE_HAS_BRAND_PRICE = (seq: number | null): string => `${seq === null ? 'This line' : `Line ${seq}`} has the customer's price: it was given while the line was being removed. Read the order again, then remove the line.`
+
+/** A line deleted; the customer's price that still holds it (the foreign key is Restrict) is a 409 in words, never a 500. */
+async function deleteLine(tx: CommandTools['tx'], lineId: string, seq: number | null): Promise<void> {
+  try {
+    await tx.salesOrderLine.delete({ where: { id: lineId }, select: { id: true } })
+  } catch (error) {
+    const found = error as { code?: unknown; message?: unknown; meta?: unknown } | null
+    if (found?.code === 'P2003' && `${String(found.message)} ${JSON.stringify(found.meta ?? {})}`.includes('OrderBrandPrice')) throw new ConflictError(LINE_HAS_BRAND_PRICE(seq))
+    throw error
+  }
+}
+// ── end B-CP-024 ──
 
 /** What refers to each line, by line (a line referred to is never removed: the database keeps the reference). */
 async function referencesOf(db: Reader, lineIds: readonly string[]): Promise<Map<string, string[]>> {
@@ -515,9 +533,11 @@ export async function amendInCommand(
   if (body.shipToAddressId) await moveShipTo(tools, fresh, body.shipToAddressId, body.reason!.trim(), 'OFFICE')
   const actorId = actorIdOf(tools)
   // Removed lines (nothing refers to them: planAmendment checked).
+  // B-CP-024: their customer's prices go first, audited (the foreign key is Restrict); one given meanwhile is named in words.
+  await removeBrandPricesOfLines(tools, order, plan.removed)
   for (const lineId of plan.removed) {
     await tx.salesOrderLineSize.deleteMany({ where: { lineId } })
-    await tx.salesOrderLine.delete({ where: { id: lineId }, select: { id: true } })
+    await deleteLine(tx, lineId, plan.before.lines.find((line) => line.id === lineId)?.seq ?? null) // B-CP-024
   }
   const finalIds: string[] = []
   const optionsWritten: { lineId: string; options: EntryOptions }[] = []

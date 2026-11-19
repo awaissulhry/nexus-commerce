@@ -30,6 +30,7 @@ import { startHarness, type Harness } from '../../../platform/auth/sessions/test
  *   - over the credit limit the order is made PENDING_APPROVAL and the answer says it waits (never "confirmed");
  *   - a line asked in words, a prospect, an ordered request, a role that makes no orders: refused in words;
  *   - W37: an office person limited to another customer finds neither the request nor its order; the body names no customer.
+ * B-CP-011 (the money wall): a price typed on Make order is the Owner's (olivia); the sales role sends none (refused 403).
  * Run with `node scripts/factory/run-pg-tests.mjs inquiries/make-order`.
  */
 
@@ -52,7 +53,7 @@ const grant = (permissions: Permission[], parties: Grant['parties'] = 'all'): Gr
 const PEOPLE = { ada: newId(), olivia: newId() } as const
 const SESSIONS: Record<string, SessionContext> = {
   ada: { audience: 'office', tenantId: T, actorId: PEOPLE.ada, grants: [grant(withGrains(sales))] },
-  // The owner sets the credit limit (sales.credit.limits).
+  // The owner sets the credit limit (sales.credit.limits) and, B-CP-011, types the order's prices (Sales holds no price grain).
   olivia: { audience: 'office', tenantId: T, actorId: PEOPLE.olivia, grants: [grant(withGrains(owner))] },
   // A sales rep limited to another customer: P1's request and its order are not there for them.
   rep: { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(withGrains(sales), [P3])] },
@@ -146,7 +147,9 @@ describe('B-TH-025 Make order from a request', () => {
     )
     const seen = await ok('ada', 'GET', `/sales/inquiries/${inquiry.id}`)
     expect(seen.inquiry.actions.order).toEqual({ allowed: true, refusal: null })
-    made = await ok('ada', 'POST', `/sales/inquiries/${inquiry.id}/order`, { version: seen.inquiry.version, lines: [{ seq: 10, unitPrice: '150' }], customerRef: 'MADE-UP-PO-77' }, 201)
+    // B-CP-011: the seller may not send the typed price (refused, nothing made); the owner makes the order priced as typed.
+    await no('ada', 'POST', `/sales/inquiries/${inquiry.id}/order`, { version: seen.inquiry.version, lines: [{ seq: 10, unitPrice: '150' }], customerRef: 'MADE-UP-PO-77' }, 403)
+    made = await ok('olivia', 'POST', `/sales/inquiries/${inquiry.id}/order`, { version: seen.inquiry.version, lines: [{ seq: 10, unitPrice: '150' }], customerRef: 'MADE-UP-PO-77' }, 201)
     expect(made.order).toMatchObject({ number: expect.stringMatching(/^SO-/), status: 'CONFIRMED', waitsFor: null })
     expect(made.said.en).toBe(`Order ${made.order.number} was made from ${inquiry.number} and is confirmed.`)
     expect(made.said.it).toContain('confermato')
@@ -156,7 +159,7 @@ describe('B-TH-025 Make order from a request', () => {
     expect(businessDate(order.promiseDate)).toBe(wanted)
     const lines = await admin<Json>('SELECT l."styleId", l."colourwayId", l.quantity, l."unitPrice"::text AS price FROM "SalesOrderLine" l WHERE l."orderId" = $1', [made.order.id])
     expect(lines).toEqual([{ styleId: jacket, colourwayId: black, quantity: 10, price: expect.stringMatching(/^150(\.0+)?$/) }])
-    expect(await one('SELECT status, "salesOrderId", "closedById" FROM "Inquiry" WHERE id = $1', [inquiry.id])).toEqual({ status: 'ORDERED', salesOrderId: made.order.id, closedById: PEOPLE.ada })
+    expect(await one('SELECT status, "salesOrderId", "closedById" FROM "Inquiry" WHERE id = $1', [inquiry.id])).toEqual({ status: 'ORDERED', salesOrderId: made.order.id, closedById: PEOPLE.olivia })
     expect((await events('inquiry.closed', inquiry.id))[0]!.payload).toMatchObject({ status: 'ORDERED', salesOrderId: made.order.id, quoteId: null, partyId: P1 })
     expect(await events('sales_order.created', made.order.id)).toHaveLength(1)
     // The order's own page names the request it came from.
@@ -175,8 +178,9 @@ describe('B-TH-025 Make order from a request', () => {
     const fresh = await request(P1, [{ styleId: jacket, colourwayId: black, sizes: { '54': 2 } }])
     const key = `mo-replay-${run}`
     const body = { version: fresh.version, lines: [{ seq: 10, unitPrice: '140' }], customerRef: 'MADE-UP-PO-78' }
-    const first = await ok('ada', 'POST', `/sales/inquiries/${fresh.id}/order`, body, 201, key)
-    const replay = await ok('ada', 'POST', `/sales/inquiries/${fresh.id}/order`, body, 201, key)
+    // B-CP-011: the typed price is the owner's.
+    const first = await ok('olivia', 'POST', `/sales/inquiries/${fresh.id}/order`, body, 201, key)
+    const replay = await ok('olivia', 'POST', `/sales/inquiries/${fresh.id}/order`, body, 201, key)
     expect(replay.order.id).toBe(first.order.id)
     expect((await events('inquiry.closed', fresh.id)).length).toBe(1)
   })
@@ -187,7 +191,8 @@ describe('B-TH-025 Make order from a request', () => {
     await admin(`UPDATE "ApprovalRule" SET active = true WHERE "tenantId" = $1 AND kind = 'CREDIT_OVERRIDE'`, [T])
     await ok('olivia', 'PUT', `/sales/credit/limits/${P3}/${companyA}`, { amount: 100, currency: 'EUR', reason: 'Made-up: a new customer starts small.' })
     const asked = await request(P3, [{ styleId: liner, colourwayId: grey, sizes: { '52': 3 } }])
-    const waiting = await ok('ada', 'POST', `/sales/inquiries/${asked.id}/order`, { version: asked.version, lines: [{ seq: 10, unitPrice: '150' }] }, 201)
+    // B-CP-011: the typed price is the owner's.
+    const waiting = await ok('olivia', 'POST', `/sales/inquiries/${asked.id}/order`, { version: asked.version, lines: [{ seq: 10, unitPrice: '150' }] }, 201)
     expect(waiting.order).toMatchObject({ status: 'PENDING_APPROVAL', waitsFor: 'CREDIT' })
     expect(waiting.said.en).toContain('waits for approval')
     expect(waiting.said.en).not.toContain('confirmed')
@@ -197,7 +202,8 @@ describe('B-TH-025 Make order from a request', () => {
 
   it('the customer’s terms want its PO number: an order without one is refused in words (the normal order checks)', async () => {
     const ready = await request(P1, [{ styleId: jacket, colourwayId: black, sizes: { '50': 1 } }])
-    const refused = await no('ada', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, lines: [{ seq: 10, unitPrice: '120' }] }, 400)
+    // B-CP-011: the typed price is the owner's.
+    const refused = await no('olivia', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, lines: [{ seq: 10, unitPrice: '120' }] }, 400)
     expect(refused.message).toContain('purchase order number')
     expect((await one('SELECT status FROM "Inquiry" WHERE id = $1', [ready.id])).status).toBe('NEW')
   })
@@ -219,7 +225,8 @@ describe('B-TH-025 Make order from a request', () => {
     expect(fromProspect.message).toContain('make the customer first')
     // A price for a line the request does not have.
     const ready = await request(P1, [{ styleId: jacket, colourwayId: black, sizes: { '50': 1 } }])
-    expect((await no('ada', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, lines: [{ seq: 99, unitPrice: '1' }] }, 400)).message).toContain('no line 99')
+    // B-CP-011: a typed price is the owner's.
+    expect((await no('olivia', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, lines: [{ seq: 99, unitPrice: '1' }] }, 400)).message).toContain('no line 99')
     expect((await admin('SELECT id FROM "Inquiry" WHERE id = ANY($1::uuid[]) AND status = \'ORDERED\'', [[words.id, sizeless.id, bare.id, prospect.id, ready.id]])).length).toBe(0)
   })
 
@@ -237,7 +244,8 @@ describe('B-TH-025 Make order from a request', () => {
     for (const extra of [{ partyId: P3 }, { companyId: companyA }, { shipToAddressId: newId() }]) {
       expect((await call('ada', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, ...extra })).statusCode).toBe(400)
     }
-    const fine = await ok('ada', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, lines: [{ seq: 10, unitPrice: '120' }], customerRef: 'MADE-UP-PO-79' }, 201)
+    // B-CP-011: the typed price is the owner's.
+    const fine = await ok('olivia', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, lines: [{ seq: 10, unitPrice: '120' }], customerRef: 'MADE-UP-PO-79' }, 201)
     expect((await one('SELECT "partyId" FROM "SalesOrder" WHERE id = $1', [fine.order.id])).partyId).toBe(P1)
   })
 })

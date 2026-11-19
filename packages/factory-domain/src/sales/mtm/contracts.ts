@@ -277,7 +277,8 @@ export const mtmLineBody = input({
   baseSize: z.string().trim().min(1).max(20).nullish(),
   unitPrice: money.price(unitPrice().nullish()),
   listUnitPrice: money.price(unitPrice().nullish()),
-  discountPct: z.string().trim().max(12).nullish(),
+  // B-CP-012 (the money wall, review A8): a percent of the price is a price (the grain filter refuses it without the grain).
+  discountPct: money.price(z.string().trim().max(12).nullish()),
   description: text(500).nullish(),
   note: text(2000).nullish(),
 })
@@ -293,7 +294,8 @@ export const mtmLineEditBody = input({
   baseSize: z.string().trim().min(1).max(20).nullish(),
   unitPrice: money.price(unitPrice().nullish()),
   listUnitPrice: money.price(unitPrice().nullish()),
-  discountPct: z.string().trim().max(12).nullish(),
+  // B-CP-012 (the money wall, review A8): a percent of the price is a price (the grain filter refuses it without the grain).
+  discountPct: money.price(z.string().trim().max(12).nullish()),
   description: text(500).nullish(),
   note: text(2000).nullish(),
 })

@@ -50,6 +50,17 @@ export const GRAIN_DESCRIPTIONS: Readonly<Record<Grain, string>> = {
   pay: "See piece pay: the rates per minute and per piece, earnings and guaranteed pay (HR and the worker; the floor sees a worker's own).",
 }
 
+// B-CP-011 (customer page lane, the money wall; Owner O6): every office role whose grains hold one of these always asks for
+// two-factor: the templates' check (auth/roles/templates), a custom role's (auth/roles/roles) and the two-factor switch's lock
+// (ops/two-factor) read this ONE list. Wages and pay keep their own rules (HR, the floor's PIN).
+export const TWO_FACTOR_GRAINS: readonly Grain[] = Object.freeze(['price', 'cost', 'margin'])
+
+/** The grains of a role that make it ask for two-factor, in GRAINS order. */
+export const twoFactorGrainsOf = (grains: readonly string[]): Grain[] => TWO_FACTOR_GRAINS.filter((grain) => grains.includes(grain))
+
+/** "price", "price and cost", "price, cost and margin": the grains in words. */
+export const grainWords = (grains: readonly Grain[]): string => (grains.length <= 1 ? grains.join('') : `${grains.slice(0, -1).join(', ')} and ${grains[grains.length - 1]}`)
+
 /** The most each audience can see, whatever its grants say. */
 const AUDIENCE_GRAINS: Readonly<Record<Actor['audience'], readonly Grain[]>> = {
   office: GRAINS,

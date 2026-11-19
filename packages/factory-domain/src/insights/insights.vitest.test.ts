@@ -47,6 +47,12 @@ function roleActor(key: string, companies: Grant['companies'] = 'all'): Actor {
   return { audience: 'office', tenantId: TENANT, grants: [{ permissions: [...template.permissions, ...template.grains.map((grain) => grainPermission(grain) as Permission)], companies, sites: 'all', parties: 'all' }] }
 }
 const viewerOf = (actor: Actor, personId = ME): Viewer => ({ actor, personId, today: TODAY, now: NOW })
+// B-CP-011: the Sales template holds no grain now (the money wall); a Sales worker the Owner also gave a role with the price and
+// margin grains (never cost) is this actor.
+function salesWithPriceRole(companies: Grant['companies'] = 'all'): Actor {
+  const template = templateOf('sales')!
+  return { audience: 'office', tenantId: TENANT, grants: [{ permissions: [...template.permissions, grainPermission('price') as Permission, grainPermission('margin') as Permission], companies, sites: 'all', parties: 'all' }] }
+}
 
 let serial = 0
 /** A made-up phrase (its English is the text). */
@@ -137,11 +143,17 @@ describe('amounts only with their grain (the row and its sentence)', () => {
   const quote = candidate('QUOTE_APPROVAL', { amounts: { currency: 'EUR', netAmount: 624000, marginPct: '18.2500', marginAmount: 113880, inSentence: 'marginPct' }, sentence: says('Quote Q-1 waits.') })
   const po = candidate('PO_NOT_CONFIRMED', { amounts: { currency: 'EUR', purchaseAmount: 120000, inSentence: 'purchaseAmount' }, sentence: says('Purchase order PO-1 is not confirmed.') })
 
-  it('sales (price, margin) sees the margin % and the value, never the margin amount (cost)', () => {
-    const item = presentItem(viewerOf(roleActor('sales')), quote, says('why'))
+  // B-CP-011: Sales holds no grain now (the money wall): no amount, the plain sentence; a price and margin holder (a role the
+  // Owner gave) sees the margin % and the value, never the margin amount (cost).
+  it('a price and margin holder sees the margin % and the value, never the margin amount (cost); Sales sees no amount', () => {
+    const item = presentItem(viewerOf(salesWithPriceRole()), quote, says('why'))
     expect(item.amounts).toEqual({ currency: 'EUR', netAmount: 624000, marginPct: '18.2500' })
     expect(item.sentence).toBe('Quote Q-1 waits (margin 18.3 %).')
     expect(JSON.stringify(item)).not.toContain('113880')
+    const sales = presentItem(viewerOf(roleActor('sales')), quote, says('why'))
+    expect(sales.amounts).toBeNull()
+    expect(sales.sentence).toBe('Quote Q-1 waits.')
+    expect(JSON.stringify(sales)).not.toContain('624000')
   })
 
   it('the buyer (cost) sees a purchase order’s value in the row and the sentence; a role without the grain sees neither', () => {
@@ -334,10 +346,14 @@ describe('waiting on others', () => {
   }
 
   it('only what I asked for, while I still see it; amounts by my grains', () => {
-    const mine = waitingFor(viewerOf(roleActor('sales')), [asked, { ...asked, record: { ...asked.record, id: B }, requestedBy: OTHER }])
+    // B-CP-011: the amounts come with a price and margin role (the Owner gave it); plain Sales holds no grain: no amount.
+    const mine = waitingFor(viewerOf(salesWithPriceRole()), [asked, { ...asked, record: { ...asked.record, id: B }, requestedBy: OTHER }])
     expect(mine).toHaveLength(1)
     expect(mine[0]).toMatchObject({ ageDays: 2, amounts: { currency: 'EUR', netAmount: 624000, marginPct: '18.2500' }, sentence: 'Your approval request for quote Q-1 is not decided yet (margin 18.3 %).' })
     expect(mine[0]!.amounts).not.toHaveProperty('marginAmount')
+    const plain = waitingFor(viewerOf(roleActor('sales')), [asked])
+    expect(plain).toHaveLength(1)
+    expect(plain[0]).toMatchObject({ amounts: null, sentence: 'Your approval request for quote Q-1 is not decided yet.' })
     expect(waitingFor(viewerOf(roleActor('sales', [B])), [asked])).toEqual([])
     expect(waitingFor(viewerOf(roleActor('buyer')), [asked])).toEqual([])
   })
