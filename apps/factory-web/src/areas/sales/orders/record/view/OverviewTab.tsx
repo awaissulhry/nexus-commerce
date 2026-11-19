@@ -55,6 +55,9 @@ import { TabLink } from '../../../../../lib/tab-link/TabLink'
 import { DiscussDoor, FollowersDoor } from './Discuss'
 // ---- end F-SA-233
 
+/** F-OP-302 (walk #4): Progress by line's column widths — the line a third, the six counts share the rest. */
+const PROGRESS_WIDTHS: readonly (string | undefined)[] = ['34%']
+
 /** The columns' words: the shared pieces catalogue's (production `parts.pieces.stages.*`, Shipped added there). */
 const COLUMN_STAGE: Readonly<Record<LineColumn, string>> = Object.freeze({ ordered: 'ORDERED', cut: 'CUT', sewn: 'SEWN', checked: 'INSPECTED', packed: 'PACKED', shipped: 'SHIPPED' })
 
@@ -210,6 +213,9 @@ function ProgressByLine({ order, model, actions }: { order: Order; model: OrderR
             label={t('overview.progress')}
             columns={columns}
             align={columns.map((_, index) => (index === 0 ? 'left' : 'right'))}
+            // F-OP-302 (walk #4): the table is fixed-layout — an equal seventh left the line (picture, name, stage, pills) too
+            // narrow, so its pill ran over the Ordered number; the line gets a third, the six counts share the rest.
+            widths={PROGRESS_WIDTHS}
             density="roomy"
             stackOnPhone
             rows={[
@@ -232,11 +238,15 @@ function ProgressByLine({ order, model, actions }: { order: Order; model: OrderR
                       />
                       <span className="fw-so-cell">
                         <span>{nameOf(row)}</span>
-                        <span className="fw-so-cell-sub">
-                          {stageOf(row)}
-                          {row.notInWorkOrders && <Tag tone="neutral">{t('overview.notInWorkOrders')}</Tag>}
-                          {row.madeExtra > 0 && <Tag tone="warning">{t('overview.madeExtra', { count: row.madeExtra })}</Tag>}
-                        </span>
+                        <span className="fw-so-cell-sub">{stageOf(row)}</span>
+                        {/* F-OP-302 (walk #4, #20): the line's pills on their own wrapping row under its stage — never inside the
+                            one-line sub (cut at 375) and never over the Ordered number. */}
+                        {(row.notInWorkOrders || row.madeExtra > 0) && (
+                          <span className="fw-so-inline">
+                            {row.notInWorkOrders && <Tag tone="neutral">{t('overview.notInWorkOrders')}</Tag>}
+                            {row.madeExtra > 0 && <Tag tone="warning">{t('overview.madeExtra', { count: row.madeExtra })}</Tag>}
+                          </span>
+                        )}
                       </span>
                     </button>
                     <DiscussDoor order={order} part={t('discuss.line', { seq: row.seq, name: nameOf(row) })} target={row.lineIds.length === 1 ? { kind: 'SalesOrderLine', id: row.lineIds[0]! } : null} />

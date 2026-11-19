@@ -534,3 +534,17 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
   })
 })
 // ---- end F-OP-301
+
+// ---- F-OP-302 (walk #4, #20): Progress by line — the line's pills never run over the Ordered number, never cut on a phone ---------
+describe('F-OP-302: Progress by line — the line column has room and its pills wrap on their own row', () => {
+  it('the line gets a third of the fixed-layout table; its pills sit outside the one-line sub (cut at 375, over "Ordered" at 1440)', () => {
+    for (const id of ['overview', 'overview-confirmed']) {
+      const html = draw(id)
+      expect(html, id).toContain('style="width:34%"')
+      expect(html, id).not.toMatch(/class="fw-so-cell-sub"[^>]*>[^<]*<span class="nds-tag/)
+    }
+    const confirmed = draw('overview-confirmed')
+    expect(confirmed).toMatch(/<span class="fw-so-inline"><span class="nds-tag[^"]*">Not in work orders yet<\/span>/)
+  })
+})
+// ---- end F-OP-302
