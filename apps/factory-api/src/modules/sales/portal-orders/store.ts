@@ -115,6 +115,8 @@ export const SHIPMENT_SELECT = {
   returnedAt: true,
   // B-W2b-F14: the carrier's expected delivery (partner-visible).
   expectedDeliveryAt: true,
+  // B-OP-031 (order page plan N5): the number typed for a carrier booked by hand (partner-visible; no carrier feeds it).
+  manualTrackingNumber: true,
 } as const satisfies Prisma.ShipmentSelect
 export type PortalShipmentRow = Prisma.ShipmentGetPayload<{ select: typeof SHIPMENT_SELECT }>
 

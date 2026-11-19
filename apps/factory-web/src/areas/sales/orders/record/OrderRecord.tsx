@@ -323,7 +323,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
     ...actsBase,
     order: ready,
     setDialog,
-    setDialogProblem,
     clearChanged: () => setChanged(null),
     showLines: () => {
       // F-OP-210: Amend keeps the dock's scope and every other term (below 1280 px the full-width thread gives way to Lines).
@@ -345,7 +344,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
       production.again()
     },
   })
-  const shipments = useShipmentsActs({ order: ready, prefix })
+  const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */ })
   const money = useMoneyActs({
     ...actsBase,
     permissions: session.permissions,
@@ -611,6 +610,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     ...lines.model,
     ...productionActs.model,
     ...money.model,
+    ...shipments.model, // F-OP-119: the tracking dialog of the shipment opened
     // B-W2b-340
     lineOptions: order.status === 'ready' ? (line) => createElement(OrderLineOptions, { key: line.id, api, order: order.value, line, permissions: session.permissions, onReload: () => void load() }) : undefined,
     // B-W2b-380 (XF6:02)
@@ -667,6 +667,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
         ...lines.actions,
         ...productionActs.actions,
         ...money.actions,
+        ...shipments.actions, // F-OP-119
         // ---- end F-OP-134
         onRetry: () => void load(),
         onRetryMargin: margin.retry,

@@ -184,7 +184,6 @@
   "offer": {
     "priced": "Bloccato dalla fase di produzione: invialo come modifica con prezzo che il cliente accetta.",
     "blocked": "Bloccato definitivamente: questa modifica non si può più fare.",
-    "go": "Invia come modifica con prezzo",
     "line": "{line}: {field}",
     "order": "L’ordine: {field}"
   },

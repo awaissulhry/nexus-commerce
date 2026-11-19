@@ -251,3 +251,31 @@ export function moveFactsOf(facts: OrderFacts, settlement?: SettlementAnswer): S
 export async function hasOrderSeries(db: Reader, companyId: string): Promise<boolean> {
   return (await db.numberSeries.count({ where: { companyId, kind: 'SALES_ORDER', status: 'ACTIVE' } })) > 0
 }
+
+// ── B-OP-023 (order page plan N5; review R-7): each shipment of the order as its Shipments tab reads it ───────────────────────────
+const SHIPMENT_DETAIL = { id: true, companyId: true, siteId: true, version: true, status: true, transportBy: true, carrierCode: true, carrierName: true, manualTrackingNumber: true, expectedDeliveryAt: true } as const satisfies Prisma.ShipmentSelect
+const PARCEL_DETAIL = { shipmentId: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true } as const satisfies Prisma.ParcelSelect
+
+export interface ShipmentDetails {
+  readonly shipments: ReadonlyMap<string, Prisma.ShipmentGetPayload<{ select: typeof SHIPMENT_DETAIL }>>
+  readonly parcels: readonly Prisma.ParcelGetPayload<{ select: typeof PARCEL_DETAIL }>[]
+  /** Each shipment's live DDT (the newest one not cancelled). */
+  readonly ddts: ReadonlyMap<string, { readonly number: string; readonly date: BusinessDate }>
+}
+
+/**
+ * The detail of the order's shipments (read by `Shipment.salesOrderId`, as the chain is today; set C reads the orders of its lines):
+ * its version, site, how it travels, the carrier, the typed tracking number, the expected delivery, its parcels' labels and its live
+ * DDT. The view decides what each reader may see of it.
+ */
+export async function readShipmentDetails(db: Reader, shipmentIds: readonly string[]): Promise<ShipmentDetails> {
+  if (shipmentIds.length === 0) return { shipments: new Map(), parcels: [], ddts: new Map() }
+  const rows = await db.shipment.findMany({ where: { id: { in: [...shipmentIds] } }, select: SHIPMENT_DETAIL })
+  const parcels = await db.parcel.findMany({ where: { shipmentId: { in: [...shipmentIds] } }, select: PARCEL_DETAIL, orderBy: [{ shipmentId: 'asc' }, { seq: 'asc' }] })
+  const ddts = await db.ddt.findMany({ where: { shipmentId: { in: [...shipmentIds] } }, select: { id: true, shipmentId: true, number: true, documentDate: true }, orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }] })
+  const cancelled = new Set(ddts.length > 0 ? (await db.ddtCancellation.findMany({ where: { ddtId: { in: ddts.map((row) => row.id) } }, select: { ddtId: true } })).map((row) => row.ddtId) : [])
+  const live = new Map<string, { number: string; date: BusinessDate }>()
+  for (const ddt of ddts) if (ddt.shipmentId && !cancelled.has(ddt.id) && !live.has(ddt.shipmentId)) live.set(ddt.shipmentId, { number: ddt.number, date: dayOf(ddt.documentDate) })
+  return { shipments: new Map(rows.map((row) => [row.id, row])), parcels, ddts: live }
+}
+// ── end B-OP-023 ──

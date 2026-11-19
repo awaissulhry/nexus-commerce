@@ -26,6 +26,8 @@ import { useCustomerWork, useReacceptOrders, type WorkCan } from './use-customer
 import { CustomerDock, WorkTab, type DockPick } from './view/WorkTab'
 import { useCustomerDock } from './use-customer-work' // F-SA-279: the dock follows the row (`dock=`), All of <customer>
 import { useAllOfCustomer } from '../../../_shared/record-thread/all-of-customer/use-all-of-customer' // F-SA-279: All of <customer>, read by the page
+import { readUnreadWith } from '../../../../lib/last-message-cell/api' // F-OP-213: whether the customer's thread may be read
+import { useUnread } from '../../../../lib/last-message-cell/use-unread' // F-OP-213
 import { useT } from '../../../../lib/i18n/provider' // F-SA-279: the band's "Thread · SO-…" below 1280 px
 // ---- end F-SA-276
 // ---- F-SA-278: the strip's two windows (Waiting for <customer>, Open tasks) ----
@@ -94,7 +96,14 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   const docked = named !== null && record.thread !== null && record.thread !== undefined
   // All of <customer>: read here while the dock shows it (the dock draws the feed it is given).
   const feed = useAllOfCustomer(api, { partyId: named?.id ?? null, customerName: named?.name ?? '', enabled: docked && customerDock.scope === 'all', prefix, canReadFiles: session.permissions.includes('files.read') })
-  const dock = named && docked ? <CustomerDock customer={named} general={record.thread} dock={customerDock} feed={feed} prefix={prefix} /> : record.thread
+  // F-OP-213 (11-dock §5, D4; B-OP-061): All of <customer> only when the customer's own thread may be read (the API's `readable`;
+  // until it says, threads.read decides, as before) — asked for this page's own customer only.
+  const readsThreads = session.permissions.includes('threads.read')
+  const readParty = useMemo(() => (readsThreads ? readUnreadWith(api) : null), [api, readsThreads])
+  const partyRows = useMemo(() => (named ? [{ recordType: 'Party', id: named.id }] : []), [named?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const partyUnread = useUnread(readParty, partyRows)
+  const allOffered = readsThreads && (named ? partyUnread[named.id]?.readable !== false : false)
+  const dock = named && docked ? <CustomerDock customer={named} general={record.thread} dock={customerDock} feed={feed} prefix={prefix} allOffered={allOffered} /> : record.thread
   const threadButton = customerDock.shown ? t('customers.work.dock.button', { record: customerDock.shown.label }) : null
   // ---- end F-SA-279
   // ---- F-SA-278: the strip's windows — each row picks its record in the dock (the customer's own record: its thread).

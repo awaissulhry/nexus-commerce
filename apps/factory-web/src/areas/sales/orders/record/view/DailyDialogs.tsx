@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { CheckCircle2 } from 'lucide-react'
 import { Banner, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
@@ -11,11 +11,8 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { money, unitPrice } from '../../../quotes/model'
-// F-SA-242: the same tick as the review window — the words for the customer also written in the order's conversation.
-import { ConversationTick } from '../../../../home/approvals/requests/view/ConversationTick'
 import type { ImpactItem, Order } from '../../api'
 import {
-  amendPairs,
   cancelConfirmHeld,
   changeLabel,
   closableLines,
@@ -25,24 +22,22 @@ import {
   IMPACT_LINKED,
   impactWords,
   inWorkOrdersOf,
-  issuePhrases,
   moneyChange,
   namesOf,
-  sizesText,
   type CompareRow,
 } from '../../daily-model'
-import { dayInstant, type Phrase } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { DialogProblem, Frame } from './Dialogs'
-// ---- B-W2b-323: a frozen change is offered as a priced change ----
-import { FrozenOffer } from '../../changes-depth/view/ChangesDepth'
-import { frozenProblemsOf } from '../../depth/model'
+// ---- F-OP-107 (B2): Close remaining lines and Cancel say what happens to each work order, and pick the extra pieces' outcome ----
+import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
+import type { ExtraPiecesView, WorkOrderPlan } from '../../api' // B-OP-013: the previews' `workOrders` (extra pieces + plan)
+import { extraChoicesOf, followedNumbers, heldWordsOf, outcomeHeld, stripWorkOrderOf, workOrderWords } from '../../daily-model'
+import { ExtraPieces } from '../../../../home/approvals/requests/view/ExtraPieces'
 
 /**
  * The order studio's daily dialogs (B-W2a-50; the DS ReviewChangesModal, ActionConfirm and ConfirmPhraseField spoke
- * English only, so these are composed from the DS Modal, SummaryTable, KeyValue and Banner, named here):
- *  - Review amendment (ReviewChangesModal, composed): the lines old → new by size, the money change (price), the reason,
- *    "the customer must accept again" when the net total changes; Apply with the order's version.
+ * English only, so these are composed from the DS Modal, SummaryTable, KeyValue and Banner, named here; F-OP-106: the amendment's
+ * review is no dialog any more — its parts are the Lines tab's "What changes" strip, ONE Apply):
  *  - Close remaining lines / Reopen lines (ActionConfirm, composed): the lines and sizes that will not be made or
  *    shipped, the reason, the reversal.
  *  - Cancel order (ActionConfirm, composed): the impact check — what stops it, what it changes, what it leaves behind —
@@ -52,142 +47,52 @@ import { frozenProblemsOf } from '../../depth/model'
 
 const close = (actions?: OrderRecordActions) => () => actions?.onDialog?.(null)
 
-function Words({ phrases }: { phrases: Phrase[] }) {
-  const t = useT('orders')
-  return (
-    <ul className="fw-so-list">
-      {phrases.map((entry, index) => (
-        <li key={`${entry.key}-${index}`}>{t(entry.key, entry.params)}</li>
-      ))}
-    </ul>
-  )
-}
+// ---- F-OP-107 (B2; 10-order-page §4.2): the change's work orders and its extra pieces, before the click --------------------------
 
-// ---- Review amendment -------------------------------------------------------------------------------------------------
-
-export function AmendReviewDialog({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+/**
+ * "Applies at once — no approval", then what the preview says of each work order ("WO-0311 40 → 28 · follows now" / "… · waits for
+ * production — decide on this page") and the extra pieces' picker. Not read (a design case, or the read failed): said so, and the
+ * change still applies at once — its work orders follow by the same rules.
+ */
+function FollowPlan({ order, model, state, plan, extra, outcome, onOutcome, name }: { order: Order; model: OrderRecordModel; state: 'none' | 'reading' | 'failed' | 'ready'; plan: readonly WorkOrderPlan[]; extra: ExtraPiecesView | null; outcome: ExtraOutcome | null; onOutcome: (outcome: ExtraOutcome) => void; name: string }) {
   const t = useT('orders')
   const locale = useLocale()
-  const amend = model.amend
-  const [reason, setReason] = useState(model.draft?.reason ?? '')
-  // F-SA-242: words for the customer (optional) and the tick (on when typed); never automatic, never a price typed in words.
-  const [tellWords, setTellWords] = useState('')
-  const [tellChosen, setTellChosen] = useState<boolean | null>(null)
-  if (!amend) return null
-  const tick = { chosen: tellChosen, reach: model.portalGone ? ('none' as const) : ('portal' as const) }
-  const tellOn = (tellChosen ?? tellWords.trim() !== '') && tick.reach === 'portal' && tellWords.trim() !== ''
-  const review = amend.review
-  const pairs = amendPairs(amend.lines, order)
-  const label = (index: number) => {
-    const draft = pairs[index]?.draft
-    if (!draft) return null
-    const names = namesOf(draft, order, amend.styles[draft.styleId])
-    return `${names.style} · ${names.colour}`
-  }
-  const preview = review?.preview ?? null
-  // B-W2b-323: the freeze rules' refusals are said apart (with the priced change's offer), the others by place as before.
-  const frozenPaths = new Set(preview && !preview.ok ? preview.problems.filter((issue) => frozenProblemsOf([issue]).length > 0).map((issue) => issue.path) : [])
-  const problems = preview && !preview.ok ? issuePhrases(preview.problems.filter((issue) => !frozenPaths.has(issue.path)), label) : []
-  const diff = preview?.diff ?? null
-  const change = diff ? moneyChange(diff) : null
-  const held = model.busy
-    ? t('held.busy')
-    : !review || review.phase === 'reading'
-      ? t('amend.held.reading')
-      : review.phase === 'failed'
-        ? t('amend.held.failed')
-        : problems.length > 0 || frozenPaths.size > 0 /* B-W2b-323 */
-          ? t('amend.held.problems')
-          : reason.trim() === ''
-            ? t('amend.held.reason')
-            : null
-  const rows = (diff?.lines ?? []).map((line) => {
-    const name = changeLabel(line, order, amend.styles)
-    const price = diff?.prices?.find((entry) => entry.lineId === line.lineId)
-    return {
-      id: line.lineId,
-      cells: [
-        <span key="l" className="fw-so-cell">
-          {name.what ? t('changes.lineWhat', { line: name.line, what: name.what }) : t('changes.line', { line: name.line })}
-        </span>,
-        <Tag key="c" tone={line.change === 'REMOVED' ? 'danger' : line.change === 'ADDED' ? 'info' : 'warning'}>
-          {t(`changes.kind.${line.change}`)}
-        </Tag>,
-        sizesText(line.sizes) || t('changes.sizesSame'),
-        t('changes.pieces', { before: line.piecesBefore, after: line.piecesAfter }),
-        ...(model.can.price ? [price?.unitPrice ? `${unitPrice(price.unitPrice.before, order.currency, locale)} → ${unitPrice(price.unitPrice.after, order.currency, locale)}` : t('changes.priceSame')] : []),
-      ],
-    }
-  })
-  const columns = [t('changes.col.line'), t('changes.col.change'), t('changes.col.sizes'), t('changes.col.pieces'), ...(model.can.price ? [t('changes.col.price')] : [])]
   return (
-    <Frame
-      title={t('amend.reviewTitle', { revision: amend.revision, number: order.number })}
-      held={held}
-      go={() => actions?.onAmendApply?.(reason.trim(), tellOn ? tellWords.trim() : null)}
-      goLabel={model.busy ? t('common.working') : t('amend.apply')}
-      onClose={close(actions)}
-      problem={<DialogProblem model={model} />}
-      size="xl"
-    >
-      {!review || review.phase === 'reading' ? (
+    <section className="fw-so-stack-tight" aria-label={t('edit.workOrders')}>
+      <p className="fw-so-hint">{t('edit.appliesAtOnce')}</p>
+      {state === 'reading' && (
         <p className="fw-so-hint" role="status">
-          <Spinner size={14} /> {t('amend.reading')}
+          <Spinner size={14} /> {t('edit.strip.reading')}
         </p>
-      ) : review.phase === 'failed' ? (
-        <Banner
-          tone="danger"
-          title={review.problem ? t(review.problem.key, review.problem.params) : t('amend.failed')}
-          action={
-            <Button size="sm" onClick={() => actions?.onAmendReview?.()}>
-              {t('common.retry')}
-            </Button>
-          }
-        />
-      ) : (
+      )}
+      {state === 'failed' && <p className="fw-so-hint">{t('edit.planNotRead')}</p>}
+      {state === 'ready' && plan.length > 0 && (
         <>
-          {/* B-W2b-323: frozen by the production stage — "Send as a priced change" (or it cannot change any more). */}
-          {preview && !preview.ok && <FrozenOffer order={order} problems={preview.problems} model={model.depth} onPriced={actions?.onPricedOffer} />}
-          {problems.length > 0 && (
-            <>
-              <Banner tone="danger" title={t('amend.problems', { count: problems.length })} />
-              <Words phrases={problems} />
-            </>
-          )}
-          {diff && (
-            <>
-              <p className="fw-so-hint">{change ? t('amend.summaryMoney', { before: money(change.before, order.currency, locale), after: money(change.after, order.currency, locale), delta: `${change.delta >= 0 ? '+' : '−'}${money(Math.abs(change.delta), order.currency, locale)}` }) : t('amend.summary', { count: diff.lines.length })}</p>
-              {diff.reacceptanceNeeded ? <Banner tone="warning" title={t('amend.reaccept')} /> : <Banner tone="info" title={t('amend.noReaccept')} />}
-              {rows.length > 0 && <SummaryTable label={t('amend.tableLabel')} columns={columns} rows={rows} density="roomy" stackOnPhone />}
-              {diff.header.length > 0 && (
-                <KeyValue
-                  dense
-                  labelCase="sentence"
-                  items={diff.header.map((entry) => ({
-                    label: t(`amend.field.${entry.field}`),
-                    value: `${entry.field === 'requestedDate' && entry.before ? formatDate(dayInstant(entry.before), { locale }) : (entry.before ?? '—')} → ${entry.field === 'requestedDate' && entry.after ? formatDate(dayInstant(entry.after), { locale }) : (entry.after ?? '—')}`,
-                  }))}
-                />
-              )}
-            </>
-          )}
-          <Field label={t('amend.reason')} hint={t('amend.reasonHint')}>
-            <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={1000} />
-          </Field>
-          {/* F-SA-242 (14-change-flow §2.10, §4.2): the customer is told only when the person writes it — the words, and the tick. */}
-          {order.party && (
-            <>
-              <Field label={t('amend.tell.words')} hint={t('amend.tell.hint')}>
-                <Textarea value={tellWords} onChange={(event) => setTellWords(event.target.value)} rows={2} maxLength={2000} />
-              </Field>
-              <ConversationTick id={`amend-${order.id}`} tick={tick} words={tellWords} customer={order.party.legalName} onTick={setTellChosen} />
-            </>
-          )}
+          <h3 className="fw-so-h3">{t('edit.workOrders')}</h3>
+          <ul className="fw-so-list">
+            {plan.map((entry, index) => {
+              const wo = stripWorkOrderOf(entry, index)
+              return <li key={wo.key}>{workOrderWords(wo, t, locale)}</li>
+            })}
+          </ul>
         </>
       )}
-    </Frame>
+      {state === 'ready' && extra && extra.extra.length > 0 && <ExtraPieces name={name} {...extraChoicesOf(extra, order, model.can.price)} chosen={outcome} onChoose={onOutcome} />}
+    </section>
   )
 }
+
+/** After the change: the work orders that followed in its command, and those that wait for production. */
+function Followed({ followed }: { followed: { readonly applied: readonly { readonly number: string | null }[]; readonly waiting: readonly { readonly number: string | null }[] } }) {
+  const t = useT('orders')
+  return (
+    <>
+      {followed.applied.length > 0 && <span>{t('edit.followed.changed', { numbers: followedNumbers(followed.applied) })}</span>}
+      {followed.waiting.length > 0 && <span>{t('edit.followed.waits', { numbers: followedNumbers(followed.waiting) })}</span>}
+    </>
+  )
+}
+// ---- end F-OP-107
 
 // ---- Close remaining lines / Reopen lines ------------------------------------------------------------------------------
 
@@ -201,7 +106,21 @@ export function CloseLinesDialog({ order, model, actions }: { order: Order; mode
   const locale = useLocale()
   const answer = model.closedLines
   const problem = closeChoiceProblem(order, chosen, reason, reasonCode, model.cancelReasons ?? null)
-  const held = model.busy ? t('held.busy') : problem ? t(problem.key) : null
+  // ---- F-OP-107: the preview of the lines chosen (asked as they change), the extra pieces' outcome ----
+  const [outcome, setOutcome] = useState<ExtraOutcome | null>(null)
+  const chosenKey = chosen.join(',')
+  const askPreview = actions?.onClosePreview
+  useEffect(() => {
+    askPreview?.(chosenKey === '' ? [] : chosenKey.split(','))
+    // Asked when the lines chosen change (the action's identity changes every render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chosenKey])
+  const part = model.closePreview
+  const preview = part?.value ?? null
+  const planState = !part ? 'none' : preview ? 'ready' : part.problem ? 'failed' : 'reading'
+  const extraHeld = outcomeHeld(preview?.workOrders ?? null, outcome)
+  // ---- end F-OP-107
+  const held = model.busy ? t('held.busy') : problem ? t(problem.key) : extraHeld ? heldWordsOf(extraHeld, t, locale) : null
   const stillMade = inWorkOrdersOf(order, chosen)
   const pieces = open.filter((entry) => chosen.includes(entry.line.id)).reduce((sum, entry) => sum + entry.left, 0)
   const done = answer ? (
@@ -210,12 +129,13 @@ export function CloseLinesDialog({ order, model, actions }: { order: Order; mode
       <span className="fw-so-stack-tight">
         <span>{t('closeLines.done', { count: answer.closed.length, pieces: answer.closed.reduce((sum, entry) => sum + entry.closedShortQuantity, 0) })}</span>
         {answer.stillInWorkOrders.length > 0 && <span>{t('closeLines.stillMade', { count: answer.stillInWorkOrders.reduce((sum, entry) => sum + entry.pieces, 0) })}</span>}
+        <Followed followed={answer.workOrders} />
         <span className="fw-so-hint">{t('closeLines.reversal')}</span>
       </span>
     </div>
   ) : undefined
   return (
-    <Frame title={t('closeLines.title', { number: order.number })} held={held} go={() => actions?.onCloseLines?.(chosen.length === open.length ? [] : chosen, reason.trim(), reasonCode)} goLabel={model.busy ? t('common.working') : t('closeLines.go', { count: chosen.length })} onClose={close(actions)} problem={<DialogProblem model={model} />} done={done}>
+    <Frame title={t('closeLines.title', { number: order.number })} held={held} go={() => actions?.onCloseLines?.(chosen.length === open.length ? [] : chosen, reason.trim(), reasonCode, preview?.workOrders?.extra.length ? outcome : null)} goLabel={model.busy ? t('common.working') : t('closeLines.go', { count: chosen.length })} onClose={close(actions)} problem={<DialogProblem model={model} />} done={done}>
       <p className="fw-so-hint">{t('closeLines.body')}</p>
       <fieldset className="fw-so-choices">
         <legend className="fw-so-legend">{t('closeLines.lines')}</legend>
@@ -237,7 +157,9 @@ export function CloseLinesDialog({ order, model, actions }: { order: Order; mode
         })}
       </fieldset>
       {chosen.length > 0 && <p className="fw-so-hint">{t('closeLines.pieces', { count: pieces })}</p>}
-      {stillMade > 0 && <Banner tone="warning" title={t('closeLines.inWorkOrders', { count: stillMade })} />}
+      {/* F-OP-107: what happens to each work order once the preview is read; until then (or when it is not), what work orders still make. */}
+      {stillMade > 0 && planState !== 'ready' && <Banner tone="warning" title={t('closeLines.inWorkOrders', { count: stillMade })} />}
+      {chosen.length > 0 && <FollowPlan order={order} model={model} state={planState} plan={preview?.workOrders?.plan ?? []} extra={preview?.workOrders ?? null} outcome={outcome} onOutcome={setOutcome} name={`fw-so-close-extra-${order.id}`} />}
       <Field label={t('closeLines.reasonCode')} hint={model.cancelReasons === null || model.cancelReasons === undefined ? t('closeLines.reasonCodeNone') : undefined} required>
         <Select value={reasonCode} disabled={!model.cancelReasons || model.cancelReasons.length === 0} onChange={(event) => setReasonCode(event.target.value)} aria-label={t('closeLines.reasonCode')}>
           <option value="">{t('closeLines.pickReasonCode')}</option>
@@ -339,8 +261,12 @@ export function CancelDialog({ order, model, actions }: { order: Order; model: O
   const [typed, setTyped] = useState(model.draft?.typed ?? '')
   const part = model.cancelCheck
   const check = part?.value ?? null
+  const locale = useLocale()
   const confirmHeld = cancelConfirmHeld({ check, reason, typed, number: order.number })
-  const held = model.busy ? t('held.busy') : confirmHeld ? t(confirmHeld.key, confirmHeld.params) : null
+  // F-OP-107 (B2): the pieces already cut of it get an outcome before the cancel, when the check says it is needed.
+  const [outcome, setOutcome] = useState<ExtraOutcome | null>(null)
+  const extraHeld = check?.impact.cancellable ? outcomeHeld(check.workOrders, outcome) : null
+  const held = model.busy ? t('held.busy') : confirmHeld ? t(confirmHeld.key, confirmHeld.params) : extraHeld ? heldWordsOf(extraHeld, t, locale) : null
   let body: ReactNode
   if (!part || (!check && !part.problem)) {
     body = (
@@ -371,6 +297,8 @@ export function CancelDialog({ order, model, actions }: { order: Order; model: O
         {nothing && <p className="fw-so-hint">{t('cancel.nothing')}</p>}
         {check.impact.cancellable && (
           <>
+            {/* F-OP-107: what the cancel does to each work order, the extra pieces' outcome. */}
+            <FollowPlan order={order} model={model} state="ready" plan={check.workOrders?.plan ?? []} extra={check.workOrders} outcome={outcome} onOutcome={setOutcome} name={`fw-so-cancel-extra-${order.id}`} />
             <Field label={t('cancel.reason')} hint={t('cancel.reasonHint')}>
               <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={1000} />
             </Field>
@@ -383,7 +311,7 @@ export function CancelDialog({ order, model, actions }: { order: Order; model: O
     )
   }
   return (
-    <Frame title={t('cancel.title', { number: order.number })} held={held} go={() => actions?.onCancelOrder?.(reason.trim(), typed.trim())} goLabel={model.busy ? t('common.working') : t('cancel.go')} onClose={close(actions)} problem={<DialogProblem model={model} />} tone="danger" size="lg" closeLabel={t('cancel.keep')}>
+    <Frame title={t('cancel.title', { number: order.number })} held={held} go={() => actions?.onCancelOrder?.(reason.trim(), typed.trim(), check?.workOrders?.extra.length ? outcome : null)} goLabel={model.busy ? t('common.working') : t('cancel.go')} onClose={close(actions)} problem={<DialogProblem model={model} />} tone="danger" size="lg" closeLabel={t('cancel.keep')}>
       {body}
     </Frame>
   )

@@ -16,6 +16,8 @@ export const UNREAD_PAGE = 200
 export interface Unread {
   readonly newCount: number
   readonly lastAt: string | null
+  /** F-OP-213 (B-OP-061): whether the reader may read the record's thread; absent: the API did not say (an older answer). */
+  readonly readable?: boolean
 }
 
 /** By record id. */
@@ -41,9 +43,9 @@ export function unreadAsk(rows: ReadonlyArray<{ readonly recordType: string; rea
 }
 
 /** The answer as the cells read it, by record id. */
-export function unreadMapOf(counts: ReadonlyArray<{ readonly recordId: string; readonly newCount: number; readonly lastAt: string | null }>): UnreadMap {
+export function unreadMapOf(counts: ReadonlyArray<{ readonly recordId: string; readonly newCount: number; readonly lastAt: string | null; readonly readable?: boolean | undefined }>): UnreadMap {
   const map: Record<string, Unread> = {}
-  for (const count of counts) map[count.recordId] = { newCount: count.newCount, lastAt: count.lastAt }
+  for (const count of counts) map[count.recordId] = { newCount: count.newCount, lastAt: count.lastAt, ...(count.readable === undefined ? {} : { readable: count.readable }) /* F-OP-213 */ }
   return map
 }
 

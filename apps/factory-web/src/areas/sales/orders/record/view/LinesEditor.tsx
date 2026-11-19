@@ -2,16 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Plus, Search } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
+import { Banner, Card, Disclosure, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
 import { SizeGridEditor, type SizeGridIssue } from '@nexus/ui/grid/size-grid/index'
 import { Button, Checkbox, Input, RadioCard, Spinner, Tag } from '@nexus/ui/primitives'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
+import { Textarea } from '../../../../../lib/i18n/ds-parts' // F-OP-109
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { StyleDetail } from '../../../quotes/api'
 import { money, unitPrice } from '../../../quotes/model'
 import { sizeGridWords } from '../../../quotes/record/view/grid-copy'
 import type { Order } from '../../api'
-import { badPrice, changeOf, draftGrid, draftGroups, namesOf, piecesOf, underCut, underWorkOrders, type DraftLine } from '../../daily-model'
+import { badPrice, changeOf, draftGrid, draftGroups, namesOf, piecesOf, type DraftLine } from '../../daily-model'
+import { cellIssuesOf, type CellFloors, type CellIssueKind, type LineFigures } from '../../daily-model' // F-OP-107
 import type { ComposerState, EditorActions } from '../record-model'
 
 /** What the lines editor draws: an amendment of an order's lines, or the lines of a typed New order. */
@@ -27,8 +29,12 @@ export interface LinesEditorModel {
   priceBasis: 'NET' | 'GROSS'
   /** Pieces work orders already make, by line and size. */
   minimums: Record<string, Record<string, number>>
-  /** F-SA-231: the pieces already cut per line and size (the production read's own cells); a size never goes under them. */
-  floors?: Record<string, Record<string, number>>
+  /** F-OP-107 (B2): each cell's floors — what is cut and what shipped (the production read's own cells). */
+  floors?: CellFloors
+  /** F-OP-107: each order line's "Cut 40 · Sewn 32 · Shipped 0" (the production read); absent: not said (a typed order). */
+  figures?: Record<string, LineFigures>
+  /** F-OP-109: a removed line's work orders that lose it (the preview's plan: "WO-0311 loses this line"), by order line. */
+  losing?: Record<string, { readonly numbers: string; readonly count: number }>
   /** A typed order: each line's net and its resolved unit price, from the preview (by line key). */
   nets?: Record<string, number | undefined>
   listPrices?: Record<string, string | undefined>
@@ -42,8 +48,9 @@ export interface LinesEditorModel {
 /**
  * The lines editor (design `order.lines.cards` in amend mode, and the typed New order's Lines): "Add a style" (type a
  * style, pick its colours, Add: their rows open in its grid), then one card per style — the DS SizeGridEditor (keyboard,
- * paste, a cell a colour does not offer is blocked; F-SA-231: a cell under what is already cut is an error, one under what work
- * orders make says the work order follows as a change) and each colour
+ * paste, a cell a colour does not offer is blocked; F-OP-107 (B2): a cell under what already shipped is an error and holds Apply,
+ * one under what is cut a warning (its extra pieces get an outcome in the strip), one under what work orders make says the work order
+ * follows — the DS grid has no info tone, so it is a warning too) and each colour
  * line's pieces and unit price (price grain; empty = unchanged, or the customer's list price on a new line), with what
  * happens to it (added, changed, removed). A line closed short is shown, never edited (reopen it first).
  */
@@ -182,6 +189,45 @@ function Composer({ composer, actions, busy }: { composer: ComposerState; action
   )
 }
 
+// ---- F-OP-107 ----
+const FLOOR_TONE: Readonly<Record<CellIssueKind, 'error' | 'warning'>> = Object.freeze({ shipped: 'error', cut: 'warning', inWork: 'warning' })
+
+/** "Cut 40 · Sewn 32 · Shipped 0" (a step not counted there is left out, never a made-up 0). */
+function figuresText(figures: LineFigures, t: (key: string, params?: Record<string, string | number>) => string): string {
+  return [...(figures.cut !== null ? [t('edit.figures.cut', { count: figures.cut })] : []), ...(figures.sewn !== null ? [t('edit.figures.sewn', { count: figures.sewn })] : []), t('edit.figures.shipped', { count: figures.shipped })].join(' · ')
+}
+// ---- end F-OP-107
+
+// ---- F-OP-109: per line in edit mode — Text… (the description and the note for production, never a price) and Remove line ----
+function LineActs({ line, model, actions }: { line: DraftLine; model: LinesEditorModel; actions?: EditorActions }) {
+  const t = useT('orders')
+  const removed = !!line.lineId && piecesOf(line) === 0
+  const losing = line.lineId ? model.losing?.[line.lineId] : undefined
+  return (
+    <span className="fw-so-stack-tight">
+      <span className="fw-so-inline">
+        <Disclosure summary={t('edit.line.text')}>
+          <span className="fw-so-stack-tight">
+            <Field label={t('edit.line.description')}>
+              <Textarea value={line.text?.description ?? ''} onChange={(event) => actions?.onText?.(line.key, 'description', event.target.value)} rows={2} maxLength={1000} />
+            </Field>
+            <Field label={t('edit.line.note')}>
+              <Textarea value={line.text?.note ?? ''} onChange={(event) => actions?.onText?.(line.key, 'note', event.target.value)} rows={2} maxLength={2000} />
+            </Field>
+          </span>
+        </Disclosure>
+        {line.lineId && (
+          <Button size="sm" variant="quiet" heldReason={removed ? t('edit.line.removed') : model.busy ? t('held.busy') : null} onClick={() => actions?.onRemove?.(line.key)}>
+            {t('edit.line.remove')}
+          </Button>
+        )}
+      </span>
+      {removed && losing && <span className="fw-so-cell-sub">{t('edit.line.loses', { numbers: losing.numbers, count: losing.count })}</span>}
+    </span>
+  )
+}
+// ---- end F-OP-109
+
 function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines: DraftLine[]; model: LinesEditorModel; actions?: EditorActions }) {
   const t = useT('orders')
   const sales = useT('sales')
@@ -191,13 +237,9 @@ function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines:
   const grid = draftGrid(lines, style, model.order)
   const first = namesOf(lines[0]!, model.order, style)
   const name = style?.name ?? model.order?.lines.find((line) => line.styleId === styleId)?.style?.name ?? ''
-  // F-SA-231 (lead note after B-SA-042): under what is CUT is an error (Review waits); under what work orders make is said in words —
-  // the work order follows as a work-order change ("Still to do") — and Review stays open.
-  const cut = underCut(lines, model.floors ?? {})
-  const under = underWorkOrders(lines, model.minimums, model.floors ?? {})
+  // F-OP-107 (B2): each cell's strongest floor it is typed under — shipped (error: Apply waits), cut, in work orders (warnings).
   const issues: SizeGridIssue[] = [
-    ...cut.map((cell) => ({ colour: cell.key, size: cell.size, tone: 'error' as const, message: t('editor.underCut', { size: cell.size, cut: cell.cut }) })),
-    ...under.map((cell) => ({ colour: cell.key, size: cell.size, tone: 'warning' as const, message: t('editor.underWorkOrders', { size: cell.size, made: cell.made }) })),
+    ...cellIssuesOf(lines, model.floors ?? {}, model.minimums).map((cell) => ({ colour: cell.key, size: cell.size, tone: FLOOR_TONE[cell.kind], message: t(`edit.floor.${cell.kind}`, { count: cell.count }) })),
     // B-W2b-323: the locked cells of this style's lines (a warning: the value stands; a change goes as a priced change).
     ...(model.frozen ?? []).filter((issue) => lines.some((line) => line.key === issue.colour)),
   ]
@@ -214,6 +256,10 @@ function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines:
       cells: [
         <span key="c" className="fw-so-cell">
           {names.colour}
+          {/* F-OP-107: what is cut, sewn and shipped of the line (a step not counted there is not said). */}
+          {line.lineId && model.figures?.[line.lineId] && <span className="fw-so-cell-sub">{figuresText(model.figures[line.lineId]!, t)}</span>}
+          {/* F-OP-109: edit mode's own per line — Text… (description, note for production) and Remove line (a line in work orders too). */}
+          {model.mode === 'amend' && <LineActs line={line} model={model} actions={actions} />}
           {/* B-W2b-374 (XF3:02): a new line takes its options when it is made. */}
           {!line.lineId && model.newLineOptions?.(line)}
         </span>,

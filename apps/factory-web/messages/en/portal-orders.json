@@ -417,7 +417,11 @@
     "copyLinkHint": "Our tracking page, to pass on to whoever receives the goods.",
     "copyLinkFailed": "The tracking link was not made: try again.",
     "copyLinkPreview": "A preview makes no link.",
-    "copyLinkTooMany": "Links of this shipment were copied already: pass on one of them."
+    "copyLinkTooMany": "Links of this shipment were copied already: pass on one of them.",
+    "typed": {
+      "label": "Tracking number",
+      "noLive": "No live tracking"
+    }
   },
   "toShip": {
     "title": "Still to ship",

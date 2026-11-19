@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs' // F-OP-214
 import { describe, expect, it } from 'vitest'
 import { BRAND_ALPHA, BRAND_BETA } from '../../testing/two-brands'
 import { scanText } from '../../testing/brand-scan'
@@ -12,6 +13,9 @@ import { FeedCase } from './view/FeedCase'
 import { HELD_REASONS } from '@nexus/factory-domain/email-in/rules'
 import { CATALOGUE } from '../../i18n/messages'
 import { foldedGist, HELD_REASON_CODES, hiddenNewLine, waitingMailLine } from './model'
+import { FOREIGN_ACTIONS, isStatusStep, stepsWordsOf, stepVerbKey } from './model' // F-OP-214
+import { createTranslator, messagesFor } from '../../i18n/messages' // F-OP-214
+import { eventOf } from '../model' // F-OP-214
 
 /** B-TH-204 — the feed (T4): the order, folding by age (all but the last 3), day lines, grouping, every state. */
 
@@ -316,3 +320,82 @@ describe('B-TH-255 — the held-mail line by right, the hidden-new line, folded 
   })
 })
 // ---- end B-TH-255
+
+// ---- F-OP-214 (order page plan N4; 11-dock §6.1, D1): other modules' steps in their own words; a run of steps folds into one line --------
+describe('F-OP-214 — feed quality: "Nexus Factory added a task", "5 steps by Nexus Factory · Show", a status step never folds', () => {
+  const SYSTEM = { who: null, actorAudience: 'SYSTEM' as const }
+  const step = (id: string, at: string, more: Partial<FeedEvent> = {}): FeedEvent => ({ id, at, ...SYSTEM, verb: 'create', action: 'tasks.create', status: null, values: [], fields: [], ...more })
+  const steps = (rows: readonly FeedRow[]) => rows.flatMap((row) => (row.kind === 'steps' ? [row.events.map((event) => event.id)] : row.kind === 'step' ? [[`1:${row.event.id}`]] : []))
+
+  it('another module\'s step reads in its own words; "created the record" only for the record\'s own module', () => {
+    expect(FOREIGN_ACTIONS['tasks.create']).toBe('addedTask')
+    expect(stepVerbKey({ verb: 'create', action: 'tasks.create' })).toBe('verb.addedTask')
+    expect(stepVerbKey({ verb: 'complete', action: 'tasks.complete' })).toBe('verb.completedTask')
+    expect(stepVerbKey({ verb: 'reopen', action: 'tasks.reopen' })).toBe('verb.reopenedTask')
+    expect(stepVerbKey({ verb: 'assign', action: 'tasks.assign' })).toBe('verb.assignedTask')
+    expect(stepVerbKey({ verb: 'completeUpload', action: 'files.completeUpload' })).toBe('verb.uploaded')
+    expect(stepVerbKey({ verb: 'create', action: 'sales.orders.create' })).toBe('verb.created')
+    // Another module's create without its own words: never "created the record".
+    expect(stepVerbKey({ verb: 'create', action: 'tasks.somethingNew' })).toBe('verb.changed')
+    expect(stepVerbKey({ verb: 'create' })).toBe('verb.created')
+    // The history entry keeps its whole action.
+    const entry = { id: 'h1', at: '2026-11-12T09:00:00.000Z', action: 'tasks.create', actor: { id: null, audience: 'SYSTEM' }, actorHidden: false, status: null, before: null, after: { taskId: 't1' }, fields: [] }
+    expect(eventOf(entry as never, new Map())).toMatchObject({ verb: 'create', action: 'tasks.create' })
+  })
+
+  it('2+ consecutive steps of the same actor within an hour fold; another actor, more than an hour later or another day splits the run', () => {
+    const rows = feedRows({
+      messages: [],
+      events: [
+        step('a', '2026-11-12T09:00:00Z'),
+        step('b', '2026-11-12T09:10:00Z'),
+        step('c', '2026-11-12T09:20:00Z'),
+        step('d', '2026-11-12T09:25:00Z', { who: 'Bea Esempio', actorAudience: 'OFFICE' }),
+        step('e', '2026-11-12T10:30:00Z'),
+        step('f', '2026-11-12T10:40:00Z'),
+        step('g', '2026-11-13T10:41:00Z'),
+      ],
+    })
+    expect(steps(rows)).toEqual([['a', 'b', 'c'], ['1:d'], ['e', 'f'], ['1:g']])
+  })
+
+  it('a status step never folds and ends the run; a field change keeps its own group (unchanged)', () => {
+    const status = step('s', '2026-11-12T09:05:00Z', { verb: 'setStatus', action: 'sales.orders.setStatus', status: { from: 'DRAFT', to: 'CONFIRMED' } })
+    expect(isStatusStep(status)).toBe(true)
+    expect(isStatusStep(step('x', '2026-11-12T09:00:00Z'))).toBe(false)
+    const rows = feedRows({ messages: [], events: [step('a', '2026-11-12T09:00:00Z'), status, step('b', '2026-11-12T09:06:00Z'), step('c', '2026-11-12T09:07:00Z'), change('u', '2026-11-12T09:08:00Z')] })
+    expect(kinds(rows)).toEqual(['day', 'step', 'step', 'steps', 'changes'])
+    expect(steps(rows)).toEqual([['1:a'], ['1:s'], ['b', 'c']])
+    // A message between two steps splits them too (only consecutive steps fold).
+    const split = feedRows({ messages: [msg('m', '2026-11-12T09:01:00Z')], events: [step('a', '2026-11-12T09:00:00Z'), step('b', '2026-11-12T09:02:00Z')] })
+    expect(kinds(split)).toEqual(['day', 'step', 'message', 'step'])
+  })
+
+  it('the run\'s words: "Nexus Factory added 5 tasks" when all are the same, else "5 steps by Nexus Factory"; the floor gate kept', () => {
+    const five = ['a', 'b', 'c', 'd', 'e'].map((id, index) => step(id, `2026-11-12T09:0${index}:00Z`))
+    expect(stepsWordsOf(five)).toEqual({ key: 'steps.many.addedTask', count: 5 })
+    expect(stepsWordsOf([five[0]!, step('z', '2026-11-12T09:09:00Z', { verb: 'issue', action: 'sales.orders.issue' })])).toEqual({ key: 'steps.text', count: 2 })
+    for (const locale of ['en', 'it'] as const) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-feed'])['record-thread-feed']!)
+      expect(t('steps.many.addedTask', { count: 5, who: 'Nexus Factory' })).toBe(locale === 'en' ? 'Nexus Factory added 5 tasks' : 'Nexus Factory ha aggiunto 5 attività')
+      expect(t('steps.text', { count: 5, who: 'Nexus Factory' })).toBe(locale === 'en' ? '5 steps by Nexus Factory' : '5 passaggi di Nexus Factory')
+      expect(t('verb.addedTask'), locale).toBe(locale === 'en' ? 'added a task' : "ha aggiunto un'attività")
+      for (const verb of ['completedTask', 'reopenedTask', 'assignedTask']) expect(t(`verb.${verb}`), `${locale} ${verb}`).not.toBe(`verb.${verb}`)
+    }
+    // A floor person behind the gate folds with the same gate only, and the line says "A person on the floor", never a name.
+    const floor = (id: string, at: string) => step(id, at, { who: 'Ugo Operaio', whoHidden: true, actorAudience: 'FLOOR' })
+    const rows = feedRows({ messages: [], events: [floor('f1', '2026-11-12T09:00:00Z'), floor('f2', '2026-11-12T09:01:00Z')] })
+    const run = rows.find((row) => row.kind === 'steps')
+    expect(run && run.kind === 'steps' ? whoWords(run.events[0]!) : null).toEqual({ key: 'who.floorPerson' })
+  })
+
+  it('the view draws the run with Show (aria-expanded) and lists each step in place; a lone step reads its own words', () => {
+    const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+    const feed = source('./view/Feed.tsx')
+    expect(feed).toContain("if (row.kind === 'steps') {")
+    expect(feed).toContain('{t(words.key, { count: words.count, who: \'text\' in who ? who.text : t(who.key) })}')
+    expect(feed).toContain('verb: t(stepVerbKey(event)) /* F-OP-214 */')
+    expect(feed).toContain('<ul id={listId} className="fw-rt-changes" hidden={!showChanges}>')
+  })
+})
+// ---- end F-OP-214

@@ -78,6 +78,8 @@ export const trackingPageView = output({
     returnedAt: instant().nullable(),
     /** While packed or on the way only. */
     expectedDeliveryAt: instant().nullable(),
+    // ── B-OP-031 (order page plan N5): the number typed for a carrier booked by hand; no carrier feeds it ("No live tracking") ──
+    typedTrackingNumber: z.string().nullable(),
   }),
   /** "Your order 4500-1234": the customer's own reference first, then ours. */
   // fix-portal-numbers-1 (B-TH-303): `number` is the customer's own order number ("#12"), never the office's SO-… series.

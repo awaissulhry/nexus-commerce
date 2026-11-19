@@ -14,7 +14,8 @@ import type { Locale } from '../../../i18n/locales'
 import { authorWords, type CardContext, type CardMessage } from '../../card/model'
 import { MessageCard, type CardActions } from '../../card/view/MessageCard'
 import { dayOf, dayWord, shortDateOf, timeOf } from '../../parts/time'
-import { arrivedAtEnd, feedRows, PAGE_SIZE, verbKey, walkTarget, whoWords, type FeedEvent, type FeedRow } from '../model'
+import { arrivedAtEnd, feedRows, PAGE_SIZE, walkTarget, whoWords, type FeedEvent, type FeedRow } from '../model'
+import { stepsWordsOf, stepVerbKey } from '../model' // F-OP-214: other modules' words, the folded run
 import { foldedGist, hiddenNewLine, waitingMailLine, type FeedWaitingMail } from '../model' // B-TH-255
 import '../../parts/parts.css'
 import '../feed.css'
@@ -415,13 +416,45 @@ function Row({
       <p className="fw-rt-event" data-event-ids={event.id} tabIndex={-1}>
         <History size={14} aria-hidden />
         <span>
-          {t('step.text', { who: 'text' in who ? who.text : t(who.key), verb: t(verbKey(event.verb)) })}
+          {t('step.text', { who: 'text' in who ? who.text : t(who.key), verb: t(stepVerbKey(event)) /* F-OP-214 */ })}
           {event.status && (event.status.from || event.status.to) ? ` · ${t('step.status', { from: event.status.from ?? '—', to: event.status.to ?? '—' })}` : ''}
         </span>
         <time dateTime={event.at}>{timeOf(event.at, locale)}</time>
       </p>
     )
   }
+  // ---- F-OP-214 (11-dock §6.1): a run of steps of the same actor within an hour — one line, "5 steps by Nexus Factory · Show"; Show
+  // lists each step in place (its words and time). A status step is never in a run.
+  if (row.kind === 'steps') {
+    const first = row.events[0]!
+    const who = whoWords(first)
+    const words = stepsWordsOf(row.events)
+    const listId = `steps-${first.id}`
+    const last = row.events[row.events.length - 1]!
+    return (
+      <>
+        <p className="fw-rt-event" data-event-ids={row.events.map((event) => event.id).join(' ')} tabIndex={-1}>
+          <History size={14} aria-hidden />
+          <span>
+            {t(words.key, { count: words.count, who: 'text' in who ? who.text : t(who.key) })}
+            {' · '}
+            <Button size="sm" variant="link" aria-expanded={showChanges} aria-controls={listId} onClick={onToggleChanges}>
+              {t(showChanges ? 'changes.hide' : 'changes.show')}
+            </Button>
+          </span>
+          <time dateTime={last.at}>{timeOf(last.at, locale)}</time>
+        </p>
+        <ul id={listId} className="fw-rt-changes" hidden={!showChanges}>
+          {row.events.map((event) => (
+            <li key={event.id}>
+              {t(stepVerbKey(event))} · {timeOf(event.at, locale)}
+            </li>
+          ))}
+        </ul>
+      </>
+    )
+  }
+  // ---- end F-OP-214
   const first = row.events[0]
   const who = whoWords(first)
   const lines = row.events.flatMap((event) => (event.values.length > 0 ? event.values.map((value) => `${value.field}: ${value.before} → ${value.after}`) : event.fields.length > 0 ? [t('changes.fields', { fields: event.fields.join(', ') })] : []))

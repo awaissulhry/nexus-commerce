@@ -417,7 +417,11 @@
     "copyLinkHint": "La nostra pagina di tracciamento, da inoltrare a chi riceve la merce.",
     "copyLinkFailed": "Il link di tracciamento non è stato creato: riprovate.",
     "copyLinkPreview": "Un'anteprima non crea link.",
-    "copyLinkTooMany": "I link di questa spedizione sono già stati copiati: inoltrate uno di quelli."
+    "copyLinkTooMany": "I link di questa spedizione sono già stati copiati: inoltrate uno di quelli.",
+    "typed": {
+      "label": "Numero di tracciamento",
+      "noLive": "Nessun tracciamento in tempo reale"
+    }
   },
   "toShip": {
     "title": "Ancora da spedire",
