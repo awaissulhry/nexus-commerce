@@ -1116,7 +1116,9 @@ describe('the W2b-6 golden flow: a cost sheet approved, an order packed by scan 
     ;({ quote } = await ok(P.owner, 'POST', `/sales/quotes/${quote.id}/lines/made-to-measure`, unit(quote.version), 201))
     const check = await ok(P.sales, 'GET', `/sales/quotes/${quote.id}/send-check`)
     expect((check.checks as Json[]).filter((entry) => entry.severity === 'BLOCKS'), JSON.stringify(check.checks)).toEqual([])
-    const sent = await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/send`, { version: quote.version })
+    // B-CP-011 (the money wall, B-CP-015): the quote's PDF shows prices: Sales may not send it (403 PRICED_DOCUMENT); the Owner sends it.
+    await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/send`, { version: quote.version }, 403)
+    const sent = await ok(P.owner, 'POST', `/sales/quotes/${quote.id}/send`, { version: quote.version })
     await settle()
     const customer = linkBrowser(w, linkTokenSentTo(w, sent.sent.to))
     await customer.send('POST', '/link/quote/accept', { versionId: sent.sent.versionId, typedName: 'Anna Golden (made up)', email: sent.sent.to })
