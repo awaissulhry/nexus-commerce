@@ -542,3 +542,87 @@ describe('the walls: office only, the price grain, tenants and companies', () =>
     expect((await wall('otherTenant', 'POST', '/invoicing/invoices/from-ddts', { ddtIds: [S.ddt.id] })).status).toBe(404)
   })
 })
+
+// ---- B-OP-022 (order page plan N3; 13-backend §3; review N-4): Money = this order's share -----------------------------------------
+/**
+ * A monthly customer's two orders on ONE issued TD24 (made up, written with the database's rules off: the read is what is tested),
+ * partly paid, with its freight: each order's settlement says its own share by the rule the orders list reads (its row's paid and
+ * balance), the invoice's whole beside it, the freight apart (in no order), and the other order it bills — of the same customer,
+ * named only to a reader of orders, else counted.
+ *
+ *   O1  2 jackets, net 200.00 + VAT 44.00 = 244.00          the TD24: O1's line (200.00), O2's line (600.00), freight 10.00 net
+ *   O2  6 jackets, net 600.00 + VAT 132.00 = 732.00                    (12.20 with VAT): net 810.00, VAT 178.20, gross 988.20
+ *   payment 300.00 placed on the TD24: O1's share 75.00 (200 of 800), O2's 225.00
+ */
+describe('B-OP-022: Money = this order’s share — two orders on one TD24, partly paid, freight apart', () => {
+  const fx = { o1: newId(), o2: newId(), l1: newId(), l2: newId(), invoice: newId(), payment: newId() }
+  const settlementOf = async (session: string, orderId: string): Promise<Json> => (await wall(session, 'GET', `/invoicing/orders/${orderId}/settlement`, undefined, 200)).body.settlement
+
+  beforeAll(async () => {
+    SESSIONS['shareReader'] = () => office(A.tenant, [grant(['orders.view', 'invoices.view', 'money.price'])])
+    SESSIONS['shareNoOrders'] = () => office(A.tenant, [grant(['invoices.view', 'money.price'])])
+    SESSIONS['shareOtherParty'] = () => office(A.tenant, [{ permissions: ['orders.view', 'invoices.view', 'money.price'], companies: 'all', sites: 'all', parties: [seedUuid(ns.a, 'party:P3')] }])
+    const [style] = await admin<{ styleId: string; colourwayId: string }>(`SELECT "styleId", "colourwayId" FROM "SalesOrderLine" WHERE id = $1`, [moneyA.shipping.quality.serialSalesOrderLineId])
+    const q = (value: string) => `'${value}'`
+    const order = (id: string, number: string, net: number, vat: number) =>
+      `INSERT INTO "SalesOrder" (id, "tenantId", "companyId", "partyId", number, status, "orderDate", "taxMode", "billTo", "shipTo", "netAmount", "vatAmount", "grossAmount")
+       VALUES (${q(id)}, ${q(A.tenant)}, ${q(A.companyA)}, ${q(A.brand)}, '${number}', 'SHIPPED', '2026-11-02', 'IT_B2B', '{}'::jsonb, '{}'::jsonb, ${net}, ${vat}, ${net + vat});`
+    const line = (id: string, orderId: string, quantity: number, net: number, vat: number) =>
+      `INSERT INTO "SalesOrderLine" (id, "tenantId", "companyId", "orderId", "partyId", seq, kind, "styleId", "colourwayId", quantity, "unitPrice", "netAmount", "vatRatePct", "vatAmount")
+       VALUES (${q(id)}, ${q(A.tenant)}, ${q(A.companyA)}, ${q(orderId)}, ${q(A.brand)}, 10, 'SIZE_GRID', ${q(style!.styleId)}, ${q(style!.colourwayId)}, ${quantity}, 100, ${net}, 22, ${vat});`
+    const invoiceLine = (seq: number, kind: string, net: number, quantity: number, orderLineId: string | null, chargeKind: string | null) =>
+      `INSERT INTO "InvoiceLine" (id, "tenantId", "invoiceId", "buyerPartyId", "partyId", seq, kind, description, quantity, "unitPrice", "netAmount", "vatRatePct", "salesOrderLineId", "chargeKind")
+       VALUES (${q(newId())}, ${q(A.tenant)}, ${q(fx.invoice)}, ${q(A.brand)}, ${q(A.brand)}, ${seq}, '${kind}', 'T-OP022 line ${seq} (made up)', ${quantity}, ${net / quantity / 100}, ${net}, 22, ${orderLineId ? q(orderLineId) : 'NULL'}, ${chargeKind ? `'${chargeKind}'` : 'NULL'});`
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       ${order(fx.o1, 'T-OP022-SO-1', 20000, 4400)}
+       ${order(fx.o2, 'T-OP022-SO-2', 60000, 13200)}
+       ${line(fx.l1, fx.o1, 2, 20000, 4400)}
+       ${line(fx.l2, fx.o2, 6, 60000, 13200)}
+       INSERT INTO "Invoice" (id, "tenantId", "companyId", "buyerPartyId", "partyId", "docType", status, number, year, "issueDate", "issuedAt", "billTo", "netTotal", "vatTotal", "grossTotal", "vatSummary")
+       VALUES (${q(fx.invoice)}, ${q(A.tenant)}, ${q(A.companyA)}, ${q(A.brand)}, ${q(A.brand)}, 'TD24', 'ISSUED', 'T-OP022-1', 2026, '2026-11-05', '2026-11-05T09:00:00Z', '{}'::jsonb, 81000, 17820, 98820, '[{"rate":"22.00","nature":null,"legalRef":null,"taxable":81000,"vat":17820,"rounding":0}]'::jsonb);
+       ${invoiceLine(1, 'GOODS', 20000, 2, fx.l1, null)}
+       ${invoiceLine(2, 'GOODS', 60000, 6, fx.l2, null)}
+       ${invoiceLine(3, 'CHARGE', 1000, 1, null, 'FREIGHT')}
+       INSERT INTO "Payment" (id, "tenantId", "companyId", "partyId", amount, "receivedOn", "externalRef") VALUES (${q(fx.payment)}, ${q(A.tenant)}, ${q(A.companyA)}, ${q(A.brand)}, 30000, '2026-11-10', 'T-OP022-TRN-1');
+       INSERT INTO "PaymentAllocation" (id, "tenantId", "companyId", "partyId", "paymentId", "invoiceId", amount) VALUES (${q(newId())}, ${q(A.tenant)}, ${q(A.companyA)}, ${q(A.brand)}, ${q(fx.payment)}, ${q(fx.invoice)}, 30000);
+       COMMIT;`,
+    )
+  })
+
+  it('each order reads its own share — the same paid and still to pay as its row in Sales › Orders', async () => {
+    const list = (await wall('shareReader', 'GET', `/sales/orders?ids=${fx.o1},${fx.o2}`, undefined, 200)).body.orders as Json[]
+    for (const orderId of [fx.o1, fx.o2]) {
+      const row = list.find((entry) => entry.id === orderId)!
+      const { thisOrder } = await settlementOf('shareReader', orderId)
+      expect([thisOrder.paid, thisOrder.stillToPay], orderId).toEqual([row.paid, row.balance])
+    }
+    expect((await settlementOf('shareReader', fx.o1)).thisOrder).toEqual({ paid: 7500, stillToPay: 16900, invoicedShare: 24400, depositsPaid: 0 })
+    expect((await settlementOf('shareReader', fx.o2)).thisOrder).toEqual({ paid: 22500, stillToPay: 50700, invoicedShare: 73200, depositsPaid: 0 })
+  })
+
+  it('the shared invoice: its whole, this order’s share and what of it is open, the freight apart, the other order it bills', async () => {
+    const one = ((await settlementOf('shareReader', fx.o1)).invoices as Json[]).find((invoice) => invoice.id === fx.invoice)!
+    expect(one).toMatchObject({ docType: 'TD24', grossTotal: 98820, paidAmount: 30000, share: 24400, openShare: 16900, freight: 1220, otherOrders: [{ id: fx.o2, number: 'T-OP022-SO-2' }], otherOrdersHidden: 0 })
+    const two = ((await settlementOf('shareReader', fx.o2)).invoices as Json[]).find((invoice) => invoice.id === fx.invoice)!
+    expect(two).toMatchObject({ share: 73200, openShare: 50700, freight: 1220, otherOrders: [{ id: fx.o1, number: 'T-OP022-SO-1' }], otherOrdersHidden: 0 })
+    // The shares and the freight make the whole: the freight is in no order.
+    expect(one.share + two.share + one.freight).toBe(one.grossTotal)
+  })
+
+  it('the other orders are named only to a reader of orders (counted otherwise); without the price grain no amount; another customer’s person: 404', async () => {
+    const blind = ((await settlementOf('shareNoOrders', fx.o1)).invoices as Json[]).find((invoice) => invoice.id === fx.invoice)!
+    expect(blind).toMatchObject({ otherOrders: [], otherOrdersHidden: 1, share: 24400 })
+    expect(JSON.stringify(blind)).not.toContain(fx.o2)
+    const plain = await settlementOf('noPrice', fx.o1)
+    expect(plain.thisOrder).toEqual({})
+    const row = (plain.invoices as Json[]).find((invoice) => invoice.id === fx.invoice)!
+    for (const field of ['share', 'openShare', 'freight', 'grossTotal']) expect(row).not.toHaveProperty(field)
+    expect(row).toMatchObject({ otherOrders: [], otherOrdersHidden: 1 })
+    const other = await wall('shareOtherParty', 'GET', `/invoicing/orders/${fx.o1}/settlement`)
+    expect(other.status).toBe(404)
+    expect(JSON.stringify(other.body)).not.toContain('T-OP022')
+  })
+})
+// ---- end B-OP-022

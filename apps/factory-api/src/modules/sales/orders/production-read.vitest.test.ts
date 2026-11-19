@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { alsoMakesOf, BLOCKER_WORDS, daysBetween, inWorkPiecesOf, mtmGroupsOf, ownShareOf, partsOf, sumOrNull, withheldOf, type OtherOrder } from './production-read'
+// B-OP-021: a work order's rights from the order page, and a blocker's door behind the wall.
+import { blockerRefFor, SHARED_WORK_ORDER_WORDS, workOrderRightsOf } from './production-read'
 import { BLOCKER_KINDS } from '@nexus/factory-domain/production-brand/waiting'
 
 /**
@@ -99,3 +101,25 @@ describe('the order’s own share and what is in work', () => {
     for (const kind of BLOCKER_KINDS) expect(BLOCKER_WORDS[kind].it.length * BLOCKER_WORDS[kind].en.length).toBeGreaterThan(0)
   })
 })
+
+// ── B-OP-021 (13-backend §3 B4, B6; review R-11) ──
+describe('B-OP-021: what the order page may do to a work order, and where a blocker opens', () => {
+  const holding = (...rights: Permission[]) => (permission: Permission) => rights.includes(permission)
+
+  it('rights are the reader’s own over the work order; one shared with other customers is changed on its own page only', () => {
+    expect(workOrderRightsOf(holding('workorders.manage'), false)).toEqual({ manage: true, release: false, hold: false, why: null })
+    expect(workOrderRightsOf(holding('workorders.release', 'workorders.hold'), false)).toEqual({ manage: false, release: true, hold: true, why: null })
+    expect(workOrderRightsOf(holding('workorders.manage', 'workorders.release', 'workorders.hold'), true)).toEqual({ manage: false, release: false, hold: false, why: SHARED_WORK_ORDER_WORDS })
+    expect(SHARED_WORK_ORDER_WORDS.it.length > 0 && SHARED_WORK_ORDER_WORDS.en.length > 0).toBe(true)
+  })
+
+  it('a blocker names its record; a work order only for a reader who reaches it', () => {
+    const reaches = (id: string) => id === 'wo-reached'
+    expect(blockerRefFor({ type: 'OrderChangeRequest', id: 'r1' }, reaches)).toEqual({ type: 'OrderChangeRequest', id: 'r1' })
+    expect(blockerRefFor({ type: 'WorkOrder', id: 'wo-reached' }, reaches)).toEqual({ type: 'WorkOrder', id: 'wo-reached' })
+    expect(blockerRefFor({ type: 'WorkOrder', id: 'wo-of-another' }, reaches)).toBeNull()
+    expect(blockerRefFor(null, reaches)).toBeNull()
+    expect(blockerRefFor(undefined, reaches)).toBeNull()
+  })
+})
+// ── end B-OP-021 ──
