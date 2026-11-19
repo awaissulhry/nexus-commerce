@@ -6,7 +6,7 @@ import { I18nProvider } from '../../../../lib/i18n/provider'
 import { LIST_ROWS } from '../_demo/fixtures'
 import type { OrderRow } from '../api'
 import { listAddress } from '../model'
-import { lockedEntry, ORDERS_LIST_KEY, sheetAddress, sheetPartyOf, useOrdersSheet, type OrdersSheetHost } from './use-orders-sheet'
+import { CLEAR_DROPS, lockedEntry, ORDERS_LIST_KEY, sheetAddress, sheetPartyOf, useOrdersSheet, type OrdersSheetHost } from './use-orders-sheet'
 
 /**
  * F-SA-220 (sales page plan N7 / N5, picks R9, P10, P12, P18; 17-review C-2 and the SHEET-G02 lesson): the ONE Orders sheet. A host's
@@ -168,3 +168,39 @@ describe('Sales › Orders behaves as before (F-SA-220)', () => {
     expect(page.split('\n').length).toBeLessThan(30)
   })
 })
+
+// ---- F-CP-102 (customer page plan C1; 10-customer-page §1): Clear all goes back to the host's default ------------------------------
+// The host says its default view (`clearTo`, default Open orders): Clear all writes it (All orders on the customer page, Open orders on
+// Sales › Orders), drops the Work · Money columns term (CLEAR_DROPS) and the door terms, never the lock or the host's tab; the model's
+// `defaultRows` is the host's (no chip, the "Showing" line compares with it).
+describe('F-CP-102: Clear all goes back to the host\'s default view', () => {
+  it('the customer page: rows=all, the columns term and every narrowing gone; the lock, the tab and the dock stay', () => {
+    const host: OrdersSheetHost = { basePath: `/sales/customers/${ALPHA}`, locked: { party: ALPHA }, keep: ['tab', 'dock', 'cols'], clearTo: 'all' }
+    const { actions, model } = draw(host, `party=${ALPHA}&tab=work&dock=all&status=IN_PRODUCTION&cols=money&q=giacca&atRisk=true`)
+    expect(model.defaultRows).toBe('all')
+    actions.onClearAll?.()
+    const written = new URL(nav.replaced[0]!, 'https://factory.example.com').searchParams
+    expect(written.get('rows')).toBe('all')
+    for (const gone of ['status', 'cols', 'q', 'atRisk']) expect(written.has(gone), gone).toBe(false)
+    expect([written.get('party'), written.get('tab'), written.get('dock')]).toEqual([ALPHA, 'work', 'all'])
+  })
+
+  it('Sales › Orders keeps Open orders: Clear all writes no rows term (Open is its default), its model has no host default', () => {
+    const { actions, model } = draw({ basePath: '/sales/orders' }, 'late=true&q=SO-1')
+    expect(model.defaultRows).toBeNull()
+    actions.onClearAll?.()
+    expect(nav.replaced).toEqual(['/w/DEMO/sales/orders'])
+  })
+
+  it('a kept term is dropped only where a write names it (CLEAR_DROPS); every other write keeps it', () => {
+    expect(CLEAR_DROPS).toEqual(['cols'])
+    const host = { locked: { party: ALPHA }, keep: ['tab', 'cols'] }
+    const now = params(`tab=work&cols=money&party=${ALPHA}`)
+    const next = { rows: 'late' as const, q: '', layout: 'list' as const, party: null }
+    expect(new URL(sheetAddress('/w/DEMO/x', host, now, next), 'https://x').searchParams.get('cols')).toBe('money')
+    const cleared = new URL(sheetAddress('/w/DEMO/x', host, now, next, CLEAR_DROPS), 'https://x').searchParams
+    expect(cleared.has('cols')).toBe(false)
+    expect([cleared.get('tab'), cleared.get('party')]).toEqual(['work', ALPHA])
+  })
+})
+// ---- end F-CP-102

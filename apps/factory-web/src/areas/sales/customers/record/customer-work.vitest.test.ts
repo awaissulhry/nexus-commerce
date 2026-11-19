@@ -572,8 +572,8 @@ describe('F-CP-101: All orders by default, written once', () => {
 
   it('the empty state per view: All orders says no order yet; In production keeps its way to All orders; other views the sheet\'s own', () => {
     const t = createTranslator('en', messagesFor('en', ['parties']).parties!)
-    expect(workEmptyOf('all', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Brand Alpha has no order yet.' })
-    expect(workEmptyOf('IN_PRODUCTION', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Nothing in production for Brand Alpha.', link: { href: '/all', label: 'Show all orders' } })
+    expect(workEmptyOf('all', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Brand Alpha has no order yet.', view: 'all' })
+    expect(workEmptyOf('IN_PRODUCTION', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Nothing in production for Brand Alpha.', link: { href: '/all', label: 'Show all orders' }, view: 'IN_PRODUCTION' })
     expect(workEmptyOf('late', null, 'Brand Alpha', t, '/all')).toBeNull()
     expect(workEmptyOf('open', 'us', 'Brand Alpha', t, '/all')).toBeNull()
     expect(createTranslator('it', messagesFor('it', ['parties']).parties!)('customers.work.emptyAll', { customer: 'Brand Alpha' })).toBe('Brand Alpha non ha ancora ordini.')
@@ -583,7 +583,7 @@ describe('F-CP-101: All orders by default, written once', () => {
     expect(rowsFromAddress(params(''))).toBe('open')
     expect(rowsFromAddress(params('rows=all'))).toBe('all')
     const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain('defaultRows: WORK_DEFAULT_ROWS')
+    expect(tab).toContain('clearTo: WORK_DEFAULT_ROWS') // F-CP-102: the sheet's default view = the host's
     expect(tab.match(/router\.replace\(/g)?.length, 'one writer of the entry address').toBe(1)
   })
 })

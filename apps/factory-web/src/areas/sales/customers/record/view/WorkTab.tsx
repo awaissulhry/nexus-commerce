@@ -73,8 +73,9 @@ export function workViewsOf(can: { readonly price: boolean }, offered: { readonl
  */
 export function workEmptyOf(rows: RowView, waiting: 'us' | null, customer: string, t: (key: string, params?: Record<string, string | number>) => string, allHref: string): OrdersListModel['empty'] {
   if (waiting) return null
-  if (rows === 'all') return { title: t('customers.work.emptyAll', { customer }) }
-  if (rows === 'IN_PRODUCTION') return { title: t('customers.work.empty', { customer }), link: { href: allHref, label: t('customers.work.showAll') } }
+  // F-CP-102: each keyed to its view (the sheet shows it on that view when nothing else narrows it).
+  if (rows === 'all') return { title: t('customers.work.emptyAll', { customer }), view: 'all' }
+  if (rows === 'IN_PRODUCTION') return { title: t('customers.work.empty', { customer }), link: { href: allHref, label: t('customers.work.showAll') }, view: 'IN_PRODUCTION' }
   return null
 }
 // ---- end F-CP-101
@@ -144,6 +145,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     embedded: true,
     keep: ['tab', 'dock'],
     listKey: ORDERS_LIST_KEY,
+    clearTo: WORK_DEFAULT_ROWS, // F-CP-102: Clear all goes back to All orders (the "Showing" line compares with it)
     // A row click docks the order's conversation; ⌘ / Ctrl opens the order in a new tab.
     onRowClick: (row, newTab) => (newTab ? window.open(`${prefix}/sales/orders/${encodeURIComponent(row.id)}`, '_blank', 'noopener') : onPick(pickOfRow(row))),
   }
@@ -158,7 +160,6 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const model: OrdersListModel = {
     ...sheet.model,
     views: workViewsOf(sheet.model.can), // F-CP-101: All orders first; Drafts / Not equal join with their steps
-    defaultRows: WORK_DEFAULT_ROWS,
     preset: workPreset(rows, waiting),
     marks: work.marks,
     doorHref: door.hrefOf,

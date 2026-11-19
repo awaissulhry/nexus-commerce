@@ -70,6 +70,8 @@ import { useReplyMany } from './use-reply-many' // F-SA-282
  *   keep       the host's own address terms the sheet keeps when it writes (the MTM page's `segment`, the customer page's `tab`)
  *   listKey    the list frame's key: 'sales.orders' on every host (one export source, one set of saved views, one Pin to Today)
  *   onRowClick a row's click (default: the order opens; ⌘ / Ctrl: a new tab); the customer page docks the order instead
+ *   clearTo    F-CP-102: the host's default rows view — where Clear all (and a view chip's ✕) goes back to, and what the "Showing: …"
+ *              line compares with (default 'open': Sales › Orders; the customer page passes 'all')
  *
  * A host's default view is written into the address by the host on entry (not an option here); the column preset is the built-in
  * view's columns.
@@ -91,7 +93,12 @@ export interface OrdersSheetHost {
   readonly listKey?: typeof ORDERS_LIST_KEY
   /** A row's click; default: open the order. */
   readonly onRowClick?: (row: OrderRow, newTab: boolean) => void
+  /** F-CP-102: the host's default rows view (Clear all goes back to it; the "Showing: …" line compares with it); default 'open'. */
+  readonly clearTo?: RowView
 }
+
+/** F-CP-102: the page terms Clear all drops even when the host keeps them (the Work · Money columns, F-CP-105). */
+export const CLEAR_DROPS: readonly string[] = Object.freeze(['cols'])
 
 type Params = { get(name: string): string | null; getAll?(name: string): string[]; toString(): string } | null
 
@@ -101,18 +108,21 @@ export function sheetPartyOf(host: Pick<OrdersSheetHost, 'locked'>, params: Para
 }
 
 /** The host's own terms of the address (each value, in the address's order), kept by every address the sheet writes. */
-function keptTerms(host: Pick<OrdersSheetHost, 'keep'>, params: Params): Array<[string, string]> {
+function keptTerms(host: Pick<OrdersSheetHost, 'keep'>, params: Params, drop: readonly string[] = []): Array<[string, string]> {
   if (!params || !host.keep?.length) return []
   const all = new URLSearchParams(params.toString())
-  return host.keep.flatMap((name) => all.getAll(name).map((value): [string, string] => [name, value]))
+  return host.keep.filter((name) => !drop.includes(name)).flatMap((name) => all.getAll(name).map((value): [string, string] => [name, value]))
 }
 
-/** The address the sheet writes: its own terms (listAddress), the host's locks over them, the host's own terms after them. */
-export function sheetAddress(base: string, host: Pick<OrdersSheetHost, 'locked' | 'keep'>, params: Params, next: Parameters<typeof listAddress>[1]): string {
+/**
+ * The address the sheet writes: its own terms (listAddress), the host's locks over them, the host's own terms after them.
+ * F-CP-102: `drop` — kept terms this write leaves out (Clear all drops CLEAR_DROPS; the locks never drop).
+ */
+export function sheetAddress(base: string, host: Pick<OrdersSheetHost, 'locked' | 'keep'>, params: Params, next: Parameters<typeof listAddress>[1], drop: readonly string[] = []): string {
   const written = listAddress(base, { ...next, ...(host.locked?.party ? { party: host.locked.party } : {}), ...(host.locked?.kind ? { kind: host.locked.kind } : {}) })
   const [path, qs = ''] = written.split('?')
   const query = new URLSearchParams(qs)
-  for (const [name, value] of keptTerms(host, params)) query.append(name, value)
+  for (const [name, value] of keptTerms(host, params, drop)) query.append(name, value)
   const text = query.toString()
   return `${path}${text ? `?${text}` : ''}`
 }
@@ -183,24 +193,30 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const searchSeq = useRef(0)
 
   const go = useCallback(
-    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */; waiting?: 'us' | null /* F-SA-276 */ }) =>
+    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */; waiting?: 'us' | null /* F-SA-276 */; drop?: readonly string[] /* F-CP-102 */ }) =>
       router.replace(
         // F-SA-220: the host's locks and its own terms stay in every address the sheet writes.
-        sheetAddress(base, host, params, {
-          rows: next.rows ?? rows,
-          q: next.q ?? q,
-          layout: next.layout ?? layout,
-          party: next.party === undefined ? party : next.party,
-          brand: next.brand === undefined ? brand : next.brand, // B-TH-225
-          company: next.company === undefined ? company : next.company, // B-TH-225
-          sort: next.sort === undefined ? sort : next.sort, // B-TH-057
-          cf: next.cf === undefined ? cf : next.cf, // B-TH-057
-          group: next.group === undefined ? group : next.group, // B-TH-244
-          extra: next.extra === undefined ? extra : next.extra, // B-TH-244
-          kind: next.kind === undefined ? kind : next.kind, // F-SA-221
-          profile: next.profile === undefined ? profile : next.profile, // F-SA-222
-          waiting: next.waiting === undefined ? waiting : next.waiting, // F-SA-276
-        }),
+        sheetAddress(
+          base,
+          host,
+          params,
+          {
+            rows: next.rows ?? rows,
+            q: next.q ?? q,
+            layout: next.layout ?? layout,
+            party: next.party === undefined ? party : next.party,
+            brand: next.brand === undefined ? brand : next.brand, // B-TH-225
+            company: next.company === undefined ? company : next.company, // B-TH-225
+            sort: next.sort === undefined ? sort : next.sort, // B-TH-057
+            cf: next.cf === undefined ? cf : next.cf, // B-TH-057
+            group: next.group === undefined ? group : next.group, // B-TH-244
+            extra: next.extra === undefined ? extra : next.extra, // B-TH-244
+            kind: next.kind === undefined ? kind : next.kind, // F-SA-221
+            profile: next.profile === undefined ? profile : next.profile, // F-SA-222
+            waiting: next.waiting === undefined ? waiting : next.waiting, // F-SA-276
+          },
+          next.drop, // F-CP-102: Clear all drops the page terms it names
+        ),
       ),
     [router, base, host, params, rows, q, layout, party, brand, company, sort, cf, group, extra, kind, profile, waiting],
   )
@@ -705,6 +721,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     listKey: host.listKey ?? ORDERS_LIST_KEY,
     embedded: !!host.embedded,
     locked: { party: !!host.locked?.party, kind: !!host.locked?.kind },
+    defaultRows: host.clearTo ?? null, // F-CP-102: the host's default view (no chip, the "Showing" line compares with it)
   }
 
   const actions: OrdersListActions = {
@@ -749,7 +766,9 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onKind: (next, view) => go({ kind: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     onProfile: (next) => go({ profile: next }), // F-SA-222: the rider chip's ✕
     onCompany: (next) => go({ company: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
-    onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */, extra: null /* B-TH-244; the grouping stays: it filters nothing */, kind: null /* F-SA-221: a lock comes back */, profile: null /* F-SA-222 */, waiting: null /* F-SA-276 */ }),
+    // F-CP-102: back to the host's default view (Sales › Orders: Open orders; the customer page: All orders); the page terms of
+    // CLEAR_DROPS (Work · Money) and the door terms (`extra`, F-CP-141's priceMatch among them) go too.
+    onClearAll: () => go({ rows: host.clearTo ?? 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */, extra: null /* B-TH-244; the grouping stays: it filters nothing */, kind: null /* F-SA-221: a lock comes back */, profile: null /* F-SA-222 */, waiting: null /* F-SA-276 */, drop: CLEAR_DROPS /* F-CP-102 */ }),
     // F-SA-276: the waiting term's chip ✕ and the built-in view "Waiting on us" (with its rows: the open ones).
     // ---- F-SA-280 ----
     onAssignSupervisor: (ids) => assign.open(supervisorTargetsOf(pickedRows(ids))),
