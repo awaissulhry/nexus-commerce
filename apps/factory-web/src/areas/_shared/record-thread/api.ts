@@ -405,7 +405,7 @@ const orderFileSchema = z.object({
 const orderWorksheetSchema = z.object({ documentId: z.string(), profileId: z.string(), line: z.object({ id: z.string(), seq: z.number() }), version: z.number(), number: z.string().nullable(), language: z.string(), createdAt: z.string() })
 export const orderFilesSchema = z.object({
   order: z.object({ id: z.string(), number: z.string() }),
-  groups: z.array(z.object({ key: z.string(), words: z.object({ it: z.string(), en: z.string() }), files: z.array(orderFileSchema), /* F-OP-125 (B5) */ worksheets: z.array(orderWorksheetSchema).default([]), leftOut: z.number(), measurementsLeftOut: z.number() })),
+  groups: z.array(z.object({ key: z.string(), words: z.object({ it: z.string(), en: z.string() }), files: z.array(orderFileSchema), /* F-OP-125 (B5) */ worksheets: z.array(orderWorksheetSchema).default([]), leftOut: z.number(), measurementsLeftOut: z.number(), /* F-CP-144 (B-CP-023): counted, never named */ pricedLeftOut: z.number().default(0) })),
   total: z.number(),
   truncated: z.boolean(),
 })

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { AudioLines, BadgeCheck, Copy, Download, FileText, FolderOpen, Image as ImageIcon, Lock, Paperclip, Receipt, RotateCcw, Share2, ShieldOff, Trash2 } from 'lucide-react'
+import { AudioLines, BadgeCheck, Copy, Download, FileText, FolderOpen, Image as ImageIcon, Lock, LockOpen, Paperclip, Receipt, RotateCcw, Share2, ShieldOff, Trash2 } from 'lucide-react'
 import { Banner, Disclosure, EmptyState, Field } from '@nexus/ui/components'
 import { BulkActionBar } from '@nexus/ui/patterns'
 import { Button, Checkbox, RadioCard, Select, Skeleton, Tag } from '@nexus/ui/primitives'
@@ -24,6 +24,9 @@ import { orderBulkReach, orderFilesOf, orderGroupsShown, orderLeftOut, sourceOf,
 // F-OP-125: the order's file cards (kind, type word, who added it, the MTM worksheets, the keys' grid step).
 import { addedByOf, cardKindOf, cardStep, orderWorksheetsOf, typeLabelOf, worksheetCardId, type OrderWorksheet } from '../model'
 import type { CardPreview } from '../model' // F-OP-126
+// F-CP-144: the PRICED lock — one counted line, no name, no preview, no box; the upload's tick; Mark as priced.
+import { orderPricedLeftOut, pricedLockedIn, uploadPricedHeld } from '../model'
+import { previewOf, pricedMarkOf } from '../../files/model'
 import '../files-view.css'
 
 export const FILES_VIEW_NS = 'record-thread-files-view'
@@ -66,12 +69,14 @@ export interface FilesViewActions {
   onBulk?: (action: BulkAction, fileIds: readonly string[]) => void
   /** Files dropped or browsed: the container asks their kind and audience (`upload`). */
   onDrop?: (files: File[]) => void
-  onUploadChange?: (change: Partial<Pick<UploadAsk, 'kind' | 'audience' | 'sheet'>>) => void
+  onUploadChange?: (change: Partial<Pick<UploadAsk, 'kind' | 'audience' | 'sheet' | /* F-CP-144 */ 'priced'>>) => void
   onUploadConfirm?: () => void
   onUploadCancel?: () => void
   onDismissRefused?: () => void
   /** B-TH-231: "Use on another record…" for these files (one row's, or the chosen ones). */
   onUseOn?: (fileIds: readonly string[]) => void
+  /** F-CP-144 (B-CP-014): Mark as priced (true), or take the mark off (false: a price holder's). */
+  onPriced?: (fileId: string, priced: boolean) => void
   /** F-SA-237 (a sales order): open a file through the order's own route; show its message in the conversation; the bulk bar.
    *  F-OP-127: `opener` — the card that opened it (the viewer gives the focus back to it). */
   onOrderOpen?: (fileId: string, mode: 'preview' | 'download', opener?: HTMLElement | null) => void
@@ -144,6 +149,8 @@ function View({ model, actions, slots }: { model: FilesViewModel; actions?: File
   // B-TH-231: the chosen files a carry may take (available, not a sheet locked for this reader).
   const carry = model.can.upload && actions?.onUseOn ? carriable(chosen).map((file) => file.id) : []
   const allChosen = order.length > 0 && chosen.length === order.length
+  // F-CP-144: the record's priced documents this reader may not open — never in a group, counted on one line.
+  const pricedLocked = model.files ? pricedLockedIn(model.files, model.record) : 0
 
   const choose = (fileId: string, on: boolean, range: boolean) => {
     const ids = range ? rangeOf(order, anchor, fileId) : [fileId]
@@ -228,10 +235,13 @@ function View({ model, actions, slots }: { model: FilesViewModel; actions?: File
                     <Skeleton key={row} height={44} />
                   ))}
                 </div>
-              ) : order.length === 0 ? (
+              ) : order.length === 0 && pricedLocked === 0 ? (
                 <EmptyState icon={<FolderOpen size={22} aria-hidden />} title={t('empty.title')} description={t(model.can.upload ? 'empty.bodyUpload' : 'empty.body')} />
               ) : (
                 <>
+                  {pricedLocked > 0 && <PricedLockLine count={pricedLocked} /* F-CP-144 */ />}
+                  {order.length > 0 && (
+                  <>
                   <div className="fw-rtv-tools">
                     <Checkbox
                       label={allChosen ? t('select.none', { count: order.length }) : t('select.all', { count: order.length })}
@@ -277,6 +287,8 @@ function View({ model, actions, slots }: { model: FilesViewModel; actions?: File
                       </section>
                     ))}
                   </div>
+                  </>
+                  )}
                 </>
               )}
             </>
@@ -288,6 +300,19 @@ function View({ model, actions, slots }: { model: FilesViewModel; actions?: File
     </>
   )
 }
+
+// ---- F-CP-144 (customer page plan C4; design 11-money §4.5; B-CP-014): the PRICED lock card — the record's priced documents this
+// reader may not open, as ONE counted line: no name, no preview, nothing to choose, open or attach ("2 priced documents — you cannot
+// open them · Only people who see prices open it.").
+function PricedLockLine({ count }: { count: number }) {
+  const words = useT('record-files')
+  return (
+    <p className="fw-rtv-held" role="note">
+      <Lock size={14} aria-hidden /> <span>{words('priced.lockedCount', { count })}</span> <span className="fw-rtv-muted">{words('priced.lockedWhy')}</span>
+    </p>
+  )
+}
+// ---- end F-CP-144
 
 function groupWords(group: ReturnType<typeof filesGroups>[number]['group'], party: FilesParty | null, t: (key: string) => string): string {
   if (group.by === 'kind') return t(`group.kind.${group.kind}`)
@@ -311,6 +336,8 @@ function Row({ series, model, actions, slots, place, chosen, onChoose }: { serie
   const lines = keepLines(file, model.now)
   // B-TH-280: a sheet locked for this reader has no depth actions (they cannot open it).
   const rowActions = file.locked ? null : (slots?.rowActions?.(file.id) ?? null)
+  // F-CP-144: Mark as priced (anyone who reaches the record), or take the mark off (the file opens for this reader: they see prices).
+  const mark = actions?.onPriced ? pricedMarkOf(file, { mark: model.can.mark ?? false }) : null
   return (
     <li className={`fw-rtv-row${chosen ? ' is-chosen' : ''}`}>
       <span
@@ -325,7 +352,8 @@ function Row({ series, model, actions, slots, place, chosen, onChoose }: { serie
         <Checkbox label={<span className="nds-vh">{t('select.one', { name })}</span>} checked={chosen} onChange={(event) => onChoose(event.target.checked, false)} />
       </span>
       <span className={`fw-rtv-pic${held ? ' is-held' : ''}`} aria-hidden>
-        {file.previewUrl && !held ? <img src={file.previewUrl} alt="" /> : held ? <Lock size={18} /> : KIND_ICON[file.kind]}
+        {/* F-CP-144: never a preview of a locked file. */}
+        {previewOf(file) && !held ? <img src={previewOf(file)!} alt="" /> : held || file.locked ? <Lock size={18} /> : KIND_ICON[file.kind]}
       </span>
       <span className="fw-rtv-main">
         <button type="button" className="fw-rtv-name" data-row={file.id} onClick={(event) => actions?.onOpen?.(file.id, event.currentTarget)}>
@@ -353,7 +381,9 @@ function Row({ series, model, actions, slots, place, chosen, onChoose }: { serie
             </Tag>
           ))}
         </span>
-        {((model.can.upload && actions?.onUseOn && carriable([file]).length > 0) || rowActions) && (
+        {/* F-CP-144: a priced document this reader opens says so. */}
+        {file.priced && <span className="fw-rtv-meta">{pricedWords('priced.isPriced')}</span>}
+        {((model.can.upload && actions?.onUseOn && carriable([file]).length > 0) || rowActions || mark) && (
           <span className="fw-rtv-row-actions">
             {model.can.upload && actions?.onUseOn && carriable([file]).length > 0 && (
               <Button size="sm" variant="quiet" heldReason={model.uploadHeld} aria-label={fileWords('useOn.actionFor', { name })} onClick={() => actions.onUseOn?.([file.id])}>
@@ -361,6 +391,12 @@ function Row({ series, model, actions, slots, place, chosen, onChoose }: { serie
               </Button>
             )}
             {rowActions /* B-TH-280: Versions, Mark up, What it is */}
+            {/* F-CP-144 (B-CP-014): Mark as priced / Take the price mark off. */}
+            {mark && (
+              <Button size="sm" variant="quiet" title={pricedWords(mark === 'mark' ? 'priced.tickHint' : 'priced.unmarkHint')} aria-label={pricedWords(mark === 'mark' ? 'priced.markFor' : 'priced.unmarkFor', { name })} heldReason={model.busy ? t('upload.busy') : null} onClick={() => actions?.onPriced?.(file.id, mark === 'mark')}>
+                {mark === 'mark' ? <Lock size={14} aria-hidden /> : <LockOpen size={14} aria-hidden />} {pricedWords(mark === 'mark' ? 'priced.mark' : 'priced.unmark')}
+              </Button>
+            )}
           </span>
         )}
         {series.earlier.length > 0 && (
@@ -398,6 +434,8 @@ const AUDIENCE_WORD: Readonly<Record<FileAudience, string>> = { OFFICE: 'upload.
 function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: FilesViewModel['party']; busy: boolean; actions?: FilesViewActions | undefined }) {
   const t = useT(FILES_VIEW_NS)
   const fileWords = useT('record-thread-files')
+  const pricedWords = useT('record-files') // F-CP-144
+  const pricedHeld = uploadPricedHeld(ask) // F-CP-144
   const locale = useLocale()
   const audiences = ask.audiences.filter((audience) => audience !== 'PARTNER' || party !== null)
   return (
@@ -409,7 +447,7 @@ function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: Fi
       footer={
         <>
           <Button onClick={() => actions?.onUploadCancel?.()}>{t('upload.cancel')}</Button>
-          <Button variant="primary" heldReason={busy ? t('upload.busy') : uploadAskHeld(ask) ? t(uploadAskHeld(ask)!) : null} onClick={() => actions?.onUploadConfirm?.()}>
+          <Button variant="primary" heldReason={busy ? t('upload.busy') : uploadAskHeld(ask) ? t(uploadAskHeld(ask)!) : pricedHeld ? pricedWords(pricedHeld) /* F-CP-144 */ : null} onClick={() => actions?.onUploadConfirm?.()}>
             {t('upload.confirm', { count: ask.files.length })}
           </Button>
         </>
@@ -442,6 +480,17 @@ function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: Fi
           checked={ask.sheet ?? false}
           onChange={(event) => actions?.onUploadChange?.({ sheet: event.target.checked })}
         />
+        {/* F-CP-144 (B-CP-014): "This file shows prices" — a customer's PO, a price list: then only people who see prices open it. */}
+        <Checkbox
+          label={
+            <span>
+              {pricedWords('priced.tick')} <span className="fw-rtv-muted">· {pricedWords('priced.tickHint')}</span>
+            </span>
+          }
+          checked={ask.priced ?? false}
+          onChange={(event) => actions?.onUploadChange?.({ priced: event.target.checked })}
+        />
+        {pricedHeld && <p className="fw-rtv-held">{pricedWords(pricedHeld)}</p>}
         <fieldset className="fw-rtv-fieldset">
           <legend className="fw-rtv-legend">{t('upload.who')}</legend>
           {audiences.map((audience) => (
@@ -469,7 +518,7 @@ function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: Fi
  */
 export function OrderFilesBody({ model, party, actions, place = 'tab' }: { model: OrderFilesModel; party: { readonly name: string } | null; actions?: FilesViewActions; place?: 'tab' | 'window' }) {
   return (
-    <WithMessages namespaces={[FILES_VIEW_NS, 'record-thread-files', 'lists']}>
+    <WithMessages namespaces={[FILES_VIEW_NS, 'record-thread-files', 'lists', /* F-CP-144 */ 'record-files']}>
       <OrderFilesView model={model} party={party} actions={actions} place={place} />
     </WithMessages>
   )
@@ -532,6 +581,7 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
   const ids = new Set(files.map((file) => file.id))
   const sheets = customer ? 0 : groups.reduce((sum, group) => sum + orderWorksheetsOf(group).length, 0)
   const leftOut = customer ? 0 : orderLeftOut(read)
+  const pricedOut = customer ? 0 : orderPricedLeftOut(read) // F-CP-144: the order's priced documents this reader may not open
   const chosen = files.filter((file) => model.selected.includes(file.id))
   const reach = orderBulkReach(chosen, read.order.id, model.canShare)
   const allChosen = files.length > 0 && chosen.length === files.length
@@ -555,11 +605,12 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
       choose(fileId, !model.selected.includes(fileId))
     }
   }
-  if (files.length === 0 && sheets === 0 && leftOut === 0) return <EmptyState icon={<FolderOpen size={22} aria-hidden />} title={t(customer ? 'order.empty.customer' : 'order.empty.title')} description={customer ? undefined : t('order.empty.body')} />
+  if (files.length === 0 && sheets === 0 && leftOut === 0 && pricedOut === 0 /* F-CP-144 */) return <EmptyState icon={<FolderOpen size={22} aria-hidden />} title={t(customer ? 'order.empty.customer' : 'order.empty.title')} description={customer ? undefined : t('order.empty.body')} />
   const words = { t, fileWords, locale }
   return (
     <div className={`fw-rtv-order${place === 'window' ? ' is-window' : ''}`}>
       {leftOut > 0 && <p className="fw-rtv-held">{t('order.leftOut', { count: leftOut })}</p>}
+      {pricedOut > 0 && <PricedLockLine count={pricedOut} /* F-CP-144 */ />}
       {read.truncated && <p className="fw-rtv-muted">{t('order.truncated', { count: read.total })}</p>}
       {files.length > 0 && !customer && (
         <div className="fw-rtv-tools">
@@ -595,7 +646,7 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
                   <WorksheetCard key={sheet.documentId} sheet={sheet} actions={actions} words={words} />
                 ))}
               </ul>
-              {!customer && group.leftOut + group.measurementsLeftOut > 0 && <p className="fw-rtv-muted">{t('order.leftOutHere', { count: group.leftOut + group.measurementsLeftOut })}</p>}
+              {!customer && group.leftOut + group.measurementsLeftOut + (group.pricedLeftOut ?? 0) /* F-CP-144 */ > 0 && <p className="fw-rtv-muted">{t('order.leftOutHere', { count: group.leftOut + group.measurementsLeftOut + (group.pricedLeftOut ?? 0) })}</p>}
             </section>
           )
         })}

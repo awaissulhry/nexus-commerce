@@ -99,6 +99,13 @@ const WITH_COPIES = [...WITHOUT_ORIGIN, COPY, LOCKED]
 const SHEET = file(15, { name: 'Measurements Anna A.pdf', sheet: true })
 const WITH_SHEETS = [...WITHOUT_ORIGIN, SHEET, LOCKED]
 // ---- end B-TH-283
+// ---- F-CP-144 (customer page plan C4, the money wall; B-CP-014): the PRICED lock — two priced documents locked for a reader without
+// prices (counted on one line, never named, never previewed), and a price holder's view of a priced PO (said, the mark taken off).
+const VERSIONED = WITHOUT_ORIGIN.map((one) => ({ ...one, version: 1 }))
+const PRICED_LOCKED = [file(16, { name: '', locked: 'PRICED', previewUrl: picture('never drawn', '#000000') }), file(17, { name: '', locked: 'PRICED' })]
+const PO_PRICED = file(18, { name: 'Brand Alpha PO 4471.pdf', priced: true, version: 2 })
+const ALL_MARK = { upload: true, share: true, delete: true, mark: true }
+// ---- end F-CP-144
 
 export const designScreen = defineDesignScreen<FilesViewCaseModel>({
   screen: 'SCR-006-filesview',
@@ -124,6 +131,12 @@ export const designScreen = defineDesignScreen<FilesViewCaseModel>({
     { id: 'sheets', label: 'Measurement sheets: opened (recorded) and locked', model: c({ files: WITH_SHEETS }), note: 'Who holds the measurements right (the production manager does on purpose) opens a sheet, marked “each opening is recorded”; who does not (finance) reads the lock and why, never its name.' },
     { id: 'upload-sheet', label: 'Add a file as a measurement sheet', model: c({ upload: { files: [{ name: 'Measurements Anna A.pdf', sizeBytes: 180_000 }], kind: 'ATTACHMENT', audience: 'FLOOR', kinds: ['ATTACHMENT', 'DOCUMENT', 'PHOTO'], audiences: ['OFFICE', 'FLOOR', 'PARTNER'], sheet: true } }), note: 'The tick at upload files it as body data; a sheet never goes to the floor (Add is held with why until another audience is chosen).' },
     // ---- end B-TH-283
+    // ---- F-CP-144 (the money wall): as Sales worker / as Production manager, and as a price holder
+    { id: 'priced-locked', label: 'As Sales worker: 2 priced documents — you cannot open them (one counted line); Mark as priced on the others', model: c({ files: [...VERSIONED, ...PRICED_LOCKED], can: ALL_MARK }), note: 'No name, no preview, nothing to choose or attach; Mark as priced on a file not priced yet (then it opens only for people who see prices).' },
+    { id: 'priced-holder', label: 'As the Owner: a priced PO said so, Take the price mark off', model: c({ files: [...VERSIONED, PO_PRICED], can: ALL_MARK }), note: 'Only someone who sees prices takes the mark off (the API answers 403 in words to anyone else).' },
+    { id: 'upload-priced', label: 'Add a file that shows prices: never to the floor', model: c({ upload: { files: [{ name: 'Brand Alpha PO 4471.pdf', sizeBytes: 220_000 }], kind: 'DOCUMENT', audience: 'FLOOR', kinds: ['ATTACHMENT', 'DOCUMENT', 'PHOTO'], audiences: ['OFFICE', 'FLOOR', 'PARTNER'], priced: true } }), note: '"This file shows prices" — then only people who see prices open it; Add held while the floor is chosen.' },
+    { id: 'priced-only', label: 'As Sales worker: every file of the record is priced (the counted line, no empty state)', model: c({ files: PRICED_LOCKED, can: ALL_MARK }) },
+    // ---- end F-CP-144
     { id: 'no-upload', label: 'No right to upload', model: c({ can: { upload: false, share: false, delete: false }, uploadHeld: null }), note: 'The upload is held with the reason; the bulk actions say the right they need.' },
     { id: 'block', label: 'A required document refuses the move', model: c({ missing: [{ id: 'm2', document: 'Test report EN 17092-3', before: 'Shipped', level: 'BLOCK' }] }) },
     { id: 'empty', label: 'No files yet', model: c({ files: [] }), note: 'An empty view never looks like an error: the drop area says what to do.' },

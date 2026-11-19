@@ -198,6 +198,21 @@
     "locked": "Documento con prezzi — non puoi aprirlo",
     "lockedWhy": "Lo aprono solo le persone che vedono i prezzi.",
     "lockedCount_one": "Documento con prezzi — non puoi aprirlo",
-    "lockedCount_other": "{count} documenti con prezzi — non puoi aprirli"
+    "lockedCount_other": "{count} documenti con prezzi — non puoi aprirli",
+    "tick": "Questo file mostra dei prezzi",
+    "tickHint": "Poi lo aprono solo le persone che vedono i prezzi.",
+    "floor": "Un documento con prezzi non si condivide mai con un reparto: il reparto non vede prezzi.",
+    "isPriced": "Documento con prezzi: lo aprono solo le persone che vedono i prezzi.",
+    "mark": "Segna come documento con prezzi",
+    "markFor": "Segna {name} come documento con prezzi",
+    "unmark": "Togli il segno dei prezzi",
+    "unmarkFor": "Togli il segno dei prezzi da {name}",
+    "unmarkHint": "Poi lo apre chiunque raggiunga questo record.",
+    "unmarkHeld": "Solo chi vede i prezzi toglie a un file il segno «mostra dei prezzi».",
+    "marked": "Segnato come documento con prezzi: da ora lo aprono solo le persone che vedono i prezzi.",
+    "unmarked": "Il segno dei prezzi è tolto: lo apre chiunque raggiunga questo record.",
+    "stale": "Qualcuno ha cambiato questo file nel frattempo. Eccolo com'è ora.",
+    "gone": "Questo file non è più su questo record.",
+    "markFailed": "Non è stato possibile cambiare il segno dei prezzi ora. Riprova."
   }
 }

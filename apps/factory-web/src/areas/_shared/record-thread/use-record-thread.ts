@@ -575,7 +575,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     () =>
       files
         .filter((file) => !file.supersededAt)
-        .map((file) => ({ id: file.id, name: file.originalName, sizeBytes: file.sizeBytes, contentType: file.contentType, available: file.status === 'AVAILABLE', shared: partyId !== null && file.partyId === partyId && (file.visibility.includes('PARTNER') || file.visibility.includes('LINK')) })),
+        .map((file) => ({ id: file.id, name: file.originalName, sizeBytes: file.sizeBytes, contentType: file.contentType, available: file.status === 'AVAILABLE', shared: partyId !== null && file.partyId === partyId && (file.visibility.includes('PARTNER') || file.visibility.includes('LINK')), ...(file.locked ? { locked: file.locked } : {}) /* F-CP-144: never offered to attach */ })),
     [files, partyId],
   )
   const context: ComposerContext = {

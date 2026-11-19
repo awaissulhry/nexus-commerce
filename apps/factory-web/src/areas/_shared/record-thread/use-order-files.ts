@@ -7,6 +7,7 @@ import type { FilesViewActions } from '../../../lib/record-thread/files-view/vie
 import { isOwnFile, type OrderFilesModel, type OrderFilesRead } from '../../../lib/record-thread/files-view/model'
 // F-OP-126 (R-14): the cards' previews, only those in view, through the order's walled batch route.
 import { orderFilesOf } from '../../../lib/record-thread/files-view/model'
+import { orderPricedLeftOut } from '../../../lib/record-thread/files-view/model' // F-CP-144
 import { useFilePreviews } from '../../../lib/record-thread/files-view/use-file-previews'
 import { useOrderFileViewer } from '../../../lib/record-thread/files-view/use-order-file-viewer' // F-OP-127
 import { listFiles } from '../../../record-panels/api'
@@ -171,7 +172,7 @@ const kindOf = (kind: string): FileKind => ((FILE_KINDS as readonly string[]).in
  * marked as theirs; the message it came with kept ("Go to message").
  */
 export function stripFilesOf(read: OrderFilesRead, partyId: string | null): ThreadFile[] {
-  return orderFilesOf(read).map((file) => ({
+  return orderFilesOf(read).map((file): ThreadFile /* F-CP-144: typed here, the priced count is concatenated below */ => ({
     id: file.id,
     recordType: file.from.type,
     recordId: file.from.id,
@@ -190,5 +191,27 @@ export function stripFilesOf(read: OrderFilesRead, partyId: string | null): Thre
     messageId: file.inThread?.messageId ?? null,
     ...(file.bodyData ? { locked: 'MEASUREMENTS' as const } : {}),
   }))
+    // ---- F-CP-144 (B-CP-023): the order's priced documents this reader may not open — the files line counts them on one line
+    // ("2 priced documents — you cannot open them"), never names, previews or opens them (no id of a real file).
+    .concat(
+      Array.from({ length: orderPricedLeftOut(read) }, (_, index): ThreadFile => ({
+        id: `priced-left-out-${index}`,
+        recordType: 'SalesOrder',
+        recordId: read.order.id,
+        name: '',
+        contentType: 'application/octet-stream',
+        kind: 'DOCUMENT',
+        sizeBytes: 0,
+        status: 'AVAILABLE',
+        quarantineReason: null,
+        visibility: ['OFFICE'],
+        partyId: null,
+        createdAt: '',
+        seriesId: `priced-left-out-${index}`,
+        previewUrl: null,
+        locked: 'PRICED',
+      })),
+    )
+    // ---- end F-CP-144
 }
 // ---- end F-OP-215
