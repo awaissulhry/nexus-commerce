@@ -7,7 +7,7 @@ import {
   type ScopeDefinition,
   type ScopeValues,
 } from '@nexus/db-kit'
-import type { Pool, PoolConfig } from 'pg'
+import type { Pool, PoolClient, PoolConfig } from 'pg'
 import { PrismaClient } from './generated/prisma/client'
 import { RUNTIME_ROLES, SCOPE_DEFINITIONS, type Audience } from './roles'
 
@@ -184,6 +184,7 @@ export function scopedClients(pool: Pool, clientCapacity = DEFAULT_CLIENT_CAPACI
  */
 export async function openFactoryDatabase(options: FactoryDatabaseOptions): Promise<FactoryDatabase> {
   const pool = new AuditedPool({ ...options.pool, connectionString: options.connectionString }, RUNTIME_LOGIN_AUDIT)
+  const connections = openConnections(pool) // fx-9
   try {
     const connection = await pool.connect()
     connection.release()
@@ -197,6 +198,30 @@ export async function openFactoryDatabase(options: FactoryDatabaseOptions): Prom
     async close() {
       await clients.close()
       await pool.end()
+      await connections.closed() // fx-9
     },
   }
 }
+
+// ---- fx-9 (end check 11-19): close() returns once the pool's connections have closed
+/**
+ * The connections a pool has open, and a wait until none is. pg-pool's `end()` resolves as soon as no client is lent
+ * out: it asks each idle connection to end (pg writes Terminate) and returns at once, before the server has seen it. A
+ * database dropped right after — a test file's `DROP DATABASE … WITH (FORCE)` once its database is closed — terminated
+ * those connections on their way out; the FATAL 57P01 reached pg-pool's idle-client listener, and the pool, with no Prisma
+ * client listening any more, raised it as an unhandled 'error' after every test of the file had passed (GitHub run
+ * 44440921192, API PostgreSQL shards 3, 5, 7, 16). A connection counts as closed at its client's 'end': its socket is gone.
+ */
+function openConnections(pool: Pool): { closed(): Promise<void> } {
+  const open = new Set<PoolClient>()
+  const waiting: (() => void)[] = []
+  pool.on('connect', (client) => {
+    open.add(client)
+    client.once('end', () => {
+      open.delete(client)
+      if (open.size === 0) for (const resume of waiting.splice(0)) resume()
+    })
+  })
+  return { closed: () => (open.size === 0 ? Promise.resolve() : new Promise<void>((resolve) => waiting.push(resolve))) }
+}
+// ---- end fx-9
