@@ -87,7 +87,8 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
     ],
     [order.id, order.partyId, projects, ownWork],
   )
-  const readUnread = useMemo(() => (held.includes('threads.read') ? readUnreadWith(api) : null), [api, held])
+  // F-OP-213 (B-OP-061 is opt-in): the dock asks whether each of its threads may be read — the few records its pick offers.
+  const readUnread = useMemo(() => (held.includes('threads.read') ? readUnreadWith(api, { readable: true }) : null), [api, held])
   const unread = useUnread(readUnread, unreadRows, tick)
   const fresh = (id: string) => unread[id]?.newCount ?? 0
   const freshOf = (ids: readonly string[]) => ids.reduce((sum, id) => sum + fresh(id), 0)
