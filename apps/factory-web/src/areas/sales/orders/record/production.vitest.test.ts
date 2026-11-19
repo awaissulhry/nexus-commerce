@@ -591,3 +591,52 @@ describe('F-OP-116: decide in place — a change waiting under its row, Still to
   })
 })
 // ---- end F-OP-116
+
+// ---- F-OP-306 (order page walk #8): New work order — DS field groups, a line's sizes under its colour, the style's size order ------
+describe('F-OP-306: the New work order dialog — field groups, a line\'s sizes under it, the sizes in the style\'s order', () => {
+  type Open = import('../../../production/_shared/api').OpenLines
+  const line = (id: string, sizes: [string, number][], styleSizes?: string[]): Open['lines'][number] => ({
+    id,
+    seq: 10,
+    kind: 'SIZE_GRID',
+    styleId: 's-jkt',
+    styleCode: 'DEMO-JKT-01',
+    styleName: 'Demo jacket',
+    colourwayId: `${id}-c`,
+    colourwayCode: 'BLK',
+    madeToMeasure: false,
+    sizes: sizes.map(([size, open]) => ({ size, ordered: open, onWorkOrders: 0, open })),
+    ...(styleSizes ? { styleSizes } : {}),
+  })
+
+  it('the sizes in the style\'s range order, whatever order the rows came in; a size outside the range after; each once', async () => {
+    const { gridSizesOf, inStyleOrder, sizesOfLine } = await import('../../../production/work-orders/list-model')
+    const range = ['48', '50', '52', '54', '56']
+    expect(inStyleOrder(['50', '54', '52'], range)).toEqual(['50', '52', '54'])
+    expect(inStyleOrder(['XL', '54', '50', '54'], range)).toEqual(['50', '54', 'XL'])
+    expect(inStyleOrder(['50', '54', '52'], undefined)).toEqual(['50', '54', '52']) // an older API: the order met
+    expect(sizesOfLine(line('a', [['50', 2], ['54', 2], ['52', 4]], range)).map((size) => size.size)).toEqual(['50', '52', '54'])
+    // Two lines of one style, the first without the 52: the columns still read 50 · 52 · 54.
+    expect(gridSizesOf([line('a', [['54', 2], ['50', 1]], range), line('b', [['52', 3], ['50', 1]], range)])).toEqual(['50', '52', '54'])
+  })
+
+  it('the dialog: its own stylesheet (the order page does not load the production area\'s), the DS field label heads, the style order', () => {
+    const dialog = readFileSync(new URL('../../../production/work-orders/view/NewWorkOrderDialog.tsx', import.meta.url), 'utf8')
+    expect(dialog).toContain("import '../../_shared/production.css'")
+    expect(dialog).toContain('<legend className="nds-field-lbl">{t(\'new.lines\')}</legend>')
+    expect(dialog).toContain('<legend className="nds-field-lbl">{t(\'new.style\')}</legend>')
+    expect(dialog).toContain('<h3 className="nds-field-lbl">{t(\'new.sizes\')}</h3>')
+    expect(dialog).not.toContain('fw-pr-h3')
+    expect(dialog).toContain('gridSizesOf(pickedLines)')
+    expect(dialog).toContain('sizesOfLine(line).filter((size) => size.open > 0)')
+    // The stylesheet it brings: no browser fieldset box; a line's words and its sizes on two lines (never "BLK50 ×2").
+    const css = readFileSync(new URL('../../../production/_shared/production.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/fieldset\.fw-pr-list \{\s*margin: 0;\s*padding: 0;\s*border: 0;/)
+    expect(css).toMatch(/\.fw-pr-check-body \{\s*display: flex;\s*flex-direction: column;/)
+    // The API sends the style's size range with each line.
+    const api = readFileSync(new URL('../../../../../../factory-api/src/modules/production/work-orders/work-orders.ts', import.meta.url), 'utf8')
+    expect(api).toContain('styleSizes: styleOf.get(line.styleId)?.sizes ?? [], // F-OP-306')
+    expect(readFileSync(new URL('../../../production/_shared/api.ts', import.meta.url), 'utf8')).toContain('styleSizes: z.array(z.string()).optional(),')
+  })
+})
+// ---- end F-OP-306

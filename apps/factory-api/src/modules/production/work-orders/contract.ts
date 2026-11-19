@@ -322,6 +322,8 @@ export const openLinesContract = defineContract({
           /** Made-to-measure comes later (B-W1-17/18): such a line is refused. */
           madeToMeasure: z.boolean(),
           sizes: z.array(output({ size: z.string(), ordered: z.number().int(), onWorkOrders: z.number().int(), open: z.number().int() })),
+          /** F-OP-306 (order page walk #8): the style's size range, in its scale's order — the dialog's size columns read in it. */
+          styleSizes: z.array(z.string()),
         }),
       ),
     }),

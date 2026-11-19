@@ -10,6 +10,10 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { sizeGridCopy } from '../../_shared/grid-copy'
 import type { ProductionCan } from '../../_shared/model'
 import { createHeld, linesOfStyle, newPieces, overOpen, stylesOf, type NewWorkOrderModel, type WorkOrdersListActions } from '../list-model'
+import { gridSizesOf, sizesOfLine } from '../list-model' // F-OP-306
+// F-OP-306 (order page walk #8): the dialog brings its own stylesheet — the sales order's Production tab opens it too and does not load the
+// production area's (its choice groups were raw browser fieldsets there, and a line's open sizes ran into its colour: "BLK50 ×2").
+import '../../_shared/production.css'
 
 /**
  * "New work order" (design wo-new; Today's New ▾ and `?new=1` open it): a confirmed sales order (search by number or
@@ -34,11 +38,8 @@ export function NewWorkOrderDialog({ model, can, actions }: { model: NewWorkOrde
   const styles = stylesOf(model.lines)
   const lines = linesOfStyle(model.lines, model.styleId)
   const pickedLines = lines.filter((line) => model.picked.includes(line.id))
-  const sizes = useMemo(() => {
-    const order: string[] = []
-    for (const line of pickedLines) for (const size of line.sizes) if (!order.includes(size.size)) order.push(size.size)
-    return order.map((size) => ({ key: size, label: size }))
-  }, [pickedLines])
+  // F-OP-306: the columns in the style's size order (50 · 52 · 54), never the order the rows came in.
+  const sizes = useMemo(() => gridSizesOf(pickedLines).map((size) => ({ key: size, label: size })), [pickedLines])
   const over = overOpen(lines, model.picked, model.grid)
   const issues: SizeGridIssue[] = over.map((cell) => ({ colour: cell.lineId, size: cell.size, message: t('new.over', { open: cell.open }), tone: 'error' }))
   const held = createHeld(model, can)
@@ -125,7 +126,8 @@ export function NewWorkOrderDialog({ model, can, actions }: { model: NewWorkOrde
 
         {model.lines && styles.length > 1 && (
           <fieldset className="fw-pr-list">
-            <legend className="fw-pr-h3">{t('new.style')}</legend>
+            {/* F-OP-306: the group's head is the design system's field label (as Due date's). */}
+            <legend className="nds-field-lbl">{t('new.style')}</legend>
             {styles.map((style) => (
               <RadioCard
                 key={style.id}
@@ -145,7 +147,7 @@ export function NewWorkOrderDialog({ model, can, actions }: { model: NewWorkOrde
 
         {lines.length > 0 && (
           <fieldset className="fw-pr-list">
-            <legend className="fw-pr-h3">{t('new.lines')}</legend>
+            <legend className="nds-field-lbl">{t('new.lines')}</legend>
             {lines.map((line) => {
               const open = line.sizes.reduce((sum, size) => sum + size.open, 0)
               const reason = open === 0 ? t('new.lineFull') : null
@@ -160,7 +162,7 @@ export function NewWorkOrderDialog({ model, can, actions }: { model: NewWorkOrde
                       <span>{t('new.line', { seq: line.seq, colourway: line.colourwayCode, style: line.styleCode })}</span>
                       <span className="fw-pr-cell-sub">
                         {/* B-W2b-368: a made-to-measure unit is one piece of its base size, on its own work order. */}
-                        {reason ?? (line.madeToMeasure ? t('new.mtmUnit', { size: line.sizes[0]?.size ?? '—' }) : line.sizes.filter((size) => size.open > 0).map((size) => t('new.sizeOpen', { size: size.size, open: size.open })).join(' · '))}
+                        {reason ?? (line.madeToMeasure ? t('new.mtmUnit', { size: line.sizes[0]?.size ?? '—' }) : sizesOfLine(line).filter((size) => size.open > 0).map((size) => t('new.sizeOpen', { size: size.size, open: size.open })).join(' · '))}
                       </span>
                     </span>
                   }
@@ -172,7 +174,7 @@ export function NewWorkOrderDialog({ model, can, actions }: { model: NewWorkOrde
 
         {pickedLines.length > 0 && (
           <div className="fw-pr-gridbox">
-            <h3 className="fw-pr-h3">{t('new.sizes')}</h3>
+            <h3 className="nds-field-lbl">{t('new.sizes')}</h3>
             <SizeGridEditor
               colours={pickedLines.map((line) => ({ key: line.id, label: line.colourwayCode, offered: line.sizes.filter((size) => size.open > 0).map((size) => size.size) }))}
               sizes={sizes}

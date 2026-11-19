@@ -389,6 +389,8 @@ export const openLinesSchema = z.object({
       colourwayCode: z.string(),
       madeToMeasure: z.boolean(),
       sizes: z.array(z.object({ size: z.string(), ordered: z.number(), onWorkOrders: z.number(), open: z.number() })),
+      /** F-OP-306 (walk #8): the style's size range, in its scale's order (absent from an older API: the order the lines give). */
+      styleSizes: z.array(z.string()).optional(),
     }),
   ),
 })
