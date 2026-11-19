@@ -38,6 +38,10 @@ import type { AskDialogModel } from '../view/AskDialog'
 import type { PortalPriceCheck } from '../price-check'
 import type { PriceCheckModel } from '../view/PriceCheck'
 // ---- end F-CP-148
+// ---- F-CP-158 (follow-up 12): the price check card's own states and its window; the thread's "Ask the factory designer" box ----
+import { priceDraftOf, priceDraftProblems } from '../price-check'
+import type { ThreadViewModel } from '../../../shell/view/ThreadView'
+// ---- end F-CP-158
 
 /**
  * SCR-184 › one order (design portal.customer.orders rec "Order"; B-W2b-191; B-TH-275, picture 22), MADE-UP data only: the four
@@ -87,6 +91,8 @@ interface CaseInput {
   model?: (locale: Locale) => Partial<OrderRecordViewModel>
   facts?: (locale: Locale) => Partial<OrderBandFacts>
   preview?: boolean
+  /** F-CP-158: the docked conversation's own state over the made-up one (the "Ask the factory designer" box). */
+  thread?: (locale: Locale) => Partial<ThreadViewModel>
 }
 
 function recordCase(input: CaseInput = {}): CustomerCaseBuilder {
@@ -107,7 +113,7 @@ function recordCase(input: CaseInput = {}): CustomerCaseBuilder {
     return {
       shell: shellOf(locale, orderBandOf({ words: orderWords(locale), record, tab, prefix: PREFIX, facts }), { path: `/orders/${record.order.id}`, preview: input.preview ?? false }),
       // B-TH-275: the order's ONE conversation docks beside every tab.
-      body: { kind: 'record', model, thread: threadOf(locale) },
+      body: { kind: 'record', model, thread: { ...threadOf(locale), ...(input.thread?.(locale) ?? {}) } /* F-CP-158 */ },
     }
   }
 }
@@ -202,6 +208,15 @@ export const ORDER_PRICE_CHECK: PortalPriceCheck = {
   total: { ourPrice: 752_000, brandPrice: 747_000, priceMatch: 'NOT_EQUAL', priceDiff: 5_000, priceNotEqualLines: 1, priceMissingLines: 0, priceOtherCurrency: 0, row: null },
   mayWrite: { allowed: true, why: null },
 }
+// ---- F-CP-158 (follow-up 12): the card's other checks, its window, the designer's made-up name ----
+const agreeing = (): PortalPriceCheck => ({ ...ORDER_PRICE_CHECK, lines: ORDER_PRICE_CHECK.lines.map((line) => ({ ...line, brandAmount: line.ourAmount, priceMatch: 'EQUAL' as const, priceDiff: 0, row: line.row ? { ...line.row, unitPrice: line.ourUnitPrice } : null })), total: { ...ORDER_PRICE_CHECK.total, brandPrice: ORDER_PRICE_CHECK.total.ourPrice, priceMatch: 'EQUAL', priceDiff: 0, priceNotEqualLines: 0 } })
+const notGiven = (): PortalPriceCheck => ({ ...ORDER_PRICE_CHECK, lines: ORDER_PRICE_CHECK.lines.map((line) => ({ ...line, brandAmount: null, priceMatch: 'NO_BRAND_PRICE' as const, priceDiff: null, row: null })), total: { ...ORDER_PRICE_CHECK.total, brandPrice: null, priceMatch: 'NO_BRAND_PRICE', priceDiff: null, priceNotEqualLines: 0, priceMissingLines: ORDER_PRICE_CHECK.lines.length } })
+function priceDialogOf(locale: Locale): NonNullable<PriceCheckModel['dialog']> {
+  const draft = priceDraftOf(ORDER_PRICE_CHECK, locale)
+  return { draft, problems: priceDraftProblems(draft), showProblems: false, busy: false, failed: null, stale: false }
+}
+const DESIGNER_NAME = 'Giulia Esempio'
+// ---- end F-CP-158
 /** The Lines tab's price check card as the page holds it (the Buyer and the Admin write; Finance reads). */
 export const priceCheckOf = (over: Partial<PriceCheckModel> = {}): PriceCheckModel => ({ state: 'ready', check: ORDER_PRICE_CHECK, access: 'write', held: null, dialog: null, notice: null, ...over })
 // ---- end F-CP-148
@@ -234,6 +249,21 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'cp-148-lines-finance', label: 'F-CP-148 · Seen as Brand Alpha Finance · reads its prices and the check; Your prices… held in words (a colleague who orders gives them)', model: recordCase({ tab: 'lines', model: (locale) => ({ priceCheck: priceCheckOf({ access: 'read', held: words(locale)('priceCheck.readsOnly'), check: { ...ORDER_PRICE_CHECK, mayWrite: { allowed: false, why: null } } }) }) }) },
     { id: 'cp-148-lines-designer', label: 'F-CP-148 · Seen as Brand Alpha Designer / Production / Viewer · no price, no check, no amount: "Prices are not part of your access."', model: recordCase({ record: withoutPrices(RECORD), tab: 'lines', model: () => ({ priceCheck: null }) }) },
     // ---- end F-CP-148
+    // ---- F-CP-158 (follow-up 12; customer page plan C3, D2; review B2, C3): the Price check card's states and "Your prices…" ----
+    { id: 'cp158-price-agree', label: 'F-CP-158 · Price check: "Our prices agree" — every line and the total', model: recordCase({ tab: 'lines', model: () => ({ priceCheck: priceCheckOf({ check: agreeing() }) }) }) },
+    { id: 'cp158-price-none', label: 'F-CP-158 · Price check: "You have not given your price yet" — never Equal', model: recordCase({ tab: 'lines', model: () => ({ priceCheck: priceCheckOf({ check: notGiven() }) }) }) },
+    { id: 'cp158-price-window', label: 'F-CP-158 · Your prices…: ours beside yours per line, one note, one Save at the versions read', model: recordCase({ tab: 'lines', model: (locale) => ({ priceCheck: priceCheckOf({ dialog: priceDialogOf(locale) }) }) }), note: 'Typing over a factory price replaces it; emptying one of yours takes it away; a factory row is never only removed.' },
+    { id: 'cp158-price-window-stale', label: 'F-CP-158 · Your prices…: changed meanwhile (409) — the prices as they are now', model: recordCase({ tab: 'lines', model: (locale) => ({ priceCheck: priceCheckOf({ dialog: { ...priceDialogOf(locale), stale: true } }) }) }) },
+    { id: 'cp158-price-saved', label: 'F-CP-158 · Saved: one quiet line, the card read again', model: recordCase({ tab: 'lines', model: () => ({ priceCheck: priceCheckOf({ notice: 'priceCheck.saved' }) }) }) },
+    { id: 'cp158-price-closed', label: 'F-CP-158 · A closed order keeps its prices: Your prices… held in words', model: recordCase({ tab: 'lines', model: (locale) => ({ priceCheck: priceCheckOf({ held: words(locale)('priceCheck.closed'), check: { ...ORDER_PRICE_CHECK, mayWrite: { allowed: false, why: null } } }) }) }) },
+    { id: 'cp158-price-loading', label: 'F-CP-158 · Price check reading', model: recordCase({ tab: 'lines', model: () => ({ priceCheck: priceCheckOf({ state: 'loading', check: null }) }) }) },
+    { id: 'cp158-price-error', label: 'F-CP-158 · Price check could not be read (Try again; the lines stay)', model: recordCase({ tab: 'lines', model: () => ({ priceCheck: priceCheckOf({ state: 'error', check: null }) }) }) },
+    // The thread's "Ask <name>, factory designer" (F-CP-156): the one name the customer may ask, never who read it.
+    { id: 'cp158-ask-designer', label: 'F-CP-158 · The conversation: "Ask Giulia Esempio, factory designer" under the box (not ticked)', model: recordCase({ thread: () => ({ designer: { name: DESIGNER_NAME, ask: false, chip: false, held: null } }) }) },
+    { id: 'cp158-ask-designer-chip', label: 'F-CP-158 · An "@" typed: ONE chip "Giulia Esempio · factory designer" puts the name in and ticks the box', model: recordCase({ thread: (locale) => ({ composer: { ...threadOf(locale).composer!, value: locale === 'it' ? 'Può controllare il logo @' : 'Could you check the logo @' }, designer: { name: DESIGNER_NAME, ask: false, chip: true, held: null } }) }) },
+    { id: 'cp158-ask-designer-ticked', label: 'F-CP-158 · The box ticked: the message goes to the factory designer at once, the team reads it as always', model: recordCase({ thread: (locale) => ({ composer: { ...threadOf(locale).composer!, value: locale === 'it' ? '@Giulia Esempio può controllare il giallo del logo?' : '@Giulia Esempio could you check the yellow of the logo?' }, designer: { name: DESIGNER_NAME, ask: true, chip: false, held: null } }) }) },
+    { id: 'cp158-ask-designer-held', label: 'F-CP-158 · The designer cannot be asked here: the box held in the portal’s words, the text kept', model: recordCase({ thread: (locale) => ({ designer: { name: DESIGNER_NAME, ask: false, chip: false, held: words(locale, 'portal')('thread.designer.notHere') } }) }) },
+    // ---- end F-CP-158
     // ── Shipments & tracking ──
     { id: 'shipments', label: 'Shipments & tracking', model: recordCase({ tab: 'shipments' }), note: 'DDT, carrier, parcels with their tracking numbers (Copy) and the carrier’s site, the four steps, ETA, what it carries, the events, the papers; still to ship with the expected day.' },
     { id: 'shipments-copied', label: 'A tracking number copied', model: recordCase({ tab: 'shipments', model: () => ({ copied: 'DEMO00012345' }) }) },

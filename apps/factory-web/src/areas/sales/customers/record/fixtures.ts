@@ -13,6 +13,7 @@ import { CustomerSupervisorCard } from '../portal/view/CustomerSupervisorCard'
 import { SUPERVISOR_CASES } from '../portal/demo'
 import { DESIGNER_CASES } from '../portal/demo' // F-CP-155
 import type { DesignerModel } from '../portal/designer/model' // F-CP-155
+import { designerModel, designerSlot, DESIGNERS } from '../portal/demo' // F-CP-158: the designer rows' last states
 import type { OpenOrderMoney } from '../money/api' // F-SA-273
 import type { SupervisorModel } from '../portal/limits/model'
 // B-W2b-324: the customer in depth (made-up data in ../depth/_demo/fixtures.ts).
@@ -504,6 +505,12 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'overview-designer-every-company', label: 'F-CP-155 · Change… held: not at every company the customer works with', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.everyCompany } },
     { id: 'overview-designer-loading', label: 'F-CP-155 · The designer rows reading (the supervisor is drawn)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.loading } },
     { id: 'overview-designer-error', label: "F-CP-155 · The designer couldn't be read: Try again (the supervisor stays)", model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.error } },
+    // ---- F-CP-158 (customer page plan C7, D12): the factory designer rows' last states (picture 23) ----
+    { id: 'cp158-designer-not-active', label: 'F-CP-158 · The factory designer is no longer active: "No longer active", the portal names the backup', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: designerModel({}, designerSlot({ designer: { id: DESIGNERS.giulia.id, name: DESIGNERS.giulia.name, state: 'NOT_ACTIVE' } })) } },
+    { id: 'cp158-designer-alone', label: 'F-CP-158 · A factory designer without a backup: the portal names the designer', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: designerModel({}, designerSlot({ backup: null })) } },
+    { id: 'cp158-designer-nobody', label: 'F-CP-158 · Both no longer reach the customer: the portal names nobody (the brand writes to our team)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: designerModel({}, designerSlot({ designer: { id: DESIGNERS.giulia.id, name: DESIGNERS.giulia.name, state: 'NO_REACH' }, backup: { id: DESIGNERS.elena.id, name: DESIGNERS.elena.name, state: 'NOT_ACTIVE' } })) } },
+    { id: 'cp158-designer-done', label: 'F-CP-158 · Applied: the receipt under the rows (no step-up for a name)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: designerModel({ notice: { key: 'customers.designer.done' } }) } },
+    // ---- end F-CP-158
     // ---- F-SA-274: People & addresses — a contact with portal access is tagged (an exact e-mail match), the others offer Invite.
     { id: 'people-portal', label: 'F-SA-274 · People & addresses: contacts tagged "Has portal access" on the same e-mail; ⋯ Invite to the portal… for the others', model: { ...record('MODA-DEMO', { tab: 'people', can: { ...RECORD_CAN, partners: true } }), portalEmails: by('MODA-DEMO').contacts.slice(0, 1).flatMap((contact) => (contact.email ? [contact.email.toLowerCase()] : [])) } },
     // ---- B-TH-260: the thread docked (the rule of picture 38); Activity and Documents are gone, their tools in the thread's "⋯" (R-ACT)

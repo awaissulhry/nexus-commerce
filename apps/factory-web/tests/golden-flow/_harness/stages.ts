@@ -52,7 +52,9 @@ const FILE = /^(\d{2}[a-z]?-[a-z0-9-]+)\.ts$/
  * F-OP-129: the order page's end stage (th9-order-page) after 16-close — the W1 order is closed by then, so nothing of it moves
  * under the stage; it works on the seeded orders of P1 (as Brand Alpha) and one order it makes.
  */
-export const AFTER_STAGES: Readonly<Record<string, readonly string[]>> = Object.freeze({ '07-order': ['th8-dock'], '16-close': ['th9-order-page'] })
+// F-CP-158 (customer page plan C5, C7): the brand's one draft order (cp-portal-draft) after th9-order-page — the brand's Designer starts it,
+// asks its factory designer, its Buyer sends it (keyboard only); alone on a fresh stack too (`--stages cp-portal-draft`).
+export const AFTER_STAGES: Readonly<Record<string, readonly string[]>> = Object.freeze({ '07-order': ['th8-dock'], '16-close': ['th9-order-page', 'cp-portal-draft'] })
 
 /** The plan's stages and any other stage file of the folder, in name order; a stage of AFTER_STAGES right after its own. */
 export function stageNames(): string[] {
