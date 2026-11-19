@@ -15,6 +15,10 @@ import { acceptRequest } from '../change-requests/office'
 import { applyPlan } from '../change-requests/apply-plan'
 import { forgetProgress } from '../portal-orders/progress'
 import { orderProduction } from './production-read'
+// B-OP-025: Done on a production task from the order; a promise change closes a refused re-promise's follow-up.
+import { wipTaskIdOf } from '../../product/changes/hooks'
+import { changePromise } from './moves'
+import { doneStillToDoTask } from './still-to-do'
 
 /**
  * B-SA-050 — the order's "Still to do" (sales page plan R1, P6; 13-backend B4; review C-8), computed from the records, on the local
@@ -169,3 +173,85 @@ describe('B-SA-050: Still to do, computed from the records — each row closes w
     expect((await thrown(orderProduction(beta, world.order, { parts: 'changes' }))).code).toBe('not_found')
   })
 })
+
+// ── B-OP-025 (order page plan N1; review R-12): Done on a production task from the order, by the task's own right ──
+describe('B-OP-025: a production task is ticked off from the order only by its own right; a promise change closes a refused re-promise\'s follow-up', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  /** A released change order's REWORK line on the world's work order, and the task it left (its id derived, as the release makes it). */
+  async function reworkTask(world: { workOrder: string; styleId: string }, assigneeId: string): Promise<string> {
+    const workOrder = await one<{ siteId: string; companyId: string }>('SELECT "siteId"::text AS "siteId", "companyId"::text AS "companyId" FROM "WorkOrder" WHERE id = $1', [world.workOrder])
+    const changeOrder = newId()
+    const taskId = wipTaskIdOf(changeOrder, world.workOrder)
+    await planted([
+      { sql: `INSERT INTO "ChangeOrder" (id, "tenantId", "companyId", number, "styleId", "fromRevisionId", title, reason, "authorId", status, "releasedAt") VALUES ($1, $2, $3, $4, $5, $6, 'Made-up: new pocket', 'Made-up: the pocket moves.', $7, 'RELEASED', now())`, values: [changeOrder, T, workOrder.companyId, `ECO-T025-${changeOrder.slice(-6)}`, world.styleId, newId(), officeId] },
+      { sql: `INSERT INTO "ChangeOrderItem" (id, "tenantId", "changeOrderId", seq, kind, "workOrderId", disposition) VALUES ($1, $2, $3, 10, 'WORK_IN_PROGRESS', $4, 'REWORK')`, values: [newId(), T, changeOrder, world.workOrder] },
+      { sql: `INSERT INTO "Task" (id, "tenantId", "companyId", "siteId", "partyId", title, "recordType", "recordId", "recordLabel", "assigneeId", status, "createdById") VALUES ($1, $2, $3, $4, $5, 'Made-up: open the rework', 'WorkOrder', $6, 'WO', $7, 'OPEN', $8)`, values: [taskId, T, workOrder.companyId, workOrder.siteId, P1, world.workOrder, assigneeId, officeId] },
+    ])
+    return taskId
+  }
+  const salesReads = () => caller(['orders.view', 'orders.manage', 'workorders.view', 'workorders.manage'])
+  const production = () => caller(['orders.view', 'workorders.view', 'tasks.manage'] as Permission[])
+  const taskOf = (taskId: string) => one<{ status: string; closedById: string | null; version: number }>('SELECT status::text AS status, "closedById"::text AS "closedById", version FROM "Task" WHERE id = $1', [taskId])
+  const PRODUCTION_DOES_THIS = 'Production does this.'
+
+  it('Sales (orders.manage, workorders.manage, no tasks.manage) reads "Production does this" and is refused; tasks.manage over the work order ticks it off', async () => {
+    const world = await inWork(0, 4)
+    const taskId = await reworkTask(world, newId())
+    const row = (await stillToDo(salesReads(), world.order)).rows.find((entry) => entry.kind === 'WORK_IN_PROGRESS_TASK')
+    expect(row).toMatchObject({ ref: { type: 'Task', id: taskId, version: 1 }, mayAct: false, waitingOn: 'PLANNER' })
+    const refusal = await thrown(doneStillToDoTask(salesReads(), world.order, taskId, { version: 1 }))
+    expect(refusal).toMatchObject({ code: 'forbidden', message: PRODUCTION_DOES_THIS, issues: [{ path: 'refusal/PRODUCTION_DOES_THIS', message: PRODUCTION_DOES_THIS }] })
+    expect((await taskOf(taskId)).status).toBe('OPEN')
+    expect((await stillToDo(production(), world.order)).rows.find((entry) => entry.kind === 'WORK_IN_PROGRESS_TASK')).toMatchObject({ mayAct: true })
+    const done = await doneStillToDoTask(production(), world.order, taskId, { version: 1 })
+    expect(done).toEqual({ task: { id: taskId, status: 'DONE', version: 2 } })
+    expect(await taskOf(taskId)).toMatchObject({ status: 'DONE', closedById: officeId })
+    expect(await one(`SELECT after FROM "AuditLog" WHERE action = 'orders.stillToDoTaskDone' AND "recordId" = $1`, [world.order])).toMatchObject({ after: { taskId, workOrderId: world.workOrder, status: 'DONE' } })
+    expect(await one(`SELECT after FROM "AuditLog" WHERE action = 'tasks.setStatus' AND "recordId" = $1`, [taskId])).toMatchObject({ after: { status: 'DONE' } })
+    expect((await stillToDo(production(), world.order)).rows.filter((entry) => entry.kind === 'WORK_IN_PROGRESS_TASK')).toEqual([])
+    // Done already: refused in the task's own words (never twice).
+    expect((await thrown(doneStillToDoTask(production(), world.order, taskId, { version: 2 }))).code).toBe('conflict')
+  })
+
+  it('its assignee may, without tasks.manage; an old version is a conflict', async () => {
+    const world = await inWork(0, 4)
+    const taskId = await reworkTask(world, officeId)
+    expect((await stillToDo(salesOnly(), world.order)).rows.find((entry) => entry.kind === 'WORK_IN_PROGRESS_TASK')).toMatchObject({ ref: null, mayAct: false })
+    expect((await thrown(doneStillToDoTask(salesOnly(), world.order, taskId, { version: 3 }))).code).toBe('conflict')
+    expect((await doneStillToDoTask(salesOnly(), world.order, taskId, { version: 1 })).task.status).toBe('DONE')
+  })
+
+  it('only this order\'s tasks: another order\'s task and an unknown id are "Task not found."; another customer\'s order is not found', async () => {
+    const world = await inWork(0, 4)
+    const other = await inWork(0, 4)
+    const othersTask = await reworkTask(other, newId())
+    const unknown = await thrown(doneStillToDoTask(production(), world.order, newId(), { version: 1 }))
+    const walled = await thrown(doneStillToDoTask(production(), world.order, othersTask, { version: 1 }))
+    expect(unknown).toMatchObject({ code: 'not_found', message: 'Task not found.' })
+    expect([walled.code, walled.message]).toEqual([unknown.code, unknown.message])
+    // A person who does not reach the work order (no workorders.view) and is not its assignee: as unknown.
+    const ownTask = await reworkTask(world, newId())
+    expect((await thrown(doneStillToDoTask(caller(['orders.view', 'tasks.manage'] as Permission[]), world.order, ownTask, { version: 1 }))).message).toBe('Task not found.')
+    const beta = caller(['orders.view', 'workorders.view', 'tasks.manage'] as Permission[], [newId()])
+    expect(await thrown(doneStillToDoTask(beta, world.order, ownTask, { version: 1 }))).toMatchObject({ code: 'not_found', message: 'Sales order not found.' })
+    expect((await taskOf(ownTask)).status).toBe('OPEN')
+  })
+
+  it('the customer refused a new date: the follow-up stays while other lines change, and closes with the whole order\'s promise change (+ audit)', async () => {
+    const world = await inWork(0, 4)
+    const request = newId()
+    await planted([
+      { sql: `INSERT INTO "ApprovalRequest" (id, "tenantId", "companyId", "recordType", "recordId", "partyId", kind, question, "dueAt", status, "answeredAt", answer) VALUES ($1, $2, $3, 'SalesOrder', $4, $5, 'REPROMISE', 'Made-up: may line 10 move to a later date?', now() + interval '2 days', 'REFUSED', now(), 'Made-up: no, we need it.')`, values: [request, T, companyA, world.order, P1] },
+      { sql: `INSERT INTO "Task" (id, "tenantId", "companyId", "partyId", title, "recordType", "recordId", "recordLabel", status) VALUES ($1, $2, $3, $4, 'Made-up: the customer refused the new date', 'SalesOrder', $5, 'SO', 'OPEN')`, values: [request, T, companyA, P1, world.order] },
+    ])
+    const later = new Date(h.clock.now().getTime() + 60 * 86_400_000).toISOString().slice(0, 10)
+    const versionOf = async () => (await one<{ version: number }>('SELECT version FROM "SalesOrder" WHERE id = $1', [world.order])).version
+    // A change of a line the refusal is not about (its ask names none here): the follow-up stays.
+    await changePromise(salesOnly(), world.order, { version: await versionOf(), promiseDate: later, reason: 'Made-up: line 10 later.', lineIds: [world.line] })
+    expect((await taskOf(request)).status).toBe('OPEN')
+    // The whole order's new promise answers the refusal: closed in the same command, audited on the order.
+    await changePromise(salesOnly(), world.order, { version: await versionOf(), promiseDate: later, reason: 'Made-up: we agree a new date with the customer.' })
+    expect(await taskOf(request)).toMatchObject({ status: 'DONE', closedById: officeId })
+    expect(await one(`SELECT after, reason FROM "AuditLog" WHERE action = 'orders.repromiseFollowUpsClosed' AND "recordId" = $1`, [world.order])).toMatchObject({ after: { taskIds: [request], lineIds: [] }, reason: 'Made-up: we agree a new date with the customer.' })
+  })
+})
+// ── end B-OP-025 ──

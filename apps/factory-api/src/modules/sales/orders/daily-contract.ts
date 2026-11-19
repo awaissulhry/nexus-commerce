@@ -211,6 +211,8 @@ export const diffView = output({
       textChanged: z.boolean(),
       /** B-OP-014: a line left out while work orders make it — closed short (it stays on the order, nothing more made of it). */
       closedShort: z.boolean(),
+      /** B-OP-014: a line closed short before and open again (a put-back of the change that closed it). */
+      reopened: z.boolean(),
     }),
   ),
   header: z.array(output({ field: z.enum(['customerRef', 'requestedDate']), before: z.string().nullable(), after: z.string().nullable() })),
