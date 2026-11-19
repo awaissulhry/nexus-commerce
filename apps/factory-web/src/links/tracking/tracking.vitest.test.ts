@@ -9,11 +9,12 @@ import { trackingPageSchema } from './api'
 import { designScreen } from './fixtures'
 import { carrierPageOf, claimOfError, headerCarrierPage, keepsPolling, loadOfError, orderLabel, placeLine, searchAddress, searchFieldProblems, searchRefusal, trackerSteps } from './model'
 import { sharedWith } from './model' // F-OP-133
+import { typedTrackingOf } from './model' // op-24
 import { hasLeadingZeroBits, solveChallenge } from './pow'
 
 const page = (id: string) => designScreen.cases.find((entry) => entry.id === id)!.model.page!
 /** A message key left on screen: one of this catalogue's top-level groups followed by a dotted name. */
-const KEY = /\b(?:state|ask|pill|now|problem|step|event|by|fact|where|parcels|events|delivery|paper|papers|claim|foot|search|loading)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
+const KEY = /\b(?:state|ask|pill|now|problem|step|event|by|fact|where|parcels|events|delivery|paper|papers|claim|foot|search|loading|typed /* op-24 */)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 
 describe('SCR-194 Track an order — the link page (B-W2b-170)', () => {
   it('a SHIPMENT_TRACK link of a shipment opens this page (link-type registry)', () => {
@@ -145,3 +146,45 @@ describe('F-OP-133 — a shared shipment on the link page: the order it is for, 
 })
 // ---- end F-OP-133
 
+// ---- op-24 (order page N5; B-OP-031, B-OP-034): a carrier booked by hand on the link page --------------------------------------
+describe('op-24 — the number typed for a carrier booked by hand, "No live tracking", and its link (Track ›, https only)', () => {
+  const draw = (id: string, locale: 'it' | 'en') => renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'ds-words']) }, createElement(designScreen.view, { model: designScreen.cases.find((entry) => entry.id === id)!.model })))
+  const typed = (number: string | null | undefined, url: string | null | undefined) => trackingPageSchema.parse({ ...page('in-transit'), shipment: { ...page('in-transit').shipment, typedTrackingNumber: number, typedTrackingUrl: url } })
+
+  it('the answer carries the typed number and link; an older answer without them shows none', () => {
+    expect(typedTrackingOf(typed(' T-DEMO-0001 ', 'https://track.example.com/T-DEMO-0001'))).toEqual({ number: 'T-DEMO-0001', link: 'https://track.example.com/T-DEMO-0001' })
+    expect(typedTrackingOf(typed('T-DEMO-0001', null))).toEqual({ number: 'T-DEMO-0001', link: null })
+    expect(typedTrackingOf(page('in-transit'))).toBeNull()
+    expect(typedTrackingOf(typed('   ', 'https://track.example.com/T-1'))).toBeNull()
+    expect(typedTrackingOf(typed(null, 'https://track.example.com/T-1'))).toBeNull()
+  })
+
+  it('a link that is not https is never drawn', () => {
+    for (const bad of ['http://track.example.com/T-1', 'javascript:alert(1)', 'ftp://track.example.com/T-1', '']) expect(typedTrackingOf(typed('T-1', bad))?.link, bad).toBeNull()
+  })
+
+  it('draws the number, "No live tracking", Copy and Track › in both languages (voi); no link, no Track ›', () => {
+    const en = draw('typed', 'en')
+    expect(en).toContain('T-DEMO-0001')
+    expect(en).toContain('No live tracking')
+    expect(en).toContain('Track ›')
+    expect(en).toContain('href="https://track.demo-corriere.invalid/T-DEMO-0001"')
+    expect(en).toContain('Track shipment SH-26-0042 on the carrier&#x27;s site (opens a new tab)')
+    const it_ = draw('typed', 'it')
+    expect(it_).toContain('Nessun tracciamento in tempo reale')
+    expect(it_).toContain('Segui ›')
+    const bare = draw('typed-no-link', 'en')
+    expect(bare).toContain('T-DEMO-0002')
+    expect(bare).toContain('No live tracking')
+    expect(bare).not.toContain('Track ›')
+    // A shipment with carrier labels says nothing of a typed number.
+    expect(draw('in-transit', 'en')).not.toContain('No live tracking')
+  })
+
+  it('R-18 holds: a shared shipment with a typed number still names one order and only how many pieces of others', () => {
+    const shared = trackingPageSchema.parse({ ...page('shared'), shipment: { ...page('shared').shipment, typedTrackingNumber: 'T-DEMO-0003', typedTrackingUrl: null } })
+    expect(sharedWith(shared)).toEqual({ order: '4500-1234', count: 3 })
+    expect(Object.keys(trackingPageSchema.shape.order.shape).sort()).toEqual(['customerRef', 'number', 'otherPieces'])
+  })
+})
+// ---- end op-24
