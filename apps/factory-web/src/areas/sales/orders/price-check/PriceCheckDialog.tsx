@@ -7,6 +7,7 @@ import { formatNumber } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { money, parsePrice, unitPrice } from '../../quotes/model'
+import type { Phrase } from '../model'
 import type { OfficeSource, PriceCheck } from './api'
 import { FILE_KEY, isClosedOrder, minorOfTyped, pricePlanOf, saveHeldOf, sourceWords, TOTAL_KEY, type PriceAs } from './model'
 import type { PriceCheckDialogActions, PriceCheckDialogModel } from './use-price-check'
@@ -33,7 +34,7 @@ export function PriceCheckDialog(props: { model: PriceCheckDialogModel; actions?
 function Dialog({ model, actions }: { model: PriceCheckDialogModel; actions?: PriceCheckDialogActions | undefined }) {
   const t = useT('orders')
   const check = model.read.status === 'ready' ? model.read.check : null
-  const held = check && model.draft ? saveHeldOf(check, pricePlanOf(check, model.draft), model.busy) : model.read.status === 'reading' ? { key: 'priceCheck.reading' } : { key: 'priceCheck.readFailed' }
+  const held: Phrase | null = check && model.draft ? saveHeldOf(check, pricePlanOf(check, model.draft), model.busy) : { key: model.read.status === 'reading' ? 'priceCheck.reading' : 'priceCheck.readFailed' }
   return (
     <Modal
       open
