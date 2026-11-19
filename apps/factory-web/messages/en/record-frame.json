@@ -12,6 +12,7 @@
   },
   "more": "More actions",
   "details": {
+    "open": "Details",
     "title": "Details",
     "more_one": "{count} more detail: show the details",
     "more_other": "{count} more details: show the details"

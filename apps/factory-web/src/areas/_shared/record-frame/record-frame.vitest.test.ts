@@ -112,7 +112,7 @@ describe('the frame on the page', () => {
     for (const locale of ['it', 'en'] as const) {
       const words = CATALOGUE[locale]['record-frame'] ?? {}
       for (const entry of FRAME_KEYS) expect(words[entry.words], `${locale} ${entry.words}`).toBeTruthy()
-      for (const key of ['keys.line', 'keys.title', 'thread.button', 'thread.back', 'details.title', 'details.more_one', 'details.more_other', 'notices.more_other']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+      for (const key of ['keys.line', 'keys.title', 'thread.button', 'thread.back', 'details.open', 'details.title', 'details.more_one', 'details.more_other', 'notices.more_other']) expect(words[key], `${locale} ${key}`).toBeTruthy()
     }
   })
 
@@ -606,7 +606,8 @@ describe('F-OP-302 — the band’s pills fold whole behind "+N", never cut; no 
     expect(css).toMatch(/\.fw-rcf-meta > \.fw-rcf-meta-more \{\s*flex: 0 1 auto;\s*flex-wrap: wrap;\s*align-content: flex-start;\s*row-gap: var\(--nds-space-24\);\s*height: var\(--nds-space-24\);/)
     // On a phone the pills stay (folded behind "+N"): only the keys and the live state give way.
     expect(css).toMatch(/@media \(max-width: 719px\) \{[^}]*\.fw-rcf-keys,\s*\.fw-rcf-live \{\s*display: none;/)
-    for (const locale of ['it', 'en'] as const) expect(CATALOGUE[locale]['record-frame']?.['details.open'], locale).toBeUndefined()
+    // The project page's own Details button keeps the frame's word (record-frame details.open).
+    for (const locale of ['it', 'en'] as const) expect(CATALOGUE[locale]['record-frame']?.['details.open'], locale).toBeTruthy()
   })
 })
 // ---- end F-OP-302

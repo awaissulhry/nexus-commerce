@@ -12,6 +12,7 @@
   },
   "more": "Altre azioni",
   "details": {
+    "open": "Dettagli",
     "title": "Dettagli",
     "more_one": "{count} dettaglio in più: mostra i dettagli",
     "more_other": "{count} dettagli in più: mostra i dettagli"
