@@ -10,6 +10,10 @@ import { linePromise, pieceCount, totalsOf, unitPriceText } from '../model'
 import { useOrderWords } from '../words'
 import { PricesNote, SizeRunTable } from './parts'
 import type { OrderRecordActions, OrderRecordViewModel } from './OrderRecordView'
+// ---- F-CP-143 (customer page plan C3, D2; 11 §3.4; picture 21): "Your price" beside our unit price, the Price check card, "Your prices…".
+import { diffText, sourceKey, yourPriceOf } from '../price-check'
+import { MatchTag, PriceCheckCard, PriceCheckDialog } from './PriceCheck'
+// ---- end F-CP-143
 
 /**
  * Order › Lines (design rec "Order" tab lines: "What you ordered", "Totals"): every line in the shared list frame (read-only:
@@ -24,7 +28,12 @@ export function LinesTab({ model, record, actions }: { model: OrderRecordViewMod
   latest.current = { model, actions, record }
   const seesPrices = record.seesPrices
   const currency = record.order.currency
+  // F-CP-143: the customer's own price check, for a price holder once read (anyone else: prices.none, no call).
+  const priceCheck = seesPrices && model.priceCheck?.state === 'ready' ? model.priceCheck.check : null
 
+  const hasCheck = priceCheck !== null // F-CP-143
+  // F-CP-143: a saved price draws again (the cells read the check as it is now).
+  const checkStamp = priceCheck ? priceCheck.lines.map((line) => `${line.lineId}:${line.row?.id ?? ''}:${line.row?.version ?? 0}:${line.brandAmount ?? ''}`).join('|') : ''
   const columns = useMemo((): ColDef<OrderLine>[] => {
     const LineCell = ({ data }: ICellRendererParams<OrderLine>) => (data ? <span className="fw-pord-num">{data.seq}</span> : null)
     const StyleCell = ({ data }: ICellRendererParams<OrderLine>) => {
@@ -63,6 +72,33 @@ export function LinesTab({ model, record, actions }: { model: OrderRecordViewMod
       ]
       return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('lines.menu', { seq: data.seq }) }} items={items} />
     }
+    // ---- F-CP-143: "Your price" beside our unit price — the customer's own (a row the factory typed says so), its amount, the check,
+    // the difference (our price minus theirs). Only for a price holder once the check is read.
+    const checkLine = (lineId: string) => latest.current.model.priceCheck?.check?.lines.find((entry) => entry.lineId === lineId) ?? null
+    const YourPriceCell = ({ data }: ICellRendererParams<OrderLine>) => {
+      const line = data ? checkLine(data.id) : null
+      if (!line) return null
+      const yours = yourPriceOf(line)
+      return (
+        <span className="fw-pord-stack">
+          <span className="fw-pord-num">{unitPriceText(yours.unit, currency, locale) ?? '—'}</span>
+          {yours.source && yours.source !== 'PORTAL' ? <span className="fw-pord-sub">{t(sourceKey(yours.source))}</span> : null}
+        </span>
+      )
+    }
+    const YourAmountCell = ({ data }: ICellRendererParams<OrderLine>) => {
+      const line = data ? checkLine(data.id) : null
+      return line ? <span className="fw-pord-num">{line.brandAmount !== null ? words.money(line.brandAmount, currency) : '—'}</span> : null
+    }
+    const CheckCell = ({ data }: ICellRendererParams<OrderLine>) => {
+      const line = data ? checkLine(data.id) : null
+      return line ? <MatchTag match={line.priceMatch} /> : null
+    }
+    const DiffCell = ({ data }: ICellRendererParams<OrderLine>) => {
+      const line = data ? checkLine(data.id) : null
+      return line ? <span className="fw-pord-num">{diffText(line.priceDiff, (minor) => words.money(minor, currency)) ?? '—'}</span> : null
+    }
+    // ---- end F-CP-143
     const column = (colId: string, header: string, cellRenderer: ColDef<OrderLine>['cellRenderer'], size: { flex?: number; minWidth?: number; width?: number; maxWidth?: number }): ColDef<OrderLine> => ({ colId, headerName: header, cellRenderer, sortable: false, ...size })
     return [
       { ...column('style', t('lines.col.style'), StyleCell, { flex: 1.6, minWidth: 220 }), valueGetter: ({ data }) => (data?.style ? `${data.style.code} · ${data.style.name}` : (data?.description ?? '')) },
@@ -76,16 +112,30 @@ export function LinesTab({ model, record, actions }: { model: OrderRecordViewMod
             { ...column('amount', t('lines.col.amount'), AmountCell, { flex: 0.8, minWidth: 120 }), valueGetter: ({ data }: { data?: OrderLine }) => (data ? words.money(data.netAmount, currency) : '') },
           ]
         : []),
+      // ---- F-CP-143: the customer's own price beside ours (a price holder, the check read).
+      ...(hasCheck
+        ? [
+            column('yourPrice', t('priceCheck.yourPrice'), YourPriceCell, { flex: 0.8, minWidth: 130 }),
+            column('yourAmount', t('priceCheck.yourAmount'), YourAmountCell, { flex: 0.8, minWidth: 120 }),
+            column('priceMatch', t('priceCheck.check'), CheckCell, { flex: 0.7, minWidth: 130 }),
+            column('priceDiff', t('priceCheck.difference'), DiffCell, { flex: 0.7, minWidth: 110 }),
+          ]
+        : []),
+      // ---- end F-CP-143
       { ...column('promise', t('lines.col.promise'), PromiseCell, { flex: 0.8, minWidth: 130 }), valueGetter: ({ data }) => (data && linePromise(data, latest.current.record.order) ? day(linePromise(data, latest.current.record.order)!) : '') },
       { ...column('actions', t('col.actions'), MoreCell, { width: 72, minWidth: 72, maxWidth: 72 }), pinned: 'right', suppressHeaderMenuButton: true },
     ]
-  }, [t, locale, day, words, seesPrices, currency])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- F-CP-143: checkStamp redraws the cells after a save
+  }, [t, locale, day, words, seesPrices, currency, hasCheck, checkStamp])
 
   const totals = seesPrices ? totalsOf(record) : null
   return (
     <div className="fw-pord-tab">
       <h2 className="fw-pord-h2">{t('lines.title')}</h2>
       {!seesPrices ? <PricesNote /> : null}
+      {/* F-CP-143: the Price check card (a price holder: its Buyer, Finance, Admin); "Your prices…" opens its window. */}
+      {seesPrices && model.priceCheck ? <PriceCheckCard model={model.priceCheck} actions={actions?.priceCheck} /> : null}
+      {seesPrices && model.priceCheck?.dialog && model.priceCheck.check ? <PriceCheckDialog model={model.priceCheck.dialog} check={model.priceCheck.check} actions={actions?.priceCheck?.dialog} /> : null}
       <ListFrame<OrderLine> label={t('lines.label')} title={t('lines.title')} listKey={null} rows={record.lines} rowId={(line) => line.id} columns={columns} count={t('lines.count', { count: record.lines.length, pieces: pieceCount(record.pieces.ordered, locale) })} onOpen={(line) => actions?.onLine?.(line.id)} />
       <section className="fw-pord-section" aria-labelledby="fw-pord-sizes">
         <h2 id="fw-pord-sizes" className="fw-pord-h2">
