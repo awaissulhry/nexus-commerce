@@ -23,6 +23,14 @@ import { askingOf, askWordsOf, decisionBandOf, stillDoorOf, stillGroupsOf, still
 import { waitingOnCustomerOf, waitingOnUsOf } from '../changes/model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
+// ---- F-OP-103: a row of the ONE waiting list and its one door (the review window, the thread, the yes, the payment, a tab) ----
+import { useSearchParams } from 'next/navigation'
+import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { tabHref } from '../../../../_shared/record-frame/address'
+import { TabLink } from '../../../../../lib/tab-link/TabLink'
+import { YesDoorView } from '../../depth/view/DepthBand'
+import { yesDoorOf } from '../../depth/model'
+import { rowWordsOf, type WaitingDoor, type WaitingRow } from '../overview/model'
 
 /** The words the request card's lines are written with (Home › Approvals' own: `approvals` customerRequest.*). */
 const APPROVALS_NS = 'approvals'
@@ -177,6 +185,7 @@ function BandNotices({ order, model }: { order: Order; model: OrderRecordModel }
   const t = useT('orders')
   const w = useProductionWords()
   const locale = useLocale()
+  const search = useSearchParams()?.toString() ?? '' // F-OP-103: the tab link keeps the dock's scope (F-OP-210)
   const asking = askingOf(model.requests?.value ?? [])
   const decision = decisionBandOf(stillRowsOf(readOf(model.production)))
   const customer = order.party?.legalName ?? ''
@@ -197,7 +206,7 @@ function BandNotices({ order, model }: { order: Order; model: OrderRecordModel }
           title={t('band.decision', { time: formatTime(decision.since, { locale }), count: decision.count })}
           action={
             <Button size="sm" variant="quiet" asChild>
-              <Link href={`${model.prefix}/sales/orders/${order.id}?tab=changes#still-to-do`}>{t('band.open')}</Link>
+              <TabLink href={`${tabHref(`${model.prefix}/sales/orders/${order.id}`, 'changes', search)}#still-to-do` /* F-OP-103 */}>{t('band.open')}</TabLink>
             </Button>
           }
         />
@@ -298,3 +307,60 @@ function Still({ order, model }: { order: Order; model: OrderRecordModel }) {
   )
 }
 // ---- end F-SA-243
+
+// ---- F-OP-103 (10-order-page §3.2): one row of the ONE waiting list — its words, since when, and its ONE door ---------------------
+/** A waiting row: what waits (the API's words or the page's), since when, its door; an answer row keeps its Discuss (F-SA-266). */
+export function WaitingRowItem({ row, order, model, actions }: { row: WaitingRow; order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const w = useProductionWords()
+  const locale = useLocale()
+  const words = rowWordsOf(row, { t, kindWords: (kind) => w.t(`parts.request.kind.${kind}`), locale, customer: order.party?.legalName ?? '' })
+  return (
+    <li className="fw-so-still">
+      <span className="fw-so-stack-tight">
+        <span>{words}</span>
+        {row.since && <span className="fw-so-cell-sub">{t('changes.still.since', { when: formatDateTime(row.since, { locale }) })}</span>}
+      </span>
+      <span className="fw-so-inline">
+        <WaitingDoorView door={row.door} order={order} model={model} actions={actions} />
+        {row.door.kind === 'answer' && <DiscussDoor order={order} part={row.door.request ? t('discuss.request', { kind: w.t(`parts.request.kind.${row.door.request.kind}`) }) : words} target={{ kind: 'OrderChangeRequest', id: row.door.requestId }} />}
+      </span>
+    </li>
+  )
+}
+
+/** The row's one door, in place: Answer… (the review window here), Reply in the thread, the yes, Record the payment, or a tab ›. */
+function WaitingDoorView({ door, order, model, actions }: { door: WaitingDoor; order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const frame = useRecordFrame()
+  const search = useSearchParams()?.toString() ?? ''
+  const recordHref = `${model.prefix}/sales/orders/${order.id}`
+  const tabLink = (tab: 'production' | 'money' | 'changes', anchor: string | null) => (
+    <Button size="sm" variant="quiet" asChild>
+      <TabLink href={`${tabHref(recordHref, tab, search)}${anchor ? `#${anchor}` : ''}`}>{t(`waiting.go.${tab}`)}</TabLink>
+    </Button>
+  )
+  switch (door.kind) {
+    case 'answer':
+      // The request as this page read it opens the ONE review window; not read (yet): Changes, where it is listed.
+      return door.request ? <AnswerDoor request={door.request} model={model} /> : tabLink('changes', null)
+    case 'reply':
+      // This order's conversation at the message the problem was raised with, the box on Reply (the customer reads it).
+      return (
+        <Button size="sm" heldReason={frame?.compose ? null : t('waiting.noThread')} onClick={() => frame?.compose?.({ messageId: door.messageId, mode: 'reply' })}>
+          {t('waiting.reply')}
+        </Button>
+      )
+    case 'yes':
+      return <YesDoorView door={yesDoorOf(door.task, model.busy)} onYes={actions?.yes} />
+    case 'payment':
+      return (
+        <Button size="sm" heldReason={model.busy ? t('held.busy') : null} onClick={() => actions?.onDialog?.({ kind: 'depositPayment', requestId: door.requestId })}>
+          {t('deposit.record')}
+        </Button>
+      )
+    case 'tab':
+      return tabLink(door.tab, door.anchor)
+  }
+}
+// ---- end F-OP-103

@@ -1,7 +1,7 @@
 import { createElement, Fragment } from 'react'
 import { Building2, Eye, Lock, ShoppingBag } from 'lucide-react' // F-OP-217: the dock's segments
 import { defineDesignScreen, type DesignCase } from '../../../../lib/design/design-screen'
-import type { Order, OrderLine } from '../api'
+import type { OpenApproval, Order, OrderLine } from '../api' // F-OP-101: OpenApproval
 import { amendKeyOf, draftOf, newKey, type AmendReview, type DraftLine } from '../daily-model'
 import { STEP_UP_CLOSED } from '../hooks'
 import type { NewOrderModel } from '../new/new-model'
@@ -335,6 +335,29 @@ const HELD: HeldFile[] = holdFiles(
 
 // ---- B-W2b-323 ----
 const waitingOrder = order('CONFIRMED', { status: 'PENDING_APPROVAL' })
+// ---- F-OP-101: the order read's open yes (B-OP-020: the engine's rows) — for an approver who did not ask, for the asker, for others ----
+const OWN_WORDS = 'You asked for this: nobody approves their own request, the Owner included. Marco Demo can approve it.'
+const YES_TASK: OpenApproval = {
+  taskId: '0190f0e2-9595-7000-8000-000000000001',
+  kind: 'SALES_ORDER',
+  kindLabel: { en: 'Sales order', it: 'Ordine di vendita' },
+  requestedAt: '2026-11-18T09:30:00Z',
+  requester: { name: 'Luca Prova', me: false },
+  approver: { kind: 'ROLE', name: 'Finance', me: false },
+  version: 1,
+  requireStepUp: false,
+  approve: { allowed: true, why: null },
+  reject: { allowed: true, why: null },
+  withdraw: { allowed: false, why: 'Only the person who asked for this request takes it back.' },
+}
+const YES_SELF_ASKED: OpenApproval = { ...YES_TASK, requester: { name: 'Giulia Esempio', me: true }, approve: { allowed: false, why: OWN_WORDS }, reject: { allowed: false, why: OWN_WORDS }, withdraw: { allowed: true, why: null } }
+const YES_OTHERS: OpenApproval = { ...YES_TASK, approve: { allowed: false, why: 'This request waits for another approver: it is not addressed to you or to a role you hold over its company.' }, reject: { allowed: false, why: 'This request waits for another approver: it is not addressed to you or to a role you hold over its company.' } }
+const APPROVAL_ASKED_BY_OTHER = { ...APPROVAL_PENDING, requests: APPROVAL_PENDING.requests.map((request) => ({ ...request, mine: false, requestedBy: 'Luca Prova' })), may: { ask: false, withdraw: false } }
+const REFUSE_REASONS = [
+  { code: 'PRICE', labelEn: 'Price below the agreed list', labelIt: 'Prezzo sotto il listino concordato', needsDetail: false },
+  { code: 'TERMS', labelEn: 'Payment terms not agreed', labelIt: 'Condizioni di pagamento non concordate', needsDetail: false },
+]
+// ---- end F-OP-101
 const d323 = (role: Role, value: Order, over: Partial<OrderRecordModel> = {}, depth: Parameters<typeof depthModel>[1] = {}): RecordCase => base(role, value, { ...over, depth: depthModel(role, depth) })
 const frozenPreview = { ok: false, revision: 4, version: 7, problems: [{ path: 'body/lines/10/SIZE_QUANTITY', message: 'x' }], diff: null, workOrders: null }
 const W2B_323 = [
@@ -372,6 +395,12 @@ const W2B_323 = [
   { id: 'w2b-323-ask', label: 'W2b · Sales · Ask for a yes (a note for who decides)', model: d323('sales', waitingOrder, {}, { approval: { value: APPROVAL_NOBODY, problem: null }, dialog: { kind: 'ask', note: 'Cliente storico, prezzo concordato con il titolare.' } }) },
   { id: 'w2b-323-priority', label: 'W2b · Sales · Set priority (⋯): Urgent with its reason', model: d323('sales', production, {}, { dialog: { kind: 'priority', level: 'URGENT', reason: 'Il cliente apre il negozio il 1° dicembre.' } }) },
   { id: 'w2b-323-season', label: 'W2b · Sales · Set season (⋯): the open seasons', model: d323('sales', production, {}, { dialog: { kind: 'season', seasonId: '' }, seasons: [{ id: '0190f0e2-5353-7000-8000-000000000001', companyId: COMPANY, code: 'FW27', name: 'Autunno-inverno 2027', startsOn: '2027-07-01', endsOn: '2028-01-31', orderBookClosesOn: '2027-03-31', status: 'OPEN', state: 'OPEN', version: 1 }, { id: '0190f0e2-5353-7000-8000-000000000002', companyId: COMPANY, code: 'SS27', name: 'Primavera-estate 2027', startsOn: '2027-01-15', endsOn: '2027-06-30', orderBookClosesOn: '2026-10-15', status: 'OPEN', state: 'BOOK_CLOSED', version: 2 }] }) },
+  // ---- F-OP-101 (10-order-page §2.4): the approver's yes in place; the asker sees it held (rule 42); Refuse… with its reason ----
+  { id: 'f-op-101-approver-yes', label: 'F-OP-101 · Owner · Waiting for a yes: asked of Finance by Luca Prova — Confirm the order (primary) and Refuse… here', model: d323('owner', { ...waitingOrder, openApprovals: [YES_TASK] }, { tab: 'overview' }, { approval: { value: APPROVAL_ASKED_BY_OTHER, problem: null } }) },
+  { id: 'f-op-101-self-asked', label: 'F-OP-101 · Sales · Waiting for a yes you asked: Confirm the order held ("another person decides"), Take the request back', model: d323('sales', { ...waitingOrder, openApprovals: [YES_SELF_ASKED] }, { tab: 'overview' }, { approval: { value: APPROVAL_PENDING, problem: null } }) },
+  { id: 'f-op-101-who-decides', label: 'F-OP-101 · Production manager · Waiting for a yes: not theirs to decide — "Who decides: Finance"', model: d323('manager', { ...waitingOrder, openApprovals: [YES_OTHERS] }, { tab: 'overview' }, { approval: { value: APPROVAL_ASKED_BY_OTHER, problem: null } }) },
+  { id: 'f-op-101-refuse', label: 'F-OP-101 · Owner · Refuse… the yes: a reason from the list and words (required)', model: d323('owner', { ...waitingOrder, openApprovals: [YES_TASK] }, { tab: 'overview', dialog: { kind: 'refuseYes', taskId: YES_TASK.taskId }, refuseReasons: { value: REFUSE_REASONS, problem: null }, draft: { reasonCode: 'PRICE', reason: 'Il prezzo è sotto il listino concordato.' } }, { approval: { value: APPROVAL_ASKED_BY_OTHER, problem: null } }) },
+  // ---- end F-OP-101
   // B-OP-010: a priced change applies at once (no yes is asked any more).
   { id: 'w2b-323-notice', label: 'W2b · Sales · After the priced change: recorded, applied at once', model: d323('sales', amended(production), { tab: 'changes' }, { notice: { tone: 'success', words: { key: 'notice.priced', params: { revision: 3 } } } }) },
 ]

@@ -7,10 +7,16 @@ import { openPreview } from '../../../admin/users/partners/preview'
 // ---- F-SA-230: the ⋯ menu's People — the production lane's dialogs, reused in place (Assign supervisor…, Ask the supervisor…) ----
 import { useAssignSupervisor } from '../../../_shared/production-supervisor/use-assign-supervisor'
 import { useNoteDialog } from '../../../production/_shared/notes/use-note-dialog'
-import type { OrderRecordActions, OrderRecordModel, RecordActsBase, RecordDialog } from './record-model'
+import type { OrderRecordActions, OrderRecordModel, Part, RecordActsBase, RecordDialog } from './record-model'
+// ---- F-OP-101: the approver's yes in place — the approval engine's own routes, the page's step-up ----
+import { newIdempotencyKey } from '../../../../lib/api/client'
+import { readProblem } from '../model'
+import { approveTask, listRejectReasons, rejectTask, type RejectReason } from '../../../home/approvals/api'
+import { decidedNoticeOf } from '../depth/model'
+import type { useStepUp } from '../hooks'
 
-export type BandActsModel = Pick<OrderRecordModel, 'portal' | 'people' | 'copied'>
-export type BandActsActions = Pick<OrderRecordActions, 'onPortal' | 'people' | 'onPromise' | 'onReady' | 'onClose' | 'onCopyAsQuote'>
+export type BandActsModel = Pick<OrderRecordModel, 'portal' | 'people' | 'copied' | 'refuseReasons'>
+export type BandActsActions = Pick<OrderRecordActions, 'onPortal' | 'people' | 'onPromise' | 'onReady' | 'onClose' | 'onCopyAsQuote' | 'yes'>
 
 /**
  * F-OP-134 (N-5): the band's acts — its primary and the ⋯: Change promise date, Mark ready, Close order, Copy as a new quote, See it
@@ -18,9 +24,57 @@ export type BandActsActions = Pick<OrderRecordActions, 'onPortal' | 'people' | '
  * (OrderRecord.tsx), which hands what it returns to the view as plain props; a view never imports it (view-boundaries rule 2).
  * Each write goes through the container's one write, with the order's version as last read.
  */
-export function useBandActs(input: RecordActsBase & { readonly order: Order | null; readonly permissions: readonly string[] }): { model: BandActsModel; actions: BandActsActions; opened: (next: RecordDialog | null) => void } {
-  const { api, orderId, current, write, version, setNotice, load, order, permissions } = input
+// F-OP-101: + the page's step-up (the yes asks a fresh one when its rule does) and its one dialog slot (Refuse… opens there).
+export function useBandActs(
+  input: RecordActsBase & {
+    readonly order: Order | null
+    readonly permissions: readonly string[]
+    readonly stepUp: Pick<ReturnType<typeof useStepUp>, 'ensureFresh' | 'guard'>
+    readonly setDialog: (dialog: RecordDialog | null) => void
+  },
+): { model: BandActsModel; actions: BandActsActions; opened: (next: RecordDialog | null) => void } {
+  const { api, orderId, current, write, version, setNotice, load, order, permissions, stepUp, setDialog } = input
   const [copied, setCopied] = useState<CopyAnswer | null>(null)
+
+  // ---- F-OP-101 (10-order-page §2.4; rule 42): the yes in place. Each decision sends the task's version as the order read lists it;
+  // the engine re-checks it (W39-02's seeded request answers STALE on a yes: its words say so, the no still clears it). Once decided
+  // the order is read again (the band re-reads: a confirmed order's primary becomes Make work orders).
+  const [refuseReasons, setRefuseReasons] = useState<Part<RejectReason[]> | null>(null)
+  const taskOf = (taskId: string) => (current.current?.openApprovals ?? []).find((task) => task.taskId === taskId) ?? null
+  const readReasons = () => {
+    setRefuseReasons({ value: null, problem: null })
+    listRejectReasons(api)
+      .then((reasons) => setRefuseReasons({ value: reasons, problem: null }))
+      .catch((error: unknown) => setRefuseReasons({ value: null, problem: readProblem(error) }))
+  }
+  const yes: NonNullable<BandActsActions['yes']> = {
+    onConfirm: (taskId) => {
+      const task = taskOf(taskId)
+      if (!task) return
+      // One key for the yes and its repeat after the code: the engine answers the second from its receipt.
+      const key = newIdempotencyKey()
+      void write(async () => {
+        if (task.requireStepUp) await stepUp.ensureFresh('approval.stepUp')
+        await stepUp.guard('approval.stepUp', () => approveTask(api, { id: task.taskId, version: task.version }, null, key))
+        return null
+      }, decidedNoticeOf(task, 'approve'))
+    },
+    onRefuse: (taskId) => {
+      if (!taskOf(taskId)) return
+      setDialog({ kind: 'refuseYes', taskId })
+      readReasons()
+    },
+    onRefuseConfirm: (taskId, reasonCode, words) => {
+      const task = taskOf(taskId)
+      if (!task) return
+      void write(async () => {
+        await stepUp.guard('approval.stepUp', () => rejectTask(api, { id: task.taskId, version: task.version }, reasonCode, words))
+        return null
+      }, decidedNoticeOf(task, 'reject'))
+    },
+    onRefuseReasons: readReasons,
+  }
+  // ---- end F-OP-101
 
   // B-W2b-180: "See it in the customer's portal" — the office person's preview of the customer's portal at this order.
   const [portalOpening, setPortalOpening] = useState(false)
@@ -68,6 +122,7 @@ export function useBandActs(input: RecordActsBase & { readonly order: Order | nu
     onPromise: ({ date, reason, lineIds }) => void write(() => changePromise(api, orderId, { version: version(), promiseDate: date, reason, ...(lineIds ? { lineIds } : {}) }), 'notice.promise'),
     onReady: (reason) => void write(() => markReady(api, orderId, { version: version(), reason }), 'notice.ready'),
     onClose: (reason) => void write(() => closeOrder(api, orderId, { version: version(), ...(reason ? { reason } : {}) }), 'notice.closed'),
+    yes, // F-OP-101
     onCopyAsQuote: () =>
       void write(
         async () => {
@@ -80,9 +135,12 @@ export function useBandActs(input: RecordActsBase & { readonly order: Order | nu
   }
 
   return {
-    model: { portal, people, copied },
+    model: { portal, people, copied, refuseReasons },
     actions,
-    // A dialog opens or closes: the copy the last one made is not said again.
-    opened: () => setCopied(null),
+    // A dialog opens or closes: the copy the last one made is not said again; F-OP-101: the reasons go with their dialog.
+    opened: (next) => {
+      setCopied(null)
+      if (next?.kind !== 'refuseYes') setRefuseReasons(null)
+    },
   }
 }

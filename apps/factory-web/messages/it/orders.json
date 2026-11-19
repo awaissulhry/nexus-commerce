@@ -1569,10 +1569,6 @@
     "requests": {
       "title": "Richieste e modifiche",
       "changes": "Modifiche ›",
-      "onUs_one": "Tocca a noi: {count} richiesta",
-      "onUs_other": "Tocca a noi: {count} richieste",
-      "onCustomer_one": "Tocca al cliente: {count}",
-      "onCustomer_other": "Tocca al cliente: {count}",
       "nothing": "Niente aspetta noi o il cliente",
       "latest": "Ultima modifica: revisione {revision} · {date}",
       "still": "Ancora da fare: {count}"
@@ -1721,5 +1717,67 @@
   "wo": {
     "makeNext": "Crea il prossimo: {style}",
     "made": "{number} creato (bozza)"
+  },
+  "approval": {
+    "confirm": "Conferma l'ordine",
+    "approveKind": "Approva: {kind}",
+    "refuse": "Rifiuta…",
+    "selfAsked": "Hai chiesto tu questo sì: decide un'altra persona",
+    "whoDecides": "Chi decide: {who}",
+    "stepUp": "Il tuo sì viene registrato con il tuo codice. Inserisci il codice dell'app di autenticazione.",
+    "confirmed": "Ordine confermato",
+    "approved": "Approvata",
+    "refusedDone": "Rifiutata: chi l'ha chiesta legge il perché",
+    "refuseTitle": "Rifiuta il sì per {number}",
+    "refuseGo": "Rifiuta",
+    "kind": "Richiesta",
+    "askedBy": "Chiesta da",
+    "askedByOn": "{who} · {date}",
+    "no": {
+      "reason": "Perché (dall'elenco)",
+      "pick": "Scegli un motivo",
+      "words": "Con parole tue",
+      "wordsHint": "Le legge chi l'ha chiesta. Da 1 a 2000 caratteri.",
+      "pickReason": "Scegli un motivo dall'elenco",
+      "wordsNeeded": "Di' perché con parole tue",
+      "tooLong": "Al massimo {max} caratteri",
+      "reading": "Lettura dei motivi…"
+    },
+    "refused": {
+      "STALE": "Questo sì non si può dare: la richiesta riguardava un'altra versione dell'ordine. Rifiutala qui, oppure ritirala e chiedi di nuovo.",
+      "SUBJECT_GONE": "Il record di questa richiesta non c'è più o è fuori dalla tua portata.",
+      "NO_KIND": "Questo tipo di richiesta non può ancora essere riletto, quindi non si approva qui.",
+      "NOT_PENDING": "Questa richiesta è già stata decisa, ritirata o trovata cambiata: l'ordine è stato riletto.",
+      "OWN_REQUEST": "Hai chiesto tu questo sì: decide un'altra persona",
+      "NOT_APPROVER": "Questo sì aspetta un altro approvatore.",
+      "NOT_REQUESTER": "Solo chi l'ha chiesta la ritira.",
+      "other": "Rifiutata da una regola dell'approvazione: l'ordine è stato riletto."
+    }
+  },
+  "waiting": {
+    "onUs_one": "In attesa di noi: {count}",
+    "onUs_other": "In attesa di noi: {count}",
+    "onCustomer_one": "In attesa di {customer}: {count}",
+    "onCustomer_other": "In attesa di {customer}: {count}",
+    "reply": "Rispondi nella conversazione",
+    "noThread": "La conversazione non è su questa pagina",
+    "counterAgreed": "Hanno accettato la tua controproposta",
+    "counterLapsed": "La tua controproposta è scaduta",
+    "problem": "{customer} ha segnalato un problema",
+    "repromise": "{customer} ha rifiutato la nuova data",
+    "yes": "In attesa di un sì: {kind}",
+    "go": {
+      "production": "Produzione ›",
+      "money": "Importi ›",
+      "changes": "Modifiche ›"
+    }
+  },
+  "doors": {
+    "stages": "Apri gli ordini di lavoro in Produzione · ora {stage}",
+    "openInProduction": "Apri in Produzione",
+    "change": "Cambia…",
+    "ownDates": "Le date dell'ordine",
+    "backupFor": "per tutti gli ordini di {customer}",
+    "backupElsewhere": "Cambialo nella pagina di {customer} ›"
   }
 }

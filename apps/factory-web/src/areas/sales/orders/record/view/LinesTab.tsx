@@ -43,6 +43,7 @@ import { artworkOfGroup } from '../production'
 // F-SA-266: each colour line's Discuss door and its anchor ("Show on the page")
 import { DiscussDoor } from './Discuss'
 import { rowAnchor } from '../dock/discuss'
+import { REQUESTED_FIELD_ID } from '../overview/model' // F-OP-104
 
 /**
  * F-SA-231 (sales page plan N2, picks P2, R9; 10-order-page §2.2) — Lines, the commercial truth: a totals strip (lines · units · net ·
@@ -308,8 +309,9 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
           <Field label={t('amend.customerRef')}>
             <Input value={amend.customerRef} onChange={(event) => actions?.onAmendHeader?.('customerRef', event.target.value)} maxLength={100} autoComplete="off" />
           </Field>
+          {/* F-OP-104: Overview's requested date "Change…" lands here with the focus (its id). */}
           <Field label={t('amend.requestedDate')} hint={t('amend.requestedHint')}>
-            <DateField value={amend.requestedDate} onChange={(value) => actions?.onAmendHeader?.('requestedDate', value)} min={model.today} locale={INTL_LOCALE[locale]} ariaLabel={t('amend.requestedDate')} />
+            <DateField id={REQUESTED_FIELD_ID} value={amend.requestedDate} onChange={(value) => actions?.onAmendHeader?.('requestedDate', value)} min={model.today} locale={INTL_LOCALE[locale]} ariaLabel={t('amend.requestedDate')} />
           </Field>
         </div>
       </Card>
