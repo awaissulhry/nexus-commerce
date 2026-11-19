@@ -13,6 +13,10 @@ import { PPE_WORDS } from './rules'
 import { draftTotals, headerProblems, heldWords, lineProblems, lineShapeProblems, lowestPrice, mayOffer, offeredSizes, rangeLabel, type LineFacts } from './rules'
 import { linesOfReady, portalOrderLinesImporter, refusedRowsCsv, uploadVerdicts, type CatalogueEntry } from './upload'
 import { DRAFT_FILE_CATEGORY, DRAFT_FILES_MAX, draftFilePartOf, draftFilesByPart, draftFileWords } from './draft-files' // B-CP-072
+// B-CP-075: every kind of draft line, the people on it, problems per part, the 409 that names the colleague.
+import { MEASURE_BY, MEASURE_BY_WORDS, PEOPLE_IN_SHEET, personRow, personShapeProblems } from './people'
+import { customLineProblems, customLineShapeProblems, draftStaleWords, lineHasPieces, linePieces, MTM_CLOSED_WORDS, PROBLEM_CODES, type CustomLineFacts } from './rules'
+import { problemPartOf, problemsByPartOf } from './office'
 
 const P1 = '00000000-0000-4000-8000-000000000001'
 const P2 = '00000000-0000-4000-8000-000000000002'
@@ -200,6 +204,97 @@ describe('a draft\'s files (B-CP-072)', () => {
   })
 })
 // ---- end B-CP-072
+
+// ---- B-CP-075 (customer page plan C5; 12 §2 parts 1 and 4; review A5, F1, F2) ---------------------------------------------------
+describe('B-CP-075: described and made-to-measure lines, and the people on them', () => {
+  const custom = (more: Partial<CustomLineFacts> = {}): CustomLineFacts => ({ id: 'l2', kind: 'DESCRIBED', quantity: 40, sizes: [], byPerson: false, people: [], sheetOnLine: false, style: null, colourway: null, mtmOpen: true, garmentType: null, ...more })
+  const codes = (facts: CustomLineFacts) => customLineProblems(facts).map((entry) => entry.code)
+
+  it('holds each kind to its shape before it is written: words for a described line, a garment type and people for made to measure', () => {
+    expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Team jackets, our logo on the back', quantity: 40 })).toEqual([])
+    expect(customLineShapeProblems({ kind: 'DESCRIBED', description: '  ' })).toEqual(['Say in your words what you need (1 to 2000 characters).'])
+    expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'x'.repeat(2001) })).toContain('A description is at most 2000 characters.')
+    expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Made-up', quantity: 0 })).toContain('A total is 1 to 100000 pieces.')
+    expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Made-up', colourwayId: 'c1' })).toContain('A colour of ours goes with its style.')
+    expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Made-up', byPerson: true, quantity: 12 })).toContain('A line by person takes its pieces from its people: no total and no sizes.')
+    expect(customLineShapeProblems({ kind: 'DESCRIBED', description: 'Made-up', quantity: 4, sizes: [{ size: '50', quantity: 2 }, { size: '50', quantity: 2 }] })).toContain('Size 50 is asked twice on the line.')
+    expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: 'JACKET' })).toEqual([])
+    expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: '' })).toEqual(['Choose the garment type to make to measure.'])
+    expect(customLineShapeProblems({ kind: 'MADE_TO_MEASURE', garmentType: 'JACKET', byPerson: false, quantity: 3 })).toEqual(expect.arrayContaining(['A made-to-measure line is always by person.', 'A made-to-measure line counts its people, not a total.']))
+  })
+
+  it('counts a line by its kind; Send takes a described total, people, or a measurement sheet that stands for them (review A5)', () => {
+    expect(linePieces({ kind: 'DESCRIBED', quantity: 40, sizes: [{ size: '50', quantity: 3 }], byPerson: false, people: 0 })).toBe(40)
+    expect(linePieces({ kind: 'MADE_TO_MEASURE', quantity: null, sizes: [], byPerson: true, people: 12 })).toBe(12)
+    expect(linePieces({ kind: 'CATALOGUE', quantity: null, sizes: [{ size: '50', quantity: 3 }, { size: '52', quantity: 2 }], byPerson: false, people: 0 })).toBe(5)
+    const mtm = { kind: 'MADE_TO_MEASURE' as const, quantity: null, sizes: [], byPerson: true, people: 0 }
+    expect(lineHasPieces({ ...mtm, sheetOnLine: false })).toBe(false)
+    expect(lineHasPieces({ ...mtm, sheetOnLine: true })).toBe(true)
+    expect(lineHasPieces({ kind: 'DESCRIBED', quantity: 40, sizes: [], byPerson: false, people: 0, sheetOnLine: false })).toBe(true)
+    expect(lineHasPieces({ kind: 'DESCRIBED', quantity: null, sizes: [], byPerson: false, people: 0, sheetOnLine: false })).toBe(false)
+  })
+
+  it('names what holds the send of a custom line: no total, sizes that miss the total, no one named, made to measure off, a garment type gone', () => {
+    expect(codes(custom())).toEqual([])
+    expect(codes(custom({ quantity: null }))).toEqual(['NO_TOTAL'])
+    expect(codes(custom({ quantity: 40, sizes: [{ size: '50', quantity: 30 }] }))).toEqual(['SIZES_NOT_TOTAL'])
+    expect(customLineProblems(custom({ quantity: 40, sizes: [{ size: '50', quantity: 30 }] }))[0]!.words.en).toBe('The sizes add up to 30 pieces, the total says 40.')
+    const byPerson = custom({ kind: 'MADE_TO_MEASURE', quantity: null, byPerson: true, garmentType: { code: 'JACKET', active: true } })
+    expect(codes(byPerson)).toEqual(['NO_PEOPLE'])
+    // "People: in the attached sheet": a sheet on the line stands for its roster.
+    expect(codes({ ...byPerson, sheetOnLine: true })).toEqual([])
+    expect(PEOPLE_IN_SHEET.en).toBe('People: in the attached sheet')
+    // A customer the office switched off (mtmDraftsOn false): held in the portal's words, never a garment type to fix first.
+    expect(customLineProblems({ ...byPerson, sheetOnLine: true, mtmOpen: false }).map((entry) => [entry.code, entry.words])).toEqual([['MTM_CLOSED', MTM_CLOSED_WORDS]])
+    expect(codes({ ...byPerson, sheetOnLine: true, garmentType: { code: 'JACKET', active: false } })).toEqual(['GARMENT_TYPE_GONE'])
+  })
+
+  it('checks the customer’s own style and a person’s size against the range; a person’s problem is the People part', () => {
+    const own = { code: 'SEED-JKT-02', sold: true, range: ['48', '50', '52'] }
+    expect(codes(custom({ style: { ...own, sold: false } }))).toEqual(['STYLE_NOT_SOLD'])
+    expect(codes(custom({ quantity: 2, sizes: [{ size: '58', quantity: 2 }], style: own }))).toEqual(['SIZE_NOT_OFFERED'])
+    const roster = customLineProblems(custom({ byPerson: true, quantity: null, style: own, people: [{ id: 'p1', size: '50' }, { id: 'p2', size: '58' }, { id: 'p3', size: null }] }))
+    expect(roster.map((entry) => [entry.code, entry.size, entry.personId])).toEqual([['SIZE_NOT_OFFERED', '58', 'p2']])
+    expect(problemPartOf(roster[0]!)).toBe('PEOPLE')
+    expect(problemPartOf({ code: 'NO_PEOPLE', personId: null })).toBe('PEOPLE')
+    expect(problemPartOf({ code: 'DATE_PAST', personId: null })).toBe('DATE')
+    expect(problemPartOf({ code: 'NO_TOTAL', personId: null })).toBe('NEED')
+    expect(problemsByPartOf([...roster, { code: 'NO_TOTAL', personId: null }, { code: 'NO_TOTAL', personId: null }])).toEqual({ PEOPLE: 1, NEED: 2 })
+  })
+
+  it('a part with a problem is not ready; the people part says "sending later" when marked so', () => {
+    const base: DraftFacts = { lines: 2, linesWithoutPieces: 0, logos: 0, references: 0, requestedDate: false, headerProblems: 0, note: false, later: [], pricedLines: null, problems: 1 }
+    const state = (facts: DraftFacts, part: string) => draftReadiness(facts).parts.find((entry) => entry.part === part)!.state
+    expect(state(base, 'NEED')).toBe('READY')
+    expect(state({ ...base, problemsByPart: { NEED: 1 } }, 'NEED')).toBe('MISSING')
+    expect(state({ ...base, problemsByPart: { PEOPLE: 1 } }, 'PEOPLE')).toBe('MISSING')
+    expect(state({ ...base, linesWithoutPieces: 1, later: ['PEOPLE'] }, 'PEOPLE')).toBe('LATER')
+    // Absent (an older reader): as before.
+    expect(state({ ...base, problems: 3 }, 'NEED')).toBe('READY')
+  })
+
+  it('holds a person to one way of being measured — a size, a sheet of the draft, or later — and writes it trimmed', () => {
+    expect(MEASURE_BY).toEqual(['SIZE', 'SHEET', 'LATER'])
+    expect((MEASURE_BY as readonly string[]).includes('PROFILE')).toBe(false) // review F2: "Saved measurements" comes later
+    expect(MEASURE_BY_WORDS.SHEET).toEqual({ it: 'Scheda misure', en: 'Measurement sheet' })
+    expect(personShapeProblems({ name: 'Mario Rossi', number: '46', measureBy: 'SIZE', size: '52' })).toEqual([])
+    expect(personShapeProblems({ name: ' ', measureBy: 'LATER' })).toEqual(['A name is 1 to 120 characters.'])
+    expect(personShapeProblems({ name: 'Made-up Rider', number: '12345678901', measureBy: 'LATER' })).toEqual(['A number is at most 10 characters.'])
+    expect(personShapeProblems({ name: 'Made-up Rider', measureBy: 'SIZE' })).toEqual(['Give the size (1 to 40 characters).'])
+    expect(personShapeProblems({ name: 'Made-up Rider', measureBy: 'SHEET', size: '52' })).toEqual(['Choose the measurement sheet of this draft that holds the measures.', 'A person measured by a sheet names no size.'])
+    expect(personShapeProblems({ name: 'Made-up Rider', measureBy: 'LATER', size: '52' })).toEqual(['A person whose measures come later names no size and no sheet.'])
+    expect(personRow({ name: '  Giulia Verdi ', number: ' ', measureBy: 'SIZE', size: ' 50 ', note: '' })).toEqual({ name: 'Giulia Verdi', number: null, measureBy: 'SIZE', size: '50', measurementFileId: null, note: null })
+  })
+
+  it('the 409 of a draft a colleague changed names them (or the person’s other window), never anyone else', () => {
+    expect(draftStaleWords({ name: 'Marta Bianchi', self: false, version: 15 }).en).toBe('Marta Bianchi changed this draft since you read it (now version 15): read it again.')
+    expect(draftStaleWords({ name: 'Marta Bianchi', self: false, version: 15 }).it).toContain('Marta Bianchi ha modificato questa bozza')
+    expect(draftStaleWords({ name: null, self: true, version: 3 }).en).toBe('You changed this draft in another window (now version 3): read it again.')
+    expect(draftStaleWords({ name: null, self: false, version: 3 }).en).toBe('This draft changed since you read it (now version 3): read it again.')
+    for (const code of ['NO_TOTAL', 'SIZES_NOT_TOTAL', 'NO_PEOPLE', 'MTM_CLOSED', 'GARMENT_TYPE_GONE']) expect(PROBLEM_CODES as readonly string[]).toContain(code)
+  })
+})
+// ---- end B-CP-075
 
 describe('reorder (SAL-072)', () => {
   const past = { kind: 'SIZE_GRID' as const, unitPrice: '389.000000', revision: 1, sizes: [{ size: '50', quantity: 2 }, { size: '56', quantity: 1 }] }
