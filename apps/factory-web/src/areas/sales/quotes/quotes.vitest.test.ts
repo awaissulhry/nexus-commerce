@@ -61,6 +61,8 @@ import type { ApiClient } from '../../../lib/api/client'
 import { addLine, editLine } from './api'
 import { pricedSendHeld, QUOTE_LINE_PRICE_KEYS, quoteLineBody } from './model'
 // ---- end F-CP-146
+import { quoteSchema } from './api' // B-CP-012: the quote as the API answers a person without the price grain
+import { needsApprovalKey } from './model' // B-CP-012
 
 /**
  * The quote screens' rules (SCR-030, 034, 035, 037, 099): the next step and why it is held, four eyes, the grid → line
@@ -565,3 +567,43 @@ describe('F-CP-146: no price key from a person without the price grain', () => {
   })
 })
 // ---- end F-CP-146
+
+// ---- B-CP-012 (end check, browser golden flow 05-quote): the quote as the API answers a person without the price grain ----------
+// The grain filter drops every money-marked field — on a line the list and unit price, the discount % (a percent of a price is a
+// price), the amounts, the cost and the margin; a size's own price; the version's sums. The screens read that answer as a quote: a
+// Sales worker's size grid is saved ("All changes saved"), never "Not saved: something went wrong on the server".
+describe('B-CP-012: the quote a Sales worker reads, without any money key, is a quote', () => {
+  const LINE_MONEY = ['listUnitPrice', 'unitPrice', 'discountPct', 'netAmount', 'vatAmount', 'unitCost', 'costAmount', 'costSnapshot', 'marginAmount', 'marginPct', 'belowFloor']
+  const CURRENT_MONEY = ['belowMinimum', 'depositAmount', 'netAmount', 'vatAmount', 'grossAmount', 'vat', 'costAmount', 'marginAmount', 'marginPct', 'marginFloorPct', 'marginFloorBreached']
+  const without = (row: object, keys: readonly string[]) => Object.fromEntries(Object.entries(row).filter(([key]) => !keys.includes(key)))
+
+  it('as Sales worker: lines with no price, no discount % and no amounts parse; the Owner\'s answer keeps its discount', () => {
+    const full = quote()
+    const { marginFloorPct: _floor, ...approval } = full.approval
+    const asSales = {
+      ...full,
+      current: without(full.current, CURRENT_MONEY),
+      lines: full.lines.map((line) => ({ ...without(line, LINE_MONEY), sizes: line.sizes.map((size) => without(size, ['unitPrice'])) })),
+      approval,
+    }
+    const read = quoteSchema.safeParse(asSales)
+    expect(read.success, JSON.stringify(read.error?.issues)).toBe(true)
+    expect(read.data!.lines.some((line) => 'discountPct' in line || 'unitPrice' in line || 'netAmount' in line)).toBe(false)
+    expect(quoteSchema.parse(full).lines[0]!.discountPct).toBeNull()
+  })
+
+  it('the "Needs approval" words: the broken rules the person reads, or the words alone — never a colon with nothing after it', () => {
+    expect(needsApprovalKey('margin under the floor', 'summary')).toBe('summary.needsApproval')
+    expect(needsApprovalKey('margin under the floor', 'held')).toBe('held.needsApproval')
+    // As Sales worker: the margin floor rule is the margin grain's, left out by the API — no readable reason.
+    expect(needsApprovalKey('', 'summary')).toBe('moneyWall.needsApproval')
+    expect(needsApprovalKey('', 'held')).toBe('moneyWall.needsApprovalFirst')
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['sales']).sales!)
+      for (const key of ['moneyWall.needsApproval', 'moneyWall.needsApprovalFirst']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+    const en = createTranslator('en', messagesFor('en', ['sales']).sales!)
+    expect([en(needsApprovalKey('', 'summary')), en(needsApprovalKey('', 'held'))]).toEqual(['Needs approval', 'Needs approval first'])
+  })
+})
+// ---- end B-CP-012

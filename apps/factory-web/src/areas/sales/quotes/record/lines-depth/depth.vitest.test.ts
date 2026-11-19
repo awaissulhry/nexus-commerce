@@ -59,9 +59,11 @@ describe('Table view rows', () => {
       [10, '50 2 · 52 4 · 54 2', { first: '2026-12-02', count: 1 }, 2],
       [20, '50 1 · 52 3 · 54 2', null, 2],
     ])
-    const { unitPrice: _price, netAmount: _net, unitCost: _cost, marginPct: _margin, ...noMoney } = QUOTE.lines[0]!
+    // B-CP-012: the discount % is a price too — absent without the grain, never null on the row.
+    const { unitPrice: _price, netAmount: _net, unitCost: _cost, marginPct: _margin, discountPct: _discount, ...noMoney } = QUOTE.lines[0]!
     const bare = tableRows({ lines: [noMoney as typeof QUOTE.lines[number]] }, null, null)[0]!
-    expect('unitPrice' in bare || 'netAmount' in bare || 'unitCost' in bare || 'marginPct' in bare).toBe(false)
+    expect('unitPrice' in bare || 'netAmount' in bare || 'unitCost' in bare || 'marginPct' in bare || 'discountPct' in bare).toBe(false)
+    expect(rows[0]!.discountPct).toBe(QUOTE.lines[0]!.discountPct)
   })
 
   it('writes sizes in the style\'s order', () => {

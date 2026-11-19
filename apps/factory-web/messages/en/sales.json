@@ -881,6 +881,8 @@
     "held": "It shows prices: it is sent by someone who sees prices."
   },
   "moneyWall": {
-    "blindPrice": "It changes a price you cannot see: someone who sees prices does it."
+    "blindPrice": "It changes a price you cannot see: someone who sees prices does it.",
+    "needsApproval": "Needs approval",
+    "needsApprovalFirst": "Needs approval first"
   }
 }

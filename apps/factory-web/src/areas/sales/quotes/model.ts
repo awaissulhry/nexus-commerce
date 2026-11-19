@@ -64,6 +64,14 @@ export function quoteLineBody<T extends Record<string, unknown>>(body: T, grains
 export const pricedSendHeld = (grains: Pick<Grains, 'price'> | undefined): { key: string } | null => (grains && !grains.price ? { key: 'pricedPdf.held' } : null)
 // ---- end F-CP-146
 
+// ---- B-CP-012 (the money wall, end check): an approval rule is a money flag the API leaves out without its grain ---------------
+/**
+ * The "Needs approval" words: with the broken rules the person reads ("Needs approval: margin under the floor"); when none is
+ * readable (Sales: the margin floor is the margin grain's) the words alone — never a colon with nothing after it.
+ */
+export const needsApprovalKey = (reasons: string, where: 'summary' | 'held'): string => (reasons !== '' ? `${where}.needsApproval` : where === 'summary' ? 'moneyWall.needsApproval' : 'moneyWall.needsApprovalFirst')
+// ---- end B-CP-012
+
 export interface QuoteAbilities {
   view: boolean
   manage: boolean
