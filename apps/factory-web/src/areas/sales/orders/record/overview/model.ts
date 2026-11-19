@@ -128,10 +128,25 @@ export function bandHealthOf(input: HealthInput): boolean {
  * F-OP-103: who acts next (office face) is the first row of the ONE waiting list (`waitingOf`), so its "since" is the card's and the
  * band's; with no row, who the read says the work waits on. The view says the row's words (`rowWordsOf`).
  */
-export function whoActsNextOf(rows: readonly WaitingRow[], headline: Headline | null | undefined): { readonly who: WaitingOn | undefined; readonly since: string | null; readonly kind: 'request' | 'record'; readonly row: WaitingRow | null } {
+// F-OP-301 (walk #2): with no row it never falls back to the kept `headline.waiting` (a stale "Waiting on us · 5 d" beside a card
+// that says nothing waits): the oldest Still to do row (the card's third list) names who acts, else nobody (`who: null`, the view
+// says the card's own "Nothing waits"); no headline read: not known.
+export interface WhoActsNext {
+  readonly who: WaitingOn | null | undefined
+  readonly since: string | null
+  readonly kind: 'request' | 'record'
+  readonly row: WaitingRow | null
+  /** F-OP-301: the Still to do row it names when no waiting row stands (its words are the view's `what`). */
+  readonly still: StillRowOf | null
+}
+
+export function whoActsNextOf(rows: readonly WaitingRow[], headline: Headline | null | undefined, still: readonly StillRowOf[] = []): WhoActsNext {
   const first = rows[0] ?? null
-  if (first) return { who: first.on, since: first.since, kind: REQUEST_KINDS.has(first.kind) ? 'request' : 'record', row: first }
-  return { who: headline ? headline.waiting.on : undefined, since: headline?.waiting.since ?? null, kind: 'record', row: null }
+  if (first) return { who: first.on, since: first.since, kind: REQUEST_KINDS.has(first.kind) ? 'request' : 'record', row: first, still: null }
+  if (!headline) return { who: undefined, since: null, kind: 'record', row: null, still: null }
+  const oldest = [...still].sort((a, b) => a.since.localeCompare(b.since))[0] ?? null
+  if (oldest) return { who: oldest.waitingOn === 'CUSTOMER' ? 'BRAND' : 'US', since: oldest.since, kind: 'record', row: null, still: oldest }
+  return { who: null, since: null, kind: 'record', row: null, still: null }
 }
 
 // ---- O2 "Progress by line" -----------------------------------------------------------------------------------------------------
@@ -345,6 +360,8 @@ export interface WaitingRow {
   /** The blocker's kind, or YES for an open yes of the order. */
   readonly kind: string
   readonly sub: string | null
+  /** F-OP-301 (walk #1): the record it is about (the Changes tab names an approval we asked by its own question); null: none. */
+  readonly ref: { readonly type: string; readonly id: string } | null
   readonly on: WaitingOn
   readonly since: string | null
   readonly words: WaitingWords
@@ -404,6 +421,7 @@ export function waitingOf(read: Pick<OrderProduction, 'headline'> | null | undef
     key: `${blocker.kind}:${blocker.ref?.type ?? '-'}:${blocker.ref?.id ?? index}`,
     kind: blocker.kind,
     sub: blocker.sub ?? null,
+    ref: blocker.ref ? { type: blocker.ref.type, id: blocker.ref.id } : null, // F-OP-301
     on: blocker.on,
     since: blocker.since,
     words: wordsOf(blocker, inputs),
@@ -411,7 +429,7 @@ export function waitingOf(read: Pick<OrderProduction, 'headline'> | null | undef
   }))
   // An open yes of the order waits on us (an office person decides it): its own row with the yes in place.
   for (const task of inputs.approvals ?? []) {
-    rows.push({ key: `YES:${task.taskId}`, kind: 'YES', sub: null, on: 'US', since: task.requestedAt, words: { kind: 'phrase', phrase: phrase('waiting.yes', { kind: inputs.locale === 'en' ? task.kindLabel.en : task.kindLabel.it }) }, door: { kind: 'yes', task } })
+    rows.push({ key: `YES:${task.taskId}`, kind: 'YES', sub: null, ref: null, on: 'US', since: task.requestedAt, words: { kind: 'phrase', phrase: phrase('waiting.yes', { kind: inputs.locale === 'en' ? task.kindLabel.en : task.kindLabel.it }) }, door: { kind: 'yes', task } })
   }
   // Rows of the same start keep the read's order.
   return rows.map((row, index) => ({ row, index })).sort((a, b) => byOldest(a.row, b.row) || a.index - b.index).map((entry) => entry.row)
@@ -458,6 +476,36 @@ export function changesDotOf(card: Pick<WaitingCard, 'onUs' | 'still'>): boolean
   return card.onUs.some((row) => (row.door.kind === 'yes' && yesDoorOf(row.door.task).kind === 'decide') || (row.door.kind === 'answer' && !!row.door.request && waitsForMe(row.door.request)))
 }
 // ---- end F-OP-103
+
+// ---- F-OP-301 (walk #1, #2, #3; plan N1 "Waiting": the header, the card and the Changes badge use the same list) -----------------
+/**
+ * The ONE call every reader of the waiting list makes — Overview's "Who acts next" and "Requests & changes", the Changes badge and
+ * dot, and the Changes tab's "Waiting on us" / "Waiting on the customer" — so they cannot disagree (the walk saw badge 4, Overview
+ * 3 + 1, Changes 1 and "Nothing waits on the customer" on one order). While the production read is not in, nothing is claimed
+ * (`loading`: never "Nothing waits" before it); a failed read says so. No production read on the page at all (a design case): the
+ * order's own open yes only.
+ */
+export type WaitingState =
+  | { readonly status: 'loading' }
+  | { readonly status: 'failed'; readonly problem: string }
+  | { readonly status: 'ready'; readonly rows: readonly WaitingRow[]; readonly card: WaitingCard; readonly next: WhoActsNext }
+
+interface WaitingPage {
+  readonly production?: ProductionState | null
+  readonly requests?: { readonly value: readonly BrandRequest[] | null } | null
+  readonly can: { readonly recordPayment: boolean }
+}
+
+export function orderWaitingOf(order: Pick<Order, 'openApprovals' | 'amendments'>, page: WaitingPage, locale: string): WaitingState {
+  const state = page.production ?? null
+  if (state?.status === 'loading') return { status: 'loading' }
+  if (state?.status === 'failed') return { status: 'failed', problem: state.problem }
+  const read = readOf(state)
+  const rows = waitingOf(read, { requests: page.requests?.value ?? null, approvals: order.openApprovals, recordPayment: page.can.recordPayment, locale })
+  const card = waitingCardOf(rows, read, order)
+  return { status: 'ready', rows, card, next: whoActsNextOf(rows, read?.headline ?? null, card.still) }
+}
+// ---- end F-OP-301
 
 /** One linked record, a count button that is a real link — or, without its right, held in words with no number. */
 export interface LinkedRecord {

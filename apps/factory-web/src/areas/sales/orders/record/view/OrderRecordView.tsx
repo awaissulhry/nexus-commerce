@@ -58,7 +58,7 @@ import { FilesTab } from './FilesTab' // F-SA-237
 import { RequestDoorNoticeBanner, RequestDoorWindow } from '../../../../home/approvals/requests/view/RequestReview'
 import { RequestBandNotices } from './RequestsSection'
 import { bandHealthOf, healthInputOf, readOf } from '../overview/model'
-import { changesBadgeOf, changesDotOf, waitingCardOf, waitingOf } from '../overview/model' // F-OP-117: the Changes count, R-22
+import { changesBadgeOf, changesDotOf, orderWaitingOf } from '../overview/model' // F-OP-117: the Changes count, R-22 (F-OP-301: the ONE call)
 import { createShipmentDoor } from '../shipments/model' // F-OP-121
 // ---- end F-SA-232
 
@@ -199,7 +199,9 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   const attention = bandHealthOf(healthInputOf(order, production?.headline ?? null, production?.dates ?? null))
   // ---- F-OP-117 (R-22): Changes counts the ONE waiting list's rows — the Overview card's own (null before the production read: no
   // number that is not true); its dot when one of them waits on this reader.
-  const waitingCard = production?.headline ? waitingCardOf(waitingOf(production, { requests: model.requests?.value ?? null, approvals: order.openApprovals, recordPayment: model.can.recordPayment, locale }), production, order) : null
+  // F-OP-301 (walk #1): the same call Overview's card and the Changes tab make (orderWaitingOf), so the three agree.
+  const waiting = orderWaitingOf(order, model, locale)
+  const waitingCard = production?.headline && waiting.status === 'ready' ? waiting.card : null
   const changesCount = waitingCard ? changesBadgeOf(waitingCard) : null
   const changesDot = waitingCard ? changesDotOf(waitingCard) : false
   // ---- end F-OP-117

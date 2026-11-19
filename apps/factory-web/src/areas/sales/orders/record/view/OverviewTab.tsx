@@ -45,7 +45,9 @@ import { linkedRecordsOf, nextDatesOf, placeWords } from '../overview/model'
 // F-SA-243: "Still to do: N" with its top 3 rows. F-OP-103: the ONE waiting list — each row with its one door.
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { StillRow, WaitingRowItem } from './RequestsSection'
-import { rowWordsOf, waitingCardOf, waitingOf, whoActsNextOf, type WaitingRow } from '../overview/model'
+import { rowWordsOf } from '../overview/model'
+import { orderWaitingOf, type WaitingState } from '../overview/model' // F-OP-301 (walk #1–#3): the ONE call of the waiting list
+import { said } from '../../../../home/approvals/requests/model' // F-OP-301: a Still to do row's words in Who acts next
 import { useSearchParams } from 'next/navigation'
 import { tabHref } from '../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../lib/tab-link/TabLink'
@@ -68,16 +70,17 @@ const COLUMN_STAGE: Readonly<Record<LineColumn, string>> = Object.freeze({ order
 export function OverviewTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const locale = useLocale()
   // F-OP-103: the ONE waiting list — Who acts next is its first row, the Requests & changes card its rows (the Changes badge, R-22).
-  const rows = waitingOf(readOf(model.production), { requests: model.requests?.value ?? null, approvals: order.openApprovals, recordPayment: model.can.recordPayment, locale })
+  // F-OP-301 (walk #1–#3): through the ONE call the badge and the Changes tab make too; nothing claimed before the production read.
+  const waiting = orderWaitingOf(order, model, locale)
   return (
     <div className="fw-so-overview">
-      <WhereItIs order={order} model={model} actions={actions} rows={rows} />
+      <WhereItIs order={order} model={model} actions={actions} waiting={waiting} />
       <ProgressByLine order={order} model={model} actions={actions} />
       {/* F-SA-233: the facts beside each other (a card grid that follows the body's width, never dead space). */}
       <div className="fw-so-overview-cards">
         <PeopleCard order={order} model={model} actions={actions} />
         <NextDatesCard order={order} model={model} actions={actions} />
-        <RequestsCard order={order} model={model} actions={actions} rows={rows} />
+        <RequestsCard order={order} model={model} actions={actions} waiting={waiting} />
         <LinkedCard order={order} model={model} />
         <FactsCard order={order} model={model} />
       </div>
@@ -85,7 +88,7 @@ export function OverviewTab({ order, model, actions }: { order: Order; model: Or
   )
 }
 
-function WhereItIs({ order, model, actions, rows }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; rows: readonly WaitingRow[] }) {
+function WhereItIs({ order, model, actions, waiting }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; waiting: WaitingState }) {
   const t = useT('orders')
   const w = useProductionWords()
   const locale = useLocale()
@@ -107,10 +110,19 @@ function WhereItIs({ order, model, actions, rows }: { order: Order; model: Order
   const health = healthInputOf(order, headline, read?.dates ?? null)
   const inWork = inWorkOf(headline)
   // F-OP-103: who acts next is the ONE waiting list's first row (its since is the card's).
-  const next = whoActsNextOf(rows, headline)
-  const what = next.row ? rowWordsOf(next.row, { t, kindWords: (kind) => w.t(`parts.request.kind.${kind}`), locale, customer: order.party?.legalName ?? '' }) : null
+  // F-OP-301 (walk #2): else the card's oldest Still to do row, else the card's own "Nothing waits" — never the kept state alone.
+  const next = waiting.status === 'ready' ? waiting.next : null
+  const what = next?.row ? rowWordsOf(next.row, { t, kindWords: (kind) => w.t(`parts.request.kind.${kind}`), locale, customer: order.party?.legalName ?? '' }) : next?.still ? said(next.still.words, locale) : null
   const facts = [
-    { label: t('overview.fact.who'), value: <WaitingOnPill face="office" loading={loading} who={next.who} since={next.since} kind={next.kind} what={what} /> },
+    {
+      label: t('overview.fact.who'),
+      value:
+        next?.who === null && !loading ? (
+          <span className="fw-so-hint">{t('overview.requests.nothing')}</span>
+        ) : (
+          <WaitingOnPill face="office" loading={loading} who={next ? next.who : undefined} since={next?.since ?? null} kind={next?.kind ?? 'record'} what={what} />
+        ),
+    },
     ...(exFactory ? [{ label: t('overview.fact.exFactory'), value: t(exFactory.key, { ...exFactory.params, date: formatDate(dayInstant(String(exFactory.params?.date ?? '')), { locale }) }) }] : []),
     { label: t('overview.fact.health'), value: <HealthPill face="office" loading={loading} {...health} /> },
     ...(headline?.urgency.customer?.code === 'URGENT' ? [{ label: t('overview.fact.customer'), value: <Tag tone="warning">{t('board.customerUrgent')}</Tag> }] : []),
@@ -476,14 +488,15 @@ function NextDatesCard({ order, model, actions }: { order: Order; model: OrderRe
  * row with its one door in place; "Still to do: N" with its top 3 rows (each a door); the latest change. "Nothing waits" only when
  * all three are empty.
  */
-function RequestsCard({ order, model, actions, rows }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; rows: readonly WaitingRow[] }) {
+function RequestsCard({ order, model, actions, waiting }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; waiting: WaitingState }) {
   const t = useT('orders')
   const locale = useLocale()
   const search = useSearchParams()?.toString() ?? '' // F-OP-210: the tab links keep the dock's scope
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
-  const read = readOf(model.production)
-  const card = waitingCardOf(rows, read, order)
   const customer = order.party?.legalName ?? ''
+  // F-OP-301 (walk #3): while the production read is out the card says it reads (never "Nothing waits" before it); failed: so said.
+  if (waiting.status !== 'ready') return <PartState problem={waiting.status === 'failed' ? waiting.problem : null} label={t('overview.requests.title')} onRetry={() => actions?.onRetryProduction?.()} />
+  const card = waiting.card
   return (
     <Card padded>
       <div className="fw-so-card-head">

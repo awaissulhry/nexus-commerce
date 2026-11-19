@@ -467,14 +467,41 @@ const STILL_ROWS = [
   { kind: 'WORK_ORDER_CHANGE', ref: { type: 'WorkOrderChange', id: '0190f0e2-9090-7000-8000-000000000001', number: 'WO-00021' }, words: { en: 'WO-00021: make 50 6 → 4', it: 'WO-00021: produci 50 6 → 4' }, since: '2026-11-17T13:02:00Z', waitingOn: 'PLANNER', mayAct: true, requestId: ACCEPTED_ASK.id },
   { kind: 'EXTRA_PIECES', ref: { type: 'WorkOrder', id: '0190f0e2-9090-7000-8000-000000000002', number: 'WO-00021' }, words: { en: 'Scrap the 2 extra pieces of WO-00021, with their approval', it: 'Scarta i 2 pezzi in più di WO-00021, con la loro approvazione' }, since: '2026-11-17T13:02:00Z', waitingOn: 'PLANNER', mayAct: false, requestId: ACCEPTED_ASK.id },
 ]
-const STILL_READ = { ...PRODUCTION_READ, changes: { openRequests: [{ id: ASK.id, kind: 'CHANGE', status: 'OPEN', since: ASK.askedAt, batchId: null }], stillToDo: { rows: STILL_ROWS, count: STILL_ROWS.length, workOrdersLeftOut: 0 } } }
+// F-OP-301 (walk #1): the read's blockers are the two requests the page reads (the ONE waiting list names what the Changes tab lists).
+const askBlocker = (request: typeof ASK) => ({ kind: 'BRAND_REQUEST', on: 'US' as const, words: { en: 'A customer request waits for our answer', it: 'Una richiesta del cliente aspetta la nostra risposta' }, since: request.askedAt, ref: { type: 'OrderChangeRequest', id: request.id }, sub: 'REQUEST' as const })
+const STILL_READ = {
+  ...PRODUCTION_READ,
+  headline: { ...PRODUCTION_READ.headline!, waiting: { ...PRODUCTION_READ.headline!.waiting, since: ASK.askedAt, blockers: [askBlocker(ASK), askBlocker(ASKED_ALSO)] } },
+  changes: { openRequests: [{ id: ASK.id, kind: 'CHANGE', status: 'OPEN', since: ASK.askedAt, batchId: null }], stillToDo: { rows: STILL_ROWS, count: STILL_ROWS.length, workOrdersLeftOut: 0 } },
+}
 const DOOR_STUB = { parts: { window: { review: null, grains: { price: true }, offline: false, nav: { ids: [ASK.id, ASKED_ALSO.id] } }, notice: null, lift: null, can: { lift: true, rush: true } }, hrefOf: (id: string) => `${PREFIX}/sales/orders/${ORDER_ID}?tab=changes&open=${id}` }
 const F_SA_243: DesignCase<RecordCase>[] = [
   { id: 'f-sa-243-band', label: 'F-SA-243 · Sales · Overview: the band "Brand Alpha asks: Change · line 10 · 50 6 → 4 · Answer…" (1 more request), Waiting on us · Answer…, Still to do: 2 with its rows', model: base('sales', production, { tab: 'overview', production: ready(STILL_READ), requests: { value: [ASK, ASKED_ALSO, ACCEPTED_ASK], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
   { id: 'f-sa-243-changes', label: 'F-SA-243 · Sales · Changes: Waiting on us with Answer… (the window here), Still to do under the change of 17 Nov: the work-order change is your turn, the scrap waits for planning', model: base('sales', production, { tab: 'changes', production: ready(STILL_READ), requests: { value: [ASK, ASKED_ALSO, ACCEPTED_ASK], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
-  { id: 'f-sa-243-nothing-mine', label: 'F-SA-243 · Sales · no row asks this reader: no "needs a decision" band (R-5)', model: base('sales', production, { tab: 'changes', production: ready({ ...STILL_READ, changes: { openRequests: [], stillToDo: { rows: STILL_ROWS.map((row) => ({ ...row, mayAct: false })), count: 2, workOrdersLeftOut: 1 } } }), requests: { value: [ACCEPTED_ASK], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
+  { id: 'f-sa-243-nothing-mine', label: 'F-SA-243 · Sales · no row asks this reader: no "needs a decision" band (R-5)', model: base('sales', production, { tab: 'changes', production: ready({ ...STILL_READ, headline: { ...STILL_READ.headline, waiting: { ...STILL_READ.headline.waiting, blockers: [] } } /* F-OP-301: no request open */, changes: { openRequests: [], stillToDo: { rows: STILL_ROWS.map((row) => ({ ...row, mayAct: false })), count: 2, workOrdersLeftOut: 1 } } }), requests: { value: [ACCEPTED_ASK], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
 ]
 // ---- end F-SA-243
+
+// ---- F-OP-301 (walk #1, #2): the walk's two orders in made-up words — "SO-0002": two gates not passed and a change request wait on
+// us, a yes we asked waits on the customer (header, card, badge and the Changes tab all say 3 + 1); "SO-0003": nothing waits, while
+// the kept state still says "Waiting on us" since 5 days (the header must not say it beside a card that says nothing waits). ----
+const SO2_REQUEST = brandRequest(21, { ...ASK, id: '0190f0e2-3080-7000-8000-000000000821', askedAt: '2026-11-04T09:00:00Z', note: 'One more black 52 instead of the 54.' })
+const blockerOf = (kind: string, on: 'US' | 'BRAND', en: string, since: string, ref: { type: string; id: string } | null, sub: 'REQUEST' | null = null) => ({ kind, on, words: { en, it: `${en} (it)` }, since, ref, sub })
+export const SO2_BLOCKERS = [
+  blockerOf('GATE', 'US', 'A gate is not passed yet', '2026-11-02T08:00:00Z', { type: 'OrderGate', id: '0190f0e2-6161-7000-8000-000000000001' }),
+  blockerOf('GATE', 'US', 'A gate is not passed yet', '2026-11-02T08:00:00Z', { type: 'OrderGate', id: '0190f0e2-6161-7000-8000-000000000002' }),
+  blockerOf('BRAND_REQUEST', 'US', 'A customer request waits for our answer', SO2_REQUEST.askedAt, { type: 'OrderChangeRequest', id: SO2_REQUEST.id }, 'REQUEST'),
+  blockerOf('APPROVAL', 'BRAND', "Waiting for the customer's yes", '2026-11-05T09:00:00Z', { type: 'ApprovalRequest', id: '0190f0e2-6262-7000-8000-000000000001' }),
+]
+const SO2_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'BRAND' as const, words: { en: 'Waiting on customer', it: 'Tocca al cliente' }, since: '2026-11-05T09:00:00Z', blockers: SO2_BLOCKERS } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
+const SO3_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'US' as const, words: { en: 'Waiting on us', it: 'Tocca a noi' }, since: '2026-11-14T17:00:00Z', blockers: [] } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
+const F_OP_301: DesignCase<RecordCase>[] = [
+  { id: 'f-op-301-so2-overview', label: 'F-OP-301 · Production manager · Overview: Waiting on us 3 (two gates, a change request) and on the customer 1 — the Changes badge says 4', model: base('manager', production, { tab: 'overview', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
+  { id: 'f-op-301-so2-changes', label: 'F-OP-301 · Production manager · Changes: the same 3 waiting on us and the yes we asked of the customer (never "Nothing waits on the customer")', model: base('manager', production, { tab: 'changes', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
+  { id: 'f-op-301-so3-overview', label: 'F-OP-301 · Production manager · Overview: nothing waits — Who acts next says so too (not the kept "Waiting on us · 5 d")', model: base('manager', production, { tab: 'overview', production: ready(SO3_READ), requests: null, liveState: 'live' }) },
+  { id: 'f-op-301-reading-changes', label: 'F-OP-301 · Changes while the production read is out: both cards read (never "Nothing waits" before it)', model: base('sales', production, { tab: 'changes', production: LOADING_STATE, liveState: 'connecting' }) },
+]
+// ---- end F-OP-301
 
 // ---- F-OP-129 (order page plan N2, N5, N6; 10-order-page §13 design cases): what the strip says each work order does, per reader
 // (Sales: a released one waits; the Owner: both follow, R-4), the extra pieces' outcome under cut, and the Shipments rows — a typed
@@ -795,6 +822,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'overview-failed', label: "F-SA-232 · Overview: the production couldn't be read (this part only, Try again)", model: base('sales', production, { tab: 'overview', production: FAILED_STATE, liveState: 'offline' }) },
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
+    ...F_OP_301, // F-OP-301 (walk #1, #2, #3)
     // ---- B-W2b-323: orders in depth (priority, season, the yes, what is frozen, priced changes, materials, confirmation, tech pack, forecast, milestones) ----
     ...W2B_323,
     // ---- F-OP-217: the dock's scopes, each inside the one card (look at them at 1440 with the dock a third and 40 %, and at 375) ----

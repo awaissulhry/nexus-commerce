@@ -63,7 +63,7 @@ import { designScreen as changesScreen } from './record/changes/fixtures'
 import { runWithStepUp } from './hooks'
 import { isMadeToMeasure, MENU_GROUPS, RECORD_TABS, tabCountOf } from './model' // F-SA-230
 import { bandHealthOf, healthInputOf } from './record/overview/model' // F-SA-232: the band's chip
-import { HISTORY_CHIPS, historyFor, historyOf, waitingOnCustomerOf, waitingOnUsOf } from './record/changes/model' // F-SA-236
+import { HISTORY_CHIPS, historyFor, historyOf, waitingOnUsOf } from './record/changes/model' // F-SA-236 (F-OP-301: the customer's side is the ONE waiting list's)
 import { designScreen as listScreen } from './list/fixtures'
 // B-TH-201
 import { getBoard, listOrders } from './api'
@@ -851,13 +851,9 @@ describe('F-SA-236: Changes — waiting on us, waiting on the customer, the hist
   const request = (id: string, status: string, askedAt: string, extra: Record<string, unknown> = {}) => ({ id, status, askedAt, kind: 'CHANGE', answeredAt: null, withdrawnAt: null, counter: null, note: null, askedBy: 'Dora Esempio', answeredBy: null, ...extra }) as never
   const change = (id: string, revision: number, at: string, priced = false) => ({ id, revision, reason: 'r', createdAt: at, createdBy: 'Bea Esempio', priced, diff: { lines: [{ change: 'CHANGED', piecesBefore: 8, piecesAfter: 9 }] }, changeAmount: 4500, feeAmount: null, deposit: null, yes: { state: 'NOT_ASKED', taskId: null, reason: null }, customer: { decision: priced ? 'REFUSED' : 'NOT_NEEDED', requestId: null, answeredAt: null }, putBack: { may: true } }) as never
 
-  it('waiting on us: open and countered requests, oldest first; on the customer: the new yes, our counters, open approvals we asked', () => {
+  it('the requests still open or countered, oldest first (the band notice names the first; the counts are the ONE waiting list\'s, F-OP-301)', () => {
     const requests = [request('b', 'OPEN', '2026-11-18T09:00:00Z'), request('a', 'COUNTERED', '2026-11-17T09:00:00Z', { counter: { at: '2026-11-17T12:00:00Z' } }), request('c', 'ACCEPTED', '2026-11-10T09:00:00Z', { answeredAt: '2026-11-11T09:00:00Z' })]
     expect(waitingOnUsOf(requests).map((entry) => entry.id)).toEqual(['a', 'b'])
-    const approvals = [{ id: 'x', kind: 'ARTWORK', status: 'OPEN', question: 'Approve the label artwork', createdAt: '2026-11-15T09:00:00Z', dueAt: '2026-11-20T18:00:00Z' }, { id: 'y', kind: 'ARTWORK', status: 'APPROVED', question: 'old', createdAt: '2026-11-01T09:00:00Z', dueAt: '2026-11-02T18:00:00Z' }] as never
-    const waits = waitingOnCustomerOf(requests, approvals, { id: 'o', reapprovalNeededAt: '2026-11-16T10:00:00Z' })
-    expect(waits.map((entry) => entry.kind)).toEqual(['reaccept', 'counter', 'approval'])
-    expect(waits[2]).toMatchObject({ question: 'Approve the label artwork', status: 'OPEN' })
   })
 
   it('the history: requests asked and answered, amendments (the changes read; priced with Put back), confirmations — newest first; chips filter', () => {
