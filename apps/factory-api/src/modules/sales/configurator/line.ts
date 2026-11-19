@@ -378,9 +378,11 @@ export async function saveQuoteOptions(caller: CommandCaller, quoteId: string, l
     assertDraft(version)
     const line = await quoteLineOf(tx, version, lineId)
     const { before, rows, check, repriced } = await applyQuoteLinePicks(tools, current, version, line, body.picks)
-    // ── B-CP-026: a line that is not priced again (typed by hand, a unit, a fee) keeps its price while what the options add moves —
-    // a surcharge left out of a price the person cannot see: held in words (the command's writes are undone); a price holder saves it.
-    if (repriced.held !== null && optionsMoneyMoved(before, rows) && !seesPricesOver(context, current)) throw blindPriceHeld('body/picks')
+    // ── B-CP-026 (Owner answer A, strict — lead 11-19): any save whose options move money is a price the person cannot see — a
+    // line priced again (from its list, or its stored waterfall with a typed change kept) or one not priced again (typed by hand, a
+    // unit, a fee: the surcharge left out of the price). Held in words for a person without the price grain (the command's writes
+    // are undone); a price holder saves it. Options that add the same are saved as before.
+    if (optionsMoneyMoved(before, rows) && !seesPricesOver(context, current)) throw blindPriceHeld('body/picks')
     // ── end B-CP-026 ──
     // B-W2b-423 (KS4:01): the line costed again, its options' own cost with it.
     await refreshVersion(tools, current, version, new Set([line.id]))

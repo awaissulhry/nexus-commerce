@@ -26,8 +26,9 @@ import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
  *
  *   1. a quote template's lines holding a unit price: "as Sales worker" the replace is refused 403 in words (it would wipe the
  *      price), nothing changes; a template without a typed price is replaced by Sales; the Owner replaces the priced one
- *   2. a line's product options whose surcharges move while the price is kept: an order line ("as Sales worker" 403 with or
- *      without keepPrice, nothing changes; the Owner keeps the price), a quote line typed by hand (not priced again: 403; the
+ *   2. a line's product options whose surcharges move (the price moves, or is kept without them): an order line ("as Sales
+ *      worker" 403 with or without keepPrice, nothing changes; the Owner keeps the price), a quote line priced again from its
+ *      stored waterfall with a typed change kept (403; the Owner saves it), a quote line typed by hand (not priced again: 403; the
  *      Owner saves it); options that add the same are saved by Sales
  *   3. accepting a request whose agreed counter-offer carries a price (its fee): "as Sales worker" (the sales accept) and "as
  *      Production manager" (the production accept) 403, the request stays COUNTERED; the Owner passes the hold; a counter of a
@@ -172,6 +173,27 @@ describe('B-CP-026 2. a line’s options whose surcharges move while its price i
     expect((await call('owner', 'PUT', `${url}/options`, { version: view.document.version, picks: more })).statusCode).toBe(409)
     await ok('owner', 'PUT', `${url}/options`, { version: view.document.version, picks: more, keepPrice: true })
     expect((await optionsOf('SalesOrderLineOption', lineId)).map((row) => row.valueId)).toContain(name)
+  })
+
+  // B-CP-026 (lead, strict Owner answer A): every quote options save that moves money is held — also a line priced again from its
+  // stored waterfall that keeps a typed change (SEED-Q-0003's grid line: … → MANUAL -0.25 → NET 470).
+  it('a quote line priced again from its stored waterfall (a typed change kept): as Sales worker 403, nothing changes; the Owner saves it', async () => {
+    const { quoteId, lineId } = await one<{ quoteId: string; lineId: string }>(
+      `SELECT q.id AS "quoteId", l.id AS "lineId" FROM "Quote" q JOIN "QuoteVersion" v ON v."quoteId" = q.id JOIN "QuoteLine" l ON l."versionId" = v.id WHERE q."tenantId" = $1 AND q.number = 'SEED-Q-0003' AND l.kind::text = 'SIZE_GRID' ORDER BY v.revision DESC, l.seq LIMIT 1`,
+      [T],
+    )
+    const url = `/sales/quotes/${quoteId}/lines/${lineId}`
+    const before = await optionsOf('QuoteLineOption', lineId)
+    const priceBefore = (await one<{ unitPrice: string }>(`SELECT "unitPrice"::text AS "unitPrice" FROM "QuoteLine" WHERE id = $1`, [lineId])).unitPrice
+    expect((await ok('owner', 'GET', `${url}/configurator`)).pricing).toMatchObject({ held: null, manualKept: true })
+    const version = (await ok('sales', 'GET', `/sales/quotes/${quoteId}`)).quote.version
+    // The name on the chest taken off: what the options add moves (−15.00), so the price the waterfall gives moves.
+    const without = before.filter((row) => row.valueId !== name).map((row) => ({ valueId: row.valueId }))
+    await held('sales', 'PUT', `${url}/options`, { version, picks: without }, 'body/picks')
+    expect(await optionsOf('QuoteLineOption', lineId)).toEqual(before)
+    expect((await one<{ unitPrice: string }>(`SELECT "unitPrice"::text AS "unitPrice" FROM "QuoteLine" WHERE id = $1`, [lineId])).unitPrice).toBe(priceBefore)
+    const saved = await notHeld('owner', 'PUT', `${url}/options`, { version, picks: without })
+    expect(saved.status).toBe(200)
   })
 
   it('a quote line typed by hand (not priced again): as Sales worker 403, nothing changes; the Owner saves it and the price stays', async () => {

@@ -231,7 +231,12 @@ describe("a quote line's configurator (SAL-133, SAL-136, SAL-139)", () => {
     const audit = await admin<Json>(`SELECT after FROM "AuditLog" WHERE action = 'quotes.configureLine' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 1`, [quoteId])
     expect(audit[0]!.after).toMatchObject({ lineId: gridLineId, newWaterfall: true, held: null })
     // The armour without protectors: outside the certificate, said by the check and by the send's line rule (a warning).
-    quote = (await ok('seller', 'PUT', `${q(quoteId, gridLineId)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.perfFront }, { valueId: options.valueIds.name, text: 'BIANCHI' }, { valueId: options.valueIds.armourNone }] })).quote
+    // B-CP-026 (Owner answer A, strict): the armour off moves what the options add (−25.00), so the line's price moves: the seller
+    // (no price grain) is held in words, nothing written; the owner saves it.
+    const armourOff = [{ valueId: options.valueIds.perfFront }, { valueId: options.valueIds.name, text: 'BIANCHI' }, { valueId: options.valueIds.armourNone }]
+    expect((await refused('seller', 'PUT', `${q(quoteId, gridLineId)}/options`, { version: quote.version, picks: armourOff }, 403)).issues[0]).toMatchObject({ path: 'refusal/BLIND_PRICE' })
+    expect(await valueCodes('QuoteLineOption', gridLineId)).toEqual(['FRONT', 'NAME', 'STD'])
+    quote = (await ok('owner', 'PUT', `${q(quoteId, gridLineId)}/options`, { version: quote.version, picks: armourOff })).quote
     const warnings = await ok('seller', 'GET', `/sales/quotes/${quoteId}/warnings`)
     expect(warnings.warnings.find((warning: Json) => warning.code === 'OPTIONS_OUTSIDE_CERTIFICATE')).toMatchObject({ severity: 'WARNING', lineIds: [gridLineId] })
     // A stale version is refused.
@@ -270,7 +275,8 @@ describe("a quote line's configurator (SAL-133, SAL-136, SAL-139)", () => {
   it('a new version of the quote carries the options; its waterfall still holds them', async () => {
     let quote = (await ok('seller', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1 }, 201)).quote
     quote = (await ok('seller', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jkt01, colourwayId: BLK, sizes: [{ size: '52', quantity: 3 }] }, 201)).quote
-    quote = (await ok('seller', 'PUT', `${q(quote.id, quote.lines[0].id)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }] })).quote
+    // B-CP-026: the liner adds to the price: the owner configures it (the seller is held in words).
+    quote = (await ok('owner', 'PUT', `${q(quote.id, quote.lines[0].id)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }] })).quote
     const [version] = await admin<{ id: string }>(`SELECT id FROM "QuoteVersion" WHERE "quoteId" = $1`, [quote.id])
     await forced(`UPDATE "QuoteVersion" SET status = 'SENT', "sentAt" = now() WHERE id = $1`, [version!.id])
     await forced(`UPDATE "Quote" SET status = 'SENT' WHERE id = $1`, [quote.id])
