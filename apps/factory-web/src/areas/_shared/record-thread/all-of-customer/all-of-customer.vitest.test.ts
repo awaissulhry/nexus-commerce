@@ -442,10 +442,11 @@ describe('F-OP-206 — J / K walk the lines, Enter answers, Space shows the whol
     expect(html).toContain('<article class="fw-aoc-line is-shared" tabindex="0" aria-posinset="1" aria-setsize="-1" aria-labelledby="fw-aoc-m2-chip fw-aoc-m2-author fw-aoc-m2-time">')
     expect(html).toContain('<article class="fw-aoc-line is-shared" tabindex="-1" aria-posinset="2" aria-setsize="-1" aria-labelledby="fw-aoc-m1-chip fw-aoc-m1-author fw-aoc-m1-time">')
     for (const id of ['fw-aoc-m2-chip', 'fw-aoc-m2-author', 'fw-aoc-m2-time']) expect(html).toContain(`id="${id}"`)
+    // op-fx1: a control is <a …> or <button …> — `\b` so the next line's own <article … tabindex="-1"> is not taken for one.
     const second = html.slice(html.indexOf('aria-posinset="2"'))
-    expect(second.match(/<(a|button)[^>]*tabindex="-1"/g)?.length).toBeGreaterThanOrEqual(3)
+    expect(second.match(/<(a|button)\b[^>]*tabindex="-1"/g)?.length).toBeGreaterThanOrEqual(3)
     const first = html.slice(html.indexOf('aria-posinset="1"'), html.indexOf('aria-posinset="2"'))
-    expect(first).not.toMatch(/<(a|button)[^>]*tabindex="-1"/)
+    expect(first).not.toMatch(/<(a|button)\b[^>]*tabindex="-1"/)
     const older = render(createElement(AllOfCustomerFeed, { model: model({ ...state, older: 'loading' }) }))
     expect(older).toContain('role="feed" aria-busy="true"')
   })

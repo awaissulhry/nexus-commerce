@@ -997,7 +997,8 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     expect(changes).toContain('id={`change-${entry.id}`}')
     // A thread card jumps back to its row: a replace (no history entry), then the row in view with the focus.
     const page = read('./record/OrderRecord.tsx')
-    expect(page).toContain("router.replace(`${pathname}?${next.toString()}#${place.anchor}`, { scroll: false })")
+    // op-fx1: F-OP-210 moved it through tabAddress (the dock's scope kept, the narrow view given way to the row).
+    expect(page).toContain('router.replace(tabAddress(pathname, window.location.search, place.tab, { narrow: narrowNow(), anchor: place.anchor }), { scroll: false })')
     expect(page).toContain('row.focus({ preventScroll: true })')
     expect(page).toContain('showOnPage={showOnPage /* F-SA-266 */}')
   })
@@ -1065,7 +1066,9 @@ describe('F-OP-111: Split into new orders — each size capped at what may move,
   it('⋯ Edit holds it in words: no right to manage orders, a state that does not split, nothing that may move', async () => {
     const { splitHeld } = await split()
     expect(splitHeld(order('CONFIRMED'), canOf('sales'))).toBeNull()
-    expect(splitHeld(order('READY'), canOf('sales'))).toBeNull()
+    // op-fx1: READY splits too — with a piece not on a work order (the demo READY has every piece on one: nothing may move, below).
+    expect(splitHeld(withWork(order('READY')), canOf('sales'))).toBeNull()
+    expect(splitHeld(order('READY'), canOf('sales'))).toEqual({ key: 'split.held.nothing' })
     expect(splitHeld(order('CONFIRMED'), canOf('manager'))).toEqual({ key: 'held.noManage' })
     for (const status of ['SHIPPED', 'CLOSED', 'CANCELLED', 'PARTLY_SHIPPED'] as const) expect(splitHeld(order(status), canOf('sales')), status).toEqual({ key: 'split.held.state' })
     expect(splitHeld(order('IN_PRODUCTION'), canOf('sales'))).toEqual({ key: 'split.held.nothing' })
@@ -1314,7 +1317,8 @@ describe('F-OP-106: the What changes strip — fed by the preview of THIS draft,
     expect(acts).not.toContain("setDialog({ kind: 'amendReview' })")
     const view = readFileSync(new URL('./record/view/LinesTab.tsx', import.meta.url), 'utf8')
     expect(view).toContain('onBlur={() => actions?.onAmendPreview?.()}')
-    expect(view).toContain("if (!heldText) actions?.onAmendApply?.()")
+    // op-fx1: F-OP-108 — the one Apply says whether it applies as a priced change (a frozen field), so ⌘↵ passes it too.
+    expect(view).toContain('if (!heldText) actions?.onAmendApply?.(asPriced)')
     expect(readFileSync(new URL('./record/view/DailyDialogs.tsx', import.meta.url), 'utf8')).not.toContain('AmendReviewDialog')
   })
 
@@ -1604,9 +1608,10 @@ describe('F-OP-101: the yes in place — Confirm the order / Refuse… for an ap
     const other = render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-op-101-who-decides'), 'en')
     expect(other).toContain('Who decides: Finance')
     expect(other).not.toContain('Confirm the order')
+    // op-fx1: the Refuse… dialog's own words are read in record/refuse-yes-dialog.vitest.test.ts (a DS dialog never draws on the
+    // server: this file draws the page to a string). Here: its case still draws the page with its door, no key on screen.
     const refuse = render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-op-101-refuse'), 'en')
-    expect(refuse).toContain('Refuse the yes for')
-    expect(refuse).toContain('Price below the agreed list')
+    expect(refuse).toContain('Refuse…')
   })
 
   it('the wiring: the engine\'s own routes with the task version, the page\'s step-up, the order read again; the view fetches nothing', () => {
