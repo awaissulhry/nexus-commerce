@@ -96,7 +96,7 @@ export function fixtureMarkers(brand: BrandFixture): Marker[] {
  * What the database holds of a party (SQL reads only, never a step): its names and code, its contacts' and portal people's
  * addresses, its address lines, the numbers and references of its records, the names of its files, and the ids of its
  * records (a record id in another brand's answer is a leak too). Short values (under 6 characters) are left out: they would
- * match by chance.
+ * match by chance. B-CP-080 (customer page plan W-CP-7): + its draft orders' references, lines and roster names, its projects.
  */
 export async function recordMarkers(w: World, partyId: string): Promise<Marker[]> {
   const rows = await admin<{ label: string; text: string | null }>(
@@ -125,12 +125,17 @@ export async function recordMarkers(w: World, partyId: string): Promise<Marker[]
      UNION ALL SELECT 'repair', id::text FROM "RepairOrder" WHERE "partyId" = $1
      UNION ALL SELECT 'order request', number FROM "PortalOrderRequest" WHERE "partyId" = $1
      UNION ALL SELECT 'order request', id::text FROM "PortalOrderRequest" WHERE "partyId" = $1
+     UNION ALL SELECT 'order request line', l.id::text FROM "PortalOrderRequestLine" l WHERE l."partyId" = $1
      UNION ALL SELECT 'private style', code FROM "Style" WHERE "brandPartyId" = $1
      UNION ALL SELECT 'private style', id::text FROM "Style" WHERE "brandPartyId" = $1
      UNION ALL SELECT 'file name', "originalName" FROM "StoredFile" WHERE "partyId" = $1
      UNION ALL SELECT 'file', id::text FROM "StoredFile" WHERE "partyId" = $1
      UNION ALL SELECT 'thread', id::text FROM "Thread" WHERE "partyId" = $1
-     UNION ALL SELECT 'message', id::text FROM "Message" WHERE "partyId" = $1`,
+     UNION ALL SELECT 'message', id::text FROM "Message" WHERE "partyId" = $1
+     UNION ALL SELECT 'order request reference', "customerRef" FROM "PortalOrderRequest" WHERE "partyId" = $1
+     UNION ALL SELECT 'draft person', name FROM "PortalOrderRequestPerson" WHERE "partyId" = $1
+     UNION ALL SELECT 'project', number FROM "Project" WHERE "partyId" = $1
+     UNION ALL SELECT 'project', id::text FROM "Project" WHERE "partyId" = $1`,
     [partyId],
   )
   return rows.filter((row): row is Marker => typeof row.text === 'string' && row.text.trim().length >= 6).map((row) => ({ label: row.label, text: row.text.trim() }))
@@ -228,10 +233,15 @@ export async function setUpBrand(w: World, office: Person, brand: BrandFixture, 
   })
   await stepped(w, office)
   await ok(office, 'POST', `/partners/${partyId}/people`, { email: brand.portalPerson.email, displayName: brand.portalPerson.name, locale: 'en', roleKey: access.roleKey ?? 'customer-admin', ...(access.capabilities ? { capabilities: access.capabilities } : {}), companyId })
+  return signedInAs(w, brand, partyId, brand.portalPerson.email)
+}
+
+/** A brand's invited portal person on a network of its own, signed in by the mailed code and through the first visit's terms. */
+async function signedInAs(w: World, brand: BrandFixture, partyId: string, email: string): Promise<BrandInWorld> {
   const made: BrandInWorld = { fixture: brand, partyId, browser: await portalBrowser(w.h, `203.0.113.${++network}`) }
-  expect((await call(made.browser, 'POST', '/portal/signin/start', { tenant: w.tenant.slug, company: 'SCA', email: brand.portalPerson.email })).status).toBe(200)
+  expect((await call(made.browser, 'POST', '/portal/signin/start', { tenant: w.tenant.slug, company: 'SCA', email })).status).toBe(200)
   await w.h.auth.settled()
-  const signedIn = await call(made.browser, 'POST', '/portal/signin/code', { tenant: w.tenant.slug, company: 'SCA', email: brand.portalPerson.email, code: mailedCode(w.h, brand.portalPerson.email)!.code })
+  const signedIn = await call(made.browser, 'POST', '/portal/signin/code', { tenant: w.tenant.slug, company: 'SCA', email, code: mailedCode(w.h, email)!.code })
   expect(signedIn.status, JSON.stringify(signedIn.body)).toBe(200)
   const terms = (await call(made.browser, 'GET', '/portal/terms?locale=en')).body
   expect((await call(made.browser, 'POST', '/portal/first-visit', { noticeId: terms.notice.id, noticeLocale: terms.notice.locale, sha256: terms.notice.sha256 })).status).toBe(200)
@@ -240,6 +250,40 @@ export async function setUpBrand(w: World, office: Person, brand: BrandFixture, 
   made.userId = me.user.id
   return made
 }
+
+// ---- B-CP-080 (customer page plan C5, C6, C7; W-CP-7): more people of a brand — its own team — through the same routes ----------
+/** Brand Alpha's own team beside its admin (the customer page lane's draft order): its Designer and its Buyer. Made up. */
+export const BRAND_ALPHA_TEAM = Object.freeze({
+  designer: { name: 'Dora Alfieri', email: 'dora.alfieri@brand-alpha.example' },
+  buyer: { name: 'Bice Alfieri', email: 'bice.alfieri@brand-alpha.example' },
+})
+
+/** A brand team's names and addresses as markers of the scan (another brand must never read them). */
+export function teamMarkers(team: Readonly<Record<string, { readonly name: string; readonly email: string }>>): Marker[] {
+  return Object.values(team).flatMap((member) => [
+    { label: 'portal person name', text: member.name },
+    { label: 'portal person address', text: member.email },
+  ])
+}
+
+/**
+ * One more portal person of a brand, invited by the office through the routes (its role and capabilities: the Designer starts and
+ * fills drafts without prices, the Buyer sends them) and signed in by code on a network of its own. Its answers go to the same scan
+ * as the brand's admin's (`asBrand`: "<brand> portal").
+ */
+export async function addBrandPerson(
+  w: World,
+  office: Person,
+  brand: BrandInWorld,
+  member: { readonly name: string; readonly email: string },
+  access: { readonly roleKey: 'customer-designer' | 'customer-buyer' | 'customer-viewer' | 'customer-finance'; readonly capabilities?: readonly ('comment' | 'upload' | 'approve')[] },
+  companyId: string,
+): Promise<BrandInWorld> {
+  await stepped(w, office)
+  await ok(office, 'POST', `/partners/${brand.partyId}/people`, { email: member.email, displayName: member.name, locale: 'en', roleKey: access.roleKey, ...(access.capabilities ? { capabilities: access.capabilities } : {}), companyId })
+  return signedInAs(w, brand.fixture, brand.partyId, member.email)
+}
+// ---- end B-CP-080
 
 /** Every address of a brand the office may write to (its fixture contact and portal person, and its seeded contacts). */
 export async function addressesOf(w: World, brand: BrandInWorld): Promise<string[]> {
