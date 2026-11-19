@@ -149,6 +149,11 @@ const requestBody = output({
   pricesChanged: notMoney(z.number().int()),
   /** "This is a request. We confirm price, quantities and date with you …" (B-TH-041: never by when). */
   notice: words,
+  /**
+   * B-CP-070 (D11): what the reader may do now beside filling the draft — send it and withdraw it once sent (who may order: the
+   * Buyer, the Admin), discard the draft (who may order, or the colleague who started it). False: held, with the page's words.
+   */
+  may: output({ send: z.boolean(), withdraw: z.boolean(), discard: z.boolean() }),
 })
 
 const address = output({

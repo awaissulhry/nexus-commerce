@@ -52,7 +52,7 @@ const styleId = (code: string) => one<{ id: string }>('SELECT id FROM "Style" WH
 const colourwayId = (style: string, code: string) => one<{ id: string }>('SELECT id FROM "Colourway" WHERE "tenantId" = $1 AND "styleId" = $2 AND code = $3', [T, style, code]).then((row) => row.id)
 const orderId = (number: string) => one<{ id: string }>('SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND number = $2', [T, number]).then((row) => row.id)
 
-const people = { buyer: 'bea.buyer@seed-racing.example', viewer: 'val.viewer@seed-racing.example', admin: 'ada.admin@seed-racing.example', other: 'olga.buyer@brand-alpha.example' }
+const people = { buyer: 'bea.buyer@seed-racing.example', viewer: 'val.viewer@seed-racing.example', admin: 'ada.admin@seed-racing.example', other: 'olga.buyer@brand-alpha.example', /* B-CP-070 */ designer: 'dina.designer@seed-racing.example' }
 const browsers = {} as Record<keyof typeof people, Browser>
 const userIds = {} as Record<keyof typeof people, string>
 
@@ -118,6 +118,7 @@ beforeAll(async () => {
   userIds.viewer = await partnerPerson(people.viewer, P1, ['customer-viewer'])
   userIds.admin = await partnerPerson(people.admin, P1, ['customer-admin'])
   userIds.other = await partnerPerson(people.other, world.partyId, ['customer-buyer'])
+  userIds.designer = await partnerPerson(people.designer, P1, ['customer-designer', 'partner-comment', 'partner-upload']) // B-CP-070
   for (const key of Object.keys(people) as (keyof typeof people)[]) browsers[key] = await signedIn(people[key])
   // The sign-ins moved the harness clock ahead of the real one; the office's commands (callerFor) run on the real clock: bring
   // the harness back just behind it, so a decision is never before the send (the database checks decidedAt >= sentAt).
@@ -512,3 +513,76 @@ describe('delivery addresses (SAL-079) and our check of them (B-W2b-F13b, wave 2
     await admin('UPDATE "User" SET locale = $1 WHERE id = $2', ['en', userIds.admin])
   })
 })
+
+// ---- B-CP-070 (customer page plan D11; wall tests W-CP-1, M-CP-2): the brand's Designer keeps drafts without prices ---------------
+describe('B-CP-070: the Designer starts, fills and discards its own drafts; never sends one, never sees a price', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const noPrice = (body: Json) => {
+    // The grain filter drops every price field for a role without the price grain (never null-but-present: the key is gone).
+    for (const line of body.request.lines as Json[]) for (const key of ['unitPriceShown', 'priceNow', 'amount']) expect(line, key).not.toHaveProperty(key)
+    expect(body.request.summary).not.toHaveProperty('net')
+    expect(body.seesPrices).toBe(false)
+  }
+
+  it('starts and fills a draft: lines and header kept, no price in any answer; held from sending and withdrawing (403)', async () => {
+    const made = await ok(browsers.designer, 'POST', '/portal/order-requests', { source: 'PICKER', note: 'Made-up: the team kit for spring' }, 201)
+    expect(made.request).toMatchObject({ status: 'DRAFT', may: { send: false, withdraw: false, discard: true } })
+    const url = `/portal/order-requests/${made.request.id}`
+    const filled = await ok(browsers.designer, 'POST', `${url}/lines`, { version: made.request.version, lines: [{ styleId: jkt02, colourwayId: blk02, sizes: [{ size: '50', quantity: 3 }] }] })
+    noPrice(filled)
+    expect(filled.request.summary).toEqual({ lines: 1, pieces: 3 })
+    // Stored without a price shown (it never had one to see): the buyer accepts today's price before sending.
+    expect((await one('SELECT "unitPriceShown" FROM "PortalOrderRequestLine" WHERE "requestId" = $1', [made.request.id])).unitPriceShown).toBeNull()
+    const header = await ok(browsers.designer, 'PATCH', url, { version: filled.request.version, requestedDate: addDays(TODAY, 40) })
+    noPrice(header)
+    noPrice(await ok(browsers.designer, 'GET', url))
+    const listed = await ok(browsers.designer, 'GET', '/portal/order-requests')
+    expect(listed.seesPrices).toBe(false)
+    for (const row of listed.requests as Json[]) expect(row).not.toHaveProperty('net')
+    // Never a send or a withdraw (the route's permission), never today's prices (no price to take), never a reorder (no orders).
+    expect((await call(browsers.designer, 'POST', `${url}/send`, { version: header.request.version })).status).toBe(403)
+    expect((await call(browsers.designer, 'POST', `${url}/prices`, { version: header.request.version })).status).toBe(409)
+    expect((await call(browsers.designer, 'GET', '/portal/reorder/orders')).status).toBe(403)
+    // The Buyer reads the Designer's draft (the party's), takes today's price and sends it; the Designer cannot withdraw it.
+    const read = await ok(browsers.buyer, 'GET', url)
+    expect(read.request).toMatchObject({ may: { send: true, discard: true }, pricesChanged: 1 })
+    const priced = await ok(browsers.buyer, 'POST', `${url}/prices`, { version: read.request.version })
+    const sent = await ok(browsers.buyer, 'POST', `${url}/send`, { version: priced.request.version })
+    expect(sent.request.status).toBe('SENT')
+    expect((await call(browsers.designer, 'POST', `${url}/withdraw`, { version: sent.request.version })).status).toBe(403)
+    expect((await ok(browsers.designer, 'GET', url)).request.may).toEqual({ send: false, withdraw: false, discard: false })
+  })
+
+  it('discards a draft it started; never a colleague\'s; a Buyer discards any draft of the party', async () => {
+    const own = await ok(browsers.designer, 'POST', '/portal/order-requests', {}, 201)
+    expect(await ok(browsers.designer, 'DELETE', `/portal/order-requests/${own.request.id}?version=${own.request.version}`)).toEqual({ discarded: true })
+    const buyers = await ok(browsers.buyer, 'POST', '/portal/order-requests', {}, 201)
+    expect((await ok(browsers.designer, 'GET', `/portal/order-requests/${buyers.request.id}`)).request.may.discard).toBe(false)
+    const held = await call(browsers.designer, 'DELETE', `/portal/order-requests/${buyers.request.id}?version=${buyers.request.version}`)
+    expect(held.status).toBe(403)
+    expect(held.body.error.message).toBe('Only the colleague who started this draft, or one who may send orders, discards it.')
+    const theirs = await ok(browsers.designer, 'POST', '/portal/order-requests', {}, 201)
+    expect(await ok(browsers.buyer, 'DELETE', `/portal/order-requests/${theirs.request.id}?version=${theirs.request.version}`)).toEqual({ discarded: true })
+    expect(await ok(browsers.buyer, 'DELETE', `/portal/order-requests/${buyers.request.id}?version=${buyers.request.version}`)).toEqual({ discarded: true })
+  })
+
+  it('W-CP-1: another customer lists, reads, edits and discards none of these drafts (404, as if absent); a Viewer keeps none (403)', async () => {
+    const draft = await ok(browsers.designer, 'POST', '/portal/order-requests', { customerRef: 'PO-T-W1' }, 201)
+    const url = `/portal/order-requests/${draft.request.id}`
+    const theirs = await ok(browsers.other, 'GET', '/portal/order-requests')
+    expect(theirs.requests.map((row: Json) => row.id)).not.toContain(draft.request.id)
+    expect(JSON.stringify(theirs)).not.toContain('PO-T-W1')
+    for (const [method, path, body] of [
+      ['GET', url, undefined],
+      ['PATCH', url, { version: draft.request.version, note: 'not mine' }],
+      ['POST', `${url}/lines`, { version: draft.request.version, lines: [{ styleId: jkt02, colourwayId: blk02, sizes: [{ size: '50', quantity: 1 }] }] }],
+      ['DELETE', `${url}?version=${draft.request.version}`, undefined],
+    ] as const) {
+      const answer = await call(browsers.other, method, path, body)
+      expect(answer.status, `${method} ${path}`).toBe(404)
+      expect(JSON.stringify(answer.body)).not.toMatch(/PO-T-W1|another customer|belongs/i)
+    }
+    expect((await call(browsers.viewer, 'GET', '/portal/order-requests')).status).toBe(403)
+    expect((await one('SELECT version FROM "PortalOrderRequest" WHERE id = $1', [draft.request.id])).version).toBe(draft.request.version)
+  })
+})
+// ---- end B-CP-070

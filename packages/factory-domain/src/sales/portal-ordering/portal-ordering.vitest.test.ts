@@ -6,7 +6,7 @@ import { partnerTemplateOf } from '../../auth/roles/templates'
 import { EVENT_DEFINITIONS } from '../../events/catalogue'
 import { ATTENTION_KINDS, KIND_RULES } from '../../insights/attention'
 import { decisionProblem, refuseReasonProblem, withdrawProblem } from './office'
-import { PORTAL_ADDRESSES_MANAGE, PORTAL_ADDRESSES_VIEW, PORTAL_CATALOGUE_VIEW, PORTAL_ORDER_REQUESTS_MANAGE, PORTAL_ORDERING_PERMISSIONS } from './permissions'
+import { PORTAL_ADDRESSES_MANAGE, PORTAL_ADDRESSES_VIEW, PORTAL_CATALOGUE_VIEW, PORTAL_ORDER_DRAFTS_EDIT, PORTAL_ORDER_REQUESTS_MANAGE, PORTAL_ORDERING_PERMISSIONS } from './permissions'
 import { reorderPlan, type ReorderFacts } from './reorder'
 import { PPE_CATEGORIES } from '../../product/styles/rules'
 import { PPE_WORDS } from './rules'
@@ -19,9 +19,25 @@ const A = '00000000-0000-4000-8000-0000000000aa'
 const facts = (more: Partial<LineFacts> = {}): LineFacts => ({ styleCode: 'JKT-100', sold: true, colourwayName: 'Black', colourwayActive: true, offered: ['48', '50', '52'], priceNow: '410.00', ...more })
 
 describe('permissions and templates (B-W2b-190)', () => {
-  it('declares four partner permissions, never office ones', () => {
+  it('declares five partner permissions, never office ones', () => {
+    expect(PORTAL_ORDERING_PERMISSIONS).toHaveLength(5)
     for (const name of PORTAL_ORDERING_PERMISSIONS) expect(FACTORY_PERMISSIONS.get(name)?.partner, name).toBe(true)
     expect(FACTORY_PERMISSIONS.assignable.map((definition) => definition.name)).not.toContain(PORTAL_CATALOGUE_VIEW)
+    expect(FACTORY_PERMISSIONS.assignable.map((definition) => definition.name)).not.toContain(PORTAL_ORDER_DRAFTS_EDIT)
+  })
+
+  // B-CP-070 (customer page plan D11): the brand's Designer starts and fills a draft, never sends it, never sees a price.
+  it('gives the drafts to the Buyer and the Designer (the Admin follows); sending stays the Buyer\'s and the Admin\'s', () => {
+    for (const key of ['customer-buyer', 'customer-designer', 'customer-admin']) expect(partnerTemplateOf(key)?.permissions, key).toContain(PORTAL_ORDER_DRAFTS_EDIT)
+    for (const key of ['customer-finance', 'customer-quality', 'customer-production', 'customer-viewer', 'supplier-orders', 'supplier-admin', 'subcontractor-jobs', 'guest-accountant']) {
+      expect(partnerTemplateOf(key)?.permissions, key).not.toContain(PORTAL_ORDER_DRAFTS_EDIT)
+    }
+    const designer = partnerTemplateOf('customer-designer')!
+    expect(designer.permissions).not.toContain(PORTAL_ORDER_REQUESTS_MANAGE)
+    expect(designer.grains).toEqual([])
+    expect(partnerTemplateOf('customer-buyer')?.permissions).toContain(PORTAL_ORDER_REQUESTS_MANAGE)
+    expect(partnerTemplateOf('customer-admin')?.permissions).toContain(PORTAL_ORDER_REQUESTS_MANAGE)
+    expect(FACTORY_PERMISSIONS.get(PORTAL_ORDER_DRAFTS_EDIT)?.risk).toBe('write')
   })
 
   it('gives the catalogue and addresses to every customer role, requests to the Buyer, address changes to the Admin only', () => {

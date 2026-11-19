@@ -2150,6 +2150,7 @@
     "portal_customerDocuments_finance": "See the invoices and credit notes (PDF and XML e-invoice) and the statements of account sent to you; only for roles that show prices",
     "portal_catalogue_view": "See the styles you can buy: colours, sizes, certificate class and, for roles that show prices, your price",
     "portal_orderRequests_manage": "Make order requests: pick styles, reorder a past order at today's prices or upload a sheet, then send the request",
+    "portal_orderDrafts_edit": "Start and fill draft orders with your colleagues (styles, files, dates, notes, messages) and discard one you started; a colleague who may order sends it",
     "portal_addresses_view": "See your organisation's delivery addresses",
     "portal_addresses_manage": "Add or archive your organisation's delivery addresses and choose the default one",
     "portal_salesOrders_ask": "Ask the factory to change or cancel your organisation's orders within the cut-off rules, and withdraw a request while it waits",

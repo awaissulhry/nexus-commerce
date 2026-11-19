@@ -9,25 +9,27 @@ export const manifest = defineManifest({
   // The catalogue (SAL-071).
   'GET /portal/catalogue': { audiences: ['partner'], permission: 'portal.catalogue.view', scope: 'party' },
   'GET /portal/catalogue/:styleId': { audiences: ['partner'], permission: 'portal.catalogue.view', scope: 'party' },
-  // Order requests (SAL-074) and their lines.
-  'GET /portal/order-requests': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
-  'POST /portal/order-requests': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
-  'GET /portal/order-requests/:requestId': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
-  'PATCH /portal/order-requests/:requestId': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
-  'DELETE /portal/order-requests/:requestId': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
-  'POST /portal/order-requests/:requestId/lines': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
-  'PUT /portal/order-requests/:requestId/lines/:lineId': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
-  'DELETE /portal/order-requests/:requestId/lines/:lineId': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
-  'POST /portal/order-requests/:requestId/prices': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
+  // Order requests (SAL-074) and their lines. B-CP-070 (D11): a draft is kept with portal.orderDrafts.edit (the Buyer and the
+  // Designer; the Admin follows): read, start, fill, discard (the handler: one who may order, or the one who started it). Send and
+  // Withdraw stay portal.orderRequests.manage (the Buyer, the Admin). No price for a role without the price grain (the filter).
+  'GET /portal/order-requests': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'POST /portal/order-requests': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'GET /portal/order-requests/:requestId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'PATCH /portal/order-requests/:requestId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'DELETE /portal/order-requests/:requestId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'POST /portal/order-requests/:requestId/lines': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'PUT /portal/order-requests/:requestId/lines/:lineId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'DELETE /portal/order-requests/:requestId/lines/:lineId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'POST /portal/order-requests/:requestId/prices': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'POST /portal/order-requests/:requestId/send': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   'POST /portal/order-requests/:requestId/withdraw': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
-  // Reorder (SAL-072).
+  // Reorder (SAL-072): a past order is the orders' business — kept with portal.orderRequests.manage (a Designer reads no order).
   'GET /portal/reorder/orders': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   'GET /portal/reorder/orders/:orderId': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   'POST /portal/order-requests/:requestId/reorder': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
-  // Upload (SAL-073).
-  'GET /portal/order-template': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
-  'POST /portal/order-requests/:requestId/upload': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
+  // Upload (SAL-073): filling a draft from a sheet (B-CP-070: portal.orderDrafts.edit).
+  'GET /portal/order-template': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'POST /portal/order-requests/:requestId/upload': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   // Delivery addresses (SAL-079).
   'GET /portal/addresses': { audiences: ['partner'], permission: 'portal.addresses.view', scope: 'party' },
   'POST /portal/addresses': { audiences: ['partner'], permission: 'portal.addresses.manage', scope: 'party' },

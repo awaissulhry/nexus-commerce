@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { ConflictError, DomainError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { ConflictError, DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
@@ -34,11 +34,18 @@ import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
 import { dayText, dayValue, iso, lockRequest, priceOrNull, readLines, readRequest, REQUEST_COLUMNS, type LineRow, type Reader, type RequestRow } from './store'
 // B-TH-304: the customer's own order numbers in the catalogue door (pick A).
 import { customerNumberOf, type CustomerNumber } from '@nexus/factory-domain/sales/customer-numbers'
+// B-CP-070 (D11): who sends and who discards a draft.
+import { can } from '@nexus/factory-domain/core/permissions'
+import { PORTAL_ORDER_REQUESTS_MANAGE } from '@nexus/factory-domain/sales/portal-ordering/permissions'
 
 /**
  * The customer's order requests in the portal (B-W2b-190; SAL-074 "portal orders arrive as requests", the draft of
- * SAL-071/072/073; design portal.customer.neworder). Partner sessions with portal.orderRequests.manage, inside their party
- * (row-level security) and the portal's company.
+ * SAL-071/072/073; design portal.customer.neworder). Partner sessions inside their party (row-level security) and the
+ * portal's company. B-CP-070 (customer page plan D11): a draft is kept with portal.orderDrafts.edit — the Buyer and the
+ * Designer (the Admin follows) start it, fill it and discard one THEY started; sending and withdrawing stay
+ * portal.orderRequests.manage (the Buyer, the Admin: one who may order also discards any draft). A role without the price
+ * grain (the Designer) is shown and sends no price: the grain filter drops every marked field. `may` says what the reader may
+ * do with the request now (held, never hidden: the page names who can).
  *
  *   GET    /portal/order-requests                    the party's requests (drafts first, then the newest)
  *   POST   /portal/order-requests                    a new DRAFT (how it starts: PICKER, REORDER, UPLOAD; the header)
@@ -188,6 +195,7 @@ export async function requestView(app: FastifyInstance, request: FastifyRequest,
     : []
   const totals = draftTotals(lines.map((line) => ({ sizes: sizesOf(line), unitPriceShown: priceOrNull(line.unitPriceShown) })), reader.seesPrices)
   const outcome = await outcomeOf(request, row)
+  const may = mayOn(reader, row) // B-CP-070
   return {
     request: {
       id: row.id,
@@ -215,11 +223,26 @@ export async function requestView(app: FastifyInstance, request: FastifyRequest,
       held: heldWords(problems.length),
       pricesChanged: views.filter((line) => line.problems.some((problem) => problem.code === 'PRICE_CHANGED')).length,
       notice: REQUEST_NOTICE,
+      // B-CP-070: send / withdraw (who may order), discard (who may order, or the one who started the draft).
+      may: { send: draft && may.order, withdraw: row.status === 'SENT' && may.order, discard: draft && may.discard },
     },
     addresses: addresses.map(({ approvalStatus, refuseReason, ...address }) => ({ ...address, isDefault: address.isDefaultShipTo, approval: approvalView({ approvalStatus, refuseReason }) })),
     seesPrices: reader.seesPrices,
   }
 }
+
+// ---- B-CP-070 (D11): who sends, who discards ------------------------------------------------------------------------------
+
+/** What the reader may do with the request beside filling a draft: order (send, withdraw), discard the draft. */
+function mayOn(reader: PortalReader, row: Pick<RequestRow, 'companyId' | 'partyId' | 'createdById'>): { readonly order: boolean; readonly discard: boolean } {
+  if (reader.session.preview) return { order: false, discard: false }
+  const order = can(reader.actor, PORTAL_ORDER_REQUESTS_MANAGE, { companyId: row.companyId, partyId: row.partyId })
+  return { order, discard: order || row.createdById === reader.session.userId }
+}
+
+/** The refusal of a discard by a colleague who neither orders nor started the draft (the page names who may). */
+const DISCARD_HELD = 'Only the colleague who started this draft, or one who may send orders, discards it.'
+// ---- end B-CP-070
 
 /** The order or quote a request became (partner reads: their number). */
 async function outcomeOf(request: FastifyRequest, row: Pick<RequestRow, 'salesOrderId' | 'quoteId'>) {
@@ -546,6 +569,7 @@ export async function takeTodaysPrices(app: FastifyInstance, request: FastifyReq
 export async function discardDraft(app: FastifyInstance, request: FastifyRequest, requestId: string, version: number, idempotencyKey?: string) {
   const reader = portalReader(app, request)
   const row = await ownDraft(request, reader, requestId)
+  if (!mayOn(reader, row).discard) throw new ForbiddenError(DISCARD_HELD) // B-CP-070
   await commandOn(app, request, { name: 'portalOrdering.discardDraft', idempotencyKey, input: { requestId, version } }, async (tools) => {
     const current = await readRequest(tools.tx, row.id)
     if (!current || current.status !== 'DRAFT') throw new InvalidStateError('This request is no longer a draft.')
