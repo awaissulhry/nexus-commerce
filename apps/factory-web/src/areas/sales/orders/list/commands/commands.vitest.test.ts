@@ -535,7 +535,7 @@ describe('F-CP-109 — ONE reason, the run (one order at a time, its own version
 describe('F-CP-109 — the money wall: the Close preview says "not settled" in words only (as Sales worker / as Production manager)', () => {
   for (const [who, can] of [
     ['Sales worker', { ...canOf('sales'), price: false, close: true }],
-    ['Production manager (seeing, never closing)', { ...canOf('manager'), close: true }],
+    ['Production manager (with the close right for this case)', { ...canOf('manager'), close: true }],
   ] as const) {
     it(`as ${who}: no amount, no difference, no sum`, () => {
       const targets = [target(1), target(2)]
