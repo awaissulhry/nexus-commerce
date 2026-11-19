@@ -29,7 +29,7 @@ export default defineIndexer({
       },
     })
     // B-OP-044 (order page N6): a shared shipment is found by every order it carries (its number and PO; one customer).
-    const ordersOf = await orderRefsOfShipments(client, rows)
+    const ordersOf = await orderRefsOfShipments(tx, rows) // op-fx1: the read's own transaction (was `client`, undefined here: every shipment read threw)
     return rows.map((row) => ({
       recordId: row.id,
       companyId: row.companyId,

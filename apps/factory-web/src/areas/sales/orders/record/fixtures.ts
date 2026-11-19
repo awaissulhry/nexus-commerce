@@ -1,4 +1,5 @@
 import { createElement, Fragment } from 'react'
+import { CHANGE_WORDS } from '@nexus/factory-domain/order-apply/rules' // op-fx1: the preview's own words
 import { Building2, Eye, Lock, ShoppingBag } from 'lucide-react' // F-OP-217: the dock's segments
 import { defineDesignScreen, type DesignCase } from '../../../../lib/design/design-screen'
 import type { OpenApproval, Order, OrderLine } from '../api' // F-OP-101: OpenApproval
@@ -278,6 +279,7 @@ function amendOf(value: Order, change: (lines: DraftLine[]) => DraftLine[] = (li
     reason: '',
     tell: { words: '', chosen: null },
     extraOutcome: null, // F-OP-107
+    fee: '', // op-fx1: F-OP-108's fee as use-lines-acts starts it (empty: none); missing, every design case of the strip threw
     ...over,
   }
   return seen ? { ...draft, review: { ...seen, key: amendKeyOf(draft, value), problem: null } } : draft
@@ -491,7 +493,7 @@ const OUTCOME_PREVIEW: AmendPreview = {
   workOrders: {
     extra: [{ workOrderSizeId: '0190f0e2-9191-7000-8000-0000000021c1', salesOrderLineId: LINE_BLK, size: '50', count: 1, words: { en: '1 piece of 50 is already cut', it: '1 pezzo della 50 è già tagliato' } }],
     needsOutcome: true,
-    words: { en: '1 piece of WO-00021 is cut beyond the new figures', it: '1 pezzo di WO-00021 è tagliato oltre le nuove quantità' },
+    words: CHANGE_WORDS.chooseExtra(1), // op-fx1: the API's own words of this view (work-order-plan.ts), as every fixture is an answer it gives
     plan: [{ kind: 'LOWER_TO_ORDER', workOrderId: WORK_ORDERS[0]!.id, number: 'WO-00021', status: 'IN_PROGRESS', route: 'LOWER_RELEASED', cells: [{ lineId: LINE_BLK, size: '50', from: 2, to: 2, cut: 2 }], extra: 1, appliesNow: true, held: null, reprint: true }],
   },
 }
@@ -627,7 +629,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'production-held', label: 'Sales · Production: the gate waits for the deposit; Make work orders held', model: base('sales', confirmed, { tab: 'production', production: ready(WORK_READ) }) },
     { id: 'production-progress', label: 'Sales · Production: the work orders with this order’s own pieces (where, made for this order, also makes, held, a shared cut), 12 made-to-measure units as one row, 1 not shown', model: base('sales', production, { tab: 'production', production: ready(WORK_READ) }) },
     // ---- F-OP-113: the work-order rows — in place for a planner, held for Sales in words, a shared row read-only ----
-    { id: 'wo-acts-manager', label: 'F-OP-113 · Production manager · Production: Due, Priority and Rush in place on each work order (by number), the row ⋯; WO-00019 is shared with another customer: its link only', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { toldAt: { [WORK_ORDERS_IDS[1]]: at(18, 9, 42) } }) }), note: 'WO-00022 says "Told the floor at 10:42" after its priority was changed here.' },
+    { id: 'wo-acts-manager', label: 'F-OP-113 · Production manager · Production: Due, Priority and Rush in place on each work order (by number), the row ⋯; WO-00019 is shared with another customer: its link only', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { toldAt: { [WORK_ORDERS_IDS[1]]: at(18, 8, 42) /* op-fx1: 18 Oct is summer time in Rome (+2): 08:42 UTC is the note's 10:42 */ } }) }), note: 'WO-00022 says "Told the floor at 10:42" after its priority was changed here.' },
     { id: 'wo-acts-saving', label: 'F-OP-113 · Production manager · Production: a priority saving (the cell marked) and a due date refused (said on the row)', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { saves: { [WORK_ORDERS_IDS[0]]: { field: 'priority', problem: null }, [WORK_ORDERS_IDS[1]]: { field: null, problem: { key: 'production:error.changed' } } } }) }) },
     // ---- F-OP-114 / F-OP-115: the row's dialogs (the DS Modal draws in a browser: the design index shows them) ----
     { id: 'wo-hold-dialog', label: 'F-OP-114 · Production manager · Hold… from a work order’s row: the reason the floor reads, what the customer reads shown before it is placed', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { reasons: [...HOLD_REASONS, ...PRODUCTION_HOLD_REASONS], dialog: woDialog('hold', productionWorkOrder('RELEASED'), { holdRight: true }) }) }) },

@@ -14,7 +14,8 @@ import { hasLeadingZeroBits, solveChallenge } from './pow'
 
 const page = (id: string) => designScreen.cases.find((entry) => entry.id === id)!.model.page!
 /** A message key left on screen: one of this catalogue's top-level groups followed by a dotted name. */
-const KEY = /\b(?:state|ask|pill|now|problem|step|event|by|fact|where|parcels|events|delivery|paper|papers|claim|foot|search|loading|typed /* op-24 */)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
+// op-24: + typed. op-fx1: that note sat inside the regex literal, whose first `/` ended it (the file did not parse).
+const KEY = /\b(?:state|ask|pill|now|problem|step|event|by|fact|where|parcels|events|delivery|paper|papers|claim|foot|search|loading|typed)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 
 describe('SCR-194 Track an order — the link page (B-W2b-170)', () => {
   it('a SHIPMENT_TRACK link of a shipment opens this page (link-type registry)', () => {
