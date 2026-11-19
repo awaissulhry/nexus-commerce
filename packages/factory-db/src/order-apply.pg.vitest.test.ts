@@ -480,9 +480,10 @@ describe('WorkOrderChange (item 4, R1)', () => {
     await expect((await change({ extra: [extra[0], extra[0]], extraOutcome: 'SCRAP' })).insert()).rejects.toThrow(/each extra is of a cell it lowers \(that cell's line and size\), once/)
     await expect((await change({ extra: [{ ...extra[0]!, count: 0 }], extraOutcome: 'SCRAP' })).insert()).rejects.toThrow(/1 to 100000 pieces/)
     // Its request one of its own order; proposed by an active office person, with words.
-    const [open] = await admin(`SELECT "orderId"::text AS "order" FROM "OrderChangeRequest" WHERE id = $1::uuid`, [sales.changes.open])
-    expect(open!.order).not.toBe(production.salesOrderId)
-    await expect((await change({ requestId: sales.changes.open })).insert()).rejects.toThrow(/carries out a request of its own order/)
+    // (End check: the seeds' OPEN ask is of SEED-SO-0002 itself; the refused cancel is of SEED-SO-0003, another order.)
+    const [other] = await admin(`SELECT "orderId"::text AS "order" FROM "OrderChangeRequest" WHERE id = $1::uuid`, [sales.changes.refusedCancel])
+    expect(other!.order).not.toBe(production.salesOrderId)
+    await expect((await change({ requestId: sales.changes.refusedCancel })).insert()).rejects.toThrow(/carries out a request of its own order/)
     await expect((await change({ proposedById: portal.userIds.p1Buyer })).insert()).rejects.toThrow(/is proposed by an active office person/)
     await expect((await change({ proposedById: randomUUID() })).insert()).rejects.toThrow(/is proposed by an active office person/)
     await expect((await change({ reason: ' ' })).insert()).rejects.toThrow(/says why in 1 to 500 characters/)
@@ -535,10 +536,10 @@ describe('the work-order cell guard, redefined (item 7, R1 "Lower to the order")
     await plant('WorkOrder', production.workOrderId, { id, number: tag('T-WO'), batchNumber: tag('T-BT'), status, ...(status === 'ON_HOLD' ? { heldFromStatus: 'IN_PROGRESS', holdReason: 'Made-up: material', heldAt: await serverNow(), heldById: a.actorId } : {}) })
     return id
   }
-  /** A cell of `workOrderId` (a copy of SEED-WO-0001's RED 50) of `quantity`; returns its id. */
-  async function cell(workOrderId: string, quantity: number): Promise<string> {
+  /** A cell of `workOrderId` (a copy of SEED-WO-0001's RED 50, or of another `size`) of `quantity`; returns its id. */
+  async function cell(workOrderId: string, quantity: number, size?: string): Promise<string> {
     const id = randomUUID()
-    await plant('WorkOrderSize', production.cellIds['RED-50'], { id, workOrderId, quantity })
+    await plant('WorkOrderSize', production.cellIds['RED-50'], { id, workOrderId, quantity, ...(size ? { size } : {}) })
     return id
   }
   /** A bundle of `cellId` (a copy of the seed's first) of `quantity` garments, ACTIVE, split off `parentBundleId` or none. */
@@ -569,13 +570,17 @@ describe('the work-order cell guard, redefined (item 7, R1 "Lower to the order")
       await expect(run(office(), `DELETE FROM "WorkOrderSize" WHERE id = $1::uuid`, c)).rejects.toThrow(BELOW(4))
       // A new cell still only on a DRAFT.
       await expect(copyRow('WorkOrderSize', c, { id: randomUUID(), size: '56', quantity: 1 })).rejects.toThrow(FROZEN)
-      // The bundle voided: only the garment split off it is held now, so the cell goes down to 1, never to none.
-      expect(await admin(`UPDATE "Bundle" SET status = 'VOID', "voidedAt" = now(), "voidReason" = 'Made-up: recut', version = version + 1 WHERE id = $1 RETURNING id`, [b])).toHaveLength(1)
-      expect(await floorOf(c)).toBe(1)
+      // The bundle voided (end check: MES-071 voids the garment split off it first, so the genealogy stays whole): the split
+      // garment alone never counted, and with both void nothing is held, so the cell goes down below what was bundled.
+      const voided = (where: string) => admin(`UPDATE "Bundle" SET status = 'VOID', "voidedAt" = now(), "voidReason" = 'Made-up: recut', version = version + 1 WHERE ${where} = $1 RETURNING id`, [b])
+      await expect(voided('id')).rejects.toThrow(/has ACTIVE bundles split from it; void them first/)
+      expect(await voided('"parentBundleId"')).toHaveLength(1)
+      expect(await floorOf(c)).toBe(4)
+      expect(await voided('id')).toHaveLength(1)
+      expect(await floorOf(c)).toBe(0)
       expect(await setQuantity(c, 1)).toBe(1)
-      await expect(run(office(), `DELETE FROM "WorkOrderSize" WHERE id = $1::uuid`, c)).rejects.toThrow(BELOW(1))
-      // A cell nothing of which is cut, bundled or on a cut order goes.
-      const gone = await cell(wo, 2)
+      // A cell nothing of which is cut, bundled or on a cut order goes (another size: a work order has one cell per size).
+      const gone = await cell(wo, 2, '56')
       expect(await run(office(), `DELETE FROM "WorkOrderSize" WHERE id = $1::uuid`, gone)).toBe(1)
     }
   })

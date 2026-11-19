@@ -623,6 +623,8 @@ describe('model ownership', () => {
       'WorkInstructionStep',
       'WorkInstructionVersion',
       'WorkOrder',
+      // B-SA-005 (sales page schema wave, #1660): the office's change of a work order an accepted order change leaves (order-apply.json).
+      'WorkOrderChange',
       'WorkOrderClose',
       'WorkOrderCostEntry',
       // B-PR-15 (production lane, #1579): a plain production or customer hold on a work order (production.json).

@@ -238,10 +238,11 @@ describe("a customer's production limits (PW-S01, DB part)", () => {
       await expect(update('PortalSettings', id, { productionAskKinds: ['HOLD', kind] }), kind).rejects.toThrow(words)
     }
     await expect(update('PortalSettings', id, { productionAskKinds: ['DESIGN', 'DESIGN'] })).rejects.toThrow(words)
-    // The owner too (the guard is the last word for every login); the words name no customer.
+    // The owner too (the guard is the last word for every login). As every refusal of this guard, the words name the
+    // settings refused (the seed keys a customer's settings by its party id) and no other customer.
     const owner = await refusal(admin(`UPDATE "PortalSettings" SET "productionAskKinds" = ARRAY['DESIGN', 'CHANGE']::"OrderChangeRequestKind"[] WHERE id = $1`, [id]))
     expect(owner).toMatch(words)
-    expect(owner).not.toContain(P.p1)
+    for (const other of [P.p2, P.p3, P.p4]) expect(owner).not.toContain(other)
     await expect(update('PortalSettings', id, { productionAskKinds: ['HOLD', 'HOLD'] })).rejects.toThrow(/each once/)
     await expect(admin(`UPDATE "PortalSettings" SET "productionAskKinds" = NULL WHERE id = $1`, [id])).rejects.toThrow(/each once/)
     expect(await update('PortalSettings', id, { productionAskKinds: [] })).toBe(1)

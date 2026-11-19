@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
+import { businessDate } from '@nexus/factory-domain/core/time'
 import { DRILL_TIMER_KEY } from '@nexus/factory-domain/ops/drills'
 import { TWO_FACTOR_ACTION } from '@nexus/factory-domain/ops/two-factor'
 import { systemRoleChanges } from '../../auth/roles/system-roles'
@@ -244,7 +245,8 @@ describe('restore drills (PLT-214)', () => {
     expect((await owner.get('/admin/security/fingerprint')).body.line).not.toBe(line)
     expect((await owner.get(`/admin/security/fingerprint?asOf=${encodeURIComponent(backupAt)}`)).body.line).toBe(line)
 
-    const drilledOn = h.clock.now().toISOString().slice(0, 10)
+    // The business day (Europe/Rome) the drill status counts from, never the UTC date (end check: 23:00-24:00 UTC is tomorrow).
+    const drilledOn = businessDate(h.clock.now())
     const recorded = await owner.post('/admin/security/drills', { id: announced.body.drillId, drilledOn, environment: 'a local copy', backupAt, restored: line, durationMinutes: 18, evidenceFileId: announced.body.file.id, notes: 'Restored on a laptop.' })
     expect(recorded.status, JSON.stringify(recorded.body)).toBe(200)
     expect(recorded.body.drill).toMatchObject({ id: announced.body.drillId, result: 'PASSED', environment: 'a local copy', evidenceFileId: announced.body.file.id, performedBy: { id: ownerUser.id } })
@@ -258,7 +260,7 @@ describe('restore drills (PLT-214)', () => {
   it('fails a drill whose copy differs, keeps the reminder, and refuses a drill over production', async () => {
     h.clock.advance(60_000)
     const wrong = line.replace(/invoices=[0-9a-f]{16}/, 'invoices=ffffffffffffffff')
-    const drilledOn = h.clock.now().toISOString().slice(0, 10)
+    const drilledOn = businessDate(h.clock.now())
     const failed = await owner.post('/admin/security/drills', { drilledOn, environment: 'staging', backupAt, restored: wrong })
     expect(failed.status, JSON.stringify(failed.body)).toBe(200)
     expect(failed.body.drill.result).toBe('FAILED')
@@ -278,7 +280,7 @@ describe('restore drills (PLT-214)', () => {
 
   it('keeps every drill (append-only) and a later pass moves the reminder', async () => {
     await daysPass(2)
-    const drilledOn = h.clock.now().toISOString().slice(0, 10)
+    const drilledOn = businessDate(h.clock.now())
     const again = await owner.post('/admin/security/drills', { drilledOn, environment: 'a local copy', backupAt, restored: line })
     expect(again.body.drill.result).toBe('PASSED')
     expect((await adminRows(`SELECT status FROM "DueTimer" WHERE "tenantId" = $1 ORDER BY "createdAt"`, [alpha.id])).map((row) => row.status)).toEqual(['CANCELLED', 'PENDING'])

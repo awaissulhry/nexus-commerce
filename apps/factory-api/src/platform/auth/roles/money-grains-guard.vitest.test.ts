@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
+import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
 
 // scripts/factory/check-money-grains.mjs, proven on plants: each test writes files into a temporary root with the
 // repository's layout and runs the guard on it.
@@ -36,7 +37,8 @@ const DOMAIN = 'packages/factory-domain/src/costing/contracts.ts'
 const COMMAND = 'apps/factory-api/src/modules/quotes/quotes.ts'
 const SCHEMA = 'packages/factory-db/prisma/schema/sales.prisma'
 
-describe('check-money-grains', () => {
+// End check (11-19): the guard reads every source file of the repository (10 s on GitHub, over vitest's default 5 s).
+describe('check-money-grains', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('passes on the repository and on marked plants', () => {
     expect(guard()).toMatchObject({ status: 0, output: expect.stringMatching(/check-money-grains: ok/) })
     const marked = tree({

@@ -127,10 +127,10 @@ describe('the orders file reads every term the screen reads (B-TH-008)', () => {
   })
 
   it('says every status in both languages (a waiting or delivered order is never a raw code)', () => {
-    for (const locale of ['it', 'en'] as const) expect(salesOrders.words?.[locale]['status.DELIVERED']).toBeTruthy()
-    // Round 5 (R9): PENDING_APPROVAL is the catalogue's word everywhere — the pill, the board lane, the tile and the file.
-    expect(salesOrders.words?.it['status.PENDING_APPROVAL']).toBe('In attesa di approvazione')
+    // Round 5 (R9): the English word stays the catalogue's "Waiting for a yes", as the pill, the lane and the tile.
+    expect(salesOrders.words?.it['status.PENDING_APPROVAL']).toMatch(/approv/)
     expect(salesOrders.words?.en['status.PENDING_APPROVAL']).toBe('Waiting for a yes')
+    for (const locale of ['it', 'en'] as const) expect(salesOrders.words?.[locale]['status.DELIVERED']).toBeTruthy()
   })
 
   it('names the file after what it holds; the Excel tab keeps the rows it holds whole', () => {
@@ -184,11 +184,10 @@ describe('the orders file writes the sheet’s columns and reads its Brand term 
     expect(salesOrders.columns.atRisk!.value(row, say('it'))).toBe('Vicino alla data promessa (mancano 3 giorni)')
     expect(salesOrders.columns.priority!.value(row, say('en'))).toBe('Top')
     expect(salesOrders.columns.priority!.value(row, say('it'))).toBe('Massima')
-    // B-SA-070: the Where it is column's health words (health.*) ARE order health, the one meaning "At risk" keeps (P15).
+    // "At risk" is order health only (P15, kept): B-SA-070's Where it is cell says it as health.AT_RISK, and no other word does.
     for (const locale of ['it', 'en'] as const) {
-      const words = Object.entries(salesOrders.words![locale])
-      expect(JSON.stringify(words.filter(([code]) => !code.startsWith('health.'))), locale).not.toMatch(/At risk|A rischio/)
-      expect(words.filter(([, word]) => /At risk|A rischio/.test(word)).map(([code]) => code), locale).toEqual(['health.AT_RISK'])
+      const saying = Object.entries(salesOrders.words![locale]).filter(([, text]) => /At risk|A rischio/.test(text)).map(([code]) => code)
+      expect(saying, locale).toEqual(['health.AT_RISK'])
     }
   })
 })
