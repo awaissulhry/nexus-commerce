@@ -5,6 +5,10 @@ import { AlertCircle, Lock } from 'lucide-react'
 import { EmptyState } from '@nexus/ui/components'
 import { Button, Skeleton } from '@nexus/ui/primitives'
 import { useOrderingWords } from '../words'
+// F-CP-154: a line's kind, the ONE "Your price" cell.
+import { Ruler } from 'lucide-react'
+import { Input, Tag } from '@nexus/ui/primitives'
+import { kindKey, type DraftEntry } from '../model'
 import '../neworder.css'
 
 /**
@@ -69,3 +73,65 @@ export function PricesNote() {
   const { t } = useOrderingWords()
   return <p className="fw-pno-quiet">{t('prices.none')}</p>
 }
+
+// ---- F-CP-154 (customer page plan C5; 12 §2 parts 1 and 6; review E4; 11 §1.3 D3): a line's kind, and the ONE "Your price" cell ----
+/** A line's kind as a DS Tag: "From the catalogue" · "Described by you" · "Made to measure" (words, never colour alone). */
+export function KindTag({ kind }: { kind: DraftEntry['kind'] }) {
+  const { t } = useOrderingWords()
+  return (
+    <Tag tone={kind === 'CATALOGUE' ? 'neutral' : 'info'} className="fw-pno-kind">
+      {kind === 'MADE_TO_MEASURE' ? <Ruler size={12} aria-hidden /> : null}
+      {t(kindKey(kind))}
+    </Tag>
+  )
+}
+
+/**
+ * The ONE "Your price (without VAT)" cell of a line (review E4: one owner, this step), for a price holder only — the customer's
+ * Buyer, Finance or Admin: typed while the draft may be written ("18,50" or "18.50"; saved on leaving the cell, with the draft's
+ * version), read otherwise. Anyone without the price grain never gets this cell: their part 6 says "Prices are not part of your
+ * access." (the API sends no price to them and refuses one from them, M-CP-2).
+ */
+export function YourPriceCell({
+  seq,
+  access,
+  saved,
+  typed,
+  problem,
+  currency,
+  onType,
+  onLeave,
+}: {
+  seq: number
+  access: 'edit' | 'read'
+  /** The price the line holds (null: none yet). */
+  saved: string | null
+  /** What is typed and not saved yet (undefined: nothing). */
+  typed: string | undefined
+  /** Why the typed text cannot be saved (a key), or null. */
+  problem: string | null
+  currency: string
+  onType?: (text: string) => void
+  onLeave?: () => void
+}) {
+  const words = useOrderingWords()
+  const { t } = words
+  if (access === 'read') return <span className="fw-pno-ownprice">{words.price(saved, currency) ?? '—'}</span>
+  const label = t('draftPage.price.cell', { seq })
+  return (
+    <span className="fw-pno-ownprice">
+      <Input
+        value={typed ?? (saved === null ? '' : words.locale === 'it' ? saved.replace('.', ',') : saved)}
+        inputMode="decimal"
+        autoComplete="off"
+        aria-label={label}
+        aria-invalid={problem ? true : undefined}
+        prefix={currency === 'EUR' ? '€' : currency}
+        onChange={(event) => onType?.(event.target.value)}
+        onBlur={() => onLeave?.()}
+      />
+      {problem ? <span className="fw-pno-ownprice-problem" role="alert">{t(problem)}</span> : null}
+    </span>
+  )
+}
+// ---- end F-CP-154

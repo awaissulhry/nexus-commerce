@@ -83,6 +83,31 @@ import { announceDraftFile, completeDraftFile, removeDraftFile, type DraftFile, 
 import { DRAFT_FILES_MAX, draftFileCount, LATER_PART_OF, laterToggleOf } from './model'
 import type { UploadRow } from './view/DraftFiles'
 // ---- end F-CP-151
+// ---- F-CP-154 (customer page plan C5; 12 §2 parts 1, 4, 6; B-CP-075, B-CP-076): lines of every kind, the People and sizes roster,
+// "Your price" — every write a draft command at the draft's version; "Your price" only from a price holder (the grain filter refuses it
+// from anyone else: the page never sends the key without the grain).
+import { addCustomLine, addPeople, changeCustomLine, changePerson, removePerson, type CustomLine } from './api'
+import {
+  ADD_KIND_OF,
+  customLineBody,
+  customLineChanges,
+  customLineDraftOf,
+  customLineProblems,
+  customLinesOf,
+  draftFilesOf,
+  isAddKind,
+  lineCountOf,
+  mtmOf,
+  ownPriceWriteOf,
+  personBody,
+  personChanges,
+  personDraftOf,
+  personProblems,
+  type AddKind,
+  type CustomLineDraft,
+  type PersonDraft,
+} from './model'
+// ---- end F-CP-154
 
 /**
  * `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=&reorder=&line=` for a customer (B-W2b-194, SCR-185, on
@@ -122,6 +147,27 @@ interface SentInfo {
   seesPrices: boolean
 }
 type PickerState = Omit<PickerModel, 'onDraft' | 'prefix' | 'writeHeld'>
+// F-CP-154: a described or made-to-measure line's window, a person's window.
+interface CustomDialogState {
+  mode: 'add' | 'change'
+  lineId: string | null
+  draft: CustomLineDraft
+  /** Something was typed in it (leaving the page asks first). */
+  typed?: boolean
+  showProblems: boolean
+  busy: boolean
+  failed: string | null
+}
+interface PersonDialogState {
+  lineId: string
+  personId: string | null
+  draft: PersonDraft
+  /** Something was typed in it (leaving the page asks first). */
+  typed?: boolean
+  showProblems: boolean
+  busy: boolean
+  failed: string | null
+}
 type ReorderState = Omit<ReorderModel, 'currency' | 'writeHeld'>
 interface AddressState {
   draft: AddressDraft
@@ -200,6 +246,16 @@ function NewOrderContainer() {
   const [orderers, setOrderers] = useState<string[] | null>(null)
   // ---- end F-CP-150
   const [uploads, setUploads] = useState<UploadRow[]>([]) // F-CP-151: files going up now, or that did not go
+  // ---- F-CP-154: a custom line's window (with the styles it may name), a person's window, "Your price" typed and not saved yet.
+  const [customDialog, setCustomDialog] = useState<CustomDialogState | null>(null)
+  const [customStyles, setCustomStyles] = useState<{ state: 'loading' | 'error' | 'ready'; rows: { id: string; code: string; name: string }[] }>({ state: 'loading', rows: [] })
+  const [personDialog, setPersonDialog] = useState<PersonDialogState | null>(null)
+  const [ownPrices, setOwnPrices] = useState<Record<string, string>>({})
+  const [ownPriceProblems, setOwnPriceProblems] = useState<Record<string, string>>({})
+  const [describing, setDescribing] = useState(false)
+  const ownPricesRef = useRef(ownPrices)
+  ownPricesRef.current = ownPrices
+  // ---- end F-CP-154
 
   const recordRef = useRef<DraftRecord | null>(null)
   recordRef.current = record
@@ -245,6 +301,9 @@ function NewOrderContainer() {
     setStale(false)
     setStaleBy(null) // F-CP-150
     setUploads([]) // F-CP-151
+    // F-CP-154: "Your price" typed and its problems.
+    setOwnPrices({})
+    setOwnPriceProblems({})
   }, [])
 
   const apply = useCallback((next: DraftRecord) => {
@@ -439,6 +498,7 @@ function NewOrderContainer() {
   const flush = useCallback(async (): Promise<boolean> => {
     const results = [await saveHeader()]
     for (const lineId of new Set([...Object.keys(cellsRef.current), ...Object.keys(notesRef.current)])) results.push(await saveLine(lineId))
+    for (const lineId of Object.keys(ownPricesRef.current)) results.push(await saveOwnPriceRef.current(lineId)) // F-CP-154
     return results.every(Boolean)
   }, [saveHeader, saveLine])
 
@@ -473,6 +533,15 @@ function NewOrderContainer() {
 
   const remove = async (lineId: string) => {
     const current = recordRef.current
+    // F-CP-154: a described or made-to-measure line goes out the same way (its people with it); no Undo: its people would not come back.
+    const custom = current ? customLinesOf(current.request).find((entry) => entry.id === lineId) : undefined
+    if (current && custom) {
+      const gone = await write(`remove:${lineId}`, (version, key) => removeLine(api, current.request.id, lineId, version, key))
+      if (!gone) return
+      setOwnPrices(({ [lineId]: _drop, ...rest }) => rest)
+      setNotice({ lines: [t('draftPage.line.removed', { seq: custom.seq })], undo: null })
+      return
+    }
     const line = current?.request.lines.find((entry) => entry.id === lineId)
     if (!current || !line) return
     const next = await write(`remove:${lineId}`, (version, key) => removeLine(api, current.request.id, lineId, version, key))
@@ -487,6 +556,8 @@ function NewOrderContainer() {
     const current = recordRef.current
     if (!line || !current) return
     const body: NewLine = { styleId: line.style.id, colourwayId: line.colourway.id, sizes: line.sizes.filter((row) => row.quantity > 0).map((row) => ({ size: row.size, quantity: row.quantity })), note: line.note }
+    // F-CP-154: the customer's own price comes back with it (a price holder's line only).
+    if (current.seesPrices && line.brandUnitPrice) body.brandUnitPrice = line.brandUnitPrice
     const next = await write(`undo:${line.id}`, (version, key) => addLines(api, current.request.id, { version, lines: [body] }, key))
     if (next) setNotice({ lines: [t('notice.back', { style: line.style.code, colour: line.colourway.name })], undo: null })
   }
@@ -495,6 +566,159 @@ function NewOrderContainer() {
     const id = recordRef.current?.request.id
     if (id) void write('prices', (version, key) => takeTodaysPrices(api, id, version, key))
   }
+
+  // ---- F-CP-154 (customer page plan C5; 12 §2 parts 1, 4, 6): a line in the customer's own words, its people, "Your price" ----------
+  /** The styles a custom line may name: a described line its own label's, a made-to-measure line any of its catalogue. */
+  const readCustomStyles = useCallback(
+    (kind: CustomLine['kind']) => {
+      setCustomStyles({ state: 'loading', rows: [] })
+      fetchCatalogue(api, kind === 'DESCRIBED' ? { range: 'OWN_LABEL' } : {})
+        .then((read) => setCustomStyles({ state: 'ready', rows: read.styles.filter((style) => kind !== 'DESCRIBED' || style.ownLabel).map((style) => ({ id: style.id, code: style.code, name: style.name })) }))
+        .catch(() => setCustomStyles({ state: 'error', rows: [] }))
+    },
+    [api],
+  )
+
+  /** "Describe it" / "Made to measure": on the start the draft is made first (its address opens the window); on a draft, the window. */
+  const openCustom = async (kind: AddKind) => {
+    if (writeHeld({ preview, offline, busy: false })) return
+    if (!draftId) {
+      setDescribing(true)
+      try {
+        const made = await createDraft(api, { source: 'PICKER' }, keyFor('create', { add: kind, at: Date.now() }))
+        router.replace(newOrderHref(frame.prefix, { draft: made.request.id, add: kind }))
+      } catch (error) {
+        setProblem(refusalOf(kindOf(error)))
+      } finally {
+        setDescribing(false)
+      }
+      return
+    }
+    if (!recordRef.current) return
+    const custom = ADD_KIND_OF[kind]
+    if (custom === 'MADE_TO_MEASURE' && !mtmOf(recordRef.current.request).open) return // held with words in "Add a line ▾"
+    setCustomDialog({ mode: 'add', lineId: null, draft: customLineDraftOf(custom), showProblems: false, busy: false, failed: null })
+    readCustomStyles(custom)
+  }
+
+  const openChangeCustom = (lineId: string) => {
+    const line = recordRef.current ? customLinesOf(recordRef.current.request).find((entry) => entry.id === lineId) : undefined
+    if (!line) return
+    setCustomDialog({ mode: 'change', lineId, draft: customLineDraftOf(line.kind, line), showProblems: false, busy: false, failed: null })
+    readCustomStyles(line.kind)
+  }
+
+  const saveCustom = async () => {
+    const current = recordRef.current
+    if (!current || !customDialog || customDialog.busy) return
+    if (Object.keys(customLineProblems(customDialog.draft)).length > 0) {
+      setCustomDialog({ ...customDialog, showProblems: true })
+      return
+    }
+    const line = customDialog.lineId ? customLinesOf(current.request).find((entry) => entry.id === customDialog.lineId) : undefined
+    const changes = line ? customLineChanges(line, customDialog.draft) : null
+    if (changes && Object.keys(changes).length === 0) {
+      setCustomDialog(null)
+      return
+    }
+    setCustomDialog({ ...customDialog, busy: true, failed: null })
+    let failed: string | null = null
+    const onError = (kind: string | null) => {
+      failed = refusalOf(kind)
+      if (kind === 'conflict') setStale(true)
+    }
+    const next =
+      line && changes
+        ? await write(`customLine:${line.id}:${JSON.stringify(changes)}`, (version, key) => changeCustomLine(api, current.request.id, line.id, { version, ...changes }, key), onError)
+        : await write(`customLine:new:${JSON.stringify(customLineBody(customDialog.draft))}`, (version, key) => addCustomLine(api, current.request.id, { version, line: customLineBody(customDialog.draft) }, key), onError)
+    if (next) setCustomDialog(null)
+    else setCustomDialog((now) => (now ? { ...now, busy: false, failed: failed ?? 'refusal.other' } : now))
+  }
+
+  const openPerson = (lineId: string, personId: string | null = null) => {
+    const line = recordRef.current ? customLinesOf(recordRef.current.request).find((entry) => entry.id === lineId) : undefined
+    if (!line) return
+    const person = personId ? (line.people.find((entry) => entry.id === personId) ?? null) : null
+    setPersonDialog({ lineId, personId: person?.id ?? null, draft: personDraftOf(person), showProblems: false, busy: false, failed: null })
+  }
+
+  const savePerson = async () => {
+    const current = recordRef.current
+    if (!current || !personDialog || personDialog.busy) return
+    const sheets = draftFilesOf(current.request).sheets
+    if (Object.keys(personProblems(personDialog.draft, sheets)).length > 0) {
+      setPersonDialog({ ...personDialog, showProblems: true })
+      return
+    }
+    const line = customLinesOf(current.request).find((entry) => entry.id === personDialog.lineId)
+    const person = personDialog.personId ? line?.people.find((entry) => entry.id === personDialog.personId) : undefined
+    const changes = person ? personChanges(person, personDialog.draft) : null
+    if (!line || (changes && Object.keys(changes).length === 0)) {
+      setPersonDialog(null)
+      return
+    }
+    setPersonDialog({ ...personDialog, busy: true, failed: null })
+    let failed: string | null = null
+    const onError = (kind: string | null) => {
+      failed = refusalOf(kind)
+      if (kind === 'conflict') setStale(true)
+    }
+    const body = personBody(personDialog.draft)
+    const next =
+      person && changes
+        ? await write(`person:${person.id}:${JSON.stringify(changes)}`, (version, key) => changePerson(api, current.request.id, line.id, person.id, { version, ...changes }, key), onError)
+        : await write(`person:new:${line.id}:${JSON.stringify(body)}`, (version, key) => addPeople(api, current.request.id, line.id, { version, people: [body] }, key), onError)
+    if (next) setPersonDialog(null)
+    else setPersonDialog((now) => (now ? { ...now, busy: false, failed: failed ?? 'refusal.other' } : now))
+  }
+
+  const removePersonRow = (lineId: string, personId: string) => {
+    const id = recordRef.current?.request.id
+    if (id) void write(`removePerson:${personId}`, (version, key) => removePerson(api, id, lineId, personId, version, key))
+  }
+
+  /** "Your price" of a line, saved on leaving its cell (catalogue or custom line) — only a price holder's, only what changed. */
+  const saveOwnPrice = useCallback(
+    async (lineId: string): Promise<boolean> => {
+      const current = recordRef.current
+      const typed = ownPricesRef.current[lineId]
+      if (!current || typed === undefined) return true
+      const wanted = ownPriceWriteOf(current, lineId, typed)
+      if (wanted && 'problem' in wanted) {
+        setOwnPriceProblems((now) => ({ ...now, [lineId]: wanted.problem }))
+        return false
+      }
+      setOwnPriceProblems(({ [lineId]: _drop, ...rest }) => rest)
+      if (wanted === null) {
+        setOwnPrices(({ [lineId]: _drop, ...rest }) => rest)
+        return true
+      }
+      if (writeHeld({ preview, offline, busy: false })) return false
+      setSave({ kind: 'saving' })
+      return enqueue(async () => {
+        const version = recordRef.current!.request.version
+        try {
+          const key = keyFor('ownPrice', { lineId, version, value: wanted.value })
+          const body = { version, brandUnitPrice: wanted.value }
+          const next = wanted.lineKind === 'CATALOGUE' ? await changeLine(api, current.request.id, lineId, body, key) : await changeCustomLine(api, current.request.id, lineId, body, key)
+          apply(next)
+          // What was typed since this save started stays typed.
+          setOwnPrices(({ [lineId]: now, ...rest }) => (now !== undefined && now !== typed ? { ...rest, [lineId]: now } : rest))
+          setSave({ kind: 'saved', at: next.request.updatedAt })
+          return true
+        } catch (error) {
+          setSave({ kind: 'failed', reason: t(refusalOf(kindOf(error))) })
+          refused(error)
+          return false
+        }
+      })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [api, apply, refused, preview, offline, t],
+  )
+  const saveOwnPriceRef = useRef(saveOwnPrice)
+  saveOwnPriceRef.current = saveOwnPrice
+  // ---- end F-CP-154
 
   // ── the picker ──────────────────────────────────────────────────────────────────────────────────────────────────────
   const loadDetail = useCallback(
@@ -726,6 +950,15 @@ function NewOrderContainer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, record?.request.id, way, stylesParam.join(','), reorderParam])
 
+  // F-CP-154: the start's "Describe it" made the draft; its address (`add=`) opens the window once, then leaves the address.
+  const addParam = search?.get('add') ?? null
+  useEffect(() => {
+    if (phase !== 'draft' || !record || !isAddKind(addParam)) return
+    void openCustom(addParam)
+    router.replace(newOrderHref(frame.prefix, { draft: record.request.id, way }), { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, record?.request.id, addParam])
+
   const chooseWay = (next: Way) => {
     if (next === 'reorder' && !mayOrder) return // F-CP-150 (D11): held with why on the page
     if (phase === 'start') {
@@ -749,7 +982,10 @@ function NewOrderContainer() {
       (picker !== null && pickerLineCount({ ...picker, onDraft }) > 0) ||
       sheet.state === 'read' ||
       (address !== null && addressTyped(address.draft)) ||
-      uploads.some((row) => row.state === 'uploading')) // F-CP-151: never leave half way through an upload
+      uploads.some((row) => row.state === 'uploading') || // F-CP-151: never leave half way through an upload
+      Object.keys(ownPrices).length > 0 || // F-CP-154: "Your price" typed, not saved yet
+      customDialog?.typed === true ||
+      personDialog?.typed === true)
   const recheck = useCallback(() => {
     const current = recordRef.current
     if (!current || current.request.status !== 'DRAFT') return
@@ -799,7 +1035,7 @@ function NewOrderContainer() {
       // The next read (the tab coming back, the live channel) shows them.
     }
   }, [api, apply, recheck])
-  const addFiles = async (part: DraftFilePart, list: readonly File[]) => {
+  const addFiles = async (part: DraftFilePart, list: readonly File[], lineId: string | null = null /* F-CP-154: a sheet onto one line */) => {
     const current = recordRef.current
     if (!current || writeHeld({ preview, offline, busy: false })) return
     let room = DRAFT_FILES_MAX - draftFileCount(current.request)
@@ -818,7 +1054,7 @@ function NewOrderContainer() {
       setUploads((rows) => [...rows, { key, part, name: file.name, state: 'uploading' }])
       try {
         const bytes = await file.arrayBuffer()
-        const { file: announced, upload } = await announceDraftFile(api, current.request.id, { part, originalName: file.name, contentType, sizeBytes: file.size, sha256: await sha256Hex(bytes) }, key)
+        const { file: announced, upload } = await announceDraftFile(api, current.request.id, { part, ...(lineId ? { lineId } : {}), originalName: file.name, contentType, sizeBytes: file.size, sha256: await sha256Hex(bytes) }, key)
         await putToStore(upload, new Blob([bytes], { type: contentType }))
         await completeDraftFile(api, current.request.id, announced.id)
         setUploads((rows) => rows.filter((row) => row.key !== key))
@@ -848,7 +1084,7 @@ function NewOrderContainer() {
   const sendWords = sendHeldNow ? t(sendHeldNow.key, sendHeldNow.count !== undefined ? { count: sendHeldNow.count } : sendHeldNow.names !== undefined ? { names: sendHeldNow.names } : undefined) : null
   const discardKey = record ? draftDiscardHeld(record.request, { preview, offline, busy: false }) : held
   const discardWords = discardKey ? t(discardKey) : null
-  const draftAsk = record ? { type: 'PortalOrderRequest', id: record.request.id, label: draftTitleOf(record.request, t) } : null
+  const draftAsk = record ? { type: 'PortalOrderRequest', id: record.request.id, label: draftTitleOf(record.request, t, locale) } : null
   usePortalBand(
     allowed
       ? newOrderBandOf({
@@ -859,7 +1095,7 @@ function NewOrderContainer() {
           customerRef: sent?.customerRef ?? record?.request.customerRef ?? null,
           sendHeld: sendWords,
           discardHeld: discardWords,
-          title: record ? draftTitleOf(record.request, t) : null, // F-CP-150
+          title: record ? draftTitleOf(record.request, t, locale) : null, // F-CP-150 (F-CP-154: a line in the customer's own words names it)
           ask: draftAsk, // F-CP-150
           onSend: () => void send(),
           onDiscard: () => setDiscard({ busy: false, failed: null }),
@@ -879,7 +1115,7 @@ function NewOrderContainer() {
         phase,
         prefix: frame.prefix,
         today,
-        start: { state: drafts.state, drafts: drafts.value, choosing, held: heldWords },
+        start: { state: drafts.state, drafts: drafts.value, choosing, held: heldWords, describing }, // F-CP-154: "Describe it"
         way,
         record,
         header,
@@ -901,6 +1137,10 @@ function NewOrderContainer() {
         closed: record && record.request.status !== 'DRAFT' && !sent ? { status: record.request.status, salesOrder: record.request.salesOrder ? { id: record.request.salesOrder.id } : null } : null, // B-TH-304: no office number
         offlineSince,
         uploads, // F-CP-151
+        // ---- F-CP-154
+        ownPrices,
+        ownPriceProblems,
+        // ---- end F-CP-154
         // ---- F-CP-150
         staleBy,
         seesOrders,
@@ -909,7 +1149,41 @@ function NewOrderContainer() {
         dialogs: {
           picker: picker ? { ...picker, onDraft, prefix: frame.prefix, writeHeld: heldWords } : null,
           address: address ? { ...address, problems: addressProblems(address.draft) } : null,
-          discard: discard && record ? { ...discard, lines: record.request.lines.length } : null,
+          discard: discard && record ? { ...discard, lines: lineCountOf(record.request) } : null, // F-CP-154: lines of every kind
+          // ---- F-CP-154: a custom line's window, a person's window.
+          customLine:
+            customDialog && record
+              ? {
+                  mode: customDialog.mode,
+                  kind: customDialog.draft.kind,
+                  seq: customDialog.lineId ? (customLinesOf(record.request).find((entry) => entry.id === customDialog.lineId)?.seq ?? null) : null,
+                  draft: customDialog.draft,
+                  problems: customLineProblems(customDialog.draft),
+                  showProblems: customDialog.showProblems,
+                  styles: customStyles,
+                  garmentTypes: mtmOf(record.request).garmentTypes,
+                  busy: customDialog.busy,
+                  failed: customDialog.failed,
+                }
+              : null,
+          person: (() => {
+            if (!personDialog || !record) return null
+            const line = customLinesOf(record.request).find((entry) => entry.id === personDialog.lineId)
+            if (!line) return null
+            const sheets = draftFilesOf(record.request).sheets
+            return {
+              mode: personDialog.personId ? ('change' as const) : ('add' as const),
+              seq: line.seq,
+              name: personDialog.personId ? (line.people.find((entry) => entry.id === personDialog.personId)?.name ?? null) : null,
+              draft: personDialog.draft,
+              problems: personProblems(personDialog.draft, sheets),
+              showProblems: personDialog.showProblems,
+              sheets,
+              busy: personDialog.busy,
+              failed: personDialog.failed,
+            }
+          })(),
+          // ---- end F-CP-154
         },
       }}
       actions={{
@@ -939,6 +1213,7 @@ function NewOrderContainer() {
           onNote: (lineId, note) => setNotes((now) => ({ ...now, [lineId]: note })),
           onColour: changeColour,
           onRemove: (lineId) => void remove(lineId),
+          onChangeCustom: openChangeCustom, // F-CP-154
           onDropSize: (lineId, size) => {
             const line = recordRef.current?.request.lines.find((entry) => entry.id === lineId)
             if (!line) return
@@ -1000,8 +1275,30 @@ function NewOrderContainer() {
           onClose: () => setAddress((now) => (now?.busy ? now : null)),
         },
         discard: { onConfirm: () => void confirmDiscard(), onCancel: () => setDiscard((now) => (now?.busy ? now : null)) },
-        // F-CP-151: a part's files.
-        files: { onFiles: (part, list) => void addFiles(part, list), onRemove: removeFile, onLater: markLater },
+        // F-CP-151: a part's files (F-CP-154: a measurement sheet onto one line).
+        files: { onFiles: (part, list, lineId) => void addFiles(part, list, lineId ?? null), onRemove: removeFile, onLater: markLater },
+        // ---- F-CP-154: "Describe it" / "Made to measure", the roster, "Your price", their windows.
+        onAddKind: (kind) => void openCustom(kind),
+        people: { onAddPerson: (lineId) => openPerson(lineId), onChangePerson: (lineId, personId) => openPerson(lineId, personId), onRemovePerson: removePersonRow },
+        price: {
+          onType: (lineId, text) => {
+            setOwnPrices((now) => ({ ...now, [lineId]: text }))
+            ownPricesRef.current = { ...ownPricesRef.current, [lineId]: text }
+            setOwnPriceProblems(({ [lineId]: _drop, ...rest }) => rest)
+          },
+          onLeave: (lineId) => void saveOwnPrice(lineId),
+        },
+        customLine: {
+          onField: (field, value) => setCustomDialog((now) => (now ? { ...now, draft: { ...now.draft, [field]: value }, failed: null, typed: true } : now)),
+          onSave: () => void saveCustom(),
+          onClose: () => setCustomDialog((now) => (now?.busy ? now : null)),
+        },
+        person: {
+          onField: (field, value) => setPersonDialog((now) => (now ? { ...now, draft: { ...now.draft, [field]: value }, failed: null, typed: true } : now)),
+          onSave: () => void savePerson(),
+          onClose: () => setPersonDialog((now) => (now?.busy ? now : null)),
+        },
+        // ---- end F-CP-154
         // F-CP-150: a chip of the checklist — its part's card, scrolled into view and focused.
         onChip: (target) => {
           const element = document.getElementById(target)

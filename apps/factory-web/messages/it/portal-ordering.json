@@ -565,11 +565,25 @@
     "people": {
       "grid": "Riga {seq}: griglia taglie, {pieces} pezzi",
       "none": "Riga {seq}: ancora nessun pezzo",
-      "empty": "Prima aggiungete una riga: qui compaiono le sue taglie."
+      "empty": "Prima aggiungete una riga: qui compaiono le sue taglie.",
+      "total": "Riga {seq}: {pieces} pezzi · taglie dopo",
+      "totalSizes": "Riga {seq}: {pieces} pezzi nelle taglie",
+      "noTotal": "Riga {seq}: manca ancora il totale",
+      "byPerson_one": "Riga {seq}, per persona: {count} persona",
+      "byPerson_other": "Riga {seq}, per persona: {count} persone",
+      "inSheet": "Riga {seq}, per persona: nella scheda allegata",
+      "noOne": "Riga {seq}, per persona: ancora nessuno indicato"
     },
     "price": {
       "line": "Riga",
-      "ours": "Il nostro prezzo di listino"
+      "ours": "Il nostro prezzo di listino",
+      "yours": "Il vostro prezzo (IVA esclusa)",
+      "cell": "Il vostro prezzo per la riga {seq}",
+      "total": "Totale",
+      "frozen": "Si blocca quando inviate. La fabbrica lo confronta con il proprio prezzo (Verifica prezzi sull'ordine).",
+      "missing_one": "{count} riga ancora senza il vostro prezzo",
+      "missing_other": "{count} righe ancora senza il vostro prezzo",
+      "problem": "Un prezzo da 0 in su, con al massimo 6 decimali."
     },
     "thread": "Messaggi · questa bozza",
     "sentThread": "La fabbrica risponde qui e per e-mail.",
@@ -608,7 +622,131 @@
       "sheetsPrivacy": "Le schede misure sono dati personali: in fabbrica le aprono solo le persone che gestiscono le misure."
     },
     "start": {
-      "words": "Scrivetelo semplicemente a parole"
+      "words": "Scrivetelo semplicemente a parole",
+      "describe": "Descrivetelo",
+      "describeHint": "Con parole vostre: cosa vi serve, i colori, quanti pezzi — o una riga per persona. La fabbrica la legge dal primo salvataggio."
+    },
+    "kind": {
+      "CATALOGUE": "Dal catalogo",
+      "DESCRIBED": "Descritto da voi",
+      "MADE_TO_MEASURE": "Su misura"
+    },
+    "addDescribed": "Descrivetelo",
+    "addMtm": "Su misura",
+    "mtmOff": "Il su misura non è ancora aperto per voi: chiedeteci nei messaggi.",
+    "line": {
+      "untitled": "Riga senza titolo",
+      "byPerson": "Per persona",
+      "people_one": "{count} persona",
+      "people_other": "{count} persone",
+      "inSheet": "Persone: nella scheda allegata",
+      "noPeople": "ancora nessuno indicato",
+      "total": "{pieces} pezzi",
+      "sizesLater": "taglie dopo",
+      "inSizes": "nelle taglie: {sizes}",
+      "noTotal": "Totale non ancora indicato",
+      "colours": "Colori: {colours}",
+      "ownStyle": "Il vostro modello {style}",
+      "madeFrom": "Dal modello {style}",
+      "change": "Modifica…",
+      "removed": "Riga {seq} tolta.",
+      "menu": "Altro per la riga {seq}"
+    },
+    "customLine": {
+      "titleDescribed": "Descrivete cosa vi serve",
+      "titleMtm": "Una riga su misura",
+      "titleChange": "Riga {seq} · {kind}",
+      "description": "Cosa vi serve",
+      "descriptionHint": "Con parole vostre: il capo, il tessuto, i loghi, tutto quello che dobbiamo sapere (fino a 2000 caratteri).",
+      "descriptionMtm": "Cosa vi serve (facoltativo)",
+      "colours": "Colori a parole (facoltativo)",
+      "coloursHint": "Per esempio «rosso e bianco, come il riferimento».",
+      "style": "Il vostro modello (facoltativo)",
+      "styleHint": "Uno dei modelli del vostro marchio, se nasce da uno di quelli.",
+      "styleMtm": "Modello (facoltativo)",
+      "styleMtmHint": "Il modello da cui nasce, se lo conoscete.",
+      "noStyle": "Nessuno",
+      "stylesLoading": "Leggiamo i vostri modelli…",
+      "stylesFailed": "Non siamo riusciti a leggere i vostri modelli: potete salvare la riga senza.",
+      "how": "Quanti",
+      "howTotal": "Un totale (le taglie possono seguire)",
+      "howPeople": "Una riga per persona",
+      "total": "Pezzi in tutto",
+      "totalHint": "Lasciatelo vuoto se non lo sapete ancora: ve lo chiediamo prima dell'invio.",
+      "garment": "Tipo di capo",
+      "garmentChoose": "Scegliete il tipo di capo",
+      "mtmPeople": "Il su misura è sempre una riga per persona: indicate le persone, o allegate la loro scheda misure, in Persone e taglie.",
+      "peopleHint": "Indicate le persone, o allegate la loro scheda misure, in Persone e taglie.",
+      "note": "Nota sulla riga (facoltativa)",
+      "add": "Aggiungi la riga",
+      "save": "Salva la riga",
+      "problem": {
+        "description": "Dite con parole vostre cosa vi serve.",
+        "descriptionLong": "Al massimo 2000 caratteri.",
+        "coloursLong": "Al massimo 200 caratteri.",
+        "total": "Un numero intero di pezzi, da 1 a 100000.",
+        "garment": "Scegliete il tipo di capo.",
+        "noteLong": "Al massimo 1000 caratteri."
+      }
+    },
+    "roster": {
+      "privacy": "Nomi e misure dei vostri piloti e del vostro team sono dati personali: li usiamo solo per realizzare questo ordine, e in fabbrica le schede misure le aprono solo le persone che si occupano delle misure.",
+      "title": "Riga {seq} · {kind} · {title} — una riga per persona",
+      "add": "Aggiungi una persona",
+      "col": {
+        "name": "Nome",
+        "number": "Numero",
+        "how": "Come riceviamo la taglia",
+        "what": "Cosa c'è",
+        "more": "Altro"
+      },
+      "empty": "Ancora nessuno indicato: aggiungete le persone, o allegate la loro scheda misure a questa riga.",
+      "inSheet": "Persone: nella scheda allegata",
+      "sheetOnLine": "Scheda misure su questa riga: {names}",
+      "attach": "Allegate la loro scheda misure a questa riga: trascinatela qui o sceglietela",
+      "attachClosed": "Schede misure: inviatele per e-mail al vostro contatto in fabbrica, citando «{draft}» e la riga {seq}.",
+      "sheetGone": "una scheda non più sulla bozza",
+      "personMenu": "Altro per {name}",
+      "change": "Modifica…",
+      "remove": "Togli"
+    },
+    "measure": {
+      "SIZE": "Taglia",
+      "SHEET": "Scheda misure",
+      "LATER": "Le mandiamo dopo"
+    },
+    "person": {
+      "titleAdd": "Aggiungete una persona alla riga {seq}",
+      "titleChange": "{name} · riga {seq}",
+      "name": "Nome",
+      "nameHint": "Il nome con cui distinguiamo i suoi capi.",
+      "number": "Numero (facoltativo)",
+      "numberHint": "Un numero di gara o di maglia, fino a 10 caratteri.",
+      "how": "Come riceviamo la taglia",
+      "size": "Taglia",
+      "sizeHint": "Come nella tabella taglie del capo.",
+      "sheet": "Scheda misure",
+      "sheetChoose": "Scegliete una scheda di questa bozza",
+      "noSheets": "Su questa bozza non c'è ancora una scheda misure: aggiungetela prima in Persone e taglie, o scegliete un altro modo.",
+      "later": "Le misure ve le mandiamo dopo.",
+      "note": "Nota (facoltativa)",
+      "add": "Aggiungi la persona",
+      "save": "Salva",
+      "problem": {
+        "name": "Un nome va da 1 a 120 caratteri.",
+        "number": "Al massimo 10 caratteri.",
+        "size": "Indicate la taglia (fino a 40 caratteri).",
+        "sheet": "Scegliete la scheda misure con le misure.",
+        "note": "Al massimo 1000 caratteri."
+      }
+    },
+    "problem": {
+      "NO_TOTAL": "Indicate quanti pezzi in tutto (le taglie possono seguire).",
+      "SIZES_NOT_TOTAL": "Le taglie fanno {sum} pezzi, il totale dice {total}.",
+      "SIZES_NOT_TOTAL_ANY": "Le taglie e il totale non coincidono.",
+      "NO_PEOPLE": "Indicate le persone, o allegate la loro scheda misure.",
+      "GARMENT_TYPE_GONE": "Il su misura {type} non è più offerto: scegliete un altro tipo di capo.",
+      "GARMENT_TYPE_GONE_ANY": "Questo tipo di capo non si fa più su misura: sceglietene un altro."
     }
   }
 }
