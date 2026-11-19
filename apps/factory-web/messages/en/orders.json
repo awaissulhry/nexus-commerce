@@ -974,7 +974,11 @@
     "shipToFailed": "The delivery addresses could not be read: the order keeps its address.",
     "shipToPrepared": "A shipment is being prepared for the old address: change it there first",
     "shipToPreparedOf": "Shipment {number} is being prepared for the old address: change it there first",
-    "shipToDone": "The delivery address is changed."
+    "shipToDone": "The delivery address is changed.",
+    "pricedHeld": {
+      "apply": "A priced change is made by someone who sees prices.",
+      "net": "Net: shown to people who see prices"
+    }
   },
   "editor": {
     "add": {

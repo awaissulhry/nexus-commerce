@@ -386,6 +386,8 @@ const REFUSE_REASONS = [
 // ---- end F-OP-101
 const d323 = (role: Role, value: Order, over: Partial<OrderRecordModel> = {}, depth: Parameters<typeof depthModel>[1] = {}): RecordCase => base(role, value, { ...over, depth: depthModel(role, depth) })
 const frozenPreview = { ok: false, revision: 4, version: 7, problems: [{ path: 'body/lines/10/SIZE_QUANTITY', message: 'x' }], diff: null, workOrders: null }
+/** F-CP-149: a case as a reader without the price grain (the Sales role since B-CP-011): no price, no margin, no cost. */
+const noPrice = (item: RecordCase): RecordCase => (item.record ? { ...item, record: { ...item.record, can: { ...item.record.can, price: false, margin: false, cost: false } } } : item)
 const W2B_323 = [
   { id: 'w2b-323-lines', label: 'W2b · Sales · Lines: urgent with its reason, season FW27, confirmation v2 sent; black 48 · 50 locked “Cutting started — size frozen”; Customer-supplied materials', model: d323('sales', production), note: 'The materials grid links each lot and the receipt that brought it; Plan from the BOM makes the rows.' },
   { id: 'w2b-323-materials-empty', label: 'W2b · Sales · Customer-supplied materials: the customer supplies nothing', model: d323('sales', production, {}, { materials: { value: MATERIALS_EMPTY, problem: null }, freeze: { value: FREEZE_NONE, problem: null } }) },
@@ -395,6 +397,16 @@ const W2B_323 = [
   { id: 'w2b-323-manager-lines', label: 'W2b · Production manager · Lines: frozen sizes and materials read-only (Plan held)', model: d323('manager', production) },
   { id: 'w2b-323-amend-frozen', label: 'W2b · Sales · Amend order: the cut sizes marked in the grid with their reason', model: d323('sales', production, { amend: amendOf(production) }) },
   { id: 'w2b-323-review-frozen', label: 'W2b · Sales · What changes: frozen by the stage — Apply as a priced change, with its optional fee', model: d323('sales', production, { amend: amendOf(production, oneMore50, {}, { phase: 'ready', preview: frozenPreview }) }) },
+  // ---- F-CP-149 (customer page plan C4, the money wall; review A8, D5): the Lines edit mode for a reader without prices — as Sales
+  // worker since B-CP-011 (here: the Sales fixtures' rights without the price grain) — held words in the net's and the fee's place.
+  { id: 'f-cp-149-strip-no-price', label: 'As Sales worker without prices · Edit mode: What changes — pieces, "Net: shown to people who see prices" (never a blank)', model: noPrice(d323('sales', forRole(confirmed, 'manager'), { amend: amendOf(forRole(confirmed, 'manager'), oneMore50, { reason: 'Una giacca nera in più.' }, { phase: 'ready', preview: AMEND_PREVIEW }) })) },
+  {
+    id: 'f-cp-149-priced-held',
+    label: 'As Sales worker without prices · Frozen by the stage: "Apply as a priced change" held — "A priced change is made by someone who sees prices."',
+    model: noPrice(d323('sales', forRole(production, 'manager'), { amend: amendOf(forRole(production, 'manager'), oneMore50, { reason: 'Una giacca nera in più.' }, { phase: 'ready', preview: frozenPreview }) })),
+    note: 'The fee\'s place says "Shown to people who see prices"; the extra deposit\'s dialog is held with the same words.',
+  },
+  // ---- end F-CP-149
   { id: 'w2b-323-review-blocked', label: 'W2b · Sales · What changes: frozen for good (finished pieces) — no way', model: d323('sales', production, { amend: amendOf(production, oneMore50, {}, { phase: 'ready', preview: frozenPreview }) }, { freeze: { value: FREEZE_FINISHED, problem: null } }) },
   { id: 'w2b-323-priced', label: 'W2b · Sales · Priced change: one more in 50 priced, the fee, the extra deposit (30 % of the growth), it waits for a yes', model: d323('sales', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen() }), note: 'The kind lists the caparra penitenziale held: off until the accountant confirms it.' },
   { id: 'w2b-323-priced-blocked', label: 'W2b · Sales · Priced change refused: the size cannot change any more', model: d323('sales', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen(PRICED_BLOCKED) }) },

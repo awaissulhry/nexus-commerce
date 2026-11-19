@@ -974,7 +974,11 @@
     "shipToFailed": "Non è stato possibile leggere gli indirizzi di consegna: l'ordine mantiene il suo indirizzo.",
     "shipToPrepared": "Si sta preparando una spedizione al vecchio indirizzo: cambialo lì prima",
     "shipToPreparedOf": "Si sta preparando la spedizione {number} al vecchio indirizzo: cambialo lì prima",
-    "shipToDone": "L'indirizzo di consegna è cambiato."
+    "shipToDone": "L'indirizzo di consegna è cambiato.",
+    "pricedHeld": {
+      "apply": "Una modifica con prezzi la fa chi vede i prezzi.",
+      "net": "Imponibile: visibile a chi vede i prezzi"
+    }
   },
   "editor": {
     "add": {
