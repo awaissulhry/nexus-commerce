@@ -346,6 +346,8 @@ export const FORBIDDEN_BRAND_KEYS = Object.freeze([
   'workOrderId',
   'workOrders',
   'siteId',
+  // B-OP-021: the office's list of what an order waits for, record by record (each with its record's id and the office's door).
+  'blockers',
 ] as const)
 
 /** The forbidden keys found anywhere in a value (paths like `items/0/health/note`), in the order met. */

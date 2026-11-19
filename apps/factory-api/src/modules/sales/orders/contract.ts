@@ -21,6 +21,7 @@ import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
 import { SUPERVISOR_MARKS } from '@nexus/factory-domain/production-brand/supervisor'
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
 import { IDS_TERM_MAX, PRODUCTION_WITHHELD } from './production-columns'
+import { APPROVAL_TASK_KINDS } from '@nexus/factory-domain/approvals/rules' // B-OP-020
 
 /**
  * The sales orders' contracts (B-W1-25; A2 SCR-038 "Orders", SCR-039 "Order record"). Money is marked: prices and totals
@@ -137,9 +138,33 @@ const depositView = output({
 const settlementView = output({
   /** Every line shipped, invoiced and paid (the money module's answer). */
   settled: z.boolean(),
-  missing: z.array(output({ code: z.string(), message: z.string() })),
+  /** B-OP-020 (B3): the words may name amounts — with the price grain only; without it the codes alone (as the invoicing read). */
+  missing: z.array(output({ code: z.string(), message: money.price(z.string()) })),
   source: z.string(),
 })
+
+// ── B-OP-020 (order page plan N1; 13-backend §2; review R-22): the yes in place, and the tabs' counts ──────────────────────────
+const decisionView = output({ allowed: z.boolean(), why: z.string().nullable() })
+/**
+ * One open request for a yes of the order (its own, an old change's, its credit hold's), as the approval engine's list builds its
+ * row (platform/approvals views openTaskRows): who asked and who decides (by name; "me"), its version, whether the yes asks a fresh
+ * step-up, and the yes, the no and taking it back for this reader — never one's own yes. No money: the decide window reads
+ * GET /approvals/tasks/:id (its facts by grain).
+ */
+const openApprovalView = output({
+  taskId: id(),
+  kind: z.enum(APPROVAL_TASK_KINDS),
+  kindLabel: output({ en: z.string(), it: z.string() }),
+  requestedAt: instant(),
+  requester: output({ name: z.string(), me: z.boolean() }),
+  approver: output({ kind: z.enum(['ROLE', 'PERSON']), name: z.string(), me: z.boolean() }),
+  version: z.number().int(),
+  requireStepUp: z.boolean(),
+  approve: decisionView,
+  reject: decisionView,
+  withdraw: decisionView,
+})
+// ── end B-OP-020 ──
 
 // ── B-SA-034: the parts of the order page a live message re-reads, and those whose last change the order read names ──
 export const ORDER_PAGE_PARTS = ['order', 'headline', 'lines', 'work', 'dates', 'quality', 'people', 'changes', 'money', 'shipments', 'files'] as const
@@ -233,11 +258,28 @@ export const orderView = output({
       depositRequestIds: z.array(id()),
       requestIds: z.array(id()),
       changeIds: z.array(id()),
+      /** B-OP-020: the open requests for a yes the read lists to this reader (`openApprovals`). */
+      approvalTaskIds: z.array(id()),
     }),
   }),
   /** Per part, the newest change: an office person or the order's own customer by name, "the floor" or "Nexus"; null: none. */
   lastChange: output({ order: lastChangeView.nullable(), changes: lastChangeView.nullable(), work: lastChangeView.nullable(), shipments: lastChangeView.nullable(), money: lastChangeView.nullable() }),
   // ── end B-SA-034 ──
+  // ── B-OP-020 (order page plan N1; 13-backend §2, §3; review R-22) ──
+  /**
+   * The order's open requests for a yes (its own SALES_ORDER, an old SALES_ORDER_CHANGE, a CREDIT_OVERRIDE of its credit hold),
+   * oldest first — only those the approval engine's list shows this reader (approvals.view: asked by them, addressed to them, or
+   * of a kind they see over the order's company and customer); the others are counted in `openApprovalsHidden`, never named.
+   * Decided with POST /approvals/tasks/:id/approve | reject | withdraw at `version`.
+   */
+  openApprovals: z.array(openApprovalView),
+  openApprovalsHidden: z.number().int(),
+  /**
+   * The Money and Shipments tabs' counts (orders.view; counts only): issued invoices and credit notes of the order (no drafts),
+   * its deposit requests still OPEN, its shipments not cancelled. The Changes tab counts the ONE waiting list in the page (R-22).
+   */
+  badges: output({ money: output({ invoices: z.number().int(), openDeposits: z.number().int() }), shipments: z.number().int() }),
+  // ── end B-OP-020 ──
 })
 
 const one = output({ order: orderView })
