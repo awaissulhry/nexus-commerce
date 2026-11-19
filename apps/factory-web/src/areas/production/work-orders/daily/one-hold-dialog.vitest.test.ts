@@ -127,6 +127,16 @@ describe('F-PR-05b — on screen', () => {
     expect(textOf(draw('hold-dialog-quality'))).not.toContain('What the customer reads')
   })
 
+  // ---- F-OP-114: the customer's words are SHOWN before the hold is placed (its own words, else the reason's); never the office note
+  it('F-OP-114: a production hold shows what the customer will read before it is placed — never the office note', () => {
+    const text = textOf(draw('hold-dialog-production'))
+    expect(text).toContain('The customer reads: A lining is late from our supplier')
+    expect(text).not.toContain('The customer reads: Fodera rossa')
+    expect(textOf(draw('hold-dialog-production', 'it'))).toContain('Il cliente legge')
+    expect(textOf(draw('hold-dialog-quality'))).not.toContain('The customer reads:')
+  })
+  // ---- end F-OP-114
+
   it('held under a production hold: the card shows its reason, the note marked Office only, what the customer reads, the lifted one; the band releases it', () => {
     const text = textOf(draw('hold-plain'))
     expect(text).toContain('Material missing')
@@ -142,14 +152,20 @@ describe('F-PR-05b — on screen', () => {
   // ---- F-PR-16 (the browser walk): Enter sends only from the send button
   it('Enter in a one-line field sends nothing: the fields of Put on hold and Release the hold sit in no form (the button and ⌘↵ send)', () => {
     // The DS Modal draws only in a browser: the dialogs' own source is read (the walk checked the screen).
-    const source = readFileSync(join(__dirname, 'view', 'DailyDialogs.tsx'), 'utf8')
-    for (const [from, to] of [['export function HoldDialog(', '// ---- F-PR-05b: Release a plain hold'], ['function LiftHoldDialog(', 'function ReleaseHoldDialog(']] as const) {
-      const dialog = source.slice(source.indexOf(from), source.indexOf(to))
+    // F-OP-114: the two dialogs moved to lib/production/work-order-acts (ONE copy); this page hands them its parts.
+    const source = readFileSync(join(__dirname, '..', '..', '..', '..', 'lib', 'production', 'work-order-acts', 'view', 'HoldDialog.tsx'), 'utf8')
+    for (const [from, to] of [['export function HoldDialog(', '// ---- F-PR-05b: Release a plain hold'], ['export function LiftHoldDialog(', '// ---- end F-PR-05b']] as const) {
+      const dialog = source.slice(source.indexOf(from), source.indexOf(to, source.indexOf(from)))
       expect(dialog.length, from).toBeGreaterThan(100)
       expect(dialog, from).not.toContain('<form')
-      expect(dialog, from).toContain('<div className="fw-pr-dialog" onKeyDown={submitKeys(go)}>')
+      expect(dialog, from).toContain('<div className="fw-woa-dialog" onKeyDown={submitKeys(go)}>')
       expect(dialog, from).toContain('aria-keyshortcuts="Meta+Enter Control+Enter"')
     }
+    // No copy left on the daily page: its two dialogs hand the shared ones their parts.
+    const daily = readFileSync(join(__dirname, 'view', 'DailyDialogs.tsx'), 'utf8')
+    expect(daily).toContain('<SharedHoldDialog numbers={numbers} workOrderIds={workOrderIds} parts={holdPartsOf(daily)}')
+    expect(daily).toContain('<SharedLiftHoldDialog holdId={holdId} parts={holdPartsOf(daily)}')
+    expect(daily).not.toContain("t('hold.customerWordsHint'")
   })
   // ---- end F-PR-16
 

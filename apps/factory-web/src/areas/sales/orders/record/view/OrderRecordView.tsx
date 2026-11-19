@@ -24,6 +24,7 @@ import { ProductionTab } from './ProductionTab'
 import { ShipmentsTab } from './ShipmentsTab'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { depthMenuItems, DepthNotice, DepthPills, WaitingBanner } from '../../depth/view/DepthBand'
+import { RefuseYesDialog } from '../../depth/view/DepthBand' // F-OP-101
 import { DepthDialogs } from '../../depth/view/DepthDialogs'
 import { NAMESPACE as DEPTH } from '../../depth/model'
 // ---- B-TH-214: the order on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
@@ -387,7 +388,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
           {/* B-TH-256: a compliance gate still blocks a work order or a shipment of this order (the gate's own words). */}
           <GateNotices model={model.links} prefix={model.prefix} />
           {/* B-W2b-323: the yes the order waits for. */}
-          {model.depth && <WaitingBanner model={model.depth} actions={actions?.depth} prefix={model.prefix} />}
+          {/* F-OP-101: the approver decides it here (the order read's open yes). */}
+          {model.depth && <WaitingBanner model={model.depth} actions={actions?.depth} prefix={model.prefix} yes={{ approvals: order.openApprovals, busy: model.busy }} onYes={actions?.yes} />}
           {/* F-SA-243: after an answer the window's own notice; "<Customer> asks: … · Answer…" and "Change of hh:mm: N steps need a
               decision · Open" (only while a row asks this reader) — one banner place, the most serious first. */}
           {model.requestDoor && <RequestDoorNoticeBanner door={model.requestDoor.parts} />}
@@ -448,6 +450,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       </RecordFrame>
 
       <OrderDialogs order={order} model={model} actions={actions} />
+      {/* F-OP-101: Refuse… of an open yes (the page's one dialog slot). */}
+      {model.dialog?.kind === 'refuseYes' && <RefuseYesDialog order={order} model={model} actions={{ onDialog: () => actions?.onDialog?.(null), yes: actions?.yes }} />}
       {/* F-SA-243: the ONE review window (Home › Approvals' own) opened on this page from its doors; Esc returns to the same tab. */}
       {model.requestDoor && <RequestDoorWindow door={model.requestDoor.parts} />}
       {model.depth && <DepthDialogs order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />}

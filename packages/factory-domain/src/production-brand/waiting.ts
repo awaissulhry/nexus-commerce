@@ -65,6 +65,8 @@ export type BlockerSub = (typeof BLOCKER_SUBS)[number]
 export interface BlockerRef {
   readonly type: string
   readonly id: string
+  /** F-OP-103: a problem the customer reported — the message it was raised with in the order's own thread (Reply in the thread). */
+  readonly messageId?: string | null
 }
 // ── end B-OP-021 ──
 

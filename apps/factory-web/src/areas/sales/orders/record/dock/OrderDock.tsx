@@ -13,6 +13,7 @@ import { useLiveBus } from '../../../../../shell/live/use-live'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { OfficeRecordThread } from '../../../../_shared/record-thread/OfficeRecordThread'
 import type { DockedHost } from '../../../../_shared/record-thread/DockedOfficeThread' // F-SA-244
+import type { OrderFilesHost } from '../../../../_shared/record-thread/use-order-files' // F-OP-215
 import { ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
 import { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-customer/use-all-of-customer'
 import { ALL_OF_CUSTOMER_NS, AllOfCustomerDock } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
@@ -48,6 +49,8 @@ export interface OrderDockProps {
   readonly showOnPage?: (about: { kind: string; id: string }) => void
   /** F-SA-244: the conversation side of a change on THIS order's conversation (the asks' chips, the change lines, their doors). */
   readonly changeSide?: DockedHost['changeSide']
+  /** F-OP-215: the page's ONE order-files container — the files line of This order counts the order's set; All files → the Files tab. */
+  readonly orderFiles?: OrderFilesHost
 }
 
 export function OrderDock(props: OrderDockProps) {
@@ -58,7 +61,7 @@ export function OrderDock(props: OrderDockProps) {
   )
 }
 
-function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* F-SA-244 */ }: OrderDockProps) {
+function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* F-SA-244 */, orderFiles /* F-OP-215 */ }: OrderDockProps) {
   const t = useT('orders')
   const rt = useT('record-thread') // F-OP-203: the short "All"
   const api = useOfficeApi()
@@ -87,7 +90,8 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
     ],
     [order.id, order.partyId, projects, ownWork],
   )
-  const readUnread = useMemo(() => (held.includes('threads.read') ? readUnreadWith(api) : null), [api, held])
+  // F-OP-213 (B-OP-061 is opt-in): the dock asks whether each of its threads may be read — the few records its pick offers.
+  const readUnread = useMemo(() => (held.includes('threads.read') ? readUnreadWith(api, { readable: true }) : null), [api, held])
   const unread = useUnread(readUnread, unreadRows, tick)
   const fresh = (id: string) => unread[id]?.newCount ?? 0
   const freshOf = (ids: readonly string[]) => ids.reduce((sum, id) => sum + fresh(id), 0)
@@ -218,7 +222,7 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
       />
     )
   } else {
-    shown = <OfficeRecordThread key="order" docked record={{ type: 'SalesOrder', id: order.id, companyId: order.companyId, siteId: null }} title={`${order.number} · ${customer}`} recordLabel={order.number} party={{ id: order.partyId, name: customer }} partyRole="customer" {...(printHref ? { printHref } : {})} {...(showOnPage ? { showOnPage } : {}) /* F-SA-265 */} {...(changeSide ? { changeSide } : {}) /* F-SA-244 */} />
+    shown = <OfficeRecordThread key="order" docked record={{ type: 'SalesOrder', id: order.id, companyId: order.companyId, siteId: null }} title={`${order.number} · ${customer}`} recordLabel={order.number} party={{ id: order.partyId, name: customer }} partyRole="customer" {...(printHref ? { printHref } : {})} {...(showOnPage ? { showOnPage } : {}) /* F-SA-265 */} {...(changeSide ? { changeSide } : {}) /* F-SA-244 */} {...(orderFiles ? { orderFiles } : {}) /* F-OP-215 */} />
   }
 
   return (

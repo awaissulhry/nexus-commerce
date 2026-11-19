@@ -97,7 +97,8 @@ export const headlineView = output({
          * OrderGate or WorkOrder (a work order only for a reader who reaches it with workorders.view); null: no one record, or one
          * the reader may not open.
          */
-        ref: output({ type: z.string(), id: id() }).nullable(),
+        // F-OP-103: + a reported problem's message in the order's own thread (the page replies to it in place).
+        ref: output({ type: z.string(), id: id(), messageId: id().optional() }).nullable(),
         /** A BRAND_REQUEST waiting on us: a request still open, a counter-offer agreed or lapsed, a reported problem, a refused new date. */
         sub: z.enum(BLOCKER_SUBS).nullable(),
         // ── end B-OP-021 ──

@@ -1581,10 +1581,6 @@
     "requests": {
       "title": "Requests & changes",
       "changes": "Changes ›",
-      "onUs_one": "Waiting on us: {count} request",
-      "onUs_other": "Waiting on us: {count} requests",
-      "onCustomer_one": "Waiting on the customer: {count}",
-      "onCustomer_other": "Waiting on the customer: {count}",
       "nothing": "Nothing waits on us or on the customer",
       "latest": "Latest change: revision {revision} · {date}",
       "still": "Still to do: {count}"
@@ -1732,6 +1728,127 @@
   },
   "wo": {
     "makeNext": "Make the next one: {style}",
-    "made": "{number} made (draft)"
+    "made": "{number} made (draft)",
+    "col": {
+      "priority": "Priority",
+      "acts": "Actions"
+    },
+    "acts": "Actions for {number}",
+    "dueOf": "Due date of {number}",
+    "priorityOf": "Priority of {number}",
+    "priorityHint": "Higher comes first",
+    "rushOf": "Rush for {number}",
+    "heldHold": "Production does this — a planner or the production manager",
+    "heldHint": "Due dates, priority, rush and the work orders’ actions: Production does this — a planner or the production manager.",
+    "act": {
+      "note": "Note…",
+      "hold": "Hold…",
+      "lift": "Lift the hold…",
+      "release": "Release…",
+      "split": "Split…",
+      "cancel": "Cancel…",
+      "close": "Close…",
+      "reopen": "Reopen…"
+    },
+    "note": {
+      "title": "Note on {number}",
+      "label": "Note",
+      "hint": "Printed on the work order’s sheet for the floor; the customer never reads it.",
+      "save": "Save the note",
+      "saved": "Note saved on {number}"
+    },
+    "reading": "Reading {number}…",
+    "readingShort": "Reading the work order…",
+    "readFailed": "{number} could not be read",
+    "notice": {
+      "held": "{number} is on hold: the floor was told",
+      "lifted": "{number}: the hold is lifted",
+      "released": "{number} released: the floor can start",
+      "cancelled": "{number} cancelled: its pieces go back to the order lines",
+      "split": "{number} split: {child} made (draft)",
+      "closed": "{number} closed",
+      "reopened": "{number} reopened"
+    },
+    "checksOpen_one": "{count} check holds the release",
+    "checksOpen_other": "{count} checks hold the release",
+    "release": {
+      "credit": "The customer is over its credit limit: the release waits for a yes on its credit.",
+      "gate": "A compliance gate holds the release: see Compliance › Gate refusals.",
+      "refused_one": "The release check holds it: {count} check changed since it was read — see the list.",
+      "refused_other": "The release check holds it: {count} checks changed since they were read — see the list."
+    },
+    "link": {
+      "planning": "Open in Planning ›",
+      "open": "Open the work order"
+    },
+    "heldReopen": "Production does this — the production manager",
+    "cancel": {
+      "check": "What cancelling it meets",
+      "notNow": "A work order in this state is not cancelled",
+      "issued": "Issued to it (it stays on it until returned by hand): {items}",
+      "atWorkshop": "At a workshop: {numbers}"
+    }
+  },
+  "approval": {
+    "confirm": "Confirm the order",
+    "approveKind": "Approve: {kind}",
+    "refuse": "Refuse…",
+    "selfAsked": "You asked for this yes: another person decides",
+    "whoDecides": "Who decides: {who}",
+    "stepUp": "Your yes is recorded with your code. Type the code from your authenticator app.",
+    "confirmed": "Order confirmed",
+    "approved": "Approved",
+    "refusedDone": "Refused: the person who asked reads why",
+    "refuseTitle": "Refuse the yes for {number}",
+    "refuseGo": "Refuse",
+    "kind": "Request",
+    "askedBy": "Asked by",
+    "askedByOn": "{who} · {date}",
+    "no": {
+      "reason": "Why (from the list)",
+      "pick": "Pick a reason",
+      "words": "In your words",
+      "wordsHint": "The person who asked reads them. 1 to 2000 characters.",
+      "pickReason": "Pick a reason from the list",
+      "wordsNeeded": "Say why in your words",
+      "tooLong": "At most {max} characters",
+      "reading": "Reading the reasons…"
+    },
+    "refused": {
+      "STALE": "This yes cannot be given: the request was asked about another version of the order. Refuse it here, or take it back and ask again.",
+      "SUBJECT_GONE": "The record of this request is gone or out of your reach.",
+      "NO_KIND": "This kind of request cannot be re-read yet, so it cannot be approved here.",
+      "NOT_PENDING": "This request was decided, withdrawn or found changed already: the order was read again.",
+      "OWN_REQUEST": "You asked for this yes: another person decides",
+      "NOT_APPROVER": "This yes waits for another approver.",
+      "NOT_REQUESTER": "Only the person who asked takes it back.",
+      "other": "Refused by a rule of the approval: the order was read again."
+    }
+  },
+  "waiting": {
+    "onUs_one": "Waiting on us: {count}",
+    "onUs_other": "Waiting on us: {count}",
+    "onCustomer_one": "Waiting on {customer}: {count}",
+    "onCustomer_other": "Waiting on {customer}: {count}",
+    "reply": "Reply in the thread",
+    "noThread": "The conversation is not on this page",
+    "counterAgreed": "They agreed to your counter-offer",
+    "counterLapsed": "Your counter-offer lapsed",
+    "problem": "{customer} reported a problem",
+    "repromise": "{customer} refused the new date",
+    "yes": "Waiting for a yes: {kind}",
+    "go": {
+      "production": "Production ›",
+      "money": "Money ›",
+      "changes": "Changes ›"
+    }
+  },
+  "doors": {
+    "stages": "Open the work orders in Production · now {stage}",
+    "openInProduction": "Open in Production",
+    "change": "Change…",
+    "ownDates": "The order's own dates",
+    "backupFor": "for every order of {customer}",
+    "backupElsewhere": "Change it on {customer}'s page ›"
   }
 }

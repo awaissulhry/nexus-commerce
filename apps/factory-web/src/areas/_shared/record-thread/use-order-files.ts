@@ -14,6 +14,8 @@ import { storeUrl } from '../../../record-panels/store'
 import { openOrderFile, readOrderFiles, shareWithParty } from './api'
 import { readOrderFilePreviews } from './api' // F-OP-126
 import { openWorksheet } from '../../sales/mtm/api' // F-OP-125 (B5): a worksheet opens by the made-to-measure route (recorded there)
+import type { ThreadFile } from '../../../lib/record-thread/files/model' // F-OP-215: the dock's files line over the order's set
+import { FILE_KINDS, type FileKind } from '../../../record-panels/model' // F-OP-215
 
 /**
  * F-SA-237 (sales page plan N9, P14) — a sales order's files, the container part the order's Files tab AND the thread's Files window
@@ -145,3 +147,48 @@ export function useOrderFiles(
   const model: OrderFilesModel = { read, problem, selected, canShare, busy, previews: previews.previews /* F-OP-126 */, viewer: viewer.model /* F-OP-127 */ }
   return { model, actions, reload: again }
 }
+
+// ---- F-OP-215 (order page plan N4; 11-dock §6.2, D2; review N-1): the dock's files line on a sales order is the order's file set — the
+// ONE read of this container (the page's own, `keep: true`), handed to the dock by its host: the count is that set (the Files tab's
+// count: `read.total`), the tiles its newest; "All files" opens the Files tab, a tile opens the file in the ONE viewer there.
+
+/** What the order page hands its dock: the container's read and actions, the way to the Files tab, a file in its viewer. */
+export interface OrderFilesHost {
+  readonly model: OrderFilesModel
+  readonly actions: FilesViewActions
+  readonly reload: () => void
+  /** "All files": the order's Files tab (the dock's scope kept). */
+  readonly onAll: () => void
+  /** A tile: the Files tab with the ONE viewer on this file. */
+  readonly onOpen: (fileId: string, opener: HTMLElement | null) => void
+}
+
+const kindOf = (kind: string): FileKind => ((FILE_KINDS as readonly string[]).includes(kind) ? (kind as FileKind) : 'DOCUMENT')
+
+/**
+ * The order's file set as the files line draws it: each listed file one tile (its own series: the read lists current versions only, so
+ * the line's count is `read.total`), newest first by the line's own rule; body data locked (never a picture); a file the customer sees
+ * marked as theirs; the message it came with kept ("Go to message").
+ */
+export function stripFilesOf(read: OrderFilesRead, partyId: string | null): ThreadFile[] {
+  return orderFilesOf(read).map((file) => ({
+    id: file.id,
+    recordType: file.from.type,
+    recordId: file.from.id,
+    name: file.name,
+    contentType: file.contentType,
+    kind: kindOf(file.kind),
+    sizeBytes: file.sizeBytes,
+    status: 'AVAILABLE',
+    quarantineReason: null,
+    visibility: file.audience === 'CUSTOMER_CAN_SEE' ? ['OFFICE', 'PARTNER'] : ['OFFICE'],
+    partyId: file.audience === 'CUSTOMER_CAN_SEE' ? partyId : null,
+    createdAt: file.at,
+    versionNo: file.versionNo,
+    seriesId: file.id,
+    previewUrl: null,
+    messageId: file.inThread?.messageId ?? null,
+    ...(file.bodyData ? { locked: 'MEASUREMENTS' as const } : {}),
+  }))
+}
+// ---- end F-OP-215
