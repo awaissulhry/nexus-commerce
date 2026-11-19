@@ -511,7 +511,8 @@ describe('F-OP-216 — the dock\'s words, one word each, the same keys in both l
     const it = Object.fromEntries(Object.entries(catalogue('it', 'record-thread')).filter(([key]) => key.startsWith('allOfCustomer.')))
     expect(it['allOfCustomer.line']).toContain('conversazione')
     expect(it['allOfCustomer.answerLabel']).toBe('Rispondi nella conversazione di {record}')
-    for (const text of Object.values(it)) expect(text).not.toMatch(/\bthread\b/i)
+    // The words a reader sees: a {placeholder}'s name is never shown ("Scrivi il primo in {thread}" shows the thread's own name).
+    for (const text of Object.values(it)) expect(text.replace(/\{\w+\}/g, '{…}')).not.toMatch(/\bthread\b/i)
   })
 
   it('the door is "Answer" / "Rispondi"; its accessible name keeps the thread it answers in', () => {
