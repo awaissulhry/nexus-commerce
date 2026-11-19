@@ -6,6 +6,8 @@ import { scanProgressOf } from '../../production/scans/progress'
 import { partnerOrder, portalReader, type PortalReader } from './access'
 import { shares } from '@nexus/factory-domain/production-brand/levels'
 import { namesOf, readLines, shareLevelOf, type PortalLine, type Reader } from './store'
+// B-OP-044 (order page N6, lines-derived): an order's shipments through their lines.
+import { shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * Production progress for the customer, read side (B-W2b-175, SAL-076; Owner answer C1): the counts per line and size from
@@ -95,8 +97,9 @@ export async function readCellCounts(db: Reader, orderId: string, lines: readonl
   const reversed = cellIds.length > 0 ? await db.qualityReleaseReversal.groupBy({ by: ['workOrderSizeId'], where: { workOrderSizeId: { in: cellIds } }, _sum: { quantity: true } }) : []
   const releasedOf = new Map(released.map((row) => [row.workOrderSizeId, row._sum.quantity ?? 0]))
   const reversedOf = new Map(reversed.map((row) => [row.workOrderSizeId, row._sum.quantity ?? 0]))
-  const shipments = await db.shipment.findMany({ where: { salesOrderId: orderId, status: { in: [...PACKED_OR_LATER] } }, select: { id: true } })
-  const packed = shipments.length > 0 ? await db.shipmentLine.groupBy({ by: ['salesOrderLineId', 'size'], where: { shipmentId: { in: shipments.map((row) => row.id) } }, _sum: { quantity: true } }) : []
+  // B-OP-044 (order page N6): the shipments made for it or carrying its garments; only this order's own pieces count.
+  const shipments = await db.shipment.findMany({ where: { ...shipmentsOfOrderWhere(orderId), status: { in: [...PACKED_OR_LATER] } }, select: { id: true } })
+  const packed = shipments.length > 0 ? await db.shipmentLine.groupBy({ by: ['salesOrderLineId', 'size'], where: { shipmentId: { in: shipments.map((row) => row.id) }, salesOrderLine: { orderId } }, _sum: { quantity: true } }) : []
 
   const sizeless = new Set(lines.filter((line) => line.sizes.length === 0).map((line) => line.id))
   const sizeOf = (lineId: string, size: string): string | null => (sizeless.has(lineId) ? null : size)

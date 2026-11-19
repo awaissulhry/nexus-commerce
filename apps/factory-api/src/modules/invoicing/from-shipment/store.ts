@@ -8,6 +8,8 @@ import { treatmentOf } from '@nexus/factory-domain/invoicing/invoices'
 import { invoiceTypePreset, type InvoiceTiming } from '@nexus/factory-domain/sales/terms/terms'
 import { treatmentKey, type VatTreatment } from '@nexus/factory-domain/tax/vat-treatment'
 import { readInvoice, readLines, type Reader } from '../store'
+// B-OP-045 (order page N6, lines-derived): a shipment's orders are its lines' orders.
+import { orderIdsOfShipments } from '../../shipping/shipments/orders-of'
 
 /**
  * What invoices of shipped goods, deductions and credit notes read (B-W1-51): DDTs and the garments their shipments
@@ -29,6 +31,8 @@ export interface DdtRow {
   readonly shipmentNumber: string
   readonly shipmentStatus: string
   readonly salesOrderId: string
+  /** B-OP-045 (order page N6): every order its shipment carries (its lines' orders), the first (salesOrderId) first. */
+  readonly salesOrderIds: readonly string[]
   readonly cancelled: boolean
   /** B-W2a-54: the shipment's freight charged (B-W2a-48 Shipment.freightCharge: minor units, null = not decided) in the order's currency. */
   readonly freightCharge: number | null
@@ -55,6 +59,8 @@ export async function readDdts(db: Reader, where: Prisma.DdtWhereInput, take = 5
       shipment: { select: { number: true, status: true, salesOrderId: true, freightCharge: true, shipTo: true, salesOrder: { select: { currency: true } } } },
     },
   })
+  // B-OP-045: the orders each DDT's shipment carries (one query for all; one order each while N6 is held off).
+  const carried = await orderIdsOfShipments(db, rows.map((row) => ({ id: row.shipmentId!, salesOrderId: row.shipment!.salesOrderId })))
   return rows.map((row) => ({
     id: row.id,
     number: row.number,
@@ -65,6 +71,7 @@ export async function readDdts(db: Reader, where: Prisma.DdtWhereInput, take = 5
     shipmentNumber: row.shipment!.number,
     shipmentStatus: row.shipment!.status,
     salesOrderId: row.shipment!.salesOrderId,
+    salesOrderIds: carried.get(row.shipmentId!) ?? [row.shipment!.salesOrderId],
     cancelled: row.cancellations.length > 0,
     freightCharge: row.shipment!.freightCharge,
     orderCurrency: row.shipment!.salesOrder.currency,
@@ -92,10 +99,13 @@ export async function presetsOf(db: Reader, partyIds: readonly string[]): Promis
   return new Map(rows.map((row) => [row.id, { timing: row.invoiceTiming, preset: invoiceTypePreset(row.invoiceTiming) }]))
 }
 
-/** The garments each DDT's shipment carried, per order line and size. */
-export async function shippedOf(db: Reader, ddts: readonly Pick<DdtRow, 'id' | 'shipmentId'>[]): Promise<ShippedQuantity[]> {
+/**
+ * The garments each DDT's shipment carried, per order line and size. B-OP-045 (N6): only the lines of `orderIds` when given (a
+ * shared shipment's DDT carries several orders' goods; an invoice bills only its chosen orders' lines).
+ */
+export async function shippedOf(db: Reader, ddts: readonly Pick<DdtRow, 'id' | 'shipmentId'>[], /* B-OP-045 */ orderIds?: readonly string[]): Promise<ShippedQuantity[]> {
   if (ddts.length === 0) return []
-  const lines = await db.shipmentLine.findMany({ where: { shipmentId: { in: [...new Set(ddts.map((ddt) => ddt.shipmentId))] } }, select: { shipmentId: true, salesOrderLineId: true, size: true, quantity: true } })
+  const lines = await db.shipmentLine.findMany({ where: { shipmentId: { in: [...new Set(ddts.map((ddt) => ddt.shipmentId))] }, ...(orderIds ? { salesOrderLine: { orderId: { in: [...orderIds] } } } : {}) }, select: { shipmentId: true, salesOrderLineId: true, size: true, quantity: true } })
   return ddts.flatMap((ddt) => lines.filter((line) => line.shipmentId === ddt.shipmentId).map((line) => ({ ddtId: ddt.id, salesOrderLineId: line.salesOrderLineId, size: line.size, quantity: line.quantity })))
 }
 

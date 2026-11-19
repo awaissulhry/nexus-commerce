@@ -50,9 +50,9 @@ describe('only released garments ship (LOG-002, QHS-058; Reg. (EU) 2016/425 art.
   it("a line is the shipment's party and sales order, made at its site, from 1 garment, while the shipment is a DRAFT", () => {
     const shipment = { siteId: 'A1', partyId: 'P1', salesOrderId: 'SO-3', status: 'DRAFT' as const }
     expect(lineProblems(shipment, { siteId: 'A1', partyId: 'P1', salesOrderId: 'SO-3' }, 1, 'body/lines/0')).toEqual([])
-    expect(lineProblems(shipment, { siteId: 'A1', partyId: 'P1', salesOrderId: 'SO-2' }, 1, 'body/lines/0')).toEqual([
-      { path: 'body/lines/0/workOrderSizeId', message: "These garments are not of the shipment's sales order." },
-    ])
+    // B-OP-046 (order page N6): the "other order" case is now the other-PARTY one — another customer's garments read as an
+    // unknown cell (another order of the same customer joins only as joinProblems allows: see the B-OP-040 block).
+    expect(lineProblems(shipment, { siteId: 'A1', partyId: 'P2', salesOrderId: 'SO-2' }, 1, 'body/lines/0')).toEqual([{ path: 'body/lines/0/workOrderSizeId', message: 'Not a work order cell.' }])
     expect(lineProblems(shipment, { siteId: 'B1', partyId: 'P1', salesOrderId: 'SO-3' }, 1, 'body/lines/0')[0]!.message).toMatch(/another site/)
     expect(lineProblems({ ...shipment, status: 'PACKED' }, { siteId: 'A1', partyId: 'P1', salesOrderId: 'SO-3' }, 0, 'body')).toEqual([
       { path: 'body', message: 'The shipment is PACKED; its lines change only while it is a DRAFT.' },

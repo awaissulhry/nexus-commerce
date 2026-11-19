@@ -6,6 +6,8 @@ import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { daysFrom } from '@nexus/factory-domain/calendars/dates'
 import { actorOfRun, dayOf, partyName, rangeOf } from '../kit'
 import { defineReport } from '../report'
+// B-OP-045 (order page N6, lines-derived): the orders a shipment carries.
+import { earliestPromisesOf, orderRefsOfShipments } from '../../../shipping/shipments/orders-of'
 
 /**
  * Sales › Shipped on time (Today's "Shipped on time", target 95 %): every shipment that left in the period, against its
@@ -49,17 +51,19 @@ export default defineReport({
             { status: { in: ['SHIPPED', 'DELIVERED'] }, shippedAt: { gte: new Date(Date.parse(`${range.from}T00:00:00Z`) - 86_400_000), lt: new Date(Date.parse(`${range.to}T00:00:00Z`) + 2 * 86_400_000) } },
           ],
         },
-        select: { id: true, number: true, shippedAt: true, salesOrder: { select: { id: true, number: true, promiseDate: true, party: { select: { tradeName: true, legalName: true } } } } },
+        select: { id: true, number: true, shippedAt: true, salesOrderId: true, salesOrder: { select: { id: true, number: true, promiseDate: true, party: { select: { tradeName: true, legalName: true } } } } },
         orderBy: [{ shippedAt: 'desc' }, { id: 'desc' }],
         take: run.limit + 1,
       }),
     )
+    // B-OP-045 (order page N6): a shipment of several orders names them all and is on time by the earliest promise among them.
+    const { refs, promises } = await run.caller.withClient(async (db) => ({ refs: await orderRefsOfShipments(db, found), promises: await earliestPromisesOf(db, found) }))
     const rows = found
       .map((row) => ({ row, shippedOn: row.shippedAt ? businessDate(row.shippedAt) : null }))
       .filter(({ shippedOn }) => shippedOn !== null && shippedOn >= range.from && shippedOn <= range.to)
       .slice(0, run.limit)
       .map(({ row, shippedOn }) => {
-        const promise = dayOf(row.salesOrder.promiseDate)
+        const promise = dayOf(promises.get(row.id) ?? row.salesOrder.promiseDate)
         const late = promise && shippedOn ? Math.max(0, daysFrom(promise, shippedOn)) : null
         return {
           id: row.id,
@@ -67,7 +71,7 @@ export default defineReport({
           currency: null,
           cells: {
             shipment: row.number,
-            order: row.salesOrder.number,
+            order: (refs.get(row.id) ?? []).map((ref) => ref.number).join(', ') || row.salesOrder.number,
             customer: partyName(row.salesOrder.party),
             shippedOn,
             promiseDate: promise,

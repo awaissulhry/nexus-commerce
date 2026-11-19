@@ -63,6 +63,8 @@ import {
   type OfficeRequestRow,
   type Reader,
 } from './store'
+// B-OP-043 (order page N6, lines-derived): an order's shipments through their lines.
+import { shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * The office's side (B-W2b-183; SAL-077, SAL-078; design home.approvals "one inbox for every request that needs my yes",
@@ -271,8 +273,8 @@ const OFFICE_SHIP_TO_WORDS = {
 
 /**
  * Why the delivery address cannot be written on the order now; null when it can: an ACTIVE delivery address of the order's own
- * customer (B-OP-015, the office: one we approved), and no shipment being prepared for the order's address (by
- * Shipment.salesOrderId, DRAFT or PACKED).
+ * customer (B-OP-015, the office: one we approved), and no shipment being prepared for the order's address (DRAFT or
+ * PACKED; B-OP-043: made for the order or carrying its garments).
  */
 export async function shipToProblem(db: Reader, order: Pick<OrderRow, 'id' | 'partyId'>, addressId: string, asker: ShipToAsker = 'REQUEST'): Promise<Issue | null> {
   const address = await db.partyAddress.findUnique({ where: { id: addressId }, select: { partyId: true, status: true, kinds: true, approvalStatus: true } })
@@ -284,7 +286,8 @@ export async function shipToProblem(db: Reader, order: Pick<OrderRow, 'id' | 'pa
   // B-OP-015: an address the customer added in the portal waits for our check (a request's Accept approves its own one).
   const waits = asker === 'OFFICE' ? addressUseProblem(address.approvalStatus) : null
   if (waits) return { path: 'body/shipToAddressId', message: waits }
-  const busy = await db.shipment.findFirst({ where: { salesOrderId: order.id, status: { in: ['DRAFT', 'PACKED'] } }, select: { number: true }, orderBy: { createdAt: 'asc' } })
+  // B-OP-043 (order page N6, lines-derived): a shipment being prepared made for the order or carrying its garments.
+  const busy = await db.shipment.findFirst({ where: { ...shipmentsOfOrderWhere(order.id), status: { in: ['DRAFT', 'PACKED'] } }, select: { number: true }, orderBy: { createdAt: 'asc' } })
   if (busy) {
     return asker === 'OFFICE'
       ? { path: 'body/shipToAddressId/SHIPMENT_PREPARED', message: OFFICE_SHIP_TO_WORDS.prepared(busy.number) }

@@ -1,6 +1,8 @@
 import { command, type CommandTools } from '../../../core/command'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { settledStateChanged, settleOrders } from './settlement'
+// B-OP-045 (order page N6, lines-derived): the orders a shipment carries.
+import { ordersOfShipment } from '../../shipping/shipments/orders-of'
 
 /**
  * B-W2b-GB02 (G148; B-W1-51's gap "order.unsettled only from the watched commands"): the worker's handler that announces
@@ -29,8 +31,9 @@ export function settleAfterChangesHandler(): EventHandler {
       const orderIds = await caller.withClient(async (client) => {
         if (event.type === 'shipment.status_changed') {
           if (!payload.shipmentId || !payload.to || !SHIPMENT_MOVES.has(payload.to)) return []
-          const shipment = await client.shipment.findUnique({ where: { id: payload.shipmentId }, select: { salesOrderId: true } })
-          return shipment ? [shipment.salesOrderId] : []
+          const shipment = await client.shipment.findUnique({ where: { id: payload.shipmentId }, select: { id: true, salesOrderId: true } })
+          // B-OP-045 (order page N6): every order the shipment carries is settled again.
+          return shipment ? await ordersOfShipment(client, shipment) : []
         }
         return [...new Set([...(payload.orderId ? [payload.orderId] : []), ...(payload.newOrderIds ?? [])])]
       })

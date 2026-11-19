@@ -130,6 +130,37 @@ export function paymentTermsOf(orders: readonly PaperOrder[]): string | null {
 /** B-OP-042: where an order's lines go among a paper's lines: the first order's first (a large step per order). */
 export const orderPlaceOf = (orders: readonly { readonly id: string }[], orderId: string | null | undefined): number => Math.max(0, orders.findIndex((order) => order.id === orderId)) * 1_000_000
 
+/**
+ * B-OP-043: the garments of these shipments' lines, by the order each line is of (only `orderIds` when given). A shared
+ * shipment's pieces count on each order for its own lines, never the whole shipment on its first order.
+ */
+export async function piecesByOrderOf(db: Reader, shipmentIds: readonly string[], orderIds?: readonly string[]): Promise<Map<string, number>> {
+  const ids = [...new Set(shipmentIds)].filter(isUuid)
+  if (ids.length === 0 || (orderIds !== undefined && orderIds.length === 0)) return new Map()
+  const rows = await db.$queryRaw<{ orderId: string; pieces: number }[]>`
+    SELECT l."orderId"::text AS "orderId", COALESCE(SUM(sl.quantity), 0)::int AS pieces
+      FROM "ShipmentLine" sl
+      JOIN "SalesOrderLine" l ON l.id = sl."salesOrderLineId"
+     WHERE sl."shipmentId" = ANY(${ids}::uuid[])
+       AND (${orderIds === undefined}::boolean OR l."orderId" = ANY(${[...(orderIds ?? [])]}::uuid[]))
+     GROUP BY l."orderId"`
+  return new Map(rows.map((row) => [row.orderId, Number(row.pieces)]))
+}
+
+/** B-OP-045: the earliest promise date among the orders each shipment carries (absent: none of them has one). */
+export async function earliestPromisesOf(db: Reader, shipments: readonly ShipmentKey[]): Promise<Map<string, Date>> {
+  const ids = await orderIdsOfShipments(db, shipments)
+  const wanted = [...new Set([...ids.values()].flat())]
+  const rows = wanted.length > 0 ? await db.salesOrder.findMany({ where: { id: { in: wanted } }, select: { id: true, promiseDate: true } }) : []
+  const promiseOf = new Map(rows.flatMap((row) => (row.promiseDate ? [[row.id, row.promiseDate] as const] : [])))
+  const out = new Map<string, Date>()
+  for (const [shipmentId, orderIds] of ids) {
+    const dates = orderIds.flatMap((id) => (promiseOf.has(id) ? [promiseOf.get(id)!] : []))
+    if (dates.length > 0) out.set(shipmentId, dates.reduce((earliest, date) => (date.getTime() < earliest.getTime() ? date : earliest)))
+  }
+  return out
+}
+
 /** The shipments that carry an order: made for it (its first order), or with a line of it. */
 export const shipmentsOfOrderWhere = (salesOrderId: string): Prisma.ShipmentWhereInput => ({ OR: [{ salesOrderId }, { lines: { some: { salesOrderLine: { orderId: salesOrderId } } } }] })
 

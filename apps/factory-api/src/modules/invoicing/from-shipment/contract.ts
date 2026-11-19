@@ -114,6 +114,11 @@ export const shippedNotInvoicedContract = defineContract({
 export const fromShipmentContract = defineContract({
   body: input({
     shipmentId: id(),
+    /**
+     * B-OP-045 (order page N6; pick P9: invoices stay one per order): the order whose goods of the shipment this draft bills;
+     * required when the shipment carries several orders, else its one order. The freight goes on the first order's invoice.
+     */
+    salesOrderId: id().optional(),
     causale: z.string().trim().max(MAX_CAUSALE).nullish(),
     payment: paymentInput.nullish(),
     internalNote: z.string().trim().max(4000).nullish(),

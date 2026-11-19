@@ -26,6 +26,8 @@ import { announcePhoto, completePhoto, instructionsPdf, presignOpen, returnPhoto
 import { claimMail, claimRecordOf, makeClaimLinkInCommand, type ClaimRecordType } from './office'
 import { COMPLAINT_RECORD, LINE_RECORD, readComplaint, readLines, readReturn, RETURN_RECORD, type Place, type Reader } from './store'
 import { complaintRecord, listCases, returnReasons, returnRecord } from './views'
+// B-OP-044 (order page N6, lines-derived): the orders a shipment carries.
+import { ordersOfShipment } from '../../shipping/shipments/orders-of'
 
 /**
  * "Report a problem" by link (B-W2b-192; SAL-334 by link; design links.claim, its screen SCR-197 is B-W2b-198's): a CLAIM
@@ -66,8 +68,11 @@ const systemOf = (request: FastifyRequest, link: { readonly tenantId: string }):
 /** What the link keeps to: its shipment (and that shipment's order) or its order. */
 export async function scopeOf(db: Reader, link: LinkSession): Promise<ClaimScope> {
   if (link.record.type === 'SalesOrder') return { salesOrderId: link.record.id, shipmentId: null }
-  const shipment = await db.shipment.findUnique({ where: { id: link.record.id }, select: { salesOrderId: true } })
-  return { salesOrderId: shipment?.salesOrderId ?? null, shipmentId: link.record.id }
+  const shipment = await db.shipment.findUnique({ where: { id: link.record.id }, select: { id: true, salesOrderId: true } })
+  // B-OP-044 (order page N6): a shipment of one order keeps the link to that order; a shared one to its own lines only
+  // (each item's order is its line's: create.ts checks the line is on the shipment).
+  const orders = shipment ? await ordersOfShipment(db, shipment) : []
+  return { salesOrderId: orders.length === 1 ? orders[0]! : null, shipmentId: link.record.id }
 }
 
 /** The cases this link opened (`type:id`), from the audit rows its submits wrote on it. */

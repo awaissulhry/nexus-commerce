@@ -6,6 +6,8 @@ import { defineHandler, type EventHandler } from '../../platform/outbox/dispatch
 import { depositNotInvoiced, readDepositRequest } from '../invoicing/drafts'
 import { issueDeposit } from './deposits'
 import { lockMoney } from './locks'
+// B-OP-043 (order page N6, lines-derived): an order's shipments through their lines.
+import { shipmentsOfOrderWhere } from '../shipping/shipments/orders-of'
 
 /**
  * The deposit invoice (TD02) of a deposit whose payment's own command did not make it (B-W2b-F48, after B-W2b-436's bug 2;
@@ -72,7 +74,8 @@ async function owedFor(db: CommandTx, paid: DepositPaid): Promise<Owed | null> {
   const payment = await db.payment.findUnique({ where: { id: paid.paymentId }, select: { status: true } })
   // What this payment placed on the request, its reversals counted (a taken-back acceptance places nothing).
   const placed = payment?.status === 'RECEIVED' ? ((await db.paymentAllocation.aggregate({ where: { paymentId: paid.paymentId, depositRequestId: request.id }, _sum: { amount: true } }))._sum.amount ?? 0) : 0
-  const shipped = request.orderId ? await db.shipment.findFirst({ where: { salesOrderId: request.orderId, shippedAt: { not: null } }, orderBy: { shippedAt: 'asc' }, select: { shippedAt: true } }) : null
+  // B-OP-043 (order page N6): any shipment made for the order or carrying its garments.
+  const shipped = request.orderId ? await db.shipment.findFirst({ where: { ...shipmentsOfOrderWhere(request.orderId), shippedAt: { not: null } }, orderBy: { shippedAt: 'asc' }, select: { shippedAt: true } }) : null
   const decision = depositInvoiceDecision({ fiscalDocument: request.fiscalDocument, fiscalRule: request.fiscalRule, paidAmount: placed, paidOn: paid.paidOn, goodsLeftOn: shipped?.shippedAt ? businessDate(shipped.shippedAt) : null })
   if (!decision.required || placed <= 0) return { outcome: 'not_required', companyId: request.companyId }
   if ((await db.invoice.count({ where: { depositRequestId: request.id, docType: 'TD02', status: 'DRAFT' } })) > 0) return { outcome: 'exists', companyId: request.companyId }

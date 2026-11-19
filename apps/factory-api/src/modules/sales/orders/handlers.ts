@@ -2,6 +2,8 @@ import { command } from '../../../core/command'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { followOrder } from './moves'
 import { followDepositInCommand } from './schedule'
+// B-OP-043 (order page N6, lines-derived): the orders a shipment carries.
+import { ordersOfShipment } from '../../shipping/shipments/orders-of'
 
 /**
  * The worker's handlers that keep a sales order's state with its facts (B-W1-25; SAL-204: the system is the one writer of
@@ -44,9 +46,11 @@ export function orderHandlers(): EventHandler[] {
       async handle(event, { caller }) {
         const payload = event.payload as { shipmentId: string; number?: string; to: string }
         if (!SHIPPED_MOVES.has(payload.to)) return
-        const shipment = await caller.withClient((client) => client.shipment.findUnique({ where: { id: payload.shipmentId }, select: { salesOrderId: true } }))
+        const shipment = await caller.withClient((client) => client.shipment.findUnique({ where: { id: payload.shipmentId }, select: { id: true, salesOrderId: true } }))
         if (!shipment) return
-        await followOrder(caller, shipment.salesOrderId, { what: `shipment ${payload.number ?? payload.shipmentId} ${payload.to.toLowerCase()}`, causationId: event.eventId })
+        // B-OP-043 (order page N6): every order the shipment carries follows (its lines' orders, the first first).
+        const orderIds = await caller.withClient((client) => ordersOfShipment(client, shipment))
+        for (const orderId of orderIds) await followOrder(caller, orderId, { what: `shipment ${payload.number ?? payload.shipmentId} ${payload.to.toLowerCase()}`, causationId: event.eventId })
       },
     }),
     defineHandler({

@@ -46,6 +46,27 @@ function eventView(event: PortalTrackingRow, parcelSeq: number | null) {
   return { at: toUtcIso(event.occurredAt), status: event.status, words: TRACKING_WORDS[event.status], description: event.description, location: event.location, parcelSeq }
 }
 
+/** B-OP-044: the customer's other orders on a shipment, with their pieces, by their own number (never another customer's). */
+function otherOrdersOn(
+  read: { readonly contents: readonly { readonly shipmentId: string; readonly salesOrderLineId: string; readonly quantity: number }[]; readonly orderOfLine: ReadonlyMap<string, string>; readonly otherOrders: ReadonlyMap<string, { readonly id: string; readonly partyId: string; readonly customerSeq: number | null; readonly customerRef: string | null }> },
+  shipmentId: string,
+  partyId: string,
+): { yourNumber: ReturnType<typeof customerNumberOf>; customerRef: string | null; pieces: number }[] {
+  const pieces = new Map<string, number>()
+  for (const row of read.contents) {
+    if (row.shipmentId !== shipmentId) continue
+    const orderId = read.orderOfLine.get(row.salesOrderLineId)
+    if (orderId) pieces.set(orderId, (pieces.get(orderId) ?? 0) + row.quantity)
+  }
+  return [...pieces]
+    .flatMap(([orderId, count]) => {
+      const other = read.otherOrders.get(orderId)
+      return other && other.partyId === partyId ? [{ yourNumber: customerNumberOf('ORDER', other.customerSeq), customerRef: other.customerRef, pieces: count, seq: other.customerSeq ?? Number.MAX_SAFE_INTEGER }] : []
+    })
+    .sort((a, b) => a.seq - b.seq)
+    .map(({ seq: _seq, ...rest }) => rest)
+}
+
 export async function orderShipments(app: FastifyInstance, request: FastifyRequest, orderId: string, now: Date) {
   const reader = portalReader(app, request)
   const order = await partnerOrder(request, reader, orderId)
@@ -53,11 +74,22 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
     const lines = await readLines(client, [order.id])
     const shipments = (await readShipments(client, [order.id])).filter((row) => SHOWN_SHIPMENT_STATUSES.includes(row.status))
     const ids = shipments.map((row) => row.id)
+    // ── B-OP-044 (order page N6): a shared shipment shows this order's own lines, and the customer's other orders it carries
+    // as "also N pieces of your order #12" (their own numbers: the same customer, by the line FK) ──
+    const contents = await readShipmentLines(client, ids)
+    const ownLines = new Set(lines.map((line) => line.id))
+    const otherLineIds = [...new Set(contents.flatMap((row) => (ownLines.has(row.salesOrderLineId) ? [] : [row.salesOrderLineId])))]
+    const orderOfLine = new Map((otherLineIds.length > 0 ? await client.salesOrderLine.findMany({ where: { id: { in: otherLineIds } }, select: { id: true, orderId: true } }) : []).map((row) => [row.id, row.orderId]))
+    const otherOrderIds = [...new Set(orderOfLine.values())]
+    const otherOrders = new Map((otherOrderIds.length > 0 ? await client.salesOrder.findMany({ where: { id: { in: otherOrderIds } }, select: { id: true, partyId: true, customerSeq: true, customerRef: true } }) : []).map((row) => [row.id, row]))
+    // ── end B-OP-044 ──
     return {
       lines,
       shipments,
-      shipped: await shippedPieces(client, shipments.filter((row) => hasLeft(row.status)).map((row) => row.id)),
-      contents: await readShipmentLines(client, ids),
+      shipped: await shippedPieces(client, shipments.filter((row) => hasLeft(row.status)).map((row) => row.id), [order.id] /* B-OP-044 */),
+      contents,
+      orderOfLine,
+      otherOrders,
       parcels: await readParcels(client, ids),
       tracking: await readTracking(client, ids),
       ddts: await liveDdts(client, ids),
@@ -118,10 +150,13 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
           }
         }),
       events: [...events].reverse().map((event) => eventView(event, event.parcelId ? (parcelSeq.get(event.parcelId) ?? null) : null)),
+      // B-OP-044: this order's own lines first and only (another order's pieces are counted below).
       lines: read.contents
-        .filter((row) => row.shipmentId === shipment.id)
+        .filter((row) => row.shipmentId === shipment.id && lineOf.has(row.salesOrderLineId))
         .map((row) => ({ lineSeq: lineOf.get(row.salesOrderLineId)?.seq ?? 0, style: styleOf(row.salesOrderLineId), colourway: colourwayOf(row.salesOrderLineId), size: sizeless.has(row.salesOrderLineId) ? null : row.size, quantity: row.quantity }))
         .sort((a, b) => a.lineSeq - b.lineSeq),
+      // B-OP-044 (N6): "also N pieces of your order #12": the customer's other orders on this shipment (none while N6 is held off).
+      otherOrders: otherOrdersOn(read, shipment.id, order.partyId),
       papers: read.papers.filter((file) => file.recordId === shipment.id && !walled.has(file.id)).map((file) => ({ fileId: file.id, name: file.originalName, contentType: file.contentType, sizeBytes: file.sizeBytes, versionNo: file.versionNo })),
     }
   })
@@ -160,9 +195,11 @@ export async function inTransit(app: FastifyInstance, request: FastifyRequest, n
   const latest = latestByShipment(read.tracking)
   const parcelSeq = new Map(read.parcels.map((parcel) => [parcel.id, parcel.seq]))
   const items = read.shipments
+    // B-OP-044 (order page N6): a shipment found through its lines names its first order the customer reads (one row each).
+    .filter((shipment) => shipment.salesOrderIds.some((id) => orderOf.has(id)))
     .sort((a, b) => (a.shippedAt?.getTime() ?? 0) - (b.shippedAt?.getTime() ?? 0))
     .map((shipment) => {
-      const order = orderOf.get(shipment.salesOrderId)!
+      const order = orderOf.get(shipment.salesOrderIds.find((id) => orderOf.has(id))!)!
       const status = customerShipmentStatusOf(shipment.status, latest.get(shipment.id) ?? [])
       const last = read.tracking.filter((event) => event.shipmentId === shipment.id).at(-1) ?? null
       return {

@@ -163,3 +163,36 @@ describe('B-TH-097: the portal search never reaches a message', { timeout: SLOW_
   })
 })
 // ---- end B-TH-097
+
+// ---- B-OP-044 (order page N6, lines-derived): a delivery is found by the PO of any order it carries (the customer's own).
+describe('B-OP-044: a shared delivery is found by every order it carries', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it("SEED-SH-0001 with one garment of SEED-SO-0003 (put in past the guards) is found by SEED-SO-0003's PO too", async () => {
+    const lineId = newId()
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(
+        `INSERT INTO "ShipmentLine" (id, "tenantId", "siteId", "partyId", "shipmentId", "workOrderId", "workOrderSizeId", "salesOrderLineId", size, quantity)
+       SELECT $1, c."tenantId", c."siteId", s."partyId", s.id, c."workOrderId", c.id, c."salesOrderLineId", c.size, 1
+         FROM "WorkOrderSize" c JOIN "SalesOrderLine" l ON l.id = c."salesOrderLineId" JOIN "SalesOrder" o ON o.id = l."orderId", "Shipment" s
+        WHERE o."tenantId" = $2 AND o.number = 'SEED-SO-0003' AND s."tenantId" = $2 AND s.number = 'SEED-SH-0001' LIMIT 1`,
+        [lineId, world.tenantId],
+      )
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+    try {
+      const [other] = await admin<{ customerRef: string | null }>(`SELECT "customerRef" FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'SEED-SO-0003'`, [world.tenantId])
+      expect(other?.customerRef).toBeTruthy()
+      const found = all(await search(buyer, q(other!.customerRef!)))
+      expect(found.find((result) => result.recordType === 'Shipment')).toMatchObject({ ourRef: 'SEED-SH-0001', status: 'SHIPPED' })
+    } finally {
+      await admin('SET session_replication_role = replica')
+      try {
+        await admin('DELETE FROM "ShipmentLine" WHERE id = $1', [lineId])
+      } finally {
+        await admin('SET session_replication_role = DEFAULT')
+      }
+    }
+  })
+})
+// ---- end B-OP-044
