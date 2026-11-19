@@ -548,3 +548,17 @@ describe('F-OP-302: Progress by line — the line column has room and its pills 
   })
 })
 // ---- end F-OP-302
+
+// ---- F-OP-304 (walk #7): Changes › Still to do never says "Nothing left to do" above rows ------------------------------------------
+describe('F-OP-304: Still to do — "Nothing left to do" only when nothing stands and nothing was made extra', () => {
+  it('pieces made extra with no step left: their own heading and list, no "Nothing left to do"; nothing at all: the empty words', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const text = textOf(draw('f-op-304-still-extra', locale))
+      expect(text).not.toContain(locale === 'en' ? 'Nothing left to do for the accepted changes.' : 'Per le modifiche accettate non resta nulla da fare.')
+      expect(text).toContain(locale === 'en' ? 'Made extra' : 'Fatti in più')
+      expect(text).toContain(locale === 'en' ? 'Line 10 · Made extra: 1' : 'Riga 10 · Fatti in più: 1')
+    }
+    expect(textOf(draw('f-op-301-so2-changes'))).toContain('Nothing left to do for the accepted changes.')
+  })
+})
+// ---- end F-OP-304

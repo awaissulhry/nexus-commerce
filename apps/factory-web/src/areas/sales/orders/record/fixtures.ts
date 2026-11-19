@@ -495,11 +495,18 @@ export const SO2_BLOCKERS = [
 ]
 const SO2_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'BRAND' as const, words: { en: 'Waiting on customer', it: 'Tocca al cliente' }, since: '2026-11-05T09:00:00Z', blockers: SO2_BLOCKERS } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
 const SO3_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'US' as const, words: { en: 'Waiting on us', it: 'Tocca a noi' }, since: '2026-11-14T17:00:00Z', blockers: [] } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
+// F-OP-304 (walk #7): line 10 cut one piece beyond what its first size now wants.
+const EXTRA_READ = {
+  ...SO2_READ,
+  lines: PRODUCTION_READ.lines!.map((line, index) => (index === 0 ? { ...line, madeExtra: 1, sizes: line.sizes.map((size, at) => (at === 0 ? { ...size, madeExtra: 1, madeExtraWords: { en: `Made extra: 1 ${size.size ?? ''}`, it: `Fatti in più: 1 ${size.size ?? ''}` } } : size)) } : line)),
+}
 const F_OP_301: DesignCase<RecordCase>[] = [
   { id: 'f-op-301-so2-overview', label: 'F-OP-301 · Production manager · Overview: Waiting on us 3 (two gates, a change request) and on the customer 1 — the Changes badge says 4', model: base('manager', production, { tab: 'overview', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
   { id: 'f-op-301-so2-changes', label: 'F-OP-301 · Production manager · Changes: the same 3 waiting on us and the yes we asked of the customer (never "Nothing waits on the customer")', model: base('manager', production, { tab: 'changes', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
   { id: 'f-op-301-so3-overview', label: 'F-OP-301 · Production manager · Overview: nothing waits — Who acts next says so too (not the kept "Waiting on us · 5 d")', model: base('manager', production, { tab: 'overview', production: ready(SO3_READ), requests: null, liveState: 'live' }) },
   { id: 'f-op-301-reading-changes', label: 'F-OP-301 · Changes while the production read is out: both cards read (never "Nothing waits" before it)', model: base('sales', production, { tab: 'changes', production: LOADING_STATE, liveState: 'connecting' }) },
+  // F-OP-304 (walk #7): no step left, but pieces of line 10 were made extra — their own list, never rows under "Nothing left to do".
+  { id: 'f-op-304-still-extra', label: 'F-OP-304 · Production manager · Changes › Still to do: no step left; "Made extra" lists line 10\'s pieces under its own heading', model: base('manager', production, { tab: 'changes', production: ready(EXTRA_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
 ]
 // ---- end F-OP-301
 

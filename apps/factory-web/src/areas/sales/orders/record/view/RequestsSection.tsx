@@ -337,9 +337,11 @@ function Still({ order, model, actions }: { order: Order; model: OrderRecordMode
           </h2>
           {still.count > 0 && <span className="fw-so-hint">{t('overview.requests.still', { count: still.count })}</span>}
         </div>
-        {groups.length === 0 ? (
+        {/* F-OP-304 (walk #7): "Nothing left to do" only when no row stands AND no piece was made extra — the pieces made extra
+            are their own list under their own heading, never rows under "nothing". */}
+        {groups.length === 0 && extra.length === 0 ? (
           <EmptyState title={t('changes.still.none')} />
-        ) : (
+        ) : groups.length === 0 ? null : (
           <div className="fw-so-stack">
             {groups.map((group) => (
               <div key={group.requestId ?? 'office'} className="fw-so-stack-tight">
@@ -358,13 +360,18 @@ function Still({ order, model, actions }: { order: Order; model: OrderRecordMode
           </div>
         )}
         {extra.length > 0 && (
-          <ul className="fw-so-datelist" aria-label={t('changes.still.madeExtra')}>
-            {extra.map((entry) => (
-              <li key={entry.key} className="fw-so-hint">
-                {t('changes.still.extraLine', { line: entry.seq, words: said(entry.words, locale) })}
-              </li>
-            ))}
-          </ul>
+          <div className="fw-so-stack-tight">
+            <p className="fw-so-h3" id="fw-so-still-extra">
+              {t('changes.still.madeExtra')}
+            </p>
+            <ul className="fw-so-datelist" aria-labelledby="fw-so-still-extra">
+              {extra.map((entry) => (
+                <li key={entry.key} className="fw-so-hint">
+                  {t('changes.still.extraLine', { line: entry.seq, words: said(entry.words, locale) })}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {still.workOrdersLeftOut > 0 && <p className="fw-so-hint">{t('changes.still.leftOut', { count: still.workOrdersLeftOut })}</p>}
       </Card>
