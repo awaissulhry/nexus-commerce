@@ -298,6 +298,11 @@ export const designScreen = defineDesignScreen<Case>({
       note: 'The money wall: the list of price holders is itself behind the price grain (the API answers 403 to anyone else; the page does not ask).',
     },
     // ---- end F-CP-145
+    // ---- F-CP-148 (the money wall, Owner O1–O3): Admin › Security "Seen as" — the Owner (prices, above), the Administrator (above), and:
+    { id: 'cp-148-prices-as-sales', label: 'F-CP-148 · Seen as Sales worker (no price grain): no "Who sees prices" card, no call', model: { model: model(), permissions: rolePermissions('sales') } },
+    { id: 'cp-148-prices-as-manager', label: 'F-CP-148 · Seen as Production manager (no price grain): no "Who sees prices" card, no call', model: { model: model(), permissions: rolePermissions('production_manager') } },
+    { id: 'cp-148-prices-as-finance', label: 'F-CP-148 · Seen as Finance (sees prices, no users.view): no card — the list needs both; only the Owner gives the role', model: { model: model(), permissions: rolePermissions('finance') } },
+    // ---- end F-CP-148
     { id: 'notice', label: 'After a drill that passed', model: { model: model({ facts: ok(facts(OK, [drill(4, { drilledOn: '2026-10-30', result: 'PASSED' }), PASSED_AUG])), notice: { key: 'sec.notice.drillPassed', tone: 'success' } }) } },
   ],
 })

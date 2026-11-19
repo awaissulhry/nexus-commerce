@@ -58,7 +58,8 @@ export const ROLE_PERMISSIONS = {
     'money.price',
     'money.margin',
   ],
-  sales: templatePermissions('sales', ['price', 'margin']),
+  // F-CP-148 (follow-up 5; Owner O1, B-CP-011): the Sales template holds no price grain — "Seen as Sales" sees no money.
+  sales: templatePermissions('sales'),
   warehouse: templatePermissions('warehouse'),
   inspector: templatePermissions('quality_inspector'),
   finance: templatePermissions('finance', ['price', 'cost', 'margin']),
