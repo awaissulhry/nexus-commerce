@@ -1589,5 +1589,56 @@
     "open": "Chi è stato avvisato",
     "aboutChanges_one": "Avvisati delle modifiche: {count} persona",
     "aboutChanges_other": "Avvisati delle modifiche: {count} persone"
+  },
+  "split": {
+    "action": "Dividi in nuovi ordini…",
+    "title": "Dividi {number} in nuovi ordini",
+    "body": "Sposta righe, o parte delle loro taglie, in nuovi ordini a sé, ognuno con il proprio indirizzo di consegna, ordine del cliente e date. Una riga con un piano di consegne o con opzioni si sposta intera.",
+    "keeps": "I nuovi ordini mantengono prezzi, condizioni e stagione; l'acconto resta qui.",
+    "part": "Parte {n}",
+    "addPart": "Un'altra parte",
+    "removePart": "Togli la parte {n}",
+    "sizes": "Pezzi che passano alla parte {n}",
+    "room": "Al massimo {room}: il resto è su ordini di lavoro o in un'altra parte",
+    "line": "{seq} · {style} {colour}",
+    "stays_one": "{count} riga resta qui: una riga di costo, un capo su misura o una riga chiusa in anticipo.",
+    "stays_other": "{count} righe restano qui: righe di costo, capi su misura o righe chiuse in anticipo.",
+    "pieces_one": "{count} pezzo si sposta",
+    "pieces_other": "{count} pezzi si spostano",
+    "shipTo": "Spedire a",
+    "shipToSame": "Come su questo ordine",
+    "shipToReading": "Lettura degli indirizzi di consegna…",
+    "shipToHeld": "Un altro indirizzo di consegna richiede il diritto di vedere i clienti: questa parte va spedita come questo ordine.",
+    "shipToFailed": "Non è stato possibile leggere gli indirizzi di consegna: questa parte va spedita come questo ordine.",
+    "reason": "Perché (facoltativo)",
+    "reasonHint": "Scritto nella cronologia dell'ordine con i numeri dei nuovi ordini.",
+    "go_one": "Dividi in {count} nuovo ordine",
+    "go_other": "Dividi in {count} nuovi ordini",
+    "done_one": "Creato {count} nuovo ordine: {numbers}. L'acconto resta qui.",
+    "done_other": "Creati {count} nuovi ordini: {numbers}. L'acconto resta qui.",
+    "open": "Apri {number}",
+    "notice": "Ordine diviso: da qui {numbers}; l'acconto resta qui.",
+    "held": {
+      "state": "Un ordine si divide mentre è confermato, in produzione o pronto",
+      "nothing": "Niente di questo ordine può spostarsi: i suoi pezzi sono su ordini di lavoro, o le sue righe restano qui",
+      "empty": "Dai a ogni parte almeno un pezzo",
+      "over": "Una taglia chiede più di quanto si può spostare",
+      "parts": "Una divisione crea al massimo {count} ordini"
+    },
+    "problem": {
+      "stays": "La riga {line} resta su questo ordine: è una riga di costo, un capo su misura o una riga chiusa in anticipo.",
+      "whole": "La riga {line} ha un piano di consegne o delle opzioni: si sposta intera o resta qui.",
+      "more": "Riga {line}, taglia {size}: più di quanto le resta da spostare.",
+      "noSize": "La riga {line} non ha la taglia {size}.",
+      "line": "La riga {line} non si può spostare così.",
+      "empty": "Questa parte non prende nessuna riga: dalle almeno un pezzo.",
+      "shipTo": "Questo indirizzo di consegna non si può usare (archiviato o non approvato da noi): scegline un altro.",
+      "reason": "Il motivo è al massimo di {count} caratteri.",
+      "inWork": "Pezzi di queste righe sono su ordini di lavoro: ciò che resta qui non può scendere sotto."
+    }
+  },
+  "wo": {
+    "makeNext": "Crea il prossimo: {style}",
+    "made": "{number} creato (bozza)"
   }
 }

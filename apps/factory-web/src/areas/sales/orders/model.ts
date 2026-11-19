@@ -23,6 +23,10 @@ import {
 } from './api'
 import { CUSTOMER_URGENCIES, INVOICED_STATES, type CustomerUrgency, type InvoicedState } from './api' // B-TH-244
 import type { DockDefault } from '../../_shared/record-frame/model' // F-SA-263
+// ---- F-OP-111: Split into new orders… (the API's own limits; the body the split sends) ----
+import { ORDERS_DEPTH_LIMITS } from '@nexus/factory-domain/sales/orders-depth/rules'
+import type { ApiIssue } from '../../../lib/api/errors'
+import type { SplitBody } from './api'
 
 /**
  * The sales order screens' pure rules (SCR-038 list and board, SCR-039 the order studio; B-W1-25 part 2): what a person
@@ -1016,3 +1020,181 @@ export function boardNarrowOf(narrow: Narrowing): { brand: string | null; compan
   return { brand: narrow.brand ?? null, companyId: narrow.companyId ?? null, cf: narrow.cf ?? null, invoiced: extra.invoiced ?? null, atRisk: !!extra.atRisk, currency: extra.currency ?? null, customerUrgency: extra.customerUrgency ?? null, shippedNotInvoiced: !!extra.shippedNotInvoiced, kind: narrow.kind ?? null, profile: narrow.profile ?? null, waiting: narrow.waiting ?? null }
 }
 // ── end B-TH-244 ──
+
+// ---- F-OP-111: Split into new orders… (⋯ Edit; POST /sales/orders/:id/split, orders.manage) ---------------------------------------
+
+/** The orders one split makes at most, and its reason's length (the API's own limits). */
+export const SPLIT_LIMITS = Object.freeze({ parts: ORDERS_DEPTH_LIMITS.splitParts, reason: ORDERS_DEPTH_LIMITS.splitReason })
+const SPLIT_STATES: readonly OrderStatus[] = ['CONFIRMED', 'IN_PRODUCTION', 'READY']
+
+/** A line a part may take pieces of: each size with what may still move (`open`: not on a work order — the rest stays here). */
+export interface SplitLine {
+  readonly lineId: string
+  readonly seq: number
+  readonly style: string
+  readonly colour: string
+  readonly sizes: readonly { readonly size: string; readonly quantity: number; readonly open: number }[]
+}
+
+/** One part as typed: its pieces per line and size, where it ships (null: as this order), its PO and dates (the order's by default). */
+export interface SplitPartDraft {
+  readonly grid: Readonly<Record<string, Readonly<Record<string, number>>>>
+  readonly shipToAddressId: string | null
+  readonly customerRef: string
+  readonly requestedDate: string
+  readonly promiseDate: string
+}
+
+/** A refusal of the split at its place: a part of the dialog (its index), or the split as a whole (null). */
+export interface SplitRefusal {
+  readonly part: number | null
+  readonly words: Phrase
+}
+
+/**
+ * The lines a split may move: size-grid lines not closed short, each size with the pieces not on a work order yet (pieces a work order
+ * makes stay with this order: the work order keeps making them for it). A fee, a made-to-measure unit and a line closed short stay.
+ */
+export function splitLinesOf(order: Pick<Order, 'lines'>): SplitLine[] {
+  return order.lines
+    .filter((line) => line.kind === 'SIZE_GRID' && !line.closedShort)
+    .map((line) => ({
+      lineId: line.id,
+      seq: line.seq,
+      style: line.style?.code ?? '—',
+      colour: line.colourway ? `${line.colourway.code} ${line.colourway.name}` : '—',
+      sizes: line.sizes.flatMap((size) => (size.size === null ? [] : [{ size: size.size, quantity: size.quantity, open: Math.max(0, size.quantity - size.progress.inWorkOrders) }])),
+    }))
+    .filter((line) => line.sizes.some((size) => size.open > 0))
+}
+
+/** The lines that stay here whatever is split (a fee, a made-to-measure unit, a line closed short). */
+export const splitStays = (order: Pick<Order, 'lines'>): number => order.lines.filter((line) => line.kind !== 'SIZE_GRID' || !!line.closedShort).length
+
+/** A new part: nothing moved yet; it ships to, is requested and promised as this order, with its PO. */
+export function splitPartOf(order: Pick<Order, 'customerRef' | 'requestedDate' | 'promiseDate'>): SplitPartDraft {
+  return { grid: {}, shipToAddressId: null, customerRef: order.customerRef ?? '', requestedDate: order.requestedDate ?? '', promiseDate: order.promiseDate ?? '' }
+}
+
+/** Why ⋯ "Split into new orders…" waits: no right, the order's state, nothing that may move. */
+export function splitHeld(order: Order, can: OrderAbilities): Phrase | null {
+  if (!can.manage) return phrase('held.noManage')
+  if (!SPLIT_STATES.includes(order.status)) return phrase('split.held.state')
+  if (splitLinesOf(order).length === 0) return phrase('split.held.nothing')
+  return null
+}
+
+/** What part `index` may still take of a line's size: what may move, less what the other parts take. */
+export function splitRoom(line: SplitLine, size: string, parts: readonly SplitPartDraft[], index: number): number {
+  const open = line.sizes.find((entry) => entry.size === size)?.open ?? 0
+  const others = parts.reduce((sum, part, at) => (at === index ? sum : sum + (part.grid[line.lineId]?.[size] ?? 0)), 0)
+  return Math.max(0, open - others)
+}
+
+/** The cells of part `index` above what it may take (the grid marks each with its room). */
+export function splitOver(lines: readonly SplitLine[], parts: readonly SplitPartDraft[], index: number): { lineId: string; size: string; room: number }[] {
+  const part = parts[index]
+  if (!part) return []
+  return lines.flatMap((line) =>
+    line.sizes.flatMap((size) => {
+      const asked = part.grid[line.lineId]?.[size.size] ?? 0
+      const room = splitRoom(line, size.size, parts, index)
+      return asked > room ? [{ lineId: line.lineId, size: size.size, room }] : []
+    }),
+  )
+}
+
+/** The pieces a part moves. */
+export const splitPieces = (part: SplitPartDraft): number => Object.values(part.grid).reduce((sum, sizes) => sum + Object.values(sizes).reduce((acc, quantity) => acc + (quantity > 0 ? quantity : 0), 0), 0)
+
+/** Every piece of the order would move: it would keep nothing (the API refuses it). */
+export function splitKeepsNothing(order: Pick<Order, 'lines'>, parts: readonly SplitPartDraft[]): boolean {
+  return order.lines.every((line) => line.kind === 'SIZE_GRID' && !line.closedShort && line.sizes.every((size) => size.size !== null && parts.reduce((sum, part) => sum + (part.grid[line.id]?.[size.size!] ?? 0), 0) >= size.quantity))
+}
+
+/** A date typed for a part that differs from the order's and lies before today (the order's own date is sent as it is: never). */
+const pastDay = (typed: string, own: string | null, today: string): boolean => typed !== '' && typed !== (own ?? '') && typed < today
+
+/** Why "Split" waits, the first that holds it (the dialog's held words), or null when it may go. */
+export function splitProblem(input: { order: Order; parts: readonly SplitPartDraft[]; reason: string; today: string }): Phrase | null {
+  const { order, parts, reason, today } = input
+  if (parts.length === 0 || parts.some((part) => splitPieces(part) === 0)) return phrase('split.held.empty')
+  if (parts.length > SPLIT_LIMITS.parts) return phrase('split.held.parts', { count: SPLIT_LIMITS.parts })
+  const lines = splitLinesOf(order)
+  if (parts.some((_, index) => splitOver(lines, parts, index).length > 0)) return phrase('split.held.over')
+  if (splitKeepsNothing(order, parts)) return phrase('amend.held.empty')
+  if (parts.some((part) => pastDay(part.requestedDate, order.requestedDate, today))) return phrase('issue.requestedDate')
+  if (parts.some((part) => pastDay(part.promiseDate, order.promiseDate, today))) return phrase('issue.promiseDate')
+  if (reason.trim().length > SPLIT_LIMITS.reason) return phrase('split.problem.reason', { count: SPLIT_LIMITS.reason })
+  return null
+}
+
+/**
+ * The split as the API reads it: each part's lines with the sizes that move (a line of which every piece moves goes whole, with its
+ * delivery schedule), and only what differs from the order (a PO cleared: none; a date cleared: none; else the order's own).
+ */
+export function splitBodyOf(order: Order, parts: readonly SplitPartDraft[], reason: string, version: number): SplitBody {
+  const lines = splitLinesOf(order)
+  const why = reason.trim()
+  return {
+    version,
+    ...(why ? { reason: why } : {}),
+    parts: parts.map((part) => {
+      const ref = part.customerRef.trim()
+      return {
+        lines: lines.flatMap((line) => {
+          const sizes = line.sizes.map((size) => ({ size: size.size, quantity: part.grid[line.lineId]?.[size.size] ?? 0 })).filter((size) => size.quantity > 0)
+          return sizes.length > 0 ? [{ lineId: line.lineId, sizes }] : []
+        }),
+        ...(part.shipToAddressId ? { shipToAddressId: part.shipToAddressId } : {}),
+        ...(ref !== (order.customerRef ?? '') ? { customerRef: ref || null } : {}),
+        ...(part.requestedDate !== (order.requestedDate ?? '') ? { requestedDate: part.requestedDate || null } : {}),
+        ...(part.promiseDate !== (order.promiseDate ?? '') ? { promiseDate: part.promiseDate || null } : {}),
+      }
+    }),
+  }
+}
+
+/**
+ * A refused split in this app's words, each at its place (issueWords pattern: by the path only, never the API's English):
+ * `body/parts/1/lines/0/sizes` → part 2, "Line 20 has a delivery schedule or options: it moves whole or stays here". The words name
+ * this order's lines and sizes only (another customer's address is "cannot be used", as an unknown one). Each said once.
+ */
+export function splitRefusals(issues: readonly ApiIssue[], body: SplitBody, order: Pick<Order, 'lines'>): SplitRefusal[] {
+  const lineOf = (part: number, line: number) => body.parts[part]?.lines[line]
+  const seqOf = (part: number, line: number): number => order.lines.find((entry) => entry.id === lineOf(part, line)?.lineId)?.seq ?? line + 1
+  const out: SplitRefusal[] = []
+  const seen = new Set<string>()
+  const index = (value: string | undefined): number | null => (value !== undefined && /^\d+$/.test(value) ? Number(value) : null)
+  for (const issue of issues) {
+    const at = issuePath(issue).replace(/^body\/?/, '').split(/[/.]/).filter(Boolean)
+    let refusal: SplitRefusal
+    const part = at[0] === 'parts' ? index(at[1]) : null
+    if (part !== null) {
+      const line = at[2] === 'lines' ? index(at[3]) : null
+      if (line !== null) {
+        const seq = seqOf(part, line)
+        const size = index(at[5])
+        if (at[4] === 'lineId') refusal = { part, words: phrase('split.problem.stays', { line: seq }) }
+        else if (at[4] === 'sizes' && size !== null) refusal = { part, words: phrase(at[6] === 'size' ? 'split.problem.noSize' : 'split.problem.more', { line: seq, size: lineOf(part, line)?.sizes[size]?.size ?? '—' }) }
+        else if (at[4] === 'sizes') refusal = { part, words: phrase('split.problem.whole', { line: seq }) }
+        else refusal = { part, words: phrase('split.problem.line', { line: seq }) }
+      } else if (at[2] === 'lines') refusal = { part, words: phrase('split.problem.empty') }
+      else if (at[2] === 'shipToAddressId') refusal = { part, words: phrase('split.problem.shipTo') }
+      else if (at[2] === 'requestedDate') refusal = { part, words: phrase('issue.requestedDate') }
+      else if (at[2] === 'promiseDate') refusal = { part, words: phrase('issue.promiseDate') }
+      else if (at[2] === 'customerRef') refusal = { part, words: phrase('issue.customerRef') }
+      else refusal = { part, words: phrase('problem.write.invalid') }
+    } else if (at[0] === 'parts') refusal = { part: null, words: phrase('amend.held.empty') }
+    else if (at[0] === 'reason') refusal = { part: null, words: phrase('split.problem.reason', { count: SPLIT_LIMITS.reason }) }
+    // The order keeps the rest through an amendment: its refusal names its own lines (`body/lines/…`), never a part's.
+    else if (at[0] === 'lines') refusal = { part: null, words: phrase('split.problem.inWork') }
+    else refusal = { part: null, words: phrase('problem.write.invalid') }
+    const id = `${refusal.part}|${refusal.words.key}|${JSON.stringify(refusal.words.params ?? {})}`
+    if (seen.has(id)) continue
+    seen.add(id)
+    out.push(refusal)
+  }
+  return out
+}
+// ---- end F-OP-111

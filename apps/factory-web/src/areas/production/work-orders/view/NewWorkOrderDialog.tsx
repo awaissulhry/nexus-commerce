@@ -80,20 +80,23 @@ export function NewWorkOrderDialog({ model, can, actions }: { model: NewWorkOrde
         }}
       >
         {model.problem && <Banner tone="danger" title={t(model.problem.key, model.problem.params)} />}
-        {!can.orders && <Banner tone="info" title={t('new.noOrders')} />}
+        {/* F-OP-112: the sales order page's door fixes its order: no search (the order is the one choice below). */}
+        {!can.orders && !model.fixed && <Banner tone="info" title={t('new.noOrders')} />}
 
-        <Field label={t('new.order')} hint={t('new.orderHint')}>
-          <Input
-            type="search"
-            leadingIcon={<Search size={13} aria-hidden />}
-            value={query}
-            placeholder={t('new.orderSearch')}
-            onChange={(event) => {
-              typed.current = true
-              setQuery(event.target.value)
-            }}
-          />
-        </Field>
+        {!model.fixed && (
+          <Field label={t('new.order')} hint={t('new.orderHint')}>
+            <Input
+              type="search"
+              leadingIcon={<Search size={13} aria-hidden />}
+              value={query}
+              placeholder={t('new.orderSearch')}
+              onChange={(event) => {
+                typed.current = true
+                setQuery(event.target.value)
+              }}
+            />
+          </Field>
+        )}
         {model.ordersProblem && <p className="fw-pr-hint">{t(model.ordersProblem)}</p>}
         {model.orders && model.orders.length === 0 && <p className="fw-pr-hint">{t('new.noOrderFound')}</p>}
         {model.orders && model.orders.length > 0 && (

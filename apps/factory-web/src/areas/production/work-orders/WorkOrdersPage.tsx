@@ -8,11 +8,7 @@ import { newIdempotencyKey } from '../../../lib/api/client'
 import { WithMessages } from '../../../record-panels/i18n'
 import {
   countWorkOrders,
-  createWorkOrder,
-  findOrders,
-  getOpenLines,
   listWorkOrders,
-  type OrderOption,
   type WorkOrderCounts,
   type WorkOrderRow,
 } from '../_shared/api'
@@ -27,7 +23,9 @@ import { ListToolsContext, useListToolsTransport, type ListToolsTransport } from
 import { initiallyCollapsed, toggleGroup } from '../../../list-frame/groups/model'
 import { customerGroupsOf, groupsToCount, listAddress, listQueryOf, termsOf, withScreenSort, type ListTerms } from './list/model'
 // ---- end F-PR-03
-import { linesOfStyle, NO_NEW_ORDER, openGridOf, pickedAfter, stylesOf, type BulkReleaseModel, type NewWorkOrderModel, type WorkOrdersListModel } from './list-model'
+import type { BulkReleaseModel, WorkOrdersListModel } from './list-model'
+// F-OP-112: "New work order" — its state and create are ONE hook (the sales order page opens it too, its order fixed).
+import { useNewWorkOrder } from './new/use-new-work-order'
 import { WorkOrdersListView } from './view/WorkOrdersListView'
 import { getReadiness, holdReasons, placeHold, /* F-PR-05b */ placeProductionHolds, type ReadinessRow } from './daily/api'
 import { DAILY_NAMESPACE, dailyCan, dailyProblem, NO_DAILY, READINESS_STATUSES, type DailyModel } from './daily/model'
@@ -87,9 +85,6 @@ function WorkOrdersContainer() {
   const readKey = JSON.stringify(listQueryOf(terms))
   const customers = useProductionCustomers('work-orders')
   const newAsked = params?.get('new') === '1'
-  // `?new=1&order=<number>` (the sales order studio's "Make work orders"): the dialog opens with that order chosen.
-  const autoPick = useRef<string | null>(newAsked ? (params?.get('order')?.trim() || null) : null)
-  const chooseRef = useRef<(order: OrderOption | null) => void>(() => undefined)
 
   const [rows, setRows] = useState<WorkOrdersListModel['rows']>({ items: null, more: false, problem: null })
   const [cursor, setCursor] = useState<string | null>(null)
@@ -97,7 +92,6 @@ function WorkOrdersContainer() {
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<WorkOrdersListModel['notice']>(null)
-  const [newOrder, setNewOrder] = useState<NewWorkOrderModel | null>(null)
   const [release, setRelease] = useState<BulkReleaseModel | null>(null)
   const releaseKey = useRef(newIdempotencyKey())
   const readId = useRef(0)
@@ -209,75 +203,18 @@ function WorkOrdersContainer() {
     () => void load(),
   )
 
+  // ---- F-OP-112: New work order (the one hook): `?new=1&order=<number>` (the sales orders' list, board and band link here) opens it
+  // with that order chosen; Create opens the new draft.
+  const newWorkOrder = useNewWorkOrder(api, {
+    canSearch: can.orders,
+    autoPick: newAsked ? (params?.get('order')?.trim() || null) : null,
+    onMade: (created) => router.push(`${prefix}/production/work-orders/${created.id}`),
+  })
   // ?new=1 (Today's New ▾, the band's button): the dialog, once.
   useEffect(() => {
-    if (newAsked && !newOrder && can.manage) setNewOrder({ ...NO_NEW_ORDER })
-  }, [newAsked, newOrder, can.manage])
-
-  // The dialog's order search.
-  const searchOrders = useCallback(
-    async (query: string) => {
-      setNewOrder((current) => (current ? { ...current, query, orders: null, ordersProblem: null } : current))
-      try {
-        const orders = await findOrders(api, query)
-        setNewOrder((current) => (current && current.query === query ? { ...current, orders } : current))
-        const asked = autoPick.current
-        if (asked && query === asked) {
-          autoPick.current = null
-          const match = orders.find((order) => order.number === asked)
-          if (match) chooseRef.current(match)
-        }
-      } catch (error) {
-        setNewOrder((current) => (current && current.query === query ? { ...current, orders: null, ordersProblem: readProblem(error) } : current))
-      }
-    },
-    [api],
-  )
-  useEffect(() => {
-    if (newOrder && newOrder.orders === null && newOrder.ordersProblem === null && newOrder.query === '' && can.orders) void searchOrders(autoPick.current ?? '')
-    // Only when the dialog opens.
-  }, [newOrder !== null])
-
-  const chooseOrder = useCallback(
-    async (order: OrderOption | null) => {
-      setNewOrder((current) => (current ? { ...current, chosen: order, lines: null, linesProblem: null, styleId: null, picked: [], grid: {}, problem: null } : current))
-      if (!order) return
-      try {
-        const lines = await getOpenLines(api, order.id)
-        setNewOrder((current) => {
-          if (!current || current.chosen?.id !== order.id) return current
-          const styles = stylesOf(lines).filter((style) => style.open > 0)
-          const styleId = styles[0]?.id ?? null
-          const own = linesOfStyle(lines, styleId).filter((line) => !line.madeToMeasure && line.sizes.some((size) => size.open > 0))
-          return { ...current, lines, styleId, picked: own.map((line) => line.id), grid: Object.fromEntries(own.map((line) => [line.id, openGridOf(line)])) }
-        })
-      } catch (error) {
-        setNewOrder((current) => (current && current.chosen?.id === order.id ? { ...current, linesProblem: readProblem(error) } : current))
-      }
-    },
-    [api],
-  )
-
-  chooseRef.current = (order) => void chooseOrder(order)
-
-  const create = useCallback(async () => {
-    const current = newOrder
-    if (!current || current.busy) return
-    setNewOrder({ ...current, busy: true, problem: null })
-    try {
-      const lines = current.picked.map((lineId) => ({
-        salesOrderLineId: lineId,
-        sizes: Object.entries(current.grid[lineId] ?? {})
-          .filter(([, quantity]) => quantity > 0)
-          .map(([size, quantity]) => ({ size, quantity })),
-      }))
-      const created = await createWorkOrder(api, { ...(current.dueDate ? { dueDate: current.dueDate } : {}), lines: lines.filter((line) => line.sizes.length > 0) })
-      setNewOrder(null)
-      router.push(`${prefix}/production/work-orders/${created.id}`)
-    } catch (error) {
-      setNewOrder((state) => (state ? { ...state, busy: false, problem: writeProblem(error) } : state))
-    }
-  }, [api, newOrder, prefix, router])
+    if (newAsked && !newWorkOrder.model && can.manage) newWorkOrder.open()
+  }, [newAsked, newWorkOrder.model, can.manage]) // eslint-disable-line react-hooks/exhaustive-deps
+  // ---- end F-OP-112
 
   // B-W2b-13: a cell or Edit N saved — the row takes its new due date, priority and version (days late follow the due date).
   const saved = useCallback((rowId: string, after: Readonly<Record<string, string | number | null>>, version: number) => {
@@ -339,7 +276,7 @@ function WorkOrdersContainer() {
     live,
     updates,
     notice,
-    newOrder,
+    newOrder: newWorkOrder.model, // F-OP-112
     release,
     readiness: readinessShown ? readiness : null,
     daily: { ...daily, can: dcan },
@@ -441,34 +378,14 @@ function WorkOrdersContainer() {
           },
         },
         onNew: (open) => {
-          if (open) setNewOrder({ ...NO_NEW_ORDER })
+          if (open) newWorkOrder.open()
           else {
-            setNewOrder(null)
+            newWorkOrder.close()
             if (newAsked) go({})
           }
         },
-        newOrder: {
-          onQuery: (query) => void searchOrders(query),
-          onChoose: (order) => void chooseOrder(order),
-          onStyle: (styleId) =>
-            setNewOrder((current) => {
-              if (!current) return current
-              const own = linesOfStyle(current.lines, styleId).filter((line) => !line.madeToMeasure && line.sizes.some((size) => size.open > 0))
-              return { ...current, styleId, picked: own.map((line) => line.id), grid: Object.fromEntries(own.map((line) => [line.id, openGridOf(line)])) }
-            }),
-          onPick: (lineId, on) =>
-            setNewOrder((current) => {
-              if (!current) return current
-              const line = current.lines?.lines.find((entry) => entry.id === lineId)
-              const picked = pickedAfter(current.lines?.lines ?? [], current.picked, lineId, on) // B-W2b-368: a unit alone
-              const grid = { ...current.grid }
-              if (on && line && !grid[lineId]) grid[lineId] = openGridOf(line)
-              return { ...current, picked, grid }
-            }),
-          onGrid: (grid) => setNewOrder((current) => (current ? { ...current, grid } : current)),
-          onDueDate: (dueDate) => setNewOrder((current) => (current ? { ...current, dueDate } : current)),
-          onCreate: () => void create(),
-        },
+        newOrder: newWorkOrder.actions, // F-OP-112
+
       }}
     />
     </ListToolsContext.Provider>

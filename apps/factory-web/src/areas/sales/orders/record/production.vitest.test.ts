@@ -210,3 +210,101 @@ describe('F-SA-235b — the Health card’s look lives with the card (lib/produc
   })
 })
 // ---- end F-SA-235b
+
+// ---- F-OP-112 (10-order-page §5.1): Make work orders… in place — the Production page's own hook, the order fixed ---------------
+describe('F-OP-112: Make work orders… in place — the style step, the next style, held in words', () => {
+  type Open = import('../../../production/_shared/api').OpenLines
+  const line = (id: string, seq: number, style: { id: string; code: string }, open: number[], over: Partial<Open['lines'][number]> = {}): Open['lines'][number] => ({
+    id,
+    seq,
+    kind: 'SIZE_GRID',
+    styleId: style.id,
+    styleCode: style.code,
+    styleName: `${style.code} name`,
+    colourwayId: `${id}-c`,
+    colourwayCode: `C${seq}`,
+    madeToMeasure: false,
+    sizes: open.map((n, index) => ({ size: String(48 + index * 2), ordered: n + 1, onWorkOrders: 1, open: n })),
+    ...over,
+  })
+  const JKT = { id: 's-jkt', code: 'DEMO-JKT-01' }
+  const PNT = { id: 's-pnt', code: 'DEMO-PNT-02' }
+  const GLV = { id: 's-glv', code: 'DEMO-GLV-03' }
+  const lines: Open = {
+    salesOrder: { id: 'so1', number: 'SO-2026-0088', status: 'CONFIRMED' },
+    numberPreview: 'WO-0412',
+    lines: [line('l1', 10, JKT, [2, 0, 3]), line('l2', 20, JKT, [0, 0, 0]), line('l3', 30, JKT, [1], { madeToMeasure: true }), line('l4', 40, PNT, [4, 4]), line('l5', 50, GLV, [0])],
+  }
+
+  it('the style step: the style asked while it has open pieces, else the first open one; its open lines picked with every open size', async () => {
+    const { styleStepOf, pickOfStyle } = await import('../../../production/work-orders/new/use-new-work-order')
+    expect(styleStepOf(lines, null)).toEqual({ styleId: JKT.id, picked: ['l1'], grid: { l1: { '48': 2, '52': 3 } } })
+    expect(styleStepOf(lines, PNT.id)).toEqual({ styleId: PNT.id, picked: ['l4'], grid: { l4: { '48': 4, '50': 4 } } })
+    // A style with nothing open (or another order's style) is never the step: the first open one is.
+    expect(styleStepOf(lines, GLV.id).styleId).toBe(JKT.id)
+    expect(styleStepOf(lines, 'not-a-style').styleId).toBe(JKT.id)
+    expect(styleStepOf({ ...lines, lines: [line('l5', 50, GLV, [0])] }, null)).toEqual({ styleId: null, picked: [], grid: {} })
+    // A made-to-measure unit is never ticked by the step (it is made alone, ticked by hand).
+    expect(pickOfStyle(lines, JKT.id).picked).not.toContain('l3')
+  })
+
+  it('the next style after a draft: the next with open pieces in line order (then from the start); none left: null', async () => {
+    const { nextStyleOf } = await import('../../../production/work-orders/new/use-new-work-order')
+    expect(nextStyleOf(lines, JKT.id)).toEqual({ styleId: PNT.id, code: 'DEMO-PNT-02' })
+    expect(nextStyleOf(lines, PNT.id)).toEqual({ styleId: JKT.id, code: 'DEMO-JKT-01' })
+    expect(nextStyleOf({ ...lines, lines: lines.lines.filter((entry) => entry.styleId === JKT.id) }, JKT.id)).toBeNull()
+    expect(nextStyleOf(null, JKT.id)).toBeNull()
+  })
+
+  it('held in words, never hidden: no right to make work orders, a confirmed order\'s deposit waiting or missing; in production only the right', async () => {
+    const { makeHeldOf } = await import('./production')
+    const { canOf, order, PAID } = await import('../_demo/fixtures')
+    expect(makeHeldOf(order('CONFIRMED'), canOf('sales'))).toEqual({ key: 'held.noWorkOrders' })
+    expect(makeHeldOf(order('CONFIRMED'), canOf('owner'))).toEqual({ key: 'held.deposit', params: { date: '2026-11-04' } })
+    expect(makeHeldOf(order('CONFIRMED', { chain: { ...order().chain, depositRequests: [] } }), canOf('owner'))).toEqual({ key: 'held.depositMissing' })
+    expect(makeHeldOf(order('CONFIRMED', { chain: { ...order().chain, depositRequests: [PAID] } }), canOf('manager'))).toBeNull()
+    expect(makeHeldOf(order('IN_PRODUCTION'), canOf('manager'))).toBeNull()
+    expect(makeHeldOf(order('IN_PRODUCTION'), canOf('sales'))).toEqual({ key: 'held.noWorkOrders' })
+  })
+
+  it('the order as the dialog\'s one choice: its number, customer, PO, state and pieces', async () => {
+    const { orderOptionOf } = await import('./production')
+    const { order } = await import('../_demo/fixtures')
+    expect(orderOptionOf(order('CONFIRMED'))).toEqual({ id: order().id, number: 'SO-2026-0088', partyName: 'Moto Demo S.r.l.', customerRef: 'PO-ESEMPIO-88', status: 'CONFIRMED', units: 14 })
+  })
+
+  it('ONE hook: the Production page moved onto it (no copy), the order page mounts it in its production acts; Create stays on the order', () => {
+    const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+    const page = read('../../../production/work-orders/WorkOrdersPage.tsx')
+    expect(page).toContain("import { useNewWorkOrder } from './new/use-new-work-order'")
+    expect(page).toContain('onMade: (created) => router.push(`${prefix}/production/work-orders/${created.id}`)')
+    for (const gone of ['createWorkOrder(', 'getOpenLines(', 'findOrders(', 'setNewOrder(']) expect(page, gone).not.toContain(gone)
+    expect(page).toContain("autoPick: newAsked ? (params?.get('order')?.trim() || null) : null,")
+    const hook = read('../../../production/work-orders/new/use-new-work-order.ts')
+    expect(hook).toContain('setModel({ ...NO_NEW_ORDER, fixed: true, query: start.order.number, orders: [start.order] })')
+    expect(hook).toContain('if (model && !model.fixed && model.orders === null')
+    const acts = read('./use-production-acts.ts')
+    expect(acts).toContain('const make = useNewWorkOrder(api, {')
+    expect(acts).toContain("setNotice({ tone: 'success', words: { key: 'wo.made', params: { number: made.number } } })")
+    expect(acts).toContain('setNext(nextStyleOf(asked.lines, asked.styleId))')
+    const tab = read('./view/ProductionTab.tsx')
+    expect(tab).not.toContain('?new=1&order=')
+    expect(tab).toContain('<NewWorkOrderDialog model={make.dialog} can={make.can} actions={actions?.makeWorkOrders?.dialog} />')
+    expect(tab).toContain("t('wo.makeNext', { style: make.next.code })")
+    expect(tab).not.toMatch(/from '[^']*use-new-work-order'/)
+    const dialog = read('../../../production/work-orders/view/NewWorkOrderDialog.tsx')
+    expect(dialog).toContain('{!model.fixed && (')
+  })
+
+  it('the words in it + en (catalogue words: "ordine di lavoro" is masculine)', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      expect(t('wo.makeNext', { style: 'DEMO-PNT-02' })).toContain('DEMO-PNT-02')
+      expect(t('wo.made', { number: 'WO-0412' })).toContain('WO-0412')
+    }
+    const it_ = createTranslator('it', messagesFor('it', ['orders']).orders!)
+    expect(it_('wo.made', { number: 'WO-0412' })).toBe('WO-0412 creato (bozza)')
+    expect(it_('wo.makeNext', { style: 'DEMO-PNT-02' })).toBe('Crea il prossimo: DEMO-PNT-02')
+  })
+})
+// ---- end F-OP-112

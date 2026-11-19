@@ -11,6 +11,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { Order } from '../../api'
 import { amendHeld, closeLinesHeld, copyHeld, reopenHeld } from '../../daily-model'
+import { splitHeld } from '../../model' // F-OP-111
 import { DOCK_DEFAULTS } from '../../model' // F-SA-263
 import { cancelHeld, createShipmentHref, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, mayCreateShipment, nextStep, promiseHeld, readyHeld, recordTabs, STATUS_TONE, tabCountOf, type MenuGroup } from '../../model'
 import { ChangesTab } from '../changes/view/ChangesTab'
@@ -211,6 +212,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   const reopenWait = reopenHeld(order, model.can)
   const cancelWait = cancelHeld(order, model.can)
   const copyWait = copyHeld(model.can)
+  const splitWait = splitHeld(order, model.can) // F-OP-111
   // ---- F-SA-230: ⋯ grouped (Next steps · Edit · People · Go to · Copy; Cancel last), every item of today kept, each held with its reason.
   const sup = useT(SUPERVISOR_NS)
   const notes = useT(NOTES_NS)
@@ -228,6 +230,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
               { id: 'amend', label: t('action.amend'), disabled: !!amendWait || !!model.amend, description: model.amend ? t('held.amending') : held(amendWait), onSelect: () => actions?.onAmendStart?.() },
               { id: 'closeLines', label: t('action.closeLines'), disabled: !!closeLinesWait, description: held(closeLinesWait), onSelect: () => actions?.onDialog?.({ kind: 'closeLines' }) },
               ...(order.lines.some((line) => line.closedShort) ? [{ id: 'reopenLines', label: t('action.reopenLines'), disabled: !!reopenWait, description: held(reopenWait), onSelect: () => actions?.onDialog?.({ kind: 'reopenLines' }) }] : []),
+              // F-OP-111: Split into new orders… (the parts become orders of their own; the deposit stays here).
+              { id: 'split', label: t('split.action'), disabled: !!splitWait, description: held(splitWait), onSelect: () => actions?.onDialog?.({ kind: 'split' }) },
             ]
           : []),
         // B-W2b-323: Set priority…, Set season…

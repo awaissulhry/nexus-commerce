@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { describe, expect, it, vi } from 'vitest'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { fileURLToPath } from 'node:url' // F-OP-134
+import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { createElement, type ComponentType } from 'react'
 import { renderView, textOf } from '../../../../lib/record-thread/parts/testing'
 import { canOf } from '../_demo/fixtures'
@@ -12,6 +13,7 @@ import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeAddress, 
 import { viewOpenOf } from '../../../_shared/record-frame/model'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
+import type { BandDialog, ChangesDialog, LinesDialog, MoneyDialog, RecordDialog } from './record-model' // F-OP-134
 
 // The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so a dialog's words are checked.
 vi.mock('@nexus/ui/components', async (original) => {
@@ -456,3 +458,59 @@ describe('F-SA-262 — the order dock picks ONE conversation, the scope in the a
   })
 })
 // ---- end F-SA-262
+
+// ---- F-OP-134 (N-5): the order page's acts live in one container hook per tab; the views draw what they return -------------------
+describe('F-OP-134 — one acts hook per tab, mounted by the container, never by a view', () => {
+  const HOOKS = ['use-band-acts', 'use-overview-acts', 'use-lines-acts', 'use-production-acts', 'use-shipments-acts', 'use-money-acts'] as const
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  /** Every file in a `view/` folder under record/ (the views draw one model and fetch nothing). */
+  const views = (dir: URL): string[] =>
+    readdirSync(dir).flatMap((name) => {
+      const at = new URL(name, dir)
+      if (statSync(at).isDirectory()) return views(new URL(`${name}/`, dir))
+      return /\.tsx?$/.test(name) && !name.includes('.vitest.') && at.pathname.includes('/view/') ? [fileURLToPath(at)] : []
+    })
+
+  it('the container mounts every tab acts hook, with the one write, and hands the view what they return', () => {
+    const container = source('./OrderRecord.tsx')
+    for (const hook of HOOKS) expect(container, hook).toContain(`from './${hook}'`)
+    expect(container).toContain('const actsBase: RecordActsBase = { api, orderId, current, write, version, setNotice, load, loadParts }')
+    for (const spread of ['...band.model', '...overview.model', '...lines.model', '...productionActs.model', '...money.model', '...band.actions', '...overview.actions', '...lines.actions', '...productionActs.actions', '...money.actions']) expect(container, spread).toContain(spread)
+    expect(container).toContain('delivered={shipments.delivered')
+    // ONE dialog slot: as a dialog opens, each hook clears what its own last dialog showed (the cancel reads its impact check).
+    expect(container).toMatch(/setDialog\(next\)\s+setDialogProblem\(null\)[\s\S]{0,200}band\.opened\(next\)\s+lines\.opened\(next\)\s+money\.opened\(next\)/)
+    // The tabs' acts left the container: none of their writes or act hooks is called here any more.
+    for (const call of ['changePromise(', 'markReady(', 'closeOrder(', 'copyAsQuote(', 'applyAmendment(', 'previewAmendment(', 'closeLines(', 'reopenLines(', 'cancelOrder(', 'getCancelCheck(', 'sendDepositLink(', 'recordDepositPayment(', 'sendToSdi(', 'useScheduleSteps(', 'useBrandHealth(', 'useAssignSupervisor(', 'useNoteDialog(', 'openPreview(', 'postPortalReplyKeyed(']) expect(container, call).not.toContain(call)
+  })
+
+  it('each hook holds its own acts (the band: promise, ready, close, copy, portal, people; Lines: amend, close / reopen lines, cancel; Money: deposits and payments)', () => {
+    const band = source('./use-band-acts.ts')
+    for (const call of ['changePromise(', 'markReady(', 'closeOrder(', 'copyAsQuote(', 'openPreview(', 'useAssignSupervisor(', 'useNoteDialog(']) expect(band, call).toContain(call)
+    const lines = source('./use-lines-acts.ts')
+    for (const call of ['applyAmendment(', 'previewAmendment(', 'closeLines(', 'reopenLines(', 'cancelOrder(', 'getCancelCheck(', 'postPortalReplyKeyed(']) expect(lines, call).toContain(call)
+    const money = source('./use-money-acts.ts')
+    for (const call of ['sendDepositLink(', 'recordDepositPayment(', 'sendToSdi(', 'useScheduleSteps(']) expect(money, call).toContain(call)
+    expect(source('./use-production-acts.ts')).toContain('useBrandHealth(')
+    expect(source('./use-overview-acts.ts')).toContain('onOpenLine: setOverviewLine')
+    expect(source('./use-shipments-acts.ts')).toContain('createElement(Deliveries, { orderId: order.id, prefix })')
+  })
+
+  it('no view under record/ imports a tab acts hook (they fetch: view-boundaries rule 2)', () => {
+    const files = views(new URL('./', import.meta.url))
+    expect(files.length).toBeGreaterThan(10)
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8')
+      for (const hook of HOOKS) expect(text, `${file}: ${hook}`).not.toMatch(new RegExp(`from '[^']*/${hook}'`))
+    }
+  })
+
+  it('RecordDialog is the one slot of every hook\'s dialogs; the dialogs draw by their owner', () => {
+    expectTypeOf<RecordDialog>().toEqualTypeOf<BandDialog | LinesDialog | MoneyDialog | ChangesDialog>()
+    const dialogs = source('./view/Dialogs.tsx')
+    const at = (words: string) => dialogs.indexOf(words)
+    expect(at('// The band (use-band-acts).')).toBeLessThan(at("case 'promise':"))
+    expect(at('// Lines (use-lines-acts).')).toBeLessThan(at("case 'amendReview':"))
+    expect(at('// Money (use-money-acts).')).toBeLessThan(at("case 'depositLink':"))
+  })
+})
+// ---- end F-OP-134
