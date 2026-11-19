@@ -29,6 +29,9 @@ export const BRAND_HEALTHS = ['LATE', 'AT_RISK', 'NO_DATE', 'ON_TRACK'] as const
 export type BrandHealth = (typeof BRAND_HEALTHS)[number]
 export const WAITING_ON = ['BRAND', 'SUPPLIER', 'WORKSHOP', 'US'] as const
 export type WaitingOn = (typeof WAITING_ON)[number]
+/** F-OP-103 (B-OP-021): what a customer request waiting on us is (the domain's BLOCKER_SUBS). */
+export const BLOCKER_SUBS = ['REQUEST', 'COUNTER', 'PROBLEM', 'REPROMISE'] as const
+export type BlockerSub = (typeof BLOCKER_SUBS)[number]
 
 const pieces = {
   ordered: z.number(),
@@ -66,7 +69,18 @@ export const headlineSchema = z.object({
     on: z.enum(WAITING_ON),
     words,
     since: instant.nullable(),
-    blockers: z.array(z.object({ kind: z.string(), on: z.enum(WAITING_ON), words, since: instant.nullable() })),
+    // F-OP-103 (B-OP-021): + the record each is about (the ONE waiting list's door; a problem with its message) and what a request
+    // waiting on us is; absent in an older answer.
+    blockers: z.array(
+      z.object({
+        kind: z.string(),
+        on: z.enum(WAITING_ON),
+        words,
+        since: instant.nullable(),
+        ref: z.object({ type: z.string(), id: z.string(), messageId: z.string().optional() }).nullable().optional(),
+        sub: z.enum(BLOCKER_SUBS).nullable().optional(),
+      }),
+    ),
   }),
   held: z.boolean(),
   holds: z.array(z.object({ kind: z.enum(['QUALITY', 'PRODUCTION', 'BRAND']), words, since: day })),

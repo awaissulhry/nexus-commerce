@@ -1,5 +1,5 @@
 import { isApiError, issuePath } from '../../../../lib/api/errors'
-import type { OrderStatus } from '../api'
+import type { OpenApproval, OrderStatus } from '../api' // F-OP-101: OpenApproval
 import type { Phrase, Tone } from '../model'
 import type {
   Approval,
@@ -485,3 +485,89 @@ export function confirmationSendBody(input: { to: string; cc: string; subject: s
   return { to: [input.to], ...(cc.length > 0 ? { cc } : {}), subject: input.subject.trim() || null, message: input.message.trim() || null, language: input.language, ...(input.outsideTicked ? { sendOutside: true } : {}) }
 }
 // ── end TH-0 follow-up ──
+
+// ---- F-OP-101 (order page plan N1; 10-order-page §2.4; rule 42): the approver's yes in place ------------------------------------
+// The order read's open requests for a yes (B-OP-020: the approval engine's own rows) decided on the page: a candidate approver who
+// did not ask gets Confirm the order and Refuse… (words required); the asker sees it held; anybody else reads who decides. Words are
+// `orders` keys (`approval.*`), not this catalogue's: the band, the waiting rows and the dialog say them.
+
+/** The kinds of yes the "Waiting for a yes" banner decides: the order's own and its credit hold's (an old change's yes is a waiting row). */
+export const BANNER_YES_KINDS: readonly string[] = Object.freeze(['SALES_ORDER', 'CREDIT_OVERRIDE'])
+/** The old change's yes (the kept SEED-SO-W39-02): no new one is asked for an office change; it is decided on its waiting row. */
+export const CHANGE_YES_KIND = 'SALES_ORDER_CHANGE'
+
+/** The engine's refusals the order page words itself (`approval.refused.<code>`); any other reads `approval.refused.other`. */
+export const YES_REFUSALS: ReadonlySet<string> = new Set(['STALE', 'SUBJECT_GONE', 'NO_KIND', 'NOT_PENDING', 'OWN_REQUEST', 'NOT_APPROVER', 'NOT_REQUESTER'])
+
+/**
+ * The engine's `why` (its English sentence, the approval rules' APPROVAL_REFUSALS) → its code. The order read carries the sentence,
+ * not the code; the page never shows it raw (it + en), so it is read by its first words; unknown words: null.
+ */
+const WHY_STARTS: readonly (readonly [string, string])[] = Object.freeze([
+  ['It changed since you looked', 'STALE'],
+  ['The record of this request is gone', 'SUBJECT_GONE'],
+  ['This kind of request has no checker yet', 'NO_KIND'],
+  ['This request was decided', 'NOT_PENDING'],
+  ['You asked for this', 'OWN_REQUEST'],
+  ['This request waits for another approver', 'NOT_APPROVER'],
+  ['Only the person who asked', 'NOT_REQUESTER'],
+] as const)
+export function yesRefusalOf(why: string | null | undefined): string | null {
+  if (!why) return null
+  return WHY_STARTS.find(([start]) => why.startsWith(start))?.[1] ?? null
+}
+
+/** Why a yes or a no is held for this reader, in the page's words. */
+export function yesHeldOf(why: string | null | undefined): Phrase {
+  const code = yesRefusalOf(why)
+  return phrase(code && YES_REFUSALS.has(code) ? `approval.refused.${code}` : 'approval.refused.other')
+}
+
+/** What this reader does with one open yes. */
+export type YesDoor =
+  /** A candidate approver who did not ask: Confirm (or Approve) and Refuse…, each held with words when the engine holds it. */
+  | { readonly kind: 'decide'; readonly task: OpenApproval; readonly confirmHeld: Phrase | null; readonly refuseHeld: Phrase | null }
+  /** Rule 42: the asker never decides their own request — it is held for them ("another person decides"). */
+  | { readonly kind: 'selfAsked'; readonly task: OpenApproval }
+  /** Anybody else: who decides it (a person or a role, by name). */
+  | { readonly kind: 'whoDecides'; readonly task: OpenApproval; readonly who: string }
+
+/** The door of one open yes for this reader (`busy`: a write of the page runs — both held with its words). */
+export function yesDoorOf(task: OpenApproval, busy = false): YesDoor {
+  if (task.requester.me) return { kind: 'selfAsked', task }
+  // The engine allows the no to every candidate approver who did not ask (its own check); the yes too, unless the request is stale or
+  // its record gone (W39-02's seeded fingerprint reads STALE: its no is the door that clears it).
+  if (task.approve.allowed || task.reject.allowed) {
+    const held = busy ? phrase('held.busy') : null
+    return { kind: 'decide', task, confirmHeld: held ?? (task.approve.allowed ? null : yesHeldOf(task.approve.why)), refuseHeld: held ?? (task.reject.allowed ? null : yesHeldOf(task.reject.why)) }
+  }
+  return { kind: 'whoDecides', task, who: task.approver.name }
+}
+
+/** The banner's yes, the order's own first (then its credit hold's), each as the read lists it (oldest first). */
+export function bannerYesOf(approvals: readonly OpenApproval[] | null | undefined): OpenApproval[] {
+  const listed = (approvals ?? []).filter((task) => BANNER_YES_KINDS.includes(task.kind))
+  return [...listed.filter((task) => task.kind === 'SALES_ORDER'), ...listed.filter((task) => task.kind !== 'SALES_ORDER')]
+}
+
+/** The yes label of a task: the order's own is "Confirm the order"; another kind "Approve: <kind>". */
+export function confirmLabelOf(task: Pick<OpenApproval, 'kind' | 'kindLabel'>, locale: string): Phrase {
+  return task.kind === 'SALES_ORDER' ? phrase('approval.confirm') : phrase('approval.approveKind', { kind: locale === 'en' ? task.kindLabel.en : task.kindLabel.it })
+}
+
+/** The words of a no, as the engine checks them (REASON_CODE, REASON_WORDS: 1 to 2000 characters). */
+export const REFUSE_WORDS_MAX = 2000
+export function refuseProblemOf(input: { readonly reasonCode: string; readonly words: string }): Phrase | null {
+  if (!input.reasonCode) return phrase('approval.no.pickReason')
+  const words = input.words.trim()
+  if (words.length === 0) return phrase('approval.no.wordsNeeded')
+  if (words.length > REFUSE_WORDS_MAX) return phrase('approval.no.tooLong', { max: REFUSE_WORDS_MAX })
+  return null
+}
+
+/** The notice after a decision: the order's own yes "Order confirmed"; another yes "Approved"; a no "Refused". */
+export function decidedNoticeOf(task: Pick<OpenApproval, 'kind'>, decision: 'approve' | 'reject'): string {
+  if (decision === 'reject') return 'approval.refusedDone'
+  return task.kind === 'SALES_ORDER' ? 'approval.confirmed' : 'approval.approved'
+}
+// ---- end F-OP-101

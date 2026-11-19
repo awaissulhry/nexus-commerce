@@ -120,6 +120,9 @@ describe('B-OP-021: what the order page may do to a work order, and where a bloc
     expect(blockerRefFor({ type: 'WorkOrder', id: 'wo-of-another' }, reaches)).toBeNull()
     expect(blockerRefFor(null, reaches)).toBeNull()
     expect(blockerRefFor(undefined, reaches)).toBeNull()
+    // F-OP-103: a reported problem keeps the message it was raised with (Reply in the thread opens there); none: no messageId key.
+    expect(blockerRefFor({ type: 'ProductionIssue', id: 'p1', messageId: 'm1' }, reaches)).toEqual({ type: 'ProductionIssue', id: 'p1', messageId: 'm1' })
+    expect(blockerRefFor({ type: 'ProductionIssue', id: 'p1', messageId: null }, reaches)).toEqual({ type: 'ProductionIssue', id: 'p1' })
   })
 })
 // ── end B-OP-021 ──
