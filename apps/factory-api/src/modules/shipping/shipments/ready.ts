@@ -206,7 +206,7 @@ async function shipsWithReader(
   return (salesOrderId, siteIds) => {
     if (salesOrderId === asked.id) return null
     const row = others.get(salesOrderId)
-    if (!row) return { allowed: false, why: 'Sales order not found.' }
+    if (!row) return { allowed: false, code: 'CUSTOMER', why: 'Sales order not found.' }
     return joinVerdict(joinProblems(shipment, joinOrderOf(row, from ? [...new Set(siteIds)] : undefined)))
   }
 }

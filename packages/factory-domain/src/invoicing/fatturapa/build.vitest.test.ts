@@ -1,6 +1,8 @@
 import { Decimal } from 'decimal.js'
 import { describe, expect, it } from 'vitest'
 import { buildFatturaPa } from './build'
+// B-OP-033 (order page N5): a paper DDT of a shipment made elsewhere, cited from the invoice's references.
+import { citedDdts, paperDdtsOf, PAPER_DDT_REF } from './build'
 import { depositDeductionFrom } from './deposit'
 import {
   FAKE_EU_BUSINESS,
@@ -326,3 +328,37 @@ describe('deterministic output', () => {
     expect(doc.xml).toContain('<Denominazione>Smith &amp; Sons &lt;Riders&gt; GmbH</Denominazione>')
   })
 })
+
+// ---- B-OP-033 (order page N5): an invoice of goods recorded as made elsewhere cites their paper DDT -----------------------------
+describe('B-OP-033 — the paper DDT of a shipment made elsewhere in DatiDDT', () => {
+  const refs = [{ kind: 'PURCHASE_ORDER', number: 'PO-81/2026' }, { kind: PAPER_DDT_REF, number: '123/2026', date: '2026-10-10' }, { kind: 'DDT', number: 'bad', date: '10/10/2026' }, null, 'x']
+
+  it('reads the references of kind DDT only (number and a real day), never a purchase order', () => {
+    expect(paperDdtsOf(refs)).toEqual([{ number: '123/2026', date: '2026-10-10' }])
+    expect(paperDdtsOf(null)).toEqual([])
+    expect(paperDdtsOf([{ kind: 'PURCHASE_ORDER', number: '1', date: '2026-10-10' }])).toEqual([])
+  })
+
+  it('cites the lines’ Nexus DDTs and the paper ones, oldest first, each number once', () => {
+    expect(citedDdts([{ number: 'D-0112', date: '2026-10-27' }], refs)).toEqual([
+      { number: '123/2026', date: '2026-10-10' },
+      { number: 'D-0112', date: '2026-10-27' },
+    ])
+    expect(citedDdts([{ number: '123/2026', date: '2026-10-10' }], refs)).toEqual([{ number: '123/2026', date: '2026-10-10' }])
+  })
+
+  it('a TD01 of one paper DDT: DatiDDT with its number and date and no line references (it covers the whole invoice)', () => {
+    const { xml } = buildFatturaPa({ ...TD01_EU_B2B, ddts: citedDdts([], refs) })
+    const ddts = blocks(xml, 'DatiDDT')
+    expect(ddts).toHaveLength(1)
+    expect([field(ddts[0]!, 'NumeroDDT'), field(ddts[0]!, 'DataDDT'), fields(ddts[0]!, 'RiferimentoNumeroLinea')]).toEqual(['123/2026', '2026-10-10', []])
+  })
+
+  it('a TD24 of one paper DDT is a deferred invoice that names its DDT (TD24 needs one)', () => {
+    const deferred = { ...TD24_IT_B2B_WITH_DEPOSIT, lines: TD24_IT_B2B_WITH_DEPOSIT.lines.map(({ ddtNumber: _ddt, ...line }) => line), ddts: citedDdts([], [{ kind: 'DDT', number: '123/2026', date: '2026-10-20' }]) }
+    const { xml } = buildFatturaPa(deferred)
+    expect(blocks(xml, 'DatiDDT').map((block) => field(block, 'NumeroDDT'))).toEqual(['123/2026'])
+  })
+})
+// ---- end B-OP-033
+

@@ -12,7 +12,7 @@ import type { TransportMode } from '@nexus/factory-domain/shipping/shipments/tra
 import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { isDocumentLanguage } from '@nexus/factory-domain/documents/model'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
-import { command, IdempotencyKeyReusedError, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
+import { command, IdempotencyKeyReusedError, StaleVersionError, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { ApiError } from '../../../core/errors'
 import { serverClock } from '../../../core/time'
@@ -26,7 +26,9 @@ import { assertMay, mayOn, officeContextOf } from '../access'
 import { tenantOf } from '../cells'
 import { shipmentDetail, officeShipment } from '../shipments/shipments'
 import { shipmentDocumentBlockers } from '../documents/read'
-import { whenShipped } from '../shipments/leave'
+import { whenShipped, type LeaveOptions } from '../shipments/leave'
+// B-OP-032 (order page N5): a shipment made elsewhere.
+import { elsewhereRefusalPath, nexusDdtWords } from '@nexus/factory-domain/shipping/elsewhere'
 import { lockedStatus, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
 import { isSourceDdt, lockSource, sourceDdtView, sourceIssuedOf, sourceLanguageOf, sourceNumbersOf, type SourceDdtRow } from './sources-store'
 import { ddtView, expectedDdtNumber, isShipmentDdt, issuedOf, languageOf, liveDdtOf, pdfFileIdOf, pdfFileIdsOf, readAnyDdt, readDdt, readDdtFacts, type AnyDdtRow, type DdtRow, type DdtView } from './store'
@@ -86,6 +88,15 @@ function layoutProblems(draft: DdtDraft, facts: DdtFacts): Issue[] {
 
 // ---- preview --------------------------------------------------------------------------------------------------------
 
+// ---- B-OP-032 (order page N5): a shipment made elsewhere left with its paper DDT (or an immediate invoice) -------------------
+/** Its refusal words when the shipment was made ELSEWHERE (Nexus issues no DDT of it: no second fiscal number), else null. */
+async function madeElsewhereWords(db: Pick<CommandTx, 'shipment'>, shipmentId: string): Promise<string | null> {
+  const row = await db.shipment.findUnique({ where: { id: shipmentId }, select: { origin: true, externalDdtNumber: true } })
+  if (row?.origin !== 'ELSEWHERE') return null
+  return nexusDdtWords(row.externalDdtNumber ? { number: row.externalDdtNumber } : null)
+}
+// ---- end B-OP-032
+
 async function previewFacts(caller: CommandCaller, shipmentId: string) {
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_VIEW)
   const company = await companyLegalOf(caller, shipment.companyId)
@@ -99,7 +110,10 @@ export async function previewDdt(caller: CommandCaller, shipmentId: string, body
   const now = serverClock.now()
   const { draft, problems } = draftDdt(facts, body, now)
   const expectedNumber = await caller.withClient((client) => expectedDdtNumber(client, shipment.companyId, draft.documentDate))
+  // B-OP-032: never a draft of a Nexus DDT for goods that left with a paper one.
+  const elsewhere = await caller.withClient((client) => madeElsewhereWords(client, shipment.id))
   const all: Issue[] = [
+    ...(elsewhere ? [{ path: elsewhereRefusalPath('NEXUS_DDT'), message: elsewhere }] : []),
     ...issueStateProblems(shipment.status, facts.liveDdtNumber, body.ship === true).map((message) => ({ path: 'state', message })),
     ...problems,
     ...(expectedNumber === null ? [{ path: 'company/numbering', message: 'The company has no single active DDT series: an administrator sets it up under numbering.' }] : []),
@@ -126,16 +140,24 @@ const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tool
  * SHIPPED (the …_quality_shipping_guards trigger ships a serial only with its shipment; the deferred one checks the
  * live DDT at commit). Returns the serials shipped.
  */
-async function shipGoods(tools: CommandTools, shipment: ShipmentHeader, periodLockOverride?: PeriodLockOverride | null): Promise<string[]> {
-  await tools.tx.shipment.update({ where: { id: shipment.id }, data: { status: 'SHIPPED', shippedAt: tools.now }, select: { id: true } })
+// B-OP-032 (order page N5, R-2): `leave` — when the goods left and from which status: a shipment made ELSEWHERE moves DRAFT →
+// SHIPPED at the time it left (packed then too: packedAt = shippedAt), with its holds as recorded (shipments/leave.ts).
+export interface ShipGoodsOptions extends LeaveOptions {
+  readonly from?: 'PACKED' | 'DRAFT' | undefined
+}
+
+export async function shipGoods(tools: CommandTools, shipment: ShipmentHeader, options: ShipGoodsOptions = {}): Promise<string[]> {
+  const from = options.from ?? 'PACKED'
+  const shippedAt = options.shippedAt ?? tools.now
+  await tools.tx.shipment.update({ where: { id: shipment.id }, data: { status: 'SHIPPED', shippedAt, ...(from === 'DRAFT' ? { packedAt: shippedAt } : {}) }, select: { id: true } })
   const serials = await tools.tx.garmentSerial.findMany({ where: { shipmentLine: { shipmentId: shipment.id }, status: 'RELEASED' }, select: { id: true, serial: true }, orderBy: { serial: 'asc' } })
   for (const serial of serials) {
     await tools.tx.garmentSerial.update({ where: { id: serial.id }, data: { status: 'SHIPPED', version: { increment: 1 } }, select: { id: true } })
     tools.audit({ action: 'shipping.shipSerial', recordType: 'GarmentSerial', recordId: serial.id, companyId: shipment.companyId, siteId: shipment.siteId, before: { status: 'RELEASED' }, after: { status: 'SHIPPED', shipmentId: shipment.id } })
   }
   // B-W2a-48: closed-short lines refused, the garments in finished goods out of stock, the freight, the EU evidence.
-  await whenShipped(tools, shipment, periodLockOverride)
-  tools.emit({ type: 'shipment.status_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, from: 'PACKED', to: 'SHIPPED', partyId: shipment.partyId /* B-SA-004 */ } })
+  await whenShipped(tools, shipment, options)
+  tools.emit({ type: 'shipment.status_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, from /* B-OP-032 */, to: 'SHIPPED', partyId: shipment.partyId /* B-SA-004 */ } })
   tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: 'SHIPPED', change: 'status', partyId: shipment.partyId /* B-SA-004 */ } })
   return serials.map((serial) => serial.serial)
 }
@@ -180,6 +202,9 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
     { name: 'shipping.issueDdt', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } },
     async (tools) => {
       const current = (await readShipment(tools.tx, shipment.id))!
+      // B-OP-032 (N5): 409 in words before the database's Ddt_not_elsewhere refuses it.
+      const elsewhere = await madeElsewhereWords(tools.tx, current.id)
+      if (elsewhere) throw new DomainError('conflict', elsewhere, [{ path: elsewhereRefusalPath('NEXUS_DDT'), message: elsewhere }])
       const facts = await readDdtFacts(tools.tx, current, company)
       const state = issueStateProblems(current.status, facts.liveDdtNumber, body.ship === true)
       if (state.length > 0) throw new InvalidStateError(state.join(' '))
@@ -230,7 +255,7 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
         select: { id: true },
       })
       const replacement = current.status === 'SHIPPED'
-      const shipped = body.ship === true ? await shipGoods(tools, current, body.periodLockOverride) : null
+      const shipped = body.ship === true ? await shipGoods(tools, current, { periodLockOverride: body.periodLockOverride }) : null
       tools.audit({
         recordType: 'Ddt',
         recordId: id,
@@ -441,7 +466,7 @@ export async function shipShipment(caller: CommandCaller, shipmentId: string, bo
     assertTransition(shipmentMachine, current.status, 'SHIPPED', facts)
     await assertDocumentsTravel(tools, current.id)
     const live = await liveDdtOf(tools.tx, current.id)
-    const serials = await shipGoods(tools, current, body.periodLockOverride)
+    const serials = await shipGoods(tools, current, { periodLockOverride: body.periodLockOverride })
     tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: 'PACKED' }, after: { status: 'SHIPPED', ddt: live?.number ?? null, serials } })
     return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, current.id))!) }
   })))

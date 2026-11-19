@@ -7,6 +7,7 @@ import { Button, Pill } from '@nexus/ui/primitives'
 import { FileRow, useDsWords } from '../../../../lib/i18n/ds-parts'
 import type { ShipmentRead, ShipmentsRead } from '../api'
 import { eventLine, shipmentSteps, shipmentTone, typedTrackingOf } from '../model'
+import { alsoCarriesOf, typedLinkOf } from '../model' // F-OP-135
 import { useOrderWords } from '../words'
 import { Loading, ReadFailed } from './parts'
 import type { OrderRecordActions, OrderRecordViewModel } from './OrderRecordView'
@@ -51,10 +52,18 @@ function ShipmentCard({ shipment, model, actions }: { shipment: ShipmentRead; mo
   ]
   const pieces = shipment.lines.reduce((sum, line) => sum + line.quantity, 0)
   const typed = typedTrackingOf(shipment) // F-OP-124
+  const typedLink = typedLinkOf(shipment) // F-OP-135
+  const also = alsoCarriesOf(shipment, t) // F-OP-135
   return (
     <Card header={t('shipments.title', { number: shipment.number })} headingLevel={2} headerAction={<Pill tone={shipmentTone(shipment.status)}>{shipment.words[locale]}</Pill>} id={`shipment-${shipment.id}`}>
       <div className="fw-pord-stack">
         <KeyValue columns={3} phoneColumns={2} labelCase="sentence" items={facts} />
+        {/* F-OP-135: a shipment shared with other orders of yours names them by your own numbers only. */}
+        {also.map((line) => (
+          <p key={line} className="fw-pord-sub">
+            {line}
+          </p>
+        ))}
         <MilestoneTracker steps={shipmentSteps(shipment, locale, at)} label={t('shipments.steps', { number: shipment.number })} labels={ds.milestoneTracker} />
         {/* B-W2b-170: our branded tracking page (links.tracking), to pass on to whoever receives the goods. */}
         <div className="fw-pord-tracking">
@@ -72,6 +81,14 @@ function ShipmentCard({ shipment, model, actions }: { shipment: ShipmentRead; mo
               <Copy size={13} aria-hidden /> {model.copied === typed ? t('shipments.copied') : t('shipments.copy')}
             </Button>
             <Pill tone="neutral">{t('shipments.typed.noLive')}</Pill>
+            {/* F-OP-135: the carrier's page typed beside the number (https only), in a new tab. */}
+            {typedLink ? (
+              <Button asChild size="sm" variant="quiet" className="fw-pord-push">
+                <a href={typedLink} target="_blank" rel="noopener noreferrer" aria-label={t('shipments.typed.trackOf', { number: shipment.number })}>
+                  <ExternalLink size={13} aria-hidden /> {t('shipments.typed.track')}
+                </a>
+              </Button>
+            ) : null}
           </div>
         ) : null}
         {shipment.parcels.length > 0 ? (

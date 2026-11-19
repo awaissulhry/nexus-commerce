@@ -129,6 +129,16 @@ export const workSchema = z.object({
       cutWithOtherWork: z.boolean(),
       due: day.nullable(),
       daysLate: z.number().nullable(),
+      // ---- F-OP-113 (B-OP-021, B6; review R-11): what the row acts on in place — its version (every write sends it), kind,
+      // release and priority, its cells of THIS order's lines, and the reader's rights over it (a shared one: none, with the words).
+      // Optional: an older read without them offers nothing in place.
+      version: z.number().optional(),
+      kind: z.string().optional(),
+      releasedAt: z.string().nullable().optional(),
+      priority: z.number().optional(),
+      cells: z.array(z.object({ id: z.string(), salesOrderLineId: z.string(), size: z.string(), quantity: z.number(), cut: z.number().nullable() })).optional(),
+      rights: z.object({ manage: z.boolean(), release: z.boolean(), hold: z.boolean(), why: words.nullable() }).optional(),
+      // ---- end F-OP-113
     }),
   ),
   mtm: z.array(

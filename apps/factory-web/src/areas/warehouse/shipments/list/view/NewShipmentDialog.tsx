@@ -2,25 +2,34 @@
 
 import { useState, type KeyboardEvent } from 'react'
 import { Banner, EmptyState, Field, Stepper } from '@nexus/ui/components'
-import { Button, Input, NumberStepper, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
+import { Button, CheckboxCard, Input, NumberStepper, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import { TRANSPORT_BY, type ReadyCell, type ReadyOrder, type TransportBy } from '../../api'
-import { newShipmentLines, newShipmentProblems, type ShippingAbilities } from '../../model'
+import { newShipmentLines, newShipmentProblems, orderWords, ordersOfNew, togetherRows, type ShippingAbilities } from '../../model'
 import type { NewShipmentModel, ShipmentsListActions } from '../list-model'
+// F-OP-121: the customer's other orders, held with the join reason in the screen's words (the depth catalogue's shipOrders.*).
+import { DEPTH_NS } from '../../queue/shared/depth'
 
 /**
  * New shipment (design sh-new, W1): two steps — 1 the order (only orders with garments quality released and not on a
  * shipment yet) and who carries the goods; 2 how many of each colour and size, each capped at what that cell can still
  * ship (released − reversed − on other shipments, the cap shown beside it). Create shipment makes a DRAFT with the
  * SHIPMENT series' next number and opens it. ⌘↵ creates; Esc closes (the DS Modal returns the focus).
+ *
+ * F-OP-121 (order page N6): `model.together` — opened from the order page: step 1 is this order and, beside it, "Add other open
+ * orders of <Customer> to this shipment" (the walled ship-together read: the same customer only, each held with its reason;
+ * several orders are held off until the switch); step 2 groups the garments under each order ("SO-0150 · PO 4471").
  */
 export function NewShipmentDialog({ model, can, actions }: { model: NewShipmentModel; can: ShippingAbilities; actions?: ShipmentsListActions }) {
   const t = useT('shipments')
   const order = model.orders?.find((entry) => entry.salesOrderId === model.salesOrderId) ?? null
-  const lines = order ? newShipmentLines(order.cells, model.quantities) : []
+  // F-OP-121: every order the shipment would carry (this one, then the others added).
+  const carried = ordersOfNew(model)
+  const cells = carried.flatMap((entry) => entry.cells)
+  const lines = order ? newShipmentLines(cells, model.quantities) : []
   const garments = lines.reduce((sum, line) => sum + line.quantity, 0)
-  const problems = order ? newShipmentProblems(order.cells, model.quantities) : []
+  const problems = order ? newShipmentProblems(cells, model.quantities) : []
   const held =
     model.step === 1
       ? !order
@@ -51,12 +60,12 @@ export function NewShipmentDialog({ model, can, actions }: { model: NewShipmentM
     <Modal
       open
       onClose={() => actions?.onNewClose?.()}
-      title={t('new.title')}
+      title={model.join ? t('new.join.title', { number: model.join.number }) /* F-OP-122 */ : t('new.title')}
       subtitle={order ? t('new.subtitle', { order: order.number, customer: order.party.legalName }) : undefined}
       size="lg"
       footer={
         <>
-          {model.step === 2 && (
+          {model.step === 2 && !model.join && (
             <Button size="sm" variant="quiet" onClick={() => actions?.onNewStep?.(1)}>
               {t('new.back')}
             </Button>
@@ -66,7 +75,7 @@ export function NewShipmentDialog({ model, can, actions }: { model: NewShipmentM
             {t('common.cancel')}
           </Button>
           <Button size="sm" variant="primary" heldReason={held} onClick={go} aria-keyshortcuts="Meta+Enter Control+Enter">
-            {model.step === 1 ? t('new.next') : t('new.create', { count: garments })}
+            {model.step === 1 ? t('new.next') : model.join ? t('addLines.go', { count: garments }) /* F-OP-122 */ : t('new.create', { count: garments })}
           </Button>
         </>
       }
@@ -79,14 +88,17 @@ export function NewShipmentDialog({ model, can, actions }: { model: NewShipmentM
         }}
         onKeyDown={onKeyDown}
       >
-        <Stepper
-          steps={[
-            { key: 'order', label: t('new.step.order') },
-            { key: 'quantities', label: t('new.step.quantities') },
-          ]}
-          current={model.step - 1}
-          onSelect={(index) => actions?.onNewStep?.(index === 0 ? 1 : 2)}
-        />
+        {/* F-OP-122: adding to a DRAFT already there is step 2 alone (the order and how it travels are the shipment's). */}
+        {!model.join && (
+          <Stepper
+            steps={[
+              { key: 'order', label: t('new.step.order') },
+              { key: 'quantities', label: t('new.step.quantities') },
+            ]}
+            current={model.step - 1}
+            onSelect={(index) => actions?.onNewStep?.(index === 0 ? 1 : 2)}
+          />
+        )}
         {model.refused && (
           <Banner tone="danger" title={t(model.refused.words.key, model.refused.words.params)}>
             {model.refused.detail}
@@ -98,18 +110,89 @@ export function NewShipmentDialog({ model, can, actions }: { model: NewShipmentM
           <p className="fw-sh-hint" role="status">
             <Spinner size={14} /> {t('new.loading')}
           </p>
-        ) : model.orders.length === 0 ? (
+        ) : model.join && (!order || order.cells.length === 0) ? (
+          <EmptyState title={t('addLines.title')} description={t('addLines.none')} />
+        ) : model.orders.length === 0 || (model.together && !order) ? (
           <EmptyState title={t('new.empty.title')} description={t('new.empty.body')} />
         ) : model.step === 1 ? (
-          <OrderStep model={model} actions={actions} />
+          model.together && order ? (
+            <TogetherStep order={order} model={model} actions={actions} />
+          ) : (
+            <OrderStep model={model} actions={actions} />
+          )
         ) : order ? (
-          <QuantitiesStep order={order} model={model} actions={actions} />
+          <QuantitiesStep orders={carried} model={model} actions={actions} />
         ) : null}
         <p className="fw-sh-hint">{t('new.number')}</p>
       </form>
     </Modal>
   )
 }
+
+// ── F-OP-121: this order, and the same customer's other open orders beside it (ship together) ────────────────────────────────────
+function TogetherStep({ order, model, actions }: { order: ReadyOrder; model: NewShipmentModel; actions?: ShipmentsListActions }) {
+  const t = useT('shipments')
+  const d = useT(DEPTH_NS)
+  const shippable = (entry: ReadyOrder) => entry.cells.reduce((sum, cell) => sum + cell.shippable, 0)
+  const po = (ref: string) => t('new.customerRef', { ref })
+  const rows = togetherRows(model)
+  const picked = new Set(model.others ?? [])
+  return (
+    <div className="fw-sh-stack">
+      <div className="fw-sh-choices">
+        <CheckboxCard checked readOnly aria-readonly="true" selected title={orderWords({ number: order.number, customerRef: order.customerRef }, po)} description={t('new.together.this', { count: shippable(order) })} />
+      </div>
+      <h3 className="fw-sh-h3">{t('new.together.add', { customer: order.party.legalName })}</h3>
+      {rows.length === 0 ? (
+        <p className="fw-sh-hint">{t('new.together.none', { customer: order.party.legalName })}</p>
+      ) : (
+        <div className="fw-sh-choices" role="group" aria-label={t('new.together.add', { customer: order.party.legalName })}>
+          {rows.map(({ order: other, held }) => (
+            // Held, never hidden nor disabled: it keeps its focus and says why (aria-disabled; ticking it does nothing).
+            <CheckboxCard
+              key={other.salesOrderId}
+              checked={picked.has(other.salesOrderId)}
+              selected={picked.has(other.salesOrderId)}
+              aria-disabled={held ? true : undefined}
+              onChange={(event) => (held ? undefined : actions?.onNewOther?.(other.salesOrderId, event.target.checked))}
+              title={orderWords({ number: other.number, customerRef: other.customerRef }, po)}
+              description={held ? d(held.key) : t('new.shippable', { count: shippable(other) })}
+            />
+          ))}
+        </div>
+      )}
+      <DeliveryFields model={model} actions={actions} />
+    </div>
+  )
+}
+
+function DeliveryFields({ model, actions }: { model: NewShipmentModel; actions?: ShipmentsListActions }) {
+  const t = useT('shipments')
+  return (
+    <div className="fw-sh-fields">
+      <Field label={t('new.transportBy')}>
+        <Select size="sm" value={model.transportBy} onChange={(event) => actions?.onNewDelivery?.({ transportBy: event.target.value as TransportBy })}>
+          {TRANSPORT_BY.map((value) => (
+            <option key={value} value={value}>
+              {t(`transportBy.${value}`)}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      {model.transportBy === 'CARRIER' && (
+        <>
+          <Field label={t('new.carrierCode')} hint={t('new.carrierHint')}>
+            <Input size="sm" value={model.carrierCode} onChange={(event) => actions?.onNewDelivery?.({ carrierCode: event.target.value })} />
+          </Field>
+          <Field label={t('new.serviceCode')} hint={t('new.serviceHint')}>
+            <Input size="sm" value={model.serviceCode} onChange={(event) => actions?.onNewDelivery?.({ serviceCode: event.target.value })} />
+          </Field>
+        </>
+      )}
+    </div>
+  )
+}
+// ── end F-OP-121 ──
 
 function OrderStep({ model, actions }: { model: NewShipmentModel; actions?: ShipmentsListActions }) {
   const t = useT('shipments')
@@ -134,38 +217,26 @@ function OrderStep({ model, actions }: { model: NewShipmentModel; actions?: Ship
         ))}
         {orders.length === 0 && <p className="fw-sh-hint">{t('new.noMatch')}</p>}
       </div>
-      <div className="fw-sh-fields">
-        <Field label={t('new.transportBy')}>
-          <Select size="sm" value={model.transportBy} onChange={(event) => actions?.onNewDelivery?.({ transportBy: event.target.value as TransportBy })}>
-              {TRANSPORT_BY.map((value) => (
-                <option key={value} value={value}>
-                  {t(`transportBy.${value}`)}
-                </option>
-              ))}
-          </Select>
-        </Field>
-        {model.transportBy === 'CARRIER' && (
-          <>
-            <Field label={t('new.carrierCode')} hint={t('new.carrierHint')}>
-              <Input size="sm" value={model.carrierCode} onChange={(event) => actions?.onNewDelivery?.({ carrierCode: event.target.value })} />
-            </Field>
-            <Field label={t('new.serviceCode')} hint={t('new.serviceHint')}>
-              <Input size="sm" value={model.serviceCode} onChange={(event) => actions?.onNewDelivery?.({ serviceCode: event.target.value })} />
-            </Field>
-          </>
-        )}
-      </div>
+      <DeliveryFields model={model} actions={actions} /* F-OP-121: shared with the together step */ />
     </div>
   )
 }
 
-function QuantitiesStep({ order, model, actions }: { order: ReadyOrder; model: NewShipmentModel; actions?: ShipmentsListActions }) {
+function QuantitiesStep({ orders, model, actions }: { orders: readonly ReadyOrder[]; model: NewShipmentModel; actions?: ShipmentsListActions }) {
   const t = useT('shipments')
-  const problems = newShipmentProblems(order.cells, model.quantities)
+  const problems = newShipmentProblems(
+    orders.flatMap((order) => order.cells),
+    model.quantities,
+  )
+  // F-OP-121: grouped by order ("SO-0150 · PO 4471") when it carries several, then by style and colour.
+  const po = (ref: string) => t('new.customerRef', { ref })
+  const several = orders.length > 1 || !!model.together
   const groups = new Map<string, ReadyCell[]>()
-  for (const cell of order.cells) {
-    const key = `${cell.styleCode} · ${cell.colourwayName}`
-    groups.set(key, [...(groups.get(key) ?? []), cell])
+  for (const order of orders) {
+    for (const cell of order.cells) {
+      const key = `${several ? `${orderWords({ number: order.number, customerRef: order.customerRef }, po)} — ` : ''}${cell.styleCode} · ${cell.colourwayName}`
+      groups.set(key, [...(groups.get(key) ?? []), cell])
+    }
   }
   return (
     <div className="fw-sh-stack">

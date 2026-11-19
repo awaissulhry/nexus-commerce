@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, CheckCircle2, Circle, Pencil, XCircle } from 'lucide-react'
+import { Pencil } from 'lucide-react' // F-OP-114: the check's icons went with the check list (lib)
 import { Banner, Card, Field, KeyValue, ProgressBar } from '@nexus/ui/components'
 import { SizeGridEditor, SizeGridView } from '@nexus/ui/grid'
 import { Button, Checkbox, Input, Spinner, Tag } from '@nexus/ui/primitives'
@@ -25,6 +25,8 @@ import { HealthCard } from '../../../../../lib/production/health/view/HealthCard
 import { ProgressTable } from '../overview/view/ProgressTable'
 // ---- end F-PR-05a
 // F-PR-05b: the Customer card (one block per customer of the work order).
+// F-OP-114: the release check list (one copy, lib).
+import { ReleaseCheckList } from '../../../../../lib/production/work-order-acts/view/ReleaseDialog'
 import { CustomerCard } from '../customer/view/CustomerCard'
 
 /**
@@ -56,13 +58,6 @@ export function OverviewTab({ workOrder, model, actions }: { workOrder: WorkOrde
   )
 }
 
-const STATE_ICON = {
-  OK: <CheckCircle2 size={16} className="fw-pr-ico is-ok" aria-hidden />,
-  NOT_REQUIRED: <Circle size={16} className="fw-pr-ico" aria-hidden />,
-  OVERRIDDEN: <AlertTriangle size={16} className="fw-pr-ico is-overridden" aria-hidden />,
-  BLOCKED: <XCircle size={16} className="fw-pr-ico is-blocked" aria-hidden />,
-} as const
-
 function ReleaseCheckCard({ workOrder, model, actions, readinessHere }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; readinessHere: boolean }) {
   const t = useT('production')
   const check = model.check.value
@@ -75,25 +70,8 @@ function ReleaseCheckCard({ workOrder, model, actions, readinessHere }: { workOr
         <h2 className="fw-pr-h2">{t('overview.check')}</h2>
         <Tag tone={open === 0 ? 'success' : onlyMaterialShort(check) ? 'warning' : 'danger'}>{open === 0 ? t('overview.ready') : t('overview.open', { count: open })}</Tag>
       </div>
-      <ul className="fw-pr-checks" aria-label={t('overview.check')}>
-        {items.map((item) => (
-          <li key={item.code} className="fw-pr-check">
-            {STATE_ICON[item.state]}
-            <span className="fw-pr-check-body">
-              <span>
-                <b>{t(`check.name.${item.code}`)}</b> — {t(item.words.key, translateParams(t, item.words.params))}
-              </span>
-              {item.problems.length > 0 && (
-                <ul className="fw-pr-check-problems">
-                  {item.problems.map((problem, index) => (
-                    <li key={index}>{t(problem.key, translateParams(t, problem.params))}</li>
-                  ))}
-                </ul>
-              )}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {/* F-OP-114: ONE release check list (lib/production/work-order-acts) — this card and Release… on the order page. */}
+      <ReleaseCheckList items={items} label={t('overview.check')} />
       {/* B-W2a-46 (wo-release "material available or expected (W2a readiness)"); F-PR-05a: in Gates & readiness when drawn. */}
       {readinessHere && <ReadinessLine readiness={check.readiness ?? null} />}
       {onlyMaterialShort(check) && <p className="fw-pr-hint">{t('overview.overrideHint')}</p>}
@@ -102,11 +80,7 @@ function ReleaseCheckCard({ workOrder, model, actions, readinessHere }: { workOr
   )
 }
 
-/** Params whose value is itself a message key (`reason.CR_VI_PENDING`, `kind.SEWING`) are drawn in words. */
-export function translateParams(t: (key: string, params?: Record<string, string | number>) => string, params?: Readonly<Record<string, string | number>>): Record<string, string | number> | undefined {
-  if (!params) return undefined
-  return Object.fromEntries(Object.entries(params).map(([name, value]) => [name, typeof value === 'string' && /^(reason|kind)\.[A-Z_]+$/.test(value) ? t(value) : value]))
-}
+// F-OP-114: translateParams moved with the check list (lib/production/work-order-acts/view/ReleaseDialog).
 
 function FrozenCard({ workOrder, model, actions, readinessHere }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; readinessHere: boolean }) {
   const t = useT('production')

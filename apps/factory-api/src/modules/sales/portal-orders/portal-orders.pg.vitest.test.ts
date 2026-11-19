@@ -425,6 +425,23 @@ describe('B-OP-031: the customer sees the number typed for a carrier booked by h
     expect(theirs.items).toEqual([])
     expect(JSON.stringify(theirs)).not.toContain('T-OP031')
   })
+
+  // B-OP-034 (set C): the tracking link typed beside it — "Track ›" in the portal, https only; another customer never.
+  it('B-OP-034: its typed tracking link shows beside the number (order and On the way); another customer sees none', async () => {
+    const so3 = await orderId('SEED-SO-0003')
+    const sh2 = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0002'])
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(`UPDATE "Shipment" SET "manualTrackingNumber" = 'T-OP031-BRT-0001', "manualTrackingUrl" = 'https://track.example.com/T-OP031-BRT-0001' WHERE id = $1`, [sh2.id])
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+    const own = await ok(browsers.buyer, `/portal/sales-orders/${so3}/shipments`)
+    expect(own.shipments.find((row: Json) => row.number === 'SEED-SH-0002')).toMatchObject({ typedTrackingNumber: 'T-OP031-BRT-0001', typedTrackingUrl: 'https://track.example.com/T-OP031-BRT-0001' })
+    const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
+    expect(transit.items.find((row: Json) => row.number === 'SEED-SH-0002')).toMatchObject({ typedTrackingUrl: 'https://track.example.com/T-OP031-BRT-0001' })
+    expect(JSON.stringify(await ok(browsers.other, '/portal/sales-orders/in-transit'))).not.toContain('track.example.com')
+  })
 })
 // ---- end B-OP-031
 

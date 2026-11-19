@@ -626,3 +626,65 @@ describe('B-OP-022: Money = this order’s share — two orders on one TD24, par
   })
 })
 // ---- end B-OP-022
+
+// ---- B-OP-033 (order page N5): goods recorded as made elsewhere are invoiced citing their paper DDT -----------------------------
+describe('B-OP-033: a shipment made elsewhere is invoiced citing its paper DDT — TD01 per shipment, TD24 for a monthly customer', () => {
+  const fx = { shipment: newId(), line: newId(), paper: 'CART-77/2026' }
+  const fromShipment = () => as('POST', '/invoicing/invoices/from-shipment', { shipmentId: fx.shipment }, 201)
+  const timing = (value: 'PER_SHIPMENT' | 'MONTHLY') => admin(`UPDATE "Party" SET "invoiceTiming" = $2 WHERE id = $1`, [A.brand, value])
+
+  beforeAll(async () => {
+    // The shipment as B-OP-032 records it (made past the guards here: this file tests the invoicing): SHIPPED today with its
+    // paper DDT, one BLK 52 of SEED-SO-0002, no Nexus DDT.
+    const production = moneyA.shipping.quality.production
+    const [cell] = await admin<{ workOrderId: string; salesOrderLineId: string; size: string }>(`SELECT "workOrderId", "salesOrderLineId", size FROM "WorkOrderSize" WHERE id = $1`, [production.cellIds['BLK-52']])
+    const left = `${TODAY()}T08:00:00.000Z`
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "Shipment" (id, "tenantId", "companyId", "siteId", "partyId", "salesOrderId", number, "shipTo", "transportBy", status, "packedAt", "shippedAt", origin, "externalDdtNumber", "externalDdtDate", "ddtRequired", "createdAt", "updatedAt")
+         VALUES ('${fx.shipment}', '${A.tenant}', '${A.companyA}', '${A.siteA1}', '${A.brand}', '${production.salesOrderId}', 'SH-ELSEWHERE-1', '{}'::jsonb, 'SENDER', 'SHIPPED', '${left}', '${left}', 'ELSEWHERE', '${fx.paper}', '${TODAY()}', true, now(), now());
+       INSERT INTO "ShipmentLine" (id, "tenantId", "siteId", "partyId", "shipmentId", "workOrderId", "workOrderSizeId", "salesOrderLineId", size, quantity)
+         VALUES ('${fx.line}', '${A.tenant}', '${A.siteA1}', '${A.brand}', '${fx.shipment}', '${cell!.workOrderId}', '${production.cellIds['BLK-52']}', '${cell!.salesOrderLineId}', '${cell!.size}', 1);
+       COMMIT;`,
+    )
+  })
+
+  afterAll(async () => {
+    await timing('PER_SHIPMENT')
+  })
+
+  it('the shipped-not-invoiced list names it with its paper DDT and the deadline by the customer’s terms (TD01: 12 days)', async () => {
+    const list = await as('GET', '/invoicing/shipped-not-invoiced')
+    const row = (list.customers as Json[]).flatMap((customer) => (customer.shipments ?? []) as Json[]).find((entry) => entry.shipmentId === fx.shipment)
+    expect(row).toMatchObject({ number: 'SH-ELSEWHERE-1', paperDdt: { number: fx.paper, date: TODAY() }, deadline: { docType: 'TD01', daysLeft: 12 } })
+  })
+
+  it('a customer invoiced per shipment: a TD01 draft citing the paper DDT, its Causale naming it', async () => {
+    await timing('PER_SHIPMENT')
+    const draft = await fromShipment()
+    expect(draft.invoice.docType).toBe('TD01')
+    expect(draft.invoice.documentRefs).toContainEqual({ kind: 'DDT', number: fx.paper, date: TODAY() })
+    expect(draft.invoice.causale).toBe(`Fattura immediata: merce spedita con DDT n. ${fx.paper} del ${TODAY().split('-').reverse().join('/')} (spedizione SH-ELSEWHERE-1)`)
+    expect(draft.invoice.lines.filter((line: Json) => line.kind === 'GOODS').map((line: Json) => line.ddtId ?? null)).toEqual([null])
+    await as('DELETE', `/invoicing/invoices/${draft.invoice.id}`, {})
+  })
+
+  it('a monthly customer: a TD24 citing the paper DDT; issued, its XML names it in DatiDDT and is XSD-valid', async () => {
+    await timing('MONTHLY')
+    const draft = await fromShipment()
+    expect(draft.invoice).toMatchObject({ docType: 'TD24', causale: 'Fattura differita (art. 21 c.4 lett. a DPR 633/1972)' })
+    const issued = await issue(draft.invoice.id)
+    expect(issued.invoice).toMatchObject({ docType: 'TD24', status: 'ISSUED' })
+    const xml = await downloaded(issued.invoice.xmlFileId)
+    expect(await xsdErrors(xml)).toEqual([])
+    expect(xml).toContain('<TipoDocumento>TD24</TipoDocumento>')
+    expect(xml).toContain(`<NumeroDDT>${fx.paper}</NumeroDDT>`)
+    expect(xml).toContain(`<DataDDT>${TODAY()}</DataDDT>`)
+    // Invoiced once: the list no longer names it, and a second draft is refused in words.
+    const list = await as('GET', '/invoicing/shipped-not-invoiced')
+    expect((list.customers as Json[]).flatMap((customer) => (customer.shipments ?? []) as Json[]).some((entry) => entry.shipmentId === fx.shipment)).toBe(false)
+    expect((await refused('POST', '/invoicing/invoices/from-shipment', { shipmentId: fx.shipment }, 409)).message).toContain('is invoiced already')
+  })
+})
+// ---- end B-OP-033

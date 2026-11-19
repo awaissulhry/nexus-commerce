@@ -75,6 +75,14 @@ import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark
 import { MARGIN, marginAs } from './margin/fixtures'
 // F-SA-232: Overview's made-up production reads.
 import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, NO_WORK_READ, ORDER_FILES, QUALITY_READ, ready, WORK_READ } from './overview/fixtures'
+// F-OP-113: the work-order rows' acts (a read with each row's version and rights; the acts' model as the container holds it).
+import { workActsRead, type WorkRights } from './overview/fixtures'
+import { ROLES } from '../_demo/fixtures'
+import { actsCanOf } from '../../../../lib/production/work-order-acts/model'
+import type { ActsDialog, WorkOrderActsModel } from '../../../../lib/production/work-order-acts/use-work-order-acts'
+// F-OP-114 / F-OP-115: the row's dialogs on a work order read afresh (the production lane's own fixtures).
+import { releaseCheck, workOrder as productionWorkOrder } from '../../../production/_shared/fixtures'
+import { HOLD_REASONS, PRODUCTION_HOLD_REASONS } from '../../../production/work-orders/daily/demo/fixtures'
 // F-SA-243: the order's requests (the shared request fixtures) and its production read with Still to do.
 import { PRODUCTION_READ } from './overview/fixtures'
 import { brandRequest } from '../../../home/approvals/requests/fixtures'
@@ -543,6 +551,31 @@ const F_OP_129: DesignCase<RecordCase>[] = [
   { id: 'f-op-129-ship-elsewhere', label: 'F-OP-129 · Owner · Shipments: made elsewhere — "Made elsewhere · DDT 123/2026", no Nexus DDT', model: base('owner', withShipments([ELSEWHERE_ROW, TYPED_ROW]), { tab: 'shipments' }) },
 ]
 // ---- end F-OP-129
+// ---- F-OP-113 ----
+const MANAGE_ALL: WorkRights = { manage: true, release: true, hold: true }
+const NO_RIGHTS: WorkRights = { manage: false, release: false, hold: false }
+const WORK_ORDERS_IDS = [WORK_ORDERS[0]!.id, WORK_ORDERS[1]!.id] as const
+function woActs(role: keyof typeof ROLES, over: Partial<WorkOrderActsModel> = {}): WorkOrderActsModel {
+  return { can: actsCanOf(ROLES[role]), saves: {}, toldAt: {}, dialog: null, reasons: null, split: null, close: CLOSE_NONE, ...over }
+}
+// ---- end F-OP-113
+// ---- F-OP-114 / F-OP-115: a row's dialog on its work order read afresh; the close's model when nothing is open ----
+const CLOSE_NONE: WorkOrderActsModel['close'] = { can: { manage: true, reopen: false, costView: false, cost: false }, check: null, dialog: null, busy: false, problem: null, undo: null }
+function woDialog(kind: ActsDialog['kind'], value: ReturnType<typeof productionWorkOrder>, over: Partial<ActsDialog> = {}): ActsDialog {
+  return { kind, workOrderId: value.id, number: value.number, workOrder: { value, problem: null }, busy: false, problem: null, ...over }
+}
+const CANCEL_CUT = {
+  workOrderId: WORK_ORDERS[0]!.id,
+  number: 'WO-00021',
+  status: 'IN_PROGRESS',
+  version: 7,
+  cancellable: false,
+  refusal: { en: '8 pieces are cut: lower the work order to the cut instead', it: "8 pezzi sono già tagliati: riduci l'ordine di lavoro al tagliato" },
+  cut: { pieces: 8, cells: [{ cellId: '0190f0e2-7a7a-7000-8000-0000000021c1', size: 'M', colourwayId: '0190f0e2-7a7a-7000-8000-0000000000b1', quantity: 4, cut: 4 }, { cellId: '0190f0e2-7a7a-7000-8000-0000000021c2', size: 'L', colourwayId: '0190f0e2-7a7a-7000-8000-0000000000b1', quantity: 4, cut: 4 }] },
+  issued: [{ itemId: '0190f0e2-7a7a-7000-8000-0000000000e1', itemColourId: null, label: 'DEMO-LEATHER-BLK', baseUom: 'dm2', quantity: '96.0' }],
+  atWorkshop: [],
+}
+// ---- end F-OP-114 / F-OP-115
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-039',
@@ -592,6 +625,15 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'production-gate-paid', label: 'Production manager · Production: deposit paid, Make work orders opens New work order', model: base('manager', paidNotSent, { tab: 'production', production: ready(WORK_READ) }) },
     { id: 'production-held', label: 'Sales · Production: the gate waits for the deposit; Make work orders held', model: base('sales', confirmed, { tab: 'production', production: ready(WORK_READ) }) },
     { id: 'production-progress', label: 'Sales · Production: the work orders with this order’s own pieces (where, made for this order, also makes, held, a shared cut), 12 made-to-measure units as one row, 1 not shown', model: base('sales', production, { tab: 'production', production: ready(WORK_READ) }) },
+    // ---- F-OP-113: the work-order rows — in place for a planner, held for Sales in words, a shared row read-only ----
+    { id: 'wo-acts-manager', label: 'F-OP-113 · Production manager · Production: Due, Priority and Rush in place on each work order (by number), the row ⋯; WO-00019 is shared with another customer: its link only', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { toldAt: { [WORK_ORDERS_IDS[1]]: at(18, 9, 42) } }) }), note: 'WO-00022 says "Told the floor at 10:42" after its priority was changed here.' },
+    { id: 'wo-acts-saving', label: 'F-OP-113 · Production manager · Production: a priority saving (the cell marked) and a due date refused (said on the row)', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { saves: { [WORK_ORDERS_IDS[0]]: { field: 'priority', problem: null }, [WORK_ORDERS_IDS[1]]: { field: null, problem: { key: 'production:error.changed' } } } }) }) },
+    // ---- F-OP-114 / F-OP-115: the row's dialogs (the DS Modal draws in a browser: the design index shows them) ----
+    { id: 'wo-hold-dialog', label: 'F-OP-114 · Production manager · Hold… from a work order’s row: the reason the floor reads, what the customer reads shown before it is placed', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { reasons: [...HOLD_REASONS, ...PRODUCTION_HOLD_REASONS], dialog: woDialog('hold', productionWorkOrder('RELEASED'), { holdRight: true }) }) }) },
+    { id: 'wo-release-dialog', label: 'F-OP-114 · Production manager · Release… a draft from its row: the release check in the dialog, each condition in words', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { dialog: woDialog('release', productionWorkOrder('DRAFT'), { check: { value: releaseCheck('blocked'), problem: null } }) }) }) },
+    { id: 'wo-cancel-cut', label: 'F-OP-115 · Production manager · Cancel… a started work order: 8 pieces are cut — refused in the API’s words, no outcome to pick (R-16)', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { dialog: woDialog('cancel', productionWorkOrder('IN_PROGRESS'), { cancelCheck: { value: CANCEL_CUT, problem: null } }) }) }) },
+    { id: 'wo-cancel-draft', label: 'F-OP-115 · Production manager · Cancel… a draft: nothing cut — the reason, then Cancel work order', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { dialog: woDialog('cancel', productionWorkOrder('DRAFT'), { cancelCheck: { value: { ...CANCEL_CUT, status: 'DRAFT', cancellable: true, refusal: null, cut: { pieces: 0, cells: [] }, issued: [], atWorkshop: [] }, problem: null } }) }) }) },
+    { id: 'wo-acts-sales', label: 'F-OP-113 · Sales · Production: the rows as they are, the acts held in words — “Production does this — a planner or the production manager”', model: base('sales', production, { tab: 'production', production: ready(workActsRead(NO_RIGHTS)), workOrderActs: woActs('sales') }) },
     { id: 'production-quality', label: 'F-SA-235 · Sales · Production: a quality hold with the office’s note, a problem that needs an answer, an NCR, a final inspection waiting; the specs in force', model: base('sales', production, { tab: 'production', production: ready(QUALITY_READ) }) },
     { id: 'production-no-right', label: 'Finance · Production: the work orders by number (no floor progress right)', model: base('finance', production, { tab: 'production', production: ready(NO_WORK_READ) }) },
     { id: 'production-error', label: 'Sales · Production: the work orders could not be read (Try again)', model: base('sales', production, { tab: 'production', production: FAILED_STATE }) },

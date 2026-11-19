@@ -247,6 +247,15 @@
     },
     "problem": {
       "range": "Da 0 a {max}"
+    },
+    "together": {
+      "this_one": "Questo ordine · {count} capo rilasciato, non spedito",
+      "this_other": "Questo ordine · {count} capi rilasciati, non spediti",
+      "add": "Aggiungi a questa spedizione altri ordini aperti di {customer}",
+      "none": "{customer} non ha altri ordini aperti con capi rilasciati."
+    },
+    "join": {
+      "title": "Aggiungi i capi di questo ordine a {number}"
     }
   },
   "held": {

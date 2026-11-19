@@ -345,8 +345,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
       void load()
       production.again()
     },
+    // F-OP-113: a work order changed in place reads the order's work again, in place (its rows keep their places).
+    rereadWork: () => production.again(['work', 'headline', 'changes']),
   })
-  const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */ })
+  const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */, api /* F-OP-121 */, setNotice /* F-OP-121 */ })
   const money = useMoneyActs({
     ...actsBase,
     permissions: session.permissions,

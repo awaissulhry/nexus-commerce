@@ -577,7 +577,7 @@ export function depositGate(order: Pick<Order, 'depositRequired' | 'chain'>): { 
   return { state: 'MISSING', request: null }
 }
 
-export type StepKind = 'makeWorkOrders' | 'changePromise' | 'close'
+export type StepKind = 'makeWorkOrders' | 'changePromise' | 'close' | /* F-OP-121 */ 'createShipment'
 
 export interface NextStep {
   kind: StepKind | null
@@ -607,6 +607,8 @@ export function nextStep(order: Order, can: OrderAbilities): NextStep {
   }
   if (isShippedInFull(order)) return { kind: 'close', held: closeHeld(order, can) } // F-SA-201
   if (isFinal(order)) return { kind: null, held: null }
+  // F-OP-121: ready (or partly shipped) with released garments not shipped yet, and the right to make a shipment: Create shipment….
+  if ((order.status === 'READY' || order.status === 'PARTLY_SHIPPED') && mayCreateShipment(order, can)) return { kind: 'createShipment', held: null }
   return { kind: 'changePromise', held: can.manage ? null : phrase('held.noManage') }
 }
 

@@ -1,30 +1,22 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { CheckCircle2, PackageCheck, PauseCircle, Printer, Scissors, Unlock, XCircle } from 'lucide-react'
+import { CheckCircle2, PackageCheck, Printer, Scissors, Unlock, XCircle } from 'lucide-react' // F-OP-114: PauseCircle went with Put on hold
 import { Banner, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Checkbox, Input, RadioCard, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { Modal, StepUpModal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
-import { wordsIn } from '../../../../_shared/reasons/model'
 import type { PickList, WorkOrder, WorkOrderBundles } from '../../../_shared/api'
 import { quantityText } from '../../../_shared/model'
 import { SPLIT_REASONS, type SplitReason } from '../api'
 import {
   cuttingRows,
   DAILY_NAMESPACE,
-  dialogReasons, // F-PR-05b
   finishRows,
-  HOLD_DIALOG_LIMITS, // F-PR-05b
   hideHeld,
-  holdKindOf, // F-PR-05b
-  liftHeld, // F-PR-05b
   pickRows,
-  placeHeld,
-  plainHoldsOf, // F-PR-05b
-  plainHoldWords, // F-PR-05b
   releaseCheckPhrase,
   releaseHoldHeld,
   reportCells,
@@ -36,6 +28,8 @@ import {
 } from '../model'
 import { say } from './DailyParts'
 import '../daily.css'
+// F-OP-114: Put on hold and Release the hold live in lib/production/work-order-acts (one copy for every page that holds a work order).
+import { HoldDialog as SharedHoldDialog, LiftHoldDialog as SharedLiftHoldDialog } from '../../../../../lib/production/work-order-acts/view/HoldDialog'
 
 /**
  * The work order's W2a dialogs (B-W2a-46; DS Modal: Esc closes, the focus returns to the opener): Put on hold (wo-hold:
@@ -104,148 +98,19 @@ const submitKeys = (go: (() => void) | null) => (event: React.KeyboardEvent) => 
 
 // ---- Put on hold ----------------------------------------------------------------------------------------------------------------
 
+// F-OP-114: ONE Put on hold dialog — lib/production/work-order-acts (the order page's row ⋯ draws the same); this page hands it its parts.
 export function HoldDialog({ numbers, workOrderIds, daily, actions }: { numbers: string[]; workOrderIds: string[]; daily: DailyModel; actions?: DailyActions }) {
-  const t = useT(DAILY_NAMESPACE)
-  const locale = useLocale()
-  const [note, setNote] = useState(daily.draft?.note ?? '')
-  // F-PR-05b: ONE dialog for both kinds — the picked reason's list decides it (a quality hold, or a plain production hold whose
-  // customer reads its own words or the reason's); each kind offered only with its right. A code may be in both lists (OTHER):
-  // the pick is the list and the code.
-  const [customerWords, setCustomerWords] = useState(daily.draft?.customerWords ?? '')
-  const offered = dialogReasons(daily.reasons, daily.can)
-  const all = offered ? [...offered.QUALITY, ...offered.PRODUCTION] : null
-  const [pick, setPick] = useState(() => {
-    const asked = daily.draft?.reasonCode ?? ''
-    if (!asked || asked.includes(':')) return asked
-    const hit = all?.find((entry) => entry.code === asked)
-    return hit ? `${hit.list}:${hit.code}` : `HOLD:${asked}`
-  })
-  const [list = '', reasonCode = ''] = pick ? pick.split(':') : []
-  const reason = all?.find((entry) => entry.list === list && entry.code === reasonCode) ?? null
-  const kind = reason ? (holdKindOf(reason) ?? 'QUALITY') : null
-  const held = placeHeld(reasonCode, note, all ? all.filter((entry) => !list || entry.list === list) : null, daily.busy, { can: daily.can, customerWords })
-  const go = held || !kind ? null : () => actions?.onPlaceHold?.({ kind, workOrderIds, reasonCode, reasonNote: note.trim() || null, customerWords: kind === 'PRODUCTION' ? customerWords.trim() || null : null })
-  const optionValue = (entry: { list: string; code: string }) => `${entry.list}:${entry.code}`
-  return (
-    <Modal
-      open
-      onClose={() => actions?.onDialog?.(null)}
-      title={numbers.length === 1 ? t('hold.title', { number: numbers[0]! }) : t('hold.titleMany', { count: numbers.length })}
-      size="md"
-      footer={
-        <Footer onCancel={() => actions?.onDialog?.(null)}>
-          <Button size="sm" variant="primary" heldReason={say(t, held)} onClick={() => go?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
-            {daily.busy ? <Spinner size={12} /> : <PauseCircle size={13} aria-hidden />} {numbers.length === 1 ? t('hold.go') : t('hold.goMany', { count: numbers.length })}
-          </Button>
-        </Footer>
-      }
-    >
-      {/* F-PR-16: no form element — Enter in a one-line field sends nothing; the send button and ⌘↵ send. */}
-      <div className="fw-pr-dialog" onKeyDown={submitKeys(go)}>
-        <Problem daily={daily} />
-        <p>{kind === 'PRODUCTION' ? t('hold.bodyProduction') : t('hold.body')}</p>
-        {numbers.length > 1 && <p className="fw-pr-hint">{numbers.join(' · ')}</p>}
-        <Field label={t('hold.reason')} hint={t('hold.reasonKinds')}>
-          {offered === null ? (
-            <p className="fw-pr-hint" role="status">
-              <Spinner size={12} /> {t('hold.reasonsLoading')}
-            </p>
-          ) : (
-            <Select
-              size="sm"
-              value={reason ? optionValue(reason) : ''}
-              onChange={(event) => setPick(event.target.value)}
-              aria-label={t('hold.reason')}
-            >
-              <option value="">{t('hold.reasonPick')}</option>
-              {offered.QUALITY.length > 0 && (
-                <optgroup label={t('hold.kind.QUALITY')}>
-                  {offered.QUALITY.map((entry) => (
-                    <option key={optionValue(entry)} value={optionValue(entry)}>
-                      {wordsIn(entry, locale)}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {offered.PRODUCTION.length > 0 && (
-                <optgroup label={t('hold.kind.PRODUCTION')}>
-                  {offered.PRODUCTION.map((entry) => (
-                    <option key={optionValue(entry)} value={optionValue(entry)}>
-                      {wordsIn(entry, locale)}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </Select>
-          )}
-        </Field>
-        {kind && <Tag tone={kind === 'PRODUCTION' ? 'info' : 'warning'}>{t(`hold.kindIs.${kind}`)}</Tag>}
-        <Field label={kind === 'PRODUCTION' ? t('hold.officeNote') : t('hold.note')} hint={reason?.needsDetail ? t('hold.noteNeeded') : kind === 'PRODUCTION' ? t('hold.officeNoteHint') : t('hold.noteHint')}>
-          <Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} maxLength={kind === 'PRODUCTION' ? HOLD_DIALOG_LIMITS.productionNote : HOLD_DIALOG_LIMITS.qualityNote} />
-        </Field>
-        {kind === 'PRODUCTION' && (
-          <Field label={t('hold.customerWords')} hint={t('hold.customerWordsHint', { reason: reason ? wordsIn(reason, locale) : '—' })}>
-            <Input value={customerWords} onChange={(event) => setCustomerWords(event.target.value)} maxLength={HOLD_DIALOG_LIMITS.customerWords} />
-          </Field>
-        )}
-        <ul className="fw-pr-list">
-          <li>{t('hold.floor')}</li>
-          <li>{kind === 'PRODUCTION' ? t('hold.liftBy') : t('hold.releaseBy')}</li>
-        </ul>
-      </div>
-    </Modal>
-  )
+  return <SharedHoldDialog numbers={numbers} workOrderIds={workOrderIds} parts={holdPartsOf(daily)} onCancel={() => actions?.onDialog?.(null)} onPlace={actions?.onPlaceHold} />
 }
+
+/** F-OP-114: what the shared hold dialogs draw, from this page's model. */
+const holdPartsOf = (daily: DailyModel) => ({ reasons: daily.reasons, can: daily.can, busy: daily.busy, problem: daily.problem, productionHolds: daily.productionHolds ?? null, draft: daily.draft ?? null })
 
 // ---- F-PR-05b: Release a plain hold (ours, or the customer's accepted pause): why, in one line; workorders.hold ---------------------
 
+// F-OP-114: ONE Release the hold dialog (lib/production/work-order-acts).
 function LiftHoldDialog({ holdId, daily, actions }: { holdId: string; daily: DailyModel; actions?: DailyActions }) {
-  const t = useT(DAILY_NAMESPACE)
-  const locale = useLocale()
-  const [reason, setReason] = useState(daily.draft?.liftReason ?? '')
-  const hold = plainHoldsOf(daily.productionHolds?.value ?? null).standing.find((entry) => entry.id === holdId) ?? null
-  const held = liftHeld(hold, daily.can, reason, daily.busy)
-  const go = held || !hold ? null : () => actions?.onLiftHold?.({ holdId, version: hold.version, reason: reason.trim() })
-  return (
-    <Modal
-      open
-      onClose={() => actions?.onDialog?.(null)}
-      title={t('liftHold.title')}
-      size="md"
-      footer={
-        <Footer onCancel={() => actions?.onDialog?.(null)}>
-          <Button size="sm" variant="primary" heldReason={say(t, held)} onClick={() => go?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
-            {daily.busy ? <Spinner size={12} /> : <Unlock size={13} aria-hidden />} {t('liftHold.go')}
-          </Button>
-        </Footer>
-      }
-    >
-      {/* F-PR-16: no form element — Enter in a one-line field sends nothing; the send button and ⌘↵ send. */}
-      <div className="fw-pr-dialog" onKeyDown={submitKeys(go)}>
-        <Problem daily={daily} />
-        {!hold ? (
-          daily.productionHolds?.problem ? (
-            <EmptyState title={t('part.failed', { part: t('liftHold.title') })} description={t(daily.productionHolds.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.('productionHolds')}>{t('common.retry')}</Button>} />
-          ) : (
-            <p className="fw-pr-hint" role="status">
-              <Spinner size={12} /> {t('part.loading', { part: t('liftHold.title') })}
-            </p>
-          )
-        ) : (
-          <>
-            <p>
-              <b>{hold.kind === 'BRAND' ? t('holds.customerPause') : plainHoldWords(hold, daily.reasons, locale)}</b>
-            </p>
-            <p>{hold.kind === 'BRAND' ? t('liftHold.bodyCustomer') : t('liftHold.body')}</p>
-            <Field label={t('liftHold.reason')} hint={t('liftHold.reasonHint')}>
-              <Input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={HOLD_DIALOG_LIMITS.liftReason} />
-            </Field>
-            {daily.productionHolds?.value && daily.productionHolds.value.qualityHoldsActive > 0 && <p className="fw-pr-hint">{t('liftHold.qualityStays', { count: daily.productionHolds.value.qualityHoldsActive })}</p>}
-          </>
-        )}
-      </div>
-    </Modal>
-  )
+  return <SharedLiftHoldDialog holdId={holdId} parts={holdPartsOf(daily)} onCancel={() => actions?.onDialog?.(null)} onLift={actions?.onLiftHold} onRetry={() => actions?.onRetry?.('productionHolds')} />
 }
 // ---- end F-PR-05b
 

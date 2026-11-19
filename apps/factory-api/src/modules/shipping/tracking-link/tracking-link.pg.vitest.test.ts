@@ -366,6 +366,32 @@ describe('B-OP-042: a shared shipment\'s tracking link names one order and count
   })
 })
 
+// B-OP-034 (order page plan N5, set C): the tracking page shows a carrier's page typed by hand ("Track ›", https only).
+describe('B-OP-034: the typed tracking link on the tracking page', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('a typed number with its https link shows both; an unsafe link is never shown', async () => {
+    const set = async (number: string | null, url: string | null) => {
+      await admin('SET session_replication_role = replica')
+      try {
+        await admin(`UPDATE "Shipment" SET "manualTrackingNumber" = $2, "manualTrackingUrl" = $3 WHERE id = $1`, [SH1, number, url])
+      } finally {
+        await admin('SET session_replication_role = DEFAULT')
+      }
+    }
+    await set('T-OP034-BRT-1', 'https://track.example.com/T-OP034-BRT-1')
+    try {
+      const made = await office.post(`/shipping/shipments/${SH1}/tracking-links`, { send: false }, { headers: { 'idempotency-key': key() } })
+      expect(made.status, JSON.stringify(made.body)).toBe(201)
+      const page = (await linkCall(tokenOf(made.body.url), 'GET', '/link/tracking')).json()
+      expect(page.shipment).toMatchObject({ typedTrackingNumber: 'T-OP034-BRT-1', typedTrackingUrl: 'https://track.example.com/T-OP034-BRT-1' })
+      // Written past the guards as javascript: — the page never offers it.
+      await set('T-OP034-BRT-1', 'javascript:alert(1)')
+      expect((await linkCall(tokenOf(made.body.url), 'GET', '/link/tracking')).json().shipment.typedTrackingUrl).toBeNull()
+    } finally {
+      await set(null, null)
+    }
+  })
+})
+
 describe('Ask for a new link on a dead tracking link', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('mails a new link to the address the dead one went to, once; a withdrawn one gets nothing', async () => {
     const before = trackingMails(BUYER_MAIL).length

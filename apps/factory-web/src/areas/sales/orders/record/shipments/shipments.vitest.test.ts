@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { carrierOf, httpsOrNull, shownShipments, trackingDoorOf, trackingOf, type ShipmentRow } from './model'
+// F-OP-121: where Create shipment… leads.
+import { createShipmentDoor } from './model'
+import { canOf, order } from '../../_demo/fixtures'
+// F-OP-122: shared shipments.
+import { alsoCarries, joinableRows } from './model'
+import { typedLinkOf } from './model' // F-OP-135
+import { trackingBody, trackingProblem } from '../../../../warehouse/shipments/booking/model'
+import type { JoinableShipments } from '../../../../warehouse/shipments/api'
+import { LOCALES } from '../../../../../lib/i18n/locales'
+import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 
 /**
  * F-OP-119 (order page plan N5) — the Shipments tab's rows, pure: who carries each shipment, its tracking, the tracking door held
@@ -88,3 +98,91 @@ describe('cancelled shipments behind "Show N cancelled"', () => {
     expect(shownShipments([row()], false).cancelled).toBe(0)
   })
 })
+
+// ── F-OP-121 (order page plan N6): where Create shipment… leads ──────────────────────────────────────────────────────────────────
+describe('F-OP-121: Create shipment… opens in place on the order page', () => {
+  const ready = order('READY', { progress: { ...order('READY').progress, released: 6, shipped: 2 } })
+  it('in place with the container, else Warehouse’s New shipment with this order chosen', () => {
+    expect(createShipmentDoor(ready, canOf('owner'), '/f', true)).toEqual({ kind: 'inPlace' })
+    expect(createShipmentDoor(ready, canOf('owner'), '/f', false)).toEqual({ kind: 'warehouse', href: `/f/warehouse/shipments?new=1&order=${encodeURIComponent(ready.id)}` })
+  })
+  it('nothing without released garments left to ship, on a final order, or without shipping.manage', () => {
+    expect(createShipmentDoor({ ...ready, progress: { ...ready.progress, shipped: 6 } }, canOf('owner'), '/f', true)).toBeNull()
+    expect(createShipmentDoor({ ...ready, status: 'CANCELLED' }, canOf('owner'), '/f', true)).toBeNull()
+    expect(createShipmentDoor(ready, canOf('sales'), '/f', true)).toBeNull()
+  })
+})
+// ── end F-OP-121 ──
+
+// ── F-OP-122 (order page plan N6): shared shipments on the order ─────────────────────────────────────────────────────────────────
+describe('F-OP-122: a shared shipment names its other orders; the customer’s DRAFTs offer to take this order’s garments', () => {
+  it('"Also carries SO-…": every other order of the shipment, never this one; none on a shipment of this order alone', () => {
+    const shared = row({ orders: [{ id: 'so-1', number: 'SO-2026-0150', customerRef: 'PO 4471' }, { id: 'so-2', number: 'SO-2026-0151', customerRef: null }] })
+    expect(alsoCarries(shared, 'so-1')).toEqual([{ id: 'so-2', number: 'SO-2026-0151' }])
+    expect(alsoCarries(shared, 'so-2')).toEqual([{ id: 'so-1', number: 'SO-2026-0150' }])
+    expect(alsoCarries(row({ orders: [{ id: 'so-1', number: 'SO-2026-0150', customerRef: null }] }), 'so-1')).toEqual([])
+    expect(alsoCarries(row(), 'so-1')).toEqual([])
+  })
+
+  it('offers the DRAFTs of the same site and address: open, or held with MULTI_ORDER_OFF’s words; another site or address not at all', () => {
+    const draft = (shipmentId: string, joinable: { allowed: boolean; code: 'MULTI_ORDER_OFF' | 'SITE' | 'SHIP_TO' | 'SHIPMENT_STATE' | null; why: string | null }, status = 'DRAFT') => ({ shipmentId, number: `SH-${shipmentId}`, status, siteId: 'site-1', joinable }) as JoinableShipments['shipments'][number]
+    expect(
+      joinableRows([
+        draft('1', { allowed: false, code: 'MULTI_ORDER_OFF', why: 'x' }),
+        draft('2', { allowed: true, code: null, why: null }),
+        draft('3', { allowed: false, code: 'SITE', why: 'x' }),
+        draft('4', { allowed: false, code: 'SHIP_TO', why: 'x' }),
+        draft('5', { allowed: true, code: null, why: null }, 'PACKED'),
+      ]),
+    ).toEqual([
+      { shipmentId: '1', number: 'SH-1', held: { key: 'shipOrders.later', detail: null } },
+      { shipmentId: '2', number: 'SH-2', held: null },
+    ])
+  })
+
+  it('the words exist in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['ship.join.title', 'ship.join.add']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('ship.alsoCarries', { number: 'SO-2026-0151' }), locale).toContain('SO-2026-0151')
+      expect(t('ship.joined', { count: 3, number: 'SH-0091' }), locale).toContain('SH-0091')
+    }
+  })
+})
+// ── end F-OP-122 ──
+
+// ── F-OP-135 (B-OP-034): the link typed beside a hand-booked carrier's number — the row's Track › ──────────────────────────────────────
+describe('F-OP-135: the typed link is the row’s Track › (https only)', () => {
+  const typed = (url: string | null | undefined, number: string | null = 'T-123') => row({ tracking: { number, source: 'TYPED', parcels: [], live: false, url } })
+  it('an https link typed beside the number; anything else, or no number, none', () => {
+    expect(typedLinkOf(typed('https://track.example.com/T-123'))).toBe('https://track.example.com/T-123')
+    expect(typedLinkOf(typed('http://track.example.com/T-123'))).toBeNull()
+    expect(typedLinkOf(typed('javascript:alert(1)'))).toBeNull()
+    expect(typedLinkOf(typed(null))).toBeNull()
+    expect(typedLinkOf(typed(undefined))).toBeNull()
+    expect(typedLinkOf(typed('https://track.example.com/T-123', null))).toBeNull()
+    // A label's parcels keep their own pages; the row has no typed link then.
+    expect(typedLinkOf(row({ tracking: { number: null, source: 'PARCELS', parcels: [{ number: 'A1', url: 'https://carrier.example.com/A1' }], live: true, url: null } }))).toBeNull()
+  })
+  it('the tracking dialog’s "Link (optional, https)": only with its number, the API’s own rule; blank clears it', () => {
+    const dialog = (text: string, link?: string) => ({ kind: 'tracking' as const, text, ...(link === undefined ? {} : { link }) })
+    expect(trackingProblem(dialog('T-1', 'https://track.example.com/T-1'))).toBeNull()
+    expect(trackingProblem(dialog('T-1'))).toBeNull()
+    expect(trackingProblem(dialog('', 'https://track.example.com/T-1'))?.key).toBe('transport.form.linkNeedsNumber')
+    for (const bad of ['http://track.example.com/T-1', 'https://someone:secret@track.example.com/T-1', 'javascript:alert(1)', `https://track.example.com/${'x'.repeat(500)}`]) expect(trackingProblem(dialog('T-1', bad))?.key, bad).toBe('transport.form.trackingLink')
+    expect(trackingBody(dialog(' T-1 ', ' https://track.example.com/T-1 '), 4)).toEqual({ version: 4, trackingNumber: 'T-1', trackingUrl: 'https://track.example.com/T-1' })
+    expect(trackingBody(dialog('T-1', ''), 4)).toEqual({ version: 4, trackingNumber: 'T-1', trackingUrl: null })
+    // The number cleared clears its link too.
+    expect(trackingBody(dialog('', 'https://track.example.com/T-1'), 4)).toEqual({ version: 4, trackingNumber: null, trackingUrl: null })
+  })
+  it('the words exist in both languages', () => {
+    for (const locale of LOCALES) {
+      const depth = messagesFor(locale, ['warehouse-shipments-depth'])['warehouse-shipments-depth']!
+      for (const key of ['transport.trackingLink', 'transport.trackingLinkHint', 'transport.form.linkNeedsNumber']) expect(createTranslator(locale, depth)(key), `${locale} ${key}`).not.toBe(key)
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      expect(t('ship.track'), locale).not.toBe('ship.track')
+      expect(t('ship.trackLink', { number: 'SH-0091' }), locale).toContain('SH-0091')
+    }
+  })
+})
+// ── end F-OP-135 ──

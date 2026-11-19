@@ -29,6 +29,10 @@ export const trackingPageSchema = z.object({
     deliveredAt: instant.nullable(),
     returnedAt: instant.nullable(),
     expectedDeliveryAt: instant.nullable(),
+    // ── op-24 (order page N5; B-OP-031, B-OP-034): a carrier booked by hand — the number typed for it (no carrier feeds it) and the
+    // carrier's tracking page typed beside it (https only). Optional: an older answer has neither. ──
+    typedTrackingNumber: z.string().nullable().optional(),
+    typedTrackingUrl: z.string().nullable().optional(),
   }),
   order: z.object({
     customerRef: z.string().nullable(),
