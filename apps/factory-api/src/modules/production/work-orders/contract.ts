@@ -420,6 +420,28 @@ export const moveContract = defineContract({ params: workOrderParams, body: inpu
 
 export const cancelContract = defineContract({ params: workOrderParams, body: input({ version, reason: z.string().trim().min(1).max(500) }), response: { 200: oneWorkOrder } })
 
+// B-OP-024 (order page plan N1; review R-16): what a cancel would meet — the pieces cut (a cancel with any is refused), the stock
+// issued to it, its subcontract orders at a workshop. Counts and quantities only: no money, no person.
+export const cancelCheckContract = defineContract({
+  params: workOrderParams,
+  response: {
+    200: output({
+      workOrderId: id(),
+      number: z.string(),
+      status,
+      version: z.number().int(),
+      /** The machine takes a cancel now and nothing is cut. */
+      cancellable: z.boolean(),
+      /** "{n} pieces are cut: lower the work order to the cut instead" (null: nothing cut). */
+      refusal: output({ it: z.string(), en: z.string() }).nullable(),
+      cut: output({ pieces: z.number().int(), cells: z.array(output({ cellId: id(), size: z.string(), colourwayId: id(), quantity: z.number().int(), cut: z.number().int() })) }),
+      /** Net issued to it (base unit): it stays on it in the ledger until returned. */
+      issued: z.array(output({ itemId: id(), itemColourId: id().nullable(), label: z.string(), baseUom: z.string(), quantity: z.string() })),
+      atWorkshop: z.array(output({ subcontractOrderId: id(), number: z.string() })),
+    }),
+  },
+})
+
 const lineRef = output({ lineId: id(), seq: z.number().int(), itemId: id(), code: z.string(), placement: z.string().nullable(), colourwayId: id().nullable() })
 const stepRef = output({ stepId: id(), seq: z.number().int(), code: z.string(), name: z.string(), standardMinutes: z.string() })
 const fieldChange = output({ field: z.string(), from: z.union([z.string(), z.number(), z.boolean(), z.null()]), to: z.union([z.string(), z.number(), z.boolean(), z.null()]) })

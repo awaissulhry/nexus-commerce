@@ -843,3 +843,58 @@ describe('Lower to the order: a released work order goes down to its order, neve
   })
 })
 // ── end B-SA-040 ──
+
+// ── B-OP-024 (order page plan N1; review R-16): a work order's cancel check, and no cancel of cut pieces ──
+describe('B-OP-024: what a cancel would meet, and a work order with cut pieces is never cancelled (lower it to the cut instead)', () => {
+  /** The trigger-free insert of a row the test plants (a bundle: its pieces are cut). */
+  async function force(sql: string, values: unknown[] = []): Promise<void> {
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(sql, values)
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+  }
+  const cancelCheckOf = (workOrderId: string, session = 'planner') => ok(session, 'GET', `/production/work-orders/${workOrderId}/cancel-check`)
+  const words = (count: number) => `${count} pieces are cut: lower the work order to the cut instead`
+
+  it('a DRAFT: nothing cut, issued or at a workshop — it may be cancelled', async () => {
+    const { workOrder } = await draft([{ colour: 'BLK', sizes: { '52': 2 } }])
+    expect(await cancelCheckOf(workOrder.id)).toEqual({ workOrderId: workOrder.id, number: workOrder.number, status: 'DRAFT', version: workOrder.version, cancellable: true, refusal: null, cut: { pieces: 0, cells: [] }, issued: [], atWorkshop: [] })
+  })
+
+  it('the seeds\' WO-0001 (in progress): its cut pieces per cell and the leather issued to it; its cancel is refused in words, nothing moves', async () => {
+    const check = await cancelCheckOf(A.seededWorkOrder)
+    expect(check.cut.pieces).toBeGreaterThan(0)
+    expect(check.cut.pieces).toBe((check.cut.cells as Json[]).reduce((sum, cell) => sum + cell.cut, 0))
+    expect((check.cut.cells as Json[]).every((cell) => cell.cut > 0 && cell.cut <= cell.quantity)).toBe(true)
+    expect(check).toMatchObject({ status: 'IN_PROGRESS', cancellable: false, refusal: { en: words(check.cut.pieces), it: `${check.cut.pieces} pezzi sono già tagliati: riduci l'ordine di lavoro al tagliato` } })
+    expect((check.issued as Json[]).find((row) => row.itemId === A.leather)).toMatchObject({ baseUom: expect.any(String), quantity: expect.stringMatching(/^[0-9.]+$/) })
+    const refusal = await refused('planner', 'POST', `/production/work-orders/${A.seededWorkOrder}/cancel`, { version: check.version, reason: 'Made-up: not needed.' }, 409)
+    expect(refusal).toMatchObject({ code: 'conflict', message: words(check.cut.pieces), issues: [{ path: 'refusal/CUT_PIECES', message: words(check.cut.pieces) }] })
+    expect((await admin(`SELECT status::text AS status, version FROM "WorkOrder" WHERE id = $1`, [A.seededWorkOrder]))[0]).toEqual({ status: 'IN_PROGRESS', version: check.version })
+  })
+
+  it('a released one with 3 pieces bundled is refused; with nothing cut it is cancelled as today', async () => {
+    const cutOne = (await release((await draft([{ colour: 'BLK', sizes: { '52': 4 } }])).workOrder.id)).json().workOrder as Json
+    await force(`INSERT INTO "Bundle" (id, "tenantId", "siteId", "workOrderId", "workOrderSizeId", code, quantity) VALUES ($1, $2, $3, $4, $5, $6, 3)`, [newId(), A.tenant, A.siteA1, cutOne.id, cutOne.cells[0].id, `T-${run}-OP024-BN`])
+    const check = await cancelCheckOf(cutOne.id, 'viewer')
+    expect(check).toMatchObject({ status: 'RELEASED', cancellable: false, cut: { pieces: 3, cells: [{ cellId: cutOne.cells[0].id, size: '52', quantity: 4, cut: 3 }] } })
+    expect((await refused('planner', 'POST', `/production/work-orders/${cutOne.id}/cancel`, { reason: 'Made-up: not needed.' }, 409)).issues).toEqual([{ path: 'refusal/CUT_PIECES', message: words(3) }])
+    const free = (await release((await draft([{ colour: 'BLK', sizes: { '52': 1 } }])).workOrder.id)).json().workOrder as Json
+    expect(await cancelCheckOf(free.id)).toMatchObject({ status: 'RELEASED', cancellable: true, refusal: null, cut: { pieces: 0, cells: [] } })
+    expect((await ok('planner', 'POST', `/production/work-orders/${free.id}/cancel`, { reason: 'Made-up: not needed.' })).workOrder).toMatchObject({ status: 'CANCELLED' })
+    // A cancelled one takes no cancel any more (the machine's own words stay).
+    expect(await cancelCheckOf(free.id)).toMatchObject({ status: 'CANCELLED', cancellable: false, refusal: null })
+  })
+
+  it('the wall: another customer\'s work order is not found, as an unknown id; the floor and the portal are refused', async () => {
+    SESSIONS.betaViewer = office(A.tenant, [{ permissions: ['workorders.view'], companies: 'all', sites: 'all', parties: [newId()] }])
+    const walled = await refused('betaViewer', 'GET', `/production/work-orders/${A.seededWorkOrder}/cancel-check`, undefined, 404)
+    const unknown = await refused('betaViewer', 'GET', `/production/work-orders/${newId()}/cancel-check`, undefined, 404)
+    expect([walled.code, walled.message]).toEqual([unknown.code, unknown.message])
+    expect(walled.message).toBe('Work order not found.')
+    for (const session of ['floor', 'partner', 'noWorkOrders']) expect((await call(session, 'GET', `/production/work-orders/${A.seededWorkOrder}/cancel-check`)).statusCode).toBe(403)
+  })
+})
+// ── end B-OP-024 ──

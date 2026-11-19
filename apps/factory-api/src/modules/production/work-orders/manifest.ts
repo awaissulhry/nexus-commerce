@@ -25,6 +25,8 @@ export const manifest = defineManifest({
   'POST /production/work-orders/:workOrderId/complete': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
   'POST /production/work-orders/:workOrderId/close': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
   'POST /production/work-orders/:workOrderId/cancel': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
+  // B-OP-024 (order page plan N1): what a cancel would meet (cut pieces, issued stock, at a workshop), checked on the work order.
+  'GET /production/work-orders/:workOrderId/cancel-check': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   // B-W2a-12 (MES-019): repair work orders, checked on the repair order's company and site.
   'GET /production/work-orders/repair-options': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'POST /production/work-orders/repairs': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
