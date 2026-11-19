@@ -15,6 +15,8 @@ import { backorder, SECOND_ORDER, SECOND_READY, secondBackorder, sharedShipment 
 import { CANDIDATES_HELD } from './_demo/fixtures'
 import { joinHeld } from './model'
 import { leftKeys } from '../../../lib/record-thread/parts/testing'
+// F-OP-131 (order page N6): the driver's pack.
+import { designScreen as packScreen } from './pack/fixtures'
 import { joinableShipmentsSchema, orderCandidatesSchema, readyOrderSchema, shipmentRowSchema, shipmentSchema } from './api'
 import { lineGroups, lineOrderIds, orderNumbers, orderWords, rowOrders, shipmentOrders } from './model'
 import { queueRowSchema, searchRowSchema } from './queue/api'
@@ -463,3 +465,23 @@ describe('F-OP-130 — the shipment record names every order, groups its lines b
   })
 })
 // ---- end F-OP-130
+
+// ---- F-OP-131 (order page N6, R-5): the driver's pack names every order -------------------------------------------------------------
+describe("F-OP-131 — the driver's sheet names each order the shipment carries, with its PO", () => {
+  const drawPack = (id: string, locale: 'it' | 'en' = 'en') => textOf(renderView(packScreen.view as ComponentType<{ model: unknown }>, packScreen.cases.find((item) => item.id === id)!.model, locale))
+
+  it('two orders: "Orders", each with its PO; one order: "Order" as before', () => {
+    const shared = drawPack('shared')
+    expect(shared).toContain('Orders SO-2026-0088 · Customer PO PO-MD-7731 SO-2026-0090 · Customer PO PO-MD-7740')
+    expect(drawPack('shared', 'it')).toContain('Ordini SO-2026-0088 · Ordine cliente PO-MD-7731 SO-2026-0090 · Ordine cliente PO-MD-7740')
+    const one = drawPack('ready')
+    expect(one).toContain('Order SO-2026-0088 · Customer PO PO-MD-7731')
+    expect(one).not.toContain('SO-2026-0090')
+  })
+
+  it('no key left on the sheet in any case', () => {
+    for (const locale of LOCALES) for (const item of packScreen.cases) expect(leftKeys(renderView(packScreen.view as ComponentType<{ model: unknown }>, item.model, locale), ['shipOrders']), `${item.id} (${locale})`).toEqual([])
+  })
+})
+// ---- end F-OP-131
+

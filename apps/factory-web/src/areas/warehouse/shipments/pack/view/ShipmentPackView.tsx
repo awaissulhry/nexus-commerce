@@ -10,6 +10,9 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import type { Shipment } from '../../api'
 import type { PackDocument } from '../../daily-model'
 import { addressLines, carrierWords, kilos } from '../../model'
+// F-OP-131 (order page N6, R-5): the driver's sheet names every order the shipment carries.
+import { orderWords, shipmentOrders } from '../../model'
+import { DEPTH_NS } from '../../queue/shared/depth'
 import type { PackActions, PackModel } from '../pack-model'
 import { PdfPages } from './PdfPages'
 import '../../shipments.css'
@@ -25,7 +28,7 @@ import '../../shipments.css'
  */
 export function ShipmentPackView({ model, actions }: { model: PackModel; actions?: PackActions }) {
   return (
-    <WithMessages namespaces={['shipments']}>
+    <WithMessages namespaces={['shipments', /* F-OP-131 */ DEPTH_NS]}>
       <Pack model={model} actions={actions} />
     </WithMessages>
   )
@@ -74,7 +77,10 @@ function Pack({ model, actions }: { model: PackModel; actions?: PackActions }) {
 
 function ReadyPack({ shipment, model, actions }: { shipment: Shipment; model: PackModel; actions?: PackActions }) {
   const t = useT('shipments')
+  const d = useT(DEPTH_NS) // F-OP-131
   const locale = useLocale()
+  // F-OP-131 (N6): every order it carries with its PO, one a line (one order: as before).
+  const orders = shipmentOrders(shipment).map((order) => orderWords(order, (ref) => t('record.customerRef', { ref })))
   const carrier = carrierWords(shipment)
   const documents = model.documents
   const included = (documents ?? []).filter((entry) => model.included.includes(entry.key))
@@ -114,7 +120,18 @@ function ReadyPack({ shipment, model, actions }: { shipment: Shipment; model: Pa
             { label: t('pack.field.ddt'), value: model.ddt ? t('pack.ddtOf', { number: model.ddt.number, date: formatDate(`${model.ddt.documentDate}T12:00:00Z`, { locale }) }) : shipment.ddtRequired ? t('pack.noDdt') : t('pack.ddtNotNeeded') },
             ...(model.ddt ? [{ label: t('pack.field.start'), value: formatDateTime(model.ddt.startAt, { locale }) }] : []),
             { label: t('pack.field.parcels'), value: `${t('list.parcels', { count: shipment.parcels.length })} · ${weight === null ? t('pack.notWeighed') : t('list.kg', { value: weight })}` },
-            { label: t('pack.field.order'), value: `${shipment.salesOrder.number}${shipment.salesOrder.customerRef ? ` · ${t('record.customerRef', { ref: shipment.salesOrder.customerRef })}` : ''}` },
+            orders.length === 1
+              ? { label: t('pack.field.order'), value: orders[0]! }
+              : {
+                  label: d('shipOrders.packField'),
+                  value: (
+                    <span className="fw-sh-cell">
+                      {orders.map((words) => (
+                        <span key={words}>{words}</span>
+                      ))}
+                    </span>
+                  ),
+                },
           ]}
         />
         {shipment.parcels.length > 0 && (

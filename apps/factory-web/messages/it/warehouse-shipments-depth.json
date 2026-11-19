@@ -963,6 +963,7 @@
     "takeOffWhat_other": "{count} capi tornano a ciò che {order} può ancora spedire e {order} esce da questa spedizione.",
     "takeOffGo": "Toglili",
     "gone": "Nessuno dei suoi capi è più su questa spedizione.",
-    "progressTitle": "{order} su questa spedizione"
+    "progressTitle": "{order} su questa spedizione",
+    "packField": "Ordini"
   }
 }

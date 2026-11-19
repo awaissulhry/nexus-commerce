@@ -963,6 +963,7 @@
     "takeOffWhat_other": "{count} garments go back to what {order} can still ship, and {order} leaves this shipment.",
     "takeOffGo": "Take them off",
     "gone": "None of its garments is on this shipment any more.",
-    "progressTitle": "{order} on this shipment"
+    "progressTitle": "{order} on this shipment",
+    "packField": "Orders"
   }
 }
