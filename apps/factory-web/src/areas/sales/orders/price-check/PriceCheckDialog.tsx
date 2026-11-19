@@ -98,8 +98,9 @@ function PriceForm({ check, model, actions }: { check: PriceCheck; model: PriceC
   const locale = useLocale()
   const draft = model.draft!
   const closed = isClosedOrder(check.status)
-  // Held, not hidden: a closed or cancelled order (or a reader who may not change orders) reads the prices, typing nothing.
-  const writable = !closed && check.mayWrite.allowed && !model.busy
+  // Held, not hidden: a closed or cancelled order (or a reader who may not change orders) reads the prices, typing nothing. While a
+  // save runs the fields stay as typed (Save says "Saving the prices…").
+  const writable = !closed && check.mayWrite.allowed
   const plan = pricePlanOf(check, draft)
   const problems = { ...(plan.kind === 'problems' ? plan.problems : {}), ...model.fields }
   const say = (phrase: { readonly key: string; readonly params?: Readonly<Record<string, string | number>> } | undefined) => (phrase ? t(phrase.key, phrase.params) : undefined)

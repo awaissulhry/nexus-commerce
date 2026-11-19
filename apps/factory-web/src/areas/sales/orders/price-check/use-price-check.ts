@@ -63,6 +63,7 @@ export function usePriceCheck(api: ApiClient, options: { readonly onSaved?: (che
   const [notice, setNotice] = useState<PriceCheckDialogModel['notice']>(null)
   const [fields, setFields] = useState<Readonly<Record<string, Phrase>>>({})
   const readId = useRef(0)
+  const filesId = useRef(0)
   const sent = useRef<{ readonly body: string; readonly key: string } | null>(null)
   const onSaved = useRef(options.onSaved)
   onSaved.current = options.onSaved
@@ -70,7 +71,8 @@ export function usePriceCheck(api: ApiClient, options: { readonly onSaved?: (che
   const readCheck = useCallback(
     (orderId: string, at: Locale, after?: PriceCheckDialogModel['notice']) => {
       const id = ++readId.current
-      setRead({ status: 'reading' })
+      // Read again after a refusal: the prices on screen stay until the fresh ones arrive (no flash of an empty window).
+      if (!after) setRead({ status: 'reading' })
       readPriceCheck(api, orderId).then(
         (check) => {
           if (id !== readId.current) return
@@ -86,11 +88,11 @@ export function usePriceCheck(api: ApiClient, options: { readonly onSaved?: (che
   )
   const readFiles = useCallback(
     (orderId: string) => {
-      const id = readId.current
+      const id = ++filesId.current
       setFiles({ status: 'reading' })
       readOrderFiles(api, orderId).then(
-        (list) => id === readId.current && setFiles({ status: 'ready', files: list }),
-        () => id === readId.current && setFiles({ status: 'failed' }),
+        (list) => id === filesId.current && setFiles({ status: 'ready', files: list }),
+        () => id === filesId.current && setFiles({ status: 'failed' }),
       )
     },
     [api],
@@ -112,6 +114,7 @@ export function usePriceCheck(api: ApiClient, options: { readonly onSaved?: (che
 
   const close = useCallback(() => {
     readId.current++
+    filesId.current++
     setOpened(null)
   }, [])
 
