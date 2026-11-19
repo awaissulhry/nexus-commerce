@@ -12,6 +12,7 @@ import { fileSetProblems, newerVersionOf, newerVersionWords, type CandidateFile,
 import { linkFilesMail } from '@nexus/factory-domain/links/mail'
 import { linkPasswordProblem, mintUnlock, passwordHeld, passwordStep, passwordWords, unlockOpens } from '@nexus/factory-domain/links/password'
 import { PAY_BY_LINK_REFUSAL, PAYROLL_EXPORT, payByLinkProblem } from '@nexus/factory-domain/links/pay'
+import { mayOpenPriced, PRICED_REFUSALS, PRICED_WORDS, seesPrices } from '@nexus/factory-domain/files/priced' // B-CP-023
 import { LINKS_MANAGE } from '@nexus/factory-domain/links/permissions'
 import { linkTerms, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-domain/links/purposes'
 import { linkTokenHash, mintLinkToken } from '@nexus/factory-domain/links/token'
@@ -108,12 +109,12 @@ export interface FileLinkInput {
   readonly message?: string | undefined
 }
 
-const CANDIDATE = { id: true, companyId: true, status: true, recordType: true, recordId: true, originalName: true } as const satisfies Prisma.StoredFileSelect
+const CANDIDATE = { id: true, companyId: true, status: true, recordType: true, recordId: true, originalName: true, priced: true /* B-CP-023 */ } as const satisfies Prisma.StoredFileSelect
 
 /** The files as the link maker judges them: a payroll file says whether it carries amounts. */
-async function candidatesOf(client: Parameters<typeof payrollCarriesPay>[0], fileIds: readonly string[]): Promise<Map<string, CandidateFile & { readonly recordId: string }>> {
+async function candidatesOf(client: Parameters<typeof payrollCarriesPay>[0], fileIds: readonly string[]): Promise<Map<string, CandidateFile & { readonly recordId: string; /* B-CP-023 */ readonly priced: boolean }>> {
   const rows = await client.storedFile.findMany({ where: { id: { in: [...new Set(fileIds)] } }, select: CANDIDATE })
-  const found = new Map<string, CandidateFile & { readonly recordId: string }>()
+  const found = new Map<string, CandidateFile & { readonly recordId: string; readonly priced: boolean }>()
   for (const row of rows) {
     const carries = row.recordType === PAYROLL_EXPORT ? await payrollCarriesPay(client, row.recordId) : false
     found.set(row.id, { ...row, payrollCarriesPay: carries })
@@ -159,6 +160,10 @@ export async function createFileLink(request: FastifyRequest, body: FileLinkInpu
     const file = visible.get(fileId)
     const pay = file ? payByLinkProblem({ recordType: file.recordType, payrollCarriesPay: file.payrollCarriesPay, fileName: file.originalName }) : null
     if (pay) throw new LinkRefusedError(PAY_BY_LINK_REFUSAL, pay, [{ path: `body/fileIds/${index}`, message: pay }])
+    // ---- B-CP-023 (the money wall D6; review B1, payByLinkProblem's pattern): a priced file goes by link only from someone who
+    // sees prices (409 refusal/PRICED_BY_LINK in words; the words never name the file to a person who may not open it).
+    if (file && !mayOpenPriced(file, seesPrices(actor))) throw new LinkRefusedError(PRICED_REFUSALS.LINK, PRICED_WORDS.byLink.en, [{ path: `body/fileIds/${index}`, message: PRICED_WORDS.byLink.en }])
+    // ---- end B-CP-023
   }
   const problems = fileSetProblems(body.fileIds, visible, body.companyId).map((issue) => ({ ...issue, path: `body/${issue.path}` }))
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)

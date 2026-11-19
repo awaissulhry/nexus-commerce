@@ -335,6 +335,7 @@
       "portal_customerDocuments_finance": "Vedere fatture, note di credito ed estratti conto",
       "portal_catalogue_view": "Vedere i modelli che potete acquistare",
       "portal_orderRequests_manage": "Fare richieste d'ordine e riordinare",
+      "portal_orderDrafts_edit": "Iniziare e completare bozze d'ordine con i colleghi e scartare una bozza iniziata da voi; la invia un collega che può ordinare",
       "portal_addresses_view": "Vedere i vostri indirizzi di consegna",
       "portal_addresses_manage": "Aggiungere, archiviare e scegliere gli indirizzi di consegna",
       "portal_search": "Cercare i vostri documenti con i vostri riferimenti e i nostri",

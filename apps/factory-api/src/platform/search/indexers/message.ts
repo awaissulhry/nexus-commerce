@@ -5,7 +5,7 @@ import { recordLabelOf } from '../../threads/labels'
 import { THREAD_GATES } from '../../threads/records'
 import { mayShare, wallPartiesOf } from '../../threads/records' // B-PR-08a part 2
 import { EVERY_PARTY_MARKER } from '../../../modules/quality/wall' // B-PR-08a part 2
-import { defineIndexer, idWhere, type SearchDocument } from '../indexer'
+import { CASCADE_MAX, defineIndexer, idWhere, type SearchDocument } from '../indexer'
 
 /**
  * Messages of record threads (B-TH-097; threads plan TH-9, G11 "search inside messages", office only; design thread T1 "Search
@@ -27,8 +27,10 @@ const GATED = Object.keys(THREAD_GATES)
 const EXCERPT = 140
 
 async function documentsOf(tx: CommandTx, rows: readonly MessageRow[]): Promise<SearchDocument[]> {
+  // B-CP-023 (the money wall D6; review B1): a priced file's name is never in search (an entry is read by everyone with the view
+  // permission, priced or not: the name is left out for all; file.priced_changed reads the messages again when a mark moves).
   const files = new Map(
-    (await tx.storedFile.findMany({ where: { id: { in: [...new Set(rows.flatMap((row) => row.attachmentFileIds))] } }, select: { id: true, originalName: true } })).map((file) => [file.id, file.originalName]),
+    (await tx.storedFile.findMany({ where: { id: { in: [...new Set(rows.flatMap((row) => row.attachmentFileIds))] }, priced: false }, select: { id: true, originalName: true } })).map((file) => [file.id, file.originalName]),
   )
   const labels = new Map<string, string | null>()
   // ---- B-PR-08a part 2: a work order's, hold's or NCR's thread is party-less (never shared); its messages are found through the
@@ -86,6 +88,13 @@ export default defineIndexer({
     'thread.message_posted': (event) => {
       const messageId = (event.payload as { messageId?: unknown } | null)?.messageId
       return typeof messageId === 'string' ? [messageId] : []
+    },
+    // B-CP-023: a file marked as showing prices (or the mark taken off): the messages that carry it are read again (its name out, or back).
+    'file.priced_changed': async (event, tx) => {
+      const ids = (event.payload as { fileIds?: unknown } | null)?.fileIds
+      const fileIds = Array.isArray(ids) ? ids.filter((entry): entry is string => typeof entry === 'string') : []
+      if (fileIds.length === 0) return []
+      return (await tx.message.findMany({ where: { attachmentFileIds: { hasSome: fileIds } }, select: { id: true }, orderBy: { id: 'asc' }, take: CASCADE_MAX })).map((row) => row.id)
     },
   },
   async read(tx, filter, take) {

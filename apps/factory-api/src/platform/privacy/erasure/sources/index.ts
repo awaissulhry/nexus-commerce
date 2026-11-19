@@ -1,6 +1,6 @@
 import type { DataSubjectKind } from '@nexus/factory-domain/privacy/retention/requests'
 import { ownRecords } from './own'
-import { accountRecords, contactRecords, personalValues, workRecords } from './records'
+import { accountRecords, contactRecords, personalValues, rosterRecords, workRecords } from './records'
 import { attachments, history, mails, messages } from './shared'
 import type { PersonSource } from './type'
 
@@ -11,6 +11,8 @@ import type { PersonSource } from './type'
 export const PERSON_SOURCES: readonly PersonSource[] = [
   ownRecords,
   contactRecords,
+  // B-CP-075: the people a customer's portal draft orders name.
+  rosterRecords,
   personalValues,
   workRecords,
   accountRecords,

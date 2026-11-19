@@ -59,6 +59,10 @@ export type NotificationState = (typeof NOTIFICATION_STATES)[number]
  */
 export const MESSAGE_TEMPLATES = {
   'notifications.mentioned': { en: '{actor} mentioned you on {record}', it: '{actor} ti ha menzionato su {record}' },
+  // ---- B-CP-079 (customer page plan C7; lead pick B6): a customer asked its factory designer — who asks and on which record, never the
+  // note's words ({customer}: the customer's name, told only to a slot person who reads the record's thread).
+  'notifications.designerAsked': { en: '{customer} asks you, the factory designer, on {record}', it: '{customer} chiede a te, designer della fabbrica, su {record}' },
+  // ---- end B-CP-079
   'notifications.following.note': { en: '{actor} wrote a note on {record}, which you follow', it: '{actor} ha scritto una nota su {record}, che segui' },
   'notifications.following.mail_in': { en: 'A reply arrived on {record}, which you follow', it: 'È arrivata una risposta su {record}, che segui' },
   'notifications.following.mail_out': { en: '{actor} sent a message on {record}, which you follow', it: '{actor} ha inviato un messaggio su {record}, che segui' },

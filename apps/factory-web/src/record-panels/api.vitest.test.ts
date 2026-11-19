@@ -132,3 +132,33 @@ describe('the timeline answer (B-W2b-F4)', () => {
     expect(timelineEntrySchema.parse({ ...change, actor: { audience: 'OFFICE', id: 'u1' }, actorHidden: false })).toMatchObject({ actor: { audience: 'OFFICE', id: 'u1' }, actorHidden: false })
   })
 })
+
+// ---- B-CP-014 (customer page plan, the money wall D6): a priced document locked for a reader who does not see prices -----------
+import { cardFiles } from '../lib/record-thread/card/model'
+import { fromApiFile } from '../lib/record-thread/files/model'
+
+describe('B-CP-014: the PRICED lock (a file that shows prices, for a reader who does not see prices)', () => {
+  it('a record’s files: a priced document locked for this reader parses — no name, no checksum — and stays locked as a thread file', async () => {
+    const { api } = client(() => json(200, { files: [{ ...FILE, status: 'AVAILABLE', originalName: '', sha256: '', priced: true, locked: 'PRICED' }] }))
+    const [file] = (await listFiles(api, RECORD)).files
+    // The page keeps no checksum of any file (fileSchema has none): the API's blank one never reaches it.
+    expect(file).toMatchObject({ originalName: '', locked: 'PRICED' })
+    expect(file).not.toHaveProperty('sha256')
+    expect(fromApiFile(file!)).toMatchObject({ name: '', locked: 'PRICED' })
+    expect(fromApiFile(file!).sheet).toBeUndefined()
+  })
+
+  it('a message’s files: a priced attachment locked for this reader parses', () => {
+    const note = { id: 'm1', direction: 'INTERNAL_NOTE', audience: 'OFFICE', channel: 'APP', body: 'x', bodyHtml: null, at: '2026-11-19T10:00:00.000Z', author: { kind: 'USER', name: null } }
+    const parsed = messageSchema.parse({ ...note, attachments: [{ id: 'f1', kind: 'DOCUMENT', originalName: '', contentType: 'application/pdf', sizeBytes: 10, status: 'AVAILABLE', locked: 'PRICED' }] })
+    expect(parsed.attachments).toEqual([expect.objectContaining({ id: 'f1', originalName: '', locked: 'PRICED' })])
+  })
+
+  it('a card counts its priced documents apart from its sheets (its own words), and only when there is one', () => {
+    expect(cardFiles([], true, false, { sheets: 1, priced: 2 })).toMatchObject({ sheets: 1, priced: 2 })
+    expect(cardFiles([], true, false, { sheets: 1 }).priced).toBeUndefined()
+    expect(cardFiles([], false, false, { priced: 2 })).toMatchObject({ hidden: 2, sheets: 0 })
+  })
+})
+// ---- end B-CP-014
+

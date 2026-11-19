@@ -41,6 +41,8 @@ export const manifest = defineManifest({
   'POST /files/:fileId/use-on': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
   // B-TH-231: the records a file may be carried to (files.read over the file, files.upload over each record, same customer or none).
   'GET /files/:fileId/use-on/targets': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
+  // B-CP-014: mark a file as showing prices (files.read over its record; taking the mark off: the price grain, checked in files.ts).
+  'POST /files/:fileId/priced': { audiences: ['office'], permission: 'files.read', scope: 'record' },
   'PUT /local-files': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'GET /local-files': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
 })

@@ -6,7 +6,7 @@ import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { decisionProblem, draftReadiness, refuseReasonProblem, type AcceptAs, type DraftLaterPart, type DraftPart, type DraftPartState } from '@nexus/factory-domain/sales/portal-ordering/office'
-import { draftTotals, headerProblems, lineAmount, lineProblems, piecesOfSizes, priceShown, REQUEST_STATUS_WORDS, type Problem, type RequestSource, type RequestStatus } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import { draftTotals, headerProblems, lineAmount, lineProblems, piecesOfSizes, priceShown, REQUEST_STATUS_WORDS, type RequestSource, type RequestStatus } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { QUOTES_MANAGE } from '@nexus/factory-domain/sales/quotes/permissions'
 import { priceText } from '@nexus/factory-domain/sales/quotes/quotes'
 import { command, COMMAND_SETTINGS, runCommand, type CommandCaller } from '../../../core/command'
@@ -27,6 +27,11 @@ import { mayOnThread } from '../../../platform/threads/records'
 // B-CP-072: a draft's files by part; a measurement sheet is named only with sales.measurements.view.
 import { draftFilesByPart } from '@nexus/factory-domain/sales/portal-ordering/draft-files'
 import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions'
+// B-CP-075: the lines of the customer's own kinds, their people, the parts it sends later, who saved it last; problems per part.
+import { problemsByPartOf } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { customLineFactsOf, customLineView, isCustomLine, madeToMeasureOf, piecesOfLine, problemView, sheetLinesOf, type MadeToMeasure, type SheetOf } from './people'
+import { customLineProblems, lineHasPieces } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import { readPeople, type PersonRow } from './store'
 
 /**
  * The office's side of portal order requests (B-W2b-190, SAL-074; design home.approvals, sales.orders "the request waits
@@ -81,12 +86,13 @@ export async function listOfficeRequests(caller: CommandCaller, query: { readonl
     }),
   )
   const lines = await caller.withClient((client) => readLines(client, rows.map((row) => row.id)))
+  const people = await caller.withClient((client) => readPeople(client, rows.map((row) => row.id))) // B-CP-075: a by-person line's pieces
   const parties = await caller.withClient(async (client) => new Map((await client.party.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.partyId))] } }, select: { id: true, code: true, legalName: true } })).map((row) => [row.id, row])))
   const names = await namesOf(caller, rows.map((row) => row.sentById))
   return {
     requests: rows.map((row) => {
       const own = lines.filter((line) => line.requestId === row.id)
-      const totals = draftTotals(own.map((line) => ({ sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown) })), true)
+      const totals = draftTotals(own.map((line) => ({ sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown), pieces: piecesOfLine(line, people) /* B-CP-075 */ })), true)
       return {
         id: row.id,
         number: row.number,
@@ -128,7 +134,7 @@ interface DraftView {
   /** Its conversation, for a reader of its thread (null: not one). */
   readonly thread: { readonly messages: number; readonly lastAt: string | null; readonly designerAsked: boolean } | null
   /** What holds its send today (the office's reading: a price change is the customer's to accept). */
-  readonly problems: { readonly code: Problem['code']; readonly lineId: string | null; readonly size: string | null; readonly words: Problem['words'] }[]
+  readonly problems: ReturnType<typeof problemView>[] // B-CP-075: + the part of the checklist and the person
   /** B-CP-072: its logos, references and measurement sheets; a sheet is named only for a reader with sales.measurements.view. */
   readonly files: Record<'logos' | 'references' | 'sheets', OfficeDraftFile[]>
 }
@@ -160,18 +166,23 @@ async function lastEditors(caller: CommandCaller, ids: readonly string[]): Promi
 }
 
 /** The drafts' office facts (rows of ONE customer, any of its companies), one read per kind. */
-async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly RequestRow[], lines: readonly LineRow[]): Promise<Map<string, DraftView>> {
+async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly RequestRow[], lines: readonly LineRow[], /* B-CP-075 */ people: readonly PersonRow[]): Promise<Map<string, DraftView>> {
   const out = new Map<string, DraftView>()
   if (rows.length === 0) return out
   const day = businessDate(serverClock.now())
   const ids = rows.map((row) => row.id)
-  const editors = await lastEditors(caller, ids)
-  const names = await namesOf(caller, [...rows.map((row) => row.createdById), ...[...editors.values()].map((entry) => entry.actorId)])
+  // B-CP-075: who saved it last is the draft's own column (lastEditedById); a draft saved before the column, its newest portal audit row.
+  const editors = await lastEditors(caller, rows.filter((row) => row.lastEditedById === null).map((row) => row.id))
+  const names = await namesOf(caller, [...rows.map((row) => row.createdById), ...rows.map((row) => row.lastEditedById), ...[...editors.values()].map((entry) => entry.actorId)])
   const catalogues = new Map<string, CustomerCatalogue>()
+  const mtms = new Map<string, MadeToMeasure>() // B-CP-075
   for (const companyId of new Set(rows.map((row) => row.companyId))) {
-    // B-CP-005: the catalogue lines' styles (a described or made-to-measure line names no catalogue style).
-    const styleIds = catalogueLines(lines.filter((line) => rows.some((row) => row.id === line.requestId && row.companyId === companyId))).map((line) => line.styleId)
+    // B-CP-005: the catalogue lines' styles (a described or made-to-measure line names no catalogue style). B-CP-075: + the styles
+    // the customer's own lines name.
+    const ofCompany = lines.filter((line) => rows.some((row) => row.id === line.requestId && row.companyId === companyId))
+    const styleIds = [...catalogueLines(ofCompany).map((line) => line.styleId), ...ofCompany.filter(isCustomLine).flatMap((line) => (line.styleId ? [line.styleId] : []))]
     catalogues.set(companyId, await caller.withClient((client) => readCatalogue(client, { companyId, partyId: rows[0]!.partyId, day, styleIds })))
+    mtms.set(companyId, await caller.withClient((client) => madeToMeasureOf(client, companyId, rows[0]!.partyId)))
   }
   const addressIds = [...new Set(rows.flatMap((row) => (row.shipToAddressId ? [row.shipToAddressId] : [])))]
   const addresses = new Map(addressIds.length === 0 ? [] : (await caller.withClient((client) => client.partyAddress.findMany({ where: { id: { in: addressIds } }, select: { id: true, status: true } }))).map((row) => [row.id, row.status]))
@@ -182,45 +193,60 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
   for (const row of rows) {
     const own = lines.filter((line) => line.requestId === row.id)
     const catalogue = catalogues.get(row.companyId)!
+    const mtm = mtms.get(row.companyId)! // B-CP-075
     const scope = { companyId: row.companyId, partyId: row.partyId }
     const header = headerProblems({ requestedDate: dayText(row.requestedDate), shipToActive: row.shipToAddressId === null ? null : addresses.get(row.shipToAddressId) === 'ACTIVE', lineCount: own.length }, day)
+    // B-CP-072/075: this draft's own files and its lines' (a sheet on a line stands for its roster).
+    const lineIds = new Set(own.map((line) => line.id))
+    const ofDraft = storedFiles.filter((file) => (file.recordType === 'PortalOrderRequest' ? file.recordId === row.id : lineIds.has(file.recordId)))
+    const sheetLines = sheetLinesOf(ofDraft)
+    const roster = people.filter((person) => person.requestId === row.id)
     // B-CP-005: the catalogue's checks for its own lines; the title is the first line's style, or a described or made-to-measure
-    // line's own words.
-    const problems = [...header, ...catalogueLines(own).flatMap((line) => lineProblems({ id: line.id, sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown) }, factsOf(catalogue, line.styleId, line.colourwayId), false))]
+    // line's own words. B-CP-075: the customer's own lines' problems too, in the draft's order.
+    const problems = [
+      ...header,
+      ...[...own]
+        .sort((a, b) => a.seq - b.seq)
+        .flatMap((line) => (isCatalogueLine(line) ? lineProblems({ id: line.id, sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown) }, factsOf(catalogue, line.styleId, line.colourwayId), false) : isCustomLine(line) ? customLineProblems(customLineFactsOf(line, roster, sheetLines, catalogue, mtm)) : [])),
+    ]
     const head = own[0]
     const first = head && isCatalogueLine(head) ? catalogue.codes.get(head.styleId) : undefined
     const ownWords = head && !isCatalogueLine(head) ? ownWordsOf(head) : null
     // end B-CP-005
     const edited = editors.get(row.id)
     const thread = threads.get(row.id)
-    // B-CP-072: this draft's own files and its lines' (a sheet locked for a reader without sales.measurements.view).
-    const lineIds = new Set(own.map((line) => line.id))
-    const files = draftFilesByPart(storedFiles.filter((file) => (file.recordType === 'PortalOrderRequest' ? file.recordId === row.id : lineIds.has(file.recordId))), row.id)
+    // B-CP-072: a sheet locked for a reader without sales.measurements.view.
+    const files = draftFilesByPart(ofDraft, row.id)
     const sheetsLocked = !can(actor, SALES_MEASUREMENTS_VIEW, scope)
+    const later = [...row.laterParts] as DraftLaterPart[] // B-CP-075
     const readiness = draftReadiness({
       lines: own.length,
-      linesWithoutPieces: own.filter((line) => piecesOfSizes(line.sizes) === 0).length,
+      // B-CP-075: a line's pieces by its kind (sizes; a described total; a by-person line's people, or a sheet on it).
+      linesWithoutPieces: own.filter((line) => !lineHasPieces({ kind: line.kind, quantity: line.quantity, sizes: line.sizes, byPerson: line.byPerson, people: roster.filter((person) => person.lineId === line.id).length, sheetOnLine: sheetLines.has(line.id) })).length,
       logos: files.logos.length,
       references: files.references.length,
       requestedDate: row.requestedDate !== null,
       headerProblems: header.filter((entry) => entry.code !== 'NO_LINES' && entry.code !== 'TOO_MANY_LINES').length,
       note: row.note !== null,
-      later: [],
+      later,
       // Part 6 "Your price" only for a price holder (review B4); the customer's own price per line comes with B-CP-076.
       pricedLines: can(actor, grainPermission('price'), scope) ? 0 : null,
       problems: problems.length,
+      problemsByPart: problemsByPartOf(problems), // B-CP-075
     })
+    // B-CP-075: who saved it last — the draft's own column, else (a draft saved before it) its newest portal audit row, else who started it.
+    const editorId = row.lastEditedById ?? edited?.actorId ?? row.createdById
     out.set(row.id, {
       startedBy: row.createdById ? (names.get(row.createdById) ?? null) : null,
       startedAt: iso(row.createdAt)!,
-      lastEditedBy: edited ? (names.get(edited.actorId) ?? null) : row.createdById ? (names.get(row.createdById) ?? null) : null,
-      lastEditedAt: iso(row.updatedAt)!,
+      lastEditedBy: editorId ? (names.get(editorId) ?? null) : null,
+      lastEditedAt: iso(row.lastEditedAt ?? row.updatedAt)!,
       title: first ? `${first.code} ${first.name}`.trim() : ownWords, // B-CP-005: else the line's own words
-      people: 0,
+      people: roster.length, // B-CP-075
       readiness: { ...readiness, parts: [...readiness.parts] },
-      later: [],
+      later, // B-CP-075
       thread: mayOnThread(actor, THREADS_READ, 'PortalOrderRequest', scope) ? { messages: thread?._count.messages ?? 0, lastAt: iso(thread?.lastMessageAt ?? null), designerAsked: false } : null,
-      problems: problems.map((entry) => ({ code: entry.code, lineId: entry.lineId, size: entry.size, words: entry.words })),
+      problems: problems.map(problemView), // B-CP-075: + the part and the person
       files: { logos: files.logos.map((file) => officeFileOf(file, false)), references: files.references.map((file) => officeFileOf(file, false)), sheets: files.sheets.map((file) => officeFileOf(file, sheetsLocked)) },
     })
   }
@@ -247,10 +273,11 @@ async function listDrafts(caller: CommandCaller, actor: Actor, partyId: string |
     }),
   )
   const lines = await caller.withClient((client) => readLines(client, rows.map((row) => row.id)))
-  const drafts = await draftViews(caller, actor, rows, lines)
+  const people = await caller.withClient((client) => readPeople(client, rows.map((row) => row.id))) // B-CP-075
+  const drafts = await draftViews(caller, actor, rows, lines, people)
   return {
     requests: rows.map((row) => {
-      const totals = draftTotals(lines.filter((line) => line.requestId === row.id).map((line) => ({ sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown) })), true)
+      const totals = draftTotals(lines.filter((line) => line.requestId === row.id).map((line) => ({ sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown), pieces: piecesOfLine(line, people) /* B-CP-075 */ })), true)
       return {
         id: row.id,
         number: row.number,
@@ -321,9 +348,23 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
       problems: lineProblems({ id: line.id, sizes, unitPriceShown: shown }, facts, false).map((problem) => ({ code: problem.code, size: problem.size, words: problem.words })),
     }
   })
-  const totals = draftTotals(lines.map((line) => ({ sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown) })), true)
+  // ---- B-CP-075: the described and made-to-measure lines with their people; a measurement sheet is named only with
+  // sales.measurements.view (else a lock without a name). Accept stays held while one is on the request (B-CP-077 maps them).
+  const people = await caller.withClient((client) => readPeople(client, [row.id]))
+  const custom = lines.filter(isCustomLine)
+  const stored = custom.length === 0 ? [] : await caller.withClient((client) => readDraftFiles(client, [row.id], lines.map((line) => line.id)))
+  const customStyles = custom.flatMap((line) => (line.styleId ? [line.styleId] : []))
+  const customCatalogue = customStyles.length === 0 ? catalogue : await caller.withClient((client) => readCatalogue(client, { companyId: row.companyId, partyId: row.partyId, day, styleIds: [...listed.map((line) => line.styleId), ...customStyles] }))
+  const mtm = custom.length === 0 ? { open: false, garmentTypes: [] } : await caller.withClient((client) => madeToMeasureOf(client, row.companyId, row.partyId))
+  const sheetsLocked = !can(actor, SALES_MEASUREMENTS_VIEW, scope)
+  const sheetNames = new Map(stored.map((file) => [file.id, file.originalName]))
+  const sheetOf: SheetOf = (fileId) => (sheetNames.has(fileId) ? { id: fileId, originalName: sheetsLocked ? null : sheetNames.get(fileId)!, locked: sheetsLocked } : null)
+  const sheetLines = sheetLinesOf(stored)
+  const customViews = custom.map((line) => customLineView(line, people, sheetLines, customCatalogue, mtm, sheetOf))
+  // ---- end B-CP-075
+  const totals = draftTotals(lines.map((line) => ({ sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown), pieces: piecesOfLine(line, people) /* B-CP-075 */ })), true)
   const open = row.status === 'SENT'
-  const draft = row.status === 'DRAFT' ? ((await draftViews(caller, actor, [row], lines)).get(row.id) ?? null) : null // B-CP-071
+  const draft = row.status === 'DRAFT' ? ((await draftViews(caller, actor, [row], lines, people)).get(row.id) ?? null) : null // B-CP-071
   return {
     request: {
       id: row.id,
@@ -349,6 +390,7 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
       lines: views,
       summary: { lines: totals.lines, pieces: totals.pieces, netShown: asMoney('price', totals.net) },
       draft, // B-CP-071: a draft's office facts (null once sent)
+      customLines: customViews, // B-CP-075
     },
     may: { order: open && can(actor, ORDERS_MANAGE, scope), quote: open && can(actor, ORDERS_MANAGE, scope) && can(actor, QUOTES_MANAGE, scope), refuse: open && can(actor, ORDERS_MANAGE, scope) },
   }

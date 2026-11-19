@@ -141,6 +141,7 @@ async function prepare(caller: CommandCaller, list: ListRow, version: ListVersio
     body: await renderEightD(report),
     // The office's file; a mail attaches it from the version's thread.
     visibility: ['OFFICE'],
+    priced: true, // B-CP-015: a price list shows its prices (the copy mailed to a customer carries the flag)
   })
   return { fingerprint, language, companyId, current: null, file }
 }

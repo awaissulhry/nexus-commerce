@@ -20,6 +20,8 @@ export const VERSION_SELECT = {
   supersededAt: true,
   kind: true,
   companyId: true,
+  // B-CP-014: whether the version shows prices (a series is priced when any of its versions is: the mark reaches every version).
+  priced: true,
 } as const satisfies Prisma.StoredFileSelect
 
 export type VersionRow = Prisma.StoredFileGetPayload<{ select: typeof VERSION_SELECT }>

@@ -7,7 +7,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere, type Permission, type ScopeColumns, type ScopedRecord } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
-import { command, type CommandCaller, type CommandTools } from '../../core/command'
+import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../core/command'
 import { actorOf, type RequestContext } from '../../core/context'
 import { ApiError } from '../../core/errors'
 import { GatewayCallFailed, GatewayRefusal } from '../gateway/gateway'
@@ -53,7 +53,10 @@ import { fileLivePartyId } from './record-scope' // B-SA-002
 // B-TH-083: measurement sheets are body data (the tick at upload, the permission that opens them, each opening recorded).
 import { isMeasurementSheet, MEASUREMENT_SHEET_CATEGORY, MEASUREMENT_SHEET_PERMISSION, measurementSheetProblem } from '@nexus/factory-domain/files/measurements'
 // fix-wall-1: a portal or link reader is never shown a file whose content is another customer's (an old copy of a mixed lot's photo).
-import { walledForOutside } from './content-wall'
+import { MAX_COPY_HOPS, walledForOutside } from './content-wall'
+// B-CP-014 (the money wall D6): a priced file opens only for someone who sees prices.
+import { mayOpenPriced, PRICED_LOCK, pricedFileProblem, pricedUnmarkHeld, seesPrices, type PricedLock } from '@nexus/factory-domain/files/priced'
+import { markMoney } from '@nexus/factory-domain/money/marked'
 
 /**
  * Files on R2 (plan A1 §3.6; features COL-045, COL-050, PLT-011; PLAN §2.8), the flow:
@@ -110,16 +113,19 @@ const CATEGORY = { category: true } as const satisfies Prisma.StoredFileSelect
 /** B-W2b-160: the version and the stripped copy, which every role reads (the floor and partner roles too). */
 const DEPTH = { versionNo: true, supersededAt: true, thumbnailKey: true } as const satisfies Prisma.StoredFileSelect
 
+/** B-CP-014: the file shows prices (a lock flag every role reads: B-CP-005 decision 13; the lock itself is the API's). */
+const PRICED = { priced: true } as const satisfies Prisma.StoredFileSelect
+
 /** What each audience's role may read (its hidden columns left out: a forgotten one would fail loudly). */
 export const SELECT_FOR = {
-  office: { ...COMMON, ...DEPTH, ...CATEGORY, floorSiteId: true, partyId: true, legalHold: true, scanEngine: true, scanFinding: true, seriesId: true, sourceFileId: true },
-  floor: { ...COMMON, ...DEPTH, ...CATEGORY, floorSiteId: true },
-  partner: { ...COMMON, ...DEPTH, ...CATEGORY, partyId: true, seriesId: true },
+  office: { ...COMMON, ...DEPTH, ...CATEGORY, ...PRICED, floorSiteId: true, partyId: true, legalHold: true, scanEngine: true, scanFinding: true, seriesId: true, sourceFileId: true },
+  floor: { ...COMMON, ...DEPTH, ...CATEGORY, ...PRICED, floorSiteId: true },
+  partner: { ...COMMON, ...DEPTH, ...CATEGORY, ...PRICED, partyId: true, seriesId: true },
 } as const satisfies Record<string, Prisma.StoredFileSelect>
 
 export type Row = Prisma.StoredFileGetPayload<{ select: typeof COMMON }> & { floorSiteId?: string | null; partyId?: string | null; legalHold?: boolean; scanEngine?: string | null; scanFinding?: string | null } & DepthColumns
 /** B-W2b-160: the depth columns, read by the selects above (a module's own select may leave them out). */
-type DepthColumns = { versionNo?: number; supersededAt?: Date | null; thumbnailKey?: string | null; seriesId?: string | null; sourceFileId?: string | null; category?: FileCategory | null }
+type DepthColumns = { versionNo?: number; supersededAt?: Date | null; thumbnailKey?: string | null; seriesId?: string | null; sourceFileId?: string | null; category?: FileCategory | null; /* B-CP-014 */ priced?: boolean }
 export type OfficeRow = Prisma.StoredFileGetPayload<{ select: (typeof SELECT_FOR)['office'] }>
 
 const selectFor = (context: RequestContext): Prisma.StoredFileSelect =>
@@ -159,6 +165,8 @@ export function viewOf(row: Row): FileView {
     ...('sourceFileId' in row ? { sourceFileId: row.sourceFileId ?? null } : {}),
     // B-TH-083: the file's category (a module's select may leave it out).
     ...('category' in row ? { category: row.category ?? null } : {}),
+    // B-CP-014: it shows prices (only people who see prices open it).
+    ...('priced' in row ? { priced: row.priced === true } : {}),
   }
 }
 
@@ -243,8 +251,16 @@ export async function readVisible(caller: CommandCaller, fileId: string, path: U
   if (isMeasurementSheet(row) && !(await opensMeasurementSheets(caller, row))) throw new NotFoundError('File not found.')
   // fix-wall-1: by id (the file, its download, preview and versions) the same 404 as a wrong id for a walled file outside the office.
   if (!office && (await walledForOutside(caller, [row.id])).has(row.id)) throw new NotFoundError('File not found.')
+  // B-CP-014: a priced file opens only for someone who sees prices (any audience: a portal or link through its own capped grain,
+  // never the floor) — the file, its download, preview, versions and history answer the same 404 as a wrong id.
+  if (!mayOpenPriced(row, seesPricesOf(context))) throw new NotFoundError('File not found.')
   return row
 }
+
+// ---- B-CP-014 (customer page plan, the money wall D6, L1, L6; review B1): the priced-file lock ------------------------------
+/** The caller sees prices (factory-domain files/priced: the session's price grain, capped by its audience). */
+export const seesPricesOf = (context: RequestContext): boolean => seesPrices(actorOf(context))
+// ---- end B-CP-014
 
 // ---- B-TH-029 (threads plan TH-2, WALL-G13, wall test T26): an office file read checks its record's own scope ---------------
 /**
@@ -285,8 +301,18 @@ export async function opensMeasurementSheets(caller: CommandCaller, record: { re
   return reachesFileRecord(actorOf(context), MEASUREMENT_SHEET_PERMISSION, found, record.companyId)
 }
 
-/** A locked sheet as an office reader without the permission sees it: what it is and where, never its name or content. */
-export const lockedView = (view: FileView): FileView => ({ ...view, originalName: '', sha256: '', locked: MEASUREMENT_SHEET_CATEGORY })
+/**
+ * A locked file as a reader who may not open it sees it: what it is and where, never its name, checksum or content. B-CP-014: the
+ * lock it names — MEASUREMENTS (a sheet without sales.measurements.view) or PRICED (a priced file without the price grain); a
+ * copy's origin loses its name too. Every attach and link path refuses the id it still carries.
+ */
+export const lockedView = (view: FileView, lock: typeof MEASUREMENT_SHEET_CATEGORY | PricedLock = MEASUREMENT_SHEET_CATEGORY): FileView => ({
+  ...view,
+  originalName: '',
+  sha256: '',
+  locked: lock,
+  ...(view.origin ? { origin: { ...view.origin, originalName: '' } } : {}),
+})
 
 /** One audit row per opening of a sheet (download or preview), by whoever opened it (office, portal, link). */
 export async function recordSheetOpening(caller: CommandCaller, row: Pick<Row, 'id' | 'companyId' | 'recordType' | 'recordId' | 'category'>, how: 'download' | 'preview'): Promise<void> {
@@ -310,6 +336,9 @@ export const readOffice = async (caller: CommandCaller, fileId: string): Promise
 export async function readOfficeReached(caller: CommandCaller, fileId: string): Promise<OfficeRow> {
   const row = await readOffice(caller, fileId)
   if (contextOf(caller).audience === 'office' && !(await officeReachesRecord(caller, row))) throw new NotFoundError('File not found.')
+  // B-CP-014: a priced file is changed by id (shared, kept, deleted, tagged, marked up, a new version, a restore) only by someone
+  // who sees prices: for anyone else it is as unknown as a wrong id (the system and modules' own callers see prices).
+  if (!mayOpenPriced(row, seesPricesOf(contextOf(caller)))) throw new NotFoundError('File not found.')
   return row
 }
 
@@ -397,6 +426,8 @@ export interface UploadRequest {
   readonly category?: FileCategory | null | undefined
   /** B-TH-083: "This is a measurement sheet" — filed as MEASUREMENTS (body data: opened only with sales.measurements.view). */
   readonly measurementSheet?: boolean | undefined
+  /** B-CP-014: "This file shows prices" — then only people who see prices open it (never shared with a floor). */
+  readonly priced?: boolean | undefined
 }
 
 // ---- B-TH-003 (threads plan TH-0, WALL-G02; T25): a file is shared only with its record's party ---------------------------
@@ -446,12 +477,16 @@ export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller
   // B-TH-083: the tick files it as a measurement sheet (a document, an attachment or a photo of one; never for a floor).
   const category: FileCategory | null = input.measurementSheet ? MEASUREMENT_SHEET_CATEGORY : (input.category ?? null)
   const sheetProblem = category === MEASUREMENT_SHEET_CATEGORY ? measurementSheetProblem({ kind: input.kind, visibility: sharing.visibility }) : null
+  // B-CP-014: the tick "This file shows prices" (a priced file never goes to a floor).
+  const priced = input.priced === true
+  const pricedProblem = pricedFileProblem({ priced, visibility: sharing.visibility })
   const problems: Issue[] = [
     ...uploadProblems({ kind: input.kind, contentType, sizeBytes: input.sizeBytes, sha256: input.sha256, clip: path.clip }),
     ...(originalName === null ? [{ path: 'body/originalName', message: 'The file needs a name.' }] : []),
     ...sharingProblems(sharing),
     ...retention.problems,
     ...(sheetProblem ? [{ path: 'body/measurementSheet', message: sheetProblem }] : []),
+    ...(pricedProblem ? [{ path: 'body/priced', message: pricedProblem }] : []), // B-CP-014
   ]
   if (problems.length > 0) throw new ValidationError('The upload is not valid.', problems)
   mayWrite(caller, FILES_UPLOAD, sharing)
@@ -484,13 +519,14 @@ export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller
         partyId: sharing.partyId,
         retainUntil: retention.retainUntil,
         ...(category ? { category } : {}),
+        ...(priced ? { priced: true } : {}), // B-CP-014
         createdAt: at,
         updatedAt: at,
         createdById: context.audience === 'office' ? context.actorId : null,
       },
       select: SELECT_FOR.office,
     })
-    audit({ recordType: 'StoredFile', recordId: id, companyId: sharing.companyId, after: { ...audited(row), ...(category ? { category } : {}) } })
+    audit({ recordType: 'StoredFile', recordId: id, companyId: sharing.companyId, after: { ...audited(row), ...(category ? { category } : {}), ...(priced ? { priced: markMoney('price', true) } : {}) /* B-CP-014 */ } })
     return { file: viewOf(row), storageKey }
   })
   const upload = await storeCall(() =>
@@ -520,6 +556,11 @@ export interface GeneratedFile {
   readonly partyId?: string | null | undefined
   /** Default: none, or ten years for the fiscal archive (retentionFor). */
   readonly retainUntil?: Date | null | undefined
+  /**
+   * B-CP-015: the document shows our prices (documents/model pricedDocument; a priced generator says it): born priced, opened only by
+   * people who see prices, never shared with a floor. Default false.
+   */
+  readonly priced?: boolean | undefined
 }
 
 export interface GeneratedFileOptions {
@@ -551,6 +592,8 @@ export interface PreparedGeneratedFile {
   readonly storageKey: string
   /** B-W2b-160 (FV1:01): the file a copy was made from (prepareFileCopy); absent for a document the API made. */
   readonly sourceFileId?: string
+  /** B-CP-014: it shows prices — born with its document (GeneratedFile.priced), or carried from the file a copy was made from. */
+  readonly priced?: boolean
 }
 
 /**
@@ -574,11 +617,14 @@ export async function putGeneratedFile(runtime: FilesRuntime, caller: CommandCal
     partyId: file.partyId ?? null,
   }
   const retention = retentionFor(file.kind, file.retainUntil ?? null, now)
+  // B-CP-014: a priced document is never shared with a floor.
+  const pricedProblem = pricedFileProblem({ priced: file.priced === true, visibility: sharing.visibility })
   const problems: Issue[] = [
     ...uploadProblems({ kind: file.kind, contentType, sizeBytes: body.length, sha256 }),
     ...(originalName === null ? [{ path: 'body/originalName', message: 'The file needs a name.' }] : []),
     ...sharingProblems(sharing),
     ...retention.problems,
+    ...(pricedProblem ? [{ path: 'body/priced', message: pricedProblem }] : []),
   ]
   if (problems.length > 0) throw new ValidationError('The generated file is not valid.', problems)
   const storeAccountId = await storeAccountOf(caller, sharing.companyId)
@@ -599,6 +645,7 @@ export async function putGeneratedFile(runtime: FilesRuntime, caller: CommandCal
     retainUntil: retention.retainUntil,
     storeAccountId,
     storageKey,
+    ...(file.priced === true ? { priced: true } : {}), // B-CP-014
   }
 }
 
@@ -642,13 +689,15 @@ export async function recordGeneratedFile(
       // B-W2b-160 (FV1:01): a copy names its source; the database checks the bytes match and the source is AVAILABLE.
       ...(prepared.sourceFileId ? { sourceFileId: prepared.sourceFileId } : {}),
       ...(options.category ? { category: options.category } : {}),
+      // B-CP-014: born priced (a priced document), or carried from the file a copy was made from.
+      ...(prepared.priced === true ? { priced: true } : {}),
       createdAt: at,
       updatedAt: at,
       createdById: inside.audience === 'office' ? inside.actorId : null,
     },
     select: SELECT_FOR.office,
   })
-  tools.audit({ ...(options.action ? { action: options.action } : {}), recordType: 'StoredFile', recordId: id, companyId: prepared.companyId, after: { ...audited(row), ...(options.details ?? {}) } })
+  tools.audit({ ...(options.action ? { action: options.action } : {}), recordType: 'StoredFile', recordId: id, companyId: prepared.companyId, after: { ...audited(row), ...(options.details ?? {}), ...(row.priced ? { priced: markMoney('price', true) } : {}) /* B-CP-014 */ } })
   // B-SA-002: the record's customer for the office's live wall (read here, from the record).
   tools.emit({ type: 'file.available', subject: id, companyId: row.companyId, payload: { fileId: id, recordType: row.recordType, recordId: row.recordId, kind: row.kind, partyId: await fileLivePartyId(tx, tenantOf(inside), row) } })
   return viewOf(row)
@@ -677,6 +726,7 @@ export async function storeGeneratedFile(runtime: FilesRuntime, caller: CommandC
     visibility: prepared.visibility,
     floorSiteId: prepared.floorSiteId,
     partyId: prepared.partyId,
+    priced: prepared.priced === true, // B-CP-014
     details: options.details ?? null,
   }
   const { result } = await command(caller, { name: options.commandName ?? 'files.storeGenerated', idempotencyKey: options.idempotencyKey, input }, (tools) =>
@@ -729,6 +779,8 @@ export async function prepareFileCopy(runtime: FilesRuntime, caller: CommandCall
     floorSiteId: target.floorSiteId,
     partyId: target.partyId,
     retainUntil: target.retainUntil,
+    // B-CP-014: a copy of a priced file is priced (Use on, a restored version, a module's copy: the same bytes show the same prices).
+    priced: source.priced === true,
   })
   return { ...prepared, sourceFileId: source.id }
 }
@@ -860,21 +912,28 @@ export async function listFiles(caller: CommandCaller, record: { readonly record
   const rows = listed.filter((row) => !walled.has(row.id))
   // B-TH-083: an office reader without sales.measurements.view sees a record's sheets locked (counted, never named).
   const opens = !rows.some(isMeasurementSheet) || (await opensMeasurementSheets(caller, { ...record, companyId: rows[0]?.companyId ?? null }))
-  const views = rows.filter((row) => audienceSees(viewerOf(context), row)).map((row) => (isMeasurementSheet(row) && !opens ? lockedView(viewOf(row)) : viewOf(row)))
+  // B-CP-014: a reader who does not see prices sees a record's priced files locked (counted, never named, no checksum).
+  const sees = seesPricesOf(context)
+  const views = rows
+    .filter((row) => audienceSees(viewerOf(context), row))
+    .map((row) => (!mayOpenPriced(row, sees) ? lockedView(viewOf(row), PRICED_LOCK) : isMeasurementSheet(row) && !opens ? lockedView(viewOf(row)) : viewOf(row)))
   // B-TH-024: the office sees where a copy came from (the source's record, name and version), when it may open that record.
-  return context.audience === 'office' ? withOrigins(caller, views) : views
+  // B-CP-014: a locked row keeps its origin's name empty too.
+  if (context.audience !== 'office') return views
+  return (await withOrigins(caller, views)).map((view) => (view.locked && view.origin ? { ...view, origin: { ...view.origin, originalName: '' } } : view))
 }
 
 /** B-TH-024: each copy's origin — its source file's record, name and version — for the office (null: its record out of reach). */
 async function withOrigins(caller: CommandCaller, views: readonly FileView[]): Promise<FileView[]> {
   const sourceIds = [...new Set(views.flatMap((view) => (view.sourceFileId ? [view.sourceFileId] : [])))]
   if (sourceIds.length === 0) return [...views]
-  const sources = await caller.withClient((client) => client.storedFile.findMany({ where: { id: { in: sourceIds } }, select: { id: true, recordType: true, recordId: true, originalName: true, versionNo: true, companyId: true, category: true } }))
+  const sources = await caller.withClient((client) => client.storedFile.findMany({ where: { id: { in: sourceIds } }, select: { id: true, recordType: true, recordId: true, originalName: true, versionNo: true, companyId: true, category: true, priced: true /* B-CP-014 */ } }))
   const reachable = new Map<string, (typeof sources)[number]>()
+  const sees = seesPricesOf(contextOf(caller)) // B-CP-014
   for (const source of sources) {
     if (!(await officeReachesRecord(caller, source))) continue
-    // B-TH-083: a sheet's name is not shown to a reader who may not open it.
-    reachable.set(source.id, isMeasurementSheet(source) && !(await opensMeasurementSheets(caller, source)) ? { ...source, originalName: '' } : source)
+    // B-TH-083: a sheet's name is not shown to a reader who may not open it. B-CP-014: nor a priced source's to one who sees no prices.
+    reachable.set(source.id, !mayOpenPriced(source, sees) || (isMeasurementSheet(source) && !(await opensMeasurementSheets(caller, source))) ? { ...source, originalName: '' } : source)
   }
   return views.map((view) => {
     if (!view.sourceFileId) return view
@@ -957,7 +1016,9 @@ export async function setVisibility(
   if (before.supersededAt !== null && !sharingNarrows(before, sharing)) {
     throw new InvalidStateError('This is an earlier version: it is never shared more widely. Share the current version instead.')
   }
-  const problems = sharingProblems(sharing)
+  // B-CP-014: a priced file is never shared with a floor.
+  const pricedProblem = pricedFileProblem({ priced: before.priced, visibility: sharing.visibility })
+  const problems = [...sharingProblems(sharing), ...(pricedProblem ? [{ path: 'body/visibility', message: pricedProblem }] : [])]
   if (problems.length > 0) throw new ValidationError('The sharing is not valid.', problems)
   const { result } = await command(
     caller,
@@ -1024,3 +1085,79 @@ export async function setRetention(
   )
   return result
 }
+
+// ---- B-CP-014 (customer page plan, the money wall D6; review B1): mark a file as showing prices, or take the mark off -----------
+/** The most files one mark reaches (a series and its copies; far more than any document has). */
+export const PRICED_REACH_MAX = 500
+
+const REACH = { id: true, companyId: true, priced: true, seriesId: true } as const satisfies Prisma.StoredFileSelect
+type Reached = Prisma.StoredFileGetPayload<{ select: typeof REACH }>
+
+/**
+ * The files a mark reaches, inside its command: every version of the series (the first one, `root`, and the later ones, deleted
+ * and superseded ones too: the database lets each take the flag) and, when MARKING, the copies made of any of them and their own
+ * versions, up to MAX_COPY_HOPS copies down (the same bytes show the same prices). Taking the mark off reaches the series only:
+ * a copy on another record keeps its lock until someone who sees prices takes it off there.
+ */
+async function pricedReachOf(tx: Pick<CommandTx, 'storedFile'>, root: string, marking: boolean): Promise<Reached[]> {
+  const found = new Map<string, Reached>()
+  for (const row of await tx.storedFile.findMany({ where: { OR: [{ id: root }, { seriesId: root }] }, select: REACH })) found.set(row.id, row)
+  let frontier = marking ? [...found.keys()] : []
+  for (let hop = 0; hop < MAX_COPY_HOPS && frontier.length > 0 && found.size < PRICED_REACH_MAX; hop++) {
+    const copies = await tx.storedFile.findMany({ where: { sourceFileId: { in: frontier } }, select: REACH })
+    const roots = [...new Set(copies.map((copy) => copy.seriesId ?? copy.id))]
+    const versions = roots.length === 0 ? [] : await tx.storedFile.findMany({ where: { OR: [{ id: { in: roots } }, { seriesId: { in: roots } }] }, select: REACH })
+    frontier = []
+    for (const row of [...copies, ...versions]) {
+      if (found.has(row.id)) continue
+      found.set(row.id, row)
+      frontier.push(row.id)
+    }
+  }
+  return [...found.values()].slice(0, PRICED_REACH_MAX)
+}
+
+/**
+ * POST /files/:fileId/priced {priced, version}: "Mark as priced" — anyone in the office who reaches the file's record (files.read
+ * over it, the record's own scope as every change by id) marks it; only someone who sees prices takes the mark off (403 in
+ * words: then everyone who reaches the record opens it). A person who does not see prices never learns more of a priced file than
+ * its lock (its view answers locked, a mark asked again changes nothing). The mark reaches every version of the series and, when
+ * marking, its copies (pricedReachOf): one audit row per file, the event file.priced_changed (the record's file panel and search).
+ */
+export async function setPriced(caller: CommandCaller, fileId: string, input: { readonly priced: boolean; readonly version: number }, idempotencyKey?: string): Promise<FileView> {
+  const context = contextOf(caller)
+  if (context.audience !== 'office') throw new NotFoundError('File not found.')
+  const before = await readOffice(caller, fileId)
+  if (!(await officeReachesRecord(caller, before)) || !can(actorOf(context), FILES_READ, { companyId: before.companyId })) throw new NotFoundError('File not found.')
+  const sees = seesPricesOf(context)
+  if (!input.priced && !sees) throw pricedUnmarkHeld()
+  // The answer from the file's view (plain JSON: a command never returns a Date), locked as every list locks it.
+  const shown = async (view: FileView): Promise<FileView> =>
+    !mayOpenPriced(view, sees) ? lockedView(view, PRICED_LOCK) : isMeasurementSheet(view) && !(await opensMeasurementSheets(caller, view)) ? lockedView(view) : view
+  if (before.priced === input.priced) return shown(viewOf(before))
+  const { result } = await command(
+    caller,
+    { name: 'files.setPriced', idempotencyKey, input: { fileId, ...input }, record: { type: 'StoredFile', id: fileId, expectedVersion: input.version } },
+    async ({ tx, audit, emit, context: inside }) => {
+      const reached = await pricedReachOf(tx, before.seriesId ?? before.id, input.priced)
+      const changed: string[] = []
+      for (const other of reached) {
+        if (other.id === fileId || other.priced === input.priced) continue
+        await tx.storedFile.update({ where: { id: other.id }, data: { priced: input.priced, version: { increment: 1 } }, select: { id: true } })
+        audit({ action: 'files.setPriced', recordType: 'StoredFile', recordId: other.id, companyId: other.companyId, before: { priced: markMoney('price', other.priced) }, after: { priced: markMoney('price', input.priced), byFileId: fileId } })
+        changed.push(other.id)
+      }
+      const row = await tx.storedFile.update({ where: { id: fileId }, data: { priced: input.priced }, select: SELECT_FOR.office })
+      audit({ recordType: 'StoredFile', recordId: fileId, companyId: row.companyId, before: { priced: markMoney('price', before.priced) }, after: { priced: markMoney('price', row.priced), alsoFileIds: changed } })
+      emit({
+        type: 'file.priced_changed',
+        subject: fileId,
+        companyId: row.companyId,
+        payload: { fileId, recordType: row.recordType, recordId: row.recordId, priced: row.priced, fileIds: [fileId, ...changed].slice(0, PRICED_REACH_MAX), partyId: await fileLivePartyId(tx, tenantOf(inside), row) },
+      })
+      return viewOf(row)
+    },
+  )
+  return shown(result)
+}
+// ---- end B-CP-014

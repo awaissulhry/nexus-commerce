@@ -62,6 +62,7 @@ function Files({ files, model }: { files: readonly FileSeries[]; model: ThreadPr
   const t = useT('records')
   const fileWords = useT('record-thread-files')
   const viewWords = useT('record-thread-files-view')
+  const pricedWords = useT('record-files') // B-CP-014
   const locale = useLocale()
   return (
     <div className="fw-rtp-part">
@@ -81,7 +82,7 @@ function Files({ files, model }: { files: readonly FileSeries[]; model: ThreadPr
                 <span className="fw-rtp-name">
                   {file.locked ? (
                     <>
-                      <Lock size={13} aria-hidden /> {fileWords('locked.sheet')}
+                      <Lock size={13} aria-hidden /> {file.locked === 'PRICED' ? pricedWords('priced.locked') /* B-CP-014 */ : fileWords('locked.sheet')}
                     </>
                   ) : (
                     file.name
@@ -91,7 +92,7 @@ function Files({ files, model }: { files: readonly FileSeries[]; model: ThreadPr
                   {fileWords(`kind.${file.kind}`)} · {sizeWords(file.sizeBytes, locale)} · {formatDate(file.createdAt, { locale })}
                   {version !== null && <> · {viewWords('version.inForce', { n: version })}</>} · {who}
                 </span>
-                {file.locked && <span className="fw-rtp-meta">{fileWords('locked.sheetWhy')}</span>}
+                {file.locked && <span className="fw-rtp-meta">{file.locked === 'PRICED' ? pricedWords('priced.lockedWhy') /* B-CP-014 */ : fileWords('locked.sheetWhy')}</span>}
                 {kept.length > 0 && <span className="fw-rtp-meta">{kept.join(' · ')}</span>}
               </li>
             )
