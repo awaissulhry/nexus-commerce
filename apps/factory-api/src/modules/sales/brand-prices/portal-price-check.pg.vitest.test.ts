@@ -14,6 +14,12 @@ import { freshGuard, mailedCode, portalBrowser, portalWorld, type PortalWorld } 
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, enrolTotp, startHarness, type Answer, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
+// B-CP-021: the alert's fan-out, as the worker runs it.
+import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
+import { MESSAGE_TEMPLATES } from '@nexus/factory-domain/notifications/rules'
+import { callerFor } from '../../../core/command'
+import { fanOut, fanOutEvents } from '../../../platform/notifications/fan-out'
+import { systemContext } from '../../../platform/outbox/system'
 
 /**
  * The customer's own price check in its portal (customer page lane B-CP-019; design customer-page 11 §1.2, §3.4; Owner O4;
@@ -31,6 +37,9 @@ import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
  *   - money M-CP-2: as Alpha Designer / Production / Viewer: no field (403 in words or by right), a body with a price refused
  *   - brand: as Beta Buyer on Alpha's order: 404 "Order not found.", nothing written
  *   - not on a closed order; 400 by place (currency, not a line of this order, both or none of unit price and line total)
+ *   - B-CP-021: a portal change makes ONE alert "Customer's price changed on order {record}" for the Owner; the order's maker
+ *     (a Sales worker) and a Production manager get no row; the words and params hold no amount; never a thread line; a change
+ *     the office types makes no alert
  *
  * Every name, number and price is made up. Run with `node scripts/factory/run-pg-tests.mjs sales/brand-prices/portal-price-check`.
  */
@@ -331,3 +340,76 @@ describe('B-CP-019 the customer’s own price check in its portal', { timeout: S
     expect(await rowsOf(closed.id)).toEqual([])
   })
 })
+
+// ── B-CP-021 ──
+describe('B-CP-021 one alert when the customer changes its price in the portal — price holders of the order only', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const KEY = 'notifications.priceCheck.customerChanged'
+  let sales: Browser
+  let order: { id: string; number: string; lineId: string }
+  const ids = {} as Record<'owner' | 'sales' | 'production', string>
+  const idOf = async (email: string) => (await one<{ id: string }>(`SELECT id FROM "User" WHERE "tenantId" = $1 AND email = $2`, [T, email])).id
+  const customerEvents = (orderId: string) =>
+    admin<Json>(`SELECT id, type, version, "companyId", "siteId", subject, payload, "occurredAt" FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'sales_order.brand_price_changed_by_customer' AND subject = $2 ORDER BY "occurredAt", id`, [T, orderId])
+  /** The worker's fan-out of one outbox row, as the system of the tenant. */
+  async function fanOutRow(row: Json): Promise<void> {
+    const envelope = { eventId: row.id, type: row.type, version: row.version, context: 'brand-prices', tenantId: T, companyId: row.companyId, siteId: row.siteId, subject: row.subject, correlationId: newId(), causationId: null, source: 'portalBrandPrices.save', occurredAt: new Date(row.occurredAt).toISOString(), payload: row.payload } as EventEnvelope
+    await fanOut(callerFor(h.database, systemContext(T, newId())), envelope)
+  }
+  const told = (eventId: string) => admin<Json>(`SELECT "userId", category::text AS category, "messageKey", params, "recordType", "recordId", "recordLabel" FROM "Notification" WHERE "tenantId" = $1 AND "eventId" = $2 ORDER BY "userId"`, [T, eventId])
+  const threadLines = (orderId: string) => one<{ count: number }>(`SELECT count(*)::int AS count FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE t."recordType" = 'SalesOrder' AND t."recordId" = $1`, [orderId])
+
+  beforeAll(async () => {
+    sales = await officePerson('sam.sales@cp019.example', 'sales', true)
+    await officePerson('pia.production@cp019.example', 'production_manager', false)
+    ids.owner = await idOf('olga.owner@cp019.example')
+    ids.sales = await idOf('sam.sales@cp019.example')
+    ids.production = await idOf('pia.production@cp019.example')
+    // The Sales worker makes the order (its maker) without a price key: P1's list prices it.
+    const made = (await ok(sales, 'POST', '/sales/orders/manual', { companyId: companyA, partyId: P1, customerRef: 'PO-CP021-1', promiseDate: PROMISE, lines: [{ styleId: JKT01, colourwayId: JKT01_BLK, sizes: grid([['50', 2]]) }] }, 201)).order
+    const row = await one<{ number: string; createdById: string; lineId: string }>(`SELECT o.number, o."createdById", l.id AS "lineId" FROM "SalesOrder" o JOIN "SalesOrderLine" l ON l."orderId" = o.id WHERE o.id = $1`, [made.id])
+    expect(row.createdById).toBe(ids.sales)
+    order = { id: made.id, number: row.number, lineId: row.lineId }
+    h.clock.set(new Date(Date.now() - 2_000))
+  })
+
+  it('the fan-out handles the event; the office’s own change of the customer’s price makes no alert', async () => {
+    expect(fanOutEvents()).toContain('sales_order.brand_price_changed_by_customer')
+    await ok(owner, 'PUT', `/sales/orders/${order.id}/brand-prices`, { rows: [{ lineId: order.lineId, unitPrice: '420', source: 'OFFICE' }] })
+    expect(await customerEvents(order.id)).toEqual([])
+  })
+
+  it('a portal change: ONE alert for the Owner; the order’s maker (Sales) and a Production manager get no row; no amount; no thread line', async () => {
+    const lines = (await threadLines(order.id)).count
+    const before = await ok(portal.buyer, 'GET', `/portal/sales-orders/${order.id}/price-check`)
+    await ok(portal.buyer, 'PUT', `/portal/sales-orders/${order.id}/brand-prices`, { rows: [{ lineId: order.lineId, unitPrice: '399', version: before.lines[0].row.version }] })
+    const events = await customerEvents(order.id)
+    expect(events).toHaveLength(1)
+    expect(Object.keys(events[0]!.payload).sort()).toEqual(['orderId', 'partyId'])
+    await fanOutRow(events[0]!)
+    const rows = await told(events[0]!.id)
+    expect(rows).toEqual([{ userId: ids.owner, category: 'ALERT', messageKey: KEY, params: { orderId: order.id }, recordType: 'SalesOrder', recordId: order.id, recordLabel: order.number }])
+    expect(rows.map((row) => row.userId)).not.toContain(ids.sales)
+    expect(rows.map((row) => row.userId)).not.toContain(ids.production)
+    // The words hold no amount and no "not equal"; the params name the order only.
+    for (const words of Object.values(MESSAGE_TEMPLATES[KEY])) {
+      expect(words).not.toMatch(/\{figure\}|\{count\}|≠|\d/)
+      expect(words).toContain('{record}')
+    }
+    expect(JSON.stringify(rows)).not.toMatch(/399|420/)
+    // Never a thread line.
+    expect((await threadLines(order.id)).count).toBe(lines)
+    // A replayed event makes no second alert.
+    await fanOutRow(events[0]!)
+    expect(await told(events[0]!.id)).toHaveLength(1)
+  })
+
+  it('the order’s maker WITH the price grain is told too: the Owner made this one (one row, not two)', async () => {
+    const made = await alphaOrder('PO-CP021-2')
+    await ok(portal.buyer, 'PUT', `/portal/sales-orders/${made.id}/brand-prices`, { rows: [{ lineId: made.lines[0]!.id, unitPrice: '420' }] })
+    const events = await customerEvents(made.id)
+    expect(events).toHaveLength(1)
+    await fanOutRow(events[0]!)
+    expect((await told(events[0]!.id)).map((row) => row.userId)).toEqual([ids.owner])
+  })
+})
+// ── end B-CP-021 ──

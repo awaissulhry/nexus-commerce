@@ -290,6 +290,9 @@
         "overdue": "{record}: {count} overdue invoices, a reminder waits for a yes",
         "reconciliationDifference": "Payments do not reconcile at {record}: {count} payment checks failed"
       },
+      "priceCheck": {
+        "customerChanged": "Customer's price changed on order {record}"
+      },
       "changes": {
         "requestRaised": "New change request {record}: {title}",
         "requestAccepted": "{actor} accepted your change request {record}",

@@ -270,6 +270,8 @@ async function saveInPortal(tools: CommandTools, order: PortalOrderRow, body: Po
   }
   if (changed === 0) throw new NothingToSave()
   announceBrandPrices(tools, priced)
+  // B-CP-021: the customer changed its own price — one alert to the price holders who keep the order (./notices.ts); ids only.
+  tools.emit({ type: 'sales_order.brand_price_changed_by_customer', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, partyId: order.partyId } })
 }
 
 /** PUT /portal/sales-orders/:orderId/brand-prices (see the module's head). */
