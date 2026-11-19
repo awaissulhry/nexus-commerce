@@ -758,7 +758,7 @@ a.fw-so-countbtn:focus-visible {
   gap: var(--nds-space-8);
 }
 
-/* F-OP-203: All of <customer> in the order's dock is the dock's one card now (DockColumn: .fw-rt-body, .fw-rt-foot in record-thread.css);
+/* F-OP-203: All of <customer> in the order's dock is the dock's one card now (DockColumn: .fw-rt-scroll, .fw-rt-foot in record-thread.css);
    the old .fw-so-dock-all / .fw-so-dock-write went with it. */
 
 /* ---- F-SA-244: a change's Told line under its History row (layout only). */

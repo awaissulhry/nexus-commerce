@@ -119,7 +119,7 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
   keepScroll.current = actions?.onScroll
   const scrolledTo = model.scrollTop
   useLayoutEffect(() => {
-    const scroller = root.current?.closest<HTMLElement>('.fw-rt-body')
+    const scroller = root.current?.closest<HTMLElement>('.fw-rt-scroll')
     if (!scroller) return
     if (scrolledTo > 0) scroller.scrollTop = scrolledTo
     const onScroll = () => keepScroll.current?.(scroller.scrollTop)
@@ -295,20 +295,28 @@ function FeedLine({
       }}
     >
       <div className="fw-aoc-line-top">
-        <a
-          className="fw-aoc-chip"
-          tabIndex={inner}
-          href={item.href}
-          title={t('allOfCustomer.openRecord', { record: chip })}
-          onClick={(event) => {
-            if (!answer || opensItself(event)) return
-            event.preventDefault()
-            answer(item.record, item.key)
-          }}
-        >
-          <RecordTypeIcon type={item.record.type} size={14} />
-          <span id={`${base}-chip`}>{chip}</span>
-        </a>
+        {item.gone ? (
+          // F-OP-305 (walk #13): the true words, no link — the record is no longer there.
+          <span className="fw-aoc-chip is-gone">
+            <RecordTypeIcon type={item.record.type} size={14} />
+            <span id={`${base}-chip`}>{chip}</span>
+          </span>
+        ) : (
+          <a
+            className="fw-aoc-chip"
+            tabIndex={inner}
+            href={item.href}
+            title={t('allOfCustomer.openRecord', { record: chip })}
+            onClick={(event) => {
+              if (!answer || opensItself(event)) return
+              event.preventDefault()
+              answer(item.record, item.key)
+            }}
+          >
+            <RecordTypeIcon type={item.record.type} size={14} />
+            <span id={`${base}-chip`}>{chip}</span>
+          </a>
+        )}
         {item.isNew && (
           <span className="fw-aoc-new">
             <span className="fw-aoc-dot" aria-hidden />
@@ -345,8 +353,9 @@ function FeedLine({
         <Button size="sm" variant="quiet" tabIndex={inner} aria-expanded={open} aria-controls={wholeId} onClick={onToggle}>
           {t(open ? 'allOfCustomer.less' : 'allOfCustomer.more')}
         </Button>
-        {/* F-OP-207: Answer in that thread (Reply / Office note, the box focused), or Open <record> at the message. */}
-        {door?.kind === 'answer' ? (
+        {/* F-OP-207: Answer in that thread (Reply / Office note, the box focused), or Open <record> at the message. F-OP-305: none
+            for a record no longer there. */}
+        {item.gone ? null : door?.kind === 'answer' ? (
           <Button ref={doorButton} size="sm" variant="quiet" tabIndex={inner} aria-label={t('allOfCustomer.answerLabel', { record: chip })} onClick={() => actions?.onCompose?.(door.ask)}>
             <CornerDownRight size={14} aria-hidden /> {t('allOfCustomer.answer')}
           </Button>

@@ -173,6 +173,11 @@ export function chipOf(record: FeedRecord, customerName: string): Words {
   return { key: 'allOfCustomer.chip.number', params: { number: record.label } }
 }
 
+// ---- F-OP-305 (order page walk #13): a record the read could not name (it is no longer there: deleted, or no longer this customer's)
+// keeps its true words ("A record no longer there") and offers no door — no chip link, no Answer, no Open: nothing leads to it.
+export const isGoneRecord = (record: Pick<FeedRecord, 'label'>): boolean => record.label === null
+// ---- end F-OP-305
+
 /** The record's page (its own page when built, else its panels), company-free address under the host's prefix. */
 export function recordHrefOf(record: FeedRecord, prefix: string): string {
   return `${prefix}${recordAddress({ type: record.type, id: record.id, ...(record.label ? { label: record.label } : {}), companyId: record.companyId }, OFFICE_PAGES)}`
@@ -200,6 +205,8 @@ export interface FeedItem {
   readonly href: string
   /** The message on its record's page (the door when the host has no dock to switch). */
   readonly messageHref: string
+  /** F-OP-305: the record is no longer there — its chip is words only and the line has no door. */
+  readonly gone: boolean
 }
 
 export interface AllOfCustomerModel {
@@ -235,6 +242,7 @@ export function feedModel(state: FeedState, input: { readonly customerName: stri
       isNew: entry.new,
       href: recordHrefOf(entry.record, input.prefix),
       messageHref: messageHrefOf(entry, input.prefix),
+      gone: isGoneRecord(entry.record), // F-OP-305
     })),
     pending: pendingOf(state).length,
     more: state.cursor !== null,
@@ -317,7 +325,8 @@ export type FeedDoor =
   | { readonly kind: 'answer'; readonly ask: { readonly record: { readonly type: string; readonly id: string }; readonly messageId: string; readonly mode: 'reply' | 'note' } }
   | { readonly kind: 'open'; readonly href: string }
 
-export function answerOf(item: Pick<FeedItem, 'record' | 'key' | 'card' | 'messageHref'>, answerable: (record: { readonly type: string; readonly id: string }) => boolean): FeedDoor {
+export function answerOf(item: Pick<FeedItem, 'record' | 'key' | 'card' | 'messageHref' | 'gone'>, answerable: (record: { readonly type: string; readonly id: string }) => boolean): FeedDoor | null {
+  if (item.gone) return null // F-OP-305: no door to a record that is no longer there
   const record = { type: item.record.type, id: item.record.id }
   if (!answerable(record)) return { kind: 'open', href: item.messageHref }
   return { kind: 'answer', ask: { record, messageId: item.key, mode: item.card.kind === 'theirs' ? 'reply' : 'note' } }

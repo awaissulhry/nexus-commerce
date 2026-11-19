@@ -628,8 +628,8 @@ describe('F-OP-217 — every dock scope drawn in the one card (design cases), th
       const at = (part: string) => dock.indexOf(part)
       expect(at('class="fw-rt-top"')).toBeGreaterThan(-1)
       expect(at('class="fw-rt-top"')).toBeLessThan(at('class="fw-rth fw-aoc-head"'))
-      expect(at('class="fw-rth fw-aoc-head"')).toBeLessThan(at('class="fw-rt-body"'))
-      expect(at('class="fw-rt-body"')).toBeLessThan(at('class="fw-rt-foot"'))
+      expect(at('class="fw-rth fw-aoc-head"')).toBeLessThan(at('class="fw-rt-scroll"'))
+      expect(at('class="fw-rt-scroll"')).toBeLessThan(at('class="fw-rt-foot"'))
       expect(dock.match(/<article class="fw-aoc-line/g)?.length, locale).toBe(5)
       expect(dock).toContain('class="fw-aoc-line is-office"')
       expect(textOf(dock)).toContain(locale === 'en' ? 'Read only. Write in:' : 'Sola lettura. Scrivi in:')
@@ -639,7 +639,7 @@ describe('F-OP-217 — every dock scope drawn in the one card (design cases), th
   it('the rules of a narrow card: short words, a full-width second select, the body and foot tighter, the lines and chips within the card', () => {
     const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
     expect(read('../../../_shared/record-thread/thread-pick.css')).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-thread-pick-extra,\s*\.fw-thread-pick-extra select \{\s*width: 100%;/)
-    expect(read('../../../../lib/record-thread/record-thread.css')).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-rt-body \{\s*padding: var\(--nds-space-10\) var\(--nds-space-12\);/)
+    expect(read('../../../../lib/record-thread/record-thread.css')).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-rt-scroll \{\s*padding: var\(--nds-space-10\) var\(--nds-space-12\);/)
     expect(read('../../../_shared/record-thread/all-of-customer/all-of-customer.css')).toMatch(/\.fw-aoc-chip \{\s*max-width: calc\(100% - var\(--nds-space-24\)\);/)
     // The phone: the full-width view (thread=open), ← Back above the card, no radius (record-thread.css's phone rule).
     expect(read('../../../../lib/record-thread/record-thread.css')).toMatch(/@media \(max-width: 719px\) \{\s*\.fw-rt-column \{\s*border-radius: 0;/)

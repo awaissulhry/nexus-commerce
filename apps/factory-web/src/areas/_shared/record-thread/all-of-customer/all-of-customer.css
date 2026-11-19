@@ -1,7 +1,7 @@
 /* F-SA-261: "All of <Customer>" (view/AllOfCustomerFeed.tsx) — the read-only merged feed in the dock: one message per line (its chip
    above the conversation's own card, its door under it), the foot. Tokens only.
    F-OP-204: its one line, the two filters and "N new · Show" moved to the pick band and FeedHead (below). */
-/* F-OP-205 (order page plan N4; 11-dock §1, §3.2, §3.5; RC2, RC3): the body of the card — it fills .fw-rt-body (which scrolls, 12/16
+/* F-OP-205 (order page plan N4; 11-dock §1, §3.2, §3.5; RC2, RC3): the body of the card — it fills .fw-rt-scroll (which scrolls, 12/16
    padded) and draws ONE compact line per message, 8 px apart. Every space was re-read against the px it means (--nds-space-N is N px):
    the old 2–5 px gaps and the 2 px / 3 px chip padding left the cards touching. */
 .fw-aoc {
@@ -271,3 +271,11 @@
   }
 }
 /* ── end F-OP-217 */
+
+/* ── F-OP-305 (order page walk #13): a record no longer there — its chip is words only (no link, no hover), in the muted text. ── */
+.fw-aoc-chip.is-gone,
+.fw-aoc-chip.is-gone:hover {
+  border-color: var(--nds-border-subtle);
+  color: var(--nds-text-muted);
+}
+/* ── end F-OP-305 */

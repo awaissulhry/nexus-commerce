@@ -23,7 +23,7 @@ import './thread-pick.css'
  * draws nothing above its children any more; it hands its band down (DockTop, `useDockTop()`) and the card inside draws it first —
  * the docked office thread through RecordThread's `slots.top` (kept when that thread is forbidden), a read-only view through
  * `PickedDockColumn`. Hosts keep their shape (`<ThreadPick …>{thread}</ThreadPick>`). Each segment: its icon, its long words (one
- * line, at most 22 characters) or, in a card of 480 px or less, its short words; its full words on hover; "N new" as a small Pill
+ * line, whole: F-OP-303) or, in a card of 480 px or less, its short words; its full words on hover; "N new" as a small Pill
  * with the number visible ("2 new" for a screen reader). The whose-line is a polite live line (office tone on work-order notes).
  */
 
@@ -87,7 +87,7 @@ export interface PickSegment {
 
 export function segmentOf(choice: ThreadChoice): PickSegment {
   const short = choice.short && choice.short !== choice.label ? choice.short : null
-  // The hover keeps every word the segment may cut (the long words end at 22 characters; the short ones drop the customer).
+  // The hover keeps every word the segment may cut (long words wider than the card; the short ones drop the customer).
   const title = choice.title && choice.title !== choice.label ? `${choice.label} · ${choice.title}` : choice.label
   const count = Number.isFinite(choice.count) ? Math.max(0, Math.trunc(choice.count ?? 0)) : 0
   return { long: choice.label, short, title, count }

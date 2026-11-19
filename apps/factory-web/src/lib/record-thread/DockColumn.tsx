@@ -29,7 +29,7 @@ export function DockColumn({ label, top, head, body, foot, onKeyDown }: DockColu
     <section className="fw-rt-column is-docked" aria-label={label} onKeyDown={onKeyDown}>
       {top ? <div className="fw-rt-top">{top}</div> : null}
       {head ?? null}
-      <div className="fw-rt-body">{body}</div>
+      <div className="fw-rt-scroll">{body /* F-OP-304: not .fw-rt-body, the message words' class (card.css) */}</div>
       {foot ? <div className="fw-rt-foot">{foot}</div> : null}
     </section>
   )
