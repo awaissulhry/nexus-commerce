@@ -30,6 +30,7 @@ import type { DraftFilePart } from '../api'
 import { draftFilesOf, draftMailName, filesAddHeld, LATER_PART_OF, laterToggleOf, uploadsOpenOf } from '../model'
 import { DraftFilesCard, DraftSheets, type DraftFilesActions, type DraftFilesModel, type UploadRow } from './DraftFiles'
 // ---- end F-CP-151
+import { wordsHref } from '../request-model' // F-CP-152: "Just write it in words"
 
 /**
  * SCR-185 › New order & reorder (design portal.customer.neworder): sec:start "How do you want to order?" (the ways in, one
@@ -380,50 +381,60 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
 function StartSection({ model, actions }: { model: NewOrderViewModel; actions?: NewOrderActions }) {
   const words = useOrderingWords()
   const { t } = words
-  const drafting = model.phase === 'draft'
+  // F-CP-152 (12 §2 Doors): the draft order's start — Pick styles, Reorder a past order (held with why for an access without
+  // orders), Upload a sheet; "Just write it in words" leads to the request like an e-mail (for who may order); the drafts to
+  // continue. ("Describe it" comes with the described lines, F-CP-154.)
+  const reorderHeld = reorderHeldKey(model.mayOrder ?? true)
+  const wordsLink = (model.mayOrder ?? true) ? wordsHref(model.prefix) : null
   return (
     <Card padded>
       <section className="fw-pno-section" aria-labelledby="start-title">
         <h2 id="start-title" className="fw-pno-h2">
           {t('start.title')}
         </h2>
-        <fieldset className="fw-pno-ways" disabled={model.start.held !== null && !drafting}>
-          <legend className="fw-pno-quiet">{drafting ? t('start.keeps') : t('start.intro')}</legend>
-          {WAYS.map((way) => (
-            <RadioCard
-              key={way}
-              name="way"
-              value={way}
-              checked={model.way === way}
-              selected={model.way === way}
-              onChange={() => actions?.onWay?.(way)}
-              title={
-                <span className="fw-pno-waytitle">
-                  {WAY_ICON[way]} {t(`start.way.${way}`)}
-                </span>
-              }
-              description={model.start.choosing === way ? t('state.saving') : t(`start.wayHint.${way}`)}
-            />
-          ))}
+        <fieldset className="fw-pno-ways" disabled={model.start.held !== null}>
+          <legend className="fw-pno-quiet">{t('start.intro')}</legend>
+          {WAYS.map((way) => {
+            const held = way === 'reorder' && reorderHeld ? t(reorderHeld) : null
+            return (
+              <RadioCard
+                key={way}
+                name="way"
+                value={way}
+                checked={model.way === way}
+                selected={model.way === way}
+                onChange={() => (held ? undefined : actions?.onWay?.(way))}
+                title={
+                  <span className="fw-pno-waytitle">
+                    {WAY_ICON[way]} {t(`start.way.${way}`)}
+                  </span>
+                }
+                description={model.start.choosing === way ? t('state.saving') : (held ?? t(`start.wayHint.${way}`))}
+              />
+            )
+          })}
         </fieldset>
-        {model.start.held && !drafting ? <p className="fw-pno-held">{model.start.held}</p> : null}
-        {!drafting ? (
-          model.start.state === 'loading' ? (
-            <Loading rows={2} height={44} label={t('start.drafts')} />
-          ) : model.start.state === 'error' ? (
-            <ReadFailed title={t('start.draftsFailed')} onRetry={actions?.onRetryStart} />
-          ) : model.start.drafts.length > 0 ? (
-            <div className="fw-pno-stack">
-              <h3 className="fw-pno-h3">{t('start.drafts')}</h3>
-              <ul className="fw-pno-drafts">
-                {model.start.drafts.map((row) => (
-                  <li key={row.id}>
-                    <PressableRow leading={<ClipboardList size={16} aria-hidden />} label={draftRowWords(row, t, words.day)} onClick={() => actions?.onContinue?.(row.id)} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null
+        {model.start.held ? <p className="fw-pno-held">{model.start.held}</p> : null}
+        {wordsLink ? (
+          <p className="fw-pno-quiet">
+            <a href={wordsLink}>{t('draftPage.start.words')}</a>
+          </p>
+        ) : null}
+        {model.start.state === 'loading' ? (
+          <Loading rows={2} height={44} label={t('start.drafts')} />
+        ) : model.start.state === 'error' ? (
+          <ReadFailed title={t('start.draftsFailed')} onRetry={actions?.onRetryStart} />
+        ) : model.start.drafts.length > 0 ? (
+          <div className="fw-pno-stack">
+            <h3 className="fw-pno-h3">{t('start.drafts')}</h3>
+            <ul className="fw-pno-drafts">
+              {model.start.drafts.map((row) => (
+                <li key={row.id}>
+                  <PressableRow leading={<ClipboardList size={16} aria-hidden />} label={draftRowWords(row, t, words.day)} onClick={() => actions?.onContinue?.(row.id)} />
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
       </section>
     </Card>

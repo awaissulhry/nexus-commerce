@@ -36,6 +36,8 @@ import { requestBandOf } from './band'
 import { discardNewRequestDraft, fetchNewRequestDraft, saveNewRequestDraft } from './api'
 import { serverDraftBody } from '../../../lib/request-compose/server-draft'
 import { CATALOGUE_DOOR_OPEN, closedRefusal, failedKey, goesToOf, openItems, opensCatalogueDoor, receiptOf, reorderText, shipToChoices, stylesText, withCarried } from './request-model'
+// F-CP-152: which page /orders/new opens.
+import { newOrderDoorOf, WORDS_WAY, wordsHref } from './request-model'
 // B-TH-304: the catalogue door open again.
 import { catalogueDoorOf, catalogueStartHref } from './request-model'
 import { fromOrderText, orderLinesLabel, ownOrderRef } from './model'
@@ -286,6 +288,7 @@ describe('SCR-185 and SCR-226 design cases', () => {
 })
 
 // ── B-TH-220, B-TH-303: New order as an e-mail ─────────────────────────────────────────────────────────────────────────
+const PREFIX_ALPHA = '/p/BRAND-ALPHA' // F-CP-152: the made-up prefix of the catalogue door's cases
 const OFFICE_SERIES = /\b(?:INQ|QT|SO|RQ)-\d{4}-\d{2,}/
 const API_UPLOADS_CLOSED = 'Uploads from outside are closed for now: the virus scanner is not running here yet. Please send the file to your contact by e-mail.'
 const renderCase = (locale: 'it' | 'en', id: string) => {
@@ -878,4 +881,36 @@ describe('F-CP-151 — the draft’s files: logos, references, measurement sheet
   })
 })
 // ---- end F-CP-151
+
+// ---- F-CP-152 (customer page plan C5, 12 §2 Doors): /orders/new opens the draft start; "Just write it in words" → door A ---------
+describe('F-CP-152 — the doors: /orders/new is the draft order for who keeps drafts; ?way=words is the request like an e-mail', () => {
+  const q = (text: string) => new URLSearchParams(text)
+
+  it('which page /orders/new opens', () => {
+    expect(WORDS_WAY).toBe('words')
+    expect(wordsHref('/p/X')).toBe('/p/X/orders/new?way=words')
+    // Who keeps drafts: the draft start with no term; a draft, a way, a past order: the draft order.
+    expect(newOrderDoorOf(q(''), { mayDraft: true })).toBe('draft')
+    for (const text of ['draft=d1', 'way=pick', 'way=reorder', 'way=upload', 'reorder=o1', 'way=pick&styles=abc']) expect(newOrderDoorOf(q(text), { mayDraft: true }), text).toBe('draft')
+    // "Just write it in words", and who may order but keeps no drafts: the request like an e-mail.
+    expect(newOrderDoorOf(q('way=words'), { mayDraft: true })).toBe('words')
+    expect(newOrderDoorOf(q(''), { mayDraft: false })).toBe('words')
+    expect(opensCatalogueDoor(q('way=words'))).toBe(false)
+    // The catalogue door closed: always the e-mail.
+    expect(newOrderDoorOf(q('draft=d1'), { mayDraft: true }, false)).toBe('words')
+  })
+
+  it('the draft start: three ways, "Just write it in words" for who may order; for a Designer Reorder held with why and no words door', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const buyer = renderCase(locale, 'start')
+      expect(buyer).toContain(`href="${PREFIX_ALPHA}/orders/new?way=words"`)
+      expect(buyer).toContain(t(locale)('draftPage.start.words'))
+      const designer = renderCase(locale, 'cp152-start-designer')
+      expect(designer).not.toContain('way=words')
+      expect(designer).toContain(t(locale)('draftPage.reorderHeld'))
+      expect(designer.match(KEY)?.[0] ?? null, locale).toBeNull()
+    }
+  })
+})
+// ---- end F-CP-152
 

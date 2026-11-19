@@ -606,6 +606,9 @@
       "noSheets": "Ancora nessuna scheda misure.",
       "sheetsTitle": "Schede misure",
       "sheetsPrivacy": "Le schede misure sono dati personali: in fabbrica le aprono solo le persone che gestiscono le misure."
+    },
+    "start": {
+      "words": "Scrivetelo semplicemente a parole"
     }
   }
 }

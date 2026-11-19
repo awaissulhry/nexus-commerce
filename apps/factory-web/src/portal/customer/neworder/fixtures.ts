@@ -396,6 +396,9 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
     { id: 'cp151-full', label: 'The draft holds 50 files: Add held with words', model: page(() => ({ record: draftRecord({ request: { files: { logos: [], references: many(50), sheets: [] }, uploads: { open: true, words: null } } }) })) },
     { id: 'cp151-later', label: '“We send these later” on Logos (once the API keeps the mark)', model: page(() => ({ record: draftRecord({ request: { files: { logos: [], references: [], sheets: [] }, uploads: { open: true, words: null }, laterParts: ['LOGOS'] } }) })), note: 'The Logos chip says “Sending later”; the toggle shows only once the API answers laterParts (B-CP-075).' },
     // ---- end F-CP-151
+    // ---- F-CP-152 (12 §2 Doors): the draft start — "Just write it in words" for who may order; Reorder held for a Designer.
+    { id: 'cp152-start-designer', label: 'The draft start, read by the brand’s Designer: Reorder held, no words door', model: page(() => ({ record: null, start: { state: 'ready', drafts: DRAFTS, choosing: null, held: null }, mayOrder: false, seesOrders: false }), 'start'), note: 'A Designer keeps drafts but reads no orders: “Reorder a past order” says “Your access does not show orders”; the request like an e-mail is not theirs (no link). The team’s drafts to continue.' },
+    // ---- end F-CP-152
     { id: 'reorder', label: 'Reorder: the past orders', model: page(() => ({ way: 'reorder', reorder: reorderModel() })), note: 'Their PO first, ours second (RefPair), date, lines, pieces. Enter or a click opens one.' },
     {
       id: 'reorder-order',

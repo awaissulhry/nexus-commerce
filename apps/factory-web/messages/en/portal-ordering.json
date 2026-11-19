@@ -606,6 +606,9 @@
       "noSheets": "No measurement sheets yet.",
       "sheetsTitle": "Measurement sheets",
       "sheetsPrivacy": "Measurement sheets are personal data: at the factory only the people who handle measurements open them."
+    },
+    "start": {
+      "words": "Just write it in words"
     }
   }
 }
