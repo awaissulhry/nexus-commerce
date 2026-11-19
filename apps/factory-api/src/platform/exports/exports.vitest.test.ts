@@ -14,6 +14,7 @@ import { EXPORT_SOURCES } from './sources'
 import { REPORT_CODE_WORDS, reportCell, reportListKey } from './sources/reports'
 import { salesOrders } from './sources/sales-orders' // B-TH-008
 import { sheetName } from './writer' // B-TH-008
+import { withCustomFields } from '../fields/exports' // fix wave 2: the wrapped source keeps the column rights
 
 /**
  * The export sources (B-W2a-23, B-W2b-11): every list source names a real Office list page, its words in both
@@ -228,6 +229,21 @@ describe('the orders file reads kind=mtm and writes Made to measure and Riders, 
     expect(lacksColumnRight(salesOrders, 'riders', actor(['orders.view']), {})).toBe(true)
     expect(lacksColumnRight(salesOrders, 'number', actor(['orders.view']), {})).toBe(false)
     expect(lacksColumnRight(salesOrders, 'not-a-column', actor(['orders.view']), {})).toBe(false)
+  })
+
+  // Fix wave 2: the routes and the worker hold the list with its custom fields (platform/fields withCustomFields, B-TH-057): the
+  // wrapper keeps each column's own right and reads the refusal on the view's own query, never its { inner, cf } wrapper.
+  it('the wrapped source the routes use keeps the Riders and Supervisor rights and the rider-term refusal', () => {
+    const wrapped = withCustomFields(salesOrders)
+    expect(wrapped).not.toBe(salesOrders)
+    expect(wrapped.columns.riders!.permission).toBe('sales.measurements.view')
+    expect(wrapped.columns.supervisor!.permission).toBe('workorders.view')
+    expect(lacksColumnRight(wrapped, 'riders', actor(['orders.view']), {})).toBe(true)
+    expect(lacksColumnRight(wrapped, 'supervisor', actor(['orders.view']), {})).toBe(true)
+    expect(lacksColumnRight(wrapped, 'supervisor', actor(['orders.view', 'workorders.view']), {})).toBe(false)
+    const query = wrapped.query(new URLSearchParams('profile=0190a1b2-0000-7000-8000-0000000000c1'))
+    expect(wrapped.refusal?.(actor(['orders.view']), query)).toBe('You may not narrow orders by rider.')
+    expect(wrapped.refusal?.(actor(['orders.view', 'sales.measurements.view']), query)).toBeNull()
   })
 })
 // ── end B-SA-020 ──

@@ -36,7 +36,7 @@ const RECORD_OF_LIST = new Map(CUSTOM_RECORDS.map((record) => [record.listKey, r
 
 function customColumns(source: AnyExportSource): Readonly<Record<string, ExportColumn<CustomRow>>> {
   const own: Record<string, ExportColumn<CustomRow>> = {}
-  for (const [key, column] of Object.entries(source.columns)) own[key] = { ...(column.grain ? { grain: column.grain } : {}), value: (wrapped, words) => column.value(wrapped.row, words) }
+  for (const [key, column] of Object.entries(source.columns)) own[key] = { ...(column.grain ? { grain: column.grain } : {}), ...(column.permission ? { permission: column.permission } : {}) /* B-SA-020: a column's own right (Riders, Supervisor) */, value: (wrapped, words) => column.value(wrapped.row, words) }
   const custom = (key: string): ExportColumn<CustomRow> => {
     const grain = grainOfColumn(key)
     return { ...(grain ? { grain } : {}), value: (wrapped) => wrapped.cells[key] ?? null }
@@ -93,6 +93,7 @@ export function withCustomFields(source: AnyExportSource): AnyExportSource {
     ...(source.reimport ? { reimport: { importer: source.reimport.importer, key: (row: CustomRow) => source.reimport!.key(row.row) } } : {}),
     // B-TH-008: the file's title reads the list's own query (a customer's sheet), never the wrapper's.
     ...(source.title ? { title: (caller: CommandCaller, query: unknown, facts: ExportTitleFacts) => source.title!(caller, (query as CustomQuery).inner, facts) } : {}),
+    ...(source.refusal ? { refusal: (actor: Parameters<NonNullable<AnyExportSource['refusal']>>[0], query: unknown) => source.refusal!(actor, (query as CustomQuery).inner) } : {}), // B-SA-021: the view's own query (the rider term), never the wrapper's
   }
   /** With a `cf` term the module's own count is too many: count by reading the view (filtered) once. */
   async function countFiltered(caller: CommandCaller, query: unknown): Promise<number> {

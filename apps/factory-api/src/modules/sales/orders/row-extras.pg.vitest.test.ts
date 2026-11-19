@@ -258,9 +258,10 @@ describe('a row waiting for approval says why it waits, read for the whole page 
     await admin(
       `INSERT INTO "ApprovalTask" (id, "tenantId", kind, "recordType", "recordId", "companyId", summary, preview, fingerprint, "requestedById", "approverUserId")
        SELECT gen_random_uuid(), "tenantId", 'SALES_ORDER', 'SalesOrder', id, "companyId", 'A sales order rule asks a yes before it goes on.',
-         '{"changes": [{"field": "status", "from": "PENDING_APPROVAL", "to": "CONFIRMED"}]}'::jsonb, encode(sha256('sa012-yes'::bytea), 'hex'), $2, $2
+         '{"changes": [{"field": "status", "from": "PENDING_APPROVAL", "to": "CONFIRMED"}]}'::jsonb, encode(sha256('sa012-yes'::bytea), 'hex'), $2, $3
        FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'TEST-SO-WAIT-YES'`,
-      [tenant, id('actor')],
+      // Asked by the seeded member, for the owner's yes: nobody approves their own request (the approvals guard, Owner answer Q3).
+      [tenant, id('user:member'), id('actor')],
     )
     await admin(
       `INSERT INTO "CreditCheck" (id, "tenantId", "companyId", "partyId", step, "recordType", "recordId", "openOrdersAmount", "openInvoicesAmount", "overdueAmount", "exposureAmount", "onHold", result, words, "checkedAt", "requestId")

@@ -315,7 +315,7 @@ describe('B-TH-059 the file writes the later columns and follows the new terms',
     { key: 'site', label: 'Site' },
     { key: 'note', label: 'Order note' },
     { key: 'priority', label: 'Priority' },
-    { key: 'atRisk', label: 'At risk' },
+    { key: 'atRisk', label: 'Close to promise' }, // F-SA-216 (P15): the list rule's word ("At risk" is order health)
     { key: 'customerUrgency', label: 'Customer urgency' },
   ]
 
@@ -332,7 +332,8 @@ describe('B-TH-059 the file writes the later columns and follows the new terms',
     expect(first['Order note']).toBe('Made-up office note of customer A')
     expect(first.Priority).toBe('High')
     expect(first.Paid).not.toBe('')
-    expect(file.rows.find((row) => row.Number === 'T059-B-01')!['At risk']).toBe('At risk (2 days left)')
+    // F-SA-216 (sales page plan P15, P25): the ORDER_LATE_RISK rule's cell reads "Close to promise"; "At risk" is order health only.
+    expect(file.rows.find((row) => row.Number === 'T059-B-01')!['Close to promise']).toBe('Close to promise (2 days left)')
     const blind = await filed('planner', 'rows=all', COLUMNS)
     expect(blind.omitted.sort()).toEqual(['balance', 'paid'])
   })
@@ -366,6 +367,13 @@ describe('B-SA-070 the production columns (production=true)', { timeout: SLOW_TE
   beforeAll(async () => {
     const sales = grantOf('sales', 'all')
     SESSIONS.noWork = { audience: 'office', tenantId: T, actorId: PEOPLE.noWork, companyId: companyA, grants: [{ ...sales, permissions: sales.permissions.filter((permission) => permission !== 'workorders.view') }] }
+    // The file is written by the worker as the person with their LIVE roles (exports/worker requesterOf): noWork is a person of the
+    // tenant holding the Sales template without workorders.view (a made-up custom role), as its session says.
+    const template = templateOf('sales')!
+    const noWorkRole = newId()
+    await admin(`INSERT INTO "Role" (id, "tenantId", key, name, audience, permissions, grains) VALUES ($1, $2, 'custom.sa070-no-work', 'Made-up Sales without work orders', 'OFFICE', $3::text[], $4::text[])`, [noWorkRole, T, template.permissions.filter((permission) => permission !== 'workorders.view'), [...template.grains]])
+    await admin('INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, \'ACTIVE\')', [PEOPLE.noWork, T, `sa070-nowork-${PEOPLE.noWork.slice(-6)}@example.com`, 'Made-up noWork'])
+    await admin('INSERT INTO "RoleAssignment" (id, "tenantId", "userId", "roleId", "allCompanies", "partyIds", "validFrom") VALUES ($1, $2, $3, $4, true, $5::uuid[], now() - interval \'1 day\')', [newId(), T, PEOPLE.noWork, noWorkRole, []])
     // SEED-SO-0002's stored production state: Sewing since today, computed On track raised to At risk (a raise standing 7 days),
     // waiting on us since now, the owner its own supervisor. T059-B-01: Preparing, no raise, waiting on the customer.
     await admin(
