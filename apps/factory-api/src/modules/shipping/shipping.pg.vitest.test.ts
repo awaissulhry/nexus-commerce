@@ -552,8 +552,8 @@ describe('live: shipment events name the shipment’s customer (B-SA-004)', () =
 
 // ── B-OP-041 (order page N6, lines-derived): the shipping core reads a shipment's orders through its lines ──────────────
 // A shared shipment of Brand Alpha's two orders (SEED-SO-0002 first, a line of SEED-SO-0003), its lines put in past the
-// guards (the API refuses a second order until the switch, B-OP-047). The last block of this file: it moves the site's
-// freight rule and two orders' nets.
+// guards (the API refuses a second order until the switch, B-OP-047; B-OP-005's line guard would let it in, but these lines
+// go past the cells' releases too). The last block of this file: it moves the site's freight rule and two orders' nets.
 describe('B-OP-041: a shared shipment shows on both orders in the shipping core', () => {
   const forced = async (sql: string, values: unknown[] = []) => {
     await admin('SET session_replication_role = replica')
@@ -628,24 +628,11 @@ describe('B-OP-041: a shared shipment shows on both orders in the shipping core'
     expect((await admin<{ releasedAt: Date | null }>(`SELECT "releasedAt" FROM "ShipmentHold" WHERE "shipmentId" = $1 AND reason = 'BALANCE_UNPAID'`, [shared.id]))[0]!.releasedAt).not.toBeNull()
   })
 
-  // Needs B-OP-005's line guard (a line of another open order of the customer passes while DRAFT).
-  it('a split keeps a subset: the child carries the orders of its own lines, the parent loses an order with its last line', async () => {
-    const parent = (await ok('warehouse', 'GET', `/shipping/shipments/${shared.id}`)).shipment
-    const { shipment: child, from } = await ok('warehouse', 'POST', `/shipping/shipments/${shared.id}/split`, { version: parent.version, reason: 'CUSTOMER_REQUEST', lines: [{ lineId: shared.jacket, quantity: 1 }] }, 201)
-    expect(child.salesOrderId).toBe(orders().so2)
-    expect(child.salesOrders.map((order: Json) => order.id)).toEqual([orders().so2, orders().so3])
-    expect(from.salesOrders.map((order: Json) => order.id)).toEqual([orders().so2])
-    const changes = await admin<{ subject: string; payload: Json }>(`SELECT subject::text AS subject, payload FROM "OutboxEvent" WHERE type = 'shipment.orders_changed' AND subject = ANY($1::uuid[]) ORDER BY "occurredAt", id`, [[shared.id, child.id]])
-    expect(changes.map((row) => [row.subject, row.payload.change, row.payload.salesOrderIds])).toEqual([
-      [child.id, 'ADDED', [orders().so2, orders().so3]],
-      [shared.id, 'REMOVED', [orders().so2]],
-    ])
-    // partyId is in the payload for the office's live wall only (never a live field).
-    expect(changes.every((row) => row.payload.partyId === A.brand)).toBe(true)
-    for (const id of [child.id, shared.id]) {
-      const current = (await ok('warehouse', 'GET', `/shipping/shipments/${id}`)).shipment
-      await ok('warehouse', 'POST', `/shipping/shipments/${id}/cancel`, { version: current.version, reason: 'Test: shared shipment done' })
-    }
+  // The split of a shared shipment is in shipment-orders.pg (its world stays within the cells' releases, which the line
+  // guard checks again when a split moves a line; here the lines above were put in past them).
+  it('done: the shared shipment is cancelled (its lines no longer hold garments)', async () => {
+    const current = (await ok('warehouse', 'GET', `/shipping/shipments/${shared.id}`)).shipment
+    expect((await ok('warehouse', 'POST', `/shipping/shipments/${shared.id}/cancel`, { version: current.version, reason: 'Test: shared shipment done' })).shipment.status).toBe('CANCELLED')
   })
 })
 // ── end B-OP-041 ──

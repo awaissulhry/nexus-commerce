@@ -16,6 +16,10 @@ import { readShipment, type ShipmentHeader } from '../store'
  * that needs "the orders of a shipment" asks this file (`ordersOfShipment`, `orderIdsOfShipments`, `orderRefsOfShipments`),
  * and every reader that goes from an order to its shipments asks `shipmentsOfOrderWhere` (the first order, or a line of it).
  *
+ * The same set as the database's `factory_order_shipments` (B-OP-005, #1704): a shipment is on its first order even with no
+ * line of it, and on every order of its lines. Floor rule (B-OP-005): the floor reads none of Shipment's origin /
+ * externalDdtNumber / externalDdtDate / manualTrackingUrl, so every Shipment read here names its columns.
+ *
  * The brand wall: a line's FK carries partyId ([tenantId, partyId, salesOrderLineId] → SalesOrderLine), so a shipment's orders
  * are only ever of its own customer, for every login. Never call it as the floor: the floor reads no sales order (R-8).
  *

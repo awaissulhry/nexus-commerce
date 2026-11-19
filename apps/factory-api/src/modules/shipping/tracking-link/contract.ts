@@ -85,8 +85,10 @@ export const trackingPageView = output({
     customerRef: z.string().nullable(),
     number: z.string().nullable(),
     /**
-     * B-OP-042 (order page N6, R-18): a link may be passed on (the customer's own shop): it names ONE order, the one it was
-     * made for (the shipment's first), and only how many pieces of the customer's other orders travel with it (0: none).
+     * B-OP-042 (order page N6, R-18; lead decision 2026-11-19): a link may be passed on (the customer's own shop), so the page
+     * names ONE order — the shipment's FIRST order, for every link (also one copied in the portal from another order's page:
+     * no link records the order it was copied from, and no schema wave is made for it) — and only HOW MANY pieces of the
+     * customer's other orders travel with it: the page says "and N pieces of other orders" (0: it says nothing).
      */
     otherPieces: z.number().int().min(0),
   }),

@@ -299,9 +299,31 @@ describe('B-OP-040: ordersOfShipment — the orders of its lines, the first orde
     expect(draft.lines.map((line) => line.description.includes(numberOf(so2())) ? 'first' : line.description.includes(numberOf(so3())) ? 'second' : 'none')).toEqual(['first', 'second'])
   })
 
+  // B-OP-041 (order page N6), against B-OP-005's real line guard (merged, #1704): a line of SEED-SO-0003 (an open order of
+  // the same customer, company, currency and tax mode) goes on the DRAFT child; this world stays within the jacket's
+  // releases (2 released: SH-0002 holds 1, the shared shipment 1), which the guard checks again when the line moves.
+  it('a split keeps a subset: the child carries the orders of its own lines, the parent loses an order with its last line', async () => {
+    const parent = (await ok('warehouse', 'GET', `/shipping/shipments/${ids.shared}`)).shipment
+    const jacketLine = (parent.lines as Json[]).find((line) => line.workOrderSizeId === cells().jacket)!
+    const { shipment: child, from } = await ok('warehouse', 'POST', `/shipping/shipments/${ids.shared}/split`, { version: parent.version, reason: 'CUSTOMER_REQUEST', lines: [{ lineId: jacketLine.id, quantity: 1 }] }, 201)
+    ids.child = child.id
+    // The child keeps the parent's first order (the database's split rule) and carries its own lines' orders.
+    expect(child.salesOrderId).toBe(so2())
+    expect(child.salesOrders.map((order: Json) => order.id)).toEqual([so2(), so3()])
+    expect(from.salesOrders.map((order: Json) => order.id)).toEqual([so2()])
+    const changes = await admin<{ subject: string; payload: Json }>(`SELECT subject::text AS subject, payload FROM "OutboxEvent" WHERE type = 'shipment.orders_changed' AND subject = ANY($1::uuid[]) ORDER BY "occurredAt", id`, [[ids.shared, child.id]])
+    expect(changes.map((row) => [row.subject, row.payload.change, row.payload.salesOrderIds])).toEqual([
+      [child.id, 'ADDED', [so2(), so3()]],
+      [ids.shared, 'REMOVED', [so2()]],
+    ])
+    // partyId rides in the payload for the office's live wall only (never a live field).
+    expect(changes.every((row) => row.payload.partyId === A.alpha)).toBe(true)
+  })
+
   it('an order with garments on a DRAFT shipment of another order refuses its own cancel, in words', async () => {
     const number = (await admin<{ number: string }>(`SELECT number FROM "SalesOrder" WHERE id = $1`, [so3()]))[0]!.number
-    const shipmentNumber = (await admin<{ number: string }>(`SELECT number FROM "Shipment" WHERE id = $1`, [ids.shared]))[0]!.number
+    // Its garments are on the split's child now (a shipment made for SEED-SO-0002).
+    const shipmentNumber = (await admin<{ number: string }>(`SELECT number FROM "Shipment" WHERE id = $1`, [ids.child ?? ids.shared]))[0]!.number
     const order = await ok('warehouse', 'GET', `/sales/orders/${so3()}`)
     const refusal = await refused('warehouse', 'POST', `/sales/orders/${so3()}/cancel`, { version: order.order?.version ?? order.version, reason: 'Test: garments on a shared shipment', confirmNumber: number }, 409)
     expect(refusal.message).toContain(`Take ${number}'s garments off ${shipmentNumber} first`)

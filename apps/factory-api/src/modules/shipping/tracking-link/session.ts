@@ -101,7 +101,8 @@ export async function trackingPage(request: FastifyRequest) {
     const { shipment, via } = tracked
     // fix-portal-numbers-1 (B-TH-303, plan §0.5): the customer's own order number, never the office's SO-… series.
     const order = await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { customerSeq: true, customerRef: true } })
-    // B-OP-042 (order page N6, R-18): the pieces of the customer's other orders on it, as a count only (never their numbers).
+    // B-OP-042 (order page N6, R-18, lead decision): the page names the shipment's first order for every link, plus the pieces
+    // of the customer's other orders on it as a count only ("and N pieces of other orders"), never their numbers.
     const otherPieces = (await db.shipmentLine.findMany({ where: { shipmentId: shipment.id, salesOrderLine: { orderId: { not: shipment.salesOrderId } } }, select: { quantity: true } })).reduce((sum, line) => sum + line.quantity, 0)
     const site = await db.site.findUnique({ where: { id: shipment.siteId }, select: { timezone: true } })
     const parcels = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true }, orderBy: { seq: 'asc' } })
