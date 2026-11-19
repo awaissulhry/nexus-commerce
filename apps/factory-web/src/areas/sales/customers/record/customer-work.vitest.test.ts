@@ -144,7 +144,7 @@ describe('F-SA-276: the four views (no tabs inside the tab)', () => {
     const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
     expect(view).toContain("{tab === 'work' && work}")
     const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain("keep: ['tab', 'dock']")
+    expect(tab).toContain("keep: ['tab', 'dock', COLS_TERM") // F-CP-105: + Work · Money
     expect(tab).toContain('listKey: ORDERS_LIST_KEY')
     expect(tab).toContain('/production/work-orders?party=')
   })

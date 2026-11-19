@@ -178,6 +178,11 @@ export interface OrdersListModel {
   preset?: { readonly shown: readonly string[]; readonly wide?: readonly string[] } | null
   /** A real link on the toolbar's right ("Work orders of <customer> ›"). */
   toolbarLink?: { readonly href: string; readonly label: string } | null
+  /**
+   * F-CP-105: "Columns: Work · Money" at the toolbar's start — the columns shown now (the host's view preset, or the money columns);
+   * the host gives it only with the price grain (absent: no toggle at all). Picked through `actions.onColumnSet`.
+   */
+  columnSet?: { readonly value: 'work' | 'money' } | null
   // ---- end F-SA-276
   // ---- F-SA-280 (bulk on the sheet's own bar): production's assign and note dialogs while open, and the rights they need ----
   assign?: AssignSupervisorModel | null
@@ -276,6 +281,10 @@ export interface OrdersListActions {
   onWaiting?: (waiting: 'us' | null, rows?: RowView) => void
   /** F-CP-102: one of the host's own views picked in Views ▾ (model.hostViews). */
   onHostView?: (id: string) => void
+  /** F-CP-105: "Columns: Work · Money" picked (the host writes its page term `cols`). */
+  onColumnSet?: (set: 'work' | 'money') => void
+  /** F-CP-105: a host's own kept page term set (null: dropped) in one write through the sheet (every other term kept). */
+  onPageTerm?: (name: string, value: string | null) => void
   // ---- F-SA-280 ----
   onAssignSupervisor?: (ids: readonly string[]) => void
   supervisor?: AssignSupervisorActions

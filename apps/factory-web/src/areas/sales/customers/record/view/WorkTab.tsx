@@ -111,6 +111,24 @@ export const MONEY_PRESET: NonNullable<OrdersListModel['preset']> = Object.freez
 export const notEqualShown = (rows: RowView, waiting: 'us' | null, extra: ExtraTerms | null | undefined): boolean => rows === 'all' && !waiting && extra?.priceMatch === 'NOT_EQUAL'
 // ---- end F-CP-141
 
+// ---- F-CP-105 (customer page plan C2d; 10 §5; review F3 not taken: the toggle stays): "Columns: Work · Money" on every Work view ----
+/** The page term of the toggle (kept by the host on every view, dropped by Clear all: CLEAR_DROPS). It names no view. */
+export const COLS_TERM = 'cols'
+export type ColumnSet = 'work' | 'money'
+/** A view's own columns: the Not equal view opens on Money, every other view on Work. */
+export const viewColumnSet = (notEqual: boolean): ColumnSet => (notEqual ? 'money' : 'work')
+/**
+ * The columns shown: the person's pick (`cols=money|work`), else the view's own. Without the price grain always Work — `cols=money`
+ * changes nothing (a shared saved view or link that names it shows no money: there is no money column for them).
+ */
+export function columnSetOf(asked: string | null | undefined, notEqual: boolean, price: boolean): ColumnSet {
+  if (!price) return 'work'
+  return asked === 'money' || asked === 'work' ? asked : viewColumnSet(notEqual)
+}
+/** The term a pick writes: none when it is the view's own (the address stays clean; the same pick again writes the same address). */
+export const colsTermOf = (set: ColumnSet, notEqual: boolean): ColumnSet | null => (set === viewColumnSet(notEqual) ? null : set)
+// ---- end F-CP-105
+
 /**
  * The columns a view shows at first (11-customer-page §3.5; a person's Customise wins): In production — no Status (every row is in
  * production); All orders — Status, Waiting on from 1800 px; the other views — Status and Waiting on. Customer and Brand never (the
@@ -186,7 +204,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     basePath,
     locked: { party: party.id },
     embedded: true,
-    keep: ['tab', 'dock'],
+    keep: ['tab', 'dock', COLS_TERM /* F-CP-105: Work · Money, kept on every view (Clear all drops it) */],
     listKey: ORDERS_LIST_KEY,
     clearTo: WORK_DEFAULT_ROWS, // F-CP-102: Clear all goes back to All orders (the "Showing" line compares with it)
     onAddLines: setLines, // F-CP-113: the lines window on this page
@@ -226,6 +244,10 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const notEqual = price && !showDrafts && notEqualShown(rows, waiting, sheet.model.extra)
   const notEqualCount = price ? priceDifferOf(work.prices) : null
   // ---- end F-CP-141
+  // ---- F-CP-105: "Columns: Work · Money" — the price grain only (no toggle otherwise, and `cols=money` changes nothing); it swaps
+  // the view's columns for the money columns; the Not equal view opens on Money.
+  const columnSet = columnSetOf(params?.get(COLS_TERM), notEqual, price)
+  // ---- end F-CP-105
   const model: OrdersListModel = {
     ...sheet.model,
     views: workViewsOf(sheet.model.can, { drafts: true, priceCheck: true }), // F-CP-101: All orders first; F-CP-107: Drafts of <customer>; F-CP-141: Not equal (price grain)
@@ -234,7 +256,8 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
       { id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: party.name }), active: showDrafts }, // F-CP-107
       ...(price ? [{ id: NOT_EQUAL_VIEW, label: t('customers.work.view.notEqual'), active: notEqual }] : []), // F-CP-141
     ],
-    preset: workPreset(rows, waiting, notEqual /* F-CP-141: the Not equal view opens on the money columns */),
+    preset: workPreset(rows, waiting, columnSet === 'money' /* F-CP-141: the Not equal view opens on the money columns; F-CP-105: the toggle on every view */),
+    columnSet: price ? { value: columnSet } : null, // F-CP-105: the toggle, a price holder's only
     marks: work.marks,
     doorHref: door.hrefOf,
     toolbarLink: can.workorders ? { href: `${prefix}/production/work-orders?party=${encodeURIComponent(party.id)}`, label: t('customers.band.workOrders', { customer: party.name }) } : null,
@@ -252,6 +275,8 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     ...sheet.actions,
     onRows, // F-CP-141
     onWaiting, // F-CP-141
+    // F-CP-105: a pick writes `cols` through the sheet (one replace; none when it is the view's own columns: the term goes).
+    ...(price ? { onColumnSet: (set: ColumnSet) => sheet.actions.onPageTerm?.(COLS_TERM, colsTermOf(set, notEqual)) } : {}),
     // F-CP-107: Drafts of <customer> — a person's pick writes `list=drafts` once (the record pages' one history writer; a rows view
     // picked again goes through the sheet, which drops it).
     // F-CP-141: Not equal — `rows=all&priceMatch=NOT_EQUAL` in one write through the sheet (it drops `list`, keeps the lock).

@@ -58,6 +58,7 @@ import { workViewCounts } from './use-customer-work' // F-CP-103: the Views ▾ 
 import { WaitingStrip } from './view/WaitingStrip'
 import { workEmptyOf, workPreset, workViewsOf } from './view/WorkTab' // F-CP-101: the views and empty states per view
 import { NOT_EQUAL_VIEW } from './view/WorkTab' // F-CP-141: the Not equal view
+import { columnSetOf, type ColumnSet } from './view/WorkTab' // F-CP-105: Columns: Work · Money
 // ---- end F-SA-276
 
 /**
@@ -110,6 +111,9 @@ interface WorkCase {
    * view or a link with the term opened by a reader without the price grain (one line, no rows, Show all orders).
    */
   readonly notEqual?: 'view' | 'held'
+  /** F-CP-105: the person's pick of "Columns: Work · Money" (`cols=`); and the production manager's page (no price grain, no orders.manage). */
+  readonly cols?: ColumnSet
+  readonly role?: 'manager'
 }
 
 /** F-CP-141: made-up rows whose prices differ (the customer's price, the check, the difference), as a price holder's answer carries them. */
@@ -175,9 +179,11 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
   const name = party.tradeName ?? party.legalName
   const view = work.view ?? WORK_DEFAULT_ROWS
   const notEqual = work.notEqual === 'view' && work.price !== false // F-CP-141
+  const can = work.role === 'manager' ? canOf('manager') : { ...canOf('sales'), price: work.price !== false } // F-CP-105: the production manager
+  const columnSet = columnSetOf(work.cols, notEqual, can.price) // F-CP-105: without the price grain always Work
   const list: OrdersListModel = {
     prefix: '/w/DEMO',
-    can: { ...canOf('sales'), price: work.price !== false },
+    can,
     today: ORDERS_TODAY,
     layout: 'list',
     rows: view,
@@ -196,7 +202,8 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
     views: workViewsOf({ price: work.price !== false }, work.notEqual ? { priceCheck: true } : {}), // F-CP-101; F-CP-141: Not equal (price grain only)
     viewCounts: { ...(workViewCounts(work.reads.board) ?? {}), ...(notEqual ? { [NOT_EQUAL_VIEW]: 2 } : {}) }, // F-CP-103; F-CP-141: the customer's own count
     defaultRows: WORK_DEFAULT_ROWS,
-    preset: workPreset(view, null, notEqual), // F-CP-141: the Not equal view opens on the money columns
+    preset: workPreset(view, null, columnSet === 'money'), // F-CP-141: the Not equal view opens on the money columns; F-CP-105: the toggle
+    columnSet: can.price ? { value: columnSet } : null, // F-CP-105: the toggle, a price holder's only
     // ---- F-CP-141: the Not equal view (its host item ticked, the term's chip) or, without the price grain, the held line ----
     ...(work.notEqual && work.price !== false ? { hostViews: [{ id: NOT_EQUAL_VIEW, label: t('customers.work.view.notEqual'), active: notEqual }], extra: { priceMatch: 'NOT_EQUAL' as const } } : {}),
     ...(work.notEqual && work.price === false ? { priceHeld: true } : {}),
@@ -379,6 +386,11 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'work-price-window', label: 'F-CP-114 · Work: Set customer\'s price… — per line a unit price or a line total, the PO file, an optional order total', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'edit' }) },
     { id: 'work-price-window-stale', label: 'F-CP-114 · Changed meanwhile (409): "Someone changed these prices meanwhile. Here they are now."', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'stale' }) },
     { id: 'work-price-window-closed', label: 'F-CP-114 · A closed order keeps its prices: read only, Save held with why', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'closed' }) },
+    // ---- F-CP-105: "Columns: Work · Money" on All orders — as Owner (the money columns), as Sales worker and as Production manager
+    // (the same address `cols=money`: no toggle, the Work columns, no money column).
+    { id: 'work-cols-money', label: 'F-CP-105 · Work: Columns: Work · Money on Money — Number, Status, Our price, Customer\'s price, Price check, Balance (a person\'s Customise wins)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: notEqualRows(by('MODA-DEMO')), cols: 'money' }) },
+    { id: 'work-cols-sales-worker', label: 'F-CP-105 · As Sales worker with cols=money in the address: no toggle, the Work columns, no money column', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined, paid: undefined, balance: undefined })), price: false, cols: 'money' }, { can: { ...RECORD_CAN, price: false } }) },
+    { id: 'work-cols-manager', label: 'F-CP-105 · As Production manager with cols=money in the address: no toggle, the Work columns, no money column', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined, paid: undefined, balance: undefined })), price: false, role: 'manager', cols: 'money' }, { can: { ...RECORD_CAN, price: false, ordersManage: false } }) },
     // ---- F-CP-141: the Not equal view (price holders only), and the same address as a Sales worker.
     { id: 'work-not-equal', label: 'F-CP-141 · Work: Not equal — every order whose prices differ, on the money columns (Our price, Customer\'s price, Price check, Balance), its count in Views ▾', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: notEqualRows(by('MODA-DEMO')), notEqual: 'view' }) },
     { id: 'work-not-equal-no-price', label: 'F-CP-141 · As Sales worker: a shared view with the price term — one line, no rows, Show all orders; no Not equal in Views ▾, no count', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], price: false, notEqual: 'held' }, { can: { ...RECORD_CAN, price: false } }) },

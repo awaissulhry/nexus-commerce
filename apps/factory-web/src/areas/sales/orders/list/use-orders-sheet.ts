@@ -148,12 +148,16 @@ function keptTerms(host: Pick<OrdersSheetHost, 'keep'>, params: Params, drop: re
 /**
  * The address the sheet writes: its own terms (listAddress), the host's locks over them, the host's own terms after them.
  * F-CP-102: `drop` — kept terms this write leaves out (Clear all drops CLEAR_DROPS; the locks never drop).
+ * F-CP-105: `put` — a host's own kept term set by a person's pick (the customer page's `cols`: Work · Money), after the others; null
+ * drops it. Only a term the host keeps (anything else is never written); the same pick again writes the same address.
  */
-export function sheetAddress(base: string, host: Pick<OrdersSheetHost, 'locked' | 'keep'>, params: Params, next: Parameters<typeof listAddress>[1], drop: readonly string[] = []): string {
+export function sheetAddress(base: string, host: Pick<OrdersSheetHost, 'locked' | 'keep'>, params: Params, next: Parameters<typeof listAddress>[1], drop: readonly string[] = [], put: Readonly<Record<string, string | null>> = {}): string {
   const written = listAddress(base, { ...next, ...(host.locked?.party ? { party: host.locked.party } : {}), ...(host.locked?.kind ? { kind: host.locked.kind } : {}) })
   const [path, qs = ''] = written.split('?')
   const query = new URLSearchParams(qs)
-  for (const [name, value] of keptTerms(host, params, drop)) query.append(name, value)
+  const own = Object.entries(put).filter(([name]) => host.keep?.includes(name)) // F-CP-105
+  for (const [name, value] of keptTerms(host, params, [...drop, ...own.map(([name]) => name)])) query.append(name, value)
+  for (const [name, value] of own) if (value !== null) query.set(name, value) // F-CP-105
   const text = query.toString()
   return `${path}${text ? `?${text}` : ''}`
 }
@@ -227,7 +231,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const searchSeq = useRef(0)
 
   const go = useCallback(
-    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */; waiting?: 'us' | null /* F-SA-276 */; drop?: readonly string[] /* F-CP-102 */ }) =>
+    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */; waiting?: 'us' | null /* F-SA-276 */; drop?: readonly string[] /* F-CP-102 */; put?: Readonly<Record<string, string | null>> /* F-CP-105 */ }) =>
       router.replace(
         // F-SA-220: the host's locks and its own terms stay in every address the sheet writes.
         sheetAddress(
@@ -250,6 +254,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
             waiting: next.waiting === undefined ? waiting : next.waiting, // F-SA-276
           },
           next.drop, // F-CP-102: Clear all drops the page terms it names
+          next.put, // F-CP-105: a host's own kept term set by a person's pick (Work · Money)
         ),
       ),
     [router, base, host, params, rows, q, layout, party, brand, company, sort, cf, group, extra, kind, profile, waiting],
@@ -853,6 +858,8 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
       : {}),
     // ---- end F-SA-280
     onWaiting: (next, view) => go({ waiting: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
+    // F-CP-105: a host's own kept term set (or dropped: null) by a person's pick, in one write that keeps every other term.
+    onPageTerm: (name, value) => go({ put: { [name]: value } }),
     onSort: (next) => go({ sort: next }), // B-TH-057
     onClearCf: () => go({ cf: null }), // B-TH-057
     readPictures, // F-SA-212

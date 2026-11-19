@@ -458,6 +458,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           }
           tools={
             <>
+              {/* F-CP-105: "Columns: Work · Money" at the toolbar's start — the host gives it only with the price grain. */}
+              {model.columnSet && <ColumnSetSwitch value={model.columnSet.value} s={s} onPick={(set) => actions?.onColumnSet?.(set)} />}
               {switcher /* B-TH-226 */}
               {/* B-TH-243 (ORD-G10): the rows views are the built-in views on top of Views ▾ — no second Rows ▾ beside it. */}
               {sortSelect /* B-TH-057 */}
@@ -1210,6 +1212,28 @@ export function extraChips(extra: ExtraTerms | null, t: Translate, s: Translate)
   if (extra.customerUrgency) out.push({ key: 'customerUrgency', label: s('chips.urgency', { urgency: s(`urgency.${extra.customerUrgency}`) }) })
   if (extra.priceMatch) out.push({ key: 'priceMatch', label: t(`priceCheck.chip.${extra.priceMatch}`) }) // F-CP-141 (a price holder's only: the sheet drops it otherwise)
   return out
+}
+
+/**
+ * F-CP-105 (customer page plan C2d; 10 §5): "Columns: Work · Money" — a DS SegmentedControl sm with its visible label; it swaps the
+ * view's columns for the money columns (the host's preset; a person's own Customise wins). Drawn only when the host gives it (the
+ * price grain): never a dead control for anyone else.
+ */
+export function ColumnSetSwitch({ value, s, onPick }: { value: 'work' | 'money'; s: Translate; onPick: (set: 'work' | 'money') => void }) {
+  return (
+    <span className="fw-pc-cols">
+      <span className="fw-pc-cols-label" aria-hidden="true">
+        {s('cols.label')}
+      </span>
+      <SegmentedControl
+        size="sm"
+        ariaLabel={s('cols.label')}
+        value={value}
+        onChange={(next) => onPick(next === 'money' ? 'money' : 'work')}
+        options={(['work', 'money'] as const).map((set) => ({ value: set, label: s(`cols.${set}`) }))}
+      />
+    </span>
+  )
 }
 
 /** F-CP-141 (money wall; 10 §5): the one line a price view says to a reader without the price grain, with the way back to every order. */

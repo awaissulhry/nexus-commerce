@@ -461,3 +461,123 @@ describe('F-CP-140: the price check columns of the Orders sheet', () => {
   })
 })
 // ---- end F-CP-140
+
+// ---- F-CP-105 (customer page plan C2d; 10 §5; review F3 not taken): "Columns: Work · Money" on every view of the customer's Work tab —
+// a DS SegmentedControl sm at the toolbar's start (the price grain only), swapping the view's preset for MONEY_PRESET; the page term
+// `cols` kept by the host on every view, dropped by Clear all; the Not equal view opens on Money; a person's Customise wins. Money
+// wall "as Sales worker / as Production manager": no toggle, and `cols=money` changes nothing.
+describe('F-CP-105: Columns: Work · Money', () => {
+  const OWNER = canOf('owner')
+  const SALES_WORKER = { ...canOf('sales'), price: false } // the Sales role after B-CP-011
+  const ALPHA = '11111111-1111-4111-8111-111111111111'
+  const BASE = `/w/acme/sales/customers/${ALPHA}`
+  const HOST = { locked: { party: ALPHA }, keep: ['tab', 'dock', 'cols'] }
+  const q = (query: string) => new URLSearchParams(query)
+  const search = (address: string) => address.slice(address.indexOf('?') + 1)
+  const work = () => import('../../customers/record/view/WorkTab')
+  const sheet = () => import('./use-orders-sheet')
+  const html = async (id: string) => {
+    const [{ createElement }, { renderToString }, { I18nProvider }, { designScreen }] = await Promise.all([import('react'), import('react-dom/server'), import('../../../../lib/i18n/provider'), import('../../customers/record/fixtures')])
+    const item = designScreen.cases.find((entry) => entry.id === id)!
+    const View = designScreen.view as (props: { model: unknown }) => ReturnType<typeof createElement>
+    return renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(View, { model: item.model })))
+  }
+
+  it('without the price grain no toggle, and cols=money changes nothing (as Sales worker / as Production manager)', async () => {
+    const { columnSetOf, workPreset, MONEY_PRESET } = await work()
+    for (const can of [SALES_WORKER, manager]) {
+      expect(columnSetOf('money', false, can.price)).toBe('work')
+      expect(columnSetOf('money', true, can.price)).toBe('work')
+      expect(workPreset('all', null, columnSetOf('money', false, can.price) === 'money')).not.toBe(MONEY_PRESET)
+    }
+    const tab = readFileSync(new URL('../../customers/record/view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('columnSet: price ? { value: columnSet } : null')
+    expect(tab).toContain('...(price ? { onColumnSet: (set: ColumnSet) => sheet.actions.onPageTerm?.(COLS_TERM, colsTermOf(set, notEqual)) } : {})')
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('{model.columnSet && <ColumnSetSwitch value={model.columnSet.value} s={s} onPick={(set) => actions?.onColumnSet?.(set)} />}')
+  })
+
+  it('a price holder: the pick wins, else the view\'s own (the Not equal view opens on Money); the money set is MONEY_PRESET', async () => {
+    const { columnSetOf, colsTermOf, viewColumnSet, workPreset, MONEY_PRESET } = await work()
+    expect(columnSetOf(null, false, OWNER.price)).toBe('work')
+    expect(columnSetOf(null, true, OWNER.price)).toBe('money')
+    expect(columnSetOf('money', false, OWNER.price)).toBe('money')
+    expect(columnSetOf('work', true, OWNER.price)).toBe('work')
+    expect(columnSetOf('sideways', false, OWNER.price)).toBe('work')
+    expect([viewColumnSet(false), viewColumnSet(true)]).toEqual(['work', 'money'])
+    // The view's own columns write no term (the address stays clean); the other one writes it.
+    expect([colsTermOf('work', false), colsTermOf('money', false), colsTermOf('money', true), colsTermOf('work', true)]).toEqual([null, 'money', null, 'work'])
+    for (const rows of ['all', 'IN_PRODUCTION', 'late'] as const) expect(workPreset(rows, null, true), rows).toBe(MONEY_PRESET)
+    expect(workPreset('open', 'us', true)).toBe(MONEY_PRESET)
+  })
+
+  it('cols applied twice = the same address (fx-12): one replace, the lock and the tab kept, nothing written again', async () => {
+    const { sheetAddress, lockedEntry } = await sheet()
+    const { workEntry } = await import('../../customers/record/use-customer-work')
+    const at = `tab=work&party=${ALPHA}&rows=all`
+    const once = sheetAddress(BASE, HOST, q(at), { rows: 'all', q: '', layout: 'list' }, [], { cols: 'money' })
+    const twice = sheetAddress(BASE, HOST, q(search(once)), { rows: 'all', q: '', layout: 'list' }, [], { cols: 'money' })
+    expect(twice).toBe(once)
+    const written = q(search(once))
+    expect([written.get('tab'), written.get('party'), written.get('rows'), written.getAll('cols')]).toEqual(['work', ALPHA, 'all', ['money']])
+    expect(workEntry(BASE, ALPHA, q(search(once)))).toBeNull()
+    expect(lockedEntry(BASE, HOST, q(search(once)))).toBeNull()
+    // Back to the view's own columns: the term goes.
+    expect(q(search(sheetAddress(BASE, HOST, q(search(once)), { rows: 'all', q: '', layout: 'list' }, [], { cols: null }))).has('cols')).toBe(false)
+    // Only a term the host keeps is ever written (Sales › Orders keeps none).
+    expect(q(search(sheetAddress('/w/acme/sales/orders', {}, q(''), { rows: 'open', q: '', layout: 'list' }, [], { cols: 'money' }))).has('cols')).toBe(false)
+  })
+
+  it('cols kept on every view, dropped by Clear all (the lock stays)', async () => {
+    const { sheetAddress, CLEAR_DROPS } = await sheet()
+    const at = q(`tab=work&party=${ALPHA}&rows=all&cols=money`)
+    for (const rows of ['IN_PRODUCTION', 'late', 'all'] as const) expect(q(search(sheetAddress(BASE, HOST, at, { rows, q: '', layout: 'list' }))).get('cols'), rows).toBe('money')
+    const cleared = q(search(sheetAddress(BASE, HOST, at, { rows: 'all', q: '', layout: 'list' }, CLEAR_DROPS)))
+    expect(cleared.has('cols')).toBe(false)
+    expect([cleared.get('party'), cleared.get('tab')]).toEqual([ALPHA, 'work'])
+    const host = readFileSync(new URL('./use-orders-sheet.ts', import.meta.url), 'utf8')
+    expect(host).toContain("onPageTerm: (name, value) => go({ put: { [name]: value } })")
+    expect(host).toContain('drop: CLEAR_DROPS /* F-CP-102 */')
+    const tab = readFileSync(new URL('../../customers/record/view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("keep: ['tab', 'dock', COLS_TERM")
+  })
+
+  it('MONEY_PRESET @1440 (the body beside the dock: 865 px) — select + its columns + ⋯ fit, no sideways scroll', async () => {
+    const { MONEY_PRESET } = await work()
+    const { PRICE_CHECK_COLUMNS } = await import('./price-check-columns')
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    const minOf = (id: string): number => {
+      const spec = PRICE_CHECK_COLUMNS.find((column) => column.id === id)
+      if (spec) return spec.minWidth
+      const match = view.match(new RegExp(`colId: '${id}'[^}]*?minWidth: (\\d+)`))
+      expect(match, id).not.toBeNull()
+      return Number(match![1])
+    }
+    const SELECT = 36
+    const total = SELECT + MONEY_PRESET.shown.reduce((sum, id) => sum + minOf(id), 0) + minOf('more')
+    expect(total).toBeLessThanOrEqual(865)
+    expect(MONEY_PRESET.shown).not.toContain('priceDiff') // in Customise (review: no sideways scroll at 1440)
+  })
+
+  it('the design cases (SCR-033 Work): as Owner the toggle on Money; as Sales worker and as Production manager no toggle, no money column', async () => {
+    const owner = await html('work-cols-money')
+    expect(owner).toContain('fw-pc-cols')
+    expect(owner).toContain('Columns')
+    expect(owner).toContain('Money')
+    for (const id of ['work-cols-sales-worker', 'work-cols-manager']) {
+      const seen = await html(id)
+      expect(seen, id).not.toContain('fw-pc-cols')
+      expect(seen, id).not.toContain('Price check')
+      expect(seen, id).not.toContain("Customer's price")
+    }
+  })
+
+  it('the words in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = tFor(locale)
+      for (const key of ['cols.label', 'cols.work', 'cols.money']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+    expect([tFor('it')('cols.label'), tFor('it')('cols.work'), tFor('it')('cols.money')]).toEqual(['Colonne', 'Lavoro', 'Conti'])
+  })
+})
+// ---- end F-CP-105
