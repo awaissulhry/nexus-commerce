@@ -52,7 +52,7 @@ export const QUOTE_LINE_PRICE_KEYS = ['unitPrice', 'listUnitPrice', 'discountPct
  * grain wall refuses a body that names a price field, null included), nor a size's own price; the line then takes the customer's
  * price list, as the API reads a missing price. A price holder's body is sent as it is.
  */
-export function quoteLineBody<T extends object>(body: T, grains: Pick<Grains, 'price'>): T {
+export function quoteLineBody<T extends Record<string, unknown>>(body: T, grains: Pick<Grains, 'price'>): T {
   if (grains.price) return body
   const out: Record<string, unknown> = { ...body }
   for (const key of QUOTE_LINE_PRICE_KEYS) delete out[key]
