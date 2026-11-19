@@ -9,8 +9,6 @@ import { batchGroupKey, orderChangeBatch } from '@nexus/factory-domain/notificat
 import type { ErrorReport } from '@nexus/factory-domain/observability/report'
 import { partnerLiveViewFor } from '@nexus/factory-domain/portal/notifications/live'
 import { FLOOR_NOTE_MAX, noPriceIn } from '@nexus/factory-domain/sales/orders/change-notes'
-// B-OP-071: the N6 switch read from the domain (MULTI_ORDER_OFF goes with B-OP-047).
-import * as shipmentsDomain from '@nexus/factory-domain/shipping/shipments'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedOrderPage } from '../../../../../packages/factory-db/seed/order-page' // B-OP-071
 import { seed as seedShipping } from '../../../../../packages/factory-db/seed/shipping' // B-OP-071
@@ -1028,8 +1026,7 @@ describe('B-SA-089 golden flow sales page: one change of Alpha’s order told to
  *   O5  tracking typed on it from the order page (number and link): the office line on the order's thread; the portal and the
  *       tracking page show the number and its link; corrected; cleared
  *   O6  its invoice names the paper DDT (B-OP-033): the shipment waits in "shipped, not invoiced"; the draft's DDT reference
- *   O7  BEFORE the switch: a second order on a shipment is held off in words (MULTI_ORDER_OFF), nothing written
- *   O8  AFTER the switch (B-OP-047; runs once MULTI_ORDER_OFF is gone): one shipment made for two of Alpha's orders through the API
+ *   O8  several orders on one shipment (B-OP-047: N6 on): one shipment made for two of Alpha's orders through the API
  *       (SEED-SO-0002's black 52 moved off SEED-SH-0004, SEED-SO-0003's free jacket): both orders' reads carry it with both orders;
  *       the DDT names one order reference per order; its freight once, each order its share
  *   OW  the wall at the end: nothing Beta's people got names Alpha; Alpha's buyer never reads Olga's, Fina's or Wanda's names
@@ -1043,9 +1040,6 @@ describe('B-SA-089 golden flow sales page: one change of Alpha’s order told to
  * The made-elsewhere body is B-OP-032's contract (shipping/elsewhere/contract.ts `elsewhereBody`), its hold reason `holdReason`.
  */
 
-/** B-OP-047 deletes MULTI_ORDER_OFF: until then the multi-order steps check the refusal, after it the shared shipment (O7 / O8). */
-const N6_ON = !('MULTI_ORDER_OFF' in shipmentsDomain)
-const MULTI_ORDER_WORDS = 'Several orders in one shipment come with the next update.'
 
 // The order page's own words of Alpha's: none may ever reach Beta.
 const AMEND_REASON = 'Made-up Alpha amend: the store wants one jacket of 50 and two of 52 fewer.'
@@ -1474,26 +1468,7 @@ describe('B-OP-071 golden flow order page: the order page’s acts on Alpha’s 
     await pageWall('O6')
   })
 
-  it.runIf(!N6_ON)('O7 before the switch: a second order on one shipment is held off in words, nothing written', async () => {
-    const before = await admin<{ n: number }>('SELECT count(*)::int AS n FROM "Shipment" WHERE "tenantId" = $1', [T()])
-    const both = await call(wanda, 'POST', '/shipping/shipments', { salesOrderId: P.so2, salesOrderIds: [P.so2, P.so3], siteId: P.siteA1 })
-    expect(both.status, JSON.stringify(both.body)).toBe(409)
-    expect(both.body.error.message).toBe(MULTI_ORDER_WORDS)
-    // Neither is a shipment made elsewhere of two orders.
-    const shippedAt = new Date(world.h.clock.now().getTime() - 30 * 60_000)
-    const elsewhere = await call(wanda, 'POST', '/shipping/shipments/elsewhere/preview', elsewhereBody(shippedAt, { salesOrderIds: [P.so2, P.so3] }))
-    expect(JSON.stringify(elsewhere.body)).toContain(MULTI_ORDER_WORDS)
-    expect(await admin<{ n: number }>('SELECT count(*)::int AS n FROM "Shipment" WHERE "tenantId" = $1', [T()])).toEqual(before)
-    // SEED-SO-0003's free jacket on a DRAFT of SEED-SO-0002 (the lines route): refused in the same words, the DRAFT unchanged.
-    const draft = (await ok(wanda, 'POST', '/shipping/shipments', { salesOrderId: P.so2, siteId: P.siteA1 }, 201)).shipment as Json
-    const added = await call(wanda, 'POST', `/shipping/shipments/${draft.id}/lines`, { version: draft.version, lines: [{ workOrderSizeId: P.jacket, quantity: 1 }] })
-    expect(added.status).toBe(400)
-    expect(added.body.error.issues).toContainEqual({ path: 'body/lines/0/workOrderSizeId', message: MULTI_ORDER_WORDS })
-    await ok(wanda, 'POST', `/shipping/shipments/${draft.id}/cancel`, { version: await shipmentVersion(draft.id as string), reason: 'Made-up: held off until the switch.' })
-    await pageWall('O7')
-  })
-
-  it.runIf(N6_ON)('O8 after the switch: one shipment for two of Alpha’s orders, through the API — on both orders’ reads, one DDT reference per order, its freight once', async () => {
+  it('O8 several orders on one shipment (B-OP-047): one shipment for two of Alpha’s orders, through the API — on both orders’ reads, one DDT reference per order, its freight once', async () => {
     // Both orders on one new DRAFT (the first = its order); another customer's order is never offered.
     const made = (await ok(wanda, 'POST', '/shipping/shipments', { salesOrderId: P.so2, salesOrderIds: [P.so2, P.so3], siteId: P.siteA1 }, 201)).shipment as Json
     P.shared = { id: made.id as string, number: made.number as string }
@@ -1503,7 +1478,8 @@ describe('B-OP-071 golden flow order page: the order page’s acts on Alpha’s 
     const candidates = await ok(wanda, 'GET', `/shipping/shipments/${P.shared.id}/orders/candidates`)
     const betaOrders = (await admin<{ id: string }>('SELECT id::text AS id FROM "SalesOrder" WHERE "tenantId" = $1 AND "partyId" = $2', [T(), world.ids.b])).map((row) => row.id)
     for (const id of betaOrders) expect(JSON.stringify(candidates)).not.toContain(id)
-    expect((candidates.orders as Json[]).every((row) => row.joinable.why !== MULTI_ORDER_WORDS)).toBe(true)
+    // B-OP-047: no order is held by the old hold any more (each verdict is its real reasons, or none).
+    expect(JSON.stringify(candidates)).not.toContain('MULTI_ORDER_OFF')
     const changed = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'shipment.orders_changed' AND subject = $2 ORDER BY "occurredAt", id`, [T(), P.shared.id])
     expect(changed.at(-1)!.payload.salesOrderIds).toEqual([P.so2, P.so3])
 

@@ -143,7 +143,7 @@ describe('what holds Record, and a refusal in words', () => {
     expect(refusalOf(conflict('refusal/HELD'), 'Moto Demo S.r.l.').words).toEqual({ key: 'elsewhere.held.customer', params: { customer: 'Moto Demo S.r.l.' } })
     expect(refusalOf(conflict('refusal/REASON_REQUIRED'), 'Moto Demo S.r.l.').words).toEqual({ key: 'elsewhere.held.reason' })
     expect(refusalOf(new ApiError('forbidden', 403, 'forbidden', 'x'), 'C').words).toEqual({ key: 'elsewhere.held.noRight' })
-    expect(refusalOf(new ApiError('conflict', 409, 'invalid_state', 'Several orders in one shipment come with the next update.'), 'C')).toEqual({ words: { key: 'elsewhere.refusal.state' }, detail: 'Several orders in one shipment come with the next update.' })
+    expect(refusalOf(new ApiError('conflict', 409, 'invalid_state', 'The sales order waits for a yes; nothing ships for it until it is confirmed.'), 'C')).toEqual({ words: { key: 'elsewhere.refusal.state' }, detail: 'The sales order waits for a yes; nothing ships for it until it is confirmed.' }) // B-OP-047: a state refusal that still exists
     expect(refusalOf(new Error('offline'), 'C').words).toEqual({ key: 'elsewhere.refusal.failed' })
     expect(CATALOGUE.en.orders?.['elsewhere.ddtUsed']).toBe('That DDT number and date are already recorded.')
   })

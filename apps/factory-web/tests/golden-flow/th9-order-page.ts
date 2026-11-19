@@ -1,5 +1,4 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import * as shipmentsDomain from '@nexus/factory-domain/shipping/shipments'
 import { BRAND_ALPHA, BRAND_BETA } from '../../src/lib/testing/two-brands'
 import { expectNothingOf } from './_harness/brand-scan'
 import { seen, type Desk, type Flow } from './_harness/flow'
@@ -25,8 +24,8 @@ import { startsWith, words } from './_harness/words'
  *   4  tracking typed, corrected and cleared on SEED-SO-0003's shipment (a carrier booked by hand): "No live tracking";
  *   5  a shipment made elsewhere: the dialog on SEED-SO-0002 — its released garments, the paper DDT, no Nexus DDT number; the live
  *      rules said under the fields;
- *   6  a combined shipment of two orders — before the N6 switch (B-OP-047) held off in words, after it made in place with SEED-SO-0003
- *      added, "Also carries" on both orders; customer B's orders never offered;
+ *   6  a combined shipment of two orders (B-OP-047: N6 on) made in place on SEED-SO-0003 with SEED-SO-0002 added, "Also carries" on
+ *      both orders; customer B's orders never offered;
  *   7  the files viewer walk by keys (→ / ←, Esc back to the card);
  *   8  two customers: B's portal answers A's orders with the neutral refusal; A's pages hold nothing of B; the page at rest asks little.
  * Not here, said in the report: cut pieces (the floor's flow: the extra-pieces outcome is held by the design case
@@ -46,9 +45,6 @@ const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** A catalogue sentence's words before its first placeholder (the key's raw text). */
 const lead = (text: string) => text.split(/\{[a-zA-Z]+\}/)[0]!.trim()
 const notHere = (description: string) => test.info().annotations.push({ type: 'not here', description })
-
-/** B-OP-047 deletes MULTI_ORDER_OFF: until then a second order on a shipment is held off in its words (Warehouse's `shipOrders.later`). */
-const N6_ON = !('MULTI_ORDER_OFF' in shipmentsDomain)
 
 /** The made-up words of this stage. */
 const PO_REF = `${BRAND_ALPHA.customerRef}-TH9`
@@ -119,7 +115,7 @@ async function refusedToBeta(beta: PortalDesk, path: string, ofAlpha: readonly s
 
 export default defineStage({
   proves:
-    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders (held off in words until the N6 switch); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal',
+    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders made in place (B-OP-047); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal',
   async run(flow: Flow) {
     const sales = await flow.desk('sales')
     const alphaId = await flow.seedId('party:P1')
@@ -327,7 +323,7 @@ export default defineStage({
       await flow.settle()
     })
 
-    await flow.step('6 · a combined shipment of two orders: before the switch held off in words; after it, SEED-SO-0002 added in place, "Also carries" on both; B’s orders never offered', async () => {
+    await flow.step('6 · a combined shipment of two orders (B-OP-047): SEED-SO-0002 added in place, "Also carries" on both; B’s orders never offered', async () => {
       const warehouse = await flow.desk('warehouse')
       const { page } = warehouse
       await warehouse.go(`/sales/orders/${world.so3.id}?tab=shipments`)
@@ -335,19 +331,13 @@ export default defineStage({
       const box = dialog(page)
       const others = box.getByRole('group', { name: SHIP('new.together.add', { customer: BRAND_ALPHA.legalName }) })
       await seen(others, 60_000)
-      // Customer B's orders are never offered, before the switch or after it.
+      // Customer B's orders are never offered.
       for (const number of world.betaNumbers) await expect(box.getByText(number, { exact: true })).toHaveCount(0)
       await expectNothingOf(page, BRAND_BETA, world.betaNumbers, 'create shipment: the other orders offered')
       const other = others.getByRole('checkbox', { name: new RegExp(escape(world.so2.number)) }).first()
       await seen(other)
-      if (!N6_ON) {
-        // Held off until B-OP-047: offered with its words, never ticked (aria-disabled: it keeps its focus).
-        await seen(others.getByText(DEPTH('shipOrders.later')).first())
-        await expect(other).toHaveAttribute('aria-disabled', 'true')
-        await flow.shot(page, 'shared-held-off')
-        await page.keyboard.press('Escape')
-        return
-      }
+      // B-OP-047: it may join (the same address, currency and terms): offered free, never held.
+      await expect(other).not.toHaveAttribute('aria-disabled', 'true')
       await other.check()
       const next = box.getByRole('button', { name: SHIP('new.next'), exact: true })
       if (await next.isVisible().catch(() => false)) await press(next)

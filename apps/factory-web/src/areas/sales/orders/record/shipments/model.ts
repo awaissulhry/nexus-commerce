@@ -93,18 +93,18 @@ export function alsoCarries(row: ShipmentRow, orderId: string): { readonly id: s
 export interface JoinableRow {
   readonly shipmentId: string
   readonly number: string
-  /** Null: it may join; else the reason in the Warehouse depth catalogue's words (several orders held off: `shipOrders.later`). */
+  /** Null: it may join (B-OP-047: the only rows offered); the field stays the row's shape for the view's held button. */
   readonly held: Phrase | null
 }
 
 /**
- * The DRAFTs the Shipments tab offers from the joinable read: the same customer, site and delivery address — allowed, or held
- * only while several orders in one shipment are held off (every real reason passed); another site or address is not offered.
+ * The DRAFTs the Shipments tab offers from the joinable read: the same customer, site and delivery address, every rule passed
+ * (B-OP-047: several orders in one shipment are on); a DRAFT held for any reason — another site or address … — is not offered.
  */
 export function joinableRows(shipments: JoinableShipments['shipments']): JoinableRow[] {
   return shipments.flatMap((row) => {
     const held = joinHeld(row.joinable)
-    return row.status === 'DRAFT' && (held === null || held.key === 'shipOrders.later') ? [{ shipmentId: row.shipmentId, number: row.number, held }] : []
+    return row.status === 'DRAFT' && held === null ? [{ shipmentId: row.shipmentId, number: row.number, held }] : []
   })
 }
 // ── end F-OP-122 ──
