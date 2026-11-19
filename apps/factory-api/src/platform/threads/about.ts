@@ -5,6 +5,8 @@ import type { Actor } from '@nexus/factory-domain/core/permissions'
 import type { CommandTx } from '../../core/command'
 import { EVERY_PARTY_MARKER } from '../../modules/quality/wall'
 import { mayOnThread, resolveRecord, type WallScope } from './records'
+// B-OP-044 (order page N6, lines-derived): an order's shipments through their lines.
+import { shipmentsOfOrderWhere } from '../../modules/shipping/shipments/orders-of'
 
 /**
  * B-SA-061 (sales page plan S5; lead picks P26, P9, R10 item 6; 10-order-page §6.4 "Discuss"): what a message is about — ONE part
@@ -70,7 +72,8 @@ async function partOfOrder(tx: CommandTx, orderId: string, about: About): Promis
     case 'SalesOrderLine':
       return (await tx.salesOrderLine.count({ where: { id, orderId } })) > 0
     case 'Shipment':
-      return (await tx.shipment.count({ where: { id, salesOrderId: orderId } })) > 0
+      // B-OP-044 (order page N6): one of the order's shipments — made for it or carrying its garments (factory_order_shipments).
+      return (await tx.shipment.count({ where: { id, ...shipmentsOfOrderWhere(orderId) } })) > 0
     case 'Invoice':
       return (await tx.invoice.count({ where: { id, salesOrderId: orderId } })) > 0
     case 'DepositRequest':

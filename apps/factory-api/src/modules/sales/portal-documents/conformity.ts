@@ -49,12 +49,14 @@ export async function conformityPerStyle(app: FastifyInstance, request: FastifyR
     const shipments = await readShipmentsThatLeft(client, companyId)
     const lines = await readShipmentLines(client, shipments.map((row) => row.id))
     const orderLines = await readOrderLines(client, [...new Set(lines.map((line) => line.salesOrderLineId))])
-    const orders = await readOrders(client, [...new Set(shipments.map((row) => row.salesOrderId))])
+    // B-OP-044 (order page N6): the orders of the garments' own lines (a shared shipment's garments name their own order).
+    const orders = await readOrders(client, [...new Set([...shipments.map((row) => row.salesOrderId), ...orderLines.map((line) => line.orderId)])])
     return { shipments, lines, orderLines, orders }
   })
   const documents = visibleEntries(library).filter((entry) => entry.group === 'CONFORMITY' && entry.replacedById === null)
   const citedIds = [...new Set(documents.flatMap((entry) => (entry.compliance?.certificateId ? [entry.compliance.certificateId] : [])))]
   const styleOfLine = new Map(own.orderLines.map((line) => [line.id, line.styleId]))
+  const orderOfLine = new Map(own.orderLines.map((line) => [line.id, line.orderId])) // B-OP-044
   const tenant = await library.reader.inTenant(async (client) => {
     const revisions = await frozenRevisions(client, [...new Set(own.lines.map((line) => line.workOrderId))])
     const styleIds = [...new Set(own.orderLines.map((line) => line.styleId))]
@@ -73,13 +75,15 @@ export async function conformityPerStyle(app: FastifyInstance, request: FastifyR
   const orderOf = new Map(own.orders.map((row) => [row.id, row]))
 
   // Garments per style × shipment × frozen revision.
-  const received = new Map<string, { styleId: string; shipmentId: string; revision: number | null; pieces: number; workOrderIds: Set<string> }>()
+  // B-OP-044 (N6): × the garments' own order (one shipment may carry several orders of the customer).
+  const received = new Map<string, { styleId: string; shipmentId: string; orderId: string | null; revision: number | null; pieces: number; workOrderIds: Set<string> }>()
   for (const line of own.lines) {
     const styleId = styleOfLine.get(line.salesOrderLineId)
     if (!styleId) continue
     const revision = tenant.revisions.get(line.workOrderId) ?? null
-    const key = `${styleId}|${line.shipmentId}|${revision ?? 'none'}`
-    const row = received.get(key) ?? { styleId, shipmentId: line.shipmentId, revision, pieces: 0, workOrderIds: new Set<string>() }
+    const orderId = orderOfLine.get(line.salesOrderLineId) ?? null
+    const key = `${styleId}|${line.shipmentId}|${orderId ?? '-'}|${revision ?? 'none'}`
+    const row = received.get(key) ?? { styleId, shipmentId: line.shipmentId, orderId, revision, pieces: 0, workOrderIds: new Set<string>() }
     row.pieces += line.quantity
     row.workOrderIds.add(line.workOrderId)
     received.set(key, row)
@@ -107,7 +111,7 @@ export async function conformityPerStyle(app: FastifyInstance, request: FastifyR
           const certificate = classification.certificateRequired ? certificateFor(cited, (tenant.covering.get(style.id) ?? []).map(certificateFacts), shippedOn) : null
           const certificateValid = certificate !== null && certificateValidOn(certificate, shippedOn)
           const state = receivedStateOf({ ppe: classification.isPpe, certificateRequired: classification.certificateRequired, declaration: declaration !== null, userInformation: userInformation !== null, certificateValid })
-          const order = orderOf.get(shipment.salesOrderId)
+          const order = orderOf.get(row.orderId ?? shipment.salesOrderId) // B-OP-044: the garments' own order
           return {
             shipment: { id: shipment.id, number: shipment.number },
             // fix-portal-numbers-1 (B-TH-303): the order by its PO and the customer's own number, never the office's SO-….

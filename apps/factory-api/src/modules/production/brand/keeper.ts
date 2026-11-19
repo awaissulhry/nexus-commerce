@@ -17,6 +17,8 @@ import { activeTenants, asSystem, systemContext } from '../../../platform/outbox
 import { dayOf } from '../../planning/store'
 import type { Reader } from '../../sales/orders/store'
 import { KEEPER_ORDER_STATES, keeperPlanningContext, orderOfCell, ordersOfWorkOrders, readOrderProductionFacts, type LineRisk, type OrderProductionFacts } from './facts'
+// B-OP-043 (order page N6, lines-derived): the orders a shipment carries.
+import { ordersOfShipment } from '../../shipping/shipments/orders-of'
 
 /**
  * The customer's stage and health keeper (B-PR-17; production plan §4, 08-backend §3 "Keeper"; review fixes R-20, R-21, R-31,
@@ -443,8 +445,9 @@ export async function ordersOfEvent(db: Reader, event: Pick<EventEnvelope, 'type
       return { orderIds: [...new Set(asStrings(payload.salesOrderIds))].sort(), hold: null }
     case 'shipment.status_changed': {
       const shipmentId = text('shipmentId')
-      const shipment = shipmentId ? await db.shipment.findUnique({ where: { id: shipmentId }, select: { salesOrderId: true } }) : null
-      return { orderIds: shipment ? [shipment.salesOrderId] : [], hold: null }
+      const shipment = shipmentId ? await db.shipment.findUnique({ where: { id: shipmentId }, select: { id: true, salesOrderId: true } }) : null
+      // B-OP-043 (order page N6): every order the shipment carries (its lines' orders, the first first; one customer).
+      return { orderIds: shipment ? [...(await ordersOfShipment(db, shipment))].sort() : [], hold: null }
     }
     case 'quality.garments_released':
     case 'quality.release_reversed': {

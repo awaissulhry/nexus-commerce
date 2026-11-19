@@ -147,7 +147,8 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
 
   const orderRows = read.orders.map((order) => {
     const lines = read.lines.filter((line) => line.orderId === order.id)
-    const shipments = read.shipments.filter((row) => row.salesOrderId === order.id)
+    // B-OP-044 (order page N6): a shared shipment is on every order it carries.
+    const shipments = read.shipments.filter((row) => row.salesOrderIds.includes(order.id))
     const status = statusOfOrder(order, shipments)
     const promiseDate = dayOrNull(order.promiseDate)
     const originalPromiseDate = dayOrNull(order.originalPromiseDate)
@@ -246,7 +247,8 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
   const read = await request.withClient(async (client) => {
     const lines = await readLines(client, [order.id])
     const shipments = (await readShipments(client, [order.id])).filter((row) => SHOWN_SHIPMENT_STATUSES.includes(row.status))
-    const shipped = await shippedPieces(client, shipments.filter((row) => hasLeft(row.status)).map((row) => row.id))
+    // B-OP-044: this order's own pieces only (a shared shipment carries another order's too).
+    const shipped = await shippedPieces(client, shipments.filter((row) => hasLeft(row.status)).map((row) => row.id), [order.id])
     const deposits = await readDeposits(client, order.id)
     const profiles = await readProfiles(client, [...new Set(lines.flatMap((line) => (line.measurementProfileId ? [line.measurementProfileId] : [])))])
     const sent = (await requestSends(client, [order.id])).get(order.id) ?? null

@@ -548,7 +548,19 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
       }),
       workOrders: facts.workOrders.map((row) => ({ id: row.id, number: row.number, status: row.status, siteId: row.siteId, releasedAt: instantOrNull(row.releasedAt) })),
       // B-OP-023: + each shipment's detail for this reader (carrier and tracking with shipping.view over its site).
-      shipments: facts.shipments.map((row) => ({ id: row.id, number: row.number, status: row.status, shippedAt: instantOrNull(row.shippedAt), deliveredAt: instantOrNull(row.deliveredAt), ...shipmentRowOf(row, shipmentDetails, viewer) })),
+      shipments: facts.shipments.map((row) => ({
+        id: row.id,
+        number: row.number,
+        status: row.status,
+        shippedAt: instantOrNull(row.shippedAt),
+        deliveredAt: instantOrNull(row.deliveredAt),
+        ...shipmentRowOf(row, shipmentDetails, viewer),
+        // ── B-OP-043 (order page N6): every order it carries, how it was made, the paper DDT of one made elsewhere ──
+        orders: row.orders,
+        origin: row.origin,
+        externalDdt: row.externalDdt ? { number: row.externalDdt.number, date: dayOf(row.externalDdt.date) } : null,
+        // ── end B-OP-043 ──
+      })),
       invoices: facts.invoices.map((row) => ({ id: row.id, number: row.number, docType: row.docType, status: row.status, issueDate: dayOrNull(row.issueDate), depositRequestId: row.depositRequestId })),
     },
     promiseHistory: history,

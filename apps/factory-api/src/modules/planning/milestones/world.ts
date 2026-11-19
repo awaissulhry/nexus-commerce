@@ -30,6 +30,8 @@ import type { GateView, MilestoneView, OrderView } from './contract'
 import { action, GATE_COLUMNS, lacking, namesOf, ORDER_COLUMNS, SYSTEM_PASSER, type GateRow, type OrderRow, type Reader } from './store'
 // B-PR-38: a gate waiting for a customer's own round says why "Mark done" is held.
 import { portalOnParties } from '../../sales/sample-decisions/owner'
+// B-OP-043 (order page N6, lines-derived): the orders a shipment carries.
+import { orderIdsOfShipments, shipmentsOfOrdersWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * Time & action's read model (B-W2b-263; design planning.milestones sec:gates, sec:calendar): the open sales orders the caller
@@ -126,7 +128,8 @@ async function orderFactsOf(db: Reader, orderIds: readonly string[]): Promise<Ma
   const workOrderIds = workOrders.map((row) => row.id)
   const [slots, shipments, reservations] = await Promise.all([
     workOrderIds.length ? db.scheduleSlot.findMany({ where: { planKind: 'WORKING', workOrderId: { in: workOrderIds } }, select: { workOrderId: true, startAt: true } }) : Promise.resolve([]),
-    db.shipment.findMany({ where: { salesOrderId: { in: ids }, shippedAt: { not: null } }, select: { salesOrderId: true, shippedAt: true } }),
+    // B-OP-043 (order page N6): the shipments that left made for these orders or carrying their garments.
+    db.shipment.findMany({ where: { ...shipmentsOfOrdersWhere(ids), shippedAt: { not: null } }, select: { id: true, salesOrderId: true, shippedAt: true } }),
     db.reservation.findMany({
       where: {
         status: { in: ['ACTIVE', 'ISSUED'] },
@@ -148,9 +151,13 @@ async function orderFactsOf(db: Reader, orderIds: readonly string[]): Promise<Ma
       facts.get(orderId)!.workOrders.push({ id: workOrder.id, kind: workOrder.kind, status: workOrder.status, startedAt: workOrder.startedAt, firstBar: firstBarOf.get(workOrder.id) ?? null })
     }
   }
+  // B-OP-043: each order the shipment carries (its lines' orders, the first first) gets its first shipped day.
+  const carried = await orderIdsOfShipments(db, shipments)
   for (const shipment of shipments) {
-    const entry = facts.get(shipment.salesOrderId)
-    if (entry && shipment.shippedAt && (entry.shippedAt === null || shipment.shippedAt < entry.shippedAt)) entry.shippedAt = shipment.shippedAt
+    for (const orderId of carried.get(shipment.id) ?? [shipment.salesOrderId]) {
+      const entry = facts.get(orderId)
+      if (entry && shipment.shippedAt && (entry.shippedAt === null || shipment.shippedAt < entry.shippedAt)) entry.shippedAt = shipment.shippedAt
+    }
   }
   for (const reservation of reservations) {
     if (!reservation.lot) continue

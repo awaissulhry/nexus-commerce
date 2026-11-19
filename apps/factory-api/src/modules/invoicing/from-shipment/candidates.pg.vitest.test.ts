@@ -83,6 +83,8 @@ const grant = (permissions: Permission[], parties: Grant['parties'] = 'all'): Gr
 const office = (grants: Grant[]): SessionContext => ({ audience: 'office', tenantId: A.tenant, actorId: newId(), grants })
 const SESSIONS: Record<string, () => SessionContext> = {
   finance: () => office([grant(MONEY)]),
+  // B-OP-045: Finance that also reads margins and freight (the profitability's documents).
+  margins: () => office([grant([...MONEY, 'costing.view', 'shipping.view', 'money.cost'])]),
   /** Finance limited to brand B (SEED-C2). */
   brandBOnly: () => office([grant(MONEY, [A.brandB])]),
   noPrice: () => office([grant(['invoices.view', 'invoices.manage'])]),
@@ -189,3 +191,94 @@ describe('B-TH-062: invoice the shipped goods of chosen orders (Finance)', () =>
     expect(unknown.body).toMatchObject({ drafts: [], held: [] })
   })
 })
+
+// ---- B-OP-045 (order page N6, lines-derived): money reads a shared shipment's orders through its lines; invoices stay one per
+// order (pick P9). Two copies of SEED-SO-0002 for brand A (X first, Y), ONE copy of SH-0001 carrying the lines of both, past the
+// guards (the API refuses a second order until B-OP-047): with its DDT for the From-DDTs candidates, and one without a DDT for
+// the immediate invoice (its freight 15.00).
+describe('B-OP-045: a shipment of two orders of one customer, in money', () => {
+  const X: Record<string, string> = {}
+  async function sharedShipment(key: string, ddt: boolean): Promise<{ shipmentId: string; ddtId: string | null }> {
+    const shipmentId = newId()
+    await copy('Shipment', money.shipping.shipmentId, { id: shipmentId, number: `TEST-SH-${key}`, salesOrderId: X.first, partyId: A.brandA, ddtRequired: ddt, freightCharge: ddt ? null : 1500 })
+    for (const orderId of [X.first!, X.second!]) {
+      const lines = await admin<{ id: string; seq: number }>('SELECT id, seq FROM "SalesOrderLine" WHERE "orderId" = $1', [orderId])
+      for (const line of await admin<{ id: string; seq: number }>('SELECT sl.id, l.seq FROM "ShipmentLine" sl JOIN "SalesOrderLine" l ON l.id = sl."salesOrderLineId" WHERE sl."shipmentId" = $1', [money.shipping.shipmentId])) {
+        const target = lines.find((row) => row.seq === line.seq)
+        if (target) await copy('ShipmentLine', line.id, { id: newId(), shipmentId, salesOrderLineId: target.id, partyId: A.brandA })
+      }
+    }
+    if (!ddt) return { shipmentId, ddtId: null }
+    const ddtId = newId()
+    await copy('Ddt', money.shipping.ddtId, { id: ddtId, number: `T${key}/2026`, shipmentId, partyId: A.brandA })
+    return { shipmentId, ddtId }
+  }
+
+  beforeAll(async () => {
+    const source = money.shipping.quality.production.salesOrderId
+    for (const [name, key] of [['first', 'X1'], ['second', 'Y1']] as const) {
+      const orderId = newId()
+      await copy('SalesOrder', source, { id: orderId, number: `TEST-SO-${key}`, partyId: A.brandA, quoteVersionId: null, customerSeq: null })
+      for (const line of await admin<{ id: string }>('SELECT id FROM "SalesOrderLine" WHERE "orderId" = $1', [source])) {
+        const lineId = newId()
+        await copy('SalesOrderLine', line.id, { id: lineId, orderId, partyId: A.brandA })
+        for (const size of await admin<{ id: string }>('SELECT id FROM "SalesOrderLineSize" WHERE "lineId" = $1', [line.id])) await copy('SalesOrderLineSize', size.id, { id: newId(), lineId, partyId: A.brandA })
+      }
+      X[name] = orderId
+    }
+    const withDdt = await sharedShipment('XY1', true)
+    X.ddt = withDdt.ddtId!
+    X.withDdt = withDdt.shipmentId
+    X.withoutDdt = (await sharedShipment('XY2', false)).shipmentId
+  })
+
+  it('From-DDTs candidates: one row per (DDT, order); a chosen order never brings an unchosen order\'s goods', async () => {
+    const both = await candidates('finance', [X.first!, X.second!])
+    expect(both.status, JSON.stringify(both.body)).toBe(200)
+    const draft = (both.body.drafts as Json[]).find((row) => (row.body.ddtIds as string[]).includes(X.ddt!))!
+    expect(draft.orders.map((order: Json) => order.number).sort()).toEqual(['TEST-SO-X1', 'TEST-SO-Y1'])
+    const rows = (draft.ddts as Json[]).filter((row) => row.ddtId === X.ddt)
+    expect(rows.map((row) => row.orderNumber).sort()).toEqual(['TEST-SO-X1', 'TEST-SO-Y1'])
+    expect(rows[0]!.garments).toBe(rows[1]!.garments)
+    const one = await candidates('finance', [X.second!])
+    const second = (one.body.drafts as Json[]).find((row) => (row.body.ddtIds as string[]).includes(X.ddt!))!
+    expect(second.orders.map((order: Json) => order.number)).toEqual(['TEST-SO-Y1'])
+    expect((second.ddts as Json[]).filter((row) => row.ddtId === X.ddt).map((row) => [row.orderNumber, row.garments])).toEqual([['TEST-SO-Y1', rows[0]!.garments]])
+    expect(JSON.stringify(second)).not.toContain('TEST-SO-X1')
+  })
+
+  it('the immediate invoice of a shipment without a DDT bills one order: asked when it carries two; freight once, on the first order\'s', async () => {
+    const post = (payload: Json) => app.inject({ method: 'POST', url: '/invoicing/invoices/from-shipment', headers: { 'x-test-session': 'finance' }, payload })
+    const unasked = await post({ shipmentId: X.withoutDdt })
+    expect(unasked.statusCode, unasked.body).toBe(400)
+    expect(unasked.json().error.issues).toEqual([{ path: 'body/salesOrderId', message: 'Required: the shipment carries several orders.' }])
+    expect((await post({ shipmentId: X.withoutDdt, salesOrderId: newId() })).statusCode).toBe(404)
+    const second = await post({ shipmentId: X.withoutDdt, salesOrderId: X.second })
+    expect(second.statusCode, second.body).toBe(201)
+    const secondLines = second.json().invoice.lines as Json[]
+    const yLines = new Set((await admin<{ id: string }>('SELECT id FROM "SalesOrderLine" WHERE "orderId" = $1', [X.second])).map((row) => row.id))
+    expect(secondLines.filter((line) => line.kind === 'GOODS').every((line) => yLines.has(line.salesOrderLineId))).toBe(true)
+    expect(secondLines.some((line) => line.kind === 'CHARGE')).toBe(false)
+    expect(second.json().freight).toEqual([{ reason: 'The freight of shipment TEST-SH-XY2 goes on the invoice of its first order.' }])
+    const first = await post({ shipmentId: X.withoutDdt, salesOrderId: X.first })
+    expect(first.statusCode, first.body).toBe(201)
+    const firstLines = first.json().invoice.lines as Json[]
+    expect(firstLines.filter((line) => line.kind === 'GOODS').some((line) => yLines.has(line.salesOrderLineId))).toBe(false)
+    expect(firstLines.filter((line) => line.kind === 'CHARGE')).toHaveLength(1)
+  })
+
+  it("profitability: each order carries its share of the shared shipment's freight, by the net of its own lines", async () => {
+    await force('UPDATE "Shipment" SET "freightCharge" = 1000 WHERE id = $1', [X.withDdt])
+    const shares: number[] = []
+    for (const orderId of [X.first!, X.second!]) {
+      const response = await app.inject({ method: 'GET', url: `/costing/margins/orders/${orderId}/documents`, headers: { 'x-test-session': 'margins' } })
+      expect(response.statusCode, response.body).toBe(200)
+      const row = (response.json().freight.rows as Json[]).find((entry) => entry.shipment.id === X.withDdt)
+      expect(row).toBeDefined()
+      shares.push(row!.charge)
+    }
+    // The two orders are copies (the same lines and prices): half each.
+    expect(shares).toEqual([500, 500])
+  })
+})
+// ---- end B-OP-045

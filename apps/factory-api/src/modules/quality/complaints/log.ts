@@ -99,7 +99,8 @@ export async function planAbout(db: Reader, asked: AboutFacts, problems: Issue[]
       size: asked.size ?? garment.size,
       batchNumber: asked.batchNumber ?? garment.batchNumber,
       shipmentId: asked.shipmentId ?? left?.id ?? null,
-      salesOrderId: asked.salesOrderId ?? (forThem && garment.companyId === companyId ? (left?.salesOrderId ?? garment.salesOrderId) : null),
+      // B-OP-045 (order page N6): the garment's own order (its line's), never only the first order of a shared shipment.
+      salesOrderId: asked.salesOrderId ?? (forThem && garment.companyId === companyId ? (garment.salesOrderId ?? left?.salesOrderId ?? null) : null),
     }
   }
   return { about, garment }

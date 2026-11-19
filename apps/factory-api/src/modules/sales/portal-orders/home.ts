@@ -36,7 +36,8 @@ export const SALES_ORDER_COUNTS: HomeSource = Object.freeze<HomeSource>({
       return { orders, shipments: await readShipments(client, orders.map((order) => order.id)) }
     })
     const week = weekOf(businessDate(now))
-    const statuses = orders.map((order) => ({ order, status: statusOfOrder(order, shipments.filter((row) => row.salesOrderId === order.id)) }))
+    // B-OP-044 (order page N6): a shared shipment counts on every order it carries.
+    const statuses = orders.map((order) => ({ order, status: statusOfOrder(order, shipments.filter((row) => row.salesOrderIds.includes(order.id))) }))
     const promised = (day: string | null): boolean => day !== null && day >= week.from && day <= week.to
     return {
       'orders.open': statuses.filter((entry) => isOpenForCustomer(entry.status)).length,

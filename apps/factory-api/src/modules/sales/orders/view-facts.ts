@@ -5,6 +5,8 @@ import { invoicedOf, type Invoiced } from '@nexus/factory-domain/sales/orders/in
 import { AT_RISK_STATUSES, riskDaysFor } from '@nexus/factory-domain/sales/orders/later-columns'
 import { plusCalendarDays } from '@nexus/factory-domain/timers/rules'
 import { asDay, LEFT, type Reader } from './store'
+// B-OP-043 (order page N6, lines-derived): pieces by the order of each line.
+import { piecesByOrderOf } from '../../shipping/shipments/orders-of'
 
 /**
  * What the orders of a whole view are, read in bulk (B-TH-058 / B-TH-059; threads plan TH-4; SHEET-G08): the overall view's
@@ -28,14 +30,10 @@ export interface OrderPieces {
 
 export async function piecesOf(client: Reader, where: Prisma.SalesOrderWhereInput): Promise<Map<string, OrderPieces>> {
   const lines = await client.salesOrderLine.groupBy({ by: ['orderId'], where: { order: where }, _sum: { quantity: true, closedShortQuantity: true } })
-  const shipments = await client.shipment.findMany({ where: { salesOrder: where, status: { in: [...LEFT] } }, select: { id: true, salesOrderId: true } })
-  const left = shipments.length > 0 ? await client.shipmentLine.groupBy({ by: ['shipmentId'], where: { shipmentId: { in: shipments.map((row) => row.id) } }, _sum: { quantity: true } }) : []
-  const orderOfShipment = new Map(shipments.map((row) => [row.id, row.salesOrderId]))
-  const shipped = new Map<string, number>()
-  for (const row of left) {
-    const orderId = orderOfShipment.get(row.shipmentId)
-    if (orderId) shipped.set(orderId, (shipped.get(orderId) ?? 0) + (row._sum.quantity ?? 0))
-  }
+  // B-OP-043 (order page N6, lines-derived): the shipments that left made for these orders or carrying their garments; each
+  // order's shipped pieces are its own lines' (a shared shipment counts on each order).
+  const shipments = await client.shipment.findMany({ where: { OR: [{ salesOrder: where }, { lines: { some: { salesOrderLine: { order: where } } } }], status: { in: [...LEFT] } }, select: { id: true } })
+  const shipped = await piecesByOrderOf(client, shipments.map((row) => row.id), lines.map((row) => row.orderId))
   const out = new Map<string, OrderPieces>()
   for (const row of lines) out.set(row.orderId, { ordered: row._sum.quantity ?? 0, closedShort: row._sum.closedShortQuantity ?? 0, shipped: shipped.get(row.orderId) ?? 0 })
   for (const [orderId, pieces] of shipped) if (!out.has(orderId)) out.set(orderId, { ordered: 0, closedShort: 0, shipped: pieces })
