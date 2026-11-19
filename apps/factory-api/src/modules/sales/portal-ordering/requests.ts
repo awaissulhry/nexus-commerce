@@ -444,12 +444,13 @@ export async function ownDraft(request: FastifyRequest, reader: PortalReader, re
  * the colleague who changed it meanwhile (`staleDraftError`).
  */
 export async function onDraft<Result>(app: FastifyInstance, request: FastifyRequest, name: `${string}.${string}`, row: RequestRow, version: number, input: unknown, idempotencyKey: string | undefined, work: (tools: CommandTools) => Promise<Result>) {
+  const editorId = portalReader(app, request).session.userId // B-CP-075: the portal person who saves (a link context has no actor id)
   try {
     return await commandOn(app, request, { name, idempotencyKey, input, record: { type: 'PortalOrderRequest', id: row.id, expectedVersion: version } }, async (tools) => {
       const current = await readRequest(tools.tx, row.id)
       if (current?.status !== 'DRAFT') throw new InvalidStateError('This request is no longer a draft.')
       const result = await work(tools)
-      await markEdited(tools.tx, row.id, tools.context.actorId, tools.now) // B-CP-075
+      await markEdited(tools.tx, row.id, editorId, tools.now) // B-CP-075
       draftChanged(tools, row) // B-CP-071
       return result
     })
@@ -894,7 +895,7 @@ export async function changeCustomLine(app: FastifyInstance, request: FastifyReq
 }
 
 /** The draft's by-person line for its people (made to measure open for a made-to-measure line), or a refusal in words. */
-async function rosterLine(request: FastifyRequest, reader: PortalReader, app: FastifyInstance, row: RequestRow, lineId: string): Promise<LineRow> {
+async function rosterLine(request: FastifyRequest, reader: PortalReader, row: RequestRow, lineId: string): Promise<LineRow> {
   const line = await request.withClient((client) => ownLine(client, row, lineId))
   if (!line.byPerson) {
     const words = PEOPLE_WORDS.NOT_BY_PERSON[partnerLocaleOf(reader.session.person.locale)]
@@ -918,7 +919,7 @@ async function checkPerson(request: FastifyRequest, row: RequestRow, person: Per
 export async function addPeople(app: FastifyInstance, request: FastifyRequest, requestId: string, lineId: string, body: { readonly version: number; readonly people: readonly PersonInput[] }, idempotencyKey?: string) {
   const reader = portalReader(app, request)
   const row = await ownDraft(request, reader, requestId)
-  await rosterLine(request, reader, app, row, lineId)
+  await rosterLine(request, reader, row, lineId)
   for (const [index, person] of body.people.entries()) await checkPerson(request, row, person, `body/people/${index}`)
   await onDraft(app, request, 'portalOrdering.addPeople', row, body.version, { requestId, lineId, people: body.people.length }, idempotencyKey, async (tools) => {
     const { tx, now } = tools
@@ -959,7 +960,7 @@ export async function changePerson(
 ) {
   const reader = portalReader(app, request)
   const row = await ownDraft(request, reader, requestId)
-  await rosterLine(request, reader, app, row, lineId)
+  await rosterLine(request, reader, row, lineId)
   const person = await request.withClient((client) => ownPerson(client, lineId, personId))
   const measureBy = body.measureBy ?? person.measureBy
   // A new way of being measured starts from its own field (the other one is dropped: personRow keeps only the field of its way).

@@ -108,7 +108,7 @@ let orderId = ''
 let quote: Json
 
 beforeAll(async () => {
-  h = await startHarness('cp015_priced_documents')
+  h = await startHarness('cp015_priced_docs')
   h.clock.set(new Date())
   const context: SeedContext = { db: h.database, namespace: NS }
   for (const file of readdirSync(SEED_DIR).filter((name) => name.endsWith('.ts')).sort()) {

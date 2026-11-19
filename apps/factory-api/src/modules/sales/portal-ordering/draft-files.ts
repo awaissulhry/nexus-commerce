@@ -75,10 +75,11 @@ async function draftFile(uploader: CommandCaller, row: RequestRow, fileId: strin
  * the draft (the draft's version stays: parallel uploads never 409 each other), and `also` what the file's move changes on the draft.
  */
 async function recordOnDraft(app: FastifyInstance, request: FastifyRequest, row: RequestRow, name: `${string}.${string}`, idempotencyKey: string | undefined, after: Record<string, unknown>, also?: (tools: CommandTools) => Promise<Record<string, unknown>>): Promise<void> {
+  const editorId = portalReader(app, request).session.userId // B-CP-075: the portal person who saves (a link context has no actor id)
   await commandOn(app, request, { name, idempotencyKey: idempotencyKey ? `${idempotencyKey}:draft` : undefined, input: { requestId: row.id, ...after } }, async (tools) => {
     const more = also ? await also(tools) : {}
     tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after: { ...after, ...more } })
-    await markEdited(tools.tx, row.id, tools.context.actorId, tools.now) // B-CP-075
+    await markEdited(tools.tx, row.id, editorId, tools.now) // B-CP-075
     draftChanged(tools, row)
     return null
   })
