@@ -241,12 +241,13 @@ describe('B-SA-061: a message says which part of its order it is about', { timeo
     part.otherCustomerLine = (await admin<{ id: string }>('SELECT id FROM "SalesOrderLine" WHERE "tenantId" = $1 AND "partyId" <> $2 ORDER BY id LIMIT 1', [T, partyA]))[0]!.id
     part.otherCustomerWorkOrder = (await admin<{ id: string }>('SELECT id FROM "WorkOrder" WHERE "tenantId" = $1 AND "partyId" IS NOT NULL AND "partyId" <> $2 ORDER BY id LIMIT 1', [T, partyA]))[0]!.id
     // A work order made before the one-customer rule (no customer), making a line of this order: SEED-WO-0001 copied with no
-    // customer and one cell of the order's line (the database's rules off for this one statement, as the copy step met them).
+    // customer, its own number and batch number (both unique in the tenant), and one cell of the order's line (the
+    // database's rules off for this one statement, as the copy step met them).
     part.mixedWorkOrder = newId()
     await h.db.admin.query(
       `BEGIN;
        SET LOCAL session_replication_role = replica;
-       INSERT INTO "WorkOrder" SELECT (jsonb_populate_record(NULL::"WorkOrder", to_jsonb(w) || jsonb_build_object('id', '${part.mixedWorkOrder}', 'number', 'T-SA061-MIX', 'partyId', NULL))).* FROM "WorkOrder" w WHERE w.id = '${workOrder!.id}';
+       INSERT INTO "WorkOrder" SELECT (jsonb_populate_record(NULL::"WorkOrder", to_jsonb(w) || jsonb_build_object('id', '${part.mixedWorkOrder}', 'number', 'T-SA061-MIX', 'batchNumber', 'T-SA061-MIX', 'partyId', NULL))).* FROM "WorkOrder" w WHERE w.id = '${workOrder!.id}';
        INSERT INTO "WorkOrderSize" SELECT (jsonb_populate_record(NULL::"WorkOrderSize", to_jsonb(c) || jsonb_build_object('id', '${newId()}', 'workOrderId', '${part.mixedWorkOrder}'))).* FROM "WorkOrderSize" c WHERE c."workOrderId" = '${workOrder!.id}' AND c."salesOrderLineId" = '${part.line}' ORDER BY c.id LIMIT 1;
        COMMIT;`,
     )
