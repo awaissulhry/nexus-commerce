@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ApiClient } from '../../api/client'
 import { getWorkOrder, updateWorkOrder, type WorkOrder } from '../../../areas/production/_shared/api'
 import { readProblem as productionReadProblem, writeProblem as productionWriteProblem } from '../../../areas/production/_shared/model'
@@ -13,6 +13,12 @@ import { holdReasons, liftProductionHold, listProductionHolds, placeHold, placeP
 import { dailyProblem, dailyReadProblem, type PlaceHoldInput } from '../../../areas/production/work-orders/daily/model'
 import { fromWorkOrders, releaseProblemOf } from './model'
 // ---- end F-OP-114
+// ---- F-OP-115: Split… (the every-shift page's own hook), Close… · Reopen… (the close's own hook), Cancel… (with its cancel check) ----
+import { cancelWorkOrder } from '../../../areas/production/_shared/api'
+import { useSplit, type SplitActions, type SplitModel } from '../../../areas/production/work-orders/every-shift/use-split'
+import { useClose, type CloseActions, type CloseModel } from '../../../areas/production/work-orders/close/use-close'
+import { getWorkOrderCancelCheck, type WorkOrderCancelCheck } from './api'
+// ---- end F-OP-115
 
 /** One row's in-place save: the cell that is saving, or why the last write was refused (said on the row). */
 export interface RowSave {
@@ -38,6 +44,8 @@ export interface ActsDialog {
   /** Release…: the release check (each condition in words), read again after a refusal. */
   readonly check?: Part<ReleaseCheck>
   // ---- end F-OP-114
+  /** F-OP-115: Cancel…: what cancelling it would meet (its cut pieces refuse it in words; issued stock; at a workshop). */
+  readonly cancelCheck?: Part<WorkOrderCancelCheck>
 }
 
 export interface WorkOrderActsModel {
@@ -49,6 +57,12 @@ export interface WorkOrderActsModel {
   readonly dialog: ActsDialog | null
   /** F-OP-114: the HOLD and PRODUCTION_HOLD reasons (read once, when Hold… first opens; null while read or not asked). */
   readonly reasons: PickerReason[] | null
+  // ---- F-OP-115 ----
+  /** Split…: the every-shift page's split (its preview as the person types); null: not open. */
+  readonly split: SplitModel | null
+  /** Close… · Reopen…: the close's own model (its check, its dialog); drawn with CloseParts. */
+  readonly close: CloseModel
+  // ---- end F-OP-115
 }
 
 export interface WorkOrderActsActions {
@@ -65,6 +79,11 @@ export interface WorkOrderActsActions {
   onLiftHold?: (input: { holdId: string; version: number; reason: string }) => void
   onRelease?: (overrideReason: string | null) => void
   // ---- end F-OP-114
+  // ---- F-OP-115 ----
+  onCancelWorkOrder?: (reason: string) => void
+  split?: SplitActions
+  close?: CloseActions
+  // ---- end F-OP-115
 }
 
 /** What the page says after a write (its one banner), and whether the order's production read is read again. */
@@ -152,6 +171,16 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
     },
     [api],
   )
+  // F-OP-115: Cancel…'s check (the cut pieces, the issued stock, the workshops).
+  const readCancelCheck = useCallback(
+    (workOrderId: string) => {
+      setDialog((now) => (now && now.workOrderId === workOrderId ? { ...now, cancelCheck: READING } : now))
+      getWorkOrderCancelCheck(api, workOrderId)
+        .then((value) => setDialog((now) => (now && now.workOrderId === workOrderId ? { ...now, cancelCheck: { value, problem: null } } : now)))
+        .catch((error: unknown) => setDialog((now) => (now && now.workOrderId === workOrderId ? { ...now, cancelCheck: { value: null, problem: productionReadProblem(error) } } : now)))
+    },
+    [api],
+  )
   const reasonsAsked = useRef(false)
   const readReasons = useCallback(() => {
     if (reasonsAsked.current) return
@@ -175,8 +204,9 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
       if (act === 'release') readCheck(row.id)
       if (act === 'hold') readReasons()
       // ---- end F-OP-114
+      if (act === 'cancel') readCancelCheck(row.id) // F-OP-115
     },
-    [readFor, readHolds, readCheck, readReasons],
+    [readFor, readHolds, readCheck, readReasons, readCancelCheck],
   )
 
   /** A dialog's write: busy while it goes, the dialog closed and the page told on success, the refusal kept in it otherwise. */
@@ -199,10 +229,52 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
           // F-OP-114: what changed since it was read shows again (the release check, the holds).
           if (current.kind === 'release') readCheck(current.workOrderId)
           if (current.kind === 'lift') readHolds(current.workOrderId)
+          if (current.kind === 'cancel') readCancelCheck(current.workOrderId) // F-OP-115: cut meanwhile? its words show
         })
     },
-    [dialog, answered, told, readFor, readCheck, readHolds],
+    [dialog, answered, told, readFor, readCheck, readHolds, readCancelCheck],
   )
+
+  // ---- F-OP-115: Split… and Close… · Reopen… — the production lane's own hooks, on the work order read afresh ----
+  const current = useRef(dialog)
+  current.current = dialog
+  const splitTarget = dialog?.kind === 'split' ? dialog.workOrder.value : null
+  const split = useSplit(api, splitTarget, (child) => {
+    const parent = current.current?.number ?? ''
+    setDialog(null)
+    written.current({ notice: { key: 'wo.notice.split', params: { number: parent, child: child.number } } })
+  })
+  const splitOpened = useRef<string | null>(null)
+  useEffect(() => {
+    if (!splitTarget) {
+      splitOpened.current = null
+      return
+    }
+    if (splitOpened.current === splitTarget.id) return
+    splitOpened.current = splitTarget.id
+    split.open()
+  }, [splitTarget, split.open])
+  const closeTarget = dialog && (dialog.kind === 'close' || dialog.kind === 'reopen') ? dialog.workOrder.value : null
+  const close = useClose(api, closeTarget, permissions, (next) => {
+    answered(next)
+    const asked = current.current
+    setDialog(null)
+    written.current({ notice: { key: asked?.kind === 'reopen' ? 'wo.notice.reopened' : 'wo.notice.closed', params: { number: asked?.number ?? next.number } } })
+  })
+  const closeOpened = useRef<string | null>(null)
+  const closeKind = dialog?.kind
+  useEffect(() => {
+    if (!closeTarget) {
+      closeOpened.current = null
+      return
+    }
+    const key = `${closeKind}:${closeTarget.id}`
+    if (closeOpened.current === key) return
+    closeOpened.current = key
+    if (closeKind === 'reopen') close.actions.onOpenReopen?.()
+    else close.actions.onOpen?.()
+  }, [closeTarget, closeKind, close.actions])
+  // ---- end F-OP-115
 
   const actions: WorkOrderActsActions = {
     onDue: (row, day) => inline(row, 'due', { dueDate: day || null }),
@@ -216,6 +288,7 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
       // F-OP-114: + the dialog's own read that failed (the holds, the release check).
       if (dialog.kind === 'lift' && dialog.holds?.problem) readHolds(dialog.workOrderId)
       if (dialog.kind === 'release' && dialog.check?.problem) readCheck(dialog.workOrderId)
+      if (dialog.kind === 'cancel' && dialog.cancelCheck?.problem) readCancelCheck(dialog.workOrderId) // F-OP-115
     },
     onSaveNote: (note) => dialogWrite((workOrder) => updateWorkOrder(api, workOrder.id, { version: workOrder.version, note: note.trim() || null }), { notice: { key: 'wo.note.saved', params: { number: dialog?.number ?? '' } }, floor: false }),
     // ---- F-OP-114: the kind the picked reason decides — a production hold (B-PR-21, with the version) or a quality hold ----
@@ -245,7 +318,30 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
         releaseProblemOf,
       ),
     // ---- end F-OP-114
+    // ---- F-OP-115 ----
+    onCancelWorkOrder: (reason) => {
+      // A released or started one: the floor stops it (its tablets follow); a draft never reached the floor.
+      const floor = (dialog?.workOrder.value?.status ?? 'DRAFT') !== 'DRAFT'
+      dialogWrite((workOrder) => cancelWorkOrder(api, workOrder.id, workOrder.version, reason.trim()), { notice: { key: 'wo.notice.cancelled', params: { number: dialog?.number ?? '' } }, floor })
+    },
+    split: {
+      ...split.actions,
+      onClose: () => {
+        if (split.model?.busy) return
+        split.actions.onClose?.()
+        setDialog(null)
+      },
+    },
+    close: {
+      ...close.actions,
+      onCancel: () => {
+        if (close.model.busy) return
+        close.actions.onCancel?.()
+        setDialog(null)
+      },
+    },
+    // ---- end F-OP-115
   }
 
-  return { model: { can, saves, toldAt, dialog, reasons /* F-OP-114 */ }, actions }
+  return { model: { can, saves, toldAt, dialog, reasons /* F-OP-114 */, split: split.model, close: close.model /* F-OP-115 */ }, actions }
 }

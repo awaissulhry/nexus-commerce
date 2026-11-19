@@ -1736,7 +1736,11 @@
       "note": "Note…",
       "hold": "Hold…",
       "lift": "Lift the hold…",
-      "release": "Release…"
+      "release": "Release…",
+      "split": "Split…",
+      "cancel": "Cancel…",
+      "close": "Close…",
+      "reopen": "Reopen…"
     },
     "note": {
       "title": "Note on {number}",
@@ -1751,7 +1755,11 @@
     "notice": {
       "held": "{number} is on hold: the floor was told",
       "lifted": "{number}: the hold is lifted",
-      "released": "{number} released: the floor can start"
+      "released": "{number} released: the floor can start",
+      "cancelled": "{number} cancelled: its pieces go back to the order lines",
+      "split": "{number} split: {child} made (draft)",
+      "closed": "{number} closed",
+      "reopened": "{number} reopened"
     },
     "checksOpen_one": "{count} check holds the release",
     "checksOpen_other": "{count} checks hold the release",
@@ -1760,6 +1768,17 @@
       "gate": "A compliance gate holds the release: see Compliance › Gate refusals.",
       "refused_one": "The release check holds it: {count} check changed since it was read — see the list.",
       "refused_other": "The release check holds it: {count} checks changed since they were read — see the list."
+    },
+    "link": {
+      "planning": "Open in Planning ›",
+      "open": "Open the work order"
+    },
+    "heldReopen": "Production does this — the production manager",
+    "cancel": {
+      "check": "What cancelling it meets",
+      "notNow": "A work order in this state is not cancelled",
+      "issued": "Issued to it (it stays on it until returned by hand): {items}",
+      "atWorkshop": "At a workshop: {numbers}"
     }
   }
 }

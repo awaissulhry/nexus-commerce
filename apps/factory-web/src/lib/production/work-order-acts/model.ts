@@ -8,6 +8,10 @@ import { releaseRefusalCodes, writeProblem as productionWriteProblem } from '../
  *   in place   Due (a day), Priority (a whole number, higher first) and Rush — until the work order is closed or cancelled
  *   row ⋯      Note… (always, but on a work order shared with other customers);
  *              F-OP-114: Hold… (a draft, released or started one not held), Lift… (a held one), Release… (a draft)
+ *              F-OP-115: Split… (a draft), Cancel… (a draft, released or started one; with cut pieces refused in words — R-16),
+ *              Close… (a completed one) · Reopen… (a closed one); Open in Planning › (line, workshop, start, outside: the board)
+ *              and Open the work order — links. Scrap and cut orders stay links on their own pages; Dispatch never shows here
+ *              (it names workers).
  *
  * Every write sends the version the row carries (B6: the order's production read gives it) or the newer one a write answered. A work
  * order made before the one-customer rule (shared with other customers) is changed on its own page only: the row offers nothing but
@@ -79,14 +83,21 @@ export function actsCanOf(permissions: readonly string[]): ActsCan {
 export const INLINE_FIELDS = ['due', 'priority', 'rush'] as const
 export type InlineField = (typeof INLINE_FIELDS)[number]
 
-/** The row ⋯ acts, in the order the menu lists them (F-OP-114: + hold, lift, release). */
-export const MENU_ACTS = ['note', 'hold', 'lift', 'release'] as const
+/** The row ⋯ acts, in the order the menu lists them (F-OP-114: + hold, lift, release; F-OP-115: + split, cancel, close, reopen). */
+export const MENU_ACTS = ['note', 'hold', 'lift', 'release', 'split', 'cancel', 'close', 'reopen'] as const
 export type MenuAct = (typeof MENU_ACTS)[number]
 
 /** A closed or cancelled work order keeps its due date, priority and rush (only its note changes: the API's rule). */
 export const FINAL_STATUSES: readonly string[] = Object.freeze(['CLOSED', 'CANCELLED'])
 /** F-OP-114: a work order is put on hold while a draft, released or started (the daily page's rule, HOLDABLE). */
 export const HOLDABLE_STATUSES: readonly string[] = Object.freeze(['DRAFT', 'RELEASED', 'IN_PROGRESS'])
+/** F-OP-115: the machine cancels a draft, released or started work order (never a held, completed or final one). */
+export const CANCELLABLE_STATUSES: readonly string[] = Object.freeze(['DRAFT', 'RELEASED', 'IN_PROGRESS'])
+/** F-OP-115: only the production manager reopens a closed work order (workorders.reopen). */
+export const HELD_REOPEN: Phrase = Object.freeze({ key: 'wo.heldReopen' })
+/** F-OP-115: the row ⋯'s links (never an act): the planning board at this work order, and the work order's own page. */
+export const MENU_LINKS = ['planning', 'open'] as const
+export type MenuLink = (typeof MENU_LINKS)[number]
 
 /** Production's people do it: a planner or the production manager (Planner / PM hold workorders.manage, .release and .hold). */
 export const HELD_FOR_SALES: Phrase = Object.freeze({ key: 'wo.heldHold' })
@@ -98,6 +109,8 @@ export interface RowActs {
   readonly inline: { readonly held: Phrase | null } | null
   /** The row ⋯, each act open (held null) or held in words. Empty: no ⋯ on the row. */
   readonly menu: readonly { readonly act: MenuAct; readonly held: Phrase | null }[]
+  /** F-OP-115: the row ⋯'s links after its acts (Open in Planning ›, Open the work order); none on a shared row. */
+  readonly links?: readonly MenuLink[]
 }
 
 const NOTHING: RowActs = Object.freeze({ shared: null, inline: null, menu: [] })
@@ -116,7 +129,14 @@ export function rowActsOf(row: ActsRow, can: ActsCan): RowActs {
   else if (HOLDABLE_STATUSES.includes(row.status)) menu.push({ act: 'hold', held: hold })
   if (row.status === 'DRAFT') menu.push({ act: 'release', held: rights.release ? null : HELD_FOR_SALES })
   // ---- end F-OP-114
-  return { shared: null, inline: final ? null : { held: manage }, menu }
+  // ---- F-OP-115: Split… (a draft), Cancel…, Close… (completed) · Reopen… (closed); the links ----
+  if (row.status === 'DRAFT') menu.push({ act: 'split', held: manage })
+  if (CANCELLABLE_STATUSES.includes(row.status)) menu.push({ act: 'cancel', held: manage })
+  if (row.status === 'COMPLETED') menu.push({ act: 'close', held: manage })
+  if (row.status === 'CLOSED') menu.push({ act: 'reopen', held: can.reopen ? null : HELD_REOPEN })
+  const links: MenuLink[] = [...(can.planning && !final ? (['planning'] as const) : []), 'open']
+  // ---- end F-OP-115
+  return { shared: null, inline: final ? null : { held: manage }, menu, links }
 }
 
 /**
@@ -177,3 +197,22 @@ export function releaseProblemOf(error: unknown): Phrase {
   return fromProduction(productionWriteProblem(error))
 }
 // ---- end F-OP-114
+
+// ---- F-OP-115 ----
+/**
+ * Why Cancel… waits, from the cancel check: with cut pieces the API's own words (no outcome picker, R-16: "{n} pieces are cut: lower
+ * the work order to the cut instead"); a state the machine does not cancel; else the reason it asks. A string is the API's words in
+ * the reader's language; a phrase is a key.
+ */
+export function cancelHeld(check: { readonly cancellable: boolean; readonly refusal: Words | null } | null, reason: string, busy: boolean, locale: string): string | Phrase | null {
+  if (busy) return { key: 'production:held.busy' }
+  if (!check) return { key: 'production:held.checking' }
+  if (check.refusal) return locale === 'it' ? check.refusal.it : check.refusal.en
+  if (!check.cancellable) return { key: 'wo.cancel.notNow' }
+  if (reason.trim().length === 0) return { key: 'production:cancel.reasonNeeded' }
+  return null
+}
+
+/** The planning board at one work order (its bar's detail opens: line, workshop, start, an outside operation). */
+export const planningHref = (prefix: string, workOrderId: string): string => `${prefix}/planning/board?wo=${encodeURIComponent(workOrderId)}`
+// ---- end F-OP-115

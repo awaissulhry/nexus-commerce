@@ -13,6 +13,8 @@ import { FAILED_STATE, LOADING_STATE, ready, WORK_READ } from './overview/fixtur
 import { LINE_BLK, LINE_RED } from '../_demo/fixtures'
 // F-SA-235b
 import { designScreen as workOrderScreen } from '../../../production/work-orders/record/fixtures'
+// F-OP-115: the work-order row's rules (lib/production/work-order-acts)
+import { actsCanOf, cancelHeld, planningHref, rowActsOf, type ActsRow } from '../../../../lib/production/work-order-acts/model'
 
 /**
  * Lead fix (production-page lane): the order's Production tab wrote `sewn ?? 0` — "0 sewn" where the site does not scan sewing.
@@ -385,3 +387,75 @@ describe('F-OP-113: the work-order rows act in place; a work order shared with o
   })
 })
 // ---- end F-OP-113
+
+// ---- F-OP-115 (10-order-page §5.2; review R-16): the rest of the row — Split, Cancel, Close · Reopen; the links -------------------
+
+describe('F-OP-115: Split…, Cancel…, Close… · Reopen…, Open in Planning › and Open the work order on a work-order row', () => {
+  const planner = actsCanOf(['workorders.view', 'workorders.manage', 'workorders.release', 'workorders.hold', 'planning.view'])
+  const manager = actsCanOf(['workorders.view', 'workorders.manage', 'workorders.reopen'])
+  const rights = { manage: true, release: true, hold: true, why: null }
+  const row = (over: Partial<ActsRow> = {}): ActsRow => ({ id: 'wo-1', number: 'WO-00021', status: 'RELEASED', held: false, rush: false, due: null, sharedWithOtherCustomers: false, version: 3, priority: 0, rights, ...over })
+  const acts = (offer: ReturnType<typeof rowActsOf>) => offer.menu.map((entry) => entry.act)
+
+  it('a draft splits and cancels; a released or started one cancels; a held one does not (lift it first); completed closes; closed reopens', () => {
+    expect(acts(rowActsOf(row({ status: 'DRAFT' }), planner))).toEqual(['note', 'hold', 'release', 'split', 'cancel'])
+    expect(acts(rowActsOf(row({ status: 'IN_PROGRESS' }), planner))).toEqual(['note', 'hold', 'cancel'])
+    expect(acts(rowActsOf(row({ status: 'ON_HOLD', held: true }), planner))).toEqual(['note', 'lift'])
+    expect(acts(rowActsOf(row({ status: 'COMPLETED' }), planner))).toEqual(['note', 'close'])
+    expect(acts(rowActsOf(row({ status: 'CLOSED' }), manager))).toEqual(['note', 'reopen'])
+    expect(rowActsOf(row({ status: 'CLOSED' }), manager).menu.find((entry) => entry.act === 'reopen')!.held).toBeNull()
+    // Only the production manager reopens: a planner reads who does it.
+    expect(rowActsOf(row({ status: 'CLOSED' }), planner).menu.find((entry) => entry.act === 'reopen')!.held).toEqual({ key: 'wo.heldReopen' })
+  })
+
+  it('the links: Open in Planning › (planning.view, an open work order) and Open the work order; a shared row has none; Dispatch never', () => {
+    expect(rowActsOf(row(), planner).links).toEqual(['planning', 'open'])
+    expect(rowActsOf(row(), manager).links).toEqual(['open'])
+    expect(rowActsOf(row({ status: 'CLOSED' }), planner).links).toEqual(['open'])
+    expect(rowActsOf(row({ sharedWithOtherCustomers: true, rights: { manage: false, release: false, hold: false, why: { en: 'x', it: 'x' } } }), planner).links ?? []).toEqual([])
+    expect(planningHref('/w/demo', 'wo-1')).toBe('/w/demo/planning/board?wo=wo-1')
+    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
+    expect(tab).not.toMatch(/dispatch/i)
+  })
+
+  it('unit: with cut pieces Cancel… holds with the API’s own words (no picker); nothing cut asks the reason', () => {
+    const refusal = { en: '8 pieces are cut: lower the work order to the cut instead', it: "8 pezzi sono già tagliati: riduci l'ordine di lavoro al tagliato" }
+    expect(cancelHeld({ cancellable: false, refusal }, 'whatever', false, 'en')).toBe(refusal.en)
+    expect(cancelHeld({ cancellable: false, refusal }, '', false, 'it')).toBe(refusal.it)
+    expect(cancelHeld({ cancellable: false, refusal: null }, 'why', false, 'en')).toEqual({ key: 'wo.cancel.notNow' })
+    expect(cancelHeld({ cancellable: true, refusal: null }, '  ', false, 'en')).toEqual({ key: 'production:cancel.reasonNeeded' })
+    expect(cancelHeld({ cancellable: true, refusal: null }, 'Il cliente ha chiuso la stagione.', false, 'en')).toBeNull()
+    expect(cancelHeld(null, 'why', false, 'en')).toEqual({ key: 'production:held.checking' })
+    // The dialog draws no outcome to pick (R-16): the refusal is a Banner, the reason field only when nothing is cut.
+    const dialogs = readFileSync(new URL('../../../../lib/production/work-order-acts/view/WorkOrderActsDialogs.tsx', import.meta.url), 'utf8')
+    expect(dialogs).toContain('check.refusal ? (')
+    expect(dialogs).not.toMatch(/RadioCard|outcome/)
+  })
+
+  it('Split… and Close… · Reopen… are the production lane’s own (useSplit + SplitDialog, useClose + CloseParts — never a copy)', () => {
+    const hook = readFileSync(new URL('../../../../lib/production/work-order-acts/use-work-order-acts.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("from '../../../areas/production/work-orders/every-shift/use-split'")
+    expect(hook).toContain("from '../../../areas/production/work-orders/close/use-close'")
+    expect(hook).toContain('cancelWorkOrder(api, workOrder.id, workOrder.version, reason.trim())')
+    const dialogs = readFileSync(new URL('../../../../lib/production/work-order-acts/view/WorkOrderActsDialogs.tsx', import.meta.url), 'utf8')
+    expect(dialogs).toContain('<SplitDialog workOrder={dialog.workOrder.value} model={model.split} actions={actions?.split} />')
+    expect(dialogs).toContain('<CloseParts workOrder={dialog.workOrder.value} model={model.close} actions={actions?.close} />')
+  })
+
+  it('the gate’s Money door is a tab link (F-OP-210: the dock’s scope kept), no plain ?tab= link', () => {
+    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
+    expect(tab).not.toContain('?tab=money')
+    expect(tab).toContain("<TabLink href={tabHref(`${model.prefix}/sales/orders/${order.id}`, 'money', search)}>{t('gate.money')}</TabLink>")
+  })
+
+  it('the words in it + en', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['wo.act.split', 'wo.act.cancel', 'wo.act.close', 'wo.act.reopen', 'wo.act.hold', 'wo.act.lift', 'wo.act.release', 'wo.link.planning', 'wo.link.open', 'wo.heldReopen', 'wo.cancel.check', 'wo.cancel.notNow', 'wo.cancel.issued', 'wo.cancel.atWorkshop', 'wo.notice.cancelled', 'wo.notice.split', 'wo.notice.closed', 'wo.notice.reopened', 'wo.notice.held', 'wo.notice.lifted', 'wo.notice.released', 'wo.release.credit', 'wo.release.gate'])
+        expect(t(key, { number: 'WO-00021', child: 'WO-00030', items: 'x', numbers: 'SC-1', count: 2 }), `${locale} ${key}`).not.toMatch(/^wo\.|\{/)
+      expect(t('wo.checksOpen', { count: 2 })).toMatch(/2/)
+      expect(t('wo.release.refused', { count: 1 })).toMatch(/1/)
+    }
+  })
+})
+// ---- end F-OP-115

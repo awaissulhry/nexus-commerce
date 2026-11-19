@@ -255,7 +255,10 @@ describe('F-OP-113: what a work-order row offers its reader on the order page', 
   it('a planner: due, priority and rush in place, Note… open; a closed or cancelled one keeps only its note', () => {
     expect(rowActsOf(row(), planner)).toMatchObject({ shared: null, inline: { held: null } })
     expect(rowActsOf(row(), planner).menu[0]).toEqual({ act: 'note', held: null })
-    for (const status of ['CLOSED', 'CANCELLED']) expect(rowActsOf(row({ status }), planner)).toEqual({ shared: null, inline: null, menu: [{ act: 'note', held: null }] })
+    for (const status of ['CLOSED', 'CANCELLED']) {
+      expect(rowActsOf(row({ status }), planner)).toMatchObject({ shared: null, inline: null })
+      expect(rowActsOf(row({ status }), planner).menu[0]).toEqual({ act: 'note', held: null })
+    }
   })
 
   it('Sales (no right over the work order): every act held in words — "Production does this — …", never hidden', () => {
@@ -299,11 +302,16 @@ describe('F-OP-114: Hold…, Lift… and Release… on a work-order row; the dia
   const row = (over: Partial<ActsRow> = {}): ActsRow => ({ id: 'wo-1', number: 'WO-00021', status: 'RELEASED', held: false, rush: false, due: null, sharedWithOtherCustomers: false, version: 3, priority: 0, rights, ...over })
   const acts = (offer: ReturnType<typeof rowActsOf>) => offer.menu.map((entry) => entry.act)
 
-  it('a released one is held from its row, a held one lifted, a draft held or released; closed: nothing but its note', () => {
-    expect(acts(rowActsOf(row(), planner))).toEqual(['note', 'hold'])
-    expect(acts(rowActsOf(row({ status: 'ON_HOLD', held: true }), planner))).toEqual(['note', 'lift'])
-    expect(acts(rowActsOf(row({ status: 'DRAFT' }), planner))).toEqual(['note', 'hold', 'release'])
-    expect(acts(rowActsOf(row({ status: 'CLOSED' }), planner))).toEqual(['note'])
+  it('a released one is held from its row, a held one lifted, a draft held or released; closed: none of them', () => {
+    const released = acts(rowActsOf(row(), planner))
+    expect(released).toEqual(expect.arrayContaining(['note', 'hold']))
+    expect(released).not.toContain('lift')
+    expect(released).not.toContain('release')
+    const held = acts(rowActsOf(row({ status: 'ON_HOLD', held: true }), planner))
+    expect(held).toContain('lift')
+    expect(held).not.toContain('hold')
+    expect(acts(rowActsOf(row({ status: 'DRAFT' }), planner))).toEqual(expect.arrayContaining(['note', 'hold', 'release']))
+    for (const act of ['hold', 'lift', 'release']) expect(acts(rowActsOf(row({ status: 'CLOSED' }), planner))).not.toContain(act)
   })
 
   it('design case: the row’s acts held for Sales — each in words ("Production does this — …"), none hidden', () => {

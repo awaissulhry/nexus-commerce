@@ -1,17 +1,23 @@
 'use client'
 
 import { useState } from 'react'
-import { StickyNote } from 'lucide-react'
+import { Ban, StickyNote } from 'lucide-react'
 import { Banner, EmptyState, Field } from '@nexus/ui/components'
 import { Button, Spinner } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../i18n/ds-parts'
-import { useScopedT } from '../../../i18n/provider'
+import { useLocale, useScopedT } from '../../../i18n/provider'
 import { NOTE_MAX, type Phrase } from '../model'
 import type { ActsDialog, WorkOrderActsActions, WorkOrderActsModel } from '../use-work-order-acts'
 import './work-order-acts.css'
 // F-OP-114: the ONE Put on hold / Release the hold / Release (moved here from the work order's pages).
 import { HoldDialog, LiftHoldDialog, type HoldParts } from './HoldDialog'
 import { ReleaseDialog } from './ReleaseDialog'
+// F-OP-115: Split… (the every-shift page's dialog as it is), Close… · Reopen… (the close's parts as they are), Cancel… (below).
+import { WithMessages } from '../../../../record-panels/i18n'
+import { SplitDialog } from '../../../../areas/production/work-orders/every-shift/view/SplitDialog'
+import { SHIFT_NAMESPACE } from '../../../../areas/production/work-orders/every-shift/model'
+import { CloseParts } from '../../../../areas/production/work-orders/close/view/CloseParts'
+import { cancelHeld } from '../model'
 
 /** Words are the order page's (`orders` wo.*); a phrase may name another catalogue (`production:error.changed`). */
 const NS = 'orders'
@@ -33,8 +39,23 @@ const say = (t: ReturnType<typeof useScopedT>, phrase: Phrase | null): string | 
  * F-OP-114: Hold… (the reason the floor reads, what the customer reads shown before it is placed, the office's note), Lift… (its
  * standing plain hold, with why) and Release… (the release check in the dialog, each condition in words; a short material only with
  * the planner's reason; the customer's credit and the compliance gate said in the refusal).
+ * F-OP-115: Split… (a draft: SplitDialog as it is), Close… · Reopen… (CloseParts as they are) and Cancel… (the reason; what the cancel
+ * check found: the pieces cut refuse it in the API's words — "{n} pieces are cut: lower the work order to the cut instead", no outcome
+ * to pick (R-16) — the stock issued to it, the workshops it is at). Each brings its catalogues, so it draws on any page.
  */
 export function WorkOrderActsDialogs({ model, actions }: { model: WorkOrderActsModel; actions?: WorkOrderActsActions }) {
+  if (!model.dialog) return null
+  return (
+    <WithMessages namespaces={DIALOG_NAMESPACES}>
+      <ActsDialogs model={model} actions={actions} />
+    </WithMessages>
+  )
+}
+
+/** F-OP-115: the catalogues the row's dialogs speak (the order page's, the production lane's). */
+const DIALOG_NAMESPACES = ['orders', 'production', 'production-work-orders', SHIFT_NAMESPACE] as const
+
+function ActsDialogs({ model, actions }: { model: WorkOrderActsModel; actions?: WorkOrderActsActions }) {
   const dialog = model.dialog
   if (!dialog) return null
   const close = () => actions?.onCloseDialog?.()
@@ -64,9 +85,87 @@ export function WorkOrderActsDialogs({ model, actions }: { model: WorkOrderActsM
         <ReadingDialog dialog={dialog} actions={actions} />
       )
     // ---- end F-OP-114
+    // ---- F-OP-115 ----
+    case 'split':
+      return dialog.workOrder.value && model.split ? <SplitDialog workOrder={dialog.workOrder.value} model={model.split} actions={actions?.split} /> : <ReadingDialog dialog={dialog} actions={actions} />
+    case 'close':
+    case 'reopen':
+      return dialog.workOrder.value && model.close.dialog ? <CloseParts workOrder={dialog.workOrder.value} model={model.close} actions={actions?.close} /> : <ReadingDialog dialog={dialog} actions={actions} />
+    case 'cancel':
+      return <CancelDialog dialog={dialog} actions={actions} />
+    // ---- end F-OP-115
     default:
       return null
   }
+}
+
+/**
+ * F-OP-115 (R-16) — Cancel… from a work-order row: the reason, and what the cancel check found. With pieces cut the API refuses it in
+ * its own words, said here before anything is sent (and Cancel held with them): the way out is to lower the work order to the cut.
+ */
+function CancelDialog({ dialog, actions }: { dialog: ActsDialog; actions?: WorkOrderActsActions }) {
+  const t = useScopedT(NS)
+  const locale = useLocale()
+  const [reason, setReason] = useState('')
+  const check = dialog.cancelCheck?.value ?? null
+  const waits = cancelHeld(check, reason, dialog.busy || !dialog.workOrder.value, locale)
+  const held = typeof waits === 'string' ? waits : say(t, waits)
+  const go = held ? null : () => actions?.onCancelWorkOrder?.(reason)
+  const started = (check?.status ?? dialog.workOrder.value?.status ?? 'DRAFT') !== 'DRAFT'
+  return (
+    <Modal
+      open
+      onClose={() => actions?.onCloseDialog?.()}
+      title={t('production:cancel.title', { number: dialog.number })}
+      size="md"
+      footer={
+        <>
+          <span className="grow" />
+          <Button size="sm" onClick={() => actions?.onCloseDialog?.()} heldReason={dialog.busy ? t('production:held.busy') : null}>
+            {t('production:cancel.keep')}
+          </Button>
+          <Button size="sm" variant="danger" heldReason={held} onClick={() => go?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
+            {dialog.busy ? <Spinner size={12} /> : <Ban size={13} aria-hidden />} {t('production:cancel.go')}
+          </Button>
+        </>
+      }
+    >
+      <div className="fw-woa-dialog" onKeyDown={submitKeys(go)}>
+        {dialog.problem && <Banner tone="danger" title={say(t, dialog.problem) ?? ''} />}
+        <p>{t(started ? 'production:cancel.bodyStarted' : 'production:cancel.bodyDraft')}</p>
+        {!check ? (
+          dialog.cancelCheck?.problem ? (
+            <EmptyState
+              title={t('wo.cancel.check')}
+              description={t(`production:${dialog.cancelCheck.problem}`)}
+              action={
+                <Button size="sm" onClick={() => actions?.onRetryDialog?.()}>
+                  {t('production:common.retry')}
+                </Button>
+              }
+            />
+          ) : (
+            <p className="fw-woa-hint" role="status">
+              <Spinner size={12} /> {t('production:held.checking')}
+            </p>
+          )
+        ) : check.refusal ? (
+          // R-16: no outcome picker — the API's own words, which name the way out.
+          <Banner tone="warning" title={locale === 'it' ? check.refusal.it : check.refusal.en} />
+        ) : (
+          <Field label={t('production:cancel.reason')} required>
+            <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={500} />
+          </Field>
+        )}
+        {check && (check.issued.length > 0 || check.atWorkshop.length > 0) && (
+          <ul className="fw-woa-list">
+            {check.issued.length > 0 && <li>{t('wo.cancel.issued', { items: check.issued.map((row) => `${row.label} ${row.quantity}${row.baseUom ? ` ${row.baseUom}` : ''}`).join(', ') })}</li>}
+            {check.atWorkshop.length > 0 && <li>{t('wo.cancel.atWorkshop', { numbers: check.atWorkshop.map((row) => row.number).join(', ') })}</li>}
+          </ul>
+        )}
+      </div>
+    </Modal>
+  )
 }
 
 /** F-OP-114: the work order being read afresh before its dialog can act (or why it could not be read, with Try again). */

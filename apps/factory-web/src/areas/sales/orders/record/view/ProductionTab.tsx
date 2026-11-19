@@ -67,6 +67,13 @@ import { useScopedT } from '../../../../../lib/i18n/provider'
 import { laterOf, priorityChoices, rowActsOf, stableRows, type RowActs } from '../../../../../lib/production/work-order-acts/model'
 import { WorkOrderActsDialogs } from '../../../../../lib/production/work-order-acts/view/WorkOrderActsDialogs'
 // ---- end F-OP-113
+// ---- F-OP-115: the row ⋯'s links (the planning board at the work order, the work order's own page); the gate's Money door is a
+// tab link (F-OP-210: the dock's scope kept, no prefetch) ----
+import { useSearchParams } from 'next/navigation'
+import { HELD_FOR_SALES, planningHref } from '../../../../../lib/production/work-order-acts/model'
+import { tabHref } from '../../../../_shared/record-frame/address'
+import { TabLink } from '../../../../../lib/tab-link/TabLink'
+// ---- end F-OP-115
 
 export function ProductionTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   return (
@@ -186,7 +193,8 @@ function OwnWorkOrders({ work, model, actions, href, order }: { work: Work; mode
   const acts = model.workOrderActs ?? null
   const act = actions?.workOrderActs
   const offers = new Map<string, RowActs>(work.workOrders.map((row) => [row.id, acts ? rowActsOf(row, acts.can) : { shared: row.sharedWithOtherCustomers ? (row.rights?.why ?? null) : null, inline: null, menu: [] }]))
-  const heldForReader = [...offers.values()].some((offer) => offer.inline?.held || offer.menu.some((entry) => entry.held))
+  // F-OP-115: the hint speaks of Production's people only (a planner reading "only the production manager reopens" sees it on the ⋯).
+  const heldForReader = [...offers.values()].some((offer) => offer.inline?.held || offer.menu.some((entry) => entry.held?.key === HELD_FOR_SALES.key))
   // ---- end F-OP-113
   const words = productionWordsFor(locale)
   const totals = new Map((model.workOrders?.value ?? []).map((row) => [row.id, row.pieces]))
@@ -298,13 +306,19 @@ function OwnWorkOrders({ work, model, actions, href, order }: { work: Work; mode
                   align="right"
                   label={<MoreHorizontal size={16} aria-hidden />}
                   triggerProps={{ 'aria-label': t('wo.acts', { number: row.number }) }}
-                  items={offer.menu.map((entry) => ({
-                    id: entry.act,
-                    label: t(`wo.act.${entry.act}`),
-                    disabled: !!entry.held,
-                    description: entry.held ? scoped(entry.held.key, entry.held.params) : undefined,
-                    onSelect: entry.held ? undefined : () => act?.onAct?.(row, entry.act),
-                  }))}
+                  items={[
+                    ...offer.menu.map((entry) => ({
+                      id: entry.act,
+                      label: t(`wo.act.${entry.act}`),
+                      disabled: !!entry.held,
+                      description: entry.held ? scoped(entry.held.key, entry.held.params) : undefined,
+                      onSelect: entry.held ? undefined : () => act?.onAct?.(row, entry.act),
+                    })),
+                    // F-OP-115: line, workshop, start and outside operations are Planning's (its board, at this work order); the
+                    // work order's own page. Real links (⌘-click opens a tab).
+                    ...((offer.links ?? []).length > 0 ? [{ id: 'links', separator: true }] : []),
+                    ...(offer.links ?? []).map((link) => ({ id: `link-${link}`, label: t(`wo.link.${link}`), href: link === 'planning' ? planningHref(model.prefix, row.id) : href(row) })),
+                  ]}
                 />
               ) : (
                 ''
@@ -364,6 +378,7 @@ function DatesCard({ order, model, actions }: { order: Order; model: OrderRecord
   const t = useT('orders')
   const d = useT(DEPTH)
   const locale = useLocale()
+  const search = useSearchParams()?.toString() ?? '' // F-OP-115: the tab link keeps the address's terms (the dock's scope)
   const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
   const held = promiseHeld(order, model.can)
   const gate = depositGate(order)
@@ -418,7 +433,8 @@ function DatesCard({ order, model, actions }: { order: Order; model: OrderRecord
         </div>
         {request && (
           <Button size="sm" asChild>
-            <Link href={`${model.prefix}/sales/orders/${order.id}?tab=money`}>{t('gate.money')}</Link>
+            {/* F-OP-115: a tab link (F-OP-210) — the dock's scope kept, never prefetched; was a plain `?tab=money` link. */}
+            <TabLink href={tabHref(`${model.prefix}/sales/orders/${order.id}`, 'money', search)}>{t('gate.money')}</TabLink>
           </Button>
         )}
       </div>
