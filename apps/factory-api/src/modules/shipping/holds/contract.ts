@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { HOLD_LIMITS, HOLD_REFUSALS, SHIPMENT_HOLD_REASONS } from '@nexus/factory-domain/shipping/holds/holds'
-import { statusSchema } from '../views'
+import { shipmentOrdersSchema, statusSchema } from '../views'
 
 /**
  * Shipment holds (B-W2b-386; LOG-017, FIN-079; design warehouse.shipments selection row "Hold", the ready check "no hold").
@@ -104,6 +104,8 @@ export const listHoldsContract = defineContract({
             customerRef: z.string().nullable(),
             partyCode: z.string(),
             partyName: z.string(),
+            /** B-OP-041 (N6): every order the shipment carries, the first (salesOrderId) first. */
+            salesOrders: shipmentOrdersSchema,
           }),
         }),
       ),

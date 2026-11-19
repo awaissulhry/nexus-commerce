@@ -123,6 +123,21 @@ export const FRAME_KEYS: readonly { readonly keys: readonly string[]; readonly w
   { keys: ['Esc'], words: 'keys.esc' },
 ]
 
+// ---- F-OP-206 (order page plan N4; 11-dock §3.3): the Keyboard window's rows of All of <Customer>'s list (J / K walk it as they walk
+// the thread: the row above) — only on the pages whose dock holds All of <Customer> (the order, the customer), never on another page.
+export const ALL_OF_KEYS: readonly { readonly keys: readonly string[]; readonly words: string }[] = [
+  { keys: ['↵'], words: 'keys.allAnswer' },
+  { keys: ['␣'], words: 'keys.allExpand' },
+]
+/** The record types whose page docks All of <Customer> (the order page's OrderDock, the customer page's CustomerDock). */
+export const ALL_OF_PAGES: readonly string[] = ['SalesOrder', 'Party']
+
+/** The keys a page's Keyboard window lists after the record's own: the frame's, and All of <Customer>'s where the dock holds it. */
+export function frameKeysFor(record: { readonly type: string } | null | undefined): readonly { readonly keys: readonly string[]; readonly words: string }[] {
+  return record && ALL_OF_PAGES.includes(record.type) ? [...FRAME_KEYS, ...ALL_OF_KEYS] : FRAME_KEYS
+}
+// ---- end F-OP-206
+
 // ---- B-TH-264 follow-up (TH-6 part B): a body part opens ITS files in the docked thread's ONE file viewer (the shipment's Documents:
 // the travelling documents and the packing lists) — the files it lists, the one clicked first; the viewer walks them with ← / →.
 /** A file a body part lists (its id, the name it shows, its type when known: the viewer draws a PDF or a photo, else a card). */

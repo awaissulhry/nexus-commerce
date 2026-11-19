@@ -22,6 +22,8 @@
     "thread": "Mostra o nascondi la conversazione",
     "step": "Il passo principale della banda",
     "walk": "Messaggio successivo e precedente, quando i messaggi hanno il focus",
+    "allAnswer": "In Tutto di un cliente: rispondi alla riga nella sua conversazione",
+    "allExpand": "In Tutto di un cliente: mostra tutto il messaggio, o richiudilo",
     "reply": "Rispondi al cliente, dalla conversazione fuori da un campo",
     "note": "Nota d'ufficio, dalla conversazione fuori da un campo",
     "esc": "Esci dal riquadro (il testo resta); da tutta la larghezza torna al record"

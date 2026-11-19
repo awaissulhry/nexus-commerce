@@ -46,7 +46,6 @@
   "allOfCustomer": {
     "title": "Tutto di {customer}",
     "line": "Sola lettura: i messaggi di ordini, preventivi, richieste, progetti e conversazione generale di {customer}. Per scrivere, scegli una conversazione.",
-    "readMarks": "Apri una conversazione per segnarla come letta.",
     "view": {
       "label": "Vista",
       "menu": "Scegli quali messaggi mostra l'elenco",
@@ -67,6 +66,8 @@
     },
     "newShow_one": "1 nuovo · Mostra",
     "newShow_other": "{count} nuovi · Mostra",
+    "newStatus_one": "1 nuovo messaggio",
+    "newStatus_other": "{count} nuovi messaggi",
     "loading": "Lettura dei messaggi di {customer}…",
     "failed": "Non è stato possibile leggere i messaggi.",
     "retry": "Riprova",
@@ -74,6 +75,7 @@
     "empty": "Ancora nessun messaggio con {customer}",
     "emptyFiltered": "Niente con questa vista e questo tipo: scegli Tutto e Ogni tipo per vedere ogni messaggio.",
     "feedLabel": "Messaggi con {customer}, i più recenti prima",
+    "keysTip": "J / K scorrono · Invio risponde · Spazio mostra tutto il messaggio. Vedere una riga qui non segna nulla come letto: apri la sua conversazione.",
     "showOlder": "Mostra i più vecchi",
     "olderLoading": "Lettura dei messaggi più vecchi…",
     "olderFailed": "Non è stato possibile leggere i messaggi più vecchi · Riprova",
@@ -82,7 +84,18 @@
     "notShown_other": "{count} conversazioni di {customer} che non puoi aprire sono escluse.",
     "openRecord": "Apri {record}",
     "new": "Nuovo",
-    "answer": "Rispondi nella sua conversazione",
+    "audience": {
+      "shared": "{customer} lo legge",
+      "office": "Solo ufficio"
+    },
+    "filesOnly": "Solo file",
+    "more": "Altro",
+    "less": "Meno",
+    "moreFiles_one": "1 altro file",
+    "moreFiles_other": "altri {count} file",
+    "writeFirst": "Scrivi il primo in {thread}",
+    "showEverything": "Mostra tutto",
+    "answer": "Rispondi",
     "answerLabel": "Rispondi nella conversazione di {record}",
     "chip": {
       "general": "{customer} (generale)",

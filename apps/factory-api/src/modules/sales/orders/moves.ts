@@ -68,7 +68,8 @@ export async function recordAfter(caller: CommandCaller, orderId: string): Promi
   const viewer = context && context.audience === 'office' ? actorOf(context) : null
   const { view, pictures } = await caller.withClient(async (client) => {
     const order = (await readOrder(client, orderId))!
-    const view = await orderView(client, order, businessDate(serverClock.now()), await orderSettlement().settlementOf(client, order), viewer)
+    // B-OP-020: and the office reader, so the open requests for a yes are the ones it may see and decide.
+    const view = await orderView(client, order, businessDate(serverClock.now()), await orderSettlement().settlementOf(client, order), viewer, context && context.audience === 'office' ? context : null)
     // B-SA-035: each colour line's picture the reader may open (files.read), read with the order.
     return { view, pictures: viewer ? await linePictureFiles(client, viewer, view.lines) : new Map<string, LinePictureFile>() }
   })
@@ -216,6 +217,11 @@ export async function cancelOrderInCommand(
   const facts = await readOrderFacts(tx, order)
   const impact = cancelImpact(await readCancelFacts(tx, { id: order.id, status: locked.status, quoteVersionId: order.quoteVersionId }, facts))
   const reason = reasonOf(body.reason)
+  // B-OP-040 (order page N6, lines-derived): garments of the order on a shipment of another of the customer's orders that has
+  // not left (DRAFT or PACKED) come off it first, in words (a cancelled order ships nothing). The shipments made for the
+  // order itself are the impact's SHIPMENT_IN_PREPARATION. Never a line of another customer (the line's FK carries partyId).
+  const carriedBy = await tx.shipment.findMany({ where: { status: { in: ['DRAFT', 'PACKED'] }, salesOrderId: { not: order.id }, lines: { some: { salesOrderLine: { orderId: order.id } } } }, select: { number: true }, orderBy: { number: 'asc' } })
+  if (carriedBy.length > 0) throw new InvalidStateError(`Take ${order.number}'s garments off ${carriedBy.map((row) => row.number).join(', ')} first: a cancelled order ships nothing.`)
   assertTransition(salesOrderMachine, locked.status, 'CANCELLED', { ...moveFactsOf(facts), reason, cancelBlocks: cancelBlocksOf(impact) })
   await tx.salesOrder.update({ where: { id: order.id }, data: { status: 'CANCELLED', cancelReason: reason!, closedAt: now, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
   // B-W2b-303 (SAL-205): a waiting order cancelled: the yes asked on it is taken back (nothing left to approve).

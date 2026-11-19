@@ -26,6 +26,13 @@ import { moneySettlementPort, useOrderSettlement } from './settlement'
 import { EVENT_CATALOGUE } from '@nexus/factory-domain/events/catalogue'
 // B-SA-035: the lines' pictures and artwork are files of the style, its colourway and the line.
 import { seedFile } from '../../../../../../packages/factory-db/src/seed-files'
+// B-OP-020: the orders, credit and changes seed (SEED-SO-W39-01 waiting, SEED-SO-W39-02's old request for a yes), and a request asked
+// through the approval engine as the order's making asks it.
+import { APPROVAL_REFUSALS } from '@nexus/factory-domain/approvals/rules'
+import { seed as seedAccounting } from '../../../../../../packages/factory-db/seed/accounting'
+import { seed as seedSalesOrdersDepth, type SalesOrdersDepthSeed } from '../../../../../../packages/factory-db/seed/sales-orders-depth'
+import { command } from '../../../core/command'
+import { askApproval } from '../../../platform/approvals/engine'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A1 §2.5 "Sales order"; PLAN
@@ -931,3 +938,155 @@ describe('the lines carry their picture and their artwork count, by the reader�
   // ---- end B-SA-035b
 })
 // ---- end B-SA-035
+
+// ---- B-OP-020 (order page plan N1; 13-backend §2, §3; review R-20, R-22, B3): the yes in place, the tabs' counts, the words' grain ----
+/**
+ * Tenant f: the orders, credit and changes seed — SEED-SO-W39-01 waits (PENDING_APPROVAL) with its CREDIT_OVERRIDE request for
+ * Finance, asked by the member; SEED-SO-W39-02 keeps its old SALES_ORDER_CHANGE request for the Owner role (R-20: the seed is kept,
+ * B-OP-010 asks no new one). Here the member also asks W39-01's own SALES_ORDER yes of the Owner role, through the engine as the
+ * order's making asks it (no rule of the kind in this tenant: the module's own rule names the role). The order read lists each
+ * request only to a reader the engine's list shows it to, with the engine's decide rule: the approver (the seeded Owner) may say yes,
+ * the asker is held (never one's own yes) and may take it back, every other reader gets the count alone.
+ */
+describe('the order read carries its open requests for a yes, decided in place (B-OP-020)', () => {
+  const NS_F = 'orders-f'
+  const TF = seedUuid(NS_F, 'tenant')
+  let depth: SalesOrdersDepthSeed
+  let askedId = ''
+  const person = (actorId: () => string, permissions: Permission[], parties: Grant['parties'] = 'all'): (() => SessionContext) => () => ({
+    audience: 'office',
+    tenantId: TF,
+    actorId: actorId(),
+    grants: [grant(permissions, 'all', parties)],
+  })
+  const read = async (session: string, orderId: string): Promise<Json> => (await ok(session, 'GET', orderUrl(orderId))).order
+
+  beforeAll(async () => {
+    await seedCore({ db: h.database, namespace: NS_F })
+    await seedAccounting({ db: h.database, namespace: NS_F })
+    depth = await seedSalesOrdersDepth({ db: h.database, namespace: NS_F })
+    const ownerRole = await one<{ id: string }>(`SELECT id FROM "Role" WHERE "tenantId" = $1 AND key = 'owner'`, [TF])
+    const caller = callerFor(h.database, { audience: 'office', tenantId: TF, actorId: depth.memberId, requestId: newId(), grants: [grant(['orders.view', 'orders.manage', 'approvals.request'])] })
+    const { result } = await command(caller, { name: 'approvals.request', input: { kind: 'SALES_ORDER', recordId: depth.waitingOrderId } }, (tools) =>
+      askApproval(tools, { kind: 'SALES_ORDER', recordId: depth.waitingOrderId, requester: { userId: depth.memberId }, whenNoRule: { approverRoleId: ownerRole.id, requireStepUp: false } }),
+    )
+    if (!result.asked) throw new Error('the SALES_ORDER request was not asked')
+    askedId = result.taskId
+    SESSIONS['f.owner'] = person(() => depth.ownerId, ['orders.view', 'approvals.view', 'approvals.decide', 'money.price'])
+    SESSIONS['f.member'] = person(() => depth.memberId, ['orders.view', 'approvals.view', 'approvals.request'])
+    SESSIONS['f.reader'] = person(newId, ['orders.view', 'approvals.view'])
+    SESSIONS['f.noApprovals'] = person(newId, ['orders.view'])
+    SESSIONS['f.p1'] = person(newId, ['orders.view', 'approvals.view'], [depth.partyId])
+    SESSIONS['f.otherParty'] = person(newId, ['orders.view', 'approvals.view', 'approvals.decide', 'money.price'], [seedUuid(NS_F, 'party:P3')])
+  }, 240_000)
+
+  it('the approver sees its yes allowed (and the no), never the request it may not see; the live list names what it listed', async () => {
+    const order = await read('f.owner', depth.waitingOrderId)
+    expect(order.status).toBe('PENDING_APPROVAL')
+    expect(order.openApprovals).toEqual([
+      expect.objectContaining({
+        taskId: askedId,
+        kind: 'SALES_ORDER',
+        kindLabel: { en: 'Sales order', it: 'Ordine di vendita' },
+        requester: { name: expect.any(String), me: false },
+        approver: expect.objectContaining({ kind: 'ROLE', me: true }),
+        version: expect.any(Number),
+        requireStepUp: false,
+        approve: { allowed: true, why: null },
+        reject: { allowed: true, why: null },
+        withdraw: { allowed: false, why: APPROVAL_REFUSALS.NOT_REQUESTER },
+      }),
+    ])
+    // The credit hold's request (Finance decides it; the Owner neither asked it nor reads credit): counted, never named.
+    expect(order.openApprovalsHidden).toBe(1)
+    expect(JSON.stringify(order)).not.toContain(depth.taskIds.override1)
+    expect(order.live.ids.approvalTaskIds).toEqual([askedId])
+    // No money fact of the request in the order read (the decide window reads them by grain).
+    expect(Object.keys(order.openApprovals[0]).sort()).toEqual(['approve', 'approver', 'kind', 'kindLabel', 'reject', 'requestedAt', 'requester', 'requireStepUp', 'taskId', 'version', 'withdraw'])
+  })
+
+  it('the asker sees both of its requests held for its own yes, and may take each back', async () => {
+    const order = await read('f.member', depth.waitingOrderId)
+    expect(order.openApprovals.map((row: Json) => row.taskId)).toEqual([depth.taskIds.override1, askedId])
+    for (const row of order.openApprovals as Json[]) {
+      expect(row.requester).toEqual({ name: expect.any(String), me: true })
+      expect(row.approve).toEqual({ allowed: false, why: APPROVAL_REFUSALS.OWN_REQUEST })
+      expect(row.reject).toEqual({ allowed: false, why: APPROVAL_REFUSALS.OWN_REQUEST })
+      expect(row.withdraw).toEqual({ allowed: true, why: null })
+    }
+    expect(order.openApprovalsHidden).toBe(0)
+    expect(order.openApprovals[0]).toMatchObject({ kind: 'CREDIT_OVERRIDE', kindLabel: { en: 'Credit override' } })
+  })
+
+  it('another reader of approvals sees the yes held (not its approver); without approvals.view only the count; another customer’s person: 404', async () => {
+    const reader = await read('f.reader', depth.waitingOrderId)
+    expect(reader.openApprovals).toEqual([expect.objectContaining({ taskId: askedId, approve: { allowed: false, why: APPROVAL_REFUSALS.NOT_APPROVER }, withdraw: { allowed: false, why: APPROVAL_REFUSALS.NOT_REQUESTER } })])
+    expect(reader.openApprovalsHidden).toBe(1)
+    // A person limited to the order's own customer reads them as the production unit does (the customer wall keeps its own).
+    const own = await read('f.p1', depth.waitingOrderId)
+    expect(own.openApprovals.map((row: Json) => row.taskId)).toEqual([askedId])
+    expect(own.openApprovalsHidden).toBe(1)
+    const none = await read('f.noApprovals', depth.waitingOrderId)
+    expect(none).toMatchObject({ openApprovals: [], openApprovalsHidden: 2 })
+    expect(none.live.ids.approvalTaskIds).toEqual([])
+    const other = await call('f.otherParty', 'GET', orderUrl(depth.waitingOrderId))
+    expect(other.status).toBe(404)
+    expect(JSON.stringify(other.body)).not.toContain(askedId)
+  })
+
+  it('the yes in place: the approver decides at the version read; the order still waits for its credit hold, the request leaves the list', async () => {
+    const before = await read('f.owner', depth.waitingOrderId)
+    const row = before.openApprovals.find((entry: Json) => entry.taskId === askedId)
+    // Never the asker's own yes (rule 42), whatever the page shows.
+    expect([403, 409]).toContain((await call('f.member', 'POST', `/approvals/tasks/${askedId}/approve`, { version: row.version })).status)
+    await ok('f.owner', 'POST', `/approvals/tasks/${askedId}/approve`, { version: row.version })
+    const after = await read('f.owner', depth.waitingOrderId)
+    expect(after.status).toBe('PENDING_APPROVAL')
+    expect(after.openApprovals).toEqual([])
+    expect(after.openApprovalsHidden).toBe(1)
+    expect(after.live.ids.approvalTaskIds).toEqual([])
+  })
+
+  it('the old SALES_ORDER_CHANGE request of SEED-SO-W39-02 (R-20) is listed to its approver and decidable in place', async () => {
+    const order = await read('f.owner', depth.orderId)
+    expect(order.openApprovals).toEqual([expect.objectContaining({ taskId: depth.taskIds.reapproval2, kind: 'SALES_ORDER_CHANGE', approver: expect.objectContaining({ me: true }), reject: { allowed: true, why: null } })])
+    // Its yes follows the engine's re-check (a request written by the seed may read as changed since it was asked): allowed, or held in words.
+    expect([null, APPROVAL_REFUSALS.STALE]).toContain(order.openApprovals[0].approve.why)
+    // The approved credit override of the same order waits no more: not listed, not counted.
+    expect(order.openApprovalsHidden).toBe(0)
+    expect(JSON.stringify(order.openApprovals)).not.toContain(depth.taskIds.override2)
+  })
+
+  it('badges: issued invoices and open deposits on the Money tab, shipments not cancelled on the Shipments tab; no Changes count (R-22)', async () => {
+    const order = await read('f.owner', depth.orderId)
+    const open = (order.chain.depositRequests as Json[]).filter((row) => row.status === 'OPEN')
+    expect(open.map((row) => row.id)).toContain(depth.extraDepositId)
+    expect(order.badges).toEqual({
+      money: { invoices: (order.chain.invoices as Json[]).filter((row) => row.status !== 'DRAFT').length, openDeposits: open.length },
+      shipments: (order.chain.shipments as Json[]).filter((row) => row.status !== 'CANCELLED').length,
+    })
+    expect(order.badges).not.toHaveProperty('changes')
+    // An order that shipped: its shipments counted (tenant a's SEED-SO-0002 left with SH-0001).
+    const shipped = await ok('a.production', 'GET', orderUrl(seeded.a.quality.production.salesOrderId))
+    expect(shipped.order.badges.shipments).toBe((shipped.order.chain.shipments as Json[]).filter((row) => row.status !== 'CANCELLED').length)
+    expect(shipped.order.badges.shipments).toBeGreaterThan(0)
+  })
+
+  it('B3: what the settlement misses comes in words with the price grain only; without it, the codes alone', async () => {
+    const priced = (await read('f.owner', depth.orderId)).settlement
+    expect(priced.settled).toBe(false)
+    expect(priced.missing.length).toBeGreaterThan(0)
+    for (const gap of priced.missing as Json[]) expect(typeof gap.message).toBe('string')
+    const plain = (await read('f.reader', depth.orderId)).settlement
+    expect(plain.missing.map((gap: Json) => gap.code)).toEqual(priced.missing.map((gap: Json) => gap.code))
+    for (const gap of plain.missing as Json[]) expect(Object.keys(gap)).toEqual(['code'])
+  })
+
+  it('live: a request for a yes asked, decided, taken back or found changed re-reads the order and its changes (never a rule change)', async () => {
+    const { live } = await read('f.owner', depth.orderId)
+    const partsOf = (type: string) => (live.events as Json[]).find((entry) => entry.type === type)?.parts
+    for (const type of ['approval.requested', 'approval.decided', 'approval.withdrawn', 'approval.stale']) expect(partsOf(type)).toEqual(['order', 'changes'])
+    expect(partsOf('approval.rule_changed')).toBeUndefined()
+  })
+})
+// ---- end B-OP-020

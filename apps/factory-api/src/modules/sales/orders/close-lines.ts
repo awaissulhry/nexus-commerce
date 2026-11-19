@@ -12,9 +12,11 @@ import { lockOrder, readOrderFacts, type OrderFacts, type OrderRow } from './sto
 import type { OrderView } from './views'
 // B-SA-042: a close proposes the gap to the work orders.
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
-import { proposeGapsInCommand } from '../../production/work-order-changes/propose'
+import { proposeGapsInCommand, storedGapLines } from '../../production/work-order-changes/propose'
 // B-OP-012 (order page plan N2, D1): the work orders follow the close in its command where the person may.
 import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../production/work-order-changes/auto'
+// B-OP-013: the close's preview says what each work order will do, read as the command reads it.
+import { plannedChangesOf, workOrderPreviewOf } from './work-order-plan'
 
 /**
  * Close remaining lines and reopen them (B-W2a-30; SAL-210; the design's band overflow "Close remaining lines": "Lines
@@ -113,15 +115,7 @@ export async function closeLinesInCommand(
   }
   // B-W2a-13: an APPROVED REDUCE of these lines' cells is done once the order line is lowered.
   const closedIds = plan.close.map((line) => line.id)
-  const cells = await tx.workOrderSize.findMany({ where: { salesOrderLineId: { in: closedIds } }, select: { id: true } })
-  const reduces = cells.length > 0 ? await tx.replacementRequest.findMany({ where: { workOrderSizeId: { in: cells.map((cell) => cell.id) }, kind: 'REDUCE', status: 'APPROVED' }, select: { id: true, companyId: true, workOrderId: true, quantity: true }, orderBy: { id: 'asc' } }) : []
-  const reducesDone: string[] = []
-  for (const reduce of reduces) {
-    const { count } = await tx.replacementRequest.updateMany({ where: { id: reduce.id, status: 'APPROVED' }, data: { status: 'DONE', doneAt: now, updatedAt: now, version: { increment: 1 } } })
-    if (count !== 1) continue
-    reducesDone.push(reduce.id)
-    tools.audit({ action: 'orders.reduceDone', recordType: 'ReplacementRequest', recordId: reduce.id, companyId: reduce.companyId, before: { status: 'APPROVED' }, after: { status: 'DONE', doneAt: toUtcIso(now), orderId: order.id, quantity: reduce.quantity } })
-  }
+  const reducesDone = await reducesDoneInCommand(tools, order, closedIds)
   let status = locked.status
   if (plan.done && locked.status === 'PARTLY_SHIPPED') {
     await tx.salesOrder.update({ where: { id: order.id }, data: { status: 'SHIPPED', updatedAt: now, version: { increment: 1 } }, select: { id: true } })
@@ -131,8 +125,6 @@ export async function closeLinesInCommand(
   } else {
     await tx.salesOrder.update({ where: { id: order.id }, data: { updatedAt: now, version: { increment: 1 } }, select: { id: true } })
   }
-  const inWork = new Map<string, number>()
-  for (const row of facts.progress.lines) if (closedIds.includes(row.lineId)) inWork.set(row.lineId, Math.max(0, row.inWorkOrders - row.shipped))
   tools.audit({
     action: 'orders.closeLines',
     recordType: 'SalesOrder',
@@ -150,10 +142,75 @@ export async function closeLinesInCommand(
   return {
     closed: plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity })),
     reducesDone,
-    stillInWorkOrders: [...inWork].filter(([, pieces]) => pieces > 0).map(([lineId, pieces]) => ({ lineId, pieces })),
+    stillInWorkOrders: stillInWorkOrdersOf(facts, closedIds),
     workOrders: { applied: gap?.applied ?? [], waiting: gap?.waiting ?? [] },
   }
 }
+
+/**
+ * B-W2a-13: the APPROVED REDUCE replacements of the closed lines' cells, DONE once the order line is lowered (a close of lines; B-OP-014:
+ * an amendment that closes a line it leaves out), each audited. Returns their ids.
+ */
+export async function reducesDoneInCommand(tools: CommandTools, order: Pick<OrderRow, 'id'>, closedIds: readonly string[]): Promise<string[]> {
+  const { tx, now } = tools
+  if (closedIds.length === 0) return []
+  const cells = await tx.workOrderSize.findMany({ where: { salesOrderLineId: { in: [...closedIds] } }, select: { id: true } })
+  const reduces = cells.length > 0 ? await tx.replacementRequest.findMany({ where: { workOrderSizeId: { in: cells.map((cell) => cell.id) }, kind: 'REDUCE', status: 'APPROVED' }, select: { id: true, companyId: true, workOrderId: true, quantity: true }, orderBy: { id: 'asc' } }) : []
+  const done: string[] = []
+  for (const reduce of reduces) {
+    const { count } = await tx.replacementRequest.updateMany({ where: { id: reduce.id, status: 'APPROVED' }, data: { status: 'DONE', doneAt: now, updatedAt: now, version: { increment: 1 } } })
+    if (count !== 1) continue
+    done.push(reduce.id)
+    tools.audit({ action: 'orders.reduceDone', recordType: 'ReplacementRequest', recordId: reduce.id, companyId: reduce.companyId, before: { status: 'APPROVED' }, after: { status: 'DONE', doneAt: toUtcIso(now), orderId: order.id, quantity: reduce.quantity } })
+  }
+  return done
+}
+
+/** What work orders still make of the closed lines (beyond what shipped of them): Production decides about it. */
+function stillInWorkOrdersOf(facts: OrderFacts, closedIds: readonly string[]): { lineId: string; pieces: number }[] {
+  const inWork = new Map<string, number>()
+  for (const row of facts.progress.lines) if (closedIds.includes(row.lineId)) inWork.set(row.lineId, Math.max(0, row.inWorkOrders - row.shipped))
+  return [...inWork].filter(([, pieces]) => pieces > 0).map(([lineId, pieces]) => ({ lineId, pieces }))
+}
+
+// ── B-OP-013 (order page plan N2, D1; 13-backend §1.3; B2): the close's preview ──
+export interface CloseLinesPreviewBody {
+  /** The lines; none: every open line with something left. */
+  readonly lineIds?: readonly string[] | undefined
+  /** The extra pieces' outcome the office would name (none: they stay production's to decide). */
+  readonly extraOutcome?: ExtraOutcome | null | undefined
+}
+
+/**
+ * orders.manage: POST /sales/orders/:orderId/close-lines/preview — what closing the lines would do, nothing written: the lines and
+ * what is left of each (closeShortPlan, as the close reads it), what work orders still make of them, and the work orders' part —
+ * the pieces already cut beyond what the lines still want (the close takes their outcome; none: production decides) and what each
+ * work order will do, in the same click or waiting with why (the close's own command reads the same, ./work-order-plan.ts).
+ * Problems come back as `problems` with `ok` false; a state that takes no close is a 409 (as the close).
+ */
+export async function previewCloseLines(caller: CommandCaller, orderId: string, body: CloseLinesPreviewBody) {
+  const context = officeContextOf(caller)
+  const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
+  return caller.withClient(async (client) => {
+    const facts = await readOrderFacts(client, order)
+    const plan = closeShortPlan(order.status, shortLinesOf(facts), [...(body.lineIds ?? [])])
+    if (Array.isArray(plan)) {
+      if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
+      return { ok: false, version: order.version, problems: plan, closed: [], stillInWorkOrders: [], workOrders: null }
+    }
+    const closedIds = plan.close.map((line) => line.id)
+    const planned = await plannedChangesOf(client, context.tenantId, order, await storedGapLines(client, order, closedIds, new Set(closedIds)))
+    return {
+      ok: true,
+      version: order.version,
+      problems: [] as Issue[],
+      closed: plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity })),
+      stillInWorkOrders: stillInWorkOrdersOf(facts, closedIds),
+      workOrders: await workOrderPreviewOf(client, context, order, planned, { requireOutcome: false, outcomeChosen: Boolean(body.extraOutcome) }),
+    }
+  })
+}
+// ── end B-OP-013 ──
 
 /** orders.manage: reopen closed lines (the close's reversal). */
 export async function reopenLines(caller: CommandCaller, orderId: string, body: LinesBody, idempotencyKey?: string): Promise<{ order: OrderView; reopened: string[] }> {

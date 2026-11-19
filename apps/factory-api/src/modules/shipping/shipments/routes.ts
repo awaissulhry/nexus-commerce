@@ -21,7 +21,11 @@ import {
   setFreightCostContract,
   getCarrierReturnContract,
   receiveCarrierReturnContract,
+  // B-OP-040 (order page N6).
+  joinableShipmentsContract,
+  shipmentOrderCandidatesContract,
 } from './contract'
+import { joinableShipments, shipmentOrderCandidates } from './orders-of'
 import { getCarrierReturn, receiveCarrierReturn } from './carrier-return'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { listBackorders, orderBackorder } from './backorder'
@@ -42,6 +46,11 @@ export default defineRoutes('shipping.shipments', manifest, async (app) => {
   app.get('/shipping/shipments', { schema: listShipmentsContract }, async (request) => listShipments(request, request.query))
 
   app.get('/shipping/shipments/:shipmentId', { schema: getShipmentContract }, async (request) => getShipment(request, request.params.shipmentId))
+
+  // B-OP-040 (order page N6, held off by MULTI_ORDER_OFF until B-OP-047): an order joins a shipment by its lines.
+  app.get('/shipping/shipments/joinable', { schema: joinableShipmentsContract }, async (request) => joinableShipments(request, request.query))
+
+  app.get('/shipping/shipments/:shipmentId/orders/candidates', { schema: shipmentOrderCandidatesContract }, async (request) => shipmentOrderCandidates(request, request.params.shipmentId))
 
   app.post('/shipping/shipments', { schema: createShipmentContract }, async (request, reply) => reply.code(201).send(await createShipment(request, request.body, idempotencyKeyFrom(request))))
 

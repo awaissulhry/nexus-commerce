@@ -27,6 +27,11 @@ import { artworkOf } from '../configurator/artwork'
 import type { Prisma } from '@nexus/factory-db'
 import { holds, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions'
+// B-OP-020 (order page plan N1): the order's open requests for a yes, by the approval engine's own list rule and row builder.
+import { APPROVALS_VIEW } from '@nexus/factory-domain/approvals/permissions'
+import { actorOf, type OfficeContext } from '../../../core/context'
+import { approverRolesOf, customerWall, TASK_COLUMNS, visibleTasks, type TaskRow } from '../../../platform/approvals/store'
+import { openTaskRows, type ViewContext } from '../../../platform/approvals/views'
 
 /**
  * The order record as the office reads it (A2 SCR-039; the design's Order record): the header with its dates (the
@@ -113,6 +118,9 @@ const LIVE_RULES: readonly { readonly match: (type: string) => boolean; readonly
   { match: (type) => type.startsWith('order_promise.') || type === 'order_gate.changed', parts: ['dates'] },
   { match: (type) => ['shipment.', 'deposit_request.', 'payment.', 'invoice.'].some((prefix) => type.startsWith(prefix)), parts: ['money', 'shipments'] },
   { match: (type) => type === 'file.available', parts: ['files'] },
+  // B-OP-020: a request for a yes of the order asked, decided, taken back or found changed (matched by `approvalTaskIds`, and a new
+  // one by its record). These name no customer: only readers of every customer get them; a limited approver re-reads by sales_order.*.
+  { match: (type) => type.startsWith('approval.') && type !== 'approval.rule_changed', parts: ['order', 'changes'] },
 ]
 
 /** Each declared event the order page re-reads on, with its parts (declared types only, sorted). */
@@ -141,7 +149,7 @@ interface PartRecords {
  * A row written by another partner (a workshop on a work order) is passed over: the answer names nobody else. Work orders: only
  * those the reader reaches (a work order of several customers, made before the rule, only for every-customer readers).
  */
-async function liveOf(db: Reader, order: OrderRow, facts: OrderFacts, depositIds: readonly string[], viewer: Actor | null) {
+async function liveOf(db: Reader, order: OrderRow, facts: OrderFacts, depositIds: readonly string[], viewer: Actor | null, approvalTaskIds: readonly string[] /* B-OP-020 */) {
   const workOrderIds = facts.workOrders.map((row) => row.id)
   const reach = viewer && workOrderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: workOrderIds }, status: { not: 'CANCELLED' } }, select: { id: true, companyId: true, siteId: true, partyId: true }, orderBy: { id: 'asc' } }) : []
   const reachedWorkOrders = viewer ? reach.filter((row) => reachesWorkOrder(viewer, WORKORDERS_VIEW, row)).map((row) => row.id) : []
@@ -154,6 +162,7 @@ async function liveOf(db: Reader, order: OrderRow, facts: OrderFacts, depositIds
     depositRequestIds: [...depositIds],
     requestIds,
     changeIds,
+    approvalTaskIds: [...approvalTaskIds], // B-OP-020
   }
   const records: PartRecords = { order: [order.id], changes: requestIds, work: reachedWorkOrders, shipments: ids.shipmentIds, money: { invoices: ids.invoiceIds, deposits: ids.depositRequestIds } }
   return { live: { events: ORDER_LIVE_EVENTS.map((entry) => ({ type: entry.type, parts: [...entry.parts] })), ids }, lastChange: await lastChangeOf(db, order, records) }
@@ -288,7 +297,66 @@ export function withLinePictures(view: OrderView, files: ReadonlyMap<string, Lin
 }
 // ── end B-SA-035 ──
 
-export async function orderView(db: Reader, order: OrderRow, today: BusinessDate, settlement: SettlementAnswer, viewer: Actor | null = null /* B-SA-034 */) {
+// ── B-OP-020 (order page plan N1; 13-backend §2; review R-22) ─────────────────────────────────────────────────────────────────
+/** The kinds of request the order page decides: the order's own yes, an old change's yes (B-OP-010: never asked again), its credit hold. */
+const ORDER_APPROVAL_KINDS = ['SALES_ORDER', 'SALES_ORDER_CHANGE', 'CREDIT_OVERRIDE'] as const
+
+/**
+ * The PENDING requests of the order, oldest first: on the order itself (SALES_ORDER, an old SALES_ORDER_CHANGE) and on its own
+ * credit checks (CREDIT_OVERRIDE: a hold whose record is the order). Every one is the order's own.
+ */
+async function openApprovalTasksOf(db: Reader, orderId: string): Promise<TaskRow[]> {
+  const checks = await db.creditCheck.findMany({ where: { recordType: 'SalesOrder', recordId: orderId }, select: { id: true } })
+  return db.approvalTask.findMany({
+    where: {
+      status: 'PENDING',
+      kind: { in: [...ORDER_APPROVAL_KINDS] },
+      OR: [{ recordType: 'SalesOrder', recordId: orderId }, ...(checks.length > 0 ? [{ recordType: 'CreditCheck', recordId: { in: checks.map((check) => check.id) } }] : [])],
+    },
+    select: TASK_COLUMNS,
+    orderBy: [{ requestedAt: 'asc' }, { id: 'asc' }],
+  })
+}
+
+/**
+ * The order's open requests as this reader may decide them on the order page: listed by the approval engine's own list rule
+ * (approvals.view; asked by them, addressed to them, or of a kind they see; and the customer wall — GET /approvals/tasks's), each
+ * row built by the engine (the yes never one's own: rule 42); the others counted, never named. No reader (no office read): none.
+ */
+async function openApprovalsOf(db: Reader, orderId: string, office: OfficeContext | null) {
+  const tasks = await openApprovalTasksOf(db, orderId)
+  const rows = office && tasks.length > 0 && holds(actorOf(office), APPROVALS_VIEW) ? await listedRows(db, tasks, office) : []
+  return {
+    openApprovals: rows.map((row) => ({
+      taskId: row.id,
+      kind: row.kind,
+      kindLabel: row.kindLabel,
+      requestedAt: row.requestedAt,
+      requester: { name: row.requester.name, me: row.requester.me },
+      approver: { kind: row.approver.kind, name: row.approver.name, me: row.approver.me },
+      version: row.version,
+      requireStepUp: row.requireStepUp,
+      approve: row.approve,
+      reject: row.reject,
+      withdraw: row.withdraw,
+    })),
+    openApprovalsHidden: tasks.length - rows.length,
+  }
+}
+
+/** The rows of the requests GET /approvals/tasks would list to this reader (its visibility and the customer wall), in their order. */
+async function listedRows(db: Reader, tasks: readonly TaskRow[], office: OfficeContext) {
+  const actor = actorOf(office)
+  const now = serverClock.now()
+  const view: ViewContext = { context: office, roles: await approverRolesOf(db, office.actorId, now), now }
+  const listed = new Set(
+    (await db.approvalTask.findMany({ where: { AND: [{ id: { in: tasks.map((task) => task.id) } }, visibleTasks(actor, office.actorId, view.roles), await customerWall(db, actor)] }, select: { id: true } })).map((row) => row.id),
+  )
+  return openTaskRows(db, tasks.filter((task) => listed.has(task.id)), view)
+}
+// ── end B-OP-020 ──
+
+export async function orderView(db: Reader, order: OrderRow, today: BusinessDate, settlement: SettlementAnswer, viewer: Actor | null = null /* B-SA-034 */, office: OfficeContext | null = null /* B-OP-020 */) {
   const facts = await readOrderFacts(db, order)
   const artwork = await artworkFilesOf(db, order, facts.lines, viewer) // B-SA-035 (B-SA-035b: the files, not only how many)
   const riders = await ridersOf(db, facts.lines, viewer) // B-SA-035b
@@ -325,6 +393,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
   const cancelBlocks = CANCEL_STATUSES.includes(order.status) ? cancelBlocksOf(cancelImpact(await readCancelFacts(db, order, facts))) : []
   const shortLines = facts.lines.map((line) => ({ id: line.id, seq: line.seq, quantity: line.quantity, shipped: facts.progress.lines.find((entry) => entry.lineId === line.id)?.shipped ?? 0, closedShort: line.closedShortQuantity !== null }))
   const promiseDate = dayOrNull(order.promiseDate)
+  const approvals = await openApprovalsOf(db, order.id, office) // B-OP-020
 
   return {
     id: order.id,
@@ -432,14 +501,23 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
     },
     promiseHistory: history,
     people: people.map((user) => ({ id: user.id, name: user.displayName })),
-    settlement: { settled: settlement.settled, missing: settlement.missing.map((entry) => ({ code: entry.code, message: entry.message })), source: settlement.source },
+    // B-OP-020 (B3): the words may name amounts (price grain); the codes reach every reader.
+    settlement: { settled: settlement.settled, missing: settlement.missing.map((entry) => ({ code: entry.code, message: asMoney('price', entry.message) })), source: settlement.source },
     actions: orderActions(order.status, { ...moveFactsOf(facts, settlement), cancelBlocks }),
     dailyActions: dailyActions(order.status, shortLines),
     amendments: { count: amendments.length, latestRevision: amendments[0]?.revision ?? null, latestAt: amendments[0] ? toUtcIso(amendments[0].createdAt) : null },
     /** SAL-209: a confirmed order's lines change only through an amendment. */
     locked: true,
     // B-SA-034: the live watch list (the server's) and who changed each part last.
-    ...(await liveOf(db, order, facts, deposits.map((row) => row.id), viewer)),
+    ...(await liveOf(db, order, facts, deposits.map((row) => row.id), viewer, approvals.openApprovals.map((row) => row.taskId) /* B-OP-020 */)),
+    // ── B-OP-020: the yes in place; the Money and Shipments tabs' counts (the Changes tab counts the ONE waiting list: R-22) ──
+    openApprovals: approvals.openApprovals,
+    openApprovalsHidden: approvals.openApprovalsHidden,
+    badges: {
+      money: { invoices: facts.invoices.filter((row) => row.status !== 'DRAFT').length, openDeposits: deposits.filter((row) => row.status === 'OPEN').length },
+      shipments: facts.shipments.filter((row) => row.status !== 'CANCELLED').length,
+    },
+    // ── end B-OP-020 ──
   }
 }
 

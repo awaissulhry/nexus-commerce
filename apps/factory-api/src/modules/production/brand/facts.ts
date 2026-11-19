@@ -218,7 +218,7 @@ export async function readOrderProductionFacts(db: Reader, context: OfficeContex
   let computed: BrandHealth | null | undefined
   let promiseOnly = false
   const used = new Map<string, LineRisk>()
-  const gates = await db.orderGate.findMany({ where: { salesOrderId: order.id, passedAt: null, overriddenAt: null }, select: { kind: true, targetDate: true, sampleRoundId: true, createdAt: true } })
+  const gates = await db.orderGate.findMany({ where: { salesOrderId: order.id, passedAt: null, overriddenAt: null }, select: { id: true /* B-OP-021 */, kind: true, targetDate: true, sampleRoundId: true, createdAt: true } })
   let materialLate = false
   if (options.health !== false) {
     const wanted: RiskLine[] = openLines.map((line) => {
@@ -251,52 +251,59 @@ export async function readOrderProductionFacts(db: Reader, context: OfficeContex
   const live = workOrders.filter((row) => row.status !== 'CANCELLED')
   const liveIds = live.map((row) => row.id)
   const roundApprovals = await roundApprovalIds(db, gates.flatMap((gate) => (gate.sampleRoundId ? [gate.sampleRoundId] : [])))
+  // B-OP-021 (13-backend §3 B4): each blocker names the one record it is about (`ref`, office only) and, for a customer request
+  // waiting on us, what it is (`sub`): the order page's ONE waiting list opens each in place.
   const approvals = await db.approvalRequest.findMany({
     where: { partyId: order.partyId, status: 'OPEN', OR: [{ recordType: 'SalesOrder', recordId: order.id }, ...(roundApprovals.length > 0 ? [{ id: { in: roundApprovals } }] : [])] },
-    select: { createdAt: true },
+    select: { id: true, createdAt: true },
   })
-  for (const row of approvals) blockers.push({ kind: 'APPROVAL', since: row.createdAt })
-  const tasks = await db.partnerTask.findMany({ where: { partyId: order.partyId, status: 'OPEN', recordType: 'SalesOrder', recordId: order.id }, select: { createdAt: true } })
-  for (const row of tasks) blockers.push({ kind: 'PARTNER_TASK', since: row.createdAt })
+  for (const row of approvals) blockers.push({ kind: 'APPROVAL', since: row.createdAt, ref: { type: 'ApprovalRequest', id: row.id } })
+  const tasks = await db.partnerTask.findMany({ where: { partyId: order.partyId, status: 'OPEN', recordType: 'SalesOrder', recordId: order.id }, select: { id: true, createdAt: true } })
+  for (const row of tasks) blockers.push({ kind: 'PARTNER_TASK', since: row.createdAt, ref: { type: 'PartnerTask', id: row.id } })
   if (order.depositRequired && !live.some((row) => row.releasedAt !== null)) {
     const deposits = await db.depositRequest.findMany({
       where: { AND: [{ OR: [{ orderId: order.id }, ...(order.quoteVersionId ? [{ orderId: null, quoteVersionId: order.quoteVersionId }] : [])] }, ORDER_DEPOSIT_ONLY] },
-      select: { status: true, dueDate: true, createdAt: true },
+      select: { id: true, status: true, dueDate: true, createdAt: true },
     })
     const gate = depositGate({ orderId: order.id, orderNumber: order.number, depositRequired: true, requests: deposits.map((row) => ({ status: row.status as DepositStatus, dueDate: dayOf(row.dueDate) })) })
     if (!gate.passed) {
-      const open = deposits.filter((row) => row.status === 'OPEN').map((row) => row.createdAt.getTime())
-      blockers.push({ kind: 'DEPOSIT', since: open.length > 0 ? new Date(Math.min(...open)) : null })
+      // B-OP-021: the oldest OPEN request (none: the deposit is missing, no request to open).
+      const open = deposits.filter((row) => row.status === 'OPEN').sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
+      blockers.push({ kind: 'DEPOSIT', since: open[0]?.createdAt ?? null, ref: open[0] ? { type: 'DepositRequest', id: open[0].id } : null })
     }
   }
   const holds = liveIds.length > 0 ? await db.workOrderHold.findMany({ where: { workOrderId: { in: liveIds }, status: 'ACTIVE' }, select: { workOrderId: true, kind: true, placedAt: true } }) : []
-  for (const hold of holds) blockers.push({ kind: hold.kind === 'BRAND' ? 'BRAND_PAUSE' : 'NO_MOVE', since: hold.placedAt })
+  // B-OP-021: a hold, a quality hold and work at a workshop name their work order (the office read keeps it only for a reader who
+  // reaches that work order: sales/orders production-read).
+  for (const hold of holds) blockers.push({ kind: hold.kind === 'BRAND' ? 'BRAND_PAUSE' : 'NO_MOVE', since: hold.placedAt, ref: { type: 'WorkOrder', id: hold.workOrderId } })
   // A work order held by quality (or a nonconformance): not one only our plain holds hold.
-  for (const row of live) if (row.status === 'ON_HOLD' && row.holdRecordType !== 'WorkOrderHold') blockers.push({ kind: 'QUALITY_HOLD', since: row.heldAt })
-  for (const gate of gates) blockers.push({ kind: gate.kind === 'TRIMS_IN' ? 'MATERIAL_SHORT' : 'GATE', since: gate.createdAt })
-  if (materialLate) blockers.push({ kind: 'MATERIAL_SHORT', since: null })
-  const outside = liveIds.length > 0 ? await db.subcontractOrder.findMany({ where: { workOrderId: { in: liveIds }, status: { in: [...AT_WORKSHOP] } }, select: { issuedAt: true } }) : []
-  for (const row of outside) blockers.push({ kind: 'SUBCONTRACT', since: row.issuedAt })
-  const requests = await db.orderChangeRequest.findMany({ where: { orderId: order.id, status: 'OPEN' }, select: { createdAt: true } })
-  for (const row of requests) blockers.push({ kind: 'BRAND_REQUEST', since: row.createdAt })
+  for (const row of live) if (row.status === 'ON_HOLD' && row.holdRecordType !== 'WorkOrderHold') blockers.push({ kind: 'QUALITY_HOLD', since: row.heldAt, ref: { type: 'WorkOrder', id: row.id } })
+  for (const gate of gates) blockers.push({ kind: gate.kind === 'TRIMS_IN' ? 'MATERIAL_SHORT' : 'GATE', since: gate.createdAt, ref: { type: 'OrderGate', id: gate.id } })
+  if (materialLate) blockers.push({ kind: 'MATERIAL_SHORT', since: null, ref: null })
+  const outside = liveIds.length > 0 ? await db.subcontractOrder.findMany({ where: { workOrderId: { in: liveIds }, status: { in: [...AT_WORKSHOP] } }, select: { workOrderId: true, issuedAt: true } }) : []
+  for (const row of outside) blockers.push({ kind: 'SUBCONTRACT', since: row.issuedAt, ref: { type: 'WorkOrder', id: row.workOrderId } })
+  const requests = await db.orderChangeRequest.findMany({ where: { orderId: order.id, status: 'OPEN' }, select: { id: true, createdAt: true } })
+  for (const row of requests) blockers.push({ kind: 'BRAND_REQUEST', since: row.createdAt, ref: { type: 'OrderChangeRequest', id: row.id }, sub: 'REQUEST' })
   // B-PR-26: a request we countered waits on the customer while our counter-offer is open (an approval), and on us again once
   // they said yes (we accept it to carry it out) or the counter lapsed (we answer it); a no withdraws it.
-  const countered = await db.orderChangeRequest.findMany({ where: { orderId: order.id, status: 'COUNTERED' }, select: { counterApprovalId: true, counteredAt: true } })
+  const countered = await db.orderChangeRequest.findMany({ where: { orderId: order.id, status: 'COUNTERED' }, select: { id: true, counterApprovalId: true, counteredAt: true } })
   const counterIds = countered.flatMap((row) => (row.counterApprovalId ? [row.counterApprovalId] : []))
   const counters = new Map((counterIds.length > 0 ? await db.approvalRequest.findMany({ where: { id: { in: counterIds } }, select: { id: true, status: true, answeredAt: true, updatedAt: true } }) : []).map((row) => [row.id, row]))
   for (const row of countered) {
     const counter = row.counterApprovalId ? counters.get(row.counterApprovalId) : undefined
-    if (counter?.status === 'OPEN') blockers.push({ kind: 'APPROVAL', since: row.counteredAt })
-    else if (counter?.status !== 'REFUSED') blockers.push({ kind: 'BRAND_REQUEST', since: counter?.answeredAt ?? counter?.updatedAt ?? row.counteredAt })
+    // B-OP-021: both name the request (its review window answers it); an agreed or lapsed counter waits on us (B4).
+    if (counter?.status === 'OPEN') blockers.push({ kind: 'APPROVAL', since: row.counteredAt, ref: { type: 'OrderChangeRequest', id: row.id } })
+    else if (counter?.status !== 'REFUSED') blockers.push({ kind: 'BRAND_REQUEST', since: counter?.answeredAt ?? counter?.updatedAt ?? row.counteredAt, ref: { type: 'OrderChangeRequest', id: row.id }, sub: 'COUNTER' })
   }
-  const reported = await db.productionIssue.findMany({ where: { salesOrderId: order.id, status: 'OPEN', source: 'BRAND' }, select: { raisedAt: true } })
-  for (const row of reported) blockers.push({ kind: 'BRAND_REQUEST', since: row.raisedAt })
+  const reported = await db.productionIssue.findMany({ where: { salesOrderId: order.id, status: 'OPEN', source: 'BRAND' }, select: { id: true, raisedAt: true } })
+  for (const row of reported) blockers.push({ kind: 'BRAND_REQUEST', since: row.raisedAt, ref: { type: 'ProductionIssue', id: row.id }, sub: 'PROBLEM' })
   // B-PR-28: a new date the customer did not accept waits for us while its follow-up task is open (the task's id is the
   // request's; the date stands: planning/promise-keep/brand-answer).
   const refusedDates = await db.approvalRequest.findMany({ where: { partyId: order.partyId, kind: 'REPROMISE', recordType: 'SalesOrder', recordId: order.id, status: 'REFUSED', reversedAt: null }, select: { id: true, answeredAt: true } })
   if (refusedDates.length > 0) {
     const followUps = new Set((await db.task.findMany({ where: { id: { in: refusedDates.map((row) => row.id) }, status: 'OPEN' }, select: { id: true } })).map((task) => task.id))
-    for (const row of refusedDates) if (followUps.has(row.id)) blockers.push({ kind: 'BRAND_REQUEST', since: row.answeredAt })
+    // B-OP-021: the refused request names its follow-up task (the same id).
+    for (const row of refusedDates) if (followUps.has(row.id)) blockers.push({ kind: 'BRAND_REQUEST', since: row.answeredAt, ref: { type: 'ApprovalRequest', id: row.id }, sub: 'REPROMISE' })
   }
 
   return {

@@ -5,7 +5,7 @@ import { CUT_OFF_LIMITS, CUT_OFF_SOURCES, ISO_WEEKDAYS } from '@nexus/factory-do
 import { AT_RISK_MINUTES_RANGE, QUEUE_RISKS } from '@nexus/factory-domain/shipping/queue/risk'
 import { SEARCH_LIMITS, SEARCH_MATCHES } from '@nexus/factory-domain/shipping/queue/search'
 import { SHIPMENT_STATUSES } from '@nexus/factory-domain/shipping/shipments'
-import { statusSchema, transportBySchema } from '../views'
+import { shipmentOrdersSchema, statusSchema, transportBySchema } from '../views'
 
 /**
  * The shipment queue (B-W2b-386; LOG-018, LOG-110, LOG-120; design warehouse.shipments "Carrier cut-offs today", the views
@@ -55,6 +55,8 @@ const queueRowSchema = output({
   customerRef: z.string().nullable(),
   partyCode: z.string(),
   partyName: z.string(),
+  /** B-OP-041 (N6): every order it carries (its lines' orders), the first (salesOrderId) first. */
+  salesOrders: shipmentOrdersSchema,
   /** Its card: the carrier's code, SENDER (own van), RECIPIENT (the customer collects) or none. */
   carrierKey: z.string(),
   transportBy: transportBySchema,
@@ -160,6 +162,8 @@ export const searchContract = defineContract({
           customerRef: z.string().nullable(),
           partyCode: z.string(),
           partyName: z.string(),
+          /** B-OP-041 (N6): every order it carries, the first (salesOrderId) first. */
+          salesOrders: shipmentOrdersSchema,
           transportBy: transportBySchema,
           carrierCode: z.string().nullable(),
           carrierName: z.string().nullable(),

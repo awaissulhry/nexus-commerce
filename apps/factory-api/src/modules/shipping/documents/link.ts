@@ -25,6 +25,8 @@ import { tenantOf } from '../cells'
 import { readShipment, type ShipmentHeader } from '../store'
 import { attachStateProblem } from './attach'
 import { contactsOf, documentsClock, documentsCommand, lockShipmentDocuments, readDocuments } from './read'
+// B-OP-042 (order page N6, lines-derived): the orders a shipment carries.
+import { orderRefsOfShipment, orderWordsOf } from '../shipments/orders-of'
 
 /**
  * The shipment's documents link (B-W1-49; SAL-099, LOG-020; A2 SCR-101 "Download a document", links.frame "Ask for a new
@@ -136,7 +138,9 @@ export async function sendDocumentLinks(request: SendRequest): Promise<SendResul
     const addresses = addressesOf(request.to, contacts)
     const suppressed = addresses.length > 0 ? await client.suppression.findMany({ where: { address: { in: addresses }, liftedAt: null }, select: { address: true } }) : []
     const read = await readDocuments(client, shipment)
-    return { addresses, suppressed: new Set(suppressed.map((row) => row.address)), read }
+    // B-OP-042 (order page N6): the mail names every order it carries (all the customer's own), the first first.
+    const orders = await orderRefsOfShipment(client, shipment)
+    return { addresses, suppressed: new Set(suppressed.map((row) => row.address)), read, orders }
   })
   const addresses = facts.addresses.filter((address) => !facts.suppressed.has(address))
   const skipped: { email: string; reason: 'SUPPRESSED' | 'ALREADY_SENT' | 'ASKED_RECENTLY' }[] = facts.addresses.filter((address) => facts.suppressed.has(address)).map((address) => ({ email: address, reason: 'SUPPRESSED' as const }))
@@ -159,7 +163,7 @@ export async function sendDocumentLinks(request: SendRequest): Promise<SendResul
     return [address, { linkId, outboundId: newId(), token: mintLinkToken({ tenantId, partyId: shipment.partyId, linkId }).value }] as const
   }))
   const mailFor = (expiresAt: Date, url: string | null) =>
-    documentsLinkMail({ locale, shipmentNumber: shipment.number, orderNumber: read.order?.number ?? null, customerRef: read.order?.customerRef ?? null, titles, expiresAt, renewal: request.reason === 'ASKED_AGAIN' }, url)
+    documentsLinkMail({ locale, shipmentNumber: shipment.number, ...orderWordsOf(facts.orders, read.order), titles, expiresAt, renewal: request.reason === 'ASKED_AGAIN' }, url)
 
   let outcome: { readonly result: SendResult; readonly replayed: boolean }
   try {

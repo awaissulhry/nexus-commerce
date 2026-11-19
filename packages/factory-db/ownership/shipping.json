@@ -11,17 +11,17 @@
       }
     },
     "Shipment": {
-      "about": "The office plans a shipment from a sales order, buys its labels, ships it with its DDT, records delivery or return, sets the freight charged (W2a) and the state of its intra-EU transport evidence (W2a), and cancels it. The site's floor reads its shipments without the freight charge and moves one DRAFT ⇄ PACKED (only that). A portal or link session reads its own party's shipments (with the freight charged to it) without the internal columns and who checked the transport evidence. W2b: the freight cost (what the carrier charged us, a cost) and its currency are the office's only: hidden from the floor and from portal and link sessions.",
+      "about": "The office plans a shipment from a sales order, buys its labels, ships it with its DDT, records delivery or return, sets the freight charged (W2a) and the state of its intra-EU transport evidence (W2a), and cancels it. The site's floor reads its shipments without the freight charge and moves one DRAFT ⇄ PACKED (only that). A portal or link session reads its own party's shipments (with the freight charged to it) without the internal columns and who checked the transport evidence. W2b: the freight cost (what the carrier charged us, a cost) and its currency are the office's only: hidden from the floor and from portal and link sessions. B-OP-005 (order page plan, N5): where it was made (origin: NEXUS or ELSEWHERE), the paper DDT a shipment made elsewhere left with (number and date) and the tracking link typed for a carrier booked by hand are the office's to write; a portal or link session reads them on its own party's shipments (its own paper DDT and link); the floor reads none of them (it packs only shipments made in Nexus).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"], "hiddenColumns": ["freightCharge", "freightCost", "freightCostCurrency"] },
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"], "hiddenColumns": ["freightCharge", "freightCost", "freightCostCurrency", "origin", "externalDdtNumber", "externalDdtDate", "manualTrackingUrl"] },
         "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["integrationAccountId", "internalNote", "transportEvidenceById", "transportEvidenceNote", "createdById", "freightCost", "freightCostCurrency"] }
       }
     },
     "ShipmentLine": {
-      "about": "The office and the site's floor (packing) add, change and remove the lines of a DRAFT shipment (released garments only). A portal or link session reads its own party's lines.",
+      "about": "The office and the site's floor (packing) add, change and remove the lines of a DRAFT shipment (released garments only). A portal or link session reads its own party's lines. B-OP-005 (N6, lines-derived): a line may ship garments of another open order of the shipment's customer (the references carry the party, so never another customer's); a shipment's orders are its lines' orders.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {

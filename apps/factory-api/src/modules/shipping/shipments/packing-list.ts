@@ -14,6 +14,8 @@ import type { FilesRuntime } from '../../../platform/files/service'
 import { tenantOf } from '../cells'
 import { readContents } from '../store'
 import { officeShipment } from './shipments'
+// B-OP-042 (order page N6, lines-derived): the orders a shipment carries.
+import { orderRefsOfShipment } from './orders-of'
 
 /**
  * A shipment's packing list (B-W1-46; LOG-039; A2 SCR-067): the PACKING_LIST document (factory-domain documents and
@@ -118,12 +120,14 @@ export async function packingList(
   const facts = await caller.withClient(async (client) => {
     const contents = await readContents(client, shipment.id)
     const order = await client.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { number: true, customerRef: true, language: true } })
+    // B-OP-042 (order page N6): every order it carries, the first first (the language stays the first order's).
+    const orders = await orderRefsOfShipment(client, shipment)
     const party = await client.party.findUnique({ where: { id: shipment.partyId }, select: { legalName: true } })
     const company = await client.company.findUnique({ where: { id: shipment.companyId }, select: { currency: true } })
     const versions = await versionsOf(client, shipment.id)
-    return { contents, order, party, company, versions }
+    return { contents, order, orders, party, company, versions }
   })
-  const { contents, order, party, company, versions } = facts
+  const { contents, order, orders, party, company, versions } = facts
   const unpacked = contents.lines.filter((line) => line.parcelId === null).reduce((garments, line) => garments + line.quantity, 0)
   const problems = packingListProblems(shipment.status, contents.lines.length, unpacked)
   if (problems.length > 0) throw new InvalidStateError(problems.join(' '))
@@ -144,7 +148,7 @@ export async function packingList(
         companyId: shipment.companyId,
         recordType: 'Shipment',
         recordId: shipment.id,
-        document: packingDocumentOf(shipment, contents, { number, language, currency: company?.currency ?? 'EUR', partyName: party?.legalName ?? '', order }),
+        document: packingDocumentOf(shipment, contents, { number, language, currency: company?.currency ?? 'EUR', partyName: party?.legalName ?? '', order, orders }),
         visibility: ['FLOOR'],
         floorSiteId: shipment.siteId,
         ...(idempotencyKey ? { idempotencyKey } : {}),
@@ -194,7 +198,7 @@ export async function packingList(
 function packingDocumentOf(
   shipment: Awaited<ReturnType<typeof officeShipment>>,
   contents: Contents,
-  facts: { number: string; language: DocumentLanguage; currency: string; partyName: string; order: { number: string; customerRef: string | null } | null },
+  facts: { number: string; language: DocumentLanguage; currency: string; partyName: string; order: { number: string; customerRef: string | null } | null; /* B-OP-042 */ orders?: readonly { number: string; customerRef: string | null }[] },
 ) {
   const shipTo = shipment.shipTo as (PostalAddress & { name?: string | null }) | null
   return packingListDocument({
@@ -206,6 +210,7 @@ function packingDocumentOf(
     shipTo: shipTo && typeof shipTo === 'object' && typeof shipTo.line1 === 'string' ? shipTo : null,
     salesOrderNumber: facts.order?.number ?? '',
     customerRef: facts.order?.customerRef ?? null,
+    ...(facts.orders && facts.orders.length > 0 ? { orders: facts.orders.map((ref) => ({ number: ref.number, customerRef: ref.customerRef })) } : {}), // B-OP-042
     parcels: contents.parcels.map((parcel) => ({ id: parcel.id, seq: parcel.seq, grossWeightKg: parcel.grossWeightKg === null ? null : parcel.grossWeightKg.toFixed(4) })),
     lines: contents.lines.map((line) => ({
       parcelId: line.parcelId!,

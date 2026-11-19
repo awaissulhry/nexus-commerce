@@ -81,7 +81,17 @@ export const trackingPageView = output({
   }),
   /** "Your order 4500-1234": the customer's own reference first, then ours. */
   // fix-portal-numbers-1 (B-TH-303): `number` is the customer's own order number ("#12"), never the office's SO-… series.
-  order: output({ customerRef: z.string().nullable(), number: z.string().nullable() }),
+  order: output({
+    customerRef: z.string().nullable(),
+    number: z.string().nullable(),
+    /**
+     * B-OP-042 (order page N6, R-18; lead decision 2026-11-19): a link may be passed on (the customer's own shop), so the page
+     * names ONE order — the shipment's FIRST order, for every link (also one copied in the portal from another order's page:
+     * no link records the order it was copied from, and no schema wave is made for it) — and only HOW MANY pieces of the
+     * customer's other orders travel with it: the page says "and N pieces of other orders" (0: it says nothing).
+     */
+    otherPieces: z.number().int().min(0),
+  }),
   pill: z.enum(TRACKING_PILLS),
   problem: z.enum(TRACKING_PROBLEMS).nullable(),
   steps: z.array(output({ code: z.enum(TRACKING_STEPS), state: z.enum(STEP_STATES), at: instant().nullable() })),

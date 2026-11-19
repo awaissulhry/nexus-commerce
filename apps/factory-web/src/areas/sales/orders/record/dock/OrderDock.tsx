@@ -13,9 +13,9 @@ import { useLiveBus } from '../../../../../shell/live/use-live'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { OfficeRecordThread } from '../../../../_shared/record-thread/OfficeRecordThread'
 import type { DockedHost } from '../../../../_shared/record-thread/DockedOfficeThread' // F-SA-244
-import { PickedDockColumn, ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
+import { ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
 import { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-customer/use-all-of-customer'
-import { ALL_OF_CUSTOMER_NS, AllOfCustomerFeed } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
+import { ALL_OF_CUSTOMER_NS, AllOfCustomerDock } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
 import { messageHrefOf } from '../../../../_shared/record-thread/all-of-customer/model'
 import { useInProject } from '../../../../products/projects/record/linked/use-in-project'
 import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeOfChoice, scopeOfParam, scopeShown, workOrderGroups, type DockWorkOrder, type OrderScope, type ScopeChoice, type ScopeOffer } from './model'
@@ -128,6 +128,8 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
     const entry = feed.state.entries.find((one) => one.record.type === record.type && one.record.id === record.id && one.message.id === messageId)
     if (entry) router.push(messageHrefOf(entry, prefix))
   }
+  // F-OP-205: the empty feed's door — the first message goes into this order's thread, the box on Office note (the frame's ask).
+  const writeFirst = { thread: t('record.dock.order'), onWrite: () => (frame?.compose ? frame.compose({ record: { type: 'SalesOrder', id: order.id }, messageId: null, mode: 'note' }) : go(ORDER_SCOPE)) }
 
   // ── the pick ──
   const segments = choicesOffered(offer)
@@ -143,8 +145,8 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
     }
     // Office only: its line in the office tone.
     if (segment === 'workOrders') return { value: 'workOrders', label: t('record.dock.workOrders'), icon: <Lock size={14} aria-hidden />, count: freshOf(offer.workOrders), tone: 'office', line: t('record.dock.workOrderLine', { wo: workOrder?.number ?? ownWork[0]?.number ?? '' }) }
-    // The feed says itself that it is read only and how to write (its own line).
-    return { value: 'all', label: t('record.dock.all', { customer }), short: rt('allOfCustomer.view.all'), title: t('record.dock.readOnly'), icon: <Eye size={14} aria-hidden />, line: null }
+    // F-OP-204 (11-dock §2): the whose-line says it is read only and how to write (one place, one wording: the feed's own line left).
+    return { value: 'all', label: t('record.dock.all', { customer }), short: rt('allOfCustomer.view.all'), title: t('record.dock.readOnly'), icon: <Eye size={14} aria-hidden />, line: rt('allOfCustomer.line', { customer }) }
   })
   const extra =
     scope.kind === 'project' && projects.length > 1 ? (
@@ -179,10 +181,13 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
     shown = <OfficeRecordThread key={`wo-${workOrder.id}`} docked record={{ type: 'WorkOrder', id: workOrder.id, companyId: order.companyId, siteId: workOrder.siteId }} title={`${workOrder.number}${workOrder.style ? ` · ${workOrder.style}` : ''}`} recordLabel={workOrder.number} party={null} recordHref={`${prefix}/production/work-orders/${encodeURIComponent(workOrder.id)}`} />
   } else if (scope.kind === 'all') {
     // F-OP-203: All of <customer> in the dock's ONE card (DockColumn): the pick band on top, the read-only feed that scrolls, the foot.
+    // F-OP-204: its Head row (FeedHead: View ▾, Kind ▾, N new · Show, the width menu, ⋯ with Open <customer>).
     shown = (
-      <PickedDockColumn
+      <AllOfCustomerDock
         label={`${t('record.dock.all', { customer })} · ${t('record.dock.readOnly')}`}
-        body={<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />}
+        model={feed.model}
+        actions={{ ...feed.actions, onAnswer, writeFirst }}
+        customerHref={`${prefix}/sales/customers/${encodeURIComponent(order.partyId)}`}
         foot={
           // Writing always goes into ONE conversation: the two the person may pick here.
           <>

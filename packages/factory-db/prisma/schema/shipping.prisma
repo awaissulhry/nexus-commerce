@@ -66,6 +66,17 @@
 // customer and the broker pack link on (both OFF by default: nothing is sent by itself until the Owner says so). A
 // delivered shipment keeps the carrier's proof of delivery: who signed, when, and its image (a file of the shipment).
 // Tracking problems, return labels and customs declarations are customs.prisma's.
+//
+// B-OP-005 (order page plan, schema wave "order page 1/1"; N5, N6; review R-8, R-10, R-23): several orders of ONE customer
+// travel in one shipment, LINES-DERIVED — a shipment's orders are the orders of its lines (no table of its own): its lines
+// may ship garments of any open order (CONFIRMED, IN_PRODUCTION, READY, PARTLY_SHIPPED) of its customer and company in its
+// first order's currency and tax mode, while it is a DRAFT; Shipment.salesOrderId stays its first order. An order is "on" a
+// shipment once it has garments on it (or is its first order). Another customer's order never joins: the line's references
+// carry the party. Apps/factory-api keeps a second order refused until the lane's switch (B-OP-040, B-OP-047). A shipment
+// says where it was made: NEXUS (planned, packed and sent through Nexus, with its Nexus DDT) or ELSEWHERE (goods that left
+// outside Nexus, recorded afterwards: DRAFT → SHIPPED in one step, at most 60 days back, with the paper DDT's number and
+// date unless an immediate invoice travelled instead; Nexus never issues a DDT of it). A carrier booked by hand may also
+// carry its typed tracking link.
 
 /// Who carries the goods (trasporto a cura del; DPR 472/1996), as factory-domain documents DDT_TRANSPORT_BY.
 enum TransportBy {
@@ -201,6 +212,8 @@ model Shipment {
   siteId               String         @db.Uuid
   /// The order's party (the partner role's policy key).
   partyId              String         @db.Uuid
+  /// B-OP-005 (N6): its FIRST order. Its orders are the orders of its lines (lines-derived): this one, and every open order
+  /// of the same customer one of its lines ships garments of.
   salesOrderId         String         @db.Uuid
   /// The number from the company's SHIPMENT series, unique in the company.
   number               String
@@ -297,6 +310,20 @@ model Shipment {
   podSignedBy                String?
   podAt                      DateTime?               @db.Timestamptz(3)
   podFileId                  String?                 @db.Uuid
+  /// B-OP-005 (order page, N5): where it was made — NEXUS, or ELSEWHERE (goods that left outside Nexus, recorded afterwards:
+  /// DRAFT → SHIPPED in one step, shipped at most 60 days back and not in the future, never packed in Nexus, never split, no
+  /// Nexus DDT); set when it is made, never changed. The floor reads none of the four columns below.
+  origin                     ShipmentOrigin          @default(NEXUS)
+  /// B-OP-005 (N5; R-10, R-23): the paper DDT a shipment made ELSEWHERE left with, as printed: its number (1 to 40
+  /// characters on one line, no space at either end) and its date (on or before the day it left); both or neither, only
+  /// on an ELSEWHERE shipment, fixed once it left. Required to leave while ddtRequired (false: an immediate invoice
+  /// travelled instead). One paper DDT is recorded once per customer (Shipment_external_ddt_key).
+  externalDdtNumber          String?
+  externalDdtDate            DateTime?               @db.Date
+  /// B-OP-005 (N5): the tracking link typed for a carrier booked by hand: https only, up to 500 characters on one line,
+  /// no user name or password in it, only with manualTrackingNumber (clearing the number clears it); it may still be
+  /// typed after the goods left.
+  manualTrackingUrl          String?
   version              Int            @default(1)
   createdAt            DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -336,6 +363,18 @@ model Shipment {
   @@index([tenantId, splitFromId])
   // W2b-6 (wave 48/57): the shipments on a day's sheet.
   @@index([tenantId, manifestId])
+  // B-OP-005 (R-10): a paper DDT is recorded once per customer: two customers (two issuers) may share a number and date,
+  // and the refusal names only the customer's own shipment.
+  @@unique([tenantId, companyId, partyId, externalDdtNumber, externalDdtDate], map: "Shipment_external_ddt_key")
+}
+
+/// B-OP-005 (order page plan, N5): where a shipment was made.
+enum ShipmentOrigin {
+  /// Planned, packed and sent through Nexus; it leaves with its Nexus DDT (or an immediate invoice).
+  NEXUS
+  /// Goods that left outside Nexus, recorded afterwards with their paper DDT (or an immediate invoice); Nexus issues no DDT
+  /// of it.
+  ELSEWHERE
 }
 
 enum ShipmentStatus {
@@ -351,6 +390,8 @@ enum ShipmentStatus {
 /// One line of a shipment (LOG-001): garments of one cell (colourway x size) of a work order that makes a line of the
 /// shipment's order, released by quality, and the parcel they are packed in. A serial-tracked style's line holds its
 /// serials (GarmentSerial.shipmentLineId) once PACKED. Written, changed and removed only while the shipment is a DRAFT.
+/// B-OP-005 (N6, lines-derived): the line's order is the shipment's first order or another open order of the same customer
+/// and company in the first order's currency and tax mode; the shipment's orders are its lines' orders.
 model ShipmentLine {
   id               String   @id @db.Uuid
   tenantId         String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -396,6 +437,8 @@ model ShipmentLine {
   @@index([tenantId, shipmentId])
   // The shipped garments per cell (only released ones ship).
   @@index([tenantId, workOrderSizeId])
+  // B-OP-005 (N6): the shipments of an order, through its lines (the delivered check, a message about a shipment, the readers).
+  @@index([tenantId, salesOrderLineId])
 }
 
 /// One parcel of a shipment (LOG-039: one consignment of several boxes): its place, weight and size, and once a carrier
