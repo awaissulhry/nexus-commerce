@@ -1,4 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
+import { newId } from '@nexus/factory-domain/core/ids' // B-CP-024
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { priceCheckOf, type PriceCheck } from '@nexus/factory-domain/sales/brand-prices/match'
@@ -127,3 +128,92 @@ export async function markSourceFilesPriced(tools: CommandTools, order: PricedOr
   }
 }
 // ── end B-CP-017 ──
+
+// ── B-CP-024 (customer page plan C3; review G5): customer prices follow a split and a removed line ─────────────────────────────
+
+/** Why a row goes with its line (the audit's reason, in words; never a price). */
+const CARRY_WORDS = Object.freeze({
+  removedWithLine: 'The line was removed from the order: its customer\'s price goes with it.',
+  changedBySplit: 'The order was split: this line changed, so the customer gives its price again.',
+  totalBySplit: 'The order was split: its lines changed, so the customer gives its total again.',
+  movedBySplit: 'The order was split: the line moved with its customer\'s unit price.',
+  copiedBySplit: 'The order was split: the part of the line that moved keeps the customer\'s unit price.',
+})
+
+/**
+ * B-CP-024: the customer's prices of lines an amendment deletes (Remove line, and a split's line left with nothing) — removed in
+ * the caller's command, each audited, before the line is deleted (the foreign key is Restrict: a row would keep the line).
+ * A line closed short (Close remaining lines, or Remove line on a line work orders make: closed short instead of deleted) stays
+ * on the order with its pieces and our line net, so its customer's price stays too and the check stays right. Returns how many
+ * were removed, and announces the order once when there were some.
+ */
+export async function removeBrandPricesOfLines(tools: CommandTools, order: PricedOrder, lineIds: readonly string[]): Promise<number> {
+  if (lineIds.length === 0) return 0
+  const rows = await tools.tx.orderBrandPrice.findMany({ where: { salesOrderId: order.id, salesOrderLineId: { in: [...lineIds] } }, select: BRAND_PRICE_COLUMNS, orderBy: { id: 'asc' } })
+  if (rows.length === 0) return 0
+  await tools.tx.orderBrandPrice.deleteMany({ where: { id: { in: rows.map((row) => row.id) } } })
+  for (const row of rows) auditBrandPrice(tools, order, { action: 'brandPrices.removedWithLine', before: brandPriceAuditView(row), after: null, reason: CARRY_WORDS.removedWithLine })
+  announceBrandPrices(tools, order)
+  return rows.length
+}
+
+/** One line a split moves: the source line, the new order and its new line, and whether the whole line moved (else some sizes). */
+export interface SplitCarry {
+  readonly fromLineId: string
+  readonly toOrderId: string
+  readonly toLineId: string
+  readonly whole: boolean
+}
+
+/**
+ * B-CP-024: a split's carry, in the split's command, after its new orders and lines are made and before the order keeps the rest
+ * (the amendment deletes a line left with nothing):
+ *
+ *   unit price, whole line     the row moves with its line (its order and its line change together: the guard's carry; a
+ *                              PORTAL row stays the customer's), audited on both orders
+ *   unit price, some sizes     the source line keeps its row (a unit price holds for the pieces it keeps); the new line gets a
+ *                              copy (same source and who typed it; no source file: the PO is a file of the source order)
+ *   line total                 removed from the source line: the line moved or changed, so it reads "No customer price yet"
+ *                              again (the total was for the line as it was)
+ *   the order's total          removed from the source order: its lines changed, so the customer gives its total again (it
+ *                              stays in the order's price history); the new orders start without one
+ *
+ * Every write is audited under OrderBrandPrice; each order whose prices changed is announced once.
+ */
+export async function carryBrandPricesOnSplit(tools: CommandTools, from: PricedOrder, carries: readonly SplitCarry[]): Promise<void> {
+  if (carries.length === 0) return
+  const { tx, now } = tools
+  const rows = await tx.orderBrandPrice.findMany({ where: { salesOrderId: from.id }, select: BRAND_PRICE_COLUMNS, orderBy: { id: 'asc' } })
+  if (rows.length === 0) return
+  const byLine = new Map(rows.flatMap((row) => (row.salesOrderLineId ? [[row.salesOrderLineId, row] as const] : [])))
+  const touched = new Set<string>()
+  const moved = new Set<string>()
+  for (const carry of carries) {
+    const row = byLine.get(carry.fromLineId)
+    if (!row) continue
+    const to: PricedOrder = { id: carry.toOrderId, companyId: from.companyId, partyId: from.partyId }
+    if (row.netAmount !== null) continue // a line total: removed below, once
+    if (carry.whole && !moved.has(row.id)) {
+      await tx.orderBrandPrice.update({ where: { id: row.id }, data: { salesOrderId: carry.toOrderId, salesOrderLineId: carry.toLineId, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
+      moved.add(row.id)
+      const after = { ...brandPriceAuditView(row), lineId: carry.toLineId, version: row.version + 1 }
+      auditBrandPrice(tools, from, { action: 'brandPrices.movedOut', before: brandPriceAuditView(row), after: { rowId: row.id, toOrderId: carry.toOrderId, toLineId: carry.toLineId }, reason: CARRY_WORDS.movedBySplit })
+      auditBrandPrice(tools, to, { action: 'brandPrices.movedIn', before: { rowId: row.id, fromOrderId: from.id, fromLineId: carry.fromLineId }, after, reason: CARRY_WORDS.movedBySplit })
+    } else {
+      const copy = { id: newId(), companyId: from.companyId, partyId: from.partyId, salesOrderId: carry.toOrderId, salesOrderLineId: carry.toLineId, unitPrice: row.unitPrice, netAmount: null, currency: row.currency, source: row.source, sourceFileId: null, note: row.note, enteredById: row.enteredById, enteredAt: row.enteredAt }
+      await tx.orderBrandPrice.create({ data: { ...copy, createdAt: now, updatedAt: now }, select: { id: true } })
+      auditBrandPrice(tools, to, { action: 'brandPrices.carried', before: { rowId: row.id, fromOrderId: from.id, fromLineId: carry.fromLineId }, after: brandPriceAuditView({ ...copy, version: 1 }), reason: CARRY_WORDS.copiedBySplit })
+    }
+    touched.add(carry.toOrderId)
+  }
+  // Line totals of the lines that moved or changed, and the source order's own total.
+  const movedLines = new Set(carries.map((carry) => carry.fromLineId))
+  const cleared = rows.filter((row) => (row.salesOrderLineId === null) || (movedLines.has(row.salesOrderLineId) && row.netAmount !== null))
+  if (cleared.length > 0) {
+    await tx.orderBrandPrice.deleteMany({ where: { id: { in: cleared.map((row) => row.id) } } })
+    for (const row of cleared) auditBrandPrice(tools, from, { action: 'brandPrices.clearedBySplit', before: brandPriceAuditView(row), after: null, reason: row.salesOrderLineId === null ? CARRY_WORDS.totalBySplit : CARRY_WORDS.changedBySplit })
+  }
+  if (moved.size > 0 || cleared.length > 0) announceBrandPrices(tools, from)
+  for (const orderId of touched) announceBrandPrices(tools, { id: orderId, companyId: from.companyId, partyId: from.partyId })
+}
+// ── end B-CP-024 ──
