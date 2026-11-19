@@ -25,6 +25,8 @@ const transportView = output({
     serviceCode: z.string().nullable(),
     /** The tracking number typed for a carrier booked by hand; null: none. */
     manualTrackingNumber: z.string().nullable(),
+    /** B-OP-034: the tracking link typed beside it (https only); null: none. */
+    manualTrackingUrl: z.string().nullable(),
     ddtRequired: z.boolean(),
     shippedAt: instant().nullable(),
     deliveredAt: instant().nullable(),
@@ -70,7 +72,12 @@ export const arrangeTransportContract = defineContract({
 
 export const typeTrackingNumberContract = defineContract({
   params: shipmentParams,
-  body: input({ version, trackingNumber: text(OWN_TRANSPORT_LIMITS.trackingNumber * 2).nullable() }),
+  body: input({
+    version,
+    trackingNumber: text(OWN_TRANSPORT_LIMITS.trackingNumber * 2).nullable(),
+    /** B-OP-034: the tracking link typed beside the number (https only); null clears it; left out: kept. */
+    trackingUrl: text(OWN_TRANSPORT_LIMITS.trackingUrl * 2).nullish(),
+  }),
   response: { 200: transportView },
 })
 

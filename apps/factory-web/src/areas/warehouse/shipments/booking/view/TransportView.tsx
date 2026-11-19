@@ -86,7 +86,7 @@ function TransportCard({ model, actions }: { model: TransportModel; actions?: Tr
           </Button>
         )}
         {arrangement === 'MANUAL_CARRIER' && (
-          <Button size="sm" heldReason={trackBlocked} onClick={() => actions?.onDialog?.({ kind: 'tracking', text: shipment.manualTrackingNumber ?? '' })}>
+          <Button size="sm" heldReason={trackBlocked} onClick={() => actions?.onDialog?.({ kind: 'tracking', text: shipment.manualTrackingNumber ?? '', link: shipment.manualTrackingUrl ?? '' /* F-OP-135 */ })}>
             {shipment.manualTrackingNumber ? t('transport.changeTracking') : t('transport.typeTracking')}
           </Button>
         )}
@@ -223,6 +223,10 @@ function TrackingDialog({ transport, model, actions }: { transport: Transport; m
     >
       <Field label={t('transport.trackingNumber')} hint={t('transport.trackingClearHint')}>
         <Input size="sm" value={dialog.text} onChange={(event) => actions?.onDialog?.({ ...dialog, text: event.target.value })} />
+      </Field>
+      {/* F-OP-135 (B-OP-034): the carrier's tracking page typed beside the number — the customer's Track ›. */}
+      <Field label={t('transport.trackingLink')} hint={t('transport.trackingLinkHint')}>
+        <Input size="sm" type="url" inputMode="url" value={dialog.link ?? ''} onChange={(event) => actions?.onDialog?.({ ...dialog, link: event.target.value })} />
       </Field>
     </DepthDialog>
   )

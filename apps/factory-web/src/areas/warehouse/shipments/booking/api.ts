@@ -27,6 +27,8 @@ export const transportSchema = z.object({
     carrierName: z.string().nullable(),
     serviceCode: z.string().nullable(),
     manualTrackingNumber: z.string().nullable(),
+    /** F-OP-135 (B-OP-034): the tracking link typed beside the number (https only); null: none. */
+    manualTrackingUrl: z.string().nullable().optional(),
     ddtRequired: z.boolean(),
     shippedAt: z.string().nullable(),
     deliveredAt: z.string().nullable(),
@@ -51,7 +53,7 @@ export function arrangeTransport(api: ApiClient, shipmentId: string, body: { ver
   return api.request('PUT', `${base(shipmentId)}/own-transport`, { body, schema: transportSchema, idempotencyKey })
 }
 
-export function typeTrackingNumber(api: ApiClient, shipmentId: string, body: { version: number; trackingNumber: string | null }, idempotencyKey: string): Promise<Transport> {
+export function typeTrackingNumber(api: ApiClient, shipmentId: string, body: { version: number; trackingNumber: string | null; /* F-OP-135: null clears; left out keeps */ trackingUrl?: string | null }, idempotencyKey: string): Promise<Transport> {
   return api.request('PUT', `${base(shipmentId)}/own-transport/tracking`, { body, schema: transportSchema, idempotencyKey })
 }
 

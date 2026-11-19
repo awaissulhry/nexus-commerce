@@ -494,11 +494,11 @@ export const CANDIDATES_HELD: OrderCandidates = {
   shipmentId: SHIPMENT_ID,
   number: 'SH-00160',
   orders: [
-    { salesOrderId: SECOND_ORDER.id, number: SECOND_ORDER.number, customerRef: SECOND_ORDER.customerRef, status: 'READY', joinable: { allowed: false, why: MULTI_ORDER_OFF } },
-    { salesOrderId: uid('5150', 22), number: 'SO-2026-0094', customerRef: null, status: 'IN_PRODUCTION', joinable: { allowed: false, why: 'SO-2026-0094 goes to Bologna, shipment SH-00160 to Milano: one shipment goes to one address.' } },
+    { salesOrderId: SECOND_ORDER.id, number: SECOND_ORDER.number, customerRef: SECOND_ORDER.customerRef, status: 'READY', joinable: { allowed: false, code: 'MULTI_ORDER_OFF', why: MULTI_ORDER_OFF } },
+    { salesOrderId: uid('5150', 22), number: 'SO-2026-0094', customerRef: null, status: 'IN_PRODUCTION', joinable: { allowed: false, code: 'SHIP_TO', why: 'SO-2026-0094 goes to Bologna, shipment SH-00160 to Milano: one shipment goes to one address.' } },
   ],
 }
-export const CANDIDATES_AFTER: OrderCandidates = { ...CANDIDATES_HELD, orders: [{ ...CANDIDATES_HELD.orders[0]!, joinable: { allowed: true, why: null } }, CANDIDATES_HELD.orders[1]!] }
+export const CANDIDATES_AFTER: OrderCandidates = { ...CANDIDATES_HELD, orders: [{ ...CANDIDATES_HELD.orders[0]!, joinable: { allowed: true, code: null, why: null } }, CANDIDATES_HELD.orders[1]!] }
 
 /** The ready cells of the second order (what it can still put on a DRAFT). */
 export const SECOND_READY: ReadyOrder = {

@@ -39,7 +39,7 @@ export type TransportArrangement = (typeof TRANSPORT_ARRANGEMENTS)[number]
 export const MANUAL_EVENT_STATUSES = ['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'EXCEPTION', 'DELIVERED', 'RETURNED'] as const
 export type ManualEventStatus = (typeof MANUAL_EVENT_STATUSES)[number]
 
-export const OWN_TRANSPORT_LIMITS = Object.freeze({ carrierName: 100, trackingNumber: 100, description: 500, location: 200, futureSkewMs: 5 * 60_000 })
+export const OWN_TRANSPORT_LIMITS = Object.freeze({ carrierName: 100, trackingNumber: 100, description: 500, location: 200, futureSkewMs: 5 * 60_000, /* B-OP-034 */ trackingUrl: 500 })
 
 /** Why an own-transport write is refused (409 `refusal/<CODE>`). */
 export const OWN_TRANSPORT_REFUSALS = ['LEFT', 'LABELLED', 'DECLARED', 'NOT_A_CARRIER', 'CANCELLED', 'NOT_LEFT', 'CARRIER_TRACKED', 'CUSTOMER_COLLECTS', 'ARRIVED'] as const
@@ -138,6 +138,30 @@ export function trackingNumberProblems(value: string | null | undefined, at = 'b
   if (number.length > OWN_TRANSPORT_LIMITS.trackingNumber || !oneLine(number)) return [{ path: at, message: `A tracking number is 1 to ${OWN_TRANSPORT_LIMITS.trackingNumber} characters on one line.` }]
   return []
 }
+
+// ── B-OP-034 (order page plan N5, set C): the tracking link typed for a carrier booked by hand ──────────────────────────────
+
+/**
+ * The database's shape of a typed tracking link (factory_shipment_carriers_check, schema wave "order page 1/1"): https only, a
+ * host of letters, digits, dots and hyphens (so no user-info "name@"), an optional port, then a path, query or fragment with no
+ * spaces and no control characters.
+ */
+export const TRACKING_URL_PATTERN = /^https:\/\/[A-Za-z0-9.-]+(:[0-9]{1,5})?([/?#][^\s\u0000-\u001f\u007f]*)?$/
+
+/**
+ * A typed tracking link (B-OP-034): https only, 1 to 500 characters on one line, no user-info, and only beside a typed tracking
+ * number (`hasNumber`: the number the same write leaves). Blank or null: none (it is cleared).
+ */
+export function trackingUrlProblems(value: string | null | undefined, hasNumber: boolean, at = 'body/trackingUrl'): Issue[] {
+  const url = clean(value)
+  if (url === null) return []
+  if (!hasNumber) return [{ path: at, message: 'A tracking link is typed only with its tracking number.' }]
+  if (url.length > OWN_TRANSPORT_LIMITS.trackingUrl || !oneLine(url) || !TRACKING_URL_PATTERN.test(url)) {
+    return [{ path: at, message: `A tracking link is an https address of 1 to ${OWN_TRANSPORT_LIMITS.trackingUrl} characters on one line, with no name or password in it.` }]
+  }
+  return []
+}
+// ── end B-OP-034 ──
 
 /** The field problems of an arrangement (400). */
 export function arrangementProblems(input: ArrangementInput): Issue[] {

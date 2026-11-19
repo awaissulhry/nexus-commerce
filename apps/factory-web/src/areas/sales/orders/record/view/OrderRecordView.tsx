@@ -14,7 +14,7 @@ import type { Order } from '../../api'
 import { amendHeld, closeLinesHeld, copyHeld, reopenHeld } from '../../daily-model'
 import { splitHeld } from '../../model' // F-OP-111
 import { DOCK_DEFAULTS } from '../../model' // F-SA-263
-import { cancelHeld, createShipmentHref, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, mayCreateShipment, nextStep, promiseHeld, readyHeld, recordTabs, STATUS_TONE, tabCountOf, type MenuGroup } from '../../model'
+import { cancelHeld, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, nextStep, promiseHeld, readyHeld, recordTabs, STATUS_TONE, tabCountOf, type MenuGroup } from '../../model'
 import { ChangesTab } from '../changes/view/ChangesTab'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
@@ -48,6 +48,7 @@ import { FilesTab } from './FilesTab' // F-SA-237
 import { RequestDoorNoticeBanner, RequestDoorWindow } from '../../../../home/approvals/requests/view/RequestReview'
 import { RequestBandNotices } from './RequestsSection'
 import { bandHealthOf, healthInputOf, readOf } from '../overview/model'
+import { createShipmentDoor } from '../shipments/model' // F-OP-121
 // ---- end F-SA-232
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'
@@ -142,6 +143,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   // F-OP-210 (11-dock §4; RC4): every tab link keeps the dock's scope (`thread=`): a pick in the dock survives a change of tab.
   const search = useSearchParams()?.toString() ?? ''
   const step = nextStep(order, model.can)
+  const createDoor = createShipmentDoor(order, model.can, model.prefix, !!actions?.onCreateShipment) // F-OP-121
   const stepHeld = step.held ? t(step.held.key, step.held.params?.date ? { ...step.held.params, date: formatDate(dayInstant(String(step.held.params.date)), { locale }) } : step.held.params) : model.busy ? t('held.busy') : null
   const makeHref = `${model.prefix}/production/work-orders?new=1&order=${encodeURIComponent(order.number)}`
   const gate = depositGate(order)
@@ -155,7 +157,11 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !typing && step.kind && !stepHeld) {
         event.preventDefault()
         if (step.kind === 'makeWorkOrders') window.location.assign(makeHref)
-        else actions?.onDialog?.({ kind: step.kind === 'close' ? 'close' : 'promise' })
+        else if (step.kind === 'createShipment') {
+          // F-OP-121: in place; without the container, Warehouse's New shipment with this order chosen.
+          if (createDoor?.kind === 'warehouse') window.location.assign(createDoor.href)
+          else actions?.onCreateShipment?.()
+        } else actions?.onDialog?.({ kind: step.kind === 'close' ? 'close' : 'promise' })
       }
     }
     window.addEventListener('keydown', onKey)
@@ -203,6 +209,16 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
           <Link href={makeHref}>{t('step.makeWorkOrders')}</Link>
         </Button>
       )
+    ) : step.kind === 'createShipment' && createDoor?.kind === 'warehouse' ? (
+      // F-OP-121: without the container (a design case), Warehouse's New shipment with this order chosen.
+      <Button size="sm" variant="primary" asChild aria-keyshortcuts="Meta+Enter Control+Enter">
+        <Link href={createDoor.href}>{t('action.createShipment')}</Link>
+      </Button>
+    ) : step.kind === 'createShipment' ? (
+      // F-OP-121: Create shipment… opens Warehouse's New shipment in place (this order and the customer's others).
+      <Button size="sm" variant="primary" heldReason={stepHeld} onClick={() => actions?.onCreateShipment?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
+        {t('step.createShipment')}
+      </Button>
     ) : step.kind ? (
       <Button size="sm" variant="primary" heldReason={stepHeld} onClick={() => actions?.onDialog?.({ kind: step.kind === 'close' ? 'close' : 'promise' })} aria-keyshortcuts="Meta+Enter Control+Enter">
         {t(`step.${step.kind}`)}
@@ -228,7 +244,9 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
     next: [
         ...(!isFinal(order) && step.kind !== 'changePromise' ? [{ id: 'promise', label: t('action.promise'), disabled: !!promiseWait, description: held(promiseWait), onSelect: () => actions?.onDialog?.({ kind: 'promise' }) }] : []),
         ...(order.status === 'IN_PRODUCTION' ? [{ id: 'ready', label: t('action.ready'), disabled: !!readyWait, description: held(readyWait), onSelect: () => actions?.onDialog?.({ kind: 'ready' }) }] : []),
-        ...(mayCreateShipment(order, model.can) ? [{ id: 'ship', label: t('action.createShipment'), href: createShipmentHref(model.prefix, order.id) }] : []),
+        // F-OP-121: Create shipment… in place (as Change promise date…, not repeated here while it is the band's next step).
+        ...(createDoor?.kind === 'inPlace' && step.kind !== 'createShipment' ? [{ id: 'ship', label: t('step.createShipment'), onSelect: () => actions?.onCreateShipment?.() }] : []),
+        ...(createDoor?.kind === 'warehouse' ? [{ id: 'ship', label: t('action.createShipment'), href: createDoor.href }] : []),
     ],
     edit: [
         ...(!isFinal(order) && model.can.manage
@@ -343,10 +361,20 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
               tone={model.notice.tone}
               title={t(model.notice.words.key, model.notice.words.params)}
               action={
-                actions?.onDismissNotice ? (
-                  <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
-                    {t('common.dismiss')}
-                  </Button>
+                model.notice.door || actions?.onDismissNotice ? (
+                  <>
+                    {/* F-OP-121: the door a notice offers (Pack and ship it in Warehouse ›) */}
+                    {model.notice.door && (
+                      <Button size="sm" asChild>
+                        <Link href={model.notice.door.href}>{t(model.notice.door.words.key, model.notice.door.words.params)}</Link>
+                      </Button>
+                    )}
+                    {actions?.onDismissNotice && (
+                      <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
+                        {t('common.dismiss')}
+                      </Button>
+                    )}
+                  </>
                 ) : undefined
               }
             />

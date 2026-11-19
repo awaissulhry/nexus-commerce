@@ -1133,9 +1133,16 @@ describe('the order read’s shipments: carrier, tracking, DDT and whether the n
     expect((await shipmentOf('a.shipView', so3(), seeded.a.draftShipmentId)).mayTypeTracking).toMatchObject({ allowed: false, code: 'NO_RIGHT' })
     await ok('a.shipping', 'PUT', `/shipping/shipments/${seeded.a.draftShipmentId}/own-transport/tracking`, { version: before.version, trackingNumber: 'T-OP023-BRT-0001' })
     const typed = await shipmentOf('a.shipping', so3(), seeded.a.draftShipmentId)
-    expect(typed.tracking).toEqual({ number: 'T-OP023-BRT-0001', source: 'TYPED', parcels: [], live: false })
+    expect(typed.tracking).toEqual({ number: 'T-OP023-BRT-0001', source: 'TYPED', parcels: [], live: false, url: null })
     expect(typed.version).toBeGreaterThan(before.version)
     expect((await shipmentOf('a.viewer', so3(), seeded.a.draftShipmentId)).tracking).toBeNull()
+    // F-OP-135 (B-OP-034): the link typed beside it is the row's Track › (https only); never to a reader without shipping.view.
+    await ok('a.shipping', 'PUT', `/shipping/shipments/${seeded.a.draftShipmentId}/own-transport/tracking`, { version: typed.version, trackingNumber: 'T-OP023-BRT-0001', trackingUrl: 'https://track.example.com/T-OP023-BRT-0001' })
+    expect((await shipmentOf('a.shipping', so3(), seeded.a.draftShipmentId)).tracking).toMatchObject({ source: 'TYPED', url: 'https://track.example.com/T-OP023-BRT-0001' })
+    expect(JSON.stringify(await shipmentOf('a.viewer', so3(), seeded.a.draftShipmentId))).not.toContain('track.example.com')
+    // Cleared again: the rows after this one read the draft as before.
+    const linked = await shipmentOf('a.shipping', so3(), seeded.a.draftShipmentId)
+    await ok('a.shipping', 'PUT', `/shipping/shipments/${seeded.a.draftShipmentId}/own-transport/tracking`, { version: linked.version, trackingNumber: 'T-OP023-BRT-0001', trackingUrl: null })
   })
 
   it('our own van takes no tracking number (NOT_A_CARRIER); a cancelled shipment none either (CANCELLED)', async () => {

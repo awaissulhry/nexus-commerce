@@ -193,6 +193,23 @@ export function typedTrackingOf(shipment: Pick<ShipmentRead, 'typedTrackingNumbe
 }
 // ── end F-OP-124 ──
 
+// ── F-OP-135 (order page plan N6; B-OP-034, B-OP-044): the typed link and a shared shipment, as the customer sees them ──
+/** The card's Track › beside a typed number: the link typed with it, https only (checked again here); null: none. */
+export function typedLinkOf(shipment: Pick<ShipmentRead, 'typedTrackingNumber' | 'typedTrackingUrl'>): string | null {
+  if (!typedTrackingOf(shipment)) return null
+  const url = shipment.typedTrackingUrl?.trim() ?? ''
+  return /^https:\/\/\S+$/i.test(url) ? url : null
+}
+
+/**
+ * A shipment that also carries other orders of THIS customer names them by the customer's own numbers only ("Also 3 pieces of your
+ * order #12"; its PO without a number of its own) — the read never lists another customer's order, and the office's series never shows.
+ */
+export function alsoCarriesOf(shipment: Pick<ShipmentRead, 'otherOrders'>, t: Translate): string[] {
+  return (shipment.otherOrders ?? []).filter((order) => order.pieces > 0).map((order) => t('shipments.also', { count: order.pieces, order: orderRefOf(order, t) }))
+}
+// ── end F-OP-135 ──
+
 /** A shipment's four steps (Packed · Collected · In transit · Delivered). */
 export function shipmentSteps(shipment: Pick<ShipmentRead, 'milestones'>, locale: Locale, at: (iso: string) => string): MilestoneStep[] {
   // The step it is at now is the furthest one reached (the next one is still to come, not "now").

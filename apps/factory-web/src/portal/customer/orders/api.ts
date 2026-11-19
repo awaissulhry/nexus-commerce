@@ -286,11 +286,15 @@ export const shipmentSchema = z.object({
   expectedDeliveryAt: z.string().nullable().optional(),
   // F-OP-124 (B-OP-031): the number typed for a carrier booked by hand (no carrier feeds it: "No live tracking").
   typedTrackingNumber: z.string().nullable().optional(),
+  // F-OP-135 (B-OP-034): the tracking link typed beside it ("Track ›", https only).
+  typedTrackingUrl: z.string().nullable().optional(),
   ddt: z.object({ number: z.string(), date: z.string() }).nullable(),
   milestones: z.array(z.object({ key: z.enum(SHIPMENT_MILESTONES), words, done: z.boolean(), at: z.string().nullable() })),
   parcels: z.array(z.object({ seq: z.number(), trackingNumber: z.string().nullable(), trackingLink: trackingLink.nullable().optional(), status: z.string().nullable(), words: words.nullable(), lastEvent: trackingEvent.nullable() })),
   events: z.array(trackingEvent),
   lines: z.array(z.object({ lineSeq: z.number(), style: named.nullable(), colourway: named.nullable(), size: z.string().nullable(), quantity: z.number() })),
+  // F-OP-135 (B-OP-044): this customer's OWN other orders the shipment carries ("also N pieces of your order 12"); never another's.
+  otherOrders: z.array(z.object({ yourNumber, customerRef: z.string().nullable(), pieces: z.number() })).optional(),
   papers: z.array(z.object({ fileId: z.string(), name: z.string(), contentType: z.string(), sizeBytes: z.number(), versionNo: z.number() })),
 })
 export type ShipmentRead = z.infer<typeof shipmentSchema>

@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 // F-OP-124: the typed tracking number of a shipment card.
 import { typedTrackingOf } from './model'
+// F-OP-135: the typed link and a shared shipment.
+import { alsoCarriesOf, typedLinkOf } from './model'
 // F-SA-238: the Documents tab's grouped files (the office Files body, its customer face).
 import { readFileSync } from 'node:fs'
 import { renderToString } from 'react-dom/server'
@@ -679,3 +681,30 @@ describe('F-OP-124: the typed tracking number ("No live tracking")', () => {
   })
 })
 // ---- end F-OP-124
+
+// ---- F-OP-135 (order page plan N6; B-OP-034, B-OP-044): the typed link and a shared shipment, as the customer sees them ----------
+describe('F-OP-135: Track › for a typed link; a shared shipment named by this customer’s own orders only', () => {
+  it('Track › only for an https link typed beside a number', () => {
+    expect(typedLinkOf({ typedTrackingNumber: 'T-1', typedTrackingUrl: ' https://track.example.com/T-1 ' })).toBe('https://track.example.com/T-1')
+    expect(typedLinkOf({ typedTrackingNumber: 'T-1', typedTrackingUrl: 'http://track.example.com/T-1' })).toBeNull()
+    expect(typedLinkOf({ typedTrackingNumber: 'T-1', typedTrackingUrl: 'javascript:alert(1)' })).toBeNull()
+    expect(typedLinkOf({ typedTrackingNumber: null, typedTrackingUrl: 'https://track.example.com/T-1' })).toBeNull()
+    expect(typedLinkOf({ typedTrackingNumber: 'T-1' })).toBeNull()
+  })
+
+  it('"Also N pieces of your order #12": the customer’s own number, else its PO; never the office’s series', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const t = createTranslator(locale, messagesFor(locale, ['portal-orders'])['portal-orders']!)
+      const lines = alsoCarriesOf({ otherOrders: [{ yourNumber: { seq: 12, words: { it: 'Vostro ordine 12', en: 'Your order 12' } }, customerRef: 'PO-4471', pieces: 3 }, { yourNumber: null, customerRef: 'PO-4480', pieces: 1 }, { yourNumber: null, customerRef: 'PO-4490', pieces: 0 }] }, t)
+      expect(lines).toHaveLength(2)
+      expect(lines[0]).toContain('#12')
+      expect(lines[0]).toContain('3')
+      expect(lines[1]).toContain('PO-4480')
+      for (const line of lines) expect(line).not.toMatch(/SO-\d/)
+      expect(alsoCarriesOf({}, t)).toEqual([])
+      for (const key of ['shipments.typed.track']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      expect(t('shipments.typed.trackOf', { number: 'SH-0091' })).toContain('SH-0091')
+    }
+  })
+})
+// ---- end F-OP-135

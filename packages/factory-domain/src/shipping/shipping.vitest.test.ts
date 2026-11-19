@@ -277,8 +277,9 @@ describe('several orders of one customer on one shipment (B-OP-040, held off)', 
     expect(sameShipTo(milano, { ...milano, line1: '  via  esempio 1 ', postalCode: '20 100', city: 'MILANO', country: 'it' })).toBe(true)
     expect(joinProblems(shipment, other({ shipTo: { ...milano, city: ' milano ' }, billTo: { vatNumber: 'IT00000000001' } }))).toEqual([{ code: 'MULTI_ORDER_OFF', message: MULTI_ORDER_OFF }])
     expect(MULTI_ORDER_OFF).toBe('Several orders in one shipment come with the next update.')
-    expect(joinVerdict(joinProblems(shipment, other()))).toEqual({ allowed: false, why: MULTI_ORDER_OFF })
-    expect(joinVerdict([])).toEqual({ allowed: true, why: null })
+    expect(joinVerdict(joinProblems(shipment, other()))).toEqual({ allowed: false, code: 'MULTI_ORDER_OFF', why: MULTI_ORDER_OFF })
+    expect(joinVerdict([])).toEqual({ allowed: true, code: null, why: null })
+    expect(joinVerdict(joinProblems(shipment, other({ currency: 'USD' }))).code).toBe('CURRENCY')
   })
 
   it('says the real reason first, in words: another address, company, currency, tax mode, Incoterm, VAT number, state, hold', () => {

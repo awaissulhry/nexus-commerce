@@ -566,7 +566,9 @@
       "pickStatus": "Scegli cosa è successo.",
       "when": "L'orario non è valido.",
       "future": "L'orario è nel futuro.",
-      "beforeLeft": "L'orario è prima della partenza della merce."
+      "beforeLeft": "L'orario è prima della partenza della merce.",
+      "linkNeedsNumber": "Un link di tracciamento si scrive solo con il suo numero di tracciamento.",
+      "trackingLink": "Un indirizzo https di al massimo {max} caratteri su una riga, senza nome né password."
     },
     "refusal": {
       "LEFT": "La merce è partita.",
@@ -578,7 +580,9 @@
       "CARRIER_TRACKED": "La segue il tracciamento del vettore: niente da inserire.",
       "CUSTOMER_COLLECTS": "Ritira il cliente: nessuno stato da inserire.",
       "ARRIVED": "È già arrivata."
-    }
+    },
+    "trackingLink": "Link (facoltativo, https)",
+    "trackingLinkHint": "La pagina di tracciamento del corriere; il cliente la apre con Segui ›. Si scrive solo con il suo numero."
   },
   "check": {
     "title": "Controllo prima della stampa",
@@ -964,6 +968,19 @@
     "takeOffGo": "Toglili",
     "gone": "Nessuno dei suoi capi è più su questa spedizione.",
     "progressTitle": "{order} su questa spedizione",
-    "packField": "Ordini"
+    "packField": "Ordini",
+    "why": {
+      "CUSTOMER": "Non è un ordine di questo cliente",
+      "COMPANY": "Venduto da un'altra società",
+      "SITE": "Prodotto in un'altra sede",
+      "SHIP_TO": "Un altro indirizzo di consegna",
+      "CURRENCY": "Un'altra valuta",
+      "TAX_MODE": "Un altro trattamento IVA",
+      "INCOTERM": "Un altro Incoterm",
+      "BILL_TO_VAT": "Fattura un'altra partita IVA",
+      "ORDER_STATE": "Non è un ordine aperto",
+      "SHIPMENT_STATE": "La spedizione non è più una bozza",
+      "CUSTOMER_HOLD": "Il cliente è bloccato"
+    }
   }
 }

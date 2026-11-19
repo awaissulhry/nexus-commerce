@@ -83,7 +83,7 @@ describe('B-OP-030: a typed tracking number tells the office, once per change', 
     const answer = await call('desk', 'PUT', tracking(seeded.draftShipmentId), { version: await versionOf(seeded.draftShipmentId), trackingNumber: 'T-OP030-BRT-0001' })
     expect(answer.statusCode, answer.body).toBe(200)
     const [event] = await eventsOf(seeded.draftShipmentId)
-    expect(event!.payload).toEqual({ shipmentId: seeded.draftShipmentId, number: 'SEED-SH-0002', status: 'SHIPPED', hasNumber: true, salesOrderIds: [orderId()], partyId: seedUuid(ns, 'party:P1') })
+    expect(event!.payload).toEqual({ shipmentId: seeded.draftShipmentId, number: 'SEED-SH-0002', status: 'SHIPPED', hasNumber: true, /* B-OP-034 */ hasLink: false, salesOrderIds: [orderId()], partyId: seedUuid(ns, 'party:P1') })
     // The wall: the customer's id is on the row (for the live wall) and never in a live field.
     expect(event!.partyId).toBe(seedUuid(ns, 'party:P1'))
     const definition = EVENT_CATALOGUE.definitions.find((entry) => entry.type === 'shipment.tracking_changed')!
@@ -130,3 +130,48 @@ describe('B-OP-030: a typed tracking number tells the office, once per change', 
     expect(trackingLineOf({ shipment: 'SH-0012', carrier: 'BRT', number: null }, 'it')).toBe('Numero di tracciamento di SH-0012 (BRT) cancellato.')
   })
 })
+
+// ── B-OP-034 (order page plan N5, set C): the tracking link typed beside the number (https only), also after the goods left ──
+describe('B-OP-034: the typed tracking link', () => {
+  const put = async (body: Json) => call('desk', 'PUT', tracking(seeded.draftShipmentId), { version: await versionOf(seeded.draftShipmentId), ...body })
+  const LINK = 'https://track.example.com/T-OP034-0001'
+
+  it('typed with its number after the goods left: kept, audited before / after, the event says hasLink', async () => {
+    const before = (await eventsOf(seeded.draftShipmentId)).length
+    const answer = await put({ trackingNumber: 'T-OP034-0001', trackingUrl: LINK })
+    expect(answer.statusCode, answer.body).toBe(200)
+    expect((answer.json() as Json).shipment).toMatchObject({ status: 'SHIPPED', manualTrackingNumber: 'T-OP034-0001', manualTrackingUrl: LINK })
+    const events = await eventsOf(seeded.draftShipmentId)
+    expect(events).toHaveLength(before + 1)
+    expect(events.at(-1)!.payload).toMatchObject({ hasNumber: true, hasLink: true })
+    const [audit] = await admin(`SELECT before, after FROM "AuditLog" WHERE action = 'shipping.typeTrackingNumber' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 1`, [seeded.draftShipmentId])
+    expect(audit).toMatchObject({ after: { manualTrackingNumber: 'T-OP034-0001', manualTrackingUrl: LINK } })
+    // The number again with no link field: the link stays.
+    const kept = await put({ trackingNumber: 'T-OP034-0001' })
+    expect((kept.json() as Json).shipment.manualTrackingUrl).toBe(LINK)
+  })
+
+  it('refused in words: no number, not https, a name or password in it; nothing changes', async () => {
+    for (const [body, message] of [
+      [{ trackingNumber: null, trackingUrl: LINK }, 'A tracking link is typed only with its tracking number.'],
+      [{ trackingNumber: 'T-OP034-0001', trackingUrl: 'http://track.example.com/T-1' }, 'A tracking link is an https address of 1 to 500 characters on one line, with no name or password in it.'],
+      [{ trackingNumber: 'T-OP034-0001', trackingUrl: 'https://someone:secret@track.example.com/T-1' }, 'A tracking link is an https address of 1 to 500 characters on one line, with no name or password in it.'],
+    ] as const) {
+      const refused = await put(body)
+      expect(refused.statusCode, refused.body).toBe(400)
+      expect((refused.json() as Json).error.issues).toEqual([{ path: 'body/trackingUrl', message }])
+    }
+    expect((await admin(`SELECT "manualTrackingUrl" FROM "Shipment" WHERE id = $1`, [seeded.draftShipmentId]))[0]).toEqual({ manualTrackingUrl: LINK })
+  })
+
+  it("a customer's own portal reads it (row-level security), another customer never; cleared with its number", async () => {
+    const read = (partyId: string) => database.withScope({ audience: 'partner', tenantId: T, actorId: newId(), partyId }, (client) => client.shipment.findMany({ where: { id: seeded.draftShipmentId }, select: { manualTrackingUrl: true } }))
+    expect(await read(seedUuid(ns, 'party:P1'))).toEqual([{ manualTrackingUrl: LINK }])
+    expect(await read(newId())).toEqual([])
+    const cleared = await put({ trackingNumber: null })
+    expect(cleared.statusCode, cleared.body).toBe(200)
+    expect((cleared.json() as Json).shipment).toMatchObject({ manualTrackingNumber: null, manualTrackingUrl: null })
+    expect((await eventsOf(seeded.draftShipmentId)).at(-1)!.payload).toMatchObject({ hasNumber: false, hasLink: false })
+  })
+})
+// ── end B-OP-034 ──

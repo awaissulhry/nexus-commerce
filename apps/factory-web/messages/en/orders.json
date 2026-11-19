@@ -246,7 +246,8 @@
   "step": {
     "makeWorkOrders": "Make work orders",
     "changePromise": "Change promise date…",
-    "close": "Close order…"
+    "close": "Close order…",
+    "createShipment": "Create shipment…"
   },
   "action": {
     "promise": "Change promise date…",
@@ -583,7 +584,18 @@
         "shipment": "Open the shipment ›",
         "arrange": "Change how it travels…"
       }
-    }
+    },
+    "created": "{number} made (draft)",
+    "createdDoor": "Pack and ship it in Warehouse ›",
+    "alsoCarries": "Also carries {number}",
+    "join": {
+      "title": "Draft shipments this order can join",
+      "add": "Add this order's garments…"
+    },
+    "joined_one": "{count} garment added to {number} (draft)",
+    "joined_other": "{count} garments added to {number} (draft)",
+    "track": "Track ›",
+    "trackLink": "Track shipment {number} on the carrier’s site"
   },
   "shipStatus": {
     "DRAFT": "Draft",
