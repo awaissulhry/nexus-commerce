@@ -85,4 +85,21 @@ describe('next.config.ts', () => {
     vi.stubEnv('FACTORY_API_URL', 'http://127.0.0.1:8190')
     expect((await configFor(BUILD)).transpilePackages).toEqual(['@nexus/ui'])
   })
+
+  // fx-8: the browser golden flow's own build (--next-start on GitHub) keeps the floor queue's test seam and leaves the
+  // types to the typecheck job; every other build inlines '' (the seam is dropped) and type-checks; Railway refuses it.
+  it('marks only the browser golden flow’s own build, and never on Railway', async () => {
+    vi.stubEnv('FACTORY_API_URL', 'http://127.0.0.1:8190')
+    vi.stubEnv('FACTORY_WEB_BROWSER_FLOW_BUILD', '')
+    const plain = await configFor(BUILD)
+    expect(plain.env).toEqual({ FACTORY_WEB_BROWSER_FLOW_BUILD: '' })
+    expect(plain.typescript).toBeUndefined()
+    vi.stubEnv('FACTORY_WEB_BROWSER_FLOW_BUILD', '1')
+    const flow = await configFor(BUILD)
+    expect(flow.env).toEqual({ FACTORY_WEB_BROWSER_FLOW_BUILD: '1' })
+    expect(flow.typescript).toEqual({ ignoreBuildErrors: true })
+    vi.stubEnv('FACTORY_TRUSTED_PROXIES', 'private')
+    vi.stubEnv('RAILWAY_ENVIRONMENT', 'production')
+    await expect(configFor(BUILD)).rejects.toThrow(/FACTORY_WEB_BROWSER_FLOW_BUILD is set on Railway/)
+  })
 })

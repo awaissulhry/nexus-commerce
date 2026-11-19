@@ -272,8 +272,9 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
     }, QUEUE_TIMER_MS)
     // PLT-242: ask the browser to keep the tablet's data, and see how much room is left.
     void storageState().then((state) => queue.setStorage(state))
-    // The test seam of the live check (never in a production build): the real queue, driven like a screen drives it.
-    if (process.env.NODE_ENV !== 'production') (window as unknown as { __nexusFloorQueue?: FloorQueue }).__nexusFloorQueue = queue
+    // The test seam of the live check (never in a deployed build): the real queue, driven like a screen drives it. `next dev`
+    // has it, and so does the browser golden flow's own build (fx-8: FACTORY_WEB_BROWSER_FLOW_BUILD, next.config.ts).
+    if (process.env.NODE_ENV !== 'production' || process.env.FACTORY_WEB_BROWSER_FLOW_BUILD === '1') (window as unknown as { __nexusFloorQueue?: FloorQueue }).__nexusFloorQueue = queue
     return () => {
       window.removeEventListener('online', online)
       window.removeEventListener('offline', online)
