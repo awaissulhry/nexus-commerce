@@ -41,8 +41,8 @@ const notice = output({ code: z.enum(REORDER_NOTICES), words })
 const sizeRow = output({ size: z.string(), quantity: z.number().int() })
 // ---- B-CP-076 (customer page plan 11 §1.3 D3): "Your price" — the customer's own net unit price of a draft line, the price grain (a
 // Designer, a Viewer, an office person without prices: dropped from the answer, refused in a body); null clears it; frozen at Send.
-const ownPrice = () => money.price(z.string().regex(/^\d{1,12}(\.\d{1,6})?$/, 'A price of at least 0, with at most 6 decimals.').nullable())
-const ownPriceShown = () => money.price(z.string().nullable())
+// cp-fx6: the mark is written at each field (money.price(…)), never inside a helper: check-money-grains reads it at the field.
+const ownPriceText = () => z.string().regex(/^\d{1,12}(\.\d{1,6})?$/, 'A price of at least 0, with at most 6 decimals.').nullable()
 // ---- end B-CP-076
 
 // ---- B-CP-072 (customer page plan C5): a draft's files, as the customer reads them -------------------------------------------
@@ -86,7 +86,7 @@ const customLine = output({
   note: z.string().nullable(),
   problems: z.array(problem),
   /** B-CP-076: "Your price" (the customer's own net unit price; price grain). */
-  brandUnitPrice: ownPriceShown(),
+  brandUnitPrice: money.price(z.string().nullable()),
 })
 // ---- end B-CP-075
 
@@ -177,7 +177,7 @@ const line = output({
   notices: z.array(notice),
   problems: z.array(problem),
   /** B-CP-076: "Your price" (the customer's own net unit price; price grain). */
-  brandUnitPrice: ownPriceShown(),
+  brandUnitPrice: money.price(z.string().nullable()),
 })
 
 const requestBody = output({
@@ -260,7 +260,7 @@ const header = {
   laterParts: z.array(z.enum(DRAFT_LATER_PARTS)).max(DRAFT_LATER_PARTS.length).optional(),
 }
 
-const newLine = input({ styleId: id(), colourwayId: id(), sizes, note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish(), brandUnitPrice: ownPrice() /* B-CP-076 */ })
+const newLine = input({ styleId: id(), colourwayId: id(), sizes, note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish(), brandUnitPrice: money.price(ownPriceText()) /* B-CP-076 */ })
 
 export const listRequestsContract = defineContract({
   querystring: input({ status: z.enum([...REQUEST_STATUSES, 'ALL']).default('ALL') }),
@@ -299,7 +299,7 @@ export const changeRequestContract = defineContract({ params: requestParams, bod
 export const addLinesContract = defineContract({ params: requestParams, body: input({ version, lines: z.array(newLine).min(1).max(ORDERING_LIMITS.lines) }), response: { 200: record } })
 export const changeLineContract = defineContract({
   params: input({ requestId: id(), lineId: id() }),
-  body: input({ version, colourwayId: id().optional(), sizes: sizes.optional(), note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish(), brandUnitPrice: ownPrice() /* B-CP-076 */ }),
+  body: input({ version, colourwayId: id().optional(), sizes: sizes.optional(), note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish(), brandUnitPrice: money.price(ownPriceText()) /* B-CP-076 */ }),
   response: { 200: record },
 })
 export const removeLineContract = defineContract({ params: input({ requestId: id(), lineId: id() }), querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: record } })
@@ -326,7 +326,7 @@ const customLineFields = {
   sizes: z.array(sizeAsk).max(ORDERING_LIMITS.sizesPerLine).optional(),
   note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish(),
   /** B-CP-076: "Your price" (price grain; null clears it). */
-  brandUnitPrice: ownPrice(),
+  brandUnitPrice: money.price(ownPriceText()),
 }
 const personFields = {
   name: z.string().trim().min(1).max(PEOPLE_LIMITS.name),
@@ -523,7 +523,7 @@ const officeLine = output({
   sourceOrderLineId: id().nullable(),
   problems: z.array(output({ code: z.enum(PROBLEM_CODES), size: z.string().nullable(), words })),
   /** B-CP-076: the customer's own net unit price typed in its draft (price grain). */
-  brandUnitPrice: ownPriceShown(),
+  brandUnitPrice: money.price(z.string().nullable()),
 })
 
 // ---- B-CP-071 (customer page plan D10, K9 reversed): a draft as the office reads it (read-only; null once it is sent) ----------
