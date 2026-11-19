@@ -145,6 +145,8 @@ function PriceForm({ check, model, actions }: { check: PriceCheck; model: PriceC
     }
   })
   const fileProblem = say(problems[FILE_KEY])
+  // The PO file as stored (read only: a closed order, or a reader who may not change orders).
+  const fileName = draft.fileId ? ([check.total.row, ...check.lines.map((line) => line.row)].find((row) => row?.sourceFile?.id === draft.fileId)?.sourceFile?.name ?? null) : null
   const totalProblem = say(problems[TOTAL_KEY])
   return (
     <div className="fw-pc">
@@ -152,21 +154,26 @@ function PriceForm({ check, model, actions }: { check: PriceCheck; model: PriceC
       {check.total.priceOtherCurrency > 0 && <p className="fw-pc-hint">{t('priceCheck.otherCurrency', { count: check.total.priceOtherCurrency })}</p>}
       <div className="fw-pc-row">
         <Field label={t('priceCheck.source')}>
-          <SegmentedControl
-            size="sm"
-            ariaLabel={t('priceCheck.source')}
-            disabled={!writable}
-            value={draft.source}
-            onChange={(value) => actions?.onSource?.(value as OfficeSource)}
-            options={[
-              { value: 'CUSTOMER_PO', label: t('priceCheck.fromPo') },
-              { value: 'OFFICE', label: t('priceCheck.typedByUs') },
-            ]}
-          />
+          {writable ? (
+            <SegmentedControl
+              size="sm"
+              ariaLabel={t('priceCheck.source')}
+              value={draft.source}
+              onChange={(value) => actions?.onSource?.(value as OfficeSource)}
+              options={[
+                { value: 'CUSTOMER_PO', label: t('priceCheck.fromPo') },
+                { value: 'OFFICE', label: t('priceCheck.typedByUs') },
+              ]}
+            />
+          ) : (
+            <span>{t(draft.source === 'OFFICE' ? 'priceCheck.typedByUs' : 'priceCheck.fromPo')}</span>
+          )}
         </Field>
         {draft.source === 'CUSTOMER_PO' && (
-          <Field label={t('priceCheck.poFile')} hint={t('priceCheck.poFileHint')} error={fileProblem}>
-            {model.files.status === 'failed' ? (
+          <Field label={t('priceCheck.poFile')} hint={writable ? t('priceCheck.poFileHint') : undefined} error={fileProblem}>
+            {!writable ? (
+              <span>{fileName ?? t('priceCheck.poFileNone')}</span>
+            ) : model.files.status === 'failed' ? (
               <span className="fw-pc-inline">
                 <span className="fw-pc-hint">{t('priceCheck.filesFailed')}</span>
                 <Button size="sm" variant="quiet" onClick={() => actions?.onRetryFiles?.()}>
@@ -174,7 +181,7 @@ function PriceForm({ check, model, actions }: { check: PriceCheck; model: PriceC
                 </Button>
               </span>
             ) : (
-              <Select size="sm" value={draft.fileId} disabled={!writable || model.files.status === 'reading'} onChange={(event) => actions?.onFile?.(event.target.value)}>
+              <Select size="sm" aria-label={t('priceCheck.poFile')} value={draft.fileId} disabled={model.files.status === 'reading'} onChange={(event) => actions?.onFile?.(event.target.value)}>
                 <option value="">{model.files.status === 'reading' ? t('priceCheck.filesReading') : t('priceCheck.poFileNone')}</option>
                 {model.files.status === 'ready' && model.files.files.map((file) => (
                   <option key={file.id} value={file.id}>
