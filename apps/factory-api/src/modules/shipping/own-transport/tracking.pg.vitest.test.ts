@@ -47,7 +47,9 @@ const call = (session: string, method: 'GET' | 'PUT', url: string, payload?: unk
   app.inject({ method, url, headers: { 'x-test-session': session, ...(method === 'PUT' ? { 'idempotency-key': `op030-${++keys}-${newId()}` } : {}) }, ...(payload === undefined ? {} : { payload: payload as object }) })
 const tracking = (shipmentId: string) => `/shipping/shipments/${shipmentId}/own-transport/tracking`
 const versionOf = async (shipmentId: string) => (await admin<{ version: number }>(`SELECT version FROM "Shipment" WHERE id = $1`, [shipmentId]))[0]!.version
-const eventsOf = (shipmentId: string) => admin<{ id: string; type: string; payload: Json; partyId: string | null }>(`SELECT id, type, payload, "partyId" FROM "OutboxEvent" WHERE type = 'shipment.tracking_changed' AND subject = $1 ORDER BY "occurredAt", id`, [shipmentId])
+// op-fx2 (end check): the customer the live wall routes by is the payload's partyId (events/live.ts livePartiesOf); the outbox
+// row's own "partyId" column is the WRITER's scope (a partner or link write), null for this office write.
+const eventsOf = (shipmentId: string) => admin<{ id: string; type: string; payload: Json; partyId: string | null; rowPartyId: string | null }>(`SELECT id, type, payload, payload->>'partyId' AS "partyId", "partyId" AS "rowPartyId" FROM "OutboxEvent" WHERE type = 'shipment.tracking_changed' AND subject = $1 ORDER BY "occurredAt", id`, [shipmentId])
 const linesOf = (orderId: string) =>
   admin<{ bodyText: string; direction: string; audience: string; authorKind: string }>(
     `SELECT m."bodyText", m.direction::text AS direction, m.audience::text AS audience, m."authorKind"::text AS "authorKind" FROM "Message" m JOIN "Thread" t ON t.id = m."threadId"
@@ -84,8 +86,9 @@ describe('B-OP-030: a typed tracking number tells the office, once per change', 
     expect(answer.statusCode, answer.body).toBe(200)
     const [event] = await eventsOf(seeded.draftShipmentId)
     expect(event!.payload).toEqual({ shipmentId: seeded.draftShipmentId, number: 'SEED-SH-0002', status: 'SHIPPED', hasNumber: true, /* B-OP-034 */ hasLink: false, salesOrderIds: [orderId()], partyId: seedUuid(ns, 'party:P1') })
-    // The wall: the customer's id is on the row (for the live wall) and never in a live field.
+    // The wall: the customer's id is on the event (for the live wall) and never in a live field; the row is the office's.
     expect(event!.partyId).toBe(seedUuid(ns, 'party:P1'))
+    expect(event!.rowPartyId).toBeNull()
     const definition = EVENT_CATALOGUE.definitions.find((entry) => entry.type === 'shipment.tracking_changed')!
     expect(definition.live?.fields).toEqual(['shipmentId', 'number', 'status', 'salesOrderIds'])
     expect(definition.live?.fields).not.toContain('partyId')
