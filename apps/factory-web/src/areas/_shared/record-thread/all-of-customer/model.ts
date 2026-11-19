@@ -282,7 +282,7 @@ export interface FeedLineFacts {
 export const lineAudienceOf = (card: Pick<CardMessage, 'kind'>): LineAudience => (card.kind === 'theirs' || card.kind === 'ours' ? 'shared' : 'office')
 
 /** A message's gist: its own words in one run (at most GIST_CHARS); an erased message says why; files alone say nothing more. */
-export function gistOf(card: Pick<CardMessage, 'body' | 'kind' | 'erased' | 'files' | 'hiddenFiles' | 'lockedSheets'>): FeedLineFacts['gist'] {
+export function gistOf(card: Pick<CardMessage, 'body' | 'kind' | 'erased' | 'files' | 'hiddenFiles' | 'lockedSheets' | /* B-CP-014 */ 'lockedPriced'>): FeedLineFacts['gist'] {
   const kind = bodyKind(card)
   if (kind === 'erased') return { key: 'erased.line', ns: 'record-thread-card' }
   if (kind !== 'text') return { key: 'allOfCustomer.filesOnly', ns: 'record-thread' }

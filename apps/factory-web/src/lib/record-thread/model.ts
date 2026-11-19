@@ -21,7 +21,7 @@ export interface ThreadApiMessage {
   forFloor: boolean
   body: string
   mentions?: readonly string[]
-  attachments: ReadonlyArray<{ id: string; originalName: string; contentType: string; sizeBytes: number; status: CardFileStatus; locked?: 'MEASUREMENTS' | undefined }>
+  attachments: ReadonlyArray<{ id: string; originalName: string; contentType: string; sizeBytes: number; status: CardFileStatus; locked?: 'MEASUREMENTS' | 'PRICED' /* B-CP-014 */ | undefined }>
   /** B-TH-231 (B-TH-029): the message's files the reader may not see (counted, never dropped). */
   hiddenAttachments?: number | undefined
   // ---- B-TH-236 (B-TH-049, B-TH-050): the typed amount (price grain only), what it answers or corrects, its newest correction.
@@ -112,7 +112,9 @@ export function cardOf(message: ThreadApiMessage, sources: CardSources): CardMes
     // B-TH-231: a sheet locked for the reader (B-TH-083) and the files the API left out are counted, never shown by name.
     files: message.attachments.filter((file) => !file.locked).map((file) => ({ id: file.id, name: file.originalName, sizeBytes: file.sizeBytes, contentType: file.contentType, status: file.status })),
     ...(message.hiddenAttachments ? { hiddenFiles: message.hiddenAttachments } : {}),
-    ...(message.attachments.some((file) => file.locked) ? { lockedSheets: message.attachments.filter((file) => file.locked).length } : {}),
+    ...(message.attachments.some((file) => file.locked === 'MEASUREMENTS') ? { lockedSheets: message.attachments.filter((file) => file.locked === 'MEASUREMENTS').length } : {}),
+    // B-CP-014: a file that shows prices, locked for a reader who does not see prices: counted in its own words, never named.
+    ...(message.attachments.some((file) => file.locked === 'PRICED') ? { lockedPriced: message.attachments.filter((file) => file.locked === 'PRICED').length } : {}),
     email: email ? { to: email.to, subject: email.subject, status: email.status, ...mailExtras(message, email, sources) } : null,
     bounceTask: email?.status === 'BOUNCED' && delivery?.task && delivery.task.status === 'OPEN' && sources.taskHref ? { href: sources.taskHref(delivery.task.id) } : null,
     ...linksOf(message, sources),

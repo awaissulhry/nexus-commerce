@@ -193,5 +193,11 @@
     "soon_one": "Expires in {count} day ({date})",
     "soon_other": "Expires in {count} days ({date})",
     "valid": "Valid until {date}"
+  },
+  "priced": {
+    "locked": "Priced document — you cannot open it",
+    "lockedWhy": "Only people who see prices open it.",
+    "lockedCount_one": "Priced document — you cannot open it",
+    "lockedCount_other": "{count} priced documents — you cannot open them"
   }
 }

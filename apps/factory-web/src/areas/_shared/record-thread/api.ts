@@ -312,7 +312,8 @@ export async function pinRequestNote(api: ApiClient, inquiryId: string): Promise
 
 // ---- B-TH-287 (B-TH-092; T5-F10, T8-F07): the composer's draft on the server — one per person and record, the person's own only
 // (the API takes the person from the session), kept until sent (the send's own command clears it) or discarded.
-const draftAttachmentSchema = z.object({ id: z.string(), kind: z.string(), originalName: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), locked: z.literal('MEASUREMENTS').optional() })
+// B-CP-014: a draft's file may also be locked PRICED (a file that shows prices, for a reader who does not see prices).
+const draftAttachmentSchema = z.object({ id: z.string(), kind: z.string(), originalName: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), locked: z.enum(['MEASUREMENTS', 'PRICED']).optional() })
 export const serverDraftSchema = z.object({
   recordType: z.string().nullable(),
   recordId: z.string().nullable(),

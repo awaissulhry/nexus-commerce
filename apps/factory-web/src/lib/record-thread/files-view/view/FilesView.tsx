@@ -122,7 +122,7 @@ const KIND_ICON: Readonly<Record<FileKind, ReactNode>> = {
  */
 export function FilesView({ model, actions, slots }: { model: FilesViewModel; actions?: FilesViewActions; /* B-TH-280 */ slots?: FilesViewSlots }) {
   return (
-    <WithMessages namespaces={[FILES_VIEW_NS, 'record-thread-files', 'lists', /* B-TH-231 */ 'search']}>
+    <WithMessages namespaces={[FILES_VIEW_NS, 'record-thread-files', 'lists', /* B-TH-231 */ 'search', /* B-CP-014 */ 'record-files']}>
       <View model={model} actions={actions} slots={slots} />
     </WithMessages>
   )
@@ -299,11 +299,13 @@ function Row({ series, model, actions, slots, place, chosen, onChoose }: { serie
   const t = useT(FILES_VIEW_NS)
   const fileWords = useT('record-thread-files')
   const searchWords = useT('search')
+  const pricedWords = useT('record-files') // B-CP-014
   const file = series.latest
   const version = versionMark(series)
   // B-TH-231: a copy says where it came from; a sheet locked for this reader is named as such, never by its own name.
-  const source = sourceLine(file)
-  const name = file.locked ? fileWords('locked.sheet') : file.name
+  // B-CP-014: a priced document locked for this reader names its lock, and no source (its origin is blank for them too).
+  const source = file.locked === 'PRICED' ? null : sourceLine(file)
+  const name = file.locked === 'PRICED' ? pricedWords('priced.locked') : file.locked ? fileWords('locked.sheet') : file.name
   const { marks, more } = audienceMarks(file, model.party)
   const held = file.status === 'QUARANTINED'
   const lines = keepLines(file, model.now)
@@ -335,7 +337,7 @@ function Row({ series, model, actions, slots, place, chosen, onChoose }: { serie
         </span>
         {source && <span className="fw-rtv-meta">{fileWords(source.key, source.params ? { ...source.params, type: file.source ? searchWords(typeKey(file.source.recordType)) : '' } : undefined)}</span>}
         {/* B-TH-283 (B-TH-083): a measurement sheet — who may not open it reads why; who may, that each opening is recorded. */}
-        {file.locked && <span className="fw-rtv-meta">{fileWords('locked.sheetWhy')}</span>}
+        {file.locked && <span className="fw-rtv-meta">{file.locked === 'PRICED' ? pricedWords('priced.lockedWhy') /* B-CP-014 */ : fileWords('locked.sheetWhy')}</span>}
         {file.sheet && <span className="fw-rtv-meta">{fileWords('sheet.recorded')}</span>}
         <span className="fw-rtv-marks">
           {marks.map((mark) => (

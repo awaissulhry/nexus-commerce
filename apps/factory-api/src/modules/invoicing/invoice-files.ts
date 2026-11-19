@@ -108,7 +108,7 @@ export async function makeInvoiceFiles(runtime: FilesRuntime, caller: CommandCal
   const company = await companyLegalOf(caller, companyId)
   const composed = composeDocument({ ...invoiceCopyOf(issued, language), company, sample: false })
   const pdf = await renderDocumentPdf(composed)
-  const base = { companyId, recordType: 'Invoice', recordId: issued.id, kind: 'FISCAL_ARCHIVE' as const }
+  const base = { companyId, recordType: 'Invoice', recordId: issued.id, kind: 'FISCAL_ARCHIVE' as const, priced: true /* B-CP-015: the FatturaPA XML and the invoice copy show prices */ }
   const xmlFile: PreparedGeneratedFile | null = found.xmlFileId ? null : await putGeneratedFile(runtime, caller, { ...base, originalName: doc.fileName, contentType: 'application/xml', body: Buffer.from(doc.xml, 'utf8') })
   const pdfFile: PreparedGeneratedFile | null = found.pdfFileId ? null : await putGeneratedFile(runtime, caller, { ...base, originalName: documentFileName(composed), contentType: 'application/pdf', body: pdf })
   // ---- B-W2b-GB02 (G153; B-W1-06's race: the worker's first try failed with StaleVersionError beside "Issue and send"):

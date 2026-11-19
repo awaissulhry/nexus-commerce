@@ -307,6 +307,7 @@ export async function makePack(files: FilesRuntime, callers: Callers, shipmentId
       body: merged.pdf,
       // A pack with prices stays the office's; without, the packing station's floor may print it too.
       ...(priced ? {} : { visibility: ['FLOOR'] as const, floorSiteId: shipment.siteId }),
+      priced, // B-CP-015 (customer page lane): a pack with a priced part is born priced
     })
   }
 

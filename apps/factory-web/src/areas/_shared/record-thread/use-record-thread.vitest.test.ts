@@ -760,3 +760,29 @@ describe('F-OP-203 — the order dock, the customer dock and the work order’s 
   })
 })
 // ── end F-OP-203
+
+// ── B-CP-014 (customer page plan, the money wall D6): a draft's file may carry the PRICED lock ──
+import { serverDraftSchema } from './api'
+import { draftFromServer } from '../../../lib/record-thread/composer/server-draft'
+
+describe('B-CP-014 — a draft keeps a priced file locked for this reader, and the box leaves it out', () => {
+  it('parses a draft whose file is locked PRICED; reading it back puts no locked file in the box', () => {
+    const draft = serverDraftSchema.parse({
+      recordType: 'SalesOrder',
+      recordId: 'o1',
+      audience: 'OFFICE',
+      body: 'x',
+      fields: {},
+      attachments: [
+        { id: 'f1', kind: 'DOCUMENT', originalName: '', contentType: 'application/pdf', sizeBytes: 10, status: 'AVAILABLE', locked: 'PRICED' },
+        { id: 'f2', kind: 'DOCUMENT', originalName: 'Brand Alpha logo.pdf', contentType: 'application/pdf', sizeBytes: 10, status: 'AVAILABLE' },
+      ],
+      savedAt: '2026-11-19T10:00:00.000Z',
+      version: 1,
+    })
+    expect(draft.attachments[0]?.locked).toBe('PRICED')
+    expect(draftFromServer(draft, { reply: false }).files.map((file) => file.name)).toEqual(['Brand Alpha logo.pdf'])
+  })
+})
+// ── end B-CP-014
+

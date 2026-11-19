@@ -41,7 +41,8 @@ export const attachmentSchema = z.object({
   sizeBytes: z.number().int(),
   status: z.enum(FILE_STATUSES),
   // B-TH-231 (B-TH-083): a measurement sheet this reader may not open (no name).
-  locked: z.literal('MEASUREMENTS').optional(),
+  // B-CP-014: or a file that shows prices, for a reader who does not see prices (no name): PRICED.
+  locked: z.enum(['MEASUREMENTS', 'PRICED']).optional(),
 })
 
 /** B-TH-236 (B-TH-050): a message another points at ("In reply to Anna, 14 Nov: …"); the author is null for a floor worker kept back. */
@@ -98,7 +99,8 @@ export const fileSchema = z.object({
   sourceFileId: z.string().nullable().optional(),
   origin: z.object({ fileId: z.string(), recordType: z.string(), recordId: z.string(), originalName: z.string(), versionNo: z.number().int() }).nullable().optional(),
   category: z.string().nullable().optional(),
-  locked: z.literal('MEASUREMENTS').optional(),
+  // B-CP-014: PRICED — a file that shows prices, for a reader who does not see prices (no name, no checksum).
+  locked: z.enum(['MEASUREMENTS', 'PRICED']).optional(),
   // ---- end B-TH-231
 })
 export type ApiFile = z.infer<typeof fileSchema>
