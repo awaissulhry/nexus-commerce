@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { AudioLines, BadgeCheck, Copy, Download, FileText, FolderOpen, Image as ImageIcon, Lock, Paperclip, Receipt, RotateCcw, Share2, ShieldOff, Trash2 } from 'lucide-react'
 import { Banner, Disclosure, EmptyState, Field } from '@nexus/ui/components'
 import { BulkActionBar } from '@nexus/ui/patterns'
@@ -11,7 +11,7 @@ import { useLocale, useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { ListKeysInfo } from '../../../../list-frame/ListKeysInfo'
 import type { FileAudience, FileKind } from '../../../../record-panels/model'
-import { sizeWords } from '../../popups/view/FileViewer'
+import { FileViewer, sizeWords } from '../../popups/view/FileViewer' // F-OP-127: the ONE viewer
 import { audienceMarks, versionMark, type FileSeries, type FilesParty, type ThreadFile } from '../../files/model'
 import { bulkReach, filesGroups, keepLines, rangeOf, type FilesAbilities, type MissingDocument, type UploadAsk } from '../model'
 // B-TH-283: the measurement-sheet tick holds an upload meant for the floor.
@@ -21,6 +21,9 @@ import { carriable, sourceLine } from '../../files/use-on'
 import { typeKey } from '../../../../areas/search/model'
 // F-SA-237: a sales order's files from its one walled read — the SAME body on the order's Files tab and in this window.
 import { orderBulkReach, orderFilesOf, orderGroupsShown, orderLeftOut, sourceOf, type OrderFile, type OrderFilesModel } from '../model'
+// F-OP-125: the order's file cards (kind, type word, who added it, the MTM worksheets, the keys' grid step).
+import { addedByOf, cardKindOf, cardStep, orderWorksheetsOf, typeLabelOf, worksheetCardId, type OrderWorksheet } from '../model'
+import type { CardPreview } from '../model' // F-OP-126
 import '../files-view.css'
 
 export const FILES_VIEW_NS = 'record-thread-files-view'
@@ -69,8 +72,18 @@ export interface FilesViewActions {
   onDismissRefused?: () => void
   /** B-TH-231: "Use on another record…" for these files (one row's, or the chosen ones). */
   onUseOn?: (fileIds: readonly string[]) => void
-  /** F-SA-237 (a sales order): open a file through the order's own route; show its message in the conversation; the bulk bar. */
-  onOrderOpen?: (fileId: string, mode: 'preview' | 'download') => void
+  /** F-SA-237 (a sales order): open a file through the order's own route; show its message in the conversation; the bulk bar.
+   *  F-OP-127: `opener` — the card that opened it (the viewer gives the focus back to it). */
+  onOrderOpen?: (fileId: string, mode: 'preview' | 'download', opener?: HTMLElement | null) => void
+  /** F-OP-125 (B5): open a made-to-measure worksheet (its own route records the opening). */
+  onOrderWorksheet?: (sheet: OrderWorksheet) => void
+  /** F-OP-126: the file cards now in view (200 px ahead): only those are asked a preview. */
+  onOrderVisible?: (fileIds: readonly string[]) => void
+  /** F-OP-127: the ONE viewer — walk, close, open a body-data file (recorded), Download at the click. */
+  onViewerIndex?: (index: number) => void
+  onViewerClose?: () => void
+  onViewerOpenLocked?: (fileId: string) => void
+  onViewerDownload?: (fileId: string) => void
   onOrderMessage?: (messageId: string) => void
   onOrderSelect?: (fileIds: readonly string[]) => void
   onOrderBulk?: (action: 'download' | 'share', fileIds: readonly string[]) => void
@@ -208,7 +221,7 @@ function View({ model, actions, slots }: { model: FilesViewModel; actions?: File
                 </p>
               )}
               {model.order ? (
-                <OrderFilesView model={model.order} party={model.party} actions={actions} />
+                <OrderFilesView model={model.order} party={model.party} actions={actions} place="window" />
               ) : model.files === null ? (
                 <div className="fw-rtv-loading" role="status" aria-label={t('loading')}>
                   {[0, 1, 2].map((row) => (
@@ -448,27 +461,58 @@ function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: Fi
 
 // ── F-SA-237 (sales page plan N9, picks P14, R7) ──────────────────────────────────────────────────────────────────────────────
 
-/** The order files body on its own (the order's Files tab mounts it; this window mounts it for a SalesOrder). */
-export function OrderFilesBody({ model, party, actions }: { model: OrderFilesModel; party: { readonly name: string } | null; actions?: FilesViewActions }) {
+/**
+ * The order files body on its own (the order's Files tab mounts it; this window mounts it for a SalesOrder). F-OP-125: `place` — the
+ * tab (its keys in the footer's info icon) or the thread's Files window (narrower cards; its keys are the window's footer).
+ */
+export function OrderFilesBody({ model, party, actions, place = 'tab' }: { model: OrderFilesModel; party: { readonly name: string } | null; actions?: FilesViewActions; place?: 'tab' | 'window' }) {
   return (
     <WithMessages namespaces={[FILES_VIEW_NS, 'record-thread-files', 'lists']}>
-      <OrderFilesView model={model} party={party} actions={actions} />
+      <OrderFilesView model={model} party={party} actions={actions} place={place} />
     </WithMessages>
   )
 }
 
 /**
  * A sales order's files by where they come from (Order & thread · Lines & artwork · Requests · Production · Quality · Shipments &
- * invoices · Returns & complaints — the read's own groups and words): name, kind, size, day, where it sits ("from WO-0311", "in the
- * conversation"), who can see it (Shared with the customer / Office only), "also on …" as the read names it, Open (the order's own
- * route), Open in the conversation; real multi-select with a counted bar (Download N · Share N own); "N files you cannot open",
- * counted, never named. Keys: ↑ / ↓ between files, x chooses, Enter opens.
+ * invoices · Returns & complaints — the read's own groups and words). F-OP-125 (order page N7 "files like Gmail"; 10-order-page §9.1):
+ * each file is a CARD — a 132 px preview area (the kind's icon; a lock and "Body data — opening is recorded" for body data, never a
+ * picture), the name on two lines (the whole name in `title`), "PDF · 1.2 MB · 12 Nov", "added by <name>" (office only; the floor
+ * never by a worker), chips (where it sits, who can see it, opening recorded, also on …); a box to choose it (on hover, focus or
+ * chosen; always on touch); Download and Open in the conversation (shown on hover or focus, always in the tab order); the counted bar
+ * (Download N · Share N own); the made-to-measure worksheets in Lines (B5); "N files you cannot open", counted, never named. Keys:
+ * ← / → / ↑ / ↓ between cards (↑ / ↓ by one grid row), x chooses, Enter opens.
  */
-function OrderFilesView({ model, party, actions }: { model: OrderFilesModel; party: { readonly name: string } | null; actions?: FilesViewActions | undefined }) {
+function OrderFilesView({ model, party, actions, place = 'window' }: { model: OrderFilesModel; party: { readonly name: string } | null; actions?: FilesViewActions | undefined; place?: 'tab' | 'window' }) {
   const t = useT(FILES_VIEW_NS)
   const fileWords = useT('record-thread-files')
   const locale = useLocale()
   const listRef = useRef<HTMLDivElement>(null)
+  // ---- F-OP-126 (R-14): the file cards in view, 200 px ahead (an IntersectionObserver); only those are asked a preview ----
+  const onVisible = actions?.onOrderVisible
+  const report = useRef(onVisible)
+  report.current = onVisible
+  const shown = !!model.read && !model.problem
+  useEffect(() => {
+    const list = listRef.current
+    if (!shown || !list || typeof IntersectionObserver === 'undefined' || !report.current) return
+    const inView = new Set<string>()
+    const order = () => [...list.querySelectorAll<HTMLElement>('li[data-card-id]')].map((card) => card.dataset.cardId!).filter((id) => inView.has(id))
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = (entry.target as HTMLElement).dataset.cardId!
+          if (entry.isIntersecting) inView.add(id)
+          else inView.delete(id)
+        }
+        report.current?.(order())
+      },
+      { rootMargin: '200px' },
+    )
+    for (const card of list.querySelectorAll<HTMLElement>('li[data-card-id]')) observer.observe(card)
+    return () => observer.disconnect()
+  }, [shown, model.read])
+  // ---- end F-OP-126
   if (model.problem) return <Banner tone="danger" title={t('problem.read')} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('problem.retry')}</Button>} />
   if (!model.read) {
     return (
@@ -483,6 +527,8 @@ function OrderFilesView({ model, party, actions }: { model: OrderFilesModel; par
   const customer = model.face === 'customer' // F-SA-238: the portal's face of the same body
   const groups = orderGroupsShown(read)
   const files = orderFilesOf(read)
+  const ids = new Set(files.map((file) => file.id))
+  const sheets = customer ? 0 : groups.reduce((sum, group) => sum + orderWorksheetsOf(group).length, 0)
   const leftOut = customer ? 0 : orderLeftOut(read)
   const chosen = files.filter((file) => model.selected.includes(file.id))
   const reach = orderBulkReach(chosen, read.order.id, model.canShare)
@@ -491,21 +537,26 @@ function OrderFilesView({ model, party, actions }: { model: OrderFilesModel; par
   const keys = (event: KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement
     if (target.closest('input, select, textarea')) return
-    const rows = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('button[data-row]') ?? [])]
-    const at = rows.indexOf(target.closest('button[data-row]') as HTMLButtonElement)
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      if (rows.length === 0) return
+    const cards = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('button[data-row]') ?? [])]
+    const current = target.closest('button[data-row]') as HTMLButtonElement | null
+    const at = current ? cards.indexOf(current) : -1
+    const arrow = ARROWS.find((key) => key === event.key)
+    if (arrow) {
+      if (cards.length === 0) return
       event.preventDefault()
-      rows[Math.max(0, Math.min(rows.length - 1, at + (event.key === 'ArrowDown' ? 1 : -1)))]?.focus()
+      const next = at < 0 ? 0 : cardStep(at, cards.length, arrow, columnsOf(current))
+      if (next !== null) cards[next]?.focus()
     } else if (event.key.toLowerCase() === 'x' && at >= 0) {
+      const fileId = cards[at]!.dataset.row!
+      if (customer || !ids.has(fileId)) return
       event.preventDefault()
-      const fileId = rows[at]!.dataset.row!
       choose(fileId, !model.selected.includes(fileId))
     }
   }
-  if (files.length === 0 && leftOut === 0) return <EmptyState icon={<FolderOpen size={22} aria-hidden />} title={t(customer ? 'order.empty.customer' : 'order.empty.title')} description={customer ? undefined : t('order.empty.body')} />
+  if (files.length === 0 && sheets === 0 && leftOut === 0) return <EmptyState icon={<FolderOpen size={22} aria-hidden />} title={t(customer ? 'order.empty.customer' : 'order.empty.title')} description={customer ? undefined : t('order.empty.body')} />
+  const words = { t, fileWords, locale }
   return (
-    <div className="fw-rtv-order">
+    <div className={`fw-rtv-order${place === 'window' ? ' is-window' : ''}`}>
       {leftOut > 0 && <p className="fw-rtv-held">{t('order.leftOut', { count: leftOut })}</p>}
       {read.truncated && <p className="fw-rtv-muted">{t('order.truncated', { count: read.total })}</p>}
       {files.length > 0 && !customer && (
@@ -526,68 +577,155 @@ function OrderFilesView({ model, party, actions }: { model: OrderFilesModel; par
         </BulkActionBar>
       )}
       <div ref={listRef} className="fw-rtv-groups" onKeyDown={keys}>
-        {groups.map((group) => (
-          <section key={group.key} className="fw-rtv-group" aria-label={locale === 'it' ? group.words.it : group.words.en}>
-            <h3 className="fw-rtv-group-title">
-              {locale === 'it' ? group.words.it : group.words.en} <span className="fw-rtv-muted">{group.files.length}</span>
-            </h3>
-            <ul className="fw-rtv-rows">
-              {group.files.map((file) => (
-                <OrderRow key={file.id} file={file} orderId={read.order.id} customer={customer} chosen={model.selected.includes(file.id)} onChoose={(on) => choose(file.id, on)} actions={actions} words={{ t, fileWords, locale }} />
-              ))}
-            </ul>
-            {!customer && group.leftOut + group.measurementsLeftOut > 0 && <p className="fw-rtv-muted">{t('order.leftOutHere', { count: group.leftOut + group.measurementsLeftOut })}</p>}
-          </section>
-        ))}
+        {groups.map((group) => {
+          const worksheets = customer ? [] : orderWorksheetsOf(group)
+          return (
+            <section key={group.key} className="fw-rtv-group" aria-label={locale === 'it' ? group.words.it : group.words.en}>
+              <h3 className="fw-rtv-group-title">
+                {locale === 'it' ? group.words.it : group.words.en} <span className="fw-rtv-muted">{group.files.length + worksheets.length}</span>
+              </h3>
+              <ul className="fw-rtv-cards">
+                {group.files.map((file) => (
+                  <OrderCard key={file.id} file={file} orderId={read.order.id} customer={customer} chosen={model.selected.includes(file.id)} onChoose={(on) => choose(file.id, on)} actions={actions} words={words} preview={model.previews?.[file.id]} />
+                ))}
+                {/* F-OP-125 (B5): the made-to-measure worksheets the read sends (the measurements right only; else counted below). */}
+                {worksheets.map((sheet) => (
+                  <WorksheetCard key={sheet.documentId} sheet={sheet} actions={actions} words={words} />
+                ))}
+              </ul>
+              {!customer && group.leftOut + group.measurementsLeftOut > 0 && <p className="fw-rtv-muted">{t('order.leftOutHere', { count: group.leftOut + group.measurementsLeftOut })}</p>}
+            </section>
+          )
+        })}
       </div>
+      {/* F-OP-127: the ONE viewer of these files — ← / → over every file in display order; body data only when asked; Esc back to the card. */}
+      {model.viewer && (
+        <FileViewer
+          walk="all"
+          files={model.viewer.files}
+          index={model.viewer.index}
+          onIndex={(index) => actions?.onViewerIndex?.(index)}
+          onClose={() => actions?.onViewerClose?.()}
+          onOpenLocked={actions?.onViewerOpenLocked}
+          onDownload={actions?.onViewerDownload}
+          onGoToMessage={actions?.onOrderMessage ? (messageId) => {
+            actions.onViewerClose?.()
+            actions.onOrderMessage?.(messageId)
+          } : undefined}
+          returnFocusTo={model.viewer.returnTo}
+        />
+      )}
+      {/* Owner rule 2026-10-29: the keys in ONE information icon at the foot (the thread's window has its own, in its footer). */}
+      {place === 'tab' && (
+        <div className="fw-rtv-foot">
+          <ListKeysInfo keys={[{ keys: ['←', '→', '↑', '↓'], does: t('keys.move') }, ...(customer ? [] : [{ keys: ['x'], does: t('keys.choose') }]), { keys: ['Enter'], does: t('keys.open') }]} />
+        </div>
+      )}
     </div>
   )
 }
 
-function OrderRow({ file, orderId, customer, chosen, onChoose, actions, words }: { file: OrderFile; orderId: string; customer: boolean; chosen: boolean; onChoose: (on: boolean) => void; actions?: FilesViewActions | undefined; words: { t: (key: string, params?: Record<string, string | number>) => string; fileWords: (key: string, params?: Record<string, string | number>) => string; locale: 'it' | 'en' } }) {
+const ARROWS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'] as const
+
+/** How many cards one grid row holds where this card sits (↑ / ↓ move by it). */
+function columnsOf(card: HTMLElement | null): number {
+  const list = card?.closest('ul')
+  if (!list) return 1
+  const tops = [...list.children].map((child) => (child as HTMLElement).offsetTop)
+  return Math.max(1, tops.filter((top) => top === tops[0]).length)
+}
+
+type CardWords = { t: (key: string, params?: Record<string, string | number>) => string; fileWords: (key: string, params?: Record<string, string | number>) => string; locale: 'it' | 'en' }
+
+const FILE_KINDS: readonly string[] = ['PHOTO', 'DOCUMENT', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO', 'ATTACHMENT']
+
+/** One file's card (F-OP-125): the preview area, the name, its facts, its chips, its box and its actions. */
+function OrderCard({ file, orderId, customer, chosen, onChoose, actions, words, preview }: { file: OrderFile; orderId: string; customer: boolean; chosen: boolean; onChoose: (on: boolean) => void; actions?: FilesViewActions | undefined; words: CardWords; /* F-OP-126 */ preview?: CardPreview | undefined }) {
   const { t, fileWords, locale } = words
   const source = sourceOf(file, orderId)
-  const kind = (['PHOTO', 'DOCUMENT', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO', 'ATTACHMENT'] as readonly string[]).includes(file.kind) ? (file.kind as FileKind) : 'ATTACHMENT'
+  const kind = FILE_KINDS.includes(file.kind) ? (file.kind as FileKind) : 'ATTACHMENT'
+  const card = cardKindOf(file)
+  const type = file.documentWords ? (locale === 'it' ? file.documentWords.it : file.documentWords.en) : typeLabelOf(file) || fileWords(`kind.${kind}`)
+  const added = customer ? null : addedByOf(file)
   return (
-    <li className={`fw-rtv-row${chosen ? ' is-chosen' : ''}`}>
+    <li className={`fw-rtv-card${chosen ? ' is-chosen' : ''}`} data-card-id={file.id}>
       {!customer && (
-        <span className="fw-rtv-check">
+        <span className="fw-rtv-card-check">
           <Checkbox label={<span className="nds-vh">{t('select.one', { name: file.name })}</span>} checked={chosen} onChange={(event) => onChoose(event.target.checked)} />
         </span>
       )}
-      <span className="fw-rtv-pic" aria-hidden>
-        {KIND_ICON[kind]}
+      <button type="button" className="fw-rtv-card-open" data-row={file.id} title={file.name} onClick={(event) => actions?.onOrderOpen?.(file.id, 'preview', event.currentTarget)}>
+        <span className={`fw-rtv-card-preview${card === 'LOCKED' ? ' is-locked' : preview?.kind === 'page' ? ' is-page' : ''}`} aria-hidden={card === 'LOCKED' ? undefined : true}>
+          {card === 'LOCKED' ? (
+            <>
+              <Lock size={20} aria-hidden />
+              <span>{t('card.bodyData')}</span>
+            </>
+          ) : preview?.kind === 'picture' || preview?.kind === 'page' ? (
+            // F-OP-126: the small preview, or PDF page 1 drawn here (never the original, never an iframe).
+            <img src={preview.src} alt="" loading="lazy" decoding="async" />
+          ) : preview?.kind === 'largePdf' ? (
+            <>
+              {KIND_ICON[kind]}
+              <span className="fw-rtv-card-note">{t('card.largePdf')}</span>
+            </>
+          ) : (
+            KIND_ICON[kind]
+          )}
+        </span>
+        <span className="fw-rtv-card-name">{file.name}</span>
+      </button>
+      <span className="fw-rtv-card-meta">
+        {[type, sizeWords(file.sizeBytes, locale), formatDate(file.at, { locale })].filter(Boolean).join(' · ')}
+        {file.versionNo > 1 && <> · {t('version.inForce', { n: file.versionNo })}</>}
       </span>
-      <span className="fw-rtv-main">
-        <button type="button" className="fw-rtv-name" data-row={file.id} onClick={() => actions?.onOrderOpen?.(file.id, 'preview')}>
-          {file.bodyData && <Lock size={13} aria-hidden />} {file.name}
-        </button>
-        <span className="fw-rtv-meta">
-          {file.documentWords ? (locale === 'it' ? file.documentWords.it : file.documentWords.en) : fileWords(`kind.${kind}`)} · {sizeWords(file.sizeBytes, locale)} · {formatDate(file.at, { locale })}
-          {file.versionNo > 1 && <> · {t('version.inForce', { n: file.versionNo })}</>}
-        </span>
-        <span className="fw-rtv-marks">
-          {/* F-SA-238: the customer reads where it sits by its own numbers only (none: no chip), never who else can see it. */}
-          {customer ? file.from.label && source.key === 'order.source.from' && <Tag tone="neutral">{t(source.key, source.params)}</Tag> : <Tag tone="neutral">{t(source.key, source.params)}</Tag>}
-          {!customer && <Tag tone={file.audience === 'CUSTOMER_CAN_SEE' ? 'info' : 'neutral'}>{t(`order.audience.${file.audience}`)}</Tag>}
-          {file.bodyData && <Tag tone="warning">{fileWords('sheet.recorded')}</Tag>}
-          {file.alsoOn.map((other) => (
-            <Tag key={`${other.type}:${other.id}`} tone="neutral">
-              {t('order.alsoOn', { record: other.label })}
-            </Tag>
-          ))}
-          {file.alsoOnOther > 0 && <Tag tone="neutral">{t('order.alsoOnOther', { count: file.alsoOnOther })}</Tag>}
-        </span>
-        <span className="fw-rtv-row-actions">
-          <Button size="sm" variant="quiet" onClick={() => actions?.onOrderOpen?.(file.id, 'preview')}>
-            {t('version.open')}
-          </Button>
+      {added && <span className="fw-rtv-card-meta">{t(added.key, added.params)}</span>}
+      <span className="fw-rtv-marks">
+        {/* F-SA-238: the customer reads where it sits by its own numbers only (none: no chip), never who else can see it. */}
+        {customer ? file.from.label && source.key === 'order.source.from' && <Tag tone="neutral">{t(source.key, source.params)}</Tag> : <Tag tone="neutral">{t(source.key, source.params)}</Tag>}
+        {!customer && <Tag tone={file.audience === 'CUSTOMER_CAN_SEE' ? 'info' : 'neutral'}>{t(`order.audience.${file.audience}`)}</Tag>}
+        {file.bodyData && <Tag tone="warning">{fileWords('sheet.recorded')}</Tag>}
+        {file.alsoOn.map((other) => (
+          <Tag key={`${other.type}:${other.id}`} tone="neutral">
+            {t('order.alsoOn', { record: other.label })}
+          </Tag>
+        ))}
+        {file.alsoOnOther > 0 && <Tag tone="neutral">{t('order.alsoOnOther', { count: file.alsoOnOther })}</Tag>}
+      </span>
+      {(!customer || file.inThread) && (
+        <span className="fw-rtv-card-actions">
+          {!customer && (
+            <Button size="sm" variant="quiet" aria-label={t('card.downloadOf', { name: file.name })} onClick={() => actions?.onOrderOpen?.(file.id, 'download')}>
+              <Download size={14} aria-hidden /> {t('card.download')}
+            </Button>
+          )}
           {file.inThread && actions?.onOrderMessage && (
             <Button size="sm" variant="quiet" onClick={() => actions.onOrderMessage?.(file.inThread!.messageId)}>
               {t('order.inThread')}
             </Button>
           )}
         </span>
+      )}
+    </li>
+  )
+}
+
+/** F-OP-125 (B5): a made-to-measure line's worksheet — body data: a lock card; Open records the opening (the made-to-measure route). */
+function WorksheetCard({ sheet, actions, words }: { sheet: OrderWorksheet; actions?: FilesViewActions | undefined; words: CardWords }) {
+  const { t, fileWords, locale } = words
+  const name = t('card.worksheet', { line: sheet.line.seq, version: sheet.version })
+  return (
+    <li className="fw-rtv-card">
+      <button type="button" className="fw-rtv-card-open" data-row={worksheetCardId(sheet)} title={name} onClick={() => actions?.onOrderWorksheet?.(sheet)}>
+        <span className="fw-rtv-card-preview is-locked">
+          <Lock size={20} aria-hidden />
+          <span>{t('card.bodyData')}</span>
+        </span>
+        <span className="fw-rtv-card-name">{name}</span>
+      </button>
+      <span className="fw-rtv-card-meta">{[sheet.number, sheet.language.toUpperCase(), formatDate(sheet.createdAt, { locale })].filter(Boolean).join(' · ')}</span>
+      <span className="fw-rtv-marks">
+        <Tag tone="warning">{fileWords('sheet.recorded')}</Tag>
       </span>
     </li>
   )
