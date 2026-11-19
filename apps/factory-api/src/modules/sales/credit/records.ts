@@ -80,6 +80,31 @@ async function resolve(db: Reader, recordType: CreditRecordType, recordId: strin
   }
 }
 
+// ---- B-OO-004 (order overview 13-backend §4, Q3): the last answer to a request for a yes on the held check ---------------------
+/** The decided requests a held check keeps showing: a no, or a request taken back. */
+const ANSWERED = ['REJECTED', 'WITHDRAWN'] as const
+
+/**
+ * The newest decided CREDIT_OVERRIDE request on the held check (null: none): REJECTED (Finance said no: when, by whom, the words
+ * — free text that may name amounts, so only with the price grain, B3's pattern) or WITHDRAWN (taken back: when, by whom; null:
+ * the system). No machine change: a refused override leaves the hold standing and the order waiting (`may.ask` true again);
+ * its ways out are a payment, a raised limit, Check again, Ask again and Cancel.
+ */
+async function lastAnswerOf(db: Reader, checkId: string) {
+  const tasks = await db.approvalTask.findMany({
+    where: { kind: 'CREDIT_OVERRIDE', recordType: 'CreditCheck', recordId: checkId, status: { in: [...ANSWERED] } },
+    select: { id: true, status: true, requestedAt: true, decidedAt: true, decidedById: true, rejectReason: true, withdrawnAt: true, withdrawnById: true },
+  })
+  const answered = tasks.map((task) => ({ task, at: (task.status === 'REJECTED' ? task.decidedAt : task.withdrawnAt) ?? task.requestedAt }))
+  const newest = answered.sort((x, y) => y.at.getTime() - x.at.getTime() || (y.task.id > x.task.id ? 1 : y.task.id < x.task.id ? -1 : 0))[0]
+  if (!newest) return null
+  const rejected = newest.task.status === 'REJECTED'
+  const byId = rejected ? newest.task.decidedById : newest.task.withdrawnById
+  const by = byId ? ((await db.user.findUnique({ where: { id: byId }, select: { displayName: true } }))?.displayName ?? null) : null
+  return { status: newest.task.status as (typeof ANSWERED)[number], at: toUtcIso(newest.at), by, reason: asMoney('price', rejected ? newest.task.rejectReason : null) }
+}
+// ---- end B-OO-004
+
 async function customerOf(db: Reader, context: OfficeContext, at: Resolved, partyId: string, now: Date) {
   const party = await db.party.findUnique({ where: { id: partyId }, select: { id: true, code: true, legalName: true } })
   const company = await db.company.findUnique({ where: { id: at.companyId }, select: { id: true, code: true } })
@@ -116,6 +141,8 @@ async function customerOf(db: Reader, context: OfficeContext, at: Resolved, part
           step: rows[0]!.step as CreditStep,
           checkedAt: toUtcIso(last.checkedAt),
           request: task ? { taskId: task.id, status: task.status, approver: role?.name ?? approverUser?.displayName ?? null, requestedAt: toUtcIso(task.requestedAt), dueAt: task.dueAt ? toUtcIso(task.dueAt) : null } : null,
+          // B-OO-004: the last answer to a request for a yes on this hold (a no, or one taken back).
+          lastAnswer: await lastAnswerOf(db, last.id),
         }
       : null,
     checks: rows.map((row) => ({

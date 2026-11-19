@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
+// B-OO-005: a Sales person as the role template has it (workorders.view, no workorders.hold).
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
@@ -53,6 +55,8 @@ const SESSIONS: Record<string, SessionContext> = {
   ...twoBrandSessions(ids.tenantId, ids.a, ids.b, PERMISSIONS),
   // B's person who reads work orders but holds none.
   'office.p2.viewer': { audience: 'office', tenantId: ids.tenantId, actorId: newId(), grants: [grant(['workorders.view'], [ids.b])] },
+  // B-OO-005: Sales over every customer (the role template's permissions: it reads work orders, Production holds them).
+  'office.sales': { audience: 'office', tenantId: ids.tenantId, actorId: newId(), grants: [grant([...templateOf('sales')!.permissions] as Permission[], 'all')] },
 }
 const B_SESSIONS = new Set(['office.p2', 'office.p2.viewer'])
 
@@ -315,3 +319,165 @@ describe('PW-03 the hold routes behind the brand wall', { timeout: 60_000 }, () 
     expect(leaks).toEqual([])
   })
 })
+
+// ---- B-OO-005 (order overview N6, F16): "Hold the whole order" — the bulk hold checks each version sent, all or none -------------
+const oo = { b5: '', three: [] as string[], versions: {} as Record<string, number>, holds: [] as Json[] }
+const versionOf = async (id: string) => (await admin<{ version: number }>(`SELECT version FROM "WorkOrder" WHERE id = $1`, [id]))[0]!.version
+const numberOf = async (id: string) => (await admin<{ number: string }>(`SELECT number FROM "WorkOrder" WHERE id = $1`, [id]))[0]!.number
+
+describe('B-OO-005 hold the whole order: every version sent is checked, one stale → nothing held', { timeout: 60_000 }, () => {
+  it('a stale version → 409 naming the work order, nothing held; a version of a work order not in the hold → 400', async () => {
+    // Three open work orders of B's one order (its own, one draft of the earlier tests, one more of size 52).
+    oo.b5 = await draftOf(w.b.salesOrderLineId, '52')
+    oo.three = [w.b.workOrderId, drafts.b2, oo.b5]
+    for (const id of oo.three) {
+      expect((await workOrderRow(id)).status).toBe('DRAFT')
+      oo.versions[id] = await versionOf(id)
+    }
+    const b2 = await numberOf(drafts.b2)
+    const stale = await refused('office.p2', 'POST', '/production/work-orders/holds', { workOrderIds: oo.three, reasonCode: 'CAPACITY', versions: { ...oo.versions, [drafts.b2]: oo.versions[drafts.b2]! - 1 } }, 409)
+    expect(stale.code).toBe('conflict')
+    expect(stale.message).toBe(`Work order ${b2} changed since you read it (now version ${oo.versions[drafts.b2]}): reload it and hold again. Nothing was held.`)
+    expect(stale.issues).toEqual([{ path: `body/versions/${drafts.b2}`, message: `Work order ${b2} is now at version ${oo.versions[drafts.b2]}.` }])
+    // All or none: not one of the three is held, not one version moved.
+    for (const id of oo.three) {
+      expect(await activeHolds(id)).toBe(0)
+      expect((await workOrderRow(id)).status).toBe('DRAFT')
+      expect(await versionOf(id)).toBe(oo.versions[id])
+    }
+    // Two stale: both named, in the body's order.
+    const two = await refused('office.p2', 'POST', '/production/work-orders/holds', { workOrderIds: oo.three, reasonCode: 'CAPACITY', versions: { ...oo.versions, [oo.b5]: oo.versions[oo.b5]! + 5, [w.b.workOrderId]: oo.versions[w.b.workOrderId]! + 5 } }, 409)
+    expect(two.message).toBe(`2 of these work orders changed since you read them: ${w.b.workOrderNumber}, ${await numberOf(oo.b5)}. Reload them and hold again. Nothing was held.`)
+    // A version may only name a work order of this hold.
+    const other = await refused('office.p2', 'POST', '/production/work-orders/holds', { workOrderIds: oo.three, reasonCode: 'CAPACITY', versions: { ...oo.versions, [drafts.b3]: 1 } }, 400)
+    expect(other.issues).toEqual([{ path: `body/versions/${drafts.b3}`, message: 'A version only for a work order of this hold.' }])
+    for (const id of oo.three) expect(await activeHolds(id)).toBe(0)
+  })
+
+  it('holds the three of one order with their versions read: three holds in one command, each ON_HOLD, each one version on', async () => {
+    const placed = await ok('office.p2', 'POST', '/production/work-orders/holds', { workOrderIds: oo.three, reasonCode: 'MATERIAL_MISSING', note: 'Made-up: the lining ships late (office only).', brandWords: 'We wait for a material and tell you the new date.', versions: oo.versions })
+    expect(placed.workOrders.map((entry: Json) => [entry.id, entry.status, entry.held])).toEqual(oo.three.map((id) => [id, 'ON_HOLD', true]))
+    expect(placed.holds.map((hold: Json) => [hold.workOrderId, hold.kind, hold.status, hold.customerReads])).toEqual(oo.three.map((id) => [id, 'PRODUCTION', 'ACTIVE', 'We wait for a material and tell you the new date.']))
+    for (const id of oo.three) {
+      expect(await activeHolds(id)).toBe(1)
+      expect(await versionOf(id)).toBe(oo.versions[id]! + 1)
+    }
+    // ONE act: the three hold events share one request (the customer is told once: production-notices.pg).
+    const rows = await admin<{ correlationId: string }>(`SELECT "correlationId" FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'work_order_hold.placed' AND payload->>'holdId' = ANY($2::text[])`, [ids.tenantId, placed.holds.map((hold: Json) => hold.id)])
+    expect(rows).toHaveLength(3)
+    expect(new Set(rows.map((row) => row.correlationId)).size).toBe(1)
+    oo.holds = placed.holds
+    // Without versions (Production's list today): still one hold per work order, all or none — checked as before.
+    const unchecked = await ok('office.p2', 'POST', '/production/work-orders/holds', { workOrderIds: [drafts.b3, drafts.b4], reasonCode: 'CAPACITY' })
+    expect(unchecked.workOrders.map((entry: Json) => entry.held)).toEqual([false, false])
+  })
+
+  it('another customer’s work order: 400 in the words of an unknown id (versions sent or not); Sales: 403, nothing held', async () => {
+    const unknown = newId()
+    const withA = await refused('office.p2', 'POST', '/production/work-orders/holds', { workOrderIds: [oo.b5, w.a.workOrderId], reasonCode: 'CAPACITY', versions: { [oo.b5]: await versionOf(oo.b5), [w.a.workOrderId]: await versionOf(w.a.workOrderId) } }, 400)
+    const withUnknown = await refused('office.p2', 'POST', '/production/work-orders/holds', { workOrderIds: [oo.b5, unknown], reasonCode: 'CAPACITY', versions: { [oo.b5]: await versionOf(oo.b5), [unknown]: 1 } }, 400)
+    expect(withA.issues).toEqual([{ path: 'body/workOrderIds/1', message: 'Work order not found.' }])
+    expect([withA.message, withA.issues]).toEqual([withUnknown.message, withUnknown.issues])
+    expect(await activeHolds(w.a.workOrderId)).toBe(0)
+    expect(await activeHolds(oo.b5)).toBe(1)
+    // Sales reads work orders; Production holds them.
+    const before = await activeHolds(drafts.b2)
+    expect((await refused('office.sales', 'POST', '/production/work-orders/holds', { workOrderIds: [drafts.b2], reasonCode: 'CAPACITY', versions: { [drafts.b2]: await versionOf(drafts.b2) } }, 403)).code).toBe('forbidden')
+    expect(await activeHolds(drafts.b2)).toBe(before)
+  })
+
+  it('no answer B’s people got here names anything of A’s', () => {
+    const leaks = seenByB.flatMap((seen) => findMarkers(JSON.stringify(seen.body), aMarkers).map((marker) => `${seen.url}: ${marker}`))
+    expect(leaks).toEqual([])
+  })
+})
+// ---- end B-OO-005
+
+// ---- B-OO-006 (order overview N5): ONE Lift for a pause on N work orders — all or none, in one command ---------------------------
+const LIFT_MANY = '/production/work-orders/holds/lift'
+type LiftEntry = { workOrderId: string; holdId: string; version: number }
+const entryOf = (hold: Json): LiftEntry => ({ workOrderId: hold.workOrderId, holdId: hold.id, version: hold.version })
+
+describe('B-OO-006 one Lift for N work orders: each hold at its version read, all or none', { timeout: 60_000 }, () => {
+  let entries: LiftEntry[] = []
+
+  it('refuses in words: no reason, a hold named twice, a hold of another work order; a stale one or one lifted meanwhile → 409 naming its work order, nothing lifted', async () => {
+    entries = oo.holds.map(entryOf)
+    expect(entries).toHaveLength(3)
+    expect((await refused('office.p2', 'POST', LIFT_MANY, { holds: entries, reason: '  ' }, 400)).issues).toEqual([{ path: 'body/reason', message: 'Say why the hold is lifted.' }])
+    expect((await refused('office.p2', 'POST', LIFT_MANY, { holds: [entries[0], entries[0]], reason: 'Made-up' }, 400)).issues).toEqual([{ path: 'body/holds/1/holdId', message: 'Name each hold once.' }])
+    // A hold of another of B's work orders, sent with this one: as unknown as a made-up hold id.
+    expect((await refused('office.p2', 'POST', LIFT_MANY, { holds: [{ ...entries[0]!, holdId: entries[1]!.holdId }], reason: 'Made-up' }, 400)).issues).toEqual([{ path: 'body/holds/0/holdId', message: 'Hold not found.' }])
+
+    const [first, second, third] = await Promise.all(oo.three.map(numberOf))
+    const stale = await refused('office.p2', 'POST', LIFT_MANY, { holds: [entries[0], { ...entries[1]!, version: entries[1]!.version + 3 }, entries[2]], reason: 'Made-up: the lining arrived' }, 409)
+    expect(stale.code).toBe('conflict')
+    expect(stale.message).toBe(`The hold on work order ${second} changed since you read it: reload it and lift again. Nothing was lifted.`)
+    expect(stale.issues).toEqual([{ path: 'body/holds/1/version', message: `The current version is ${entries[1]!.version}.` }])
+    for (const id of oo.three) expect(await activeHolds(id)).toBe(1)
+
+    // One lifted meanwhile (its own page's Lift): the whole Lift is refused naming it; the other two stay held.
+    await ok('office.p2', 'POST', liftOf(entries[2]!.workOrderId, entries[2]!.holdId), { version: entries[2]!.version, reason: 'Made-up: freed first' }, 200)
+    const meanwhile = await refused('office.p2', 'POST', LIFT_MANY, { holds: entries, reason: 'Made-up: the lining arrived' }, 409)
+    expect(meanwhile.code).toBe('invalid_state')
+    expect(meanwhile.message).toBe(`The hold on work order ${third} is lifted already: reload it and lift again. Nothing was lifted.`)
+    expect(await activeHolds(oo.three[0]!)).toBe(1)
+    expect(await activeHolds(oo.three[1]!)).toBe(1)
+    expect((await workOrderRow(oo.three[0]!)).status).toBe('ON_HOLD')
+    expect(first).toBe(w.b.workOrderNumber)
+    // Held again, for the Lift below.
+    const again = await ok('office.p2', 'POST', holdsOf(entries[2]!.workOrderId), { reasonCode: 'MATERIAL_MISSING' })
+    entries[2] = entryOf(again.hold)
+  })
+
+  it('lifts them in ONE command: each work order back to DRAFT, one that another hold still names stays held; one request, one audit row per hold', async () => {
+    // B's draft b3 carries two holds: lifting one of them leaves it held under the other.
+    const b3 = ((await ok('office.p2', 'GET', holdsOf(drafts.b3))).holds as Json[]).filter((hold) => hold.status === 'ACTIVE')
+    expect(b3).toHaveLength(2)
+    const body = { holds: [...entries, entryOf(b3[0]!)], reason: 'Made-up: the lining arrived.' }
+    const lifted = await ok('office.p2', 'POST', LIFT_MANY, body, 200)
+    expect(lifted.holds.map((hold: Json) => [hold.id, hold.status, hold.liftReason, hold.version])).toEqual(body.holds.map((entry) => [entry.holdId, 'LIFTED', 'Made-up: the lining arrived.', entry.version + 1]))
+    expect(lifted.workOrders.map((entry: Json) => [entry.id, entry.status, entry.lifted])).toEqual([...oo.three.map((id) => [id, 'DRAFT', true]), [drafts.b3, 'ON_HOLD', false]])
+    for (const id of oo.three) expect(await workOrderRow(id)).toEqual({ status: 'DRAFT', heldFromStatus: null, holdReason: null, holdRecordType: null, holdRecordId: null })
+    expect(await activeHolds(drafts.b3)).toBe(1)
+    expect((await workOrderRow(drafts.b3)).holdRecordId).toBe(b3[1]!.id)
+    // ONE act: the four lift events share one request (the customer reads "resumed" once: production-notices.pg).
+    const rows = await admin<{ correlationId: string }>(`SELECT "correlationId" FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'work_order_hold.lifted' AND payload->>'holdId' = ANY($2::text[])`, [ids.tenantId, body.holds.map((entry) => entry.holdId)])
+    expect(rows).toHaveLength(4)
+    expect(new Set(rows.map((row) => row.correlationId)).size).toBe(1)
+    const audits = await admin(`SELECT 1 FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'production.liftHold' AND "before"->>'holdId' = ANY($2::text[])`, [ids.tenantId, body.holds.map((entry) => entry.holdId)])
+    expect(audits).toHaveLength(4)
+    // A lifted hold never changes: the same Lift again is refused, nothing written.
+    expect((await refused('office.p2', 'POST', LIFT_MANY, { holds: entries.map((entry) => ({ ...entry, version: entry.version + 1 })), reason: 'Made-up: again' }, 409)).code).toBe('invalid_state')
+  })
+
+  it('another customer’s work order or hold: the words of an unknown id; Sales: 403; the production unit lifts every customer’s', async () => {
+    const onA = await ok('office.all', 'POST', holdsOf(w.a.workOrderId), { reasonCode: 'CAPACITY' })
+    const withA = await refused('office.p2', 'POST', LIFT_MANY, { holds: [entryOf(onA.hold)], reason: 'Made-up' }, 400)
+    const withUnknown = await refused('office.p2', 'POST', LIFT_MANY, { holds: [{ workOrderId: newId(), holdId: newId(), version: 1 }], reason: 'Made-up' }, 400)
+    expect(withA.issues).toEqual([{ path: 'body/holds/0/workOrderId', message: 'Work order not found.' }])
+    expect([withA.message, withA.issues]).toEqual([withUnknown.message, withUnknown.issues])
+    // A's hold through B's own work order: as unknown as a made-up hold id.
+    const throughB = await refused('office.p2', 'POST', LIFT_MANY, { holds: [{ workOrderId: drafts.b3, holdId: onA.hold.id, version: 1 }], reason: 'Made-up' }, 400)
+    const madeUp = await refused('office.p2', 'POST', LIFT_MANY, { holds: [{ workOrderId: drafts.b3, holdId: newId(), version: 1 }], reason: 'Made-up' }, 400)
+    expect(throughB.issues).toEqual([{ path: 'body/holds/0/holdId', message: 'Hold not found.' }])
+    expect([throughB.message, throughB.issues]).toEqual([madeUp.message, madeUp.issues])
+    expect(await activeHolds(w.a.workOrderId)).toBe(1)
+    // Sales reads work orders; Production lifts their holds.
+    const b3 = ((await ok('office.p2', 'GET', holdsOf(drafts.b3))).holds as Json[]).find((hold) => hold.status === 'ACTIVE')!
+    expect((await refused('office.sales', 'POST', LIFT_MANY, { holds: [entryOf(b3)], reason: 'Made-up' }, 403)).code).toBe('forbidden')
+    expect(await activeHolds(drafts.b3)).toBe(1)
+    // B's person wrote no audit row about A.
+    const p2 = (SESSIONS['office.p2'] as { readonly actorId: string }).actorId
+    expect(await admin(`SELECT 1 FROM "AuditLog" WHERE "actorId" = $1 AND "recordId" = ANY($2::uuid[])`, [p2, [w.a.workOrderId, onA.hold.id]])).toEqual([])
+    // The production unit lifts A's with the same route.
+    const freed = await ok('office.all', 'POST', LIFT_MANY, { holds: [entryOf(onA.hold)], reason: 'Made-up: capacity found' }, 200)
+    expect(freed.workOrders).toEqual([{ id: w.a.workOrderId, number: w.a.workOrderNumber, status: 'DRAFT', lifted: true }])
+  })
+
+  it('no answer B’s people got here names anything of A’s', () => {
+    const leaks = seenByB.flatMap((seen) => findMarkers(JSON.stringify(seen.body), aMarkers).map((marker) => `${seen.url}: ${marker}`))
+    expect(leaks).toEqual([])
+  })
+})
+// ---- end B-OO-006
