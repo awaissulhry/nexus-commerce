@@ -254,6 +254,18 @@ export const settlementContract = defineContract({
             paidAmount: money.price(z.number().int()),
             openAmount: money.price(z.number().int()),
             refundDueAmount: money.price(z.number().int()),
+            // ── B-OP-022 (order page plan N3; 13-backend §3): this order's part of it (the invoice's whole is grossTotal, its open openAmount) ──
+            /** This order's share of the invoice's goods: its gross less its freight, split by the net each order's lines carry on it. */
+            share: money.price(z.number().int()),
+            /** What of that share is still open: less its share of the credit notes and of what is paid (never below 0). */
+            openShare: money.price(z.number().int()),
+            /** The invoice's freight, VAT included: in no order. */
+            freight: money.price(z.number().int()),
+            /** The other orders it bills — of the invoice's own buyer only — that the reader reaches (orders.view), by number. */
+            otherOrders: z.array(output({ id: id(), number: z.string() })),
+            /** Its buyer's other orders the reader does not reach: counted, never named. */
+            otherOrdersHidden: z.number().int(),
+            // ── end B-OP-022 ──
           }),
         ),
         invoicedAmount: money.price(z.number().int()),
@@ -262,6 +274,18 @@ export const settlementContract = defineContract({
         depositsPaidWithoutInvoiceAmount: money.price(z.number().int()),
         balanceDueAmount: money.price(z.number().int()),
         refundDueAmount: money.price(z.number().int()),
+        /**
+         * B-OP-022 (order page plan N3): Money = this order's share, by the rule the orders list reads (its row's paid and balance):
+         * paid (its deposit requests' payments and its share of its invoices' payments, less refunds), still to pay (its gross less
+         * what will never be billed, its credit notes' share and what is paid; never below 0), its share of the issued invoices less
+         * their credit notes (freight apart), the deposits received.
+         */
+        thisOrder: output({
+          paid: money.price(z.number().int()),
+          stillToPay: money.price(z.number().int()),
+          invoicedShare: money.price(z.number().int()),
+          depositsPaid: money.price(z.number().int()),
+        }),
       }),
     }),
   },

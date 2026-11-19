@@ -5,6 +5,14 @@ import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandCaller, CommandTools } from '../../../core/command'
 import { assertMay, officeContextOf, type Reader } from '../store'
 import { lockInvoicing } from './locks'
+// B-OP-022 (order page plan N3): this order's share, by the one rule the orders list reads (sales/orders later-columns).
+import type { Prisma } from '@nexus/factory-db'
+import { can, type Actor } from '@nexus/factory-domain/core/permissions'
+import { orderMoneyOf, shareOf } from '@nexus/factory-domain/sales/orders/later-columns'
+import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+import { Dec, HUNDRED } from '@nexus/factory-domain/tax/decimal'
+import { actorOf } from '../../../core/context'
+import { orderMoneyFactsOf } from '../../sales/orders/later-columns'
 
 /**
  * The order's settlement (B-W1-51; PLAN §4.7 "Closing the order"): the port B-W1-25's close command asks ("is every line
@@ -211,12 +219,67 @@ export async function settleNoted(tools: SettleTools): Promise<void> {
   await settleOrders(tools, noted)
 }
 
+// ── B-OP-022 (order page plan N3; 13-backend §3; review N-4) ──────────────────────────────────────────────────────────────────
+/** A FREIGHT charge line's amount with its VAT: its gross on a VAT-included invoice, else its net and the VAT at its rate. */
+function freightGrossOf(line: { readonly netAmount: number; readonly grossAmount: number | null; readonly vatRatePct: Prisma.Decimal | string }): number {
+  if (line.grossAmount !== null) return line.grossAmount
+  return line.netAmount + Number(new Dec(line.netAmount).times(line.vatRatePct.toString()).dividedBy(HUNDRED).toDecimalPlaces(0, Dec.ROUND_HALF_UP).toFixed(0))
+}
+
+/**
+ * The order's own share of its money, by the rule the orders list reads (sales/orders later-columns orderMoneyFactsOf, then
+ * factory-domain orderMoneyOf), so its page and its row say the same paid and still to pay. Per invoice that bills it: its share
+ * of the invoice's goods (the invoice's gross less its freight, split by the net each order's lines carry on it), what of that
+ * share is still open (less its share of the credit notes and of what is paid), the freight apart (it is in no order), and the
+ * other orders the invoice bills — the invoice's own buyer's only (a TD24 bills one customer), each named only when the reader
+ * reaches it with orders.view, the rest counted.
+ */
+async function shareOfOrder(db: Reader, orderId: string, invoiceIds: readonly string[], actor: Actor) {
+  const order = await db.salesOrder.findUniqueOrThrow({ where: { id: orderId }, select: { id: true, grossAmount: true } })
+  const lines = await db.salesOrderLine.findMany({ where: { orderId }, select: { id: true, orderId: true, kind: true, quantity: true, closedShortQuantity: true, feeCreditedAt: true, netAmount: true, vatAmount: true } })
+  const money = await orderMoneyFactsOf(db, [orderId], lines)
+  const answer = orderMoneyOf(money.factsOf(order))
+  const shares = money.invoicesOf(orderId)
+  const ids = [...new Set([...invoiceIds, ...shares.map((invoice) => invoice.id)])]
+  const freightLines = ids.length > 0 ? await db.invoiceLine.findMany({ where: { invoiceId: { in: ids }, kind: 'CHARGE', chargeKind: 'FREIGHT' }, select: { invoiceId: true, netAmount: true, grossAmount: true, vatRatePct: true } }) : []
+  const freightOf = (invoiceId: string) => freightLines.filter((line) => line.invoiceId === invoiceId).reduce((sum, line) => sum + freightGrossOf(line), 0)
+  // The other orders each invoice bills: those of its order lines and the order it names, of its own buyer only.
+  const heads = ids.length > 0 ? await db.invoice.findMany({ where: { id: { in: ids } }, select: { id: true, buyerPartyId: true, salesOrderId: true } }) : []
+  const billed = ids.length > 0 ? await db.invoiceLine.findMany({ where: { invoiceId: { in: ids }, salesOrderLineId: { not: null } }, select: { invoiceId: true, salesOrderLineId: true }, distinct: ['invoiceId', 'salesOrderLineId'] }) : []
+  const ownLines = new Set(lines.map((line) => line.id))
+  const foreignLineIds = [...new Set(billed.flatMap((line) => (line.salesOrderLineId && !ownLines.has(line.salesOrderLineId) ? [line.salesOrderLineId] : [])))]
+  const orderOfLine = new Map((foreignLineIds.length > 0 ? await db.salesOrderLine.findMany({ where: { id: { in: foreignLineIds } }, select: { id: true, orderId: true } }) : []).map((line) => [line.id, line.orderId]))
+  const othersOf = (invoiceId: string): string[] => {
+    const head = heads.find((row) => row.id === invoiceId)
+    const fromLines = billed.flatMap((line) => (line.invoiceId === invoiceId && line.salesOrderLineId ? [orderOfLine.get(line.salesOrderLineId)] : [])).filter((id): id is string => typeof id === 'string')
+    return [...new Set([...fromLines, ...(head?.salesOrderId ? [head.salesOrderId] : [])])].filter((id) => id !== orderId)
+  }
+  const otherIds = [...new Set(ids.flatMap(othersOf))]
+  const others = new Map((otherIds.length > 0 ? await db.salesOrder.findMany({ where: { id: { in: otherIds } }, select: { id: true, number: true, companyId: true, partyId: true } }) : []).map((row) => [row.id, row]))
+  const invoiceOf = (invoiceId: string) => {
+    const billing = shares.find((invoice) => invoice.id === invoiceId)
+    const head = heads.find((row) => row.id === invoiceId)
+    const freight = freightOf(invoiceId)
+    const goods = billing ? shareOf(billing.grossTotal - freight, billing.part, billing.whole) : 0
+    const settled = billing ? shareOf(billing.creditedGross, billing.part, billing.whole) + shareOf(billing.placed - billing.refunded, billing.part, billing.whole) : 0
+    // Of the invoice's own buyer only (never another customer's order, not even counted); named only when the reader reaches it.
+    const buyers = othersOf(invoiceId).flatMap((id) => (others.has(id) && others.get(id)!.partyId === head?.buyerPartyId ? [others.get(id)!] : []))
+    const named = buyers.filter((row) => can(actor, ORDERS_VIEW, { companyId: row.companyId, partyId: row.partyId })).sort((a, b) => a.number.localeCompare(b.number))
+    return { share: goods, openShare: Math.max(0, goods - settled), freight, otherOrders: named.map((row) => ({ id: row.id, number: row.number })), otherOrdersHidden: buyers.length - named.length }
+  }
+  const invoicedShare = shares.reduce((sum, invoice) => sum + shareOf(invoice.grossTotal - freightOf(invoice.id), invoice.part, invoice.whole) - shareOf(invoice.creditedGross, invoice.part, invoice.whole), 0)
+  return { thisOrder: { paid: answer.paid, stillToPay: answer.balance, invoicedShare, depositsPaid: money.depositsPaidOf(orderId) }, invoiceOf }
+}
+// ── end B-OP-022 ──
+
 /** invoices.view (A2 SCR-081 "Deposits & payments", SCR-082): the order's settlement, money with the price grain. */
 export async function getSettlement(caller: CommandCaller, orderId: string) {
   const context = officeContextOf(caller)
   const found = await caller.withClient((client) => settlementOf(client, orderId))
   assertMay(context, INVOICES_VIEW, INVOICES_VIEW, found ? { companyId: found.companyId, partyId: found.partyId } : null, 'Order')
   const { settlement } = found!
+  // B-OP-022: this order's share (the list's rule), each invoice's share and the other orders it bills.
+  const ours = await caller.withClient((client) => shareOfOrder(client, found!.orderId, settlement.invoices.map((invoice) => invoice.id), actorOf(context)))
   return {
     settlement: {
       orderId: found!.orderId,
@@ -229,23 +292,39 @@ export async function getSettlement(caller: CommandCaller, orderId: string) {
       fullyInvoiced: settlement.fullyInvoiced,
       documentsFinal: settlement.documentsFinal,
       lines: [...settlement.lines],
-      invoices: settlement.invoices.map((invoice) => ({
-        id: invoice.id,
-        docType: invoice.docType,
-        number: invoice.number,
-        status: invoice.status,
-        grossTotal: asMoney('price', invoice.grossTotal),
-        creditedAmount: asMoney('price', invoice.creditedGross),
-        paidAmount: asMoney('price', invoice.paid),
-        openAmount: asMoney('price', invoice.open),
-        refundDueAmount: asMoney('price', invoice.refundDue),
-      })),
+      invoices: settlement.invoices.map((invoice) => {
+        const mine = ours.invoiceOf(invoice.id) // B-OP-022
+        return {
+          id: invoice.id,
+          docType: invoice.docType,
+          number: invoice.number,
+          status: invoice.status,
+          grossTotal: asMoney('price', invoice.grossTotal),
+          creditedAmount: asMoney('price', invoice.creditedGross),
+          paidAmount: asMoney('price', invoice.paid),
+          openAmount: asMoney('price', invoice.open),
+          refundDueAmount: asMoney('price', invoice.refundDue),
+          // ── B-OP-022: this order's share of it, the freight apart, the other orders it bills (its buyer's only) ──
+          share: asMoney('price', mine.share),
+          openShare: asMoney('price', mine.openShare),
+          freight: asMoney('price', mine.freight),
+          otherOrders: mine.otherOrders,
+          otherOrdersHidden: mine.otherOrdersHidden,
+        }
+      }),
       invoicedAmount: asMoney('price', settlement.money.invoicedGross),
       creditedAmount: asMoney('price', settlement.money.creditedGross),
       paidAmount: asMoney('price', settlement.money.paidOnInvoices),
       depositsPaidWithoutInvoiceAmount: asMoney('price', settlement.money.depositsPaidWithoutInvoice),
       balanceDueAmount: asMoney('price', settlement.money.balanceDue),
       refundDueAmount: asMoney('price', settlement.money.refundDue),
+      // B-OP-022: Money = this order's share (the list's paid and balance).
+      thisOrder: {
+        paid: asMoney('price', ours.thisOrder.paid),
+        stillToPay: asMoney('price', ours.thisOrder.stillToPay),
+        invoicedShare: asMoney('price', ours.thisOrder.invoicedShare),
+        depositsPaid: asMoney('price', ours.thisOrder.depositsPaid),
+      },
     },
   }
 }
