@@ -319,7 +319,7 @@ export async function quoteDetail(db: Reader, quote: QuoteRow, now: Date) {
         quantity: line.quantity,
         listUnitPrice: asMoney('price', decimal(line.listUnitPrice)),
         unitPrice: asMoney('price', decimal(line.unitPrice)!),
-        discountPct: money?.discountPct ?? null,
+        discountPct: asMoney('price', money?.discountPct ?? null), // B-CP-012: a percent of the price is a price
         netAmount: asMoney('price', line.netAmount),
         vatRatePct: line.vatRatePct.toFixed(2),
         vatNature: line.vatNature,

@@ -154,7 +154,7 @@ const audits = (orderId: string) => admin<Json>(`SELECT action, before, after FR
 const announced = (orderId: string) => admin<Json>(`SELECT type, payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'sales_order.brand_price_changed' AND subject = $2 ORDER BY "occurredAt", id`, [T, orderId])
 
 beforeAll(async () => {
-  h = await startHarness('sales_portal_price_check_cp019')
+  h = await startHarness('cp019_portal_check') // B-CP-022: test-database labels are at most 20 characters
   h.clock.set(new Date())
   usePortalOptions({ answerFloorMs: 0 })
   await seedCore({ db: h.database, namespace: NS })

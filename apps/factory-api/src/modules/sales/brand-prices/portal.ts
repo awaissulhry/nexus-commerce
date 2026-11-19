@@ -4,6 +4,7 @@ import { ForbiddenError, ValidationError, type Issue } from '@nexus/factory-doma
 import { newId } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { asMoneyKeys } from '@nexus/factory-domain/money/marked' // B-CP-019
 import { PORTAL_SALES_ORDERS_ASK } from '@nexus/factory-domain/sales/change-requests/permissions'
 import { priceText } from '@nexus/factory-domain/sales/quotes/quotes'
 import { parseDecimal } from '@nexus/factory-domain/tax/decimal'
@@ -122,7 +123,8 @@ async function portalCheckView(request: FastifyRequest, reader: PortalReader, or
         }
       : null
   const why = CLOSED.has(order.status) ? PORTAL_PRICE_WORDS.closed : !can(reader.actor, PORTAL_SALES_ORDERS_ASK, scopeOf(order)) ? PORTAL_PRICE_WORDS.readsOnly : null
-  return {
+  // B-CP-019: every key of the customer's price check is the price grain (its contract).
+  return asMoneyKeys('price', {
     orderId: order.id,
     currency: order.currency,
     lines: lines.map((line) => {
@@ -143,7 +145,7 @@ async function portalCheckView(request: FastifyRequest, reader: PortalReader, or
     }),
     total: { ...check.total, row: rowView(rows.find((row) => row.salesOrderLineId === null)) },
     mayWrite: { allowed: why === null, why: why ? { ...why } : null },
-  }
+  })
 }
 
 /** GET /portal/sales-orders/:orderId/price-check (see the module's head). */

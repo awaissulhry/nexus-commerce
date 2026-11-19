@@ -158,8 +158,10 @@ function RecordDesign({ model }: { model: DesignModel }) {
 const est = (over: Partial<EstimateModel> = {}) => estimateModel(over)
 const PART_LINE = RMA_PART_RECEIVED.lines[1]!
 
-// F-CP-160: a Sales worker sees no price (the demo's Sales permissions still carry the grain: follow-up 5, F-CP-148).
+// F-CP-160: a Sales worker sees no price. F-CP-148 (follow-up 5): the demo's Sales permissions hold no grain any more (the same can);
+// a case that shows a Sales person typing a credit is a Sales worker with a price role the Owner named (SALES_PRICED).
 const SALES_NO_PRICE = { ...canFor('sales'), price: false }
+const SALES_PRICED = { ...canFor('sales'), price: true }
 const decided: Record<string, DecisionDraft> = { [RMA_RECEIVED.lines[1]!.id]: { disposition: 'CREDIT_ONLY', outcome: 'RESTOCK', credit: '' } }
 const filledChecklist = { seams: 'PASS' as const, abrasionZones: 'PASS' as const, closures: 'NOT_APPLICABLE' as const, protectors: 'PASS' as const, replaced: true, lot: 'PRT-DEMO-07', level: '2' as const, certificateCovers: true, note: '' }
 
@@ -323,8 +325,9 @@ export const designScreen = defineDesignScreen<DesignModel>({
     },
     {
       id: 'w2b-352-credit-ask',
-      label: 'W2b: Credit without return — above the limit: asks a yes (from Bea Demo)',
-      model: { kind: 'rma', role: 'sales', model: rmaModel('sales', { tab: 'credit', depth: { ...depthFor(RMA_AUTHORISED), dialog: { kind: 'credit', draft: { lineId: RMA_AUTHORISED.lines[1]!.id, amount: '200', note: '' }, preview: { ok: true, problems: [], lineId: RMA_AUTHORISED.lines[1]!.id, seq: 20, pieces: 2, currency: 'EUR', value: 32400, creditAmount: 20000, approval: { needed: true, approverRoleId: null, approverUserId: PEOPLE[1]!.id, nobodyElse: false }, waiting: null }, previewing: false } } }) },
+      // F-CP-148 (follow-up 5): a Sales worker with a price role the Owner named (a plain Sales worker never types a credit: B-CP-026).
+      label: 'W2b: Credit without return — above the limit: asks a yes (from Bea Demo); a Sales worker with a price role the Owner named',
+      model: { kind: 'rma', role: 'sales', model: rmaModel('sales', { can: SALES_PRICED, tab: 'credit', depth: { ...depthFor(RMA_AUTHORISED), dialog: { kind: 'credit', draft: { lineId: RMA_AUTHORISED.lines[1]!.id, amount: '200', note: '' }, preview: { ok: true, problems: [], lineId: RMA_AUTHORISED.lines[1]!.id, seq: 20, pieces: 2, currency: 'EUR', value: 32400, creditAmount: 20000, approval: { needed: true, approverRoleId: null, approverUserId: PEOPLE[1]!.id, nobodyElse: false }, waiting: null }, previewing: false } } }) },
     },
     {
       id: 'w2b-352-credit-over',

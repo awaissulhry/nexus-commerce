@@ -736,3 +736,18 @@ describe('F-OP-129 — the order page at the end in the design screen: the strip
   })
 })
 // ---- end F-OP-129
+
+// ---- F-OP-305 (order page walk #16, Lines part): Amend order is held with words, never hidden, for a reader without orders.manage ----
+describe('F-OP-305: Lines draws Amend order (and Close remaining lines) held for a reader without orders.manage', () => {
+  it('the production manager sees Amend order held "Changing an order needs the sales right to manage orders" (en, it)', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw('manager-lines', locale)
+      expect(textOf(html)).toContain(locale === 'en' ? 'Amend order' : 'Modifica ordine')
+      expect(html).toContain(locale === 'en' ? 'aria-description="Changing an order needs the sales right to manage orders"' : 'aria-description="Cambiare un ordine richiede il diritto vendite di gestire gli ordini"')
+    }
+    // A final order offers no change at all (nothing to hold).
+    const tab = readFileSync(new URL('./view/LinesTab.tsx', import.meta.url), 'utf8')
+    expect(tab).not.toContain('{model.can.manage && !isFinal(order) && (')
+  })
+})
+// ---- end F-OP-305

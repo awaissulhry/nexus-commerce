@@ -112,7 +112,7 @@ const orderLines = (orderId: string) => admin<{ seq: number; unitPrice: string; 
 const ordersOf = (ref: string) => admin(`SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND "customerRef" = $2`, [T, ref])
 
 beforeAll(async () => {
-  h = await startHarness('sales_no_price_writers')
+  h = await startHarness('cp012_no_price') // B-CP-022: test-database labels are at most 20 characters
   h.clock.set(new Date())
   usePortalOptions({ answerFloorMs: 0 })
   await seedCore({ db: h.database, namespace: NS })

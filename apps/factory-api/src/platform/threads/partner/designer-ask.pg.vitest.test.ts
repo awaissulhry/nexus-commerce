@@ -21,8 +21,9 @@ import { ensureThread, postNote, writeMessage } from '../threads'
  *
  *   - asked: the customer's message is posted as always, then ONE office-only note "<customer> … asks the factory designer: «first 80
  *     characters…»" mentions Giulia and Marta (mention rows, MENTIONED follows), `thread.factory_designer_asked` with ids only; the
- *     answer says "We asked Giulia Verdi."; the bell names who asks and the record, never the excerpt; the customer never reads the
- *     note; a repeated Idempotency-Key writes no second note;
+ *     answer says "We asked Giulia Verdi." in the asking person's own language (the seed's P1 buyer reads Italian: "Abbiamo chiesto
+ *     a …"); the bell names who asks and the record, never the excerpt; the customer never reads the note; a repeated
+ *     Idempotency-Key writes no second note;
  *   - held BEFORE the post (409 in words, nothing written): no factory designer named for the customer; nobody of the slot reads that
  *     thread;
  *   - the cap: after DESIGNER_ASKS_PER_DAY asks of a customer in 24 hours the next message is posted WITHOUT the ask, and says so;
@@ -44,6 +45,8 @@ const marta = { id: newId(), name: 'Made-up Marta Bianchi' }
 let sent = ''
 let betaDraft = ''
 let customerA = ''
+// B-CP-079 (end-check fix): the route answers in the person's own language (caller.session.person.locale); A's buyer is the seed's.
+let buyerALocale = ''
 let serial = 0
 
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await h.db.admin.query(sql, values)).rows as T[]
@@ -93,6 +96,9 @@ beforeAll(async () => {
   sent = await requestId('number = $2', ['SEED-RQ-0001'])
   const party = (await admin<{ tradeName: string | null; legalName: string }>('SELECT "tradeName", "legalName" FROM "Party" WHERE id = $1', [world.p1]))[0]!
   customerA = party.tradeName ?? party.legalName
+  // B-CP-079 (end-check fix): the seed's P1 buyer reads Italian (seed portal-auth), so its answers are the portal's Italian words.
+  buyerALocale = (await admin<{ locale: string }>('SELECT locale FROM "User" WHERE id = $1', [world.people.buyer.id]))[0]!.locale
+  expect(buyerALocale).toBe('it')
   const made = await buyerB.send('POST', '/portal/order-requests', {}, { headers: { 'idempotency-key': `cp079-key-${++serial}` } })
   expect(made.status, JSON.stringify(made.body)).toBe(201)
   betaDraft = made.body.request.id
@@ -116,7 +122,7 @@ describe('B-CP-079: "Ask the factory designer" from a portal thread', { timeout:
     const key = `cp079-key-${++serial}`
     const asked = await post(buyerA, sent, long, true, key)
     expect(asked.status, JSON.stringify(asked.body)).toBe(201)
-    expect(asked.body.designerAsk).toEqual({ asked: true, name: giulia.name, words: designerAskWords('ASKED', 'en', giulia.name) })
+    expect(asked.body.designerAsk).toEqual({ asked: true, name: giulia.name, words: designerAskWords('ASKED', buyerALocale, giulia.name) })
     const [note, ...more] = await notesOn(sent)
     expect(more).toEqual([])
     expect(note).toMatchObject({ audience: 'OFFICE', authorKind: 'SYSTEM', authorName: designerAskAuthor(customerA) })
@@ -172,7 +178,7 @@ describe('B-CP-079: "Ask the factory designer" from a portal thread', { timeout:
     })
     const capped = await post(buyerA, sent, 'Made-up: one more question for the designer.')
     expect(capped.status, JSON.stringify(capped.body)).toBe(201)
-    expect(capped.body.designerAsk).toEqual({ asked: false, name: null, words: designerAskWords('CAPPED', 'en') })
+    expect(capped.body.designerAsk).toEqual({ asked: false, name: null, words: designerAskWords('CAPPED', buyerALocale) })
     expect(await notesOn(sent)).toHaveLength(DESIGNER_ASKS_PER_DAY)
     expect(JSON.stringify((await buyerA.get(`/portal/threads/PortalOrderRequest/${sent}`)).body)).toContain('one more question for the designer')
   })

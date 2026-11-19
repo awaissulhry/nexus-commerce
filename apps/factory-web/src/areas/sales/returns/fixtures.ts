@@ -140,7 +140,8 @@ export const designScreen = defineDesignScreen<DesignModel>({
   view: ReturnsDesign,
   cases: [
     { id: 'owner', label: 'Owner: open returns and repairs, the notices, the tiles', model: { role: 'owner', list: listModel('owner') }, note: 'One notice at a time (the most serious), the rest behind "2 more notices". Tiles are named saved filters.' },
-    { id: 'sales', label: 'Sales: opens returns and repairs, sees credit values', model: { role: 'sales', list: listModel('sales') } },
+    // F-CP-148 (follow-up 5): the Sales worker sees no price (Owner O1): credit values are a price holder's.
+    { id: 'sales', label: 'Sales worker: opens returns and repairs; no credit value (shown to people who see prices)', model: { role: 'sales', list: listModel('sales') } },
     { id: 'warehouse', label: 'Warehouse: receives; New return held with its reason; no prices', model: { role: 'warehouse', list: listModel('warehouse') } },
     { id: 'inspector', label: 'Quality inspector: sees, grades; no prices', model: { role: 'inspector', list: listModel('inspector') } },
     { id: 'finance', label: 'Finance: reads both; credit values', model: { role: 'finance', list: listModel('finance') } },

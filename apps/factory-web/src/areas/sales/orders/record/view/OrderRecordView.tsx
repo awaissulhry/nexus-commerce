@@ -38,6 +38,7 @@ import { useRecordFrame, type RecordFrameState } from '../../../../_shared/recor
 import { makeHeldOf } from '../production' // F-OP-102
 import { makeInMenu } from '../../model' // F-OP-102
 import { linesNotInProduction } from '../../model' // F-OP-102
+import { readOnlyOnPage } from '../../model' // F-OP-303 (walk #6)
 import { planningHref } from '../../../../../lib/production/work-order-acts/model' // F-OP-102
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-210
@@ -58,7 +59,7 @@ import { FilesTab } from './FilesTab' // F-SA-237
 import { RequestDoorNoticeBanner, RequestDoorWindow } from '../../../../home/approvals/requests/view/RequestReview'
 import { RequestBandNotices } from './RequestsSection'
 import { bandHealthOf, healthInputOf, readOf } from '../overview/model'
-import { changesBadgeOf, changesDotOf, waitingCardOf, waitingOf } from '../overview/model' // F-OP-117: the Changes count, R-22
+import { changesBadgeOf, changesDotOf, orderWaitingOf } from '../overview/model' // F-OP-117: the Changes count, R-22 (F-OP-301: the ONE call)
 import { createShipmentDoor } from '../shipments/model' // F-OP-121
 // ---- end F-SA-232
 
@@ -199,7 +200,9 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   const attention = bandHealthOf(healthInputOf(order, production?.headline ?? null, production?.dates ?? null))
   // ---- F-OP-117 (R-22): Changes counts the ONE waiting list's rows — the Overview card's own (null before the production read: no
   // number that is not true); its dot when one of them waits on this reader.
-  const waitingCard = production?.headline ? waitingCardOf(waitingOf(production, { requests: model.requests?.value ?? null, approvals: order.openApprovals, recordPayment: model.can.recordPayment, locale }), production, order) : null
+  // F-OP-301 (walk #1): the same call Overview's card and the Changes tab make (orderWaitingOf), so the three agree.
+  const waiting = orderWaitingOf(order, model, locale)
+  const waitingCard = production?.headline && waiting.status === 'ready' ? waiting.card : null
   const changesCount = waitingCard ? changesBadgeOf(waitingCard) : null
   const changesDot = waitingCard ? changesDotOf(waitingCard) : false
   // ---- end F-OP-117
@@ -226,7 +229,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       ) : (
         t(`tab.${tab}`)
       ),
-    count: tab === 'files' ? (model.files?.read?.total ?? null) : tabCountOf(tab, order, { changes: changesCount /* F-OP-117 */ }), // F-SA-237: the files the reader may open
+    count: tab === 'files' ? (model.files?.read?.total ?? null) : tabCountOf(tab, order, { changes: changesCount /* F-OP-117 */, viewInvoices: model.can.viewInvoices /* F-OP-306 */ }), // F-SA-237: the files the reader may open
   }))
   // F-SA-230: a section an old address named (`?tab=margin` → Money #margin) comes into view once its tab is drawn.
   useEffect(() => {
@@ -466,7 +469,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
             />
           )}
           {order.status === 'CLOSED' && <Banner tone="info" title={order.closedAt ? t('record.closed', { date: formatDate(order.closedAt, { locale }) }) : t('record.closedNoDate')} />}
-          {!model.can.manage && !model.can.close && !model.can.recordPayment && !model.can.makeWorkOrders && !isFinal(order) && <Banner tone="info" title={t('record.readOnly')} />}
+          {/* F-OP-303 (walk #6): only for a reader who can change nothing here (shipping, invoices, a quote copy … counted too). */}
+          {readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold }) && !isFinal(order) && <Banner tone="info" title={t('record.readOnly')} />}
         </RecordNotices>
 
         <div className="fw-so-main">

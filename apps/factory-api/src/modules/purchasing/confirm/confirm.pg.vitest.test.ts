@@ -81,14 +81,25 @@ const SESSIONS: Record<string, () => SessionContext> = {
 const wall = (session: string, method: Method, url: string, payload?: unknown) =>
   walls.inject({ method, url, headers: { 'x-test-session': session }, ...(payload === undefined ? {} : { payload: payload as object }) })
 
+// End-check fix (cp-fx3, run 4): this file's office side (the send: command() on core/time serverClock) runs on the system clock,
+// its link side on the harness clock (the office sign-in's, which linkCommand uses), moved 30 s ahead by enrolTotp and then
+// standing still. Once real time passed it (a slow runner), a link answer closed the order's CONFIRM_PO request (B-W2b-174)
+// "before it was made" — the PartnerTask guard's closedAt < createdAt, a 409 refusal/DATABASE_RULE. A supplier always answers after
+// the office sent: before each link request the harness clock is never behind the system's (as in production, one clock).
+const notBehindSystemClock = (): void => {
+  if (h.clock.now().getTime() < Date.now()) h.clock.set(new Date())
+}
+
 /** A request of the supplier's browser: only the link's token, no cookie. */
-const viaLink = (token: string | null, method: 'GET' | 'POST', url: string, payload?: unknown) =>
-  h.app.inject({
+const viaLink = (token: string | null, method: 'GET' | 'POST', url: string, payload?: unknown) => {
+  notBehindSystemClock()
+  return h.app.inject({
     method,
     url,
     headers: { ...(token === null ? {} : { 'x-factory-link': token }), 'user-agent': 'SeedBrowser/1.0', ...(method === 'POST' ? { 'idempotency-key': key('link') } : {}) },
     ...(method === 'POST' ? { payload: (payload ?? {}) as object } : {}),
   })
+}
 const page = async (token: string): Promise<Json> => {
   const answer = await viaLink(token, 'GET', '/link/purchase-order')
   expect(answer.statusCode, answer.body).toBe(200)

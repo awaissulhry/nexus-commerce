@@ -485,6 +485,27 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
       }),
     },
     // ---- end F-CP-154
+    // ---- F-CP-158 (customer page plan C5; 12 §2: a draft with only logos, or only a measurement sheet, is saved and shared): SCR-185-draft's
+    // last states — every other state is above (empty, typed, problems, prices moved, no prices, stale, files, every kind, sent, closed).
+    {
+      id: 'cp158-logos-only',
+      label: 'A draft with only logos: saved and shared with the team, read by the factory; Send waits for a line',
+      model: page(() => ({ record: draftRecord({ lines: [], request: { files: { logos: FILES.logos, references: [], sheets: [] }, uploads: { open: true, words: null }, problems: [{ code: 'NO_LINES', lineId: null, size: null }] } }) })),
+      note: 'The checklist counts the logos; the factory reads the draft from its first save (K9) and may answer in its conversation before anything is sent.',
+    },
+    {
+      id: 'cp158-sheet-only',
+      label: 'A draft with only a measurement sheet: saved and shared; the lines come next; Send waits for a line',
+      model: page(() => ({ record: draftRecord({ lines: [], request: { files: { logos: [], references: [], sheets: FILES.sheets }, uploads: { open: true, words: null }, problems: [{ code: 'NO_LINES', lineId: null, size: null }] } }) })),
+      note: 'A measurement sheet stays body data: named to the team and to the office people who may read measurements only.',
+    },
+    {
+      id: 'cp158-sent-designer',
+      label: 'Sent, read by the brand’s Designer: the end state without a price',
+      model: page(() => ({ record: draftRecord({ seesPrices: false, request: { status: 'SENT', may: { send: false, withdraw: false, discard: false } } }), sent: { customerRef: 'BA-PO-4521', lines: 2, pieces: 26, net: null, currency: 'EUR', seesPrices: false }, mayOrder: false, seesOrders: false }), 'sent'),
+      note: 'M-CP-2: no net and no price; the factory answers in the same conversation.',
+    },
+    // ---- end F-CP-158
     { id: 'cp152-start-designer', label: 'The draft start, read by the brand’s Designer: Reorder held, no words door', model: page(() => ({ record: null, start: { state: 'ready', drafts: DRAFTS, choosing: null, held: null }, mayOrder: false, seesOrders: false }), 'start'), note: 'A Designer keeps drafts but reads no orders: “Reorder a past order” says “Your access does not show orders”; the request like an e-mail is not theirs (no link). The team’s drafts to continue.' },
     // ---- end F-CP-152
     { id: 'reorder', label: 'Reorder: the past orders', model: page(() => ({ way: 'reorder', reorder: reorderModel() })), note: 'Their PO first, ours second (RefPair), date, lines, pieces. Enter or a click opens one.' },
