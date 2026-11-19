@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { samplePdf } from '../../../_shared/document-send/sample-pdf'
 import { at, canOf, DDT_LIVE, documents, inShell, labelled, ownVan, PACKING_LISTS, PDF, PREFIX, TODAY, type Role } from '../_demo/fixtures'
+import { sharedShipment } from '../_demo/fixtures' // F-OP-131 (order page N6)
 import { packDocuments } from '../daily-model'
 import type { PackModel } from './pack-model'
 import { ShipmentPackView } from './view/ShipmentPackView'
@@ -57,6 +58,8 @@ export const designScreen = defineDesignScreen<PackCase>({
   cases: [
     { id: 'ready', label: 'Warehouse: the sheet, then the DDT, the packing list, the DoC and the user information', model: page('warehouse'), note: 'Print sends the sheet and every ticked document at once; untick one to leave it out.' },
     { id: 'some', label: 'Only the DDT and the packing list ticked', model: page('warehouse', { included: DOCUMENTS.filter((entry) => entry.kind === 'DDT' || entry.kind === 'PACKING_LIST').map((entry) => entry.key) }) },
+    // F-OP-131 (order page N6, R-5): a shipment of two orders of one customer (after the switch, B-OP-047).
+    { id: 'shared', label: 'Two orders of one customer: the sheet names each order and its PO', model: page('warehouse', { shipment: { status: 'ready', value: sharedShipment('PACKED') } }) },
     { id: 'reading', label: 'Reading the shipment', model: page('warehouse', { shipment: { status: 'loading' }, documents: null, files: {}, readAt: null }) },
     { id: 'reading-files', label: 'The sheet is there, the documents still reading (Print held)', model: page('warehouse', { files: {} }) },
     { id: 'file-failed', label: 'The DoC could not be read (said beside it; the rest prints)', model: page('warehouse', { files: { ...FILES, [DOCUMENTS[2]!.key]: { data: null, problem: 'problem.read.unavailable' } } }) },

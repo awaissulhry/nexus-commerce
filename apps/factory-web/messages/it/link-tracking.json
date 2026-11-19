@@ -79,7 +79,9 @@
   "where": {
     "title": "Dove si trova",
     "sub": "Le ultime notizie della vostra spedizione, nella vostra lingua.",
-    "steps": "Dove si trova la spedizione {number}"
+    "steps": "Dove si trova la spedizione {number}",
+    "shared_one": "Questa spedizione porta il vostro ordine {order} e {count} pezzo di altri ordini.",
+    "shared_other": "Questa spedizione porta il vostro ordine {order} e {count} pezzi di altri ordini."
   },
   "parcels": {
     "label_one": "{count} collo",

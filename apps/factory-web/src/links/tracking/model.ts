@@ -89,6 +89,13 @@ export const initialTracking = (search: SearchModel | null): TrackingViewModel =
 /** The page's title: the customer's own order reference first, then its own order number ("#12", fix-portal-numbers-1), then the shipment. */
 export const orderLabel = (page: TrackingPage): string => page.order.customerRef ?? page.order.number ?? page.shipment.number
 
+/**
+ * F-OP-133 (order page N6, R-5 + R-18): a shipment that also carries garments of the customer's other orders names the order
+ * the page is for and "and N pieces of other orders" — a count only, never another order's number or PO (the link may reach
+ * a third party, the customer's own shop). Null: it carries this order alone.
+ */
+export const sharedWith = (page: TrackingPage): { readonly order: string; readonly count: number } | null => (page.order.otherPieces > 0 ? { order: orderLabel(page), count: page.order.otherPieces } : null)
+
 /** The DS tracker: every step reached is done, the furthest reached is "now" (B-W2b-191's rule). */
 export function trackerSteps(page: TrackingPage, label: (code: TrackingPage['steps'][number]['code']) => string, at: (iso: string) => string): MilestoneStep[] {
   return page.steps.map((step) => ({

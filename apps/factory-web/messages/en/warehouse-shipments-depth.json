@@ -944,5 +944,26 @@
       "busy": "Wait: the mail is being sent.",
       "pickOne": "Pick at least one contact."
     }
+  },
+  "shipOrders": {
+    "of": "Orders on this shipment",
+    "add": "Add an order's garments…",
+    "addTitle": "Add an order of {customer}",
+    "addHint": "Only {customer}'s open orders that go to the same address and wait at this site join this shipment.",
+    "pick": "Which order",
+    "reading": "Reading {customer}'s open orders…",
+    "none": "{customer} has no other open order.",
+    "later": "Several orders in one shipment come with the next update.",
+    "cannotJoin": "Cannot join this shipment",
+    "cells": "Garments of {order}",
+    "unread": "Order not read yet",
+    "takeOff": "Take its garments off",
+    "takeOffTitle": "Take {order}'s garments off {number}",
+    "takeOffWhat_one": "{count} garment goes back to what {order} can still ship, and {order} leaves this shipment.",
+    "takeOffWhat_other": "{count} garments go back to what {order} can still ship, and {order} leaves this shipment.",
+    "takeOffGo": "Take them off",
+    "gone": "None of its garments is on this shipment any more.",
+    "progressTitle": "{order} on this shipment",
+    "packField": "Orders"
   }
 }

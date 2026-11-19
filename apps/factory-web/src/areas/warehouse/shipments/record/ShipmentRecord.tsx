@@ -63,11 +63,15 @@ import {
   type SentLinks,
   type Shipment,
   type Tracking,
+  // F-OP-130 (order page N6)
+  orderCandidates,
+  type OrderCandidates,
 } from '../api'
 import { openPresigned, presignedBytes } from '../files'
 import { useCoalesced, useLive } from '../hooks'
 import { olderRead } from '../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 import { abilitiesOf, ddtFormFor, ddtRequestOf, hasLeft, knownIds, liveTouches, readProblem, tabOf, writeProblem, type DdtForm, type RecordTab } from '../model'
+import { lineGroups, shipmentOrders } from '../model' // F-OP-130 (order page N6)
 import { PART_LOADING, type Loaded, type Part, type PdfPart, type RecordDialog, type ShipmentRecordModel } from './record-model'
 import { ShipmentRecordView } from './view/ShipmentRecordView'
 // B-W2b-170
@@ -119,8 +123,12 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
   const [labels, setLabels] = useState<Part<Labels> | null>(can.pack ? PART_LOADING : null)
   const [tracking, setTracking] = useState<Part<Tracking> | null>(null)
   const [documents, setDocuments] = useState<Part<Documents>>(PART_LOADING)
-  const [ready, setReady] = useState<Part<ReadyOrder | null> | null>(null)
-  const [backorder, setBackorder] = useState<Part<Backorder>>(PART_LOADING)
+  const [ready, setReady] = useState<Part<ReadyOrder[]> | null>(null)
+  const [backorder, setBackorder] = useState<Part<Backorder[]>>(PART_LOADING)
+  // F-OP-130 (order page N6): the orders that may join this DRAFT, and the one chosen with what it can still put on it.
+  const [candidates, setCandidates] = useState<Part<OrderCandidates> | null>(null)
+  const [picked, setPicked] = useState<ShipmentRecordModel['picked']>(null)
+  const pickedRef = useRef<string | null>(null)
   const [packingLists, setPackingLists] = useState<Part<PackingListVersion[]>>(PART_LOADING)
   const [evidence, setEvidence] = useState<Part<Evidence>>(PART_LOADING)
   const [voided, setVoided] = useState<Voided | null>(null)
@@ -235,22 +243,49 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
     [api],
   )
 
+  // F-OP-130 (order page N6, R-5): what EVERY order it carries can still put on it (its lines' orders, the first first): one read
+  // per order — one, while several orders in one shipment are held off (MULTI_ORDER_OFF).
   const loadReady = useCallback(
     (value: Shipment) => {
       if (value.status !== 'DRAFT' || !can.manage) return setReady(null)
       setReady((known) => known ?? PART_LOADING)
-      readyToShip(api, { salesOrderId: value.salesOrderId })
-        .then((orders) => setReady(part(orders.find((order) => order.salesOrderId === value.salesOrderId) ?? null)))
+      Promise.all(shipmentOrders(value).map((order) => readyToShip(api, { salesOrderId: order.id }).then((orders) => orders.find((entry) => entry.salesOrderId === order.id) ?? null)))
+        .then((orders) => setReady(part(orders.filter((order): order is ReadyOrder => order !== null))))
         .catch((error: unknown) => setReady({ value: null, problem: readProblem(error) }))
     },
     [api, can.manage],
   )
 
+  // F-OP-130 (N6, R-5): each carried order's lines on this shipment and its backorder (they also say whose each line is).
   const loadBackorder = useCallback(
     (value: Shipment) => {
-      orderBackorder(api, value.salesOrderId, value.id)
-        .then((answer) => setBackorder(part(answer)))
+      Promise.all(shipmentOrders(value).map((order) => orderBackorder(api, order.id, value.id)))
+        .then((answers) => setBackorder(part(answers)))
         .catch((error: unknown) => setBackorder({ value: null, problem: readProblem(error) }))
+    },
+    [api],
+  )
+
+  // F-OP-130 (N6): "Add an order's garments…" reads the customer's other open orders with their verdicts when it opens.
+  const loadCandidates = useCallback(
+    (value: Shipment) => {
+      setCandidates(PART_LOADING)
+      orderCandidates(api, value.id)
+        .then((answer) => setCandidates(part(answer)))
+        .catch((error: unknown) => setCandidates({ value: null, problem: readProblem(error) }))
+    },
+    [api],
+  )
+
+  // F-OP-130: the order chosen to join, and what it can still put on this DRAFT (a later choice wins over an earlier answer).
+  const pickOrder = useCallback(
+    (salesOrderId: string | null) => {
+      pickedRef.current = salesOrderId
+      if (!salesOrderId) return setPicked(null)
+      setPicked({ salesOrderId, ready: PART_LOADING })
+      readyToShip(api, { salesOrderId })
+        .then((orders) => pickedRef.current === salesOrderId && setPicked({ salesOrderId, ready: part(orders.find((order) => order.salesOrderId === salesOrderId) ?? null) }))
+        .catch((error: unknown) => pickedRef.current === salesOrderId && setPicked({ salesOrderId, ready: { value: null, problem: readProblem(error) } }))
     },
     [api],
   )
@@ -412,6 +447,8 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
     packingLists,
     evidence,
     voided,
+    candidates, // F-OP-130
+    picked, // F-OP-130
   }
 
   // B-W2b-410: the parts in depth, each its own container; the cartons card lends W1's carton dialogs and writes.
@@ -473,6 +510,7 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
           if (which === 'backorder') loadBackorder(value)
           if (which === 'packingLists') loadPackingLists(value)
           if (which === 'evidence') loadEvidence(value)
+          if (which === 'candidates') loadCandidates(value) // F-OP-130
         },
         onReload: () => void load(),
         onDismissNotice: () => setNotice(null),
@@ -483,13 +521,41 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
           setSent(null)
           setVoided(null)
           if (next?.kind === 'issueDdt' && value && !ddtForm) setDdtForm(ddtFormFor(value, preview?.value ?? null))
+          // F-OP-130 (N6): "Add an order's garments…" opens on the list of the customer's orders that may join.
+          if (next?.kind === 'addOrder' && value) {
+            pickOrder(null)
+            loadCandidates(value)
+          }
         },
         // Lines & cartons
         onPack: () => void write(async () => void (await markPacked(api, shipmentId, version())), 'notice.packed'),
         onUnpack: () => void write(async () => void (await unpack(api, shipmentId, version())), 'notice.unpacked'),
         onLineQuantity: (lineId, quantity) => void write(() => changeLine(api, shipmentId, lineId, version(), quantity), null),
         onRemoveLine: (lineId) => void write(() => removeLine(api, shipmentId, lineId, version()), 'notice.lineRemoved'),
+        // F-OP-130 (N6): the garments of another order of the customer go on through the same lines route (the API refuses them
+        // in words while several orders in one shipment are held off); then every carried order's parts are read again.
         onAddLines: (lines) => void write(() => addLines(api, shipmentId, version(), lines), 'notice.linesAdded'),
+        onPickOrder: (salesOrderId) => pickOrder(salesOrderId),
+        // F-OP-130 (N6): an order other than the first leaves with its last line — each of its lines removed in turn, each with the
+        // version the one before answered (a refusal stops there and says so; what was removed stays removed).
+        onTakeOff: (salesOrderId) => {
+          const ids = value ? (lineGroups(value, backorder.value).find((group) => group.order?.id === salesOrderId)?.lines ?? []).map((line) => line.id) : []
+          if (ids.length === 0 || salesOrderId === value?.salesOrderId) return
+          void write(async () => {
+            let next = null as Shipment | null
+            try {
+              for (const lineId of ids) next = await removeLine(api, shipmentId, lineId, next?.version ?? version())
+            } catch (error) {
+              // What was removed stays removed: the page shows the shipment as the last removal answered, then the refusal.
+              if (next) {
+                setValue(next)
+                loadParts(next)
+              }
+              throw error
+            }
+            return next ?? undefined
+          }, null)
+        },
         onPlaceLine: (lineId, parcelId) => void write(async () => void (await placeLine(api, shipmentId, lineId, version(), parcelId)), null),
         onSaveParcel: (parcelId, measures) => {
           const clean = (text: string) => (text.trim() === '' ? null : text.trim().replace(',', '.'))

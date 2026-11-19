@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Download, Hand, MoreHorizontal, PackagePlus, Printer, Search, Timer, Truck } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
@@ -15,6 +15,7 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import type { ShipmentRow } from '../../api'
 import { money, printDdtsHeld, printDdtsPlan } from '../../daily-model'
 import { carrierWords, kilos, placeOf, ROW_VIEWS, STATUS_TONE, TILES, waitsForHandOver, needsLabels, type CutOffCard, type RowView } from '../../model'
+import { rowOrders } from '../../model' // F-OP-130 (order page N6)
 import type { ShipmentsListActions, ShipmentsListModel } from '../list-model'
 import { NewShipmentDialog } from './NewShipmentDialog'
 import { PrintDdtsDialog } from './PrintDdtsDialog'
@@ -156,7 +157,23 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
       data ? (
         <span className="fw-sh-cell">
           <span className="fw-sh-ellipsis">{data.partyName || '—'}</span>
-          {model.can.viewOrders ? (
+          {/* F-OP-130 (order page N6, R-5): a shipment of several orders names each of them (each a link). */}
+          {rowOrders(data).length > 1 ? (
+            <span className="fw-sh-cell-sub fw-sh-ellipsis">
+              {rowOrders(data).map((order, index) => (
+                <Fragment key={order.id}>
+                  {index > 0 ? ', ' : null}
+                  {model.can.viewOrders ? (
+                    <Link className="fw-sh-link" href={`${model.prefix}/sales/orders/${order.id}`}>
+                      {order.number}
+                    </Link>
+                  ) : (
+                    order.number
+                  )}
+                </Fragment>
+              ))}
+            </span>
+          ) : model.can.viewOrders ? (
             <Link className="fw-sh-link fw-sh-cell-sub" href={`${model.prefix}/sales/orders/${data.salesOrderId}`}>
               {data.salesOrderNumber}
             </Link>

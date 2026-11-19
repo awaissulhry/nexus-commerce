@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { CircleAlert, CircleCheck, CircleMinus, FileText, PackagePlus, Plus, Scale, Trash2, TriangleAlert } from 'lucide-react'
+import { CircleAlert, CircleCheck, CircleMinus, FileText, ListMinus, ListPlus, PackagePlus, Plus, Scale, Trash2, TriangleAlert } from 'lucide-react'
 import { Card, EmptyState, SummaryTable } from '@nexus/ui/components'
 import { Button, NumberStepper, Pill, Select, Tag } from '@nexus/ui/primitives'
 import { formatDateTime } from '../../../../../lib/i18n/format'
@@ -11,6 +11,9 @@ import type { Parcel, Shipment, ShipmentLine } from '../../api'
 import { kilos, packingNeeds, type ReadyCheck } from '../../model'
 import type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model'
 import { OrderProgressCard } from './OrderProgressCard'
+// F-OP-130 (order page N6, R-5): the lines grouped by order and PO; another order of the customer joins a DRAFT, or leaves it.
+import { lineGroups, offersTakeOff, orderWords, shipmentOrders, takeOffHeld } from '../../model'
+import { DEPTH_NS } from '../../queue/shared/depth'
 
 const CHECK_ICON = { ok: CircleCheck, open: CircleAlert, warn: TriangleAlert, notNeeded: CircleMinus } as const
 
@@ -23,9 +26,15 @@ const CHECK_ICON = { ok: CircleCheck, open: CircleAlert, warn: TriangleAlert, no
  * this shipment as size grids and what stays on backorder.
  */
 // B-W2b-410: `depth` — the cartons as packed (contents, serials, carton master; in place of W1's card), the holds in Ready to ship.
+// F-OP-130 (order page N6, R-5): a shipment of several orders lists its lines under each order and PO ("SO-0150 · Customer PO
+// 4471"), each order other than the first with "Take its garments off" on a DRAFT; "Add an order's garments…" beside Add garments.
 export function LinesTab({ shipment, checks, model, actions, depth }: { shipment: Shipment; checks: ReadyCheck[]; model: ShipmentRecordModel; actions?: ShipmentRecordActions; depth?: { cartons?: ReactNode; holds?: ReactNode; held?: boolean } }) {
   const t = useT('shipments')
+  const d = useT(DEPTH_NS) // F-OP-130
   const locale = useLocale()
+  const groups = lineGroups(shipment, model.backorder.value) // F-OP-130
+  const several = shipmentOrders(shipment).length > 1 // F-OP-130: a heading per order only when it carries more than one
+  const po = (ref: string) => t('record.customerRef', { ref })
   const draft = shipment.status === 'DRAFT'
   const editLines = draft && model.can.manage
   const editCartons = draft && model.can.pack
@@ -51,16 +60,41 @@ export function LinesTab({ shipment, checks, model, actions, depth }: { shipment
                   <Plus size={14} aria-hidden /> {t('lines.add')}
                 </Button>
               )}
+              {/* F-OP-130 (N6): another open order of the customer; its rows say why one cannot join (held off until the switch). */}
+              {editLines && (
+                <Button size="sm" heldReason={model.busy ? t('held.busy') : null} onClick={() => actions?.onDialog?.({ kind: 'addOrder' })}>
+                  <ListPlus size={14} aria-hidden /> {d('shipOrders.add')}
+                </Button>
+              )}
             </span>
           </div>
           {!draft && hasPackingState(shipment) && <p className="fw-sh-hint">{t('lines.locked')}</p>}
           {shipment.lines.length === 0 ? (
             <EmptyState title={t('lines.empty.title')} description={editLines ? t('lines.empty.body') : t('lines.empty.readOnly')} />
           ) : (
+            groups.map((group) => {
+              // F-OP-130 (N6): one order: the table as before; several: each order's lines under its number and PO.
+              const title = group.order ? orderWords(group.order, po) : d('shipOrders.unread')
+              const offHeld = takeOffHeld(group)
+              return (
+                <OrderGroup key={group.order?.id ?? 'unread'} several={several} label={title}>
+                  {several && (
+                    <div className="fw-sh-card-head">
+                      <h3 className="fw-sh-h3">{title}</h3>
+                      <span className="fw-sh-inline">
+                        <span className="fw-sh-hint">{t('lines.count', { count: group.lines.reduce((sum, line) => sum + line.quantity, 0), lines: group.lines.length })}</span>
+                        {editLines && offersTakeOff(shipment, group) && (
+                          <Button size="sm" variant="quiet" heldReason={model.busy ? t('held.busy') : offHeld ? t(offHeld.key, offHeld.params) : null} onClick={() => actions?.onDialog?.({ kind: 'takeOff', salesOrderId: group.order!.id })}>
+                            <ListMinus size={14} aria-hidden /> {d('shipOrders.takeOff')}
+                          </Button>
+                        )}
+                      </span>
+                    </div>
+                  )}
             <SummaryTable
-              label={t('lines.title')}
+              label={several ? `${t('lines.title')} · ${title}` : t('lines.title')}
               columns={[t('lines.col.style'), t('lines.col.size'), t('lines.col.batch'), t('lines.col.quantity'), t('lines.col.carton'), ...(editLines ? [t('lines.col.actions')] : [])]}
-              rows={shipment.lines.map((line) => ({
+              rows={group.lines.map((line) => ({
                 id: line.id,
                 cells: [
                   <span key="s" className="fw-sh-cell">
@@ -122,6 +156,9 @@ export function LinesTab({ shipment, checks, model, actions, depth }: { shipment
               stackOnPhone
               align={['left', 'left', 'left', 'right', 'left', ...(editLines ? (['right'] as const) : [])]}
             />
+                </OrderGroup>
+              )
+            })
           )}
           {shipment.lines.some((line: ShipmentLine) => line.serialTracked && line.serials.length > 0) && (
             <details className="fw-sh-details">
@@ -253,6 +290,17 @@ export function LinesTab({ shipment, checks, model, actions, depth }: { shipment
         </Card>
       </aside>
     </div>
+  )
+}
+
+/** F-OP-130 (N6): one order's lines — a section named by the order when the shipment carries several, else the table alone (as before). */
+function OrderGroup({ several, label, children }: { several: boolean; label: string; children: ReactNode }) {
+  return several ? (
+    <section className="fw-sh-stack" aria-label={label}>
+      {children}
+    </section>
+  ) : (
+    <>{children}</>
   )
 }
 
