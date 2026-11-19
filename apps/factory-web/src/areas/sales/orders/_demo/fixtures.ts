@@ -529,10 +529,11 @@ export const AMEND_PREVIEW: AmendPreview = {
     grossAmountAfter: 1090680,
     reacceptanceNeeded: true,
   },
+  workOrders: null, // F-OP-106: no extra pieces, no work order yet (a confirmed order)
 }
 
 /** The same review refused by the API: a size of a line under what its work orders make (said by place, in words). */
-export const AMEND_PREVIEW_PROBLEMS: AmendPreview = { ok: false, revision: 1, version: 4, problems: [{ path: 'body/lines/0/sizes', message: 'x' }, { path: 'body/lines', message: 'x' }], diff: null }
+export const AMEND_PREVIEW_PROBLEMS: AmendPreview = { ok: false, revision: 1, version: 4, problems: [{ path: 'body/lines/0/sizes', message: 'x' }, { path: 'body/lines', message: 'x' }], diff: null, workOrders: null }
 
 export const SCHEDULE: Schedule = {
   orderId: ORDER_ID,
@@ -573,6 +574,8 @@ export const CANCEL_CHECK: CancelCheck = {
     ],
   },
   leatherCut: [{ workOrderId: WO_21.id, number: WO_21.number, hides: 3, area: '61.5' }],
+  // F-OP-107 (B-OP-013): no extra pieces, no plan read (the design cases add their own).
+  workOrders: null,
 }
 
 /** An order the cancel stops at: a draft work order, a shipment being packed, an invoice issued. */

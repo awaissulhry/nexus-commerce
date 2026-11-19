@@ -40,6 +40,22 @@
     "text": "{who} {verb}",
     "status": "{from} → {to}"
   },
+  "steps": {
+    "text_one": "{count} step by {who}",
+    "text_other": "{count} steps by {who}",
+    "many": {
+      "addedTask_one": "{who} added {count} task",
+      "addedTask_other": "{who} added {count} tasks",
+      "completedTask_one": "{who} completed {count} task",
+      "completedTask_other": "{who} completed {count} tasks",
+      "reopenedTask_one": "{who} reopened {count} task",
+      "reopenedTask_other": "{who} reopened {count} tasks",
+      "assignedTask_one": "{who} assigned {count} task",
+      "assignedTask_other": "{who} assigned {count} tasks",
+      "uploaded_one": "{who} added {count} file",
+      "uploaded_other": "{who} added {count} files"
+    }
+  },
   "changes": {
     "text_one": "{count} change by {who}",
     "text_other": "{count} changes by {who}",
@@ -67,6 +83,10 @@
     "statusChanged": "changed the status",
     "sent": "sent it",
     "uploaded": "added a file",
+    "addedTask": "added a task",
+    "completedTask": "completed a task",
+    "reopenedTask": "reopened a task",
+    "assignedTask": "assigned a task",
     "shared": "changed who sees a file",
     "retentionChanged": "changed how long a file is kept",
     "assigned": "assigned it",

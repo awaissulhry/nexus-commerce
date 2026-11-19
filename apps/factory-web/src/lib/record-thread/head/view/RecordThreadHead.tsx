@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { BadgeCheck, ChevronDown, Columns2, Filter, Handshake, ListChecks, Lock, MoreHorizontal, Users, WifiOff, X } from 'lucide-react'
+import { BadgeCheck, ChevronDown, Filter, Handshake, ListChecks, Lock, MoreHorizontal, Users, WifiOff, X } from 'lucide-react'
 import { Menu, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Pill, Tooltip } from '@nexus/ui/primitives'
 import { formatDate, formatTime } from '../../../i18n/format'
@@ -9,7 +9,8 @@ import { useLocale, useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { CountPopover } from '../../popups/view/CountPopover'
 import type { CountKind } from '../../popups/model'
-import { DOCK_WIDTHS, menuRows, newWords, waitingWords, type DockWidth, type HeadDoor, type HeadModel, type ThreadView } from '../model'
+import { menuRows, newWords, waitingWords, type DockWidth, type HeadDoor, type HeadModel, type ThreadView } from '../model'
+import { WidthMenu } from './WidthMenu' // F-OP-204: the one width menu (All of <Customer>'s Head draws the same part)
 // B-TH-229: the owner's tile (the factory web's Avatar, B-TH-298).
 import { Avatar } from '../../parts/Avatar'
 // B-TH-251: "In project …" (a link to the project's page).
@@ -90,12 +91,6 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
 
   const viewWord = (view: ThreadView) => (view === 'shared' ? t(`view.shared.${role}`) : t(`view.${view}`))
   const viewItems: MenuItemDef[] = model.views.map((view) => ({ id: view, label: viewWord(view), checked: view === model.view, onSelect: () => actions?.onView?.(view) }))
-  const widthItems: MenuItemDef[] = [
-    ...DOCK_WIDTHS.map((width) => ({ id: width, label: t(`width.${width}`), checked: width === model.width, onSelect: () => actions?.onWidth?.(width) })),
-    { id: 'sep', separator: true },
-    { id: 'hide', label: t('width.hide'), onSelect: () => actions?.onWidth?.('hide') },
-    { id: 'reset', label: t('width.reset'), onSelect: () => actions?.onWidth?.('reset') },
-  ]
   const rows = menuRows(model, folded || compact)
   const moreItems: MenuItemDef[] = []
   let section: string | null = null
@@ -280,9 +275,7 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
           triggerProps={{ className: 'nds-btn sm', 'aria-label': t('view.menu') }}
         />
       )}
-      {!compact && model.width !== null && (
-        <Menu align="right" className="fw-rth-menu" label={<Columns2 size={16} aria-hidden />} items={widthItems} triggerProps={{ className: 'nds-btn sm icon', 'aria-label': t('width.label') }} />
-      )}
+      {!compact && <WidthMenu width={model.width} onWidth={actions?.onWidth} /* F-OP-204 */ />}
       <Menu align="right" className="fw-rth-menu" label={<MoreHorizontal size={16} aria-hidden />} items={moreItems} triggerProps={{ className: 'nds-btn sm icon', 'aria-label': t('more.label') }} />
     </div>
   )

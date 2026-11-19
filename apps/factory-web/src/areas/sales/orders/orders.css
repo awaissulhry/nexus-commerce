@@ -560,6 +560,29 @@ fieldset.fw-so-choices {
   min-width: 0;
 }
 
+/* ---- F-OP-106: the "What changes" strip — its facts and "Applies at once" on lines of their own under the bar's first line (they wrap
+   at 375 px; Apply stays on the first line). A work order that waits for production reads in the warning text tone. ---- */
+.fw-so-strip-line {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-12, var(--nds-space-10));
+  margin: 0;
+  min-width: 0;
+}
+
+.fw-so-strip-line > span + span::before {
+  content: '·';
+  margin-inline-end: var(--nds-space-8);
+  color: var(--nds-text-muted);
+}
+
+.fw-so-strip-waits {
+  color: var(--nds-warning-text);
+}
+/* ---- end F-OP-106 ---- */
+
 .fw-so-composer {
   display: flex;
   flex-direction: column;

@@ -28,6 +28,8 @@ import { testRedis, type TestRedis } from '../../../platform/outbox/testing'
 import { createSecretsService } from '../../../platform/secrets/envelope'
 import { localKeyProvider } from '../../../platform/secrets/local'
 import { findMarkers, markersOf, productionTwoBrands, twoBrandIds, twoBrandSessions, type Marker, type ProductionTwoBrands } from '../../production/testing/two-brands'
+// B-OP-050: the small preview's key, as the strip job derives it.
+import { smallKeyOf } from '../../../platform/files/thumbs/small'
 
 /**
  * B-SA-036 — every file of one sales order for the office (`GET /sales/orders/:orderId/files`, `POST …/files/:fileId/open`): Sales
@@ -264,6 +266,158 @@ describe('GET /sales/orders/:orderId/files — every file of the order by where 
     await notFound('office.all', 'POST', openOf(w.a.salesOrderId, files.copyOnOtherOrder), 'File not found.')
   })
 })
+
+// ── B-OP-050 (order page plan N7, R-14): the cards' previews in one call, and who added each file ──
+describe('B-OP-050: POST …/files/previews — small pictures and PDF links in one walled call; who added each file', { timeout: 60_000 }, () => {
+  const previewsOf = (orderId: string) => `/sales/orders/${orderId}/files/previews`
+  const presigns = async (): Promise<number> => Number((await admin<{ n: string }>(`SELECT count(*) AS n FROM "IntegrationCall" WHERE operation = 'files.presign_download'`))[0]!.n)
+  const presignsOfKey = async (key: string): Promise<number> => Number((await admin<{ n: string }>(`SELECT count(*) AS n FROM "IntegrationCall" WHERE operation = 'files.presign_download' AND "requestSummary"->>'key' = $1`, [key]))[0]!.n)
+  const officePerson = newId()
+  const worker = newId()
+  let made = 0
+  /** A made-up file of Alpha's order, as the office's runtime login writes it (the database's file rules apply). */
+  async function cardFile(name: string, options: { readonly contentType?: string; readonly kind?: 'DOCUMENT' | 'PHOTO'; readonly sizeBytes?: number; readonly category?: 'MEASUREMENTS'; readonly visibility?: ('OFFICE' | 'FLOOR' | 'PARTNER')[]; readonly createdById?: string } = {}): Promise<{ id: string; storageKey: string }> {
+    const id = newId()
+    const at = new Date(Date.now() - 30 * 60_000 + ++made * 1000)
+    const visibility = options.visibility ?? ['OFFICE']
+    await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId: newId() }, (client) =>
+      client.storedFile.create({
+        data: seedFile(ids.tenantId, {
+          id,
+          companyId: companyA,
+          recordType: 'SalesOrder',
+          recordId: w.a.salesOrderId,
+          kind: options.kind ?? 'DOCUMENT',
+          ...(options.category ? { category: options.category } : {}),
+          originalName: name,
+          contentType: options.contentType ?? 'application/pdf',
+          sizeBytes: options.sizeBytes ?? 2048,
+          storeAccountId: seedUuid(ns, 'files:account:r2'),
+          storageKey: `t/${ids.tenantId}/c/${companyA}/2026/${newId()}`,
+          status: 'AVAILABLE',
+          availableAt: at,
+          visibility,
+          ...(visibility.includes('FLOOR') ? { floorSiteId: seedUuid(ns, 'site:A1') } : {}),
+          ...(visibility.includes('PARTNER') ? { partyId: ids.a } : {}),
+          ...(options.createdById ? { createdById: options.createdById } : {}),
+          createdAt: at,
+          updatedAt: at,
+        }),
+        select: { id: true },
+      }),
+    )
+    const [row] = await admin<{ storageKey: string }>('SELECT "storageKey" FROM "StoredFile" WHERE id = $1', [id])
+    return { id, storageKey: row!.storageKey }
+  }
+  /** The strip job's result on a picture, as it records it (its small preview's key is derived from the stripped copy's). */
+  async function withSmall(file: { readonly id: string; readonly storageKey: string }): Promise<string> {
+    const thumbnailKey = file.storageKey.replace(/[0-9a-f-]{36}$/, newId())
+    await admin(`UPDATE "StoredFile" SET "thumbnailKey" = $2, "exifStrippedAt" = now() WHERE id = $1`, [file.id, thumbnailKey])
+    return smallKeyOf(thumbnailKey)
+  }
+  const audited = (fileId: string, audience: 'PARTNER' | 'FLOOR', actorId: string) =>
+    admin(`INSERT INTO "AuditLog" (id, "tenantId", "companyId", "siteId", "partyId", audience, "actorId", action, "recordType", "recordId", "requestId") VALUES ($1, $2, $3, $4, $5, $6::"AuditAudience", $7, $8, 'StoredFile', $9, $10)`, [
+      newId(),
+      ids.tenantId,
+      companyA,
+      audience === 'FLOOR' ? seedUuid(ns, 'site:A1') : null,
+      audience === 'PARTNER' ? ids.a : null,
+      audience,
+      actorId,
+      audience === 'PARTNER' ? 'portal.attachFile' : 'production.floorPhoto',
+      fileId,
+      newId(),
+    ])
+  const cards = { picture: { id: '', storageKey: '' }, notYet: { id: '', storageKey: '' }, bigPdf: { id: '', storageKey: '' }, sheet: { id: '', storageKey: '' }, byPerson: { id: '', storageKey: '' }, byFloor: { id: '', storageKey: '' }, byCustomer: { id: '', storageKey: '' } }
+  let smallKey = ''
+
+  beforeAll(async () => {
+    await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, 'otto.files@seed-a.example', 'Otto Files', 'ACTIVE')`, [officePerson, ids.tenantId])
+    cards.picture = await cardFile('T-OP050 sleeve photo.jpg', { kind: 'PHOTO', contentType: 'image/jpeg' })
+    smallKey = await withSmall(cards.picture)
+    cards.notYet = await cardFile('T-OP050 collar photo.jpg', { kind: 'PHOTO', contentType: 'image/jpeg' })
+    cards.bigPdf = await cardFile('T-OP050 tech pack.pdf', { sizeBytes: 4 * 1024 * 1024 })
+    cards.sheet = await cardFile('T-OP050 sizes.csv', { contentType: 'text/csv' })
+    cards.byPerson = await cardFile('T-OP050 by Otto.pdf', { createdById: officePerson })
+    cards.byFloor = await cardFile('T-OP050 floor photo.jpg', { kind: 'PHOTO', contentType: 'image/jpeg', visibility: ['OFFICE', 'FLOOR'] })
+    await audited(cards.byFloor.id, 'FLOOR', worker)
+    cards.byCustomer = await cardFile('T-OP050 from the customer.pdf', { visibility: ['OFFICE', 'PARTNER'] })
+    await audited(cards.byCustomer.id, 'PARTNER', newId())
+  })
+
+  it('in the order asked: a picture\'s small preview (never the original), a PDF\'s inline link (≤ 3 MiB), body data LOCKED, the rest by kind; an id not in the read is absent', async () => {
+    const before = await presigns()
+    const asked = [cards.picture.id, cards.notYet.id, files.shared, cards.bigPdf.id, files.measure, cards.sheet.id, newId(), files.copyOnOtherOrder]
+    const answer = await ok('office.all', 'POST', previewsOf(w.a.salesOrderId), { fileIds: asked })
+    expect(answer.previews.map((row: Json) => [row.fileId, row.kind, row.small !== null, row.pdfDrawable, row.inline !== null, row.later])).toEqual([
+      [cards.picture.id, 'PICTURE', true, false, false, false],
+      // Not made yet (the strip job still to run): null, the card shows its kind.
+      [cards.notYet.id, 'PICTURE', false, false, false, false],
+      [files.shared, 'PDF', false, true, true, false],
+      // Over 3 MiB: opened to be seen.
+      [cards.bigPdf.id, 'PDF', false, false, false, false],
+      // Body data: no address, nothing recorded (the click's own opening is).
+      [files.measure, 'LOCKED', false, false, false, false],
+      [cards.sheet.id, 'OTHER', false, false, false, false],
+    ])
+    expect(answer.previews[0]).toMatchObject({ versionNo: 1, small: { url: expect.any(String), expiresAt: expect.any(String) } })
+    expect(Date.parse(answer.previews[2].inline.expiresAt) - Date.now()).toBeLessThanOrEqual(61_000)
+    // Two presigns: the picture's SMALL key (never its original) and the PDF; none for the locked sheet or the large PDF.
+    expect((await presigns()) - before).toBe(2)
+    expect(await presignsOfKey(smallKey)).toBe(1)
+    expect(await presignsOfKey(cards.picture.storageKey)).toBe(0)
+    expect(await presignsOfKey(cards.bigPdf.storageKey)).toBe(0)
+    expect(await admin(`SELECT id FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'sales.orderFileOpened' AND after->>'fileId' = $2`, [ids.tenantId, files.measure])).toHaveLength(0)
+    // Never the generic preview route.
+    expect(JSON.stringify(answer)).not.toMatch(/\/files\/[0-9a-f-]{36}\/preview/)
+  })
+
+  it('at most 24 ids, each once; at most 8 addresses a call — the rest say `later`, never a missing preview', async () => {
+    const tooMany = await call('office.all', 'POST', previewsOf(w.a.salesOrderId), { fileIds: Array.from({ length: 25 }, () => newId()) })
+    expect(tooMany.status).toBe(400)
+    const twice = await call('office.all', 'POST', previewsOf(w.a.salesOrderId), { fileIds: [files.shared, files.shared] })
+    expect([twice.status, twice.body.error?.message]).toEqual([400, 'Each file once: the same file was asked twice.'])
+    const pictures: string[] = []
+    for (let index = 0; index < 10; index += 1) {
+      const picture = await cardFile(`T-OP050 batch ${index}.jpg`, { kind: 'PHOTO', contentType: 'image/jpeg' })
+      await withSmall(picture)
+      pictures.push(picture.id)
+    }
+    const before = await presigns()
+    const answer = await ok('office.all', 'POST', previewsOf(w.a.salesOrderId), { fileIds: pictures })
+    expect((await presigns()) - before).toBe(8)
+    expect(answer.previews.map((row: Json) => [row.small !== null, row.later])).toEqual([...Array.from({ length: 8 }, () => [true, false]), [false, true], [false, true]])
+    // Asked again, the two left come.
+    const rest = await ok('office.all', 'POST', previewsOf(w.a.salesOrderId), { fileIds: pictures.slice(8) })
+    expect(rest.previews.map((row: Json) => [row.small !== null, row.later])).toEqual([
+      [true, false],
+      [true, false],
+    ])
+  })
+
+  it('the files read names who added each file: an office person, "the floor" (never the worker), this order\'s customer; the system\'s own none', async () => {
+    const list = await ok('office.all', 'GET', listOf(w.a.salesOrderId))
+    const customer = (await admin<{ name: string }>('SELECT coalesce("tradeName", "legalName") AS name FROM "Party" WHERE id = $1', [ids.a]))[0]!.name
+    expect(fileOfList(list, cards.byPerson.id)?.addedBy).toEqual({ kind: 'PERSON', name: 'Otto Files' })
+    expect(fileOfList(list, cards.byFloor.id)?.addedBy).toEqual({ kind: 'FLOOR', name: null })
+    expect(fileOfList(list, cards.byCustomer.id)?.addedBy).toEqual({ kind: 'CUSTOMER', name: customer })
+    expect(fileOfList(list, cards.sheet.id)?.addedBy).toBeNull()
+    expect(JSON.stringify(list)).not.toContain(worker)
+  })
+
+  it('the wall: Beta\'s person gets the words of an unknown order; Alpha\'s ids through Beta\'s own order are absent; a reader without the measurements right never sees body data', async () => {
+    const unknown = await call('office.p2', 'POST', previewsOf(newId()), { fileIds: [files.shared] })
+    const walled = await call('office.p2', 'POST', previewsOf(w.a.salesOrderId), { fileIds: [files.shared, cards.picture.id] })
+    expect([walled.status, walled.body.error?.message]).toEqual([404, 'Sales order not found.'])
+    expect([walled.status, walled.body.error?.message]).toEqual([unknown.status, unknown.body.error?.message])
+    const through = await ok('office.p2', 'POST', previewsOf(w.b.salesOrderId), { fileIds: [files.shared, cards.picture.id, files.copyOnBeta] })
+    expect(through.previews).toEqual([])
+    // Alpha's own person without workorders.view and the measurements right: the mixed work order's file and the sheet are absent.
+    const thin = await ok('office.p1.thin', 'POST', previewsOf(w.a.salesOrderId), { fileIds: [files.measure, files.onMixed, files.onWorkOrder, files.shared] })
+    expect(thin.previews.map((row: Json) => row.fileId)).toEqual([files.shared])
+  })
+})
+// ── end B-OP-050 ──
 
 describe('the brand wall: Beta’s person never reaches Alpha’s order files', { timeout: 60_000 }, () => {
   it('404 on Alpha’s order’s files and on opening any of them, in the words of an unknown id', async () => {

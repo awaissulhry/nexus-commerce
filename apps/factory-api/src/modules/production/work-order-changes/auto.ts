@@ -1,13 +1,11 @@
 import { DomainError } from '@nexus/factory-domain/core/errors'
-import { can } from '@nexus/factory-domain/core/permissions'
-import { applyRouteOf, takesEveryCell, type ApplyRoute, type Words } from '@nexus/factory-domain/order-apply/rules'
-import { WORKORDERS_MANAGE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
-import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
+import type { ApplyRoute, Words } from '@nexus/factory-domain/order-apply/rules'
+// B-OP-013: the follow rule is the domain's, so a preview says exactly what this command then does (order-apply/plan).
+import { FOLLOW_WORDS, followDecisionOf, seesWorkOrder, type FollowDecision } from '@nexus/factory-domain/order-apply/plan'
 import type { CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
-import { reachesWorkOrder } from '../work-orders/scope'
-import { createWorkOrderInCommand, type DraftRight } from '../work-orders/work-orders'
-import { applyChangeInCommand, failureWords, madeByChange, newDraftBody, routeRefusalWords } from './apply'
+import { createWorkOrderInCommand } from '../work-orders/work-orders'
+import { applyChangeInCommand, failureWords, madeByChange, newDraftBody } from './apply'
 import type { ChangeOrder, Proposed } from './propose'
 import { WORK_ORDER_COLUMNS, type ChangeWorkOrder } from './read'
 
@@ -114,50 +112,17 @@ export async function withAutoApply<Result>(run: (auto: AutoApply) => Promise<Re
   }
 }
 
-/** Words the order page shows of a change that waits (it + en; a work order's number only when the reader sees it whole). */
-export const FOLLOW_WORDS = {
-  production: (number: string): Words => ({
-    en: `${number} is released: production applies the change (a planner or a production manager).`,
-    it: `${number} è rilasciato: la modifica la applica la produzione (un pianificatore o un responsabile di produzione).`,
-  }),
-  shared: (number: string): Words => ({ en: `${number} is shared with other customers: change it on its own page.`, it: `${number} è condiviso con altri clienti: cambialo dalla sua pagina.` }),
-  /** A work order the reader does not reach: named by nothing. */
-  unseen: (): Words => ({ en: 'A work order waits: production applies the change on its own page.', it: 'Un ordine di lavoro è in attesa: la modifica la applica la produzione dalla sua pagina.' }),
-  notNow: (number: string | null): Words =>
-    number
-      ? { en: `${number} waits: apply the change from the order page.`, it: `${number} è in attesa: applica la modifica dalla pagina dell'ordine.` }
-      : { en: 'The new work order waits: apply the change from the order page.', it: "Il nuovo ordine di lavoro è in attesa: applica la modifica dalla pagina dell'ordine." },
-  refused: (number: string | null): Words =>
-    number
-      ? { en: `${number} waits: its change could not be applied now — see why on the change, then apply it again.`, it: `${number} è in attesa: la sua modifica non si è potuta applicare ora — vedi il perché sulla modifica, poi applicala di nuovo.` }
-      : { en: 'The new work order waits: it could not be made now — see why on the change, then apply it again.', it: 'Il nuovo ordine di lavoro è in attesa: non si è potuto fare ora — vedi il perché sulla modifica, poi applicala di nuovo.' },
-} as const
-
 /** The key a change is left out by: its work order, or (a new DRAFT, a new id every run) the cells it asks. */
 const skipKeyOf = (change: Pick<Proposed, 'workOrderId' | 'cells'>): string =>
   change.workOrderId ?? `new:${change.cells.map((cell) => `${cell.salesOrderLineId}|${cell.size}`).sort().join(',')}`
 
-/** Who may carry the change out now, by its route on the work order as it is (see the file's head); null: it waits, `why`. */
-type Decision = { readonly route: ApplyRoute; readonly right: DraftRight } | { readonly why: Words; readonly lastError: string | null }
-
-async function decisionOf(tools: CommandTools, context: OfficeContext, order: ChangeOrder, change: Proposed, workOrder: ChangeWorkOrder | null): Promise<Decision> {
-  const actor = actorOf(context)
-  if (change.kind === 'MAKE_MORE' && change.workOrderId === null) {
-    return can(actor, ORDERS_MANAGE, { companyId: order.companyId, partyId: order.partyId }) ? { route: 'NEW_DRAFT', right: 'ORDER' } : { why: FOLLOW_WORDS.notNow(null), lastError: null }
-  }
-  if (!workOrder) return { why: FOLLOW_WORDS.unseen(), lastError: null }
-  // R-11: a work order of several customers (made before the one-customer rule) is never changed from an order.
-  if (workOrder.partyId === null) return { why: FOLLOW_WORDS.shared(workOrder.number), lastError: null }
-  if (workOrder.partyId !== order.partyId) return { why: FOLLOW_WORDS.notNow(workOrder.number), lastError: null }
-  const cellIds = (await tools.tx.workOrderSize.findMany({ where: { workOrderId: workOrder.id }, select: { id: true } })).map((cell) => cell.id)
-  const route = applyRouteOf({ kind: change.kind, workOrderId: workOrder.id }, workOrder, change.kind === 'LOWER_TO_ORDER' && takesEveryCell(change.cells, cellIds))
-  if ('refusal' in route) {
-    const words = routeRefusalWords(route.refusal, workOrder.number)
-    return { why: words, lastError: words.en }
-  }
-  // D1: a DRAFT follows for whoever may change the order; a released work order only for workorders.manage over it (the wall).
-  if (workOrder.status === 'DRAFT') return can(actor, ORDERS_MANAGE, { companyId: order.companyId, partyId: order.partyId }) ? { route: route.route, right: 'ORDER' } : { why: FOLLOW_WORDS.notNow(workOrder.number), lastError: null }
-  return reachesWorkOrder(actor, WORKORDERS_MANAGE, workOrder) ? { route: route.route, right: 'WORK_ORDER' } : { why: FOLLOW_WORDS.production(workOrder.number), lastError: null }
+/**
+ * Who may carry the change out now, by its route on the work order as it is (see the file's head): B-OP-013 — the domain's ONE rule
+ * (order-apply/plan followDecisionOf), with the work order's cells read in this command.
+ */
+async function decisionOf(tools: CommandTools, context: OfficeContext, order: ChangeOrder, change: Proposed, workOrder: ChangeWorkOrder | null): Promise<FollowDecision> {
+  const cellIds = workOrder ? (await tools.tx.workOrderSize.findMany({ where: { workOrderId: workOrder.id }, select: { id: true } })).map((cell) => cell.id) : []
+  return followDecisionOf(actorOf(context), order, change, workOrder ? { ...workOrder, cellIds } : null)
 }
 
 /** Words of a refusal for the order page: its own when it has them (a change's or a lowering's refusal), else ours. */
@@ -180,14 +145,13 @@ export async function followInCommand(tools: CommandTools, context: OfficeContex
   const ids = [...new Set(proposed.flatMap((change) => (change.workOrderId ? [change.workOrderId] : [])))]
   const workOrders = new Map((ids.length > 0 ? await tools.tx.workOrder.findMany({ where: { id: { in: ids } }, select: WORK_ORDER_COLUMNS }) : []).map((row) => [row.id, row]))
   const actor = actorOf(context)
-  // The wall: a work order is named only to a person who reaches it with workorders.view (a mixed one: every customer); a new
-  // DRAFT is of the order's customer.
-  const newOnesSeen = can(actor, WORKORDERS_VIEW, { companyId: order.companyId, partyId: order.partyId })
   const applied: AppliedChange[] = []
   const waiting: WaitingChange[] = []
   for (const change of proposed) {
     const workOrder = change.workOrderId ? (workOrders.get(change.workOrderId) ?? null) : null
-    const seen = workOrder ? reachesWorkOrder(actor, WORKORDERS_VIEW, workOrder) : newOnesSeen
+    // The wall: a work order is named only to a person who reaches it with workorders.view (a mixed one: every customer); a new
+    // DRAFT is of the order's customer (B-OP-013: the domain's seesWorkOrder, as the previews read it).
+    const seen = seesWorkOrder(actor, order, workOrder ? { ...workOrder, cellIds: [] } : null)
     const number = workOrder && seen ? workOrder.number : null
     const wait = (words: Words) => waiting.push({ changeId: change.id, workOrderId: seen ? change.workOrderId : null, number, words: seen ? words : FOLLOW_WORDS.unseen() })
     const skipped = auto.skip.get(skipKeyOf(change))

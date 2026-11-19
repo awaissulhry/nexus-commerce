@@ -1,5 +1,7 @@
 import { DomainError, ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { applyRouteOf, CHANGE_WORDS, changedSince, declineProblem, takesEveryCell, type ApplyRoute, type ChangeCell, type WorkOrderChangeStatus, type Words } from '@nexus/factory-domain/order-apply/rules'
+// B-OP-013: the words of a route's refusal are the domain's (the previews say them too: order-apply/plan).
+import { routeRefusalWords } from '@nexus/factory-domain/order-apply/plan'
 import { command, IdempotencyKeyReusedError, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { lockWorkOrderIssues } from '../../inventory/issue/store'
@@ -111,9 +113,6 @@ export async function applyChange(caller: CommandCaller, changeId: string, body:
 
 /** Why the work order as it is now takes no change (its words name our work order only). */
 const refuseRoute = (refusal: 'WORK_ORDER_DONE' | 'ON_HOLD' | 'NOT_A_DRAFT', number: string): never => refuseChange(refusal, routeRefusalWords(refusal, number))
-/** B-OP-012: the words of a route's refusal (the order page's "WO-0042 waits: on hold — lift the hold, then Apply"). */
-export const routeRefusalWords = (refusal: 'WORK_ORDER_DONE' | 'ON_HOLD' | 'NOT_A_DRAFT', number: string): Words =>
-  refusal === 'ON_HOLD' ? CHANGE_WORDS.onHold(number) : refusal === 'NOT_A_DRAFT' ? CHANGE_WORDS.notADraft(number) : CHANGE_WORDS.workOrderDone(number)
 
 async function applyNow(caller: CommandCaller, context: OfficeContext, row: ChangeRow, version: number, idempotencyKey: string | undefined): Promise<ApplyAnswer> {
   const { current, cellIds } = await caller.withClient(async (db) => ({

@@ -35,6 +35,8 @@ import { brandRequestImpact } from '../../production/brand-requests/read'
 import { declineChange } from '../../production/work-order-changes/apply'
 // The planner's decision on the harness clock too (core/time.ts): Accept proposed the change on it.
 import { useServerClock } from '../../../core/time'
+// B-OP-015: the office's own amendment moves the delivery address by the same rule as an accepted request's.
+import { applyAmendment, previewAmendment } from '../orders/amend'
 
 /**
  * Change and cancel requests from the portal on the local stack (B-W2b-183; SAL-077, SAL-078), the customer through the real
@@ -1143,3 +1145,77 @@ describe('B-SA-048: the customer\'s ask is its own message in the order\'s conve
   })
 })
 // ── end B-SA-048 ──
+
+// ── B-OP-015 (order page plan N1; 13-backend §1.4): the office changes the delivery address in its own amendment ──
+describe('B-OP-015: the office amends the delivery address — an ACTIVE one of the order\'s customer, never while a shipment is prepared', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const workshop = seedUuid(NS, 'party-address:P1:workshop')
+  let planted = 0
+  /** SEED-SO-0001 copied whole (CONFIRMED, nothing shipped, its lines open), with a copy of SEED-SH-0002 as its DRAFT shipment when asked. */
+  async function plantedOrder(withDraftShipment = false) {
+    const so1 = await orderOf('SEED-SO-0001')
+    const tag = `T-OP015-${++planted}-${newId().slice(-4)}`
+    const lines = await admin<{ id: string }>('SELECT id::text AS id FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq', [so1.id])
+    const sizes = await admin<{ id: string; lineId: string }>('SELECT id::text AS id, "lineId"::text AS "lineId" FROM "SalesOrderLineSize" WHERE "lineId" = ANY($1::uuid[])', [lines.map((line) => line.id)])
+    const lineOf = new Map(lines.map((line) => [line.id, newId()]))
+    const id = newId()
+    const draft = await one<{ id: string }>('SELECT id::text AS id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0002'])
+    const shipment = { id: newId(), number: `${tag}-SH` }
+    await plantedRows([
+      copyOf('SalesOrder', so1.id, { id, number: tag, status: 'CONFIRMED', version: 1, reapprovalNeededAt: null, customerSeq: await nextCustomerSeq(so1.id), shipTo: { line1: 'Via Esempio 99', postalCode: '00000', city: 'Seedville', country: 'IT' } }),
+      ...lines.map((line) => copyOf('SalesOrderLine', line.id, { id: lineOf.get(line.id), orderId: id, closedShortQuantity: null, closedShortAt: null, closedShortById: null, closeShortReason: null, closedShortReasonCode: null, version: 1 })),
+      ...sizes.map((size) => copyOf('SalesOrderLineSize', size.id, { id: newId(), lineId: lineOf.get(size.lineId) })),
+      ...(withDraftShipment ? [copyOf('Shipment', draft.id, { id: shipment.id, number: shipment.number, salesOrderId: id, status: 'DRAFT', version: 1 })] : []),
+    ])
+    h.clock.set(new Date())
+    return { id, number: tag, lines: [...lineOf.values()], shipment }
+  }
+  const shipToOf = async (orderId: string) => (await one<{ shipTo: Json; version: number }>('SELECT "shipTo", version FROM "SalesOrder" WHERE id = $1', [orderId])).shipTo
+  const keepLines = (lines: readonly string[]) => lines.map((lineId) => ({ id: lineId }))
+
+  it('only the address: it moves in one command — the customer\'s workshop as a snapshot, audited, and no amendment written', async () => {
+    const order = await plantedOrder()
+    const body = { reason: 'Deliver to the workshop this time.', lines: keepLines(order.lines), shipToAddressId: workshop }
+    expect(await previewAmendment(office(), order.id, body)).toMatchObject({ ok: true, problems: [], diff: null, workOrders: null, shipTo: { addressId: workshop, amendment: false } })
+    const applied = await applyAmendment(office(), order.id, { ...body, version: 1 })
+    expect(applied.amendment).toBeNull()
+    expect(applied.workOrders).toEqual({ applied: [], waiting: [] })
+    expect(await shipToOf(order.id)).toMatchObject({ name: 'Seed Racing workshop', line1: 'Via Esempio 12', city: 'Seedville', contactName: 'Seed Receiver' })
+    expect(await admin('SELECT count(*)::int AS n FROM "SalesOrderAmendment" WHERE "orderId" = $1', [order.id])).toEqual([{ n: 0 }])
+    expect((await one<{ after: Json; reason: string }>(`SELECT after, reason FROM "AuditLog" WHERE action = 'orders.changeShipTo' AND "recordId" = $1`, [order.id]))).toMatchObject({ after: { addressId: workshop }, reason: body.reason })
+  })
+
+  it('with a change of its lines: ONE amendment, and the address moved in the same command', async () => {
+    const order = await plantedOrder()
+    // The whole grid of the first line, one more of its first size (its other sizes as they are).
+    const grid = await admin<{ size: string; quantity: number }>('SELECT size, quantity FROM "SalesOrderLineSize" WHERE "lineId" = $1 ORDER BY size', [order.lines[0]!])
+    const lines = [{ id: order.lines[0]!, sizes: grid.map((row, index) => ({ size: row.size, quantity: row.quantity + (index === 0 ? 1 : 0) })) }, ...keepLines(order.lines.slice(1))]
+    const body = { reason: 'One more, delivered to the workshop.', lines, shipToAddressId: workshop }
+    expect(await previewAmendment(office(), order.id, body)).toMatchObject({ ok: true, shipTo: { addressId: workshop, amendment: true } })
+    const applied = await applyAmendment(office(), order.id, { ...body, version: 1 })
+    expect(applied.amendment).toMatchObject({ revision: 1, reason: body.reason })
+    expect(await shipToOf(order.id)).toMatchObject({ line1: 'Via Esempio 12' })
+  })
+
+  it('SHIPMENT_PREPARED: a DRAFT shipment of the order (by its order) holds the address, in words; nothing moves', async () => {
+    const order = await plantedOrder(true)
+    const body = { reason: 'Deliver to the workshop.', lines: keepLines(order.lines), shipToAddressId: workshop }
+    const words = `Shipment ${order.shipment.number} is being prepared for the order's address: change it on the shipment first.`
+    expect(await previewAmendment(office(), order.id, body)).toMatchObject({ ok: false, problems: [{ path: 'body/shipToAddressId/SHIPMENT_PREPARED', message: words }], shipTo: { amendment: false } })
+    const refusal = await thrown(applyAmendment(office(), order.id, { ...body, version: 1 }))
+    expect(refusal).toMatchObject({ code: 'invalid_state', message: words, issues: [{ path: 'body/shipToAddressId/SHIPMENT_PREPARED', message: words }] })
+    expect(await shipToOf(order.id)).toMatchObject({ line1: 'Via Esempio 99' })
+  })
+
+  it('the wall: another customer\'s address is refused in the words of an unknown id; an address of the customer for invoices only too', async () => {
+    const order = await plantedOrder()
+    const ask = (shipToAddressId: string) => ({ reason: 'Deliver elsewhere.', lines: keepLines(order.lines), shipToAddressId, version: 1 })
+    const unknown = await thrown(applyAmendment(office(), order.id, ask(newId())))
+    const otherCustomer = await thrown(applyAmendment(office(), order.id, ask(seedUuid(NS, 'party-address:P2:office'))))
+    const invoicesOnly = await thrown(applyAmendment(office(), order.id, ask(seedUuid(NS, 'party-address:P1:office'))))
+    expect(unknown).toMatchObject({ code: 'validation_failed', message: 'Not an active delivery address of this customer.', issues: [{ path: 'body/shipToAddressId', message: 'Not an active delivery address of this customer.' }] })
+    for (const refusal of [otherCustomer, invoicesOnly]) expect([refusal.code, refusal.message, refusal.issues]).toEqual([unknown.code, unknown.message, unknown.issues])
+    expect((await previewAmendment(office(), order.id, ask(seedUuid(NS, 'party-address:P2:office')))).problems).toEqual((await previewAmendment(office(), order.id, ask(newId()))).problems)
+    expect(await shipToOf(order.id)).toMatchObject({ line1: 'Via Esempio 99' })
+  })
+})
+// ── end B-OP-015 ──

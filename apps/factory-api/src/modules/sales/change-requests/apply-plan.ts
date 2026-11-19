@@ -36,6 +36,9 @@ import { dayOrNull, readLines, type LineRecord, type OrderRow } from '../orders/
 import { officeProgressFor } from '../portal-orders/progress'
 import { openSubcontractsOf, toldSubcontractsOf } from '../orders/still-to-do' // B-SA-050
 import { acceptPreviewOf, designStylesOf, officeRequest, officeViews, type AcceptPreview } from './office'
+// B-OP-013 (order page plan N2, D1): before Accept, what each work order will do in the same click, or why it waits.
+import { workOrderPlanFor } from '../orders/work-order-plan'
+import type { WorkOrderPlanRow } from '@nexus/factory-domain/order-apply/plan'
 import { keptImpactOf, LIVE_EVENTS, readCells, type OfficeRequestRow, type Reader } from './store'
 
 /**
@@ -55,6 +58,10 @@ import { keptImpactOf, LIVE_EVENTS, readCells, type OfficeRequestRow, type Reade
  *           to charge, the scrap's own approval to scrap); the outcome chosen once accepted
  *   next    the numbered steps (factory-domain apply-plan): AMEND = this Accept, LOWER_TO_ORDER / MAKE_MORE held for who manages
  *           the work order (its supervisor named inside the office), REPROMISE, TELL_WORKSHOP
+ *   workOrderPlan   B-OP-013, before Accept: each work order's cells from → to with what is cut, whether Accept carries the change
+ *           along in its own command for this reader (B-OP-012: a DRAFT for whoever may change the order, a released one only with
+ *           workorders.manage) or it waits and why, the reprint mark (factory-domain order-apply/plan, the command's own rule);
+ *           [] once answered (`next` says what was done)
  *
  * THE WALL: a work order the reader does not reach (another customer's, or a mixed one made before the one-customer rule for a
  * person limited to some customers) is counted in `workOrdersLeftOut`, never named: its step reads "A work order" with this
@@ -145,10 +152,13 @@ export async function planOf(db: Reader, context: OfficeContext, row: OfficeRequ
   // What happens to the work orders: planned before Accept (the same read as the record's preview), stored after.
   let entries: WorkEntry[] = []
   let held: AcceptPreview['held'] = []
+  // B-OP-013: the plan of each work order before Accept (Accept carries them along where the accepter may: B-OP-012); none after.
+  let workOrderPlan: WorkOrderPlanRow[] = []
   if (waiting && !isProductionAccept(kind)) {
     const preview = await acceptPreviewOf(db, context.tenantId, row, order, now)
     entries = plannedEntries(preview.changes)
     held = preview.held
+    workOrderPlan = await workOrderPlanFor(db, context, place, preview.changes)
   } else if (accepted) {
     entries = storedEntries(await db.workOrderChange.findMany({ where: { requestId: row.id }, select: CHANGE_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }))
   }
@@ -283,6 +293,7 @@ export async function planOf(db: Reader, context: OfficeContext, row: OfficeRequ
     },
     next,
     workOrdersLeftOut,
+    workOrderPlan,
   }
 }
 

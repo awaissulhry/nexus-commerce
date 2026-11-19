@@ -13,14 +13,15 @@ import { useLiveBus } from '../../../../../shell/live/use-live'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { OfficeRecordThread } from '../../../../_shared/record-thread/OfficeRecordThread'
 import type { DockedHost } from '../../../../_shared/record-thread/DockedOfficeThread' // F-SA-244
-import { PickedDockColumn, ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
+import { ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
 import { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-customer/use-all-of-customer'
-import { ALL_OF_CUSTOMER_NS, AllOfCustomerFeed } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
+import { ALL_OF_CUSTOMER_NS, AllOfCustomerDock } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
 import { messageHrefOf } from '../../../../_shared/record-thread/all-of-customer/model'
 import { useInProject } from '../../../../products/projects/record/linked/use-in-project'
 import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeOfChoice, scopeOfParam, scopeShown, workOrderGroups, type DockWorkOrder, type OrderScope, type ScopeChoice, type ScopeOffer } from './model'
 import { scopeValueOf } from './model' // F-OP-209
 import { sameScope, scopeOfRecord, scopeParamOf } from './model' // F-OP-212
+import { offerOf } from './model' // F-OP-213
 import { pendingAskOf } from '../../../../_shared/record-frame/model' // F-OP-212
 import { viewOpenOf } from '../../../../_shared/record-frame/model' // F-OP-212
 
@@ -73,7 +74,27 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
   const projects = useInProject(api, { type: 'SalesOrder', id: order.id }, held.includes('threads.read'), prefix)
   const seesWork = held.includes('workorders.view')
   const ownWork = useMemo(() => (seesWork ? (workOrders ?? []) : []), [seesWork, workOrders])
-  const offer: ScopeOffer = { general: true, all: true, projects: projects.map((project) => project.id), workOrders: ownWork.map((row) => row.id) }
+
+  // ── "N new" of each conversation (the reader's own; again on a live message) — F-OP-213: and whether each one may be read ──
+  const [tick, setTick] = useState(0)
+  useLiveBus({ onChange: (change) => change.type.startsWith('thread.') && setTick((value) => value + 1), onReconnect: () => setTick((value) => value + 1) }, held.includes('threads.read'))
+  const unreadRows = useMemo(
+    () => [
+      { recordType: 'SalesOrder', id: order.id },
+      { recordType: 'Party', id: order.partyId },
+      ...projects.map((project) => ({ recordType: 'Project', id: project.id })),
+      ...ownWork.map((row) => ({ recordType: 'WorkOrder', id: row.id })),
+    ],
+    [order.id, order.partyId, projects, ownWork],
+  )
+  const readUnread = useMemo(() => (held.includes('threads.read') ? readUnreadWith(api) : null), [api, held])
+  const unread = useUnread(readUnread, unreadRows, tick)
+  const fresh = (id: string) => unread[id]?.newCount ?? 0
+  const freshOf = (ids: readonly string[]) => ids.reduce((sum, id) => sum + fresh(id), 0)
+  const withNew = (label: string, count: number) => (count > 0 ? t('record.dock.withNew', { label, count }) : label)
+
+  // F-OP-213 (11-dock §5, D4): General only when the reader may read the customer's thread, All only when General is.
+  const offer: ScopeOffer = offerOf({ canRead: held.includes('threads.read'), partyReadable: unread[order.partyId]?.readable, projects: projects.map((project) => project.id), workOrders: ownWork.map((row) => row.id), seesWork })
   const asked = scopeOfParam(params?.get(SCOPE_PARAM))
   const scope = scopeShown(asked, offer)
   const last = useRef<{ project: string | null; wo: string | null }>({ project: null, wo: null })
@@ -100,24 +121,6 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
     now.frame?.setThread?.(scopeValueOf(target, now.narrow, now.closed))
   }, [pending?.ask, targetValue]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── "N new" of each conversation (the reader's own; again on a live message) ──
-  const [tick, setTick] = useState(0)
-  useLiveBus({ onChange: (change) => change.type.startsWith('thread.') && setTick((value) => value + 1), onReconnect: () => setTick((value) => value + 1) }, held.includes('threads.read'))
-  const unreadRows = useMemo(
-    () => [
-      { recordType: 'SalesOrder', id: order.id },
-      { recordType: 'Party', id: order.partyId },
-      ...projects.map((project) => ({ recordType: 'Project', id: project.id })),
-      ...ownWork.map((row) => ({ recordType: 'WorkOrder', id: row.id })),
-    ],
-    [order.id, order.partyId, projects, ownWork],
-  )
-  const readUnread = useMemo(() => (held.includes('threads.read') ? readUnreadWith(api) : null), [api, held])
-  const unread = useUnread(readUnread, unreadRows, tick)
-  const fresh = (id: string) => unread[id]?.newCount ?? 0
-  const freshOf = (ids: readonly string[]) => ids.reduce((sum, id) => sum + fresh(id), 0)
-  const withNew = (label: string, count: number) => (count > 0 ? t('record.dock.withNew', { label, count }) : label)
-
   // ── All of <customer> (read only; read only while it shows) ──
   const feed = useAllOfCustomer(api, { partyId: order.partyId, customerName: customer, enabled: scope.kind === 'all', prefix, canReadFiles: held.includes('files.read') })
   const onAnswer = (record: { readonly type: string; readonly id: string }, messageId: string) => {
@@ -128,6 +131,15 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
     const entry = feed.state.entries.find((one) => one.record.type === record.type && one.record.id === record.id && one.message.id === messageId)
     if (entry) router.push(messageHrefOf(entry, prefix))
   }
+  // F-OP-205: the empty feed's door — the first message goes into this order's thread, the box on Office note (the frame's ask).
+  const writeFirst = { thread: t('record.dock.order'), onWrite: () => (frame?.compose ? frame.compose({ record: { type: 'SalesOrder', id: order.id }, messageId: null, mode: 'note' }) : go(ORDER_SCOPE)) }
+  // ---- F-OP-207 (11-dock §3.2, §3.4): Answer on a line of this order's, its customer's general or a linked project's thread opens THAT
+  // thread at the message with the box focused (Reply on the customer's line, Office note otherwise) — the frame's compose ask, which
+  // moves the pick there first; any other record's line opens its page. The foot's Write in: the same ask, the box on Office note.
+  const page = { orderId: order.id, partyId: order.partyId }
+  const canAnswer = (record: { readonly type: string; readonly id: string }) => scopeOfRecord(record, page, offer) !== null
+  const writeIn = (record: { readonly type: string; readonly id: string }, fallback: OrderScope) => (frame?.compose ? frame.compose({ record, messageId: null, mode: 'note' }) : go(fallback))
+  // ---- end F-OP-207
 
   // ── the pick ──
   const segments = choicesOffered(offer)
@@ -143,8 +155,8 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
     }
     // Office only: its line in the office tone.
     if (segment === 'workOrders') return { value: 'workOrders', label: t('record.dock.workOrders'), icon: <Lock size={14} aria-hidden />, count: freshOf(offer.workOrders), tone: 'office', line: t('record.dock.workOrderLine', { wo: workOrder?.number ?? ownWork[0]?.number ?? '' }) }
-    // The feed says itself that it is read only and how to write (its own line).
-    return { value: 'all', label: t('record.dock.all', { customer }), short: rt('allOfCustomer.view.all'), title: t('record.dock.readOnly'), icon: <Eye size={14} aria-hidden />, line: null }
+    // F-OP-204 (11-dock §2): the whose-line says it is read only and how to write (one place, one wording: the feed's own line left).
+    return { value: 'all', label: t('record.dock.all', { customer }), short: rt('allOfCustomer.view.all'), title: t('record.dock.readOnly'), icon: <Eye size={14} aria-hidden />, line: rt('allOfCustomer.line', { customer }) }
   })
   const extra =
     scope.kind === 'project' && projects.length > 1 ? (
@@ -179,20 +191,28 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
     shown = <OfficeRecordThread key={`wo-${workOrder.id}`} docked record={{ type: 'WorkOrder', id: workOrder.id, companyId: order.companyId, siteId: workOrder.siteId }} title={`${workOrder.number}${workOrder.style ? ` · ${workOrder.style}` : ''}`} recordLabel={workOrder.number} party={null} recordHref={`${prefix}/production/work-orders/${encodeURIComponent(workOrder.id)}`} />
   } else if (scope.kind === 'all') {
     // F-OP-203: All of <customer> in the dock's ONE card (DockColumn): the pick band on top, the read-only feed that scrolls, the foot.
+    // F-OP-204: its Head row (FeedHead: View ▾, Kind ▾, N new · Show, the width menu, ⋯ with Open <customer>).
     shown = (
-      <PickedDockColumn
+      <AllOfCustomerDock
         label={`${t('record.dock.all', { customer })} · ${t('record.dock.readOnly')}`}
-        body={<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />}
+        model={feed.model}
+        actions={{ ...feed.actions, onAnswer, writeFirst, canAnswer, ...(frame?.compose ? { onCompose: frame.compose } : {}) /* F-OP-207 */ }}
+        customerHref={`${prefix}/sales/customers/${encodeURIComponent(order.partyId)}`}
         foot={
-          // Writing always goes into ONE conversation: the two the person may pick here.
+          // Writing always goes into ONE conversation: the two the person may pick here. F-OP-207: "Read only. Write in:", each door
+          // opens its thread with the box focused on Office note (the frame's compose ask).
           <>
-            <span>{t('record.dock.writeIn')}</span>
-            <Button size="sm" variant="secondary" onClick={() => go(ORDER_SCOPE)}>
+            <span>
+              {t('record.dock.readOnly')}. {t('record.dock.writeIn')}
+            </span>
+            <Button size="sm" variant="secondary" onClick={() => writeIn({ type: 'SalesOrder', id: order.id }, ORDER_SCOPE)}>
               {t('record.dock.order')}
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => go({ kind: 'general' })}>
-              {t('record.dock.writeGeneral')}
-            </Button>
+            {offer.general && (
+              <Button size="sm" variant="secondary" onClick={() => writeIn({ type: 'Party', id: order.partyId }, { kind: 'general' })}>
+                {t('record.dock.writeGeneral')}
+              </Button>
+            )}
           </>
         }
       />

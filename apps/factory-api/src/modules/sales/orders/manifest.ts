@@ -24,6 +24,8 @@ export const manifest = defineManifest({
   'POST /sales/orders/:orderId/amendments/preview': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/orders/:orderId/amendments': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/orders/:orderId/close-lines': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  // B-OP-013 (order page plan N2): the close's preview — what each work order will do (can() on the order, as the close).
+  'POST /sales/orders/:orderId/close-lines/preview': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/orders/:orderId/reopen-lines': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'GET /sales/orders/:orderId/cancel-check': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'GET /sales/orders/:orderId/schedule': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
@@ -51,6 +53,9 @@ export const manifest = defineManifest({
   // record, its group's right, body data with sales.measurements.view), and the walled opening of one (body data recorded).
   'GET /sales/orders/:orderId/files': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   'POST /sales/orders/:orderId/files/:fileId/open': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // B-OP-050 (order page plan N7): the small previews and PDF links of the order's file cards (can() on the order; the files read's
+  // wall per file, body data never an address).
+  'POST /sales/orders/:orderId/files/previews': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-SA-056 (Sales page plan P8, R2, R8): who was told about one change (can() on the order, threads.read on its conversation;
   // office people by name, the floor and the workshops by when and which work order — never who read anything).
   'GET /sales/orders/:orderId/told': { audiences: ['office'], permission: 'orders.view', scope: 'record' },

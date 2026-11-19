@@ -709,21 +709,26 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const composeAsk = frame?.composeAsk ?? null
   const clearCompose = frame?.clearCompose
   const feedReady = model.feed.state === 'ready'
-  const latestCompose = useRef({ onReply: actions.onReply, jumpTo: base.jumpTo })
-  latestCompose.current = { onReply: actions.onReply, jumpTo: base.jumpTo }
+  const latestCompose = useRef({ onReply: actions.onReply, jumpTo: base.jumpTo, messages: base.server.messages })
+  latestCompose.current = { onReply: actions.onReply, jumpTo: base.jumpTo, messages: base.server.messages }
   useEffect(() => {
     if (!composeAsk || !feedReady || !takesAsk(composeAsk.record, key)) return
     clearCompose?.()
     const { composer, onDraft: setDraft } = latestBox.current
-    const { onReply, jumpTo } = latestCompose.current
-    if (composeAsk.mode === 'reply' && composeAsk.messageId && onReply) onReply(composeAsk.messageId)
-    else {
+    const { onReply, jumpTo, messages } = latestCompose.current
+    const messageId = composeAsk.messageId
+    const reply = composeAsk.mode === 'reply' && messageId !== null && !!onReply
+    if (!reply) {
       const switched = switchMode(composer.draft, 'note', composer.context.people)
       setDraft?.(switched.draft, switched.notes)
     }
-    if (composeAsk.messageId) {
+    if (messageId) {
       setView('all')
-      void jumpTo(composeAsk.messageId)
+      const reached = jumpTo(messageId)
+      // F-OP-207: Answer on a line of All of <customer> — a message beyond the first page is read first, then answered (the box names
+      // the message it answers, "Replying to …", as the card's own Reply does).
+      if (reply && messages.some((message) => message.id === messageId)) onReply?.(messageId)
+      else if (reply) void reached.then(() => requestAnimationFrame(() => latestCompose.current.onReply?.(messageId)))
     }
     requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('.fw-rcf-dock .fw-rt-composer textarea')?.focus())
   }, [composeAsk, clearCompose, feedReady, key])

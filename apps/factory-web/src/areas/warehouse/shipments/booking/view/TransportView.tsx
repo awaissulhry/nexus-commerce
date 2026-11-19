@@ -263,3 +263,26 @@ function StatusDialog({ transport, model, actions }: { transport: Transport; mod
     </DepthDialog>
   )
 }
+
+// ── F-OP-119 (order page plan N5): the tracking number typed from a sales order's Shipments tab — this very dialog ──────────────
+/**
+ * The tracking dialog alone, for a page that opens it for ONE shipment (its container mounts useOwnTransport for it): the same
+ * dialog, words and refusals as here; a failed read said in a dialog with Try again; nothing while it reads.
+ */
+export function TrackingDoorDialog({ model, actions, onClose }: { model: TransportModel; actions?: TransportActions; onClose: () => void }) {
+  return (
+    <WithMessages namespaces={DEPTH_NAMESPACES}>
+      <TrackingDoor model={model} actions={actions} onClose={onClose} />
+    </WithMessages>
+  )
+}
+
+function TrackingDoor({ model, actions, onClose }: { model: TransportModel; actions?: TransportActions; onClose: () => void }) {
+  const { t } = useDepthWords()
+  if (model.transport.state === 'error') {
+    return <DepthDialog title={t('transport.title')} held={null} onGo={onClose} goLabel={t('common.done')} onClose={onClose} problem={null} size="sm" done={<PartRead problem={model.transport.problem} onRetry={actions?.onRetry} label={t('transport.title')} />} />
+  }
+  if (model.transport.state !== 'ready') return null
+  return <TrackingDialog transport={model.transport.value} model={model} actions={actions} />
+}
+// ── end F-OP-119 ──
