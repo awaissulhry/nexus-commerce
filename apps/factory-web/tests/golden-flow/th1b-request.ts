@@ -56,6 +56,9 @@ function wantedDay(): { iso: string; label: RegExp } {
 async function sendRequest(desk: PortalDesk, input: { subject: string; message: string; customerRef: string; wanted?: boolean }): Promise<{ seq: number; id: string }> {
   const { page } = desk
   await desk.go('/orders/new')
+  // F-CP-152 (customer page PW1, #1728): New order opens on the draft order's start; the request like an e-mail is behind
+  // "Just write it in words".
+  await page.getByRole('link', { name: ORDERING('draftPage.start.words'), exact: true }).click()
   await page.getByLabel(COMPOSE('subject.label'), { exact: true }).fill(input.subject)
   // The message is required: its label carries a mark (the field's accessible name is the label alone).
   await page.getByRole('textbox', { name: COMPOSE('message.label'), exact: true }).fill(input.message)
