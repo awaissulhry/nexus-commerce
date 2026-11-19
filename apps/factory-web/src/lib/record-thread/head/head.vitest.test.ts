@@ -453,3 +453,29 @@ describe('B-TH-288 — Done and search in the thread head', () => {
   })
 })
 // ---- end B-TH-288
+
+// ---- F-OP-204 (order page plan N4; 11-dock §1, §3.1; D6): ONE width menu — the thread's Head and All of <Customer>'s Head draw it ------
+describe('F-OP-204 — the width menu is one part', () => {
+  const draw = (node: ReturnType<typeof createElement>) => renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, node))
+  it('drawn where the thread is docked (a width), never without one; it brings its own words', async () => {
+    const { WidthMenu, WIDTH_NS } = await import('./view/WidthMenu')
+    const { HEAD_NS } = await import('./view/RecordThreadHead')
+    expect(WIDTH_NS).toBe(HEAD_NS)
+    expect(draw(createElement(WidthMenu, { width: 'forty' }))).toContain('aria-label="Thread width"')
+    expect(draw(createElement(WidthMenu, { width: null }))).toBe('')
+  })
+  it('the thread Head draws THE part (no width items of its own); All of <Customer>\'s Head the same', () => {
+    const head = readFileSync(new URL('./view/RecordThreadHead.tsx', import.meta.url), 'utf8')
+    expect(head).toContain('<WidthMenu width={model.width} onWidth={actions?.onWidth} /* F-OP-204 */ />')
+    expect(head).not.toContain('widthItems')
+    expect(head).not.toContain('DOCK_WIDTHS')
+    const menu = readFileSync(new URL('./view/WidthMenu.tsx', import.meta.url), 'utf8')
+    for (const id of ["id: 'hide'", "id: 'reset'", 'DOCK_WIDTHS.map(']) expect(menu).toContain(id)
+    const feed = readFileSync(new URL('../../../areas/_shared/record-thread/all-of-customer/view/FeedHead.tsx', import.meta.url), 'utf8')
+    expect(feed).toContain('<WidthMenu ')
+    // The docked Head still offers the widths (the phone's compact Head does not).
+    expect(draw(createElement(RecordThreadHead, { model: base() }))).toContain('aria-label="Thread width"')
+    expect(draw(createElement(RecordThreadHead, { model: base({ width: null }) }))).not.toContain('aria-label="Thread width"')
+  })
+})
+// ---- end F-OP-204

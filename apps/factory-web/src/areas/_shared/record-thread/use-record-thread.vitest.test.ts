@@ -698,15 +698,21 @@ describe('F-OP-203 — the order dock, the customer dock and the work order’s 
     expect(workOrder).toContain('export function WorkOrderThreads({ choices, pick, onPick, children }: { choices: readonly OrderThreadChoice[]; pick: OrderFilesPick; onPick?: (pick: OrderFilesPick) => void; children: ReactNode })')
   })
 
-  it('All of <customer> is the same card (PickedDockColumn: the pick band on top, the feed in the body, the order page’s write-in at the foot)', () => {
+  // F-OP-204: the card is AllOfCustomerDock (PickedDockColumn + FeedHead + the feed + the foot), drawn by both hosts.
+  it('All of <customer> is the same card (the pick band on top, its Head, the feed in the body, the order page’s write-in at the foot)', () => {
     const all = order.slice(order.indexOf("} else if (scope.kind === 'all') {"), order.indexOf('} else {', order.indexOf("} else if (scope.kind === 'all') {")))
-    expect(all).toContain('<PickedDockColumn')
+    expect(all).toContain('<AllOfCustomerDock')
     expect(all).toContain("label={`${t('record.dock.all', { customer })} · ${t('record.dock.readOnly')}`}")
-    expect(all).toContain('body={<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />}')
+    expect(all).toContain('model={feed.model}')
+    expect(all).toContain('actions={{ ...feed.actions, onAnswer }}')
     expect(all).toMatch(/foot=\{[\s\S]*t\('record\.dock\.writeIn'\)[\s\S]*go\(ORDER_SCOPE\)[\s\S]*go\(\{ kind: 'general' \}\)/)
     expect(all).not.toContain('className=')
     const dock = customer.slice(customer.indexOf('function Dock('))
-    expect(dock).toContain("<PickedDockColumn label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} body={<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />} />")
+    expect(dock).toContain("<AllOfCustomerDock label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} model={feed.model} actions={{ ...feed.actions, onAnswer }} />")
+    const card = read('./all-of-customer/view/AllOfCustomerFeed.tsx')
+    expect(card).toContain('<PickedDockColumn')
+    expect(card).toContain('head={<FeedHead title={label} model={model} actions={actions} customerHref={customerHref ?? null} />}')
+    expect(card).toContain('body={<AllOfCustomerFeed model={model} actions={actions} />}')
   })
 
   it('the segments: icons, short words, "N new" as the pick’s pill (never glued into the words), the office tone on work orders', () => {

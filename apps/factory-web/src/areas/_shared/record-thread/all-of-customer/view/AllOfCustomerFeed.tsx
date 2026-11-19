@@ -1,16 +1,20 @@
 'use client'
 
-import { ChevronDown, CornerDownRight, Eye, Filter, Layers } from 'lucide-react'
-import { EmptyState, Menu, type MenuItemDef } from '@nexus/ui/components'
-import { Button, Skeleton } from '@nexus/ui/primitives'
+import type { ReactNode } from 'react'
+import { CornerDownRight } from 'lucide-react'
+import { EmptyState } from '@nexus/ui/components'
+import { Button, InfoTip, Skeleton } from '@nexus/ui/primitives'
 import { useT } from '../../../../../lib/i18n/provider'
 import { MessageCard } from '../../../../../lib/record-thread/card/view/MessageCard'
+import { WIDTH_NS } from '../../../../../lib/record-thread/head/view/WidthMenu' // F-OP-204: the Head's words (width, ⋯)
 import { RecordTypeIcon } from '../../../../search/RecordTypeIcon'
-import { FEED_KIND_CHOICES, FEED_VIEWS, opensItself, type AllOfCustomerModel, type FeedItem, type FeedKindChoice, type FeedView, type Words } from '../model'
+import { PickedDockColumn } from '../../ThreadPick' // F-OP-204: the dock's one card
+import { opensItself, type AllOfCustomerModel, type FeedItem, type FeedKindChoice, type FeedView, type Words } from '../model'
+import { FeedHead } from './FeedHead' // F-OP-204
 import '../all-of-customer.css'
 
-/** The catalogues the view reads (the host loads them: WithMessages). */
-export const ALL_OF_CUSTOMER_NS = ['record-thread', 'record-thread-card'] as const
+/** The catalogues the view reads (the host loads them: WithMessages). F-OP-204: + the Head's (FeedHead's width menu and ⋯). */
+export const ALL_OF_CUSTOMER_NS = ['record-thread', 'record-thread-card', WIDTH_NS] as const
 
 /** A record a line belongs to (the door's target). */
 export interface FeedRecordRef {
@@ -34,59 +38,49 @@ export interface AllOfCustomerFeedActions {
 }
 
 /**
- * F-SA-261 (sales page plan R4, P9, N4, N5; 10-order-page §6.2, 11-customer-page §9.2) — "All of <Customer>", the read-only merged
- * feed the dock pickers mount (F-SA-262 on the order page, F-SA-279 on the customer page): one line says it is read only and how to
- * write; View ▾ and Kind ▾; "N new · Show" (the list never moves by itself); each message with its record chip (a real link to the
- * record — ⌘-click a new tab — and, clicked, the dock's switch to that conversation), the conversation's own card READ ONLY, a "New"
- * dot, and "Answer in its conversation"; Show older at the foot; what is left out said in words. Draws its model only.
+ * F-OP-204 (order page plan N4; 11-dock §0.2, §1, §3; RC1) — All of <Customer> in the dock's ONE card (PickedDockColumn: the same
+ * `section.fw-rt-column.is-docked` as a thread): the pick band first (its whose-line says it is read only and how to write, the host's
+ * choice), the Head row (FeedHead: title, View ▾, Kind ▾, "N new · Show", the width menu, ⋯), the feed that scrolls, and the fixed foot
+ * — the host's own (the order page's "Write in: This order · General") with the info icon that says what seeing a line does.
  */
-export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerModel; actions?: AllOfCustomerFeedActions }) {
+export function AllOfCustomerDock({ label, model, actions, foot, customerHref }: { label: string; model: AllOfCustomerModel; actions?: AllOfCustomerFeedActions; foot?: ReactNode; customerHref?: string | null }) {
+  return (
+    <PickedDockColumn
+      label={label}
+      head={<FeedHead title={label} model={model} actions={actions} customerHref={customerHref ?? null} />}
+      body={<AllOfCustomerFeed model={model} actions={actions} />}
+      foot={<DockFoot>{foot}</DockFoot>}
+    />
+  )
+}
+
+/** The card's foot: the host's doors, then ONE info icon (the rule: key hints and the like only in the foot's info icon). */
+function DockFoot({ children }: { children?: ReactNode }) {
+  const t = useT('record-thread')
+  return (
+    <>
+      {children}
+      <span className="fw-aoc-foot-tip">
+        <InfoTip tip={t('allOfCustomer.readMarks')} />
+      </span>
+    </>
+  )
+}
+
+/**
+ * F-SA-261 (sales page plan R4, P9, N4, N5; 10-order-page §6.2, 11-customer-page §9.2) — "All of <Customer>", the read-only merged
+ * feed the dock pickers mount (F-SA-262 on the order page, F-SA-279 on the customer page): each message with its record chip (a real
+ * link to the record — ⌘-click a new tab — and, clicked, the dock's switch to that conversation), the conversation's own card READ
+ * ONLY, a "New" dot, and its door; Show older at the foot; what is left out said in words. Draws its model only.
+ * F-OP-204: the body of the card — its one line, View ▾, Kind ▾ and "N new · Show" moved to the pick band and FeedHead.
+ */
+export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerModel; actions?: AllOfCustomerFeedActions | undefined }) {
   const t = useT('record-thread')
   const customer = model.customerName
   const words = (text: Words) => t(text.key, text.params)
-  const viewItems: MenuItemDef[] = FEED_VIEWS.map((view) => ({ id: `view-${view}`, label: t(`allOfCustomer.view.${view}`), checked: view === model.view, onSelect: () => actions?.onView?.(view) }))
-  const kindItems: MenuItemDef[] = FEED_KIND_CHOICES.map((kind) => ({ id: `kind-${kind}`, label: t(`allOfCustomer.kind.${kind}`), checked: kind === model.kind, onSelect: () => actions?.onKind?.(kind) }))
 
   return (
-    <section className="fw-aoc" aria-label={t('allOfCustomer.title', { customer })}>
-      <header className="fw-aoc-head">
-        <p className="fw-aoc-line">
-          <Eye size={14} aria-hidden />
-          <span>{t('allOfCustomer.line', { customer })}</span>
-        </p>
-        <div className="fw-aoc-filters">
-          <Menu
-            className="fw-aoc-menu"
-            label={
-              <>
-                <Filter size={14} aria-hidden /> {t('allOfCustomer.view.label')}: {t(`allOfCustomer.view.${model.view}`)} <ChevronDown size={14} aria-hidden />
-              </>
-            }
-            items={viewItems}
-            triggerProps={{ className: 'nds-btn sm', 'aria-label': t('allOfCustomer.view.menu') }}
-          />
-          <Menu
-            className="fw-aoc-menu"
-            label={
-              <>
-                <Layers size={14} aria-hidden /> {t('allOfCustomer.kind.label')}: {t(`allOfCustomer.kind.${model.kind}`)} <ChevronDown size={14} aria-hidden />
-              </>
-            }
-            items={kindItems}
-            triggerProps={{ className: 'nds-btn sm', 'aria-label': t('allOfCustomer.kind.menu') }}
-          />
-        </div>
-        <p className="fw-aoc-marks">{t('allOfCustomer.readMarks')}</p>
-      </header>
-
-      <div className="fw-aoc-news" role="status" aria-live="polite">
-        {model.pending > 0 && (
-          <Button size="sm" variant="tonal" onClick={() => actions?.onShowNew?.()}>
-            {t('allOfCustomer.newShow', { count: model.pending })}
-          </Button>
-        )}
-      </div>
-
+    <div className="fw-aoc">
       {model.status === 'loading' || model.status === 'idle' ? (
         <div className="fw-aoc-loading" aria-busy="true" aria-label={t('allOfCustomer.loading', { customer })}>
           {[0, 1, 2].map((row) => (
@@ -124,7 +118,7 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
           {model.threadsNotShown > 0 && <p className="fw-aoc-note">{t('allOfCustomer.notShown', { count: model.threadsNotShown, customer })}</p>}
         </footer>
       )}
-    </section>
+    </div>
   )
 }
 

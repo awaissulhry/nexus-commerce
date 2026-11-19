@@ -67,6 +67,8 @@
     },
     "newShow_one": "1 nuovo · Mostra",
     "newShow_other": "{count} nuovi · Mostra",
+    "newStatus_one": "1 nuovo messaggio",
+    "newStatus_other": "{count} nuovi messaggi",
     "loading": "Lettura dei messaggi di {customer}…",
     "failed": "Non è stato possibile leggere i messaggi.",
     "retry": "Riprova",

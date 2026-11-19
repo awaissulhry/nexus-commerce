@@ -1,5 +1,6 @@
-/* F-SA-261: "All of <Customer>" (view/AllOfCustomerFeed.tsx) — the read-only merged feed in the dock: its one line, the two filters,
-   "N new · Show", one message per line (its chip above the conversation's own card, its door under it), the foot. Tokens only. */
+/* F-SA-261: "All of <Customer>" (view/AllOfCustomerFeed.tsx) — the read-only merged feed in the dock: one message per line (its chip
+   above the conversation's own card, its door under it), the foot. Tokens only.
+   F-OP-204: its one line, the two filters and "N new · Show" moved to the pick band and FeedHead (below). */
 .fw-aoc {
   display: flex;
   flex-direction: column;
@@ -7,41 +8,11 @@
   min-width: 0;
 }
 
-.fw-aoc-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-3);
-  min-width: 0;
-}
-
-.fw-aoc-line,
-.fw-aoc-marks,
 .fw-aoc-note {
   margin: 0;
   color: var(--nds-text-muted);
   font-size: var(--nds-font-size-sm);
   line-height: 1.45;
-}
-
-.fw-aoc-line {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--nds-space-2);
-}
-
-.fw-aoc-line > svg {
-  flex: none;
-  margin-top: 2px;
-}
-
-.fw-aoc-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--nds-space-2);
-}
-
-.fw-aoc-news:empty {
-  display: none;
 }
 
 .fw-aoc-loading {
@@ -146,3 +117,50 @@
   align-items: flex-start;
   gap: var(--nds-space-2);
 }
+
+/* ── F-OP-204 (order page plan N4; 11-dock §3.1; RC1, D6): FeedHead — the thread Head's own 44 px row (.fw-rth, head.css) with the
+   title that truncates, View ▾ and Kind ▾ (their icon only in a card of 480 px or less: their accessible names keep the words), the
+   width menu and ⋯ that never fold; the card's foot ends with its ONE info icon. --nds-space-N is N px. ── */
+.fw-aoc-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-base);
+  font-weight: 600;
+}
+
+.fw-aoc-title > svg {
+  flex: none;
+  color: var(--nds-text-muted);
+}
+
+.fw-aoc-title-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-aoc-menu-words {
+  white-space: nowrap;
+}
+
+.fw-aoc-news {
+  flex: none;
+}
+
+@container fw-rtcol (max-width: 480px) {
+  .fw-aoc-menu-words {
+    display: none;
+  }
+}
+
+.fw-aoc-foot-tip {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: auto;
+}
+/* ── end F-OP-204 */

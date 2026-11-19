@@ -398,7 +398,7 @@ describe('F-SA-279: the page wires it (the sources)', () => {
     const dock = tab.slice(tab.indexOf('function Dock('))
     expect(dock).toContain("{ value: 'general', label: t('customers.work.dock.general'")
     expect(dock).toContain("{ value: 'all', label: t('customers.work.dock.all'")
-    expect(dock).toContain('<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />')
+    expect(dock).toContain('<AllOfCustomerDock label={`${t(\'customers.work.dock.all\', { customer: customer.name })} · ${t(\'customers.work.dock.readOnly\')}`} model={feed.model} actions={{ ...feed.actions, onAnswer }} />') // F-OP-204: the card with its Head
     expect(dock).toContain('onDraft={(kept) => dock.onDraft(pick, kept)}')
     expect(dock).toContain("note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}")
     // No threads.read: no dock at all.

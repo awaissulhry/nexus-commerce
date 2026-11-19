@@ -26,6 +26,8 @@ import {
   type FeedState,
 } from './model'
 import { AllOfCustomerFeed } from './view/AllOfCustomerFeed'
+import { AllOfCustomerDock } from './view/AllOfCustomerFeed' // F-OP-204
+import { FeedHead } from './view/FeedHead' // F-OP-204
 
 /**
  * F-SA-261 (sales page plan R4, P9, N4, N5) — "All of <Customer>", the read-only merged view: its one call, paging (Show older, no
@@ -174,11 +176,11 @@ describe('F-SA-261 the view, in both languages', () => {
     answer([entry('m4', 40), entry('m3', 30)], 'c-0', { threadsNotShown: 1 }),
   )
 
-  it('read only: the line, the filters, the chips, "1 new · Show", the New dot, the door, Show older, what is left out — no ⋯ on a card', () => {
-    const html = render(createElement(AllOfCustomerFeed, { model: model(state), actions: { onAnswer: () => undefined } }))
+  // F-OP-204: the card — its Head (the filters, "1 new · Show"), the feed, the foot's info icon; the one line is the pick band's now.
+  it('read only: the filters, the chips, "1 new · Show", the New dot, the door, Show older, what is left out — no ⋯ on a card', () => {
+    const html = render(createElement(AllOfCustomerDock, { label: 'All of Brand Alpha · Read only', model: model(state), actions: { onAnswer: () => undefined } }))
     const text = textOf(html)
-    expect(text).toContain("Read only: messages of Brand Alpha's orders, quotes, requests, projects and general conversation. To write, pick one conversation.")
-    expect(text).toContain('Open a conversation to mark it read.')
+    expect(html).toContain('aria-label="Open a conversation to mark it read."')
     expect(text).toContain('View: All')
     expect(text).toContain('Kind: Every kind')
     expect(text).toContain('SO-0142 · Your order 12')
@@ -192,8 +194,7 @@ describe('F-SA-261 the view, in both languages', () => {
     // The chip is a real link to the record (⌘-click opens a new tab).
     expect(html).toContain('href="/w/x/sales/orders/so-1"')
     expect(leftKeys(html, ['allOfCustomer', 'view', 'kind', 'chip'])).toEqual([])
-    const italian = render(createElement(AllOfCustomerFeed, { model: model(state), actions: { onAnswer: () => undefined } }), 'it')
-    expect(textOf(italian)).toContain('Sola lettura: i messaggi di ordini, preventivi, richieste, progetti e conversazione generale di Brand Alpha. Per scrivere, scegli una conversazione.')
+    const italian = render(createElement(AllOfCustomerDock, { label: 'Tutto di Brand Alpha · Sola lettura', model: model(state), actions: { onAnswer: () => undefined } }), 'it')
     expect(textOf(italian)).toContain('Rispondi nella sua conversazione')
     expect(textOf(italian)).toContain('Brand Alpha (generale)')
     expect(textOf(italian)).toContain('Vista: Tutto')
@@ -230,3 +231,75 @@ describe('F-SA-261 MessageCard read only', () => {
     expect(textOf(readOnly)).toContain('Message m1')
   })
 })
+
+// ---- F-OP-204 (order page plan N4; 11-dock §0.2, §1, §3.1; RC1, D6): All of <Customer> in the dock's ONE card, with its Head row ---------
+describe('F-OP-204 — All of <Customer> inside the card: FeedHead, the width menu, the foot', () => {
+  const model = (state: FeedState, over: Partial<Parameters<typeof feedModel>[1]> = {}) => feedModel(state, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true, ...over })
+  const shown = afterFirst(EMPTY_FEED, answer([entry('m2', 20), entry('m1', 10)]))
+  const waiting = afterFresh(shown, answer([entry('m4', 40), entry('m3', 30), entry('m2', 20)]))
+
+  it('the card: the same column as a thread — the Head row, the body that scrolls, the fixed foot with ONE info icon', () => {
+    const html = render(createElement(AllOfCustomerDock, { label: 'All of Brand Alpha · Read only', model: model(shown), foot: createElement('span', null, 'WRITE IN') }))
+    expect(html).toContain('class="fw-rt-column is-docked" aria-label="All of Brand Alpha · Read only"')
+    const head = html.indexOf('class="fw-rth fw-aoc-head"')
+    const body = html.indexOf('class="fw-rt-body"')
+    const foot = html.indexOf('class="fw-rt-foot"')
+    expect(head).toBeGreaterThan(-1)
+    expect(head).toBeLessThan(body)
+    expect(body).toBeLessThan(foot)
+    expect(html.slice(foot)).toContain('WRITE IN')
+    expect(html.slice(foot).match(/class="info"/g)?.length).toBe(1)
+    // The feed's old header (its line, filters, marks) is gone from the body.
+    expect(html.slice(body, foot)).not.toContain('fw-aoc-head')
+    expect(html.slice(body, foot)).not.toContain('View: All')
+  })
+
+  it('the Head: the title, View ▾ and Kind ▾ with their words in their names, "N new · Show" only while messages wait, a polite status', () => {
+    const calm = render(createElement(FeedHead, { title: 'All of Brand Alpha · Read only', model: model(shown) }))
+    expect(calm).toContain('role="group" aria-label="All of Brand Alpha · Read only"')
+    expect(textOf(calm)).toContain('All of Brand Alpha · Read only')
+    expect(calm).toContain('aria-label="View: All · Choose which messages the feed shows"')
+    expect(calm).toContain('aria-label="Kind: Every kind · Choose which records the feed shows"')
+    expect(textOf(calm)).not.toContain('new · Show')
+    expect(calm).toMatch(/<span class="nds-vh" role="status" aria-live="polite"><\/span>/)
+    const news = render(createElement(FeedHead, { title: 'All of Brand Alpha · Read only', model: model(waiting) }))
+    expect(textOf(news)).toContain('2 new · Show')
+    expect(news).toContain('2 new messages')
+    const italian = render(createElement(FeedHead, { title: 'Tutto di Brand Alpha · Sola lettura', model: model(waiting) }), 'it')
+    expect(textOf(italian)).toContain('2 nuovi · Mostra')
+    expect(italian).toContain('2 nuovi messaggi')
+    expect(leftKeys(italian, ['allOfCustomer', 'width', 'more'])).toEqual([])
+  })
+
+  it('outside a docked frame no width menu; the ⋯ only with something in it (Open <customer> on the order page)', () => {
+    const bare = render(createElement(FeedHead, { title: 'All of Brand Alpha · Read only', model: model(shown) }))
+    expect(bare).not.toContain('aria-label="Thread width"')
+    expect(bare).not.toContain('aria-label="Thread tools"')
+    const withPage = render(createElement(FeedHead, { title: 'All of Brand Alpha · Read only', model: model(shown), customerHref: '/w/x/sales/customers/p-a' }))
+    expect(withPage).toContain('aria-label="Thread tools"')
+  })
+
+  it('the sources: the SAME width menu as the thread Head; the ⋯ hides, resets and opens the customer; icon-only filters below 481 px', () => {
+    const head = readFileSync(new URL('./view/FeedHead.tsx', import.meta.url), 'utf8')
+    expect(head).toContain("import { WIDTH_NS, WidthMenu } from '../../../../../lib/record-thread/head/view/WidthMenu'")
+    expect(head).toContain('<WidthMenu width={width} onWidth={frame ? (choice) => frame.choose(choice) : undefined} />')
+    expect(head).toContain("onSelect: () => frame.choose('hide')")
+    expect(head).toContain("onSelect: () => frame.choose('reset')")
+    expect(head).toContain("t('allOfCustomer.openRecord', { record: model.customerName }), href: customerHref")
+    const css = readFileSync(new URL('./all-of-customer.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-aoc-menu-words \{\s*display: none;/)
+    expect(css).not.toMatch(/\.fw-aoc-head \{/)
+  })
+
+  it('the hosts: the order page and the customer page draw the card; the pick band\'s line says it is read only and how to write', () => {
+    const order = readFileSync(new URL('../../../sales/orders/record/dock/OrderDock.tsx', import.meta.url), 'utf8')
+    const customer = readFileSync(new URL('../../../sales/customers/record/view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(order).toContain('<AllOfCustomerDock')
+    expect(order).toContain('customerHref={`${prefix}/sales/customers/${encodeURIComponent(order.partyId)}`}')
+    expect(order).toContain("line: rt('allOfCustomer.line', { customer })")
+    expect(customer).toContain('<AllOfCustomerDock label=')
+    expect(customer).toContain("line: rt('allOfCustomer.line', { customer: customer.name })")
+    for (const host of [order, customer]) expect(host).not.toContain('<PickedDockColumn')
+  })
+})
+// ---- end F-OP-204
