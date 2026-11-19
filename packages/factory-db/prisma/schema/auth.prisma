@@ -153,6 +153,10 @@ model User {
   supervisedPortalSettings PortalSettings[] @relation("PortalSettingsSupervisor")
   backupPortalSettings     PortalSettings[] @relation("PortalSettingsBackup")
   approverPortalSettings   PortalSettings[] @relation("PortalSettingsApprover")
+  // B-CP-005 portal-auth.prisma (customer page plan, schema wave "customer page 1/1"): the customers whose factory designer
+  // they are, or its backup (an office person).
+  designerPortalSettings       PortalSettings[] @relation("PortalSettingsFactoryDesigner")
+  designerBackupPortalSettings PortalSettings[] @relation("PortalSettingsFactoryDesignerBackup")
   // B-PR-15 brand-production.prisma (production plan, schema wave 3/5): the orders they supervise themselves (an office person).
   supervisedOrders         BrandOrderProduction[] @relation("BrandOrderProductionSupervisor")
   // TH-5 projects.prisma (threads plan, schema wave 8/9, B-TH-065): the projects they lead (an office person).

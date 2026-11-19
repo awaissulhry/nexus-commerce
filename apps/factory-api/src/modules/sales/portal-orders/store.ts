@@ -203,7 +203,8 @@ export async function sentRequests(db: Reader, companyId: string) {
   const piecesOf = new Map(sizes.map((row) => [row.lineId, row._sum.quantity ?? 0]))
   return requests.map((request) => {
     const mine = lines.filter((line) => line.requestId === request.id)
-    return { ...request, styleIds: [...new Set(mine.map((line) => line.styleId))], pieces: mine.reduce((sum, line) => sum + (piecesOf.get(line.id) ?? 0), 0) }
+    // B-CP-005 (schema wave "customer page 1/1"): the styles its lines name; a described or made-to-measure line may name none.
+    return { ...request, styleIds: [...new Set(mine.flatMap((line) => (line.styleId === null ? [] : [line.styleId])))], pieces: mine.reduce((sum, line) => sum + (piecesOf.get(line.id) ?? 0), 0) }
   })
 }
 

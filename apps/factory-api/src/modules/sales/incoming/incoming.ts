@@ -370,7 +370,8 @@ async function catalogueRows(db: Reader, actor: Actor, rows: readonly CatalogueD
   return rows.map((row) => {
     const own = lines.filter((line) => line.requestId === row.id)
     const pieces = own.reduce((sum, line) => sum + line.sizes.reduce((total, size) => total + size.quantity, 0), 0)
-    const codes = [...new Set(own.map((line) => styles.get(line.styleId) ?? ''))].filter((code) => code !== '')
+    // B-CP-005 (schema wave "customer page 1/1"): the style codes its lines name; a described or made-to-measure line may name none.
+    const codes = [...new Set(own.map((line) => (line.styleId === null ? '' : (styles.get(line.styleId) ?? ''))))].filter((code) => code !== '')
     const order = orders.find((entry) => entry.id === row.salesOrderId)
     const quote = quotes.find((entry) => entry.id === row.quoteId)
     const party = parties.get(row.partyId) ?? null
