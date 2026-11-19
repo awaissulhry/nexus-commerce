@@ -1,13 +1,14 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { InspectionLevel } from '@nexus/factory-domain/quality/aql/iso2859'
 import { QUALITY_AQL_MANAGE, QUALITY_AQL_VIEW } from '@nexus/factory-domain/quality/aql/permissions'
 import { aqlWords, LEVEL_WORDS, levelText } from '@nexus/factory-domain/quality/aql/sampling'
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
+import { optionalStyleWall } from '../../product/styles/store'
 import type { AssignmentView, ProfileView } from './contract'
 
 /**
@@ -27,9 +28,41 @@ export function officeOf(caller: Pick<CommandCaller, 'factoryContext'>): OfficeC
 export const mayView = (context: OfficeContext, companyId: string): boolean => can(actorOf(context), QUALITY_AQL_VIEW, { companyId }) || can(actorOf(context), QUALITY_AQL_MANAGE, { companyId })
 export const mayManage = (context: OfficeContext, companyId: string): boolean => can(actorOf(context), QUALITY_AQL_MANAGE, { companyId })
 
-export function assertManage(context: OfficeContext, companyId: string): void {
-  if (!mayManage(context, companyId)) throw new ForbiddenError("A company's AQL profiles are kept with the right to keep AQL profiles over that company.")
+export function assertManage(context: OfficeContext, companyId: string, named?: Named): void {
+  if (!mayManage(context, companyId) || (named && !reachesNamed(context, [QUALITY_AQL_MANAGE], companyId, named))) throw new ForbiddenError("A company's AQL profiles are kept with the right to keep AQL profiles over that company.")
 }
+
+// ── op-fx9 (the brand wall; Owner rule 2026-11-16: "One brand must not be able to see anything related to any other brand. But
+// we, as the production unit, should be able to see it all. And manage it all as well.") ─────────────────────────────────────────
+/** What an assignment names: its customer, and its style's brand (a private-label style is its customer's; our own collection: none). */
+export interface Named {
+  readonly customerId: string | null
+  readonly brandPartyId: string | null
+}
+
+/** One of the permissions reaches both customers an assignment names, at its company (a party it does not name: everyone's). */
+export function reachesNamed(context: OfficeContext, permissions: readonly Permission[], companyId: string, named: Named): boolean {
+  const actor = actorOf(context)
+  return permissions.some((permission) => can(actor, permission, { companyId, partyId: named.customerId }) && can(actor, permission, { companyId, partyId: named.brandPartyId }))
+}
+
+/**
+ * The assignments `permission` reaches: of a company it reaches, for no customer or one it reaches, on no style or a style of our
+ * own collection or of a customer it reaches. A person limited to some customers meets another customer's row as no row (the
+ * answer of an unknown style or customer); the production unit (every customer) is not filtered beyond the company.
+ */
+export function assignmentWall(context: OfficeContext, permission: Permission): Prisma.AqlProfileAssignmentWhereInput {
+  const actor = actorOf(context)
+  const parts = [scopeWhere(actor, permission, { company: 'companyId', party: { field: 'customerId', nullable: true } }), optionalStyleWall(actor, permission)].filter((part) => Object.keys(part).length > 0)
+  return (parts.length === 0 ? {} : { AND: parts }) as Prisma.AqlProfileAssignmentWhereInput
+}
+
+/** The brand of an assignment's style (null: no style, or a style of our own collection). */
+export async function brandOfStyle(db: Reader, styleId: string | null): Promise<string | null> {
+  if (styleId === null) return null
+  return (await db.style.findUnique({ where: { id: styleId }, select: { brandPartyId: true } }))?.brandPartyId ?? null
+}
+// ── end op-fx9 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const PROFILE_COLUMNS = {
   id: true,
