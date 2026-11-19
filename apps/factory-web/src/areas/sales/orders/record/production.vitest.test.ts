@@ -16,11 +16,15 @@ import { designScreen as workOrderScreen } from '../../../production/work-orders
 // F-OP-115: the work-order row's rules (lib/production/work-order-acts)
 import { actsCanOf, cancelHeld, planningHref, rowActsOf, type ActsRow } from '../../../../lib/production/work-order-acts/model'
 
+// op-fx1: a source without its comments (block, JSX and line comments), for a pin about what the code does — never about its notes.
+const codeOf = (source: string): string => source.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, '').replace(/(^|\s)\/\/.*$/gm, '$1')
+
 /**
  * Lead fix (production-page lane): the order's Production tab wrote `sewn ?? 0` — "0 sewn" where the site does not scan sewing.
  * Now ONE figure (lib/production progressFigure: the bar shows what its words name) and, for a step the site does not count, "—"
  * with the reason in words.
  */
+
 describe('the Production tab’s progress, honest where a step is not scanned', () => {
   const row = (progress: { cut: number | null; bundled: number | null; sewn: number | null; finished: number | null } | null, status = 'IN_PROGRESS') => ({ progress, pieces: 100, status }) as Parameters<typeof productionProgress>[0]
 
@@ -429,7 +433,8 @@ describe('F-OP-115: Split…, Cancel…, Close… · Reopen…, Open in Planning
     // The dialog draws no outcome to pick (R-16): the refusal is a Banner, the reason field only when nothing is cut.
     const dialogs = readFileSync(new URL('../../../../lib/production/work-order-acts/view/WorkOrderActsDialogs.tsx', import.meta.url), 'utf8')
     expect(dialogs).toContain('check.refusal ? (')
-    expect(dialogs).not.toMatch(/RadioCard|outcome/)
+    // op-fx1: the code, not its notes (they say "no outcome picker" in words).
+    expect(codeOf(dialogs)).not.toMatch(/RadioCard|outcome/)
   })
 
   it('Split… and Close… · Reopen… are the production lane’s own (useSplit + SplitDialog, useClose + CloseParts — never a copy)', () => {
@@ -444,7 +449,7 @@ describe('F-OP-115: Split…, Cancel…, Close… · Reopen…, Open in Planning
 
   it('the gate’s Money door is a tab link (F-OP-210: the dock’s scope kept), no plain ?tab= link', () => {
     const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
-    expect(tab).not.toContain('?tab=money')
+    expect(codeOf(tab)).not.toContain('?tab=money') // op-fx1: the code, not the note that says what it was
     expect(tab).toContain("<TabLink href={tabHref(`${model.prefix}/sales/orders/${order.id}`, 'money', search)}>{t('gate.money')}</TabLink>")
   })
 
