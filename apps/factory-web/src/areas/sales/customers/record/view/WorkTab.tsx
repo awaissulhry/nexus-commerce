@@ -240,6 +240,27 @@ function Dock({ customer, general, dock, feed, prefix }: DockProps) {
   }
   // F-OP-205: the empty feed's door — the first message goes into the customer's general thread, the box on Office note.
   const writeFirst = { thread: t('customers.work.dock.general', { customer: customer.name }), onWrite: () => (frame?.compose ? frame.compose({ record: { type: 'Party', id: customer.id }, messageId: null, mode: 'note' }) : dock.onScope('general')) }
+  // ---- F-OP-207 (11-dock §3.2, §3.4; D11): Answer in place on a line of the customer's general thread or of the record picked (the
+  // frame's compose ask: the pick goes there first, the box focused — Reply on the customer's line, Office note otherwise); any other
+  // record's line opens its page. The foot: "Read only. Write in: [<customer> (general)]" and the record picked, when one is.
+  const canAnswer = (record: { readonly type: string; readonly id: string }) => (record.type === 'Party' ? record.id === customer.id : !!pick && sameRecord(record, pick))
+  const writeIn = (record: { readonly type: string; readonly id: string }, fallback: 'general' | 'record') => (frame?.compose ? frame.compose({ record, messageId: null, mode: 'note' }) : dock.onScope(fallback))
+  const allFoot = (
+    <>
+      <span>
+        {t('customers.work.dock.readOnly')}. {o('record.dock.writeIn')}
+      </span>
+      <Button size="sm" variant="secondary" onClick={() => writeIn({ type: 'Party', id: customer.id }, 'general')}>
+        {t('customers.work.dock.general', { customer: customer.name })}
+      </Button>
+      {pick && (
+        <Button size="sm" variant="secondary" onClick={() => writeIn({ type: pick.type, id: pick.id }, 'record')}>
+          {pick.label}
+        </Button>
+      )}
+    </>
+  )
+  // ---- end F-OP-207
   return (
     <ThreadPick label={t('customers.work.dock.label')} choices={choices} value={dock.scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>
       {dock.scope === 'record' && pick ? (
@@ -257,7 +278,7 @@ function Dock({ customer, general, dock, feed, prefix }: DockProps) {
       ) : dock.scope === 'all' ? (
         // F-OP-203: All of <customer> in the dock's ONE card (DockColumn): the pick band on top, the read-only feed that scrolls.
         // F-OP-204: its Head row (FeedHead); this page IS the customer's, so its ⋯ has no "Open <customer>".
-        <AllOfCustomerDock label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} model={feed.model} actions={{ ...feed.actions, onAnswer, writeFirst }} />
+        <AllOfCustomerDock label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} model={feed.model} actions={{ ...feed.actions, onAnswer, writeFirst, canAnswer, ...(frame?.compose ? { onCompose: frame.compose } : {}) }} foot={allFoot} />
       ) : (
         general
       )}

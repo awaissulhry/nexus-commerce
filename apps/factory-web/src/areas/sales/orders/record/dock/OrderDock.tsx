@@ -130,6 +130,13 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
   }
   // F-OP-205: the empty feed's door — the first message goes into this order's thread, the box on Office note (the frame's ask).
   const writeFirst = { thread: t('record.dock.order'), onWrite: () => (frame?.compose ? frame.compose({ record: { type: 'SalesOrder', id: order.id }, messageId: null, mode: 'note' }) : go(ORDER_SCOPE)) }
+  // ---- F-OP-207 (11-dock §3.2, §3.4): Answer on a line of this order's, its customer's general or a linked project's thread opens THAT
+  // thread at the message with the box focused (Reply on the customer's line, Office note otherwise) — the frame's compose ask, which
+  // moves the pick there first; any other record's line opens its page. The foot's Write in: the same ask, the box on Office note.
+  const page = { orderId: order.id, partyId: order.partyId }
+  const canAnswer = (record: { readonly type: string; readonly id: string }) => scopeOfRecord(record, page, offer) !== null
+  const writeIn = (record: { readonly type: string; readonly id: string }, fallback: OrderScope) => (frame?.compose ? frame.compose({ record, messageId: null, mode: 'note' }) : go(fallback))
+  // ---- end F-OP-207
 
   // ── the pick ──
   const segments = choicesOffered(offer)
@@ -186,18 +193,23 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
       <AllOfCustomerDock
         label={`${t('record.dock.all', { customer })} · ${t('record.dock.readOnly')}`}
         model={feed.model}
-        actions={{ ...feed.actions, onAnswer, writeFirst }}
+        actions={{ ...feed.actions, onAnswer, writeFirst, canAnswer, ...(frame?.compose ? { onCompose: frame.compose } : {}) /* F-OP-207 */ }}
         customerHref={`${prefix}/sales/customers/${encodeURIComponent(order.partyId)}`}
         foot={
-          // Writing always goes into ONE conversation: the two the person may pick here.
+          // Writing always goes into ONE conversation: the two the person may pick here. F-OP-207: "Read only. Write in:", each door
+          // opens its thread with the box focused on Office note (the frame's compose ask).
           <>
-            <span>{t('record.dock.writeIn')}</span>
-            <Button size="sm" variant="secondary" onClick={() => go(ORDER_SCOPE)}>
+            <span>
+              {t('record.dock.readOnly')}. {t('record.dock.writeIn')}
+            </span>
+            <Button size="sm" variant="secondary" onClick={() => writeIn({ type: 'SalesOrder', id: order.id }, ORDER_SCOPE)}>
               {t('record.dock.order')}
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => go({ kind: 'general' })}>
-              {t('record.dock.writeGeneral')}
-            </Button>
+            {offer.general && (
+              <Button size="sm" variant="secondary" onClick={() => writeIn({ type: 'Party', id: order.partyId }, { kind: 'general' })}>
+                {t('record.dock.writeGeneral')}
+              </Button>
+            )}
           </>
         }
       />

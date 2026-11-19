@@ -261,3 +261,20 @@ export function lineTimeOf(at: string, locale: Locale, today: string): string {
   return dayOf(at) === today ? timeOf(at, locale) : `${shortDateOf(at, locale, today)} ${timeOf(at, locale)}`
 }
 // ---- end F-OP-205
+
+// ---- F-OP-207 (order page plan N4; 11-dock §3.2, §3.4; pick P7: no merged composer): a line's door. Answer — for a line of a thread
+// the dock can write in (the order page: this order, its customer's general thread, a linked project; the customer page: its general
+// thread, the record picked) — opens THAT thread at the message with the box focused: Reply when the customer wrote it (the card's own
+// Reply: they read the answer), Office note otherwise. Any other record's line opens its record's page at the message ("Open …").
+// Answer never writes anywhere but a thread of this customer (the host says which threads it can show).
+
+export type FeedDoor =
+  | { readonly kind: 'answer'; readonly ask: { readonly record: { readonly type: string; readonly id: string }; readonly messageId: string; readonly mode: 'reply' | 'note' } }
+  | { readonly kind: 'open'; readonly href: string }
+
+export function answerOf(item: Pick<FeedItem, 'record' | 'key' | 'card' | 'messageHref'>, answerable: (record: { readonly type: string; readonly id: string }) => boolean): FeedDoor {
+  const record = { type: item.record.type, id: item.record.id }
+  if (!answerable(record)) return { kind: 'open', href: item.messageHref }
+  return { kind: 'answer', ask: { record, messageId: item.key, mode: item.card.kind === 'theirs' ? 'reply' : 'note' } }
+}
+// ---- end F-OP-207

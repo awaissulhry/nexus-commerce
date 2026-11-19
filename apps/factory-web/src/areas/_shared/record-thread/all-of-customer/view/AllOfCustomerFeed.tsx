@@ -12,6 +12,7 @@ import { RecordTypeIcon } from '../../../../search/RecordTypeIcon'
 import { PickedDockColumn } from '../../ThreadPick' // F-OP-204: the dock's one card
 import { opensItself, type AllOfCustomerModel, type FeedItem, type FeedKindChoice, type FeedView, type Words } from '../model'
 import { lineTimeOf } from '../model' // F-OP-205
+import { answerOf, type FeedDoor } from '../model' // F-OP-207
 import { feedKeyOf, linePlaceOf, rovingIndexOf } from '../keys' // F-OP-206: the list's keys, one tab stop
 import { FeedHead } from './FeedHead' // F-OP-204
 import '../all-of-customer.css'
@@ -40,6 +41,10 @@ export interface AllOfCustomerFeedActions {
   readonly onOpenFile?: (fileId: string, record: FeedRecordRef, messageId: string) => void
   /** F-OP-205: the empty feed's door — "Write the first one in <thread>" (the host's own thread, the box on Office note). */
   readonly writeFirst?: { readonly thread: string; readonly onWrite: () => void }
+  // ---- F-OP-207: Answer in place — the threads the dock can write in, and the frame's compose ask (absent: the door as before).
+  readonly canAnswer?: (record: FeedRecordRef) => boolean
+  readonly onCompose?: (ask: Extract<FeedDoor, { kind: 'answer' }>['ask']) => void
+  // ---- end F-OP-207
 }
 
 /**
@@ -243,6 +248,7 @@ function FeedLine({
   const tc = useT('record-thread-card')
   const locale = useLocale()
   const answer = actions?.onAnswer
+  const door: FeedDoor | null = actions?.canAnswer && actions.onCompose ? answerOf(item, actions.canAnswer) : null // F-OP-207
   const openFile = (fileId: string) => (actions?.onOpenFile ? actions.onOpenFile(fileId, item.record, item.key) : answer?.(item.record, item.key))
   const { line, card } = item
   const author = 'text' in line.author ? line.author.text : tc(line.author.key)
@@ -323,7 +329,16 @@ function FeedLine({
         <Button size="sm" variant="quiet" tabIndex={inner} aria-expanded={open} aria-controls={wholeId} onClick={onToggle}>
           {t(open ? 'allOfCustomer.less' : 'allOfCustomer.more')}
         </Button>
-        {answer ? (
+        {/* F-OP-207: Answer in that thread (Reply / Office note, the box focused), or Open <record> at the message. */}
+        {door?.kind === 'answer' ? (
+          <Button ref={doorButton} size="sm" variant="quiet" tabIndex={inner} aria-label={t('allOfCustomer.answerLabel', { record: chip })} onClick={() => actions?.onCompose?.(door.ask)}>
+            <CornerDownRight size={14} aria-hidden /> {t('allOfCustomer.answer')}
+          </Button>
+        ) : door?.kind === 'open' ? (
+          <a ref={doorLink} className="nds-btn sm quiet" tabIndex={inner} href={door.href}>
+            <CornerDownRight size={14} aria-hidden /> {t('allOfCustomer.openRecord', { record: chip })}
+          </a>
+        ) : answer ? (
           <Button ref={doorButton} size="sm" variant="quiet" tabIndex={inner} aria-label={t('allOfCustomer.answerLabel', { record: chip })} onClick={() => answer(item.record, item.key)}>
             <CornerDownRight size={14} aria-hidden /> {t('allOfCustomer.answer')}
           </Button>
