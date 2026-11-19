@@ -3,7 +3,8 @@ import { defineRoutes } from '../../../core/manifest'
 import { compareWithMaster } from './compare'
 import { cancelContract, cellsContract, compareContract, countsContract, createContract, getContract, listContract, moveContract, openLinesContract, releaseCheckContract, releaseContract, updateContract } from './contract'
 import { manifest } from './manifest'
-import { moveWorkOrder } from './moves'
+import { moveWorkOrder, workOrderCancelCheck } from './moves'
+import { cancelCheckContract } from './contract' // B-OP-024
 import { releaseCheck, releaseWorkOrder } from './release'
 import { countWorkOrders, createWorkOrder, getWorkOrder, listWorkOrders, openLines, setCells, updateWorkOrder } from './work-orders'
 import { createRepairWorkOrder, repairOptions, setRepairSteps } from './repairs'
@@ -67,6 +68,8 @@ export default defineRoutes('production.work-orders', manifest, async (app) => {
   app.post('/production/work-orders/:workOrderId/close', { schema: closeContract }, async (request) => closeWorkOrder(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/production/work-orders/:workOrderId/cancel', { schema: cancelContract }, async (request) => moveWorkOrder(request, request.params.workOrderId, 'CANCELLED', request.body, idempotencyKeyFrom(request)))
+  // B-OP-024: what a cancel would meet (read only).
+  app.get('/production/work-orders/:workOrderId/cancel-check', { schema: cancelCheckContract }, async (request) => workOrderCancelCheck(request, request.params.workOrderId))
 
   // B-W2a-12 (MES-019): a repair work order from a repair order, its steps, and what the dialog needs.
   app.get('/production/work-orders/repair-options', { schema: repairOptionsContract }, async (request) => repairOptions(request, request.query.repairOrderId))

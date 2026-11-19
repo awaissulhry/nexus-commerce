@@ -112,6 +112,8 @@ export interface LineChange {
   readonly textChanged: boolean
   /** B-OP-014: a line left out that work orders make — closed short (it stays on the order), not deleted. */
   readonly closedShort: boolean
+  /** B-OP-014: a line closed short before and open again after (a put-back of the change that closed it): what was left comes back. */
+  readonly reopened: boolean
 }
 
 export interface HeaderChange {
@@ -171,6 +173,29 @@ export function amendmentDiff(before: OrderSnapshot, after: OrderSnapshot): Amen
         netAfter: now.netAmount,
         textChanged: false,
         closedShort: true,
+        reopened: false,
+      })
+      continue
+    }
+    // B-OP-014: a line reopened by the amendment (a put-back of the change that closed it short): what was left of it comes back.
+    if (old !== undefined && now !== undefined && old.closedShortQuantity !== null && now.closedShortQuantity === null) {
+      const left = Math.max(0, old.quantity - old.closedShortQuantity)
+      const was = left === 0 ? new Map<string, number>() : oldSizes
+      changes.push({
+        change: 'CHANGED',
+        lineId: id,
+        seq: reference.seq,
+        styleId: reference.styleId,
+        colourwayId: reference.colourwayId,
+        piecesBefore: left,
+        piecesAfter: now.quantity,
+        sizes: order.flatMap((size) => ((was.get(size) ?? 0) === (newSizes.get(size) ?? 0) ? [] : [{ size, before: was.get(size) ?? 0, after: newSizes.get(size) ?? 0 }])),
+        unitPrice: priceChanged ? { before: priceBefore, after: priceAfter } : null,
+        netBefore: old.netAmount,
+        netAfter: now.netAmount,
+        textChanged,
+        closedShort: false,
+        reopened: true,
       })
       continue
     }
@@ -190,6 +215,7 @@ export function amendmentDiff(before: OrderSnapshot, after: OrderSnapshot): Amen
       netAfter: now?.netAmount ?? 0,
       textChanged,
       closedShort: false,
+      reopened: false,
     })
   }
   changes.sort((a, b) => a.seq - b.seq)

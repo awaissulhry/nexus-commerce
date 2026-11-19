@@ -70,7 +70,8 @@ export default defineRoutes('threads', manifest, async (app) => {
   // ---- end B-TH-093
 
   // ---- B-TH-027
-  app.post('/threads/unread', { schema: unreadContract }, async (request) => unreadCounts(request, request.body.records.map((record) => ({ type: record.recordType, id: record.recordId }))))
+  // B-OP-061: `readable` asked, each row says whether its thread is readable to the reader.
+  app.post('/threads/unread', { schema: unreadContract }, async (request) => unreadCounts(request, request.body.records.map((record) => ({ type: record.recordType, id: record.recordId })), { readable: request.body.readable === true }))
   app.post('/threads/:recordType/:recordId/read', { schema: markReadContract }, async (request) => markThreadRead(request, { type: request.params.recordType, id: request.params.recordId }, request.body, idempotencyKeyFrom(request)))
   app.post('/threads/:recordType/:recordId/unread', { schema: markUnreadContract }, async (request) => markThreadUnread(request, { type: request.params.recordType, id: request.params.recordId }, request.body, idempotencyKeyFrom(request)))
   // ---- end B-TH-027

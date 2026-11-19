@@ -11,8 +11,19 @@ import { actorOf, type OfficeContext, type SystemContext } from '../../../core/c
 import { readProposals } from '../../planning/promise-keep/store'
 import { wipTaskIdOf } from '../../product/changes/hooks'
 import { cellsOf, CHANGE_COLUMNS, extraOf, mayDecide } from '../../production/work-order-changes/read'
-import { reachesWorkOrder } from '../../production/work-orders/scope'
+import { reachesWorkOrder, type WorkOrderReach } from '../../production/work-orders/scope'
 import type { OrderRow, Reader } from './store'
+// B-OP-025 (order page plan N1; review R-12): a production task done from the order by the task's own right; a promise change closes
+// a refused re-promise's follow-up.
+import { z } from 'zod'
+import { defineContract, id, input, output } from '@nexus/factory-domain/core/contracts'
+import { DomainError, NotFoundError } from '@nexus/factory-domain/core/errors'
+import { TASKS_MANAGE } from '@nexus/factory-domain/tasks/permissions'
+import { command, type CommandCaller, type CommandTools } from '../../../core/command'
+import { markTaskDoneInCommand } from '../../../platform/tasks/tasks'
+import { askedOf } from '../../planning/promise-keep/brand-answer'
+import { officeContextOf } from './access'
+import { officeOrder } from './moves'
 
 /**
  * B-SA-050 (sales page plan R1, P6; 13-backend B4 "Still to do"; 14-change-flow §3.4; review C-8): what is still to do after the
@@ -28,6 +39,8 @@ import type { OrderRow, Reader } from './store'
  *                          request DONE) or it is REJECTED                                                  waits on PRODUCT
  *   WORK_IN_PROGRESS_TASK  the task a released change order's REWORK or SCRAP line left on one of the order's work orders
  *                          (product/changes/hooks wipTaskIdOf) — closed when DONE or CANCELLED                waits on PLANNER
+ *                          B-OP-025 (R-12): floor work — Done from the order only by the task's own right (tasks.manage over its
+ *                          work order, or its assignee: POST …/still-to-do/tasks/:taskId/done); anyone else reads "Production does this"
  *   REPROMISE              planning's re-promise of one of its lines still WAITING for sales — closed when accepted or
  *                          declined                                                                           waits on SALES
  *   TELL_WORKSHOP          an open subcontract order of a work order an accepted change changed — closed once a notice is
@@ -191,7 +204,8 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
       words: STILL_WORDS.wipTask(item.disposition as WipDisposition, workOrder?.number ?? null, revision),
       since: toUtcIso(task.createdAt),
       waitingOn: 'PLANNER',
-      mayAct: workOrder !== null && (task.assigneeId === context.actorId || reachesWorkOrder(actor, WORKORDERS_MANAGE, workOrder)),
+      // B-OP-025 (R-12): the task's own right — tasks.manage over its work order (the wall), or its assignee — never orders.manage.
+      mayAct: workOrder !== null && mayDoTask(actor, context.actorId, task, workOrder),
       requestId: carried.get(item.changeOrderId) ?? null, // B-SA-046c
     })
   }
@@ -218,3 +232,71 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
   rows.sort((a, b) => a.since.localeCompare(b.since))
   return { rows, count: rows.length, workOrdersLeftOut: leftOut.size }
 }
+
+// ── B-OP-025 (order page plan N1; 13-backend §11; review R-12): Done on a production task, from the order ──
+/** The words of a production task the reader may not tick off (403 `refusal/PRODUCTION_DOES_THIS`). */
+export const PRODUCTION_DOES_THIS: Words = Object.freeze({ en: 'Production does this.', it: 'Lo fa la produzione.' })
+
+/** May the person mark the task done: its assignee, or a holder of tasks.manage over its work order (a mixed one: every customer). */
+export const mayDoTask = (actor: ReturnType<typeof actorOf>, actorId: string, task: { readonly assigneeId: string | null }, workOrder: WorkOrderReach): boolean =>
+  task.assigneeId === actorId || reachesWorkOrder(actor, TASKS_MANAGE, workOrder)
+
+export const stillToDoTaskDoneContract = defineContract({
+  params: input({ orderId: id(), taskId: id() }),
+  body: input({ version: z.number().int().min(1) }),
+  response: { 200: output({ task: output({ id: id(), status: z.enum(['OPEN', 'DONE', 'CANCELLED']), version: z.number().int() }) }) },
+})
+
+/**
+ * POST /sales/orders/:orderId/still-to-do/tasks/:taskId/done (orders.view to reach the order): ONE of the order's own production
+ * tasks — the task a released change order's REWORK or SCRAP line left on a work order that makes this order's lines (wipTaskIdOf)
+ * — marked DONE, as the tasks platform marks it (the machine, the audit, task.completed), plus an audit row on the order. Checked
+ * by the TASK's own right (R-12): its assignee, or tasks.manage over its work order; anyone else (Sales: orders.manage alone) is
+ * refused 403 "Production does this". Another order's task, a task of a work order the reader does not reach, and an unknown id are
+ * all "Task not found."; another customer's order is "Sales order not found." (the words of an unknown id).
+ */
+export async function doneStillToDoTask(caller: CommandCaller, orderId: string, taskId: string, body: { readonly version: number }, idempotencyKey?: string) {
+  const context = officeContextOf(caller)
+  const actor = actorOf(context)
+  const order = await officeOrder(caller, orderId)
+  const found = await caller.withClient(async (client) => {
+    const task = await client.task.findUnique({ where: { id: taskId }, select: { id: true, recordType: true, recordId: true, assigneeId: true } })
+    if (!task || task.recordType !== 'WorkOrder' || !task.recordId) return null
+    const workOrder = await client.workOrder.findUnique({ where: { id: task.recordId }, select: { id: true, number: true, companyId: true, siteId: true, partyId: true } })
+    if (!workOrder) return null
+    // A work order that makes this order's own lines, and the task one of its released change orders' work-in-progress lines left.
+    const lines = (await client.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
+    const makes = lines.length > 0 && (await client.workOrderSize.count({ where: { workOrderId: workOrder.id, salesOrderLineId: { in: lines } } })) > 0
+    const items = makes ? await client.changeOrderItem.findMany({ where: { kind: 'WORK_IN_PROGRESS', workOrderId: workOrder.id, disposition: { in: [...TASK_DISPOSITIONS] }, changeOrder: { is: { status: 'RELEASED' } } }, select: { changeOrderId: true } }) : []
+    if (!items.some((item) => wipTaskIdOf(item.changeOrderId, workOrder.id) === task.id)) return null
+    // The wall: named to a person who reaches its work order (or its own assignee); else as unknown.
+    if (task.assigneeId !== context.actorId && !reachesWorkOrder(actor, WORKORDERS_VIEW, workOrder)) return null
+    return { task, workOrder }
+  })
+  if (!found) throw new NotFoundError('Task not found.')
+  if (!mayDoTask(actor, context.actorId, found.task, found.workOrder)) throw new DomainError('forbidden', PRODUCTION_DOES_THIS.en, [{ path: 'refusal/PRODUCTION_DOES_THIS', message: PRODUCTION_DOES_THIS.en }])
+  const { result } = await command(caller, { name: 'orders.stillToDoTaskDone', idempotencyKey, input: { orderId, taskId, ...body } }, async (tools) => {
+    const done = await markTaskDoneInCommand(tools, context, found.task.id, body.version)
+    tools.audit({ action: 'orders.stillToDoTaskDone', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { taskId: done.id, workOrderId: found.workOrder.id, status: done.status } })
+    return { task: { id: done.id, status: done.status, version: done.version } }
+  })
+  return result
+}
+
+/**
+ * A promise change of the order answers the customer's refusal of a new date: the OPEN follow-up tasks of its refused re-promises
+ * (planning/promise-keep brand-answer: the task's id is the REPROMISE request's) are closed DONE in the same command, each as the
+ * tasks platform closes one, with an audit row on the order — those of the changed lines (none named: the whole order's).
+ */
+export async function closeRefusedFollowUpsInCommand(tools: CommandTools, context: OfficeContext, order: Pick<OrderRow, 'id' | 'companyId'>, lineIds: readonly string[], reason: string): Promise<string[]> {
+  const refused = await tools.tx.approvalRequest.findMany({ where: { kind: 'REPROMISE', recordType: 'SalesOrder', recordId: order.id, status: 'REFUSED' }, select: { id: true } })
+  if (refused.length === 0) return []
+  const open = await tools.tx.task.findMany({ where: { id: { in: refused.map((row) => row.id) }, status: 'OPEN' }, select: { id: true } })
+  if (open.length === 0) return []
+  const asked: ReadonlyMap<string, { readonly orderLineId: string }> = lineIds.length > 0 ? await askedOf(tools.tx, open.map((row) => row.id)) : new Map()
+  const closing = open.filter((row) => lineIds.length === 0 || lineIds.includes(asked.get(row.id)?.orderLineId ?? ''))
+  for (const row of closing) await markTaskDoneInCommand(tools, context, row.id, null)
+  if (closing.length > 0) tools.audit({ action: 'orders.repromiseFollowUpsClosed', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { taskIds: closing.map((row) => row.id), lineIds: [...lineIds] }, reason })
+  return closing.map((row) => row.id)
+}
+// ── end B-OP-025 ──
