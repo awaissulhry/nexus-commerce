@@ -40,4 +40,9 @@ export const manifest = defineManifest({
   // B-TH-069 / B-TH-072: the portal (members only).
   'GET /portal/projects': portal,
   'GET /portal/projects/:projectId/news': portal,
+  // B-CP-074 (customer page plan D13, K10): a customer's admin adds and takes out its own people on a project it is a member of
+  // (step-up and the colleague's version on the writes; members only, its own company only — checked in the handler).
+  'GET /portal/projects/:projectId/people/choices': { audiences: ['partner'], permission: 'portal.colleagues.manage', scope: 'party' },
+  'POST /portal/projects/:projectId/people': { audiences: ['partner'], permission: 'portal.colleagues.manage', scope: 'party' },
+  'DELETE /portal/projects/:projectId/people/:userId': { audiences: ['partner'], permission: 'portal.colleagues.manage', scope: 'party' },
 })

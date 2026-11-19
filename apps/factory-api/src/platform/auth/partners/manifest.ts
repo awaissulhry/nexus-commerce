@@ -25,4 +25,10 @@ export const manifest = defineManifest({
   'POST /portal/colleagues': { audiences: ['partner'], permission: 'portal.colleagues.manage', scope: 'party' },
   'PATCH /portal/colleagues/:userId': { audiences: ['partner'], permission: 'portal.colleagues.manage', scope: 'party' },
   'POST /portal/colleagues/:userId/deactivate': { audiences: ['partner'], permission: 'portal.colleagues.manage', scope: 'party' },
+  // B-CP-073 (customer page plan D13): a customer's admin resends or withdraws an invitation, pauses or gives back access (step-up;
+  // the person's version; customers only — a supplier's or workshop's admin is refused in the handler).
+  'POST /portal/colleagues/:userId/invitation': { audiences: ['partner'], permission: 'portal.colleagues.manage', scope: 'party' },
+  'POST /portal/colleagues/:userId/invitation/revoke': { audiences: ['partner'], permission: 'portal.colleagues.manage', scope: 'party' },
+  'POST /portal/colleagues/:userId/suspend': { audiences: ['partner'], permission: 'portal.colleagues.manage', scope: 'party' },
+  'POST /portal/colleagues/:userId/reactivate': { audiences: ['partner'], permission: 'portal.colleagues.manage', scope: 'party' },
 })

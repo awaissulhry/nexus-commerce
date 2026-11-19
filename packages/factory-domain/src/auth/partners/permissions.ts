@@ -49,7 +49,8 @@ export const definePartnerPermissions = (area: string, declarations: Parameters<
 
 export const PORTAL_DEFINITIONS: PermissionDefinition[] = definePartnerPermissions('portal', {
   'colleagues.view': { risk: 'read', description: "See your organisation's portal users: names, roles, whether they see prices, their last sign-in and status." },
-  'colleagues.manage': { risk: 'stepUp', description: "Your organisation's portal admin: invite colleagues within the limits the factory set, change their role, deactivate them." },
+  // B-CP-073 / B-CP-074 (customer page plan D13): a customer's admin also resends, withdraws, pauses, gives back, adds to its projects.
+  'colleagues.manage': { risk: 'stepUp', description: "Your organisation's portal admin: invite colleagues within the limits the factory set, change their role, deactivate them; a customer's admin also sends an invitation again or withdraws it, pauses or gives back access, and adds its own people to the projects it is in." },
   comment: { risk: 'write', description: 'Write messages on the records your role shows.' },
   upload: { risk: 'write', description: 'Send files on the records your role shows.' },
   approve: { risk: 'write', description: 'Approve, accept or sign on the records your role shows (samples, proofs, quotes, changes).' },
