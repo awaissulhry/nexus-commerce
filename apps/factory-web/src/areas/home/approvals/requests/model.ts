@@ -14,6 +14,8 @@ import type { AcceptDone, AcceptedWorkOrder, BatchAnswer, BatchItem, BrandReques
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
 import { DESIGN_HELD_WORDS } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 import type { ApplyPlan, ApplyPlanStep } from './api'
+// F-CP-160: the money wall's hold of accepting a priced counter-offer (the API's B-CP-026).
+import { BLIND_PRICE_CODE, BLIND_PRICE_KEY } from '../../../sales/_shared/blind-price'
 
 /**
  * F-PR-08 — a customer's requests in Home › Approvals, without a screen (production plan §3 "Brand asks, we decide: we accept, counter
@@ -97,6 +99,15 @@ export const namesGroup = (group: RequestGroup, openId: string): 'batch' | 'requ
 
 export type RequestAnswer = 'accept' | 'refuse' | 'counter'
 
+// ── F-CP-160 (customer page lane, the money wall; Owner answer A, the API's B-CP-026) ──
+/**
+ * Accepting a request the customer agreed after our counter-offer that carries a price (its fee: `counter.priced`, never the
+ * amount) carries that price out: a reader without the price grain is held in the API's words ("It changes a price you cannot
+ * see: someone who sees prices does it."); a price holder accepts it. A counter of a date or words is accepted as before.
+ */
+export const acceptsBlindPrice = (request: Pick<BrandRequest, 'status' | 'counter'>, price: boolean): boolean => !price && request.status === 'COUNTERED' && request.counter?.priced === true
+// ── end F-CP-160 ──
+
 const TEAMS: Readonly<Record<string, string>> = Object.freeze({ 'orders.manage': 'sales', 'production.brand.manage': 'production', 'sales.samples.manage': 'samples' })
 
 /** Who answers a kind, in words (`customerRequest.team.<team>`): Sales, production's manager or planner, sampling. */
@@ -108,7 +119,7 @@ export const teamOf = (answeredWith: string): string => TEAMS[answeredWith] ?? '
  * only refused, an agreed one only accepted, a resume never countered, a request countered once), the words a refusal needs, too
  * long, offline, busy. `words` are the words the customer reads (a refusal needs them; an accept may carry them).
  */
-export function answerHeld(request: BrandRequest, answer: RequestAnswer, state: { readonly offline: boolean; readonly busy: boolean }, words: string): string | null {
+export function answerHeld(request: BrandRequest, answer: RequestAnswer, state: { readonly offline: boolean; readonly busy: boolean; /** F-CP-160: the reader holds the price grain. */ readonly price: boolean }, words: string): string | null {
   if (request.status === 'WITHDRAWN') return `${CR}.held.withdrawn`
   if (request.status === 'ACCEPTED' || request.status === 'REFUSED') return `${CR}.held.answered`
   if (request.waitingOn === 'CUSTOMER') return `${CR}.held.waitsOnCustomer`
@@ -116,6 +127,8 @@ export function answerHeld(request: BrandRequest, answer: RequestAnswer, state: 
   if (answer === 'accept' && !request.may.accept) return request.counter?.state === 'LAPSED' ? `${CR}.held.counterLapsed` : `${CR}.held.noAccept`
   if (answer === 'refuse' && !request.may.refuse) return request.counter?.state === 'AGREED' ? `${CR}.held.counterAgreed` : `${CR}.held.noRefuse`
   if (answer === 'counter' && !request.may.counter) return request.kind === 'RESUME' ? `${CR}.held.noCounterResume` : request.counter ? `${CR}.held.counteredOnce` : `${CR}.held.noCounter`
+  // F-CP-160: a priced counter-offer the customer agreed is accepted by a price holder (B-CP-026).
+  if (answer === 'accept' && acceptsBlindPrice(request, state.price)) return BLIND_PRICE_KEY
   const typed = words.trim()
   if (answer === 'refuse' && typed === '') return `${CR}.held.words`
   if (answer !== 'counter' && typed.length > MAX_ANSWER) return `${CR}.held.long`
@@ -211,11 +224,11 @@ export interface BatchLine {
  * The batch's requests as read now, each checked as the answer asks (its state, this reader's right, a counter's state): the order
  * of the read kept. The words are checked once for all (the dialog's own field), never per line. At most the API's batch limit.
  */
-export function batchLinesOf(now: readonly BrandRequest[], answer: 'accept' | 'refuse'): BatchLine[] {
+export function batchLinesOf(now: readonly BrandRequest[], answer: 'accept' | 'refuse', /** F-CP-160: the reader holds the price grain. */ price: boolean): BatchLine[] {
   return [...now]
     .sort(oldestFirst)
     .slice(0, BATCH_ANSWER_MAX)
-    .map((request) => ({ requestId: request.id, orderId: request.orderId, orderNumber: request.orderNumber, customerRef: request.customerRef, version: request.version, leftOut: answerHeld(request, answer, { offline: false, busy: false }, 'words') }))
+    .map((request) => ({ requestId: request.id, orderId: request.orderId, orderNumber: request.orderNumber, customerRef: request.customerRef, version: request.version, leftOut: answerHeld(request, answer, { offline: false, busy: false, price }, 'words') }))
 }
 
 export const batchItemsOf = (lines: readonly BatchLine[]): BatchItem[] => lines.filter((line) => line.leftOut === null).map((line) => ({ requestId: line.requestId, version: line.version }))
@@ -289,7 +302,9 @@ export function requestRefusalOf(issues: readonly ApiIssue[] | undefined): strin
 }
 
 /** A refusal code in this page's words (a key of `customerRequest.refusal.`). */
-export const refusalKeyOf = (code: string | null): string => (code && KNOWN_REQUEST_REFUSALS.has(code) ? `${CR}.refusal.${code}` : `${CR}.refusal.other`)
+export const refusalKeyOf = (code: string | null): string =>
+  // F-CP-160: the money wall's refusal (B-CP-026) in its words.
+  code === BLIND_PRICE_CODE ? BLIND_PRICE_KEY : code && KNOWN_REQUEST_REFUSALS.has(code) ? `${CR}.refusal.${code}` : `${CR}.refusal.other`
 
 /** An answer's failure as a key of this page, and whether the inbox and the window read again. */
 export function answerProblem(error: unknown): { readonly key: string; readonly reload: boolean } {

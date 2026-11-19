@@ -12,6 +12,10 @@ import { AccountantAccessView, type AccountantAccessModel } from './view/Account
  * company (Revisori Fittizi), the newest downloads. Cases: the list, access that ended shown, two chosen (End access 2), the
  * Give access pop-up (blank, filled, a firm of every company, refused), Change the end, End access, the authenticator code,
  * nobody yet, no adviser firm yet, a read-only role, loading, an error, a notice, the keys.
+ *
+ * F-CP-159 (the money wall): the accountant sees our prices, so the Owner gives the access and moves its end later; finance
+ * brings it earlier and ends it. The Give access cases are the Owner's; finance and a Sales worker see "Give access…" held
+ * in words, a later end held, the API's refusal in the same words.
  */
 
 const HOUR = 3_600_000
@@ -63,6 +67,8 @@ function base(over: Partial<AccountantAccessModel> = {}, answer: Accountants = a
       showLeft,
       downloads: answer.downloads,
       may: answer.may.manage,
+      // F-CP-159: the Owner gives the access; every other role reads it held in words.
+      owner: role === 'owner',
       selected: [],
       busy: null,
       notice: null,
@@ -78,6 +84,8 @@ function base(over: Partial<AccountantAccessModel> = {}, answer: Accountants = a
 const invite = (draft: Partial<InviteDraft> = {}, problem: string | null = null) => ({ draft: { ...blankInvite([STUDIO], TODAY), ...draft }, problems: {}, problem, busy: false, today: TODAY })
 const FILLED: Partial<InviteDraft> = { partyId: STUDIO.party.id, displayName: 'Giorgio Esempio', email: 'giorgio@studio-esempio.example' }
 const rowsOf = (answer: Accountants = answerOf()) => accountantRows(answer, false)
+// F-CP-159: the Owner's cases (Give access, a later end).
+const asOwner = (over: Partial<AccountantAccessModel> = {}, answer: Accountants = answerOf()): Case => base(over, answer, 'owner')
 
 function AccessDesign({ model }: { model: Case }) {
   return inShell('/finance/accounting', createElement(AccountantAccessView, { model: model.model }), model.role)
@@ -91,19 +99,26 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'normal', label: 'Who has access, and the newest downloads', model: base(), note: 'Under the exports: each accountant (firm, invited / active, when access ends, last sign-in), ⋯ Change the end… / End access…; Give access…; the newest downloads (who, when, what, the period). Access that ended is hidden until asked.' },
     { id: 'show-left', label: 'Access that ended shown', model: base({ showLeft: true }), note: 'An ended row cannot be chosen (it says why).' },
     { id: 'selected', label: 'Two chosen · End access (2)', model: base({ selected: rowsOf().map((row) => row.id) }) },
-    { id: 'invite', label: 'Pop-up: Give access (blank)', model: base({ invite: { ...invite(), problems: { partyId: 'office.invite.problem.firm', displayName: 'office.invite.problem.name', email: 'office.invite.problem.email' } } }), note: 'Give access waits with the first missing field in words; access lasts three months by default and always ends.' },
-    { id: 'invite-filled', label: 'Pop-up: Give access (filled)', model: base({ invite: invite(FILLED) }) },
-    { id: 'invite-every-company', label: 'Pop-up: a firm of every company', model: base({ invite: invite({ ...FILLED, partyId: AUDITORS.party.id }) }), note: 'The warning says the person can open any company whose portal they sign in to.' },
-    { id: 'invite-refused', label: 'Pop-up: refused (the address is someone else’s)', model: base({ invite: invite(FILLED, 'office.problem.email') }) },
-    { id: 'change', label: 'Pop-up: Change the end', model: base({ change: { row: rowsOf()[0]!, until: at(24 * 80).slice(0, 10), problem: null, busy: false, today: TODAY } }) },
+    { id: 'invite', label: 'Pop-up: Give access (blank)', model: asOwner({ invite: { ...invite(), problems: { partyId: 'office.invite.problem.firm', displayName: 'office.invite.problem.name', email: 'office.invite.problem.email' } } }), note: 'Give access waits with the first missing field in words; access lasts three months by default and always ends.' },
+    { id: 'invite-filled', label: 'Pop-up: Give access (filled)', model: asOwner({ invite: invite(FILLED) }) },
+    { id: 'invite-every-company', label: 'Pop-up: a firm of every company', model: asOwner({ invite: invite({ ...FILLED, partyId: AUDITORS.party.id }) }), note: 'The warning says the person can open any company whose portal they sign in to.' },
+    { id: 'invite-refused', label: 'Pop-up: refused (the address is someone else’s)', model: asOwner({ invite: invite(FILLED, 'office.problem.email') }) },
+    { id: 'change', label: 'Pop-up: Change the end (the Owner)', model: asOwner({ change: { row: rowsOf()[0]!, until: at(24 * 80).slice(0, 10), problem: null, busy: false, today: TODAY } }) },
     { id: 'end', label: 'Pop-up: End access', model: base({ end: { rows: [rowsOf()[0]!], reason: '', problem: null, busy: false } }), note: 'Their sessions end at once; an open invitation stops.' },
-    { id: 'step-up', label: 'The authenticator code', model: base({ invite: invite(FILLED), stepUp: { open: true, busy: false, problem: null } }), note: 'Giving, changing or ending access opens or closes the books to an outside firm: a fresh code first.' },
-    { id: 'done', label: 'Access given', model: base({ notice: { key: 'office.done.invitedOn', params: { name: 'Giorgio Esempio', email: 'giorgio@studio-esempio.example' }, tone: 'success' } }) },
+    { id: 'step-up', label: 'The authenticator code', model: asOwner({ invite: invite(FILLED), stepUp: { open: true, busy: false, problem: null } }), note: 'Giving, changing or ending access opens or closes the books to an outside firm: a fresh code first.' },
+    { id: 'done', label: 'Access given', model: asOwner({ notice: { key: 'office.done.invitedOn', params: { name: 'Giorgio Esempio', email: 'giorgio@studio-esempio.example' }, tone: 'success' } }) },
     { id: 'empty', label: 'Nobody has access yet', model: base({}, answerOf({ firms: [{ ...STUDIO, portalOn: false, people: [] }], downloads: [] })) },
     { id: 'no-firm', label: 'No adviser firm yet', model: base({}, answerOf({ firms: [], downloads: [] })), note: 'Give access waits: add the firm with the Consultant role first.' },
     { id: 'read-only', label: 'Read only · sees, changes nothing', model: base({}, answerOf({ may: { manage: false } }), 'reader'), note: 'Give access, Change and End are held with who may.' },
     { id: 'loading', label: 'Loading', model: base({ state: 'loading', rows: null, downloads: null }) },
     { id: 'error', label: 'Could not be read', model: base({ state: 'error', rows: null, downloads: null }) },
     { id: 'keys', label: 'Keys in the footer info icon', model: base({ keysOpen: true }) },
+    // ── F-CP-159 (the money wall) ──
+    { id: 'as-finance', label: 'As finance: Give access held (only the Owner gives it)', model: base(), note: '"Give access…" says "Only the Owner gives a role that sees prices.": the accountant reads our invoices and registers. Change the end and End access stay finance’s.' },
+    { id: 'change-earlier', label: 'As finance: Change the end, an earlier day', model: base({ change: { row: rowsOf()[1]!, until: at(24 * 40).slice(0, 10), problem: null, busy: false, today: TODAY } }), note: 'An earlier end saves; the line says only the Owner moves it later.' },
+    { id: 'change-later-held', label: 'As finance: Change the end, a later day held', model: base({ change: { row: rowsOf()[1]!, until: at(24 * 120).slice(0, 10), problem: null, busy: false, today: TODAY } }), note: 'Save the date waits: "Only the Owner moves the end of access later: you can bring it earlier or end it now."' },
+    { id: 'change-refused', label: 'As finance: the API refused a later end', model: base({ change: { row: rowsOf()[1]!, until: at(24 * 40).slice(0, 10), problem: 'moneyWall.ownerLater', busy: false, today: TODAY } }), note: 'A refusal of the API (accessUntil/onlyOwnerGivesPrices) in the same words.' },
+    { id: 'as-sales', label: 'As Sales worker: Give access, Change and End held', model: base({}, answerOf({ may: { manage: false } }), 'sales'), note: 'Sales sees no price and changes no accountant access: Give access says only the Owner gives it, Change and End say who may.' },
+    { id: 'as-owner', label: 'As the Owner: Give access open', model: asOwner(), note: 'Only the Owner gives the access (and moves its end later).' },
   ],
 })

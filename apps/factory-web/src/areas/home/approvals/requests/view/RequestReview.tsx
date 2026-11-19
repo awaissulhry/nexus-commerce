@@ -139,7 +139,8 @@ function OneReview({ review, grains, offline, busy = false, nav, actions }: Requ
     setWords(value)
     actions?.onWords?.(value)
   }
-  const state = { offline, busy }
+  // F-CP-160: the price grain holds a priced counter-offer's accept for a reader without it.
+  const state = { offline, busy, price: grains.price }
   const heldKey = (answer: 'accept' | 'refuse' | 'counter') => (request ? answerHeld(request, answer, state, words) : `${CR}.held.reading`)
   const refuseHeld = heldKey('refuse')
   const counterHeldKey = heldKey('counter')
@@ -162,7 +163,7 @@ function OneReview({ review, grains, offline, busy = false, nav, actions }: Requ
   // ---- end F-SA-241 / F-SA-242
   const answering = waiting && request.waitingOn === 'US' && (request.may.accept || request.may.refuse || request.may.counter)
   // Why it cannot be accepted as it stands (its state, our counter, who answers its kind) — said once in the window, not only on hover.
-  const standingHeld = request && waiting ? answerHeld(request, 'accept', { offline: false, busy: false }, 'words') : null
+  const standingHeld = request && waiting ? answerHeld(request, 'accept', { offline: false, busy: false, price: grains.price }, 'words') : null
   const dialog = review.dialog
   const accept = (rushFloor: boolean) => {
     if (acceptHeld || dialog || done) return
@@ -450,7 +451,7 @@ function CounterDialog({ request, today, price, busy, problem, initialNote, acti
 
 // ---- a batch -----------------------------------------------------------------------------------------------------------------
 
-function BatchReview({ review, offline, busy = false, nav, actions }: RequestReviewProps & { review: Extract<RequestReviewModel, { as: 'batch' }> }) {
+function BatchReview({ review, grains, offline, busy = false, nav, actions }: RequestReviewProps & { review: Extract<RequestReviewModel, { as: 'batch' }> }) {
   const t = useT('approvals')
   const depth = useT(DEPTH_NS)
   const sales = useT('sales')
@@ -464,7 +465,8 @@ function BatchReview({ review, offline, busy = false, nav, actions }: RequestRev
     setWords(value)
     actions?.onWords?.(value)
   }
-  const state = { offline, busy }
+  // F-CP-160: the price grain (a priced counter-offer's accept).
+  const state = { offline, busy, price: grains.price }
   const waiting = (requests ?? []).filter((request) => request.waitingOn === 'US')
   // Accept all / Refuse all: held while none of the batch may be answered so (each is checked again when read before the answer).
   const heldAll = (answer: 'accept' | 'refuse'): string | null => {

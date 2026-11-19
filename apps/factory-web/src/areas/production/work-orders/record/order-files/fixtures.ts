@@ -23,6 +23,7 @@ export function orderGroup(workOrder: WorkOrder, over: Partial<OrderFilesGroup> 
     worksheets: [{ documentId: 'sheet-demo-1', profileId: 'profile-demo-1', line: { id: 'line-demo-3', seq: 3 }, version: 2, number: 'MTM-DEMO-0007', language: 'it', createdAt: at(5, '10:00') }],
     measurementsLeftOut: 0,
     filesLeftOut: 0,
+    pricedLeftOut: 0, // F-CP-161
     ...over,
   }
 }
@@ -54,7 +55,16 @@ export function twoGroupsOf(workOrder: WorkOrder): WorkOrderOrderFiles {
       worksheets: [],
       measurementsLeftOut: 1,
       filesLeftOut: 0,
+      pricedLeftOut: 0, // F-CP-161
     },
   ])
 }
 // ---- end F-PR-25
+
+// ---- F-CP-161 (the money wall, B-CP-023): as a Production manager or a Sales worker (no price grain) the order's confirmation and the
+// customer's PO are priced documents: left out, ONE counted line, never named; the artwork and the worksheet open as before.
+export const pricedLeftOutFor = (workOrder: WorkOrder): WorkOrderOrderFiles =>
+  orderFilesOf(workOrder, [orderGroup(workOrder, { files: orderGroup(workOrder).files.filter((file) => file.from !== 'ORDER'), pricedLeftOut: 2 })])
+/** Only priced documents on the order: the line says them (never "no files"). */
+export const onlyPricedFor = (workOrder: WorkOrder): WorkOrderOrderFiles => orderFilesOf(workOrder, [orderGroup(workOrder, { files: [], worksheets: [], pricedLeftOut: 1 })])
+// ---- end F-CP-161

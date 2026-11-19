@@ -1,3 +1,4 @@
+import { holdsEveryOfficePermission } from '@nexus/factory-domain/auth/roles/custom'
 import { addDays, dayOf, endOfDay } from '../../../admin/users/partners/model'
 import type { Accountant, Accountants, Firm } from './api'
 
@@ -28,9 +29,43 @@ export const STATUS_TONE: Readonly<Record<Accountant['status'], 'success' | 'inf
 /** A row that cannot be chosen for "End access N": one whose access ended already. */
 export const rowHeld = (row: AccountantRow): string | null => (row.status === 'DEACTIVATED' ? 'office.held.left' : null)
 
+// ── F-CP-159 (customer page lane, the money wall; Owner O3, the API's B-CP-011) ────────────────────────────────────────────
+/**
+ * The accountant reads our invoices and registers, so it sees our prices: only the Owner gives the access or moves its end
+ * later (the API answers 403 `roleKey/onlyOwnerGivesPrices` / `accessUntil/onlyOwnerGivesPrices`, "Only the Owner gives a
+ * role that sees prices."). Bringing the end earlier and ending it now stay finance's.
+ *
+ * Who is the Owner: the web reads no role (`GET /auth/office/me` lists permissions; the accountants answer says `may.manage`
+ * only). The Owner's role holds every office permission and no custom role ever does (factory-domain `custom.ts`), so a
+ * session that holds them all reads as the Owner. A person whose several roles add up to all of them is not held here: the
+ * API refuses and `writeProblemKey` says the same words. The exact field would be a `may.give` on GET /accounting/accountants.
+ */
+export const OWNER_GIVES = 'moneyWall.ownerGives'
+export const OWNER_LATER = 'moneyWall.ownerLater'
+
+/** This session reads as the Owner (every office permission: the Owner's every()). */
+export const readsAsOwner = (permissions: readonly string[]): boolean => holdsEveryOfficePermission(permissions)
+
+/** Why a new end of access is the Owner's (a key), or null: it falls later than the end the access has now. */
+export function laterEndHeld(row: Pick<AccountantRow, 'accessUntil'>, until: string, owner: boolean): string | null {
+  if (owner || !until || row.accessUntil === null) return null
+  return Date.parse(endOfDay(until)) > Date.parse(row.accessUntil) ? OWNER_LATER : null
+}
+
+/** Why "Save the date" waits (a key), or null: a change on its way, no day, a past day, or a later end only the Owner gives. */
+export function changeSaveHeld(change: { readonly row: Pick<AccountantRow, 'accessUntil'>; readonly until: string; readonly today: string; readonly busy: boolean }, owner: boolean): string | null {
+  if (change.busy) return 'office.held.busy'
+  if (!change.until) return 'office.invite.problem.until'
+  if (change.until < change.today) return 'office.invite.problem.past'
+  return laterEndHeld(change.row, change.until, owner)
+}
+// ── end F-CP-159 ──
+
 /** Why "Give access" cannot act (a key), or null. */
-export function inviteHeld(answer: { readonly firms: readonly Firm[]; readonly may: Accountants['may'] } | null): string | null {
+export function inviteHeld(answer: { readonly firms: readonly Firm[]; readonly may: Accountants['may'] } | null, owner: boolean): string | null {
   if (!answer) return 'office.held.reading'
+  // F-CP-159: only the Owner gives the accountant access (it sees prices).
+  if (!owner) return OWNER_GIVES
   if (!answer.may.manage) return 'office.held.noManage'
   if (answer.firms.length === 0) return 'office.held.noFirm'
   return null
@@ -84,6 +119,9 @@ export { endOfDay, addDays, dayOf }
 export function writeProblemKey(error: unknown): string {
   const issues = (error as { issues?: readonly { path?: unknown }[] } | null)?.issues ?? []
   const paths = issues.map((issue) => (typeof issue.path === 'string' ? issue.path : ''))
+  // F-CP-159: the money wall's refusal (B-CP-011): giving access, or a later end, is the Owner's.
+  if (paths.includes('roleKey/onlyOwnerGivesPrices')) return OWNER_GIVES
+  if (paths.includes('accessUntil/onlyOwnerGivesPrices')) return OWNER_LATER
   if (paths.includes('partyId')) return 'office.problem.firm'
   if (paths.includes('email')) return 'office.problem.email'
   if (paths.includes('accessUntil')) return 'office.problem.until'
