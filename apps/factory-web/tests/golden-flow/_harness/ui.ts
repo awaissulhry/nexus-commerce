@@ -100,3 +100,38 @@ export async function chooseFromMenu(trigger: Locator, item: Locator): Promise<v
 export function byApi(what: string): void {
   test.info().annotations.push({ type: 'by API', description: what })
 }
+
+/**
+ * fx-12 (the customer page that reloaded itself, 2026-11-19): what a page asks over `ms` after `action` (its arrival) — the main
+ * frame's navigations, the documents it loads and the Next router's own requests (`rsc: 1`: navigations, prefetches, refreshes,
+ * connectivity checks). A page at rest asks a handful; a loop asks hundreds.
+ */
+export async function routerActivity(page: Page, ms: number, action: () => Promise<unknown>): Promise<{ navigations: number; documents: number; router: number; lines: string[] }> {
+  const seen = { navigations: 0, documents: 0, router: 0, lines: [] as string[] }
+  const started = Date.now()
+  const note = (what: string) => seen.lines.length < 40 && seen.lines.push(`${((Date.now() - started) / 1000).toFixed(2)} ${what}`)
+  const onNavigated = (frame: import('@playwright/test').Frame) => {
+    if (frame !== page.mainFrame()) return
+    seen.navigations += 1
+    note(`navigated ${new URL(frame.url()).search}`)
+  }
+  const onRequest = (request: import('@playwright/test').Request) => {
+    if (request.resourceType() === 'document') {
+      seen.documents += 1
+      note(`document ${new URL(request.url()).pathname}`)
+    } else if (request.headers()['rsc'] === '1') {
+      seen.router += 1
+      note(`router ${request.method()} ${new URL(request.url()).search.replace(/[&?]_rsc=[^&]*/, '')}`)
+    }
+  }
+  page.on('framenavigated', onNavigated)
+  page.on('request', onRequest)
+  try {
+    await action()
+    await page.waitForTimeout(Math.max(0, ms - (Date.now() - started)))
+  } finally {
+    page.off('framenavigated', onNavigated)
+    page.off('request', onRequest)
+  }
+  return seen
+}

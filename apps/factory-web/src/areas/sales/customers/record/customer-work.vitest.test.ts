@@ -11,6 +11,7 @@ import { valueOf } from './view/WaitingStrip'
 import { pickOfRow, WORK_VIEWS, workPreset } from './view/WorkTab'
 // F-SA-279: the dock follows the row
 import { DOCK_FOLLOW_MS, DOCK_PARAM, DOCK_TABS, dockable, dockAddress, dockFollower, dockKeyOf, dockOnTab, dockTermOf, dockValueOf, draftKeptOf, GENERAL_DOCK, pickOfSummary, scopeOf } from './use-customer-work'
+import { lockedEntry } from '../../orders/list/use-orders-sheet' // fx-12
 
 /**
  * F-SA-276 (sales page plan N5, N7, N3; picks R5, R9, P10, P17; 11-customer-page §3; 17-review R-1, BW-7): the customer's Work tab —
@@ -421,3 +422,29 @@ describe('F-SA-279: the page wires it (the sources)', () => {
   })
 })
 // ---- end F-SA-279
+
+// ---- fx-12 (the customer page that reloaded itself, 2026-11-19): every address the page writes is stable — written once, the next
+// look at the address writes nothing (the Work tab's entry, then the sheet's lock, then the dock): no writer can feed another.
+describe('fx-12: the customer page writes its address once', () => {
+  const ORDER = '33333333-3333-4333-8333-333333333333'
+  const search = (address: string) => address.slice(address.indexOf('?') + 1)
+  it.each(['', 'tab=work', 'tab=orders', 'late=true', `tab=work&party=${BETA}&rows=all`, 'dock=all', `tab=work&status=IN_PRODUCTION&dock=SalesOrder.${ORDER}`, 'q=giacca&waiting=us'])(
+    'the Work tab\'s entry from %j: applied twice gives the same address, and the sheet\'s lock then writes nothing',
+    (query) => {
+      const once = workEntry(BASE, ALPHA, params(query))
+      const address = once ?? `${BASE}?${query}`
+      expect(workEntry(BASE, ALPHA, params(search(address))), address).toBeNull()
+      expect(lockedEntry(BASE, { locked: { party: ALPHA } }, params(search(address))), address).toBeNull()
+    },
+  )
+  it('the dock writes only a different address: the same term again is the address as it is', () => {
+    const entry = workEntry(BASE, ALPHA, params(''))!
+    const term = { kind: 'record', type: 'SalesOrder', id: ORDER } as const
+    const docked = dockAddress(BASE, `?${search(entry)}`, term)
+    expect(dockAddress(BASE, `?${search(docked)}`, term)).toBe(docked)
+    expect(dockAddress(BASE, `?${search(entry)}`, GENERAL_DOCK)).toBe(entry)
+    // The docked address needs no entry write either (the dock term is not a view term).
+    expect(workEntry(BASE, ALPHA, params(search(docked)))).toBeNull()
+  })
+})
+// ---- end fx-12
