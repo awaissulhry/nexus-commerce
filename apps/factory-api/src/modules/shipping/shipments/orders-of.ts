@@ -147,6 +147,20 @@ export async function piecesByOrderOf(db: Reader, shipmentIds: readonly string[]
   return new Map(rows.map((row) => [row.orderId, Number(row.pieces)]))
 }
 
+/** B-OP-045: the earliest promise date among the orders each shipment carries (absent: none of them has one). */
+export async function earliestPromisesOf(db: Reader, shipments: readonly ShipmentKey[]): Promise<Map<string, Date>> {
+  const ids = await orderIdsOfShipments(db, shipments)
+  const wanted = [...new Set([...ids.values()].flat())]
+  const rows = wanted.length > 0 ? await db.salesOrder.findMany({ where: { id: { in: wanted } }, select: { id: true, promiseDate: true } }) : []
+  const promiseOf = new Map(rows.flatMap((row) => (row.promiseDate ? [[row.id, row.promiseDate] as const] : [])))
+  const out = new Map<string, Date>()
+  for (const [shipmentId, orderIds] of ids) {
+    const dates = orderIds.flatMap((id) => (promiseOf.has(id) ? [promiseOf.get(id)!] : []))
+    if (dates.length > 0) out.set(shipmentId, dates.reduce((earliest, date) => (date.getTime() < earliest.getTime() ? date : earliest)))
+  }
+  return out
+}
+
 /** The shipments that carry an order: made for it (its first order), or with a line of it. */
 export const shipmentsOfOrderWhere = (salesOrderId: string): Prisma.ShipmentWhereInput => ({ OR: [{ salesOrderId }, { lines: { some: { salesOrderLine: { orderId: salesOrderId } } } }] })
 
