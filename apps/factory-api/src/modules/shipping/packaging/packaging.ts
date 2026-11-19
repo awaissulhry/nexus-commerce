@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ConflictError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { defaultScopeProblems, markTemplateProblems, packagingTypeProblems, type PackagingKind, type PackagingTypeValues, type PalletKind, type ShippingMarkField } from '@nexus/factory-domain/shipping/packaging/rules'
@@ -9,6 +9,7 @@ import { SHIPPING_PACKAGING_MANAGE } from '@nexus/factory-domain/shipping/packag
 import { SHIPPING_SETTINGS_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
+import { optionalStyleWall, styleBrandWhere } from '../../product/styles/store'
 import { assertMay, officeContextOf } from '../access'
 
 /**
@@ -241,6 +242,8 @@ export async function listDefaults(caller: CommandCaller, query: { companyId?: s
       query.companyId ? { companyId: query.companyId } : {},
       query.styleId ? { styleId: query.styleId } : {},
       query.active === undefined ? {} : { active: query.active },
+      // op-fx10 (the brand wall): a default of a customer's private-label style is that customer's (the production unit: all).
+      optionalStyleWall(actorOf(context), SHIPPING_SETTINGS_VIEW) as Prisma.PackagingDefaultWhereInput,
     ],
   }
   const rows = await caller.withClient((client) => client.packagingDefault.findMany({ where, select: DEFAULT_SELECT, orderBy: [{ companyId: 'asc' }, { kind: 'asc' }, { id: 'asc' }], take: 500 }))
@@ -255,12 +258,15 @@ async function liveTypeOf(tx: CommandTx, companyId: string, typeId: string): Pro
   return type
 }
 
-/** The scope's records: a style of the company (or tenant-wide) not archived, its own scale; the sizes of the scale. */
-async function scopeProblems(tx: CommandTx, companyId: string, scope: { styleId: string | null; sizeScaleId: string | null; fromSize: string | null; toSize: string | null }): Promise<Issue[]> {
+/**
+ * The scope's records: a style of the company (or tenant-wide) not archived, its own scale; the sizes of the scale. op-fx10: a
+ * style the person does not reach (another customer's private label) is refused as an unknown one.
+ */
+async function scopeProblems(tx: CommandTx, companyId: string, scope: { styleId: string | null; sizeScaleId: string | null; fromSize: string | null; toSize: string | null }, actor: Actor): Promise<Issue[]> {
   const problems: Issue[] = []
   const scaleId = scope.sizeScaleId
   if (scope.styleId !== null) {
-    const style = isUuid(scope.styleId) ? await tx.style.findUnique({ where: { id: scope.styleId }, select: { companyId: true, status: true, sizeScaleId: true } }) : null
+    const style = isUuid(scope.styleId) ? await tx.style.findFirst({ where: { AND: [{ id: scope.styleId }, styleBrandWhere(actor, SHIPPING_PACKAGING_MANAGE)] }, select: { companyId: true, status: true, sizeScaleId: true } }) : null
     if (!style || (style.companyId !== null && style.companyId !== companyId) || style.status === 'ARCHIVED') problems.push({ path: 'body/styleId', message: 'Choose a style of the company that is not archived.' })
     else if (scaleId !== null && scaleId !== style.sizeScaleId) problems.push({ path: 'body/sizeScaleId', message: "A style's size run runs over the style's own size scale." })
   }
@@ -298,7 +304,7 @@ export async function createDefault(caller: CommandCaller, body: DefaultInput, i
     () =>
       command(caller, { name: 'shipping.createPackagingDefault', idempotencyKey, input: body }, async (tools) => {
         const type = await liveTypeOf(tools.tx, body.companyId, body.packagingTypeId)
-        const problems = await scopeProblems(tools.tx, body.companyId, scope)
+        const problems = await scopeProblems(tools.tx, body.companyId, scope, actorOf(officeContextOf(caller)))
         if (problems.length > 0) invalid(problems, 'default')
         const row = await tools.tx.packagingDefault.create({ data: { id, companyId: body.companyId, packagingTypeId: type.id, kind: type.kind, ...scope, createdById: officeContextOf(caller).actorId }, select: DEFAULT_SELECT })
         tools.audit({ action: 'shipping.createPackagingDefault', recordType: 'PackagingDefault', recordId: id, companyId: body.companyId, after: { packagingTypeId: type.id, kind: type.kind, ...scope } })
@@ -311,7 +317,9 @@ export async function createDefault(caller: CommandCaller, body: DefaultInput, i
 
 /** shipping.packaging.manage: another type of the same kind for a default, or switched off or on. */
 export async function changeDefault(caller: CommandCaller, defaultId: string, body: { version?: number | undefined; packagingTypeId?: string | undefined; active?: boolean | undefined }, idempotencyKey?: string) {
-  const before = isUuid(defaultId) ? await caller.withClient((client) => client.packagingDefault.findUnique({ where: { id: defaultId }, select: DEFAULT_SELECT })) : null
+  // op-fx10: a default of a style the person does not reach (another customer's private label) is not found, as an unknown one.
+  const wall = optionalStyleWall(actorOf(officeContextOf(caller)), SHIPPING_SETTINGS_VIEW) as Prisma.PackagingDefaultWhereInput
+  const before = isUuid(defaultId) ? await caller.withClient((client) => client.packagingDefault.findFirst({ where: { AND: [{ id: defaultId }, wall] }, select: DEFAULT_SELECT })) : null
   if (!before) throw new NotFoundError('Packaging default not found.')
   assertCompany(caller, before.companyId)
   const { result } = await unique(
