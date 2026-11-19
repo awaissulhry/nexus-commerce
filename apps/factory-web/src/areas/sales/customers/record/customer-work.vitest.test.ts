@@ -9,6 +9,8 @@ import { builtInActive, builtInViewsOf, pickBuiltIn, WAITING_US_VIEW, withPreset
 import { marksOf, sourcesTouched, STRIP_GROUPS, tileOf, tilesShown, workAttention, workEntry, WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
 import { valueOf } from './view/WaitingStrip'
 import { pickOfRow, WORK_VIEWS, workPreset } from './view/WorkTab'
+import { DRAFTS_VIEW, NOT_EQUAL_VIEW, workEmptyOf, workViewsOf } from './view/WorkTab' // F-CP-101
+import { rowsFromAddress } from '../../orders/model' // F-CP-101: Sales › Orders keeps Open
 // F-SA-279: the dock follows the row
 import { DOCK_FOLLOW_MS, DOCK_PARAM, DOCK_TABS, dockable, dockAddress, dockFollower, dockKeyOf, dockOnTab, dockTermOf, dockValueOf, draftKeptOf, GENERAL_DOCK, pickOfSummary, scopeOf } from './use-customer-work'
 import { lockedEntry } from '../../orders/list/use-orders-sheet' // fx-12
@@ -30,12 +32,14 @@ const board = (tiles: Record<string, number>) => ({ status: 'ready' as const, va
 const reads = (over: Partial<WorkReads> = {}): WorkReads => ({ board: { status: 'reading' }, requests: { status: 'reading' }, replies: { status: 'reading' }, asks: { status: 'reading' }, tasks: { status: 'reading' }, ...over })
 
 describe('F-SA-276: the address the Work tab writes on entry', () => {
-  it('no view term: the default view (In production), the tab and the lock — one write', () => {
+  // F-CP-101: the default view is All orders (`rows=all`, never `status=all`).
+  it('no view term: the default view (All orders), the tab and the lock — one write', () => {
     const entry = workEntry(BASE, ALPHA, params(''))!
     const written = new URL(`https://x${entry}`).searchParams
     expect(written.get('tab')).toBe('work')
     expect(written.get('party')).toBe(ALPHA)
-    expect(written.get('status')).toBe(WORK_DEFAULT_ROWS)
+    expect(written.get('rows')).toBe(WORK_DEFAULT_ROWS)
+    expect(written.has('status')).toBe(false)
   })
   it('a view in the address is kept; a complete address writes nothing', () => {
     const entry = workEntry(BASE, ALPHA, params(`tab=work&party=${ALPHA}&rows=all`))
@@ -87,8 +91,9 @@ describe('F-SA-276: the lock through every path (screen = file)', () => {
 describe('F-SA-276: the four views (no tabs inside the tab)', () => {
   const orders = createTranslator('en', messagesFor('en', ['orders']).orders!)
   const sheet = createTranslator('en', messagesFor('en', ['orders-sheet'])['orders-sheet']!)
-  it('In production · Waiting on us · Late · All orders, in that order; Sales › Orders keeps its own list (no Waiting on us unasked)', () => {
-    expect(builtInViewsOf({ customer: null, views: WORK_VIEWS }, orders, sheet).map((view) => view.label)).toEqual(['In production', 'Waiting on us', 'Late', 'All orders'])
+  // F-CP-101: All orders first.
+  it('All orders · In production · Waiting on us · Late, in that order; Sales › Orders keeps its own list (no Waiting on us unasked)', () => {
+    expect(builtInViewsOf({ customer: null, views: workViewsOf({ price: true }) }, orders, sheet).map((view) => view.label)).toEqual(['All orders', 'In production', 'Waiting on us', 'Late'])
     expect(builtInViewsOf({ customer: null }, orders, sheet).some((view) => view.id === WAITING_US_VIEW)).toBe(false)
   })
   it('the active view and a pick: each view stands alone', () => {
@@ -192,6 +197,7 @@ describe('F-SA-276: words in both languages', () => {
         'customers.work.strip.tasks',
         ...['requests', 'replies', 'late', 'deposit', 'customer', 'tasks', 'failed'].map((tile) => `customers.work.tile.${tile}`),
         'customers.work.empty',
+        'customers.work.emptyAll', // F-CP-101
         'customers.work.showAll',
         'customers.work.gone',
         'customers.work.view.waitingUs',
@@ -495,3 +501,90 @@ describe('F-OP-211: the dock writes `dock=` through the one history writer', () 
   })
 })
 // ---- end F-OP-211
+
+// ---- F-CP-101 (customer page plan C1, D7, K1; fx-12; review G4, E6): the Work tab opens on All orders ------------------------------
+// The entry address has ONE writer (workEntry in WorkTab); applied to its own output it writes nothing. `rows=all`, never `status=all`
+// (that term reads as Open orders and, being a view term, would stop every later write). Each new term — `list` (Drafts), `priceMatch`
+// (Not equal), `cols` (Work · Money) — applied twice gives the same address. Sales › Orders keeps Open orders.
+describe('F-CP-101: All orders by default, written once', () => {
+  const search = (address: string) => address.slice(address.indexOf('?') + 1)
+  const twice = (query: string) => {
+    const once = workEntry(BASE, ALPHA, params(query))
+    const address = once ?? `${BASE}?${query}`
+    return { once, address, again: workEntry(BASE, ALPHA, params(search(address))) }
+  }
+
+  it("workEntry('') → tab=work&party=A&rows=all; applied to its own output → null", () => {
+    expect(workEntry(BASE, ALPHA, params(''))).toBe(`${BASE}?tab=work&party=${ALPHA}&rows=all`)
+    expect(twice('').again).toBeNull()
+    expect(WORK_DEFAULT_ROWS).toBe('all')
+    expect(new URL(`https://x${workEntry(BASE, ALPHA, params(''))!}`).searchParams.has('status')).toBe(false)
+  })
+
+  it.each([['status=IN_PRODUCTION', 'status'], ['late=true', 'late'], ['list=drafts', 'list'], ['priceMatch=NOT_EQUAL', 'priceMatch'], ['waiting=us', 'waiting']])('a view term (%s): no default written beside it', (query, term) => {
+    const { once, again } = twice(`tab=work&party=${ALPHA}&${query}`)
+    expect(once).toBeNull()
+    expect(again).toBeNull()
+    const entry = new URL(`https://x${workEntry(BASE, ALPHA, params(query))!}`).searchParams
+    expect(entry.has('rows'), query).toBe(false)
+    expect(entry.has(term), query).toBe(true)
+  })
+
+  it.each(['list=drafts', 'priceMatch=NOT_EQUAL', 'cols=money', 'tab=work&cols=money', `tab=work&party=${ALPHA}&cols=money&rows=all`])('each new term applied twice = the same address (%s)', (query) => {
+    const { address, again } = twice(query)
+    expect(again, address).toBeNull()
+    expect(lockedEntry(BASE, { locked: { party: ALPHA } }, params(search(address))), address).toBeNull()
+  })
+
+  it('`cols` names no view: All orders is written beside it, once', () => {
+    const written = new URL(`https://x${workEntry(BASE, ALPHA, params('tab=work&cols=money'))!}`).searchParams
+    expect(written.get('rows')).toBe('all')
+    expect(written.get('cols')).toBe('money')
+  })
+
+  it('the pairs: list=drafts with a view term keeps both, writes no default, once', () => {
+    for (const query of ['list=drafts&status=IN_PRODUCTION', 'list=drafts&waiting=us', 'priceMatch=NOT_EQUAL&rows=all']) {
+      const { address, again } = twice(query)
+      expect(again, address).toBeNull()
+      const kept = new URL(`https://x${address}`).searchParams
+      expect(kept.get('tab')).toBe('work')
+      expect(kept.get('party')).toBe(ALPHA)
+      expect(kept.getAll('rows').length, query).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('?tab=orders → rows=all once; a saved view without tab → tab and party back, once', () => {
+    const old = twice('tab=orders')
+    expect(new URL(`https://x${old.once!}`).searchParams.get('rows')).toBe('all')
+    expect(old.again).toBeNull()
+    const saved = twice('late=true')
+    const back = new URL(`https://x${saved.once!}`).searchParams
+    expect([back.get('tab'), back.get('party'), back.get('late'), back.has('rows')]).toEqual(['work', ALPHA, 'true', false])
+    expect(saved.again).toBeNull()
+  })
+
+  it('the views in their order; Not equal only with the price grain (and once its step offers it); Drafts once its step offers it', () => {
+    expect(WORK_VIEWS).toEqual(['all', 'IN_PRODUCTION', WAITING_US_VIEW, 'late', DRAFTS_VIEW, NOT_EQUAL_VIEW])
+    expect(workViewsOf({ price: true }, { drafts: true, priceCheck: true })).toEqual([...WORK_VIEWS])
+    expect(workViewsOf({ price: false }, { drafts: true, priceCheck: true })).toEqual(['all', 'IN_PRODUCTION', WAITING_US_VIEW, 'late', DRAFTS_VIEW])
+    expect(workViewsOf({ price: true })).toEqual(['all', 'IN_PRODUCTION', WAITING_US_VIEW, 'late'])
+  })
+
+  it('the empty state per view: All orders says no order yet; In production keeps its way to All orders; other views the sheet\'s own', () => {
+    const t = createTranslator('en', messagesFor('en', ['parties']).parties!)
+    expect(workEmptyOf('all', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Brand Alpha has no order yet.' })
+    expect(workEmptyOf('IN_PRODUCTION', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Nothing in production for Brand Alpha.', link: { href: '/all', label: 'Show all orders' } })
+    expect(workEmptyOf('late', null, 'Brand Alpha', t, '/all')).toBeNull()
+    expect(workEmptyOf('open', 'us', 'Brand Alpha', t, '/all')).toBeNull()
+    expect(createTranslator('it', messagesFor('it', ['parties']).parties!)('customers.work.emptyAll', { customer: 'Brand Alpha' })).toBe('Brand Alpha non ha ancora ordini.')
+  })
+
+  it('Sales › Orders keeps Open orders as its default (the customer page only changes)', () => {
+    expect(rowsFromAddress(params(''))).toBe('open')
+    expect(rowsFromAddress(params('rows=all'))).toBe('all')
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('defaultRows: WORK_DEFAULT_ROWS')
+    expect(tab.match(/router\.replace\(/g)?.length, 'one writer of the entry address').toBe(1)
+  })
+})
+// ---- end F-CP-101

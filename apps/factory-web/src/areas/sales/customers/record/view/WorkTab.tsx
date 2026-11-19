@@ -35,8 +35,9 @@ import './customer-work.css'
  * F-SA-276 (sales page plan N5, N7, N3; picks R5, R9, P10, P17; 11-customer-page §3; 17-review R-1; picture 21) — the customer's
  * Work tab, no tabs inside the tab: the waiting strip on top, then the ONE Orders sheet (useOrdersSheet) locked to the customer —
  * embedded (the customer's band is the page's), its terms in the page's address beside the page's own `tab` and `dock`, list key
- * 'sales.orders' (one export source, one set of saved views: a view saved here keeps the lock). Its built-in views: In production
- * (the default, written into the address on entry) · Waiting on us · Late · All orders. A row click switches the page's dock to that
+ * 'sales.orders' (one export source, one set of saved views: a view saved here keeps the lock). Its built-in views (F-CP-101): All
+ * orders (the default, `rows=all`, written into the address on entry) · In production · Waiting on us · Late (+ Drafts of <customer>,
+ * Not equal with their steps). A row click switches the page's dock to that
  * order's conversation (⌘ / Ctrl: the order in a new tab; Enter opens the order). "Requests to answer" opens the view Waiting on us,
  * a request's Answer… the review window on this page (the four-door window, `?open=`). A real link to Production › Work orders of
  * the customer. Live: values in place, rows never jump (the sheet's own rule); the strip's counts re-read on their events.
@@ -50,8 +51,33 @@ export interface DockPick {
   readonly companyId: string | null
 }
 
-/** The Work tab's built-in views, in their order (R5). */
-export const WORK_VIEWS: readonly string[] = Object.freeze([WORK_DEFAULT_ROWS, WAITING_US_VIEW, 'late', 'all'])
+// ---- F-CP-101 (customer page plan C1, D7, K1): the views of the Work tab, All orders first ----
+/** The host's own views (not rows views of the sheet): Drafts of <customer> (`list=drafts`, F-CP-107) and Not equal (`priceMatch`, F-CP-141). */
+export const DRAFTS_VIEW = 'drafts:customer'
+export const NOT_EQUAL_VIEW = 'price:notEqual'
+
+/** The Work tab's views, in their order: All orders · In production · Waiting on us · Late · Drafts of <customer> · Not equal. */
+export const WORK_VIEWS: readonly string[] = Object.freeze([WORK_DEFAULT_ROWS, 'IN_PRODUCTION', WAITING_US_VIEW, 'late', DRAFTS_VIEW, NOT_EQUAL_VIEW])
+
+/**
+ * The views this person is offered, in WORK_VIEWS' order: Not equal only with the price grain (money wall: no view, no count without
+ * it); a host view only once its step draws it (`offered`: Drafts by F-CP-107, Not equal by F-CP-141) — never an item that shows nothing.
+ */
+export function workViewsOf(can: { readonly price: boolean }, offered: { readonly drafts?: boolean; readonly priceCheck?: boolean } = {}): string[] {
+  return WORK_VIEWS.filter((id) => (id === DRAFTS_VIEW ? !!offered.drafts : id === NOT_EQUAL_VIEW ? !!offered.priceCheck && can.price : true))
+}
+
+/**
+ * What an empty view says, per view (11-customer-page; 10 §1): All orders — "<customer> has no order yet." (F-CP-104 adds New order
+ * beside it); In production — "Nothing in production for <customer>." with Show all orders; every other view the sheet's own words.
+ */
+export function workEmptyOf(rows: RowView, waiting: 'us' | null, customer: string, t: (key: string, params?: Record<string, string | number>) => string, allHref: string): OrdersListModel['empty'] {
+  if (waiting) return null
+  if (rows === 'all') return { title: t('customers.work.emptyAll', { customer }) }
+  if (rows === 'IN_PRODUCTION') return { title: t('customers.work.empty', { customer }), link: { href: allHref, label: t('customers.work.showAll') } }
+  return null
+}
+// ---- end F-CP-101
 
 /**
  * The columns a view shows at first (11-customer-page §3.5; a person's Customise wins): In production — no Status (every row is in
@@ -60,7 +86,7 @@ export const WORK_VIEWS: readonly string[] = Object.freeze([WORK_DEFAULT_ROWS, W
  */
 export function workPreset(rows: RowView, waiting: 'us' | null): NonNullable<OrdersListModel['preset']> {
   if (rows === 'all' && !waiting) return { shown: ['picture', 'number', 'status', 'whereItIs', 'promised', 'newMessages'], wide: ['waitingOn', 'priority', 'deposit', 'balance'] }
-  if (rows === WORK_DEFAULT_ROWS && !waiting) return { shown: ['picture', 'number', 'whereItIs', 'promised', 'waitingOn', 'newMessages'], wide: ['priority', 'deposit', 'balance', 'supervisor'] }
+  if (rows === 'IN_PRODUCTION' && !waiting) return { shown: ['picture', 'number', 'whereItIs', 'promised', 'waitingOn', 'newMessages'], wide: ['priority', 'deposit', 'balance', 'supervisor'] }
   return { shown: ['picture', 'number', 'status', 'whereItIs', 'promised', 'waitingOn', 'newMessages'], wide: ['priority', 'deposit', 'balance', 'supervisor'] }
 }
 
@@ -131,13 +157,13 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const all = `${prefix}${sheetAddress(basePath, host, params, { rows: 'all', q: '', layout: 'list', party: party.id })}`
   const model: OrdersListModel = {
     ...sheet.model,
-    views: WORK_VIEWS,
+    views: workViewsOf(sheet.model.can), // F-CP-101: All orders first; Drafts / Not equal join with their steps
     defaultRows: WORK_DEFAULT_ROWS,
     preset: workPreset(rows, waiting),
     marks: work.marks,
     doorHref: door.hrefOf,
     toolbarLink: can.workorders ? { href: `${prefix}/production/work-orders?party=${encodeURIComponent(party.id)}`, label: t('customers.band.workOrders', { customer: party.name }) } : null,
-    empty: rows === WORK_DEFAULT_ROWS && !waiting ? { title: t('customers.work.empty', { customer: party.name }), link: { href: all, label: t('customers.work.showAll') } } : (sheet.model.empty ?? null),
+    empty: workEmptyOf(rows, waiting, party.name, t, all) ?? sheet.model.empty ?? null, // F-CP-101: per view
     // F-SA-279: the row the dock shows is marked; the keys' row is reported (the dock follows after its rest); a phone card's door.
     active: can.threads ? { id: picked && picked.type === 'SalesOrder' ? picked.id : null, cardDoor: t('customers.work.dock.cardDoor') } : null,
   }

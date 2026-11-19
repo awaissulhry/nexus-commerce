@@ -36,7 +36,7 @@ import type { OrdersListModel } from '../../orders/list/list-model'
 import { OrdersListView } from '../../orders/list/view/OrdersListView'
 import { WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
 import { WaitingStrip } from './view/WaitingStrip'
-import { WORK_VIEWS, workPreset } from './view/WorkTab'
+import { workEmptyOf, workPreset, workViewsOf } from './view/WorkTab' // F-CP-101: the views and empty states per view
 // ---- end F-SA-276
 
 /**
@@ -121,11 +121,11 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
     embedded: true,
     locked: { party: true, kind: false },
     listKey: 'sales.orders',
-    views: WORK_VIEWS,
+    views: workViewsOf({ price: work.price !== false }), // F-CP-101
     defaultRows: WORK_DEFAULT_ROWS,
     preset: workPreset(view, null),
     toolbarLink: { href: `/w/DEMO/production/work-orders?party=${party.id}`, label: t('customers.band.workOrders', { customer: name }) },
-    empty: view === WORK_DEFAULT_ROWS ? { title: t('customers.work.empty', { customer: name }), link: { href: `/w/DEMO/sales/customers/${party.id}?tab=work&rows=all`, label: t('customers.work.showAll') } } : null,
+    empty: workEmptyOf(view, null, name, t, `/w/DEMO/sales/customers/${party.id}?tab=work&rows=all`), // F-CP-101: per view
   }
   return createElement(
     'div',
@@ -264,15 +264,17 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'identity-new', label: 'New tax identity from a date', model: record('MODA-DEMO', { tab: 'terms', dialog: { kind: 'identity', mode: 'new' } }) },
     { id: 'identity-correct', label: 'Correct the identity in force (add the SDI code)', model: record('MARCHIO-ESEMPIO', { tab: 'terms', dialog: { kind: 'identity', mode: 'correct' } }) },
     { id: 'identity-first', label: 'A first tax identity', model: record('NUOVO-PROVA', { tab: 'terms', dialog: { kind: 'identity', mode: 'new' } }) },
-    // ---- F-SA-276: Work — the waiting strip and the Orders sheet locked to the customer (In production · Waiting on us · Late · All orders).
-    { id: 'quotes-orders', label: 'F-SA-276 · Work: the strip (two groups and the tasks) and the orders in production', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')) }) },
-    { id: 'quotes-orders-all', label: 'F-SA-276 · Work: All orders (Status shown)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), view: 'all' }) },
+    // ---- F-SA-276: Work — the waiting strip and the Orders sheet locked to the customer. F-CP-101: All orders first (the default) ·
+    // In production · Waiting on us · Late.
+    { id: 'quotes-orders', label: 'F-CP-101 · Work opens on All orders: the strip (two groups and the tasks) and every order (Status shown)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')) }) },
+    { id: 'quotes-orders-all', label: 'F-CP-101 · Work: the view In production (no Status column: every row is in production)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ status: 'IN_PRODUCTION' })), view: 'IN_PRODUCTION' }) },
     {
       id: 'quotes-orders-no-price',
       label: 'F-SA-276 · Work without the price grain (no money column, never 0)',
       model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined, paid: undefined, balance: undefined })), price: false }, { can: { ...RECORD_CAN, price: false }, quotes: loaded(withoutMoney(QUOTES)), orders: loaded(withoutMoney(ORDERS)) }),
     },
-    { id: 'quotes-orders-empty', label: 'F-SA-276 · Work: nothing in production (the way to All orders)', model: workCase('NUOVO-PROVA', { reads: STRIP_READY, rows: [] }) },
+    { id: 'quotes-orders-empty', label: 'F-CP-101 · Work: All orders, none yet ("<customer> has no order yet.")', model: workCase('NUOVO-PROVA', { reads: STRIP_READY, rows: [] }) },
+    { id: 'quotes-orders-empty-production', label: 'F-CP-101 · Work: In production, nothing (the way to All orders)', model: workCase('NUOVO-PROVA', { reads: STRIP_READY, rows: [], view: 'IN_PRODUCTION' }) },
     { id: 'quotes-orders-reading', label: 'F-SA-276 · Work: the strip and the rows reading ("—", never 0)', model: workCase('MODA-DEMO', { reads: STRIP_READING, rows: null }) },
     { id: 'quotes-orders-error', label: "F-SA-276 · Work: the orders couldn't be read (the strip stays usable)", model: workCase('MODA-DEMO', { reads: { ...STRIP_READY, requests: { status: 'failed' } }, rows: [], problem: 'problem.read.unavailable' }) },
     // ---- F-SA-271: the seven tabs (R5), the landing tab, the band's primary and ⋯ lines.

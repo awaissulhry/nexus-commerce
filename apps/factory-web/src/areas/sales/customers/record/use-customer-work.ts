@@ -43,18 +43,27 @@ import { writeSearch } from '../../../_shared/record-frame/address' // F-OP-211:
 
 // ---- the address (the tab, its lock, its default view) ------------------------------------------------------------------
 
-/** The Work tab's default view: the orders in production (`status=IN_PRODUCTION`), written into the address on entry. */
-export const WORK_DEFAULT_ROWS = 'IN_PRODUCTION' as const
+/**
+ * The Work tab's default view, written into the address on entry. F-CP-101 (customer page plan C1, D7, K1): All orders (`rows=all`) —
+ * never `status=all`: that term reads as Open orders and, being a view term, would stop every later write (a silent wrong view).
+ * The customer page only: Sales › Orders keeps Open orders as its default.
+ */
+export const WORK_DEFAULT_ROWS = 'all' as const
 
-/** The terms that name a view of the sheet (any of them: the address already shows a view, the default is not written). */
-const VIEW_TERMS: readonly string[] = Object.freeze(['rows', 'status', 'late', 'deposit', 'reaccept', 'shippedNotInvoiced', 'waiting'])
+/**
+ * The terms that name a view of the sheet (any of them: the address already shows a view, the default is not written).
+ * F-CP-101 (review E6: this step is their ONE owner): + `priceMatch` (the Not equal view, F-CP-141) and the page term `list` (Drafts of
+ * <customer>, F-CP-107) — an address on either view gets no default written beside it. `cols` (F-CP-105) names no view.
+ */
+const VIEW_TERMS: readonly string[] = Object.freeze(['rows', 'status', 'late', 'deposit', 'reaccept', 'shippedNotInvoiced', 'waiting', 'priceMatch' /* F-CP-101 */, 'list' /* F-CP-101 */])
 
 type Params = { get(name: string): string | null; toString(): string } | null
 
 /**
  * The address the Work tab writes on entry, or null (nothing to write): `tab=work` (a saved view replaces the whole query and drops
  * the transient `tab`: the tab comes back), the customer's lock (`party`), an old address's terms (`?tab=orders` → All orders), and
- * the default view when no view term is there. One write, so the sheet reads once.
+ * the default view when no view term is there. One write, so the sheet reads once. fx-12: its ONE writer (WorkTab); applied to its
+ * own output it writes nothing. F-CP-101: the default is `rows=all`.
  */
 export function workEntry(base: string, partyId: string, params: Params): string | null {
   const query = new URLSearchParams(params?.toString() ?? '')
@@ -70,7 +79,7 @@ export function workEntry(base: string, partyId: string, params: Params): string
   if (merged && !hasView()) for (const [name, value] of Object.entries(merged)) set(name, value)
   set('tab', 'work')
   set('party', partyId)
-  if (!hasView()) set('status', WORK_DEFAULT_ROWS)
+  if (!hasView()) set('rows', WORK_DEFAULT_ROWS) // F-CP-101: All orders (`rows=all`), never `status=all`
   return changed ? `${base}?${query.toString()}` : null
 }
 
