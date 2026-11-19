@@ -251,9 +251,9 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
   const offer = pricedOfferOf(strip, model.depth?.freeze?.value ?? null) // F-OP-108
   // F-OP-109: each removed line of the order, with the work orders of the preview that lose it.
   const losing = Object.fromEntries(
-    amend.lines.flatMap((line) => {
+    amend.lines.flatMap((line): [string, { numbers: string; count: number }][] => {
       const wos = line.lineId && !line.locked && piecesOf(line) === 0 ? workOrdersOfLine(strip.workOrders, line.lineId) : []
-      return wos.length > 0 ? [[line.lineId!, { numbers: followedNumbers(wos), count: wos.length }]] : []
+      return line.lineId && wos.length > 0 ? [[line.lineId, { numbers: followedNumbers(wos), count: wos.length }]] : []
     }),
   )
   const asPriced = offer === 'priced'
@@ -384,7 +384,8 @@ function WhatChanges({ order, amend, strip, asPriced, model, actions }: { order:
           {name.what ? t('changes.lineWhat', { line: name.line, what: name.what }) : t('changes.line', { line: name.line })}
         </span>,
         <Tag key="c" tone={line.change === 'REMOVED' ? 'danger' : line.change === 'ADDED' ? 'info' : 'warning'}>
-          {t(`changes.kind.${line.change}`)}
+          {/* F-OP-109 (B-OP-014): a line left out while work orders make it is closed short, never deleted. */}
+          {line.closedShort ? t('edit.closedShort') : t(`changes.kind.${line.change}`)}
         </Tag>,
         sizesText(line.sizes) || t('changes.sizesSame'),
         t('changes.pieces', { before: line.piecesBefore, after: line.piecesAfter }),

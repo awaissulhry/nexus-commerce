@@ -916,7 +916,8 @@
       "removed": "Removed: type its sizes again to keep it",
       "loses_one": "{numbers} loses this line",
       "loses_other": "{numbers} lose this line"
-    }
+    },
+    "closedShort": "Closed short: work orders make it"
   },
   "editor": {
     "add": {

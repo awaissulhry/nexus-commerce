@@ -1195,14 +1195,15 @@ describe('F-OP-106: the What changes strip — fed by the preview of THIS draft,
   const words = { en: 'WO-0312 is on hold: lift the hold first, then apply the change.', it: 'WO-0312 è in pausa: togli prima la pausa, poi applica la modifica.' }
   // B-OP-013's plan as the API answers it to Sales: the DRAFT follows (orders.manage), the RELEASED one waits (no workorders.manage).
   const plan = [
-    { workOrderId: 'wo-draft', number: 'WO-0311', status: 'DRAFT', route: 'SET_DRAFT_CELLS' as const, cells: [{ size: '48', from: 2, to: 1, cut: 0, salesOrderLineId: black.id }], appliesNow: true, held: null, reprint: false },
-    { workOrderId: 'wo-released', number: 'WO-0312', status: 'RELEASED', route: 'LOWER_RELEASED' as const, cells: [{ size: '50', from: 2, to: 1, cut: 0, salesOrderLineId: black.id }], appliesNow: false, held: words, reprint: true },
+    { kind: 'LOWER_TO_ORDER' as const, workOrderId: 'wo-draft', number: 'WO-0311', status: 'DRAFT', route: 'SET_DRAFT_CELLS' as const, cells: [{ lineId: black.id, size: '48', from: 2, to: 1, cut: 0 }], extra: 0, appliesNow: true, held: null, reprint: false },
+    { kind: 'LOWER_TO_ORDER' as const, workOrderId: 'wo-released', number: 'WO-0312', status: 'RELEASED', route: 'LOWER_RELEASED' as const, cells: [{ lineId: black.id, size: '50', from: 2, to: 1, cut: 0 }], extra: 0, appliesNow: false, held: words, reprint: true },
   ]
   const draftOfTyped = () => {
     const lines = withCells(draftOf(production), { [black.id]: { '48': 1, '50': 1, '52': 2, '54': 2 } })
     return { lines, customerRef: production.customerRef ?? '', requestedDate: production.requestedDate ?? '' }
   }
-  const previewOf = (over: Record<string, unknown> = {}) => ({ ...AMEND_PREVIEW, plan, ...over }) as typeof AMEND_PREVIEW
+  // B-OP-013: the plan rides in the preview's `workOrders` (beside the extra pieces).
+  const previewOf = (over: { plan?: unknown[] } = {}) => ({ ...AMEND_PREVIEW, workOrders: { extra: [], needsOutcome: false, words: null, plan: over.plan ?? plan } }) as typeof AMEND_PREVIEW
   const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
 
   it('a DRAFT work order follows now for Sales, a RELEASED one waits for production — said with the API\'s why; a planner\'s follows', async () => {
@@ -1224,7 +1225,7 @@ describe('F-OP-106: the What changes strip — fed by the preview of THIS draft,
     const planned = stripOf({ order: production, review: { phase: 'ready', key, preview: planner, problem: null }, key, local: null, price: false, label: () => null })
     expect(planned.workOrders.every((wo) => wo.now && wo.held === null)).toBe(true)
     // A work order this reader does not reach has no number: "A work order"; a new one and a cancel say so.
-    const others = stripOf({ order: production, review: { phase: 'ready', key, preview: previewOf({ plan: [{ ...plan[0]!, number: null }, { ...plan[0]!, workOrderId: null, route: 'NEW_DRAFT', cells: [{ size: '48', from: 0, to: 3, cut: 0 }] }, { ...plan[1]!, route: 'CANCEL_WORK_ORDER', appliesNow: true }] }), problem: null }, key, local: null, price: true, label: () => null })
+    const others = stripOf({ order: production, review: { phase: 'ready', key, preview: previewOf({ plan: [{ ...plan[0]!, number: null }, { ...plan[0]!, kind: 'MAKE_MORE', workOrderId: null, number: null, status: null, route: 'NEW_DRAFT', cells: [{ lineId: black.id, size: '48', from: 0, to: 3, cut: 0 }] }, { ...plan[1]!, route: 'CANCEL_WORK_ORDER', appliesNow: true }] }), problem: null }, key, local: null, price: true, label: () => null })
     expect(others.workOrders.map((wo) => workOrderWords(wo, en, 'en'))).toEqual(['A work order 2 → 1 · follows now', 'A new work order: 3 pieces · follows now', 'WO-0312 cancelled · follows now · its work sheet is printed again'])
     expect(strip.workOrders[0]!.lineIds).toEqual([black.id])
   })
@@ -1336,7 +1337,7 @@ describe('F-OP-107: below the cut the strip asks what happens to the extra piece
   const production = order('IN_PRODUCTION')
   const black = lineOf(production, 10)
   const chooseWords = { en: 'Choose what happens to the 1 extra pieces', it: 'Scegli cosa fare dei 1 pezzi in più' }
-  const extra = { extra: [{ workOrderSizeId: 'ws-1', salesOrderLineId: black.id, size: '48', count: 1, words: { en: 'Extra pieces: 1 48 already cut', it: 'Pezzi in più: 1 48 già tagliati' } }], needsOutcome: true, words: chooseWords }
+  const extra = { extra: [{ workOrderSizeId: 'ws-1', salesOrderLineId: black.id, size: '48', count: 1, words: { en: 'Extra pieces: 1 48 already cut', it: 'Pezzi in più: 1 48 già tagliati' } }], needsOutcome: true, words: chooseWords, plan: [] }
 
   it('the strip carries the preview\'s extra pieces; Apply waits for an outcome (the API\'s words) until one is picked, then for the reason', async () => {
     const { amendKeyOf, heldWordsOf, stripHeld, stripOf } = await import('./daily-model')
@@ -1351,7 +1352,7 @@ describe('F-OP-107: below the cut the strip asks what happens to the extra piece
     expect(stripHeld(strip, { reason: 'Fewer 48.', busy: false, local: null, extraOutcome: 'LEFTOVER' })).toBeNull()
     expect(stripHeld(strip, { reason: '', busy: false, local: null, extraOutcome: 'LEFTOVER' })).toEqual({ key: 'amend.held.reason' })
     // No extra pieces (or the API says none is needed): nothing waits for an outcome.
-    const none = stripOf({ order: production, review: { phase: 'ready', key, preview: { ...AMEND_PREVIEW, workOrders: { extra: [], needsOutcome: false, words: null } }, problem: null }, key, local: null, price: true, label: () => null })
+    const none = stripOf({ order: production, review: { phase: 'ready', key, preview: { ...AMEND_PREVIEW, workOrders: { extra: [], needsOutcome: false, words: null, plan: [] } }, problem: null }, key, local: null, price: true, label: () => null })
     expect(none.extra).toBeNull()
     expect(stripHeld(none, { reason: 'x', busy: false, local: null, extraOutcome: null })).toBeNull()
   })
@@ -1407,7 +1408,7 @@ describe('F-OP-107: below the cut the strip asks what happens to the extra piece
 describe('F-OP-108: a frozen field — Apply as a priced change, its optional fee in the strip; frozen for good holds it', () => {
   const production = order('IN_PRODUCTION')
   const black = lineOf(production, 10)
-  const frozen = { ok: false, revision: 4, version: 7, problems: [{ path: 'body/lines/10/SIZE_QUANTITY', message: 'x' }], diff: null, workOrders: null, plan: [] }
+  const frozen = { ok: false, revision: 4, version: 7, problems: [{ path: 'body/lines/10/SIZE_QUANTITY', message: 'x' }], diff: null, workOrders: null }
 
   it('priced: Apply is not held by the freeze (the fee, when typed, must be one); blocked: held; no frozen field: no offer', async () => {
     const { amendKeyOf, feeHeld, pricedOfferOf, stripHeld, stripOf } = await import('./daily-model')

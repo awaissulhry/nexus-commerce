@@ -30,7 +30,7 @@ import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { DialogProblem, Frame } from './Dialogs'
 // ---- F-OP-107 (B2): Close remaining lines and Cancel say what happens to each work order, and pick the extra pieces' outcome ----
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
-import type { ExtraPiecesView, WorkOrderPlan } from '../../api'
+import type { ExtraPiecesView, WorkOrderPlan } from '../../api' // B-OP-013: the previews' `workOrders` (extra pieces + plan)
 import { extraChoicesOf, followedNumbers, heldWordsOf, outcomeHeld, stripWorkOrderOf, workOrderWords } from '../../daily-model'
 import { ExtraPieces } from '../../../../home/approvals/requests/view/ExtraPieces'
 
@@ -159,7 +159,7 @@ export function CloseLinesDialog({ order, model, actions }: { order: Order; mode
       {chosen.length > 0 && <p className="fw-so-hint">{t('closeLines.pieces', { count: pieces })}</p>}
       {/* F-OP-107: what happens to each work order once the preview is read; until then (or when it is not), what work orders still make. */}
       {stillMade > 0 && planState !== 'ready' && <Banner tone="warning" title={t('closeLines.inWorkOrders', { count: stillMade })} />}
-      {chosen.length > 0 && <FollowPlan order={order} model={model} state={planState} plan={preview?.plan ?? []} extra={preview?.workOrders ?? null} outcome={outcome} onOutcome={setOutcome} name={`fw-so-close-extra-${order.id}`} />}
+      {chosen.length > 0 && <FollowPlan order={order} model={model} state={planState} plan={preview?.workOrders?.plan ?? []} extra={preview?.workOrders ?? null} outcome={outcome} onOutcome={setOutcome} name={`fw-so-close-extra-${order.id}`} />}
       <Field label={t('closeLines.reasonCode')} hint={model.cancelReasons === null || model.cancelReasons === undefined ? t('closeLines.reasonCodeNone') : undefined} required>
         <Select value={reasonCode} disabled={!model.cancelReasons || model.cancelReasons.length === 0} onChange={(event) => setReasonCode(event.target.value)} aria-label={t('closeLines.reasonCode')}>
           <option value="">{t('closeLines.pickReasonCode')}</option>
@@ -298,7 +298,7 @@ export function CancelDialog({ order, model, actions }: { order: Order; model: O
         {check.impact.cancellable && (
           <>
             {/* F-OP-107: what the cancel does to each work order, the extra pieces' outcome. */}
-            <FollowPlan order={order} model={model} state="ready" plan={check.plan} extra={check.workOrders} outcome={outcome} onOutcome={setOutcome} name={`fw-so-cancel-extra-${order.id}`} />
+            <FollowPlan order={order} model={model} state="ready" plan={check.workOrders?.plan ?? []} extra={check.workOrders} outcome={outcome} onOutcome={setOutcome} name={`fw-so-cancel-extra-${order.id}`} />
             <Field label={t('cancel.reason')} hint={t('cancel.reasonHint')}>
               <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={1000} />
             </Field>

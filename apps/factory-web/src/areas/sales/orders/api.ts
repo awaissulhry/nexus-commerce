@@ -5,6 +5,9 @@ import { newIdempotencyKey } from '../../../lib/api/client'
 import type { PickBody } from '../quotes/record/configurator/api'
 // F-OP-107 (B2): the three outcomes of pieces already cut beyond the new figures.
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
+// F-OP-106: how a work order follows an office change, and the change's kind (factory-domain order-apply: B-OP-012 / B-OP-013).
+import { APPLY_ROUTES } from '@nexus/factory-domain/order-apply/plan'
+import { WORK_ORDER_CHANGE_KINDS, type ApplyRoute } from '@nexus/factory-domain/order-apply/rules'
 
 /**
  * Every call of the sales order screens (SCR-038 list and board, SCR-039 the order studio), with the answer's shape
@@ -792,28 +795,34 @@ export const extraPiecesSchema = z.object({
   words: saidWords.nullable(),
 })
 export type ExtraPiecesView = z.infer<typeof extraPiecesSchema>
-/** How a work order follows an office change (B-OP-012's routes). */
-export const FOLLOW_ROUTES = ['SET_DRAFT_CELLS', 'LOWER_RELEASED', 'CANCEL_WORK_ORDER', 'NEW_DRAFT'] as const
-export type FollowRoute = (typeof FOLLOW_ROUTES)[number]
+/** How a work order follows an office change (B-OP-012's routes, factory-domain APPLY_ROUTES). */
+export type FollowRoute = ApplyRoute
 /**
- * B-OP-013: one work order the change touches, as the preview says it — its cells from → to (and what is cut of them), whether it
- * follows in the same click (the API's rule, D1: a DRAFT for orders.manage, a RELEASED one for workorders.manage, a mixed one
- * never) or waits (with why), and whether its papers are printed again. No number: a work order this reader does not reach.
+ * B-OP-013 (daily-contract workOrderPlanView): one work order the change touches (or a new DRAFT), as the preview says it — its cells
+ * from → to with what is cut, the pieces cut beyond the new figures, whether it follows in the same click (factory-domain
+ * followDecisionOf, D1: a DRAFT for whoever may change the order, a released one with workorders.manage, a mixed one never) or waits
+ * with why, and whether its traveller is reprinted. No id, number or status: a new DRAFT, or a work order this reader does not reach.
+ * No route: it cannot be carried out now (`held` says why).
  */
 export const workOrderPlanSchema = z.object({
+  kind: z.enum(WORK_ORDER_CHANGE_KINDS),
   workOrderId: z.string().nullable(),
   number: z.string().nullable(),
-  status: z.string(),
-  route: z.enum(FOLLOW_ROUTES),
-  cells: z.array(z.object({ size: z.string(), from: z.number(), to: z.number(), cut: z.number().default(0), salesOrderLineId: z.string().nullable().optional() })),
+  status: z.string().nullable(),
+  route: z.enum(APPLY_ROUTES).nullable(),
+  cells: z.array(z.object({ lineId: z.string(), size: z.string(), from: z.number(), to: z.number(), cut: z.number() })),
+  extra: z.number(),
   appliesNow: z.boolean(),
-  held: saidWords.nullable().default(null),
-  reprint: z.boolean().default(false),
+  held: saidWords.nullable(),
+  reprint: z.boolean(),
 })
 export type WorkOrderPlan = z.infer<typeof workOrderPlanSchema>
+/** B-OP-013 (workOrderPreviewView): a preview's work orders — the extra pieces (B-SA-042) and the plan of each work order. */
+export const workOrderPreviewSchema = extraPiecesSchema.extend({ plan: z.array(workOrderPlanSchema).default([]) })
+export type WorkOrderPreview = z.infer<typeof workOrderPreviewSchema>
 /** B-OP-012: the work-order changes an office change carried out in its own command, and those that wait (with why). */
 export const followedSchema = z.object({
-  applied: z.array(z.object({ changeId: z.string(), workOrderId: z.string().nullable(), number: z.string().nullable(), route: z.enum(FOLLOW_ROUTES), reprint: z.boolean() })),
+  applied: z.array(z.object({ changeId: z.string(), workOrderId: z.string().nullable(), number: z.string().nullable(), route: z.enum(APPLY_ROUTES), reprint: z.boolean() })),
   waiting: z.array(z.object({ changeId: z.string(), workOrderId: z.string().nullable(), number: z.string().nullable(), words: saidWords })),
 })
 export type Followed = z.infer<typeof followedSchema>
@@ -833,6 +842,8 @@ const diffSchema = z.object({
       sizes: z.array(z.object({ size: z.string(), before: z.number(), after: z.number() })),
       priceChanged: z.boolean(),
       textChanged: z.boolean(),
+      /** F-OP-109 (B-OP-014): a line left out while work orders make it — closed short (it stays on the order). */
+      closedShort: z.boolean().optional(),
     }),
   ),
   header: z.array(z.object({ field: z.enum(['customerRef', 'requestedDate']), before: z.string().nullable(), after: z.string().nullable() })),
@@ -892,9 +903,8 @@ export const amendPreviewSchema = z.object({
   version: z.number(),
   problems: z.array(issueSchema),
   diff: diffSchema.nullable(),
-  // F-OP-106: the extra pieces it would leave (B-SA-042) and what each work order would do (B-OP-013); an older answer: none.
-  workOrders: extraPiecesSchema.nullable().default(null),
-  plan: z.array(workOrderPlanSchema).default([]),
+  // F-OP-106: the extra pieces it would leave (B-SA-042) and what each work order would do (B-OP-013, `workOrders.plan`).
+  workOrders: workOrderPreviewSchema.nullable().default(null),
 })
 export type AmendPreview = z.infer<typeof amendPreviewSchema>
 
@@ -907,8 +917,9 @@ export function previewAmendment(api: ApiClient, orderId: string, body: AmendBod
  * "Apply amendment" with the order's version as read (a stale one: 409). F-OP-106: it applies at once (no yes is asked) and answers
  * the work orders that followed in the same command and those that wait (B-OP-012).
  */
-export function applyAmendment(api: ApiClient, orderId: string, body: AmendBody & { version: number; reason: string }, idempotencyKey: string): Promise<{ order: Order; amendment: Amendment; workOrders: Followed }> {
-  return api.post(`${orderPath(orderId)}/amendments`, { body, schema: z.object({ order: orderSchema, amendment: amendmentSchema, workOrders: followedSchema.default(NOTHING_FOLLOWED) }), idempotencyKey })
+export function applyAmendment(api: ApiClient, orderId: string, body: AmendBody & { version: number; reason: string }, idempotencyKey: string): Promise<{ order: Order; amendment: Amendment | null; workOrders: Followed }> {
+  // B-OP-015: `amendment` is null when only the delivery address changed (it moved alone; no amendment is written).
+  return api.post(`${orderPath(orderId)}/amendments`, { body, schema: z.object({ order: orderSchema, amendment: amendmentSchema.nullable(), workOrders: followedSchema.default(NOTHING_FOLLOWED) }), idempotencyKey })
 }
 
 const closeLinesSchema = z.object({
@@ -928,9 +939,8 @@ export function closeLines(api: ApiClient, orderId: string, body: { version: num
 
 // ---- F-OP-107 (B2; 13-backend §1.3, B-OP-013): what closing these lines would do to the work orders, before the click ----
 export const closePreviewSchema = z.object({
-  plan: z.array(workOrderPlanSchema).default([]),
-  /** The pieces already cut of them beyond what stays (their outcome is picked in the dialog). */
-  workOrders: extraPiecesSchema.nullable().default(null),
+  /** The pieces already cut of them beyond what stays (their outcome is picked in the dialog) and each work order's plan. */
+  workOrders: workOrderPreviewSchema.nullable().default(null),
 })
 export type ClosePreview = z.infer<typeof closePreviewSchema>
 
@@ -963,9 +973,8 @@ export const cancelCheckSchema = z.object({
   impact: impactSchema,
   /** The leather cut for its work orders: hides and area in the hide's base unit (no money, no worker). */
   leatherCut: z.array(z.object({ workOrderId: z.string(), number: z.string(), hides: z.number(), area: z.string().nullable() })),
-  // F-OP-107 (B-OP-013): what the cancel would do to each work order, and the pieces already cut (their outcome picked before it).
-  plan: z.array(workOrderPlanSchema).default([]),
-  workOrders: extraPiecesSchema.nullable().default(null),
+  // F-OP-107 (B-OP-013): the pieces already cut (their outcome picked before the cancel) and what each work order would do.
+  workOrders: workOrderPreviewSchema.nullable().default(null),
 })
 export type CancelCheck = z.infer<typeof cancelCheckSchema>
 

@@ -280,7 +280,7 @@ const HELD: HeldFile[] = holdFiles(
 // ---- B-W2b-323 ----
 const waitingOrder = order('CONFIRMED', { status: 'PENDING_APPROVAL' })
 const d323 = (role: Role, value: Order, over: Partial<OrderRecordModel> = {}, depth: Parameters<typeof depthModel>[1] = {}): RecordCase => base(role, value, { ...over, depth: depthModel(role, depth) })
-const frozenPreview = { ok: false, revision: 4, version: 7, problems: [{ path: 'body/lines/10/SIZE_QUANTITY', message: 'x' }], diff: null, workOrders: null, plan: [] }
+const frozenPreview = { ok: false, revision: 4, version: 7, problems: [{ path: 'body/lines/10/SIZE_QUANTITY', message: 'x' }], diff: null, workOrders: null }
 const W2B_323 = [
   { id: 'w2b-323-lines', label: 'W2b · Sales · Lines: urgent with its reason, season FW27, confirmation v2 sent; black 48 · 50 locked “Cutting started — size frozen”; Customer-supplied materials', model: d323('sales', production), note: 'The materials grid links each lot and the receipt that brought it; Plan from the BOM makes the rows.' },
   { id: 'w2b-323-materials-empty', label: 'W2b · Sales · Customer-supplied materials: the customer supplies nothing', model: d323('sales', production, {}, { materials: { value: MATERIALS_EMPTY, problem: null }, freeze: { value: FREEZE_NONE, problem: null } }) },

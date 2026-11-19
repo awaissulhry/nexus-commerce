@@ -252,7 +252,7 @@ export function useLinesActs(
         // order's own percent of the growth ("Deposit and words…" opens its dialog to set another).
         const done = asPriced
           ? await applyPricedChange(api, orderId, { ...pricedBodyOf({ ...PRICED_EMPTY, fee: draft.fee }, amendBodyOf(draft, value), true), version: value.version, reason, ...extra }, key).then((answer) => ({ order: answer.order, revision: answer.change.revision, workOrders: answer.workOrders }))
-          : await applyAmendment(api, orderId, { version: value.version, reason, ...amendBodyOf(draft, value), ...extra }, key).then((answer) => ({ order: answer.order, revision: answer.amendment.revision, workOrders: answer.workOrders }))
+          : await applyAmendment(api, orderId, { version: value.version, reason, ...amendBodyOf(draft, value), ...extra }, key).then((answer) => ({ order: answer.order, revision: answer.amendment?.revision ?? draft.revision /* B-OP-015: none when only the address moved */, workOrders: answer.workOrders }))
         setAmend(null)
         clearChanged()
         // "Amendment 3 applied · WO-0311 changed · WO-0312 waits for production": the work orders followed in the same command.

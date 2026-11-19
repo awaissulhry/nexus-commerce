@@ -432,7 +432,8 @@ export interface StripWorkOrder {
   readonly key: string
   /** null: a work order this reader does not reach ("A work order"). */
   readonly number: string | null
-  readonly route: FollowRoute
+  /** null: it cannot be carried out now (`held` says why). */
+  readonly route: FollowRoute | null
   readonly before: number
   readonly after: number
   /** It follows in the same click (D1); false: it waits for production — decided on this page. */
@@ -472,7 +473,7 @@ const EMPTY_STRIP = { problem: null, pieces: null, net: null, workOrders: [], pr
 export function stripWorkOrderOf(plan: WorkOrderPlan, index: number): StripWorkOrder {
   const before = plan.cells.reduce((sum, cell) => sum + cell.from, 0)
   const after = plan.cells.reduce((sum, cell) => sum + cell.to, 0)
-  const lineIds = [...new Set(plan.cells.flatMap((cell) => (cell.salesOrderLineId ? [cell.salesOrderLineId] : [])))]
+  const lineIds = [...new Set(plan.cells.map((cell) => cell.lineId))]
   return { key: plan.workOrderId ?? `new-${index}`, number: plan.number, route: plan.route, before, after, now: plan.appliesNow, held: plan.appliesNow ? null : plan.held, reprint: plan.reprint, lineIds }
 }
 
@@ -496,7 +497,7 @@ export function stripOf(input: { readonly order: Pick<Order, 'lines'>; readonly 
     problem: null,
     pieces: diff ? { before: ordered, after: ordered + delta, delta } : null,
     net: input.price && diff ? moneyChange(diff) : null,
-    workOrders: preview.plan.map(stripWorkOrderOf),
+    workOrders: (preview.workOrders?.plan ?? []).map(stripWorkOrderOf),
     problems: preview.ok ? [] : issuePhrases(preview.problems.filter((issue) => !frozenPaths.has(issue.path)), input.label),
     frozen: preview.ok ? [] : preview.problems.filter((issue) => frozenPaths.has(issue.path)),
     reaccept: diff ? diff.reacceptanceNeeded : null,

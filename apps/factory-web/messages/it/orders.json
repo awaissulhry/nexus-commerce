@@ -916,7 +916,8 @@
       "removed": "Tolta: scrivi di nuovo le taglie per tenerla",
       "loses_one": "{numbers} perde questa riga",
       "loses_other": "{numbers} perdono questa riga"
-    }
+    },
+    "closedShort": "Chiusa in anticipo: la fanno gli ordini di lavoro"
   },
   "editor": {
     "add": {
