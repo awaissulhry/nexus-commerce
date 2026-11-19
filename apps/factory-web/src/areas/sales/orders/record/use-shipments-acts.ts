@@ -36,12 +36,12 @@ import type { Phrase } from '../model'
  * (useOwnTransport mounted lazily, only while it is open: `model.shipmentTracking`); a save reads the order again.
  *
  * F-OP-121 (order page plan N6): "Create shipment…" opens Warehouse's New shipment IN PLACE (useNewShipment, `together`): this
- * order and the same customer's other open orders beside it (each held with its reason; several orders held off until the switch).
+ * order and the same customer's other open orders beside it (each held with its reason, if any; B-OP-047: N6 on).
  * Create makes a DRAFT; the order is read again and the notice says where to pack it ("Pack and ship it in Warehouse ›").
  *
- * F-OP-122 (order page plan N6): the customer's DRAFT shipments of the same site and delivery address (the joinable read: those
- * whose only reason is the hold of several orders, or none) each offer "Add this order's garments…" — the same step 2 — held with
- * MULTI_ORDER_OFF's words until the switch B-OP-047; a DRAFT only (the API keeps the last word).
+ * F-OP-122 (order page plan N6): the customer's DRAFT shipments this order may join (the joinable read, every rule passed;
+ * B-OP-047: several orders in one shipment are on) each offer "Add this order's garments…" — the same step 2; a DRAFT only (the
+ * API keeps the last word).
  */
 export function useShipmentsActs(input: {
   readonly order: Order | null
@@ -72,7 +72,7 @@ export function useShipmentsActs(input: {
     (shipment: Shipment, done: NewShipmentDone) => {
       reload()
       // F-OP-122: garments added to a DRAFT already there say so (how many, onto which shipment).
-      const words = done.kind === 'joined' ? { key: 'ship.joined', params: { count: done.garments, number: shipment.number } } : { key: 'ship.created', params: { number: shipment.number } }
+      const words: Phrase /* op-fx1: one phrase, either key */ = done.kind === 'joined' ? { key: 'ship.joined', params: { count: done.garments, number: shipment.number } } : { key: 'ship.created', params: { number: shipment.number } }
       setNotice({ tone: 'success', words, door: { href: `${prefix}/warehouse/shipments/${shipment.id}`, words: { key: 'ship.createdDoor' } } })
     },
     [prefix, reload, setNotice],
@@ -97,7 +97,7 @@ export function useShipmentsActs(input: {
     let live = true
     joinableShipments(api, orderId)
       .then((answer) => {
-        // The same customer, site and delivery address: allowed, or held only while several orders in one shipment are held off.
+        // The same customer, site and delivery address, every rule passed (B-OP-047): the DRAFTs this order may join.
         if (live) setJoinable({ orderId, rows: joinableRows(answer.shipments) })
       })
       .catch(() => live && setJoinable({ orderId, rows: [] }))

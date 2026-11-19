@@ -112,7 +112,7 @@ export function useNewShipment(input: { readonly api: ApiClient; readonly defaul
         api,
         {
           salesOrderId: model.salesOrderId,
-          // Ship together: every order of the new shipment, the first = salesOrderId (refused with MULTI_ORDER_OFF's words until the switch).
+          // Ship together: every order of the new shipment, the first = salesOrderId (each checked against it; B-OP-047: N6 on).
           ...(others.length > 0 ? { salesOrderIds: [model.salesOrderId, ...others] } : {}),
           transportBy: model.transportBy,
           // Blank: the site's default carrier and service (the API fills them); none at all without a carrier.

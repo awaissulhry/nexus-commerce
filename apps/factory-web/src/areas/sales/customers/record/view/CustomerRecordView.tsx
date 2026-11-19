@@ -18,6 +18,7 @@ import { CUSTOMER_MONEY_NAMESPACE } from '../../money/model'
 import { useCustomerOverview, type CustomerMoneyModel } from '../../money/overview'
 import { MoneyTab } from './MoneyTab' // F-SA-273
 import { overdueOf } from '../../money/model' // F-SA-273
+import { workDoor } from '../use-customer-work' // F-CP-103: each tile opens the view it counts
 
 /**
  * SCR-033 Customer record (design sales.customers "records: Customer"; F-SA-270, sales page plan N5, picks P10, R5): the customer's
@@ -47,6 +48,8 @@ export function CustomerRecordView({
   workCount,
   quotesIncoming,
   threadButton,
+  onNewOrder,
+  onImport,
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
@@ -77,11 +80,14 @@ export function CustomerRecordView({
   quotesIncoming?: ReactNode
   /** F-SA-279: below 1280 px the band's button names the record the dock holds ("Thread · SO-…"); null: "Thread". */
   threadButton?: string | null
+  /** F-CP-104: the band's New order and ⋯ Import orders for <customer>… open on this page (the container asks the Work sheet); absent: the old doors. */
+  onNewOrder?: () => void
+  onImport?: () => void
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -106,6 +112,8 @@ interface CustomerProps {
   workCount?: { readonly count: number | null; readonly attention: boolean } | null | undefined
   quotesIncoming?: ReactNode // F-SA-277
   threadButton?: string | null // F-SA-279
+  onNewOrder?: (() => void) | undefined // F-CP-104
+  onImport?: (() => void) | undefined // F-CP-104
 }
 
 function Customer(props: CustomerProps) {
@@ -118,7 +126,8 @@ function Customer(props: CustomerProps) {
 }
 
 /** F-SA-271: the band's ⋯ lines of the customer (after Start a project), each held with why. */
-function customerMore(model: PartyRecordModel, party: Party, t: ReturnType<typeof useT>, onAddTask?: () => void): MenuItemDef[] {
+// F-CP-104: + Import orders for <customer>… opens the sheet's import on this page (onImport), held without orders.manage.
+function customerMore(model: PartyRecordModel, party: Party, t: ReturnType<typeof useT>, onAddTask?: () => void, onImport?: () => void): MenuItemDef[] {
   const can = model.can
   const name = partyName(party)
   const id = encodeURIComponent(party.id)
@@ -126,7 +135,9 @@ function customerMore(model: PartyRecordModel, party: Party, t: ReturnType<typeo
     { id: 'task', label: t('customers.band.addTask', { customer: name }), onSelect: () => onAddTask?.(), disabled: !can.tasks || !onAddTask, description: can.tasks ? undefined : t('held.right', { right: rightRef('tasks.manage') }) },
     ...(can.orders
       ? [
-          { id: 'import', label: t('customers.band.importOrders', { customer: name }), href: can.ordersManage ? `${model.prefix}/sales/orders?party=${id}&rows=all&import=1` : undefined, disabled: !can.ordersManage, description: can.ordersManage ? undefined : t('held.right', { right: rightRef('orders.manage') }) },
+          onImport
+            ? { id: 'import', label: t('customers.band.importOrders', { customer: name }), onSelect: onImport, disabled: !can.ordersManage, description: can.ordersManage ? undefined : t('held.right', { right: rightRef('orders.manage') }) } // F-CP-104: in place
+            : { id: 'import', label: t('customers.band.importOrders', { customer: name }), href: can.ordersManage ? `${model.prefix}/sales/orders?party=${id}&rows=all&import=1` : undefined, disabled: !can.ordersManage, description: can.ordersManage ? undefined : t('held.right', { right: rightRef('orders.manage') }) },
           { id: 'orders', label: t('customers.openSheet'), href: `${model.prefix}/sales/orders?party=${id}&rows=all` },
         ]
       : []),
@@ -143,7 +154,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -169,19 +180,26 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
   }))
   // F-SA-271: the primary — Activate a prospect, New order for an active customer (orders.manage), none when blocked or archived;
   // Check VIES goes into ⋯ (and stays in Terms › VIES).
+  // F-CP-104 (C2a): New order opens the New order window on this page, the customer held (no Change), no trip to Sales › Orders.
   const primary =
     party.status === 'ACTIVE' ? (
       can.ordersManage ? (
-        <Button size="sm" variant="primary" asChild>
-          <Link href={`${model.prefix}/sales/orders?party=${encodeURIComponent(party.id)}&new=1`}>{t('customers.band.newOrder')}</Link>
-        </Button>
+        onNewOrder ? (
+          <Button size="sm" variant="primary" onClick={onNewOrder}>
+            {t('customers.band.newOrder')}
+          </Button>
+        ) : (
+          <Button size="sm" variant="primary" asChild>
+            <Link href={`${model.prefix}/sales/orders?party=${encodeURIComponent(party.id)}&new=1`}>{t('customers.band.newOrder')}</Link>
+          </Button>
+        )
       ) : (
         <Button size="sm" variant="primary" heldReason={t('held.right', { right: rightRef('orders.manage') })}>
           {t('customers.band.newOrder')}
         </Button>
       )
     ) : party.status === 'PROSPECT' ? undefined : null
-  const { band, viesHeld } = usePartyBand(model, party, actions, { primary, viesInMore: true, more: customerMore(model, party, t, onAddTask) })
+  const { band, viesHeld } = usePartyBand(model, party, actions, { primary, viesInMore: true, more: customerMore(model, party, t, onAddTask, onImport /* F-CP-104 */) })
   const { current } = identitiesOf(party)
 
   return (
@@ -275,7 +293,7 @@ const OPEN_ORDER_STATES: readonly string[] = ['CONFIRMED', 'IN_PRODUCTION', 'REA
 
 /**
  * F-SA-272 (11-customer-page §4): who they are, how they stand, who looks after them — Key numbers (at most 6, each a door: Open
- * orders · In production · Late → Work, Open quotes → Quotes & incoming, Overdue → Money), Identity, Also open (samples, repairs,
+ * orders · In production · Late → Work on the view each counts (F-CP-103), Open quotes → Quotes & incoming, Overdue → Money), Identity, Also open (samples, repairs,
  * open returns and claims), the custom fields (the frame's, on this tab only); beside it Status, Who looks after <customer> (the
  * supervisor and backup, moved from Portal settings), Next steps, VIES, the team and the requirements in force, the main contacts.
  * Ordered in <year>, Returns in <year> and Free credit went to Money; the Now card to Work and Quotes & incoming.
@@ -287,7 +305,8 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview,
   const year = String(new Date().getUTCFullYear())
   const numbers = keyNumbers(model.quotes, model.orders, year)
   const amount = (value: number | null | undefined, currency: string | null) => (can.price && value !== null && value !== undefined && currency ? money(value, currency, locale) : null)
-  const tabHref = (tab: string) => `${sideHref(model.prefix, SIDES.customers, `/${encodeURIComponent(party.id)}`)}?tab=${tab}`
+  const recordHref = sideHref(model.prefix, SIDES.customers, `/${encodeURIComponent(party.id)}`)
+  const tabHref = (tab: string) => `${recordHref}?tab=${tab}`
   const today = new Date().toISOString().slice(0, 10)
   const orders = model.orders.items && !model.orders.more ? model.orders.items : null
   const ordersHint = t(model.orders.problem ? 'tile.unknown' : 'numbers.reading')
@@ -298,14 +317,14 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview,
             label: t('numbers.backlog'),
             value: numbers.backlog ? String(numbers.backlog.count) : '—',
             hint: numbers.backlog ? [t('numbers.units', { count: numbers.backlog.units }), amount(numbers.backlog.amount, numbers.backlog.currency)].filter(Boolean).join(' · ') : ordersHint,
-            href: tabHref('work'),
+            href: workDoor(recordHref, 'open'), // F-CP-103: the open orders it counts
           },
-          { label: t('numbers.inProduction'), value: orders ? String(orders.filter((order) => order.status === 'IN_PRODUCTION').length) : '—', hint: orders ? t('numbers.inProductionHint') : ordersHint, href: tabHref('work') },
+          { label: t('numbers.inProduction'), value: orders ? String(orders.filter((order) => order.status === 'IN_PRODUCTION').length) : '—', hint: orders ? t('numbers.inProductionHint') : ordersHint, href: workDoor(recordHref, 'inProduction') /* F-CP-103 */ },
           {
             label: t('numbers.late'),
             value: orders ? String(orders.filter((order) => OPEN_ORDER_STATES.includes(order.status) && order.promiseDate !== null && order.promiseDate < today).length) : '—',
             hint: orders ? t('numbers.lateHint') : ordersHint,
-            href: tabHref('work'),
+            href: workDoor(recordHref, 'late'), // F-CP-103: the late orders it counts
           },
         ]
       : []),

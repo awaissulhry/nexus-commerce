@@ -10,7 +10,6 @@ import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryClient, type FactoryDat
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
-import { MULTI_ORDER_OFF } from '@nexus/factory-domain/shipping/shipments'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedShipping, type ShippingSeed } from '../../../../../../packages/factory-db/seed/shipping'
@@ -35,11 +34,13 @@ import { shipToProblem } from '../../sales/change-requests/office'
 
 /**
  * B-OP-040 / B-OP-070 (order page N6, lines-derived; R-6): several orders of ONE customer on one shipment, held off by
- * MULTI_ORDER_OFF ("Several orders in one shipment come with the next update") until B-OP-047 deletes it. On the local stack
+ * MULTI_ORDER_OFF until the switch.
+ * B-OP-047 turned it on (MULTI_ORDER_OFF deleted): every other join rule stays (same customer, site, ship-to, currency, tax mode,
+ * bill-to, an open order, a DRAFT, the brand wall). On the local stack
  * with the app's real routes: a throwaway PostgreSQL 17 database from the migrations (the runtime login: row-level security,
  * the column grants and the shipping guards are real), the factory-db shipping seed (Brand Alpha's SEED-SO-0002 and
  * SEED-SO-0003 with released garments), a copy of SEED-SO-0002 for Brand Alpha (the same address, currency and terms: only
- * MULTI_ORDER_OFF refuses it) and one for another customer, Brand Beta (never named to anyone). Every name and number is made
+ * no join rule refuses it) and one for another customer, Brand Beta (never named to anyone). Every name and number is made
  * up. Run with `node scripts/factory/run-pg-tests.mjs shipment-orders`.
  */
 
@@ -161,13 +162,13 @@ afterAll(async () => {
   if (localRoot) rmSync(localRoot, { recursive: true, force: true })
 }, 60_000)
 
-describe('B-OP-040: a second order of the customer is held off (MULTI_ORDER_OFF), in words', () => {
-  it('POST /shipping/shipments with a second order of the same customer: 409 MULTI_ORDER_OFF, nothing made', async () => {
+describe('B-OP-040 / B-OP-047: a second order of the customer joins (N6 on), every other rule kept', () => {
+  it('POST /shipping/shipments with a second order of the same customer (its address, currency and terms): made, the first its order', async () => {
     const before = await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "Shipment" WHERE "tenantId" = $1`, [A.tenant])
-    const second = await refused('warehouse', 'POST', '/shipping/shipments', { salesOrderId: so2(), salesOrderIds: [so2(), ids.alpha2], siteId: A.siteA1 }, 409)
-    expect(second.message).toBe(MULTI_ORDER_OFF)
-    expect(second.message).toBe('Several orders in one shipment come with the next update.')
-    expect(await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "Shipment" WHERE "tenantId" = $1`, [A.tenant])).toEqual(before)
+    const second = (await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: so2(), salesOrderIds: [so2(), ids.alpha2], siteId: A.siteA1 }, 201)).shipment
+    expect(second.salesOrderId).toBe(so2())
+    expect(await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "Shipment" WHERE "tenantId" = $1`, [A.tenant])).toEqual([{ n: before[0]!.n + 1 }])
+    await ok('warehouse', 'POST', `/shipping/shipments/${second.id}/cancel`, { version: second.version, reason: 'Test: two orders made' })
     // The first order is the shipment's salesOrderId.
     expect((await refused('warehouse', 'POST', '/shipping/shipments', { salesOrderId: so2(), salesOrderIds: [ids.alpha2, so2()], siteId: A.siteA1 }, 400)).issues).toEqual([{ path: 'body/salesOrderIds/0', message: 'Expected the salesOrderId first.' }])
     // One order alone, as today.
@@ -185,13 +186,19 @@ describe('B-OP-040: a second order of the customer is held off (MULTI_ORDER_OFF)
     expect((await refused('betaOnly', 'POST', '/shipping/shipments', { salesOrderId: so2(), siteId: A.siteA1 }, 404)).message).toBe('Sales order not found.')
   })
 
-  it('the lines route: a cell of another order of the customer is refused by MULTI_ORDER_OFF; versions and lines unchanged', async () => {
+  it('the lines route: a cell of another order of the customer joins the DRAFT (orders_changed ADDED); taken off, it leaves (REMOVED)', async () => {
     const draft = (await ok('warehouse', 'GET', `/shipping/shipments/${ids.draft}`)).shipment
-    const refusal = await refused('warehouse', 'POST', `/shipping/shipments/${ids.draft}/lines`, { version: draft.version, lines: [{ workOrderSizeId: cells().jacket, quantity: 1 }] }, 400)
-    expect(refusal.issues).toContainEqual({ path: 'body/lines/0/workOrderSizeId', message: MULTI_ORDER_OFF })
-    const after = (await ok('warehouse', 'GET', `/shipping/shipments/${ids.draft}`)).shipment
-    expect([after.version, after.lines]).toEqual([draft.version, []])
-    expect(await admin(`SELECT 1 FROM "OutboxEvent" WHERE type = 'shipment.orders_changed' AND subject = $1`, [ids.draft])).toEqual([])
+    const joined = (await ok('warehouse', 'POST', `/shipping/shipments/${ids.draft}/lines`, { version: draft.version, lines: [{ workOrderSizeId: cells().jacket, quantity: 1 }] })).shipment
+    const line = (joined.lines as Json[]).find((entry) => entry.workOrderSizeId === cells().jacket)!
+    expect(line).toBeDefined()
+    // Taken off again: the jacket's one free garment stays free for the shared shipment below.
+    const after = (await ok('warehouse', 'DELETE', `/shipping/shipments/${ids.draft}/lines/${line.id}?version=${joined.version}`)).shipment
+    expect(after.lines).toEqual([])
+    const changes = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.orders_changed' AND subject = $1 ORDER BY "occurredAt", id`, [ids.draft])
+    expect(changes.map((row) => [row.payload.change, row.payload.salesOrderIds])).toEqual([
+      ['ADDED', [so2(), so3()]],
+      ['REMOVED', [so2()]],
+    ])
   })
 
   it('an order of another customer is never a line of it: the database refuses it (the FK carries the party)', async () => {
@@ -211,9 +218,10 @@ describe('B-OP-040: candidates and joinable answer the same customer only, each 
     const { orders, number } = await ok('warehouse', 'GET', `/shipping/shipments/${ids.draft}/orders/candidates`)
     expect(number).toMatch(/^SH-/)
     const alpha2 = (orders as Json[]).find((row) => row.salesOrderId === ids.alpha2)
-    expect(alpha2).toEqual({ salesOrderId: ids.alpha2, number: 'SO-ALPHA-2', customerRef: 'SO-ALPHA-2-PO', status: 'CONFIRMED', joinable: { allowed: false, code: 'MULTI_ORDER_OFF', why: MULTI_ORDER_OFF } })
+    expect(alpha2).toEqual({ salesOrderId: ids.alpha2, number: 'SO-ALPHA-2', customerRef: 'SO-ALPHA-2-PO', status: 'CONFIRMED', joinable: { allowed: true, code: null, why: null } })
     expect((orders as Json[]).map((row) => row.salesOrderId)).not.toContain(so2())
-    expect((orders as Json[]).every((row) => row.joinable.allowed === false)).toBe(true)
+    // B-OP-047: no order is held by the old hold; each verdict is its real reasons (or none).
+    expect(JSON.stringify(orders)).not.toContain('MULTI_ORDER_OFF')
     // Never Brand Beta's order, also for a person who sees every customer.
     expect(JSON.stringify(orders)).not.toContain(ids.beta1)
     expect(JSON.stringify(orders)).not.toContain('SO-BETA-1')
@@ -226,7 +234,7 @@ describe('B-OP-040: candidates and joinable answer the same customer only, each 
   it('GET /shipping/shipments/joinable?salesOrderId=: the DRAFT shipments of its customer it is not on, each with its verdict', async () => {
     const joinable = await ok('warehouse', 'GET', `/shipping/shipments/joinable?salesOrderId=${ids.alpha2}`)
     expect(joinable).toMatchObject({ salesOrderId: ids.alpha2, number: 'SO-ALPHA-2' })
-    expect((joinable.shipments as Json[]).find((row) => row.shipmentId === ids.draft)).toMatchObject({ status: 'DRAFT', siteId: A.siteA1, joinable: { allowed: false, why: MULTI_ORDER_OFF } })
+    expect((joinable.shipments as Json[]).find((row) => row.shipmentId === ids.draft)).toMatchObject({ status: 'DRAFT', siteId: A.siteA1, joinable: { allowed: true, code: null, why: null } })
     // The order's own shipments are not offered.
     expect(((await ok('warehouse', 'GET', `/shipping/shipments/joinable?salesOrderId=${so2()}`)).shipments as Json[]).map((row) => row.shipmentId)).not.toContain(ids.draft)
     // Brand Beta's order: no shipment of Alpha's is ever offered to it.
@@ -245,9 +253,9 @@ describe('B-OP-070: ship together — the ready read lists the same customer\'s 
     const rows = ready.orders as Json[]
     expect(rows[0]).toMatchObject({ salesOrderId: so2(), shipsWith: null })
     const other = rows.find((row) => row.salesOrderId === so3())
-    expect(other).toMatchObject({ partyId: A.alpha, shipsWith: { allowed: false, code: expect.any(String), why: expect.any(String) } }) // F-OP-121: a code per reason
-    // Held off: every other order is refused, MULTI_ORDER_OFF at the latest.
-    expect(rows.slice(1).every((row) => row.shipsWith.allowed === false)).toBe(true)
+    // B-OP-047: SEED-SO-0003 (the same address, currency and terms) ships with it; every other order says its own reason, if any.
+    expect(other).toMatchObject({ partyId: A.alpha, shipsWith: { allowed: true, code: null, why: null } })
+    expect(rows.slice(1).every((row) => row.shipsWith.allowed === true || (typeof row.shipsWith.code === 'string' && row.shipsWith.code !== 'MULTI_ORDER_OFF'))).toBe(true)
     expect(rows.every((row) => row.partyId === A.alpha)).toBe(true)
     // Never another customer's order, also for a person who sees every customer.
     expect(JSON.stringify(ready)).not.toContain(ids.beta1)
@@ -270,7 +278,7 @@ describe('B-OP-070: ship together — the ready read lists the same customer\'s 
 describe('B-OP-040: ordersOfShipment — the orders of its lines, the first order first', () => {
   it('one order per shipment: its first order; a shared shipment made by a raw line: both, the first first; one query for many', async () => {
     const draft = (await ok('warehouse', 'GET', `/shipping/shipments/${ids.draft}`)).shipment
-    expect(await scoped((client) => orderIdsOfShipments(client, [{ id: ids.draft, salesOrderId: so2() }]))).toEqual(new Map([[ids.draft, [so2()]]]))
+    expect(await scoped((client) => orderIdsOfShipments(client, [{ id: ids.draft!, salesOrderId: so2() }]))).toEqual(new Map([[ids.draft, [so2()]]]))
     // A shared shipment of Brand Alpha's two orders (SEED-SO-0002 first, then SEED-SO-0003's jacket), made past the API.
     const shared = (await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: so2(), lines: [{ workOrderSizeId: cells().blk52, quantity: 1 }] }, 201)).shipment
     ids.shared = shared.id

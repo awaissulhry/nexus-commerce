@@ -51,8 +51,7 @@ export const parcelSchema = output({
 
 /** What every packer sees: the lines, the parcels, the garments and what packing still needs (PLT-097). */
 export const contentsSchema = {
-  /** F-OP-121 (lead addition): the office's lines name their order (the floor's packing views never: it reads no sales order line). */
-  lines: z.array(lineSchema.extend({ salesOrderId: id() })),
+  lines: z.array(lineSchema),
   parcels: z.array(parcelSchema),
   garments: z.number().int(),
   packingProblems: z.array(z.string()),
@@ -74,7 +73,7 @@ export const freightSchema = output({
 
 /**
  * B-OP-041 (order page N6, lines-derived): the orders a shipment carries (its lines' orders, ordersOfShipment), the first
- * order (salesOrderId) first; one while N6 is held off. Always of its own customer (the line's FK carries partyId).
+ * order (salesOrderId) first; several since B-OP-047. Always of its own customer (the line's FK carries partyId).
  */
 export const shipmentOrdersSchema = z.array(output({ id: id(), number: z.string(), customerRef: z.string().nullable() }))
 
@@ -113,6 +112,11 @@ export const shipmentSchema = output({
   updatedAt: instant(),
   createdById: id().nullable(),
   ...contentsSchema,
+  /**
+   * F-OP-121 (lead addition): the office's lines name their order. op-fx1: only here, in the office's shipment — the packing view
+   * (packing/contract.ts, also a floor device's) keeps the packers' lines: the floor reads no sales order line.
+   */
+  lines: z.array(lineSchema.extend({ salesOrderId: id() })),
   /** B-W2a-48 (LOG-105): the freight charged to the customer, in the order's currency (minor units). */
   freight: freightSchema,
   /** B-W2a-48 (LOG-090): the intra-EU transport evidence's state (GET …/evidence has the papers). */

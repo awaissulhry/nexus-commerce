@@ -42,6 +42,28 @@ export function grainsOf(permissions: readonly string[]): Grains {
   return { price: held.has('money.price'), cost: held.has('money.cost'), margin: held.has('money.margin') }
 }
 
+// ---- F-CP-146 (money wall D1-c, review A8): a person without the price grain sends no price key -------------------------
+
+/** The keys of a quote line write that are prices — a discount % too: a percent of a price is a price. */
+export const QUOTE_LINE_PRICE_KEYS = ['unitPrice', 'listUnitPrice', 'discountPct'] as const
+
+/**
+ * A quote line write as this person may send it: without the price grain NO price key at all — not even an empty one (the API's
+ * grain wall refuses a body that names a price field, null included), nor a size's own price; the line then takes the customer's
+ * price list, as the API reads a missing price. A price holder's body is sent as it is.
+ */
+export function quoteLineBody<T extends Record<string, unknown>>(body: T, grains: Pick<Grains, 'price'>): T {
+  if (grains.price) return body
+  const out: Record<string, unknown> = { ...body }
+  for (const key of QUOTE_LINE_PRICE_KEYS) delete out[key]
+  if (Array.isArray(out.sizes)) out.sizes = out.sizes.map((size: unknown) => (size && typeof size === 'object' ? Object.fromEntries(Object.entries(size).filter(([key]) => key !== 'unitPrice')) : size))
+  return out as T
+}
+
+/** A priced document (the quote's PDF) is sent by someone who sees prices: why Send waits, or null. */
+export const pricedSendHeld = (grains: Pick<Grains, 'price'> | undefined): { key: string } | null => (grains && !grains.price ? { key: 'pricedPdf.held' } : null)
+// ---- end F-CP-146
+
 export interface QuoteAbilities {
   view: boolean
   manage: boolean
@@ -271,7 +293,8 @@ export interface NextStepView {
 }
 
 /** The primary action of the band and the summary rail, by state (design: "Next step by state"). */
-export function nextStep(quote: QuoteDetail, me: string, can: QuoteAbilities): NextStepView {
+// F-CP-146: + the person's grains — Send of the priced PDF waits for someone who sees prices (said, never hidden).
+export function nextStep(quote: QuoteDetail, me: string, can: QuoteAbilities, grains?: Pick<Grains, 'price'>): NextStepView {
   const status = quote.current.status
   if (status === 'DRAFT') {
     if (quote.approval.needed) {
@@ -280,7 +303,7 @@ export function nextStep(quote: QuoteDetail, me: string, can: QuoteAbilities): N
       return { step: 'askApproval', held: null }
     }
     if (!can.send) return { step: 'send', held: { key: 'held.noSend' } }
-    return { step: 'send', held: null }
+    return { step: 'send', held: pricedSendHeld(grains) }
   }
   if (status === 'PENDING_APPROVAL') {
     const request = pendingRequest(quote)
@@ -288,7 +311,7 @@ export function nextStep(quote: QuoteDetail, me: string, can: QuoteAbilities): N
     if (can.approve) return { step: 'decide', held: null }
     return { step: 'withdraw', held: can.manage ? null : { key: 'held.noManage' } }
   }
-  if (status === 'APPROVED') return { step: 'send', held: can.send ? null : { key: 'held.noSend' } }
+  if (status === 'APPROVED') return { step: 'send', held: can.send ? pricedSendHeld(grains) /* F-CP-146 */ : { key: 'held.noSend' } }
   if (status === 'SENT') return { step: 'revise', held: can.manage ? null : { key: 'held.noManage' } }
   return { step: 'none', held: null }
 }

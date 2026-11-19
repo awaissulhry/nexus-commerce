@@ -19,6 +19,8 @@ import { events as projectEvents } from '@nexus/factory-domain/projects/events'
 import { PORTAL_PROJECTS_VIEW } from '@nexus/factory-domain/projects/permissions'
 // th2-backend step 7 (§0.5): a customer's order, quote or request by its own number, never the office's series.
 import { customerRefOf, type CustomerNumberKind } from '@nexus/factory-domain/sales/customer-numbers'
+// B-CP-071: a draft order's conversation is news for those who keep the party's drafts only.
+import { PORTAL_ORDER_DRAFTS_EDIT } from '@nexus/factory-domain/sales/portal-ordering/permissions'
 
 /**
  * News of a partner's records from the W1/W2a modules' own events (B-W2b-167, PLT-148; design portal.frame Notifications,
@@ -249,7 +251,13 @@ async function messageDrafts(context: PartnerRuleContext, event: { readonly thre
   const partyId = thread.partyId
   // th2-backend step 7: a customer's order, quote or request by its own number; any other record by its label.
   const named = await customerNamed(context.tx, thread.recordType, thread.recordId)
-  const label = named?.label ?? (await recordLabelOf(context.tx, thread.recordType, thread.recordId)) ?? thread.recordType
+  // ---- B-CP-071 (customer page plan D10): a draft order's conversation (it has one from its first save) is news only for the party's
+  // people who keep its drafts — the partner view opens it to them alone; a draft has no number: its label is the customer's own PO.
+  const draftOf = thread.recordType === 'PortalOrderRequest' ? await context.tx.portalOrderRequest.findUnique({ where: { id: thread.recordId }, select: { status: true, customerRef: true } }) : null
+  const isDraft = draftOf?.status === 'DRAFT'
+  const draftLabel = draftOf?.status === 'DRAFT' ? (draftOf.customerRef ?? '—') : null
+  // ---- end B-CP-071
+  const label = named?.label ?? draftLabel ?? (await recordLabelOf(context.tx, thread.recordType, thread.recordId)) ?? thread.recordType
   // ── B-TH-045 (threads plan TH-3, thread-G04): a thread with no company — the account conversation of a customer every company
   // serves (its Party record is tenant-wide) — tells the party's people too: one draft per company whose portal they may use (the
   // fan-out tells each person once, under the first). The party is the thread's, never the event's (W06).
@@ -273,7 +281,10 @@ async function messageDrafts(context: PartnerRuleContext, event: { readonly thre
     // A batch of ours (one answer to several records of the customer) is one bell item.
     batchId: event.batchId ?? null,
     forReader: (reader: PartnerReader) =>
-      home({ companyId, partyId })(reader) && can(reader.actor, THREADS_READ, threadScope) && (members === null || (members.has(reader.personId) && can(reader.actor, PORTAL_PROJECTS_VIEW, threadScope))), // B-TH-068
+      home({ companyId, partyId })(reader) &&
+      can(reader.actor, THREADS_READ, threadScope) &&
+      (members === null || (members.has(reader.personId) && can(reader.actor, PORTAL_PROJECTS_VIEW, threadScope))) && // B-TH-068
+      (!isDraft || can(reader.actor, PORTAL_ORDER_DRAFTS_EDIT, threadScope)), // B-CP-071
   }))
   // ── end B-TH-045
 }

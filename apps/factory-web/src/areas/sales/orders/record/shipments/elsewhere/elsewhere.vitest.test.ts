@@ -143,7 +143,7 @@ describe('what holds Record, and a refusal in words', () => {
     expect(refusalOf(conflict('refusal/HELD'), 'Moto Demo S.r.l.').words).toEqual({ key: 'elsewhere.held.customer', params: { customer: 'Moto Demo S.r.l.' } })
     expect(refusalOf(conflict('refusal/REASON_REQUIRED'), 'Moto Demo S.r.l.').words).toEqual({ key: 'elsewhere.held.reason' })
     expect(refusalOf(new ApiError('forbidden', 403, 'forbidden', 'x'), 'C').words).toEqual({ key: 'elsewhere.held.noRight' })
-    expect(refusalOf(new ApiError('conflict', 409, 'invalid_state', 'Several orders in one shipment come with the next update.'), 'C')).toEqual({ words: { key: 'elsewhere.refusal.state' }, detail: 'Several orders in one shipment come with the next update.' })
+    expect(refusalOf(new ApiError('conflict', 409, 'invalid_state', 'The sales order waits for a yes; nothing ships for it until it is confirmed.'), 'C')).toEqual({ words: { key: 'elsewhere.refusal.state' }, detail: 'The sales order waits for a yes; nothing ships for it until it is confirmed.' }) // B-OP-047: a state refusal that still exists
     expect(refusalOf(new Error('offline'), 'C').words).toEqual({ key: 'elsewhere.refusal.failed' })
     expect(CATALOGUE.en.orders?.['elsewhere.ddtUsed']).toBe('That DDT number and date are already recorded.')
   })
@@ -159,10 +159,11 @@ describe('the "Made elsewhere" chip and the doors on the order page', () => {
 
   it('Shipments: the card head’s door and the row’s chip, in both languages', () => {
     const item = recordScreen.cases.find((entry) => entry.id === 'shipments')!.model
-    const value = item.record.order.status === 'ready' ? item.record.order.value : null
+    const record = item.record! // op-fx1: the Shipments case is a record case (a design case is a record or a new order's draft)
+    const value = record.order.status === 'ready' ? record.order.value : null
     expect(value).not.toBeNull()
     const order = { ...value!, chain: { ...value!.chain, shipments: value!.chain.shipments.map((row, index) => (index === 0 ? { ...row, origin: 'ELSEWHERE' as const, externalDdt: { number: '123/2026', date: '2026-11-18' } } : row)) } }
-    const model = { ...item, record: { ...item.record, order: { status: 'ready' as const, value: order }, elsewhere: { held: { key: 'elsewhere.held.noRight' }, dialog: null } } }
+    const model = { ...item, record: { ...record, order: { status: 'ready' as const, value: order }, elsewhere: { held: { key: 'elsewhere.held.noRight' }, dialog: null } } }
     for (const locale of LOCALES) {
       const text = textOf(renderView(recordScreen.view as ComponentType<{ model: unknown }>, model, locale))
       expect(text).toContain(locale === 'en' ? 'Made elsewhere · DDT 123/2026' : 'Fatta altrove · DDT 123/2026')

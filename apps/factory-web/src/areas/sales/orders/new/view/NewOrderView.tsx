@@ -27,6 +27,7 @@ import '../../orders.css'
  * editor (styles, colours, sizes, prices; an empty price is the customer's list price); the summary rail priced by the
  * API as it is typed — net, VAT, gross, the deposit and the payment schedule the order will get, the problems in words.
  * Nothing is written before Confirm order; this tab keeps the lines if it is reloaded.
+ * F-CP-146: a person without the price grain reads "Priced from <customer>'s price list" above the lines and sends no price.
  */
 export function NewOrderView({ model, actions }: { model: NewOrderModel; actions?: NewOrderActions }) {
   return (
@@ -174,6 +175,8 @@ function NewOrder({ model, actions }: { model: NewOrderModel; actions?: NewOrder
                 <Textarea value={model.draft.internalNote} onChange={(event) => actions?.onField?.('internalNote', event.target.value)} rows={2} maxLength={2000} />
               </Field>
             </Card>
+            {/* F-CP-146 (money wall D1-c): without the price grain no price is typed or sent — the lines take the customer's price list. */}
+            {!model.can.price && <p className="fw-so-hint">{t('priced.fromList', { customer: party?.legalName ?? '—' })}</p>}
             <LinesEditor
               model={{ mode: 'new', lines: model.draft.lines, order: null, styles: model.styles, composer: model.composer, price: model.can.price, currency, priceBasis: priced?.priceBasis ?? 'NET', minimums: {}, nets: model.can.price ? nets : undefined, listPrices: prices, busy: model.busy, newLineOptions: model.newLineOptions /* B-W2b-374 */ }}
               actions={{ onCells: actions?.onCells, onPrice: actions?.onPrice, onComposerQuery: actions?.onComposerQuery, onComposerPick: actions?.onComposerPick, onComposerToggle: actions?.onComposerToggle, onComposerAdd: actions?.onComposerAdd }}

@@ -128,7 +128,7 @@ const changed = (tools: CommandTools, shipment: ShipmentHeader) =>
 // ── B-OP-030 (order page plan N5): a typed tracking number tells the office (the order's thread: ./tracking-notes.ts) ──
 /**
  * The tracking number of a carrier booked by hand typed, corrected or cleared: every order the shipment carries (B-OP-034: its
- * lines' orders, ordersOfShipment — one while N6 is held off), and whether a tracking link is typed beside it.
+ * lines' orders, ordersOfShipment — several since B-OP-047), and whether a tracking link is typed beside it.
  */
 const trackingChanged = async (tools: CommandTools, shipment: ShipmentHeader, hasNumber: boolean, /* B-OP-034 */ hasLink: boolean) =>
   tools.emit({

@@ -50,8 +50,11 @@ export async function putToStore(presigned: Presigned, body: Blob | ArrayBuffer,
   if (!response.ok) throw new StoreError(response.status)
 }
 
-/** Reads the bytes with the presigned GET (a PDF for the viewer: read once, so a 60-second address cannot run out). */
-export async function readFromStore(presigned: Presigned, doFetch: typeof fetch = globalThis.fetch.bind(globalThis)): Promise<Uint8Array> {
+/**
+ * Reads the bytes with the presigned GET (a PDF for the viewer: read once, so a 60-second address cannot run out).
+ * op-fx1: typed as what they are, bytes over their own ArrayBuffer, so a Blob takes them without a cast.
+ */
+export async function readFromStore(presigned: Presigned, doFetch: typeof fetch = globalThis.fetch.bind(globalThis)): Promise<Uint8Array<ArrayBuffer>> {
   const url = storeUrl(presigned.url)
   const response = await doFetch(url, { method: 'GET', headers: storeHeaders(presigned), credentials: credentialsFor(url), cache: 'no-store' })
   if (!response.ok) throw new StoreError(response.status)

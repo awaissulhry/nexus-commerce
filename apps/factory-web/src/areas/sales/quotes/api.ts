@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 // TH-6 part B (B-TH-257 follow-up): the request's own state on "Made from" (the factory-domain list the API checks against).
 import { INQUIRY_STATUSES } from '@nexus/factory-domain/sales/inquiries/rules'
+import { quoteLineBody, type Grains } from './model' // F-CP-146: no price key without the price grain
 
 /**
  * The quotes screens' calls to the factory API (apps/factory-api modules/sales/quotes; B-W1-21, B-W1-24), through the
@@ -504,12 +505,13 @@ export interface SizeEntry {
   quantity: number
 }
 
-export function addLine(api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>, line: { styleId: string; colourwayId: string; sizes: SizeEntry[]; unitPrice?: string | null }): Promise<QuoteDetail> {
-  return write(api, `${quotePath(quote.id)}/lines`, { version: quote.version, kind: 'SIZE_GRID', ...line })
+// F-CP-146 (money wall D1-c, review A8): a line write of a person without the price grain carries no price key (quoteLineBody).
+export function addLine(api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>, line: { styleId: string; colourwayId: string; sizes: SizeEntry[]; unitPrice?: string | null }, grains: Pick<Grains, 'price'>): Promise<QuoteDetail> {
+  return write(api, `${quotePath(quote.id)}/lines`, { version: quote.version, kind: 'SIZE_GRID', ...quoteLineBody(line, grains) })
 }
 
-export async function editLine(api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>, lineId: string, patch: { sizes?: SizeEntry[]; unitPrice?: string | null; description?: string | null; note?: string | null }): Promise<QuoteDetail> {
-  return (await api.request('PATCH', `${quotePath(quote.id)}/lines/${enc(lineId)}`, { body: { version: quote.version, ...patch }, schema: oneQuote, idempotencyKey: newIdempotencyKey() })).quote
+export async function editLine(api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>, lineId: string, patch: { sizes?: SizeEntry[]; unitPrice?: string | null; description?: string | null; note?: string | null }, grains: Pick<Grains, 'price'>): Promise<QuoteDetail> {
+  return (await api.request('PATCH', `${quotePath(quote.id)}/lines/${enc(lineId)}`, { body: { version: quote.version, ...quoteLineBody(patch, grains) }, schema: oneQuote, idempotencyKey: newIdempotencyKey() })).quote
 }
 
 export async function removeLine(api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>, lineId: string): Promise<QuoteDetail> {

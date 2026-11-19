@@ -20,7 +20,7 @@ const serial = () => z.string().trim().min(1).max(100)
 export const elsewhereBody = input({
   /** The order the shipment is made for (its first order). */
   salesOrderId: id(),
-  /** Every order of the shipment, the first = salesOrderId (refused with MULTI_ORDER_OFF's words until the switch, B-OP-047). */
+  /** Every order of the shipment, the first = salesOrderId (each checked against it by the join rules; B-OP-047: N6 on). */
   salesOrderIds: z.array(id()).min(1).max(20).optional(),
   /** The site the goods left from (default: the one site of the lines). */
   siteId: id().optional(),

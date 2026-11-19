@@ -11,6 +11,10 @@ import type { SavedView, ViewsAnswer } from '../../../../list-frame/tools/transp
 import { ROW_VIEWS } from '../model'
 import { exportAbout, NAMESPACE } from './sheet/model'
 import { builtInViewsOf } from './view/OrdersListView'
+// ---- F-CP-102 ----
+import { readFileSync } from 'node:fs'
+import { builtInActive, homeOf, hostEmptyOf, pickBuiltIn, showingOf } from './view/OrdersListView'
+// ---- end F-CP-102
 
 // The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so the dialog's words are checked.
 vi.mock('@nexus/ui/components', async (original) => {
@@ -110,3 +114,76 @@ describe('a customer\'s own sheet (SHEET.brand-view-F01, F03)', () => {
     for (const key of ['tools.builtIn', 'tools.viewsTrigger', 'tools.saveOwn', 'tools.saveOwnHint']) for (const locale of LOCALES) expect(CATALOGUE[locale].lists?.[key], `${locale} ${key}`).toBeTruthy()
   })
 })
+
+// ---- F-CP-102 (customer page plan C1; 10-customer-page §1): the host's own views in Views ▾, and the host's default view -------------
+describe('F-CP-102: host views in Views ▾; the "Showing" line and the empty words compare with the host\'s default', () => {
+  const DRAFTS = 'drafts:customer'
+  const hostViews = [{ id: DRAFTS, label: 'Drafts of Brand Alpha' }]
+
+  it('a host view sits where the host\'s views name it, with the host\'s words; a sheet without views never shows it', () => {
+    expect(builtInViewsOf({ customer: null, views: ['all', 'IN_PRODUCTION', DRAFTS], hostViews }, orders, sheet).map((item) => item.label)).toEqual([orders('rows.all'), orders('rows.IN_PRODUCTION'), 'Drafts of Brand Alpha'])
+    expect(builtInViewsOf({ customer: null, hostViews }, orders, sheet).some((item) => item.id === DRAFTS)).toBe(false)
+  })
+
+  it('picked: a host view goes to the host, a rows view to the sheet; active: the host view the address shows wins', () => {
+    const calls: unknown[][] = []
+    const actions = { onRows: (...args: unknown[]) => calls.push(['rows', ...args]), onWaiting: (...args: unknown[]) => calls.push(['waiting', ...args]), onKind: (...args: unknown[]) => calls.push(['kind', ...args]), onHostView: (...args: unknown[]) => calls.push(['host', ...args]) }
+    pickBuiltIn(DRAFTS, { waiting: null, hostViews }, actions)
+    pickBuiltIn('late', { waiting: null, hostViews }, actions)
+    expect(calls).toEqual([['host', DRAFTS], ['rows', 'late']])
+    expect(builtInActive({ rows: 'all', kind: null, waiting: null, hostViews: [{ ...hostViews[0]!, active: true }] })).toBe(DRAFTS)
+    expect(builtInActive({ rows: 'all', kind: null, waiting: null, hostViews })).toBe('all')
+  })
+
+  it('"Showing: …" names any view but the host\'s default: rows=open on the customer page says Open; Sales › Orders as before', () => {
+    expect(homeOf({ defaultRows: 'all' })).toBe('all')
+    expect(homeOf({})).toBe('open')
+    expect(showingOf({ rows: 'open', defaultRows: 'all', layout: 'list' })).toBe('open')
+    expect(showingOf({ rows: 'all', defaultRows: 'all', layout: 'list' })).toBeNull()
+    expect(showingOf({ rows: 'IN_PRODUCTION', defaultRows: 'all', layout: 'list' })).toBe('IN_PRODUCTION')
+    expect(showingOf({ rows: 'open', layout: 'list' })).toBeNull()
+    expect(showingOf({ rows: 'all', layout: 'list' })).toBe('all')
+    expect(showingOf({ rows: 'late', layout: 'week' })).toBeNull()
+    expect(orders('list.viewing', { view: orders('rows.open') })).toContain(orders('rows.open'))
+  })
+
+  it('the host\'s empty words: keyed to a view, they show on it unless something else narrows; unkeyed, only when nothing narrows', () => {
+    const keyed = { title: 'Nothing in production for Brand Alpha.', view: 'IN_PRODUCTION' as const }
+    expect(hostEmptyOf({ rows: 'IN_PRODUCTION', empty: keyed }, true, false)).toBe(keyed)
+    expect(hostEmptyOf({ rows: 'IN_PRODUCTION', empty: keyed }, true, true)).toBeNull()
+    expect(hostEmptyOf({ rows: 'late', empty: keyed }, true, false)).toBeNull()
+    const unkeyed = { title: 'Made-to-measure has not started.' }
+    expect(hostEmptyOf({ rows: 'open', empty: unkeyed }, false, false)).toBe(unkeyed)
+    expect(hostEmptyOf({ rows: 'late', empty: unkeyed }, true, false)).toBeNull()
+  })
+
+  it('a view chip\'s ✕ goes back to the host\'s default (the source)', () => {
+    const source = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('onClear: () => actions?.onRows?.(home)')
+    expect(source).toContain('const hostEmpty = hostEmptyOf(model, narrowed, othersNarrowed)')
+  })
+})
+// ---- end F-CP-102
+
+// ---- F-CP-103 (review A4): a built-in view's count at its item's end ------------------------------------------------------------------
+describe('F-CP-103: the Views menu writes each view\'s count beside its name', () => {
+  it('a counted view draws its name and its number; an uncounted one only its name; the trigger keeps the name', () => {
+    const builtIns = { items: [{ id: 'all', label: 'All orders', count: '1.204' }, { id: 'waiting:us', label: 'Waiting on us' }], active: 'all', onPick: () => undefined }
+    const items = columnsMenuItems(lists, { answer: answer([]), problem: null, active: null, changed: false, asBuilt: true, builtIns }, act)
+    const counted = items.find((item) => item.id === 'b-all')!
+    const html = renderToString(createElement('div', null, counted.label as never))
+    expect(html).toContain('All orders')
+    expect(html).toContain('fw-lt-builtin-count')
+    expect(html).toContain('1.204')
+    expect(items.find((item) => item.id === 'b-waiting:us')?.label).toBe('Waiting on us')
+    expect(counted.checked).toBe(true)
+  })
+
+  it('the sheet writes the counts in the person\'s language (no count: no number)', () => {
+    const written = builtInViewsOf({ customer: null, views: ['all', 'late'], viewCounts: { all: 1204 } }, orders, sheet, (value) => `n${value}`)
+    expect(written.map((item) => item.count ?? null)).toEqual(['n1204', null])
+    const source = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('builtInViewsOf(model, t, s, (value) => formatNumber(value, locale)')
+  })
+})
+// ---- end F-CP-103

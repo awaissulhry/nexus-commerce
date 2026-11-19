@@ -43,18 +43,27 @@ import { writeSearch } from '../../../_shared/record-frame/address' // F-OP-211:
 
 // ---- the address (the tab, its lock, its default view) ------------------------------------------------------------------
 
-/** The Work tab's default view: the orders in production (`status=IN_PRODUCTION`), written into the address on entry. */
-export const WORK_DEFAULT_ROWS = 'IN_PRODUCTION' as const
+/**
+ * The Work tab's default view, written into the address on entry. F-CP-101 (customer page plan C1, D7, K1): All orders (`rows=all`) —
+ * never `status=all`: that term reads as Open orders and, being a view term, would stop every later write (a silent wrong view).
+ * The customer page only: Sales › Orders keeps Open orders as its default.
+ */
+export const WORK_DEFAULT_ROWS = 'all' as const
 
-/** The terms that name a view of the sheet (any of them: the address already shows a view, the default is not written). */
-const VIEW_TERMS: readonly string[] = Object.freeze(['rows', 'status', 'late', 'deposit', 'reaccept', 'shippedNotInvoiced', 'waiting'])
+/**
+ * The terms that name a view of the sheet (any of them: the address already shows a view, the default is not written).
+ * F-CP-101 (review E6: this step is their ONE owner): + `priceMatch` (the Not equal view, F-CP-141) and the page term `list` (Drafts of
+ * <customer>, F-CP-107) — an address on either view gets no default written beside it. `cols` (F-CP-105) names no view.
+ */
+const VIEW_TERMS: readonly string[] = Object.freeze(['rows', 'status', 'late', 'deposit', 'reaccept', 'shippedNotInvoiced', 'waiting', 'priceMatch' /* F-CP-101 */, 'list' /* F-CP-101 */])
 
 type Params = { get(name: string): string | null; toString(): string } | null
 
 /**
  * The address the Work tab writes on entry, or null (nothing to write): `tab=work` (a saved view replaces the whole query and drops
  * the transient `tab`: the tab comes back), the customer's lock (`party`), an old address's terms (`?tab=orders` → All orders), and
- * the default view when no view term is there. One write, so the sheet reads once.
+ * the default view when no view term is there. One write, so the sheet reads once. fx-12: its ONE writer (WorkTab); applied to its
+ * own output it writes nothing. F-CP-101: the default is `rows=all`.
  */
 export function workEntry(base: string, partyId: string, params: Params): string | null {
   const query = new URLSearchParams(params?.toString() ?? '')
@@ -70,9 +79,46 @@ export function workEntry(base: string, partyId: string, params: Params): string
   if (merged && !hasView()) for (const [name, value] of Object.entries(merged)) set(name, value)
   set('tab', 'work')
   set('party', partyId)
-  if (!hasView()) set('status', WORK_DEFAULT_ROWS)
+  if (!hasView()) set('rows', WORK_DEFAULT_ROWS) // F-CP-101: All orders (`rows=all`), never `status=all`
   return changed ? `${base}?${query.toString()}` : null
 }
+
+// ---- F-CP-104 (customer page plan C2a; fx-12, review G4): New order and Import orders in place ------------------------------------
+
+/** What the band (New order) or its ⋯ (Import orders for <customer>…) asks of the Work sheet; held in the page's memory, never in the address. */
+export type WorkAsk = 'new' | 'import'
+
+/**
+ * The one address the band writes for an ask, or null: on the Work tab nothing (the sheet opens its window in place); on any other tab
+ * `?tab=work` — then the Work tab's entry writes its lock and view once, and nothing more (two replaces at most, then none). No term
+ * of the ask is written: nothing to loop on, and a reload does not open the window again.
+ */
+export const workAskAddress = (recordHref: string, tab: string): string | null => (tab === 'work' ? null : `${recordHref}?tab=work`)
+// ---- end F-CP-104
+
+// ---- F-CP-103 (customer page plan C1; review A4): the Overview's tiles open their own view; Views ▾ counts each view ------------------
+
+/** The Work view each Overview tile counts (its door shows exactly those rows): Open orders, In production, Late. */
+export const WORK_DOORS = Object.freeze({ open: 'rows=open', inProduction: 'status=IN_PRODUCTION', late: 'late=true' } as const)
+
+/** A tile's door: the record's Work tab on the view the tile counts (the entry then adds the lock, once). */
+export const workDoor = (recordHref: string, door: keyof typeof WORK_DOORS): string => `${recordHref}?tab=work&${WORK_DOORS[door]}`
+
+/**
+ * The count beside each Views ▾ item, from the ONE count read the strip already makes (the board of this customer: the API walls it
+ * to the customer, never a filter in the browser): All orders (every state), In production, Late. A view the read does not count
+ * (Waiting on us) gets no number — never a guess. Nothing while the read is not ready.
+ */
+export function workViewCounts(board: Read<OrderBoard>): Readonly<Record<string, number>> | null {
+  if (board.status !== 'ready') return null
+  const value = board.value
+  return {
+    all: value.byStatus.reduce((sum, entry) => sum + entry.count, 0),
+    IN_PRODUCTION: value.byStatus.find((entry) => entry.status === 'IN_PRODUCTION')?.count ?? 0,
+    late: value.tiles.find((tile) => tile.key === 'late')?.count ?? 0,
+  }
+}
+// ---- end F-CP-103
 
 // ---- the strip's tiles ------------------------------------------------------------------------------------------------
 

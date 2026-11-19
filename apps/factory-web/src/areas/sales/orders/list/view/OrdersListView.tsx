@@ -12,6 +12,7 @@ import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { useListSearch } from '../../../../../list-frame/search/use-list-search' // F-SA-223
 import { listKeys, type ListKey } from '../../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
+import { formatNumber } from '../../../../../lib/i18n/format' // F-CP-103: the Views ▾ counts
 import type { Locale } from '../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
@@ -224,7 +225,14 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   )
 
   // F-SA-276: the host's default view is not a narrowing; the waiting term is.
-  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all' && model.rows !== model.defaultRows) || !!model.waiting || !!model.customer || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 || (!!model.kind && !model.locked?.kind) || !!model.profile // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221, F-SA-222
+  // F-CP-102: compared with the host's default (`home`: Open orders on Sales › Orders, All orders on the customer page); the rows
+  // view apart from every other narrowing, so a host's words for that one view (model.empty.view) still show.
+  const home = homeOf(model)
+  const viewNarrowed = model.rows !== home && model.rows !== 'all'
+  const othersNarrowed = model.q.trim() !== '' || !!model.waiting || !!model.customer || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 || (!!model.kind && !model.locked?.kind) || !!model.profile // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221, F-SA-222
+  const narrowed = viewNarrowed || othersNarrowed
+  const hostEmpty = hostEmptyOf(model, narrowed, othersNarrowed)
+  const showing = showingOf(model)
   const clearFilters = () => {
     search.reset('') // F-SA-223
     actions?.onClearAll?.() // B-TH-225: the search, the view, the customer, the label and the company at once
@@ -235,7 +243,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     // F-SA-220: a customer the host locks is the page's own (no chip: the page names it).
     ...(model.customer && !model.locked?.party ? [{ id: 'party', label: model.customer.name === null ? s('switcher.unknown') : s('chips.customer', { name: model.customer.name ?? '…' }), onClear: () => actions?.onCustomer?.(null) }] : []),
     ...(model.brand ? [{ id: 'brand', label: s('chips.brand', { name: model.brand.value === 'own' ? s('brand.own') : (model.brand.name ?? s('brand.unknown')) }), onClear: () => actions?.onBrand?.(null) }] : []),
-    ...(statusView && statusView !== model.defaultRows /* F-SA-276: the host's own view is no chip */ ? [{ id: 'status', label: s('chips.status', { status: t(`status.${statusView}`) }), onClear: () => actions?.onRows?.('open') }] : []),
+    ...(statusView && statusView !== model.defaultRows /* F-SA-276: the host's own view is no chip */ ? [{ id: 'status', label: s('chips.status', { status: t(`status.${statusView}`) }), onClear: () => actions?.onRows?.(home) /* F-CP-102: back to the host's default */ }] : []),
     // F-SA-276: the orders waiting on us (the customer page's view "Waiting on us").
     ...(model.waiting ? [{ id: 'waiting', label: s('chips.waitingUs'), onClear: () => actions?.onWaiting?.(null) }] : []),
     ...(model.company ? [{ id: 'company', label: s('chips.company', { name: model.company.name }), onClear: () => actions?.onCompany?.(null) }] : []),
@@ -288,15 +296,21 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   ) : items && items.length === 0 && model.rows === 'uninvoiced' && !groupsShown ? (
     // B-TH-244 (SHEET.overall-F06): nothing shipped waits to be invoiced.
     <EmptyState title={s('uninvoiced.none')} description={s('uninvoiced.noneBody')} />
-  ) : items && items.length === 0 && !groupsShown && !narrowed && model.empty ? (
+  ) : items && items.length === 0 && !groupsShown && hostEmpty ? (
     // F-SA-222 (GATE-MTM): the host says why its view is empty (made-to-measure not started, or no order yet) — never a bare 0.
+    // F-CP-102: words keyed to a view show on that view (hostEmpty).
     <EmptyState
-      title={model.empty.title}
-      description={model.empty.body ?? undefined}
+      title={hostEmpty.title}
+      description={hostEmpty.body ?? undefined}
       action={
-        model.empty.link ? (
+        hostEmpty.link ? (
           <Button size="sm" asChild>
-            <Link href={model.empty.link.href}>{model.empty.link.label}</Link>
+            <Link href={hostEmpty.link.href}>{hostEmpty.link.label}</Link>
+          </Button>
+        ) : hostEmpty.newOrder ? (
+          // F-CP-104: the customer page's All orders, none yet — New order in place (held with why without orders.manage).
+          <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewOrder?.(true)}>
+            {t('list.new')}
           </Button>
         ) : undefined
       }
@@ -450,7 +464,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           custom={{ recordType: 'ORDER', companyId: model.company?.id ?? null, partyId: model.customer?.id ?? null, partyOf: (row) => row.partyId, partyFieldsOnPartySheet: true, edit: { held: cellHeld } } /* B-TH-241 / B-TH-242 / B-TH-245: a customer's own columns on its sheet only, edited in their cells */}
           edit={orderEdit /* B-TH-245: the order note and the custom values in their cells; Edit N with the preview; lines never */}
           onShownColumns={actions?.onShownColumns /* B-TH-244: Progress reads the floor only while shown */}
-          builtInViews={{ items: builtInViewsOf(model, t, s), active: builtInActive(model), onPick: (id) => pickBuiltIn(id, model, actions) /* F-SA-221, F-SA-276 */ }}
+          builtInViews={{ items: builtInViewsOf(model, t, s, (value) => formatNumber(value, locale) /* F-CP-103 */), active: builtInActive(model), onPick: (id) => pickBuiltIn(id, model, actions) /* F-SA-221, F-SA-276 */ }}
           viewName={customerName ? s('views.suggest', { customer: customerName }) : null /* B-TH-243: a customer's sheet saved under its name */}
           // B-TH-057: a header click sorts every page on the server (the address keeps it); the grid only shows the arrow.
           onSortChanged={(colId, direction) => actions?.onSort?.(colId ? sortOfColumn(colId, direction) : null)}
@@ -519,7 +533,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           }
         />
       )}
-      {model.rows !== 'open' && model.rows !== model.defaultRows /* F-SA-276 */ && model.layout !== 'week' && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${model.rows}`) })}</p>}
+      {showing /* F-SA-276; F-CP-102: compared with the host's default — rows=open on the customer page says it */ && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${showing}`) })}</p>}
 
       {viewerRow && <PictureViewerFor row={viewerRow} model={model} actions={actions} onClose={() => setViewer(null)} /> /* B-TH-225; F-SA-212: the one viewer */}
       {model.newOrder && <NewOrderDialog model={model.newOrder} actions={actions} />}
@@ -668,16 +682,36 @@ function LayoutSwitchFor({ model, actions, held }: { model: OrdersListModel; act
 }
 // ── end F-SA-220 ──
 
+// ── F-CP-102 (customer page plan C1): the host's default view — Clear all, a view chip's ✕ and the "Showing: …" line compare with it ──
+/** The host's default rows view (Sales › Orders and the Made-to-measure page: Open orders; the customer page: All orders). */
+export const homeOf = (model: Pick<OrdersListModel, 'defaultRows'>): RowView => model.defaultRows ?? 'open'
+/** The view the "Showing: …" line names: any but the host's default (null there, and on By promise week). */
+export const showingOf = (model: Pick<OrdersListModel, 'rows' | 'defaultRows' | 'layout'>): RowView | null => (model.rows !== homeOf(model) && model.layout !== 'week' ? model.rows : null)
+/** The host's empty words that apply now: words keyed to this view when nothing else narrows it; unkeyed words when nothing narrows. */
+export function hostEmptyOf(model: Pick<OrdersListModel, 'empty' | 'rows'>, narrowed: boolean, othersNarrowed: boolean): NonNullable<OrdersListModel['empty']> | null {
+  const empty = model.empty
+  if (!empty) return null
+  return (empty.view ? empty.view === model.rows && !othersNarrowed : !narrowed) ? empty : null
+}
+// ── end F-CP-102 ──
+
 // ── B-TH-243 (threads plan TH-4, ORD-G10; SHEET.brand-view-F01): the Orders' built-in views, on top of Views ▾ ──
 /** The rows views as built-in views (the address terms each stands for), the open orders first; a customer's sheet names them so. */
 // F-SA-221: + "Made-to-measure" after them (`kind=mtm` with the open orders).
 // F-SA-276: + "Waiting on us" (`waiting=us` with the open orders); a host's `views` names which it offers, in its order.
-export function builtInViewsOf(model: Pick<OrdersListModel, 'customer' | 'views'>, t: Translate, s: Translate): Array<{ id: string; label: string; hint?: string }> {
-  const name = model.customer?.name ?? null
+// F-CP-102: + the host's own views (model.hostViews: Drafts of <customer>, Not equal), each where `views` names its id.
+// F-CP-103 (review A4): + each view's count from the host's one count read (model.viewCounts; `number` writes it in the person's
+// language); on a page locked to one customer no "Orders of <customer>" line under each (the page names the customer: picture 20).
+export function builtInViewsOf(model: Pick<OrdersListModel, 'customer' | 'views' | 'hostViews' | 'viewCounts' | 'locked'>, t: Translate, s: Translate, number: (value: number) => string = String): Array<{ id: string; label: string; hint?: string; count?: string }> {
+  const name = model.locked?.party ? null : (model.customer?.name ?? null)
   const hint = name ? { hint: s('views.ofCustomer', { customer: name }) } : {}
-  const all = [...ROW_VIEWS.map((view) => ({ id: view, label: t(`rows.${view}`), ...hint })), { id: MTM_VIEW, label: s('view.mtm'), ...hint }, { id: WAITING_US_VIEW, label: s('views.waitingUs'), ...hint }]
-  if (!model.views) return all.filter((view) => view.id !== WAITING_US_VIEW)
-  return model.views.flatMap((id) => all.filter((view) => view.id === id))
+  const all = [...ROW_VIEWS.map((view) => ({ id: view, label: t(`rows.${view}`), ...hint })), { id: MTM_VIEW, label: s('view.mtm'), ...hint }, { id: WAITING_US_VIEW, label: s('views.waitingUs'), ...hint }, ...(model.hostViews ?? []).map((view) => ({ id: view.id, label: view.label }))]
+  const counted = (view: { id: string; label: string; hint?: string }) => {
+    const count = model.viewCounts?.[view.id]
+    return count === undefined ? view : { ...view, count: number(count) }
+  }
+  if (!model.views) return all.filter((view) => view.id !== WAITING_US_VIEW && !model.hostViews?.some((own) => own.id === view.id)).map(counted)
+  return model.views.flatMap((id) => all.filter((view) => view.id === id)).map(counted)
 }
 
 /** F-SA-221: the built-in view "Made-to-measure" (`kind=mtm` + the open orders). */
@@ -687,11 +721,15 @@ export const WAITING_US_VIEW = 'waiting:us'
 
 /** F-SA-221: the built-in view the address shows: "Made-to-measure" for the open made-to-measure orders, else the rows view. */
 // F-SA-276: "Waiting on us" for the open orders waiting on us; another view with the waiting term is none of them.
-export const builtInActive = (model: Pick<OrdersListModel, 'rows' | 'kind' | 'waiting'>): string | null =>
-  model.waiting === 'us' ? (model.rows === 'open' && !model.kind ? WAITING_US_VIEW : null) : model.kind === 'mtm' && model.rows === 'open' ? MTM_VIEW : model.rows
+// F-CP-102: a host's own view the address shows wins (its `active`).
+export const builtInActive = (model: Pick<OrdersListModel, 'rows' | 'kind' | 'waiting' | 'hostViews'>): string | null =>
+  model.hostViews?.find((view) => view.active)?.id ??
+  (model.waiting === 'us' ? (model.rows === 'open' && !model.kind ? WAITING_US_VIEW : null) : model.kind === 'mtm' && model.rows === 'open' ? MTM_VIEW : model.rows)
 
 /** F-SA-276: a built-in view picked — each stands alone (picking Late drops the waiting term; Waiting on us drops nothing else). */
-export function pickBuiltIn(id: string, model: Pick<OrdersListModel, 'waiting'>, actions?: Pick<OrdersListActions, 'onKind' | 'onRows' | 'onWaiting'>): void {
+// F-CP-102: a host's own view goes to the host (actions.onHostView).
+export function pickBuiltIn(id: string, model: Pick<OrdersListModel, 'waiting' | 'hostViews'>, actions?: Pick<OrdersListActions, 'onKind' | 'onRows' | 'onWaiting' | 'onHostView'>): void {
+  if (model.hostViews?.some((view) => view.id === id)) return actions?.onHostView?.(id)
   if (id === MTM_VIEW) return actions?.onKind?.('mtm', 'open')
   if (id === WAITING_US_VIEW) return actions?.onWaiting?.('us', 'open')
   if (model.waiting) return actions?.onWaiting?.(null, id as RowView)

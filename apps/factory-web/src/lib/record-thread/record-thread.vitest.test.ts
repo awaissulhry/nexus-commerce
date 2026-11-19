@@ -39,7 +39,7 @@ describe('an API message becomes a card by its audience', () => {
 describe('the history’s steps', () => {
   const change = (more: Partial<ThreadApiChange>): ThreadApiChange => ({ kind: 'change', id: 'c1', at: '2026-11-12T15:00:00Z', action: 'sales.orders.update', actor: { audience: 'OFFICE', id: 'u1' }, actorHidden: false, status: null, fields: ['requestedDate'], before: { requestedDate: '2026-11-28' }, after: { requestedDate: '2026-12-01' }, ...more })
   it('a change becomes a quiet line with who and the values the API gave', () => {
-    expect(eventOf(change({}), sources.names)).toEqual({ id: 'c1', at: '2026-11-12T15:00:00Z', who: 'Alex Demo', whoHidden: false, actorAudience: 'OFFICE', verb: 'update', status: null, values: [{ field: 'requestedDate', before: '2026-11-28', after: '2026-12-01' }], fields: ['requestedDate'] })
+    expect(eventOf(change({}), sources.names)).toEqual({ id: 'c1', at: '2026-11-12T15:00:00Z', who: 'Alex Demo', whoHidden: false, actorAudience: 'OFFICE', verb: 'update', action: 'sales.orders.update' /* op-fx1: F-OP-214 carries the whole action */, status: null, values: [{ field: 'requestedDate', before: '2026-11-28', after: '2026-12-01' }], fields: ['requestedDate'] })
     expect(eventOf(change({ before: undefined, after: undefined }), sources.names).values).toEqual([])
   })
 
@@ -249,7 +249,8 @@ describe('F-OP-201 — the one card: the pick band inside the column, DockColumn
 
   it('one band CSS for both: record-thread.css holds .fw-rt-top / .fw-rt-body / .fw-rt-foot once, both parts draw them, tokens only', () => {
     const css = readFileSync(new URL('./record-thread.css', import.meta.url), 'utf8')
-    for (const band of ['fw-rt-top', 'fw-rt-body', 'fw-rt-foot']) expect(css.match(new RegExp(`\\.${band} \\{`, 'g'))?.length, band).toBe(1)
+    // op-fx1: once at the top level (F-OP-217's narrow-card rules re-pad them inside @container fw-rtcol, indented: not a second copy).
+    for (const band of ['fw-rt-top', 'fw-rt-body', 'fw-rt-foot']) expect(css.match(new RegExp(`^\\.${band} \\{`, 'gm'))?.length, band).toBe(1)
     expect(css).toMatch(/\.fw-rt-top \{[^}]*padding: var\(--nds-space-10\) var\(--nds-space-12\) var\(--nds-space-9\);[^}]*border-bottom: 1px solid var\(--nds-border-subtle\);/)
     expect(css).toMatch(/\.fw-rt-body \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;/)
     expect(css).toMatch(/\.fw-rt-foot \{[^}]*flex: none;[^}]*border-top: 1px solid var\(--nds-border-subtle\);/)

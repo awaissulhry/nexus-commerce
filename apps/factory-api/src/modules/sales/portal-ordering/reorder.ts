@@ -9,7 +9,7 @@ import { isGoodsLine } from '@nexus/factory-domain/sales/quotes/quotes'
 import { appClock, commandOn } from '../../../platform/portal/tasks/clock'
 import { portalReader, type PortalReader } from '../portal-orders/access'
 import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
-import { addLinesInCommand, ownRequest, pricesFor, requestView, type NewLine } from './requests'
+import { addLinesInCommand, draftChanged, ownRequest, pricesFor, requestView, type NewLine } from './requests'
 import { dayText, readRequest } from './store'
 // B-TH-304: the customer's own order numbers in the catalogue door (pick A).
 import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
@@ -176,6 +176,7 @@ export async function reorderInto(app: FastifyInstance, request: FastifyRequest,
       companyId: row.companyId,
       after: { reorderOf: order.id, added: outcome.added, merged: outcome.merged, kept: outcome.kept, lines: lines.map((line) => ({ sourceOrderLineId: line.sourceOrderLineId, colourwayId: line.colourwayId, sizes: line.sizes, unitPriceShown: markMoney('price', prices.get(`${line.styleId}|${line.colourwayId}`) ?? null) })) },
     })
+    draftChanged(tools, row) // B-CP-071
     return outcome
   })
   return { ...(await requestView(app, request, reader, await ownRequest(request, reader, requestId))), added: result.added.length, merged: [...result.merged], kept: [...result.kept], skipped: skipped.map((entry) => ({ ...entry, notices: [...entry.notices] })) }

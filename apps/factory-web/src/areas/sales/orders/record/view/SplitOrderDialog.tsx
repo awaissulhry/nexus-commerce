@@ -72,7 +72,7 @@ export function SplitOrderDialog({ order, model, actions }: { order: Order; mode
     >
       <p className="fw-so-hint">{t('split.body')}</p>
       {stays > 0 && <p className="fw-so-hint">{t('split.stays', { count: stays })}</p>}
-      {parts.map((part, index) => (
+      {parts.map((_, index) => (
         <SplitPart
           key={index}
           order={order}

@@ -9,6 +9,17 @@ import { builtInActive, builtInViewsOf, pickBuiltIn, WAITING_US_VIEW, withPreset
 import { marksOf, sourcesTouched, STRIP_GROUPS, tileOf, tilesShown, workAttention, workEntry, WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
 import { valueOf } from './view/WaitingStrip'
 import { pickOfRow, WORK_VIEWS, workPreset } from './view/WorkTab'
+import { DRAFTS_VIEW, NOT_EQUAL_VIEW, workEmptyOf, workViewsOf } from './view/WorkTab' // F-CP-101
+import { rowsFromAddress } from '../../orders/model' // F-CP-101: Sales › Orders keeps Open
+// ---- F-CP-103 ----
+import { OPEN_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
+import { OPEN_ORDERS } from '../../../parties/_shared/model'
+import { workDoor, workViewCounts } from './use-customer-work'
+// ---- end F-CP-103
+// ---- F-CP-104 ----
+import { rightRef } from '../../../../lib/i18n/rights'
+import { workAskAddress } from './use-customer-work'
+// ---- end F-CP-104
 // F-SA-279: the dock follows the row
 import { DOCK_FOLLOW_MS, DOCK_PARAM, DOCK_TABS, dockable, dockAddress, dockFollower, dockKeyOf, dockOnTab, dockTermOf, dockValueOf, draftKeptOf, GENERAL_DOCK, pickOfSummary, scopeOf } from './use-customer-work'
 import { lockedEntry } from '../../orders/list/use-orders-sheet' // fx-12
@@ -30,12 +41,14 @@ const board = (tiles: Record<string, number>) => ({ status: 'ready' as const, va
 const reads = (over: Partial<WorkReads> = {}): WorkReads => ({ board: { status: 'reading' }, requests: { status: 'reading' }, replies: { status: 'reading' }, asks: { status: 'reading' }, tasks: { status: 'reading' }, ...over })
 
 describe('F-SA-276: the address the Work tab writes on entry', () => {
-  it('no view term: the default view (In production), the tab and the lock — one write', () => {
+  // F-CP-101: the default view is All orders (`rows=all`, never `status=all`).
+  it('no view term: the default view (All orders), the tab and the lock — one write', () => {
     const entry = workEntry(BASE, ALPHA, params(''))!
     const written = new URL(`https://x${entry}`).searchParams
     expect(written.get('tab')).toBe('work')
     expect(written.get('party')).toBe(ALPHA)
-    expect(written.get('status')).toBe(WORK_DEFAULT_ROWS)
+    expect(written.get('rows')).toBe(WORK_DEFAULT_ROWS)
+    expect(written.has('status')).toBe(false)
   })
   it('a view in the address is kept; a complete address writes nothing', () => {
     const entry = workEntry(BASE, ALPHA, params(`tab=work&party=${ALPHA}&rows=all`))
@@ -87,8 +100,9 @@ describe('F-SA-276: the lock through every path (screen = file)', () => {
 describe('F-SA-276: the four views (no tabs inside the tab)', () => {
   const orders = createTranslator('en', messagesFor('en', ['orders']).orders!)
   const sheet = createTranslator('en', messagesFor('en', ['orders-sheet'])['orders-sheet']!)
-  it('In production · Waiting on us · Late · All orders, in that order; Sales › Orders keeps its own list (no Waiting on us unasked)', () => {
-    expect(builtInViewsOf({ customer: null, views: WORK_VIEWS }, orders, sheet).map((view) => view.label)).toEqual(['In production', 'Waiting on us', 'Late', 'All orders'])
+  // F-CP-101: All orders first.
+  it('All orders · In production · Waiting on us · Late, in that order; Sales › Orders keeps its own list (no Waiting on us unasked)', () => {
+    expect(builtInViewsOf({ customer: null, views: workViewsOf({ price: true }) }, orders, sheet).map((view) => view.label)).toEqual(['All orders', 'In production', 'Waiting on us', 'Late'])
     expect(builtInViewsOf({ customer: null }, orders, sheet).some((view) => view.id === WAITING_US_VIEW)).toBe(false)
   })
   it('the active view and a pick: each view stands alone', () => {
@@ -192,6 +206,7 @@ describe('F-SA-276: words in both languages', () => {
         'customers.work.strip.tasks',
         ...['requests', 'replies', 'late', 'deposit', 'customer', 'tasks', 'failed'].map((tile) => `customers.work.tile.${tile}`),
         'customers.work.empty',
+        'customers.work.emptyAll', // F-CP-101
         'customers.work.showAll',
         'customers.work.gone',
         'customers.work.view.waitingUs',
@@ -495,3 +510,190 @@ describe('F-OP-211: the dock writes `dock=` through the one history writer', () 
   })
 })
 // ---- end F-OP-211
+
+// ---- F-CP-101 (customer page plan C1, D7, K1; fx-12; review G4, E6): the Work tab opens on All orders ------------------------------
+// The entry address has ONE writer (workEntry in WorkTab); applied to its own output it writes nothing. `rows=all`, never `status=all`
+// (that term reads as Open orders and, being a view term, would stop every later write). Each new term — `list` (Drafts), `priceMatch`
+// (Not equal), `cols` (Work · Money) — applied twice gives the same address. Sales › Orders keeps Open orders.
+describe('F-CP-101: All orders by default, written once', () => {
+  const search = (address: string) => address.slice(address.indexOf('?') + 1)
+  const twice = (query: string) => {
+    const once = workEntry(BASE, ALPHA, params(query))
+    const address = once ?? `${BASE}?${query}`
+    return { once, address, again: workEntry(BASE, ALPHA, params(search(address))) }
+  }
+
+  it("workEntry('') → tab=work&party=A&rows=all; applied to its own output → null", () => {
+    expect(workEntry(BASE, ALPHA, params(''))).toBe(`${BASE}?tab=work&party=${ALPHA}&rows=all`)
+    expect(twice('').again).toBeNull()
+    expect(WORK_DEFAULT_ROWS).toBe('all')
+    expect(new URL(`https://x${workEntry(BASE, ALPHA, params(''))!}`).searchParams.has('status')).toBe(false)
+  })
+
+  it.each([['status=IN_PRODUCTION', 'status'], ['late=true', 'late'], ['list=drafts', 'list'], ['priceMatch=NOT_EQUAL', 'priceMatch'], ['waiting=us', 'waiting']])('a view term (%s): no default written beside it', (query, term) => {
+    const { once, again } = twice(`tab=work&party=${ALPHA}&${query}`)
+    expect(once).toBeNull()
+    expect(again).toBeNull()
+    const entry = new URL(`https://x${workEntry(BASE, ALPHA, params(query))!}`).searchParams
+    expect(entry.has('rows'), query).toBe(false)
+    expect(entry.has(term), query).toBe(true)
+  })
+
+  it.each(['list=drafts', 'priceMatch=NOT_EQUAL', 'cols=money', 'tab=work&cols=money', `tab=work&party=${ALPHA}&cols=money&rows=all`])('each new term applied twice = the same address (%s)', (query) => {
+    const { address, again } = twice(query)
+    expect(again, address).toBeNull()
+    expect(lockedEntry(BASE, { locked: { party: ALPHA } }, params(search(address))), address).toBeNull()
+  })
+
+  it('`cols` names no view: All orders is written beside it, once', () => {
+    const written = new URL(`https://x${workEntry(BASE, ALPHA, params('tab=work&cols=money'))!}`).searchParams
+    expect(written.get('rows')).toBe('all')
+    expect(written.get('cols')).toBe('money')
+  })
+
+  it('the pairs: list=drafts with a view term keeps both, writes no default, once', () => {
+    for (const query of ['list=drafts&status=IN_PRODUCTION', 'list=drafts&waiting=us', 'priceMatch=NOT_EQUAL&rows=all']) {
+      const { address, again } = twice(query)
+      expect(again, address).toBeNull()
+      const kept = new URL(`https://x${address}`).searchParams
+      expect(kept.get('tab')).toBe('work')
+      expect(kept.get('party')).toBe(ALPHA)
+      expect(kept.getAll('rows').length, query).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('?tab=orders → rows=all once; a saved view without tab → tab and party back, once', () => {
+    const old = twice('tab=orders')
+    expect(new URL(`https://x${old.once!}`).searchParams.get('rows')).toBe('all')
+    expect(old.again).toBeNull()
+    const saved = twice('late=true')
+    const back = new URL(`https://x${saved.once!}`).searchParams
+    expect([back.get('tab'), back.get('party'), back.get('late'), back.has('rows')]).toEqual(['work', ALPHA, 'true', false])
+    expect(saved.again).toBeNull()
+  })
+
+  it('the views in their order; Not equal only with the price grain (and once its step offers it); Drafts once its step offers it', () => {
+    expect(WORK_VIEWS).toEqual(['all', 'IN_PRODUCTION', WAITING_US_VIEW, 'late', DRAFTS_VIEW, NOT_EQUAL_VIEW])
+    expect(workViewsOf({ price: true }, { drafts: true, priceCheck: true })).toEqual([...WORK_VIEWS])
+    expect(workViewsOf({ price: false }, { drafts: true, priceCheck: true })).toEqual(['all', 'IN_PRODUCTION', WAITING_US_VIEW, 'late', DRAFTS_VIEW])
+    expect(workViewsOf({ price: true })).toEqual(['all', 'IN_PRODUCTION', WAITING_US_VIEW, 'late'])
+  })
+
+  it('the empty state per view: All orders says no order yet; In production keeps its way to All orders; other views the sheet\'s own', () => {
+    const t = createTranslator('en', messagesFor('en', ['parties']).parties!)
+    expect(workEmptyOf('all', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Brand Alpha has no order yet.', view: 'all', newOrder: true /* F-CP-104 */ })
+    expect(workEmptyOf('IN_PRODUCTION', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Nothing in production for Brand Alpha.', link: { href: '/all', label: 'Show all orders' }, view: 'IN_PRODUCTION' })
+    expect(workEmptyOf('late', null, 'Brand Alpha', t, '/all')).toBeNull()
+    expect(workEmptyOf('open', 'us', 'Brand Alpha', t, '/all')).toBeNull()
+    expect(createTranslator('it', messagesFor('it', ['parties']).parties!)('customers.work.emptyAll', { customer: 'Brand Alpha' })).toBe('Brand Alpha non ha ancora ordini.')
+  })
+
+  it('Sales › Orders keeps Open orders as its default (the customer page only changes)', () => {
+    expect(rowsFromAddress(params(''))).toBe('open')
+    expect(rowsFromAddress(params('rows=all'))).toBe('all')
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('clearTo: WORK_DEFAULT_ROWS') // F-CP-102: the sheet's default view = the host's
+    expect(tab.match(/router\.replace\(/g)?.length, 'one writer of the entry address').toBe(1)
+  })
+})
+// ---- end F-CP-101
+
+// ---- F-CP-103 (customer page plan C1; review A4): the Overview's tiles open their own view; Views ▾ counts each view ----------------
+describe('F-CP-103: each tile opens the rows it counts; the Views counts come from the one count read', () => {
+  const RECORD = `/w/acme/sales/customers/${ALPHA}`
+  const viewOf = (href: string) => rowsFromAddress(new URL(`https://x${href}`).searchParams)
+
+  it('Open orders → rows=open, In production → status=IN_PRODUCTION, Late → late=true (the views the tiles count)', () => {
+    expect(workDoor(RECORD, 'open')).toBe(`${RECORD}?tab=work&rows=open`)
+    expect(workDoor(RECORD, 'inProduction')).toBe(`${RECORD}?tab=work&status=IN_PRODUCTION`)
+    expect(workDoor(RECORD, 'late')).toBe(`${RECORD}?tab=work&late=true`)
+    expect([viewOf(workDoor(RECORD, 'open')), viewOf(workDoor(RECORD, 'inProduction')), viewOf(workDoor(RECORD, 'late'))]).toEqual(['open', 'IN_PRODUCTION', 'late'])
+    // The rows each door reads are the rows its tile counts: Open = the open states, Late = open and promised before today.
+    expect([...OPEN_ORDERS].sort()).toEqual([...OPEN_STATUSES].sort())
+    expect(rowsQuery('open', '', null, ALPHA)).toMatchObject({ open: true, partyId: ALPHA })
+    expect(rowsQuery('IN_PRODUCTION', '', null, ALPHA)).toMatchObject({ status: 'IN_PRODUCTION', partyId: ALPHA })
+    expect(rowsQuery('late', '', null, ALPHA)).toMatchObject({ late: true, partyId: ALPHA })
+    const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
+    for (const door of ['open', 'inProduction', 'late']) expect(view).toContain(`href: workDoor(recordHref, '${door}')`)
+  })
+
+  it('a door arrives with its view: the entry adds the lock once and no default beside the view (fx-12)', () => {
+    for (const door of ['open', 'inProduction', 'late'] as const) {
+      const query = workDoor(BASE, door).split('?')[1]!
+      const once = workEntry(BASE, ALPHA, params(query))!
+      const written = new URL(`https://x${once}`).searchParams
+      expect(written.get('party'), door).toBe(ALPHA)
+      expect(written.getAll('rows').length + written.getAll('status').length + written.getAll('late').length, door).toBe(1)
+      expect(workEntry(BASE, ALPHA, params(once.split('?')[1]!)), door).toBeNull()
+    }
+  })
+
+  it('the counts: All orders (every state), In production, Late from the strip\'s board read; nothing while it reads; Waiting on us no number', () => {
+    expect(workViewCounts({ status: 'reading' })).toBeNull()
+    expect(workViewCounts({ status: 'failed' })).toBeNull()
+    const ready = { status: 'ready' as const, value: { byStatus: [{ status: 'CONFIRMED', count: 3 }, { status: 'IN_PRODUCTION', count: 7 }, { status: 'CLOSED', count: 32 }], lanes: [], tiles: [{ key: 'late', count: 2, filter: {} }], asOf: '2026-11-19T10:00:00Z' } } as never
+    const counts = workViewCounts(ready)!
+    expect(counts).toEqual({ all: 42, IN_PRODUCTION: 7, late: 2 })
+    const orders = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    const sheet = createTranslator('en', messagesFor('en', ['orders-sheet'])['orders-sheet']!)
+    const items = builtInViewsOf({ customer: { id: ALPHA, name: 'Brand Alpha' }, locked: { party: true, kind: false }, views: workViewsOf({ price: true }), viewCounts: counts }, orders, sheet)
+    expect(items.map((item) => [item.label, item.count ?? null])).toEqual([['All orders', '42'], ['In production', '7'], ['Waiting on us', null], ['Late', '2']])
+    // The page names the customer: no "Orders of Brand Alpha" line under each item on its own page.
+    expect(items.some((item) => item.hint)).toBe(false)
+  })
+
+  it('no second read: the Work tab hands the sheet the strip\'s read (brand wall: the API walls it to this customer)', () => {
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('viewCounts: workViewCounts(work.reads.board)')
+    expect(tab).not.toMatch(/getBoard\(/)
+    const hook = readFileSync(new URL('./use-customer-work.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("board: () => run('board', () => getBoard(api, '', undefined, partyId))")
+  })
+})
+// ---- end F-CP-103
+
+// ---- F-CP-104 (customer page plan C2a; fx-12, review G4, A9): New order and Import orders in place ---------------------------------
+// The band's New order and ⋯ Import orders for <customer>… are asks kept in the page's memory, never address terms: on the Work tab
+// nothing is written (the window opens in place); on another tab the page writes `tab=work`, the Work entry writes its lock and view
+// once, then nothing — two replaces at most, then none. The window holds the page's customer (no Change); held without orders.manage.
+describe('F-CP-104: New order and Import orders open on the customer page', () => {
+  const RECORD = `/w/acme/sales/customers/${ALPHA}`
+  const search = (address: string) => address.slice(address.indexOf('?') + 1)
+
+  it('on the Work tab the ask writes nothing; on another tab ?tab=work, then the entry once, then none (two replaces at most)', () => {
+    expect(workAskAddress(RECORD, 'work')).toBeNull()
+    for (const tab of ['overview', 'quotes', 'money', 'people', 'terms', 'portal']) {
+      const first = workAskAddress(RECORD, tab)!
+      expect(first, tab).toBe(`${RECORD}?tab=work`)
+      const second = workEntry(RECORD, ALPHA, params(search(first)))!
+      expect(new URL(`https://x${second}`).searchParams.get('rows'), tab).toBe('all')
+      expect(workEntry(RECORD, ALPHA, params(search(second))), tab).toBeNull()
+      // No term of the ask anywhere: nothing to loop on, a reload does not reopen the window.
+      for (const address of [first, second]) expect(address, tab).not.toMatch(/[?&](new|import)=/)
+    }
+  })
+
+  it('the page keeps the ask in memory and the Work sheet serves it once (no address write of its own)', () => {
+    const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("const address = workAskAddress(`${prefix}/sales/customers/${encodeURIComponent(partyId)}`, tab)")
+    expect(page).toContain('onAsked={() => setAsk(null) /* F-CP-104 */}')
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("if (ask === 'new') latest.current.onNewOrder?.(true)")
+    expect(tab).toContain('else latest.current.onImport?.()')
+    expect(tab.match(/router\.replace\(/g)?.length).toBe(1)
+  })
+
+  it('the band: New order is a button on this page; ⋯ Import orders opens here; both held with the right\'s words without orders.manage', () => {
+    const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('<Button size="sm" variant="primary" onClick={onNewOrder}>')
+    expect(view).toContain("onSelect: onImport, disabled: !can.ordersManage")
+    expect(view).toContain("heldReason={t('held.right', { right: rightRef('orders.manage') })}")
+    for (const locale of LOCALES) {
+      const words = createTranslator(locale, messagesFor(locale, ['parties']).parties!)('held.right', { right: rightRef('orders.manage') })
+      expect(words, locale).not.toContain('orders.manage')
+      expect(words, locale).not.toBe('held.right')
+    }
+    expect(createTranslator('en', messagesFor('en', ['parties']).parties!)('held.right', { right: rightRef('orders.manage') })).toMatch(/^Needs the right /)
+  })
+})
+// ---- end F-CP-104

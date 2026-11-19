@@ -7,6 +7,9 @@ import { browseCatalogue, catalogueStyle } from './browse'
 import {
   acceptContract,
   addAddressContract,
+  announceDraftFileContract,
+  completeDraftFileContract,
+  removeDraftFileContract,
   addLinesContract,
   addressesContract,
   addressMoveContract,
@@ -37,7 +40,9 @@ import {
 import { manifest } from './manifest'
 import { acceptRequest, listOfficeRequests, officeRequestView, refuseRequest } from './office'
 import { pastOrder, pastOrders, reorderInto } from './reorder'
-import { addLines, changeHeader, changeLine, createDraft, discardDraft, getRequest, listRequests, removeLine, sendRequest, takeTodaysPrices, withdrawRequest } from './requests'
+import { addLines, changeHeader, changeLine, createDraft, getRequest, listRequests, sendRequest, takeTodaysPrices, withdrawRequest } from './requests'
+// B-CP-072: the draft's files; a discarded draft and a line taken out take theirs with them.
+import { announceDraftFile, completeDraftFile, discardDraftWithFiles, removeDraftFile, removeLineWithFiles } from './draft-files'
 import { orderTemplate, uploadSheet } from './upload'
 // B-W2b-374 (XF3:04): an option's artwork in the portal.
 import { processFiles } from '../../../platform/files/service'
@@ -60,11 +65,15 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   app.post('/portal/order-requests', { schema: createRequestContract }, async (request, reply) => reply.code(201).send(await createDraft(app, request, request.body, idempotencyKeyFrom(request))))
   app.get('/portal/order-requests/:requestId', { schema: getRequestContract }, async (request) => getRequest(app, request, request.params.requestId))
   app.patch('/portal/order-requests/:requestId', { schema: changeRequestContract }, async (request) => changeHeader(app, request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
-  app.delete('/portal/order-requests/:requestId', { schema: discardContract }, async (request) => discardDraft(app, request, request.params.requestId, request.query.version, idempotencyKeyFrom(request)))
+  app.delete('/portal/order-requests/:requestId', { schema: discardContract }, async (request) => discardDraftWithFiles(processFiles, app, request, request.params.requestId, request.query.version, idempotencyKeyFrom(request)))
   app.post('/portal/order-requests/:requestId/lines', { schema: addLinesContract }, async (request) => addLines(app, request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
   app.put('/portal/order-requests/:requestId/lines/:lineId', { schema: changeLineContract }, async (request) => changeLine(app, request, request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
-  app.delete('/portal/order-requests/:requestId/lines/:lineId', { schema: removeLineContract }, async (request) => removeLine(app, request, request.params.requestId, request.params.lineId, request.query.version, idempotencyKeyFrom(request)))
+  app.delete('/portal/order-requests/:requestId/lines/:lineId', { schema: removeLineContract }, async (request) => removeLineWithFiles(processFiles, app, request, request.params.requestId, request.params.lineId, request.query.version, idempotencyKeyFrom(request)))
   app.post('/portal/order-requests/:requestId/prices', { schema: pricesContract }, async (request) => takeTodaysPrices(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
+  // B-CP-072: the draft's files.
+  app.post('/portal/order-requests/:requestId/files', { schema: announceDraftFileContract }, async (request, reply) => reply.code(201).send(await announceDraftFile(processFiles(), app, request, request.params.requestId, request.body, idempotencyKeyFrom(request))))
+  app.post('/portal/order-requests/:requestId/files/:fileId/complete', { schema: completeDraftFileContract }, async (request) => completeDraftFile(processFiles(), app, request, request.params.requestId, request.params.fileId, idempotencyKeyFrom(request)))
+  app.delete('/portal/order-requests/:requestId/files/:fileId', { schema: removeDraftFileContract }, async (request) => removeDraftFile(processFiles(), app, request, request.params.requestId, request.params.fileId, request.query.version, idempotencyKeyFrom(request)))
   app.post('/portal/order-requests/:requestId/send', { schema: sendContract }, async (request) => sendRequest(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
   app.post('/portal/order-requests/:requestId/withdraw', { schema: withdrawContract }, async (request) => withdrawRequest(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
 
