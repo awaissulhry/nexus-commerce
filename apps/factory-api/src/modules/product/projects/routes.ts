@@ -10,8 +10,11 @@ import {
   moveProjectContract,
   myProjectsContract,
   peopleChoicesContract,
+  portalAddProjectPersonContract,
   portalProjectNewsContract,
+  portalProjectPeopleContract,
   portalProjectsContract,
+  portalRemoveProjectPersonContract,
   projectCountsContract,
   projectPageContract,
   projectPeopleContract,
@@ -26,7 +29,7 @@ import { listProjects, projectCounts, projectPage } from './list'
 import { manifest } from './manifest'
 import { addPerson, peopleChoices, projectPeople, removePerson } from './members'
 import { partnerProjectNews } from './news'
-import { portalProjects } from './portal'
+import { addPortalProjectPerson, portalProjectPeople, portalProjects, removePortalProjectPerson } from './portal'
 import { createProject, moveProject, similarProjects, updateProject } from './projects'
 import { myProjects } from './today'
 
@@ -57,4 +60,8 @@ export default defineRoutes('product.projects', manifest, async (app) => {
   app.delete('/projects/:projectId/people/:userId', { schema: removePersonContract }, async (request) => removePerson(request, request.params.projectId, request.params.userId, idempotencyKeyFrom(request)))
   app.get('/portal/projects', { schema: portalProjectsContract }, async (request) => portalProjects(request))
   app.get('/portal/projects/:projectId/news', { schema: portalProjectNewsContract }, async (request) => partnerProjectNews(request, request.params.projectId, request.query))
+  // B-CP-074: the brand admin's own people on a project it is a member of.
+  app.get('/portal/projects/:projectId/people/choices', { schema: portalProjectPeopleContract }, async (request) => portalProjectPeople(app, request, request.params.projectId))
+  app.post('/portal/projects/:projectId/people', { schema: portalAddProjectPersonContract }, async (request) => addPortalProjectPerson(app, request, request.params.projectId, request.body, idempotencyKeyFrom(request)))
+  app.delete('/portal/projects/:projectId/people/:userId', { schema: portalRemoveProjectPersonContract }, async (request) => removePortalProjectPerson(app, request, request.params.projectId, request.params.userId, request.query.version, idempotencyKeyFrom(request)))
 })
