@@ -62,6 +62,8 @@ import { confirmHeld, draftKey, headerFromAddress, manualBody, newOrderAddress, 
 import { designScreen as changesScreen } from './record/changes/fixtures'
 import { runWithStepUp } from './hooks'
 import { isMadeToMeasure, MENU_GROUPS, RECORD_TABS, tabCountOf } from './model' // F-SA-230
+import { abilitiesOf, PAGE_ACT_RIGHTS, readOnlyOnPage } from './model' // F-OP-303 (walk #6)
+import { ROLES, type Role } from './_demo/fixtures' // F-OP-303
 import { bandHealthOf, healthInputOf } from './record/overview/model' // F-SA-232: the band's chip
 import { HISTORY_CHIPS, historyFor, historyOf, waitingOnUsOf } from './record/changes/model' // F-SA-236 (F-OP-301: the customer's side is the ONE waiting list's)
 import { designScreen as listScreen } from './list/fixtures'
@@ -1868,3 +1870,22 @@ describe('F-OP-102: the band primary by state, in place, and the ⋯ re-cut (set
   })
 })
 // ---- end F-OP-102
+
+// ---- F-OP-303 (order page walk #6): "Read-only: your role follows orders and changes none." counts every right the page acts on ----
+describe('F-OP-303: the read-only banner only for a reader who can change nothing on the order page', () => {
+  it('Warehouse (shipping.manage: Create shipment…, Tracking number…, made elsewhere) is not read-only; a follower only is', () => {
+    expect(readOnlyOnPage(abilitiesOf(['orders.view', 'shipping.view', 'shipping.manage', 'shipping.ddt.issue']))).toBe(false)
+    expect(readOnlyOnPage(abilitiesOf(['orders.view', 'workorders.view', 'invoices.view', 'quotes.view']))).toBe(true)
+    // Each acting right alone lifts the banner — the four of before and the ones it forgot.
+    for (const permission of ['orders.manage', 'orders.close', 'payments.record', 'invoices.issue', 'invoices.manage', 'workorders.manage', 'shipping.manage', 'quotes.manage']) expect(readOnlyOnPage(abilitiesOf(['orders.view', permission])), permission).toBe(false)
+    expect(PAGE_ACT_RIGHTS).toEqual(['manage', 'close', 'recordPayment', 'issueInvoices', 'manageInvoices', 'makeWorkOrders', 'createShipment', 'manageQuotes'])
+    // The page's acting rights outside the order abilities: assign the supervisor, a quality hold on a work order.
+    expect(readOnlyOnPage(abilitiesOf(['orders.view']), { assignSupervisor: true })).toBe(false)
+    expect(readOnlyOnPage(abilitiesOf(['orders.view']), { qualityHold: true })).toBe(false)
+    for (const role of Object.keys(ROLES) as Role[]) expect(readOnlyOnPage(abilitiesOf(ROLES[role])), role).toBe(false)
+    const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })')
+    expect(view).not.toContain('!model.can.manage && !model.can.close && !model.can.recordPayment && !model.can.makeWorkOrders')
+  })
+})
+// ---- end F-OP-303

@@ -38,6 +38,7 @@ import { useRecordFrame, type RecordFrameState } from '../../../../_shared/recor
 import { makeHeldOf } from '../production' // F-OP-102
 import { makeInMenu } from '../../model' // F-OP-102
 import { linesNotInProduction } from '../../model' // F-OP-102
+import { readOnlyOnPage } from '../../model' // F-OP-303 (walk #6)
 import { planningHref } from '../../../../../lib/production/work-order-acts/model' // F-OP-102
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-210
@@ -467,7 +468,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
             />
           )}
           {order.status === 'CLOSED' && <Banner tone="info" title={order.closedAt ? t('record.closed', { date: formatDate(order.closedAt, { locale }) }) : t('record.closedNoDate')} />}
-          {!model.can.manage && !model.can.close && !model.can.recordPayment && !model.can.makeWorkOrders && !isFinal(order) && <Banner tone="info" title={t('record.readOnly')} />}
+          {/* F-OP-303 (walk #6): only for a reader who can change nothing here (shipping, invoices, a quote copy … counted too). */}
+          {readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold }) && !isFinal(order) && <Banner tone="info" title={t('record.readOnly')} />}
         </RecordNotices>
 
         <div className="fw-so-main">

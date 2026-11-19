@@ -97,6 +97,24 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
   }
 }
 
+// ---- F-OP-303 (order page walk #6): the read-only banner counts every right the page acts on --------------------------------
+/**
+ * The rights of `abilitiesOf` with which the order page changes something: the order (manage, close), its money (a payment, an
+ * invoice issued or drafted), its work orders, its shipments (Create shipment…, Tracking number…, Record a shipment made
+ * elsewhere…: shipping.manage) and a copy as a new quote.
+ */
+export const PAGE_ACT_RIGHTS = ['manage', 'close', 'recordPayment', 'issueInvoices', 'manageInvoices', 'makeWorkOrders', 'createShipment', 'manageQuotes'] as const satisfies readonly (keyof OrderAbilities)[]
+
+/**
+ * "Read-only: your role follows orders and changes none." only for a reader who holds none of them, nor the page's other acting
+ * rights (assign the supervisor: production.brand.manage; a quality hold on a work order: quality.holds.place). The walk saw it for
+ * Warehouse on the very tab where Warehouse creates shipments and types tracking.
+ */
+export function readOnlyOnPage(can: Pick<OrderAbilities, (typeof PAGE_ACT_RIGHTS)[number]>, more: { readonly assignSupervisor?: boolean; readonly qualityHold?: boolean } = {}): boolean {
+  return PAGE_ACT_RIGHTS.every((key) => !can[key]) && !more.assignSupervisor && !more.qualityHold
+}
+// ---- end F-OP-303
+
 // ---- words and tones ---------------------------------------------------------------------------------------------------
 
 export const STATUS_TONE: Record<OrderStatus, Tone> = {
