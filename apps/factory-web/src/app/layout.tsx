@@ -15,6 +15,7 @@ import '@nexus/ui/styles/a11y.css'
 import '../shell/base.css'
 import { LocaleSwitchHost } from '../lib/i18n/LocaleSwitchHost'
 import { ErrorReporting } from '../observability/ErrorReporting'
+import { RouterGuard } from '../lib/router-guard/RouterGuard' // fx-12
 import { createTranslator, messagesFor } from '../lib/i18n/messages'
 import { I18nProvider } from '../lib/i18n/provider'
 import { requestLocale } from '../lib/i18n/server'
@@ -63,6 +64,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         </a>
         {/* B-W2a-42 (PLT-218): uncaught errors become redacted reports (fake sink; off in production). */}
         <ErrorReporting />
+        {/* fx-12: the Next router never loops against a server of another build, nor on one address it cannot read. */}
+        <RouterGuard />
         <I18nProvider locale={locale} messages={messagesFor(locale, ['shell'])}>
           <LocaleSwitchHost>
             <PdfProvider>{children}</PdfProvider>

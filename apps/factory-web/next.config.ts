@@ -4,6 +4,7 @@ import { readFactoryApiUrl } from './src/lib/api-url'
 import { readWebTrustedProxies } from './src/lib/api/forwarded'
 import { pageExtensionsFor } from './src/lib/design/route'
 import { officeRedirects } from './src/shell/nav/renamed'
+import { WEB_BUILD_HEADER } from './src/lib/router-guard/guard' // fx-12
 
 /**
  * `next dev`, `next build` and `next start` call this function: without FACTORY_API_URL none of them starts. The one
@@ -46,6 +47,10 @@ export default function factoryWebConfig(phase: string): NextConfig {
     // B-TH-216 (threads plan TH-1b): an Office page that changed its address opens from its old one, its query and record id
     // kept (Sales › Inquiries → Sales › Incoming; src/shell/nav/renamed.ts).
     redirects: async () => officeRedirects(),
+    // fx-12: every answer names the build that served it (`dev` under `next dev`, `build` after `next build`: written into the
+    // build's routes manifest, so `next start` says what the build's pages were compiled as). A tab of the other build stops its
+    // router before it loops on answers it cannot read (src/lib/router-guard/guard.ts).
+    headers: async () => [{ source: '/:path*', headers: [{ key: WEB_BUILD_HEADER, value: phase === PHASE_DEVELOPMENT_SERVER ? 'dev' : 'build' }] }],
     // B-W2b-F57: the browser talks to the factory API through this app's route `src/app/api/[...path]/route.ts`
     // (`/api/<route>` → `<FACTORY_API_URL>/<route>`, the session cookie first-party), no longer a rewrite: a rewrite cannot
     // tell the API whose call it is (lib/api/forwarded.ts). The API's routes carry no `/api` prefix of their own.
