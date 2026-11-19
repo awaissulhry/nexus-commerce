@@ -393,7 +393,8 @@ describe('every string of the four screens exists in it and en (PLAN §4.6)', ()
     expect(keys.length).toBeGreaterThan(400)
     expect([...new Set(keys)].filter((key) => !has(key))).toEqual([])
     // op-fx1: the keys read through the orders translator exist in the orders catalogue, in both languages.
-    expect(ordersReadKeys()).toEqual(['record.dock.writeGeneral', 'record.dock.writeIn'])
+    // F-CP-113: + the made order's toast of the lines window (an orders word).
+    expect(ordersReadKeys()).toEqual(['newOrder.window.made', 'record.dock.writeGeneral', 'record.dock.writeIn'])
     expect(ordersReadKeys().filter((key) => !LOCALES.every((locale) => key in (CATALOGUE[locale].orders ?? {})))).toEqual([])
   })
 })

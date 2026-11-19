@@ -39,3 +39,13 @@
   display: inline-block;
   min-width: 1px;
 }
+/* F-CP-110: the dock's door on the customer page — a button that looks like the link. */
+.fw-lmc.is-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}

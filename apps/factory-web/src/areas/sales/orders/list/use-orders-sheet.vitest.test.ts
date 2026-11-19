@@ -6,7 +6,7 @@ import { I18nProvider } from '../../../../lib/i18n/provider'
 import { LIST_ROWS } from '../_demo/fixtures'
 import type { OrderRow } from '../api'
 import { listAddress } from '../model'
-import { CLEAR_DROPS, lockedEntry, ORDERS_LIST_KEY, sheetAddress, sheetPartyOf, useOrdersSheet, type OrdersSheetHost } from './use-orders-sheet'
+import { CLEAR_DROPS, lockedEntry, ORDERS_LIST_KEY, sheetAddress, sheetPartyOf, styleTilesOf, useOrdersSheet, type OrdersSheetHost } from './use-orders-sheet'
 
 /**
  * F-SA-220 (sales page plan N7 / N5, picks R9, P10, P12, P18; 17-review C-2 and the SHEET-G02 lesson): the ONE Orders sheet. A host's
@@ -250,3 +250,26 @@ describe('F-CP-104: New order on the customer page holds its customer', () => {
   })
 })
 // ---- end F-CP-104
+
+// ---- F-CP-110 (customer page plan C2c): the picture viewer's styles strip reads the order once — its lines, never a price ------------
+describe('F-CP-110: an order\'s lines for the styles strip', () => {
+  it('each line in seq order: style, colour, picture and its small preview; no price field', () => {
+    const lines = [
+      { id: 'l2', seq: 20, styleId: 's2', style: { code: 'STY-02', name: 'Pantalone' }, colourway: null, picture: null, unitPrice: '440', netAmount: 352000 },
+      { id: 'l1', seq: 10, styleId: 's1', style: { code: 'STY-01', name: 'Giacca' }, colourway: { code: 'BLK', name: 'Nero' }, picture: { fileId: 'f1', contentType: 'image/webp', small: { url: 'https://files.example.com/f1.webp', expiresAt: '2026-11-19T10:01:00.000Z' } }, unitPrice: '450', netAmount: 360000 },
+    ]
+    const tiles = styleTilesOf({ lines } as never)
+    expect(tiles.map((tile) => tile.key)).toEqual(['l1', 'l2'])
+    expect(tiles[0]).toEqual({ key: 'l1', styleId: 's1', styleCode: 'STY-01', styleName: 'Giacca', colour: 'BLK Nero', fileId: 'f1', small: { url: 'https://files.example.com/f1.webp', expiresAt: '2026-11-19T10:01:00.000Z' } })
+    expect(tiles[1]).toMatchObject({ colour: null, fileId: null, small: null })
+    expect(JSON.stringify(tiles)).not.toMatch(/unitPrice|netAmount|440|450/)
+  })
+
+  it('the sheet reads it through the walled order read, once per viewer (the viewer asks while open)', () => {
+    const source = readFileSync(new URL('./use-orders-sheet.ts', import.meta.url), 'utf8')
+    expect(source).toContain('readStyles: (orderId, signal) => getOrder(api, orderId, signal).then(styleTilesOf)')
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('readStyles={actions?.readStyles /* F-CP-110: every style of the order */}')
+  })
+})
+// ---- end F-CP-110

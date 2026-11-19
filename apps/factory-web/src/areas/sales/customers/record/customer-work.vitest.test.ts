@@ -697,3 +697,31 @@ describe('F-CP-104: New order and Import orders open on the customer page', () =
   })
 })
 // ---- end F-CP-104
+
+// ---- F-CP-113 (customer page plan C2a; review A2): "Add the lines" opens the lines editor in a large window on this page ------------
+describe('F-CP-113: the lines editor in a large window on the customer page', () => {
+  const tab = () => readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+
+  it('"Add the lines" hands the header to the page\'s window (the New order window closes); Sales › Orders keeps the editor\'s page', () => {
+    expect(tab()).toContain('onAddLines: setLines, // F-CP-113')
+    const sheet = readFileSync(new URL('../../orders/list/use-orders-sheet.ts', import.meta.url), 'utf8')
+    expect(sheet).toContain('if (host.onAddLines) {')
+    expect(sheet).toContain('return host.onAddLines(header)')
+    expect(sheet).toContain('router.push(newOrderAddress(prefix, header))')
+  })
+
+  it('no address term and no page hop: the window lives in the page\'s memory; Confirm closes it on the new order and says so', () => {
+    const source = tab()
+    expect(source.match(/router\.replace\(/g)?.length).toBe(1)
+    expect(source).toContain("toast(o('newOrder.window.made', { number: order.number }), 'success')")
+    expect(source).toContain('if (can.threads) onPick(pickOfRow({ id: order.id, number: order.number, companyId: lines.companyId }))')
+    expect(source).toContain('onDiscarded={() => setLines(null)}')
+    expect(source).toContain('onClose={() => setLines(null)}')
+  })
+
+  it('the design cases: the window with lines, without prices, and the Discard question', () => {
+    const fixtures = readFileSync(new URL('./fixtures.ts', import.meta.url), 'utf8')
+    for (const id of ['work-new-order-lines', 'work-new-order-lines-no-price', 'work-new-order-discard']) expect(fixtures).toContain(`id: '${id}'`)
+  })
+})
+// ---- end F-CP-113

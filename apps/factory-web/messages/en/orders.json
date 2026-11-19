@@ -1413,6 +1413,14 @@
     "problems_other": "{count} things stop the order",
     "problem": {
       "past": "A date is today or later."
+    },
+    "discardAsk": {
+      "title": "Discard this new order?",
+      "body": "What you typed is lost: the lines ({lines}), the dates and the note. Nothing was saved yet.",
+      "keep": "Keep typing"
+    },
+    "window": {
+      "made": "Order {number} made: it joins the list with the next updates."
     }
   },
   "portal": {

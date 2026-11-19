@@ -1413,6 +1413,14 @@
     "problems_other": "{count} cose bloccano l'ordine",
     "problem": {
       "past": "Una data è oggi o dopo."
+    },
+    "discardAsk": {
+      "title": "Scartare questo nuovo ordine?",
+      "body": "Quello che hai scritto va perso: le righe ({lines}), le date e la nota. Non era ancora salvato nulla.",
+      "keep": "Continua a scrivere"
+    },
+    "window": {
+      "made": "Ordine {number} creato: entra nell'elenco con i prossimi aggiornamenti."
     }
   },
   "portal": {

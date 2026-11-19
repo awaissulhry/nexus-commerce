@@ -159,7 +159,7 @@ function Loaded({ model, actions, thread, row, nav, onClose, onNext, companyName
           <span className="fw-rp-sep" aria-hidden>
             —
           </span>
-          <span className="fw-rp-subject">{t('catalogue.title', { number })}</span>
+          <span className="fw-rp-subject">{model.draft ? model.draft.title /* F-CP-107: a draft has no number yet */ : t('catalogue.title', { number })}</span>
         </h2>
         <span className="fw-rp-state">
           <Pill tone={STATE_TONE[request.status]}>{request.words[locale]}</Pill>
@@ -212,7 +212,8 @@ function Loaded({ model, actions, thread, row, nav, onClose, onNext, companyName
       {model.offline && <Banner tone="warning" title={t('record.offline')} />}
       <NoticeLine notice={model.notice} onDismiss={actions?.onDismissNotice} />
       <div className="fw-rp-row2">
-        <div className="fw-rp-actions">{main ? (['order', 'quote', 'refuse'] as const).map(button) : <span className="fw-inq-hint">{say(outcome)}</span>}</div>
+        {/* F-CP-107: a draft shows the decisions it will have, each held with why ("The customer is still writing it"). */}
+        <div className="fw-rp-actions">{main || (model.draft && request.status === 'DRAFT') ? (['order', 'quote', 'refuse'] as const).map(button) : <span className="fw-inq-hint">{say(outcome)}</span>}</div>
       </div>
       {main && ship?.approvalStatus === 'WAITING' && <p className="fw-inq-hint">{t('catalogue.shipToWaiting')}</p>}
       <div className="fw-rp-body">

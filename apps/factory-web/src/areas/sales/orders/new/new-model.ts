@@ -53,6 +53,9 @@ export interface NewOrderDraft {
 
 export const EMPTY_DRAFT: NewOrderDraft = Object.freeze({ lines: [], requestedDate: '', promiseDate: '', internalNote: '' }) as NewOrderDraft
 
+/** F-CP-113: something typed that Discard would lose (a line with pieces or not, a date, the note) — Discard asks first then. */
+export const typedSomething = (draft: NewOrderDraft): boolean => draft.lines.length > 0 || !!draft.requestedDate || !!draft.promiseDate || draft.internalNote.trim() !== ''
+
 /** The session-storage key of a draft (one per company and customer). */
 export const draftKey = (header: Pick<NewOrderHeader, 'companyId' | 'partyId'>): string => `factory:new-order:${header.companyId}:${header.partyId}`
 
@@ -163,6 +166,8 @@ export interface NewOrderModel {
   newLineOptions?: (line: DraftLine) => ReactNode
   /** B-TH-231: the customer's files held until Confirm (absent: no fold). */
   files?: CustomerFilesModel
+  /** F-CP-113: Discard asked to confirm (what was typed would be lost). */
+  discardAsk?: boolean
 }
 
 export interface NewOrderActions {
@@ -175,6 +180,11 @@ export interface NewOrderActions {
   onComposerAdd?: () => void
   onConfirm?: () => void
   onDiscard?: () => void
+  /** F-CP-113: the Discard question's two answers. */
+  onDiscardConfirm?: () => void
+  onDiscardCancel?: () => void
+  /** F-CP-113: the window's × / Esc — closed, the typed lines kept in this tab. */
+  onClose?: () => void
   onRetry?: () => void
   /** B-TH-231: the fold's own actions. */
   files?: CustomerFilesActions
