@@ -907,7 +907,16 @@
       "waits": "Waiting for production: {numbers} — decide on this page"
     },
     "applyPriced": "Apply as a priced change",
-    "pricedMore": "Extra deposit and words for the customer…"
+    "pricedMore": "Extra deposit and words for the customer…",
+    "line": {
+      "text": "Text…",
+      "description": "Description",
+      "note": "Note for production (no prices)",
+      "remove": "Remove line",
+      "removed": "Removed: type its sizes again to keep it",
+      "loses_one": "{numbers} loses this line",
+      "loses_other": "{numbers} lose this line"
+    }
   },
   "editor": {
     "add": {

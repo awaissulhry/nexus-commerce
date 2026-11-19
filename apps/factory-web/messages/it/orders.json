@@ -907,7 +907,16 @@
       "waits": "In attesa della produzione: {numbers} — decidi in questa pagina"
     },
     "applyPriced": "Applica come modifica con prezzo",
-    "pricedMore": "Acconto aggiuntivo e parole per il cliente…"
+    "pricedMore": "Acconto aggiuntivo e parole per il cliente…",
+    "line": {
+      "text": "Testo…",
+      "description": "Descrizione",
+      "note": "Nota per la produzione (senza prezzi)",
+      "remove": "Togli la riga",
+      "removed": "Tolta: scrivi di nuovo le taglie per tenerla",
+      "loses_one": "{numbers} perde questa riga",
+      "loses_other": "{numbers} perdono questa riga"
+    }
   },
   "editor": {
     "add": {

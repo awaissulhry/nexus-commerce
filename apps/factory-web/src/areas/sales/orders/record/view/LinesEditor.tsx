@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Plus, Search } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
+import { Banner, Card, Disclosure, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
 import { SizeGridEditor, type SizeGridIssue } from '@nexus/ui/grid/size-grid/index'
 import { Button, Checkbox, Input, RadioCard, Spinner, Tag } from '@nexus/ui/primitives'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
+import { Textarea } from '../../../../../lib/i18n/ds-parts' // F-OP-109
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { StyleDetail } from '../../../quotes/api'
 import { money, unitPrice } from '../../../quotes/model'
@@ -32,6 +33,8 @@ export interface LinesEditorModel {
   floors?: CellFloors
   /** F-OP-107: each order line's "Cut 40 · Sewn 32 · Shipped 0" (the production read); absent: not said (a typed order). */
   figures?: Record<string, LineFigures>
+  /** F-OP-109: a removed line's work orders that lose it (the preview's plan: "WO-0311 loses this line"), by order line. */
+  losing?: Record<string, { readonly numbers: string; readonly count: number }>
   /** A typed order: each line's net and its resolved unit price, from the preview (by line key). */
   nets?: Record<string, number | undefined>
   listPrices?: Record<string, string | undefined>
@@ -195,6 +198,36 @@ function figuresText(figures: LineFigures, t: (key: string, params?: Record<stri
 }
 // ---- end F-OP-107
 
+// ---- F-OP-109: per line in edit mode — Text… (the description and the note for production, never a price) and Remove line ----
+function LineActs({ line, model, actions }: { line: DraftLine; model: LinesEditorModel; actions?: EditorActions }) {
+  const t = useT('orders')
+  const removed = !!line.lineId && piecesOf(line) === 0
+  const losing = line.lineId ? model.losing?.[line.lineId] : undefined
+  return (
+    <span className="fw-so-stack-tight">
+      <span className="fw-so-inline">
+        <Disclosure summary={t('edit.line.text')}>
+          <span className="fw-so-stack-tight">
+            <Field label={t('edit.line.description')}>
+              <Textarea value={line.text?.description ?? ''} onChange={(event) => actions?.onText?.(line.key, 'description', event.target.value)} rows={2} maxLength={1000} />
+            </Field>
+            <Field label={t('edit.line.note')}>
+              <Textarea value={line.text?.note ?? ''} onChange={(event) => actions?.onText?.(line.key, 'note', event.target.value)} rows={2} maxLength={2000} />
+            </Field>
+          </span>
+        </Disclosure>
+        {line.lineId && (
+          <Button size="sm" variant="quiet" heldReason={removed ? t('edit.line.removed') : model.busy ? t('held.busy') : null} onClick={() => actions?.onRemove?.(line.key)}>
+            {t('edit.line.remove')}
+          </Button>
+        )}
+      </span>
+      {removed && losing && <span className="fw-so-cell-sub">{t('edit.line.loses', { numbers: losing.numbers, count: losing.count })}</span>}
+    </span>
+  )
+}
+// ---- end F-OP-109
+
 function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines: DraftLine[]; model: LinesEditorModel; actions?: EditorActions }) {
   const t = useT('orders')
   const sales = useT('sales')
@@ -225,6 +258,8 @@ function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines:
           {names.colour}
           {/* F-OP-107: what is cut, sewn and shipped of the line (a step not counted there is not said). */}
           {line.lineId && model.figures?.[line.lineId] && <span className="fw-so-cell-sub">{figuresText(model.figures[line.lineId]!, t)}</span>}
+          {/* F-OP-109: edit mode's own per line — Text… (description, note for production) and Remove line (a line in work orders too). */}
+          {model.mode === 'amend' && <LineActs line={line} model={model} actions={actions} />}
           {/* B-W2b-374 (XF3:02): a new line takes its options when it is made. */}
           {!line.lineId && model.newLineOptions?.(line)}
         </span>,

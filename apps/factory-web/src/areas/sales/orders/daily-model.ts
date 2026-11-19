@@ -151,6 +151,8 @@ export interface DraftLine {
   locked: boolean
   /** B-W2b-374 (XF3:02): a new line's options, chosen in its Options dialog (sent with the line). */
   options?: PickBody[]
+  /** F-OP-109: the line's description and its note for production (no prices), as typed in edit mode; absent: not edited here. */
+  text?: { readonly description: string; readonly note: string }
 }
 
 export const newKey = (styleId: string, colourwayId: string): string => `new:${styleId}:${colourwayId}`
@@ -169,6 +171,7 @@ export function draftOf(order: Pick<Order, 'lines'>): DraftLine[] {
       sizes: Object.fromEntries(line.sizes.flatMap((size) => (size.size === null ? [] : [[size.size, size.quantity]]))),
       price: line.unitPrice ?? '',
       locked: !!line.closedShort || line.kind !== 'SIZE_GRID',
+      text: { description: line.description ?? '', note: line.note ?? '' }, // F-OP-109
     }))
 }
 
@@ -243,6 +246,19 @@ export const badPrice = (line: Pick<DraftLine, 'price'>): boolean => line.price.
 
 export type DraftChange = 'added' | 'removed' | 'changed'
 
+// ---- F-OP-109: a line's text in edit mode ----
+/** The description and note an amendment sends for a line: only what differs from the order's (empty: cleared); a new line's when typed. */
+export function textOf(line: Pick<DraftLine, 'text'>, own: Pick<OrderLine, 'description' | 'note'> | null): { description?: string | null; note?: string | null } {
+  if (!line.text) return {}
+  const out: { description?: string | null; note?: string | null } = {}
+  for (const field of ['description', 'note'] as const) {
+    const typed = line.text[field].trim() || null
+    if (typed !== (own?.[field] ?? null)) out[field] = typed
+  }
+  return out
+}
+// ---- end F-OP-109
+
 /** What happens to each line of the draft (null: nothing). */
 export function changeOf(line: DraftLine, order: Pick<Order, 'lines'> | null): DraftChange | null {
   if (!line.lineId) return piecesOf(line) > 0 ? 'added' : null
@@ -250,6 +266,7 @@ export function changeOf(line: DraftLine, order: Pick<Order, 'lines'> | null): D
   if (!own || line.locked) return null
   if (piecesOf(line) === 0) return 'removed'
   if (!sameSizes(own, line)) return 'changed'
+  if (Object.keys(textOf(line, own)).length > 0) return 'changed' // F-OP-109
   if (line.price.trim() !== '' && parsePrice(line.price) !== null && Number(parsePrice(line.price)) !== Number(own.unitPrice ?? 'NaN')) return 'changed'
   return null
 }
@@ -271,12 +288,12 @@ export function amendPairs(lines: readonly DraftLine[], order: Pick<Order, 'line
       if (piecesOf(line) === 0) continue
       const price = parsePrice(line.price)
       const priceChanged = price !== null && Number(price) !== Number(own.unitPrice ?? 'NaN')
-      out.push({ draft: line, input: { id: line.lineId, sizes: sizeInputs(line), ...(priceChanged ? { unitPrice: price } : {}) } })
+      out.push({ draft: line, input: { id: line.lineId, sizes: sizeInputs(line), ...(priceChanged ? { unitPrice: price } : {}), ...textOf(line, own) /* F-OP-109 */ } })
       continue
     }
     if (piecesOf(line) === 0) continue
     const price = parsePrice(line.price)
-    out.push({ draft: line, input: { styleId: line.styleId, colourwayId: line.colourwayId, sizes: sizeInputs(line), ...(price !== null ? { unitPrice: price } : {}), ...(line.options?.length ? { options: line.options } : {}) } })
+    out.push({ draft: line, input: { styleId: line.styleId, colourwayId: line.colourwayId, sizes: sizeInputs(line), ...(price !== null ? { unitPrice: price } : {}), ...(line.options?.length ? { options: line.options } : {}), ...textOf(line, null) /* F-OP-109 */ } })
   }
   return out
 }
@@ -549,6 +566,9 @@ export function workOrderWords(wo: StripWorkOrder, t: Translate, locale: 'it' | 
   return [what, t(wo.now ? 'edit.strip.wo.now' : 'edit.strip.wo.waits'), ...(wo.held ? [saidIn(wo.held, locale)] : []), ...(wo.reprint ? [t('edit.strip.wo.reprint')] : [])].join(' · ')
 }
 // ---- end F-OP-107 (the picker)
+
+/** F-OP-109: the work orders of the strip that make an order line ("WO-0311 loses this line" when it is removed); none when not said. */
+export const workOrdersOfLine = (workOrders: readonly StripWorkOrder[], lineId: string): readonly StripWorkOrder[] => workOrders.filter((wo) => wo.lineIds.includes(lineId))
 
 /** The work orders an answer names, as numbers ("WO-0311, WO-0312"); one this reader does not reach reads "WO-…". */
 export const followedNumbers = (entries: readonly { readonly number: string | null }[]): string => entries.map((entry) => entry.number ?? 'WO-…').join(', ')

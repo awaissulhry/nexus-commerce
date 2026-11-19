@@ -290,6 +290,9 @@ export interface OrderRecordActions {
   // F-OP-108: `asPriced` — a frozen field makes it "Apply as a priced change" (the strip's fee goes with it).
   onAmendApply?: (asPriced?: boolean) => void
   onAmendFee?: (text: string) => void
+  /** F-OP-109: a line's Text… (its description or note for production), and Remove line (every size to 0). */
+  onAmendText?: (key: string, field: 'description' | 'note', text: string) => void
+  onAmendRemove?: (key: string) => void
   /** F-OP-107 (B2): the extra pieces' outcome (the strip's picker). */
   onAmendOutcome?: (outcome: ExtraOutcome) => void
   /** F-OP-107: read Close remaining lines' preview of the lines chosen. */
@@ -325,6 +328,9 @@ export interface OrderRecordActions {
 export interface EditorActions {
   onCells?: (styleId: string, next: Record<string, Record<string, number>>) => void
   onPrice?: (key: string, text: string) => void
+  /** F-OP-109 (amend mode): a line's description or note for production; Remove line. */
+  onText?: (key: string, field: 'description' | 'note', text: string) => void
+  onRemove?: (key: string) => void
   onComposerQuery?: (query: string) => void
   onComposerPick?: (styleId: string | null) => void
   onComposerToggle?: (colourwayId: string) => void

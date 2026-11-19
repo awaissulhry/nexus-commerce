@@ -38,6 +38,8 @@ export type LinesActsActions = Pick<
   | 'onAmendApply'
   | 'onAmendOutcome' // F-OP-107
   | 'onAmendFee' // F-OP-108
+  | 'onAmendText' // F-OP-109
+  | 'onAmendRemove' // F-OP-109
   | 'onClosePreview' // F-OP-107
   | 'onComposerQuery'
   | 'onComposerPick'
@@ -275,6 +277,9 @@ export function useLinesActs(
     },
     onAmendOutcome: (outcome) => setAmend((known) => (known ? { ...known, extraOutcome: outcome } : known)), // F-OP-107
     onAmendFee: (text) => setAmend((known) => (known ? { ...known, fee: text } : known)), // F-OP-108
+    // ---- F-OP-109: a line's text, and Remove line (a line in work orders too: they follow; its cut pieces go to the picker) ----
+    onAmendText: (key, field, text) => setAmend((known) => (known ? { ...known, lines: known.lines.map((line) => (line.key === key ? { ...line, text: { description: line.text?.description ?? '', note: line.text?.note ?? '', [field]: text } } : line)) } : known)),
+    onAmendRemove: (key) => setAmend((known) => (known ? { ...known, lines: known.lines.map((line) => (line.key === key && !line.locked ? { ...line, sizes: {} } : line)) } : known)),
     // ---- F-OP-107: Close remaining lines' preview of the lines chosen (nothing written) ----
     onClosePreview: (lineIds) => {
       const mine = ++closeSeq.current

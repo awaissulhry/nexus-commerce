@@ -1446,3 +1446,55 @@ describe('F-OP-108: a frozen field — Apply as a priced change, its optional fe
   })
 })
 // ---- end F-OP-108
+
+// ---- F-OP-109: per line in edit mode — Text… (description, note for production) and Remove line (a line in work orders too) -------
+describe('F-OP-109: a line\'s text and Remove line in edit mode; a removed line in work orders says which work order loses it', () => {
+  const production = order('IN_PRODUCTION')
+  const black = lineOf(production, 10)
+  const red = lineOf(production, 20)
+
+  it('the draft starts with each line\'s text; only what differs is sent (empty clears it); a new line sends its own when typed', async () => {
+    const { textOf } = await import('./daily-model')
+    const draft = draftOf(production)
+    expect(draft.find((line) => line.lineId === black.id)?.text).toEqual({ description: black.description ?? '', note: black.note ?? '' })
+    expect(changeCount(draft, production)).toBe(0)
+    const typed = draft.map((line) => (line.lineId === black.id ? { ...line, text: { description: 'Pocket on the left', note: 'Double stitch at the collar' } } : line))
+    expect(changeCount(typed, production)).toBe(1)
+    expect(amendLines(typed, production)[0]).toMatchObject({ id: black.id, description: 'Pocket on the left', note: 'Double stitch at the collar' })
+    // Unchanged text is not sent; a text cleared is sent as null (the API's "blank to null").
+    expect(textOf({ text: { description: black.description ?? '', note: black.note ?? '' } }, black)).toEqual({})
+    expect(textOf({ text: { description: '   ', note: black.note ?? '' } }, { ...black, description: 'Old words' })).toEqual({ description: null })
+    expect(textOf({ text: { description: 'New', note: '' } }, null)).toEqual({ description: 'New' })
+    expect(textOf({}, black)).toEqual({})
+  })
+
+  it('Remove line: every size to 0 — the line is left out (a line in work orders too: it is closed short by the API, B-OP-014)', async () => {
+    const { workOrdersOfLine } = await import('./daily-model')
+    const removed = draftOf(production).map((line) => (line.lineId === red.id ? { ...line, sizes: {} } : line))
+    expect(amendLines(removed, production).map((input) => ('id' in input ? input.id : null))).toEqual([black.id])
+    expect(changeCount(removed, production)).toBe(1)
+    const wos = [
+      { key: 'w1', number: 'WO-0311', route: 'LOWER_RELEASED' as const, before: 4, after: 0, now: false, held: null, reprint: false, lineIds: [red.id] },
+      { key: 'w2', number: 'WO-0312', route: 'SET_DRAFT_CELLS' as const, before: 2, after: 2, now: true, held: null, reprint: false, lineIds: [black.id] },
+    ]
+    expect(workOrdersOfLine(wos, red.id).map((wo) => wo.number)).toEqual(['WO-0311'])
+    expect(workOrdersOfLine(wos, 'none')).toEqual([])
+    const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    expect(en('edit.line.loses', { numbers: 'WO-0311', count: 1 })).toBe('WO-0311 loses this line')
+  })
+
+  it('the editor: Text… and Remove line only in edit mode (Remove held once removed, with words); the colour change stays deferred', () => {
+    const editor = readFileSync(new URL('./record/view/LinesEditor.tsx', import.meta.url), 'utf8')
+    expect(editor).toContain("{model.mode === 'amend' && <LineActs line={line} model={model} actions={actions} />}")
+    expect(editor).toContain("heldReason={removed ? t('edit.line.removed')")
+    expect(editor).not.toContain("t('edit.line.colour')")
+    const acts = readFileSync(new URL('./record/use-lines-acts.ts', import.meta.url), 'utf8')
+    expect(acts).toContain("line.key === key && !line.locked ? { ...line, sizes: {} } : line")
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['edit.line.text', 'edit.line.description', 'edit.line.note', 'edit.line.remove', 'edit.line.removed']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('edit.line.loses', { numbers: 'WO-1, WO-2', count: 2 }), locale).not.toBe('edit.line.loses')
+    }
+  })
+})
+// ---- end F-OP-109

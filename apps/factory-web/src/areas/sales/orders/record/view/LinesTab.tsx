@@ -22,6 +22,8 @@ import { amendKeyOf, amendPairs, changeLabel, namesOf, sizesText, stripHeld, str
 import { cellFloorsOf, extraChoicesOf, heldWordsOf, lineFiguresOf } from '../../daily-model'
 // ---- F-OP-108: a frozen field turns Apply into "Apply as a priced change" with its optional fee (one button) ----
 import { feeHeld, pricedOfferOf } from '../../daily-model'
+// ---- F-OP-109: a removed line's work orders ("WO-0311 loses this line") ----
+import { followedNumbers, piecesOf, workOrdersOfLine } from '../../daily-model'
 import { ExtraPieces } from '../../../../home/approvals/requests/view/ExtraPieces'
 import { ConversationTick } from '../../../../home/approvals/requests/view/ConversationTick'
 import { tellHeld, tickOn } from '../../../../home/approvals/requests/model'
@@ -247,6 +249,13 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
   }
   const strip = stripOf({ order, review: amend.review, key: amendKeyOf(amend, order), local, price: model.can.price, label })
   const offer = pricedOfferOf(strip, model.depth?.freeze?.value ?? null) // F-OP-108
+  // F-OP-109: each removed line of the order, with the work orders of the preview that lose it.
+  const losing = Object.fromEntries(
+    amend.lines.flatMap((line) => {
+      const wos = line.lineId && !line.locked && piecesOf(line) === 0 ? workOrdersOfLine(strip.workOrders, line.lineId) : []
+      return wos.length > 0 ? [[line.lineId!, { numbers: followedNumbers(wos), count: wos.length }]] : []
+    }),
+  )
   const asPriced = offer === 'priced'
   const held = stripHeld(strip, { reason: amend.reason, busy: model.busy, local, extraOutcome: amend.extraOutcome, offer, fee: amend.fee })
   const heldText = held ? heldWordsOf(held, t, locale) : null
@@ -305,8 +314,8 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
         </div>
       </Card>
       <LinesEditor
-        model={{ mode: 'amend', lines: amend.lines, order, styles: amend.styles, composer: amend.composer, price: model.can.price, currency: order.currency, priceBasis: order.priceBasis, minimums, floors /* F-OP-107 */, figures: lineFiguresOf(read) /* F-OP-107 */, busy: model.busy, frozen: frozenIssues(model.depth, d) /* B-W2b-323 */, newLineOptions: model.newLineOptions /* B-W2b-374 */ }}
-        actions={{ onCells: actions?.onAmendCells, onPrice: actions?.onAmendPrice, onComposerQuery: actions?.onComposerQuery, onComposerPick: actions?.onComposerPick, onComposerToggle: actions?.onComposerToggle, onComposerAdd: actions?.onComposerAdd }}
+        model={{ mode: 'amend', lines: amend.lines, order, styles: amend.styles, composer: amend.composer, price: model.can.price, currency: order.currency, priceBasis: order.priceBasis, minimums, floors /* F-OP-107 */, figures: lineFiguresOf(read) /* F-OP-107 */, losing /* F-OP-109 */, busy: model.busy, frozen: frozenIssues(model.depth, d) /* B-W2b-323 */, newLineOptions: model.newLineOptions /* B-W2b-374 */ }}
+        actions={{ onCells: actions?.onAmendCells, onPrice: actions?.onAmendPrice, onComposerQuery: actions?.onComposerQuery, onComposerPick: actions?.onComposerPick, onComposerToggle: actions?.onComposerToggle, onComposerAdd: actions?.onComposerAdd, onText: actions?.onAmendText /* F-OP-109 */, onRemove: actions?.onAmendRemove /* F-OP-109 */ }}
       />
     </div>
   )

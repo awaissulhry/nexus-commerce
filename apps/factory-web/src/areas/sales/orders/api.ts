@@ -766,8 +766,11 @@ export async function createManualOrder(api: ApiClient, body: ManualOrderBody, i
   return (await api.post('/sales/orders/manual', { body, schema: one, idempotencyKey })).order
 }
 
-/** An existing line as an amendment keeps it (its whole size grid; none: unchanged), or a new line. */
-export type AmendLineInput = { id: string; sizes?: SizeInput[]; unitPrice?: string | null } | NewLineInput
+/**
+ * An existing line as an amendment keeps it (its whole size grid; none: unchanged), or a new line. F-OP-109: its description and note
+ * for production (none: unchanged; empty: cleared).
+ */
+export type AmendLineInput = ({ id: string; sizes?: SizeInput[]; unitPrice?: string | null } | NewLineInput) & { description?: string | null; note?: string | null }
 
 export interface AmendBody {
   reason?: string
