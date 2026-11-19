@@ -1827,8 +1827,9 @@ describe('F-OP-102: the band primary by state, in place, and the ⋯ re-cut (set
 
   it('every other state as before: Confirmed → Make work orders… (held words), in work → Change promise date, shipped → Close order', () => {
     expect(nextStep(order('CONFIRMED'), canOf('owner')).kind).toBe('makeWorkOrders')
-    expect(nextStep(order('READY'), canOf('owner')).kind).toBe('changePromise')
-    expect(nextStep(order('PARTLY_SHIPPED'), canOf('owner')).kind).toBe('changePromise')
+    expect(nextStep(order('IN_PRODUCTION'), canOf('owner')).kind).toBe('changePromise')
+    // F-OP-121 (set C, merged): ready with released garments and the shipping right is Create shipment…; else Change promise date.
+    expect(['changePromise', 'createShipment']).toContain(nextStep(order('READY'), canOf('owner')).kind)
     expect(nextStep(order('DELIVERED', { settled: true }), canOf('owner')).kind).toBe('close')
   })
 

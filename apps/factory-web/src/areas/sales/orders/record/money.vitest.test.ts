@@ -64,6 +64,21 @@ describe('F-OP-118: Money = this order\'s share', () => {
     expect(tab).not.toMatch(/customerBalance|partyBalance|openCredit|creditLimit/)
   })
 
+  // Lane agreement (the Owner: "Sales = no price"): a reader without the money.price grain reads the app's held words — no figure,
+  // no empty zero; the invoices keep their numbers and states, their amounts, share, freight and "settled when" stay away.
+  it('without the price grain: the held words in place of every figure (summary.noPrice), no amount column, no freight, no settled line', () => {
+    const tab = readFileSync(new URL('./view/MoneyTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("<p className=\"fw-so-hint\">{t('summary.noPrice')}</p>")
+    expect(tab).toContain('const showMoney = model.can.price && !!settlement')
+    expect(tab).toContain('const freight = amounts && model.can.price ? freightOf(amounts) : null')
+    // Without the grain the API drops openAmount (money.price): "Settled when …" is not said either.
+    expect(settledWhenOf(settlement({ invoices: [invoice({ openAmount: undefined, grossTotal: undefined, share: undefined })] }) as never)).toBeNull()
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      expect(t('summary.noPrice'), locale).not.toBe('summary.noPrice')
+    }
+  })
+
   it('the words exist in both languages', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
