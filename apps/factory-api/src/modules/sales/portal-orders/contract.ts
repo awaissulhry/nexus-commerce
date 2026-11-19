@@ -220,6 +220,8 @@ const shipment = output({
   ),
   events: z.array(trackingEvent),
   lines: z.array(output({ lineSeq: z.number().int(), style: named.nullable(), colourway: named.nullable(), size: z.string().nullable(), quantity: z.number().int() })),
+  /** B-OP-044 (order page N6): the customer's other orders this shipment carries — "also N pieces of your order #12" (empty while held off). */
+  otherOrders: z.array(output({ yourNumber, customerRef: z.string().nullable(), pieces: z.number().int() })),
   papers: z.array(output({ fileId: id(), name: z.string(), contentType: z.string(), sizeBytes: z.number().int(), versionNo: z.number().int() })),
 })
 

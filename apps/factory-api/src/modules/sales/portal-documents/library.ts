@@ -55,6 +55,8 @@ import {
   type Reader, // B-PR-44
   type SharedFileRow,
 } from './store'
+// B-OP-044 (order page N6, lines-derived): the orders a shipment carries.
+import { orderIdsOfShipments } from '../../shipping/shipments/orders-of'
 
 /**
  * A customer's document library (B-W2b-178; SAL-086, SAL-092, QHS-111; design portal.customer.documents › Which documents,
@@ -188,14 +190,17 @@ export async function readLibrary(app: FastifyInstance, request: FastifyRequest,
     const ordersOfQuotes = await readOrdersOfVersions(client, accepted)
     // B-PR-44: an order line's files (its artwork shown to the customer) and its quote line's artwork are the order's.
     const lineOrders = await readLineOrders(client, files)
+    // B-OP-044 (order page N6): a shared shipment's papers are on every order it carries (all the customer's own).
+    const carried = await orderIdsOfShipments(client, shipments)
     const orderIds = uniq([
       ...files.filter((file) => file.recordType === 'SalesOrder').map((file) => file.recordId),
       ...shipments.map((shipment) => shipment.salesOrderId),
+      ...[...carried.values()].flat(),
       ...invoices.map((invoice) => invoice.salesOrderId),
       ...lineOrders.values(), // B-PR-44
     ])
     const orders = [...(await readOrders(client, orderIds)), ...ordersOfQuotes]
-    return { files, invoices, shipments, quotes, versions, orders, lineOrders }
+    return { files, invoices, shipments, quotes, versions, orders, lineOrders, carried }
   })
 
   // 2. The tenant's, for exactly those.
@@ -295,7 +300,8 @@ export async function readLibrary(app: FastifyInstance, request: FastifyRequest,
       expiresOn: day(file.expiresOn),
       series,
       superseded: file.supersededAt !== null,
-      orderIds: uniq([forRecord?.order?.id]),
+      // B-OP-044: a shipment's paper is on every order it carries.
+      orderIds: uniq([forRecord?.order?.id, ...(file.recordType === 'Shipment' ? (own.carried.get(file.recordId) ?? []) : [])]),
       shipmentId: file.recordType === 'Shipment' ? file.recordId : null,
       compliance: compliance && (kind === 'DECLARATION_OF_CONFORMITY' || kind === 'USER_INFORMATION') ? { styleId: compliance.styleId, revision: compliance.revision, certificateId: compliance.certificateId } : null,
       withdrawn: compliance?.status === 'WITHDRAWN' ? { replacedBy: null } : null,

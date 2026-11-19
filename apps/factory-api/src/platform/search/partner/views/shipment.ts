@@ -1,5 +1,7 @@
 import { definePartnerView, equalsTyped, holdsTyped, idsOf } from '../view'
 import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-portal-numbers-1
+// B-OP-044 (order page N6, lines-derived): the orders a shipment carries.
+import { orderRefsOfShipments } from '../../../../modules/shipping/shipments/orders-of'
 
 /**
  * A customer's deliveries (modules/shipping/shipments; the index's ../../indexers/shipment.ts), once shipped: our number,
@@ -22,10 +24,13 @@ export default definePartnerView({
         number: true,
         status: true,
         shippedAt: true,
+        salesOrderId: true, // B-OP-044
         salesOrder: { select: { number: true, customerRef: true, customerSeq: true /* fix-portal-numbers-1 */ } },
         parcels: { where: { trackingNumber: { not: null } }, select: { trackingNumber: true }, orderBy: { seq: 'asc' }, take: TRACKING },
       },
     })
+    // B-OP-044 (order page N6): the customer's other orders it carries are matched too (all its own: the partner reads its party).
+    const ordersOf = await orderRefsOfShipments(client, rows)
     return rows.map((row) => ({
       id: row.id,
       companyId: row.companyId,
@@ -36,13 +41,22 @@ export default definePartnerView({
       subtitle: customerRefOf('ORDER', row.salesOrder.customerSeq),
       status: row.status,
       date: row.shippedAt,
-      words: [row.salesOrder.number, ...row.parcels.map((parcel) => parcel.trackingNumber)],
+      words: [row.salesOrder.number, ...row.parcels.map((parcel) => parcel.trackingNumber), ...(ordersOf.get(row.id) ?? []).slice(1).flatMap((ref) => [ref.number, ref.customerRef])],
     }))
   },
   async lookup(client, typed, take) {
     return idsOf(
       await client.shipment.findMany({
-        where: { ...SHIPPED, OR: [{ number: equalsTyped(typed) }, { salesOrder: { customerRef: holdsTyped(typed) } }, { parcels: { some: { trackingNumber: equalsTyped(typed) } } }] },
+        where: {
+          ...SHIPPED,
+          OR: [
+            { number: equalsTyped(typed) },
+            { salesOrder: { customerRef: holdsTyped(typed) } },
+            { parcels: { some: { trackingNumber: equalsTyped(typed) } } },
+            // B-OP-044: the PO of any order it carries.
+            { lines: { some: { salesOrderLine: { order: { customerRef: holdsTyped(typed) } } } } },
+          ],
+        },
         select: { id: true },
         orderBy: { shippedAt: 'desc' },
         take,

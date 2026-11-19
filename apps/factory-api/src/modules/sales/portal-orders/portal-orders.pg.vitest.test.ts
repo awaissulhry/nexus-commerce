@@ -399,3 +399,47 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
     }
   })
 })
+
+// ---- B-OP-044 (order page N6, lines-derived): a shared shipment on every order it carries, naming only the customer's own orders.
+// One garment of SEED-SO-0003 is put on SEED-SH-0001 (SEED-SO-0002's) past the guards (the API refuses it until B-OP-047).
+describe('B-OP-044: a shared shipment in the portal', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const lineId = newId()
+  const forced = async (sql: string, values: unknown[] = []) => {
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(sql, values)
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+  }
+
+  it("shows on both orders: each its own lines, and \"also N pieces of your order #12\" for the other; another customer gets 404", async () => {
+    await forced(`INSERT INTO "ShipmentLine" (id, "tenantId", "siteId", "partyId", "shipmentId", "workOrderId", "workOrderSizeId", "salesOrderLineId", size, quantity)
+       SELECT $1, c."tenantId", c."siteId", s."partyId", s.id, c."workOrderId", c.id, c."salesOrderLineId", c.size, 1
+         FROM "WorkOrderSize" c JOIN "SalesOrderLine" l ON l.id = c."salesOrderLineId" JOIN "SalesOrder" o ON o.id = l."orderId", "Shipment" s
+        WHERE o."tenantId" = $2 AND o.number = 'SEED-SO-0003' AND s."tenantId" = $2 AND s.number = 'SEED-SH-0001' LIMIT 1`, [lineId, T])
+    try {
+      const so2 = await orderId('SEED-SO-0002')
+      const so3 = await orderId('SEED-SO-0003')
+      const seqOf = async (id: string) => (await one<{ customerSeq: number | null }>('SELECT "customerSeq" FROM "SalesOrder" WHERE id = $1', [id])).customerSeq
+      const second = (await ok(browsers.buyer, `/portal/sales-orders/${so3}/shipments`)).shipments.find((row: Json) => row.number === 'SEED-SH-0001')
+      expect(second).toBeDefined()
+      expect(second.lines.map((line: Json) => line.quantity)).toEqual([1])
+      expect(second.otherOrders).toEqual([{ yourNumber: (await seqOf(so2)) === null ? null : expect.objectContaining({ seq: await seqOf(so2) }), customerRef: 'SEED-PO-78', pieces: 2 }])
+      const first = (await ok(browsers.viewer, `/portal/sales-orders/${so2}/shipments`)).shipments.find((row: Json) => row.number === 'SEED-SH-0001')
+      expect(first.lines.map((line: Json) => [line.colourway?.code, line.size, line.quantity]).sort()).toEqual([
+        ['BLK', '50', 1],
+        ['RED', '52', 1],
+      ])
+      expect(first.otherOrders).toEqual([expect.objectContaining({ pieces: 1 })])
+      // Never the office's SO-… numbers.
+      expect(JSON.stringify([first, second])).not.toMatch(/SEED-SO-000/)
+      // Another customer finds neither order.
+      expect((await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)).status).toBe(404)
+      expect((await browsers.other.get(`/portal/sales-orders/${so2}/shipments`)).status).toBe(404)
+    } finally {
+      await forced('DELETE FROM "ShipmentLine" WHERE id = $1', [lineId])
+    }
+  })
+})
+// ---- end B-OP-044
