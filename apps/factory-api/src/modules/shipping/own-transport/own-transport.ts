@@ -119,6 +119,18 @@ export async function getOwnTransport(caller: CommandCaller, shipmentId: string)
 const changed = (tools: CommandTools, shipment: ShipmentHeader) =>
   tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: shipment.status, change: 'details', partyId: shipment.partyId /* B-SA-004 */ } })
 
+// ── B-OP-030 (order page plan N5): a typed tracking number tells the office (the order's thread: ./tracking-notes.ts) ──
+/** The tracking number of a carrier booked by hand typed, corrected or cleared: the orders the shipment carries (today its one order). */
+const trackingChanged = (tools: CommandTools, shipment: ShipmentHeader, hasNumber: boolean) =>
+  tools.emit({
+    type: 'shipment.tracking_changed',
+    subject: shipment.id,
+    companyId: shipment.companyId,
+    siteId: shipment.siteId,
+    payload: { shipmentId: shipment.id, number: shipment.number, status: shipment.status, hasNumber, salesOrderIds: [shipment.salesOrderId], partyId: shipment.partyId },
+  })
+// ── end B-OP-030 ──
+
 export interface ArrangeBody extends ArrangementInput {
   readonly version?: number | undefined
 }
@@ -148,6 +160,8 @@ export async function arrangeTransport(caller: CommandCaller, shipmentId: string
         after: { mode: body.mode, transportBy: data.transportBy, carrierCode: data.carrierCode, carrierName: data.carrierName, serviceCode: null, manualTrackingNumber: data.manualTrackingNumber },
       })
       changed(tools, current)
+      // B-OP-030: a number typed (or dropped) with the arrangement tells the office too.
+      if (data.manualTrackingNumber !== facts.manualTrackingNumber) trackingChanged(tools, current, data.manualTrackingNumber !== null)
       return { shipmentId: current.id }
     },
   )
@@ -180,6 +194,7 @@ export async function typeTrackingNumber(caller: CommandCaller, shipmentId: stri
         after: { manualTrackingNumber: trackingNumber },
       })
       changed(tools, current)
+      trackingChanged(tools, current, trackingNumber !== null) // B-OP-030
       return { changed: true }
     },
   )

@@ -399,3 +399,31 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
     }
   })
 })
+
+// ---- B-OP-031 (order page plan N5): the number typed for a carrier booked by hand, on the customer's own shipments only ------------
+describe('B-OP-031: the customer sees the number typed for a carrier booked by hand ("No live tracking")', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('its own shipment carries the typed number (the labelled one none); "On the way" too; another customer sees nothing of it', async () => {
+    const so3 = await orderId('SEED-SO-0003')
+    const sh2 = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0002'])
+    // SEED-SH-0002 left with a carrier booked by hand, its number typed (written around the guards: the read is what is tested).
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(`UPDATE "Shipment" SET status = 'SHIPPED', "packedAt" = now() - interval '1 day', "shippedAt" = now() - interval '1 day', "manualTrackingNumber" = 'T-OP031-BRT-0001' WHERE id = $1`, [sh2.id])
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+    const own = await ok(browsers.buyer, `/portal/sales-orders/${so3}/shipments`)
+    expect(own.shipments).toEqual([expect.objectContaining({ number: 'SEED-SH-0002', typedTrackingNumber: 'T-OP031-BRT-0001' })])
+    const so2 = await ok(browsers.viewer, `/portal/sales-orders/${await orderId('SEED-SO-0002')}/shipments`)
+    expect(so2.shipments[0]).toMatchObject({ number: 'SEED-SH-0001', typedTrackingNumber: null })
+    const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
+    expect(transit.items.find((row: Json) => row.number === 'SEED-SH-0002')).toMatchObject({ typedTrackingNumber: 'T-OP031-BRT-0001' })
+    expect(transit.items.find((row: Json) => row.number === 'SEED-SH-0001')).toMatchObject({ typedTrackingNumber: null })
+    // The wall: another customer finds neither the order nor the number.
+    expect((await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)).status).toBe(404)
+    const theirs = await ok(browsers.other, '/portal/sales-orders/in-transit')
+    expect(theirs.items).toEqual([])
+    expect(JSON.stringify(theirs)).not.toContain('T-OP031')
+  })
+})
+// ---- end B-OP-031

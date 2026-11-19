@@ -224,6 +224,8 @@ export interface OrderRecordModel {
   readiness?: Part<ReadinessRow[]> | null
   /** F-SA-237: the order's files (the Files tab; the same read as the thread's Files window); absent: not read here. */
   files?: OrderFilesModel | null
+  /** F-OP-119: the tracking dialog of the one shipment opened on Shipments (its container: use-shipments-acts); null: none open. */
+  shipmentTracking?: ReactNode | null
   /** F-SA-236: the order's customer requests, every state (Changes: waiting on us, history); null: not read here. */
   requests?: Part<BrandRequest[]> | null
   /**
@@ -256,6 +258,8 @@ export interface PaymentInput {
 export interface OrderRecordActions {
   /** F-OP-112: Make work orders… on Production (open it; the dialog's own actions). */
   makeWorkOrders?: MakeWorkOrdersActions
+  /** F-OP-119: open the tracking number of a shipment of the order (Shipments: row ⋯, or Enter on its Tracking cell). */
+  onShipmentTracking?: (shipmentId: string) => void
   /** F-OP-111: split the parts off into new orders (the dialog's parts as typed, the optional reason). */
   onSplit?: (input: { parts: readonly SplitPartDraft[]; reason: string }) => void
   /** B-W2b-180 (design sales.orders conn "Portal › Orders & tracking"): open the order in the customer's portal, read-only. */

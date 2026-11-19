@@ -6,7 +6,7 @@ import { MilestoneTracker } from '@nexus/ui/components/MilestoneTracker/index'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { FileRow, useDsWords } from '../../../../lib/i18n/ds-parts'
 import type { ShipmentRead, ShipmentsRead } from '../api'
-import { eventLine, shipmentSteps, shipmentTone } from '../model'
+import { eventLine, shipmentSteps, shipmentTone, typedTrackingOf } from '../model'
 import { useOrderWords } from '../words'
 import { Loading, ReadFailed } from './parts'
 import type { OrderRecordActions, OrderRecordViewModel } from './OrderRecordView'
@@ -50,6 +50,7 @@ function ShipmentCard({ shipment, model, actions }: { shipment: ShipmentRead; mo
         : { label: t('shipments.shipped'), value: shipment.shippedAt ? at(shipment.shippedAt) : '—' },
   ]
   const pieces = shipment.lines.reduce((sum, line) => sum + line.quantity, 0)
+  const typed = typedTrackingOf(shipment) // F-OP-124
   return (
     <Card header={t('shipments.title', { number: shipment.number })} headingLevel={2} headerAction={<Pill tone={shipmentTone(shipment.status)}>{shipment.words[locale]}</Pill>} id={`shipment-${shipment.id}`}>
       <div className="fw-pord-stack">
@@ -62,6 +63,17 @@ function ShipmentCard({ shipment, model, actions }: { shipment: ShipmentRead; mo
           </Button>
           <span className="fw-pord-sub">{t('shipments.copyLinkHint')}</span>
         </div>
+        {/* F-OP-124 (order page plan N5): the number of a carrier booked by hand — no carrier feeds it, so no live tracking. */}
+        {typed ? (
+          <div className="fw-pord-tracking">
+            <span className="fw-pord-strong">{t('shipments.typed.label')}</span>
+            <code>{typed}</code>
+            <Button size="sm" variant="quiet" onClick={() => actions?.onCopy?.(typed)} aria-label={t('shipments.copyOf', { number: typed })}>
+              <Copy size={13} aria-hidden /> {model.copied === typed ? t('shipments.copied') : t('shipments.copy')}
+            </Button>
+            <Pill tone="neutral">{t('shipments.typed.noLive')}</Pill>
+          </div>
+        ) : null}
         {shipment.parcels.length > 0 ? (
           <ul className="fw-pord-parcels" aria-label={t('shipments.parcelsOf', { number: shipment.number })}>
             {shipment.parcels.map((parcel) => (
