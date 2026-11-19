@@ -16,11 +16,14 @@ import { definePartnerPermissions } from '../../auth/partners/permissions'
  *   addresses.view        see the organisation's delivery addresses (the ones an order request may ask for)
  *   addresses.manage      the customer admin adds, archives and chooses the default delivery address (the factory sees
  *                         who did in the customer's record)
+ *   orderDrafts.edit      B-CP-070 (customer page plan D11): start a draft order and fill it — styles, a sheet, its files,
+ *                         its header, its thread — and discard a draft one started; never send or withdraw it (that stays
+ *                         orderRequests.manage) and never a price (the role's price grain: a Designer has none)
  *
  * Given in ../../auth/roles/templates PARTNER_ADDS: the catalogue and the addresses to every customer role, order requests
- * to the customer Buyer, the address changes to the customer Admin only (the Admin follows the others by itself). The
- * office decides a sent request with the sales orders' own permissions (orders.view, orders.manage; quotes.manage for a
- * quote): no office permission is added.
+ * to the customer Buyer, the address changes to the customer Admin only (the Admin follows the others by itself). B-CP-070:
+ * the drafts to the customer Buyer and Designer (the Admin follows). The office decides a sent request with the sales
+ * orders' own permissions (orders.view, orders.manage; quotes.manage for a quote): no office permission is added.
  */
 export const PORTAL_ORDERING_DEFINITIONS = definePartnerPermissions('portal', {
   'catalogue.view': {
@@ -31,20 +34,39 @@ export const PORTAL_ORDERING_DEFINITIONS = definePartnerPermissions('portal', {
     risk: 'write',
     description: 'Make order requests: pick styles, reorder a past order at today\'s prices or upload a sheet, then send the request (the factory confirms it as an order).',
   },
+  // B-CP-070 (D11): the brand's Designer starts and fills a draft without prices; a Buyer or the Admin sends it.
+  'orderDrafts.edit': {
+    risk: 'write',
+    description: 'Start and fill draft orders with your colleagues (styles, files, dates, notes, messages) and discard one you started; a colleague who may order sends it.',
+  },
   'addresses.view': { risk: 'read', description: "See your organisation's delivery addresses." },
   'addresses.manage': { risk: 'write', description: "Add or archive your organisation's delivery addresses and choose the default one (the factory sees who did)." },
 })
 
 export const PORTAL_CATALOGUE_VIEW = 'portal.catalogue.view' satisfies Permission
 export const PORTAL_ORDER_REQUESTS_MANAGE = 'portal.orderRequests.manage' satisfies Permission
+export const PORTAL_ORDER_DRAFTS_EDIT = 'portal.orderDrafts.edit' satisfies Permission // B-CP-070
 export const PORTAL_ADDRESSES_VIEW = 'portal.addresses.view' satisfies Permission
 export const PORTAL_ADDRESSES_MANAGE = 'portal.addresses.manage' satisfies Permission
-export const PORTAL_ORDERING_PERMISSIONS: readonly Permission[] = Object.freeze([PORTAL_CATALOGUE_VIEW, PORTAL_ORDER_REQUESTS_MANAGE, PORTAL_ADDRESSES_VIEW, PORTAL_ADDRESSES_MANAGE])
+export const PORTAL_ORDERING_PERMISSIONS: readonly Permission[] = Object.freeze([PORTAL_CATALOGUE_VIEW, PORTAL_ORDER_REQUESTS_MANAGE, PORTAL_ORDER_DRAFTS_EDIT, PORTAL_ADDRESSES_VIEW, PORTAL_ADDRESSES_MANAGE])
 
 const CUSTOMER_MAIN_ROLES = ['customer-buyer', 'customer-finance', 'customer-quality', 'customer-designer', 'customer-viewer'] as const
 
+/** B-CP-070 (D11): who keeps drafts — the Buyer and the Designer (the Admin follows them). */
+const DRAFT_ROLES: readonly string[] = ['customer-buyer', 'customer-designer']
+
 /** The partner templates (keys) and what this step gives each; every customer Admin follows its kind's roles and adds its own. */
 export const PORTAL_ORDERING_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
-  ...Object.fromEntries(CUSTOMER_MAIN_ROLES.map((key) => [key, key === 'customer-buyer' ? [PORTAL_CATALOGUE_VIEW, PORTAL_ADDRESSES_VIEW, PORTAL_ORDER_REQUESTS_MANAGE] : [PORTAL_CATALOGUE_VIEW, PORTAL_ADDRESSES_VIEW]])),
+  ...Object.fromEntries(
+    CUSTOMER_MAIN_ROLES.map((key) => [
+      key,
+      [
+        PORTAL_CATALOGUE_VIEW,
+        PORTAL_ADDRESSES_VIEW,
+        ...(key === 'customer-buyer' ? [PORTAL_ORDER_REQUESTS_MANAGE] : []),
+        ...(DRAFT_ROLES.includes(key) ? [PORTAL_ORDER_DRAFTS_EDIT] : []), // B-CP-070
+      ],
+    ]),
+  ),
   'customer-admin': [PORTAL_ADDRESSES_MANAGE],
 })

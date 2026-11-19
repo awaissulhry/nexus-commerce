@@ -12,7 +12,7 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
 import { useAbuseGuard } from '../../../platform/abuse/guard'
 import { usePortalOptions } from '../../../platform/auth/portal/service'
-import { freshGuard } from '../../../platform/auth/portal/testing/portal'
+import { freshGuard, mailedCode } from '../../../platform/auth/portal/testing/portal'
 import { startHarness, type Browser, type Harness } from '../../../platform/auth/sessions/testing/harness'
 import { fanOut } from '../../../platform/notifications/fan-out'
 import { systemContext } from '../../../platform/outbox/system'
@@ -258,3 +258,89 @@ describe('B-TH-068: project people', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     ])
   })
 })
+
+// ---- B-CP-074 (customer page plan D13, K10: PROJ.members-F09 reversed for the brand only — the case it renames; wall W-CP-4) -----
+describe('B-CP-074: brand A’s admin adds and takes out its own people on a project it is a member of', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const almaPerson: Person = { id: newId(), email: `alma.admin.${NS}@studio-alpha.example`, name: 'Alma Admin' }
+  const saraPerson: Person = { id: newId(), email: `sara.admin.${NS}@supplier-beta.example`, name: 'Sara Supplier Admin' }
+  let alma: Browser
+  const people = (browser: Browser) => browser.get(`/portal/projects/${project.id}/people/choices`)
+  const versionOf = async (userId: string) => (await one<{ version: number }>('SELECT version FROM "User" WHERE id = $1', [userId])).version
+  const add = (browser: Browser, userId: string, version: number) => browser.send('POST', `/portal/projects/${project.id}/people`, { userId, version }, { headers: { 'idempotency-key': `cp074-${newId()}` } })
+  const remove = (browser: Browser, userId: string, version: number) => browser.send('DELETE', `/portal/projects/${project.id}/people/${userId}?version=${version}`, undefined, { headers: { 'idempotency-key': `cp074-${newId()}` } })
+  async function portalStepUp(browser: Browser, email: string) {
+    h.clock.advance(61_000)
+    expect((await browser.post('/portal/step-up/start')).status).toBe(200)
+    const proved = await browser.post('/portal/step-up', { code: mailedCode(h, email, 'auth.portal_step_up')!.code })
+    expect(proved.status, JSON.stringify(proved.body)).toBe(200)
+  }
+  async function partnerAdmin(who: Person, partyId: string, kind: 'CUSTOMER' | 'SUPPLIER', roleKey: string): Promise<Browser> {
+    await inTenant(h, world, async (client) => {
+      await client.user.create({ data: { id: who.id, email: who.email, displayName: who.name, status: 'ACTIVE', audience: 'PARTNER', partyId, partnerKind: kind, locale: 'en' }, select: { id: true } })
+      const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: world.tenantId, key: roleKey } }, select: { id: true } })
+      await client.roleAssignment.create({ data: { id: newId(), userId: who.id, roleId: role.id, allCompanies: true, partyIds: [partyId], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+    })
+    return signIn(h, world, who)
+  }
+
+  it('a member admin adds its own active colleague (ADDED, told once) and takes them out; the step-up and the colleague’s version are asked', async () => {
+    alma = await partnerAdmin(almaPerson, world.p1, 'CUSTOMER', 'customer-admin')
+    // Not a member yet: the project is not there for Alma (as for anyone not added).
+    expect((await people(alma)).status).toBe(404)
+    await ok('ada', 'POST', `/projects/${project.id}/people`, { userId: almaPerson.id })
+    const view = await people(alma)
+    expect(view.status, JSON.stringify(view.body)).toBe(200)
+    expect(view.body.members).toEqual([expect.objectContaining({ userId: almaPerson.id, you: true })])
+    expect(view.body.choices.map((person: Json) => person.userId)).toContain(world.people.viewer.id)
+    expect(view.body.choices.map((person: Json) => person.userId)).not.toContain(buyerB.id)
+    const viewer = world.people.viewer.id
+    // A write asks a fresh step-up, then the colleague's version (a stale one: 409).
+    const held = await add(alma, viewer, await versionOf(viewer))
+    expect(held.status).toBe(403)
+    expect(held.body.error.issues).toEqual([expect.objectContaining({ path: 'stepUp' })])
+    await portalStepUp(alma, almaPerson.email)
+    expect((await add(alma, viewer, (await versionOf(viewer)) + 1)).status).toBe(409)
+    const added = await add(alma, viewer, await versionOf(viewer))
+    expect(added.status, JSON.stringify(added.body)).toBe(200)
+    expect(added.body.members.map((person: Json) => person.userId)).toEqual(expect.arrayContaining([almaPerson.id, viewer]))
+    expect((await followers(project.id)).find((row) => row.userId === viewer)).toEqual({ userId: viewer, reason: 'ADDED', partyId: world.p1, createdById: almaPerson.id })
+    expect((await outbox('project.person_added', project.id)).map((row) => row.payload)).toContainEqual(expect.objectContaining({ userId: viewer, outside: true, byId: almaPerson.id, partyId: world.p1 }))
+    // Added twice: no second row, no second event; told once, in their own portal.
+    expect((await add(alma, viewer, await versionOf(viewer))).status).toBe(200)
+    expect((await outbox('project.person_added', project.id)).filter((row) => row.payload.userId === viewer)).toHaveLength(1)
+    await portalNews('project.person_added', project.id)
+    const told = await admin<{ userId: string }>(`SELECT "userId" FROM "Notification" WHERE "tenantId" = $1 AND "recordType" = 'Project' AND "recordId" = $2 AND "messageKey" = 'portal.project.added' AND "userId" = $3`, [world.tenantId, project.id, viewer])
+    expect(told).toHaveLength(1)
+    expect((await browsers.viewer.get(`/portal/threads/Project/${project.id}`)).status).toBe(200)
+    // Taken out: their access to it ends at once; told once.
+    const out = await remove(alma, viewer, await versionOf(viewer))
+    expect(out.status, JSON.stringify(out.body)).toBe(200)
+    expect(out.body.members.map((person: Json) => person.userId)).not.toContain(viewer)
+    expect((await browsers.viewer.get(`/portal/threads/Project/${project.id}`)).status).toBe(404)
+    expect((await outbox('project.person_removed', project.id)).map((row) => row.payload)).toContainEqual(expect.objectContaining({ userId: viewer, outside: true, byId: almaPerson.id }))
+  })
+
+  it('W-CP-4: never another company’s person, an office person or the lead (404, as a wrong id); never a project it is not in; not for a non-admin or a supplier’s admin', async () => {
+    await portalStepUp(alma, almaPerson.email)
+    for (const userId of [buyerB.id, PEOPLE.ada, PEOPLE.cleo, newId()]) {
+      const answer = await add(alma, userId, 1)
+      expect(answer.status, userId).toBe(404)
+      expect(answer.body.error.message).toBe('Colleague not found.')
+      expect(JSON.stringify(answer.body)).not.toMatch(/SEED-C2B|Made-up ada|Made-up cleo/)
+    }
+    // The lead (Ada, our colleague) is never the brand's to take out: not found.
+    expect((await remove(alma, PEOPLE.ada, 1)).status).toBe(404)
+    expect((await followers(project.id)).map((row) => row.userId)).toContain(PEOPLE.ada)
+    const choices = (await people(alma)).body
+    expect(JSON.stringify(choices)).not.toContain(buyerB.id)
+    for (const id of Object.values(PEOPLE)) expect(JSON.stringify(choices)).not.toContain(id)
+    // The office-only project and brand B's: not there for Alma.
+    expect((await alma.get(`/portal/projects/${officeOnly}/people/choices`)).status).toBe(404)
+    // Brand B's buyer keeps no team (no portal.colleagues.manage): refused; a supplier's admin reaches none of it.
+    expect((await browsers.buyerB.get(`/portal/projects/${project.id}/people/choices`)).status).toBe(403)
+    const sara = await partnerAdmin(saraPerson, world.p2, 'SUPPLIER', 'supplier-admin')
+    expect((await sara.get(`/portal/projects/${project.id}/people/choices`)).status).toBe(403)
+    expect((await sara.send('POST', `/portal/projects/${project.id}/people`, { userId: world.people.orders.id, version: 1 }, { headers: { 'idempotency-key': `cp074-${newId()}` } })).status).toBe(403)
+  })
+})
+// ---- end B-CP-074
