@@ -8,5 +8,9 @@ export default defineConfig({
     include: ['src/**/*.vitest.test.ts'],
     exclude: ['node_modules/**', '.next/**', '.next-*/**'],
     environment: 'node',
+    // The design-case tests draw every case of a screen in both languages in ONE test (SCR-039: 169 cases × it, en). On the Mac
+    // that is 0.1–2 s; on the shared CI runner it is 3–4 times slower, and the first full end check on GitHub (run 44416200778)
+    // timed out five of them at vitest's default 5 s while each passed (SCR-059 passed at 4.8 s). A hang still fails, at 30 s.
+    testTimeout: 30_000,
   },
 })

@@ -373,7 +373,9 @@ describe('F-SA-246: the doors, the request card and the words', () => {
     const draw = (held: string | null) => render(createElement(PortalRecordFrame, { thread: createElement('p', null, 'the conversation'), threadLabel: 'Messages: Your order 4', design: { mode: 'docked' }, door: { label: 'Ask for a change', held, onOpen: () => undefined }, children: createElement('div', null, 'body') }))
     const html = draw(null)
     expect(textOf(html)).toContain('Ask for a change')
-    expect(html.indexOf('Ask for a change')).toBeLessThan(html.indexOf('the conversation'))
+    // F-SA-264 gave the dock "Hide the conversation" above both: the door is measured against the conversation itself.
+    expect(html.indexOf('<p>the conversation</p>')).toBeGreaterThan(0)
+    expect(html.indexOf('Ask for a change')).toBeLessThan(html.indexOf('<p>the conversation</p>'))
     expect(textOf(draw('You are looking at a preview.'))).toContain('Ask for a change')
     expect(render(createElement(PortalRecordFrame, { thread: createElement('p', null, 'x'), threadLabel: 'Messages', design: { mode: 'docked' }, children: createElement('div', null, 'body') }))).not.toContain('Ask for a change')
   })

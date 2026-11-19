@@ -1466,7 +1466,7 @@
       "finish": "Fine prevista",
       "noForecast": "—",
       "extra": "Fatti in più",
-      "units": "Su misura: un ordine di lavoro per unità — la fase di ogni unità è in Produzione › Ordini di lavoro.",
+      "units": "Su misura: un ordine di lavoro per unità — la fase di ogni unità è in Produzione › Ordini di produzione.",
       "openLines": "Apri in Righe",
       "noun": "riga"
     },
