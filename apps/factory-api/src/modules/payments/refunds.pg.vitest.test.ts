@@ -66,7 +66,9 @@ async function issue(invoiceId: string): Promise<Json> {
 }
 const invoice = async (invoiceId: string): Promise<Json> => (await as('GET', `/invoicing/invoices/${invoiceId}`)).invoice
 
-const RETURNS: Permission[] = ['sales.returns.view', 'sales.returns.manage', 'sales.returns.decide', 'sales.returns.receive', 'sales.returns.inspect', 'orders.view', 'orders.manage', 'money.price']
+// B-CP-011: Sales holds no price grain (the money wall): it works the return and cancels the order without it; the money is
+// read by finance.
+const RETURNS: Permission[] = ['sales.returns.view', 'sales.returns.manage', 'sales.returns.decide', 'sales.returns.receive', 'sales.returns.inspect', 'orders.view', 'orders.manage']
 const grant = (permissions: Permission[]): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all' })
 const office = (tenantId: string, permissions: Permission[]): SessionContext => ({ audience: 'office', tenantId, actorId: newId(), grants: [grant(permissions)] })
 const SESSIONS: Record<string, () => SessionContext> = {

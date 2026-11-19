@@ -1097,7 +1097,7 @@ describe('the W2b-6 golden flow: a cost sheet approved, an order packed by scan 
     await settle()
   })
 
-  it('F02 a made-to-measure jacket released to the floor: the Owner switches the jacket template’s made-to-measure on (GATE-MTM, a fresh code); the rider measured again (with the height) and the measures confirmed by the reviewer; sales quotes the unit, sent and accepted by link; its own work order is released; the Owner switches made-to-measure off again', async () => {
+  it('F02 a made-to-measure jacket released to the floor: the Owner switches the jacket template’s made-to-measure on (GATE-MTM, a fresh code); the rider measured again (with the height) and the measures confirmed by the reviewer; sales quotes the unit (the Owner types its price), sent and accepted by link; its own work order is released; the Owner switches made-to-measure off again', async () => {
     const templateUrl = `/product/measurement-templates/${id('product:measurement-template:JACKET')}`
     const template = (await ok(P.owner, 'GET', templateUrl)).template
     await stepped(w, P.owner)
@@ -1110,7 +1110,10 @@ describe('the W2b-6 golden flow: a cost sheet approved, an order packed by scan 
     const profileId = measured.profile.id as string
     keep(profileId)
     await ok(P.owner, 'POST', `/sales/mtm/profiles/${profileId}/review`, { decision: 'CONFIRM', note: 'Measures checked against the base size (made up).', notify: false })
-    ;({ quote } = await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/lines/made-to-measure`, { version: quote.version, styleId: jacket(), colourwayId: black(), measurementProfileId: profileId, unitPrice: '680' }, 201))
+    // B-CP-011 (the money wall): the unit's typed price is the Owner's; Sales may not send it (403).
+    const unit = (version: number) => ({ version, styleId: jacket(), colourwayId: black(), measurementProfileId: profileId, unitPrice: '680' })
+    await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/lines/made-to-measure`, unit(quote.version), 403)
+    ;({ quote } = await ok(P.owner, 'POST', `/sales/quotes/${quote.id}/lines/made-to-measure`, unit(quote.version), 201))
     const check = await ok(P.sales, 'GET', `/sales/quotes/${quote.id}/send-check`)
     expect((check.checks as Json[]).filter((entry) => entry.severity === 'BLOCKS'), JSON.stringify(check.checks)).toEqual([])
     const sent = await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/send`, { version: quote.version })
