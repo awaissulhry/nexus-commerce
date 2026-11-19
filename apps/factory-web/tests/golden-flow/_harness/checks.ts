@@ -61,6 +61,11 @@ const NOT_WRITES: readonly { readonly path: RegExp; readonly when?: (capture: Ca
   // ---- End check (fx-6): the batch picture reads (factory-api modules/product/images/small-pictures.ts; B-SA-074 adds the work orders' one)
   { path: /^\/(sales\/(orders|quotes|inquiries)|production\/work-orders)\/pictures$/, why: 'the small pictures of a page of records (a read in a POST, its record ids in the body): it answers, it writes nothing' },
   // ---- end fx-6
+  // ---- op-fx4: the order page's questions (th9-order-page runs them in the full flow for the first time)
+  { path: /^\/sales\/orders\/[0-9a-f-]+\/amendments\/preview$/, why: "what an amendment would change and what each work order would do (modules/sales/orders/amend.ts previewAmendment): it answers, it writes nothing" },
+  { path: /^\/shipping\/shipments\/elsewhere\/preview$/, why: 'what recording a shipment made elsewhere would say now (modules/shipping/elsewhere/elsewhere.ts previewElsewhere): nothing written' },
+  { path: /^\/sales\/orders\/[0-9a-f-]+\/files\/previews$/, why: "the order's file cards' previews (B-OP-050, a read in a POST, its file ids in the body): no command, no event, no audit row" },
+  // ---- end op-fx4
 ]
 const notAWrite = (capture: Capture) => NOT_WRITES.some((rule) => rule.path.test(capture.path) && (!rule.when || rule.when(capture)))
 
