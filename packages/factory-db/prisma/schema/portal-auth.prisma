@@ -114,6 +114,21 @@ model PortalSettings {
   /// step, for the customers listed for a second person at release (QualitySettings.secondPersonPartyIds).
   overrideFourEyes          Boolean                  @default(false)
   // ── end B-PR-12
+  // ── B-CP-005 (customer page plan, schema wave "customer page 1/1"; S4; lead pick: made-to-measure drafts on for every
+  // customer). Office only, like every column here: the partner role has no grant on this table, so a customer reads its
+  // factory designer's name only through the API (never the backup, never an id it could follow).
+  /// The office person who is this customer's factory designer (an active office user when named), the one its people may
+  /// ask in a thread, and since when: both or neither. Set only for a customer or a brand. Made inactive, never deleted
+  /// (Restrict).
+  factoryDesignerId       String?   @db.Uuid
+  factoryDesignerSetAt    DateTime? @db.Timestamptz(3)
+  /// The factory designer's backup (an active office user when named): only beside a factory designer, never the same
+  /// person.
+  factoryDesignerBackupId String?   @db.Uuid
+  /// This customer may keep made-to-measure lines in its draft orders (drafts only: a made-to-measure quote or order still
+  /// follows GATE-MTM). On for every customer by default; the office may switch one off.
+  mtmDraftsOn             Boolean   @default(true)
+  // ── end B-CP-005
   version         Int      @default(1)
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
@@ -124,6 +139,9 @@ model PortalSettings {
   productionSupervisor User? @relation("PortalSettingsSupervisor", fields: [tenantId, productionSupervisorId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   productionBackup     User? @relation("PortalSettingsBackup", fields: [tenantId, productionBackupId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   productionApprover   User? @relation("PortalSettingsApprover", fields: [tenantId, productionApproverId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // B-CP-005: the factory designer and the backup (the same pattern).
+  factoryDesigner       User? @relation("PortalSettingsFactoryDesigner", fields: [tenantId, factoryDesignerId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  factoryDesignerBackup User? @relation("PortalSettingsFactoryDesignerBackup", fields: [tenantId, factoryDesignerBackupId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, partyId])
   // B-PR-12: the customers a person supervises ("Mine", B-PR-42a).

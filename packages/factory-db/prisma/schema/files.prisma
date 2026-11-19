@@ -124,6 +124,13 @@ model StoredFile {
   /// named. A tag like the category: set or corrected while the file is the current version. Null: not said (the category
   /// only). Hidden from the floor.
   documentTypeCode String?
+  /// B-CP-005 (customer page plan, schema wave "customer page 1/1"; the money wall, design 11 D6): the file shows prices
+  /// (an order confirmation, a quote, an invoice copy, a proforma, a commercial invoice, a price list, a statement, the
+  /// customer's own PO): only people who see prices open it (the API's lock). Born with its document, or set by a person; a
+  /// lock flag, not content: it may change on a live file, a superseded version and a deleted one (a mark reaches every
+  /// version of the series). Copies and new versions carry it (the API).
+  /// @not-money a lock flag: the file shows prices
+  priced           Boolean        @default(false)
   version          Int            @default(1)
   createdAt        DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -257,6 +264,11 @@ model StoredFile {
   measurementPhotosFront MeasurementProfile[] @relation("MeasurementProfilePhotoFront")
   measurementPhotosSide  MeasurementProfile[] @relation("MeasurementProfilePhotoSide")
   measurementPhotosBack  MeasurementProfile[] @relation("MeasurementProfilePhotoBack")
+  // B-CP-005 sales-brand-prices.prisma, portal-sales.prisma (customer page plan, schema wave "customer page 1/1"): the
+  // customer's prices whose PO it is, the people of a portal draft whose measurement sheet it is.
+  /// @not-money the relation to the customer's price rows whose source it is (the rows carry the grain)
+  orderBrandPrices       OrderBrandPrice[]          @relation("OrderBrandPriceSourceFile")
+  portalRequestPeople    PortalOrderRequestPerson[] @relation("PortalOrderRequestPersonSheet")
 
   @@unique([tenantId, storageKey])
   // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).
