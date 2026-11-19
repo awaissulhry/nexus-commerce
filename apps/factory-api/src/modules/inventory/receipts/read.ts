@@ -499,7 +499,9 @@ export async function expectedLines(caller: CommandCaller, query: { readonly sit
     const orders = await client.purchaseOrder.findMany({
       where: {
         AND: [
-          scopeWhere(actorOf(context), INVENTORY_RECEIVE, { company: 'companyId', site: 'siteId' }) as Prisma.PurchaseOrderWhereInput,
+          // op-fx10 (the brand wall): the supplier is the order's party, as the purchase orders' own list scopes it (purchasing/orders.ts):
+          // an order to a customer who also supplies (customer A) is that customer's — a person limited to other customers never meets it.
+          scopeWhere(actorOf(context), INVENTORY_RECEIVE, { company: 'companyId', site: 'siteId', party: 'partyId' }) as Prisma.PurchaseOrderWhereInput,
           { status: { in: ['SENT', 'CONFIRMED', 'PARTLY_RECEIVED'] } },
           query.siteId ? { siteId: query.siteId } : {},
           query.purchaseOrderId ? { id: query.purchaseOrderId } : {},
