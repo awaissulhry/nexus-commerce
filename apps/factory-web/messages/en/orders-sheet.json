@@ -360,5 +360,21 @@
       "failed": "It did not go through: try again."
     },
     "yourOrder": "Your order {seq} ({number})"
+  },
+  "commands": {
+    "confirmOrRefuse": "Confirm or refuse…",
+    "reading": "Reading {number}…",
+    "readFailed": "{number} could not be read: {problem}",
+    "yesTitle": "Confirm or refuse {number}",
+    "noYes": "Nobody was asked for this yes yet: ask for it on the order.",
+    "openOrder": "Open {number}",
+    "confirmState": "Only an order waiting for a yes is confirmed",
+    "done": {
+      "ready": "{number} marked ready",
+      "close": "{number} closed",
+      "cancel": "{number} cancelled",
+      "confirm": "{number} confirmed",
+      "refuse": "{number}: the yes was refused"
+    }
   }
 }

@@ -197,7 +197,11 @@ export function YesDoorView({ door, onYes }: { door: YesDoor; onYes?: YesActions
  * words typed (1 to 2000 characters, the engine's own rule); Refuse sends the task's version. A refusal is said inside it; what was
  * typed stays.
  */
-export function RefuseYesDialog({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: { readonly onDialog?: (dialog: null) => void; readonly yes?: YesActions } }) {
+// ---- F-CP-108 (customer page plan C2b; lane agreement (a)): TYPE ONLY — Refuse… takes the narrow part of the record's model it reads, so
+// the Orders sheet's row ("Confirm or refuse…") mounts THIS dialog in place; the record passes its whole model as before.
+export type RefuseYesModel = Pick<OrderRecordModel, 'dialog' | 'draft' | 'refuseReasons' | 'busy' | 'dialogProblem'>
+// ---- end F-CP-108
+export function RefuseYesDialog({ order, model, actions }: { order: Order; model: RefuseYesModel /* F-CP-108: type only */; actions?: { readonly onDialog?: (dialog: null) => void; readonly yes?: YesActions } }) {
   return (
     <WithMessages namespaces={['orders']}>
       <Refuse order={order} model={model} actions={actions} />
@@ -205,7 +209,7 @@ export function RefuseYesDialog({ order, model, actions }: { order: Order; model
   )
 }
 
-function Refuse({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: { readonly onDialog?: (dialog: null) => void; readonly yes?: YesActions } }) {
+function Refuse({ order, model, actions }: { order: Order; model: RefuseYesModel /* F-CP-108: type only */; actions?: { readonly onDialog?: (dialog: null) => void; readonly yes?: YesActions } }) {
   const t = useT('orders')
   const locale = useLocale()
   const dialog = model.dialog

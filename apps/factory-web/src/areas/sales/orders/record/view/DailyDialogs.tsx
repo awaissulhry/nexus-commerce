@@ -28,6 +28,7 @@ import {
 } from '../../daily-model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { DialogProblem, Frame } from './Dialogs'
+import type { CommandDialogActions, CommandDialogModel } from './Dialogs' // F-CP-108: type only (the Cancel the Orders sheet's row mounts)
 // ---- F-OP-107 (B2): Close remaining lines and Cancel say what happens to each work order, and pick the extra pieces' outcome ----
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
 import type { ExtraPiecesView, WorkOrderPlan } from '../../api' // B-OP-013: the previews' `workOrders` (extra pieces + plan)
@@ -45,7 +46,7 @@ import { ExtraPieces } from '../../../../home/approvals/requests/view/ExtraPiece
  *  - Copy as new quote, and the Changes tab's before → after (VersionCompare, composed).
  */
 
-const close = (actions?: OrderRecordActions) => () => actions?.onDialog?.(null)
+const close = (actions?: Pick<OrderRecordActions, 'onDialog'> /* F-CP-108: type only */) => () => actions?.onDialog?.(null)
 
 // ---- F-OP-107 (B2; 10-order-page §4.2): the change's work orders and its extra pieces, before the click --------------------------
 
@@ -54,7 +55,7 @@ const close = (actions?: OrderRecordActions) => () => actions?.onDialog?.(null)
  * production — decide on this page") and the extra pieces' picker. Not read (a design case, or the read failed): said so, and the
  * change still applies at once — its work orders follow by the same rules.
  */
-function FollowPlan({ order, model, state, plan, extra, outcome, onOutcome, name }: { order: Order; model: OrderRecordModel; state: 'none' | 'reading' | 'failed' | 'ready'; plan: readonly WorkOrderPlan[]; extra: ExtraPiecesView | null; outcome: ExtraOutcome | null; onOutcome: (outcome: ExtraOutcome) => void; name: string }) {
+function FollowPlan({ order, model, state, plan, extra, outcome, onOutcome, name }: { order: Order; model: Pick<OrderRecordModel, 'can'> /* F-CP-108: type only */; state: 'none' | 'reading' | 'failed' | 'ready'; plan: readonly WorkOrderPlan[]; extra: ExtraPiecesView | null; outcome: ExtraOutcome | null; onOutcome: (outcome: ExtraOutcome) => void; name: string }) {
   const t = useT('orders')
   const locale = useLocale()
   return (
@@ -218,7 +219,7 @@ export function ReopenLinesDialog({ order, model, actions }: { order: Order; mod
 
 // ---- Cancel order -----------------------------------------------------------------------------------------------------
 
-function ImpactList({ title, items, order, model, tone }: { title: string; items: ImpactItem[]; order: Order; model: OrderRecordModel; tone: 'danger' | 'info' | 'neutral' }) {
+function ImpactList({ title, items, order, model, tone }: { title: string; items: ImpactItem[]; order: Order; model: Pick<OrderRecordModel, 'cancelCheck' | 'can' | 'prefix'> /* F-CP-108: type only */; tone: 'danger' | 'info' | 'neutral' }) {
   const t = useT('orders')
   const locale = useLocale()
   if (items.length === 0) return null
@@ -255,7 +256,7 @@ function ImpactList({ title, items, order, model, tone }: { title: string; items
   )
 }
 
-export function CancelDialog({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+export function CancelDialog({ order, model, actions }: { order: Order; model: CommandDialogModel; actions?: CommandDialogActions } /* F-CP-108: type only */) {
   const t = useT('orders')
   const [reason, setReason] = useState(model.draft?.reason ?? '')
   const [typed, setTyped] = useState(model.draft?.typed ?? '')

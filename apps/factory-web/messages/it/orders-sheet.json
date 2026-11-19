@@ -360,5 +360,21 @@
       "failed": "Non è arrivato: riprova."
     },
     "yourOrder": "Il vostro ordine {seq} ({number})"
+  },
+  "commands": {
+    "confirmOrRefuse": "Conferma o rifiuta…",
+    "reading": "Lettura di {number}…",
+    "readFailed": "Non riesco a leggere {number}: {problem}",
+    "yesTitle": "Conferma o rifiuta {number}",
+    "noYes": "Il sì non è ancora stato chiesto a nessuno: chiedilo sull'ordine.",
+    "openOrder": "Apri {number}",
+    "confirmState": "Si conferma solo un ordine in attesa di approvazione",
+    "done": {
+      "ready": "{number} segnato come pronto",
+      "close": "{number} chiuso",
+      "cancel": "{number} annullato",
+      "confirm": "{number} confermato",
+      "refuse": "{number}: il sì è stato rifiutato"
+    }
   }
 }

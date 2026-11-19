@@ -58,6 +58,11 @@ import type { PanelRead } from '../../../../record-panels/model'
 import { useReplyMany } from './use-reply-many' // F-SA-282
 import { usePriceCheck } from '../price-check/use-price-check' // F-CP-114: the ONE customer's-price window
 import type { PriceCheck } from '../price-check/api' // F-CP-114
+// ---- F-CP-108: the order page's own commands from a row's ⋯ "Next steps" (the ONE window; its dialogs are the order page's) ----
+import { useOrderCommandDoor } from './commands/use-order-command-door'
+import { doneWords, stillInView, type Words } from './commands/model'
+import type { OrderStatus } from '../api'
+// ---- end F-CP-108
 
 /**
  * F-SA-220 (sales page plan N7 / N5, picks R9, P10, P12, P18; 17-review C-2; 12-lists-board §4.5): the ONE Orders sheet, for every
@@ -225,6 +230,10 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<OrdersListModel['notice']>(null)
   const [weekTick, setWeekTick] = useState(0) // B-W2b-323
+  // F-CP-108: the rows a command moved out of the view on screen (they stay where they are, greyed, until the next read: "N updates ·
+  // Show"), and the last command's toast.
+  const [moved, setMoved] = useState<readonly string[]>([])
+  const [receipt, setReceipt] = useState<{ words: Words; at: number } | null>(null)
   const readId = useRef(0)
   const companyId = session.company?.id ?? session.companies[0]?.id ?? ''
   const [newOrder, setNewOrder] = useState<NewOrderDialogModel | null>(params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId, incomingOf(prefix, session.permissions), can.price /* F-CP-146 */, !!host.locked?.party /* F-CP-104 */) : null)
@@ -305,6 +314,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
 
   const load = useCallback(async (silent = false) => {
     const id = ++readId.current
+    setMoved([]) // F-CP-108: a read again puts every row where the view says
     readBoard(id)
     readSummary(id) // B-TH-244
     // F-CP-141 (money wall): a price view a reader without the price grain opened (a shared saved view, a link) reads no rows: the
@@ -706,6 +716,32 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     },
   })
   // ---- end F-CP-114
+  // ---- F-CP-108 (customer page plan C2b, D8, K2): the row ⋯ "Next steps" — the order page's own commands, its own dialogs, in ONE window
+  // on this page; every write the order page's route with the order's version and an Idempotency-Key. Done: the row takes the order's
+  // new state where it stands (rows never jump) — greyed when it no longer belongs to the view, until "N updates · Show" — and it is
+  // read again by id (its other values, in place); a toast says what was done.
+  const placeRow = (id: string, change: (row: OrderRow) => OrderRow, status: OrderStatus) => {
+    const apply = <R extends OrderRow>(row: R): R => (row.id === id ? (change(row) as R) : row)
+    setList((current) => ({ ...current, items: current.items?.map(apply) ?? null }))
+    setGroupRows((current) => Object.fromEntries(Object.entries(current).map(([key, entry]) => [key, { ...entry, items: entry.items?.map(apply) ?? null }])))
+    setMoved((now) => (stillInView(rows, status) ? now.filter((entry) => entry !== id) : now.includes(id) ? now : [...now, id]))
+  }
+  const commandDoor = useOrderCommandDoor(api, {
+    can,
+    prefix,
+    onDone: ({ id, number, command, order }) => {
+      if (order) placeRow(id, (row) => ({ ...row, status: order.status, version: order.version, updatedAt: order.updatedAt }), order.status)
+      const mine = readId.current
+      listOrders(api, { ids: [id], production: productionShown, progress: progressShown, limit: 1 })
+        .then((page) => {
+          const fresh = page.orders[0]
+          if (fresh && mine === readId.current) placeRow(id, () => fresh, fresh.status)
+        })
+        .catch(() => undefined)
+      setReceipt({ words: doneWords(command, number), at: Date.now() })
+    },
+  })
+  // ---- end F-CP-108
   const week = usePromiseWeek(api, session, { enabled: layout === 'week', asked: params?.get('site') ?? null, q, tick: weekTick, partyId: party /* B-TH-201 */ })
   // B-TH-293: on one customer's sheet (the switcher's customer) the import is offered that customer's remembered columns.
   const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load(), customer)
@@ -778,6 +814,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld /* F-SA-281 */, reply: noteCan /* F-SA-282: threads.post */ },
     replyMany: replyMany.model, // F-SA-282
     priceCheck: priceCheck.model, // F-CP-114
+    commands: { window: commandDoor.model, moved, receipt }, // F-CP-108
     task, // F-SA-281
     me: session.user.id, // F-SA-281
     // ---- F-SA-220: the host ----
@@ -857,6 +894,13 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
         }
       : {}),
     // ---- end F-SA-280
+    // ---- F-CP-108: a row's ⋯ "Next steps" (the window reads the order itself: the row only names it) ----
+    onCommand: (orderId, command) => {
+      const row = [...(list.items ?? []), ...Object.values(groupRows).flatMap((entry) => entry.items ?? [])].find((entry) => entry.id === orderId)
+      if (row) commandDoor.open({ id: row.id, number: row.number }, command)
+    },
+    command: commandDoor.actions,
+    // ---- end F-CP-108
     onWaiting: (next, view) => go({ waiting: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     // F-CP-105: a host's own kept term set (or dropped: null) by a person's pick, in one write that keeps every other term.
     onPageTerm: (name, value) => go({ put: { [name]: value } }),
