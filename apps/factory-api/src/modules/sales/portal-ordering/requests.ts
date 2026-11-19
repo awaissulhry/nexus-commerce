@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { ConflictError, DomainError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { ConflictError, DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
@@ -31,14 +31,27 @@ import { portalOf } from '../../../platform/auth/portal/service'
 import { appClock, commandOn } from '../../../platform/portal/tasks/clock'
 import { portalReader, type PortalReader } from '../portal-orders/access'
 import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
-import { dayText, dayValue, iso, lockRequest, priceOrNull, readLines, readRequest, REQUEST_COLUMNS, type LineRow, type Reader, type RequestRow } from './store'
+import { dayText, dayValue, iso, lockRequest, priceOrNull, readDraftFiles, readLines, readRequest, REQUEST_COLUMNS, type DraftFileRow, type LineRow, type Reader, type RequestRow } from './store'
+import { catalogueLines, isCatalogueLine, type CatalogueLineRow } from './store' // B-CP-005
 // B-TH-304: the customer's own order numbers in the catalogue door (pick A).
 import { customerNumberOf, type CustomerNumber } from '@nexus/factory-domain/sales/customer-numbers'
+// B-CP-070 (D11): who sends and who discards a draft.
+import { can } from '@nexus/factory-domain/core/permissions'
+import { PORTAL_ORDER_REQUESTS_MANAGE } from '@nexus/factory-domain/sales/portal-ordering/permissions'
+// B-CP-072: the draft's files by part, and whether files may go up here now (the outside-upload gate, D14).
+import { draftFilesByPart } from '@nexus/factory-domain/sales/portal-ordering/draft-files'
+import { PORTAL_UPLOAD } from '@nexus/factory-domain/auth/partners/permissions'
+import { portalUploadWords } from '@nexus/factory-domain/threads/partner/uploads'
+import { outsideUploadsWords } from '../../../platform/files/multipart/outside'
 
 /**
  * The customer's order requests in the portal (B-W2b-190; SAL-074 "portal orders arrive as requests", the draft of
- * SAL-071/072/073; design portal.customer.neworder). Partner sessions with portal.orderRequests.manage, inside their party
- * (row-level security) and the portal's company.
+ * SAL-071/072/073; design portal.customer.neworder). Partner sessions inside their party (row-level security) and the
+ * portal's company. B-CP-070 (customer page plan D11): a draft is kept with portal.orderDrafts.edit — the Buyer and the
+ * Designer (the Admin follows) start it, fill it and discard one THEY started; sending and withdrawing stay
+ * portal.orderRequests.manage (the Buyer, the Admin: one who may order also discards any draft). A role without the price
+ * grain (the Designer) is shown and sends no price: the grain filter drops every marked field. `may` says what the reader may
+ * do with the request now (held, never hidden: the page names who can).
  *
  *   GET    /portal/order-requests                    the party's requests (drafts first, then the newest)
  *   POST   /portal/order-requests                    a new DRAFT (how it starts: PICKER, REORDER, UPLOAD; the header)
@@ -138,7 +151,8 @@ export async function shipToAddresses(request: FastifyRequest) {
 const sizesOf = (line: LineRow): SizeAsk[] => line.sizes.map((row) => ({ size: row.size, quantity: row.quantity }))
 
 /** One line as the customer sees it. */
-function lineView(line: LineRow, catalogue: CustomerCatalogue, source: SourceFacts | null, seesPrices: boolean) {
+// B-CP-005: a catalogue line (its style, colourway, sizes offered and list price); the other kinds are B-CP-075's.
+function lineView(line: CatalogueLineRow, catalogue: CustomerCatalogue, source: SourceFacts | null, seesPrices: boolean) {
   const facts = factsOf(catalogue, line.styleId, line.colourwayId)
   const style = catalogue.styles.get(line.styleId)
   const code = catalogue.codes.get(line.styleId)
@@ -177,10 +191,14 @@ const problemView = (problem: Problem) => ({ code: problem.code, lineId: problem
 export async function requestView(app: FastifyInstance, request: FastifyRequest, reader: PortalReader, row: RequestRow) {
   const day = today(app)
   const lines = await request.withClient((client) => readLines(client, [row.id]))
-  const catalogue = await reader.inTenant((db) => readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day, styleIds: lines.map((line) => line.styleId) }))
+  // B-CP-005: the catalogue lines are read with the catalogue; a described or made-to-measure line is shown by its kind
+  // (B-CP-075), not as a style it does not have (it still counts in the header and the totals).
+  const listed = catalogueLines(lines)
+  const catalogue = await reader.inTenant((db) => readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day, styleIds: listed.map((line) => line.styleId) }))
   const sources = await sourcesOf(request, reader, lines)
   const addresses = await shipToAddresses(request)
-  const views = lines.map((line) => lineView(line, catalogue, line.sourceOrderLineId ? (sources.get(line.sourceOrderLineId) ?? null) : null, reader.seesPrices))
+  const views = listed.map((line) => lineView(line, catalogue, line.sourceOrderLineId ? (sources.get(line.sourceOrderLineId) ?? null) : null, reader.seesPrices))
+  // end B-CP-005
   const draft = row.status === 'DRAFT'
   const shipTo = row.shipToAddressId ? addresses.find((address) => address.id === row.shipToAddressId) : undefined
   const problems = draft
@@ -188,6 +206,10 @@ export async function requestView(app: FastifyInstance, request: FastifyRequest,
     : []
   const totals = draftTotals(lines.map((line) => ({ sizes: sizesOf(line), unitPriceShown: priceOrNull(line.unitPriceShown) })), reader.seesPrices)
   const outcome = await outcomeOf(request, row)
+  const may = mayOn(reader, row) // B-CP-070
+  // B-CP-072: its files (the party's own, partner scope) by part; on live, files wait for the virus scanner (the e-mail way).
+  const files = draftFilesByPart(await request.withClient((client) => readDraftFiles(client, [row.id], lines.map((line) => line.id))), row.id)
+  const closed = uploadsClosed(reader, row)
   return {
     request: {
       id: row.id,
@@ -215,11 +237,51 @@ export async function requestView(app: FastifyInstance, request: FastifyRequest,
       held: heldWords(problems.length),
       pricesChanged: views.filter((line) => line.problems.some((problem) => problem.code === 'PRICE_CHANGED')).length,
       notice: REQUEST_NOTICE,
+      // B-CP-070: send / withdraw (who may order), discard (who may order, or the one who started the draft).
+      may: { send: draft && may.order, withdraw: row.status === 'SENT' && may.order, discard: draft && may.discard },
+      // B-CP-072: logos, references and measurement sheets (the draft's own and its lines'); uploads open here, or why not.
+      files: { logos: files.logos.map(draftFileView), references: files.references.map(draftFileView), sheets: files.sheets.map(draftFileView) },
+      uploads: { open: closed === null, words: closed },
     },
     addresses: addresses.map(({ approvalStatus, refuseReason, ...address }) => ({ ...address, isDefault: address.isDefaultShipTo, approval: approvalView({ approvalStatus, refuseReason }) })),
     seesPrices: reader.seesPrices,
   }
 }
+
+// ---- B-CP-070 (D11): who sends, who discards ------------------------------------------------------------------------------
+
+/** What the reader may do with the request beside filling a draft: order (send, withdraw), discard the draft. */
+function mayOn(reader: PortalReader, row: Pick<RequestRow, 'companyId' | 'partyId' | 'createdById'>): { readonly order: boolean; readonly discard: boolean } {
+  if (reader.session.preview) return { order: false, discard: false }
+  const order = can(reader.actor, PORTAL_ORDER_REQUESTS_MANAGE, { companyId: row.companyId, partyId: row.partyId })
+  return { order, discard: order || row.createdById === reader.session.userId }
+}
+
+/** The refusal of a discard by a colleague who neither orders nor started the draft (the page names who may). */
+const DISCARD_HELD = 'Only the colleague who started this draft, or one who may send orders, discards it.'
+// ---- end B-CP-070
+
+/** B-CP-072: why files cannot go up onto this request now, in the person's words (null: they can) — said before one is dropped. */
+function uploadsClosed(reader: PortalReader, row: Pick<RequestRow, 'status' | 'companyId' | 'partyId'>): string | null {
+  const gate = outsideUploadsWords()
+  if (gate !== null) return gate
+  if (row.status !== 'DRAFT') return portalUploadWords('REQUEST_CLOSED', reader.session.person.locale)
+  if (reader.session.preview) return 'A preview of the portal sends no file.'
+  return can(reader.actor, PORTAL_UPLOAD, { companyId: row.companyId, partyId: row.partyId }) ? null : portalUploadWords('NO_UPLOAD', reader.session.person.locale)
+}
+
+/** B-CP-072: a draft's file as the customer reads it (its own party's: named, with its version for a removal). */
+export const draftFileView = (file: DraftFileRow & { readonly lineId: string | null }) => ({
+  id: file.id,
+  lineId: file.lineId,
+  originalName: file.originalName,
+  kind: file.kind,
+  contentType: file.contentType,
+  sizeBytes: file.sizeBytes,
+  status: file.status,
+  version: file.version,
+  createdAt: iso(file.createdAt)!,
+})
 
 /** The order or quote a request became (partner reads: their number). */
 async function outcomeOf(request: FastifyRequest, row: Pick<RequestRow, 'salesOrderId' | 'quoteId'>) {
@@ -323,13 +385,14 @@ export async function createDraft(app: FastifyInstance, request: FastifyRequest,
       select: { id: true },
     })
     tools.audit({ recordType: 'PortalOrderRequest', recordId: id, companyId: session.company.id, after: { status: 'DRAFT', source: body.source ?? 'PICKER', ...headerData(body), shipToAddressId: shipTo } })
+    draftChanged(tools, { id, companyId: session.company.id, partyId: session.partyId }) // B-CP-071
     return null
   })
   return requestView(app, request, reader, (await ownRequest(request, reader, id))!)
 }
 
 /** The draft of the party, for a change by its own session: DRAFT, or 409 in words. */
-async function ownDraft(request: FastifyRequest, reader: PortalReader, requestId: string): Promise<RequestRow> {
+export async function ownDraft(request: FastifyRequest, reader: PortalReader, requestId: string): Promise<RequestRow> {
   const row = await ownRequest(request, reader, requestId)
   if (row.status !== 'DRAFT') throw new InvalidStateError(row.status === 'SENT' ? 'This request was sent: withdraw it to change it, or ask us.' : 'This request is no longer a draft.')
   return row
@@ -340,9 +403,18 @@ function onDraft<Result>(app: FastifyInstance, request: FastifyRequest, name: `$
   return commandOn(app, request, { name, idempotencyKey, input, record: { type: 'PortalOrderRequest', id: row.id, expectedVersion: version } }, async (tools) => {
     const current = await readRequest(tools.tx, row.id)
     if (current?.status !== 'DRAFT') throw new InvalidStateError('This request is no longer a draft.')
-    return work(tools)
+    const result = await work(tools)
+    draftChanged(tools, row) // B-CP-071
+    return result
   })
 }
+
+// ---- B-CP-071 (customer page plan D10; review C2): each change of a draft, one per command, tells the office's Drafts of the
+// customer to read again — ids only; the party routes the live message (a person limited to another customer is never told).
+export function draftChanged(tools: Pick<CommandTools, 'emit'>, row: Pick<RequestRow, 'id' | 'companyId' | 'partyId'>): void {
+  tools.emit({ type: 'portal_order_request.draft_changed', subject: row.id, companyId: row.companyId, payload: { requestId: row.id, partyId: row.partyId } })
+}
+// ---- end B-CP-071
 
 export async function changeHeader(app: FastifyInstance, request: FastifyRequest, requestId: string, body: HeaderBody & { readonly version: number }, idempotencyKey?: string) {
   const reader = portalReader(app, request)
@@ -404,7 +476,11 @@ export interface AddOutcome {
 export async function addLinesInCommand(tools: CommandTools, row: RequestRow, lines: readonly NewLine[], prices: ReadonlyMap<string, string | null>, actorId: string, merge: boolean): Promise<AddOutcome> {
   const { tx, now } = tools
   const existing = await readLines(tx, [row.id])
-  const byKey = new Map(existing.map((line) => [`${line.styleId}|${line.colourwayId}`, { id: line.id, seq: line.seq, sizes: new Set(line.sizes.map((size) => size.size)) }]))
+  // B-CP-005: a style and colour merges into a catalogue line only (a described line that names the customer's own style is
+  // not the same line); the limit counts every line of the request.
+  const byKey = new Map(catalogueLines(existing).map((line) => [`${line.styleId}|${line.colourwayId}`, { id: line.id, seq: line.seq, sizes: new Set(line.sizes.map((size) => size.size)) }]))
+  let lineCount = existing.length
+  // end B-CP-005
   let seq = existing.reduce((max, line) => Math.max(max, line.seq), 0)
   const added: string[] = []
   const merged: { lineId: string; size: string }[] = []
@@ -426,7 +502,8 @@ export async function addLinesInCommand(tools: CommandTools, row: RequestRow, li
       }
       continue
     }
-    if (byKey.size >= ORDERING_LIMITS.lines) throw new ValidationError(`At most ${ORDERING_LIMITS.lines} lines per request.`, [{ path: 'body/lines', message: `At most ${ORDERING_LIMITS.lines} lines per request.` }])
+    if (lineCount >= ORDERING_LIMITS.lines) throw new ValidationError(`At most ${ORDERING_LIMITS.lines} lines per request.`, [{ path: 'body/lines', message: `At most ${ORDERING_LIMITS.lines} lines per request.` }]) // B-CP-005: every line
+    lineCount += 1 // B-CP-005
     seq += 1
     const id = await insertLine(tx, row, line, seq, prices.get(key) ?? null, actorId, now)
     added.push(id)
@@ -464,6 +541,15 @@ async function ownLine(tx: Reader, row: RequestRow, lineId: string): Promise<Lin
   return line
 }
 
+// B-CP-005: the catalogue line's own editor (colour, sizes, note): a described or made-to-measure line has no colourway or
+// size grid of the catalogue to change here (B-CP-075 edits it by its kind).
+async function ownCatalogueLine(tx: Reader, row: RequestRow, lineId: string): Promise<CatalogueLineRow> {
+  const line = await ownLine(tx, row, lineId)
+  if (!isCatalogueLine(line)) throw new InvalidStateError(`Line ${line.seq} is not from the catalogue: it has no colour or sizes of a catalogue style to change here.`)
+  return line
+}
+// end B-CP-005
+
 export async function changeLine(
   app: FastifyInstance,
   request: FastifyRequest,
@@ -474,7 +560,7 @@ export async function changeLine(
 ) {
   const reader = portalReader(app, request)
   const row = await ownDraft(request, reader, requestId)
-  const line = await request.withClient((client) => ownLine(client, row, lineId))
+  const line = await request.withClient((client) => ownCatalogueLine(client, row, lineId)) // B-CP-005: a catalogue line
   const next: NewLine = { styleId: line.styleId, colourwayId: body.colourwayId ?? line.colourwayId, sizes: (body.sizes ?? sizesOf(line)).map((ask) => ({ size: ask.size.trim(), quantity: ask.quantity })), note: body.note === undefined ? line.note : body.note }
   const catalogue = await reader.inTenant((db) => readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day: today(app), styleIds: [line.styleId] }))
   // Only a change of sizes or colour is checked against today's catalogue: a note alone keeps the line as it was.
@@ -483,7 +569,8 @@ export async function changeLine(
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
   const colourChanged = next.colourwayId !== line.colourwayId
   if (colourChanged) {
-    const duplicate = (await request.withClient((client) => readLines(client, [row.id]))).find((entry) => entry.id !== line.id && entry.styleId === line.styleId && entry.colourwayId === next.colourwayId)
+    // B-CP-005: a duplicate is another catalogue line of the same style and colour.
+    const duplicate = catalogueLines(await request.withClient((client) => readLines(client, [row.id]))).find((entry) => entry.id !== line.id && entry.styleId === line.styleId && entry.colourwayId === next.colourwayId)
     if (duplicate) throw new ValidationError('This colour is already on the request.', [{ path: 'body/colourwayId', message: `Already on line ${duplicate.seq}.` }])
   }
   const price = colourChanged ? (pricesFor([next], catalogue, reader.seesPrices).get(`${next.styleId}|${next.colourwayId}`) ?? null) : priceOrNull(line.unitPriceShown)
@@ -525,12 +612,13 @@ export async function takeTodaysPrices(app: FastifyInstance, request: FastifyReq
   const reader = portalReader(app, request)
   const row = await ownDraft(request, reader, requestId)
   if (!reader.seesPrices) throw new InvalidStateError('Prices are not part of your access: the factory confirms them.')
-  const lines = await request.withClient((client) => readLines(client, [row.id]))
+  // B-CP-005: a list price is a catalogue line's; a described or made-to-measure line has none to take.
+  const lines = catalogueLines(await request.withClient((client) => readLines(client, [row.id])))
   const catalogue = await reader.inTenant((db) => readCatalogue(db, { companyId: row.companyId, partyId: row.partyId, day: today(app), styleIds: lines.map((line) => line.styleId) }))
   const prices = pricesFor(lines, catalogue, true)
   await onDraft(app, request, 'portalOrdering.takePrices', row, version, { requestId, version }, idempotencyKey, async (tools) => {
     const changed: { lineId: string; before: string | null; after: string | null }[] = []
-    for (const line of await readLines(tools.tx, [row.id])) {
+    for (const line of catalogueLines(await readLines(tools.tx, [row.id]))) { // B-CP-005: catalogue lines only
       const now = prices.get(`${line.styleId}|${line.colourwayId}`) ?? null
       const before = priceOrNull(line.unitPriceShown)
       if (now === null || (before !== null && Number(before) === Number(now))) continue
@@ -546,6 +634,7 @@ export async function takeTodaysPrices(app: FastifyInstance, request: FastifyReq
 export async function discardDraft(app: FastifyInstance, request: FastifyRequest, requestId: string, version: number, idempotencyKey?: string) {
   const reader = portalReader(app, request)
   const row = await ownDraft(request, reader, requestId)
+  if (!mayOn(reader, row).discard) throw new ForbiddenError(DISCARD_HELD) // B-CP-070
   await commandOn(app, request, { name: 'portalOrdering.discardDraft', idempotencyKey, input: { requestId, version } }, async (tools) => {
     const current = await readRequest(tools.tx, row.id)
     if (!current || current.status !== 'DRAFT') throw new InvalidStateError('This request is no longer a draft.')
@@ -555,6 +644,7 @@ export async function discardDraft(app: FastifyInstance, request: FastifyRequest
     await tools.tx.portalOrderRequestLine.deleteMany({ where: { requestId: row.id } })
     await tools.tx.portalOrderRequest.delete({ where: { id: row.id }, select: { id: true } })
     tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, before: { status: 'DRAFT', lines: lines.length }, after: { discarded: true } })
+    draftChanged(tools, row) // B-CP-071
     return null
   })
   return { discarded: true as const }
@@ -564,11 +654,14 @@ export async function discardDraft(app: FastifyInstance, request: FastifyRequest
 
 /** The problems of a draft today (the send's check): its header's and every line's, as the record shows them. */
 async function sendProblems(tx: CommandTx, row: RequestRow, lines: readonly LineRow[], day: BusinessDate, seesPrices: boolean): Promise<Problem[]> {
-  const catalogue = await readCatalogue(tx, { companyId: row.companyId, partyId: row.partyId, day, styleIds: lines.map((line) => line.styleId) })
+  // B-CP-005: the catalogue's checks (sold, colour, sizes offered, price shown) for its own lines; the header counts every line
+  // (a described or made-to-measure line's own parts are B-CP-075's).
+  const listed = catalogueLines(lines)
+  const catalogue = await readCatalogue(tx, { companyId: row.companyId, partyId: row.partyId, day, styleIds: listed.map((line) => line.styleId) })
   const shipTo = row.shipToAddressId ? await tx.partyAddress.findUnique({ where: { id: row.shipToAddressId }, select: { status: true } }) : null
   return [
     ...headerProblems({ requestedDate: dayText(row.requestedDate), shipToActive: row.shipToAddressId === null ? null : shipTo?.status === 'ACTIVE', lineCount: lines.length }, day),
-    ...lines.flatMap((line) => lineProblems({ id: line.id, sizes: sizesOf(line), unitPriceShown: priceOrNull(line.unitPriceShown) }, factsOf(catalogue, line.styleId, line.colourwayId), seesPrices)),
+    ...listed.flatMap((line) => lineProblems({ id: line.id, sizes: sizesOf(line), unitPriceShown: priceOrNull(line.unitPriceShown) }, factsOf(catalogue, line.styleId, line.colourwayId), seesPrices)), // B-CP-005
   ]
 }
 

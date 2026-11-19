@@ -12,6 +12,7 @@ import { RECORD_PICTURE_NS } from './view/RecordPicture'
 import { createElement } from 'react'
 import { render } from '../record-thread/parts/testing'
 import { RecordPicture } from './view/RecordPicture'
+import { tilePicture, tileWords, type StyleTile } from './styles' // F-CP-110
 
 /**
  * F-SA-211 (sales page plan N8, picks P13, P18, R9; 12-lists-board §2) — the ONE picture part: its sizes and fit, the cache keyed
@@ -216,3 +217,44 @@ describe('F-SA-283 — a row that names no picture and has no read: the placehol
   })
 })
 // ── end F-SA-283
+
+// ---- F-CP-110 (customer page plan C2c): the viewer's styles strip — every line's picture, read once, never a price -----------------
+describe('F-CP-110: the picture viewer shows every style of the record', () => {
+  const tile: StyleTile = { key: 'l1', styleId: 's1', styleCode: 'STY-01', styleName: 'Giacca demo', colour: 'BLK Nero', fileId: 'f1', small: { url: 'https://files.example.com/s1.webp', expiresAt: '2026-11-18T10:01:00.000Z' } }
+
+  it('a tile in words (style · colour) and as the one picture part takes it (its preview held: no batch read)', () => {
+    expect(tileWords(tile)).toBe('STY-01 · BLK Nero')
+    expect(tileWords({ styleCode: 'STY-02', colour: null })).toBe('STY-02')
+    expect(tilePicture(tile)).toEqual({ styleId: 's1', styleCode: 'STY-01', styleName: 'Giacca demo', fileId: 'f1', small: true })
+    expect(tilePicture({ ...tile, fileId: null, small: null }).small).toBe(false)
+  })
+
+  it('the strip only with "+N" and a host read; reading = skeleton tiles; failed = words, Try again and the lines door; a click shows it large', () => {
+    const viewer = readFileSync(join(HERE, 'view/PictureViewer.tsx'), 'utf8')
+    expect(viewer).toContain('const styles = useRecordStyles(readStyles, recordId, more > 0)')
+    expect(viewer).toContain('<Skeleton width={40} height={40} />')
+    expect(viewer).toContain("{t('stylesFailed')}")
+    expect(viewer).toContain('onClick={styles.retry}')
+    expect(viewer).toContain("(styles.state.status === 'off' || styles.state.status === 'failed')")
+    expect(viewer).toContain('held={tile.small} onOpen={() => setShown(tile)}')
+    // Open style follows the one shown (the footer reads `picture`, the shown tile's when one is picked).
+    expect(viewer).toContain('const picture = shown ? tilePicture(shown) : first')
+    const hook = readFileSync(join(HERE, 'styles.ts'), 'utf8')
+    expect(hook).toContain('return () => controller.abort()')
+  })
+
+  it('no price in a tile: the strip holds the style, the colour and the picture only', () => {
+    expect(Object.keys(tile).sort()).toEqual(['colour', 'fileId', 'key', 'small', 'styleCode', 'styleId', 'styleName'])
+    const viewer = readFileSync(join(HERE, 'view/PictureViewer.tsx'), 'utf8')
+    expect(viewer).not.toMatch(/unitPrice|netAmount|money\(/)
+  })
+
+  it('the words in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, [RECORD_PICTURE_NS])[RECORD_PICTURE_NS]!)
+      expect(t('styles', { number: 'SO-2026-0142' }), locale).toContain('SO-2026-0142')
+      for (const key of ['stylesFailed', 'retry']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-CP-110

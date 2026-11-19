@@ -211,3 +211,15 @@ export const portalProjectNewsContract = defineContract({
     }),
   },
 })
+
+// ---- B-CP-074 (customer page plan D13, K10): the brand admin's own people on a project it is a member of; the colleague's version.
+const portalPeople = output({
+  /** Its company's members of the project. */
+  members: z.array(output({ userId: id(), name: z.string(), version, you: z.boolean(), since: instant() })),
+  /** Its ACTIVE colleagues who may use the portal there and are not in it yet. */
+  choices: z.array(output({ userId: id(), name: z.string(), version })),
+})
+export const portalProjectPeopleContract = defineContract({ params: projectParams, response: { 200: portalPeople } })
+export const portalAddProjectPersonContract = defineContract({ params: projectParams, body: input({ userId: id(), version }), response: { 200: portalPeople } })
+export const portalRemoveProjectPersonContract = defineContract({ params: input({ projectId: id(), userId: id() }), querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: portalPeople } })
+// ---- end B-CP-074

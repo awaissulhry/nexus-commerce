@@ -275,8 +275,11 @@ describe('F-SA-243: the order page opens the same review window as Home › Appr
     }
     const html = draw('f-sa-243-changes')
     expect(html).toContain('id="still-to-do"')
-    // The work-order change opens Home › Approvals' window on it; the extra pieces' row its work order's page.
-    expect(html).toContain('/home/approvals?open=0190f0e2-9090-7000-8000-000000000001')
+    // op-fx1: F-OP-116 — the work-order change is decided in place (Apply… / Leave as is…, the ONE decide window on this page), no
+    // longer a link to Home › Approvals.
+    expect(textOf(html)).toContain('Apply…')
+    expect(textOf(html)).toContain('Leave as is…')
+    expect(html).not.toContain('/home/approvals?open=0190f0e2-9090-7000-8000-000000000001')
     expect(textOf(draw('f-sa-243-nothing-mine'))).toContain('1 work order not shown')
   })
 

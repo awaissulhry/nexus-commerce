@@ -44,3 +44,34 @@
     flex: 0 0 auto;
   }
 }
+
+/* F-CP-107: "Drafts of <customer>" — a draft's two lines, the ready count beside its problems (layout only, DS tokens). */
+.fw-cwd-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+.fw-cwd-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-text-strong);
+}
+.fw-cwd-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+.fw-cwd-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-cwd-window {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}

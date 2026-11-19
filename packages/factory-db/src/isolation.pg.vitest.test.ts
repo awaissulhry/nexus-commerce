@@ -115,6 +115,7 @@ import { PLATFORM_ROLE, POLICY_KEYS, RUNTIME_LOGIN, RUNTIME_ROLES, WALL, type Po
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
 import { SECOND_BRAND_TABLES, seedSecondBrand, type SecondBrand } from './testing/second-brand' // B-TH-001
 import { seedHeldMail } from './testing/held-mail' // B-TH-038
+import { seedCustomerPage } from './testing/customer-page' // B-CP-005
 import { loadOwnership, loadSchema } from './tools'
 
 /**
@@ -175,6 +176,23 @@ async function removeRow(table: string, pk: string, id: unknown): Promise<void> 
     throw error
   }
 }
+// ---- B-CP-005 (customer page plan, schema wave "customer page 1/1"): a copy of a row whose unique key is made of ids only.
+// A line holds one customer's price (OrderBrandPrice's unique line key), so the generated copy of the first row names another
+// line of the same order that has none (testing/customer-page.ts leaves SEED-SO-0001's second line free); every other copy
+// is taken as it is.
+async function adjustCopy(model: string, copy: Record<string, unknown>): Promise<Record<string, unknown>> {
+  if (model !== 'OrderBrandPrice' || copy.salesOrderLineId === null || copy.salesOrderLineId === undefined) return copy
+  const [free] = await admin(
+    `SELECT l.id::text AS id FROM "SalesOrderLine" l
+      WHERE l."tenantId" = $1::uuid AND l."orderId" = $2::uuid
+        AND NOT EXISTS (SELECT 1 FROM "OrderBrandPrice" b WHERE b."tenantId" = l."tenantId" AND b."salesOrderLineId" = l.id)
+      ORDER BY l.id LIMIT 1`,
+    [copy.tenantId, copy.salesOrderId],
+  )
+  expect(free, 'a line of the order with no customer price (testing/customer-page.ts)').toBeDefined()
+  return { ...copy, salesOrderLineId: free!.id }
+}
+// ---- end B-CP-005
 const q = (name: string): string => {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`bad identifier ${name}`)
   return `"${name}"`
@@ -558,6 +576,12 @@ beforeAll(async () => {
   await seedOrderApply({ db: factory, namespace: 'iso-a' })
   await seedOrderApply({ db: factory, namespace: 'iso-b' })
   // ---- end B-SA-005
+  // ---- B-CP-005 (customer page plan, schema wave "customer page 1/1"; no CLI seed change): the customer's own prices of
+  // SEED-SO-0001 (P1's PORTAL row of its first line, the first row a copy may repeat; the office's total) and the people of a
+  // made-to-measure line on P1's DRAFT (the first rider by size), in each tenant (testing/customer-page.ts).
+  await seedCustomerPage({ db: factory, namespace: 'iso-a' })
+  await seedCustomerPage({ db: factory, namespace: 'iso-b' })
+  // ---- end B-CP-005
   // Every seed of both tenants: under a full parallel run this takes more than a minute (B-TH-038: and over two on a machine
   // short of memory, 2026-11-17).
 }, 300_000)
@@ -856,6 +880,7 @@ it('covers every classified table and every runtime role', () => {
     'OptionGroup',
     'OptionRule',
     'OptionValue',
+    'OrderBrandPrice', // B-CP-005
     'OrderChangeRequest',
     'OrderChangeRequestLine',
     'OrderFreezeRule',
@@ -920,6 +945,7 @@ it('covers every classified table and every runtime role', () => {
     'PointOfMeasure',
     'PortalOrderRequest',
     'PortalOrderRequestLine',
+    'PortalOrderRequestPerson', // B-CP-005
     'PortalOrderRequestSize',
     'PortalSettings',
     'PortalSignInCode',
@@ -1348,7 +1374,7 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
       it('cannot insert a row outside its scope; the same insert inside it works', async () => {
         if (filter.length > 0) await expect(insert(copyOf(await rowOf(`NOT (${inside})`)))).rejects.toThrow(RLS)
         for (const entry of only) await expect(insert(copyOf(await rowOf(`${keysInside} AND NOT (${entry.sql})`)))).rejects.toThrow(RLS)
-        const own = copyOf(await rowOf(inside))
+        const own = await adjustCopy(model.name, copyOf(await rowOf(inside))) // B-CP-005
         expect(await insert(own)).toBe(1)
         await removeRow(table, q(pk), own[pk])
       })

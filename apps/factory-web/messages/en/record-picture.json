@@ -19,5 +19,8 @@
     "documents_one": "{count} document",
     "documents_other": "{count} documents",
     "door": "Open the files"
-  }
+  },
+  "styles": "Styles of {number}",
+  "stylesFailed": "Couldn't read the other styles",
+  "retry": "Try again"
 }

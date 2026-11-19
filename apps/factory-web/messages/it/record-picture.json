@@ -19,5 +19,8 @@
     "documents_one": "{count} documento",
     "documents_other": "{count} documenti",
     "door": "Apri i file"
-  }
+  },
+  "styles": "Modelli di {number}",
+  "stylesFailed": "Non riesco a leggere gli altri modelli",
+  "retry": "Riprova"
 }

@@ -187,7 +187,8 @@
       "showAll": "Show all orders",
       "gone": "{record} is no longer in «{view}»",
       "view": {
-        "waitingUs": "Waiting on us"
+        "waitingUs": "Waiting on us",
+        "drafts": "Drafts of {customer}"
       },
       "dock": {
         "label": "Which thread",
@@ -229,6 +230,50 @@
       "incoming": "Incoming",
       "noQuotes": "No open quote for {customer}.",
       "noRequests": "No request from {customer}."
+    },
+    "drafts": {
+      "col": {
+        "draft": "Draft",
+        "lines": "Lines",
+        "files": "Files",
+        "ready": "Ready",
+        "changed": "Last change",
+        "wanted": "Wanted by",
+        "value": "Value at the prices shown",
+        "messages": "Messages"
+      },
+      "untitled": "Untitled draft",
+      "started": "Started {date} by {name}",
+      "startedNoName": "Started {date}",
+      "lineCount_one": "{count} line",
+      "lineCount_other": "{count} lines",
+      "pieceCount_one": "{count} piece",
+      "pieceCount_other": "{count} pieces",
+      "peopleCount_one": "{count} person",
+      "peopleCount_other": "{count} people",
+      "logoCount_one": "{count} logo",
+      "logoCount_other": "{count} logos",
+      "referenceCount_one": "{count} reference",
+      "referenceCount_other": "{count} references",
+      "sheetCount_one": "{count} measurement sheet",
+      "sheetCount_other": "{count} measurement sheets",
+      "ready": "{done} of {of}",
+      "problems_one": "{count} problem",
+      "problems_other": "{count} problems",
+      "changed": "{time} by {name}",
+      "messages_one": "{count} message",
+      "messages_other": "{count} messages",
+      "messagesAsked_one": "{count} message · asked the factory designer",
+      "messagesAsked_other": "{count} messages · asked the factory designer",
+      "count_one": "{count} draft",
+      "count_other": "{count} drafts",
+      "empty": "{customer} has no draft in the portal.",
+      "failed": "Couldn't read the drafts",
+      "retry": "Try again",
+      "open": "Open",
+      "openOf": "Open {draft}",
+      "noun": "draft",
+      "readOnly": "Read only: {customer} is still writing it."
     }
   },
   "suppliers": {

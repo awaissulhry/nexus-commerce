@@ -363,7 +363,7 @@ describe('F-OP-126: lazy previews — visible-only asks, the cache by address ex
 
   it('asks only the cards in view, in view order, at most 24 a call; never body data, a large PDF or a kind no browser draws', async () => {
     const { asksPreview, PREVIEW_BATCH_MAX, wantedOf } = await import('./use-file-previews')
-    const files = new Map(Array.from({ length: 30 }, (_, n) => [`p${n}`, file(`p${n}`)] as const))
+    const files = new Map<string, ReturnType<typeof file>>(Array.from({ length: 30 }, (_, n) => [`p${n}`, file(`p${n}`)] as const)) // op-fx1: any file id, not only p…
     files.set('body', file('body', { bodyData: true }))
     files.set('big', file('big', { contentType: 'application/pdf', sizeBytes: 3 * 1024 * 1024 + 1 }))
     files.set('small-pdf', file('small-pdf', { contentType: 'application/pdf', sizeBytes: 3 * 1024 * 1024 }))

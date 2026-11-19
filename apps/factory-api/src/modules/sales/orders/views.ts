@@ -556,7 +556,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
         deliveredAt: instantOrNull(row.deliveredAt),
         ...shipmentRowOf(row, shipmentDetails, viewer),
         // ── B-OP-043 (order page N6): every order it carries, how it was made, the paper DDT of one made elsewhere ──
-        orders: row.orders,
+        orders: [...row.orders], // op-fx1: the contract's array (the store's is readonly)
         origin: row.origin,
         externalDdt: row.externalDdt ? { number: row.externalDdt.number, date: dayOf(row.externalDdt.date) } : null,
         // ── end B-OP-043 ──

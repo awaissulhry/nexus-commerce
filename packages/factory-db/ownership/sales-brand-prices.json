@@ -1,0 +1,18 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/sales-brand-prices.prisma (rules: src/ownership.ts; roles: src/roles.ts). Customer page plan, schema wave \"customer page 1/1\" (B-CP-005; design customer-page 11 §1.1, review C3). The office (factory_runtime; the tenant's system context of the API) writes the customer's prices of an order through apps/factory-api's sales/brand-prices and the portal-request accept, always with command(), and removes a row (audited under recordType OrderBrandPrice). Portal sessions run as factory_partner_runtime behind their party's wall (scopedBy party): a customer reads its own orders' rows and writes, changes and removes its own PORTAL line rows (the guard); it never reads or writes who in the office typed a row (enteredById: hiddenColumns, no column grant), and the API never sends it an office note. Every price column and the note are the price grain (`/// @grain price`): readable by the partner role (its own orders), filtered by the API for any office person without the price grain. Each write is held to its shape, its order and its source by the …_customer_page_guards trigger. No floor grant: none of this is floor work. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "OrderBrandPrice": {
+      "about": "The customer's own price for one line of a sales order, or its total for the whole order (C3): typed by the office from the customer's PO (CUSTOMER_PO) or by itself (OFFICE), typed by the customer in the portal or carried from its portal request on accept (PORTAL). The office reads and writes every row; the customer reads its own orders' rows and writes its own PORTAL line rows, never who in the office typed one. Not written once the order is CLOSED or CANCELLED (the guard).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": {
+          "privileges": ["select", "insert", "update", "delete"],
+          "scopedBy": ["party"],
+          "hiddenColumns": ["enteredById"]
+        }
+      }
+    }
+  }
+}

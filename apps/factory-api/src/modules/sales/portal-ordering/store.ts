@@ -45,11 +45,28 @@ export const LINE_COLUMNS = {
   note: true,
   version: true,
   sizes: { select: { id: true, size: true, quantity: true }, orderBy: { size: 'asc' } },
+  // B-CP-005: the line's kind and its own words (a described or made-to-measure line names no catalogue style and colourway).
+  kind: true,
+  description: true,
+  garmentType: true,
+  // end B-CP-005
 } as const satisfies Prisma.PortalOrderRequestLineSelect
 
 export type RequestRow = Prisma.PortalOrderRequestGetPayload<{ select: typeof REQUEST_COLUMNS }>
 export type LineRow = Prisma.PortalOrderRequestLineGetPayload<{ select: typeof LINE_COLUMNS }>
 export type Reader = FactoryClient | CommandTx
+
+// ---- B-CP-005 (schema wave "customer page 1/1"): a request line is of one of three kinds. A CATALOGUE line names a style of
+// the catalogue and one of its colourways (the …_customer_page_guards trigger holds it); a DESCRIBED or MADE_TO_MEASURE
+// line names neither, or only the customer's own style. Whatever reads lines as catalogue lines (the grid, the sizes and
+// colours offered, the list price, merging an upload or a reorder, the order or quote made from them) takes the catalogue
+// lines only; the other kinds are shown and accepted by their own steps (B-CP-075, B-CP-077).
+export type CatalogueLineRow = LineRow & { readonly kind: 'CATALOGUE'; readonly styleId: string; readonly colourwayId: string }
+export const isCatalogueLine = (line: LineRow): line is CatalogueLineRow => line.kind === 'CATALOGUE' && line.styleId !== null && line.colourwayId !== null
+export const catalogueLines = (lines: readonly LineRow[]): CatalogueLineRow[] => lines.filter(isCatalogueLine)
+/** A line in the customer's own words (a described or made-to-measure one): its description, else its garment type. */
+export const ownWordsOf = (line: LineRow): string | null => line.description ?? line.garmentType
+// ---- end B-CP-005
 
 /** An instant as the contracts send it (UTC, milliseconds), or null. */
 export const iso = (value: Date | null): string | null => (value === null ? null : toUtcIso(value))
@@ -75,3 +92,21 @@ export async function lockRequest(tx: CommandTx, requestId: string, expected: nu
   if (row.version !== expected) throw new ConflictError(`This order request changed since you read it (now version ${row.version}). Read it again.`)
   return row
 }
+
+// ---- B-CP-072 (customer page plan C5): a draft's files — on the draft or one of its lines, not deleted ---------------------------
+
+/** What a draft's file shows (partner-readable columns: never who uploaded it, never a hold or a scan finding). */
+export const DRAFT_FILE_COLUMNS = { id: true, recordType: true, recordId: true, category: true, kind: true, originalName: true, contentType: true, sizeBytes: true, status: true, version: true, createdAt: true } as const satisfies Prisma.StoredFileSelect
+export type DraftFileRow = Prisma.StoredFileGetPayload<{ select: typeof DRAFT_FILE_COLUMNS }>
+
+/** The where of the files of these drafts and of their lines (read in the caller's scope: a portal session sees its party's only). */
+export const draftFilesWhere = (requestIds: readonly string[], lineIds: readonly string[]): Prisma.StoredFileWhereInput => ({
+  status: { not: 'DELETED' },
+  OR: [{ recordType: 'PortalOrderRequest', recordId: { in: [...requestIds] } }, ...(lineIds.length > 0 ? [{ recordType: 'PortalOrderRequestLine', recordId: { in: [...lineIds] } }] : [])],
+})
+
+export async function readDraftFiles(db: Reader, requestIds: readonly string[], lineIds: readonly string[]): Promise<DraftFileRow[]> {
+  if (requestIds.length === 0) return []
+  return db.storedFile.findMany({ where: draftFilesWhere(requestIds, lineIds), select: DRAFT_FILE_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 1000 })
+}
+// ---- end B-CP-072

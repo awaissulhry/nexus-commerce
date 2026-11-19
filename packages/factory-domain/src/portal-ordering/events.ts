@@ -5,13 +5,15 @@ import { defineEvent } from '../events/define'
  * Portal order requests (B-W2b-190; SAL-074 "portal orders arrive as requests"). apps/factory-api's
  * modules/sales/portal-ordering emits them in the command that makes the move: the customer's send and withdraw (its
  * portal session, the send numbered in the tenant's office scope as that person), the office's decision. Their own
- * module folder (as partners/events.ts): the code is factory-domain sales/portal-ordering. A draft moves no event (it is
- * the customer's work in progress).
+ * module folder (as partners/events.ts): the code is factory-domain sales/portal-ordering. B-CP-071 (customer page plan D10):
+ * each change of a draft (one per command: started, filled, its files, discarded) is `draft_changed`, so the office's Drafts
+ * of a customer reads it again; nothing else moves on a draft.
  *
  *   portal_order_request.sent       a customer sent a request: it waits for the office in Home › Approvals
  *   portal_order_request.accepted   the office made the order or a quote from it
  *   portal_order_request.refused    the office refused it in words
  *   portal_order_request.withdrawn  the customer withdrew it before the office decided
+ *   portal_order_request.draft_changed  B-CP-071: a customer changed one of its drafts (the office reads drafts, read-only)
  *   delivery_address.checked        the office approved or refused an address the customer added (B-W2b-F15)
  *
  * Reach the office's Home › Approvals and sales screens (orders.view over the request's company and customer): ids,
@@ -50,6 +52,16 @@ export const events = [
     payload: z.strictObject(ids),
     live,
   }),
+  // ---- B-CP-071 (customer page plan D10; review C2): a draft changed. Its party only ROUTES the message (live.ts LIVE_PARTY_KEYS: a
+  // person limited to another customer is never told); the screen is given the request's id alone, never the party.
+  defineEvent({
+    type: 'portal_order_request.draft_changed',
+    context: 'portal-ordering',
+    description: 'A customer started, changed or discarded a draft order in the portal (the office reads drafts read-only; nothing waits for it).',
+    payload: z.strictObject({ requestId: z.uuid(), partyId: z.uuid() }),
+    live: { permission: 'orders.view', fields: ['requestId'] },
+  }),
+  // ---- end B-CP-071
   // B-W2b-F15: the office decided a delivery address a customer added in the portal (sales/portal-ordering address-check.ts:
   // approved or refused by hand, or approved by accepting a request that names it). The customer's person who asked hears it
   // (platform/portal/notifications rules/addresses.ts). Ids and the decision only: never the address, the reason or a name.
