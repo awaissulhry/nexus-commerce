@@ -16,7 +16,6 @@ import { dayInstant, daysUntil, depositGate, isFinal, isShippedInFull, linesNotI
 import { madeForOf, ownProgress } from '../production'
 // F-OP-112: Make work orders… in place — why it waits, and the Production page's own New work order dialog (its view, as it is).
 import { makeHeldOf } from '../production'
-import { NewWorkOrderDialog } from '../../../../production/work-orders/view/NewWorkOrderDialog'
 import { forecastPart } from '../production' // F-SA-234b
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
@@ -134,8 +133,8 @@ function WorkOrdersCard({ order, model, actions }: { order: Order; model: OrderR
           </Button>
         )}
       </div>
-      {/* F-OP-112: the Production page's New work order dialog, its order fixed (the style step; Create stays on this page). */}
-      {make?.dialog && <NewWorkOrderDialog model={make.dialog} can={make.can} actions={actions?.makeWorkOrders?.dialog} />}
+      {/* F-OP-112: the Production page's New work order dialog, its order fixed — F-OP-102: mounted once for the page (OrderRecordView):
+          the band's primary opens it from any tab. */}
       {/* F-OP-113: the dialog a work-order row's ⋯ opened (on the work order read afresh) — F-OP-116: mounted once for the page
           (OrderRecordView), so the waiting list's "Lift the customer's pause…" opens it from any tab. */}
       {!state || state.status === 'loading' ? (

@@ -1773,3 +1773,75 @@ describe('F-OP-117: the Changes tab — work-order changes of this order, the Hi
   })
 })
 // ---- end F-OP-117
+
+// ---- F-OP-102 (order page N1; 10-order-page §2.1, §2.2; set A part): the band's primary by state, the ⋯ re-cut ---------------------
+describe('F-OP-102: the band primary by state, in place, and the ⋯ re-cut (set A)', () => {
+  const yes = (over: Record<string, unknown> = {}) => ({
+    taskId: 't-1',
+    kind: 'SALES_ORDER',
+    kindLabel: { en: 'Sales order', it: 'Ordine di vendita' },
+    requestedAt: '2026-11-18T09:30:00Z',
+    requester: { name: 'Luca Prova', me: false },
+    approver: { kind: 'ROLE' as const, name: 'Finance', me: false },
+    version: 1,
+    requireStepUp: false,
+    approve: { allowed: true, why: null },
+    reject: { allowed: true, why: null },
+    withdraw: { allowed: false, why: null },
+    ...over,
+  })
+
+  it('PENDING_APPROVAL: the approver who did not ask confirms the order; the asker and anyone else ask for it / take it back', () => {
+    const waiting = (approvals: unknown[]) => ({ ...order('CONFIRMED', { status: 'PENDING_APPROVAL' }), openApprovals: approvals }) as never
+    expect(nextStep(waiting([yes()]), canOf('owner'))).toEqual({ kind: 'confirmYes', held: null, taskId: 't-1' })
+    // W39-02-like: the yes held with the engine's words (STALE), still the approver's primary.
+    expect(nextStep(waiting([yes({ approve: { allowed: false, why: 'It changed since you looked: …' } })]), canOf('owner'))).toMatchObject({ kind: 'confirmYes', held: { key: 'approval.refused.STALE' } })
+    // Rule 42: the asker never confirms; nobody else decides it here.
+    expect(nextStep(waiting([yes({ requester: { name: 'Giulia Esempio', me: true } })]), canOf('owner'))).toEqual({ kind: 'askYes', held: null })
+    expect(nextStep(waiting([yes({ approve: { allowed: false, why: 'This request waits for another approver: …' }, reject: { allowed: false, why: 'x' } })]), canOf('owner')).kind).toBe('askYes')
+    // A credit hold's yes is not "Confirm the order" (its banner pair says Approve: <kind>).
+    expect(nextStep(waiting([yes({ kind: 'CREDIT_OVERRIDE' })]), canOf('owner')).kind).toBe('askYes')
+    expect(nextStep(waiting([]), canOf('manager')).held?.key).toBe('held.noManage')
+  })
+
+  it('every other state as before: Confirmed → Make work orders… (held words), in work → Change promise date, shipped → Close order', () => {
+    expect(nextStep(order('CONFIRMED'), canOf('owner')).kind).toBe('makeWorkOrders')
+    expect(nextStep(order('READY'), canOf('owner')).kind).toBe('changePromise')
+    expect(nextStep(order('PARTLY_SHIPPED'), canOf('owner')).kind).toBe('changePromise')
+    expect(nextStep(order('DELIVERED', { settled: true }), canOf('owner')).kind).toBe('close')
+  })
+
+  it('the ⋯: Make work orders… while in production with lines not in work orders yet; never before or after', async () => {
+    const { makeInMenu } = await import('./model')
+    expect(makeInMenu(order('IN_PRODUCTION'), 1)).toBe(true)
+    expect(makeInMenu(order('IN_PRODUCTION'), 0)).toBe(false)
+    expect(makeInMenu(order('CONFIRMED'), 2)).toBe(false) // the primary already
+    expect(makeInMenu(order('SHIPPED'), 2)).toBe(false)
+  })
+
+  it('the band: one primary in place (no page change), ⌘↵ runs it; the ⋯ items of set A; no re-confirm item (deferred)', () => {
+    const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).not.toContain('?new=1&order=')
+    expect(view).toContain("if (step.kind === 'makeWorkOrders') return actions?.makeWorkOrders?.onOpen?.()")
+    expect(view).toContain("if (step.kind === 'confirmYes' && step.taskId) return actions?.yes?.onConfirm?.(step.taskId)")
+    expect(view).toContain('runPrimary() // F-OP-102: the primary, in place')
+    expect(view).toContain("onSelect: () => actions?.onChangeShipTo?.()")
+    expect(view).toContain("onSelect: () => frameRef.current?.openDoor?.('owner')")
+    expect(view).toContain('planningHref(model.prefix, firstWorkOrder.id)')
+    expect(view).not.toMatch(/reconfirm/i)
+    // Edit's order: Amend · Change ship-to… · Split… · Close remaining lines… · Reopen lines… · (Set priority…, Set season…).
+    const at = (id: string) => view.indexOf(`id: '${id}'`)
+    expect(at('amend')).toBeLessThan(at('shipTo'))
+    expect(at('shipTo')).toBeLessThan(at('split'))
+    expect(at('split')).toBeLessThan(at('closeLines'))
+    expect(at('closeLines')).toBeLessThan(at('reopenLines'))
+  })
+
+  it('the words exist in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['bandMenu.makeWorkOrders', 'bandMenu.changeShipTo', 'bandMenu.whoAnswers', 'wo.link.planning', 'approval.confirm']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-OP-102

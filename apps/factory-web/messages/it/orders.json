@@ -1880,5 +1880,10 @@
   },
   "badge": {
     "yourTurn": "Qui qualcosa aspetta te"
+  },
+  "bandMenu": {
+    "makeWorkOrders": "Crea ordini di lavoro…",
+    "changeShipTo": "Cambia l'indirizzo di consegna…",
+    "whoAnswers": "Chi risponde al cliente…"
   }
 }

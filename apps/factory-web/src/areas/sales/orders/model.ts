@@ -1,5 +1,6 @@
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { YES_REFUSALS } from './depth/model' // F-OP-101
+import { bannerYesOf, yesDoorOf } from './depth/model' // F-OP-102
 import type { Locale } from '../../../lib/i18n/locales'
 import {
   BOARD_LANES,
@@ -580,11 +581,14 @@ export function depositGate(order: Pick<Order, 'depositRequired' | 'chain'>): { 
   return { state: 'MISSING', request: null }
 }
 
-export type StepKind = 'makeWorkOrders' | 'changePromise' | 'close'
+// F-OP-102: + PENDING_APPROVAL — the approver's Confirm the order (its task), anyone else's Ask for a yes / Take the request back.
+export type StepKind = 'makeWorkOrders' | 'changePromise' | 'close' | 'confirmYes' | 'askYes'
 
 export interface NextStep {
   kind: StepKind | null
   held: Phrase | null
+  /** F-OP-102: Confirm the order's task (the order read's open yes, B-OP-020). */
+  taskId?: string
 }
 
 // F-SA-201: a Delivered order closes as a Shipped one does (the machine: SHIPPED → CLOSED and DELIVERED → CLOSED; the
@@ -601,6 +605,17 @@ export const isShippedInFull = (order: Pick<Order, 'status'>): boolean => CLOSE_
  * Warehouse pages (no dead control): its promise is the step meanwhile.
  */
 export function nextStep(order: Order, can: OrderAbilities): NextStep {
+  // ---- F-OP-102 (10-order-page §2.1): the yes the order waits for — an approver who did not ask confirms it here (F-OP-101's door);
+  // anyone else asks for it or takes their request back (the banner's own words say which).
+  if (order.status === 'PENDING_APPROVAL') {
+    const decide = bannerYesOf(order.openApprovals)
+      .filter((task) => task.kind === 'SALES_ORDER')
+      .map((task) => yesDoorOf(task))
+      .find((door) => door.kind === 'decide')
+    if (decide && decide.kind === 'decide') return { kind: 'confirmYes', held: decide.confirmHeld, taskId: decide.task.taskId }
+    return { kind: 'askYes', held: can.manage ? null : phrase('held.noManage') }
+  }
+  // ---- end F-OP-102
   if (order.status === 'CONFIRMED') {
     if (!can.makeWorkOrders) return { kind: 'makeWorkOrders', held: phrase('held.noWorkOrders') }
     const gate = depositGate(order)
@@ -1207,3 +1222,10 @@ export function splitRefusals(issues: readonly ApiIssue[], body: SplitBody, orde
   return out
 }
 // ---- end F-OP-111
+
+// ---- F-OP-102 (10-order-page §2.2): the ⋯'s Make work orders… also while in production with lines not in work orders yet ----
+/** Make work orders… in the ⋯: CONFIRMED (when it is not already the primary) and IN_PRODUCTION while a line is not in work orders. */
+export function makeInMenu(order: Pick<Order, 'status'>, notInProduction: number): boolean {
+  return order.status === 'IN_PRODUCTION' && notInProduction > 0
+}
+// ---- end F-OP-102

@@ -1880,5 +1880,10 @@
   },
   "badge": {
     "yourTurn": "Something here waits on you"
+  },
+  "bandMenu": {
+    "makeWorkOrders": "Make work orders…",
+    "changeShipTo": "Change ship-to…",
+    "whoAnswers": "Who answers the customer…"
   }
 }
