@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import type { Redis } from 'ioredis'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
@@ -173,7 +174,8 @@ afterAll(async () => {
   await db?.close()
 }, 60_000)
 
-describe('the collector', () => {
+// End check (11-19): the collector reads every source of failures of the database (2.3 s on the Mac, over 5 s on GitHub).
+describe('the collector', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('opens one item per failed message, a key once with its tries; never a transient refusal, a test or a key that went through', async () => {
     const first = await collectErrors({ database, log: LOG, jobs })
     // Seven in tenant A, one (its failed SDI call) in tenant B.

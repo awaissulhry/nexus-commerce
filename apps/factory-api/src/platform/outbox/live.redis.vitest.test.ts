@@ -14,6 +14,7 @@ import { defineManifest, defineRoutes } from '../../core/manifest'
 import { liveChannel, LiveFeed, publishLive, serveLiveStream, useLiveFeed } from '../../core/sse'
 import { LOCAL_COOKIE_SECRET } from '../../env'
 import { openEventStream, testRedis, type TestRedis } from './testing'
+import { SLOW_TEST_TIMEOUT_MS } from '../../testing/timeouts'
 
 /**
  * GET /live on the local Redis (no database: the stream reads only the session and the feed). Live messages are
@@ -105,7 +106,8 @@ beforeAll(async () => {
     },
   )
   base = await app.listen({ host: '127.0.0.1', port: 0 })
-}, 30_000)
+  // End check (11-19): the boot of every real routes file, as the grain filter's (32 s on GitHub, over the 30 s it had).
+}, SLOW_TEST_TIMEOUT_MS)
 
 afterAll(async () => {
   await app?.close()
