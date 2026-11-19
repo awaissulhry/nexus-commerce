@@ -27,6 +27,13 @@ import { findMarkers, markersOf, walkWorkOrderRoutes, type Marker, type OfficeSe
  *     sent are left out) — also on a route whose request names nothing of A (a list, a board, a report).
  * The production unit (`everyone`, the same permissions, every customer) reads the same GET addresses: how many it reaches is
  * counted (the sweep proves the wall on real records, not on ids that exist nowhere).
+ *
+ * op-fx10 (run 5 of the order page's end check: a leak on GET /quality/aql/assignments passed run 4 and failed run 5 on the same
+ * code, as the "first" of A's styles was the first row the table happened to hold): A's records are read in a fixed order
+ * (ORDER BY), and each route is swept once per PICK — up to MAX_PICKS of A's records per model, never fewer than two when A has
+ * two: the first in that order (the one the sweep always sent), then the records whose linked rows (the rows of every model
+ * that names them: a style's assignments, a work order's inspections …) cover the kinds of rows the picks before had none of.
+ * A leak cannot hide behind an empty first record. A route is swept again only while its request names other records of A's.
  */
 
 export type Json = Record<string, any>
@@ -210,17 +217,18 @@ export function createWallSweep(options: WallSweepOptions): WallSweep {
     const mixed = `(SELECT id FROM "WorkOrder" WHERE id = '${world().w.mixed.workOrderId}')`
     if (model.name === 'WorkOrder') return `SELECT x.id FROM ${t} x WHERE (x."partyId" = '${ids.a}' OR x.id IN ${mixed})${tenant} ORDER BY x.status DESC, x.id`
     if (model.name === 'Party') return `SELECT x.id FROM ${t} x WHERE x.id = '${ids.a}'`
-    if (model.name === 'Style') return `SELECT x.id FROM ${t} x WHERE x."brandPartyId" = '${ids.a}'${tenant}`
-    if (has(model, 'workOrderId')) return `SELECT x.id FROM ${t} x JOIN "WorkOrder" o ON o.id = x."workOrderId" WHERE (o."partyId" = '${ids.a}' OR o.id IN ${mixed})${tenant}`
-    if (has(model, 'workOrderSizeId')) return `SELECT x.id FROM ${t} x JOIN "WorkOrderSize" c ON c.id = x."workOrderSizeId" JOIN "WorkOrder" o ON o.id = c."workOrderId" WHERE (o."partyId" = '${ids.a}' OR o.id IN ${mixed})${tenant}`
-    if (has(model, 'partyId')) return `SELECT x.id FROM ${t} x WHERE x."partyId" = '${ids.a}'${tenant}`
+    // op-fx10: every list in a fixed order (`ORDER BY x.id`), never the order the table happens to hold its rows in.
+    if (model.name === 'Style') return `SELECT x.id FROM ${t} x WHERE x."brandPartyId" = '${ids.a}'${tenant} ORDER BY x.id`
+    if (has(model, 'workOrderId')) return `SELECT x.id FROM ${t} x JOIN "WorkOrder" o ON o.id = x."workOrderId" WHERE (o."partyId" = '${ids.a}' OR o.id IN ${mixed})${tenant} ORDER BY x.id`
+    if (has(model, 'workOrderSizeId')) return `SELECT x.id FROM ${t} x JOIN "WorkOrderSize" c ON c.id = x."workOrderSizeId" JOIN "WorkOrder" o ON o.id = c."workOrderId" WHERE (o."partyId" = '${ids.a}' OR o.id IN ${mixed})${tenant} ORDER BY x.id`
+    if (has(model, 'partyId')) return `SELECT x.id FROM ${t} x WHERE x."partyId" = '${ids.a}'${tenant} ORDER BY x.id`
     // One step up: a column `<relation>Id` to a model that names its customer.
     for (const field of model.fields) {
       if (!field.relation || field.list || !has(model, `${field.name}Id`)) continue
       const parent = modelByName(field.type)
       if (!parent || parent.name === model.name) continue
       const via = has(parent, 'partyId') ? `p."partyId" = '${ids.a}'` : has(parent, 'workOrderId') ? `p."workOrderId" IN (SELECT id FROM "WorkOrder" WHERE "partyId" = '${ids.a}')` : parent.name === 'WorkOrder' ? `p."partyId" = '${ids.a}'` : null
-      if (via) return `SELECT x.id FROM ${t} x JOIN "${parent.table}" p ON p.id = x."${field.name}Id" WHERE ${via}${tenant}`
+      if (via) return `SELECT x.id FROM ${t} x JOIN "${parent.table}" p ON p.id = x."${field.name}Id" WHERE ${via}${tenant} ORDER BY x.id`
     }
     return null
   }
@@ -254,7 +262,71 @@ export function createWallSweep(options: WallSweepOptions): WallSweep {
         touched.add(target.name)
       }
     }
+    await choosePicks()
   }
+
+  // ---- op-fx10: the picks — more than one of A's records per model, those with linked rows first -----------------------------
+  /** At most this many of A's records of one model are sent, each in a sweep of its own. */
+  const MAX_PICKS = 3
+  /** Per model, the records of A's the rounds of a route send: picks[0] in round 0, picks[1] in round 1 … */
+  const picks = new Map<string, string[]>()
+  /** The round of the route being swept (0 outside a sweep). */
+  let round = 0
+
+  /**
+   * Per model of A's with two records or more: which kinds of linked rows (a model and its relation field that names the record:
+   * `AqlProfileAssignment.style`, `Inspection.workOrder` …) each record has, then the picks — the first record in the fixed order
+   * (the sweep's one pick before), then, while fewer than MAX_PICKS, the record that adds the most kinds no pick has yet (ties:
+   * more kinds, more rows, the fixed order); a second pick always when A has two, a third only when it adds a kind.
+   */
+  async function choosePicks(): Promise<void> {
+    const kindsOf = new Map<string, Map<string, Set<string>>>()
+    const rowsOf = new Map<string, Map<string, number>>()
+    for (const owner of models) {
+      for (const field of owner.fields) {
+        const own = field.relation && !field.list ? ofA.get(field.type) : undefined
+        if (!own || own.length < 2 || !has(owner, `${field.name}Id`)) continue
+        const counted = await admin<{ id: string; n: number }>(`SELECT x."${field.name}Id"::text AS id, count(*)::int AS n FROM "${owner.table}" x WHERE x."${field.name}Id"::text = ANY($1::text[]) GROUP BY 1`, [own]).catch(() => [])
+        for (const row of counted) {
+          const kinds = kindsOf.get(field.type) ?? kindsOf.set(field.type, new Map()).get(field.type)!
+          const rows = rowsOf.get(field.type) ?? rowsOf.set(field.type, new Map()).get(field.type)!
+          ;(kinds.get(row.id) ?? kinds.set(row.id, new Set()).get(row.id)!).add(`${owner.name}.${field.name}`)
+          rows.set(row.id, (rows.get(row.id) ?? 0) + Number(row.n))
+        }
+      }
+    }
+    /** The first key that differs decides; equal keys keep the earlier record (the fixed order). */
+    const ahead = (x: readonly number[], y: readonly number[]): boolean => {
+      for (let at = 0; at < x.length; at++) if (x[at] !== y[at]) return x[at]! > y[at]!
+      return false
+    }
+    for (const [model, own] of ofA) {
+      const kinds = kindsOf.get(model) ?? new Map<string, Set<string>>()
+      const rows = rowsOf.get(model) ?? new Map<string, number>()
+      const chosen = [own[0]!]
+      const covered = new Set(kinds.get(own[0]!) ?? [])
+      while (chosen.length < Math.min(MAX_PICKS, own.length)) {
+        let best: { id: string; key: number[] } | null = null
+        for (const id of own) {
+          if (chosen.includes(id)) continue
+          const its = kinds.get(id) ?? new Set<string>()
+          const key = [[...its].filter((kind) => !covered.has(kind)).length, its.size, rows.get(id) ?? 0]
+          if (!best || ahead(key, best.key)) best = { id, key }
+        }
+        if (!best || (chosen.length >= 2 && best.key[0] === 0)) break
+        chosen.push(best.id)
+        for (const kind of kinds.get(best.id) ?? []) covered.add(kind)
+      }
+      picks.set(model, chosen)
+    }
+  }
+
+  /** The record of A's of `model` this round sends (a model with fewer picks: its last). */
+  function pickOf(model: string | null): string | undefined {
+    const list = model ? (picks.get(model) ?? ofA.get(model)) : undefined
+    return list && list.length > 0 ? list[Math.min(round, list.length - 1)] : undefined
+  }
+  // ---- end op-fx10 -----------------------------------------------------------------------------------------------------------
 
   /** The model a parameter or a body field names (`workOrderId`, `workOrderIds`, `ncrId` …), from its name and the address. */
   const PARAM_MODELS: Readonly<Record<string, string>> = {
@@ -357,7 +429,7 @@ export function createWallSweep(options: WallSweepOptions): WallSweep {
     if (name === 'companyId') return { id: made.companyId, owned: false }
     if (name === 'tenantId') return { id: made.tenantId, owned: false }
     const model = modelOf(name, url)
-    const own = model ? ofA.get(model)?.[0] : undefined
+    const own = pickOf(model) // op-fx10: this round's pick (was always the first)
     if (own) return { id: own, owned: true }
     const other = model ? neutral.get(model) : undefined
     if (other) return { id: other, owned: false }
@@ -610,7 +682,7 @@ export function createWallSweep(options: WallSweepOptions): WallSweep {
       else if (!isId) params[name] = own && paramsSchema ? sample(own, name, ctx, paramsSchema) : 'sweep'
       else {
         const model = modelOf(name, route.url)
-        const ownId = model ? ofA.get(model)?.[0] : undefined
+        const ownId = pickOf(model) // op-fx10: this round's pick (was always the first)
         params[name] = ownId ?? (await listedId(route, name, params))?.id ?? idFor(name, route.url).id
       }
     }
@@ -721,10 +793,27 @@ export function createWallSweep(options: WallSweepOptions): WallSweep {
   const called: Called[] = []
   const failures: Finding[] = []
 
+  /** op-fx10: one route, once per round while its request names records of A's no round before named (MAX_PICKS at most). */
   async function sweep(route: RouteFacts, variant: Json = {}): Promise<Finding[]> {
+    const findings: Finding[] = []
+    const asked = new Set<string>()
+    try {
+      for (round = 0; round < MAX_PICKS; round++) {
+        const request = await requestOf(route, variant)
+        const named = namedIds(request).sort().join(' ')
+        if (round > 0 && (named === '' || asked.has(named))) break
+        asked.add(named)
+        findings.push(...(await sweepRequest(route, request)))
+      }
+    } finally {
+      round = 0
+    }
+    return findings
+  }
+
+  async function sweepRequest(route: RouteFacts, request: Request): Promise<Finding[]> {
     const key = `${route.method} ${route.url}`
     const findings: Finding[] = []
-    const request = await requestOf(route, variant)
     const session = options.sessions[reader]
     if (!session) throw new Error(`the wall sweep has no session ${reader}`)
     const p2 = session.actorId
