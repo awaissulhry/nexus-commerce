@@ -158,7 +158,7 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
         .filter((row) => row.shipmentId === shipment.id && lineOf.has(row.salesOrderLineId))
         .map((row) => ({ lineSeq: lineOf.get(row.salesOrderLineId)?.seq ?? 0, style: styleOf(row.salesOrderLineId), colourway: colourwayOf(row.salesOrderLineId), size: sizeless.has(row.salesOrderLineId) ? null : row.size, quantity: row.quantity }))
         .sort((a, b) => a.lineSeq - b.lineSeq),
-      // B-OP-044 (N6): "also N pieces of your order #12": the customer's other orders on this shipment (none while N6 is held off).
+      // B-OP-044 (N6): "also N pieces of your order #12": the customer's other orders on this shipment (B-OP-047: N6 on).
       otherOrders: otherOrdersOn(read, shipment.id, order.partyId),
       papers: read.papers.filter((file) => file.recordId === shipment.id && !walled.has(file.id)).map((file) => ({ fileId: file.id, name: file.originalName, contentType: file.contentType, sizeBytes: file.sizeBytes, versionNo: file.versionNo })),
     }

@@ -189,7 +189,7 @@ export async function readyToShip(caller: CommandCaller, query: ReadyQuery) {
 /**
  * B-OP-070 (order page N6, "ship together"): may another order of the customer ship with the asked one — joinProblems
  * against a new shipment of the asked order from its site (the one asked, else that of its first ready garment): another
- * delivery address, another site, another currency, a customer hold, and MULTI_ORDER_OFF until the switch (B-OP-047).
+ * delivery address, another site, another currency, a customer hold (B-OP-047: the hold of several orders is gone).
  */
 async function shipsWithReader(
   client: FactoryClient,

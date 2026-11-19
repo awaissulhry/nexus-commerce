@@ -608,10 +608,7 @@
   "money": {
     "balanceTitle": "Balance",
     "gross": "Order total",
-    "invoiced": "Invoiced",
-    "paid": "Paid on invoices",
     "depositPaid": "Deposits received",
-    "balance": "Balance due",
     "invoicesTitle": "Invoices and credit notes",
     "noInvoices": {
       "title": "Nothing invoiced yet",
@@ -631,7 +628,19 @@
       "totals": "Totals",
       "deposit": "Deposit",
       "margin": "Margin"
-    }
+    },
+    "invoicedShare": "Invoiced for this order",
+    "paidHere": "Paid on this order",
+    "toPayHere": "Still to pay on this order",
+    "share": "This order's share",
+    "invoiceWhole": "Invoice total",
+    "alsoBills": "Also bills",
+    "alsoBillsHidden_one": "and {count} more order you cannot open",
+    "alsoBillsHidden_other": "and {count} more orders you cannot open",
+    "freight": "Freight {amount} is on the invoice, in no order",
+    "settledWhen": "Settled when {invoice} is paid in full",
+    "settledWhenShared": "Settled when {invoice} is paid in full (it also bills {numbers})",
+    "statement": "{customer}'s statement ›"
   },
   "docType": {
     "TD01": "Invoice (TD01)",
@@ -958,7 +967,14 @@
       "loses_one": "{numbers} loses this line",
       "loses_other": "{numbers} lose this line"
     },
-    "closedShort": "Closed short: work orders make it"
+    "closedShort": "Closed short: work orders make it",
+    "shipTo": "Ship to",
+    "shipToKeep": "As now: {address}",
+    "shipToHeld": "Another delivery address needs the right to see customers: the order keeps its address.",
+    "shipToFailed": "The delivery addresses could not be read: the order keeps its address.",
+    "shipToPrepared": "A shipment is being prepared for the old address: change it there first",
+    "shipToPreparedOf": "Shipment {number} is being prepared for the old address: change it there first",
+    "shipToDone": "The delivery address is changed."
   },
   "editor": {
     "add": {
@@ -1284,7 +1300,8 @@
         "all": "All",
         "requests": "Requests",
         "amendments": "Amendments",
-        "confirmations": "Confirmations"
+        "confirmations": "Confirmations",
+        "workOrders": "Work orders"
       },
       "asked": "Request asked · {kind}",
       "by": "by {name}",
@@ -1341,7 +1358,7 @@
     "numberLoading": "Reading the next number…",
     "numberUnknown": "The number is given when the order is confirmed.",
     "number": "It will get number {number} (unless another order takes it first).",
-    "create": "Create draft order",
+    "addLines": "Add the lines",
     "partyStatus": {
       "PROSPECT": "a prospect",
       "ACTIVE": "active",
@@ -1787,6 +1804,23 @@
       "notNow": "A work order in this state is not cancelled",
       "issued": "Issued to it (it stays on it until returned by hand): {items}",
       "atWorkshop": "At a workshop: {numbers}"
+    },
+    "changeWaits": "Change waits: {before} → {after}",
+    "changeApply": "Apply…",
+    "changeLeave": "Leave as is…",
+    "waitsPlanner": "Waits for a planner · told {time}",
+    "waitsPlannerShort": "Waits for a planner: a planner or the production manager decides it",
+    "changeApplied": "The change of {number} is applied: the floor was told",
+    "changeDeclined": "The change of {number} is left as is",
+    "done": "Done",
+    "taskDone": "Done: the task is ticked off",
+    "repromiseHeld": "Sales answers it, never the planner who proposed it",
+    "liftPause": "Lift the customer's pause…",
+    "go": {
+      "scrap": "Scrap ›",
+      "products": "Products ›",
+      "subcontracting": "Subcontracting ›",
+      "open": "Open"
     }
   },
   "approval": {
@@ -1850,6 +1884,19 @@
     "ownDates": "The order's own dates",
     "backupFor": "for every order of {customer}",
     "backupElsewhere": "Change it on {customer}'s page ›"
+  },
+  "wocs": {
+    "title": "Work-order changes of this order",
+    "none": "No work-order change for this order yet.",
+    "newDraft": "A new work order (draft)"
+  },
+  "badge": {
+    "yourTurn": "Something here waits on you"
+  },
+  "bandMenu": {
+    "makeWorkOrders": "Make work orders…",
+    "changeShipTo": "Change ship-to…",
+    "whoAnswers": "Who answers the customer…"
   },
   "elsewhere": {
     "title": "Record a shipment made elsewhere…",
@@ -1919,5 +1966,11 @@
       "state": "The shipment could not be recorded",
       "failed": "The shipment could not be recorded: try again"
     }
+  },
+  "priced": {
+    "fromList": "Priced from {customer}'s price list"
+  },
+  "pricedPdf": {
+    "held": "It shows prices: it is sent by someone who sees prices."
   }
 }

@@ -1,4 +1,6 @@
 import type { BrandRequest } from '../../../../home/approvals/requests/api'
+import type { WorkOrderChange } from '../../../../home/approvals/work-order-changes/api' // F-OP-116
+import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-116
 import type { OfficeRequest } from '../../../../../record-panels/approvals/api'
 import type { Amendment, Order } from '../../api'
 import { moneyChange } from '../../daily-model'
@@ -39,7 +41,8 @@ export function waitingOnCustomerOf(requests: readonly BrandRequest[], approvals
 
 // ---- the history ----------------------------------------------------------------------------------------------------------------
 
-export const HISTORY_CHIPS = ['all', 'requests', 'amendments', 'confirmations'] as const
+// F-OP-117: + Work orders (the work-order changes decided: applied, left as is).
+export const HISTORY_CHIPS = ['all', 'requests', 'amendments', 'workOrders', 'confirmations'] as const
 export type HistoryChip = (typeof HISTORY_CHIPS)[number]
 
 export type HistoryEntry =
@@ -65,8 +68,10 @@ export type HistoryEntry =
     }
   | { readonly kind: 'confirmationMade'; readonly id: string; readonly at: string; readonly version: number; readonly by: string | null }
   | { readonly kind: 'confirmationSent'; readonly id: string; readonly at: string; readonly version: number }
+  /** F-OP-117: a work-order change decided — carried out on its work order, left as is, or put back (stale). */
+  | { readonly kind: 'workOrderChange'; readonly id: string; readonly at: string; readonly change: WorkOrderChange }
 
-const chipOf = (entry: HistoryEntry): Exclude<HistoryChip, 'all'> => (entry.kind === 'requestAsked' || entry.kind === 'requestAnswered' ? 'requests' : entry.kind === 'amendment' ? 'amendments' : 'confirmations')
+const chipOf = (entry: HistoryEntry): Exclude<HistoryChip, 'all'> => (entry.kind === 'requestAsked' || entry.kind === 'requestAnswered' ? 'requests' : entry.kind === 'amendment' ? 'amendments' : entry.kind === 'workOrderChange' ? 'workOrders' : 'confirmations')
 
 /** The lines an amendment moved, and the pieces before → after (an amendment's diff or a change's: only what it counts). */
 function countsOf(diff: { readonly lines: readonly Pick<Amendment['diff']['lines'][number], 'change' | 'piecesBefore' | 'piecesAfter'>[] }) {
@@ -88,6 +93,8 @@ interface HistoryInput {
   /** The amendments read (only where the changes read is not there: a design case, an older page). */
   readonly amendments: readonly Amendment[] | null
   readonly confirmation: Confirmation | null
+  /** F-OP-117: the order's work-order changes (the decided ones become history); absent or null: not read here. */
+  readonly workOrderChanges?: readonly WorkOrderChange[] | null
 }
 
 /** Every event of the order's changes, newest first. */
@@ -124,6 +131,8 @@ export function historyOf(input: HistoryInput): HistoryEntry[] {
   }
   for (const version of input.confirmation?.versions ?? []) out.push({ kind: 'confirmationMade', id: `made-${version.id}`, at: version.createdAt, version: version.version, by: version.createdBy })
   if (input.confirmation?.sentAt && input.confirmation.sentVersion !== null) out.push({ kind: 'confirmationSent', id: `sent-${input.confirmation.sentVersion}`, at: input.confirmation.sentAt, version: input.confirmation.sentVersion })
+  // F-OP-117: a decided work-order change, at its decision (a PROPOSED one waits: it is the section's row, not history yet).
+  for (const change of input.workOrderChanges ?? []) if (change.status !== 'PROPOSED') out.push({ kind: 'workOrderChange', id: `woc-${change.id}`, at: change.decidedAt ?? change.proposedAt, change })
   return out.sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id))
 }
 
@@ -164,7 +173,8 @@ export const stillRowsOf = (read: { readonly changes?: { readonly stillToDo?: { 
 
 export interface StillRowOf {
   readonly kind: string
-  readonly ref: { readonly type: string; readonly id: string; readonly number: string | null } | null
+  /** F-OP-116 (B-OP-021): + the record's version (a task's Done sends it); null or absent: none. */
+  readonly ref: { readonly type: string; readonly id: string; readonly number: string | null; readonly version?: number | null } | null
   readonly words: { readonly en: string; readonly it: string }
   readonly since: string
   readonly waitingOn: string
@@ -203,12 +213,64 @@ export function stillGroupsOf(rows: readonly StillRowOf[], requests: readonly Br
 }
 
 /** Where a row opens (a real link): the work-order change in Approvals' window, the amendment on Changes, the record's own page. */
-export function stillDoorOf(row: Pick<StillRowOf, 'kind' | 'ref'>, place: { readonly prefix: string; readonly record: string; readonly address: (ref: { readonly type: string; readonly id: string; readonly number: string | null }) => string }): string | null {
+// F-OP-116 (F-OP-210, R-19): the order's own tabs through tabHref — the dock's scope kept (`search`: the page's address terms now).
+export function stillDoorOf(row: Pick<StillRowOf, 'kind' | 'ref'>, place: { readonly prefix: string; readonly record: string; readonly address: (ref: { readonly type: string; readonly id: string; readonly number: string | null }) => string; readonly search?: string }): string | null {
   const ref = row.ref
   if (!ref) return null
   if (ref.type === 'WorkOrderChange') return `${place.prefix}/home/approvals?open=${encodeURIComponent(ref.id)}`
-  if (ref.type === 'SalesOrderAmendment') return `${place.record}?tab=changes`
-  if (ref.type === 'RePromise') return `${place.record}?tab=overview`
+  if (ref.type === 'SalesOrderAmendment') return tabHref(place.record, 'changes', place.search ?? '')
+  if (ref.type === 'RePromise') return tabHref(place.record, 'overview', place.search ?? '')
   return `${place.prefix}${place.address(ref)}`
 }
 // ---- end F-SA-243
+
+// ---- F-OP-116 (10-order-page §5.2, §5.3; review R-12): decide in place ------------------------------------------------------------
+/** The changes waiting on one work order (PROPOSED), the oldest first: its row says "Change waits: 40 → 28 · Apply… / Leave as is…". */
+export function waitingChangesOf(list: readonly WorkOrderChange[] | null | undefined, workOrderId: string): WorkOrderChange[] {
+  return (list ?? []).filter((change) => change.status === 'PROPOSED' && change.workOrder?.id === workOrderId).sort((a, b) => a.proposedAt.localeCompare(b.proposedAt) || a.id.localeCompare(b.id))
+}
+
+/** A change's pieces before → after (its cells summed: what the work order makes now for them, what it would make). */
+export function changeFiguresOf(change: Pick<WorkOrderChange, 'cells'>): { readonly before: number; readonly after: number } {
+  return change.cells.reduce((sum, cell) => ({ before: sum.before + cell.from, after: sum.after + cell.to }), { before: 0, after: 0 })
+}
+
+/** Why a change cannot be decided by this reader: a planner decides it (told when it was proposed); null: this reader may. */
+export function changeHeldOf(change: Pick<WorkOrderChange, 'mayDecide' | 'proposedAt'>): { readonly key: string; readonly params: { readonly at: string } } | null {
+  return change.mayDecide ? null : { key: 'wo.waitsPlanner', params: { at: change.proposedAt } }
+}
+
+/** One Still to do row's door, in place where it can be: a work-order change decided here, a re-promise answered here, a task done
+ * here (its own right, R-12), else a real link to where it is done (Scrap, Products, Subcontracting, Changes). */
+export type StillDoor =
+  | { readonly kind: 'change'; readonly changeId: string; readonly held: boolean }
+  | { readonly kind: 'repromise'; readonly proposalId: string; readonly held: boolean }
+  | { readonly kind: 'task'; readonly taskId: string; readonly version: number | null; readonly held: boolean }
+  | { readonly kind: 'link'; readonly href: string; readonly label: 'scrap' | 'products' | 'subcontracting' | 'open' }
+  | { readonly kind: 'none' }
+
+export function stillDoorsOf(row: Pick<StillRowOf, 'kind' | 'ref' | 'mayAct'>, place: Parameters<typeof stillDoorOf>[1]): StillDoor {
+  const ref = row.ref
+  if (!ref) return { kind: 'none' }
+  if (row.kind === 'WORK_ORDER_CHANGE' && ref.type === 'WorkOrderChange') return { kind: 'change', changeId: ref.id, held: !row.mayAct }
+  if (row.kind === 'REPROMISE' && ref.type === 'RePromise') return { kind: 'repromise', proposalId: ref.id, held: !row.mayAct }
+  if (row.kind === 'WORK_IN_PROGRESS_TASK' && ref.type === 'Task') return { kind: 'task', taskId: ref.id, version: ref.version ?? null, held: !row.mayAct }
+  const href = stillDoorOf(row, place)
+  if (!href) return { kind: 'none' }
+  const label = row.kind === 'EXTRA_PIECES' && ref.type === 'WorkOrder' ? 'scrap' : row.kind === 'STYLE_CHANGE' ? 'products' : row.kind === 'TELL_WORKSHOP' ? 'subcontracting' : 'open'
+  return { kind: 'link', href, label }
+}
+// ---- end F-OP-116
+
+// ---- F-OP-117 (10-order-page §6): the Changes tab's "Work-order changes of this order" ---------------------------------------------
+/** The section's rows: the PROPOSED first (oldest first: they wait), then the decided ones newest first; nothing of another order. */
+export function workOrderChangeRowsOf(list: readonly WorkOrderChange[] | null | undefined, orderId: string): WorkOrderChange[] {
+  const own = (list ?? []).filter((change) => change.salesOrder.id === orderId)
+  const waiting = own.filter((change) => change.status === 'PROPOSED').sort((a, b) => a.proposedAt.localeCompare(b.proposedAt) || a.id.localeCompare(b.id))
+  const decided = own.filter((change) => change.status !== 'PROPOSED').sort((a, b) => (b.decidedAt ?? b.proposedAt).localeCompare(a.decidedAt ?? a.proposedAt) || a.id.localeCompare(b.id))
+  return [...waiting, ...decided]
+}
+
+/** When the floor was told of an applied change (the floor note goes with it: change-notes); null for one not carried out. */
+export const floorToldOfChange = (change: Pick<WorkOrderChange, 'status' | 'decidedAt' | 'workOrder'>): string | null => (change.status === 'APPLIED' && change.workOrder && change.decidedAt ? change.decidedAt : null)
+// ---- end F-OP-117

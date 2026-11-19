@@ -391,6 +391,8 @@ export interface AmendDraftLike {
   readonly lines: readonly DraftLine[]
   readonly customerRef: string
   readonly requestedDate: string
+  /** F-OP-110: another delivery address picked in the edit header ('' or absent: the order keeps its own). */
+  readonly shipToAddressId?: string
 }
 
 /** The amendment's body as the API reads it (the preview, Apply, and the priced change it may become): its lines, and the header that changed. */
@@ -401,8 +403,33 @@ export function amendBodyOf(draft: AmendDraftLike, order: Pick<Order, 'lines' | 
     lines: amendLines(draft.lines, order),
     ...(customerRef !== (order.customerRef ?? null) ? { customerRef } : {}),
     ...(requestedDate !== (order.requestedDate ?? null) ? { requestedDate } : {}),
+    ...(draft.shipToAddressId ? { shipToAddressId: draft.shipToAddressId } : {}), // F-OP-110
   }
 }
+
+// ---- F-OP-110 (10-order-page §4.5): Ship to in the edit header ------------------------------------------------------------------
+/** The Ship to field's id (⋯ Change ship-to… opens edit mode with it focused). */
+export const SHIP_TO_FIELD_ID = 'amend-ship-to'
+
+/** The header changed: the customer PO, the requested date, or another delivery address picked. */
+export function headerChangedOf(draft: AmendDraftLike, order: Pick<Order, 'customerRef' | 'requestedDate'>): boolean {
+  return (draft.customerRef.trim() || null) !== (order.customerRef ?? null) || (draft.requestedDate || null) !== (order.requestedDate ?? null) || !!draft.shipToAddressId
+}
+
+/** An address as one line: its name, street, postal code and town (what the order and the Select show). */
+export function addressLineOf(address: { readonly name?: unknown; readonly line1?: unknown; readonly postalCode?: unknown; readonly city?: unknown } | null | undefined): string | null {
+  if (!address) return null
+  const text = (value: unknown) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null)
+  const town = [text(address.postalCode), text(address.city)].filter(Boolean).join(' ')
+  const words = [text(address.name), text(address.line1), town || null].filter((part): part is string => !!part)
+  return words.length > 0 ? words.join(' · ') : null
+}
+
+/** The shipment a SHIPMENT_PREPARED refusal names (the API's sentence "Shipment SHP-… is being prepared …"); null: not said. */
+export function preparedShipmentOf(message: string): string | null {
+  return /^Shipment (\S+) is being prepared/.exec(message)?.[1] ?? null
+}
+// ---- end F-OP-110
 
 /** What a preview is about: the body it was asked with, on the order's version (an answer about another one is stale). */
 export const amendKeyOf = (draft: AmendDraftLike, order: Pick<Order, 'lines' | 'customerRef' | 'requestedDate' | 'version'>): string => JSON.stringify([order.version, amendBodyOf(draft, order)])
@@ -614,6 +641,11 @@ const HEADER_FIELDS: Record<string, string> = {
 export function issueWords(issue: PathIssue, label: (index: number) => string | null): Phrase {
   const parts = issue.path.replace(/^body\/?/, '').split(/[/.]/).filter(Boolean)
   if (parts.length === 0) return phrase('issue.state')
+  // F-OP-110: a shipment is being prepared for the order's address — said with that shipment (the same customer's).
+  if (parts[0] === 'shipToAddressId' && parts[1] === 'SHIPMENT_PREPARED') {
+    const number = preparedShipmentOf(issue.message)
+    return number ? phrase('edit.shipToPreparedOf', { number }) : phrase('edit.shipToPrepared')
+  }
   if (parts[0] === 'lines' && parts.length >= 2 && /^\d+$/.test(parts[1]!)) {
     const kind = LINE_FIELDS[parts[2] ?? ''] ?? 'other'
     return phrase(`issue.line.${kind}`, { line: label(Number(parts[1])) ?? String(Number(parts[1]) + 1) })

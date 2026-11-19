@@ -608,10 +608,7 @@
   "money": {
     "balanceTitle": "Saldo",
     "gross": "Totale ordine",
-    "invoiced": "Fatturato",
-    "paid": "Pagato sulle fatture",
     "depositPaid": "Acconti ricevuti",
-    "balance": "Saldo da pagare",
     "invoicesTitle": "Fatture e note di credito",
     "noInvoices": {
       "title": "Ancora nulla di fatturato",
@@ -631,7 +628,19 @@
       "totals": "Totali",
       "deposit": "Acconto",
       "margin": "Margine"
-    }
+    },
+    "invoicedShare": "Fatturato per questo ordine",
+    "paidHere": "Pagato su questo ordine",
+    "toPayHere": "Ancora da pagare su questo ordine",
+    "share": "Quota di questo ordine",
+    "invoiceWhole": "Totale fattura",
+    "alsoBills": "Fattura anche",
+    "alsoBillsHidden_one": "e {count} altro ordine che non puoi aprire",
+    "alsoBillsHidden_other": "e altri {count} ordini che non puoi aprire",
+    "freight": "Il trasporto {amount} è in fattura, in nessun ordine",
+    "settledWhen": "Saldato quando {invoice} è pagata per intero",
+    "settledWhenShared": "Saldato quando {invoice} è pagata per intero (fattura anche {numbers})",
+    "statement": "Estratto conto di {customer} ›"
   },
   "docType": {
     "TD01": "Fattura (TD01)",
@@ -958,7 +967,14 @@
       "loses_one": "{numbers} perde questa riga",
       "loses_other": "{numbers} perdono questa riga"
     },
-    "closedShort": "Chiusa in anticipo: la fanno gli ordini di lavoro"
+    "closedShort": "Chiusa in anticipo: la fanno gli ordini di lavoro",
+    "shipTo": "Spedire a",
+    "shipToKeep": "Come ora: {address}",
+    "shipToHeld": "Un altro indirizzo di consegna richiede il diritto di vedere i clienti: l'ordine mantiene il suo indirizzo.",
+    "shipToFailed": "Non è stato possibile leggere gli indirizzi di consegna: l'ordine mantiene il suo indirizzo.",
+    "shipToPrepared": "Si sta preparando una spedizione al vecchio indirizzo: cambialo lì prima",
+    "shipToPreparedOf": "Si sta preparando la spedizione {number} al vecchio indirizzo: cambialo lì prima",
+    "shipToDone": "L'indirizzo di consegna è cambiato."
   },
   "editor": {
     "add": {
@@ -1284,7 +1300,8 @@
         "all": "Tutto",
         "requests": "Richieste",
         "amendments": "Modifiche",
-        "confirmations": "Conferme"
+        "confirmations": "Conferme",
+        "workOrders": "Ordini di lavoro"
       },
       "asked": "Richiesta · {kind}",
       "by": "di {name}",
@@ -1341,7 +1358,7 @@
     "numberLoading": "Lettura del prossimo numero…",
     "numberUnknown": "Il numero si dà alla conferma dell'ordine.",
     "number": "Avrà il numero {number} (se un altro ordine non lo prende prima).",
-    "create": "Crea l'ordine in bozza",
+    "addLines": "Aggiungi le righe",
     "partyStatus": {
       "PROSPECT": "un potenziale cliente",
       "ACTIVE": "attivo",
@@ -1787,6 +1804,23 @@
       "notNow": "In questo stato l’ordine di lavoro non si annulla",
       "issued": "Prelevato per l’ordine (resta su di esso finché non viene reso a mano): {items}",
       "atWorkshop": "Presso un laboratorio: {numbers}"
+    },
+    "changeWaits": "Modifica in attesa: {before} → {after}",
+    "changeApply": "Applica…",
+    "changeLeave": "Lascia com'è…",
+    "waitsPlanner": "Attende un pianificatore · avvisato alle {time}",
+    "waitsPlannerShort": "Attende un pianificatore: decide un pianificatore o il responsabile di produzione",
+    "changeApplied": "La modifica di {number} è applicata: il reparto è stato avvisato",
+    "changeDeclined": "La modifica di {number} resta com'è",
+    "done": "Fatto",
+    "taskDone": "Fatto: il compito è chiuso",
+    "repromiseHeld": "Risponde la vendita, mai il pianificatore che l'ha proposta",
+    "liftPause": "Togli la pausa del cliente…",
+    "go": {
+      "scrap": "Scarti ›",
+      "products": "Prodotti ›",
+      "subcontracting": "Lavorazioni esterne ›",
+      "open": "Apri"
     }
   },
   "approval": {
@@ -1850,6 +1884,19 @@
     "ownDates": "Le date dell'ordine",
     "backupFor": "per tutti gli ordini di {customer}",
     "backupElsewhere": "Cambialo nella pagina di {customer} ›"
+  },
+  "wocs": {
+    "title": "Modifiche agli ordini di lavoro di questo ordine",
+    "none": "Ancora nessuna modifica agli ordini di lavoro per questo ordine.",
+    "newDraft": "Un nuovo ordine di lavoro (bozza)"
+  },
+  "badge": {
+    "yourTurn": "Qui qualcosa aspetta te"
+  },
+  "bandMenu": {
+    "makeWorkOrders": "Crea ordini di lavoro…",
+    "changeShipTo": "Cambia l'indirizzo di consegna…",
+    "whoAnswers": "Chi risponde al cliente…"
   },
   "elsewhere": {
     "title": "Registra una spedizione fatta altrove…",
@@ -1919,5 +1966,11 @@
       "state": "Non è stato possibile registrare la spedizione",
       "failed": "Non è stato possibile registrare la spedizione: riprova"
     }
+  },
+  "priced": {
+    "fromList": "Prezzi dal listino di {customer}"
+  },
+  "pricedPdf": {
+    "held": "Mostra dei prezzi: lo invia chi vede i prezzi."
   }
 }

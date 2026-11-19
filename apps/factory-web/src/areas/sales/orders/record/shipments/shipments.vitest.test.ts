@@ -124,20 +124,17 @@ describe('F-OP-122: a shared shipment names its other orders; the customer’s D
     expect(alsoCarries(row(), 'so-1')).toEqual([])
   })
 
-  it('offers the DRAFTs of the same site and address: open, or held with MULTI_ORDER_OFF’s words; another site or address not at all', () => {
-    const draft = (shipmentId: string, joinable: { allowed: boolean; code: 'MULTI_ORDER_OFF' | 'SITE' | 'SHIP_TO' | 'SHIPMENT_STATE' | null; why: string | null }, status = 'DRAFT') => ({ shipmentId, number: `SH-${shipmentId}`, status, siteId: 'site-1', joinable }) as JoinableShipments['shipments'][number]
+  it('offers the DRAFTs the order may join (B-OP-047: N6 on); one held for any reason — another site or address, a hold — not at all', () => {
+    const draft = (shipmentId: string, joinable: { allowed: boolean; code: 'CUSTOMER_HOLD' | 'SITE' | 'SHIP_TO' | 'SHIPMENT_STATE' | null; why: string | null }, status = 'DRAFT') => ({ shipmentId, number: `SH-${shipmentId}`, status, siteId: 'site-1', joinable }) as JoinableShipments['shipments'][number]
     expect(
       joinableRows([
-        draft('1', { allowed: false, code: 'MULTI_ORDER_OFF', why: 'x' }),
+        draft('1', { allowed: false, code: 'CUSTOMER_HOLD', why: 'x' }),
         draft('2', { allowed: true, code: null, why: null }),
         draft('3', { allowed: false, code: 'SITE', why: 'x' }),
         draft('4', { allowed: false, code: 'SHIP_TO', why: 'x' }),
         draft('5', { allowed: true, code: null, why: null }, 'PACKED'),
       ]),
-    ).toEqual([
-      { shipmentId: '1', number: 'SH-1', held: { key: 'shipOrders.later', detail: null } },
-      { shipmentId: '2', number: 'SH-2', held: null },
-    ])
+    ).toEqual([{ shipmentId: '2', number: 'SH-2', held: null }])
   })
 
   it('the words exist in both languages', () => {

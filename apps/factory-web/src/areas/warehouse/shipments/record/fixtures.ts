@@ -35,7 +35,7 @@ import {
 } from '../_demo/fixtures'
 import { ddtFormFor } from '../model'
 // F-OP-130 (order page N6): a shipment of two orders of one customer (shown as it will be after the switch, B-OP-047).
-import { CANDIDATES_AFTER, CANDIDATES_HELD, SECOND_ORDER, SECOND_READY, secondBackorder, sharedShipment } from '../_demo/fixtures'
+import { CANDIDATES_AFTER, SECOND_ORDER, SECOND_READY, secondBackorder, sharedShipment } from '../_demo/fixtures'
 import type { ShipmentRecordModel } from './record-model'
 import { ShipmentRecordView } from './view/ShipmentRecordView'
 // ---- B-TH-264: the shipment's docked thread in the design cases (RecordFrame beside every tab) ----
@@ -210,15 +210,15 @@ export const designScreen = defineDesignScreen<RecordCase>({
     // ---- F-OP-130 (order page N6, R-5): several orders of one customer on one shipment ----
     {
       id: 'shared-draft',
-      label: 'Two orders on one DRAFT (after the switch): a chip per order, the lines under each order and PO, Take its garments off',
+      label: 'Two orders on one DRAFT: a chip per order, the lines under each order and PO, Take its garments off',
       model: base('warehouse', sharedShipment('DRAFT'), { backorder: { value: [backorder(), secondBackorder()], problem: null }, ready: { value: [READY[0]!, SECOND_READY], problem: null } }),
-      note: 'Until the switch (B-OP-047) no shipment carries a second order: this is what Warehouse shows after it. The first order stays (the shipment was made for it); another one leaves with its garments.',
+      note: 'Since the switch (B-OP-047) a shipment may carry several orders of one customer. The first order stays (the shipment was made for it); another one leaves with its garments.',
     },
     { id: 'shared-packed', label: 'Two orders, packed: every order named, each order’s progress', model: base('sales', sharedShipment('PACKED'), { backorder: { value: [backorder(), secondBackorder()], problem: null } }) },
     { id: 'shared-reading', label: 'Two orders: whose each line is, still being read (a line never under the wrong order)', model: base('warehouse', sharedShipment('DRAFT'), { backorder: { value: null, problem: null } }) },
-    { id: 'add-order', label: 'Add an order’s garments… — each order held with why (several orders in one shipment: next update)', model: base('warehouse', draftLoose(), { dialog: { kind: 'addOrder' }, candidates: { value: CANDIDATES_HELD, problem: null } }), note: 'Only this shipment’s own customer’s open orders are listed, never another customer’s, not even held. Every one says why it cannot join; the real reason first.' },
-    { id: 'add-order-none', label: 'Add an order’s garments… — the customer has no other open order', model: base('warehouse', draftLoose(), { dialog: { kind: 'addOrder' }, candidates: { value: { ...CANDIDATES_HELD, orders: [] }, problem: null } }) },
-    { id: 'add-order-cells', label: 'Add an order’s garments… (after the switch): SO-2026-0090 chosen, its sizes with each cap', model: base('warehouse', draftLoose(), { dialog: { kind: 'addOrder' }, candidates: { value: CANDIDATES_AFTER, problem: null }, picked: { salesOrderId: SECOND_ORDER.id, ready: { value: SECOND_READY, problem: null } } }) },
+    { id: 'add-order', label: 'Add an order’s garments… — each order with its verdict: SO-2026-0090 may join, SO-2026-0094 held with why (another address)', model: base('warehouse', draftLoose(), { dialog: { kind: 'addOrder' }, candidates: { value: CANDIDATES_AFTER, problem: null } }), note: 'Only this shipment’s own customer’s open orders are listed, never another customer’s, not even held. Every one says why it cannot join; the real reason first.' },
+    { id: 'add-order-none', label: 'Add an order’s garments… — the customer has no other open order', model: base('warehouse', draftLoose(), { dialog: { kind: 'addOrder' }, candidates: { value: { ...CANDIDATES_AFTER, orders: [] }, problem: null } }) },
+    { id: 'add-order-cells', label: 'Add an order’s garments…: SO-2026-0090 chosen, its sizes with each cap', model: base('warehouse', draftLoose(), { dialog: { kind: 'addOrder' }, candidates: { value: CANDIDATES_AFTER, problem: null }, picked: { salesOrderId: SECOND_ORDER.id, ready: { value: SECOND_READY, problem: null } } }) },
     { id: 'add-lines-shared', label: 'Add garments on two orders: the sizes under each order and PO', model: base('warehouse', sharedShipment('DRAFT'), { dialog: { kind: 'addLines' }, ready: { value: [READY[0]!, SECOND_READY], problem: null }, backorder: { value: [backorder(), secondBackorder()], problem: null } }) },
     { id: 'take-off', label: 'Take SO-2026-0090’s garments off SH-00160', model: base('warehouse', sharedShipment('DRAFT'), { dialog: { kind: 'takeOff', salesOrderId: SECOND_ORDER.id }, backorder: { value: [backorder(), secondBackorder()], problem: null } }) },
     { id: 'loading', label: 'Loading', model: base('warehouse', packed, { shipment: { status: 'loading' } }) },

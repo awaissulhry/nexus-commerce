@@ -250,7 +250,7 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
   )
 
   // F-OP-130 (order page N6, R-5): what EVERY order it carries can still put on it (its lines' orders, the first first): one read
-  // per order — one, while several orders in one shipment are held off (MULTI_ORDER_OFF).
+  // per order (B-OP-047: several since the N6 switch).
   const loadReady = useCallback(
     (value: Shipment) => {
       if (value.status !== 'DRAFT' || !can.manage) return setReady(null)
