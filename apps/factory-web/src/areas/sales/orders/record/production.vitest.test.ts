@@ -640,3 +640,23 @@ describe('F-OP-306: the New work order dialog — field groups, a line\'s sizes 
   })
 })
 // ---- end F-OP-306
+
+// ---- F-OP-309 (order page walk #15): the work-order table beside the dock — its columns' widths, the number whole, sub lines wrap ----
+describe('F-OP-309: the work-order table keeps the number whole, the Due field clear of Priority, and wraps instead of cutting', () => {
+  it('each column its width (Materials takes what is left); the Actions width only with the row ⋯', () => {
+    const acts = draw('wo-acts-manager')
+    expect(acts).toContain('<div class="fw-so-wotable"><table')
+    expect(acts).toContain('<colgroup><col style="width:15%"/><col style="width:15%"/><col style="width:12%"/><col style="width:13%"/><col style="width:144px"/><col style="width:96px"/><col/><col style="width:64px"/></colgroup>')
+    const reader = draw('production-progress')
+    expect(reader).toContain('<colgroup><col style="width:15%"/><col style="width:15%"/><col style="width:12%"/><col style="width:13%"/><col style="width:144px"/><col style="width:96px"/><col/></colgroup>')
+  })
+
+  it('the number on one line; the sub lines wrap in this table only', () => {
+    const css = readFileSync(new URL('../orders.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-so-wotable \.fw-so-link \{\s*white-space: nowrap;\s*\}/)
+    expect(css).toMatch(/\.fw-so-wotable \.fw-so-cell-sub \{\s*white-space: normal;\s*overflow-wrap: anywhere;\s*\}/)
+    // Elsewhere a sub line still ends in "…" (the order page's other tables keep their one-line cells).
+    expect(css).toMatch(/\.fw-so-cell-sub,\s*\.fw-so-card-sub \{[^}]*white-space: nowrap;/)
+  })
+})
+// ---- end F-OP-309

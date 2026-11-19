@@ -374,19 +374,31 @@ function OwnWorkOrders({ work, model, actions, href, order }: { work: Work; mode
   }))
   return (
     <>
-      <SummaryTable
-        label={t('production.title')}
-        columns={[t('production.col.number'), t('production.col.style'), t('production.col.own'), t('production.col.progress'), t('production.col.due'), t('wo.col.priority') /* F-OP-113 */, t('production.col.materials'), ...(acts ? [t('wo.col.acts')] : [])]}
-        rows={[...rows, ...mtm]}
-        density="roomy"
-        stackOnPhone
-        align={['left', 'left', 'left', 'left', 'right', 'left', 'left', ...(acts ? (['right'] as const) : [])]}
-      />
+      {/* F-OP-309 (walk #15): the DS table is fixed-layout, so eight equal shares beside the dock (a third at 1440) wrapped the work
+          order's number, ran the Due date field into Priority and cut the cells. Each column its width (Materials takes what is left);
+          the number stays on one line and the sub lines wrap (orders.css .fw-so-wotable). */}
+      <div className="fw-so-wotable">
+        <SummaryTable
+          label={t('production.title')}
+          columns={[t('production.col.number'), t('production.col.style'), t('production.col.own'), t('production.col.progress'), t('production.col.due'), t('wo.col.priority') /* F-OP-113 */, t('production.col.materials'), ...(acts ? [t('wo.col.acts')] : [])]}
+          rows={[...rows, ...mtm]}
+          density="roomy"
+          stackOnPhone
+          align={['left', 'left', 'left', 'left', 'right', 'left', 'left', ...(acts ? (['right'] as const) : [])]}
+          widths={WO_WIDTHS.slice(0, acts ? WO_WIDTHS.length : WO_WIDTHS.length - 1)}
+        />
+      </div>
       {/* F-OP-113: a reader who may not change them reads who does (the row ⋯ says it again per act). */}
       {heldForReader && <p className="fw-so-hint">{t('wo.heldHint')}</p>}
     </>
   )
 }
+
+/**
+ * F-OP-309 (walk #15): the work-order table's column widths — Work order · Style · Made for this order · Progress · Due (a day field) ·
+ * Priority (a select and Rush) · Materials (what is left) · Actions (the row ⋯; absent without acts).
+ */
+const WO_WIDTHS: readonly (string | undefined)[] = ['15%', '15%', '12%', '13%', '144px', '96px', undefined, '64px']
 
 /**
  * Dates & milestones (#dates; today's Dates card merged in): the deposit gate first (production waits for it; its door: Money), the

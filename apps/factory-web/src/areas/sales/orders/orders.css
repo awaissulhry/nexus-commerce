@@ -779,3 +779,15 @@ a.fw-so-countbtn:focus-visible {
   cursor: default;
 }
 /* ---- end F-OP-307 */
+
+/* ---- F-OP-309 (order page walk #15): the Production tab's work-order table beside the dock — the work order's number on one line,
+   the sub lines (where it is made, its progress words) wrap instead of being cut; the columns' widths are the table's own. */
+.fw-so-wotable .fw-so-link {
+  white-space: nowrap;
+}
+
+.fw-so-wotable .fw-so-cell-sub {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* ---- end F-OP-309 */
