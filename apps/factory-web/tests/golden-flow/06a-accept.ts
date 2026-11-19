@@ -4,22 +4,24 @@ import { defineStage } from './_harness/stages'
 import { answerOf, dialog, press } from './_harness/ui'
 
 export default defineStage({
-  proves: 'send; accept by link in a second context with a typed name; the link shows the party’s own prices; deposit request (and the bank-details page by its DEPOSIT_INFO link)',
+  proves: 'send (by the Owner: the PDF shows prices); accept by link in a second context with a typed name; the link shows the party’s own prices; deposit request (and the bank-details page by its DEPOSIT_INFO link)',
   async run(flow) {
     const sales = await flow.desk('sales')
     const quote = flow.state.quote as { id: string; number: string }
     const to = CUSTOMER.orders.email
 
-    const sent = await flow.step('sales sends the quote: checks, the PDF as it leaves, to Anna (orders contact)', async () => {
+    // B-CP-011 (the money wall, B-CP-015): the quote's PDF shows prices — the Owner sends it (Sales' Send is held in words, 05-quote).
+    const sent = await flow.step('the Owner sends the quote (its PDF shows prices): checks, the PDF as it leaves, to Anna (orders contact)', async () => {
+      const owner = await flow.desk('owner')
       const before = await flow.mailsTo(to)
-      await sales.go(`/sales/quotes/${quote.id}`)
-      await press(sales.page.getByRole('button', { name: /^Send to customer/ }).first())
-      const form = dialog(sales.page)
+      await owner.go(`/sales/quotes/${quote.id}`)
+      await press(owner.page.getByRole('button', { name: /^Send to customer/ }).first())
+      const form = dialog(owner.page)
       await expect(form.getByText(to).first()).toBeVisible()
       await expect(form.locator('canvas').first()).toBeVisible({ timeout: 60_000 })
       await expect(form.getByText(/^Stops the send:/)).toHaveCount(0)
-      await flow.shot(sales.page, 'send-dialog')
-      const answer = await answerOf(sales.page, 'POST', /\/send$/, () => press(form.getByRole('button', { name: 'Send', exact: true }), 60_000))
+      await flow.shot(owner.page, 'send-dialog')
+      const answer = await answerOf(owner.page, 'POST', /\/send$/, () => press(form.getByRole('button', { name: 'Send', exact: true }), 60_000))
       await expect(form.getByText(new RegExp(`Sent to ${to.replace(/\./g, '\\.')}`)).first()).toBeVisible()
       await press(form.getByRole('button', { name: 'Done' }))
       expect(answer).toMatchObject({ quote: { status: 'SENT' }, sent: { to } })
