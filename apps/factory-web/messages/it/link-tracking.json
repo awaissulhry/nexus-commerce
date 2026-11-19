@@ -202,5 +202,11 @@
         "format": "Scrivete il CAP come nell'indirizzo di consegna: lettere e cifre."
       }
     }
+  },
+  "typed": {
+    "label": "Numero di tracciamento",
+    "noLive": "Nessun tracciamento in tempo reale",
+    "track": "Segui ›",
+    "trackOf": "Segui la spedizione {number} sul sito del corriere (si apre in una nuova scheda)"
   }
 }

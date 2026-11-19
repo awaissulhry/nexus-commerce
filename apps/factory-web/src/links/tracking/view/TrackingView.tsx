@@ -19,6 +19,7 @@ import {
   headerCarrierPage,
   orderLabel,
   sharedWith, // F-OP-133
+  typedTrackingOf, // op-24
   paperLine,
   PILL_TONE,
   placeLine,
@@ -231,6 +232,7 @@ function WhereItIs({ page, model, actions }: { page: TrackingPage; model: Tracki
   ]
   const several = page.parcels.length > 1
   const shared = sharedWith(page) // F-OP-133 (N6, R-18)
+  const typed = typedTrackingOf(page) // op-24 (N5): a carrier booked by hand
   return (
     <Card header={t('where.title')} headingLevel={2} description={t('where.sub')}>
       <div className="fw-trk-card">
@@ -238,6 +240,27 @@ function WhereItIs({ page, model, actions }: { page: TrackingPage; model: Tracki
         <KeyValue columns={2} phoneColumns={1} labelCase="sentence" items={facts} />
         {/* F-OP-133 (order page N6, R-5 + R-18): this order, and only HOW MANY pieces of other orders travel with it. */}
         {shared ? <p className="fw-trk-hint">{t('where.shared', { order: shared.order, count: shared.count })}</p> : null}
+        {/* op-24 (order page N5; B-OP-031, B-OP-034): the number typed for a carrier booked by hand — no carrier feeds it, so no live
+            tracking — with Copy and, when it was typed, the carrier's own page (Track ›, a new tab). */}
+        {typed ? (
+          <div className="fw-trk-parcel">
+            <span className="fw-trk-parcel-name">
+              <strong>{t('typed.label')}</strong>
+              <span className="fw-trk-mono">{typed.number}</span>
+              <Pill tone="neutral">{t('typed.noLive')}</Pill>
+            </span>
+            <span className="fw-trk-parcel-actions">
+              <Button size="sm" variant="quiet" onClick={() => actions?.onCopy?.(typed.number)} aria-label={t('parcels.copyOf', { number: typed.number })}>
+                <Copy size={13} aria-hidden /> {model.copied === typed.number ? t('parcels.copied') : t('parcels.copy')}
+              </Button>
+              {typed.link ? (
+                <a className="fw-trk-link" href={typed.link} target="_blank" rel="noopener noreferrer" aria-label={t('typed.trackOf', { number: shipment.number })}>
+                  <ExternalLink size={13} aria-hidden /> {t('typed.track')}
+                </a>
+              ) : null}
+            </span>
+          </div>
+        ) : null}
         {page.parcels.length > 0 ? (
           <ul className="fw-trk-parcels" aria-label={t('parcels.label', { count: page.parcels.length })}>
             {page.parcels.map((parcel) => {

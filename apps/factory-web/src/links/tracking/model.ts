@@ -130,6 +130,18 @@ export const EVENT_TONE: Readonly<Record<TrackingPage['events'][number]['status'
 /** The carrier's own page, only when it is https (the API keeps no other; checked again here). */
 export const carrierPageOf = (url: string | null | undefined): string | null => (url && /^https:\/\/\S+$/i.test(url) ? url : null)
 
+// ── op-24 (order page N5; B-OP-031, B-OP-034): a carrier booked by hand, as the page shows it ──
+/**
+ * The number typed for a carrier booked by hand (no carrier feeds it: the page says "No live tracking") and, when it was typed
+ * beside it, the carrier's tracking page ("Track ›", https only, checked again here); null: no number typed.
+ */
+export function typedTrackingOf(page: TrackingPage): { readonly number: string; readonly link: string | null } | null {
+  const number = page.shipment.typedTrackingNumber?.trim() ?? ''
+  if (number === '') return null
+  return { number, link: carrierPageOf(page.shipment.typedTrackingUrl?.trim()) }
+}
+// ── end op-24 ──
+
 /** The header's "Track on the carrier's site": the only parcel's page, or the first one when every parcel has the same. */
 export function headerCarrierPage(page: TrackingPage): string | null {
   const pages = [...new Set(page.parcels.map((parcel) => carrierPageOf(parcel.carrierPage)).filter((url): url is string => url !== null))]
