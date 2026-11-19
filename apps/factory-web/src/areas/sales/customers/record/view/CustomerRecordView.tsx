@@ -188,6 +188,7 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
     <>
       <RecordFrame
         recordType="Party"
+        record={{ type: 'Party', id: party.id } /* F-OP-212: every ask that names no record is this customer's */}
         personId={model.personId ?? null}
         threadLabel={t('record.dockLabelOf', { name: partyName(party) })}
         thread={thread ?? null}

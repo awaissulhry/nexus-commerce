@@ -69,6 +69,7 @@ import { readRecordRequests, type OfficeRequest } from '../../../../record-panel
 import { useOrderFiles } from '../../../_shared/record-thread/use-order-files' // F-SA-237: the order's files (one read, two places)
 import { OrderDock } from './dock/OrderDock' // F-SA-262: the dock's pick of ONE conversation
 import { aboutPlace } from './dock/discuss' // F-SA-266: "Show on the page" — a message about a part of the order jumps back to its row
+import { narrowNow, tabAddress } from '../../../_shared/record-frame/address' // F-OP-210: the in-page moves keep the dock's scope
 import type { Work } from './overview/api' // F-SA-262
 // F-SA-243: the order page is a door of the ONE review window (Home › Approvals' own), its "Decide for <customer>" too.
 import { useRequestReviewDoor } from '../../../home/approvals/requests/use-request-review-door'
@@ -121,11 +122,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // F-SA-230: the tabs re-cut; an old address lands on its new tab and section (`?tab=margin` → Money #margin with the margin grain).
   const landing = landingOf(params?.get('tab'), can)
   const tab = landing.tab
+  // F-OP-210: through tabAddress — an arrival: every term kept as it came (a scope, the narrow view, `new`, a message to open at).
   useEffect(() => {
     if (!landing.moved) return
-    const next = new URLSearchParams(params?.toString() ?? '')
-    next.set('tab', landing.tab)
-    router.replace(`${pathname}?${next.toString()}${landing.anchor ? `#${landing.anchor}` : ''}`, { scroll: false })
+    router.replace(tabAddress(pathname, window.location.search, landing.tab, { anchor: landing.anchor, arrival: true }), { scroll: false })
   }, [landing.moved, landing.tab, landing.anchor]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [order, setOrder] = useState<Loaded<Order>>({ status: 'loading' })
@@ -326,7 +326,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     setDialogProblem,
     clearChanged: () => setChanged(null),
     showLines: () => {
-      if (tab !== 'lines') router.replace(`${pathname}?tab=lines`)
+      // F-OP-210: Amend keeps the dock's scope and every other term (below 1280 px the full-width thread gives way to Lines).
+      if (tab !== 'lines') router.replace(tabAddress(pathname, window.location.search, 'lines', { narrow: narrowNow() }))
     },
     pricedStart: (amendment) => depth.actions.onPricedStart?.(amendment),
     permissions: session.permissions, // F-OP-111: the split's Ship to reads the customer's addresses (parties.view)
@@ -474,9 +475,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     (about: { kind: string; id: string }) => {
       const place = aboutPlace(about)
       if (!place) return
-      const next = new URLSearchParams(window.location.search)
-      next.set('tab', place.tab)
-      router.replace(`${pathname}?${next.toString()}#${place.anchor}`, { scroll: false })
+      // F-OP-210: the dock's scope kept; below 1280 px the full-width thread gives way to the row.
+      router.replace(tabAddress(pathname, window.location.search, place.tab, { narrow: narrowNow(), anchor: place.anchor }), { scroll: false })
       setFocusRow({ anchor: place.anchor, at: Date.now() })
     },
     [router, pathname],
@@ -526,11 +526,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
       changes: changeFactsOf(told?.value?.changes ?? [], stillRows),
       onWhoWasTold: (messageId: string) => setToldOpen(messageId),
       onStillToDo: () => {
-        const next = new URLSearchParams(window.location.search)
-        next.set('tab', 'changes')
-        // Narrower than the dock: the full-width conversation gives way to the page (Back still holds the way to it).
-        if (next.get('thread') === 'open') next.delete('thread')
-        router.replace(`${pathname}?${next.toString()}#still-to-do`, { scroll: false })
+        // Narrower than the dock: the full-width conversation gives way to the page (Back still holds the way to it; the frame keeps
+        // the scope). F-OP-210: through tabAddress, the dock's scope kept docked.
+        router.replace(tabAddress(pathname, window.location.search, 'changes', { narrow: narrowNow(), anchor: 'still-to-do' }), { scroll: false })
         setFocusRow({ anchor: 'still-to-do', at: Date.now() })
       },
     }),

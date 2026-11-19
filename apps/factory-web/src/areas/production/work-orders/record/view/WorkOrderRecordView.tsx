@@ -306,6 +306,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
   return (
     <RecordFrame
       recordType="WorkOrder"
+      record={{ type: 'WorkOrder', id: workOrder.id } /* F-OP-212: every ask that names no record is this work order's */}
       personId={model.personId ?? null}
       threadLabel={t('record.dockLabel')}
       thread={thread ?? null}

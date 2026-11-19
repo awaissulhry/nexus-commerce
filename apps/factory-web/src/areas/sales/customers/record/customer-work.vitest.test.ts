@@ -12,6 +12,7 @@ import { pickOfRow, WORK_VIEWS, workPreset } from './view/WorkTab'
 // F-SA-279: the dock follows the row
 import { DOCK_FOLLOW_MS, DOCK_PARAM, DOCK_TABS, dockable, dockAddress, dockFollower, dockKeyOf, dockOnTab, dockTermOf, dockValueOf, draftKeptOf, GENERAL_DOCK, pickOfSummary, scopeOf } from './use-customer-work'
 import { lockedEntry } from '../../orders/list/use-orders-sheet' // fx-12
+import { writeSearch, type HistoryTarget } from '../../../_shared/record-frame/address' // F-OP-211
 
 /**
  * F-SA-276 (sales page plan N5, N7, N3; picks R5, R9, P10, P17; 11-customer-page §3; 17-review R-1, BW-7): the customer's Work tab —
@@ -375,8 +376,11 @@ describe('F-SA-279: the page wires it (the sources)', () => {
   const hook = readFileSync(new URL('./use-customer-work.ts', import.meta.url), 'utf8')
   const block = hook.slice(hook.indexOf('export function useCustomerDock'))
   it('a replace, never a push (Back leaves the page); the summary read checks an address\'s record', () => {
-    expect(block).toContain('router.replace(address, { scroll: false })')
+    // F-OP-211: the record pages' ONE history writer (a replace, only a different address); no router write of `dock=` any more.
+    expect(block).toContain('writeSearch(dockAddress(pathname, window.location.search, next, messageId))')
+    expect(block).not.toContain('router.replace')
     expect(block).not.toContain('router.push')
+    expect(block).not.toContain('push: true')
     expect(block).toContain('readRecordSummary(api, { type: term.type, id: term.id }, controller.signal)')
     expect(block).toContain('if (!checked) return write(GENERAL_DOCK)')
   })
@@ -448,3 +452,46 @@ describe('fx-12: the customer page writes its address once', () => {
   })
 })
 // ---- end fx-12
+
+// ---- F-OP-211 (order page plan N4; 11-dock §4): the customer page's `dock=` on the record pages' ONE history writer (the order page's
+// `thread=` writer): a history replace, only when the address differs (fx-12's rule above, unchanged), never a push, the hash kept.
+describe('F-OP-211: the dock writes `dock=` through the one history writer', () => {
+  const ORDER = '44444444-4444-4444-8444-444444444444'
+  function fakeWindow(address: string) {
+    let now = new URL(address, 'https://factory.example.com')
+    const writes: string[] = []
+    const target: HistoryTarget = {
+      location: {
+        get pathname() {
+          return now.pathname
+        },
+        get search() {
+          return now.search
+        },
+        get hash() {
+          return now.hash
+        },
+      },
+      history: {
+        replaceState: (_data: unknown, _unused: string, url?: string | null) => {
+          writes.push(String(url))
+          now = new URL(String(url), now)
+        },
+        pushState: () => {
+          throw new Error('the dock never pushes: Back leaves the page')
+        },
+      },
+    }
+    return { target, writes, search: () => now.search }
+  }
+  it('a pick is one replace; the same pick again writes nothing; the general one drops the term; the hash stays', () => {
+    const { target, writes, search } = fakeWindow(`${BASE}?tab=work#orders`)
+    const write = (term: Parameters<typeof dockAddress>[2]) => writeSearch(dockAddress(BASE, search(), term), {}, target)
+    expect(write({ kind: 'record', type: 'SalesOrder', id: ORDER })).toBe(true)
+    expect(write({ kind: 'record', type: 'SalesOrder', id: ORDER })).toBe(false)
+    expect(write(GENERAL_DOCK)).toBe(true)
+    expect(write(GENERAL_DOCK)).toBe(false)
+    expect(writes).toEqual([`${BASE}?tab=work&dock=SalesOrder.${ORDER}#orders`, `${BASE}?tab=work#orders`])
+  })
+})
+// ---- end F-OP-211
