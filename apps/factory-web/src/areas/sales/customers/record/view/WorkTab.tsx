@@ -17,13 +17,14 @@ import { doorListOf } from '../../../../home/approvals/requests/model'
 import { useRequestReviewDoor } from '../../../../home/approvals/requests/use-request-review-door'
 import { RequestDoorNoticeBanner, RequestDoorWindow } from '../../../../home/approvals/requests/view/RequestReview'
 import type { OrderRow } from '../../../orders/api'
-import type { RowView } from '../../../orders/model'
+import type { ExtraTerms, RowView } from '../../../orders/model'
 import { ORDERS_LIST_KEY, sheetAddress, useOrdersSheet, type OrdersSheetHost } from '../../../orders/list/use-orders-sheet'
 import { OrdersListView, WAITING_US_VIEW } from '../../../orders/list/view/OrdersListView'
 import type { OrdersListModel } from '../../../orders/list/list-model'
 import { WORK_DEFAULT_ROWS, workEntry, type useCustomerWork, type WorkCan } from '../use-customer-work'
 import { workViewCounts } from '../use-customer-work' // F-CP-103: the Views ▾ counts from the strip's one count read
 import type { WorkAsk } from '../use-customer-work' // F-CP-104: the band's New order / ⋯ Import orders, served in place
+import { priceDifferOf } from '../use-customer-work' // F-CP-141: the Not equal view's count (the customer's own counts)
 // ---- F-CP-113: the New order page's own lines editor, in a large window on this page ----
 import type { NewOrderHeader } from '../../../orders/new/new-model'
 import { NewOrderEditor } from '../../../orders/new/NewOrderEditor'
@@ -41,6 +42,10 @@ import { pendingAskOf, sameRecord } from '../../../../_shared/record-frame/model
 import type { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-customer/use-all-of-customer'
 import { ALL_OF_CUSTOMER_NS, AllOfCustomerDock } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
 // ---- end F-SA-279
+// ---- F-CP-111: the docked order's files line = its file set; a tile opens the ONE viewer here ----
+import { FileViewer } from '../../../../../lib/record-thread/popups/view/FileViewer'
+import { FILES_VIEW_NS } from '../../../../../lib/record-thread/files-view/view/FilesView'
+// ---- end F-CP-111
 import { WaitingStrip, type StripDoors } from './WaitingStrip'
 import './customer-work.css'
 
@@ -93,12 +98,49 @@ export function workEmptyOf(rows: RowView, waiting: 'us' | null, customer: strin
 }
 // ---- end F-CP-101
 
+// ---- F-CP-141 (customer page plan C2d; 11-money §3.2; review E5, E6): the Not equal view and the money columns ----
+/**
+ * The money columns — ONE constant: the Not equal view's, and the Work · Money columns of every view (F-CP-105). Shown: Number ·
+ * Status · Our price · Customer's price · Price check · Balance (@1440 beside the dock: select 36 + 128 + 112 + 104 + 104 + 112 + 104
+ * + ⋯ 64 = 764 px ≤ the body's 865); from 1800 px Picture, Promised and Paid; Difference stays in Customise. The ids are the price
+ * check spec's (fixed: the Owner's sheet maps onto them). A person's own Customise wins; without the price grain the money columns
+ * do not exist, so nothing of it shows.
+ */
+export const MONEY_PRESET: NonNullable<OrdersListModel['preset']> = Object.freeze({
+  shown: Object.freeze(['number', 'status', 'ourPrice', 'brandPrice', 'priceMatch', 'balance']),
+  wide: Object.freeze(['picture', 'promised', 'paid']),
+})
+
+/** The Not equal view is the one shown: every order (`rows=all`), the price check term Not equal, no waiting term (a price holder's). */
+export const notEqualShown = (rows: RowView, waiting: 'us' | null, extra: ExtraTerms | null | undefined): boolean => rows === 'all' && !waiting && extra?.priceMatch === 'NOT_EQUAL'
+// ---- end F-CP-141
+
+// ---- F-CP-105 (customer page plan C2d; 10 §5; review F3 not taken: the toggle stays): "Columns: Work · Money" on every Work view ----
+/** The page term of the toggle (kept by the host on every view, dropped by Clear all: CLEAR_DROPS). It names no view. */
+export const COLS_TERM = 'cols'
+export type ColumnSet = 'work' | 'money'
+/** A view's own columns: the Not equal view opens on Money, every other view on Work. */
+export const viewColumnSet = (notEqual: boolean): ColumnSet => (notEqual ? 'money' : 'work')
+/**
+ * The columns shown: the person's pick (`cols=money|work`), else the view's own. Without the price grain always Work — `cols=money`
+ * changes nothing (a shared saved view or link that names it shows no money: there is no money column for them).
+ */
+export function columnSetOf(asked: string | null | undefined, notEqual: boolean, price: boolean): ColumnSet {
+  if (!price) return 'work'
+  return asked === 'money' || asked === 'work' ? asked : viewColumnSet(notEqual)
+}
+/** The term a pick writes: none when it is the view's own (the address stays clean; the same pick again writes the same address). */
+export const colsTermOf = (set: ColumnSet, notEqual: boolean): ColumnSet | null => (set === viewColumnSet(notEqual) ? null : set)
+// ---- end F-CP-105
+
 /**
  * The columns a view shows at first (11-customer-page §3.5; a person's Customise wins): In production — no Status (every row is in
  * production); All orders — Status, Waiting on from 1800 px; the other views — Status and Waiting on. Customer and Brand never (the
- * customer is the page's).
+ * customer is the page's). F-CP-141: the money columns (MONEY_PRESET) when `money` — the Not equal view; All orders keeps its own
+ * (review E5: money comes with the Not equal view or the Work · Money toggle, never unasked).
  */
-export function workPreset(rows: RowView, waiting: 'us' | null): NonNullable<OrdersListModel['preset']> {
+export function workPreset(rows: RowView, waiting: 'us' | null, money = false): NonNullable<OrdersListModel['preset']> {
+  if (money) return MONEY_PRESET // F-CP-141
   if (rows === 'all' && !waiting) return { shown: ['picture', 'number', 'status', 'whereItIs', 'promised', 'newMessages'], wide: ['waitingOn', 'priority', 'deposit', 'balance'] }
   if (rows === 'IN_PRODUCTION' && !waiting) return { shown: ['picture', 'number', 'whereItIs', 'promised', 'waitingOn', 'newMessages'], wide: ['priority', 'deposit', 'balance', 'supervisor'] }
   return { shown: ['picture', 'number', 'status', 'whereItIs', 'promised', 'waitingOn', 'newMessages'], wide: ['priority', 'deposit', 'balance', 'supervisor'] }
@@ -166,7 +208,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     basePath,
     locked: { party: party.id },
     embedded: true,
-    keep: ['tab', 'dock'],
+    keep: ['tab', 'dock', COLS_TERM /* F-CP-105: Work · Money, kept on every view (Clear all drops it) */],
     listKey: ORDERS_LIST_KEY,
     clearTo: WORK_DEFAULT_ROWS, // F-CP-102: Clear all goes back to All orders (the "Showing" line compares with it)
     onAddLines: setLines, // F-CP-113: the lines window on this page
@@ -199,12 +241,27 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const drafts = useCustomerDrafts(party.id, showDrafts, untitled)
   const draftRows = drafts.read.status === 'ready' ? drafts.read.rows : null
   // ---- end F-CP-107
+  // ---- F-CP-141: "Not equal" (`rows=all&priceMatch=NOT_EQUAL`) — a price holder's only: the view, its count (the customer's own
+  // counts, read by the page: GET /sales/brand-prices/summary) and its money columns. Without the price grain: no view, no count;
+  // an address with the term is held by the sheet in one line (no read carries it).
+  const price = sheet.model.can.price
+  const notEqual = price && !showDrafts && notEqualShown(rows, waiting, sheet.model.extra)
+  const notEqualCount = price ? priceDifferOf(work.prices) : null
+  // ---- end F-CP-141
+  // ---- F-CP-105: "Columns: Work · Money" — the price grain only (no toggle otherwise, and `cols=money` changes nothing); it swaps
+  // the view's columns for the money columns; the Not equal view opens on Money.
+  const columnSet = columnSetOf(params?.get(COLS_TERM), notEqual, price)
+  // ---- end F-CP-105
   const model: OrdersListModel = {
     ...sheet.model,
-    views: workViewsOf(sheet.model.can, { drafts: true }), // F-CP-101: All orders first; F-CP-107: Drafts of <customer>; Not equal with F-CP-141
-    viewCounts: { ...(workViewCounts(work.reads.board) ?? {}), ...(draftRows ? { [DRAFTS_VIEW]: draftRows.length } : {}) }, // F-CP-103 (no second read); F-CP-107: the drafts once read
-    hostViews: [{ id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: party.name }), active: showDrafts }], // F-CP-107
-    preset: workPreset(rows, waiting),
+    views: workViewsOf(sheet.model.can, { drafts: true, priceCheck: true }), // F-CP-101: All orders first; F-CP-107: Drafts of <customer>; F-CP-141: Not equal (price grain)
+    viewCounts: { ...(workViewCounts(work.reads.board) ?? {}), ...(draftRows ? { [DRAFTS_VIEW]: draftRows.length } : {}), ...(notEqualCount !== null ? { [NOT_EQUAL_VIEW]: notEqualCount } : {}) }, // F-CP-103 (no second read); F-CP-107: the drafts once read; F-CP-141: the Not equal count
+    hostViews: [
+      { id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: party.name }), active: showDrafts }, // F-CP-107
+      ...(price ? [{ id: NOT_EQUAL_VIEW, label: t('customers.work.view.notEqual'), active: notEqual }] : []), // F-CP-141
+    ],
+    preset: workPreset(rows, waiting, columnSet === 'money' /* F-CP-141: the Not equal view opens on the money columns; F-CP-105: the toggle on every view */),
+    columnSet: price ? { value: columnSet } : null, // F-CP-105: the toggle, a price holder's only
     marks: work.marks,
     doorHref: door.hrefOf,
     toolbarLink: can.workorders ? { href: `${prefix}/production/work-orders?party=${encodeURIComponent(party.id)}`, label: t('customers.band.workOrders', { customer: party.name }) } : null,
@@ -212,12 +269,24 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     // F-SA-279: the row the dock shows is marked; the keys' row is reported (the dock follows after its rest); a phone card's door.
     active: can.threads ? { id: picked && picked.type === 'SalesOrder' ? picked.id : null, cardDoor: t('customers.work.dock.cardDoor') } : null,
   }
+  // ---- F-CP-141: on the Not equal view every other pick stands alone — the price check term goes in the same write (Views ▾, the
+  // strip's doors, Show all orders); the chip's ✕ goes back to All orders.
+  const leave = notEqual ? (sheet.actions.onPriceMatch ?? null) : null
+  const onRows = leave ? (next: RowView) => leave(null, { rows: next }) : sheet.actions.onRows
+  const onWaiting = leave ? (next: 'us' | null, view?: RowView) => leave(null, { rows: view ?? rows, waiting: next }) : sheet.actions.onWaiting
+  // ---- end F-CP-141
   const actions = {
     ...sheet.actions,
+    onRows, // F-CP-141
+    onWaiting, // F-CP-141
+    // F-CP-105: a pick writes `cols` through the sheet (one replace; none when it is the view's own columns: the term goes).
+    ...(price ? { onColumnSet: (set: ColumnSet) => sheet.actions.onPageTerm?.(COLS_TERM, colsTermOf(set, notEqual)) } : {}),
     // F-CP-107: Drafts of <customer> — a person's pick writes `list=drafts` once (the record pages' one history writer; a rows view
     // picked again goes through the sheet, which drops it).
+    // F-CP-141: Not equal — `rows=all&priceMatch=NOT_EQUAL` in one write through the sheet (it drops `list`, keeps the lock).
     onHostView: (id: string) => {
       if (id === DRAFTS_VIEW) writeSearch(draftsAddress(`${prefix}${basePath}`, party.id, params))
+      else if (id === NOT_EQUAL_VIEW) sheet.actions.onPriceMatch?.('NOT_EQUAL', { rows: 'all' })
     },
     ...(can.threads
       ? {
@@ -230,15 +299,15 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
       : {}),
   }
   const doors: StripDoors = {
-    onView: (view) => (view === 'waitingUs' ? sheet.actions.onWaiting?.('us', 'open') : waiting ? sheet.actions.onWaiting?.(null, view) : sheet.actions.onRows?.(view)),
+    onView: (view) => (view === 'waitingUs' ? onWaiting?.('us', 'open') : waiting ? onWaiting?.(null, view) : onRows?.(view)), // F-CP-141: they leave the Not equal view
     repliesHref: `${prefix}/sales/incoming?tile=CUSTOMER_REPLIES&party=${encodeURIComponent(party.id)}`,
     onWindow,
     onRetry: work.retry,
   }
   // The picked order left the view (it moved on, live): the dock keeps its conversation; one line says so, with the way back.
   const items = sheet.model.list.items
-  const gone = !showDrafts && picked && picked.type === 'SalesOrder' && items && sheet.model.updates === 0 && !items.some((row) => row.id === picked.id) && !(rows === 'all' && !waiting)
-  const viewName = waiting ? t('customers.work.view.waitingUs') : o(`rows.${rows}`)
+  const gone = !showDrafts && picked && picked.type === 'SalesOrder' && items && sheet.model.updates === 0 && !items.some((row) => row.id === picked.id) && !(rows === 'all' && !waiting && !notEqual /* F-CP-141 */)
+  const viewName = waiting ? t('customers.work.view.waitingUs') : notEqual ? t('customers.work.view.notEqual') /* F-CP-141 */ : o(`rows.${rows}`)
   return (
     <CustomerOverrideProvider onDone={door.refresh}>
       <div className="fw-cw">
@@ -247,7 +316,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
         {gone && (
           <p className="fw-cw-line" role="status">
             <span>{t('customers.work.gone', { record: picked?.label ?? '', view: viewName })}</span>
-            <Button size="sm" variant="quiet" onClick={() => (waiting ? sheet.actions.onWaiting?.(null, 'all') : sheet.actions.onRows?.('all'))}>
+            <Button size="sm" variant="quiet" onClick={() => (waiting ? onWaiting?.(null, 'all') : onRows?.('all')) /* F-CP-141 */}>
               {t('customers.work.showAll')}
             </Button>
           </p>
@@ -310,7 +379,7 @@ type DockProps = { customer: { id: string; name: string }; general: ReactNode; d
  * hands the dock its feed (end check: a view fetches nothing).
  */
 /** F-OP-203: the dock's catalogues — All of <customer>'s, and the orders' for the pick's short "General" (the order page's word). */
-const CUSTOMER_DOCK_NS = [...ALL_OF_CUSTOMER_NS, 'orders'] as const
+const CUSTOMER_DOCK_NS = [...ALL_OF_CUSTOMER_NS, 'orders', FILES_VIEW_NS /* F-CP-111: a file of the order's set that did not open */] as const
 
 export function CustomerDock(props: DockProps) {
   return (
@@ -324,6 +393,14 @@ function Dock({ customer, general, dock, feed, prefix, allOffered = true }: Dock
   const t = useT('parties')
   const o = useT('orders') // F-OP-203
   const rt = useT('record-thread') // F-OP-203
+  // ---- F-CP-111: a file of the docked order's set that could not be opened (or shared) is said once, as the order page says it.
+  const fv = useT(FILES_VIEW_NS)
+  const { toast } = useToast()
+  const filesProblem = dock.filesProblem
+  useEffect(() => {
+    if (filesProblem) toast(fv(filesProblem.key), 'danger')
+  }, [filesProblem?.at]) // eslint-disable-line react-hooks/exhaustive-deps -- once per problem
+  // ---- end F-CP-111
   // ---- F-OP-212 (11-dock §5, D5): an ask of the page (files, Followers…, a door, Answer) names its record — the customer's own when
   // the body names none: the pick goes to that record's thread first (the customer's general one; the record picked), which then
   // takes the ask; once per ask. The narrow view is the frame's term, untouched by `dock=`.
@@ -376,27 +453,45 @@ function Dock({ customer, general, dock, feed, prefix, allOffered = true }: Dock
     </>
   )
   // ---- end F-OP-207
+  // F-CP-111: the ONE viewer of the docked order's files (the container's walk: ← / → over the order's files; body data only when asked).
+  const viewer = scope === 'record' ? (dock.orderFiles?.model.viewer ?? null) : null
+  const filesActions = dock.orderFiles?.actions
   return (
-    <ThreadPick label={t('customers.work.dock.label')} choices={choices} value={scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>
-      {scope === 'record' && pick ? (
-        <OfficeRecordThread
-          key={`${pick.type}:${pick.id}`}
-          docked
-          record={{ type: pick.type, id: pick.id, companyId: pick.companyId, siteId: null }}
-          title={`${pick.label} · ${customer.name}`}
-          recordLabel={pick.label}
-          party={{ id: customer.id, name: customer.name }}
-          partyRole="customer"
-          recordHref={`${prefix}${recordAddress({ type: pick.type, id: pick.id, label: pick.label, companyId: pick.companyId }, OFFICE_PAGES)}`}
-          onDraft={(kept) => dock.onDraft(pick, kept)}
+    <>
+      {viewer && (
+        <FileViewer
+          walk="all"
+          files={viewer.files}
+          index={viewer.index}
+          onIndex={(index) => filesActions?.onViewerIndex?.(index)}
+          onClose={() => filesActions?.onViewerClose?.()}
+          onOpenLocked={filesActions?.onViewerOpenLocked}
+          onDownload={filesActions?.onViewerDownload}
+          returnFocusTo={viewer.returnTo}
         />
-      ) : scope === 'all' ? (
-        // F-OP-203: All of <customer> in the dock's ONE card (DockColumn): the pick band on top, the read-only feed that scrolls.
-        // F-OP-204: its Head row (FeedHead); this page IS the customer's, so its ⋯ has no "Open <customer>".
-        <AllOfCustomerDock label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} model={feed.model} actions={{ ...feed.actions, onAnswer, writeFirst, canAnswer, ...(frame?.compose ? { onCompose: frame.compose } : {}) }} foot={allFoot} />
-      ) : (
-        general
       )}
-    </ThreadPick>
+      <ThreadPick label={t('customers.work.dock.label')} choices={choices} value={scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>
+        {scope === 'record' && pick ? (
+          <OfficeRecordThread
+            key={`${pick.type}:${pick.id}`}
+            docked
+            record={{ type: pick.type, id: pick.id, companyId: pick.companyId, siteId: null }}
+            title={`${pick.label} · ${customer.name}`}
+            recordLabel={pick.label}
+            party={{ id: customer.id, name: customer.name }}
+            partyRole="customer"
+            recordHref={`${prefix}${recordAddress({ type: pick.type, id: pick.id, label: pick.label, companyId: pick.companyId }, OFFICE_PAGES)}`}
+            onDraft={(kept) => dock.onDraft(pick, kept)}
+            {...(dock.orderFiles && pick.type === 'SalesOrder' ? { orderFiles: dock.orderFiles } : {}) /* F-CP-111: the files line = the order's file set */}
+          />
+        ) : scope === 'all' ? (
+          // F-OP-203: All of <customer> in the dock's ONE card (DockColumn): the pick band on top, the read-only feed that scrolls.
+          // F-OP-204: its Head row (FeedHead); this page IS the customer's, so its ⋯ has no "Open <customer>".
+          <AllOfCustomerDock label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} model={feed.model} actions={{ ...feed.actions, onAnswer, writeFirst, canAnswer, ...(frame?.compose ? { onCompose: frame.compose } : {}) }} foot={allFoot} />
+        ) : (
+          general
+        )}
+      </ThreadPick>
+    </>
   )
 }

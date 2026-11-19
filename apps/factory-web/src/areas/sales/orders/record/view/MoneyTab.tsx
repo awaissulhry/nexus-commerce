@@ -23,6 +23,7 @@ import { OpenStepDialog, StepVerbs, WaiveDialog } from '../schedule/view/StepVer
 import { MarginTab } from '../margin/view/MarginTab' // F-SA-230: Margin is Money's last section
 // ---- F-OP-118: Money = this order's share (the totals, the one "Settled when …", each invoice's whole and share, the other orders it bills)
 import { alsoBillsOf, freightOf, settledWhenOf, shareTotalsOf } from '../money-share'
+import { PriceCheckSection } from './PriceCheckSection' // F-CP-142
 
 const REQUEST_TONE: Record<DepositRequest['status'], Tone> = { OPEN: 'warning', PAID: 'success', WAIVED: 'neutral', CANCELLED: 'neutral' }
 const INVOICE_TONE: Record<string, Tone> = { DRAFT: 'neutral', ISSUED: 'info', SENT: 'info', DELIVERED: 'success', NOT_DELIVERABLE: 'warning', REJECTED: 'danger', ERROR: 'danger' }
@@ -43,6 +44,7 @@ export function MoneyTab({ order, model, actions }: { order: Order; model: Order
   return (
     <div className="fw-so-stack">
       <MoneyTotals order={order} model={model} actions={actions} />
+      {/* F-CP-142: */ <PriceCheckSection record={model} order={order} actions={actions} />}
       <div className="fw-so-cards fw-so-cards--wide">
         <section className="fw-so-stack" aria-label={t('money.section.deposit')}>
           {requests.length === 0 ? (

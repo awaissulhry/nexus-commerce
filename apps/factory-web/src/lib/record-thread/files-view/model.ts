@@ -1,5 +1,6 @@
 import type { FileAudience, FileKind } from '../../../record-panels/model'
 import { fileSeries, recordFiles, type FileOrigin, type FileSeries, type FilesParty, type ThreadFile } from '../files/model'
+import { namedSeries, pricedLockedOf } from '../files/model' // F-CP-144
 import { isPicture } from '@nexus/factory-domain/files/thumbs/strip' // F-OP-125: the previews route's own picture rule
 import type { ViewerFile } from '../popups/model' // F-OP-127
 
@@ -33,13 +34,17 @@ const KINDS: readonly FileKind[] = ['PHOTO', 'DOCUMENT', 'CERTIFICATE', 'ATTACHM
 
 /** The record's documents in groups: by origin once the API says it for every file (WALL-G13), else by kind; empty groups hidden. */
 export function filesGroups(files: readonly ThreadFile[], record: { readonly type: string; readonly id: string }): FilesGroup[] {
-  const series = fileSeries(recordFiles(files, record))
+  // F-CP-144: a priced document locked for this reader is in no group (never named, never chosen): ONE counted line says it.
+  const series = namedSeries(fileSeries(recordFiles(files, record)))
   const byOrigin = series.length > 0 && series.every((one) => one.latest.origin)
   if (byOrigin) {
     return ORIGINS.map((origin) => ({ key: `origin:${origin}`, group: { by: 'origin' as const, origin }, series: series.filter((one) => one.latest.origin === origin) })).filter((group) => group.series.length > 0)
   }
   return KINDS.map((kind) => ({ key: `kind:${kind}`, group: { by: 'kind' as const, kind }, series: series.filter((one) => one.latest.kind === kind) })).filter((group) => group.series.length > 0)
 }
+
+/** F-CP-144: the record's priced documents this reader may not open, counted ("2 priced documents — you cannot open them"). */
+export const pricedLockedIn = (files: readonly ThreadFile[], record: { readonly type: string; readonly id: string }): number => pricedLockedOf(fileSeries(recordFiles(files, record)))
 
 /** What the person may do in the window (their rights over the record; the API checks every call again). */
 export interface FilesAbilities {
@@ -49,6 +54,8 @@ export interface FilesAbilities {
   readonly share: boolean
   /** files.delete */
   readonly delete: boolean
+  /** F-CP-144 (B-CP-014): files.read — "Mark as priced" (anyone who reaches the record; taking it off is a price holder's). */
+  readonly mark?: boolean
 }
 
 /** The bulk bar's actions, each with the files it reaches (only those it is allowed for: the button says the count). */
@@ -114,10 +121,15 @@ export interface UploadAsk {
   readonly audiences: readonly FileAudience[]
   /** B-TH-283 (B-TH-083): "This is a measurement sheet" — filed as body data (only holders of the measurements right open it). */
   readonly sheet?: boolean
+  /** F-CP-144 (B-CP-014): "This file shows prices" — then only people who see prices open it. */
+  readonly priced?: boolean
 }
 
 /** B-TH-283: why the upload waits (a key of record-thread-files-view), or null: a measurement sheet never goes to the floor. */
 export const uploadAskHeld = (ask: Pick<UploadAsk, 'sheet' | 'audience'>): string | null => (ask.sheet && ask.audience === 'FLOOR' ? 'upload.sheetFloor' : null)
+
+/** F-CP-144: why the upload waits (a key of `record-files`), or null: a file that shows prices never goes to the floor (it sees none). */
+export const uploadPricedHeld = (ask: Pick<UploadAsk, 'priced' | 'audience'>): string | null => (ask.priced && ask.audience === 'FLOOR' ? 'priced.floor' : null)
 
 export const START_AUDIENCE: FileAudience = 'OFFICE'
 
@@ -181,6 +193,8 @@ export interface OrderFilesGroup {
   readonly worksheets?: readonly OrderWorksheet[]
   readonly leftOut: number
   readonly measurementsLeftOut: number
+  /** F-CP-144 (B-CP-023): the group's priced documents this reader may not open (counted, never named); absent: none. */
+  readonly pricedLeftOut?: number
 }
 
 export interface OrderFilesRead {
@@ -210,7 +224,10 @@ export interface OrderFilesModel {
 }
 
 /** The groups that list a file (or a worksheet, F-OP-125) or count one the reader may not open (an empty group says nothing). */
-export const orderGroupsShown = (read: OrderFilesRead): OrderFilesGroup[] => read.groups.filter((group) => group.files.length > 0 || (group.worksheets?.length ?? 0) > 0 || group.leftOut + group.measurementsLeftOut > 0)
+export const orderGroupsShown = (read: OrderFilesRead): OrderFilesGroup[] => read.groups.filter((group) => group.files.length > 0 || (group.worksheets?.length ?? 0) > 0 || group.leftOut + group.measurementsLeftOut + (group.pricedLeftOut ?? 0) /* F-CP-144 */ > 0)
+
+/** F-CP-144: the order's priced documents this reader may not open, counted over every group ("2 priced documents — you cannot open them"). */
+export const orderPricedLeftOut = (read: OrderFilesRead): number => read.groups.reduce((sum, group) => sum + (group.pricedLeftOut ?? 0), 0)
 
 /** "N files you cannot open": every group's left-out files and body data without the right, counted. */
 export const orderLeftOut = (read: OrderFilesRead): number => read.groups.reduce((sum, group) => sum + group.leftOut + group.measurementsLeftOut, 0)

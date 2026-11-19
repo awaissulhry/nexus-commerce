@@ -19,6 +19,8 @@ import { REPLY_BATCH_MAX } from '@nexus/factory-domain/threads/replies'
 import { otherCustomers } from '../email-out/mis-send/check'
 // B-SA-061: what the reply is about (a part of its order; never a work order: office only).
 import { aboutProblems, aboutShapeProblems, type About } from './about'
+// B-CP-020: a reply whose words look like a price is held once with a warning (Send it anyway: pricesInWordsOk).
+import { pricesInWordsHeld } from './threads'
 
 /**
  * B-TH-044 (threads plan TH-3, G15; T5-F07 "Reply in the portal only"; wall W08): POST /threads/<type>/<id>/replies — a reply to
@@ -57,6 +59,8 @@ export interface ReplyInput {
   readonly namesNoOtherCustomer?: boolean | undefined
   // ---- B-SA-061: the part of its order the reply is about (a sales order's reply only; never a work order).
   readonly about?: About | undefined
+  // ---- B-CP-020: the writer's "Send it anyway" for words that look like a price.
+  readonly pricesInWordsOk?: boolean | undefined
 }
 
 // ---- B-SA-073 ----------------------------------------------------------------------------------------------------------------
@@ -126,10 +130,14 @@ export async function postPortalReply(caller: CommandCaller, record: RecordRef, 
   if (!mayShare(record.type)) throw notShareableRefusal()
   if (scope.partyId === null) throw replyRefusal('NO_PARTY')
   if (existing && existing.status !== 'OPEN') throw replyRefusal('CLOSED')
+  // ---- B-CP-020 (customer page plan O5, L3): words that look like a price, held once with a warning (no amount repeated).
+  const priced = pricesInWordsHeld(draft.bodyText, 'reply', record.type, input.pricesInWordsOk)
+  if (priced) throw priced
+  // ---- end B-CP-020
 
   const { result } = await command(
     caller,
-    { name: 'threads.postReply', idempotencyKey, input: { recordType: record.type, recordId: record.id, bodyText: draft.bodyText, attachments: draft.attachments, batchId: input.batchId ?? null, replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null, /* B-SA-073 */ namesNoOtherCustomer: input.namesNoOtherCustomer === true, /* B-SA-061 */ about: input.about ?? null } },
+    { name: 'threads.postReply', idempotencyKey, input: { recordType: record.type, recordId: record.id, bodyText: draft.bodyText, attachments: draft.attachments, batchId: input.batchId ?? null, replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null, /* B-SA-073 */ namesNoOtherCustomer: input.namesNoOtherCustomer === true, /* B-SA-061 */ about: input.about ?? null, /* B-CP-020 */ pricesInWordsOk: input.pricesInWordsOk === true } },
     async (tools) => {
       const { thread } = await ensureThread(tools, record, context.actorId)
       // The thread as it is now (made by this command or a racing one): its scope decides — with its wall party, as the note route

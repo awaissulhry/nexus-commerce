@@ -2,6 +2,8 @@ import { REPLY_BATCH_MAX } from '@nexus/factory-domain/threads/replies'
 import type { ComposerContext, ComposerDraft, SwitchNote } from '../../../../lib/record-thread/composer/model'
 import type { OrderRow } from '../api'
 import type { Phrase } from './sheet/model'
+// F-CP-162: words that look like a price (the API's B-CP-020, 409 NAMES_A_PRICE) — warned, never blocked, like the composer (F-CP-147).
+import { namesPriceRefused } from '../../../../lib/record-thread/send-check/model'
 
 /**
  * F-SA-282 (sales page plan N5, picks P10, R7; 11-customer-page §3.8 "Reply to <customer> on N…"; review BW-6; rule 7 / agreement T11
@@ -72,8 +74,12 @@ export interface ReplyError {
 /**
  * What one refused reply means: the box's hold (the text names another customer of ours — the API never says whom; the round stops and
  * the composer offers its tick), a refusal of THIS order for good with why, or a fault (no answer, the factory busy): tried again.
+ * F-CP-162: or the words look like a price (409 NAMES_A_PRICE): the round stops, the text stays in the box with the composer's warning,
+ * and its "Send anyway" goes on to the orders still to post with `pricesInWordsOk`.
  */
-export function replyOutcomeOf(error: ReplyError, customer: string): { readonly kind: 'namesOther' } | { readonly kind: 'refused' | 'failed'; readonly why: Phrase } {
+export function replyOutcomeOf(error: ReplyError, customer: string): { readonly kind: 'namesOther' } | { readonly kind: 'namesPrice' } | { readonly kind: 'refused' | 'failed'; readonly why: Phrase } {
+  // F-CP-162: the price warning (B-CP-020), never an amount repeated.
+  if (namesPriceRefused(error.code)) return { kind: 'namesPrice' }
   switch (error.code) {
     case 'NAMES_OTHER_CUSTOMER':
       return { kind: 'namesOther' }
@@ -121,30 +127,33 @@ export interface ReplyKey {
   readonly key: string
   readonly body: string
   readonly ticked: boolean
+  /** F-CP-162: made for a "Send anyway" (pricesInWordsOk): another request than the first try's. */
+  readonly pricesOk?: boolean
 }
 
 /**
  * The key one order's reply goes with: the same while the same words (and tick) go again — a try after a lost answer never posts
  * twice — and a new one for new words or the tick (the API refuses a key used for another request; a refused reply kept none).
  */
-export function keyFor(previous: ReplyKey | undefined, body: string, ticked: boolean, fresh: () => string): ReplyKey {
-  return previous && previous.body === body && previous.ticked === ticked ? previous : { key: fresh(), body, ticked }
+export function keyFor(previous: ReplyKey | undefined, body: string, ticked: boolean, fresh: () => string, /** F-CP-162: "Send anyway" */ pricesOk = false): ReplyKey {
+  return previous && previous.body === body && previous.ticked === ticked && (previous.pricesOk ?? false) === pricesOk ? previous : { key: fresh(), body, ticked, ...(pricesOk ? { pricesOk } : {}) }
 }
 
 /**
  * One round of Send: each order still to post in turn, never two at once (the ticked order), one call per order into its OWN
  * conversation. It stops at the first text the API holds because it names another customer of ours (`namesOther`): nothing more goes,
- * the words come back held with the tick. Answers whether it was held and how many were posted.
+ * the words come back held with the tick. Answers whether it was held (and by which hold) and how many were posted.
+ * F-CP-162: it stops the same way at words that look like a price (`namesPrice`): they come back with the warning and "Send anyway".
  */
 export async function replyRound(
   pending: readonly ReplyTarget[],
-  post: (target: ReplyTarget) => Promise<ReplyResult | 'namesOther'>,
+  post: (target: ReplyTarget) => Promise<ReplyResult | 'namesOther' | /* F-CP-162 */ 'namesPrice'>,
   onResult: (id: string, result: ReplyResult, done: number) => void,
-): Promise<{ held: boolean; posted: number }> {
+): Promise<{ held: false | 'namesOther' | /* F-CP-162 */ 'namesPrice'; posted: number }> {
   let posted = 0
   for (const [index, target] of pending.entries()) {
     const result = await post(target)
-    if (result === 'namesOther') return { held: true, posted }
+    if (result === 'namesOther' || result === 'namesPrice') return { held: result, posted }
     if (result.state === 'sent') posted += 1
     onResult(target.id, result, index + 1)
   }

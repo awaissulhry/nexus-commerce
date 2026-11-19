@@ -188,8 +188,11 @@
       "gone": "{record} is no longer in «{view}»",
       "view": {
         "waitingUs": "Waiting on us",
-        "drafts": "Drafts of {customer}"
+        "drafts": "Drafts of {customer}",
+        "notEqual": "Not equal"
       },
+      "priceDiffer_one": "Prices differ on {count} order ›",
+      "priceDiffer_other": "Prices differ on {count} orders ›",
       "dock": {
         "label": "Which thread",
         "general": "{customer} (general)",
@@ -274,6 +277,51 @@
       "openOf": "Open {draft}",
       "noun": "draft",
       "readOnly": "Read only: {customer} is still writing it."
+    },
+    "designer": {
+      "label": "Factory designer",
+      "backup": "Backup",
+      "none": "Not set",
+      "seen": "{customer} sees this name",
+      "lostReach": "No longer reaches {customer}",
+      "notActive": "No longer active",
+      "hint": "{customer} sees only this person's name when it asks for design help.",
+      "portalOff": "{customer} has no portal yet: the name shows once the portal is on.",
+      "backupNamed": "The portal now names the backup, {name}.",
+      "nobodyNamed": "The portal names nobody now: name another factory designer.",
+      "change": "Change…",
+      "title": "Factory designer for {customer}",
+      "backupHint": "The backup stands in for them. The list names only office people who read and answer {customer}'s conversations.",
+      "search": "Search a person",
+      "me": "{name} (you)",
+      "notListed": "{name} (not on the list now)",
+      "partial": "The list shows the first 500 people of the office.",
+      "nobodyEligible": "Nobody of the office reads and answers {customer}'s conversations yet.",
+      "apply": "Apply",
+      "saving": "Saving…",
+      "reading": "Reading the factory designer…",
+      "readFailed": "Couldn't read the factory designer",
+      "choicesFailed": "Couldn't read who may be named",
+      "done": "{customer}'s factory designer is saved.",
+      "stale": "Someone changed the factory designer meanwhile: here it is now.",
+      "nothing": "Nothing changes: these are the factory designer and the backup already.",
+      "fixFirst": "Fix the field marked first.",
+      "failed": "The factory designer was not saved: try again.",
+      "notFound": "Customer not found.",
+      "heldEveryCompany": "Naming this customer's factory designer needs the right to manage partners at every company it works with.",
+      "refusal": {
+        "NOT_OFFICE": "Only a person of the office can be the factory designer.",
+        "NOT_ACTIVE": "This person is no longer active.",
+        "NO_REACH": "This person does not work with {customer}: they cannot read and answer its conversations.",
+        "BACKUP_ALONE": "Name a factory designer first; the backup stands in for them.",
+        "SAME_PERSON": "The backup is another person.",
+        "other": "This person cannot be named here: pick from the list."
+      },
+      "mtm": {
+        "label": "Made-to-measure drafts",
+        "onHint": "{customer}'s people may add made-to-measure lines to their portal drafts (accepted, such a draft becomes a quote first).",
+        "offHint": "Made-to-measure lines are closed in {customer}'s portal drafts: they ask us in the messages."
+      }
     }
   },
   "suppliers": {

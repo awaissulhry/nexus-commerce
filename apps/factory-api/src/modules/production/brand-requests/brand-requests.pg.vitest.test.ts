@@ -224,9 +224,15 @@ describe('B-PR-26: the factory answers its customers’ requests', { timeout: SL
     const agreed = (await read('office.all', `/production/brand-requests/${change.id}`)).request
     expect(agreed).toMatchObject({ status: 'COUNTERED', waitingOn: 'US', counter: { state: 'AGREED' }, may: { accept: true, refuse: false, counter: false } })
     expect((await todayKeys(sales)).some((value) => value.endsWith(`:${change.id}`))).toBe(true)
-    // Not refused after the yes; accepted by Sales (orders.manage), the order's date becomes the counter's.
+    // Not refused after the yes; the order's date becomes the counter's on the accept.
     expect((await send(sales, 'POST', `/production/brand-requests/${change.id}/refuse`, { version: agreed.version, answer: 'No.' })).body.error.issues[0].path).toBe('request/COUNTER_AGREED')
-    const accepted = await send(sales, 'POST', `/sales/change-requests/${change.id}/accept`, { version: agreed.version })
+    // B-CP-026 (Owner answer A): the agreed counter carries a price (its fee): Sales (no price grain) is held in words and nothing
+    // changes; a price holder (the Owner) accepts it (was Sales, orders.manage).
+    const blind = await send(sales, 'POST', `/sales/change-requests/${change.id}/accept`, { version: agreed.version })
+    expect(blind.status, JSON.stringify(blind.body)).toBe(403)
+    expect(blind.body.error.issues[0]).toMatchObject({ path: 'refusal/BLIND_PRICE', message: 'It changes a price you cannot see: someone who sees prices does it.' })
+    expect((await requestRow(change.id)).status).toBe('COUNTERED')
+    const accepted = await send(owner, 'POST', `/sales/change-requests/${change.id}/accept`, { version: agreed.version })
     expect(accepted.status, JSON.stringify(accepted.body)).toBe(200)
     expect(accepted.body.request.status).toBe('ACCEPTED')
     expect((await admin<{ day: string }>(`SELECT to_char("requestedDate", 'YYYY-MM-DD') AS day FROM "SalesOrder" WHERE id = $1`, [orders.so1.orderId]))[0]!.day).toBe(offered)

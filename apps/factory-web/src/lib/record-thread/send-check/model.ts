@@ -147,3 +147,26 @@ export function defaultSubject(lastSubject: string | null, recordLabel: string):
   if (lastSubject) return /^re:/i.test(lastSubject) ? lastSubject : `Re: ${lastSubject}`
   return recordLabel
 }
+
+// ---- F-CP-147 (customer page plan C4, the money wall: L3, Owner O5 "warn our people before they send a price"; design 11-money
+// §4.6, §6; the API's B-CP-020) -----------------------------------------------------------------------------------------------------
+/**
+ * Prices typed in words — WARN, NEVER BLOCK: an office note, or an office message the customer reads in its portal, whose words
+ * look like a price comes back from the API once (409 `refusal/NAMES_A_PRICE`, the NAMES_OTHER_CUSTOMER flow): people who do not see
+ * prices read the same thread (a Sales worker, production, the factory designer). The box says so — "This message names a price.
+ * People who do not see prices read this thread too. Use the Amount field, or send it anyway." (a note) / "This reply names a price.
+ * Our people who do not see prices read this thread too. Send it anyway?" (the portal) — the typed text stays, and "Send anyway"
+ * sends the same words with `pricesInWordsOk: true`. The warning repeats NO amount (the words that looked like one are never
+ * echoed back). A note for the floor stays held by its own rule (FLOOR_PRICE); the customer's own text is not checked.
+ */
+export const NAMES_A_PRICE = 'NAMES_A_PRICE' as const
+
+/** The API held the words: its refusal code is NAMES_A_PRICE (`refusal/<CODE>` of a 409). */
+export const namesPriceRefused = (code: string | null | undefined): boolean => code === NAMES_A_PRICE
+
+/** The warning's words for the box's audience (keys of `record-thread-send`): never an amount. */
+export const namesPriceWords = (mode: 'note' | 'reply' | 'portal'): { readonly key: 'namesPrice.note' | 'namesPrice.reply' } => ({ key: mode === 'note' ? 'namesPrice.note' : 'namesPrice.reply' })
+
+/** Send's word while the box warns: "Send anyway" (a key of `record-thread-send`). */
+export const NAMES_PRICE_SEND = 'namesPrice.send' as const
+// ---- end F-CP-147

@@ -16,6 +16,12 @@ import type { DraftFile } from './api'
 import type { UploadRow } from './view/DraftFiles'
 
 // ---- end F-CP-151
+// ---- F-CP-154 (B-CP-075, B-CP-076; picture 22): lines of every kind, the roster, "Your price", their windows (made-up riders).
+import { describedLine, kindsRecord, mtmLine, MTM_TYPES, RIDERS, SHEET_ON_MTM } from './design-data'
+import { customLineDraftOf, customLineProblems, EMPTY_PERSON, personProblems } from './model'
+import type { CustomLineDialogModel } from './view/LinesSection'
+import type { PersonDialogModel } from './view/PeopleRoster'
+// ---- end F-CP-154
 import type { NewOrderViewModel } from './view/NewOrderView'
 import { OrderingCase, type OrderingCaseBuilder } from './view/OrderingCase'
 // B-TH-220: New order as an e-mail, read by Brand Beta (brand B), the made-up reader of every wall scan.
@@ -397,6 +403,88 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
     { id: 'cp151-later', label: '“We send these later” on Logos (once the API keeps the mark)', model: page(() => ({ record: draftRecord({ request: { files: { logos: [], references: [], sheets: [] }, uploads: { open: true, words: null }, laterParts: ['LOGOS'] } }) })), note: 'The Logos chip says “Sending later”; the toggle shows only once the API answers laterParts (B-CP-075).' },
     // ---- end F-CP-151
     // ---- F-CP-152 (12 §2 Doors): the draft start — "Just write it in words" for who may order; Reorder held for a Designer.
+    // ---- F-CP-154 (customer page plan C5; 12 §2 parts 1, 4, 6; review A5, G6; picture 22): lines of every kind, the roster, Your price.
+    {
+      id: 'cp154-kinds',
+      label: 'Lines of every kind: from the catalogue, described by you, made to measure with four riders — Your price filled (Brand Admin)',
+      model: page(() => ({ record: kindsRecord() })),
+      note: 'One list by seq. People and sizes: each line’s pieces, the privacy line, the made-to-measure roster (Size · Measurement sheet · Sending later; no saved measurements in v1). Your price: one cell per line, our list price beside it on catalogue lines, the total.',
+    },
+    {
+      id: 'cp154-sheet-only',
+      label: 'A made-to-measure line with no names typed: “People: in the attached sheet” (review A5)',
+      model: page(() => ({ record: kindsRecord({ custom: [describedLine(), mtmLine({ people: [], peopleInSheet: true, pieces: 0 })] }) })),
+      note: 'A team with one measurement sheet for twelve riders sends without typing twelve names: the sheet on the line stands for its roster.',
+    },
+    {
+      id: 'cp154-no-people',
+      label: 'A by-person line with no one named and no sheet: People and sizes is missing, Send held',
+      model: page(() => {
+        const empty = mtmLine({ people: [], pieces: 0, problems: [{ code: 'NO_PEOPLE', lineId: mtmLine().id, size: null, part: 'PEOPLE', personId: null }] })
+        return { record: kindsRecord({ custom: [describedLine(), empty], request: { files: { logos: [], references: [], sheets: [] }, problems: empty.problems } }) }
+      }),
+    },
+    {
+      id: 'cp154-designer',
+      label: 'The brand’s Designer: every kind of line and the roster, no price anywhere',
+      model: page(() => ({ record: kindsRecord({ seesPrices: false, request: { may: { send: false, withdraw: false, discard: true } } }), mayOrder: false, seesOrders: false })),
+      note: 'M-CP-2: no list price, no Your price, no total — part 6 says “Prices are not part of your access.” The roster is the Designer’s to fill.',
+    },
+    {
+      id: 'cp154-mtm-off',
+      label: 'Made to measure switched off by the office: “not open for you yet”, the line holds Send',
+      model: page(() => {
+        const closed = mtmLine({ problems: [{ code: 'MTM_CLOSED', lineId: mtmLine().id, size: null, part: 'NEED', personId: null }] })
+        return { record: kindsRecord({ custom: [describedLine(), closed], request: { madeToMeasure: { open: false, words: { it: 'chiuso', en: 'closed' }, garmentTypes: [] }, problems: closed.problems } }), showProblems: true }
+      }),
+      note: 'Made to measure is open for every customer by default; only where the office switched it off “Add a line ▾ › Made to measure” is held with these words.',
+    },
+    {
+      id: 'cp154-price-typed',
+      label: 'Your price typed: one cell not saved yet, one that does not read as a price',
+      model: page(() => ({ record: kindsRecord(), ownPrices: { [describedLine().id]: '19,90', [mtmLine().id]: 'abc' }, ownPriceProblems: { [mtmLine().id]: 'draftPage.price.problem' } })),
+      note: 'Saved on leaving the cell, with the draft’s version; “18,50” and “18.50” both read; a cell that is not a price says so and sends nothing.',
+    },
+    {
+      id: 'cp154-describe',
+      label: 'Describe what you need (the window)',
+      model: page(() => {
+        const draft = { ...customLineDraftOf('DESCRIBED'), description: 'Felpa con cappuccio, il nostro logo sul petto.', total: '40' }
+        const customLine: CustomLineDialogModel = { mode: 'add', kind: 'DESCRIBED', seq: null, draft, problems: customLineProblems(draft), showProblems: false, styles: { state: 'ready', rows: [{ id: '0194f0e2-1940-7000-8000-000000000001', code: 'JKT-100', name: 'Giacca Corsa Esempio' }] }, garmentTypes: [], busy: false, failed: null }
+        return { record: kindsRecord(), dialogs: { picker: null, address: null, discard: null, customLine } }
+      }),
+      note: 'Their words (required), colours in words, their own label’s style (optional), a total — sizes may follow — or one row per person.',
+    },
+    {
+      id: 'cp154-mtm-window',
+      label: 'A made-to-measure line (the window): garment type required',
+      model: page(() => {
+        const draft = customLineDraftOf('MADE_TO_MEASURE')
+        const customLine: CustomLineDialogModel = { mode: 'add', kind: 'MADE_TO_MEASURE', seq: null, draft, problems: customLineProblems(draft), showProblems: true, styles: { state: 'ready', rows: [] }, garmentTypes: MTM_TYPES.map((type) => ({ ...type })), busy: false, failed: null }
+        return { record: kindsRecord(), dialogs: { picker: null, address: null, discard: null, customLine } }
+      }),
+    },
+    {
+      id: 'cp154-person',
+      label: 'Add a person: measured by the line’s measurement sheet',
+      model: page(() => {
+        const draft = { ...EMPTY_PERSON, name: 'Marco Esempio', number: '7', measureBy: 'SHEET' as const, sheetId: SHEET_ON_MTM.id }
+        const person: PersonDialogModel = { mode: 'add', seq: 3, name: null, draft, problems: personProblems(draft, [SHEET_ON_MTM]), showProblems: false, sheets: [SHEET_ON_MTM], busy: false, failed: null }
+        return { record: kindsRecord(), dialogs: { picker: null, address: null, discard: null, person } }
+      }),
+      note: 'Size · Measurement sheet · Sending later (no saved measurements in v1); a sheet is one of this draft’s.',
+    },
+    {
+      id: 'cp154-person-change',
+      label: 'Change a person: a size left empty is held at its field',
+      model: page(() => {
+        const rider = RIDERS()[1]!
+        const draft = { ...EMPTY_PERSON, name: rider.name, number: rider.number ?? '', measureBy: 'SIZE' as const, size: '' }
+        const person: PersonDialogModel = { mode: 'change', seq: 3, name: rider.name, draft, problems: personProblems(draft, []), showProblems: true, sheets: [], busy: false, failed: null }
+        return { record: kindsRecord(), dialogs: { picker: null, address: null, discard: null, person } }
+      }),
+    },
+    // ---- end F-CP-154
     { id: 'cp152-start-designer', label: 'The draft start, read by the brand’s Designer: Reorder held, no words door', model: page(() => ({ record: null, start: { state: 'ready', drafts: DRAFTS, choosing: null, held: null }, mayOrder: false, seesOrders: false }), 'start'), note: 'A Designer keeps drafts but reads no orders: “Reorder a past order” says “Your access does not show orders”; the request like an e-mail is not theirs (no link). The team’s drafts to continue.' },
     // ---- end F-CP-152
     { id: 'reorder', label: 'Reorder: the past orders', model: page(() => ({ way: 'reorder', reorder: reorderModel() })), note: 'Their PO first, ours second (RefPair), date, lines, pieces. Enter or a click opens one.' },

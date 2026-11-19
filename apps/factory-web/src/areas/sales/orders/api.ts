@@ -91,6 +91,11 @@ export type TileKey = (typeof TILE_KEYS)[number]
 // B-TH-225: the Invoiced column (factory-domain sales/orders/invoiced.ts INVOICED_STATES).
 export const INVOICED_STATES = ['NONE', 'PART', 'ALL'] as const
 export type InvoicedState = (typeof INVOICED_STATES)[number]
+// ── F-CP-140 (customer page plan C2d; the API's B-CP-018): the price check of an order (factory-domain sales/brand-prices/match
+// PRICE_MATCHES) — Equal, Not equal, No customer price yet ("No customer price yet" is never Equal) ──
+export const PRICE_MATCHES = ['EQUAL', 'NOT_EQUAL', 'NO_BRAND_PRICE'] as const
+export type PriceMatch = (typeof PRICE_MATCHES)[number]
+// ── end F-CP-140 ──
 export const SDI_STATE_CODES = ['DRAFT', 'NOT_SENT', 'SENDING', 'AT_SDI', 'DELIVERED', 'NOT_DELIVERED', 'REJECTED', 'ERROR'] as const
 export type SdiStateCode = (typeof SDI_STATE_CODES)[number]
 export const SDI_NEXT_ACTIONS = ['ISSUE', 'SEND', 'WAIT', 'FIX_AND_RESEND', 'SEND_AGAIN', 'CHECK_COPY', 'NONE'] as const
@@ -196,6 +201,17 @@ export const orderRowSchema = z.object({
       withheld: z.array(z.enum(PRODUCTION_WITHHELD)),
     })
     .optional(),
+  // ── F-CP-140 (customer page plan C2d; the API's B-CP-018): the price check of the row — only in a price holder's answer (the price
+  // grain: absent for everyone else, never zero, never "Equal"); our price is the row's netAmount ──
+  /** The customer's price of the order, without VAT (minor units): its total, else the sum of its line prices; null: none yet. */
+  brandPrice: z.number().nullable().optional(),
+  /** Equal / Not equal / No customer price yet. */
+  priceMatch: z.enum(PRICE_MATCHES).optional(),
+  /** Our price − the customer's (+ we ask more); null: the customer's is not known. */
+  priceDiff: z.number().nullable().optional(),
+  /** How many lines differ ("Not equal · 2 lines"). */
+  priceNotEqualLines: z.number().optional(),
+  // ── end F-CP-140 ──
 })
 export type OrderRow = z.infer<typeof orderRowSchema>
 
@@ -239,6 +255,10 @@ export interface OrderQuery {
   waiting?: 'us' | null
   /** F-SA-276: only these rows (≤ 50: a live read again of the rows in view, values in place). */
   ids?: readonly string[] | null
+  // ── F-CP-141 (customer page plan C2d; the API's B-CP-018): the price check term — the list, its totals and its file read it (never
+  // the board); a price holder's only (403 in words otherwise: the sheet never sends it for anyone else) ──
+  priceMatch?: PriceMatch | null
+  // ── end F-CP-141 ──
   q?: string
   cursor?: string | null
   limit?: number
@@ -270,6 +290,7 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       production: query.production ? 'true' : undefined, // F-SA-275
       waiting: query.waiting ?? undefined, // F-SA-276
       ids: query.ids?.length ? query.ids.join(',') : undefined, // F-SA-276
+      priceMatch: query.priceMatch ?? undefined, // F-CP-141
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
@@ -347,6 +368,7 @@ export function getOrderSummary(api: ApiClient, query: OrderQuery, group: 'party
       kind: query.kind ?? undefined, // F-SA-221
       profile: query.profile ?? undefined, // F-SA-222
       waiting: query.waiting ?? undefined, // F-SA-276: the totals keep the same rows
+      priceMatch: query.priceMatch ?? undefined, // F-CP-141: the totals keep the same rows
       q: query.q?.trim() || undefined,
       group: group ?? undefined,
     },

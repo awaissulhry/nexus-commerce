@@ -46,7 +46,8 @@ export interface DraftFilesModel {
 }
 
 export interface DraftFilesActions {
-  onFiles?: (part: DraftFilePart, files: File[]) => void
+  /** F-CP-154: `lineId` — a measurement sheet onto one line of the draft (it stands for that line's roster). */
+  onFiles?: (part: DraftFilePart, files: File[], lineId?: string | null) => void
   onRemove?: (file: DraftFile) => void
   onLater?: (part: DraftFilePart, on: boolean) => void
 }
@@ -54,7 +55,7 @@ export interface DraftFilesActions {
 const ADD_KEY: Readonly<Record<DraftFilePart, string>> = { LOGO: 'draftPage.files.addLogos', REFERENCE: 'draftPage.files.addReferences', SHEET: 'draftPage.files.addSheets' }
 const NONE_KEY: Readonly<Record<DraftFilePart, string>> = { LOGO: 'draftPage.files.noLogos', REFERENCE: 'draftPage.files.noReferences', SHEET: 'draftPage.files.noSheets' }
 /** What a part takes (the API checks again: a picture up to 15 MB, any other file up to 25 MB; never a page or a script). */
-const ACCEPT: Readonly<Record<DraftFilePart, string>> = {
+export const ACCEPT: Readonly<Record<DraftFilePart, string>> = {
   LOGO: '.ai,.eps,.ps,.pdf,.png,.jpg,.jpeg,.webp,.heic,.psd,.zip',
   REFERENCE: '.pdf,.png,.jpg,.jpeg,.webp,.heic',
   SHEET: '.pdf,.png,.jpg,.jpeg,.webp,.heic,.xlsx,.xls,.csv',

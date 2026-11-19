@@ -176,6 +176,16 @@
       "removed": "Message removed after a privacy request",
       "filesOnly_one": "{count} file",
       "filesOnly_other": "{count} files"
+    },
+    "designer": {
+      "ask": "Ask {name}, factory designer",
+      "hint": "{name} gets your message at once; the rest of the factory reads it as always.",
+      "typeAt": "Type @ to ask {name}.",
+      "chip": "{name} · factory designer",
+      "asked": "We asked {name}.",
+      "notHere": "The factory designer cannot be asked here: your message reaches our team.",
+      "noDesigner": "No factory designer is named for you yet: write here, our team answers.",
+      "capped": "Message sent. You asked the factory designer 20 times today already: this message reaches our team."
     }
   },
   "record": {

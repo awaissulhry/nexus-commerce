@@ -36,8 +36,8 @@ export function amountProblems(amount: MessageAmount, facts: { readonly forFloor
   return problems
 }
 
-/** The refusal codes of this module (`refusal/<CODE>` in a 409's issues). */
-export const PRICE_REFUSALS = ['FLOOR_PRICE'] as const
+/** The refusal codes of this module (`refusal/<CODE>` in a 409's issues). B-CP-020: + NAMES_A_PRICE (a warning: sent again, it goes). */
+export const PRICE_REFUSALS = ['FLOOR_PRICE', /* B-CP-020 */ 'NAMES_A_PRICE'] as const
 export type PriceRefusal = (typeof PRICE_REFUSALS)[number]
 
 export const AMOUNT_WORDS = Object.freeze({
@@ -92,3 +92,51 @@ export function floorPriceRefusal(text: string): { readonly code: PriceRefusal; 
     },
   }
 }
+
+// ── B-CP-020 (customer page plan O5, L3; design customer-page 11 §4.6 L3, §6 namesPrice; review F5, B6) ──────────────────────
+/**
+ * Prices typed in words, by our own people — WARN, NEVER BLOCK (Owner pick O5): an office note, or an office reply the customer
+ * reads in its portal, whose words look like a price (priceInWords: the floor's patterns, Italian and English) is held ONCE with a
+ * warning (409 `refusal/NAMES_A_PRICE`) and goes when the writer sends it again with `pricesInWordsOk: true` — the flow of the
+ * mis-send check NAMES_OTHER_CUSTOMER. People who do not see prices read the same thread (a Sales worker, production, the factory
+ * designer): field security can hide a field, never free text, so the warning points at the Amount field.
+ *
+ *   the money wall   the warning repeats NO amount (the words that looked like a price are never echoed back, unlike the floor's
+ *                    hold, whose reader typed them and whose note never leaves the office)
+ *   the floor        a note for the floor stays HELD (FLOOR_PRICE above): `pricesInWordsOk` never lets one through
+ *   not checked      a customer's own text and incoming mail (we cannot change them: an accepted residual, review B6); the threads
+ *                    of a purchase (a supplier's PO, a workshop's order, a claim, a supplier invoice, a delivery) — purchase prices
+ *                    are talked with the supplier there (C2; Owner O8: the selling-price wall leaves purchase prices out)
+ */
+export const NAMES_A_PRICE = 'NAMES_A_PRICE' as const satisfies PriceRefusal
+
+/** The writer's message the warning is about. */
+export type PricesInWordsKind = 'note' | 'reply'
+
+/** The warning's words (design customer-page 11 §6 `record-thread-send.json namesPrice.*`): never an amount. */
+export const PRICES_IN_WORDS_WORDS: Readonly<Record<PricesInWordsKind, { readonly it: string; readonly en: string }>> = Object.freeze({
+  note: {
+    it: 'Questo messaggio indica un prezzo. Leggono questa conversazione anche persone che non vedono i prezzi. Usa il campo Importo, oppure invialo comunque.',
+    en: 'This message names a price. People who do not see prices read this thread too. Use the Amount field, or send it anyway.',
+  },
+  reply: {
+    it: 'Questa risposta indica un prezzo. La leggono anche nostri colleghi che non vedono i prezzi. Inviarla comunque?',
+    en: 'This reply names a price. Our people who do not see prices read this thread too. Send it anyway?',
+  },
+})
+
+/** The record types of a purchase, whose threads talk purchase prices with the supplier (not warned). */
+export const PURCHASE_SIDE_RECORDS: ReadonlySet<string> = Object.freeze(new Set(['PurchaseOrder', 'SubcontractOrder', 'SupplierClaim', 'SupplierInvoice', 'GoodsReceipt']))
+
+/**
+ * Why an office note or reply is held once (its words look priced), in Italian and English; null: it may go — the writer sent it
+ * anyway (`pricesInWordsOk`), it is a purchase's thread, or nothing in it looks like a price. A note for the floor is never asked
+ * here (floorPriceRefusal holds it).
+ */
+export function pricesInWordsRefusal(text: string, facts: { readonly kind: PricesInWordsKind; readonly recordType: string; readonly pricesInWordsOk: boolean }): { readonly code: typeof NAMES_A_PRICE; readonly words: { readonly it: string; readonly en: string } } | null {
+  if (facts.pricesInWordsOk) return null
+  if (PURCHASE_SIDE_RECORDS.has(facts.recordType)) return null
+  if (priceInWords(text) === null) return null
+  return { code: NAMES_A_PRICE, words: PRICES_IN_WORDS_WORDS[facts.kind] }
+}
+// ── end B-CP-020 ──

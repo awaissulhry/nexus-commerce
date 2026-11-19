@@ -4,6 +4,8 @@ import { useRef, useState } from 'react'
 import { newIdempotencyKey, type ApiClient } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { heldReason, heldForNamesOther, namesNoOtherCustomerOf, startDraft } from '../../../../lib/record-thread/composer/model'
+// F-CP-162 (B-CP-020): words that look like a price come back warned; "Send anyway" sends them with pricesInWordsOk (F-CP-147's flow).
+import { heldForNamesPrice, pricesInWordsOkOf } from '../../../../lib/record-thread/composer/model'
 import { postPortalReplyKeyed } from '../../../_shared/record-thread/api'
 import { refusalCode } from '../../../_shared/record-thread/state'
 import { getParty } from '../../../parties/_shared/api'
@@ -35,6 +37,8 @@ import {
  * order (POST /threads/SalesOrder/:id/replies, the batchId on each, its own Idempotency-Key), one after the other; each order answers
  * posted or not with why. The API's mis-send check (NAMES_OTHER_CUSTOMER) stops the round and puts the text back held with the
  * composer's own tick (F-SA-282a); the next Send goes on to the orders still to post, the batch the same.
+ * F-CP-162: the API's price warning (409 NAMES_A_PRICE) stops the round the same way: the typed text stays with the composer's warning
+ * (no amount repeated), Send reads "Send anyway" and the next round sends the same words with `pricesInWordsOk: true`.
  */
 
 export function useReplyMany(api: ApiClient, permissions: readonly string[], onPosted: () => void): { model: ReplyManyModel | null; open: (rows: readonly OrderRow[], locked: string | null) => void; actions: ReplyManyActions } {
@@ -84,22 +88,26 @@ export function useReplyMany(api: ApiClient, permissions: readonly string[], onP
     const { batchId } = now
     const body = now.draft.body
     const ticked = namesNoOtherCustomerOf(now.draft)
+    // F-CP-162: "Send anyway" after the price warning (only for the very words it warned about).
+    const pricesOk = pricesInWordsOkOf(now.draft)
     update(batchId, (m) => ({ ...m, sending: true, done: false, progress: { done: 0, count: pending.length } }))
     // One order's reply: posted, refused or failed with why — or the hold of a text that names another customer of ours.
-    const postOne = async (target: ReplyTarget): Promise<ReplyResult | 'namesOther'> => {
-      const key = keyFor(keys.current.get(target.id), body, ticked, newIdempotencyKey)
+    const postOne = async (target: ReplyTarget): Promise<ReplyResult | 'namesOther' | /* F-CP-162 */ 'namesPrice'> => {
+      const key = keyFor(keys.current.get(target.id), body, ticked, newIdempotencyKey, pricesOk)
       keys.current.set(target.id, key)
       try {
-        await postPortalReplyKeyed(api, { type: 'SalesOrder', id: target.id }, { body, attachments: [], batchId, ...(ticked ? { namesNoOtherCustomer: true } : {}) }, key.key)
+        await postPortalReplyKeyed(api, { type: 'SalesOrder', id: target.id }, { body, attachments: [], batchId, ...(ticked ? { namesNoOtherCustomer: true } : {}), ...(pricesOk ? { pricesInWordsOk: true } : {}) /* F-CP-162 */ }, key.key)
         return { state: 'sent' }
       } catch (error) {
         const outcome = replyOutcomeOf({ code: refusalCode(error), kind: isApiError(error) ? error.kind : null }, now.customer.name)
-        return outcome.kind === 'namesOther' ? 'namesOther' : { state: outcome.kind, why: outcome.why }
+        // F-CP-162: the price warning stops the round like the names-another-customer hold.
+        return outcome.kind === 'namesOther' || outcome.kind === 'namesPrice' ? outcome.kind : { state: outcome.kind, why: outcome.why }
       }
     }
     const { held, posted } = await replyRound(pending, postOne, (id, result, done) => update(batchId, (m) => ({ ...m, results: { ...m.results, [id]: result }, progress: { done, count: pending.length } })))
     // Held: the text names another customer of ours — it comes back held with the composer's tick "This text names no other customer".
-    update(batchId, (m) => ({ ...m, sending: false, progress: null, done: !held, ...(held ? { draft: heldForNamesOther(m.draft) } : {}) }))
+    // F-CP-162: or its words look like a price — it comes back with the warning, and Send reads "Send anyway" (the text stays).
+    update(batchId, (m) => ({ ...m, sending: false, progress: null, done: !held, ...(held === 'namesOther' ? { draft: heldForNamesOther(m.draft) } : held === 'namesPrice' ? { draft: heldForNamesPrice(m.draft) } : {}) }))
     if (posted > 0) onPosted()
   }
 

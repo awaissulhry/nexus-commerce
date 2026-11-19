@@ -32,6 +32,9 @@ import {
 import { draftAfter, namesOtherAsked } from '../model'
 // F-SA-265 (Discuss): the chip "About: …" in the box's audience words, removable.
 import { aboutWords, withoutAbout } from '../model'
+// F-CP-147 (B-CP-020): the API held words that look like a price — the box warns (no amount repeated) and Send becomes "Send anyway".
+import { namesPriceAsked } from '../model'
+import { NAMES_PRICE_SEND, namesPriceWords } from '../../send-check/model'
 import '../../parts/parts.css'
 import '../composer.css'
 
@@ -83,6 +86,7 @@ const MODE_ICON = { note: Lock, reply: Mail, portal: Globe } as const
 export function Composer(props: ComposerProps) {
   const { context, draft, notes = [], sending = false } = props
   const t = useT('record-thread-composer')
+  const sendWords = useT('record-thread-send') // F-CP-147
   const locale = useLocale()
   const heldId = useId()
   const boxRef = useRef<HTMLDivElement>(null)
@@ -324,6 +328,13 @@ export function Composer(props: ComposerProps) {
         </div>
       )}
       {draft.mode === 'portal' && <p className="fw-rt-cx-line">{t('portal.line', { party })}</p>}
+      {/* F-CP-147 (the money wall L3; Owner O5): these words look like a price — warned once, never blocked; the text stays. */}
+      {namesPriceAsked(draft) && (
+        <p className="fw-rt-cx-warn" role="status">
+          <Euro size={14} aria-hidden />
+          <span>{sendWords(namesPriceWords(draft.mode).key)}</span>
+        </p>
+      )}
       {/* F-SA-282a (B-SA-073): the API held the text — it names another customer of ours (never whom): the tick, and what it means. */}
       {namesOtherAsked(draft) && (
         <div className="fw-rt-cx-tick">
@@ -386,7 +397,7 @@ export function Composer(props: ComposerProps) {
           </span>
         )}
         <Button size="sm" variant="primary" onClick={send} heldReason={heldText}>
-          {t(sendKey(draft.mode), { party })}
+          {namesPriceAsked(draft) ? sendWords(NAMES_PRICE_SEND) /* F-CP-147 */ : t(sendKey(draft.mode), { party })}
         </Button>
       </div>
       <p className="fw-rt-sr" aria-live="polite">

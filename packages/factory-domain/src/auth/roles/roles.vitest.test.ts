@@ -24,6 +24,7 @@ import {
   type AssignmentScope,
 } from './roles'
 import { ROLE_TEMPLATES, templateOf, templateProblems } from './templates'
+import { PARTNER_ROLE_TEMPLATES, SYSTEM_ROLE_TEMPLATES } from './templates' // B-CP-016
 
 const A = '0195f5d0-0000-7000-8000-00000000000a'
 const B = '0195f5d0-0000-7000-8000-00000000000b'
@@ -77,6 +78,8 @@ describe('role templates', () => {
       // B-W2b-120: the HR office, the safety officer and the occupational doctor.
       'hr', 'safety_officer', 'company_doctor',
       'read_only',
+      // B-CP-016: the office role "Factory designer".
+      'designer',
       'operator', 'cutting_operator', 'floor_inspector', 'team_leader',
       'technician',
     ])
@@ -271,3 +274,45 @@ describe('B-CP-011: only the Owner gives a role that sees prices (Owner O3)', ()
     expect(seesPrices(templateOf('admin')!.grains)).toBe(false)
   })
 })
+
+// ── B-CP-016 (customer page plan C7; design customer-page 12 §5; review F7): the office role "Factory designer" ──
+describe('B-CP-016: the office role "Factory designer" sees no money', () => {
+  const designer = templateOf('designer')!
+
+  it('key designer, an office role, grains [] and no two-factor', () => {
+    expect(designer).toMatchObject({ key: 'designer', audience: 'office', name: 'Factory designer', description: 'Works on logos, artwork and samples with customers; sees no money.', requireMfa: false, grains: [] })
+    expect(seesPrices(designer.grains)).toBe(false)
+    expect(designer.grains.some((grain) => TWO_FACTOR_GRAINS.includes(grain))).toBe(false)
+    expect(mfaRequiredFor({ requireMfa: false }, [{ role: designer, scope: everywhere }])).toBe(false)
+    // A designer session without two-factor holds its whole role (nothing waits for a code).
+    expect(sessionGrants({ requireMfa: false }, [{ role: designer, scope: everywhere }], false)).toHaveLength(1)
+  })
+
+  it('works on artwork and samples with customers: exactly the permissions of the design, all declared', () => {
+    expect([...designer.permissions].sort()).toEqual(['files.read', 'files.upload', 'home.view', 'orders.view', 'parties.view', 'product.bom.view', 'product.styles.view', 'sales.inquiries.view', 'sales.samples.view', 'threads.post', 'threads.read', 'views.save'])
+    for (const name of designer.permissions) expect(FACTORY_PERMISSIONS.isDeclared(name), name).toBe(true)
+    expect(templateProblems([designer])).toEqual([])
+    // Never a money permission, never a write of an order, a quote or a price; never measurement sheets (body data).
+    expect(designer.permissions.filter((name) => name.startsWith('money.'))).toEqual([])
+    for (const name of ['orders.manage', 'quotes.view', 'quotes.manage', 'pricelists.view', 'sales.measurements.view', 'product.materials.cost', 'costing.view', 'invoices.view', 'payments.view']) expect(designer.permissions, name).not.toContain(name)
+  })
+
+  it('a designer session holds no grain: heldGrains is empty, money.price is never granted', () => {
+    const actor = office([grantOf({ permissions: designer.permissions, grains: designer.grains }, everywhere)])
+    expect([...heldGrains(actor)]).toEqual([])
+    expect(can(actor, 'money.price' as Permission, { companyId: A })).toBe(false)
+    expect(can(actor, 'orders.view' as Permission, { companyId: A })).toBe(true)
+  })
+
+  it('its key is unique among every system role, and never the portal Designer’s (customer-designer)', () => {
+    const keys = SYSTEM_ROLE_TEMPLATES.map((entry) => entry.key)
+    expect(keys.filter((key) => key === 'designer')).toEqual(['designer'])
+    expect(new Set(keys).size).toBe(keys.length)
+    const portal = PARTNER_ROLE_TEMPLATES.find((entry) => entry.key === 'customer-designer')!
+    expect(portal.audience).toBe('partner')
+    expect(portal.key).not.toBe(designer.key)
+    // The office roles that see our prices are still the Owner and Finance only.
+    expect(ROLE_TEMPLATES.filter((entry) => entry.audience === 'office' && entry.grains.includes('price')).map((entry) => entry.key)).toEqual(['owner', 'finance'])
+  })
+})
+// ── end B-CP-016 ──

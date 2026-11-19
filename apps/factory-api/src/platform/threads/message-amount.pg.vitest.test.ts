@@ -147,7 +147,12 @@ describe('B-TH-049 the price check before a note goes to the floor', { timeout: 
   })
 
   it('the same words stay possible in an office note; a floor note of pieces and sizes goes to the floor', async () => {
-    const office = await ok('priced', 'POST', `/threads/WorkOrder/${workOrder}/notes`, { body: 'Made-up: il cliente paga € 12,50 al pezzo' }, 201)
+    // B-CP-020 (customer page plan O5, L3): an office note naming a price is held once with a warning (NAMES_A_PRICE, no amount
+    // repeated); the writer sends it anyway.
+    const warned = await call('priced', 'POST', `/threads/WorkOrder/${workOrder}/notes`, { body: 'Made-up: il cliente paga € 12,50 al pezzo' })
+    expect(warned.statusCode, warned.body).toBe(409)
+    expect(issuesOf(warned.json() as Json).find((entry) => String(entry.path).startsWith('refusal/'))?.path).toBe('refusal/NAMES_A_PRICE')
+    const office = await ok('priced', 'POST', `/threads/WorkOrder/${workOrder}/notes`, { body: 'Made-up: il cliente paga € 12,50 al pezzo', pricesInWordsOk: true }, 201)
     expect(office.message).toMatchObject({ forFloor: false, audience: 'OFFICE' })
     const floor = await ok('priced', 'POST', `/threads/WorkOrder/${workOrder}/notes`, { body: 'Made-up: taglia 48, 30 pezzi, cucire il collo prima delle maniche.', forFloor: true }, 201)
     expect(floor.message).toMatchObject({ forFloor: true, amount: null })

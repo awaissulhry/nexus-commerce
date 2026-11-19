@@ -17,6 +17,8 @@ import { DRAFT_FILE_CATEGORY, DRAFT_FILES_MAX, draftFilePartOf, draftFilesByPart
 import { MEASURE_BY, MEASURE_BY_WORDS, PEOPLE_IN_SHEET, personRow, personShapeProblems } from './people'
 import { customLineProblems, customLineShapeProblems, draftStaleWords, lineHasPieces, linePieces, MTM_CLOSED_WORDS, PROBLEM_CODES, type CustomLineFacts } from './rules'
 import { problemPartOf, problemsByPartOf } from './office'
+import { ACCEPT_MAP_LIMITS, ACCEPT_WORDS, acceptPlanOf, lineMapOf, mappedLineNote, type AcceptLineFacts } from './office' // B-CP-077
+import { brandPricesOfAccept, draftValueOf } from './office' // B-CP-076
 
 const P1 = '00000000-0000-4000-8000-000000000001'
 const P2 = '00000000-0000-4000-8000-000000000002'
@@ -362,3 +364,110 @@ describe('B-W2b-F17: the PPE category in words', () => {
     expect(PPE_WORDS.CATEGORY_II).toEqual({ it: 'DPI categoria II', en: 'PPE category II' })
   })
 })
+
+// ---- B-CP-077: the accept's ONE line map (pure) -------------------------------------------------------------------------------
+describe('B-CP-077: accept a described or made-to-measure request by its line map', () => {
+  const line = (over: Partial<AcceptLineFacts> & Pick<AcceptLineFacts, 'id' | 'seq' | 'kind'>): AcceptLineFacts => ({ styleId: null, colourwayId: null, sizes: [], quantity: null, byPerson: false, peopleSizes: [], note: null, ownWords: null, colourText: null, ...over })
+  const catalogue = line({ id: 'c1', seq: 1, kind: 'CATALOGUE', styleId: 's1', colourwayId: 'k1', sizes: [{ size: '50', quantity: 2 }] })
+  const described = line({ id: 'd2', seq: 2, kind: 'DESCRIBED', quantity: 6, ownWords: 'Made-up team jackets', colourText: 'Black and red' })
+  const tailored = line({ id: 'm3', seq: 3, kind: 'MADE_TO_MEASURE', byPerson: true, peopleSizes: ['50', '52', '52'], ownWords: 'JACKET' })
+  const plan = (as: 'ORDER' | 'QUOTE', map: Parameters<typeof acceptPlanOf>[0]['map'], lines = [catalogue, described, tailored], prices: { lineId: string; unitPrice?: string }[] = []) => acceptPlanOf({ number: 'RQ-0001', as, lines, map, prices })
+
+  it('holds an unmapped line (as a quote) and a made-to-measure line (as an order), in words naming their places', () => {
+    expect(plan('QUOTE', [])).toEqual({ kind: 'HELD', words: ACCEPT_WORDS.unmapped([2, 3]), issues: [{ path: 'request/lines/2', message: ACCEPT_WORDS.unmapped([2, 3]) }, { path: 'request/lines/3', message: ACCEPT_WORDS.unmapped([2, 3]) }] })
+    expect(ACCEPT_WORDS.unmapped([2])).toMatch(/described or made to measure/)
+    expect(plan('ORDER', [{ lineId: 'm3', into: [{ styleId: 's1', colourwayId: 'k1' }] }]).kind).toBe('HELD')
+    expect(plan('ORDER', [], [catalogue, tailored])).toMatchObject({ kind: 'HELD', words: ACCEPT_WORDS.madeToMeasureOrder([3]) })
+    // A catalogue-only request needs no map.
+    expect(plan('ORDER', [], [catalogue])).toMatchObject({ kind: 'PLAN', lines: [{ requestLineId: 'c1', styleId: 's1', sizes: [{ size: '50', quantity: 2 }], at: 'request/lines/1' }] })
+  })
+
+  it('refuses by place what the office sent: a catalogue line, an unknown line, twice, no sizes, a price on a described line', () => {
+    const mtm = { lineId: 'm3', into: [{ styleId: 's1', colourwayId: 'k1' }] }
+    expect(plan('QUOTE', [{ lineId: 'c1', into: [{ styleId: 's1', colourwayId: 'k1' }] }, mtm])).toMatchObject({ kind: 'INVALID', issues: [{ path: 'body/map/0/lineId', message: ACCEPT_WORDS.fromCatalogue(1) }] })
+    expect(plan('QUOTE', [{ lineId: 'x9', into: [{ styleId: 's1', colourwayId: 'k1' }] }, mtm])).toMatchObject({ kind: 'INVALID', issues: [{ path: 'body/map/0/lineId', message: ACCEPT_WORDS.notALine }] })
+    expect(plan('QUOTE', [mtm, mtm])).toMatchObject({ kind: 'INVALID', issues: [{ path: 'body/map/1/lineId', message: ACCEPT_WORDS.mappedTwice(3) }] })
+    expect(plan('QUOTE', [{ lineId: 'd2', into: [{ styleId: 's1', colourwayId: 'k1' }] }, mtm])).toMatchObject({ kind: 'INVALID', issues: [{ path: 'body/map/0/into/0/sizes', message: ACCEPT_WORDS.sizesOfTotal(2, 6) }] })
+    expect(plan('QUOTE', [{ lineId: 'd2', into: [{ styleId: 's1', colourwayId: 'k1', sizes: [{ size: '50', quantity: 3 }] }, { styleId: 's1', colourwayId: 'k2' }] }, mtm])).toMatchObject({ kind: 'INVALID', issues: [{ path: 'body/map/0/into/1/sizes', message: ACCEPT_WORDS.sizesOfEach(2) }] })
+    expect(plan('QUOTE', [{ lineId: 'd2', into: [{ styleId: 's1', colourwayId: 'k1', sizes: [{ size: '50', quantity: 6 }] }] }, mtm], undefined, [{ lineId: 'd2', unitPrice: '10' }])).toMatchObject({ kind: 'INVALID', issues: [{ path: 'body/lines/0/lineId', message: ACCEPT_WORDS.priceOnMap(2) }] })
+    // People measured by a sheet or "sending later" give no size: the office names them.
+    const later = line({ id: 'm4', seq: 4, kind: 'MADE_TO_MEASURE', byPerson: true, peopleSizes: ['50', null] })
+    expect(plan('QUOTE', [{ lineId: 'm4', into: [{ styleId: 's1', colourwayId: 'k1' }] }], [later])).toMatchObject({ kind: 'INVALID', issues: [{ message: ACCEPT_WORDS.sizesOfPeople(4, 1, 2) }] })
+    const sheet = line({ id: 'm5', seq: 5, kind: 'MADE_TO_MEASURE', byPerson: true })
+    expect(plan('QUOTE', [{ lineId: 'm5', into: [{ styleId: 's1', colourwayId: 'k1' }] }], [sheet])).toMatchObject({ kind: 'INVALID', issues: [{ message: ACCEPT_WORDS.sizesInSheet(5) }] })
+  })
+
+  it('plans every line in the request’s order, a mapped line into its style lines; its people’s sizes; the note names no person; pieces said', () => {
+    const planned = plan('QUOTE', [
+      { lineId: 'm3', into: [{ styleId: 's1', colourwayId: 'k1' }] },
+      { lineId: 'd2', into: [{ styleId: 's1', colourwayId: 'k1', sizes: [{ size: '50', quantity: 2 }] }, { styleId: 's1', colourwayId: 'k2', sizes: [{ size: ' 52 ', quantity: 3 }], note: 'Made-up red half' }] },
+    ])
+    if (planned.kind !== 'PLAN') throw new Error(planned.words)
+    expect(planned.lines.map((entry) => [entry.requestLineId, entry.colourwayId, entry.sizes, entry.at])).toEqual([
+      ['c1', 'k1', [{ size: '50', quantity: 2 }], 'request/lines/1'],
+      ['d2', 'k1', [{ size: '50', quantity: 2 }], 'body/map/1/into/0'],
+      ['d2', 'k2', [{ size: '52', quantity: 3 }], 'body/map/1/into/1'],
+      ['m3', 'k1', [{ size: '50', quantity: 1 }, { size: '52', quantity: 2 }], 'body/map/0/into/0'],
+    ])
+    expect(planned.lines[1]!.note).toBe('Request RQ-0001, line 2 (described): Made-up team jackets · Colours: Black and red')
+    expect(planned.lines[2]!.note).toBe('Made-up red half')
+    expect(planned.lines[3]!.note).toBe('Request RQ-0001, line 3 (made to measure): JACKET · People: 3 on the request (their names stay there)')
+    expect(planned.warnings).toEqual([ACCEPT_WORDS.pieces(2, 6, 5, 'QUOTE')])
+    expect(mappedLineNote(null, line({ id: 'z', seq: 9, kind: 'DESCRIBED', ownWords: 'x'.repeat(2000) })).length).toBe(ACCEPT_MAP_LIMITS.note)
+  })
+
+  it('the map pairs the lines made with the plan, by id; a place a copy left out has none', () => {
+    const planned = [
+      { requestLineId: 'c1', requestSeq: 1 },
+      { requestLineId: 'd2', requestSeq: 2 },
+      { requestLineId: 'd2', requestSeq: 2 },
+      { requestLineId: 'm3', requestSeq: 3 },
+    ]
+    const made = [{ id: 'o10', seq: 10 }, { id: 'o20', seq: 20 }, { id: 'o30', seq: 30 }, { id: 'o40', seq: 40 }]
+    expect(lineMapOf(planned, made)).toEqual([
+      { requestLineId: 'c1', requestSeq: 1, into: [{ lineId: 'o10', seq: 10 }] },
+      { requestLineId: 'd2', requestSeq: 2, into: [{ lineId: 'o20', seq: 20 }, { lineId: 'o30', seq: 30 }] },
+      { requestLineId: 'm3', requestSeq: 3, into: [{ lineId: 'o40', seq: 40 }] },
+    ])
+    expect(lineMapOf(planned, made.slice(0, 3), new Set([0]))).toEqual([
+      { requestLineId: 'c1', requestSeq: 1, into: [] },
+      { requestLineId: 'd2', requestSeq: 2, into: [{ lineId: 'o10', seq: 10 }, { lineId: 'o20', seq: 20 }] },
+      { requestLineId: 'm3', requestSeq: 3, into: [{ lineId: 'o30', seq: 30 }] },
+    ])
+  })
+})
+// ---- end B-CP-077
+
+// ---- B-CP-076: "Your price" — the draft's value and the carry on accept (pure) -----------------------------------------------
+describe('B-CP-076: the customer’s own price — the draft’s value and its carry onto the order by the line map', () => {
+  it('values a draft at the price shown, else the customer’s own, in minor units; null when a line has neither, or no line', () => {
+    expect(draftValueOf([{ priceShown: '410', brandUnitPrice: '400', pieces: 2 }, { priceShown: null, brandUnitPrice: '390', pieces: 2 }], 'EUR')).toBe(160_000)
+    expect(draftValueOf([{ priceShown: '410', brandUnitPrice: null, pieces: 1 }, { priceShown: null, brandUnitPrice: null, pieces: 1 }], 'EUR')).toBeNull()
+    expect(draftValueOf([], 'EUR')).toBeNull()
+    // The price check's own rounding: half up to the minor unit (1.005 → 1.01).
+    expect(draftValueOf([{ priceShown: '0.335', brandUnitPrice: null, pieces: 3 }], 'EUR')).toBe(101)
+  })
+
+  it('carries by the map, never by place: 1 → 1 a unit row; 1 → n a line total on the first; every line priced → one order total', () => {
+    const map = [
+      { requestLineId: 'c1', into: [{ lineId: 'o10', pieces: 3 }] },
+      { requestLineId: 'r2', into: [{ lineId: 'o20', pieces: 1 }] },
+      { requestLineId: 'd3', into: [{ lineId: 'o30', pieces: 2 }, { lineId: 'o40', pieces: 2 }] },
+    ]
+    const priced = (red: string | null) => [{ requestLineId: 'c1', brandUnitPrice: '401' }, { requestLineId: 'r2', brandUnitPrice: red }, { requestLineId: 'd3', brandUnitPrice: '395.5' }]
+    expect(brandPricesOfAccept({ currency: 'EUR', prices: priced(null), map })).toEqual([
+      { orderLineId: 'o10', unitPrice: '401', netAmount: null, requestLineIds: ['c1'] },
+      { orderLineId: 'o30', unitPrice: null, netAmount: 158_200, requestLineIds: ['d3'] },
+    ])
+    expect(brandPricesOfAccept({ currency: 'EUR', prices: priced('402'), map })).toEqual([
+      { orderLineId: 'o10', unitPrice: '401', netAmount: null, requestLineIds: ['c1'] },
+      { orderLineId: 'o20', unitPrice: '402', netAmount: null, requestLineIds: ['r2'] },
+      { orderLineId: null, unitPrice: null, netAmount: 120_300 + 40_200 + 158_200, requestLineIds: ['c1', 'r2', 'd3'] },
+    ])
+    // No line made into several: unit rows only; no price: nothing; a line a copy made nothing from: nothing.
+    expect(brandPricesOfAccept({ currency: 'EUR', prices: priced('402'), map: map.slice(0, 2) })).toHaveLength(2)
+    expect(brandPricesOfAccept({ currency: 'EUR', prices: [{ requestLineId: 'c1', brandUnitPrice: null }], map })).toEqual([])
+    expect(brandPricesOfAccept({ currency: 'EUR', prices: priced(null), map: [{ requestLineId: 'c1', into: [] }] })).toEqual([])
+  })
+})
+// ---- end B-CP-076

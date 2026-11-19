@@ -1688,6 +1688,20 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     permissions: every((risk) => risk === 'read'),
     grains: [],
   }),
+  // ── B-CP-016 (customer page plan C7; design customer-page 12 §5; review F7) ──
+  // The office role "Factory designer" (key `designer`: no clash with the portal's `customer-designer`), an OFFER — the customer's
+  // "Factory designer" slot takes any office person who reads and writes the customer's threads (review F7). It works on logos,
+  // artwork and samples with customers and sees NO money: no grain, so the API drops every price field and a priced file is locked
+  // for it (the priced-file lock, B-CP-014/015/023, which this role lands after: orders.view + files.read would open priced PDFs
+  // otherwise); a measurement sheet stays locked (no sales.measurements.view). No two-factor (no price, cost or margin).
+  template('designer', {
+    name: 'Factory designer',
+    description: 'Works on logos, artwork and samples with customers; sees no money.',
+    requireMfa: false,
+    permissions: ['home.view', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'parties.view', 'orders.view', 'sales.inquiries.view', 'sales.samples.view', 'product.styles.view', 'product.bom.view', 'views.save'],
+    grains: [],
+  }),
+  // ── end B-CP-016 ──
   floorTemplate('operator', {
     name: 'Operator',
     description: 'Works at a station on an enrolled floor device; sees only their own pay (the piece rates published to them).',

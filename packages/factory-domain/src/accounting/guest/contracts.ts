@@ -151,7 +151,13 @@ export const accountantsAnswer = output({
       files: z.number().int(),
     }),
   ),
-  may: output({ manage: z.boolean() }),
+  may: output({
+    manage: z.boolean(),
+    // B-CP-011 (follow-up 13, the money wall; Owner O3): the accountant sees our prices, so giving the access and a later end of
+    // it are the Owner's (the API's `onlyOwnerGivesPrices`). true only for a live holder of the Owner role who may manage; the web
+    // holds "Give access…" and a later end before the click with it. A yes/no of the reader's own right: no price, no amount.
+    give: z.boolean(),
+  }),
   asOf: instant(),
 })
 export type AccountantsAnswer = z.infer<typeof accountantsAnswer>

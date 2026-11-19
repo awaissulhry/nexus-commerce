@@ -58,6 +58,8 @@ export const templateSchema = templateRowSchema.extend({
   termsText: z.string().nullable(),
   termsVersion: z.string().nullable(),
   lines: z.array(templateLineSchema),
+  // F-CP-160 (follow-up 13): a line holds a typed price (a yes/no, never the price): a reader without prices leaves the replace.
+  holdsTypedPrices: z.boolean(),
   mayManage: z.boolean(),
 })
 export type QuoteTemplate = z.infer<typeof templateSchema>

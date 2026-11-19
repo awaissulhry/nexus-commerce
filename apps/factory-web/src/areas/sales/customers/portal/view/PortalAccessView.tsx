@@ -13,6 +13,7 @@ import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { previewHeld, settingsBody, settingsDraftOf, settingsProblems, type SettingsDraft } from '../../../../admin/users/partners/model'
 import type { PortalAccessActions, PortalAccessModel, RequestRow } from '../model'
 import { LimitsCard } from './LimitsCard' // F-PR-07
+import { MtmDraftsSwitch } from './MtmDraftsSwitch' // F-CP-155
 import { heldWords, NoticeLine, PortalAccessMessages, PortalStepUp, usePortalT } from './parts'
 import { PeopleCard } from './PeopleCard'
 import { PortalDialogs } from './PortalDialogs'
@@ -160,6 +161,8 @@ function SettingsCard({ model, actions }: { model: PortalAccessModel; actions?: 
             </span>
           </div>
         </div>
+        {/* F-CP-155: made-to-measure lines in a customer's portal drafts (on by default) — the same Save and fresh code. */}
+        {model.side === 'customers' && access.kinds.includes('CUSTOMER') && <MtmDraftsSwitch checked={draft.mtmDraftsOn ?? true} held={held} customer={access.party.name} onChange={(next) => set({ mtmDraftsOn: next })} />}
         <Field label={t('settings.maxUsers')} hint={t('settings.maxUsersHint', { taken: access.seats.taken })} error={problems.maxUsers ? t(problems.maxUsers, { taken: access.seats.taken }) : undefined}>
           <Input inputMode="numeric" value={draft.maxUsers} onChange={(event) => set({ maxUsers: event.target.value.replace(/[^0-9]/g, '') })} placeholder={t('settings.noLimit')} disabled={held !== null} />
         </Field>

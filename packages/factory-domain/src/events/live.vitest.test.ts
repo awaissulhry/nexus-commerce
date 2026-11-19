@@ -344,6 +344,12 @@ describe('order events name their customer (B-SA-001)', () => {
   /** Every sales_order.* type the catalogue declares (a new one is held to the rule by itself), and the materials event. */
   const ORDER_EVENTS = [...EVENT_CATALOGUE.types().filter((type) => type.startsWith('sales_order.')), 'customer_material.changed']
   const definitionOf = (type: string) => EVENT_CATALOGUE.get(type, 1)
+  // ── B-CP-017 / B-CP-021 (customer page lane, the money wall): the customer's price events go live to price holders only
+  // (money.price, never orders.view: a Sales worker or a Production manager has no price to re-read), or not at all (the alert's
+  // own event: the screens re-read on brand_price_changed). They name the order's customer like every order event.
+  const MONEY_WALLED: Readonly<Record<string, 'money.price' | null>> = { 'sales_order.brand_price_changed': 'money.price', 'sales_order.brand_price_changed_by_customer': null }
+  const LIVE_ORDER_EVENTS = ORDER_EVENTS.filter((type) => definitionOf(type).live !== null)
+  // ── end B-CP-017 / B-CP-021 ──
   const viewerOf = (type: string, parties: Grant['parties']): Actor => office([{ permissions: [definitionOf(type).live!.permission], companies: 'all', sites: 'all', parties }])
   const messageOf = (type: string, payload: Record<string, unknown>) => {
     const definition = definitionOf(type)
@@ -362,11 +368,17 @@ describe('order events name their customer (B-SA-001)', () => {
     expect(field!.safeParse('Brand Alpha').success).toBe(false)
     // sales_order.created always named it; the others take it from B-SA-001 on, so an event written before still parses.
     if (type !== 'sales_order.created') expect(field!.safeParse(undefined).success).toBe(true)
-    expect(definition.live?.permission).toBe('orders.view')
-    expect(definition.live!.fields ?? []).not.toContain('partyId')
+    // B-CP-017 / B-CP-021: a price event's own live rule (money.price), or none.
+    expect(definition.live?.permission).toBe(Object.hasOwn(MONEY_WALLED, type) ? (MONEY_WALLED[type] ?? undefined) : 'orders.view')
+    expect(definition.live?.fields ?? []).not.toContain('partyId')
   })
 
-  it.each(ORDER_EVENTS)("%s: a person limited to Brand Beta never receives Brand Alpha's; Beta's reaches them; every customer gets both", (type) => {
+  it('B-CP-017 / B-CP-021: the money-walled order events are declared, and the ones with no live rule are only those', () => {
+    for (const type of Object.keys(MONEY_WALLED)) expect(ORDER_EVENTS, type).toContain(type)
+    expect(ORDER_EVENTS.filter((type) => !LIVE_ORDER_EVENTS.includes(type))).toEqual(Object.keys(MONEY_WALLED).filter((type) => MONEY_WALLED[type] === null))
+  })
+
+  it.each(LIVE_ORDER_EVENTS)("%s: a person limited to Brand Beta never receives Brand Alpha's; Beta's reaches them; every customer gets both", (type) => {
     const ofAlpha = messageOf(type, { orderId: 'SO-A', partyId: ALPHA })
     const ofBeta = messageOf(type, { orderId: 'SO-B', partyId: BETA })
     expect(ofAlpha.partyIds).toEqual([ALPHA])
@@ -377,7 +389,7 @@ describe('order events name their customer (B-SA-001)', () => {
     expect(liveViewFor(ofBeta, viewerOf(type, [BETA]), EVENT_CATALOGUE)!.fields).not.toHaveProperty('partyId')
   })
 
-  it.each(ORDER_EVENTS)('%s without a party (an event of an older worker): every-customer viewers only (fails closed)', (type) => {
+  it.each(LIVE_ORDER_EVENTS)('%s without a party (an event of an older worker): every-customer viewers only (fails closed)', (type) => {
     const older = messageOf(type, { orderId: 'SO-OLD' })
     expect(older.partyIds).toEqual([])
     expect(liveViewFor(older, viewerOf(type, [ALPHA]), EVENT_CATALOGUE)).toBeNull()

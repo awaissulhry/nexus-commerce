@@ -56,8 +56,9 @@ describe('surcharges in the options area\'s words (CF1:02)', () => {
 })
 
 describe('Save waits with its reason; the price is the API\'s', () => {
-  const base: SaveState = { held: null, changed: true, checking: false, preview: null, saving: false, offline: false, keepPrice: false, kind: 'QUOTE' }
-  const ok = { ok: true, blocks: [], warnings: [], outsideCertificate: false, certificateNotes: [], chosen: [], pricing: { repriced: true, held: null, manualKept: false, unitPrice: '413', before: '470', optionsTotal: '35', change: null, steps: null, marginPct: '25', marginBefore: '34' }, problem: null }
+  // F-CP-160 (follow-up 13): a price holder (`price`); the check's `optionsMoveMoney` holds only a reader without prices.
+  const base: SaveState = { held: null, changed: true, checking: false, preview: null, saving: false, offline: false, keepPrice: false, kind: 'QUOTE', price: true }
+  const ok = { ok: true, blocks: [], warnings: [], outsideCertificate: false, certificateNotes: [], chosen: [], pricing: { repriced: true, held: null, manualKept: false, optionsMoveMoney: true, unitPrice: '413', before: '470', optionsTotal: '35', change: null, steps: null, marginPct: '25', marginBefore: '34' }, problem: null }
   const draft = draftOf(DEMO_LINE.chosen)
   it('in this order: the API\'s held words, offline, unchanged, a text, the check, a block, an order\'s price change', () => {
     expect(saveHeld({ ...base, held: { it: 'x', en: 'held' } }, draft, groups)).toEqual({ words: { it: 'x', en: 'held' } })

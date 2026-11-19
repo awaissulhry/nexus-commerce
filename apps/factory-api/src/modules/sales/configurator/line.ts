@@ -45,6 +45,10 @@ import { styleConfiguratorOf, valuePrices } from './style'
 // B-W2b-374: what a group takes; who may show an order line's artwork in the portal.
 import { assertPicksTake } from '../../product/options/takes'
 import { mayShareArtwork } from '../portal-ordering/artwork'
+// B-CP-026: an options save that keeps a price while what the options add changes is held for a price holder.
+import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
+import { blindPriceHeld } from '@nexus/factory-domain/sales/blind-price'
 
 /**
  * The configurator on a quote or order line (B-W2b-340; SAL-133, SAL-136, SAL-139, SAL-140; CF1:01-03; design
@@ -284,7 +288,9 @@ export async function checkQuoteLine(caller: CommandCaller, quoteId: string, lin
     const rows = rowsToWrite(check.check.chosen, body.picks, surcharges)
     const names = await valueNameMap(db, rows.map((row) => row.valueId))
     const preview = rows.map((row) => ({ ...row, id: newId() }))
-    let pricing: CheckLineView['pricing'] = { repriced: false, held: restart.kind === 'HELD' ? restart.held : null, manualKept: false, unitPrice: asMoney('price', before), before: asMoney('price', before), optionsTotal: asMoney('price', surchargeTotal(rows.map((row) => ({ amount: row.surchargeAmount })))), change: asMoney('price', null), steps: asMoney('price', null), marginPct: asMoney('margin', marginBefore), marginBefore: asMoney('margin', marginBefore) }
+    // B-CP-026 (follow-up 13): the save's own rule (saveQuoteOptions) said before the click — what the options add moves.
+    const optionsMoveMoney = frozen.ok && optionsMoneyMoved(await quoteOptions(db, line.id), rows)
+    let pricing: CheckLineView['pricing'] = { repriced: false, held: restart.kind === 'HELD' ? restart.held : null, manualKept: false, optionsMoveMoney, unitPrice: asMoney('price', before), before: asMoney('price', before), optionsTotal: asMoney('price', surchargeTotal(rows.map((row) => ({ amount: row.surchargeAmount })))), change: asMoney('price', null), steps: asMoney('price', null), marginPct: asMoney('margin', marginBefore), marginBefore: asMoney('margin', marginBefore) }
     if (frozen.ok && check.check.ok) {
       const planned = await plannedPrice(db, ctx, version, line, restart, chargesOf(preview.map((row) => ({ id: row.id, name: names.get(row.valueId) ?? 'Option', text: row.freeText, amount: row.surchargeAmount, pct: row.surchargePct }))))
       if ('plan' in planned) {
@@ -356,6 +362,14 @@ export async function applyQuoteLinePicks(
   return { before, rows, check, repriced }
 }
 
+// ── B-CP-026 (Owner answer A, the money wall): whether the person sees the prices of a quote's or an order's customer ──
+const PRICE = grainPermission('price') as Permission
+const seesPricesOver = (context: OfficeContext, record: { readonly companyId: string; readonly partyId: string | null }): boolean => can(actorOf(context), PRICE, { companyId: record.companyId, partyId: record.partyId })
+/** What the options add moved (a sum of surcharges per piece other than before). */
+const optionsMoneyMoved = (before: readonly { readonly surchargeAmount: string | null }[], after: readonly { readonly surchargeAmount: string | null }[]): boolean =>
+  orderChangeHeld(surchargeChange(before.map((row) => ({ amount: row.surchargeAmount })), after.map((row) => ({ amount: row.surchargeAmount }))), false)
+// ── end B-CP-026 ──
+
 /** PUT /sales/quotes/:quoteId/lines/:lineId/options (quotes.manage): see the file's head. */
 export async function saveQuoteOptions(caller: CommandCaller, quoteId: string, lineId: string, body: SaveQuoteOptionsBody, idempotencyKey?: string) {
   invalidPicks(body.picks)
@@ -366,6 +380,12 @@ export async function saveQuoteOptions(caller: CommandCaller, quoteId: string, l
     assertDraft(version)
     const line = await quoteLineOf(tx, version, lineId)
     const { before, rows, check, repriced } = await applyQuoteLinePicks(tools, current, version, line, body.picks)
+    // ── B-CP-026 (Owner answer A, strict — lead 11-19): any save whose options move money is a price the person cannot see — a
+    // line priced again (from its list, or its stored waterfall with a typed change kept) or one not priced again (typed by hand, a
+    // unit, a fee: the surcharge left out of the price). Held in words for a person without the price grain (the command's writes
+    // are undone); a price holder saves it. Options that add the same are saved as before.
+    if (optionsMoneyMoved(before, rows) && !seesPricesOver(context, current)) throw blindPriceHeld('body/picks')
+    // ── end B-CP-026 ──
     // B-W2b-423 (KS4:01): the line costed again, its options' own cost with it.
     await refreshVersion(tools, current, version, new Set([line.id]))
     tools.audit({
@@ -494,6 +514,8 @@ export async function checkOrderLine(caller: CommandCaller, orderId: string, lin
         repriced: false,
         held: null,
         manualKept: false,
+        // B-CP-026 (follow-up 13): the save's own rule (saveOrderOptions) said before the click — what the options add moves.
+        optionsMoveMoney: surcharges.ok && orderChangeHeld(surcharges.change, false),
         unitPrice: asMoney('price', unitPrice),
         before: asMoney('price', unitPrice),
         optionsTotal: asMoney('price', surchargeTotal(rows.map((row) => ({ amount: row.surchargeAmount })))),
@@ -527,6 +549,11 @@ export async function saveOrderOptions(caller: CommandCaller, orderId: string, l
     const current = await orderOptions(tx, line.id)
     const surcharges = await orderSurchargesOf(tx, order, line, current, check.check.chosen)
     if (!surcharges.ok) throw new DomainError('conflict', surcharges.message.en, [{ path: 'body/picks', message: surcharges.message.en }])
+    // ── B-CP-026 (Owner answer A): what the options add moves on an accepted order — keeping the accepted price (keepPrice) gives
+    // the surcharge away, and the amendment's words below name the amount: both a price decision the person cannot see. Held in
+    // words, nothing changed; a price holder does it.
+    if (orderChangeHeld(surcharges.change, false) && !seesPricesOver(context, order)) throw blindPriceHeld('body/keepPrice')
+    // ── end B-CP-026 ──
     if (orderChangeHeld(surcharges.change, body.keepPrice === true)) {
       const words = `These options change what the options add by ${surcharges.change} a piece over what was accepted: keep the accepted price, or amend the order so the customer accepts the new one.`
       throw new DomainError('conflict', words, [{ path: 'body/keepPrice', message: words }])

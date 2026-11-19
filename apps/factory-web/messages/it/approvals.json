@@ -545,5 +545,8 @@
       "signed_out": "Sei uscito: accedi di nuovo.",
       "internal": "Qualcosa non ha funzionato: riprova."
     }
+  },
+  "moneyWall": {
+    "blindPrice": "Cambia un prezzo che non vedi: lo fa chi vede i prezzi."
   }
 }

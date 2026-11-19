@@ -1077,5 +1077,8 @@
     "reason": "Perché viene rottamato",
     "reasonNeeded": "Scrivi perché il capo viene rottamato.",
     "submit": "Rottama il capo"
+  },
+  "moneyWall": {
+    "blindPrice": "Cambia un prezzo che non vedi: lo fa chi vede i prezzi."
   }
 }

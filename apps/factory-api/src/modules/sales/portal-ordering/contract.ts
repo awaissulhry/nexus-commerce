@@ -11,6 +11,9 @@ import { DRAFT_FILE_PARTS } from '@nexus/factory-domain/sales/portal-ordering/dr
 // B-CP-075: the lines of the customer's own kinds, their people, the parts sent later.
 import { MEASURE_BY, PEOPLE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/people'
 import { CUSTOM_LINE_KINDS, CUSTOM_LINE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/rules'
+// B-CP-077: the accept's line map.
+import { ACCEPT_MAP_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { MAX_TEXT } from '@nexus/factory-domain/sales/quotes/quotes'
 
 /**
  * Portal ordering (B-W2b-190; SAL-071, SAL-072, SAL-073, SAL-074, SAL-079; design portal.customer.catalogue,
@@ -36,6 +39,11 @@ const sizes = z.array(sizeAsk).min(1).max(ORDERING_LIMITS.sizesPerLine)
 const problem = output({ code: z.enum(PROBLEM_CODES), part: z.enum(DRAFT_PARTS), lineId: id().nullable(), size: z.string().nullable(), personId: id().nullable(), words })
 const notice = output({ code: z.enum(REORDER_NOTICES), words })
 const sizeRow = output({ size: z.string(), quantity: z.number().int() })
+// ---- B-CP-076 (customer page plan 11 §1.3 D3): "Your price" — the customer's own net unit price of a draft line, the price grain (a
+// Designer, a Viewer, an office person without prices: dropped from the answer, refused in a body); null clears it; frozen at Send.
+const ownPrice = () => money.price(z.string().regex(/^\d{1,12}(\.\d{1,6})?$/, 'A price of at least 0, with at most 6 decimals.').nullable())
+const ownPriceShown = () => money.price(z.string().nullable())
+// ---- end B-CP-076
 
 // ---- B-CP-072 (customer page plan C5): a draft's files, as the customer reads them -------------------------------------------
 const draftFile = output({ id: id(), lineId: id().nullable(), originalName: z.string(), kind: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), version, createdAt: at })
@@ -77,6 +85,8 @@ const customLine = output({
   peopleInSheet: z.boolean(),
   note: z.string().nullable(),
   problems: z.array(problem),
+  /** B-CP-076: "Your price" (the customer's own net unit price; price grain). */
+  brandUnitPrice: ownPriceShown(),
 })
 // ---- end B-CP-075
 
@@ -166,6 +176,8 @@ const line = output({
   source: output({ orderLineId: id(), orderId: id(), orderNumber: z.string(), yourNumber, customerRef: z.string().nullable(), orderDate: day }).nullable(),
   notices: z.array(notice),
   problems: z.array(problem),
+  /** B-CP-076: "Your price" (the customer's own net unit price; price grain). */
+  brandUnitPrice: ownPriceShown(),
 })
 
 const requestBody = output({
@@ -248,7 +260,7 @@ const header = {
   laterParts: z.array(z.enum(DRAFT_LATER_PARTS)).max(DRAFT_LATER_PARTS.length).optional(),
 }
 
-const newLine = input({ styleId: id(), colourwayId: id(), sizes, note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish() })
+const newLine = input({ styleId: id(), colourwayId: id(), sizes, note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish(), brandUnitPrice: ownPrice() /* B-CP-076 */ })
 
 export const listRequestsContract = defineContract({
   querystring: input({ status: z.enum([...REQUEST_STATUSES, 'ALL']).default('ALL') }),
@@ -287,7 +299,7 @@ export const changeRequestContract = defineContract({ params: requestParams, bod
 export const addLinesContract = defineContract({ params: requestParams, body: input({ version, lines: z.array(newLine).min(1).max(ORDERING_LIMITS.lines) }), response: { 200: record } })
 export const changeLineContract = defineContract({
   params: input({ requestId: id(), lineId: id() }),
-  body: input({ version, colourwayId: id().optional(), sizes: sizes.optional(), note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish() }),
+  body: input({ version, colourwayId: id().optional(), sizes: sizes.optional(), note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish(), brandUnitPrice: ownPrice() /* B-CP-076 */ }),
   response: { 200: record },
 })
 export const removeLineContract = defineContract({ params: input({ requestId: id(), lineId: id() }), querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: record } })
@@ -313,6 +325,8 @@ const customLineFields = {
   /** A described line's split by size ([] clears it). */
   sizes: z.array(sizeAsk).max(ORDERING_LIMITS.sizesPerLine).optional(),
   note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish(),
+  /** B-CP-076: "Your price" (price grain; null clears it). */
+  brandUnitPrice: ownPrice(),
 }
 const personFields = {
   name: z.string().trim().min(1).max(PEOPLE_LIMITS.name),
@@ -508,6 +522,8 @@ const officeLine = output({
   note: z.string().nullable(),
   sourceOrderLineId: id().nullable(),
   problems: z.array(output({ code: z.enum(PROBLEM_CODES), size: z.string().nullable(), words })),
+  /** B-CP-076: the customer's own net unit price typed in its draft (price grain). */
+  brandUnitPrice: ownPriceShown(),
 })
 
 // ---- B-CP-071 (customer page plan D10, K9 reversed): a draft as the office reads it (read-only; null once it is sent) ----------
@@ -534,6 +550,11 @@ const officeDraft = output({
   problems: z.array(problem),
   /** B-CP-072: its files by part; a measurement sheet without sales.measurements.view is `locked` and nameless. */
   files: output({ logos: z.array(officeDraftFile), references: z.array(officeDraftFile), sheets: z.array(officeDraftFile) }),
+  /**
+   * B-CP-076 (review B4): "Value at the prices shown" — each line at the price shown to the customer, else its own price, × its
+   * pieces, minor units of the draft's currency; null: a line has neither. Price grain.
+   */
+  draftValueAmount: money.price(z.number().int().nullable()),
 })
 // ---- end B-CP-071
 
@@ -564,8 +585,13 @@ const officeRecord = output({
     summary: output({ lines: z.number().int(), pieces: z.number().int(), netShown: money.price(z.string().nullable()) }),
     /** B-CP-071: a draft's facts (accept and refuse are held while it is one: `may` all false). */
     draft: officeDraft.nullable(),
-    /** B-CP-075: the described and made-to-measure lines with their people (a measurement sheet locked without sales.measurements.view); accept is held while one is on the request (B-CP-077 maps them). */
+    /** B-CP-075: the described and made-to-measure lines with their people (a measurement sheet locked without sales.measurements.view); the accept maps them (B-CP-077). */
     customLines: z.array(customLine),
+    /**
+     * B-CP-077: what the accept needs — the described and made-to-measure lines to map to style lines (ids, in the request's
+     * order; none: nothing to map), and why it is not accepted as an order (a made-to-measure line: a quote first; null: it may be).
+     */
+    acceptMap: output({ lineIds: z.array(id()), orderHeld: z.string().nullable() }),
   }),
   may: output({ order: z.boolean(), quote: z.boolean(), refuse: z.boolean() }),
 })
@@ -609,12 +635,55 @@ export const acceptContract = defineContract({
     version,
     as: z.enum(ACCEPT_AS),
     promiseDate: day.nullish(),
-    /** ORDER: a unit price typed per request line (else the customer's list price today). */
+    /** ORDER: a unit price typed per catalogue line of the request (else the customer's list price today). */
     lines: z.array(input({ lineId: id(), unitPrice: money.price(z.string().regex(/^\d{1,12}(\.\d{1,6})?$/)) })).max(ORDERING_LIMITS.lines).optional(),
+    /**
+     * B-CP-077: each described or made-to-measure line of the request and the style line(s) it is made into — a style and colourway
+     * the company sells (never another customer's own label), its sizes (else the request line's own: its size rows, or its people's
+     * sizes when each has one), for an ORDER maybe a typed unit price (else the list price), a description and a note (else where it
+     * came from: the request, the line, the customer's words, how many people). A made-to-measure line is accepted as a QUOTE only.
+     */
+    map: z
+      .array(
+        input({
+          lineId: id(),
+          into: z
+            .array(
+              input({
+                styleId: id(),
+                colourwayId: id(),
+                sizes: sizes.optional(),
+                unitPrice: money.price(z.string().regex(/^\d{1,12}(\.\d{1,6})?$/)),
+                description: z.string().trim().max(MAX_TEXT.description).nullish(),
+                note: z.string().trim().max(ACCEPT_MAP_LIMITS.note).nullish(),
+              }),
+            )
+            .min(1)
+            .max(ACCEPT_MAP_LIMITS.into),
+        }),
+      )
+      .max(ORDERING_LIMITS.lines)
+      .optional(),
   }),
   response: {
     200: officeRecord.extend({
-      made: output({ as: z.enum(ACCEPT_AS), salesOrderId: id().nullable(), quoteId: id().nullable(), number: z.string(), dropped: z.array(output({ seq: z.number().int(), size: z.string().nullable(), reason: z.string() })), warnings: z.array(z.string()) }),
+      made: output({
+        as: z.enum(ACCEPT_AS),
+        salesOrderId: id().nullable(),
+        quoteId: id().nullable(),
+        number: z.string(),
+        dropped: z.array(output({ seq: z.number().int(), size: z.string().nullable(), reason: z.string() })),
+        warnings: z.array(z.string()),
+        /** B-CP-077: the accept's ONE map — each request line (by id, and its place) and the order or quote lines made from it. */
+        lines: z.array(output({ requestLineId: id(), requestSeq: z.number().int(), into: z.array(output({ lineId: id(), seq: z.number().int() })) })),
+        /** B-CP-077: the customer's logos carried onto the lines made (on a line) or the order or quote itself (on the draft); and those not. */
+        artwork: output({
+          carried: z.array(output({ sourceFileId: id(), fileId: id(), name: z.string(), recordType: z.string(), recordId: id() })),
+          notCarried: z.array(output({ sourceFileId: id(), name: z.string(), reason: z.string() })),
+        }),
+        /** B-CP-076: the customer's prices the order took from its request (rows of OrderBrandPrice; 0 for a quote). Price grain. */
+        brandPrices: money.price(z.number().int()),
+      }),
     }),
   },
 })

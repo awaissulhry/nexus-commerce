@@ -5,6 +5,7 @@ import type { PortalShellViewModel } from '../../shell/view/PortalShellView'
 import type { CatalogueRead, StyleCard, StyleDetail } from '../catalogue/api'
 import { shellOf as ordersShellOf } from '../orders/design-data'
 import type { DraftLine, DraftRecord, DraftRow, PastOrder, PastOrderRow, ShipTo, UploadAnswer } from './api'
+import type { CustomLine, DraftFile, DraftPerson } from './api' // F-CP-154
 import { NS } from './model'
 import { orderingWordsFor, type OrderingWords } from './words'
 // B-TH-304: the customer's own order numbers.
@@ -334,3 +335,95 @@ export function uploadAnswer(): UploadAnswer {
     record: null,
   }
 }
+
+// ---- F-CP-154 (customer page plan C5; 12 §2 parts 1, 4, 6; picture 22): lines of every kind, the roster, "Your price" — MADE-UP
+// riders (… Esempio), a made-up garment type and a made-up measurement sheet. Never a real person or measure.
+export const MTM_TYPES: readonly { code: string; words: { it: string; en: string } }[] = [
+  { code: 'SUIT-1PC', words: { it: 'Tuta intera da corsa', en: 'One-piece race suit' } },
+  { code: 'JKT-MTM', words: { it: 'Giacca su misura', en: 'Made-to-measure jacket' } },
+]
+
+/** A measurement sheet on the made-to-measure line (it stands for the riders while none is named). */
+export const SHEET_ON_MTM: DraftFile = { id: id(901), lineId: id(311), originalName: 'misure-esempio.pdf', kind: 'DOCUMENT', contentType: 'application/pdf', sizeBytes: 182_000, status: 'AVAILABLE', version: 1, createdAt: at(-5) }
+
+export function personOf(n: number, over: Partial<DraftPerson> = {}): DraftPerson {
+  return { id: id(950 + n), seq: n, version: 1, name: `Pilota ${n} Esempio`, number: String(10 + n), measureBy: 'SIZE', size: '52', sheet: null, note: null, ...over }
+}
+
+export const RIDERS = (): DraftPerson[] => [
+  personOf(1, { name: 'Andrea Esempio', number: '12', measureBy: 'SHEET', size: null, sheet: { id: SHEET_ON_MTM.id, originalName: SHEET_ON_MTM.originalName, locked: false } }),
+  personOf(2, { name: 'Luca Esempio', number: '27', measureBy: 'SIZE', size: '50' }),
+  personOf(3, { name: 'Tommaso Esempio', number: '44', measureBy: 'LATER', size: null }),
+  personOf(4, { name: 'Nico Esempio', number: null, measureBy: 'SIZE', size: '52' }),
+]
+
+export function describedLine(over: Partial<CustomLine> = {}, seesPrices = true): CustomLine {
+  return {
+    id: id(310),
+    seq: 2,
+    version: 1,
+    kind: 'DESCRIBED',
+    description: 'Maglietta box a maniche corte, rossa e bianca come il riferimento; il nostro logo davanti e dietro.',
+    colourText: 'Rosso e bianco',
+    style: null,
+    colourway: null,
+    garmentType: null,
+    quantity: 30,
+    sizes: [],
+    byPerson: false,
+    pieces: 30,
+    people: [],
+    peopleInSheet: false,
+    note: null,
+    problems: [],
+    ...(seesPrices ? { brandUnitPrice: '18.50' } : {}),
+    ...over,
+  }
+}
+
+export function mtmLine(over: Partial<CustomLine> = {}, seesPrices = true): CustomLine {
+  const people = over.people ?? RIDERS()
+  return {
+    id: id(311),
+    seq: 3,
+    version: 1,
+    kind: 'MADE_TO_MEASURE',
+    description: null,
+    colourText: 'Blu e bianco',
+    style: null,
+    colourway: null,
+    garmentType: { ...MTM_TYPES[0]! },
+    quantity: null,
+    sizes: [],
+    byPerson: true,
+    pieces: people.length,
+    people,
+    peopleInSheet: false,
+    note: null,
+    problems: [],
+    ...(seesPrices ? { brandUnitPrice: '640.00' } : {}),
+    ...over,
+  }
+}
+
+/** The draft of picture 22: a catalogue line, a line described in their words, a made-to-measure line with four riders. */
+export function kindsRecord(over: { seesPrices?: boolean; request?: Partial<DraftRecord['request']>; custom?: CustomLine[] } = {}): DraftRecord {
+  const seesPrices = over.seesPrices ?? true
+  const jacket = lineOf(1, seesPrices ? { brandUnitPrice: '410.00' } : {}, seesPrices)
+  const custom = over.custom ?? [describedLine({}, seesPrices), mtmLine({}, seesPrices)]
+  const pieces = jacket.pieces + custom.reduce((sum, line) => sum + line.pieces, 0)
+  return draftRecord({
+    lines: [jacket],
+    seesPrices,
+    request: {
+      customLines: custom,
+      madeToMeasure: { open: true, words: null, garmentTypes: MTM_TYPES.map((type) => ({ ...type })) },
+      files: { logos: [], references: [], sheets: [SHEET_ON_MTM] },
+      uploads: { open: true, words: null },
+      laterParts: [],
+      summary: { lines: 1 + custom.length, pieces, ...(seesPrices ? { net: '7380.00' } : {}) },
+      ...over.request,
+    },
+  })
+}
+// ---- end F-CP-154

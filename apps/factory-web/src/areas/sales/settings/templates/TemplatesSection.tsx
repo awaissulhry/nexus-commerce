@@ -8,7 +8,9 @@ import { getTemplate, type QuoteTemplate } from '../../quotes/new-from/api'
 import { grainsOf } from '../../quotes/model'
 import { readProblem, writeProblem } from '../../quotes/problems'
 import { createTemplate, listTemplates, moveTemplate, replaceTemplateLines, templateFromQuote, updateTemplate } from './api'
-import { draftOf, emptyDraft, headerPatch, linesBody, linesChanged, mayKeep, movableTemplates, templateProblems, type TemplateStatusFilter } from './model'
+// F-CP-160: a line replace refused because it drops a price the person cannot see.
+import { isBlindPriceRefusal } from '../../_shared/blind-price'
+import { draftOf, emptyDraft, headerPatch, linesBody, linesChanged, linesHeldOf, mayKeep, movableTemplates, templateProblems, type TemplateStatusFilter } from './model'
 import type { TemplateDialogModel } from './view/TemplateDialog'
 import { TemplatesView, type TemplatesModel } from './view/TemplatesView'
 
@@ -63,7 +65,8 @@ export function QuoteTemplatesSection() {
     getTemplate(api, id)
       .then((template) => {
         const loaded = draftOf(template)
-        setDialog((current) => (current ? { ...current, reading: false, template, draft: loaded, before: loaded, archived: template.status === 'ARCHIVED', mayKeep: template.mayManage, currency: template.currency } : current))
+        // F-CP-160 (follow-up 13): a line holds a typed price: the line replace is held before the click for a reader without prices.
+        setDialog((current) => (current ? { ...current, reading: false, template, draft: loaded, before: loaded, archived: template.status === 'ARCHIVED', mayKeep: template.mayManage, currency: template.currency, linesHeld: linesHeldOf(template) } : current))
       })
       .catch((error: unknown) => setDialog((current) => (current ? { ...current, reading: false, readProblem: readProblem(error) } : current)))
   }
@@ -82,14 +85,16 @@ export function QuoteTemplatesSection() {
       } else if (current.template) {
         let template = current.template
         const patch = headerPatch(current.before, current.draft)
-        if (Object.keys(patch).length > 0) template = await updateTemplate(api, template, patch)
+        // F-CP-160: the lines first, so a replace held by the money wall (B-CP-026) leaves the header unsaved too: nothing half saved.
         if (linesChanged(current.before.lines, current.draft.lines, current.grains)) template = await replaceTemplateLines(api, template, linesBody(current.draft.lines, current.grains))
+        if (Object.keys(patch).length > 0) template = await updateTemplate(api, template, patch)
       }
       setDialog(null)
       setNotice({ words: { key: current.mode === 'new' ? 'tpl.done.created' : 'tpl.done.saved' }, tone: 'success' })
       void load()
     } catch (error) {
-      setDialog((state) => (state ? { ...state, saving: false, problem: { ns: 'sales', key: writeProblem(error).key } } : state))
+      // F-CP-160: a blind-price refusal holds Save in the same words while the lines still differ (the draft is kept).
+      setDialog((state) => (state ? { ...state, saving: false, problem: { ns: 'sales', key: writeProblem(error).key }, ...(isBlindPriceRefusal(error) ? { linesHeld: true } : {}) } : state))
     }
   }
 

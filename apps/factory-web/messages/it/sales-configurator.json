@@ -135,5 +135,8 @@
     "notes": "Note sulla revisione {revision}",
     "nothingSaved": "Una prova: niente viene salvato.",
     "close": "Chiudi"
+  },
+  "moneyWall": {
+    "blindPrice": "Cambia un prezzo che non vedi: lo fa chi vede i prezzi."
   }
 }

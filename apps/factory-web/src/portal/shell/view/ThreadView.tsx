@@ -5,6 +5,9 @@ import { RefPair } from '@nexus/ui/components/RefPair/index'
 import { PartnerThread, type PartnerMessage } from '@nexus/ui/patterns/PartnerThread/index'
 import { useDsWords } from '../../../lib/i18n/ds-parts'
 import { useT } from '../../../lib/i18n/provider'
+// F-CP-156: "Ask <name>, factory designer" under the thread (the DS PartnerThread unchanged).
+import { AtSign } from 'lucide-react'
+import { Checkbox, FilterChip } from '@nexus/ui/primitives'
 
 /**
  * Ask a question / Messages (design portal.frame › thread; COL-059, COL-060): ONE conversation per record, shared with us —
@@ -29,6 +32,12 @@ export interface ThreadViewModel {
   failed: string | null
   /** B-TH-286 (B-TH-091): the messages pinned for everyone on the record that this customer may read; empty: no line. */
   pins?: readonly { readonly id: string; readonly author: string | null; readonly words: string; readonly date: string }[]
+  /**
+   * F-CP-156 (customer page plan C7, D12): "Ask <name>, factory designer" — the one name the customer may ask, whether the box is
+   * ticked, whether the ONE "@" chip shows (an "@" being typed), why it cannot be ticked now (words), or null: no box (no name, or a
+   * record the customer cannot ask on). Never who read it.
+   */
+  designer?: { readonly name: string; readonly ask: boolean; readonly chip: boolean; readonly held: string | null } | null
 }
 
 export interface ThreadViewProps {
@@ -38,9 +47,12 @@ export interface ThreadViewProps {
   onMore?: () => void
   onRetry?: () => void
   headingLevel?: 2 | 3
+  /** F-CP-156: the box ticked or not; the "@" chip pressed (the name goes into the text and the box is ticked). */
+  onAskDesigner?: (ask: boolean) => void
+  onDesignerChip?: () => void
 }
 
-export function ThreadView({ model, onChange, onSend, onMore, onRetry, headingLevel = 2 }: ThreadViewProps) {
+export function ThreadView({ model, onChange, onSend, onMore, onRetry, headingLevel = 2, onAskDesigner, onDesignerChip }: ThreadViewProps) {
   const t = useT('portal')
   const ds = useDsWords()
   const pins = model.pins ?? []
@@ -88,6 +100,26 @@ export function ThreadView({ model, onChange, onSend, onMore, onRetry, headingLe
         labels={ds.partnerThread}
         textareaLabels={ds.textarea}
       />
+      {/* F-CP-156: under the DS thread — the ONE "@" chip while an "@" is typed, then the box and its hint. */}
+      {model.designer && model.composer ? (
+        <div className="fw-pthread-designer">
+          {model.designer.chip ? (
+            <FilterChip className="fw-pthread-designer-chip" onClick={() => onDesignerChip?.()}>
+              <AtSign size={12} aria-hidden /> {t('thread.designer.chip', { name: model.designer.name })}
+            </FilterChip>
+          ) : null}
+          <Checkbox
+            checked={model.designer.ask}
+            disabled={model.designer.held !== null}
+            title={model.designer.held ?? undefined}
+            onChange={(event) => onAskDesigner?.(event.target.checked)}
+            label={<strong>{t('thread.designer.ask', { name: model.designer.name })}</strong>}
+          />
+          <p className="fw-pthread-designer-hint">
+            {model.designer.held ?? `${t('thread.designer.hint', { name: model.designer.name })} ${t('thread.designer.typeAt', { name: model.designer.name })}`}
+          </p>
+        </div>
+      ) : null}
       {model.failed ? (
         <p className="fw-pdialog-failed" role="alert">
           {model.failed}

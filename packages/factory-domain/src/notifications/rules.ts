@@ -232,6 +232,9 @@ export const MESSAGE_TEMPLATES = {
   'notifications.money.sdiRejected': { en: 'Invoice {record} was rejected by SDI: fix it and send it again with the same number and date', it: 'La fattura {record} è stata scartata dallo SDI: correggila e inviala di nuovo con lo stesso numero e la stessa data' },
   'notifications.money.overdue': { en: '{record}: {count} overdue invoices, a reminder waits for a yes', it: '{record}: {count} fatture scadute, un sollecito attende un sì' },
   'notifications.money.reconciliationDifference': { en: 'Payments do not reconcile at {record}: {count} payment checks failed', it: 'I pagamenti non quadrano in {record}: {count} controlli sui pagamenti non superati' },
+  // B-CP-021 (customer page plan C3): the customer changed its own price in its portal ({record}: the order), told only to price
+  // holders of the order; never an amount, never "not equal" (the price check says it to whoever opens it).
+  'notifications.priceCheck.customerChanged': { en: "Customer's price changed on order {record}", it: "Il prezzo del cliente è cambiato sull’ordine {record}" },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES
 export const MESSAGE_KEYS = Object.freeze(Object.keys(MESSAGE_TEMPLATES)) as readonly MessageKey[]
