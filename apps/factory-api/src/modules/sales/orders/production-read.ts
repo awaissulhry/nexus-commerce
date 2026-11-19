@@ -195,7 +195,9 @@ export function workOrderRightsOf(may: (permission: Permission) => boolean, shar
 /** B-OP-021: a blocker's record for this reader: a work order only when the reader reaches it (else no door), every other as it is. */
 export function blockerRefFor(ref: BlockerRef | null | undefined, reaches: (workOrderId: string) => boolean): BlockerRef | null {
   if (!ref) return null
-  return ref.type === 'WorkOrder' && !reaches(ref.id) ? null : { type: ref.type, id: ref.id }
+  if (ref.type === 'WorkOrder' && !reaches(ref.id)) return null
+  // F-OP-103: a reported problem keeps the message it was raised with (the order's own thread).
+  return ref.messageId ? { type: ref.type, id: ref.id, messageId: ref.messageId } : { type: ref.type, id: ref.id }
 }
 // ── end B-OP-021 ──
 

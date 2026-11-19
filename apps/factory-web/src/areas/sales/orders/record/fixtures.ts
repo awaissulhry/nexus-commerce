@@ -1,6 +1,7 @@
-import { createElement } from 'react'
+import { createElement, Fragment } from 'react'
+import { Building2, Eye, Lock, ShoppingBag } from 'lucide-react' // F-OP-217: the dock's segments
 import { defineDesignScreen, type DesignCase } from '../../../../lib/design/design-screen'
-import type { Order, OrderLine } from '../api'
+import type { OpenApproval, Order, OrderLine } from '../api' // F-OP-101: OpenApproval
 import { amendKeyOf, draftOf, newKey, type AmendReview, type DraftLine } from '../daily-model'
 import { STEP_UP_CLOSED } from '../hooks'
 import type { NewOrderModel } from '../new/new-model'
@@ -59,11 +60,28 @@ import { ThreadCase } from '../../../../lib/record-thread/ThreadCase'
 import { LINKS_FULL, LINKS_MANAGER, LINKS_NONE, linksModel } from './links/fixtures'
 import { BRAND_ALPHA, type BrandFixture } from '../../../../lib/testing/two-brands'
 import { useRecordFrame } from '../../../_shared/record-frame/RecordFrame'
+// ---- F-OP-217: the dock's scopes in the design screen (the pick band in the one card, General, a work order's notes, All of)
+import { Button } from '@nexus/ui/primitives'
+import { useT } from '../../../../lib/i18n/provider'
+import { WithMessages } from '../../../../record-panels/i18n'
+import { designAllOfCustomer, designDockedThread } from '../../../_shared/record-frame/fixtures'
+import { ThreadPick, useDockTop, type ThreadChoice } from '../../../_shared/record-thread/ThreadPick'
+import { ALL_OF_CUSTOMER_NS } from '../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
+import type { ScopeChoice } from './dock/model'
+// ---- end F-OP-217
 // B-W2b-380 (XF6:02): cost changed since priced on the lines.
 import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark'
 import { MARGIN, marginAs } from './margin/fixtures'
 // F-SA-232: Overview's made-up production reads.
 import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, NO_WORK_READ, ORDER_FILES, QUALITY_READ, ready, WORK_READ } from './overview/fixtures'
+// F-OP-113: the work-order rows' acts (a read with each row's version and rights; the acts' model as the container holds it).
+import { workActsRead, type WorkRights } from './overview/fixtures'
+import { ROLES } from '../_demo/fixtures'
+import { actsCanOf } from '../../../../lib/production/work-order-acts/model'
+import type { ActsDialog, WorkOrderActsModel } from '../../../../lib/production/work-order-acts/use-work-order-acts'
+// F-OP-114 / F-OP-115: the row's dialogs on a work order read afresh (the production lane's own fixtures).
+import { releaseCheck, workOrder as productionWorkOrder } from '../../../production/_shared/fixtures'
+import { HOLD_REASONS, PRODUCTION_HOLD_REASONS } from '../../../production/work-orders/daily/demo/fixtures'
 // F-SA-243: the order's requests (the shared request fixtures) and its production read with Still to do.
 import { PRODUCTION_READ } from './overview/fixtures'
 import { brandRequest } from '../../../home/approvals/requests/fixtures'
@@ -101,14 +119,60 @@ const ORDER_BRAND: BrandFixture = {
 
 function OrderThread() {
   const frame = useRecordFrame()
+  const top = useDockTop() // F-OP-217: under a design pick, the band is the card's first (none without one)
   const model = dockedThread(ORDER_BRAND, { width: frame?.width ?? null }, true)
-  return createElement(ThreadCase, { model, onWidth: frame?.choose })
+  return createElement(ThreadCase, { model, onWidth: frame?.choose, top })
 }
 
 /** The element a design case passes to OrderRecordView as its `thread`. */
 export const orderDesignThread = () => createElement(OrderThread)
 
-type RecordCase = { role: Role; record: OrderRecordModel; draft?: undefined } | { role: Role; draft: NewOrderModel; record?: undefined }
+type RecordCase = { role: Role; record: OrderRecordModel; draft?: undefined; /** F-OP-217: the dock's scope (absent: the order's thread alone). */ dock?: DockScope } | { role: Role; draft: NewOrderModel; record?: undefined; dock?: undefined }
+
+// ---- F-OP-217 (order page plan N4; 11-dock §2, §3, §7): the dock's scopes in SCR-039 — the pick band inside the ONE card on This order,
+// <Customer> (general), a work order's notes (office only: its line in the office tone) and All of <Customer> (read only: its Head, the
+// compact lines, the foot "Read only. Write in:"). Design only: the page's OrderDock draws the same parts from its reads.
+type DockScope = 'order' | 'general' | 'wo' | 'all'
+const DESIGN_WO = 'WO-00021'
+
+function DesignDock({ scope, prefix }: { scope: DockScope; prefix: string }) {
+  const t = useT('orders')
+  const rt = useT('record-thread')
+  const customer = ORDER_BRAND.tradeName
+  const icon = (Icon: typeof Eye) => createElement(Icon, { size: 14, 'aria-hidden': true })
+  const choices: ThreadChoice<ScopeChoice>[] = [
+    { value: 'order', label: t('record.dock.order'), icon: icon(ShoppingBag), count: 2, line: t('record.dock.orderLine', { customer }) },
+    { value: 'general', label: t('record.dock.general', { customer }), short: t('record.dock.writeGeneral'), icon: icon(Building2), count: 1, line: t('record.dock.generalLine', { customer }) },
+    { value: 'workOrders', label: t('record.dock.workOrders'), icon: icon(Lock), tone: 'office', line: t('record.dock.workOrderLine', { wo: DESIGN_WO }) },
+    { value: 'all', label: t('record.dock.all', { customer }), short: rt('allOfCustomer.view.all'), title: t('record.dock.readOnly'), icon: icon(Eye), line: rt('allOfCustomer.line', { customer }) },
+  ]
+  const foot = createElement(
+    Fragment,
+    null,
+    createElement('span', null, `${t('record.dock.readOnly')}. ${t('record.dock.writeIn')}`),
+    createElement(Button, { size: 'sm', variant: 'secondary' }, t('record.dock.order')),
+    createElement(Button, { size: 'sm', variant: 'secondary' }, t('record.dock.writeGeneral')),
+  )
+  const shown =
+    scope === 'all'
+      ? designAllOfCustomer({
+          label: `${t('record.dock.all', { customer })} · ${t('record.dock.readOnly')}`,
+          prefix,
+          customer: { id: '0190f0e2-7a00-7000-8000-0000000000c1', name: customer, code: ORDER_BRAND.code },
+          order: { id: ORDER_ID, number: ORDER_BRAND.numbers.order, ownNumber: 12 },
+          other: { id: '0190f0e2-7a00-7000-8000-0000000000c2', number: 'SO-2026-0061' },
+          at: '2026-11-19T10:30:00.000Z',
+          foot,
+        })
+      : scope === 'general'
+        ? designDockedThread({ recordType: 'Party', record: ORDER_BRAND.code, party: { name: customer, role: 'customer' } })
+        : scope === 'wo'
+          ? designDockedThread({ recordType: 'WorkOrder', record: DESIGN_WO, party: null })
+          : orderDesignThread()
+  const value: ScopeChoice = scope === 'wo' ? 'workOrders' : scope
+  return createElement(WithMessages, { namespaces: [...ALL_OF_CUSTOMER_NS, 'orders'] }, createElement(ThreadPick<ScopeChoice>, { label: t('record.dock.label'), choices, value, children: shown }))
+}
+// ---- end F-OP-217
 
 const CHAIN_SDI = (code: Parameters<typeof sdi>[0], action: Parameters<typeof sdi>[1], canSend = false) => ({ [TD02_ID]: { value: sdi(code, action, canSend), problem: null } })
 
@@ -279,6 +343,29 @@ const HELD: HeldFile[] = holdFiles(
 
 // ---- B-W2b-323 ----
 const waitingOrder = order('CONFIRMED', { status: 'PENDING_APPROVAL' })
+// ---- F-OP-101: the order read's open yes (B-OP-020: the engine's rows) — for an approver who did not ask, for the asker, for others ----
+const OWN_WORDS = 'You asked for this: nobody approves their own request, the Owner included. Marco Demo can approve it.'
+const YES_TASK: OpenApproval = {
+  taskId: '0190f0e2-9595-7000-8000-000000000001',
+  kind: 'SALES_ORDER',
+  kindLabel: { en: 'Sales order', it: 'Ordine di vendita' },
+  requestedAt: '2026-11-18T09:30:00Z',
+  requester: { name: 'Luca Prova', me: false },
+  approver: { kind: 'ROLE', name: 'Finance', me: false },
+  version: 1,
+  requireStepUp: false,
+  approve: { allowed: true, why: null },
+  reject: { allowed: true, why: null },
+  withdraw: { allowed: false, why: 'Only the person who asked for this request takes it back.' },
+}
+const YES_SELF_ASKED: OpenApproval = { ...YES_TASK, requester: { name: 'Giulia Esempio', me: true }, approve: { allowed: false, why: OWN_WORDS }, reject: { allowed: false, why: OWN_WORDS }, withdraw: { allowed: true, why: null } }
+const YES_OTHERS: OpenApproval = { ...YES_TASK, approve: { allowed: false, why: 'This request waits for another approver: it is not addressed to you or to a role you hold over its company.' }, reject: { allowed: false, why: 'This request waits for another approver: it is not addressed to you or to a role you hold over its company.' } }
+const APPROVAL_ASKED_BY_OTHER = { ...APPROVAL_PENDING, requests: APPROVAL_PENDING.requests.map((request) => ({ ...request, mine: false, requestedBy: 'Luca Prova' })), may: { ask: false, withdraw: false } }
+const REFUSE_REASONS = [
+  { code: 'PRICE', labelEn: 'Price below the agreed list', labelIt: 'Prezzo sotto il listino concordato', needsDetail: false },
+  { code: 'TERMS', labelEn: 'Payment terms not agreed', labelIt: 'Condizioni di pagamento non concordate', needsDetail: false },
+]
+// ---- end F-OP-101
 const d323 = (role: Role, value: Order, over: Partial<OrderRecordModel> = {}, depth: Parameters<typeof depthModel>[1] = {}): RecordCase => base(role, value, { ...over, depth: depthModel(role, depth) })
 const frozenPreview = { ok: false, revision: 4, version: 7, problems: [{ path: 'body/lines/10/SIZE_QUANTITY', message: 'x' }], diff: null, workOrders: null }
 const W2B_323 = [
@@ -316,13 +403,21 @@ const W2B_323 = [
   { id: 'w2b-323-ask', label: 'W2b · Sales · Ask for a yes (a note for who decides)', model: d323('sales', waitingOrder, {}, { approval: { value: APPROVAL_NOBODY, problem: null }, dialog: { kind: 'ask', note: 'Cliente storico, prezzo concordato con il titolare.' } }) },
   { id: 'w2b-323-priority', label: 'W2b · Sales · Set priority (⋯): Urgent with its reason', model: d323('sales', production, {}, { dialog: { kind: 'priority', level: 'URGENT', reason: 'Il cliente apre il negozio il 1° dicembre.' } }) },
   { id: 'w2b-323-season', label: 'W2b · Sales · Set season (⋯): the open seasons', model: d323('sales', production, {}, { dialog: { kind: 'season', seasonId: '' }, seasons: [{ id: '0190f0e2-5353-7000-8000-000000000001', companyId: COMPANY, code: 'FW27', name: 'Autunno-inverno 2027', startsOn: '2027-07-01', endsOn: '2028-01-31', orderBookClosesOn: '2027-03-31', status: 'OPEN', state: 'OPEN', version: 1 }, { id: '0190f0e2-5353-7000-8000-000000000002', companyId: COMPANY, code: 'SS27', name: 'Primavera-estate 2027', startsOn: '2027-01-15', endsOn: '2027-06-30', orderBookClosesOn: '2026-10-15', status: 'OPEN', state: 'BOOK_CLOSED', version: 2 }] }) },
+  // ---- F-OP-101 (10-order-page §2.4): the approver's yes in place; the asker sees it held (rule 42); Refuse… with its reason ----
+  { id: 'f-op-101-approver-yes', label: 'F-OP-101 · Owner · Waiting for a yes: asked of Finance by Luca Prova — Confirm the order (primary) and Refuse… here', model: d323('owner', { ...waitingOrder, openApprovals: [YES_TASK] }, { tab: 'overview' }, { approval: { value: APPROVAL_ASKED_BY_OTHER, problem: null } }) },
+  { id: 'f-op-101-self-asked', label: 'F-OP-101 · Sales · Waiting for a yes you asked: Confirm the order held ("another person decides"), Take the request back', model: d323('sales', { ...waitingOrder, openApprovals: [YES_SELF_ASKED] }, { tab: 'overview' }, { approval: { value: APPROVAL_PENDING, problem: null } }) },
+  { id: 'f-op-101-who-decides', label: 'F-OP-101 · Production manager · Waiting for a yes: not theirs to decide — "Who decides: Finance"', model: d323('manager', { ...waitingOrder, openApprovals: [YES_OTHERS] }, { tab: 'overview' }, { approval: { value: APPROVAL_ASKED_BY_OTHER, problem: null } }) },
+  { id: 'f-op-101-refuse', label: 'F-OP-101 · Owner · Refuse… the yes: a reason from the list and words (required)', model: d323('owner', { ...waitingOrder, openApprovals: [YES_TASK] }, { tab: 'overview', dialog: { kind: 'refuseYes', taskId: YES_TASK.taskId }, refuseReasons: { value: REFUSE_REASONS, problem: null }, draft: { reasonCode: 'PRICE', reason: 'Il prezzo è sotto il listino concordato.' } }, { approval: { value: APPROVAL_ASKED_BY_OTHER, problem: null } }) },
+  // ---- end F-OP-101
   // B-OP-010: a priced change applies at once (no yes is asked any more).
   { id: 'w2b-323-notice', label: 'W2b · Sales · After the priced change: recorded, applied at once', model: d323('sales', amended(production), { tab: 'changes' }, { notice: { tone: 'success', words: { key: 'notice.priced', params: { revision: 3 } } } }) },
 ]
 
 function OrderDesign({ model }: { model: RecordCase }) {
   if (model.draft) return inShell('/sales/orders/new', createElement(NewOrderView, { model: model.draft }), model.role)
-  return inShell(`/sales/orders/${model.record.order.status === 'ready' ? model.record.order.value.id : 'x'}`, createElement(OrderRecordView, { model: model.record, thread: orderDesignThread() }), model.role)
+  // F-OP-217: a case may dock a scope of the pick (the order page's dock), else the order's thread alone.
+  const thread = model.dock ? createElement(DesignDock, { scope: model.dock, prefix: model.record.prefix }) : orderDesignThread()
+  return inShell(`/sales/orders/${model.record.order.status === 'ready' ? model.record.order.value.id : 'x'}`, createElement(OrderRecordView, { model: model.record, thread }), model.role)
 }
 
 // ---- F-SA-243: Brand Alpha asks on this order (M 40 → 36); a change accepted yesterday still has a work-order change for planning
@@ -350,6 +445,32 @@ const F_SA_243: DesignCase<RecordCase>[] = [
   { id: 'f-sa-243-nothing-mine', label: 'F-SA-243 · Sales · no row asks this reader: no "needs a decision" band (R-5)', model: base('sales', production, { tab: 'changes', production: ready({ ...STILL_READ, changes: { openRequests: [], stillToDo: { rows: STILL_ROWS.map((row) => ({ ...row, mayAct: false })), count: 2, workOrdersLeftOut: 1 } } }), requests: { value: [ACCEPTED_ASK], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
 ]
 // ---- end F-SA-243
+
+// ---- F-OP-113 ----
+const MANAGE_ALL: WorkRights = { manage: true, release: true, hold: true }
+const NO_RIGHTS: WorkRights = { manage: false, release: false, hold: false }
+const WORK_ORDERS_IDS = [WORK_ORDERS[0]!.id, WORK_ORDERS[1]!.id] as const
+function woActs(role: keyof typeof ROLES, over: Partial<WorkOrderActsModel> = {}): WorkOrderActsModel {
+  return { can: actsCanOf(ROLES[role]), saves: {}, toldAt: {}, dialog: null, reasons: null, split: null, close: CLOSE_NONE, ...over }
+}
+// ---- end F-OP-113
+// ---- F-OP-114 / F-OP-115: a row's dialog on its work order read afresh; the close's model when nothing is open ----
+const CLOSE_NONE: WorkOrderActsModel['close'] = { can: { manage: true, reopen: false, costView: false, cost: false }, check: null, dialog: null, busy: false, problem: null, undo: null }
+function woDialog(kind: ActsDialog['kind'], value: ReturnType<typeof productionWorkOrder>, over: Partial<ActsDialog> = {}): ActsDialog {
+  return { kind, workOrderId: value.id, number: value.number, workOrder: { value, problem: null }, busy: false, problem: null, ...over }
+}
+const CANCEL_CUT = {
+  workOrderId: WORK_ORDERS[0]!.id,
+  number: 'WO-00021',
+  status: 'IN_PROGRESS',
+  version: 7,
+  cancellable: false,
+  refusal: { en: '8 pieces are cut: lower the work order to the cut instead', it: "8 pezzi sono già tagliati: riduci l'ordine di lavoro al tagliato" },
+  cut: { pieces: 8, cells: [{ cellId: '0190f0e2-7a7a-7000-8000-0000000021c1', size: 'M', colourwayId: '0190f0e2-7a7a-7000-8000-0000000000b1', quantity: 4, cut: 4 }, { cellId: '0190f0e2-7a7a-7000-8000-0000000021c2', size: 'L', colourwayId: '0190f0e2-7a7a-7000-8000-0000000000b1', quantity: 4, cut: 4 }] },
+  issued: [{ itemId: '0190f0e2-7a7a-7000-8000-0000000000e1', itemColourId: null, label: 'DEMO-LEATHER-BLK', baseUom: 'dm2', quantity: '96.0' }],
+  atWorkshop: [],
+}
+// ---- end F-OP-114 / F-OP-115
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-039',
@@ -399,6 +520,15 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'production-gate-paid', label: 'Production manager · Production: deposit paid, Make work orders opens New work order', model: base('manager', paidNotSent, { tab: 'production', production: ready(WORK_READ) }) },
     { id: 'production-held', label: 'Sales · Production: the gate waits for the deposit; Make work orders held', model: base('sales', confirmed, { tab: 'production', production: ready(WORK_READ) }) },
     { id: 'production-progress', label: 'Sales · Production: the work orders with this order’s own pieces (where, made for this order, also makes, held, a shared cut), 12 made-to-measure units as one row, 1 not shown', model: base('sales', production, { tab: 'production', production: ready(WORK_READ) }) },
+    // ---- F-OP-113: the work-order rows — in place for a planner, held for Sales in words, a shared row read-only ----
+    { id: 'wo-acts-manager', label: 'F-OP-113 · Production manager · Production: Due, Priority and Rush in place on each work order (by number), the row ⋯; WO-00019 is shared with another customer: its link only', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { toldAt: { [WORK_ORDERS_IDS[1]]: at(18, 9, 42) } }) }), note: 'WO-00022 says "Told the floor at 10:42" after its priority was changed here.' },
+    { id: 'wo-acts-saving', label: 'F-OP-113 · Production manager · Production: a priority saving (the cell marked) and a due date refused (said on the row)', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { saves: { [WORK_ORDERS_IDS[0]]: { field: 'priority', problem: null }, [WORK_ORDERS_IDS[1]]: { field: null, problem: { key: 'production:error.changed' } } } }) }) },
+    // ---- F-OP-114 / F-OP-115: the row's dialogs (the DS Modal draws in a browser: the design index shows them) ----
+    { id: 'wo-hold-dialog', label: 'F-OP-114 · Production manager · Hold… from a work order’s row: the reason the floor reads, what the customer reads shown before it is placed', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { reasons: [...HOLD_REASONS, ...PRODUCTION_HOLD_REASONS], dialog: woDialog('hold', productionWorkOrder('RELEASED'), { holdRight: true }) }) }) },
+    { id: 'wo-release-dialog', label: 'F-OP-114 · Production manager · Release… a draft from its row: the release check in the dialog, each condition in words', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { dialog: woDialog('release', productionWorkOrder('DRAFT'), { check: { value: releaseCheck('blocked'), problem: null } }) }) }) },
+    { id: 'wo-cancel-cut', label: 'F-OP-115 · Production manager · Cancel… a started work order: 8 pieces are cut — refused in the API’s words, no outcome to pick (R-16)', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { dialog: woDialog('cancel', productionWorkOrder('IN_PROGRESS'), { cancelCheck: { value: CANCEL_CUT, problem: null } }) }) }) },
+    { id: 'wo-cancel-draft', label: 'F-OP-115 · Production manager · Cancel… a draft: nothing cut — the reason, then Cancel work order', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { dialog: woDialog('cancel', productionWorkOrder('DRAFT'), { cancelCheck: { value: { ...CANCEL_CUT, status: 'DRAFT', cancellable: true, refusal: null, cut: { pieces: 0, cells: [] }, issued: [], atWorkshop: [] }, problem: null } }) }) }) },
+    { id: 'wo-acts-sales', label: 'F-OP-113 · Sales · Production: the rows as they are, the acts held in words — “Production does this — a planner or the production manager”', model: base('sales', production, { tab: 'production', production: ready(workActsRead(NO_RIGHTS)), workOrderActs: woActs('sales') }) },
     { id: 'production-quality', label: 'F-SA-235 · Sales · Production: a quality hold with the office’s note, a problem that needs an answer, an NCR, a final inspection waiting; the specs in force', model: base('sales', production, { tab: 'production', production: ready(QUALITY_READ) }) },
     { id: 'production-no-right', label: 'Finance · Production: the work orders by number (no floor progress right)', model: base('finance', production, { tab: 'production', production: ready(NO_WORK_READ) }) },
     { id: 'production-error', label: 'Sales · Production: the work orders could not be read (Try again)', model: base('sales', production, { tab: 'production', production: FAILED_STATE }) },
@@ -522,5 +652,10 @@ export const designScreen = defineDesignScreen<RecordCase>({
     ...F_SA_243,
     // ---- B-W2b-323: orders in depth (priority, season, the yes, what is frozen, priced changes, materials, confirmation, tech pack, forecast, milestones) ----
     ...W2B_323,
+    // ---- F-OP-217: the dock's scopes, each inside the one card (look at them at 1440 with the dock a third and 40 %, and at 375) ----
+    { id: 'f-op-217-dock-order', label: 'F-OP-217 · Sales · Dock: the pick band inside the card on This order (2 new), the whose-line', model: { ...base('sales', production, { tab: 'overview' }), dock: 'order' } },
+    { id: 'f-op-217-dock-general', label: 'F-OP-217 · Sales · Dock: Moto Demo (general) — the customer’s general thread, the pick band in its card', model: { ...base('sales', production, { tab: 'overview' }), dock: 'general' } },
+    { id: 'f-op-217-dock-work-order', label: 'F-OP-217 · Sales · Dock: a work order’s notes — office only, the whose-line in the office tone, no mail', model: { ...base('sales', production, { tab: 'production' }), dock: 'wo' } },
+    { id: 'f-op-217-dock-all', label: 'F-OP-217 · Sales · Dock: All of Moto Demo — read only: its Head, compact lines (the customer’s, ours, an office note, General, another order with files), the foot “Read only. Write in:”', model: { ...base('sales', production, { tab: 'lines' }), dock: 'all' } },
   ],
 })

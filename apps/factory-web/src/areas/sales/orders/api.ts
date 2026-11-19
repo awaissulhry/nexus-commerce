@@ -479,6 +479,26 @@ export const depositRequestSchema = z.object({
 })
 export type DepositRequest = z.infer<typeof depositRequestSchema>
 
+// ---- F-OP-101 (B-OP-020): one open request for a yes of the order, as the approval engine's list builds its row — who asked and
+// who decides (by name; "me"), its version, whether the yes asks a fresh step-up, and the yes, the no and taking it back for this
+// reader, each with the engine's why (never one's own yes, rule 42). No money facts.
+const yesDecisionSchema = z.object({ allowed: z.boolean(), why: z.string().nullable() })
+export const openApprovalSchema = z.object({
+  taskId: z.string(),
+  kind: z.string(),
+  kindLabel: z.object({ en: z.string(), it: z.string() }),
+  requestedAt: instant,
+  requester: z.object({ name: z.string(), me: z.boolean() }),
+  approver: z.object({ kind: z.enum(['ROLE', 'PERSON']), name: z.string(), me: z.boolean() }),
+  version: z.number(),
+  requireStepUp: z.boolean(),
+  approve: yesDecisionSchema,
+  reject: yesDecisionSchema,
+  withdraw: yesDecisionSchema,
+})
+export type OpenApproval = z.infer<typeof openApprovalSchema>
+// ---- end F-OP-101
+
 // F-SA-239: who changed a part last — an office person or the order's own customer by name, "the floor", "Nexus" (it + en).
 const lastChangeSchema = z.object({ by: z.object({ kind: z.enum(['OFFICE', 'CUSTOMER', 'FLOOR', 'SYSTEM']), name: z.string().nullable(), words: z.object({ it: z.string(), en: z.string() }) }), at: instant })
 
@@ -534,12 +554,25 @@ export const orderSchema = z.object({
         version: z.number().optional(),
         transportBy: z.enum(['CARRIER', 'SENDER', 'RECIPIENT']).optional(),
         carrier: z.object({ code: z.string().nullable(), name: z.string().nullable() }).nullable().optional(),
-        tracking: z.object({ number: z.string().nullable(), source: z.enum(['TYPED', 'PARCELS']), parcels: z.array(z.object({ number: z.string(), url: z.string().nullable() })), live: z.boolean() }).nullable().optional(),
+        tracking: z
+          .object({
+            number: z.string().nullable(),
+            source: z.enum(['TYPED', 'PARCELS']),
+            parcels: z.array(z.object({ number: z.string(), url: z.string().nullable() })),
+            live: z.boolean(),
+            /** F-OP-135 (B-OP-034): the link typed beside the number ("Track ›", https only). */
+            url: z.string().nullable().optional(),
+          })
+          .nullable()
+          .optional(),
         expectedDeliveryAt: instant.nullable().optional(),
         ddt: z.object({ number: z.string(), date: z.string() }).nullable().optional(),
         mayTypeTracking: z.object({ allowed: z.boolean(), code: z.string().nullable(), why: z.string().nullable() }).optional(),
         withheld: z.array(z.string()).optional(),
         // ---- end F-OP-119
+        // ---- F-OP-122 (B-OP-043, lines-derived): every order the shipment carries, the first first (all of this order's customer) ----
+        orders: z.array(z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable() })).optional(),
+        // ---- end F-OP-122
         // ---- F-OP-123 (B-OP-043 / B-OP-032): made elsewhere (recorded with its paper DDT; Nexus issued none) ----
         origin: z.enum(['NEXUS', 'ELSEWHERE']).optional(),
         externalDdt: z.object({ number: z.string(), date: z.string() }).nullable().optional(),
@@ -575,6 +608,11 @@ export const orderSchema = z.object({
     })
     .optional(),
   // ── end F-SA-239
+  // ---- F-OP-101 (B-OP-020): the order's open requests for a yes this reader may see (oldest first), and how many it may not see
+  // (counted, never named); absent in an older answer.
+  openApprovals: z.array(openApprovalSchema).optional(),
+  openApprovalsHidden: z.number().optional(),
+  // ---- end F-OP-101
 })
 export type Order = z.infer<typeof orderSchema>
 export type ChainInvoice = Order['chain']['invoices'][number]

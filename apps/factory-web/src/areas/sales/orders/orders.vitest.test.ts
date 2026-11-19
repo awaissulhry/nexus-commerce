@@ -1499,3 +1499,149 @@ describe('F-OP-109: a line\'s text and Remove line in edit mode; a removed line 
   })
 })
 // ---- end F-OP-109
+
+// ---- F-OP-121 (order page plan N6): Create shipment… is the band's next step once garments are released and not shipped ----
+describe('F-OP-121: Create shipment… in place', () => {
+  const ready = (status: 'READY' | 'PARTLY_SHIPPED', released: number, shipped: number) => order(status, { progress: { ...order(status).progress, released, shipped } })
+  it('Ready / Partly shipped with released garments not shipped, and shipping.manage → Create shipment…', () => {
+    expect(nextStep(ready('READY', 4, 0), canOf('owner'))).toEqual({ kind: 'createShipment', held: null })
+    expect(nextStep(ready('PARTLY_SHIPPED', 4, 2), canOf('owner'))).toEqual({ kind: 'createShipment', held: null })
+    // Nothing more released than shipped, or no right to make a shipment (Sales): the promise as before.
+    expect(nextStep(ready('READY', 2, 2), canOf('owner')).kind).toBe('changePromise')
+    expect(nextStep(ready('READY', 4, 0), canOf('sales')).kind).toBe('changePromise')
+    expect(nextStep(ready('READY', 4, 0), canOf('sales')).held).toBeNull()
+  })
+  it('the words exist in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['step.createShipment', 'ship.createdDoor']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('ship.created', { number: 'SH-0091' }), locale).toContain('SH-0091')
+    }
+  })
+})
+// ---- end F-OP-121
+
+// ---- F-OP-101 (order page N1; 10-order-page §2.4; rule 42): the approver's yes in place ------------------------------------------
+describe('F-OP-101: the yes in place — Confirm the order / Refuse… for an approver who did not ask; held for the asker; who decides', () => {
+  const OWN = 'You asked for this: nobody approves their own request, the Owner included. Marco Demo can approve it.'
+  const STALE = 'It changed since you looked: the request was asked about another version of the record. Ask again.'
+  const OTHER = 'This request waits for another approver: it is not addressed to you or to a role you hold over its company.'
+  const task = (over: Record<string, unknown> = {}) => ({
+    taskId: 't-1',
+    kind: 'SALES_ORDER',
+    kindLabel: { en: 'Sales order', it: 'Ordine di vendita' },
+    requestedAt: '2026-11-18T09:30:00Z',
+    requester: { name: 'Luca Prova', me: false },
+    approver: { kind: 'ROLE' as const, name: 'Finance', me: false },
+    version: 3,
+    requireStepUp: false,
+    approve: { allowed: true, why: null },
+    reject: { allowed: true, why: null },
+    withdraw: { allowed: false, why: 'Only the person who asked for this request takes it back.' },
+    ...over,
+  })
+  const caseOf = (id: string) => recordScreen.cases.find((item) => item.id === id)!.model
+
+  it('the door of each open yes: an approver who did not ask decides; the asker is held (rule 42); anybody else reads who decides', async () => {
+    const { yesDoorOf } = await import('./depth/model')
+    expect(yesDoorOf(task())).toEqual({ kind: 'decide', task: task(), confirmHeld: null, refuseHeld: null })
+    // Rule 42: whatever the roles, the asker never decides — not even the no.
+    expect(yesDoorOf(task({ requester: { name: 'Giulia Esempio', me: true }, approve: { allowed: false, why: OWN }, reject: { allowed: false, why: OWN } })).kind).toBe('selfAsked')
+    expect(yesDoorOf(task({ requester: { name: 'Giulia Esempio', me: true } })).kind).toBe('selfAsked')
+    expect(yesDoorOf(task({ approve: { allowed: false, why: OTHER }, reject: { allowed: false, why: OTHER } }))).toMatchObject({ kind: 'whoDecides', who: 'Finance' })
+    // W39-02: the seeded fingerprint reads STALE — the yes is held with its words, the no clears it.
+    const stale = yesDoorOf(task({ kind: 'SALES_ORDER_CHANGE', approve: { allowed: false, why: STALE } }))
+    expect(stale).toMatchObject({ kind: 'decide', confirmHeld: { key: 'approval.refused.STALE' }, refuseHeld: null })
+    // A write of the page runs: both held with its words.
+    expect(yesDoorOf(task(), true)).toMatchObject({ confirmHeld: { key: 'held.busy' }, refuseHeld: { key: 'held.busy' } })
+  })
+
+  it('the engine\'s why is read by its first words, never shown raw; an unknown one reads the general words', async () => {
+    const { yesHeldOf, yesRefusalOf } = await import('./depth/model')
+    expect(yesRefusalOf(STALE)).toBe('STALE')
+    expect(yesRefusalOf(OWN)).toBe('OWN_REQUEST')
+    expect(yesRefusalOf(OTHER)).toBe('NOT_APPROVER')
+    expect(yesRefusalOf('The record of this request is gone or out of your reach.')).toBe('SUBJECT_GONE')
+    expect(yesRefusalOf('This kind of request has no checker yet: it cannot be re-read, so it cannot be approved here.')).toBe('NO_KIND')
+    expect(yesRefusalOf(null)).toBeNull()
+    expect(yesHeldOf('Something new')).toEqual({ key: 'approval.refused.other' })
+  })
+
+  it('the banner decides the order\'s own yes first, then its credit hold\'s; an old change\'s yes is a waiting row, not the banner\'s', async () => {
+    const { bannerYesOf, CHANGE_YES_KIND, confirmLabelOf, decidedNoticeOf } = await import('./depth/model')
+    const credit = task({ taskId: 't-2', kind: 'CREDIT_OVERRIDE', kindLabel: { en: 'Credit hold', it: 'Blocco fido' } })
+    const change = task({ taskId: 't-3', kind: CHANGE_YES_KIND, kindLabel: { en: 'Order change', it: 'Modifica ordine' } })
+    expect(bannerYesOf([credit, change, task()]).map((entry) => entry.taskId)).toEqual(['t-1', 't-2'])
+    expect(bannerYesOf(undefined)).toEqual([])
+    expect(confirmLabelOf(task(), 'en')).toEqual({ key: 'approval.confirm' })
+    expect(confirmLabelOf(credit, 'it')).toEqual({ key: 'approval.approveKind', params: { kind: 'Blocco fido' } })
+    expect(decidedNoticeOf(task(), 'approve')).toBe('approval.confirmed')
+    expect(decidedNoticeOf(credit, 'approve')).toBe('approval.approved')
+    expect(decidedNoticeOf(task(), 'reject')).toBe('approval.refusedDone')
+  })
+
+  it('Refuse… needs a reason of the list and words (1 to 2000 characters, the engine\'s own rule)', async () => {
+    const { refuseProblemOf, REFUSE_WORDS_MAX } = await import('./depth/model')
+    expect(refuseProblemOf({ reasonCode: '', words: 'x' })).toEqual({ key: 'approval.no.pickReason' })
+    expect(refuseProblemOf({ reasonCode: 'PRICE', words: '   ' })).toEqual({ key: 'approval.no.wordsNeeded' })
+    expect(refuseProblemOf({ reasonCode: 'PRICE', words: 'x'.repeat(REFUSE_WORDS_MAX + 1) })).toEqual({ key: 'approval.no.tooLong', params: { max: REFUSE_WORDS_MAX } })
+    expect(refuseProblemOf({ reasonCode: 'PRICE', words: 'Below the agreed list.' })).toBeNull()
+  })
+
+  it('a refusal of the engine is said in its own words and the order is read again (W39-02\'s yes: STALE)', async () => {
+    const { writeProblem } = await import('./model')
+    expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/STALE' }]))).toEqual({ key: 'approval.refused.STALE', reload: true })
+    expect(writeProblem(new ApiError('forbidden', 403, 'forbidden', 'x', null, [{ path: 'refusal/OWN_REQUEST' }]))).toEqual({ key: 'approval.refused.OWN_REQUEST', reload: true })
+    expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/SOMETHING_NEW' }]))).toEqual({ key: 'approval.refused.other', reload: true })
+    // A plain version move keeps its words.
+    expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'version' }]))).toEqual({ key: 'problem.write.moved', reload: true })
+  })
+
+  it('every approval.* word exists in it and en (office "tu")', async () => {
+    const { YES_REFUSALS } = await import('./depth/model')
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      const keys = ['approval.confirm', 'approval.refuse', 'approval.selfAsked', 'approval.stepUp', 'approval.confirmed', 'approval.approved', 'approval.refusedDone', 'approval.refuseGo', 'approval.kind', 'approval.askedBy', 'approval.no.reason', 'approval.no.pick', 'approval.no.words', 'approval.no.wordsHint', 'approval.no.pickReason', 'approval.no.wordsNeeded', 'approval.no.reading', 'approval.refused.other', ...[...YES_REFUSALS].map((code) => `approval.refused.${code}`)]
+      for (const key of keys) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      for (const [key, params] of [['approval.whoDecides', { who: 'Finance' }], ['approval.approveKind', { kind: 'x' }], ['approval.refuseTitle', { number: 'SO-1' }], ['approval.askedByOn', { who: 'x', date: 'y' }], ['approval.no.tooLong', { max: 2000 }]] as const) expect(t(key, params), `${locale} ${key}`).not.toBe(key)
+    }
+    const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    expect(en('approval.confirm')).toBe('Confirm the order')
+    expect(en('approval.selfAsked')).toBe('You asked for this yes: another person decides')
+    expect(en('approval.whoDecides', { who: 'Finance' })).toBe('Who decides: Finance')
+    const it_ = createTranslator('it', messagesFor('it', ['orders']).orders!)
+    expect(it_('approval.confirm')).toBe("Conferma l'ordine")
+    expect(it_('approval.selfAsked')).toBe("Hai chiesto tu questo sì: decide un'altra persona")
+  })
+
+  it('design cases: the approver sees Confirm the order and Refuse…; the asker sees it held; another reads who decides', () => {
+    const approver = render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-op-101-approver-yes'), 'en')
+    expect(approver).toContain('Confirm the order')
+    expect(approver).toContain('Refuse…')
+    const asker = render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-op-101-self-asked'), 'en')
+    expect(asker).toContain('You asked for this yes: another person decides')
+    expect(asker).toContain('Take the request back')
+    expect(textOf(render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-op-101-who-decides'), 'it'))).toContain('Chi decide: Finance')
+    const other = render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-op-101-who-decides'), 'en')
+    expect(other).toContain('Who decides: Finance')
+    expect(other).not.toContain('Confirm the order')
+    const refuse = render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-op-101-refuse'), 'en')
+    expect(refuse).toContain('Refuse the yes for')
+    expect(refuse).toContain('Price below the agreed list')
+  })
+
+  it('the wiring: the engine\'s own routes with the task version, the page\'s step-up, the order read again; the view fetches nothing', () => {
+    const acts = readFileSync(new URL('./record/use-band-acts.ts', import.meta.url), 'utf8')
+    expect(acts).toContain("approveTask(api, { id: task.taskId, version: task.version }, null, key)")
+    expect(acts).toContain("rejectTask(api, { id: task.taskId, version: task.version }, reasonCode, words)")
+    expect(acts).toContain("if (task.requireStepUp) await stepUp.ensureFresh('approval.stepUp')")
+    // The answer is not an order: the one write reads the order again (the band re-reads; a confirmed order moves on).
+    expect(acts).toContain('return null')
+    const band = readFileSync(new URL('./depth/view/DepthBand.tsx', import.meta.url), 'utf8')
+    expect(band).not.toMatch(/from '\.\.\/\.\.\/\.\.\/\.\.\/home\/approvals\/api'/)
+    expect(band).not.toContain('useEffect')
+    const container = readFileSync(new URL('./record/OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('stepUp: { ensureFresh, guard }, setDialog /* F-OP-101: the yes in place */')
+  })
+})
+// ---- end F-OP-101

@@ -256,6 +256,8 @@ export const orderView = output({
           source: z.enum(['TYPED', 'PARCELS']),
           parcels: z.array(output({ number: z.string(), url: z.string().nullable() })),
           live: z.boolean(),
+          /** F-OP-135 (B-OP-034): TYPED — the tracking link typed beside the number ("Track ›", https only); null otherwise. */
+          url: z.string().nullable(),
         }).nullable(),
         expectedDeliveryAt: instant().nullable(),
         /** Its live DDT (the newest one not cancelled). */

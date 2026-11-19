@@ -420,8 +420,12 @@
     "copyLinkTooMany": "Links of this shipment were copied already: pass on one of them.",
     "typed": {
       "label": "Tracking number",
-      "noLive": "No live tracking"
-    }
+      "noLive": "No live tracking",
+      "track": "Track ›",
+      "trackOf": "Track shipment {number} on the carrier’s site"
+    },
+    "also_one": "Also {count} piece of your order {order}",
+    "also_other": "Also {count} pieces of your order {order}"
   },
   "toShip": {
     "title": "Still to ship",

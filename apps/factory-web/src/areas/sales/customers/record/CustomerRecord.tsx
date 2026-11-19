@@ -99,7 +99,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // F-OP-213 (11-dock §5, D4; B-OP-061): All of <customer> only when the customer's own thread may be read (the API's `readable`;
   // until it says, threads.read decides, as before) — asked for this page's own customer only.
   const readsThreads = session.permissions.includes('threads.read')
-  const readParty = useMemo(() => (readsThreads ? readUnreadWith(api) : null), [api, readsThreads])
+  const readParty = useMemo(() => (readsThreads ? readUnreadWith(api, { readable: true }) : null), [api, readsThreads]) // B-OP-061: opt-in
   const partyRows = useMemo(() => (named ? [{ recordType: 'Party', id: named.id }] : []), [named?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const partyUnread = useUnread(readParty, partyRows)
   const allOffered = readsThreads && (named ? partyUnread[named.id]?.readable !== false : false)

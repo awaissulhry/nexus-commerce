@@ -67,6 +67,7 @@ import { getReadiness, type ReadinessRow } from '../../../production/work-orders
 import { listOrderRequests, type BrandRequest } from '../../../home/approvals/requests/api'
 import { readRecordRequests, type OfficeRequest } from '../../../../record-panels/approvals/api'
 import { useOrderFiles } from '../../../_shared/record-thread/use-order-files' // F-SA-237: the order's files (one read, two places)
+import type { OrderFilesHost } from '../../../_shared/record-thread/use-order-files' // F-OP-215
 import { OrderDock } from './dock/OrderDock' // F-SA-262: the dock's pick of ONE conversation
 import { aboutPlace } from './dock/discuss' // F-SA-266: "Show on the page" — a message about a part of the order jumps back to its row
 import { narrowNow, tabAddress } from '../../../_shared/record-frame/address' // F-OP-210: the in-page moves keep the dock's scope
@@ -317,8 +318,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // ---- F-OP-134 (N-5): the tabs' acts, one container hook per tab, each with the one write and the order as last read ----------------
   const ready = order.status === 'ready' ? order.value : null
   const actsBase: RecordActsBase = { api, orderId, current, write, version, setNotice, load, loadParts }
-  const band = useBandActs({ ...actsBase, order: ready, permissions: session.permissions })
-  const overview = useOverviewActs()
+  const band = useBandActs({ ...actsBase, order: ready, permissions: session.permissions, stepUp: { ensureFresh, guard }, setDialog /* F-OP-101: the yes in place */ })
+  // F-OP-104: the requested date's Change… starts the amendment (Lines' acts) and focuses its field (the page's one focus).
+  const overview = useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }) })
   const lines = useLinesActs({
     ...actsBase,
     order: ready,
@@ -343,8 +345,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
       void load()
       production.again()
     },
+    // F-OP-113: a work order changed in place reads the order's work again, in place (its rows keep their places).
+    rereadWork: () => production.again(['work', 'headline', 'changes']),
   })
-  const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */ })
+  const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */, api /* F-OP-121 */, setNotice /* F-OP-121 */ })
   const money = useMoneyActs({
     ...actsBase,
     permissions: session.permissions,
@@ -462,13 +466,28 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // the dock: one read, one count.
   const orderFiles = useOrderFiles(api, {
     orderId: readyId,
-    enabled: tab === 'files',
+    // F-OP-215: wanted on every tab where the reader may read files — the dock's files line counts this one set (one read per page).
+    enabled: tab === 'files' || session.permissions.includes('files.read'),
     partyId: order.status === 'ready' ? order.value.partyId : null,
     canShare: session.permissions.includes('files.manage'),
     onProblem: (key) => setNotice({ tone: 'danger', words: { key: key === 'order.shareFailed' ? 'files.shareFailed' : 'files.openFailed' } }),
     keep: true, // F-OP-125: the page's one read
   })
   // ---- end F-SA-237
+  // ---- F-OP-215 (11-dock §6.2): the dock gets this container (no read of its own): "All files" opens the Files tab (the dock's scope
+  // kept; below 1280 px the full-width thread gives way), a tile opens the file in the ONE viewer there.
+  const toFiles = () => router.replace(tabAddress(pathname, window.location.search, 'files', { narrow: narrowNow() }), { scroll: false })
+  const orderFilesHost: OrderFilesHost = {
+    model: orderFiles.model,
+    actions: orderFiles.actions,
+    reload: orderFiles.reload,
+    onAll: toFiles,
+    onOpen: (fileId, opener) => {
+      toFiles()
+      orderFiles.actions.onOrderOpen?.(fileId, 'preview', opener)
+    },
+  }
+  // ---- end F-OP-215
 
   // ---- F-SA-266: "Show on the page" — the message's part: its tab (a replace: no history entry), then its row in view with the focus
   // (the row is drawn after the tab's read: looked for a few frames).
@@ -646,6 +665,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
               printHref={printHref(pathname, params?.toString() ?? '')}
               showOnPage={showOnPage /* F-SA-266 */}
               changeSide={changeSide /* F-SA-244 */}
+              orderFiles={orderFilesHost /* F-OP-215 */}
             />
           ) : (
             <OfficeRecordThread
@@ -656,6 +676,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
               party={null}
               partyRole="customer"
               printHref={printHref(pathname, params?.toString() ?? '')}
+              orderFiles={orderFilesHost /* F-OP-215 */}
             />
           )
         ) : null

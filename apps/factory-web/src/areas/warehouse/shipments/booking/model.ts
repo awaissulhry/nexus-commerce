@@ -1,4 +1,6 @@
 import { MANUAL_EVENT_STATUSES, OWN_TRANSPORT_LIMITS, OWN_TRANSPORT_REFUSALS } from '@nexus/factory-domain/shipping/own-transport/rules'
+// F-OP-135: the typed link's rule, the API's own.
+import { TRACKING_URL_PATTERN } from '@nexus/factory-domain/shipping/own-transport/rules'
 import { REPRINT_REASON_MAX, REPRINT_REASON_MIN, REPRINT_REFUSALS } from '@nexus/factory-domain/shipping/reprint/rules'
 import { words, type DepthAbilities, type Read, type Words } from '../queue/shared/depth'
 import type { CheckProblem, LabelCheck, LabelJob, LabelJobs, ManualStatus, Reprinted, Transport, TransportMode } from './api'
@@ -14,7 +16,7 @@ export { MANUAL_EVENT_STATUSES, OWN_TRANSPORT_LIMITS, OWN_TRANSPORT_REFUSALS, RE
 export type TransportDialog =
   | null
   | { readonly kind: 'arrange'; readonly mode: TransportMode; readonly carrierName: string; readonly trackingNumber: string }
-  | { readonly kind: 'tracking'; readonly text: string }
+  | { readonly kind: 'tracking'; readonly text: string; /* F-OP-135: the link typed beside it (optional, https) */ readonly link?: string }
   | { readonly kind: 'status'; readonly status: ManualStatus | null; readonly occurredAt: string | null; readonly description: string; readonly location: string }
 
 export interface TransportModel {
@@ -75,7 +77,18 @@ export function arrangeBody(dialog: Extract<TransportDialog, { kind: 'arrange' }
 
 export function trackingProblem(dialog: Extract<TransportDialog, { kind: 'tracking' }>): Words | null {
   if (dialog.text.trim().length > OWN_TRANSPORT_LIMITS.trackingNumber || !oneLine(dialog.text)) return words('transport.form.trackingTooLong', { max: OWN_TRANSPORT_LIMITS.trackingNumber })
+  // F-OP-135 (B-OP-034): a link only with its number; https, 1–500 characters, one line, no name or password in it.
+  const link = dialog.link?.trim() ?? ''
+  if (link !== '' && dialog.text.trim() === '') return words('transport.form.linkNeedsNumber')
+  if (link !== '' && (link.length > OWN_TRANSPORT_LIMITS.trackingUrl || !TRACKING_URL_PATTERN.test(link))) return words('transport.form.trackingLink', { max: OWN_TRANSPORT_LIMITS.trackingUrl })
   return null
+}
+
+/** F-OP-135: the tracking write's body — the link sent with the number (blank: cleared; no number: none). */
+export function trackingBody(dialog: Extract<TransportDialog, { kind: 'tracking' }>, version: number): { version: number; trackingNumber: string | null; trackingUrl: string | null } {
+  const text = dialog.text.trim()
+  const link = dialog.link?.trim() ?? ''
+  return { version, trackingNumber: text === '' ? null : text, trackingUrl: text === '' || link === '' ? null : link }
 }
 
 /** What stops the typed status: a status, a time not in the future and not before the goods left, the lengths. */

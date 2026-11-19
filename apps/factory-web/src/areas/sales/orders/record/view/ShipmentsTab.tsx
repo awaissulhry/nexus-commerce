@@ -13,11 +13,18 @@ import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { sizeGridWords } from '../../../quotes/record/view/grid-copy'
 import type { Order } from '../../api'
-import { createShipmentHref, gridOf, mayCreateShipment, styleGroups } from '../../model'
+import { gridOf, styleGroups } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PointsAtOrder } from '../links/view/OrderLinks' // F-SA-230: Complaints & returns live here
 // F-OP-119 (order page plan N5): each row's carrier and tracking, the tracking door, the cancelled rows behind "Show N".
 import { carrierOf, shownShipments, trackingDoorOf, trackingOf, type ShipmentRow } from '../shipments/model'
+import { createShipmentDoor } from '../shipments/model' // F-OP-121
+// F-OP-122: shared shipments — the other orders a shipment carries, and the customer's DRAFTs this order may join (held with why).
+import { alsoCarries } from '../shipments/model'
+import { typedLinkOf } from '../shipments/model' // F-OP-135: the typed link's Track ›
+import { DEPTH_NS } from '../../../../warehouse/shipments/queue/shared/depth'
+import { WithMessages } from '../../../../../record-panels/i18n' // F-OP-122: the join reasons' catalogue (not one the order page loads)
+import type { JoinableRow } from '../shipments/model'
 import { tabHref } from '../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../lib/tab-link/TabLink'
 // F-OP-123 (order page N5): Record a shipment made elsewhere…, and the "Made elsewhere" chip of a row.
@@ -51,6 +58,7 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
   const shown = shownShipments(order.chain.shipments, showCancelled)
   const search = useSearchParams()?.toString() ?? ''
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
+  const createDoor = createShipmentDoor(order, model.can, model.prefix, !!actions?.onCreateShipment) // F-OP-121
   const carrierText = (row: ShipmentRow): string => {
     const carrier = carrierOf(row)
     return carrier ? t(carrier.key, carrier.params) : '—'
@@ -82,9 +90,15 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
       <Card padded>
         <div className="fw-so-card-head">
           <h2 className="fw-so-h2">{t('ship.listTitle')}</h2>
-          {mayCreateShipment(order, model.can) && (
+          {/* F-OP-121: Create shipment… in place (this order and the customer's others); without the container, Warehouse's page. */}
+          {createDoor?.kind === 'inPlace' && (
+            <Button size="sm" variant="primary" onClick={() => actions?.onCreateShipment?.()}>
+              {t('step.createShipment')}
+            </Button>
+          )}
+          {createDoor?.kind === 'warehouse' && (
             <Button size="sm" variant="primary" asChild>
-              <Link href={createShipmentHref(model.prefix, order.id)}>{t('action.createShipment')}</Link>
+              <Link href={createDoor.href}>{t('action.createShipment')}</Link>
             </Button>
           )}
           {/* F-OP-123: goods that left with a paper DDT written outside Nexus — held with words for who may not (D4). */}
@@ -108,6 +122,12 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
                     {row.number}
                   </Link>
                   <DiscussDoor order={order} part={t('discuss.shipment', { number: row.number })} target={{ kind: 'Shipment', id: row.id }} />
+                  {/* F-OP-122: a shared shipment names the other orders it carries, each a link to its order. */}
+                  {alsoCarries(row, order.id).map((other) => (
+                    <Link key={other.id} className="fw-so-link" href={`${model.prefix}/sales/orders/${other.id}`}>
+                      {t('ship.alsoCarries', { number: other.number })}
+                    </Link>
+                  ))}
                   {/* F-OP-123: made elsewhere, with its paper DDT. */}
                   {madeElsewhereChip(row) && <Tag tone="neutral">{t(madeElsewhereChip(row)!.key, madeElsewhereChip(row)!.params)}</Tag>}
                 </span>,
@@ -129,8 +149,16 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
             {showCancelled ? t('ship.hideCancelled') : t('ship.showCancelled', { count: shown.cancelled })}
           </Button>
         )}
+        {/* ── F-OP-122: the customer's DRAFT shipments of the same site and address this order may join (DRAFT only) ── */}
+        {model.joinable && model.joinable.length > 0 && (
+          <WithMessages namespaces={[DEPTH_NS]}>
+            <JoinableDrafts rows={model.joinable} shipmentHref={shipmentHref} onJoin={actions?.onJoinShipment} />
+          </WithMessages>
+        )}
+        {/* ── end F-OP-122 ── */}
       </Card>
       {model.shipmentTracking /* F-OP-119: the tracking dialog of the shipment opened (its container) */}
+      {model.newShipment /* F-OP-121: Warehouse's New shipment, opened in place (its container) */}
       {model.elsewhere?.dialog /* F-OP-123: Record a shipment made elsewhere… (its container, while open) */}
       {delivered}
       <PointsAtOrder model={model.links} actions={actions?.links} prefix={model.prefix} />
@@ -143,6 +171,32 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
   )
 }
 
+// ── F-OP-122 (order page plan N6): the DRAFTs this order may join, each "Add this order's garments…" held with why ─────────────────
+function JoinableDrafts({ rows, shipmentHref, onJoin }: { rows: readonly JoinableRow[]; shipmentHref: (row: { id: string; number: string }) => string; onJoin?: (shipmentId: string) => void }) {
+  const t = useT('orders')
+  const depth = useT(DEPTH_NS) // the join reasons, in the Warehouse's own words
+  return (
+    <div className="fw-so-stack">
+      <h3 className="fw-so-h3">{t('ship.join.title')}</h3>
+      {rows.map((row) => (
+        <div key={row.shipmentId} className="fw-so-card-head">
+          <span className="fw-so-inline">
+            <Link className="fw-so-link" href={shipmentHref({ id: row.shipmentId, number: row.number })}>
+              {row.number}
+            </Link>
+            <Pill tone="neutral">{t('shipStatus.DRAFT')}</Pill>
+          </span>
+          {/* Held, never hidden: while several orders in one shipment are held off, it says so in words. */}
+          <Button size="sm" heldReason={row.held ? depth(row.held.key, row.held.params) : null} onClick={() => onJoin?.(row.shipmentId)}>
+            {t('ship.join.add')}
+          </Button>
+        </div>
+      ))}
+    </div>
+  )
+}
+// ── end F-OP-122 ──
+
 // ── F-OP-119 (order page plan N5; 10-order-page §8.1, §8.2) ──────────────────────────────────────────────────────────────────────────
 /**
  * A shipment's Tracking cell: the number typed for a carrier booked by hand (Copy, and "No live tracking": no carrier feeds it), or its
@@ -153,6 +207,7 @@ function TrackingCell({ row, shipmentHref, onOpen }: { row: ShipmentRow; shipmen
   const t = useT('orders')
   const tracking = trackingOf(row)
   const door = trackingDoorOf(row)
+  const link = typedLinkOf(row) // F-OP-135
   return (
     <span className="fw-so-inline">
       {tracking?.typed ? (
@@ -160,6 +215,12 @@ function TrackingCell({ row, shipmentHref, onOpen }: { row: ShipmentRow; shipmen
           <span>{tracking.typed}</span>
           <CopyNumber text={tracking.typed} />
           <Pill tone="neutral">{t('ship.noLive')}</Pill>
+          {/* F-OP-135: the carrier's page typed beside the number (https only), in a new tab. */}
+          {link && (
+            <a className="fw-so-link" href={link} target="_blank" rel="noopener noreferrer" aria-label={t('ship.trackLink', { number: row.number })}>
+              {t('ship.track')}
+            </a>
+          )}
         </>
       ) : null}
       {tracking?.parcels.map((parcel) =>

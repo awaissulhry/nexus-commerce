@@ -2,6 +2,8 @@ import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
 import { presignedSchema } from '../../../record-panels/api'
 import { putToStore, sha256Hex } from '../../../record-panels/store'
+// F-OP-121: the join verdict's codes.
+import { JOIN_PROBLEM_CODES } from '@nexus/factory-domain/shipping/shipments'
 
 /**
  * Every call of the shipping office screens (SCR-066 the shipments list, SCR-067 a shipment), with the answer's shape
@@ -57,7 +59,12 @@ export const shipmentOrderSchema = z.object({ id: z.string(), number: z.string()
 export type ShipmentOrder = z.infer<typeof shipmentOrderSchema>
 
 /** F-OP-132: may an order join a shipment (ship together): allowed, or why not — the API's words (the real reason first). */
-export const joinVerdictSchema = z.object({ allowed: z.boolean(), why: z.string().nullable() })
+export const joinVerdictSchema = z.object({
+  allowed: z.boolean(),
+  /** F-OP-121 (lead addition): the first reason's code, worded by the screen (it + en); `why` stays the API's English sentence, never shown. */
+  code: z.enum(JOIN_PROBLEM_CODES).nullable().optional(),
+  why: z.string().nullable(),
+})
 export type JoinVerdict = z.infer<typeof joinVerdictSchema>
 
 // ---- the list -----------------------------------------------------------------------------------------------------------
@@ -214,6 +221,8 @@ export const lineSchema = z.object({
   batchNumber: z.string().nullable(),
   workOrderSizeId: z.string(),
   salesOrderLineId: z.string(),
+  /** F-OP-121 (lead addition): the line's order, on the office's read only (the floor's contents never carry it). */
+  salesOrderId: z.string().optional(),
   styleId: z.string(),
   styleCode: z.string(),
   styleName: z.string(),

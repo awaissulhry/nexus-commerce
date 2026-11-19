@@ -30,6 +30,10 @@ import type { SplitPartDraft, SplitRefusal } from '../model' // F-OP-111
 // F-OP-112: Make work orders… in place — the Production page's New work order dialog (its model, its actions, the lane's rights).
 import type { NewWorkOrderModel, WorkOrdersListActions } from '../../../production/work-orders/list-model'
 import type { ProductionCan } from '../../../production/_shared/model'
+import type { JoinableRow } from './shipments/model' // F-OP-122
+// F-OP-113: the work-order rows' acts in place (lib/production/work-order-acts, mounted by use-production-acts).
+import type { WorkOrderActsActions, WorkOrderActsModel } from '../../../../lib/production/work-order-acts/use-work-order-acts'
+import type { RejectReason } from '../../../home/approvals/api' // F-OP-101
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -46,7 +50,8 @@ export const PART_LOADING = { value: null, problem: null } as const
 // ---- F-OP-134 (N-5): the dialogs split by the tab acts hook that owns them (record/use-*-acts.ts). The page still opens ONE dialog
 // at a time: RecordDialog is the container's one slot, and each hook's `opened` clears what its own dialog showed last.
 /** use-band-acts: the band's primary and its ⋯ (Change promise date, Mark ready, Close order; B-W2a-50: Copy as a new quote). */
-export type BandDialog = { kind: 'promise' } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' }
+// F-OP-101: Refuse… of an open yes (its task; the words are typed in the dialog).
+export type BandDialog = { kind: 'promise' } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' } | { kind: 'refuseYes'; taskId: string }
 /** use-lines-acts: the lines (close and reopen lines, the cancel; F-OP-111: the split; F-OP-106: the amendment has no dialog — its strip). */
 export type LinesDialog = { kind: 'closeLines' } | { kind: 'reopenLines' } | { kind: 'cancel' } | { kind: 'split' }
 /** use-money-acts: the deposits and payments (the bank-details page, the payment, the TD02's send to SDI). */
@@ -138,7 +143,22 @@ export interface MakeWorkOrdersActions {
 }
 // ---- end F-OP-112
 
+// ---- F-OP-101: the approver's yes in place (use-band-acts) ----
+export interface YesActions {
+  /** Confirm the order (or Approve another yes of it): the task's version sent; a fresh step-up first when its rule asks one. */
+  readonly onConfirm?: (taskId: string) => void
+  /** Refuse…: the dialog opens and reads the reasons a no names. */
+  readonly onRefuse?: (taskId: string) => void
+  /** The dialog's Refuse: the reason picked and the words typed (required). */
+  readonly onRefuseConfirm?: (taskId: string, reasonCode: string, words: string) => void
+  /** Read the reasons again (Try again). */
+  readonly onRefuseReasons?: () => void
+}
+// ---- end F-OP-101
+
 export interface OrderRecordModel {
+  /** F-OP-101: the reasons a no names (the tenant's APPROVAL_REJECT list) while Refuse… is open; null: not open or not read. */
+  refuseReasons?: Part<RejectReason[]> | null
   /** F-OP-112: Make work orders… on Production (the dialog, the next style); absent: not here (a design case). */
   makeWorkOrders?: MakeWorkOrdersModel | null
   /** F-OP-111: Split into new orders… — the dialog's addresses, refusals and the orders made; absent: not open here (a design case). */
@@ -170,7 +190,7 @@ export interface OrderRecordModel {
   /** Someone changed the order while a dialog holds typed work: "Changed at 10:42 · Reload". */
   /** F-SA-239: the parts that changed under typed work (their last change names who: the order read's `lastChange`). */
   changed: { at: string; parts?: readonly string[]; by?: string | null } | null
-  notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
+  notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase; /* F-OP-121: a door the notice offers (Pack and ship it in Warehouse ›) */ door?: { href: string; words: Phrase } } | null
   busy: boolean
   dialog: RecordDialog | null
   /** A refused write while its dialog is open: said inside the dialog (what was typed stays). */
@@ -226,6 +246,12 @@ export interface OrderRecordModel {
   files?: OrderFilesModel | null
   /** F-OP-119: the tracking dialog of the one shipment opened on Shipments (its container: use-shipments-acts); null: none open. */
   shipmentTracking?: ReactNode | null
+  /** F-OP-121: Warehouse's New shipment, opened in place (its container). */
+  newShipment?: ReactNode | null
+  /** F-OP-122: the customer's DRAFT shipments (same site and address) this order may join; null: not read or not offered. */
+  joinable?: JoinableRow[] | null
+  /** F-OP-113: the work-order rows' acts on Production (saves, the floor's told time, the open dialog); absent: none here. */
+  workOrderActs?: WorkOrderActsModel | null
   /**
    * F-OP-123 (order page N5): "Record a shipment made elsewhere…" — its door held with words (null: open) and its dialog while open
    * (its container: use-shipments-acts); absent: not offered here (a design case).
@@ -261,10 +287,18 @@ export interface PaymentInput {
 }
 
 export interface OrderRecordActions {
+  /** F-OP-101: the approver's yes in place (the band's "Waiting for a yes", an old change's waiting row). */
+  yes?: YesActions
   /** F-OP-112: Make work orders… on Production (open it; the dialog's own actions). */
   makeWorkOrders?: MakeWorkOrdersActions
   /** F-OP-119: open the tracking number of a shipment of the order (Shipments: row ⋯, or Enter on its Tracking cell). */
   onShipmentTracking?: (shipmentId: string) => void
+  /** F-OP-121: Create shipment… in place (this order and the customer's others beside it). */
+  onCreateShipment?: () => void
+  /** F-OP-122: Add this order's garments… to a DRAFT of the same customer (the same step 2). */
+  onJoinShipment?: (shipmentId: string) => void
+  /** F-OP-113: a work-order row's act in place (due, priority, rush) or from its ⋯ (the dialog's own acts). */
+  workOrderActs?: WorkOrderActsActions
   /** F-OP-123: open "Record a shipment made elsewhere…" (⋯ Next steps, the Shipments card head). */
   onRecordElsewhere?: () => void
   /** F-OP-111: split the parts off into new orders (the dialog's parts as typed, the optional reason). */
@@ -331,6 +365,8 @@ export interface OrderRecordActions {
   /** F-SA-232: read the production again (Try again); open a line's sizes (null closes the window). */
   onRetryProduction?: () => void
   onOpenLine?: (rowId: string | null) => void
+  /** F-OP-104: Next dates' requested date "Change…" — edit mode on Lines with its field focused. */
+  onRequestedChange?: () => void
   /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
   people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
 }

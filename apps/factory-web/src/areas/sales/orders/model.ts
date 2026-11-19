@@ -1,4 +1,5 @@
 import { isApiError, issuePath } from '../../../lib/api/errors'
+import { YES_REFUSALS } from './depth/model' // F-OP-101
 import type { Locale } from '../../../lib/i18n/locales'
 import {
   BOARD_LANES,
@@ -576,7 +577,7 @@ export function depositGate(order: Pick<Order, 'depositRequired' | 'chain'>): { 
   return { state: 'MISSING', request: null }
 }
 
-export type StepKind = 'makeWorkOrders' | 'changePromise' | 'close'
+export type StepKind = 'makeWorkOrders' | 'changePromise' | 'close' | /* F-OP-121 */ 'createShipment'
 
 export interface NextStep {
   kind: StepKind | null
@@ -606,6 +607,8 @@ export function nextStep(order: Order, can: OrderAbilities): NextStep {
   }
   if (isShippedInFull(order)) return { kind: 'close', held: closeHeld(order, can) } // F-SA-201
   if (isFinal(order)) return { kind: null, held: null }
+  // F-OP-121: ready (or partly shipped) with released garments not shipped yet, and the right to make a shipment: Create shipment….
+  if ((order.status === 'READY' || order.status === 'PARTLY_SHIPPED') && mayCreateShipment(order, can)) return { kind: 'createShipment', held: null }
   return { kind: 'changePromise', held: can.manage ? null : phrase('held.noManage') }
 }
 
@@ -836,6 +839,10 @@ export interface WriteProblem extends Phrase {
 /** A refused write as words (never the API's English): a moved record, a state that does not allow it, no right… */
 export function writeProblem(error: unknown): WriteProblem {
   if (!isApiError(error)) return { key: 'problem.write.internal', reload: false }
+  // F-OP-101: the approval engine's refusal of a yes or a no decided here (`refusal/STALE` …): its own words, and the order read again
+  // (W39-02's seeded request answers STALE on a yes — its no still clears it).
+  const refusal = error.issues.map(issuePath).find((path) => path.startsWith('refusal/'))?.slice('refusal/'.length) ?? null
+  if (refusal) return { key: YES_REFUSALS.has(refusal) ? `approval.refused.${refusal}` : 'approval.refused.other', reload: true }
   if (error.kind === 'conflict') {
     const moved = error.issues.some((issue) => issuePath(issue).split(/[./]/).includes('version'))
     if (moved) return { key: 'problem.write.moved', reload: true }

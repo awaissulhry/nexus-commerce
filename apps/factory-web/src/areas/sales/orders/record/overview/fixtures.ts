@@ -17,7 +17,7 @@ export const HEADLINE: Headline = {
   stage: { code: 'SEWING', words: w('Sewing', 'Confezione'), since: '2026-11-13', ahead: 1, aheadWords: w('1 line ahead', '1 riga avanti'), sewingNotCounted: false, sewingNotCountedWords: null, next: { code: 'QUALITY', words: w('Quality check', 'Controllo qualità') }, partlyShipped: false },
   inWork: { bundles: 3, pieces: { cutting: 0, sewing: 6, checking: 2, packing: null } },
   health: { code: 'AT_RISK', words: w('At risk', 'A rischio'), computed: 'AT_RISK', raise: null },
-  waiting: { on: 'US', words: w('Waiting on us', 'Tocca a noi'), since: '2026-11-17T09:05:00Z', blockers: [{ kind: 'REQUEST', on: 'US', words: w('A change request', 'Una richiesta di modifica'), since: '2026-11-17T09:05:00Z' }] },
+  waiting: { on: 'US', words: w('Waiting on us', 'Tocca a noi'), since: '2026-11-17T09:05:00Z', blockers: [{ kind: 'BRAND_REQUEST', on: 'US', words: w('A customer request waits for our answer', 'Una richiesta del cliente aspetta la nostra risposta'), since: '2026-11-17T09:05:00Z', ref: { type: 'OrderChangeRequest', id: '0190f0e2-3080-7000-8000-000000000901' }, sub: 'REQUEST' }] }, // F-OP-103: a real blocker kind, with its ref and sub
   held: false,
   holds: [],
   holdNotes: null,
@@ -84,7 +84,7 @@ export const PRODUCTION_READ: OrderProduction = {
 export const CONFIRMED_READ: OrderProduction = {
   ...PRODUCTION_READ,
   order: { ...PRODUCTION_READ.order, status: 'CONFIRMED' },
-  headline: { ...HEADLINE, stage: null, inWork: { bundles: 0, pieces: { cutting: 0, sewing: 0, checking: 0, packing: 0 } }, health: null, waiting: { on: 'BRAND', words: w('Waiting on customer', 'Tocca al cliente'), since: '2026-10-28T15:00:00Z', blockers: [{ kind: 'DEPOSIT', on: 'BRAND', words: w('The deposit', "L'acconto"), since: '2026-10-28T15:00:00Z' }] }, urgency: { ...HEADLINE.urgency, customer: null } },
+  headline: { ...HEADLINE, stage: null, inWork: { bundles: 0, pieces: { cutting: 0, sewing: 0, checking: 0, packing: 0 } }, health: null, waiting: { on: 'BRAND', words: w('Waiting on customer', 'Tocca al cliente'), since: '2026-10-28T15:00:00Z', blockers: [{ kind: 'DEPOSIT', on: 'BRAND', words: w('Deposit not paid yet', 'Acconto non ancora pagato'), since: '2026-10-28T15:00:00Z', ref: { type: 'DepositRequest', id: '0190f0e2-1818-7000-8000-000000000001' }, sub: null }] }, urgency: { ...HEADLINE.urgency, customer: null } },
   lines: LINES.map((line) => ({ ...line, cut: 0, sewn: 0, checked: 0, packed: 0, inWorkOrders: 0, notInWorkOrders: true, sizes: line.sizes.map((entry) => ({ ...entry, cut: 0, sewn: 0, checked: 0, packed: 0 })) })),
 }
 
@@ -104,6 +104,52 @@ export const WORK: Work = {
   notInProduction: { lines: 0, pieces: 0 },
 }
 export const WORK_READ: OrderProduction = { ...PRODUCTION_READ, work: WORK }
+
+// ---- F-OP-113 (B-OP-021, B6; R-11): the work orders as the order page acts on them — each row's version, kind, release, priority,
+// its cells of this order's lines and the reader's rights; a third, older work order shared with another customer (read-only here).
+export type WorkRights = { readonly manage: boolean; readonly release: boolean; readonly hold: boolean }
+export const SHARED_WO_ID = '0190f0e2-6060-7000-8000-000000000019'
+const SHARED_WORDS = { en: 'Shared with other customers: change it on its page.', it: 'Condiviso con altri clienti: cambialo dalla sua pagina.' }
+export function workActsRead(rights: WorkRights): OrderProduction {
+  const [first, second] = WORK.workOrders
+  const own = (row: Work['workOrders'][number], line: string, extra: Partial<Work['workOrders'][number]>) => ({
+    ...row,
+    kind: 'STANDARD',
+    cells: [
+      { id: `${row.id.slice(0, -2)}c1`, salesOrderLineId: line, size: 'M', quantity: Math.ceil(row.own.pieces / 2), cut: row.own.cut === null ? null : Math.min(row.own.cut, Math.ceil(row.own.pieces / 2)) },
+      { id: `${row.id.slice(0, -2)}c2`, salesOrderLineId: line, size: 'L', quantity: Math.floor(row.own.pieces / 2), cut: row.own.cut === null ? null : Math.max(0, row.own.cut - Math.ceil(row.own.pieces / 2)) },
+    ],
+    rights: { ...rights, why: null },
+    ...extra,
+  })
+  return {
+    ...WORK_READ,
+    work: {
+      ...WORK,
+      workOrders: [
+        // Listed out of order on purpose: the card shows them by number.
+        own(second!, LINE_RED, { version: 4, releasedAt: '2026-11-10T08:00:00Z', priority: 100, rush: true }),
+        own(first!, LINE_BLK, { version: 7, releasedAt: '2026-11-04T08:00:00Z', priority: 0 }),
+        {
+          ...first!,
+          id: SHARED_WO_ID,
+          number: 'WO-00019',
+          status: 'RELEASED',
+          own: { cells: 1, pieces: 4, cut: 0, sewn: null, checked: 0 },
+          alsoMakes: { orders: [], more: 0 },
+          sharedWithOtherCustomers: true,
+          version: 2,
+          kind: 'STANDARD',
+          releasedAt: '2026-10-28T08:00:00Z',
+          priority: 0,
+          cells: [{ id: '0190f0e2-6060-7000-8000-0000000019c1', salesOrderLineId: LINE_BLK, size: 'S', quantity: 4, cut: 0 }],
+          rights: { manage: false, release: false, hold: false, why: SHARED_WORDS },
+        },
+      ],
+    },
+  }
+}
+// ---- end F-OP-113
 /** Without workorders.view: the work part withheld (the chain's numbers only). */
 export const NO_WORK_READ: OrderProduction = { ...PRODUCTION_READ, work: null, people: null, quality: { issues: null, ncrs: null, final: null }, withheld: ['work', 'people', 'headline.notes', 'quality.issues', 'quality.ncrs', 'quality.final'] }
 

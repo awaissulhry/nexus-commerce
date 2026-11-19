@@ -16,6 +16,7 @@ import { latestByShipment, progressOfLines } from './orders'
 import { dayOrNull, hasLeft, liveDdts, namesOf, readLines, readOrders, readPapers, readParcels, readShipmentLines, readShipments, readTracking, shippedPieces, type PortalShipmentRow, type PortalTrackingRow } from './store'
 import { walledForOutside } from '../../../platform/files/content-wall' // fix-wall-1
 import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-portal-numbers-1
+import { trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking' // B-OP-034: a typed link, https only
 
 /**
  * Shipments and tracking for the customer (B-W2b-175; SAL-080, SAL-081; design portal.customer.orders › Shipments &
@@ -128,6 +129,8 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
       expectedDeliveryAt: etaOf(shipment),
       // B-OP-031: the number of a carrier booked by hand (the page says "No live tracking": no carrier feeds it).
       typedTrackingNumber: shipment.manualTrackingNumber,
+      // B-OP-034: its typed tracking link ("Track ›"), https only.
+      typedTrackingUrl: trackingPageOf(shipment.manualTrackingUrl),
       ddt: read.ddts.get(shipment.id) ?? null,
       milestones: shipmentMilestonesOf({ status: shipment.status, packedAt: shipment.packedAt, shippedAt: shipment.shippedAt, deliveredAt: shipment.deliveredAt, events }).map((view) => ({
         key: view.key,
@@ -213,6 +216,7 @@ export async function inTransit(app: FastifyInstance, request: FastifyRequest, n
         shippedAt: shipment.shippedAt ? toUtcIso(shipment.shippedAt) : null,
         expectedDeliveryAt: etaOf(shipment),
         typedTrackingNumber: shipment.manualTrackingNumber, // B-OP-031
+        typedTrackingUrl: trackingPageOf(shipment.manualTrackingUrl), // B-OP-034
         trackingNumbers: read.parcels.filter((parcel) => parcel.shipmentId === shipment.id && parcel.trackingNumber !== null).map((parcel) => parcel.trackingNumber!),
         trackingLinks: read.parcels.flatMap((parcel) => {
           const link = parcel.shipmentId === shipment.id && parcel.trackingNumber !== null ? trackingLinkOf(parcel.trackingUrl) : null

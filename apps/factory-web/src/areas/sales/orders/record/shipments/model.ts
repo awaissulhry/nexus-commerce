@@ -1,5 +1,10 @@
 import type { Order } from '../../api'
 import type { Phrase } from '../../model'
+// F-OP-121: where Create shipment… leads.
+import { createShipmentHref, mayCreateShipment, type OrderAbilities } from '../../model'
+// F-OP-122: the joinable read and its reasons in the Warehouse's words.
+import type { JoinableShipments } from '../../../../warehouse/shipments/api'
+import { joinHeld } from '../../../../warehouse/shipments/model'
 
 /**
  * F-OP-119 (order page plan N5; 10-order-page §8.1, §8.2; review R-7) — the Shipments tab's rows, pure: who carries each shipment
@@ -64,3 +69,49 @@ export function shownShipments(rows: readonly ShipmentRow[], showCancelled: bool
   const cancelled = rows.filter((row) => row.status === 'CANCELLED').length
   return { rows: showCancelled ? [...rows] : rows.filter((row) => row.status !== 'CANCELLED'), cancelled }
 }
+
+// ── F-OP-121 (order page plan N6): where Create shipment… leads ──────────────────────────────────────────────────────────────────
+export type CreateShipmentDoor = { readonly kind: 'inPlace' } | { readonly kind: 'warehouse'; readonly href: string }
+
+/**
+ * Released garments not shipped yet and the right to make a shipment: opened in place on the order page (its container mounts
+ * Warehouse's New shipment), else Warehouse's page with this order chosen; null: nothing to offer.
+ */
+export function createShipmentDoor(order: Pick<Order, 'id' | 'status' | 'progress'>, can: Pick<OrderAbilities, 'createShipment'>, prefix: string, inPlace: boolean): CreateShipmentDoor | null {
+  if (!mayCreateShipment(order, can)) return null
+  return inPlace ? { kind: 'inPlace' } : { kind: 'warehouse', href: createShipmentHref(prefix, order.id) }
+}
+// ── end F-OP-121 ──
+
+// ── F-OP-122 (order page plan N6): shared shipments on the order ─────────────────────────────────────────────────────────────────
+/** "Also carries SO-0151": the other orders a shipment of this order carries (all of this customer's), the first first. */
+export function alsoCarries(row: ShipmentRow, orderId: string): { readonly id: string; readonly number: string }[] {
+  return (row.orders ?? []).filter((entry) => entry.id !== orderId).map((entry) => ({ id: entry.id, number: entry.number }))
+}
+
+/** A DRAFT of the same customer this order may join, as the Shipments tab offers it: "Add this order's garments…", held with why. */
+export interface JoinableRow {
+  readonly shipmentId: string
+  readonly number: string
+  /** Null: it may join; else the reason in the Warehouse depth catalogue's words (several orders held off: `shipOrders.later`). */
+  readonly held: Phrase | null
+}
+
+/**
+ * The DRAFTs the Shipments tab offers from the joinable read: the same customer, site and delivery address — allowed, or held
+ * only while several orders in one shipment are held off (every real reason passed); another site or address is not offered.
+ */
+export function joinableRows(shipments: JoinableShipments['shipments']): JoinableRow[] {
+  return shipments.flatMap((row) => {
+    const held = joinHeld(row.joinable)
+    return row.status === 'DRAFT' && (held === null || held.key === 'shipOrders.later') ? [{ shipmentId: row.shipmentId, number: row.number, held }] : []
+  })
+}
+// ── end F-OP-122 ──
+
+// ── F-OP-135 (order page plan N5/N6, B-OP-034): the link typed beside a hand-booked carrier's number ─────────────────────────────────
+/** The row's Track ›: the tracking link typed beside the number (https only, checked again here); null: none, or not a typed number. */
+export function typedLinkOf(row: ShipmentRow): string | null {
+  return row.tracking?.source === 'TYPED' && row.tracking.number ? httpsOrNull(row.tracking.url) : null
+}
+// ── end F-OP-135 ──

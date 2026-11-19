@@ -295,8 +295,9 @@ export async function readOrderProductionFacts(db: Reader, context: OfficeContex
     if (counter?.status === 'OPEN') blockers.push({ kind: 'APPROVAL', since: row.counteredAt, ref: { type: 'OrderChangeRequest', id: row.id } })
     else if (counter?.status !== 'REFUSED') blockers.push({ kind: 'BRAND_REQUEST', since: counter?.answeredAt ?? counter?.updatedAt ?? row.counteredAt, ref: { type: 'OrderChangeRequest', id: row.id }, sub: 'COUNTER' })
   }
-  const reported = await db.productionIssue.findMany({ where: { salesOrderId: order.id, status: 'OPEN', source: 'BRAND' }, select: { id: true, raisedAt: true } })
-  for (const row of reported) blockers.push({ kind: 'BRAND_REQUEST', since: row.raisedAt, ref: { type: 'ProductionIssue', id: row.id }, sub: 'PROBLEM' })
+  // F-OP-103: with the message it was raised with (the order page's "Reply in the thread" opens the conversation at it).
+  const reported = await db.productionIssue.findMany({ where: { salesOrderId: order.id, status: 'OPEN', source: 'BRAND' }, select: { id: true, raisedAt: true, messageId: true } })
+  for (const row of reported) blockers.push({ kind: 'BRAND_REQUEST', since: row.raisedAt, ref: { type: 'ProductionIssue', id: row.id, messageId: row.messageId }, sub: 'PROBLEM' })
   // B-PR-28: a new date the customer did not accept waits for us while its follow-up task is open (the task's id is the
   // request's; the date stands: planning/promise-keep/brand-answer).
   const refusedDates = await db.approvalRequest.findMany({ where: { partyId: order.partyId, kind: 'REPROMISE', recordType: 'SalesOrder', recordId: order.id, status: 'REFUSED', reversedAt: null }, select: { id: true, answeredAt: true } })

@@ -51,7 +51,8 @@ export const parcelSchema = output({
 
 /** What every packer sees: the lines, the parcels, the garments and what packing still needs (PLT-097). */
 export const contentsSchema = {
-  lines: z.array(lineSchema),
+  /** F-OP-121 (lead addition): the office's lines name their order (the floor's packing views never: it reads no sales order line). */
+  lines: z.array(lineSchema.extend({ salesOrderId: id() })),
   parcels: z.array(parcelSchema),
   garments: z.number().int(),
   packingProblems: z.array(z.string()),
