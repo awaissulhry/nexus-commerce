@@ -48,8 +48,10 @@ export function scopeParamOf(scope: OrderScope): string | null {
  * address itself is the frame's (`rf/address.ts withThread`: every other term kept; a line of All of <customer> sets `message=`,
  * any other move drops it).
  */
-export function scopeValueOf(scope: OrderScope, narrow: boolean): string | null {
-  return scopeParamOf(scope) ?? (narrow ? 'open' : null)
+export function scopeValueOf(scope: OrderScope, narrow: boolean, viewClosed = false /* F-OP-212 */): string | null {
+  // F-OP-212: a move the page makes for an ask (not the person's pick) keeps the view as it is — below 1280 px with the view closed,
+  // this order's own is no term (a file opened from the body never pops the full-width thread open).
+  return scopeParamOf(scope) ?? (narrow && !viewClosed ? 'open' : null)
 }
 
 /** What the reader may pick: the customer's conversations, the linked projects, the work orders of its wall. */
@@ -120,3 +122,21 @@ export function workOrderGroups(rows: readonly DockWorkOrder[]): { readonly key:
   }
   return groups
 }
+
+// ---- F-OP-212 (11-dock §5; review N-1, D5): every frame ask names its record; the dock moves its pick to that record's thread first.
+/**
+ * The scope that shows a record's thread on this order's dock: this order's own, its customer's general one, a linked project, a work
+ * order of the reader's wall — only what is offered; anything else (another order, a record of another customer) is null: no move.
+ */
+export function scopeOfRecord(record: { readonly type: string; readonly id: string } | null | undefined, page: { readonly orderId: string; readonly partyId: string }, offer: ScopeOffer): OrderScope | null {
+  if (!record) return null
+  if (record.type === 'SalesOrder') return record.id === page.orderId ? ORDER_SCOPE : null
+  if (record.type === 'Party') return record.id === page.partyId && offer.general ? { kind: 'general' } : null
+  if (record.type === 'Project') return offer.projects.includes(record.id) ? { kind: 'project', id: record.id } : null
+  if (record.type === 'WorkOrder') return offer.workOrders.includes(record.id) ? { kind: 'wo', id: record.id } : null
+  return null
+}
+
+/** The same scope (the same address value). */
+export const sameScope = (a: OrderScope, b: OrderScope): boolean => scopeParamOf(a) === scopeParamOf(b)
+// ---- end F-OP-212

@@ -280,6 +280,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
     <>
       <RecordFrame
         recordType="SalesOrder"
+        record={{ type: 'SalesOrder', id: order.id } /* F-OP-212: every ask that names no record is this order's */}
         personId={model.personId ?? null}
         threadLabel={t('record.dockLabel')}
         thread={thread ?? null}

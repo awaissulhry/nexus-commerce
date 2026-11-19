@@ -20,6 +20,9 @@ import { messageHrefOf } from '../../../../_shared/record-thread/all-of-customer
 import { useInProject } from '../../../../products/projects/record/linked/use-in-project'
 import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeOfChoice, scopeOfParam, scopeShown, workOrderGroups, type DockWorkOrder, type OrderScope, type ScopeChoice, type ScopeOffer } from './model'
 import { scopeValueOf } from './model' // F-OP-209
+import { sameScope, scopeOfRecord, scopeParamOf } from './model' // F-OP-212
+import { pendingAskOf } from '../../../../_shared/record-frame/model' // F-OP-212
+import { viewOpenOf } from '../../../../_shared/record-frame/model' // F-OP-212
 
 /**
  * F-SA-262 (sales page plan N4; picks P9, P9', R4, R9; 10-order-page §6.1, §6.2; review C-13) — the order page's dock: ONE
@@ -82,12 +85,20 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
   const go = (next: OrderScope, messageId: string | null = null) => frame?.setThread?.(scopeValueOf(next, narrow), { message: messageId })
 
   // ── F-SA-265: Discuss and Show in thread are about THIS order: the pick goes to its own conversation first (which reads the ask) ──
-  const asking = frame?.discussAsk?.record.id === order.id || frame?.showAsk?.record.id === order.id
-  const goRef = useRef(go)
-  goRef.current = go
+  // F-OP-212 (11-dock §5, D5): every frame ask names its record (files, Followers…, the owner door, Ask, Discuss, Show, Answer): the
+  // pick goes to that record's thread first — this order's, its customer's general one, a linked project, a work order — keeping the
+  // view as it is (below 1280 px with the view closed: no term, so a file opened from the body never pops the full-width thread open);
+  // that thread then takes the ask. Once per ask: a later pick of the person is never undone.
+  const pending = pendingAskOf(frame)
+  const target = pending ? scopeOfRecord(pending.record, { orderId: order.id, partyId: order.partyId }, offer) : null
+  const targetValue = target ? (scopeParamOf(target) ?? 'order') : null
+  const follow = useRef({ scope, closed: !viewOpenOf(params?.get(SCOPE_PARAM)), narrow, frame })
+  follow.current = { scope, closed: !viewOpenOf(params?.get(SCOPE_PARAM)), narrow, frame }
   useEffect(() => {
-    if (asking && scope.kind !== 'order') goRef.current(ORDER_SCOPE)
-  }, [asking, scope.kind])
+    const now = follow.current
+    if (!target || sameScope(target, now.scope)) return
+    now.frame?.setThread?.(scopeValueOf(target, now.narrow, now.closed))
+  }, [pending?.ask, targetValue]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── "N new" of each conversation (the reader's own; again on a live message) ──
   const [tick, setTick] = useState(0)

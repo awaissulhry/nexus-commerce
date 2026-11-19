@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Building2, Eye } from 'lucide-react' // F-OP-203: the segments' icons
 import { Button, Skeleton } from '@nexus/ui/primitives'
@@ -24,6 +24,7 @@ import { WORK_DEFAULT_ROWS, workEntry, type useCustomerWork, type WorkCan } from
 // ---- F-SA-279: the dock follows the row; All of <customer> in the dock ----
 import type { useCustomerDock } from '../use-customer-work'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { pendingAskOf, sameRecord } from '../../../../_shared/record-frame/model' // F-OP-212: the dock follows an ask's record
 import type { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-customer/use-all-of-customer'
 import { ALL_OF_CUSTOMER_NS, AllOfCustomerFeed } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
 // ---- end F-SA-279
@@ -211,6 +212,19 @@ function Dock({ customer, general, dock, feed, prefix }: DockProps) {
   const t = useT('parties')
   const o = useT('orders') // F-OP-203
   const rt = useT('record-thread') // F-OP-203
+  // ---- F-OP-212 (11-dock §5, D5): an ask of the page (files, Followers…, a door, Answer) names its record — the customer's own when
+  // the body names none: the pick goes to that record's thread first (the customer's general one; the record picked), which then
+  // takes the ask; once per ask. The narrow view is the frame's term, untouched by `dock=`.
+  const frame = useRecordFrame()
+  const pending = pendingAskOf(frame)
+  const askFor = pending?.record ?? null
+  const follow = !askFor ? null : askFor.type === 'Party' ? (askFor.id === customer.id ? 'general' : null) : dock.pick && sameRecord(askFor, dock.pick) ? 'record' : null
+  const latest = useRef(dock)
+  latest.current = dock
+  useEffect(() => {
+    if (follow && latest.current.scope !== follow) latest.current.onScope(follow)
+  }, [pending?.ask, follow])
+  // ---- end F-OP-212
   if (general === null || general === undefined) return null
   const pick = dock.pick
   // F-OP-203: each segment with its icon and its short words for a narrow card (the order page's words, C-13).
