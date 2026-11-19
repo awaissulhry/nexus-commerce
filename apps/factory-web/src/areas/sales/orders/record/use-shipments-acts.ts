@@ -6,6 +6,9 @@ import type { Order } from '../api'
 import { Deliveries } from './shipments/delivered/Deliveries'
 // F-OP-119: the tracking number of one shipment typed in place (the Warehouse's own hook and dialog).
 import { depthAbilitiesOf } from '../../../warehouse/shipments/queue/shared/depth'
+// F-OP-121: the order page loads its own catalogues only; New shipment brings the Warehouse's (shipments, its depth words).
+import { DEPTH_NAMESPACES } from '../../../warehouse/shipments/queue/shared/depth'
+import { WithMessages } from '../../../../record-panels/i18n'
 import { ShipmentTracking } from './shipments/ShipmentTracking'
 // F-OP-121 (order page plan N6): Create shipment… in place — the Warehouse's ONE New shipment hook and its dialog.
 import type { ApiClient } from '../../../../lib/api/client'
@@ -76,7 +79,7 @@ export function useShipmentsActs(input: {
   const onCreateShipment = useCallback(() => {
     if (order) create.open(order.id, { together: true })
   }, [create, order])
-  const newShipment = create.model ? createElement(NewShipmentDialog, { model: create.model, can: shipping, actions: create.actions }) : null
+  const newShipment = create.model ? createElement(WithMessages, { namespaces: DEPTH_NAMESPACES }, createElement(NewShipmentDialog, { model: create.model, can: shipping, actions: create.actions })) : null
   // ---- end F-OP-121
 
   // ---- F-OP-122: the DRAFT shipments this order may join ----

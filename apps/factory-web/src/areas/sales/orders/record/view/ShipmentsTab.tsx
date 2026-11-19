@@ -23,6 +23,8 @@ import { createShipmentDoor } from '../shipments/model' // F-OP-121
 import { alsoCarries } from '../shipments/model'
 import { typedLinkOf } from '../shipments/model' // F-OP-135: the typed link's Track ›
 import { DEPTH_NS } from '../../../../warehouse/shipments/queue/shared/depth'
+import { WithMessages } from '../../../../../record-panels/i18n' // F-OP-122: the join reasons' catalogue (not one the order page loads)
+import type { JoinableRow } from '../shipments/model'
 import { tabHref } from '../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../lib/tab-link/TabLink'
 
@@ -43,7 +45,6 @@ import { rowAnchor } from '../dock/discuss'
 export function ShipmentsTab({ order, model, actions, delivered }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; delivered?: ReactNode }) {
   const t = useT('orders')
   const sales = useT('sales')
-  const depth = useT(DEPTH_NS) // F-OP-122: the join reasons, in the Warehouse's own words
   const locale = useLocale()
   const copy = sizeGridWords(sales)
   const groups = styleGroups(order.lines)
@@ -139,23 +140,9 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
         )}
         {/* ── F-OP-122: the customer's DRAFT shipments of the same site and address this order may join (DRAFT only) ── */}
         {model.joinable && model.joinable.length > 0 && (
-          <div className="fw-so-stack">
-            <h3 className="fw-so-h3">{t('ship.join.title')}</h3>
-            {model.joinable.map((row) => (
-              <div key={row.shipmentId} className="fw-so-card-head">
-                <span className="fw-so-inline">
-                  <Link className="fw-so-link" href={shipmentHref({ id: row.shipmentId, number: row.number })}>
-                    {row.number}
-                  </Link>
-                  <Pill tone="neutral">{t('shipStatus.DRAFT')}</Pill>
-                </span>
-                {/* Held, never hidden: while several orders in one shipment are held off, it says so in words. */}
-                <Button size="sm" heldReason={row.held ? depth(row.held.key, row.held.params) : null} onClick={() => actions?.onJoinShipment?.(row.shipmentId)}>
-                  {t('ship.join.add')}
-                </Button>
-              </div>
-            ))}
-          </div>
+          <WithMessages namespaces={[DEPTH_NS]}>
+            <JoinableDrafts rows={model.joinable} shipmentHref={shipmentHref} onJoin={actions?.onJoinShipment} />
+          </WithMessages>
         )}
         {/* ── end F-OP-122 ── */}
       </Card>
@@ -171,6 +158,32 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
     </div>
   )
 }
+
+// ── F-OP-122 (order page plan N6): the DRAFTs this order may join, each "Add this order's garments…" held with why ─────────────────
+function JoinableDrafts({ rows, shipmentHref, onJoin }: { rows: readonly JoinableRow[]; shipmentHref: (row: { id: string; number: string }) => string; onJoin?: (shipmentId: string) => void }) {
+  const t = useT('orders')
+  const depth = useT(DEPTH_NS) // the join reasons, in the Warehouse's own words
+  return (
+    <div className="fw-so-stack">
+      <h3 className="fw-so-h3">{t('ship.join.title')}</h3>
+      {rows.map((row) => (
+        <div key={row.shipmentId} className="fw-so-card-head">
+          <span className="fw-so-inline">
+            <Link className="fw-so-link" href={shipmentHref({ id: row.shipmentId, number: row.number })}>
+              {row.number}
+            </Link>
+            <Pill tone="neutral">{t('shipStatus.DRAFT')}</Pill>
+          </span>
+          {/* Held, never hidden: while several orders in one shipment are held off, it says so in words. */}
+          <Button size="sm" heldReason={row.held ? depth(row.held.key, row.held.params) : null} onClick={() => onJoin?.(row.shipmentId)}>
+            {t('ship.join.add')}
+          </Button>
+        </div>
+      ))}
+    </div>
+  )
+}
+// ── end F-OP-122 ──
 
 // ── F-OP-119 (order page plan N5; 10-order-page §8.1, §8.2) ──────────────────────────────────────────────────────────────────────────
 /**
