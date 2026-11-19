@@ -41,7 +41,8 @@ export function waitingOnCustomerOf(requests: readonly BrandRequest[], approvals
 
 // ---- the history ----------------------------------------------------------------------------------------------------------------
 
-export const HISTORY_CHIPS = ['all', 'requests', 'amendments', 'confirmations'] as const
+// F-OP-117: + Work orders (the work-order changes decided: applied, left as is).
+export const HISTORY_CHIPS = ['all', 'requests', 'amendments', 'workOrders', 'confirmations'] as const
 export type HistoryChip = (typeof HISTORY_CHIPS)[number]
 
 export type HistoryEntry =
@@ -67,8 +68,10 @@ export type HistoryEntry =
     }
   | { readonly kind: 'confirmationMade'; readonly id: string; readonly at: string; readonly version: number; readonly by: string | null }
   | { readonly kind: 'confirmationSent'; readonly id: string; readonly at: string; readonly version: number }
+  /** F-OP-117: a work-order change decided — carried out on its work order, left as is, or put back (stale). */
+  | { readonly kind: 'workOrderChange'; readonly id: string; readonly at: string; readonly change: WorkOrderChange }
 
-const chipOf = (entry: HistoryEntry): Exclude<HistoryChip, 'all'> => (entry.kind === 'requestAsked' || entry.kind === 'requestAnswered' ? 'requests' : entry.kind === 'amendment' ? 'amendments' : 'confirmations')
+const chipOf = (entry: HistoryEntry): Exclude<HistoryChip, 'all'> => (entry.kind === 'requestAsked' || entry.kind === 'requestAnswered' ? 'requests' : entry.kind === 'amendment' ? 'amendments' : entry.kind === 'workOrderChange' ? 'workOrders' : 'confirmations')
 
 /** The lines an amendment moved, and the pieces before → after (an amendment's diff or a change's: only what it counts). */
 function countsOf(diff: { readonly lines: readonly Pick<Amendment['diff']['lines'][number], 'change' | 'piecesBefore' | 'piecesAfter'>[] }) {
@@ -90,6 +93,8 @@ interface HistoryInput {
   /** The amendments read (only where the changes read is not there: a design case, an older page). */
   readonly amendments: readonly Amendment[] | null
   readonly confirmation: Confirmation | null
+  /** F-OP-117: the order's work-order changes (the decided ones become history); absent or null: not read here. */
+  readonly workOrderChanges?: readonly WorkOrderChange[] | null
 }
 
 /** Every event of the order's changes, newest first. */
@@ -126,6 +131,8 @@ export function historyOf(input: HistoryInput): HistoryEntry[] {
   }
   for (const version of input.confirmation?.versions ?? []) out.push({ kind: 'confirmationMade', id: `made-${version.id}`, at: version.createdAt, version: version.version, by: version.createdBy })
   if (input.confirmation?.sentAt && input.confirmation.sentVersion !== null) out.push({ kind: 'confirmationSent', id: `sent-${input.confirmation.sentVersion}`, at: input.confirmation.sentAt, version: input.confirmation.sentVersion })
+  // F-OP-117: a decided work-order change, at its decision (a PROPOSED one waits: it is the section's row, not history yet).
+  for (const change of input.workOrderChanges ?? []) if (change.status !== 'PROPOSED') out.push({ kind: 'workOrderChange', id: `woc-${change.id}`, at: change.decidedAt ?? change.proposedAt, change })
   return out.sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id))
 }
 
@@ -254,3 +261,16 @@ export function stillDoorsOf(row: Pick<StillRowOf, 'kind' | 'ref' | 'mayAct'>, p
   return { kind: 'link', href, label }
 }
 // ---- end F-OP-116
+
+// ---- F-OP-117 (10-order-page §6): the Changes tab's "Work-order changes of this order" ---------------------------------------------
+/** The section's rows: the PROPOSED first (oldest first: they wait), then the decided ones newest first; nothing of another order. */
+export function workOrderChangeRowsOf(list: readonly WorkOrderChange[] | null | undefined, orderId: string): WorkOrderChange[] {
+  const own = (list ?? []).filter((change) => change.salesOrder.id === orderId)
+  const waiting = own.filter((change) => change.status === 'PROPOSED').sort((a, b) => a.proposedAt.localeCompare(b.proposedAt) || a.id.localeCompare(b.id))
+  const decided = own.filter((change) => change.status !== 'PROPOSED').sort((a, b) => (b.decidedAt ?? b.proposedAt).localeCompare(a.decidedAt ?? a.proposedAt) || a.id.localeCompare(b.id))
+  return [...waiting, ...decided]
+}
+
+/** When the floor was told of an applied change (the floor note goes with it: change-notes); null for one not carried out. */
+export const floorToldOfChange = (change: Pick<WorkOrderChange, 'status' | 'decidedAt' | 'workOrder'>): string | null => (change.status === 'APPLIED' && change.workOrder && change.decidedAt ? change.decidedAt : null)
+// ---- end F-OP-117

@@ -811,9 +811,17 @@ describe('F-SA-230: the tab counts, the band’s health chip, Made to measure', 
     const value = order('SHIPPED')
     expect(tabCountOf('lines', value)).toBe(value.lines.length)
     expect(tabCountOf('production', value)).toBe(value.chain.workOrders.length)
-    expect(tabCountOf('changes', value)).toBe(value.amendments.count)
+    // F-OP-117 (R-22): Changes is the ONE waiting list's count, null until the production read gives it (never a made-up 0).
+    expect(tabCountOf('changes', value)).toBeNull()
+    expect(tabCountOf('changes', value, { changes: 0 })).toBe(0)
+    expect(tabCountOf('changes', value, { changes: 3 })).toBe(3)
+    // An older answer without badges: the chain's own counts.
     expect(tabCountOf('money', value)).toBe(value.chain.invoices.length)
     expect(tabCountOf('shipments', value)).toBe(value.chain.shipments.length)
+    // F-OP-117 (B-OP-020): with the read's badges, Money = issued invoices and credit notes + open deposits; Shipments = not cancelled.
+    const badged = { ...value, badges: { money: { invoices: 2, openDeposits: 1 }, shipments: 4 } }
+    expect(tabCountOf('money', badged)).toBe(3)
+    expect(tabCountOf('shipments', badged)).toBe(4)
   })
 
   it('the health chip only for a late order still to ship (never On track), from the order read until the production read comes', () => {
@@ -862,7 +870,7 @@ describe('F-SA-236: Changes — waiting on us, waiting on the customer, the hist
     expect(entries.map((entry) => entry.kind)).toEqual(['amendment', 'amendment', 'requestAnswered', 'requestAsked', 'confirmationSent', 'confirmationMade'])
     const priced = entries[0]!
     expect(priced.kind === 'amendment' && priced.putBack).toBe(true)
-    expect(HISTORY_CHIPS).toEqual(['all', 'requests', 'amendments', 'confirmations'])
+    expect(HISTORY_CHIPS).toEqual(['all', 'requests', 'amendments', 'workOrders', 'confirmations']) // F-OP-117: + Work orders
     expect(historyFor(entries, 'requests').map((entry) => entry.kind)).toEqual(['requestAnswered', 'requestAsked'])
     expect(historyFor(entries, 'amendments')).toHaveLength(2)
     expect(historyFor(entries, 'confirmations')).toHaveLength(2)
@@ -1687,3 +1695,81 @@ describe('F-OP-110: Ship to in the edit header — the customer\'s own delivery 
   })
 })
 // ---- end F-OP-110
+
+// ---- F-OP-117 (order page N1; 10-order-page §6; review R-22): the Changes tab — work-order changes, the Work orders chip, the badges ----
+describe('F-OP-117: the Changes tab — work-order changes of this order, the History chip Work orders, the badges from the ONE list', () => {
+  const change = (over: Record<string, unknown> = {}) =>
+    ({
+      id: 'c1',
+      status: 'PROPOSED',
+      kind: 'LOWER_TO_ORDER',
+      partyId: 'p1',
+      salesOrder: { id: 'o1', number: 'SO-DEMO-0150' },
+      workOrder: { id: 'wo-1', number: 'WO-DEMO-0311', status: 'RELEASED' },
+      requestId: null,
+      amendmentId: null,
+      cells: [{ salesOrderLineId: 'l1', lineSeq: 10, size: 'M', from: 40, to: 28, workOrderSizeId: 's1' }],
+      extra: [],
+      extraOutcome: null,
+      reason: 'x',
+      lastError: null,
+      proposedBy: null,
+      proposedAt: '2026-11-17T09:00:00Z',
+      decidedAt: null,
+      decidedBy: null,
+      decisionNote: null,
+      madeWorkOrder: null,
+      version: 1,
+      mayDecide: true,
+      words: { title: { en: 'x', it: 'x' }, status: { en: 'Waiting', it: 'In attesa' }, cells: 'M 40 → 28' },
+      ...over,
+    }) as never
+
+  it('the section: waiting first (oldest first), then decided newest first; only this order\'s; the floor told once carried out', async () => {
+    const { workOrderChangeRowsOf, floorToldOfChange } = await import('./record/changes/model')
+    const list = [
+      change({ id: 'applied', status: 'APPLIED', decidedAt: '2026-11-18T10:00:00Z' }),
+      change({ id: 'late', proposedAt: '2026-11-18T09:00:00Z' }),
+      change({ id: 'early' }),
+      change({ id: 'declined', status: 'DECLINED', decidedAt: '2026-11-19T10:00:00Z' }),
+      change({ id: 'other-order', salesOrder: { id: 'o2', number: 'SO-2' } }),
+    ]
+    expect(workOrderChangeRowsOf(list, 'o1').map((entry: { id: string }) => entry.id)).toEqual(['early', 'late', 'declined', 'applied'])
+    expect(floorToldOfChange(change({ status: 'APPLIED', decidedAt: '2026-11-18T10:00:00Z' }))).toBe('2026-11-18T10:00:00Z')
+    expect(floorToldOfChange(change())).toBeNull()
+    expect(floorToldOfChange(change({ status: 'DECLINED', decidedAt: '2026-11-18T10:00:00Z' }))).toBeNull()
+  })
+
+  it('History: a decided work-order change is an entry at its decision under the chip Work orders; a waiting one is not history yet', () => {
+    const entries = historyOf({ requests: [], changes: [], amendments: null, confirmation: null, workOrderChanges: [change(), change({ id: 'done', status: 'APPLIED', decidedAt: '2026-11-18T10:00:00Z' })] })
+    expect(entries.map((entry) => entry.kind)).toEqual(['workOrderChange'])
+    expect(entries[0]).toMatchObject({ id: 'woc-done', at: '2026-11-18T10:00:00Z' })
+    expect(historyFor(entries, 'workOrders')).toHaveLength(1)
+    expect(historyFor(entries, 'amendments')).toHaveLength(0)
+  })
+
+  it('the Changes dot: a Still to do row that is this reader\'s, or a yes they decide, waits on them', async () => {
+    const { changesDotOf } = await import('./record/overview/model')
+    const still = (mayAct: boolean) => ({ kind: 'WORK_ORDER_CHANGE', ref: null, words: { en: 'x', it: 'x' }, since: '2026-11-17T09:00:00Z', waitingOn: 'PLANNER', mayAct, requestId: null })
+    expect(changesDotOf({ onUs: [], still: [still(false)] })).toBe(false)
+    expect(changesDotOf({ onUs: [], still: [still(true)] })).toBe(true)
+    const yes = (allowed: boolean, me = false) => ({ key: 'YES:t', kind: 'YES', sub: null, on: 'US' as const, since: null, words: { kind: 'api' as const, words: { en: 'x', it: 'x' } }, door: { kind: 'yes' as const, task: { taskId: 't', kind: 'SALES_ORDER', kindLabel: { en: 'x', it: 'x' }, requestedAt: '2026-11-17T09:00:00Z', requester: { name: 'Luca Prova', me }, approver: { kind: 'ROLE' as const, name: 'Finance', me: false }, version: 1, requireStepUp: false, approve: { allowed, why: null }, reject: { allowed, why: null }, withdraw: { allowed: false, why: null } } } })
+    expect(changesDotOf({ onUs: [yes(true)], still: [] })).toBe(true)
+    expect(changesDotOf({ onUs: [yes(false)], still: [] })).toBe(false)
+    expect(changesDotOf({ onUs: [yes(true, true)], still: [] })).toBe(false)
+  })
+
+  it('the wiring: the tabs count Changes from the ONE waiting list (R-22), the section and the chip are drawn, words in it + en', () => {
+    const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('const changesCount = waitingCard ? changesBadgeOf(waitingCard) : null')
+    expect(view).toContain('tabCountOf(tab, order, { changes: changesCount /* F-OP-117 */ })')
+    const tab = readFileSync(new URL('./record/changes/view/ChangesTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('<WorkOrderChanges order={order} model={model} actions={actions} />')
+    expect(tab).toContain('workOrderChanges: model.orderChanges?.list?.value ?? null')
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['wocs.title', 'wocs.none', 'wocs.newDraft', 'badge.yourTurn', 'changes.history.chips.workOrders']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-OP-117

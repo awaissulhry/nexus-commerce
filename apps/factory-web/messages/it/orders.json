@@ -1279,7 +1279,8 @@
         "all": "Tutto",
         "requests": "Richieste",
         "amendments": "Modifiche",
-        "confirmations": "Conferme"
+        "confirmations": "Conferme",
+        "workOrders": "Ordini di lavoro"
       },
       "asked": "Richiesta · {kind}",
       "by": "di {name}",
@@ -1862,5 +1863,13 @@
     "ownDates": "Le date dell'ordine",
     "backupFor": "per tutti gli ordini di {customer}",
     "backupElsewhere": "Cambialo nella pagina di {customer} ›"
+  },
+  "wocs": {
+    "title": "Modifiche agli ordini di lavoro di questo ordine",
+    "none": "Ancora nessuna modifica agli ordini di lavoro per questo ordine.",
+    "newDraft": "Un nuovo ordine di lavoro (bozza)"
+  },
+  "badge": {
+    "yourTurn": "Qui qualcosa aspetta te"
   }
 }

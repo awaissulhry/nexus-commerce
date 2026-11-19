@@ -597,6 +597,8 @@ export const orderSchema = z.object({
   // (counted, never named); absent in an older answer.
   openApprovals: z.array(openApprovalSchema).optional(),
   openApprovalsHidden: z.number().optional(),
+  // F-OP-117 (B-OP-020): the Money and Shipments tabs' counts (counts only; the Changes count is the page's ONE waiting list, R-22).
+  badges: z.object({ money: z.object({ invoices: z.number(), openDeposits: z.number() }), shipments: z.number() }).optional(),
   // ---- end F-OP-101
 })
 export type Order = z.infer<typeof orderSchema>

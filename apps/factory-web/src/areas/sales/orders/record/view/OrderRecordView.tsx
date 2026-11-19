@@ -51,6 +51,7 @@ import { FilesTab } from './FilesTab' // F-SA-237
 import { RequestDoorNoticeBanner, RequestDoorWindow } from '../../../../home/approvals/requests/view/RequestReview'
 import { RequestBandNotices } from './RequestsSection'
 import { bandHealthOf, healthInputOf, readOf } from '../overview/model'
+import { changesBadgeOf, changesDotOf, waitingCardOf, waitingOf } from '../overview/model' // F-OP-117: the Changes count, R-22
 // ---- end F-SA-232
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'
@@ -170,6 +171,12 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   // F-SA-232: Overview carries a mark while the order is late or at risk (the band's same chip, the same read).
   const production = readOf(model.production)
   const attention = bandHealthOf(healthInputOf(order, production?.headline ?? null, production?.dates ?? null))
+  // ---- F-OP-117 (R-22): Changes counts the ONE waiting list's rows — the Overview card's own (null before the production read: no
+  // number that is not true); its dot when one of them waits on this reader.
+  const waitingCard = production?.headline ? waitingCardOf(waitingOf(production, { requests: model.requests?.value ?? null, approvals: order.openApprovals, recordPayment: model.can.recordPayment, locale }), production, order) : null
+  const changesCount = waitingCard ? changesBadgeOf(waitingCard) : null
+  const changesDot = waitingCard ? changesDotOf(waitingCard) : false
+  // ---- end F-OP-117
   const tabs: TabItem[] = recordTabs(model.can).map((tab) => ({
     id: tab,
     href: tabHref(recordHref, tab, search), // F-OP-210
@@ -179,6 +186,12 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
           {t(`tab.${tab}`)}
           <span className="fw-so-dot" aria-label={t('tab.attention')} role="img" />
         </span>
+      ) : tab === 'changes' && changesDot ? (
+        // F-OP-117: one of the waiting rows is this reader's to do.
+        <span className="fw-so-tablabel">
+          {t(`tab.${tab}`)}
+          <span className="fw-so-dot" aria-label={t('badge.yourTurn')} role="img" />
+        </span>
       ) : tab === 'money' && openDeposits > 0 ? (
         <span className="fw-so-tablabel">
           {t(`tab.${tab}`)}
@@ -187,7 +200,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       ) : (
         t(`tab.${tab}`)
       ),
-    count: tab === 'files' ? (model.files?.read?.total ?? null) : tabCountOf(tab, order), // F-SA-237: the files the reader may open
+    count: tab === 'files' ? (model.files?.read?.total ?? null) : tabCountOf(tab, order, { changes: changesCount /* F-OP-117 */ }), // F-SA-237: the files the reader may open
   }))
   // F-SA-230: a section an old address named (`?tab=margin` → Money #margin) comes into view once its tab is drawn.
   useEffect(() => {

@@ -8,6 +8,8 @@ import type { BrandRequest } from '../../../../home/approvals/requests/api'
 import type { OpenApproval } from '../../api'
 import { stillRowsOf, type StillRowOf } from '../changes/model'
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-104: the tab links keep the dock's scope (F-OP-210)
+import { yesDoorOf } from '../../depth/model' // F-OP-117: the Changes dot
+import { waitsForMe } from '../../../../home/approvals/requests/model' // F-OP-117
 
 /**
  * F-SA-232 (sales page plan N2, picks P2, P3, P4, P15, R9; 10-order-page §2.1 O1, O2; review OW-6, OW-7) — Overview's rules, without
@@ -446,6 +448,15 @@ export function waitingCardOf(rows: readonly WaitingRow[], read: OrderProduction
 
 /** R-22: the Changes tab's badge counts the card's own rows (waiting on us, on the customer, still to do) — never a second rule. */
 export const changesBadgeOf = (card: Pick<WaitingCard, 'onUs' | 'onCustomer' | 'still'>): number => card.onUs.length + card.onCustomer.length + card.still.length
+
+/**
+ * F-OP-117 (10-order-page §6): the Changes tab's dot — one of the card's rows waits on THIS reader: a yes they decide, a request
+ * their team answers, a Still to do row that is their turn.
+ */
+export function changesDotOf(card: Pick<WaitingCard, 'onUs' | 'still'>): boolean {
+  if (card.still.some((row) => row.mayAct)) return true
+  return card.onUs.some((row) => (row.door.kind === 'yes' && yesDoorOf(row.door.task).kind === 'decide') || (row.door.kind === 'answer' && !!row.door.request && waitsForMe(row.door.request)))
+}
 // ---- end F-OP-103
 
 /** One linked record, a count button that is a real link — or, without its right, held in words with no number. */

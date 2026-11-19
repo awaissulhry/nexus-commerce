@@ -1279,7 +1279,8 @@
         "all": "All",
         "requests": "Requests",
         "amendments": "Amendments",
-        "confirmations": "Confirmations"
+        "confirmations": "Confirmations",
+        "workOrders": "Work orders"
       },
       "asked": "Request asked · {kind}",
       "by": "by {name}",
@@ -1862,5 +1863,13 @@
     "ownDates": "The order's own dates",
     "backupFor": "for every order of {customer}",
     "backupElsewhere": "Change it on {customer}'s page ›"
+  },
+  "wocs": {
+    "title": "Work-order changes of this order",
+    "none": "No work-order change for this order yet.",
+    "newDraft": "A new work order (draft)"
+  },
+  "badge": {
+    "yourTurn": "Something here waits on you"
   }
 }
