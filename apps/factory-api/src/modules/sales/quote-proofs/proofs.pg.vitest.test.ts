@@ -31,6 +31,7 @@ let h: Harness
 let walls: FastifyInstance
 let sales: Browser
 // B-CP-011 (the money wall): the Owner prices the quotes' lines (a Sales worker sends no unitPrice any more).
+// B-CP-015: the quote's PDF shows prices, so the Owner sends the quote too (Sales: 403 PRICED_DOCUMENT).
 let owner: Browser
 
 const NS = 'quote-proofs'
@@ -119,7 +120,8 @@ async function addProof(quoteId: string, name: string, body: Buffer, contentType
 async function send(quote: Json): Promise<{ answer: Json; token: string }> {
   const fresh = (await as(sales, 'GET', quoteUrl(quote.id))).quote
   const before = h.ses.mails.length
-  const answer = await as(sales, 'POST', `${quoteUrl(quote.id)}/send`, { version: fresh.version })
+  // B-CP-011: the quote's PDF shows prices: the Owner (a price holder) sends it, never Sales (B-CP-015, 403 PRICED_DOCUMENT).
+  const answer = await as(owner, 'POST', `${quoteUrl(quote.id)}/send`, { version: fresh.version })
   const mail = h.ses.mails.slice(before).find((entry) => entry.outboundId === answer.sent?.emailId)
   return { answer, token: mail ? decodeURIComponent(/#token=(\S+)/.exec(textOf(mail.raw))?.[1] ?? '') : '' }
 }
@@ -244,7 +246,11 @@ describe('the send freezes the proofs with the version', () => {
     expect(check.ready).toBe(false)
     expect(check.checks).toContainEqual(expect.objectContaining({ code: 'PROOF_NOT_READY', severity: 'BLOCKS', path: `proofs/${pending.file.id}`, message: 'The proof "Measurement sheet.pdf" is still uploading: finish it or remove it.' }))
     const fresh = (await as(sales, 'GET', quoteUrl(quote.id))).quote
-    const refused = await sales.send('POST', `${quoteUrl(quote.id)}/send`, { version: fresh.version }, { headers: { 'idempotency-key': key() } })
+    // B-CP-011: as Sales worker the send is 403 in words (the PDF shows prices); the Owner's send is held by the proof (409).
+    const bySales = await sales.send('POST', `${quoteUrl(quote.id)}/send`, { version: fresh.version }, { headers: { 'idempotency-key': key() } })
+    expect(bySales.status).toBe(403)
+    expect((bySales.body as Json).error.issues).toEqual([{ path: 'refusal/PRICED_DOCUMENT', message: 'It shows prices: it is sent by someone who sees prices.' }])
+    const refused = await owner.send('POST', `${quoteUrl(quote.id)}/send`, { version: fresh.version }, { headers: { 'idempotency-key': key() } })
     expect(refused.status).toBe(409)
     const list = await as(sales, 'DELETE', `${quoteUrl(quote.id)}/proofs/${pending.file.id}`)
     expect(current(list).proofs).toHaveLength(2)
