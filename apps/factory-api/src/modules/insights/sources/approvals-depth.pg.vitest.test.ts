@@ -226,7 +226,11 @@ describe('work-order changes in Home › Approvals (B-SA-044)', () => {
     SESSIONS.betaManager = { audience: 'office', tenantId: A.tenant, actorId: PEOPLE.manager, grants: grantsOf('production_manager').map((grant) => ({ ...grant, parties: [newId()] })) }
     const beta = await ok('betaManager', 'GET', '/home/today?category=APPROVAL&limit=200')
     expect(changeRows(beta.items as Json[])).toEqual([])
-    expect(JSON.stringify(beta)).not.toContain('WORK_ORDER_CHANGE')
+    // Its kind's tile is a production manager's own (insights tileKindsFor), so the kind is listed — at 0, as when nothing waits:
+    // a count of none, never Alpha's. Nothing names the change, its work order or its order.
+    expect((beta.counts.byKind as Json[]).find((entry) => entry.kind === 'WORK_ORDER_CHANGE')).toMatchObject({ count: 0 })
+    expect(JSON.stringify(beta.items)).not.toContain('WORK_ORDER_CHANGE')
+    for (const word of [SEEDED, WORK_ORDER, 'SEED-WO-0001']) expect(JSON.stringify(beta)).not.toContain(word)
     // Left as is: the row leaves.
     const { change } = await ok('manager', 'GET', `/production/work-order-changes/${SEEDED}`)
     await ok('manager', 'POST', `/production/work-order-changes/${SEEDED}/decline`, { version: change.version, words: 'Made-up: the customer keeps the RED 54 after all.' })
