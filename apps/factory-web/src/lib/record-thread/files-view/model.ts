@@ -1,6 +1,7 @@
 import type { FileAudience, FileKind } from '../../../record-panels/model'
 import { fileSeries, recordFiles, type FileOrigin, type FileSeries, type FilesParty, type ThreadFile } from '../files/model'
 import { isPicture } from '@nexus/factory-domain/files/thumbs/strip' // F-OP-125: the previews route's own picture rule
+import type { ViewerFile } from '../popups/model' // F-OP-127
 
 /**
  * B-TH-299 — the Files view (threads plan T9; features T9-F01…F06, F09, F10, F13): every file of ONE record (its POST /files
@@ -199,6 +200,8 @@ export interface OrderFilesModel {
   readonly busy?: boolean
   /** F-OP-126: the previews read for the cards in view, by file id (absent: the kind's icon until it comes). */
   readonly previews?: Readonly<Record<string, CardPreview>>
+  /** F-OP-127: the ONE viewer while open — the walk of every file in display order, the one shown, the card to give the focus back to. */
+  readonly viewer?: { readonly files: readonly ViewerFile[]; readonly index: number; readonly returnTo: HTMLElement | null } | null
   /**
    * F-SA-238: `customer` — the portal's face of the same body: the customer's own shared files only, no audience label (all are
    * theirs), no "also on", no left-out count (never "n hidden"), no choosing or sharing; default `office`.

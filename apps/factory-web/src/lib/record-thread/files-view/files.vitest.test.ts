@@ -461,3 +461,73 @@ describe('F-OP-126: lazy previews — visible-only asks, the cache by address ex
   })
 })
 // ---- end F-OP-126
+
+// ---- F-OP-127 (order page N7; 10-order-page §9.3): one viewer walk — every file in display order, body data only when asked ----
+describe('F-OP-127: one viewer — ← / → over every file in display order, a lock card for body data, Download at the click', () => {
+  const ORDER = { id: 'so-alpha', number: 'SO-2026-0142' }
+  const base = { kind: 'DOCUMENT', category: null, versionNo: 1, at: '2026-11-12T10:00:00Z', from: { type: 'SalesOrder', id: ORDER.id, label: ORDER.number }, line: null, audience: 'OFFICE_ONLY' as const, bodyData: false, alsoOn: [], alsoOnOther: 0, inThread: null, sizeBytes: 10_000 }
+  const READ: OrderFilesRead = {
+    order: ORDER,
+    groups: [
+      { key: 'ORDER', words: { en: 'Order & thread', it: 'Ordine e conversazione' }, files: [{ ...base, id: 'spec', name: 'Spec.pdf', contentType: 'application/pdf', inThread: { messageId: 'm1' } }, { ...base, id: 'collar', name: 'Collar.jpg', kind: 'PHOTO', contentType: 'image/jpeg' }], leftOut: 0, measurementsLeftOut: 0 },
+      { key: 'LINES', words: { en: 'Lines & artwork', it: 'Righe e grafiche' }, files: [{ ...base, id: 'rider', name: 'Rider.jpg', kind: 'PHOTO', contentType: 'image/jpeg', bodyData: true }, { ...base, id: 'sizes', name: 'Sizes.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }], leftOut: 1, measurementsLeftOut: 0 },
+    ],
+    total: 4,
+    truncated: false,
+  }
+
+  it('the walk is every listed file in display order across the groups; body data is locked until opened; a source once fetched', async () => {
+    const { fetchesOf, viewerFilesOf } = await import('./use-order-file-viewer')
+    const walk = viewerFilesOf(orderFilesOf(READ), new Map(), new Set())
+    expect(walk.map((file) => [file.id, !!file.locked])).toEqual([
+      ['spec', false],
+      ['collar', false],
+      ['rider', true],
+      ['sizes', false],
+    ])
+    expect(walk[0]!.messageId).toBe('m1')
+    // Fetched when shown: a PDF and a photo; never a locked one (it waits for its Open), never a kind no browser draws.
+    expect(walk.map((file) => fetchesOf(file, new Map()))).toEqual([true, true, false, false])
+    const opened = viewerFilesOf(orderFilesOf(READ), new Map([['collar', 'blob:collar']]), new Set(['rider']))
+    expect(opened[2]!.locked).toBe(false)
+    expect(fetchesOf(opened[1]!, new Map([['collar', 'blob:collar']]))).toBe(false)
+  })
+
+  it('walk="all": a photo is drawn in the viewer\'s window (no Lightbox), "2 of 4", Download a button asked at the click', async () => {
+    const { FileViewer } = await import('../popups/view/FileViewer')
+    const { viewerFilesOf } = await import('./use-order-file-viewer')
+    const walk = viewerFilesOf(orderFilesOf(READ), new Map([['collar', 'blob:collar']]), new Set())
+    const draw = (index: number) => renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(FileViewer, { walk: 'all', files: walk, index, onIndex: () => undefined, onClose: () => undefined, onDownload: () => undefined, onOpenLocked: () => undefined })))
+    const photo = draw(1)
+    expect(photo).toContain('class="fw-rtp-photo" src="blob:collar"')
+    expect(photo).toContain('2 of 4')
+    expect(photo).toContain('Download')
+    expect(photo).not.toContain('download="Collar.jpg"') // never a link fetched before: the click asks it
+    // Body data: a lock card that opens only when asked; no Download, no picture.
+    const locked = draw(2)
+    expect(locked).toContain('Open — this opening is recorded')
+    expect(locked).not.toContain('<img')
+    expect(locked).not.toContain('Download')
+    // A kind no browser draws: its card.
+    expect(draw(3)).toContain('Office file: download it to open it in its program.')
+  })
+
+  it('the page: Open shows the file in the ONE viewer (the card gets the focus back), Download asks mode download; the body mounts it', () => {
+    const container = readFileSync(new URL('../../../areas/_shared/record-thread/use-order-files.ts', import.meta.url), 'utf8')
+    expect(container).toContain("onOrderOpen: (fileId, mode, opener) => (mode === 'preview' ? viewer.openAt(fileId, opener ?? null) : void download(fileId)),")
+    expect(container).toContain("await openOrderFile(api, orderId, fileId, 'download')")
+    expect(container).not.toContain("window.open(url, '_blank', 'noopener')")
+    const view = readFileSync(new URL('./view/FilesView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('<FileViewer\n          walk="all"')
+    expect(view).toContain('returnFocusTo={model.viewer.returnTo}')
+    expect(view).toContain("onClick={(event) => actions?.onOrderOpen?.(file.id, 'preview', event.currentTarget)}")
+    const hook = readFileSync(new URL('./use-order-file-viewer.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("const answer = await open(file.id, 'preview')")
+    expect(hook).toContain('setOpened(new Set())') // closed: body data is locked again
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-popups'])['record-thread-popups']!)
+      for (const key of ['viewer.locked', 'viewer.openRecorded']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-OP-127

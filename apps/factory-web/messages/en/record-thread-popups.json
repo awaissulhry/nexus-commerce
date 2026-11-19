@@ -31,7 +31,9 @@
       "audio": "Voice note: download it to listen to it.",
       "office": "Office file: download it to open it in its program.",
       "other": "This file cannot be shown here. Download it to open it."
-    }
+    },
+    "locked": "Body data — it opens only when you ask, and the opening is recorded.",
+    "openRecorded": "Open — this opening is recorded"
   },
   "original": {
     "title": "Original e-mail",

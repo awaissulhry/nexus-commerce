@@ -11,7 +11,7 @@ import { useLocale, useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { ListKeysInfo } from '../../../../list-frame/ListKeysInfo'
 import type { FileAudience, FileKind } from '../../../../record-panels/model'
-import { sizeWords } from '../../popups/view/FileViewer'
+import { FileViewer, sizeWords } from '../../popups/view/FileViewer' // F-OP-127: the ONE viewer
 import { audienceMarks, versionMark, type FileSeries, type FilesParty, type ThreadFile } from '../../files/model'
 import { bulkReach, filesGroups, keepLines, rangeOf, type FilesAbilities, type MissingDocument, type UploadAsk } from '../model'
 // B-TH-283: the measurement-sheet tick holds an upload meant for the floor.
@@ -79,6 +79,11 @@ export interface FilesViewActions {
   onOrderWorksheet?: (sheet: OrderWorksheet) => void
   /** F-OP-126: the file cards now in view (200 px ahead): only those are asked a preview. */
   onOrderVisible?: (fileIds: readonly string[]) => void
+  /** F-OP-127: the ONE viewer — walk, close, open a body-data file (recorded), Download at the click. */
+  onViewerIndex?: (index: number) => void
+  onViewerClose?: () => void
+  onViewerOpenLocked?: (fileId: string) => void
+  onViewerDownload?: (fileId: string) => void
   onOrderMessage?: (messageId: string) => void
   onOrderSelect?: (fileIds: readonly string[]) => void
   onOrderBulk?: (action: 'download' | 'share', fileIds: readonly string[]) => void
@@ -593,6 +598,23 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
           )
         })}
       </div>
+      {/* F-OP-127: the ONE viewer of these files — ← / → over every file in display order; body data only when asked; Esc back to the card. */}
+      {model.viewer && (
+        <FileViewer
+          walk="all"
+          files={model.viewer.files}
+          index={model.viewer.index}
+          onIndex={(index) => actions?.onViewerIndex?.(index)}
+          onClose={() => actions?.onViewerClose?.()}
+          onOpenLocked={actions?.onViewerOpenLocked}
+          onDownload={actions?.onViewerDownload}
+          onGoToMessage={actions?.onOrderMessage ? (messageId) => {
+            actions.onViewerClose?.()
+            actions.onOrderMessage?.(messageId)
+          } : undefined}
+          returnFocusTo={model.viewer.returnTo}
+        />
+      )}
       {/* Owner rule 2026-10-29: the keys in ONE information icon at the foot (the thread's window has its own, in its footer). */}
       {place === 'tab' && (
         <div className="fw-rtv-foot">

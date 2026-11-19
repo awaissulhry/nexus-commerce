@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { pdfPageImage } from '../../pdf/pdf-page'
+import { readFromStore } from '../../../record-panels/store'
 import { cardKindOf, type CardPreview, type OrderFile } from './model'
 
 /**
@@ -30,7 +31,7 @@ export const LATER_AGAIN_MS = 1_000
 /** A card's PDF page is drawn this wide (the card is 176 px; twice for a sharp screen). */
 export const PAGE_WIDTH = 360
 
-/** One answer of the route, as the container's call gives it (addresses already through the browser's path). */
+/** One answer of the route, as the container's call gives it (the small address through the browser's path; the inline one as signed). */
 export interface PreviewAnswer {
   readonly fileId: string
   readonly versionNo: number
@@ -130,11 +131,9 @@ export function queueOf(limit: number): <T>(job: () => Promise<T>) => Promise<T>
 const pages = new Lru<string>(PDF_PAGES_KEPT)
 const drawQueue = queueOf(PDF_DRAWS_AT_ONCE)
 
-/** Page 1 of a PDF at its inline address, drawn small (bytes once; nothing kept but the picture). */
-async function drawFirstPage(url: string): Promise<string> {
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`page ${response.status}`)
-  const bytes = new Uint8Array(await response.arrayBuffer())
+/** Page 1 of a PDF at its inline address, drawn small (its bytes once, by the store's reader; nothing kept but the picture). */
+async function drawFirstPage(inline: { readonly url: string; readonly expiresAt: string }): Promise<string> {
+  const bytes = await readFromStore({ method: 'GET', url: inline.url, headers: {}, expiresAt: inline.expiresAt })
   return (await pdfPageImage(bytes, 1, PAGE_WIDTH)).src
 }
 
@@ -182,7 +181,7 @@ export function useFilePreviews(input: { readonly files: readonly OrderFile[] | 
           }
           if (answer.kind === 'PICTURE') keep(key, keptPicture(answer, at))
           else if (answer.kind === 'PDF' && answer.pdfDrawable && answer.inline) {
-            const inline = answer.inline.url
+            const inline = answer.inline
             void drawQueue(() => drawFirstPage(inline))
               .then((src) => {
                 pages.set(key, src)

@@ -417,9 +417,9 @@ export function readOrderFiles(api: ApiClient, orderId: string, signal?: AbortSi
 const openSchema = z.object({ open: z.object({ mode: z.enum(['inline', 'download']), method: z.literal('GET'), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: z.string() }) })
 
 /** POST /sales/orders/:orderId/files/:fileId/open — ONE of them, found again in the same read (body data: the opening is recorded). */
-export async function openOrderFile(api: ApiClient, orderId: string, fileId: string, mode: 'preview' | 'download'): Promise<{ mode: 'inline' | 'download'; url: string }> {
+export async function openOrderFile(api: ApiClient, orderId: string, fileId: string, mode: 'preview' | 'download'): Promise<{ mode: 'inline' | 'download'; url: string; /* F-OP-127: the viewer reads its bytes */ headers: Record<string, string>; expiresAt: string }> {
   const answer = await api.post(`/sales/orders/${enc(orderId)}/files/${enc(fileId)}/open`, { body: { mode }, schema: openSchema, idempotencyKey: globalThis.crypto.randomUUID() })
-  return { mode: answer.open.mode, url: answer.open.url }
+  return { mode: answer.open.mode, url: answer.open.url, headers: answer.open.headers, expiresAt: answer.open.expiresAt }
 }
 // ── end F-SA-237
 
@@ -449,7 +449,7 @@ export type OrderFilePreview = z.infer<typeof orderFilePreviewsSchema>['previews
  */
 export async function readOrderFilePreviews(api: ApiClient, orderId: string, fileIds: readonly string[], signal?: AbortSignal): Promise<OrderFilePreview[]> {
   const answer = await api.post(`/sales/orders/${enc(orderId)}/files/previews`, { body: { fileIds: [...fileIds] }, schema: orderFilePreviewsSchema, signal })
-  const local = (address: { url: string; expiresAt: string } | null) => (address ? { url: browserAddress(address.url), expiresAt: address.expiresAt } : null)
-  return answer.previews.map((preview) => ({ ...preview, small: local(preview.small), inline: local(preview.inline) }))
+  // A picture's small address is an <img> src (through the browser's path); a PDF's inline address is read as bytes by the store's reader.
+  return answer.previews.map((preview) => ({ ...preview, small: preview.small ? { url: browserAddress(preview.small.url), expiresAt: preview.small.expiresAt } : null }))
 }
 // ── end F-OP-126

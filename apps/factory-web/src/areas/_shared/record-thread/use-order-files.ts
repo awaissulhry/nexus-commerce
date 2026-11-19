@@ -8,6 +8,7 @@ import { isOwnFile, type OrderFilesModel, type OrderFilesRead } from '../../../l
 // F-OP-126 (R-14): the cards' previews, only those in view, through the order's walled batch route.
 import { orderFilesOf } from '../../../lib/record-thread/files-view/model'
 import { useFilePreviews } from '../../../lib/record-thread/files-view/use-file-previews'
+import { useOrderFileViewer } from '../../../lib/record-thread/files-view/use-order-file-viewer' // F-OP-127
 import { listFiles } from '../../../record-panels/api'
 import { storeUrl } from '../../../record-panels/store'
 import { openOrderFile, readOrderFiles, shareWithParty } from './api'
@@ -16,9 +17,8 @@ import { openWorksheet } from '../../sales/mtm/api' // F-OP-125 (B5): a workshee
 
 /**
  * F-SA-237 (sales page plan N9, P14) — a sales order's files, the container part the order's Files tab AND the thread's Files window
- * on the order both use (one read, one way to open): reads `GET /sales/orders/:orderId/files` while shown; opens a file through
- * the read's own route (a picture or a PDF in a new tab, anything else downloads; body data is recorded there — never the generic
- * preview); Download N; Share N OWN files (the order's own, still office only) with the order's customer — each file at its version
+ * on the order both use (one read, one way to open): reads `GET /sales/orders/:orderId/files` while shown; F-OP-127: opens a file in
+ * the ONE viewer through the read's own route (body data only when asked, recorded there — never the generic preview); Download N; Share N OWN files (the order's own, still office only) with the order's customer — each file at its version
  * as `GET /files` reads it now (B-TH-003 refuses any other party). Refusals are words of `record-thread-files-view`.
  *
  * F-OP-125 (order page N-1): THE order-files container — the order page mounts it ONCE (OrderRecord.tsx) and gives the same model to
@@ -76,22 +76,19 @@ export function useOrderFiles(
     else readFor.current = null
   }, [load])
 
-  const open = useCallback(
-    async (fileId: string, mode: 'preview' | 'download') => {
+  // F-OP-127: a file is shown in the ONE viewer below; Download (a card's, the bar's, the viewer's) is asked at the click.
+  const download = useCallback(
+    async (fileId: string) => {
       if (!orderId) return
       try {
-        const answer = await openOrderFile(api, orderId, fileId, mode)
-        const url = storeUrl(answer.url)
-        if (answer.mode === 'inline') window.open(url, '_blank', 'noopener')
-        else {
-          const anchor = document.createElement('a')
-          anchor.href = url
-          anchor.rel = 'noopener'
-          anchor.download = read?.groups.flatMap((group) => group.files).find((file) => file.id === fileId)?.name ?? ''
-          document.body.appendChild(anchor)
-          anchor.click()
-          anchor.remove()
-        }
+        const answer = await openOrderFile(api, orderId, fileId, 'download')
+        const anchor = document.createElement('a')
+        anchor.href = storeUrl(answer.url)
+        anchor.rel = 'noopener'
+        anchor.download = read?.groups.flatMap((group) => group.files).find((file) => file.id === fileId)?.name ?? ''
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
       } catch {
         onProblem.current?.('order.openFailed')
       }
@@ -100,13 +97,21 @@ export function useOrderFiles(
   )
 
   // ---- F-OP-126: the previews of the cards in view (the body reports them) ----
-  const previews = useFilePreviews({ files: read ? orderFilesOf(read) : null, ask: orderId ? (fileIds) => readOrderFilePreviews(api, orderId, fileIds) : null })
+  const listed = read ? orderFilesOf(read) : null
+  const previews = useFilePreviews({ files: listed, ask: orderId ? (fileIds) => readOrderFilePreviews(api, orderId, fileIds) : null })
+  // ---- F-OP-127: the ONE viewer — ← / → over every file in display order, each fetched by the order's open route when shown ----
+  const viewer = useOrderFileViewer({ files: listed, open: orderId ? (fileId, mode) => openOrderFile(api, orderId, fileId, mode) : null, onProblem: (key) => onProblem.current?.(key) })
 
   const actions: FilesViewActions = {
     onRetry: load,
     onOrderVisible: previews.visible, // F-OP-126
     onOrderSelect: setSelected,
-    onOrderOpen: (fileId, mode) => void open(fileId, mode),
+    // F-OP-127: Open shows the file in the viewer (the card gets the focus back); Download is asked at the click.
+    onOrderOpen: (fileId, mode, opener) => (mode === 'preview' ? viewer.openAt(fileId, opener ?? null) : void download(fileId)),
+    onViewerIndex: viewer.onIndex,
+    onViewerClose: viewer.onClose,
+    onViewerOpenLocked: viewer.onOpenLocked,
+    onViewerDownload: (fileId) => void download(fileId),
     // F-OP-125 (B5): a worksheet through the made-to-measure route (it records the opening on the profile), in a new tab.
     onOrderWorksheet: (sheet) => {
       void openWorksheet(api, sheet.profileId, sheet.documentId)
@@ -115,7 +120,7 @@ export function useOrderFiles(
     },
     onOrderBulk: (action, ids) => {
       if (action === 'download') {
-        for (const fileId of ids) void open(fileId, 'download')
+        for (const fileId of ids) void download(fileId)
         return
       }
       if (!orderId || !partyId || !canShare || busy) return
@@ -137,6 +142,6 @@ export function useOrderFiles(
     },
   }
 
-  const model: OrderFilesModel = { read, problem, selected, canShare, busy, previews: previews.previews /* F-OP-126 */ }
+  const model: OrderFilesModel = { read, problem, selected, canShare, busy, previews: previews.previews /* F-OP-126 */, viewer: viewer.model /* F-OP-127 */ }
   return { model, actions, reload: again }
 }

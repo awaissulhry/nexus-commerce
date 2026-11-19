@@ -25,6 +25,13 @@ export interface FileViewerProps {
   onGoToMessage?: (messageId: string) => void
   /** Where the focus goes on close (the picture that opened it); default what had it when it opened. */
   returnFocusTo?: HTMLElement | null
+  // ---- F-OP-127 (order page N7: one viewer walk) ----
+  /** `all`: ← / → walk EVERY file in display order — photos are drawn in this Modal too (the DS Lightbox walks photos only; it is not changed). */
+  walk?: 'all'
+  /** A body-data file not opened yet: "Open — this opening is recorded" asks it (its opening is recorded where it is opened). */
+  onOpenLocked?: (fileId: string) => void
+  /** Download asked at the click (the order's own route, mode download) instead of a link fetched before. */
+  onDownload?: (fileId: string) => void
 }
 
 /**
@@ -32,7 +39,9 @@ export interface FileViewerProps {
  * pages through the DS PdfViewer, a card with a real Download link for a file it cannot draw (HEIC, an Office file, a voice
  * note), a held file with its lock and reason and no download, "Go to message". Files the reader may not open are counted,
  * never listed. A factory wrapper over the DS Lightbox until the Owner's word on the Lightbox change (DS gate 2): the
- * Lightbox walks the photos; a PDF or a card opens in the DS Modal with the same keys. Esc closes; focus returns.
+ * Lightbox walks the photos; a PDF or a card opens in the DS Modal with the same keys. Esc closes; focus returns. F-OP-127: `walk="all"`
+ * draws photos in the Modal as well, so ← / → walk every file ("3 of 7"); a body-data file shows a lock card and loads only when asked;
+ * Download may be asked at the click.
  */
 export function FileViewer(props: FileViewerProps) {
   return (
@@ -42,7 +51,7 @@ export function FileViewer(props: FileViewerProps) {
   )
 }
 
-function Viewer({ files, index, onIndex, onClose, onGoToMessage, returnFocusTo }: FileViewerProps) {
+function Viewer({ files, index, onIndex, onClose, onGoToMessage, returnFocusTo, walk: walkAll, onOpenLocked, onDownload }: FileViewerProps) {
   const t = useT(POPUPS_NS)
   const shellT = useT('shell')
   const locale = useLocale()
@@ -56,10 +65,13 @@ function Viewer({ files, index, onIndex, onClose, onGoToMessage, returnFocusTo }
   })
   const show = current ? viewerShow(current) : 'card'
   const photoReady = show === 'photo' && typeof current?.src === 'string'
+  // F-OP-127: in a walk of every file the photos stay in this Modal (the Lightbox walks photos only); body data waits for its Open.
+  const inLightbox = photoReady && walkAll !== 'all' && !current?.locked
+  const locked = !!current?.locked
 
   // ← / → walk every file while the focus is in this window (the Lightbox has its own keys for its photos).
   useEffect(() => {
-    if (!current || photoReady) return
+    if (!current || inLightbox) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return
@@ -72,17 +84,24 @@ function Viewer({ files, index, onIndex, onClose, onGoToMessage, returnFocusTo }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [current, photoReady])
+  }, [current, inLightbox])
 
   if (!current) return null
   const counter = t('viewer.counter', { n: at + 1, count: items.length })
   const size = sizeWords(current.sizeBytes, locale)
   const kind = t(`kind.${current.kind}`)
   const goToMessage = current.messageId && onGoToMessage ? () => onGoToMessage(current.messageId!) : null
-  const download = <DownloadLink file={current} t={t} />
+  const download = onDownload ? (
+    // F-OP-127: asked at the click (mode download), never fetched before.
+    <Button size="sm" onClick={() => onDownload(current.id)}>
+      <Download size={14} aria-hidden /> {t('viewer.download')}
+    </Button>
+  ) : (
+    <DownloadLink file={current} t={t} />
+  )
   const notOpen = cannotOpen > 0 ? <span className="fw-rtp-muted">{t('viewer.cannotOpen', { count: cannotOpen })}</span> : null
 
-  if (photoReady) {
+  if (inLightbox) {
     const { photos, at: photoAt } = photoRun(items, at)
     return (
       <Lightbox
@@ -141,12 +160,24 @@ function Viewer({ files, index, onIndex, onClose, onGoToMessage, returnFocusTo }
               <MessageSquare size={14} aria-hidden /> {t('viewer.goToMessage')}
             </Button>
           )}
-          {show !== 'held' && download}
+          {show !== 'held' && !locked && download}
         </div>
       }
     >
       <div ref={bodyRef} className="fw-rtp-viewer">
-        {show === 'held' ? (
+        {locked ? (
+          // F-OP-127: body data never loads by itself — the person asks it, and that opening is recorded.
+          <div className="fw-rtp-card">
+            <span className="fw-rtp-card-icon is-held" aria-hidden>
+              <Lock size={22} />
+            </span>
+            <p className="fw-rtp-card-title">{current.name}</p>
+            <p className="fw-rtp-muted">{t('viewer.locked')}</p>
+            <Button size="sm" variant="primary" onClick={() => onOpenLocked?.(current.id)}>
+              {t('viewer.openRecorded')}
+            </Button>
+          </div>
+        ) : show === 'held' ? (
           <div className="fw-rtp-card" role="status">
             <span className="fw-rtp-card-icon is-held" aria-hidden>
               <Lock size={22} />
@@ -162,6 +193,9 @@ function Viewer({ files, index, onIndex, onClose, onGoToMessage, returnFocusTo }
             <p className="fw-rtp-card-title">{current.name}</p>
             <p className="fw-rtp-muted">{t(cardWordKey(current))}</p>
           </div>
+        ) : walkAll === 'all' && show === 'photo' && typeof current.src === 'string' ? (
+          // F-OP-127: a photo of the walk, drawn whole in this window.
+          <img className="fw-rtp-photo" src={current.src} alt={current.name} />
         ) : current.src === null || show !== 'pdf' ? (
           <p className="fw-rtp-loading" role="status">
             <Spinner size={14} /> {t('viewer.opening')}

@@ -31,6 +31,8 @@ export interface ViewerFile {
   readonly messageId?: string | null
   /** v2, v3 … when the file has earlier versions. */
   readonly versionNo?: number | null
+  /** F-OP-127: body data not opened yet — a lock card with "Open — this opening is recorded"; it never loads by itself. */
+  readonly locked?: boolean
 }
 
 /** How the viewer shows a file: a photo (the DS Lightbox), PDF pages (the DS PdfViewer), a card with Download, or held. */
