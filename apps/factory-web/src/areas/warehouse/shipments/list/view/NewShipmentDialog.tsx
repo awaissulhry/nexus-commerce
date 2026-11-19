@@ -60,12 +60,12 @@ export function NewShipmentDialog({ model, can, actions }: { model: NewShipmentM
     <Modal
       open
       onClose={() => actions?.onNewClose?.()}
-      title={t('new.title')}
+      title={model.join ? t('new.join.title', { number: model.join.number }) /* F-OP-122 */ : t('new.title')}
       subtitle={order ? t('new.subtitle', { order: order.number, customer: order.party.legalName }) : undefined}
       size="lg"
       footer={
         <>
-          {model.step === 2 && (
+          {model.step === 2 && !model.join && (
             <Button size="sm" variant="quiet" onClick={() => actions?.onNewStep?.(1)}>
               {t('new.back')}
             </Button>
@@ -75,7 +75,7 @@ export function NewShipmentDialog({ model, can, actions }: { model: NewShipmentM
             {t('common.cancel')}
           </Button>
           <Button size="sm" variant="primary" heldReason={held} onClick={go} aria-keyshortcuts="Meta+Enter Control+Enter">
-            {model.step === 1 ? t('new.next') : t('new.create', { count: garments })}
+            {model.step === 1 ? t('new.next') : model.join ? t('addLines.go', { count: garments }) /* F-OP-122 */ : t('new.create', { count: garments })}
           </Button>
         </>
       }
@@ -88,14 +88,17 @@ export function NewShipmentDialog({ model, can, actions }: { model: NewShipmentM
         }}
         onKeyDown={onKeyDown}
       >
-        <Stepper
-          steps={[
-            { key: 'order', label: t('new.step.order') },
-            { key: 'quantities', label: t('new.step.quantities') },
-          ]}
-          current={model.step - 1}
-          onSelect={(index) => actions?.onNewStep?.(index === 0 ? 1 : 2)}
-        />
+        {/* F-OP-122: adding to a DRAFT already there is step 2 alone (the order and how it travels are the shipment's). */}
+        {!model.join && (
+          <Stepper
+            steps={[
+              { key: 'order', label: t('new.step.order') },
+              { key: 'quantities', label: t('new.step.quantities') },
+            ]}
+            current={model.step - 1}
+            onSelect={(index) => actions?.onNewStep?.(index === 0 ? 1 : 2)}
+          />
+        )}
         {model.refused && (
           <Banner tone="danger" title={t(model.refused.words.key, model.refused.words.params)}>
             {model.refused.detail}
@@ -107,6 +110,8 @@ export function NewShipmentDialog({ model, can, actions }: { model: NewShipmentM
           <p className="fw-sh-hint" role="status">
             <Spinner size={14} /> {t('new.loading')}
           </p>
+        ) : model.join && (!order || order.cells.length === 0) ? (
+          <EmptyState title={t('addLines.title')} description={t('addLines.none')} />
         ) : model.orders.length === 0 || (model.together && !order) ? (
           <EmptyState title={t('new.empty.title')} description={t('new.empty.body')} />
         ) : model.step === 1 ? (

@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { ApiClient } from '../../../../lib/api/client'
 import { newIdempotencyKey } from '../../../../lib/api/client'
-import { createShipment, readyToShip, type ReadyOrder, type Shipment, type TransportBy } from '../api'
+import { addLines, createShipment, getShipment, readyToShip, type Shipment, type TransportBy } from '../api'
 import type { NewShipmentModel } from '../list/list-model'
 import { newShipmentLines, ordersOfNew, readProblem, togetherRows, writeProblem } from '../model'
 
@@ -36,7 +36,10 @@ export interface NewShipmentActions {
 
 const CLOSED: NewShipmentModel = { step: 1, orders: null, problem: null, salesOrderId: null, quantities: {}, transportBy: 'CARRIER', carrierCode: '', serviceCode: '', busy: false, refused: null }
 
-export function useNewShipment(input: { readonly api: ApiClient; readonly defaults: () => NewShipmentDefaults; readonly onCreated: (shipment: Shipment) => void; readonly onClosed?: () => void }) {
+/** What the write made: a new DRAFT, or this order's garments added to a DRAFT already there (F-OP-122). */
+export type NewShipmentDone = { readonly kind: 'created' | 'joined'; readonly garments: number }
+
+export function useNewShipment(input: { readonly api: ApiClient; readonly defaults: () => NewShipmentDefaults; readonly onCreated: (shipment: Shipment, done: NewShipmentDone) => void; readonly onClosed?: () => void }) {
   const { api, defaults, onCreated, onClosed } = input
   const [model, setModel] = useState<NewShipmentModel | null>(null)
   const key = useRef<string | null>(null)
@@ -64,6 +67,22 @@ export function useNewShipment(input: { readonly api: ApiClient; readonly defaul
     [api, defaults],
   )
 
+  /**
+   * F-OP-122: "Add this order's garments…" onto a DRAFT of the same customer (the joinable read said it may join): the same step 2,
+   * this order's cells only, sent through the shipment's lines route at the version read just before (the API keeps the last word:
+   * DRAFT only, and several orders in one shipment refused in words until the switch).
+   */
+  const openJoin = useCallback(
+    (salesOrderId: string, shipment: { readonly id: string; readonly number: string }) => {
+      key.current = newIdempotencyKey()
+      setModel({ ...CLOSED, salesOrderId, step: 2, join: { shipmentId: shipment.id, number: shipment.number } })
+      readyToShip(api, { salesOrderId })
+        .then((orders) => setModel((current) => (current ? { ...current, orders: orders.filter((order) => order.salesOrderId === salesOrderId) } : current)))
+        .catch((error: unknown) => setModel((current) => (current ? { ...current, problem: readProblem(error) } : current)))
+    },
+    [api],
+  )
+
   const close = useCallback(() => {
     setModel(null)
     onClosed?.()
@@ -79,7 +98,16 @@ export function useNewShipment(input: { readonly api: ApiClient; readonly defaul
     if (lines.length === 0) return
     setModel({ ...model, busy: true, refused: null })
     const others = model.others ?? []
+    const garments = lines.reduce((sum, line) => sum + line.quantity, 0)
     try {
+      // F-OP-122: onto the DRAFT already there, at the version it has now.
+      if (model.join) {
+        const current = await getShipment(api, model.join.shipmentId)
+        const joined = await addLines(api, model.join.shipmentId, current.version, lines)
+        setModel(null)
+        onCreated(joined, { kind: 'joined', garments })
+        return
+      }
       const shipment = await createShipment(
         api,
         {
@@ -96,7 +124,7 @@ export function useNewShipment(input: { readonly api: ApiClient; readonly defaul
         key.current ?? newIdempotencyKey(),
       )
       setModel(null)
-      onCreated(shipment)
+      onCreated(shipment, { kind: 'created', garments })
     } catch (error) {
       const problem = writeProblem(error)
       setModel((current) => (current ? { ...current, busy: false, refused: { words: { key: problem.key }, detail: problem.detail ?? null } } : current))
@@ -131,5 +159,5 @@ export function useNewShipment(input: { readonly api: ApiClient; readonly defaul
     [close, submit],
   )
 
-  return { model, actions, open }
+  return { model, actions, open, openJoin }
 }

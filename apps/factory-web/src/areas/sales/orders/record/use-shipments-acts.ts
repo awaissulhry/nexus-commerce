@@ -1,6 +1,6 @@
 'use client'
 
-import { createElement, useCallback, useMemo, useState, type ReactNode } from 'react'
+import { createElement, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Order } from '../api'
 // B-W2b-398: the Shipments tab's card "Delivered (from carrier)".
 import { Deliveries } from './shipments/delivered/Deliveries'
@@ -14,6 +14,11 @@ import { abilitiesOf } from '../../../warehouse/shipments/model'
 import { useNewShipment } from '../../../warehouse/shipments/new/use-new-shipment'
 import { NewShipmentDialog } from '../../../warehouse/shipments/list/view/NewShipmentDialog'
 import type { OrderRecordModel } from './record-model'
+// F-OP-122: the customer's DRAFT shipments this order may join (the walled joinable read), each held with why.
+import { joinableShipments } from '../../../warehouse/shipments/api'
+import type { NewShipmentDone } from '../../../warehouse/shipments/new/use-new-shipment'
+import { mayCreateShipment } from '../model'
+import { joinableRows, type JoinableRow } from './shipments/model'
 
 /**
  * F-OP-134 (N-5): the Shipments tab's container side — B-W2b-398: the card "Delivered (from carrier)" (its own container: it reads
@@ -26,6 +31,10 @@ import type { OrderRecordModel } from './record-model'
  * F-OP-121 (order page plan N6): "Create shipment…" opens Warehouse's New shipment IN PLACE (useNewShipment, `together`): this
  * order and the same customer's other open orders beside it (each held with its reason; several orders held off until the switch).
  * Create makes a DRAFT; the order is read again and the notice says where to pack it ("Pack and ship it in Warehouse ›").
+ *
+ * F-OP-122 (order page plan N6): the customer's DRAFT shipments of the same site and delivery address (the joinable read: those
+ * whose only reason is the hold of several orders, or none) each offer "Add this order's garments…" — the same step 2 — held with
+ * MULTI_ORDER_OFF's words until the switch B-OP-047; a DRAFT only (the API keeps the last word).
  */
 export function useShipmentsActs(input: {
   readonly order: Order | null
@@ -36,8 +45,8 @@ export function useShipmentsActs(input: {
   /* F-OP-121 */ readonly setNotice: (notice: OrderRecordModel['notice']) => void
 }): {
   delivered: ReactNode
-  model: { shipmentTracking: ReactNode | null; /* F-OP-121 */ newShipment: ReactNode | null }
-  actions: { onShipmentTracking: (shipmentId: string) => void; /* F-OP-121 */ onCreateShipment: () => void }
+  model: { shipmentTracking: ReactNode | null; /* F-OP-121 */ newShipment: ReactNode | null; /* F-OP-122 */ joinable: JoinableRow[] | null }
+  actions: { onShipmentTracking: (shipmentId: string) => void; /* F-OP-121 */ onCreateShipment: () => void; /* F-OP-122 */ onJoinShipment: (shipmentId: string) => void }
 } {
   const { order, prefix, permissions, reload, api, setNotice } = input
   // ---- F-OP-119 ----
@@ -53,9 +62,11 @@ export function useShipmentsActs(input: {
   // ---- F-OP-121: Create shipment… in place ----
   const shipping = useMemo(() => abilitiesOf(permissions), [permissions])
   const created = useCallback(
-    (shipment: Shipment) => {
+    (shipment: Shipment, done: NewShipmentDone) => {
       reload()
-      setNotice({ tone: 'success', words: { key: 'ship.created', params: { number: shipment.number } }, door: { href: `${prefix}/warehouse/shipments/${shipment.id}`, words: { key: 'ship.createdDoor' } } })
+      // F-OP-122: garments added to a DRAFT already there say so (how many, onto which shipment).
+      const words = done.kind === 'joined' ? { key: 'ship.joined', params: { count: done.garments, number: shipment.number } } : { key: 'ship.created', params: { number: shipment.number } }
+      setNotice({ tone: 'success', words, door: { href: `${prefix}/warehouse/shipments/${shipment.id}`, words: { key: 'ship.createdDoor' } } })
     },
     [prefix, reload, setNotice],
   )
@@ -67,5 +78,38 @@ export function useShipmentsActs(input: {
   }, [create, order])
   const newShipment = create.model ? createElement(NewShipmentDialog, { model: create.model, can: shipping, actions: create.actions }) : null
   // ---- end F-OP-121
-  return { delivered: order ? createElement(Deliveries, { orderId: order.id, prefix }) : null, model: { shipmentTracking, newShipment }, actions: { onShipmentTracking, onCreateShipment } }
+
+  // ---- F-OP-122: the DRAFT shipments this order may join ----
+  const [joinable, setJoinable] = useState<{ orderId: string; rows: JoinableRow[] } | null>(null)
+  const mayJoin = !!order && shipping.view && mayCreateShipment(order, { createShipment: shipping.manage })
+  // Read again whenever the order's shipments change (made, joined, left, cancelled).
+  const shipmentsKey = order ? order.chain.shipments.map((row) => `${row.id}:${row.status}`).join(',') : ''
+  const orderId = order?.id ?? null
+  useEffect(() => {
+    if (!orderId || !mayJoin) return
+    let live = true
+    joinableShipments(api, orderId)
+      .then((answer) => {
+        // The same customer, site and delivery address: allowed, or held only while several orders in one shipment are held off.
+        if (live) setJoinable({ orderId, rows: joinableRows(answer.shipments) })
+      })
+      .catch(() => live && setJoinable({ orderId, rows: [] }))
+    return () => {
+      live = false
+    }
+  }, [api, orderId, mayJoin, shipmentsKey])
+  const onJoinShipment = useCallback(
+    (shipmentId: string) => {
+      const row = joinable?.rows.find((entry) => entry.shipmentId === shipmentId)
+      if (order && row && !row.held) create.openJoin(order.id, { id: row.shipmentId, number: row.number })
+    },
+    [create, joinable, order],
+  )
+  const joinableRows = mayJoin && joinable?.orderId === orderId ? joinable.rows : null
+  // ---- end F-OP-122
+  return {
+    delivered: order ? createElement(Deliveries, { orderId: order.id, prefix }) : null,
+    model: { shipmentTracking, newShipment, joinable: joinableRows },
+    actions: { onShipmentTracking, onCreateShipment, onJoinShipment },
+  }
 }

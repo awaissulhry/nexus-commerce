@@ -65,6 +65,8 @@ export interface NewShipmentModel {
   /** The other orders added to this shipment (only ones their verdict allows; none while several orders are held off). */
   others?: string[]
   // ── end F-OP-121 ──
+  /** F-OP-122: "Add this order's garments…" — step 2 only, onto this DRAFT of the same customer (the lines route; DRAFT only). */
+  join?: { shipmentId: string; number: string } | null
 }
 
 /** B-W2a-71 (design sh-grid selection row "Print 4 DDTs"): the selected shipments' live DDTs on their site's document printer. */

@@ -19,6 +19,9 @@ import { PointsAtOrder } from '../links/view/OrderLinks' // F-SA-230: Complaints
 // F-OP-119 (order page plan N5): each row's carrier and tracking, the tracking door, the cancelled rows behind "Show N".
 import { carrierOf, shownShipments, trackingDoorOf, trackingOf, type ShipmentRow } from '../shipments/model'
 import { createShipmentDoor } from '../shipments/model' // F-OP-121
+// F-OP-122: shared shipments — the other orders a shipment carries, and the customer's DRAFTs this order may join (held with why).
+import { alsoCarries } from '../shipments/model'
+import { DEPTH_NS } from '../../../../warehouse/shipments/queue/shared/depth'
 import { tabHref } from '../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../lib/tab-link/TabLink'
 
@@ -39,6 +42,7 @@ import { rowAnchor } from '../dock/discuss'
 export function ShipmentsTab({ order, model, actions, delivered }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; delivered?: ReactNode }) {
   const t = useT('orders')
   const sales = useT('sales')
+  const depth = useT(DEPTH_NS) // F-OP-122: the join reasons, in the Warehouse's own words
   const locale = useLocale()
   const copy = sizeGridWords(sales)
   const groups = styleGroups(order.lines)
@@ -107,6 +111,12 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
                     {row.number}
                   </Link>
                   <DiscussDoor order={order} part={t('discuss.shipment', { number: row.number })} target={{ kind: 'Shipment', id: row.id }} />
+                  {/* F-OP-122: a shared shipment names the other orders it carries, each a link to its order. */}
+                  {alsoCarries(row, order.id).map((other) => (
+                    <Link key={other.id} className="fw-so-link" href={`${model.prefix}/sales/orders/${other.id}`}>
+                      {t('ship.alsoCarries', { number: other.number })}
+                    </Link>
+                  ))}
                 </span>,
                 <Pill key="s" tone={SHIPMENT_TONE[row.status as keyof typeof SHIPMENT_TONE] ?? 'neutral'}>{t(`shipStatus.${row.status}`)}</Pill>,
                 // F-OP-119: who carries it, its tracking and the tracking door (the carrier and tracking only as the read gives them).
@@ -126,6 +136,27 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
             {showCancelled ? t('ship.hideCancelled') : t('ship.showCancelled', { count: shown.cancelled })}
           </Button>
         )}
+        {/* ── F-OP-122: the customer's DRAFT shipments of the same site and address this order may join (DRAFT only) ── */}
+        {model.joinable && model.joinable.length > 0 && (
+          <div className="fw-so-stack">
+            <h3 className="fw-so-h3">{t('ship.join.title')}</h3>
+            {model.joinable.map((row) => (
+              <div key={row.shipmentId} className="fw-so-card-head">
+                <span className="fw-so-inline">
+                  <Link className="fw-so-link" href={shipmentHref({ id: row.shipmentId, number: row.number })}>
+                    {row.number}
+                  </Link>
+                  <Pill tone="neutral">{t('shipStatus.DRAFT')}</Pill>
+                </span>
+                {/* Held, never hidden: while several orders in one shipment are held off, it says so in words. */}
+                <Button size="sm" heldReason={row.held ? depth(row.held.key, row.held.params) : null} onClick={() => actions?.onJoinShipment?.(row.shipmentId)}>
+                  {t('ship.join.add')}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* ── end F-OP-122 ── */}
       </Card>
       {model.shipmentTracking /* F-OP-119: the tracking dialog of the shipment opened (its container) */}
       {model.newShipment /* F-OP-121: Warehouse's New shipment, opened in place (its container) */}

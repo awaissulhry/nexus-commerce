@@ -540,6 +540,9 @@ export const orderSchema = z.object({
         mayTypeTracking: z.object({ allowed: z.boolean(), code: z.string().nullable(), why: z.string().nullable() }).optional(),
         withheld: z.array(z.string()).optional(),
         // ---- end F-OP-119
+        // ---- F-OP-122 (B-OP-043, lines-derived): every order the shipment carries, the first first (all of this order's customer) ----
+        orders: z.array(z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable() })).optional(),
+        // ---- end F-OP-122
       }),
     ),
     invoices: z.array(z.object({ id: z.string(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable(), depositRequestId: z.string().nullable().default(null) })),

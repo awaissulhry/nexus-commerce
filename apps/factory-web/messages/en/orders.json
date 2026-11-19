@@ -586,7 +586,14 @@
       }
     },
     "created": "{number} made (draft)",
-    "createdDoor": "Pack and ship it in Warehouse ›"
+    "createdDoor": "Pack and ship it in Warehouse ›",
+    "alsoCarries": "Also carries {number}",
+    "join": {
+      "title": "Draft shipments this order can join",
+      "add": "Add this order's garments…"
+    },
+    "joined_one": "{count} garment added to {number} (draft)",
+    "joined_other": "{count} garments added to {number} (draft)"
   },
   "shipStatus": {
     "DRAFT": "Draft",

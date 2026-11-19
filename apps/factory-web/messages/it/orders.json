@@ -586,7 +586,14 @@
       }
     },
     "created": "{number} creata (bozza)",
-    "createdDoor": "Imballala e spediscila in Magazzino ›"
+    "createdDoor": "Imballala e spediscila in Magazzino ›",
+    "alsoCarries": "Porta anche {number}",
+    "join": {
+      "title": "Spedizioni in bozza a cui aggiungere questo ordine",
+      "add": "Aggiungi i capi di questo ordine…"
+    },
+    "joined_one": "{count} capo aggiunto a {number} (bozza)",
+    "joined_other": "{count} capi aggiunti a {number} (bozza)"
   },
   "shipStatus": {
     "DRAFT": "Bozza",

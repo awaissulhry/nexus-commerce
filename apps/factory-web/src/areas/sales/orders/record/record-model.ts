@@ -30,6 +30,7 @@ import type { SplitPartDraft, SplitRefusal } from '../model' // F-OP-111
 // F-OP-112: Make work orders… in place — the Production page's New work order dialog (its model, its actions, the lane's rights).
 import type { NewWorkOrderModel, WorkOrdersListActions } from '../../../production/work-orders/list-model'
 import type { ProductionCan } from '../../../production/_shared/model'
+import type { JoinableRow } from './shipments/model' // F-OP-122
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -228,6 +229,8 @@ export interface OrderRecordModel {
   shipmentTracking?: ReactNode | null
   /** F-OP-121: Warehouse's New shipment, opened in place (its container). */
   newShipment?: ReactNode | null
+  /** F-OP-122: the customer's DRAFT shipments (same site and address) this order may join; null: not read or not offered. */
+  joinable?: JoinableRow[] | null
   /** F-SA-236: the order's customer requests, every state (Changes: waiting on us, history); null: not read here. */
   requests?: Part<BrandRequest[]> | null
   /**
@@ -264,6 +267,8 @@ export interface OrderRecordActions {
   onShipmentTracking?: (shipmentId: string) => void
   /** F-OP-121: Create shipment… in place (this order and the customer's others beside it). */
   onCreateShipment?: () => void
+  /** F-OP-122: Add this order's garments… to a DRAFT of the same customer (the same step 2). */
+  onJoinShipment?: (shipmentId: string) => void
   /** F-OP-111: split the parts off into new orders (the dialog's parts as typed, the optional reason). */
   onSplit?: (input: { parts: readonly SplitPartDraft[]; reason: string }) => void
   /** B-W2b-180 (design sales.orders conn "Portal › Orders & tracking"): open the order in the customer's portal, read-only. */

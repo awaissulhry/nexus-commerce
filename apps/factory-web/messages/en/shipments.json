@@ -253,6 +253,9 @@
       "this_other": "This order · {count} garments released, not shipped",
       "add": "Add other open orders of {customer} to this shipment",
       "none": "{customer} has no other open order with garments released."
+    },
+    "join": {
+      "title": "Add this order's garments to {number}"
     }
   },
   "held": {

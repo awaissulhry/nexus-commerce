@@ -2,6 +2,9 @@ import type { Order } from '../../api'
 import type { Phrase } from '../../model'
 // F-OP-121: where Create shipment… leads.
 import { createShipmentHref, mayCreateShipment, type OrderAbilities } from '../../model'
+// F-OP-122: the joinable read and its reasons in the Warehouse's words.
+import type { JoinableShipments } from '../../../../warehouse/shipments/api'
+import { joinHeld } from '../../../../warehouse/shipments/model'
 
 /**
  * F-OP-119 (order page plan N5; 10-order-page §8.1, §8.2; review R-7) — the Shipments tab's rows, pure: who carries each shipment
@@ -79,3 +82,29 @@ export function createShipmentDoor(order: Pick<Order, 'id' | 'status' | 'progres
   return inPlace ? { kind: 'inPlace' } : { kind: 'warehouse', href: createShipmentHref(prefix, order.id) }
 }
 // ── end F-OP-121 ──
+
+// ── F-OP-122 (order page plan N6): shared shipments on the order ─────────────────────────────────────────────────────────────────
+/** "Also carries SO-0151": the other orders a shipment of this order carries (all of this customer's), the first first. */
+export function alsoCarries(row: ShipmentRow, orderId: string): { readonly id: string; readonly number: string }[] {
+  return (row.orders ?? []).filter((entry) => entry.id !== orderId).map((entry) => ({ id: entry.id, number: entry.number }))
+}
+
+/** A DRAFT of the same customer this order may join, as the Shipments tab offers it: "Add this order's garments…", held with why. */
+export interface JoinableRow {
+  readonly shipmentId: string
+  readonly number: string
+  /** Null: it may join; else the reason in the Warehouse depth catalogue's words (several orders held off: `shipOrders.later`). */
+  readonly held: Phrase | null
+}
+
+/**
+ * The DRAFTs the Shipments tab offers from the joinable read: the same customer, site and delivery address — allowed, or held
+ * only while several orders in one shipment are held off (every real reason passed); another site or address is not offered.
+ */
+export function joinableRows(shipments: JoinableShipments['shipments']): JoinableRow[] {
+  return shipments.flatMap((row) => {
+    const held = joinHeld(row.joinable)
+    return row.status === 'DRAFT' && (held === null || held.key === 'shipOrders.later') ? [{ shipmentId: row.shipmentId, number: row.number, held }] : []
+  })
+}
+// ── end F-OP-122 ──
