@@ -11,7 +11,15 @@ import { useLiveBus } from '../../../shell/live/use-live'
 import { OfficeRecordThread } from '../../_shared/record-thread/OfficeRecordThread'
 import { acceptCatalogueOrder, readCatalogueOrder, refuseCatalogueOrder, type CatalogueRecord } from './api'
 import { acceptBodyOf, acceptDone, acceptDraftOf, type CatalogueActions, type CatalogueDialog, type CatalogueModel } from './catalogue-model'
+// ---- F-CP-157: the accept's line map — the styles a line may be made into, a picked style's colourways ----
+import { findStyles, readStyle } from './api'
+import { intoOf, linesToMap, mapStylesOf, MAP_INTO_MAX, type MapInto } from './catalogue-model'
+import type { StyleRead } from './view/LinesEditor'
+// ---- end F-CP-157
 import { fieldLines, inquiriesCan, readProblem, writeProblem, type Loaded, type Notice } from './model'
+
+/** F-CP-157: the styles a line may be made into, as read for the window. */
+type CatalogueDialogStyles = NonNullable<NonNullable<Extract<CatalogueDialog, { kind: 'accept' }>['styles']>['items']>
 
 /**
  * B-TH-233 (threads plan TH-3; B-TH-040, pane-actions-F13): ONE container for a catalogue order beside the Incoming list — it reads
@@ -104,7 +112,7 @@ export function useCatalogueOrder(options: { readonly requestId: string | null; 
         const done = acceptDone(answer.made, number)
         const href = answer.made.as === 'ORDER' && answer.made.salesOrderId && can.ordersView ? `${prefix}/sales/orders/${encodeURIComponent(answer.made.salesOrderId)}` : answer.made.as === 'QUOTE' && answer.made.quoteId && can.quotesView ? `${prefix}/sales/quotes/${encodeURIComponent(answer.made.quoteId)}` : null
         setLoaded({ status: 'ready', value: { request: answer.request, may: answer.may } })
-        setNotice({ ...done.phrase, tone: done.lines.length > 0 ? 'warning' : 'success', link: href ? { href, label: { key: 'catalogue.done.open', params: { made: answer.made.number } } } : null, lines: done.lines })
+        setNotice({ ...done.phrase, tone: done.warn /* F-CP-157: logos carried are no warning */ ? 'warning' : 'success', link: href ? { href, label: { key: 'catalogue.done.open', params: { made: answer.made.number } } } : null, lines: done.lines })
       } else {
         const value = await refuseCatalogueOrder(api, now.request.id, { version: now.request.version, reason: dialog.reason.trim() }, keyRef.current)
         setLoaded({ status: 'ready', value })
@@ -119,7 +127,45 @@ export function useCatalogueOrder(options: { readonly requestId: string | null; 
     }
   }
 
-  const model: CatalogueModel = { prefix, can, offline, loaded, notice, dialog, handled, draft: options.draft ?? null /* F-CP-107 */ }
+  // ---- F-CP-157 (customer page plan C5; the API's B-CP-077): the accept window maps each described / made-to-measure line to the style
+  // line(s) it is made into — the styles read once when such a window opens (product.styles.view; the open range and THIS customer's own
+  // label only: never another customer's), each picked (or hinted) style's colourways and sizes read once.
+  const [styles, setStyles] = useState<{ readonly items: CatalogueDialogStyles | null; readonly problem: string | null } | null>(null)
+  const [details, setDetails] = useState<Readonly<Record<string, StyleRead>>>({})
+  const detailsRef = useRef(details)
+  detailsRef.current = details
+  const readDetail = useCallback(
+    (styleId: string) => {
+      if (!can.styles || detailsRef.current[styleId]?.status === 'ready' || detailsRef.current[styleId]?.status === 'loading') return
+      setDetails((now) => ({ ...now, [styleId]: { status: 'loading' } }))
+      readStyle(api, styleId)
+        .then((value) => setDetails((now) => ({ ...now, [styleId]: { status: 'ready', value } })))
+        .catch(() => setDetails((now) => ({ ...now, [styleId]: { status: 'error' } })))
+    },
+    [api, can.styles],
+  )
+  const mapping = dialog?.kind === 'accept' && !!record && linesToMap(record).length > 0
+  const partyId = record?.request.party.id ?? null
+  useEffect(() => {
+    if (!mapping || !partyId) return
+    if (!can.styles) return setStyles(null)
+    const controller = new AbortController()
+    setStyles({ items: null, problem: null })
+    findStyles(api, '', controller.signal)
+      .then((items) => setStyles({ items: mapStylesOf(items, partyId), problem: null }))
+      .catch((error: unknown) => !controller.signal.aborted && setStyles({ items: [], problem: readProblem(error) }))
+    return () => controller.abort()
+  }, [api, mapping, partyId, can.styles])
+  // The styles the window already names (the lines' own hints, the picks) have their colourways read.
+  const named = dialog?.kind === 'accept' ? [...new Set(Object.values(dialog.draft.map ?? {}).flatMap((into) => into.map((one) => one.styleId).filter((id): id is string => !!id)))].join(',') : ''
+  useEffect(() => {
+    for (const styleId of named.split(',').filter(Boolean)) readDetail(styleId)
+  }, [named, readDetail])
+  const changeMap = (lineId: string, change: (into: readonly MapInto[]) => readonly MapInto[]) =>
+    setDialog((open) => (open?.kind === 'accept' ? { ...open, draft: { ...open.draft, map: { ...(open.draft.map ?? {}), [lineId]: change(open.draft.map?.[lineId] ?? []) } } } : open))
+  const shownDialog: CatalogueDialog | null = dialog?.kind === 'accept' && mapping ? { ...dialog, styles: can.styles ? styles : null, details } : dialog
+  // ---- end F-CP-157
+  const model: CatalogueModel = { prefix, can, offline, loaded, notice, dialog: shownDialog /* F-CP-157 */, handled, draft: options.draft ?? null /* F-CP-107 */ }
   const actions: CatalogueActions = {
     onRetry: () => void load(),
     onReload: () => {
@@ -141,6 +187,12 @@ export function useCatalogueOrder(options: { readonly requestId: string | null; 
     onDraft: (patch) => setDialog((open) => (open?.kind === 'accept' ? { ...open, draft: { ...open.draft, ...patch } } : open)),
     onPrice: (lineId, price) => setDialog((open) => (open?.kind === 'accept' ? { ...open, draft: { ...open.draft, prices: { ...open.draft.prices, [lineId]: price } } } : open)),
     onReason: (reason) => setDialog((open) => (open?.kind === 'refuse' ? { ...open, reason } : open)),
+    // ---- F-CP-157: the line map (a change keeps the other lines; a new style line up to 20; a style picked: its colourways read)
+    onMapInto: (lineId, key, patch) => changeMap(lineId, (into) => into.map((one) => (one.key === key ? { ...one, ...patch, ...(patch.styleId !== undefined && patch.styleId !== one.styleId ? { colourwayId: null } : {}) } : one))),
+    onMapAdd: (lineId) => changeMap(lineId, (into) => (into.length >= MAP_INTO_MAX ? into : [...into, intoOf(null)])),
+    onMapRemove: (lineId, key) => changeMap(lineId, (into) => (into.length <= 1 ? [intoOf(null)] : into.filter((one) => one.key !== key))),
+    onMapStyle: readDetail,
+    // ---- end F-CP-157
     onSubmit: () => void submit(),
     onCloseDialog: () => {
       keyRef.current = null

@@ -420,6 +420,31 @@ const catalogueLine = z.object({
   note: z.string().nullable(),
   problems: z.array(z.object({ code: z.string(), size: z.string().nullable(), words: z.object({ it: z.string(), en: z.string() }) })),
 })
+// ── F-CP-157 (customer page plan C5; the API's B-CP-075 / B-CP-077): the lines in the customer's own words and made to measure ──
+/**
+ * A described or made-to-measure line as the office reads it: its words, colours, the style it names (a hint), the garment type, its
+ * sizes or total, and its people — only how many and their sizes here (the roster's names stay on the request: never copied, never
+ * mapped to a profile). The accept maps it to the style line(s) it is made into.
+ */
+const customLine = z.object({
+  id: z.string(),
+  seq: z.number().int(),
+  kind: z.enum(['DESCRIBED', 'MADE_TO_MEASURE']),
+  description: z.string().nullable(),
+  colourText: z.string().nullable(),
+  style: named.nullable(),
+  colourway: named.nullable(),
+  garmentType: z.object({ code: z.string(), words: z.object({ it: z.string(), en: z.string() }) }).nullable(),
+  quantity: z.number().int().nullable(),
+  sizes: z.array(z.object({ size: z.string(), quantity: z.number().int() })),
+  byPerson: z.boolean(),
+  pieces: z.number().int(),
+  people: z.array(z.object({ size: z.string().nullable() })),
+  peopleInSheet: z.boolean(),
+  note: z.string().nullable(),
+})
+export type CatalogueCustomLine = z.infer<typeof customLine>
+// ── end F-CP-157 ──
 const catalogueRecord = z.object({
   request: z.object({
     id: z.string(),
@@ -444,13 +469,32 @@ const catalogueRecord = z.object({
     version: z.number().int(),
     lines: z.array(catalogueLine),
     summary: z.object({ lines: z.number().int(), pieces: z.number().int(), netShown: z.string().nullable().optional() }),
+    // F-CP-157: the lines of the customer's own kinds (absent on an older answer: none) and what the accept needs — the lines to map
+    // (ids, the request's order) and why it is not accepted as an order (a made-to-measure line: a quote first; null: it may be).
+    customLines: z.array(customLine).optional(),
+    acceptMap: z.object({ lineIds: z.array(z.string()), orderHeld: z.string().nullable() }).optional(),
   }),
   may: z.object({ order: z.boolean(), quote: z.boolean(), refuse: z.boolean() }),
 })
 export type CatalogueRecord = z.infer<typeof catalogueRecord>
 export type CatalogueOrder = CatalogueRecord['request']
 export type CatalogueLine = CatalogueOrder['lines'][number]
-const acceptAnswer = catalogueRecord.extend({ made: z.object({ as: z.enum(['ORDER', 'QUOTE']), salesOrderId: z.string().nullable(), quoteId: z.string().nullable(), number: z.string(), dropped: z.array(z.object({ seq: z.number().int(), size: z.string().nullable(), reason: z.string() })), warnings: z.array(z.string()) }) })
+const acceptAnswer = catalogueRecord.extend({
+  made: z.object({
+    as: z.enum(['ORDER', 'QUOTE']),
+    salesOrderId: z.string().nullable(),
+    quoteId: z.string().nullable(),
+    number: z.string(),
+    dropped: z.array(z.object({ seq: z.number().int(), size: z.string().nullable(), reason: z.string() })),
+    warnings: z.array(z.string()),
+    // ── F-CP-157 (the API's B-CP-077 / B-CP-076): the accept's ONE line map, the customer's logos carried (and not), and how many of
+    // the customer's prices the order took (the price grain: absent without it) ──
+    lines: z.array(z.object({ requestLineId: z.string(), requestSeq: z.number().int(), into: z.array(z.object({ lineId: z.string(), seq: z.number().int() })) })).optional(),
+    artwork: z.object({ carried: z.array(z.object({ sourceFileId: z.string(), name: z.string() })), notCarried: z.array(z.object({ sourceFileId: z.string(), name: z.string(), reason: z.string() })) }).optional(),
+    brandPrices: z.number().int().optional(),
+    // ── end F-CP-157 ──
+  }),
+})
 export type CatalogueAccepted = z.infer<typeof acceptAnswer>
 
 const catalogueOne = (requestId: string) => `/sales/order-requests/${enc(requestId)}`
@@ -459,7 +503,13 @@ export function readCatalogueOrder(api: ApiClient, requestId: string, signal?: A
   return api.get(catalogueOne(requestId), { schema: catalogueRecord, signal })
 }
 
-export function acceptCatalogueOrder(api: ApiClient, requestId: string, body: { version: number; as: 'ORDER' | 'QUOTE'; promiseDate?: string | null; lines?: Array<{ lineId: string; unitPrice: string }> }, idempotencyKey?: string): Promise<CatalogueAccepted> {
+/** F-CP-157: one style line a described or made-to-measure line is made into (the accept's map). */
+export interface AcceptMapBody {
+  readonly lineId: string
+  readonly into: ReadonlyArray<{ readonly styleId: string; readonly colourwayId: string; readonly sizes?: ReadonlyArray<{ readonly size: string; readonly quantity: number }>; readonly unitPrice?: string }>
+}
+
+export function acceptCatalogueOrder(api: ApiClient, requestId: string, body: { version: number; as: 'ORDER' | 'QUOTE'; promiseDate?: string | null; lines?: Array<{ lineId: string; unitPrice: string }>; map?: readonly AcceptMapBody[] /* F-CP-157 */ }, idempotencyKey?: string): Promise<CatalogueAccepted> {
   return api.post(`${catalogueOne(requestId)}/accept`, { body, schema: acceptAnswer, ...key(idempotencyKey) })
 }
 
