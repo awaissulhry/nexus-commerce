@@ -377,3 +377,45 @@ describe('the money wall and the brand wall', { timeout: SLOW_TEST_TIMEOUT_MS },
     expect(JSON.stringify(own)).not.toContain(alpha)
   })
 })
+
+// ── B-CP-025 (customer page plan C4; review B3): the customer's price history stays with price holders ──
+describe('the price history: never on the order’s timeline, only for price holders in the audit', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  let order: { id: string; lines: { id: string; seq: number }[] }
+  let rowId: string
+
+  beforeAll(async () => {
+    order = await alphaOrder('PO-CP025-HISTORY')
+    const check = await ok('owner', 'PUT', `/sales/orders/${order.id}/brand-prices`, { rows: [{ lineId: order.lines[0]!.id, unitPrice: '95', source: 'CUSTOMER_PO', note: 'Customer says 95' }] })
+    rowId = check.lines[0].row.id
+    await ok('owner', 'PUT', `/sales/orders/${order.id}/brand-prices`, { remove: [{ id: rowId, version: 1 }] })
+  })
+
+  it('the order’s thread timeline (the dock) reads no customer’s price row, for the Owner, a Sales worker or a Production manager', async () => {
+    for (const person of ['owner', 'sales', 'production'] as const) {
+      const response = await call(person, 'GET', `/threads/SalesOrder/${order.id}/timeline?kinds=change`)
+      if (response.statusCode === 403) continue // no threads.read: nothing to read at all
+      expect(response.statusCode, response.body).toBe(200)
+      expect(response.body, person).not.toContain('brandPrices.')
+      expect(response.body, person).not.toContain(rowId)
+      expect(response.body, person).not.toContain('Customer says 95')
+    }
+    // The order's own history names none either; the customer's prices are a history of their own.
+    expect(JSON.stringify((await ok('owner', 'GET', `/audit/SalesOrder/${order.id}`)).entries)).not.toContain('brandPrices.')
+  })
+
+  it('as Sales worker / as Administrator: the audit list and the record history leave them out; the Owner reads them', async () => {
+    for (const person of ['sales', 'admin'] as const) {
+      expect((await ok(person, 'GET', `/audit?recordType=OrderBrandPrice&recordId=${order.id}`)).entries, person).toEqual([])
+      expect((await ok(person, 'GET', `/audit/OrderBrandPrice/${order.id}`)).entries, person).toEqual([])
+      expect((await ok(person, 'GET', '/audit?limit=200')).entries.filter((entry: Json) => entry.recordType === 'OrderBrandPrice'), person).toEqual([])
+    }
+    const history = (await ok('owner', 'GET', `/audit/OrderBrandPrice/${order.id}`)).entries
+    expect(history.map((entry: Json) => entry.action)).toEqual(['brandPrices.remove', 'brandPrices.set'])
+    expect(history[1].after).toMatchObject({ rowId, unitPrice: '95', note: 'Customer says 95' })
+  })
+
+  it('the brand wall: an Owner limited to Brand Beta reads none of Brand Alpha’s price history', async () => {
+    expect((await ok('betaOwner', 'GET', `/audit/OrderBrandPrice/${order.id}`)).entries).toEqual([])
+  })
+})
+// ── end B-CP-025 ──
