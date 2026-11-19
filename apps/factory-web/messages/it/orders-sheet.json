@@ -320,7 +320,15 @@
     "reply_one": "Rispondi a {customer} su {count}…",
     "reply_other": "Rispondi a {customer} su {count}…",
     "replyAny_one": "Rispondi su {count}…",
-    "replyAny_other": "Rispondi su {count}…"
+    "replyAny_other": "Rispondi su {count}…",
+    "ready_one": "Segna {count} come pronto…",
+    "ready_other": "Segna {count} come pronti…",
+    "close_one": "Chiudi {count}…",
+    "close_other": "Chiudi {count}…",
+    "confirm_one": "Conferma {count}…",
+    "confirm_other": "Conferma {count}…",
+    "noneInState_one": "L'ordine spuntato non è «{state}».",
+    "noneInState_other": "Nessuno dei {count} è «{state}»."
   },
   "reply": {
     "title_one": "Rispondi a {customer} su {count} ordine",
@@ -375,6 +383,44 @@
       "cancel": "{number} annullato",
       "confirm": "{number} confermato",
       "refuse": "{number}: il sì è stato rifiutato"
+    },
+    "runs_one": "Si applica a {count}",
+    "runs_other": "Si applica a {count}",
+    "notOn_one": "Non su {count}: il motivo è accanto",
+    "notOn_other": "Non su {count}: il motivo è accanto a ognuno",
+    "cancelOne": "Si annulla un ordine alla volta (⋯ sulla sua riga): ognuno mostra cosa ferma.",
+    "many": {
+      "title": {
+        "ready_one": "Segna {count} ordine come pronto",
+        "ready_other": "Segna {count} ordini come pronti",
+        "close_one": "Chiudi {count} ordine",
+        "close_other": "Chiudi {count} ordini",
+        "confirm_one": "Conferma {count} ordine",
+        "confirm_other": "Conferma {count} ordini"
+      },
+      "go": {
+        "ready_one": "Segna {count} come pronto",
+        "ready_other": "Segna {count} come pronti",
+        "close_one": "Chiudi {count}",
+        "close_other": "Chiudi {count}",
+        "confirm_one": "Conferma {count}",
+        "confirm_other": "Conferma {count}"
+      },
+      "reading": "Lettura degli ordini: {done} di {count}…",
+      "stillReading": "Gli ordini sono ancora in lettura",
+      "nothing": "Non si applica a nessuno: niente da fare",
+      "outOfReach_one": "{count} ordine non si può più aprire: è escluso.",
+      "outOfReach_other": "{count} ordini non si possono più aprire: sono esclusi.",
+      "reasonAll": "Un solo motivo per ogni ordine su cui si applica: ognuno lo tiene nella sua cronologia.",
+      "oneCode": "Un codice dell'app di autenticazione conferma ogni ordine elencato qui; ogni sì viene registrato a sé.",
+      "running": "In corso: {done} di {count}…",
+      "result": "{done} fatti · {left} non fatti",
+      "stale": "{number} è cambiato nel frattempo: aprilo e riprova.",
+      "codeExpired": "Il codice è scaduto prima di questo: esegui di nuovo il resto.",
+      "notDone": "Non fatto. {why}",
+      "runRest_one": "Esegui di nuovo il resto ({count})",
+      "runRest_other": "Esegui di nuovo il resto ({count})",
+      "label": "Ogni ordine"
     }
   }
 }

@@ -63,6 +63,7 @@ import { useOrderCommandDoor } from './commands/use-order-command-door'
 import { doneWords, stillInView, type Words } from './commands/model'
 import type { OrderStatus } from '../api'
 // ---- end F-CP-108
+import { useOrderCommandMany } from './commands/use-order-command-many' // F-CP-109: Mark N ready… · Close N… · Confirm N…
 
 /**
  * F-SA-220 (sales page plan N7 / N5, picks R9, P10, P12, P18; 17-review C-2; 12-lists-board §4.5): the ONE Orders sheet, for every
@@ -742,6 +743,24 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     },
   })
   // ---- end F-CP-108
+  // ---- F-CP-109: Mark N ready… · Close N… · Confirm N… over the ticked orders (≤ 50; Cancel stays one at a time) — each order its own
+  // command, version and key, one after the other; at the end each order it ran on takes its answer in place (greyed when it left the
+  // view) and is read again by id; the window shows the result.
+  const commandMany = useOrderCommandMany(api, {
+    can,
+    onDone: (answered, ran) => {
+      for (const order of answered) placeRow(order.id, (row) => ({ ...row, status: order.status, version: order.version, updatedAt: order.updatedAt }), order.status)
+      if (ran.length === 0) return
+      const mine = readId.current
+      listOrders(api, { ids: ran.slice(0, 50), production: productionShown, progress: progressShown, limit: 50 })
+        .then((page) => {
+          if (mine !== readId.current) return
+          for (const fresh of page.orders) placeRow(fresh.id, () => fresh, fresh.status)
+        })
+        .catch(() => undefined)
+    },
+  })
+  // ---- end F-CP-109
   const week = usePromiseWeek(api, session, { enabled: layout === 'week', asked: params?.get('site') ?? null, q, tick: weekTick, partyId: party /* B-TH-201 */ })
   // B-TH-293: on one customer's sheet (the switcher's customer) the import is offered that customer's remembered columns.
   const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load(), customer)
@@ -814,7 +833,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld /* F-SA-281 */, reply: noteCan /* F-SA-282: threads.post */ },
     replyMany: replyMany.model, // F-SA-282
     priceCheck: priceCheck.model, // F-CP-114
-    commands: { window: commandDoor.model, moved, receipt }, // F-CP-108
+    commands: { window: commandDoor.model, moved, receipt, many: commandMany.model /* F-CP-109 */, decide: session.permissions.includes('approvals.decide') /* F-CP-109 */ }, // F-CP-108
     task, // F-SA-281
     me: session.user.id, // F-SA-281
     // ---- F-SA-220: the host ----
@@ -901,6 +920,10 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     },
     command: commandDoor.actions,
     // ---- end F-CP-108
+    // ---- F-CP-109: the bar's bulk commands on the ticked orders (the window reads each order itself) ----
+    onCommandMany: (ids, command) => commandMany.open(command, pickedRows(ids)),
+    commandMany: commandMany.actions,
+    // ---- end F-CP-109
     onWaiting: (next, view) => go({ waiting: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     // F-CP-105: a host's own kept term set (or dropped: null) by a person's pick, in one write that keeps every other term.
     onPageTerm: (name, value) => go({ put: { [name]: value } }),

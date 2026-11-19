@@ -1,9 +1,11 @@
 import { CANCEL_STATUSES, OPEN_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
+import { isApiError } from '../../../../../lib/api/errors' // F-CP-109
 import type { RejectReason } from '../../../../home/approvals/api'
 import { ORDER_STATUSES, type CancelCheck, type Order, type OrderRow, type OrderStatus } from '../../api'
 import { bannerYesOf, yesDoorOf, type YesDoor } from '../../depth/model'
 import type { StepUpState } from '../../hooks'
 import { cancelHeld, closeHeld, readyHeld, type OrderAbilities, type Phrase, type RowView } from '../../model'
+import { closeNeedsReason, writeProblem } from '../../model' // F-CP-109
 import type { Part, YesActions } from '../../record/record-model'
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
 
@@ -191,6 +193,190 @@ export interface OrderCommandActions {
   readonly yes?: YesActions
   /** Refuse… closed: back to the yes's window. */
   readonly onRefuseBack?: () => void
+  readonly onStepUpSubmit?: (code: string) => void
+  readonly onStepUpCancel?: () => void
+}
+
+// ---- F-CP-109: Mark {count} ready… · Close {count}… · Confirm {count}… on the bar ---------------------------------------------------
+
+export const MANY_COMMANDS = ['ready', 'close', 'confirm'] as const
+export type ManyCommand = (typeof MANY_COMMANDS)[number]
+/** At most this many orders in one bulk command (lead pick, approved: ≤ 50; Confirm N with ONE code). Cancel stays one at a time. */
+export const MANY_MAX = 50
+/** Reads of the ticked orders run this many at a time. */
+export const MANY_READ_AT_ONCE = 5
+/** The states each bulk command takes. */
+export const MANY_STATES: Readonly<Record<ManyCommand, readonly OrderStatus[]>> = Object.freeze({ ready: ['IN_PRODUCTION'], close: CLOSE_STATUSES, confirm: ['PENDING_APPROVAL'] })
+
+/**
+ * The bar's bulk commands for this reader: Mark N ready (held in words without orders.manage), Close N with orders.manage or
+ * orders.close, Confirm N for who decides yeses (approvals.decide). Never Cancel: it is one order at a time.
+ */
+export function manyShown(can: OrderAbilities, decide: boolean): ManyCommand[] {
+  return MANY_COMMANDS.filter((command) => (command === 'close' ? can.manage || can.close : command === 'confirm' ? decide : true))
+}
+
+/**
+ * Why a bulk button waits before the click, or null: more than 50 ticked; the right (Mark ready: orders.manage; Close: manage or close);
+ * none of the ticked orders is in the command's state ("None of the 2 is waiting for a yes.").
+ */
+export function manyHeld(command: ManyCommand, rows: readonly Pick<OrderRow, 'status'>[], can: OrderAbilities): Words | null {
+  if (rows.length === 0) return null
+  if (rows.length > MANY_MAX) return sheet('bulk.tooMany', { max: MANY_MAX })
+  if (command === 'ready' && !can.manage) return orders('held.noManage')
+  if (command === 'close' && !can.manage && !can.close) return orders('held.noClose')
+  if (!rows.some((row) => MANY_STATES[command].includes(row.status))) return { key: 'bulk.noneInState', params: { count: rows.length }, sheet: true, states: MANY_STATES[command] }
+  return null
+}
+
+/** The bar's button words: "Mark {count} ready…" (orders-sheet `bulk.<command>`). */
+export const manyLabel = (command: ManyCommand, count: number): Words => sheet(`bulk.${command}`, { count })
+
+/** A ticked order as the window names it: the office number and the customer's PO when it gave one. */
+export interface ManyTarget {
+  readonly id: string
+  readonly number: string
+  readonly customerRef: string | null
+}
+export const manyTargetsOf = (rows: readonly Pick<OrderRow, 'id' | 'number' | 'customerRef'>[]): ManyTarget[] => rows.map((row) => ({ id: row.id, number: row.number, customerRef: row.customerRef }))
+export const manyTargetLabel = (target: Pick<ManyTarget, 'number' | 'customerRef'>): string => (target.customerRef ? `${target.number} (${target.customerRef})` : target.number)
+
+/** One ticked order's read: reading, read (the order), out of reach (404 / 403: counted, never named), or failed with why. */
+export type ManyRead = { readonly state: 'reading' } | { readonly state: 'ready'; readonly order: Order } | { readonly state: 'gone' } | { readonly state: 'failed'; readonly problem: string }
+
+/** How a read failed: out of reach (the brand wall's neutral answer) or a fault said in words. */
+export function manyReadOf(error: unknown): Extract<ManyRead, { state: 'gone' | 'failed' }> {
+  if (isApiError(error) && (error.kind === 'not_found' || error.kind === 'forbidden')) return { state: 'gone' }
+  const kind = isApiError(error) ? error.kind : null
+  return { state: 'failed', problem: kind && ['signed_out', 'unavailable', 'rate_limited'].includes(kind) ? `problem.read.${kind}` : 'problem.read.internal' }
+}
+
+/** A line of the preview: the order, whether it runs, why not (beside it), and what it adds ("Not settled", words only). */
+export interface ManyLine {
+  readonly target: ManyTarget
+  readonly order: Order | null
+  readonly runs: boolean
+  readonly why: Words | null
+  readonly note: Words | null
+}
+
+/** Confirm N: the order's own yes this reader decides (its task: id, version, whether its rule asks a fresh code); null: none. */
+export function yesTaskOf(order: Pick<Order, 'openApprovals'>): YesDoor['task'] | null {
+  const door = orderYesDoor(order)
+  return door?.kind === 'decide' ? door.task : null
+}
+
+/** A14's rule of the bulk command on one order as read (the same rules the row and the order page use). */
+export function manyRuleOf(command: ManyCommand, order: Order, can: OrderAbilities): Words | null {
+  if (command === 'ready') return readyHeld(order, can)
+  if (command === 'close') return closeHeld(order, can)
+  return confirmHeldOf(order)
+}
+
+/**
+ * The preview "Runs on 6 · Not on 2: why is beside each": each ticked order by number with its held words beside it, those still
+ * read, and how many are out of reach (counted, never named). A Close that runs on an order not settled says so in words (no amount).
+ */
+export function manyPreview(command: ManyCommand, targets: readonly ManyTarget[], reads: Readonly<Record<string, ManyRead>>, can: OrderAbilities): { runs: ManyLine[]; notOn: ManyLine[]; reading: number; gone: number } {
+  const runs: ManyLine[] = []
+  const notOn: ManyLine[] = []
+  let reading = 0
+  let gone = 0
+  for (const target of targets) {
+    const read = reads[target.id] ?? { state: 'reading' }
+    if (read.state === 'reading') reading += 1
+    else if (read.state === 'gone') gone += 1
+    else if (read.state === 'failed') notOn.push({ target, order: null, runs: false, why: orders(read.problem), note: null })
+    else {
+      const why = manyRuleOf(command, read.order, can)
+      const note = command === 'close' && !why && closeNeedsReason(read.order) ? orders('close.notSettled') : null
+      ;(why ? notOn : runs).push({ target, order: read.order, runs: !why, why, note })
+    }
+  }
+  return { runs, notOn, reading, gone }
+}
+
+/** The ONE reason, asked when a runnable order needs one: Mark ready always (the order page's rule); Close when one is not settled. */
+export function manyNeedsReason(command: ManyCommand, runs: readonly Pick<ManyLine, 'order'>[]): boolean {
+  if (runs.length === 0 || command === 'confirm') return false
+  if (command === 'ready') return true
+  return runs.some((line) => !!line.order && closeNeedsReason(line.order))
+}
+
+/** Why the window's go waits, or null: a write runs, orders still read, it runs on none, the reason is missing. */
+export function manyGoHeld(command: ManyCommand, preview: Pick<ReturnType<typeof manyPreview>, 'runs' | 'reading'>, reason: string, busy: boolean): Words | null {
+  if (busy) return orders('held.busy')
+  if (preview.reading > 0) return sheet('commands.many.stillReading')
+  if (preview.runs.length === 0) return sheet('commands.many.nothing')
+  if (manyNeedsReason(command, preview.runs) && reason.trim() === '') return orders(command === 'ready' ? 'ready.reasonNeeded' : 'close.reasonNeeded')
+  return null
+}
+
+/** One order's answer: done; not done with why (beside it); the code ran out (run the rest again); out of reach (counted, never named). */
+export type ManyResult = { readonly state: 'done' } | { readonly state: 'notDone'; readonly why: Words } | { readonly state: 'codeExpired' } | { readonly state: 'gone' }
+
+/** What a refused write means for the result list (the order page's words; a moved order: "SO-0150 changed meanwhile: open it and try again."). */
+export function manyOutcomeOf(error: unknown, number: string): Exclude<ManyResult, { state: 'done' }> {
+  if (isApiError(error) && error.kind === 'step_up') return { state: 'codeExpired' }
+  if (isApiError(error) && (error.kind === 'not_found' || error.kind === 'forbidden')) return { state: 'gone' }
+  const words = writeProblem(error)
+  if (words.key === 'problem.write.moved' || words.key === 'problem.write.state' || words.key === 'approval.refused.STALE' || words.key === 'approval.refused.NOT_PENDING') return { state: 'notDone', why: sheet('commands.many.stale', { number }) }
+  return { state: 'notDone', why: words.params ? orders(words.key, words.params) : orders(words.key) }
+}
+
+/**
+ * One run: the orders that run, ONE AT A TIME (never two at once), each with its own version and Idempotency-Key (the call's); a failure
+ * never stops the rest — an expired code too (each yes that needed it says "run the rest again"). Answers how many were done.
+ */
+export async function runMany(lines: readonly ManyLine[], one: (line: ManyLine) => Promise<void>, onResult: (id: string, result: ManyResult, done: number) => void): Promise<number> {
+  let done = 0
+  for (const [index, line] of lines.entries()) {
+    let result: ManyResult
+    try {
+      await one(line)
+      result = { state: 'done' }
+      done += 1
+    } catch (error) {
+      result = manyOutcomeOf(error, line.target.number)
+    }
+    onResult(line.target.id, result, index + 1)
+  }
+  return done
+}
+
+/** The result: "5 done · 1 not done", each named order's line (done, or not with why), and how many are out of reach (counted only). */
+export function manyReceipt(targets: readonly ManyTarget[], results: Readonly<Record<string, ManyResult>>): { done: number; left: number; gone: number; again: ManyTarget[]; lines: Array<{ target: ManyTarget; result: ManyResult }> } {
+  const lines = targets.flatMap((target) => {
+    const result = results[target.id]
+    return result && result.state !== 'gone' ? [{ target, result }] : []
+  })
+  const gone = targets.filter((target) => results[target.id]?.state === 'gone').length
+  const done = lines.filter((line) => line.result.state === 'done').length
+  // Run the rest again: the named orders not done (read again first: a fresh version, A14's rules again; a fresh code for Confirm N).
+  const again = lines.filter((line) => line.result.state !== 'done').map((line) => line.target)
+  return { done, left: lines.length - done, gone, again, lines }
+}
+
+/** The bulk window (use-order-command-many keeps it; view/OrderCommandManyDialog draws it). */
+export interface OrderCommandManyModel {
+  readonly command: ManyCommand
+  readonly targets: readonly ManyTarget[]
+  readonly reads: Readonly<Record<string, ManyRead>>
+  readonly reason: string
+  readonly phase: 'preview' | 'running' | 'done'
+  /** While it runs: how many of how many are done. */
+  readonly progress: { readonly done: number; readonly count: number } | null
+  readonly results: Readonly<Record<string, ManyResult>>
+  readonly stepUp: StepUpState
+  readonly can: OrderAbilities
+}
+
+export interface OrderCommandManyActions {
+  readonly onReason?: (reason: string) => void
+  readonly onRun?: () => void
+  /** Run the rest again: the named orders not done, read again first. */
+  readonly onAgain?: () => void
+  readonly onClose?: () => void
   readonly onStepUpSubmit?: (code: string) => void
   readonly onStepUpCancel?: () => void
 }

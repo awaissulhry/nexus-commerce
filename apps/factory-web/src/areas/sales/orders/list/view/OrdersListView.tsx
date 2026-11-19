@@ -86,6 +86,11 @@ import { rowStepsOf, wordsText, type RowStep, type Words } from '../commands/mod
 import { OrderCommandWindow } from '../commands/view/OrderCommandWindow'
 import '../commands/commands.css'
 // ---- end F-CP-108
+// ---- F-CP-109: Mark N ready… · Close N… · Confirm N… on the bar (≤ 50; Cancel stays one at a time) ----
+import { Archive, CheckCheck, PackageCheck } from 'lucide-react'
+import { manyHeld, manyLabel, manyShown, type ManyCommand } from '../commands/model'
+import { OrderCommandManyDialog } from '../commands/view/OrderCommandManyDialog'
+// ---- end F-CP-109
 
 export type { OrdersListActions, OrdersListModel } from '../list-model'
 
@@ -529,6 +534,18 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
                     <Globe size={13} aria-hidden /> <SelectionLabel>{replyLabel}</SelectionLabel>
                   </Button>
                 )}
+                {/* F-CP-109: Mark N ready… · Close N… · Confirm N… — the order page's own commands over the ticked orders (≤ 50), held in words. */}
+                {actions?.onCommandMany &&
+                  manyShown(model.can, !!model.commands?.decide).map((command) => {
+                    const held = manyHeld(command, picked, model.can)
+                    const label = wordsText(manyLabel(command, picked.length), t, s, locale)
+                    const Icon = MANY_ICON[command]
+                    return (
+                      <Button key={command} size="sm" aria-label={label} heldReason={held ? wordsText(held, t, s, locale) : null} onClick={() => actions.onCommandMany?.(picked.map((row) => row.id), command)}>
+                        <Icon size={13} aria-hidden /> <SelectionLabel>{label}</SelectionLabel>
+                      </Button>
+                    )
+                  })}
                 {/* B-TH-244 (SHEET.overall-F07, ORD-G06): finance only — Finance's From-DDTs dialog with their DDTs chosen, never an invoice from here. */}
                 {model.can.manageInvoices && (
                   <Button size="sm" heldReason={invoiceShippedHeld(picked.length) ? s(invoiceShippedHeld(picked.length)!) : null} aria-label={s('invoiceShipped.action', { count: picked.length })} onClick={() => actions?.onInvoiceShipped?.(picked.map((row) => row.id))}>
@@ -574,6 +591,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       {model.priceCheck && <PriceCheckDialog model={model.priceCheck} actions={actions?.priceCheck} />}
       {/* F-CP-108: the row ⋯ "Next steps" window — the order page's own dialogs on the order as read. */}
       {model.commands?.window && <OrderCommandWindow model={model.commands.window} actions={actions?.command} />}
+      {/* F-CP-109: Mark N ready… · Close N… · Confirm N… — the preview, the run one order at a time, the result. */}
+      {model.commands?.many && <OrderCommandManyDialog model={model.commands.many} actions={actions?.commandMany} />}
       {/* F-SA-281: the one New task window — on one order (a row's ⋯), or on N orders in one batch (the selection). */}
       {model.task && (
         <TaskNewDialog
@@ -1213,6 +1232,9 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer 
     .map((column) => withPreset(column, model.preset ?? null, wide)) // F-SA-276
     .map((column) => withMovedMark(column, () => latest.current.model.commands?.moved ?? [])) // F-CP-108
 }
+
+/** F-CP-109: the bar's bulk commands' marks (lucide, as the bar's other buttons). */
+const MANY_ICON: Readonly<Record<ManyCommand, typeof PackageCheck>> = { ready: PackageCheck, close: Archive, confirm: CheckCheck }
 
 /** F-CP-108: a row a command moved out of the view stays where it is, every cell greyed, until "N updates · Show" (rows never jump). */
 export function withMovedMark(column: ColDef<OrderRow>, moved: () => readonly string[]): ColDef<OrderRow> {

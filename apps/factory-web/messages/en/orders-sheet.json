@@ -320,7 +320,15 @@
     "reply_one": "Reply to {customer} on {count}…",
     "reply_other": "Reply to {customer} on {count}…",
     "replyAny_one": "Reply on {count}…",
-    "replyAny_other": "Reply on {count}…"
+    "replyAny_other": "Reply on {count}…",
+    "ready_one": "Mark {count} ready…",
+    "ready_other": "Mark {count} ready…",
+    "close_one": "Close {count}…",
+    "close_other": "Close {count}…",
+    "confirm_one": "Confirm {count}…",
+    "confirm_other": "Confirm {count}…",
+    "noneInState_one": "The order ticked is not {state}.",
+    "noneInState_other": "None of the {count} is {state}."
   },
   "reply": {
     "title_one": "Reply to {customer} on {count} order",
@@ -375,6 +383,44 @@
       "cancel": "{number} cancelled",
       "confirm": "{number} confirmed",
       "refuse": "{number}: the yes was refused"
+    },
+    "runs_one": "Runs on {count}",
+    "runs_other": "Runs on {count}",
+    "notOn_one": "Not on {count}: why is beside it",
+    "notOn_other": "Not on {count}: why is beside each",
+    "cancelOne": "Cancelling is one order at a time (⋯ on its row): each shows what it stops.",
+    "many": {
+      "title": {
+        "ready_one": "Mark {count} order ready",
+        "ready_other": "Mark {count} orders ready",
+        "close_one": "Close {count} order",
+        "close_other": "Close {count} orders",
+        "confirm_one": "Confirm {count} order",
+        "confirm_other": "Confirm {count} orders"
+      },
+      "go": {
+        "ready_one": "Mark {count} ready",
+        "ready_other": "Mark {count} ready",
+        "close_one": "Close {count}",
+        "close_other": "Close {count}",
+        "confirm_one": "Confirm {count}",
+        "confirm_other": "Confirm {count}"
+      },
+      "reading": "Reading the orders: {done} of {count}…",
+      "stillReading": "The orders are still being read",
+      "nothing": "It runs on none of them: nothing to do",
+      "outOfReach_one": "{count} order can no longer be opened: it is left out.",
+      "outOfReach_other": "{count} orders can no longer be opened: they are left out.",
+      "reasonAll": "One reason for every order it runs on: each keeps it in its history.",
+      "oneCode": "One code from your authenticator app confirms each order named here; each yes is recorded on its own.",
+      "running": "Working: {done} of {count}…",
+      "result": "{done} done · {left} not done",
+      "stale": "{number} changed meanwhile: open it and try again.",
+      "codeExpired": "The code ran out before this one: run the rest again.",
+      "notDone": "Not done. {why}",
+      "runRest_one": "Run the rest again ({count})",
+      "runRest_other": "Run the rest again ({count})",
+      "label": "Each order"
     }
   }
 }

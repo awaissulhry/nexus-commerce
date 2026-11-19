@@ -27,6 +27,7 @@ import type { PanelRead } from '../../../../record-panels/model' // F-SA-281
 import type { ReplyManyActions, ReplyManyModel } from './reply-many' // F-SA-282
 import type { PriceCheckDialogActions, PriceCheckDialogModel } from '../price-check/use-price-check' // F-CP-114
 import type { OrderCommandActions, OrderCommandModel, WindowCommand, Words } from './commands/model' // F-CP-108
+import type { ManyCommand, OrderCommandManyActions, OrderCommandManyModel } from './commands/model' // F-CP-109
 
 /** SCR-038 — the orders list's view model (OrdersListView draws it and fetches nothing). */
 
@@ -204,6 +205,10 @@ export interface OrdersListModel {
     readonly window: OrderCommandModel | null
     readonly moved: readonly string[]
     readonly receipt: { readonly words: Words; readonly at: number } | null
+    /** F-CP-109: the bulk window over the ticked orders (Mark N ready… · Close N… · Confirm N…) while open; null: closed. */
+    readonly many?: OrderCommandManyModel | null
+    /** F-CP-109: the reader decides yeses (approvals.decide): Confirm N… is on the bar. */
+    readonly decide?: boolean
   } | null
   // ---- end F-CP-108
   // ---- F-SA-279 (the customer page: a row drives the dock) ----
@@ -310,6 +315,10 @@ export interface OrdersListActions {
   onCommand?: (orderId: string, command: WindowCommand) => void
   command?: OrderCommandActions
   // ---- end F-CP-108
+  // ---- F-CP-109: the bar's Mark N ready… · Close N… · Confirm N… on the ticked orders (≤ 50), and the bulk window's own actions.
+  onCommandMany?: (ids: readonly string[], command: ManyCommand) => void
+  commandMany?: OrderCommandManyActions
+  // ---- end F-CP-109
   // ---- F-SA-279: the keys moved the focus to a row (the page's dock follows after its rest); a phone card's conversation door ----
   onFocusRow?: (row: OrderRow) => void
   onCardThread?: (row: OrderRow) => void
