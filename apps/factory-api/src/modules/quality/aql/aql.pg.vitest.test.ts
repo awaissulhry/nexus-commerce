@@ -303,6 +303,41 @@ describe('assignments and the chain (QHS-021)', () => {
     await ok('keeperP3', 'POST', `/quality/aql/assignments/${own.assignment.id}/end`, { version: own.assignment.version })
   })
 
+  // op-fx10 (the brand wall): a count of another customer's rows tells that they exist. A person limited to another customer counts
+  // only what it may see of a profile's use; it never retires a profile (its use by other customers is what it may not see).
+  it("op-fx10: a person limited to another customer counts none of P1's use of a profile, and never retires one; the production unit reads the real use", async () => {
+    const list = `/quality/aql/profiles?companyId=${A.company}`
+    const ofP3 = async (profileId: string) =>
+      (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "Inspection" i JOIN "WorkOrder" o ON o.id = i."workOrderId" WHERE i."aqlProfileId" = $1 AND o."partyId" = $2`, [profileId, A.otherCustomer]))[0]!.n
+    const all = await ok('viewer', 'GET', list)
+    expect(profileIn(all, 'AQL-EXM').usedBy).toEqual({ customers: 1, styles: 0, pairs: 0 })
+    expect(profileIn(all, 'AQL-STD').inspections).toBeGreaterThan(await ofP3(A.std))
+
+    const limited = await ok('keeperP3', 'GET', list)
+    expect(limited.profiles.map((row: Json) => row.code)).toEqual(all.profiles.map((row: Json) => row.code))
+    expect(profileIn(limited, 'AQL-EXM')).toMatchObject({ usedBy: { customers: 0, styles: 0, pairs: 0 }, inspections: await ofP3(A.exm) })
+    expect(profileIn(limited, 'AQL-STD')).toMatchObject({ usedBy: { customers: 0, styles: 0, pairs: 0 }, inspections: await ofP3(A.std) })
+    expect(JSON.stringify(limited)).not.toContain(A.brand)
+
+    // Its own customer's assignment counts for it (and for the production unit, beside P1's).
+    const own = await ok('keeperP3', 'POST', '/quality/aql/assignments', { profileId: A.exm, customerId: A.otherCustomer }, 201)
+    expect(own.assignment).toMatchObject({ profileCode: 'AQL-EXM', customer: { id: A.otherCustomer } })
+    expect(profileIn(await ok('keeperP3', 'GET', list), 'AQL-EXM').usedBy).toEqual({ customers: 1, styles: 0, pairs: 0 })
+    expect(profileIn(await ok('viewer', 'GET', list), 'AQL-EXM').usedBy).toEqual({ customers: 2, styles: 0, pairs: 0 })
+    const ended = await ok('keeperP3', 'POST', `/quality/aql/assignments/${own.assignment.id}/end`, { version: own.assignment.version })
+    expect(ended.assignment.active).toBe(false)
+
+    // Retiring: refused to the limited person in words that name no customer, used or not; the keeper reads the real reason.
+    const now = await ok('viewer', 'GET', list)
+    const exm = profileIn(now, 'AQL-EXM')
+    const tight = profileIn(now, 'AQL-TIGHT')
+    const words = 'Retiring an AQL profile changes it for every customer: it needs access to every customer.'
+    expect((await refused('keeperP3', 'PATCH', `/quality/aql/profiles/${A.exm}`, { version: exm.version, active: false }, 403)).message).toBe(words)
+    expect((await refused('keeperP3', 'PATCH', `/quality/aql/profiles/${tight.id}`, { version: tight.version, active: false }, 403)).message).toBe(words)
+    expect((await refused('keeper', 'PATCH', `/quality/aql/profiles/${A.exm}`, { version: exm.version, active: false }, 409)).message).toContain('1 active assignment')
+    expect(profileIn(await ok('viewer', 'GET', list), 'AQL-TIGHT')).toMatchObject({ active: true, version: tight.version })
+  })
+
   it('refuses an assignment to no one, to a party that is no customer, and by a viewer', async () => {
     expect(paths(await refused('keeper', 'POST', '/quality/aql/assignments', { profileId: A.std }, 400))).toEqual(['body/customerId'])
     const [supplier] = await admin<{ id: string }>(`SELECT id FROM "Party" WHERE "tenantId" = $1 AND NOT ('CUSTOMER' = ANY (roles)) AND NOT ('BRAND' = ANY (roles)) LIMIT 1`, [A.tenant])
