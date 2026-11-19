@@ -607,7 +607,7 @@ async function askMessageInCommand(
     },
     select: { id: true },
   })
-  tools.audit({ recordType: 'Message', recordId: id, companyId: thread.companyId, siteId: thread.siteId, after: { threadId: thread.id, recordType: thread.recordType, recordId: thread.recordId, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', attachments: [...input.prepared.fileIds], askOf: input.body.kind } })
+  tools.audit({ action: 'portal.postMessage' /* threads/partner POST_ACTION: the portal reads its own posts as "mine" by it */, recordType: 'Message', recordId: id, companyId: thread.companyId, siteId: thread.siteId, after: { threadId: thread.id, recordType: thread.recordType, recordId: thread.recordId, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', attachments: [...input.prepared.fileIds], askOf: input.body.kind } })
   tools.emit(eventFor(messagePosted, { subject: thread.recordId, companyId: thread.companyId, siteId: thread.siteId, payload: { threadId: thread.id, messageId: id, recordType: thread.recordType, recordId: thread.recordId, direction: 'INBOUND', audience: 'PARTNER', partyId: thread.partyId } }))
   return { id, threadId: thread.id, at: now }
 }

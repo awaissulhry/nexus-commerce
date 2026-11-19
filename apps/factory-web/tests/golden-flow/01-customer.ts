@@ -38,7 +38,8 @@ export default defineStage({
     expect(party.roles).toEqual(expect.arrayContaining(['CUSTOMER', 'BRAND']))
 
     await flow.step('payment terms on the identity card', async () => {
-      await sales.go(`/sales/customers/${party.id}`)
+      // F-SA-271 (sales page plan, pick R5): a customer opens on Work for Sales; the identity card is the Overview's.
+      await sales.go(`/sales/customers/${party.id}?tab=overview`)
       await press(page.getByRole('button', { name: 'Edit', exact: true }).first())
       await dialog(page).getByRole('textbox', { name: 'Payment terms', exact: true }).fill('Bonifico 30 gg d.f.')
       await answerOf(page, 'PATCH', /^\/parties\/[0-9a-f-]+$/, () => press(dialog(page).getByRole('button', { name: 'Save' })))

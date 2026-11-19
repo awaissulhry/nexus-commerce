@@ -18,11 +18,14 @@ export default defineStage({
       await page.getByRole('link', { name: order.number, exact: true }).first().click()
       await page.waitForURL(new RegExp(`/sales/orders/${order.id}`))
       await expect(page.getByText('Confirmed').first()).toBeVisible()
-      // The deposit's state reads in the record's chain (the band's deposit chip went with the docked thread, B-TH-214).
-      const chain = page.getByRole('list', { name: O('chain.title') })
-      await expect(chain.getByRole('listitem').filter({ hasText: O('chain.deposit') })).toContainText(O('gate.state.PAID'))
+      // F-SA-232 / F-SA-233 (sales page plan): the order opens on Overview; the deposit's state reads in its Linked records (the
+      // record chain left Lines, its words went).
+      const linked = page.getByRole('list', { name: O('overview.linked.title') })
+      await expect(linked.getByRole('listitem').filter({ hasText: O('overview.linked.deposit') })).toContainText(O('gate.state.PAID'))
       await expect(page.getByText(new RegExp(`From quote ${flow.state.quote.number}`)).first()).toBeVisible()
-      const lines = page.getByRole('table', { name: `${STYLE.code}: Ordered by colour and size` })
+      // F-SA-230: the lines, per colour and size, are the Lines tab's.
+      await sales.go(`/sales/orders/${order.id}?tab=lines`)
+      const lines = page.getByRole('table', { name: O('lines.gridCaption', { style: STYLE.code }) })
       const row = lines.getByRole('row', { name: /RED · Rosso/ })
       await expect(row).toBeVisible()
       expect((await row.getByRole('cell').allInnerTexts()).map((text) => text.trim()).slice(-4)).toEqual(['2', '4', '2', '8'])
