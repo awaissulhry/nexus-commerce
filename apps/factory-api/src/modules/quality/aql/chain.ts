@@ -1,5 +1,8 @@
+import type { Prisma } from '@nexus/factory-db'
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
+import { anyOf } from '@nexus/factory-domain/core/permissions'
+import { QUALITY_AQL_MANAGE, QUALITY_AQL_VIEW } from '@nexus/factory-domain/quality/aql/permissions'
 import type { InspectionLevel } from '@nexus/factory-domain/quality/aql/iso2859'
 import { resolveProfile, SOURCE_WORDS, type ChainAnswer } from '@nexus/factory-domain/quality/aql/profiles'
 import { aqlWords, levelText, samplingPlan, type SamplingPlanResult } from '@nexus/factory-domain/quality/aql/sampling'
@@ -9,7 +12,7 @@ import { readCells } from '../../production/serials/store'
 import { finalWorkOrder } from '../final/access'
 import type { AqlResult } from '@nexus/factory-domain/quality/aql/result'
 import type { ChainView, PlanView, ResultView } from './contract'
-import { mayView, officeOf, PROFILE_COLUMNS, type ProfileRow, type Reader } from './store'
+import { assignmentWall, mayView, officeOf, PROFILE_COLUMNS, type ProfileRow, type Reader } from './store'
 
 /**
  * Which AQL profile applies, and the plan it gives (B-W2b-93; QHS-020, QHS-021; design quality.inspections aql-profile
@@ -38,15 +41,18 @@ export interface ChainRead {
   readonly fixedSample: boolean
 }
 
-/** The chain for a company, a style and the customers, read as the caller (office or the site's floor). */
-export async function readChain(db: Reader, facts: ChainFacts): Promise<ChainRead> {
+/**
+ * The chain for a company, a style and the customers, read as the caller (office or the site's floor). op-fx9: `wall` keeps out
+ * the assignments the caller does not reach (the office's resolve: another customer's row counts as no row).
+ */
+export async function readChain(db: Reader, facts: ChainFacts, wall: Prisma.AqlProfileAssignmentWhereInput = {}): Promise<ChainRead> {
   const rows = await db.aqlProfile.findMany({ where: { companyId: facts.companyId }, select: PROFILE_COLUMNS })
   const customerIds = [...new Set(facts.customerIds)]
   const assignments = await db.aqlProfileAssignment.findMany({
     where: {
       companyId: facts.companyId,
       active: true,
-      AND: [{ OR: [{ customerId: null }, ...(customerIds.length ? [{ customerId: { in: customerIds } }] : [])] }, { OR: [{ styleId: null }, ...(facts.styleId ? [{ styleId: facts.styleId }] : [])] }],
+      AND: [{ OR: [{ customerId: null }, ...(customerIds.length ? [{ customerId: { in: customerIds } }] : [])] }, { OR: [{ styleId: null }, ...(facts.styleId ? [{ styleId: facts.styleId }] : [])] }, wall],
     },
     select: { id: true, profileId: true, customerId: true, styleId: true, active: true },
   })
@@ -140,7 +146,10 @@ export async function aqlPlanFor(db: Reader, ask: AqlPlanAsk): Promise<AqlPlanAn
 export async function resolveRoute(caller: CommandCaller, query: { readonly companyId: string; readonly customerId?: string | undefined; readonly styleId?: string | undefined }): Promise<{ chain: ChainView }> {
   const context = officeOf(caller)
   if (!mayView(context, query.companyId)) throw new NotFoundError('Company not found.')
-  return caller.withClient(async (client) => ({ chain: chainView(await readChain(client, { companyId: query.companyId, styleId: query.styleId ?? null, customerIds: query.customerId ? [query.customerId] : [] })) }))
+  // op-fx9 (the brand wall): another customer's assignments, or those of its private-label style, are no rows here — the answer of
+  // an unknown customer or style. Viewers and keepers alike, as mayView.
+  const wall = anyOf([assignmentWall(context, QUALITY_AQL_VIEW), assignmentWall(context, QUALITY_AQL_MANAGE)]) as Prisma.AqlProfileAssignmentWhereInput
+  return caller.withClient(async (client) => ({ chain: chainView(await readChain(client, { companyId: query.companyId, styleId: query.styleId ?? null, customerIds: query.customerId ? [query.customerId] : [] }, wall)) }))
 }
 
 /** The customers a work order's goods are for (its cells' sales order lines' parties). */
