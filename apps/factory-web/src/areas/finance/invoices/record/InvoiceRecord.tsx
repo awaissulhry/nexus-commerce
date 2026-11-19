@@ -29,6 +29,7 @@ import {
   type Sdi,
 } from '../../_shared/api'
 import { isStepUpCancelled, useCoalesced, useLive, useStepUp } from '../../_shared/hooks'
+import { olderRead } from '../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 import { abilitiesOf, lineInputsOf, readProblem, recordTouched, romeToday, writeProblem } from '../../_shared/model'
 import { releaseOverpayment } from '../daily/api'
 import { withCharge, withoutLine } from '../daily/model'
@@ -126,15 +127,20 @@ function RecordContainer({ invoiceId }: { invoiceId: string }) {
     [api],
   )
 
-  const setValue = useCallback((next: Invoice) => {
+  // fx-11 (end check): the page never goes back to an older version of its invoice (olderRead, as the purchase order since fx-10): a live
+  // re-read that left before a write and answered after it would put the invoice as it was back, and the next write would send that
+  // version and be refused as changed (409). Such a read is dropped: the write's own answer is newer, and its event reads it again.
+  const setValue = useCallback((next: Invoice): boolean => {
+    if (olderRead(current.current, next)) return false
     current.current = next
     setInvoice({ status: 'ready', value: next })
+    return true
   }, [])
 
   const load = useCallback(async () => {
     try {
       const next = await getInvoice(api, invoiceId)
-      setValue(next)
+      if (!setValue(next)) return // fx-11: an older read than the page holds
       setChanged(null)
       loadParts(next)
     } catch (error) {

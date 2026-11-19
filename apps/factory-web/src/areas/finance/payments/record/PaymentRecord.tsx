@@ -7,6 +7,7 @@ import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { allocatePayment, getPayment, reverseAllocation, voidPayment, type Payment } from '../../_shared/api'
 import { useCoalesced, useLive } from '../../_shared/hooks'
+import { olderRead } from '../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 import { abilitiesOf, allocationsOf, readProblem, romeToday, writeProblem } from '../../_shared/model'
 import type { Loaded, Part } from '../../invoices/record/record-model'
 import { newIdempotencyKey } from '../../../../lib/api/client'
@@ -68,6 +69,9 @@ function RecordContainer({ paymentId }: { paymentId: string }) {
   const load = useCallback(async () => {
     try {
       const next = await getPayment(api, paymentId)
+      // fx-11 (end check): a live re-read that left before a write and answered after it never puts the payment as it was back
+      // (olderRead): the next write would send that version and be refused as changed (409).
+      if (olderRead(current.current, next)) return
       current.current = next
       setPayment({ status: 'ready', value: next })
       void readRefunds(next)

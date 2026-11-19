@@ -9,6 +9,7 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { storeUrl } from '../../../../record-panels/store'
 import { useCoalesced, useLive } from '../../../_shared/buying/hooks'
+import { olderRead } from '../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 import { answerClaim, cancelClaim, claimReasons, closeClaim, ddtPdfLink, fileAddress, getClaim, makeLetter, removeClaimPhoto, removeLine, returnGoods, sendCheck, sendClaim, updateClaim, uploadClaimPhoto, type Claim, type PickerReason } from '../api'
 import {
   answerBody,
@@ -92,7 +93,10 @@ function Container({ claimId }: { claimId: string }) {
 
   const load = useCallback(async () => {
     try {
-      setClaim({ status: 'ready', value: await getClaim(api, claimId) })
+      const next = await getClaim(api, claimId)
+      // fx-11 (end check): a live re-read that left before a write and answered after it never puts the claim as it was back
+      // (olderRead): the next write would send that version and be refused as changed (409).
+      setClaim((held) => (held.status === 'ready' && olderRead(held.value, next) ? held : { status: 'ready', value: next }))
       setChanged(null)
     } catch (error) {
       if (isApiError(error) && error.kind === 'not_found') setClaim({ status: 'not_found' })

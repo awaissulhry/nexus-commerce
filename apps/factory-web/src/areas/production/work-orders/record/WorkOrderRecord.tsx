@@ -34,6 +34,7 @@ import {
   type WorkOrderWip,
 } from '../../_shared/api'
 import { useCoalesced, useLive } from '../../_shared/hooks'
+import { olderRead } from '../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 import { abilitiesOf, cellsBody, liveTouches, readProblem, releaseRefusalCodes, tabOf, writeProblem } from '../../_shared/model'
 import { PART_LOADING, type Loaded, type Part, type RecordDialog, type ReprintRun, type WorkOrderRecordModel } from './record-model'
 import { newIdempotencyKey } from '../../../../lib/api/client'
@@ -151,9 +152,14 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   const dailyRef = useRef(daily)
   dailyRef.current = daily
 
-  const setValue = useCallback((next: WorkOrder) => {
+  // fx-11 (end check): the page never goes back to an older version of its work order (olderRead, as the purchase order since fx-10): a live
+  // re-read that left before a write and answered after it would put the work order as it was back, and the next write would send that
+  // version and be refused as changed (409). Such a read is dropped: the write's own answer is newer, and its event reads it again.
+  const setValue = useCallback((next: WorkOrder): boolean => {
+    if (olderRead(current.current, next)) return false
     current.current = next
     setWorkOrder({ status: 'ready', value: next })
+    return true
   }, [])
 
   // Each read of the parts has a turn: an answer of an older read (a slow one before a write) never replaces a newer one.
@@ -243,7 +249,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   const load = useCallback(async () => {
     try {
       const next = await getWorkOrder(api, workOrderId)
-      setValue(next)
+      if (!setValue(next)) return // fx-11: an older read than the page holds
       setChanged(null)
       void loadParts(next)
     } catch (error) {

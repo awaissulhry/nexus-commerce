@@ -36,6 +36,7 @@ import {
   type ViesCheck,
 } from './api'
 import { partyEvent, useLive } from './hooks'
+import { olderRead } from '../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 import {
   addressBody,
   addressDraftOf,
@@ -174,7 +175,10 @@ export function usePartyRecord(side: Side, partyId: string, slots: PartySlots = 
   const load = useCallback(async () => {
     if (!can.view) return
     try {
-      setParty(await getParty(api, partyId))
+      const next = await getParty(api, partyId)
+      // fx-11 (end check): a live re-read that left before a write and answered after it never puts the party as it was back
+      // (olderRead): the next write would send that version and be refused as changed (409).
+      setParty((held) => (olderRead(held, next) ? held : next))
       setProblem(null)
       setChangedAt(null)
       setAsOf(new Date().toISOString())

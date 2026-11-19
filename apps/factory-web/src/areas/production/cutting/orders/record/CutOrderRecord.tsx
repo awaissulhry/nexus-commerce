@@ -6,6 +6,7 @@ import { isApiError } from '../../../../../lib/api/errors'
 import { newIdempotencyKey } from '../../../../../lib/api/client'
 import { useOfficeApi, useOfficeSession } from '../../../../../lib/session/context'
 import { useCoalesced, useLive } from '../../../_shared/hooks'
+import { olderRead } from '../../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 import { loading, phrase, readProblem, type Part } from '../../model'
 import {
   allocateRolls,
@@ -70,7 +71,9 @@ export function CutOrderRecord({ cutOrderId }: { cutOrderId: string }) {
     if (!can.view) return
     try {
       const value = await getCutOrder(api, cutOrderId)
-      setRecord({ status: 'ready', value, problem: null })
+      // fx-11 (end check): a live re-read that left before a write and answered after the write's own read never puts the cut
+      // order as it was back (olderRead): the next write would send that version and be refused as changed (409).
+      setRecord((held) => (held.value && olderRead(held.value.cutOrder, value.cutOrder) ? held : { status: 'ready', value, problem: null }))
       readRecon()
     } catch (error) {
       if (isApiError(error) && error.kind === 'not_found') setRecord({ status: 'missing', value: null, problem: null })

@@ -66,6 +66,7 @@ import {
 } from '../api'
 import { openPresigned, presignedBytes } from '../files'
 import { useCoalesced, useLive } from '../hooks'
+import { olderRead } from '../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 import { abilitiesOf, ddtFormFor, ddtRequestOf, hasLeft, knownIds, liveTouches, readProblem, tabOf, writeProblem, type DdtForm, type RecordTab } from '../model'
 import { PART_LOADING, type Loaded, type Part, type PdfPart, type RecordDialog, type ShipmentRecordModel } from './record-model'
 import { ShipmentRecordView } from './view/ShipmentRecordView'
@@ -297,15 +298,20 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
     [loadDdts, loadLabels, loadTracking, loadDocuments, loadReady, loadTabPart],
   )
 
-  const setValue = useCallback((next: Shipment) => {
+  // fx-11 (end check): the page never goes back to an older version of its shipment (olderRead, as the purchase order since fx-10): a live
+  // re-read that left before a write and answered after it would put the shipment as it was back, and the next write would send that
+  // version and be refused as changed (409). Such a read is dropped: the write's own answer is newer, and its event reads it again.
+  const setValue = useCallback((next: Shipment): boolean => {
+    if (olderRead(current.current, next)) return false
     current.current = next
     setShipment({ status: 'ready', value: next })
+    return true
   }, [])
 
   const load = useCallback(async () => {
     try {
       const next = await getShipment(api, shipmentId)
-      setValue(next)
+      if (!setValue(next)) return // fx-11: an older read than the page holds
       setChanged(null)
       loadParts(next)
     } catch (error) {

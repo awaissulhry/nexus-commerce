@@ -11,6 +11,7 @@ import { readFromStore, storeUrl } from '../../../../record-panels/store'
 import { findMaterials, getMaterial } from '../../../_shared/buying/api'
 import { todayIn } from '../../../_shared/buying/model'
 import { useCoalesced, useLive } from '../../../_shared/buying/hooks'
+import { olderRead } from '../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 import { listLocations, stockOverview } from '../../../_shared/stock/api'
 import {
   actOn,
@@ -133,15 +134,20 @@ function RecordContainer({ orderId }: { orderId: string }) {
     setDialogState(next)
   }, [])
 
-  const setValue = useCallback((next: SubcontractOrder) => {
+  // fx-11 (end check): the page never goes back to an older version of its order (olderRead, as the purchase order since fx-10): a live
+  // re-read that left before a write and answered after it would put the order as it was back, and the next write would send that
+  // version and be refused as changed (409). Such a read is dropped: the write's own answer is newer, and its event reads it again.
+  const setValue = useCallback((next: SubcontractOrder): boolean => {
+    if (olderRead(current.current, next)) return false
     current.current = next
     setOrder({ status: 'ready', value: next })
+    return true
   }, [])
 
   const load = useCallback(async () => {
     try {
       const next = await getOrder(api, orderId)
-      setValue(next)
+      if (!setValue(next)) return // fx-11: an older read than the page holds
       setChanged(null)
     } catch (error) {
       if (isApiError(error) && error.kind === 'not_found') setOrder({ status: 'not_found' })
