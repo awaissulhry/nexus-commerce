@@ -369,14 +369,14 @@ describe('F-SA-265: the frame\'s doors into the conversation (Discuss, Show in t
     expect(frame).toContain('...(hasThread ? { discuss, discussAsk, clearDiscuss, showInThread, showAsk, clearShow } : {})')
     const discuss = frame.slice(frame.indexOf('const discuss = useCallback'), frame.indexOf('const clearDiscuss'))
     expect(discuss.match(/showThread\(\)/g)?.length).toBe(2)
-    expect(frame).toContain('readonly openDoor?: (door: FrameDoor) => void')
+    expect(frame).toContain('readonly openDoor?: (door: FrameDoor, record?: FrameRecord) => void') // F-OP-212: with its record
   })
   it('the docked thread reads each ask once, only for its own record: the chip on Office note, the step in view, the followers', () => {
     const docked = readFileSync(new URL('../record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
     expect(docked).toContain('if (!discussAsk || discussAsk.record.type !== key.type || discussAsk.record.id !== key.id) return')
     expect(docked).toContain('const next = withAbout(composer.draft, discussAsk.about, composer.context.people)')
     expect(docked).toContain("notify({ ns: 'record-frame', key: 'discuss.notInThread', tone: 'warning' })")
-    expect(docked).toContain("const followersAsked = frame?.door === 'followers'")
+    expect(docked).toContain("const followersAsked = doorAsked === 'followers'") // F-OP-212: this thread's own door only
     const card = readFileSync(new URL('../../../lib/record-thread/card/view/MessageCard.tsx', import.meta.url), 'utf8')
     expect(card).toContain('{!readOnly && message.about && actions?.onShowOnPage && (')
     const feed = readFileSync(new URL('../../../lib/record-thread/feed/view/Feed.tsx', import.meta.url), 'utf8')
@@ -408,7 +408,7 @@ describe('F-SA-244: the frame\'s answer door — the ask card opens the page\'s 
     expect(frame).toContain('readonly answer?: FrameAnswer')
     expect(frame).toContain('...(hasThread && answer ? { answer } : {})')
     // Beside openDoor('approve'): the approve door is untouched.
-    expect(frame).toContain('readonly openDoor?: (door: FrameDoor) => void')
+    expect(frame).toContain('readonly openDoor?: (door: FrameDoor, record?: FrameRecord) => void') // F-OP-212: with its record
   })
   it('the docked thread hands it to the cards; a door to the conversation of another record (a change request: its order\'s)', () => {
     const docked = readFileSync(new URL('../record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
@@ -433,3 +433,127 @@ describe('F-SA-244: the frame\'s answer door — the ask card opens the page\'s 
   })
 })
 // ---- end F-SA-244
+
+// ---- F-OP-212 (order page plan N4; 11-dock §5; review N-1, D5): every frame ask names its record; only that record's thread takes it;
+// the page's dock moves its pick there first, keeping the view as it is.
+describe('F-OP-212 — frame asks carry a record', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const ORDER = { type: 'SalesOrder', id: 'o1' }
+  const PARTY = { type: 'Party', id: 'p1' }
+  const WO = { type: 'WorkOrder', id: 'w1' }
+
+  it('only the matching thread takes an ask; an ask that names no record (a page without one): any thread, as before', async () => {
+    const { takesAsk, askRecordOf, sameRecord } = await import('./model')
+    expect(takesAsk(ORDER, ORDER)).toBe(true)
+    expect(takesAsk(ORDER, PARTY)).toBe(false)
+    expect(takesAsk(ORDER, { type: 'SalesOrder', id: 'o2' })).toBe(false)
+    expect(takesAsk({ type: 'Quote', id: 'o1' }, ORDER)).toBe(false)
+    for (const none of [null, undefined]) expect(takesAsk(none, WO)).toBe(true)
+    // A missing record is the page's own; a page that names none leaves it open (its one thread).
+    expect(askRecordOf(undefined, ORDER)).toEqual(ORDER)
+    expect(askRecordOf(PARTY, ORDER)).toEqual(PARTY)
+    expect(askRecordOf(null, null)).toBeNull()
+    expect(sameRecord(ORDER, { ...ORDER })).toBe(true)
+    expect(sameRecord(ORDER, null)).toBe(false)
+  })
+
+  it('the ask waiting now and its record (the host moves once per ask)', async () => {
+    const { pendingAskOf } = await import('./model')
+    const files = { files: [], fileId: 'f1', record: ORDER }
+    expect(pendingAskOf(null)).toBeNull()
+    expect(pendingAskOf({ door: null, filesAsk: null })).toBeNull()
+    expect(pendingAskOf({ door: null, filesAsk: files })).toEqual({ ask: files, record: ORDER })
+    const compose = { record: PARTY, messageId: 'm1', mode: 'note' as const }
+    expect(pendingAskOf({ door: { door: 'owner', record: ORDER }, composeAsk: compose })?.record).toEqual(PARTY)
+    expect(pendingAskOf({ door: { door: 'followers', record: ORDER } })?.record).toEqual(ORDER)
+    // An ask on a page without a record of its own names none: no host moves.
+    expect(pendingAskOf({ door: { door: 'approve', record: null } })).toBeNull()
+  })
+
+  it('the frame fills the page\'s own record into every ask that names none (files, a door, the arrival\'s door, compose)', () => {
+    const frame = read('./RecordFrame.tsx')
+    expect(frame).toContain('readonly record?: FrameRecord')
+    expect(frame).toContain('setFilesAsk({ ...ask, record: askRecordOf(ask.record, pageRecord) })')
+    expect(frame).toContain('setDoor({ door: asked, record: askRecordOf(about, pageRecord) })')
+    expect(frame).toContain('if (asked.door) setDoor({ door: asked.door, record: pageRecordRef.current })')
+    // The arrival's door is read by the frame that has the thread (a loading frame is another mount: its door would be lost).
+    expect(frame).toContain('if (arrived.current || !hasThread) return')
+    expect(frame).toContain('setComposeAsk({ ...ask, record: askRecordOf(ask.record, pageRecord) })')
+    expect(frame).toContain('...(hasThread ? { compose, composeAsk, clearCompose } : {})')
+    const compose = frame.slice(frame.indexOf('const compose = useCallback'), frame.indexOf('const clearCompose'))
+    expect(compose).toContain('showThread()')
+    // The three pages with a pick name their own record.
+    expect(read('../../sales/orders/record/view/OrderRecordView.tsx')).toContain("record={{ type: 'SalesOrder', id: order.id }")
+    expect(read('../../sales/customers/record/view/CustomerRecordView.tsx')).toContain("record={{ type: 'Party', id: party.id }")
+    expect(read('../../production/work-orders/record/view/WorkOrderRecordView.tsx')).toContain("record={{ type: 'WorkOrder', id: workOrder.id }")
+  })
+
+  it('the docked thread takes files, doors and Answer only for its own record; Answer waits for its feed and opens at the message', () => {
+    const docked = read('../record-thread/DockedOfficeThread.tsx')
+    expect(docked).toContain('if (!filesAsk || !takesAsk(filesAsk.record, key)) return')
+    expect(docked).toContain('const doorAsked = frame?.door && takesAsk(frame.door.record, key) ? frame.door.door : null')
+    expect(docked).toContain("const askOnArrival = doorAsked === 'approve'")
+    expect(docked).not.toMatch(/frame\?\.door === '/)
+    expect(docked).toContain('if (!composeAsk || !feedReady || !takesAsk(composeAsk.record, key)) return')
+    expect(docked).toContain("if (composeAsk.mode === 'reply' && composeAsk.messageId && onReply) onReply(composeAsk.messageId)")
+    expect(docked).toContain("const switched = switchMode(composer.draft, 'note', composer.context.people)")
+    expect(docked).toContain('void jumpTo(composeAsk.messageId)')
+  })
+
+  it('the owner door (who answers the customer, N-1) reaches This order: filled with the order, the order dock moves there, its thread opens the owner dialog', async () => {
+    const { askRecordOf } = await import('./model')
+    const { scopeOfRecord, ORDER_SCOPE } = await import('../../sales/orders/record/dock/model')
+    const offer = { general: true, all: true, projects: ['pr1'], workOrders: ['w1'] }
+    const page = { orderId: 'o1', partyId: 'p1' }
+    expect(scopeOfRecord(askRecordOf(undefined, ORDER), page, offer)).toEqual(ORDER_SCOPE)
+    const docked = read('../record-thread/DockedOfficeThread.tsx')
+    const owner = docked.slice(docked.indexOf("const ownerAsked = doorAsked === 'owner'"), docked.indexOf('// Answer / Reply in the thread'))
+    expect(owner).toContain('if (!ownerAsked || !headRead) return')
+    expect(owner).toContain('setOwning({ busy: false, problem: null })')
+    // Held in words where the person may not write here (never a dialog that cannot save).
+    expect(owner).toContain("key: 'held.noRight', params: { right: rightRef('threads.post') }")
+    const model = read('./model.ts')
+    expect(model).toContain("export type FrameDoor = 'approve' | 'followers' | 'owner'")
+  })
+
+  it('the order dock: the record\'s scope (only what is offered), once per ask, the view kept (narrow + closed: no term)', async () => {
+    const { scopeOfRecord, scopeValueOf, sameScope, ORDER_SCOPE } = await import('../../sales/orders/record/dock/model')
+    const offer = { general: true, all: true, projects: ['pr1'], workOrders: ['w1'] }
+    const page = { orderId: 'o1', partyId: 'p1' }
+    expect(scopeOfRecord(PARTY, page, offer)).toEqual({ kind: 'general' })
+    expect(scopeOfRecord({ type: 'Project', id: 'pr1' }, page, offer)).toEqual({ kind: 'project', id: 'pr1' })
+    expect(scopeOfRecord(WO, page, offer)).toEqual({ kind: 'wo', id: 'w1' })
+    // Not offered, another order, another customer, another kind: no move (never a hint).
+    expect(scopeOfRecord({ type: 'WorkOrder', id: 'w9' }, page, offer)).toBeNull()
+    expect(scopeOfRecord({ type: 'SalesOrder', id: 'o2' }, page, offer)).toBeNull()
+    expect(scopeOfRecord({ type: 'Party', id: 'p2' }, page, offer)).toBeNull()
+    expect(scopeOfRecord(PARTY, page, { ...offer, general: false })).toBeNull()
+    expect(scopeOfRecord({ type: 'Shipment', id: 's1' }, page, offer)).toBeNull()
+    // The view as it is: docked no term; narrow and open `open`; narrow and closed no term (a file never pops the view open).
+    expect(scopeValueOf(ORDER_SCOPE, false, true)).toBeNull()
+    expect(scopeValueOf(ORDER_SCOPE, true, false)).toBe('open')
+    expect(scopeValueOf(ORDER_SCOPE, true, true)).toBeNull()
+    expect(scopeValueOf({ kind: 'general' }, true, true)).toBe('general')
+    expect(sameScope(ORDER_SCOPE, { kind: 'order' })).toBe(true)
+    expect(sameScope({ kind: 'wo', id: 'w1' }, { kind: 'wo', id: 'w2' })).toBe(false)
+    const dock = read('../../sales/orders/record/dock/OrderDock.tsx')
+    expect(dock).toContain('const pending = pendingAskOf(frame)')
+    expect(dock).toContain('now.frame?.setThread?.(scopeValueOf(target, now.narrow, now.closed))')
+    expect(dock).toContain('}, [pending?.ask, targetValue])')
+    expect(dock).not.toContain('const asking =')
+  })
+
+  it('the customer page (→ its general thread, or the record picked) and the work order (→ its notes, or an order of its pick) switch first', () => {
+    const work = read('../../sales/customers/record/view/WorkTab.tsx')
+    const dock = work.slice(work.indexOf('function Dock('))
+    expect(dock).toContain('const pending = pendingAskOf(frame)')
+    expect(dock).toContain("askFor.type === 'Party' ? (askFor.id === customer.id ? 'general' : null)")
+    expect(dock).toContain('if (follow && latest.current.scope !== follow) latest.current.onScope(follow)')
+    // The hooks before the page's "no threads.read: no dock" return.
+    expect(dock.indexOf('const pending = pendingAskOf(frame)')).toBeLessThan(dock.indexOf('if (general === null || general === undefined) return null'))
+    const wo = read('../../production/work-orders/record/WorkOrderRecord.tsx')
+    expect(wo).toContain('<FollowFrameAsks workOrderId={value.id} choices={choices} pick={threadPick} onPick={orderFiles.setPick} /* F-OP-212 */ />')
+    expect(wo).toContain("record.type === 'WorkOrder' ? (record.id === workOrderId ? 'workOrder' : null)")
+  })
+})
+// ---- end F-OP-212

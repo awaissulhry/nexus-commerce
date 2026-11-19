@@ -12,13 +12,15 @@ import { activeTenants, systemContext } from '../../../platform/outbox/system'
 import { holdsInForce as accountHoldsInForce } from '../../parties/holds/holds'
 import { newestCheck, planCredit } from '../../sales/credit/check'
 import { factsOf, lockShipmentRow, placeHoldInCommand, readHolds, releaseHoldInCommand, type LockedShipment } from './store'
+// B-OP-041 (order page N6, lines-derived): a shipment's orders are its lines' orders.
+import { orderIdsOfShipments, shipmentsOfOrderWhere } from '../shipments/orders-of'
 
 /**
  * The holds the system places and lifts by itself (B-W2b-386; FIN-079, follow-up LQ1:01; rules factory-domain
  * shipping/holds/system): the balance before shipping, the customer's account on hold, over the credit limit. Run in the
  * tenant's system context (placedById / releasedById null) by
  *
- *   the handler `shipping.systemHolds`   on shipment.created (the new shipment), sales_order.schedule_changed (the order's
+ *   the handler `shipping.systemHolds`   on shipment.created and B-OP-040's shipment.orders_changed (the shipment), sales_order.schedule_changed (the order's
  *                                        open shipments: a before-shipping step made, paid, waived or cancelled),
  *                                        party.hold_placed / party.hold_released, credit_check.recorded and
  *                                        credit_limit.changed (the customer's open shipments)
@@ -39,7 +41,8 @@ async function openShipmentIds(db: Reader, where: { readonly shipmentIds?: reado
     where: {
       status: { in: [...HOLDABLE_STATUSES] },
       ...(where.shipmentIds ? { id: { in: where.shipmentIds.filter(isUuid) } } : {}),
-      ...(where.salesOrderId ? { salesOrderId: where.salesOrderId } : {}),
+      // B-OP-041: an order's shipments — made for it, or carrying its garments.
+      ...(where.salesOrderId ? shipmentsOfOrderWhere(where.salesOrderId) : {}),
       ...(where.partyId ? { partyId: where.partyId } : {}),
     },
     select: { id: true },
@@ -59,9 +62,16 @@ interface ShipmentFacts {
 
 /** What the system rules read for one shipment (the credit plan once per customer and company). */
 async function factsFor(db: Reader, shipment: ShipmentFacts, now: Date, credit: Map<string, Promise<boolean>>): Promise<SystemHoldFacts> {
-  const order = await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { number: true } })
+  // B-OP-041 (N6): every order the shipment carries; the balance before shipping of each of them (the earliest open one
+  // holds it), and the words name the orders whose balance is open (the first order when none is).
+  const orderIds = (await orderIdsOfShipments(db, [shipment])).get(shipment.id) ?? [shipment.salesOrderId]
+  const orders = await db.salesOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, number: true } })
+  const numberOf = new Map(orders.map((row) => [row.id, row.number]))
   const party = await db.party.findUnique({ where: { id: shipment.partyId }, select: { code: true } })
-  const balance = await db.salesOrderMilestone.findFirst({ where: { orderId: shipment.salesOrderId, kind: 'BEFORE_SHIPPING', status: 'OPEN' }, select: { createdAt: true }, orderBy: { createdAt: 'asc' } })
+  const balances = await db.salesOrderMilestone.findMany({ where: { orderId: { in: orderIds }, kind: 'BEFORE_SHIPPING', status: 'OPEN' }, select: { orderId: true, createdAt: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+  const balance = balances[0] ?? null
+  const unpaid = orderIds.filter((id) => balances.some((row) => row.orderId === id))
+  const order = { number: (unpaid.length > 0 ? unpaid : [shipment.salesOrderId]).map((id) => numberOf.get(id) ?? '').filter((number) => number !== '').join(', ') }
   const accountHolds = await accountHoldsInForce(db, shipment.partyId, shipment.companyId)
   const key = `${shipment.partyId}|${shipment.companyId}`
   if (!credit.has(key)) credit.set(key, planCredit(db, { step: 'SHIPMENT', partyId: shipment.partyId, companyId: shipment.companyId, now, askers: [] }).then((plan) => plan?.result === 'HOLD'))
@@ -151,12 +161,13 @@ interface EventFacts {
 
 /** The open shipments an event concerns. */
 async function shipmentsOfEvent(db: Reader, type: string, payload: EventFacts): Promise<string[]> {
-  if (type === 'shipment.created') return typeof payload.shipmentId === 'string' ? openShipmentIds(db, { shipmentIds: [payload.shipmentId] }) : []
+  // B-OP-040 (N6): the orders a shipment carries changed: its holds follow every order's balance before shipping.
+  if (type === 'shipment.created' || type === 'shipment.orders_changed') return typeof payload.shipmentId === 'string' ? openShipmentIds(db, { shipmentIds: [payload.shipmentId] }) : []
   if (type === 'sales_order.schedule_changed') return typeof payload.orderId === 'string' && isUuid(payload.orderId) ? openShipmentIds(db, { salesOrderId: payload.orderId }) : []
   return typeof payload.partyId === 'string' && isUuid(payload.partyId) ? openShipmentIds(db, { partyId: payload.partyId }) : []
 }
 
-export const SYSTEM_HOLD_EVENTS = ['shipment.created', 'sales_order.schedule_changed', 'party.hold_placed', 'party.hold_released', 'credit_check.recorded', 'credit_limit.changed'] as const
+export const SYSTEM_HOLD_EVENTS = ['shipment.created', 'sales_order.schedule_changed', 'party.hold_placed', 'party.hold_released', 'credit_check.recorded', 'credit_limit.changed', /* B-OP-040 */ 'shipment.orders_changed'] as const
 
 export function systemHoldsHandler(): EventHandler {
   return defineHandler({

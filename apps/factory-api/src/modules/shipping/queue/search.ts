@@ -11,6 +11,8 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { officeContextOf } from '../access'
 import { factsOf, holdsInForceBy } from '../holds/store'
+// B-OP-041 (order page N6, lines-derived): the orders a shipment carries.
+import { orderRefsOfShipments } from '../shipments/orders-of'
 
 /**
  * Shipment search and its history (B-W2b-386; LOG-120; rules factory-domain shipping/queue/search). Office, shipping.view:
@@ -43,6 +45,9 @@ function matchWhere(term: string): Prisma.ShipmentWhereInput {
       { salesOrder: { customerRef: contains(term) } },
       { salesOrder: { party: { legalName: contains(term) } } },
       { salesOrder: { party: { code: contains(term) } } },
+      // B-OP-041 (order page N6): the number or PO of any order it carries (its lines' orders, of its own customer).
+      { lines: { some: { salesOrderLine: { order: { number: contains(term) } } } } },
+      { lines: { some: { salesOrderLine: { order: { customerRef: contains(term) } } } } },
       { parcels: { some: { trackingNumber: contains(term) } } },
       { manualTrackingNumber: contains(term) },
       { lines: { some: { serials: { some: { serial: { equals: term, mode: 'insensitive' } } } } } },
@@ -106,6 +111,8 @@ export async function searchShipments(caller: CommandCaller, query: SearchQuery)
     })
     const page = rows.slice(0, query.limit)
     const holds = await holdsInForceBy(client, page.map((row) => row.id))
+    // B-OP-041: every order each shipment carries, the first first.
+    const ordersOf = await orderRefsOfShipments(client, page)
     const lower = term?.toLowerCase() ?? ''
     const carton = term ? cartonCodeOf(term) : null
     const has = (value: string | null | undefined) => !!value && value.toLowerCase().includes(lower)
@@ -114,6 +121,7 @@ export async function searchShipments(caller: CommandCaller, query: SearchQuery)
       /** Kinds of numbers the term looks like that are not kept yet: an SSCC (pallet and carton SSCCs come later). */
       notKept: (term && looksLikeSscc(term) ? ['SSCC'] : []) as 'SSCC'[],
       shipments: page.map((row) => {
+        const orders = ordersOf.get(row.id) ?? []
         const serials = row.lines.flatMap((line) => line.serials.map((serial) => serial.serial))
         const trackingNumbers = [...row.parcels.flatMap((parcel) => (parcel.trackingNumber ? [parcel.trackingNumber] : [])), ...(row.manualTrackingNumber ? [row.manualTrackingNumber] : [])]
         const matchedBy: SearchMatch[] = term
@@ -123,8 +131,8 @@ export async function searchShipments(caller: CommandCaller, query: SearchQuery)
                 carton && row.number.toLowerCase() === carton.shipmentNumber.toLowerCase() && row.parcels.some((parcel) => parcel.cartonNumber === carton.cartonNumber) ? 'CARTON' : null,
                 serials.length > 0 ? 'SERIAL' : null,
                 trackingNumbers.some(has) ? 'TRACKING' : null,
-                has(row.salesOrder.number) ? 'ORDER' : null,
-                has(row.salesOrder.customerRef) ? 'CUSTOMER_PO' : null,
+                has(row.salesOrder.number) || orders.some((ref) => has(ref.number)) ? 'ORDER' : null,
+                has(row.salesOrder.customerRef) || orders.some((ref) => has(ref.customerRef)) ? 'CUSTOMER_PO' : null,
                 has(row.salesOrder.party.legalName) || has(row.salesOrder.party.code) ? 'CUSTOMER' : null,
               ] as const
             )
@@ -142,6 +150,7 @@ export async function searchShipments(caller: CommandCaller, query: SearchQuery)
           customerRef: row.salesOrder.customerRef,
           partyCode: row.salesOrder.party.code,
           partyName: row.salesOrder.party.legalName,
+          salesOrders: orders.map((ref) => ({ id: ref.id, number: ref.number, customerRef: ref.customerRef })), // B-OP-041
           transportBy: row.transportBy,
           carrierCode: row.carrierCode,
           carrierName: row.carrierName,

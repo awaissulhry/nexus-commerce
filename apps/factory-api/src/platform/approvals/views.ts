@@ -2,6 +2,7 @@ import type { z } from 'zod'
 import {
   APPROVAL_KIND_WORDS,
   APPROVAL_REFUSALS,
+  askersOf, // B-OP-020
   changeSize,
   ownRequestWords,
   parseCondition,
@@ -21,7 +22,7 @@ import { recheckSubject, type Recheck } from './engine'
 import type { HistoryLine } from './history/source'
 import { kindOf } from './kinds'
 import { reasonWords } from '../reasons/service'
-import { askersOfTask, decideCheck, decidersOf, fieldsOfKind, grainsOf, heldGrain, hiddenFieldsOf, isApprover, peopleNames, roleNames, type HeldApproverRole, type Reader, type TaskRow } from './store'
+import { askersOfTask, decideCheck, decidersOf, fieldsOfKind, grainsOf, heldGrain, hiddenFieldsOf, isApprover, peopleNames, roleNames, type DecideCheck, type HeldApproverRole, type Reader, type TaskRow } from './store'
 
 /**
  * The requests as the screens read them (B-W2b-282; design home.approvals queue, review, why-me): names resolved in one pass,
@@ -144,6 +145,40 @@ export async function taskRows(db: Reader, tasks: readonly TaskRow[], view: View
   return rows
 }
 
+// ── B-OP-020 (order page plan N1; 13-backend §2): a record's open requests, decided on the record's own page ──────────────────
+type Decision = TaskDetailView['withdraw']
+
+/** The no: the request's approver who did not ask it (no re-check: a changed subject may still be refused); held in the yes's words. */
+function rejectOf(check: DecideCheck, approve: Decision): Decision {
+  return check.allowed ? { allowed: true, why: null } : check.code === 'OWN_REQUEST' ? approve : { allowed: false, why: APPROVAL_REFUSALS[check.code] }
+}
+
+/** Taking it back: only the person who asked (or wrote) it, while it is pending (the withdraw route's own rule). */
+function withdrawOf(task: Pick<TaskRow, 'status'>, askers: readonly string[], me: string): Decision {
+  return task.status !== 'PENDING' ? { allowed: false, why: APPROVAL_REFUSALS.NOT_PENDING } : askers.includes(me) ? { allowed: true, why: null } : { allowed: false, why: APPROVAL_REFUSALS.NOT_REQUESTER }
+}
+
+export type OpenTaskRowView = TaskRowView & { readonly reject: Decision; readonly withdraw: Decision }
+
+/**
+ * The open requests of one record as its own page decides them (the order page's yes in place): each row as the inbox builds it
+ * (`rowOf`: the engine's may-decide rule, so nobody approves their own request) with what the request's popup adds to decide it —
+ * the no and taking it back. The caller lists only the requests the engine's list rule shows the reader.
+ */
+export async function openTaskRows(db: Reader, tasks: readonly TaskRow[], view: ViewContext): Promise<OpenTaskRowView[]> {
+  const data = await lookups(db, tasks, false)
+  const rows: OpenTaskRowView[] = []
+  for (const task of tasks) {
+    const subject = await subjectOfTask(db, task)
+    const row = rowOf(task, view, data, subject.recheck, subject.words)
+    const worker = task.requestedByWorkerId ? data.workers.get(task.requestedByWorkerId) : undefined
+    const askers = askersOf(task, worker?.userId ?? null)
+    rows.push({ ...row, reject: rejectOf(decideCheck(view.context, task, askers, view.roles), row.approve), withdraw: withdrawOf(task, askers, view.context.actorId) })
+  }
+  return rows
+}
+// ── end B-OP-020 ──
+
 /** One request as the review popup reads it: its change, its re-check line, its rules, who may decide, its history. */
 export async function taskDetailOf(db: Reader, task: TaskRow, view: ViewContext, history: readonly HistoryLine[]): Promise<TaskDetailView> {
   const data = await lookups(db, [task], true)
@@ -197,8 +232,9 @@ export async function taskDetailOf(db: Reader, task: TaskRow, view: ViewContext,
     withdrawn: task.withdrawnAt ? { at: toUtcIso(task.withdrawnAt), by: person(task.withdrawnById) } : null,
     staleAt: task.staleAt ? toUtcIso(task.staleAt) : null,
     history: history.map((entry) => historyLineView(entry, me, historyPeople, historyWorkers)),
-    reject: check.allowed ? { allowed: true, why: null } : check.code === 'OWN_REQUEST' ? approve : { allowed: false, why: APPROVAL_REFUSALS[check.code] },
-    withdraw: task.status !== 'PENDING' ? { allowed: false, why: APPROVAL_REFUSALS.NOT_PENDING } : askers.includes(me) ? { allowed: true, why: null } : { allowed: false, why: APPROVAL_REFUSALS.NOT_REQUESTER },
+    // B-OP-020: the same rules as a record's open rows (openTaskRows).
+    reject: rejectOf(check, approve),
+    withdraw: withdrawOf(task, askers, me),
   }
 }
 

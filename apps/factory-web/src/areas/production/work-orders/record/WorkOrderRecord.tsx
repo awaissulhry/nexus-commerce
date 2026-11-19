@@ -65,6 +65,9 @@ import { pickOf, threadChoices } from './order-files/model'
 import { useOrderFiles } from './order-files/use-order-files'
 import { WorkOrderThreads } from './view/WorkOrderThreads'
 // ---- end B-TH-265
+import { useRecordFrame } from '../../../_shared/record-frame/RecordFrame' // F-OP-212: the dock follows an ask's record
+import { pendingAskOf } from '../../../_shared/record-frame/model' // F-OP-212
+import type { OrderThreadChoice, ThreadPick as OrderFilesPick } from './order-files/model' // F-OP-212
 // ---- F-PR-05a: the band's health (each order's, B-PR-35) with Raise to At risk, the Overview's gates, Preview as <customer> ----
 import { useBrandHealth } from '../../../../lib/production/health/use-health' // F-SA-235: moved to lib (one card)
 import { useOrderGates } from './gates/use-gates'
@@ -409,6 +412,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   const thread =
     value && own && readsThreads ? (
       <WorkOrderThreads choices={choices} pick={threadPick} onPick={orderFiles.setPick}>
+        <FollowFrameAsks workOrderId={value.id} choices={choices} pick={threadPick} onPick={orderFiles.setPick} /* F-OP-212 */ />
         {pickedOrder ? (
           <OfficeRecordThread
             key={`order-${pickedOrder.orderId}`}
@@ -733,3 +737,21 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     />
   )
 }
+
+// ---- F-OP-212 (order page plan N4; 11-dock §5, D5): an ask of the page (files, Followers…, a door, Answer) names its record — the
+// work order's own when the body names none: the dock's pick goes to that record's thread first (the work order's notes, or one of its
+// orders' threads the pick offers), which then takes the ask; once per ask. Drawn inside the dock (where the frame's asks are); draws
+// nothing.
+function FollowFrameAsks({ workOrderId, choices, pick, onPick }: { workOrderId: string; choices: readonly OrderThreadChoice[]; pick: OrderFilesPick; onPick: (pick: OrderFilesPick) => void }) {
+  const frame = useRecordFrame()
+  const pending = pendingAskOf(frame)
+  const record = pending?.record ?? null
+  const next: OrderFilesPick | null = !record ? null : record.type === 'WorkOrder' ? (record.id === workOrderId ? 'workOrder' : null) : record.type === 'SalesOrder' && choices.some((choice) => choice.orderId === record.id) ? record.id : null
+  const latest = useRef({ pick, onPick })
+  latest.current = { pick, onPick }
+  useEffect(() => {
+    if (next !== null && next !== latest.current.pick) latest.current.onPick(next)
+  }, [pending?.ask, next])
+  return null
+}
+// ---- end F-OP-212

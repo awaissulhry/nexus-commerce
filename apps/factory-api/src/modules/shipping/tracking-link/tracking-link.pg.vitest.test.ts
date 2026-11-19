@@ -184,7 +184,7 @@ describe('the tracking page by link (links.tracking)', { timeout: SLOW_TEST_TIME
     const page = read.json()
     expect(page.shipment).toMatchObject({ number: 'SEED-SH-0001', status: 'SHIPPED', transportBy: 'CARRIER', carrierName: 'Seed Express' })
     // fix-portal-numbers-1 (B-TH-303): the customer's own order number ("#N"), never the office's SEED-SO-0002.
-    expect(page.order).toEqual({ customerRef: 'SEED-PO-78', number: expect.stringMatching(/^#\d+$/) })
+    expect(page.order).toEqual({ customerRef: 'SEED-PO-78', number: expect.stringMatching(/^#\d+$/), /* B-OP-042, R-18 */ otherPieces: 0 })
     expect(page.pill).toBe('IN_TRANSIT')
     expect(page.steps.map((step: Json) => [step.code, step.state])).toEqual([
       ['PACKED', 'DONE'],
@@ -316,6 +316,53 @@ describe('Find your order: the public search by order reference and postcode (se
     expect(challenged.json().error.issues.map((issue: Json) => issue.path)).toContain('challenge')
     // Another network is not held.
     expect((await search({ tenant: NS, company: 'SCA', reference: 'SEED-PO-78', postcode: '00000' }, '192.0.2.44')).json().shipments).toHaveLength(1)
+  })
+})
+
+// B-OP-042 (order page N6, lines-derived; R-18): a link may be passed on to a third party (the customer's own shop): the page
+// names the one order it was made for and only HOW MANY pieces of the customer's other orders travel with it. SEED-SH-0001
+// (SEED-SO-0002) gets one garment of SEED-SO-0003 past the guards (the API refuses a second order until B-OP-047).
+describe('B-OP-042: a shared shipment\'s tracking link names one order and counts the others (R-18)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const forced = async (sql: string, values: unknown[] = []) => {
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(sql, values)
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+  }
+  const lineId = newId()
+
+  it('the page names SEED-SO-0002 (its own reference and number) and "1 piece of other orders", never the other order', async () => {
+    const other = await one<{ id: string; number: string; customerRef: string | null; customerSeq: number | null }>(`SELECT id, number, "customerRef", "customerSeq" FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'SEED-SO-0003'`, [T])
+    const cell = await one<{ id: string }>(`SELECT c.id FROM "WorkOrderSize" c JOIN "SalesOrderLine" l ON l.id = c."salesOrderLineId" WHERE l."orderId" = $1 LIMIT 1`, [other.id])
+    await forced(
+      `INSERT INTO "ShipmentLine" (id, "tenantId", "siteId", "partyId", "shipmentId", "workOrderId", "workOrderSizeId", "salesOrderLineId", size, quantity)
+       SELECT $1, c."tenantId", c."siteId", s."partyId", s.id, c."workOrderId", c.id, c."salesOrderLineId", c.size, 1 FROM "WorkOrderSize" c, "Shipment" s WHERE c.id = $2 AND s.id = $3`,
+      [lineId, cell.id, SH1],
+    )
+    const made = await office.post(`/shipping/shipments/${SH1}/tracking-links`, { send: false }, { headers: { 'idempotency-key': key() } })
+    expect(made.status, JSON.stringify(made.body)).toBe(201)
+    const read = await linkCall(tokenOf(made.body.url), 'GET', '/link/tracking')
+    expect(read.statusCode, read.body).toBe(200)
+    const page = read.json()
+    expect(page.order).toEqual({ customerRef: 'SEED-PO-78', number: expect.stringMatching(/^#\d+$/), otherPieces: 1 })
+    const text = JSON.stringify(page)
+    expect(text).not.toContain('SEED-SO-0003')
+    expect(text).not.toContain(other.id)
+    if (other.customerRef) expect(text).not.toContain(other.customerRef)
+    if (other.customerSeq !== null && other.customerSeq !== undefined) expect(page.order.number).not.toBe(`#${other.customerSeq}`)
+  })
+
+  it('the public search finds the shipment by the other order too, and its page still names only the one order', async () => {
+    const found = await search({ tenant: NS, company: 'SCA', reference: 'SEED-SO-0003', postcode: '00000' }, '203.0.113.42')
+    expect(found.statusCode, found.body).toBe(200)
+    const hit = (found.json().shipments as Json[]).find((row) => row.number === 'SEED-SH-0001')
+    expect(hit).toBeDefined()
+    const page = (await linkCall(hit!.token, 'GET', '/link/tracking')).json()
+    expect(page.order).toMatchObject({ customerRef: 'SEED-PO-78', otherPieces: 1 })
+    expect(JSON.stringify(page)).not.toContain('SEED-SO-0003')
+    await forced(`DELETE FROM "ShipmentLine" WHERE id = $1`, [lineId])
   })
 })
 

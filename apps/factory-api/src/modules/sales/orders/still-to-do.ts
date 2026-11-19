@@ -45,8 +45,11 @@ import type { OrderRow, Reader } from './store'
 
 export interface StillRow {
   readonly kind: StillKind
-  /** The record that closes it (null: one the reader does not reach — counted, never named). */
-  readonly ref: { readonly type: string; readonly id: string; readonly number: string | null } | null
+  /**
+   * The record that closes it (null: one the reader does not reach — counted, never named). B-OP-021: + its version, for the act
+   * done in place (null: a record with none — an amendment, a re-promise).
+   */
+  readonly ref: { readonly type: string; readonly id: string; readonly number: string | null; readonly version: number | null } | null
   readonly words: Words
   /** Since when it waits. */
   readonly since: string
@@ -75,9 +78,9 @@ const AT_WORKSHOP = ['ISSUED', 'AT_WORKSHOP', 'PARTLY_RECEIVED'] as const
 const OPEN_TASK = 'OPEN'
 
 /** The open subcontract orders of these work orders. */
-export async function openSubcontractsOf(db: Reader, workOrderIds: readonly string[]): Promise<{ id: string; number: string; workOrderId: string }[]> {
+export async function openSubcontractsOf(db: Reader, workOrderIds: readonly string[]): Promise<{ id: string; number: string; workOrderId: string; version: number }[]> {
   if (workOrderIds.length === 0) return []
-  return db.subcontractOrder.findMany({ where: { workOrderId: { in: [...workOrderIds] }, status: { in: [...AT_WORKSHOP] } }, select: { id: true, number: true, workOrderId: true }, orderBy: { number: 'asc' } })
+  return db.subcontractOrder.findMany({ where: { workOrderId: { in: [...workOrderIds] }, status: { in: [...AT_WORKSHOP] } }, select: { id: true, number: true, workOrderId: true, version: true /* B-OP-021 */ }, orderBy: { number: 'asc' } })
 }
 
 /** The subcontract orders whose workshop was told since then: a notice written to it on the subcontract order (B-SA-054). */
@@ -101,7 +104,7 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
   // The work orders of its own lines (and those its changes name), read once, through the wall.
   const own = lines.length > 0 ? await db.workOrderSize.findMany({ where: { salesOrderLineId: { in: lines.map((line) => line.id) } }, select: { workOrderId: true }, distinct: ['workOrderId'] }) : []
   const workOrderIds = [...new Set([...own.map((cell) => cell.workOrderId), ...changes.flatMap((change) => (change.workOrderId ? [change.workOrderId] : []))])]
-  const workOrders = new Map((workOrderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, number: true, status: true, kind: true, companyId: true, siteId: true, partyId: true } }) : []).map((row) => [row.id, row]))
+  const workOrders = new Map((workOrderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, number: true, status: true, kind: true, companyId: true, siteId: true, partyId: true, version: true /* B-OP-021 */ } }) : []).map((row) => [row.id, row]))
   const reached = (id: string | null) => {
     const workOrder = id ? workOrders.get(id) : undefined
     return workOrder && reachesWorkOrder(actor, WORKORDERS_VIEW, workOrder) ? workOrder : null
@@ -122,7 +125,7 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
     if (change.status === 'PROPOSED') {
       rows.push({
         kind: 'WORK_ORDER_CHANGE',
-        ref: !change.workOrderId || workOrder ? { type: 'WorkOrderChange', id: change.id, number: workOrder?.number ?? null } : null,
+        ref: !change.workOrderId || workOrder ? { type: 'WorkOrderChange', id: change.id, number: workOrder?.number ?? null, version: change.version } : null,
         words: APPLY_WORDS.work(change.kind as WorkOrderChangeKind, workOrder?.number ?? null, CHANGE_WORDS.cells(cells), count),
         since: toUtcIso(change.createdAt),
         waitingOn: 'PLANNER',
@@ -136,7 +139,7 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
     if (outcome === 'CHARGE') {
       const amendment = change.amendmentId ? await db.salesOrderAmendment.findUnique({ where: { id: change.amendmentId }, select: { id: true, revision: true, reacceptanceNeeded: true } }) : null
       if (amendment && amendment.reacceptanceNeeded && order.reapprovalNeededAt !== null) {
-        rows.push({ kind: 'EXTRA_PIECES', ref: { type: 'SalesOrderAmendment', id: amendment.id, number: String(amendment.revision) }, words: STILL_WORDS.extraCharged(count), since: toUtcIso(change.createdAt), waitingOn: 'CUSTOMER', mayAct: false, requestId: change.requestId })
+        rows.push({ kind: 'EXTRA_PIECES', ref: { type: 'SalesOrderAmendment', id: amendment.id, number: String(amendment.revision), version: null }, words: STILL_WORDS.extraCharged(count), since: toUtcIso(change.createdAt), waitingOn: 'CUSTOMER', mayAct: false, requestId: change.requestId })
       }
       continue
     }
@@ -147,7 +150,7 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
     if (scans.length === 0 || waiting > 0) {
       rows.push({
         kind: 'EXTRA_PIECES',
-        ref: workOrder ? { type: 'WorkOrder', id: workOrder.id, number: workOrder.number } : null,
+        ref: workOrder ? { type: 'WorkOrder', id: workOrder.id, number: workOrder.number, version: workOrder.version } : null,
         words: STILL_WORDS.extraScrap(count, workOrder?.number ?? null),
         since: toUtcIso(change.createdAt),
         waitingOn: 'PLANNER',
@@ -160,17 +163,17 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
   // STYLE_CHANGE: the product change requests the order's DESIGN requests raised, until released or refused.
   const requests = await db.orderChangeRequest.findMany({ where: { orderId: order.id, status: 'ACCEPTED' }, select: { id: true, kind: true, answeredAt: true } })
   const designIds = requests.filter((request) => request.kind === 'DESIGN').map((request) => request.id)
-  const raised = designIds.length > 0 ? await db.changeRequest.findMany({ where: { orderChangeRequestId: { in: designIds }, status: { notIn: ['DONE', 'REJECTED'] } }, select: { id: true, number: true, companyId: true, styleId: true, createdAt: true, orderChangeRequestId: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }) : []
+  const raised = designIds.length > 0 ? await db.changeRequest.findMany({ where: { orderChangeRequestId: { in: designIds }, status: { notIn: ['DONE', 'REJECTED'] } }, select: { id: true, number: true, companyId: true, styleId: true, createdAt: true, orderChangeRequestId: true, version: true /* B-OP-021 */ }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }) : []
   const styles = new Map((raised.length > 0 ? await db.style.findMany({ where: { id: { in: [...new Set(raised.map((row) => row.styleId))] } }, select: { id: true, code: true } }) : []).map((style) => [style.id, style.code]))
   for (const request of raised) {
-    rows.push({ kind: 'STYLE_CHANGE', ref: { type: 'ChangeRequest', id: request.id, number: request.number }, words: STILL_WORDS.styleWaiting(request.number, styles.get(request.styleId) ?? ''), since: toUtcIso(request.createdAt), waitingOn: 'PRODUCT', mayAct: can(actor, PRODUCT_CHANGES_MANAGE, { companyId: request.companyId }), requestId: request.orderChangeRequestId })
+    rows.push({ kind: 'STYLE_CHANGE', ref: { type: 'ChangeRequest', id: request.id, number: request.number, version: request.version }, words: STILL_WORDS.styleWaiting(request.number, styles.get(request.styleId) ?? ''), since: toUtcIso(request.createdAt), waitingOn: 'PRODUCT', mayAct: can(actor, PRODUCT_CHANGES_MANAGE, { companyId: request.companyId }), requestId: request.orderChangeRequestId })
   }
 
   // WORK_IN_PROGRESS_TASK: the tasks released change orders' REWORK and SCRAP lines left on the order's own work orders.
   const ownIds = own.map((cell) => cell.workOrderId)
   const items = ownIds.length > 0 ? await db.changeOrderItem.findMany({ where: { kind: 'WORK_IN_PROGRESS', workOrderId: { in: ownIds }, disposition: { in: [...TASK_DISPOSITIONS] }, changeOrder: { is: { status: 'RELEASED' } } }, select: { changeOrderId: true, workOrderId: true, disposition: true, changeOrder: { select: { toRevisionId: true } } } }) : []
   const taskIds = items.map((item) => wipTaskIdOf(item.changeOrderId, item.workOrderId!))
-  const tasks = new Map((taskIds.length > 0 ? await db.task.findMany({ where: { id: { in: taskIds }, status: OPEN_TASK }, select: { id: true, assigneeId: true, createdAt: true } }) : []).map((task) => [task.id, task]))
+  const tasks = new Map((taskIds.length > 0 ? await db.task.findMany({ where: { id: { in: taskIds }, status: OPEN_TASK }, select: { id: true, assigneeId: true, createdAt: true, version: true /* B-OP-021 */ } }) : []).map((task) => [task.id, task]))
   // B-SA-046c: a task a design change's change order left carries that customer's request (its product change request names it),
   // so the customer reads "we are carrying it out" until the rework or scrap is done.
   const changeOrderIds = [...new Set(items.map((item) => item.changeOrderId))]
@@ -184,7 +187,7 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
     const revision = item.changeOrder.toRevisionId ? (revisions.get(item.changeOrder.toRevisionId) ?? null) : null
     rows.push({
       kind: 'WORK_IN_PROGRESS_TASK',
-      ref: workOrder ? { type: 'Task', id: task.id, number: workOrder.number } : null,
+      ref: workOrder ? { type: 'Task', id: task.id, number: workOrder.number, version: task.version } : null,
       words: STILL_WORDS.wipTask(item.disposition as WipDisposition, workOrder?.number ?? null, revision),
       since: toUtcIso(task.createdAt),
       waitingOn: 'PLANNER',
@@ -196,7 +199,7 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
   // REPROMISE: planning's re-promises of its lines still waiting for sales (never answered by who proposed it).
   const manages = can(actor, ORDERS_MANAGE, place)
   for (const proposal of (await readProposals(db, [order.id])).filter((entry) => entry.state === 'WAITING')) {
-    rows.push({ kind: 'REPROMISE', ref: { type: 'RePromise', id: proposal.id, number: null }, words: STILL_WORDS.repromise(seqOf.get(proposal.orderLineId) ?? 0), since: toUtcIso(proposal.proposedAt), waitingOn: 'SALES', mayAct: manages && proposal.proposedById !== context.actorId, requestId: null })
+    rows.push({ kind: 'REPROMISE', ref: { type: 'RePromise', id: proposal.id, number: null, version: null }, words: STILL_WORDS.repromise(seqOf.get(proposal.orderLineId) ?? 0), since: toUtcIso(proposal.proposedAt), waitingOn: 'SALES', mayAct: manages && proposal.proposedById !== context.actorId, requestId: null })
   }
 
   // TELL_WORKSHOP: the workshops of the work orders an accepted request's changes name, not told since its answer.
@@ -208,7 +211,7 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
     for (const entry of outside) {
       if (told.has(entry.id)) continue
       const workOrder = named(entry.workOrderId)
-      rows.push({ kind: 'TELL_WORKSHOP', ref: workOrder ? { type: 'SubcontractOrder', id: entry.id, number: entry.number } : null, words: STILL_WORDS.workshop(workOrder ? entry.number : null), since: toUtcIso(request.answeredAt), waitingOn: 'PLANNER', mayAct: false, requestId: request.id })
+      rows.push({ kind: 'TELL_WORKSHOP', ref: workOrder ? { type: 'SubcontractOrder', id: entry.id, number: entry.number, version: entry.version } : null, words: STILL_WORDS.workshop(workOrder ? entry.number : null), since: toUtcIso(request.answeredAt), waitingOn: 'PLANNER', mayAct: false, requestId: request.id })
     }
   }
 

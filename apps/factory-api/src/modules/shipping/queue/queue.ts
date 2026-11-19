@@ -14,6 +14,8 @@ import { readyToShip } from '../shipments/ready'
 import { factsOf, holdsInForceBy } from '../holds/store'
 import { shipByLookup } from './promise'
 import { cutOffToday, siteDaysOf, type CutOffToday, type SiteDay } from './site-day'
+// B-OP-041 (order page N6, lines-derived): the orders a shipment carries.
+import { orderRefsOfShipments } from '../shipments/orders-of'
 
 /**
  * The ship-today queue and the at-risk queue (B-W2b-386; LOG-018, LOG-110; design warehouse.shipments "Carrier cut-offs
@@ -79,6 +81,8 @@ async function openRows(caller: CommandCaller, siteIds: readonly string[], warnM
     const visible = rows.filter((row) => mayOn(context, SHIPPING_VIEW, row))
     const shipBy = await shipByLookup(client, visible.flatMap((row) => row.lines))
     const holds = await holdsInForceBy(client, visible.map((row) => row.id))
+    // B-OP-041 (order page N6): every order each shipment carries, the first first (its lines' promises are read per line already).
+    const ordersOf = await orderRefsOfShipments(client, visible)
     return visible.map((row) => {
       const day = days.get(row.siteId)!
       const key = carrierKeyOf(row)
@@ -99,6 +103,7 @@ async function openRows(caller: CommandCaller, siteIds: readonly string[], warnM
         customerRef: row.salesOrder.customerRef,
         partyCode: row.salesOrder.party.code,
         partyName: row.salesOrder.party.legalName,
+        salesOrders: (ordersOf.get(row.id) ?? []).map((ref) => ({ id: ref.id, number: ref.number, customerRef: ref.customerRef })), // B-OP-041
         carrierKey: key,
         transportBy: row.transportBy,
         carrierCode: row.carrierCode,

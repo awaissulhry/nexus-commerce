@@ -610,7 +610,19 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    its planned materials go down or go, never below `factory_work_order_cell_floor` — what is cut, bundled or on a cut order)),
    `…_order_apply_design_asks_guards` (sales page plan schema wave 2/2, B-SA-005b, guard only, no schema folder of its own: it
    redefines …_production_wave5_guards' `factory_portal_settings_guard` so a customer's ask-kinds switch may also open the design
-   change DESIGN — factory-domain production-brand/kinds `LIMITS_ASK_KINDS`, the API's list)):
+   change DESIGN — factory-domain production-brand/kinds `LIMITS_ASK_KINDS`, the API's list)),
+   `…_order_page_guards` (order page plan schema wave 1/1, B-OP-005, N5 + N6 LINES-DERIVED: a shipment's orders are the orders
+   of its lines, `Shipment.salesOrderId` its first order, no table of its own; the new helper `factory_order_shipments` (the
+   shipments of an order: its first-order ones and those that carry its garments) and the trigger `Ddt_not_elsewhere` (no Nexus
+   DDT of a shipment made ELSEWHERE); it redefines …_followups_f1_w2b_guards' `factory_shipment_line_guard` (a line of another
+   OPEN order of the shipment's customer and company, in the first order's currency and tax mode, while DRAFT; the floor still
+   skips the order check, R-8), …_delivery_customs_w2b_guards' `factory_shipment_guard` (origin never changes; ELSEWHERE never
+   split, never packed, DRAFT → SHIPPED in one step, at most 60 days back; the paper DDT both or neither, as printed, fixed once
+   it left; `manualTrackingUrl` in after_leaving) and `factory_sales_order_delivered_check` (its shipments through its lines),
+   …_carriers_w2b_guards' `factory_shipment_carriers_check` (the typed tracking link: https, ≤ 500, one line, no user-info,
+   only with its number; its trigger recreated with the column), …_quality_shipping_guards' `factory_shipment_shipped_has_ddt`
+   (R-23: an ELSEWHERE shipment leaves with its paper DDT's number unless an immediate invoice travelled) and …_order_apply_guards'
+   `factory_message_about_ok` (a shipment that carries the order's garments is a part of it)):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

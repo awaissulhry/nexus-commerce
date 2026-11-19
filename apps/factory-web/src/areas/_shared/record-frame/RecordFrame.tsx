@@ -20,6 +20,8 @@ import { viewOpenOf } from './model' // F-SA-262
 import type { DiscussAsk, FrameDoor, ShowInThreadAsk } from './model' // F-SA-265
 import type { FrameAnswer } from './model' // F-SA-244
 import type { FrameFilesAsk } from './model' // B-TH-264 follow-up
+import { askRecordOf, type ComposeAsk, type FrameDoorAsk, type FrameRecord } from './model' // F-OP-212: every ask names its record
+import { currentAddress, keptScopeOf, withThread, writeSearch } from './address' // F-OP-209: the ONE writer of `thread=`
 // B-TH-229: "Thread · 2 new".
 import { threadButtonWords } from './model'
 import './record-frame.css'
@@ -89,6 +91,10 @@ export interface RecordFrameProps {
   // ---- F-SA-244: the page's ONE review window, opened from the conversation (the customer's ask's Answer…); absent: not offered.
   readonly answer?: FrameAnswer
   // ---- end F-SA-244
+  // ---- F-OP-212 (11-dock §5): the page's own record (the order, the customer, the work order): every ask that names no record is for
+  // it, and only its thread takes it (the page's dock moves its pick there first). Absent: asks name no record (the page's one thread).
+  readonly record?: FrameRecord
+  // ---- end F-OP-212
 }
 
 // B-TH-264 follow-up: the body's files in the thread's ONE viewer (the types live in model.ts).
@@ -104,14 +110,17 @@ export interface RecordFrameState {
   readonly choose: (choice: DockWidth | 'hide' | 'reset') => void
   /** Stacked: back from the full-width thread to the body (same tab, same scroll). */
   readonly close: () => void
-  /** The door the address asked for on arrival (`panel=approvals`), once; the thread clears it. F-SA-265: or the body's Followers…. */
-  readonly door: FrameDoor | null
+  /**
+   * The door the address asked for on arrival (`panel=approvals`), once; the thread clears it. F-SA-265: or the body's Followers….
+   * F-OP-212: with the thread it is for (only that thread takes it).
+   */
+  readonly door: FrameDoorAsk | null
   readonly clearDoor: () => void
   /** B-TH-229: the thread tells the band how many messages are new to the reader ("Thread · 2 new"). */
   readonly reportNew?: (count: number) => void
   // ---- B-TH-262 (R-ACT; 08-tabs R-ACT "the sample Approval tab's Ask the customer opens the Ask popover"): a part of the body opens
   // one of the thread's doors — the thread shows (docked) or opens full width (narrower), then the door opens, as `panel=approvals` does.
-  readonly openDoor?: (door: FrameDoor) => void
+  readonly openDoor?: (door: FrameDoor, record?: FrameRecord) => void // F-OP-212: the record (absent: the page's own)
   // ---- end B-TH-262
   // ---- B-TH-264 follow-up: the body's files in the thread's ONE viewer. `openFiles` is there only where the page has a thread (else
   // the body opens the file as before); the thread reads `filesAsk` once and clears it.
@@ -123,6 +132,10 @@ export interface RecordFrameState {
   // docked, it shows (if hidden); narrower, the full-width thread opens. (TH-6 part B's invoice Send copy uses it too, B-TH-268.)
   readonly showThread?: () => void
   // ---- end B-TH-265
+  // ---- F-OP-209 (11-dock §4): the ONE writer of `thread=` — the dock's pick (a scope, `open` below 1280 px, null: This order's own),
+  // the message a line opens its thread at; a history replace only when the address changes, a push only when the narrow view opens.
+  readonly setThread?: (value: string | null, options?: SetThreadOptions) => void
+  // ---- end F-OP-209
   // ---- F-SA-265 (10-order-page §6.4): Discuss — a row of the body opens the conversation about it: the dock shows (narrower: the
   // full-width conversation), the page's pick goes to the record's own conversation, the box opens on Office note with the chip
   // "About: …". Show in thread — a history row shows its step in the conversation. The thread reads each ask once and clears it.
@@ -136,6 +149,18 @@ export interface RecordFrameState {
   // ---- F-SA-244: the door kind beside openDoor('approve') — the conversation asks the page's review window to open on a request.
   readonly answer?: FrameAnswer
   // ---- end F-SA-244
+  // ---- F-OP-212 (review N-1): Answer / Reply in the thread — the thread of the ask's record opens at the message with the box focused
+  // (Reply: the card's own Reply; Office note otherwise). The thread shows first; only that record's thread reads the ask, once.
+  readonly compose?: (ask: ComposeAsk) => void
+  readonly composeAsk?: ComposeAsk | null
+  readonly clearCompose?: () => void
+  // ---- end F-OP-212
+}
+
+/** F-OP-209: how `setThread` writes — the message to open the thread at (absent: dropped), a push (the narrow view opening). */
+export interface SetThreadOptions {
+  readonly message?: string | null
+  readonly push?: boolean
 }
 
 const FrameContext = createContext<RecordFrameState | null>(null)
@@ -212,7 +237,7 @@ export function RecordFrame(props: RecordFrameProps) {
   )
 }
 
-function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /* F-SA-263 */, dockTab /* F-SA-263 */, printThread, children, closed = false /* B-TH-269 */, fields /* B-TH-280 */, threadButton: namedButton /* F-SA-279 */, answer /* F-SA-244 */ }: RecordFrameProps) {
+function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /* F-SA-263 */, dockTab /* F-SA-263 */, printThread, children, closed = false /* B-TH-269 */, fields /* B-TH-280 */, threadButton: namedButton /* F-SA-279 */, answer /* F-SA-244 */, record /* F-OP-212 */ }: RecordFrameProps) {
   const t = useT(FRAME_NS)
   const slot = useBandSlot()
   const printing = usePrintMode()
@@ -232,7 +257,15 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
   const viewOpen = viewOpenOf(params?.get(THREAD_PARAM) ?? null)
   const [details, setDetails] = useState(false)
   const [keys, setKeys] = useState(false)
-  const [door, setDoor] = useState<FrameDoor | null>(null)
+  const [door, setDoor] = useState<FrameDoorAsk | null>(null)
+  // ---- F-OP-212: the page's own record, the one every ask that names none is for (kept by its type and id: a new object each render).
+  const ownType = record?.type ?? null
+  const ownId = record?.id ?? null
+  const pageRecord = useMemo<FrameRecord | null>(() => (ownType && ownId ? { type: ownType, id: ownId } : null), [ownType, ownId])
+  const pageRecordRef = useRef(pageRecord)
+  pageRecordRef.current = pageRecord
+  const [composeAsk, setComposeAsk] = useState<ComposeAsk | null>(null)
+  // ---- end F-OP-212
   const [discussAsk, setDiscussAsk] = useState<DiscussAsk | null>(null) // F-SA-265
   const [showAsk, setShowAsk] = useState<ShowInThreadAsk | null>(null) // F-SA-265
   const [filesAsk, setFilesAsk] = useState<FrameFilesAsk | null>(null) // B-TH-264 follow-up
@@ -245,7 +278,12 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
   useLayoutEffect(() => slot.claim(), [slot.claim])
 
   // R-8: an old address that asked for Activity opens the thread (and `panel=approvals` its "Ask a partner to approve").
+  // F-OP-212: read by the frame that has the thread — a page's frame while its record still loads has none (it is another mount), and
+  // the door it took would be lost with it; the address waits for the frame with the thread (once per mount).
+  const arrived = useRef(false)
   useEffect(() => {
+    if (arrived.current || !hasThread) return
+    arrived.current = true
     const asked = arrivalOf(window.location.search)
     // F-SA-263: any `?thread=` (a dock scope, the narrow view's `open`) shows a docked thread the person had hidden.
     if (!asked.openThread && showsOnArrival(window.location.search) && window.matchMedia(`(min-width: ${DOCK_FROM}px)`).matches) sizes.show()
@@ -256,27 +294,34 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
     if (next.get(THREAD_PARAM) === 'new') next.delete(THREAD_PARAM) // B-TH-230: the New messages cell's door
     if (!window.matchMedia(`(min-width: ${DOCK_FROM}px)`).matches) next.set(THREAD_PARAM, 'open')
     else sizes.show()
-    window.history.replaceState(null, '', `${window.location.pathname}${next.size > 0 ? `?${next.toString()}` : ''}${window.location.hash}`)
-    if (asked.door) setDoor(asked.door)
+    // F-OP-209: the arrival reads and cleans the address once, through the same history writer (nothing when it is the same).
+    writeSearch(`${window.location.pathname}${next.size > 0 ? `?${next.toString()}` : ''}${window.location.hash}`)
+    if (asked.door) setDoor({ door: asked.door, record: pageRecordRef.current }) // F-OP-212: the page's own thread takes it
     // Only on arrival.
-  }, [])
+  }, [hasThread]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ---- F-OP-209 (11-dock §4; RC4, RC5): the ONE writer of `thread=`. Never in render; the arrival above is the one exception that
+  // reads the address and cleans it once. Below 1280 px the scope and the open view share the term: closing the view drops it, so
+  // the frame keeps the scope (this page mount only) and the band's Thread button opens the view on it again.
+  const setThread = useCallback((value: string | null, options: SetThreadOptions = {}) => {
+    writeSearch(withThread(currentAddress(), value, { message: options.message ?? null }), { push: options.push === true })
+  }, [])
+  const term = params?.get(THREAD_PARAM) ?? null
+  const keptScope = useRef<string | null>(null)
+  useEffect(() => {
+    keptScope.current = keptScopeOf(keptScope.current, term, mode)
+  }, [term, mode])
   const openView = useCallback(() => {
     const scroller = scrollerOf(root.current)
     scrollKept.current = scroller?.scrollTop ?? null
-    const next = new URLSearchParams(window.location.search)
-    next.set(THREAD_PARAM, 'open')
-    window.history.pushState(null, '', `${pathname}?${next.toString()}`)
-  }, [pathname])
+    setThread(keptScope.current ?? 'open', { push: true })
+  }, [setThread])
   const closeView = useCallback(() => {
     if (!new URLSearchParams(window.location.search).has(THREAD_PARAM)) return
     if (scrollKept.current !== null) window.history.back()
-    else {
-      const next = new URLSearchParams(window.location.search)
-      next.delete(THREAD_PARAM)
-      window.history.replaceState(null, '', `${pathname}${next.size > 0 ? `?${next.toString()}` : ''}`)
-    }
-  }, [pathname])
+    else setThread(null)
+  }, [setThread])
+  // ---- end F-OP-209
   // Back keeps place: the scroll of this address is kept while scrolling and given back after Back / Forward (once the body is tall
   // enough: the record reads its parts after the page comes back).
   const address = `${pathname}?${params?.toString() ?? ''}`
@@ -386,15 +431,16 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
 
   // B-TH-262: a body part's door (the sample's "Ask the customer"): show the thread, then the door.
   const openDoor = useCallback(
-    (asked: FrameDoor) => {
+    (asked: FrameDoor, about?: FrameRecord) => {
       if (mode === 'docked') sizes.show()
       else if (!viewOpen) openView()
-      setDoor(asked)
+      setDoor({ door: asked, record: askRecordOf(about, pageRecord) }) // F-OP-212
     },
-    [mode, sizes, viewOpen, openView],
+    [mode, sizes, viewOpen, openView, pageRecord],
   )
   // B-TH-264 follow-up: the body's files in the thread's viewer (a window over the page: the dock need not be shown for it).
-  const openFiles = useCallback((ask: FrameFilesAsk) => setFilesAsk(ask), [])
+  // F-OP-212: in the viewer of the ask's record's thread (the page's own when the body names none).
+  const openFiles = useCallback((ask: FrameFilesAsk) => setFilesAsk({ ...ask, record: askRecordOf(ask.record, pageRecord) }), [pageRecord])
   const clearFiles = useCallback(() => setFilesAsk(null), [])
   // ---- B-TH-265: show the thread (no door).
   const showThread = useCallback(() => {
@@ -420,6 +466,16 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
   const clearDiscuss = useCallback(() => setDiscussAsk(null), [])
   const clearShow = useCallback(() => setShowAsk(null), [])
   // ---- end F-SA-265
+  // ---- F-OP-212: Answer / Reply in the thread — the conversation shows, then the ask's record's thread reads it.
+  const compose = useCallback(
+    (ask: ComposeAsk) => {
+      showThread()
+      setComposeAsk({ ...ask, record: askRecordOf(ask.record, pageRecord) })
+    },
+    [showThread, pageRecord],
+  )
+  const clearCompose = useCallback(() => setComposeAsk(null), [])
+  // ---- end F-OP-212
   const state = useMemo<RecordFrameState>(
     () => ({
       mode,
@@ -432,11 +488,13 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
       reportNew: setFresh,
       openDoor /* B-TH-262 */,
       showThread /* B-TH-265 */,
+      ...(hasThread ? { setThread } : {}) /* F-OP-209: the dock's pick writes the address here, and only here */,
       ...(hasThread ? { openFiles, filesAsk, clearFiles } : {}) /* B-TH-264 follow-up */,
       ...(hasThread ? { discuss, discussAsk, clearDiscuss, showInThread, showAsk, clearShow } : {}) /* F-SA-265: only where the page has a conversation */,
+      ...(hasThread ? { compose, composeAsk, clearCompose } : {}) /* F-OP-212 */,
       ...(hasThread && answer ? { answer } : {}) /* F-SA-244: only where the page has the review window and a conversation */,
     }),
-    [mode, width, phone, choose, closeView, door, openDoor, showThread, hasThread, openFiles, filesAsk, clearFiles, discuss, discussAsk, clearDiscuss, showInThread, showAsk, clearShow, answer],
+    [mode, width, phone, choose, closeView, door, openDoor, showThread, hasThread, setThread, openFiles, filesAsk, clearFiles, discuss, discussAsk, clearDiscuss, showInThread, showAsk, clearShow, answer, compose, composeAsk, clearCompose],
   )
 
   const buttonWords = threadButtonWords(fresh) // B-TH-229

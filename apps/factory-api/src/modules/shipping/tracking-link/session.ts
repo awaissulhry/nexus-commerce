@@ -101,11 +101,14 @@ export async function trackingPage(request: FastifyRequest) {
     const { shipment, via } = tracked
     // fix-portal-numbers-1 (B-TH-303, plan §0.5): the customer's own order number, never the office's SO-… series.
     const order = await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { customerSeq: true, customerRef: true } })
+    // B-OP-042 (order page N6, R-18, lead decision): the page names the shipment's first order for every link, plus the pieces
+    // of the customer's other orders on it as a count only ("and N pieces of other orders"), never their numbers.
+    const otherPieces = (await db.shipmentLine.findMany({ where: { shipmentId: shipment.id, salesOrderLine: { orderId: { not: shipment.salesOrderId } } }, select: { quantity: true } })).reduce((sum, line) => sum + line.quantity, 0)
     const site = await db.site.findUnique({ where: { id: shipment.siteId }, select: { timezone: true } })
     const parcels = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true }, orderBy: { seq: 'asc' } })
     const events = await db.trackingEvent.findMany({ where: { shipmentId: shipment.id }, select: { id: true, status: true, location: true, occurredAt: true, parcelId: true }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200 })
     const papers = papersShown(via) ? await papersOf(db, shipment) : []
-    return { shipment, via, order, timeZone: site?.timezone ?? 'Europe/Rome', parcels, events, papers }
+    return { shipment, via, order, otherPieces, timeZone: site?.timezone ?? 'Europe/Rome', parcels, events, papers }
   })
   if (!page) throw linkUnavailable()
   const { shipment, via, parcels, events } = page
@@ -125,7 +128,7 @@ export async function trackingPage(request: FastifyRequest) {
       returnedAt: iso(shipment.returnedAt),
       expectedDeliveryAt: iso(expectedDeliveryOf(shipment.status, shipment.expectedDeliveryAt)),
     },
-    order: { customerRef: page.order?.customerRef ?? null, number: customerRefOf('ORDER', page.order?.customerSeq ?? null) /* fix-portal-numbers-1: "#12" */ },
+    order: { customerRef: page.order?.customerRef ?? null, number: customerRefOf('ORDER', page.order?.customerSeq ?? null) /* fix-portal-numbers-1: "#12" */, otherPieces: page.otherPieces /* B-OP-042, R-18 */ },
     pill: tracker.pill,
     problem: tracker.problem,
     steps: tracker.steps.map((step) => ({ code: step.code, state: step.state, at: iso(step.at) })),

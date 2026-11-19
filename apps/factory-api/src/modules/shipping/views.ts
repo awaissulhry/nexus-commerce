@@ -71,6 +71,12 @@ export const freightSchema = output({
   cost: notMoney(output({ amount: money.cost(z.number().int().nullable()), currency: z.string().nullable() })),
 })
 
+/**
+ * B-OP-041 (order page N6, lines-derived): the orders a shipment carries (its lines' orders, ordersOfShipment), the first
+ * order (salesOrderId) first; one while N6 is held off. Always of its own customer (the line's FK carries partyId).
+ */
+export const shipmentOrdersSchema = z.array(output({ id: id(), number: z.string(), customerRef: z.string().nullable() }))
+
 /** The office's shipment: header, order and party, and its contents. */
 export const shipmentSchema = output({
   id: id(),
@@ -83,6 +89,8 @@ export const shipmentSchema = output({
   party: output({ code: z.string(), legalName: z.string() }),
   salesOrderId: id(),
   salesOrder: output({ number: z.string(), customerRef: z.string().nullable(), status: z.string() }),
+  /** B-OP-041: every order it carries, the first (salesOrder) first. */
+  salesOrders: z.array(output({ id: id(), number: z.string(), customerRef: z.string().nullable(), status: z.string() })),
   shipToAddressId: id().nullable(),
   shipTo: z.record(z.string(), z.unknown()),
   transportBy: transportBySchema,

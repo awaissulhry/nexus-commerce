@@ -9,6 +9,8 @@ import type { CommandTx } from '../../../core/command'
 import type { ShipmentHeader } from '../store'
 // B-W2b-386 (LQ1:02): the customer's requirements as the DDT's remarks.
 import { ddtRequirementRemarks } from '../queue/ddt-remarks'
+// B-OP-042 (order page N6, lines-derived): the orders a shipment carries.
+import { ordersOfShipment } from '../shipments/orders-of'
 
 /**
  * The DDT part's reads (every read names its columns). A reader takes the command's transaction (the issue reads its
@@ -30,6 +32,8 @@ const GOODS_SELECT = {
     },
   },
   serials: { select: { serial: true } },
+  // B-OP-042: the order of the line (the DDT groups its lines by order).
+  salesOrderLine: { select: { orderId: true } },
 } as const satisfies Prisma.ShipmentLineSelect
 
 /** A name in the document's language when the record has one (nameI18n), else its own name. */
@@ -39,7 +43,7 @@ function localised(name: string, names: unknown, language: DocumentLanguage): st
 }
 
 /** The garments of the shipment, one entry per work order cell (its lines over every parcel added up). */
-async function goodsOf(db: CommandTx, shipmentId: string, language: DocumentLanguage): Promise<DdtGoods[]> {
+async function goodsOf(db: CommandTx, shipmentId: string, language: DocumentLanguage, /* B-OP-042 */ orderIds: readonly string[] = []): Promise<DdtGoods[]> {
   const rows = await db.shipmentLine.findMany({ where: { shipmentId }, select: GOODS_SELECT, orderBy: { id: 'asc' } })
   const byCell = new Map<string, { goods: DdtGoods; quantity: number; serials: string[] }>()
   for (const row of rows) {
@@ -63,6 +67,8 @@ async function goodsOf(db: CommandTx, shipmentId: string, language: DocumentLang
         batchNumber: row.workOrderSize.workOrder.batchNumber,
         serials: [],
         ppe,
+        // B-OP-042: its order's place among the shipment's orders (0: the first).
+        orderSeq: Math.max(0, orderIds.indexOf(row.salesOrderLine.orderId)),
       },
       quantity: row.quantity,
       serials: row.serials.map((serial) => serial.serial),
@@ -86,9 +92,14 @@ const day = (value: Date): BusinessDate => value.toISOString().slice(0, 10)
 export async function readDdtFacts(db: CommandTx, shipment: ShipmentHeader, company: CompanyLegal): Promise<DdtFacts> {
   const order = await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { number: true, orderDate: true, customerRef: true, billTo: true, language: true } })
   const language: DocumentLanguage = isDocumentLanguage(order?.language) ? order.language : 'it'
+  // B-OP-042 (N6): every order it carries, the first first (one SALES_ORDER + CUSTOMER_ORDER ref each; the recipient stays
+  // the first order's buyer, whose VAT number every other order shares).
+  const orderIds = await ordersOfShipment(db, shipment)
+  const orderRows = await db.salesOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, number: true, orderDate: true, customerRef: true, billTo: true } })
+  const orders = orderIds.flatMap((id) => orderRows.filter((row) => row.id === id).map((row) => ({ number: row.number, orderDate: day(row.orderDate), customerRef: row.customerRef, billTo: row.billTo })))
   const settings = await db.shippingSettings.findUnique({ where: { id: shipment.siteId }, select: { defaultGoodsAppearance: true } })
   const parcels = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { seq: true, grossWeightKg: true }, orderBy: { seq: 'asc' } })
-  const goods = await goodsOf(db, shipment.id, language)
+  const goods = await goodsOf(db, shipment.id, language, orderIds)
   const live = await liveDdtOf(db, shipment.id)
   // B-W2b-386 (LQ1:02): the customer's requirements on the shipping checklist, printed as the DDT's remarks by default.
   const requirementRemarks = await ddtRequirementRemarks(db, shipment)
@@ -99,6 +110,7 @@ export async function readDdtFacts(db: CommandTx, shipment: ShipmentHeader, comp
     company,
     billTo: order?.billTo ?? null,
     order: { number: order?.number ?? '', orderDate: order ? day(order.orderDate) : '', customerRef: order?.customerRef ?? null },
+    orders, // B-OP-042
     defaultAppearance: settings?.defaultGoodsAppearance ?? null,
     parcels: parcels.map((parcel) => ({ seq: parcel.seq, grossWeightKg: parcel.grossWeightKg === null ? null : parcel.grossWeightKg.toFixed(4) })),
     goods,

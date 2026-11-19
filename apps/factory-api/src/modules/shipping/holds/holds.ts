@@ -25,6 +25,8 @@ import { actorOf, type OfficeContext } from '../../../core/context'
 import { assertMay, mayOn, officeContextOf } from '../access'
 import { readShipment } from '../store'
 import { factsOf, holdView, lockShipmentRow, namesOf, placeHoldInCommand, readHolds, releaseHoldInCommand, type HoldRow, type LockedShipment } from './store'
+// B-OP-041 (order page N6, lines-derived): the orders a shipment carries.
+import { orderRefsOfShipments } from '../shipments/orders-of'
 
 /**
  * Hold and release a shipment (B-W2b-386; LOG-017, FIN-079; design warehouse.shipments: the selection row's "Hold" (W2b), the
@@ -217,6 +219,8 @@ export async function listHolds(caller: CommandCaller, query: HoldsQuery) {
     }),
   )
   const page = rows.slice(0, query.limit)
+  // B-OP-041 (order page N6): every order each hold's shipment carries, the first first (one query for the page).
+  const ordersOf = await caller.withClient((client) => orderRefsOfShipments(client, page.map((row) => ({ id: row.shipment.id, salesOrderId: row.shipment.salesOrder.id }))))
   const actor = actorOf(context)
   return {
     holds: page.map((row) => ({
@@ -237,6 +241,7 @@ export async function listHolds(caller: CommandCaller, query: HoldsQuery) {
         customerRef: row.shipment.salesOrder.customerRef,
         partyCode: row.shipment.salesOrder.party.code,
         partyName: row.shipment.salesOrder.party.legalName,
+        salesOrders: (ordersOf.get(row.shipment.id) ?? []).map((ref) => ({ id: ref.id, number: ref.number, customerRef: ref.customerRef })), // B-OP-041
       },
     })),
     nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null,
