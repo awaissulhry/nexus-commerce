@@ -95,7 +95,7 @@
     "moreFiles_other": "altri {count} file",
     "writeFirst": "Scrivi il primo in {thread}",
     "showEverything": "Mostra tutto",
-    "answer": "Rispondi nella sua conversazione",
+    "answer": "Rispondi",
     "answerLabel": "Rispondi nella conversazione di {record}",
     "chip": {
       "general": "{customer} (generale)",

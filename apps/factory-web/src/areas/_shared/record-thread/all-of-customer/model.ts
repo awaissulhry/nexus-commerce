@@ -15,7 +15,7 @@ import type { FeedAnswer, FeedEntry, FeedQuery, FeedRecord } from './api'
  *   each line    a record chip — "SO-0142 · Your order 12", "<Customer> (general)", "QT-0031 · Your quote 3", "PRJ-0004 …" — and the
  *                conversation's own message card, READ ONLY (MessageCard `readOnly`: its audience edge — blue, the customer reads it;
  *                yellow, office only —, its words, files and time, no ⋯), a "New" dot when it is new to the reader
- *   doors        "Answer in its conversation" (the host switches the dock to that record's ONE thread, at that message) and the chip,
+ *   doors        "Answer" (F-OP-216; the host switches the dock to that record's ONE thread, at that message) and the chip,
  *                a real link to the record's page (⌘-click: a new tab); nothing is written from here
  *   never jumps  a live hint reads the newest page again in the background; what is newer than the top waits behind "N new · Show"
  *                (the list moves only when the person asks), Show older adds the next page at the foot, without a gap or a repeat

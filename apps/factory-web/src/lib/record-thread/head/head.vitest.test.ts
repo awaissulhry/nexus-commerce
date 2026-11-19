@@ -92,16 +92,16 @@ describe('B-TH-229 — waiting words and the amber rule, the owner, 2 new', () =
 
   it('amber only by the rule: past the threshold while it waits on US; waiting on the customer is never amber', () => {
     const amber = render(base({ answers: us(1460, true) }))
-    expect(amber).toMatch(/nds-pill warning[^"]*"[^>]*>(<span[^>]*>)?Waiting on us · 3 d/)
+    expect(amber).toMatch(/nds-pill warning[^"]*"[^>]*>(<span[^>]*>)?This thread waits on us · 3 d/) // F-OP-216: the pill names the thread
     expect(amber).toContain('Amber after 1 working day waiting on us.')
     const calm = render(base({ answers: us(242, false, 3) }))
-    expect(calm).toMatch(/nds-pill neutral[^"]*"[^>]*>(<span[^>]*>)?Waiting on us · 4 h/)
+    expect(calm).toMatch(/nds-pill neutral[^"]*"[^>]*>(<span[^>]*>)?This thread waits on us · 4 h/)
     expect(calm).toContain('Amber after 3 working days waiting on us.')
     const theirs = render(base({ answers: answersOf({ on: 'CUSTOMER', since: '2026-11-11T09:00:00.000Z', workingMinutes: 2380, calendar: true, amber: false, thresholdDays: 3 }) }))
-    expect(theirs).toContain('Waiting on customer · 4 d')
+    expect(theirs).toContain('This thread waits on the customer · 4 d')
     expect(theirs).toContain('Never amber while it waits on the other side.')
     expect(render(base({ answers: us(242, false, 3, false) }))).toContain('No company calendar: counted in clock hours.')
-    expect(render(base({ answers: us(242, false) }), 'it')).toContain('Tocca a noi · 4 h')
+    expect(render(base({ answers: us(242, false) }), 'it')).toContain('Conversazione: tocca a noi · 4 h')
   })
 
   it('the owner: a tile named on hover and for screen readers; inactive said; nobody "—"; Change owner held with the right', () => {
@@ -324,7 +324,7 @@ describe('the words', () => {
   it('the office Head names the thread for screen readers and says who answers', () => {
     const html = renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: designScreen.cases[0]!.model })))
     expect(html).toContain('Thread of SO-2026-0142')
-    expect(html).toContain('Waiting on us · 4 h')
+    expect(html).toContain('This thread waits on us · 4 h')
     expect(html).toContain('aria-label="Thread tools"')
   })
 })
@@ -479,3 +479,57 @@ describe('F-OP-204 — the width menu is one part', () => {
   })
 })
 // ---- end F-OP-204
+
+// ---- F-OP-216 (order page plan N4; 11-dock §6.3, §6.4, §8; review R-21): the dock's words — the Head's pill names the thread, All of
+// <Customer> says "thread" in English (Italian keeps "conversazione", the dock's word), the door is "Answer" / "Rispondi" ----------------
+describe('F-OP-216 — the dock\'s words, one word each, the same keys in both languages', () => {
+  const flat = (tree: Record<string, unknown>, prefix = ''): Record<string, string> =>
+    Object.fromEntries(Object.entries(tree).flatMap(([key, value]) => (typeof value === 'string' ? [[`${prefix}${key}`, value]] : Object.entries(flat(value as Record<string, unknown>, `${prefix}${key}.`)))))
+  const catalogue = (locale: 'en' | 'it', name: string) => flat(JSON.parse(readFileSync(new URL(`../../../../messages/${locale}/${name}.json`, import.meta.url), 'utf8')) as Record<string, unknown>)
+  const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort().join(',')
+
+  it('the Head\'s pill says whose turn it is in THIS thread (R-21: the dock never shows an order-level count)', () => {
+    const en = catalogue('en', 'record-thread-head')
+    const it = catalogue('it', 'record-thread-head')
+    for (const side of ['us', 'customer', 'supplier', 'partner']) {
+      expect(en[`answers.${side}`], side).toMatch(/^This thread waits on (us|the (customer|supplier|partner)) · \{wait\}$/)
+      expect(it[`answers.${side}`], side).toMatch(/^Conversazione: tocca (a noi|al (cliente|fornitore|partner)) · \{wait\}$/)
+    }
+    const t = createTranslator('en', messagesFor('en', ['record-thread-head'])['record-thread-head']!)
+    expect(t('answers.customer', { wait: '2 d' })).toBe('This thread waits on the customer · 2 d')
+    // The order dock draws no waiting of its own (the order band and Overview own the order's).
+    const dock = readFileSync(new URL('../../../areas/sales/orders/record/dock/OrderDock.tsx', import.meta.url), 'utf8')
+    expect(dock).not.toMatch(/waitingOf|requests\.onUs|answers\./)
+  })
+
+  it('All of <Customer> in English says "thread", never "conversation"; Italian keeps "conversazione"', () => {
+    const en = Object.entries(catalogue('en', 'record-thread')).filter(([key]) => key.startsWith('allOfCustomer.'))
+    expect(en.length).toBeGreaterThan(20)
+    for (const [key, text] of en) expect(text, key).not.toMatch(/conversation/i)
+    expect(Object.fromEntries(en)['allOfCustomer.kind.GENERAL']).toBe('General thread')
+    expect(Object.fromEntries(en)['allOfCustomer.line']).toContain('To write, pick one thread.')
+    const it = Object.fromEntries(Object.entries(catalogue('it', 'record-thread')).filter(([key]) => key.startsWith('allOfCustomer.')))
+    expect(it['allOfCustomer.line']).toContain('conversazione')
+    expect(it['allOfCustomer.answerLabel']).toBe('Rispondi nella conversazione di {record}')
+    for (const text of Object.values(it)) expect(text).not.toMatch(/\bthread\b/i)
+  })
+
+  it('the door is "Answer" / "Rispondi"; its accessible name keeps the thread it answers in', () => {
+    const en = catalogue('en', 'record-thread')
+    const it = catalogue('it', 'record-thread')
+    expect(en['allOfCustomer.answer']).toBe('Answer')
+    expect(it['allOfCustomer.answer']).toBe('Rispondi')
+    expect(en['allOfCustomer.answerLabel']).toBe('Answer in the thread of {record}')
+  })
+
+  it('catalogue parity: the same keys and the same placeholders in en and it (the Head, All of <Customer>, the frame\'s keys)', () => {
+    for (const [name, prefix] of [['record-thread-head', ''], ['record-thread', 'allOfCustomer.'], ['record-frame', 'keys.']] as const) {
+      const en = catalogue('en', name)
+      const it = catalogue('it', name)
+      const keys = (all: Record<string, string>) => Object.keys(all).filter((key) => key.startsWith(prefix)).sort()
+      expect(keys(it), name).toEqual(keys(en))
+      for (const key of keys(en)) expect(placeholders(it[key]!), `${name} ${key}`).toBe(placeholders(en[key]!))
+    }
+  })
+})
+// ---- end F-OP-216

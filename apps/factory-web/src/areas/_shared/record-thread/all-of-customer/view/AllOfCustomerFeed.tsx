@@ -32,7 +32,7 @@ export interface AllOfCustomerFeedActions {
   readonly onOlder?: () => void
   readonly onRetry?: () => void
   /**
-   * "Answer in its conversation", and a plain click on a line's chip: the host switches the dock to that record's ONE conversation,
+   * "Answer" (its name: "Answer in the thread of <record>"), and a plain click on a line's chip: the host switches the dock to that record's ONE conversation,
    * at that message (B-TH-050's `?message=`). Without it the door is a link to the message on its record's page.
    */
   readonly onAnswer?: (record: FeedRecordRef, messageId: string) => void
