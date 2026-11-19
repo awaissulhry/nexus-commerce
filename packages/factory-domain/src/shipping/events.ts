@@ -33,6 +33,7 @@ import { TRACKING_VIAS } from './tracking-link/rules'
  *                                 the party asked for a new one
  *   shipment.tracking_link_made   B-W2b-170: links to the branded tracking page were made (when the goods left, by the
  *                                 office, from the portal, by the public search, or asked for again)
+ *   shipment.tracking_changed     B-OP-030: the tracking number of a carrier booked by hand was typed, corrected or cleared
  *   ddt.source_issued         a DDT for another reason was issued (B-W2a-17, LOG-056: no shipment; a subcontract kit, goods
  *                             back to a supplier, a repaired garment, returned goods sent back), `replacement` when it
  *                             replaces a cancelled one whose goods left
@@ -189,4 +190,14 @@ export const events = [
     payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), links: z.number().int().min(1), via: z.enum(TRACKING_VIAS), mailed: z.number().int().min(0), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'links', 'via'] },
   }),
+  // ── B-OP-030 (order page plan N5): the tracking number of a carrier booked by hand typed, corrected or cleared (also after the
+  // goods left): the office's line on the order's thread follows (shipping.trackingNotes). Never the customer's id in a live field. ──
+  defineEvent({
+    type: 'shipment.tracking_changed',
+    context: 'shipping',
+    description: "The tracking number of a shipment's carrier booked by hand was typed, corrected or cleared, before or after the goods left.",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), status, hasNumber: z.boolean(), salesOrderIds: z.array(z.uuid()).min(1), partyId: livePartyId() }),
+    live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'status', 'salesOrderIds'] },
+  }),
+  // ── end B-OP-030 ──
 ] as const
