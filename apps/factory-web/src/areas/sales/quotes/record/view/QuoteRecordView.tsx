@@ -111,7 +111,7 @@ function ReadyRecord({ quote, model, actions, thread, printThread, fields, sendA
   const locale = useLocale()
   const recordHref = `${model.prefix}/sales/quotes/${quote.id}`
   const tabHref = (tab: QuoteTab) => `${recordHref}?tab=${tab}`
-  const step = nextStep(quote, model.me, model.can)
+  const step = nextStep(quote, model.me, model.can, model.grains /* F-CP-146: the priced PDF is sent by someone who sees prices */)
   const readOnly = readOnlyReason(quote, model.can)
   const status = quote.current.status
   const pendingRequest = quote.approval.requests.find((request) => request.status === 'PENDING') ?? null
