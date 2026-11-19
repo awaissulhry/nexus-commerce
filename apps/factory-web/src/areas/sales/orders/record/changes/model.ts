@@ -1,8 +1,7 @@
 import type { BrandRequest } from '../../../../home/approvals/requests/api'
 import type { WorkOrderChange } from '../../../../home/approvals/work-order-changes/api' // F-OP-116
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-116
-import type { OfficeRequest } from '../../../../../record-panels/approvals/api'
-import type { Amendment, Order } from '../../api'
+import type { Amendment } from '../../api'
 import { moneyChange } from '../../daily-model'
 import type { Change, Confirmation } from '../../depth/api'
 import { putBackOffered } from '../../depth/model'
@@ -19,25 +18,8 @@ export function waitingOnUsOf(requests: readonly BrandRequest[]): BrandRequest[]
   return requests.filter((request) => request.status === 'OPEN' || request.status === 'COUNTERED').sort((a, b) => a.askedAt.localeCompare(b.askedAt))
 }
 
-export interface CustomerWait {
-  readonly id: string
-  readonly kind: 'reaccept' | 'counter' | 'approval'
-  /** An approval's question as we asked it (our words). */
-  readonly question: string | null
-  readonly since: string | null
-  readonly dueAt: string | null
-  /** An approval's state code (record-approvals status.*); null for the others. */
-  readonly status: string | null
-}
-
-/** What we asked the customer and they have not answered: the new yes of a changed order, a counter-offer, an approval still open. */
-export function waitingOnCustomerOf(requests: readonly BrandRequest[], approvals: readonly OfficeRequest[], order: Pick<Order, 'id' | 'reapprovalNeededAt'>): CustomerWait[] {
-  const out: CustomerWait[] = []
-  if (order.reapprovalNeededAt) out.push({ id: `reaccept-${order.id}`, kind: 'reaccept', question: null, since: order.reapprovalNeededAt, dueAt: null, status: null })
-  for (const request of requests) if (request.status === 'COUNTERED' && request.counter) out.push({ id: `counter-${request.id}`, kind: 'counter', question: null, since: request.counter.at, dueAt: null, status: null })
-  for (const approval of approvals) if (approval.status === 'OPEN' && approval.kind !== 'COUNTER_OFFER') out.push({ id: approval.id, kind: 'approval', question: approval.question, since: approval.createdAt, dueAt: approval.dueAt, status: approval.status })
-  return out
-}
+// F-OP-301 (walk #1): what waits on the customer is the ONE waiting list's (overview/model `orderWaitingOf`); its own copy here,
+// which disagreed with Overview and the badge, is gone.
 
 // ---- the history ----------------------------------------------------------------------------------------------------------------
 

@@ -1625,7 +1625,6 @@
       "returns": "Returns",
       "sameQuote": "Same quote",
       "sameQuoteValue": "{number}",
-      "invoicesHeld": "needs the invoices right",
       "leftOut_one": "{count} work order not shown",
       "leftOut_other": "{count} work orders not shown"
     },

@@ -1625,7 +1625,6 @@
       "returns": "Resi",
       "sameQuote": "Stesso preventivo",
       "sameQuoteValue": "{number}",
-      "invoicesHeld": "serve il permesso fatture",
       "leftOut_one": "{count} ordine di lavoro non mostrato",
       "leftOut_other": "{count} ordini di lavoro non mostrati"
     },
