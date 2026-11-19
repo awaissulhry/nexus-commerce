@@ -376,7 +376,8 @@ describe('F-OP-113: the work-order rows act in place; a work order shared with o
     expect(acts).toContain('useWorkOrderActs(api, permissions,')
     const tab = source('./view/ProductionTab.tsx')
     expect(tab).not.toMatch(/from '[^']*use-work-order-acts'/)
-    expect(tab).toContain('<WorkOrderActsDialogs model={model.workOrderActs} actions={actions?.workOrderActs} />')
+    // op-fx1: F-OP-116 mounts the rows' dialogs once for the page (a row's ⋯ and the waiting list's Lift…): the record view draws them.
+    expect(source('./view/OrderRecordView.tsx')).toContain('{model.workOrderActs && <WorkOrderActsDialogs model={model.workOrderActs} actions={actions?.workOrderActs} />}')
     expect(source('./OrderRecord.tsx')).toContain("rereadWork: () => production.again(['work', 'headline', 'changes'])")
     // Every write sends the version: the row's (B6) or the newer one a write answered.
     const hook = source('../../../../lib/production/work-order-acts/use-work-order-acts.ts')

@@ -1,4 +1,5 @@
 import { createElement, Fragment } from 'react'
+import { CHANGE_WORDS } from '@nexus/factory-domain/order-apply/rules' // op-fx1: the preview's own words
 import { Building2, Eye, Lock, ShoppingBag } from 'lucide-react' // F-OP-217: the dock's segments
 import { defineDesignScreen, type DesignCase } from '../../../../lib/design/design-screen'
 import type { OpenApproval, Order, OrderLine } from '../api' // F-OP-101: OpenApproval
@@ -492,7 +493,7 @@ const OUTCOME_PREVIEW: AmendPreview = {
   workOrders: {
     extra: [{ workOrderSizeId: '0190f0e2-9191-7000-8000-0000000021c1', salesOrderLineId: LINE_BLK, size: '50', count: 1, words: { en: '1 piece of 50 is already cut', it: '1 pezzo della 50 è già tagliato' } }],
     needsOutcome: true,
-    words: { en: '1 piece of WO-00021 is cut beyond the new figures', it: '1 pezzo di WO-00021 è tagliato oltre le nuove quantità' },
+    words: CHANGE_WORDS.chooseExtra(1), // op-fx1: the API's own words of this view (work-order-plan.ts), as every fixture is an answer it gives
     plan: [{ kind: 'LOWER_TO_ORDER', workOrderId: WORK_ORDERS[0]!.id, number: 'WO-00021', status: 'IN_PROGRESS', route: 'LOWER_RELEASED', cells: [{ lineId: LINE_BLK, size: '50', from: 2, to: 2, cut: 2 }], extra: 1, appliesNow: true, held: null, reprint: true }],
   },
 }
