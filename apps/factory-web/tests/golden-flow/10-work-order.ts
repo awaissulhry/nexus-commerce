@@ -1,6 +1,7 @@
-import { expect } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { defineStage } from './_harness/stages'
 import { answerOf, dialog, press } from './_harness/ui'
+import { startsWith, words } from './_harness/words' // F-OP-218
 
 export default defineStage({
   proves: 'work order released with a frozen spec: every release check green (revision, label, certificate, materials in stock, the deposit paid); the order follows (IN_PRODUCTION)',
@@ -39,6 +40,27 @@ export default defineStage({
       const sales = await flow.desk('sales')
       await sales.go(`/sales/orders/${order.id}`)
       await expect(sales.page.getByText('In production').first()).toBeVisible()
+    })
+
+    // F-OP-218 (order page plan N4; 11-dock §0, §2): the work order's dock is the same ONE card (the pick band inside it when an order's
+    // thread may be read, the work order's notes office only); the order page offers the work order's notes in its own dock.
+    await flow.step('the dock: the work order’s pick band in the one card; the order page’s Work orders scope, office only', async () => {
+      const OD = words('orders')
+      const card = (where: typeof page) => where.locator('.fw-rcf.has-thread > aside.fw-rcf-dock section.fw-rt-column.is-docked')
+      await planner.go(`/production/work-orders/${workOrder.id}`)
+      await expect(card(page)).toHaveCount(1, { timeout: 60_000 })
+      const band = card(page).locator('.fw-rt-top')
+      if ((await band.count()) > 0) await expect(band.locator('.fw-thread-pick-line.is-office')).toBeVisible()
+      else test.info().annotations.push({ type: 'not here', description: 'no order thread the planner may read beside the work order: its dock has no pick band' })
+      const sales = await flow.desk('sales')
+      await sales.go(`/sales/orders/${order.id}`)
+      const segment = card(sales.page).locator('.fw-rt-top').getByRole('radio', { name: startsWith(OD('record.dock.workOrders')) })
+      if ((await segment.count()) > 0) {
+        await segment.click()
+        await expect(sales.page).toHaveURL(/[?&]thread=wo%3A/)
+        await expect(card(sales.page).locator('.fw-thread-pick-line.is-office')).toBeVisible()
+        await flow.shot(sales.page, 'order-dock-work-order')
+      } else test.info().annotations.push({ type: 'not here', description: 'sales reads no work order here (workorders.view): the order dock offers no Work orders scope' })
     })
   },
 })
