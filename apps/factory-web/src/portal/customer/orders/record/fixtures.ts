@@ -34,6 +34,10 @@ import type { AskImpact, AskVerdict, ChangeRules } from '../api'
 import { askChoicesOf, askHeld, EMPTY_ASK, impactViewOf, type AskDraft, type AskKind } from '../ask-model'
 import type { AskDialogModel } from '../view/AskDialog'
 // ---- end F-PR-13
+// ---- F-CP-148 (the money wall, Owner O4): the customer's own price check on its order, seen as each of its people ----
+import type { PortalPriceCheck } from '../price-check'
+import type { PriceCheckModel } from '../view/PriceCheck'
+// ---- end F-CP-148
 
 /**
  * SCR-184 › one order (design portal.customer.orders rec "Order"; B-W2b-191; B-TH-275, picture 22), MADE-UP data only: the four
@@ -185,6 +189,22 @@ const pay = (locale: Locale, over: Partial<Extract<OrderDialog, { kind: 'pay' }>
   model: { amount: orderWords(locale).money(MTM.deposits[0]!.amount, 'EUR'), number: own(MTM), methods: ['CARD', 'SEPA_DEBIT'], method: 'CARD', state: 'idle', fake: true, held: null, failure: null, problem: null, ...over },
 })
 const NO_REQUESTS = { state: 'ready', items: [] } as const
+
+// ---- F-CP-148 (Owner O4): Brand Alpha's own price check of this order (made up): line 1 equal (its own price), line 2 lower, from its PO.
+const priceRow = (n: number, over: Partial<NonNullable<PortalPriceCheck['lines'][number]['row']>> = {}): NonNullable<PortalPriceCheck['lines'][number]['row']> => ({ id: `0190f0e2-9393-7000-8000-00000000000${n}`, unitPrice: '185.00', netAmount: null, currency: 'EUR', source: 'PORTAL', note: null, enteredAt: at(-30), version: 1, ...over })
+export const ORDER_PRICE_CHECK: PortalPriceCheck = {
+  orderId: RECORD.order.id,
+  currency: 'EUR',
+  lines: [
+    { lineId: RECORD.lines[0]!.id, seq: 1, label: 'City jacket · Black', pieces: 30, ourUnitPrice: '185.00', ourAmount: 555_000, brandAmount: 555_000, priceMatch: 'EQUAL', priceDiff: 0, row: priceRow(1) },
+    { lineId: RECORD.lines[1]!.id, seq: 2, label: 'Trousers · Sand', pieces: 16, ourUnitPrice: '123.13', ourAmount: 197_000, brandAmount: 192_000, priceMatch: 'NOT_EQUAL', priceDiff: 5_000, row: priceRow(2, { unitPrice: '120.00', source: 'CUSTOMER_PO', version: 2 }) },
+  ],
+  total: { ourPrice: 752_000, brandPrice: 747_000, priceMatch: 'NOT_EQUAL', priceDiff: 5_000, priceNotEqualLines: 1, priceMissingLines: 0, priceOtherCurrency: 0, row: null },
+  mayWrite: { allowed: true, why: null },
+}
+/** The Lines tab's price check card as the page holds it (the Buyer and the Admin write; Finance reads). */
+export const priceCheckOf = (over: Partial<PriceCheckModel> = {}): PriceCheckModel => ({ state: 'ready', check: ORDER_PRICE_CHECK, access: 'write', held: null, dialog: null, notice: null, ...over })
+// ---- end F-CP-148
 const PAY_OPEN = { [MTM.deposits[0]!.id]: { held: null } }
 
 export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
@@ -208,6 +228,12 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'lines-sizes', label: 'A line’s sizes open', model: recordCase({ tab: 'lines', model: () => ({ openLine: RECORD.lines[0]!.id }) }) },
     { id: 'lines-mtm', label: 'A made-to-measure line', model: recordCase({ record: MTM, tab: 'lines', model: () => ({ requests: NO_REQUESTS }) }), note: 'The rider and the measurement revision (“Marco B. · rev. 3”).' },
     { id: 'lines-no-prices', label: 'Lines without prices', model: recordCase({ record: withoutPrices(RECORD), tab: 'lines' }) },
+    // ---- F-CP-148 (the money wall, Owner O4): the Lines tab seen as each of Brand Alpha's people — its Buyer (and Admin) gives its own
+    // price and reads the check; its Finance reads them; its Designer, Production and Viewer read no price at all (lines-no-prices).
+    { id: 'cp-148-lines-buyer', label: 'F-CP-148 · Seen as Brand Alpha Buyer · Lines: Your price · Your amount · Check · Difference beside ours; Price check "differ on 1 line"; Your prices…', model: recordCase({ tab: 'lines', model: () => ({ priceCheck: priceCheckOf() }) }), note: 'Never cost or margin; a factory row reads "From your PO, typed by the factory" — never the office note or a name.' },
+    { id: 'cp-148-lines-finance', label: 'F-CP-148 · Seen as Brand Alpha Finance · reads its prices and the check; Your prices… held in words (a colleague who orders gives them)', model: recordCase({ tab: 'lines', model: (locale) => ({ priceCheck: priceCheckOf({ access: 'read', held: words(locale)('priceCheck.readsOnly'), check: { ...ORDER_PRICE_CHECK, mayWrite: { allowed: false, why: null } } }) }) }) },
+    { id: 'cp-148-lines-designer', label: 'F-CP-148 · Seen as Brand Alpha Designer / Production / Viewer · no price, no check, no amount: "Prices are not part of your access."', model: recordCase({ record: withoutPrices(RECORD), tab: 'lines', model: () => ({ priceCheck: null }) }) },
+    // ---- end F-CP-148
     // ── Shipments & tracking ──
     { id: 'shipments', label: 'Shipments & tracking', model: recordCase({ tab: 'shipments' }), note: 'DDT, carrier, parcels with their tracking numbers (Copy) and the carrier’s site, the four steps, ETA, what it carries, the events, the papers; still to ship with the expected day.' },
     { id: 'shipments-copied', label: 'A tracking number copied', model: recordCase({ tab: 'shipments', model: () => ({ copied: 'DEMO00012345' }) }) },

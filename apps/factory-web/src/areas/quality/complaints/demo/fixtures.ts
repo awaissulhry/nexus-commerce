@@ -53,7 +53,8 @@ export const ROLE_PERMISSIONS = {
     'quality.capa.view',
   ],
   inspector: templatePermissions('quality_inspector'),
-  sales: [...templatePermissions('sales'), 'money.price'],
+  // F-CP-148 (follow-up 5; Owner O1, B-CP-011): the Sales template holds no price grain — "Seen as Sales" sees no money.
+  sales: templatePermissions('sales'),
   readOnly: ['home.view', 'quality.complaints.view', 'compliance.register.view', 'quality.ncr.view', 'files.read', 'threads.read'],
   none: ['home.view'],
 } as const
