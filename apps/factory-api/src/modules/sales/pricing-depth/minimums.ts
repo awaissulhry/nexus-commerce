@@ -7,6 +7,8 @@ import { listPriceText } from '@nexus/factory-domain/sales/pricelists/pricelists
 import { PRICE_LISTS_MANAGE, PRICE_LISTS_VIEW } from '@nexus/factory-domain/sales/pricelists/permissions'
 import { minimumProblems, type MinimumAction, type MinimumChange, type MinimumPer } from '@nexus/factory-domain/sales/pricing-depth/rules'
 import { StaleVersionError, command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
+import { actorOf, type OfficeContext } from '../../../core/context'
+import { optionalStyleWall, styleBrandWhere } from '../../product/styles/store'
 import { assertMayChangeList, mayOnList } from '../pricelists/store'
 import { officeContextOf } from '../quotes/store'
 import { invalid, MINIMUM_COLUMNS, minimumViewsOf, type MinimumRecord } from './store'
@@ -22,6 +24,8 @@ import { invalid, MINIMUM_COLUMNS, minimumViewsOf, type MinimumRecord } from './
  *                     (several rules of one subject, counted differently, stand side by side: 5 per colourway, 20 per order)
  *   subject fixed     the company and what the rule is about never change (another subject is another rule)
  *   archive           switches a rule off (kept); reactivate switches it on again; delete removes it
+ *   op-fx10           the brand wall: a rule of a customer's private-label style is that customer's — a person limited to other
+ *                     customers neither lists nor finds it, and names that style as an unknown one (the production unit: all)
  */
 
 const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
@@ -43,13 +47,16 @@ export async function listMinimums(caller: CommandCaller, query: MinimumsQuery) 
     ...(query.styleId ? { styleId: query.styleId } : {}),
   }
   return caller.withClient(async (client) => {
-    const rows = (await client.moqRule.findMany({ where, select: MINIMUM_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 1000 })).filter((row) => mayOnList(context, PRICE_LISTS_VIEW, row.companyId))
+    const walled: Prisma.MoqRuleWhereInput = { AND: [where, optionalStyleWall(actorOf(context), PRICE_LISTS_VIEW)] } // op-fx10: the brand wall
+    const rows = (await client.moqRule.findMany({ where: walled, select: MINIMUM_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 1000 })).filter((row) => mayOnList(context, PRICE_LISTS_VIEW, row.companyId))
     return { minimums: await minimumViewsOf(client, rows) }
   })
 }
 
 async function readMinimumFor(caller: CommandCaller, ruleId: string): Promise<MinimumRecord> {
-  const row = isUuid(ruleId) ? await caller.withClient((client) => client.moqRule.findUnique({ where: { id: ruleId }, select: MINIMUM_COLUMNS })) : null
+  // op-fx10: a rule of a style the person does not reach (another customer's private label) is not found, as an unknown one.
+  const wall = optionalStyleWall(actorOf(officeContextOf(caller)), PRICE_LISTS_VIEW)
+  const row = isUuid(ruleId) ? await caller.withClient((client) => client.moqRule.findFirst({ where: { AND: [{ id: ruleId }, wall] }, select: MINIMUM_COLUMNS })) : null
   if (!row || !mayOnList(officeContextOf(caller), PRICE_LISTS_VIEW, row.companyId)) throw new NotFoundError('Minimum order quantity not found.')
   return row
 }
@@ -88,12 +95,15 @@ async function assertNoTwin(tx: CommandTx, row: Pick<MinimumRecord, 'companyId' 
   if (twin) throw new ConflictError(`An active minimum of ${twin.minQuantity} already counts this subject the same way for the same customers: change that one, or archive it first.`)
 }
 
-/** What the rule names, checked against the database: the style or material (its company's or every company's), the list. */
-async function subjectIssues(tx: CommandTx, companyId: string | null, body: Pick<MinimumBody, 'styleId' | 'itemId' | 'priceListId' | 'surchargeAmount' | 'currency'>, checkSubject: boolean): Promise<Issue[]> {
+/**
+ * What the rule names, checked against the database: the style or material (its company's or every company's), the list.
+ * op-fx10: a style the person does not reach (another customer's private label) is refused as an unknown one.
+ */
+async function subjectIssues(tx: CommandTx, companyId: string | null, body: Pick<MinimumBody, 'styleId' | 'itemId' | 'priceListId' | 'surchargeAmount' | 'currency'>, checkSubject: boolean, context: OfficeContext): Promise<Issue[]> {
   const issues: Issue[] = []
   const ofCompany = (owner: string | null) => owner === null || owner === companyId
   if (checkSubject && body.styleId) {
-    const style = isUuid(body.styleId) ? await tx.style.findUnique({ where: { id: body.styleId }, select: { companyId: true } }) : null
+    const style = isUuid(body.styleId) ? await tx.style.findFirst({ where: { AND: [{ id: body.styleId }, styleBrandWhere(actorOf(context), PRICE_LISTS_MANAGE)] }, select: { companyId: true } }) : null
     if (!style || !ofCompany(style.companyId)) issues.push({ path: 'styleId', message: companyId === null ? 'A minimum of every company is about a style of every company.' : "Not a style of the rule's company." })
   }
   if (checkSubject && body.itemId) {
@@ -133,7 +143,7 @@ export async function createMinimum(caller: CommandCaller, body: MinimumBody, id
   if (problems.length > 0) throw invalid(problems, 'The minimum order quantity is not valid.')
   const { result } = await command(caller, { name: 'minimums.create', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
-    const issues = await subjectIssues(tx, companyId, body, true)
+    const issues = await subjectIssues(tx, companyId, body, true, context)
     if (issues.length > 0) throw invalid(issues, 'The minimum order quantity names what it cannot.')
     const id = newId()
     const data = {
@@ -195,7 +205,7 @@ export async function updateMinimum(caller: CommandCaller, ruleId: string, body:
     }
     next.currency = next.surchargeAmount === null ? null : keepsSurcharge ? row.currency : (body.currency ?? row.currency)
     const problems = minimumProblems({ ...next, styleId: row.styleId, productType: row.productType as ProductType | null, itemId: row.itemId }, false)
-    const issues = [...problems, ...(await subjectIssues(tx, row.companyId, { ...next, styleId: null, itemId: null }, false))]
+    const issues = [...problems, ...(await subjectIssues(tx, row.companyId, { ...next, styleId: null, itemId: null }, false, officeContextOf(caller)))]
     if (issues.length > 0) throw invalid(issues, 'The minimum order quantity is not valid.')
     if (next.per !== row.per || next.priceListId !== row.priceListId) await assertNoTwin(tx, { ...row, per: next.per, priceListId: next.priceListId }, ruleId)
     const fields = Object.keys(body).filter((key) => key !== 'version')

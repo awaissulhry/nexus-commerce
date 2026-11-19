@@ -1,15 +1,15 @@
 import type { AqlInspectionLevel, Prisma } from '@nexus/factory-db'
-import { ConflictError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { reachesEveryParty, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { INSPECTION_LEVELS } from '@nexus/factory-domain/quality/aql/iso2859'
-import { QUALITY_AQL_VIEW } from '@nexus/factory-domain/quality/aql/permissions'
+import { QUALITY_AQL_MANAGE, QUALITY_AQL_VIEW } from '@nexus/factory-domain/quality/aql/permissions'
 import { PROFILE_LIMITS, profileDraftProblems, type ProfileChange } from '@nexus/factory-domain/quality/aql/profiles'
 import { AQL_VALUES, aqlStored, CRITICAL_LOCK, LEVEL_WORDS, levelOf, levelText } from '@nexus/factory-domain/quality/aql/sampling'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
-import { actorOf } from '../../../core/context'
+import { actorOf, type OfficeContext } from '../../../core/context'
 import type { ProfileView } from './contract'
-import { assertManage, auditedProfile, lockCompanyProfiles, mayManage, mayView, officeOf, profileFor, profileView, PROFILE_COLUMNS, readProfile, usageOf, type ProfileRow, type Reader } from './store'
+import { assertManage, auditedProfile, lockCompanyProfiles, mayManage, mayView, officeOf, profileFor, profileView, PROFILE_COLUMNS, readProfile, usageOf, usageWall, type ProfileRow, type Reader } from './store'
 
 /**
  * AQL profiles (B-W2b-93; QHS-021; design quality.plans pl-aql "Rows: profile, inspection level (I, II, III, S1-S4),
@@ -35,9 +35,14 @@ const refuse = (problems: readonly Issue[], words: string): never => {
 const changed = (tools: CommandTools, row: ProfileRow, change: ProfileChange) =>
   tools.emit({ type: 'quality.aql_profile_changed', subject: row.id, companyId: row.companyId, payload: { companyId: row.companyId, profileId: row.id, code: row.code, change } })
 
-async function viewOne(db: Reader, row: ProfileRow): Promise<ProfileView> {
-  return profileView(row, (await usageOf(db, [row.id])).get(row.id))
+async function viewOne(db: Reader, row: ProfileRow, context: OfficeContext): Promise<ProfileView> {
+  // op-fx10: the use the person may see (as the list counts it, for a keeper).
+  return profileView(row, (await usageOf(db, [row.id], usageWall(context, [QUALITY_AQL_VIEW, QUALITY_AQL_MANAGE]))).get(row.id))
 }
+
+// op-fx10 (the brand wall): a person limited to some customers never retires a profile. Its use by other customers' work is
+// what they may not see (the reason "named by N assignments" would count it), and a profile serves every customer's chain.
+const RETIRE_NEEDS_EVERY_CUSTOMER = 'Retiring an AQL profile changes it for every customer: it needs access to every customer.'
 
 /** The company's default stops being it (another profile becomes the default in the same command). */
 async function clearDefault(tools: CommandTools, companyId: string, keep: string | null): Promise<string | null> {
@@ -62,7 +67,7 @@ export async function readProfiles(caller: CommandCaller, query: { readonly comp
       select: PROFILE_COLUMNS,
       orderBy: [{ companyId: 'asc' }, { isDefault: 'desc' }, { code: 'asc' }],
     })
-    const usage = await usageOf(client, rows.map((row) => row.id))
+    const usage = await usageOf(client, rows.map((row) => row.id), usageWall(context, [QUALITY_AQL_VIEW])) // op-fx10: only rows it may see
     return {
       profiles: rows.map((row) => profileView(row, usage.get(row.id))),
       levels: INSPECTION_LEVELS.map((level) => ({ level, text: levelText(level), ...LEVEL_WORDS[level] })),
@@ -130,7 +135,7 @@ export async function createProfile(caller: CommandCaller, body: CreateProfileBo
     tools.audit({ recordType: 'AqlProfile', recordId: id, companyId: body.companyId, after: auditedProfile(row) })
     changed(tools, row, 'CREATED')
     if (isDefault) changed(tools, row, 'DEFAULT_SET')
-    return { profile: await viewOne(tx, row), previousDefaultId }
+    return { profile: await viewOne(tx, row, context), previousDefaultId }
   })
   return result
 }
@@ -160,7 +165,8 @@ async function retireProblem(db: Reader, row: ProfileRow): Promise<string | null
 
 /** PATCH /quality/aql/profiles/:profileId */
 export async function editProfile(caller: CommandCaller, profileId: string, body: EditProfileBody, idempotencyKey?: string): Promise<{ profile: ProfileView; previousDefaultId: string | null }> {
-  const { row: before } = await profileFor(caller, profileId, true)
+  const { context, row: before } = await profileFor(caller, profileId, true)
+  if (body.active === false && before.active && !reachesEveryParty(actorOf(context), QUALITY_AQL_MANAGE, { companyId: before.companyId })) throw new ForbiddenError(RETIRE_NEEDS_EVERY_CUSTOMER) // op-fx10
   const draft = { ...body, inspectionLevel: levelIn(body.inspectionLevel) }
   const problems = profileDraftProblems(draft, false)
   if (body.isDefault === true && body.active === false) problems.push({ path: 'active', message: 'The default is a profile in use: it cannot be retired in the same change.' })
@@ -190,7 +196,7 @@ export async function editProfile(caller: CommandCaller, profileId: string, body
       const row = await tx.aqlProfile.update({ where: { id: current.id }, data, select: PROFILE_COLUMNS })
       tools.audit({ recordType: 'AqlProfile', recordId: row.id, companyId: row.companyId, before: auditedProfile(current), after: auditedProfile(row) })
       changed(tools, row, body.active === false && current.active ? 'RETIRED' : body.active === true && !current.active ? 'REACTIVATED' : becomesDefault ? 'DEFAULT_SET' : 'EDITED')
-      return { profile: await viewOne(tx, row), previousDefaultId }
+      return { profile: await viewOne(tx, row, context), previousDefaultId }
     },
   )
   return result

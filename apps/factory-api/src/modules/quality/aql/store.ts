@@ -1,7 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
+import { anyOf, can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { InspectionLevel } from '@nexus/factory-domain/quality/aql/iso2859'
 import { QUALITY_AQL_MANAGE, QUALITY_AQL_VIEW } from '@nexus/factory-domain/quality/aql/permissions'
@@ -9,6 +9,8 @@ import { aqlWords, LEVEL_WORDS, levelText } from '@nexus/factory-domain/quality/
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { optionalStyleWall } from '../../product/styles/store'
+import { workOrderWhere } from '../../production/work-orders/scope'
+import { seesEveryCustomer } from '../wall'
 import type { AssignmentView, ProfileView } from './contract'
 
 /**
@@ -64,6 +66,24 @@ export async function brandOfStyle(db: Reader, styleId: string | null): Promise<
 }
 // ── end op-fx9 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
+// ── op-fx10 (the brand wall: a count of another customer's rows tells that they exist) ──────────────────────────────────────────
+/** The rows of a profile's use a person limited to some customers may count; null: it sees every customer (nothing left out). */
+export interface UsageWall {
+  readonly assignments: Prisma.AqlProfileAssignmentWhereInput
+  readonly inspections: Prisma.InspectionWhereInput
+}
+
+/** For `permissions` (any of them): the assignments it reaches (assignmentWall) and the inspections of the work orders it reaches. */
+export function usageWall(context: OfficeContext, permissions: readonly Permission[]): UsageWall | null {
+  const actor = actorOf(context)
+  if (permissions.some((permission) => seesEveryCustomer(actor, permission))) return null
+  return {
+    assignments: anyOf(permissions.map((permission) => assignmentWall(context, permission))) as Prisma.AqlProfileAssignmentWhereInput,
+    inspections: { workOrder: { is: anyOf(permissions.map((permission) => workOrderWhere(actor, permission))) as Prisma.WorkOrderWhereInput } },
+  }
+}
+// ── end op-fx10 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
 export const PROFILE_COLUMNS = {
   id: true,
   companyId: true,
@@ -110,15 +130,18 @@ export interface Usage {
 }
 const NO_USE: Usage = { customers: 0, styles: 0, pairs: 0, inspections: 0 }
 
-/** How many active assignments (customers, styles, a style of one customer) and inspections name each profile. */
-export async function usageOf(db: Reader, profileIds: readonly string[]): Promise<Map<string, Usage>> {
+/**
+ * How many active assignments (customers, styles, a style of one customer) and inspections name each profile. op-fx10: with a
+ * wall (a person limited to some customers), only the rows it may see are counted.
+ */
+export async function usageOf(db: Reader, profileIds: readonly string[], wall: UsageWall | null = null): Promise<Map<string, Usage>> {
   const used = new Map<string, Usage>()
   if (profileIds.length === 0) return used
   const bump = (id: string, key: keyof Usage, by: number) => used.set(id, { ...(used.get(id) ?? NO_USE), [key]: (used.get(id) ?? NO_USE)[key] + by })
   // One after the other: a transaction client runs one statement at a time.
-  const rows = await db.aqlProfileAssignment.findMany({ where: { profileId: { in: [...profileIds] }, active: true }, select: { profileId: true, customerId: true, styleId: true } })
+  const rows = await db.aqlProfileAssignment.findMany({ where: { AND: [{ profileId: { in: [...profileIds] }, active: true }, wall?.assignments ?? {}] }, select: { profileId: true, customerId: true, styleId: true } })
   for (const row of rows) bump(row.profileId, row.customerId && row.styleId ? 'pairs' : row.customerId ? 'customers' : 'styles', 1)
-  for (const row of await db.inspection.groupBy({ by: ['aqlProfileId'], where: { aqlProfileId: { in: [...profileIds] } }, _count: { _all: true } })) if (row.aqlProfileId) bump(row.aqlProfileId, 'inspections', row._count._all)
+  for (const row of await db.inspection.groupBy({ by: ['aqlProfileId'], where: { AND: [{ aqlProfileId: { in: [...profileIds] } }, wall?.inspections ?? {}] }, _count: { _all: true } })) if (row.aqlProfileId) bump(row.aqlProfileId, 'inspections', row._count._all)
   return used
 }
 

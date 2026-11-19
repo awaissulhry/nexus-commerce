@@ -266,7 +266,10 @@ export async function askFromShortage(caller: CommandCaller, body: FromShortageI
     // One open request per work order and material: the second asker waits for the first one's lock and finds it.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.ask-shortage', ${context.tenantId}::uuid, ${body.workOrderId}::text, ${body.itemId}::text, ${colourId ?? '-'}::text), 0))`
     const live = await livePlanOf(tx, site)
-    const row = (await shortageRows(tx, live)).find((entry) => entry.workOrder.id === body.workOrderId && entry.material.itemId === body.itemId && entry.material.itemColourId === colourId)
+    // op-fx10 (the brand wall): a shortage of another customer's work order answers as one that is gone — the words of an unknown
+    // work order (SHORTAGE_GONE, 409), never checkAsked's 400 that only a real work order reaches.
+    const reached = (await tx.workOrder.count({ where: { AND: [{ id: body.workOrderId }, workOrderWhere(actor, PURCHASING_REQUESTS_ASK)] } })) > 0
+    const row = reached ? (await shortageRows(tx, live)).find((entry) => entry.workOrder.id === body.workOrderId && entry.material.itemId === body.itemId && entry.material.itemColourId === colourId) : undefined
     if (!row) throw new ConflictError(ASK_REFUSALS.SHORTAGE_GONE)
     const open = await tx.purchaseRequest.findFirst({ where: { source: 'SHORTAGE', workOrderId: body.workOrderId, itemId: body.itemId, itemColourId: colourId, status: { in: [...LIVE_REQUEST_STATUSES] } }, select: { id: true } })
     if (open) throw new ConflictError(ASK_REFUSALS.SHORTAGE_ASKED)
