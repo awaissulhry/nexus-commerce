@@ -14,8 +14,10 @@ import { startsWith, words } from './_harness/words'
  * makes its own world once — the seeded P1 as Brand Alpha and P3 as Brand Beta with their portal buyers (two-brands.ts), one order for
  * A typed by Sales (set-up), and the seeds' orders of P1 (SEED-SO-0002, SEED-SO-0003 with released garments; SEED-SO-W39-01 waiting
  * for a yes, SEED-SO-W39-02 with a change that asks the yes again). Then, through the order page's screens, at 1440 × 900:
- *   1  the yes in place: the Owner confirms SEED-SO-W39-01 (its credit yes) and SEED-SO-W39-02's change, each with the code; a yes
- *      Sales asked is held for Sales ("another person decides");
+ *   1  the yes in place: SEED-SO-W39-01's credit yes confirmed with the code (the Owner, else Finance, its approver); SEED-SO-W39-02's
+ *      change refused in place with a reason and words (its yes is stale by design: the page says so and offers the no); a yes the
+ *      Owner asked is held for her ("another person decides", rule 42) and Finance confirms it. Lane rule (Sales = no price): the
+ *      acts with prices are the Owner's or Finance's; Sales keeps the no-price ones (the quantity change of step 3, D1);
  *   2  make a work order in place (the planner, the Production tab): a DRAFT of the new order; the production lane releases it
  *      (set-up: 10-work-order's flow);
  *   3  amend (Sales, edit mode): the strip says what each work order does — the released one waits for production, the new pieces
@@ -62,6 +64,7 @@ const TRACKING = ['T-TH9-TRK-0001', 'T-TH9-TRK-0002'] as const
 const TRACK_LINK = 'https://track.example.com/T-TH9-TRK-0002'
 const PAPER_DDT = 'T-TH9-77/2026'
 const AMEND_REASON = 'Made-up: Brand Alpha wants one more 50 and one fewer 52.'
+const REFUSE_WORDS = 'Made-up: asked about an older version of the order; ask it again on this one.'
 
 type Json = Record<string, any>
 type Made = { id: string; number: string }
@@ -124,17 +127,18 @@ async function refusedToBeta(beta: PortalDesk, path: string, ofAlpha: readonly s
 
 export default defineStage({
   proves:
-    'the order page at the end: the yes in place (the Owner confirms a waiting order and a change; a yes Sales asked is held for Sales); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders (held off in words until the N6 switch); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal',
+    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders (held off in words until the N6 switch); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal',
   async run(flow: Flow) {
     const sales = await flow.desk('sales')
     const alphaId = await flow.seedId('party:P1')
     const betaId = await flow.seedId('party:P3')
 
-    const world = await flow.step('set-up: P1 as Brand Alpha and P3 as Brand Beta with their portal buyers; an order for A; the seeds’ orders of P1', async () => {
+    const world = await flow.step('set-up: P1 as Brand Alpha and P3 as Brand Beta with their portal buyers; an order for A (the Owner’s, with its prices); the seeds’ orders of P1', async () => {
       await ensureBrand(flow, sales, BRAND_ALPHA, alphaId)
       await ensureBrand(flow, sales, BRAND_BETA, betaId)
+      // Lane rule (Sales = no price): an order typed with its prices is the Owner's; Sales keeps the no-price acts (step 3).
       const made = await flow.write(
-        sales.page,
+        (await flow.desk('owner')).page,
         'POST',
         '/sales/orders/manual',
         {
@@ -158,21 +162,44 @@ export default defineStage({
     })
     const ofAlpha = [world.order.number, world.order.id, world.so2.number, world.so2.id, world.so3.number, world.so3.id, PO_REF, ...TRACKING, PAPER_DDT]
 
-    await flow.step('1 · the yes in place: the Owner confirms SEED-SO-W39-01 and SEED-SO-W39-02’s change with the code; a yes Sales asked is held for Sales', async () => {
-      // A yes Sales asked (the new order when a rule or the customer's credit holds it): held for its asker, decided by another person.
-      if (world.order.status === 'PENDING_APPROVAL') {
-        await sales.go(`/sales/orders/${world.order.id}?tab=overview`)
-        const own = sales.page.getByRole('button', { name: YES })
-        await seen(sales.page.getByText(OD('approval.selfAsked')).first(), 60_000)
-        if ((await own.count()) > 0) await expect(own.first(), 'nobody approves their own request').toBeDisabled()
-        await yesInPlace(flow, [await flow.desk('owner'), await flow.desk('finance')], world.order.id)
-      } else notHere('a yes Sales asked: the new order was confirmed as typed (no rule held it); the held yes is the design case f-op-101-self-asked')
-
+    await flow.step('1 · the yes in place: SEED-SO-W39-01 confirmed with the code; SEED-SO-W39-02’s change refused in place with its reason (its yes is stale); a yes the Owner asked is held for her', async () => {
       const owner = await flow.desk('owner')
-      // SEED-SO-W39-01 waits for its credit yes (asked of Finance); SEED-SO-W39-02's change asks the Owner's role.
-      const decided = await yesInPlace(flow, [owner, await flow.desk('finance')], world.w3901.id)
+      const finance = await flow.desk('finance')
+      // A yes the Owner asked (the new order when a rule or the customer's credit holds it): held for its asker (rule 42, the Owner
+      // included), decided by another person.
+      if (world.order.status === 'PENDING_APPROVAL') {
+        await owner.go(`/sales/orders/${world.order.id}?tab=overview`)
+        const own = owner.page.getByRole('button', { name: YES })
+        await seen(owner.page.getByText(OD('approval.selfAsked')).first(), 60_000)
+        if ((await own.count()) > 0) await expect(own.first(), 'nobody approves their own request').toBeDisabled()
+        await yesInPlace(flow, [finance], world.order.id)
+      } else notHere('a yes the Owner asked: the new order was confirmed as typed (no rule held it); the held yes is the design case f-op-101-self-asked')
+
+      // SEED-SO-W39-01 waits for its credit yes (asked of Finance): the Owner when the engine lets her, else Finance.
+      const decided = await yesInPlace(flow, [owner, finance], world.w3901.id)
       await flow.shot(decided.page, 'yes-confirmed')
-      await yesInPlace(flow, [owner], world.w3902.id)
+
+      // SEED-SO-W39-02's change asks the Owner's role about an older version of the order (the seeds' made-up fingerprint: STALE by
+      // design, op-19): the page says the yes cannot be given and offers the no, given in place with a reason and words.
+      const { page } = owner
+      await owner.go(`/sales/orders/${world.w3902.id}?tab=overview`)
+      const yes = page.getByRole('button', { name: YES }).first()
+      await seen(yes, 60_000)
+      const stale = page.getByText(OD('approval.refused.STALE')).first()
+      await press(yes)
+      await flow.stepUp(page, owner.person)
+      await expect(page.getByText(DONE).first().or(stale)).toBeVisible({ timeout: 60_000 })
+      if (await stale.isVisible().catch(() => false)) {
+        await press(page.getByRole('button', { name: OD('approval.refuse'), exact: true }).first())
+        const box = dialog(page)
+        const why = box.getByRole('combobox', { name: OD('approval.no.reason') })
+        await seen(why, 60_000)
+        await why.selectOption({ index: 1 })
+        await box.getByRole('textbox', { name: startsWith(OD('approval.no.words')) }).fill(REFUSE_WORDS)
+        await answerOf(page, 'POST', /^\/approvals\/tasks\/[^/]+\/reject$/, () => press(box.getByRole('button', { name: OD('approval.refuseGo'), exact: true })))
+        await seen(page.getByText(OD('approval.refusedDone')).first(), 60_000)
+        await flow.shot(page, 'yes-refused')
+      }
       await flow.settle()
       await expect.poll(() => statusOf(flow, owner.page, world.w3901.id), { timeout: 60_000 }).toBe('CONFIRMED')
       const after = (await flow.read(owner.page, `/sales/orders/${world.w3902.id}`)).order as Json
