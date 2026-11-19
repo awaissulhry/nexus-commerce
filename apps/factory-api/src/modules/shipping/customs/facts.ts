@@ -7,6 +7,8 @@ import { specialTerritoryOf, type SpecialTerritory } from '@nexus/factory-domain
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTx } from '../../../core/command'
 import type { ShipmentHeader } from '../store'
+// B-OP-042 (order page N6, lines-derived): the orders a shipment carries, as its papers name them.
+import { orderPlaceOf, orderReferencesOf, paperOrdersOf, paymentTermsOf } from '../shipments/orders-of'
 
 /**
  * What the customs papers of a shipment say, read from the shipment (B-W2b-409; LOG-086, LOG-087; factory-domain
@@ -106,6 +108,8 @@ export async function customsFactsOf(db: CommandTx, shipment: ShipmentHeader): P
     where: { id: shipment.salesOrderId },
     select: { number: true, orderDate: true, customerRef: true, billTo: true, language: true, currency: true, paymentTerms: true, incoterm: true, incotermPlace: true },
   })
+  // B-OP-042 (order page N6): every order it carries, the first first (references, payment terms, the lines' order).
+  const paperOrders = await paperOrdersOf(db, shipment)
   const party = await db.party.findUnique({ where: { id: shipment.partyId }, select: { legalName: true } })
   const lines = await db.shipmentLine.findMany({
     where: { shipmentId: shipment.id },
@@ -114,7 +118,7 @@ export async function customsFactsOf(db: CommandTx, shipment: ShipmentHeader): P
   })
   const orderLineIds = [...new Set(lines.map((line) => line.salesOrderLineId))]
   const orderLines = new Map(
-    (orderLineIds.length === 0 ? [] : await db.salesOrderLine.findMany({ where: { id: { in: orderLineIds } }, select: { id: true, seq: true, unitPrice: true, sizes: { select: { size: true, unitPrice: true } } } })).map((row) => [row.id, row]),
+    (orderLineIds.length === 0 ? [] : await db.salesOrderLine.findMany({ where: { id: { in: orderLineIds } }, select: { id: true, /* B-OP-042 */ orderId: true, seq: true, unitPrice: true, sizes: { select: { size: true, unitPrice: true } } } })).map((row) => [row.id, row]),
   )
   const parcelRows = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, grossWeightKg: true }, orderBy: { seq: 'asc' } })
   const live = await db.ddt.findFirst({ where: { shipmentId: shipment.id, cancellations: { none: {} } }, select: { id: true, number: true }, orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }] })
@@ -143,7 +147,7 @@ export async function customsFactsOf(db: CommandTx, shipment: ShipmentHeader): P
     if (style.originCountry?.trim()) origins.add(style.originCountry.trim().toUpperCase())
     const unitPrice = orderLine ? (orderLine.sizes.find((size) => size.size === line.size)?.unitPrice ?? orderLine.unitPrice).toString() : null
     const key = `${line.salesOrderLineId}|${unitPrice ?? '-'}|${style.code}|${colour.code}`
-    const base = { seq: orderLine?.seq ?? Number.MAX_SAFE_INTEGER, code: `${style.code} ${colour.code}`, goods: `${style.name}, ${colour.name}`, unitPrice, hsCode: style.hsCode, originCountry: style.originCountry ? style.originCountry.trim().toUpperCase() : null }
+    const base = { seq: orderLine ? orderPlaceOf(paperOrders, orderLine.orderId) + orderLine.seq : Number.MAX_SAFE_INTEGER, code: `${style.code} ${colour.code}`, goods: `${style.name}, ${colour.name}`, unitPrice, hsCode: style.hsCode, originCountry: style.originCountry ? style.originCountry.trim().toUpperCase() : null }
     add(groups, key, base, line.size, line.quantity, mass)
     if (line.parcelId === null) unpacked += line.quantity
     else {
@@ -171,8 +175,8 @@ export async function customsFactsOf(db: CommandTx, shipment: ShipmentHeader): P
   }))
   const weighed = parcels.length > 0 && parcels.every((parcel) => parcel.grossKg !== null)
   const references: DocumentReference[] = [
-    ...(order ? [{ kind: 'SALES_ORDER' as const, number: order.number, date: dayOf(order.orderDate) }] : []),
-    ...(order?.customerRef ? [{ kind: 'CUSTOMER_ORDER' as const, number: order.customerRef }] : []),
+    // B-OP-042: one SALES_ORDER and CUSTOMER_ORDER reference per order it carries.
+    ...(paperOrders.length > 0 ? orderReferencesOf(paperOrders, dayOf) : [...(order ? [{ kind: 'SALES_ORDER' as const, number: order.number, date: dayOf(order.orderDate) }] : []), ...(order?.customerRef ? [{ kind: 'CUSTOMER_ORDER' as const, number: order.customerRef }] : [])]),
     { kind: 'SHIPMENT', number: shipment.number },
     ...(live ? [{ kind: 'DDT' as const, number: live.number }] : []),
   ]
@@ -190,7 +194,7 @@ export async function customsFactsOf(db: CommandTx, shipment: ShipmentHeader): P
     deliverTo: postalOf(shipment.shipTo),
     references,
     deliveryTerms: order ? incotermWords(order.incoterm, order.incotermPlace, language) : null,
-    paymentTerms: order?.paymentTerms ?? null,
+    paymentTerms: paymentTermsOf(paperOrders) ?? order?.paymentTerms ?? null, // B-OP-042
     lines: customsLines,
     unpacked,
     parcels,

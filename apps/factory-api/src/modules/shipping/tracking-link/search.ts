@@ -10,6 +10,8 @@ import { processEmail } from '../../../platform/email-out/service'
 import { systemCallerOf } from '../../../platform/files/files'
 import { SHIPMENT_HEADER, type ShipmentHeader } from '../store'
 import { makeTrackingLinks } from './make'
+// B-OP-042 (order page N6, lines-derived): an order's shipments through their lines.
+import { shipmentsOfOrdersWhere } from '../shipments/orders-of'
 
 /**
  * "Find your order" (B-W2b-170; LOG-062; design links.tracking sec:search, `/t`): PUBLIC `POST /tracking/search` {tenant,
@@ -52,7 +54,8 @@ async function findShipments(app: FastifyInstance, request: FastifyRequest, body
     })
     if (orders.length === 0) return []
     const rows = await client.shipment.findMany({
-      where: { companyId: company.id, salesOrderId: { in: orders.map((order) => order.id) }, status: { in: [...TRACKABLE_STATUSES] } },
+      // B-OP-042 (order page N6): the found orders' shipments — made for them or carrying their garments (of their customer by the line FK).
+      where: { companyId: company.id, ...shipmentsOfOrdersWhere(orders.map((order) => order.id)), status: { in: [...TRACKABLE_STATUSES] } },
       select: SHIPMENT_HEADER,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: 50,

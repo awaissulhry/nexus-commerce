@@ -15,6 +15,8 @@ import { mayOn, officeContextOf } from '../access'
 import { officeShipment } from '../shipments/shipments'
 import { readContents, readShipment, type ShipmentHeader } from '../store'
 import { recipientsOf } from '../tracking-link/office'
+// B-OP-042 (order page N6, lines-derived): the orders a shipment carries.
+import { orderRefsOfShipment, orderWordsOf } from '../shipments/orders-of'
 
 /**
  * The shipping notice to the customer (B-W2b-398; LOG-061; factory-domain shipping/notices). ONE command per send: the
@@ -146,9 +148,11 @@ export async function sendNotice(request: NoticeRequest): Promise<NoticeOutcome>
   const to = request.contactIds && request.contactIds.length > 0 ? all.filter((recipient) => request.contactIds!.includes(recipient.contactId)) : all
   const words = await request.caller.withClient(async (client) => {
     const order = await client.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { number: true, customerRef: true, language: true } })
+    // B-OP-042 (order page N6): the mail names every order it carries (the first first; the language stays the first's).
+    const orders = await orderRefsOfShipment(client, shipment)
     const company = await client.company.findUnique({ where: { id: shipment.companyId }, select: { legalName: true, tradeName: true } })
     const party = await client.party.findUnique({ where: { id: shipment.partyId }, select: { language: true } })
-    return { order, companyName: company?.tradeName ?? company?.legalName ?? '', partyLanguage: party?.language ?? null }
+    return { order, ...orderWordsOf(orders, order), companyName: company?.tradeName ?? company?.legalName ?? '', partyLanguage: party?.language ?? null }
   })
 
   let outcome
@@ -180,8 +184,8 @@ export async function sendNotice(request: NoticeRequest): Promise<NoticeOutcome>
             locale: noticeLocaleOf(recipient.language, words.partyLanguage, words.order?.language),
             companyName: words.companyName,
             shipmentNumber: current.number,
-            orderNumber: words.order?.number ?? null,
-            customerRef: words.order?.customerRef ?? null,
+            orderNumber: words.orderNumber, // B-OP-042
+            customerRef: words.customerRef,
             carrierName: current.carrierName,
             manualTrackingNumber: facts.manualTrackingNumber,
             expectedDeliveryAt: current.status === 'SHIPPED' ? current.expectedDeliveryAt : null,

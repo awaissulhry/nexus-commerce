@@ -9,7 +9,7 @@ import { FREIGHT_RULES, MAX_FREIGHT } from '@nexus/factory-domain/shipping/shipm
 import { CARRIER_RETURN_STATES } from '@nexus/factory-domain/shipping/shipments/stock'
 import { TRANSPORT_MODES } from '@nexus/factory-domain/shipping/shipments/transport'
 import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
-import { freightSchema, oneShipment, statusSchema, transportBySchema } from '../views'
+import { freightSchema, oneShipment, shipmentOrdersSchema, statusSchema, transportBySchema } from '../views'
 // B-W2b-386: the ready list's ship-by day, cut-off and risk.
 import { businessDate as businessDateSchema } from '@nexus/factory-domain/core/contracts'
 import { AT_RISK_MINUTES_RANGE, QUEUE_RISKS } from '@nexus/factory-domain/shipping/queue/risk'
@@ -25,10 +25,18 @@ const version = z.number().int().min(1).optional()
 const garments = () => z.number().int().min(1).max(100_000)
 const lineInput = input({ workOrderSizeId: id(), quantity: garments() })
 
+/** B-OP-040 / B-OP-070: may it join (ship together): allowed, or why not (factory-domain joinProblems, the first reason). */
+export const joinVerdictSchema = output({ allowed: z.boolean(), why: z.string().nullable() })
+
 export const readyContract = defineContract({
   querystring: input({
     siteId: id().optional(),
     salesOrderId: id().optional(),
+    /**
+     * B-OP-070 (order page N6, "ship together"): with salesOrderId, beside that order the SAME customer's other open orders
+     * with released garments, each with `shipsWith` (never another customer's order).
+     */
+    together: z.enum(['1', '0']).optional(),
     partyId: id().optional(),
     /** B-W2a-48: a page of orders at a time (by number); the cursor is the last order of the page before. */
     cursor: id().optional(),
@@ -51,6 +59,8 @@ export const readyContract = defineContract({
           companyId: id(),
           partyId: id(),
           party: output({ code: z.string(), legalName: z.string() }),
+          /** B-OP-070: with together=1, may this order ship with the asked one (joinProblems against it); null: the asked order itself, or no together. */
+          shipsWith: joinVerdictSchema.nullable(),
           cells: z.array(
             output({
               workOrderSizeId: id(),
@@ -116,6 +126,8 @@ export const listShipmentsContract = defineContract({
           partyName: z.string(),
           salesOrderId: id(),
           salesOrderNumber: z.string(),
+          /** B-OP-041 (N6): every order it carries (its lines' orders), the first (salesOrderId) first. */
+          salesOrders: shipmentOrdersSchema,
           transportBy: transportBySchema,
           carrierCode: z.string().nullable(),
           carrierName: z.string().nullable(),
@@ -156,6 +168,11 @@ export const getShipmentContract = defineContract({ params: shipmentParams, resp
 export const createShipmentContract = defineContract({
   body: input({
     salesOrderId: id(),
+    /**
+     * B-OP-040 (order page N6): every order of the new shipment, the first = salesOrderId; the others are orders of the same
+     * customer that may join it (refused "Several orders in one shipment come with the next update" until the switch).
+     */
+    salesOrderIds: z.array(id()).min(1).max(20).optional(),
     /** The site the goods leave from; default the one site of the lines' work order cells. */
     siteId: id().optional(),
     /** A delivery address of the order's party; default the order's ship-to. */
@@ -404,4 +421,30 @@ export const receiveCarrierReturnContract = defineContract({
     periodLockOverride: periodLockOverride.optional(),
   }),
   response: { 201: output({ carrierReturn: carrierReturnView, valued: z.boolean() }) },
+})
+
+// ---- B-OP-040 (order page N6, lines-derived): several orders of one customer on one shipment, held off ----------------
+
+export const shipmentOrderCandidatesContract = defineContract({
+  params: shipmentParams,
+  response: {
+    200: output({
+      shipmentId: id(),
+      number: z.string(),
+      /** The shipment's customer's other open orders (never another customer's), each with its verdict. */
+      orders: z.array(output({ salesOrderId: id(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), joinable: joinVerdictSchema })),
+    }),
+  },
+})
+
+export const joinableShipmentsContract = defineContract({
+  querystring: input({ salesOrderId: id() }),
+  response: {
+    200: output({
+      salesOrderId: id(),
+      number: z.string(),
+      /** The order's customer's DRAFT shipments it is not on yet, each with its verdict. */
+      shipments: z.array(output({ shipmentId: id(), number: z.string(), status: statusSchema, siteId: id(), joinable: joinVerdictSchema })),
+    }),
+  },
 })

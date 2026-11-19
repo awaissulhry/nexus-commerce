@@ -13,6 +13,11 @@ import { serverClock } from '../../../core/time'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { shipByLookup } from '../queue/promise'
 import { cutOffToday, siteDaysOf } from '../queue/site-day'
+// B-OP-070 (order page N6, "ship together"): the same customer's other orders, each with its verdict against the asked one.
+import { joinProblems, joinShipmentOf, joinVerdict, type JoinVerdict } from '@nexus/factory-domain/shipping/shipments'
+import { holdWordsAt } from '../../parties/holds/stops'
+import { joinOrderOf, joinOrdersOf, type JoinOrderRow } from './orders-of'
+import type { FactoryClient } from '@nexus/factory-db'
 
 /**
  * What is ready to ship (SCR-066; LOG-001, LOG-002, GAP-002): per sales order, each work order cell that quality
@@ -34,6 +39,8 @@ export interface ReadyQuery {
   readonly limit?: number | undefined
   /** B-W2b-386: minutes before the cut-off from which garments due today and on no shipment are at risk. */
   readonly warnMinutes?: number | undefined
+  /** B-OP-070: '1' with salesOrderId: the same customer's other open orders too, each with shipsWith. */
+  readonly together?: '1' | '0' | undefined
 }
 
 export const READY_PAGE = 100
@@ -44,6 +51,13 @@ export async function readyToShip(caller: CommandCaller, query: ReadyQuery) {
   const limit = query.limit ?? READY_PAGE
   if (!scope) return { orders: [], nextCursor: null }
   return caller.withClient(async (client) => {
+    // B-OP-070: "ship together" — the asked order's customer (only when the caller may see the order): the page is that
+    // customer's orders, never another customer's (by query; the line FK carries the party too).
+    const asked = query.together === '1' && query.salesOrderId && isUuid(query.salesOrderId) ? (await joinOrdersOf(client, [query.salesOrderId])).get(query.salesOrderId) : undefined
+    const together = asked && mayOn(context, SHIPPING_VIEW, { companyId: asked.companyId, partyId: asked.partyId }) ? asked : null
+    const orderFilter = together ? null : (query.salesOrderId ?? null)
+    const partyFilter = together ? together.partyId : (query.partyId ?? null)
+    if (together && query.partyId && query.partyId !== together.partyId) return { orders: [], nextCursor: null }
     const cursor = query.cursor && isUuid(query.cursor) ? await client.salesOrder.findUnique({ where: { id: query.cursor }, select: { id: true, number: true } }) : null
     // The page of open orders with a cell (repair work orders aside) that can still ship, in the caller's scope (loosely:
     // each cell is checked with can() below).
@@ -51,8 +65,8 @@ export async function readyToShip(caller: CommandCaller, query: ReadyQuery) {
       SELECT o.id, o.number
         FROM "SalesOrder" o
        WHERE o.status::text NOT IN ('CANCELLED', 'CLOSED')
-         AND (${query.salesOrderId ?? null}::uuid IS NULL OR o.id = ${query.salesOrderId ?? null}::uuid)
-         AND (${query.partyId ?? null}::uuid IS NULL OR o."partyId" = ${query.partyId ?? null}::uuid)
+         AND (${orderFilter}::uuid IS NULL OR o.id = ${orderFilter}::uuid)
+         AND (${partyFilter}::uuid IS NULL OR o."partyId" = ${partyFilter}::uuid)
          AND (${cursor?.number ?? null}::text IS NULL OR (o.number, o.id) > (${cursor?.number ?? ''}::text, ${cursor?.id ?? '00000000-0000-0000-0000-000000000000'}::uuid))
          AND EXISTS (
            SELECT 1
@@ -125,11 +139,16 @@ export async function readyToShip(caller: CommandCaller, query: ReadyQuery) {
       const risk = riskOf({ shipBy: day, today: site.today, now, status: null, held: false, siteOpen: site.open, cutOffAt: cutOff?.at ?? null, dayEnd: site.dayEnd, warnMinutes: query.warnMinutes })
       return { shipBy: { day, siteId: site.siteId, cutOff: cutOff ? { time: cutOff.time, at: toUtcIso(cutOff.at), source: cutOff.source, minutesLeft: cutOff.minutesLeft, passed: cutOff.passed } : null }, risk }
     }
+    // B-OP-070: each other order's verdict against the asked one (its site: the one asked, else that of its first ready garment).
+    const shipsWithOf = together ? await shipsWithReader(client, together, groups, query.siteId) : () => null
+    // The asked order first, then the customer's others by number.
+    const ordered = together ? [...groups.filter((group) => group.salesOrderId === together.id), ...groups.filter((group) => group.salesOrderId !== together.id)] : groups
     return {
-      orders: groups.map((group) => {
+      orders: ordered.map((group) => {
         const order = group.cells[0]!.salesOrderLine.order
         return {
           ...dueOf(group.cells),
+          shipsWith: shipsWithOf(group.salesOrderId, group.cells.map((cell) => cell.siteId)),
           salesOrderId: order.id,
           number: order.number,
           customerRef: order.customerRef,
@@ -165,4 +184,29 @@ export async function readyToShip(caller: CommandCaller, query: ReadyQuery) {
       nextCursor,
     }
   })
+}
+
+/**
+ * B-OP-070 (order page N6, "ship together"): may another order of the customer ship with the asked one — joinProblems
+ * against a new shipment of the asked order from its site (the one asked, else that of its first ready garment): another
+ * delivery address, another site, another currency, a customer hold, and MULTI_ORDER_OFF until the switch (B-OP-047).
+ */
+async function shipsWithReader(
+  client: FactoryClient,
+  asked: JoinOrderRow,
+  groups: readonly { readonly salesOrderId: string; readonly cells: readonly { readonly siteId: string }[] }[],
+  siteId: string | undefined,
+): Promise<(salesOrderId: string, siteIds: readonly string[]) => JoinVerdict | null> {
+  const own = groups.find((group) => group.salesOrderId === asked.id)
+  const from = siteId ?? own?.cells[0]?.siteId ?? null
+  const site = from ? await client.site.findUnique({ where: { id: from }, select: { companyId: true } }) : null
+  const customerHold = await holdWordsAt(client, { partyId: asked.partyId, companyId: asked.companyId }, 'SHIPMENT')
+  const shipment = joinShipmentOf(joinOrderOf(asked), { number: null, status: 'DRAFT', siteId: from ?? '', siteCompanyId: site?.companyId ?? asked.companyId, customerHold })
+  const others = await joinOrdersOf(client, groups.map((group) => group.salesOrderId).filter((id) => id !== asked.id))
+  return (salesOrderId, siteIds) => {
+    if (salesOrderId === asked.id) return null
+    const row = others.get(salesOrderId)
+    if (!row) return { allowed: false, why: 'Sales order not found.' }
+    return joinVerdict(joinProblems(shipment, joinOrderOf(row, from ? [...new Set(siteIds)] : undefined)))
+  }
 }

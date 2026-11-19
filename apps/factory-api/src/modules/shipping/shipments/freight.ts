@@ -10,6 +10,8 @@ import { command, type CommandCaller, type CommandTools, type CommandTx } from '
 import { assertMay, officeContextOf } from '../access'
 import { readShipment, type ShipmentHeader } from '../store'
 import { officeShipment } from './shipments'
+// B-OP-041 (order page N6, lines-derived): the orders a shipment carries.
+import { ordersOfShipment } from './orders-of'
 
 /**
  * The freight charged to the customer (B-W2a-48; LOG-105; design warehouse.shipments "Freight charged (price, W2a)",
@@ -109,7 +111,11 @@ export async function saveFreightRule(caller: CommandCaller, siteId: string, bod
 async function byRuleOf(db: CommandTx, shipment: Pick<ShipmentHeader, 'id' | 'siteId' | 'salesOrderId' | 'partyId' | 'transportBy'>): Promise<FreightByRule> {
   const settings = await db.shippingSettings.findUnique({ where: { id: shipment.siteId }, select: { companyId: true, freightRule: true, freightAmount: true, freightFreeFrom: true } })
   const company = settings ? await db.company.findUnique({ where: { id: settings.companyId }, select: { currency: true } }) : null
-  const order = await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { currency: true, netAmount: true } })
+  // B-OP-041 (N6): free from on the sum of the nets of every order it carries (one currency: joinProblems keeps it so).
+  const orderIds = await ordersOfShipment(db, shipment)
+  const orders = await db.salesOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, currency: true, netAmount: true } })
+  const order = orders.find((row) => row.id === shipment.salesOrderId) ?? orders[0] ?? null
+  const net = orders.filter((row) => row.currency === order?.currency).reduce((sum, row) => sum + row.netAmount, 0)
   const party = await db.party.findUnique({ where: { id: shipment.partyId }, select: { incoterm: true } })
   const parcels = await db.parcel.count({ where: { shipmentId: shipment.id } })
   return freightByRule({
@@ -117,7 +123,7 @@ async function byRuleOf(db: CommandTx, shipment: Pick<ShipmentHeader, 'id' | 'si
     transportBy: shipment.transportBy,
     incoterm: party?.incoterm ?? null,
     orderCurrency: order?.currency ?? 'EUR',
-    orderNet: order?.netAmount ?? 0,
+    orderNet: net,
     parcels,
   })
 }
