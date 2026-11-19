@@ -37,6 +37,9 @@ const lead = (text: string) => text.split(/\{[a-zA-Z]+\}/)[0]!.trim()
 /** The made-up words of this stage. */
 const FROM_ALPHA = 'Made-up from Brand Alpha on its order: can the sleeves of the size 52 be two centimetres longer?'
 const GENERAL_NOTE = 'Made-up office note on Brand Alpha: their new warehouse takes deliveries from December.'
+// op-fx4: the order's own reference, not Brand Alpha's fixture one: th1a-sheet (later in the run) calls P1 Brand Beta and scans its
+// rows for Brand Alpha's markers, the fixture's reference among them.
+const DOCK_REF = 'T-TH8-DOCK-PO-0001'
 
 type Made = { id: string; number: string }
 
@@ -114,7 +117,7 @@ export default defineStage({
         {
           companyId: flow.companyId,
           partyId: alphaId,
-          customerRef: `${BRAND_ALPHA.customerRef}-DOCK`,
+          customerRef: DOCK_REF,
           promiseDate: day(45),
           depositPct: null,
           lines: [{ styleId: await flow.seedId('product:style:JKT-01'), colourwayId: await flow.seedId('product:colourway:JKT-01:BLK'), sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 2 }] }],
@@ -192,7 +195,7 @@ export default defineStage({
       await seen(feedHead(page), 60_000)
       await expect(segment(page, OD('record.dock.all', { customer }), RT('allOfCustomer.view.all'))).toHaveAttribute('aria-checked', 'true')
       // An arrival from outside (the list) has no scope: This order.
-      await sales.go(`/sales/orders?q=${encodeURIComponent(`${BRAND_ALPHA.customerRef}-DOCK`)}`)
+      await sales.go(`/sales/orders?q=${encodeURIComponent(DOCK_REF)}`)
       await page.getByRole('link', { name: order.number, exact: true }).first().click()
       await page.waitForURL(new RegExp(`/sales/orders/${order.id}`))
       await expect(page).not.toHaveURL(/[?&]thread=/)

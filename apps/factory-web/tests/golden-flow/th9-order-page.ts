@@ -49,7 +49,9 @@ const lead = (text: string) => text.split(/\{[a-zA-Z]+\}/)[0]!.trim()
 const notHere = (description: string) => test.info().annotations.push({ type: 'not here', description })
 
 /** The made-up words of this stage. */
-const PO_REF = `${BRAND_ALPHA.customerRef}-TH9`
+// op-fx4: a reference of this stage's own, not Brand Alpha's fixture one: th1a-sheet (later in the run) calls P1 Brand Beta and
+// scans its rows for Brand Alpha's markers, the fixture's reference among them.
+const PO_REF = 'T-TH9-PO-0001'
 const TRACKING = ['T-TH9-TRK-0001', 'T-TH9-TRK-0002'] as const
 const TRACK_LINK = 'https://track.example.com/T-TH9-TRK-0002'
 const PAPER_DDT = 'T-TH9-77/2026'
