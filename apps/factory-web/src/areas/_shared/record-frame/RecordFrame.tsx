@@ -39,6 +39,10 @@ export interface RecordBand {
   readonly status?: ReactNode
   /** Identity that travels with the title: the customer's PO, "From QT-…" (F-OP-302: what does not fit folds behind "+N"). */
   readonly meta?: ReactNode
+  // ---- F-OP-302 follow-up (end check, cp-fx9): the page's save state ("All changes saved · 21:35", role=status) is not identity: it
+  // never folds behind "+N" (the one typing sees whether it saved), drawn after the pills as before the fold.
+  readonly save?: ReactNode
+  // ---- end F-OP-302 follow-up
   /** The primary step by state (one button). */
   readonly primary?: ReactNode
   /** The band's ⋯ lines (the frame adds its "Keyboard" line at the end, PR-14). */
@@ -569,7 +573,7 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
       backLabel={band.back}
       title={band.title}
       meta={
-        band.status || band.meta ? (
+        band.status || band.meta || band.save /* F-OP-302 follow-up */ ? (
           <span className="fw-rcf-meta">
             {band.status}
             {band.meta && (
@@ -583,6 +587,7 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
                 +{folded}
               </Button>
             )}
+            {band.save /* F-OP-302 follow-up (cp-fx9): outside the track, never folded */}
           </span>
         ) : undefined
       }

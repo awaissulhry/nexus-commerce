@@ -303,9 +303,9 @@ function ReadyRecord({ quote, model, actions, thread, printThread, fields, sendA
                 ) : (
                   <span className="fw-q-hint">{t(madeOrder.cancelled ? 'record.orderCancelledPlain' : 'record.orderPlain', { number: madeOrder.number })}</span>
                 ))}
-              {saveWords}
             </>
           ),
+          save: saveWords /* F-OP-302 follow-up (cp-fx9): the save state never folds behind "+N" */,
           primary,
           more,
           moreLabel: t('record.more'),
