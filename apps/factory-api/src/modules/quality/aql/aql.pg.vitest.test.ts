@@ -48,6 +48,8 @@ const A = {
   wo1: id('production:work-order:WO-0001'),
   style: id('production:style:JKT-02'),
   brand: id('party:P1'),
+  // op-fx9: another customer of the seed (a German business customer), for a person limited to it.
+  otherCustomer: id('party:P3'),
   member: id('user:member'),
   lead: id('worker:A1:lead'),
   device: id('device:A1:cutting'),
@@ -68,6 +70,8 @@ const SESSIONS: Record<string, SessionContext> = {
   nobody: office(A.tenant, newId(), [grant(['sites.view'])]),
   bench: { audience: 'floor', tenantId: A.tenant, actorId: A.lead, siteId: A.site, deviceId: A.device, grants: [grant(['floor.work', 'quality.inspections.view', 'quality.inspections.record'], { companies: [A.company], sites: [A.site] })] },
   keeperB: office(tenantB, newId(), [grant(KEEP)]),
+  // op-fx9 (the brand wall): every AQL right, limited to the customer P3 — P1's assignments, customer and jacket are none of its.
+  keeperP3: office(A.tenant, newId(), [grant(KEEP, { parties: [A.otherCustomer] })]),
 }
 
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await db.admin.query(sql, values)).rows as T[]
@@ -251,6 +255,52 @@ describe('assignments and the chain (QHS-021)', () => {
     await ok('keeper', 'POST', `/quality/aql/assignments/${replaced.assignment.id}/end`, { version: replaced.assignment.version })
     expect((await ok('viewer', 'GET', `/quality/aql/resolve?companyId=${A.company}&customerId=${A.brand}&styleId=${A.style}`)).chain).toMatchObject({ source: 'CUSTOMER', profile: { code: 'AQL-EXM' } })
     expect((await events('quality.aql_assignment_changed')).map((event) => event.change)).toEqual(['ASSIGNED', 'REPLACED', 'ASSIGNED', 'ENDED', 'ENDED'])
+  })
+
+  // op-fx9 (the brand wall; Owner rule 2026-11-16): the end check's sweep found GET /quality/aql/assignments?styleId=<P1's jacket>
+  // naming SEED-JKT-02 to a person limited to another customer. Such a person meets another customer's rows, customer and
+  // private-label style as unknown ones; the production unit still reads and keeps them all.
+  it("op-fx9: a person limited to another customer meets none of P1's assignments — as an unknown style or customer: no row, no name, the same refusal", async () => {
+    const all = (await ok('viewer', 'GET', `/quality/aql/assignments?styleId=${A.style}`)).assignments as Json[]
+    expect(all.length).toBeGreaterThan(0)
+    expect(all.every((row) => row.style?.code === 'SEED-JKT-02')).toBe(true)
+    const p1 = (await ok('viewer', 'GET', `/quality/aql/assignments?customerId=${A.brand}&active=true`)).assignments as Json[]
+    expect(p1.map((row) => row.profileCode)).toEqual(['AQL-EXM'])
+
+    // The lists: P1's jacket, P1 itself, no filter and the company give what an unknown style gives — no row.
+    const unknown = await ok('keeperP3', 'GET', `/quality/aql/assignments?styleId=${newId()}`)
+    expect(unknown).toEqual({ assignments: [] })
+    for (const query of [`?styleId=${A.style}`, `?customerId=${A.brand}`, `?companyId=${A.company}`, '']) {
+      const response = await call('keeperP3', 'GET', `/quality/aql/assignments${query}`)
+      expect(response.statusCode, response.body).toBe(200)
+      expect(response.json(), query).toEqual(unknown)
+      expect(response.body).not.toContain('SEED-JKT-02')
+      expect(response.body).not.toContain(A.brand)
+    }
+
+    // The chain: P1 and its jacket resolve as an unknown customer and style (the company default), not as P1's profile.
+    const asked = (await ok('keeperP3', 'GET', `/quality/aql/resolve?companyId=${A.company}&customerId=${A.brand}&styleId=${A.style}`)).chain
+    expect(asked).toEqual((await ok('keeperP3', 'GET', `/quality/aql/resolve?companyId=${A.company}&customerId=${newId()}&styleId=${newId()}`)).chain)
+    expect(asked).toMatchObject({ source: 'COMPANY_DEFAULT', profile: { code: 'AQL-STD' } })
+    expect((await ok('viewer', 'GET', `/quality/aql/resolve?companyId=${A.company}&customerId=${A.brand}&styleId=${A.style}`)).chain).toMatchObject({ source: 'CUSTOMER', profile: { code: 'AQL-EXM' } })
+
+    // The writes: P1, or P1's jacket, is refused in the words of an unknown one; P1's assignment is not found; nothing changes.
+    const byCustomer = await refused('keeperP3', 'POST', '/quality/aql/assignments', { profileId: A.std, customerId: A.brand }, 400)
+    const byUnknownCustomer = await refused('keeperP3', 'POST', '/quality/aql/assignments', { profileId: A.std, customerId: newId() }, 400)
+    expect([byCustomer.message, byCustomer.issues]).toEqual([byUnknownCustomer.message, byUnknownCustomer.issues])
+    const byStyle = await refused('keeperP3', 'POST', '/quality/aql/assignments', { profileId: A.std, styleId: A.style }, 400)
+    const byUnknownStyle = await refused('keeperP3', 'POST', '/quality/aql/assignments', { profileId: A.std, styleId: newId() }, 400)
+    expect([byStyle.message, byStyle.issues]).toEqual([byUnknownStyle.message, byUnknownStyle.issues])
+    const ended = await refused('keeperP3', 'POST', `/quality/aql/assignments/${p1[0]!.id}/end`, { version: p1[0]!.version }, 404)
+    const endedUnknown = await refused('keeperP3', 'POST', `/quality/aql/assignments/${newId()}/end`, { version: 1 }, 404)
+    expect(ended.message).toBe(endedUnknown.message)
+    expect((await ok('viewer', 'GET', `/quality/aql/assignments?customerId=${A.brand}&active=true`)).assignments).toEqual(p1)
+
+    // Its own customer stays its own: P3 is assigned, listed and ended by the person limited to it.
+    const own = await ok('keeperP3', 'POST', '/quality/aql/assignments', { profileId: A.std, customerId: A.otherCustomer }, 201)
+    expect(own.assignment).toMatchObject({ profileCode: 'AQL-STD', customer: { id: A.otherCustomer }, style: null })
+    expect(((await ok('keeperP3', 'GET', '/quality/aql/assignments')).assignments as Json[]).map((row) => row.id)).toEqual([own.assignment.id])
+    await ok('keeperP3', 'POST', `/quality/aql/assignments/${own.assignment.id}/end`, { version: own.assignment.version })
   })
 
   it('refuses an assignment to no one, to a party that is no customer, and by a viewer', async () => {

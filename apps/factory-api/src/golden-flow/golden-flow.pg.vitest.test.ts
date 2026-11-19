@@ -50,7 +50,8 @@ import {
 
 let w: World
 const P = {} as Record<'sales' | 'finance' | 'planner' | 'buyer' | 'warehouse' | 'manager' | 'inspector' | 'supervisor' | 'admin', Person>
-/** B-CP-011 (the money wall): the Owner prices what Sales may not (a new customer's quote line). Signed in as the others are, and
+/** B-CP-011 (the money wall): the Owner prices what Sales may not (a new customer's quote line) and sends the priced quote PDF
+ *  (B-CP-015: Sales gets 403 PRICED_DOCUMENT). Signed in as the others are, and
  *  kept out of P so the Home end checks (steps 35, E08) stay the flow's own roles. */
 let owner: Person
 type Json = Record<string, any>
@@ -338,11 +339,13 @@ describe('the golden flow: a brand size run from the customer to the paid invoic
     await drain(w)
   })
 
-  it('09 sales sends the quote: a frozen version, its PDF, and the accept link mailed to the customer', async () => {
+  it('09 the Owner sends the quote (Sales may not: its PDF shows prices): a frozen version, its PDF, and the accept link mailed to the customer', async () => {
     const check = await ok(P.sales, 'GET', `/sales/quotes/${G.quote.id}/send-check`)
     expect(check).toMatchObject({ ready: true, recipient: { email: CUSTOMER_ORDERS } })
     expect(check.checks.filter((entry: Json) => entry.severity === 'BLOCKS')).toEqual([])
-    const sent = await ok(P.sales, 'POST', `/sales/quotes/${G.quote.id}/send`, { version: G.quote.version })
+    // B-CP-011 (the money wall, B-CP-015): the quote's PDF shows prices: Sales may not send it (403 PRICED_DOCUMENT); the Owner sends it.
+    await ok(P.sales, 'POST', `/sales/quotes/${G.quote.id}/send`, { version: G.quote.version }, 403)
+    const sent = await ok(owner, 'POST', `/sales/quotes/${G.quote.id}/send`, { version: G.quote.version })
     expect(sent).toMatchObject({ quote: { status: 'SENT' }, sent: { to: CUSTOMER_ORDERS, documentSha256: expect.stringMatching(/^[0-9a-f]{64}$/) }, delivery: 'sent' })
     G.quote = sent.quote
     G.sent = sent.sent
@@ -879,7 +882,8 @@ describe('the EU variant: a German business customer, VIES, N3.2, no deposit inv
     ;({ quote } = await ok(owner, 'POST', `/sales/quotes/${quote.id}/lines`, euLine(quote.version), 201))
     expect(quote.current).toMatchObject({ taxMode: 'EU_B2B', vatAmount: 0 })
     expect(quote.approval.needed).toBe(false)
-    const sent = await ok(P.sales, 'POST', `/sales/quotes/${quote.id}/send`, { version: quote.version })
+    // B-CP-011 (B-CP-015): the quote's PDF shows prices: the Owner sends it (Sales: 403 PRICED_DOCUMENT, step 09).
+    const sent = await ok(owner, 'POST', `/sales/quotes/${quote.id}/send`, { version: quote.version })
     const customer = linkBrowser(w, linkTokenSentTo(w, EU_ORDERS))
     const accepted = await customer.send('POST', '/link/quote/accept', { versionId: sent.sent.versionId, typedName: 'Clara Beispiel', email: EU_ORDERS })
     // Goods to an EU business with a valid VIES number: the deposit is only a payment (no TD02).

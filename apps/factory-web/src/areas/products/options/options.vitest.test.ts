@@ -66,7 +66,10 @@ describe('Options & rules, the list (B-W2b-242, SCR-114)', () => {
 
   it('reads the rights from the permissions and grains: the library, the surcharge, offers', () => {
     expect(optionsCan(ROLE_PERMISSIONS.developer)).toMatchObject({ view: true, manage: true, price: false, seesPrice: false, offer: true })
-    expect(optionsCan(ROLE_PERMISSIONS.sales)).toMatchObject({ view: true, manage: false, price: true, seesPrice: true })
+    // B-CP-011 (money wall, plan O1–O3): only the Owner prices an option (product.options.price + money.price); Sales reads the
+    // library and sees no price.
+    expect(optionsCan(ROLE_PERMISSIONS.owner)).toMatchObject({ view: true, manage: true, price: true, seesPrice: true })
+    expect(optionsCan(ROLE_PERMISSIONS.sales)).toMatchObject({ view: true, manage: false, price: false, seesPrice: false })
     expect(optionsCan(['product.options.price'])).toMatchObject({ price: false })
     expect(moveHeldKey([ROWS[0]!], { manage: false }, 'archive')).toBe('held.noManage')
     expect(moveHeldKey([ROWS[0]!], { manage: true }, 'restore')).toBe('held.noneArchived')

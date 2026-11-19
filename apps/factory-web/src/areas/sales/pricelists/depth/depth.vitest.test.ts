@@ -9,12 +9,14 @@ import { LOCALES } from '../../../../lib/i18n/locales'
 import { CATALOGUE, messagesFor } from '../../../../lib/i18n/messages'
 import { I18nProvider } from '../../../../lib/i18n/provider'
 import { KNOWN_IMPORTERS } from '../../../admin/import/model'
+import { rolePermissions } from '../../../../shell/design-data'
 import { can, DETAIL, MINIMUMS, RULES, V1, V2, V2_DATED, V2_ENTRIES } from '../_demo/fixtures'
 import { importHeldOf } from '../import/PriceListImport'
 import { designScreen as importScreen } from '../import/fixtures'
 import { designScreen as listScreen } from '../list/fixtures'
 import { designScreen as printScreen } from '../print/fixtures'
 import { designScreen as recordScreen } from '../record/fixtures'
+import { abilitiesOf } from '../model'
 import { exportHref } from './api'
 import { breakCellRow, breakHeld, breakRowOf, daysHeld, daysRows, datedKeys, DEPTH_NS, emptyBreak, emptyMinimum, isPhrase, minimumBody, minimumHeld, movableMinimums, rulesHeld, sortedBreaks, splitRows, surchargeCellRow, surchargeGrid, surchargeHeld, surchargeRowsOf, surchargeSizes } from './model'
 
@@ -129,12 +131,16 @@ describe('size surcharges (SAL-180)', () => {
   })
 
   it('holds the rules of a version in force, without the right, the price grain or a version', () => {
-    expect(rulesHeld(DETAIL, V2, can('sales'))).toBeNull()
-    expect(rulesHeld(DETAIL, V1, can('sales'))).toEqual({ key: 'held.activeHasDraft', params: { revision: 1 } })
-    expect(rulesHeld({ ...DETAIL, draftVersionId: null }, V1, can('sales'))).toEqual({ key: 'held.activeVersion', params: { revision: 1 } })
+    // B-CP-011 (money wall, plan O1–O3): the rules are kept by a price holder with pricelists.manage — the Owner; the Sales
+    // template holds neither the price grain nor pricelists.manage since B-CP-011.
+    expect(rulesHeld(DETAIL, V2, can('owner'))).toBeNull()
+    expect(rulesHeld(DETAIL, V1, can('owner'))).toEqual({ key: 'held.activeHasDraft', params: { revision: 1 } })
+    expect(rulesHeld({ ...DETAIL, draftVersionId: null }, V1, can('owner'))).toEqual({ key: 'held.activeVersion', params: { revision: 1 } })
+    // As Sales worker (the template as it is): held, no price.
+    expect(rulesHeld(DETAIL, V2, abilitiesOf(rolePermissions('sales')))).toEqual({ key: 'held.noPrice' })
     expect(rulesHeld(DETAIL, V2, can('finance'))).toEqual({ key: 'held.noManage' })
     expect(rulesHeld(DETAIL, V2, can('readOnly'))).toEqual({ key: 'held.noPrice' })
-    expect(rulesHeld({ ...DETAIL, status: 'ARCHIVED' }, V2, can('sales'))).toEqual({ key: 'held.archived' })
+    expect(rulesHeld({ ...DETAIL, status: 'ARCHIVED' }, V2, can('owner'))).toEqual({ key: 'held.archived' })
   })
 })
 

@@ -149,7 +149,9 @@ export function fileSeries(files: readonly ThreadFile[]): FileSeries[] {
   const groups = new Map<string, ThreadFile[]>()
   for (const file of files) {
     if (file.status === 'DELETED' || file.status === 'PENDING_UPLOAD') continue
-    const key = file.versionNo !== undefined ? `series:${file.seriesId ?? file.id}` : `name:${file.kind}:${file.name.trim().toLocaleLowerCase()}`
+    // F-CP-144 (cp-fx6): a locked file comes without its name (never named to this reader), so it is never grouped by name —
+    // its own series (or itself): two priced documents are counted two, not folded into one.
+    const key = file.versionNo !== undefined || file.locked ? `series:${file.seriesId ?? file.id}` : `name:${file.kind}:${file.name.trim().toLocaleLowerCase()}`
     groups.set(key, [...(groups.get(key) ?? []), file])
   }
   const newest = (a: ThreadFile, b: ThreadFile) => (b.versionNo ?? 0) - (a.versionNo ?? 0) || b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)
