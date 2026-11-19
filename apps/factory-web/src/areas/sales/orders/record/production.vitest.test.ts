@@ -481,3 +481,102 @@ describe('the Overview’s doors land on Production: #work-orders, #holds, #line
   })
 })
 // ---- end F-OP-115 (A11's anchors)
+
+// ---- F-OP-116 (order page N1; 10-order-page §5.2, §5.3; review R-12, R-17): decide in place -------------------------------------
+describe('F-OP-116: decide in place — a change waiting under its row, Still to do doors, the customer\'s pause lifted from the list', () => {
+  const change = (over: Record<string, unknown> = {}) =>
+    ({
+      id: 'c1',
+      status: 'PROPOSED',
+      kind: 'LOWER_TO_ORDER',
+      partyId: 'p1',
+      salesOrder: { id: 'o1', number: 'SO-DEMO-0150' },
+      workOrder: { id: 'wo-1', number: 'WO-DEMO-0311', status: 'RELEASED' },
+      requestId: null,
+      amendmentId: null,
+      cells: [
+        { salesOrderLineId: 'l1', lineSeq: 10, size: 'M', from: 30, to: 20, workOrderSizeId: 's1' },
+        { salesOrderLineId: 'l1', lineSeq: 10, size: 'L', from: 10, to: 8, workOrderSizeId: 's2' },
+      ],
+      extra: [],
+      extraOutcome: null,
+      reason: 'x',
+      lastError: null,
+      proposedBy: null,
+      proposedAt: '2026-11-18T09:30:00Z',
+      decidedAt: null,
+      decidedBy: null,
+      decisionNote: null,
+      madeWorkOrder: null,
+      version: 2,
+      mayDecide: true,
+      words: { title: { en: 'x', it: 'x' }, status: { en: 'x', it: 'x' }, cells: 'M 30 → 20' },
+      ...over,
+    }) as never
+
+  it('a row\'s waiting changes: PROPOSED on that work order only, the oldest first; "Change waits: 40 → 28"; held for who may not decide', async () => {
+    const { changeFiguresOf, changeHeldOf, waitingChangesOf } = await import('./changes/model')
+    const list = [change({ id: 'c2', proposedAt: '2026-11-19T09:00:00Z' }), change(), change({ id: 'c3', status: 'APPLIED' }), change({ id: 'c4', workOrder: { id: 'wo-2', number: 'WO-2', status: 'RELEASED' } })]
+    expect(waitingChangesOf(list, 'wo-1').map((entry: { id: string }) => entry.id)).toEqual(['c1', 'c2'])
+    expect(waitingChangesOf(null, 'wo-1')).toEqual([])
+    expect(changeFiguresOf(change())).toEqual({ before: 40, after: 28 })
+    expect(changeHeldOf(change())).toBeNull()
+    expect(changeHeldOf(change({ mayDecide: false }))).toEqual({ key: 'wo.waitsPlanner', params: { at: '2026-11-18T09:30:00Z' } })
+  })
+
+  it('Still to do doors in place: the change\'s window, the re-promise\'s Accept / Decline…, the task\'s Done by its own right (R-12), links else', async () => {
+    const { stillDoorsOf, stillDoorOf } = await import('./changes/model')
+    const place = { prefix: '/w/demo', record: '/w/demo/sales/orders/o1', address: (ref: { type: string; id: string }) => `/x/${ref.type}/${ref.id}`, search: 'tab=overview&thread=all' }
+    const row = (kind: string, ref: { type: string; id: string; number: string | null; version?: number | null } | null, mayAct = true) => ({ kind, ref, mayAct })
+    expect(stillDoorsOf(row('WORK_ORDER_CHANGE', { type: 'WorkOrderChange', id: 'c1', number: 'WO-1' }), place)).toEqual({ kind: 'change', changeId: 'c1', held: false })
+    expect(stillDoorsOf(row('WORK_ORDER_CHANGE', { type: 'WorkOrderChange', id: 'c1', number: 'WO-1' }, false), place)).toEqual({ kind: 'change', changeId: 'c1', held: true })
+    expect(stillDoorsOf(row('REPROMISE', { type: 'RePromise', id: 'rp1', number: null }), place)).toEqual({ kind: 'repromise', proposalId: 'rp1', held: false })
+    expect(stillDoorsOf(row('WORK_IN_PROGRESS_TASK', { type: 'Task', id: 't1', number: 'WO-1', version: 3 }), place)).toEqual({ kind: 'task', taskId: 't1', version: 3, held: false })
+    // R-12: Sales (orders.manage alone) reads it held — the task's own right decides, never the order's.
+    expect(stillDoorsOf(row('WORK_IN_PROGRESS_TASK', { type: 'Task', id: 't1', number: 'WO-1', version: 3 }, false), place)).toMatchObject({ kind: 'task', held: true })
+    expect(stillDoorsOf(row('EXTRA_PIECES', { type: 'WorkOrder', id: 'wo-1', number: 'WO-1' }), place)).toEqual({ kind: 'link', href: '/w/demo/x/WorkOrder/wo-1', label: 'scrap' })
+    expect(stillDoorsOf(row('STYLE_CHANGE', { type: 'ChangeRequest', id: 'cr1', number: 'CR-1' }), place)).toMatchObject({ kind: 'link', label: 'products' })
+    expect(stillDoorsOf(row('TELL_WORKSHOP', { type: 'SubcontractOrder', id: 'sc1', number: 'SC-1' }), place)).toMatchObject({ kind: 'link', label: 'subcontracting' })
+    expect(stillDoorsOf(row('TELL_WORKSHOP', null), place)).toEqual({ kind: 'none' })
+    // The order's own tabs keep the dock's scope (tabHref): no plain ?tab= link.
+    expect(stillDoorsOf(row('EXTRA_PIECES', { type: 'SalesOrderAmendment', id: 'a1', number: '2' }, false), place)).toEqual({ kind: 'link', href: '/w/demo/sales/orders/o1?tab=changes&thread=all', label: 'open' })
+    expect(stillDoorOf(row('REPROMISE', { type: 'RePromise', id: 'rp1', number: null }), { ...place, search: '' })).toBe('/w/demo/sales/orders/o1?tab=overview')
+  })
+
+  it('a refused Done says who does it ("Production does this"); the waiting list\'s pause opens the row\'s own Lift (one copy)', async () => {
+    const { taskDoneProblemOf } = await import('./use-production-acts')
+    const { ApiError } = await import('../../../../lib/api/errors')
+    expect(taskDoneProblemOf(new ApiError('forbidden', 403, 'forbidden', 'x', null, [{ path: 'refusal/PRODUCTION_DOES_THIS' }]))).toEqual({ key: 'wo.heldHold' })
+    expect(taskDoneProblemOf(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'version' }]))).toEqual({ key: 'problem.write.moved' })
+    const section = readFileSync(new URL('./view/RequestsSection.tsx', import.meta.url), 'utf8')
+    expect(section).toContain("rowActsOf(row, acts.can).menu.find((entry) => entry.act === 'lift')")
+    expect(section).toContain("actions?.workOrderActs?.onAct?.(row, 'lift')")
+    expect(section).toContain('actions?.orderChanges?.onOpen?.(door.changeId)')
+    expect(section).toContain('actions?.links?.onAccept?.(door.proposalId)')
+    expect(section).toContain('actions?.onTaskDone?.(door.taskId, door.version)')
+  })
+
+  it('the wiring: one read of the order\'s changes, the ONE decide window by the page\'s state (no address word), the dialogs once for the page', () => {
+    const acts = readFileSync(new URL('./use-production-acts.ts', import.meta.url), 'utf8')
+    expect(acts).toContain("listWorkOrderChanges(api, { salesOrderId: orderId, status: 'ALL', limit: 50 })")
+    expect(acts).toContain('openId: openChange')
+    expect(acts).not.toContain('router')
+    const container = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain("if (parts.includes('changes')) productionActs.rereadChanges()")
+    const view = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('<WorkOrderActsDialogs model={model.workOrderActs} actions={actions?.workOrderActs} />')
+    expect(view).toContain('<WorkOrderChangeReview')
+    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
+    expect(tab).not.toContain('<WorkOrderActsDialogs')
+    expect(tab).toContain("t('wo.changeWaits', { before: figures.before, after: figures.after })")
+  })
+
+  it('the words exist in both languages (office "tu")', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['wo.changeApply', 'wo.changeLeave', 'wo.waitsPlannerShort', 'wo.done', 'wo.taskDone', 'wo.repromiseHeld', 'wo.liftPause', 'wo.go.scrap', 'wo.go.products', 'wo.go.subcontracting', 'wo.go.open', 'links.rePromise.accept', 'links.rePromise.decline']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      for (const [key, params] of [['wo.changeWaits', { before: 40, after: 28 }], ['wo.waitsPlanner', { time: '10:42' }], ['wo.changeApplied', { number: 'WO-1' }], ['wo.changeDeclined', { number: 'WO-1' }]] as const) expect(t(key, params), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-OP-116

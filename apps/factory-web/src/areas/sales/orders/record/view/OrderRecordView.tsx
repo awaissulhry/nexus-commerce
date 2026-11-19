@@ -25,6 +25,9 @@ import { ShipmentsTab } from './ShipmentsTab'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { depthMenuItems, DepthNotice, DepthPills, WaitingBanner } from '../../depth/view/DepthBand'
 import { RefuseYesDialog } from '../../depth/view/DepthBand' // F-OP-101
+// ---- F-OP-116: the page's work-order dialogs and the ONE decide window of a work-order change ----
+import { WorkOrderActsDialogs } from '../../../../../lib/production/work-order-acts/view/WorkOrderActsDialogs'
+import { WorkOrderChangeReview } from '../../../../home/approvals/work-order-changes/view/WorkOrderChangeReview'
 import { DepthDialogs } from '../../depth/view/DepthDialogs'
 import { NAMESPACE as DEPTH } from '../../depth/model'
 // ---- B-TH-214: the order on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
@@ -427,6 +430,19 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       {/* F-SA-243: the ONE review window (Home › Approvals' own) opened on this page from its doors; Esc returns to the same tab. */}
       {model.requestDoor && <RequestDoorWindow door={model.requestDoor.parts} />}
       {model.depth && <DepthDialogs order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />}
+      {/* F-OP-116: the work-order rows' dialogs, once for the page (a row's ⋯, the waiting list's "Lift the customer's pause…"), and
+          the ONE decide window of a work-order change (Approvals' own; opened by the page's state, Esc returns here). */}
+      {model.workOrderActs && <WorkOrderActsDialogs model={model.workOrderActs} actions={actions?.workOrderActs} />}
+      {model.orderChanges?.review && (
+        <WorkOrderChangeReview
+          review={model.orderChanges.review}
+          prefix={model.prefix}
+          offline={model.liveState === 'offline'}
+          busy={model.orderChanges.busy}
+          nav={{ ids: (model.orderChanges.list?.value ?? []).filter((change) => change.status === 'PROPOSED').map((change) => change.id), onOpen: actions?.orderChanges?.onOpen }}
+          actions={actions?.orderChanges}
+        />
+      )}
       <DeclineDialog model={model.links} actions={actions?.links} />
       {/* F-SA-230: the production lane's own dialogs, mounted as they are. */}
       {model.people?.assign && <AssignSupervisorDialog model={model.people.assign} actions={actions?.people?.assign} />}

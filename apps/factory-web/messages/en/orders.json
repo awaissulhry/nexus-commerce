@@ -1782,6 +1782,23 @@
       "notNow": "A work order in this state is not cancelled",
       "issued": "Issued to it (it stays on it until returned by hand): {items}",
       "atWorkshop": "At a workshop: {numbers}"
+    },
+    "changeWaits": "Change waits: {before} → {after}",
+    "changeApply": "Apply…",
+    "changeLeave": "Leave as is…",
+    "waitsPlanner": "Waits for a planner · told {time}",
+    "waitsPlannerShort": "Waits for a planner: a planner or the production manager decides it",
+    "changeApplied": "The change of {number} is applied: the floor was told",
+    "changeDeclined": "The change of {number} is left as is",
+    "done": "Done",
+    "taskDone": "Done: the task is ticked off",
+    "repromiseHeld": "Sales answers it, never the planner who proposed it",
+    "liftPause": "Lift the customer's pause…",
+    "go": {
+      "scrap": "Scrap ›",
+      "products": "Products ›",
+      "subcontracting": "Subcontracting ›",
+      "open": "Open"
     }
   },
   "approval": {

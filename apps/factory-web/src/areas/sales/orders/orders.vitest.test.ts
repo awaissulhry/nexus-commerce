@@ -1571,7 +1571,9 @@ describe('F-OP-101: the yes in place — Confirm the order / Refuse… for an ap
     const { writeProblem } = await import('./model')
     expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/STALE' }]))).toEqual({ key: 'approval.refused.STALE', reload: true })
     expect(writeProblem(new ApiError('forbidden', 403, 'forbidden', 'x', null, [{ path: 'refusal/OWN_REQUEST' }]))).toEqual({ key: 'approval.refused.OWN_REQUEST', reload: true })
-    expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/SOMETHING_NEW' }]))).toEqual({ key: 'approval.refused.other', reload: true })
+    // F-OP-116: another route's refusal keeps its own words (only the approval engine's codes are said as a yes's).
+    expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal/SOMETHING_NEW' }]))).toEqual({ key: 'problem.write.state', reload: true })
+    expect(writeProblem(new ApiError('forbidden', 403, 'forbidden', 'x', null, [{ path: 'refusal/PRODUCTION_DOES_THIS' }]))).toEqual({ key: 'problem.write.forbidden', reload: false })
     // A plain version move keeps its words.
     expect(writeProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'version' }]))).toEqual({ key: 'problem.write.moved', reload: true })
   })

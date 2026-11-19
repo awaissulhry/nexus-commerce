@@ -320,7 +320,8 @@ export function nextDatesOf(dates: Dates | null | undefined, promise: string | n
  *   an open yes of the order              Confirm / Refuse… for an approver who did not ask; held for the asker; who decides (F-OP-101)
  *   APPROVAL · PARTNER_TASK               Changes › (what we asked the customer: it decides)
  *   DEPOSIT                               Record the payment (payments.record, the request open) or Money ›
- *   BRAND_PAUSE · holds · quality · work  Production › #holds (F-OP-116 wires "Lift the customer's pause…" in place)
+ *   BRAND_PAUSE                           Lift the customer's pause… in place (F-OP-116: the shared Lift; no ref: Production › #holds)
+ *   holds · quality · work                Production › #holds
  *   MATERIAL_SHORT · GATE                 Production › #dates
  *
  * Oldest first (a row with no known start last). Nothing here names another customer: every row is this order's own read.
@@ -331,6 +332,8 @@ export type WaitingDoor =
   | { readonly kind: 'yes'; readonly task: OpenApproval }
   | { readonly kind: 'payment'; readonly requestId: string }
   | { readonly kind: 'tab'; readonly tab: 'production' | 'money' | 'changes'; readonly anchor: string | null }
+  /** F-OP-116: the customer's pause on a work order this reader reaches: "Lift the customer's pause…" (the shared Lift, F-OP-114). */
+  | { readonly kind: 'lift'; readonly workOrderId: string }
 
 /** A row's words: the API's own (it + en), or the page's phrase (its `{customer}` and the request's kind as `{what}` filled in: rowWordsOf). */
 export type WaitingWords = { readonly kind: 'api'; readonly words: Words } | { readonly kind: 'phrase'; readonly phrase: Phrase; readonly requestKind?: string | null }
@@ -373,6 +376,8 @@ function doorOf(blocker: Blocker, inputs: WaitingInputs): WaitingDoor {
   }
   if (blocker.kind === 'DEPOSIT') return inputs.recordPayment && ref?.type === 'DepositRequest' ? { kind: 'payment', requestId: ref.id } : { kind: 'tab', tab: 'money', anchor: null }
   if (blocker.kind === 'APPROVAL' || blocker.kind === 'PARTNER_TASK') return { kind: 'tab', tab: 'changes', anchor: null }
+  // F-OP-116: the customer's pause is lifted in place (a work order the reader does not reach has no ref: Production › holds).
+  if (blocker.kind === 'BRAND_PAUSE' && ref?.type === 'WorkOrder') return { kind: 'lift', workOrderId: ref.id }
   if (DATE_KINDS.has(blocker.kind)) return { kind: 'tab', tab: 'production', anchor: 'dates' }
   return { kind: 'tab', tab: 'production', anchor: HOLD_KINDS.has(blocker.kind) ? 'holds' : null }
 }

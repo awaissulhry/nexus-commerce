@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { Banner, Card, EmptyState } from '@nexus/ui/components'
 import { Button, Pill, Skeleton } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime, formatTime } from '../../../../../lib/i18n/format'
-import { useLocale, useT } from '../../../../../lib/i18n/provider'
+import { useLocale, useScopedT, useT } from '../../../../../lib/i18n/provider' // F-OP-116: useScopedT
 import { money } from '../../../quotes/model'
 import { useProductionWords } from '../../../../../lib/production/words'
 import { RequestCard } from '../../../../../lib/production/view/RequestCard'
@@ -19,7 +19,8 @@ import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { readOf } from '../overview/model'
 import type { Order } from '../../api'
-import { askingOf, askWordsOf, decisionBandOf, stillDoorOf, stillGroupsOf, stillRowsOf, type StillRowOf } from '../changes/model'
+import { askingOf, askWordsOf, decisionBandOf, stillGroupsOf, stillRowsOf, type StillRowOf } from '../changes/model'
+import { stillDoorsOf } from '../changes/model' // F-OP-116
 import { waitingOnCustomerOf, waitingOnUsOf } from '../changes/model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
@@ -31,6 +32,7 @@ import { TabLink } from '../../../../../lib/tab-link/TabLink'
 import { YesDoorView } from '../../depth/view/DepthBand'
 import { yesDoorOf } from '../../depth/model'
 import { rowWordsOf, type WaitingDoor, type WaitingRow } from '../overview/model'
+import { rowActsOf } from '../../../../../lib/production/work-order-acts/model' // F-OP-116: the row's own Lift rule
 
 /** The words the request card's lines are written with (Home › Approvals' own: `approvals` customerRequest.*). */
 const APPROVALS_NS = 'approvals'
@@ -215,14 +217,21 @@ function BandNotices({ order, model }: { order: Order; model: OrderRecordModel }
   )
 }
 
-/** One Still to do row: the step, who acts (the team), its state in the window's own words, since when, its door. */
-export function StillRow({ row, order, model }: { row: StillRowOf; order: Order; model: OrderRecordModel }) {
+/**
+ * One Still to do row: the step, who acts (the team), its state in the window's own words, since when, its door.
+ * F-OP-116 (10-order-page §5.3; R-12): the door in place where it can be — a work-order change: Apply… / Leave as is… (the ONE decide
+ * window here); planning's re-promise: Accept / Decline…; a production task: Done by the task's own right, else held "Production does
+ * this"; a scrap, a style change, a workshop: a real link (Scrap ›, Products ›, Subcontracting ›).
+ */
+export function StillRow({ row, order, model, actions }: { row: StillRowOf; order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const a = useT(APPROVALS_NS)
   const locale = useLocale()
+  const search = useSearchParams()?.toString() ?? '' // F-OP-116: the order's own tabs keep the dock's scope
   const state = stillStateOf(row)
   const team = TEAM_WORDS[row.waitingOn as ApplyTeam]
-  const href = stillDoorOf(row, { prefix: model.prefix, record: `${model.prefix}/sales/orders/${order.id}`, address: (ref) => recordAddress({ type: ref.type, id: ref.id, label: ref.number ?? undefined, companyId: order.companyId, siteId: null }, OFFICE_PAGES) })
+  const door = stillDoorsOf(row, { prefix: model.prefix, record: `${model.prefix}/sales/orders/${order.id}`, address: (ref) => recordAddress({ type: ref.type, id: ref.id, label: ref.number ?? undefined, companyId: order.companyId, siteId: null }, OFFICE_PAGES), search })
+  const busy = model.busy ? t('held.busy') : null
   return (
     <li className="fw-so-still">
       <span className="fw-so-stack-tight">
@@ -231,9 +240,35 @@ export function StillRow({ row, order, model }: { row: StillRowOf; order: Order;
       </span>
       <span className="fw-so-inline">
         <Pill tone={state.tone}>{a(state.key)}</Pill>
-        {href && (
+        {/* F-OP-116: the door in place. */}
+        {door.kind === 'change' && (
+          <>
+            <Button size="sm" heldReason={door.held ? t('wo.waitsPlannerShort') : busy} onClick={() => actions?.orderChanges?.onOpen?.(door.changeId)}>
+              {t('wo.changeApply')}
+            </Button>
+            <Button size="sm" variant="quiet" heldReason={door.held ? t('wo.waitsPlannerShort') : busy} onClick={() => actions?.orderChanges?.onOpen?.(door.changeId)}>
+              {t('wo.changeLeave')}
+            </Button>
+          </>
+        )}
+        {door.kind === 'repromise' && (
+          <>
+            <Button size="sm" heldReason={door.held ? t('wo.repromiseHeld') : busy} onClick={() => actions?.links?.onAccept?.(door.proposalId)}>
+              {t('links.rePromise.accept')}
+            </Button>
+            <Button size="sm" variant="quiet" heldReason={door.held ? t('wo.repromiseHeld') : busy} onClick={() => actions?.links?.onDeclineStart?.(door.proposalId)}>
+              {t('links.rePromise.decline')}
+            </Button>
+          </>
+        )}
+        {door.kind === 'task' && (
+          <Button size="sm" heldReason={door.held ? t('wo.heldHold') : door.version === null ? t('held.busy') : busy} onClick={() => door.version !== null && actions?.onTaskDone?.(door.taskId, door.version)}>
+            {t('wo.done')}
+          </Button>
+        )}
+        {door.kind === 'link' && (
           <Button size="sm" variant="quiet" asChild>
-            <Link href={href}>{t('changes.still.open')}</Link>
+            <Link href={door.href}>{t(`wo.go.${door.label}`)}</Link>
           </Button>
         )}
       </span>
@@ -245,15 +280,15 @@ export function StillRow({ row, order, model }: { row: StillRowOf; order: Order;
  * Changes › Still to do: under each accepted change (the customer's request it carries out, or the office's own) its rows, until
  * each is done or left as is; the order's own "Made extra: 4 M" (office only); work orders the reader does not reach counted.
  */
-export function StillToDo({ order, model }: { order: Order; model: OrderRecordModel }) {
+export function StillToDo({ order, model, actions }: { order: Order; model: OrderRecordModel; /* F-OP-116 */ actions?: OrderRecordActions }) {
   return (
     <WithMessages namespaces={[APPROVALS_NS]}>
-      <Still order={order} model={model} />
+      <Still order={order} model={model} actions={actions} />
     </WithMessages>
   )
 }
 
-function Still({ order, model }: { order: Order; model: OrderRecordModel }) {
+function Still({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const w = useProductionWords()
   const locale = useLocale()
@@ -285,7 +320,7 @@ function Still({ order, model }: { order: Order; model: OrderRecordModel }) {
                 </p>
                 <ul className="fw-so-datelist">
                   {group.rows.map((row, index) => (
-                    <StillRow key={`${row.kind}:${row.ref?.id ?? index}`} row={row} order={order} model={model} />
+                    <StillRow key={`${row.kind}:${row.ref?.id ?? index}`} row={row} order={order} model={model} actions={actions /* F-OP-116 */} />
                   ))}
                 </ul>
               </div>
@@ -332,6 +367,7 @@ export function WaitingRowItem({ row, order, model, actions }: { row: WaitingRow
 /** The row's one door, in place: Answer… (the review window here), Reply in the thread, the yes, Record the payment, or a tab ›. */
 function WaitingDoorView({ door, order, model, actions }: { door: WaitingDoor; order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
+  const scoped = useScopedT('orders') // F-OP-116: a held phrase may name another catalogue
   const frame = useRecordFrame()
   const search = useSearchParams()?.toString() ?? ''
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
@@ -361,6 +397,19 @@ function WaitingDoorView({ door, order, model, actions }: { door: WaitingDoor; o
       )
     case 'tab':
       return tabLink(door.tab, door.anchor)
+    case 'lift': {
+      // F-OP-116: the work-order row's own Lift (F-OP-114, one copy), on the row the production read gives; held with who does it.
+      const row = (readOf(model.production)?.work?.workOrders ?? []).find((entry) => entry.id === door.workOrderId) ?? null
+      const acts = model.workOrderActs ?? null
+      const lift = row && acts ? (rowActsOf(row, acts.can).menu.find((entry) => entry.act === 'lift') ?? null) : null
+      if (!row || !lift) return tabLink('production', 'holds')
+      const held = lift.held ? scoped(lift.held.key, lift.held.params) : model.busy ? t('held.busy') : null
+      return (
+        <Button size="sm" heldReason={held} onClick={() => actions?.workOrderActs?.onAct?.(row, 'lift')}>
+          {t('wo.liftPause')}
+        </Button>
+      )
+    }
   }
 }
 // ---- end F-OP-103

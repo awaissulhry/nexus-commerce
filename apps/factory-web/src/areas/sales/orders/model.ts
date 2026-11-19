@@ -839,8 +839,9 @@ export function writeProblem(error: unknown): WriteProblem {
   if (!isApiError(error)) return { key: 'problem.write.internal', reload: false }
   // F-OP-101: the approval engine's refusal of a yes or a no decided here (`refusal/STALE` …): its own words, and the order read again
   // (W39-02's seeded request answers STALE on a yes — its no still clears it).
+  // F-OP-116: only the approval engine's own codes — another route's refusal (PRODUCTION_DOES_THIS, CUT_PIECES …) keeps its words.
   const refusal = error.issues.map(issuePath).find((path) => path.startsWith('refusal/'))?.slice('refusal/'.length) ?? null
-  if (refusal) return { key: YES_REFUSALS.has(refusal) ? `approval.refused.${refusal}` : 'approval.refused.other', reload: true }
+  if (refusal && YES_REFUSALS.has(refusal)) return { key: `approval.refused.${refusal}`, reload: true }
   if (error.kind === 'conflict') {
     const moved = error.issues.some((issue) => issuePath(issue).split(/[./]/).includes('version'))
     if (moved) return { key: 'problem.write.moved', reload: true }

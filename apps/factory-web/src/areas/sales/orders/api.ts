@@ -1141,3 +1141,10 @@ export async function listShipToAddresses(api: ApiClient, partyId: string, signa
   return party.addresses.filter((address) => address.status === 'ACTIVE' && address.kinds.includes('SHIP_TO') && (!address.approval || address.approval.status === 'APPROVED'))
 }
 // ---- end F-OP-111
+
+// ---- F-OP-116 (B-OP-025, R-12): Done on one of the order's own production tasks (Still to do), by the task's own right ----
+/** POST /sales/orders/:orderId/still-to-do/tasks/:taskId/done {version}: its assignee or tasks.manage over its work order; else 403. */
+export async function doneStillToDoTask(api: ApiClient, orderId: string, taskId: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<{ id: string; status: string; version: number }> {
+  return (await api.post(`${orderPath(orderId)}/still-to-do/tasks/${encodeURIComponent(taskId)}/done`, { body: { version }, schema: z.object({ task: z.object({ id: z.string(), status: z.string(), version: z.number() }) }), idempotencyKey })).task
+}
+// ---- end F-OP-116

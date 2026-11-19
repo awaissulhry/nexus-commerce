@@ -279,8 +279,10 @@ describe('F-OP-103: the ONE waiting list — every blocker and open yes is one r
     expect(byKind(rows, 'PARTNER_TASK')[0]!.door).toEqual({ kind: 'tab', tab: 'changes', anchor: null })
     expect(byKind(rows, 'DEPOSIT')[0]!.door).toEqual({ kind: 'payment', requestId: 'd-1' })
     expect(byKind(waitingOf(all, { ...inputs, recordPayment: false }), 'DEPOSIT')[0]!.door).toEqual({ kind: 'tab', tab: 'money', anchor: null })
-    // The customer's pause: Production › (F-OP-116 wires "Lift the customer's pause…" in place, F-OP-114's lift).
-    for (const kind of ['BRAND_PAUSE', 'QUALITY_HOLD', 'NO_MOVE', 'SUBCONTRACT']) expect(byKind(rows, kind)[0]!.door, kind).toEqual({ kind: 'tab', tab: 'production', anchor: 'holds' })
+    // F-OP-116: the customer's pause on a work order the reader reaches is lifted in place (F-OP-114's Lift); no ref: Production › holds.
+    expect(byKind(rows, 'BRAND_PAUSE')[0]!.door).toEqual({ kind: 'lift', workOrderId: 'wo-1' })
+    expect(byKind(waitingOf(headlineWith([blocker('BRAND_PAUSE', 'BRAND', null, null)]), inputs), 'BRAND_PAUSE')[0]!.door).toEqual({ kind: 'tab', tab: 'production', anchor: 'holds' })
+    for (const kind of ['QUALITY_HOLD', 'NO_MOVE', 'SUBCONTRACT']) expect(byKind(rows, kind)[0]!.door, kind).toEqual({ kind: 'tab', tab: 'production', anchor: 'holds' })
     for (const kind of ['MATERIAL_SHORT', 'GATE']) expect(byKind(rows, kind)[0]!.door, kind).toEqual({ kind: 'tab', tab: 'production', anchor: 'dates' })
     // Every row has exactly one door, and the API's own words wherever the page has none of its own.
     expect(rows.every((row) => typeof row.door.kind === 'string')).toBe(true)
