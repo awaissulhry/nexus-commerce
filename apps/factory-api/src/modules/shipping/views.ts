@@ -74,7 +74,7 @@ export const freightSchema = output({
 
 /**
  * B-OP-041 (order page N6, lines-derived): the orders a shipment carries (its lines' orders, ordersOfShipment), the first
- * order (salesOrderId) first; one while N6 is held off. Always of its own customer (the line's FK carries partyId).
+ * order (salesOrderId) first; several since B-OP-047. Always of its own customer (the line's FK carries partyId).
  */
 export const shipmentOrdersSchema = z.array(output({ id: id(), number: z.string(), customerRef: z.string().nullable() }))
 

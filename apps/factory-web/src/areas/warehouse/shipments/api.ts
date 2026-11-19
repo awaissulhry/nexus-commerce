@@ -52,7 +52,7 @@ const enc = encodeURIComponent
 /**
  * F-OP-132 (order page N6, lines-derived; B-OP-040/041): an order a shipment carries. A shipment's orders are the orders of its
  * lines, the first (salesOrderId, the one it was made for) first; always of the shipment's own customer (the line's FK carries
- * the party). One while several orders in one shipment are held off (MULTI_ORDER_OFF, until B-OP-047). Absent from an older
+ * the party); several since the N6 switch (B-OP-047). Absent from an older
  * answer: the first order alone (shipmentOrders / rowOrders say it).
  */
 export const shipmentOrderSchema = z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable() })
@@ -314,7 +314,7 @@ export function getShipment(api: ApiClient, id: string, signal?: AbortSignal): P
 
 export interface NewShipmentBody {
   salesOrderId: string
-  /** F-OP-132 (B-OP-040): every order of the new shipment, the first = salesOrderId (refused with MULTI_ORDER_OFF's words until the switch). */
+  /** F-OP-132 (B-OP-040): every order of the new shipment, the first = salesOrderId (each checked against it; B-OP-047: N6 on). */
   salesOrderIds?: string[]
   transportBy?: TransportBy
   carrierCode?: string | null

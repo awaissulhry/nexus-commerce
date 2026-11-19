@@ -957,7 +957,6 @@
     "pick": "Which order",
     "reading": "Reading {customer}'s open orders…",
     "none": "{customer} has no other open order.",
-    "later": "Several orders in one shipment come with the next update.",
     "cannotJoin": "Cannot join this shipment",
     "cells": "Garments of {order}",
     "unread": "Order not read yet",

@@ -27,7 +27,13 @@ export const ROLES = {
   supervisor: 'floor_supervisor',
   admin: 'admin',
 } as const
-export type PersonKey = keyof typeof ROLES
+/**
+ * F-OP-129: people a later stage adds beside the nine (16-close walks the nine only): the Owner, who decides the yes the order page
+ * asks of the Owner's role.
+ */
+export const MORE_ROLES = { owner: 'owner' } as const
+export type PersonKey = keyof typeof ROLES | keyof typeof MORE_ROLES
+const ROLE_OF: Record<PersonKey, string> = { ...ROLES, ...MORE_ROLES }
 const NAMES: Record<PersonKey, string> = {
   sales: 'Sara Sales',
   finance: 'Franco Finance',
@@ -38,6 +44,7 @@ const NAMES: Record<PersonKey, string> = {
   inspector: 'Ines Inspector',
   supervisor: 'Silvio Supervisor',
   admin: 'Ada Admin',
+  owner: 'Olga Owner', // F-OP-129
 }
 
 export const TENANT = 'golden'
@@ -159,7 +166,7 @@ export class Flow {
   async person(key: PersonKey): Promise<Person> {
     let found = this.people.get(key)
     if (!found) {
-      found = await this.control<Person>('POST', '/people', { key, role: ROLES[key], displayName: NAMES[key] })
+      found = await this.control<Person>('POST', '/people', { key, role: ROLE_OF[key], displayName: NAMES[key] }) // F-OP-129: ROLE_OF
       this.people.set(key, found)
     }
     return found

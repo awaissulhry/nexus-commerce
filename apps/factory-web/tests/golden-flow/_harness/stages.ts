@@ -49,8 +49,10 @@ const FILE = /^(\d{2}[a-z]?-[a-z0-9-]+)\.ts$/
 /**
  * F-OP-218: stages that run right after a plan stage, in the same run (its world is warm): the order page's dock (th8-dock) after
  * 07-order. Each also runs alone on a fresh stack (`--stages th8-dock`): it makes the world it needs.
+ * F-OP-129: the order page's end stage (th9-order-page) after 16-close — the W1 order is closed by then, so nothing of it moves
+ * under the stage; it works on the seeded orders of P1 (as Brand Alpha) and one order it makes.
  */
-export const AFTER_STAGES: Readonly<Record<string, readonly string[]>> = Object.freeze({ '07-order': ['th8-dock'] })
+export const AFTER_STAGES: Readonly<Record<string, readonly string[]>> = Object.freeze({ '07-order': ['th8-dock'], '16-close': ['th9-order-page'] })
 
 /** The plan's stages and any other stage file of the folder, in name order; a stage of AFTER_STAGES right after its own. */
 export function stageNames(): string[] {
