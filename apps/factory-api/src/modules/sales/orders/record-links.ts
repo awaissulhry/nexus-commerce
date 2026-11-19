@@ -17,6 +17,8 @@ import { readProposals } from '../../planning/promise-keep/store'
 import { officeContextOf } from './access'
 import { officeOrder } from './moves'
 import type { Reader } from './store'
+// B-OP-043 (order page N6, lines-derived): an order's shipments through their lines.
+import { shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * What points at a sales order (B-TH-077; threads plan TH-6, gaps X-G02, ORD-G04, ORD-G09; design O-SAL-ORD-REC.body and
@@ -183,7 +185,8 @@ export async function orderLinks(caller: CommandCaller, orderId: string) {
     const foreign = touched.length > 0 ? await db.workOrderSize.findMany({ where: { workOrderId: { in: touched }, OR: [{ partyId: null }, { partyId: { not: order.partyId } }] }, select: { workOrderId: true }, distinct: ['workOrderId'] }) : []
     const mixed = new Set(foreign.map((cell) => cell.workOrderId))
     const workOrderIds = touched.filter((workOrderId) => !mixed.has(workOrderId))
-    const shipments = await db.shipment.findMany({ where: own, select: { id: true, number: true } })
+    // B-OP-043 (order page N6): the shipments made for it or carrying its garments (all of its customer and company).
+    const shipments = await db.shipment.findMany({ where: { ...shipmentsOfOrderWhere(order.id), partyId: order.partyId, companyId: order.companyId }, select: { id: true, number: true } })
     const workOrders = workOrderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, number: true } }) : []
     const numbers = new Map([...workOrders, ...shipments].map((row) => [row.id, row.number]))
     const subjects = [

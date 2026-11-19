@@ -130,6 +130,23 @@ export function paymentTermsOf(orders: readonly PaperOrder[]): string | null {
 /** B-OP-042: where an order's lines go among a paper's lines: the first order's first (a large step per order). */
 export const orderPlaceOf = (orders: readonly { readonly id: string }[], orderId: string | null | undefined): number => Math.max(0, orders.findIndex((order) => order.id === orderId)) * 1_000_000
 
+/**
+ * B-OP-043: the garments of these shipments' lines, by the order each line is of (only `orderIds` when given). A shared
+ * shipment's pieces count on each order for its own lines, never the whole shipment on its first order.
+ */
+export async function piecesByOrderOf(db: Reader, shipmentIds: readonly string[], orderIds?: readonly string[]): Promise<Map<string, number>> {
+  const ids = [...new Set(shipmentIds)].filter(isUuid)
+  if (ids.length === 0 || (orderIds !== undefined && orderIds.length === 0)) return new Map()
+  const rows = await db.$queryRaw<{ orderId: string; pieces: number }[]>`
+    SELECT l."orderId"::text AS "orderId", COALESCE(SUM(sl.quantity), 0)::int AS pieces
+      FROM "ShipmentLine" sl
+      JOIN "SalesOrderLine" l ON l.id = sl."salesOrderLineId"
+     WHERE sl."shipmentId" = ANY(${ids}::uuid[])
+       AND (${orderIds === undefined}::boolean OR l."orderId" = ANY(${[...(orderIds ?? [])]}::uuid[]))
+     GROUP BY l."orderId"`
+  return new Map(rows.map((row) => [row.orderId, Number(row.pieces)]))
+}
+
 /** The shipments that carry an order: made for it (its first order), or with a line of it. */
 export const shipmentsOfOrderWhere = (salesOrderId: string): Prisma.ShipmentWhereInput => ({ OR: [{ salesOrderId }, { lines: { some: { salesOrderLine: { orderId: salesOrderId } } } }] })
 

@@ -4,6 +4,8 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { orderProgress, type OrderProgress, type PieceCount, type SalesOrderFacts, type SalesOrderStatus, type SettlementAnswer } from '@nexus/factory-domain/sales/orders/orders'
 import { StaleVersionError, type CommandTx } from '../../../core/command'
+// B-OP-043 (order page N6, lines-derived): a shipment's orders are its lines' orders (the first order first).
+import { orderRefsOfShipments, shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * The sales orders' reads (factory-db sales.prisma SalesOrder, SalesOrderLine, SalesOrderLineSize, and what follows an
@@ -142,6 +144,14 @@ export interface ShipmentLink {
   readonly status: string
   readonly shippedAt: Date | null
   readonly deliveredAt: Date | null
+  // ── B-OP-043 (order page N6, lines-derived): its first order, how it was made, its paper DDT, every order it carries ──
+  readonly salesOrderId: string
+  readonly origin: 'NEXUS' | 'ELSEWHERE'
+  /** A shipment recorded as made elsewhere: the paper DDT it left with (number and date); null otherwise. */
+  readonly externalDdt: { readonly number: string; readonly date: Date } | null
+  /** Every order it carries (its lines' orders), the first first: all of the order's own customer (the line FK). */
+  readonly orders: readonly { readonly id: string; readonly number: string; readonly customerRef: string | null }[]
+  // ── end B-OP-043 ──
 }
 
 export interface InvoiceLink {
@@ -192,9 +202,21 @@ export async function readOrderFacts(db: Reader, order: Pick<OrderRow, 'id'>): P
   const reversedOf = new Map(reversed.map((row) => [row.workOrderSizeId, row._sum.quantity ?? 0]))
   const cellOf = new Map(cells.map((cell) => [cell.id, cell]))
 
-  const shipments = await db.shipment.findMany({ where: { salesOrderId: order.id }, select: { id: true, number: true, status: true, shippedAt: true, deliveredAt: true }, orderBy: { number: 'asc' } })
+  // B-OP-043 (order page N6, lines-derived): the order's shipments are those made for it and those that carry its garments
+  // (the database's factory_order_shipments); each with every order it carries. Shipped counts only this order's lines.
+  const shipmentRows = await db.shipment.findMany({
+    where: shipmentsOfOrderWhere(order.id),
+    select: { id: true, number: true, status: true, shippedAt: true, deliveredAt: true, salesOrderId: true, origin: true, externalDdtNumber: true, externalDdtDate: true },
+    orderBy: { number: 'asc' },
+  })
+  const ordersOf = await orderRefsOfShipments(db, shipmentRows)
+  const shipments: ShipmentLink[] = shipmentRows.map(({ externalDdtNumber, externalDdtDate, ...row }) => ({
+    ...row,
+    externalDdt: externalDdtNumber !== null && externalDdtDate !== null ? { number: externalDdtNumber, date: externalDdtDate } : null,
+    orders: (ordersOf.get(row.id) ?? []).map((ref) => ({ id: ref.id, number: ref.number, customerRef: ref.customerRef })),
+  }))
   const leftIds = shipments.filter((row) => (LEFT as readonly string[]).includes(row.status)).map((row) => row.id)
-  const shipped = leftIds.length > 0 ? await db.shipmentLine.groupBy({ by: ['salesOrderLineId', 'size'], where: { shipmentId: { in: leftIds } }, _sum: { quantity: true } }) : []
+  const shipped = leftIds.length > 0 && lineIds.length > 0 ? await db.shipmentLine.groupBy({ by: ['salesOrderLineId', 'size'], where: { shipmentId: { in: leftIds }, salesOrderLineId: { in: lineIds } }, _sum: { quantity: true } }) : []
 
   // B-W2b-330 (SAL-181): a fee line is billed by the SERVICE line that names it (modules/sales/price-waterfall/fee-invoicing).
   const feeIds = lines.filter((line) => line.kind === 'FEE').map((line) => line.id)

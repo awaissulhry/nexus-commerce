@@ -120,7 +120,8 @@ export async function orderRowExtras(
   actor: Actor,
   orders: readonly PageOrder[],
   deposits: readonly { readonly id: string; readonly orderId: string | null }[],
-  shipments: readonly { readonly id: string; readonly salesOrderId: string | null }[],
+  /** B-OP-043: each shipment with the page's orders it carries (`salesOrderIds`; default its first order). */
+  shipments: readonly { readonly id: string; readonly salesOrderId: string | null; readonly salesOrderIds?: readonly string[] }[],
 ): Promise<Map<string, OrderRowExtras>> {
   const out = new Map<string, OrderRowExtras>()
   if (orders.length === 0) return out
@@ -186,11 +187,11 @@ export async function orderRowExtras(
   // ---- delivery notes -----------------------------------------------------------------------------------------------------
   const shipmentIds = shipments.map((shipment) => shipment.id)
   const ddts = shipmentIds.length > 0 ? await client.ddt.findMany({ where: { shipmentId: { in: shipmentIds }, cancellations: { none: {} } }, select: { id: true, number: true, shipmentId: true, companyId: true, siteId: true, partyId: true }, orderBy: [{ documentDate: 'asc' }, { number: 'asc' }] }) : []
-  const orderOfShipment = new Map(shipments.map((shipment) => [shipment.id, shipment.salesOrderId]))
+  // B-OP-043 (order page N6): a shared shipment's delivery note is on every order it carries.
+  const ordersOfShipment = new Map(shipments.map((shipment) => [shipment.id, shipment.salesOrderIds ?? (shipment.salesOrderId ? [shipment.salesOrderId] : [])]))
   const ddtsOf = new Map<string, typeof ddts>()
   for (const ddt of ddts) {
-    const orderId = ddt.shipmentId === null ? null : orderOfShipment.get(ddt.shipmentId)
-    if (orderId) push(ddtsOf, orderId, ddt)
+    for (const orderId of ddt.shipmentId === null ? [] : (ordersOfShipment.get(ddt.shipmentId) ?? [])) push(ddtsOf, orderId, ddt)
   }
 
   for (const order of orders) {
