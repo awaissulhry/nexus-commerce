@@ -117,20 +117,21 @@ function FreezePanel({ model, actions }: { model: OrderDepthModel; actions?: Ord
 }
 
 /**
- * Inside Review amendment (B-W2b-309: a frozen change is refused): what froze, in words, and the way on — "Send as a priced
- * change" when a field asks a priced change the customer accepts, or that it cannot change any more. Fetches nothing.
+ * Inside the edit strip (B-W2b-309: a frozen change is refused): what froze, in words, and the way on — a priced change the customer
+ * accepts, or that it cannot change any more. F-OP-108: one button — the strip's own Apply becomes "Apply as a priced change" (with its
+ * optional fee); this banner only says what froze. Fetches nothing.
  */
-export function FrozenOffer({ order, problems, model, onPriced }: { order: Order; problems: ReadonlyArray<{ path: string }>; model: OrderDepthModel | undefined; onPriced?: () => void }) {
+export function FrozenOffer({ order, problems, model }: { order: Order; problems: ReadonlyArray<{ path: string }>; model: OrderDepthModel | undefined }) {
   const frozen = frozenProblemsOf(problems)
   if (frozen.length === 0) return null
   return (
     <WithMessages namespaces={[NAMESPACE]}>
-      <Offer order={order} frozen={frozen} model={model} onPriced={onPriced} />
+      <Offer order={order} frozen={frozen} model={model} />
     </WithMessages>
   )
 }
 
-function Offer({ order, frozen, model, onPriced }: { order: Order; frozen: Array<{ seq: number | null; field: FreezeField }>; model: OrderDepthModel | undefined; onPriced?: () => void }) {
+function Offer({ order, frozen, model }: { order: Order; frozen: Array<{ seq: number | null; field: FreezeField }>; model: OrderDepthModel | undefined }) {
   const d = useT(NAMESPACE)
   const offer = frozenOffer(frozen, model?.freeze?.value ?? null)
   const name = (seq: number | null) => {
@@ -138,18 +139,7 @@ function Offer({ order, frozen, model, onPriced }: { order: Order; frozen: Array
     return line ? `${line.style?.code ?? '—'} · ${line.colourway?.code ?? '—'}` : null
   }
   return (
-    <Banner
-      tone={offer === 'blocked' ? 'danger' : 'warning'}
-      icon={<Lock size={16} aria-hidden />}
-      title={d(offer === 'blocked' ? 'offer.blocked' : 'offer.priced')}
-      action={
-        offer === 'priced' && onPriced ? (
-          <Button size="sm" variant="primary" heldReason={!model?.can.manage ? d('held.noManage') : null} onClick={onPriced}>
-            {d('offer.go')}
-          </Button>
-        ) : undefined
-      }
-    >
+    <Banner tone={offer === 'blocked' ? 'danger' : 'warning'} icon={<Lock size={16} aria-hidden />} title={d(offer === 'blocked' ? 'offer.blocked' : 'offer.priced')}>
       <ul className="fw-sod-list">
         {frozen.map((entry) => (
           <li key={`${entry.seq}-${entry.field}`}>{name(entry.seq) ? d('offer.line', { line: name(entry.seq)!, field: d(`field.${entry.field}`) }) : d('offer.order', { field: d(`field.${entry.field}`) })}</li>

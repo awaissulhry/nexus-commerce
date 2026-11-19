@@ -323,7 +323,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
     ...actsBase,
     order: ready,
     setDialog,
-    setDialogProblem,
     clearChanged: () => setChanged(null),
     showLines: () => {
       // F-OP-210: Amend keeps the dock's scope and every other term (below 1280 px the full-width thread gives way to Lines).

@@ -3,6 +3,7 @@ import type { StyleDetail } from '../quotes/api'
 import type {
   AmendLineInput,
   AmendmentDiff,
+  AmendPreview, // F-OP-106
   CancelCheck,
   DailyOrderAction,
   ImpactItem,
@@ -15,7 +16,17 @@ import type {
   OrderStatus,
   PathIssue,
 } from './api'
+import type { Followed, FollowRoute, WorkOrderPlan } from './api' // F-OP-106
+// F-OP-107 (B2): the extra pieces' outcomes, in the review window's words (factory-domain's).
+import type { ExtraPiecesView } from './api'
+import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
+import { outcomeOptionsOf } from '@nexus/factory-domain/sales/change-requests/apply-plan'
+import type { ExtraChoice, ExtraPiece } from '../../home/approvals/requests/view/ExtraPieces' // the picker's props (types only)
 import { isFinal, type OrderAbilities, type Phrase, type Tone } from './model'
+import { frozenProblemsOf } from './depth/model' // F-OP-106: the freeze rules' refusals are the strip's own part
+// F-OP-108: a frozen field makes Apply a priced change (the freeze read says whether it still may), with its optional fee.
+import { frozenOffer, PRICED_EMPTY, pricedProblems } from './depth/model'
+import type { Freeze } from './depth/api'
 // B-W2b-374: a new line's options.
 import type { PickBody } from '../quotes/record/configurator/api'
 
@@ -140,6 +151,8 @@ export interface DraftLine {
   locked: boolean
   /** B-W2b-374 (XF3:02): a new line's options, chosen in its Options dialog (sent with the line). */
   options?: PickBody[]
+  /** F-OP-109: the line's description and its note for production (no prices), as typed in edit mode; absent: not edited here. */
+  text?: { readonly description: string; readonly note: string }
 }
 
 export const newKey = (styleId: string, colourwayId: string): string => `new:${styleId}:${colourwayId}`
@@ -158,6 +171,7 @@ export function draftOf(order: Pick<Order, 'lines'>): DraftLine[] {
       sizes: Object.fromEntries(line.sizes.flatMap((size) => (size.size === null ? [] : [[size.size, size.quantity]]))),
       price: line.unitPrice ?? '',
       locked: !!line.closedShort || line.kind !== 'SIZE_GRID',
+      text: { description: line.description ?? '', note: line.note ?? '' }, // F-OP-109
     }))
 }
 
@@ -232,6 +246,19 @@ export const badPrice = (line: Pick<DraftLine, 'price'>): boolean => line.price.
 
 export type DraftChange = 'added' | 'removed' | 'changed'
 
+// ---- F-OP-109: a line's text in edit mode ----
+/** The description and note an amendment sends for a line: only what differs from the order's (empty: cleared); a new line's when typed. */
+export function textOf(line: Pick<DraftLine, 'text'>, own: Pick<OrderLine, 'description' | 'note'> | null): { description?: string | null; note?: string | null } {
+  if (!line.text) return {}
+  const out: { description?: string | null; note?: string | null } = {}
+  for (const field of ['description', 'note'] as const) {
+    const typed = line.text[field].trim() || null
+    if (typed !== (own?.[field] ?? null)) out[field] = typed
+  }
+  return out
+}
+// ---- end F-OP-109
+
 /** What happens to each line of the draft (null: nothing). */
 export function changeOf(line: DraftLine, order: Pick<Order, 'lines'> | null): DraftChange | null {
   if (!line.lineId) return piecesOf(line) > 0 ? 'added' : null
@@ -239,6 +266,7 @@ export function changeOf(line: DraftLine, order: Pick<Order, 'lines'> | null): D
   if (!own || line.locked) return null
   if (piecesOf(line) === 0) return 'removed'
   if (!sameSizes(own, line)) return 'changed'
+  if (Object.keys(textOf(line, own)).length > 0) return 'changed' // F-OP-109
   if (line.price.trim() !== '' && parsePrice(line.price) !== null && Number(parsePrice(line.price)) !== Number(own.unitPrice ?? 'NaN')) return 'changed'
   return null
 }
@@ -260,12 +288,12 @@ export function amendPairs(lines: readonly DraftLine[], order: Pick<Order, 'line
       if (piecesOf(line) === 0) continue
       const price = parsePrice(line.price)
       const priceChanged = price !== null && Number(price) !== Number(own.unitPrice ?? 'NaN')
-      out.push({ draft: line, input: { id: line.lineId, sizes: sizeInputs(line), ...(priceChanged ? { unitPrice: price } : {}) } })
+      out.push({ draft: line, input: { id: line.lineId, sizes: sizeInputs(line), ...(priceChanged ? { unitPrice: price } : {}), ...textOf(line, own) /* F-OP-109 */ } })
       continue
     }
     if (piecesOf(line) === 0) continue
     const price = parsePrice(line.price)
-    out.push({ draft: line, input: { styleId: line.styleId, colourwayId: line.colourwayId, sizes: sizeInputs(line), ...(price !== null ? { unitPrice: price } : {}), ...(line.options?.length ? { options: line.options } : {}) } })
+    out.push({ draft: line, input: { styleId: line.styleId, colourwayId: line.colourwayId, sizes: sizeInputs(line), ...(price !== null ? { unitPrice: price } : {}), ...(line.options?.length ? { options: line.options } : {}), ...textOf(line, null) /* F-OP-109 */ } })
   }
   return out
 }
@@ -285,57 +313,279 @@ export function manualLines(lines: readonly DraftLine[]): NewLineInput[] {
 
 /**
  * Pieces work orders already make, per line and size. F-SA-231 (lead note after B-SA-042, R1): an amendment MAY go under them now —
- * the work order follows as a work-order change ("Still to do"); the editor says so in words (a warning, never a hold). The floor is
- * what is already CUT (`cutFloorsOf`): a cut piece is never un-cut.
+ * the work order follows as a work-order change ("Still to do"); the editor says so in words (a warning, never a hold). F-OP-107: under
+ * what is CUT its extra pieces get an outcome (`cellIssuesOf`); under what SHIPPED it never goes.
  */
 export function minimumsOf(order: Pick<Order, 'lines'>): Record<string, Record<string, number>> {
   return Object.fromEntries(order.lines.map((line) => [line.id, Object.fromEntries(line.sizes.flatMap((size) => (size.size !== null && size.progress.inWorkOrders > 0 ? [[size.size, size.progress.inWorkOrders]] : [])))]))
 }
 
-/**
- * Cells typed under what work orders already make (F-SA-231: said, not held — the work order follows the change as "Still to do").
- * A cell under what is already cut is `underCut` (held), never listed here too.
- */
-export function underWorkOrders(lines: readonly DraftLine[], minimums: Readonly<Record<string, Readonly<Record<string, number>>>>, floors: Readonly<Record<string, Readonly<Record<string, number>>>> = {}): { key: string; size: string; made: number }[] {
-  const out: { key: string; size: string; made: number }[] = []
+// ── F-OP-107 (B2; 10-order-page §4.2; review R-16): the floors of each cell — what shipped, what is cut, what work orders make ──
+/** One cell's floors: pieces of the order's own cells already cut and already shipped (a step not counted there: 0). */
+export interface CellFloor {
+  readonly cut: number
+  readonly shipped: number
+}
+export type CellFloors = Readonly<Record<string, Readonly<Record<string, CellFloor>>>>
+
+type ReadLine = { readonly lineId: string; readonly cut: number | null; readonly sewn: number | null; readonly shipped: number; readonly sizes: readonly { readonly size: string | null; readonly cut: number | null; readonly shipped: number }[] }
+
+/** The floors per line and size from the production read's own cells (shipped per size is in the read: R-16). */
+export function cellFloorsOf(lines: readonly ReadLine[]): CellFloors {
+  return Object.fromEntries(lines.map((line) => [line.lineId, Object.fromEntries(line.sizes.flatMap((size) => (size.size !== null && ((size.cut ?? 0) > 0 || size.shipped > 0) ? [[size.size, { cut: size.cut ?? 0, shipped: size.shipped }]] : [])))]))
+}
+
+/** "Cut 40 · Sewn 32 · Shipped 0" of a colour line (null: the step is not counted there — never a made-up 0). */
+export interface LineFigures {
+  readonly cut: number | null
+  readonly sewn: number | null
+  readonly shipped: number
+}
+export const lineFiguresOf = (lines: readonly ReadLine[]): Record<string, LineFigures> => Object.fromEntries(lines.map((line) => [line.lineId, { cut: line.cut, sewn: line.sewn, shipped: line.shipped }]))
+
+export type CellIssueKind = 'shipped' | 'cut' | 'inWork'
+/** One cell typed under a floor: under what shipped (held: it cannot go lower), under what is cut (the extra pieces get an outcome), under what work orders make (the work order follows). */
+export interface CellIssue {
+  readonly key: string
+  readonly size: string
+  readonly kind: CellIssueKind
+  /** shipped: the pieces shipped; cut: the pieces cut beyond the figure typed; inWork: what work orders make. */
+  readonly count: number
+}
+
+/** Each cell's strongest floor it is typed under (shipped, then cut, then in work orders); a line kept as it is never has one. */
+export function cellIssuesOf(lines: readonly DraftLine[], floors: CellFloors, minimums: Readonly<Record<string, Readonly<Record<string, number>>>> = {}): CellIssue[] {
+  const out: CellIssue[] = []
   for (const line of lines) {
-    const mins = line.lineId ? minimums[line.lineId] : undefined
-    if (!mins || line.locked) continue
-    const cut = line.lineId ? (floors[line.lineId] ?? {}) : {}
-    for (const [size, made] of Object.entries(mins)) {
+    if (!line.lineId || line.locked) continue
+    const own = floors[line.lineId] ?? {}
+    const made = minimums[line.lineId] ?? {}
+    for (const size of [...new Set([...Object.keys(own), ...Object.keys(made)])]) {
       const typed = line.sizes[size] ?? 0
-      if (typed < made && typed >= (cut[size] ?? 0)) out.push({ key: line.key, size, made })
+      const floor = own[size]
+      if (floor && typed < floor.shipped) out.push({ key: line.key, size, kind: 'shipped', count: floor.shipped })
+      else if (floor && typed < floor.cut) out.push({ key: line.key, size, kind: 'cut', count: floor.cut - typed })
+      else if (typed < (made[size] ?? 0)) out.push({ key: line.key, size, kind: 'inWork', count: made[size]! })
     }
   }
   return out
 }
+// ── end F-OP-107
 
-// ── F-SA-231 (lead note after B-SA-042): the floor of a size is what is already CUT of the order's own cells ──
-/** The pieces already cut per line and size, from the production read's own cells (a step not counted: no floor known, 0). */
-export function cutFloorsOf(lines: readonly { readonly lineId: string; readonly sizes: readonly { readonly size: string | null; readonly cut: number | null }[] }[]): Record<string, Record<string, number>> {
-  return Object.fromEntries(lines.map((line) => [line.lineId, Object.fromEntries(line.sizes.flatMap((size) => (size.size !== null && size.cut !== null && size.cut > 0 ? [[size.size, size.cut]] : [])))]))
-}
-
-/** Cells typed under what is already cut (a cut piece is never un-cut: the API refuses it; Review waits, said per cell). */
-export function underCut(lines: readonly DraftLine[], floors: Readonly<Record<string, Readonly<Record<string, number>>>>): { key: string; size: string; cut: number }[] {
-  const out: { key: string; size: string; cut: number }[] = []
-  for (const line of lines) {
-    const cut = line.lineId ? floors[line.lineId] : undefined
-    if (!cut || line.locked) continue
-    for (const [size, pieces] of Object.entries(cut)) if ((line.sizes[size] ?? 0) < pieces) out.push({ key: line.key, size, cut: pieces })
-  }
-  return out
-}
-// ── end F-SA-231
-
-/** Why the draft cannot be reviewed yet (in this app's words), or null. F-SA-231: under the cut floor holds; under work orders does not. */
-export function reviewHeld(lines: readonly DraftLine[], order: Pick<Order, 'lines'>, header: { changed: boolean }, floors: Readonly<Record<string, Readonly<Record<string, number>>>> = {}): Phrase | null {
+/**
+ * Why the draft cannot be applied yet (in this app's words), or null. F-OP-107 (B2): under what already shipped holds; under what is
+ * cut no longer does — its extra pieces get an outcome in the strip; under work orders never did.
+ */
+export function reviewHeld(lines: readonly DraftLine[], order: Pick<Order, 'lines'>, header: { changed: boolean }, floors: CellFloors = {}): Phrase | null {
   if (lines.some(badPrice)) return phrase('amend.held.price')
-  if (underCut(lines, floors).length > 0) return phrase('amend.held.cut')
+  if (cellIssuesOf(lines, floors).some((issue) => issue.kind === 'shipped')) return phrase('edit.held.shipped')
   if (amendLines(lines, order).length === 0) return phrase('amend.held.empty')
   if (changeCount(lines, order) === 0 && !header.changed) return phrase('amend.held.nothing')
   return null
 }
+
+// ---- F-OP-106 (order page N2; 10-order-page §4.1; review R-4): the "What changes" strip — fed by the amendment's preview ----------
+
+/** The draft as the strip reads it (record-model AmendState holds it). */
+export interface AmendDraftLike {
+  readonly lines: readonly DraftLine[]
+  readonly customerRef: string
+  readonly requestedDate: string
+}
+
+/** The amendment's body as the API reads it (the preview, Apply, and the priced change it may become): its lines, and the header that changed. */
+export function amendBodyOf(draft: AmendDraftLike, order: Pick<Order, 'lines' | 'customerRef' | 'requestedDate'>) {
+  const customerRef = draft.customerRef.trim() || null
+  const requestedDate = draft.requestedDate || null
+  return {
+    lines: amendLines(draft.lines, order),
+    ...(customerRef !== (order.customerRef ?? null) ? { customerRef } : {}),
+    ...(requestedDate !== (order.requestedDate ?? null) ? { requestedDate } : {}),
+  }
+}
+
+/** What a preview is about: the body it was asked with, on the order's version (an answer about another one is stale). */
+export const amendKeyOf = (draft: AmendDraftLike, order: Pick<Order, 'lines' | 'customerRef' | 'requestedDate' | 'version'>): string => JSON.stringify([order.version, amendBodyOf(draft, order)])
+
+/** The strip's read of the API's preview, with the key it was asked for. */
+export interface AmendReview {
+  readonly phase: 'reading' | 'ready' | 'failed'
+  readonly key: string
+  readonly preview: AmendPreview | null
+  readonly problem: Phrase | null
+}
+
+/** A preview's answer into the draft; dropped when the draft asked for another body since (its key moved on) or is gone. */
+export function tookPreview<T extends { readonly review: AmendReview | null }>(draft: T | null, next: AmendReview): T | null {
+  if (!draft || draft.review?.key !== next.key) return draft
+  return { ...draft, review: next }
+}
+
+export interface StripChange {
+  readonly before: number
+  readonly after: number
+  readonly delta: number
+}
+
+/** One work order of the strip: what the change does to it and whether it follows now (the API's rule) or waits for production. */
+export interface StripWorkOrder {
+  readonly key: string
+  /** null: a work order this reader does not reach ("A work order"). */
+  readonly number: string | null
+  /** null: it cannot be carried out now (`held` says why). */
+  readonly route: FollowRoute | null
+  readonly before: number
+  readonly after: number
+  /** It follows in the same click (D1); false: it waits for production — decided on this page. */
+  readonly now: boolean
+  /** Why it waits (the API's words), when it says one. */
+  readonly held: { readonly it: string; readonly en: string } | null
+  readonly reprint: boolean
+  /** The order's lines its cells make (F-OP-109: "WO-0311 loses this line"); none when the preview does not say. */
+  readonly lineIds: readonly string[]
+}
+
+export interface AmendStrip {
+  /** idle: nothing to ask yet (the draft's own hold says why); reading: the preview of THIS draft is not there yet. */
+  readonly phase: 'idle' | 'reading' | 'ready' | 'failed'
+  /** The failed read's words. */
+  readonly problem: Phrase | null
+  /** The order's pieces before → after. */
+  readonly pieces: StripChange | null
+  /** The net before → after (the price grain only; never shown without it). */
+  readonly net: StripChange | null
+  readonly workOrders: readonly StripWorkOrder[]
+  /** The API's refusals by place, in this app's words (the freeze rules' apart, below). */
+  readonly problems: readonly Phrase[]
+  /** The freeze rules' refusals (FrozenOffer says what froze and the way on). */
+  readonly frozen: readonly PathIssue[]
+  /** The net total changes: the customer accepts the order again (information: it blocks nothing). null: not known yet. */
+  readonly reaccept: boolean | null
+  /** The preview's lines old → new and its header (Show all changes). */
+  readonly diff: AmendmentDiff | null
+  /** F-OP-107 (B2): pieces already cut beyond the new figures (their outcome is picked in the strip); null: none. */
+  readonly extra: ExtraPiecesView | null
+}
+
+const EMPTY_STRIP = { problem: null, pieces: null, net: null, workOrders: [], problems: [], frozen: [], reaccept: null, diff: null, extra: null } as const
+
+/** A work order of the preview's plan as the strip says it. */
+export function stripWorkOrderOf(plan: WorkOrderPlan, index: number): StripWorkOrder {
+  const before = plan.cells.reduce((sum, cell) => sum + cell.from, 0)
+  const after = plan.cells.reduce((sum, cell) => sum + cell.to, 0)
+  const lineIds = [...new Set(plan.cells.map((cell) => cell.lineId))]
+  return { key: plan.workOrderId ?? `new-${index}`, number: plan.number, route: plan.route, before, after, now: plan.appliesNow, held: plan.appliesNow ? null : plan.held, reprint: plan.reprint, lineIds }
+}
+
+/**
+ * The strip of a draft: idle while the draft's own hold stands (nothing is asked), reading until the preview of THIS draft is there
+ * (an answer for an older draft is never drawn), its failure, or what changes — pieces, net (price grain), the work orders (each
+ * "follows now" or "waits for production", by the API's rule and the reader's rights: R-4), the refusals by place, re-acceptance.
+ */
+export function stripOf(input: { readonly order: Pick<Order, 'lines'>; readonly review: AmendReview | null; readonly key: string; readonly local: Phrase | null; readonly price: boolean; readonly label: (index: number) => string | null }): AmendStrip {
+  if (input.local) return { phase: 'idle', ...EMPTY_STRIP }
+  const review = input.review
+  if (!review || review.key !== input.key || review.phase === 'reading') return { phase: 'reading', ...EMPTY_STRIP }
+  if (review.phase === 'failed' || !review.preview) return { phase: 'failed', ...EMPTY_STRIP, problem: review.problem }
+  const preview = review.preview
+  const frozenPaths = new Set(preview.ok ? [] : preview.problems.filter((issue) => frozenProblemsOf([issue]).length > 0).map((issue) => issue.path))
+  const diff = preview.diff
+  const ordered = input.order.lines.reduce((sum, line) => sum + line.quantity, 0)
+  const delta = diff ? diff.lines.reduce((sum, line) => sum + (line.piecesAfter - line.piecesBefore), 0) : 0
+  return {
+    phase: 'ready',
+    problem: null,
+    pieces: diff ? { before: ordered, after: ordered + delta, delta } : null,
+    net: input.price && diff ? moneyChange(diff) : null,
+    workOrders: (preview.workOrders?.plan ?? []).map(stripWorkOrderOf),
+    problems: preview.ok ? [] : issuePhrases(preview.problems.filter((issue) => !frozenPaths.has(issue.path)), input.label),
+    frozen: preview.ok ? [] : preview.problems.filter((issue) => frozenPaths.has(issue.path)),
+    reaccept: diff ? diff.reacceptanceNeeded : null,
+    diff,
+    extra: preview.workOrders && preview.workOrders.extra.length > 0 ? preview.workOrders : null, // F-OP-107
+  }
+}
+
+// ---- F-OP-108: a frozen field turns Apply into "Apply as a priced change" (one button instead of the FrozenOffer step) ----
+/** What a frozen draft may still become: a priced change the customer accepts, nothing any more (blocked), or not frozen (null). */
+export type PricedOffer = 'priced' | 'blocked' | null
+export const pricedOfferOf = (strip: Pick<AmendStrip, 'frozen'>, freeze: Freeze | null): PricedOffer => frozenOffer(frozenProblemsOf(strip.frozen), freeze)
+/** The optional fee typed (price grain) is not one ("25,00": above 0, at most 2 decimals — the priced change's own rule). */
+export const feeHeld = (fee: string): boolean => fee.trim() !== '' && pricedProblems({ ...PRICED_EMPTY, fee }, '', { price: true }).fee !== undefined
+// ---- end F-OP-108
+
+/** Words of a hold: a phrase of this app, or the API's own words (F-OP-107: "Choose what happens to the 4 extra pieces"). */
+export type HeldWords = Phrase | { readonly words: { readonly it: string; readonly en: string } }
+
+/** A hold said in the reader's language. */
+export const heldWordsOf = (held: HeldWords, t: (key: string, params?: Record<string, string | number>) => string, locale: 'it' | 'en'): string => ('words' in held ? (locale === 'it' ? held.words.it : held.words.en) : t(held.key, held.params))
+
+/**
+ * Why Apply waits, or null: the work, the draft's own hold, the preview (reading, failed, refused), the extra pieces' outcome not
+ * picked yet (F-OP-107, B2: when the preview says it is needed), the reason.
+ */
+export function stripHeld(strip: AmendStrip, input: { readonly reason: string; readonly busy: boolean; readonly local: Phrase | null; readonly extraOutcome?: ExtraOutcome | null; readonly offer?: PricedOffer; readonly fee?: string }): HeldWords | null {
+  if (input.busy) return phrase('held.busy')
+  if (input.local) return input.local
+  if (strip.phase === 'reading' || strip.phase === 'idle') return phrase('amend.held.reading')
+  if (strip.phase === 'failed') return phrase('amend.held.failed')
+  // F-OP-108: a frozen field holds Apply only when it is frozen for good; else Apply is "Apply as a priced change" (its fee checked).
+  if (strip.problems.length > 0 || (strip.frozen.length > 0 && input.offer !== 'priced')) return phrase('amend.held.problems')
+  if (input.offer === 'priced' && feeHeld(input.fee ?? '')) return phrase('edit.held.fee')
+  const outcome = outcomeHeld(strip.extra, input.extraOutcome ?? null)
+  if (outcome) return outcome
+  if (input.reason.trim() === '') return phrase('amend.held.reason')
+  return null
+}
+
+// ---- F-OP-107 (B2): the extra-pieces picker — the strip's, Close remaining lines' and Cancel's (the review window's part) ----
+
+/** Apply waits for the extra pieces' outcome when the preview says it is needed and none is picked: the API's words. */
+export function outcomeHeld(extra: ExtraPiecesView | null, chosen: ExtraOutcome | null): HeldWords | null {
+  if (!extra || !extra.needsOutcome || chosen !== null || extra.extra.length === 0) return null
+  return extra.words ? { words: extra.words } : phrase('edit.held.extra', { count: extra.extra.reduce((sum, entry) => sum + entry.count, 0) })
+}
+
+/**
+ * The picker of an office change: its pieces by order line, and the three outcomes in the review window's order and words
+ * (factory-domain outcomeOptionsOf) — charging the customer needs the price grain (held, said why); none is picked for the reader.
+ */
+export function extraChoicesOf(view: ExtraPiecesView, order: Pick<Order, 'lines' | 'party'>, seesPrices: boolean): { readonly pieces: ExtraPiece[]; readonly outcomes: ExtraChoice[] } {
+  return {
+    pieces: view.extra.map((piece) => ({ key: piece.workOrderSizeId, line: order.lines.find((line) => line.id === piece.salesOrderLineId)?.seq ?? 0, words: piece.words })),
+    outcomes: outcomeOptionsOf({ customer: order.party?.legalName ?? '', seesPrices }).map((option) => ({ outcome: option.outcome, words: option.words, held: option.mayChoose ? null : option.needsWords })),
+  }
+}
+
+type Translate = (key: string, params?: Record<string, string | number>) => string
+const saidIn = (words: { readonly it: string; readonly en: string }, locale: 'it' | 'en'): string => (locale === 'it' ? words.it : words.en)
+
+/** One work order in words (the strip, Close remaining lines, Cancel): "WO-0311 40 → 28 · follows now" / "… · waits for production — decide on this page". */
+export function workOrderWords(wo: StripWorkOrder, t: Translate, locale: 'it' | 'en'): string {
+  const number = wo.number ?? t('edit.strip.wo.someone')
+  const what = wo.route === 'NEW_DRAFT' ? t('edit.strip.wo.new', { after: wo.after }) : wo.route === 'CANCEL_WORK_ORDER' ? t('edit.strip.wo.cancel', { number }) : t('edit.strip.wo.change', { number, before: wo.before, after: wo.after })
+  return [what, t(wo.now ? 'edit.strip.wo.now' : 'edit.strip.wo.waits'), ...(wo.held ? [saidIn(wo.held, locale)] : []), ...(wo.reprint ? [t('edit.strip.wo.reprint')] : [])].join(' · ')
+}
+// ---- end F-OP-107 (the picker)
+
+/** F-OP-109: the work orders of the strip that make an order line ("WO-0311 loses this line" when it is removed); none when not said. */
+export const workOrdersOfLine = (workOrders: readonly StripWorkOrder[], lineId: string): readonly StripWorkOrder[] => workOrders.filter((wo) => wo.lineIds.includes(lineId))
+
+/** The work orders an answer names, as numbers ("WO-0311, WO-0312"); one this reader does not reach reads "WO-…". */
+export const followedNumbers = (entries: readonly { readonly number: string | null }[]): string => entries.map((entry) => entry.number ?? 'WO-…').join(', ')
+
+/**
+ * The notice after Apply: "Amendment 3 applied · WO-0311 changed · WO-0312 waits for production — decide on this page · <Customer>
+ * told" — the work orders that followed in the same command and those that wait (B-OP-012's answer), and the customer when the words
+ * reached them (null: not told).
+ */
+export function appliedNotice(revision: number, followed: Followed, told: string | null): Phrase {
+  const changed = followedNumbers(followed.applied)
+  const waits = followedNumbers(followed.waiting)
+  const which = changed && waits ? 'both' : changed ? 'changed' : waits ? 'waits' : 'plain'
+  return phrase(`edit.done.${which}${told ? 'Told' : ''}`, { revision, ...(changed ? { changed } : {}), ...(waits ? { waits } : {}), ...(told ? { customer: told } : {}) })
+}
+// ---- end F-OP-106
 
 // ---- the API's refusals, by their place, in this app's words ---------------------------------------------------------------
 

@@ -315,7 +315,7 @@ describe('F-SA-243: the order page opens the same review window as Home › Appr
 
   it('every new word in it + en (the band, Still to do, the amend review tick)', async () => {
     const { CATALOGUE, placeholdersOf } = await import('../../../../lib/i18n/messages')
-    const keys = ['band.asks', 'band.answer', 'band.answerNone', 'band.askCell', 'band.askLine', 'band.askWhole', 'band.moreRequests_one', 'band.moreRequests_other', 'band.decision_one', 'band.decision_other', 'band.open', 'changes.onUs.count_one', 'changes.still.title', 'changes.still.since', 'changes.still.open', 'changes.still.none', 'changes.still.changeOf', 'changes.still.office', 'changes.still.madeExtra', 'changes.still.extraLine', 'changes.still.leftOut_one', 'changes.still.leftOut_other', 'overview.requests.still', 'amend.tell.words', 'amend.tell.hint', 'notice.amendedTold', 'notice.amendedNotTold', 'notice.amendedNotReached']
+    const keys = ['band.asks', 'band.answer', 'band.answerNone', 'band.askCell', 'band.askLine', 'band.askWhole', 'band.moreRequests_one', 'band.moreRequests_other', 'band.decision_one', 'band.decision_other', 'band.open', 'changes.onUs.count_one', 'changes.still.title', 'changes.still.since', 'changes.still.open', 'changes.still.none', 'changes.still.changeOf', 'changes.still.office', 'changes.still.madeExtra', 'changes.still.extraLine', 'changes.still.leftOut_one', 'changes.still.leftOut_other', 'overview.requests.still', 'amend.tell.words', 'amend.tell.hint', /* F-OP-106: the told notice names the work orders */ 'edit.done.plainTold', 'notice.amendedNotTold', 'notice.amendedNotReached']
     for (const key of keys) {
       expect(CATALOGUE.en.orders?.[key]?.trim(), `en ${key}`).toBeTruthy()
       expect(CATALOGUE.it.orders?.[key]?.trim(), `it ${key}`).toBeTruthy()
@@ -519,7 +519,9 @@ describe('F-OP-134 — one acts hook per tab, mounted by the container, never by
     const dialogs = source('./view/Dialogs.tsx')
     const at = (words: string) => dialogs.indexOf(words)
     expect(at('// The band (use-band-acts).')).toBeLessThan(at("case 'promise':"))
-    expect(at('// Lines (use-lines-acts).')).toBeLessThan(at("case 'amendReview':"))
+    // F-OP-106: the amendment has no dialog any more (its strip is the Lines tab's): Lines' first dialog is Close remaining lines.
+    expect(at('// Lines (use-lines-acts')).toBeLessThan(at("case 'closeLines':"))
+    expect(dialogs).not.toContain("case 'amendReview':")
     expect(at('// Money (use-money-acts).')).toBeLessThan(at("case 'depositLink':"))
   })
 })
