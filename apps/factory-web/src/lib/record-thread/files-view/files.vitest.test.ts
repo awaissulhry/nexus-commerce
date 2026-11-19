@@ -355,3 +355,109 @@ describe('F-OP-125: Gmail cards — kinds, the lock card, who added it (office o
   })
 })
 // ---- end F-OP-125
+
+// ---- F-OP-126 (order page N7; 10-order-page §9.2; review R-14): lazy previews — only cards in view, ≤ 24 a call, PDF page 1 here ----
+describe('F-OP-126: lazy previews — visible-only asks, the cache by address expiry, the PDF cap and queue, the session LRU', () => {
+  const NOW = Date.parse('2026-11-19T10:00:00Z')
+  const file = (id: string, over: Partial<OrderFile> = {}) => ({ id, versionNo: 1, contentType: 'image/jpeg', bodyData: false, sizeBytes: 200_000, ...over })
+
+  it('asks only the cards in view, in view order, at most 24 a call; never body data, a large PDF or a kind no browser draws', async () => {
+    const { asksPreview, PREVIEW_BATCH_MAX, wantedOf } = await import('./use-file-previews')
+    const files = new Map(Array.from({ length: 30 }, (_, n) => [`p${n}`, file(`p${n}`)] as const))
+    files.set('body', file('body', { bodyData: true }))
+    files.set('big', file('big', { contentType: 'application/pdf', sizeBytes: 3 * 1024 * 1024 + 1 }))
+    files.set('small-pdf', file('small-pdf', { contentType: 'application/pdf', sizeBytes: 3 * 1024 * 1024 }))
+    files.set('zip', file('zip', { contentType: 'application/zip' }))
+    const visible = ['body', 'big', 'zip', 'small-pdf', ...Array.from({ length: 30 }, (_, n) => `p${n}`)]
+    const asked = wantedOf(visible, files, new Map(), new Set(), NOW)
+    expect(asked).toHaveLength(PREVIEW_BATCH_MAX)
+    expect(asked[0]).toBe('small-pdf')
+    expect(asked).not.toContain('body')
+    expect(asked).not.toContain('big')
+    expect(asked).not.toContain('zip')
+    // Not in view: never asked; on its way: not asked twice.
+    expect(wantedOf([], files, new Map(), new Set(), NOW)).toEqual([])
+    expect(wantedOf(['p1', 'p2'], files, new Map(), new Set(['p1']), NOW)).toEqual(['p2'])
+    expect([asksPreview(file('a', { contentType: 'image/heic' })), asksPreview(file('b', { contentType: 'application/pdf', sizeBytes: 100 })), asksPreview(file('c', { bodyData: true }))]).toEqual([true, true, false])
+  })
+
+  it('a picture is kept until its address expires (less 5 s) and asked again then, while in view; one not made yet, a minute later', async () => {
+    const { EXPIRY_MARGIN_MS, freshOf, keptPicture, keyOf, NOT_MADE_AGAIN_MS, wantedOf } = await import('./use-file-previews')
+    const kept = keptPicture({ small: { url: 'https://store.example.com/s1?sig=1', expiresAt: new Date(NOW + 60_000).toISOString() } }, NOW)
+    expect(kept).toEqual({ preview: { kind: 'picture', src: 'https://store.example.com/s1?sig=1' }, until: NOW + 60_000 - EXPIRY_MARGIN_MS })
+    expect(freshOf(kept, NOW + 54_000)).toBe(true)
+    expect(freshOf(kept, NOW + 56_000)).toBe(false)
+    const files = new Map([['s1', file('s1')]])
+    const cache = new Map([[keyOf(file('s1')), kept]])
+    expect(wantedOf(['s1'], files, cache, new Set(), NOW + 10_000)).toEqual([])
+    expect(wantedOf(['s1'], files, cache, new Set(), NOW + 56_000)).toEqual(['s1'])
+    // A new version is another key: asked again at once.
+    expect(wantedOf(['s1'], new Map([['s1', file('s1', { versionNo: 2 })]]), cache, new Set(), NOW)).toEqual(['s1'])
+    expect(keptPicture({ small: null }, NOW)).toEqual({ preview: { kind: 'icon' }, until: NOW + NOT_MADE_AGAIN_MS })
+  })
+
+  it('a PDF over 3 MiB says "Large PDF: open it to see it" without a call; pages are drawn 2 at a time and the session keeps 60', async () => {
+    const { knownWithoutAsking, Lru, PDF_DRAWS_AT_ONCE, PDF_PAGES_KEPT, queueOf } = await import('./use-file-previews')
+    expect(knownWithoutAsking(file('big', { contentType: 'application/pdf', sizeBytes: 4 * 1024 * 1024 }))).toEqual({ kind: 'largePdf' })
+    expect(knownWithoutAsking(file('ok', { contentType: 'application/pdf', sizeBytes: 1024 }))).toBeNull()
+    expect([PDF_DRAWS_AT_ONCE, PDF_PAGES_KEPT]).toEqual([2, 60])
+    // The queue: never more than 2 running.
+    const queue = queueOf(2)
+    let running = 0
+    let most = 0
+    const job = () => new Promise<void>((resolve) => {
+      running += 1
+      most = Math.max(most, running)
+      setTimeout(() => {
+        running -= 1
+        resolve()
+      }, 5)
+    })
+    await Promise.all(Array.from({ length: 6 }, () => queue(job)))
+    expect(most).toBe(2)
+    // The LRU keeps the newest; reading one makes it the newest.
+    const lru = new Lru<string>(2)
+    lru.set('a', '1')
+    lru.set('b', '2')
+    expect(lru.get('a')).toBe('1')
+    lru.set('c', '3')
+    expect([lru.get('a'), lru.get('b'), lru.get('c'), lru.size]).toEqual(['1', undefined, '3', 2])
+  })
+
+  it('the code: one batch route (never the generic /files/:id/preview), no iframe / embed / object, the body reports what is in view', () => {
+    const api = readFileSync(new URL('../../../areas/_shared/record-thread/api.ts', import.meta.url), 'utf8')
+    expect(api).toContain('`/sales/orders/${enc(orderId)}/files/previews`')
+    const hook = readFileSync(new URL('./use-file-previews.ts', import.meta.url), 'utf8')
+    const view = readFileSync(new URL('./view/FilesView.tsx', import.meta.url), 'utf8')
+    for (const source of [hook, view]) {
+      expect(source).not.toMatch(/\/files\/[^`'"]*\/preview\b/)
+      expect(source).not.toMatch(/<(iframe|embed|object)\b/)
+    }
+    expect(view).toContain("{ rootMargin: '200px' }")
+    expect(view).toContain('report.current?.(order())')
+    const container = readFileSync(new URL('../../../areas/_shared/record-thread/use-order-files.ts', import.meta.url), 'utf8')
+    expect(container).toContain('readOrderFilePreviews(api, orderId, fileIds)')
+    // links/approve draws its PDF page with the one helper, moved to lib/pdf.
+    expect(readFileSync(new URL('../../../links/approve/Approve.tsx', import.meta.url), 'utf8')).toContain("from '../../lib/pdf/pdf-page'")
+  })
+
+  it('the card draws what came: the small picture, PDF page 1, "Large PDF…", else the kind\'s icon; body data never a picture', () => {
+    const ORDER = { id: 'so-alpha', number: 'SO-2026-0142' }
+    const base = { kind: 'DOCUMENT', category: null, versionNo: 1, at: '2026-11-12T10:00:00Z', from: { type: 'SalesOrder', id: ORDER.id, label: ORDER.number }, line: null, audience: 'OFFICE_ONLY' as const, bodyData: false, alsoOn: [], alsoOnOther: 0, inThread: null }
+    const files: OrderFile[] = [
+      { ...base, id: 'pic', name: 'Collar.jpg', contentType: 'image/jpeg', sizeBytes: 900_000 },
+      { ...base, id: 'pdf', name: 'Spec.pdf', contentType: 'application/pdf', sizeBytes: 200_000 },
+      { ...base, id: 'big', name: 'Catalogue.pdf', contentType: 'application/pdf', sizeBytes: 9_000_000 },
+      { ...base, id: 'body', name: 'Rider.jpg', contentType: 'image/jpeg', sizeBytes: 400_000, bodyData: true },
+    ]
+    const read: OrderFilesRead = { order: ORDER, groups: [{ key: 'ORDER', words: { en: 'Order & thread', it: 'Ordine e conversazione' }, files, leftOut: 0, measurementsLeftOut: 0 }], total: 4, truncated: false }
+    const previews = { pic: { kind: 'picture' as const, src: 'https://store.example.com/small/pic' }, pdf: { kind: 'page' as const, src: 'data:image/png;base64,AAAA' }, big: { kind: 'largePdf' as const }, body: { kind: 'picture' as const, src: 'https://store.example.com/never' } }
+    const html = renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(OrderFilesBody, { model: { read, problem: null, selected: [], canShare: false, previews }, party: null })))
+    expect(html).toContain('src="https://store.example.com/small/pic"')
+    expect(html).toContain('src="data:image/png;base64,AAAA"')
+    expect(html).toContain('Large PDF: open it to see it')
+    expect(html).not.toContain('store.example.com/never')
+    expect(html).toContain('data-card-id="pic"')
+  })
+})
+// ---- end F-OP-126

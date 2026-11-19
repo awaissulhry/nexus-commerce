@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { browserAddress } from '../../../lib/api/browser-address' // F-OP-126: a store address through the browser's path
 import type { ApiClient } from '../../../lib/api/client'
 import { messageSchema, threadSchema, type RecordKey } from '../../../record-panels/api'
 import { CHECK_WARNINGS, RECIPIENT_KINDS, type SendCheck } from '../../../lib/record-thread/send-check/model'
@@ -421,3 +422,34 @@ export async function openOrderFile(api: ApiClient, orderId: string, fileId: str
   return { mode: answer.open.mode, url: answer.open.url }
 }
 // ── end F-SA-237
+
+// ── F-OP-126 (order page N7; review R-14; B-OP-050): the previews of the cards in view, in ONE call ──
+const presignedAddress = z.object({ url: z.string(), expiresAt: z.string() })
+export const orderFilePreviewsSchema = z.object({
+  previews: z.array(
+    z.object({
+      fileId: z.string(),
+      versionNo: z.number(),
+      kind: z.enum(['PICTURE', 'PDF', 'OTHER', 'LOCKED']),
+      /** PICTURE: the ~320 px small preview (never the original); null until it is made. */
+      small: presignedAddress.nullable(),
+      /** PDF: at most 3 MiB — page 1 drawn in the browser from `inline`. */
+      pdfDrawable: z.boolean(),
+      inline: presignedAddress.nullable(),
+      /** This call's addresses were spent: ask for it again. */
+      later: z.boolean(),
+    }),
+  ),
+})
+export type OrderFilePreview = z.infer<typeof orderFilePreviewsSchema>['previews'][number]
+
+/**
+ * POST /sales/orders/:orderId/files/previews {fileIds 1–24} (orders.view): the cards in view only — an id the reader may not open is
+ * simply absent; body data never has an address. Never the generic /files/:id/preview. The addresses go through the browser's path.
+ */
+export async function readOrderFilePreviews(api: ApiClient, orderId: string, fileIds: readonly string[], signal?: AbortSignal): Promise<OrderFilePreview[]> {
+  const answer = await api.post(`/sales/orders/${enc(orderId)}/files/previews`, { body: { fileIds: [...fileIds] }, schema: orderFilePreviewsSchema, signal })
+  const local = (address: { url: string; expiresAt: string } | null) => (address ? { url: browserAddress(address.url), expiresAt: address.expiresAt } : null)
+  return answer.previews.map((preview) => ({ ...preview, small: local(preview.small), inline: local(preview.inline) }))
+}
+// ── end F-OP-126

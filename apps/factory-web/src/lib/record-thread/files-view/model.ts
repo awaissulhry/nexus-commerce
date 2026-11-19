@@ -197,6 +197,8 @@ export interface OrderFilesModel {
   /** files.manage: share the order's OWN files with its customer. */
   readonly canShare: boolean
   readonly busy?: boolean
+  /** F-OP-126: the previews read for the cards in view, by file id (absent: the kind's icon until it comes). */
+  readonly previews?: Readonly<Record<string, CardPreview>>
   /**
    * F-SA-238: `customer` — the portal's face of the same body: the customer's own shared files only, no audience label (all are
    * theirs), no "also on", no left-out count (never "n hidden"), no choosing or sharing; default `office`.
@@ -297,3 +299,8 @@ export function cardStep(at: number, count: number, key: 'ArrowLeft' | 'ArrowRig
   return next < 0 || next >= count ? null : next
 }
 // ── end F-OP-125
+
+// ── F-OP-126 (review R-14): what a card's preview area shows once its preview is read (none yet: the kind's icon) ──
+/** picture: the small preview's address; page: PDF page 1 drawn here (a data URL); largePdf: "Large PDF: open it to see it"; icon: none. */
+export type CardPreview = { readonly kind: 'picture'; readonly src: string } | { readonly kind: 'page'; readonly src: string } | { readonly kind: 'largePdf' } | { readonly kind: 'icon' }
+// ── end F-OP-126

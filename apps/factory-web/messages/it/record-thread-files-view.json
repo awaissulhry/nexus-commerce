@@ -154,6 +154,7 @@
     "addedByFloor": "aggiunto dal reparto",
     "download": "Scarica",
     "downloadOf": "Scarica {name}",
-    "worksheet": "Scheda di lavoro · riga {line} · v{version}"
+    "worksheet": "Scheda di lavoro · riga {line} · v{version}",
+    "largePdf": "PDF grande: aprilo per vederlo"
   }
 }

@@ -154,6 +154,7 @@
     "addedByFloor": "added by the floor",
     "download": "Download",
     "downloadOf": "Download {name}",
-    "worksheet": "Worksheet · line {line} · v{version}"
+    "worksheet": "Worksheet · line {line} · v{version}",
+    "largePdf": "Large PDF: open it to see it"
   }
 }

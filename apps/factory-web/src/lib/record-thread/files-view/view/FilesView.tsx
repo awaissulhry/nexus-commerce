@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { AudioLines, BadgeCheck, Copy, Download, FileText, FolderOpen, Image as ImageIcon, Lock, Paperclip, Receipt, RotateCcw, Share2, ShieldOff, Trash2 } from 'lucide-react'
 import { Banner, Disclosure, EmptyState, Field } from '@nexus/ui/components'
 import { BulkActionBar } from '@nexus/ui/patterns'
@@ -23,6 +23,7 @@ import { typeKey } from '../../../../areas/search/model'
 import { orderBulkReach, orderFilesOf, orderGroupsShown, orderLeftOut, sourceOf, type OrderFile, type OrderFilesModel } from '../model'
 // F-OP-125: the order's file cards (kind, type word, who added it, the MTM worksheets, the keys' grid step).
 import { addedByOf, cardKindOf, cardStep, orderWorksheetsOf, typeLabelOf, worksheetCardId, type OrderWorksheet } from '../model'
+import type { CardPreview } from '../model' // F-OP-126
 import '../files-view.css'
 
 export const FILES_VIEW_NS = 'record-thread-files-view'
@@ -76,6 +77,8 @@ export interface FilesViewActions {
   onOrderOpen?: (fileId: string, mode: 'preview' | 'download', opener?: HTMLElement | null) => void
   /** F-OP-125 (B5): open a made-to-measure worksheet (its own route records the opening). */
   onOrderWorksheet?: (sheet: OrderWorksheet) => void
+  /** F-OP-126: the file cards now in view (200 px ahead): only those are asked a preview. */
+  onOrderVisible?: (fileIds: readonly string[]) => void
   onOrderMessage?: (messageId: string) => void
   onOrderSelect?: (fileIds: readonly string[]) => void
   onOrderBulk?: (action: 'download' | 'share', fileIds: readonly string[]) => void
@@ -480,6 +483,31 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
   const fileWords = useT('record-thread-files')
   const locale = useLocale()
   const listRef = useRef<HTMLDivElement>(null)
+  // ---- F-OP-126 (R-14): the file cards in view, 200 px ahead (an IntersectionObserver); only those are asked a preview ----
+  const onVisible = actions?.onOrderVisible
+  const report = useRef(onVisible)
+  report.current = onVisible
+  const shown = !!model.read && !model.problem
+  useEffect(() => {
+    const list = listRef.current
+    if (!shown || !list || typeof IntersectionObserver === 'undefined' || !report.current) return
+    const inView = new Set<string>()
+    const order = () => [...list.querySelectorAll<HTMLElement>('li[data-card-id]')].map((card) => card.dataset.cardId!).filter((id) => inView.has(id))
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = (entry.target as HTMLElement).dataset.cardId!
+          if (entry.isIntersecting) inView.add(id)
+          else inView.delete(id)
+        }
+        report.current?.(order())
+      },
+      { rootMargin: '200px' },
+    )
+    for (const card of list.querySelectorAll<HTMLElement>('li[data-card-id]')) observer.observe(card)
+    return () => observer.disconnect()
+  }, [shown, model.read])
+  // ---- end F-OP-126
   if (model.problem) return <Banner tone="danger" title={t('problem.read')} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('problem.retry')}</Button>} />
   if (!model.read) {
     return (
@@ -553,7 +581,7 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
               </h3>
               <ul className="fw-rtv-cards">
                 {group.files.map((file) => (
-                  <OrderCard key={file.id} file={file} orderId={read.order.id} customer={customer} chosen={model.selected.includes(file.id)} onChoose={(on) => choose(file.id, on)} actions={actions} words={words} />
+                  <OrderCard key={file.id} file={file} orderId={read.order.id} customer={customer} chosen={model.selected.includes(file.id)} onChoose={(on) => choose(file.id, on)} actions={actions} words={words} preview={model.previews?.[file.id]} />
                 ))}
                 {/* F-OP-125 (B5): the made-to-measure worksheets the read sends (the measurements right only; else counted below). */}
                 {worksheets.map((sheet) => (
@@ -590,7 +618,7 @@ type CardWords = { t: (key: string, params?: Record<string, string | number>) =>
 const FILE_KINDS: readonly string[] = ['PHOTO', 'DOCUMENT', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO', 'ATTACHMENT']
 
 /** One file's card (F-OP-125): the preview area, the name, its facts, its chips, its box and its actions. */
-function OrderCard({ file, orderId, customer, chosen, onChoose, actions, words }: { file: OrderFile; orderId: string; customer: boolean; chosen: boolean; onChoose: (on: boolean) => void; actions?: FilesViewActions | undefined; words: CardWords }) {
+function OrderCard({ file, orderId, customer, chosen, onChoose, actions, words, preview }: { file: OrderFile; orderId: string; customer: boolean; chosen: boolean; onChoose: (on: boolean) => void; actions?: FilesViewActions | undefined; words: CardWords; /* F-OP-126 */ preview?: CardPreview | undefined }) {
   const { t, fileWords, locale } = words
   const source = sourceOf(file, orderId)
   const kind = FILE_KINDS.includes(file.kind) ? (file.kind as FileKind) : 'ATTACHMENT'
@@ -598,18 +626,26 @@ function OrderCard({ file, orderId, customer, chosen, onChoose, actions, words }
   const type = file.documentWords ? (locale === 'it' ? file.documentWords.it : file.documentWords.en) : typeLabelOf(file) || fileWords(`kind.${kind}`)
   const added = customer ? null : addedByOf(file)
   return (
-    <li className={`fw-rtv-card${chosen ? ' is-chosen' : ''}`}>
+    <li className={`fw-rtv-card${chosen ? ' is-chosen' : ''}`} data-card-id={file.id}>
       {!customer && (
         <span className="fw-rtv-card-check">
           <Checkbox label={<span className="nds-vh">{t('select.one', { name: file.name })}</span>} checked={chosen} onChange={(event) => onChoose(event.target.checked)} />
         </span>
       )}
       <button type="button" className="fw-rtv-card-open" data-row={file.id} title={file.name} onClick={(event) => actions?.onOrderOpen?.(file.id, 'preview', event.currentTarget)}>
-        <span className={`fw-rtv-card-preview${card === 'LOCKED' ? ' is-locked' : ''}`} aria-hidden={card === 'LOCKED' ? undefined : true}>
+        <span className={`fw-rtv-card-preview${card === 'LOCKED' ? ' is-locked' : preview?.kind === 'page' ? ' is-page' : ''}`} aria-hidden={card === 'LOCKED' ? undefined : true}>
           {card === 'LOCKED' ? (
             <>
               <Lock size={20} aria-hidden />
               <span>{t('card.bodyData')}</span>
+            </>
+          ) : preview?.kind === 'picture' || preview?.kind === 'page' ? (
+            // F-OP-126: the small preview, or PDF page 1 drawn here (never the original, never an iframe).
+            <img src={preview.src} alt="" loading="lazy" decoding="async" />
+          ) : preview?.kind === 'largePdf' ? (
+            <>
+              {KIND_ICON[kind]}
+              <span className="fw-rtv-card-note">{t('card.largePdf')}</span>
             </>
           ) : (
             KIND_ICON[kind]

@@ -5,9 +5,13 @@ import type { ApiClient } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
 import type { FilesViewActions } from '../../../lib/record-thread/files-view/view/FilesView'
 import { isOwnFile, type OrderFilesModel, type OrderFilesRead } from '../../../lib/record-thread/files-view/model'
+// F-OP-126 (R-14): the cards' previews, only those in view, through the order's walled batch route.
+import { orderFilesOf } from '../../../lib/record-thread/files-view/model'
+import { useFilePreviews } from '../../../lib/record-thread/files-view/use-file-previews'
 import { listFiles } from '../../../record-panels/api'
 import { storeUrl } from '../../../record-panels/store'
 import { openOrderFile, readOrderFiles, shareWithParty } from './api'
+import { readOrderFilePreviews } from './api' // F-OP-126
 import { openWorksheet } from '../../sales/mtm/api' // F-OP-125 (B5): a worksheet opens by the made-to-measure route (recorded there)
 
 /**
@@ -95,8 +99,12 @@ export function useOrderFiles(
     [api, orderId, read],
   )
 
+  // ---- F-OP-126: the previews of the cards in view (the body reports them) ----
+  const previews = useFilePreviews({ files: read ? orderFilesOf(read) : null, ask: orderId ? (fileIds) => readOrderFilePreviews(api, orderId, fileIds) : null })
+
   const actions: FilesViewActions = {
     onRetry: load,
+    onOrderVisible: previews.visible, // F-OP-126
     onOrderSelect: setSelected,
     onOrderOpen: (fileId, mode) => void open(fileId, mode),
     // F-OP-125 (B5): a worksheet through the made-to-measure route (it records the opening on the profile), in a new tab.
@@ -129,6 +137,6 @@ export function useOrderFiles(
     },
   }
 
-  const model: OrderFilesModel = { read, problem, selected, canShare, busy }
+  const model: OrderFilesModel = { read, problem, selected, canShare, busy, previews: previews.previews /* F-OP-126 */ }
   return { model, actions, reload: again }
 }
