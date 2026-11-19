@@ -12,6 +12,7 @@ import { BLK, canOf, COMPANY, PARTY, STYLE_ID } from '../_demo/fixtures'
 import { newKey, type DraftLine } from '../daily-model'
 import { COMPOSER_EMPTY } from '../record/record-model'
 import { manualBody, type NewOrderModel } from './new-model'
+import { confirmHeld, typedSomething } from './new-model' // F-CP-113
 import { NewOrderView } from './view/NewOrderView'
 // ---- end F-CP-146
 
@@ -146,7 +147,8 @@ describe('F-CP-146: the New order sends no price key without the price grain', (
   })
 
   it('the page sends the person\'s grain with the preview and with Confirm order', () => {
-    const page = readFileSync(new URL('./NewOrderPage.tsx', import.meta.url), 'utf8')
+    // F-CP-113: the page's container is the ONE editor now (NewOrderEditor).
+    const page = readFileSync(new URL('./NewOrderEditor.tsx', import.meta.url), 'utf8')
     expect(page.match(/manualBody\(header, draft, can\b/g)?.length).toBe(2)
     const window = readFileSync(new URL('../list/view/NewOrderDialog.tsx', import.meta.url), 'utf8')
     expect(window).toContain("model.price === false && <p className=\"fw-so-hint\">{t('priced.fromList'")
@@ -189,3 +191,71 @@ describe('F-CP-146: the New order sends no price key without the price grain', (
   })
 })
 // ---- end F-CP-146
+
+// ---- F-CP-113 (customer page plan C2a; review A2, lead pick "one editor, a large centred window"): ONE lines editor, two doors ------
+// The New order page's container moved out of its page shell into NewOrderEditor (never copied): /sales/orders/new mounts it as a
+// page (the header from the address), the customer page as a large centred window (the header from the New order window, no
+// address of its own). Discard asks first when something is typed; Confirm is held without orders.manage, as on the page.
+describe('F-CP-113: one New order editor, mounted by the page and by the customer page\'s window', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('both doors mount the same NewOrderEditor; the order is made in one place only (no copy)', () => {
+    const page = read('./NewOrderPage.tsx')
+    expect(page).toContain('<NewOrderEditor')
+    expect(page).toContain('frame="page"')
+    expect(page).not.toContain('createManualOrder')
+    const work = read('../../customers/record/view/WorkTab.tsx')
+    expect(work).toContain('<NewOrderEditor')
+    expect(work).toContain('frame="window"')
+    const editor = read('./NewOrderEditor.tsx')
+    expect(editor.match(/createManualOrder\(/g)?.length).toBe(1)
+    expect(editor).toContain("const View = frame === 'window' ? NewOrderWindow : NewOrderView")
+  })
+
+  it('the editor writes no address and moves no page: its door decides (the page: its list or the order; the window: closes)', () => {
+    const editor = read('./NewOrderEditor.tsx')
+    expect(editor).not.toMatch(/useRouter|useSearchParams|usePathname|router\.|writeSearch/)
+    const page = read('./NewOrderPage.tsx')
+    expect(page).toContain('onDiscarded={() => router.push(`${prefix}/sales/orders`)}')
+    expect(page).toContain('onMade={(order) => router.push(order.href)}')
+  })
+
+  it('Discard asks first when something is typed (lines, a date, the note), at once when nothing is', () => {
+    const empty = { lines: [], requestedDate: '', promiseDate: '', internalNote: '' }
+    expect(typedSomething(empty)).toBe(false)
+    expect(typedSomething({ ...empty, internalNote: '  ' })).toBe(false)
+    expect(typedSomething({ ...empty, promiseDate: '2026-12-08' })).toBe(true)
+    expect(typedSomething({ ...empty, internalNote: 'Etichetta' })).toBe(true)
+    expect(typedSomething({ ...empty, lines: [{ key: 'k', lineId: null, styleId: 's', colourwayId: 'c', sizes: {}, price: '', locked: false }] })).toBe(true)
+    const editor = read('./NewOrderEditor.tsx')
+    expect(editor).toContain('onDiscard: () => (typedSomething(draft) ? setDiscardAsk(true) : discard())')
+    const view = read('./view/NewOrderView.tsx')
+    expect(view).toContain("title={t('newOrder.discardAsk.title')}")
+    expect(view).toContain('onClick={() => actions?.onDiscardConfirm?.()}')
+  })
+
+  it('Confirm is held without orders.manage in the window as on the page (the same rule)', () => {
+    const ready = { phase: 'ready' as const, value: null, problem: null }
+    expect(confirmHeld({ can: { ...canOf('sales'), manage: false }, draft: { lines: [], requestedDate: '', promiseDate: '', internalNote: '' }, preview: ready, today: '2026-10-29', busy: false })?.key).toBe('held.noManage')
+  })
+
+  it('the page frame still draws its band and the same body (the window draws the body in a DetailModal)', () => {
+    const model: NewOrderModel = { prefix: '/w/DEMO', can: canOf('owner'), today: '2026-10-29', header: { companyId: COMPANY, partyId: PARTY.id, contactId: '', customerRef: 'PO-1' }, party: { status: 'ready', value: PARTY }, number: 'SO-2026-0089', draft: { lines: [], requestedDate: '', promiseDate: '', internalNote: '' }, styles: {}, composer: COMPOSER_EMPTY, preview: { phase: 'idle', value: null, problem: null }, busy: false, problem: null }
+    const text = textOf(render(createElement(NewOrderView, { model })))
+    expect(text).toContain('Confirm order')
+    expect(text).toContain('Discard')
+    expect(text).toContain(PARTY.legalName)
+    const view = read('./view/NewOrderView.tsx')
+    expect(view).toContain('<DetailModal open onClose={() => actions?.onClose?.()} title={title} meta={facts} actions={buttons}>')
+  })
+
+  it('the words in both languages', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['newOrder.discardAsk.title', 'newOrder.discardAsk.keep']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('newOrder.discardAsk.body', { lines: 2 }), locale).toContain('2')
+      expect(t('newOrder.window.made', { number: 'SO-2026-0089' }), locale).toContain('SO-2026-0089')
+    }
+  })
+})
+// ---- end F-CP-113

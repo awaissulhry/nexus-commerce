@@ -30,6 +30,13 @@ import { STEP_UP_CLOSED } from '../../../admin/shared/model'
 // ---- F-SA-276: the Work tab (the waiting strip with made-up reads, the ONE Orders sheet locked to the customer) ----
 import { useT } from '../../../../lib/i18n/provider'
 import { at as ordersAt, BOARD, canOf, LIST_ROWS, TODAY as ORDERS_TODAY } from '../../orders/_demo/fixtures'
+// ---- F-CP-113: the New order page's own lines editor in its window over the Work tab (made-up lines) ----
+import { BLK, BRN, COMPANY, MANUAL_PREVIEW, PARTY as ORDER_PARTY, STYLE, STYLE_ID } from '../../orders/_demo/fixtures'
+import { newKey } from '../../orders/daily-model'
+import { COMPOSER_EMPTY } from '../../orders/record/record-model'
+import type { NewOrderModel } from '../../orders/new/new-model'
+import { NewOrderWindow } from '../../orders/new/view/NewOrderView'
+// ---- end F-CP-113
 import type { OrderRow } from '../../orders/api'
 import type { RowView } from '../../orders/model'
 import type { OrdersListModel } from '../../orders/list/list-model'
@@ -79,7 +86,34 @@ interface WorkCase {
   readonly view?: RowView
   readonly problem?: string | null
   readonly price?: boolean
+  /** F-CP-113: the lines window open over the sheet (priced lines; or the Discard question). */
+  readonly linesWindow?: 'lines' | 'discard'
 }
+
+/** F-CP-113: the lines window's made-up model (two colour lines, one at the list price, one typed; priced by the API). */
+const linesWindowOf = (kind: 'lines' | 'discard', price: boolean): NewOrderModel => ({
+  prefix: '/w/DEMO',
+  can: { ...canOf('sales'), price },
+  today: ORDERS_TODAY,
+  header: { companyId: COMPANY, partyId: ORDER_PARTY.id, contactId: ORDER_PARTY.contacts[0]!.id, customerRef: 'PO-ESEMPIO-89' },
+  party: { status: 'ready', value: ORDER_PARTY },
+  number: 'SO-2026-0089',
+  draft: {
+    lines: [
+      { key: newKey(STYLE_ID, BLK.id), lineId: null, styleId: STYLE_ID, colourwayId: BLK.id, sizes: { '48': 2, '50': 2, '52': 2, '54': 2 }, price: '', locked: false },
+      { key: newKey(STYLE_ID, BRN.id), lineId: null, styleId: STYLE_ID, colourwayId: BRN.id, sizes: { '50': 2, '52': 2 }, price: price ? '430' : '', locked: false },
+    ],
+    requestedDate: '2026-12-01',
+    promiseDate: '2026-12-08',
+    internalNote: '',
+  },
+  styles: { [STYLE_ID]: STYLE },
+  composer: COMPOSER_EMPTY,
+  preview: { phase: 'ready', value: MANUAL_PREVIEW, problem: null },
+  busy: false,
+  problem: null,
+  discardAsk: kind === 'discard',
+})
 const STRIP_READY: WorkReads = {
   board: { status: 'ready', value: { ...BOARD, tiles: BOARD.tiles.map((tile) => (tile.key === 'late' ? { ...tile, count: 1 } : tile.key === 'waitingForDeposit' ? { ...tile, count: 1 } : tile)) } },
   requests: { status: 'ready', value: { items: [], open: 2, countered: 1 } },
@@ -134,6 +168,7 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
     { className: 'fw-cw' },
     createElement(WaitingStrip, { customer: name, reads: work.reads, can: { orders: true, workorders: true, threads: true, partners: true }, doors: { onView: () => undefined, repliesHref: '/w/DEMO/sales/incoming?tile=CUSTOMER_REPLIES', onWindow: () => undefined } }),
     createElement(OrdersListView, { model: list }),
+    work.linesWindow ? createElement(NewOrderWindow, { model: linesWindowOf(work.linesWindow, work.price !== false) }) : null, // F-CP-113
   )
 }
 // ---- end F-SA-276
@@ -276,6 +311,10 @@ export const designScreen = defineDesignScreen<CustomerCase>({
       model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined, paid: undefined, balance: undefined })), price: false }, { can: { ...RECORD_CAN, price: false }, quotes: loaded(withoutMoney(QUOTES)), orders: loaded(withoutMoney(ORDERS)) }),
     },
     { id: 'quotes-orders-empty', label: 'F-CP-101 · Work: All orders, none yet ("<customer> has no order yet.")', model: workCase('NUOVO-PROVA', { reads: STRIP_READY, rows: [] }) },
+    // ---- F-CP-113: "Add the lines" — the New order page's own editor in a large centred window over the Work tab (one editor, two doors).
+    { id: 'work-new-order-lines', label: 'F-CP-113 · Work: New order › Add the lines — the lines editor in a large window on this page (no page hop)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), linesWindow: 'lines' }) },
+    { id: 'work-new-order-lines-no-price', label: 'F-CP-113 · Sales worker without prices: the same window, "Priced from <customer>\'s price list", no price typed', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), linesWindow: 'lines', price: false }) },
+    { id: 'work-new-order-discard', label: 'F-CP-113 · Discard asks first when something is typed', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), linesWindow: 'discard' }) },
     { id: 'quotes-orders-empty-production', label: 'F-CP-101 · Work: In production, nothing (the way to All orders)', model: workCase('NUOVO-PROVA', { reads: STRIP_READY, rows: [], view: 'IN_PRODUCTION' }) },
     { id: 'quotes-orders-reading', label: 'F-SA-276 · Work: the strip and the rows reading ("—", never 0)', model: workCase('MODA-DEMO', { reads: STRIP_READING, rows: null }) },
     { id: 'quotes-orders-error', label: "F-SA-276 · Work: the orders couldn't be read (the strip stays usable)", model: workCase('MODA-DEMO', { reads: { ...STRIP_READY, requests: { status: 'failed' } }, rows: [], problem: 'problem.read.unavailable' }) },

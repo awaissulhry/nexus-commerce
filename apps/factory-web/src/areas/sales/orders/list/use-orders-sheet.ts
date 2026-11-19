@@ -17,6 +17,7 @@ import { getProfile } from '../../mtm/api' // F-SA-222: the rider chip's name
 import { abilitiesOf, boardLanes, brandFromAddress, cfFromAddress, companyFromAddress, laneQuery, sortFromAddress, layoutFromAddress, listAddress, listTouches, partyFromAddress, readProblem, romeToday, rowsFromAddress, rowsQuery, type Lane, type Layout, type Narrowing, type RowView } from '../model'
 import type { OrderSort } from '../api' // B-TH-057
 import { newOrderAddress } from '../new/new-model'
+import type { NewOrderHeader } from '../new/new-model' // F-CP-113: the lines editor's header, handed to a host's window
 import type { NewOrderDialogModel, OrdersListActions, OrdersListModel } from './list-model'
 import { useListMargins } from './margin/use-list-margins'
 // ---- B-W2b-323 (orders in depth on screen) ----
@@ -72,6 +73,7 @@ import { useReplyMany } from './use-reply-many' // F-SA-282
  *   onRowClick a row's click (default: the order opens; ⌘ / Ctrl: a new tab); the customer page docks the order instead
  *   clearTo    F-CP-102: the host's default rows view — where Clear all (and a view chip's ✕) goes back to, and what the "Showing: …"
  *              line compares with (default 'open': Sales › Orders; the customer page passes 'all')
+ *   onAddLines F-CP-113: "Add the lines" opens the host's own lines window (the customer page) instead of the editor's page
  *
  * A host's default view is written into the address by the host on entry (not an option here); the column preset is the built-in
  * view's columns.
@@ -95,6 +97,11 @@ export interface OrdersSheetHost {
   readonly onRowClick?: (row: OrderRow, newTab: boolean) => void
   /** F-CP-102: the host's default rows view (Clear all goes back to it; the "Showing: …" line compares with it); default 'open'. */
   readonly clearTo?: RowView
+  /**
+   * F-CP-113: "Add the lines" on this host — the New order window closes and the host opens the ONE lines editor itself (the customer
+   * page: a large centred window, no page hop, no address term); absent: the editor's page `/sales/orders/new?…`.
+   */
+  readonly onAddLines?: (header: NewOrderHeader) => void
 }
 
 /** F-CP-102: the page terms Clear all drops even when the host keeps them (the Work · Money columns, F-CP-105). */
@@ -819,7 +826,13 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onWeekRetry: week.retry,
     onNewCreate: () => {
       if (!newOrder?.party) return
-      router.push(newOrderAddress(prefix, { companyId: newOrder.companyId, partyId: newOrder.party.id, contactId: newOrder.contactId, customerRef: newOrder.customerRef }))
+      const header: NewOrderHeader = { companyId: newOrder.companyId, partyId: newOrder.party.id, contactId: newOrder.contactId, customerRef: newOrder.customerRef }
+      // F-CP-113: a host with its own lines window takes the header there (the New order window closes); else the editor's page.
+      if (host.onAddLines) {
+        setNewOrder(null)
+        return host.onAddLines(header)
+      }
+      router.push(newOrderAddress(prefix, header))
     },
   }
   return { model, actions }

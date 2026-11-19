@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Building2, Eye } from 'lucide-react' // F-OP-203: the segments' icons
 import { Button, Skeleton } from '@nexus/ui/primitives'
+import { useToast } from '@nexus/ui/components' // F-CP-113: the made order announced
 import { useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
@@ -23,6 +24,9 @@ import type { OrdersListModel } from '../../../orders/list/list-model'
 import { WORK_DEFAULT_ROWS, workEntry, type useCustomerWork, type WorkCan } from '../use-customer-work'
 import { workViewCounts } from '../use-customer-work' // F-CP-103: the Views ▾ counts from the strip's one count read
 import type { WorkAsk } from '../use-customer-work' // F-CP-104: the band's New order / ⋯ Import orders, served in place
+// ---- F-CP-113: the New order page's own lines editor, in a large window on this page ----
+import type { NewOrderHeader } from '../../../orders/new/new-model'
+import { NewOrderEditor } from '../../../orders/new/NewOrderEditor'
 // ---- F-SA-279: the dock follows the row; All of <customer> in the dock ----
 import type { useCustomerDock } from '../use-customer-work'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
@@ -142,6 +146,13 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const t = useT('parties')
   const o = useT('orders')
   const params = useSearchParams()
+  // ---- F-CP-113: "Add the lines" opens the ONE lines editor (the New order page's own) in a large window here: no page hop, no
+  // address term. Discard and a made order close it (the new order docks, its row arrives behind "N updates · Show"); × keeps the
+  // typed lines in this tab.
+  const router = useRouter()
+  const { toast } = useToast()
+  const [lines, setLines] = useState<NewOrderHeader | null>(null)
+  // ---- end F-CP-113
   const frame = useRecordFrame() // F-SA-279: a phone card's door shows the conversation (the full-width view)
   const basePath = `/sales/customers/${encodeURIComponent(party.id)}`
   const host: OrdersSheetHost = {
@@ -151,6 +162,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     keep: ['tab', 'dock'],
     listKey: ORDERS_LIST_KEY,
     clearTo: WORK_DEFAULT_ROWS, // F-CP-102: Clear all goes back to All orders (the "Showing" line compares with it)
+    onAddLines: setLines, // F-CP-113: the lines window on this page
     // A row click docks the order's conversation; ⌘ / Ctrl opens the order in a new tab.
     onRowClick: (row, newTab) => (newTab ? window.open(`${prefix}/sales/orders/${encodeURIComponent(row.id)}`, '_blank', 'noopener') : onPick(pickOfRow(row))),
   }
@@ -223,6 +235,22 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
         <OrdersListView model={model} actions={actions /* F-SA-279 */} />
       </div>
       <RequestDoorWindow door={door} />
+      {lines && (
+        // F-CP-113: the same editor as /sales/orders/new, its customer and header set by the New order window.
+        <NewOrderEditor
+          frame="window"
+          prefix={prefix}
+          header={lines}
+          onClose={() => setLines(null)}
+          onDiscarded={() => setLines(null)}
+          onMade={(order) => {
+            setLines(null)
+            toast(o('newOrder.window.made', { number: order.number }), 'success')
+            if (can.threads) onPick(pickOfRow({ id: order.id, number: order.number, companyId: lines.companyId }))
+          }}
+          onOpen={(href) => router.push(href)}
+        />
+      )}
     </CustomerOverrideProvider>
   )
 }
