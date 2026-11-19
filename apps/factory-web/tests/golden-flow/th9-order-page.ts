@@ -45,14 +45,6 @@ const SHIP = words('shipments')
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** A catalogue sentence's words before its first placeholder (the key's raw text). */
 const lead = (text: string) => text.split(/\{[a-zA-Z]+\}/)[0]!.trim()
-/** A key's words when the catalogue holds it, else null (a part of a later step: said in the report, never guessed). */
-function maybe(ns: (key: string, params?: Record<string, string | number>) => string, key: string, params?: Record<string, string | number>): string | null {
-  try {
-    return ns(key, params)
-  } catch {
-    return null
-  }
-}
 const notHere = (description: string) => test.info().annotations.push({ type: 'not here', description })
 
 /** B-OP-047 deletes MULTI_ORDER_OFF: until then a second order on a shipment is held off in its words (Warehouse's `shipOrders.later`). */
@@ -254,28 +246,23 @@ export default defineStage({
       await seen(page.getByText(startsWith(lead(OD('edit.done.both')))).first(), 60_000)
       await flow.settle()
 
-      // The planner decides it on the order page: under the work order's row, "Change waits: 4 → 3" → Lower to the order.
+      // The planner decides it on the order page (F-OP-116, A14): under the work order's row "Change waits: 4 → 3 · Apply… /
+      // Leave as is…"; Apply… opens the ONE review window (Approvals' WorkOrderChangeReview as is) → Lower to the order.
       const planner = await flow.desk('planner')
       await planner.go(`/sales/orders/${world.order.id}?tab=production`)
-      const waits = maybe(OD, 'wo.changeWaits', { before: 4, after: 3 })
-      if (!waits) {
-        notHere('the waiting change decided in place: the work-order row says none yet (F-OP-116)')
-        return
-      }
+      const waits = startsWith(lead(OD('wo.changeWaits')))
       const line = planner.page.getByText(waits).first()
       await seen(line, 60_000)
-      // Its door beside the words (Apply, or the review of WorkOrderChangeReview as is): Lower to the order.
-      const lower = APPROVALS('workOrderChange.apply.LOWER_TO_ORDER')
-      const decide = maybe(OD, 'waiting.decide')
-      const around = line.locator('xpath=ancestor::*[.//button][1]')
-      const door = around.getByRole('button', { name: new RegExp(`^(${[lower, decide].filter((text): text is string => text !== null).map(escape).join('|')})`) }).first()
+      const beside = line.locator('xpath=..')
+      await expect(beside.getByRole('button', { name: OD('wo.changeLeave'), exact: true })).toBeVisible()
+      await press(beside.getByRole('button', { name: OD('wo.changeApply'), exact: true }))
       const review = dialog(planner.page)
+      await seen(review, 60_000)
       await answerOf(planner.page, 'POST', /^\/production\/work-order-changes\/[^/]+\/apply$/, async () => {
-        await press((await door.count()) > 0 ? door : around.getByRole('button').first())
-        const opened = await review.waitFor({ state: 'visible', timeout: 5_000 }).then(() => true, () => false)
-        if (opened) await press(review.getByRole('button', { name: lower, exact: true }))
+        await press(review.getByRole('button', { name: APPROVALS('workOrderChange.apply.LOWER_TO_ORDER'), exact: true }))
         await flow.stepUp(planner.page, planner.person)
       })
+      await seen(planner.page.getByText(OD('wo.changeApplied', { number: workOrder.number })).first(), 60_000)
       await flow.settle()
       await expect(planner.page.getByText(waits)).toHaveCount(0, { timeout: 60_000 })
       await flow.shot(planner.page, 'change-decided')
