@@ -3,6 +3,11 @@ import type { ApiClient } from '../../../lib/api/client'
 import { newIdempotencyKey } from '../../../lib/api/client'
 // B-W2b-374: a typed line's options.
 import type { PickBody } from '../quotes/record/configurator/api'
+// F-OP-107 (B2): the three outcomes of pieces already cut beyond the new figures.
+import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
+// F-OP-106: how a work order follows an office change, and the change's kind (factory-domain order-apply: B-OP-012 / B-OP-013).
+import { APPLY_ROUTES } from '@nexus/factory-domain/order-apply/plan'
+import { WORK_ORDER_CHANGE_KINDS, type ApplyRoute } from '@nexus/factory-domain/order-apply/rules'
 
 /**
  * Every call of the sales order screens (SCR-038 list and board, SCR-039 the order studio), with the answer's shape
@@ -765,8 +770,11 @@ export async function createManualOrder(api: ApiClient, body: ManualOrderBody, i
   return (await api.post('/sales/orders/manual', { body, schema: one, idempotencyKey })).order
 }
 
-/** An existing line as an amendment keeps it (its whole size grid; none: unchanged), or a new line. */
-export type AmendLineInput = { id: string; sizes?: SizeInput[]; unitPrice?: string | null } | NewLineInput
+/**
+ * An existing line as an amendment keeps it (its whole size grid; none: unchanged), or a new line. F-OP-109: its description and note
+ * for production (none: unchanged; empty: cleared).
+ */
+export type AmendLineInput = ({ id: string; sizes?: SizeInput[]; unitPrice?: string | null } | NewLineInput) & { description?: string | null; note?: string | null }
 
 export interface AmendBody {
   reason?: string
@@ -774,7 +782,52 @@ export interface AmendBody {
   requestedDate?: string | null
   /** Every line the order keeps (a line left out is removed). */
   lines: AmendLineInput[]
+  /** F-OP-107 (B2): what happens to pieces already cut beyond the new figures (sent only when the preview names some). */
+  extraOutcome?: ExtraOutcome | null
 }
+
+// ---- F-OP-106 (order page N2; 13-backend §1.2–1.3, B-OP-012 / B-OP-013): what an office change does to the work orders ----
+const saidWords = z.object({ it: z.string(), en: z.string() })
+/** B-SA-042: pieces already cut beyond the new figures, by work-order cell (`needsOutcome`: an outcome is picked before Apply). */
+export const extraPiecesSchema = z.object({
+  extra: z.array(z.object({ workOrderSizeId: z.string(), salesOrderLineId: z.string(), size: z.string(), count: z.number(), words: saidWords })),
+  needsOutcome: z.boolean(),
+  words: saidWords.nullable(),
+})
+export type ExtraPiecesView = z.infer<typeof extraPiecesSchema>
+/** How a work order follows an office change (B-OP-012's routes, factory-domain APPLY_ROUTES). */
+export type FollowRoute = ApplyRoute
+/**
+ * B-OP-013 (daily-contract workOrderPlanView): one work order the change touches (or a new DRAFT), as the preview says it — its cells
+ * from → to with what is cut, the pieces cut beyond the new figures, whether it follows in the same click (factory-domain
+ * followDecisionOf, D1: a DRAFT for whoever may change the order, a released one with workorders.manage, a mixed one never) or waits
+ * with why, and whether its traveller is reprinted. No id, number or status: a new DRAFT, or a work order this reader does not reach.
+ * No route: it cannot be carried out now (`held` says why).
+ */
+export const workOrderPlanSchema = z.object({
+  kind: z.enum(WORK_ORDER_CHANGE_KINDS),
+  workOrderId: z.string().nullable(),
+  number: z.string().nullable(),
+  status: z.string().nullable(),
+  route: z.enum(APPLY_ROUTES).nullable(),
+  cells: z.array(z.object({ lineId: z.string(), size: z.string(), from: z.number(), to: z.number(), cut: z.number() })),
+  extra: z.number(),
+  appliesNow: z.boolean(),
+  held: saidWords.nullable(),
+  reprint: z.boolean(),
+})
+export type WorkOrderPlan = z.infer<typeof workOrderPlanSchema>
+/** B-OP-013 (workOrderPreviewView): a preview's work orders — the extra pieces (B-SA-042) and the plan of each work order. */
+export const workOrderPreviewSchema = extraPiecesSchema.extend({ plan: z.array(workOrderPlanSchema).default([]) })
+export type WorkOrderPreview = z.infer<typeof workOrderPreviewSchema>
+/** B-OP-012: the work-order changes an office change carried out in its own command, and those that wait (with why). */
+export const followedSchema = z.object({
+  applied: z.array(z.object({ changeId: z.string(), workOrderId: z.string().nullable(), number: z.string().nullable(), route: z.enum(APPLY_ROUTES), reprint: z.boolean() })),
+  waiting: z.array(z.object({ changeId: z.string(), workOrderId: z.string().nullable(), number: z.string().nullable(), words: saidWords })),
+})
+export type Followed = z.infer<typeof followedSchema>
+export const NOTHING_FOLLOWED: Followed = Object.freeze({ applied: [], waiting: [] }) as unknown as Followed
+// ---- end F-OP-106
 
 const diffSchema = z.object({
   lines: z.array(
@@ -789,6 +842,8 @@ const diffSchema = z.object({
       sizes: z.array(z.object({ size: z.string(), before: z.number(), after: z.number() })),
       priceChanged: z.boolean(),
       textChanged: z.boolean(),
+      /** F-OP-109 (B-OP-014): a line left out while work orders make it — closed short (it stays on the order). */
+      closedShort: z.boolean().optional(),
     }),
   ),
   header: z.array(z.object({ field: z.enum(['customerRef', 'requestedDate']), before: z.string().nullable(), after: z.string().nullable() })),
@@ -842,17 +897,29 @@ export function listAmendments(api: ApiClient, orderId: string, signal?: AbortSi
   return api.get(`${orderPath(orderId)}/amendments`, { schema: amendmentsSchema, signal })
 }
 
-export const amendPreviewSchema = z.object({ ok: z.boolean(), revision: z.number(), version: z.number(), problems: z.array(issueSchema), diff: diffSchema.nullable() })
+export const amendPreviewSchema = z.object({
+  ok: z.boolean(),
+  revision: z.number(),
+  version: z.number(),
+  problems: z.array(issueSchema),
+  diff: diffSchema.nullable(),
+  // F-OP-106: the extra pieces it would leave (B-SA-042) and what each work order would do (B-OP-013, `workOrders.plan`).
+  workOrders: workOrderPreviewSchema.nullable().default(null),
+})
 export type AmendPreview = z.infer<typeof amendPreviewSchema>
 
-/** What the amendment would change (the review dialog): lines old → new by size, the money change, re-acceptance. */
+/** What the amendment would change (F-OP-106: the "What changes" strip): lines old → new by size, the money change, re-acceptance, the work orders. */
 export function previewAmendment(api: ApiClient, orderId: string, body: AmendBody & { version?: number }, signal?: AbortSignal): Promise<AmendPreview> {
   return api.post(`${orderPath(orderId)}/amendments/preview`, { body, schema: amendPreviewSchema, signal })
 }
 
-/** "Apply amendment" with the order's version as read (a stale one: 409). */
-export function applyAmendment(api: ApiClient, orderId: string, body: AmendBody & { version: number; reason: string }, idempotencyKey: string): Promise<{ order: Order; amendment: Amendment }> {
-  return api.post(`${orderPath(orderId)}/amendments`, { body, schema: z.object({ order: orderSchema, amendment: amendmentSchema }), idempotencyKey })
+/**
+ * "Apply amendment" with the order's version as read (a stale one: 409). F-OP-106: it applies at once (no yes is asked) and answers
+ * the work orders that followed in the same command and those that wait (B-OP-012).
+ */
+export function applyAmendment(api: ApiClient, orderId: string, body: AmendBody & { version: number; reason: string }, idempotencyKey: string): Promise<{ order: Order; amendment: Amendment | null; workOrders: Followed }> {
+  // B-OP-015: `amendment` is null when only the delivery address changed (it moved alone; no amendment is written).
+  return api.post(`${orderPath(orderId)}/amendments`, { body, schema: z.object({ order: orderSchema, amendment: amendmentSchema.nullable(), workOrders: followedSchema.default(NOTHING_FOLLOWED) }), idempotencyKey })
 }
 
 const closeLinesSchema = z.object({
@@ -860,13 +927,28 @@ const closeLinesSchema = z.object({
   closed: z.array(z.object({ lineId: z.string(), seq: z.number(), closedShortQuantity: z.number() })),
   reducesDone: z.array(z.string()),
   stillInWorkOrders: z.array(z.object({ lineId: z.string(), pieces: z.number() })),
+  /** F-OP-107: the work orders that followed in the close's command, and those that wait (B-OP-012). */
+  workOrders: followedSchema.default(NOTHING_FOLLOWED),
 })
 export type CloseLinesAnswer = z.infer<typeof closeLinesSchema>
 
 /** "Close remaining lines": what is left of the lines named (none: every open line) will not be made or shipped. */
-export function closeLines(api: ApiClient, orderId: string, body: { version: number; reason: string; reasonCode?: string; lineIds?: string[] }): Promise<CloseLinesAnswer> {
+export function closeLines(api: ApiClient, orderId: string, body: { version: number; reason: string; reasonCode?: string; lineIds?: string[]; /* F-OP-107 */ extraOutcome?: ExtraOutcome }): Promise<CloseLinesAnswer> {
   return api.post(`${orderPath(orderId)}/close-lines`, { body, schema: closeLinesSchema, idempotencyKey: newIdempotencyKey() })
 }
+
+// ---- F-OP-107 (B2; 13-backend §1.3, B-OP-013): what closing these lines would do to the work orders, before the click ----
+export const closePreviewSchema = z.object({
+  /** The pieces already cut of them beyond what stays (their outcome is picked in the dialog) and each work order's plan. */
+  workOrders: workOrderPreviewSchema.nullable().default(null),
+})
+export type ClosePreview = z.infer<typeof closePreviewSchema>
+
+/** POST …/close-lines/preview (orders.manage; nothing written): each work order's plan and the extra pieces of the lines named. */
+export function previewCloseLines(api: ApiClient, orderId: string, lineIds: readonly string[], signal?: AbortSignal): Promise<ClosePreview> {
+  return api.post(`${orderPath(orderId)}/close-lines/preview`, { body: { lineIds: [...lineIds] }, schema: closePreviewSchema, signal })
+}
+// ---- end F-OP-107
 
 /** "Reopen lines" (the close's reversal). */
 export function reopenLines(api: ApiClient, orderId: string, body: { version: number; reason: string; lineIds?: string[] }): Promise<{ order: Order; reopened: string[] }> {
@@ -891,6 +973,8 @@ export const cancelCheckSchema = z.object({
   impact: impactSchema,
   /** The leather cut for its work orders: hides and area in the hide's base unit (no money, no worker). */
   leatherCut: z.array(z.object({ workOrderId: z.string(), number: z.string(), hides: z.number(), area: z.string().nullable() })),
+  // F-OP-107 (B-OP-013): the pieces already cut (their outcome picked before the cancel) and what each work order would do.
+  workOrders: workOrderPreviewSchema.nullable().default(null),
 })
 export type CancelCheck = z.infer<typeof cancelCheckSchema>
 
@@ -900,8 +984,8 @@ export function getCancelCheck(api: ApiClient, orderId: string, signal?: AbortSi
 }
 
 /** "Cancel order" with the reason and the number typed to confirm it. */
-export function cancelOrder(api: ApiClient, id: string, body: { version: number; reason: string; confirmNumber: string }): Promise<{ order: Order; paidDepositRequestIds: string[]; impact: Impact | null }> {
-  return api.post(`${orderPath(id)}/cancel`, { body, schema: z.object({ order: orderSchema, paidDepositRequestIds: z.array(z.string()), impact: impactSchema.nullable().default(null) }), idempotencyKey: newIdempotencyKey() })
+export function cancelOrder(api: ApiClient, id: string, body: { version: number; reason: string; confirmNumber: string; /* F-OP-107 */ extraOutcome?: ExtraOutcome }): Promise<{ order: Order; paidDepositRequestIds: string[]; impact: Impact | null; workOrders: Followed }> {
+  return api.post(`${orderPath(id)}/cancel`, { body, schema: z.object({ order: orderSchema, paidDepositRequestIds: z.array(z.string()), impact: impactSchema.nullable().default(null), /* F-OP-107 */ workOrders: followedSchema.default(NOTHING_FOLLOWED) }), idempotencyKey: newIdempotencyKey() })
 }
 
 export const milestoneSchema = z.object({

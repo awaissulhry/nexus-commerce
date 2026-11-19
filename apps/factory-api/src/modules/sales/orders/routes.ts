@@ -5,13 +5,14 @@ import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { copyOrderAsQuoteContract } from '../quotes/contract'
 import { copyOrderAsQuote } from '../quotes/duplicate'
 import { applyAmendment, listAmendments, previewAmendment } from './amend'
-import { closeLines, reopenLines } from './close-lines'
+import { closeLines, previewCloseLines, reopenLines } from './close-lines'
 import { boardContract, closeContract, customersContract, getOrderContract, listOrdersContract, makeOrderContract, promiseContract, readyContract, summaryContract } from './contract'
 import {
   applyAmendmentContract,
   cancelCheckContract,
   cancelContract,
   closeLinesContract,
+  closeLinesPreviewContract, // B-OP-013
   createManualContract,
   listAmendmentsContract,
   nextOrderNumberContract,
@@ -46,6 +47,8 @@ import { orderFiles, orderFilesContract } from './order-files'
 import { toldContract, whoWasTold } from './told'
 import { toldChanges, toldChangesContract } from './told' // F-SA-244
 import { openOrderFile, openOrderFileContract } from './order-files-open'
+// B-OP-050: the cards' previews in one call.
+import { orderFilePreviews, orderFilePreviewsContract } from './order-files-previews'
 // B-SA-011: the small pictures of a page of orders in one read.
 import { orderPicturesReadContract } from './contract'
 import { recordPictures } from '../../product/images/small-pictures'
@@ -107,6 +110,9 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
 
   app.post('/sales/orders/:orderId/close-lines', { schema: closeLinesContract }, async (request) => closeLines(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
 
+  // B-OP-013 (order page plan N2): the close's preview (nothing written).
+  app.post('/sales/orders/:orderId/close-lines/preview', { schema: closeLinesPreviewContract }, async (request) => previewCloseLines(request, request.params.orderId, request.body))
+
   app.post('/sales/orders/:orderId/reopen-lines', { schema: reopenLinesContract }, async (request) => reopenLines(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
 
   app.get('/sales/orders/:orderId/cancel-check', { schema: cancelCheckContract }, async (request) => cancelCheck(request, request.params.orderId))
@@ -146,6 +152,8 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
   // B-SA-036 (Sales page plan N9, P14): the order's files by source group, and the walled opening of one.
   app.get('/sales/orders/:orderId/files', { schema: orderFilesContract }, async (request) => orderFiles(request, request.params.orderId))
   app.post('/sales/orders/:orderId/files/:fileId/open', { schema: openOrderFileContract }, async (request) => openOrderFile(request, request.params.orderId, request.params.fileId, request.body, idempotencyKeyFrom(request)))
+  // B-OP-050 (order page plan N7, R-14): the small previews and PDF links of the cards in view (≤ 24 ids, ≤ 8 addresses a call).
+  app.post('/sales/orders/:orderId/files/previews', { schema: orderFilePreviewsContract }, async (request) => orderFilePreviews(request, request.params.orderId, request.body))
 
   // B-SA-056 (Sales page plan P8, R2, R8): who was told about one change (never who read it).
   app.get('/sales/orders/:orderId/told', { schema: toldContract }, async (request) => whoWasTold(request, request.params.orderId, request.query))

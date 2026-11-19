@@ -18,7 +18,10 @@ import type { LinePick } from '../configurator/rules'
  *   what      the order's lines as they should be: a line's sizes and unit price, its description and note; a new line
  *             (a style in one colourway); a line left out is removed. Its customer reference and requested date. A
  *             made-to-measure line and a line closed short stay as they are (reopen it first)
- *   limits    a line removed has none in work orders (close it short instead). B-SA-042 (sales page plan P6', R1; a business-rule
+ *   limits    B-OP-014 (order page plan N1): a line left out that work orders make is CLOSED SHORT in the same command, never
+ *             deleted (their cells point at it): what is left of it will not be made or shipped, its gap goes to the work orders
+ *             as a close of lines' does (cut pieces need their outcome); the diff names it REMOVED with `closedShort`, its money
+ *             kept on the line as a close keeps it (a closed line is not billed). B-SA-042 (sales page plan P6', R1; a business-rule
  *             change named for the Owner): a size MAY drop under what work orders make — the gap becomes a WorkOrderChange
  *             proposed in the same command (factory-domain order-apply), the work order never goes below what is cut, and
  *             pieces cut beyond the new figure are extra pieces with a named outcome; a made-to-measure unit is cancel only
@@ -107,6 +110,8 @@ export interface LineChange {
   readonly netAfter: MinorUnits
   /** The description or the note changed. */
   readonly textChanged: boolean
+  /** B-OP-014: a line left out that work orders make — closed short (it stays on the order), not deleted. */
+  readonly closedShort: boolean
 }
 
 export interface HeaderChange {
@@ -149,6 +154,26 @@ export function amendmentDiff(before: OrderSnapshot, after: OrderSnapshot): Amen
     const sizePrices = (line: SnapshotLine | undefined) => JSON.stringify((line?.sizes ?? []).map((size) => [size.size, size.unitPrice]))
     const priceChanged = old !== undefined && now !== undefined && (priceBefore !== priceAfter || sizePrices(old) !== sizePrices(now))
     const textChanged = old !== undefined && now !== undefined && (old.description !== now.description || old.note !== now.note)
+    // B-OP-014: a line closed short by the amendment (left out while work orders make it): REMOVED, what is left of it to 0.
+    if (old !== undefined && now !== undefined && old.closedShortQuantity === null && now.closedShortQuantity !== null) {
+      const left = Math.max(0, now.quantity - now.closedShortQuantity)
+      changes.push({
+        change: 'REMOVED',
+        lineId: id,
+        seq: reference.seq,
+        styleId: reference.styleId,
+        colourwayId: reference.colourwayId,
+        piecesBefore: old.quantity,
+        piecesAfter: left,
+        sizes: left === 0 ? old.sizes.flatMap((size) => (size.quantity > 0 ? [{ size: size.size, before: size.quantity, after: 0 }] : [])) : [],
+        unitPrice: null,
+        netBefore: old.netAmount,
+        netAfter: now.netAmount,
+        textChanged: false,
+        closedShort: true,
+      })
+      continue
+    }
     const change: LineChangeKind | null = old === undefined ? 'ADDED' : now === undefined ? 'REMOVED' : sizes.length > 0 || priceChanged || textChanged || old.quantity !== now.quantity ? 'CHANGED' : null
     if (change === null) continue
     changes.push({
@@ -164,6 +189,7 @@ export function amendmentDiff(before: OrderSnapshot, after: OrderSnapshot): Amen
       netBefore: old?.netAmount ?? 0,
       netAfter: now?.netAmount ?? 0,
       textChanged,
+      closedShort: false,
     })
   }
   changes.sort((a, b) => a.seq - b.seq)
@@ -200,14 +226,14 @@ export interface AmendLineInput {
   readonly options?: readonly LinePick[] | undefined
 }
 
-/** A line of the order now, with what its work orders already make per size (cells not cancelled). */
+/** A line of the order now, with what its work orders already make per size (cells not cancelled). B-OP-014: one left out is closed short. */
 export interface AmendableLine {
   readonly id: string
   readonly seq: number
   readonly kind: SalesLineKind
   readonly closedShort: boolean
   readonly sizes: readonly { readonly size: string; readonly quantity: number }[]
-  /** Pieces in work orders, per size (a made-to-measure unit: size ''): a line with any is not removed. */
+  /** Pieces in work orders, per size (a made-to-measure unit: size ''): B-OP-014 — a line with any, left out, is closed short. */
   readonly inWorkOrders: ReadonlyMap<string, number>
 }
 
@@ -228,9 +254,9 @@ export function amendStateProblem(status: SalesOrderStatus): string | null {
 
 /**
  * The problems of an amendment's lines, in words, by path (body/lines/<i>/…): a reason; at least one line; existing
- * lines named once; no line removed while work orders make it (B-SA-042: a size under them is allowed); a
- * made-to-measure line or a line closed short unchanged; a new line names its style and colourway; whole pieces.
- * Style, colourway and sizes offered are the API's checks (they read the catalogue).
+ * lines named once (B-SA-042: a size under what work orders make is allowed; B-OP-014: a line they make may be left out —
+ * it is closed short, `leftOutOf`); a made-to-measure line or a line closed short unchanged and never left out; a new line
+ * names its style and colourway; whole pieces. Style, colourway and sizes offered are the API's checks (they read the catalogue).
  */
 export function amendmentProblems(check: AmendmentCheck): Issue[] {
   const issues: Issue[] = []
@@ -272,13 +298,33 @@ export function amendmentProblems(check: AmendmentCheck): Issue[] {
   })
   for (const line of check.current) {
     if (named.has(line.id)) continue
-    const made = [...line.inWorkOrders.values()].reduce((total, value) => total + value, 0)
-    if (made > 0) issues.push({ path: 'body/lines', message: `Line ${line.seq} is in work orders (${made} piece(s)): it cannot be removed; lower or cancel the work order first.` })
+    // B-OP-014 (order page plan N1): a line in work orders left out is closed short in the same command (`leftOutOf`), never refused.
     if (line.closedShort) issues.push({ path: 'body/lines', message: `Line ${line.seq} is closed short: reopen it before removing it.` })
     if (line.kind === 'MADE_TO_MEASURE') issues.push({ path: 'body/lines', message: `Line ${line.seq} is a made-to-measure unit: it does not change through an amendment.` })
   }
   return issues
 }
+
+// ── B-OP-014 (order page plan N1; 13-backend §1.4): a line work orders make may be left out of an amendment ──
+/**
+ * What happens to each line the amendment leaves out (the order's lines not named): CLOSE — work orders make it (pieces in its
+ * cells, or `madeByWorkOrders`: any cell that points at it, a cancelled work order's too), so it is closed short in the same
+ * command and never deleted; REMOVE — nothing of production refers to it (the API still checks every other reference). Lines
+ * closed short already and made-to-measure units are never left out (amendmentProblems says so).
+ */
+export function leftOutOf(check: Pick<AmendmentCheck, 'lines' | 'current'>, madeByWorkOrders: ReadonlySet<string> = new Set()): { readonly remove: string[]; readonly close: string[] } {
+  const named = new Set(check.lines.flatMap((line) => (line.id ? [line.id] : [])))
+  const remove: string[] = []
+  const close: string[] = []
+  for (const line of check.current) {
+    if (named.has(line.id)) continue
+    const made = [...line.inWorkOrders.values()].reduce((total, value) => total + value, 0)
+    if (made > 0 || madeByWorkOrders.has(line.id)) close.push(line.id)
+    else remove.push(line.id)
+  }
+  return { remove, close }
+}
+// ── end B-OP-014 ──
 
 /** The next amendment's number on an order: one more than the highest so far (1 for the first). */
 export const nextRevision = (revisions: readonly number[]): number => Math.max(0, ...revisions) + 1

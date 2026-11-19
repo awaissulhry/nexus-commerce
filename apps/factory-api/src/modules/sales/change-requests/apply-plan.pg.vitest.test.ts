@@ -193,3 +193,37 @@ describe('F-SA-241: the bundles in work of each work order a step changes', { ti
   })
 })
 // ── end F-SA-241 ──
+
+// ── B-OP-013 (order page plan N2, D1 + D3): before Accept, what each work order will do — and Accept then does exactly that ──
+describe('B-OP-013: the apply plan names each work order\'s change, in Accept\'s own click or waiting, as Accept then carries it', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('the planner: the work order in progress is lowered in the click, never below cut, its traveller reprinted; Accept answers the same', async () => {
+    forgetProgress()
+    const world = await inWork(3, 2)
+    const plan = await applyPlan(planner(), world.request, h.clock.now())
+    expect(plan.workOrderPlan).toEqual([
+      { kind: 'LOWER_TO_ORDER', workOrderId: world.workOrder, number: world.number, status: 'IN_PROGRESS', route: 'LOWER_RELEASED', cells: [{ lineId: world.line, size: '52', from: 4, to: 2, cut: 3 }], extra: 1, appliesNow: true, held: null, reprint: true },
+    ])
+    const accepted = await acceptRequest(planner(), world.request, { version: 1, extraOutcome: 'LEFTOVER' }, undefined, h.clock)
+    expect(accepted.workOrders.applied.map((entry) => [entry.workOrderId, entry.number, entry.route, entry.reprint])).toEqual(plan.workOrderPlan.map((row) => [row.workOrderId, row.number, row.route, row.reprint]))
+    expect(accepted.workOrders.waiting).toEqual([])
+    // Never below what is cut: the cell stops at 3 (the 1 extra piece kept as leftover).
+    expect((await one<{ quantity: number }>('SELECT quantity FROM "WorkOrderSize" WHERE id = $1', [world.cell])).quantity).toBe(3)
+    // Once answered the plan is empty: `next` says what was done.
+    expect((await applyPlan(planner(), world.request, h.clock.now())).workOrderPlan).toEqual([])
+  })
+
+  it('Sales: the change waits for production — "a work order", no id, number or status; Accept leaves it waiting, as said', async () => {
+    forgetProgress()
+    const world = await inWork(0, 3)
+    const plan = await applyPlan(sales(), world.request, h.clock.now())
+    expect(plan.workOrderPlan).toEqual([
+      { kind: 'LOWER_TO_ORDER', workOrderId: null, number: null, status: null, route: 'LOWER_RELEASED', cells: [{ lineId: world.line, size: '52', from: 4, to: 3, cut: 0 }], extra: 0, appliesNow: false, held: { en: 'A work order waits: production applies the change on its own page.', it: 'Un ordine di lavoro è in attesa: la modifica la applica la produzione dalla sua pagina.' }, reprint: true },
+    ])
+    expect(JSON.stringify(plan.workOrderPlan)).not.toContain(world.number)
+    const accepted = await acceptRequest(sales(), world.request, { version: 1 }, undefined, h.clock)
+    expect(accepted.workOrders.applied).toEqual([])
+    expect(accepted.workOrders.waiting.map((entry) => [entry.workOrderId, entry.number, entry.words])).toEqual(plan.workOrderPlan.map((row) => [row.workOrderId, row.number, row.held]))
+    expect((await one<{ quantity: number }>('SELECT quantity FROM "WorkOrderSize" WHERE id = $1', [world.cell])).quantity).toBe(4)
+  })
+})
+// ── end B-OP-013 ──

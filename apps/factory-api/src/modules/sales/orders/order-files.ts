@@ -56,6 +56,10 @@ import type { OrderRow } from './store'
  * (else `measurementsLeftOut`); opening it is recorded on the order. A copy (Use on, B-TH-024) is listed once: "also on …" names
  * ONLY records of this order's customer the reader reaches; any other record a copy sits on is counted ("also on 1 other record").
  * At most 500 files are read (`truncated`); nothing is presigned until a file is opened. A read: no command, no event.
+ *
+ * B-OP-050 (order page plan N7): each file says who added it (`addedBy`) — an office person by name; "the floor" (a floor device's
+ * upload: never a worker's name); this order's customer by its name (a portal or link upload of its own); null for the system's own
+ * files and anything not known. The small previews and PDF links of the cards are POST …/files/previews (./order-files-previews.ts).
  */
 
 export const ORDER_FILE_GROUPS = ['ORDER', 'LINES', 'REQUESTS', 'PRODUCTION', 'QUALITY', 'SHIPMENTS', 'RETURNS'] as const
@@ -94,10 +98,19 @@ const FILE_SELECT = {
   visibility: true,
   partyId: true,
   sourceFileId: true,
+  createdById: true, // B-OP-050
 } as const
 
 type Db = FactoryClient
-type FileRow = { readonly id: string; readonly companyId: string | null; readonly recordType: string; readonly recordId: string; readonly kind: string; readonly category: string | null; readonly originalName: string; readonly contentType: string; readonly sizeBytes: number; readonly versionNo: number; readonly availableAt: Date | null; readonly createdAt: Date; readonly visibility: readonly string[]; readonly partyId: string | null; readonly sourceFileId: string | null }
+type FileRow = { readonly id: string; readonly companyId: string | null; readonly recordType: string; readonly recordId: string; readonly kind: string; readonly category: string | null; readonly originalName: string; readonly contentType: string; readonly sizeBytes: number; readonly versionNo: number; readonly availableAt: Date | null; readonly createdAt: Date; readonly visibility: readonly string[]; readonly partyId: string | null; readonly sourceFileId: string | null; /* B-OP-050 */ readonly createdById: string | null }
+
+/** B-OP-050: who added a file, as the office's cards say it (never a worker: the floor is "the floor"). */
+export const ADDED_BY_KINDS = ['PERSON', 'FLOOR', 'CUSTOMER'] as const
+export interface AddedBy {
+  readonly kind: (typeof ADDED_BY_KINDS)[number]
+  /** An office person's name, or this order's customer's; null for the floor (the screen says "the floor"). */
+  readonly name: string | null
+}
 
 export interface RecordRef {
   readonly type: string
@@ -124,6 +137,8 @@ export interface OrderFile {
   readonly alsoOnOther: number
   /** A thread attachment: the message of the order's thread it came with (for a reader of the thread). */
   readonly inThread: { readonly messageId: string } | null
+  /** B-OP-050: who added it (null: the system, or not known). */
+  readonly addedBy: AddedBy | null
 }
 
 export interface OrderWorksheet {
@@ -317,9 +332,14 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
         alsoOn: [],
         alsoOnOther: 0,
         inThread: null,
+        addedBy: null,
       },
     })
   }
+
+  // ---- B-OP-050: who added each file shown (an office person, the floor, this order's customer) ---------------------------
+  const adders = await addersOf(db, order, shown.map((entry) => entry.file))
+  for (const entry of shown) entry.view = { ...entry.view, addedBy: adders.get(entry.file.id) ?? null }
 
   // ---- a thread attachment: the message of the order's thread it came with ----------------------------------------------
   const orderFiles = shown.filter((entry) => entry.file.recordType === 'SalesOrder').map((entry) => entry.file.id)
@@ -367,6 +387,44 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
     truncated,
   }
 }
+
+// ── B-OP-050 (order page plan N7): who added a file ──
+/**
+ * Who added each file: its `createdById` (an office upload names its person; a user of a partner is this order's customer, by its
+ * name, or nobody named); with none, the file's own audit rows (a portal or link upload records the party's session on the file:
+ * this order's customer, by its name) and its sharing (a floor device's upload is shared with the office and that floor: "the
+ * floor", never the worker); else null (a document the system made). Nothing names another customer.
+ */
+async function addersOf(db: Db, order: Pick<OrderRow, 'partyId'>, files: readonly FileRow[]): Promise<Map<string, AddedBy | null>> {
+  const out = new Map<string, AddedBy | null>()
+  if (files.length === 0) return out
+  const userIds = unique(files.flatMap((file) => (file.createdById ? [file.createdById] : [])))
+  const users = new Map((userIds.length > 0 ? await db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, displayName: true, partyId: true } }) : []).map((user) => [user.id, user]))
+  const nobody = files.filter((file) => file.createdById === null).map((file) => file.id)
+  const outside = nobody.length > 0 ? await db.auditLog.findMany({ where: { recordType: 'StoredFile', recordId: { in: nobody }, audience: { in: ['PARTNER', 'LINK', 'FLOOR'] } }, select: { recordId: true, audience: true, partyId: true } }) : []
+  let customer: string | null | undefined
+  const customerOf = async (): Promise<AddedBy | null> => {
+    if (customer === undefined) {
+      const party = await db.party.findUnique({ where: { id: order.partyId }, select: { legalName: true, tradeName: true } })
+      customer = party ? (party.tradeName ?? party.legalName) : null
+    }
+    return customer ? { kind: 'CUSTOMER', name: customer } : null
+  }
+  for (const file of files) {
+    if (file.createdById) {
+      const user = users.get(file.createdById)
+      out.set(file.id, !user ? null : user.partyId === null ? { kind: 'PERSON', name: user.displayName } : user.partyId === order.partyId ? await customerOf() : null)
+      continue
+    }
+    const rows = outside.filter((row) => row.recordId === file.id)
+    const shared = new Set(file.visibility)
+    if (rows.some((row) => (row.audience === 'PARTNER' || row.audience === 'LINK') && row.partyId === order.partyId)) out.set(file.id, await customerOf())
+    else if (rows.some((row) => row.audience === 'FLOOR') || (shared.has('OFFICE') && shared.has('FLOOR') && !shared.has('PARTNER') && !shared.has('LINK'))) out.set(file.id, { kind: 'FLOOR', name: null })
+    else out.set(file.id, null)
+  }
+  return out
+}
+// ── end B-OP-050 ──
 
 /**
  * One file per content: a copy (B-TH-024 Use on, a module's prepareFileCopy) and its source are one document. Of the order's
@@ -467,6 +525,11 @@ export const orderFileView = output({
   alsoOnOther: z.number().int(),
   /** It came with a message of the order's thread ("Open in thread"). */
   inThread: output({ messageId: id() }).nullable(),
+  /**
+   * B-OP-050: who added it — PERSON: an office person (`name`); FLOOR: a floor device (no name: never a worker); CUSTOMER: this order's
+   * customer (`name`). Null: the system's own document, or not known.
+   */
+  addedBy: output({ kind: z.enum(ADDED_BY_KINDS), name: z.string().nullable() }).nullable(),
 })
 
 export const orderFilesContract = defineContract({

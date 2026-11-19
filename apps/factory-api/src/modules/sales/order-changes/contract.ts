@@ -5,7 +5,7 @@ import { MAX_REASON } from '@nexus/factory-domain/sales/orders/orders'
 import { MAX_QUOTE_LINES, MAX_SIZE_QUANTITY, MAX_TEXT } from '@nexus/factory-domain/sales/quotes/quotes'
 import { FREEZE_LIMITS, FREEZE_STATES, ORDER_FREEZE_ACTIONS, ORDER_FREEZE_FIELDS, ORDER_FREEZE_STAGES } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { CHANGE_YES_STATES, CUSTOMER_DECISIONS, PRICED_LIMITS } from '@nexus/factory-domain/sales/order-changes/priced'
-import { diffView } from '../orders/daily-contract'
+import { diffView, workOrderPreviewView } from '../orders/daily-contract'
 import { orderView } from '../orders/contract'
 // B-OP-012: what the office change's work orders did in its command, and what waits.
 import { followedView } from '../../production/work-order-changes/contract'
@@ -150,6 +150,8 @@ export const previewPricedChangeContract = defineContract({
       /** B-OP-010: an office change applies at once ("Applies at once — no approval"); null with the problems of no plan. */
       yes: z.enum(['APPLIES_AT_ONCE']).nullable(),
       stage: output({ stage, words }).nullable(),
+      /** B-OP-013: the extra pieces and what each work order will do (null with the problems of no plan). */
+      workOrders: workOrderPreviewView.nullable(),
     }),
   },
 })
