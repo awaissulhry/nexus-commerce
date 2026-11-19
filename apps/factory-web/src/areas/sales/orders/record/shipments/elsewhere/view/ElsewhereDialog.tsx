@@ -13,6 +13,7 @@ import { zonedToday } from '../../../../../../warehouse/shipments/model'
 import type { Phrase } from '../../../../model'
 import type { ElsewherePreview, ElsewhereRecorded } from '../api'
 import { elsewhereBody, garmentsOf, problemPlaces, recordHeld, type ElsewhereForm, type ElsewhereTransport } from '../model'
+import { clampGarments, NOTHING_SEEN, problemShown, recordHeldWords, stepperEnds, type ElsewhereField, type ElsewhereSeen } from '../model' // F-OP-307
 
 /** F-OP-123 — the dialog's view model (RecordElsewhere fills it; this view fetches nothing). */
 export interface ElsewhereDialogModel {
@@ -30,11 +31,17 @@ export interface ElsewhereDialogModel {
   readonly done: ElsewhereRecorded | null
   /** Now (ISO): the latest "Left on" offered. */
   readonly now: string
+  /** F-OP-307: whether the person tried to record, and the fields they left (a problem shows only then). Absent: nothing yet. */
+  readonly seen?: ElsewhereSeen
 }
 
 export interface ElsewhereDialogActions {
   onChange?: (next: Partial<ElsewhereForm>) => void
   onRetryCells?: () => void
+  /** F-OP-307: the person left a field (its problem may show now). */
+  onLeave?: (field: ElsewhereField) => void
+  /** F-OP-307: the person pressed Record (or ⌘↵), held or not (every problem may show now). */
+  onTry?: () => void
   onRecord?: () => void
   onClose?: () => void
 }
@@ -62,11 +69,13 @@ export function ElsewhereDialog({ model, actions }: { model: ElsewhereDialogMode
   const words = (phrase: Phrase) => t(phrase.key, phrase.params)
   const change = (next: Partial<ElsewhereForm>) => actions?.onChange?.(next)
   const close = () => actions?.onClose?.()
+  const seen = model.seen ?? NOTHING_SEEN // F-OP-307
   const record = () => {
+    actions?.onTry?.() // F-OP-307: a try shows every problem (held or not)
     if (!held) actions?.onRecord?.()
   }
   const keys = (event: KeyboardEvent) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !held && !model.done) {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !model.done) {
       event.preventDefault()
       record()
     }
@@ -96,9 +105,12 @@ export function ElsewhereDialog({ model, actions }: { model: ElsewhereDialogMode
             <Button size="sm" onClick={close}>
               {t('elsewhere.cancel')}
             </Button>
-            <Button size="sm" variant="primary" heldReason={held ? words(held) : null} onClick={record} aria-keyshortcuts="Meta+Enter Control+Enter">
-              {t('elsewhere.record', { count })}
-            </Button>
+            {/* F-OP-307: a click on Record is a try even while it is held (the held button keeps the click to itself; it bubbles here). */}
+            <span className="fw-so-inline" onClick={() => actions?.onTry?.()}>
+              <Button size="sm" variant="primary" heldReason={held ? words(recordHeldWords(held, places, seen) ?? held) : null} onClick={() => actions?.onRecord?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
+                {t('elsewhere.record', { count })}
+              </Button>
+            </span>
           </>
         )
       }
@@ -137,8 +149,8 @@ export function ElsewhereDialog({ model, actions }: { model: ElsewhereDialogMode
             </Banner>
           )}
           {preview?.holds.held && preview.holds.mayRelease && (
-            <Field label={t('elsewhere.reason')} hint={t('elsewhere.reasonHint')} error={form.holdReason.trim() === '' ? t('elsewhere.held.reason') : undefined}>
-              <Textarea rows={2} maxLength={ELSEWHERE_LIMITS.reason} value={form.holdReason} onChange={(event) => change({ holdReason: event.target.value })} />
+            <Field label={t('elsewhere.reason')} hint={t('elsewhere.reasonHint')} error={problemShown(seen, 'reason') && form.holdReason.trim() === '' ? t('elsewhere.held.reason') : undefined}>
+              <Textarea rows={2} maxLength={ELSEWHERE_LIMITS.reason} value={form.holdReason} onChange={(event) => change({ holdReason: event.target.value })} onBlur={() => actions?.onLeave?.('reason')} />
             </Field>
           )}
 
@@ -167,6 +179,7 @@ export function ElsewhereDialog({ model, actions }: { model: ElsewhereDialogMode
                 const quantity = form.quantities[cell.workOrderSizeId] ?? 0
                 const problems = places.byCell[cell.workOrderSizeId] ?? []
                 const label = `${cell.styleCode} · ${cell.colourwayName} · ${cell.size}`
+                const ends = stepperEnds(quantity, cell.shippable) // F-OP-307 (walk #18)
                 return (
                   <div key={cell.workOrderSizeId} className="fw-so-stack">
                     <Field
@@ -174,7 +187,16 @@ export function ElsewhereDialog({ model, actions }: { model: ElsewhereDialogMode
                       hint={[t('elsewhere.cap', { count: cell.shippable }), read?.releasedAt ? t('elsewhere.releasedOn', { date: formatDate(read.releasedAt, { locale }) }) : null].filter(Boolean).join(' · ')}
                       error={problems.length > 0 ? problems.map(words).join(' ') : undefined}
                     >
-                      <NumberStepper size="sm" min={0} max={cell.shippable} value={quantity} onChange={(next) => change({ quantities: { ...form.quantities, [cell.workOrderSizeId]: next } })} decrementLabel={t('elsewhere.minus', { cell: label })} incrementLabel={t('elsewhere.plus', { cell: label })} />
+                      {/* F-OP-307 (walk #18): no native min / max — a disabled − says nothing; the ends are held with words in their
+                          names and the held look (orders.css), and the count is kept within 0 and the cap here. */}
+                      <NumberStepper
+                        size="sm"
+                        className={`fw-so-nstep${ends.floor ? ' is-floor' : ''}${ends.ceiling ? ' is-ceiling' : ''}`}
+                        value={quantity}
+                        onChange={(next) => change({ quantities: { ...form.quantities, [cell.workOrderSizeId]: clampGarments(next, cell.shippable) } })}
+                        decrementLabel={ends.floor ? t('elsewhere.minusHeld', { cell: label }) : t('elsewhere.minus', { cell: label })}
+                        incrementLabel={ends.ceiling ? t('elsewhere.plusHeld', { cell: label, count: cell.shippable }) : t('elsewhere.plus', { cell: label })}
+                      />
                     </Field>
                     {cell.serialTracked && quantity > 0 && (
                       <Field label={t('elsewhere.serials')} hint={t('elsewhere.serialsHint')}>
@@ -193,8 +215,8 @@ export function ElsewhereDialog({ model, actions }: { model: ElsewhereDialogMode
             <p className="fw-so-hint">{t('elsewhere.noNexusDdt')}</p>
             <Checkbox checked={form.invoiceInstead} onChange={() => change({ invoiceInstead: !form.invoiceInstead })} label={t('elsewhere.invoiceInstead')} />
             <div className="fw-so-two">
-              <Field label={t('elsewhere.ddtNumber')} error={places.ddt.length > 0 ? places.ddt.map(words).join(' ') : undefined} hint={preview && !preview.ddtCitable ? t('elsewhere.notCitable') : undefined}>
-                <Input size="sm" maxLength={ELSEWHERE_LIMITS.ddtNumber} value={form.ddtNumber} onChange={(event) => change({ ddtNumber: event.target.value })} />
+              <Field label={t('elsewhere.ddtNumber')} error={problemShown(seen, 'ddt') && places.ddt.length > 0 ? places.ddt.map(words).join(' ') : undefined} hint={preview && !preview.ddtCitable ? t('elsewhere.notCitable') : undefined}>
+                <Input size="sm" maxLength={ELSEWHERE_LIMITS.ddtNumber} value={form.ddtNumber} onChange={(event) => change({ ddtNumber: event.target.value })} onBlur={() => actions?.onLeave?.('ddt')} />
               </Field>
               <Field label={t('elsewhere.ddtDate')}>
                 <DateField value={form.ddtDate} max={zonedToday(new Date(model.now))} onChange={(value) => change({ ddtDate: value })} />

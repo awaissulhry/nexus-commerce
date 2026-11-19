@@ -1918,6 +1918,8 @@
     "releasedOn": "released on {date}",
     "minus": "One less of {cell}",
     "plus": "One more of {cell}",
+    "minusHeld": "None of {cell} is taken: nothing to take off",
+    "plusHeld": "All {count} of {cell} are taken: no more released",
     "serials": "Serials, one per garment",
     "serialsHint": "Type or scan them, separated by spaces or commas.",
     "waitQuality_one": "Only released garments: {count} piece waits for quality",

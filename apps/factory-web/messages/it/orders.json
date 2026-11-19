@@ -1918,6 +1918,8 @@
     "releasedOn": "rilasciati il {date}",
     "minus": "Un capo in meno di {cell}",
     "plus": "Un capo in più di {cell}",
+    "minusHeld": "Nessun capo di {cell} è preso: niente da togliere",
+    "plusHeld": "Presi tutti i {count} capi di {cell}: nessun altro rilasciato",
     "serials": "Matricole, una per capo",
     "serialsHint": "Scrivile o leggile, separate da spazi o virgole.",
     "waitQuality_one": "Solo capi rilasciati: {count} pezzo attende la qualità",
