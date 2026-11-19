@@ -308,3 +308,80 @@ describe('F-OP-112: Make work orders… in place — the style step, the next st
   })
 })
 // ---- end F-OP-112
+
+// ---- F-OP-113 (10-order-page §5.2; review R-11, B6): the work-order rows — in place, the row ⋯, a shared row read-only ------------
+describe('F-OP-113: the work-order rows act in place; a work order shared with other customers offers nothing but its link', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('a planner: rows by number, Due · Priority · Rush in place on each own work order, the row ⋯; the floor’s told time', () => {
+    const html = draw('wo-acts-manager')
+    const text = textOf(html)
+    // Stable by number, whatever order the read gave (WO-00022 came first).
+    expect(text.indexOf('WO-00019')).toBeLessThan(text.indexOf('WO-00021'))
+    expect(text.indexOf('WO-00021')).toBeLessThan(text.indexOf('WO-00022'))
+    for (const number of ['WO-00021', 'WO-00022']) {
+      expect(html, number).toContain(`aria-label="Priority of ${number}"`)
+      expect(html, number).toContain(`aria-label="Rush for ${number}"`)
+      expect(html, number).toContain(`aria-label="Actions for ${number}"`)
+    }
+    expect(html).toMatch(/aria-label="Rush for WO-00022"[^>]*aria-pressed="true"|aria-pressed="true"[^>]*aria-label="Rush for WO-00022"/)
+    expect(text).toContain('Told the floor at 10:42')
+    expect(text).not.toContain('Production does this')
+  })
+
+  it('a mixed work order is read-only: its link and the words, no field, no ⋯ (never changed from one customer’s order)', () => {
+    const html = draw('wo-acts-manager')
+    expect(textOf(html)).toContain('Shared with other customers: change it on its page.')
+    expect(html).toContain('WO-00019')
+    expect(html).not.toContain('aria-label="Priority of WO-00019"')
+    expect(html).not.toContain('aria-label="Rush for WO-00019"')
+    expect(html).not.toContain('aria-label="Due date of WO-00019"')
+    expect(html).not.toContain('aria-label="Actions for WO-00019"')
+    expect(textOf(draw('wo-acts-manager', 'it'))).toContain('Condiviso con altri clienti: cambialo dalla sua pagina.')
+  })
+
+  it('Sales: the rows as they are, every act held in words — "Production does this — …" (never hidden, never a dead field)', () => {
+    const html = draw('wo-acts-sales')
+    const text = textOf(html)
+    expect(text).toContain('Production does this — a planner or the production manager.')
+    expect(html).not.toContain('aria-label="Priority of WO-00021"')
+    expect(html).not.toContain('aria-label="Rush for WO-00021"')
+    // The ⋯ stays (its acts held with the same words inside): the reader learns who does it.
+    expect(html).toContain('aria-label="Actions for WO-00021"')
+    expect(textOf(draw('wo-acts-sales', 'it'))).toContain('lo fa la produzione — un pianificatore o il responsabile di produzione')
+  })
+
+  it('a saving cell is marked, a refused write is said on its row in words (never the API’s English)', () => {
+    const html = draw('wo-acts-saving')
+    expect(html).toContain('data-state="saving"')
+    expect(textOf(html)).toContain('Someone changed this work order meanwhile')
+  })
+
+  it('without the acts (no work orders right, an older read): the card stays as today — no ⋯ column, no field', () => {
+    const html = draw('production-progress')
+    expect(html).not.toContain('aria-label="Actions for')
+    expect(html).not.toContain('aria-label="Priority of')
+  })
+
+  it('N-5: the hook is mounted by the container; the view draws the lib’s dialogs and imports no fetching hook', () => {
+    const acts = source('./use-production-acts.ts')
+    expect(acts).toContain('useWorkOrderActs(api, permissions,')
+    const tab = source('./view/ProductionTab.tsx')
+    expect(tab).not.toMatch(/from '[^']*use-work-order-acts'/)
+    expect(tab).toContain('<WorkOrderActsDialogs model={model.workOrderActs} actions={actions?.workOrderActs} />')
+    expect(source('./OrderRecord.tsx')).toContain("rereadWork: () => production.again(['work', 'headline', 'changes'])")
+    // Every write sends the version: the row's (B6) or the newer one a write answered.
+    const hook = source('../../../../lib/production/work-order-acts/use-work-order-acts.ts')
+    expect(hook).toContain('updateWorkOrder(api, row.id, { version: versionOf(row, known.current), ...body })')
+    expect(hook).toContain('updateWorkOrder(api, workOrder.id, { version: workOrder.version, note:')
+  })
+
+  it('the words in it + en', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['wo.col.priority', 'wo.col.acts', 'wo.priorityHint', 'wo.heldHold', 'wo.heldHint', 'wo.act.note', 'wo.note.title', 'wo.note.label', 'wo.note.hint', 'wo.note.save', 'wo.note.saved', 'wo.reading', 'wo.readingShort', 'wo.readFailed', 'wo.acts', 'wo.dueOf', 'wo.priorityOf', 'wo.rushOf'])
+        expect(t(key, { number: 'WO-00021' }), `${locale} ${key}`).not.toMatch(/^wo\.|\{/)
+    }
+  })
+})
+// ---- end F-OP-113

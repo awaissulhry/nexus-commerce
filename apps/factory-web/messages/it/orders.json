@@ -1720,6 +1720,30 @@
   },
   "wo": {
     "makeNext": "Crea il prossimo: {style}",
-    "made": "{number} creato (bozza)"
+    "made": "{number} creato (bozza)",
+    "col": {
+      "priority": "Priorità",
+      "acts": "Azioni"
+    },
+    "acts": "Azioni per {number}",
+    "dueOf": "Consegna di {number}",
+    "priorityOf": "Priorità di {number}",
+    "priorityHint": "Più alta viene prima",
+    "rushOf": "Urgenza per {number}",
+    "heldHold": "Lo fa la produzione — un pianificatore o il responsabile di produzione",
+    "heldHint": "Date di consegna, priorità, urgenza e azioni degli ordini di lavoro: lo fa la produzione — un pianificatore o il responsabile di produzione.",
+    "act": {
+      "note": "Nota…"
+    },
+    "note": {
+      "title": "Nota su {number}",
+      "label": "Nota",
+      "hint": "Stampata sul foglio dell’ordine di lavoro per il reparto; il cliente non la legge mai.",
+      "save": "Salva la nota",
+      "saved": "Nota salvata su {number}"
+    },
+    "reading": "Lettura di {number}…",
+    "readingShort": "Lettura dell’ordine di lavoro…",
+    "readFailed": "Impossibile leggere {number}"
   }
 }

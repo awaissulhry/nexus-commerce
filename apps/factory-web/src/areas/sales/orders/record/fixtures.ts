@@ -64,6 +64,11 @@ import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark
 import { MARGIN, marginAs } from './margin/fixtures'
 // F-SA-232: Overview's made-up production reads.
 import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, NO_WORK_READ, ORDER_FILES, QUALITY_READ, ready, WORK_READ } from './overview/fixtures'
+// F-OP-113: the work-order rows' acts (a read with each row's version and rights; the acts' model as the container holds it).
+import { workActsRead, type WorkRights } from './overview/fixtures'
+import { ROLES } from '../_demo/fixtures'
+import { actsCanOf } from '../../../../lib/production/work-order-acts/model'
+import type { WorkOrderActsModel } from '../../../../lib/production/work-order-acts/use-work-order-acts'
 // F-SA-243: the order's requests (the shared request fixtures) and its production read with Still to do.
 import { PRODUCTION_READ } from './overview/fixtures'
 import { brandRequest } from '../../../home/approvals/requests/fixtures'
@@ -351,6 +356,15 @@ const F_SA_243: DesignCase<RecordCase>[] = [
 ]
 // ---- end F-SA-243
 
+// ---- F-OP-113 ----
+const MANAGE_ALL: WorkRights = { manage: true, release: true, hold: true }
+const NO_RIGHTS: WorkRights = { manage: false, release: false, hold: false }
+const WORK_ORDERS_IDS = [WORK_ORDERS[0]!.id, WORK_ORDERS[1]!.id] as const
+function woActs(role: keyof typeof ROLES, over: Partial<WorkOrderActsModel> = {}): WorkOrderActsModel {
+  return { can: actsCanOf(ROLES[role]), saves: {}, toldAt: {}, dialog: null, ...over }
+}
+// ---- end F-OP-113
+
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-039',
   title: 'Order studio: lines, dates, production, shipments, invoices & payments with the deposit, documents',
@@ -399,6 +413,10 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'production-gate-paid', label: 'Production manager · Production: deposit paid, Make work orders opens New work order', model: base('manager', paidNotSent, { tab: 'production', production: ready(WORK_READ) }) },
     { id: 'production-held', label: 'Sales · Production: the gate waits for the deposit; Make work orders held', model: base('sales', confirmed, { tab: 'production', production: ready(WORK_READ) }) },
     { id: 'production-progress', label: 'Sales · Production: the work orders with this order’s own pieces (where, made for this order, also makes, held, a shared cut), 12 made-to-measure units as one row, 1 not shown', model: base('sales', production, { tab: 'production', production: ready(WORK_READ) }) },
+    // ---- F-OP-113: the work-order rows — in place for a planner, held for Sales in words, a shared row read-only ----
+    { id: 'wo-acts-manager', label: 'F-OP-113 · Production manager · Production: Due, Priority and Rush in place on each work order (by number), the row ⋯; WO-00019 is shared with another customer: its link only', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { toldAt: { [WORK_ORDERS_IDS[1]]: at(18, 9, 42) } }) }), note: 'WO-00022 says "Told the floor at 10:42" after its priority was changed here.' },
+    { id: 'wo-acts-saving', label: 'F-OP-113 · Production manager · Production: a priority saving (the cell marked) and a due date refused (said on the row)', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { saves: { [WORK_ORDERS_IDS[0]]: { field: 'priority', problem: null }, [WORK_ORDERS_IDS[1]]: { field: null, problem: { key: 'production:error.changed' } } } }) }) },
+    { id: 'wo-acts-sales', label: 'F-OP-113 · Sales · Production: the rows as they are, the acts held in words — “Production does this — a planner or the production manager”', model: base('sales', production, { tab: 'production', production: ready(workActsRead(NO_RIGHTS)), workOrderActs: woActs('sales') }) },
     { id: 'production-quality', label: 'F-SA-235 · Sales · Production: a quality hold with the office’s note, a problem that needs an answer, an NCR, a final inspection waiting; the specs in force', model: base('sales', production, { tab: 'production', production: ready(QUALITY_READ) }) },
     { id: 'production-no-right', label: 'Finance · Production: the work orders by number (no floor progress right)', model: base('finance', production, { tab: 'production', production: ready(NO_WORK_READ) }) },
     { id: 'production-error', label: 'Sales · Production: the work orders could not be read (Try again)', model: base('sales', production, { tab: 'production', production: FAILED_STATE }) },

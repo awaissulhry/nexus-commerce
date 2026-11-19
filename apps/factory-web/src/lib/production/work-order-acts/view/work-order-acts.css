@@ -1,0 +1,88 @@
+/*
+ * F-OP-113 / F-OP-114 — the work-order acts' dialogs (lib/production/work-order-acts/view): LAYOUT only, with semantic tokens (no
+ * colours of their own). They are drawn on the work order's own pages and on the sales order's Production tab, which does not load
+ * the production area's stylesheet: each class here has exactly the declarations of the production area's rule it replaces
+ * (`.fw-pr-dialog`, `.fw-pr-hint`, `.fw-pr-list`, `.fw-pr-checks`, `.fw-pr-check…`, `.fw-pr-ico…`, `.fw-pr-h3`), so the work order's
+ * pages look as before (the HealthCard precedent, F-SA-235).
+ */
+.fw-woa-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-woa-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-woa-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-woa-h3 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-woa-checks,
+.fw-woa-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-woa-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-woa-check-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-woa-check-problems {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  color: var(--nds-text-muted);
+}
+
+.fw-woa-ico {
+  flex: none;
+  margin-top: 2px;
+  color: var(--nds-text-muted);
+}
+
+.fw-woa-ico.is-ok {
+  color: var(--nds-success);
+}
+
+.fw-woa-ico.is-blocked {
+  color: var(--nds-danger);
+}
+
+.fw-woa-ico.is-overridden {
+  color: var(--nds-warning);
+}

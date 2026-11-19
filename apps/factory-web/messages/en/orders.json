@@ -1720,6 +1720,30 @@
   },
   "wo": {
     "makeNext": "Make the next one: {style}",
-    "made": "{number} made (draft)"
+    "made": "{number} made (draft)",
+    "col": {
+      "priority": "Priority",
+      "acts": "Actions"
+    },
+    "acts": "Actions for {number}",
+    "dueOf": "Due date of {number}",
+    "priorityOf": "Priority of {number}",
+    "priorityHint": "Higher comes first",
+    "rushOf": "Rush for {number}",
+    "heldHold": "Production does this — a planner or the production manager",
+    "heldHint": "Due dates, priority, rush and the work orders’ actions: Production does this — a planner or the production manager.",
+    "act": {
+      "note": "Note…"
+    },
+    "note": {
+      "title": "Note on {number}",
+      "label": "Note",
+      "hint": "Printed on the work order’s sheet for the floor; the customer never reads it.",
+      "save": "Save the note",
+      "saved": "Note saved on {number}"
+    },
+    "reading": "Reading {number}…",
+    "readingShort": "Reading the work order…",
+    "readFailed": "{number} could not be read"
   }
 }

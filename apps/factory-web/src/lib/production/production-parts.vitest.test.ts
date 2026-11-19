@@ -31,6 +31,8 @@ import { ProductionHoldBanner } from './view/ProductionHoldBanner'
 import { RequestCard } from './view/RequestCard'
 import { StageStrip } from './view/StageStrip'
 import { WaitingOnPill } from './view/WaitingOnPill'
+// F-OP-113: the work-order acts' rules (lib/production/work-order-acts)
+import { actsCanOf, laterOf, priorityChoices, reachesFloor, rowActsOf, stableRows, versionOf, type ActsRow } from './work-order-acts/model'
 
 /**
  * F-PR-01 — the shared production parts (lib/production): the rules without a screen, then each part drawn in both
@@ -228,3 +230,57 @@ describe('the parts drawn, in both languages', () => {
     expect(productionWordsFor('it')('parts.health.lateDays', { count: 2 })).toBe('in ritardo di 2 giorni')
   })
 })
+
+// ---- F-OP-113 (order page plan 10-order-page §5.2; review R-11, B6): a work order's acts from a page that is not its own ---------
+
+describe('F-OP-113: what a work-order row offers its reader on the order page', () => {
+  const planner = actsCanOf(['workorders.view', 'workorders.manage', 'workorders.release', 'workorders.hold', 'planning.view'])
+  const sales = actsCanOf(['orders.view', 'workorders.view'])
+  const row = (over: Partial<ActsRow> = {}): ActsRow => ({ id: 'wo-1', number: 'WO-00021', status: 'RELEASED', held: false, rush: false, due: '2026-12-05', sharedWithOtherCustomers: false, version: 3, priority: 0, rights: { manage: true, release: true, hold: true, why: null }, ...over })
+  const shared = { en: 'Shared with other customers: change it on its page.', it: 'Condiviso con altri clienti: cambialo dalla sua pagina.' }
+
+  it('a mixed work order (shared with other customers) offers nothing but its link, with the words — whatever the reader’s rights', () => {
+    for (const can of [planner, sales]) {
+      const offer = rowActsOf(row({ sharedWithOtherCustomers: true, rights: { manage: false, release: false, hold: false, why: shared } }), can)
+      expect(offer).toEqual({ shared, inline: null, menu: [] })
+    }
+    // Even a read that still names rights: shared is shared.
+    expect(rowActsOf(row({ sharedWithOtherCustomers: true }), planner)).toMatchObject({ inline: null, menu: [] })
+  })
+
+  it('a planner: due, priority and rush in place, Note… open; a closed or cancelled one keeps only its note', () => {
+    expect(rowActsOf(row(), planner)).toEqual({ shared: null, inline: { held: null }, menu: [{ act: 'note', held: null }] })
+    for (const status of ['CLOSED', 'CANCELLED']) expect(rowActsOf(row({ status }), planner)).toEqual({ shared: null, inline: null, menu: [{ act: 'note', held: null }] })
+  })
+
+  it('Sales (no right over the work order): every act held in words — "Production does this — …", never hidden', () => {
+    const offer = rowActsOf(row({ rights: { manage: false, release: false, hold: false, why: null } }), sales)
+    expect(offer.inline).toEqual({ held: { key: 'wo.heldHold' } })
+    expect(offer.menu.every((entry) => entry.held?.key === 'wo.heldHold')).toBe(true)
+  })
+
+  it('an older read (no version, no rights) or a reader without workorders.view: nothing in place', () => {
+    expect(rowActsOf(row({ version: undefined }), planner)).toEqual({ shared: null, inline: null, menu: [] })
+    expect(rowActsOf(row({ rights: undefined }), planner)).toEqual({ shared: null, inline: null, menu: [] })
+    expect(rowActsOf(row(), actsCanOf(['workorders.manage']))).toEqual({ shared: null, inline: null, menu: [] })
+  })
+
+  it('a write reaches the floor on a released work order only (never a draft, never the note); the row says when, never who', () => {
+    expect(reachesFloor('priority', 'RELEASED')).toBe(true)
+    expect(reachesFloor('due', 'IN_PROGRESS')).toBe(true)
+    expect(reachesFloor('rush', 'DRAFT')).toBe(false)
+    expect(reachesFloor('note', 'RELEASED')).toBe(false)
+    expect(laterOf('2026-11-18T09:42:00Z', '2026-11-18T08:00:00Z')).toBe('2026-11-18T09:42:00Z')
+    expect(laterOf(null, '2026-11-18T08:00:00Z')).toBe('2026-11-18T08:00:00Z')
+    expect(laterOf(undefined, null)).toBeNull()
+  })
+
+  it('every write sends the newer version (the row’s, or one a write here answered); rows by number; the priority offered with its own', () => {
+    expect(versionOf({ id: 'wo-1', version: 3 }, {})).toBe(3)
+    expect(versionOf({ id: 'wo-1', version: 3 }, { 'wo-1': 5 })).toBe(5)
+    expect(stableRows([{ number: 'WO-00022' }, { number: 'WO-00019' }, { number: 'WO-00100' }]).map((entry) => entry.number)).toEqual(['WO-00019', 'WO-00022', 'WO-00100'])
+    expect(priorityChoices(30)).toContain(30)
+    expect(priorityChoices(0)).toEqual([...priorityChoices(0)].sort((a, b) => b - a))
+  })
+})
+// ---- end F-OP-113
