@@ -201,8 +201,28 @@ export const markUnreadContract = defineContract({
   response: { 200: output({ reading: readingView }) },
 })
 export const unreadContract = defineContract({
-  body: input({ records: z.array(input({ recordType: z.string().regex(RECORD_TYPE), recordId: id() })).min(1).max(200) }),
-  response: { 200: output({ counts: z.array(output({ recordType: z.string(), recordId: id(), newCount: z.number().int(), lastAt: instant().nullable() })) }) },
+  body: input({
+    records: z.array(input({ recordType: z.string().regex(RECORD_TYPE), recordId: id() })).min(1).max(200),
+    /** B-OP-061 (order page dock A2): also say, per record, whether the reader may read its thread (`readable` on each row). */
+    readable: z.boolean().optional(),
+  }),
+  response: {
+    200: output({
+      counts: z.array(
+        output({
+          recordType: z.string(),
+          recordId: id(),
+          newCount: z.number().int(),
+          lastAt: instant().nullable(),
+          /**
+           * B-OP-061: only when asked — the reader may read the record's thread (GET /threads/<type>/<id>'s check; a record with no
+           * thread yet by the record's own scope). An unknown record and another customer's both answer false: no difference to read.
+           */
+          readable: z.boolean().optional(),
+        }),
+      ),
+    }),
+  },
 })
 // ---- end B-TH-027
 

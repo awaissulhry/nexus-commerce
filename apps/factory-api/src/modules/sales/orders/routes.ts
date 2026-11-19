@@ -49,6 +49,8 @@ import { toldChanges, toldChangesContract } from './told' // F-SA-244
 import { openOrderFile, openOrderFileContract } from './order-files-open'
 // B-OP-050: the cards' previews in one call.
 import { orderFilePreviews, orderFilePreviewsContract } from './order-files-previews'
+// B-OP-025: Done on one of the order's production tasks, by the task's own right.
+import { doneStillToDoTask, stillToDoTaskDoneContract } from './still-to-do'
 // B-SA-011: the small pictures of a page of orders in one read.
 import { orderPicturesReadContract } from './contract'
 import { recordPictures } from '../../product/images/small-pictures'
@@ -154,6 +156,8 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
   app.post('/sales/orders/:orderId/files/:fileId/open', { schema: openOrderFileContract }, async (request) => openOrderFile(request, request.params.orderId, request.params.fileId, request.body, idempotencyKeyFrom(request)))
   // B-OP-050 (order page plan N7, R-14): the small previews and PDF links of the cards in view (≤ 24 ids, ≤ 8 addresses a call).
   app.post('/sales/orders/:orderId/files/previews', { schema: orderFilePreviewsContract }, async (request) => orderFilePreviews(request, request.params.orderId, request.body))
+  // B-OP-025 (order page plan N1; review R-12): Done on a production task from the order's Still to do.
+  app.post('/sales/orders/:orderId/still-to-do/tasks/:taskId/done', { schema: stillToDoTaskDoneContract }, async (request) => doneStillToDoTask(request, request.params.orderId, request.params.taskId, request.body, idempotencyKeyFrom(request)))
 
   // B-SA-056 (Sales page plan P8, R2, R8): who was told about one change (never who read it).
   app.get('/sales/orders/:orderId/told', { schema: toldContract }, async (request) => whoWasTold(request, request.params.orderId, request.query))

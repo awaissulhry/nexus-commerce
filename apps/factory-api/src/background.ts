@@ -223,6 +223,8 @@ import { supervisorFollowsHandler } from './modules/production/supervisor/follow
 import { issueAnsweredHandler } from './modules/production/issues/answered'
 // B-SA-052: the ONE writer of an order change's system line, floor notes and workshop notices.
 import { orderChangeNotesHandler } from './modules/sales/orders/change-notes'
+// B-OP-030 (order page plan N5): a typed tracking number's office line on the order's thread.
+import { trackingNotesHandler } from './modules/shipping/own-transport/tracking-notes'
 // B-PR-45: an issue nobody answered goes up (1 working day → the backup or the production managers; 2 → the Owner and Admin).
 import { issueEscalationCron } from './modules/production/issues/escalate'
 
@@ -357,6 +359,9 @@ const W2B_PR43B_HANDLERS: readonly EventHandler[] = [issueAnsweredHandler()]
 // applied or left as is, a pause placed or lifted, an ECO released → ONE system line per change and order, the floor notes of its
 // open work orders and the workshops told (modules/sales/orders/change-notes.ts).
 const W2B_SA52_HANDLERS: readonly EventHandler[] = [orderChangeNotesHandler()]
+// B-OP-030 (order page plan N5; review R-15: no customer e-mail): shipment.tracking_changed → ONE office-only line on the thread of each
+// order the shipment carries (modules/shipping/own-transport/tracking-notes.ts).
+const W2B_OP30_HANDLERS: readonly EventHandler[] = [trackingNotesHandler()]
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 // B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
@@ -425,7 +430,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_304_HANDLERS, ...W2B_317_HANDLERS, ...W2B_294_HANDLERS, ...W2B_340_HANDLERS, ...W2B_377_HANDLERS, ...W2B_386_HANDLERS, ...W2B_393_HANDLERS, ...W2B_394_HANDLERS, ...W2B_398_HANDLERS, ...W2B_407_HANDLERS, ...W2B_428_HANDLERS, ...W2B_401_HANDLERS, ...W2B_402_HANDLERS, ...W2B_405_HANDLERS, ...W2B_395_HANDLERS, ...W2B_GB02_HANDLERS, ...W2B_PR17_HANDLERS, ...W2B_PR42B_HANDLERS, ...W2B_PR43B_HANDLERS, ...W2B_SA52_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_304_HANDLERS, ...W2B_317_HANDLERS, ...W2B_294_HANDLERS, ...W2B_340_HANDLERS, ...W2B_377_HANDLERS, ...W2B_386_HANDLERS, ...W2B_393_HANDLERS, ...W2B_394_HANDLERS, ...W2B_398_HANDLERS, ...W2B_407_HANDLERS, ...W2B_428_HANDLERS, ...W2B_401_HANDLERS, ...W2B_402_HANDLERS, ...W2B_405_HANDLERS, ...W2B_395_HANDLERS, ...W2B_GB02_HANDLERS, ...W2B_PR17_HANDLERS, ...W2B_PR42B_HANDLERS, ...W2B_PR43B_HANDLERS, ...W2B_SA52_HANDLERS, ...W2B_OP30_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]

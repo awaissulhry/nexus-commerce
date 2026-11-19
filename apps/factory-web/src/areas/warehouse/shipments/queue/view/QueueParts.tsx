@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Download, Hand, MoreHorizontal, Timer, Truck } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, SummaryTable } from '@nexus/ui/components'
@@ -15,6 +15,7 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { holdable } from '../../holds/model'
 import type { CarrierCard, NotPlanned, ProblemRow, QueueRow, SearchRow } from '../api'
 import { cardName, RISK_TONE, todayRows, type QueueDepthActions, type QueueDepthModel } from '../model'
+import { orderWords, rowOrders } from '../../model' // F-OP-130 (order page N6)
 import { dayInstant, DEPTH_NAMESPACES } from '../shared/depth'
 import { PartRead, useDepthWords } from '../shared/DepthDialog'
 import '../../shipments.css'
@@ -171,14 +172,20 @@ function useRowColumns(model: QueueDepthModel, t: T, locale: ReturnType<typeof u
         <span className="fw-sh-cell">
           <span className="fw-sh-ellipsis">{data.partyName}</span>
           <span className="fw-sh-cell-sub">
-            {model.viewOrders ? (
-              <Link className="fw-sh-link" href={`${model.prefix}/sales/orders/${data.salesOrderId}`}>
-                {data.salesOrderNumber}
-              </Link>
-            ) : (
-              data.salesOrderNumber
-            )}
-            {data.customerRef ? ` · ${t('grid.po', { po: data.customerRef })}` : ''}
+            {/* F-OP-130 (order page N6, R-5): every order it carries with its PO, each a link (one: as before). */}
+            {rowOrders(data).map((order, index) => (
+              <Fragment key={order.id}>
+                {index > 0 ? ', ' : null}
+                {model.viewOrders ? (
+                  <Link className="fw-sh-link" href={`${model.prefix}/sales/orders/${order.id}`}>
+                    {order.number}
+                  </Link>
+                ) : (
+                  order.number
+                )}
+                {order.customerRef ? ` · ${t('grid.po', { po: order.customerRef })}` : ''}
+              </Fragment>
+            ))}
           </span>
         </span>
       ) : null
@@ -428,10 +435,8 @@ function SearchGrid({ model, actions, search, tools, keys, onHelp, selectionExtr
       data ? (
         <span className="fw-sh-cell">
           <span className="fw-sh-ellipsis">{data.partyName}</span>
-          <span className="fw-sh-cell-sub">
-            {data.salesOrderNumber}
-            {data.customerRef ? ` · ${t('grid.po', { po: data.customerRef })}` : ''}
-          </span>
+          {/* F-OP-130 (order page N6, R-5): every order it carries with its PO (one: as before). */}
+          <span className="fw-sh-cell-sub">{rowOrders(data).map((order) => orderWords(order, (po) => t('grid.po', { po }))).join(', ')}</span>
         </span>
       ) : null
     const CarrierCell = ({ data }: ICellRendererParams<SearchRow>) => {

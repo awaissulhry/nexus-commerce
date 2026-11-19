@@ -31,7 +31,9 @@
       "audio": "Nota vocale: scaricala per ascoltarla.",
       "office": "File Office: scaricalo per aprirlo nel suo programma.",
       "other": "Questo file non si può mostrare qui. Scaricalo per aprirlo."
-    }
+    },
+    "locked": "Dati corporei — si apre solo quando lo chiedi, e l’apertura è registrata.",
+    "openRecorded": "Apri — l’apertura è registrata"
   },
   "original": {
     "title": "E-mail originale",

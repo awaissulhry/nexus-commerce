@@ -26,6 +26,8 @@ import { deliveredMoveInCommand } from './delivered'
 // B-SA-042: a cancel proposes the gap to the work orders.
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
 import { proposeGapsInCommand } from '../../production/work-order-changes/propose'
+// B-OP-025: a promise change closes the refused re-promise's follow-up.
+import { closeRefusedFollowUpsInCommand } from './still-to-do'
 // B-OP-012 (order page plan N2, D1): the work orders follow the cancel in its command where the person may.
 import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../production/work-order-changes/auto'
 
@@ -101,7 +103,13 @@ export interface PromiseInput {
  */
 export async function changePromise(caller: CommandCaller, orderId: string, body: PromiseInput, idempotencyKey?: string): Promise<{ order: OrderView }> {
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
-  await command(caller, { name: 'orders.changePromise', idempotencyKey, input: { orderId, ...body } }, async (tools) => changePromiseInCommand(tools, order, body))
+  // B-OP-025: the new date answers the customer's refusal of an earlier one — its follow-up closes in the same command (+ audit).
+  const context = officeContextOf(caller)
+  await command(caller, { name: 'orders.changePromise', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
+    const done = await changePromiseInCommand(tools, order, body)
+    const followUpsClosed = await closeRefusedFollowUpsInCommand(tools, context, order, done.lineIds, body.reason.trim())
+    return { ...done, followUpsClosed }
+  })
   return { order: await recordAfter(caller, order.id) }
 }
 

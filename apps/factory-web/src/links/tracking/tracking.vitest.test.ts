@@ -8,6 +8,7 @@ import { linkTaskOf } from '../_nav/link-types'
 import { trackingPageSchema } from './api'
 import { designScreen } from './fixtures'
 import { carrierPageOf, claimOfError, headerCarrierPage, keepsPolling, loadOfError, orderLabel, placeLine, searchAddress, searchFieldProblems, searchRefusal, trackerSteps } from './model'
+import { sharedWith } from './model' // F-OP-133
 import { hasLeadingZeroBits, solveChallenge } from './pow'
 
 const page = (id: string) => designScreen.cases.find((entry) => entry.id === id)!.model.page!
@@ -26,7 +27,7 @@ describe('SCR-194 Track an order — the link page (B-W2b-170)', () => {
   it('heads with the customer\'s own reference first; draws the furthest step reached as now', () => {
     expect(orderLabel(page('in-transit'))).toBe('4500-1234')
     // fix-portal-numbers-1 (B-TH-303): without their PO, the customer's own order number (the API's "#42"), never the office's SO-….
-    expect(orderLabel({ ...page('in-transit'), order: { customerRef: null, number: '#42' } })).toBe('#42')
+    expect(orderLabel({ ...page('in-transit'), order: { customerRef: null, number: '#42', otherPieces: 0 } })).toBe('#42')
     const steps = trackerSteps(page('in-transit'), (code) => code, (iso) => iso.slice(0, 10))
     expect(steps.map((step) => [step.id, step.state, step.current ?? false])).toEqual([
       ['PACKED', 'done', false],
@@ -113,3 +114,34 @@ describe('SCR-194 every case', () => {
     expect(html).toContain('To report a problem, open the link in our e-mail, or write to us.')
   })
 })
+
+// ---- F-OP-133 (order page N6, R-5 + R-18): a passed-on link shows one order of one customer ------------------------------------
+describe('F-OP-133 — a shared shipment on the link page: the order it is for, and only how many pieces of other orders', () => {
+  const draw = (id: string, locale: 'it' | 'en') => renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'ds-words']) }, createElement(designScreen.view, { model: designScreen.cases.find((entry) => entry.id === id)!.model })))
+
+  it('the answer carries the count of other pieces; an older answer without it is none', () => {
+    const answer = trackingPageSchema.parse({ ...page('in-transit'), order: { customerRef: '4500-1234', number: '#42', otherPieces: 3 } })
+    expect(sharedWith(answer)).toEqual({ order: '4500-1234', count: 3 })
+    const older = trackingPageSchema.parse({ ...page('in-transit'), order: { customerRef: '4500-1234', number: '#42' } })
+    expect(older.order.otherPieces).toBe(0)
+    expect(sharedWith(older)).toBeNull()
+    // Without their PO: their own order number, never the office's SO-….
+    expect(sharedWith(page('shared-one'))).toEqual({ order: '#42', count: 1 })
+  })
+
+  it('names this order and "and N pieces of other orders" in both languages (voi), nothing for a shipment of one order', () => {
+    expect(draw('shared', 'en')).toContain('This shipment carries your order 4500-1234 and 3 pieces of other orders.')
+    expect(draw('shared', 'it')).toContain('Questa spedizione porta il vostro ordine 4500-1234 e 3 pezzi di altri ordini.')
+    expect(draw('shared-one', 'en')).toContain('and 1 piece of other orders.')
+    expect(draw('in-transit', 'en')).not.toContain('pieces of other orders')
+    expect(draw('in-transit', 'it')).not.toContain('altri ordini')
+  })
+
+  it('never another order: the page knows no other order number or PO to show (the answer has none)', () => {
+    expect(Object.keys(trackingPageSchema.shape.order.shape).sort()).toEqual(['customerRef', 'number', 'otherPieces'])
+    const html = draw('shared', 'en')
+    expect(html).not.toMatch(/SO-\d/)
+  })
+})
+// ---- end F-OP-133
+

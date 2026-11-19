@@ -53,6 +53,8 @@ const partner = (actorId: string, partyId: string): SessionContext => ({ audienc
 const SESSIONS: Record<string, SessionContext> = {
   ada: { audience: 'office', tenantId: T, actorId: PEOPLE.ada, grants: [grant(SALES)] },
   bruno: { audience: 'office', tenantId: T, actorId: PEOPLE.bruno, grants: [grant(SALES)] },
+  // B-OP-061: an office person limited to P1 (Brand A).
+  adaP1: { audience: 'office', tenantId: T, actorId: PEOPLE.ada, grants: [grant(SALES, [P1])] },
   // P1's portal people (Brand A) and P3's (Brand B).
   anna: partner(PEOPLE.anna, P1),
   alba: partner(PEOPLE.alba, P1),
@@ -188,3 +190,48 @@ describe('T08 portal people: shared messages only, their own mark only, another 
     expect([403, 404]).toContain((await call('berta', 'POST', `/threads/Inquiry/${inquiry}/read`, {})).statusCode)
   })
 })
+
+// ── B-OP-061 (order page dock A2): asked with `readable`, each row says whether the reader may read the record's thread ──
+describe('B-OP-061: POST /threads/unread {readable: true} — readable per record, false alike for an unknown record and another customer\'s', () => {
+  const ids = { fresh: '', otherWithThread: '', otherNoThread: '' }
+  const companyA = idOf('company:A')
+  const newInquiry = async (partyId: string) => (await ok('ada', 'POST', '/sales/inquiries', { companyId: companyA, source: 'PHONE', partyId, request: 'Made-up: a few jackets.', lines: [{ description: 'Made-up: jacket', quantity: 2 }] }, 201)).inquiry.id as string
+  const asked = (records: string[]) => records.map((recordId) => ({ recordType: 'Inquiry', recordId }))
+  const readableOf = async (session: string, records: Json[]) => (await ok(session, 'POST', '/threads/unread', { records, readable: true })).counts as Json[]
+
+  beforeAll(async () => {
+    ids.fresh = await newInquiry(P1)
+    ids.otherWithThread = await newInquiry(P3)
+    await ok('ada', 'POST', `/threads/Inquiry/${ids.otherWithThread}/notes`, { body: "Made-up office note on the other customer's request." }, 201)
+    ids.otherNoThread = await newInquiry(P3)
+  })
+
+  it('a person limited to P1: its request with a thread and one with no thread yet are readable; P3\'s (with or without a thread) and an unknown one are not — alike', async () => {
+    const unknown = newId()
+    const rows = await readableOf('adaP1', [...asked([inquiry, ids.fresh, ids.otherWithThread, ids.otherNoThread, unknown]), { recordType: 'NoSuchRecord', recordId: newId() }])
+    expect(rows.map((row) => [row.recordId, row.readable])).toEqual([
+      [inquiry, true],
+      [ids.fresh, true],
+      [ids.otherWithThread, false],
+      [ids.otherNoThread, false],
+      [unknown, false],
+      [rows[5]!.recordId, false],
+    ])
+    // No difference to read between another customer's record and one that does not exist.
+    const without = (row: Json) => ({ ...row, recordId: 'x' })
+    expect(without(rows[2]!)).toEqual(without(rows[4]!))
+    expect(without(rows[3]!)).toEqual(without(rows[4]!))
+    expect(rows[2]).toEqual({ recordType: 'Inquiry', recordId: ids.otherWithThread, newCount: 0, lastAt: null, readable: false })
+  })
+
+  it('a person of every customer reads them all; not asked, no row carries it (a list pays no extra read)', async () => {
+    expect((await readableOf('ada', asked([ids.otherWithThread, ids.otherNoThread]))).map((row) => row.readable)).toEqual([true, true])
+    expect(await unread('ada', asked([ids.fresh]))).toEqual([{ recordType: 'Inquiry', recordId: ids.fresh, newCount: 0, lastAt: null }])
+  })
+
+  it('a portal person: its own party\'s thread that exists is readable; one not started yet, and another customer\'s, are not', async () => {
+    expect((await readableOf('anna', asked([inquiry, ids.fresh, ids.otherWithThread]))).map((row) => row.readable)).toEqual([true, false, false])
+    expect((await readableOf('berta', asked([inquiry]))).map((row) => [row.newCount, row.readable])).toEqual([[0, false]])
+  })
+})
+// ── end B-OP-061 ──

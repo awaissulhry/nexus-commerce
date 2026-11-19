@@ -522,7 +522,26 @@ export const orderSchema = z.object({
     quote: quoteRef.nullable(),
     depositRequests: z.array(depositRequestSchema),
     workOrders: z.array(z.object({ id: z.string(), number: z.string(), status: z.string(), siteId: z.string(), releasedAt: instant.nullable() })),
-    shipments: z.array(z.object({ id: z.string(), number: z.string(), status: z.string(), shippedAt: instant.nullable(), deliveredAt: instant.nullable() })),
+    shipments: z.array(
+      z.object({
+        id: z.string(),
+        number: z.string(),
+        status: z.string(),
+        shippedAt: instant.nullable(),
+        deliveredAt: instant.nullable(),
+        // ---- F-OP-119 (B-OP-023): each shipment's detail for this reader — how it travels, the carrier and its tracking (shipping.view
+        // over its site, else withheld), its live DDT, whether its tracking number may be typed here and why not ----
+        version: z.number().optional(),
+        transportBy: z.enum(['CARRIER', 'SENDER', 'RECIPIENT']).optional(),
+        carrier: z.object({ code: z.string().nullable(), name: z.string().nullable() }).nullable().optional(),
+        tracking: z.object({ number: z.string().nullable(), source: z.enum(['TYPED', 'PARCELS']), parcels: z.array(z.object({ number: z.string(), url: z.string().nullable() })), live: z.boolean() }).nullable().optional(),
+        expectedDeliveryAt: instant.nullable().optional(),
+        ddt: z.object({ number: z.string(), date: z.string() }).nullable().optional(),
+        mayTypeTracking: z.object({ allowed: z.boolean(), code: z.string().nullable(), why: z.string().nullable() }).optional(),
+        withheld: z.array(z.string()).optional(),
+        // ---- end F-OP-119
+      }),
+    ),
     invoices: z.array(z.object({ id: z.string(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable(), depositRequestId: z.string().nullable().default(null) })),
   }),
   promiseHistory: z.array(z.object({ at: instant, actorId: z.string(), from: z.string().nullable(), to: z.string(), lineIds: z.array(z.string()), reason: z.string().nullable() })),

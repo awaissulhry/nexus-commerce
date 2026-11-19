@@ -4,7 +4,7 @@ import { freezeVerdict, frozenProblems, furthestStage, looseningProblem, type Fr
 import { changeYesStateOf, customerDecisionOf, extraDepositOf, pricedInputProblems, pricedPartsOf, salesOrderChangeFacts } from './priced'
 
 const rule = (over: Partial<FreezeRuleFacts>): FreezeRuleFacts => ({ id: over.id ?? 'r', field: 'SIZE_QUANTITY', frozenFrom: 'CUT', action: 'CHANGE_REQUEST', active: true, note: null, ...over })
-const line = (over: Partial<Parameters<typeof pricedPartsOf>[0][number]>) => ({ change: 'CHANGED' as const, lineId: 'l1', seq: 10, styleId: 's', colourwayId: 'c', piecesBefore: 6, piecesAfter: 7, sizes: [], unitPrice: null, netBefore: 60000, netAfter: 70000, textChanged: false, closedShort: false /* B-OP-014 */, ...over })
+const line = (over: Partial<Parameters<typeof pricedPartsOf>[0][number]>) => ({ change: 'CHANGED' as const, lineId: 'l1', seq: 10, styleId: 's', colourwayId: 'c', piecesBefore: 6, piecesAfter: 7, sizes: [], unitPrice: null, netBefore: 60000, netAfter: 70000, textChanged: false, closedShort: false /* B-OP-014 */, reopened: false, ...over })
 
 describe('what freezes at each stage (SAL-218)', () => {
   const rules = [rule({ id: 'a', frozenFrom: 'CUT', action: 'CHANGE_REQUEST' }), rule({ id: 'b', frozenFrom: 'FINISHED', action: 'BLOCKED' }), rule({ id: 'off', frozenFrom: 'RELEASED', action: 'BLOCKED', active: false })]

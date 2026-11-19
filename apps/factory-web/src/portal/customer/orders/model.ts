@@ -185,6 +185,14 @@ export function milestoneSteps(milestones: readonly OrderMilestone[], locale: Lo
   }))
 }
 
+// ── F-OP-124 (order page plan N5): the number of a carrier booked by hand, as the shipment card shows it ──
+/** The typed tracking number of a shipment (no carrier feeds it: the card says "No live tracking"); null: none typed. */
+export function typedTrackingOf(shipment: Pick<ShipmentRead, 'typedTrackingNumber'>): string | null {
+  const number = shipment.typedTrackingNumber?.trim() ?? ''
+  return number === '' ? null : number
+}
+// ── end F-OP-124 ──
+
 /** A shipment's four steps (Packed · Collected · In transit · Delivered). */
 export function shipmentSteps(shipment: Pick<ShipmentRead, 'milestones'>, locale: Locale, at: (iso: string) => string): MilestoneStep[] {
   // The step it is at now is the furthest one reached (the next one is still to come, not "now").

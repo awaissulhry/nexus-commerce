@@ -206,6 +206,8 @@ export interface AmendmentPlan {
 export interface PlanOptions {
   /** Close short a line left out that work orders make (its cells point at it); off: such a line is refused, as before. */
   readonly closeLeftOut?: boolean
+  /** A put-back of the change that closed these lines short: they read open again (reopened in the same command). */
+  readonly reopen?: ReadonlySet<string>
 }
 
 /**
@@ -225,7 +227,8 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
     map.set(row.size ?? '', row.inWorkOrders)
     inWorkOrders.set(row.lineId, map)
   }
-  const current: AmendableLine[] = lines.map((line) => ({ id: line.id, seq: line.seq, kind: line.kind, closedShort: line.closedShortQuantity !== null, sizes: line.sizes.map(({ size, quantity }) => ({ size, quantity })), inWorkOrders: inWorkOrders.get(line.id) ?? new Map() }))
+  const reopen = planOptions.reopen ?? new Set<string>()
+  const current: AmendableLine[] = lines.map((line) => ({ id: line.id, seq: line.seq, kind: line.kind, closedShort: line.closedShortQuantity !== null && !reopen.has(line.id), sizes: line.sizes.map(({ size, quantity }) => ({ size, quantity })), inWorkOrders: inWorkOrders.get(line.id) ?? new Map() }))
   const issues = amendmentProblems({ status, reason: body.reason, lines: body.lines, current })
   if (body.customerRef !== undefined && body.customerRef !== null && body.customerRef.trim().length > MAX_TEXT.customerRef) issues.push({ path: 'body/customerRef', message: `At most ${MAX_TEXT.customerRef} characters.` })
   if (body.requestedDate !== undefined && body.requestedDate !== null && body.requestedDate < businessDate(now)) issues.push({ path: 'body/requestedDate', message: 'A requested date is today or later.' })
@@ -343,7 +346,10 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
     requestedDate: body.requestedDate === undefined ? dayOrNull(order.requestedDate) : body.requestedDate,
   }
   const before = snapshotOf(headerOf(order, order), lines.map(lineSnapshot))
-  const closedOf = new Map<string, number | null>([...lines.map((line) => [line.id, line.closedShortQuantity] as const), /* B-OP-014 */ ...closing.map((line) => [line.id, line.closedShortQuantity] as const)])
+  const closedOf = new Map<string, number | null>([
+    ...lines.map((line) => [line.id, reopen.has(line.id) ? null : line.closedShortQuantity] as const),
+    /* B-OP-014 */ ...closing.map((line) => [line.id, line.closedShortQuantity] as const),
+  ])
   const after = snapshotOf(
     headerOf(order, priced, header),
     priced.lines.map((line, index) => snapshotLine({ ...line, id: line.id ?? placeholderId(index), closedShortQuantity: line.id ? (closedOf.get(line.id) ?? null) : null })),
@@ -368,6 +374,7 @@ export function diffView(diff: AmendmentDiff) {
       priceChanged: line.unitPrice !== null,
       textChanged: line.textChanged,
       closedShort: line.closedShort, // B-OP-014
+      reopened: line.reopened, // B-OP-014
     })),
     header: diff.header.map((entry) => ({ ...entry })),
     prices: asMoney(
@@ -474,6 +481,8 @@ export async function amendInCommand(
     readonly autoApply?: AutoApply
     /** B-OP-014: the office's own amendment — a line left out that work orders make is closed short (PlanOptions). */
     readonly closeLeftOut?: boolean
+    /** B-OP-014: a put-back of a change that closed these lines short reopens them (as Reopen lines does). */
+    readonly reopen?: readonly string[]
   } = {} /* B-W2b-303: a split asks no re-acceptance */,
 ): Promise<{ amendmentId: string; /* B-SA-042 */ changedLineIds: string[]; before: Map<string, Map<string, number>>; /* B-OP-012 */ workOrders: FollowedWorkOrders }> {
   const { tx, now } = tools
@@ -485,7 +494,9 @@ export async function amendInCommand(
   const locked = await lockOrder(tx, order.id, body.version)
   const fresh = (await readOrder(tx, order.id))!
   const facts = await readOrderFacts(tx, fresh)
-  const plan = await planAmendment(tx, fresh, locked.status, facts, body, now, { closeLeftOut: options.closeLeftOut === true })
+  // B-OP-014: only lines still closed short are reopened (one reopened since by hand stays as it is).
+  const reopening = new Set(facts.lines.filter((line) => line.closedShortQuantity !== null && (options.reopen ?? []).includes(line.id)).map((line) => line.id))
+  const plan = await planAmendment(tx, fresh, locked.status, facts, body, now, { closeLeftOut: options.closeLeftOut === true, reopen: reopening })
   if (isIssueList(plan)) {
     if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
     throw invalid(plan)
@@ -563,6 +574,11 @@ export async function amendInCommand(
     await tx.salesOrderLine.update({ where: { id: line.id }, data: { closedShortQuantity: line.closedShortQuantity, closedShortAt: now, closedShortById: actorId, closeShortReason: body.reason!.trim(), updatedAt: now, version: { increment: 1 } }, select: { id: true } })
   }
   const reducesDone = closedIds.length > 0 ? await reducesDoneInCommand(tools, order, closedIds) : []
+  // B-OP-014: a put-back reopens the lines its change closed short, as Reopen lines does (the four columns and the code cleared).
+  const reopenedIds = [...reopening]
+  for (const lineId of reopenedIds) {
+    await tx.salesOrderLine.update({ where: { id: lineId }, data: { closedShortQuantity: null, closedShortAt: null, closedShortById: null, closeShortReason: null, closedShortReasonCode: null, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
+  }
   // B-W2b-374 (XF3:02): the new lines' options (the order is CONFIRMED, IN_PRODUCTION or READY: amendStateProblem).
   const optionLineIds = await writeEntryOptions(tools, order.partyId, optionsWritten)
   // The snapshot after names the new lines by the ids they got.
@@ -630,6 +646,7 @@ export async function amendInCommand(
       removedLineIds: plan.removed,
       // B-OP-014
       ...(plan.closing.length > 0 ? { closedLines: plan.closing.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity })), reducesDone } : {}),
+      ...(reopenedIds.length > 0 ? { reopenedLineIds: reopenedIds } : {}),
       netAmount: markMoney('price', plan.diff.netAfter),
       grossAmount: markMoney('price', plan.diff.grossAfter),
       reacceptanceNeeded,
@@ -644,6 +661,7 @@ export async function amendInCommand(
   tools.emit({ type: 'sales_order.amended', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, amendmentId, revision, reacceptanceNeeded, lineIds: changedLineIds, partyId: order.partyId } })
   // B-OP-014: the lines closed short, as a close of lines announces them (the floor's note, the settlement, the keeper).
   if (closedIds.length > 0) tools.emit({ type: 'sales_order.lines_closed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'CLOSED', lineIds: closedIds, partyId: order.partyId } })
+  if (reopenedIds.length > 0) tools.emit({ type: 'sales_order.lines_closed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'REOPENED', lineIds: reopenedIds, partyId: order.partyId } })
   // B-W2b-309: sales_order.change_priced; the customer's materials of the changed lines follow their sizes.
   await afterAmendment(tools, fresh, { amendmentId, revision, changedLineIds, extras })
   // B-SA-042: the gap to the order's work orders, proposed in this command (Accept proposes once at its own end). B-OP-012: and

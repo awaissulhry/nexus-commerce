@@ -1,12 +1,16 @@
-import { ForbiddenError, InvalidStateError, NotFoundError } from '@nexus/factory-domain/core/errors'
+import { DomainError, ForbiddenError, InvalidStateError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { moveChange, workOrderMachine, type ManualMove } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_MANAGE } from '@nexus/factory-domain/production/work-orders/permissions'
-import { assertTransition } from '@nexus/factory-domain/state/machine'
+import { assertTransition, nextStates } from '@nexus/factory-domain/state/machine'
 import { command, StaleVersionError, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { lockWorkOrderIssues } from '../../inventory/issue/store'
 import { officeContextOf } from './access'
-import { lockedStatus, readWorkOrder } from './store'
+import { lockedStatus, readWorkOrder, type Reader } from './store'
+// B-OP-024 (order page plan N1; review R-16): what a cancel would meet, and a cancel with cut pieces refused in words.
+import type { Words } from '@nexus/factory-domain/order-apply/rules'
+import { decimalText } from '@nexus/factory-domain/product/units/units'
+import { readIssued } from './facts'
 import { workOrderView, type WorkOrderView } from './views'
 import { officeWorkOrder, onWorkOrder, todayOfCommand } from './work-orders'
 
@@ -64,10 +68,80 @@ export async function moveWorkOrder(
   const { result } = await command(caller, { name: spec.name, idempotencyKey, input: spec.input }, async (tools) => {
     await lockWorkOrderIssues(tools.tx, tenantId, workOrder.id)
     await bumpVersion(tools.tx, workOrder.id, body.version)
+    // B-OP-024 (R-16): pieces already cut are never cancelled away — the way out is Lower to the order (never below what is cut).
+    if (to === 'CANCELLED') refuseCutPieces((await cutCellsOf(tools.tx, tenantId, workOrder.id)).reduce((sum, cell) => sum + cell.cut, 0))
     return work(tools)
   })
   return result
 }
+
+// ── B-OP-024 (order page plan N1; review R-16): a work order's cancel check, and no cancel of cut pieces ──
+/** The words of a cancel refused for pieces already cut (409 `refusal/CUT_PIECES`); the way out named. */
+export const CUT_PIECES_WORDS = (count: number): Words => ({
+  en: `${count} pieces are cut: lower the work order to the cut instead`,
+  it: `${count} pezzi sono già tagliati: riduci l'ordine di lavoro al tagliato`,
+})
+
+const refuseCutPieces = (count: number): void => {
+  if (count <= 0) return
+  const words = CUT_PIECES_WORDS(count)
+  throw new DomainError('conflict', words.en, [{ path: 'refusal/CUT_PIECES', message: words.en }])
+}
+
+/** Each cell of the work order with what is already cut of it (the database's floor, factory_work_order_cell_floor). */
+export async function cutCellsOf(db: Reader, tenantId: string, workOrderId: string): Promise<{ cellId: string; size: string; colourwayId: string; quantity: number; cut: number }[]> {
+  const cells = await db.workOrderSize.findMany({ where: { workOrderId }, select: { id: true, size: true, colourwayId: true, quantity: true }, orderBy: [{ colourwayId: 'asc' }, { size: 'asc' }] })
+  if (cells.length === 0) return []
+  const floors = await db.$queryRaw<{ id: string; floor: number }[]>`SELECT c.id::text AS id, "factory_work_order_cell_floor"(${tenantId}::uuid, c.id) AS floor FROM unnest(${cells.map((cell) => cell.id)}::uuid[]) AS c(id)`
+  const cutOf = new Map(floors.map((row) => [row.id, Number(row.floor)]))
+  return cells.map((cell) => ({ cellId: cell.id, size: cell.size, colourwayId: cell.colourwayId, quantity: cell.quantity, cut: cutOf.get(cell.id) ?? 0 }))
+}
+
+/** A subcontract order at its workshop (the work order's pieces are out there). */
+const AT_WORKSHOP = ['ISSUED', 'AT_WORKSHOP', 'PARTLY_RECEIVED'] as const
+
+/**
+ * workorders.view: GET /production/work-orders/:workOrderId/cancel-check — what cancelling the work order would meet, read only:
+ * the pieces already cut per cell (a cancel with any is refused: lower it to the cut instead — R-16, no outcome to pick on the
+ * row), the stock issued to it (it stays on it in the ledger until returned), and the subcontract orders at a workshop. Another
+ * customer's work order (or a mixed one, for a person limited to some customers) is "Work order not found.", as an unknown id.
+ */
+export async function workOrderCancelCheck(caller: CommandCaller, workOrderId: string) {
+  const context = officeContextOf(caller)
+  const workOrder = await officeWorkOrder(caller, workOrderId)
+  return caller.withClient(async (client) => {
+    const cells = await cutCellsOf(client, context.tenantId, workOrder.id)
+    const pieces = cells.reduce((sum, cell) => sum + cell.cut, 0)
+    const issued = [...(await readIssued(client, workOrder.siteId, [workOrder.id])).entries()].flatMap(([key, quantity]) => {
+      if (!quantity.gt(0)) return []
+      const [, itemId, colour] = key.split('|') as [string, string, string]
+      return [{ itemId, itemColourId: colour === '-' ? null : colour, quantity: decimalText(quantity) }]
+    })
+    const items = new Map((issued.length > 0 ? await client.item.findMany({ where: { id: { in: [...new Set(issued.map((row) => row.itemId))] } }, select: { id: true, code: true, baseUom: true } }) : []).map((row) => [row.id, row]))
+    const colourIds = [...new Set(issued.flatMap((row) => (row.itemColourId ? [row.itemColourId] : [])))]
+    const colours = new Map((colourIds.length > 0 ? await client.itemColour.findMany({ where: { id: { in: colourIds } }, select: { id: true, code: true } }) : []).map((row) => [row.id, row.code]))
+    const workshops = await client.subcontractOrder.findMany({ where: { workOrderId: workOrder.id, status: { in: [...AT_WORKSHOP] } }, select: { id: true, number: true }, orderBy: { number: 'asc' } })
+    const stateAllows = nextStates(workOrderMachine, workOrder.status).includes('CANCELLED')
+    return {
+      workOrderId: workOrder.id,
+      number: workOrder.number,
+      status: workOrder.status,
+      version: workOrder.version,
+      /** The machine takes a cancel now and nothing is cut. */
+      cancellable: stateAllows && pieces === 0,
+      /** Why a cancel is refused for what is cut (null: nothing cut). */
+      refusal: pieces > 0 ? CUT_PIECES_WORDS(pieces) : null,
+      cut: { pieces, cells: cells.filter((cell) => cell.cut > 0) },
+      issued: issued.map((row) => {
+        const item = items.get(row.itemId)
+        const colour = row.itemColourId ? colours.get(row.itemColourId) : undefined
+        return { ...row, label: `${item?.code ?? row.itemId}${colour ? ` ${colour}` : ''}`, baseUom: item?.baseUom ?? '' }
+      }),
+      atWorkshop: workshops.map((row) => ({ subcontractOrderId: row.id, number: row.number })),
+    }
+  })
+}
+// ── end B-OP-024 ──
 
 // ── B-SA-041 (sales page plan): a move's own work inside a command that already holds the work order (its row locked; for
 // COMPLETED, CLOSED and CANCELLED its issue lock taken first: lockWorkOrderIssues, then bumpVersion) — moveWorkOrder's own

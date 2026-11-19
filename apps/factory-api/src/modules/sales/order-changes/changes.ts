@@ -255,7 +255,10 @@ export async function putBackChange(caller: CommandCaller, orderId: string, amen
     }
     // B-SA-041: the work-order changes the change proposed and nobody applied yet are no longer needed (STALE): it is put back.
     await staleChangesInCommand(tools, { amendmentId })
-    const { amendmentId: putBackId, workOrders } = await amendInCommand(tools, context.tenantId, fresh, amend, { putBack: true, autoApply })
+    // B-OP-014: the lines that change closed short (left out while work orders made them) are reopened by its put-back, as Reopen
+    // lines reopens them — the order is as it was before it.
+    const closedByIt = (row.after as unknown as OrderSnapshot).lines.filter((line) => line.closedShortQuantity !== null && before.lines.some((was) => was.id === line.id && was.closedShortQuantity === null)).map((line) => line.id)
+    const { amendmentId: putBackId, workOrders } = await amendInCommand(tools, context.tenantId, fresh, amend, { putBack: true, autoApply, reopen: closedByIt })
     // Its extra deposit, while nothing is paid on it.
     let depositCancelled = false
     if (row.depositRequestId) {
