@@ -6,6 +6,8 @@ import { QUEUE_RISKS } from '@nexus/factory-domain/shipping/queue/risk'
 import { SEARCH_MATCHES } from '@nexus/factory-domain/shipping/queue/search'
 import { SHIPMENT_STATUSES, type ShipmentStatus } from '@nexus/factory-domain/shipping/shipments'
 import type { ApiClient } from '../../../../lib/api/client'
+// F-OP-132 (order page N6): a shipment's several orders.
+import { shipmentOrderSchema } from '../api'
 
 /**
  * The shipment queue in depth (B-W2b-386, B-W2b-398; apps/factory-api modules/shipping queue, exceptions): Ship today (a
@@ -31,7 +33,7 @@ const siteDaySchema = z.object({
 })
 export type SiteDay = z.infer<typeof siteDaySchema>
 
-const queueRowSchema = z.object({
+export const queueRowSchema = z.object({
   id: z.string(),
   number: z.string(),
   status: z.enum(SHIPMENT_STATUSES),
@@ -39,6 +41,8 @@ const queueRowSchema = z.object({
   salesOrderId: z.string(),
   salesOrderNumber: z.string(),
   customerRef: z.string().nullable(),
+  /** F-OP-132 (B-OP-041, N6): every order it carries, the first (salesOrderId) first. */
+  salesOrders: z.array(shipmentOrderSchema).optional(),
   partyCode: z.string(),
   partyName: z.string(),
   carrierKey: z.string(),
@@ -103,7 +107,7 @@ export const atRisk = (api: ApiClient, siteId: string | null): Promise<AtRisk> =
 
 // ---- the search (LOG-120) ---------------------------------------------------------------------------------------------------------
 
-const searchRowSchema = z.object({
+export const searchRowSchema = z.object({
   id: z.string(),
   number: z.string(),
   status: z.enum(SHIPMENT_STATUSES),
@@ -111,6 +115,8 @@ const searchRowSchema = z.object({
   salesOrderId: z.string(),
   salesOrderNumber: z.string(),
   customerRef: z.string().nullable(),
+  /** F-OP-132 (B-OP-041, N6): every order it carries, the first (salesOrderId) first. */
+  salesOrders: z.array(shipmentOrderSchema).optional(),
   partyName: z.string(),
   transportBy,
   carrierCode: z.string().nullable(),

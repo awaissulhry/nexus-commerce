@@ -448,6 +448,53 @@ export function backorder(kind: 'partial' | 'complete' | 'closed' = 'partial'): 
   }
 }
 
+// ---- F-OP-132 (order page N6, lines-derived): a shipment of two orders of one customer ---------------------------------------
+// Made up. Until the switch (B-OP-047, MULTI_ORDER_OFF) no shipment carries a second order: these cases show what comes after it.
+
+const FIRST_ORDER = { id: uid('5150', 20), number: 'SO-2026-0088', customerRef: 'PO-MD-7731' }
+/** A second order of the same customer (Moto Demo), to the same address, made at the same site. */
+export const SECOND_ORDER = { id: uid('5150', 21), number: 'SO-2026-0090', customerRef: 'PO-MD-7740' }
+
+/** SH-00160 carrying three jackets of SO-2026-0090 besides SO-2026-0088's (its line 4: the second order's line). */
+export function sharedShipment(status: ShipmentStatus = 'DRAFT'): Shipment {
+  const value = shipment(status)
+  const into = value.lines[2]!.parcelId
+  return {
+    ...value,
+    salesOrders: [
+      { ...FIRST_ORDER, status: value.salesOrder.status },
+      { ...SECOND_ORDER, status: 'READY' },
+    ],
+    lines: [...value.lines, line(4, '52', 3, into, { salesOrderLineId: uid('5800', 3), workOrderId: uid('5600', 2), workOrderNumber: 'WO-DEMO-0045', batchNumber: 'B-DEMO-26-044', workOrderSizeId: uid('5700', 4) })],
+    parcels: value.parcels.map((entry) => (entry.id === into ? { ...entry, garments: entry.garments + 3 } : entry)),
+    garments: value.garments + 3,
+  }
+}
+
+/** SO-2026-0090 on SH-00160: its one line, all three jackets on this shipment (it completes the order). */
+export function secondBackorder(): Backorder {
+  const jackets = [size('52', 3, 0, 0, 3, 3)]
+  return {
+    order: { salesOrderId: SECOND_ORDER.id, number: SECOND_ORDER.number, status: 'READY', customerRef: SECOND_ORDER.customerRef, promiseDate: '2026-11-10' },
+    shipmentId: SHIPMENT_ID,
+    lines: [{ lineId: uid('5800', 3), seq: 10, styleCode: 'DEMO-JKT-01', styleName: 'Giacca moto Demo', colourwayCode: 'BLK', colourwayName: 'Nero', closedShort: false, closeShortReason: null, sizes: jackets, totals: totalsOf(jackets) }],
+    totals: totalsOf(jackets),
+    shipments: [{ id: SHIPMENT_ID, number: 'SH-00160', status: 'DRAFT', shippedAt: null }],
+  }
+}
+
+/** The ready cells of the second order (what it can still put on a DRAFT). */
+export const SECOND_READY: ReadyOrder = {
+  salesOrderId: SECOND_ORDER.id,
+  number: SECOND_ORDER.number,
+  customerRef: SECOND_ORDER.customerRef,
+  status: 'READY',
+  companyId: COMPANY,
+  partyId: PARTIES[0]!.id,
+  party: { code: 'C-DEMO-01', legalName: PARTIES[0]!.name },
+  cells: [cell(5, '50', 2, { salesOrderLineId: uid('5800', 3), workOrderNumber: 'WO-DEMO-0045', batchNumber: 'B-DEMO-26-044' }), cell(6, '54', 1, { salesOrderLineId: uid('5800', 3), workOrderNumber: 'WO-DEMO-0045', batchNumber: 'B-DEMO-26-044' })],
+}
+
 export const PACKING_LISTS: PackingListVersion[] = [
   { fileId: uid('5380', 2), version: 2, number: 'SH-00160/2', language: 'it', current: true, parcels: 2, garments: 8, createdAt: at(29, 10, 25) },
   { fileId: uid('5380', 1), version: 1, number: 'SH-00160/1', language: 'it', current: false, parcels: 2, garments: 7, createdAt: at(29, 9, 50) },

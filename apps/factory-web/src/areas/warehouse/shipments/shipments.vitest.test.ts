@@ -9,6 +9,11 @@ import { I18nProvider } from '../../../lib/i18n/provider'
 import { listAddress as webListAddress, recordAddress } from '../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { DDT_ROW, documents, draftLoose, labelled, labels, OPEN_ROWS, ownVan, PREVIEW_HELD, PREVIEW_OK, READY, row, shipment } from './_demo/fixtures'
+// F-OP-132 (order page N6): a shipment of two orders.
+import { backorder, SECOND_ORDER, SECOND_READY, secondBackorder, sharedShipment } from './_demo/fixtures'
+import { joinableShipmentsSchema, orderCandidatesSchema, readyOrderSchema, shipmentRowSchema, shipmentSchema } from './api'
+import { lineGroups, lineOrderIds, orderNumbers, orderWords, rowOrders, shipmentOrders } from './model'
+import { queueRowSchema, searchRowSchema } from './queue/api'
 import { designScreen as listScreen } from './list/fixtures'
 import { ShipmentsListView } from './list/view/ShipmentsListView'
 import {
@@ -323,3 +328,59 @@ describe('B-TH-264 follow-up — the Documents’ files open in the thread’s f
   })
 })
 // ---- end B-TH-264 follow-up
+
+// ---- F-OP-132 (order page N6, R-5): the Warehouse api types know a shipment's several orders ------------------------------------
+describe('F-OP-132 — a shipment of two orders of one customer: the answers parse, each line has its order', () => {
+  const two = sharedShipment()
+  const orderIds = two.salesOrders!.map((order) => order.id)
+
+  it('the record, the list row, the queue row and the search row parse with every order, the first first', () => {
+    const record = shipmentSchema.parse(two)
+    expect(shipmentOrders(record).map((order) => order.number)).toEqual(['SO-2026-0088', 'SO-2026-0090'])
+    expect(shipmentOrders(record)[0]!.id).toBe(record.salesOrderId)
+    const listed = shipmentRowSchema.parse({ ...row(1, 'DRAFT'), salesOrders: [{ id: orderIds[0], number: 'SO-2026-0088', customerRef: 'PO-MD-7731' }, { id: orderIds[1], number: 'SO-2026-0090', customerRef: null }] })
+    expect(orderNumbers(rowOrders(listed))).toBe('SO-2026-0088, SO-2026-0090')
+    const orders = [{ id: orderIds[0], number: 'SO-2026-0088', customerRef: 'PO-MD-7731' }, { id: orderIds[1], number: 'SO-2026-0090', customerRef: 'PO-MD-7740' }]
+    const queued = { id: two.id, number: two.number, status: 'DRAFT', siteId: two.siteId, salesOrderId: orderIds[0], salesOrderNumber: 'SO-2026-0088', customerRef: 'PO-MD-7731', salesOrders: orders, partyCode: 'C-DEMO-01', partyName: 'Moto Demo S.r.l.', carrierKey: 'brt', transportBy: 'CARRIER', carrierCode: 'brt', carrierName: 'BRT', serviceCode: null, shipTo: { city: 'Milano', country: 'IT' }, splitFromId: null, garments: 11, parcels: 2, labelled: 0, shipBy: null, cutOff: null, risk: 'NO_DATE', willMiss: false, held: false, holdReasons: [] }
+    expect(rowOrders(queueRowSchema.parse(queued)).map((order) => order.customerRef)).toEqual(['PO-MD-7731', 'PO-MD-7740'])
+    const found = { id: two.id, number: two.number, status: 'DRAFT', siteCode: 'A1', salesOrderId: orderIds[0], salesOrderNumber: 'SO-2026-0088', customerRef: 'PO-MD-7731', salesOrders: orders, partyName: 'Moto Demo S.r.l.', transportBy: 'CARRIER', carrierCode: 'brt', carrierName: 'BRT', serviceCode: null, trackingNumbers: [], parcels: 2, garments: 11, ddtNumber: null, splitFrom: null, holdReasons: [], createdAt: two.createdAt, shippedAt: null, deliveredAt: null, cancelledAt: null, matchedBy: ['ORDER'], matchedSerials: [] }
+    // The search finds it through its second order (B-OP-041: the number or PO of any order it carries).
+    expect(rowOrders(searchRowSchema.parse(found)).map((order) => order.number)).toEqual(['SO-2026-0088', 'SO-2026-0090'])
+  })
+
+  it('an older answer without the list is its first order alone (never empty, never another order)', () => {
+    const one = shipment('DRAFT')
+    expect(shipmentOrders(one)).toEqual([{ id: one.salesOrderId, number: 'SO-2026-0088', customerRef: 'PO-MD-7731' }])
+    const plain = row(2, 'PACKED')
+    expect(rowOrders(plain)).toEqual([{ id: plain.salesOrderId, number: plain.salesOrderNumber, customerRef: null }])
+  })
+
+  it('candidates, joinable shipments and ship together parse with their verdicts (the API words kept as they are)', () => {
+    const candidates = orderCandidatesSchema.parse({ shipmentId: two.id, number: two.number, orders: [{ salesOrderId: orderIds[1], number: 'SO-2026-0090', customerRef: 'PO-MD-7740', status: 'READY', joinable: { allowed: false, why: 'Several orders in one shipment come with the next update.' } }] })
+    expect(candidates.orders[0]!.joinable).toEqual({ allowed: false, why: 'Several orders in one shipment come with the next update.' })
+    const joinable = joinableShipmentsSchema.parse({ salesOrderId: orderIds[1], number: 'SO-2026-0090', shipments: [{ shipmentId: two.id, number: two.number, status: 'DRAFT', siteId: two.siteId, joinable: { allowed: true, why: null } }] })
+    expect(joinable.shipments[0]!.joinable.allowed).toBe(true)
+    const together = readyOrderSchema.parse({ ...SECOND_READY, shipsWith: { allowed: false, why: 'SO-2026-0090 goes to Bologna, this shipment to Milano: one shipment goes to one address.' } })
+    expect(together.shipsWith?.allowed).toBe(false)
+    expect(readyOrderSchema.parse(READY[0]).shipsWith).toBeUndefined()
+  })
+
+  it('each line has its order: from each order’s lines (the backorder read); unread lines last; one order reads nothing', () => {
+    const groups = lineGroups(two, [backorder(), secondBackorder()])
+    expect(groups.map((group) => [group.order?.number ?? null, group.lines.map((entry) => entry.size)])).toEqual([
+      ['SO-2026-0088', ['50', '52', '54']],
+      ['SO-2026-0090', ['52']],
+    ])
+    // The second order's read is not there yet: its line waits in a group of its own (never put under the first order).
+    expect(lineGroups(two, [backorder()]).map((group) => group.order?.number ?? null)).toEqual(['SO-2026-0088', null])
+    expect(lineGroups(two, null).map((group) => group.order)).toEqual([null])
+    expect(lineGroups(shipment('DRAFT'), null)).toEqual([{ order: shipmentOrders(shipment('DRAFT'))[0], lines: shipment('DRAFT').lines }])
+    expect(lineOrderIds([secondBackorder()]).get(two.lines[3]!.salesOrderLineId)).toBe(SECOND_ORDER.id)
+  })
+
+  it('the order’s words: its number and its PO in the catalogue’s PO words', () => {
+    expect(orderWords({ number: 'SO-2026-0090', customerRef: 'PO-MD-7740' }, (ref) => `Customer PO ${ref}`)).toBe('SO-2026-0090 · Customer PO PO-MD-7740')
+    expect(orderWords({ number: 'SO-2026-0090', customerRef: null }, (ref) => ref)).toBe('SO-2026-0090')
+  })
+})
+// ---- end F-OP-132
