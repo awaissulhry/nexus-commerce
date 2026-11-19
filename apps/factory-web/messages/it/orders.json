@@ -587,6 +587,12 @@
     },
     "created": "{number} creata (bozza)",
     "createdDoor": "Imballala e spediscila in Magazzino ›",
+    "create": {
+      "held": {
+        "noRight": "Creare una spedizione richiede il diritto di spedizione del magazzino",
+        "nothing": "Nessun capo rilasciato attende la spedizione: prima la qualità rilascia i capi"
+      }
+    },
     "alsoCarries": "Porta anche {number}",
     "join": {
       "title": "Spedizioni in bozza a cui aggiungere questo ordine",
@@ -1917,6 +1923,8 @@
     "releasedOn": "rilasciati il {date}",
     "minus": "Un capo in meno di {cell}",
     "plus": "Un capo in più di {cell}",
+    "minusHeld": "Nessun capo di {cell} è preso: niente da togliere",
+    "plusHeld": "Presi tutti i {count} capi di {cell}: nessun altro rilasciato",
     "serials": "Matricole, una per capo",
     "serialsHint": "Scrivile o leggile, separate da spazi o virgole.",
     "waitQuality_one": "Solo capi rilasciati: {count} pezzo attende la qualità",

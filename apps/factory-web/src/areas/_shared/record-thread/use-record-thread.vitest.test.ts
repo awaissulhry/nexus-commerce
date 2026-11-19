@@ -580,13 +580,15 @@ describe('F-OP-202 — the pick band inside the dock’s one card: icons, long /
     expect(source).not.toMatch(/<Pill[^>]*\bcompact\b/)
   })
 
-  it('each segment: its icon, its long words (one line, 22 characters), its short words for a card of 480 px or less', () => {
+  it('each segment: its icon, its long words (one line, whole — F-OP-303), its short words for a card of 480 px or less', () => {
     const html = render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'general', children: createElement(Card) }))
     expect(html).toContain('<span class="nds-seg-icon"><i data-icon="bag"></i></span><span class="fw-thread-pick-long">This order</span>')
     expect(html).toContain('<span class="fw-thread-pick-long has-short">Brand Alpha S.r.l. (general)</span><span class="fw-thread-pick-short">General</span>')
     expect(html).toContain('title="All of Brand Alpha S.r.l. · Read only"><span class="fw-thread-pick-long has-short">All of Brand Alpha S.r.l.</span><span class="fw-thread-pick-short">All</span>')
     const css = readFileSync(new URL('./thread-pick.css', import.meta.url), 'utf8')
-    expect(css).toMatch(/\.fw-thread-pick-long \{[^}]*max-width: min\(22ch, 100%\);[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/)
+    // F-OP-303 (walk #11): no 22-character cap — the names show whole (the segments wrap); only words wider than the card end in "…".
+    expect(css).toMatch(/\.fw-thread-pick-long \{[^}]*max-width: 100%;[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/)
+    expect(css).not.toContain('22ch')
     expect(css).toMatch(/\.fw-thread-pick-short \{\s*display: none;\s*\}/)
     expect(css).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-thread-pick-long\.has-short \{\s*display: none;\s*\}\s*\.fw-thread-pick-short \{\s*display: inline;\s*\}\s*\}/)
     expect(css).toMatch(/\.fw-thread-pick-line\.is-office \{\s*color: var\(--nds-warning-text\);\s*\}/)
@@ -733,7 +735,7 @@ describe('F-OP-203 — the order dock, the customer dock and the work order’s 
     expect(customer).toContain("short: o('record.dock.writeGeneral'), icon: <Building2 size={14} aria-hidden />")
     expect(customer).toContain('icon: <RecordTypeIcon type={pick.type} size={14} />')
     expect(customer).toContain("short: rt('allOfCustomer.view.all')")
-    expect(customer).toContain("const CUSTOMER_DOCK_NS = [...ALL_OF_CUSTOMER_NS, 'orders'] as const")
+    expect(customer).toContain("const CUSTOMER_DOCK_NS = [...ALL_OF_CUSTOMER_NS, 'orders'") // F-CP-111 adds the files view's words after them
     // The work order: its notes office only (Lock, office tone), each order with its bag.
     expect(workOrder).toContain("icon: <Lock size={14} aria-hidden />, tone: 'office'")
     expect(workOrder).toContain('icon: <ShoppingBag size={14} aria-hidden />')

@@ -120,6 +120,29 @@ export function liveProblems(form: ElsewhereForm, cells: readonly ReadyCell[], p
   return elsewhereProblems({ shippedAt: body.shippedAt, externalDdt: ddt, ddtRequired: body.ddtRequired, cells: lines }, now)
 }
 
+// ---- F-OP-307 (order page walk #9): a field's problem shows only once the person tried to record, or left that field — never on open
+// (the paper DDT's number was red before anything was typed). Record stays held with its words meanwhile.
+export type ElsewhereField = 'ddt' | 'reason'
+export interface ElsewhereSeen {
+  /** Record was pressed (or ⌘↵), held or not. */
+  readonly tried: boolean
+  /** The fields the person left (a blur). */
+  readonly left: readonly ElsewhereField[]
+}
+export const NOTHING_SEEN: ElsewhereSeen = Object.freeze({ tried: false, left: [] })
+export const problemShown = (seen: ElsewhereSeen, field: ElsewhereField): boolean => seen.tried || seen.left.includes(field)
+export const afterLeaving = (seen: ElsewhereSeen, field: ElsewhereField): ElsewhereSeen => (seen.left.includes(field) ? seen : { ...seen, left: [...seen.left, field] })
+export const afterTry = (seen: ElsewhereSeen): ElsewhereSeen => (seen.tried ? seen : { ...seen, tried: true })
+
+// ---- F-OP-307 (order page walk #18): the garments' stepper is held with words at its ends, never a silent disabled − or +.
+/** A cell's count kept between 0 and what it can still ship (whole garments). */
+export const clampGarments = (next: number, cap: number): number => Math.max(0, Math.min(cap, Math.round(Number.isFinite(next) ? next : 0)))
+/** The stepper's ends: − held at 0, + held at the cap (their names say why; the look is held). */
+export function stepperEnds(quantity: number, cap: number): { readonly floor: boolean; readonly ceiling: boolean } {
+  return { floor: quantity <= 0, ceiling: quantity >= cap }
+}
+// ---- end F-OP-307
+
 /** Where each problem shows: under "Left on", the DDT, a line (by its cell), or the lines as a whole. */
 export interface ProblemPlaces {
   readonly left: Phrase[]
@@ -156,6 +179,16 @@ export function problemPlaces(problems: readonly ElsewhereProblem[], body: Pick<
     } else places.lines.push(phrase('elsewhere.noLines'))
   }
   return places
+}
+
+/**
+ * F-OP-307 (walk #9): Record's held words — while a problem is not shown under its field yet (nothing tried, the field not left), the
+ * held words name that problem itself (never "Fix what the fields say first" over fields that say nothing); else what holds it.
+ */
+export function recordHeldWords(held: Phrase | null, places: Pick<ProblemPlaces, 'ddt'>, seen: ElsewhereSeen): Phrase | null {
+  if (held?.key !== 'elsewhere.held.problems') return held
+  const hidden = problemShown(seen, 'ddt') ? [] : places.ddt
+  return hidden[0] ?? held
 }
 
 /** Pieces of the order that still wait for quality (ordered, not released, not closed short): "Only released garments: N pieces wait". */

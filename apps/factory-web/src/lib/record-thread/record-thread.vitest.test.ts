@@ -227,7 +227,7 @@ describe('F-OP-201 — the one card: the pick band inside the column, DockColumn
     expect(html.startsWith('<section class="fw-rt-column is-docked" aria-label="All of Brand Alpha · Read only">')).toBe(true)
     const top = html.indexOf('<div class="fw-rt-top"><p>THE PICK</p></div>')
     const head = html.indexOf('<header>THE HEAD</header>')
-    const body = html.indexOf('<div class="fw-rt-body"><ol>THE LINES</ol></div>')
+    const body = html.indexOf('<div class="fw-rt-scroll"><ol>THE LINES</ol></div>')
     const foot = html.indexOf('<div class="fw-rt-foot"><span>THE FOOT</span></div>')
     expect(top).toBeGreaterThan(-1)
     expect(head).toBeGreaterThan(top)
@@ -237,7 +237,7 @@ describe('F-OP-201 — the one card: the pick band inside the column, DockColumn
     const bare = render(createElement(DockColumn, { label: 'x', body: 'THE LINES' }))
     expect(bare).not.toContain('fw-rt-top')
     expect(bare).not.toContain('fw-rt-foot')
-    expect(bare).toContain('<div class="fw-rt-body">THE LINES</div>')
+    expect(bare).toContain('<div class="fw-rt-scroll">THE LINES</div>')
   })
 
   it('DockColumn is a view: it imports no office, portal, shell, panel, API or session code and fetches nothing', () => {
@@ -247,12 +247,12 @@ describe('F-OP-201 — the one card: the pick band inside the column, DockColumn
     expect(source).not.toMatch(/\bfetch\(/)
   })
 
-  it('one band CSS for both: record-thread.css holds .fw-rt-top / .fw-rt-body / .fw-rt-foot once, both parts draw them, tokens only', () => {
+  it('one band CSS for both: record-thread.css holds .fw-rt-top / .fw-rt-scroll / .fw-rt-foot once, both parts draw them, tokens only', () => {
     const css = readFileSync(new URL('./record-thread.css', import.meta.url), 'utf8')
     // op-fx1: once at the top level (F-OP-217's narrow-card rules re-pad them inside @container fw-rtcol, indented: not a second copy).
-    for (const band of ['fw-rt-top', 'fw-rt-body', 'fw-rt-foot']) expect(css.match(new RegExp(`^\\.${band} \\{`, 'gm'))?.length, band).toBe(1)
+    for (const band of ['fw-rt-top', 'fw-rt-scroll', 'fw-rt-foot']) expect(css.match(new RegExp(`^\\.${band} \\{`, 'gm'))?.length, band).toBe(1)
     expect(css).toMatch(/\.fw-rt-top \{[^}]*padding: var\(--nds-space-10\) var\(--nds-space-12\) var\(--nds-space-9\);[^}]*border-bottom: 1px solid var\(--nds-border-subtle\);/)
-    expect(css).toMatch(/\.fw-rt-body \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;/)
+    expect(css).toMatch(/\.fw-rt-scroll \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;/)
     expect(css).toMatch(/\.fw-rt-foot \{[^}]*flex: none;[^}]*border-top: 1px solid var\(--nds-border-subtle\);/)
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i)
     // The same container (fw-rtcol) for both: the card measures itself.
@@ -260,7 +260,11 @@ describe('F-OP-201 — the one card: the pick band inside the column, DockColumn
     const dock = readFileSync(new URL('./DockColumn.tsx', import.meta.url), 'utf8')
     expect(dock).toContain("import './record-thread.css'")
     expect(dock).toContain('className="fw-rt-column is-docked"')
-    for (const band of ['fw-rt-top', 'fw-rt-body', 'fw-rt-foot']) expect(dock).toContain(`className="${band}"`)
+    for (const band of ['fw-rt-top', 'fw-rt-scroll', 'fw-rt-foot']) expect(dock).toContain(`className="${band}"`)
+    // F-OP-304 (walk #12): the dock's scroller never shares a class with a message's words (.fw-rt-body, card.css: max-width 72ch).
+    expect(css).not.toMatch(/^\s*\.fw-rt-body \{/m)
+    expect(dock).not.toContain('className="fw-rt-body"')
+    expect(readFileSync(new URL('./card/card.css', import.meta.url), 'utf8')).toMatch(/^\.fw-rt-body \{[^}]*max-width: 72ch;/m)
     expect(readFileSync(new URL('./RecordThread.tsx', import.meta.url), 'utf8')).toContain('<div className="fw-rt-top">{slots.top}</div>')
   })
 })

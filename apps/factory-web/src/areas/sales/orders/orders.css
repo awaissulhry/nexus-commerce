@@ -758,7 +758,7 @@ a.fw-so-countbtn:focus-visible {
   gap: var(--nds-space-8);
 }
 
-/* F-OP-203: All of <customer> in the order's dock is the dock's one card now (DockColumn: .fw-rt-body, .fw-rt-foot in record-thread.css);
+/* F-OP-203: All of <customer> in the order's dock is the dock's one card now (DockColumn: .fw-rt-scroll, .fw-rt-foot in record-thread.css);
    the old .fw-so-dock-all / .fw-so-dock-write went with it. */
 
 /* ---- F-SA-244: a change's Told line under its History row (layout only). */
@@ -767,3 +767,27 @@ a.fw-so-countbtn:focus-visible {
   margin-top: 2px;
 }
 /* ---- end F-SA-244 */
+
+/* ---- F-OP-307 (order page walk #18): the garments' stepper in Record a shipment made elsewhere — its − at 0 and its + at the cap are
+   HELD, not disabled: they keep their focus, their names say why, and they look held (the DS stepper's disabled look; no hover). */
+.fw-so-nstep.is-floor > .dec,
+.fw-so-nstep.is-floor > .dec:hover,
+.fw-so-nstep.is-ceiling > .inc,
+.fw-so-nstep.is-ceiling > .inc:hover {
+  background: var(--nds-surface-hover);
+  color: var(--nds-text-disabled);
+  cursor: default;
+}
+/* ---- end F-OP-307 */
+
+/* ---- F-OP-309 (order page walk #15): the Production tab's work-order table beside the dock — the work order's number on one line,
+   the sub lines (where it is made, its progress words) wrap instead of being cut; the columns' widths are the table's own. */
+.fw-so-wotable .fw-so-link {
+  white-space: nowrap;
+}
+
+.fw-so-wotable .fw-so-cell-sub {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* ---- end F-OP-309 */

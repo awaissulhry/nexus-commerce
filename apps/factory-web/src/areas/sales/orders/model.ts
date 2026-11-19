@@ -525,15 +525,16 @@ export const tabOf = (asked: string | null | undefined, can?: Pick<OrderAbilitie
 /** The tabs a person sees: every tab (each part inside says what its right holds back, never an empty tab with zeros). */
 export const recordTabs = (_can?: Pick<OrderAbilities, 'margin'>): readonly RecordTab[] => RECORD_TABS
 
-// ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5): each tab its own dock width when the person chose none — Overview and
-// Money 40 %; the grid tabs (Lines, Production, Shipments, Files) a third under 1600 px and 40 % from 1600; Changes half (one column
-// of the story beside the thread). A width the person picks is kept for that tab (RecordFrame `dockTab`).
+// ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5): the dock's width when the person chose none, per tab.
+// F-OP-301 (walk #5): ONE width per viewport on every tab — the grid rule (a third under 1600 px, where Lines, Production and Shipments
+// need the room; 40 % from 1600): the dock never jumps when the page tab changes, and the page tabs fit beside it (Changes was half, and
+// Files hid behind ›). A width the person picks holds on every tab too (RecordFrame).
 export const DOCK_DEFAULTS: Readonly<Record<RecordTab, DockDefault>> = Object.freeze({
-  overview: 'forty',
+  overview: 'grid',
   lines: 'grid',
   production: 'grid',
-  changes: 'half',
-  money: 'forty',
+  changes: 'grid',
+  money: 'grid',
   shipments: 'grid',
   files: 'grid',
 })

@@ -9,6 +9,7 @@ import { threadButtonWords } from './model'
 // B-TH-264 follow-up
 import { askedFiles } from './model'
 import { RecordFrame } from './RecordFrame'
+import { foldedOf } from './RecordFrame' // F-OP-302
 // F-SA-263
 import { defaultWidthAt, showsOnArrival } from './model'
 import { RecordNotices } from './RecordNotices'
@@ -111,7 +112,7 @@ describe('the frame on the page', () => {
     for (const locale of ['it', 'en'] as const) {
       const words = CATALOGUE[locale]['record-frame'] ?? {}
       for (const entry of FRAME_KEYS) expect(words[entry.words], `${locale} ${entry.words}`).toBeTruthy()
-      for (const key of ['keys.line', 'keys.title', 'thread.button', 'thread.back', 'details.open', 'notices.more_other']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+      for (const key of ['keys.line', 'keys.title', 'thread.button', 'thread.back', 'details.open', 'details.title', 'details.more_one', 'details.more_other', 'notices.more_other']) expect(words[key], `${locale} ${key}`).toBeTruthy()
     }
   })
 
@@ -289,9 +290,10 @@ describe('F-SA-263 — the dock adapts per tab and remembers', () => {
     expect(showsOnArrival(new URLSearchParams('thread=all'))).toBe(true)
   })
 
-  it('the frame keeps the width per tab and "hidden" only for a page that names its tab (`dockTab`); ⌘J and the band button toggle it, ?thread= shows it', () => {
+  it('the frame keeps "hidden" only for a page that names its tab (`dockTab`), the width ONE per record type (F-OP-301); ⌘J and the band button toggle it, ?thread= shows it', () => {
     const frame = readFileSync(new URL('./RecordFrame.tsx', import.meta.url), 'utf8')
-    expect(frame).toContain("tab: dockTab ?? null, rememberHidden: dockTab !== undefined")
+    expect(frame).toContain('startHidden: closed /* B-TH-269 (R-10) */, rememberHidden: dockTab !== undefined })')
+    expect(frame).not.toContain('tab: dockTab') // F-OP-301 (walk #5): never a width per tab
     expect(frame).toContain('const width = dockWidth({ chosen: sizes.remembered ? sizes.width : null, defaultWidth, viewport: wideViewport ? 1600 : 1440 })')
     // The `wide` boolean is gone (no page passes it any more).
     expect(frame).not.toMatch(/readonly wide\?: boolean/)
@@ -579,3 +581,33 @@ describe('F-OP-206 — the Keyboard window names All of <Customer>\'s keys on th
   })
 })
 // ---- end F-OP-206
+
+// ---- F-OP-302 (order page walk #10, #20): the band's pills are never cut — what does not fit folds behind "+N" (Details) ----------
+describe('F-OP-302 — the band’s pills fold whole behind "+N", never cut; no "i" on a phone', () => {
+  it('a pill on the clipped second row, or one wider than the track, is folded; the first row stays', () => {
+    const box = { top: 100, right: 500, bottom: 124 }
+    expect(foldedOf(box, [{ top: 101, right: 180 }, { top: 102, right: 320 }, { top: 146, right: 140 }, { top: 146, right: 300 }])).toEqual([false, false, true, true])
+    expect(foldedOf(box, [{ top: 101, right: 620 }])).toEqual([true])
+    expect(foldedOf(box, [])).toEqual([])
+  })
+
+  it('the band draws the pills in their track, "+N" opens Details, and the phone’s "i" is gone', () => {
+    const band = { back: createElement('a', { href: '/w/demo/sales/orders' }, 'Orders'), title: 'SO-2026-0101 · Brand Alpha', status: createElement('span', null, 'Confirmed'), meta: createElement('span', null, 'Customer PO PO-77') }
+    const html = render(createElement(RecordFrame, { recordType: 'SalesOrder', personId: 'u1', band, thread: createElement('div', null, 'messages'), threadLabel: 'The order’s thread', children: createElement('p', null, 'The body') }))
+    expect(html).toContain('<span class="fw-rcf-meta-more"><span>Customer PO PO-77</span></span>')
+    expect(html).not.toContain('fw-rcf-meta-fold') // nothing measured on the server: nothing folded
+    const frame = readFileSync(new URL('./RecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain("aria-label={t('details.more', { count: folded })}")
+    expect(frame).toContain('onClick={() => setDetails(true)}')
+    expect(frame).toContain('item.inert = folded[index]!')
+    expect(frame).not.toContain('ToolbarButton')
+    expect(frame).not.toContain("t('details.open')")
+    const css = readFileSync(new URL('./record-frame.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-rcf-meta > \.fw-rcf-meta-more \{\s*flex: 0 1 auto;\s*flex-wrap: wrap;\s*align-content: flex-start;\s*row-gap: var\(--nds-space-24\);\s*height: var\(--nds-space-24\);/)
+    // On a phone the pills stay (folded behind "+N"): only the keys and the live state give way.
+    expect(css).toMatch(/@media \(max-width: 719px\) \{[^}]*\.fw-rcf-keys,\s*\.fw-rcf-live \{\s*display: none;/)
+    // The project page's own Details button keeps the frame's word (record-frame details.open).
+    for (const locale of ['it', 'en'] as const) expect(CATALOGUE[locale]['record-frame']?.['details.open'], locale).toBeTruthy()
+  })
+})
+// ---- end F-OP-302

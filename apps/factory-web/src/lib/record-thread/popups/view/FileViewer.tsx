@@ -133,6 +133,9 @@ function Viewer({ files, index, onIndex, onClose, onGoToMessage, returnFocusTo, 
 
   const prevHeld = at === 0 ? t('viewer.first') : null
   const nextHeld = at >= items.length - 1 ? t('viewer.last') : null
+  // F-OP-310 (order page walk #19): ONE Download. The DS PdfViewer draws its own in its toolbar (it cannot be left out), so while it
+  // shows the PDF the footer has none; the PdfViewer's goes through the host's own download where it asks one (mode download).
+  const pdfShown = !locked && show === 'pdf' && current.src !== null
   return (
     <Modal
       open
@@ -160,7 +163,7 @@ function Viewer({ files, index, onIndex, onClose, onGoToMessage, returnFocusTo, 
               <MessageSquare size={14} aria-hidden /> {t('viewer.goToMessage')}
             </Button>
           )}
-          {show !== 'held' && !locked && download}
+          {show !== 'held' && !locked && !pdfShown && download}
         </div>
       }
     >
@@ -201,7 +204,7 @@ function Viewer({ files, index, onIndex, onClose, onGoToMessage, returnFocusTo, 
             <Spinner size={14} /> {t('viewer.opening')}
           </p>
         ) : (
-          <PdfViewer src={current.src} title={current.name} fileName={current.name} labels={pdfViewerLabels(shellT)} height="min(68vh, 760px)" />
+          <PdfViewer src={current.src} title={current.name} fileName={current.name} labels={pdfViewerLabels(shellT)} height="min(68vh, 760px)" {...(onDownload ? { onDownload: () => onDownload(current.id) } : {})} />
         )}
       </div>
     </Modal>

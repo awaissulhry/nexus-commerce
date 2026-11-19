@@ -220,3 +220,72 @@ describe('every word it draws, in both languages', () => {
     expect(createElement(designScreen.view, { model: designScreen.cases[0]!.model })).toBeTruthy()
   })
 })
+
+// ---- F-OP-307 (order page walk #9, #18): a problem shows after a try or a blur; the stepper's ends held with words ------------------
+describe('F-OP-307 — no red on open; the stepper\'s − and + held with words, never silently disabled', () => {
+  it('a field\'s problem shows once Record was tried or the field was left; nothing on open', async () => {
+    const { afterLeaving, afterTry, NOTHING_SEEN, problemShown } = await import('./model')
+    expect(problemShown(NOTHING_SEEN, 'ddt')).toBe(false)
+    expect(problemShown(NOTHING_SEEN, 'reason')).toBe(false)
+    const left = afterLeaving(NOTHING_SEEN, 'ddt')
+    expect(problemShown(left, 'ddt')).toBe(true)
+    expect(problemShown(left, 'reason')).toBe(false)
+    expect(afterLeaving(left, 'ddt')).toBe(left)
+    const tried = afterTry(NOTHING_SEEN)
+    expect(problemShown(tried, 'ddt') && problemShown(tried, 'reason')).toBe(true)
+    expect(afterTry(tried)).toBe(tried)
+  })
+
+  it('Record\'s held words name a problem not shown yet, else what holds it', async () => {
+    const { afterLeaving, NOTHING_SEEN, recordHeldWords } = await import('./model')
+    const noDdt = places(form({ ddtNumber: '' }))
+    expect(noDdt.ddt).toEqual([{ key: 'elsewhere.ddtRequired' }])
+    const held = { key: 'elsewhere.held.problems' }
+    expect(recordHeldWords(held, noDdt, NOTHING_SEEN)).toEqual({ key: 'elsewhere.ddtRequired' })
+    expect(recordHeldWords(held, noDdt, afterLeaving(NOTHING_SEEN, 'ddt'))).toEqual(held)
+    expect(recordHeldWords({ key: 'elsewhere.noLines' }, noDdt, NOTHING_SEEN)).toEqual({ key: 'elsewhere.noLines' })
+    expect(recordHeldWords(null, noDdt, NOTHING_SEEN)).toBeNull()
+  })
+
+  it('the stepper: a count kept within 0 and the cap; − held at 0, + held at the cap', async () => {
+    const { clampGarments, stepperEnds } = await import('./model')
+    expect(clampGarments(-1, 3)).toBe(0)
+    expect(clampGarments(4, 3)).toBe(3)
+    expect(clampGarments(2.4, 3)).toBe(2)
+    expect(clampGarments(Number.NaN, 3)).toBe(0)
+    expect(stepperEnds(0, 3)).toEqual({ floor: true, ceiling: false })
+    expect(stepperEnds(3, 3)).toEqual({ floor: false, ceiling: true })
+    expect(stepperEnds(1, 3)).toEqual({ floor: false, ceiling: false })
+    expect(stepperEnds(0, 0)).toEqual({ floor: true, ceiling: true })
+  })
+
+  it('the dialog: the DDT and reason words wait for a try or a blur; the stepper never natively disabled, its ends named and held', () => {
+    // The DS Modal draws nothing on the server, so the dialog is read as source (the rules above are its model).
+    const dialog = readFileSync(new URL('./view/ElsewhereDialog.tsx', import.meta.url), 'utf8')
+    expect(dialog).toContain("error={problemShown(seen, 'ddt') && places.ddt.length > 0 ? places.ddt.map(words).join(' ') : undefined}")
+    expect(dialog).toContain("error={problemShown(seen, 'reason') && form.holdReason.trim() === '' ? t('elsewhere.held.reason') : undefined}")
+    expect(dialog).toContain("onBlur={() => actions?.onLeave?.('ddt')}")
+    expect(dialog).toContain("onBlur={() => actions?.onLeave?.('reason')}")
+    expect(dialog).toContain('<span className="fw-so-inline" onClick={() => actions?.onTry?.()}>')
+    expect(dialog).toContain('heldReason={held ? words(recordHeldWords(held, places, seen) ?? held) : null}')
+    expect(dialog).not.toMatch(/<NumberStepper[^>]*\bmin=/)
+    expect(dialog).toContain("className={`fw-so-nstep${ends.floor ? ' is-floor' : ''}${ends.ceiling ? ' is-ceiling' : ''}`}")
+    expect(dialog).toContain("decrementLabel={ends.floor ? t('elsewhere.minusHeld', { cell: label }) : t('elsewhere.minus', { cell: label })}")
+    expect(dialog).toContain('clampGarments(next, cell.shippable)')
+    const container = readFileSync(new URL('./RecordElsewhere.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('const [seen, setSeen] = useState<ElsewhereSeen>(NOTHING_SEEN)')
+    const css = readFileSync(new URL('../../../orders.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-so-nstep\.is-floor > \.dec,\s*\.fw-so-nstep\.is-floor > \.dec:hover,\s*\.fw-so-nstep\.is-ceiling > \.inc,\s*\.fw-so-nstep\.is-ceiling > \.inc:hover \{[^}]*color: var\(--nds-text-disabled\);/)
+    // The design cases: just opened and an untouched DDT field show nothing; a try shows the DDT's words.
+    const caseOf = (id: string) => designScreen.cases.find((entry) => entry.id === id)!.model
+    expect(caseOf('just-opened').seen).toBeUndefined()
+    expect(caseOf('no-ddt-untouched').seen).toBeUndefined()
+    expect(caseOf('no-ddt').seen).toEqual({ tried: true, left: [] })
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale].orders ?? {}
+      expect(words['elsewhere.minusHeld'], locale).toContain('{cell}')
+      expect(words['elsewhere.plusHeld'], locale).toContain('{count}')
+    }
+  })
+})
+// ---- end F-OP-307

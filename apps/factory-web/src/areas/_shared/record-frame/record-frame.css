@@ -32,8 +32,23 @@
   gap: var(--nds-space-8);
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
+
+/* ── F-OP-302 (order page walk #10, #20): a pill is never cut. The status and "+N" keep their size; the pills share what is left and
+   wrap onto a second row the track clips (the row gap puts it a whole row below, so nothing peeks in); RecordFrame counts the folded
+   ones and draws "+N", which opens Details. --nds-space-N is N px. ── */
+.fw-rcf-meta > :not(.fw-rcf-meta-more) {
+  flex: none;
+}
+
+.fw-rcf-meta > .fw-rcf-meta-more {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  row-gap: var(--nds-space-24);
+  height: var(--nds-space-24);
+}
+/* ── end F-OP-302 */
 
 .fw-rcf-live {
   display: inline-flex;
@@ -150,8 +165,8 @@
 }
 
 @media (max-width: 719px) {
+  /* F-OP-302: the pills stay on a phone too (what does not fit folds behind "+N"), so the band needs no "i". */
   .fw-rcf-keys,
-  .fw-rcf-meta-more,
   .fw-rcf-live {
     display: none;
   }

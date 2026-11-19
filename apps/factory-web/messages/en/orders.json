@@ -587,6 +587,12 @@
     },
     "created": "{number} made (draft)",
     "createdDoor": "Pack and ship it in Warehouse ›",
+    "create": {
+      "held": {
+        "noRight": "Making a shipment needs the warehouse's shipping right",
+        "nothing": "No released garment waits to ship: quality releases the garments first"
+      }
+    },
     "alsoCarries": "Also carries {number}",
     "join": {
       "title": "Draft shipments this order can join",
@@ -1917,6 +1923,8 @@
     "releasedOn": "released on {date}",
     "minus": "One less of {cell}",
     "plus": "One more of {cell}",
+    "minusHeld": "None of {cell} is taken: nothing to take off",
+    "plusHeld": "All {count} of {cell} are taken: no more released",
     "serials": "Serials, one per garment",
     "serialsHint": "Type or scan them, separated by spaces or commas.",
     "waitQuality_one": "Only released garments: {count} piece waits for quality",

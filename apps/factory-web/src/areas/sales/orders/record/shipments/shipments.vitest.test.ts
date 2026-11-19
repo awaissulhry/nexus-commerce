@@ -188,3 +188,39 @@ describe('F-OP-135: the typed link is the row’s Track › (https only)', () =>
   })
 })
 // ── end F-OP-135 ──
+
+// ---- F-OP-308 (order page walk #14, #16): the Shipments card head — its doors together at the end, Create shipment… held with words -----
+describe('F-OP-308: Create shipment… is held with words where it may not open, beside Record made elsewhere', () => {
+  const ready = order('READY', { progress: { ...order('READY').progress, released: 6, shipped: 2 } })
+
+  it('why it is held: no shipping right first, then a final order, then nothing released waiting; null exactly where the door opens', async () => {
+    const { createShipmentHeld } = await import('./model')
+    expect(createShipmentHeld(ready, canOf('owner'))).toBeNull()
+    expect(createShipmentHeld(ready, canOf('sales'))).toEqual({ key: 'ship.create.held.noRight' })
+    expect(createShipmentHeld(ready, canOf('manager'))).toEqual({ key: 'ship.create.held.noRight' })
+    expect(createShipmentHeld({ ...ready, status: 'CANCELLED' }, canOf('owner'))).toEqual({ key: 'held.final' })
+    expect(createShipmentHeld({ ...ready, status: 'CLOSED' }, canOf('owner'))).toEqual({ key: 'held.final' })
+    expect(createShipmentHeld({ ...ready, progress: { ...ready.progress, shipped: 6 } }, canOf('owner'))).toEqual({ key: 'ship.create.held.nothing' })
+    expect(createShipmentHeld(order('CONFIRMED'), canOf('owner'))).toEqual({ key: 'ship.create.held.nothing' })
+    for (const role of ['owner', 'sales', 'manager'] as const)
+      for (const state of [ready, { ...ready, status: 'CANCELLED' as const }, { ...ready, progress: { ...ready.progress, shipped: 6 } }])
+        expect(createShipmentHeld(state, canOf(role)) === null, `${role} ${state.status}`).toBe(createShipmentDoor(state, canOf(role), '/f', true) !== null)
+  })
+
+  it('drawn on the tab: held "Create shipment…" with its words, in one group with the card\'s other door; both languages', async () => {
+    const { renderView } = await import('../../../../../lib/record-thread/parts/testing')
+    const { designScreen } = await import('../fixtures')
+    const item = designScreen.cases.find((entry) => entry.id === 'shipments')!.model
+    for (const locale of LOCALES) {
+      const html = renderView(designScreen.view as import('react').ComponentType<{ model: unknown }>, item, locale)
+      const head = html.slice(html.indexOf('<span class="fw-so-actions">'))
+      expect(head, locale).toContain(locale === 'en' ? 'Create shipment…' : 'Crea spedizione…')
+      expect(head, locale).toContain(locale === 'en' ? 'aria-description="Making a shipment needs the warehouse' : 'aria-description="Creare una spedizione richiede il diritto di spedizione del magazzino"')
+    }
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['ship.create.held.noRight', 'ship.create.held.nothing', 'held.final']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-OP-308

@@ -253,7 +253,7 @@ describe('F-OP-204 — All of <Customer> inside the card: FeedHead, the width me
     const html = render(createElement(AllOfCustomerDock, { label: 'All of Brand Alpha · Read only', model: model(shown), foot: createElement('span', null, 'WRITE IN') }))
     expect(html).toContain('class="fw-rt-column is-docked" aria-label="All of Brand Alpha · Read only"')
     const head = html.indexOf('class="fw-rth fw-aoc-head"')
-    const body = html.indexOf('class="fw-rt-body"')
+    const body = html.indexOf('class="fw-rt-scroll"')
     const foot = html.indexOf('class="fw-rt-foot"')
     expect(head).toBeGreaterThan(-1)
     expect(head).toBeLessThan(body)
@@ -400,7 +400,7 @@ describe('F-OP-205 — compact lines, expand in place, the states inside the car
     expect(css).toMatch(/\.fw-aoc-list \{[^}]*gap: var\(--nds-space-8\);/)
     expect(css).toMatch(/\.fw-aoc-chip \{[^}]*height: 20px;[^}]*padding: 0 var\(--nds-space-8\);/)
     expect(css).toMatch(/\.fw-aoc-line\.is-office \{[^}]*background: var\(--nds-warning-soft\);/)
-    // RC2: the body scrolls in the card (.fw-rt-body), never the feed itself.
+    // RC2: the body scrolls in the card (.fw-rt-scroll), never the feed itself.
     expect(css).not.toMatch(/overflow-y:\s*auto/)
   })
 })
@@ -573,7 +573,7 @@ describe('F-OP-208 — revisit keeps the list and reads fresh; a hint on a held 
     expect(hook).toContain('liveTouches(change, heldRecordsOf(stateRef.current)) && folder.hint()')
     expect(hook).toContain('scrollTop: scrollTop.current')
     const view = readFileSync(new URL('./view/AllOfCustomerFeed.tsx', import.meta.url), 'utf8')
-    expect(view).toContain("const scroller = root.current?.closest<HTMLElement>('.fw-rt-body')")
+    expect(view).toContain("const scroller = root.current?.closest<HTMLElement>('.fw-rt-scroll')")
     expect(view).toContain('if (scrolledTo > 0) scroller.scrollTop = scrolledTo')
     // The hosts call the container on every render (it reads only while All shows), so leaving All never drops it.
     const order = readFileSync(new URL('../../../sales/orders/record/dock/OrderDock.tsx', import.meta.url), 'utf8')
@@ -583,3 +583,34 @@ describe('F-OP-208 — revisit keeps the list and reads fresh; a hint on a held 
   })
 })
 // ---- end F-OP-208
+
+// ---- F-OP-305 (order page walk #13): a record no longer there keeps its true words and offers no door ---------------------------
+describe('F-OP-305 — "A record no longer there": the true words, no door', () => {
+  const GONE = { ...ORDER, id: 'so-gone', label: null, ownNumber: null }
+  const model = (state: FeedState) => feedModel(state, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true })
+  const state = afterFirst(EMPTY_FEED, answer([entry('m2', 20, GONE), entry('m1', 10)]))
+  const anyRecord = () => true
+
+  it('the model marks it gone; answerOf offers no door for it (and still does for a record that is there)', () => {
+    const [gone, there] = model(state).items
+    expect(gone!.gone).toBe(true)
+    expect(there!.gone).toBe(false)
+    expect(answerOf(gone!, anyRecord)).toBeNull()
+    expect(answerOf(gone!, () => false)).toBeNull()
+    expect(answerOf(there!, anyRecord)).toMatchObject({ kind: 'answer' })
+  })
+
+  it('drawn: its chip is words, never a link; no "Open A record no longer there", no Answer — with every host and none', () => {
+    for (const actions of [undefined, { onAnswer: () => undefined }, { canAnswer: anyRecord, onCompose: () => undefined, onAnswer: () => undefined }, { canAnswer: () => false, onCompose: () => undefined }]) {
+      const html = render(createElement(AllOfCustomerFeed, { model: model(afterFirst(EMPTY_FEED, answer([entry('m2', 20, GONE)]))), actions }))
+      const text = textOf(html)
+      expect(text).toContain('A record no longer there')
+      expect(html).toContain('class="fw-aoc-chip is-gone"')
+      expect(html).not.toContain('/so-gone')
+      expect(text).not.toContain('Open A record no longer there')
+      expect(text).not.toContain('Answer')
+      expect(text).toContain('More') // the message itself still opens in place
+    }
+  })
+})
+// ---- end F-OP-305
