@@ -25,6 +25,11 @@ import { draftKeys } from '../band'
 import { closedOf, draftBannerOf, draftChips, linesInOrder, peopleLineWords, reorderHeldKey, savedWords, type DraftChip, type DraftPart } from '../model'
 import { DraftChecklist, PartHeading } from './DraftChecklist'
 // ---- end F-CP-150
+// ---- F-CP-151 (B-CP-072; D14): the draft's files cards — logos, references, measurement sheets; the e-mail way on live.
+import type { DraftFilePart } from '../api'
+import { draftFilesOf, draftMailName, filesAddHeld, LATER_PART_OF, laterToggleOf, uploadsOpenOf } from '../model'
+import { DraftFilesCard, DraftSheets, type DraftFilesActions, type DraftFilesModel, type UploadRow } from './DraftFiles'
+// ---- end F-CP-151
 
 /**
  * SCR-185 › New order & reorder (design portal.customer.neworder): sec:start "How do you want to order?" (the ways in, one
@@ -86,6 +91,8 @@ export interface NewOrderViewModel {
   /** The design review: the frame's layout whatever the window (docked or narrow, the conversation open, a new count). */
   frame?: { readonly mode: PortalFrameMode; readonly viewOpen?: boolean; readonly newCount?: number; readonly width?: PortalDockWidth; readonly hidden?: boolean }
   // ---- end F-CP-150
+  /** F-CP-151: the files going up now, or that did not go (their words). */
+  uploads?: readonly UploadRow[]
 }
 
 export interface NewOrderActions {
@@ -105,6 +112,8 @@ export interface NewOrderActions {
   onRetrySave?: () => void
   /** F-CP-150: a chip of the checklist — scroll to its part and focus it. */
   onChip?: (target: string) => void
+  /** F-CP-151: a part's files — add, take out, "Sending later". */
+  files?: DraftFilesActions
   lines?: LinesActions
   reorder?: ReorderActions
   upload?: UploadActions
@@ -235,6 +244,23 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
   })
   const kind = draftBannerOf({ offline: model.offlineSince !== null, stale: model.stale, refused: model.problem !== null, notice: model.notice !== null, problems: request.problems.length })
   const kit = { t, price: (value: string | null | undefined) => words.price(value, request.currency) }
+  // F-CP-151: each part's files, where they may go up (else the e-mail way), the cap and "Sending later".
+  const files = draftFilesOf(request)
+  const capKey = filesAddHeld(request, { preview: false, offline: false, busy: false })
+  const filesModel = (part: DraftFilePart): DraftFilesModel => {
+    const later = laterToggleOf(request, LATER_PART_OF[part])
+    return {
+      part,
+      files: part === 'LOGO' ? files.logos : part === 'REFERENCE' ? files.references : files.sheets,
+      lines: request.lines,
+      uploading: model.uploads ?? [],
+      open: uploadsOpenOf(request),
+      addHeld: model.writeHeld ?? (capKey ? t(capKey) : null),
+      removeHeld: model.writeHeld,
+      later: later ? { on: later.on, held: model.writeHeld } : null,
+      draftName: draftMailName(request, t),
+    }
+  }
   return (
     <PortalRecordFrame thread={children ?? null} threadLabel={t('draftPage.thread')} design={model.frame}>
       <div
@@ -328,8 +354,12 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
         <Card padded>
           <LinesSection model={{ record, cells: model.cells, notes: model.notes, saving: model.saving, writeHeld: model.writeHeld, chip: chip('NEED'), addLine }} actions={actions?.lines} />
         </Card>
-        {/* F-CP-151: Logos and References. */}
-        <PeopleCard chip={chip('PEOPLE')} record={record} />
+        {/* F-CP-151: 2 Logos beside 3 References; the measurement sheets inside 4 People and sizes. */}
+        <div className="fw-pno-pair">
+          <DraftFilesCard chip={chip('LOGOS')} model={filesModel('LOGO')} actions={actions?.files} />
+          <DraftFilesCard chip={chip('REFERENCES')} model={filesModel('REFERENCE')} actions={actions?.files} />
+        </div>
+        <PeopleCard chip={chip('PEOPLE')} record={record} sheets={filesModel('SHEET')} actions={actions?.files} />
         <div className="fw-pno-pair">
           <DateCard model={model} actions={actions} chip={chip('DATE')} />
           <NotesCard model={model} actions={actions} chip={chip('NOTES')} />
@@ -403,7 +433,7 @@ function StartSection({ model, actions }: { model: NewOrderViewModel; actions?: 
 // ── F-CP-150: the part cards ──────────────────────────────────────────────────────────────────────────────────────────────
 
 /** 4 People and sizes (v1): each line's pieces by its size grid; the roster (name, number, size or measurement sheet, sending later) comes with F-CP-154. */
-function PeopleCard({ chip, record }: { chip: DraftChip; record: DraftRecord }) {
+function PeopleCard({ chip, record, sheets, actions }: { chip: DraftChip; record: DraftRecord; sheets: DraftFilesModel; actions?: DraftFilesActions }) {
   const words = useOrderingWords()
   const { t } = words
   const lines = linesInOrder(record.request.lines)
@@ -422,6 +452,8 @@ function PeopleCard({ chip, record }: { chip: DraftChip; record: DraftRecord }) 
             ))}
           </ul>
         )}
+        {/* F-CP-151: the measurement sheets (body data) and who opens them. */}
+        <DraftSheets model={sheets} actions={actions} />
       </section>
     </Card>
   )

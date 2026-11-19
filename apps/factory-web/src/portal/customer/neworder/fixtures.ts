@@ -11,6 +11,11 @@ import { formatDateTime } from '../../../lib/i18n/format'
 import type { ThreadViewModel } from '../../shell/view/ThreadView'
 import { draftDiscardHeld, draftSendHeld, draftTitleOf } from './model'
 // ---- end F-CP-150
+// ---- F-CP-151 (B-CP-072; D14): the draft's files (made-up names; a line's file names its line by seq on the page).
+import type { DraftFile } from './api'
+import type { UploadRow } from './view/DraftFiles'
+
+// ---- end F-CP-151
 import type { NewOrderViewModel } from './view/NewOrderView'
 import { OrderingCase, type OrderingCaseBuilder } from './view/OrderingCase'
 // B-TH-220: New order as an e-mail, read by Brand Beta (brand B), the made-up reader of every wall scan.
@@ -111,6 +116,32 @@ function draftThread(locale: Locale): ThreadViewModel {
   return { state: 'ready', title: orderingWords(locale).t('draftPage.thread'), record: null, companyName: 'Pelletteria Esempio', messages, composer: { value: '', busy: false, heldReason: null, hint: null, limit: 20_000 }, loadMore: null, accessLine: null, failed: null }
 }
 // ---- end F-CP-150
+
+// ---- F-CP-151: the made-up files of a draft.
+const fileOf = (n: number, originalName: string, contentType: string, lineId: string | null = null, status = 'AVAILABLE'): DraftFile => ({
+  id: `0194f0e2-1940-7000-8000-0000000009${String(n).padStart(2, '0')}`,
+  lineId,
+  originalName,
+  kind: contentType.startsWith('image/') ? 'PHOTO' : 'DOCUMENT',
+  contentType,
+  sizeBytes: 180_000 + n * 1_000,
+  status,
+  version: 1,
+  createdAt: at(-4 + n * 0.1),
+})
+const LINE_TWO = '0194f0e2-1940-7000-8000-000000000302'
+const FILES = {
+  logos: [fileOf(1, 'logo-front.ai', 'application/postscript'), fileOf(2, 'sponsor-back.png', 'image/png', LINE_TWO)],
+  references: [fileOf(3, 'pit-shirt-reference.jpg', 'image/jpeg', LINE_TWO), fileOf(4, 'sleeve-stripes.pdf', 'application/pdf', null, 'QUARANTINED')],
+  sheets: [fileOf(5, 'measures-rider-12.pdf', 'application/pdf')],
+}
+const UPLOADS = (locale: Locale): UploadRow[] => [
+  { key: 'u1', part: 'LOGO', name: 'logo-sleeve.eps', state: 'uploading' },
+  { key: 'u2', part: 'LOGO', name: 'logo.svg', state: 'failed', failure: createTranslator(locale, CATALOGUE[locale][COMPOSE_NS] ?? {})('files.problem.page') },
+  { key: 'u3', part: 'REFERENCE', name: 'pit-photo.jpg', state: 'failed', failure: orderingWords(locale).t('draftPage.files.notNow') },
+]
+const many = (count: number) => Array.from({ length: count }, (_, index) => fileOf(10 + (index % 80), `reference-${index + 1}.jpg`, 'image/jpeg'))
+// ---- end F-CP-151
 
 function page(build: (locale: Locale) => Over = () => ({}), phase: NewOrderPhase = 'draft', beta = false): OrderingCaseBuilder {
   return (locale) => {
@@ -358,6 +389,13 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
       note: '“The factory made it an order: your buyer follows it.” A Buyer reads “Open the order”.',
     },
     // ---- end F-CP-150
+    // ---- F-CP-151 (B-CP-072; D14): the draft's files cards.
+    { id: 'cp151-files', label: 'Files: logos (vector prints best), references, a measurement sheet — uploads open (here)', model: page(() => ({ record: draftRecord({ request: { files: FILES, uploads: { open: true, words: null } } }) })), note: 'Each file says what it is and where it sits (“vector · on the draft”, “picture · on line 2”); one waits for the virus scan; × takes it out by its version. The logos and references chips turn Ready.' },
+    { id: 'cp151-closed', label: 'Uploads closed on live until the virus scanner: the e-mail way in each card', model: page(() => ({ record: draftRecord({ request: { files: FILES, uploads: { open: false, words: 'Uploads from outside are closed for now.' } } }) })), note: 'D14 (O7 not approved): no drop area; “e-mail them to your contact at the factory, naming «BA-PO-4521»”; lines, sizes and notes still work. The API’s English sentence is never shown: the page says it in Italian or English.' },
+    { id: 'cp151-uploading', label: 'A file going up, one refused (an SVG), one that did not go', model: page((locale) => ({ record: draftRecord({ request: { files: { logos: [], references: [], sheets: [] }, uploads: { open: true, words: null } } }), uploads: UPLOADS(locale) })) },
+    { id: 'cp151-full', label: 'The draft holds 50 files: Add held with words', model: page(() => ({ record: draftRecord({ request: { files: { logos: [], references: many(50), sheets: [] }, uploads: { open: true, words: null } } }) })) },
+    { id: 'cp151-later', label: '“We send these later” on Logos (once the API keeps the mark)', model: page(() => ({ record: draftRecord({ request: { files: { logos: [], references: [], sheets: [] }, uploads: { open: true, words: null }, laterParts: ['LOGOS'] } }) })), note: 'The Logos chip says “Sending later”; the toggle shows only once the API answers laterParts (B-CP-075).' },
+    // ---- end F-CP-151
     { id: 'reorder', label: 'Reorder: the past orders', model: page(() => ({ way: 'reorder', reorder: reorderModel() })), note: 'Their PO first, ours second (RefPair), date, lines, pieces. Enter or a click opens one.' },
     {
       id: 'reorder-order',

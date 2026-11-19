@@ -41,6 +41,21 @@ export type Problem = z.infer<typeof problemSchema>
 export const noticeSchema = z.object({ code: z.enum(NOTICE_CODES) })
 export type Notice = z.infer<typeof noticeSchema>
 
+// F-CP-151 (B-CP-072): one of a draft's files (its own party's: named, with its version for a removal).
+const draftFileSchema = z.object({
+  id: z.string(),
+  /** The line it is on (null: the draft's own). */
+  lineId: z.string().nullable(),
+  originalName: z.string(),
+  kind: z.string(),
+  contentType: z.string(),
+  sizeBytes: z.number(),
+  status: z.string(),
+  version: z.number(),
+  createdAt: z.string(),
+})
+export type DraftFile = z.infer<typeof draftFileSchema>
+
 export const lineSchema = z.object({
   id: z.string(),
   seq: z.number(),
@@ -94,6 +109,11 @@ export const requestSchema = z.object({
   lastEditedBy: z.string().nullable().optional(),
   lastEditedAt: z.string().nullable().optional(),
   // ---- end F-CP-150
+  // ---- F-CP-151 (B-CP-072): the draft's logos, references and measurement sheets (its own and its lines'), and whether files go
+  // up here now — on live, until the virus scanner runs (D14, O7 not approved), they do not: the page says to e-mail them.
+  files: z.object({ logos: z.array(draftFileSchema), references: z.array(draftFileSchema), sheets: z.array(draftFileSchema) }).optional(),
+  uploads: z.object({ open: z.boolean(), words: z.string().nullable() }).optional(),
+  // ---- end F-CP-151
 })
 export type DraftRequest = z.infer<typeof requestSchema>
 
@@ -149,6 +169,8 @@ export interface HeaderBody {
   shipToAddressId?: string | null
   requestedDate?: string | null
   note?: string | null
+  /** F-CP-151: the parts the customer sends later (LOGOS, REFERENCES, PEOPLE) — B-CP-075 keeps them (PA2). */
+  laterParts?: string[]
 }
 
 const path = (id: string) => `/portal/order-requests/${encodeURIComponent(id)}`
@@ -192,6 +214,34 @@ export const sentSchema = recordSchema.extend({ sent: z.object({ number: z.strin
 export type SentRecord = z.infer<typeof sentSchema>
 export const sendDraft = (api: ApiClient, id: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<SentRecord> =>
   api.post(`${path(id)}/send`, { body: { version }, schema: sentSchema, idempotencyKey })
+
+// ---- F-CP-151 (customer page plan C5; B-CP-072): a draft's files — POST …/files {part, lineId?, name, type, size, sha256} announces
+// one and says where to PUT its bytes, …/files/:fileId/complete confirms it (held for the virus scan where one runs), DELETE
+// …/files/:fileId?version= takes it out (the FILE's version; the draft as read comes back). A LOGO is filed as artwork, a
+// REFERENCE with no category, a SHEET as a measurement sheet (body data: in the factory only who handles measurements opens it).
+// The body names no party or company: the session's (W-CP-1, W-CP-3).
+export const DRAFT_FILE_PARTS = ['LOGO', 'REFERENCE', 'SHEET'] as const
+export type DraftFilePart = (typeof DRAFT_FILE_PARTS)[number]
+const presignedSchema = z.object({ method: z.enum(['PUT', 'GET']), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: z.string() })
+
+export interface DraftFileAnnounce {
+  part: DraftFilePart
+  lineId?: string | null
+  originalName: string
+  contentType: string
+  sizeBytes: number
+  sha256: string
+}
+
+export const announceDraftFile = (api: ApiClient, id: string, body: DraftFileAnnounce, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(`${path(id)}/files`, { body, schema: z.object({ file: draftFileSchema, upload: presignedSchema }), idempotencyKey })
+
+export const completeDraftFile = (api: ApiClient, id: string, fileId: string, idempotencyKey: string = newIdempotencyKey()): Promise<DraftFile> =>
+  api.post(`${path(id)}/files/${encodeURIComponent(fileId)}/complete`, { body: {}, schema: z.object({ file: draftFileSchema }), idempotencyKey }).then((answer) => answer.file)
+
+export const removeDraftFile = (api: ApiClient, id: string, fileId: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
+  api.request('DELETE', `${path(id)}/files/${encodeURIComponent(fileId)}`, { query: { version }, schema: recordSchema, idempotencyKey })
+// ---- end F-CP-151
 
 // ── reorder ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export const pastOrderRowSchema = z.object({ id: z.string(), number: z.string(), yourNumber: ownNumber /* B-TH-304 */, customerRef: z.string().nullable(), orderDate: z.string().nullable(), lines: z.number(), pieces: z.number() })

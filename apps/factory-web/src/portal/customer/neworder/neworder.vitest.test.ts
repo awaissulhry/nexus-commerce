@@ -15,6 +15,9 @@ import { ADDRESSES, catalogueRead, draftRecord, lineOf, pastOrder, styleDetail, 
 import { LINE_TROUSERS } from './design-data'
 import { closedOf, draftBannerOf, draftChips, draftDiscardHeld, draftFactsOf, draftSendHeld, draftStateOf, draftTitleOf, laterPartsOf, linesInOrder, mayOf, partTone, peopleLineWords, reorderHeldKey, savedWords, whoMayOrder } from './model'
 import { OrderingCase } from './view/OrderingCase'
+// F-CP-151: the draft's files.
+import { announceDraftFile, completeDraftFile, removeDraftFile } from './api'
+import { DRAFT_FILES_MAX, draftFileCount, draftMailName, fileHeldKey, fileKindOf, fileWhereWords, filesAddHeld, laterToggleOf, uploadsOpenOf } from './model'
 import { designScreen as newOrderScreen, REQUEST_CASES } from './fixtures'
 // B-TH-220, B-TH-303: New order as an e-mail.
 import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
@@ -779,3 +782,100 @@ describe('F-CP-150 — the draft order page: checklist, held Send, one banner, r
   })
 })
 // ---- end F-CP-150
+
+// ---- F-CP-151 (customer page plan C5; 12 §2 parts 2–4; D14): the draft's files cards --------------------------------------------
+describe('F-CP-151 — the draft’s files: logos, references, measurement sheets; the e-mail way while uploads are closed', () => {
+  const file = (over: Record<string, unknown> = {}) => ({ id: 'f1', lineId: null, originalName: 'logo-front.ai', kind: 'DOCUMENT', contentType: 'application/postscript', sizeBytes: 9, status: 'AVAILABLE', version: 1, createdAt: '2026-11-19T09:00:00Z', ...over })
+  const FACTS = { preview: false, offline: false, busy: false }
+
+  it('closed-gate words: files go up only where the API says so; on live the cards say to e-mail them, naming the draft (it, en)', () => {
+    expect(uploadsOpenOf({})).toBe(false)
+    expect(uploadsOpenOf({ uploads: { open: false, words: 'closed' } })).toBe(false)
+    expect(uploadsOpenOf({ uploads: { open: true, words: null } })).toBe(true)
+    expect(draftMailName({ customerRef: 'BA-PO-4521', lines: [] }, t('en'))).toBe('BA-PO-4521')
+    expect(draftMailName({ customerRef: null, lines: [] }, t('en'))).toBe('Untitled draft')
+    for (const locale of ['it', 'en'] as const) {
+      const html = renderCase(locale, 'cp151-closed')
+      expect(html, locale).toContain(t(locale)('draftPage.files.closed', { draft: 'BA-PO-4521' }))
+      expect(html, locale).toContain(t(locale)('draftPage.files.sheetsClosed', { draft: 'BA-PO-4521' }))
+      // The API's English sentence is never drawn; no drop area while closed.
+      expect(html, locale).not.toContain('Uploads from outside are closed for now.')
+      expect(html, locale).not.toContain('nds-dropzone')
+      expect(html.match(KEY)?.[0] ?? null, locale).toBeNull()
+    }
+  })
+
+  it('cap 50: the 51st file is held with words; a preview or offline holds every file first', () => {
+    expect(DRAFT_FILES_MAX).toBe(50)
+    const files = (count: number) => ({ logos: [], references: Array.from({ length: count }, (_, index) => file({ id: `r${index}` })), sheets: [] })
+    expect(draftFileCount({ files: files(49) })).toBe(49)
+    expect(filesAddHeld({ files: files(49) }, FACTS)).toBeNull()
+    expect(filesAddHeld({ files: files(50) }, FACTS)).toBe('draftPage.files.full')
+    expect(filesAddHeld({ files: files(0) }, { ...FACTS, preview: true })).toBe('held.preview')
+    expect(filesAddHeld({}, { ...FACTS, offline: true })).toBe('held.offline')
+    expect(renderCase('en', 'cp151-full')).toContain('This draft already holds 50 files')
+  })
+
+  it('"Sending later": shown only once the API keeps the mark; on and off say which parts the change sends', () => {
+    expect(laterToggleOf({}, 'LOGOS')).toBeNull()
+    expect(laterToggleOf({ laterParts: [] }, 'LOGOS')).toEqual({ on: false, next: ['LOGOS'] })
+    expect(laterToggleOf({ laterParts: ['LOGOS'] }, 'LOGOS')).toEqual({ on: true, next: [] })
+    expect(laterToggleOf({ laterParts: ['PEOPLE'] }, 'LOGOS')).toEqual({ on: false, next: ['LOGOS', 'PEOPLE'] })
+    const later = renderCase('en', 'cp151-later')
+    expect(later).toContain('We send these later')
+    expect(later).toContain('Sending later')
+    expect(renderCase('en', 'cp151-files')).not.toContain('We send these later')
+  })
+
+  it('each file says what it is and where it sits; a file waiting for the virus scan says so; the chips count the files', () => {
+    const lines = [{ id: 'l1', seq: 1 }, { id: 'l2', seq: 2 }]
+    expect(fileKindOf(file())).toBe('vector')
+    expect(fileKindOf(file({ originalName: 'stripes.pdf', contentType: 'application/pdf' }))).toBe('vector')
+    expect(fileKindOf(file({ originalName: 'sponsor.png', contentType: 'image/png', kind: 'PHOTO' }))).toBe('picture')
+    expect(fileKindOf(file({ originalName: 'brief.docx', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }))).toBe('document')
+    expect(fileWhereWords(file({ lineId: 'l2' }), lines, t('en'))).toBe('on line 2')
+    expect(fileWhereWords(file(), lines, t('it'))).toBe('sulla bozza')
+    expect(fileHeldKey(file())).toBeNull()
+    expect(fileHeldKey(file({ status: 'QUARANTINED' }))).toBe('draftPage.files.scanning')
+    const record = draftRecord({ request: { files: { logos: [file()], references: [file({ id: 'f2' })], sheets: [] }, uploads: { open: true, words: null } } })
+    expect(draftFactsOf(record)).toMatchObject({ logos: 1, references: 1 })
+    const chips = draftChips(record)
+    expect(chips.find((chip) => chip.part === 'LOGOS')!.state).toBe('READY')
+    expect(chips.find((chip) => chip.part === 'REFERENCES')!.state).toBe('READY')
+    for (const locale of ['it', 'en'] as const) {
+      const html = renderCase(locale, 'cp151-files')
+      expect(html, locale).toContain(t(locale)('draftPage.files.logoHint'))
+      expect(html, locale).toContain(`${t(locale)('draftPage.files.kind.vector')} · ${t(locale)('draftPage.files.onDraft')}`)
+      expect(html, locale).toContain(`${t(locale)('draftPage.files.kind.picture')} · ${t(locale)('draftPage.files.onLine', { seq: 2 })}`)
+      expect(html, locale).toContain(t(locale)('draftPage.files.sheetsPrivacy'))
+      expect(html.match(KEY)?.[0] ?? null, locale).toBeNull()
+    }
+    const uploading = renderCase('en', 'cp151-uploading')
+    expect(uploading).toContain('Uploading…')
+    expect(uploading).toContain('Not uploaded:')
+  })
+
+  it('W-CP-1 / W-CP-3: a file goes onto the session’s own draft by its id (and its line’s) only — never a party or a company', async () => {
+    const calls: { method: string; path: string; body?: unknown; query?: unknown }[] = []
+    const answer = { file: file({ status: 'PENDING_UPLOAD' }), upload: { method: 'PUT', url: '/store/x', headers: {}, expiresAt: '2026-11-19T10:05:00Z' } }
+    const api = {
+      post: async (path: string, options: { body?: unknown }) => {
+        calls.push({ method: 'POST', path, body: options.body })
+        return path.endsWith('/complete') ? { file: file() } : answer
+      },
+      request: async (method: string, path: string, options: { query?: unknown }) => {
+        calls.push({ method, path, query: options.query })
+        return draftRecord()
+      },
+    } as unknown as ApiClient
+    await announceDraftFile(api, 'd1', { part: 'LOGO', lineId: 'l2', originalName: 'logo-front.ai', contentType: 'application/postscript', sizeBytes: 9, sha256: 'a'.repeat(64) })
+    await completeDraftFile(api, 'd1', 'f1')
+    await removeDraftFile(api, 'd1', 'f1', 3)
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(['POST /portal/order-requests/d1/files', 'POST /portal/order-requests/d1/files/f1/complete', 'DELETE /portal/order-requests/d1/files/f1'])
+    expect(calls[0]!.body).toEqual({ part: 'LOGO', lineId: 'l2', originalName: 'logo-front.ai', contentType: 'application/postscript', sizeBytes: 9, sha256: 'a'.repeat(64) })
+    expect(calls[2]!.query).toEqual({ version: 3 })
+    expect(JSON.stringify(calls)).not.toMatch(/party|company/i)
+  })
+})
+// ---- end F-CP-151
+

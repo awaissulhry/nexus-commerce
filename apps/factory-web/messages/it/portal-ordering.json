@@ -307,7 +307,7 @@
     "lines_other": "{count} righe verranno eliminate.",
     "noNumber": "La bozza non è mai stata inviata: il lavoro non è mai partito.",
     "back": "inizia un nuovo ordine",
-    "acknowledge": "Ho capito: la bozza e le sue righe vengono eliminate."
+    "acknowledge": "Ho capito: la bozza, le sue righe e i suoi file vengono eliminati."
   },
   "catalogue": {
     "title": "Catalogo",
@@ -580,6 +580,32 @@
     "problems_one": "{count} problema da sistemare prima di inviare",
     "problems_other": "{count} problemi da sistemare prima di inviare",
     "keySend": "Invia alla fabbrica",
-    "keyThread": "Mostra o nascondi la conversazione"
+    "keyThread": "Mostra o nascondi la conversazione",
+    "files": {
+      "logoHint": "I file vettoriali (AI, EPS, PDF) stampano meglio; per iniziare va bene anche una foto.",
+      "addLogos": "Aggiungi loghi: trascinateli qui o sceglieteli",
+      "addReferences": "Aggiungi foto o PDF: trascinateli qui o sceglieteli",
+      "addSheets": "Aggiungi una scheda misure: trascinatela qui o sceglietela",
+      "onDraft": "sulla bozza",
+      "onLine": "sulla riga {seq}",
+      "kind": {
+        "vector": "vettoriale",
+        "picture": "foto",
+        "document": "documento"
+      },
+      "scanning": "in attesa del controllo antivirus: arriva alla fabbrica quando è pulito",
+      "uploading": "Caricamento…",
+      "failed": "Non caricato: {reason}",
+      "full": "Questa bozza ha già 50 file: toglietene uno o scriveteci nei messaggi per il resto.",
+      "closed": "Per ora qui non si caricano file: inviateli per e-mail al vostro referente in fabbrica citando «{draft}». Li aggiungiamo alla richiesta quando la inviate.",
+      "sheetsClosed": "Schede misure: inviatele per e-mail al vostro referente in fabbrica citando «{draft}».",
+      "notNow": "In questo momento qui non si caricano file: inviateli per e-mail al vostro referente in fabbrica.",
+      "later": "Li mandiamo dopo",
+      "noLogos": "Ancora nessun logo.",
+      "noReferences": "Ancora nessun riferimento.",
+      "noSheets": "Ancora nessuna scheda misure.",
+      "sheetsTitle": "Schede misure",
+      "sheetsPrivacy": "Le schede misure sono dati personali: in fabbrica le aprono solo le persone che gestiscono le misure."
+    }
   }
 }

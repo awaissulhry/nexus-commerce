@@ -7,6 +7,9 @@ import type { OwnNumber } from './api'
 // F-CP-150: the draft's checklist is the domain's (the office's Drafts view reads the same rule, B-CP-071).
 import { DRAFT_LATER_PARTS, DRAFT_PARTS, draftReadiness, type DraftFacts, type DraftLaterPart, type DraftPart, type DraftPartState } from '@nexus/factory-domain/sales/portal-ordering/office'
 import type { RequestStatus } from './api'
+// F-CP-151: the draft's files (B-CP-072): the domain's cap, the parts.
+import { DRAFT_FILES_MAX } from '@nexus/factory-domain/sales/portal-ordering/draft-files'
+import type { DraftFile, DraftFilePart } from './api'
 
 /**
  * New order & reorder (B-W2b-194; design portal.customer.neworder, SCR-185), pure: the page's address, the three ways in,
@@ -400,8 +403,9 @@ export function draftFactsOf(record: Pick<DraftRecord, 'request' | 'seesPrices'>
   return {
     lines: request.lines.length,
     linesWithoutPieces: request.lines.filter((line) => line.pieces === 0).length,
-    logos: 0,
-    references: 0,
+    // F-CP-151: the draft's own files and its lines' (B-CP-072).
+    logos: draftFilesOf(request).logos.length,
+    references: draftFilesOf(request).references.length,
     requestedDate: request.requestedDate !== null && request.requestedDate !== '',
     headerProblems: request.problems.filter((problem) => problem.lineId === null && HEADER_CODES.includes(problem.code)).length,
     note: (request.note ?? '').trim() !== '',
@@ -515,3 +519,69 @@ export function closedOf(status: RequestStatus, seesOrders: boolean): { body: st
 export const peopleLineWords = (line: Pick<DraftLine, 'seq' | 'pieces'>, t: Translate, pieces: (n: number) => string): string =>
   line.pieces > 0 ? t('draftPage.people.grid', { seq: line.seq, pieces: pieces(line.pieces) }) : t('draftPage.people.none', { seq: line.seq })
 // ---- end F-CP-150
+
+// ---- F-CP-151 (customer page plan C5; 12 §2 parts 2–4; D14): the draft's files cards ------------------------------------------
+// Logos (filed as artwork; vector prints best, a picture is never refused for it), references (pictures or PDFs), measurement
+// sheets (body data). On live the virus scanner does not run yet (O7 not approved): the cards say to e-mail the files, naming the
+// draft; lines, sizes and notes still work. At most DRAFT_FILES_MAX files on a draft (its own and its lines' together).
+
+export { DRAFT_FILES_MAX }
+
+const NO_FILES = Object.freeze({ logos: [] as DraftFile[], references: [] as DraftFile[], sheets: [] as DraftFile[] })
+
+/** The draft's files by part (an answer from before B-CP-072: none). */
+export const draftFilesOf = (request: Pick<DraftRequest, 'files'>): { logos: readonly DraftFile[]; references: readonly DraftFile[]; sheets: readonly DraftFile[] } => request.files ?? NO_FILES
+
+/** How many files the draft holds (the cap counts them all). */
+export const draftFileCount = (request: Pick<DraftRequest, 'files'>): number => {
+  const files = draftFilesOf(request)
+  return files.logos.length + files.references.length + files.sheets.length
+}
+
+/** Files go up here now: only when the API says so (an answer without it: closed — the e-mail way). */
+export const uploadsOpenOf = (request: Pick<DraftRequest, 'uploads'>): boolean => request.uploads?.open ?? false
+
+/** Why a file cannot be added now (a key), or null: a preview or offline first, then the draft's cap. */
+export function filesAddHeld(request: Pick<DraftRequest, 'files'>, facts: WriteFacts): string | null {
+  return writeHeld(facts) ?? (draftFileCount(request) >= DRAFT_FILES_MAX ? 'draftPage.files.full' : null)
+}
+
+/** The part a card's files are, and the list they come from. */
+export const FILE_PART_OF: Readonly<Record<'logos' | 'references' | 'sheets', DraftFilePart>> = Object.freeze({ logos: 'LOGO', references: 'REFERENCE', sheets: 'SHEET' })
+
+/** The checklist part a file part marks "we send it later" (sheets belong to People and sizes). */
+export const LATER_PART_OF: Readonly<Record<DraftFilePart, DraftLaterPart>> = Object.freeze({ LOGO: 'LOGOS', REFERENCE: 'REFERENCES', SHEET: 'PEOPLE' })
+
+/**
+ * The "Sending later" toggle of a part: shown once the API keeps the mark (B-CP-075 answers `laterParts`; before it, null: no
+ * toggle, never one that saves nothing), whether it is on, and the parts a change sends.
+ */
+export function laterToggleOf(request: Pick<DraftRequest, 'laterParts'>, part: DraftLaterPart): { on: boolean; next: DraftLaterPart[] } | null {
+  if (request.laterParts === undefined) return null
+  const later = laterPartsOf(request)
+  const on = later.includes(part)
+  return { on, next: on ? later.filter((entry) => entry !== part) : DRAFT_LATER_PARTS.filter((entry) => entry === part || later.includes(entry)) }
+}
+
+const VECTOR = /\.(ai|eps|ps|pdf)$/i
+const VECTOR_TYPES = ['application/pdf', 'application/postscript', 'application/illustrator', 'application/vnd.adobe.illustrator']
+
+/** What a file is, in a word: a vector file (prints best), a picture, or a document. */
+export function fileKindOf(file: Pick<DraftFile, 'originalName' | 'contentType' | 'kind'>): 'vector' | 'picture' | 'document' {
+  if (VECTOR.test(file.originalName) || VECTOR_TYPES.includes(file.contentType)) return 'vector'
+  return file.kind === 'PHOTO' || file.contentType.startsWith('image/') ? 'picture' : 'document'
+}
+
+/** Where a file sits: "on the draft", or "on line 2" (by the line's seq). */
+export function fileWhereWords(file: Pick<DraftFile, 'lineId'>, lines: readonly Pick<DraftLine, 'id' | 'seq'>[], t: Translate): string {
+  const line = file.lineId ? lines.find((entry) => entry.id === file.lineId) : undefined
+  return line ? t('draftPage.files.onLine', { seq: line.seq }) : t('draftPage.files.onDraft')
+}
+
+/** A file still held for the virus scan (where one runs) says so; an available one says nothing. */
+export const fileHeldKey = (file: Pick<DraftFile, 'status'>): string | null => (file.status === 'AVAILABLE' ? null : 'draftPage.files.scanning')
+
+/** How the draft is named in the e-mail way ("naming «BA-PO-4521»"): their PO, else its title. */
+export const draftMailName = (request: Pick<DraftRequest, 'customerRef' | 'lines'>, t: Translate): string => request.customerRef ?? draftTitleOf(request, t)
+// ---- end F-CP-151
+

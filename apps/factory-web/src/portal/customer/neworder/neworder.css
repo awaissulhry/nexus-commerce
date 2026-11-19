@@ -694,3 +694,53 @@
   justify-content: flex-end;
 }
 /* ---- end F-CP-150 */
+
+/* ---- F-CP-151 (12 §2 parts 2–4; D14): the draft's files — rows, the drop area or the e-mail way, "Sending later". */
+.fw-pno-files,
+.fw-pno-sheets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pno-sheets {
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-pno-filelist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pno-mailway {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-12);
+  border-left: 3px solid var(--nds-info);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pno-mailway > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.fw-pno-later {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+/* ---- end F-CP-151 */

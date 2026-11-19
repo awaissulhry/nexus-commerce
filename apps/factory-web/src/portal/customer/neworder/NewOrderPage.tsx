@@ -73,6 +73,16 @@ import { PortalThread } from '../../shell/thread/PortalThread'
 import { fetchColleagues } from './api'
 import { draftDiscardHeld, draftSendHeld, draftTitleOf, mayOf, whoMayOrder } from './model'
 // ---- end F-CP-150
+// ---- F-CP-151 (B-CP-072; D14): the draft's files — announced, PUT to the store, completed; taken out by their version.
+import { useT } from '../../../lib/i18n/provider'
+import { COMPOSE_NS } from '../../../lib/request-compose/model'
+import { heldProblem } from '../../../lib/request-compose/files'
+import { contentTypeOf } from '../../../lib/record-thread/attachments/model'
+import { putToStore, sha256Hex, StoreError } from '../../../record-panels/store'
+import { announceDraftFile, completeDraftFile, removeDraftFile, type DraftFile, type DraftFilePart } from './api'
+import { DRAFT_FILES_MAX, draftFileCount, LATER_PART_OF, laterToggleOf } from './model'
+import type { UploadRow } from './view/DraftFiles'
+// ---- end F-CP-151
 
 /**
  * `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=&reorder=&line=` for a customer (B-W2b-194, SCR-185, on
@@ -94,7 +104,7 @@ import { draftDiscardHeld, draftSendHeld, draftTitleOf, mayOf, whoMayOrder } fro
  */
 export function CustomerNewOrderPage() {
   return (
-    <WithMessages namespaces={[NS, 'ds-words', 'lists', 'portal-account']}>
+    <WithMessages namespaces={[NS, 'ds-words', 'lists', 'portal-account', COMPOSE_NS /* F-CP-151: a file's refusal words */]}>
       <NewOrderContainer />
     </WithMessages>
   )
@@ -189,6 +199,7 @@ function NewOrderContainer() {
   const [staleBy, setStaleBy] = useState<string | null>(null)
   const [orderers, setOrderers] = useState<string[] | null>(null)
   // ---- end F-CP-150
+  const [uploads, setUploads] = useState<UploadRow[]>([]) // F-CP-151: files going up now, or that did not go
 
   const recordRef = useRef<DraftRecord | null>(null)
   recordRef.current = record
@@ -233,6 +244,7 @@ function NewOrderContainer() {
     setNotes({})
     setStale(false)
     setStaleBy(null) // F-CP-150
+    setUploads([]) // F-CP-151
   }, [])
 
   const apply = useCallback((next: DraftRecord) => {
@@ -736,7 +748,8 @@ function NewOrderContainer() {
       Object.keys(notes).length > 0 ||
       (picker !== null && pickerLineCount({ ...picker, onDraft }) > 0) ||
       sheet.state === 'read' ||
-      (address !== null && addressTyped(address.draft)))
+      (address !== null && addressTyped(address.draft)) ||
+      uploads.some((row) => row.state === 'uploading')) // F-CP-151: never leave half way through an upload
   const recheck = useCallback(() => {
     const current = recordRef.current
     if (!current || current.request.status !== 'DRAFT') return
@@ -758,6 +771,75 @@ function NewOrderContainer() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [recheck])
   usePortalUnsaved('neworder', { dirty, what: t('unsaved.what'), save: flush })
+
+  // ---- F-CP-151 (B-CP-072; D14): a part's files. Each is checked as the API will (kinds and sizes, never a page or a script),
+  // announced, its bytes PUT to the store, completed (held for the virus scan where one runs); then the draft is read again for its
+  // files (a file moves no version of the draft: a newer version meanwhile goes through the usual re-read). On live the cards show
+  // the e-mail way instead (the API's `uploads`), so nothing is dropped here.
+  const tc = useT(COMPOSE_NS)
+  const failureOf = useCallback(
+    (error: unknown): string => {
+      if (error instanceof StoreError) return tc('files.failed.store')
+      if (!isApiError(error)) return tc('files.failed.network')
+      // The API's own words in the person's language (refusal/TOO_MANY_FILES, refusal/NO_UPLOAD).
+      const refusal = error.issues.find((issue) => issuePath(issue).replace(/\./g, '/').startsWith('refusal/'))
+      if (refusal?.message) return refusal.message
+      return t(error.kind === 'unavailable' ? 'draftPage.files.notNow' : refusalOf(error.kind))
+    },
+    [tc, t],
+  )
+  const refreshFiles = useCallback(async () => {
+    const current = recordRef.current
+    if (!current) return
+    try {
+      const next = await fetchDraft(api, current.request.id)
+      if (next.request.version === recordRef.current?.request.version) apply(next)
+      else recheck()
+    } catch {
+      // The next read (the tab coming back, the live channel) shows them.
+    }
+  }, [api, apply, recheck])
+  const addFiles = async (part: DraftFilePart, list: readonly File[]) => {
+    const current = recordRef.current
+    if (!current || writeHeld({ preview, offline, busy: false })) return
+    let room = DRAFT_FILES_MAX - draftFileCount(current.request)
+    for (const file of list) {
+      const key = newIdempotencyKey()
+      const contentType = contentTypeOf(file).split(';')[0]!.trim().toLowerCase()
+      const problem = room <= 0 ? { words: t('draftPage.files.full') } : (() => {
+        const found = heldProblem({ name: file.name, type: contentType, size: file.size })
+        return found ? { words: tc(found.key, found.params) } : null
+      })()
+      if (problem) {
+        setUploads((rows) => [...rows, { key, part, name: file.name, state: 'failed', failure: problem.words }])
+        continue
+      }
+      room -= 1
+      setUploads((rows) => [...rows, { key, part, name: file.name, state: 'uploading' }])
+      try {
+        const bytes = await file.arrayBuffer()
+        const { file: announced, upload } = await announceDraftFile(api, current.request.id, { part, originalName: file.name, contentType, sizeBytes: file.size, sha256: await sha256Hex(bytes) }, key)
+        await putToStore(upload, new Blob([bytes], { type: contentType }))
+        await completeDraftFile(api, current.request.id, announced.id)
+        setUploads((rows) => rows.filter((row) => row.key !== key))
+      } catch (error) {
+        setUploads((rows) => rows.map((row) => (row.key === key ? { ...row, state: 'failed' as const, failure: failureOf(error) } : row)))
+      }
+    }
+    await refreshFiles()
+  }
+  const removeFile = (file: DraftFile) => {
+    const id = recordRef.current?.request.id
+    if (id) void write(`removeFile:${file.id}:${file.version}`, (_version, key) => removeDraftFile(api, id, file.id, file.version, key))
+  }
+  /** "Sending later" for a part (sheets: People and sizes) — once the API keeps the mark (B-CP-075). */
+  const markLater = (part: DraftFilePart, on: boolean) => {
+    const current = recordRef.current
+    const toggle = current ? laterToggleOf(current.request, LATER_PART_OF[part]) : null
+    if (!current || !toggle || toggle.on === on) return
+    void write(`later:${toggle.next.join(',')}`, (version, key) => changeHeader(api, current.request.id, { version, laterParts: toggle.next }, key))
+  }
+  // ---- end F-CP-151
 
   // ── the band ────────────────────────────────────────────────────────────────────────────────────────────────────────
   // F-CP-150: held, never hidden — a Designer reads the names of who may order; Discard… held for a colleague who neither orders
@@ -818,6 +900,7 @@ function NewOrderContainer() {
         sent,
         closed: record && record.request.status !== 'DRAFT' && !sent ? { status: record.request.status, salesOrder: record.request.salesOrder ? { id: record.request.salesOrder.id } : null } : null, // B-TH-304: no office number
         offlineSince,
+        uploads, // F-CP-151
         // ---- F-CP-150
         staleBy,
         seesOrders,
@@ -917,6 +1000,8 @@ function NewOrderContainer() {
           onClose: () => setAddress((now) => (now?.busy ? now : null)),
         },
         discard: { onConfirm: () => void confirmDiscard(), onCancel: () => setDiscard((now) => (now?.busy ? now : null)) },
+        // F-CP-151: a part's files.
+        files: { onFiles: (part, list) => void addFiles(part, list), onRemove: removeFile, onLater: markLater },
         // F-CP-150: a chip of the checklist — its part's card, scrolled into view and focused.
         onChip: (target) => {
           const element = document.getElementById(target)

@@ -307,7 +307,7 @@
     "lines_other": "{count} lines will be deleted.",
     "noNumber": "The draft was never sent: work never started on it.",
     "back": "start a new order",
-    "acknowledge": "I understand: the draft and its lines are deleted."
+    "acknowledge": "I understand: the draft, its lines and its files are deleted."
   },
   "catalogue": {
     "title": "Catalogue",
@@ -580,6 +580,32 @@
     "problems_one": "{count} problem to fix before you send",
     "problems_other": "{count} problems to fix before you send",
     "keySend": "Send to the factory",
-    "keyThread": "Show or hide the conversation"
+    "keyThread": "Show or hide the conversation",
+    "files": {
+      "logoHint": "Vector files (AI, EPS, PDF) print best; a picture is fine to start.",
+      "addLogos": "Add logos: drop them here or choose them",
+      "addReferences": "Add pictures or PDFs: drop them here or choose them",
+      "addSheets": "Add a measurement sheet: drop it here or choose it",
+      "onDraft": "on the draft",
+      "onLine": "on line {seq}",
+      "kind": {
+        "vector": "vector",
+        "picture": "picture",
+        "document": "document"
+      },
+      "scanning": "held for the virus scan: it reaches the factory once it is clean",
+      "uploading": "Uploading…",
+      "failed": "Not uploaded: {reason}",
+      "full": "This draft already holds 50 files: remove one, or write to us in the messages for the rest.",
+      "closed": "Files cannot be uploaded here yet: e-mail them to your contact at the factory, naming «{draft}». We add them to the request when you send it.",
+      "sheetsClosed": "Measurement sheets: e-mail them to your contact at the factory, naming «{draft}».",
+      "notNow": "Files cannot be uploaded here right now: e-mail them to your contact at the factory.",
+      "later": "We send these later",
+      "noLogos": "No logos yet.",
+      "noReferences": "No references yet.",
+      "noSheets": "No measurement sheets yet.",
+      "sheetsTitle": "Measurement sheets",
+      "sheetsPrivacy": "Measurement sheets are personal data: at the factory only the people who handle measurements open them."
+    }
   }
 }
