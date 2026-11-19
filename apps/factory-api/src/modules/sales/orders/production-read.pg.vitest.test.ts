@@ -84,7 +84,7 @@ const workOrderOf = (answer: Json, workOrderId: string): Json | undefined => (an
 
 beforeAll(async () => {
   forgetProgress()
-  db = await migratedDatabase('sa031_production_read')
+  db = await migratedDatabase('sa031_prod_read')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 8 } })
   for (const seed of [seedCore, seedAuth, seedRoles, seedFiles]) await seed({ db: database, namespace: ns })
   await seedProduction({ db: database, namespace: ns })
@@ -96,21 +96,25 @@ beforeAll(async () => {
   w = await productionTwoBrands({ db, database, app, namespace: ns })
   expect(w.a.partyId).toBe(ids.a)
 
-  // Alpha's SO-A1 (40 pieces) and SO-A2 (60) of our own collection's jacket, made by ONE work order of 100 pieces.
+  // Alpha's SO-A1 (40 pieces: 20 of 50, 20 of 52) and SO-A2 (60 of 54) of our own collection's jacket, made by ONE work order of
+  // 100 pieces. A work order holds one cell per colourway and size (production/work-orders cells.ts clashProblems), so the two
+  // orders' lines of the one colourway ask different sizes.
   const [harnessLine] = await admin<{ colourwayId: string; companyId: string }>(`SELECT "colourwayId", "companyId" FROM "SalesOrderLine" WHERE id = $1`, [w.a.salesOrderLineId])
   const actorId = seedUuid(ns, 'actor')
+  const sizesOf: Readonly<Record<'A1' | 'A2', readonly (readonly [string, number])[]>> = { A1: [['50', 20], ['52', 20]], A2: [['54', 60]] }
   await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId }, (client) =>
     client.$transaction(async (tx) => {
-      for (const [orderId, lineId, tag, half] of [[alpha.so1, alpha.line1, 'A1', 20], [alpha.so2, alpha.line2, 'A2', 30]] as const) {
+      for (const [orderId, lineId, tag] of [[alpha.so1, alpha.line1, 'A1'], [alpha.so2, alpha.line2, 'A2']] as const) {
+        const pieces = sizesOf[tag].reduce((sum, [, quantity]) => sum + quantity, 0)
         await tx.salesOrder.create({
           data: { id: orderId, companyId: harnessLine!.companyId, partyId: ids.a, number: `T-SA031-SO-${tag}`, customerRef: `T-SA031-PO-${tag}`, status: 'CONFIRMED', orderDate: new Date('2026-11-03T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' }, promiseDate: new Date('2026-12-20T00:00:00.000Z') },
           select: { id: true },
         })
         await tx.salesOrderLine.create({
-          data: { id: lineId, companyId: harnessLine!.companyId, orderId, partyId: ids.a, seq: 10, kind: 'SIZE_GRID', styleId: w.styleId, colourwayId: harnessLine!.colourwayId, quantity: half * 2, unitPrice: '100.000000', netAmount: half * 2 * 10_000, vatRatePct: '22.00', vatAmount: half * 2 * 2_200 },
+          data: { id: lineId, companyId: harnessLine!.companyId, orderId, partyId: ids.a, seq: 10, kind: 'SIZE_GRID', styleId: w.styleId, colourwayId: harnessLine!.colourwayId, quantity: pieces, unitPrice: '100.000000', netAmount: pieces * 10_000, vatRatePct: '22.00', vatAmount: pieces * 2_200 },
           select: { id: true },
         })
-        await tx.salesOrderLineSize.createMany({ data: ['50', '52'].map((size) => ({ id: newId(), lineId, partyId: ids.a, size, quantity: half })) })
+        await tx.salesOrderLineSize.createMany({ data: sizesOf[tag].map(([size, quantity]) => ({ id: newId(), lineId, partyId: ids.a, size, quantity })) })
       }
     }),
   )
@@ -118,7 +122,7 @@ beforeAll(async () => {
     method: 'POST',
     url: '/production/work-orders',
     headers: { 'x-test-session': 'office.all' },
-    payload: { siteId: w.siteId, lines: [{ salesOrderLineId: alpha.line1, sizes: [{ size: '50', quantity: 20 }, { size: '52', quantity: 20 }] }, { salesOrderLineId: alpha.line2, sizes: [{ size: '50', quantity: 30 }, { size: '52', quantity: 30 }] }] },
+    payload: { siteId: w.siteId, lines: [{ salesOrderLineId: alpha.line1, sizes: [{ size: '50', quantity: 20 }, { size: '52', quantity: 20 }] }, { salesOrderLineId: alpha.line2, sizes: [{ size: '54', quantity: 60 }] }] },
   })
   expect(made.statusCode, made.body).toBe(201)
   ;({ id: alpha.workOrderId, number: alpha.workOrderNumber } = (made.json() as { workOrder: { id: string; number: string } }).workOrder)
