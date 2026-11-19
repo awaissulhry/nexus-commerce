@@ -246,7 +246,7 @@ describe('F-SA-237 — the order files body: groups by source, who can see each 
   it('the SalesOrder switch: the window draws the order body when given the order read; every other record keeps its own list', () => {
     const view = readFileSync(new URL('./view/FilesView.tsx', import.meta.url), 'utf8')
     expect(view).toContain('{model.order ? (')
-    expect(view).toContain('<OrderFilesView model={model.order} party={model.party} actions={actions} />')
+    expect(view).toContain('<OrderFilesView model={model.order} party={model.party} actions={actions} place="window" />') // F-OP-125: narrower cards
     const thread = readFileSync(new URL('../../../areas/_shared/record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
     expect(thread).toContain("order: key.type === 'SalesOrder' ? orderFiles.model : null,")
     const tab = readFileSync(new URL('../../../areas/sales/orders/record/view/FilesTab.tsx', import.meta.url), 'utf8')
@@ -254,3 +254,104 @@ describe('F-SA-237 — the order files body: groups by source, who can see each 
   })
 })
 // ---- end F-SA-237
+
+// ---- F-OP-125 (order page N7 "files like Gmail"; 10-order-page §9.1; N-1): the order's file cards and the page's one container ----
+describe('F-OP-125: Gmail cards — kinds, the lock card, who added it (office only), the MTM worksheets, one read per page', () => {
+  const ORDER = { id: 'so-alpha', number: 'SO-2026-0142' }
+  const card = (id: string, over: Partial<OrderFile> = {}): OrderFile => ({
+    id,
+    name: `${id}.pdf`,
+    kind: 'DOCUMENT',
+    category: null,
+    contentType: 'application/pdf',
+    sizeBytes: 1_258_291,
+    versionNo: 1,
+    at: '2026-11-12T10:00:00Z',
+    from: { type: 'SalesOrder', id: ORDER.id, label: ORDER.number },
+    line: null,
+    audience: 'OFFICE_ONLY',
+    bodyData: false,
+    alsoOn: [],
+    alsoOnOther: 0,
+    inThread: null,
+    addedBy: null,
+    ...over,
+  })
+  const sheet = { documentId: 'doc-1', profileId: 'prof-1', line: { id: 'l2', seq: 20 }, version: 2, number: 'WS-0007', language: 'it', createdAt: '2026-11-13T09:00:00Z' }
+  const READ: OrderFilesRead = {
+    order: ORDER,
+    groups: [
+      { key: 'ORDER', words: { en: 'Order & thread', it: 'Ordine e conversazione' }, files: [card('spec', { addedBy: { kind: 'PERSON', name: 'Demo Planner' } }), card('photo', { name: 'Collar.jpg', kind: 'PHOTO', contentType: 'image/jpeg', addedBy: { kind: 'FLOOR', name: null } })], leftOut: 0, measurementsLeftOut: 0 },
+      { key: 'LINES', words: { en: 'Lines & artwork', it: 'Righe e grafiche' }, files: [card('measures', { name: 'Rider measures.jpg', kind: 'PHOTO', contentType: 'image/jpeg', bodyData: true }), card('sizes', { name: 'Sizes.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', addedBy: { kind: 'CUSTOMER', name: BRAND_ALPHA.tradeName } })], worksheets: [sheet], leftOut: 0, measurementsLeftOut: 1 },
+    ],
+    total: 4,
+    truncated: false,
+  }
+  const draw = (locale: 'it' | 'en', model: Parameters<typeof OrderFilesBody>[0]['model'], place: 'tab' | 'window' = 'tab') => renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(OrderFilesBody, { model, party: { name: BRAND_ALPHA.tradeName }, actions: { onOrderMessage: () => undefined }, place })))
+
+  it('a card\'s kind is the previews route\'s rule: body data is LOCKED whatever it is; pictures; PDFs; anything else is its kind\'s card', async () => {
+    const { cardKindOf } = await import('./model')
+    expect(cardKindOf(card('a'))).toBe('PDF')
+    expect(cardKindOf(card('b', { contentType: 'image/heic' }))).toBe('PICTURE')
+    expect(cardKindOf(card('c', { contentType: 'application/zip' }))).toBe('OTHER')
+    expect(cardKindOf(card('d', { contentType: 'image/jpeg', bodyData: true }))).toBe('LOCKED')
+  })
+
+  it('the facts line: the type as a mail client says it, the size, the day; "added by" a person, the customer, or "the floor" (never a worker)', async () => {
+    const { addedByOf, typeLabelOf } = await import('./model')
+    expect([typeLabelOf(card('a')), typeLabelOf(card('b', { name: 'Sizes.xlsx' })), typeLabelOf(card('c', { name: 'scan', contentType: 'image/png' })), typeLabelOf(card('d', { name: 'notes', contentType: 'application/vnd.ms-excel' }))]).toEqual(['PDF', 'XLSX', 'PNG', ''])
+    expect(addedByOf(card('a', { addedBy: { kind: 'PERSON', name: 'Demo Planner' } }))).toEqual({ key: 'card.addedBy', params: { name: 'Demo Planner' } })
+    expect(addedByOf(card('a', { addedBy: { kind: 'FLOOR', name: 'Someone' } }))).toEqual({ key: 'card.addedByFloor' })
+    expect(addedByOf(card('a', { addedBy: { kind: 'CUSTOMER', name: null } }))).toBeNull()
+    expect(addedByOf(card('a'))).toBeNull()
+  })
+
+  it('cards in both languages: the grid, the lock card for body data (never a picture), who added it, Download; no key on screen', () => {
+    for (const locale of LOCALES) {
+      const html = draw(locale, { read: READ, problem: null, selected: [], canShare: true })
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
+      for (const words of [t('card.bodyData'), t('card.addedBy', { name: 'Demo Planner' }), t('card.addedByFloor'), t('card.addedBy', { name: BRAND_ALPHA.tradeName }), t('card.download'), t('card.worksheet', { line: 20, version: 2 }), t('order.leftOut', { count: 1 })]) expect(html, `${locale}: ${words}`).toContain(words)
+      expect(html).toContain('class="fw-rtv-cards"')
+      expect(html.match(/\b(card|order)\.[a-zA-Z]+/)?.[0] ?? null, locale).toBeNull()
+      // The body photo is a lock card: no <img> of it, ever (its previews come in F-OP-126, never for body data).
+      expect(html).not.toMatch(/<img[^>]*Rider measures/)
+    }
+    // The thread's Files window draws narrower cards.
+    expect(draw('en', { read: READ, problem: null, selected: [], canShare: true }, 'window')).toContain('fw-rtv-order is-window')
+  })
+
+  it('B5: the worksheets the read sends show in Lines as lock cards; without the measurements right they are counted, never named', async () => {
+    const { cardOrderOf, orderWorksheetsOf, worksheetCardId } = await import('./model')
+    expect(orderWorksheetsOf(READ.groups[1]!)).toEqual([sheet])
+    expect(cardOrderOf(READ)).toEqual(['spec', 'photo', 'measures', 'sizes', worksheetCardId(sheet)])
+    const withoutRight: OrderFilesRead = { ...READ, groups: READ.groups.map((group) => ({ ...group, worksheets: [] })) }
+    const html = draw('en', { read: withoutRight, problem: null, selected: [], canShare: true })
+    expect(html).not.toContain('Worksheet · line')
+    expect(orderLeftOut(withoutRight)).toBe(1)
+    // The customer's face: no worksheet, no "added by", no box.
+    const customer = draw('en', { read: READ, problem: null, selected: [], canShare: false, face: 'customer' })
+    for (const never of ['Worksheet · line', 'added by', 'type="checkbox"']) expect(customer, never).not.toContain(never)
+  })
+
+  it('the keys walk the grid: ← / → by one card, ↑ / ↓ by one row, no wrap', async () => {
+    const { cardStep } = await import('./model')
+    expect(cardStep(0, 7, 'ArrowRight', 3)).toBe(1)
+    expect(cardStep(0, 7, 'ArrowLeft', 3)).toBeNull()
+    expect(cardStep(1, 7, 'ArrowDown', 3)).toBe(4)
+    expect(cardStep(5, 7, 'ArrowDown', 3)).toBeNull()
+    expect(cardStep(4, 7, 'ArrowUp', 3)).toBe(1)
+  })
+
+  it('one read per page: OrderRecord mounts THE container once and keeps its read across tabs; news reads it again when wanted', () => {
+    const page = readFileSync(new URL('../../../areas/sales/orders/record/OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(page.match(/useOrderFiles\(api, \{/g)).toHaveLength(1)
+    expect(page).toContain('keep: true, // F-OP-125')
+    expect(page).toContain('files: orderFiles.model, // F-SA-237; F-OP-125')
+    expect(page).toContain("if (parts.includes('files')) orderFiles.reload()")
+    const hook = readFileSync(new URL('../../../areas/_shared/record-thread/use-order-files.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('if (enabled && readFor.current !== orderId) load()')
+    expect(hook).toContain('if (!enabled && !keep) readFor.current = null')
+    expect(hook).toContain('openWorksheet(api, sheet.profileId, sheet.documentId)')
+  })
+})
+// ---- end F-OP-125

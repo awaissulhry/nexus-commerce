@@ -8,6 +8,7 @@ import { isOwnFile, type OrderFilesModel, type OrderFilesRead } from '../../../l
 import { listFiles } from '../../../record-panels/api'
 import { storeUrl } from '../../../record-panels/store'
 import { openOrderFile, readOrderFiles, shareWithParty } from './api'
+import { openWorksheet } from '../../sales/mtm/api' // F-OP-125 (B5): a worksheet opens by the made-to-measure route (recorded there)
 
 /**
  * F-SA-237 (sales page plan N9, P14) — a sales order's files, the container part the order's Files tab AND the thread's Files window
@@ -15,9 +16,25 @@ import { openOrderFile, readOrderFiles, shareWithParty } from './api'
  * the read's own route (a picture or a PDF in a new tab, anything else downloads; body data is recorded there — never the generic
  * preview); Download N; Share N OWN files (the order's own, still office only) with the order's customer — each file at its version
  * as `GET /files` reads it now (B-TH-003 refuses any other party). Refusals are words of `record-thread-files-view`.
+ *
+ * F-OP-125 (order page N-1): THE order-files container — the order page mounts it ONCE (OrderRecord.tsx) and gives the same model to
+ * the Files tab and, later, to the dock (F-OP-215): one read, one count. The read is made the first time it is wanted and kept while
+ * the page stays; news of the order's files (the live channel) reads it again when it is shown, or the next time it is wanted. A
+ * made-to-measure worksheet (B5) opens through its own route, which records the opening on the profile.
  */
-export function useOrderFiles(api: ApiClient, input: { readonly orderId: string | null; readonly enabled: boolean; readonly partyId: string | null; readonly canShare: boolean; readonly onProblem?: (key: string) => void }) {
-  const { orderId, enabled, partyId, canShare } = input
+export function useOrderFiles(
+  api: ApiClient,
+  input: {
+    readonly orderId: string | null
+    readonly enabled: boolean
+    readonly partyId: string | null
+    readonly canShare: boolean
+    readonly onProblem?: (key: string) => void
+    /** F-OP-125: the page's own container keeps its read across tabs (true); a window that mounts its own reads again each time it opens. */
+    readonly keep?: boolean
+  },
+) {
+  const { orderId, enabled, partyId, canShare, keep = false } = input
   const [read, setRead] = useState<OrderFilesRead | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [selected, setSelected] = useState<readonly string[]>([])
@@ -25,19 +42,35 @@ export function useOrderFiles(api: ApiClient, input: { readonly orderId: string 
   const turn = useRef(0)
   const onProblem = useRef(input.onProblem)
   onProblem.current = input.onProblem
+  // F-OP-125: the read this page holds (null: never read, or no longer true — read again the next time it is wanted).
+  const readFor = useRef<string | null>(null)
+  const wanted = useRef(enabled)
+  wanted.current = enabled
 
   const load = useCallback(() => {
     if (!orderId) return
     const mine = ++turn.current
+    readFor.current = orderId
     setProblem(null)
     readOrderFiles(api, orderId)
       .then((answer) => mine === turn.current && setRead(answer))
-      .catch((error: unknown) => mine === turn.current && setProblem(isApiError(error) && error.kind === 'forbidden' ? 'forbidden' : 'read'))
+      .catch((error: unknown) => {
+        if (mine !== turn.current) return
+        readFor.current = null
+        setProblem(isApiError(error) && error.kind === 'forbidden' ? 'forbidden' : 'read')
+      })
   }, [api, orderId])
 
+  // Read once, when first wanted (and for another order); kept while the page stays (`keep`), else read again each time it is wanted.
   useEffect(() => {
-    if (enabled) load()
-  }, [enabled, load])
+    if (enabled && readFor.current !== orderId) load()
+    if (!enabled && !keep) readFor.current = null
+  }, [enabled, orderId, load, keep])
+  /** News of the order's files: read again now when shown, else the next time they are wanted. */
+  const again = useCallback(() => {
+    if (wanted.current) load()
+    else readFor.current = null
+  }, [load])
 
   const open = useCallback(
     async (fileId: string, mode: 'preview' | 'download') => {
@@ -66,6 +99,12 @@ export function useOrderFiles(api: ApiClient, input: { readonly orderId: string 
     onRetry: load,
     onOrderSelect: setSelected,
     onOrderOpen: (fileId, mode) => void open(fileId, mode),
+    // F-OP-125 (B5): a worksheet through the made-to-measure route (it records the opening on the profile), in a new tab.
+    onOrderWorksheet: (sheet) => {
+      void openWorksheet(api, sheet.profileId, sheet.documentId)
+        .then((answer) => window.open(storeUrl(answer.download.url), '_blank', 'noopener'))
+        .catch(() => onProblem.current?.('order.openFailed'))
+    },
     onOrderBulk: (action, ids) => {
       if (action === 'download') {
         for (const fileId of ids) void open(fileId, 'download')
@@ -91,5 +130,5 @@ export function useOrderFiles(api: ApiClient, input: { readonly orderId: string 
   }
 
   const model: OrderFilesModel = { read, problem, selected, canShare, busy }
-  return { model, actions, reload: load }
+  return { model, actions, reload: again }
 }

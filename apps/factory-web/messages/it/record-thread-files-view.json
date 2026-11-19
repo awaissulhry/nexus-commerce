@@ -147,5 +147,13 @@
     "noneOwn": "Da qui si condividono solo i file dell'ordine che sono solo per l'ufficio.",
     "openFailed": "Impossibile aprire il file: riprova.",
     "shareFailed": "La condivisione non è riuscita: riprova."
+  },
+  "card": {
+    "bodyData": "Dati corporei — l’apertura è registrata",
+    "addedBy": "aggiunto da {name}",
+    "addedByFloor": "aggiunto dal reparto",
+    "download": "Scarica",
+    "downloadOf": "Scarica {name}",
+    "worksheet": "Scheda di lavoro · riga {line} · v{version}"
   }
 }

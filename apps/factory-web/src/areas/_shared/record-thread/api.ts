@@ -396,10 +396,14 @@ const orderFileSchema = z.object({
   alsoOn: z.array(orderFileRef),
   alsoOnOther: z.number(),
   inThread: z.object({ messageId: z.string() }).nullable(),
+  // F-OP-125 (B-OP-050): who added it — an office person or this order's customer by name; the floor never by a worker's name.
+  addedBy: z.object({ kind: z.enum(['PERSON', 'FLOOR', 'CUSTOMER']), name: z.string().nullable() }).nullable().default(null),
 })
+// F-OP-125 (B5): the newest MTM worksheet of each made-to-measure line (sent only with the measurements right; else counted).
+const orderWorksheetSchema = z.object({ documentId: z.string(), profileId: z.string(), line: z.object({ id: z.string(), seq: z.number() }), version: z.number(), number: z.string().nullable(), language: z.string(), createdAt: z.string() })
 export const orderFilesSchema = z.object({
   order: z.object({ id: z.string(), number: z.string() }),
-  groups: z.array(z.object({ key: z.string(), words: z.object({ it: z.string(), en: z.string() }), files: z.array(orderFileSchema), leftOut: z.number(), measurementsLeftOut: z.number() })),
+  groups: z.array(z.object({ key: z.string(), words: z.object({ it: z.string(), en: z.string() }), files: z.array(orderFileSchema), /* F-OP-125 (B5) */ worksheets: z.array(orderWorksheetSchema).default([]), leftOut: z.number(), measurementsLeftOut: z.number() })),
   total: z.number(),
   truncated: z.boolean(),
 })
