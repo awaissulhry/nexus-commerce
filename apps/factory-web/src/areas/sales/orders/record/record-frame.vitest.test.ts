@@ -642,3 +642,46 @@ describe('F-OP-217 — every dock scope drawn in the one card (design cases), th
   })
 })
 // ---- end F-OP-217
+
+// ---- F-OP-215 (order page plan N4; 11-dock §6.2, D2; review N-1): the dock's files line on the order = the order's file set ------------
+describe('F-OP-215 — the files line counts the order\'s file set (the Files tab\'s count); All files opens the Files tab', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  it('the order\'s set as tiles: one per listed file, the count = read.total; body data locked; what the customer sees marked theirs', async () => {
+    const { stripFilesOf } = await import('../../../_shared/record-thread/use-order-files')
+    const { fileSeries, filesChip } = await import('../../../../lib/record-thread/files/model')
+    const { ORDER_FILES } = await import('./overview/fixtures')
+    const tiles = stripFilesOf(ORDER_FILES, 'party-a')
+    expect(tiles.map((tile) => tile.name)).toEqual(['Ordine firmato.pdf', 'Note ufficio.pdf', 'Logo ricamo.pdf', 'Taglio nero.jpg'])
+    expect(filesChip(fileSeries(tiles)).count).toBe(ORDER_FILES.total)
+    expect(tiles[0]).toMatchObject({ visibility: ['OFFICE', 'PARTNER'], partyId: 'party-a', messageId: '0190f0e2-8282-7000-8000-000000000001', status: 'AVAILABLE' })
+    expect(tiles[1]).toMatchObject({ visibility: ['OFFICE'], partyId: null })
+    expect(tiles[3]).toMatchObject({ kind: 'PHOTO', recordType: 'WorkOrder' })
+    const body = stripFilesOf({ ...ORDER_FILES, groups: [{ ...ORDER_FILES.groups[0]!, files: [{ ...ORDER_FILES.groups[0]!.files[0]!, bodyData: true }] }], total: 1 }, null)
+    expect(body[0]).toMatchObject({ locked: 'MEASUREMENTS' })
+    // The strip draws "Files (4)", the Files tab's own count (model.files.read.total).
+    const { render, textOf: text } = await import('../../../../lib/record-thread/parts/testing')
+    const { FileStrip } = await import('../../../../lib/record-thread/files/view/FileStrip')
+    expect(text(render(createElement(FileStrip, { model: { files: tiles, party: null, open: false } })))).toContain(`Files (${ORDER_FILES.total})`)
+    expect(read('./view/OrderRecordView.tsx')).toContain("count: tab === 'files' ? (model.files?.read?.total ?? null)")
+  })
+  it('the dock reads no files of its own on the order: the page\'s ONE container, its tiles and All files to the Files tab', () => {
+    const docked = read('../../../_shared/record-thread/DockedOfficeThread.tsx')
+    expect(docked).toContain("const hostFiles = key.type === 'SalesOrder' ? (host.orderFiles ?? null) : null")
+    expect(docked).toContain("orderId: key.type === 'SalesOrder' && !hostFiles ? key.id : null")
+    expect(docked).toContain('const orderFiles = hostFiles ?? ownOrderFiles')
+    expect(docked).toContain('onAllFiles: () => (hostFiles ? hostFiles.onAll() : setFilesOpen(true)),')
+    expect(docked).toContain('model={{ files: stripFiles, party: filesParty')
+    const page = read('./OrderRecord.tsx')
+    expect(page.match(/useOrderFiles\(api, \{/g)).toHaveLength(1)
+    expect(page).toContain("enabled: tab === 'files' || session.permissions.includes('files.read'),")
+    expect(page).toContain("router.replace(tabAddress(pathname, window.location.search, 'files', { narrow: narrowNow() }), { scroll: false })")
+    expect(page.match(/orderFiles=\{orderFilesHost \/\* F-OP-215 \*\/\}/g)).toHaveLength(2)
+    const dock = read('./dock/OrderDock.tsx')
+    expect(dock).toContain('{...(orderFiles ? { orderFiles } : {}) /* F-OP-215 */}')
+    // Only This order's thread gets it (General, a project, a work order keep their own files).
+    const order = dock.slice(dock.lastIndexOf('shown = <OfficeRecordThread key="order"'))
+    expect(order).toContain('orderFiles')
+    expect(dock.slice(dock.indexOf('shown = <OfficeRecordThread key="general"'), dock.indexOf('} else if (scope.kind === \'project\'')).includes('orderFiles')).toBe(false)
+  })
+})
+// ---- end F-OP-215

@@ -27,6 +27,7 @@ import { FILES_NS, FileStrip } from '../../../lib/record-thread/files/view/FileS
 import { START_AUDIENCE, type MissingDocument, type UploadAsk } from '../../../lib/record-thread/files-view/model'
 import { FILES_VIEW_NS, FilesView, type BulkAction } from '../../../lib/record-thread/files-view/view/FilesView'
 import { useOrderFiles } from './use-order-files' // F-SA-237
+import { stripFilesOf, type OrderFilesHost } from './use-order-files' // F-OP-215: the order page's ONE order-files read
 import type { SavedRepliesModel, SavedReplyLine } from '../../../lib/record-thread/helpers/model'
 import { savedReplyLines } from '../../../lib/record-thread/helpers/model' // th-backend-g step 3
 import { replyAudienceOf, withSavedReply } from '../../../lib/record-thread/composer/model' // th-backend-g step 1
@@ -120,6 +121,11 @@ export interface DockedHost extends RecordThreadHost {
     readonly onStillToDo?: (messageId: string) => void
   }
   // ---- end F-SA-244
+  // ---- F-OP-215 (11-dock §6.2, D2): on the order page's own thread, the page's ONE order-files container — the files line counts the
+  // order's file set (the Files tab's count), "All files" opens the Files tab, a tile opens the file in its ONE viewer; the Files
+  // window reads the same container (no second read). Absent (every other record, every other scope): the record's own files, as before.
+  orderFiles?: OrderFilesHost
+  // ---- end F-OP-215
 }
 
 const NAMESPACES = [HEAD_NS, FILES_NS, FILES_VIEW_NS, POPUPS_NS, HELPERS_NS, 'records', 'record-approvals', SHARES_NS, 'record-files', 'home-mywork', /* F-SA-244: the place door */ 'record-thread-card']
@@ -322,6 +328,9 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const threadFiles = useMemo(() => recordFiles(base.files.map((file) => fromApiFile(file)), key), [base.files, key])
   const filesParty: FilesParty | null = partyId ? { id: partyId, role } : null
   const lineFiles = can.readFiles ? (base.filesRead ? threadFiles : null) : []
+  // F-OP-215: the files line of the order's own thread draws the order's file set from the page's container (null while it is read).
+  const hostFiles = key.type === 'SalesOrder' ? (host.orderFiles ?? null) : null
+  const stripFiles = !can.readFiles ? [] : hostFiles ? (hostFiles.model.read ? stripFilesOf(hostFiles.model.read, partyId ?? null) : hostFiles.model.problem ? [] : null) : lineFiles
   const [viewer, setViewer] = useState<{ files: readonly ThreadFile[]; index: number; returnTo: HTMLElement | null } | null>(null)
   const [links, setLinks] = useState<Readonly<Record<string, { src: string | Uint8Array | null; downloadHref: string | null }>>>({})
   const asked = useRef(new Set<string>())
@@ -370,13 +379,15 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const [filesOpen, setFilesOpen] = useState(false)
   // ---- F-SA-237 (sales page plan N9, P14; the T9 rule changes for a SalesOrder, by the lane agreement): on a sales order the Files
   // window lists EVERY file of the order from its one walled read — the same body as the order's Files tab (one read, one way to open).
-  const orderFiles = useOrderFiles(api, {
-    orderId: key.type === 'SalesOrder' ? key.id : null,
-    enabled: filesOpen && key.type === 'SalesOrder' && can.readFiles,
+  // F-OP-215: the page's container when the host gives it (one read per page); else this thread's own, read while the window is open.
+  const ownOrderFiles = useOrderFiles(api, {
+    orderId: key.type === 'SalesOrder' && !hostFiles ? key.id : null,
+    enabled: filesOpen && key.type === 'SalesOrder' && can.readFiles && !hostFiles,
     partyId: partyId ?? null,
     canShare: can.share,
     onProblem: (problem) => base.notify({ ns: FILES_VIEW_NS, key: problem, tone: 'danger' }),
   })
+  const orderFiles = hostFiles ?? ownOrderFiles
   // ---- end F-SA-237
   const [selected, setSelected] = useState<readonly string[]>([])
   const [upload, setUpload] = useState<UploadAsk | null>(null)
@@ -1017,13 +1028,14 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
 
   // B-TH-286 (B-TH-091; T2-F07): the pins lead the line ("2 pinned"); a line with neither pins nor files is not drawn (T2-F09).
   const pinLines = base.pins ? pinLinesOf(base.pins) : null
-  const filesLine = lineShown(lineFiles, pinLines) ? (
+  // F-OP-215: on the order's own thread the line is the order's file set; its tiles and "All files" go to the order's Files tab.
+  const filesLine = lineShown(stripFiles, pinLines) ? (
     <FileStrip
-      model={{ files: lineFiles, party: filesParty, open: strip.open, pins: pinLines, canUnpin: can.post && !offline }}
+      model={{ files: stripFiles, party: filesParty, open: strip.open, pins: pinLines, canUnpin: can.post && !offline }}
       actions={{
         onToggle: strip.toggle,
-        onOpen: (fileId, opener) => openViewer(latestOf(threadFiles), fileId, opener),
-        onAllFiles: () => setFilesOpen(true),
+        onOpen: (fileId, opener) => (hostFiles ? hostFiles.onOpen(fileId, opener) : openViewer(latestOf(threadFiles), fileId, opener)),
+        onAllFiles: () => (hostFiles ? hostFiles.onAll() : setFilesOpen(true)),
         onPin: (messageId) => {
           setView('all')
           void base.jumpTo(messageId)
