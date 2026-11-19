@@ -24,6 +24,10 @@ import { testRedis, type TestRedis } from '../../platform/outbox/testing'
 import { createSecretsService } from '../../platform/secrets/envelope'
 import { localKeyProvider } from '../../platform/secrets/local'
 import { lockCells } from './cells'
+// B-OP-041 (order page N6): the system holds of a shared shipment, run as the tenant's system.
+import { callerFor } from '../../core/command'
+import { systemContext } from '../../platform/outbox/system'
+import { syncSystemHolds } from './holds/system'
 
 /**
  * Shipping settings, shipments and packing from released goods only (B-W1-46; LOG-001, LOG-002, LOG-039, LOG-117,
@@ -236,7 +240,9 @@ describe('a shipment from released goods only (LOG-001, LOG-002, GAP-002)', () =
       'Only released garments ship: SEED-WO-0001 RED 52 has 1 released (less reversals) and 1 on shipments, so 0 can still ship; 1 asked.',
     )
     const otherOrder = await refused('warehouse', 'POST', `/shipping/shipments/${s1}/lines`, { lines: [{ workOrderSizeId: cells().jacket, quantity: 1 }] }, 400)
-    expect(otherOrder.issues).toEqual([{ path: 'body/lines/0/workOrderSizeId', message: "These garments are not of the shipment's sales order." }])
+    // B-OP-040 (order page N6): another order of the same customer joins only as joinProblems allows: held off until B-OP-047.
+    expect(otherOrder.issues).toContainEqual({ path: 'body/lines/0/workOrderSizeId', message: 'Several orders in one shipment come with the next update.' })
+    expect((otherOrder.issues as Json[]).every((issue) => issue.path === 'body/lines/0/workOrderSizeId')).toBe(true)
     const line = (await ok('warehouse', 'GET', `/shipping/shipments/${s1}`)).shipment.lines[0]
     expect((await refused('warehouse', 'PATCH', `/shipping/shipments/${s1}/lines/${line.id}`, { quantity: 2 }, 409)).code).toBe('conflict')
     expect((await refused('warehouse', 'PATCH', `/shipping/shipments/${s1}/lines/${line.id}`, { version: 99, quantity: 1 }, 409)).message).toMatch(/changed since it was read \(version 99\); it is now at version 1/)
@@ -543,3 +549,90 @@ describe('live: shipment events name the shipment’s customer (B-SA-004)', () =
   })
 })
 // ── end B-SA-004 ──
+
+// ── B-OP-041 (order page N6, lines-derived): the shipping core reads a shipment's orders through its lines ──────────────
+// A shared shipment of Brand Alpha's two orders (SEED-SO-0002 first, a line of SEED-SO-0003), its lines put in past the
+// guards (the API refuses a second order until the switch, B-OP-047; B-OP-005's line guard would let it in, but these lines
+// go past the cells' releases too). The last block of this file: it moves the site's freight rule and two orders' nets.
+describe('B-OP-041: a shared shipment shows on both orders in the shipping core', () => {
+  const forced = async (sql: string, values: unknown[] = []) => {
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(sql, values)
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+  }
+  const lineSql = `INSERT INTO "ShipmentLine" (id, "tenantId", "siteId", "partyId", "shipmentId", "workOrderId", "workOrderSizeId", "salesOrderLineId", size, quantity)
+    SELECT $1, c."tenantId", c."siteId", s."partyId", s.id, c."workOrderId", c.id, c."salesOrderLineId", c.size, 1 FROM "WorkOrderSize" c, "Shipment" s WHERE c.id = $2 AND s.id = $3`
+  const number = async (orderId: string) => (await admin<{ number: string }>('SELECT number FROM "SalesOrder" WHERE id = $1', [orderId]))[0]!.number
+  const shared: Record<string, string> = {}
+
+  it('the record, the list (by either order, by either number) and the backorder name both orders, the first first', async () => {
+    const { shipment } = await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: orders().so2, siteId: A.siteA1 }, 201)
+    shared.id = shipment.id
+    shared.blk = newId()
+    shared.jacket = newId()
+    await forced(lineSql, [shared.blk, cells().blk52, shipment.id])
+    await forced(lineSql, [shared.jacket, cells().jacket, shipment.id])
+    const record = (await ok('warehouse', 'GET', `/shipping/shipments/${shipment.id}`)).shipment
+    expect(record.salesOrderId).toBe(orders().so2)
+    expect(record.salesOrders.map((order: Json) => order.id)).toEqual([orders().so2, orders().so3])
+    const so3 = await number(orders().so3)
+    expect(((await ok('warehouse', 'GET', `/shipping/shipments?salesOrderId=${orders().so3}`)).shipments as Json[]).map((row) => row.id)).toContain(shipment.id)
+    const byNumber = ((await ok('warehouse', 'GET', `/shipping/shipments?q=${encodeURIComponent(so3)}`)).shipments as Json[]).find((row) => row.id === shipment.id)
+    expect(byNumber?.salesOrders.map((order: Json) => order.id)).toEqual([orders().so2, orders().so3])
+    // The backorder of the second order knows the shipment.
+    const backorder = await ok('warehouse', 'GET', `/shipping/orders/${orders().so3}/backorder?shipmentId=${shipment.id}`)
+    expect(backorder.shipmentId).toBe(shipment.id)
+    expect((backorder.shipments as Json[]).map((row) => row.id)).toContain(shipment.id)
+    // Another company's person finds nothing of it, as before.
+    expect((await ok('companyB', 'GET', `/shipping/shipments?salesOrderId=${orders().so3}`)).shipments).toEqual([])
+  })
+
+  it('the queue lists it under either order: search by the second order, with both orders on the row', async () => {
+    const so3 = await number(orders().so3)
+    const found = ((await ok('warehouse', 'GET', `/shipping/queue/search?q=${encodeURIComponent(so3)}`)).shipments as Json[]).find((row) => row.id === shared.id)
+    expect(found).toMatchObject({ salesOrderId: orders().so2, matchedBy: expect.arrayContaining(['ORDER']) })
+    expect(found!.salesOrders.map((order: Json) => order.id)).toEqual([orders().so2, orders().so3])
+    const today = ((await ok('warehouse', 'GET', `/shipping/queue/today?siteId=${A.siteA1}`)).shipments as Json[]).find((row) => row.id === shared.id)
+    expect(today?.salesOrders.map((order: Json) => order.id)).toEqual([orders().so2, orders().so3])
+  })
+
+  it('freight: free from on the sum of the nets of every order it carries (one currency)', async () => {
+    await forced('UPDATE "SalesOrder" SET "netAmount" = 60000 WHERE id = ANY($1::uuid[])', [[orders().so2, orders().so3]])
+    await ok('warehouse', 'PUT', `/shipping/sites/${A.siteA1}/freight-rule`, { rule: 'PER_SHIPMENT', amount: 1500, freeFrom: 100000 })
+    const freight = (await ok('warehouse', 'GET', `/shipping/shipments/${shared.id}`)).shipment.freight
+    expect(freight.byRule).toMatchObject({ charge: 0, basis: 'FREE_FROM' })
+    // One order alone (60 000 < 100 000) still pays the rule's amount.
+    const { shipment: alone } = await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: orders().so2, siteId: A.siteA1 }, 201)
+    expect(alone.freight.byRule).toMatchObject({ charge: 1500, basis: 'PER_SHIPMENT' })
+    await ok('warehouse', 'POST', `/shipping/shipments/${alone.id}/cancel`, { version: alone.version, reason: 'Test: one order alone' })
+  })
+
+  it("holds: the system holds it while any of its orders' balance before shipping is open, and names that order", async () => {
+    const step = newId()
+    await forced(
+      `INSERT INTO "SalesOrderMilestone" (id, "tenantId", "companyId", "orderId", "partyId", seq, kind, amount, status) SELECT $1, o."tenantId", o."companyId", o.id, o."partyId", 99, 'BEFORE_SHIPPING', 100, 'OPEN' FROM "SalesOrder" o WHERE o.id = $2`,
+      [step, orders().so3],
+    )
+    const system = callerFor(database, systemContext(A.tenant, `b-op-041-${run}`))
+    await syncSystemHolds(system, [shared.id])
+    const held = await admin<{ reason: string; words: string; releasedAt: Date | null }>(`SELECT reason::text AS reason, words, "releasedAt" FROM "ShipmentHold" WHERE "shipmentId" = $1 AND reason = 'BALANCE_UNPAID'`, [shared.id])
+    expect(held).toEqual([expect.objectContaining({ releasedAt: null })])
+    expect(held[0]!.words).toContain(await number(orders().so3))
+    expect(held[0]!.words).not.toContain(await number(orders().so2))
+    // Paid: the hold lifts itself.
+    await forced(`UPDATE "SalesOrderMilestone" SET status = 'PAID', "paidAt" = now() WHERE id = $1`, [step])
+    await syncSystemHolds(system, [shared.id])
+    expect((await admin<{ releasedAt: Date | null }>(`SELECT "releasedAt" FROM "ShipmentHold" WHERE "shipmentId" = $1 AND reason = 'BALANCE_UNPAID'`, [shared.id]))[0]!.releasedAt).not.toBeNull()
+  })
+
+  // The split of a shared shipment is in shipment-orders.pg (its world stays within the cells' releases, which the line
+  // guard checks again when a split moves a line; here the lines above were put in past them).
+  it('done: the shared shipment is cancelled (its lines no longer hold garments)', async () => {
+    const current = (await ok('warehouse', 'GET', `/shipping/shipments/${shared.id}`)).shipment
+    expect((await ok('warehouse', 'POST', `/shipping/shipments/${shared.id}/cancel`, { version: current.version, reason: 'Test: shared shipment done' })).shipment.status).toBe('CANCELLED')
+  })
+})
+// ── end B-OP-041 ──

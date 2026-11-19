@@ -34,6 +34,7 @@ import { TRACKING_VIAS } from './tracking-link/rules'
  *   shipment.tracking_link_made   B-W2b-170: links to the branded tracking page were made (when the goods left, by the
  *                                 office, from the portal, by the public search, or asked for again)
  *   shipment.tracking_changed     B-OP-030: the tracking number of a carrier booked by hand was typed, corrected or cleared
+ *   shipment.orders_changed   B-OP-040: the orders a shipment carries changed (its lines' orders; office screens, holds)
  *   ddt.source_issued         a DDT for another reason was issued (B-W2a-17, LOG-056: no shipment; a subcontract kit, goods
  *                             back to a supplier, a repaired garment, returned goods sent back), `replacement` when it
  *                             replaces a cancelled one whose goods left
@@ -44,6 +45,8 @@ const status = z.enum(SHIPMENT_STATUSES)
 export const PACKING_CHANGES = ['lines', 'parcels', 'serials', 'details', 'status'] as const
 /** Why a documents link was sent. */
 export const DOCUMENT_LINK_REASONS = ['SHIPPED', 'OFFICE', 'ASKED_AGAIN'] as const
+/** B-OP-040: how the orders of a shipment changed. */
+export const SHIPMENT_ORDER_CHANGES = ['ADDED', 'REMOVED'] as const
 
 export const events = [
   defineEvent({
@@ -181,6 +184,15 @@ export const events = [
     description: 'The garments of a shipment the carrier brought back were put back into finished goods.',
     payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), garments: z.number().int().min(1), locationId: z.uuid(), partyId: livePartyId() /* B-SA-004 */ }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'garments'] },
+  }),
+  // B-OP-040 (order page N6, lines-derived): the orders a shipment carries changed (a line of another order added, or an
+  // order's last line removed). partyId is never a live field.
+  defineEvent({
+    type: 'shipment.orders_changed',
+    context: 'shipping',
+    description: "The orders a shipment carries changed: a line of another order of its customer was added, or an order's last line was removed.",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), salesOrderIds: z.array(z.uuid()).min(1), change: z.enum(SHIPMENT_ORDER_CHANGES), partyId: livePartyId() /* B-SA-004 */ }),
+    live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'salesOrderIds', 'change'] },
   }),
   // B-W2b-170 (LOG-062): the branded tracking page's link(s) of a shipment were made (mailed, copied, found by the search).
   defineEvent({

@@ -11,6 +11,7 @@ import { designScreen } from './fixtures'
 // F-SA-262: the order dock's scope (the pick of ONE conversation)
 import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeOfChoice, scopeOfParam, scopeParamOf, scopeShown, workOrderGroups } from './dock/model'
 import { scopeValueOf } from './dock/model' // F-OP-209
+import { offerOf } from './dock/model' // F-OP-213
 import { withThread } from '../../../_shared/record-frame/address' // F-OP-209
 import { tabAddress, tabHref } from '../../../_shared/record-frame/address' // F-OP-210
 import { viewOpenOf } from '../../../_shared/record-frame/model'
@@ -315,7 +316,7 @@ describe('F-SA-243: the order page opens the same review window as Home › Appr
 
   it('every new word in it + en (the band, Still to do, the amend review tick)', async () => {
     const { CATALOGUE, placeholdersOf } = await import('../../../../lib/i18n/messages')
-    const keys = ['band.asks', 'band.answer', 'band.answerNone', 'band.askCell', 'band.askLine', 'band.askWhole', 'band.moreRequests_one', 'band.moreRequests_other', 'band.decision_one', 'band.decision_other', 'band.open', 'changes.onUs.count_one', 'changes.still.title', 'changes.still.since', 'changes.still.open', 'changes.still.none', 'changes.still.changeOf', 'changes.still.office', 'changes.still.madeExtra', 'changes.still.extraLine', 'changes.still.leftOut_one', 'changes.still.leftOut_other', 'overview.requests.still', 'amend.tell.words', 'amend.tell.hint', 'notice.amendedTold', 'notice.amendedNotTold', 'notice.amendedNotReached']
+    const keys = ['band.asks', 'band.answer', 'band.answerNone', 'band.askCell', 'band.askLine', 'band.askWhole', 'band.moreRequests_one', 'band.moreRequests_other', 'band.decision_one', 'band.decision_other', 'band.open', 'changes.onUs.count_one', 'changes.still.title', 'changes.still.since', 'changes.still.open', 'changes.still.none', 'changes.still.changeOf', 'changes.still.office', 'changes.still.madeExtra', 'changes.still.extraLine', 'changes.still.leftOut_one', 'changes.still.leftOut_other', 'overview.requests.still', 'amend.tell.words', 'amend.tell.hint', /* F-OP-106: the told notice names the work orders */ 'edit.done.plainTold', 'notice.amendedNotTold', 'notice.amendedNotReached']
     for (const key of keys) {
       expect(CATALOGUE.en.orders?.[key]?.trim(), `en ${key}`).toBeTruthy()
       expect(CATALOGUE.it.orders?.[key]?.trim(), `it ${key}`).toBeTruthy()
@@ -437,7 +438,8 @@ describe('F-SA-262 — the order dock picks ONE conversation, the scope in the a
     // Work orders only with workorders.view, from the production read (this reader's wall).
     expect(dock).toContain("const seesWork = held.includes('workorders.view')")
     // All of <customer>: read only, "Write in: This order · General".
-    expect(dock).toContain('<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />')
+    expect(dock).toContain('<AllOfCustomerDock') // F-OP-204: the card with its Head
+    expect(dock).toContain('actions={{ ...feed.actions, onAnswer, writeFirst, canAnswer, ...(frame?.compose ? { onCompose: frame.compose } : {}) /* F-OP-207 */ }}')
     expect(dock).toContain("t('record.dock.writeIn')")
     // F-OP-209: the scope is written by the frame's ONE writer (a history replace: Back keeps it; no router.replace).
     expect(dock).toContain('frame?.setThread?.(scopeValueOf(next, narrow), { message: messageId })')
@@ -518,7 +520,9 @@ describe('F-OP-134 — one acts hook per tab, mounted by the container, never by
     const dialogs = source('./view/Dialogs.tsx')
     const at = (words: string) => dialogs.indexOf(words)
     expect(at('// The band (use-band-acts).')).toBeLessThan(at("case 'promise':"))
-    expect(at('// Lines (use-lines-acts).')).toBeLessThan(at("case 'amendReview':"))
+    // F-OP-106: the amendment has no dialog any more (its strip is the Lines tab's): Lines' first dialog is Close remaining lines.
+    expect(at('// Lines (use-lines-acts')).toBeLessThan(at("case 'closeLines':"))
+    expect(dialogs).not.toContain("case 'amendReview':")
     expect(at('// Money (use-money-acts).')).toBeLessThan(at("case 'depositLink':"))
   })
 })
@@ -560,3 +564,43 @@ describe('F-OP-210 — the tabs and the in-page moves keep `thread=`', () => {
   })
 })
 // ---- end F-OP-210
+
+// ---- F-OP-213 (order page plan N4; 11-dock §5, D4; B-OP-061): the dock offers only the threads the reader may read -----------------
+describe('F-OP-213 — scopes by rights: General when its thread is readable, All only when General is', () => {
+  const base = { canRead: true, projects: ['p1'], workOrders: ['w1'], seesWork: true }
+  it('offerOf: All follows General; an unreadable Party thread offers neither; until the API says, threads.read decides', () => {
+    expect(offerOf({ ...base, partyReadable: true })).toEqual({ general: true, all: true, projects: ['p1'], workOrders: ['w1'] })
+    expect(offerOf({ ...base, partyReadable: false })).toEqual({ general: false, all: false, projects: ['p1'], workOrders: ['w1'] })
+    expect(offerOf({ ...base, partyReadable: undefined })).toMatchObject({ general: true, all: true })
+    expect(offerOf({ ...base, canRead: false, partyReadable: true })).toMatchObject({ general: false, all: false })
+    // Work orders only with workorders.view; projects as useInProject gives them (the ones the reader may open).
+    expect(offerOf({ ...base, partyReadable: true, seesWork: false }).workOrders).toEqual([])
+    // A scope the address names that is not offered shows this order's own, with no word that it existed.
+    const offer = offerOf({ ...base, partyReadable: false })
+    expect(choicesOffered(offer)).toEqual(['order', 'projects', 'workOrders'])
+    expect(scopeShown({ kind: 'all' }, offer)).toEqual(ORDER_SCOPE)
+    expect(scopeShown({ kind: 'general' }, offer)).toEqual(ORDER_SCOPE)
+  })
+  it('the order dock asks readable only for the records it shows (the order, its customer, its projects, its work orders)', () => {
+    const dock = readFileSync(new URL('./dock/OrderDock.tsx', import.meta.url), 'utf8')
+    expect(dock).toContain("const offer: ScopeOffer = offerOf({ canRead: held.includes('threads.read'), partyReadable: unread[order.partyId]?.readable")
+    expect(dock.indexOf('const unread = useUnread(')).toBeLessThan(dock.indexOf('const offer: ScopeOffer = offerOf('))
+    expect(dock).not.toContain('general: true, all: true')
+    const api = readFileSync(new URL('../../../../lib/last-message-cell/api.ts', import.meta.url), 'utf8')
+    expect(api).toContain('readable: z.boolean().optional()')
+  })
+  it('the customer page: All of only when its own thread is readable; an address naming it then shows the general thread', () => {
+    const page = readFileSync(new URL('../../customers/record/CustomerRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("const allOffered = readsThreads && (named ? partyUnread[named.id]?.readable !== false : false)")
+    expect(page).toContain('allOffered={allOffered}')
+    const work = readFileSync(new URL('../../customers/record/view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(work).toContain("...(allOffered ? [{ value: 'all' as const")
+    expect(work).toContain("const scope = dock.scope === 'all' && !allOffered ? 'general' : dock.scope")
+  })
+  it('a picked thread that answers forbidden says so inside the card, the pick band kept (RecordThread: the band before the forbidden feed)', () => {
+    const thread = readFileSync(new URL('../../../../lib/record-thread/RecordThread.tsx', import.meta.url), 'utf8')
+    expect(thread).toContain('{slots?.top ? <div className="fw-rt-top">{slots.top}</div> : null}')
+    expect(thread).toContain("{model.feed.state !== 'forbidden' && slots?.head}")
+  })
+})
+// ---- end F-OP-213

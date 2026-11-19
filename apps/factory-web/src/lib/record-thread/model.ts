@@ -163,6 +163,7 @@ export function eventOf(entry: ThreadApiChange, names: ReadonlyMap<string, strin
     whoHidden: entry.actorHidden,
     actorAudience: entry.actor.audience,
     verb,
+    action: entry.action, // F-OP-214: the whole action — another module's step reads in its own words
     status: entry.status,
     values,
     fields: entry.fields,

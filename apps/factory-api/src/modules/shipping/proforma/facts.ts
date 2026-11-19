@@ -8,6 +8,8 @@ import { incotermWords } from '@nexus/factory-domain/sales/quote-terms/rules'
 import { customsDescription, prepaymentLineText, purposeOf, treatmentOfStored, type ProformaLineInput, type ProformaRecordType, type ProformaSource } from '@nexus/factory-domain/shipping/proforma/rules'
 import { Dec, parseDecimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTx } from '../../../core/command'
+// B-OP-042 (order page N6, lines-derived): the orders a shipment carries, as its papers name them.
+import { orderPlaceOf, orderReferencesOf, paperOrdersOf, paymentTermsOf } from '../shipments/orders-of'
 
 /**
  * What a proforma says, read from its record (B-W2b-391; LOG-058; factory-domain shipping/proforma/rules.ts): the record's
@@ -80,6 +82,8 @@ async function shipmentFacts(db: CommandTx, shipmentId: string): Promise<Proform
     where: { id: shipment.salesOrderId },
     select: { number: true, orderDate: true, customerRef: true, billTo: true, language: true, currency: true, taxMode: true, paymentTerms: true, incoterm: true, incotermPlace: true },
   })
+  // B-OP-042 (order page N6): every order it carries, the first first (references, payment terms, the lines' order).
+  const paperOrders = await paperOrdersOf(db, shipment)
   const party = await db.party.findUnique({ where: { id: shipment.partyId }, select: { legalName: true } })
   const lines = await db.shipmentLine.findMany({
     where: { shipmentId },
@@ -88,7 +92,7 @@ async function shipmentFacts(db: CommandTx, shipmentId: string): Promise<Proform
   })
   const orderLineIds = [...new Set(lines.map((line) => line.salesOrderLineId))]
   const orderLines = new Map(
-    (orderLineIds.length === 0 ? [] : await db.salesOrderLine.findMany({ where: { id: { in: orderLineIds } }, select: { id: true, seq: true, unitPrice: true, vatRatePct: true, vatNature: true, sizes: { select: { size: true, unitPrice: true } } } })).map((row) => [row.id, row]),
+    (orderLineIds.length === 0 ? [] : await db.salesOrderLine.findMany({ where: { id: { in: orderLineIds } }, select: { id: true, /* B-OP-042 */ orderId: true, seq: true, unitPrice: true, vatRatePct: true, vatNature: true, sizes: { select: { size: true, unitPrice: true } } } })).map((row) => [row.id, row]),
   )
   const parcels = await db.parcel.findMany({ where: { shipmentId }, select: { grossWeightKg: true } })
   const live = await db.ddt.findFirst({ where: { shipmentId, cancellations: { none: {} } }, select: { number: true } })
@@ -115,7 +119,7 @@ async function shipmentFacts(db: CommandTx, shipmentId: string): Promise<Proform
     const unitPrice = (orderLine.sizes.find((size) => size.size === line.size)?.unitPrice ?? orderLine.unitPrice).toString()
     const key = `${orderLine.id}|${unitPrice}`
     const group = groups.get(key) ?? {
-      orderLineSeq: orderLine.seq,
+      orderLineSeq: orderPlaceOf(paperOrders, orderLine.orderId) + orderLine.seq, // B-OP-042: by order, then line
       code: `${style.code} ${colour.code}`,
       goods: `${style.name}, ${colour.name}`,
       sizes: new Map<string, number>(),
@@ -141,8 +145,8 @@ async function shipmentFacts(db: CommandTx, shipmentId: string): Promise<Proform
   const gross = weighed ? parcels.reduce((sum, parcel) => sum.plus(new Dec(parcel.grossWeightKg!.toString())), new Dec(0)) : null
   const shipTo = postalOf(shipment.shipTo)
   const references: DocumentReference[] = [
-    ...(order ? [{ kind: 'SALES_ORDER' as const, number: order.number, date: dayOf(order.orderDate) }] : []),
-    ...(order?.customerRef ? [{ kind: 'CUSTOMER_ORDER' as const, number: order.customerRef }] : []),
+    // B-OP-042: one SALES_ORDER and CUSTOMER_ORDER reference per order it carries.
+    ...(paperOrders.length > 0 ? orderReferencesOf(paperOrders, dayOf) : [...(order ? [{ kind: 'SALES_ORDER' as const, number: order.number, date: dayOf(order.orderDate) }] : []), ...(order?.customerRef ? [{ kind: 'CUSTOMER_ORDER' as const, number: order.customerRef }] : [])]),
     { kind: 'SHIPMENT', number: shipment.number },
     ...(live ? [{ kind: 'DDT' as const, number: live.number }] : []),
   ]
@@ -163,7 +167,7 @@ async function shipmentFacts(db: CommandTx, shipmentId: string): Promise<Proform
       references,
       lines: proformaLines,
       basis: order ? priceBasisOf(order.taxMode) : 'NET',
-      paymentTerms: order?.paymentTerms ?? null,
+      paymentTerms: paymentTermsOf(paperOrders) ?? order?.paymentTerms ?? null, // B-OP-042
       deliveryTerms: order ? incotermWords(order.incoterm, order.incotermPlace, language) : null,
       facts: {
         packages: parcels.length > 0 ? parcels.length : null,

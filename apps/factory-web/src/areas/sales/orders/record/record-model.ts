@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react' // B-W2b-340
 import type { StyleDetail, StyleRow, VersionsAnswer } from '../../quotes/api'
-import type { AmendmentsAnswer, AmendPreview, CancelCheck, CancelReason, CloseLinesAnswer, CopyAnswer, DepositLinkAnswer, DepositReceived, Order, OrderWorkOrder, Schedule, SdiStatus, Settlement } from '../api'
-import type { DraftLine } from '../daily-model'
+import type { AmendmentsAnswer, CancelCheck, CancelReason, CloseLinesAnswer, CopyAnswer, DepositLinkAnswer, DepositReceived, Order, OrderWorkOrder, Schedule, SdiStatus, Settlement } from '../api'
+import type { AmendReview, DraftLine } from '../daily-model' // F-OP-106: the strip's preview
+import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules' // F-OP-107 (B2)
+import type { ClosePreview } from '../api' // F-OP-107
 import type { MarginTabModel } from './margin/model'
 import type { StepUpState } from '../hooks'
 import type { OrderAbilities, Phrase, RecordTab } from '../model'
@@ -45,8 +47,8 @@ export const PART_LOADING = { value: null, problem: null } as const
 // at a time: RecordDialog is the container's one slot, and each hook's `opened` clears what its own dialog showed last.
 /** use-band-acts: the band's primary and its ⋯ (Change promise date, Mark ready, Close order; B-W2a-50: Copy as a new quote). */
 export type BandDialog = { kind: 'promise' } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' }
-/** use-lines-acts: the lines (B-W2a-50: the amendment's review, close and reopen lines, the cancel; F-OP-111: the split). */
-export type LinesDialog = { kind: 'amendReview' } | { kind: 'closeLines' } | { kind: 'reopenLines' } | { kind: 'cancel' } | { kind: 'split' }
+/** use-lines-acts: the lines (close and reopen lines, the cancel; F-OP-111: the split; F-OP-106: the amendment has no dialog — its strip). */
+export type LinesDialog = { kind: 'closeLines' } | { kind: 'reopenLines' } | { kind: 'cancel' } | { kind: 'split' }
 /** use-money-acts: the deposits and payments (the bank-details page, the payment, the TD02's send to SDI). */
 export type MoneyDialog = { kind: 'depositLink'; requestId: string } | { kind: 'depositPayment'; requestId: string } | { kind: 'sdiSend'; invoiceId: string }
 /** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
@@ -86,7 +88,7 @@ export interface ComposerState {
 
 export const COMPOSER_EMPTY: ComposerState = Object.freeze({ query: '', results: null, searching: false, problem: null, chosen: null, picked: [] }) as ComposerState
 
-/** "Amend order" (design order.lines.cards: the lines become an amendment draft until Review → Apply). */
+/** "Amend order" (design order.lines.cards: the lines become an amendment draft; F-OP-106: its strip says what changes, ONE Apply). */
 export interface AmendState {
   /** The number the amendment will get ("Amendment 2 — not applied"). */
   revision: number
@@ -96,8 +98,15 @@ export interface AmendState {
   /** Each style of the draft as read (sizes, colourways, offered sizes): undefined while read, null when it failed. */
   styles: Record<string, StyleDetail | null | undefined>
   composer: ComposerState
-  /** The review dialog's read of the API's preview. */
-  review: { phase: 'reading' | 'ready' | 'failed'; preview: AmendPreview | null; problem: Phrase | null } | null
+  /** F-OP-106: the strip's read of the API's preview (asked 500 ms after the last edit and on blur, for the key of the draft then). */
+  review: AmendReview | null
+  // ---- F-OP-106: the strip's Why (required) and the words for the customer with their tick (null: not touched) ----
+  reason: string
+  tell: { readonly words: string; readonly chosen: boolean | null }
+  /** F-OP-107 (B2): what happens to pieces already cut beyond the new figures (null: not picked yet). */
+  extraOutcome: ExtraOutcome | null
+  /** F-OP-108: the optional fee of a priced change (price grain), as typed; empty: none. */
+  fee: string
 }
 
 // ---- F-OP-111: Split into new orders… (use-lines-acts) ----
@@ -184,6 +193,8 @@ export interface OrderRecordModel {
   cancelCheck: Part<CancelCheck> | null
   /** Close remaining lines just ran: what it closed, what work orders still make. */
   closedLines: CloseLinesAnswer | null
+  /** F-OP-107: Close remaining lines' preview of the lines chosen (each work order's plan, the extra pieces); absent: not read. */
+  closePreview?: Part<ClosePreview> | null
   /** Copy as new quote just ran: the new quote and what it left out. */
   copied: CopyAnswer | null
   /** B-W2a-72: the Margin tab (the order's margin quoted → now → so far; margin grain only). */
@@ -276,20 +287,32 @@ export interface OrderRecordActions {
   onAmendCells?: (styleId: string, next: Record<string, Record<string, number>>) => void
   onAmendPrice?: (key: string, text: string) => void
   onAmendHeader?: (field: 'customerRef' | 'requestedDate', value: string) => void
-  onAmendReview?: () => void
-  // F-SA-242: `tell` — the words for the customer also written in the order's conversation (null: not ticked).
-  onAmendApply?: (reason: string, tell?: string | null) => void
+  // ---- F-OP-106: the strip — ask its preview now (blur, Try again), Why, the words for the customer and their tick, ONE Apply
+  onAmendPreview?: () => void
+  onAmendReason?: (text: string) => void
+  onAmendTell?: (next: { readonly words?: string; readonly chosen?: boolean }) => void
+  // F-OP-108: `asPriced` — a frozen field makes it "Apply as a priced change" (the strip's fee goes with it).
+  onAmendApply?: (asPriced?: boolean) => void
+  onAmendFee?: (text: string) => void
+  /** F-OP-109: a line's Text… (its description or note for production), and Remove line (every size to 0). */
+  onAmendText?: (key: string, field: 'description' | 'note', text: string) => void
+  onAmendRemove?: (key: string) => void
+  /** F-OP-107 (B2): the extra pieces' outcome (the strip's picker). */
+  onAmendOutcome?: (outcome: ExtraOutcome) => void
+  /** F-OP-107: read Close remaining lines' preview of the lines chosen. */
+  onClosePreview?: (lineIds: readonly string[]) => void
   onComposerQuery?: (query: string) => void
   onComposerPick?: (styleId: string | null) => void
   onComposerToggle?: (colourwayId: string) => void
   onComposerAdd?: () => void
-  onCloseLines?: (lineIds: string[], reason: string, reasonCode: string) => void
+  // F-OP-107: with the extra pieces' outcome picked in the dialog (null: none — production decides).
+  onCloseLines?: (lineIds: string[], reason: string, reasonCode: string, extraOutcome?: ExtraOutcome | null) => void
   onReopenLines?: (lineIds: string[], reason: string) => void
-  onCancelOrder?: (reason: string, typed: string) => void
+  onCancelOrder?: (reason: string, typed: string, extraOutcome?: ExtraOutcome | null) => void
   onCopyAsQuote?: () => void
   /** B-W2a-72: read the Margin tab again. */
   onRetryMargin?: () => void
-  /** B-W2b-323: the depth's actions, and "Send as a priced change" from Review amendment (the draft's lines go with it). */
+  /** B-W2b-323: the depth's actions; F-OP-108: "Deposit and words…" opens the priced change's own dialog with the draft's lines. */
   depth?: OrderDepthActions
   onPricedOffer?: () => void
   /** B-TH-256: Accept / Decline a re-promise, the "Tell the customer" tick, read the links again. */
@@ -309,6 +332,9 @@ export interface OrderRecordActions {
 export interface EditorActions {
   onCells?: (styleId: string, next: Record<string, Record<string, number>>) => void
   onPrice?: (key: string, text: string) => void
+  /** F-OP-109 (amend mode): a line's description or note for production; Remove line. */
+  onText?: (key: string, field: 'description' | 'note', text: string) => void
+  onRemove?: (key: string) => void
   onComposerQuery?: (query: string) => void
   onComposerPick?: (styleId: string | null) => void
   onComposerToggle?: (colourwayId: string) => void

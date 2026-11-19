@@ -28,6 +28,8 @@ import { syncSystemHoldsInCommand } from '../holds/system'
 import { shipByLookup } from '../queue/promise'
 import { shipmentDetail } from '../shipments/shipments'
 import { readShipment, type ShipmentHeader } from '../store'
+// B-OP-041 (order page N6, lines-derived): the orders a shipment carries.
+import { ordersChanged, ordersOfShipment } from '../shipments/orders-of'
 
 /**
  * Split one order into several shipments (B-W2b-386; LOG-005; rules factory-domain shipping/split). Office: shipping.view
@@ -160,6 +162,9 @@ async function splitInCommand(tools: CommandTools, parent: ShipmentHeader, group
   const facts = await tx.shipment.findUniqueOrThrow({ where: { id: parent.id }, select: { integrationAccountId: true, express: true, dutyPayer: true, paperless: true, transportMode: true } })
   const actorId = tools.context.audience === 'office' ? tools.context.actorId : null
   const from = await lockShipmentRow(tx, parent.id)
+  // B-OP-041 (order page N6, lines-derived): the orders the parent carries before; a child keeps the parent's first order
+  // (salesOrderId: the database's split rule) and carries the orders of its own lines, a subset of the parent's.
+  const parentOrdersBefore = await ordersOfShipment(tx, parent)
   const made: string[] = []
   for (const group of groups) {
     // Garments come off the old lines first: a cell's lines over every shipment never pass its releases (the triggers).
@@ -221,8 +226,12 @@ async function splitInCommand(tools: CommandTools, parent: ShipmentHeader, group
     tools.emit({ type: 'shipment.packing_changed', subject: id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: id, number: number.formatted, status: 'DRAFT', change: 'lines', partyId: parent.partyId /* B-SA-004 */ } })
     const to = await lockShipmentRow(tx, id)
     await carryHoldsInCommand(tools, from, to)
+    // B-OP-041: a child with lines of another order of the customer carries that order too (after the switch only).
+    ordersChanged(tools, { id, number: number.formatted, companyId: parent.companyId, siteId: parent.siteId, partyId: parent.partyId }, [parent.salesOrderId], await ordersOfShipment(tx, { id, salesOrderId: parent.salesOrderId }))
     made.push(id)
   }
+  // B-OP-041: an order whose last line moved to a child leaves the parent.
+  ordersChanged(tools, parent, parentOrdersBefore, await ordersOfShipment(tx, parent))
   tools.emit({ type: 'shipment.packing_changed', subject: parent.id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: parent.id, number: parent.number, status: 'DRAFT', change: 'lines', partyId: parent.partyId /* B-SA-004 */ } })
   // The system's holds of the new shipments settle as their causes stand (most were carried over already).
   await syncSystemHoldsInCommand(tools, made)

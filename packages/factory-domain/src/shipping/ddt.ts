@@ -135,6 +135,17 @@ export interface DdtGoods {
   readonly batchNumber: string | null
   readonly serials: readonly string[]
   readonly ppe: PpeMarking
+  /** B-OP-042 (order page N6): the place of its order among the shipment's orders (0: the first); default 0. */
+  readonly orderSeq?: number | undefined
+}
+
+/** B-OP-042 (order page N6, lines-derived): an order a DDT carries goods of (the first order first). */
+export interface DdtOrder {
+  readonly number: string
+  readonly orderDate: BusinessDate
+  readonly customerRef: string | null
+  /** Its buyer as accepted: one DDT names one recipient, so every order bills the same VAT number. */
+  readonly billTo?: unknown
 }
 
 /** What the API reads for a DDT, under the shipment's lock. */
@@ -154,6 +165,11 @@ export interface DdtFacts {
   /** The order's buyer as accepted (SalesOrder.billTo: { legalName, vatNumber?, fiscalCode?, address }). */
   readonly billTo: unknown
   readonly order: { readonly number: string; readonly orderDate: BusinessDate; readonly customerRef: string | null }
+  /**
+   * B-OP-042 (order page N6): every order the shipment carries (its lines' orders), the first (= `order`) first; not given:
+   * the first alone. The recipient stays the first order's buyer.
+   */
+  readonly orders?: readonly DdtOrder[] | undefined
   /** The site's default appearance of the goods (ShippingSettings.defaultGoodsAppearance). */
   readonly defaultAppearance: string | null
   readonly parcels: readonly { readonly seq: number; readonly grossWeightKg: string | null }[]
@@ -264,9 +280,9 @@ const sameAddress = (a: PostalAddress, b: PostalAddress): boolean => {
   return key(a) === key(b)
 }
 
-const WORDS: Readonly<Record<DocumentLanguage, { readonly size: string; readonly batch: string; readonly serials: string; readonly ppe: (category: string) => string; readonly class: string }>> = {
-  it: { size: 'taglia', batch: 'lotto', serials: 'matricole', ppe: (category) => `DPI cat. ${category}`, class: 'classe' },
-  en: { size: 'size', batch: 'batch', serials: 'serials', ppe: (category) => `PPE cat. ${category}`, class: 'class' },
+const WORDS: Readonly<Record<DocumentLanguage, { readonly size: string; readonly batch: string; readonly serials: string; readonly ppe: (category: string) => string; readonly class: string; /* B-OP-042 */ readonly order: string; readonly po: string }>> = {
+  it: { size: 'taglia', batch: 'lotto', serials: 'matricole', ppe: (category) => `DPI cat. ${category}`, class: 'classe', order: 'ordine', po: 'vs. ordine' },
+  en: { size: 'size', batch: 'batch', serials: 'serials', ppe: (category) => `PPE cat. ${category}`, class: 'class', order: 'order', po: 'your order' },
 }
 
 const PPE_ROMAN: Readonly<Record<PpeMarking['category'], string | null>> = { NOT_PPE: null, CATEGORY_I: 'I', CATEGORY_II: 'II', CATEGORY_III: 'III' }
@@ -283,14 +299,24 @@ export function goodsDescription(goods: DdtGoods, language: DocumentLanguage): s
   ].join(' - ')
 }
 
-/** The goods' lines: one per work order cell, by style, colourway and size. */
-export function ddtLines(goods: readonly DdtGoods[], language: DocumentLanguage): DdtLine[] {
+/**
+ * The goods' lines: one per work order cell, by style, colourway and size. B-OP-042 (N6): grouped by order first (the
+ * first order's goods first); with several orders each line names its order and PO in the DDT's language.
+ */
+export function ddtLines(goods: readonly DdtGoods[], language: DocumentLanguage, /* B-OP-042 */ orders: readonly DdtOrder[] = []): DdtLine[] {
+  const several = orders.length > 1
+  const orderWords = (entry: DdtGoods): string => {
+    const order = orders[entry.orderSeq ?? 0]
+    if (!several || !order) return ''
+    const words = WORDS[language]
+    return ` - ${words.order} ${order.number}${filled(order.customerRef) ? `, ${words.po} ${order.customerRef.trim()}` : ''}`
+  }
   return [...goods]
-    .sort((a, b) => a.styleCode.localeCompare(b.styleCode) || a.colourway.localeCompare(b.colourway) || a.size.localeCompare(b.size, undefined, { numeric: true }) || a.workOrderSizeId.localeCompare(b.workOrderSizeId))
+    .sort((a, b) => (a.orderSeq ?? 0) - (b.orderSeq ?? 0) || a.styleCode.localeCompare(b.styleCode) || a.colourway.localeCompare(b.colourway) || a.size.localeCompare(b.size, undefined, { numeric: true }) || a.workOrderSizeId.localeCompare(b.workOrderSizeId))
     .map((entry, index) => ({
       seq: index + 1,
       code: trimmed(entry.styleCode),
-      description: goodsDescription(entry, language),
+      description: `${goodsDescription(entry, language)}${orderWords(entry)}`,
       quantity: String(entry.quantity),
       uom: 'PCS',
       workOrderSizeId: entry.workOrderSizeId,
@@ -391,12 +417,20 @@ export function draftDdt(facts: DdtFacts, request: DdtRequest, now: Date): { rea
   const destinationName = string((facts.shipment.shipTo as Record<string, unknown> | null)?.name)
   const destination: DdtDestination | null = shipTo && !(recipient.address && sameAddress(shipTo, recipient.address)) ? { ...(destinationName ? { name: destinationName } : {}), ...shipTo } : null
 
-  const lines = ddtLines(facts.goods, facts.language)
+  // B-OP-042 (order page N6, lines-derived): every order the shipment carries, the first first; one recipient (the first
+  // order's buyer), so every other order bills the same VAT number.
+  const orders: readonly DdtOrder[] = facts.orders && facts.orders.length > 0 ? facts.orders : [facts.order]
+  const vatOf = (billTo: unknown): string => (string((billTo as Record<string, unknown> | null)?.vatNumber) ?? '').replace(/[\s.-]/g, '').toUpperCase()
+  for (const other of orders.slice(1)) {
+    if (other.billTo !== undefined && vatOf(other.billTo) !== vatOf(facts.billTo)) problems.push({ path: 'shipment/recipient', message: `${other.number} bills another VAT number than ${orders[0]!.number}: one DDT names one recipient.` })
+  }
+  const lines = ddtLines(facts.goods, facts.language, orders)
   if (lines.length === 0) problems.push({ path: 'shipment/lines', message: 'The shipment has no goods: a DDT lists at least one line.' })
-  const documentRefs: DocumentReference[] = [
-    { kind: 'SALES_ORDER', number: facts.order.number, ...(isBusinessDate(facts.order.orderDate) ? { date: facts.order.orderDate } : {}) },
-    ...(filled(facts.order.customerRef) ? [{ kind: 'CUSTOMER_ORDER' as const, number: facts.order.customerRef.trim() }] : []),
-  ]
+  // One SALES_ORDER and one CUSTOMER_ORDER reference per order (no schema change: documentRefs is a list).
+  const documentRefs: DocumentReference[] = orders.flatMap((order): DocumentReference[] => [
+    { kind: 'SALES_ORDER', number: order.number, ...(isBusinessDate(order.orderDate) ? { date: order.orderDate } : {}) },
+    ...(filled(order.customerRef) ? [{ kind: 'CUSTOMER_ORDER' as const, number: order.customerRef.trim() }] : []),
+  ])
 
   return {
     draft: {

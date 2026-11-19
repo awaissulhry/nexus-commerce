@@ -32,6 +32,8 @@ export interface PackingListInput {
   readonly shipTo: (PostalAddress & { readonly name?: string | null }) | null
   readonly salesOrderNumber: string
   readonly customerRef: string | null
+  /** B-OP-042 (order page N6): every order the shipment carries, the first (salesOrderNumber) first; not given: the first alone. */
+  readonly orders?: readonly { readonly number: string; readonly customerRef: string | null }[] | undefined
   readonly parcels: readonly { readonly id: string; readonly seq: number; readonly grossWeightKg: string | null }[]
   readonly lines: readonly PackingListLine[]
 }
@@ -60,10 +62,12 @@ export function packingListDocument(input: PackingListInput): Omit<DocumentInput
     }))
   const weights = input.parcels.map((parcel) => parcel.grossWeightKg)
   const weighed = weights.length > 0 && weights.every((weight) => weight !== null)
-  const references: DocumentReference[] = [
-    { kind: 'SALES_ORDER', number: input.salesOrderNumber },
-    ...(input.customerRef ? [{ kind: 'CUSTOMER_ORDER' as const, number: input.customerRef }] : []),
-  ]
+  // B-OP-042 (N6): one SALES_ORDER and one CUSTOMER_ORDER reference per order the shipment carries.
+  const orders = input.orders && input.orders.length > 0 ? input.orders : [{ number: input.salesOrderNumber, customerRef: input.customerRef }]
+  const references: DocumentReference[] = orders.flatMap((order): DocumentReference[] => [
+    { kind: 'SALES_ORDER', number: order.number },
+    ...(order.customerRef ? [{ kind: 'CUSTOMER_ORDER' as const, number: order.customerRef }] : []),
+  ])
   return {
     type: 'PACKING_LIST',
     language: input.language,

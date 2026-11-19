@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { amendmentDiff, amendmentProblems, amendStateProblem, nextRevision, snapshotOf, type AmendableLine, type SnapshotHeader, type SnapshotLine } from './amendments'
+import { amendmentDiff, amendmentProblems, amendStateProblem, leftOutOf, nextRevision, snapshotOf, type AmendableLine, type SnapshotHeader, type SnapshotLine } from './amendments'
 
 const header: SnapshotHeader = { customerRef: 'PO-1', requestedDate: null, promiseDate: '2026-12-20', paymentTerms: 'Bonifico', currency: 'EUR', taxMode: 'IT_B2B', netAmount: 624_000, vatAmount: 137_280, grossAmount: 761_280 }
 const blk: SnapshotLine = {
@@ -63,7 +63,7 @@ describe('what an amendment may do (SAL-209)', () => {
     expect(amendStateProblem('PARTLY_SHIPPED')).toMatch(/its lines no longer change/)
   })
 
-  it('a reason; under what work orders make is allowed (B-SA-042); no removal of a line in work orders or closed short', () => {
+  it('a reason; under what work orders make is allowed (B-SA-042); a line closed short is never left out (B-OP-014: one in work orders is)', () => {
     const problems = amendmentProblems({
       status: 'CONFIRMED',
       reason: ' ',
@@ -79,10 +79,8 @@ describe('what an amendment may do (SAL-209)', () => {
     expect(problems.map((issue) => issue.path)).toEqual(['body/reason', 'body/lines/1/sizes', 'body/lines/2/colourwayId', 'body/lines/3/id'])
     expect(problems.some((issue) => issue.message.includes('work orders already make'))).toBe(false)
     const removal = amendmentProblems({ status: 'CONFIRMED', reason: 'Customer asked.', current, lines: [{ id: 'L2' }] })
-    expect(removal.map((issue) => issue.message)).toEqual([
-      'Line 10 is in work orders (4 piece(s)): it cannot be removed; lower or cancel the work order first.',
-      'Line 30 is closed short: reopen it before removing it.',
-    ])
+    // B-OP-014: line 10 (in work orders) left out is closed short, not refused; line 30 (closed short already) still is.
+    expect(removal.map((issue) => issue.message)).toEqual(['Line 30 is closed short: reopen it before removing it.'])
     expect(amendmentProblems({ status: 'CONFIRMED', reason: 'Customer asked.', current, lines: [{ id: 'L1' }, { id: 'L2', sizes: [{ size: '52', quantity: 4 }] }, { id: 'L3' }] })).toEqual([])
   })
 
@@ -97,3 +95,62 @@ describe('what an amendment may do (SAL-209)', () => {
     expect(problems.map((issue) => issue.message)).toEqual(['A made-to-measure unit does not change through an amendment.'])
   })
 })
+
+// ── B-OP-014 (order page plan N1): a line work orders make may be left out — closed short in the same command ──
+describe('B-OP-014: a line left out of an amendment', () => {
+  const current: AmendableLine[] = [
+    { id: 'L1', seq: 10, kind: 'SIZE_GRID', closedShort: false, sizes: blk.sizes, inWorkOrders: new Map([['52', 4]]) },
+    { id: 'L2', seq: 20, kind: 'SIZE_GRID', closedShort: false, sizes: red.sizes, inWorkOrders: new Map() },
+    { id: 'L4', seq: 40, kind: 'SIZE_GRID', closedShort: false, sizes: red.sizes, inWorkOrders: new Map() },
+  ]
+
+  it('is closed short when work orders make it (pieces in its cells, or any cell pointing at it), else removed', () => {
+    expect(leftOutOf({ current, lines: [{ id: 'L2' }] })).toEqual({ remove: ['L4'], close: ['L1'] })
+    // A cancelled work order's cell still points at line 40: closed short too, never deleted.
+    expect(leftOutOf({ current, lines: [{ id: 'L2' }] }, new Set(['L4']))).toEqual({ remove: [], close: ['L1', 'L4'] })
+    expect(leftOutOf({ current, lines: [{ id: 'L1' }, { id: 'L2' }, { id: 'L4' }] })).toEqual({ remove: [], close: [] })
+    // Nothing refuses it any more: the amendment's own checks pass.
+    expect(amendmentProblems({ status: 'IN_PRODUCTION', reason: 'The customer drops the black.', current, lines: [{ id: 'L2' }, { id: 'L4' }] })).toEqual([])
+  })
+
+  it('a made-to-measure unit is never left out (cancel it instead), in work orders or not', () => {
+    const unit: AmendableLine = { id: 'U1', seq: 50, kind: 'MADE_TO_MEASURE', closedShort: false, sizes: [{ size: '52', quantity: 1 }], inWorkOrders: new Map([['', 1]]) }
+    expect(amendmentProblems({ status: 'IN_PRODUCTION', reason: 'Fewer', current: [...current, unit], lines: [{ id: 'L1' }, { id: 'L2' }, { id: 'L4' }] }).map((issue) => issue.message)).toEqual([
+      'Line 50 is a made-to-measure unit: it does not change through an amendment.',
+    ])
+  })
+
+  it('the diff names a line closed short by the amendment REMOVED, what is left of it to 0, its money kept on the line', () => {
+    const before = snapshotOf(header, [blk, red])
+    const after = snapshotOf(header, [{ ...blk, closedShortQuantity: 8 }, red])
+    const diff = amendmentDiff(before, after)
+    expect(diff.lines).toEqual([
+      {
+        change: 'REMOVED',
+        lineId: 'L1',
+        seq: 10,
+        styleId: 'S',
+        colourwayId: 'BLK',
+        piecesBefore: 8,
+        piecesAfter: 0,
+        sizes: [
+          { size: '50', before: 2, after: 0 },
+          { size: '52', before: 4, after: 0 },
+          { size: '54', before: 2, after: 0 },
+        ],
+        unitPrice: null,
+        netBefore: 360_000,
+        netAfter: 360_000,
+        textChanged: false,
+        closedShort: true,
+      },
+    ])
+    // Closing short moves no money (a closed line is not billed): the customer is not asked to accept again; it is a change.
+    expect([diff.reacceptanceNeeded, diff.empty]).toEqual([false, false])
+    // A line closed short before and after (reopened by nobody) is no change.
+    expect(amendmentDiff(after, after).empty).toBe(true)
+    // An ordinary removal and change say closedShort false.
+    expect(amendmentDiff(before, snapshotOf(header, [red])).lines[0]).toMatchObject({ change: 'REMOVED', closedShort: false, netAfter: 0 })
+  })
+})
+// ── end B-OP-014 ──

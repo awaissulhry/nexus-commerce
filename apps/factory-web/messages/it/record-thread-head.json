@@ -1,10 +1,10 @@
 {
   "label": "Thread di {record}",
   "answers": {
-    "us": "Tocca a noi · {wait}",
-    "customer": "Tocca al cliente · {wait}",
-    "supplier": "Tocca al fornitore · {wait}",
-    "partner": "Tocca al partner · {wait}",
+    "us": "Conversazione: tocca a noi · {wait}",
+    "customer": "Conversazione: tocca al cliente · {wait}",
+    "supplier": "Conversazione: tocca al fornitore · {wait}",
+    "partner": "Conversazione: tocca al partner · {wait}",
     "tipUs": "{party} ha scritto per ultimo, {when}. Contato in ore di orologio da quel messaggio.",
     "tipParty": "Abbiamo scritto per ultimi a {party}, {when}. Contato in ore di orologio da quel messaggio."
   },

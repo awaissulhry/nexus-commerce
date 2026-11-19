@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { defineDesignScreen, type DesignCase } from '../../../../lib/design/design-screen'
 import type { Order, OrderLine } from '../api'
-import { draftOf, newKey, type DraftLine } from '../daily-model'
+import { amendKeyOf, draftOf, newKey, type AmendReview, type DraftLine } from '../daily-model'
 import { STEP_UP_CLOSED } from '../hooks'
 import type { NewOrderModel } from '../new/new-model'
 import { NewOrderView } from '../new/view/NewOrderView'
@@ -197,9 +197,12 @@ const RECORDED = {
 
 export const amended = (value: Order): Order => ({ ...value, amendments: AMENDED_SUMMARY, reapprovalNeededAt: at(30, 11, 5), customerRef: 'PO-ESEMPIO-88B' })
 
-/** The amendment draft of an order (optionally with typed changes). */
-function amendOf(value: Order, change: (lines: DraftLine[]) => DraftLine[] = (lines) => lines, over: Partial<AmendState> = {}): AmendState {
-  return {
+/**
+ * The amendment draft of an order (optionally with typed changes). F-OP-106: `seen` is the strip's preview, read for THIS draft
+ * (its key is the draft's: a design case draws what the strip shows once the preview came).
+ */
+function amendOf(value: Order, change: (lines: DraftLine[]) => DraftLine[] = (lines) => lines, over: Partial<AmendState> = {}, seen?: Pick<AmendReview, 'phase' | 'preview'>): AmendState {
+  const draft: AmendState = {
     revision: (value.amendments.latestRevision ?? 0) + 1,
     lines: change(draftOf(value)),
     customerRef: value.customerRef ?? '',
@@ -207,9 +210,15 @@ function amendOf(value: Order, change: (lines: DraftLine[]) => DraftLine[] = (li
     styles: { [STYLE_ID]: STYLE },
     composer: COMPOSER_EMPTY,
     review: null,
+    reason: '',
+    tell: { words: '', chosen: null },
+    extraOutcome: null, // F-OP-107
     ...over,
   }
+  return seen ? { ...draft, review: { ...seen, key: amendKeyOf(draft, value), problem: null } } : draft
 }
+/** B-W2b-323: black 50 one more (a cut size: frozen by the stage). */
+const oneMore50 = (lines: DraftLine[]): DraftLine[] => lines.map((line) => (line.lineId === LINE_BLK ? { ...line, sizes: { ...line.sizes, '50': 3 } } : line))
 const moreBlack = (lines: DraftLine[]): DraftLine[] => [
   ...lines.map((line) => (line.lineId === LINE_BLK ? { ...line, sizes: { ...line.sizes, '50': 3, '52': 3 } } : line)),
   { key: newKey(STYLE_ID, BRN.id), lineId: null, styleId: STYLE_ID, colourwayId: BRN.id, sizes: { '50': 2, '52': 2 }, price: '450', locked: false },
@@ -271,7 +280,7 @@ const HELD: HeldFile[] = holdFiles(
 // ---- B-W2b-323 ----
 const waitingOrder = order('CONFIRMED', { status: 'PENDING_APPROVAL' })
 const d323 = (role: Role, value: Order, over: Partial<OrderRecordModel> = {}, depth: Parameters<typeof depthModel>[1] = {}): RecordCase => base(role, value, { ...over, depth: depthModel(role, depth) })
-const frozenPreview = { ok: false, revision: 4, version: 7, problems: [{ path: 'body/lines/10/SIZE_QUANTITY', message: 'x' }], diff: null }
+const frozenPreview = { ok: false, revision: 4, version: 7, problems: [{ path: 'body/lines/10/SIZE_QUANTITY', message: 'x' }], diff: null, workOrders: null }
 const W2B_323 = [
   { id: 'w2b-323-lines', label: 'W2b · Sales · Lines: urgent with its reason, season FW27, confirmation v2 sent; black 48 · 50 locked “Cutting started — size frozen”; Customer-supplied materials', model: d323('sales', production), note: 'The materials grid links each lot and the receipt that brought it; Plan from the BOM makes the rows.' },
   { id: 'w2b-323-materials-empty', label: 'W2b · Sales · Customer-supplied materials: the customer supplies nothing', model: d323('sales', production, {}, { materials: { value: MATERIALS_EMPTY, problem: null }, freeze: { value: FREEZE_NONE, problem: null } }) },
@@ -280,8 +289,8 @@ const W2B_323 = [
   { id: 'w2b-323-materials-loading', label: 'W2b · Sales · Customer materials reading', model: d323('sales', production, {}, { materials: { value: null, problem: null } }) },
   { id: 'w2b-323-manager-lines', label: 'W2b · Production manager · Lines: frozen sizes and materials read-only (Plan held)', model: d323('manager', production) },
   { id: 'w2b-323-amend-frozen', label: 'W2b · Sales · Amend order: the cut sizes marked in the grid with their reason', model: d323('sales', production, { amend: amendOf(production) }) },
-  { id: 'w2b-323-review-frozen', label: 'W2b · Sales · Review amendment: frozen by the stage — Send as a priced change', model: d323('sales', production, { amend: amendOf(production, (lines) => lines.map((line) => (line.lineId === LINE_BLK ? { ...line, sizes: { ...line.sizes, '50': 3 } } : line)), { review: { phase: 'ready', preview: frozenPreview, problem: null } }), dialog: { kind: 'amendReview' } }) },
-  { id: 'w2b-323-review-blocked', label: 'W2b · Sales · Review amendment: frozen for good (finished pieces) — no way', model: d323('sales', production, { amend: amendOf(production, (lines) => lines, { review: { phase: 'ready', preview: frozenPreview, problem: null } }), dialog: { kind: 'amendReview' } }, { freeze: { value: FREEZE_FINISHED, problem: null } }) },
+  { id: 'w2b-323-review-frozen', label: 'W2b · Sales · What changes: frozen by the stage — Apply as a priced change, with its optional fee', model: d323('sales', production, { amend: amendOf(production, oneMore50, {}, { phase: 'ready', preview: frozenPreview }) }) },
+  { id: 'w2b-323-review-blocked', label: 'W2b · Sales · What changes: frozen for good (finished pieces) — no way', model: d323('sales', production, { amend: amendOf(production, oneMore50, {}, { phase: 'ready', preview: frozenPreview }) }, { freeze: { value: FREEZE_FINISHED, problem: null } }) },
   { id: 'w2b-323-priced', label: 'W2b · Sales · Priced change: one more in 50 priced, the fee, the extra deposit (30 % of the growth), it waits for a yes', model: d323('sales', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen() }), note: 'The kind lists the caparra penitenziale held: off until the accountant confirms it.' },
   { id: 'w2b-323-priced-blocked', label: 'W2b · Sales · Priced change refused: the size cannot change any more', model: d323('sales', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen(PRICED_BLOCKED) }) },
   { id: 'w2b-323-priced-reading', label: 'W2b · Sales · Priced change: pricing', model: d323('sales', production, {}, { dialog: { kind: 'priced' }, priced: { ...pricedOpen(), preview: { phase: 'reading', value: null, problem: null } } }) },
@@ -438,14 +447,14 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'amend-under-work-orders', label: 'W2a · Sales · In production: a size typed under what work orders make (held, said in the grid)', model: base('sales', production, { amend: amendOf(production, underMade) }) },
     { id: 'amend-composer', label: 'W2a · Sales · Amendment: Add a style — the style picked, its colours to add', model: base('sales', confirmed, { amend: amendOf(confirmed, (lines) => lines, { composer: { ...COMPOSER_EMPTY, query: 'DEMO', results: STYLE_ROWS, chosen: STYLE, picked: [BRN.id] } }) }) },
     { id: 'amend-search', label: 'W2a · Sales · Amendment: Add a style — the search results', model: base('sales', confirmed, { amend: amendOf(confirmed, (lines) => lines, { composer: { ...COMPOSER_EMPTY, query: 'DEMO', results: STYLE_ROWS } }) }) },
-    { id: 'amend-review', label: 'W2a · Sales · Review amendment: lines old → new by size, money change, the customer accepts again', model: base('sales', confirmed, { amend: amendOf(confirmed, moreBlack, { review: { phase: 'ready', preview: AMEND_PREVIEW, problem: null } }), dialog: { kind: 'amendReview' }, draft: { reason: 'Il cliente aggiunge due giacche nere e quattro marroni.' } }) },
-    { id: 'amend-review-reading', label: 'W2a · Sales · Review amendment: reading the API’s preview', model: base('sales', confirmed, { amend: amendOf(confirmed, moreBlack, { review: { phase: 'reading', preview: null, problem: null } }), dialog: { kind: 'amendReview' } }) },
-    { id: 'amend-review-problems', label: 'W2a · Sales · Review amendment refused by place, in words (Apply held)', model: base('sales', production, { amend: amendOf(production, moreBlack, { review: { phase: 'ready', preview: AMEND_PREVIEW_PROBLEMS, problem: null } }), dialog: { kind: 'amendReview' } }) },
-    { id: 'amend-review-moved', label: 'W2a · Sales · Apply refused: someone changed the order meanwhile (read again)', model: base('sales', confirmed, { amend: amendOf(confirmed, moreBlack, { review: { phase: 'ready', preview: AMEND_PREVIEW, problem: null } }), dialog: { kind: 'amendReview' }, dialogProblem: { key: 'problem.write.moved' }, draft: { reason: 'Due giacche in più.' } }) },
+    { id: 'amend-review', label: 'W2a · Sales · What changes: pieces and net old → new, the customer accepts again (Show all changes: by size)', model: base('sales', confirmed, { amend: amendOf(confirmed, moreBlack, { reason: 'Il cliente aggiunge due giacche nere e quattro marroni.' }, { phase: 'ready', preview: AMEND_PREVIEW }) }) },
+    { id: 'amend-review-reading', label: 'W2a · Sales · What changes: working it out (Apply held while it reads)', model: base('sales', confirmed, { amend: amendOf(confirmed, moreBlack, {}, { phase: 'reading', preview: null }) }) },
+    { id: 'amend-review-problems', label: 'W2a · Sales · What changes: refused by place, in words (Apply held)', model: base('sales', production, { amend: amendOf(production, moreBlack, {}, { phase: 'ready', preview: AMEND_PREVIEW_PROBLEMS }) }) },
+    { id: 'amend-review-moved', label: 'W2a · Sales · Apply refused: someone changed the order meanwhile (read again)', model: base('sales', confirmed, { amend: amendOf(confirmed, moreBlack, { reason: 'Due giacche in più.' }, { phase: 'ready', preview: AMEND_PREVIEW }), notice: { tone: 'danger', words: { key: 'problem.write.moved' } } }) },
     { id: 'amend-held-shipped', label: 'W2a · Sales · Partly shipped: Amend order held — the lines are fixed once anything shipped', model: base('sales', order('PARTLY_SHIPPED')) },
     { id: 'amended-band', label: 'W2a · Sales · An amended order: “Amended · rev 2”, waiting for the customer to accept again', model: base('sales', amended(production)) },
     { id: 'close-lines-dialog', label: 'W2a · Sales · Close remaining lines: what will not be made or shipped, the reason, the reversal', model: base('sales', order('PARTLY_SHIPPED'), { dialog: { kind: 'closeLines' }, draft: { reason: 'Il cliente non vuole il resto.' } }) },
-    { id: 'close-lines-done', label: 'W2a · Sales · Lines closed: what work orders still make is Production’s', model: base('sales', closedShort, { dialog: { kind: 'closeLines' }, closedLines: { order: closedShort, closed: [{ lineId: LINE_RED, seq: 20, closedShortQuantity: 2 }], reducesDone: [], stillInWorkOrders: [{ lineId: LINE_RED, pieces: 2 }] } }) },
+    { id: 'close-lines-done', label: 'W2a · Sales · Lines closed: what work orders still make is Production’s', model: base('sales', closedShort, { dialog: { kind: 'closeLines' }, closedLines: { order: closedShort, closed: [{ lineId: LINE_RED, seq: 20, closedShortQuantity: 2 }], reducesDone: [], stillInWorkOrders: [{ lineId: LINE_RED, pieces: 2 }], workOrders: { applied: [], waiting: [] } } }) },
     { id: 'closed-short', label: 'W2a · Sales · Lines: the red line closed short (2 pieces) with its reason', model: base('sales', closedShort) },
     { id: 'reopen-dialog', label: 'W2a · Sales · Reopen lines (the close’s reversal)', model: base('sales', closedShort, { dialog: { kind: 'reopenLines' }, draft: { reason: 'Arrivata altra pelle rossa.' } }) },
     { id: 'cancel-dialog', label: 'W2a · Sales · Cancel order in production: what it changes and leaves behind; reason; the number typed', model: base('sales', production, { dialog: { kind: 'cancel' }, cancelCheck: { value: CANCEL_CHECK, problem: null }, draft: { reason: 'Il cliente ha chiuso la stagione.', typed: 'SO-2026-0088' } }), note: 'Cancel order waits for the reason and the number typed exactly.' },

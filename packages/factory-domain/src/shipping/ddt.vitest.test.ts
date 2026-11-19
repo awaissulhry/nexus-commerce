@@ -224,3 +224,43 @@ describe('when a DDT is issued, a shipment leaves and a DDT is cancelled', () =>
     expect(issued.payload.safeParse({ ddtId: '0190a1b2-0000-7000-8000-000000000001', shipmentId: '0190a1b2-0000-7000-8000-000000000002', number: '145/2026', documentDate: '2026-11-24', replacement: false, shipped: true }).success).toBe(true)
   })
 })
+
+// B-OP-042 (order page N6, lines-derived): a DDT of a shipment that carries several orders of one customer.
+describe('a DDT of two orders of one customer (B-OP-042)', () => {
+  const second = { number: 'SO-2026-0003', orderDate: '2026-11-14', customerRef: 'PO-81', billTo: { legalName: 'Cliente Esempio S.r.l.', vatNumber: 'IT 00000001016' } }
+  const twoOrders = facts({
+    orders: [{ number: 'SO-2026-0002', orderDate: '2026-11-12', customerRef: 'PO-78' }, second],
+    goods: [goods({ workOrderSizeId: 'cell-3', styleCode: 'AAA-01', orderSeq: 1 }), goods({ workOrderSizeId: 'cell-2', colourway: 'Rosso', size: '50', quantity: 1 }), goods()],
+  })
+
+  it('one SALES_ORDER and one CUSTOMER_ORDER reference per order; the recipient stays the first order\'s buyer', () => {
+    const { draft, problems } = draftDdt(twoOrders, {}, NOW)
+    expect(problems).toEqual([])
+    expect(draft.documentRefs).toEqual([
+      { kind: 'SALES_ORDER', number: 'SO-2026-0002', date: '2026-11-12' },
+      { kind: 'CUSTOMER_ORDER', number: 'PO-78' },
+      { kind: 'SALES_ORDER', number: 'SO-2026-0003', date: '2026-11-14' },
+      { kind: 'CUSTOMER_ORDER', number: 'PO-81' },
+    ])
+    expect(draft.recipient).toMatchObject({ name: 'Cliente Esempio S.r.l.', vatNumber: 'IT00000001016' })
+  })
+
+  it('groups the lines by order (the first order\'s first) and names each line\'s order and PO, in the DDT\'s language', () => {
+    const { draft } = draftDdt(twoOrders, {}, NOW)
+    expect(draft.lines.map((line) => [line.seq, line.workOrderSizeId])).toEqual([[1, 'cell-1'], [2, 'cell-2'], [3, 'cell-3']])
+    expect(draft.lines[0]!.description).toBe('Giacca moto in pelle, Nero, taglia 52 (DPI cat. II, EN 17092-3:2020, classe AA) - lotto BT-0001 - ordine SO-2026-0002, vs. ordine PO-78')
+    expect(draft.lines[2]!.description).toMatch(/ - ordine SO-2026-0003, vs\. ordine PO-81$/)
+    expect(draftDdt({ ...twoOrders, language: 'en' }, {}, NOW).draft.lines[2]!.description).toMatch(/ - order SO-2026-0003, your order PO-81$/)
+  })
+
+  it('one order: references and lines exactly as before (nothing visible changes while N6 is held off)', () => {
+    const before = draftDdt(facts(), {}, NOW).draft
+    const one = draftDdt(facts({ orders: [{ number: 'SO-2026-0002', orderDate: '2026-11-12', customerRef: 'PO-78' }] }), {}, NOW).draft
+    expect([one.documentRefs, one.lines]).toEqual([before.documentRefs, before.lines])
+  })
+
+  it('refuses in words an order that bills another VAT number: one DDT names one recipient', () => {
+    const other = facts({ orders: [{ number: 'SO-2026-0002', orderDate: '2026-11-12', customerRef: 'PO-78' }, { ...second, billTo: { vatNumber: 'IT99999999999' } }] })
+    expect(problemsOf({}, other)).toContain('shipment/recipient: SO-2026-0003 bills another VAT number than SO-2026-0002: one DDT names one recipient.')
+  })
+})

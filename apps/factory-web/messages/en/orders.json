@@ -801,13 +801,10 @@
     "ready": "The order is ready to ship.",
     "closed": "The order is closed.",
     "sdiSent": "Sent to SDI: its answer appears here when it comes.",
-    "amended": "Amendment {revision} applied.",
-    "amendedReaccept": "Amendment {revision} applied. The net total changed: the customer must accept the order again — tell them.",
     "reopened": "The lines were reopened.",
     "cancelled": "The order was cancelled.",
     "healthRaised": "Raised to At risk: the customer reads it with its reason.",
     "healthCleared": "The raise is cleared: the dates speak again.",
-    "amendedTold": "Amendment {revision} applied; also written in the order's conversation.",
     "amendedNotTold": "Amendment {revision} applied; the words were not written in the order's conversation: write them there.",
     "amendedNotReached": "Amendment {revision} applied; no way to reach {customer}: add a contact."
   },
@@ -855,20 +852,14 @@
     "count_other": "{count} changes",
     "barLabel": "Amendment draft",
     "discard": "Discard",
-    "review": "Review",
-    "how": "Change the sizes and prices below, add a colour or a style, or set a line to 0 to remove it. Nothing changes until you review and apply the amendment.",
+    "how": "Change the sizes and prices below, add a colour or a style, or set a line to 0 to remove it. Nothing changes until you apply the amendment.",
     "header": "Order details",
     "customerRef": "Customer PO",
     "requestedDate": "Requested by the customer",
     "requestedHint": "Today or later; empty: none.",
-    "reviewTitle": "Review amendment {revision} of {number}",
-    "reading": "Checking the amendment with the factory server…",
     "failed": "The amendment could not be checked.",
     "problems_one": "{count} thing stops the amendment:",
     "problems_other": "{count} things stop the amendment:",
-    "summary_one": "{count} line changes.",
-    "summary_other": "{count} lines change.",
-    "summaryMoney": "Net {before} → {after} ({delta}).",
     "reaccept": "The net total changes: the customer must accept the order again. The order shows “waiting for the customer”; the acceptance link is not there yet, so tell the customer yourself.",
     "noReaccept": "The net total does not change: the customer does not need to accept again.",
     "tableLabel": "Lines old → new",
@@ -886,13 +877,76 @@
       "reading": "Checking the amendment first",
       "failed": "The check failed: try again",
       "problems": "Fix what stops the amendment first",
-      "reason": "Say why the order changes",
-      "cut": "A size is under what is already cut: raise it to the pieces cut"
+      "reason": "Say why the order changes"
     },
     "tell": {
       "words": "Words for the customer (optional)",
       "hint": "Ticked, they go as our message in the order's conversation after the amendment. Never a price in words."
     }
+  },
+  "edit": {
+    "appliesAtOnce": "Applies at once — no approval",
+    "showAll": "Show all changes",
+    "strip": {
+      "reading": "Working out what changes…",
+      "pieces": "Pieces {before} → {after} ({delta})",
+      "net": "Net {before} → {after} ({delta})",
+      "told": "{customer} is told",
+      "notTold": "{customer} is not told",
+      "wo": {
+        "change": "{number} {before} → {after}",
+        "cancel": "{number} cancelled",
+        "new": "A new work order: {after} pieces",
+        "someone": "A work order",
+        "now": "follows now",
+        "waits": "waits for production — decide on this page",
+        "reprint": "its work sheet is printed again"
+      }
+    },
+    "done": {
+      "plain": "Amendment {revision} applied.",
+      "plainTold": "Amendment {revision} applied · {customer} told.",
+      "changed": "Amendment {revision} applied · {changed} changed.",
+      "changedTold": "Amendment {revision} applied · {changed} changed · {customer} told.",
+      "waits": "Amendment {revision} applied · waiting for production: {waits} — decide on this page.",
+      "waitsTold": "Amendment {revision} applied · waiting for production: {waits} — decide on this page · {customer} told.",
+      "both": "Amendment {revision} applied · {changed} changed · waiting for production: {waits} — decide on this page.",
+      "bothTold": "Amendment {revision} applied · {changed} changed · waiting for production: {waits} — decide on this page · {customer} told."
+    },
+    "floor": {
+      "shipped": "{count} already shipped: it cannot go lower",
+      "cut": "{count} already cut beyond this",
+      "inWork": "the work order follows"
+    },
+    "figures": {
+      "cut": "Cut {count}",
+      "sewn": "Sewn {count}",
+      "shipped": "Shipped {count}"
+    },
+    "held": {
+      "shipped": "A size is under what already shipped: raise it to the pieces shipped",
+      "extra_one": "Choose what happens to the {count} extra piece",
+      "extra_other": "Choose what happens to the {count} extra pieces",
+      "fee": "A fee above 0, with at most 2 decimals."
+    },
+    "workOrders": "What happens to the work orders",
+    "planNotRead": "What happens to the work orders could not be read now: it still applies at once, and they follow by the same rules.",
+    "followed": {
+      "changed": "{numbers} changed",
+      "waits": "Waiting for production: {numbers} — decide on this page"
+    },
+    "applyPriced": "Apply as a priced change",
+    "pricedMore": "Extra deposit and words for the customer…",
+    "line": {
+      "text": "Text…",
+      "description": "Description",
+      "note": "Note for production (no prices)",
+      "remove": "Remove line",
+      "removed": "Removed: type its sizes again to keep it",
+      "loses_one": "{numbers} loses this line",
+      "loses_other": "{numbers} lose this line"
+    },
+    "closedShort": "Closed short: work orders make it"
   },
   "editor": {
     "add": {
@@ -936,14 +990,12 @@
       "none": "Unchanged",
       "empty": "Type its sizes"
     },
-    "underWorkOrders": "Size {size}: work orders make {made} — the work order follows the change (Still to do)",
     "styleReading": "Reading the style…",
     "styleUnread": "The style could not be read: only its sizes on the order",
     "lockedLabel": "Lines kept as they are",
     "lockedClosed_one": "{colour}: closed short ({count} piece): reopen it first to change it",
     "lockedClosed_other": "{colour}: closed short ({count} pieces): reopen it first to change it",
-    "lockedMtm": "{colour}: a made-to-measure unit, kept as it is",
-    "underCut": "Size {size}: {cut} already cut — it never goes under what is cut"
+    "lockedMtm": "{colour}: a made-to-measure unit, kept as it is"
   },
   "issue": {
     "state": "The order does not take this change in its state now.",

@@ -8,6 +8,8 @@ import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { mayOn, officeContextOf } from '../access'
 import { cellCounts } from '../cells'
+// B-OP-041 (order page N6, lines-derived): an order's shipments through their lines.
+import { ordersOfShipment, shipmentsOfOrderWhere } from './orders-of'
 
 /**
  * Partial shipments and the backorder (B-W2a-48; LOG-004; SCOPE W2a rule 1; design warehouse.shipments sh-lines
@@ -155,11 +157,13 @@ export async function orderBackorder(caller: CommandCaller, salesOrderId: string
     let shipmentId: string | null = null
     if (query.shipmentId) {
       const shipment = isUuid(query.shipmentId) ? await client.shipment.findUnique({ where: { id: query.shipmentId }, select: { id: true, salesOrderId: true } }) : null
-      if (!shipment || shipment.salesOrderId !== order.id) throw new NotFoundError('Shipment not found on this order.')
+      // B-OP-041 (N6): a shipment is on the order when it carries its garments (or was made for it).
+      if (!shipment || !(await ordersOfShipment(client, shipment)).includes(order.id)) throw new NotFoundError('Shipment not found on this order.')
       shipmentId = shipment.id
     }
     const lines = (await readBackorders(client, [order.id], shipmentId)).get(order.id) ?? []
-    const shipments = await client.shipment.findMany({ where: { salesOrderId: order.id }, select: { id: true, number: true, status: true, shippedAt: true }, orderBy: { number: 'asc' } })
+    // B-OP-041: the order's shipments — made for it, or carrying its garments.
+    const shipments = await client.shipment.findMany({ where: shipmentsOfOrderWhere(order.id), select: { id: true, number: true, status: true, shippedAt: true }, orderBy: { number: 'asc' } })
     const totals = backorderTotals(lines.flatMap((line) => line.sizes))
     return {
       order: orderHeader(order),

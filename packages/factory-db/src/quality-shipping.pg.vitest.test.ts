@@ -90,6 +90,8 @@ const insertSql = (table: string, row: Record<string, unknown>): [string, string
 }
 const insert = (scope: FactoryScope, table: string, row: Record<string, unknown>) => run(scope, ...insertSql(table, row))
 const tag = (): string => randomUUID().slice(0, 8)
+// B-OP-005: the refusal's words, or null when it passed.
+const refusalOf = (work: Promise<unknown>): Promise<string | null> => work.then(() => null, (error: Error) => error.message)
 
 beforeAll(async () => {
   db = await migratedDatabase('quality_shipping')
@@ -347,6 +349,9 @@ describe('the walls', () => {
     // W2b schema wave 34/44 (B-W2b-275): the lab's price of a lab result is a cost, office only; its currency goes with it.
     const costs: Record<string, string[]> = { Shipment: ['freightCost'], LabResult: ['costAmount'] }
     const withCosts: Record<string, string[]> = { Shipment: ['freightCost', 'freightCostCurrency'], LabResult: ['costAmount', 'costCurrency'] }
+    // B-OP-005 (order page, N5): where a shipment was made, the paper DDT of one made elsewhere and the typed tracking link
+    // are the office's; the floor reads none of them (it packs only shipments made in Nexus).
+    const officeOnly: Record<string, string[]> = { Shipment: ['origin', 'externalDdtNumber', 'externalDdtDate', 'manualTrackingUrl'] }
     for (const { model, ownership } of models) {
       const grained = model.fields.filter((field) => field.tags.some((entry) => entry.startsWith('@grain')))
       expect(grained.map((field) => field.column), model.name).toEqual([...(prices[model.name] ?? []), ...(costs[model.name] ?? [])])
@@ -362,7 +367,7 @@ describe('the walls', () => {
         expect(floorAccess, model.name).toEqual({ privileges: ['select'] })
       } else if (floorAccess) {
         expect(floorAccess.scopedBy, model.name).toEqual(['site'])
-        expect(floorAccess.hiddenColumns ?? [], model.name).toEqual([...(prices[model.name] ?? []), ...(withCosts[model.name] ?? [])])
+        expect(floorAccess.hiddenColumns ?? [], model.name).toEqual([...(prices[model.name] ?? []), ...(withCosts[model.name] ?? []), ...(officeOnly[model.name] ?? [])])
       }
       const partnerAccess = ownership.access[PARTNER_ROLE]
       if (model.file === 'quality.prisma') expect(partnerAccess, model.name).toBeUndefined()
@@ -715,10 +720,15 @@ describe('a shipment', () => {
     // A line ships its cell: that cell's sales order line and size, of the shipment's order.
     await expect(insert(floor(), 'ShipmentLine', lineOf(draft, 'BLK-52', { size: '54' }))).rejects.toThrow(/ships its work order cell .*: that cell's party, sales order line and size/)
     await expect(insert(floor(), 'ShipmentLine', lineOf(draft, 'BLK-52', { salesOrderLineId: A.orderLine.RED }))).rejects.toThrow(/that cell's party, sales order line and size/)
+    // B-OP-005 (order page, N6 lines-derived): a line of another OPEN order of the same customer (SEED-SO-0003, P1's, confirmed,
+    // in the same currency and tax mode) is no longer refused for its order while the shipment is a DRAFT; the release cap
+    // still holds (99 garments are never released). order-page.pg.vitest.test.ts holds the order rule itself.
     const q = seeded.quality
-    await expect(
-      insert(office(), 'ShipmentLine', lineRow(draft, { workOrderId: q.serialWorkOrderId, workOrderSizeId: q.serialCellId, salesOrderLineId: q.serialSalesOrderLineId, size: '52' })),
-    ).rejects.toThrow(/which is not of the shipment's order/)
+    const otherOrder = await refusalOf(
+      insert(office(), 'ShipmentLine', lineRow(draft, { workOrderId: q.serialWorkOrderId, workOrderSizeId: q.serialCellId, salesOrderLineId: q.serialSalesOrderLineId, size: '52', quantity: 99 })),
+    )
+    expect(otherOrder).toMatch(/only released garments ship \(QHS-058\)/)
+    expect(otherOrder).not.toMatch(/cannot travel in shipment/)
   })
 
   it('serialise two packers taking the last released garment of a cell: the second is refused', async () => {

@@ -801,13 +801,10 @@
     "ready": "L'ordine è pronto da spedire.",
     "closed": "L'ordine è chiuso.",
     "sdiSent": "Inviata allo SDI: la sua risposta compare qui quando arriva.",
-    "amended": "Modifica {revision} applicata.",
-    "amendedReaccept": "Modifica {revision} applicata. Il totale imponibile è cambiato: il cliente deve accettare di nuovo l'ordine — avvisalo.",
     "reopened": "Le righe sono state riaperte.",
     "cancelled": "L'ordine è stato annullato.",
     "healthRaised": "Portato a A rischio: il cliente lo legge con il motivo.",
     "healthCleared": "Segnalazione tolta: parlano di nuovo le date.",
-    "amendedTold": "Modifica {revision} applicata; scritta anche nella conversazione dell'ordine.",
     "amendedNotTold": "Modifica {revision} applicata; le parole non sono state scritte nella conversazione dell'ordine: scrivile lì.",
     "amendedNotReached": "Modifica {revision} applicata; nessun modo di raggiungere {customer}: aggiungi un contatto."
   },
@@ -855,20 +852,14 @@
     "count_other": "{count} cambiamenti",
     "barLabel": "Bozza della modifica",
     "discard": "Scarta",
-    "review": "Rivedi",
-    "how": "Cambia qui sotto taglie e prezzi, aggiungi un colore o un modello, o porta una riga a 0 per toglierla. Non cambia nulla finché non rivedi e applichi la modifica.",
+    "how": "Cambia qui sotto taglie e prezzi, aggiungi un colore o un modello, o porta una riga a 0 per toglierla. Non cambia nulla finché non applichi la modifica.",
     "header": "Dati dell'ordine",
     "customerRef": "Ordine del cliente",
     "requestedDate": "Data richiesta dal cliente",
     "requestedHint": "Oggi o dopo; vuota: nessuna.",
-    "reviewTitle": "Rivedi la modifica {revision} di {number}",
-    "reading": "Verifica della modifica con il server della fabbrica…",
     "failed": "Non è stato possibile verificare la modifica.",
     "problems_one": "{count} cosa blocca la modifica:",
     "problems_other": "{count} cose bloccano la modifica:",
-    "summary_one": "Cambia {count} riga.",
-    "summary_other": "Cambiano {count} righe.",
-    "summaryMoney": "Imponibile {before} → {after} ({delta}).",
     "reaccept": "Il totale imponibile cambia: il cliente deve accettare di nuovo l'ordine. L'ordine mostra «in attesa del cliente»; il link di accettazione non c'è ancora, quindi avvisa tu il cliente.",
     "noReaccept": "Il totale imponibile non cambia: il cliente non deve accettare di nuovo.",
     "tableLabel": "Righe prima → dopo",
@@ -886,13 +877,76 @@
       "reading": "Prima la verifica della modifica",
       "failed": "La verifica non è riuscita: riprova",
       "problems": "Prima sistema ciò che blocca la modifica",
-      "reason": "Scrivi perché l'ordine cambia",
-      "cut": "Una taglia è sotto il già tagliato: portala ai capi tagliati"
+      "reason": "Scrivi perché l'ordine cambia"
     },
     "tell": {
       "words": "Parole per il cliente (facoltative)",
       "hint": "Se spunti, vanno come nostro messaggio nella conversazione dell'ordine dopo la modifica. Mai un prezzo a parole."
     }
+  },
+  "edit": {
+    "appliesAtOnce": "Si applica subito — senza approvazione",
+    "showAll": "Mostra tutte le modifiche",
+    "strip": {
+      "reading": "Calcolo di cosa cambia…",
+      "pieces": "Capi {before} → {after} ({delta})",
+      "net": "Imponibile {before} → {after} ({delta})",
+      "told": "{customer} viene avvisato",
+      "notTold": "{customer} non viene avvisato",
+      "wo": {
+        "change": "{number} {before} → {after}",
+        "cancel": "{number} annullato",
+        "new": "Un nuovo ordine di lavoro: {after} capi",
+        "someone": "Un ordine di lavoro",
+        "now": "segue subito",
+        "waits": "attende la produzione — decidi in questa pagina",
+        "reprint": "il foglio di lavorazione si ristampa"
+      }
+    },
+    "done": {
+      "plain": "Modifica {revision} applicata.",
+      "plainTold": "Modifica {revision} applicata · {customer} avvisato.",
+      "changed": "Modifica {revision} applicata · ordini di lavoro cambiati: {changed}.",
+      "changedTold": "Modifica {revision} applicata · ordini di lavoro cambiati: {changed} · {customer} avvisato.",
+      "waits": "Modifica {revision} applicata · in attesa della produzione: {waits} — decidi in questa pagina.",
+      "waitsTold": "Modifica {revision} applicata · in attesa della produzione: {waits} — decidi in questa pagina · {customer} avvisato.",
+      "both": "Modifica {revision} applicata · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina.",
+      "bothTold": "Modifica {revision} applicata · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina · {customer} avvisato."
+    },
+    "floor": {
+      "shipped": "{count} già spediti: non può scendere",
+      "cut": "{count} già tagliati oltre",
+      "inWork": "l'ordine di lavoro segue"
+    },
+    "figures": {
+      "cut": "Tagliati {count}",
+      "sewn": "Cuciti {count}",
+      "shipped": "Spediti {count}"
+    },
+    "held": {
+      "shipped": "Una taglia è sotto il già spedito: portala ai capi spediti",
+      "extra_one": "Scegli cosa fare del {count} pezzo in più",
+      "extra_other": "Scegli cosa fare dei {count} pezzi in più",
+      "fee": "Un costo sopra 0, con al massimo 2 decimali."
+    },
+    "workOrders": "Cosa succede agli ordini di lavoro",
+    "planNotRead": "Non è stato possibile leggere ora cosa succede agli ordini di lavoro: si applica comunque subito e seguono con le stesse regole.",
+    "followed": {
+      "changed": "Ordini di lavoro cambiati: {numbers}",
+      "waits": "In attesa della produzione: {numbers} — decidi in questa pagina"
+    },
+    "applyPriced": "Applica come modifica con prezzo",
+    "pricedMore": "Acconto aggiuntivo e parole per il cliente…",
+    "line": {
+      "text": "Testo…",
+      "description": "Descrizione",
+      "note": "Nota per la produzione (senza prezzi)",
+      "remove": "Togli la riga",
+      "removed": "Tolta: scrivi di nuovo le taglie per tenerla",
+      "loses_one": "{numbers} perde questa riga",
+      "loses_other": "{numbers} perdono questa riga"
+    },
+    "closedShort": "Chiusa in anticipo: la fanno gli ordini di lavoro"
   },
   "editor": {
     "add": {
@@ -936,14 +990,12 @@
       "none": "Invariata",
       "empty": "Scrivi le taglie"
     },
-    "underWorkOrders": "Taglia {size}: gli ordini di lavoro ne fanno {made} — l'ordine di lavoro segue la modifica (Ancora da fare)",
     "styleReading": "Lettura del modello…",
     "styleUnread": "Non è stato possibile leggere il modello: solo le taglie dell'ordine",
     "lockedLabel": "Righe tenute come sono",
     "lockedClosed_one": "{colour}: chiusa in anticipo ({count} pezzo): riaprila prima di cambiarla",
     "lockedClosed_other": "{colour}: chiusa in anticipo ({count} pezzi): riaprila prima di cambiarla",
-    "lockedMtm": "{colour}: un capo su misura, tenuto com'è",
-    "underCut": "Taglia {size}: {cut} già tagliati — non si scende sotto il tagliato"
+    "lockedMtm": "{colour}: un capo su misura, tenuto com'è"
   },
   "issue": {
     "state": "Nel suo stato di ora l'ordine non accetta questo cambiamento.",

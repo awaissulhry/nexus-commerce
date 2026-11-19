@@ -10,6 +10,8 @@ import { systemCallerOf } from '../../../platform/files/files'
 import { partnerOrder, portalReader } from '../../sales/portal-orders/access'
 import { readShipment } from '../store'
 import { makeTrackingLinks } from './make'
+// B-OP-042 (order page N6, lines-derived): the orders a shipment carries.
+import { ordersOfShipment } from '../shipments/orders-of'
 
 /**
  * "Copy tracking link" in the portal (B-W2b-170; design portal.customer.orders › Shipments: "copies the branded tracking
@@ -33,7 +35,10 @@ export async function copyFromPortal(app: FastifyInstance, request: FastifyReque
   if (session.preview) throw new ForbiddenError('A preview of the portal changes nothing.')
   const order = await partnerOrder(request, reader, orderId)
   const shipment = await reader.inTenant((client) => readShipment(client, shipmentId))
-  if (!shipment || shipment.salesOrderId !== order.id || shipment.partyId !== session.partyId || shipment.companyId !== session.company.id || !SHOWN_SHIPMENT_STATUSES.includes(shipment.status)) {
+  // B-OP-042 (order page N6): a shipment is on the order when it carries its garments (or was made for it); the customer's own.
+  // R-18 (lead decision): the link's page still names the shipment's first order, plus "and N pieces of other orders".
+  const carries = shipment ? (await reader.inTenant((client) => ordersOfShipment(client, shipment))).includes(order.id) : false
+  if (!shipment || !carries || shipment.partyId !== session.partyId || shipment.companyId !== session.company.id || !SHOWN_SHIPMENT_STATUSES.includes(shipment.status)) {
     throw new NotFoundError('Shipment not found.')
   }
   const auth = officeAuthOf(app)

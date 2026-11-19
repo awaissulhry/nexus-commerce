@@ -18,6 +18,8 @@ import { putGeneratedFile, recordGeneratedFile, type PreparedGeneratedFile } fro
 import type { FilesRuntime } from '../../../platform/files/service'
 import { carrierAccountIdOf } from '../labels/store'
 import { carrierProblem, type CarrierRuntime } from '../labels/carrier'
+// B-OP-041 (order page N6, lines-derived): an order's shipments through their lines.
+import { shipmentsOfOrderWhere } from '../shipments/orders-of'
 
 /**
  * Booking a return label (B-W2b-398; LOG-112; factory-domain shipping/return-labels): what a label needs (the return, the
@@ -52,7 +54,8 @@ async function customerAddressOf(db: CommandTx, shipment: { readonly partyId: st
 export async function labelFactsOf(db: CommandTx, rma: ReturnRow, shipmentId?: string) {
   const shipments = rma.salesOrderId
     ? await db.shipment.findMany({
-        where: { salesOrderId: rma.salesOrderId, partyId: rma.partyId, status: { in: ['SHIPPED', 'DELIVERED', 'RETURNED'] } },
+        // B-OP-041 (order page N6): the order's shipments that left — made for it, or carrying its garments (its customer's).
+        where: { ...shipmentsOfOrderWhere(rma.salesOrderId), partyId: rma.partyId, status: { in: ['SHIPPED', 'DELIVERED', 'RETURNED'] } },
         select: { id: true, number: true, companyId: true, siteId: true, partyId: true, shipTo: true, carrierCode: true, serviceCode: true, integrationAccountId: true, shippedAt: true },
         orderBy: [{ shippedAt: 'desc' }, { number: 'desc' }],
       })

@@ -362,3 +362,44 @@ describe('F-SA-240: the review window opens from any door with its own props (on
     expect(hook).toContain('nav: { ids: door.ids, onOpen: open }')
   })
 })
+
+// ---- F-OP-107 (order page B2): the extra-pieces part on plain props — the review window draws what it drew before ----------------
+describe('F-OP-107: ExtraPieces takes {pieces, outcomes, chosen, onChoose}; the review window moved to the same props', () => {
+  const { PLAN, PLAN_AFTER } = REQUEST_FIXTURES
+  const draw = async (locale: Locale, props: Record<string, unknown>) => {
+    const { ExtraPieces } = await import('./view/ExtraPieces')
+    return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(ExtraPieces as ComponentType<Record<string, unknown>>, props)))
+  }
+  const propsOf = async (plan: typeof PLAN, done: boolean) => {
+    const { outcomeHeld } = await import('./model')
+    return { name: `fw-apv-extra-${plan.request.id}`, pieces: plan.extra.pieces.map((piece) => ({ key: `${piece.lineId}:${piece.size}`, line: piece.seq, words: piece.words })), outcomes: plan.extra.outcomes.map((option) => ({ outcome: option.outcome, words: option.words, held: outcomeHeld(option) })), chosen: done ? plan.extra.chosen : null, done }
+  }
+
+  it('before Accept: the pieces by line, "Pick what happens…", the three outcomes, none picked; after: the outcome recorded', async () => {
+    const before = await draw('en', await propsOf(PLAN, false))
+    for (const words of ['Extra pieces', 'Line 2 · Extra pieces: 2 M already cut', 'Pick what happens to the extra pieces', 'Keep and charge the customer', 'Keep as leftover for Brand Alpha', 'Scrap']) expect(before).toContain(words)
+    expect(before).not.toContain('checked=""')
+    const after = await draw('en', await propsOf(PLAN_AFTER, true))
+    expect(after).toContain('Chosen at Accept: Keep as leftover for Brand Alpha')
+    expect(after).not.toContain('role="radiogroup"')
+    // It brings its own words: no key on screen in either language, on a page with the shell's catalogue only.
+    for (const locale of LOCALES) expect(leftKeys(await draw(locale, await propsOf(PLAN, false)), ['customerRequest'])).toEqual([])
+  })
+
+  it('an outcome this reader may not choose stays, focusable, with why; nothing at all without pieces', async () => {
+    const held = { ...(await propsOf(PLAN, false)), outcomes: [{ outcome: 'CHARGE', words: { en: 'Keep and charge the customer', it: 'Tieni e addebita al cliente' }, held: { en: 'Charging the customer needs the right to see prices', it: 'Per addebitare al cliente serve il permesso di vedere i prezzi' } }] }
+    const html = await draw('en', held)
+    expect(html).toContain('aria-disabled="true"')
+    expect(html).toContain('Charging the customer needs the right to see prices')
+    expect(await draw('en', { ...held, pieces: [] })).toBe('')
+  })
+
+  it('the review window passes the plan as plain props (the order page passes its previews the same way)', async () => {
+    const { readFileSync } = await import('node:fs')
+    const review = readFileSync(new URL('./view/RequestReview.tsx', import.meta.url), 'utf8')
+    expect(review).toContain('outcomes={plan.extra.outcomes.map((option) => ({ outcome: option.outcome, words: option.words, held: outcomeHeld(option) }))}')
+    expect(review).toContain('chosen={accepted ? plan.extra.chosen : choices.extraOutcome}')
+    expect(review).not.toContain('<ExtraPieces plan={plan}')
+  })
+})
+// ---- end F-OP-107

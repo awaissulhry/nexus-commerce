@@ -10,7 +10,7 @@ import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { CustomerOverrideProvider } from '../../../../_shared/customer-override/CustomerOverride'
 import { OfficeRecordThread } from '../../../../_shared/record-thread/OfficeRecordThread'
-import { PickedDockColumn, ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
+import { ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
 import { RecordTypeIcon } from '../../../../search/RecordTypeIcon' // F-OP-203: the picked record's icon in its segment
 import { doorListOf } from '../../../../home/approvals/requests/model'
 import { useRequestReviewDoor } from '../../../../home/approvals/requests/use-request-review-door'
@@ -26,7 +26,7 @@ import type { useCustomerDock } from '../use-customer-work'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { pendingAskOf, sameRecord } from '../../../../_shared/record-frame/model' // F-OP-212: the dock follows an ask's record
 import type { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-customer/use-all-of-customer'
-import { ALL_OF_CUSTOMER_NS, AllOfCustomerFeed } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
+import { ALL_OF_CUSTOMER_NS, AllOfCustomerDock } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
 // ---- end F-SA-279
 import { WaitingStrip, type StripDoors } from './WaitingStrip'
 import './customer-work.css'
@@ -184,7 +184,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
 }
 
 type CustomerFeed = ReturnType<typeof useAllOfCustomer>
-type DockProps = { customer: { id: string; name: string }; general: ReactNode; dock: ReturnType<typeof useCustomerDock>; feed: CustomerFeed; prefix: string }
+type DockProps = { customer: { id: string; name: string }; general: ReactNode; dock: ReturnType<typeof useCustomerDock>; feed: CustomerFeed; prefix: string; /** F-OP-213: All of <customer> may be read (its General is readable). */ allOffered?: boolean }
 
 /**
  * F-SA-276 (11-customer-page §9.1, review C-13): the customer page's dock — the customer's own thread, and beside it the record a
@@ -208,7 +208,7 @@ export function CustomerDock(props: DockProps) {
   )
 }
 
-function Dock({ customer, general, dock, feed, prefix }: DockProps) {
+function Dock({ customer, general, dock, feed, prefix, allOffered = true }: DockProps) {
   const t = useT('parties')
   const o = useT('orders') // F-OP-203
   const rt = useT('record-thread') // F-OP-203
@@ -231,16 +231,42 @@ function Dock({ customer, general, dock, feed, prefix }: DockProps) {
   const choices: ThreadChoice<'general' | 'record' | 'all'>[] = [
     { value: 'general', label: t('customers.work.dock.general', { customer: customer.name }), short: o('record.dock.writeGeneral'), icon: <Building2 size={14} aria-hidden />, line: t('customers.work.dock.generalLine', { customer: customer.name }) },
     ...(pick ? [{ value: 'record' as const, label: pick.label, icon: <RecordTypeIcon type={pick.type} size={14} />, line: t('customers.work.dock.recordLine', { record: pick.label, customer: customer.name }) }] : []),
-    // The feed says itself that it is read only and how to write (its own line).
-    { value: 'all', label: t('customers.work.dock.all', { customer: customer.name }), short: rt('allOfCustomer.view.all'), title: t('customers.work.dock.readOnly'), icon: <Eye size={14} aria-hidden />, line: null },
+    // F-OP-204 (11-dock §2): the whose-line says it is read only and how to write (one place, one wording: the feed's own line left).
+    // F-OP-213: offered only when the customer's own thread may be read (the feed's wall).
+    ...(allOffered ? [{ value: 'all' as const, label: t('customers.work.dock.all', { customer: customer.name }), short: rt('allOfCustomer.view.all'), title: t('customers.work.dock.readOnly'), icon: <Eye size={14} aria-hidden />, line: rt('allOfCustomer.line', { customer: customer.name }) }] : []),
   ]
+  // F-OP-213: an address that names All of a reader may not read shows the general thread (no word that it existed).
+  const scope = dock.scope === 'all' && !allOffered ? 'general' : dock.scope
   const onAnswer = (record: { readonly type: string; readonly id: string }, messageId: string) => {
     const entry = feed.state.entries.find((one) => one.record.type === record.type && one.record.id === record.id)
     dock.onAnswer({ type: record.type, id: record.id, label: entry?.record.label ?? record.type, companyId: entry?.record.companyId ?? null }, messageId)
   }
+  // F-OP-205: the empty feed's door — the first message goes into the customer's general thread, the box on Office note.
+  const writeFirst = { thread: t('customers.work.dock.general', { customer: customer.name }), onWrite: () => (frame?.compose ? frame.compose({ record: { type: 'Party', id: customer.id }, messageId: null, mode: 'note' }) : dock.onScope('general')) }
+  // ---- F-OP-207 (11-dock §3.2, §3.4; D11): Answer in place on a line of the customer's general thread or of the record picked (the
+  // frame's compose ask: the pick goes there first, the box focused — Reply on the customer's line, Office note otherwise); any other
+  // record's line opens its page. The foot: "Read only. Write in: [<customer> (general)]" and the record picked, when one is.
+  const canAnswer = (record: { readonly type: string; readonly id: string }) => (record.type === 'Party' ? record.id === customer.id : !!pick && sameRecord(record, pick))
+  const writeIn = (record: { readonly type: string; readonly id: string }, fallback: 'general' | 'record') => (frame?.compose ? frame.compose({ record, messageId: null, mode: 'note' }) : dock.onScope(fallback))
+  const allFoot = (
+    <>
+      <span>
+        {t('customers.work.dock.readOnly')}. {o('record.dock.writeIn')}
+      </span>
+      <Button size="sm" variant="secondary" onClick={() => writeIn({ type: 'Party', id: customer.id }, 'general')}>
+        {t('customers.work.dock.general', { customer: customer.name })}
+      </Button>
+      {pick && (
+        <Button size="sm" variant="secondary" onClick={() => writeIn({ type: pick.type, id: pick.id }, 'record')}>
+          {pick.label}
+        </Button>
+      )}
+    </>
+  )
+  // ---- end F-OP-207
   return (
-    <ThreadPick label={t('customers.work.dock.label')} choices={choices} value={dock.scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>
-      {dock.scope === 'record' && pick ? (
+    <ThreadPick label={t('customers.work.dock.label')} choices={choices} value={scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>
+      {scope === 'record' && pick ? (
         <OfficeRecordThread
           key={`${pick.type}:${pick.id}`}
           docked
@@ -252,9 +278,10 @@ function Dock({ customer, general, dock, feed, prefix }: DockProps) {
           recordHref={`${prefix}${recordAddress({ type: pick.type, id: pick.id, label: pick.label, companyId: pick.companyId }, OFFICE_PAGES)}`}
           onDraft={(kept) => dock.onDraft(pick, kept)}
         />
-      ) : dock.scope === 'all' ? (
+      ) : scope === 'all' ? (
         // F-OP-203: All of <customer> in the dock's ONE card (DockColumn): the pick band on top, the read-only feed that scrolls.
-        <PickedDockColumn label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} body={<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />} />
+        // F-OP-204: its Head row (FeedHead); this page IS the customer's, so its ⋯ has no "Open <customer>".
+        <AllOfCustomerDock label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} model={feed.model} actions={{ ...feed.actions, onAnswer, writeFirst, canAnswer, ...(frame?.compose ? { onCompose: frame.compose } : {}) }} foot={allFoot} />
       ) : (
         general
       )}

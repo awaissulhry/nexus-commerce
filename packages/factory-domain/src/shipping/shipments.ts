@@ -73,25 +73,187 @@ export interface LineCell {
 export interface LineShipment {
   readonly siteId: string
   readonly partyId: string
+  /** The first order (Shipment.salesOrderId). */
   readonly salesOrderId: string
   readonly status: ShipmentStatus
+  /** B-OP-040 (N6): the orders whose garments it carries now (ordersOfShipment), the first order first; default the first only. */
+  readonly salesOrderIds?: readonly string[] | undefined
 }
 
+/** B-OP-040: the words of a cell the caller cannot use, the same as an unknown id's (another customer's garments are never named). */
+export const NOT_A_CELL = 'Not a work order cell.'
+
+/** B-OP-040: the orders a shipment carries now: its lines' orders, the first order first (one, before any line of another order). */
+export const ordersOn = (shipment: Pick<LineShipment, 'salesOrderId' | 'salesOrderIds'>): readonly string[] => (shipment.salesOrderIds && shipment.salesOrderIds.length > 0 ? shipment.salesOrderIds : [shipment.salesOrderId])
+
 /**
- * Why a cell's garments cannot be a line of this shipment (empty: they can): the same party and sales order as the
- * shipment, made at the shipment's site (the goods leave from where they were made), the shipment a DRAFT, from 1
- * garment.
+ * Why a cell's garments cannot be a line of this shipment (empty: they can): of the shipment's customer (another
+ * customer's cell is answered as an unknown one, B-OP-040), of an order the shipment carries or one that may join it
+ * (`joining`: the words of joinProblems for the cell's order when it is not on the shipment yet), made at the shipment's
+ * site (the goods leave from where they were made), the shipment a DRAFT, from 1 garment.
  */
-export function lineProblems(shipment: LineShipment, cell: LineCell, quantity: number, at: string): Issue[] {
+export function lineProblems(shipment: LineShipment, cell: LineCell, quantity: number, at: string, /* B-OP-040 */ joining?: readonly string[]): Issue[] {
   const problems: Issue[] = []
   if (shipment.status !== 'DRAFT') problems.push({ path: at, message: `The shipment is ${shipment.status}; its lines change only while it is a DRAFT.` })
   if (!Number.isSafeInteger(quantity) || quantity < 1) problems.push({ path: `${at}/quantity`, message: 'A line ships at least one garment.' })
-  if (cell.partyId !== shipment.partyId || cell.salesOrderId !== shipment.salesOrderId) {
-    problems.push({ path: `${at}/workOrderSizeId`, message: "These garments are not of the shipment's sales order." })
-  } else if (cell.siteId !== shipment.siteId) {
+  // B-OP-040 (N6): another customer's garments are never named (the line's FK carries the party too); another order of
+  // the customer joins only as joinProblems allows (MULTI_ORDER_OFF until the switch, B-OP-047).
+  if (cell.partyId !== shipment.partyId) {
+    problems.push({ path: `${at}/workOrderSizeId`, message: NOT_A_CELL })
+    return problems
+  }
+  if (!ordersOn(shipment).includes(cell.salesOrderId)) {
+    const words = joining ?? ["These garments are not of the shipment's sales order."]
+    for (const message of words) problems.push({ path: `${at}/workOrderSizeId`, message })
+    if (words.length > 0) return problems
+  }
+  if (cell.siteId !== shipment.siteId) {
     problems.push({ path: `${at}/workOrderSizeId`, message: 'These garments are made at another site; a shipment sends the goods of its own site.' })
   }
   return problems
+}
+
+// ---- B-OP-040 (order page N6, lines-derived): several orders of one customer on one shipment --------------------------
+
+/**
+ * The refusal that holds N6 off until every reader of a shipment's orders reads them through its lines (R-6). The last
+ * step of the order page's set C (B-OP-047) deletes it: no flag, no gate.
+ */
+export const MULTI_ORDER_OFF = 'Several orders in one shipment come with the next update.'
+
+/** The states of an order whose garments may join a shipment (the DRAFT line guard's list). */
+export const JOIN_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'] as const
+
+export const JOIN_PROBLEM_CODES = ['CUSTOMER', 'COMPANY', 'SITE', 'SHIP_TO', 'CURRENCY', 'TAX_MODE', 'INCOTERM', 'BILL_TO_VAT', 'ORDER_STATE', 'SHIPMENT_STATE', 'CUSTOMER_HOLD', 'MULTI_ORDER_OFF'] as const
+export type JoinProblemCode = (typeof JOIN_PROBLEM_CODES)[number]
+
+export interface JoinProblem {
+  readonly code: JoinProblemCode
+  readonly message: string
+}
+
+/** The shipment an order would join, with what its first order fixes for all of them (one address, one currency …). */
+export interface JoinShipment {
+  /** Its number; null for a shipment not made yet (POST /shipping/shipments). */
+  readonly number: string | null
+  readonly status: ShipmentStatus
+  readonly partyId: string
+  readonly companyId: string
+  readonly siteId: string
+  /** The company of the site the goods leave from. */
+  readonly siteCompanyId: string
+  /** The ship-to snapshot it goes to (SalesOrder.shipTo's shape). */
+  readonly shipTo: unknown
+  /** Of its first order. */
+  readonly currency: string
+  readonly taxMode: string
+  readonly incoterm: string | null
+  readonly billTo: unknown
+  /** The words of the customer's account hold in force for the company (null: none). */
+  readonly customerHold: string | null
+}
+
+/** The order that would join. */
+export interface JoinOrder {
+  readonly id: string
+  readonly number: string
+  readonly partyId: string
+  readonly companyId: string
+  readonly status: string
+  readonly shipTo: unknown
+  readonly currency: string
+  readonly taxMode: string
+  readonly incoterm: string | null
+  readonly billTo: unknown
+  /** The sites its garments that can ship wait at (B-OP-070's ready read); not given: not checked. */
+  readonly siteIds?: readonly string[] | undefined
+}
+
+const text = (value: unknown): string => (typeof value === 'string' ? value : '')
+const squeezed = (value: unknown): string => text(value).normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase()
+const field = (value: unknown, key: string): unknown => (value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined)
+
+/** A ship-to as compared: country, postal code (no spaces), town and street, each normalised (case, spaces). */
+export function shipToKey(shipTo: unknown): string {
+  return [squeezed(field(shipTo, 'country')).toUpperCase(), squeezed(field(shipTo, 'postalCode')).replace(/ /g, '').toUpperCase(), squeezed(field(shipTo, 'city')), squeezed(field(shipTo, 'line1'))].join('|')
+}
+
+/** Two ship-tos are one address (B-OP-040: normalised country, postal code, town and street). */
+export const sameShipTo = (a: unknown, b: unknown): boolean => shipToKey(a) === shipToKey(b)
+
+const vatOf = (billTo: unknown): string => squeezed(field(billTo, 'vatNumber')).replace(/[ .-]/g, '').toUpperCase()
+const townOf = (shipTo: unknown): string => text(field(shipTo, 'city')).trim()
+const streetOf = (shipTo: unknown): string => text(field(shipTo, 'line1')).trim()
+
+/** Where a ship-to goes, in the words of the refusal: the town, or the street when both are in one town. */
+function placeWords(order: unknown, shipment: unknown): { readonly order: string; readonly shipment: string } {
+  const towns = { order: townOf(order), shipment: townOf(shipment) }
+  if (towns.order !== '' && towns.shipment !== '' && squeezed(towns.order) !== squeezed(towns.shipment)) return towns
+  const streets = { order: [streetOf(order), towns.order].filter((part) => part !== '').join(', '), shipment: [streetOf(shipment), towns.shipment].filter((part) => part !== '').join(', ') }
+  return { order: streets.order || 'another address', shipment: streets.shipment || 'another address' }
+}
+
+/**
+ * Why an order cannot join a shipment (empty: it can), in words, the real reasons first and MULTI_ORDER_OFF last: of the
+ * same customer (another customer's order is answered as an unknown one), company and site's company, the same ship-to,
+ * currency, tax mode, Incoterm and bill-to VAT number as the shipment's first order, an open order, the shipment a DRAFT,
+ * no hold of the customer.
+ */
+export function joinProblems(shipment: JoinShipment, order: JoinOrder): JoinProblem[] {
+  const problems: JoinProblem[] = []
+  const push = (code: JoinProblemCode, message: string) => problems.push({ code, message })
+  if (order.partyId !== shipment.partyId) {
+    // The FK refuses it for every login; the words are those of an unknown order.
+    push('CUSTOMER', 'Sales order not found.')
+    return problems
+  }
+  const shipmentName = shipment.number ? `shipment ${shipment.number}` : 'this shipment'
+  if (order.companyId !== shipment.companyId) push('COMPANY', `${order.number} is sold by another company than ${shipmentName}: one shipment carries the goods of one company.`)
+  else if (order.companyId !== shipment.siteCompanyId) push('COMPANY', `${order.number} is sold by another company than the site the goods leave from.`)
+  if (order.siteIds && order.siteIds.length > 0 && !order.siteIds.includes(shipment.siteId)) push('SITE', `${order.number}'s garments wait at another site: a shipment sends the goods of its own site.`)
+  if (!sameShipTo(order.shipTo, shipment.shipTo)) {
+    const place = placeWords(order.shipTo, shipment.shipTo)
+    push('SHIP_TO', `${order.number} goes to ${place.order}, ${shipmentName} to ${place.shipment}: one shipment goes to one address.`)
+  }
+  if (order.currency !== shipment.currency) push('CURRENCY', `${order.number} is in ${order.currency}, ${shipmentName} in ${shipment.currency}: one shipment is in one currency.`)
+  if (order.taxMode !== shipment.taxMode) push('TAX_MODE', `${order.number} is taxed as ${order.taxMode}, ${shipmentName} as ${shipment.taxMode}: one shipment has one tax treatment.`)
+  if ((order.incoterm ?? '') !== (shipment.incoterm ?? '')) push('INCOTERM', `${order.number} ships ${order.incoterm ?? 'with no Incoterm'}, ${shipmentName} ${shipment.incoterm ?? 'with no Incoterm'}: one shipment has one Incoterm.`)
+  if (vatOf(order.billTo) !== vatOf(shipment.billTo)) push('BILL_TO_VAT', `${order.number} bills another VAT number than ${shipmentName}: one DDT names one recipient.`)
+  if (!(JOIN_ORDER_STATUSES as readonly string[]).includes(order.status)) push('ORDER_STATE', `${order.number} is ${order.status}: only an open order (confirmed, in production, ready or partly shipped) joins a shipment.`)
+  if (shipment.status !== 'DRAFT') push('SHIPMENT_STATE', `${shipmentName[0]!.toUpperCase()}${shipmentName.slice(1)} is ${shipment.status}: orders join a shipment only while it is a DRAFT.`)
+  if (shipment.customerHold) push('CUSTOMER_HOLD', shipment.customerHold)
+  // B-OP-040 (R-6): held off until B-OP-047 deletes this line.
+  push('MULTI_ORDER_OFF', MULTI_ORDER_OFF)
+  return problems
+}
+
+/** A verdict as the API answers it: allowed, or why not (the first reason). */
+export interface JoinVerdict {
+  readonly allowed: boolean
+  readonly why: string | null
+}
+
+export const joinVerdict = (problems: readonly JoinProblem[]): JoinVerdict => ({ allowed: problems.length === 0, why: problems[0]?.message ?? null })
+
+/** The facts of a shipment an order would join, from its first order (a new shipment, or B-OP-070's "ship together"). */
+export function joinShipmentOf(
+  first: Pick<JoinOrder, 'partyId' | 'companyId' | 'shipTo' | 'currency' | 'taxMode' | 'incoterm' | 'billTo'>,
+  shipment: { readonly number: string | null; readonly status: ShipmentStatus; readonly siteId: string; readonly siteCompanyId: string; readonly shipTo?: unknown; readonly customerHold: string | null },
+): JoinShipment {
+  return {
+    number: shipment.number,
+    status: shipment.status,
+    partyId: first.partyId,
+    companyId: first.companyId,
+    siteId: shipment.siteId,
+    siteCompanyId: shipment.siteCompanyId,
+    shipTo: shipment.shipTo === undefined ? first.shipTo : shipment.shipTo,
+    currency: first.currency,
+    taxMode: first.taxMode,
+    incoterm: first.incoterm,
+    billTo: first.billTo,
+    customerHold: shipment.customerHold,
+  }
 }
 
 /** A line as packing sees it. */

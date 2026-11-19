@@ -6,6 +6,10 @@ import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { officeOrder } from './moves'
 import { readOrderFacts, type OrderFacts, type OrderRow, type Reader } from './store'
+// B-OP-013 (order page plan N2): the cancel's check says what each work order will do, and the extra pieces' outcome is picked there.
+import { storedGapLines } from '../../production/work-order-changes/propose'
+import { officeContextOf } from './access'
+import { plannedChangesOf, workOrderPreviewOf } from './work-order-plan'
 
 /**
  * The cancel's impact check (B-W2a-30; SAL-211; the design's Cancel order dialog "What it leaves behind: leather already
@@ -65,13 +69,19 @@ export const impactView = (impact: CancelImpact) => ({
 
 /**
  * orders.manage: what cancelling the order would stop at, change and leave behind, in words (the design's Cancel order
- * dialog), with the leather cut per work order. Reads only.
+ * dialog), with the leather cut per work order. Reads only. B-OP-013: and what its work orders will do — each lowered to nothing
+ * (never below cut), in the same click or waiting with why, and the pieces already cut whose outcome the cancel may name
+ * (`extraOutcome`; none: they stay production's to decide).
  */
 export async function cancelCheck(caller: CommandCaller, orderId: string) {
+  const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
   return caller.withClient(async (client) => {
     const facts = await readOrderFacts(client, order)
     const cancelFacts = await readCancelFacts(client, order, facts)
+    // As the cancel proposes it: every line of the order, the order read as CANCELLED (every line wants none).
+    const cancelled = { id: order.id, status: 'CANCELLED' }
+    const planned = await plannedChangesOf(client, context.tenantId, cancelled, await storedGapLines(client, cancelled, facts.lines.map((line) => line.id)))
     return {
       orderId: order.id,
       number: order.number,
@@ -79,6 +89,7 @@ export async function cancelCheck(caller: CommandCaller, orderId: string) {
       version: order.version,
       impact: impactView(cancelImpact(cancelFacts)),
       leatherCut: cancelFacts.workOrders.filter((row) => row.cutHides > 0).map((row) => ({ workOrderId: row.id, number: row.number, hides: row.cutHides, area: row.cutArea })),
+      workOrders: await workOrderPreviewOf(client, context, order, planned, { requireOutcome: false, outcomeChosen: false }),
     }
   })
 }
