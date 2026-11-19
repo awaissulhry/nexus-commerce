@@ -1038,7 +1038,7 @@ describe('B-SA-089 golden flow sales page: one change of Alpha’s order told to
  * is the quality suite's flow; the seeds date theirs in the story's days to come, after "now": a copy dated an hour before).
  * Invoices per order of a shared shipment that LEFT are B-OP-045's (candidates.pg: one per order, the freight on the first order's):
  * here the shared shipment stays a DRAFT, its second order's jacket being serial-tracked (Q31: its serial is packed at PACKED).
- * Written against 13-backend §5 before B-OP-032 / B-OP-033 merged: `elsewhereBody` and `holdOverride` hold the body's names.
+ * The made-elsewhere body is B-OP-032's contract (shipping/elsewhere/contract.ts `elsewhereBody`), its hold reason `holdReason`.
  */
 
 /** B-OP-047 deletes MULTI_ORDER_OFF: until then the multi-order steps check the refusal, after it the shared shipment (O7 / O8). */
@@ -1121,10 +1121,9 @@ async function trackingPage(token: string): Promise<Json> {
   return answer.json() as Json
 }
 
-// B-OP-032 / B-OP-033 were built beside this step (C06): the two helpers below hold the names of 13-backend §5's body.
-/** A shipment made elsewhere of SEED-SO-0002's black 52: a carrier booked by hand, the paper DDT that went with the goods. */
+/** A shipment made elsewhere of SEED-SO-0002's black 52 (B-OP-032's body): a carrier booked by hand, the paper DDT that went with the goods. */
 const elsewhereBody = (shippedAt: Date, more: Json = {}): Json => ({
-  salesOrderIds: [P.so2],
+  salesOrderId: P.so2,
   siteId: P.siteA1,
   lines: [{ workOrderSizeId: P.blk52, quantity: 1 }],
   transportBy: 'CARRIER',
@@ -1132,11 +1131,11 @@ const elsewhereBody = (shippedAt: Date, more: Json = {}): Json => ({
   externalDdt: { number: PAPER_DDT, date: romeDay(shippedAt) },
   ddtRequired: true,
   shippedAt: shippedAt.toISOString(),
-  note: ELSEWHERE_NOTE,
+  internalNote: ELSEWHERE_NOTE,
   ...more,
 })
 /** R-9: a person with shipping.holds.release records it while the customer is on hold, with a reason. */
-const holdOverride = (reason: string): Json => ({ holdOverride: { reason } })
+const holdOverride = (reason: string): Json => ({ holdReason: reason })
 
 /**
  * The wall at the end of an order page step: Beta's buyer, `office.p2` and Bice read every door of the order page's records of
@@ -1372,36 +1371,47 @@ describe('B-OP-071 golden flow order page: the order page’s acts on Alpha’s 
     // The dialog's preview names the hold; the warehouse's record is refused in words, nothing written, her reason changes nothing.
     const shippedAt = new Date(world.h.clock.now().getTime() - 60 * 60_000)
     const preview = await ok(wanda, 'POST', '/shipping/shipments/elsewhere/preview', elsewhereBody(shippedAt))
-    expect(JSON.stringify(preview)).toMatch(/hold/i)
+    expect(preview.holds).toMatchObject({ held: true, mayRelease: false })
+    // The seeds' free black 52 and the one released two hours ago: two on no shipment.
+    expect(preview.lines).toEqual([expect.objectContaining({ workOrderSizeId: P.blk52, quantity: 1, shippable: 2, serialTracked: false })])
+    expect(new Date(preview.earliest as string).getTime()).toBeLessThanOrEqual(shippedAt.getTime())
     const refused = await call(wanda, 'POST', '/shipping/shipments/elsewhere', elsewhereBody(shippedAt))
     expect(refused.status, JSON.stringify(refused.body)).toBe(409)
-    expect(JSON.stringify(refused.body)).toMatch(/hold/i)
+    expect(refused.body.error.issues[0].path).toBe('refusal/HELD')
     expect([403, 409]).toContain((await call(wanda, 'POST', '/shipping/shipments/elsewhere', elsewhereBody(shippedAt, holdOverride(HOLD_REASON)))).status)
+    // The Owner may release holds, but says why first.
+    expect(pathOf((await call(olga, 'POST', '/shipping/shipments/elsewhere', elsewhereBody(shippedAt))).body)).toBe('refusal/REASON_REQUIRED')
     expect(await admin('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND "externalDdtNumber" = $2', [T(), PAPER_DDT])).toEqual([])
     // A person limited to Beta records nothing on Alpha's order (as unknown).
     await asBeta('POST', '/shipping/shipments/elsewhere', elsewhereBody(shippedAt, holdOverride(HOLD_REASON)), 404)
 
     // The Owner holds the hold-release right: with her reason it is recorded — SHIPPED, made elsewhere, its paper DDT.
     const recorded = (await ok(olga, 'POST', '/shipping/shipments/elsewhere', elsewhereBody(shippedAt, holdOverride(HOLD_REASON)), 201)).shipment as Json
-    expect(recorded).toMatchObject({ status: 'SHIPPED', salesOrderId: P.so2 })
+    expect(recorded).toMatchObject({ status: 'SHIPPED', salesOrderId: P.so2, externalDdt: { number: PAPER_DDT } })
     P.elsewhere = { id: recorded.id as string, number: recorded.number as string }
     const order = (await ok(olga, 'GET', `/sales/orders/${P.so2}`)).order as Json
     expect((order.chain.shipments as Json[]).find((row) => row.id === P.elsewhere.id)).toMatchObject({ origin: 'ELSEWHERE', externalDdt: { number: PAPER_DDT } })
     // The override recorded: its audit names the reason; an office-only line on the order's thread.
-    const audit = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'shipping.recordedElsewhere' AND "recordId" = $2`, [T(), P.elsewhere.id])
+    const audit = await admin<{ after: Json; reason: string | null }>(`SELECT after, reason FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'shipping.recordedElsewhere' AND "recordId" = $2`, [T(), P.elsewhere.id])
     expect(audit).toHaveLength(1)
-    expect(JSON.stringify(audit[0]!.after)).toContain(HOLD_REASON)
+    expect(audit[0]!.after.holds).toMatchObject({ reason: HOLD_REASON })
+    expect(audit[0]!.reason).toBe(HOLD_REASON)
     await settle()
-    const lines = await systemLinesOn(P.so2, P.elsewhere.number)
-    expect(lines.length).toBeGreaterThan(0)
-    expect(lines.every((entry) => entry.audience === 'OFFICE')).toBe(true)
+    const lines = await systemLinesOn(P.so2, HOLD_REASON)
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toMatchObject({ audience: 'OFFICE', direction: 'INTERNAL_NOTE' })
+    expect(lines[0]!.body).toContain(P.elsewhere.number)
+    // No system hold is synced onto it (it left already).
+    expect(await admin('SELECT 1 FROM "ShipmentHold" WHERE "shipmentId" = $1', [P.elsewhere.id])).toEqual([])
     // Nexus issues no second fiscal number: its DDT is refused in words naming the paper DDT.
     const ddt = await call(wanda, 'POST', `/shipping/shipments/${P.elsewhere.id}/ddt`, {})
     expect(ddt.status).toBe(409)
-    expect(JSON.stringify(ddt.body)).toContain(PAPER_DDT)
-    // The same paper DDT is never recorded twice for the customer.
+    expect(pathOf(ddt.body)).toBe('refusal/NEXUS_DDT')
+    expect(ddt.body.error.message).toContain(PAPER_DDT)
+    // The same paper DDT is never recorded twice for the customer (R-10), in words that name no customer.
     const twice = await call(olga, 'POST', '/shipping/shipments/elsewhere', elsewhereBody(shippedAt, holdOverride(HOLD_REASON)))
-    expect(twice.status).not.toBe(201)
+    expect(twice.status).toBe(409)
+    expect(twice.body.error.message).not.toMatch(/Alpha|Beta/)
 
     // The hold released again (the paper of the next steps is not held).
     const released = (await stepped(olga, 'POST', `/parties/${world.ids.a}/holds/${hold.id}/release`, { version: hold.version, words: 'Made-up: both invoices paid.' })).holds as Json
@@ -1447,7 +1457,8 @@ describe('B-OP-071 golden flow order page: the order page’s acts on Alpha’s 
 
   it('O6 its invoice names the paper DDT: the shipment waits in “shipped, not invoiced”; the draft’s DDT reference (B-OP-033)', async () => {
     const queue = await ok(olga, 'GET', '/invoicing/shipped-not-invoiced')
-    expect(JSON.stringify(queue)).toContain(P.elsewhere.id)
+    const row = (queue.customers as Json[]).flatMap((customer) => (customer.shipments ?? []) as Json[]).find((entry) => entry.shipmentId === P.elsewhere.id)
+    expect(row).toMatchObject({ number: P.elsewhere.number, paperDdt: { number: PAPER_DDT } })
     const drafted = (await ok(olga, 'POST', '/invoicing/invoices/from-shipment', { shipmentId: P.elsewhere.id }, 201)).invoice as Json
     // TD24 when Alpha's terms defer its invoices, else TD01: by the order's terms, never chosen here.
     expect(['TD01', 'TD24']).toContain(drafted.docType)
@@ -1463,6 +1474,10 @@ describe('B-OP-071 golden flow order page: the order page’s acts on Alpha’s 
     const both = await call(wanda, 'POST', '/shipping/shipments', { salesOrderId: P.so2, salesOrderIds: [P.so2, P.so3], siteId: P.siteA1 })
     expect(both.status, JSON.stringify(both.body)).toBe(409)
     expect(both.body.error.message).toBe(MULTI_ORDER_WORDS)
+    // Neither is a shipment made elsewhere of two orders.
+    const shippedAt = new Date(world.h.clock.now().getTime() - 30 * 60_000)
+    const elsewhere = await call(wanda, 'POST', '/shipping/shipments/elsewhere/preview', elsewhereBody(shippedAt, { salesOrderIds: [P.so2, P.so3] }))
+    expect(JSON.stringify(elsewhere.body)).toContain(MULTI_ORDER_WORDS)
     expect(await admin<{ n: number }>('SELECT count(*)::int AS n FROM "Shipment" WHERE "tenantId" = $1', [T()])).toEqual(before)
     // SEED-SO-0003's free jacket on a DRAFT of SEED-SO-0002 (the lines route): refused in the same words, the DRAFT unchanged.
     const draft = (await ok(wanda, 'POST', '/shipping/shipments', { salesOrderId: P.so2, siteId: P.siteA1 }, 201)).shipment as Json
