@@ -34,6 +34,8 @@ import type { JoinableRow } from './shipments/model' // F-OP-122
 // F-OP-113: the work-order rows' acts in place (lib/production/work-order-acts, mounted by use-production-acts).
 import type { WorkOrderActsActions, WorkOrderActsModel } from '../../../../lib/production/work-order-acts/use-work-order-acts'
 import type { RejectReason } from '../../../home/approvals/api' // F-OP-101
+import type { WorkOrderChange } from '../../../home/approvals/work-order-changes/api' // F-OP-116
+import type { ChangeReviewActions, ChangeReviewModel } from '../../../home/approvals/work-order-changes/model' // F-OP-116
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -112,6 +114,10 @@ export interface AmendState {
   extraOutcome: ExtraOutcome | null
   /** F-OP-108: the optional fee of a priced change (price grain), as typed; empty: none. */
   fee: string
+  // ---- F-OP-110: Ship to in the header — the address picked ('' keeps the order's), the customer's delivery addresses (null: no
+  // right to read them, parties.view) ----
+  shipToAddressId?: string
+  addresses?: Part<ShipToAddress[]> | null
 }
 
 // ---- F-OP-111: Split into new orders… (use-lines-acts) ----
@@ -156,7 +162,23 @@ export interface YesActions {
 }
 // ---- end F-OP-101
 
+// ---- F-OP-116: decide in place — the order's work-order changes and the ONE decide window (use-production-acts) ----
+export interface OrderChangesModel {
+  /** Every work-order change of the order, newest first (the API's wall); null: not read yet. */
+  readonly list: Part<WorkOrderChange[]> | null
+  /** The decide window while one is open (Approvals' own model); null: closed. */
+  readonly review: ChangeReviewModel | null
+  readonly busy: boolean
+}
+export type OrderChangesActions = ChangeReviewActions & {
+  /** Open the decide window on a change (null closes it). */
+  readonly onOpen?: (changeId: string | null) => void
+}
+// ---- end F-OP-116
+
 export interface OrderRecordModel {
+  /** F-OP-116: the order's work-order changes and the decide window; absent: not read here (a design case). */
+  orderChanges?: OrderChangesModel | null
   /** F-OP-101: the reasons a no names (the tenant's APPROVAL_REJECT list) while Refuse… is open; null: not open or not read. */
   refuseReasons?: Part<RejectReason[]> | null
   /** F-OP-112: Make work orders… on Production (the dialog, the next style); absent: not here (a design case). */
@@ -287,6 +309,10 @@ export interface PaymentInput {
 }
 
 export interface OrderRecordActions {
+  /** F-OP-116: open / decide a work-order change in place (Apply, Leave as is). */
+  orderChanges?: OrderChangesActions
+  /** F-OP-116: Done on one of the order's production tasks (Still to do; the task's own right, R-12). */
+  onTaskDone?: (taskId: string, version: number) => void
   /** F-OP-101: the approver's yes in place (the band's "Waiting for a yes", an old change's waiting row). */
   yes?: YesActions
   /** F-OP-112: Make work orders… on Production (open it; the dialog's own actions). */
@@ -327,7 +353,9 @@ export interface OrderRecordActions {
   onAmendDiscard?: () => void
   onAmendCells?: (styleId: string, next: Record<string, Record<string, number>>) => void
   onAmendPrice?: (key: string, text: string) => void
-  onAmendHeader?: (field: 'customerRef' | 'requestedDate', value: string) => void
+  onAmendHeader?: (field: 'customerRef' | 'requestedDate' | 'shipToAddressId' /* F-OP-110 */, value: string) => void
+  /** F-OP-110: ⋯ Change ship-to… — edit mode with Ship to focused (one edit path). */
+  onChangeShipTo?: () => void
   // ---- F-OP-106: the strip — ask its preview now (blur, Try again), Why, the words for the customer and their tick, ONE Apply
   onAmendPreview?: () => void
   onAmendReason?: (text: string) => void

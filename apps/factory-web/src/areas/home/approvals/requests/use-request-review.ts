@@ -25,6 +25,7 @@ import { getApplyPlan, type ApplyPlan } from './api'
 import {
   CR,
   doneCommandsOf,
+  atAcceptOf, // F-OP-116
   leftToRun,
   NO_CHOICES,
   reachOf,
@@ -266,14 +267,16 @@ export function useRequestReview(host: RequestReviewHost): { readonly model: Req
         if (after && openId) setPlan({ id: openId, value: { status: 'ready', value: after } })
         const known = plan?.id === openId && plan.value.status === 'ready' ? plan.value.value : null
         const stops = stoppableOf(known).filter((workOrder) => choices.stops.includes(workOrder.id))
-        const commands = doneCommandsOf(after, stops)
+        // F-OP-116 (R-17): what Accept already carried out is never applied again; B1: the applies first, the stops after.
+        const commands = doneCommandsOf(after, stops, (accepted.workOrders?.applied ?? []).map((entry) => entry.changeId))
         setDone({ id: openId ?? request.id, then, notice: { key: notice.key, tone: notice.tone, lines: notice.lines ?? [] }, next: hostRef.current.doneNext ?? 'close', commands, states: {}, running: false })
         hostRef.current.onReload()
         // The request read again (it reads Accepted now); the done view stays over it.
         void read()
         if (told) void tellNow(request, words)
-        // Stop now: the holds go at once, each its own command, stopping at the first refusal.
-        const stopNow = commands.filter((command) => command.kind === 'stop')
+        // Stop now: the holds go at once, each its own command, stopping at the first refusal — F-OP-116 (B1): after the changes this
+        // reader carries out now, so a hold never makes its own work order refuse them.
+        const stopNow = atAcceptOf(commands)
         if (stopNow.length > 0) void run(stopNow)
       } else {
         const accepted = await acceptProduction(api, request.id, { version: request.version, answer: words, ...(hasTwoAccepts(request) ? { rushFloor } : {}) })
