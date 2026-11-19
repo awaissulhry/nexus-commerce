@@ -1,7 +1,7 @@
 import type { Translate } from '../../../../lib/i18n/messages'
 import type { SendCheckItem } from '../../../_shared/document-send/model'
 import type { SendCheck } from '../api'
-import type { QuoteTab } from '../model'
+import { pricedSendHeld, type Grains, type QuoteTab } from '../model' // F-CP-146: the priced PDF and the price grain
 // B-W2b-368 (XF1:04): the MTM_* line checks in words of their unit, fixed in the rider profile.
 import { isMtmCode, mtmFixItem, type FixUnit } from '../../../_shared/document-send/fix-tab/mtm/model'
 
@@ -68,7 +68,11 @@ export interface MtmFix {
   readonly mayOpen: boolean
 }
 
-export function sendItems(check: Pick<SendCheck, 'checks'>, t: Translate, tabHref: (tab: QuoteTab) => string, mtm?: MtmFix): SendCheckItem[] {
+// F-CP-146 (money wall D1-c): + the person's grains — without the price grain the first check blocks: the quote's PDF shows prices,
+// it is sent by someone who sees prices (the shared dialog then holds Send with these words).
+export function sendItems(check: Pick<SendCheck, 'checks'>, t: Translate, tabHref: (tab: QuoteTab) => string, mtm?: MtmFix, grains?: Pick<Grains, 'price'>): SendCheckItem[] {
+  const priced = pricedSendHeld(grains)
+  const wall: SendCheckItem[] = priced ? [{ id: 'priced-pdf', state: 'blocks', label: t(priced.key), fix: null }] : []
   const failing: SendCheckItem[] = check.checks.map((item, index) => {
     if (mtm && isMtmCode(item.code)) return mtmFixItem(item, index, mtm.units, mtm.t, mtm.prefix, mtm.mayOpen) // B-W2b-368
     const tab = FIX_TAB[item.code]
@@ -81,5 +85,5 @@ export function sendItems(check: Pick<SendCheck, 'checks'>, t: Translate, tabHre
   })
   const codes = new Set(check.checks.map((item) => item.code))
   const passing: SendCheckItem[] = PASSING_CHECKS.filter((entry) => !entry.codes.some((code) => codes.has(code))).map((entry) => ({ id: `pass-${entry.id}`, state: 'passes', label: t(`check.pass.${entry.id}`) }))
-  return [...failing, ...passing]
+  return [...wall, ...failing, ...passing]
 }

@@ -77,8 +77,13 @@ export function parseDraft(text: string | null): NewOrderDraft | null {
   }
 }
 
-/** What "Confirm order" (and the preview) sends. */
-export function manualBody(header: NewOrderHeader, draft: NewOrderDraft): ManualOrderBody {
+/**
+ * What "Confirm order" (and the preview) sends.
+ * F-CP-146 (money wall D1-c, review A8): a person without the price grain sends NO price key — each line is priced from the
+ * customer's price list by the API (a typed price kept in this tab from someone else is never sent: the grain wall refuses it).
+ */
+export function manualBody(header: NewOrderHeader, draft: NewOrderDraft, can?: Pick<OrderAbilities, 'price'>): ManualOrderBody {
+  const lines = manualLines(draft.lines)
   return {
     companyId: header.companyId,
     partyId: header.partyId,
@@ -87,7 +92,8 @@ export function manualBody(header: NewOrderHeader, draft: NewOrderDraft): Manual
     ...(draft.requestedDate ? { requestedDate: draft.requestedDate } : {}),
     ...(draft.promiseDate ? { promiseDate: draft.promiseDate } : {}),
     ...(draft.internalNote.trim() ? { internalNote: draft.internalNote.trim() } : {}),
-    lines: manualLines(draft.lines),
+    // F-CP-146: no price key without the price grain.
+    lines: can && !can.price ? lines.map(({ unitPrice: _price, ...line }) => line) : lines,
   }
 }
 

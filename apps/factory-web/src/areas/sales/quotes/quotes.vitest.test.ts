@@ -56,6 +56,11 @@ import { scopedTransport } from '../_shared/scoped-list-tools/ScopedListTools'
 import { NO_FILTERS, type ListFilters } from './model'
 import { filtersOf, QUOTES_LIST_KEY, quotesAddress, quotesFiltersFor, quotesFromQuery, quotesReadOf, quotesTileReadOf, quotesToolsQuery, searchOf } from './list/use-quotes-list'
 // ---- end F-SA-277
+// ---- F-CP-146: no price key from a person without the price grain ----
+import type { ApiClient } from '../../../lib/api/client'
+import { addLine, editLine } from './api'
+import { pricedSendHeld, QUOTE_LINE_PRICE_KEYS, quoteLineBody } from './model'
+// ---- end F-CP-146
 
 /**
  * The quote screens' rules (SCR-030, 034, 035, 037, 099): the next step and why it is held, four eyes, the grid → line
@@ -491,3 +496,72 @@ describe('F-SA-277: the Quotes list lifted — the locked container, the page un
   })
 })
 // ---- end F-SA-277
+
+// ---- F-CP-146 (customer page lane, money wall D1-c, review A8): a person without the price grain writes no price ----------------
+// As Sales worker (no money.price after B-CP-011) and as Production manager: a quote line write names no price key — not the unit
+// price, not the list price, not the discount % (a percent of a price is a price), not a size's own price, not even an empty one
+// (the API's grain wall refuses a body that names one); the line takes the customer's price list. The Owner's bodies are unchanged.
+// Send of the quote's priced PDF waits for someone who sees prices, said in words on the band and in the send checks.
+describe('F-CP-146: no price key from a person without the price grain', () => {
+  const NO_PRICE = { price: false } as const
+  const OWNER = { price: true } as const
+  const typed = { styleId: 's1', colourwayId: 'c1', sizes: [{ size: 'M', quantity: 4, unitPrice: '12.5' }, { size: 'L', quantity: 2 }], unitPrice: null, listUnitPrice: '20', discountPct: '5', description: 'Giacca' }
+  const priceKeys = (body: unknown): string[] => JSON.stringify(body).match(/"(unitPrice|listUnitPrice|discountPct)"/g) ?? []
+
+  it('as Sales worker / as Production manager: the line body carries no price key (sizes included); the Owner\'s is sent as typed', () => {
+    const body = quoteLineBody(typed, NO_PRICE)
+    expect(priceKeys(body)).toEqual([])
+    expect(body).toEqual({ styleId: 's1', colourwayId: 'c1', sizes: [{ size: 'M', quantity: 4 }, { size: 'L', quantity: 2 }], description: 'Giacca' })
+    expect(quoteLineBody(typed, OWNER)).toBe(typed)
+    expect(QUOTE_LINE_PRICE_KEYS).toContain('discountPct')
+  })
+
+  it('the calls themselves: Add line and Edit line post no price key without the grain (the version and the sizes still go)', async () => {
+    const bodies: Array<Record<string, unknown>> = []
+    const api = {
+      post: async (_path: string, options: { body: Record<string, unknown> }) => (bodies.push(options.body), { quote: quote() }),
+      request: async (_method: string, _path: string, options: { body: Record<string, unknown> }) => (bodies.push(options.body), { quote: quote() }),
+    } as unknown as ApiClient
+    const current = { id: 'q1', version: 7 }
+    await addLine(api, current, { styleId: 's1', colourwayId: 'c1', sizes: [{ size: 'M', quantity: 4 }], unitPrice: null }, NO_PRICE)
+    await editLine(api, current, 'l1', { sizes: [{ size: 'M', quantity: 5 }], unitPrice: '9' }, NO_PRICE)
+    await addLine(api, current, { styleId: 's1', colourwayId: 'c1', sizes: [{ size: 'M', quantity: 4 }], unitPrice: '30' }, OWNER)
+    expect(priceKeys(bodies[0])).toEqual([])
+    expect(priceKeys(bodies[1])).toEqual([])
+    expect(bodies[0]).toMatchObject({ version: 7, kind: 'SIZE_GRID', styleId: 's1', sizes: [{ size: 'M', quantity: 4 }] })
+    expect(bodies[1]).toEqual({ version: 7, sizes: [{ size: 'M', quantity: 5 }] })
+    expect(bodies[2]).toMatchObject({ unitPrice: '30' })
+  })
+
+  it('the record passes the person\'s grains to every line write and to the send checks (no write without them)', () => {
+    const record = readFileSync(new URL('./record/QuoteRecord.tsx', import.meta.url), 'utf8')
+    const calls = record.match(/\b(?:addLine|editLine)\(api,[^\n]*/g) ?? []
+    expect(calls.length).toBeGreaterThanOrEqual(4)
+    for (const call of calls) expect(call, call).toContain('grains')
+    expect(record).toMatch(/sendItems\([^\n]*grains/)
+    expect(readFileSync(new URL('./record/view/QuoteRecordView.tsx', import.meta.url), 'utf8')).toContain('nextStep(quote, model.me, model.can, model.grains')
+  })
+
+  it('Send of the priced PDF waits for someone who sees prices: on the band and as the first blocking check; the Owner\'s Send is free', () => {
+    expect(pricedSendHeld(NO_PRICE)).toEqual({ key: 'pricedPdf.held' })
+    expect(pricedSendHeld(OWNER)).toBeNull()
+    expect(nextStep(quote(), PEOPLE.sales, CAN.sales, NO_PRICE)).toEqual({ step: 'send', held: { key: 'pricedPdf.held' } })
+    expect(nextStep(quote(), PEOPLE.owner, CAN.owner, OWNER)).toEqual({ step: 'send', held: null })
+    // No send right stays the first reason; the approval round is not touched.
+    expect(nextStep(quote(), PEOPLE.finance, CAN.finance, NO_PRICE).held).toEqual({ key: 'held.noSend' })
+    const items = sendItems({ checks: [] }, echo, (tab) => `/q?tab=${tab}`, undefined, NO_PRICE)
+    expect(items[0]).toEqual({ id: 'priced-pdf', state: 'blocks', label: 'pricedPdf.held', fix: null })
+    const words = { loading: 'loading', busy: 'busy', noRight: 'noRight', noEmail: 'noEmail', cc: (list: string) => `cc ${list}`, sent: 'sent' }
+    expect(sendHeld({ checks: { status: 'ready', items }, sending: false, canSend: true, recipient: { name: 'A', email: 'buyer@example.com' }, result: null, outside: null }, [], words)).toBe('pricedPdf.held')
+    expect(sendItems({ checks: [] }, echo, (tab) => `/q?tab=${tab}`, undefined, OWNER).some((item) => item.id === 'priced-pdf')).toBe(false)
+  })
+
+  it('the words in both languages (the quote\'s own catalogue)', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['sales']).sales!)
+      expect(t('pricedPdf.held'), locale).not.toBe('pricedPdf.held')
+    }
+    expect(createTranslator('it', messagesFor('it', ['sales']).sales!)('pricedPdf.held')).toBe('Mostra dei prezzi: lo invia chi vede i prezzi.')
+  })
+})
+// ---- end F-CP-146

@@ -1919,5 +1919,11 @@
       "state": "Non è stato possibile registrare la spedizione",
       "failed": "Non è stato possibile registrare la spedizione: riprova"
     }
+  },
+  "priced": {
+    "fromList": "Prezzi dal listino di {customer}"
+  },
+  "pricedPdf": {
+    "held": "Mostra dei prezzi: lo invia chi vede i prezzi."
   }
 }

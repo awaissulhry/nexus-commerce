@@ -43,6 +43,8 @@ export interface NewOrderDialogModel {
   number: string | null | undefined
   /** B-TH-221: the one pointer — a written request goes to Incoming's New request (null: the person makes no request). */
   incomingHref?: string | null
+  /** F-CP-146 (money wall D1-c): false — the person sees no price: the window says the lines take the customer's price list. */
+  price?: boolean
 }
 // B-TH-230
 import type { UnreadMap } from '../../../../lib/last-message-cell/model'

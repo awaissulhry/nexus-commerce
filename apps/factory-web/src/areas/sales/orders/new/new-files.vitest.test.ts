@@ -5,6 +5,15 @@ import { scanText } from '../../../../lib/testing/brand-scan'
 import { leftKeys, render, textOf } from '../../../../lib/record-thread/parts/testing'
 import { attachOutcome, attaching, heldCount, heldKindOf, holdFiles, MAX_HELD, takesSheetTick, toAttach, type HeldFile } from './new-files'
 import { CustomerFiles, FilesOutcome, type CustomerFilesModel } from './view/CustomerFiles'
+// ---- F-CP-146: the New order of a person without the price grain ----
+import { readFileSync } from 'node:fs'
+import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
+import { BLK, canOf, COMPANY, PARTY, STYLE_ID } from '../_demo/fixtures'
+import { newKey, type DraftLine } from '../daily-model'
+import { COMPOSER_EMPTY } from '../record/record-model'
+import { manualBody, type NewOrderModel } from './new-model'
+import { NewOrderView } from './view/NewOrderView'
+// ---- end F-CP-146
 
 /**
  * B-TH-231 — Sales › Orders › New order's fold "Customer files" (O-SAL-ORD-NEW.form-F08; ORD-G05): files held in the page
@@ -111,3 +120,72 @@ describe('the fold and the outcome, in it and en', () => {
     expect(render(createElement(FilesOutcome, { model }))).toBe('')
   })
 })
+
+// ---- F-CP-146 (customer page lane, money wall D1-c, review A8): the New order of a person without the price grain -----------------
+// As Sales worker (the Sales role after B-CP-011: no money.price) and as Production manager: "Confirm order" and its preview send NO
+// price key (a price typed earlier in this tab by someone else is never sent: the API's grain wall refuses it), the page and the New
+// order window say "Priced from <customer>'s price list". The Owner's body is unchanged.
+describe('F-CP-146: the New order sends no price key without the price grain', () => {
+  const SALES_AFTER = { ...canOf('sales'), price: false }
+  const header = { companyId: COMPANY, partyId: PARTY.id, contactId: '', customerRef: '' }
+  const lines: DraftLine[] = [
+    { key: newKey(STYLE_ID, BLK.id), lineId: null, styleId: STYLE_ID, colourwayId: BLK.id, sizes: { '48': 2, '50': 1 }, price: '430', locked: false },
+    { key: newKey(STYLE_ID, 'c2'), lineId: null, styleId: STYLE_ID, colourwayId: 'c2', sizes: { '50': 3 }, price: '', locked: false },
+  ]
+  const draft = { lines, requestedDate: '', promiseDate: '', internalNote: '' }
+  const priceKeys = (body: unknown): string[] => JSON.stringify(body).match(/"unitPrice"/g) ?? []
+
+  it('as Sales worker / as Production manager: no line carries a price key; the Owner\'s body keeps the typed price', () => {
+    for (const can of [SALES_AFTER, canOf('manager')]) {
+      const body = manualBody(header, draft, can)
+      expect(priceKeys(body)).toEqual([])
+      expect(body.lines.map((line) => line.sizes.length)).toEqual([2, 1])
+    }
+    expect(manualBody(header, draft, canOf('owner')).lines[0]).toMatchObject({ unitPrice: '430' })
+    expect(manualBody(header, draft, canOf('owner'))).toEqual(manualBody(header, draft))
+  })
+
+  it('the page sends the person\'s grain with the preview and with Confirm order', () => {
+    const page = readFileSync(new URL('./NewOrderPage.tsx', import.meta.url), 'utf8')
+    expect(page.match(/manualBody\(header, draft, can\b/g)?.length).toBe(2)
+    const window = readFileSync(new URL('../list/view/NewOrderDialog.tsx', import.meta.url), 'utf8')
+    expect(window).toContain("model.price === false && <p className=\"fw-so-hint\">{t('priced.fromList'")
+    const sheet = readFileSync(new URL('../list/use-orders-sheet.ts', import.meta.url), 'utf8')
+    expect(sheet.match(/emptyNew\([^\n]*can\.price/g)?.length).toBe(2)
+  })
+
+  it('the page says "Priced from <customer>\'s price list" to a person without prices, never to the Owner', () => {
+    const model = (can: NewOrderModel['can']): NewOrderModel => ({
+      prefix: '/w/DEMO',
+      can,
+      today: '2026-10-29',
+      header,
+      party: { status: 'ready', value: PARTY },
+      number: 'SO-2026-0089',
+      draft,
+      styles: {},
+      composer: COMPOSER_EMPTY,
+      preview: { phase: 'idle', value: null, problem: null },
+      busy: false,
+      problem: null,
+    })
+    for (const locale of ['en', 'it'] as const) {
+      const html = render(createElement(NewOrderView, { model: model(SALES_AFTER) }), locale)
+      expect(textOf(html)).toContain(locale === 'en' ? `Priced from ${PARTY.legalName}'s price list` : `Prezzi dal listino di ${PARTY.legalName}`)
+      expect(leftKeys(html, ['priced', 'pricedPdf'])).toEqual([])
+    }
+    expect(textOf(render(createElement(NewOrderView, { model: model(canOf('owner')) })))).not.toContain('Priced from')
+  })
+
+  it('the confirmation PDF is sent by someone who sees prices (its Send held with the words); the words in both languages', () => {
+    const card = readFileSync(new URL('../confirmation/view/ConfirmationCard.tsx', import.meta.url), 'utf8')
+    expect(card).toContain("const pricedHeld = model.can.price ? null : o('pricedPdf.held')")
+    expect(card).toContain('heldReason={pricedHeld ?? (held ? d(held.key) : busy)}')
+    for (const locale of ['en', 'it'] as const) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      expect(t('pricedPdf.held'), locale).not.toBe('pricedPdf.held')
+      expect(t('priced.fromList', { customer: 'Brand Alpha' }), locale).toContain('Brand Alpha')
+    }
+  })
+})
+// ---- end F-CP-146

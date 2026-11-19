@@ -876,5 +876,8 @@
     },
     "allCopied": "Every line was copied.",
     "open": "Open {number}"
+  },
+  "pricedPdf": {
+    "held": "It shows prices: it is sent by someone who sees prices."
   }
 }

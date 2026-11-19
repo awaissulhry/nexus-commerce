@@ -1919,5 +1919,11 @@
       "state": "The shipment could not be recorded",
       "failed": "The shipment could not be recorded: try again"
     }
+  },
+  "priced": {
+    "fromList": "Priced from {customer}'s price list"
+  },
+  "pricedPdf": {
+    "held": "It shows prices: it is sent by someone who sees prices."
   }
 }

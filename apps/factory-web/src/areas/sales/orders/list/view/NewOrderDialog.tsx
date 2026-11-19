@@ -141,6 +141,8 @@ export function NewOrderDialog({ model, actions }: { model: NewOrderDialogModel;
             />
             {held && <Banner tone="danger" title={held} />}
             {party.warnings.length > 0 && <Banner tone="warning" title={t('newOrder.warnings', { count: party.warnings.length })} />}
+            {/* F-CP-146 (money wall D1-c): no price is typed or sent without the price grain. */}
+            {model.price === false && <p className="fw-so-hint">{t('priced.fromList', { customer: party.legalName })}</p>}
             <Field label={t('newOrder.contact')} hint={t('newOrder.contactHint')}>
               <Select autoFocus value={model.contactId} onChange={(event) => actions?.onNewField?.('contactId', event.target.value)}>
                 <option value="">{t('newOrder.contactDefault')}</option>

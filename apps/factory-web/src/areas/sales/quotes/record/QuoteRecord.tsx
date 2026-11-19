@@ -322,10 +322,10 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
           const key = `${styleId}:${write.colourwayId}`
           if (write.kind === 'add') {
             const price = pricesRef.current[key]
-            ok = await runWrite((quote) => addLine(api, quote, { styleId, colourwayId: write.colourwayId, sizes: write.sizes, unitPrice: price ?? null }))
+            ok = await runWrite((quote) => addLine(api, quote, { styleId, colourwayId: write.colourwayId, sizes: write.sizes, unitPrice: price ?? null }, grains /* F-CP-146 */))
             if (ok) setPrices(({ [key]: _gone, ...rest }) => rest)
           } else if (write.kind === 'edit') {
-            ok = await runWrite((quote) => editLine(api, quote, write.lineId, { sizes: write.sizes }))
+            ok = await runWrite((quote) => editLine(api, quote, write.lineId, { sizes: write.sizes }, grains /* F-CP-146 */))
           } else {
             ok = await runWrite((quote) => removeLine(api, quote, write.lineId))
             // The row stays in the block (its colourway is still chosen), now without a line.
@@ -335,7 +335,7 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
         }
         if (ok && draftsRef.current[styleId] === typed) setDrafts(({ [styleId]: _done, ...rest }) => rest)
       }),
-    [api, enqueue, runWrite],
+    [api, enqueue, runWrite, grains /* F-CP-146 */],
   )
 
   const onCells = (styleId: string, next: Record<string, Record<string, number>>) => {
@@ -365,7 +365,7 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
       setPrices((all) => ({ ...all, [`${styleId}:${colourwayId}`]: parsed }))
       return
     }
-    void enqueue(() => runWrite((quote) => editLine(api, quote, line.id, { unitPrice: parsed })))
+    void enqueue(() => runWrite((quote) => editLine(api, quote, line.id, { unitPrice: parsed }, grains /* F-CP-146 */)))
   }
 
   const onRemoveBlock = (styleId: string) => {
@@ -447,7 +447,7 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
               language: check.language,
               how: { kind: 'acceptLink', until: check.linkExpiresAt },
               fields: { ...model.fields, subject: model.fields.subject || check.subject || '', message: model.fields.message },
-              checks: { status: 'ready', items: sendItems(check, t, tabHref, { units, t: fixT, prefix, mayOpen: session.permissions.includes(MTM_PERMISSIONS.view) }) },
+              checks: { status: 'ready', items: sendItems(check, t, tabHref, { units, t: fixT, prefix, mayOpen: session.permissions.includes(MTM_PERMISSIONS.view) }, grains /* F-CP-146 */) },
             }
           : model,
       )
@@ -641,7 +641,7 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
         onUseListPrice: (lineId) => {
           const line = quoteRef.current?.lines.find((entry) => entry.id === lineId)
           if (!line?.listUnitPrice) return
-          void enqueue(() => runWrite((quote) => editLine(api, quote, line.id, { unitPrice: line.listUnitPrice ?? null }), { key: 'lines.backToList', tone: 'success', params: { colour: line.colourway.code } }))
+          void enqueue(() => runWrite((quote) => editLine(api, quote, line.id, { unitPrice: line.listUnitPrice ?? null }, grains /* F-CP-146 */), { key: 'lines.backToList', tone: 'success', params: { colour: line.colourway.code } }))
         },
       }}
       sendParts={sendParts.parts}
