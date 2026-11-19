@@ -349,7 +349,7 @@ jobs:
       # Every suite of scripts/factory/golden-flow.mjs (the Mac end check's golden + golden-prod stages). A suite added
       # there is added here and in .github/factory-test-floor.json (the summary fails on a result without a floor).
       matrix:
-        suite: [w1, daily, followups, people, quality, portal, product, sales-depth, money-depth, threads, sales-page, production]
+        suite: [w1, daily, followups, people, quality, portal, product, sales-depth, money-depth, threads, sales-page, production, money-wall]
     steps:
       - uses: actions/checkout@v4
         with:

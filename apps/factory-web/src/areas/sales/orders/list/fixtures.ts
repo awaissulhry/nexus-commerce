@@ -335,6 +335,11 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'cp-140-sales-worker', label: 'CP · As Sales worker (no price grain): the same layout, no money column; Customise has no "Price check"', model: { ...sheet('sales', { can: SALES_WORKER, list: { items: forRole(PRICED_ROWS, 'manager'), more: false, problem: null } }), tools: tools({ layout: { columns: { order: PRICE_LAYOUT, hidden: [], pinned: [] } } }) } },
     { id: 'cp-140-manager', label: 'CP · As Production manager: the same layout, no money column, no price check', model: { ...sheet('manager', { list: { items: rowsFor('manager', PRICED_ROWS), more: false, problem: null } }), tools: tools({ layout: { columns: { order: PRICE_LAYOUT, hidden: [], pinned: [] } } }) } },
     // ── end F-CP-140 ──
+    // ── F-CP-148 (the money wall, Owner O1–O3): Sales › Orders "Seen as" — the price term "Prices differ" ──
+    { id: 'cp-148-not-equal-owner', label: 'CP · Seen as Owner · Prices differ: the term narrows the sheet (its chip with ✕), the check columns shown', model: { ...sheet('owner', { extra: { priceMatch: 'NOT_EQUAL' }, list: { items: rowsFor('owner', PRICED_ROWS.filter((entry) => entry.priceMatch === 'NOT_EQUAL')), more: false, problem: null } }), tools: tools({ layout: { columns: { order: PRICE_LAYOUT, hidden: [], pinned: [] } } }) } },
+    { id: 'cp-148-not-equal-sales', label: 'CP · Seen as Sales worker · a shared link with the price term: one line "Amounts are shown to people who see prices", Show all orders; no row read', model: sheet('sales', { can: SALES_WORKER, priceHeld: true, list: { items: [], more: false, problem: null } }) },
+    { id: 'cp-148-not-equal-manager', label: 'CP · Seen as Production manager · the same held line: no rows, no figure, no chip', model: sheet('manager', { priceHeld: true, list: { items: [], more: false, problem: null } }) },
+    // ── end F-CP-148 ──
     // ── F-CP-162 (the money wall, B-CP-020; F-CP-147's flow): Reply to N whose words look like a price — the API warns once (409
     // NAMES_A_PRICE): the round stops, the typed text stays with the composer's warning (no amount repeated), Send reads "Send anyway"
     // and goes on to the orders still to post with pricesInWordsOk. As a Sales worker (no price grain). ──

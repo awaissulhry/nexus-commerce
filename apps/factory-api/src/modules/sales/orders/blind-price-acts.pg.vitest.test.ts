@@ -99,7 +99,7 @@ async function notHeld(who: Person, method: Method, url: string, payload: unknow
 const optionValue = async (group: string, code: string) => (await one<{ id: string }>(`SELECT v.id FROM "OptionValue" v JOIN "OptionGroup" g ON g.id = v."groupId" WHERE g."tenantId" = $1 AND g.code = $2 AND v.code = $3`, [T, group, code])).id
 
 beforeAll(async () => {
-  h = await startHarness('blind_price_acts_cp026')
+  h = await startHarness('cp026_blind_price') // B-CP-022: test-database labels are at most 20 characters
   for (const file of readdirSync(SEED_DIR).filter((name) => name.endsWith('.ts')).sort()) {
     const module = (await import(pathToFileURL(join(SEED_DIR, file)).href)) as { seed: (context: { db: FactoryDatabase; namespace: string }) => Promise<unknown> }
     await module.seed({ db: h.database, namespace: NS })

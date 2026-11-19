@@ -30,7 +30,8 @@ const templatePermissions = (key: string, grains: readonly string[] = []): strin
 const ROLE_PERMISSIONS = {
   finance: templatePermissions('finance', ['price', 'cost', 'margin']),
   owner: ['home.view', 'quotes.view', 'sales.returns.view', 'sales.settings.manage', 'numbering.view', 'reasons.view', 'reasons.manage', 'money.price', 'money.margin'],
-  sales: templatePermissions('sales', ['price', 'margin']),
+  // F-CP-148 (follow-up 5; Owner O1, B-CP-011): the Sales template holds no price grain — "Seen as Sales" sees no money.
+  sales: templatePermissions('sales'),
   readOnly: ['home.view', 'quotes.view', 'sales.returns.view', 'reasons.view'],
   none: ['home.view'],
 } as const

@@ -95,7 +95,7 @@ let differs: string
 let none: string
 
 beforeAll(async () => {
-  h = await startHarness('sales_price_columns_cp018')
+  h = await startHarness('cp018_price_columns') // B-CP-022: test-database labels are at most 20 characters
   for (const file of readdirSync(SEED_DIR).filter((name) => name.endsWith('.ts')).sort()) {
     const module = (await import(pathToFileURL(join(SEED_DIR, file)).href)) as { seed: (context: { db: FactoryDatabase; namespace: string }) => Promise<unknown> }
     await module.seed({ db: h.database, namespace: NS })
