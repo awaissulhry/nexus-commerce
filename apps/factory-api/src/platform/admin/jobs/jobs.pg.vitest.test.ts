@@ -14,6 +14,7 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { activeTenants } from '../../outbox/system'
 import { testRedis, type TestRedis } from '../../outbox/testing'
 import { useHealthRedis } from './redis'
+import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts' // fx-7
 
 /**
  * Jobs and integrations on the local stack (B-W2b-415; PLT-221), with the app's real routes and the local Redis under this
@@ -76,7 +77,9 @@ afterAll(async () => {
   await db?.close()
 }, 60_000)
 
-describe('every cron writes its run', () => {
+// fx-7: the file's first database work (two tenants' runs written and finished), past vitest's 5 s on GitHub's 2-core runner; no
+// assertion changed.
+describe('every cron writes its run', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('writes one run per active tenant and tick, SUCCEEDED; the same tick again writes none', async () => {
     let ran = 0
     const job = recordedCron(defineCron({ name: 'outbox.lag', schedule: '* * * * *', run: async () => void ran++ }), settings)
