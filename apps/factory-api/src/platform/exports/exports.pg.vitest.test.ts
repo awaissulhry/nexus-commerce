@@ -10,6 +10,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
+import { businessDate } from '@nexus/factory-domain/core/time'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { cell } from '@nexus/factory-domain/imports/cells'
 import { mapHeaders } from '@nexus/factory-domain/imports/headers'
@@ -343,7 +344,8 @@ describe('the worker writes the file (as the person, with their live rights)', (
     const [counted] = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'exports.count'`, [asked.id])
     expect(counted?.after).toEqual({ rowCount: 450 })
     const done = await job(asked.id)
-    expect(done).toMatchObject({ status: 'DONE', rowsDone: 450, rowCount: 450, file: { name: 'aziende-di-prova-' + done.finishedAt.slice(0, 10) + '.csv' } })
+    // The file is named after the business day it was written (Europe/Rome: from 23:00 UTC in winter it is already tomorrow).
+    expect(done).toMatchObject({ status: 'DONE', rowsDone: 450, rowCount: 450, file: { name: 'aziende-di-prova-' + businessDate(new Date(done.finishedAt)) + '.csv' } })
     expect(Date.parse(done.expiresAt) - Date.parse(done.finishedAt)).toBe(7 * 86_400_000)
     const text = (await bytesOf(asked.id)).toString('utf8')
     expect(text.charCodeAt(0)).toBe(0xfeff)
