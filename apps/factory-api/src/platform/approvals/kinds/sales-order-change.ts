@@ -1,5 +1,5 @@
 import { SALES_ORDER_CHANGE_FIELDS } from '@nexus/factory-domain/sales/order-changes/priced'
-import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import type { CommandTools, CommandTx } from '../../../core/command'
 // B-W2b-309: what the order does with the decision (the subject's read, the yes and the no).
 import { changeApprovedInCommand, changeRejectedInCommand, readChangeSubject } from '../../../modules/sales/order-changes/yes'
@@ -14,15 +14,18 @@ import type { ApprovalKindDefinition, Reader, TaskRef } from './kind'
  * pieces changed, whether it was priced after the start, the furthest production stage of a changed line, the customer's
  * code, whether the order went on with a SALES_ORDER yes. The fingerprint covers the change itself (a newer change makes it
  * STALE). The yes is kept on the order; the no leaves the change written and the order says so (modules/sales/order-changes:
- * a person puts it back). Asked from the generic route too (orders.manage): after a STALE request, or when only the person
- * who changed the order could decide at the time.
+ * a person puts it back).
+ *
+ * B-OP-010 (order page plan N2, decision D2): an office change applies at once — nothing asks this kind any more, the generic
+ * route included (`ask: null`), and Approvals › Rules makes no rule of it. It stays registered so an old PENDING request is still
+ * read, decided (its yes, its no) or taken back in place, and still holds the order's next change until then.
  */
 export const SALES_ORDER_CHANGE_KIND: ApprovalKindDefinition = Object.freeze({
   kind: 'SALES_ORDER_CHANGE',
   recordType: 'SalesOrder',
   label: { en: 'Sales order change', it: "Modifica dell'ordine di vendita" },
   view: ORDERS_VIEW,
-  ask: ORDERS_MANAGE,
+  ask: null, // B-OP-010: nothing asks it any more
   fields: SALES_ORDER_CHANGE_FIELDS,
   read: (client: Reader, recordId: string) => readChangeSubject(client, recordId),
   async lock(tx: CommandTx, recordId: string) {

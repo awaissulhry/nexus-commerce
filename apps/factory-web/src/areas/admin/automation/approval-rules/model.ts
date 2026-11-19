@@ -134,6 +134,7 @@ export function saveHeld(draft: RuleDraft, state: { readonly manage: boolean; re
   if (!state.manage) return 'rules.held.noManage'
   if (state.offline) return 'rules.held.offline'
   if (state.rule && !state.rule.canChange) return 'rules.held.cannotChange'
+  if (state.rule && isRetired(state.rule)) return 'rules.held.retired' // B-OP-010
   if (state.busy) return 'inbox.held.busy'
   if (!draft.kind) return 'rules.held.kind'
   if (draft.name.trim() === '') return 'rules.held.name'
@@ -176,8 +177,20 @@ export function switchHeld(rule: ApprovalRule, state: { readonly manage: boolean
   if (state.offline) return 'rules.held.offline'
   if (state.saving.includes(rule.id)) return 'inbox.held.busy'
   if (!rule.registered) return 'rules.held.notRegistered'
+  // B-OP-010: a rule of a kind nothing asks any more is only switched off.
+  if (isRetired(rule) && !rule.active) return 'rules.held.retired'
   return null
 }
+
+// ── B-OP-010 (order page plan N2, decision D2; review R-3): a kind nothing asks any more ──
+/** The rule's kind asks no yes any more (office changes apply at once): it never fires. */
+export const isRetired = (rule: Pick<ApprovalRule, 'retired'>): boolean => (rule.retired ?? null) !== null
+/** The kinds a NEW rule may be made of (a kind nothing asks any more is listed only for its old rules). */
+export const offeredKinds = <Kind extends Pick<RuleKind, 'offered'>>(kinds: readonly Kind[]): Kind[] => kinds.filter((kind) => kind.offered !== false)
+/** What the list's on/off says of a rule: "Off: office changes apply at once" for a retired kind's, else on or off. */
+export const stateWords = (rule: Pick<ApprovalRule, 'active' | 'retired'>, locale: string): { readonly key: 'rules.on' | 'rules.off' | null; readonly words: string | null } =>
+  isRetired(rule) ? { key: null, words: said(rule.retired, locale) } : { key: rule.active ? 'rules.on' : 'rules.off', words: null }
+// ── end B-OP-010 ──
 
 /** Why New rule is held (a key), or null. */
 export function newHeld(model: Pick<ApprovalRulesModel, 'manage' | 'offline' | 'rules' | 'kinds'>): string | null {
@@ -185,7 +198,7 @@ export function newHeld(model: Pick<ApprovalRulesModel, 'manage' | 'offline' | '
   if (model.offline) return 'rules.held.offline'
   if (model.rules.status !== 'ready' || model.kinds.status !== 'ready') return 'rules.held.reading'
   if (!model.rules.data.canAdd) return 'rules.held.noManage'
-  if (model.kinds.data.kinds.length === 0) return 'rules.held.noKinds'
+  if (offeredKinds(model.kinds.data.kinds).length === 0) return 'rules.held.noKinds' // B-OP-010
   return null
 }
 

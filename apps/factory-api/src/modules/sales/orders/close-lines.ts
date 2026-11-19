@@ -13,6 +13,8 @@ import type { OrderView } from './views'
 // B-SA-042: a close proposes the gap to the work orders.
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
 import { proposeGapsInCommand } from '../../production/work-order-changes/propose'
+// B-OP-012 (order page plan N2, D1): the work orders follow the close in its command where the person may.
+import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../production/work-order-changes/auto'
 
 /**
  * Close remaining lines and reopen them (B-W2a-30; SAL-210; the design's band overflow "Close remaining lines": "Lines
@@ -72,12 +74,12 @@ async function checkReasonCode(tools: Pick<CommandTools, 'tx'>, code: string | u
 }
 
 /** orders.manage: close what is left of the lines named (or of every open line). */
-export async function closeLines(caller: CommandCaller, orderId: string, body: CloseLinesBody, idempotencyKey?: string): Promise<{ order: OrderView; closed: { lineId: string; seq: number; closedShortQuantity: number }[]; reducesDone: string[]; stillInWorkOrders: { lineId: string; pieces: number }[] }> {
+export async function closeLines(caller: CommandCaller, orderId: string, body: CloseLinesBody, idempotencyKey?: string): Promise<{ order: OrderView; closed: { lineId: string; seq: number; closedShortQuantity: number }[]; reducesDone: string[]; stillInWorkOrders: { lineId: string; pieces: number }[]; /* B-OP-012 */ workOrders: FollowedWorkOrders }> {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
   const reason = reasonOf(body.reason)
   if (reason === '' || reason.length > MAX_REASON) throw invalid([{ path: 'body/reason', message: 'Say why the lines are closed (it stays on each line).' }])
-  const { result } = await command(caller, { name: 'orders.closeLines', idempotencyKey, input: { orderId, ...body } }, (tools) => closeLinesInCommand(tools, context, order, body))
+  const { result } = await withAutoApply((autoApply) => command(caller, { name: 'orders.closeLines', idempotencyKey, input: { orderId, ...body } }, (tools) => closeLinesInCommand(tools, context, order, body, { autoApply })))
   return { order: await recordAfter(caller, order.id), ...result }
 }
 
@@ -91,9 +93,9 @@ export async function closeLinesInCommand(
   context: { readonly tenantId: string; readonly actorId: string },
   order: OrderRow,
   body: CloseLinesBody,
-  /** B-SA-042: `later` — the caller proposes the gap to the work orders once at its end (Accept of a customer's cancel). */
-  options: { readonly workOrders?: 'now' | 'later' } = {},
-): Promise<{ closed: { lineId: string; seq: number; closedShortQuantity: number }[]; reducesDone: string[]; stillInWorkOrders: { lineId: string; pieces: number }[] }> {
+  /** B-SA-042: `later` — the caller proposes the gap to the work orders once at its end (Accept of a customer's cancel). B-OP-012: `autoApply`. */
+  options: { readonly workOrders?: 'now' | 'later'; readonly autoApply?: AutoApply } = {},
+): Promise<{ closed: { lineId: string; seq: number; closedShortQuantity: number }[]; reducesDone: string[]; stillInWorkOrders: { lineId: string; pieces: number }[]; /* B-OP-012 */ workOrders: FollowedWorkOrders }> {
   const { tx, now } = tools
   const reason = reasonOf(body.reason)
   const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
@@ -143,11 +145,13 @@ export async function closeLinesInCommand(
   tools.emit({ type: 'sales_order.lines_closed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'CLOSED', lineIds: closedIds, partyId: order.partyId /* B-SA-001 */ } })
   // B-SA-042 (P6', R1): what work orders still make of the closed lines is proposed to them (lowered to what shipped, never below
   // cut); the pieces cut beyond get the outcome named, else stay production's to decide (stillInWorkOrders, as before).
-  if (options.workOrders !== 'later') await proposeGapsInCommand(tools, { order: { ...order, status }, requestId: null, amendmentId: null, reason, extraOutcome: body.extraOutcome ?? null, requireOutcome: false, lineIds: closedIds })
+  // B-OP-012: and carried out where the person may.
+  const gap = options.workOrders !== 'later' ? await proposeGapsInCommand(tools, { order: { ...order, status }, requestId: null, amendmentId: null, reason, extraOutcome: body.extraOutcome ?? null, requireOutcome: false, lineIds: closedIds }, options.autoApply) : null
   return {
     closed: plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity })),
     reducesDone,
     stillInWorkOrders: [...inWork].filter(([, pieces]) => pieces > 0).map(([lineId, pieces]) => ({ lineId, pieces })),
+    workOrders: { applied: gap?.applied ?? [], waiting: gap?.waiting ?? [] },
   }
 }
 

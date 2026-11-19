@@ -5,6 +5,8 @@ import { MAX_REASON, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/or
 import { MAX_SIZE_QUANTITY, SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { diffView, extraPiecesView, impactView } from '../orders/daily-contract'
+// B-OP-012: what Accept's work orders did in its command, and what waits.
+import { followedView } from '../../production/work-order-changes/contract'
 // B-SA-042 (P6', R1): Accept runs the change at once; the extra pieces' outcome, the work-order changes it proposed.
 import { EXTRA_OUTCOMES, WORK_ORDER_CHANGE_KINDS } from '@nexus/factory-domain/order-apply/rules'
 // B-PR-25: the production asks from the portal, the impact before Send.
@@ -394,6 +396,9 @@ export const acceptContract = defineContract({
         proposed: z.array(output({ id: id(), kind: z.enum(WORK_ORDER_CHANGE_KINDS), workOrderId: id().nullable(), number: z.string().nullable() })),
         extra: z.array(output({ workOrderSizeId: id(), salesOrderLineId: id(), size: z.string(), count: z.number().int(), words })),
         extraOutcome: z.enum(EXTRA_OUTCOMES).nullable(),
+        /** B-OP-012 (R-17): the changes Accept carried out in its command (the review window never applies them again) and those that wait. */
+        applied: followedView.shape.applied,
+        waiting: followedView.shape.waiting,
       }),
       /** B-SA-047: the product change requests an accepted design change raised, one per style of the customer's own label. */
       styleChanges: z.array(output({ id: id(), number: z.string(), style: output({ id: id(), code: z.string(), name: z.string() }) })),

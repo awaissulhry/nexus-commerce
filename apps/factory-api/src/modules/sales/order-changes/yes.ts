@@ -1,30 +1,28 @@
 import type { Prisma } from '@nexus/factory-db'
-import { chooseRules, type Facts } from '@nexus/factory-domain/approvals/rules'
+import type { Facts } from '@nexus/factory-domain/approvals/rules'
 import { amendmentDiff, type OrderSnapshot } from '@nexus/factory-domain/sales/amendments/amendments'
-import { furthestStage, type OrderFreezeStage } from '@nexus/factory-domain/sales/order-changes/freeze'
-import { SALES_ORDER_CHANGE_FIELDS, salesOrderChangeChanges, salesOrderChangeFacts, type PricedPart } from '@nexus/factory-domain/sales/order-changes/priced'
+import { furthestStage } from '@nexus/factory-domain/sales/order-changes/freeze'
+import { salesOrderChangeChanges, salesOrderChangeFacts, type PricedPart } from '@nexus/factory-domain/sales/order-changes/priced'
 import type { CommandTools } from '../../../core/command'
-import { askApproval } from '../../../platform/approvals/engine'
 import type { ApprovalSubject, TaskRef } from '../../../platform/approvals/kinds/kind'
 import type { Reader } from '../orders/store'
 import { readStages, stageOfLine } from './stages'
 
 /**
- * The new yes after an edit (B-W2b-309; SAL-190 "re-approval after editing an approved order"): the SALES_ORDER_CHANGE kind's
+ * The yes after an edit (B-W2b-309; SAL-190 "re-approval after editing an approved order"): the SALES_ORDER_CHANGE kind's
  * subject is the order (recordType SalesOrder, the database's rule for SalesOrderAmendment.reapprovalTaskId), about its
- * latest change. The change is written as the amendment it is (W2a's, append-only); in the same command, when one of the
- * company's SALES_ORDER_CHANGE rules holds on its facts, the yes is asked and the amendment names the request. While it waits
- * no other change of the order is taken (one change at a time); the yes is kept on the order (audit, event); a no leaves the
- * change written and the order says so — "Put back" (./put-back.ts) writes the order as it was, by a person. No rule: nothing
- * is asked, the change goes on as today. Nobody approves their own request (the engine), the Owner included.
+ * latest change. The yes is kept on the order (audit, event); a no leaves the change written and the order says so — "Put
+ * back" (./changes.ts) writes the order as it was, by a person. Nobody approves their own request (the engine), the Owner
+ * included.
  *
- * The request is asked BEFORE the amendment row exists (the row names the request, and is never changed after): the change
- * about to be written is handed to the kind's read for that one command (`withPendingChange`), as B-W2b-341's
- * CREDIT_WITHOUT_RETURN does. Afterwards the read takes the order's latest amendment: the fingerprint covers the change (its
- * revision, lines old → new, money, priced parts, fee and extra deposit), so a newer change makes the request STALE.
+ * B-OP-010 (order page plan N2, decision D2; review R-3): an office change applies at once — no change asks this yes any more
+ * (the amendment, the priced change and the accepted request write `reapprovalTaskId` null). The kind stays registered for the
+ * requests asked before: one still PENDING is read here (the order's latest amendment: the fingerprint covers its revision,
+ * lines old → new, money, priced parts, fee and extra deposit, so a newer change makes it STALE), still holds the order's next
+ * change until it is decided or taken back in place (./apply.ts), and its yes or no is kept on the order.
  */
 
-/** A change as the kind reads it: the amendment's own columns (stored, or about to be written). */
+/** A change as the kind reads it: the amendment's own columns. */
 export interface ChangeFacts {
   readonly amendmentId: string
   readonly revision: number
@@ -38,20 +36,6 @@ export interface ChangeFacts {
   readonly priceDeltaLines: readonly PricedPart[] | null
   readonly feeAmount: number | null
   readonly depositRequestId: string | null
-  /** The furthest stage of a changed line when it was written (null: not in production); read again when unknown. */
-  readonly stage?: OrderFreezeStage | null
-}
-
-const PENDING = new Map<string, ChangeFacts>()
-
-/** The change about to be written, for the kind's read inside the amendment's command (the row does not exist yet). */
-export async function withPendingChange<Result>(orderId: string, change: ChangeFacts, work: () => Promise<Result>): Promise<Result> {
-  PENDING.set(orderId, change)
-  try {
-    return await work()
-  } finally {
-    PENDING.delete(orderId)
-  }
 }
 
 export const AMENDMENT_CHANGE_COLUMNS = {
@@ -89,25 +73,20 @@ export const changeFactsOf = (row: AmendmentChangeRow): ChangeFacts => ({
   depositRequestId: row.depositRequestId,
 })
 
-/** The order's latest change (the one being written in this command, else the newest amendment), or null. */
-export async function latestChange(db: Reader, orderId: string): Promise<ChangeFacts | null> {
-  const pending = PENDING.get(orderId)
-  if (pending) return pending
+/** The order's latest change (its newest amendment), or null. */
+async function latestChange(db: Reader, orderId: string): Promise<ChangeFacts | null> {
   const row = await db.salesOrderAmendment.findFirst({ where: { orderId }, orderBy: { revision: 'desc' }, select: AMENDMENT_CHANGE_COLUMNS })
   return row ? changeFactsOf(row) : null
 }
 
 const ORDER_COLUMNS = { id: true, number: true, status: true, companyId: true, partyId: true, currency: true } as const
 
-/** The facts of a change on its order (the rule's test at the ask, the request's read after). */
-export async function changeFactsFor(db: Reader, order: { readonly id: string; readonly partyId: string; readonly currency: string }, change: ChangeFacts): Promise<Facts> {
+/** The facts of a change on its order (the request's read): the furthest production stage of a changed line read now. */
+async function changeFactsFor(db: Reader, order: { readonly id: string; readonly partyId: string; readonly currency: string }, change: ChangeFacts): Promise<Facts> {
   const diff = amendmentDiff(change.before, change.after)
-  let stage = change.stage
-  if (stage === undefined) {
-    const changed = diff.lines.filter((line) => line.change !== 'ADDED').map((line) => line.lineId)
-    const stages = await readStages(db, changed)
-    stage = furthestStage(changed.map((lineId) => stageOfLine(stages, lineId).stage))
-  }
+  const changed = diff.lines.filter((line) => line.change !== 'ADDED').map((line) => line.lineId)
+  const stages = await readStages(db, changed)
+  const stage = furthestStage(changed.map((lineId) => stageOfLine(stages, lineId).stage))
   const party = await db.party.findUnique({ where: { id: order.partyId }, select: { code: true } })
   const approved = await db.approvalTask.findFirst({ where: { kind: 'SALES_ORDER', recordType: 'SalesOrder', recordId: order.id, status: 'APPROVED' }, select: { id: true } })
   return salesOrderChangeFacts({
@@ -160,32 +139,7 @@ export async function readChangeSubject(db: Reader, orderId: string): Promise<Ap
   }
 }
 
-const RULE_COLUMNS = { id: true, companyId: true, sequence: true, createdAt: true, active: true, effectiveFrom: true, condition: true, approverRoleId: true, approverUserId: true } as const
-
-const officeActor = (tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
-
-export type ChangeYes = { readonly taskId: string } | { readonly taskId: null; readonly held: 'NO_RULE' | 'NOBODY_TO_ASK' }
-
-/**
- * Inside the amendment's command, before its row: the company's SALES_ORDER_CHANGE rules on the change's facts; when one
- * holds and someone other than the person changing may decide, the request (asked by that person). No rule: nothing asked.
- * A rule that holds with nobody else to decide: nothing asked now (another office person asks from Home › Approvals).
- */
-export async function askChangeYes(tools: CommandTools, order: { readonly id: string; readonly companyId: string; readonly partyId: string; readonly currency: string }, change: ChangeFacts): Promise<ChangeYes> {
-  const rules = await tools.tx.approvalRule.findMany({ where: { kind: 'SALES_ORDER_CHANGE', active: true, OR: [{ companyId: null }, { companyId: order.companyId }] }, select: RULE_COLUMNS })
-  if (rules.length === 0) return { taskId: null, held: 'NO_RULE' }
-  const requesterId = officeActor(tools)
-  const facts = await changeFactsFor(tools.tx, order, change)
-  const choice = chooseRules(rules, { companyId: order.companyId, facts, askers: requesterId ? [requesterId] : [] }, SALES_ORDER_CHANGE_FIELDS, tools.now)
-  if (choice.matched.length === 0) return { taskId: null, held: 'NO_RULE' }
-  if (choice.deciding === null || requesterId === null) return { taskId: null, held: 'NOBODY_TO_ASK' }
-  const outcome = await withPendingChange(order.id, change, () =>
-    askApproval(tools, { kind: 'SALES_ORDER_CHANGE', recordId: order.id, requester: { userId: requesterId }, note: change.reason.slice(0, 4000), changes: salesOrderChangeChanges({ revision: change.revision, netBefore: change.netAmountBefore, netAfter: change.netAmountAfter, feeAmount: change.feeAmount }) }),
-  )
-  return outcome.asked ? { taskId: outcome.taskId } : { taskId: null, held: 'NO_RULE' }
-}
-
-/** The request waiting on the order, if any (one change at a time). */
+/** The request asked before B-OP-010 still waiting on the order, if any: it holds the next change until it is decided. */
 export const pendingChangeYes = (db: Reader, orderId: string) => db.approvalTask.findFirst({ where: { kind: 'SALES_ORDER_CHANGE', recordType: 'SalesOrder', recordId: orderId, status: 'PENDING' }, select: { id: true, requestedAt: true } })
 
 async function decided(tools: CommandTools, task: TaskRef, decision: 'APPROVED' | 'REJECTED'): Promise<void> {

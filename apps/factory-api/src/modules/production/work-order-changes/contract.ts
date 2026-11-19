@@ -102,3 +102,15 @@ export const declineContract = defineContract({
   body: input({ version, words: z.string().trim().min(1).max(MAX_DECISION_NOTE) }),
   response: { 200: oneChange },
 })
+
+// ── B-OP-012 (order page plan N2, D1; review R-17): what an office change's work orders did in its own command ──
+/**
+ * The answer of an office change of the order (amend, priced change, put-back, close lines, cancel, accept): the work-order changes
+ * it carried out (the web never applies them again) and those that wait, PROPOSED, with why. A work order's id and number only for a
+ * person who reaches it with workorders.view (a mixed one: every customer); else "a work order" in words that name none.
+ */
+export const followedView = output({
+  applied: z.array(output({ changeId: id(), workOrderId: id().nullable(), number: z.string().nullable(), route: z.enum(['SET_DRAFT_CELLS', 'LOWER_RELEASED', 'CANCEL_WORK_ORDER', 'NEW_DRAFT']), reprint: z.boolean() })),
+  waiting: z.array(output({ changeId: id(), workOrderId: id().nullable(), number: z.string().nullable(), words })),
+})
+// ── end B-OP-012 ──

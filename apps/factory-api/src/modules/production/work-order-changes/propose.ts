@@ -11,6 +11,8 @@ import { officeContextOf } from '../work-orders/access'
 import { reachesWorkOrder } from '../work-orders/scope'
 import { cellsOf, changeViews, CHANGE_COLUMNS, WORK_ORDER_COLUMNS, type Reader } from './read'
 import { decideInCommand } from './decide'
+// B-OP-012: the work orders follow an office change in its command.
+import { followInCommand, NEVER_APPLY, type AutoApply, type FollowedWorkOrders } from './auto'
 
 /**
  * B-SA-041 (sales page plan, lead picks P6', R1; 13-backend B4b): proposing a WorkOrderChange — the gap an accepted change of a
@@ -331,9 +333,13 @@ export interface GapInput {
  * a newer change of the same lines makes them STALE, their raises carried) against their work orders. Only from an office person's
  * command (the database names an ACTIVE office proposer; the system's own commands leave the gap to production). Refused in words,
  * nothing written, when extra pieces are left with no outcome and the change needs one.
+ *
+ * B-OP-012 (order page plan N2, D1): `auto` (the office routes' runner, ./auto.ts withAutoApply) — IF_ALLOWED: each change is carried
+ * out right after it is written where the person may (a DRAFT's for whoever may change the order, a released one's only with
+ * workorders.manage over it, a mixed one's never), the rest waits with its words; NEVER (the default): every change waits.
  */
-export async function proposeGapsInCommand(tools: CommandTools, input: GapInput): Promise<{ proposed: Proposed[]; extra: ExtraPieces[] }> {
-  const none = { proposed: [], extra: [] }
+export async function proposeGapsInCommand(tools: CommandTools, input: GapInput, /* B-OP-012 */ auto: AutoApply = NEVER_APPLY): Promise<{ proposed: Proposed[]; extra: ExtraPieces[] } & FollowedWorkOrders> {
+  const none = { proposed: [], extra: [], applied: [], waiting: [] }
   if (tools.context.audience !== 'office' || input.lineIds.length === 0) return none
   const context = tools.context as OfficeContext
   const { tx } = tools
@@ -364,6 +370,8 @@ export async function proposeGapsInCommand(tools: CommandTools, input: GapInput)
   }
   for (const row of replaced) await decideInCommand(tools, context, row, 'STALE')
   const proposed = await proposeInCommand(tools, context, { order: input.order, requestId: input.requestId, amendmentId: input.amendmentId, reason: input.reason, extraOutcome: input.extraOutcome, changes })
-  return { proposed, extra }
+  // B-OP-012: the work orders follow in this command where the person may (an apply refused: the runner runs it again without it).
+  const followed: FollowedWorkOrders = auto.apply === 'NEVER' && auto.skip.size === 0 ? { applied: [], waiting: [] } : await followInCommand(tools, context, input.order, proposed, auto)
+  return { proposed, extra, applied: followed.applied, waiting: followed.waiting }
 }
 // ── end B-SA-042 ──

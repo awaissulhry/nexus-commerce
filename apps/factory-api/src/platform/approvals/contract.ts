@@ -49,6 +49,9 @@ export const kindView = output({
   fields: z.array(fieldView),
   /** A person may ask a yes on its records from the generic route (else only its own page asks). */
   askable: z.boolean(),
+  /** B-OP-010: a new rule may be made of it; a kind nothing asks any more is listed (for its old rules) with its words. */
+  offered: z.boolean(),
+  retired: words.nullable(),
 })
 
 export const kindsContract = defineContract({
@@ -78,6 +81,8 @@ const ruleView = output({
   kindLabel: words,
   /** The kind has a checker (else its rule is listed but cannot be tested or asked). */
   registered: z.boolean(),
+  /** B-OP-010: the kind asks no yes any more ("Off: office changes apply at once"): the rule never fires, it is only switched off. */
+  retired: words.nullable(),
   name: z.string(),
   /** The rule in a sentence (a threshold the reader may not see: "…"). */
   sentence: words,

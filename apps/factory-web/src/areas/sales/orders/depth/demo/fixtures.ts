@@ -209,7 +209,7 @@ export const PRICED_PREVIEW: PricedPreview = {
   feeAmount: 2500,
   changeAmount: 47500,
   deposit: { amount: 14250, pct: '30.0000', kind: 'ACCONTO', growthAmount: 47500 },
-  yes: 'WOULD_ASK',
+  yes: 'APPLIES_AT_ONCE', // B-OP-010
   stage: { stage: 'CUT' },
 }
 export const PRICED_BLOCKED: PricedPreview = { ...PRICED_PREVIEW, ok: false, problems: [{ path: 'body/lines/10/SIZE_QUANTITY' }], parts: [], feeAmount: null, changeAmount: null, deposit: null, yes: null }

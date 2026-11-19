@@ -386,7 +386,8 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
         setPriced(null)
         input.onAmendDone()
         input.onOrder(answer.order)
-        setNotice({ tone: 'success', words: { key: answer.change.yes.state === 'WAITING' ? 'notice.pricedWaiting' : 'notice.priced', params: { revision: answer.change.revision } } })
+        // B-OP-010: a priced change applies at once (no yes is asked any more).
+        setNotice({ tone: 'success', words: { key: 'notice.priced', params: { revision: answer.change.revision } } })
       }, null)
     },
     onOpenFile: (fileId) => {

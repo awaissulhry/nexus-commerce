@@ -5,7 +5,7 @@ import { businessDate } from '@nexus/factory-domain/core/time'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { depositFiscalOf } from '@nexus/factory-domain/sales/deposits/deposits'
 import { amendmentDiff, type OrderSnapshot } from '@nexus/factory-domain/sales/amendments/amendments'
-import { frozenProblems, type OrderFreezeStage } from '@nexus/factory-domain/sales/order-changes/freeze'
+import { frozenProblems } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { extraDepositOf, feeMinorOf, PENITENTIAL_FISCAL_REASON, PENITENTIAL_KIND, PENITENTIAL_OFF_WORDS, pricedInputProblems, pricedPartsOf, type PricedInput, type PricedPart } from '@nexus/factory-domain/sales/order-changes/priced'
 import { addDays, type DepositKind } from '@nexus/factory-domain/sales/quotes/quotes'
 import { DEPOSIT_DUE_DAYS } from '@nexus/factory-domain/sales/quotes/terms'
@@ -16,20 +16,22 @@ import type { AmendmentPlan } from '../orders/amend'
 import type { OrderRow } from '../orders/store'
 import { quotePartyOf } from '../quotes/store'
 import { frozenChangesOf } from './freeze'
-import { askChangeYes, pendingChangeYes, type ChangeFacts } from './yes'
+import { pendingChangeYes } from './yes'
 
 /**
  * What an order change adds to W2a's amendment (B-W2b-309; SAL-218, SAL-219, SAL-221, SAL-190, SAL-306), called by
  * modules/sales/orders/amend.ts `amendInCommand` in its own command, in three places:
  *
- *   before the writes   one change at a time (a change whose yes still waits holds the next one); the company's freeze rules
+ *   before the writes   one change at a time (a change whose yes still waits holds the next one: B-OP-010, a request asked
+ *                       before office changes applied at once, until it is decided or taken back); the company's freeze rules
  *                       against the change (BLOCKED refused; CHANGE_REQUEST refused unless the change is priced); the
  *                       customer-supplied rows of a line the change removes (removed first, refused when something of them
  *                       was received, used or returned)
  *   the amendment row   a priced change's parts (one per line whose net moved, in the office's words when given) and its
  *                       fee; the extra deposit of a bigger order (the order's own percent of the gross growth unless the
- *                       office names one; its kind the order's deposit's, a caparra penitenziale only while switched on);
- *                       the new yes (SALES_ORDER_CHANGE) when a rule holds — all named on the append-only row
+ *                       office names one; its kind the order's deposit's, a caparra penitenziale only while switched on)
+ *                       — named on the append-only row. B-OP-010 (order page plan N2, decision D2): no yes is asked any
+ *                       more, an office change applies at once (reapprovalTaskId stays null)
  *   after               sales_order.change_priced; the order's customer-supplied rows of the lines it changed planned again
  *                       when the order keeps them (customer_material rows follow the sizes)
  *
@@ -47,16 +49,11 @@ export interface ChangeOptions {
   readonly putBack: boolean
 }
 
-export interface BeforeWrites {
-  /** The furthest production stage of a changed line (null: none in production). */
-  readonly stage: OrderFreezeStage | null
-}
-
 const conflict = (message: string, path = 'body') => new DomainError('conflict', message, [{ path, message }])
 
 /** Before W2a writes the lines (see the file's head). */
-export async function beforeAmendmentWrites(tools: CommandTools, order: OrderRow, plan: AmendmentPlan, options: ChangeOptions): Promise<BeforeWrites> {
-  if (options.split) return { stage: null }
+export async function beforeAmendmentWrites(tools: CommandTools, order: OrderRow, plan: AmendmentPlan, options: ChangeOptions): Promise<void> {
+  if (options.split) return
   if (!options.putBack) {
     const waiting = await pendingChangeYes(tools.tx, order.id)
     if (waiting) throw conflict(`${order.number}'s last change waits for its yes (request of ${businessDate(waiting.requestedAt)}): ask the approver, or take the request back, before another change.`)
@@ -70,15 +67,12 @@ export async function beforeAmendmentWrites(tools: CommandTools, order: OrderRow
   if (issues.length > 0) throw new DomainError('conflict', issues.length === 1 ? issues[0]!.message : `${issues.length} changes are frozen at the stage production reached: ${issues[0]!.message}`, issues)
   const removed = plan.removed.map((lineId) => ({ id: lineId, seq: plan.before.lines.find((line) => line.id === lineId)?.seq ?? 0 }))
   await materialsOfRemovedLines(tools, removed)
-  return { stage: frozen.furthest }
 }
 
 export interface AmendmentExtras {
   readonly priceDeltaLines: Prisma.InputJsonValue | undefined
   readonly feeAmount: number | null
   readonly depositRequestId: string | null
-  readonly reapprovalTaskId: string | null
-  readonly yes: 'ASKED' | 'NO_RULE' | 'NOBODY_TO_ASK' | 'NOT_ASKED'
   readonly priced: boolean
 }
 
@@ -138,10 +132,10 @@ async function extraDepositInCommand(tools: CommandTools, order: OrderRow, input
 export async function amendmentExtras(
   tools: CommandTools,
   order: OrderRow,
-  input: { readonly amendmentId: string; readonly revision: number; readonly reason: string; readonly before: OrderSnapshot; readonly after: OrderSnapshot; readonly stage: OrderFreezeStage | null },
+  input: { readonly revision: number; readonly before: OrderSnapshot; readonly after: OrderSnapshot },
   options: ChangeOptions,
 ): Promise<AmendmentExtras> {
-  const none: AmendmentExtras = { priceDeltaLines: undefined, feeAmount: null, depositRequestId: null, reapprovalTaskId: null, yes: 'NOT_ASKED', priced: false }
+  const none: AmendmentExtras = { priceDeltaLines: undefined, feeAmount: null, depositRequestId: null, priced: false }
   if (options.split) return none
   const diff = amendmentDiff(input.before, input.after)
   let parts: PricedPart[] | null = null
@@ -154,29 +148,7 @@ export async function amendmentExtras(
     if (parts.length > 100) throw conflict('A priced change is priced in at most 100 parts: change fewer lines at once.', 'body/lines')
     depositRequestId = await extraDepositInCommand(tools, order, { growth: diff.grossAfter - diff.grossBefore, revision: input.revision, asked: options.priced.deposit })
   }
-  let reapprovalTaskId: string | null = null
-  let yes: AmendmentExtras['yes'] = 'NOT_ASKED'
-  if (!options.putBack) {
-    const change: ChangeFacts = {
-      amendmentId: input.amendmentId,
-      revision: input.revision,
-      reason: input.reason,
-      before: input.before,
-      after: input.after,
-      netAmountBefore: diff.netBefore,
-      netAmountAfter: diff.netAfter,
-      grossAmountBefore: diff.grossBefore,
-      grossAmountAfter: diff.grossAfter,
-      priceDeltaLines: parts && parts.length > 0 ? parts : null,
-      feeAmount,
-      depositRequestId,
-      stage: input.stage,
-    }
-    const asked = await askChangeYes(tools, order, change)
-    reapprovalTaskId = asked.taskId
-    yes = asked.taskId !== null ? 'ASKED' : asked.held
-  }
-  return { priceDeltaLines: parts && parts.length > 0 ? (parts as unknown as Prisma.InputJsonValue) : undefined, feeAmount, depositRequestId, reapprovalTaskId, yes, priced: options.priced !== null }
+  return { priceDeltaLines: parts && parts.length > 0 ? (parts as unknown as Prisma.InputJsonValue) : undefined, feeAmount, depositRequestId, priced: options.priced !== null }
 }
 
 /** After the amendment row (see the file's head). */
@@ -186,7 +158,8 @@ export async function afterAmendment(tools: CommandTools, order: OrderRow, input
       type: 'sales_order.change_priced',
       subject: order.id,
       companyId: order.companyId,
-      payload: { orderId: order.id, number: order.number, amendmentId: input.amendmentId, revision: input.revision, hasFee: input.extras.feeAmount !== null, depositRequestId: input.extras.depositRequestId, reapprovalTaskId: input.extras.reapprovalTaskId, partyId: order.partyId /* B-SA-001: the order row's own */ },
+      // B-OP-010: no change asks a yes any more (the event keeps its field for the changes priced before: null now).
+      payload: { orderId: order.id, number: order.number, amendmentId: input.amendmentId, revision: input.revision, hasFee: input.extras.feeAmount !== null, depositRequestId: input.extras.depositRequestId, reapprovalTaskId: null, partyId: order.partyId /* B-SA-001: the order row's own */ },
     })
   }
   // The customer's materials follow the sizes, when the order keeps them.

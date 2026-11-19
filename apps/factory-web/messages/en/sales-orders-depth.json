@@ -117,8 +117,7 @@
     "planned": "Planned from the BOM: {made} new, {changed} changed, {removed} removed.",
     "putBack": "The order is back as it was.",
     "putBackDeposit": "Revision {revision} put back; its open extra deposit was cancelled.",
-    "priced": "Priced change {revision} recorded: the customer accepts it on the link we send.",
-    "pricedWaiting": "Priced change {revision} recorded; it waits for a yes in Home › Approvals."
+    "priced": "Priced change {revision} recorded: the customer accepts it on the link we send."
   },
   "problem": {
     "read": {
@@ -229,8 +228,7 @@
     "depositValue": "Extra deposit {amount} ({pct} % of the growth).",
     "depositNone": "No extra deposit: the order does not grow.",
     "yes": {
-      "WOULD_ASK": "This change will wait for a yes (Home › Approvals).",
-      "NOBODY_TO_ASK": "A rule asks for a yes but nobody else may decide: another office person asks for it."
+      "APPLIES_AT_ONCE": "Applies at once — no approval"
     },
     "customer": "The customer accepts or refuses it afterwards; a refusal is put back by a person.",
     "reason": "Why (kept with the change)",

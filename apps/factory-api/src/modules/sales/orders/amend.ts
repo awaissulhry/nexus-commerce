@@ -20,7 +20,7 @@ import { asDay, dayOrNull, lockOrder, readOrder, readOrderFacts, type LineRecord
 import type { OrderView } from './views'
 // B-W2b-303 (SO1:02): the line rules on an amendment's lines.
 import { amendedLineProblems } from '../orders-depth/line-rules'
-// B-W2b-309 (SAL-218, SAL-219, SAL-221, SAL-190, SAL-306): the freeze rules, the priced change, its extra deposit, the new yes.
+// B-W2b-309 (SAL-218, SAL-219, SAL-221, SAL-190, SAL-306): the freeze rules, the priced change, its extra deposit (B-OP-010: no yes).
 import type { PricedInput } from '@nexus/factory-domain/sales/order-changes/priced'
 import { afterAmendment, amendmentExtras, beforeAmendmentWrites, type ChangeOptions } from '../order-changes/apply'
 import { previewFrozenProblems } from '../order-changes/freeze'
@@ -30,6 +30,8 @@ import { entryOptionsAudit, planEntryOptions, writeEntryOptions, type EntryOptio
 import { CHANGE_WORDS, chargeFeeOf, extraOf as extraOfPlanned, type ExtraOutcome, type ExtraPieces, type PlannedChange, type PricedSize } from '@nexus/factory-domain/order-apply/rules'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import { gapOf, proposeGapsInCommand, raisesOf, workCellsOf, type GapLine } from '../../production/work-order-changes/propose'
+// B-OP-012 (order page plan N2, D1): the work orders follow the amendment in its command where the person may.
+import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../production/work-order-changes/auto'
 
 /**
  * Order amendments (B-W2a-30; SAL-209, SAL-217; the design's "Amend order" → "Review amendment" → Changes tab). A
@@ -364,16 +366,21 @@ export async function previewAmendment(caller: CommandCaller, orderId: string, b
 
 const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
 
-/** orders.manage: apply an amendment (ONE command; see the module's head). */
-export async function applyAmendment(caller: CommandCaller, orderId: string, body: AmendBody, idempotencyKey?: string): Promise<{ order: OrderView; amendment: AmendmentView }> {
+/** orders.manage: apply an amendment (ONE command; see the module's head). B-OP-012: its work orders follow in it where the person may. */
+export async function applyAmendment(caller: CommandCaller, orderId: string, body: AmendBody, idempotencyKey?: string): Promise<{ order: OrderView; amendment: AmendmentView; workOrders: FollowedWorkOrders }> {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
-  const { result } = await command(caller, { name: 'orders.amend', idempotencyKey, input: { orderId, ...body } }, async (tools) => ({ amendmentId: (await amendInCommand(tools, context.tenantId, order, body)).amendmentId /* plain JSON: never its `before` Map */ }))
+  const { result } = await withAutoApply((autoApply) =>
+    command(caller, { name: 'orders.amend', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
+      const done = await amendInCommand(tools, context.tenantId, order, body, { autoApply })
+      return { amendmentId: done.amendmentId, workOrders: done.workOrders } /* plain JSON: never its `before` Map */
+    }),
+  )
   const amendment = await caller.withClient(async (client) => {
     const row = await client.salesOrderAmendment.findUniqueOrThrow({ where: { id: result.amendmentId }, select: AMENDMENT_COLUMNS })
     return amendmentViewOf(row, await namesOf(client, [row.createdById]))
   })
-  return { order: await recordAfter(caller, order.id), amendment }
+  return { order: await recordAfter(caller, order.id), amendment, workOrders: result.workOrders }
 }
 
 /**
@@ -393,8 +400,10 @@ export async function amendInCommand(
     /** B-SA-042: the customer's request it carries out; `later`: the caller proposes the gap once at its end (Accept). */
     readonly requestId?: string | null
     readonly workOrders?: 'now' | 'later'
+    /** B-OP-012: the office routes' runner (../../production/work-order-changes/auto.ts); left out: every change waits. */
+    readonly autoApply?: AutoApply
   } = {} /* B-W2b-303: a split asks no re-acceptance */,
-): Promise<{ amendmentId: string; /* B-SA-042 */ changedLineIds: string[]; before: Map<string, Map<string, number>> }> {
+): Promise<{ amendmentId: string; /* B-SA-042 */ changedLineIds: string[]; before: Map<string, Map<string, number>>; /* B-OP-012 */ workOrders: FollowedWorkOrders }> {
   const { tx, now } = tools
   const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
   await lockOrderLines(tx, tenantId, lineIds)
@@ -418,7 +427,7 @@ export async function amendInCommand(
   }
   // B-W2b-309: one change at a time, the freeze rules, the customer's materials of removed lines (before any write).
   const changeOptions: ChangeOptions = { split: options.reacceptance === false, priced, putBack: options.putBack === true }
-  const before309 = await beforeAmendmentWrites(tools, fresh, plan, changeOptions)
+  await beforeAmendmentWrites(tools, fresh, plan, changeOptions)
   const actorId = actorIdOf(tools)
   // Removed lines (nothing refers to them: planAmendment checked).
   for (const lineId of plan.removed) {
@@ -498,8 +507,8 @@ export async function amendInCommand(
   })
   const revision = nextRevision((await tx.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { revision: true } })).map((row) => row.revision))
   const amendmentId = newId()
-  // B-W2b-309: the priced parts and fee, the extra deposit and the new yes the row names (append-only: named at insert).
-  const extras = await amendmentExtras(tools, fresh, { amendmentId, revision, reason: body.reason!.trim(), before: plan.before, after, stage: before309.stage }, changeOptions)
+  // B-W2b-309: the priced parts and fee and the extra deposit the row names (append-only: named at insert). B-OP-010: no yes.
+  const extras = await amendmentExtras(tools, fresh, { revision, before: plan.before, after }, changeOptions)
   await tx.salesOrderAmendment.create({
     data: {
       id: amendmentId,
@@ -519,7 +528,6 @@ export async function amendInCommand(
       ...(extras.priceDeltaLines !== undefined ? { priceDeltaLines: extras.priceDeltaLines } : {}),
       feeAmount: extras.feeAmount,
       depositRequestId: extras.depositRequestId,
-      reapprovalTaskId: extras.reapprovalTaskId,
       requestId: tools.context.requestId,
       createdAt: now,
       createdById: actorId,
@@ -553,12 +561,15 @@ export async function amendInCommand(
   tools.emit({ type: 'sales_order.amended', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, amendmentId, revision, reacceptanceNeeded, lineIds: changedLineIds, partyId: order.partyId } })
   // B-W2b-309: sales_order.change_priced; the customer's materials of the changed lines follow their sizes.
   await afterAmendment(tools, fresh, { amendmentId, revision, changedLineIds, extras })
-  // B-SA-042: the gap to the order's work orders, proposed in this command (Accept proposes once at its own end).
+  // B-SA-042: the gap to the order's work orders, proposed in this command (Accept proposes once at its own end). B-OP-012: and
+  // carried out where the person may (a put-back's extra pieces stay production's, as before).
   const before = sizesOf(plan.before)
+  let workOrders: FollowedWorkOrders = { applied: [], waiting: [] }
   if (options.workOrders !== 'later') {
-    await proposeGapsInCommand(tools, { order: { ...fresh, status: locked.status }, requestId: options.requestId ?? null, amendmentId, reason: body.reason!.trim(), extraOutcome: body.extraOutcome ?? null, requireOutcome: options.putBack !== true /* a put-back leaves them to production */, lineIds: changedLineIds, before })
+    const gap = await proposeGapsInCommand(tools, { order: { ...fresh, status: locked.status }, requestId: options.requestId ?? null, amendmentId, reason: body.reason!.trim(), extraOutcome: body.extraOutcome ?? null, requireOutcome: options.putBack !== true /* a put-back leaves them to production */, lineIds: changedLineIds, before }, options.autoApply)
+    workOrders = { applied: gap.applied, waiting: gap.waiting }
   }
-  return { amendmentId, changedLineIds, before }
+  return { amendmentId, changedLineIds, before, workOrders }
 }
 
 // ---- the Changes tab ------------------------------------------------------------------------------------------------------
