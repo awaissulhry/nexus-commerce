@@ -20,11 +20,11 @@ export const SHIPPING_PROFORMA_ISSUE = 'shipping.proforma.issue' satisfies Permi
 export const SHIPPING_PROFORMA_PERMISSIONS: readonly Permission[] = Object.freeze([SHIPPING_PROFORMA_ISSUE])
 
 /**
- * Who holds it (auth/roles/templates; the owner from every(), the read-only role none: a write): sales (samples, the
- * customer's prepayment, the export customer's papers) and finance (payment requests), the two office roles that see prices.
- * The warehouse sees no prices: a shipment's pack prints a proforma only for someone who does.
+ * Who holds it (auth/roles/templates; the owner from every(), the read-only role none: a write): finance (payment requests,
+ * the export customer's papers), the office role that sees prices. The warehouse sees no prices: a shipment's pack prints a
+ * proforma only for someone who does. B-CP-011 (step 5, lead pick): no longer sales — it sees no price since B-CP-011, so the
+ * right was dead (every proforma route also asks the price grain).
  */
 export const SHIPPING_PROFORMA_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
-  sales: [SHIPPING_PROFORMA_ISSUE],
   finance: [SHIPPING_PROFORMA_ISSUE],
 })
