@@ -1733,7 +1733,10 @@
     "heldHold": "Production does this — a planner or the production manager",
     "heldHint": "Due dates, priority, rush and the work orders’ actions: Production does this — a planner or the production manager.",
     "act": {
-      "note": "Note…"
+      "note": "Note…",
+      "hold": "Hold…",
+      "lift": "Lift the hold…",
+      "release": "Release…"
     },
     "note": {
       "title": "Note on {number}",
@@ -1744,6 +1747,19 @@
     },
     "reading": "Reading {number}…",
     "readingShort": "Reading the work order…",
-    "readFailed": "{number} could not be read"
+    "readFailed": "{number} could not be read",
+    "notice": {
+      "held": "{number} is on hold: the floor was told",
+      "lifted": "{number}: the hold is lifted",
+      "released": "{number} released: the floor can start"
+    },
+    "checksOpen_one": "{count} check holds the release",
+    "checksOpen_other": "{count} checks hold the release",
+    "release": {
+      "credit": "The customer is over its credit limit: the release waits for a yes on its credit.",
+      "gate": "A compliance gate holds the release: see Compliance › Gate refusals.",
+      "refused_one": "The release check holds it: {count} check changed since it was read — see the list.",
+      "refused_other": "The release check holds it: {count} checks changed since they were read — see the list."
+    }
   }
 }

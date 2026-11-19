@@ -5,6 +5,14 @@ import type { ApiClient } from '../../api/client'
 import { getWorkOrder, updateWorkOrder, type WorkOrder } from '../../../areas/production/_shared/api'
 import { readProblem as productionReadProblem, writeProblem as productionWriteProblem } from '../../../areas/production/_shared/model'
 import { actsCanOf, fromProduction, reachesFloor, READING, versionOf, type ActsCan, type ActsRow, type InlineField, type MenuAct, type Part, type Phrase } from './model'
+// ---- F-OP-114: Hold… / Lift… / Release… — the production lane's own helpers (never a copy) ----
+import { newIdempotencyKey } from '../../api/client'
+import { getReleaseCheck, releaseWorkOrder, type ReleaseCheck } from '../../../areas/production/_shared/api'
+import type { PickerReason } from '../../../areas/_shared/reasons/api'
+import { holdReasons, liftProductionHold, listProductionHolds, placeHold, placeProductionHold, type ProductionHolds } from '../../../areas/production/work-orders/daily/api'
+import { dailyProblem, dailyReadProblem, type PlaceHoldInput } from '../../../areas/production/work-orders/daily/model'
+import { fromWorkOrders, releaseProblemOf } from './model'
+// ---- end F-OP-114
 
 /** One row's in-place save: the cell that is saving, or why the last write was refused (said on the row). */
 export interface RowSave {
@@ -22,6 +30,14 @@ export interface ActsDialog {
   readonly busy: boolean
   /** A refused write, said inside the dialog (what was typed stays). */
   readonly problem: Phrase | null
+  // ---- F-OP-114 ----
+  /** Hold…: the row's own hold right (a production hold) — the quality reasons come with quality.holds.place. */
+  readonly holdRight?: boolean
+  /** Lift…: the work order's plain holds (its standing one is lifted). */
+  readonly holds?: Part<ProductionHolds>
+  /** Release…: the release check (each condition in words), read again after a refusal. */
+  readonly check?: Part<ReleaseCheck>
+  // ---- end F-OP-114
 }
 
 export interface WorkOrderActsModel {
@@ -31,6 +47,8 @@ export interface WorkOrderActsModel {
   /** Per work order id: when a write of this page last reached its floor (the row says "Told the floor at hh:mm"). */
   readonly toldAt: Readonly<Record<string, string>>
   readonly dialog: ActsDialog | null
+  /** F-OP-114: the HOLD and PRODUCTION_HOLD reasons (read once, when Hold… first opens; null while read or not asked). */
+  readonly reasons: PickerReason[] | null
 }
 
 export interface WorkOrderActsActions {
@@ -42,6 +60,11 @@ export interface WorkOrderActsActions {
   onCloseDialog?: () => void
   onRetryDialog?: () => void
   onSaveNote?: (note: string) => void
+  // ---- F-OP-114 ----
+  onPlaceHold?: (input: PlaceHoldInput) => void
+  onLiftHold?: (input: { holdId: string; version: number; reason: string }) => void
+  onRelease?: (overrideReason: string | null) => void
+  // ---- end F-OP-114
 }
 
 /** What the page says after a write (its one banner), and whether the order's production read is read again. */
@@ -61,6 +84,7 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
   const [saves, setSaves] = useState<Record<string, RowSave>>({})
   const [toldAt, setToldAt] = useState<Record<string, string>>({})
   const [dialog, setDialog] = useState<ActsDialog | null>(null)
+  const [reasons, setReasons] = useState<PickerReason[] | null>(null) // F-OP-114
   /** The newest version a write of this page answered, per work order (a second edit before the read comes again sends it). */
   const known = useRef<Record<string, number>>({})
   const turn = useRef(0)
@@ -109,17 +133,55 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
     [api, answered],
   )
 
+  // ---- F-OP-114: the dialog's own reads — the holds of Lift…, the release check of Release…, the reasons of Hold… (once) ----
+  const readHolds = useCallback(
+    (workOrderId: string) => {
+      setDialog((now) => (now && now.workOrderId === workOrderId ? { ...now, holds: READING } : now))
+      listProductionHolds(api, workOrderId)
+        .then((value) => setDialog((now) => (now && now.workOrderId === workOrderId ? { ...now, holds: { value, problem: null } } : now)))
+        .catch((error: unknown) => setDialog((now) => (now && now.workOrderId === workOrderId ? { ...now, holds: { value: null, problem: dailyReadProblem(error) } } : now)))
+    },
+    [api],
+  )
+  const readCheck = useCallback(
+    (workOrderId: string) => {
+      setDialog((now) => (now && now.workOrderId === workOrderId ? { ...now, check: now.check?.value ? now.check : READING } : now))
+      getReleaseCheck(api, workOrderId)
+        .then((value) => setDialog((now) => (now && now.workOrderId === workOrderId ? { ...now, check: { value, problem: null } } : now)))
+        .catch((error: unknown) => setDialog((now) => (now && now.workOrderId === workOrderId ? { ...now, check: { value: null, problem: productionReadProblem(error) } } : now)))
+    },
+    [api],
+  )
+  const reasonsAsked = useRef(false)
+  const readReasons = useCallback(() => {
+    if (reasonsAsked.current) return
+    reasonsAsked.current = true
+    holdReasons(api)
+      .then(setReasons)
+      .catch((error: unknown) => {
+        // Said in the dialog; the next Hold… asks again.
+        reasonsAsked.current = false
+        setDialog((now) => (now && now.kind === 'hold' ? { ...now, problem: fromWorkOrders({ key: dailyReadProblem(error) }) } : now))
+      })
+  }, [api])
+  // ---- end F-OP-114
+
   const open = useCallback(
     (row: ActsRow, act: MenuAct) => {
-      setDialog({ kind: act, workOrderId: row.id, number: row.number, workOrder: READING, busy: false, problem: null })
+      setDialog({ kind: act, workOrderId: row.id, number: row.number, workOrder: READING, busy: false, problem: null, ...(act === 'hold' ? { holdRight: row.rights?.hold ?? false } : {}) })
       readFor(row.id)
+      // ---- F-OP-114 ----
+      if (act === 'lift') readHolds(row.id)
+      if (act === 'release') readCheck(row.id)
+      if (act === 'hold') readReasons()
+      // ---- end F-OP-114
     },
-    [readFor],
+    [readFor, readHolds, readCheck, readReasons],
   )
 
   /** A dialog's write: busy while it goes, the dialog closed and the page told on success, the refusal kept in it otherwise. */
   const dialogWrite = useCallback(
-    (run: (workOrder: WorkOrder) => Promise<Pick<WorkOrder, 'id' | 'version' | 'status'> | null>, after: { notice: Phrase | null; floor: boolean }) => {
+    (run: (workOrder: WorkOrder) => Promise<Pick<WorkOrder, 'id' | 'version'> | null>, after: { notice: Phrase | null; floor: boolean }, problemOf: (error: unknown) => Phrase = (error) => fromProduction(productionWriteProblem(error))) => {
       const current = dialog
       const workOrder = current?.workOrder.value
       if (!current || !workOrder || current.busy) return
@@ -132,11 +194,14 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
           written.current({ notice: after.notice })
         })
         .catch((error: unknown) => {
-          setDialog((now) => (now && now.workOrderId === current.workOrderId ? { ...now, busy: false, problem: fromProduction(productionWriteProblem(error)) } : now))
+          setDialog((now) => (now && now.workOrderId === current.workOrderId ? { ...now, busy: false, problem: problemOf(error) } : now))
           readFor(current.workOrderId)
+          // F-OP-114: what changed since it was read shows again (the release check, the holds).
+          if (current.kind === 'release') readCheck(current.workOrderId)
+          if (current.kind === 'lift') readHolds(current.workOrderId)
         })
     },
-    [dialog, answered, told, readFor],
+    [dialog, answered, told, readFor, readCheck, readHolds],
   )
 
   const actions: WorkOrderActsActions = {
@@ -146,10 +211,41 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
     onAct: open,
     onCloseDialog: () => setDialog((now) => (now?.busy ? now : null)),
     onRetryDialog: () => {
-      if (dialog) readFor(dialog.workOrderId)
+      if (!dialog) return
+      readFor(dialog.workOrderId)
+      // F-OP-114: + the dialog's own read that failed (the holds, the release check).
+      if (dialog.kind === 'lift' && dialog.holds?.problem) readHolds(dialog.workOrderId)
+      if (dialog.kind === 'release' && dialog.check?.problem) readCheck(dialog.workOrderId)
     },
     onSaveNote: (note) => dialogWrite((workOrder) => updateWorkOrder(api, workOrder.id, { version: workOrder.version, note: note.trim() || null }), { notice: { key: 'wo.note.saved', params: { number: dialog?.number ?? '' } }, floor: false }),
+    // ---- F-OP-114: the kind the picked reason decides — a production hold (B-PR-21, with the version) or a quality hold ----
+    onPlaceHold: (input) => {
+      const key = newIdempotencyKey()
+      dialogWrite(
+        async (workOrder) => {
+          if (input.kind === 'PRODUCTION') return (await placeProductionHold(api, workOrder.id, { reasonCode: input.reasonCode, note: input.reasonNote, brandWords: input.customerWords, version: workOrder.version }, key)).workOrder
+          await placeHold(api, { workOrderIds: [workOrder.id], reasonCode: input.reasonCode, reasonNote: input.reasonNote }, key)
+          return null
+        },
+        { notice: { key: 'wo.notice.held', params: { number: dialog?.number ?? '' } }, floor: true },
+        (error) => fromWorkOrders(dailyProblem(error)),
+      )
+    },
+    onLiftHold: (input) => {
+      const key = newIdempotencyKey()
+      dialogWrite(async (workOrder) => (await liftProductionHold(api, workOrder.id, input.holdId, { version: input.version, reason: input.reason }, key)).workOrder, { notice: { key: 'wo.notice.lifted', params: { number: dialog?.number ?? '' } }, floor: true }, (error) => fromWorkOrders(dailyProblem(error)))
+    },
+    onRelease: (overrideReason) =>
+      dialogWrite(
+        async (workOrder) => {
+          const released = await releaseWorkOrder(api, workOrder.id, { version: workOrder.version, ...(overrideReason ? { materialOverride: { reason: overrideReason } } : {}) })
+          return released
+        },
+        { notice: { key: 'wo.notice.released', params: { number: dialog?.number ?? '' } }, floor: true },
+        releaseProblemOf,
+      ),
+    // ---- end F-OP-114
   }
 
-  return { model: { can, saves, toldAt, dialog }, actions }
+  return { model: { can, saves, toldAt, dialog, reasons /* F-OP-114 */ }, actions }
 }

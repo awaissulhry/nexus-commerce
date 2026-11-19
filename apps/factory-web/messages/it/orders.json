@@ -1733,7 +1733,10 @@
     "heldHold": "Lo fa la produzione — un pianificatore o il responsabile di produzione",
     "heldHint": "Date di consegna, priorità, urgenza e azioni degli ordini di lavoro: lo fa la produzione — un pianificatore o il responsabile di produzione.",
     "act": {
-      "note": "Nota…"
+      "note": "Nota…",
+      "hold": "Metti in sospeso…",
+      "lift": "Togli il blocco…",
+      "release": "Rilascia…"
     },
     "note": {
       "title": "Nota su {number}",
@@ -1744,6 +1747,19 @@
     },
     "reading": "Lettura di {number}…",
     "readingShort": "Lettura dell’ordine di lavoro…",
-    "readFailed": "Impossibile leggere {number}"
+    "readFailed": "Impossibile leggere {number}",
+    "notice": {
+      "held": "{number} è in sospeso: il reparto è avvisato",
+      "lifted": "{number}: blocco tolto",
+      "released": "{number} rilasciato: il reparto può iniziare"
+    },
+    "checksOpen_one": "{count} controllo blocca il rilascio",
+    "checksOpen_other": "{count} controlli bloccano il rilascio",
+    "release": {
+      "credit": "Il cliente ha superato il fido: il rilascio attende un sì sul fido.",
+      "gate": "Un controllo di conformità blocca il rilascio: vedi Conformità › Blocchi ai controlli.",
+      "refused_one": "Il controllo di rilascio lo blocca: {count} controllo è cambiato da quando è stato letto — vedi l’elenco.",
+      "refused_other": "Il controllo di rilascio lo blocca: {count} controlli sono cambiati da quando sono stati letti — vedi l’elenco."
+    }
   }
 }

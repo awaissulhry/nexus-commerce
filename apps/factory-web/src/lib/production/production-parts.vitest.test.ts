@@ -33,6 +33,10 @@ import { StageStrip } from './view/StageStrip'
 import { WaitingOnPill } from './view/WaitingOnPill'
 // F-OP-113: the work-order acts' rules (lib/production/work-order-acts)
 import { actsCanOf, laterOf, priorityChoices, reachesFloor, rowActsOf, stableRows, versionOf, type ActsRow } from './work-order-acts/model'
+// F-OP-114: + the release's refusal in words; the moved dialogs' sources
+import { readFileSync } from 'node:fs'
+import { ApiError } from '../api/errors'
+import { releaseProblemOf } from './work-order-acts/model'
 
 /**
  * F-PR-01 — the shared production parts (lib/production): the rules without a screen, then each part drawn in both
@@ -249,7 +253,8 @@ describe('F-OP-113: what a work-order row offers its reader on the order page', 
   })
 
   it('a planner: due, priority and rush in place, Note… open; a closed or cancelled one keeps only its note', () => {
-    expect(rowActsOf(row(), planner)).toEqual({ shared: null, inline: { held: null }, menu: [{ act: 'note', held: null }] })
+    expect(rowActsOf(row(), planner)).toMatchObject({ shared: null, inline: { held: null } })
+    expect(rowActsOf(row(), planner).menu[0]).toEqual({ act: 'note', held: null })
     for (const status of ['CLOSED', 'CANCELLED']) expect(rowActsOf(row({ status }), planner)).toEqual({ shared: null, inline: null, menu: [{ act: 'note', held: null }] })
   })
 
@@ -284,3 +289,91 @@ describe('F-OP-113: what a work-order row offers its reader on the order page', 
   })
 })
 // ---- end F-OP-113
+
+// ---- F-OP-114: Hold / Lift and Release — ONE copy in lib/production/work-order-acts (the work order's pages and the order page) ----
+describe('F-OP-114: Hold…, Lift… and Release… on a work-order row; the dialogs live once, in lib', () => {
+  const planner = actsCanOf(['workorders.view', 'workorders.manage', 'workorders.release', 'workorders.hold'])
+  const sales = actsCanOf(['orders.view', 'workorders.view'])
+  const rights = { manage: true, release: true, hold: true, why: null }
+  const none = { manage: false, release: false, hold: false, why: null }
+  const row = (over: Partial<ActsRow> = {}): ActsRow => ({ id: 'wo-1', number: 'WO-00021', status: 'RELEASED', held: false, rush: false, due: null, sharedWithOtherCustomers: false, version: 3, priority: 0, rights, ...over })
+  const acts = (offer: ReturnType<typeof rowActsOf>) => offer.menu.map((entry) => entry.act)
+
+  it('a released one is held from its row, a held one lifted, a draft held or released; closed: nothing but its note', () => {
+    expect(acts(rowActsOf(row(), planner))).toEqual(['note', 'hold'])
+    expect(acts(rowActsOf(row({ status: 'ON_HOLD', held: true }), planner))).toEqual(['note', 'lift'])
+    expect(acts(rowActsOf(row({ status: 'DRAFT' }), planner))).toEqual(['note', 'hold', 'release'])
+    expect(acts(rowActsOf(row({ status: 'CLOSED' }), planner))).toEqual(['note'])
+  })
+
+  it('design case: the row’s acts held for Sales — each in words ("Production does this — …"), none hidden', () => {
+    for (const status of ['DRAFT', 'RELEASED', 'ON_HOLD']) {
+      const offer = rowActsOf(row({ status, held: status === 'ON_HOLD', rights: none }), sales)
+      expect(offer.menu.length, status).toBeGreaterThan(1)
+      for (const entry of offer.menu) expect(entry.held, `${status} ${entry.act}`).toEqual({ key: 'wo.heldHold' })
+    }
+    // The right per act: a planner without workorders.hold over it holds nothing, releases still.
+    const noHold = rowActsOf(row({ status: 'DRAFT', rights: { ...rights, hold: false } }), planner)
+    expect(noHold.menu.find((entry) => entry.act === 'hold')!.held).toEqual({ key: 'wo.heldHold' })
+    expect(noHold.menu.find((entry) => entry.act === 'release')!.held).toBeNull()
+  })
+
+  it('a refused release is said in words: the customer’s credit, a compliance gate, a check that changed — never the API’s English', () => {
+    const conflict = (path: string) => new ApiError('conflict', 409, 'conflict', 'Over the credit limit', null, [{ path, message: 'Over the credit limit' }])
+    expect(releaseProblemOf(conflict('credit'))).toEqual({ key: 'wo.release.credit' })
+    expect(releaseProblemOf(conflict('gate/REACH'))).toEqual({ key: 'wo.release.gate' })
+    expect(releaseProblemOf(conflict('checks/BOM'))).toEqual({ key: 'wo.release.refused', params: { count: 1 } })
+    expect(releaseProblemOf(new Error('boom')).key).toMatch(/^production:/)
+  })
+
+  it('one copy: the work order’s pages hand their parts to the lib dialogs (no Put on hold, Release the hold or Release left there)', () => {
+    const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+    const daily = read('../../areas/production/work-orders/daily/view/DailyDialogs.tsx')
+    expect(daily).toContain("from '../../../../../lib/production/work-order-acts/view/HoldDialog'")
+    expect(daily).not.toContain("t('hold.customerWords')")
+    expect(daily).not.toContain("t('liftHold.reason')")
+    const record = read('../../areas/production/work-orders/record/view/Dialogs.tsx')
+    expect(record).toContain('<SharedReleaseDialog workOrder={workOrder} check={model.check}')
+    expect(record).not.toContain("t('release.override')")
+    const overview = read('../../areas/production/work-orders/record/view/OverviewTab.tsx')
+    expect(overview).toContain('<ReleaseCheckList items={items} label={t(\'overview.check\')} />')
+    expect(overview).not.toContain('fw-pr-checks')
+    // The order page draws the same dialogs.
+    const dialogs = read('./work-order-acts/view/WorkOrderActsDialogs.tsx')
+    expect(dialogs).toContain("from './HoldDialog'")
+    expect(dialogs).toContain("from './ReleaseDialog'")
+    expect(dialogs).toContain('listChecks')
+  })
+
+  it('the dialogs’ look moved with them: their own classes, each with the declarations of the production rule it replaces', () => {
+    const rulesOf = (css: string): Map<string, Map<string, string>> => {
+      const out = new Map<string, Map<string, string>>()
+      const text = css.replace(/\/\*[\s\S]*?\*\//g, '')
+      for (const match of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selectors = match[1]!.split(',').map((part) => part.trim())
+        const declarations = match[2]!.split(';').map((part) => part.trim()).filter(Boolean).map((part) => [part.slice(0, part.indexOf(':')).trim(), part.slice(part.indexOf(':') + 1).trim()] as const)
+        for (const selector of selectors) {
+          if (!/^\.[a-z0-9-]+(\.[a-z-]+)?$/.test(selector)) continue
+          const known = out.get(selector) ?? new Map<string, string>()
+          for (const [name, value] of declarations) known.set(name, value)
+          out.set(selector, known)
+        }
+      }
+      return out
+    }
+    const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+    const own = rulesOf(read('./work-order-acts/view/work-order-acts.css'))
+    const area = rulesOf(read('../../areas/production/_shared/production.css'))
+    for (const name of ['dialog', 'hint', 'h3', 'checks', 'list', 'check', 'check-body', 'check-problems', 'ico', 'ico.is-ok', 'ico.is-blocked', 'ico.is-overridden']) {
+      expect(own.get(`.fw-woa-${name}`), name).toBeDefined()
+      expect(Object.fromEntries(own.get(`.fw-woa-${name}`)!), name).toEqual(Object.fromEntries(area.get(`.fw-pr-${name}`)!))
+    }
+    for (const file of ['HoldDialog.tsx', 'ReleaseDialog.tsx', 'WorkOrderActsDialogs.tsx']) {
+      const source = read(`./work-order-acts/view/${file}`)
+      expect(source, file).toContain("import './work-order-acts.css'")
+      expect(source, file).not.toMatch(/className="fw-pr-/)
+    }
+    expect(read('./work-order-acts/view/work-order-acts.css')).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(|hsl\(/i)
+  })
+})
+// ---- end F-OP-114

@@ -1,9 +1,13 @@
+import { isApiError, issuePath } from '../../api/errors'
+import { releaseRefusalCodes, writeProblem as productionWriteProblem } from '../../../areas/production/_shared/model'
+
 /**
  * F-OP-113 (order page plan 10-order-page §5.2; review R-11, B6) — what a person may do to one work order from a page that is not the
  * work order's own (the sales order's Production tab), without a screen:
  *
  *   in place   Due (a day), Priority (a whole number, higher first) and Rush — until the work order is closed or cancelled
- *   row ⋯      Note… (always, but on a work order shared with other customers)
+ *   row ⋯      Note… (always, but on a work order shared with other customers);
+ *              F-OP-114: Hold… (a draft, released or started one not held), Lift… (a held one), Release… (a draft)
  *
  * Every write sends the version the row carries (B6: the order's production read gives it) or the newer one a write answered. A work
  * order made before the one-customer rule (shared with other customers) is changed on its own page only: the row offers nothing but
@@ -59,6 +63,8 @@ export interface ActsRow {
 export interface ActsCan {
   /** workorders.view: the work order is read afresh before a dialog opens. */
   readonly view: boolean
+  /** F-OP-114: quality.holds.place — Hold… offers the quality reasons too (a production hold needs the row's own hold right). */
+  readonly qualityHold: boolean
   /** workorders.reopen: reopen a closed work order (the production manager). */
   readonly reopen: boolean
   /** planning.view: Open in Planning ›. */
@@ -67,18 +73,20 @@ export interface ActsCan {
 
 export function actsCanOf(permissions: readonly string[]): ActsCan {
   const held = new Set(permissions)
-  return { view: held.has('workorders.view'), reopen: held.has('workorders.reopen'), planning: held.has('planning.view') }
+  return { view: held.has('workorders.view'), qualityHold: held.has('quality.holds.place') /* F-OP-114 */, reopen: held.has('workorders.reopen'), planning: held.has('planning.view') }
 }
 
 export const INLINE_FIELDS = ['due', 'priority', 'rush'] as const
 export type InlineField = (typeof INLINE_FIELDS)[number]
 
-/** The row ⋯ acts, in the order the menu lists them. */
-export const MENU_ACTS = ['note'] as const
+/** The row ⋯ acts, in the order the menu lists them (F-OP-114: + hold, lift, release). */
+export const MENU_ACTS = ['note', 'hold', 'lift', 'release'] as const
 export type MenuAct = (typeof MENU_ACTS)[number]
 
 /** A closed or cancelled work order keeps its due date, priority and rush (only its note changes: the API's rule). */
 export const FINAL_STATUSES: readonly string[] = Object.freeze(['CLOSED', 'CANCELLED'])
+/** F-OP-114: a work order is put on hold while a draft, released or started (the daily page's rule, HOLDABLE). */
+export const HOLDABLE_STATUSES: readonly string[] = Object.freeze(['DRAFT', 'RELEASED', 'IN_PROGRESS'])
 
 /** Production's people do it: a planner or the production manager (Planner / PM hold workorders.manage, .release and .hold). */
 export const HELD_FOR_SALES: Phrase = Object.freeze({ key: 'wo.heldHold' })
@@ -102,6 +110,12 @@ export function rowActsOf(row: ActsRow, can: ActsCan): RowActs {
   const manage = rights.manage ? null : HELD_FOR_SALES
   const final = FINAL_STATUSES.includes(row.status)
   const menu: { act: MenuAct; held: Phrase | null }[] = [{ act: 'note', held: manage }]
+  // ---- F-OP-114: Hold… / Lift… (workorders.hold over the work order) and Release… (workorders.release) ----
+  const hold = rights.hold ? null : HELD_FOR_SALES
+  if (row.held || row.status === 'ON_HOLD') menu.push({ act: 'lift', held: hold })
+  else if (HOLDABLE_STATUSES.includes(row.status)) menu.push({ act: 'hold', held: hold })
+  if (row.status === 'DRAFT') menu.push({ act: 'release', held: rights.release ? null : HELD_FOR_SALES })
+  // ---- end F-OP-114
   return { shared: null, inline: final ? null : { held: manage }, menu }
 }
 
@@ -142,3 +156,24 @@ export function laterOf(a: string | null | undefined, b: string | null | undefin
 
 /** A phrase of the production catalogue, named for a translator scoped to another (`production:error.changed`). */
 export const fromProduction = (phrase: Phrase): Phrase => (phrase.key.includes(':') ? phrase : { ...phrase, key: `production:${phrase.key}` })
+
+// ---- F-OP-114 ----
+/** A phrase of the production lane's work-order catalogue (hold.*, liftHold.*, notice.*), named for another translator. */
+export const fromWorkOrders = (phrase: Phrase): Phrase => (phrase.key.includes(':') ? phrase : { ...phrase, key: `production-work-orders:${phrase.key}` })
+
+/**
+ * Why a release from the order page was refused, in words (never the API's English): the customer over its credit limit (the
+ * release checks it again), a compliance gate, the release check that changed since it was read (the dialog reads it again), or the
+ * work order's own refusal.
+ */
+export function releaseProblemOf(error: unknown): Phrase {
+  if (isApiError(error) && error.kind === 'conflict') {
+    const paths = error.issues.map(issuePath)
+    if (paths.some((path) => path === 'credit' || path.startsWith('credit/'))) return { key: 'wo.release.credit' }
+    if (paths.some((path) => path.startsWith('gate/'))) return { key: 'wo.release.gate' }
+    const codes = releaseRefusalCodes(error)
+    if (codes.length > 0) return { key: 'wo.release.refused', params: { count: codes.length } }
+  }
+  return fromProduction(productionWriteProblem(error))
+}
+// ---- end F-OP-114
