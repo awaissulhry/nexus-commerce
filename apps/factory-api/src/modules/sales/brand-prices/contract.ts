@@ -123,3 +123,18 @@ export const takeOverContract = defineContract({
   }),
   response: { 200: priceCheckView },
 })
+
+// ── B-CP-018: one customer's counts (the Work tab's "Not equal" view chip) ──
+export const summaryContract = defineContract({
+  querystring: input({ partyId: id(), companyId: id().optional() }),
+  response: {
+    200: output({
+      partyId: money.price(id()),
+      /** Its orders (every status, as the list's rows=all) whose price check reads Not equal. */
+      priceNotEqualCount: money.price(z.number().int()),
+      /** Its orders that read No customer price yet. */
+      priceMissingCount: money.price(z.number().int()),
+    }),
+  },
+})
+// ── end B-CP-018 ──

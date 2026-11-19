@@ -1,6 +1,7 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
-import { priceCheckContract, saveBrandPricesContract, takeOverContract } from './contract'
+import { brandPriceSummary } from './columns' // B-CP-018
+import { priceCheckContract, saveBrandPricesContract, summaryContract, takeOverContract } from './contract'
 import { manifest } from './manifest'
 import { readPriceCheck, saveBrandPrices, takeOverBrandPrices } from './prices'
 
@@ -15,4 +16,7 @@ export default defineRoutes('sales.brand-prices', manifest, async (app) => {
   app.put('/sales/orders/:orderId/brand-prices', { schema: saveBrandPricesContract }, async (request) => saveBrandPrices(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/sales/orders/:orderId/brand-prices/from-request', { schema: takeOverContract }, async (request) => takeOverBrandPrices(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
+
+  // B-CP-018: one customer's Not equal and No customer price yet counts.
+  app.get('/sales/brand-prices/summary', { schema: summaryContract }, async (request) => brandPriceSummary(request, request.query))
 })

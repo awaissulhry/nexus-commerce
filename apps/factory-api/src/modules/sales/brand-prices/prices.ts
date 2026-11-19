@@ -1,4 +1,3 @@
-import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
 import { ConflictError, ForbiddenError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
@@ -12,7 +11,7 @@ import { mayOn, officeContextOf } from '../orders/access'
 import { officeOrder } from '../orders/moves'
 import { lockOrder, readOrder, type OrderRow, type Reader } from '../orders/store'
 import { decimal } from '../quotes/store'
-import { announceBrandPrices, auditBrandPrice, brandPriceAuditView, brandPriceRowsOf, checkOfOrder, markSourceFilesPriced, type BrandPriceRecord, type PricedOrder } from './store'
+import { announceBrandPrices, auditBrandPrice, brandPriceAuditView, brandPriceRowsOf, checkOfOrder, markSourceFilesPriced, NOT_A_PRICE_HOLDER, PRICE_PERMISSION, type BrandPriceRecord, type PricedOrder } from './store'
 
 /**
  * The customer's price of an order and the price check (customer page plan C2d, C3, B-CP-017; design customer-page 11 §1.2, §2;
@@ -42,12 +41,9 @@ import { announceBrandPrices, auditBrandPrice, brandPriceAuditView, brandPriceRo
  * yet" is never EQUAL. Without VAT, in the order's currency, exact to the cent. The history is the audit under OrderBrandPrice (./store).
  */
 
-/** The price grain as the permission can() reads (money.price). */
-export const PRICE_PERMISSION = grainPermission('price') as Permission
-
 /** The words of the refusals (the web says `orders.json money.noPrice` and its own catalogue words). */
 export const BRAND_PRICE_WORDS = Object.freeze({
-  notAPriceHolder: 'Shown to people who see prices.',
+  notAPriceHolder: NOT_A_PRICE_HOLDER,
   closedOrder: 'A closed or cancelled order keeps its prices.',
   notAManager: 'The customer\'s price is set by people who manage orders.',
   stale: 'Someone changed these prices meanwhile. Here they are now: read them again.',

@@ -8,7 +8,8 @@ import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
 import { liveMessageFor, liveViewFor } from '@nexus/factory-domain/events/live'
 import { filterForGrains, unheldMoneyInput } from '@nexus/factory-domain/money/filter'
 import { grainOfSchema } from '@nexus/factory-domain/money/marked'
-import { priceCheckContract, priceCheckView, saveBrandPricesContract, takeOverContract } from './contract'
+import { listOrdersContract } from '../orders/contract' // B-CP-018
+import { priceCheckContract, priceCheckView, saveBrandPricesContract, summaryContract, takeOverContract } from './contract'
 
 /**
  * The customer's price contracts (customer page lane B-CP-017; review B4: every key money-marked, the note included) and the
@@ -68,6 +69,18 @@ describe('every key of the customer price contracts is the price grain (review B
     expect(unmarkedKeys(takeOverContract.body)).toEqual([])
     expect(saveBrandPricesContract.response[200]).toBe(priceCheckView)
     expect(takeOverContract.response[200]).toBe(priceCheckView)
+  })
+
+  // B-CP-018: one customer's counts.
+  it('the summary of one customer: its id and both counts', () => {
+    expect(unmarkedKeys(summaryContract.response[200])).toEqual([])
+    expect(filterForGrains(summaryContract.response[200], { partyId: ORDER, priceNotEqualCount: 2, priceMissingCount: 5 }, new Set())).toEqual({})
+  })
+
+  it('the Orders list: the four price check keys of a row are the price grain; the term is a plain query term', () => {
+    const rows = (listOrdersContract.response[200] as unknown as z.ZodObject).shape.orders as unknown as z.ZodArray<z.ZodObject>
+    for (const key of ['brandPrice', 'priceMatch', 'priceDiff', 'priceNotEqualLines']) expect(grainOfSchema(rows.element.shape[key] as z.ZodType), key).toBe('price')
+    expect(Object.keys((listOrdersContract.querystring as unknown as z.ZodObject).shape)).toContain('priceMatch')
   })
 
   it('a reader without the price grain is sent nothing of the answer; a price holder all of it', () => {

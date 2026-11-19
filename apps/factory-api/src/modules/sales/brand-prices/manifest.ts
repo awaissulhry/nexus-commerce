@@ -14,4 +14,6 @@ export const manifest = defineManifest({
   'GET /sales/orders/:orderId/price-check': view,
   'PUT /sales/orders/:orderId/brand-prices': manage,
   'POST /sales/orders/:orderId/brand-prices/from-request': manage,
+  // B-CP-018: one customer's counts (orders.view over that customer, and the price grain: the handler).
+  'GET /sales/brand-prices/summary': view,
 })

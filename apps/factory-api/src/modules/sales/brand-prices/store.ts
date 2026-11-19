@@ -1,4 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
+import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { newId } from '@nexus/factory-domain/core/ids' // B-CP-024
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { markMoney } from '@nexus/factory-domain/money/marked'
@@ -25,6 +27,11 @@ import type { Reader } from '../orders/store'
  *
  * Other batches call these (B-CP-076 the accept's carry, B-CP-019 the portal): keep their shape.
  */
+
+/** The price grain as the permission can() reads (money.price): every route of the module asks it over the order. */
+export const PRICE_PERMISSION = grainPermission('price') as Permission
+/** The refusal to a person without the price grain (the web says `orders.json money.noPrice`). */
+export const NOT_A_PRICE_HOLDER = 'Shown to people who see prices.'
 
 /** The audit record type of the customer's prices (B-CP-025 hides it from people without the price grain). */
 export const BRAND_PRICE_RECORD = 'OrderBrandPrice' as const

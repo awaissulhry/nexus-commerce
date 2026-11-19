@@ -25,6 +25,7 @@ import { APPROVAL_TASK_KINDS } from '@nexus/factory-domain/approvals/rules' // B
 // B-OP-023: how a shipment travels and why its tracking number may not be typed.
 import { OWN_TRANSPORT_REFUSALS } from '@nexus/factory-domain/shipping/own-transport/rules'
 import { TRANSPORT_BY } from '@nexus/factory-domain/shipping/shipments'
+import { PRICE_MATCHES } from '@nexus/factory-domain/sales/brand-prices/match' // B-CP-018
 
 /**
  * The sales orders' contracts (B-W1-25; A2 SCR-038 "Orders", SCR-039 "Order record"). Money is marked: prices and totals
@@ -381,6 +382,10 @@ const viewTermFields = {
   deposit: z.enum(['OPEN']).optional(),
   /** B-W2b-323: a change waits for the customer to accept it (reapprovalNeededAt set), the order not closed or cancelled. */
   reaccept: flag.optional(),
+  // ── B-CP-018 (customer page plan C2d): the price check term — a price holder's only (403 in words otherwise, in viewWhere) ──
+  /** The orders whose price check reads so (Not equal, No customer price yet, Equal); never a sort by a price field. */
+  priceMatch: z.enum(PRICE_MATCHES).optional(),
+  // ── end B-CP-018 ──
   ...filterFields,
 }
 
@@ -501,6 +506,16 @@ export const listOrdersContract = defineContract({
             openIssues: z.number().int().nullable(),
             withheld: z.array(z.enum(PRODUCTION_WITHHELD)),
           }).optional(),
+          // ── B-CP-018 (customer page plan C2d): the price check, read only for a price holder (absent without the price grain) ──
+          /** The customer's price of the order: its total row, else the sum of its line prices when every line has one; null: none yet. */
+          brandPrice: money.price(z.number().int().nullable()),
+          /** Equal / Not equal / No customer price yet (never Equal without the customer's price). */
+          priceMatch: money.price(z.enum(PRICE_MATCHES)),
+          /** Our price − the customer's (+ we ask more); null: the customer's is not known. */
+          priceDiff: money.price(z.number().int().nullable()),
+          /** How many lines differ ("Not equal · 2 lines"). */
+          priceNotEqualLines: money.price(z.number().int()),
+          // ── end B-CP-018 ──
         }),
       ),
       /** B-TH-057: the next page's cursor (an id newest first; an opaque sort key and id in a server sort). */
