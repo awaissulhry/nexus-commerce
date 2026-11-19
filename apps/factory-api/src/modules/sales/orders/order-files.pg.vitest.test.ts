@@ -347,6 +347,9 @@ describe('B-OP-050: POST …/files/previews — small pictures and PDF links in 
 
   it('in the order asked: a picture\'s small preview (never the original), a PDF\'s inline link (≤ 3 MiB), body data LOCKED, the rest by kind; an id not in the read is absent', async () => {
     const before = await presigns()
+    // op-fx3: the measurement sheet was opened by a test above (its own opening is recorded); this call adds no line of its own.
+    const measureOpens = async () => (await admin(`SELECT id FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'sales.orderFileOpened' AND after->>'fileId' = $2`, [ids.tenantId, files.measure])).length
+    const measureOpensBefore = await measureOpens()
     const asked = [cards.picture.id, cards.notYet.id, files.shared, cards.bigPdf.id, files.measure, cards.sheet.id, newId(), files.copyOnOtherOrder]
     const answer = await ok('office.all', 'POST', previewsOf(w.a.salesOrderId), { fileIds: asked })
     expect(answer.previews.map((row: Json) => [row.fileId, row.kind, row.small !== null, row.pdfDrawable, row.inline !== null, row.later])).toEqual([
@@ -367,7 +370,7 @@ describe('B-OP-050: POST …/files/previews — small pictures and PDF links in 
     expect(await presignsOfKey(smallKey)).toBe(1)
     expect(await presignsOfKey(cards.picture.storageKey)).toBe(0)
     expect(await presignsOfKey(cards.bigPdf.storageKey)).toBe(0)
-    expect(await admin(`SELECT id FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'sales.orderFileOpened' AND after->>'fileId' = $2`, [ids.tenantId, files.measure])).toHaveLength(0)
+    expect(await measureOpens()).toBe(measureOpensBefore)
     // Never the generic preview route.
     expect(JSON.stringify(answer)).not.toMatch(/\/files\/[0-9a-f-]{36}\/preview/)
   })
