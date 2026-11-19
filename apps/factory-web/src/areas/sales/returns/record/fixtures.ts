@@ -22,6 +22,9 @@ import type { Rma } from '../api'
  * GateChecklist and the sign-off, Return), with their dialogs, read-only and held states and the role cases. Made-up
  * data only (demo/fixtures.ts). B-W2b-352 (`w2b-352-*`): the RMA's W2b parts (policy, deadline, credit without return,
  * fees, split, size exchange, remake asked, the finish reasons) and the repair's Estimate tab.
+ *
+ * F-CP-160 (the money wall, B-CP-026): as a Sales worker (no price grain) a credit-only line is the price holder's decision: Decide
+ * waits in the API's words and the line says them where the credit would be; a repair or a replacement is decided as before.
  */
 
 /** The W2b parts that go with each demo RMA (B-W2b-352). */
@@ -155,6 +158,10 @@ function RecordDesign({ model }: { model: DesignModel }) {
 const est = (over: Partial<EstimateModel> = {}) => estimateModel(over)
 const PART_LINE = RMA_PART_RECEIVED.lines[1]!
 
+// F-CP-160: a Sales worker sees no price. F-CP-148 (follow-up 5): the demo's Sales permissions hold no grain any more (the same can);
+// a case that shows a Sales person typing a credit is a Sales worker with a price role the Owner named (SALES_PRICED).
+const SALES_NO_PRICE = { ...canFor('sales'), price: false }
+const SALES_PRICED = { ...canFor('sales'), price: true }
 const decided: Record<string, DecisionDraft> = { [RMA_RECEIVED.lines[1]!.id]: { disposition: 'CREDIT_ONLY', outcome: 'RESTOCK', credit: '' } }
 const filledChecklist = { seams: 'PASS' as const, abrasionZones: 'PASS' as const, closures: 'NOT_APPLICABLE' as const, protectors: 'PASS' as const, replaced: true, lot: 'PRT-DEMO-07', level: '2' as const, certificateCovers: true, note: '' }
 
@@ -185,6 +192,18 @@ export const designScreen = defineDesignScreen<DesignModel>({
           decisionPreview: { ok: true, problems: [], lines: [{ lineId: RMA_RECEIVED.lines[1]!.id, seq: 20, disposition: 'CREDIT_ONLY', goodsOutcome: 'RESTOCK', creditAmount: 32400, receivedValue: 32400, currency: 'EUR', place: { id: 'demo-place', code: 'A1-FG' }, followUp: 'CREDIT_NOTE', options: [{ disposition: 'CREDIT_ONLY', outcomes: [{ outcome: 'RESTOCK', held: null }, { outcome: 'SECOND_QUALITY', held: null }, { outcome: 'QUARANTINE', held: null }, { outcome: 'REPAIR', held: null }, { outcome: 'SCRAP', held: null }], defaultCredit: 32400 }], problems: [] }] },
         }),
       },
+    },
+    // ── F-CP-160 (the money wall) ──
+    {
+      id: 'rma-deciding-sales',
+      label: 'As Sales worker: a credit-only line — Decide held in words (a price holder decides the credit)',
+      model: { kind: 'rma', role: 'sales', model: rmaModel('sales', { can: SALES_NO_PRICE, rma: { ...RMA_RECEIVED, lines: [RMA_RECEIVED.lines[0]!, { ...RMA_RECEIVED.lines[1]!, grade: 'LIKE_NEW', cause: 'NO_FAULT', suggestedOutcome: 'RESTOCK' }] }, tab: 'inspection', decisions: decided }) },
+      note: '"It changes a price you cannot see: someone who sees prices does it." No amount on screen; Repair, Replace, Size exchange, Scrap and Return unchanged are decided as before.',
+    },
+    {
+      id: 'rma-deciding-sales-repair',
+      label: 'As Sales worker: a replacement — decided as before',
+      model: { kind: 'rma', role: 'sales', model: rmaModel('sales', { can: SALES_NO_PRICE, rma: { ...RMA_RECEIVED, lines: [RMA_RECEIVED.lines[0]!, { ...RMA_RECEIVED.lines[1]!, grade: 'LIKE_NEW', cause: 'NO_FAULT', suggestedOutcome: 'RESTOCK' }] }, tab: 'inspection', decisions: { [RMA_RECEIVED.lines[1]!.id]: { disposition: 'REPLACE', outcome: 'RESTOCK', credit: '' } } }) },
     },
     { id: 'rma-grade', label: 'Grade 1 line (office inspection)', model: { kind: 'rma', role: 'inspector', model: rmaModel('inspector', { rma: RMA_RECEIVED, tab: 'inspection', dialog: { kind: 'grade', lineIds: [RMA_RECEIVED.lines[1]!.id], grade: '', cause: '', note: '' } }) } },
     { id: 'rma-decided', label: 'Inspected: decided lines with their stock moves; Make replacement order', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, tab: 'inspection' }) } },
@@ -306,8 +325,9 @@ export const designScreen = defineDesignScreen<DesignModel>({
     },
     {
       id: 'w2b-352-credit-ask',
-      label: 'W2b: Credit without return — above the limit: asks a yes (from Bea Demo)',
-      model: { kind: 'rma', role: 'sales', model: rmaModel('sales', { tab: 'credit', depth: { ...depthFor(RMA_AUTHORISED), dialog: { kind: 'credit', draft: { lineId: RMA_AUTHORISED.lines[1]!.id, amount: '200', note: '' }, preview: { ok: true, problems: [], lineId: RMA_AUTHORISED.lines[1]!.id, seq: 20, pieces: 2, currency: 'EUR', value: 32400, creditAmount: 20000, approval: { needed: true, approverRoleId: null, approverUserId: PEOPLE[1]!.id, nobodyElse: false }, waiting: null }, previewing: false } } }) },
+      // F-CP-148 (follow-up 5): a Sales worker with a price role the Owner named (a plain Sales worker never types a credit: B-CP-026).
+      label: 'W2b: Credit without return — above the limit: asks a yes (from Bea Demo); a Sales worker with a price role the Owner named',
+      model: { kind: 'rma', role: 'sales', model: rmaModel('sales', { can: SALES_PRICED, tab: 'credit', depth: { ...depthFor(RMA_AUTHORISED), dialog: { kind: 'credit', draft: { lineId: RMA_AUTHORISED.lines[1]!.id, amount: '200', note: '' }, preview: { ok: true, problems: [], lineId: RMA_AUTHORISED.lines[1]!.id, seq: 20, pieces: 2, currency: 'EUR', value: 32400, creditAmount: 20000, approval: { needed: true, approverRoleId: null, approverUserId: PEOPLE[1]!.id, nobodyElse: false }, waiting: null }, previewing: false } } }) },
     },
     {
       id: 'w2b-352-credit-over',

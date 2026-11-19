@@ -11,8 +11,10 @@ import { definePermissions } from '../../auth/permissions/registry'
  *                    the requires and excludes rules, and what a value does to the garment (BOM lines added, replaced or
  *                    left out, an operation, minutes, "outside the certificate"). The production manager, who keeps the
  *                    styles and their BOMs.
- *   options.price    set the price surcharge of an option value (an amount or a percent; money.price too). Sales, who
- *                    price the garments; the production manager sees no money.
+ *   options.price    set the price surcharge of an option value (an amount or a percent; money.price too). B-CP-011
+ *                    (customer page lane, the money wall, Owner O1): no template but the Owner's (every()) holds it now —
+ *                    Sales sees no price; a custom role with the price grain the Owner names may hold it. The production
+ *                    manager sees no money.
  *
  * Offering a group on a style is product.styles.manage (a change of the style's spec, under its edit rule); a draft BOM
  * line only for an option is product.bom.manage; a routing step only for an option is product.routing.manage.
@@ -30,8 +32,10 @@ export const PRODUCT_OPTIONS_PRICE = 'product.options.price' satisfies Permissio
 
 export const PRODUCT_OPTIONS_PERMISSIONS: readonly Permission[] = Object.freeze([PRODUCT_OPTIONS_MANAGE, PRODUCT_OPTIONS_PRICE])
 
-/** Who holds them (auth/roles/templates): the production manager keeps the library, sales prices it; the owner from every(). */
+/**
+ * Who holds them (auth/roles/templates): the production manager keeps the library; the owner from every(). B-CP-011 (step 5,
+ * lead pick): Sales no longer prices it (no price grain since B-CP-011: the right was dead, held by the route in words).
+ */
 export const PRODUCT_OPTIONS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   production_manager: [PRODUCT_OPTIONS_MANAGE],
-  sales: [PRODUCT_OPTIONS_PRICE],
 })

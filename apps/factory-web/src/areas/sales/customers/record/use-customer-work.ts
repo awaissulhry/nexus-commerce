@@ -21,6 +21,10 @@ import { CUSTOMER_FEED_TYPES } from '@nexus/factory-domain/sales/customer-feed/k
 import { readRecordSummary } from '../../../_shared/record-summary/api'
 // ---- end F-SA-279
 import { writeSearch } from '../../../_shared/record-frame/address' // F-OP-211: the record pages' ONE history writer
+// ---- F-CP-111: the dock's files line on this page = the picked order's file set (the order lane's container, F-OP-215's host prop) ----
+import { useRouter } from 'next/navigation'
+import { useOrderFiles, type OrderFilesHost } from '../../../_shared/record-thread/use-order-files'
+// ---- end F-CP-111
 
 /**
  * F-SA-276 (sales page plan N5, picks R5, R9, P10, P17; 11-customer-page §3.2, §3.4, §3.10, §3.11): the customer's Work tab beside
@@ -137,6 +141,8 @@ export interface WorkCan {
   readonly workorders: boolean
   readonly threads: boolean
   readonly partners: boolean
+  /** F-CP-141: the price grain (money.price): the Not equal view, its count and the Money tab's line; absent / false: none of them. */
+  readonly price?: boolean
 }
 
 export function tilesShown(can: WorkCan): StripTile[] {
@@ -286,6 +292,31 @@ export async function readCustomerRequests(api: ApiClient, partyId: string, sign
 const OFF: Read<never> = { status: 'off' }
 const READING: Read<never> = { status: 'reading' }
 
+// ---- F-CP-141 (customer page plan C2d; 11-money §3.2; money wall O1–O3): one customer's price check counts --------------------------
+const priceSummarySchema = z.object({ partyId: z.string(), priceNotEqualCount: z.number(), priceMissingCount: z.number() })
+/** How many of the customer's orders (every status) read Not equal, and No customer price yet. */
+export type PriceSummary = z.infer<typeof priceSummarySchema>
+
+/**
+ * GET /sales/brand-prices/summary?partyId= (orders.view + the price grain over the customer; 403 in words otherwise): THIS customer's
+ * counts only — the API walls them to the customer (one out of reach answers like an unknown one), never a filter in the browser.
+ */
+export function readPriceSummary(api: ApiClient, partyId: string, signal?: AbortSignal): Promise<PriceSummary> {
+  return api.get('/sales/brand-prices/summary', { query: { partyId }, schema: priceSummarySchema, signal })
+}
+
+/** The Not equal view's terms (the Work tab's view, the Money tab's line opens it): every order whose prices differ. */
+export const NOT_EQUAL_TERMS = 'rows=all&priceMatch=NOT_EQUAL'
+/** The Money tab's door to the Work tab's Not equal view (the entry then adds the lock, once; no default beside the view). */
+export const notEqualDoor = (recordHref: string): string => `${recordHref}?tab=work&${NOT_EQUAL_TERMS}`
+
+/** The Not equal count once read; null while read, after a failed read, and always for a reader without the price grain (off). */
+export const priceDifferOf = (read: Read<PriceSummary>): number | null => (read.status === 'ready' ? read.value.priceNotEqualCount : null)
+
+/** A live change that may move the counts: any order event (a customer's price saved is `sales_order.brand_price_changed`). */
+export const pricesTouched = (type: string): boolean => type.startsWith('sales_order.')
+// ---- end F-CP-141
+
 /** The Work tab's reads for one customer (each only with its right), their live re-reads, and the marks of the sheet. */
 export function useCustomerWork(partyId: string, can: WorkCan) {
   const api = useOfficeApi()
@@ -303,6 +334,19 @@ export function useCustomerWork(partyId: string, can: WorkCan) {
     tasks: allowed.tasks ? READING : OFF,
   }))
   const turn = useRef<Record<keyof WorkReads, number>>({ board: 0, requests: 0, replies: 0, asks: 0, tasks: 0 })
+  // ---- F-CP-141: the price check counts, only with orders.view and the price grain (no read at all otherwise: no number anywhere)
+  const pricesAllowed = can.orders && can.price === true
+  const [prices, setPrices] = useState<Read<PriceSummary>>(pricesAllowed ? READING : OFF)
+  const pricesTurn = useRef(0)
+  const readPrices = useCallback(() => {
+    if (!pricesAllowed) return setPrices(OFF)
+    const mine = ++pricesTurn.current
+    readPriceSummary(api, partyId).then(
+      (value) => mine === pricesTurn.current && setPrices({ status: 'ready', value }),
+      () => mine === pricesTurn.current && setPrices({ status: 'failed' }),
+    )
+  }, [api, partyId, pricesAllowed])
+  // ---- end F-CP-141
 
   const run = useCallback(
     <K extends keyof WorkReads>(source: K, read: () => Promise<WorkReads[K] extends Read<infer T> ? T : never>) => {
@@ -342,21 +386,30 @@ export function useCustomerWork(partyId: string, can: WorkCan) {
   )
   const readAll = useCallback(() => {
     for (const read of Object.values(readers)) read()
-  }, [readers])
+    readPrices() // F-CP-141
+  }, [readers, readPrices])
   useEffect(() => readAll(), [readAll])
 
   // Live: each source on its own events, coalesced; everything again after a reconnect.
   const pending = useRef(new Set<keyof WorkReads>())
+  const pricesPending = useRef(false) // F-CP-141
   const flush = useCoalesced(() => {
     const sources = [...pending.current]
     pending.current.clear()
     for (const source of sources) readers[source]()
+    // F-CP-141: the counts again on an order's change (coalesced with the strip's reads).
+    if (pricesPending.current) {
+      pricesPending.current = false
+      readPrices()
+    }
   }, 800)
   const live = useLiveBus({
     onChange: (change) => {
       const touched = sourcesTouched(change.type)
-      if (touched.length === 0) return
+      const pricesMoved = pricesAllowed && pricesTouched(change.type) // F-CP-141
+      if (touched.length === 0 && !pricesMoved) return
       for (const source of touched) pending.current.add(source)
+      if (pricesMoved) pricesPending.current = true
       flush()
     },
     onReconnect: readAll,
@@ -375,7 +428,7 @@ export function useCustomerWork(partyId: string, can: WorkCan) {
       readers.board()
     } else readers.board()
   }
-  return { reads, live, marks, retry, reload: readAll, attention: workAttention(reads) }
+  return { reads, live, marks, retry, reload: readAll, attention: workAttention(reads), prices /* F-CP-141 */ }
 }
 
 // ---- F-SA-279 (sales page plan N5, N4, N6; picks R5, R9, P9, P11; 11-customer-page §3.7, §9.1; review C-13) ---------------------
@@ -550,10 +603,47 @@ export function useCustomerDock(partyId: string, tab: string) {
   }, [termKey, partyId]) // eslint-disable-line react-hooks/exhaustive-deps
   const scope = scopeOf(term, pick)
   const shownKey = scope === 'record' && pick ? dockKeyOf(pick) : null
+  // ---- F-CP-111 (customer page plan C2c; 10-customer-page §4; review B1): while the dock shows an ORDER, its files line is the order's
+  // file set — the order lane's useOrderFiles (A09, F-OP-125: GET /sales/orders/:id/files, walled by the API; a priced document is
+  // counted, never named, for a reader without the price grain: B-CP-023), handed to the docked thread as `orderFiles` (F-OP-215's host
+  // prop: the line's count is the order's Files tab's count). A tile opens the file in the ONE viewer here; "All files" opens the
+  // order's Files tab. The general scope (the customer's own thread), All of <customer> and every other record keep their own line.
+  const session = useOfficeSession()
+  const router = useRouter()
+  const prefix = pathname.replace(/\/sales\/customers\/.*$/, '')
+  const order = orderShownOf(scope, pick)
+  const readsFiles = session.permissions.includes('files.read')
+  const [filesProblem, setFilesProblem] = useState<{ readonly key: string; readonly at: number } | null>(null)
+  const orderFiles = useOrderFiles(api, {
+    orderId: order?.id ?? null,
+    enabled: !!order && readsFiles,
+    partyId,
+    canShare: session.permissions.includes('files.manage'),
+    onProblem: (key) => setFilesProblem({ key, at: Date.now() }),
+    keep: true, // one read per docked order (read again when another order docks, or on its files' news)
+  })
+  // News of a file (the reader's own live stream: `file.available`, the file's record named) reads the docked order's set again, coalesced.
+  const filesAgain = useCoalesced(() => orderFiles.reload(), 800)
+  useLiveBus({ onChange: (change) => change.type === 'file.available' && filesAgain(), onReconnect: filesAgain }, !!order && readsFiles)
+  const orderFilesHost: OrderFilesHost | null =
+    order && readsFiles
+      ? {
+          model: orderFiles.model,
+          actions: orderFiles.actions,
+          reload: orderFiles.reload,
+          onAll: () => router.push(orderFilesHref(prefix, order.id)),
+          onOpen: (fileId, opener) => orderFiles.actions.onOrderOpen?.(fileId, 'preview', opener),
+        }
+      : null
+  // ---- end F-CP-111
   return {
     term,
     pick,
     scope,
+    /** F-CP-111: the docked order's file set for its files line (null: no order docked, or no files.read — the record's own line). */
+    orderFiles: orderFilesHost,
+    /** F-CP-111: a file of that set that could not be opened or shared (a `record-thread-files-view` key), said once by the dock. */
+    filesProblem,
     /** The record docked now (marked on its row); null: the general conversation or All of <customer>. */
     shown: scope === 'record' ? pick : null,
     /** "Draft kept on SO-…" under the pick. */
@@ -590,3 +680,12 @@ export function useCustomerDock(partyId: string, tab: string) {
   }
 }
 // ---- end F-SA-279
+
+// ---- F-CP-111: which order's file set the dock's files line shows, and the way to its Files tab ----
+/** The order the dock shows now (its own thread picked), else null: the general scope, All of <customer> and any other record. */
+export function orderShownOf<P extends { readonly type: string; readonly id: string }>(scope: 'general' | 'record' | 'all', pick: P | null): P | null {
+  return scope === 'record' && pick && pick.type === 'SalesOrder' ? pick : null
+}
+/** "All files": the order page's Files tab. */
+export const orderFilesHref = (prefix: string, orderId: string): string => `${prefix}/sales/orders/${encodeURIComponent(orderId)}?tab=files`
+// ---- end F-CP-111

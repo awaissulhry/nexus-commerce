@@ -635,5 +635,9 @@
     "unsaved_one": "1 change to the production limits not saved",
     "unsaved_other": "{count} changes to the production limits not saved",
     "apply": "Apply"
+  },
+  "moneyWall": {
+    "ownerGives": "Only the Owner gives a role that sees prices.",
+    "ownerLater": "Only the Owner moves the end of access later: you can bring it earlier or end it now."
   }
 }

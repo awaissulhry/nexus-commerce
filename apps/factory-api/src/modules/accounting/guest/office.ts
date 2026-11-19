@@ -5,6 +5,8 @@ import { ACCOUNTING_VIEW } from '@nexus/factory-domain/accounting/permissions'
 import { partnerKindsOf } from '@nexus/factory-domain/auth/partners/kinds'
 import { accessEndsSoon, type AccessChoice } from '@nexus/factory-domain/auth/partners/rules'
 import { partnerTemplateOf } from '@nexus/factory-domain/auth/roles/templates'
+// B-CP-011 (follow-up 13): `may.give`, the API's own rule (only the Owner gives a role that sees prices).
+import { seesPrices } from '@nexus/factory-domain/auth/roles/roles'
 import { DomainError, ForbiddenError, InvalidStateError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { can, grantsFor, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -13,6 +15,7 @@ import { events as partnerEvents } from '@nexus/factory-domain/partners/events'
 import { actorOf, requireContext, type OfficeContext } from '../../../core/context'
 import { requireStepUp } from '../../../platform/auth/office/account'
 import { mailInvitation, settingsEventFields } from '../../../platform/auth/partners/office'
+import { holdsOwnerRole } from '../../../platform/auth/roles/assignments'
 import { changeInCommand, inviteInCommand, revokeInCommand, statusInCommand, STATUS_TARGET } from '../../../platform/auth/partners/people'
 import { lockParty, partyById, peopleOf, personOf, settingsOf, type PartnerParty } from '../../../platform/auth/partners/store'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
@@ -45,6 +48,7 @@ import { DOWNLOAD_ACTION, ZIP_ACTION } from './portal'
  * giving access and a later end of access are the Owner's only (403 `roleKey/onlyOwnerGivesPrices` or
  * `accessUntil/onlyOwnerGivesPrices`, "Only the Owner gives a role that sees prices."; the check is in the shared
  * platform/auth/partners/people.ts commands, so Portal access asks it too). An earlier end and ending it now stay free.
+ * The list says it before the click: `may.give` (follow-up 13), true only for a live holder of the Owner role who may manage.
  */
 
 const officeOf = (request: FastifyRequest): OfficeContext => {
@@ -137,11 +141,16 @@ export async function accountants(app: FastifyInstance, request: FastifyRequest,
         files: row.action === ZIP_ACTION && typeof after.files === 'number' ? after.files : 1,
       }
     })
+    const manage = can(actor, ACCOUNTING_ACCOUNTANTS_MANAGE, { companyId })
+    // ── B-CP-011 (follow-up 13, the money wall): giving the access (and a later end) is the Owner's when the accountant's role sees
+    // prices — the same rule as the commands (people.ts assertOwnerGivesGuestPrices); a yes/no of the reader's own right only.
+    const give = manage && (!seesPrices(partnerTemplateOf(ACCOUNTANT_ROLE_KEY)?.grains ?? []) || (await holdsOwnerRole(client, context.actorId, now)))
+    // ── end B-CP-011 ──
     return {
       company: { id: company.id, code: company.code, name: company.tradeName ?? company.legalName },
       firms,
       downloads,
-      may: { manage: can(actor, ACCOUNTING_ACCOUNTANTS_MANAGE, { companyId }) },
+      may: { manage, give },
       asOf: toUtcIso(now),
     }
   })

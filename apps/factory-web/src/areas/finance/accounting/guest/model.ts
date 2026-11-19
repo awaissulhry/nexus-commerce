@@ -28,9 +28,42 @@ export const STATUS_TONE: Readonly<Record<Accountant['status'], 'success' | 'inf
 /** A row that cannot be chosen for "End access N": one whose access ended already. */
 export const rowHeld = (row: AccountantRow): string | null => (row.status === 'DEACTIVATED' ? 'office.held.left' : null)
 
+// ── F-CP-159 (customer page lane, the money wall; Owner O3, the API's B-CP-011) ────────────────────────────────────────────
+/**
+ * The accountant reads our invoices and registers, so it sees our prices: only the Owner gives the access or moves its end
+ * later (the API answers 403 `roleKey/onlyOwnerGivesPrices` / `accessUntil/onlyOwnerGivesPrices`, "Only the Owner gives a
+ * role that sees prices."). Bringing the end earlier and ending it now stay finance's.
+ *
+ * Who gives it: the API says so before the click (follow-up 13), `may.give` on GET /accounting/accountants — true only for a
+ * live holder of the Owner role (the API's own rule, `onlyOwnerGivesPrices`), never guessed from the session's permissions.
+ * Until the list is read nobody gives it; a refusal that still comes is said in the same words (`writeProblemKey`).
+ */
+export const OWNER_GIVES = 'moneyWall.ownerGives'
+export const OWNER_LATER = 'moneyWall.ownerLater'
+
+/** The reader gives the access and moves its end later (the API's `may.give`); false until the list is read. */
+export const mayGive = (answer: Pick<Accountants, 'may'> | null): boolean => answer?.may.give ?? false
+
+/** Why a new end of access is the Owner's (a key), or null: it falls later than the end the access has now. */
+export function laterEndHeld(row: Pick<AccountantRow, 'accessUntil'>, until: string, give: boolean): string | null {
+  if (give || !until || row.accessUntil === null) return null
+  return Date.parse(endOfDay(until)) > Date.parse(row.accessUntil) ? OWNER_LATER : null
+}
+
+/** Why "Save the date" waits (a key), or null: a change on its way, no day, a past day, or a later end only the Owner gives. */
+export function changeSaveHeld(change: { readonly row: Pick<AccountantRow, 'accessUntil'>; readonly until: string; readonly today: string; readonly busy: boolean }, give: boolean): string | null {
+  if (change.busy) return 'office.held.busy'
+  if (!change.until) return 'office.invite.problem.until'
+  if (change.until < change.today) return 'office.invite.problem.past'
+  return laterEndHeld(change.row, change.until, give)
+}
+// ── end F-CP-159 ──
+
 /** Why "Give access" cannot act (a key), or null. */
 export function inviteHeld(answer: { readonly firms: readonly Firm[]; readonly may: Accountants['may'] } | null): string | null {
   if (!answer) return 'office.held.reading'
+  // F-CP-159: only the Owner gives the accountant access (it sees prices): the API's `may.give` (follow-up 13).
+  if (!answer.may.give) return OWNER_GIVES
   if (!answer.may.manage) return 'office.held.noManage'
   if (answer.firms.length === 0) return 'office.held.noFirm'
   return null
@@ -84,6 +117,9 @@ export { endOfDay, addDays, dayOf }
 export function writeProblemKey(error: unknown): string {
   const issues = (error as { issues?: readonly { path?: unknown }[] } | null)?.issues ?? []
   const paths = issues.map((issue) => (typeof issue.path === 'string' ? issue.path : ''))
+  // F-CP-159: the money wall's refusal (B-CP-011): giving access, or a later end, is the Owner's.
+  if (paths.includes('roleKey/onlyOwnerGivesPrices')) return OWNER_GIVES
+  if (paths.includes('accessUntil/onlyOwnerGivesPrices')) return OWNER_LATER
   if (paths.includes('partyId')) return 'office.problem.firm'
   if (paths.includes('email')) return 'office.problem.email'
   if (paths.includes('accessUntil')) return 'office.problem.until'

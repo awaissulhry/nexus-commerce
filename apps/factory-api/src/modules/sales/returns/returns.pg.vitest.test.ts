@@ -314,10 +314,13 @@ describe('the decision: money, stock and work in one step (SAL-341), the replace
     expect((await refused('owner', 'POST', `/sales/returns/${rma2.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma2.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP', creditAmount: 25_001 }] }, 400)).issues).toEqual([{ path: 'body/lines/0/creditAmount', message: 'Never more than what came back is worth.' }])
     // A caller without the price grain cannot send a credit value (B-CP-011: Sales neither).
     for (const who of ['noPrice', 'sales']) await refused(who, 'POST', `/sales/returns/${rma2.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma2.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP', creditAmount: 100 }] }, 403)
-    // B-CP-011: Sales decides the default credit unseen; the Owner reads its amount.
-    const decided = await ok('sales', 'POST', `/sales/returns/${rma2.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma2.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP' }] })
+    // B-CP-026 (Owner answer A): the credit is an amount Sales cannot see — Sales is held in words, nothing decided; the Owner
+    // decides it (was Sales, B-CP-011), and Sales reads the decision without the amount.
+    const blindDecision = await refused('sales', 'POST', `/sales/returns/${rma2.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma2.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP' }] }, 403)
+    expect(blindDecision.issues).toEqual([{ path: 'refusal/BLIND_PRICE', message: 'It changes a price you cannot see: someone who sees prices does it.' }, { path: 'body/lines/0/disposition', message: 'It changes a price you cannot see: someone who sees prices does it.' }])
+    const decided = await ok('owner', 'POST', `/sales/returns/${rma2.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma2.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP' }] })
     expect(decided.return).toMatchObject({ status: 'INSPECTED', lines: [{ followUp: 'CREDIT_NOTE', stock: [] }] })
-    expect(decided.return).not.toHaveProperty('creditTotal')
+    expect(await recordOf(rma2.id, 'sales')).not.toHaveProperty('creditTotal')
     expect(await recordOf(rma2.id, 'owner')).toMatchObject({ status: 'INSPECTED', creditTotal: 25_000, lines: [{ creditAmount: 25_000, receivedValue: 25_000, followUp: 'CREDIT_NOTE', stock: [], effectWithAmount: 'Credit 250.00 EUR; goods are scrapped; a credit note to make (Finance)' }] })
     expect((await events('return.credit_due', rma2.id))[0]?.payload).toEqual({ returnId: rma2.id, number: rma2.number, partyId: P1, lineIds: [rma2.lines[0].id] })
     // Without the price grain the record shows the effect without its amount.
@@ -392,7 +395,8 @@ describe('a returned garment put back into stock carries its value, so its month
     const received = await ok('sales', 'POST', `/sales/returns/${rma.id}/receipts`, { version: rma.version, parcels: 1, parcelCondition: 'INTACT', lines: [{ lineId: rma.lines[0].id, quantity: 1 }] }, 201)
     const graded = await ok('sales', 'POST', `/sales/returns/${rma.id}/grades`, { version: received.return.version, lines: [{ lineId: rma.lines[0].id, grade: 'NEW', cause: 'NO_FAULT' }] })
     expect(graded.return.lines[0]).toMatchObject({ suggestedOutcome: 'RESTOCK', restockHeld: null })
-    const decided = await ok('sales', 'POST', `/sales/returns/${rma.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'RESTOCK' }] })
+    // B-CP-026: a credit-only decision is a price holder's (Sales is held in words).
+    const decided = await ok('owner', 'POST', `/sales/returns/${rma.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'RESTOCK' }] })
     expect(decided.return.lines[0]).toMatchObject({ goodsOutcome: 'RESTOCK', stock: [{ locationCode: 'A1-FG', quantity: '1' }] })
     // Valued as a production receipt is: the item's frozen standard of the company in force today.
     expect(await valuationOf(decided.moves[0].moveId)).toMatchObject({ method: 'STANDARD_COST', valueAmount: 27_550 })

@@ -88,6 +88,9 @@ import { HOLD_REASONS, PRODUCTION_HOLD_REASONS } from '../../../production/work-
 import { PRODUCTION_READ } from './overview/fixtures'
 import { brandRequest } from '../../../home/approvals/requests/fixtures'
 import { ORDER_ID } from '../_demo/fixtures'
+// F-CP-142: Money's Price check card — the ONE window's made-up check and its states (so/price-check, F-CP-114).
+import { PRICE_CHECK, priceWindowOf } from '../price-check/fixtures'
+import type { PriceCheckCardModel, PriceCheckRead } from './price-check-card'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { APPROVAL_CREDIT, APPROVAL_NOBODY, APPROVAL_PENDING, CHANGES, CHANGES_NONE, CHANGES_WAITING_YES, CONFIRMATION_NONE, CONFIRMATION_OUTDATED, CONFIRMATION_WAITING, depthModel, FREEZE_FINISHED, FREEZE_NONE, MATERIALS_EMPTY, MATERIALS_NOT_PLANNED, orderDepth, PRICED_BLOCKED, pricedOpen } from '../depth/demo/fixtures'
 
@@ -220,6 +223,15 @@ const paidDraft = order('CONFIRMED', { chain: { ...confirmed.chain, depositReque
 const noTd02 = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [deposit({ fiscalDocument: 'NONE', fiscalRule: 'DEPOSIT_EU_B2B_GOODS', status: 'PAID', paidAt: at(29, 9), paidAmount: 228384, link: SENT_LINK })] } })
 const noDeposit = order('CONFIRMED', { depositRequired: false, chain: { ...confirmed.chain, depositRequests: [] } })
 const production = order('IN_PRODUCTION')
+// ---- F-CP-148: the order's files with two priced documents (made up): named for a price holder, counted (pricedLeftOut) for anyone else.
+const PRICED_NAMES = ['Conferma d’ordine SO-2026-0088 v1.pdf', 'Ordine del cliente PO-ESEMPIO-88.pdf'] as const
+const PRICED_FILES: typeof ORDER_FILES = {
+  ...ORDER_FILES,
+  groups: ORDER_FILES.groups.map((group, index) => (index === 0 ? { ...group, files: [...group.files, ...PRICED_NAMES.map((name, n) => ({ ...group.files[0]!, id: `0190f0e2-8181-7000-8000-00000000009${n}`, name, audience: 'OFFICE_ONLY' as const, inThread: null }))], pricedLeftOut: 0 } : group)),
+  total: ORDER_FILES.total + PRICED_NAMES.length,
+}
+const PRICED_LOCKED: typeof ORDER_FILES = { ...ORDER_FILES, groups: ORDER_FILES.groups.map((group, index) => (index === 0 ? { ...group, pricedLeftOut: PRICED_NAMES.length } : group)) }
+// ---- end F-CP-148
 // ---- F-SA-231b: the order read names each line's artwork files (the chip opens them in the thread's viewer) and, with
 // sales.measurements.view, a made-to-measure line's rider (name, garment, revision — never a measurement) ----
 const ARTWORK_FILES = [
@@ -241,6 +253,19 @@ const closed = order('CLOSED', { settled: true, actions: [] })
 const cancelled = order('CANCELLED', { actions: [], chain: { ...confirmed.chain, depositRequests: [deposit({ status: 'CANCELLED' })] } })
 // B-W2b-16: a typed order (no quote): its deposit's page goes to the customer's invoices contact.
 const typed = order('CONFIRMED', { chain: { ...confirmed.chain, quote: null, depositRequests: [deposit({ quoteVersionId: null })] } })
+
+// ---- F-CP-142 (customer page plan C3; picture 21): Money's "Price check" card — made-up checks for each state ----
+const priceCard = (read: PriceCheckRead, canHistory = true): Pick<OrderRecordModel, 'priceCheck'> => ({ priceCheck: { read, canHistory } satisfies PriceCheckCardModel })
+// F-CP-142 (end-check fix): its own name — `ready` is overview/fixtures' production read, imported above.
+const priceReady = (check = PRICE_CHECK, extra: Partial<Extract<PriceCheckRead, { state: 'ready' }>> = {}): PriceCheckRead => ({ state: 'ready', check, stale: false, taking: false, problem: null, ...extra })
+const EMPTY_CHECK = {
+  ...PRICE_CHECK,
+  lines: PRICE_CHECK.lines.map((line) => ({ ...line, brandAmount: null, priceMatch: 'NO_BRAND_PRICE' as const, priceDiff: null, row: null })),
+  total: { ...PRICE_CHECK.total, brandPrice: null, priceMatch: 'NO_BRAND_PRICE' as const, priceDiff: null, priceNotEqualLines: 0, priceMissingLines: 3 },
+  fromRequest: { requestId: '0190f0e2-5555-7000-8000-000000000087', number: 'RQ-0087', lines: 2 },
+}
+const CLOSED_CHECK = { ...PRICE_CHECK, status: 'CLOSED', mayWrite: { allowed: false, why: 'closed' } }
+// ---- end F-CP-142
 const CANCEL_REASONS = [
   { code: 'CUSTOMER_REQUEST', labelIt: 'Richiesta del cliente', labelEn: 'Customer request', needsDetail: false },
   { code: 'LEAD_TIME', labelIt: 'Tempi di consegna', labelEn: 'Lead time', needsDetail: false },
@@ -371,6 +396,8 @@ const REFUSE_REASONS = [
 // ---- end F-OP-101
 const d323 = (role: Role, value: Order, over: Partial<OrderRecordModel> = {}, depth: Parameters<typeof depthModel>[1] = {}): RecordCase => base(role, value, { ...over, depth: depthModel(role, depth) })
 const frozenPreview = { ok: false, revision: 4, version: 7, problems: [{ path: 'body/lines/10/SIZE_QUANTITY', message: 'x' }], diff: null, workOrders: null }
+/** F-CP-149: a case as a reader without the price grain (the Sales role since B-CP-011): no price, no margin, no cost. */
+const noPrice = (item: RecordCase): RecordCase => (item.record ? { ...item, record: { ...item.record, can: { ...item.record.can, price: false, margin: false, cost: false } } } : item)
 const W2B_323 = [
   { id: 'w2b-323-lines', label: 'W2b · Sales · Lines: urgent with its reason, season FW27, confirmation v2 sent; black 48 · 50 locked “Cutting started — size frozen”; Customer-supplied materials', model: d323('sales', production), note: 'The materials grid links each lot and the receipt that brought it; Plan from the BOM makes the rows.' },
   { id: 'w2b-323-materials-empty', label: 'W2b · Sales · Customer-supplied materials: the customer supplies nothing', model: d323('sales', production, {}, { materials: { value: MATERIALS_EMPTY, problem: null }, freeze: { value: FREEZE_NONE, problem: null } }) },
@@ -380,6 +407,19 @@ const W2B_323 = [
   { id: 'w2b-323-manager-lines', label: 'W2b · Production manager · Lines: frozen sizes and materials read-only (Plan held)', model: d323('manager', production) },
   { id: 'w2b-323-amend-frozen', label: 'W2b · Sales · Amend order: the cut sizes marked in the grid with their reason', model: d323('sales', production, { amend: amendOf(production) }) },
   { id: 'w2b-323-review-frozen', label: 'W2b · Sales · What changes: frozen by the stage — Apply as a priced change, with its optional fee', model: d323('sales', production, { amend: amendOf(production, oneMore50, {}, { phase: 'ready', preview: frozenPreview }) }) },
+  // ---- F-CP-149 (customer page plan C4, the money wall; review A8, D5): the Lines edit mode for a reader without prices — as Sales
+  // worker since B-CP-011 (here: the Sales fixtures' rights without the price grain) — held words in the net's and the fee's place.
+  { id: 'f-cp-149-strip-no-price', label: 'As Sales worker without prices · Edit mode: What changes — pieces, "Net: shown to people who see prices" (never a blank)', model: noPrice(d323('sales', forRole(confirmed, 'manager'), { amend: amendOf(forRole(confirmed, 'manager'), oneMore50, { reason: 'Una giacca nera in più.' }, { phase: 'ready', preview: AMEND_PREVIEW }) })) },
+  {
+    id: 'f-cp-149-priced-held',
+    label: 'As Sales worker without prices · Frozen by the stage: "Apply as a priced change" held — "A priced change is made by someone who sees prices."',
+    model: noPrice(d323('sales', forRole(production, 'manager'), { amend: amendOf(forRole(production, 'manager'), oneMore50, { reason: 'Una giacca nera in più.' }, { phase: 'ready', preview: frozenPreview }) })),
+    note: 'The fee\'s place says "Shown to people who see prices"; the extra deposit\'s dialog is held with the same words.',
+  },
+  // ---- end F-CP-149
+  // ---- F-CP-148 (the money wall): the same edit mode seen as the Owner — the net's change in figures (a price holder's own view)
+  { id: 'cp-148-edit-owner', label: 'F-CP-148 · Seen as Owner · Edit mode: What changes — the pieces and the net in figures, Apply for a price holder', model: d323('owner', confirmed, { amend: amendOf(confirmed, oneMore50, { reason: 'Una giacca nera in più.' }, { phase: 'ready', preview: AMEND_PREVIEW }) }) },
+  // ---- end F-CP-148
   { id: 'w2b-323-review-blocked', label: 'W2b · Sales · What changes: frozen for good (finished pieces) — no way', model: d323('sales', production, { amend: amendOf(production, oneMore50, {}, { phase: 'ready', preview: frozenPreview }) }, { freeze: { value: FREEZE_FINISHED, problem: null } }) },
   { id: 'w2b-323-priced', label: 'W2b · Sales · Priced change: one more in 50 priced, the fee, the extra deposit (30 % of the growth), it waits for a yes', model: d323('sales', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen() }), note: 'The kind lists the caparra penitenziale held: off until the accountant confirms it.' },
   { id: 'w2b-323-priced-blocked', label: 'W2b · Sales · Priced change refused: the size cannot change any more', model: d323('sales', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen(PRICED_BLOCKED) }) },
@@ -440,14 +480,48 @@ const STILL_ROWS = [
   { kind: 'WORK_ORDER_CHANGE', ref: { type: 'WorkOrderChange', id: '0190f0e2-9090-7000-8000-000000000001', number: 'WO-00021' }, words: { en: 'WO-00021: make 50 6 → 4', it: 'WO-00021: produci 50 6 → 4' }, since: '2026-11-17T13:02:00Z', waitingOn: 'PLANNER', mayAct: true, requestId: ACCEPTED_ASK.id },
   { kind: 'EXTRA_PIECES', ref: { type: 'WorkOrder', id: '0190f0e2-9090-7000-8000-000000000002', number: 'WO-00021' }, words: { en: 'Scrap the 2 extra pieces of WO-00021, with their approval', it: 'Scarta i 2 pezzi in più di WO-00021, con la loro approvazione' }, since: '2026-11-17T13:02:00Z', waitingOn: 'PLANNER', mayAct: false, requestId: ACCEPTED_ASK.id },
 ]
-const STILL_READ = { ...PRODUCTION_READ, changes: { openRequests: [{ id: ASK.id, kind: 'CHANGE', status: 'OPEN', since: ASK.askedAt, batchId: null }], stillToDo: { rows: STILL_ROWS, count: STILL_ROWS.length, workOrdersLeftOut: 0 } } }
+// F-OP-301 (walk #1): the read's blockers are the two requests the page reads (the ONE waiting list names what the Changes tab lists).
+const askBlocker = (request: typeof ASK) => ({ kind: 'BRAND_REQUEST', on: 'US' as const, words: { en: 'A customer request waits for our answer', it: 'Una richiesta del cliente aspetta la nostra risposta' }, since: request.askedAt, ref: { type: 'OrderChangeRequest', id: request.id }, sub: 'REQUEST' as const })
+const STILL_READ = {
+  ...PRODUCTION_READ,
+  headline: { ...PRODUCTION_READ.headline!, waiting: { ...PRODUCTION_READ.headline!.waiting, since: ASK.askedAt, blockers: [askBlocker(ASK), askBlocker(ASKED_ALSO)] } },
+  changes: { openRequests: [{ id: ASK.id, kind: 'CHANGE', status: 'OPEN', since: ASK.askedAt, batchId: null }], stillToDo: { rows: STILL_ROWS, count: STILL_ROWS.length, workOrdersLeftOut: 0 } },
+}
 const DOOR_STUB = { parts: { window: { review: null, grains: { price: true }, offline: false, nav: { ids: [ASK.id, ASKED_ALSO.id] } }, notice: null, lift: null, can: { lift: true, rush: true } }, hrefOf: (id: string) => `${PREFIX}/sales/orders/${ORDER_ID}?tab=changes&open=${id}` }
 const F_SA_243: DesignCase<RecordCase>[] = [
   { id: 'f-sa-243-band', label: 'F-SA-243 · Sales · Overview: the band "Brand Alpha asks: Change · line 10 · 50 6 → 4 · Answer…" (1 more request), Waiting on us · Answer…, Still to do: 2 with its rows', model: base('sales', production, { tab: 'overview', production: ready(STILL_READ), requests: { value: [ASK, ASKED_ALSO, ACCEPTED_ASK], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
   { id: 'f-sa-243-changes', label: 'F-SA-243 · Sales · Changes: Waiting on us with Answer… (the window here), Still to do under the change of 17 Nov: the work-order change is your turn, the scrap waits for planning', model: base('sales', production, { tab: 'changes', production: ready(STILL_READ), requests: { value: [ASK, ASKED_ALSO, ACCEPTED_ASK], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
-  { id: 'f-sa-243-nothing-mine', label: 'F-SA-243 · Sales · no row asks this reader: no "needs a decision" band (R-5)', model: base('sales', production, { tab: 'changes', production: ready({ ...STILL_READ, changes: { openRequests: [], stillToDo: { rows: STILL_ROWS.map((row) => ({ ...row, mayAct: false })), count: 2, workOrdersLeftOut: 1 } } }), requests: { value: [ACCEPTED_ASK], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
+  { id: 'f-sa-243-nothing-mine', label: 'F-SA-243 · Sales · no row asks this reader: no "needs a decision" band (R-5)', model: base('sales', production, { tab: 'changes', production: ready({ ...STILL_READ, headline: { ...STILL_READ.headline, waiting: { ...STILL_READ.headline.waiting, blockers: [] } } /* F-OP-301: no request open */, changes: { openRequests: [], stillToDo: { rows: STILL_ROWS.map((row) => ({ ...row, mayAct: false })), count: 2, workOrdersLeftOut: 1 } } }), requests: { value: [ACCEPTED_ASK], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
 ]
 // ---- end F-SA-243
+
+// ---- F-OP-301 (walk #1, #2): the walk's two orders in made-up words — "SO-0002": two gates not passed and a change request wait on
+// us, a yes we asked waits on the customer (header, card, badge and the Changes tab all say 3 + 1); "SO-0003": nothing waits, while
+// the kept state still says "Waiting on us" since 5 days (the header must not say it beside a card that says nothing waits). ----
+const SO2_REQUEST = brandRequest(21, { ...ASK, id: '0190f0e2-3080-7000-8000-000000000821', askedAt: '2026-11-04T09:00:00Z', note: 'One more black 52 instead of the 54.' })
+const blockerOf = (kind: string, on: 'US' | 'BRAND', en: string, since: string, ref: { type: string; id: string } | null, sub: 'REQUEST' | null = null) => ({ kind, on, words: { en, it: `${en} (it)` }, since, ref, sub })
+export const SO2_BLOCKERS = [
+  blockerOf('GATE', 'US', 'A gate is not passed yet', '2026-11-02T08:00:00Z', { type: 'OrderGate', id: '0190f0e2-6161-7000-8000-000000000001' }),
+  blockerOf('GATE', 'US', 'A gate is not passed yet', '2026-11-02T08:00:00Z', { type: 'OrderGate', id: '0190f0e2-6161-7000-8000-000000000002' }),
+  blockerOf('BRAND_REQUEST', 'US', 'A customer request waits for our answer', SO2_REQUEST.askedAt, { type: 'OrderChangeRequest', id: SO2_REQUEST.id }, 'REQUEST'),
+  blockerOf('APPROVAL', 'BRAND', "Waiting for the customer's yes", '2026-11-05T09:00:00Z', { type: 'ApprovalRequest', id: '0190f0e2-6262-7000-8000-000000000001' }),
+]
+const SO2_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'BRAND' as const, words: { en: 'Waiting on customer', it: 'Tocca al cliente' }, since: '2026-11-05T09:00:00Z', blockers: SO2_BLOCKERS } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
+const SO3_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'US' as const, words: { en: 'Waiting on us', it: 'Tocca a noi' }, since: '2026-11-14T17:00:00Z', blockers: [] } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
+// F-OP-304 (walk #7): line 10 cut one piece beyond what its first size now wants.
+const EXTRA_READ = {
+  ...SO2_READ,
+  lines: PRODUCTION_READ.lines!.map((line, index) => (index === 0 ? { ...line, madeExtra: 1, sizes: line.sizes.map((size, at) => (at === 0 ? { ...size, madeExtra: 1, madeExtraWords: { en: `Made extra: 1 ${size.size ?? ''}`, it: `Fatti in più: 1 ${size.size ?? ''}` } } : size)) } : line)),
+}
+const F_OP_301: DesignCase<RecordCase>[] = [
+  { id: 'f-op-301-so2-overview', label: 'F-OP-301 · Production manager · Overview: Waiting on us 3 (two gates, a change request) and on the customer 1 — the Changes badge says 4', model: base('manager', production, { tab: 'overview', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
+  { id: 'f-op-301-so2-changes', label: 'F-OP-301 · Production manager · Changes: the same 3 waiting on us and the yes we asked of the customer (never "Nothing waits on the customer")', model: base('manager', production, { tab: 'changes', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
+  { id: 'f-op-301-so3-overview', label: 'F-OP-301 · Production manager · Overview: nothing waits — Who acts next says so too (not the kept "Waiting on us · 5 d")', model: base('manager', production, { tab: 'overview', production: ready(SO3_READ), requests: null, liveState: 'live' }) },
+  { id: 'f-op-301-reading-changes', label: 'F-OP-301 · Changes while the production read is out: both cards read (never "Nothing waits" before it)', model: base('sales', production, { tab: 'changes', production: LOADING_STATE, liveState: 'connecting' }) },
+  // F-OP-304 (walk #7): no step left, but pieces of line 10 were made extra — their own list, never rows under "Nothing left to do".
+  { id: 'f-op-304-still-extra', label: 'F-OP-304 · Production manager · Changes › Still to do: no step left; "Made extra" lists line 10\'s pieces under its own heading', model: base('manager', production, { tab: 'changes', production: ready(EXTRA_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
+]
+// ---- end F-OP-301
 
 // ---- F-OP-129 (order page plan N2, N5, N6; 10-order-page §13 design cases): what the strip says each work order does, per reader
 // (Sales: a released one waits; the Owner: both follow, R-4), the extra pieces' outcome under cut, and the Shipments rows — a typed
@@ -589,7 +663,8 @@ export const designScreen = defineDesignScreen<RecordCase>({
     // B-TH-228: an order made straight from a request (no quote): the band names the request ("Made from INQ-… — Open"), the chain too.
     { id: 'th-228-made-from', label: 'TH-2 · Sales · An order made from a request: "Made from INQ-2026-0041 — Open" on the band, the request in Overview › Linked records', model: base('sales', typed, { tab: 'overview', madeFrom: { id: '0190f0e2-5151-7000-8000-000000000041', number: 'INQ-2026-0041' }, madeFromReading: false }) },
     { id: 'th-228-made-from-reading', label: 'TH-2 · Sales · While the source is read: neither "Made from" nor "Typed by the office"', model: base('sales', typed, { tab: 'overview', madeFrom: null, madeFromReading: true }) },
-    { id: 'sales-lines', label: 'Sales · Lines: prices and margin %, no cost (S2); making work orders is production’s', model: base('sales', confirmed) },
+    // F-CP-148 (Owner O1, B-CP-011; the S2 answer reversed): seen as Sales worker the lines carry no price and no margin %.
+    { id: 'sales-lines', label: 'Seen as Sales worker · Lines: no price, no margin % (Owner O1); making work orders is production’s', model: noPrice(base('sales', forRole(confirmed, 'manager'))) },
     {
       id: 'lines-cost-changed',
       label: 'Owner · Lines: cost changed since priced (B-W2b-380)',
@@ -610,7 +685,18 @@ export const designScreen = defineDesignScreen<RecordCase>({
       model: base('owner', pageSent, { tab: 'money', dialog: { kind: 'depositLink', requestId: PAID.id }, sentLink: { link: { id: '0190f0e2-1616-7000-8000-000000000001', expiresAt: SENT_LINK.expiresAt, to: SENT_LINK.to!, revokedLinkIds: [] }, emailId: '0190f0e2-1515-7000-8000-000000000001', delivery: 'sent' } }),
     },
     { id: 'money-page-sent', label: 'Finance · Page sent, waiting for the transfer', model: base('finance', pageSent, { tab: 'money' }) },
-    { id: 'money-sales', label: 'Sales · Money: sees the deposit; sending and recording held with the reason', model: base('sales', pageSent, { tab: 'money' }) },
+    // F-CP-148 (Owner O1): seen as Sales worker the Money tab says the deposit's state in words, the Price check one held line.
+    { id: 'money-sales', label: 'Seen as Sales worker · Money: the deposit in words, no amount; Price check one line; sending and recording held', model: noPrice(base('sales', forRole(pageSent, 'manager'), { tab: 'money', ...priceCard({ state: 'held' }) })) },
+    // ---- F-CP-142 (customer page plan C3; picture 21): Money › Price check, after Totals ----
+    { id: 'price-check', label: 'Owner · Money › Price check: per line ours against the customer\'s, Not equal · 1 line, where it came from', model: base('owner', pageSent, { tab: 'money', ...priceCard(priceReady()) }), note: 'Customer\'s price… opens the ONE window (the Work tab\'s too); Change our price › is the order\'s Edit mode; History › the audit of this order\'s customer prices.' },
+    { id: 'price-check-empty', label: 'Owner · Price check: no customer price yet, a request named them (Take them over)', model: base('owner', pageSent, { tab: 'money', ...priceCard(priceReady(EMPTY_CHECK)) }), note: '"No customer price yet" is never Equal; Customer\'s price… is the primary; the take-over is a row inside the card.' },
+    { id: 'price-check-stale', label: 'Owner · Price check: changed meanwhile — "Here they are now"', model: base('owner', pageSent, { tab: 'money', ...priceCard(priceReady(PRICE_CHECK, { stale: true })) }) },
+    { id: 'price-check-closed', label: 'Owner · Price check: a closed order keeps its prices (Customer\'s price… held in words)', model: base('owner', pageSent, { tab: 'money', ...priceCard(priceReady(CLOSED_CHECK), false) }), note: 'History › held: no right to read the audit log.' },
+    { id: 'price-check-loading', label: 'Owner · Price check: reading', model: base('owner', pageSent, { tab: 'money', ...priceCard({ state: 'loading' }) }) },
+    { id: 'price-check-error', label: 'Owner · Price check: could not be read (Try again)', model: base('owner', pageSent, { tab: 'money', ...priceCard({ state: 'failed', problem: 'problem.read.unavailable' }) }) },
+    { id: 'price-check-dialog', label: 'Owner · Price check: the customer\'s-price window open', model: base('owner', pageSent, { tab: 'money', ...priceCard(priceReady()), priceCheckDialog: priceWindowOf('edit') }) },
+    { id: 'price-check-held', label: 'As Production manager · Money › Price check: one line "Shown to people who see prices", no table, nothing asked', model: base('manager', pageSent, { tab: 'money', ...priceCard({ state: 'held' }) }), note: 'The money wall: as Sales worker the same (the Sales role holds no price since B-CP-011).' },
+    // ---- end F-CP-142
     { id: 'payment-dialog', label: 'Finance · Record the payment: amount, day, bank reference, Issue the TD02 now', model: base('finance', pageSent, { tab: 'money', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { reference: 'CRO-0000-ESEMPIO-88' } }) },
     { id: 'payment-dialog-over', label: 'Finance · Record the payment: more than is left (the rest stays on the payment)', model: base('finance', partPaid, { tab: 'money', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { amount: '2000,00', reference: 'CRO-0000-ESEMPIO-89' } }) },
     { id: 'payment-refused', label: 'Finance · Record the payment: the bank reference was recorded already', model: base('finance', pageSent, { tab: 'money', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { reference: 'CRO-0000-ESEMPIO-01' }, dialogProblem: { key: 'problem.write.reference' } }) },
@@ -750,6 +836,11 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'files-chosen', label: 'F-SA-237 · Sales · Files: two chosen — Download 2 · Share 1 own with the customer', model: base('sales', production, { tab: 'files', files: { read: ORDER_FILES, problem: null, selected: ['0190f0e2-8181-7000-8000-000000000001', '0190f0e2-8181-7000-8000-000000000002'], canShare: true } }) },
     { id: 'files-empty', label: 'F-SA-237 · Files: none yet', model: base('sales', production, { tab: 'files', files: { read: { ...ORDER_FILES, groups: ORDER_FILES.groups.map((group) => ({ ...group, files: [], leftOut: 0, measurementsLeftOut: 0 })), total: 0 }, problem: null, selected: [], canShare: true } }) },
     { id: 'files-failed', label: "F-SA-237 · Files couldn't be read (Try again)", model: base('sales', production, { tab: 'files', files: { read: null, problem: 'read', selected: [], canShare: true } }) },
+    // ---- F-CP-148 (the money wall; B-CP-023): the order's files with two priced documents — named for a price holder, counted for anyone else
+    { id: 'cp-148-files-owner', label: 'F-CP-148 · Seen as Owner · Files: the order confirmation and the customer\'s PO named and opened (a price holder)', model: base('owner', production, { tab: 'files', files: { read: PRICED_FILES, problem: null, selected: [], canShare: true } }) },
+    { id: 'cp-148-files-sales', label: 'F-CP-148 · Seen as Sales worker · Files: "2 priced documents — you cannot open them" counted, never named, no tile, no preview', model: noPrice(base('sales', forRole(production, 'manager'), { tab: 'files', files: { read: PRICED_LOCKED, problem: null, selected: [], canShare: true } })) },
+    { id: 'cp-148-files-manager', label: 'F-CP-148 · Seen as Production manager · Files: the same counted lock line; the artwork and the photos open', model: base('manager', production, { tab: 'files', files: { read: PRICED_LOCKED, problem: null, selected: [], canShare: false } }) },
+    // ---- end F-CP-148
     // ---- F-SA-232: Overview, the first tab ("where is it now", progress by line — the order's own pieces) ----
     { id: 'overview', label: 'F-SA-232 · Sales · Overview: Sewing · 1 line ahead, at risk, waiting on us, Urgent (customer), 3 bundles in work; the lines’ own pieces (Rosso: sewing not counted here)', model: base('sales', production, { tab: 'overview', production: ready(), liveState: 'live' }) },
     { id: 'overview-confirmed', label: 'F-SA-232 · Sales · Overview before any work order: Confirmed · waiting for the deposit; Preparing — work orders are made after the deposit', model: base('sales', confirmed, { tab: 'overview', production: ready(CONFIRMED_READ), liveState: 'live' }) },
@@ -758,6 +849,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'overview-failed', label: "F-SA-232 · Overview: the production couldn't be read (this part only, Try again)", model: base('sales', production, { tab: 'overview', production: FAILED_STATE, liveState: 'offline' }) },
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
+    ...F_OP_301, // F-OP-301 (walk #1, #2, #3)
     // ---- B-W2b-323: orders in depth (priority, season, the yes, what is frozen, priced changes, materials, confirmation, tech pack, forecast, milestones) ----
     ...W2B_323,
     // ---- F-OP-217: the dock's scopes, each inside the one card (look at them at 1440 with the dock a third and 40 %, and at 375) ----

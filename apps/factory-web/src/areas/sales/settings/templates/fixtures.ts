@@ -3,7 +3,7 @@ import { DEMO_COMPANIES } from '../../../../shell/design-data'
 import type { QuoteTemplate, TemplateRow } from '../../quotes/new-from/api'
 import { ROWS } from '../../quotes/list/fixtures'
 import { STYLE, STYLE_ROWS } from '../../quotes/record/fixtures'
-import { draftOf, emptyDraft } from './model'
+import { draftOf, emptyDraft, linesHeldOf } from './model'
 import type { TemplateDialogModel } from './view/TemplateDialog'
 import { TemplatesView, type TemplatesModel } from './view/TemplatesView'
 
@@ -12,6 +12,11 @@ import { TemplatesView, type TemplatesModel } from './view/TemplatesView'
  * B-W2b-294's API), made-up data only: invented templates of the invented jacket. Each case is one state: the list, archived,
  * two selected, a role without the right, empty, an error, the template's dialog (edit, new empty with a line being added,
  * new from a quote, archived read only).
+ *
+ * F-CP-160 (the money wall, B-CP-026): as a Sales worker (no price grain: the API drops every line's price), changing the lines of
+ * a template that holds a typed price is a price holder's: the template says so before the click (`holdsTypedPrices`, follow-up
+ * 13: a yes/no, no price) and a refusal that still comes says it too; Save waits in the API's words while the lines differ, and
+ * the header alone still saves.
  */
 
 const COMPANY = DEMO_COMPANIES[0]
@@ -30,6 +35,8 @@ const TEMPLATE: QuoteTemplate = {
   paymentTermsName: null,
   termsText: null,
   termsVersion: '2026-1',
+  // F-CP-160 (follow-up 13): the first line holds a typed price.
+  holdsTypedPrices: true,
   mayManage: true,
   lines: [
     { id: '0190f0e2-7310-7000-8000-000000000001', seq: 10, section: 'Giacche', kind: 'SIZE_GRID', feeKind: null, styleId: STYLE.id, style: { code: STYLE.code, name: STYLE.name, status: 'ACTIVE' }, colourwayId: STYLE.colourways[0]!.id, colourway: { code: STYLE.colourways[0]!.code, name: STYLE.colourways[0]!.name }, sizes: { '50': 2, '52': 4, '54': 2 }, pieces: 8, unitPrice: '450', description: null, note: null },
@@ -41,6 +48,14 @@ const dialog = (extra: Partial<TemplateDialogModel>): TemplateDialogModel => {
   const draft = draftOf(TEMPLATE)
   return { mode: 'edit', start: 'empty', reading: false, readProblem: null, archived: false, draft, before: draft, companies: COMPANIES, mayKeep: true, grains: { price: true }, currency: 'EUR', saving: false, problem: null, composer: { query: '', results: null, style: null, colourwayId: '', sizes: {}, section: '', unitPrice: '' }, fromQuote: { query: '', results: null, chosenId: '', name: '', everyCompany: false }, ...extra }
 }
+// ── F-CP-160: the template as a Sales worker reads it (no price grain: no unitPrice on any line) ──
+const TEMPLATE_NO_PRICE: QuoteTemplate = { ...TEMPLATE, lines: TEMPLATE.lines.map(({ unitPrice: _unitPrice, ...line }) => line) }
+const salesDialog = (extra: Partial<TemplateDialogModel>): TemplateDialogModel => {
+  const before = draftOf(TEMPLATE_NO_PRICE)
+  return dialog({ grains: { price: false }, before, draft: before, ...extra })
+}
+const LINE_REMOVED = { ...draftOf(TEMPLATE_NO_PRICE), lines: draftOf(TEMPLATE_NO_PRICE).lines.slice(0, 1) }
+// ── end F-CP-160 ──
 const model = (extra: Partial<TemplatesModel> = {}): TemplatesModel => ({ rows: { status: 'ready', value: ROWS_T }, status: 'ACTIVE', selected: [], mayCreate: true, busy: false, notice: null, dialog: null, ...extra })
 const empty = emptyDraft(COMPANY.id)
 
@@ -62,5 +77,11 @@ export const designScreen = defineDesignScreen<TemplatesModel>({
     { id: 'dialog-from-quote', label: 'New template from a quote (a quote in template mode)', model: model({ dialog: dialog({ mode: 'new', start: 'quote', draft: empty, before: empty, fromQuote: { query: 'Q-2026', results: ROWS.slice(0, 3), chosenId: ROWS[0]!.id, name: 'Come Q-2026-0142', everyCompany: false } }) }) },
     { id: 'dialog-archived', label: 'An archived template: read only, restore first', model: model({ status: 'ALL', dialog: dialog({ archived: true }) }) },
     { id: 'dialog-problem', label: 'The template with what stops the save', model: model({ dialog: dialog({ draft: { ...draftOf(TEMPLATE), acceptanceMode: 'SIGN_AND_PAY', depositPct: '', incotermPlace: '' } }) }) },
+    // ── F-CP-160 (the money wall) ──
+    { id: 'dialog-sales-lines', label: 'As Sales worker: a template with no typed price, a line removed — Save open (no price shown)', model: model({ dialog: salesDialog({ draft: LINE_REMOVED, linesHeld: false }) }), note: 'No price column: the API drops the prices. A template whose lines hold no typed price is changed by Sales (the list prices them at use).' },
+    // follow-up 13: held BEFORE the click (the template's yes/no, no price), no refusal needed.
+    { id: 'dialog-sales-before', label: 'As Sales worker: the template holds a typed price — Save held before the click', model: model({ dialog: salesDialog({ draft: LINE_REMOVED, linesHeld: linesHeldOf(TEMPLATE_NO_PRICE) }) }), note: '"It changes a price you cannot see: someone who sees prices does it." The template says a line holds a typed price (a yes/no, never the price); the header alone still saves.' },
+    { id: 'dialog-sales-blind', label: 'As Sales worker: the lines hold a price you cannot see — Save held in words', model: model({ dialog: salesDialog({ draft: LINE_REMOVED, linesHeld: true, problem: { ns: 'sales', key: 'moneyWall.blindPrice' } }) }), note: '"It changes a price you cannot see: someone who sees prices does it." Nothing was saved (the lines go first); the header alone still saves.' },
+    { id: 'dialog-sales-header', label: 'As Sales worker: only the header changed after the refusal — Save goes', model: model({ dialog: salesDialog({ draft: { ...draftOf(TEMPLATE_NO_PRICE), name: 'Stagione moto 2027 — squadre B' }, linesHeld: true }) }) },
   ],
 })

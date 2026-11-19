@@ -102,6 +102,9 @@ export const fileSchema = z.object({
   // B-CP-014: PRICED — a file that shows prices, for a reader who does not see prices (no name, no checksum).
   locked: z.enum(['MEASUREMENTS', 'PRICED']).optional(),
   // ---- end B-TH-231
+  // F-CP-144 (B-CP-014): the file shows prices (born with its document, ticked at upload, or marked) — a reader who sees it unlocked
+  // sees prices: "Take the price mark off" is theirs; anyone else marks a file that is not priced yet.
+  priced: z.boolean().optional(),
 })
 export type ApiFile = z.infer<typeof fileSchema>
 
@@ -218,6 +221,8 @@ export interface UploadAnnouncement {
   partyId: string | null
   /** B-TH-231 (B-TH-083): "This is a measurement sheet" (filed MEASUREMENTS: opened only with sales.measurements.view). */
   measurementSheet?: boolean
+  /** F-CP-144 (B-CP-014): "This file shows prices" — then only people who see prices open it (never for a floor). */
+  priced?: boolean
 }
 
 /** POST /files: announce an upload; the answer holds the presigned request to send the bytes with. */
@@ -237,6 +242,7 @@ export function requestUpload(api: ApiClient, input: UploadAnnouncement): Promis
       ...(shared.includes('FLOOR') ? { floorSiteId: input.floorSiteId } : {}),
       ...(shared.includes('PARTNER') || shared.includes('LINK') ? { partyId: input.partyId } : {}),
       ...(input.measurementSheet ? { measurementSheet: true } : {}),
+      ...(input.priced ? { priced: true } : {}), // F-CP-144
     },
     schema: z.object({ file: fileSchema, upload: presignedSchema }),
     idempotencyKey: newIdempotencyKey(),
@@ -247,6 +253,13 @@ export function requestUpload(api: ApiClient, input: UploadAnnouncement): Promis
 export function completeUpload(api: ApiClient, fileId: string): Promise<{ file: ApiFile }> {
   return api.post(`/files/${encodeURIComponent(fileId)}/complete`, { body: {}, schema: z.object({ file: fileSchema }), idempotencyKey: newIdempotencyKey() })
 }
+
+// ---- F-CP-144 (B-CP-014): POST /files/<id>/priced {priced, version} — "Mark as priced" (anyone who reaches the record: the mark reaches
+// every version and its copies), or the mark taken off (only someone who sees prices: 403 in words otherwise). A stale version: 409.
+export function setFilePriced(api: ApiClient, fileId: string, body: { readonly priced: boolean; readonly version: number }): Promise<{ file: ApiFile }> {
+  return api.post(`/files/${encodeURIComponent(fileId)}/priced`, { body, schema: z.object({ file: fileSchema }), idempotencyKey: newIdempotencyKey() })
+}
+// ---- end F-CP-144
 
 /** GET /files/<id>/download: a presigned GET that lives 60 seconds (always an attachment). */
 export function downloadLink(api: ApiClient, fileId: string): Promise<{ download: Presigned }> {

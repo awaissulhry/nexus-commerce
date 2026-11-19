@@ -32,6 +32,8 @@ import { pictureReader } from '../../../../lib/record-picture/api' // F-SA-212
 // ---- B-TH-244 (TH-4: the overall view grouped by customer, honest totals, the later columns, Invoice shipped goods) ----
 import { fromDdtsCandidates, getOrderSummary, type OrderSummary } from '../api'
 import { boardNarrowOf, extraFromAddress, groupFromAddress, noExtra, withoutExtra, type ExtraTerms } from '../model'
+import { priceTermOf, withPriceMatch } from '../model' // F-CP-141: the price check term (a price holder's only)
+import type { PriceMatch } from '../api' // F-CP-141
 import { initiallyCollapsed, toggleGroup } from '../../../../list-frame/groups/model'
 import { groupedItems, groupsToRead, type GroupRows } from './sheet/overall'
 import type { InvoiceDraftsState } from './sheet/overall-parts'
@@ -54,6 +56,14 @@ import { addTaskHeld, batchBody, createBody, type Assignable, type BatchAnswer, 
 import type { PanelRead } from '../../../../record-panels/model'
 // ---- end F-SA-281
 import { useReplyMany } from './use-reply-many' // F-SA-282
+import { usePriceCheck } from '../price-check/use-price-check' // F-CP-114: the ONE customer's-price window
+import type { PriceCheck } from '../price-check/api' // F-CP-114
+// ---- F-CP-108: the order page's own commands from a row's ⋯ "Next steps" (the ONE window; its dialogs are the order page's) ----
+import { useOrderCommandDoor } from './commands/use-order-command-door'
+import { doneWords, stillInView, type Words } from './commands/model'
+import type { OrderStatus } from '../api'
+// ---- end F-CP-108
+import { useOrderCommandMany } from './commands/use-order-command-many' // F-CP-109: Mark N ready… · Close N… · Confirm N…
 
 /**
  * F-SA-220 (sales page plan N7 / N5, picks R9, P10, P12, P18; 17-review C-2; 12-lists-board §4.5): the ONE Orders sheet, for every
@@ -144,12 +154,16 @@ function keptTerms(host: Pick<OrdersSheetHost, 'keep'>, params: Params, drop: re
 /**
  * The address the sheet writes: its own terms (listAddress), the host's locks over them, the host's own terms after them.
  * F-CP-102: `drop` — kept terms this write leaves out (Clear all drops CLEAR_DROPS; the locks never drop).
+ * F-CP-105: `put` — a host's own kept term set by a person's pick (the customer page's `cols`: Work · Money), after the others; null
+ * drops it. Only a term the host keeps (anything else is never written); the same pick again writes the same address.
  */
-export function sheetAddress(base: string, host: Pick<OrdersSheetHost, 'locked' | 'keep'>, params: Params, next: Parameters<typeof listAddress>[1], drop: readonly string[] = []): string {
+export function sheetAddress(base: string, host: Pick<OrdersSheetHost, 'locked' | 'keep'>, params: Params, next: Parameters<typeof listAddress>[1], drop: readonly string[] = [], put: Readonly<Record<string, string | null>> = {}): string {
   const written = listAddress(base, { ...next, ...(host.locked?.party ? { party: host.locked.party } : {}), ...(host.locked?.kind ? { kind: host.locked.kind } : {}) })
   const [path, qs = ''] = written.split('?')
   const query = new URLSearchParams(qs)
-  for (const [name, value] of keptTerms(host, params, drop)) query.append(name, value)
+  const own = Object.entries(put).filter(([name]) => host.keep?.includes(name)) // F-CP-105
+  for (const [name, value] of keptTerms(host, params, [...drop, ...own.map(([name]) => name)])) query.append(name, value)
+  for (const [name, value] of own) if (value !== null) query.set(name, value) // F-CP-105
   const text = query.toString()
   return `${path}${text ? `?${text}` : ''}`
 }
@@ -197,14 +211,17 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const cf = cfFromAddress(params)
   // B-TH-244: the grouping (`?group=party`), the door terms beside the rows view, and the Progress column's read.
   const group = groupFromAddress(params)
-  const extraKey = JSON.stringify(extraFromAddress(params, rows))
+  // F-CP-141 (money wall): without the price grain the price check term is carried by no read; `priceHeld`: the address asked for it.
+  const priceTerm = priceTermOf(extraFromAddress(params, rows), can)
+  const priceHeld = priceTerm.held
+  const extraKey = JSON.stringify(priceTerm.extra)
   const extra = useMemo<ExtraTerms>(() => JSON.parse(extraKey) as ExtraTerms, [extraKey])
   const [progressShown, setProgressShown] = useState(false)
   // F-SA-275: the rows' production part only while a production column is shown (Where it is, Waiting on, Supervisor).
   const [productionShown, setProductionShown] = useState(false)
   const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort, extra, progress: progressShown, kind /* F-SA-221 */, profile /* F-SA-222 */, production: productionShown /* F-SA-275 */, waiting /* F-SA-276 */ }), [brand, company, cf, sort, extra, progressShown, kind, profile, productionShown, waiting])
-  const grouped = layout === 'list' && group === 'party' && !party
-  const wantsSummary = layout === 'list' && (grouped || rows === 'uninvoiced' || !noExtra(extra))
+  const grouped = layout === 'list' && group === 'party' && !party && !priceHeld /* F-CP-141: a held view reads no group's rows */
+  const wantsSummary = !priceHeld /* F-CP-141 */ && layout === 'list' && (grouped || rows === 'uninvoiced' || !noExtra(extra))
 
   const [list, setList] = useState<OrdersListModel['list']>({ items: null, more: false, problem: null })
   const [cursor, setCursor] = useState<string | null>(null)
@@ -214,13 +231,17 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<OrdersListModel['notice']>(null)
   const [weekTick, setWeekTick] = useState(0) // B-W2b-323
+  // F-CP-108: the rows a command moved out of the view on screen (they stay where they are, greyed, until the next read: "N updates ·
+  // Show"), and the last command's toast.
+  const [moved, setMoved] = useState<readonly string[]>([])
+  const [receipt, setReceipt] = useState<{ words: Words; at: number } | null>(null)
   const readId = useRef(0)
   const companyId = session.company?.id ?? session.companies[0]?.id ?? ''
   const [newOrder, setNewOrder] = useState<NewOrderDialogModel | null>(params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId, incomingOf(prefix, session.permissions), can.price /* F-CP-146 */, !!host.locked?.party /* F-CP-104 */) : null)
   const searchSeq = useRef(0)
 
   const go = useCallback(
-    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */; waiting?: 'us' | null /* F-SA-276 */; drop?: readonly string[] /* F-CP-102 */ }) =>
+    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */; kind?: 'mtm' | null /* F-SA-221 */; profile?: string | null /* F-SA-222 */; waiting?: 'us' | null /* F-SA-276 */; drop?: readonly string[] /* F-CP-102 */; put?: Readonly<Record<string, string | null>> /* F-CP-105 */ }) =>
       router.replace(
         // F-SA-220: the host's locks and its own terms stay in every address the sheet writes.
         sheetAddress(
@@ -243,6 +264,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
             waiting: next.waiting === undefined ? waiting : next.waiting, // F-SA-276
           },
           next.drop, // F-CP-102: Clear all drops the page terms it names
+          next.put, // F-CP-105: a host's own kept term set by a person's pick (Work · Money)
         ),
       ),
     [router, base, host, params, rows, q, layout, party, brand, company, sort, cf, group, extra, kind, profile, waiting],
@@ -293,8 +315,18 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
 
   const load = useCallback(async (silent = false) => {
     const id = ++readId.current
+    setMoved([]) // F-CP-108: a read again puts every row where the view says
     readBoard(id)
     readSummary(id) // B-TH-244
+    // F-CP-141 (money wall): a price view a reader without the price grain opened (a shared saved view, a link) reads no rows: the
+    // sheet holds it in one line with the way back (Show all orders); the board's counts carry no price term.
+    if (priceHeld) {
+      setList({ items: [], more: false, problem: null })
+      setLanes([])
+      setAsOf(new Date().toISOString())
+      setUpdates(0)
+      return
+    }
     // B-TH-244: the grouped view reads its groups' rows itself (each group's own pages), after the figures name the groups.
     if (grouped) {
       if (!silent) {
@@ -348,7 +380,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
       if (id !== readId.current) return
       setList({ items: null, more: false, problem: readProblem(error) })
     }
-  }, [api, rows, q, party, narrow, layout, readBoard, readSummary, grouped])
+  }, [api, rows, q, party, narrow, layout, readBoard, readSummary, grouped, priceHeld /* F-CP-141 */])
 
   // ── B-TH-244: the grouped view opens with every group open up to ten (more: all folded), and reads the open groups' rows ──
   const summaryGroups = summary?.value?.groups ?? null
@@ -673,6 +705,62 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   // a Send that posted reads the rows again (their New messages).
   const replyMany = useReplyMany(api, session.permissions, () => void load(true))
   // ---- end F-SA-282
+  // ---- F-CP-114 (customer page plan C2d, C3; review A3): the ONE customer's-price window, opened from a row (⋯ "Set customer's price…",
+  // the Customer's price cell) for a price holder only; it reads that order's price check once. A save puts the order's new figures
+  // in its row where it stands (rows never jump) and says so.
+  const priceCheck = usePriceCheck(api, {
+    onSaved: (check: PriceCheck) => {
+      const apply = <R extends OrderRow>(row: R): R => (row.id === check.orderId ? { ...row, brandPrice: check.total.brandPrice, priceMatch: check.total.priceMatch, priceDiff: check.total.priceDiff, priceNotEqualLines: check.total.priceNotEqualLines } : row)
+      setList((current) => ({ ...current, items: current.items?.map(apply) ?? null }))
+      setGroupRows((current) => Object.fromEntries(Object.entries(current).map(([key, entry]) => [key, { ...entry, items: entry.items?.map(apply) ?? null }])))
+      setNotice({ tone: 'success', words: { key: 'priceCheck.saved', params: { number: check.number } } })
+    },
+  })
+  // ---- end F-CP-114
+  // ---- F-CP-108 (customer page plan C2b, D8, K2): the row ⋯ "Next steps" — the order page's own commands, its own dialogs, in ONE window
+  // on this page; every write the order page's route with the order's version and an Idempotency-Key. Done: the row takes the order's
+  // new state where it stands (rows never jump) — greyed when it no longer belongs to the view, until "N updates · Show" — and it is
+  // read again by id (its other values, in place); a toast says what was done.
+  const placeRow = (id: string, change: (row: OrderRow) => OrderRow, status: OrderStatus) => {
+    const apply = <R extends OrderRow>(row: R): R => (row.id === id ? (change(row) as R) : row)
+    setList((current) => ({ ...current, items: current.items?.map(apply) ?? null }))
+    setGroupRows((current) => Object.fromEntries(Object.entries(current).map(([key, entry]) => [key, { ...entry, items: entry.items?.map(apply) ?? null }])))
+    setMoved((now) => (stillInView(rows, status) ? now.filter((entry) => entry !== id) : now.includes(id) ? now : [...now, id]))
+  }
+  const commandDoor = useOrderCommandDoor(api, {
+    can,
+    prefix,
+    onDone: ({ id, number, command, order }) => {
+      if (order) placeRow(id, (row) => ({ ...row, status: order.status, version: order.version, updatedAt: order.updatedAt }), order.status)
+      const mine = readId.current
+      listOrders(api, { ids: [id], production: productionShown, progress: progressShown, limit: 1 })
+        .then((page) => {
+          const fresh = page.orders[0]
+          if (fresh && mine === readId.current) placeRow(id, () => fresh, fresh.status)
+        })
+        .catch(() => undefined)
+      setReceipt({ words: doneWords(command, number), at: Date.now() })
+    },
+  })
+  // ---- end F-CP-108
+  // ---- F-CP-109: Mark N ready… · Close N… · Confirm N… over the ticked orders (≤ 50; Cancel stays one at a time) — each order its own
+  // command, version and key, one after the other; at the end each order it ran on takes its answer in place (greyed when it left the
+  // view) and is read again by id; the window shows the result.
+  const commandMany = useOrderCommandMany(api, {
+    can,
+    onDone: (answered, ran) => {
+      for (const order of answered) placeRow(order.id, (row) => ({ ...row, status: order.status, version: order.version, updatedAt: order.updatedAt }), order.status)
+      if (ran.length === 0) return
+      const mine = readId.current
+      listOrders(api, { ids: ran.slice(0, 50), production: productionShown, progress: progressShown, limit: 50 })
+        .then((page) => {
+          if (mine !== readId.current) return
+          for (const fresh of page.orders) placeRow(fresh.id, () => fresh, fresh.status)
+        })
+        .catch(() => undefined)
+    },
+  })
+  // ---- end F-CP-109
   const week = usePromiseWeek(api, session, { enabled: layout === 'week', asked: params?.get('site') ?? null, q, tick: weekTick, partyId: party /* B-TH-201 */ })
   // B-TH-293: on one customer's sheet (the switcher's customer) the import is offered that customer's remembered columns.
   const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load(), customer)
@@ -717,6 +805,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     list: grouped ? { items: groupedRows, more: false, problem: summary?.problem ?? null } : list,
     group: grouped ? 'party' : null,
     extra,
+    priceHeld, // F-CP-141: the address names the price check term and the reader sees no price (one line, no rows)
     summary,
     groupRows,
     collapsed: collapsed ?? [],
@@ -743,6 +832,8 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     note: note.model,
     bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld /* F-SA-281 */, reply: noteCan /* F-SA-282: threads.post */ },
     replyMany: replyMany.model, // F-SA-282
+    priceCheck: priceCheck.model, // F-CP-114
+    commands: { window: commandDoor.model, moved, receipt, many: commandMany.model /* F-CP-109 */, decide: session.permissions.includes('approvals.decide') /* F-CP-109 */ }, // F-CP-108
     task, // F-SA-281
     me: session.user.id, // F-SA-281
     // ---- F-SA-220: the host ----
@@ -807,8 +898,35 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     task: taskActions, // F-SA-281
     onReplyMany: (ids) => replyMany.open(pickedRows(ids), host.locked?.party ?? null), // F-SA-282
     replyMany: replyMany.actions, // F-SA-282
+    // F-CP-114: the door only with the price grain (no door, no call for anyone else).
+    ...(can.price
+      ? {
+          // F-CP-141: the price check term in ONE write — the cell's funnel narrows the view shown; a view picked with it (the Not
+          // equal view: rows=all and the term alone) stands alone; null drops it (leaving that view: the next view, its rows).
+          onPriceMatch: (match: PriceMatch | null, view?: { readonly rows: RowView; readonly waiting?: 'us' | null }) =>
+            go({ extra: withPriceMatch(extra, match, !!view && !!match), ...(view ? { rows: view.rows, waiting: view.waiting ?? null } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
+          onPriceCheck: (orderId: string) => {
+            const row = [...(list.items ?? []), ...Object.values(groupRows).flatMap((entry) => entry.items ?? [])].find((entry) => entry.id === orderId)
+            if (row) priceCheck.open({ orderId: row.id, number: row.number })
+          },
+          priceCheck: priceCheck.actions,
+        }
+      : {}),
     // ---- end F-SA-280
+    // ---- F-CP-108: a row's ⋯ "Next steps" (the window reads the order itself: the row only names it) ----
+    onCommand: (orderId, command) => {
+      const row = [...(list.items ?? []), ...Object.values(groupRows).flatMap((entry) => entry.items ?? [])].find((entry) => entry.id === orderId)
+      if (row) commandDoor.open({ id: row.id, number: row.number }, command)
+    },
+    command: commandDoor.actions,
+    // ---- end F-CP-108
+    // ---- F-CP-109: the bar's bulk commands on the ticked orders (the window reads each order itself) ----
+    onCommandMany: (ids, command) => commandMany.open(command, pickedRows(ids)),
+    commandMany: commandMany.actions,
+    // ---- end F-CP-109
     onWaiting: (next, view) => go({ waiting: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
+    // F-CP-105: a host's own kept term set (or dropped: null) by a person's pick, in one write that keeps every other term.
+    onPageTerm: (name, value) => go({ put: { [name]: value } }),
     onSort: (next) => go({ sort: next }), // B-TH-057
     onClearCf: () => go({ cf: null }), // B-TH-057
     readPictures, // F-SA-212

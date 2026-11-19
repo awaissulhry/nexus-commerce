@@ -304,10 +304,12 @@ describe('the deadline flags a late arrival; a fee by rule is withheld from the 
     const record = (await ok('sales', 'GET', `/sales/returns/${redRma.id}`)).return
     const w2aPreview = await ok('owner', 'POST', `/sales/returns/${redRma.id}/decisions/preview`, { lines: [{ lineId: redLine.id, disposition: 'CREDIT_ONLY', goodsOutcome: 'QUARANTINE' }] })
     expect(w2aPreview.lines[0].creditAmount).toBe(36_000)
-    // B-CP-011: Sales still decides the return (the default credit, sent by no one); its answer holds no amount.
-    const decided = await ok('sales', 'POST', `/sales/returns/${redRma.id}/decisions`, { version: record.version, lines: [{ lineId: redLine.id, disposition: 'CREDIT_ONLY', goodsOutcome: 'QUARANTINE' }] })
+    // B-CP-026 (Owner answer A): the credit is an amount Sales cannot see: held for Sales in words (was decided by Sales, B-CP-011);
+    // the Owner decides it, and Sales reads the decision without the amount.
+    expect((await refused('sales', 'POST', `/sales/returns/${redRma.id}/decisions`, { version: record.version, lines: [{ lineId: redLine.id, disposition: 'CREDIT_ONLY', goodsOutcome: 'QUARANTINE' }] }, 403)).issues[0]).toMatchObject({ path: 'refusal/BLIND_PRICE' })
+    const decided = await ok('owner', 'POST', `/sales/returns/${redRma.id}/decisions`, { version: record.version, lines: [{ lineId: redLine.id, disposition: 'CREDIT_ONLY', goodsOutcome: 'QUARANTINE' }] })
     expect(decided.return.lines[0]).toMatchObject({ disposition: 'CREDIT_ONLY' })
-    expect(decided.return.lines[0]).not.toHaveProperty('creditAmount')
+    expect((await ok('sales', 'GET', `/sales/returns/${redRma.id}`)).return.lines[0]).not.toHaveProperty('creditAmount')
     expect(await lineRow(redLine.id)).toMatchObject({ creditAmount: 36_000, feeAmount: 4000, feeRuleId: seeded.feeRuleIds.changeOfMind })
     expect((await depthOf(redRma.id, 'owner')).lines[0].fee).toMatchObject({ ruleName: 'Change of mind', amount: 4000, dropped: null, wordsWithAmount: 'Change of mind: 10 % of the credit = 40.00 EUR' })
     // The rule gave a fee: its terms stay.

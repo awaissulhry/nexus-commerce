@@ -9,11 +9,12 @@
   min-width: 0;
 }
 
-/* F-OP-202: long words in a wide card (one line, at most 22 characters, the rest in the segment's title); in a card of 480 px or less
-   (the docked column's container fw-rtcol) the short words instead, when the choice has them. */
+/* F-OP-202: long words in a wide card (one line), in a card of 480 px or less (the docked column's container fw-rtcol) the short
+   words instead, when the choice has them. F-OP-303 (walk #11): the long words whole — no 22-character cap; the segments wrap onto
+   another row (the DS SegmentedControl `wrap`), and only words wider than the whole card end in "…" (the full words in the title). */
 .fw-thread-pick-long {
   display: inline-block;
-  max-width: min(22ch, 100%);
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

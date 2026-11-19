@@ -1200,13 +1200,17 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     expect(preview.lines[0]).not.toHaveProperty('creditAmount')
     const ownersPreview = await ok(G.owner, 'POST', `/sales/returns/${G.rma.id}/decisions/preview`, { version: record.version, lines: [decision] })
     expect(ownersPreview).toMatchObject({ ok: true, problems: [], lines: [{ lineId: G.rma.lineId, creditAmount: G.rma.pieceValue }] })
-    const decided = await ok(P.sales, 'POST', `/sales/returns/${G.rma.id}/decisions`, { version: record.version, lines: [decision] })
+    // B-CP-026 (Owner answer A): the credit is an amount Sales cannot see — Sales is held in words (nothing decided); the Owner
+    // decides it, and Sales reads the decision without the amount.
+    expect((await ok(P.sales, 'POST', `/sales/returns/${G.rma.id}/decisions`, { version: record.version, lines: [decision] }, 403)).error.issues[0]).toMatchObject({ path: 'refusal/BLIND_PRICE' })
+    const decided = await ok(G.owner, 'POST', `/sales/returns/${G.rma.id}/decisions`, { version: record.version, lines: [decision] })
     expect(decided.return).toMatchObject({
       status: 'INSPECTED',
       lines: [{ disposition: 'CREDIT_ONLY', goodsOutcome: 'RESTOCK', followUp: 'CREDIT_NOTE', stock: [{ locationId: fg.id, locationCode: fg.code, quantity: '1' }] }],
     })
-    expect(decided.return).not.toHaveProperty('creditTotal')
-    expect(decided.return.lines[0]).not.toHaveProperty('creditAmount')
+    const salesRead = (await ok(P.sales, 'GET', `/sales/returns/${G.rma.id}`)).return
+    expect(salesRead).not.toHaveProperty('creditTotal')
+    expect(salesRead.lines[0]).not.toHaveProperty('creditAmount')
     const ownersRead = (await ok(G.owner, 'GET', `/sales/returns/${G.rma.id}`)).return
     expect(ownersRead).toMatchObject({ status: 'INSPECTED', creditTotal: G.rma.pieceValue, lines: [{ creditAmount: G.rma.pieceValue }] })
     expect(decided.return.lines[0].effect).toContain(`at ${fg.code}; a credit note to make (Finance)`)

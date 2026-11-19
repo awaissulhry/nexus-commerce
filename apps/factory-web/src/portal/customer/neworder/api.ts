@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import type { ServerDraftBody } from '../../../lib/request-compose/server-draft' // B-TH-287
+// F-CP-154 (B-CP-075, B-CP-076): the kinds of a draft line, how a person is measured, the parts of the checklist.
+import { DRAFT_PARTS } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { MEASURE_BY } from '@nexus/factory-domain/sales/portal-ordering/people'
+import { CUSTOM_LINE_KINDS } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { PROBLEM_CODES } from '@nexus/factory-domain/sales/portal-ordering/rules' // B-CP-075: the domain's codes, one source
 
 /**
@@ -39,7 +43,14 @@ export type OwnNumber = z.infer<typeof ownNumber>
 const pair = z.object({ it: z.string(), en: z.string() })
 export type Pair = z.infer<typeof pair>
 
-export const problemSchema = z.object({ code: z.enum(PROBLEM_CODES), lineId: z.string().nullable(), size: z.string().nullable() })
+export const problemSchema = z.object({
+  code: z.enum(PROBLEM_CODES),
+  lineId: z.string().nullable(),
+  size: z.string().nullable(),
+  // F-CP-154 (B-CP-075): the part of the checklist it holds and the person of a roster it is on (absent from an older answer).
+  part: z.enum(DRAFT_PARTS).optional(),
+  personId: z.string().nullable().optional(),
+})
 export type Problem = z.infer<typeof problemSchema>
 export const noticeSchema = z.object({ code: z.enum(NOTICE_CODES) })
 export type Notice = z.infer<typeof noticeSchema>
@@ -79,8 +90,62 @@ export const lineSchema = z.object({
   source: z.object({ orderLineId: z.string(), orderId: z.string(), orderNumber: z.string(), yourNumber: ownNumber, customerRef: z.string().nullable(), orderDate: z.string() }).nullable(),
   notices: z.array(noticeSchema),
   problems: z.array(problemSchema),
+  /** F-CP-154 (B-CP-076): "Your price" — the customer's own net unit price (price grain only; absent without it). */
+  brandUnitPrice: z.string().nullable().optional(),
 })
 export type DraftLine = z.infer<typeof lineSchema>
+
+// ---- F-CP-154 (customer page plan C5; 12 §2 parts 1 and 4; B-CP-075): a line in the customer's own words and its people ---------
+/** How a person of a by-person line is measured: a size, a measurement sheet of this draft, or sent later (no saved measurements in v1). */
+export { MEASURE_BY, CUSTOM_LINE_KINDS }
+export type MeasureBy = (typeof MEASURE_BY)[number]
+export type CustomLineKind = (typeof CUSTOM_LINE_KINDS)[number]
+
+export const personSchema = z.object({
+  id: z.string(),
+  seq: z.number(),
+  version: z.number(),
+  name: z.string(),
+  number: z.string().nullable(),
+  measureBy: z.enum(MEASURE_BY),
+  size: z.string().nullable(),
+  /** SHEET: the draft's measurement sheet it names (the customer's own file: named). */
+  sheet: z.object({ id: z.string(), originalName: z.string().nullable(), locked: z.boolean() }).nullable(),
+  note: z.string().nullable(),
+})
+export type DraftPerson = z.infer<typeof personSchema>
+
+export const customLineSchema = z.object({
+  id: z.string(),
+  seq: z.number(),
+  version: z.number(),
+  kind: z.enum(CUSTOM_LINE_KINDS),
+  description: z.string().nullable(),
+  colourText: z.string().nullable(),
+  /** A described line's own-label style, or the style a made-to-measure line is made from (null: none named). */
+  style: named.nullable(),
+  colourway: named.nullable(),
+  /** MADE_TO_MEASURE: the garment type and its words. */
+  garmentType: z.object({ code: z.string(), words: pair }).nullable(),
+  /** DESCRIBED: the pieces in all (the sizes may follow after Send). */
+  quantity: z.number().nullable(),
+  sizes: z.array(sizeRow),
+  byPerson: z.boolean(),
+  pieces: z.number(),
+  people: z.array(personSchema),
+  /** By person, no one typed, a measurement sheet on the line: "People: in the attached sheet" (review A5). */
+  peopleInSheet: z.boolean(),
+  note: z.string().nullable(),
+  problems: z.array(problemSchema),
+  /** "Your price" (price grain only). */
+  brandUnitPrice: z.string().nullable().optional(),
+})
+export type CustomLine = z.infer<typeof customLineSchema>
+
+/** Made to measure for this customer: open (the default), else why not; the garment types it may choose. */
+export const madeToMeasureSchema = z.object({ open: z.boolean(), words: pair.nullable(), garmentTypes: z.array(z.object({ code: z.string(), words: pair })) })
+export type MadeToMeasure = z.infer<typeof madeToMeasureSchema>
+// ---- end F-CP-154
 
 export const requestSchema = z.object({
   id: z.string(),
@@ -117,6 +182,11 @@ export const requestSchema = z.object({
   files: z.object({ logos: z.array(draftFileSchema), references: z.array(draftFileSchema), sheets: z.array(draftFileSchema) }).optional(),
   uploads: z.object({ open: z.boolean(), words: z.string().nullable() }).optional(),
   // ---- end F-CP-151
+  // ---- F-CP-154 (B-CP-075): the lines in the customer's own words (with `lines`, one draft by seq) and made to measure for it (null
+  // once sent; absent from an older answer: none, and made to measure open — the default).
+  customLines: z.array(customLineSchema).optional(),
+  madeToMeasure: madeToMeasureSchema.nullable().optional(),
+  // ---- end F-CP-154
 })
 export type DraftRequest = z.infer<typeof requestSchema>
 
@@ -195,12 +265,14 @@ export interface NewLine {
   colourwayId: string
   sizes: SizeAsk[]
   note?: string | null
+  /** F-CP-154 (B-CP-076): "Your price" — only a price holder sends it (the grain filter refuses it from anyone else). */
+  brandUnitPrice?: string | null
 }
 
 export const addLines = (api: ApiClient, id: string, body: { version: number; lines: NewLine[] }, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
   api.post(`${path(id)}/lines`, { body, schema: recordSchema, idempotencyKey })
 
-export const changeLine = (api: ApiClient, id: string, lineId: string, body: { version: number; sizes?: SizeAsk[]; colourwayId?: string; note?: string | null }, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
+export const changeLine = (api: ApiClient, id: string, lineId: string, body: { version: number; sizes?: SizeAsk[]; colourwayId?: string; note?: string | null; brandUnitPrice?: string | null /* F-CP-154 */ }, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
   api.request('PUT', `${path(id)}/lines/${encodeURIComponent(lineId)}`, { body, schema: recordSchema, idempotencyKey })
 
 export const removeLine = (api: ApiClient, id: string, lineId: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
@@ -217,6 +289,51 @@ export const sentSchema = recordSchema.extend({ sent: z.object({ number: z.strin
 export type SentRecord = z.infer<typeof sentSchema>
 export const sendDraft = (api: ApiClient, id: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<SentRecord> =>
   api.post(`${path(id)}/send`, { body: { version }, schema: sentSchema, idempotencyKey })
+
+// ---- F-CP-154 (customer page plan C5; B-CP-075, B-CP-076): described and made-to-measure lines, the people of a by-person line --
+// Every write is a draft command at the DRAFT's version (one rule for all parts; 409 when a colleague changed it). A custom line
+// out is DELETE …/lines/:lineId (removeLine). "Your price" (brandUnitPrice) only from a price holder: a body with it from anyone else
+// is refused (403) by the grain filter, so the page never sends the key without the grain. Bodies name no party or company (W-CP-1).
+export interface CustomLineFields {
+  description?: string | null
+  colourText?: string | null
+  styleId?: string | null
+  colourwayId?: string | null
+  garmentType?: string | null
+  quantity?: number | null
+  byPerson?: boolean
+  sizes?: SizeAsk[]
+  note?: string | null
+  brandUnitPrice?: string | null
+}
+
+export const addCustomLine = (api: ApiClient, id: string, body: { version: number; line: { kind: CustomLineKind } & CustomLineFields }, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
+  api.post(`${path(id)}/custom-lines`, { body, schema: recordSchema, idempotencyKey })
+
+export const changeCustomLine = (api: ApiClient, id: string, lineId: string, body: { version: number } & CustomLineFields, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
+  api.request('PUT', `${path(id)}/custom-lines/${encodeURIComponent(lineId)}`, { body, schema: recordSchema, idempotencyKey })
+
+export interface PersonFields {
+  name: string
+  number?: string | null
+  measureBy: MeasureBy
+  size?: string | null
+  /** SHEET: a measurement sheet of this draft (its own or one of its lines'). */
+  measurementFileId?: string | null
+  note?: string | null
+}
+
+const peoplePath = (id: string, lineId: string) => `${path(id)}/lines/${encodeURIComponent(lineId)}/people`
+
+export const addPeople = (api: ApiClient, id: string, lineId: string, body: { version: number; people: PersonFields[] }, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
+  api.post(peoplePath(id, lineId), { body, schema: recordSchema, idempotencyKey })
+
+export const changePerson = (api: ApiClient, id: string, lineId: string, personId: string, body: { version: number } & Partial<PersonFields>, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
+  api.request('PUT', `${peoplePath(id, lineId)}/${encodeURIComponent(personId)}`, { body, schema: recordSchema, idempotencyKey })
+
+export const removePerson = (api: ApiClient, id: string, lineId: string, personId: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
+  api.request('DELETE', `${peoplePath(id, lineId)}/${encodeURIComponent(personId)}`, { query: { version }, schema: recordSchema, idempotencyKey })
+// ---- end F-CP-154
 
 // ---- F-CP-151 (customer page plan C5; B-CP-072): a draft's files — POST …/files {part, lineId?, name, type, size, sha256} announces
 // one and says where to PUT its bytes, …/files/:fileId/complete confirms it (held for the virus scan where one runs), DELETE

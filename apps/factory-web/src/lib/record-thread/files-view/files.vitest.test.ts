@@ -13,6 +13,7 @@ import { bulkReach, filesGroups, keepLines, rangeOf, START_AUDIENCE } from './mo
 import { uploadAskHeld } from './model' // B-TH-283
 import { isOwnFile, orderBulkReach, orderFilesOf, orderGroupsShown, orderLeftOut, sourceOf, type OrderFile, type OrderFilesRead } from './model' // F-SA-237
 import { OrderFilesBody } from './view/FilesView' // F-SA-237
+import { orderPricedLeftOut, pricedLockedIn, uploadPricedHeld } from './model' // F-CP-144
 
 // The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so the Files view's rows are read.
 vi.mock('@nexus/ui/components', async (original) => {
@@ -531,3 +532,109 @@ describe('F-OP-127: one viewer — ← / → over every file in display order, a
   })
 })
 // ---- end F-OP-127
+
+// ---- F-OP-310 (order page walk #19): ONE Download in the viewer — the PDF's toolbar has its own, so the footer has none then ---------
+describe('F-OP-310: the file viewer offers ONE Download', () => {
+  const base = { kind: 'DOCUMENT', category: null, versionNo: 1, at: '2026-11-12T10:00:00Z', from: { type: 'SalesOrder', id: 'so-alpha', label: 'SO-2026-0142' }, line: null, audience: 'OFFICE_ONLY' as const, bodyData: false, alsoOn: [], alsoOnOther: 0, inThread: null, sizeBytes: 10_000 }
+  const READ: OrderFilesRead = {
+    order: { id: 'so-alpha', number: 'SO-2026-0142' },
+    groups: [{ key: 'ORDER', words: { en: 'Order & thread', it: 'Ordine e conversazione' }, files: [{ ...base, id: 'spec', name: 'Spec.pdf', contentType: 'application/pdf' }, { ...base, id: 'sizes', name: 'Sizes.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }], leftOut: 0, measurementsLeftOut: 0 }],
+    total: 2,
+    truncated: false,
+  }
+  const downloads = (html: string) => (html.match(/Download<\/(button|a)>/g) ?? []).length
+
+  it('a PDF shown: only its toolbar\'s Download (through the host\'s download when it asks one); a card or a PDF still loading: the footer\'s', async () => {
+    const { FileViewer } = await import('../popups/view/FileViewer')
+    const { viewerFilesOf } = await import('./use-order-file-viewer')
+    const draw = (sources: Map<string, string>, index: number, onDownload?: (fileId: string) => void) =>
+      renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(FileViewer, { walk: 'all', files: viewerFilesOf(orderFilesOf(READ), sources, new Set()), index, onIndex: () => undefined, onClose: () => undefined, ...(onDownload ? { onDownload } : {}), onOpenLocked: () => undefined })))
+    const shown = draw(new Map([['spec', 'blob:spec']]), 0, () => undefined)
+    expect(shown).toContain('class="nds-pdf"')
+    expect(downloads(shown)).toBe(1)
+    expect(downloads(draw(new Map([['spec', 'blob:spec']]), 0))).toBe(1)
+    // Still loading (no source yet): no toolbar, the footer's Download.
+    expect(downloads(draw(new Map(), 0, () => undefined))).toBe(1)
+    // A kind no browser draws: its card and the footer's Download.
+    expect(downloads(draw(new Map(), 1, () => undefined))).toBe(1)
+    const viewer = readFileSync(new URL('../popups/view/FileViewer.tsx', import.meta.url), 'utf8')
+    expect(viewer).toContain("{show !== 'held' && !locked && !pdfShown && download}")
+    expect(viewer).toContain('{...(onDownload ? { onDownload: () => onDownload(current.id) } : {})}')
+  })
+})
+// ---- end F-OP-310
+
+// ── F-CP-144 (customer page plan C4, the money wall; design 11-money §4.5; B-CP-014, B-CP-023) ──────────────────────────────────
+// The PRICED lock card in the Files view: as Sales worker / as Production manager a priced document is in no group — never named,
+// never previewed, never chosen, downloaded or attached — and ONE line counts them; the upload's tick "This file shows prices"
+// (never to the floor); Mark as priced, and taking the mark off only for a price holder; the order's files count theirs too.
+describe('F-CP-144: the PRICED lock card, the upload tick, Mark as priced', () => {
+  const draw = (locale: 'it' | 'en', id: string) => {
+    const item = designScreen.cases.find((one) => one.id === id)!
+    return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: item.model })))
+  }
+  const locked = (n: number) => file({ id: `p${n}`, name: '', locked: 'PRICED' })
+
+  it('a priced document locked for the reader is in no group, counted once, never chosen or downloaded', () => {
+    const files = [locked(1), locked(2), file({ id: 'o', name: 'Size chart.xlsx' })]
+    expect(filesGroups(files, RECORD).flatMap((group) => group.series.map((one) => one.latest.id))).toEqual(['o'])
+    expect(pricedLockedIn(files, RECORD)).toBe(2)
+    expect(bulkReach([locked(1)], PARTY, ALL)).toMatchObject({ download: [], share: [] })
+    // Another record's priced file is not counted here (R-1 to R-4).
+    expect(pricedLockedIn([file({ id: 'x', name: '', locked: 'PRICED', recordType: 'WorkOrder' })], RECORD)).toBe(0)
+  })
+
+  it('as Sales worker: one counted line and why, no name, no preview, in it and en; the others offer Mark as priced', () => {
+    const en = draw('en', 'priced-locked')
+    expect(en).toContain('2 priced documents — you cannot open them')
+    expect(en).toContain('Only people who see prices open it.')
+    expect(en).not.toContain('never drawn')
+    expect(en).toContain('Mark as priced')
+    expect(en).not.toContain('Take the price mark off')
+    expect(draw('it', 'priced-locked')).toContain('2 documenti con prezzi — non puoi aprirli')
+    // Every file of the record priced: the counted line, never "No files yet".
+    const only = draw('en', 'priced-only')
+    expect(only).toContain('2 priced documents — you cannot open them')
+    expect(only).not.toContain('No files yet')
+  })
+
+  it('as a price holder: the priced PO said so, Take the price mark off', () => {
+    const html = draw('en', 'priced-holder')
+    expect(html).toContain('Brand Alpha PO 4471.pdf')
+    expect(html).toContain('Priced document: only people who see prices open it.')
+    expect(html).toContain('Take the price mark off')
+  })
+
+  it('the upload asks "This file shows prices"; a priced file never goes to the floor (Add held with why)', () => {
+    expect(uploadPricedHeld({ priced: true, audience: 'FLOOR' })).toBe('priced.floor')
+    expect(uploadPricedHeld({ priced: true, audience: 'OFFICE' })).toBeNull()
+    expect(uploadPricedHeld({ priced: false, audience: 'FLOOR' })).toBeNull()
+    // The upload window is a DS Modal (mocked to draw in place here).
+    const html = draw('en', 'upload-priced')
+    expect(html).toContain('This file shows prices')
+    expect(html).toContain('A priced document is never shared with a floor: the floor sees no prices.')
+    // The container sends the tick with the upload.
+    const docked = readFileSync(new URL('../../../areas/_shared/record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    expect(docked).toContain('...(ask.priced ? { priced: true } : {})')
+    expect(docked).toContain('setFilePriced(api, fileId, { priced, version: file.version })')
+  })
+
+  it('the order\'s files: the priced documents left out are counted on one line and in their group, never named', () => {
+    const read: OrderFilesRead = {
+      order: { id: 'so-alpha', number: 'SO-2026-0142' },
+      groups: [
+        { key: 'ORDER', words: { en: 'Order & thread', it: 'Ordine e conversazione' }, files: [], leftOut: 0, measurementsLeftOut: 0, pricedLeftOut: 2 },
+        { key: 'RETURNS', words: { en: 'Returns & complaints', it: 'Resi e reclami' }, files: [], leftOut: 0, measurementsLeftOut: 0 },
+      ],
+      total: 0,
+      truncated: false,
+    }
+    expect(orderPricedLeftOut(read)).toBe(2)
+    expect(orderGroupsShown(read).map((group) => group.key)).toEqual(['ORDER'])
+    for (const locale of LOCALES) {
+      const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(OrderFilesBody, { model: { read, problem: null, selected: [], canShare: false }, party: null })))
+      expect(html).toContain(locale === 'en' ? '2 priced documents — you cannot open them' : '2 documenti con prezzi — non puoi aprirli')
+    }
+  })
+})
+// ── end F-CP-144 ─────────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -34,6 +34,10 @@ import {
 import { PRODUCTION_ROWS } from './demo/fixtures'
 import { emptyDecline, emptyLine, HOME_ADDRESS, requestDraftOf, type InquiryTile, type ListAddress, type RecordTab } from './model'
 import { acceptDraftOf, type CatalogueModel } from './catalogue-model'
+// ---- F-CP-157: the accept window's line map ----
+import { MAP_RECORD, MAP_STYLES } from './demo/fixtures' // JACKET_DETAIL: imported above (end-check fix)
+import { mapStylesOf, type AcceptDraft, type CatalogueDialog } from './catalogue-model'
+// ---- end F-CP-157
 import type { AddressesModel } from './addresses/model' // B-TH-285
 import type { InquiryView } from './api'
 import type { InquiryRecordModel, RecordDialog } from './record-model'
@@ -118,6 +122,18 @@ function catalogueModel(over: Partial<CatalogueModel> = {}, role: RoleCase = 'ow
   return { prefix: PREFIX, can: canFor(role), offline: false, loaded: { status: 'ready', value: CATALOGUE_RECORD }, notice: null, dialog: null, handled: null, ...over }
 }
 const catalogueOpen = (over: Partial<CatalogueModel> = {}, role: RoleCase = 'owner', list = listOf()): DesignModel => page({ address: at({ catalogue: CATALOGUE_ROW.id }), list, catalogue: catalogueModel(over, role) }, role)
+// ---- F-CP-157: the accept window over a portal order with a line in the customer's words (mapped to JACKET · Sand) and a made-to-
+// measure line (not mapped yet): as Owner (a quote; an order held), as Sales worker (no price anywhere).
+const [DESCRIBED_LINE, MTM_LINE] = MAP_RECORD.request.customLines!
+function mapDialog(as: 'ORDER' | 'QUOTE', price: boolean): CatalogueDialog {
+  const start = acceptDraftOf(MAP_RECORD, as, { price })
+  const map = { ...(start.map ?? {}), [DESCRIBED_LINE!.id]: [{ key: 'into-1', styleId: JACKET_DETAIL.id, styleLabel: `${JACKET_DETAIL.code} · ${JACKET_DETAIL.name}`, colourwayId: JACKET_DETAIL.colourways[1]!.id, sizesText: '', price: as === 'ORDER' && price ? '139.00' : '' }], [MTM_LINE!.id]: [{ key: 'into-2', styleId: null, styleLabel: null, colourwayId: null, sizesText: '', price: '' }] }
+  const draft: AcceptDraft = { ...start, map }
+  return { kind: 'accept', draft, busy: false, notice: null, styles: { items: mapStylesOf(MAP_STYLES, MAP_RECORD.request.party.id), problem: null }, details: { [JACKET_DETAIL.id]: { status: 'ready', value: JACKET_DETAIL } } }
+}
+const mapOpen = (as: 'ORDER' | 'QUOTE', role: RoleCase = 'owner', price = true): DesignModel =>
+  catalogueOpen({ loaded: { status: 'ready', value: MAP_RECORD }, dialog: mapDialog(as, price), ...(price ? {} : { can: { ...canFor(role), price: false } }) }, role)
+// ---- end F-CP-157
 const ACCEPTED_RECORD = { ...CATALOGUE_RECORD, request: { ...CATALOGUE_RECORD.request, status: 'ACCEPTED' as const, words: { it: 'Confermata', en: 'Confirmed' }, decidedAt: NOW, decidedBy: 'Marco Demo', salesOrder: { id: '0190f0e2-5502-7000-8000-000000000009', number: 'SO-DEMO-00009' } }, may: { order: false, quote: false, refuse: false } }
 const tile = (id: InquiryTile, rows: typeof ROWS): Partial<InquiriesModel> => ({ address: at({ tile: id }), list: listOf(rows) })
 
@@ -214,6 +230,10 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'th3-233-catalogue-accept', label: 'TH-3 · Accept as order: the promise date, a price per line (the price the customer was shown filled in)', model: catalogueOpen({ dialog: { kind: 'accept', draft: acceptDraftOf(CATALOGUE_RECORD, 'ORDER', canFor('owner')), busy: false, notice: null } }) },
     { id: 'th3-233-catalogue-refuse', label: 'TH-3 · Refuse: the words the customer reads, previewed', model: catalogueOpen({ dialog: { kind: 'refuse', reason: 'We cannot make the sand jackets before March: we will send a quote for March.', busy: false, notice: null } }) },
     { id: 'th3-233-catalogue-decided', label: 'TH-3 · A catalogue order accepted as SO-…: the outcome line, no actions; the receipt opens the order', model: catalogueOpen({ loaded: { status: 'ready', value: ACCEPTED_RECORD }, notice: { key: 'catalogue.done.order', params: { made: 'SO-DEMO-00009', number: CATALOGUE_ROW.number }, tone: 'success', link: { href: '#', label: { key: 'catalogue.done.open', params: { made: 'SO-DEMO-00009' } } } } }) },
+    // ---- F-CP-157: the accept window maps the lines in the customer's words and made to measure (held until mapped; the map shown).
+    { id: 'cp-157-accept-map', label: 'F-CP-157 · Accept as quote: line 3 (in the customer\'s words) made into DEMO-JKT-01 · Sand, line 4 (made to measure) not mapped yet — Accept held in words; the line map below', model: mapOpen('QUOTE') },
+    { id: 'cp-157-accept-map-order', label: 'F-CP-157 · Accept as order on a made-to-measure request: held "accept the request as a quote"; a unit price on the style line (price grain)', model: mapOpen('ORDER') },
+    { id: 'cp-157-accept-map-sales', label: 'F-CP-157 · As Sales worker (no price grain): the same map, no price field, no price in the body', model: mapOpen('QUOTE', 'sales', false) },
     { id: 'th3-233-catalogue-production', label: 'TH-3 · The production manager opens a catalogue order: every action held "Only sales can accept or refuse a catalogue order", no prices', model: catalogueOpen({}, 'production') },
     { id: 'th3-233-catalogue-gone', label: 'TH-3 · A catalogue order this reader may not open: "not found" — never that it exists', model: catalogueOpen({ loaded: { status: 'notFound' } }) },
     { id: 'th3-233-selected-mixed', label: 'TH-3 · A selection over every kind: Assign and Decline reach the requests only, the other kinds left out and said', model: page({ address: at({ tile: 'ALL' }), list: listOf(INCOMING_ROWS), selected: [keyOf(ROWS[0]!), CATALOGUE_ROW.key, CHANGE_ROW.key] }) },

@@ -208,6 +208,29 @@ export function pickedAfter(lines: OpenLines['lines'], picked: readonly string[]
   return [...new Set([...picked.filter((id) => !units.has(id)), lineId])]
 }
 
+// ---- F-OP-306 (order page walk #8): the sizes as the style reads them (its scale: 50 · 52 · 54), never the order the API's rows came in.
+/** The sizes in the style's size range order; a size outside the range after them, in the order met; each size once. */
+export function inStyleOrder(sizes: readonly string[], range: readonly string[] | undefined): string[] {
+  const unique = [...new Set(sizes)]
+  if (!range || range.length === 0) return unique
+  const rank = (size: string) => {
+    const at = range.indexOf(size)
+    return at < 0 ? range.length : at
+  }
+  return unique.map((size, met) => ({ size, met })).sort((a, b) => rank(a.size) - rank(b.size) || a.met - b.met).map((entry) => entry.size)
+}
+
+/** A line's sizes in its style's order. */
+export function sizesOfLine(line: OpenLines['lines'][number]): OpenLines['lines'][number]['sizes'] {
+  return inStyleOrder(line.sizes.map((size) => size.size), line.styleSizes).map((code) => line.sizes.find((size) => size.size === code)!)
+}
+
+/** The size grid's columns: every size of the picked lines (one style), in the style's order. */
+export function gridSizesOf(lines: OpenLines['lines']): string[] {
+  return inStyleOrder(lines.flatMap((line) => line.sizes.map((size) => size.size)), lines[0]?.styleSizes)
+}
+// ---- end F-OP-306
+
 /** Every open size of a line, as the grid's default. */
 export function openGridOf(line: OpenLines['lines'][number]): Record<string, number> {
   return Object.fromEntries(line.sizes.filter((size) => size.open > 0).map((size) => [size.size, size.open]))

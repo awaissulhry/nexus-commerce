@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useSearchParams } from 'next/navigation' // F-OP-210 (lead, in A08): the artwork link keeps the dock's scope
-import { FileImage, PencilLine } from 'lucide-react'
+import { FileImage, Lock, PencilLine } from 'lucide-react' // F-CP-149: Lock
 import { Banner, Card, Disclosure, Field, KeyValue, MetricStrip, SummaryTable } from '@nexus/ui/components'
 import { SizeGridView } from '@nexus/ui/grid/size-grid/index'
 import { Button, Input, Select, Spinner, Tag } from '@nexus/ui/primitives' // F-OP-110: Select
@@ -76,7 +76,9 @@ export function LinesTab({ order, model, actions }: { order: Order; model: Order
       <Totals order={order} model={model} />
       <div className="fw-so-card-head">
         <p className="fw-so-hint">{t('lines.readOnly')}</p>
-        {model.can.manage && !isFinal(order) && (
+        {/* F-OP-305 (walk #16, Lines part): drawn for every reader, held with its words without orders.manage (amendHeld,
+            closeLinesHeld: "Changing an order needs the sales right to manage orders") — held, never hidden. */}
+        {!isFinal(order) && (
           <span className="fw-so-actions">
             <Button size="sm" heldReason={held ? t(held.key) : busy} onClick={() => actions?.onAmendStart?.()}>
               <PencilLine size={14} aria-hidden /> {t('amend.start')}
@@ -283,7 +285,7 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
     }),
   )
   const asPriced = offer === 'priced'
-  const held = stripHeld(strip, { reason: amend.reason, busy: model.busy, local, extraOutcome: amend.extraOutcome, offer, fee: amend.fee })
+  const held = stripHeld(strip, { reason: amend.reason, busy: model.busy, local, extraOutcome: amend.extraOutcome, offer, fee: amend.fee, price: model.can.price /* F-CP-149 */ })
   const heldText = held ? heldWordsOf(held, t, locale) : null
   useEffect(() => {
     if (count === 0) return
@@ -384,6 +386,8 @@ function StripFacts({ order, strip, local, model, actions }: { order: Order; str
     <p className="fw-so-strip-line" aria-live="polite">
       {strip.pieces && <span>{change('edit.strip.pieces', strip.pieces, String)}</span>}
       {model.can.price && strip.net && <span>{change('edit.strip.net', strip.net, (n) => money(n, order.currency, locale))}</span>}
+      {/* F-CP-149 (the money wall): no price grain — the net's place says so in words, never a blank. */}
+      {!model.can.price && strip.netHeld && <span className="fw-so-hint">{t('edit.pricedHeld.net')}</span>}
       {strip.workOrders.map((wo) => (
         <span key={wo.key} className={wo.now ? undefined : 'fw-so-strip-waits'}>
           {workOrderWords(wo, t, locale)}
@@ -435,8 +439,18 @@ function WhatChanges({ order, amend, strip, asPriced, model, actions }: { order:
               <Input value={amend.fee} inputMode="decimal" onChange={(event) => actions?.onAmendFee?.(event.target.value)} placeholder="0,00" autoComplete="off" />
             </Field>
           )}
+          {/* ---- F-CP-149 (the money wall; review A8, D5): without the price grain the fee's place says so in words (never a blank),
+              and the priced change waits for a price holder (Apply and its dialog held with the same words). */}
+          {!model.can.price && (
+            <Field label={d('priced.fee')}>
+              <p className="fw-so-hint">
+                <Lock size={13} aria-hidden /> {t('summary.noPrice')}
+              </p>
+            </Field>
+          )}
+          {/* ---- end F-CP-149 */}
           <div>
-            <Button size="sm" variant="quiet" heldReason={model.busy ? t('held.busy') : null} onClick={() => actions?.onPricedOffer?.()}>
+            <Button size="sm" variant="quiet" heldReason={model.busy ? t('held.busy') : !model.can.price ? t('edit.pricedHeld.apply') /* F-CP-149 */ : null} onClick={() => actions?.onPricedOffer?.()}>
               {t('edit.pricedMore')}
             </Button>
           </div>

@@ -73,6 +73,8 @@ const grant = (permissions: Permission[]): Grant => ({ permissions, companies: '
 const office = (tenantId: string, permissions: Permission[]): SessionContext => ({ audience: 'office', tenantId, actorId: newId(), grants: [grant(permissions)] })
 const SESSIONS: Record<string, () => SessionContext> = {
   sales: () => office(A.tenant, RETURNS),
+  // B-CP-026 (Owner answer A): a credit-only decision is a price holder's — the returns desk with the price grain.
+  pricedReturns: () => office(A.tenant, [...RETURNS, 'money.price']),
   viewer: () => office(A.tenant, ['payments.view', 'invoices.view']),
   recorder: () => office(A.tenant, ['payments.view', 'payments.record', 'money.price']),
   otherTenant: () => office(B.tenant, ['payments.view', 'payments.refund', 'invoices.view', 'invoices.manage', 'money.price']),
@@ -227,7 +229,8 @@ describe('a credit note drafted from a customer return (FIN-070)', () => {
     let record = (await wall('sales', 'GET', `/sales/returns/${returnId}`)).return
     record = (await wall('sales', 'POST', `/sales/returns/${returnId}/receipts`, { version: record.version, parcels: 1, parcelCondition: 'INTACT', lines: [{ lineId: seeded.waitingLineId, quantity: 1 }] }, 201)).return
     record = (await wall('sales', 'POST', `/sales/returns/${returnId}/grades`, { version: record.version, lines: [{ lineId: seeded.waitingLineId, grade: 'NEW', cause: 'NO_FAULT' }] })).return
-    record = (await wall('sales', 'POST', `/sales/returns/${returnId}/decisions`, { version: record.version, lines: [{ lineId: seeded.waitingLineId, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP' }] })).return
+    // B-CP-026: the credit is decided by a person who sees prices (Sales is held in words).
+    record = (await wall('pricedReturns', 'POST', `/sales/returns/${returnId}/decisions`, { version: record.version, lines: [{ lineId: seeded.waitingLineId, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP' }] })).return
     const [due] = await events('return.credit_due', returnId)
     expect(due?.payload).toMatchObject({ returnId, lineIds: [seeded.waitingLineId] })
 

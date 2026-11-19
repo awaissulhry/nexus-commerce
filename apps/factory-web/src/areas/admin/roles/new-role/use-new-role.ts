@@ -26,8 +26,9 @@ export function useNewRole(api: ApiClient, args: { takenKeys: readonly string[];
     )
   }, [api])
 
-  const open = () => {
-    setModel({ templates: null, readProblem: null, draft: EMPTY_NEW_ROLE, named: false, tried: false, busy: false, problem: null })
+  // F-CP-145: `basedOn` — opened from "Make a role that sees prices only ›" (Admin › Security, Who sees prices): Finance is picked.
+  const open = (basedOn?: string) => {
+    setModel({ templates: null, readProblem: null, draft: basedOn ? { ...EMPTY_NEW_ROLE, basedOn } : EMPTY_NEW_ROLE, named: false, tried: false, busy: false, problem: null })
     read()
   }
 
@@ -51,7 +52,9 @@ export function useNewRole(api: ApiClient, args: { takenKeys: readonly string[];
     model,
     stepUp: fresh.stepUp,
     actions: {
-      onOpen: open,
+      onOpen: () => open(),
+      /** F-CP-145: New role started on this ready-made role (the address's `?new=<template>`). */
+      onOpenFrom: (basedOn: string) => open(basedOn),
       // A name typed is the person's; picking a ready-made role names the copy after it until then (the view's words).
       onName: (name: string) => setModel((current) => (current ? { ...current, draft: { ...current.draft, name }, named: name.trim() !== '', problem: null } : current)),
       onPick: (basedOn: string, suggested: string) =>

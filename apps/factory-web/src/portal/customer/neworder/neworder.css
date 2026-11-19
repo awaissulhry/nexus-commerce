@@ -744,3 +744,94 @@
   color: var(--nds-text-2);
 }
 /* ---- end F-CP-151 */
+
+/* ---- F-CP-154 (12 §2 parts 1, 4, 6; review A5, G6): lines of every kind, the roster, "Your price". Tokens only. */
+.fw-pno-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  vertical-align: middle;
+}
+
+.fw-pno-ownwords {
+  margin: 0;
+  white-space: pre-line;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}
+
+.fw-pno-linefacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-16);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-pno-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}
+
+.fw-pno-privacy > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.fw-pno-roster {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-pno-rosterhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-pno-insheet,
+.fw-pno-measure {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pno-quiet.is-missing {
+  color: var(--nds-danger-text);
+}
+
+.fw-pno-personname {
+  font-weight: 600;
+}
+
+.fw-pno-ownprice {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--nds-space-4);
+  width: 100%;
+  min-width: 0;
+}
+
+.fw-pno-ownprice input {
+  text-align: right;
+}
+
+.fw-pno-ownprice-problem {
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+  text-align: right;
+}
+/* ---- end F-CP-154 */

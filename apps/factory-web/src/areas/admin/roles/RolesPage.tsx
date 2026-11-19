@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { listRoles, roleCatalogue, type PermissionCatalogue, type Role } from '../shared/api'
@@ -29,6 +29,20 @@ export function RolesPage() {
   const [pages, setPages] = useState(1)
   // B-W2b-413: New role (roles.manage): the copy opens on its Permissions tab.
   const newRole = useNewRole(api, { takenKeys: roles.items?.map((role) => role.key) ?? [], onCreated: (roleId) => router.push(`${adminHref(prefix, `/roles/${roleId}`)}?tab=permissions`) })
+  // ---- F-CP-145 (the money wall, Owner O3): Admin › Security's "Make a role that sees prices only ›" lands here with `?new=finance`:
+  // New role opens once, started on that ready-made role (roles.manage only; else the band's New role says why), and the address
+  // forgets the term (a reload does not open it again).
+  const params = useSearchParams()
+  const wanted = params?.get('new') ?? null
+  const startedFrom = useRef(false)
+  const mayCreate = session.permissions.includes('roles.manage')
+  useEffect(() => {
+    if (!wanted || startedFrom.current) return
+    startedFrom.current = true
+    if (mayCreate) newRole.actions.onOpenFrom(wanted)
+    router.replace(adminHref(prefix, '/roles'), { scroll: false })
+  }, [wanted]) // eslint-disable-line react-hooks/exhaustive-deps
+  // ---- end F-CP-145
 
   const load = useCallback(async () => {
     try {

@@ -1,4 +1,6 @@
 import { PARTNER_PEOPLE, PARTNER_WORDS } from '@nexus/factory-domain/auth/partners/rules'
+// follow-up 14: the money wall's refusal code (only the Owner gives a role that sees prices).
+import { ONLY_OWNER_GIVES_PRICES } from '@nexus/factory-domain/auth/roles/roles'
 import { isApiError, issuePath } from '../../../../lib/api/errors'
 import { DEFAULT_TIME_ZONE } from '../../../../lib/i18n/format'
 import type { LiveChange } from '../../../../shell/live/use-live'
@@ -226,9 +228,11 @@ export interface SettingsDraft {
   maxUsers: string
   /** The roles the portal offers ([] = every role of its kinds). */
   allowedRoleKeys: string[]
+  /** F-CP-155: made-to-measure lines in a customer's portal drafts (on by default). */
+  mtmDraftsOn?: boolean
 }
 
-export const settingsDraftOf = (settings: PortalSettings): SettingsDraft => ({ portalOn: settings.portalOn, maxUsers: settings.maxUsers === null ? '' : String(settings.maxUsers), allowedRoleKeys: [...settings.allowedRoleKeys] })
+export const settingsDraftOf = (settings: PortalSettings): SettingsDraft => ({ portalOn: settings.portalOn, maxUsers: settings.maxUsers === null ? '' : String(settings.maxUsers), allowedRoleKeys: [...settings.allowedRoleKeys], mtmDraftsOn: settings.mtmDraftsOn ?? true /* F-CP-155 */ })
 
 export function settingsProblems(draft: SettingsDraft, seats: Seats): Record<string, string> {
   const out: Record<string, string> = {}
@@ -247,6 +251,7 @@ export function settingsBody(saved: PortalSettings, draft: SettingsDraft): Setti
   if (draft.portalOn !== before.portalOn) body.portalOn = draft.portalOn
   if (draft.maxUsers.trim() !== before.maxUsers) body.maxUsers = draft.maxUsers.trim() === '' ? null : Number(draft.maxUsers)
   if ([...draft.allowedRoleKeys].sort().join() !== [...before.allowedRoleKeys].sort().join()) body.allowedRoleKeys = [...draft.allowedRoleKeys]
+  if (draft.mtmDraftsOn !== undefined && draft.mtmDraftsOn !== before.mtmDraftsOn) body.mtmDraftsOn = draft.mtmDraftsOn // F-CP-155
   return Object.keys(body).length === 1 ? null : body
 }
 
@@ -264,6 +269,21 @@ const CONFLICTS: ReadonlyArray<[string, string]> = [
   [PARTNER_WORDS.noPortalCompany, 'problem.noPortalCompany'],
 ]
 
+// ── follow-up 14 (customer page lane, the money wall; Owner O3, the API's B-CP-011) ─────────────────────────────────────────
+/**
+ * Only the Owner gives a role that sees prices: the API refuses a guest Accountant's invitation or role (403
+ * `roleKey/onlyOwnerGivesPrices`) and a later end of its access (`accessUntil/onlyOwnerGivesPrices`) to anyone else. The words
+ * are Finance › Close's (portal-accountant `moneyWall.*`, the same in `portal-access`): "Only the Owner gives a role that sees
+ * prices." and "Only the Owner moves the end of access later: you can bring it earlier or end it now."
+ */
+export function ownerRefusalOf(paths: readonly string[]): string | null {
+  const normal = paths.map((path) => path.replace(/\./g, '/'))
+  if (normal.includes(`roleKey/${ONLY_OWNER_GIVES_PRICES.code}`)) return 'moneyWall.ownerGives'
+  if (normal.includes(`accessUntil/${ONLY_OWNER_GIVES_PRICES.code}`)) return 'moneyWall.ownerLater'
+  return null
+}
+// ── end follow-up 14 ──
+
 /**
  * A refused partner call as a key of `portal-access`: the rule's own sentence when the API said one of factory-domain's
  * PARTNER_WORDS (the same constants), the seats limit, a field the API named, else the kind of refusal. Never the API's
@@ -277,6 +297,11 @@ export function partnerProblem(error: unknown): string {
   // apps/factory-api platform/auth/portal/terms.ts PORTAL_TERMS_MISSING (GATE-PRIVACY: no invitation before the terms).
   if (error.message.startsWith('The portal terms of this company are not published yet')) return 'problem.noTerms'
   const path = error.issues.map(issuePath).find((value) => value !== '') ?? ''
+  // ── follow-up 14 (the money wall, the API's B-CP-011): a guest Accountant sees our prices, so inviting one (or giving its role)
+  // and moving its end later are the Owner's; said in Finance › Close's words, before the field's own reading below.
+  const owners = ownerRefusalOf(error.issues.map(issuePath))
+  if (owners) return owners
+  // ── end follow-up 14 ──
   if (/roleKey/.test(path)) return 'problem.roleNotOffered'
   if (/accessUntil/.test(path)) return 'problem.accessUntil'
   if (/capabilities/.test(path)) return 'problem.capability'

@@ -9,7 +9,7 @@ import type { QuoteListRow, StyleDetail, StyleRow } from '../../../quotes/api'
 import { unitPrice } from '../../../quotes/model'
 import type { Words } from '../../../quotes/record/lines-depth/model'
 import { useDepthWords } from '../../../quotes/record/lines-depth/words'
-import { headerPatch, INCOTERMS, linesChanged, newLineKey, templateProblems, type LineDraft, type TemplateDraft } from '../model'
+import { headerPatch, INCOTERMS, linesBlindHeld, linesChanged, newLineKey, templateProblems, type LineDraft, type TemplateDraft } from '../model'
 
 export interface TemplateComposer {
   query: string
@@ -38,6 +38,8 @@ export interface TemplateDialogModel {
   currency: string
   saving: boolean
   problem: Words | null
+  /** F-CP-160: a line holds a price this reader cannot see (B-CP-026; the template's `holdsTypedPrices`, or the API's refusal): their line replace is a price holder's. */
+  linesHeld?: boolean
   composer: TemplateComposer
   fromQuote: { query: string; results: QuoteListRow[] | null; chosenId: string; name: string; everyCompany: boolean }
 }
@@ -71,6 +73,8 @@ export function TemplateDialog({ model, actions }: { model: TemplateDialogModel;
   const changed = model.mode === 'new' || Object.keys(headerPatch(model.before, draft)).length > 0 || linesChanged(model.before.lines, draft.lines, model.grains)
   const fromQuote = model.mode === 'new' && model.start === 'quote'
   const chosenQuote = model.fromQuote.results?.find((row) => row.id === model.fromQuote.chosenId) ?? null
+  // F-CP-160: the lines hold a price this reader cannot see (the template says so, follow-up 13): Save waits in its words while they differ.
+  const blindHeld = model.mode === 'edit' ? linesBlindHeld(model) : null
   const saveHeld = readOnly
     ? t(model.archived ? 'tpl.held.archived' : 'tpl.held.right')
     : fromQuote
@@ -83,9 +87,11 @@ export function TemplateDialog({ model, actions }: { model: TemplateDialogModel;
         ? say(problems[0]!)
         : !changed
           ? t('tpl.held.noChange')
-          : model.saving
-            ? t('common.working')
-            : null
+          : blindHeld
+            ? sales(blindHeld)
+            : model.saving
+              ? t('common.working')
+              : null
   const moveLine = (index: number, step: -1 | 1) => {
     const lines = [...draft.lines]
     const [line] = lines.splice(index, 1)

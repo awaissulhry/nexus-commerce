@@ -23,7 +23,8 @@ import '../sheet/sheet.css'
  */
 export function ReplyManyDialog(props: { model: ReplyManyModel; actions?: ReplyManyActions }) {
   return (
-    <WithMessages namespaces={[SHEET, 'record-thread-composer']}>
+    // F-CP-162: 'record-thread-send' — the composer's price warning and its "Send anyway" (F-CP-147's words).
+    <WithMessages namespaces={[SHEET, 'record-thread-composer', 'record-thread-send']}>
       <Dialog {...props} />
     </WithMessages>
   )

@@ -332,17 +332,18 @@ describe('F-SA-243: the order page opens the same review window as Home › Appr
 
 // ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5): the order's dock, each tab its own default width ----------------------
 describe('F-SA-263 — the order’s dock: each tab its own default width, the person’s choice kept per tab', () => {
-  it('Overview and Money 40 %; Lines, Production, Shipments, Files a third under 1600 px (40 % from 1600); Changes half', () => {
+  // F-OP-301 (walk #5): ONE dock width per viewport — the dock never changes its width when the page tab changes.
+  it('F-OP-301: one width per viewport on every tab — a third under 1600 px, 40 % from 1600 (the grid rule)', () => {
     expect(Object.keys(DOCK_DEFAULTS).sort()).toEqual([...RECORD_TABS].sort())
-    const at = (viewport: number) => Object.fromEntries(RECORD_TABS.map((tab) => [tab, defaultWidthAt(DOCK_DEFAULTS[tab], viewport)]))
-    expect(at(1440)).toEqual({ overview: 'forty', lines: 'third', production: 'third', changes: 'half', money: 'forty', shipments: 'third', files: 'third' })
-    expect(at(1920)).toEqual({ overview: 'forty', lines: 'forty', production: 'forty', changes: 'half', money: 'forty', shipments: 'forty', files: 'forty' })
+    const at = (viewport: number) => new Set(RECORD_TABS.map((tab) => defaultWidthAt(DOCK_DEFAULTS[tab], viewport)))
+    for (const viewport of [1280, 1440, 1599]) expect([...at(viewport)], String(viewport)).toEqual(['third'])
+    for (const viewport of [1600, 1920]) expect([...at(viewport)], String(viewport)).toEqual(['forty'])
   })
 
-  it('the page draws each tab at its default (nothing chosen yet): Production a third at 1440, Changes half, Money 40 %', () => {
+  it('F-OP-301: the page draws every tab at the same width (nothing chosen yet): Production, Changes and Money a third at 1440', () => {
     expect(draw('thread-docked')).toContain('data-width="third"')
-    expect(draw('documents')).toContain('data-width="half"')
-    expect(draw('money-new')).toContain('data-width="forty"')
+    expect(draw('documents')).toContain('data-width="third"')
+    expect(draw('money-new')).toContain('data-width="third"')
   })
 
   it('the order names its tab to the frame (the width kept per tab, "hidden" per person on every order)', () => {
@@ -627,8 +628,8 @@ describe('F-OP-217 — every dock scope drawn in the one card (design cases), th
       const at = (part: string) => dock.indexOf(part)
       expect(at('class="fw-rt-top"')).toBeGreaterThan(-1)
       expect(at('class="fw-rt-top"')).toBeLessThan(at('class="fw-rth fw-aoc-head"'))
-      expect(at('class="fw-rth fw-aoc-head"')).toBeLessThan(at('class="fw-rt-body"'))
-      expect(at('class="fw-rt-body"')).toBeLessThan(at('class="fw-rt-foot"'))
+      expect(at('class="fw-rth fw-aoc-head"')).toBeLessThan(at('class="fw-rt-scroll"'))
+      expect(at('class="fw-rt-scroll"')).toBeLessThan(at('class="fw-rt-foot"'))
       expect(dock.match(/<article class="fw-aoc-line/g)?.length, locale).toBe(5)
       expect(dock).toContain('class="fw-aoc-line is-office"')
       expect(textOf(dock)).toContain(locale === 'en' ? 'Read only. Write in:' : 'Sola lettura. Scrivi in:')
@@ -638,7 +639,7 @@ describe('F-OP-217 — every dock scope drawn in the one card (design cases), th
   it('the rules of a narrow card: short words, a full-width second select, the body and foot tighter, the lines and chips within the card', () => {
     const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
     expect(read('../../../_shared/record-thread/thread-pick.css')).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-thread-pick-extra,\s*\.fw-thread-pick-extra select \{\s*width: 100%;/)
-    expect(read('../../../../lib/record-thread/record-thread.css')).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-rt-body \{\s*padding: var\(--nds-space-10\) var\(--nds-space-12\);/)
+    expect(read('../../../../lib/record-thread/record-thread.css')).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-rt-scroll \{\s*padding: var\(--nds-space-10\) var\(--nds-space-12\);/)
     expect(read('../../../_shared/record-thread/all-of-customer/all-of-customer.css')).toMatch(/\.fw-aoc-chip \{\s*max-width: calc\(100% - var\(--nds-space-24\)\);/)
     // The phone: the full-width view (thread=open), ← Back above the card, no radius (record-thread.css's phone rule).
     expect(read('../../../../lib/record-thread/record-thread.css')).toMatch(/@media \(max-width: 719px\) \{\s*\.fw-rt-column \{\s*border-radius: 0;/)
@@ -735,3 +736,18 @@ describe('F-OP-129 — the order page at the end in the design screen: the strip
   })
 })
 // ---- end F-OP-129
+
+// ---- F-OP-305 (order page walk #16, Lines part): Amend order is held with words, never hidden, for a reader without orders.manage ----
+describe('F-OP-305: Lines draws Amend order (and Close remaining lines) held for a reader without orders.manage', () => {
+  it('the production manager sees Amend order held "Changing an order needs the sales right to manage orders" (en, it)', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw('manager-lines', locale)
+      expect(textOf(html)).toContain(locale === 'en' ? 'Amend order' : 'Modifica ordine')
+      expect(html).toContain(locale === 'en' ? 'aria-description="Changing an order needs the sales right to manage orders"' : 'aria-description="Cambiare un ordine richiede il diritto vendite di gestire gli ordini"')
+    }
+    // A final order offers no change at all (nothing to hold).
+    const tab = readFileSync(new URL('./view/LinesTab.tsx', import.meta.url), 'utf8')
+    expect(tab).not.toContain('{model.can.manage && !isFinal(order) && (')
+  })
+})
+// ---- end F-OP-305

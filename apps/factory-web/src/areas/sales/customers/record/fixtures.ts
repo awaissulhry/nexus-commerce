@@ -11,6 +11,9 @@ import { CustomerRecordView } from './view/CustomerRecordView'
 // F-SA-272: the supervisor card's states (made-up people of the portal demo).
 import { CustomerSupervisorCard } from '../portal/view/CustomerSupervisorCard'
 import { SUPERVISOR_CASES } from '../portal/demo'
+import { DESIGNER_CASES } from '../portal/demo' // F-CP-155
+import type { DesignerModel } from '../portal/designer/model' // F-CP-155
+import { designerModel, designerSlot, DESIGNERS } from '../portal/demo' // F-CP-158: the designer rows' last states
 import type { OpenOrderMoney } from '../money/api' // F-SA-273
 import type { SupervisorModel } from '../portal/limits/model'
 // B-W2b-324: the customer in depth (made-up data in ../depth/_demo/fixtures.ts).
@@ -51,10 +54,21 @@ import type { RowView } from '../../orders/model'
 import type { OrdersListModel } from '../../orders/list/list-model'
 import { OrdersListView } from '../../orders/list/view/OrdersListView'
 import { WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
+import { priceWindowOf, type PriceWindowCase } from '../../orders/price-check/fixtures' // F-CP-114
 import { workViewCounts } from './use-customer-work' // F-CP-103: the Views ▾ counts
 import { WaitingStrip } from './view/WaitingStrip'
 import { workEmptyOf, workPreset, workViewsOf } from './view/WorkTab' // F-CP-101: the views and empty states per view
+import { NOT_EQUAL_VIEW } from './view/WorkTab' // F-CP-141: the Not equal view
+import { columnSetOf, type ColumnSet } from './view/WorkTab' // F-CP-105: Columns: Work · Money
 // ---- end F-SA-276
+// ---- F-CP-112 (SCR-033): the row's Next steps window, the bulk window over the ticked orders, the band's New order window ----
+import { order as demoOrder } from '../../orders/_demo/fixtures'
+import { DEMO_COMPANIES } from '../../../../shell/design-data'
+import { STEP_UP_CLOSED as ORDERS_STEP_UP_CLOSED } from '../../orders/hooks'
+import type { OrderAbilities } from '../../orders/model'
+import { manyTargetsOf, type ManyRead, type ManyResult, type OrderCommandManyModel, type OrderCommandModel } from '../../orders/list/commands/model'
+import type { NewOrderDialogModel } from '../../orders/list/list-model'
+// ---- end F-CP-112
 
 /**
  * SCR-033 Customer record — made-up customers only. Each case is one state the Owner reviews: an Italian business that
@@ -85,7 +99,7 @@ const OPEN_ORDER_MONEY: OpenOrderMoney[] = [
 /** A case: the record, (B-W2a-49) the Commercial terms card of its Terms & requirements tab (B-TH-260), (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
 // F-SA-272: + the Overview's "Who looks after <customer>" card (the supervisor and backup, moved from Portal settings).
 // F-SA-274: + the e-mails of the people with portal access (the contacts' "Has portal access").
-type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[]; work?: WorkCase /* F-SA-276 */ }
+type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[]; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */; priceDiffer?: number /* F-CP-141 */ }
 
 // ---- F-SA-276: the Work tab's cases — the strip's reads and the sheet's rows (made-up; the production part as the API sends it) ----
 interface WorkCase {
@@ -99,7 +113,32 @@ interface WorkCase {
   readonly linesWindow?: 'lines' | 'discard'
   /** F-CP-107: "Drafts of <customer>" shown (its list, none yet, or one draft open in its window). */
   readonly drafts?: 'list' | 'empty' | 'window'
+  /** F-CP-114: the ONE customer's-price window open over the sheet (typing, changed meanwhile, a closed order). */
+  readonly priceWindow?: PriceWindowCase
+  /**
+   * F-CP-141: the Not equal view — `view`: shown to a price holder (its money columns, its count, its chip); `held`: a shared saved
+   * view or a link with the term opened by a reader without the price grain (one line, no rows, Show all orders).
+   */
+  readonly notEqual?: 'view' | 'held'
+  /** F-CP-105: the person's pick of "Columns: Work · Money" (`cols=`); and the production manager's page (no price grain, no orders.manage). */
+  readonly cols?: ColumnSet
+  readonly role?: 'manager'
+  // ---- F-CP-112 (SCR-033) ----
+  /** A row's ⋯ "Next steps" window over the sheet (the order page's own dialog on the order as read): Mark ready…, Close order… on a
+   *  shipped order not settled, held (the row is older than the order), or the order being read. */
+  readonly command?: 'ready' | 'close' | 'held' | 'reading'
+  /** The bulk window over the ticked orders: its preview (runs on 2 · not on 1, one reason) or its result (1 done · 1 not done). */
+  readonly many?: 'preview' | 'result'
+  /** Orders ticked on the sheet (the bar's Mark N ready… · Close N… · Confirm N…). */
+  readonly ticked?: number
+  /** The band's New order window: the customer held (no Change), Add the lines next. */
+  readonly newOrder?: boolean
+  // ---- end F-CP-112
 }
+
+/** F-CP-141: made-up rows whose prices differ (the customer's price, the check, the difference), as a price holder's answer carries them. */
+const notEqualRows = (party: Party): OrderRow[] =>
+  workRows(party, (row, index) => ({ brandPrice: (row.netAmount ?? 0) + (index === 0 ? -6000 : 6000), priceMatch: 'NOT_EQUAL' as const, priceDiff: index === 0 ? 6000 : -6000, priceNotEqualLines: index === 0 ? 2 : 1 })).slice(0, 2)
 
 /** F-CP-107: made-up portal drafts of the customer (one ready to send, one just started). */
 const draftRowsOf = (party: Party, price: boolean): DraftRow[] => {
@@ -154,14 +193,49 @@ const workRows = (party: Party, over: (row: OrderRow, index: number) => Partial<
   }))
 const workCase = (code: string, work: WorkCase, over: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record(code, { tab: 'work', ...over }), work })
 
+// ---- F-CP-112 (SCR-033): made-up windows as the sheet mounts them (the order page's own dialogs, A14's rules on the order as read) ----
+/** The rows of the command cases: two in production and one confirmed (the bulk preview runs on 2, not on 1). */
+const commandRows = (party: Party): OrderRow[] => workRows(party, (_row, index) => ({ status: index < 2 ? ('IN_PRODUCTION' as const) : ('CONFIRMED' as const) })).slice(0, 3)
+function commandWindowOf(kind: NonNullable<WorkCase['command']>, rows: readonly OrderRow[], can: OrderAbilities): OrderCommandModel {
+  const row = rows[0]!
+  const at = { id: row.id, number: row.number }
+  const read = kind === 'reading' ? null : kind === 'close' ? demoOrder('SHIPPED', { ...at, settled: false }) : kind === 'held' ? demoOrder('CONFIRMED', at) : demoOrder('IN_PRODUCTION', at)
+  return { command: kind === 'close' ? 'close' : 'ready', target: at, order: read, problem: null, busy: false, dialogProblem: null, cancelCheck: null, refuse: null, refuseReasons: null, stepUp: ORDERS_STEP_UP_CLOSED, can, prefix: '/w/DEMO' }
+}
+function manyWindowOf(kind: NonNullable<WorkCase['many']>, rows: readonly OrderRow[], can: OrderAbilities): OrderCommandManyModel {
+  const reads: Record<string, ManyRead> = Object.fromEntries(rows.map((row) => [row.id, { state: 'ready', order: demoOrder(row.status, { id: row.id, number: row.number }) } satisfies ManyRead]))
+  // The result: the first done, the second changed meanwhile (the third never ran: not in production).
+  const results: Record<string, ManyResult> = kind === 'result' ? { [rows[0]!.id]: { state: 'done' }, [rows[1]!.id]: { state: 'notDone', why: { key: 'commands.many.stale', params: { number: rows[1]!.number }, sheet: true } } } : {}
+  return { command: 'ready', targets: manyTargetsOf(rows), reads, reason: kind === 'result' ? 'Made-up: the lot is finished and checked.' : '', phase: kind === 'result' ? 'done' : 'preview', progress: null, results, stepUp: ORDERS_STEP_UP_CLOSED, can }
+}
+/** The band's New order window over the Work tab, the customer of the page held (picked on open, no Change). */
+const newOrderOf = (party: Party, price: boolean): NewOrderDialogModel => ({
+  companies: DEMO_COMPANIES.slice(0, 1),
+  companyId: DEMO_COMPANIES[0].id,
+  results: null,
+  searchProblem: null,
+  party: { ...ORDER_PARTY, id: party.id, code: party.code, legalName: party.legalName, tradeName: party.tradeName ?? null },
+  partyProblem: null,
+  contactId: ORDER_PARTY.contacts[0]!.id,
+  customerRef: '',
+  number: 'SO-2026-0089',
+  incomingHref: '/w/DEMO/sales/incoming?new=1',
+  price,
+  partyLocked: true,
+})
+// ---- end F-CP-112
+
 /** The Work tab as the page draws it: the strip, then the Orders sheet embedded and locked to the customer (its views, its preset). */
 function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
   const t = useT('parties')
   const name = party.tradeName ?? party.legalName
   const view = work.view ?? WORK_DEFAULT_ROWS
+  const notEqual = work.notEqual === 'view' && work.price !== false // F-CP-141
+  const can = work.role === 'manager' ? canOf('manager') : { ...canOf('sales'), price: work.price !== false } // F-CP-105: the production manager
+  const columnSet = columnSetOf(work.cols, notEqual, can.price) // F-CP-105: without the price grain always Work
   const list: OrdersListModel = {
     prefix: '/w/DEMO',
-    can: { ...canOf('sales'), price: work.price !== false },
+    can,
     today: ORDERS_TODAY,
     layout: 'list',
     rows: view,
@@ -177,12 +251,21 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
     embedded: true,
     locked: { party: true, kind: false },
     listKey: 'sales.orders',
-    views: workViewsOf({ price: work.price !== false }), // F-CP-101
-    viewCounts: workViewCounts(work.reads.board), // F-CP-103
+    views: workViewsOf({ price: work.price !== false }, work.notEqual ? { priceCheck: true } : {}), // F-CP-101; F-CP-141: Not equal (price grain only)
+    viewCounts: { ...(workViewCounts(work.reads.board) ?? {}), ...(notEqual ? { [NOT_EQUAL_VIEW]: 2 } : {}) }, // F-CP-103; F-CP-141: the customer's own count
     defaultRows: WORK_DEFAULT_ROWS,
-    preset: workPreset(view, null),
+    preset: workPreset(view, null, columnSet === 'money'), // F-CP-141: the Not equal view opens on the money columns; F-CP-105: the toggle
+    columnSet: can.price ? { value: columnSet } : null, // F-CP-105: the toggle, a price holder's only
+    // ---- F-CP-141: the Not equal view (its host item ticked, the term's chip) or, without the price grain, the held line ----
+    ...(work.notEqual && work.price !== false ? { hostViews: [{ id: NOT_EQUAL_VIEW, label: t('customers.work.view.notEqual'), active: notEqual }], extra: { priceMatch: 'NOT_EQUAL' as const } } : {}),
+    ...(work.notEqual && work.price === false ? { priceHeld: true } : {}),
     toolbarLink: { href: `/w/DEMO/production/work-orders?party=${party.id}`, label: t('customers.band.workOrders', { customer: name }) },
     empty: workEmptyOf(view, null, name, t, `/w/DEMO/sales/customers/${party.id}?tab=work&rows=all`), // F-CP-101: per view
+    // ---- F-CP-112: the row's Next steps window, the ticked orders and their bulk window, the band's New order window ----
+    ...(work.command || work.many ? { commands: { window: work.command ? commandWindowOf(work.command, work.rows ?? [], can) : null, moved: [], receipt: null, many: work.many ? manyWindowOf(work.many, (work.rows ?? []).slice(0, 3), can) : null, decide: work.role !== 'manager' } } : {}),
+    ...(work.ticked ? { selected: (work.rows ?? []).slice(0, work.ticked).map((row) => row.id) } : {}),
+    ...(work.newOrder ? { newOrder: newOrderOf(party, can.price) } : {}),
+    // ---- end F-CP-112
   }
   return createElement(
     'div',
@@ -193,7 +276,7 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
       ? createElement(CustomerDraftsList, {
           model: { customer: name, read: { status: 'ready', rows: work.drafts === 'empty' ? [] : draftRowsOf(party, work.price !== false) }, updates: work.drafts === 'list' ? 1 : 0, activeId: null, views: { model: { ...list, hostViews: [{ id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: name }), active: true }], views: workViewsOf({ price: work.price !== false }, { drafts: true }) } } },
         })
-      : createElement(OrdersListView, { model: list }),
+      : createElement(OrdersListView, { model: work.priceWindow && work.price !== false ? { ...list, priceCheck: priceWindowOf(work.priceWindow) } : list /* F-CP-114 */ }),
     work.drafts === 'window'
       ? createElement(DraftWindow, {
           model: {
@@ -236,7 +319,7 @@ function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDept
 }
 
 function CustomerDesign({ model }: { model: CustomerCase }) {
-  const { terms, money, depth, supervisor, portalEmails, work, ...record } = model
+  const { terms, money, depth, supervisor, portalEmails, work, designer, priceDiffer, ...record } = model
   const party = record.party
   const id = party?.id ?? 'x'
   return inShell(
@@ -245,7 +328,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
       // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
-      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WorkDesign, { work, party }) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null }),
+      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName, designer: designer ?? null /* F-CP-155 */ }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WorkDesign, { work, party }) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */ }),
     ),
   )
 }
@@ -356,7 +439,40 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'work-drafts-empty', label: 'F-CP-107 · Drafts: none in the portal yet', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'empty' }) },
     { id: 'work-drafts-window', label: 'F-CP-107 · A draft open in its window: read only, Accept and Refuse held with why, J / K between drafts', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'window' }) },
     { id: 'work-new-order-discard', label: 'F-CP-113 · Discard asks first when something is typed', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), linesWindow: 'discard' }) },
+    // ---- F-CP-114: "Set customer's price…" (row ⋯, or the Customer's price cell) — the ONE window, price holders only.
+    { id: 'work-price-window', label: 'F-CP-114 · Work: Set customer\'s price… — per line a unit price or a line total, the PO file, an optional order total', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'edit' }) },
+    { id: 'work-price-window-stale', label: 'F-CP-114 · Changed meanwhile (409): "Someone changed these prices meanwhile. Here they are now."', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'stale' }) },
+    { id: 'work-price-window-closed', label: 'F-CP-114 · A closed order keeps its prices: read only, Save held with why', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'closed' }) },
+    // ---- F-CP-105: "Columns: Work · Money" on All orders — as Owner (the money columns), as Sales worker and as Production manager
+    // (the same address `cols=money`: no toggle, the Work columns, no money column).
+    { id: 'work-cols-money', label: 'F-CP-105 · Work: Columns: Work · Money on Money — Number, Status, Our price, Customer\'s price, Price check, Balance (a person\'s Customise wins)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: notEqualRows(by('MODA-DEMO')), cols: 'money' }) },
+    { id: 'work-cols-sales-worker', label: 'F-CP-105 · As Sales worker with cols=money in the address: no toggle, the Work columns, no money column', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined, paid: undefined, balance: undefined })), price: false, cols: 'money' }, { can: { ...RECORD_CAN, price: false } }) },
+    { id: 'work-cols-manager', label: 'F-CP-105 · As Production manager with cols=money in the address: no toggle, the Work columns, no money column', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined, paid: undefined, balance: undefined })), price: false, role: 'manager', cols: 'money' }, { can: { ...RECORD_CAN, price: false, ordersManage: false } }) },
+    // ---- F-CP-141: the Not equal view (price holders only), and the same address as a Sales worker.
+    { id: 'work-not-equal', label: 'F-CP-141 · Work: Not equal — every order whose prices differ, on the money columns (Our price, Customer\'s price, Price check, Balance), its count in Views ▾', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: notEqualRows(by('MODA-DEMO')), notEqual: 'view' }) },
+    { id: 'work-not-equal-no-price', label: 'F-CP-141 · As Sales worker: a shared view with the price term — one line, no rows, Show all orders; no Not equal in Views ▾, no count', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], price: false, notEqual: 'held' }, { can: { ...RECORD_CAN, price: false } }) },
+    { id: 'work-price-window-no-price', label: 'F-CP-114 · As Sales worker (no price grain): no door, no window, no call', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined })), price: false, priceWindow: 'edit' }, { can: { ...RECORD_CAN, price: false } }) },
     { id: 'quotes-orders-empty-production', label: 'F-CP-101 · Work: In production, nothing (the way to All orders)', model: workCase('NUOVO-PROVA', { reads: STRIP_READY, rows: [], view: 'IN_PRODUCTION' }) },
+    // ---- F-CP-112 (SCR-033): New order in place, the row's Next steps window, the bulk window (light / dark; 375 / 1440 / 1920) ----
+    { id: 'work-new-order', label: 'F-CP-112 · Work: New order from the band — the customer held (no Change), Add the lines opens the lines window here', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), newOrder: true }) },
+    { id: 'work-new-order-no-price', label: 'F-CP-112 · As Sales worker (no price grain): the same window says "Priced from <customer>\'s price list"', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined })), newOrder: true, price: false }, { can: { ...RECORD_CAN, price: false } }) },
+    { id: 'work-command-ready', label: 'F-CP-112 · Work: row ⋯ Next steps › Mark ready… — the order page\'s own dialog on the order as read (a reason)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: commandRows(by('MODA-DEMO')), command: 'ready' }) },
+    { id: 'work-command-close', label: 'F-CP-112 · Close order… on a shipped order not settled: "not settled" in words and a reason — never an amount', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: commandRows(by('MODA-DEMO')), command: 'close', price: false }, { can: { ...RECORD_CAN, price: false } }) },
+    { id: 'work-command-held', label: 'F-CP-112 · Mark ready… held in the order page\'s words: the order moved since the row was read (not in production)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: commandRows(by('MODA-DEMO')), command: 'held' }) },
+    { id: 'work-command-reading', label: 'F-CP-112 · The Next steps window while the order is read (its number in the title)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: commandRows(by('MODA-DEMO')), command: 'reading' }) },
+    { id: 'work-bulk-bar', label: 'F-CP-112 · Three orders ticked: the bar — Reply to N, Mark 3 ready…, Close 3…, Confirm 3… (held in words where none is in its state)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: commandRows(by('MODA-DEMO')), ticked: 3 }) },
+    { id: 'work-bulk-bar-manager', label: 'F-CP-112 · As Production manager: only Mark 3 ready…, held in words (no orders.manage); no money anywhere', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: commandRows(by('MODA-DEMO')).map((row) => ({ ...row, netAmount: undefined, grossAmount: undefined, paid: undefined, balance: undefined })), ticked: 3, price: false, role: 'manager' }, { can: { ...RECORD_CAN, price: false, ordersManage: false } }) },
+    { id: 'work-bulk-preview', label: 'F-CP-112 · Mark 3 ready…: the preview — "Runs on 2 · Not on 1", why beside it, each order by number, one reason', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: commandRows(by('MODA-DEMO')), ticked: 3, many: 'preview' }) },
+    { id: 'work-bulk-result', label: 'F-CP-112 · Mark 3 ready…: the result — "1 done · 1 not done", the order changed meanwhile, Run the rest again', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: commandRows(by('MODA-DEMO')), ticked: 3, many: 'result' }) },
+    // ---- end F-CP-112
+    // ---- F-CP-148 (the money wall, Owner O1–O3): "Seen as" on the Work tab — Owner (work-cols-money, work-not-equal, work-price-window,
+    // work-drafts), Sales worker (work-cols-sales-worker, work-not-equal-no-price, work-price-window-no-price, work-drafts-no-price) and
+    // the Production manager below; Brand Alpha never reaches an office screen (its own cases are the portal's). ----
+    { id: 'cp-148-work-manager', label: 'F-CP-148 · Seen as Production manager · Work on All orders: no toggle, no money column, no Set customer\'s price…, New order held', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined, paid: undefined, balance: undefined })), price: false, role: 'manager' }, { can: { ...RECORD_CAN, price: false, ordersManage: false } }) },
+    { id: 'cp-148-work-not-equal-manager', label: 'F-CP-148 · Seen as Production manager · a link with the price term: one line, no rows, Show all orders; no Not equal in Views ▾', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], price: false, notEqual: 'held', role: 'manager' }, { can: { ...RECORD_CAN, price: false, ordersManage: false } }) },
+    { id: 'cp-148-price-window-manager', label: 'F-CP-148 · Seen as Production manager · no customer\'s-price door, no window, no call', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined })), price: false, role: 'manager', priceWindow: 'edit' }, { can: { ...RECORD_CAN, price: false, ordersManage: false } }) },
+    { id: 'cp-148-drafts-manager', label: 'F-CP-148 · Seen as Production manager · Drafts of <customer>: no Value column, readiness counted of 6', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'list', price: false, role: 'manager' }, { can: { ...RECORD_CAN, price: false, ordersManage: false } }) },
+    // ---- end F-CP-148
     { id: 'quotes-orders-reading', label: 'F-SA-276 · Work: the strip and the rows reading ("—", never 0)', model: workCase('MODA-DEMO', { reads: STRIP_READING, rows: null }) },
     { id: 'quotes-orders-error', label: "F-SA-276 · Work: the orders couldn't be read (the strip stays usable)", model: workCase('MODA-DEMO', { reads: { ...STRIP_READY, requests: { status: 'failed' } }, rows: [], problem: 'problem.read.unavailable' }) },
     // ---- F-SA-271: the seven tabs (R5), the landing tab, the band's primary and ⋯ lines.
@@ -365,6 +481,9 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'tab-quotes', label: 'F-SA-277 · Quotes & incoming: the tab (its two lists, Quotes then Incoming requests, are their pages\' own lists mounted by the page; see the Sales › Quotes and Incoming design cases)', model: record('MODA-DEMO', { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
     // F-SA-273: the Money tab with every card's right (the made-up ageing, returns and open orders of money/_demo).
     { id: 'tab-money', label: 'F-SA-273 · Money: key numbers, credit, open invoices per currency, deposits and balances, payment terms', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.sales, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }) } },
+    // F-CP-141: "Prices differ on {count} orders ›" — the door to the Work tab's Not equal view; nothing of it without the price grain.
+    { id: 'tab-money-price-differ', label: 'F-CP-141 · Money: "Prices differ on 2 orders ›" under the key numbers (opens Work › Not equal)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.sales, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }), priceDiffer: 2 } },
+    { id: 'tab-money-price-differ-no-price', label: 'F-CP-141 · Money as Sales worker: no line, no count (the page reads none)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel({ ...MONEY_CAN.sales, price: false, orders: true, credit: true, creditLimits: false }, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }), priceDiffer: 2 } },
     { id: 'tab-money-blind', label: 'F-SA-273 · Money without the price grain and without sales.credit.limits: counts only, Change limit… held', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel({ ...MONEY_CAN.sales, price: false, orders: true, credit: true, creditLimits: false }, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }) } },
     { id: 'band-held', label: 'F-SA-271 · New order and Add task held with why (no orders.manage, no tasks.manage)', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: false, tasks: false, workorders: true } }) },
     { id: 'band-doors', label: 'F-SA-271 · ⋯ Check VIES, Add task for <customer>…, Import orders…, Open in Sales › Orders, Work orders of <customer> ›', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: true, tasks: true, workorders: true } }) },
@@ -375,6 +494,23 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'overview-supervisor-every-company', label: 'F-SA-272 · The supervisor held — the reader does not manage this customer at every company', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.everyCompany } },
     { id: 'overview-supervisor-nobody', label: 'F-SA-272 · Nobody may supervise yet (what a supervisor needs, in words)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.nobody } },
     { id: 'overview-supervisor-refused', label: 'F-SA-272 · Apply refused: the supervisor cannot open measurement sheets', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.refused } },
+    // ---- F-CP-155: the Factory designer + Backup under Supervisor / Backup (the only names of ours the customer sees) ----
+    { id: 'overview-designer', label: 'F-CP-155 · Who looks after <customer>: Factory designer Giulia Verdi + Backup Elena Rossi — "<customer> sees this name"', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.set } },
+    { id: 'overview-designer-change', label: 'F-CP-155 · Change…: ONE window, two pick lists (office people who read and answer its conversations), Apply with the version', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.change } },
+    { id: 'overview-designer-refused', label: 'F-CP-155 · Apply refused at the field: "This person does not work with <customer>…"', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.refused } },
+    { id: 'overview-designer-lost', label: 'F-CP-155 · The designer no longer reaches the customer: the portal names the backup', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.lost } },
+    { id: 'overview-designer-portal-off', label: 'F-CP-155 · Portal off: the name shows once the portal is on', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.portalOff } },
+    { id: 'overview-designer-empty', label: 'F-CP-155 · No factory designer named yet', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.empty } },
+    { id: 'overview-designer-held', label: 'F-CP-155 · Change… held: "Needs the right: …" (no partners.manage)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.held, designer: DESIGNER_CASES.held } },
+    { id: 'overview-designer-every-company', label: 'F-CP-155 · Change… held: not at every company the customer works with', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.everyCompany } },
+    { id: 'overview-designer-loading', label: 'F-CP-155 · The designer rows reading (the supervisor is drawn)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.loading } },
+    { id: 'overview-designer-error', label: "F-CP-155 · The designer couldn't be read: Try again (the supervisor stays)", model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.error } },
+    // ---- F-CP-158 (customer page plan C7, D12): the factory designer rows' last states (picture 23) ----
+    { id: 'cp158-designer-not-active', label: 'F-CP-158 · The factory designer is no longer active: "No longer active", the portal names the backup', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: designerModel({}, designerSlot({ designer: { id: DESIGNERS.giulia.id, name: DESIGNERS.giulia.name, state: 'NOT_ACTIVE' } })) } },
+    { id: 'cp158-designer-alone', label: 'F-CP-158 · A factory designer without a backup: the portal names the designer', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: designerModel({}, designerSlot({ backup: null })) } },
+    { id: 'cp158-designer-nobody', label: 'F-CP-158 · Both no longer reach the customer: the portal names nobody (the brand writes to our team)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: designerModel({}, designerSlot({ designer: { id: DESIGNERS.giulia.id, name: DESIGNERS.giulia.name, state: 'NO_REACH' }, backup: { id: DESIGNERS.elena.id, name: DESIGNERS.elena.name, state: 'NOT_ACTIVE' } })) } },
+    { id: 'cp158-designer-done', label: 'F-CP-158 · Applied: the receipt under the rows (no step-up for a name)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: designerModel({ notice: { key: 'customers.designer.done' } }) } },
+    // ---- end F-CP-158
     // ---- F-SA-274: People & addresses — a contact with portal access is tagged (an exact e-mail match), the others offer Invite.
     { id: 'people-portal', label: 'F-SA-274 · People & addresses: contacts tagged "Has portal access" on the same e-mail; ⋯ Invite to the portal… for the others', model: { ...record('MODA-DEMO', { tab: 'people', can: { ...RECORD_CAN, partners: true } }), portalEmails: by('MODA-DEMO').contacts.slice(0, 1).flatMap((contact) => (contact.email ? [contact.email.toLowerCase()] : [])) } },
     // ---- B-TH-260: the thread docked (the rule of picture 38); Activity and Documents are gone, their tools in the thread's "⋯" (R-ACT)

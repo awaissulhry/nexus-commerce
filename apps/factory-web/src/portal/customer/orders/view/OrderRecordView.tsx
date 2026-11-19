@@ -29,6 +29,7 @@ import { Loading } from './parts'
 import { ShipmentsTab } from './ShipmentsTab'
 import { StatusTab } from './StatusTab'
 import '../orders.css'
+import type { PriceCheckActions, PriceCheckModel } from './PriceCheck' // F-CP-143
 
 /**
  * SCR-184 › one order (design portal.customer.orders rec "Order"; B-TH-275, picture 22: Status & progress, Lines, Shipments &
@@ -123,6 +124,10 @@ export interface OrderRecordViewModel {
   // ---- end F-PR-24
   /** F-SA-246: "Ask for a change" above the order's conversation (the Ask dialog), held with why; absent or null: not offered. */
   askDoor?: { readonly held: string | null } | null
+  // ---- F-CP-143 (customer page plan C3, D2): the customer's own price check on the Lines tab — a price holder's (its Buyer, Finance,
+  // Admin); absent or null: none (anyone else reads "Prices are not part of your access.", and no call is made).
+  priceCheck?: PriceCheckModel | null
+  // ---- end F-CP-143
 }
 
 export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRetryQuality, onReport, onPhoto */ {
@@ -155,6 +160,8 @@ export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRe
   /** F-SA-246: the conversation's "Ask for a change" (the Ask dialog). */
   onAskChange?: () => void
   report?: ReportProblemActions
+  /** F-CP-143: "Your prices…", its window, read again. */
+  priceCheck?: PriceCheckActions
   dialog?: {
     change?: ChangeDialogActions
     cancel?: CancelDialogActions

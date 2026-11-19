@@ -64,6 +64,15 @@ export function leftOutOf(group: Pick<OrderFilesGroup, 'filesLeftOut' | 'measure
   ]
 }
 
+// ── F-CP-161 (customer page lane, the money wall; the API's B-CP-023, MW1's words) ──
+/**
+ * The priced documents of one order this reader may not open (no price grain): ONE counted lock line, "2 priced documents — you
+ * cannot open them · Only people who see prices open it." (record-files `priced.*`), never named, never previewed, never in the
+ * band's count; a group with only those does not say "nothing to open".
+ */
+export const pricedLeftOutOf = (group: Pick<OrderFilesGroup, 'pricedLeftOut'>): number => Math.max(0, group.pricedLeftOut)
+// ── end F-CP-161 ──
+
 /** The thread the dock shows: the work order's own notes, or one order's thread (its id). */
 export type ThreadPick = 'workOrder' | string
 

@@ -145,9 +145,9 @@ export const widthKey = (recordType: string, personId: string | null) => `factor
 
 export const isDockWidth = (value: unknown): value is DockWidth => typeof value === 'string' && (DOCK_WIDTHS as readonly string[]).includes(value)
 
-// ---- F-SA-263 (sales page plan N6, P11; 10-order-page §6.3): a page whose dock adapts per tab keeps the person's chosen width per
-// person + record type + TAB (the record type's key + `.tab`), and "hidden" per person + record type; a private window keeps nothing.
-export const tabWidthKey = (recordType: string, personId: string | null, tab: string) => `${widthKey(recordType, personId)}.${tab}`
+// ---- F-SA-263 (sales page plan N6, P11; 10-order-page §6.3): a page that names its tab keeps "hidden" per person + record type; a
+// private window keeps nothing. F-OP-301 (walk #5): the chosen width is ONE per person + record type on every tab (`widthKey`): the dock
+// never changes its width when the page tab changes.
 export const hiddenKey = (recordType: string, personId: string | null) => `factory.thread.hidden.${personId ?? 'anyone'}.${recordType}`
 // ---- end F-SA-263
 

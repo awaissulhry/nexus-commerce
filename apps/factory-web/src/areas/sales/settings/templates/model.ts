@@ -4,6 +4,8 @@ import { parsePercent, parsePrice } from '../../quotes/model'
 import type { QuoteTemplate, TemplateRow } from '../../quotes/new-from/api'
 import type { Words } from '../../quotes/record/lines-depth/model'
 import type { TemplateHeader, TemplateLineInput } from './api'
+// F-CP-160: the money wall's hold of a line replace that would drop a price the person cannot see.
+import { BLIND_PRICE_KEY } from '../../_shared/blind-price'
 
 /**
  * Sales settings › Quote templates (design sales.settings sec:ssettings.templates; SAL-144), pure: the rows the status
@@ -160,6 +162,22 @@ export function linesBody(lines: readonly LineDraft[], grains: { price: boolean 
 
 /** The lines changed (their order, styles, colourways, pieces, sections, prices). */
 export const linesChanged = (before: readonly LineDraft[], after: readonly LineDraft[], grains: { price: boolean }): boolean => JSON.stringify(linesBody(before, grains)) !== JSON.stringify(linesBody(after, grains))
+
+// ── F-CP-160 (customer page lane, the money wall; the API's B-CP-026) ──────────────────────────────────────────────────────
+/**
+ * Replacing a template's lines while one of them holds a typed unit price is a price holder's: a person without the price grain
+ * sends no price, so the replace would drop it (the API answers 403 refusal/BLIND_PRICE, nothing changed). That reader never sees
+ * the prices (the grain filter drops `unitPrice`); the template says it before the click (`holdsTypedPrices`, follow-up 13: a
+ * yes/no, no price) and a refusal that still comes says it too (`linesHeld`). Save then waits in the API's words while the lines
+ * differ from the template's; the header alone still saves. A price holder is never held.
+ */
+export const linesHeldOf = (template: Pick<QuoteTemplate, 'holdsTypedPrices'>): boolean => template.holdsTypedPrices
+
+export function linesBlindHeld(dialog: { readonly linesHeld?: boolean; readonly grains: { price: boolean }; readonly before: TemplateDraft; readonly draft: TemplateDraft }): string | null {
+  if (dialog.grains.price || !dialog.linesHeld) return null
+  return linesChanged(dialog.before.lines, dialog.draft.lines, dialog.grains) ? BLIND_PRICE_KEY : null
+}
+// ── end F-CP-160 ──
 
 /** Whether the person may keep a template of this company (null: every company), from the session's grants. */
 export function mayKeep(permissions: readonly string[]): boolean {

@@ -211,7 +211,7 @@
     "declined_one": "{count} request declined ({reason})",
     "declined_other": "{count} requests declined ({reason})",
     "reachOthers": "{open} open requests · {others} of other kinds left out (each answered on its own)",
-    "noneRequests": "Assign and Decline act on requests: a catalogue order is answered in its pane, a change request in Home › Approvals"
+    "noneRequests": "Assign and Decline act on requests: a portal order is answered in its pane, a change request in Home › Approvals"
   },
   "held": {
     "right": "Needs the sales permission ({right})",
@@ -720,7 +720,7 @@
   },
   "export": {
     "heading": "Export · {view}",
-    "note": "Every row of this view, page by page to the end: requests, catalogue orders and change requests you may open. Prospects’ names make it personal data.",
+    "note": "Every row of this view, page by page to the end: requests, portal orders and change requests you may open. Prospects’ names make it personal data.",
     "notePrice": "Every row of this view, page by page to the end; the target price is left out (it needs the price right). Prospects’ names make it personal data."
   },
   "pane": {
@@ -906,16 +906,16 @@
   },
   "kind": {
     "REQUEST": "Request",
-    "CATALOGUE_ORDER": "Catalogue order",
+    "CATALOGUE_ORDER": "Portal order",
     "CHANGE_REQUEST": "Change request",
     "plural": {
       "REQUEST": "Requests",
-      "CATALOGUE_ORDER": "Catalogue orders",
+      "CATALOGUE_ORDER": "Portal orders",
       "CHANGE_REQUEST": "Change requests"
     },
     "hint": {
       "REQUEST": "A request by portal, mail, phone, a fair or a visit",
-      "CATALOGUE_ORDER": "Styles the customer picked in its portal catalogue: accept it as an order or a quote, or refuse it",
+      "CATALOGUE_ORDER": "What the customer asks in its portal (styles of its catalogue, in its own words, made to measure): accept it as an order or a quote, or refuse it",
       "CHANGE_REQUEST": "The customer asks to change or cancel a confirmed order: answered in Home › Approvals"
     }
   },
@@ -969,23 +969,23 @@
     "ApprovalRequest": "Approval"
   },
   "catalogue": {
-    "reading": "Reading the catalogue order…",
-    "failed": "Couldn't load the catalogue order",
-    "noRight": "Catalogue orders need the orders right",
+    "reading": "Reading the portal order…",
+    "failed": "Couldn't load the portal order",
+    "noRight": "Portal orders need the orders right",
     "noRightBody": "Ask an administrator for the right to see orders of this customer.",
-    "notFound": "Catalogue order not found",
+    "notFound": "Portal order not found",
     "notFoundBody": "It is not there, or not yours to open.",
-    "title": "Catalogue order {number}",
+    "title": "Portal order {number}",
     "acceptOrder": "Accept as order",
     "acceptQuote": "Accept as quote",
     "refuse": "Refuse",
-    "handled": "Someone else changed this catalogue order at {time}",
+    "handled": "Someone else changed this portal order at {time}",
     "held": {
       "DRAFT": "The customer is still writing it",
       "ACCEPTED": "Already accepted",
       "REFUSED": "Already refused",
       "WITHDRAWN": "Withdrawn by the customer",
-      "right": "Only sales can accept or refuse a catalogue order ({right})"
+      "right": "Only sales can accept or refuse a portal order ({right})"
     },
     "accept": {
       "badPrice": "Line {n}: the price is not a price (e.g. 38.50)"
@@ -1280,6 +1280,62 @@
       "savedOk": "Production's answer on {number}: OK.",
       "savedWeek": "Production's answer on {number}: not before week {week}.",
       "takenBack": "Production's answer on {number} taken back."
+    }
+  },
+  "catalogueMap": {
+    "title": "Lines to map",
+    "hint": "The customer described these lines, or asked them made to measure: each is made into one or more of our styles. Pick the style and the colourway; the sizes are the line's own unless you type them.",
+    "line": "Line {n} · {kind}",
+    "kind": {
+      "DESCRIBED": "In the customer's words",
+      "MADE_TO_MEASURE": "Made to measure"
+    },
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "people_one": "{count} person on the request (the name stays there)",
+    "people_other": "{count} people on the request (their names stay there)",
+    "peopleInSheet": "People: in the measurement sheet on the request",
+    "ownSizes": "Its sizes: {sizes}",
+    "noSizes": "No sizes yet: type them on the style line",
+    "note": "Their note: {note}",
+    "into": "Style line {m} of line {n}",
+    "sizesHint": "Empty: the line's own sizes (e.g. 50:5 52:10)",
+    "add": "Add a style line",
+    "addMax": "At most {max} style lines for one line",
+    "remove": "Take out style line {m} of line {n}",
+    "noStylesRight": "Your role does not read the styles: a person who does maps these lines.",
+    "stylesReading": "Reading the styles…",
+    "colourFirst": "Pick the style first",
+    "mapOrder": "The line map: what the order gets",
+    "mapQuote": "The line map: what the quote gets",
+    "mapLabel": "Each line of the request and what it becomes",
+    "col": {
+      "asked": "Asked",
+      "becomes": "Becomes"
+    },
+    "notMapped": "Not mapped yet",
+    "mtmHint": "Made to measure: accepted as a quote first (made-to-measure orders have not started). No measurement profile is made: the people stay on the request, which the quote links.",
+    "held": {
+      "madeToMeasure_one": "Line {lines} is made to measure: accept the request as a quote. Its people stay on the request.",
+      "madeToMeasure_other": "Lines {lines} are made to measure: accept the request as a quote. Their people stay on the request.",
+      "quoteOnly": "This portal order is accepted as a quote first.",
+      "unmapped_one": "Line {lines} is not mapped yet: pick the style and the colourway it is made into.",
+      "unmapped_other": "Lines {lines} are not mapped yet: pick the style and the colourway each is made into.",
+      "half": "Line {n}: each style line needs its style and its colourway.",
+      "tooMany": "Line {n} is made into at most {max} style lines.",
+      "badSizes": "Line {n}: the sizes do not read (e.g. 50:5 52:10).",
+      "sizesOfEach": "Line {n} is made into several style lines: type the sizes of each.",
+      "sizesOfPeople": "Line {n}: its people have no size yet (a measurement sheet, or sending later): type the sizes.",
+      "sizesOfTotal": "Line {n} asks {pieces} pieces in all, not yet by size: type the sizes.",
+      "badPrice": "Line {n}: the price is not a price (e.g. 38.50)."
+    },
+    "done": {
+      "logos_one": "{count} logo of the customer carried onto {made}",
+      "logos_other": "{count} logos of the customer carried onto {made}",
+      "logosNot_one": "{count} logo could not be carried: add it by hand",
+      "logosNot_other": "{count} logos could not be carried: add them by hand",
+      "brandPrices_one": "{count} price of the customer taken over onto {made}",
+      "brandPrices_other": "{count} prices of the customer taken over onto {made}"
     }
   }
 }

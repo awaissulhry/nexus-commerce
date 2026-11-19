@@ -29,6 +29,8 @@ const TEMPLATE: QuoteTemplate = {
   paymentTermsName: null,
   termsText: null,
   termsVersion: '2026-1',
+  // F-CP-160 (follow-up 13): the fee line holds a typed price.
+  holdsTypedPrices: true,
   mayManage: true,
   lines: [
     { id: '0190f0e2-7310-7000-8000-000000000001', seq: 10, section: 'Giacche', kind: 'SIZE_GRID', feeKind: null, styleId: STYLE.id, style: { code: STYLE.code, name: STYLE.name, status: 'ACTIVE' }, colourwayId: STYLE.colourways[0]!.id, colourway: { code: STYLE.colourways[0]!.code, name: STYLE.colourways[0]!.name }, sizes: { '50': 2, '52': 4, '54': 2 }, pieces: 8, unitPrice: null, description: null, note: null },

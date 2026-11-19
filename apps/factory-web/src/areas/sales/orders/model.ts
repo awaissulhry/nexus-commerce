@@ -24,6 +24,7 @@ import {
   type TileKey,
 } from './api'
 import { CUSTOMER_URGENCIES, INVOICED_STATES, type CustomerUrgency, type InvoicedState } from './api' // B-TH-244
+import { PRICE_MATCHES, type PriceMatch } from './api' // F-CP-141: the price check term (the Not equal view)
 import type { DockDefault } from '../../_shared/record-frame/model' // F-SA-263
 // ---- F-OP-111: Split into new orders… (the API's own limits; the body the split sends) ----
 import { ORDERS_DEPTH_LIMITS } from '@nexus/factory-domain/sales/orders-depth/rules'
@@ -95,6 +96,24 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     measurements: held.has('sales.measurements.view'), // F-SA-214
   }
 }
+
+// ---- F-OP-303 (order page walk #6): the read-only banner counts every right the page acts on --------------------------------
+/**
+ * The rights of `abilitiesOf` with which the order page changes something: the order (manage, close), its money (a payment, an
+ * invoice issued or drafted), its work orders, its shipments (Create shipment…, Tracking number…, Record a shipment made
+ * elsewhere…: shipping.manage) and a copy as a new quote.
+ */
+export const PAGE_ACT_RIGHTS = ['manage', 'close', 'recordPayment', 'issueInvoices', 'manageInvoices', 'makeWorkOrders', 'createShipment', 'manageQuotes'] as const satisfies readonly (keyof OrderAbilities)[]
+
+/**
+ * "Read-only: your role follows orders and changes none." only for a reader who holds none of them, nor the page's other acting
+ * rights (assign the supervisor: production.brand.manage; a quality hold on a work order: quality.holds.place). The walk saw it for
+ * Warehouse on the very tab where Warehouse creates shipments and types tracking.
+ */
+export function readOnlyOnPage(can: Pick<OrderAbilities, (typeof PAGE_ACT_RIGHTS)[number]>, more: { readonly assignSupervisor?: boolean; readonly qualityHold?: boolean } = {}): boolean {
+  return PAGE_ACT_RIGHTS.every((key) => !can[key]) && !more.assignSupervisor && !more.qualityHold
+}
+// ---- end F-OP-303
 
 // ---- words and tones ---------------------------------------------------------------------------------------------------
 
@@ -506,15 +525,16 @@ export const tabOf = (asked: string | null | undefined, can?: Pick<OrderAbilitie
 /** The tabs a person sees: every tab (each part inside says what its right holds back, never an empty tab with zeros). */
 export const recordTabs = (_can?: Pick<OrderAbilities, 'margin'>): readonly RecordTab[] => RECORD_TABS
 
-// ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5): each tab its own dock width when the person chose none — Overview and
-// Money 40 %; the grid tabs (Lines, Production, Shipments, Files) a third under 1600 px and 40 % from 1600; Changes half (one column
-// of the story beside the thread). A width the person picks is kept for that tab (RecordFrame `dockTab`).
+// ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5): the dock's width when the person chose none, per tab.
+// F-OP-301 (walk #5): ONE width per viewport on every tab — the grid rule (a third under 1600 px, where Lines, Production and Shipments
+// need the room; 40 % from 1600): the dock never jumps when the page tab changes, and the page tabs fit beside it (Changes was half, and
+// Files hid behind ›). A width the person picks holds on every tab too (RecordFrame).
 export const DOCK_DEFAULTS: Readonly<Record<RecordTab, DockDefault>> = Object.freeze({
-  overview: 'forty',
+  overview: 'grid',
   lines: 'grid',
   production: 'grid',
-  changes: 'half',
-  money: 'forty',
+  changes: 'grid',
+  money: 'grid',
   shipments: 'grid',
   files: 'grid',
 })
@@ -524,10 +544,12 @@ export const DOCK_DEFAULTS: Readonly<Record<RecordTab, DockDefault>> = Object.fr
 // F-OP-117 (10-order-page §6, §7, §8; review R-22): Changes counts the ONE waiting list's rows (`changes`: changesBadgeOf of the card,
 // null before the production read — never a made-up 0); Money and Shipments the order read's own badges (B-OP-020: issued invoices and
 // credit notes + open deposit requests; shipments not cancelled carrying this order's lines), the chain's counts in an older answer.
-export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments' | 'badges'>, counts: { readonly changes?: number | null } = {}): number | null {
+export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments' | 'badges'>, counts: { readonly changes?: number | null; /* F-OP-306 */ readonly viewInvoices?: boolean } = {}): number | null {
   if (tab === 'lines') return order.lines.length
   if (tab === 'production') return order.chain.workOrders.length
   if (tab === 'changes') return counts.changes ?? null
+  // F-OP-306 (walk #21): a reader without invoices.view is shown no invoice, so Money counts only its open deposits.
+  if (tab === 'money' && counts.viewInvoices === false) return order.badges ? order.badges.money.openDeposits : null
   if (tab === 'money') return order.badges ? order.badges.money.invoices + order.badges.money.openDeposits : order.chain.invoices.length
   if (tab === 'shipments') return order.badges ? order.badges.shipments : order.chain.shipments.length
   // F-SA-237: the files the reader may open come with the files read (none before it: no number that is not true).
@@ -950,6 +972,11 @@ export interface ExtraTerms {
   readonly atRisk?: boolean
   readonly currency?: string | null
   readonly customerUrgency?: CustomerUrgency | null
+  // F-CP-141 (customer page plan C2d; 11-money §3.2): the price check term — the orders whose check reads Equal, Not equal or No
+  // customer price yet (`?priceMatch=`: the list, its totals and its file read it; never the board). A price holder's only: the API
+  // refuses it in words without the price grain, and the sheet carries it in no read for such a person (it holds the view in words).
+  readonly priceMatch?: PriceMatch | null
+  // ---- end F-CP-141
 }
 
 const CURRENCY = /^[A-Z]{3}$/
@@ -961,6 +988,7 @@ export function extraFromAddress(params: { get(name: string): string | null } | 
   const invoiced = params.get('invoiced')
   const currency = params.get('currency')?.trim() ?? ''
   const urgency = params.get('customerUrgency')
+  const priceMatch = params.get('priceMatch') // F-CP-141
   return {
     ...(isStatus(status) && rows !== status ? { status } : {}),
     ...(params.get('late') === 'true' && rows !== 'late' ? { late: true } : {}),
@@ -971,6 +999,7 @@ export function extraFromAddress(params: { get(name: string): string | null } | 
     ...(params.get('atRisk') === 'true' ? { atRisk: true } : {}),
     ...(CURRENCY.test(currency) ? { currency } : {}),
     ...(urgency && (CUSTOMER_URGENCIES as readonly string[]).includes(urgency) ? { customerUrgency: urgency as CustomerUrgency } : {}),
+    ...(priceMatch && (PRICE_MATCHES as readonly string[]).includes(priceMatch) ? { priceMatch: priceMatch as PriceMatch } : {}), // F-CP-141
   }
 }
 
@@ -989,6 +1018,7 @@ function extraEntries(extra: ExtraTerms, rows: RowView): Array<[string, string]>
   if (extra.atRisk) out.push(['atRisk', 'true'])
   if (extra.currency) out.push(['currency', extra.currency])
   if (extra.customerUrgency) out.push(['customerUrgency', extra.customerUrgency])
+  if (extra.priceMatch) out.push(['priceMatch', extra.priceMatch]) // F-CP-141
   return out
 }
 
@@ -1005,6 +1035,7 @@ function extraQueryOf(extra: ExtraTerms | null): OrderQuery {
     ...(extra.atRisk ? { atRisk: true } : {}),
     ...(extra.currency ? { currency: extra.currency } : {}),
     ...(extra.customerUrgency ? { customerUrgency: extra.customerUrgency } : {}),
+    ...(extra.priceMatch ? { priceMatch: extra.priceMatch } : {}), // F-CP-141: the list and its totals (never the board: boardNarrowOf)
   }
 }
 
@@ -1014,6 +1045,28 @@ export function withoutExtra(extra: ExtraTerms, key: keyof ExtraTerms): ExtraTer
   delete next[key]
   return next
 }
+
+// ── F-CP-141 (customer page plan C4, money wall O1–O3; 10 §5): the price check term is a price holder's only ──
+/**
+ * The terms a reader's reads carry: without the price grain the price check term goes from every read (a shared saved view or a
+ * link that names it reads nothing with it, and writes no address either); `held` says the address asked for it — the sheet then
+ * holds the view in ONE line ("Amounts are shown to people who see prices" + Show all orders), never an answer about prices.
+ */
+export function priceTermOf(extra: ExtraTerms, can: Pick<OrderAbilities, 'price'>): { readonly extra: ExtraTerms; readonly held: boolean } {
+  if (!extra.priceMatch || can.price) return { extra, held: false }
+  return { extra: withoutExtra(extra, 'priceMatch'), held: true }
+}
+
+/**
+ * The price check term set or dropped by a person's pick, in ONE write: the cell's funnel narrows the view shown (`view` absent);
+ * a view picked with it (the Not equal view: `rows=all` and the term alone) stands alone; null drops it (leaving that view, the
+ * next view keeps the other door terms).
+ */
+export function withPriceMatch(extra: ExtraTerms, match: PriceMatch | null, alone = false): ExtraTerms {
+  if (!match) return withoutExtra(extra, 'priceMatch')
+  return alone ? { priceMatch: match } : { ...extra, priceMatch: match }
+}
+// ── end F-CP-141 ──
 
 /**
  * A total's door: the list's address for exactly the rows it counts, from the filter the API gave it (GET /sales/orders/summary;
@@ -1032,7 +1085,7 @@ export function doorAddress(path: string, filter: Readonly<Record<string, string
   if (!rowsTerm && filter.open !== 'true') query.set('rows', 'all')
   if (filter.partyId) query.set('party', filter.partyId)
   if (filter.companyId) query.set('company', filter.companyId)
-  for (const name of ['brand', 'cf', 'invoiced', 'atRisk', 'currency', 'customerUrgency', 'kind' /* F-SA-221 */, 'profile' /* F-SA-222 */, 'q'] as const) if (filter[name] && !(name === 'atRisk' && filter[name] !== 'true')) query.set(name, filter[name]!)
+  for (const name of ['brand', 'cf', 'invoiced', 'atRisk', 'currency', 'customerUrgency', 'kind' /* F-SA-221 */, 'profile' /* F-SA-222 */, 'priceMatch' /* F-CP-141 */, 'q'] as const) if (filter[name] && !(name === 'atRisk' && filter[name] !== 'true')) query.set(name, filter[name]!)
   const qs = query.toString()
   return `${path}${qs ? `?${qs}` : ''}`
 }

@@ -36,7 +36,15 @@
     "waitingOn": "Waiting on",
     "waitingOnHint": "The most urgent: a request to answer, a reply that waits on us, who acts next",
     "supervisor": "Supervisor",
-    "supervisorHint": "Me, someone else or not set: never a name on a list"
+    "supervisorHint": "Me, someone else or not set: never a name on a list",
+    "ourPrice": "Our price",
+    "ourPriceHint": "Our order total without VAT",
+    "brandPrice": "Customer's price",
+    "brandPriceHint": "The customer's own price for this order, without VAT (its PO or the portal)",
+    "priceMatch": "Price check",
+    "priceMatchHint": "Our price beside the customer's, line by line, without VAT: Equal, Not equal or No customer price yet",
+    "priceDiff": "Difference",
+    "priceDiffHint": "Our price minus the customer's: + we ask more, − we ask less"
   },
   "door": {
     "order": "Open order {number} · its thread on the right",
@@ -75,6 +83,11 @@
   },
   "status": {
     "filter": "Show only “{status}” (filters the sheet)"
+  },
+  "cols": {
+    "label": "Columns",
+    "work": "Work",
+    "money": "Money"
   },
   "company": {
     "filter": "Show only {name} (filters the sheet)",
@@ -307,7 +320,15 @@
     "reply_one": "Reply to {customer} on {count}…",
     "reply_other": "Reply to {customer} on {count}…",
     "replyAny_one": "Reply on {count}…",
-    "replyAny_other": "Reply on {count}…"
+    "replyAny_other": "Reply on {count}…",
+    "ready_one": "Mark {count} ready…",
+    "ready_other": "Mark {count} ready…",
+    "close_one": "Close {count}…",
+    "close_other": "Close {count}…",
+    "confirm_one": "Confirm {count}…",
+    "confirm_other": "Confirm {count}…",
+    "noneInState_one": "The order ticked is not {state}.",
+    "noneInState_other": "None of the {count} is {state}."
   },
   "reply": {
     "title_one": "Reply to {customer} on {count} order",
@@ -347,5 +368,59 @@
       "failed": "It did not go through: try again."
     },
     "yourOrder": "Your order {seq} ({number})"
+  },
+  "commands": {
+    "confirmOrRefuse": "Confirm or refuse…",
+    "reading": "Reading {number}…",
+    "readFailed": "{number} could not be read: {problem}",
+    "yesTitle": "Confirm or refuse {number}",
+    "noYes": "Nobody was asked for this yes yet: ask for it on the order.",
+    "openOrder": "Open {number}",
+    "confirmState": "Only an order waiting for a yes is confirmed",
+    "done": {
+      "ready": "{number} marked ready",
+      "close": "{number} closed",
+      "cancel": "{number} cancelled",
+      "confirm": "{number} confirmed",
+      "refuse": "{number}: the yes was refused"
+    },
+    "runs_one": "Runs on {count}",
+    "runs_other": "Runs on {count}",
+    "notOn_one": "Not on {count}: why is beside it",
+    "notOn_other": "Not on {count}: why is beside each",
+    "cancelOne": "Cancelling is one order at a time (⋯ on its row): each shows what it stops.",
+    "many": {
+      "title": {
+        "ready_one": "Mark {count} order ready",
+        "ready_other": "Mark {count} orders ready",
+        "close_one": "Close {count} order",
+        "close_other": "Close {count} orders",
+        "confirm_one": "Confirm {count} order",
+        "confirm_other": "Confirm {count} orders"
+      },
+      "go": {
+        "ready_one": "Mark {count} ready",
+        "ready_other": "Mark {count} ready",
+        "close_one": "Close {count}",
+        "close_other": "Close {count}",
+        "confirm_one": "Confirm {count}",
+        "confirm_other": "Confirm {count}"
+      },
+      "reading": "Reading the orders: {done} of {count}…",
+      "stillReading": "The orders are still being read",
+      "nothing": "It runs on none of them: nothing to do",
+      "outOfReach_one": "{count} order can no longer be opened: it is left out.",
+      "outOfReach_other": "{count} orders can no longer be opened: they are left out.",
+      "reasonAll": "One reason for every order it runs on: each keeps it in its history.",
+      "oneCode": "One code from your authenticator app confirms each order named here; each yes is recorded on its own.",
+      "running": "Working: {done} of {count}…",
+      "result": "{done} done · {left} not done",
+      "stale": "{number} changed meanwhile: open it and try again.",
+      "codeExpired": "The code ran out before this one: run the rest again.",
+      "notDone": "Not done. {why}",
+      "runRest_one": "Run the rest again ({count})",
+      "runRest_other": "Run the rest again ({count})",
+      "label": "Each order"
+    }
   }
 }

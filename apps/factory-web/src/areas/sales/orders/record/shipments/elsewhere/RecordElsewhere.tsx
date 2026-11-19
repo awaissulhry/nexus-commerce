@@ -7,6 +7,7 @@ import { readyToShip, type ReadyCell } from '../../../../../warehouse/shipments/
 import type { Order } from '../../../api'
 import { previewElsewhere, recordElsewhere, type ElsewherePreview, type ElsewhereRecorded } from './api'
 import { changed, elsewhereBody, emptyForm, garmentsOf, liveProblems, recordableCells, refusalOf, waitingForQuality, type ElsewhereForm } from './model'
+import { afterLeaving, afterTry, NOTHING_SEEN, type ElsewhereSeen } from './model' // F-OP-307
 import { ElsewhereDialog, type ElsewhereDialogModel } from './view/ElsewhereDialog'
 
 /**
@@ -24,6 +25,7 @@ export function RecordElsewhere({ order, prefix, onDone, onClose }: { order: Ord
   const [busy, setBusy] = useState(false)
   const [refusal, setRefusal] = useState<ElsewhereDialogModel['refusal']>(null)
   const [done, setDone] = useState<ElsewhereRecorded | null>(null)
+  const [seen, setSeen] = useState<ElsewhereSeen>(NOTHING_SEEN) // F-OP-307: a problem shows after a try or a blur
   const key = useRef(newIdempotencyKey())
   const customer = order.party?.legalName ?? order.party?.code ?? '—'
 
@@ -64,6 +66,7 @@ export function RecordElsewhere({ order, prefix, onDone, onClose }: { order: Ord
     refusal,
     done,
     now: now.toISOString(),
+    seen, // F-OP-307
   }
   return (
     <ElsewhereDialog
@@ -75,6 +78,8 @@ export function RecordElsewhere({ order, prefix, onDone, onClose }: { order: Ord
           setForm((current) => changed(current, next, new Date()))
         },
         onRetryCells: readCells,
+        onLeave: (field) => setSeen((current) => afterLeaving(current, field)), // F-OP-307
+        onTry: () => setSeen((current) => afterTry(current)), // F-OP-307
         onRecord: () => {
           if (busy || garmentsOf(form) === 0) return
           setBusy(true)

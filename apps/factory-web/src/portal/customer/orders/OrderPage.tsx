@@ -105,6 +105,7 @@ import { useT } from '../../../lib/i18n/provider'
 import { useOrderWords } from './words'
 // B-W2b-374: the lines' options and artwork.
 import { PortalLineOptions } from './options/PortalLineOptions'
+import { usePortalPriceCheck } from './use-price-check' // F-CP-143: the customer's own price check (a price holder's)
 // ---- F-PR-24: Report a problem (the dialog My production opens too), the chip of the problems reported, the order's files card
 import { NS as PRODUCTION_NS, rowName } from '../production/model'
 import { problemChipOf } from '../production/problem/model'
@@ -369,6 +370,10 @@ function OrderContainer({ id }: { id: string }) {
   // ---- B-TH-275 (P-CUS-ORD.body "Made from your request"): the order read does not name its source; its summary does (its parent,
   // through the partner views only) — a request directly, or a quote whose own summary names the request. A failed read draws nothing.
   const [madeFrom, setMadeFrom] = useState<OrderRecordViewModel['madeFrom']>(null)
+  // ---- F-CP-143 (customer page plan C3, D2): the price check on the Lines tab — read only for a price holder (its Buyer, Finance,
+  // Admin), again with the order; "Your prices…" for the Buyer and the Admin while the order is open.
+  const priceCheck = usePortalPriceCheck({ api, orderId: id, seesPrices, status: record?.order.status ?? null, mayAsk, preview, offline, refreshKey: loadedAt ?? '', t, locale })
+  // ---- end F-CP-143
   useEffect(() => {
     const abort = new AbortController()
     const parentOf = (answer: { summary: { parent: SummaryParent | null } }): SummaryParent | null => answer.summary.parent
@@ -1097,8 +1102,10 @@ function OrderContainer({ id }: { id: string }) {
         // F-PR-24: the problems reported on this order (never who answers) and Report a problem; its dialog.
         problem: productionReady && production.read ? { chip: problemChipOf(production.read.problem, productionWords.t, productionWords.day), report: reportFacts } : null,
         report: problemDialog.model,
+        priceCheck: priceCheck.model, // F-CP-143
       }}
       actions={{
+        priceCheck: priceCheck.actions, // F-CP-143
         onRetry: () => {
           setState('loading')
           void load()

@@ -17,6 +17,9 @@ import type { OrderSummary, SummaryFigures } from '../api'
 import { ListToolsContext, type ListField, type ListFieldValue } from '../../../../list-frame/tools/transport'
 import { memoryStore, memoryTransport, type MemoryToolsModel } from '../../../_shared/list-tools/memory'
 import type { BulkRowFacts } from '@nexus/factory-domain/views/bulk/rules' // B-TH-245: the cells' bulk rows
+// F-CP-162: Reply to N held once by the price warning (the composer's own flow, F-CP-147).
+import { heldForNamesPrice, startDraft } from '../../../../lib/record-thread/composer/model'
+import { replyComposerContext, replyTargetsOf, type ReplyManyModel } from './reply-many'
 
 /**
  * SCR-038 — Orders (design sales.orders) with made-up data only: every state of the list (loading, error, empty, nothing
@@ -166,10 +169,31 @@ function switcherOf(customers: OrderCustomer[], over: Partial<NonNullable<Orders
   return { customers, total: customers.length, limited: false, problem: null, query: '', searching: false, ...over }
 }
 
+// ── F-CP-162: one customer's open orders, and Reply to N held once by the price warning (made-up words) ──
+const REPLY_ROWS = OPEN_ROWS.filter((entry) => entry.partyId === OPEN_ROWS[0]!.partyId).slice(0, 3)
+function replyPriced(over: Partial<ReplyManyModel> = {}): ReplyManyModel {
+  const targets = replyTargetsOf(REPLY_ROWS)
+  const draft = heldForNamesPrice({ ...startDraft(replyComposerContext(targets[0]!.partyName)), body: 'Pronte venerdì, al prezzo concordato di 45 euro al pezzo.' })
+  return { customer: { id: targets[0]!.partyId, name: targets[0]!.partyName }, targets, batchId: '0190f0e2-7c62-7000-8000-000000000162', draft, notes: [], language: 'it', portal: 'on', sending: false, progress: null, results: {}, done: false, ...over }
+}
+// ── end F-CP-162 ──
+
 function sheet(role: Role, over: Partial<OrdersListModel> = {}): ListCase {
   return base(role, { demoPictures: PICTURES, switcher: switcherOf(CUSTOMERS), companies: DEMO_COMPANIES.slice(0, 1).map((entry) => ({ id: entry.id, name: entry.name })), ...over })
 }
 // ── end B-TH-225 / B-TH-226 ──
+
+// ── F-CP-140: made-up price checks (ours = the row's Net; the customer's typed from its PO or the portal) ──
+/** The Sales role after the money wall (B-CP-011): no price grain. */
+const SALES_WORKER = { ...canOf('sales'), price: false }
+const PRICE_LAYOUT = ['picture', 'number', 'customer', 'status', 'ourPrice', 'brandPrice', 'priceMatch', 'priceDiff']
+const PRICED_ROWS = OPEN_ROWS.map((entry, index) => {
+  const net = entry.netAmount ?? 0
+  if (index % 3 === 0) return { ...entry, brandPrice: net - 6000, priceMatch: 'NOT_EQUAL' as const, priceDiff: 6000, priceNotEqualLines: 2 }
+  if (index % 3 === 1) return { ...entry, brandPrice: net, priceMatch: 'EQUAL' as const, priceDiff: 0, priceNotEqualLines: 0 }
+  return { ...entry, brandPrice: null, priceMatch: 'NO_BRAND_PRICE' as const, priceDiff: null, priceNotEqualLines: 0 }
+})
+// ── end F-CP-140 ──
 
 export const designScreen = defineDesignScreen<ListCase>({
   screen: 'SCR-038',
@@ -304,6 +328,24 @@ export const designScreen = defineDesignScreen<ListCase>({
     },
     { id: 'th4-cells-manager', label: 'TH-4 · Production manager · Every cell reads only (no right to change orders: said on Edit N)', model: { ...sheet('manager', { selected: OPEN_ROWS.slice(0, 1).map((entry) => entry.id) }), tools: tools({ layout: { columns: { order: ['picture', 'number', 'customer', 'status', 'note'], hidden: [], pinned: [] } } }) } },
     // ── end B-TH-245 ──
+    // ── F-CP-140 (customer page plan C2d; design 11-money §3.1): the price check columns — opt-in in Customise under "Price check"; a
+    // layout shows them here. The same layout as Sales worker (the Sales role without the price grain) and as Production manager: no
+    // money column at all (no Customise entry, nothing in the file), the rows carry no price field. ──
+    { id: 'cp-140-price-check', label: 'CP · Owner · The price check: Our price, Customer\'s price, Price check (Equal · Not equal · 2 lines · — No customer price yet), Difference', model: { ...sheet('owner', { list: { items: rowsFor('owner', PRICED_ROWS), more: false, problem: null } }), tools: tools({ layout: { columns: { order: PRICE_LAYOUT, hidden: [], pinned: [] } } }) }, note: 'Customise ▸ the heading "Price check" holds the four; none is shown until a view or Customise shows it. Export writes them by their ids.' },
+    { id: 'cp-140-sales-worker', label: 'CP · As Sales worker (no price grain): the same layout, no money column; Customise has no "Price check"', model: { ...sheet('sales', { can: SALES_WORKER, list: { items: forRole(PRICED_ROWS, 'manager'), more: false, problem: null } }), tools: tools({ layout: { columns: { order: PRICE_LAYOUT, hidden: [], pinned: [] } } }) } },
+    { id: 'cp-140-manager', label: 'CP · As Production manager: the same layout, no money column, no price check', model: { ...sheet('manager', { list: { items: rowsFor('manager', PRICED_ROWS), more: false, problem: null } }), tools: tools({ layout: { columns: { order: PRICE_LAYOUT, hidden: [], pinned: [] } } }) } },
+    // ── end F-CP-140 ──
+    // ── F-CP-148 (the money wall, Owner O1–O3): Sales › Orders "Seen as" — the price term "Prices differ" ──
+    { id: 'cp-148-not-equal-owner', label: 'CP · Seen as Owner · Prices differ: the term narrows the sheet (its chip with ✕), the check columns shown', model: { ...sheet('owner', { extra: { priceMatch: 'NOT_EQUAL' }, list: { items: rowsFor('owner', PRICED_ROWS.filter((entry) => entry.priceMatch === 'NOT_EQUAL')), more: false, problem: null } }), tools: tools({ layout: { columns: { order: PRICE_LAYOUT, hidden: [], pinned: [] } } }) } },
+    { id: 'cp-148-not-equal-sales', label: 'CP · Seen as Sales worker · a shared link with the price term: one line "Amounts are shown to people who see prices", Show all orders; no row read', model: sheet('sales', { can: SALES_WORKER, priceHeld: true, list: { items: [], more: false, problem: null } }) },
+    { id: 'cp-148-not-equal-manager', label: 'CP · Seen as Production manager · the same held line: no rows, no figure, no chip', model: sheet('manager', { priceHeld: true, list: { items: [], more: false, problem: null } }) },
+    // ── end F-CP-148 ──
+    // ── F-CP-162 (the money wall, B-CP-020; F-CP-147's flow): Reply to N whose words look like a price — the API warns once (409
+    // NAMES_A_PRICE): the round stops, the typed text stays with the composer's warning (no amount repeated), Send reads "Send anyway"
+    // and goes on to the orders still to post with pricesInWordsOk. As a Sales worker (no price grain). ──
+    { id: 'cp-162-reply-price', label: 'CP · As Sales worker · Reply to N: the words name a price — warned, the text stays, "Send anyway"', model: sheet('sales', { can: SALES_WORKER, list: { items: forRole(REPLY_ROWS, 'manager'), more: false, problem: null }, selected: REPLY_ROWS.map((entry) => entry.id), replyMany: replyPriced() }), note: '"This reply names a price. Our people who do not see prices read this thread too. Send it anyway?" — never blocked; a change of the words checks them again.' },
+    { id: 'cp-162-reply-price-one-sent', label: 'CP · As Sales worker · Reply to N: one order posted before the warning — Send anyway goes on to the others', model: sheet('sales', { can: SALES_WORKER, list: { items: forRole(REPLY_ROWS, 'manager'), more: false, problem: null }, selected: REPLY_ROWS.map((entry) => entry.id), replyMany: replyPriced({ results: { [REPLY_ROWS[0]!.id]: { state: 'sent' } } }) }) },
+    // ── end F-CP-162 ──
   ],
 })
 

@@ -879,5 +879,8 @@
   },
   "pricedPdf": {
     "held": "Mostra dei prezzi: lo invia chi vede i prezzi."
+  },
+  "moneyWall": {
+    "blindPrice": "Cambia un prezzo che non vedi: lo fa chi vede i prezzi."
   }
 }

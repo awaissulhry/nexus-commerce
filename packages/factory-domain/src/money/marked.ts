@@ -40,6 +40,14 @@ export type Money<G extends Grain, T = unknown> = T & z.$brand<`money.${G}`>
 /** States the grain of a value a handler returns in a marked field. */
 export const asMoney = <G extends Grain, T>(_grain: G, value: T): Money<G, T> => value as Money<G, T>
 
+// ---- B-CP-017 (end-check fix wave 3): a view whose EVERY key is one grain (the price check's contracts mark ids, words and counts
+// too), stated once for the whole view by the handler that builds it, as asMoney states one field. Each key of the object, of a
+// nested object and of an array's objects is `Money<G, …>`; the value is returned as it is (the filter works on the contract).
+type GrainInner<G extends Grain, T> = T extends readonly (infer U)[] ? GrainInner<G, U>[] : T extends object ? MoneyKeys<G, T> : T
+export type MoneyKeys<G extends Grain, T> = { [K in keyof T]: Money<G, GrainInner<G, T[K]>> }
+export const asMoneyKeys = <G extends Grain, T extends object>(_grain: G, value: T): MoneyKeys<G, T> => value as unknown as MoneyKeys<G, T>
+// ---- end B-CP-017
+
 type MarkedField<G extends Grain, S extends z.ZodType> = z.ZodOptional<z.ZodType<Money<G, z.output<S>>, z.input<S>>>
 
 function marker<G extends Grain>(grain: G) {

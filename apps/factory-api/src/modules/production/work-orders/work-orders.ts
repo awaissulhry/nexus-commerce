@@ -411,7 +411,8 @@ export async function openLines(caller: CommandCaller, salesOrderId: string) {
     if (!order || !can(actorOf(context), WORKORDERS_VIEW, { companyId: order.companyId, partyId: order.partyId })) throw new NotFoundError('Sales order not found.')
     const ids = (await client.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true }, orderBy: { seq: 'asc' } })).map((line) => line.id)
     const lines = await readOrderLines(client, ids)
-    const styles = await client.style.findMany({ where: { id: { in: [...new Set([...lines.values()].map((line) => line.styleId))] } }, select: { id: true, code: true, name: true } })
+    // F-OP-306 (walk #8): + the style's size range (its scale's order), so the dialog shows the sizes as the style reads them.
+    const styles = await client.style.findMany({ where: { id: { in: [...new Set([...lines.values()].map((line) => line.styleId))] } }, select: { id: true, code: true, name: true, sizes: true } })
     const styleOf = new Map(styles.map((style) => [style.id, style]))
     return {
       salesOrder: { id: order.id, number: order.number, status: order.status },
@@ -433,6 +434,7 @@ export async function openLines(caller: CommandCaller, salesOrderId: string) {
             siteId: line.siteId,
             madeToMeasure: line.kind === 'MADE_TO_MEASURE',
             sizes: openSizes(line),
+            styleSizes: styleOf.get(line.styleId)?.sizes ?? [], // F-OP-306
           },
         ]
       }),

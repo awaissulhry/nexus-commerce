@@ -135,5 +135,8 @@
     "notes": "Notes on the revision {revision}",
     "nothingSaved": "A test: nothing is saved.",
     "close": "Close"
+  },
+  "moneyWall": {
+    "blindPrice": "It changes a price you cannot see: someone who sees prices does it."
   }
 }

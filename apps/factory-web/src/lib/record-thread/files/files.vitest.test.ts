@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/errors'
@@ -7,6 +8,9 @@ import { bulkReach } from '../files-view/model'
 import { createTranslator, messagesFor } from '../../i18n/messages'
 import { leftKeys, render, textOf } from '../parts/testing'
 import { fromApiFile, toViewerFile, type ThreadFile } from './model'
+import { fileSeries, isPricedLock, namedSeries, previewOf, pricedLockedOf, pricedMarkOf, pricedRefusalKey } from './model' // F-CP-144
+import { FileStrip } from './view/FileStrip' // F-CP-144
+import { pickerGroups, pickerPricedLocked } from '../attachments/model' // F-CP-144
 import { carriable, offeredTargets, openRefusal, queryReady, sourceLine, targetLabel, useOnRefusal, type UseOnTarget } from './use-on'
 import { UseOnBody, type UseOnModel } from './view/UseOnDialog'
 
@@ -189,3 +193,108 @@ describe('the copy names its source; a locked sheet is named as such (B-TH-083)'
     expect(en('locked.sheet')).toBe('Measurement sheet — you cannot open it')
   })
 })
+
+// ── F-CP-144 (customer page plan C4, the money wall; design 11-money §4.5; B-CP-014, B-CP-023) ──────────────────────────────────
+// The PRICED lock as the thread draws it, as Sales worker / as Production manager (no price grain): a priced document is never
+// named, never previewed, never a tile and never offered to attach — the files line says "2 priced documents — you cannot open
+// them" once; Mark as priced for a file not priced yet; taking the mark off only where the file opens (a price holder).
+describe('F-CP-144: the PRICED lock on the files line and in the attach picker', () => {
+  const apiFile = {
+    id: 'po',
+    companyId: null,
+    recordType: 'SalesOrder',
+    recordId: 'so-alpha',
+    kind: 'DOCUMENT' as const,
+    originalName: 'Brand Alpha PO 4471.pdf',
+    contentType: 'application/pdf',
+    sizeBytes: 10,
+    status: 'AVAILABLE' as const,
+    visibility: ['OFFICE' as const],
+    retainUntil: null,
+    quarantineReason: null,
+    availableAt: null,
+    createdAt: '2026-11-17T08:00:00.000Z',
+    version: 3,
+  }
+  const lockedOne = file({ id: 'p1', name: '', locked: 'PRICED', previewUrl: 'https://store.example.com/preview-p1.webp' })
+  const lockedTwo = file({ id: 'p2', name: '', locked: 'PRICED', createdAt: '2026-11-16T08:00:00.000Z' })
+  const plain = file({ id: 'f1', version: 2, previewUrl: 'https://store.example.com/preview-f1.webp' })
+
+  it('fromApiFile: a priced file the reader opens says so and carries its version; a locked one is not "priced" to them', () => {
+    const opened = fromApiFile({ ...apiFile, priced: true })
+    expect(opened).toMatchObject({ priced: true, version: 3 })
+    const locked = fromApiFile({ ...apiFile, originalName: '', locked: 'PRICED', priced: true })
+    expect(locked.priced).toBeUndefined()
+    expect(isPricedLock(locked)).toBe(true)
+    expect(fromApiFile(apiFile).priced).toBeUndefined()
+  })
+
+  it('counted, never named, never previewed: the lock is one count; the named documents leave it out', () => {
+    const series = fileSeries([lockedOne, lockedTwo, plain])
+    expect(pricedLockedOf(series)).toBe(2)
+    expect(namedSeries(series).map((one) => one.latest.id)).toEqual(['f1'])
+    expect(previewOf(lockedOne)).toBeNull()
+    expect(previewOf(plain)).toBe('https://store.example.com/preview-f1.webp')
+    expect(toViewerFile(lockedOne, undefined, 'Priced document — you cannot open it')).toMatchObject({ mayOpen: false, name: 'Priced document — you cannot open it' })
+  })
+
+  it('the files line: no tile and no preview of a priced document, one counted line, in it and en (as Sales worker)', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = render(createElement(FileStrip, { model: { files: [lockedOne, lockedTwo, plain], party: null, open: true } }), locale)
+      expect(textOf(html)).toContain(locale === 'en' ? '2 priced documents — you cannot open them' : '2 documenti con prezzi — non puoi aprirli')
+      expect(html).not.toContain('preview-p1')
+      expect(html).toContain('preview-f1')
+      expect(html.match(/data-tile/g)?.length).toBe(2) // the plain file's tile and "All files": none for the priced ones
+      expect(leftKeys(html, ['priced', 'chip', 'strip'])).toEqual([])
+    }
+  })
+
+  it('the order\'s dock line: the read\'s pricedLeftOut counted on one line; the chip counts only the files the reader sees', async () => {
+    const { stripFilesOf } = await import('../../../areas/_shared/record-thread/use-order-files')
+    const read = { order: { id: 'so-alpha', number: 'SO-2026-0142' }, groups: [{ key: 'ORDER', words: { en: 'Order & thread', it: 'Ordine e conversazione' }, files: [], leftOut: 0, measurementsLeftOut: 0, pricedLeftOut: 2 }], total: 0, truncated: false }
+    const tiles = stripFilesOf(read, null)
+    expect(tiles.map((tile) => tile.locked)).toEqual(['PRICED', 'PRICED'])
+    expect(tiles.every((tile) => tile.name === '' && tile.previewUrl === null)).toBe(true)
+    const shut = textOf(render(createElement(FileStrip, { model: { files: tiles, party: null, open: false } })))
+    expect(shut).toContain('2 priced documents — you cannot open them')
+    expect(shut).not.toContain('Files (2)')
+    const mixed = textOf(render(createElement(FileStrip, { model: { files: [...tiles, plain], party: null, open: false } })))
+    expect(mixed).toContain('Files (1)')
+  })
+
+  it('never offered to attach: the picker leaves out every locked file and counts the priced ones', () => {
+    const files = [
+      { id: 'p1', name: '', sizeBytes: 1, contentType: 'application/pdf', shared: false, available: true, locked: 'PRICED' as const },
+      { id: 's1', name: '', sizeBytes: 1, contentType: 'application/pdf', shared: false, available: true, locked: 'MEASUREMENTS' as const },
+      { id: 'f1', name: 'Label sketch.jpg', sizeBytes: 1, contentType: 'image/jpeg', shared: true, available: true },
+    ]
+    const groups = pickerGroups(files)
+    expect([...groups.shared, ...groups.office].map((one) => one.id)).toEqual(['f1'])
+    expect(pickerPricedLocked(files)).toBe(1)
+    // The container passes the lock through (use-record-thread's recordFiles).
+    const container = readFileSync(new URL('../../../areas/_shared/record-thread/use-record-thread.ts', import.meta.url), 'utf8')
+    expect(container).toContain('...(file.locked ? { locked: file.locked } : {})')
+  })
+
+  it('Mark as priced (anyone who reaches the record), take the mark off only where it opens; refusals in words', () => {
+    expect(pricedMarkOf({ ...plain, version: 2 }, { mark: true })).toBe('mark')
+    expect(pricedMarkOf({ ...plain, priced: true, version: 2 }, { mark: true })).toBe('unmark')
+    expect(pricedMarkOf(lockedOne, { mark: true })).toBeNull()
+    expect(pricedMarkOf({ ...plain, version: 2 }, { mark: false })).toBeNull()
+    expect(pricedMarkOf({ ...plain, version: undefined }, { mark: true })).toBeNull()
+    expect(pricedMarkOf({ ...plain, status: 'QUARANTINED', version: 2 }, { mark: true })).toBeNull()
+    expect(pricedRefusalKey('forbidden', 'PRICED_UNMARK')).toBe('priced.unmarkHeld')
+    expect(pricedRefusalKey('conflict', null)).toBe('priced.stale')
+    expect(pricedRefusalKey('not_found', null)).toBe('priced.gone')
+    expect(pricedRefusalKey(null, null)).toBe('priced.markFailed')
+    for (const locale of ['en', 'it'] as const) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-files'])['record-files'] ?? {})
+      for (const key of ['priced.tick', 'priced.tickHint', 'priced.floor', 'priced.mark', 'priced.unmark', 'priced.unmarkHint', 'priced.unmarkHeld', 'priced.isPriced', 'priced.marked', 'priced.unmarked', 'priced.stale', 'priced.gone', 'priced.markFailed']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('priced.markFor', { name: 'x.pdf' })).toContain('x.pdf')
+    }
+    const en = createTranslator('en', messagesFor('en', ['record-files'])['record-files'] ?? {})
+    expect(en('priced.tick')).toBe('This file shows prices')
+    expect(en('priced.unmarkHeld')).toBe('Only people who see prices take the "shows prices" mark off a file.')
+  })
+})
+// ── end F-CP-144 ─────────────────────────────────────────────────────────────────────────────────────────────────────────

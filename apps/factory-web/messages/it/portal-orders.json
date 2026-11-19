@@ -976,5 +976,50 @@
   "reported": {
     "label": "I problemi che avete segnalato su questo ordine",
     "report": "Segnala un problema"
+  },
+  "priceCheck": {
+    "title": "Verifica prezzi",
+    "yours": "Il vostro prezzo (IVA esclusa)",
+    "yourPrice": "Il vostro prezzo",
+    "yourAmount": "Il vostro importo",
+    "yourTotal": "Il vostro totale",
+    "check": "Verifica",
+    "difference": "Differenza",
+    "agree": "I prezzi coincidono",
+    "differ_one": "I prezzi non coincidono su {count} riga: cambiate il vostro prezzo (potete aggiungere una nota)",
+    "differ_other": "I prezzi non coincidono su {count} righe: cambiate il vostro prezzo (potete aggiungere una nota)",
+    "differTotal": "I prezzi non coincidono sul totale dell'ordine: cambiate il vostro prezzo (potete aggiungere una nota)",
+    "none": "Non avete ancora indicato il vostro prezzo",
+    "missing": "{missing} righe su {lines} senza il vostro prezzo",
+    "otherCurrency_one": "{count} prezzo in un'altra valuta non è contato",
+    "otherCurrency_other": "{count} prezzi in un'altra valuta non sono contati",
+    "totalRow": "Il vostro totale per tutto l'ordine: {source}",
+    "diffHint": "Differenza = il nostro prezzo meno il vostro: + chiediamo di più, − chiediamo di meno.",
+    "match": {
+      "EQUAL": "Uguale",
+      "NOT_EQUAL": "Diverso",
+      "NO_BRAND_PRICE": "Vostro prezzo non ancora dato"
+    },
+    "source": {
+      "PORTAL": "Inserito da voi",
+      "CUSTOMER_PO": "Dal vostro ordine d'acquisto, inserito dalla fabbrica",
+      "OFFICE": "Inserito dalla fabbrica"
+    },
+    "edit": "I vostri prezzi…",
+    "dialogTitle": "I vostri prezzi (IVA esclusa)",
+    "unit": "Il vostro prezzo unitario per la riga {seq}",
+    "note": "Nota (facoltativa)",
+    "noteHint": "Accompagna i prezzi che cambiate; la fabbrica la legge insieme a loro.",
+    "save": "Salva i vostri prezzi",
+    "saving": "Salvataggio…",
+    "saved": "I vostri prezzi sono salvati.",
+    "problem": "Un prezzo da 0 in su, con al massimo 6 decimali.",
+    "noteLong": "Al massimo 1000 caratteri.",
+    "stale": "Qualcuno ha cambiato questi prezzi nel frattempo. Ecco come sono ora.",
+    "closed": "Un ordine chiuso o annullato non cambia più i prezzi.",
+    "readsOnly": "Il vostro prezzo lo indica un collega che ordina per voi (un Buyer o il vostro Admin).",
+    "refused": "Questi prezzi non si possono salvare così: controllate le righe segnate.",
+    "notSaved": "I vostri prezzi non sono stati salvati: riprovate.",
+    "failed": "Non siamo riusciti a leggere i prezzi."
   }
 }

@@ -3,10 +3,10 @@
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Info, Keyboard, MessageSquare, MoreHorizontal } from 'lucide-react'
+import { ArrowLeft, Keyboard, MessageSquare, MoreHorizontal } from 'lucide-react'
 import { Menu, type MenuItemDef } from '@nexus/ui/components'
 import { DetailHeader } from '@nexus/ui/patterns'
-import { Button, Kbd, ToolbarButton } from '@nexus/ui/primitives'
+import { Button, Kbd } from '@nexus/ui/primitives'
 import { Modal } from '../../../lib/i18n/ds-parts'
 import { useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
@@ -37,7 +37,7 @@ export interface RecordBand {
   readonly title: ReactNode
   /** The ONE status pill. */
   readonly status?: ReactNode
-  /** Identity that travels with the title: the customer's PO, "From QT-…" (on a phone behind the band's "i"). */
+  /** Identity that travels with the title: the customer's PO, "From QT-…" (F-OP-302: what does not fit folds behind "+N"). */
   readonly meta?: ReactNode
   /** The primary step by state (one button). */
   readonly primary?: ReactNode
@@ -66,10 +66,10 @@ export interface RecordFrameProps {
    */
   readonly defaultWidth?: DockDefault
   /**
-   * The tab on screen, for a page whose dock adapts per tab: the person's chosen width is kept per person + record type + THIS tab
-   * (the menu's "Default width" clears this tab's), and hiding the dock is kept per person + record type (⌘J, the band's button,
-   * `?tab=activity` or `?thread=` show it again); a private window keeps nothing. Absent: one width per person + record type, and
-   * "hidden" lasts while the page is open (every other record page, as before).
+   * The tab on screen, for a page that keeps its dock across tabs: hiding the dock is kept per person + record type (⌘J, the band's
+   * button, `?tab=activity` or `?thread=` show it again); a private window keeps nothing. Absent: "hidden" lasts while the page is
+   * open (every other record page, as before). F-OP-301 (walk #5): the person's chosen width is ONE per person + record type on every
+   * tab (the menu's "Default width" clears it): the dock never changes its width when the page tab changes.
    */
   readonly dockTab?: string
   // ---- end F-SA-263
@@ -211,6 +211,45 @@ function scrollerOf(element: HTMLElement | null): HTMLElement | null {
   return null
 }
 
+// ---- F-OP-302 (order page walk #10, #20): the band's identity pills are never cut. The pills that do not fit the band's track wrap
+// onto a row the track clips (record-frame.css), and this counts them: each folded pill is hidden and inert (never focused unseen),
+// and the band says "+N", which opens Details (status and every pill). The same at every width: on a phone the "i" is gone, so the
+// band's tools fit one row.
+export function foldedOf(box: { readonly top: number; readonly right: number; readonly bottom: number }, items: readonly { readonly top: number; readonly right: number }[]): boolean[] {
+  return items.map((item) => item.top >= box.bottom - 1 || item.right > box.right + 1)
+}
+
+function useFoldedPills(): [(node: HTMLElement | null) => void, number] {
+  const [count, setCount] = useState(0)
+  const stop = useRef<(() => void) | null>(null)
+  const ref = useCallback((node: HTMLElement | null) => {
+    stop.current?.()
+    stop.current = null
+    if (!node) return setCount(0)
+    const measure = () => {
+      const items = [...node.children] as HTMLElement[]
+      for (const item of items) item.style.visibility = ''
+      const folded = foldedOf(node.getBoundingClientRect(), items.map((item) => item.getBoundingClientRect()))
+      items.forEach((item, index) => {
+        item.inert = folded[index]!
+        if (folded[index]) item.style.visibility = 'hidden'
+      })
+      setCount(folded.filter(Boolean).length)
+    }
+    measure()
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    resize?.observe(node)
+    const changes = typeof MutationObserver === 'undefined' ? null : new MutationObserver(measure)
+    changes?.observe(node, { childList: true, subtree: true, characterData: true })
+    stop.current = () => {
+      resize?.disconnect()
+      changes?.disconnect()
+    }
+  }, [])
+  return [ref, count]
+}
+// ---- end F-OP-302
+
 function useMedia(query: string, initial: boolean): boolean {
   const [matches, setMatches] = useState(initial)
   useEffect(() => {
@@ -227,8 +266,8 @@ function useMedia(query: string, initial: boolean): boolean {
  * RecordFrame (B-TH-213; PL1, PL4): one place for the thread on a record page, factory-only. The record band sits IN the shell's area
  * band row (the band slot), the body takes ~60 % and the docked thread ~40 % (a 3 : 2 grid; one third on a wide grid tab under
  * 1600 px; 50 % or full from the thread's width menu), sticky while the body scrolls, open by default; ⌘J hides and shows it. Below
- * 1280 px the band's "Thread" button opens it full width (Back returns to the same tab and scroll); on a phone the band's details
- * are behind its "i". ONE thread per page.
+ * 1280 px the band's "Thread" button opens it full width (Back returns to the same tab and scroll); the pills that do not fit fold
+ * behind "+N" (F-OP-302). ONE thread per page.
  */
 export function RecordFrame(props: RecordFrameProps) {
   return (
@@ -250,13 +289,15 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
   const phone = useMedia(`(max-width: ${PHONE_BELOW - 1}px)`, false)
   const wideViewport = useMedia('(min-width: 1600px)', false)
   const mode: FrameMode = frameMode(docked ? DOCK_FROM : DOCK_FROM - 1)
-  // F-SA-263: with `dockTab` the width is kept per tab and "hidden" per record type.
-  const sizes = useThreadWidth(recordType, personId, { keys: false, startHidden: closed /* B-TH-269 (R-10) */, tab: dockTab ?? null, rememberHidden: dockTab !== undefined })
+  // F-SA-263: with `dockTab` "hidden" is kept per record type.
+  // F-OP-301 (walk #5): the chosen width is one per record type (never per tab); `dockTab` keeps "hidden".
+  const sizes = useThreadWidth(recordType, personId, { keys: false, startHidden: closed /* B-TH-269 (R-10) */, rememberHidden: dockTab !== undefined })
   const width = dockWidth({ chosen: sizes.remembered ? sizes.width : null, defaultWidth, viewport: wideViewport ? 1600 : 1440 })
   const hasThread = thread !== null
   // F-SA-262: a dock scope in the address (`general`, `project:…`, `wo:…`, `all`: the order page's pick) keeps the narrow view open too.
   const viewOpen = viewOpenOf(params?.get(THREAD_PARAM) ?? null)
   const [details, setDetails] = useState(false)
+  const [metaRef, folded] = useFoldedPills() // F-OP-302
   const [keys, setKeys] = useState(false)
   const [door, setDoor] = useState<FrameDoorAsk | null>(null)
   // ---- F-OP-212: the page's own record, the one every ask that names none is for (kept by its type and id: a new object each render).
@@ -531,7 +572,17 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
         band.status || band.meta ? (
           <span className="fw-rcf-meta">
             {band.status}
-            {band.meta && <span className="fw-rcf-meta-more">{band.meta}</span>}
+            {band.meta && (
+              <span ref={metaRef} className="fw-rcf-meta-more">
+                {band.meta}
+              </span>
+            )}
+            {/* F-OP-302: the pills that do not fit, behind "+N" (Details shows the status and every pill). */}
+            {band.meta && folded > 0 && (
+              <Button size="sm" variant="quiet" className="fw-rcf-meta-fold" aria-label={t('details.more', { count: folded })} title={t('details.more', { count: folded })} onClick={() => setDetails(true)}>
+                +{folded}
+              </Button>
+            )}
           </span>
         ) : undefined
       }
@@ -540,7 +591,6 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
         <span className="fw-rcf-actions">
           {band.primary && <span className="fw-rcf-primary">{band.primary}</span>}
           {threadButton}
-          {band.meta && phone && <ToolbarButton icon={<Info size={16} />} label={t('details.open')} onClick={() => setDetails(true)} />}
           <Menu
             label={<MoreHorizontal size={16} aria-label={band.moreLabel ?? t('more')} />}
             items={[...(band.more ?? []), ...(band.more?.length ? [{ id: 'sep-keys', separator: true }] : []), { id: 'keys', label: t('keys.line'), icon: <Keyboard size={15} aria-hidden />, description: t('keys.lineHint'), onSelect: () => setKeys(true) }]}

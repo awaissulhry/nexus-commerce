@@ -104,6 +104,20 @@ export const designScreen = defineDesignScreen<ComposerCaseModel>({
       note: 'Ticked: Post to Brand Alpha may go; a change of the text takes the tick off again (the factory checks the new text).',
     },
     // ---- end F-SA-282a
+    // ---- F-CP-147 (the money wall L3; Owner O5 "warn, never block"; B-CP-020): words that look like a price, held once with a warning.
+    {
+      id: 'names-price-note',
+      label: 'An office note names a price: warned once, Send anyway',
+      model: { ...base, draft: { mode: 'note', body: 'The customer agreed 92,50 a jacket for the second run.', forFloor: false, namesPrice: true } },
+      note: 'People who do not see prices read this thread too (a Sales worker, production): use the Amount field, or Send anyway — the same words, with the writer\'s yes. The warning repeats no amount.',
+    },
+    {
+      id: 'names-price-portal',
+      label: 'A message in the portal names a price: "Send it anyway?"',
+      model: { ...base, context: { ...SALES_ORDER, portal: true }, draft: { mode: 'portal', body: 'Confirmed: 92,50 each, as in your PO.', forFloor: false, namesPrice: true } },
+      note: 'The text stays as typed; a change of the words takes the warning off (the factory checks them again).',
+    },
+    // ---- end F-CP-147
     { id: 'brand-beta', label: 'Brand Beta’s copy (brand wall)', model: { ...base, context: { ...SALES_ORDER, recordLabel: BRAND_BETA.numbers.order, party: { name: BRAND_BETA.tradeName } }, draft: { mode: 'reply', body: '', forFloor: false } }, note: '“Reply to Brand Beta”: the reply names only this record’s customer.' },
   ],
 })

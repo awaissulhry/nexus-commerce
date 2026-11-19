@@ -81,6 +81,18 @@ export function createShipmentDoor(order: Pick<Order, 'id' | 'status' | 'progres
   if (!mayCreateShipment(order, can)) return null
   return inPlace ? { kind: 'inPlace' } : { kind: 'warehouse', href: createShipmentHref(prefix, order.id) }
 }
+
+/**
+ * F-OP-308 (order page walk #16): why Create shipment… is held where it may not open — the card draws it held with these words, never
+ * hides it: no shipping right (Production manager, Read-only), a closed or cancelled order, nothing released waiting to ship. Null:
+ * it opens (exactly where createShipmentDoor gives a door).
+ */
+export function createShipmentHeld(order: Pick<Order, 'status' | 'progress'>, can: Pick<OrderAbilities, 'createShipment'>): Phrase | null {
+  if (!can.createShipment) return phrase('ship.create.held.noRight')
+  if (order.status === 'CANCELLED' || order.status === 'CLOSED') return phrase('held.final')
+  if (order.progress.released <= order.progress.shipped) return phrase('ship.create.held.nothing')
+  return null
+}
 // ── end F-OP-121 ──
 
 // ── F-OP-122 (order page plan N6): shared shipments on the order ─────────────────────────────────────────────────────────────────

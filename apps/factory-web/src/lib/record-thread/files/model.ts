@@ -58,6 +58,9 @@ export interface ThreadFile {
   // ---- end B-TH-231
   /** B-TH-283 (B-TH-083): a measurement sheet this reader opens (sales.measurements.view): body data, each opening recorded. */
   readonly sheet?: boolean
+  // ---- F-CP-144 (B-CP-014): the file shows prices (this reader opens it: they see prices) and its version (for the mark's write).
+  readonly priced?: boolean
+  readonly version?: number
 }
 
 export type FileOrigin = 'party' | 'ours' | 'made' | 'floor'
@@ -94,9 +97,45 @@ export function fromApiFile(file: ApiFile, previewUrl: string | null = null, ext
     ...(file.locked ? { locked: file.locked } : {}),
     // B-TH-283: a sheet the reader may open says so (the API answers its category only to who opens it).
     ...(file.category === 'MEASUREMENTS' && !file.locked ? { sheet: true } : {}),
+    // F-CP-144: a priced file the reader opens says so; the version goes with "Mark as priced" / its taking off.
+    ...(file.priced === true && !file.locked ? { priced: true } : {}),
+    version: file.version,
     ...extra,
   }
 }
+
+// ---- F-CP-144 (customer page plan C4, the money wall; design 11-money §4.5; B-CP-014, B-CP-023) ---------------------------------
+/**
+ * The PRICED lock, as the thread draws it: a file that shows prices, for a reader who does not see prices, is never named, never
+ * previewed and never attached — the record's lists show ONE counted line instead ("2 priced documents — you cannot open them").
+ * Marking: anyone who reaches the record marks a file that is not priced yet ("Mark as priced": then it opens only for people who
+ * see prices, them included when they do not); only someone who sees prices takes the mark off (the API's 403 in words otherwise).
+ */
+export const isPricedLock = (file: Pick<ThreadFile, 'locked'>): boolean => file.locked === 'PRICED'
+
+/** How many documents (their versions in force) are priced documents locked for this reader: counted, never named. */
+export const pricedLockedOf = (series: readonly Pick<FileSeries, 'latest'>[]): number => series.filter((one) => isPricedLock(one.latest)).length
+
+/** The documents a list names and opens: a priced document locked for this reader is left out (its counted line says it). */
+export const namedSeries = <T extends Pick<FileSeries, 'latest'>>(series: readonly T[]): T[] => series.filter((one) => !isPricedLock(one.latest))
+
+/** A file's small preview, when the reader may see one: never for a locked file (a priced document or a sheet they cannot open). */
+export const previewOf = (file: Pick<ThreadFile, 'previewUrl' | 'locked' | 'status'>): string | null => (file.previewUrl && !file.locked && file.status === 'AVAILABLE' ? file.previewUrl : null)
+
+/** What the price mark offers on this file: mark it, take the mark off (a price holder: the file opens for them), or nothing. */
+export function pricedMarkOf(file: Pick<ThreadFile, 'status' | 'locked' | 'priced' | 'version'>, can: { readonly mark: boolean }): 'mark' | 'unmark' | null {
+  if (!can.mark || file.locked || file.version === undefined || file.status !== 'AVAILABLE') return null
+  return file.priced ? 'unmark' : 'mark'
+}
+
+/** A refused mark in words (keys of `record-files`): only a price holder takes it off; changed meanwhile; any other fault. */
+export function pricedRefusalKey(kind: string | null, code: string | null): string {
+  if (kind === 'forbidden' || code === 'PRICED_UNMARK') return 'priced.unmarkHeld'
+  if (kind === 'conflict') return 'priced.stale'
+  if (kind === 'not_found') return 'priced.gone'
+  return 'priced.markFailed'
+}
+// ---- end F-CP-144
 
 /** One document: its version in force (the newest) and its earlier versions, newest first. */
 export interface FileSeries {

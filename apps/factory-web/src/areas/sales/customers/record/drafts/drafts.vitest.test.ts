@@ -12,6 +12,7 @@ import { workEntry } from '../use-customer-work'
 import { DRAFTS_VIEW, workViewsOf } from '../view/WorkTab'
 import { listCustomerDrafts, type DraftRow } from './api'
 import { draftPick, draftsAddress, draftsNav, draftsShown, draftsTouched, draftTitle, filesWords, linesWords, messagesWords, readyOf, showsValue } from './model'
+import { draftValueOf } from './model' // F-CP-141
 import { CustomerDraftsList, type CustomerDraftsListModel } from './view/CustomerDraftsList'
 
 /**
@@ -183,3 +184,21 @@ describe('the read, live changes and the states', () => {
     }
   })
 })
+
+// ---- F-CP-141 (follow-up 6; the API's B-CP-076): the Value column reads the draft's own value when the API sends it -----------------
+describe('F-CP-141: the Drafts Value column — draft.draftValueAmount, else the net at the prices shown', () => {
+  it('the draft value (minor units) wins; null says "not known"; without it the net shown; neither: no value', () => {
+    expect(draftValueOf(row({ netShown: '1840.00' }, { draftValueAmount: 2_150_00 }))).toEqual({ minor: 2_150_00 })
+    expect(draftValueOf(row({ netShown: '1840.00' }, { draftValueAmount: null }))).toBeNull()
+    expect(draftValueOf(row({ netShown: '1840.00' }))).toEqual({ decimal: '1840.00' })
+    expect(draftValueOf(row())).toBeNull()
+  })
+  it('the money wall: the column only when a row carries either field (as Sales worker / as Production manager neither comes)', () => {
+    expect(showsValue([row({}, { draftValueAmount: 0 })])).toBe(true)
+    expect(showsValue([row({}, { draftValueAmount: null })])).toBe(true)
+    expect(showsValue([row()])).toBe(false)
+    const view = readFileSync(new URL('./view/CustomerDraftsList.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("return 'minor' in value ? money(value.minor, params.data.currency, locale) : priceText(value.decimal, params.data.currency, INTL_LOCALE[locale])")
+  })
+})
+// ---- end F-CP-141

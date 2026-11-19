@@ -149,8 +149,22 @@ export type PartnerThreadRead = z.infer<typeof partnerThreadSchema>
 const recordPath = (type: string, id: string) => `/portal/threads/${encodeURIComponent(type)}/${encodeURIComponent(id)}`
 export const fetchThread = (api: ApiClient, type: string, id: string, cursor?: string | null, signal?: AbortSignal) =>
   api.get(recordPath(type, id), { query: { limit: 50, ...(cursor ? { cursor } : {}) }, schema: partnerThreadSchema, signal })
-export const postMessage = (api: ApiClient, type: string, id: string, body: string, idempotencyKey: string) =>
-  api.post(`${recordPath(type, id)}/messages`, { body: { body }, schema: z.object({ message: partnerMessage }), idempotencyKey })
+export const postMessage = (api: ApiClient, type: string, id: string, body: string, idempotencyKey: string, options: { askFactoryDesigner?: boolean } = {}) =>
+  api.post(`${recordPath(type, id)}/messages`, {
+    // F-CP-156 (B-CP-079): the ask rides on the post only when ticked (the body names no person: the slot is the office's).
+    body: options.askFactoryDesigner ? { body, askFactoryDesigner: true } : { body },
+    schema: z.object({ message: partnerMessage, designerAsk: designerAskSchema.nullable().optional() }),
+    idempotencyKey,
+  })
+// ---- F-CP-156 (customer page plan C7, D12; 12 §5; B-CP-078, B-CP-079): "Ask <name>, factory designer" ------------------------------
+// GET /portal/factory-designer → the ONE name the customer may ask (the designer while active, else the backup; null: none) — never an
+// id, an e-mail, a role, or whether two names exist (W-CP-5). A post's answer says whether the designer was asked (asked: the name;
+// not asked: the day's asks are used up and the message reached the team); its words are the API's, the page says its own.
+const designerAskSchema = z.object({ asked: z.boolean(), name: z.string().nullable(), words: z.string() })
+export type DesignerAskRead = z.infer<typeof designerAskSchema>
+export const fetchFactoryDesigner = (api: ApiClient, signal?: AbortSignal): Promise<string | null> =>
+  api.get('/portal/factory-designer', { schema: z.object({ name: z.string().nullable() }), signal }).then((answer) => answer.name)
+// ---- end F-CP-156
 // ---- B-TH-286 (B-TH-091; wall W08): the conversation's pins as a portal reader may see them — only the pins of messages shared with its
 // own customer (the API's partner policy), never an office note's pin and never who pinned it.
 const partnerPin = z.object({

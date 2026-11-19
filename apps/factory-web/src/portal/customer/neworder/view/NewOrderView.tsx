@@ -22,15 +22,22 @@ import { ListKeysInfo } from '../../../../list-frame/ListKeysInfo'
 import { PortalRecordFrame } from '../../../shell/record/PortalRecordFrame'
 import type { PortalDockWidth, PortalFrameMode } from '../../../shell/record/model'
 import { draftKeys } from '../band'
-import { closedOf, draftBannerOf, draftChips, linesInOrder, peopleLineWords, reorderHeldKey, savedWords, type DraftChip, type DraftPart } from '../model'
+import { closedOf, draftBannerOf, draftChips, reorderHeldKey, savedWords, type DraftChip, type DraftPart } from '../model'
 import { DraftChecklist, PartHeading } from './DraftChecklist'
 // ---- end F-CP-150
 // ---- F-CP-151 (B-CP-072; D14): the draft's files cards — logos, references, measurement sheets; the e-mail way on live.
 import type { DraftFilePart } from '../api'
 import { draftFilesOf, draftMailName, filesAddHeld, LATER_PART_OF, laterToggleOf, uploadsOpenOf } from '../model'
-import { DraftFilesCard, DraftSheets, type DraftFilesActions, type DraftFilesModel, type UploadRow } from './DraftFiles'
+import { DraftFilesCard, type DraftFilesActions, type DraftFilesModel, type UploadRow } from './DraftFiles'
 // ---- end F-CP-151
 import { wordsHref } from '../request-model' // F-CP-152: "Just write it in words"
+// ---- F-CP-154 (customer page plan C5; 12 §2 parts 1, 4, 6): lines of every kind, the People and sizes roster, "Your price".
+import { NotebookPen, Ruler } from 'lucide-react'
+import { mtmHeldKey, ownTotalOf, priceRowsOf, yourPriceAccess, type AddKind } from '../model'
+import { CustomLineDialog, type CustomLineDialogActions, type CustomLineDialogModel } from './LinesSection'
+import { PeopleRoster, PersonDialog, type PeopleRosterActions, type PersonDialogActions, type PersonDialogModel } from './PeopleRoster'
+import { YourPriceCell } from './parts'
+// ---- end F-CP-154
 
 /**
  * SCR-185 › New order & reorder (design portal.customer.neworder): sec:start "How do you want to order?" (the ways in, one
@@ -52,7 +59,7 @@ export interface NewOrderViewModel {
   prefix: string
   /** Today in the site's zone: the earliest requested date. */
   today: string
-  start: { state: 'loading' | 'error' | 'ready'; drafts: readonly DraftRow[]; choosing: Way | null; held: string | null }
+  start: { state: 'loading' | 'error' | 'ready'; drafts: readonly DraftRow[]; choosing: Way | null; held: string | null; /** F-CP-154: "Describe it" is making the draft. */ describing?: boolean }
   way: Way | null
   record: DraftRecord | null
   header: HeaderDraft
@@ -81,7 +88,14 @@ export interface NewOrderViewModel {
   sent: { customerRef: string | null; lines: number; pieces: number; net: string | null; currency: string; seesPrices: boolean } | null
   closed: { status: RequestStatus; salesOrder: { id: string } | null } | null
   offlineSince: string | null
-  dialogs: { picker: PickerModel | null; address: AddressDialogModel | null; discard: DiscardModel | null }
+  dialogs: {
+    picker: PickerModel | null
+    address: AddressDialogModel | null
+    discard: DiscardModel | null
+    // F-CP-154: a described or made-to-measure line's window; a person's window.
+    customLine?: CustomLineDialogModel | null
+    person?: PersonDialogModel | null
+  }
   // ---- F-CP-150
   /** The colleague who changed the draft meanwhile (a 409's re-read names them once B-CP-075 says who), or null. */
   staleBy?: string | null
@@ -94,6 +108,10 @@ export interface NewOrderViewModel {
   // ---- end F-CP-150
   /** F-CP-151: the files going up now, or that did not go (their words). */
   uploads?: readonly UploadRow[]
+  // ---- F-CP-154: "Your price" typed and not saved yet, and why a typed one cannot be saved (keys), by line.
+  ownPrices?: Readonly<Record<string, string>>
+  ownPriceProblems?: Readonly<Record<string, string>>
+  // ---- end F-CP-154
 }
 
 export interface NewOrderActions {
@@ -116,6 +134,13 @@ export interface NewOrderActions {
   /** F-CP-151: a part's files — add, take out, "Sending later". */
   files?: DraftFilesActions
   lines?: LinesActions
+  // ---- F-CP-154: "Describe it" / "Made to measure" (a new line in the customer's own words), the roster, "Your price", their windows.
+  onAddKind?: (kind: AddKind) => void
+  people?: PeopleRosterActions
+  price?: { onType?: (lineId: string, text: string) => void; onLeave?: (lineId: string) => void }
+  customLine?: CustomLineDialogActions
+  person?: PersonDialogActions
+  // ---- end F-CP-154
   reorder?: ReorderActions
   upload?: UploadActions
   picker?: PickerActions
@@ -239,12 +264,21 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
   const chips = draftChips(record)
   const chip = (part: DraftPart): DraftChip => chips.find((entry) => entry.part === part)!
   const reorderHeld = reorderHeldKey(model.mayOrder ?? true)
-  const addLine: MenuItemDef[] = WAYS.map((way) => {
-    const held = way === 'reorder' && reorderHeld ? t(reorderHeld) : model.writeHeld
-    return { id: way, label: t(`start.way.${way}`), disabled: held !== null, description: held ?? undefined, onSelect: () => actions?.onWay?.(way) }
-  })
+  // F-CP-154: "Describe it" and "Made to measure" first (made to measure held with words only where the office switched it off).
+  const mtmHeld = mtmHeldKey(request)
+  const addKinds: MenuItemDef[] = [
+    { id: 'described', label: t('draftPage.addDescribed'), icon: <NotebookPen size={14} aria-hidden />, disabled: model.writeHeld !== null, description: model.writeHeld ?? undefined, onSelect: () => actions?.onAddKind?.('described') },
+    { id: 'mtm', label: t('draftPage.addMtm'), icon: <Ruler size={14} aria-hidden />, disabled: (model.writeHeld ?? (mtmHeld ? t(mtmHeld) : null)) !== null, description: model.writeHeld ?? (mtmHeld ? t(mtmHeld) : undefined), onSelect: () => actions?.onAddKind?.('mtm') },
+  ]
+  const addLine: MenuItemDef[] = [
+    ...addKinds,
+    ...WAYS.map((way) => {
+      const held = way === 'reorder' && reorderHeld ? t(reorderHeld) : model.writeHeld
+      return { id: way, label: t(`start.way.${way}`), disabled: held !== null, description: held ?? undefined, onSelect: () => actions?.onWay?.(way) }
+    }),
+  ]
   const kind = draftBannerOf({ offline: model.offlineSince !== null, stale: model.stale, refused: model.problem !== null, notice: model.notice !== null, problems: request.problems.length })
-  const kit = { t, price: (value: string | null | undefined) => words.price(value, request.currency) }
+  const kit = { t, price: (value: string | null | undefined) => words.price(value, request.currency), locale: words.locale }
   // F-CP-151: each part's files, where they may go up (else the e-mail way), the cap and "Sending later".
   const files = draftFilesOf(request)
   const capKey = filesAddHeld(request, { preview: false, offline: false, busy: false })
@@ -330,7 +364,7 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
               <ul className="fw-pno-notes">
                 {request.problems.map((problem, index) => (
                   <li key={index} className="fw-pno-note is-danger">
-                    <a href={`#${problemPlace(problem)}`}>{problemWords(problem, request.lines, kit)}</a>
+                    <a href={`#${problemPlace(problem)}`}>{problemWords(problem, request.lines, kit, request.customLines ?? [])}</a>
                   </li>
                 ))}
               </ul>
@@ -360,7 +394,7 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
           <DraftFilesCard chip={chip('LOGOS')} model={filesModel('LOGO')} actions={actions?.files} />
           <DraftFilesCard chip={chip('REFERENCES')} model={filesModel('REFERENCE')} actions={actions?.files} />
         </div>
-        <PeopleCard chip={chip('PEOPLE')} record={record} sheets={filesModel('SHEET')} actions={actions?.files} />
+        <PeopleCard chip={chip('PEOPLE')} record={record} sheets={filesModel('SHEET')} writeHeld={model.writeHeld} actions={{ ...actions?.files, ...actions?.people }} />
         <div className="fw-pno-pair">
           <DateCard model={model} actions={actions} chip={chip('DATE')} />
           <NotesCard model={model} actions={actions} chip={chip('NOTES')} />
@@ -374,6 +408,9 @@ export function NewOrderView({ model, actions, children }: { model: NewOrderView
       {model.dialogs.picker ? <StylePickerDialog model={model.dialogs.picker} actions={actions?.picker} /> : null}
       {model.dialogs.address ? <NewAddressDialog model={model.dialogs.address} actions={actions?.address} /> : null}
       {model.dialogs.discard ? <DiscardDialog model={model.dialogs.discard} onConfirm={actions?.discard?.onConfirm} onCancel={actions?.discard?.onCancel} /> : null}
+      {/* F-CP-154: a described or made-to-measure line's window; a person's window. */}
+      {model.dialogs.customLine ? <CustomLineDialog model={model.dialogs.customLine} actions={actions?.customLine} /> : null}
+      {model.dialogs.person ? <PersonDialog model={model.dialogs.person} actions={actions?.person} /> : null}
     </PortalRecordFrame>
   )
 }
@@ -394,6 +431,20 @@ function StartSection({ model, actions }: { model: NewOrderViewModel; actions?: 
         </h2>
         <fieldset className="fw-pno-ways" disabled={model.start.held !== null}>
           <legend className="fw-pno-quiet">{t('start.intro')}</legend>
+          {/* F-CP-154 (12 §2 Doors): "Describe it" first — the new draft opens with its "Describe what you need" window. */}
+          <RadioCard
+            name="way"
+            value="describe"
+            checked={false}
+            selected={false}
+            onChange={() => actions?.onAddKind?.('described')}
+            title={
+              <span className="fw-pno-waytitle">
+                <NotebookPen size={18} aria-hidden /> {t('draftPage.start.describe')}
+              </span>
+            }
+            description={model.start.describing ? t('state.saving') : t('draftPage.start.describeHint')}
+          />
           {WAYS.map((way) => {
             const held = way === 'reorder' && reorderHeld ? t(reorderHeld) : null
             return (
@@ -443,28 +494,17 @@ function StartSection({ model, actions }: { model: NewOrderViewModel; actions?: 
 
 // ── F-CP-150: the part cards ──────────────────────────────────────────────────────────────────────────────────────────────
 
-/** 4 People and sizes (v1): each line's pieces by its size grid; the roster (name, number, size or measurement sheet, sending later) comes with F-CP-154. */
-function PeopleCard({ chip, record, sheets, actions }: { chip: DraftChip; record: DraftRecord; sheets: DraftFilesModel; actions?: DraftFilesActions }) {
-  const words = useOrderingWords()
-  const { t } = words
-  const lines = linesInOrder(record.request.lines)
+/**
+ * 4 People and sizes: each line's pieces as the draft holds them, the privacy line (review G6), each by-person line's roster (name,
+ * number, Size · Measurement sheet · Sending later; "People: in the attached sheet" when a sheet on the line stands for it — F-CP-154),
+ * then the draft's measurement sheets.
+ */
+function PeopleCard({ chip, record, sheets, writeHeld, actions }: { chip: DraftChip; record: DraftRecord; sheets: DraftFilesModel; writeHeld: string | null; actions?: PeopleRosterActions }) {
   return (
     <Card padded>
       <section className="fw-pno-section" id={chip.target} tabIndex={-1} aria-labelledby="part-people-title">
         <PartHeading chip={chip} id="part-people-title" />
-        {lines.length === 0 ? (
-          <p className="fw-pno-quiet">{t('draftPage.people.empty')}</p>
-        ) : (
-          <ul className="fw-pno-peoplelines">
-            {lines.map((line) => (
-              <li key={line.id} className={line.pieces > 0 ? undefined : 'is-missing'}>
-                <a href={`#line-${line.id}`}>{peopleLineWords(line, t, words.pieces)}</a>
-              </li>
-            ))}
-          </ul>
-        )}
-        {/* F-CP-151: the measurement sheets (body data) and who opens them. */}
-        <DraftSheets model={sheets} actions={actions} />
+        <PeopleRoster model={{ record, writeHeld, sheets }} actions={actions} />
       </section>
     </Card>
   )
@@ -551,9 +591,11 @@ function NotesCard({ model, actions, chip }: { model: NewOrderViewModel; actions
 }
 
 /**
- * 6 Your price: for a price holder each line's pieces and our list price, the net total (prices that changed since the draft
- * began, with "Take today's prices"); the customer's own price per line comes with F-CP-154. Anyone else: "Prices are not part of
- * your access" — no amount, no total, no count of priced lines (the API sends none, M-CP-2).
+ * 6 Your price: for a price holder (the customer's Buyer, Finance, Admin) every line by seq with its pieces, our list price beside it on
+ * catalogue lines, and the ONE "Your price (without VAT)" cell (F-CP-154; saved on leaving it; frozen when sent); the total row carries
+ * our net and their total (when every line has their price, else how many lines lack it); prices that changed since the draft began,
+ * with "Take today's prices". Anyone else: "Prices are not part of your access" — no amount, no total, no count of priced lines (the
+ * API sends none and refuses one, M-CP-2).
  */
 function PriceCard({ model, actions, chip }: { model: NewOrderViewModel; actions?: NewOrderActions; chip: DraftChip }) {
   const words = useOrderingWords()
@@ -561,19 +603,58 @@ function PriceCard({ model, actions, chip }: { model: NewOrderViewModel; actions
   const record = model.record!
   const request = record.request
   const price = (value: string | null | undefined) => words.price(value, request.currency) ?? '—'
+  // F-CP-154: the customer's own price per line, typed by a price holder while the draft may be written.
+  const access = yourPriceAccess(record.seesPrices, request.status === 'DRAFT' ? model.writeHeld : t('held.notDraft'))
+  const rows = priceRowsOf(request, t, words.locale)
+  const typed = model.ownPrices ?? {}
+  const own = ownTotalOf(rows, typed)
   return (
     <Card padded>
       <section className="fw-pno-section" id={chip.target} tabIndex={-1} aria-labelledby="part-price-title">
         <PartHeading chip={chip} id="part-price-title" />
-        {record.seesPrices ? (
+        {access !== 'none' ? (
           <>
-            <SummaryTablePrices
+            <SummaryTable
               label={t('draftPage.part.PRICE')}
-              columns={[t('draftPage.price.line'), t('summary.pieces'), t('draftPage.price.ours')]}
-              rows={linesInOrder(request.lines).map((line) => ({ id: line.id, cells: [`${line.seq} · ${line.style.code} ${line.colourway.name}`, words.pieces(line.pieces), price(line.unitPriceShown)] }))}
-              total={[t('summary.net'), words.pieces(request.summary.pieces), price(request.summary.net)]}
+              density="roomy"
+              stackOnPhone
+              columns={[t('draftPage.price.line'), t('summary.pieces'), t('draftPage.price.ours'), t('draftPage.price.yours')]}
+              align={['left', 'right', 'right', 'right']}
+              widths={['40%', undefined, undefined, '200px']}
+              rows={[
+                ...rows.map((row) => ({
+                  id: row.id,
+                  cells: [
+                    `${row.seq} · ${row.label}`,
+                    words.pieces(row.pieces),
+                    row.kind === 'CATALOGUE' ? price(row.ours) : '—',
+                    <YourPriceCell
+                      key="yours"
+                      seq={row.seq}
+                      access={access}
+                      saved={row.yours}
+                      typed={typed[row.id]}
+                      problem={model.ownPriceProblems?.[row.id] ?? null}
+                      currency={request.currency}
+                      onType={(text) => actions?.price?.onType?.(row.id, text)}
+                      onLeave={() => actions?.price?.onLeave?.(row.id)}
+                    />,
+                  ],
+                })),
+                {
+                  id: 'total',
+                  cells: [
+                    <strong key="l">{t('draftPage.price.total')}</strong>,
+                    <strong key="p">{words.pieces(request.summary.pieces)}</strong>,
+                    <strong key="o">{price(request.summary.net)}</strong>,
+                    own.total !== null ? <strong key="y">{price(own.total)}</strong> : <span key="y" className="fw-pno-quiet">{t('draftPage.price.missing', { count: own.missing })}</span>,
+                  ],
+                },
+              ]}
             />
-            <p className="fw-pno-quiet">{t('summary.netHint')}</p>
+            <p className="fw-pno-quiet">
+              {t('summary.netHint')} {t('draftPage.price.frozen')}
+            </p>
             {request.pricesChanged > 0 ? (
               <p className="fw-pno-held">
                 <AlertTriangle size={14} aria-hidden /> {t('summary.pricesChanged', { count: request.pricesChanged })}
@@ -591,9 +672,4 @@ function PriceCard({ model, actions, chip }: { model: NewOrderViewModel; actions
       </section>
     </Card>
   )
-}
-
-/** The lines and their total row (the DS SummaryTable; the total as its last row). */
-function SummaryTablePrices({ label, columns, rows, total }: { label: string; columns: readonly string[]; rows: readonly { id: string; cells: readonly ReactNode[] }[]; total: readonly ReactNode[] }) {
-  return <SummaryTable label={label} columns={columns} rows={[...rows, { id: 'total', cells: total.map((cell, index) => <strong key={index}>{cell}</strong>) }]} align={['left', 'right', 'right']} stackOnPhone widths={['55%', undefined, undefined]} />
 }

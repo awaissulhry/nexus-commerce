@@ -336,7 +336,8 @@ export function useRequestReview(host: RequestReviewHost): { readonly model: Req
     try {
       const now = await listBatch(api, openId)
       setBatch({ id: openId, value: now.length === 0 ? { status: 'not_found' } : { status: 'ready', value: now } })
-      setDialog({ kind: 'batch', answer, rushFloor, lines: batchLinesOf(now, answer), state: { phase: 'ready' } })
+      // F-CP-160: a priced counter-offer is left out for a reader without the price grain (in the money wall's words).
+      setDialog({ kind: 'batch', answer, rushFloor, lines: batchLinesOf(now, answer, hostRef.current.price), state: { phase: 'ready' } })
     } catch (error) {
       setDialog({ kind: 'batch', answer, rushFloor, lines: null, state: { phase: 'failed', problem: answerProblem(error).key } })
     }

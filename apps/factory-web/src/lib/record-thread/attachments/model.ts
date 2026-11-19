@@ -160,6 +160,11 @@ export interface RecordFile {
   /** The customer sees it already (portal or link, shared with this record's customer). */
   shared: boolean
   available: boolean
+  /**
+   * F-CP-144 (B-CP-014, B-CP-023): a file this reader may not open — a priced document for a reader who does not see prices, a sheet
+   * without the measurements right: never offered to attach (the API answers "File not found." for its id); a priced one is counted.
+   */
+  locked?: 'MEASUREMENTS' | 'PRICED'
 }
 
 /**
@@ -168,9 +173,13 @@ export interface RecordFile {
  */
 export function pickerGroups(files: readonly RecordFile[], query = ''): { shared: RecordFile[]; office: RecordFile[] } {
   const words = query.trim().toLowerCase()
-  const shown = files.filter((file) => file.available && (words === '' || file.name.toLowerCase().includes(words)))
+  // F-CP-144: a locked file is never offered (no name, no attach): pickerPricedLocked counts the priced ones.
+  const shown = files.filter((file) => file.available && !file.locked && (words === '' || file.name.toLowerCase().includes(words)))
   return { shared: shown.filter((file) => file.shared), office: shown.filter((file) => !file.shared) }
 }
+
+/** F-CP-144: the record's priced documents this reader may not open — not in the picker, said in one counted line. */
+export const pickerPricedLocked = (files: readonly RecordFile[]): number => files.filter((file) => file.locked === 'PRICED').length
 
 /** A record's file as a row of the message. */
 export function draftOfRecordFile(file: RecordFile, key: string): DraftFile {

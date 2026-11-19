@@ -635,5 +635,9 @@
     "unsaved_one": "1 modifica ai limiti di produzione non salvata",
     "unsaved_other": "{count} modifiche ai limiti di produzione non salvate",
     "apply": "Applica"
+  },
+  "moneyWall": {
+    "ownerGives": "Solo il titolare dà un ruolo che vede i prezzi.",
+    "ownerLater": "Solo il titolare sposta più avanti la fine dell'accesso: tu puoi anticiparla o terminarlo ora."
   }
 }
