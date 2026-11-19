@@ -22,8 +22,14 @@ import {
   revokeContract,
   settingsContract,
   statusContract,
+  // B-CP-078
+  factoryDesignerContract,
+  factoryDesignerChoicesContract,
+  factoryDesignerChangeContract,
+  portalFactoryDesignerContract,
 } from './contract'
 import { manifest } from './manifest'
+import { factoryDesigner, factoryDesignerChoices, portalFactoryDesigner, setFactoryDesigner } from './designer' // B-CP-078
 import { changePerson, changeProduction, changeSettings, changeStatus, invitePerson, organisations, portalAccess, preview, productionLimits, resendInvitation, revokeInvitation } from './office'
 
 /**
@@ -40,6 +46,10 @@ import { changePerson, changeProduction, changeSettings, changeStatus, invitePer
  * PATCH /partners/:partyId/people/:userId                      role, capabilities, end of access
  * POST  /partners/:partyId/people/:userId/{suspend|reactivate|deactivate}
  * POST  /partners/:partyId/preview                             the party's portal, read-only, in this browser
+ * GET   /partners/:partyId/factory-designer                    B-CP-078: the factory designer and backup ("Who looks after …")
+ * GET   /partners/:partyId/factory-designer/choices            B-CP-078: who may be named
+ * PUT   /partners/:partyId/factory-designer                    B-CP-078: the designer and backup (the stored version; no step-up)
+ * GET   /portal/factory-designer                               B-CP-078: the one name the customer may ask
  * GET   /portal/access                                         "My access"
  * GET   /portal/colleagues                                     the organisation's people
  * POST  /portal/colleagues                                     the admin invites a colleague
@@ -65,6 +75,12 @@ export default defineRoutes('auth-partners', manifest, async (app) => {
   app.post('/partners/:partyId/people/:userId/reactivate', { schema: statusContract }, (request) => changeStatus(auth(), request, request.params.partyId, request.params.userId, request.body, 'reactivate'))
   app.post('/partners/:partyId/people/:userId/deactivate', { schema: statusContract }, (request) => changeStatus(auth(), request, request.params.partyId, request.params.userId, request.body, 'deactivate'))
   app.post('/partners/:partyId/preview', { schema: previewContract }, (request, reply) => preview(auth(), request, reply, request.params.partyId, request.body))
+
+  // B-CP-078
+  app.get('/partners/:partyId/factory-designer', { schema: factoryDesignerContract }, (request) => factoryDesigner(auth(), request, request.params.partyId))
+  app.get('/partners/:partyId/factory-designer/choices', { schema: factoryDesignerChoicesContract }, (request) => factoryDesignerChoices(auth(), request, request.params.partyId))
+  app.put('/partners/:partyId/factory-designer', { schema: factoryDesignerChangeContract }, (request) => setFactoryDesigner(auth(), request, request.params.partyId, request.body, idempotencyKeyFrom(request)))
+  app.get('/portal/factory-designer', { schema: portalFactoryDesignerContract }, (request) => portalFactoryDesigner(app, request))
 
   app.get('/portal/access', { schema: myAccessContract }, (request) => myAccess(app, request))
   app.get('/portal/colleagues', { schema: colleaguesContract }, (request) => colleagues(app, request))

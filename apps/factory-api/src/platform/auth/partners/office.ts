@@ -40,8 +40,8 @@ import { clientAddressOf } from '../../../core/client-address'
 
 const officeContextOf = (request: FastifyRequest): OfficeContext => requireContext(request) as OfficeContext
 
-/** The actor may change the party with `permission` (a tenant-wide party: only by a grant over every company). */
-function mayChange(actor: Actor, party: PartnerParty, permission: Permission): boolean {
+/** The actor may change the party with `permission` (a tenant-wide party: only by a grant over every company). B-CP-078: the designer slot's rule too. */
+export function mayChange(actor: Actor, party: PartnerParty, permission: Permission): boolean {
   return party.companyId !== null
     ? can(actor, permission, { companyId: party.companyId, partyId: party.id })
     : grantsFor(actor, permission).some((grant) => grant.companies === 'all' && (grant.parties === 'all' || grant.parties.includes(party.id)))
@@ -120,7 +120,7 @@ export function rolesView(kinds: readonly PartnerKind[], allowedRoleKeys: readon
 }
 
 // B-PR-40: the old progress switch is dropped; what the customer sees of its production is the limits card's level.
-const settingsBody = (settings: PortalSettingsView) => ({ portalOn: settings.portalOn, maxUsers: settings.maxUsers, allowedRoleKeys: [...settings.allowedRoleKeys], version: settings.version })
+const settingsBody = (settings: PortalSettingsView) => ({ portalOn: settings.portalOn, maxUsers: settings.maxUsers, allowedRoleKeys: [...settings.allowedRoleKeys], mtmDraftsOn: settings.mtmDraftsOn /* B-CP-078 */, version: settings.version })
 const partyBody = (party: PartnerParty) => ({ id: party.id, code: party.code, name: party.name, roles: [...party.roles], status: party.status, companyId: party.companyId })
 
 /** GET /partners/:partyId — the party's Portal access tab. */
@@ -202,6 +202,9 @@ export async function changeSettings(auth: OfficeAuth, request: FastifyRequest, 
       portalOn: body.portalOn ?? before.portalOn,
       maxUsers: body.maxUsers === undefined ? before.maxUsers : body.maxUsers,
       allowedRoleKeys: body.allowedRoleKeys ?? [...before.allowedRoleKeys],
+      // B-CP-078 (customer page plan, lead pick D15/F1): made-to-measure lines in the customer's portal drafts — on by default, the
+      // office may switch one customer off (drafts only: a made-to-measure quote or order still follows GATE-MTM).
+      mtmDraftsOn: body.mtmDraftsOn ?? before.mtmDraftsOn,
     }
     const fields = (Object.keys(next) as (keyof typeof next)[]).filter((field) => JSON.stringify(next[field]) !== JSON.stringify(before[field]))
     if (fields.length === 0) throw new InvalidStateError('Nothing changes: these are the settings already.')
