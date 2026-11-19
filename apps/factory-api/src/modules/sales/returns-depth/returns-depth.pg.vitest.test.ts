@@ -323,7 +323,10 @@ describe('the deadline flags a late arrival; a fee by rule is withheld from the 
     const dock = (await ok('sales', 'POST', `/sales/returns/${sampleRma.id}/receipts`, { version: current.version, parcels: 1, parcelCondition: 'INTACT', lines: [{ lineId: current.lines[0].id, quantity: 1 }] }, 201)).return
     await ok('sales', 'POST', `/sales/returns/${sampleRma.id}/grades`, { version: dock.version, lines: [{ lineId: current.lines[0].id, grade: 'DAMAGED', cause: 'OUR_DEFECT' }] })
     const record = (await ok('sales', 'GET', `/sales/returns/${sampleRma.id}`)).return
-    await ok('sales', 'POST', `/sales/returns/${sampleRma.id}/decisions`, { version: record.version, lines: [{ lineId: current.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP' }] })
+    // B-CP-026 (Owner answer A; fix wave cp-fx8): the credit is an amount Sales cannot see — held for Sales in words, decided by the Owner.
+    const decision = { version: record.version, lines: [{ lineId: current.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP' }] }
+    expect((await refused('sales', 'POST', `/sales/returns/${sampleRma.id}/decisions`, decision, 403)).issues[0]).toMatchObject({ path: 'refusal/BLIND_PRICE' })
+    await ok('owner', 'POST', `/sales/returns/${sampleRma.id}/decisions`, decision)
     expect(await lineRow(current.lines[0].id)).toMatchObject({ creditAmount: 25_000, feeAmount: 0, feeRuleId: seeded.feeRuleIds.changeOfMind })
     // B-CP-011: the fee's amount is read as the Owner (was Sales).
     expect((await depthOf(sampleRma.id, 'owner')).lines[0].fee).toMatchObject({ amount: 0, dropped: 'OUR_CAUSE', words: 'Change of mind: 10 % of the credit, dropped: the cause is ours (our defect).' })
