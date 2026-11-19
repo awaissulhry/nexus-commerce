@@ -42,6 +42,10 @@ import { pendingAskOf, sameRecord } from '../../../../_shared/record-frame/model
 import type { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-customer/use-all-of-customer'
 import { ALL_OF_CUSTOMER_NS, AllOfCustomerDock } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
 // ---- end F-SA-279
+// ---- F-CP-111: the docked order's files line = its file set; a tile opens the ONE viewer here ----
+import { FileViewer } from '../../../../../lib/record-thread/popups/view/FileViewer'
+import { FILES_VIEW_NS } from '../../../../../lib/record-thread/files-view/view/FilesView'
+// ---- end F-CP-111
 import { WaitingStrip, type StripDoors } from './WaitingStrip'
 import './customer-work.css'
 
@@ -375,7 +379,7 @@ type DockProps = { customer: { id: string; name: string }; general: ReactNode; d
  * hands the dock its feed (end check: a view fetches nothing).
  */
 /** F-OP-203: the dock's catalogues — All of <customer>'s, and the orders' for the pick's short "General" (the order page's word). */
-const CUSTOMER_DOCK_NS = [...ALL_OF_CUSTOMER_NS, 'orders'] as const
+const CUSTOMER_DOCK_NS = [...ALL_OF_CUSTOMER_NS, 'orders', FILES_VIEW_NS /* F-CP-111: a file of the order's set that did not open */] as const
 
 export function CustomerDock(props: DockProps) {
   return (
@@ -389,6 +393,14 @@ function Dock({ customer, general, dock, feed, prefix, allOffered = true }: Dock
   const t = useT('parties')
   const o = useT('orders') // F-OP-203
   const rt = useT('record-thread') // F-OP-203
+  // ---- F-CP-111: a file of the docked order's set that could not be opened (or shared) is said once, as the order page says it.
+  const fv = useT(FILES_VIEW_NS)
+  const { toast } = useToast()
+  const filesProblem = dock.filesProblem
+  useEffect(() => {
+    if (filesProblem) toast(fv(filesProblem.key), 'danger')
+  }, [filesProblem?.at]) // eslint-disable-line react-hooks/exhaustive-deps -- once per problem
+  // ---- end F-CP-111
   // ---- F-OP-212 (11-dock §5, D5): an ask of the page (files, Followers…, a door, Answer) names its record — the customer's own when
   // the body names none: the pick goes to that record's thread first (the customer's general one; the record picked), which then
   // takes the ask; once per ask. The narrow view is the frame's term, untouched by `dock=`.
@@ -441,27 +453,45 @@ function Dock({ customer, general, dock, feed, prefix, allOffered = true }: Dock
     </>
   )
   // ---- end F-OP-207
+  // F-CP-111: the ONE viewer of the docked order's files (the container's walk: ← / → over the order's files; body data only when asked).
+  const viewer = scope === 'record' ? (dock.orderFiles?.model.viewer ?? null) : null
+  const filesActions = dock.orderFiles?.actions
   return (
-    <ThreadPick label={t('customers.work.dock.label')} choices={choices} value={scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>
-      {scope === 'record' && pick ? (
-        <OfficeRecordThread
-          key={`${pick.type}:${pick.id}`}
-          docked
-          record={{ type: pick.type, id: pick.id, companyId: pick.companyId, siteId: null }}
-          title={`${pick.label} · ${customer.name}`}
-          recordLabel={pick.label}
-          party={{ id: customer.id, name: customer.name }}
-          partyRole="customer"
-          recordHref={`${prefix}${recordAddress({ type: pick.type, id: pick.id, label: pick.label, companyId: pick.companyId }, OFFICE_PAGES)}`}
-          onDraft={(kept) => dock.onDraft(pick, kept)}
+    <>
+      {viewer && (
+        <FileViewer
+          walk="all"
+          files={viewer.files}
+          index={viewer.index}
+          onIndex={(index) => filesActions?.onViewerIndex?.(index)}
+          onClose={() => filesActions?.onViewerClose?.()}
+          onOpenLocked={filesActions?.onViewerOpenLocked}
+          onDownload={filesActions?.onViewerDownload}
+          returnFocusTo={viewer.returnTo}
         />
-      ) : scope === 'all' ? (
-        // F-OP-203: All of <customer> in the dock's ONE card (DockColumn): the pick band on top, the read-only feed that scrolls.
-        // F-OP-204: its Head row (FeedHead); this page IS the customer's, so its ⋯ has no "Open <customer>".
-        <AllOfCustomerDock label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} model={feed.model} actions={{ ...feed.actions, onAnswer, writeFirst, canAnswer, ...(frame?.compose ? { onCompose: frame.compose } : {}) }} foot={allFoot} />
-      ) : (
-        general
       )}
-    </ThreadPick>
+      <ThreadPick label={t('customers.work.dock.label')} choices={choices} value={scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>
+        {scope === 'record' && pick ? (
+          <OfficeRecordThread
+            key={`${pick.type}:${pick.id}`}
+            docked
+            record={{ type: pick.type, id: pick.id, companyId: pick.companyId, siteId: null }}
+            title={`${pick.label} · ${customer.name}`}
+            recordLabel={pick.label}
+            party={{ id: customer.id, name: customer.name }}
+            partyRole="customer"
+            recordHref={`${prefix}${recordAddress({ type: pick.type, id: pick.id, label: pick.label, companyId: pick.companyId }, OFFICE_PAGES)}`}
+            onDraft={(kept) => dock.onDraft(pick, kept)}
+            {...(dock.orderFiles && pick.type === 'SalesOrder' ? { orderFiles: dock.orderFiles } : {}) /* F-CP-111: the files line = the order's file set */}
+          />
+        ) : scope === 'all' ? (
+          // F-OP-203: All of <customer> in the dock's ONE card (DockColumn): the pick band on top, the read-only feed that scrolls.
+          // F-OP-204: its Head row (FeedHead); this page IS the customer's, so its ⋯ has no "Open <customer>".
+          <AllOfCustomerDock label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} model={feed.model} actions={{ ...feed.actions, onAnswer, writeFirst, canAnswer, ...(frame?.compose ? { onCompose: frame.compose } : {}) }} foot={allFoot} />
+        ) : (
+          general
+        )}
+      </ThreadPick>
+    </>
   )
 }

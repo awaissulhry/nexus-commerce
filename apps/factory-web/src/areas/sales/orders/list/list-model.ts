@@ -26,6 +26,8 @@ import type { Assignable, BatchAnswer, BatchAssignee, BatchRecord, TaskDraft } f
 import type { PanelRead } from '../../../../record-panels/model' // F-SA-281
 import type { ReplyManyActions, ReplyManyModel } from './reply-many' // F-SA-282
 import type { PriceCheckDialogActions, PriceCheckDialogModel } from '../price-check/use-price-check' // F-CP-114
+import type { OrderCommandActions, OrderCommandModel, WindowCommand, Words } from './commands/model' // F-CP-108
+import type { ManyCommand, OrderCommandManyActions, OrderCommandManyModel } from './commands/model' // F-CP-109
 
 /** SCR-038 — the orders list's view model (OrdersListView draws it and fetches nothing). */
 
@@ -197,6 +199,18 @@ export interface OrdersListModel {
   replyMany?: ReplyManyModel | null
   // F-CP-114: the ONE customer's-price window while open (row ⋯ "Set customer's price…", the Customer's price cell; price holders only).
   priceCheck?: PriceCheckDialogModel | null
+  // ---- F-CP-108: the order page's own commands on the sheet — the ONE window a row's ⋯ "Next steps" opens (null: none open), the rows a
+  // command moved out of the view on screen (they stay, greyed, until "N updates · Show"), and the last command's toast.
+  commands?: {
+    readonly window: OrderCommandModel | null
+    readonly moved: readonly string[]
+    readonly receipt: { readonly words: Words; readonly at: number } | null
+    /** F-CP-109: the bulk window over the ticked orders (Mark N ready… · Close N… · Confirm N…) while open; null: closed. */
+    readonly many?: OrderCommandManyModel | null
+    /** F-CP-109: the reader decides yeses (approvals.decide): Confirm N… is on the bar. */
+    readonly decide?: boolean
+  } | null
+  // ---- end F-CP-108
   // ---- F-SA-279 (the customer page: a row drives the dock) ----
   /** The order the page's dock shows (marked; null: none), and the words of a phone card's door to its conversation; absent: not a dock list. */
   active?: { readonly id: string | null; readonly cardDoor?: string | null } | null
@@ -297,6 +311,14 @@ export interface OrdersListActions {
   // F-CP-114: open the customer's-price window of one order (given only to a price holder: no door, no call for anyone else).
   onPriceCheck?: (orderId: string) => void
   priceCheck?: PriceCheckDialogActions
+  // ---- F-CP-108: a row's ⋯ "Next steps" opens the order page's command in place (the ONE window), and the window's own actions.
+  onCommand?: (orderId: string, command: WindowCommand) => void
+  command?: OrderCommandActions
+  // ---- end F-CP-108
+  // ---- F-CP-109: the bar's Mark N ready… · Close N… · Confirm N… on the ticked orders (≤ 50), and the bulk window's own actions.
+  onCommandMany?: (ids: readonly string[], command: ManyCommand) => void
+  commandMany?: OrderCommandManyActions
+  // ---- end F-CP-109
   // ---- F-SA-279: the keys moved the focus to a row (the page's dock follows after its rest); a phone card's conversation door ----
   onFocusRow?: (row: OrderRow) => void
   onCardThread?: (row: OrderRow) => void

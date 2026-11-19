@@ -882,3 +882,65 @@ describe('F-CP-141: the Not equal view', () => {
   })
 })
 // ---- end F-CP-141
+
+// ---- F-CP-111 (customer page plan C2c; 10-customer-page §4; review B1): the dock's files line on this page = the docked order's file set
+describe('F-CP-111 — the docked order\'s files line is the order\'s file set (its Files tab\'s count); the general scope unchanged', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const ORDER = { type: 'SalesOrder', id: '0190f0e2-5151-7000-8000-000000000142', label: 'SO-2026-0142', companyId: null }
+  const QUOTE = { type: 'Quote', id: '0190f0e2-4141-7000-8000-000000000012', label: 'Q-2026-0112', companyId: null }
+  it('only an ORDER docked in its own thread gets the order\'s set; the general scope, All of <customer> and other records keep their own line', async () => {
+    const { orderShownOf } = await import('./use-customer-work')
+    expect(orderShownOf('record', ORDER)).toBe(ORDER)
+    expect(orderShownOf('general', ORDER)).toBeNull()
+    expect(orderShownOf('all', ORDER)).toBeNull()
+    expect(orderShownOf('record', QUOTE)).toBeNull()
+    expect(orderShownOf('record', null)).toBeNull()
+  })
+  it('files count = the order\'s Files tab: one tile per listed file, "Files (N)" with N = read.total (the same container\'s read)', async () => {
+    const { stripFilesOf } = await import('../../../_shared/record-thread/use-order-files')
+    const { fileSeries, filesChip } = await import('../../../../lib/record-thread/files/model')
+    const { ORDER_FILES } = await import('../../orders/record/overview/fixtures')
+    const tiles = stripFilesOf(ORDER_FILES, ALPHA)
+    expect(filesChip(fileSeries(tiles)).count).toBe(ORDER_FILES.total)
+    const { render, textOf } = await import('../../../../lib/record-thread/parts/testing')
+    const { FileStrip } = await import('../../../../lib/record-thread/files/view/FileStrip')
+    expect(textOf(render(createElement(FileStrip, { model: { files: tiles, party: null, open: false } })))).toContain(`Files (${ORDER_FILES.total})`)
+    // The order page's Files tab counts the same read (model.files.read.total).
+    expect(read('../../orders/record/view/OrderRecordView.tsx')).toContain("count: tab === 'files' ? (model.files?.read?.total ?? null)")
+  })
+  it('the page mounts the order lane\'s ONE container for the docked order (no read of its own in the dock) and hands it as `orderFiles`', () => {
+    const hook = read('./use-customer-work.ts')
+    expect(hook).toContain("import { useOrderFiles, type OrderFilesHost } from '../../../_shared/record-thread/use-order-files'")
+    expect(hook.match(/useOrderFiles\(api, \{/g)).toHaveLength(1)
+    expect(hook).toContain('const order = orderShownOf(scope, pick)')
+    expect(hook).toContain('enabled: !!order && readsFiles,')
+    expect(hook).toContain("canShare: session.permissions.includes('files.manage'),")
+    expect(hook).toContain('onAll: () => router.push(orderFilesHref(prefix, order.id)),')
+    expect(hook).toContain("onOpen: (fileId, opener) => orderFiles.actions.onOrderOpen?.(fileId, 'preview', opener),")
+    expect(hook).toContain("change.type === 'file.available' && filesAgain()")
+    // The dock passes it to the docked ORDER's thread only (F-OP-215's host prop); the general thread keeps its own files line.
+    const dock = read('./view/WorkTab.tsx')
+    expect(dock).toContain("{...(dock.orderFiles && pick.type === 'SalesOrder' ? { orderFiles: dock.orderFiles } : {}) /* F-CP-111: the files line = the order's file set */}")
+    const general = dock.slice(dock.indexOf('function Dock('))
+    expect(general.match(/orderFiles: dock\.orderFiles/g)).toHaveLength(1)
+    // A tile opens the ONE viewer here (the container's walk); the view fetches nothing.
+    expect(dock).toContain('const viewer = scope === \'record\' ? (dock.orderFiles?.model.viewer ?? null) : null')
+    expect(dock).toContain('<FileViewer')
+  })
+  it('"All files" opens the order page\'s Files tab', async () => {
+    const { orderFilesHref } = await import('./use-customer-work')
+    expect(orderFilesHref('/w/acme', '0190f0e2-5151-7000-8000-000000000142')).toBe('/w/acme/sales/orders/0190f0e2-5151-7000-8000-000000000142?tab=files')
+  })
+  it('the money wall and the brand wall stay the API\'s: the order\'s set is walled by its read (a priced document never named on the line)', async () => {
+    const { stripFilesOf } = await import('../../../_shared/record-thread/use-order-files')
+    const { ORDER_FILES } = await import('../../orders/record/overview/fixtures')
+    // The line draws only what the read lists: a document the read leaves out (priced, without the price grain; another customer's) has
+    // no tile, no name.
+    const leftOut = { ...ORDER_FILES, groups: ORDER_FILES.groups.map((group) => ({ ...group, files: [], leftOut: group.files.length })), total: 0 }
+    expect(stripFilesOf(leftOut, ALPHA)).toEqual([])
+    const api = read('../../../../../../factory-api/src/modules/sales/orders/order-files.ts')
+    expect(api).toContain('if (file.priced && !sees) {')
+    expect(api).toContain('group.pricedLeftOut += 1')
+  })
+})
+// ---- end F-CP-111

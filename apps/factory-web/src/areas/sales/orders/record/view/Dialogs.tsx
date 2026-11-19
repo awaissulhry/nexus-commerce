@@ -15,6 +15,13 @@ import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { CancelDialog, CloseLinesDialog, CompareDialog, CopyQuoteDialog, ReopenLinesDialog } from './DailyDialogs'
 import { SplitOrderDialog } from './SplitOrderDialog' // F-OP-111
 
+// ---- F-CP-108 (customer page plan C2b; lane agreement (a), the order lead's yes): TYPE ONLY — Mark ready, Close order (and the Cancel
+// in DailyDialogs) are exported with the narrow part of the record's model and actions they read, so the Orders sheet's row mounts
+// THESE dialogs in place (never a copy). The record passes its whole model and actions, as before: nothing here changes what they do.
+export type CommandDialogModel = Pick<OrderRecordModel, 'busy' | 'draft' | 'can' | 'dialogProblem' | 'cancelCheck' | 'prefix'>
+export type CommandDialogActions = Pick<OrderRecordActions, 'onDialog' | 'onReady' | 'onClose' | 'onCancelOrder' | 'onRetryPart'>
+// ---- end F-CP-108
+
 /**
  * The order studio's dialogs: Change promise date (the order or chosen lines, the reason; the first promise never
  * changes), Mark ready (a reason, while quality release is not in use), Close order (settled: a confirm; not settled:
@@ -113,7 +120,7 @@ export function Frame({ title, held, go, goLabel, onClose, children, problem, si
   )
 }
 
-export function DialogProblem({ model }: { model: OrderRecordModel }) {
+export function DialogProblem({ model }: { model: Pick<OrderRecordModel, 'dialogProblem'> /* F-CP-108: type only */ }) {
   const t = useT('orders')
   return model.dialogProblem ? <Banner tone="danger" title={t(model.dialogProblem.key, model.dialogProblem.params)} /> : null
 }
@@ -172,7 +179,7 @@ function PromiseDialog({ order, model, actions }: { order: Order; model: OrderRe
   )
 }
 
-function ReadyDialog({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+export /* F-CP-108 */ function ReadyDialog({ order, model, actions }: { order: Order; model: CommandDialogModel; actions?: CommandDialogActions } /* F-CP-108: type only */) {
   const t = useT('orders')
   const [reason, setReason] = useState(model.draft?.reason ?? '')
   const held = model.busy ? t('held.busy') : reason.trim() === '' ? t('ready.reasonNeeded') : null
@@ -186,7 +193,7 @@ function ReadyDialog({ order, model, actions }: { order: Order; model: OrderReco
   )
 }
 
-function CloseDialog({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+export /* F-CP-108 */ function CloseDialog({ order, model, actions }: { order: Order; model: CommandDialogModel; actions?: CommandDialogActions } /* F-CP-108: type only */) {
   const t = useT('orders')
   const needsReason = closeNeedsReason(order)
   const [reason, setReason] = useState(model.draft?.reason ?? '')

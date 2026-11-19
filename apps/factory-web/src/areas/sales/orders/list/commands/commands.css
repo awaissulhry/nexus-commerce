@@ -1,0 +1,61 @@
+/*
+ * F-CP-108 / F-CP-109 — the Orders sheet's command windows (row ⋯ Next steps, Mark N ready… · Close N… · Confirm N…): LAYOUT only. The
+ * dialogs themselves are the order page's (so/record/view) and the design system's; semantic tokens only. On a phone the lists wrap:
+ * nothing scrolls sideways.
+ */
+.fw-cmd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-cmd-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-cmd-heading {
+  margin: 0;
+  font-weight: 600;
+}
+
+.fw-cmd-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.fw-cmd-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cmd-line > svg {
+  flex: none;
+  align-self: center;
+}
+
+.fw-cmd-why {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+/* A row whose order a command moved out of the view on screen: it stays where it is, greyed, until "N updates · Show". */
+.fw-cmd-left {
+  opacity: 0.55;
+}

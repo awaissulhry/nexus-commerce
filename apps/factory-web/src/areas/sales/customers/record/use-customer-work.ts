@@ -21,6 +21,10 @@ import { CUSTOMER_FEED_TYPES } from '@nexus/factory-domain/sales/customer-feed/k
 import { readRecordSummary } from '../../../_shared/record-summary/api'
 // ---- end F-SA-279
 import { writeSearch } from '../../../_shared/record-frame/address' // F-OP-211: the record pages' ONE history writer
+// ---- F-CP-111: the dock's files line on this page = the picked order's file set (the order lane's container, F-OP-215's host prop) ----
+import { useRouter } from 'next/navigation'
+import { useOrderFiles, type OrderFilesHost } from '../../../_shared/record-thread/use-order-files'
+// ---- end F-CP-111
 
 /**
  * F-SA-276 (sales page plan N5, picks R5, R9, P10, P17; 11-customer-page §3.2, §3.4, §3.10, §3.11): the customer's Work tab beside
@@ -599,10 +603,47 @@ export function useCustomerDock(partyId: string, tab: string) {
   }, [termKey, partyId]) // eslint-disable-line react-hooks/exhaustive-deps
   const scope = scopeOf(term, pick)
   const shownKey = scope === 'record' && pick ? dockKeyOf(pick) : null
+  // ---- F-CP-111 (customer page plan C2c; 10-customer-page §4; review B1): while the dock shows an ORDER, its files line is the order's
+  // file set — the order lane's useOrderFiles (A09, F-OP-125: GET /sales/orders/:id/files, walled by the API; a priced document is
+  // counted, never named, for a reader without the price grain: B-CP-023), handed to the docked thread as `orderFiles` (F-OP-215's host
+  // prop: the line's count is the order's Files tab's count). A tile opens the file in the ONE viewer here; "All files" opens the
+  // order's Files tab. The general scope (the customer's own thread), All of <customer> and every other record keep their own line.
+  const session = useOfficeSession()
+  const router = useRouter()
+  const prefix = pathname.replace(/\/sales\/customers\/.*$/, '')
+  const order = orderShownOf(scope, pick)
+  const readsFiles = session.permissions.includes('files.read')
+  const [filesProblem, setFilesProblem] = useState<{ readonly key: string; readonly at: number } | null>(null)
+  const orderFiles = useOrderFiles(api, {
+    orderId: order?.id ?? null,
+    enabled: !!order && readsFiles,
+    partyId,
+    canShare: session.permissions.includes('files.manage'),
+    onProblem: (key) => setFilesProblem({ key, at: Date.now() }),
+    keep: true, // one read per docked order (read again when another order docks, or on its files' news)
+  })
+  // News of a file (the reader's own live stream: `file.available`, the file's record named) reads the docked order's set again, coalesced.
+  const filesAgain = useCoalesced(() => orderFiles.reload(), 800)
+  useLiveBus({ onChange: (change) => change.type === 'file.available' && filesAgain(), onReconnect: filesAgain }, !!order && readsFiles)
+  const orderFilesHost: OrderFilesHost | null =
+    order && readsFiles
+      ? {
+          model: orderFiles.model,
+          actions: orderFiles.actions,
+          reload: orderFiles.reload,
+          onAll: () => router.push(orderFilesHref(prefix, order.id)),
+          onOpen: (fileId, opener) => orderFiles.actions.onOrderOpen?.(fileId, 'preview', opener),
+        }
+      : null
+  // ---- end F-CP-111
   return {
     term,
     pick,
     scope,
+    /** F-CP-111: the docked order's file set for its files line (null: no order docked, or no files.read — the record's own line). */
+    orderFiles: orderFilesHost,
+    /** F-CP-111: a file of that set that could not be opened or shared (a `record-thread-files-view` key), said once by the dock. */
+    filesProblem,
     /** The record docked now (marked on its row); null: the general conversation or All of <customer>. */
     shown: scope === 'record' ? pick : null,
     /** "Draft kept on SO-…" under the pick. */
@@ -639,3 +680,12 @@ export function useCustomerDock(partyId: string, tab: string) {
   }
 }
 // ---- end F-SA-279
+
+// ---- F-CP-111: which order's file set the dock's files line shows, and the way to its Files tab ----
+/** The order the dock shows now (its own thread picked), else null: the general scope, All of <customer> and any other record. */
+export function orderShownOf<P extends { readonly type: string; readonly id: string }>(scope: 'general' | 'record' | 'all', pick: P | null): P | null {
+  return scope === 'record' && pick && pick.type === 'SalesOrder' ? pick : null
+}
+/** "All files": the order page's Files tab. */
+export const orderFilesHref = (prefix: string, orderId: string): string => `${prefix}/sales/orders/${encodeURIComponent(orderId)}?tab=files`
+// ---- end F-CP-111

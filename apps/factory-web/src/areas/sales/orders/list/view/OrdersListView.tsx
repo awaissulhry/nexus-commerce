@@ -80,6 +80,17 @@ import { PriceDiffCell, PriceMatchCell } from './PriceMatchCell'
 // ---- end F-CP-140
 import { PriceCheckDialog } from '../../price-check/PriceCheckDialog' // F-CP-114: the ONE customer's-price window
 import '../../price-check/price-check.css' // F-CP-114: the Customer's price cell's door
+// ---- F-CP-108: the row ⋯ "Next steps" — the order page's own commands (A14's map) in ONE window, its own dialogs ----
+import { useToast, type MenuItemDef } from '@nexus/ui/components'
+import { rowStepsOf, wordsText, type RowStep, type Words } from '../commands/model'
+import { OrderCommandWindow } from '../commands/view/OrderCommandWindow'
+import '../commands/commands.css'
+// ---- end F-CP-108
+// ---- F-CP-109: Mark N ready… · Close N… · Confirm N… on the bar (≤ 50; Cancel stays one at a time) ----
+import { Archive, CheckCheck, PackageCheck } from 'lucide-react'
+import { manyHeld, manyLabel, manyShown, type ManyCommand } from '../commands/model'
+import { OrderCommandManyDialog } from '../commands/view/OrderCommandManyDialog'
+// ---- end F-CP-109
 
 export type { OrdersListActions, OrdersListModel } from '../list-model'
 
@@ -124,6 +135,13 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const rowsKey = items?.map((row) => row.id).join(',') ?? ''
   useEffect(() => setSelected((current) => current.filter((id) => rowsKey.includes(id))), [rowsKey])
   useEffect(() => setSelected(model.selected ?? []), [model.selected])
+  // ---- F-CP-108: a command done from a row's ⋯ says so in a DS toast ("SO-0142 marked ready"); the row already shows it in place.
+  const { toast } = useToast()
+  const receipt = model.commands?.receipt ?? null
+  useEffect(() => {
+    if (receipt) toast(wordsText(receipt.words, t, s, locale), 'success')
+  }, [receipt?.at]) // eslint-disable-line react-hooks/exhaustive-deps -- once per command done
+  // ---- end F-CP-108
 
   // v: List ⇄ Board (the design's view key); c: New order — never while typing or inside a dialog. The list frame keeps
   // / j k x Enter ?.
@@ -516,6 +534,18 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
                     <Globe size={13} aria-hidden /> <SelectionLabel>{replyLabel}</SelectionLabel>
                   </Button>
                 )}
+                {/* F-CP-109: Mark N ready… · Close N… · Confirm N… — the order page's own commands over the ticked orders (≤ 50), held in words. */}
+                {actions?.onCommandMany &&
+                  manyShown(model.can, !!model.commands?.decide).map((command) => {
+                    const held = manyHeld(command, picked, model.can)
+                    const label = wordsText(manyLabel(command, picked.length), t, s, locale)
+                    const Icon = MANY_ICON[command]
+                    return (
+                      <Button key={command} size="sm" aria-label={label} heldReason={held ? wordsText(held, t, s, locale) : null} onClick={() => actions.onCommandMany?.(picked.map((row) => row.id), command)}>
+                        <Icon size={13} aria-hidden /> <SelectionLabel>{label}</SelectionLabel>
+                      </Button>
+                    )
+                  })}
                 {/* B-TH-244 (SHEET.overall-F07, ORD-G06): finance only — Finance's From-DDTs dialog with their DDTs chosen, never an invoice from here. */}
                 {model.can.manageInvoices && (
                   <Button size="sm" heldReason={invoiceShippedHeld(picked.length) ? s(invoiceShippedHeld(picked.length)!) : null} aria-label={s('invoiceShipped.action', { count: picked.length })} onClick={() => actions?.onInvoiceShipped?.(picked.map((row) => row.id))}>
@@ -559,6 +589,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       {model.replyMany && <ReplyManyDialog model={model.replyMany} actions={actions?.replyMany} />}
       {/* F-CP-114: the ONE customer's-price window (the order page's Money tab mounts the same one, F-CP-142). */}
       {model.priceCheck && <PriceCheckDialog model={model.priceCheck} actions={actions?.priceCheck} />}
+      {/* F-CP-108: the row ⋯ "Next steps" window — the order page's own dialogs on the order as read. */}
+      {model.commands?.window && <OrderCommandWindow model={model.commands.window} actions={actions?.command} />}
+      {/* F-CP-109: Mark N ready… · Close N… · Confirm N… — the preview, the run one order at a time, the result. */}
+      {model.commands?.many && <OrderCommandManyDialog model={model.commands.many} actions={actions?.commandMany} />}
       {/* F-SA-281: the one New task window — on one order (a row's ⋯), or on N orders in one batch (the selection). */}
       {model.task && (
         <TaskNewDialog
@@ -1034,8 +1068,26 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer 
       </FunnelButton>
     )
   }
-  const MoreCell = ({ data }: ICellRendererParams<OrderRow>) =>
-    data ? (
+  // ---- F-CP-108 (customer page plan C2b, D8, K2): the row ⋯ "Next steps" — the order page's own commands by the row's state (A14's map:
+  // Confirm or refuse… · Make work orders · Mark ready… · Close order…; Cancel order… last, in the danger tone), each held with its words
+  // from the row's facts; never a system move, no free status. A pick opens the ONE window on this page (the order read, its own dialog).
+  const heldWords = (words: Words): string => wordsText(words.params?.date ? { ...words, params: { ...words.params, date: day(String(words.params.date)) } } : words, t, s, locale)
+  const STEP_LABEL: Record<Exclude<RowStep['command'], 'make'>, () => string> = { confirm: () => s('commands.confirmOrRefuse'), ready: () => t('action.ready'), close: () => t('step.close'), cancel: () => t('action.cancel') }
+  const stepItem = (step: RowStep, row: OrderRow): MenuItemDef => {
+    const held = step.held ? heldWords(step.held) : null
+    // Make work orders: today's door (Production's New work order with this order chosen), held with its words.
+    if (step.command === 'make') return { id: 'make', label: t('step.makeWorkOrders'), ...(held ? { disabled: true, description: held } : { href: `${prefix}/production/work-orders?new=1&order=${encodeURIComponent(row.number)}` }) }
+    const command = step.command
+    return { id: command, label: STEP_LABEL[command](), ...(command === 'cancel' ? { tone: 'danger' as const } : {}), ...(held ? { disabled: true, description: held } : { onSelect: () => act()?.onCommand?.(row.id, command) }) }
+  }
+  // ---- end F-CP-108
+  const MoreCell = ({ data }: ICellRendererParams<OrderRow>) => {
+    if (!data) return null
+    // F-CP-108: the host gives the door (both hosts of the ONE sheet); without it, today's items.
+    const steps = act()?.onCommand ? rowStepsOf(data, can) : []
+    const next = steps.filter((step) => step.command !== 'cancel').map((step) => stepItem(step, data))
+    const cancel = steps.find((step) => step.command === 'cancel')
+    return (
       <Menu
         label={<MoreHorizontal size={16} aria-hidden />}
         align="right"
@@ -1043,19 +1095,25 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer 
         items={[
           { id: 'open', label: t('list.open'), href: orderHref(prefix, data) },
           { id: 'tab', label: t('list.openNewTab'), href: orderHref(prefix, data), target: '_blank' },
+          // F-CP-108: Next steps (the order page's own heading), between rules.
+          ...(next.length > 0 ? [{ id: 'sep-next', separator: true }, { id: 'head-next', heading: true, label: t('menu.group.next') }, ...next, { id: 'sep-rest', separator: true }] : []),
           { id: 'deposit', label: t('tab.money'), href: orderHref(prefix, data, 'money') },
           // F-CP-114: Set customer's price… — the ONE window, here (a price holder only: the host gives the door with the price grain).
           ...(can.price && act()?.onPriceCheck ? [{ id: 'priceCheck', label: t('priceCheck.edit'), onSelect: () => act()?.onPriceCheck?.(data.id) }] : []),
-          ...(data.status === 'CONFIRMED' && can.makeWorkOrders ? [{ id: 'make', label: t('step.makeWorkOrders'), href: `${prefix}/production/work-orders?new=1&order=${encodeURIComponent(data.number)}` }] : []),
+          // F-CP-108: Make work orders is a Next step now (held with its words); a host without the door keeps today's item.
+          ...(steps.length === 0 && data.status === 'CONFIRMED' && can.makeWorkOrders ? [{ id: 'make', label: t('step.makeWorkOrders'), href: `${prefix}/production/work-orders?new=1&order=${encodeURIComponent(data.number)}` }] : []),
           // B-W2b-323: Print confirmation (the confirmation PDF in a new tab; held while it waits for a yes or was cancelled).
           ...(model.depth ? [printVerb(data, prefix, d)] : []),
           // ---- F-SA-275: Add task… on this order (the one New task window, F-SA-281) and Answer request… while one waits on us.
           ...(act()?.onAddTask ? [{ id: 'task', label: s('row.addTask'), onSelect: () => act()?.onAddTask?.([data.id], 'row'), disabled: !!latest.current.model.bulkCan?.task, ...(latest.current.model.bulkCan?.task && r ? { description: r(latest.current.model.bulkCan.task) } : {}) }] : []),
           ...answerItem(data),
           // ---- end F-SA-275
+          // F-CP-108: Cancel order… last, after a rule (each cancel shows what it stops: one order at a time).
+          ...(cancel ? [{ id: 'sep-danger', separator: true }, stepItem(cancel, data)] : []),
         ]}
       />
-    ) : null
+    )
+  }
   // ---- F-SA-275: the production columns (opt-in on Sales › Orders, shown by the customer page's views; their reads only while shown) ----
   const now = Date.now()
   const pw = productionWordsFor(locale)
@@ -1170,7 +1228,17 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer 
     later({ colId: 'supervisor', headerName: s('col.supervisor'), headerTooltip: s('col.supervisorHint'), minWidth: 104, flex: 0.6, cellRenderer: SupervisorColumn, valueGetter: ({ data }: { data?: OrderRow }) => data?.production?.supervisorMark ?? '' }),
     ...laterColumns, // B-TH-244
     { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
-  ] as ColDef<OrderRow>[]).map((column) => withPreset(column, model.preset ?? null, wide)) // F-SA-276
+  ] as ColDef<OrderRow>[])
+    .map((column) => withPreset(column, model.preset ?? null, wide)) // F-SA-276
+    .map((column) => withMovedMark(column, () => latest.current.model.commands?.moved ?? [])) // F-CP-108
+}
+
+/** F-CP-109: the bar's bulk commands' marks (lucide, as the bar's other buttons). */
+const MANY_ICON: Readonly<Record<ManyCommand, typeof PackageCheck>> = { ready: PackageCheck, close: Archive, confirm: CheckCheck }
+
+/** F-CP-108: a row a command moved out of the view stays where it is, every cell greyed, until "N updates · Show" (rows never jump). */
+export function withMovedMark(column: ColDef<OrderRow>, moved: () => readonly string[]): ColDef<OrderRow> {
+  return { ...column, cellClassRules: { ...(column.cellClassRules ?? {}), 'fw-cmd-left': (params: { data?: OrderRow }) => !!params.data && moved().includes(params.data.id) } }
 }
 
 /** F-SA-276: the host's first columns (its view's preset; from 1800 px its wide ones too); ⋯ always; a person's Customise wins. */
