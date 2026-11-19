@@ -298,6 +298,9 @@ describe('F-OP-112: Make work orders… in place — the style step, the next st
     // F-OP-102: the dialog is mounted once for the page (the band's primary opens it from any tab).
     expect(tab).not.toContain('<NewWorkOrderDialog')
     expect(read('./view/OrderRecordView.tsx')).toContain('<NewWorkOrderDialog model={model.makeWorkOrders.dialog} can={model.makeWorkOrders.can} actions={actions?.makeWorkOrders?.dialog} />')
+    // op-fx4: production's dialog speaks production's catalogue — the page mounts it inside it (it showed its keys before).
+    expect(read('./view/OrderRecordView.tsx')).toMatch(/<WithMessages namespaces=\{\['production'\]\}>\s*<NewWorkOrderDialog /)
+    expect(read('../../../production/work-orders/view/NewWorkOrderDialog.tsx')).toContain("useT('production')")
     expect(tab).toContain("t('wo.makeNext', { style: make.next.code })")
     expect(tab).not.toMatch(/from '[^']*use-new-work-order'/)
     const dialog = read('../../../production/work-orders/view/NewWorkOrderDialog.tsx')
