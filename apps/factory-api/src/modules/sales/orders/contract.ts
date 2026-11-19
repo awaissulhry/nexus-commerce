@@ -22,6 +22,9 @@ import { SUPERVISOR_MARKS } from '@nexus/factory-domain/production-brand/supervi
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
 import { IDS_TERM_MAX, PRODUCTION_WITHHELD } from './production-columns'
 import { APPROVAL_TASK_KINDS } from '@nexus/factory-domain/approvals/rules' // B-OP-020
+// B-OP-023: how a shipment travels and why its tracking number may not be typed.
+import { OWN_TRANSPORT_REFUSALS } from '@nexus/factory-domain/shipping/own-transport/rules'
+import { TRANSPORT_BY } from '@nexus/factory-domain/shipping/shipments'
 
 /**
  * The sales orders' contracts (B-W1-25; A2 SCR-038 "Orders", SCR-039 "Order record"). Money is marked: prices and totals
@@ -237,6 +240,34 @@ export const orderView = output({
         status: z.string(),
         shippedAt: instant().nullable(),
         deliveredAt: instant().nullable(),
+        // ── B-OP-023 (order page plan N5; review R-7: read by Shipment.salesOrderId today, set C reads the orders of its lines) ──
+        version: z.number().int(),
+        siteId: id(),
+        transportBy: z.enum(TRANSPORT_BY),
+        /** With shipping.view over its site (else null, named in `withheld`): who carries it, as booked. */
+        carrier: output({ code: z.string().nullable(), name: z.string().nullable() }).nullable(),
+        /**
+         * With shipping.view over its site (else null): the number typed for a carrier booked by hand (TYPED: no carrier feeds it,
+         * `live` false), or its parcels' carrier labels (PARCELS: each number and the carrier's https page; a TEST label is not
+         * tracked and not listed); null: nothing to track yet.
+         */
+        tracking: output({
+          number: z.string().nullable(),
+          source: z.enum(['TYPED', 'PARCELS']),
+          parcels: z.array(output({ number: z.string(), url: z.string().nullable() })),
+          live: z.boolean(),
+        }).nullable(),
+        expectedDeliveryAt: instant().nullable(),
+        /** Its live DDT (the newest one not cancelled). */
+        ddt: output({ number: z.string(), date: businessDate() }).nullable(),
+        /**
+         * Whether this reader may type its tracking number in place (PUT /shipping/shipments/:id/own-transport/tracking): the
+         * shipment's own refusal first (NOT_A_CARRIER, LABELLED, CANCELLED), then the right (NO_RIGHT: shipping.manage over its
+         * site — "a warehouse person adds it"); `why` in words.
+         */
+        mayTypeTracking: output({ allowed: z.boolean(), code: z.enum([...OWN_TRANSPORT_REFUSALS, 'NO_RIGHT']).nullable(), why: z.string().nullable() }),
+        withheld: z.array(z.enum(['shipments.detail'])),
+        // ── end B-OP-023 ──
         // ── B-OP-043 (order page N6, lines-derived): a shipment is on the order when it carries its garments (or was made for it) ──
         /** Every order it carries, the first (the one it was made for) first; all of this order's customer. */
         orders: z.array(output({ id: id(), number: z.string(), customerRef: z.string().nullable() })),

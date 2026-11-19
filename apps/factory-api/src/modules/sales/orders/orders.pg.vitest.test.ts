@@ -1090,3 +1090,61 @@ describe('the order read carries its open requests for a yes, decided in place (
   })
 })
 // ---- end B-OP-020
+
+// ---- B-OP-023 (order page plan N5; review R-7): the order's shipments with their carrier, tracking, DDT and the tracking door -------
+/**
+ * Tenant a: SEED-SO-0002 left with SH-0001 (Seed Express, two parcels with carrier labels, DDT 144 live); SEED-SO-0003's SH-0002 is a
+ * DRAFT for the same carrier with no label. A reader of shipping sees the carrier and the tracking (the labels' numbers, live; then a
+ * number typed by hand, not live); a reader of orders alone sees neither (withheld) but the DDT and how it travels; the tracking door
+ * says why it is held: the shipment's own refusal first (LABELLED, NOT_A_CARRIER, CANCELLED), then the right (NO_RIGHT).
+ */
+describe('the order read’s shipments: carrier, tracking, DDT and whether the number may be typed here (B-OP-023)', () => {
+  const so2 = () => seeded.a.quality.production.salesOrderId
+  const so3 = () => seeded.a.quality.serialSalesOrderId
+  const shipmentOf = async (session: string, orderId: string, shipmentId: string): Promise<Json> => ((await ok(session, 'GET', orderUrl(orderId))).order.chain.shipments as Json[]).find((row) => row.id === shipmentId)!
+
+  beforeAll(() => {
+    SESSIONS['a.shipping'] = office('a', ['orders.view', 'shipping.view', 'shipping.manage'])
+    SESSIONS['a.shipView'] = office('a', ['orders.view', 'shipping.view'])
+  })
+
+  it('a shipment that left with carrier labels: its carrier, the labels’ numbers (live), its live DDT; typing is held (LABELLED)', async () => {
+    const row = await shipmentOf('a.shipping', so2(), seeded.a.shipmentId)
+    expect(row).toMatchObject({ number: 'SEED-SH-0001', transportBy: 'CARRIER', carrier: { code: 'seed-express', name: 'Seed Express' }, withheld: [] })
+    expect(row.tracking).toMatchObject({ source: 'PARCELS', number: null, live: true })
+    expect((row.tracking.parcels as Json[]).map((parcel) => parcel.number).sort()).toEqual(['SEEDTRACK0001', 'SEEDTRACK0002'])
+    expect(row.ddt).toMatchObject({ number: expect.stringMatching(/^144\//) })
+    expect(row.mayTypeTracking).toMatchObject({ allowed: false, code: 'LABELLED' })
+    const stored = await one<{ version: number; siteId: string }>(`SELECT version, "siteId" FROM "Shipment" WHERE id = $1`, [seeded.a.shipmentId])
+    expect([row.version, row.siteId]).toEqual([stored.version, stored.siteId])
+  })
+
+  it('a reader of orders alone: how it travels and its DDT, never its carrier or tracking (withheld); the door held for the right', async () => {
+    const row = await shipmentOf('a.viewer', so2(), seeded.a.shipmentId)
+    expect(row).toMatchObject({ transportBy: 'CARRIER', carrier: null, tracking: null, withheld: ['shipments.detail'], mayTypeTracking: { allowed: false, code: 'NO_RIGHT' } })
+    expect(row.ddt).toMatchObject({ number: expect.stringMatching(/^144\//) })
+    expect(JSON.stringify(row)).not.toContain('SEEDTRACK')
+  })
+
+  it('a draft for a carrier: typed here by a person who manages shipments (TYPED, not live); a reader of shipping alone is held for the right', async () => {
+    const before = await shipmentOf('a.shipping', so3(), seeded.a.draftShipmentId)
+    expect(before.mayTypeTracking).toEqual({ allowed: true, code: null, why: null })
+    expect(before.tracking).toBeNull()
+    expect((await shipmentOf('a.shipView', so3(), seeded.a.draftShipmentId)).mayTypeTracking).toMatchObject({ allowed: false, code: 'NO_RIGHT' })
+    await ok('a.shipping', 'PUT', `/shipping/shipments/${seeded.a.draftShipmentId}/own-transport/tracking`, { version: before.version, trackingNumber: 'T-OP023-BRT-0001' })
+    const typed = await shipmentOf('a.shipping', so3(), seeded.a.draftShipmentId)
+    expect(typed.tracking).toEqual({ number: 'T-OP023-BRT-0001', source: 'TYPED', parcels: [], live: false })
+    expect(typed.version).toBeGreaterThan(before.version)
+    expect((await shipmentOf('a.viewer', so3(), seeded.a.draftShipmentId)).tracking).toBeNull()
+  })
+
+  it('our own van takes no tracking number (NOT_A_CARRIER); a cancelled shipment none either (CANCELLED)', async () => {
+    const draft = await shipmentOf('a.shipping', so3(), seeded.a.draftShipmentId)
+    await ok('a.shipping', 'PUT', `/shipping/shipments/${seeded.a.draftShipmentId}/own-transport`, { version: draft.version, mode: 'OWN_VAN' })
+    const van = await shipmentOf('a.shipping', so3(), seeded.a.draftShipmentId)
+    expect(van).toMatchObject({ transportBy: 'SENDER', tracking: null, mayTypeTracking: { allowed: false, code: 'NOT_A_CARRIER' } })
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "Shipment" SET status = 'CANCELLED', "cancelledAt" = now(), "cancelReason" = 'T-OP023 made up' WHERE id = '${seeded.a.draftShipmentId}'; COMMIT;`)
+    expect((await shipmentOf('a.shipping', so3(), seeded.a.draftShipmentId)).mayTypeTracking).toMatchObject({ allowed: false, code: 'CANCELLED' })
+  })
+})
+// ---- end B-OP-023

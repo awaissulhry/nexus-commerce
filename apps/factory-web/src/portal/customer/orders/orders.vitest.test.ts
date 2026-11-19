@@ -1,4 +1,6 @@
 import { createElement } from 'react'
+// F-OP-124: the typed tracking number of a shipment card.
+import { typedTrackingOf } from './model'
 // F-SA-238: the Documents tab's grouped files (the office Files body, its customer face).
 import { readFileSync } from 'node:fs'
 import { renderToString } from 'react-dom/server'
@@ -658,3 +660,22 @@ describe('F-SA-238 — the portal Documents tab: the customer’s own shared fil
   })
 })
 // ---- end F-SA-238
+
+// ---- F-OP-124 (order page plan N5): the number of a carrier booked by hand on the customer's shipment card ----------------------
+describe('F-OP-124: the typed tracking number ("No live tracking")', () => {
+  it('a typed number is shown as typed; none, blank or absent shows nothing', () => {
+    expect(typedTrackingOf({ typedTrackingNumber: ' T-BRT-0001 ' })).toBe('T-BRT-0001')
+    expect(typedTrackingOf({ typedTrackingNumber: null })).toBeNull()
+    expect(typedTrackingOf({ typedTrackingNumber: '   ' })).toBeNull()
+    expect(typedTrackingOf({})).toBeNull()
+  })
+
+  it('says it in both languages, the same words to every customer', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const t = createTranslator(locale, messagesFor(locale, ['portal-orders'])['portal-orders']!)
+      for (const key of ['shipments.typed.label', 'shipments.typed.noLive']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+    }
+    expect(createTranslator('en', messagesFor('en', ['portal-orders'])['portal-orders']!)('shipments.typed.noLive')).toBe('No live tracking')
+  })
+})
+// ---- end F-OP-124

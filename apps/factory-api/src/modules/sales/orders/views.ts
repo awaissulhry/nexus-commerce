@@ -11,6 +11,13 @@ import { serverClock } from '../../../core/time'
 import { depositViewOf, DEPOSIT_COLUMNS } from '../deposits/deposits'
 import { readCancelFacts } from './impact'
 import { dayOf, dayOrNull, moveFactsOf, readOrderFacts, type OrderFacts, type OrderRow, type Reader } from './store'
+// B-OP-023 (order page plan N5): each shipment's carrier, tracking, DDT and whether its number may be typed in place.
+import { readShipmentDetails, type ShipmentDetails, type ShipmentLink } from './store'
+import { carrierNameFor } from '@nexus/factory-domain/shipping/labels/labels'
+import { trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking'
+import { trackingRefusal, type OwnTransportRefusalCode } from '@nexus/factory-domain/shipping/own-transport/rules'
+import { SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
+import { isTestLabel } from '@nexus/factory-domain/shipping/test-mode/rules'
 // B-SA-034 (Sales page plan P17): the order read names its own live watch list and who changed each part last.
 import type { Actor } from '@nexus/factory-domain/core/permissions'
 import type { Words } from '@nexus/factory-domain/portal/tasks/kinds'
@@ -356,6 +363,49 @@ async function listedRows(db: Reader, tasks: readonly TaskRow[], office: OfficeC
 }
 // ── end B-OP-020 ──
 
+// ── B-OP-023 (order page plan N5; review R-7) ─────────────────────────────────────────────────────────────────────────────────
+/** Typing a shipment's tracking number needs the right to manage shipments over its site. */
+export const NO_TRACKING_RIGHT_WORDS = 'A warehouse person adds the tracking number: it needs the right to manage shipments.'
+
+type MayTrack = { allowed: boolean; code: OwnTransportRefusalCode | 'NO_RIGHT' | null; why: string | null }
+const NO_TRACKING_RIGHT: MayTrack = { allowed: false, code: 'NO_RIGHT', why: NO_TRACKING_RIGHT_WORDS }
+
+/**
+ * A shipment of the order as its Shipments tab shows it to this reader: how it travels, its expected delivery and live DDT for every
+ * reader of the order; the carrier and its tracking only with shipping.view over its site (else withheld); and whether the reader
+ * may type its tracking number here — the shipment's own refusal first (the warehouse's rule), then the right.
+ */
+function shipmentRowOf(link: ShipmentLink, details: ShipmentDetails, viewer: Actor | null) {
+  // Read in the same client as the order's chain: every shipment of the chain is there.
+  const row = details.shipments.get(link.id)!
+  const place = { companyId: row.companyId, siteId: row.siteId }
+  const sees = viewer !== null && can(viewer, SHIPPING_VIEW, place)
+  const parcels = details.parcels.filter((parcel) => parcel.shipmentId === link.id)
+  const labelled = parcels.filter((parcel) => parcel.trackingNumber !== null && !isTestLabel(parcel.carrierParcelId))
+  const typed = row.manualTrackingNumber
+  const tracking = !sees
+    ? null
+    : typed !== null
+      ? { number: typed, source: 'TYPED' as const, parcels: [], live: false }
+      : labelled.length > 0
+        ? { number: null, source: 'PARCELS' as const, parcels: labelled.map((parcel) => ({ number: parcel.trackingNumber!, url: trackingPageOf(parcel.trackingUrl) })), live: true }
+        : null
+  const refusal = trackingRefusal({ status: row.status, transportBy: row.transportBy, manualTrackingNumber: typed, parcels: parcels.map((parcel) => ({ trackingNumber: parcel.trackingNumber, providerId: parcel.carrierParcelId })), liveDdts: 0 })
+  const mayTypeTracking: MayTrack = !sees ? NO_TRACKING_RIGHT : refusal ? { allowed: false, code: refusal.code, why: refusal.message } : viewer !== null && can(viewer, SHIPPING_MANAGE, place) ? { allowed: true, code: null, why: null } : NO_TRACKING_RIGHT
+  return {
+    version: row.version,
+    siteId: row.siteId,
+    transportBy: row.transportBy,
+    carrier: sees && (row.carrierCode !== null || row.carrierName !== null) ? { code: row.carrierCode, name: row.carrierName ?? carrierNameFor(row.transportBy, row.carrierCode) } : null,
+    tracking,
+    expectedDeliveryAt: row.expectedDeliveryAt ? toUtcIso(row.expectedDeliveryAt) : null,
+    ddt: details.ddts.get(link.id) ?? null,
+    mayTypeTracking,
+    withheld: sees ? [] : ['shipments.detail' as const],
+  }
+}
+// ── end B-OP-023 ──
+
 export async function orderView(db: Reader, order: OrderRow, today: BusinessDate, settlement: SettlementAnswer, viewer: Actor | null = null /* B-SA-034 */, office: OfficeContext | null = null /* B-OP-020 */) {
   const facts = await readOrderFacts(db, order)
   const artwork = await artworkFilesOf(db, order, facts.lines, viewer) // B-SA-035 (B-SA-035b: the files, not only how many)
@@ -394,6 +444,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
   const shortLines = facts.lines.map((line) => ({ id: line.id, seq: line.seq, quantity: line.quantity, shipped: facts.progress.lines.find((entry) => entry.lineId === line.id)?.shipped ?? 0, closedShort: line.closedShortQuantity !== null }))
   const promiseDate = dayOrNull(order.promiseDate)
   const approvals = await openApprovalsOf(db, order.id, office) // B-OP-020
+  const shipmentDetails = await readShipmentDetails(db, facts.shipments.map((row) => row.id)) // B-OP-023
 
   return {
     id: order.id,
@@ -496,12 +547,14 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
         return { ...view, depositPct, amount: asMoney('price', view.amount), paidAmount: asMoney('price', placed.paid.get(row.id) ?? 0), link: placed.links.get(row.id) ?? null, stepKind: stepKinds.get(row.id) ?? null, version: row.version }
       }),
       workOrders: facts.workOrders.map((row) => ({ id: row.id, number: row.number, status: row.status, siteId: row.siteId, releasedAt: instantOrNull(row.releasedAt) })),
+      // B-OP-023: + each shipment's detail for this reader (carrier and tracking with shipping.view over its site).
       shipments: facts.shipments.map((row) => ({
         id: row.id,
         number: row.number,
         status: row.status,
         shippedAt: instantOrNull(row.shippedAt),
         deliveredAt: instantOrNull(row.deliveredAt),
+        ...shipmentRowOf(row, shipmentDetails, viewer),
         // ── B-OP-043 (order page N6): every order it carries, how it was made, the paper DDT of one made elsewhere ──
         orders: row.orders,
         origin: row.origin,

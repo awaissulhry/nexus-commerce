@@ -12,7 +12,7 @@ import { money } from '../../../quotes/model'
 import type { Order } from '../../api'
 import { amountText, closeHeld, closeNeedsReason, dayInstant, linePromisesAllowed, mayIssueDepositInvoice, parseAmount, paymentProblems, promiseProblems, settlementWords, stillToPay } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
-import { AmendReviewDialog, CancelDialog, CloseLinesDialog, CompareDialog, CopyQuoteDialog, ReopenLinesDialog } from './DailyDialogs'
+import { CancelDialog, CloseLinesDialog, CompareDialog, CopyQuoteDialog, ReopenLinesDialog } from './DailyDialogs'
 import { SplitOrderDialog } from './SplitOrderDialog' // F-OP-111
 
 /**
@@ -37,9 +37,7 @@ export function OrderDialogs({ order, model, actions }: { order: Order; model: O
       return <CloseDialog order={order} model={model} actions={actions} />
     case 'copyQuote':
       return <CopyQuoteDialog order={order} model={model} actions={actions} />
-    // Lines (use-lines-acts).
-    case 'amendReview':
-      return <AmendReviewDialog order={order} model={model} actions={actions} />
+    // Lines (use-lines-acts; F-OP-106: the amendment has no dialog — its strip is the Lines tab's).
     case 'closeLines':
       return <CloseLinesDialog order={order} model={model} actions={actions} />
     case 'reopenLines':

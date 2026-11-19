@@ -28,7 +28,8 @@ import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers' 
  *                                                 line and size with the day expected (backorders after a partial shipment)
  *   GET /portal/sales-orders/in-transit           every shipment of the party on the way, across its orders
  * B-W2b-F14: each shipment's expected delivery as the carrier says it (while packed or on the way) and each parcel's "Track
- * on the carrier's site" link (an https tracking page only).
+ * on the carrier's site" link (an https tracking page only). B-OP-031: the number typed for a carrier booked by hand (no carrier
+ * feeds it: "No live tracking").
  * Partner reads only (the party's scope); the style and colourway names are the tenant's (office scope, after the partner
  * read). The carrier's own words of an event pass as written; no office note, no freight, no person.
  */
@@ -125,6 +126,8 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
       shippedAt: shipment.shippedAt ? toUtcIso(shipment.shippedAt) : null,
       deliveredAt: shipment.deliveredAt ? toUtcIso(shipment.deliveredAt) : null,
       expectedDeliveryAt: etaOf(shipment),
+      // B-OP-031: the number of a carrier booked by hand (the page says "No live tracking": no carrier feeds it).
+      typedTrackingNumber: shipment.manualTrackingNumber,
       ddt: read.ddts.get(shipment.id) ?? null,
       milestones: shipmentMilestonesOf({ status: shipment.status, packedAt: shipment.packedAt, shippedAt: shipment.shippedAt, deliveredAt: shipment.deliveredAt, events }).map((view) => ({
         key: view.key,
@@ -209,6 +212,7 @@ export async function inTransit(app: FastifyInstance, request: FastifyRequest, n
         carrierName: shipment.carrierName,
         shippedAt: shipment.shippedAt ? toUtcIso(shipment.shippedAt) : null,
         expectedDeliveryAt: etaOf(shipment),
+        typedTrackingNumber: shipment.manualTrackingNumber, // B-OP-031
         trackingNumbers: read.parcels.filter((parcel) => parcel.shipmentId === shipment.id && parcel.trackingNumber !== null).map((parcel) => parcel.trackingNumber!),
         trackingLinks: read.parcels.flatMap((parcel) => {
           const link = parcel.shipmentId === shipment.id && parcel.trackingNumber !== null ? trackingLinkOf(parcel.trackingUrl) : null

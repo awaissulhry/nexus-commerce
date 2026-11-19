@@ -15,6 +15,10 @@ import {
   kindsOfChoice,
   liveTouches,
   showFresh,
+  freshFolder, // F-OP-208
+  heldRecordsOf, // F-OP-208
+  listKeyOf, // F-OP-208
+  onShowOf, // F-OP-208
   type AllOfCustomerModel,
   type FeedKindChoice,
   type FeedState,
@@ -33,6 +37,8 @@ export interface AllOfCustomerActions {
   readonly onOlder: () => void
   /** Try again after a failed read. */
   readonly onRetry: () => void
+  /** F-OP-208: where the person scrolled the list (kept for the next visit; no new render). */
+  readonly onScroll: (top: number) => void
 }
 
 /**
@@ -41,6 +47,8 @@ export interface AllOfCustomerActions {
  * 800 ms) and keeps what is newer behind "N new · Show" — the list never moves by itself; View ▾ and Kind ▾ read the first page
  * again. It never marks anything read and writes nothing. The host draws `AllOfCustomerFeed` with the model and the actions, plus
  * its own doors (`onAnswer`: switch the dock to that conversation).
+ * F-OP-208: it stays mounted with the dock — a revisit of the same list keeps its lines, View, Kind and scroll and reads fresh in the
+ * background; a hint on a record the list holds always reads again (R-1: the hint names no party).
  */
 export function useAllOfCustomer(
   api: ApiClient,
@@ -52,24 +60,25 @@ export function useAllOfCustomer(
   const [kind, setKind] = useState<FeedKindChoice>('every')
   // Each read knows its turn: an answer of an older View, Kind or customer never lands on a newer list.
   const turn = useRef(0)
-  const freshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const query = useMemo(() => ({ audience: audienceOfView(view), kinds: kindsOfChoice(kind) }), [view, kind])
   const stateRef = useRef(state)
   stateRef.current = state
+  // F-OP-208: which list the lines are (customer · View · Kind) and where it was scrolled — kept while the dock shows another thread.
+  const listKey = listKeyOf(partyId, view, kind)
+  const heldKey = useRef<string | null>(null)
+  const scrollTop = useRef(0)
 
   const loadFirst = useCallback(() => {
     if (!partyId) return
+    heldKey.current = listKeyOf(partyId, view, kind)
+    scrollTop.current = 0
     const mine = ++turn.current
     // A new View or Kind starts its own list: the lines of the last one never stand under the new filter.
     setState((now) => ({ ...now, status: 'loading', entries: [], cursor: null, older: 'idle', fresh: null }))
     readCustomerFeed(api, partyId, query)
       .then((answer) => mine === turn.current && setState((now) => afterFirst(now, answer)))
       .catch((error: unknown) => mine === turn.current && setState((now) => ({ ...now, status: isApiError(error) && (error.kind === 'not_found' || error.kind === 'forbidden') ? 'gone' : 'failed' })))
-  }, [api, partyId, query])
-
-  useEffect(() => {
-    if (enabled) loadFirst()
-  }, [enabled, loadFirst])
+  }, [api, partyId, query, view, kind])
 
   const loadOlder = useCallback(() => {
     const now = stateRef.current
@@ -89,23 +98,21 @@ export function useAllOfCustomer(
       .catch(() => undefined) // a hint missed: the next one, or a reconnect, reads again
   }, [api, partyId, query])
 
-  const scheduleFresh = useCallback(() => {
-    if (freshTimer.current) return
-    freshTimer.current = setTimeout(() => {
-      freshTimer.current = null
-      loadFresh()
-    }, FRESH_WAIT_MS)
-  }, [loadFresh])
+  // F-OP-208: shown again (a revisit of the same list): drawn at once from what it holds and read fresh in the background (newer ones
+  // wait behind "N new · Show"); the first visit, another customer or a new View / Kind: the first page again.
+  useEffect(() => {
+    if (!enabled) return
+    if (onShowOf(stateRef.current, heldKey.current, listKey) === 'fresh') loadFresh()
+    else loadFirst()
+  }, [enabled, listKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(
-    () => () => {
-      if (freshTimer.current) clearTimeout(freshTimer.current)
-      freshTimer.current = null
-    },
-    [],
-  )
+  // Live hints are folded into one read (FRESH_WAIT_MS); a hint on a record the list holds always counts (R-1: no party id in it).
+  const freshRef = useRef(loadFresh)
+  freshRef.current = loadFresh
+  const folder = useMemo(() => freshFolder(() => freshRef.current(), FRESH_WAIT_MS), [])
+  useEffect(() => () => folder.cancel(), [folder])
 
-  useLiveChanges({ onChange: (change) => liveTouches(change) && scheduleFresh(), onReconnect: scheduleFresh }, enabled && partyId !== null)
+  useLiveChanges({ onChange: (change) => liveTouches(change, heldRecordsOf(stateRef.current)) && folder.hint(), onReconnect: folder.hint }, enabled && partyId !== null)
 
   const actions: AllOfCustomerActions = {
     onView: (next) => setView(next),
@@ -113,7 +120,10 @@ export function useAllOfCustomer(
     onShowNew: () => setState(showFresh),
     onOlder: loadOlder,
     onRetry: loadFirst,
+    onScroll: (top) => {
+      scrollTop.current = top
+    },
   }
-  const model = feedModel(state, { customerName: input.customerName, prefix: input.prefix, view, kind, canReadFiles: input.canReadFiles })
+  const model = feedModel(state, { customerName: input.customerName, prefix: input.prefix, view, kind, canReadFiles: input.canReadFiles, scrollTop: scrollTop.current })
   return { model, actions, state }
 }

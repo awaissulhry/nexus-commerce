@@ -108,7 +108,10 @@ export async function trackingPage(request: FastifyRequest) {
     const parcels = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true }, orderBy: { seq: 'asc' } })
     const events = await db.trackingEvent.findMany({ where: { shipmentId: shipment.id }, select: { id: true, status: true, location: true, occurredAt: true, parcelId: true }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200 })
     const papers = papersShown(via) ? await papersOf(db, shipment) : []
-    return { shipment, via, order, otherPieces, timeZone: site?.timezone ?? 'Europe/Rome', parcels, events, papers }
+    // ── B-OP-031 (order page plan N5): the number typed for a carrier booked by hand ──
+    const typed = (await db.shipment.findUnique({ where: { id: shipment.id }, select: { manualTrackingNumber: true } }))?.manualTrackingNumber ?? null
+    // ── end B-OP-031 ──
+    return { shipment, via, order, otherPieces, timeZone: site?.timezone ?? 'Europe/Rome', parcels, events, papers, typed }
   })
   if (!page) throw linkUnavailable()
   const { shipment, via, parcels, events } = page
@@ -127,6 +130,7 @@ export async function trackingPage(request: FastifyRequest) {
       deliveredAt: iso(shipment.deliveredAt),
       returnedAt: iso(shipment.returnedAt),
       expectedDeliveryAt: iso(expectedDeliveryOf(shipment.status, shipment.expectedDeliveryAt)),
+      typedTrackingNumber: page.typed, // B-OP-031: no carrier feeds it ("No live tracking")
     },
     order: { customerRef: page.order?.customerRef ?? null, number: customerRefOf('ORDER', page.order?.customerSeq ?? null) /* fix-portal-numbers-1: "#12" */, otherPieces: page.otherPieces /* B-OP-042, R-18 */ },
     pill: tracker.pill,

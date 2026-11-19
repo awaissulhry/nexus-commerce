@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { unreadAsk, unreadMapOf, type UnreadAsk, type UnreadMap } from './model'
 
 /** The read itself (the page's own API client: the office's or the portal's; POST /threads/unread). */
-export type ReadUnread = (records: readonly UnreadAsk[], signal: AbortSignal) => Promise<ReadonlyArray<{ readonly recordId: string; readonly newCount: number; readonly lastAt: string | null }>>
+export type ReadUnread = (records: readonly UnreadAsk[], signal: AbortSignal) => Promise<ReadonlyArray<{ readonly recordId: string; readonly newCount: number; readonly lastAt: string | null; readonly readable?: boolean | undefined }>>
 
 /**
  * B-TH-230: the new-message counts of the rows a list shows — ONE read per page (the rows' ids as their key), again when `refresh`

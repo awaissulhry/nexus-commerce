@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { newIdempotencyKey, type ApiClient } from '../../../../lib/api/client'
 import { orderSchema, type Order } from '../api'
+import { followedSchema, NOTHING_FOLLOWED, type Followed } from '../api' // F-OP-108: the work orders that followed
+import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules' // F-OP-108
 
 /**
  * B-W2b-323 — the calls of the orders in depth (Sales › Orders, SCR-038 and SCR-039) on the merged APIs of B-W2b-303 (priority,
@@ -257,6 +259,8 @@ export interface PricedBody {
   labels?: Record<string, string>
   fee?: string | null
   deposit?: { pct?: string; amount?: string; dueDate?: string; kind?: ExtraDepositKind } | null
+  /** F-OP-108 (B2): what happens to pieces already cut beyond the new figures (the edit strip's picker). */
+  extraOutcome?: ExtraOutcome
 }
 
 export const pricedPreviewSchema = z.object({
@@ -278,8 +282,9 @@ export function previewPricedChange(api: ApiClient, orderId: string, body: Price
   return api.post(`${orderPath(orderId)}/priced-changes/preview`, { body, schema: pricedPreviewSchema, signal })
 }
 
-export function applyPricedChange(api: ApiClient, orderId: string, body: PricedBody & { version: number; reason: string }, idempotencyKey: string): Promise<{ order: Order; change: Change }> {
-  return api.post(`${orderPath(orderId)}/priced-changes`, { body, schema: z.object({ order: orderSchema, change: changeSchema }), idempotencyKey })
+/** A priced change applies at once (B-OP-010); F-OP-108: it answers the work orders that followed in its command and those that wait. */
+export function applyPricedChange(api: ApiClient, orderId: string, body: PricedBody & { version: number; reason: string }, idempotencyKey: string): Promise<{ order: Order; change: Change; workOrders: Followed }> {
+  return api.post(`${orderPath(orderId)}/priced-changes`, { body, schema: z.object({ order: orderSchema, change: changeSchema, /* F-OP-108 */ workOrders: followedSchema.default(NOTHING_FOLLOWED) }), idempotencyKey })
 }
 
 export const depositKindsSchema = z.object({

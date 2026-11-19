@@ -387,3 +387,29 @@ describe('Ask for a new link on a dead tracking link', { timeout: SLOW_TEST_TIME
     expect((await linkCall(tokenOfMail(mails.at(-1)!.raw), 'GET', '/link/tracking')).statusCode).toBe(200)
   })
 })
+
+// ---- B-OP-031 (order page plan N5): the tracking page shows the number typed for a carrier booked by hand -------------------------
+describe('B-OP-031: the tracking page shows the typed number; a TEST label’s stays hidden', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('a carrier booked by hand: its typed number on the page (no carrier feeds it); the labelled shipment has none typed', async () => {
+    const SH2 = (await one<{ id: string }>(`SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = 'SEED-SH-0002'`, [T])).id
+    // SEED-SH-0002 left (written around the guards); its number typed by the warehouse after it left, as today.
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "Shipment" SET status = 'SHIPPED', "packedAt" = now() - interval '1 day', "shippedAt" = now() - interval '1 day' WHERE id = '${SH2}'; COMMIT;`)
+    const version = (await one<{ version: number }>(`SELECT version FROM "Shipment" WHERE id = $1`, [SH2])).version
+    const typed = await office.send('PUT', `/shipping/shipments/${SH2}/own-transport/tracking`, { version, trackingNumber: 'T-OP031-GLS-0001' }, { headers: { 'idempotency-key': key() } })
+    expect(typed.status, JSON.stringify(typed.body)).toBe(200)
+    const made = await office.post(`/shipping/shipments/${SH2}/tracking-links`, { send: false }, { headers: { 'idempotency-key': key() } })
+    expect(made.status, JSON.stringify(made.body)).toBe(201)
+    const page = (await linkCall(tokenOf(made.body.url), 'GET', '/link/tracking')).json()
+    expect(page.shipment).toMatchObject({ number: 'SEED-SH-0002', transportBy: 'CARRIER', typedTrackingNumber: 'T-OP031-GLS-0001' })
+    const labelled = (await linkCall(mailedToken, 'GET', '/link/tracking')).json()
+    expect(labelled.shipment.typedTrackingNumber).toBeNull()
+  })
+
+  it('a TEST label (test mode) is never shown, as today', async () => {
+    const [parcel] = await admin<{ id: string }>(`SELECT id FROM "Parcel" WHERE "shipmentId" = $1 ORDER BY seq LIMIT 1`, [SH1])
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "Parcel" SET "carrierParcelId" = 'test:T-OP031' WHERE id = '${parcel!.id}'; COMMIT;`)
+    const page = (await linkCall(mailedToken, 'GET', '/link/tracking')).json()
+    expect(page.parcels[0]).toMatchObject({ seq: 1, trackingNumber: null, carrierPage: null })
+  })
+})
+// ---- end B-OP-031
