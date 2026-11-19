@@ -92,6 +92,10 @@ describe('F-OP-209 — a tab\'s link and an in-page move keep the scope (RC4)', 
     expect(tabAddress(BASE, '?tab=overview&thread=general', 'lines', { narrow: true })).toBe(`${BASE}?tab=lines`)
     expect(tabAddress(BASE, '?tab=overview&thread=open', 'changes', { narrow: true, anchor: 'still-to-do' })).toBe(`${BASE}?tab=changes#still-to-do`)
   })
+  it('an old tab\'s landing is an arrival: the tab renamed, every term kept as it came (the frame and the thread read them after)', () => {
+    expect(tabAddress(BASE, '?tab=dates&thread=open&message=m1', 'production', { anchor: 'dates', arrival: true })).toBe(`${BASE}?tab=production&thread=open&message=m1#dates`)
+    expect(tabAddress(BASE, 'tab=invoices&thread=new', 'money', { anchor: 'invoices', arrival: true, narrow: true })).toBe(`${BASE}?tab=money&thread=new#invoices`)
+  })
   it('a move applied twice is the same address', () => {
     const once = tabAddress(BASE, '?tab=overview&thread=all', 'lines')
     expect(tabAddress(BASE, once.slice(once.indexOf('?')), 'lines')).toBe(once)

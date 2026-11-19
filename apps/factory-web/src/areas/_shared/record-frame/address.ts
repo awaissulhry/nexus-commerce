@@ -82,13 +82,15 @@ export function tabHref(base: string, tab: string, search: Search): string {
 }
 
 /**
- * An in-page move to a tab (Amend → Lines, Show on the page, Still to do, an old tab's landing): `tab` set, every other term kept,
- * the dock's scope kept, `open` / `new` / `message=` dropped; below 1280 px (`narrow`) the term goes (the page gives way: the frame
- * keeps the scope). `anchor` names the section to scroll to (`#still-to-do`); absent: no hash.
+ * An in-page move to a tab (Amend → Lines, Show on the page, Still to do): `tab` set, every other term kept, the dock's scope kept,
+ * `open` / `new` / `message=` dropped; below 1280 px (`narrow`) the term goes (the page gives way: the frame keeps the scope).
+ * `arrival`: an old tab's landing (`?tab=dates` → Production #dates) renames the tab and keeps every term as it came — `new`, `open`
+ * and `message=` are still the frame's and the thread's to read. `anchor` names the section to scroll to (`#still-to-do`).
  */
-export function tabAddress(pathname: string, search: Search, tab: string, options: { readonly narrow?: boolean; readonly anchor?: string | null } = {}): string {
+export function tabAddress(pathname: string, search: Search, tab: string, options: { readonly narrow?: boolean; readonly anchor?: string | null; readonly arrival?: boolean } = {}): string {
   const { query } = partsOf(searchOf(search))
   query.set('tab', tab)
+  if (options.arrival) return joined(pathname, query, options.anchor ? `#${options.anchor}` : '')
   const scope = options.narrow ? null : scopeTermOf(query.get(THREAD_TERM))
   if (scope) query.set(THREAD_TERM, scope)
   else query.delete(THREAD_TERM)

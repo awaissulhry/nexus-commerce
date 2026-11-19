@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation' // F-OP-210: the tab links keep the dock's scope
 import { FileX, ShieldOff } from 'lucide-react'
 import { Banner, Card, EmptyState, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
@@ -28,6 +29,8 @@ import { NAMESPACE as DEPTH } from '../../depth/model'
 // ---- B-TH-214: the order on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-210
+import { TabLink } from '../../../../../lib/tab-link/TabLink' // F-OP-210
 // ---- B-TH-256: what points at the order (its complaints and returns, planning's re-promises, the gates' refusals) ----
 import { DeclineDialog, GateNotices, LinksSaid, RePromiseNotices } from '../links/view/OrderLinks'
 import '../../orders.css'
@@ -135,6 +138,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   const d = useT(DEPTH) // B-W2b-323
   const locale = useLocale()
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
+  // F-OP-210 (11-dock §4; RC4): every tab link keeps the dock's scope (`thread=`): a pick in the dock survives a change of tab.
+  const search = useSearchParams()?.toString() ?? ''
   const step = nextStep(order, model.can)
   const stepHeld = step.held ? t(step.held.key, step.held.params?.date ? { ...step.held.params, date: formatDate(dayInstant(String(step.held.params.date)), { locale }) } : step.held.params) : model.busy ? t('held.busy') : null
   const makeHref = `${model.prefix}/production/work-orders?new=1&order=${encodeURIComponent(order.number)}`
@@ -163,7 +168,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   const attention = bandHealthOf(healthInputOf(order, production?.headline ?? null, production?.dates ?? null))
   const tabs: TabItem[] = recordTabs(model.can).map((tab) => ({
     id: tab,
-    href: `${recordHref}?tab=${tab}`,
+    href: tabHref(recordHref, tab, search), // F-OP-210
     label:
       tab === 'overview' && attention ? (
         <span className="fw-so-tablabel">
@@ -267,7 +272,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   const depositOverdue = gate.state === 'WAITING' && !!depositRequest && depositRequest.dueDate < model.today
   const toMoney = (
     <Button size="sm" variant="quiet" asChild>
-      <Link href={`${recordHref}?tab=money`}>{t('tab.money')}</Link>
+      <TabLink href={tabHref(recordHref, 'money', search) /* F-OP-210 */}>{t('tab.money')}</TabLink>
     </Button>
   )
 
@@ -326,7 +331,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
           moreLabel: t('record.more'),
         }}
       >
-        <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+        {/* F-OP-210: the factory's TabLink (no prefetch: a pick re-writes every tab's href). */}
+        <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" linkAs={TabLink} />
 
         {/* B-TH-214: ONE notice in the body column; F-SA-230: the most serious first, the rest behind "N more notices". */}
         <RecordNotices>
@@ -366,7 +372,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
               action={
                 order.amendments.count > 0 && order.amendments.latestRevision !== null ? (
                   <Button size="sm" variant="quiet" asChild>
-                    <Link href={`${recordHref}?tab=changes`}>{t('record.amended', { revision: order.amendments.latestRevision })}</Link>
+                    <TabLink href={tabHref(recordHref, 'changes', search) /* F-OP-210 */}>{t('record.amended', { revision: order.amendments.latestRevision })}</TabLink>
                   </Button>
                 ) : undefined
               }
