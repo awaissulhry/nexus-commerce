@@ -223,6 +223,15 @@ const paidDraft = order('CONFIRMED', { chain: { ...confirmed.chain, depositReque
 const noTd02 = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [deposit({ fiscalDocument: 'NONE', fiscalRule: 'DEPOSIT_EU_B2B_GOODS', status: 'PAID', paidAt: at(29, 9), paidAmount: 228384, link: SENT_LINK })] } })
 const noDeposit = order('CONFIRMED', { depositRequired: false, chain: { ...confirmed.chain, depositRequests: [] } })
 const production = order('IN_PRODUCTION')
+// ---- F-CP-148: the order's files with two priced documents (made up): named for a price holder, counted (pricedLeftOut) for anyone else.
+const PRICED_NAMES = ['Conferma d’ordine SO-2026-0088 v1.pdf', 'Ordine del cliente PO-ESEMPIO-88.pdf'] as const
+const PRICED_FILES: typeof ORDER_FILES = {
+  ...ORDER_FILES,
+  groups: ORDER_FILES.groups.map((group, index) => (index === 0 ? { ...group, files: [...group.files, ...PRICED_NAMES.map((name, n) => ({ ...group.files[0]!, id: `0190f0e2-8181-7000-8000-00000000009${n}`, name, audience: 'OFFICE_ONLY' as const, inThread: null }))], pricedLeftOut: 0 } : group)),
+  total: ORDER_FILES.total + PRICED_NAMES.length,
+}
+const PRICED_LOCKED: typeof ORDER_FILES = { ...ORDER_FILES, groups: ORDER_FILES.groups.map((group, index) => (index === 0 ? { ...group, pricedLeftOut: PRICED_NAMES.length } : group)) }
+// ---- end F-CP-148
 // ---- F-SA-231b: the order read names each line's artwork files (the chip opens them in the thread's viewer) and, with
 // sales.measurements.view, a made-to-measure line's rider (name, garment, revision — never a measurement) ----
 const ARTWORK_FILES = [
@@ -408,6 +417,9 @@ const W2B_323 = [
     note: 'The fee\'s place says "Shown to people who see prices"; the extra deposit\'s dialog is held with the same words.',
   },
   // ---- end F-CP-149
+  // ---- F-CP-148 (the money wall): the same edit mode seen as the Owner — the net's change in figures (a price holder's own view)
+  { id: 'cp-148-edit-owner', label: 'F-CP-148 · Seen as Owner · Edit mode: What changes — the pieces and the net in figures, Apply for a price holder', model: d323('owner', confirmed, { amend: amendOf(confirmed, oneMore50, { reason: 'Una giacca nera in più.' }, { phase: 'ready', preview: AMEND_PREVIEW }) }) },
+  // ---- end F-CP-148
   { id: 'w2b-323-review-blocked', label: 'W2b · Sales · What changes: frozen for good (finished pieces) — no way', model: d323('sales', production, { amend: amendOf(production, oneMore50, {}, { phase: 'ready', preview: frozenPreview }) }, { freeze: { value: FREEZE_FINISHED, problem: null } }) },
   { id: 'w2b-323-priced', label: 'W2b · Sales · Priced change: one more in 50 priced, the fee, the extra deposit (30 % of the growth), it waits for a yes', model: d323('sales', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen() }), note: 'The kind lists the caparra penitenziale held: off until the accountant confirms it.' },
   { id: 'w2b-323-priced-blocked', label: 'W2b · Sales · Priced change refused: the size cannot change any more', model: d323('sales', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen(PRICED_BLOCKED) }) },
@@ -617,7 +629,8 @@ export const designScreen = defineDesignScreen<RecordCase>({
     // B-TH-228: an order made straight from a request (no quote): the band names the request ("Made from INQ-… — Open"), the chain too.
     { id: 'th-228-made-from', label: 'TH-2 · Sales · An order made from a request: "Made from INQ-2026-0041 — Open" on the band, the request in Overview › Linked records', model: base('sales', typed, { tab: 'overview', madeFrom: { id: '0190f0e2-5151-7000-8000-000000000041', number: 'INQ-2026-0041' }, madeFromReading: false }) },
     { id: 'th-228-made-from-reading', label: 'TH-2 · Sales · While the source is read: neither "Made from" nor "Typed by the office"', model: base('sales', typed, { tab: 'overview', madeFrom: null, madeFromReading: true }) },
-    { id: 'sales-lines', label: 'Sales · Lines: prices and margin %, no cost (S2); making work orders is production’s', model: base('sales', confirmed) },
+    // F-CP-148 (Owner O1, B-CP-011; the S2 answer reversed): seen as Sales worker the lines carry no price and no margin %.
+    { id: 'sales-lines', label: 'Seen as Sales worker · Lines: no price, no margin % (Owner O1); making work orders is production’s', model: noPrice(base('sales', forRole(confirmed, 'manager'))) },
     {
       id: 'lines-cost-changed',
       label: 'Owner · Lines: cost changed since priced (B-W2b-380)',
@@ -638,7 +651,8 @@ export const designScreen = defineDesignScreen<RecordCase>({
       model: base('owner', pageSent, { tab: 'money', dialog: { kind: 'depositLink', requestId: PAID.id }, sentLink: { link: { id: '0190f0e2-1616-7000-8000-000000000001', expiresAt: SENT_LINK.expiresAt, to: SENT_LINK.to!, revokedLinkIds: [] }, emailId: '0190f0e2-1515-7000-8000-000000000001', delivery: 'sent' } }),
     },
     { id: 'money-page-sent', label: 'Finance · Page sent, waiting for the transfer', model: base('finance', pageSent, { tab: 'money' }) },
-    { id: 'money-sales', label: 'Sales · Money: sees the deposit; sending and recording held with the reason', model: base('sales', pageSent, { tab: 'money' }) },
+    // F-CP-148 (Owner O1): seen as Sales worker the Money tab says the deposit's state in words, the Price check one held line.
+    { id: 'money-sales', label: 'Seen as Sales worker · Money: the deposit in words, no amount; Price check one line; sending and recording held', model: noPrice(base('sales', forRole(pageSent, 'manager'), { tab: 'money', ...priceCard({ state: 'held' }) })) },
     // ---- F-CP-142 (customer page plan C3; picture 21): Money › Price check, after Totals ----
     { id: 'price-check', label: 'Owner · Money › Price check: per line ours against the customer\'s, Not equal · 1 line, where it came from', model: base('owner', pageSent, { tab: 'money', ...priceCard(priceReady()) }), note: 'Customer\'s price… opens the ONE window (the Work tab\'s too); Change our price › is the order\'s Edit mode; History › the audit of this order\'s customer prices.' },
     { id: 'price-check-empty', label: 'Owner · Price check: no customer price yet, a request named them (Take them over)', model: base('owner', pageSent, { tab: 'money', ...priceCard(priceReady(EMPTY_CHECK)) }), note: '"No customer price yet" is never Equal; Customer\'s price… is the primary; the take-over is a row inside the card.' },
@@ -788,6 +802,11 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'files-chosen', label: 'F-SA-237 · Sales · Files: two chosen — Download 2 · Share 1 own with the customer', model: base('sales', production, { tab: 'files', files: { read: ORDER_FILES, problem: null, selected: ['0190f0e2-8181-7000-8000-000000000001', '0190f0e2-8181-7000-8000-000000000002'], canShare: true } }) },
     { id: 'files-empty', label: 'F-SA-237 · Files: none yet', model: base('sales', production, { tab: 'files', files: { read: { ...ORDER_FILES, groups: ORDER_FILES.groups.map((group) => ({ ...group, files: [], leftOut: 0, measurementsLeftOut: 0 })), total: 0 }, problem: null, selected: [], canShare: true } }) },
     { id: 'files-failed', label: "F-SA-237 · Files couldn't be read (Try again)", model: base('sales', production, { tab: 'files', files: { read: null, problem: 'read', selected: [], canShare: true } }) },
+    // ---- F-CP-148 (the money wall; B-CP-023): the order's files with two priced documents — named for a price holder, counted for anyone else
+    { id: 'cp-148-files-owner', label: 'F-CP-148 · Seen as Owner · Files: the order confirmation and the customer\'s PO named and opened (a price holder)', model: base('owner', production, { tab: 'files', files: { read: PRICED_FILES, problem: null, selected: [], canShare: true } }) },
+    { id: 'cp-148-files-sales', label: 'F-CP-148 · Seen as Sales worker · Files: "2 priced documents — you cannot open them" counted, never named, no tile, no preview', model: noPrice(base('sales', forRole(production, 'manager'), { tab: 'files', files: { read: PRICED_LOCKED, problem: null, selected: [], canShare: true } })) },
+    { id: 'cp-148-files-manager', label: 'F-CP-148 · Seen as Production manager · Files: the same counted lock line; the artwork and the photos open', model: base('manager', production, { tab: 'files', files: { read: PRICED_LOCKED, problem: null, selected: [], canShare: false } }) },
+    // ---- end F-CP-148
     // ---- F-SA-232: Overview, the first tab ("where is it now", progress by line — the order's own pieces) ----
     { id: 'overview', label: 'F-SA-232 · Sales · Overview: Sewing · 1 line ahead, at risk, waiting on us, Urgent (customer), 3 bundles in work; the lines’ own pieces (Rosso: sewing not counted here)', model: base('sales', production, { tab: 'overview', production: ready(), liveState: 'live' }) },
     { id: 'overview-confirmed', label: 'F-SA-232 · Sales · Overview before any work order: Confirmed · waiting for the deposit; Preparing — work orders are made after the deposit', model: base('sales', confirmed, { tab: 'overview', production: ready(CONFIRMED_READ), liveState: 'live' }) },

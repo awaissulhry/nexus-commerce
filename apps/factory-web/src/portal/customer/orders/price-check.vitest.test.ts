@@ -198,3 +198,18 @@ describe('F-CP-143 — the portal order’s price check by role', () => {
     }
   })
 })
+
+// ── F-CP-158 (follow-up 12): the design index draws the card and its window in every state, as Brand Alpha's people see them ──
+describe('F-CP-158: the portal order’s Price check design cases (follow-up 12) and the "Seen as" ones (F-CP-148)', () => {
+  it('the cases exist: agree, not given yet, Not equal (the Buyer), Finance reads only, the window and its 409, saved, closed, reading, failed', async () => {
+    const { designScreen, ORDER_PRICE_CHECK } = await import('./record/fixtures')
+    const ids = designScreen.cases.map((item) => item.id)
+    for (const id of ['cp-148-lines-buyer', 'cp-148-lines-finance', 'cp-148-lines-designer', 'cp158-price-agree', 'cp158-price-none', 'cp158-price-window', 'cp158-price-window-stale', 'cp158-price-saved', 'cp158-price-closed', 'cp158-price-loading', 'cp158-price-error', 'cp158-ask-designer', 'cp158-ask-designer-chip', 'cp158-ask-designer-ticked', 'cp158-ask-designer-held']) expect(ids, id).toContain(id)
+    // The made-up check reads "differ on 1 line" (never "write to us"), its total ours − theirs.
+    expect(priceCardOf(ORDER_PRICE_CHECK)).toEqual({ key: 'priceCheck.differ', tone: 'danger', count: 1, missing: 0 })
+    expect(ORDER_PRICE_CHECK.total.ourPrice - ORDER_PRICE_CHECK.total.brandPrice!).toBe(ORDER_PRICE_CHECK.total.priceDiff)
+    // Nothing of Brand Beta in the labels of these cases.
+    expect(JSON.stringify(designScreen.cases.filter((item) => item.id.startsWith('cp158-') || item.id.startsWith('cp-148-')).map((item) => item.label))).not.toMatch(/Brand Beta/)
+  })
+})
+// ── end F-CP-158 ──
