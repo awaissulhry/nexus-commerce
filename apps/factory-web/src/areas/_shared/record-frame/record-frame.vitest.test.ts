@@ -289,9 +289,10 @@ describe('F-SA-263 — the dock adapts per tab and remembers', () => {
     expect(showsOnArrival(new URLSearchParams('thread=all'))).toBe(true)
   })
 
-  it('the frame keeps the width per tab and "hidden" only for a page that names its tab (`dockTab`); ⌘J and the band button toggle it, ?thread= shows it', () => {
+  it('the frame keeps "hidden" only for a page that names its tab (`dockTab`), the width ONE per record type (F-OP-301); ⌘J and the band button toggle it, ?thread= shows it', () => {
     const frame = readFileSync(new URL('./RecordFrame.tsx', import.meta.url), 'utf8')
-    expect(frame).toContain("tab: dockTab ?? null, rememberHidden: dockTab !== undefined")
+    expect(frame).toContain('startHidden: closed /* B-TH-269 (R-10) */, rememberHidden: dockTab !== undefined })')
+    expect(frame).not.toContain('tab: dockTab') // F-OP-301 (walk #5): never a width per tab
     expect(frame).toContain('const width = dockWidth({ chosen: sizes.remembered ? sizes.width : null, defaultWidth, viewport: wideViewport ? 1600 : 1440 })')
     // The `wide` boolean is gone (no page passes it any more).
     expect(frame).not.toMatch(/readonly wide\?: boolean/)

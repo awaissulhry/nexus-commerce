@@ -66,10 +66,10 @@ export interface RecordFrameProps {
    */
   readonly defaultWidth?: DockDefault
   /**
-   * The tab on screen, for a page whose dock adapts per tab: the person's chosen width is kept per person + record type + THIS tab
-   * (the menu's "Default width" clears this tab's), and hiding the dock is kept per person + record type (⌘J, the band's button,
-   * `?tab=activity` or `?thread=` show it again); a private window keeps nothing. Absent: one width per person + record type, and
-   * "hidden" lasts while the page is open (every other record page, as before).
+   * The tab on screen, for a page that keeps its dock across tabs: hiding the dock is kept per person + record type (⌘J, the band's
+   * button, `?tab=activity` or `?thread=` show it again); a private window keeps nothing. Absent: "hidden" lasts while the page is
+   * open (every other record page, as before). F-OP-301 (walk #5): the person's chosen width is ONE per person + record type on every
+   * tab (the menu's "Default width" clears it): the dock never changes its width when the page tab changes.
    */
   readonly dockTab?: string
   // ---- end F-SA-263
@@ -250,8 +250,9 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
   const phone = useMedia(`(max-width: ${PHONE_BELOW - 1}px)`, false)
   const wideViewport = useMedia('(min-width: 1600px)', false)
   const mode: FrameMode = frameMode(docked ? DOCK_FROM : DOCK_FROM - 1)
-  // F-SA-263: with `dockTab` the width is kept per tab and "hidden" per record type.
-  const sizes = useThreadWidth(recordType, personId, { keys: false, startHidden: closed /* B-TH-269 (R-10) */, tab: dockTab ?? null, rememberHidden: dockTab !== undefined })
+  // F-SA-263: with `dockTab` "hidden" is kept per record type.
+  // F-OP-301 (walk #5): the chosen width is one per record type (never per tab); `dockTab` keeps "hidden".
+  const sizes = useThreadWidth(recordType, personId, { keys: false, startHidden: closed /* B-TH-269 (R-10) */, rememberHidden: dockTab !== undefined })
   const width = dockWidth({ chosen: sizes.remembered ? sizes.width : null, defaultWidth, viewport: wideViewport ? 1600 : 1440 })
   const hasThread = thread !== null
   // F-SA-262: a dock scope in the address (`general`, `project:…`, `wo:…`, `all`: the order page's pick) keeps the narrow view open too.

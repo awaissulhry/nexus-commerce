@@ -344,7 +344,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
         thread={thread ?? null}
         printThread={printThread}
         fields={fields /* B-TH-280 */}
-        // F-SA-263: each tab its own default width; a width the person picks is kept for this tab, "hidden" for every order.
+        // F-SA-263: "hidden" kept for every order. F-OP-301 (walk #5): one dock width per viewport on every tab (DOCK_DEFAULTS), and a
+        // width the person picks holds on every tab.
         defaultWidth={DOCK_DEFAULTS[model.tab]}
         dockTab={model.tab}
         // F-SA-244: the thread's ask cards open this page's ONE review window (the frame's answer door; the same `?open=` address).

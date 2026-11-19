@@ -332,17 +332,18 @@ describe('F-SA-243: the order page opens the same review window as Home › Appr
 
 // ---- F-SA-263 (sales page plan N6, P11; 10-order-page §5): the order's dock, each tab its own default width ----------------------
 describe('F-SA-263 — the order’s dock: each tab its own default width, the person’s choice kept per tab', () => {
-  it('Overview and Money 40 %; Lines, Production, Shipments, Files a third under 1600 px (40 % from 1600); Changes half', () => {
+  // F-OP-301 (walk #5): ONE dock width per viewport — the dock never changes its width when the page tab changes.
+  it('F-OP-301: one width per viewport on every tab — a third under 1600 px, 40 % from 1600 (the grid rule)', () => {
     expect(Object.keys(DOCK_DEFAULTS).sort()).toEqual([...RECORD_TABS].sort())
-    const at = (viewport: number) => Object.fromEntries(RECORD_TABS.map((tab) => [tab, defaultWidthAt(DOCK_DEFAULTS[tab], viewport)]))
-    expect(at(1440)).toEqual({ overview: 'forty', lines: 'third', production: 'third', changes: 'half', money: 'forty', shipments: 'third', files: 'third' })
-    expect(at(1920)).toEqual({ overview: 'forty', lines: 'forty', production: 'forty', changes: 'half', money: 'forty', shipments: 'forty', files: 'forty' })
+    const at = (viewport: number) => new Set(RECORD_TABS.map((tab) => defaultWidthAt(DOCK_DEFAULTS[tab], viewport)))
+    for (const viewport of [1280, 1440, 1599]) expect([...at(viewport)], String(viewport)).toEqual(['third'])
+    for (const viewport of [1600, 1920]) expect([...at(viewport)], String(viewport)).toEqual(['forty'])
   })
 
-  it('the page draws each tab at its default (nothing chosen yet): Production a third at 1440, Changes half, Money 40 %', () => {
+  it('F-OP-301: the page draws every tab at the same width (nothing chosen yet): Production, Changes and Money a third at 1440', () => {
     expect(draw('thread-docked')).toContain('data-width="third"')
-    expect(draw('documents')).toContain('data-width="half"')
-    expect(draw('money-new')).toContain('data-width="forty"')
+    expect(draw('documents')).toContain('data-width="third"')
+    expect(draw('money-new')).toContain('data-width="third"')
   })
 
   it('the order names its tab to the frame (the width kept per tab, "hidden" per person on every order)', () => {

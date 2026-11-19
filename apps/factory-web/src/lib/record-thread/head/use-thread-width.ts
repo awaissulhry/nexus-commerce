@@ -1,35 +1,32 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { DEFAULT_DOCK_WIDTH, hiddenKey, isDockWidth, tabWidthKey, widthKey, type DockWidth } from './model'
+import { DEFAULT_DOCK_WIDTH, hiddenKey, isDockWidth, widthKey, type DockWidth } from './model'
 
-// F-SA-263: a page whose dock adapts per tab keeps the width per tab (the record type's key + `.tab`); without a tab, per record type.
-const keyOf = (recordType: string, personId: string | null, tab?: string | null) => (tab ? tabWidthKey(recordType, personId, tab) : widthKey(recordType, personId))
-
-/** The width remembered on this device for the person and record type (F-SA-263: and tab); 40 % when none (or storage is closed). */
-export function readWidth(storage: Pick<Storage, 'getItem'> | null, recordType: string, personId: string | null, tab?: string | null): DockWidth {
+/** The width remembered on this device for the person and record type (F-OP-301: one for every tab); 40 % when none (or storage is closed). */
+export function readWidth(storage: Pick<Storage, 'getItem'> | null, recordType: string, personId: string | null): DockWidth {
   try {
-    const value = storage?.getItem(keyOf(recordType, personId, tab))
+    const value = storage?.getItem(widthKey(recordType, personId))
     return isDockWidth(value) ? value : DEFAULT_DOCK_WIDTH
   } catch {
     return DEFAULT_DOCK_WIDTH
   }
 }
 
-/** B-TH-213: whether the person chose a width for this record type (F-SA-263: and tab) on this device (else the frame's own rule decides). */
-export function isRemembered(storage: Pick<Storage, 'getItem'> | null, recordType: string, personId: string | null, tab?: string | null): boolean {
+/** B-TH-213: whether the person chose a width for this record type on this device (else the frame's own rule decides). */
+export function isRemembered(storage: Pick<Storage, 'getItem'> | null, recordType: string, personId: string | null): boolean {
   try {
-    return isDockWidth(storage?.getItem(keyOf(recordType, personId, tab)))
+    return isDockWidth(storage?.getItem(widthKey(recordType, personId)))
   } catch {
     return false
   }
 }
 
 /** Remembers a width (null: forget it, back to the default). A closed storage (a private window) forgets quietly. */
-export function writeWidth(storage: Pick<Storage, 'setItem' | 'removeItem'> | null, recordType: string, personId: string | null, width: DockWidth | null, tab?: string | null): void {
+export function writeWidth(storage: Pick<Storage, 'setItem' | 'removeItem'> | null, recordType: string, personId: string | null, width: DockWidth | null): void {
   try {
-    if (width === null) storage?.removeItem(keyOf(recordType, personId, tab))
-    else storage?.setItem(keyOf(recordType, personId, tab), width)
+    if (width === null) storage?.removeItem(widthKey(recordType, personId))
+    else storage?.setItem(widthKey(recordType, personId), width)
   } catch {
     // Nothing to do: the width is only a convenience of this device.
   }
@@ -68,15 +65,14 @@ const storageOf = (): Storage | null => {
  * The dock's width and its visibility (T1-F07): one third / 40 % / 50 % / full, remembered on this device per person and
  * record type, so the next record of the same type opens the same; ⌘J (Ctrl J) shows or hides the thread; "Default width"
  * forgets the choice. The dock (B-TH-214) reads `width` and `hidden`; the Head's width menu calls `choose`.
- * F-SA-263: with `tab`, the choice is kept per person + record type + tab (each tab its own default when none); with
- * `rememberHidden`, hiding and showing are kept per person + record type (the next record of the type opens the same).
+ * F-SA-263: with `rememberHidden`, hiding and showing are kept per person + record type (the next record of the type opens the same).
+ * F-OP-301 (walk #5): the chosen width is one per person + record type on every tab of the page.
  */
 export function useThreadWidth(
   recordType: string,
   personId: string | null,
-  options: { readonly keys?: boolean; /* B-TH-269 */ readonly startHidden?: boolean; /* F-SA-263 */ readonly tab?: string | null; readonly rememberHidden?: boolean } = {},
+  options: { readonly keys?: boolean; /* B-TH-269 */ readonly startHidden?: boolean; /* F-SA-263 */ readonly rememberHidden?: boolean } = {},
 ) {
-  const tab = options.tab ?? null // F-SA-263
   const rememberHidden = (options.rememberHidden ?? false) && !options.startHidden // F-SA-263: a page that docks closed keeps nothing
   // Server and first client render: the default; the remembered one after mounting (no mismatch).
   const [width, setWidth] = useState<DockWidth>(DEFAULT_DOCK_WIDTH)
@@ -86,11 +82,11 @@ export function useThreadWidth(
   // B-TH-213: RecordFrame reads whether a width was chosen (a wide grid tab gives one third otherwise) and owns ⌘J itself.
   const [remembered, setRemembered] = useState(false)
   const keys = options.keys ?? true
-  // F-SA-263: read before paint, so another tab opens at ITS width (never a flash of the previous tab's).
+  // Read before paint (never a flash of the default width first).
   useLayoutEffect(() => {
-    setWidth(readWidth(storageOf(), recordType, personId, tab))
-    setRemembered(isRemembered(storageOf(), recordType, personId, tab))
-  }, [recordType, personId, tab])
+    setWidth(readWidth(storageOf(), recordType, personId))
+    setRemembered(isRemembered(storageOf(), recordType, personId))
+  }, [recordType, personId])
   // ---- F-SA-263: hidden as the person left it on this record type (before paint: the dock never flashes open first).
   useLayoutEffect(() => {
     if (rememberHidden) setHiddenNow(readHidden(storageOf(), recordType, personId))
@@ -121,11 +117,11 @@ export function useThreadWidth(
       if (choice === 'hide') return setHidden(true)
       setHidden(false)
       const next = choice === 'reset' ? DEFAULT_DOCK_WIDTH : choice
-      writeWidth(storageOf(), recordType, personId, choice === 'reset' ? null : next, tab)
+      writeWidth(storageOf(), recordType, personId, choice === 'reset' ? null : next)
       setWidth(next)
       setRemembered(choice !== 'reset')
     },
-    [recordType, personId, tab, setHidden],
+    [recordType, personId, setHidden],
   )
   const toggle = useCallback(() => setHidden(!hiddenNow.current), [setHidden])
   const show = useCallback(() => setHidden(false), [setHidden])
