@@ -75,9 +75,13 @@ export function arrangeBody(dialog: Extract<TransportDialog, { kind: 'arrange' }
   return { version, mode: 'MANUAL_CARRIER', carrierName: dialog.carrierName.trim(), trackingNumber: tracking === '' ? null : tracking }
 }
 
-export function trackingProblem(dialog: Extract<TransportDialog, { kind: 'tracking' }>): Words | null {
+export function trackingProblem(dialog: Extract<TransportDialog, { kind: 'tracking' }>, current: string | null = null): Words | null {
   if (dialog.text.trim().length > OWN_TRANSPORT_LIMITS.trackingNumber || !oneLine(dialog.text)) return words('transport.form.trackingTooLong', { max: OWN_TRANSPORT_LIMITS.trackingNumber })
   // F-OP-135 (B-OP-034): a link only with its number; https, 1–500 characters, one line, no name or password in it.
+  // op-fx4 (B-OP-034: "clearing the number clears it"): the number emptied while the shipment has one (`current`) is Clear it — its
+  // link goes with it (trackingBody sends none), so a link left in the box never holds the clear; a link alone, with no number at
+  // all, is still held.
+  if (dialog.text.trim() === '' && current) return null
   const link = dialog.link?.trim() ?? ''
   if (link !== '' && dialog.text.trim() === '') return words('transport.form.linkNeedsNumber')
   if (link !== '' && (link.length > OWN_TRANSPORT_LIMITS.trackingUrl || !TRACKING_URL_PATTERN.test(link))) return words('transport.form.trackingLink', { max: OWN_TRANSPORT_LIMITS.trackingUrl })

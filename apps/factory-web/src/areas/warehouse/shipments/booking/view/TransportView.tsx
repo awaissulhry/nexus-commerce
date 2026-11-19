@@ -214,7 +214,7 @@ function TrackingDialog({ transport, model, actions }: { transport: Transport; m
     <DepthDialog
       title={t('transport.trackingTitle', { carrier: transport.shipment.carrierName ?? '—' })}
       subtitle={transport.shipment.number}
-      held={model.busy ? t('transport.held.busy') : say(trackingProblem(dialog))}
+      held={model.busy ? t('transport.held.busy') : say(trackingProblem(dialog, transport.shipment.manualTrackingNumber))}
       onGo={() => actions?.onTracking?.()}
       goLabel={dialog.text.trim() === '' && transport.shipment.manualTrackingNumber ? t('transport.clearTracking') : t('transport.saveTracking')}
       onClose={() => actions?.onDialog?.(null)}
