@@ -542,7 +542,7 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
           const ids = value ? (lineGroups(value, backorder.value).find((group) => group.order?.id === salesOrderId)?.lines ?? []).map((line) => line.id) : []
           if (ids.length === 0 || salesOrderId === value?.salesOrderId) return
           void write(async () => {
-            let next: Shipment | null = null
+            let next = null as Shipment | null
             try {
               for (const lineId of ids) next = await removeLine(api, shipmentId, lineId, next?.version ?? version())
             } catch (error) {
