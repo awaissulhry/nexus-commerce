@@ -82,7 +82,7 @@ const SESSIONS: Record<string, SessionContext> = {
   priced: office([...SHIPPING, ...PRINTING, 'files.read', 'shipping.proforma.issue', 'money.price']),
   // B-CP-011: a proforma shows prices: the Owner makes it; Sales (shipping.proforma.issue, no price grain) is refused.
   owner: office(['shipping.view', 'shipping.proforma.issue', 'money.price', 'money.cost', 'money.margin']),
-  sales: office(['shipping.view', 'shipping.proforma.issue']),
+  sales: office(['shipping.view']), // B-CP-011 (step 5): the Sales template holds no shipping.proforma.issue now
   noPrice: office(['shipping.view', 'shipping.proforma.issue']),
   quality: office(TRAVEL_DOCUMENT_PERMISSIONS),
   packerA1: { audience: 'floor', tenantId: A.tenant, actorId: A.operator, siteId: A.siteA1, deviceId: newId(), grants: [{ permissions: ['shipping.pack', 'print.view', 'print.labels'], companies: [A.companyA], sites: [A.siteA1], parties: 'all' }] },
@@ -289,8 +289,10 @@ describe('one PDF per shipment (LOG-031)', () => {
 describe('the proforma invoice (LOG-058)', () => {
   it('needs the price grain', async () => {
     expect((await refused('noPrice', 'GET', `/shipping/proformas?recordType=Shipment&recordId=${sh2()}`, undefined, 403)).message).toBe('A proforma shows prices: it needs the price grain.')
-    // B-CP-011: Sales sees no prices now: no proforma either.
-    expect((await refused('sales', 'POST', '/shipping/proformas', { recordType: 'Shipment', recordId: sh2() }, 403)).message).toBe('A proforma shows prices: it needs the price grain.')
+    // B-CP-011: Sales sees no prices now: no proforma either. Step 5: it holds no right to one (refused before the price check);
+    // a holder of the right without the price grain is refused in the price words.
+    expect((await refused('sales', 'POST', '/shipping/proformas', { recordType: 'Shipment', recordId: sh2() }, 403)).code).toBe('forbidden')
+    expect((await refused('noPrice', 'POST', '/shipping/proformas', { recordType: 'Shipment', recordId: sh2() }, 403)).message).toBe('A proforma shows prices: it needs the price grain.')
     expect((await refused('warehouse', 'POST', '/shipping/proformas', { recordType: 'Shipment', recordId: sh2() }, 403)).code).toBe('forbidden')
   })
 

@@ -1,6 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { reachesEveryParty, scopeWhere, type Actor, type ScopeColumns } from '@nexus/factory-domain/core/permissions'
+import { heldGrains } from '@nexus/factory-domain/auth/grains/grains' // B-CP-025
 import { fileRecordScope, reachesFileRecord } from '../files/record-scope'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
@@ -34,8 +35,8 @@ export interface AuditHistoryQuery {
  * record. One record's history is read through the record itself (auditHistoryScope).
  */
 export function auditScope(actor: Actor): Prisma.AuditLogWhereInput {
-  if (reachesEveryParty(actor, AUDIT_READ)) return scopeWhere(actor, AUDIT_READ, AUDIT_SCOPE_COLUMNS) as Prisma.AuditLogWhereInput
-  return scopeWhere(actor, AUDIT_READ, { ...AUDIT_SCOPE_COLUMNS, party: 'partyId' }) as Prisma.AuditLogWhereInput
+  if (reachesEveryParty(actor, AUDIT_READ)) return priceHeld(actor, scopeWhere(actor, AUDIT_READ, AUDIT_SCOPE_COLUMNS) as Prisma.AuditLogWhereInput) // B-CP-025
+  return priceHeld(actor, scopeWhere(actor, AUDIT_READ, { ...AUDIT_SCOPE_COLUMNS, party: 'partyId' }) as Prisma.AuditLogWhereInput) // B-CP-025
 }
 
 /**
@@ -45,13 +46,30 @@ export function auditScope(actor: Actor): Prisma.AuditLogWhereInput {
  * record of its company); a record it does not reach, or an unknown one, shows only the rows the log shows it (auditScope).
  */
 async function auditHistoryScope(client: FactoryClient, actor: Actor, recordType: string, recordId: string): Promise<Prisma.AuditLogWhereInput> {
-  const wide = scopeWhere(actor, AUDIT_READ, AUDIT_SCOPE_COLUMNS) as Prisma.AuditLogWhereInput
+  const wide = priceHeld(actor, scopeWhere(actor, AUDIT_READ, AUDIT_SCOPE_COLUMNS) as Prisma.AuditLogWhereInput) // B-CP-025
   if (reachesEveryParty(actor, AUDIT_READ)) return wide
   if (!isUuid(recordId) || !actor.tenantId) return auditScope(actor)
-  const found = await fileRecordScope(client, actor.tenantId, { recordType, recordId })
+  // B-CP-025: an order's customer's prices are one history whose record id is the order: it is read through the order.
+  const found = await fileRecordScope(client, actor.tenantId, PRICE_HELD_RECORDS.includes(recordType) ? { recordType: 'SalesOrder', recordId } : { recordType, recordId })
   return reachesFileRecord(actor, AUDIT_READ, found, null) ? wide : auditScope(actor)
 }
 // ── end fix-pr-8 ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+// ── B-CP-025 (customer page plan C4, the money wall; review B3) ──────────────────────────────────────────────────────────────
+/**
+ * The records whose whole history is behind the price grain: an order's customer's prices (modules/sales/brand-prices, audited
+ * under `OrderBrandPrice` with the order as its record id). Their rows name a price, a removal or a dispute even where the
+ * amounts are marked (the action, who, when): a person without the price grain reads none of them — not in GET /audit, a
+ * record's history, the audit search, its export, one entry or an entry's siblings (each reads through auditScope or
+ * auditHistoryScope). The thread timeline never reads them: it reads the thread's own record (an order is `SalesOrder`).
+ */
+export const PRICE_HELD_RECORDS: readonly string[] = Object.freeze(['OrderBrandPrice'])
+
+/** The scope, less the price-held records for a person without the price grain. */
+function priceHeld(actor: Actor, scope: Prisma.AuditLogWhereInput): Prisma.AuditLogWhereInput {
+  return heldGrains(actor).has('price') ? scope : { AND: [scope, { recordType: { notIn: [...PRICE_HELD_RECORDS] } }] }
+}
+// ── end B-CP-025 ──
 
 export async function readAuditHistory(client: FactoryClient, actor: Actor, query: AuditHistoryQuery): Promise<AuditEntryView[]> {
   const scope = await auditHistoryScope(client, actor, query.recordType, query.recordId) // fix-pr-8
