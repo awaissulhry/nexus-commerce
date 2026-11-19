@@ -523,6 +523,43 @@ describe('B-OP-014: a line work orders make, left out of an amendment, is closed
 })
 // ── end B-OP-014 ──
 
+// ── B-OP-014 fix (lead, A07): putting back a change that closed a line short reopens that line, as Reopen lines does ──
+describe('B-OP-014: the put-back of a change that closed a line short reopens it', () => {
+  it('the customer refused the change: its put-back reopens the line, the price comes back, the waiting work-order change goes stale', async () => {
+    const order = await orderInWork()
+    const before = await recordOf(order.id)
+    const red = before.lines.find((line: Json) => line.id === order.red.id)
+    const body = { reason: 'The customer drops the black jackets; the red ones at a new price.', lines: [{ id: order.red.id, unitPrice: '1.00' }] }
+    const applied = await ok('sales', 'POST', `${orderUrl(order.id)}/amendments`, { version: order.version, ...body }, 201)
+    expect(applied.amendment).toMatchObject({ reacceptance: 'NEEDED' })
+    expect(await one('SELECT "closedShortQuantity" AS closed FROM "SalesOrderLine" WHERE id = $1', [order.blk.id])).toEqual({ closed: 4 })
+    const waiting = await one<{ id: string; status: string }>(`SELECT id::text AS id, status::text AS status FROM "WorkOrderChange" WHERE "amendmentId" = $1 AND "workOrderId" = $2`, [applied.amendment.id, order.inProgress])
+    expect(waiting.status).toBe('PROPOSED')
+    // The customer refuses the revised order (its REVISED_ORDER answer): the change may be put back.
+    await planted([
+      {
+        sql: `INSERT INTO "ApprovalRequest" (id, "tenantId", "companyId", "recordType", "recordId", "partyId", kind, question, "dueAt", status, "answeredAt", answer) VALUES ($1, $2, $3, 'SalesOrderAmendment', $4, $5, 'REVISED_ORDER', 'Made-up: do you accept the revised order?', now() + interval '2 days', 'REFUSED', now(), 'Made-up: no.')`,
+        values: [newId(), T, companyA, applied.amendment.id, P1],
+      },
+    ])
+    expect((await ok('sales', 'GET', `${orderUrl(order.id)}/changes`)).changes[0]).toMatchObject({ id: applied.amendment.id, putBack: { may: true, why: null } })
+    const put = await ok('sales', 'POST', `${orderUrl(order.id)}/changes/${applied.amendment.id}/put-back`, { version: applied.order.version }, 201)
+    // Reopened as Reopen lines reopens it: the four columns and the code cleared; the order as it was before the change.
+    expect(await one('SELECT "closedShortQuantity" AS closed, "closedShortAt" AS at, "closedShortById" AS by, "closeShortReason" AS reason, "closedShortReasonCode" AS code FROM "SalesOrderLine" WHERE id = $1', [order.blk.id])).toEqual({ closed: null, at: null, by: null, reason: null, code: null })
+    expect(put.order.lines.find((line: Json) => line.id === order.red.id)).toMatchObject({ unitPrice: red.unitPrice })
+    expect(put.order.lines.find((line: Json) => line.id === order.blk.id)).toMatchObject({ closedShort: null })
+    expect(put.change.diff.lines).toEqual(expect.arrayContaining([expect.objectContaining({ lineId: order.blk.id, change: 'CHANGED', reopened: true, closedShort: false, piecesBefore: 0, piecesAfter: 4 })]))
+    expect((await events('sales_order.lines_closed', order.id)).map((event) => [event.payload.change, event.payload.lineIds])).toEqual([
+      ['CLOSED', [order.blk.id]],
+      ['REOPENED', [order.blk.id]],
+    ])
+    // What the change proposed and nobody applied is no longer needed.
+    expect((await one<{ status: string }>('SELECT status::text AS status FROM "WorkOrderChange" WHERE id = $1', [waiting.id])).status).toBe('STALE')
+    expect((await one(`SELECT after FROM "AuditLog" WHERE action = 'orders.amend' AND "recordId" = $1 ORDER BY at DESC LIMIT 1`, [order.id])).after).toMatchObject({ reopenedLineIds: [order.blk.id] })
+  })
+})
+// ── end B-OP-014 fix ──
+
 describe('the cancel with its impact check (SAL-211)', () => {
   it('SEED-SO-0002: names what stops it (a draft work order, goods that left, a draft invoice) and what it would leave behind', async () => {
     const so2 = seeded.money.shipping.quality.production.salesOrderId

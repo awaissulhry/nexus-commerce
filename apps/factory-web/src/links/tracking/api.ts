@@ -30,7 +30,15 @@ export const trackingPageSchema = z.object({
     returnedAt: instant.nullable(),
     expectedDeliveryAt: instant.nullable(),
   }),
-  order: z.object({ customerRef: z.string().nullable(), number: z.string().nullable() }),
+  order: z.object({
+    customerRef: z.string().nullable(),
+    number: z.string().nullable(),
+    /**
+     * F-OP-133 (order page N6, R-5 + R-18): a link may be passed on, so the page names ONE order (the shipment's first) and only
+     * how many pieces of the customer's other orders travel with it — never their numbers or POs. 0 (or an older answer): none.
+     */
+    otherPieces: z.number().int().min(0).default(0),
+  }),
   pill: z.enum(TRACKING_PILLS),
   problem: z.enum(TRACKING_PROBLEMS).nullable(),
   steps: z.array(z.object({ code: z.enum(TRACKING_STEPS), state: z.enum(STEP_STATES), at: instant.nullable() })),

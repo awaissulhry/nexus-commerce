@@ -5,6 +5,9 @@ import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
 import { samplePdf } from '../../../_shared/document-send/sample-pdf'
 import type { Backorder, Ddt, DdtPreview, DdtRow, Documents, Evidence, EvidencePaper, EvidenceStatus, Freight, Labels, PackingListVersion, Parcel, ReadyOrder, Shipment, ShipmentLine, ShipmentRow, ShipmentStatus, Tracking, Voided } from '../api'
+// F-OP-130 (order page N6): the candidates read, held off until the switch.
+import { MULTI_ORDER_OFF } from '@nexus/factory-domain/shipping/shipments'
+import type { OrderCandidates } from '../api'
 import { abilitiesOf, type ShippingAbilities } from '../model'
 
 /**
@@ -446,6 +449,67 @@ export function backorder(kind: 'partial' | 'complete' | 'closed' = 'partial'): 
       { id: SHIPMENT_ID, number: 'SH-00160', status: 'PACKED', shippedAt: null },
     ],
   }
+}
+
+// ---- F-OP-132 (order page N6, lines-derived): a shipment of two orders of one customer ---------------------------------------
+// Made up. Until the switch (B-OP-047, MULTI_ORDER_OFF) no shipment carries a second order: these cases show what comes after it.
+
+const FIRST_ORDER = { id: uid('5150', 20), number: 'SO-2026-0088', customerRef: 'PO-MD-7731' }
+/** A second order of the same customer (Moto Demo), to the same address, made at the same site. */
+export const SECOND_ORDER = { id: uid('5150', 21), number: 'SO-2026-0090', customerRef: 'PO-MD-7740' }
+
+/** SH-00160 carrying three jackets of SO-2026-0090 besides SO-2026-0088's (its line 4: the second order's line). */
+export function sharedShipment(status: ShipmentStatus = 'DRAFT'): Shipment {
+  const value = shipment(status)
+  const into = value.lines[2]!.parcelId
+  return {
+    ...value,
+    salesOrders: [
+      { ...FIRST_ORDER, status: value.salesOrder.status },
+      { ...SECOND_ORDER, status: 'READY' },
+    ],
+    lines: [...value.lines, line(4, '52', 3, into, { salesOrderLineId: uid('5800', 3), workOrderId: uid('5600', 2), workOrderNumber: 'WO-DEMO-0045', batchNumber: 'B-DEMO-26-044', workOrderSizeId: uid('5700', 4) })],
+    parcels: value.parcels.map((entry) => (entry.id === into ? { ...entry, garments: entry.garments + 3 } : entry)),
+    garments: value.garments + 3,
+  }
+}
+
+/** SO-2026-0090 on SH-00160: its one line, all three jackets on this shipment (it completes the order). */
+export function secondBackorder(): Backorder {
+  const jackets = [size('52', 3, 0, 0, 3, 3)]
+  return {
+    order: { salesOrderId: SECOND_ORDER.id, number: SECOND_ORDER.number, status: 'READY', customerRef: SECOND_ORDER.customerRef, promiseDate: '2026-11-10' },
+    shipmentId: SHIPMENT_ID,
+    lines: [{ lineId: uid('5800', 3), seq: 10, styleCode: 'DEMO-JKT-01', styleName: 'Giacca moto Demo', colourwayCode: 'BLK', colourwayName: 'Nero', closedShort: false, closeShortReason: null, sizes: jackets, totals: totalsOf(jackets) }],
+    totals: totalsOf(jackets),
+    shipments: [{ id: SHIPMENT_ID, number: 'SH-00160', status: 'DRAFT', shippedAt: null }],
+  }
+}
+
+/**
+ * F-OP-130: the customer's other open orders as the candidates read answers them now — every one held (MULTI_ORDER_OFF last,
+ * the real reason first: SO-2026-0094 goes to another address) — and after the switch (B-OP-047), SO-2026-0090 may join.
+ */
+export const CANDIDATES_HELD: OrderCandidates = {
+  shipmentId: SHIPMENT_ID,
+  number: 'SH-00160',
+  orders: [
+    { salesOrderId: SECOND_ORDER.id, number: SECOND_ORDER.number, customerRef: SECOND_ORDER.customerRef, status: 'READY', joinable: { allowed: false, why: MULTI_ORDER_OFF } },
+    { salesOrderId: uid('5150', 22), number: 'SO-2026-0094', customerRef: null, status: 'IN_PRODUCTION', joinable: { allowed: false, why: 'SO-2026-0094 goes to Bologna, shipment SH-00160 to Milano: one shipment goes to one address.' } },
+  ],
+}
+export const CANDIDATES_AFTER: OrderCandidates = { ...CANDIDATES_HELD, orders: [{ ...CANDIDATES_HELD.orders[0]!, joinable: { allowed: true, why: null } }, CANDIDATES_HELD.orders[1]!] }
+
+/** The ready cells of the second order (what it can still put on a DRAFT). */
+export const SECOND_READY: ReadyOrder = {
+  salesOrderId: SECOND_ORDER.id,
+  number: SECOND_ORDER.number,
+  customerRef: SECOND_ORDER.customerRef,
+  status: 'READY',
+  companyId: COMPANY,
+  partyId: PARTIES[0]!.id,
+  party: { code: 'C-DEMO-01', legalName: PARTIES[0]!.name },
+  cells: [cell(5, '50', 2, { salesOrderLineId: uid('5800', 3), workOrderNumber: 'WO-DEMO-0045', batchNumber: 'B-DEMO-26-044' }), cell(6, '54', 1, { salesOrderLineId: uid('5800', 3), workOrderNumber: 'WO-DEMO-0045', batchNumber: 'B-DEMO-26-044' })],
 }
 
 export const PACKING_LISTS: PackingListVersion[] = [

@@ -18,6 +18,7 @@ import {
   EVENT_TONE,
   headerCarrierPage,
   orderLabel,
+  sharedWith, // F-OP-133
   paperLine,
   PILL_TONE,
   placeLine,
@@ -229,11 +230,14 @@ function WhereItIs({ page, model, actions }: { page: TrackingPage; model: Tracki
     ...(page.order.customerRef && page.order.number ? [{ label: t('fact.ourOrder'), value: page.order.number }] : []),
   ]
   const several = page.parcels.length > 1
+  const shared = sharedWith(page) // F-OP-133 (N6, R-18)
   return (
     <Card header={t('where.title')} headingLevel={2} description={t('where.sub')}>
       <div className="fw-trk-card">
         <MilestoneTracker steps={trackerSteps(page, (code) => t(`step.${code}`), when)} label={t('where.steps', { number: shipment.number })} labels={ds.milestoneTracker} />
         <KeyValue columns={2} phoneColumns={1} labelCase="sentence" items={facts} />
+        {/* F-OP-133 (order page N6, R-5 + R-18): this order, and only HOW MANY pieces of other orders travel with it. */}
+        {shared ? <p className="fw-trk-hint">{t('where.shared', { order: shared.order, count: shared.count })}</p> : null}
         {page.parcels.length > 0 ? (
           <ul className="fw-trk-parcels" aria-label={t('parcels.label', { count: page.parcels.length })}>
             {page.parcels.map((parcel) => {

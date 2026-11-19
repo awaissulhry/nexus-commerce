@@ -143,6 +143,7 @@ describe('B-OP-014: a line left out of an amendment', () => {
         netAfter: 360_000,
         textChanged: false,
         closedShort: true,
+        reopened: false,
       },
     ])
     // Closing short moves no money (a closed line is not billed): the customer is not asked to accept again; it is a change.
@@ -151,6 +152,15 @@ describe('B-OP-014: a line left out of an amendment', () => {
     expect(amendmentDiff(after, after).empty).toBe(true)
     // An ordinary removal and change say closedShort false.
     expect(amendmentDiff(before, snapshotOf(header, [red])).lines[0]).toMatchObject({ change: 'REMOVED', closedShort: false, netAfter: 0 })
+  })
+
+  it('a put-back reopens it: the diff names it CHANGED and reopened, what was left of it back (0 → its sizes)', () => {
+    const closed = snapshotOf(header, [{ ...blk, closedShortQuantity: 8 }, red])
+    const diff = amendmentDiff(closed, snapshotOf(header, [blk, red]))
+    expect(diff.lines).toEqual([
+      expect.objectContaining({ change: 'CHANGED', lineId: 'L1', piecesBefore: 0, piecesAfter: 8, closedShort: false, reopened: true, sizes: [{ size: '50', before: 0, after: 2 }, { size: '52', before: 0, after: 4 }, { size: '54', before: 0, after: 2 }], unitPrice: null, netBefore: 360_000, netAfter: 360_000 }),
+    ])
+    expect(diff.empty).toBe(false)
   })
 })
 // ── end B-OP-014 ──

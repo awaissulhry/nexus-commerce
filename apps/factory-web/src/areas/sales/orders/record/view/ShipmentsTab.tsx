@@ -1,7 +1,8 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation' // F-OP-119 (F-OP-210's tab links)
 import { Card, EmptyState, SummaryTable } from '@nexus/ui/components'
 import { SizeGridView } from '@nexus/ui/grid/size-grid/index'
 import { Button, Pill } from '@nexus/ui/primitives'
@@ -15,6 +16,10 @@ import type { Order } from '../../api'
 import { createShipmentHref, gridOf, mayCreateShipment, styleGroups } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PointsAtOrder } from '../links/view/OrderLinks' // F-SA-230: Complaints & returns live here
+// F-OP-119 (order page plan N5): each row's carrier and tracking, the tracking door, the cancelled rows behind "Show N".
+import { carrierOf, shownShipments, trackingDoorOf, trackingOf, type ShipmentRow } from '../shipments/model'
+import { tabHref } from '../../../../_shared/record-frame/address'
+import { TabLink } from '../../../../../lib/tab-link/TabLink'
 
 const SHIPMENT_TONE = { DRAFT: 'neutral', PACKED: 'info', SHIPPED: 'info', DELIVERED: 'success', RETURNED: 'warning', CANCELLED: 'danger' } as const
 
@@ -38,6 +43,15 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
   const groups = styleGroups(order.lines)
   const shipmentHref = (row: { id: string; number: string }) => `${model.prefix}${recordAddress({ type: 'Shipment', id: row.id, label: row.number, companyId: order.companyId }, OFFICE_PAGES)}`
   const figures = order.progress
+  // ---- F-OP-119: cancelled rows behind "Show N cancelled"; the tab links keep the dock's scope (F-OP-210) ----
+  const [showCancelled, setShowCancelled] = useState(false)
+  const shown = shownShipments(order.chain.shipments, showCancelled)
+  const search = useSearchParams()?.toString() ?? ''
+  const recordHref = `${model.prefix}/sales/orders/${order.id}`
+  const carrierText = (row: ShipmentRow): string => {
+    const carrier = carrierOf(row)
+    return carrier ? t(carrier.key, carrier.params) : '—'
+  }
 
   return (
     <div className="fw-so-stack">
@@ -76,8 +90,8 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
         ) : (
           <SummaryTable
             label={t('ship.listTitle')}
-            columns={[t('ship.col.number'), t('ship.col.status'), t('ship.col.shipped'), t('ship.col.delivered')]}
-            rows={order.chain.shipments.map((row) => ({
+            columns={[t('ship.col.number'), t('ship.col.status'), t('ship.col.carrier'), t('ship.col.tracking'), t('ship.col.shipped'), t('ship.col.delivered')]}
+            rows={shown.rows.map((row) => ({
               id: row.id,
               cells: [
                 <span key="n" className="fw-so-inline" id={rowAnchor('Shipment', row.id) /* F-SA-266 */} tabIndex={-1}>
@@ -87,23 +101,102 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
                   <DiscussDoor order={order} part={t('discuss.shipment', { number: row.number })} target={{ kind: 'Shipment', id: row.id }} />
                 </span>,
                 <Pill key="s" tone={SHIPMENT_TONE[row.status as keyof typeof SHIPMENT_TONE] ?? 'neutral'}>{t(`shipStatus.${row.status}`)}</Pill>,
+                // F-OP-119: who carries it, its tracking and the tracking door (the carrier and tracking only as the read gives them).
+                carrierText(row),
+                <TrackingCell key="t" row={row} shipmentHref={shipmentHref(row)} onOpen={actions?.onShipmentTracking} />,
                 row.shippedAt ? formatDate(row.shippedAt, { locale }) : '—',
                 row.deliveredAt ? formatDate(row.deliveredAt, { locale }) : '—',
               ],
             }))}
             density="roomy"
             stackOnPhone
-            align={['left', 'left', 'right', 'right']}
+            align={['left', 'left', 'left', 'left', 'right', 'right']}
           />
         )}
+        {shown.cancelled > 0 && (
+          <Button size="sm" onClick={() => setShowCancelled((value) => !value)} aria-expanded={showCancelled}>
+            {showCancelled ? t('ship.hideCancelled') : t('ship.showCancelled', { count: shown.cancelled })}
+          </Button>
+        )}
       </Card>
+      {model.shipmentTracking /* F-OP-119: the tracking dialog of the shipment opened (its container) */}
       {delivered}
       <PointsAtOrder model={model.links} actions={actions?.links} prefix={model.prefix} />
       <p className="fw-so-hint">
-        <Link className="fw-so-link" href={`${model.prefix}/sales/orders/${order.id}?tab=money`}>
+        <TabLink className="fw-so-link" href={tabHref(recordHref, 'money', search) /* F-OP-119: F-OP-210's tab link */}>
           {t('ship.moneyDoor')}
-        </Link>
+        </TabLink>
       </p>
     </div>
   )
 }
+
+// ── F-OP-119 (order page plan N5; 10-order-page §8.1, §8.2) ──────────────────────────────────────────────────────────────────────────
+/**
+ * A shipment's Tracking cell: the number typed for a carrier booked by hand (Copy, and "No live tracking": no carrier feeds it), or its
+ * labels' parcel numbers (each to its carrier's https page), then "Tracking number…" — held with the read's words and, where one
+ * fixes it, the door: the shipment's page (a label to void), "Change how it travels…" there before the goods leave.
+ */
+function TrackingCell({ row, shipmentHref, onOpen }: { row: ShipmentRow; shipmentHref: string; onOpen?: (shipmentId: string) => void }) {
+  const t = useT('orders')
+  const tracking = trackingOf(row)
+  const door = trackingDoorOf(row)
+  return (
+    <span className="fw-so-inline">
+      {tracking?.typed ? (
+        <>
+          <span>{tracking.typed}</span>
+          <CopyNumber text={tracking.typed} />
+          <Pill tone="neutral">{t('ship.noLive')}</Pill>
+        </>
+      ) : null}
+      {tracking?.parcels.map((parcel) =>
+        parcel.url ? (
+          <a key={parcel.number} className="fw-so-link" href={parcel.url} target="_blank" rel="noopener noreferrer">
+            {parcel.number}
+          </a>
+        ) : (
+          <span key={parcel.number}>{parcel.number}</span>
+        ),
+      )}
+      {!tracking && <span>—</span>}
+      <Button size="sm" heldReason={door.kind === 'held' ? t(door.words.key, door.words.params) : null} onClick={() => onOpen?.(row.id)}>
+        {t('ship.trackingOpen')}
+      </Button>
+      {door.kind === 'held' && door.door === 'shipment' && (
+        <Link className="fw-so-link" href={shipmentHref}>
+          {t('ship.tracking.door.shipment')}
+        </Link>
+      )}
+      {door.kind === 'held' && door.door === 'arrange' && (
+        <Link className="fw-so-link" href={`${shipmentHref}?tab=carrier`}>
+          {t('ship.tracking.door.arrange')}
+        </Link>
+      )}
+    </span>
+  )
+}
+
+/** Copy a typed number; "Copied" for a moment (said to a screen reader too). */
+function CopyNumber({ text }: { text: string }) {
+  const t = useT('orders')
+  const [copied, setCopied] = useState(false)
+  return (
+    <Button
+      size="sm"
+      aria-live="polite"
+      onClick={() => {
+        void navigator.clipboard
+          ?.writeText(text)
+          .then(() => {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 3000)
+          })
+          .catch(() => setCopied(false))
+      }}
+    >
+      {copied ? t('ship.copied') : t('ship.copy')}
+    </Button>
+  )
+}
+// ── end F-OP-119 ──

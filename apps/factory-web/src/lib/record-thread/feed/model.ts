@@ -38,6 +38,8 @@ export interface FeedEvent {
   actorAudience: ActorAudience
   /** The command's verb (the last part of `sales.orders.setStatus`). */
   verb: string
+  /** F-OP-214: the whole action (`tasks.create`): a step of another module reads in its own words; absent: the verb alone. */
+  action?: string
   status: { from: string | null; to: string | null } | null
   /** The values, only when the API gave them (audit.read; money only with its grain). */
   values: ReadonlyArray<{ field: string; before: string; after: string }>
@@ -72,6 +74,45 @@ const VERBS: Readonly<Record<string, string>> = {
 /** A step's verb in words: a key of record-thread-feed (`verb.issued`), `verb.changed` otherwise. */
 export const verbKey = (verb: string): string => `verb.${VERBS[verb] ?? 'changed'}`
 
+// ---- F-OP-214 (order page plan N4; 11-dock §6.1, D1): a step of another module on the record (a task added to it, a file) reads in its own
+// words; "created the record" only for the record's own module. The issues engine audits each task it adds on its record
+// (`tasks.create`, the actor SYSTEM: "Nexus Factory"), so an order showed "Nexus Factory created the record" five times.
+export const FOREIGN_ACTIONS: Readonly<Record<string, string>> = Object.freeze({
+  'tasks.create': 'addedTask',
+  'tasks.complete': 'completedTask',
+  'tasks.reopen': 'reopenedTask',
+  'tasks.assign': 'assignedTask',
+  'files.completeUpload': 'uploaded',
+})
+/** The other modules' verbs that have plural words ("added 5 tasks"). */
+const FOREIGN_VERBS: readonly string[] = Object.values(FOREIGN_ACTIONS)
+/** The modules whose steps land on another module's record (never "created the record" there). */
+const FOREIGN_MODULES: readonly string[] = ['tasks', 'files']
+
+/** A step's words: another module's own (`verb.addedTask`), its generic change (never "created the record"), else the verb's. */
+export function stepVerbKey(event: Pick<FeedEvent, 'verb' | 'action'>): string {
+  const own = event.action ? FOREIGN_ACTIONS[event.action] : undefined
+  if (own) return `verb.${own}`
+  const dot = event.action ? event.action.indexOf('.') : -1
+  const module = event.action && dot > 0 ? event.action.slice(0, dot) : ''
+  if (FOREIGN_MODULES.includes(module) && event.verb === 'create') return 'verb.changed'
+  return verbKey(event.verb)
+}
+
+/** A status step: it never folds and it ends a run of steps (a status move is always read on its own). */
+export const isStatusStep = (event: Pick<FeedEvent, 'status'>): boolean => event.status !== null && (event.status.from !== null || event.status.to !== null)
+
+/**
+ * The words of a run of folded steps: "Nexus Factory added 5 tasks" when every step is the same action of another module (its own
+ * plural words), else "5 steps by Nexus Factory".
+ */
+export function stepsWordsOf(events: readonly Pick<FeedEvent, 'verb' | 'action'>[]): { readonly key: string; readonly count: number } {
+  const first = events[0] ? stepVerbKey(events[0]) : null
+  const same = first !== null && events.every((event) => stepVerbKey(event) === first) && first.startsWith('verb.') && FOREIGN_VERBS.includes(first.slice(5))
+  return { key: same ? `steps.many.${first!.slice(5)}` : 'steps.text', count: events.length }
+}
+// ---- end F-OP-214
+
 /** Who did a step, in words: the name; "A person on the floor" behind the gate; else by audience. */
 export function whoWords(event: Pick<FeedEvent, 'who' | 'whoHidden' | 'actorAudience'>): { text: string } | { key: string } {
   if (event.whoHidden) return { key: 'who.floorPerson' }
@@ -87,6 +128,8 @@ export type FeedRow =
   | { kind: 'folded'; key: string; message: CardMessage }
   | { kind: 'message'; key: string; message: CardMessage }
   | { kind: 'step'; key: string; event: FeedEvent }
+  // F-OP-214: 2+ consecutive record steps of the same actor within an hour, one line ("5 steps by Nexus Factory · Show").
+  | { kind: 'steps'; key: string; events: readonly FeedEvent[] }
   | { kind: 'changes'; key: string; events: readonly FeedEvent[] }
 
 export interface FeedRowsInput {
@@ -183,6 +226,12 @@ export function feedRows(input: FeedRowsInput): FeedRow[] {
       rows[rows.length - 1] = { ...previous, events: [...previous.events, event] }
     } else if (isFieldChange(event)) {
       rows.push({ kind: 'changes', key: `changes:${event.id}`, events: [event] })
+    } else if (!isStatusStep(event) && previous?.kind === 'steps' && sameGroup(previous.events[0], event, timeZone)) {
+      // F-OP-214: the run goes on (the same actor, within an hour of its first step, nothing between).
+      rows[rows.length - 1] = { ...previous, events: [...previous.events, event] }
+    } else if (!isStatusStep(event) && previous?.kind === 'step' && !isStatusStep(previous.event) && sameGroup(previous.event, event, timeZone)) {
+      // F-OP-214: a second step of the same actor folds the two into one run; a status step never folds and ends the run.
+      rows[rows.length - 1] = { kind: 'steps', key: `steps:${previous.event.id}`, events: [previous.event, event] }
     } else {
       rows.push({ kind: 'step', key: `step:${event.id}`, event })
     }

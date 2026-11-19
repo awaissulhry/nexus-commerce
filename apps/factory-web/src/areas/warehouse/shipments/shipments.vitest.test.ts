@@ -9,6 +9,17 @@ import { I18nProvider } from '../../../lib/i18n/provider'
 import { listAddress as webListAddress, recordAddress } from '../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { DDT_ROW, documents, draftLoose, labelled, labels, OPEN_ROWS, ownVan, PREVIEW_HELD, PREVIEW_OK, READY, row, shipment } from './_demo/fixtures'
+// F-OP-132 (order page N6): a shipment of two orders.
+import { backorder, SECOND_ORDER, SECOND_READY, secondBackorder, sharedShipment } from './_demo/fixtures'
+// F-OP-130 (order page N6): the record of a shared shipment.
+import { CANDIDATES_HELD } from './_demo/fixtures'
+import { joinHeld } from './model'
+import { leftKeys } from '../../../lib/record-thread/parts/testing'
+// F-OP-131 (order page N6): the driver's pack.
+import { designScreen as packScreen } from './pack/fixtures'
+import { joinableShipmentsSchema, orderCandidatesSchema, readyOrderSchema, shipmentRowSchema, shipmentSchema } from './api'
+import { lineGroups, lineOrderIds, orderNumbers, orderWords, rowOrders, shipmentOrders } from './model'
+import { queueRowSchema, searchRowSchema } from './queue/api'
 import { designScreen as listScreen } from './list/fixtures'
 import { ShipmentsListView } from './list/view/ShipmentsListView'
 import {
@@ -323,3 +334,154 @@ describe('B-TH-264 follow-up — the Documents’ files open in the thread’s f
   })
 })
 // ---- end B-TH-264 follow-up
+
+// ---- F-OP-132 (order page N6, R-5): the Warehouse api types know a shipment's several orders ------------------------------------
+describe('F-OP-132 — a shipment of two orders of one customer: the answers parse, each line has its order', () => {
+  const two = sharedShipment()
+  const orderIds = two.salesOrders!.map((order) => order.id)
+
+  it('the record, the list row, the queue row and the search row parse with every order, the first first', () => {
+    const record = shipmentSchema.parse(two)
+    expect(shipmentOrders(record).map((order) => order.number)).toEqual(['SO-2026-0088', 'SO-2026-0090'])
+    expect(shipmentOrders(record)[0]!.id).toBe(record.salesOrderId)
+    const listed = shipmentRowSchema.parse({ ...row(1, 'DRAFT'), salesOrders: [{ id: orderIds[0], number: 'SO-2026-0088', customerRef: 'PO-MD-7731' }, { id: orderIds[1], number: 'SO-2026-0090', customerRef: null }] })
+    expect(orderNumbers(rowOrders(listed))).toBe('SO-2026-0088, SO-2026-0090')
+    const orders = [{ id: orderIds[0], number: 'SO-2026-0088', customerRef: 'PO-MD-7731' }, { id: orderIds[1], number: 'SO-2026-0090', customerRef: 'PO-MD-7740' }]
+    const queued = { id: two.id, number: two.number, status: 'DRAFT', siteId: two.siteId, salesOrderId: orderIds[0], salesOrderNumber: 'SO-2026-0088', customerRef: 'PO-MD-7731', salesOrders: orders, partyCode: 'C-DEMO-01', partyName: 'Moto Demo S.r.l.', carrierKey: 'brt', transportBy: 'CARRIER', carrierCode: 'brt', carrierName: 'BRT', serviceCode: null, shipTo: { city: 'Milano', country: 'IT' }, splitFromId: null, garments: 11, parcels: 2, labelled: 0, shipBy: null, cutOff: null, risk: 'NO_DATE', willMiss: false, held: false, holdReasons: [] }
+    expect(rowOrders(queueRowSchema.parse(queued)).map((order) => order.customerRef)).toEqual(['PO-MD-7731', 'PO-MD-7740'])
+    const found = { id: two.id, number: two.number, status: 'DRAFT', siteCode: 'A1', salesOrderId: orderIds[0], salesOrderNumber: 'SO-2026-0088', customerRef: 'PO-MD-7731', salesOrders: orders, partyName: 'Moto Demo S.r.l.', transportBy: 'CARRIER', carrierCode: 'brt', carrierName: 'BRT', serviceCode: null, trackingNumbers: [], parcels: 2, garments: 11, ddtNumber: null, splitFrom: null, holdReasons: [], createdAt: two.createdAt, shippedAt: null, deliveredAt: null, cancelledAt: null, matchedBy: ['ORDER'], matchedSerials: [] }
+    // The search finds it through its second order (B-OP-041: the number or PO of any order it carries).
+    expect(rowOrders(searchRowSchema.parse(found)).map((order) => order.number)).toEqual(['SO-2026-0088', 'SO-2026-0090'])
+  })
+
+  it('an older answer without the list is its first order alone (never empty, never another order)', () => {
+    const one = shipment('DRAFT')
+    expect(shipmentOrders(one)).toEqual([{ id: one.salesOrderId, number: 'SO-2026-0088', customerRef: 'PO-MD-7731' }])
+    const plain = row(2, 'PACKED')
+    expect(rowOrders(plain)).toEqual([{ id: plain.salesOrderId, number: plain.salesOrderNumber, customerRef: null }])
+  })
+
+  it('candidates, joinable shipments and ship together parse with their verdicts (the API words kept as they are)', () => {
+    const candidates = orderCandidatesSchema.parse({ shipmentId: two.id, number: two.number, orders: [{ salesOrderId: orderIds[1], number: 'SO-2026-0090', customerRef: 'PO-MD-7740', status: 'READY', joinable: { allowed: false, why: 'Several orders in one shipment come with the next update.' } }] })
+    expect(candidates.orders[0]!.joinable).toEqual({ allowed: false, why: 'Several orders in one shipment come with the next update.' })
+    const joinable = joinableShipmentsSchema.parse({ salesOrderId: orderIds[1], number: 'SO-2026-0090', shipments: [{ shipmentId: two.id, number: two.number, status: 'DRAFT', siteId: two.siteId, joinable: { allowed: true, why: null } }] })
+    expect(joinable.shipments[0]!.joinable.allowed).toBe(true)
+    const together = readyOrderSchema.parse({ ...SECOND_READY, shipsWith: { allowed: false, why: 'SO-2026-0090 goes to Bologna, this shipment to Milano: one shipment goes to one address.' } })
+    expect(together.shipsWith?.allowed).toBe(false)
+    expect(readyOrderSchema.parse(READY[0]).shipsWith).toBeUndefined()
+  })
+
+  it('each line has its order: from each order’s lines (the backorder read); unread lines last; one order reads nothing', () => {
+    const groups = lineGroups(two, [backorder(), secondBackorder()])
+    expect(groups.map((group) => [group.order?.number ?? null, group.lines.map((entry) => entry.size)])).toEqual([
+      ['SO-2026-0088', ['50', '52', '54']],
+      ['SO-2026-0090', ['52']],
+    ])
+    // The second order's read is not there yet: its line waits in a group of its own (never put under the first order).
+    expect(lineGroups(two, [backorder()]).map((group) => group.order?.number ?? null)).toEqual(['SO-2026-0088', null])
+    expect(lineGroups(two, null).map((group) => group.order)).toEqual([null])
+    expect(lineGroups(shipment('DRAFT'), null)).toEqual([{ order: shipmentOrders(shipment('DRAFT'))[0], lines: shipment('DRAFT').lines }])
+    expect(lineOrderIds([secondBackorder()]).get(two.lines[3]!.salesOrderLineId)).toBe(SECOND_ORDER.id)
+  })
+
+  it('the order’s words: its number and its PO in the catalogue’s PO words', () => {
+    expect(orderWords({ number: 'SO-2026-0090', customerRef: 'PO-MD-7740' }, (ref) => `Customer PO ${ref}`)).toBe('SO-2026-0090 · Customer PO PO-MD-7740')
+    expect(orderWords({ number: 'SO-2026-0090', customerRef: null }, (ref) => ref)).toBe('SO-2026-0090')
+  })
+})
+// ---- end F-OP-132
+
+// ---- F-OP-130 (order page N6, R-5): the Warehouse shipment shows every order it carries -------------------------------------------
+describe('F-OP-130 — the shipment record names every order, groups its lines by order and PO, and lets an order join or leave a DRAFT', () => {
+  const drawCase = (id: string, locale: 'it' | 'en' = 'en') => textOf(renderView(recordScreen.view as ComponentType<{ model: unknown }>, recordScreen.cases.find((item) => item.id === id)!.model, locale))
+  const htmlOf = (id: string, locale: 'it' | 'en' = 'en') => renderView(recordScreen.view as ComponentType<{ model: unknown }>, recordScreen.cases.find((item) => item.id === id)!.model, locale)
+
+  it('a shared DRAFT: a chip per order (each a link to it), its lines under each order and PO, Take its garments off for the second only', () => {
+    const html = htmlOf('shared-draft')
+    const text = textOf(html)
+    expect(text).toContain('Order SO-2026-0088 · Customer PO PO-MD-7731')
+    expect(text).toContain('Order SO-2026-0090 · Customer PO PO-MD-7740')
+    expect(html).toContain(`/sales/orders/${SECOND_ORDER.id}?tab=shipments`)
+    expect(text).toContain('SO-2026-0090 · Customer PO PO-MD-7740 3 garments in 1 lines')
+    expect(text.match(/Take its garments off/g)?.length).toBe(1)
+    expect(text).toContain("Add an order's garments…")
+    // Each order's progress, titled by the order.
+    expect(text).toContain('SO-2026-0088 · Customer PO PO-MD-7731 on this shipment')
+    expect(text).toContain('SO-2026-0090 · Customer PO PO-MD-7740 on this shipment')
+  })
+
+  it('one order: the band, the lines and the progress as before (no order headings, nothing to take off)', () => {
+    const text = drawCase('draft')
+    expect(text).toContain('Order SO-2026-0088')
+    expect(text).toContain('The order on this shipment')
+    expect(text).not.toContain('Take its garments off')
+    expect(text).not.toContain('on this shipment SO-')
+    expect(text).toContain("Add an order's garments…")
+  })
+
+  it('whose each line is, while it is read: the lines wait in a group of their own, never under the wrong order, nothing to take off', () => {
+    const text = drawCase('shared-reading')
+    expect(text).toContain('Order not read yet')
+    expect(text).not.toContain('Take its garments off')
+  })
+
+  it('read-only (Sales): every order named, no door to add or take off', () => {
+    const text = drawCase('shared-packed')
+    expect(text).toContain('Order SO-2026-0090 · Customer PO PO-MD-7740')
+    expect(text).not.toContain("Add an order's garments…")
+    expect(text).not.toContain('Take its garments off')
+  })
+
+  it('an order that cannot join is held with why: the hold of several orders in its own words, any other reason the API’s sentence', () => {
+    expect(joinHeld({ allowed: true, why: null })).toBeNull()
+    expect(joinHeld(CANDIDATES_HELD.orders[0]!.joinable)).toEqual({ key: 'shipOrders.later', detail: null })
+    expect(joinHeld(CANDIDATES_HELD.orders[1]!.joinable)).toEqual({ key: 'shipOrders.cannotJoin', detail: 'SO-2026-0094 goes to Bologna, shipment SH-00160 to Milano: one shipment goes to one address.' })
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale]['warehouse-shipments-depth'] ?? {}
+      for (const key of ['shipOrders.later', 'shipOrders.cannotJoin', 'shipOrders.add', 'shipOrders.takeOff', 'shipOrders.takeOffWhat_one', 'shipOrders.takeOffWhat_other', 'shipOrders.progressTitle', 'shipOrders.unread']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
+    expect(CATALOGUE.it['warehouse-shipments-depth']?.['shipOrders.later']).toBe('Più ordini in una spedizione arrivano con il prossimo aggiornamento.')
+  })
+
+  it('no shipOrders key is left on screen in any case, in either language', () => {
+    for (const locale of LOCALES) for (const item of recordScreen.cases) expect(leftKeys(renderView(recordScreen.view as ComponentType<{ model: unknown }>, item.model, locale), ['shipOrders']), `${item.id} (${locale})`).toEqual([])
+  })
+
+  it('the record reads what every order can still ship and each order’s lines; an order leaves line by line, each with the version the one before answered', () => {
+    const source = readFileSync(new URL('./record/ShipmentRecord.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('Promise.all(shipmentOrders(value).map((order) => readyToShip(api, { salesOrderId: order.id })')
+    expect(source).toContain('Promise.all(shipmentOrders(value).map((order) => orderBackorder(api, order.id, value.id)))')
+    expect(source).toContain('for (const lineId of ids) next = await removeLine(api, shipmentId, lineId, next?.version ?? version())')
+    // Never the first order: the shipment was made for it.
+    expect(source).toContain('salesOrderId === value?.salesOrderId) return')
+    expect(source).toContain('orderCandidates(api, value.id)')
+  })
+
+  it('the lists name every order: the CSV of the list and of the queue', () => {
+    const shared = { ...row(3, 'PACKED'), salesOrders: [{ id: 'a', number: 'SO-2026-0083', customerRef: 'PO-1' }, { id: 'b', number: 'SO-2026-0090', customerRef: 'PO-2' }] }
+    const csv = shipmentsCsv([shared], { header: (column) => column, status: (status) => status, carrier: () => 'BRT' })
+    expect(csv).toContain('"SO-2026-0083, SO-2026-0090"')
+    expect(shipmentsCsv([row(3, 'PACKED')], { header: (column) => column, status: (status) => status, carrier: () => 'BRT' })).toContain(',SO-2026-0083,')
+  })
+})
+// ---- end F-OP-130
+
+// ---- F-OP-131 (order page N6, R-5): the driver's pack names every order -------------------------------------------------------------
+describe("F-OP-131 — the driver's sheet names each order the shipment carries, with its PO", () => {
+  const drawPack = (id: string, locale: 'it' | 'en' = 'en') => textOf(renderView(packScreen.view as ComponentType<{ model: unknown }>, packScreen.cases.find((item) => item.id === id)!.model, locale))
+
+  it('two orders: "Orders", each with its PO; one order: "Order" as before', () => {
+    const shared = drawPack('shared')
+    expect(shared).toContain('Orders SO-2026-0088 · Customer PO PO-MD-7731 SO-2026-0090 · Customer PO PO-MD-7740')
+    expect(drawPack('shared', 'it')).toContain('Ordini SO-2026-0088 · Ordine cliente PO-MD-7731 SO-2026-0090 · Ordine cliente PO-MD-7740')
+    const one = drawPack('ready')
+    expect(one).toContain('Order SO-2026-0088 · Customer PO PO-MD-7731')
+    expect(one).not.toContain('SO-2026-0090')
+  })
+
+  it('no key left on the sheet in any case', () => {
+    for (const locale of LOCALES) for (const item of packScreen.cases) expect(leftKeys(renderView(packScreen.view as ComponentType<{ model: unknown }>, item.model, locale), ['shipOrders']), `${item.id} (${locale})`).toEqual([])
+  })
+})
+// ---- end F-OP-131
+

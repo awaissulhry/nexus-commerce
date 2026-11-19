@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CUSTOMER_FEED_KINDS } from '@nexus/factory-domain/sales/customer-feed/kinds'
 import type { ApiClient } from '../../../../lib/api/client'
 import { leftKeys, render, textOf } from '../../../../lib/record-thread/parts/testing'
@@ -30,6 +30,9 @@ import { AllOfCustomerDock } from './view/AllOfCustomerFeed' // F-OP-204
 import { FeedHead } from './view/FeedHead' // F-OP-204
 import { gistOf, GIST_CHARS, LINE_FILES, lineAudienceOf, lineFilesOf, lineTimeOf } from './model' // F-OP-205
 import { feedKeyOf, linePlaceOf, rovingIndexOf } from './keys' // F-OP-206
+import { answerOf } from './model' // F-OP-207
+import { freshFolder, heldRecordsOf, listKeyOf, onShowOf } from './model' // F-OP-208
+import { FRESH_WAIT_MS } from './use-all-of-customer' // F-OP-208
 import { LOCALES } from '../../../../lib/i18n/locales' // F-OP-206
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages' // F-OP-206
 
@@ -465,3 +468,117 @@ describe('F-OP-206 — J / K walk the lines, Enter answers, Space shows the whol
   })
 })
 // ---- end F-OP-206
+
+// ---- F-OP-207 (order page plan N4; 11-dock §3.2, §3.4; pick P7): Answer opens that thread at the message, the box focused; the foot --------
+describe('F-OP-207 — Answer per line and the read-only foot', () => {
+  const model = (state: FeedState) => feedModel(state, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true })
+  const OTHER = { ...ORDER, id: 'so-9', label: 'SO-0150', ownNumber: null }
+  const state = afterFirst(EMPTY_FEED, answer([entry('m3', 30), entry('m2', 20, ORDER, { direction: 'INTERNAL_NOTE', audience: 'OFFICE' }), entry('m1', 10, OTHER)]))
+  const onlyThisOrder = (record: { type: string; id: string }) => record.type === 'SalesOrder' && record.id === 'so-1'
+
+  it('answerOf: the customer\'s line → Reply at its message; a note (or ours) → Office note; another record → its page at the message', () => {
+    const [customers, note, other] = model(state).items
+    expect(answerOf(customers!, onlyThisOrder)).toEqual({ kind: 'answer', ask: { record: { type: 'SalesOrder', id: 'so-1' }, messageId: 'm3', mode: 'reply' } })
+    expect(answerOf(note!, onlyThisOrder)).toEqual({ kind: 'answer', ask: { record: { type: 'SalesOrder', id: 'so-1' }, messageId: 'm2', mode: 'note' } })
+    const ours = model(afterFirst(EMPTY_FEED, answer([entry('m4', 40, ORDER, { direction: 'OUTBOUND' })]))).items[0]!
+    expect(answerOf(ours, onlyThisOrder)).toMatchObject({ kind: 'answer', ask: { mode: 'note' } })
+    expect(answerOf(other!, onlyThisOrder)).toEqual({ kind: 'open', href: '/w/x/sales/orders/so-9?message=m1' })
+  })
+
+  it('the doors drawn: "Answer" (its name the thread it answers in) asks the frame; another record "Open …" is a real link', () => {
+    const asked: unknown[] = []
+    const html = render(createElement(AllOfCustomerFeed, { model: model(state), actions: { canAnswer: onlyThisOrder, onCompose: (ask) => asked.push(ask), onAnswer: () => undefined } }))
+    expect(html.match(/aria-label="Answer in the thread of SO-0142 · Your order 12"/g)?.length).toBe(2)
+    expect(html).toContain('href="/w/x/sales/orders/so-9?message=m1"')
+    expect(textOf(html)).toContain('Open SO-0150')
+    // Without the host's threads the door is what it was (Answer through onAnswer, or the message's link).
+    expect(render(createElement(AllOfCustomerFeed, { model: model(state) }))).toContain('href="/w/x/sales/orders/so-1?message=m3"')
+  })
+
+  it('the hosts: only this customer\'s threads the dock can show (order: this order, General, a linked project; customer page: General, the record picked)', () => {
+    const order = readFileSync(new URL('../../../sales/orders/record/dock/OrderDock.tsx', import.meta.url), 'utf8')
+    expect(order).toContain('const canAnswer = (record: { readonly type: string; readonly id: string }) => scopeOfRecord(record, page, offer) !== null')
+    expect(order).toContain('...(frame?.compose ? { onCompose: frame.compose } : {})')
+    // The foot: "Read only. Write in:" — This order, and General only when it is offered; each opens its thread on Office note.
+    expect(order).toContain("{t('record.dock.readOnly')}. {t('record.dock.writeIn')}")
+    expect(order).toContain("writeIn({ type: 'SalesOrder', id: order.id }, ORDER_SCOPE)")
+    expect(order).toMatch(/\{offer\.general && \(\s*<Button size="sm" variant="secondary" onClick=\{\(\) => writeIn\(\{ type: 'Party', id: order\.partyId \}/)
+    expect(order).toContain("frame.compose({ record, messageId: null, mode: 'note' })")
+    const customer = readFileSync(new URL('../../../sales/customers/record/view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(customer).toContain("const canAnswer = (record: { readonly type: string; readonly id: string }) => (record.type === 'Party' ? record.id === customer.id : !!pick && sameRecord(record, pick))")
+    expect(customer).toContain("{t('customers.work.dock.readOnly')}. {o('record.dock.writeIn')}")
+    expect(customer).toMatch(/\{pick && \(\s*<Button size="sm" variant="secondary" onClick=\{\(\) => writeIn\(\{ type: pick\.type, id: pick\.id \}, 'record'\)\}>/)
+    expect(customer).toContain('foot={allFoot}')
+  })
+})
+// ---- end F-OP-207
+
+// ---- F-OP-208 (order page plan N4; 11-dock §3.6, D8; R-1): a revisit keeps the list; live hints by the records the list holds --------------
+describe('F-OP-208 — revisit keeps the list and reads fresh; a hint on a held record reads again', () => {
+  const held = heldRecordsOf(afterFirst(EMPTY_FEED, answer([entry('m2', 20), entry('m1', 10, GENERAL)])))
+
+  it('the records the list holds; a hint on one of them reads again; any other keeps today\'s rule (customer-side types only)', () => {
+    expect([...held].sort()).toEqual(['Party:p-a', 'SalesOrder:so-1'])
+    expect(liveTouches({ type: 'thread.message_posted', fields: { recordType: 'SalesOrder', recordId: 'so-1' } }, held)).toBe(true)
+    // Not held, a customer-side type: a new thread of this customer may begin (the server sends it only to who reaches the customer).
+    expect(liveTouches({ type: 'thread.message_posted', fields: { recordType: 'Quote', recordId: 'q-new' } }, held)).toBe(true)
+    // Not held and not customer-side: never; another event: never.
+    for (const recordType of ['WorkOrder', 'QualityHold', 'PurchaseOrder']) expect(liveTouches({ type: 'thread.message_posted', fields: { recordType, recordId: 'x' } }, held), recordType).toBe(false)
+    expect(liveTouches({ type: 'sales_order.changed', fields: { recordType: 'SalesOrder', recordId: 'so-1' } }, held)).toBe(false)
+    // The hint names no party: the rule never reads a party id (R-1).
+    const model = readFileSync(new URL('./model.ts', import.meta.url), 'utf8')
+    const rule = model.slice(model.indexOf('export function liveTouches'), model.indexOf('// ---- F-OP-208'))
+    expect(rule).not.toContain('partyId')
+  })
+
+  it('showing the list again: the same customer, View and Kind read fresh behind "N new"; the first visit or another list starts again', () => {
+    const shown = afterFirst(EMPTY_FEED, answer([entry('m1', 10)]))
+    const key = listKeyOf('p-a', 'all', 'every')
+    expect(onShowOf(shown, key, key)).toBe('fresh')
+    expect(onShowOf(shown, null, key)).toBe('first')
+    expect(onShowOf(shown, key, listKeyOf('p-a', 'notes', 'every'))).toBe('first')
+    expect(onShowOf(shown, key, listKeyOf('p-b', 'all', 'every'))).toBe('first')
+    expect(onShowOf({ status: 'failed' }, key, key)).toBe('first')
+    expect(onShowOf({ status: 'loading' }, key, key)).toBe('first')
+    expect(new Set([listKeyOf('p-a', 'all', 'every'), listKeyOf('p-a', 'all', 'QUOTES'), listKeyOf('p-a', 'shared', 'every'), listKeyOf(null, 'all', 'every')]).size).toBe(4)
+  })
+
+  it('live hints fold into one read per burst (800 ms); a cancelled wait reads nothing', () => {
+    vi.useFakeTimers()
+    try {
+      let reads = 0
+      const folder = freshFolder(() => (reads += 1), FRESH_WAIT_MS)
+      folder.hint()
+      folder.hint()
+      vi.advanceTimersByTime(FRESH_WAIT_MS - 1)
+      folder.hint()
+      expect(reads).toBe(0)
+      vi.advanceTimersByTime(1)
+      expect(reads).toBe(1)
+      folder.hint()
+      folder.cancel()
+      vi.advanceTimersByTime(FRESH_WAIT_MS * 2)
+      expect(reads).toBe(1)
+      expect(FRESH_WAIT_MS).toBe(800)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('the container stays mounted and keeps lines, View, Kind and scroll; the view draws the list where it was', () => {
+    const hook = readFileSync(new URL('./use-all-of-customer.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("if (onShowOf(stateRef.current, heldKey.current, listKey) === 'fresh') loadFresh()")
+    expect(hook).toContain('}, [enabled, listKey])')
+    expect(hook).toContain('liveTouches(change, heldRecordsOf(stateRef.current)) && folder.hint()')
+    expect(hook).toContain('scrollTop: scrollTop.current')
+    const view = readFileSync(new URL('./view/AllOfCustomerFeed.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("const scroller = root.current?.closest<HTMLElement>('.fw-rt-body')")
+    expect(view).toContain('if (scrolledTo > 0) scroller.scrollTop = scrolledTo')
+    // The hosts call the container on every render (it reads only while All shows), so leaving All never drops it.
+    const order = readFileSync(new URL('../../../sales/orders/record/dock/OrderDock.tsx', import.meta.url), 'utf8')
+    expect(order).toMatch(/const feed = useAllOfCustomer\(api, \{ partyId: order\.partyId, customerName: customer, enabled: scope\.kind === 'all'/)
+    expect(feedModel(EMPTY_FEED, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true }).scrollTop).toBe(0)
+    expect(feedModel(EMPTY_FEED, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true, scrollTop: 420 }).scrollTop).toBe(420)
+  })
+})
+// ---- end F-OP-208

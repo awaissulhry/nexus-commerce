@@ -40,6 +40,22 @@
     "text": "{who} {verb}",
     "status": "{from} → {to}"
   },
+  "steps": {
+    "text_one": "{count} passaggio di {who}",
+    "text_other": "{count} passaggi di {who}",
+    "many": {
+      "addedTask_one": "{who} ha aggiunto {count} attività",
+      "addedTask_other": "{who} ha aggiunto {count} attività",
+      "completedTask_one": "{who} ha completato {count} attività",
+      "completedTask_other": "{who} ha completato {count} attività",
+      "reopenedTask_one": "{who} ha riaperto {count} attività",
+      "reopenedTask_other": "{who} ha riaperto {count} attività",
+      "assignedTask_one": "{who} ha assegnato {count} attività",
+      "assignedTask_other": "{who} ha assegnato {count} attività",
+      "uploaded_one": "{who} ha aggiunto {count} file",
+      "uploaded_other": "{who} ha aggiunto {count} file"
+    }
+  },
   "changes": {
     "text_one": "{count} modifica di {who}",
     "text_other": "{count} modifiche di {who}",
@@ -67,6 +83,10 @@
     "statusChanged": "ha cambiato lo stato",
     "sent": "lo ha inviato",
     "uploaded": "ha aggiunto un file",
+    "addedTask": "ha aggiunto un'attività",
+    "completedTask": "ha completato un'attività",
+    "reopenedTask": "ha riaperto un'attività",
+    "assignedTask": "ha assegnato un'attività",
     "shared": "ha cambiato chi vede un file",
     "retentionChanged": "ha cambiato quanto si conserva un file",
     "assigned": "lo ha assegnato",

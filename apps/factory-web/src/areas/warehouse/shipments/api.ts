@@ -45,6 +45,21 @@ const status = z.enum(SHIPMENT_STATUSES)
 const transportBy = z.enum(TRANSPORT_BY)
 const enc = encodeURIComponent
 
+// ---- F-OP-132 (order page N6, R-5): a shipment's orders ------------------------------------------------------------------
+
+/**
+ * F-OP-132 (order page N6, lines-derived; B-OP-040/041): an order a shipment carries. A shipment's orders are the orders of its
+ * lines, the first (salesOrderId, the one it was made for) first; always of the shipment's own customer (the line's FK carries
+ * the party). One while several orders in one shipment are held off (MULTI_ORDER_OFF, until B-OP-047). Absent from an older
+ * answer: the first order alone (shipmentOrders / rowOrders say it).
+ */
+export const shipmentOrderSchema = z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable() })
+export type ShipmentOrder = z.infer<typeof shipmentOrderSchema>
+
+/** F-OP-132: may an order join a shipment (ship together): allowed, or why not — the API's words (the real reason first). */
+export const joinVerdictSchema = z.object({ allowed: z.boolean(), why: z.string().nullable() })
+export type JoinVerdict = z.infer<typeof joinVerdictSchema>
+
 // ---- the list -----------------------------------------------------------------------------------------------------------
 
 export const shipmentRowSchema = z.object({
@@ -58,6 +73,8 @@ export const shipmentRowSchema = z.object({
   partyName: z.string(),
   salesOrderId: z.string(),
   salesOrderNumber: z.string(),
+  /** F-OP-132 (N6): every order it carries, the first (salesOrderId) first. */
+  salesOrders: z.array(shipmentOrderSchema).optional(),
   transportBy,
   carrierCode: z.string().nullable(),
   carrierName: z.string().nullable(),
@@ -167,12 +184,23 @@ export const readyOrderSchema = z.object({
   companyId: z.string(),
   partyId: z.string(),
   party: z.object({ code: z.string(), legalName: z.string() }),
+  /**
+   * F-OP-132 (B-OP-070 "ship together"): asked with `together`, may this order ship with the asked one (null: the asked order
+   * itself, or not asked). Only ever the same customer's orders.
+   */
+  shipsWith: joinVerdictSchema.nullable().optional(),
   cells: z.array(readyCellSchema),
 })
 export type ReadyOrder = z.infer<typeof readyOrderSchema>
 
-export function readyToShip(api: ApiClient, query: { salesOrderId?: string | null } = {}, signal?: AbortSignal): Promise<ReadyOrder[]> {
-  return api.get('/shipping/ready', { query: { salesOrderId: query.salesOrderId ?? undefined }, schema: z.object({ orders: z.array(readyOrderSchema) }), signal }).then((answer) => answer.orders)
+/**
+ * What is released and not on a shipment yet. F-OP-132 (B-OP-070): with `together` and an order, beside it the SAME customer's
+ * other open orders with released garments, each with `shipsWith` (never another customer's order).
+ */
+export function readyToShip(api: ApiClient, query: { salesOrderId?: string | null; together?: boolean } = {}, signal?: AbortSignal): Promise<ReadyOrder[]> {
+  return api
+    .get('/shipping/ready', { query: { salesOrderId: query.salesOrderId ?? undefined, together: query.together && query.salesOrderId ? '1' : undefined }, schema: z.object({ orders: z.array(readyOrderSchema) }), signal })
+    .then((answer) => answer.orders)
 }
 
 // ---- the record -----------------------------------------------------------------------------------------------------------
@@ -237,6 +265,8 @@ export const shipmentSchema = z.object({
   party: z.object({ code: z.string(), legalName: z.string() }),
   salesOrderId: z.string(),
   salesOrder: z.object({ number: z.string(), customerRef: z.string().nullable(), status: z.string() }),
+  /** F-OP-132 (N6): every order it carries (its lines' orders), the first (salesOrder) first. */
+  salesOrders: z.array(shipmentOrderSchema.extend({ status: z.string() })).optional(),
   shipToAddressId: z.string().nullable(),
   shipTo: z.record(z.string(), z.unknown()),
   transportBy,
@@ -271,6 +301,8 @@ export function getShipment(api: ApiClient, id: string, signal?: AbortSignal): P
 
 export interface NewShipmentBody {
   salesOrderId: string
+  /** F-OP-132 (B-OP-040): every order of the new shipment, the first = salesOrderId (refused with MULTI_ORDER_OFF's words until the switch). */
+  salesOrderIds?: string[]
   transportBy?: TransportBy
   carrierCode?: string | null
   serviceCode?: string | null
@@ -280,6 +312,35 @@ export interface NewShipmentBody {
 
 export function createShipment(api: ApiClient, body: NewShipmentBody, idempotencyKey: string): Promise<Shipment> {
   return api.post('/shipping/shipments', { body, schema: oneShipment, idempotencyKey }).then((answer) => answer.shipment)
+}
+
+// ---- F-OP-132 (order page N6, B-OP-040): several orders of one customer on one DRAFT shipment ----------------------------
+
+export const orderCandidatesSchema = z.object({
+  shipmentId: z.string(),
+  number: z.string(),
+  /** The shipment's customer's other open orders (never another customer's), each with its verdict. */
+  orders: z.array(z.object({ salesOrderId: z.string(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), joinable: joinVerdictSchema })),
+})
+export type OrderCandidates = z.infer<typeof orderCandidatesSchema>
+export type OrderCandidate = OrderCandidates['orders'][number]
+
+/** The orders that may join this shipment (shipping.view): its own customer's other open orders, each `joinable {allowed, why}`. */
+export function orderCandidates(api: ApiClient, shipmentId: string, signal?: AbortSignal): Promise<OrderCandidates> {
+  return api.get(`/shipping/shipments/${enc(shipmentId)}/orders/candidates`, { schema: orderCandidatesSchema, signal })
+}
+
+export const joinableShipmentsSchema = z.object({
+  salesOrderId: z.string(),
+  number: z.string(),
+  /** The order's customer's DRAFT shipments it is not on yet, each with its verdict. */
+  shipments: z.array(z.object({ shipmentId: z.string(), number: z.string(), status, siteId: z.string(), joinable: joinVerdictSchema })),
+})
+export type JoinableShipments = z.infer<typeof joinableShipmentsSchema>
+
+/** The DRAFT shipments an order may join (shipping.view): its customer's, each `joinable {allowed, why}`; another customer's order as an unknown one. */
+export function joinableShipments(api: ApiClient, salesOrderId: string, signal?: AbortSignal): Promise<JoinableShipments> {
+  return api.get('/shipping/shipments/joinable', { query: { salesOrderId }, schema: joinableShipmentsSchema, signal })
 }
 
 export interface DeliveryBody {

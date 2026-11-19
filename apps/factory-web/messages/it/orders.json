@@ -552,9 +552,38 @@
       "number": "Spedizione",
       "status": "Stato",
       "shipped": "Partita",
-      "delivered": "Consegnata"
+      "delivered": "Consegnata",
+      "carrier": "Vettore",
+      "tracking": "Tracciamento"
     },
-    "moneyDoor": "Fatture e pagamenti sono in Importi ›"
+    "moneyDoor": "Fatture e pagamenti sono in Importi ›",
+    "carrier": {
+      "ownVan": "Nostro furgone",
+      "collects": "Ritira il cliente",
+      "manual": "{carrier}, prenotato a mano",
+      "named": "{name}"
+    },
+    "noLive": "Nessun tracciamento in tempo reale",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "trackingOpen": "Numero di tracciamento…",
+    "showCancelled": "Mostra {count} annullate",
+    "hideCancelled": "Nascondi le annullate",
+    "tracking": {
+      "held": {
+        "LABELLED": "È stata acquistata un'etichetta: prima annulla le etichette.",
+        "NOT_A_CARRIER": "Solo una spedizione con vettore accetta un numero di tracciamento inserito.",
+        "NOT_A_CARRIER_LEFT": "Solo una spedizione con vettore accetta un numero di tracciamento inserito. La merce è partita.",
+        "CANCELLED": "La spedizione è annullata.",
+        "CARRIER_TRACKED": "La segue il tracciamento del vettore: niente da inserire.",
+        "NO_RIGHT": "Il tracciamento lo aggiunge una persona del magazzino.",
+        "other": "Non possibile ora."
+      },
+      "door": {
+        "shipment": "Apri la spedizione ›",
+        "arrange": "Cambia come viaggia…"
+      }
+    }
   },
   "shipStatus": {
     "DRAFT": "Bozza",
