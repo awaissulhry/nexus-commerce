@@ -12,7 +12,10 @@
  *      (relay + handlers) and the two polls in the same process (the FAKE SDI answers only the process that sent the
  *      file), a loopback control endpoint on :8277 for the test's harness. FACTORY_ENV=local, a fresh secrets master
  *      key, queue prefix w106 (its Redis keys are removed before and after).
- *   3. Starts the web (`next dev` on :3276, FACTORY_API_URL = the stack's API) and compiles the flow's pages once.
+ *   3. Starts the web (`next dev` on :3276, FACTORY_API_URL = the stack's API) and compiles the flow's pages once. With
+ *      --next-start (the GitHub end check) the web is built once (`next build`, before the stack starts) and served by
+ *      `next start`: on a 4-vCPU runner `next dev` compiled each page on its first visit, ran the stages 3–5 times slower
+ *      than on the Mac and starved the runner until GitHub lost it (run 44428984181).
  *   4. Runs the spec apps/factory-web/tests/golden-flow.spec.ts (stages tests/golden-flow/NN-*.ts in order; a stage
  *      missing or blocked is reported by name) and the end checks it ends with.
  *   5. Runs the test that proves production refuses to start with a FAKE adapter (apps/factory-api:
@@ -21,10 +24,14 @@
  *   6. Stops the web and the stack by their process ids, drops every factory_test_<run>_… database left behind, prints
  *      the stages passed / blocked / missing / failed.
  *
- * Run: node scripts/factory/browser-golden-flow.mjs [--shots <dir>] [--headed] [--keep] [--stages 01-customer,02-style]
+ * Run: node scripts/factory/browser-golden-flow.mjs [--shots <dir>] [--headed] [--keep] [--next-start] [--stages 01-customer,02-style]
  *   --shots   where the screenshots, traces and logs go (default: a new folder in the system's temporary directory);
  *             never inside the repository.
  *   --keep    leave the stack and the web running after the spec (their process ids in <shots>/attach.json).
+ *   --next-start  build the web (`next build` into apps/factory-web/.next) and serve it with `next start` instead of
+ *             `next dev`. The build is the browser flow's own (FACTORY_WEB_BROWSER_FLOW_BUILD=1, next.config.ts): it keeps
+ *             the test seam `next dev` has (the floor queue on window) and leaves type checking to the typecheck job, as
+ *             `next dev` does. Off by default (the Mac end check runs `next dev`).
  *   --stages  run only these stages (comma-separated names); the others are skipped.
  *   --attach  with --shots of a kept run: run the spec again on that stack and web, the flow's state read back from
  *             <shots>/state.json (to work on one stage without walking the ones before it); add --stop to stop them.
@@ -74,6 +81,7 @@ if (!relative(ROOT, out).startsWith('..')) {
 }
 mkdirSync(out, { recursive: true })
 const attach = flag('--attach')
+const nextStart = flag('--next-start')
 const kept = attach ? JSON.parse(readFileSync(join(out, 'attach.json'), 'utf8')) : null
 const run = kept?.run ?? randomBytes(4).toString('hex')
 const started = Date.now()
@@ -137,13 +145,31 @@ async function waitFor(what, ms, check) {
   }
 }
 
-/** Starts the stack, then the web on its API, and compiles the flow's pages once. */
+/**
+ * --next-start: the web built once, before the stack starts (nothing else loads the machine meanwhile). The API's address
+ * is only checked at build time (next.config.ts); the server reads FACTORY_API_URL when it runs.
+ */
+function buildWeb() {
+  const begun = Date.now()
+  const log = join(out, 'web-build.log')
+  const fd = openSync(log, 'a')
+  const env = { ...process.env, FACTORY_API_URL: `http://127.0.0.1:${PORTS.api}`, FACTORY_WEB_BROWSER_FLOW_BUILD: '1', NEXT_TELEMETRY_DISABLED: '1' }
+  const build = spawnSync(join(BIN, 'next'), ['build'], { cwd: WEB, env, stdio: ['ignore', fd, fd], timeout: 20 * 60_000 })
+  if (build.status !== 0) {
+    console.error(readFileSync(log, 'utf8').split('\n').slice(-40).join('\n'))
+    throw new Error(`next build failed (${build.error?.message ?? `exit ${build.status ?? build.signal}`}); see ${log}`)
+  }
+  say(`web built (next build) in ${Math.round((Date.now() - begun) / 1000)} s`)
+}
+
+/** Starts the stack, then the web on its API (`next dev`, or with --next-start the build's `next start`), and opens the flow's pages once. */
 async function startEverything() {
   const version = (await root.query('SHOW server_version')).rows[0].server_version
   if (!/^1[7-9]\.|^[2-9]\d\./.test(version)) throw new Error(`the server runs PostgreSQL ${version}; the factory needs 17`)
   for (const [name, port] of Object.entries(PORTS)) if (!(await portFree(port))) throw new Error(`port ${port} (${name}) is in use`)
   say(`run ${run} on PostgreSQL ${version} at ${server.host}; files in ${out}`)
   await cleanRedis()
+  if (nextStart) buildWeb()
   const stackEnv = {
     ...process.env,
     FACTORY_ENV: 'local',
@@ -167,14 +193,14 @@ async function startEverything() {
   say(`stack ready: API ${ready.api}, database ${ready.database} (pid ${stack.pid})`)
 
   const webEnv = { ...process.env, FACTORY_API_URL: ready.api, NEXT_TELEMETRY_DISABLED: '1' }
-  web = start('web', join(BIN, 'next'), ['dev', '-p', String(PORTS.web)], { cwd: WEB, env: webEnv })
+  web = start('web', join(BIN, 'next'), [nextStart ? 'start' : 'dev', '-p', String(PORTS.web)], { cwd: WEB, env: webEnv })
   await waitFor('the web', 180_000, async () => {
     if (web.exitCode !== null) throw new Error(`the web stopped (exit ${web.exitCode}); see ${join(out, 'web.log')}`)
     const answer = await fetch(`http://localhost:${PORTS.web}/sign-in`, { redirect: 'manual' })
     return answer.status < 500
   })
   for (const path of WARM) await fetch(`http://localhost:${PORTS.web}${path}`, { redirect: 'manual' }).catch(() => {})
-  say(`web ready on http://localhost:${PORTS.web} (pid ${web.pid}); pages compiled`)
+  say(`web ready on http://localhost:${PORTS.web} (pid ${web.pid}, next ${nextStart ? 'start' : 'dev'}); pages ${nextStart ? 'opened' : 'compiled'}`)
 }
 
 let stack

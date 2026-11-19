@@ -20,7 +20,10 @@
 #              migrated template per server (factory_tpl_<hash>) and copies it for every file, as on the Mac. The
 #              golden-flow files are left out here: they run as the golden jobs.
 #   golden     one job per golden suite (scripts/factory/golden-flow.mjs <suite>)
-#   browser    scripts/factory/browser-golden-flow.mjs: the stack, `next dev`, Playwright (chromium), the boot test
+#   browser    scripts/factory/browser-golden-flow.mjs --next-start: the web built once (`next build`) and served by
+#              `next start` (`next dev` compiled every page on its first visit: on 4 vCPU the stages ran 3–5 times
+#              slower than on the Mac and starved the runner, run 44428984181), the stack, Playwright (chromium), the
+#              boot test. On ubuntu-24.04: Playwright 1.60 has no system dependencies for 26.04 (ubuntu-latest)
 #   summary    one table of every part (scripts/factory/ci-report.mjs); it FAILS when a part failed, never reported,
 #              or ran fewer tests than its floor in .github/factory-test-floor.json ("every suite skipped" cannot pass)
 #
@@ -378,11 +381,14 @@ jobs:
           retention-days: 7
 
   browser:
-    name: Browser golden flow (Playwright on next dev)
+    name: Browser golden flow (Playwright on next start)
     needs: setup
     if: inputs.parts == 'all' || inputs.parts == 'browser'
-    runs-on: ubuntu-latest
-    timeout-minutes: 75
+    # Pinned: `npx playwright install-deps` has no package list for 26.04, ubuntu-latest's image.
+    runs-on: ubuntu-24.04
+    # About 25–30 min expected (setup + Playwright deps 2, next build 2–3, stack 3, 27 stages 14–21, boot test 1–2; the
+    # Mac with --next-start: 774 s): 45 is headroom, not a target.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -408,12 +414,15 @@ jobs:
         if: steps.browsers.outputs.cache-hit != 'true'
       - run: npx playwright install-deps chromium
         if: steps.browsers.outputs.cache-hit == 'true'
-      - name: node scripts/factory/browser-golden-flow.mjs
+      - name: node scripts/factory/browser-golden-flow.mjs --next-start
         # Its own ports (8276, 8277, 3276), queue prefix and the local stack's Redis: the defaults, nothing else runs here.
+        # One memory line a minute in this step's log (not in browser.log): if the runner is lost again, the log shows why.
         run: |
+          ( while sleep 60; do echo "[runner] $(free -m | awk '/^Mem:/ {print "memory used " $3 " MB, available " $7 " MB"}'), swap used $(free -m | awk '/^Swap:/ {print $3}') MB, load $(cut -d' ' -f1 /proc/loadavg)"; done ) &
+          sampler=$!
           set +e
-          node scripts/factory/browser-golden-flow.mjs --shots "$RUNNER_TEMP/bgf" 2>&1 | tee "$RUNNER_TEMP/browser.log"
-          rc=${PIPESTATUS[0]}; echo "$rc" > "$RUNNER_TEMP/exit"; exit "$rc"
+          node scripts/factory/browser-golden-flow.mjs --next-start --shots "$RUNNER_TEMP/bgf" 2>&1 | tee "$RUNNER_TEMP/browser.log"
+          rc=${PIPESTATUS[0]}; kill "$sampler"; echo "$rc" > "$RUNNER_TEMP/exit"; exit "$rc"
       - name: Record
         if: always()
         run: node scripts/factory/ci-report.mjs record --part browser --kind browser --input "$RUNNER_TEMP/browser.log" --exit-file "$RUNNER_TEMP/exit" --out "$RUNNER_TEMP/results"
