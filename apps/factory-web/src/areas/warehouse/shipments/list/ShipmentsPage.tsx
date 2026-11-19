@@ -7,7 +7,7 @@ import { useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { isApiError, issuePath } from '../../../../lib/api/errors'
-import { createShipment, listShipments, listSiteSettings, printDdtOf, readyToShip, type ShipmentRow, type SiteSettings } from '../api'
+import { listShipments, listSiteSettings, printDdtOf, type ShipmentRow, type SiteSettings } from '../api'
 import { printDdtsPlan, type PrintOutcome } from '../daily-model'
 import { downloadText, useCoalesced, useLive } from '../hooks'
 import {
@@ -18,17 +18,17 @@ import {
   cutOffsBySite,
   listAddress,
   liveTouches,
-  newShipmentLines,
   readProblem,
   rowsFromAddress,
   rowsQuery,
   shipmentsCsv,
   tileCounts,
-  writeProblem,
   zonedToday,
   type RowView,
 } from '../model'
-import type { NewShipmentModel, PrintDdtsModel, ShipmentsListModel } from './list-model'
+import type { PrintDdtsModel, ShipmentsListModel } from './list-model'
+// F-OP-121: New shipment's one hook.
+import { useNewShipment } from '../new/use-new-shipment'
 import { ShipmentsListView } from './view/ShipmentsListView'
 // B-W2b-410
 import { gridOf, queueCsv } from '../queue/model'
@@ -58,7 +58,6 @@ export function ShipmentsPage() {
   )
 }
 
-const CLOSED_CREATE: NewShipmentModel = { step: 1, orders: null, problem: null, salesOrderId: null, quantities: {}, transportBy: 'CARRIER', carrierCode: '', serviceCode: '', busy: false, refused: null }
 
 function ShipmentsContainer() {
   const t = useT('shipments')
@@ -84,11 +83,9 @@ function ShipmentsContainer() {
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<ShipmentsListModel['notice']>(null)
-  const [create, setCreate] = useState<NewShipmentModel | null>(null)
   const [printDdts, setPrintDdts] = useState<PrintDdtsModel | null>(null)
   const printKeys = useRef<Record<string, string>>({})
   const readId = useRef(0)
-  const createKey = useRef<string | null>(null)
 
   const go = useCallback(
     (next: { rows?: RowView; q?: string; carrier?: string | null; site?: string | null }) => router.replace(listAddress(pathname, { rows: next.rows ?? rows, q: next.q ?? q, carrier: next.carrier === undefined ? carrier : next.carrier, site: next.site === undefined ? site : next.site })),
@@ -174,68 +171,32 @@ function ShipmentsContainer() {
 
   // ---- New shipment ---------------------------------------------------------------------------------------------------
 
-  const openCreate = useCallback(
-    (salesOrderId: string | null) => {
-      createKey.current = newIdempotencyKey()
-      const defaults = sites?.[0]?.settings ?? null
-      setCreate({ ...CLOSED_CREATE, salesOrderId, step: 1, transportBy: defaults?.defaultTransportBy ?? 'CARRIER', carrierCode: defaults?.defaultCarrierCode ?? '', serviceCode: defaults?.defaultServiceCode ?? '' })
-      readyToShip(api)
-        .then((orders) => {
-          setCreate((current) => {
-            if (!current) return current
-            const chosen = salesOrderId && orders.some((order) => order.salesOrderId === salesOrderId) ? salesOrderId : orders.length === 1 ? orders[0]!.salesOrderId : current.salesOrderId
-            return { ...current, orders, salesOrderId: chosen ?? null, step: chosen && salesOrderId ? 2 : 1 }
-          })
-        })
-        .catch((error: unknown) => setCreate((current) => (current ? { ...current, problem: readProblem(error) } : current)))
-    },
-    [api, sites],
-  )
-
+  // ---- F-OP-121: New shipment is ONE hook (../new/use-new-shipment.ts), shared with the order page's Create shipment… ----
   // `?new=1` (the band's New shipment, a palette command) and `&order=<id>` from the order studio's Create shipment.
   const wantsNew = params?.get('new') === '1'
   const wantedOrder = params?.get('order') ?? null
   const opened = useRef(false)
+  const newShipment = useNewShipment({
+    api,
+    defaults: () => {
+      const defaults = sites?.[0]?.settings ?? null
+      return { transportBy: defaults?.defaultTransportBy ?? 'CARRIER', carrierCode: defaults?.defaultCarrierCode ?? '', serviceCode: defaults?.defaultServiceCode ?? '' }
+    },
+    onCreated: (shipment) => router.push(`${prefix}/warehouse/shipments/${shipment.id}`),
+    onClosed: () => {
+      if (!wantsNew) return
+      opened.current = false
+      router.replace(listAddress(pathname, { rows, q, carrier }))
+    },
+  })
+  const create = newShipment.model
+  const openCreate = newShipment.open
   useEffect(() => {
     if (!wantsNew || opened.current || !can.manage) return
     opened.current = true
     openCreate(wantedOrder)
   }, [wantsNew, wantedOrder, can.manage, openCreate])
-
-  const closeCreate = useCallback(() => {
-    setCreate(null)
-    if (wantsNew) {
-      opened.current = false
-      router.replace(listAddress(pathname, { rows, q, carrier }))
-    }
-  }, [wantsNew, router, pathname, rows, q, carrier])
-
-  const submitCreate = useCallback(async () => {
-    if (!create || !create.salesOrderId || create.busy) return
-    const order = create.orders?.find((entry) => entry.salesOrderId === create.salesOrderId)
-    const lines = order ? newShipmentLines(order.cells, create.quantities) : []
-    if (lines.length === 0) return
-    setCreate({ ...create, busy: true, refused: null })
-    try {
-      const shipment = await createShipment(
-        api,
-        {
-          salesOrderId: create.salesOrderId,
-          transportBy: create.transportBy,
-          // Blank: the site's default carrier and service (the API fills them); none at all without a carrier.
-          ...(create.transportBy === 'CARRIER'
-            ? { ...(create.carrierCode.trim() ? { carrierCode: create.carrierCode.trim() } : {}), ...(create.serviceCode.trim() ? { serviceCode: create.serviceCode.trim() } : {}) }
-            : { carrierCode: null, serviceCode: null }),
-          lines,
-        },
-        createKey.current ?? newIdempotencyKey(),
-      )
-      router.push(`${prefix}/warehouse/shipments/${shipment.id}`)
-    } catch (error) {
-      const problem = writeProblem(error)
-      setCreate((current) => (current ? { ...current, busy: false, refused: { words: { key: problem.key }, detail: problem.detail ?? null } } : current))
-    }
-  }, [api, create, prefix, router])
+  // ---- end F-OP-121
 
   // ---- B-W2b-410: the queue in depth ----------------------------------------------------------------------------------------
 
@@ -349,17 +310,7 @@ function ShipmentsContainer() {
         onExport: exportRows,
         onDismissNotice: () => setNotice(null),
         onNew: () => openCreate(null),
-        onNewClose: closeCreate,
-        onNewOrder: (salesOrderId) => setCreate((current) => (current ? { ...current, salesOrderId, quantities: {}, refused: null } : current)),
-        onNewStep: (step) => setCreate((current) => (current ? { ...current, step, refused: null } : current)),
-        onNewQuantity: (cellId, quantity) => setCreate((current) => (current ? { ...current, quantities: { ...current.quantities, [cellId]: quantity } } : current)),
-        onNewAll: () =>
-          setCreate((current) => {
-            const order = current?.orders?.find((entry) => entry.salesOrderId === current.salesOrderId)
-            return current && order ? { ...current, quantities: Object.fromEntries(order.cells.map((cell) => [cell.workOrderSizeId, cell.shippable])) } : current
-          }),
-        onNewDelivery: (next) => setCreate((current) => (current ? { ...current, ...next } : current)),
-        onNewCreate: () => void submitCreate(),
+        ...newShipment.actions, // F-OP-121: onNewClose … onNewCreate, onNewOther
         onPrintDdts: (ids) => {
           printKeys.current = {}
           setPrintDdts({ ids, busy: false, outcomes: null })

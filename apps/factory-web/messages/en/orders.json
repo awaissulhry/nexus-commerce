@@ -246,7 +246,8 @@
   "step": {
     "makeWorkOrders": "Make work orders",
     "changePromise": "Change promise date…",
-    "close": "Close order…"
+    "close": "Close order…",
+    "createShipment": "Create shipment…"
   },
   "action": {
     "promise": "Change promise date…",
@@ -583,7 +584,18 @@
         "shipment": "Open the shipment ›",
         "arrange": "Change how it travels…"
       }
-    }
+    },
+    "created": "{number} made (draft)",
+    "createdDoor": "Pack and ship it in Warehouse ›",
+    "alsoCarries": "Also carries {number}",
+    "join": {
+      "title": "Draft shipments this order can join",
+      "add": "Add this order's garments…"
+    },
+    "joined_one": "{count} garment added to {number} (draft)",
+    "joined_other": "{count} garments added to {number} (draft)",
+    "track": "Track ›",
+    "trackLink": "Track shipment {number} on the carrier’s site"
   },
   "shipStatus": {
     "DRAFT": "Draft",
@@ -1885,5 +1897,74 @@
     "makeWorkOrders": "Make work orders…",
     "changeShipTo": "Change ship-to…",
     "whoAnswers": "Who answers the customer…"
+  },
+  "elsewhere": {
+    "title": "Record a shipment made elsewhere…",
+    "subtitle": "{order} · {customer}",
+    "lines": "Garments that left",
+    "cap": "Up to {count}",
+    "releasedOn": "released on {date}",
+    "minus": "One less of {cell}",
+    "plus": "One more of {cell}",
+    "serials": "Serials, one per garment",
+    "serialsHint": "Type or scan them, separated by spaces or commas.",
+    "waitQuality_one": "Only released garments: {count} piece waits for quality",
+    "waitQuality_other": "Only released garments: {count} pieces wait for quality",
+    "noneReleased": "Nothing of this order is released and on no shipment.",
+    "reading": "Reading what quality released…",
+    "readFailed": "What quality released could not be read.",
+    "retry": "Try again",
+    "paper": "The paper DDT",
+    "ddtNumber": "External DDT number",
+    "ddtDate": "DDT date",
+    "invoiceInstead": "An immediate invoice travelled instead of a DDT",
+    "noNexusDdt": "No Nexus DDT number is issued: the paper DDT that went with the goods is the document",
+    "notCitable": "The e-invoice cites a DDT number of at most 20 plain characters: this shipment is invoiced by hand.",
+    "leftOn": "Left on",
+    "beforeRelease": "Not before the garments were released ({date})",
+    "future": "Not in the future",
+    "tooOld": "At most {days} days back",
+    "ddtRequired": "Type the number and date of the paper DDT, or say that an immediate invoice travelled instead",
+    "ddtNumberRule": "1 to {max} characters on one line, as printed",
+    "ddtAfter": "The DDT is dated on or before the day the goods left",
+    "ddtUsed": "That DDT number and date are already recorded.",
+    "notReleased": "Only released garments ship: not more than this size can still ship",
+    "serialsMissing": "Name the serial of each garment ({count} of {total})",
+    "noLines": "Choose at least one garment",
+    "how": "How it travelled",
+    "by": {
+      "CARRIER": "A carrier booked by hand",
+      "SENDER": "Our own van",
+      "RECIPIENT": "The customer collected"
+    },
+    "trackingNumber": "Tracking number (optional)",
+    "tellOn": "{customer} gets the shipping notice: the site tells the customer when goods leave.",
+    "tellOff": "No shipping notice goes to {customer}: the site's notice is off.",
+    "heldCustomer": "{customer} is on hold",
+    "creditHeld": "{customer}'s credit is held.",
+    "reason": "Why the goods were let go anyway",
+    "reasonHint": "Recorded with the shipment and written on the order's thread.",
+    "note": "Internal note (optional)",
+    "cancel": "Cancel",
+    "record_one": "Record shipment ({count} garment)",
+    "record_other": "Record shipment ({count} garments)",
+    "done": "{number} is recorded as made elsewhere and shipped.",
+    "doneClose": "Done",
+    "open": "Open {number} ›",
+    "warnings": "Recorded without every PPE document on file (a line is on the order's thread):",
+    "chip": "Made elsewhere · DDT {ddt}",
+    "chipInvoice": "Made elsewhere · immediate invoice",
+    "held": {
+      "state": "Only an open order records a shipment made elsewhere",
+      "noRight": "A warehouse person records it: it needs the rights to manage shipments and issue DDTs",
+      "reading": "Checking what the shipment would say…",
+      "problems": "Fix what the fields say first",
+      "customer": "{customer} is on hold: a person who may release holds records it, with the reason",
+      "reason": "Say why the goods were let go anyway"
+    },
+    "refusal": {
+      "state": "The shipment could not be recorded",
+      "failed": "The shipment could not be recorded: try again"
+    }
   }
 }

@@ -12,6 +12,7 @@ import {
   moveOfStatus,
   ownTransportRefusalPath,
   trackingNumberProblems,
+  trackingUrlProblems, // B-OP-034
   trackingRefusal,
   type ArrangementInput,
   type ManualEventStatus,
@@ -24,6 +25,8 @@ import { command, type CommandCaller, type CommandTools, type CommandTx } from '
 import { liveDdtOf } from '../ddt/store'
 import { officeShipment } from '../shipments/shipments'
 import { readShipment, type ShipmentHeader } from '../store'
+// B-OP-034: the orders a shipment carries (its lines' orders).
+import { ordersOfShipment } from '../shipments/orders-of'
 
 /**
  * A manual carrier or our own van (B-W2b-390; LOG-122; rules factory-domain shipping/own-transport). Office only. The DDT
@@ -50,8 +53,8 @@ const refuseIf = (refusal: { code: OwnTransportRefusalCode; message: string } | 
 }
 
 /** What the rules read of a shipment (a scoped client or the command's transaction). */
-async function factsOf(db: CommandTx, shipment: ShipmentHeader): Promise<OwnTransportFacts & { readonly ddt: { id: string; number: string } | null }> {
-  const row = await db.shipment.findUnique({ where: { id: shipment.id }, select: { manualTrackingNumber: true } })
+async function factsOf(db: CommandTx, shipment: ShipmentHeader): Promise<OwnTransportFacts & { readonly ddt: { id: string; number: string } | null; /* B-OP-034 */ readonly manualTrackingUrl: string | null }> {
+  const row = await db.shipment.findUnique({ where: { id: shipment.id }, select: { manualTrackingNumber: true, /* B-OP-034 (office only, never the floor) */ manualTrackingUrl: true } })
   const parcels = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { trackingNumber: true, carrierParcelId: true }, orderBy: { seq: 'asc' } })
   const ddt = await liveDdtOf(db, shipment.id)
   return {
@@ -61,6 +64,7 @@ async function factsOf(db: CommandTx, shipment: ShipmentHeader): Promise<OwnTran
     parcels: parcels.map((parcel) => ({ trackingNumber: parcel.trackingNumber, providerId: parcel.carrierParcelId })),
     liveDdts: ddt ? 1 : 0,
     ddt,
+    manualTrackingUrl: row?.manualTrackingUrl ?? null, // B-OP-034
   }
 }
 
@@ -86,6 +90,8 @@ async function transportView(db: CommandTx, shipmentId: string) {
       carrierName: shipment.carrierName,
       serviceCode: shipment.serviceCode,
       manualTrackingNumber: facts.manualTrackingNumber,
+      /** B-OP-034: the tracking link typed beside it (https only); null: none. */
+      manualTrackingUrl: facts.manualTrackingUrl,
       ddtRequired: shipment.ddtRequired,
       shippedAt: shipment.shippedAt ? toUtcIso(shipment.shippedAt) : null,
       deliveredAt: shipment.deliveredAt ? toUtcIso(shipment.deliveredAt) : null,
@@ -120,14 +126,17 @@ const changed = (tools: CommandTools, shipment: ShipmentHeader) =>
   tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: shipment.status, change: 'details', partyId: shipment.partyId /* B-SA-004 */ } })
 
 // ── B-OP-030 (order page plan N5): a typed tracking number tells the office (the order's thread: ./tracking-notes.ts) ──
-/** The tracking number of a carrier booked by hand typed, corrected or cleared: the orders the shipment carries (today its one order). */
-const trackingChanged = (tools: CommandTools, shipment: ShipmentHeader, hasNumber: boolean) =>
+/**
+ * The tracking number of a carrier booked by hand typed, corrected or cleared: every order the shipment carries (B-OP-034: its
+ * lines' orders, ordersOfShipment — one while N6 is held off), and whether a tracking link is typed beside it.
+ */
+const trackingChanged = async (tools: CommandTools, shipment: ShipmentHeader, hasNumber: boolean, /* B-OP-034 */ hasLink: boolean) =>
   tools.emit({
     type: 'shipment.tracking_changed',
     subject: shipment.id,
     companyId: shipment.companyId,
     siteId: shipment.siteId,
-    payload: { shipmentId: shipment.id, number: shipment.number, status: shipment.status, hasNumber, salesOrderIds: [shipment.salesOrderId], partyId: shipment.partyId },
+    payload: { shipmentId: shipment.id, number: shipment.number, status: shipment.status, hasNumber, hasLink, salesOrderIds: await ordersOfShipment(tools.tx, shipment), partyId: shipment.partyId },
   })
 // ── end B-OP-030 ──
 
@@ -149,32 +158,38 @@ export async function arrangeTransport(caller: CommandCaller, shipmentId: string
       const facts = await factsOf(tools.tx, current)
       refuseIf(arrangeRefusal(facts))
       const data = arrangementData(body, (code) => carrierNameFor('CARRIER', code))
-      await tools.tx.shipment.update({ where: { id: current.id }, data, select: { id: true } })
+      // B-OP-034: a link lives only beside its number — own van, or a carrier with no number typed, drops it; a new number keeps it.
+      const manualTrackingUrl = data.manualTrackingNumber === null ? null : facts.manualTrackingUrl
+      await tools.tx.shipment.update({ where: { id: current.id }, data: { ...data, manualTrackingUrl }, select: { id: true } })
       tools.audit({
         action: 'shipping.arrangeTransport',
         recordType: 'Shipment',
         recordId: current.id,
         companyId: current.companyId,
         siteId: current.siteId,
-        before: { transportBy: current.transportBy, carrierCode: current.carrierCode, carrierName: current.carrierName, serviceCode: current.serviceCode, manualTrackingNumber: facts.manualTrackingNumber },
-        after: { mode: body.mode, transportBy: data.transportBy, carrierCode: data.carrierCode, carrierName: data.carrierName, serviceCode: null, manualTrackingNumber: data.manualTrackingNumber },
+        before: { transportBy: current.transportBy, carrierCode: current.carrierCode, carrierName: current.carrierName, serviceCode: current.serviceCode, manualTrackingNumber: facts.manualTrackingNumber, /* B-OP-034 */ manualTrackingUrl: facts.manualTrackingUrl },
+        after: { mode: body.mode, transportBy: data.transportBy, carrierCode: data.carrierCode, carrierName: data.carrierName, serviceCode: null, manualTrackingNumber: data.manualTrackingNumber, /* B-OP-034 */ manualTrackingUrl },
       })
       changed(tools, current)
       // B-OP-030: a number typed (or dropped) with the arrangement tells the office too.
-      if (data.manualTrackingNumber !== facts.manualTrackingNumber) trackingChanged(tools, current, data.manualTrackingNumber !== null)
+      if (data.manualTrackingNumber !== facts.manualTrackingNumber || manualTrackingUrl !== facts.manualTrackingUrl) await trackingChanged(tools, current, data.manualTrackingNumber !== null, manualTrackingUrl !== null)
       return { shipmentId: current.id }
     },
   )
   return caller.withClient((client) => transportView(client, shipment.id))
 }
 
-/** shipping.manage: the manual carrier's tracking number typed, corrected or cleared (null). */
-export async function typeTrackingNumber(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; trackingNumber: string | null }, idempotencyKey?: string) {
+/**
+ * shipping.manage: the manual carrier's tracking number typed, corrected or cleared (null); B-OP-034: with its tracking link
+ * (`trackingUrl`: https only, only with a number; null clears it; left out: kept — but clearing the number clears it too). Also
+ * after the goods left.
+ */
+export async function typeTrackingNumber(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; trackingNumber: string | null; /* B-OP-034 */ trackingUrl?: string | null | undefined }, idempotencyKey?: string) {
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
-  const problems = trackingNumberProblems(body.trackingNumber)
+  const trackingNumber = body.trackingNumber?.trim() || null
+  const problems = [...trackingNumberProblems(body.trackingNumber), ...trackingUrlProblems(body.trackingUrl, trackingNumber !== null)] // B-OP-034
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
   refuseIf(trackingRefusal(await caller.withClient((client) => factsOf(client, shipment))))
-  const trackingNumber = body.trackingNumber?.trim() || null
   await command(
     caller,
     { name: 'shipping.typeTrackingNumber', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } },
@@ -182,19 +197,21 @@ export async function typeTrackingNumber(caller: CommandCaller, shipmentId: stri
       const current = (await readShipment(tools.tx, shipment.id))!
       const facts = await factsOf(tools.tx, current)
       refuseIf(trackingRefusal(facts))
-      if (facts.manualTrackingNumber === trackingNumber) return { changed: false }
-      await tools.tx.shipment.update({ where: { id: current.id }, data: { manualTrackingNumber: trackingNumber }, select: { id: true } })
+      // B-OP-034: the link as asked (left out: kept), never without its number.
+      const trackingUrl = trackingNumber === null ? null : body.trackingUrl === undefined ? facts.manualTrackingUrl : body.trackingUrl?.trim() || null
+      if (facts.manualTrackingNumber === trackingNumber && facts.manualTrackingUrl === trackingUrl) return { changed: false }
+      await tools.tx.shipment.update({ where: { id: current.id }, data: { manualTrackingNumber: trackingNumber, manualTrackingUrl: trackingUrl }, select: { id: true } })
       tools.audit({
         action: 'shipping.typeTrackingNumber',
         recordType: 'Shipment',
         recordId: current.id,
         companyId: current.companyId,
         siteId: current.siteId,
-        before: { manualTrackingNumber: facts.manualTrackingNumber },
-        after: { manualTrackingNumber: trackingNumber },
+        before: { manualTrackingNumber: facts.manualTrackingNumber, /* B-OP-034 */ manualTrackingUrl: facts.manualTrackingUrl },
+        after: { manualTrackingNumber: trackingNumber, /* B-OP-034 */ manualTrackingUrl: trackingUrl },
       })
       changed(tools, current)
-      trackingChanged(tools, current, trackingNumber !== null) // B-OP-030
+      await trackingChanged(tools, current, trackingNumber !== null, trackingUrl !== null) // B-OP-030, B-OP-034
       return { changed: true }
     },
   )

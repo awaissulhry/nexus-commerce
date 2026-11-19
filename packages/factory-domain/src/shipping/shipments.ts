@@ -227,13 +227,17 @@ export function joinProblems(shipment: JoinShipment, order: JoinOrder): JoinProb
   return problems
 }
 
-/** A verdict as the API answers it: allowed, or why not (the first reason). */
+/**
+ * A verdict as the API answers it: allowed, or why not — the first reason's `code` (F-OP-121: the screens word it in it + en,
+ * never the API's English sentence) and its words.
+ */
 export interface JoinVerdict {
   readonly allowed: boolean
+  readonly code: JoinProblemCode | null
   readonly why: string | null
 }
 
-export const joinVerdict = (problems: readonly JoinProblem[]): JoinVerdict => ({ allowed: problems.length === 0, why: problems[0]?.message ?? null })
+export const joinVerdict = (problems: readonly JoinProblem[]): JoinVerdict => ({ allowed: problems.length === 0, code: problems[0]?.code ?? null, why: problems[0]?.message ?? null })
 
 /** The facts of a shipment an order would join, from its first order (a new shipment, or B-OP-070's "ship together"). */
 export function joinShipmentOf(

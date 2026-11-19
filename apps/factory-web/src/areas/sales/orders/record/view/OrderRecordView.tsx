@@ -14,7 +14,7 @@ import type { Order } from '../../api'
 import { amendHeld, closeLinesHeld, copyHeld, reopenHeld } from '../../daily-model'
 import { splitHeld } from '../../model' // F-OP-111
 import { DOCK_DEFAULTS } from '../../model' // F-SA-263
-import { cancelHeld, createShipmentHref, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, mayCreateShipment, nextStep, promiseHeld, readyHeld, recordTabs, STATUS_TONE, tabCountOf, type MenuGroup } from '../../model'
+import { cancelHeld, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, nextStep, promiseHeld, readyHeld, recordTabs, STATUS_TONE, tabCountOf, type MenuGroup } from '../../model'
 import { ChangesTab } from '../changes/view/ChangesTab'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
@@ -59,6 +59,7 @@ import { RequestDoorNoticeBanner, RequestDoorWindow } from '../../../../home/app
 import { RequestBandNotices } from './RequestsSection'
 import { bandHealthOf, healthInputOf, readOf } from '../overview/model'
 import { changesBadgeOf, changesDotOf, waitingCardOf, waitingOf } from '../overview/model' // F-OP-117: the Changes count, R-22
+import { createShipmentDoor } from '../shipments/model' // F-OP-121
 // ---- end F-SA-232
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'
@@ -154,6 +155,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   // F-OP-210 (11-dock §4; RC4): every tab link keeps the dock's scope (`thread=`): a pick in the dock survives a change of tab.
   const search = useSearchParams()?.toString() ?? ''
   const step = nextStep(order, model.can)
+  const createDoor = createShipmentDoor(order, model.can, model.prefix, !!actions?.onCreateShipment) // F-OP-121
   const stepHeld = step.held ? t(step.held.key, step.held.params?.date ? { ...step.held.params, date: formatDate(dayInstant(String(step.held.params.date)), { locale }) } : step.held.params) : model.busy ? t('held.busy') : null
   const gate = depositGate(order)
   // ---- F-OP-102 (10-order-page §2.1): the primary by state, in place — Make work orders… opens its dialog here (F-OP-112); while the
@@ -167,6 +169,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
     if (step.kind === 'makeWorkOrders') return actions?.makeWorkOrders?.onOpen?.()
     if (step.kind === 'confirmYes' && step.taskId) return actions?.yes?.onConfirm?.(step.taskId)
     if (step.kind === 'askYes') return actions?.depth?.onDialog?.(yesRequest ? { kind: 'withdraw' } : { kind: 'ask', note: '' })
+    if (step.kind === 'createShipment') return actions?.onCreateShipment?.() // F-OP-121: in place
     if (step.kind === 'close' || step.kind === 'changePromise') actions?.onDialog?.({ kind: step.kind === 'close' ? 'close' : 'promise' })
   }
   const primaryLabel = step.kind === 'confirmYes' ? t('approval.confirm') : step.kind === 'askYes' ? d(yesRequest ? 'wait.withdraw' : 'wait.ask') : step.kind ? t(`step.${step.kind}`) : ''
@@ -180,7 +183,9 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       if (target?.closest('[role="dialog"]') || model.dialog) return
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !typing && step.kind && !primaryHeld) {
         event.preventDefault()
-        runPrimary() // F-OP-102: the primary, in place
+        // F-OP-121: Create shipment… without the container goes to Warehouse's New shipment with this order chosen.
+        if (step.kind === 'createShipment' && createDoor?.kind === 'warehouse') window.location.assign(createDoor.href)
+        else runPrimary() // F-OP-102: the primary, in place
       }
     }
     window.addEventListener('keydown', onKey)
@@ -231,7 +236,12 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
 
   // F-OP-102: one primary by state, every one in place (no page change).
   const primary =
-    step.kind ? (
+    step.kind === 'createShipment' && createDoor?.kind === 'warehouse' ? (
+      // F-OP-121: without the container (a design case), Warehouse's New shipment with this order chosen.
+      <Button size="sm" variant="primary" asChild aria-keyshortcuts="Meta+Enter Control+Enter">
+        <Link href={createDoor.href}>{t('action.createShipment')}</Link>
+      </Button>
+    ) : step.kind ? (
       <Button size="sm" variant="primary" heldReason={primaryHeld} onClick={runPrimary} aria-keyshortcuts="Meta+Enter Control+Enter">
         {primaryLabel}
       </Button>
@@ -262,7 +272,11 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
         ...(!isFinal(order) && step.kind !== 'changePromise' ? [{ id: 'promise', label: t('action.promise'), disabled: !!promiseWait, description: held(promiseWait), onSelect: () => actions?.onDialog?.({ kind: 'promise' }) }] : []),
         ...(order.status === 'IN_PRODUCTION' ? [{ id: 'ready', label: t('action.ready'), disabled: !!readyWait, description: held(readyWait), onSelect: () => actions?.onDialog?.({ kind: 'ready' }) }] : []),
         ...(makeInMenu(order, linesNotInProduction(order)) ? [{ id: 'make', label: t('bandMenu.makeWorkOrders'), disabled: !!makeWait, description: makeWait ? t(makeWait.key, makeWait.params?.date ? { date: formatDate(dayInstant(String(makeWait.params.date)), { locale }) } : makeWait.params) : undefined, onSelect: () => actions?.makeWorkOrders?.onOpen?.() }] : []),
-        ...(mayCreateShipment(order, model.can) ? [{ id: 'ship', label: t('action.createShipment'), href: createShipmentHref(model.prefix, order.id) }] : []),
+        // F-OP-121: Create shipment… in place (as Change promise date…, not repeated here while it is the band's next step).
+        ...(createDoor?.kind === 'inPlace' && step.kind !== 'createShipment' ? [{ id: 'ship', label: t('step.createShipment'), onSelect: () => actions?.onCreateShipment?.() }] : []),
+        ...(createDoor?.kind === 'warehouse' ? [{ id: 'ship', label: t('action.createShipment'), href: createDoor.href }] : []),
+        // F-OP-123 (order page N5): Record a shipment made elsewhere… (held with its words: the order's state, the rights).
+        ...(model.elsewhere ? [{ id: 'elsewhere', label: t('elsewhere.title'), disabled: !!model.elsewhere.held, description: held(model.elsewhere.held), onSelect: () => actions?.onRecordElsewhere?.() }] : []),
     ],
     edit: [
         ...(!isFinal(order) && model.can.manage
@@ -388,10 +402,20 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
               tone={model.notice.tone}
               title={t(model.notice.words.key, model.notice.words.params)}
               action={
-                actions?.onDismissNotice ? (
-                  <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
-                    {t('common.dismiss')}
-                  </Button>
+                model.notice.door || actions?.onDismissNotice ? (
+                  <>
+                    {/* F-OP-121: the door a notice offers (Pack and ship it in Warehouse ›) */}
+                    {model.notice.door && (
+                      <Button size="sm" asChild>
+                        <Link href={model.notice.door.href}>{t(model.notice.door.words.key, model.notice.door.words.params)}</Link>
+                      </Button>
+                    )}
+                    {actions?.onDismissNotice && (
+                      <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
+                        {t('common.dismiss')}
+                      </Button>
+                    )}
+                  </>
                 ) : undefined
               }
             />

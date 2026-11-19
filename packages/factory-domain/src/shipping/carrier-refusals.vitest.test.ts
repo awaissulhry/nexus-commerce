@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CARRIER_REFUSAL_ISSUES, databaseCarrierRefusal } from './carrier-refusals'
+// B-OP-034: the typed tracking link's rule.
+import { OWN_TRANSPORT_LIMITS, TRACKING_URL_PATTERN, trackingUrlProblems } from './own-transport/rules'
 
 describe('databaseCarrierRefusal()', () => {
   it("reads the database's carrier refusals of a shipment back as words with their issue path", () => {
@@ -15,5 +17,21 @@ describe('databaseCarrierRefusal()', () => {
     expect(databaseCarrierRefusal('carriers: who collected shipment x is 1 to 200 characters on one line')).toBeNull()
     expect(databaseCarrierRefusal('carriers: pickup request x cannot move from FAILED to CONFIRMED')).toBeNull()
     expect(databaseCarrierRefusal('shipping: shipment x cannot move from DRAFT to SHIPPED')).toBeNull()
+  })
+})
+
+// B-OP-034 (order page plan N5, set C): the tracking link typed beside a carrier booked by hand — the database's rule, in words.
+describe('trackingUrlProblems() (B-OP-034)', () => {
+  it('an https address of 1 to 500 characters on one line, no name or password, only with its tracking number', () => {
+    expect(trackingUrlProblems('https://track.example.com/T-0001?lang=it#top', true)).toEqual([])
+    expect(trackingUrlProblems('https://track.example.com:8443/T-0001', true)).toEqual([])
+    expect(trackingUrlProblems(null, false)).toEqual([])
+    expect(trackingUrlProblems('   ', false)).toEqual([])
+    expect(trackingUrlProblems('https://track.example.com/T-0001', false)).toEqual([{ path: 'body/trackingUrl', message: 'A tracking link is typed only with its tracking number.' }])
+    for (const wrong of ['http://track.example.com/T-0001', 'https://user:secret@track.example.com/T-1', 'https://track.example.com/T 0001', 'https://track.example.com/T-1\nx', 'ftp://track.example.com', `https://track.example.com/${'x'.repeat(500)}`]) {
+      expect(trackingUrlProblems(wrong, true), wrong).toEqual([{ path: 'body/trackingUrl', message: 'A tracking link is an https address of 1 to 500 characters on one line, with no name or password in it.' }])
+    }
+    expect(TRACKING_URL_PATTERN.test('https://track.example.com')).toBe(true)
+    expect(OWN_TRANSPORT_LIMITS.trackingUrl).toBe(500)
   })
 })

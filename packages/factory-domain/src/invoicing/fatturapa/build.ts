@@ -8,6 +8,7 @@ import {
   type FatturaPaInvoiceInput,
   type FatturaPaIssue,
   type FatturaPaLine,
+  type DdtReference, // B-OP-033
 } from './types'
 import { validateFatturaPaInput, type NormalizedAddress, type NormalizedInvoice, type NormalizedLine, type NormalizedParty } from './validate'
 import { el, optional, serializeXml, type XmlElement } from './xml'
@@ -23,6 +24,33 @@ import { isSelfInvoiceDocument, selfInvoiceHeader } from './td-extra'
  * zero-VAT lines), art. 6 c.4 (deposit invoices), art. 26 (credit notes); D.Lgs. 127/2015 (invoices through SDI,
  * including foreign customers' data, art. 1 c.3-bis).
  */
+// ---- B-OP-033 (order page N5): the paper DDT of a shipment made elsewhere, cited as a DDT ----------------------------------
+/**
+ * The invoice's own references of kind DDT ({kind: 'DDT', number, date} in Invoice.documentRefs): the paper DDTs goods recorded
+ * as made elsewhere left with (Nexus issued none; B-OP-032). The XML's DatiDDT and the copy cite them beside the Nexus DDTs its
+ * lines name (an invoice line names no paper DDT: with one DDT it covers the whole invoice, so no RiferimentoNumeroLinea).
+ * UNVERIFIED (GATE-ACCOUNTANT, plan §7): the accountant checks how a paper DDT is named before the first real use.
+ */
+export const PAPER_DDT_REF = 'DDT'
+
+export function paperDdtsOf(refs: unknown): DdtReference[] {
+  if (!Array.isArray(refs)) return []
+  return refs.flatMap((ref): DdtReference[] => {
+    if (typeof ref !== 'object' || ref === null) return []
+    const entry = ref as { kind?: unknown; number?: unknown; date?: unknown }
+    if (entry.kind !== PAPER_DDT_REF || typeof entry.number !== 'string' || typeof entry.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(entry.date)) return []
+    return [{ number: entry.number, date: entry.date }]
+  })
+}
+
+/** The DDTs an invoice cites: its lines' Nexus DDTs, then its paper ones (one per number), oldest first. */
+export function citedDdts(nexus: readonly DdtReference[], refs: unknown): DdtReference[] {
+  const all = [...nexus]
+  for (const paper of paperDdtsOf(refs)) if (!all.some((ddt) => ddt.number === paper.number)) all.push(paper)
+  return all.sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number, undefined, { numeric: true }))
+}
+// ---- end B-OP-033
+
 export const FATTURAPA_NAMESPACE = 'http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2'
 export const FATTURAPA_SCHEMA_VERSION = '1.2.3'
 

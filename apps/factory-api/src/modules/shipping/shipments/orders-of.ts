@@ -252,7 +252,7 @@ export async function shipmentOrderCandidates(caller: CommandCaller, shipmentId:
         number: row.number,
         customerRef: row.customerRef,
         status: row.status as string,
-        joinable: facts ? joinVerdict(joinProblems(facts, joinOrderOf(row))) : { allowed: false, why: 'Sales order not found.' },
+        joinable: facts ? joinVerdict(joinProblems(facts, joinOrderOf(row))) : { allowed: false, code: 'CUSTOMER' as const, why: 'Sales order not found.' },
       })),
     }
   })
@@ -280,7 +280,7 @@ export async function joinableShipments(caller: CommandCaller, query: { readonly
     // One query after another: a scoped client's transaction has one connection.
     for (const row of visible) {
       const facts = await joinShipmentFacts(client, { number: row.number, status: row.status, siteId: row.siteId, salesOrderId: row.salesOrderId, shipTo: row.shipTo })
-      shipments.push({ shipmentId: row.id, number: row.number, status: row.status, siteId: row.siteId, joinable: facts ? joinVerdict(joinProblems(facts, joinOrderOf(order))) : { allowed: false, why: 'Shipment not found.' } })
+      shipments.push({ shipmentId: row.id, number: row.number, status: row.status, siteId: row.siteId, joinable: facts ? joinVerdict(joinProblems(facts, joinOrderOf(order))) : { allowed: false, code: 'CUSTOMER' as const, why: 'Shipment not found.' } })
     }
     return { salesOrderId: order.id, number: order.number, shipments }
   })

@@ -202,5 +202,11 @@
         "format": "Type the postcode as it is on the delivery address: letters and digits."
       }
     }
+  },
+  "typed": {
+    "label": "Tracking number",
+    "noLive": "No live tracking",
+    "track": "Track ›",
+    "trackOf": "Track shipment {number} on the carrier's site (opens a new tab)"
   }
 }

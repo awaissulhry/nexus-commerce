@@ -6,7 +6,7 @@ import { useOfficeApi } from '../../../../lib/session/context'
 import { useLive } from '../hooks'
 import { failed, LOADING, ready, touchesShipment, writeWords, type DepthAbilities } from '../queue/shared/depth'
 import { arrangeTransport, checkLabels, readLabelJobs, readTransport, reprintLabels, typeStatus, typeTrackingNumber, type Transport } from './api'
-import { arrangeBody, arrangeProblem, OWN_TRANSPORT_REFUSALS, reasonProblem, REPRINT_REFUSALS, reprintHeld, statusProblem, trackingProblem, type ReprintActions, type ReprintModel, type TransportActions, type TransportModel } from './model'
+import { arrangeBody, arrangeProblem, OWN_TRANSPORT_REFUSALS, reasonProblem, REPRINT_REFUSALS, reprintHeld, statusProblem, trackingBody, trackingProblem, type ReprintActions, type ReprintModel, type TransportActions, type TransportModel } from './model'
 import { ReprintView } from './view/ReprintView'
 
 /**
@@ -99,7 +99,8 @@ export function useOwnTransport(shipmentId: string, version: number, can: DepthA
         const dialog = latest.current.dialog
         if (dialog?.kind !== 'tracking' || trackingProblem(dialog)) return
         const text = dialog.text.trim()
-        void write('tracking', (key, transport) => typeTrackingNumber(api, shipmentId, { version: transport.shipment.version, trackingNumber: text === '' ? null : text }, key), text === '' ? 'transport.done.trackingCleared' : 'transport.done.tracking')
+        // F-OP-135: the link typed beside the number goes with it (blank clears it).
+        void write('tracking', (key, transport) => typeTrackingNumber(api, shipmentId, trackingBody(dialog, transport.shipment.version), key), text === '' ? 'transport.done.trackingCleared' : 'transport.done.tracking')
       },
       onStatus: () => {
         const state = latest.current

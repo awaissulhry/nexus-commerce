@@ -20,7 +20,7 @@ export function ShipmentTracking({ shipmentId, version, can, onChanged, onClose 
     if (!ready) return
     if (!opened.current) {
       opened.current = true
-      actions.onDialog?.({ kind: 'tracking', text: ready.shipment.manualTrackingNumber ?? '' })
+      actions.onDialog?.({ kind: 'tracking', text: ready.shipment.manualTrackingNumber ?? '', link: ready.shipment.manualTrackingUrl ?? '' /* F-OP-135 */ })
       return
     }
     // Saved (the hook closes its dialog once the write is through): this door closes too.

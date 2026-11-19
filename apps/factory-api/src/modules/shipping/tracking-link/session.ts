@@ -109,9 +109,12 @@ export async function trackingPage(request: FastifyRequest) {
     const events = await db.trackingEvent.findMany({ where: { shipmentId: shipment.id }, select: { id: true, status: true, location: true, occurredAt: true, parcelId: true }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200 })
     const papers = papersShown(via) ? await papersOf(db, shipment) : []
     // ── B-OP-031 (order page plan N5): the number typed for a carrier booked by hand ──
-    const typed = (await db.shipment.findUnique({ where: { id: shipment.id }, select: { manualTrackingNumber: true } }))?.manualTrackingNumber ?? null
+    // B-OP-034: and the tracking link typed beside it (https only) — read by the tenant's system for the link, never the floor.
+    const typedRow = await db.shipment.findUnique({ where: { id: shipment.id }, select: { manualTrackingNumber: true, manualTrackingUrl: true } })
+    const typed = typedRow?.manualTrackingNumber ?? null
+    const typedUrl = typed === null ? null : trackingPageOf(typedRow?.manualTrackingUrl)
     // ── end B-OP-031 ──
-    return { shipment, via, order, otherPieces, timeZone: site?.timezone ?? 'Europe/Rome', parcels, events, papers, typed }
+    return { shipment, via, order, otherPieces, timeZone: site?.timezone ?? 'Europe/Rome', parcels, events, papers, typed, typedUrl }
   })
   if (!page) throw linkUnavailable()
   const { shipment, via, parcels, events } = page
@@ -131,6 +134,7 @@ export async function trackingPage(request: FastifyRequest) {
       returnedAt: iso(shipment.returnedAt),
       expectedDeliveryAt: iso(expectedDeliveryOf(shipment.status, shipment.expectedDeliveryAt)),
       typedTrackingNumber: page.typed, // B-OP-031: no carrier feeds it ("No live tracking")
+      typedTrackingUrl: page.typedUrl, // B-OP-034: "Track ›" on the carrier's page typed by hand
     },
     order: { customerRef: page.order?.customerRef ?? null, number: customerRefOf('ORDER', page.order?.customerSeq ?? null) /* fix-portal-numbers-1: "#12" */, otherPieces: page.otherPieces /* B-OP-042, R-18 */ },
     pill: tracker.pill,
