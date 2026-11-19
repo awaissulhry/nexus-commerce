@@ -97,6 +97,24 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
   }
 }
 
+// ---- F-OP-303 (order page walk #6): the read-only banner counts every right the page acts on --------------------------------
+/**
+ * The rights of `abilitiesOf` with which the order page changes something: the order (manage, close), its money (a payment, an
+ * invoice issued or drafted), its work orders, its shipments (Create shipment…, Tracking number…, Record a shipment made
+ * elsewhere…: shipping.manage) and a copy as a new quote.
+ */
+export const PAGE_ACT_RIGHTS = ['manage', 'close', 'recordPayment', 'issueInvoices', 'manageInvoices', 'makeWorkOrders', 'createShipment', 'manageQuotes'] as const satisfies readonly (keyof OrderAbilities)[]
+
+/**
+ * "Read-only: your role follows orders and changes none." only for a reader who holds none of them, nor the page's other acting
+ * rights (assign the supervisor: production.brand.manage; a quality hold on a work order: quality.holds.place). The walk saw it for
+ * Warehouse on the very tab where Warehouse creates shipments and types tracking.
+ */
+export function readOnlyOnPage(can: Pick<OrderAbilities, (typeof PAGE_ACT_RIGHTS)[number]>, more: { readonly assignSupervisor?: boolean; readonly qualityHold?: boolean } = {}): boolean {
+  return PAGE_ACT_RIGHTS.every((key) => !can[key]) && !more.assignSupervisor && !more.qualityHold
+}
+// ---- end F-OP-303
+
 // ---- words and tones ---------------------------------------------------------------------------------------------------
 
 export const STATUS_TONE: Record<OrderStatus, Tone> = {
@@ -525,10 +543,12 @@ export const DOCK_DEFAULTS: Readonly<Record<RecordTab, DockDefault>> = Object.fr
 // F-OP-117 (10-order-page §6, §7, §8; review R-22): Changes counts the ONE waiting list's rows (`changes`: changesBadgeOf of the card,
 // null before the production read — never a made-up 0); Money and Shipments the order read's own badges (B-OP-020: issued invoices and
 // credit notes + open deposit requests; shipments not cancelled carrying this order's lines), the chain's counts in an older answer.
-export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments' | 'badges'>, counts: { readonly changes?: number | null } = {}): number | null {
+export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments' | 'badges'>, counts: { readonly changes?: number | null; /* F-OP-306 */ readonly viewInvoices?: boolean } = {}): number | null {
   if (tab === 'lines') return order.lines.length
   if (tab === 'production') return order.chain.workOrders.length
   if (tab === 'changes') return counts.changes ?? null
+  // F-OP-306 (walk #21): a reader without invoices.view is shown no invoice, so Money counts only its open deposits.
+  if (tab === 'money' && counts.viewInvoices === false) return order.badges ? order.badges.money.openDeposits : null
   if (tab === 'money') return order.badges ? order.badges.money.invoices + order.badges.money.openDeposits : order.chain.invoices.length
   if (tab === 'shipments') return order.badges ? order.badges.shipments : order.chain.shipments.length
   // F-SA-237: the files the reader may open come with the files read (none before it: no number that is not true).

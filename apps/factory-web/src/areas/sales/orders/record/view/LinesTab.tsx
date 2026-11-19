@@ -76,7 +76,9 @@ export function LinesTab({ order, model, actions }: { order: Order; model: Order
       <Totals order={order} model={model} />
       <div className="fw-so-card-head">
         <p className="fw-so-hint">{t('lines.readOnly')}</p>
-        {model.can.manage && !isFinal(order) && (
+        {/* F-OP-305 (walk #16, Lines part): drawn for every reader, held with its words without orders.manage (amendHeld,
+            closeLinesHeld: "Changing an order needs the sales right to manage orders") — held, never hidden. */}
+        {!isFinal(order) && (
           <span className="fw-so-actions">
             <Button size="sm" heldReason={held ? t(held.key) : busy} onClick={() => actions?.onAmendStart?.()}>
               <PencilLine size={14} aria-hidden /> {t('amend.start')}
