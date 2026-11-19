@@ -123,7 +123,8 @@ function WorkOrdersCard({ order, model, actions }: { order: Order; model: OrderR
   const workOrderHref = (row: { id: string; number: string }) => `${model.prefix}${recordAddress({ type: 'WorkOrder', id: row.id, label: row.number, companyId: order.companyId }, OFFICE_PAGES)}`
 
   return (
-    <Card padded>
+    // F-OP-115 (A11's Overview doors): the address #work-orders lands here.
+    <Card padded id="work-orders" className="fw-so-anchor">
       <div className="fw-so-card-head">
         <h2 className="fw-so-h2">{t('production.title')}</h2>
         {mayMake && (
@@ -465,7 +466,8 @@ function DatesCard({ order, model, actions }: { order: Order; model: OrderRecord
           id: line.id,
           cells: [
             // F-SA-266: a line's dates discussed by the line's reference (the customer reads its own words, never a price).
-            <span key="l" className="fw-so-inline">
+            // F-OP-115 (A11's Overview doors): the address #line-<lineId> lands on the line's row.
+            <span key="l" className="fw-so-inline fw-so-anchor" id={`line-${line.id}`} tabIndex={-1}>
               {`${line.style?.code ?? '—'} · ${line.colourway ? `${line.colourway.code} ${line.colourway.name}` : '—'}`}
               <DiscussDoor order={order} part={t('discuss.line', { seq: line.seq, name: `${line.style?.code ?? '—'} ${line.colourway?.name ?? ''}`.trim() })} target={{ kind: 'SalesOrderLine', id: line.id }} />
             </span>,
@@ -558,7 +560,8 @@ function HoldsQualityCard({ order, model, actions }: { order: Order; model: Orde
   return (
     <div className="fw-so-stack">
       {model.health && model.health.orders.length > 0 && <HealthCard model={model.health} daysLate={order.daysLate} actions={actions?.health} />}
-      <Card padded>
+      {/* F-OP-115 (A11's Overview doors): the address #holds lands here. */}
+      <Card padded id="holds" className="fw-so-anchor">
         <h2 className="fw-so-h2">{t('production.quality.title')}</h2>
         {!read ? (
           <Skeleton height={44} />

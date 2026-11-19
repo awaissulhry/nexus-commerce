@@ -459,3 +459,25 @@ describe('F-OP-115: Split…, Cancel…, Close… · Reopen…, Open in Planning
   })
 })
 // ---- end F-OP-115
+
+// ---- F-OP-115 (A11's Overview doors, #1716): the Production tab answers every address the Overview links to ---------------------
+describe('the Overview’s doors land on Production: #work-orders, #holds, #line-<lineId> (and #dates)', () => {
+  it('each anchor is on the page, with room above it when it comes into view', () => {
+    const html = draw('production-progress')
+    for (const id of ['work-orders', 'holds', 'dates', `line-${LINE_BLK}`, `line-${LINE_RED}`]) expect(html, id).toMatch(new RegExp(`id="${id}"`))
+    expect(html).toMatch(/class="[^"]*fw-so-anchor[^"]*" id="work-orders"|id="work-orders"[^>]*class="[^"]*fw-so-anchor/)
+  })
+
+  it('the sources: the Overview links to exactly these, and ProductionTab carries them', () => {
+    const overview = readFileSync(new URL('./view/OverviewTab.tsx', import.meta.url), 'utf8')
+    expect(overview).toContain('#work-orders`')
+    expect(overview).toContain('#line-${row.lineIds[0] ?? row.id}')
+    const doors = readFileSync(new URL('./overview/model.ts', import.meta.url), 'utf8')
+    expect(doors).toContain("anchor: HOLD_KINDS.has(blocker.kind) ? 'holds' : null")
+    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('<Card padded id="work-orders" className="fw-so-anchor">')
+    expect(tab).toContain('<Card padded id="holds" className="fw-so-anchor">')
+    expect(tab).toContain('id={`line-${line.id}`}')
+  })
+})
+// ---- end F-OP-115 (A11's anchors)
