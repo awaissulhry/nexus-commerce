@@ -43,6 +43,38 @@ import { catalogueDoorOf, catalogueStartHref } from './request-model'
 import { fromOrderText, orderLinesLabel, ownOrderRef } from './model'
 import { orderingWordsFor } from './words'
 import type { OrderingCaseBuilder } from './view/OrderingCase'
+// F-CP-154: lines of every kind, the People and sizes roster, "Your price".
+import { partnerTemplateOf } from '@nexus/factory-domain/auth/roles/templates'
+import { MEASURE_BY as DOMAIN_MEASURES } from '@nexus/factory-domain/sales/portal-ordering/people'
+import { addCustomLine, addPeople, changeCustomLine, changeLine, changePerson, removePerson, recordSchema } from './api'
+import { describedLine, kindsRecord, mtmLine, personOf, RIDERS, SHEET_ON_MTM } from './design-data'
+import {
+  customDetailWords,
+  customLineBody,
+  customLineChanges,
+  customLineDraftOf,
+  customLineProblems,
+  customTitleOf,
+  EMPTY_PERSON,
+  entriesInOrder,
+  entryPeopleOf,
+  isAddKind,
+  kindKey,
+  MEASURES,
+  mtmHeldKey,
+  mtmOf,
+  ownPriceOf,
+  ownPriceWriteOf,
+  ownTotalOf,
+  personBody,
+  personChanges,
+  personDraftOf,
+  personProblems,
+  personWhat,
+  priceRowsOf,
+  rosterLinesOf,
+  yourPriceAccess,
+} from './model'
 import {
   cellsOf,
   columnsOf,
@@ -914,3 +946,273 @@ describe('F-CP-152 — the doors: /orders/new is the draft order for who keeps d
 })
 // ---- end F-CP-152
 
+// ---- F-CP-154 (customer page plan C5; 12 §2 parts 1, 4, 6; review A5, E4, G6; 11 §1.3 D3): lines of every kind, the People and
+// sizes roster, "Your price" ---------------------------------------------------------------------------------------------------------
+describe('F-CP-154 — lines of every kind, the People and sizes roster, Your price', () => {
+  const FACTS = { preview: false, offline: false, busy: false, emptyLine: false }
+  const stateOf = (record: Parameters<typeof draftChips>[0], part: string) => draftChips(record).find((chip) => chip.part === part)!.state
+
+  it('follow-up 7: a draft holding described and made-to-measure lines parses — the new problem codes, their part and person', () => {
+    expect([...PROBLEM_CODES]).toEqual([...DOMAIN_PROBLEMS])
+    for (const code of ['NO_TOTAL', 'SIZES_NOT_TOTAL', 'NO_PEOPLE', 'MTM_CLOSED', 'GARMENT_TYPE_GONE']) expect(PROBLEM_CODES, code).toContain(code)
+    const record = kindsRecord({ request: { problems: [{ code: 'SIZE_NOT_OFFERED', lineId: mtmLine().id, size: '62', part: 'PEOPLE', personId: RIDERS()[1]!.id }] } })
+    const parsed = recordSchema.parse({ ...record, request: { ...record.request, customLines: [...(record.request.customLines ?? [])] } })
+    expect(parsed.request.customLines?.map((line) => line.kind)).toEqual(['DESCRIBED', 'MADE_TO_MEASURE'])
+    expect(parsed.request.problems[0]).toMatchObject({ part: 'PEOPLE', personId: RIDERS()[1]!.id })
+    // An answer from before B-CP-075 (no part, no person, no custom lines) still parses.
+    expect(recordSchema.parse(draftRecord()).request.customLines).toBeUndefined()
+  })
+
+  it('kinds: one list by seq, each kind in words (it, en); the title from the first line of any kind', () => {
+    const record = kindsRecord()
+    expect(entriesInOrder(record.request).map((entry) => [entry.line.seq, entry.kind])).toEqual([
+      [1, 'CATALOGUE'],
+      [2, 'DESCRIBED'],
+      [3, 'MADE_TO_MEASURE'],
+    ])
+    // Read in another order: still by seq (a row never jumps).
+    const swapped = { lines: record.request.lines, customLines: [mtmLine(), describedLine()] }
+    expect(entriesInOrder(swapped).map((entry) => entry.line.seq)).toEqual([1, 2, 3])
+    expect(t('en')(kindKey('CATALOGUE'))).toBe('From the catalogue')
+    expect(t('en')(kindKey('DESCRIBED'))).toBe('Described by you')
+    expect(t('en')(kindKey('MADE_TO_MEASURE'))).toBe('Made to measure')
+    expect(t('it')(kindKey('DESCRIBED'))).toBe('Descritto da voi')
+    expect(t('it')(kindKey('MADE_TO_MEASURE'))).toBe('Su misura')
+    expect(draftTitleOf({ lines: [], customLines: [describedLine({ seq: 1 })] }, t('en'))).toBe('Maglietta box a maniche corte, rossa e bianca come il rifer…')
+    expect(draftTitleOf({ lines: [], customLines: [mtmLine({ seq: 1 })] }, t('en'), 'en')).toBe('One-piece race suit')
+    expect(customTitleOf({ style: null, description: null, garmentType: null }, t('it'))).toBe('Riga senza titolo')
+    expect(customDetailWords(describedLine(), t('en'), String)).toBe('30 pieces · sizes later')
+    expect(customDetailWords(describedLine({ sizes: [{ size: 'S', quantity: 10 }, { size: 'M', quantity: 20 }] }), t('en'), String)).toBe('30 pieces · in sizes: S 10 · M 20')
+    expect(customDetailWords(mtmLine(), t('en'), String)).toBe('By person · 4 people')
+    expect(customDetailWords(mtmLine({ people: [], peopleInSheet: true }), t('it'), String)).toBe('Per persona · Persone: nella scheda allegata')
+    expect(isAddKind('described')).toBe(true)
+    expect(isAddKind('words')).toBe(false)
+    for (const locale of ['it', 'en'] as const) {
+      const html = renderCase(locale, 'cp154-kinds')
+      for (const kind of ['CATALOGUE', 'DESCRIBED', 'MADE_TO_MEASURE'] as const) expect(html, `${kind} ${locale}`).toContain(t(locale)(kindKey(kind)))
+      expect(html.match(KEY)?.[0] ?? null, locale).toBeNull()
+      expect(html).toContain(`id="line-${describedLine().id}"`)
+      expect(html).toContain(`id="line-${mtmLine().id}"`)
+    }
+  })
+
+  it('made to measure is open by default; “not open for you yet” only where the office switched it off — held, never hidden', () => {
+    expect(mtmOf({ status: 'DRAFT' }).open).toBe(true)
+    expect(mtmOf({ status: 'DRAFT', madeToMeasure: { open: true, words: null, garmentTypes: [] } }).open).toBe(true)
+    expect(mtmOf({ status: 'DRAFT', madeToMeasure: { open: false, words: { it: 'x', en: 'x' }, garmentTypes: [] } }).open).toBe(false)
+    expect(mtmOf({ status: 'SENT', madeToMeasure: null }).open).toBe(false)
+    expect(mtmHeldKey({ status: 'DRAFT' })).toBeNull()
+    expect(mtmHeldKey({ status: 'DRAFT', madeToMeasure: { open: false, words: null, garmentTypes: [] } })).toBe('draftPage.mtmOff')
+    expect(t('en')('draftPage.mtmOff')).toBe('Made to measure is not open for you yet: ask us in the messages.')
+    expect(t('it')('draftPage.mtmOff')).toBe('Il su misura non è ancora aperto per voi: chiedeteci nei messaggi.')
+    // The problem of an existing made-to-measure line says the same words; the open draft never says them.
+    const closed = kindsRecord({ request: { madeToMeasure: { open: false, words: null, garmentTypes: [] } } })
+    expect(problemWords({ code: 'MTM_CLOSED', lineId: mtmLine().id, size: null }, closed.request.lines, kit('en'), closed.request.customLines)).toBe(t('en')('draftPage.mtmOff'))
+    expect(renderCase('en', 'cp154-mtm-off')).toContain(t('en')('draftPage.mtmOff'))
+    expect(renderCase('en', 'cp154-kinds')).not.toContain(t('en')('draftPage.mtmOff'))
+  })
+
+  it('a custom line’s problems in our words, from codes and figures; “Show me” goes to the line, its roster or the person', () => {
+    const custom = [describedLine({ quantity: 30, sizes: [{ size: 'S', quantity: 10 }, { size: 'M', quantity: 12 }] }), mtmLine()]
+    expect(problemWords({ code: 'SIZES_NOT_TOTAL', lineId: describedLine().id, size: null }, [], kit('en'), custom)).toBe('The sizes add up to 22 pieces, the total says 30.')
+    expect(problemWords({ code: 'GARMENT_TYPE_GONE', lineId: mtmLine().id, size: null }, [], { ...kit('it'), locale: 'it' }, custom)).toBe('Il su misura Tuta intera da corsa non è più offerto: scegliete un altro tipo di capo.')
+    expect(problemWords({ code: 'NO_PEOPLE', lineId: mtmLine().id, size: null }, [], kit('en'), custom)).toBe('Name the people, or attach their measurement sheet.')
+    for (const locale of ['it', 'en'] as const) for (const code of ['NO_TOTAL', 'SIZES_NOT_TOTAL', 'NO_PEOPLE', 'MTM_CLOSED', 'GARMENT_TYPE_GONE'] as const) expect(problemWords({ code, lineId: null, size: null }, [], kit(locale)), `${code} ${locale}`).not.toMatch(/draftPage\.|\{/)
+    expect(problemPlace({ code: 'SIZE_NOT_OFFERED', lineId: 'l3', size: '62', personId: 'p2' })).toBe('person-p2')
+    expect(problemPlace({ code: 'NO_PEOPLE', lineId: 'l3', size: null })).toBe('people-l3')
+    expect(problemPlace({ code: 'NO_TOTAL', lineId: 'l2', size: null })).toBe('line-l2')
+  })
+
+  it('the roster: Size · Measurement sheet · Sending later only (no saved measurements in v1), rows by seq, what is there in words', () => {
+    expect([...MEASURES]).toEqual([...DOMAIN_MEASURES])
+    expect(MEASURES).not.toContain('PROFILE')
+    expect(MEASURES.map((measure) => t('en')(`draftPage.measure.${measure}`))).toEqual(['Size', 'Measurement sheet', 'Sending later'])
+    expect(MEASURES.map((measure) => t('it')(`draftPage.measure.${measure}`))).toEqual(['Taglia', 'Scheda misure', 'Le mandiamo dopo'])
+    const record = kindsRecord()
+    expect(rosterLinesOf(record.request).map((line) => line.id)).toEqual([mtmLine().id])
+    expect(rosterLinesOf({ customLines: [describedLine({ byPerson: true, quantity: null })] })).toHaveLength(1)
+    const [andrea, luca, tommaso] = RIDERS()
+    expect(personWhat(andrea!, t('en'))).toBe(SHEET_ON_MTM.originalName)
+    expect(personWhat(luca!, t('en'))).toBe('50')
+    expect(personWhat(tommaso!, t('en'))).toBe('Sending later')
+    expect(personWhat({ measureBy: 'SHEET', size: null, sheet: null }, t('en'))).toBe('a sheet no longer on the draft')
+    const html = renderCase('en', 'cp154-kinds')
+    for (const rider of RIDERS()) expect(html).toContain(rider.name)
+    expect(html.indexOf('Andrea Esempio')).toBeLessThan(html.indexOf('Nico Esempio'))
+    expect(html).toContain(`id="person-${andrea!.id}"`)
+    expect(html).toContain(`id="people-${mtmLine().id}"`)
+    expect(html).toContain('Add a person')
+    expect(html).not.toMatch(/Saved measurements|Misure salvate/)
+  })
+
+  it('a person’s window: held at its fields by the API’s limits; the body sends only the field of its way; a change clears the other', () => {
+    expect(personProblems(EMPTY_PERSON, [])).toEqual({ name: 'draftPage.person.problem.name', size: 'draftPage.person.problem.size' })
+    expect(personProblems({ ...EMPTY_PERSON, name: 'Ada Esempio', measureBy: 'SHEET', sheetId: 'nope' }, [SHEET_ON_MTM])).toEqual({ sheet: 'draftPage.person.problem.sheet' })
+    expect(personProblems({ ...EMPTY_PERSON, name: 'Ada Esempio', measureBy: 'SHEET', sheetId: SHEET_ON_MTM.id }, [SHEET_ON_MTM])).toEqual({})
+    expect(personProblems({ ...EMPTY_PERSON, name: 'Ada Esempio', number: '12345678901', measureBy: 'LATER' }, [])).toEqual({ number: 'draftPage.person.problem.number' })
+    expect(personBody({ ...EMPTY_PERSON, name: ' Ada Esempio ', number: '', measureBy: 'SIZE', size: ' 52 ', sheetId: SHEET_ON_MTM.id })).toEqual({ name: 'Ada Esempio', measureBy: 'SIZE', size: '52' })
+    expect(personBody({ ...EMPTY_PERSON, name: 'Ada Esempio', number: '7', measureBy: 'SHEET', size: '52', sheetId: SHEET_ON_MTM.id })).toEqual({ name: 'Ada Esempio', number: '7', measureBy: 'SHEET', measurementFileId: SHEET_ON_MTM.id })
+    expect(personBody({ ...EMPTY_PERSON, name: 'Ada Esempio', measureBy: 'LATER', size: '52' })).toEqual({ name: 'Ada Esempio', measureBy: 'LATER' })
+    const luca = RIDERS()[1]!
+    expect(personChanges(luca, personDraftOf(luca))).toEqual({})
+    expect(personChanges(luca, { ...personDraftOf(luca), size: '52' })).toEqual({ size: '52' })
+    expect(personChanges(luca, { ...personDraftOf(luca), measureBy: 'LATER' })).toEqual({ measureBy: 'LATER', size: null, measurementFileId: null })
+    expect(personChanges(luca, { ...personDraftOf(luca), measureBy: 'SHEET', sheetId: SHEET_ON_MTM.id })).toEqual({ measureBy: 'SHEET', size: null, measurementFileId: SHEET_ON_MTM.id })
+    for (const locale of ['it', 'en'] as const) {
+      for (const id of ['cp154-person', 'cp154-person-change']) expect(renderCase(locale, id).match(KEY)?.[0] ?? null, `${id} ${locale}`).toBeNull()
+    }
+    // The window's words (the DS Modal draws only once hydrated, so its words are checked here, not in the static page).
+    expect(t('en')(personProblems({ ...EMPTY_PERSON, name: 'Luca Esempio' }, []).size!)).toBe('Give the size (up to 40 characters).')
+    expect(t('it')('draftPage.person.titleAdd', { seq: 3 })).toBe('Aggiungete una persona alla riga 3')
+  })
+
+  it('review A5: a by-person line whose people are in the measurement sheet on it counts — “People: in the attached sheet”', () => {
+    const sheetOnly = kindsRecord({ custom: [describedLine(), mtmLine({ people: [], peopleInSheet: true, pieces: 0 })] })
+    expect(draftFactsOf(sheetOnly)).toMatchObject({ lines: 3, linesWithoutPieces: 0 })
+    expect(stateOf(sheetOnly, 'PEOPLE')).toBe('READY')
+    expect(entryPeopleOf({ kind: 'MADE_TO_MEASURE', line: mtmLine({ people: [], peopleInSheet: true }) }, t('en'), String)).toEqual({ words: 'Line 3, by person: in the attached sheet', missing: false, target: `people-${mtmLine().id}` })
+    for (const locale of ['it', 'en'] as const) {
+      const html = renderCase(locale, 'cp154-sheet-only')
+      expect(html, locale).toContain(t(locale)('draftPage.roster.inSheet'))
+      expect(html, locale).toContain(SHEET_ON_MTM.originalName)
+      expect(html.match(KEY)?.[0] ?? null, locale).toBeNull()
+    }
+    // No one named and no sheet: People and sizes is missing and its problem holds Send.
+    const empty = kindsRecord({ custom: [describedLine(), mtmLine({ people: [], pieces: 0, problems: [{ code: 'NO_PEOPLE', lineId: mtmLine().id, size: null, personId: null }] })], request: { files: { logos: [], references: [], sheets: [] }, problems: [{ code: 'NO_PEOPLE', lineId: mtmLine().id, size: null, personId: null }] } })
+    expect(draftFactsOf(empty).linesWithoutPieces).toBe(1)
+    expect(stateOf(empty, 'PEOPLE')).toBe('MISSING')
+    expect(draftSendHeld(empty.request, FACTS, [])).toEqual({ key: 'held.problems', count: 1 })
+    expect(renderCase('en', 'cp154-no-people')).toContain('No one named yet: add the people, or attach their measurement sheet to this line.')
+    // A described line by its total; with none yet: missing.
+    expect(draftFactsOf(kindsRecord({ custom: [describedLine({ quantity: null, pieces: 0 })] })).linesWithoutPieces).toBe(1)
+  })
+
+  it('review G6: the People card says the riders’ names and measures are personal data — in it and en, for every reader', () => {
+    expect(t('en')('draftPage.roster.privacy')).toContain('personal data')
+    expect(t('it')('draftPage.roster.privacy')).toContain('dati personali')
+    for (const locale of ['it', 'en'] as const) for (const id of ['cp154-kinds', 'cp154-designer', 'cp154-sheet-only', 'draft']) expect(renderCase(locale, id), `${id} ${locale}`).toContain(t(locale)('draftPage.roster.privacy'))
+  })
+
+  it('Your price by role: the customer’s Buyer, Finance and Admin type it; Designer, Production and Viewer never see a price (M-CP-2)', () => {
+    const seesOf = (key: string) => partnerTemplateOf(key)!.grains.includes('price')
+    const roles = { 'customer-buyer': 'edit', 'customer-finance': 'edit', 'customer-admin': 'edit', 'customer-designer': 'none', 'customer-production': 'none', 'customer-viewer': 'none' } as const
+    for (const [key, access] of Object.entries(roles)) {
+      expect(yourPriceAccess(seesOf(key), null), key).toBe(access)
+      const record = kindsRecord({ seesPrices: seesOf(key) })
+      // Part 6 is counted only for a price holder (review B4).
+      expect(draftFactsOf(record).pricedLines, key).toBe(access === 'edit' ? 3 : null)
+      // A reader without the grain never sends the key (the grain filter would refuse the body).
+      expect(ownPriceWriteOf(record, describedLine().id, '20'), key).toEqual(access === 'edit' ? { lineKind: 'CUSTOM', value: '20' } : null)
+    }
+    // A price holder in a preview, offline or on a sent draft reads it.
+    expect(yourPriceAccess(true, 'Offline')).toBe('read')
+    for (const locale of ['it', 'en'] as const) {
+      const admin = renderCase(locale, 'cp154-kinds')
+      expect(admin, locale).toContain(t(locale)('draftPage.price.yours'))
+      expect(admin, locale).toContain(t(locale)('draftPage.price.cell', { seq: 2 }))
+      expect(admin, locale).toContain(t(locale)('draftPage.price.ours'))
+      const designer = renderCase(locale, 'cp154-designer')
+      expect(designer, locale).not.toMatch(/€|EUR/)
+      expect(designer, locale).not.toContain(t(locale)('draftPage.price.yours'))
+      expect(designer, locale).toContain(t(locale)('prices.none'))
+      expect(designer.match(KEY)?.[0] ?? null, locale).toBeNull()
+    }
+    expect(t('en')('draftPage.price.yours')).toBe('Your price (without VAT)')
+    expect(t('it')('draftPage.price.yours')).toBe('Il vostro prezzo (IVA esclusa)')
+  })
+
+  it('Your price: typed the customer’s way, the API’s decimal; our list price beside it on catalogue lines only; the total', () => {
+    expect(ownPriceOf('18,50')).toEqual({ value: '18.50' })
+    expect(ownPriceOf(' € 18.5 ')).toEqual({ value: '18.5' })
+    expect(ownPriceOf('1.250,00')).toEqual({ value: '1250.00' })
+    expect(ownPriceOf('1,250.00')).toEqual({ value: '1250.00' })
+    expect(ownPriceOf('')).toEqual({ value: null })
+    for (const bad of ['abc', '-1', '1.1234567', '12,3,4']) expect(ownPriceOf(bad), bad).toEqual({ problem: 'draftPage.price.problem' })
+    const record = kindsRecord()
+    expect(ownPriceWriteOf(record, describedLine().id, '18,50')).toBeNull() // the price it holds: nothing to write
+    expect(ownPriceWriteOf(record, record.request.lines[0]!.id, '400')).toEqual({ lineKind: 'CATALOGUE', value: '400' })
+    expect(ownPriceWriteOf(record, mtmLine().id, '')).toEqual({ lineKind: 'CUSTOM', value: null })
+    expect(ownPriceWriteOf(record, mtmLine().id, 'abc')).toEqual({ problem: 'draftPage.price.problem' })
+    const rows = priceRowsOf(record.request, t('en'), 'en')
+    expect(rows.map((row) => [row.seq, row.kind, row.ours, row.yours])).toEqual([
+      [1, 'CATALOGUE', '410.00', '410.00'],
+      [2, 'DESCRIBED', null, '18.50'],
+      [3, 'MADE_TO_MEASURE', null, '640.00'],
+    ])
+    // 18 × 410 + 30 × 18.50 + 4 × 640 = 7380 + 555 + 2560.
+    expect(ownTotalOf(rows)).toEqual({ total: '10495.00', missing: 0 })
+    expect(ownTotalOf(rows, { [describedLine().id]: '19,90' })).toEqual({ total: '10537.00', missing: 0 })
+    expect(ownTotalOf(rows, { [mtmLine().id]: '' })).toEqual({ total: null, missing: 1 })
+    const typed = renderCase('en', 'cp154-price-typed')
+    expect(typed).toContain('A price of 0 or more, with up to 6 decimals.')
+    expect(typed).toContain('1 line still without your price')
+  })
+
+  it('a custom line’s window: words required for a described line, a garment type for made to measure; the bodies send only their fields', () => {
+    expect(customLineProblems(customLineDraftOf('DESCRIBED'))).toEqual({ description: 'draftPage.customLine.problem.description' })
+    expect(customLineProblems(customLineDraftOf('MADE_TO_MEASURE'))).toEqual({ garmentType: 'draftPage.customLine.problem.garment' })
+    expect(customLineProblems({ ...customLineDraftOf('DESCRIBED'), description: 'Felpe', total: '0' })).toEqual({ total: 'draftPage.customLine.problem.total' })
+    expect(customLineProblems({ ...customLineDraftOf('DESCRIBED'), description: 'Felpe', total: '12.5' })).toEqual({ total: 'draftPage.customLine.problem.total' })
+    expect(customLineProblems({ ...customLineDraftOf('DESCRIBED'), description: 'Felpe', total: '' })).toEqual({})
+    expect(customLineBody({ ...customLineDraftOf('DESCRIBED'), description: ' Felpe ', total: '40', colourText: '' })).toEqual({ kind: 'DESCRIBED', description: 'Felpe', quantity: 40 })
+    expect(customLineBody({ ...customLineDraftOf('DESCRIBED'), description: 'Felpe', total: '40', byPerson: true })).toEqual({ kind: 'DESCRIBED', description: 'Felpe', byPerson: true })
+    // Made to measure: always by person, never a total.
+    expect(customLineBody({ ...customLineDraftOf('MADE_TO_MEASURE'), garmentType: 'SUIT-1PC', total: '4' })).toEqual({ kind: 'MADE_TO_MEASURE', garmentType: 'SUIT-1PC' })
+    expect(customLineDraftOf('MADE_TO_MEASURE').byPerson).toBe(true)
+    const line = describedLine({ sizes: [{ size: 'S', quantity: 30 }] })
+    expect(customLineChanges(line, customLineDraftOf('DESCRIBED', line))).toEqual({})
+    expect(customLineChanges(line, { ...customLineDraftOf('DESCRIBED', line), byPerson: true })).toEqual({ byPerson: true, sizes: [], quantity: null })
+    expect(customLineChanges(line, { ...customLineDraftOf('DESCRIBED', line), total: '' })).toEqual({ quantity: null })
+    expect(customLineChanges(mtmLine(), { ...customLineDraftOf('MADE_TO_MEASURE', mtmLine()), garmentType: 'JKT-MTM', colourText: '' })).toEqual({ colourText: null, garmentType: 'JKT-MTM' })
+    for (const locale of ['it', 'en'] as const) for (const id of ['cp154-describe', 'cp154-mtm-window']) expect(renderCase(locale, id).match(KEY)?.[0] ?? null, `${id} ${locale}`).toBeNull()
+    // The window's words (the DS Modal draws only once hydrated, so its words are checked here, not in the static page).
+    expect(t('en')(customLineProblems(customLineDraftOf('MADE_TO_MEASURE')).garmentType!)).toBe('Choose the garment type.')
+    for (const key of ['titleDescribed', 'titleMtm', 'description', 'descriptionHint', 'colours', 'style', 'styleMtm', 'how', 'howTotal', 'howPeople', 'total', 'totalHint', 'garment', 'garmentChoose', 'mtmPeople', 'note', 'add', 'save'])
+      for (const locale of ['it', 'en'] as const) expect(t(locale)(`draftPage.customLine.${key}`), `${key} ${locale}`).not.toMatch(/^draftPage\.|\{/)
+  })
+
+  it('W-CP-1 / W-CP-3: lines, people and Your price go onto the session’s own draft by ids only, at the draft’s version — never a party or a company', async () => {
+    const calls: { method: string; path: string; body?: unknown; query?: unknown }[] = []
+    const api = {
+      post: async (path: string, options: { body?: unknown }) => {
+        calls.push({ method: 'POST', path, body: options.body })
+        return kindsRecord()
+      },
+      request: async (method: string, path: string, options: { body?: unknown; query?: unknown }) => {
+        calls.push({ method, path, body: options.body, query: options.query })
+        return kindsRecord()
+      },
+    } as unknown as ApiClient
+    await addCustomLine(api, 'd1', { version: 7, line: { kind: 'DESCRIBED', description: 'Felpe', quantity: 40 } })
+    await changeCustomLine(api, 'd1', 'l2', { version: 8, brandUnitPrice: '18.50' })
+    await addPeople(api, 'd1', 'l3', { version: 9, people: [{ name: 'Ada Esempio', measureBy: 'SIZE', size: '52' }] })
+    await changePerson(api, 'd1', 'l3', 'p1', { version: 10, measureBy: 'LATER', size: null })
+    await removePerson(api, 'd1', 'l3', 'p1', 11)
+    await changeLine(api, 'd1', 'l1', { version: 12, brandUnitPrice: null })
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([
+      'POST /portal/order-requests/d1/custom-lines',
+      'PUT /portal/order-requests/d1/custom-lines/l2',
+      'POST /portal/order-requests/d1/lines/l3/people',
+      'PUT /portal/order-requests/d1/lines/l3/people/p1',
+      'DELETE /portal/order-requests/d1/lines/l3/people/p1',
+      'PUT /portal/order-requests/d1/lines/l1',
+    ])
+    expect(calls[0]!.body).toEqual({ version: 7, line: { kind: 'DESCRIBED', description: 'Felpe', quantity: 40 } })
+    expect(calls[4]!.query).toEqual({ version: 11 })
+    expect(calls[5]!.body).toEqual({ version: 12, brandUnitPrice: null })
+    expect(JSON.stringify(calls)).not.toMatch(/party|company/i)
+  })
+
+  it('every new case draws in Italian and English, Brand Alpha’s own riders only, no raw key, no e-mail outside example.com', () => {
+    for (const locale of ['it', 'en'] as const) {
+      for (const id of ['cp154-kinds', 'cp154-sheet-only', 'cp154-no-people', 'cp154-designer', 'cp154-mtm-off', 'cp154-price-typed', 'cp154-describe', 'cp154-mtm-window', 'cp154-person', 'cp154-person-change']) {
+        const html = renderCase(locale, id)
+        expect(html.match(KEY)?.[0] ?? null, `${id} (${locale})`).toBeNull()
+        expect(html, `${id} (${locale})`).not.toMatch(/@(?!example\b)[a-z0-9-]+\.(com|it|eu)\b/)
+        expect(scanText(html, BRAND_BETA), `${id} (${locale})`).toEqual([])
+      }
+    }
+    expect(personOf(9).name).toMatch(/Esempio$/)
+  })
+})
+// ---- end F-CP-154

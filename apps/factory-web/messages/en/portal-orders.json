@@ -976,5 +976,50 @@
   "reported": {
     "label": "Problems you reported on this order",
     "report": "Report a problem"
+  },
+  "priceCheck": {
+    "title": "Price check",
+    "yours": "Your price (without VAT)",
+    "yourPrice": "Your price",
+    "yourAmount": "Your amount",
+    "yourTotal": "Your total",
+    "check": "Check",
+    "difference": "Difference",
+    "agree": "Our prices agree",
+    "differ_one": "Our prices differ on {count} line: change your price (you can add a note)",
+    "differ_other": "Our prices differ on {count} lines: change your price (you can add a note)",
+    "differTotal": "Our prices differ on the order's total: change your price (you can add a note)",
+    "none": "You have not given your price yet",
+    "missing": "{missing} of {lines} lines without your price",
+    "otherCurrency_one": "{count} price in another currency is not counted",
+    "otherCurrency_other": "{count} prices in another currency are not counted",
+    "totalRow": "Your total for the whole order: {source}",
+    "diffHint": "Difference = our price minus yours: + we ask more, − we ask less.",
+    "match": {
+      "EQUAL": "Equal",
+      "NOT_EQUAL": "Not equal",
+      "NO_BRAND_PRICE": "No price of yours yet"
+    },
+    "source": {
+      "PORTAL": "Typed by you",
+      "CUSTOMER_PO": "From your PO, typed by the factory",
+      "OFFICE": "Typed by the factory"
+    },
+    "edit": "Your prices…",
+    "dialogTitle": "Your prices (without VAT)",
+    "unit": "Your unit price for line {seq}",
+    "note": "Note (optional)",
+    "noteHint": "It goes with the prices you change; the factory reads it with them.",
+    "save": "Save your prices",
+    "saving": "Saving…",
+    "saved": "Your prices are saved.",
+    "problem": "A price of 0 or more, with up to 6 decimals.",
+    "noteLong": "At most 1000 characters.",
+    "stale": "Someone changed these prices meanwhile. Here they are now.",
+    "closed": "A closed or cancelled order keeps its prices.",
+    "readsOnly": "Your price is given by a colleague who orders for you (a Buyer or your Admin).",
+    "refused": "These prices cannot be saved as they are: check the lines marked.",
+    "notSaved": "Your prices were not saved: try again.",
+    "failed": "The prices could not be read."
   }
 }

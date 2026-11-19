@@ -176,6 +176,16 @@
       "removed": "Messaggio rimosso dopo una richiesta di privacy",
       "filesOnly_one": "{count} file",
       "filesOnly_other": "{count} file"
+    },
+    "designer": {
+      "ask": "Chiedi a {name}, designer della fabbrica",
+      "hint": "{name} riceve subito il vostro messaggio; il resto della fabbrica lo legge come sempre.",
+      "typeAt": "Scrivete @ per chiedere a {name}.",
+      "chip": "{name} · designer della fabbrica",
+      "asked": "Abbiamo chiesto a {name}.",
+      "notHere": "Qui il designer della fabbrica non si può chiedere: il messaggio arriva al nostro team.",
+      "noDesigner": "Non c'è ancora un designer della fabbrica per voi: scrivete qui, risponde il nostro team.",
+      "capped": "Messaggio inviato. Oggi avete già chiesto 20 volte al designer della fabbrica: questo messaggio arriva al nostro team."
     }
   },
   "record": {

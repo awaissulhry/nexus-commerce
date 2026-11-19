@@ -218,12 +218,7 @@
     "NO_SIZES": "The line asks no size.",
     "PRICE_CHANGED": "Price now {now} (was {was}).",
     "PRICE_NEW": "Price now {now}: take today's prices.",
-    "PRICE_ANY": "The price changed: take today's prices.",
-    "NO_TOTAL": "Say how many pieces in all (the sizes may follow).",
-    "SIZES_NOT_TOTAL": "The sizes do not add up to the total pieces.",
-    "NO_PEOPLE": "Name the people, or attach their measurement sheet.",
-    "MTM_CLOSED": "Made to measure is not open for you yet: ask us in the messages.",
-    "GARMENT_TYPE_GONE": "This made-to-measure garment type is no longer offered: choose another garment type."
+    "PRICE_ANY": "The price changed: take today's prices."
   },
   "notice": {
     "PRICE_CHANGED": "Price now {now} (was {was})",
@@ -570,11 +565,25 @@
     "people": {
       "grid": "Line {seq}: size grid, {pieces} pieces",
       "none": "Line {seq}: no pieces yet",
-      "empty": "Add a line first: its sizes show here."
+      "empty": "Add a line first: its sizes show here.",
+      "total": "Line {seq}: {pieces} pieces · sizes later",
+      "totalSizes": "Line {seq}: {pieces} pieces in sizes",
+      "noTotal": "Line {seq}: no total yet",
+      "byPerson_one": "Line {seq}, by person: {count} person",
+      "byPerson_other": "Line {seq}, by person: {count} people",
+      "inSheet": "Line {seq}, by person: in the attached sheet",
+      "noOne": "Line {seq}, by person: no one named yet"
     },
     "price": {
       "line": "Line",
-      "ours": "Our list price"
+      "ours": "Our list price",
+      "yours": "Your price (without VAT)",
+      "cell": "Your price for line {seq}",
+      "total": "Total",
+      "frozen": "Frozen when you send. The factory checks it against its own price (Price check on the order).",
+      "missing_one": "{count} line still without your price",
+      "missing_other": "{count} lines still without your price",
+      "problem": "A price of 0 or more, with up to 6 decimals."
     },
     "thread": "Messages · this draft",
     "sentThread": "The factory answers here and by e-mail.",
@@ -613,7 +622,131 @@
       "sheetsPrivacy": "Measurement sheets are personal data: at the factory only the people who handle measurements open them."
     },
     "start": {
-      "words": "Just write it in words"
+      "words": "Just write it in words",
+      "describe": "Describe it",
+      "describeHint": "In your own words: what you need, the colours, how many — or one row per person. The factory reads it from the first save."
+    },
+    "kind": {
+      "CATALOGUE": "From the catalogue",
+      "DESCRIBED": "Described by you",
+      "MADE_TO_MEASURE": "Made to measure"
+    },
+    "addDescribed": "Describe it",
+    "addMtm": "Made to measure",
+    "mtmOff": "Made to measure is not open for you yet: ask us in the messages.",
+    "line": {
+      "untitled": "Untitled line",
+      "byPerson": "By person",
+      "people_one": "{count} person",
+      "people_other": "{count} people",
+      "inSheet": "People: in the attached sheet",
+      "noPeople": "no one named yet",
+      "total": "{pieces} pieces",
+      "sizesLater": "sizes later",
+      "inSizes": "in sizes: {sizes}",
+      "noTotal": "No total yet",
+      "colours": "Colours: {colours}",
+      "ownStyle": "Your style {style}",
+      "madeFrom": "Made from {style}",
+      "change": "Change…",
+      "removed": "Line {seq} removed.",
+      "menu": "More for line {seq}"
+    },
+    "customLine": {
+      "titleDescribed": "Describe what you need",
+      "titleMtm": "A made-to-measure line",
+      "titleChange": "Line {seq} · {kind}",
+      "description": "What you need",
+      "descriptionHint": "In your own words: the garment, the fabric, the logos, anything we should know (up to 2000 characters).",
+      "descriptionMtm": "What you need (optional)",
+      "colours": "Colours in words (optional)",
+      "coloursHint": "Like “red and white, as the reference”.",
+      "style": "Your own style (optional)",
+      "styleHint": "One of your own label’s styles, if it is made from one.",
+      "styleMtm": "Style (optional)",
+      "styleMtmHint": "The style it is made from, if you know it.",
+      "noStyle": "None",
+      "stylesLoading": "Reading your styles…",
+      "stylesFailed": "Your styles could not be read: you can save the line without one.",
+      "how": "How many",
+      "howTotal": "A total (sizes may follow)",
+      "howPeople": "One row per person",
+      "total": "Pieces in all",
+      "totalHint": "Leave it empty if you do not know yet: we ask before you send.",
+      "garment": "Garment type",
+      "garmentChoose": "Choose a garment type",
+      "mtmPeople": "Made to measure is always one row per person: name the people, or attach their measurement sheet, in People and sizes.",
+      "peopleHint": "Name the people, or attach their measurement sheet, in People and sizes.",
+      "note": "Note on the line (optional)",
+      "add": "Add the line",
+      "save": "Save the line",
+      "problem": {
+        "description": "Say in your words what you need.",
+        "descriptionLong": "At most 2000 characters.",
+        "coloursLong": "At most 200 characters.",
+        "total": "A whole number of pieces, 1 to 100000.",
+        "garment": "Choose the garment type.",
+        "noteLong": "At most 1000 characters."
+      }
+    },
+    "roster": {
+      "privacy": "The names and measures of your riders and team are personal data: we use them only to make this order, and at the factory only the people who handle measurements open the measurement sheets.",
+      "title": "Line {seq} · {kind} · {title} — one row per person",
+      "add": "Add a person",
+      "col": {
+        "name": "Name",
+        "number": "Number",
+        "how": "How we get the size",
+        "what": "What is there",
+        "more": "More"
+      },
+      "empty": "No one named yet: add the people, or attach their measurement sheet to this line.",
+      "inSheet": "People: in the attached sheet",
+      "sheetOnLine": "Measurement sheet on this line: {names}",
+      "attach": "Attach their measurement sheet to this line: drop it here or choose it",
+      "attachClosed": "Measurement sheets: e-mail them to your contact at the factory, naming «{draft}» and line {seq}.",
+      "sheetGone": "a sheet no longer on the draft",
+      "personMenu": "More for {name}",
+      "change": "Change…",
+      "remove": "Remove"
+    },
+    "measure": {
+      "SIZE": "Size",
+      "SHEET": "Measurement sheet",
+      "LATER": "Sending later"
+    },
+    "person": {
+      "titleAdd": "Add a person to line {seq}",
+      "titleChange": "{name} · line {seq}",
+      "name": "Name",
+      "nameHint": "The name we tell their garments apart by.",
+      "number": "Number (optional)",
+      "numberHint": "A race or shirt number, up to 10 characters.",
+      "how": "How we get the size",
+      "size": "Size",
+      "sizeHint": "As on the size chart of the garment.",
+      "sheet": "Measurement sheet",
+      "sheetChoose": "Choose a sheet of this draft",
+      "noSheets": "No measurement sheet on this draft yet: add it in People and sizes first, or choose another way.",
+      "later": "We send the measures later.",
+      "note": "Note (optional)",
+      "add": "Add the person",
+      "save": "Save",
+      "problem": {
+        "name": "A name is 1 to 120 characters.",
+        "number": "At most 10 characters.",
+        "size": "Give the size (up to 40 characters).",
+        "sheet": "Choose the measurement sheet that holds the measures.",
+        "note": "At most 1000 characters."
+      }
+    },
+    "problem": {
+      "NO_TOTAL": "Say how many pieces in all (the sizes may follow).",
+      "SIZES_NOT_TOTAL": "The sizes add up to {sum} pieces, the total says {total}.",
+      "SIZES_NOT_TOTAL_ANY": "The sizes and the total do not match.",
+      "NO_PEOPLE": "Name the people, or attach their measurement sheet.",
+      "GARMENT_TYPE_GONE": "Made to measure {type} is no longer offered: choose another garment type.",
+      "GARMENT_TYPE_GONE_ANY": "This garment type is no longer made to measure: choose another one."
     }
   }
 }

@@ -19,6 +19,12 @@ import { usePortalRecordFrame } from '../record/PortalRecordFrame'
 // ---- end B-TH-273
 import { THREAD_BODY_LIMIT, threadHeldKey } from '../thread-model'
 import { ThreadView } from '../view/ThreadView'
+// ---- F-CP-156 (customer page plan C7, D12; B-CP-078, B-CP-079): "Ask <name>, factory designer" — the one name, the box, the "@" chip.
+import { useToast } from '@nexus/ui/components'
+import { issuePath } from '../../../lib/api/errors'
+import { fetchFactoryDesigner } from '../api'
+import { designerAskedOf, designerBoxShows, designerChipShows, designerRefusalKey, withDesignerMention } from '../thread-model'
+// ---- end F-CP-156
 
 /**
  * The conversation about one record (or the account, `Party`) as the partner sees it: GET /portal/threads/:type/:id, a post
@@ -58,6 +64,20 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
   const box = useRef<HTMLDivElement>(null)
   // ---- B-TH-286: the pins, read with the conversation (a failed read shows none: they are a pointer, never the only copy).
   const [pins, setPins] = useState<PartnerPinRead[]>([])
+  // ---- F-CP-156: the one factory designer the customer may ask (null: none named, or not a customer's portal) and the box.
+  const [designerName, setDesignerName] = useState<string | null>(null)
+  const [askDesigner, setAskDesigner] = useState(false)
+  const { toast } = useToast()
+  const customer = frame.kinds.includes('CUSTOMER')
+  useEffect(() => {
+    if (!customer) return
+    const abort = new AbortController()
+    fetchFactoryDesigner(frame.api, abort.signal)
+      .then(setDesignerName)
+      .catch(() => setDesignerName(null))
+    return () => abort.abort()
+  }, [customer, frame.api])
+  // ---- end F-CP-156
   const told = useRef({ onRecord, onMissing, onMessages })
   told.current = { onRecord, onMissing, onMessages }
   // ---- B-TH-273
@@ -134,26 +154,44 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
     box.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
   }, [focus, state])
 
+  // F-CP-156: the box shows for a name to ask, on a record the customer may ask on, while it may write here.
+  const boxShows = designerBoxShows({ name: designerName, type, canPost: read?.composer.canPost ?? false })
   const send = useCallback(async (): Promise<boolean> => {
     const body = draft.trim()
     if (!body || sending) return false
     key.current ??= newIdempotencyKey()
     setSending(true)
     setFailed(null)
+    const asking = boxShows && askDesigner // F-CP-156
     try {
-      await postMessage(frame.api, type, id, body, key.current)
+      const answer = await postMessage(frame.api, type, id, body, key.current, { askFactoryDesigner: asking })
       key.current = null
       setDraft('')
+      // ---- F-CP-156: "We asked Giulia Verdi." (or: the day's asks are used up, the message reached the team) — never who read it.
+      setAskDesigner(false)
+      const said = asking ? designerAskedOf(answer.designerAsk) : null
+      if (said) toast(t(said.key, said.name ? { name: said.name } : undefined), said.key === 'thread.designer.asked' ? 'success' : 'info')
+      // ---- end F-CP-156
       await load()
       return true
     } catch (error) {
       const kind = isApiError(error) ? error.kind : 'internal'
+      // ---- F-CP-156: the ask refused before the post (nothing posted): the text stays, with its words; no name now → no box.
+      const refusal = asking && isApiError(error) && kind === 'conflict' ? designerRefusalKey(error.issues.map(issuePath)) : null
+      if (refusal) {
+        key.current = null
+        setAskDesigner(false)
+        if (refusal === 'thread.designer.noDesigner') setDesignerName(null)
+        setFailed(t(refusal))
+        return false
+      }
+      // ---- end F-CP-156
       setFailed(t(`thread.failed.${kind === 'conflict' || kind === 'forbidden' || kind === 'invalid' || kind === 'unavailable' ? kind : 'other'}`))
       return false
     } finally {
       setSending(false)
     }
-  }, [draft, sending, frame.api, type, id, load, t])
+  }, [draft, sending, frame.api, type, id, load, t, boxShows, askDesigner, toast])
 
   usePortalUnsaved(`thread:${type}:${id}`, { dirty: draft.trim() !== '', what: t('unsaved.message'), save: send })
 
@@ -229,6 +267,8 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
             words: pin.message.removed ? t('thread.pins.removed') : pin.message.excerpt.trim() !== '' ? pin.message.excerpt : t('thread.pins.filesOnly', { count: pin.message.attachmentCount }),
             date: formatDate(pin.message.at, { locale }),
           })),
+          // F-CP-156: "Ask <name>, factory designer" under the thread; the ONE "@" chip while an "@" is typed.
+          designer: boxShows && designerName ? { name: designerName, ask: askDesigner, chip: designerChipShows(draft, designerName), held: null } : null,
         }}
         headingLevel={headingLevel}
         onChange={(value) => {
@@ -236,6 +276,19 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
           if (failed) setFailed(null)
         }}
         onSend={() => void send()}
+        // ---- F-CP-156: a change of the box is a new post (its own key); the chip puts "@<name> " in the text and ticks the box.
+        onAskDesigner={(ask) => {
+          key.current = null
+          setAskDesigner(ask)
+        }}
+        onDesignerChip={() => {
+          if (!designerName) return
+          key.current = null
+          setDraft((now) => withDesignerMention(now, designerName))
+          setAskDesigner(true)
+          if (failed) setFailed(null)
+        }}
+        // ---- end F-CP-156
         onMore={() => void more()}
         onRetry={() => {
           setState('loading')

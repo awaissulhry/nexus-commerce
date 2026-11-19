@@ -10,6 +10,11 @@ import type { RequestStatus } from './api'
 // F-CP-151: the draft's files (B-CP-072): the domain's cap, the parts.
 import { DRAFT_FILES_MAX } from '@nexus/factory-domain/sales/portal-ordering/draft-files'
 import type { DraftFile, DraftFilePart } from './api'
+// F-CP-154: lines of every kind, the People and sizes roster, "Your price".
+import { problemsByPartOf } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { PEOPLE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/people'
+import { CUSTOM_LINE_LIMITS, lineHasPieces } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import type { CustomLine, CustomLineFields, CustomLineKind, DraftPerson, MadeToMeasure, MeasureBy, PersonFields } from './api'
 
 /**
  * New order & reorder (B-W2b-194; design portal.customer.neworder, SCR-185), pure: the page's address, the three ways in,
@@ -38,6 +43,8 @@ export interface NewOrderQuery {
   /** A past order to reorder (the order record's "Reorder this line"), and the line. */
   reorder?: string | null
   line?: string | null
+  /** F-CP-154: the start's "Describe it" — the new draft opens with its "Describe what you need" window. */
+  add?: AddKind | null
 }
 
 /** `/p/<party>/orders/new?draft=&way=&styles=&reorder=&line=`. */
@@ -48,6 +55,7 @@ export function newOrderHref(prefix: string, query: NewOrderQuery = {}): string 
   if (query.styles && query.styles.length > 0) search.set('styles', query.styles.join(','))
   if (query.reorder) search.set('reorder', query.reorder)
   if (query.line) search.set('line', query.line)
+  if (query.add) search.set('add', query.add) // F-CP-154
   const text = search.toString()
   return `${prefix}/orders/new${text ? `?${text}` : ''}`
 }
@@ -196,13 +204,16 @@ export const lineHeld = (cells: Cells): string | null => (piecesOfCells(cells) =
 export interface WordsKit {
   t: Translate
   price: (value: string | null | undefined) => string | null
+  /** F-CP-154: the page's language (a garment type's words); absent: its code. */
+  locale?: Locale
 }
 
-/** A problem that holds the send, in the page's words. */
-export function problemWords(problem: Problem, lines: readonly DraftLine[], kit: WordsKit): string {
+/** A problem that holds the send, in the page's words (F-CP-154: a described or made-to-measure line's too — `custom`). */
+export function problemWords(problem: Problem, lines: readonly DraftLine[], kit: WordsKit, custom: readonly CustomLine[] = []): string {
   const { t } = kit
   const line = problem.lineId ? lines.find((entry) => entry.id === problem.lineId) : undefined
-  const style = line?.style.code ?? t('problem.thisStyle')
+  const own = problem.lineId ? custom.find((entry) => entry.id === problem.lineId) : undefined // F-CP-154
+  const style = line?.style.code ?? own?.style?.code ?? t('problem.thisStyle')
   switch (problem.code) {
     case 'NO_LINES':
       return t('problem.NO_LINES')
@@ -215,7 +226,7 @@ export function problemWords(problem: Problem, lines: readonly DraftLine[], kit:
     case 'STYLE_NOT_SOLD':
       return t('problem.STYLE_NOT_SOLD', { style })
     case 'COLOUR_DISCONTINUED':
-      return t('problem.COLOUR_DISCONTINUED', { colour: line?.colourway.name ?? '' })
+      return t('problem.COLOUR_DISCONTINUED', { colour: line?.colourway.name ?? own?.colourway?.name ?? '' })
     case 'SIZE_NOT_OFFERED':
       return t('problem.SIZE_NOT_OFFERED', { size: problem.size ?? '', style })
     case 'NO_SIZES':
@@ -225,23 +236,30 @@ export function problemWords(problem: Problem, lines: readonly DraftLine[], kit:
       const was = kit.price(line?.unitPriceShown)
       return now && was ? t('problem.PRICE_CHANGED', { now, was }) : now ? t('problem.PRICE_NEW', { now }) : t('problem.PRICE_ANY')
     }
-    // ---- B-CP-075: a described or made-to-measure line's own problems (the domain's customLineProblems), in the page's words
+    // F-CP-154 (B-CP-075): a described or made-to-measure line's own problems, from codes and figures.
     case 'NO_TOTAL':
-      return t('problem.NO_TOTAL')
-    case 'SIZES_NOT_TOTAL':
-      return t('problem.SIZES_NOT_TOTAL')
+      return t('draftPage.problem.NO_TOTAL')
+    case 'SIZES_NOT_TOTAL': {
+      const sum = own ? own.sizes.reduce((total, row) => total + row.quantity, 0) : null
+      return own && own.quantity !== null && sum !== null ? t('draftPage.problem.SIZES_NOT_TOTAL', { sum, total: own.quantity }) : t('draftPage.problem.SIZES_NOT_TOTAL_ANY')
+    }
     case 'NO_PEOPLE':
-      return t('problem.NO_PEOPLE')
+      return t('draftPage.problem.NO_PEOPLE')
     case 'MTM_CLOSED':
-      return t('problem.MTM_CLOSED')
-    case 'GARMENT_TYPE_GONE':
-      return t('problem.GARMENT_TYPE_GONE')
-    // ---- end B-CP-075
+      return t('draftPage.mtmOff')
+    case 'GARMENT_TYPE_GONE': {
+      const type = own?.garmentType ? (kit.locale ? own.garmentType.words[kit.locale] : own.garmentType.code) : null
+      return type ? t('draftPage.problem.GARMENT_TYPE_GONE', { type }) : t('draftPage.problem.GARMENT_TYPE_GONE_ANY')
+    }
   }
 }
 
-/** Where "Show me" goes for a problem: the line's card, or the order details. */
-export const problemPlace = (problem: Problem): string => (problem.lineId ? `line-${problem.lineId}` : problem.code === 'NO_LINES' || problem.code === 'TOO_MANY_LINES' ? 'lines' : 'order-head')
+/**
+ * Where "Show me" goes for a problem: the line's card, or the order details. F-CP-154: a person's problem goes to their row of the
+ * roster, a line with no one named to its roster.
+ */
+export const problemPlace = (problem: Problem): string =>
+  problem.personId ? `person-${problem.personId}` : problem.code === 'NO_PEOPLE' && problem.lineId ? `people-${problem.lineId}` : problem.lineId ? `line-${problem.lineId}` : problem.code === 'NO_LINES' || problem.code === 'TOO_MANY_LINES' ? 'lines' : 'order-head'
 
 export interface NoticeFacts {
   style?: string | null
@@ -412,9 +430,14 @@ export const linesInOrder = <Line extends Pick<DraftLine, 'seq'>>(lines: readonl
 /** What the checklist counts, from the draft as read (the files with F-CP-151; the customer's own prices with F-CP-154). */
 export function draftFactsOf(record: Pick<DraftRecord, 'request' | 'seesPrices'>): DraftFacts {
   const request = record.request
+  // F-CP-154 (B-CP-075): the lines of every kind count — a described line by its total or sizes, a by-person line by its people or
+  // the measurement sheet on it (the domain's own rule, as the office's Drafts view counts them).
+  const custom = customLinesOf(request)
+  const sheetLines = new Set(draftFilesOf(request).sheets.flatMap((file) => (file.lineId ? [file.lineId] : [])))
+  const customWithout = custom.filter((line) => !lineHasPieces({ kind: line.kind, quantity: line.quantity, sizes: line.sizes, byPerson: line.byPerson, people: line.people.length, sheetOnLine: sheetLines.has(line.id) || line.peopleInSheet })).length
   return {
-    lines: request.lines.length,
-    linesWithoutPieces: request.lines.filter((line) => line.pieces === 0).length,
+    lines: request.lines.length + custom.length,
+    linesWithoutPieces: request.lines.filter((line) => line.pieces === 0).length + customWithout,
     // F-CP-151: the draft's own files and its lines' (B-CP-072).
     logos: draftFilesOf(request).logos.length,
     references: draftFilesOf(request).references.length,
@@ -422,10 +445,10 @@ export function draftFactsOf(record: Pick<DraftRecord, 'request' | 'seesPrices'>
     headerProblems: request.problems.filter((problem) => problem.lineId === null && HEADER_CODES.includes(problem.code)).length,
     note: (request.note ?? '').trim() !== '',
     later: laterPartsOf(request),
-    // Part 6 is not counted for a reader without the price grain (review B4); a price holder types the customer's own price
-    // with F-CP-154 (PW2): until then no line carries one.
-    pricedLines: record.seesPrices ? 0 : null,
+    // Part 6 is not counted for a reader without the price grain (review B4). F-CP-154: a price holder's lines with their own price.
+    pricedLines: record.seesPrices ? [...request.lines, ...custom].filter((line) => line.brandUnitPrice !== undefined && line.brandUnitPrice !== null).length : null,
     problems: request.problems.length,
+    problemsByPart: problemsByPartOf(request.problems), // F-CP-154: a part with a problem is not ready (the domain's own rule)
   }
 }
 
@@ -451,10 +474,14 @@ export function draftChips(record: Pick<DraftRecord, 'request' | 'seesPrices'>):
 /** A part's state as a DS tone: Ready green, Sending later amber, Missing red, Optional plain. */
 export const partTone = (state: DraftPartState): 'success' | 'warning' | 'danger' | 'neutral' => (state === 'READY' ? 'success' : state === 'LATER' ? 'warning' : state === 'MISSING' ? 'danger' : 'neutral')
 
-/** The draft's name: its first line (by seq) — the style's code and name —, else "Untitled draft". */
-export function draftTitleOf(request: Pick<DraftRequest, 'lines'>, t: Translate): string {
-  const first = linesInOrder(request.lines)[0]
-  return first ? `${first.style.code} ${first.style.name}` : t('draftPage.untitled')
+/**
+ * The draft's name: its first line (by seq) — the style's code and name —, else "Untitled draft". F-CP-154: a line in the customer's
+ * own words names its words (the first line, cut), else its garment type, else its style.
+ */
+export function draftTitleOf(request: Pick<DraftRequest, 'lines'> & Partial<Pick<DraftRequest, 'customLines'>>, t: Translate, locale?: Locale): string {
+  const first = entriesInOrder(request)[0]
+  if (!first) return t('draftPage.untitled')
+  return first.kind === 'CATALOGUE' ? `${first.line.style.code} ${first.line.style.name}` : customTitleOf(first.line, t, locale)
 }
 
 /** "Saved 14:02 by Marta Bianchi · v14" (the name once B-CP-075 says who changed it last; else "Saved 14:02 · v14"). */
@@ -507,12 +534,12 @@ export function draftBannerOf(input: { offline: boolean; stale: boolean; refused
 /** The draft as one of the page's states (the view draws one banner and the right cards for each). */
 export type DraftState = 'empty' | 'partly' | 'held' | 'sent' | 'refused' | 'withdrawn' | 'accepted'
 
-export function draftStateOf(request: Pick<DraftRequest, 'status' | 'lines' | 'problems' | 'may'>): DraftState {
+export function draftStateOf(request: Pick<DraftRequest, 'status' | 'lines' | 'problems' | 'may'> & Partial<Pick<DraftRequest, 'customLines'>>): DraftState {
   if (request.status === 'SENT') return 'sent'
   if (request.status === 'REFUSED') return 'refused'
   if (request.status === 'WITHDRAWN') return 'withdrawn'
   if (request.status === 'ACCEPTED') return 'accepted'
-  if (request.lines.length === 0) return 'empty'
+  if (request.lines.length + customLinesOf(request).length === 0) return 'empty' // F-CP-154: lines of every kind
   return request.problems.length > 0 || !mayOf(request).send ? 'held' : 'partly'
 }
 
@@ -597,3 +624,364 @@ export const fileHeldKey = (file: Pick<DraftFile, 'status'>): string | null => (
 export const draftMailName = (request: Pick<DraftRequest, 'customerRef' | 'lines'>, t: Translate): string => request.customerRef ?? draftTitleOf(request, t)
 // ---- end F-CP-151
 
+
+// ---- F-CP-154 (customer page plan C5; 12 §2 parts 1, 4 and 6; review A5, E4, G6; 11 §1.3 D3): lines of every kind, the People and
+// sizes roster, "Your price" -----------------------------------------------------------------------------------------------------
+// The draft holds three kinds of line, one list by seq (rows never jump): From the catalogue (style × colour, the size grid), Described
+// by you (their words, colours in words, maybe their own-label style, a total — sizes may follow —, or one row per person), Made to
+// measure (a garment type, maybe a style, always one row per person). A by-person line has a roster: each person a name, maybe a
+// number, and ONE of Size · Measurement sheet · Sending later (no "Saved measurements" in v1: lead pick). A measurement sheet on the
+// line stands for its roster ("People: in the attached sheet", review A5). Made to measure is open by default; only where the office
+// switched it off it says "Made to measure is not open for you yet". The ONE "Your price (without VAT)" cell, per line, only for a
+// price holder (the customer's Buyer, Finance, Admin): anyone else reads "Prices are not part of your access." — the API sends no
+// price to them and refuses one from them (M-CP-2).
+
+/** The draft's lines in the customer's own words (an older answer: none). */
+export const customLinesOf = (request: Partial<Pick<DraftRequest, 'customLines'>>): readonly CustomLine[] => request.customLines ?? []
+
+/** One line of the draft, of any kind. */
+export type DraftEntry = { readonly kind: 'CATALOGUE'; readonly line: DraftLine } | { readonly kind: CustomLineKind; readonly line: CustomLine }
+
+/** Every line of the draft, catalogue and custom, in ONE order: by seq (both carry it; a row never jumps under the cursor). */
+export function entriesInOrder(request: Pick<DraftRequest, 'lines'> & Partial<Pick<DraftRequest, 'customLines'>>): DraftEntry[] {
+  const entries: DraftEntry[] = [...request.lines.map((line) => ({ kind: 'CATALOGUE' as const, line })), ...customLinesOf(request).map((line) => ({ kind: line.kind, line }))]
+  return entries.sort((a, b) => a.line.seq - b.line.seq)
+}
+
+/** How many lines the draft holds, of every kind. */
+export const lineCountOf = (request: Pick<DraftRequest, 'lines'> & Partial<Pick<DraftRequest, 'customLines'>>): number => request.lines.length + customLinesOf(request).length
+
+/** The kinds a new line may be in the customer's own words ("Describe it", "Made to measure" in "Add a line ▾"). */
+export const ADD_KINDS = ['described', 'mtm'] as const
+export type AddKind = (typeof ADD_KINDS)[number]
+export const isAddKind = (value: unknown): value is AddKind => typeof value === 'string' && (ADD_KINDS as readonly string[]).includes(value)
+export const ADD_KIND_OF: Readonly<Record<AddKind, CustomLineKind>> = Object.freeze({ described: 'DESCRIBED', mtm: 'MADE_TO_MEASURE' })
+
+/** A line's kind in words: "From the catalogue" · "Described by you" · "Made to measure". */
+export const kindKey = (kind: DraftEntry['kind']): string => `draftPage.kind.${kind}`
+
+/** Made to measure for this customer: open unless the office switched it off; never offered once the draft is no longer one. */
+export function mtmOf(request: Pick<DraftRequest, 'status'> & Partial<Pick<DraftRequest, 'madeToMeasure'>>): { open: boolean; garmentTypes: MadeToMeasure['garmentTypes'] } {
+  if (request.status !== 'DRAFT' || request.madeToMeasure === null) return { open: false, garmentTypes: [] }
+  if (request.madeToMeasure === undefined) return { open: true, garmentTypes: [] }
+  return { open: request.madeToMeasure.open, garmentTypes: request.madeToMeasure.garmentTypes }
+}
+
+/** Why a made-to-measure line cannot be added (a key), or null: "not open for you yet" only where the office switched it off. */
+export const mtmHeldKey = (request: Pick<DraftRequest, 'status'> & Partial<Pick<DraftRequest, 'madeToMeasure'>>): string | null => (mtmOf(request).open ? null : 'draftPage.mtmOff')
+
+const TITLE_MAX = 60
+const firstLine = (text: string): string => {
+  const line = text.split(/\r?\n/).find((part) => part.trim() !== '')?.trim() ?? ''
+  return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX - 1).trimEnd()}…` : line
+}
+
+/** A custom line's name: its words (the first line, cut), else its garment type, else its style, else "Untitled line". */
+export function customTitleOf(line: Pick<CustomLine, 'style' | 'description' | 'garmentType'>, t: Translate, locale?: Locale): string {
+  if (line.description && line.description.trim() !== '') return firstLine(line.description)
+  if (line.garmentType) return locale ? line.garmentType.words[locale] : line.garmentType.code
+  if (line.style) return `${line.style.code} ${line.style.name}`.trim()
+  return t('draftPage.line.untitled')
+}
+
+/** A custom line's quantities in words: "30 pieces · sizes later", "30 pieces · in sizes: S 10 · M 20", "By person · 4 people", "By person · People: in the attached sheet". */
+export function customDetailWords(line: Pick<CustomLine, 'byPerson' | 'quantity' | 'sizes' | 'people' | 'peopleInSheet'>, t: Translate, pieces: (n: number) => string): string {
+  if (line.byPerson) {
+    const who = line.people.length > 0 ? t('draftPage.line.people', { count: line.people.length }) : line.peopleInSheet ? t('draftPage.line.inSheet') : t('draftPage.line.noPeople')
+    return `${t('draftPage.line.byPerson')} · ${who}`
+  }
+  if (line.quantity === null) return t('draftPage.line.noTotal')
+  const total = t('draftPage.line.total', { pieces: pieces(line.quantity) })
+  return line.sizes.length > 0 ? `${total} · ${t('draftPage.line.inSizes', { sizes: line.sizes.map((row) => `${row.size} ${row.quantity}`).join(' · ') })}` : `${total} · ${t('draftPage.line.sizesLater')}`
+}
+
+/** Part 4's line of a custom line: "Line 2: 30 pieces · sizes later", "Line 3, by person: 4 people" or "… in the attached sheet". */
+export function customPeopleWords(line: Pick<CustomLine, 'seq' | 'byPerson' | 'quantity' | 'sizes' | 'people' | 'peopleInSheet'>, t: Translate, pieces: (n: number) => string): string {
+  if (line.byPerson) {
+    if (line.people.length > 0) return t('draftPage.people.byPerson', { seq: line.seq, count: line.people.length })
+    return line.peopleInSheet ? t('draftPage.people.inSheet', { seq: line.seq }) : t('draftPage.people.noOne', { seq: line.seq })
+  }
+  if (line.quantity === null) return t('draftPage.people.noTotal', { seq: line.seq })
+  return line.sizes.length > 0 ? t('draftPage.people.totalSizes', { seq: line.seq, pieces: pieces(line.quantity) }) : t('draftPage.people.total', { seq: line.seq, pieces: pieces(line.quantity) })
+}
+
+/** Part 4's line of any line: its pieces as the draft holds them; missing while it has none (and no sheet stands for its people). */
+export function entryPeopleOf(entry: DraftEntry, t: Translate, pieces: (n: number) => string): { words: string; missing: boolean; target: string } {
+  if (entry.kind === 'CATALOGUE') return { words: peopleLineWords(entry.line, t, pieces), missing: entry.line.pieces === 0, target: `line-${entry.line.id}` }
+  const line = entry.line
+  const missing = line.byPerson ? line.people.length === 0 && !line.peopleInSheet : line.quantity === null
+  return { words: customPeopleWords(line, t, pieces), missing, target: line.byPerson ? `people-${line.id}` : `line-${line.id}` }
+}
+
+// ── a custom line typed in its window ──────────────────────────────────────────────────────────────────────────────────────
+export interface CustomLineDraft {
+  kind: CustomLineKind
+  description: string
+  colourText: string
+  /** '' = none. */
+  styleId: string
+  /** MADE_TO_MEASURE: a garment type's code ('' = none chosen yet). */
+  garmentType: string
+  /** DESCRIBED: a total in pieces as typed ('' = none yet: sizes later). */
+  total: string
+  /** DESCRIBED: one row per person instead of a total (made to measure: always). */
+  byPerson: boolean
+  note: string
+}
+
+export type CustomLineField = 'description' | 'colourText' | 'garmentType' | 'total' | 'note'
+
+export function customLineDraftOf(kind: CustomLineKind, line: CustomLine | null = null): CustomLineDraft {
+  return {
+    kind,
+    description: line?.description ?? '',
+    colourText: line?.colourText ?? '',
+    styleId: line?.style?.id ?? '',
+    garmentType: line?.garmentType?.code ?? '',
+    total: line && line.quantity !== null ? String(line.quantity) : '',
+    byPerson: kind === 'MADE_TO_MEASURE' ? true : (line?.byPerson ?? false),
+    note: line?.note ?? '',
+  }
+}
+
+const blankOr = (value: string): string | null => (value.trim() === '' ? null : value.trim())
+/** A total as typed: null (empty), a whole number, or NaN (not one). */
+const totalOf = (value: string): number | null => (value.trim() === '' ? null : /^\d+$/.test(value.trim()) ? Number(value.trim()) : Number.NaN)
+
+/** The window's problems by field (keys of this catalogue), by the API's limits: what it needs before it saves. */
+export function customLineProblems(draft: CustomLineDraft): Partial<Record<CustomLineField, string>> {
+  const out: Partial<Record<CustomLineField, string>> = {}
+  if (draft.kind === 'DESCRIBED' && draft.description.trim() === '') out.description = 'draftPage.customLine.problem.description'
+  else if (draft.description.trim().length > CUSTOM_LINE_LIMITS.description) out.description = 'draftPage.customLine.problem.descriptionLong'
+  if (draft.colourText.trim().length > CUSTOM_LINE_LIMITS.colourText) out.colourText = 'draftPage.customLine.problem.coloursLong'
+  if (draft.kind === 'MADE_TO_MEASURE' && draft.garmentType.trim() === '') out.garmentType = 'draftPage.customLine.problem.garment'
+  if (draft.kind === 'DESCRIBED' && !draft.byPerson) {
+    const total = totalOf(draft.total)
+    if (total !== null && (!Number.isInteger(total) || total < 1 || total > CUSTOM_LINE_LIMITS.total)) out.total = 'draftPage.customLine.problem.total'
+  }
+  if (draft.note.trim().length > LIMITS.lineNote) out.note = 'draftPage.customLine.problem.noteLong'
+  return out
+}
+
+/**
+ * What a new custom line sends: its own fields only (blanks left out). A described line by person sends no total; a described total may
+ * stay empty ("sizes later" — the send asks for it). Made to measure: always by person, never a total.
+ */
+export function customLineBody(draft: CustomLineDraft): { kind: CustomLineKind } & CustomLineFields {
+  const body: { kind: CustomLineKind } & CustomLineFields = { kind: draft.kind }
+  const description = blankOr(draft.description)
+  const colourText = blankOr(draft.colourText)
+  const styleId = blankOr(draft.styleId)
+  const lineNote = blankOr(draft.note)
+  if (description) body.description = description
+  if (colourText) body.colourText = colourText
+  if (styleId) body.styleId = styleId
+  if (lineNote) body.note = lineNote
+  if (draft.kind === 'MADE_TO_MEASURE') {
+    body.garmentType = draft.garmentType.trim()
+    return body
+  }
+  if (draft.byPerson) body.byPerson = true
+  else {
+    const total = totalOf(draft.total)
+    if (total !== null && Number.isInteger(total)) body.quantity = total
+  }
+  return body
+}
+
+/** What a change of a custom line sends: only the fields typed differently (blank = null); nothing changed → an empty body. */
+export function customLineChanges(line: CustomLine, draft: CustomLineDraft): CustomLineFields {
+  const out: CustomLineFields = {}
+  const before = customLineDraftOf(line.kind, line)
+  if ((blankOr(before.description) ?? '') !== (blankOr(draft.description) ?? '')) out.description = blankOr(draft.description)
+  if ((blankOr(before.colourText) ?? '') !== (blankOr(draft.colourText) ?? '')) out.colourText = blankOr(draft.colourText)
+  if (before.styleId !== draft.styleId) {
+    out.styleId = blankOr(draft.styleId)
+    // A colour of ours goes with its style: a new style (or none) drops the old one's colour.
+    if (line.colourway) out.colourwayId = null
+  }
+  if ((blankOr(before.note) ?? '') !== (blankOr(draft.note) ?? '')) out.note = blankOr(draft.note)
+  if (line.kind === 'MADE_TO_MEASURE') {
+    if (before.garmentType !== draft.garmentType && draft.garmentType.trim() !== '') out.garmentType = draft.garmentType.trim()
+    return out
+  }
+  if (before.byPerson !== draft.byPerson) {
+    out.byPerson = draft.byPerson
+    // One row per person takes its pieces from its people: no total and no sizes beside it.
+    if (draft.byPerson && line.sizes.length > 0) out.sizes = []
+  }
+  const total = totalOf(draft.total)
+  const next = draft.byPerson ? null : total !== null && Number.isInteger(total) ? total : null
+  if (next !== line.quantity) out.quantity = next
+  return out
+}
+
+// ── the roster ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+export { PEOPLE_LIMITS }
+
+/** The ways a person is measured, in the window's order (v1: no saved measurements — lead pick). */
+export const MEASURES: readonly MeasureBy[] = Object.freeze(['SIZE', 'SHEET', 'LATER'] as MeasureBy[])
+
+/** How we get a person's size, in words: Size · Measurement sheet · Sending later. */
+export const measureKey = (measureBy: MeasureBy): string => `draftPage.measure.${measureBy}`
+
+/** The draft's by-person lines (each has its own roster), in the draft's order. */
+export const rosterLinesOf = (request: Partial<Pick<DraftRequest, 'customLines'>>): CustomLine[] => [...customLinesOf(request)].filter((line) => line.byPerson).sort((a, b) => a.seq - b.seq)
+
+/** The people of a roster in their places (by seq: a row never jumps). */
+export const peopleInOrder = (people: readonly DraftPerson[]): DraftPerson[] => [...people].sort((a, b) => a.seq - b.seq)
+
+/** The measurement sheets on one line (they stand for its roster while no one is named). */
+export const sheetsOfLine = (request: Pick<DraftRequest, 'files'>, lineId: string): readonly DraftFile[] => draftFilesOf(request).sheets.filter((file) => file.lineId === lineId)
+
+/** What is there for a person: their size, their sheet's name (a sheet gone from the draft says so), or "Sending later". */
+export function personWhat(person: Pick<DraftPerson, 'measureBy' | 'size' | 'sheet'>, t: Translate): string {
+  if (person.measureBy === 'SIZE') return person.size ?? '—'
+  if (person.measureBy === 'SHEET') return person.sheet?.originalName ?? t('draftPage.roster.sheetGone')
+  return t('draftPage.measure.LATER')
+}
+
+export interface PersonDraft {
+  name: string
+  number: string
+  measureBy: MeasureBy
+  size: string
+  /** SHEET: a measurement sheet of this draft ('' = none chosen yet). */
+  sheetId: string
+  note: string
+}
+
+export type PersonField = 'name' | 'number' | 'size' | 'sheet' | 'note'
+
+export const EMPTY_PERSON: Readonly<PersonDraft> = Object.freeze({ name: '', number: '', measureBy: 'SIZE' as MeasureBy, size: '', sheetId: '', note: '' })
+
+export const personDraftOf = (person: DraftPerson | null): PersonDraft =>
+  person ? { name: person.name, number: person.number ?? '', measureBy: person.measureBy, size: person.size ?? '', sheetId: person.sheet?.id ?? '', note: person.note ?? '' } : { ...EMPTY_PERSON }
+
+/** The person window's problems by field (keys), by the API's limits; a sheet must be one of this draft's measurement sheets. */
+export function personProblems(draft: PersonDraft, sheets: readonly Pick<DraftFile, 'id'>[]): Partial<Record<PersonField, string>> {
+  const out: Partial<Record<PersonField, string>> = {}
+  const name = draft.name.trim()
+  if (name === '' || name.length > PEOPLE_LIMITS.name) out.name = 'draftPage.person.problem.name'
+  if (draft.number.trim().length > PEOPLE_LIMITS.number) out.number = 'draftPage.person.problem.number'
+  if (draft.measureBy === 'SIZE' && (draft.size.trim() === '' || draft.size.trim().length > PEOPLE_LIMITS.size)) out.size = 'draftPage.person.problem.size'
+  if (draft.measureBy === 'SHEET' && !sheets.some((sheet) => sheet.id === draft.sheetId)) out.sheet = 'draftPage.person.problem.sheet'
+  if (draft.note.trim().length > PEOPLE_LIMITS.note) out.note = 'draftPage.person.problem.note'
+  return out
+}
+
+/** What a new person sends: the name, maybe a number and a note, and only the field of their way of being measured. */
+export function personBody(draft: PersonDraft): PersonFields {
+  const body: PersonFields = { name: draft.name.trim(), measureBy: draft.measureBy }
+  const number = blankOr(draft.number)
+  const personNote = blankOr(draft.note)
+  if (number) body.number = number
+  if (personNote) body.note = personNote
+  if (draft.measureBy === 'SIZE') body.size = draft.size.trim()
+  if (draft.measureBy === 'SHEET') body.measurementFileId = draft.sheetId
+  return body
+}
+
+/** What a change of a person sends: only what changed; a new way of being measured sends its field and clears the other one. */
+export function personChanges(person: DraftPerson, draft: PersonDraft): Partial<PersonFields> {
+  const out: Partial<PersonFields> = {}
+  const before = personDraftOf(person)
+  if (before.name.trim() !== draft.name.trim()) out.name = draft.name.trim()
+  if ((blankOr(before.number) ?? '') !== (blankOr(draft.number) ?? '')) out.number = blankOr(draft.number)
+  if ((blankOr(before.note) ?? '') !== (blankOr(draft.note) ?? '')) out.note = blankOr(draft.note)
+  if (before.measureBy !== draft.measureBy) {
+    out.measureBy = draft.measureBy
+    out.size = draft.measureBy === 'SIZE' ? draft.size.trim() : null
+    out.measurementFileId = draft.measureBy === 'SHEET' ? draft.sheetId : null
+  } else if (draft.measureBy === 'SIZE' && before.size.trim() !== draft.size.trim()) out.size = draft.size.trim()
+  else if (draft.measureBy === 'SHEET' && before.sheetId !== draft.sheetId) out.measurementFileId = draft.sheetId
+  return out
+}
+
+// ── "Your price" ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+/** The API's shape of the customer's own price: at least 0, at most 6 decimals (B-CP-076). */
+export const OWN_PRICE = /^\d{1,12}(\.\d{1,6})?$/
+
+/**
+ * The customer's own price as typed ("18,50", "18.50", "€ 1.250,00") → the decimal the API takes ("18.50"), null for an empty cell
+ * (it clears the price), or a problem key.
+ */
+export function ownPriceOf(typed: string): { value: string | null } | { problem: string } {
+  let text = typed.replace(/[\s €]/g, '')
+  if (text === '') return { value: null }
+  const comma = text.lastIndexOf(',')
+  const dot = text.lastIndexOf('.')
+  if (comma >= 0 && dot >= 0) text = comma > dot ? text.replace(/\./g, '').replace(',', '.') : text.replace(/,/g, '')
+  else if (comma >= 0) text = text.replace(',', '.')
+  return OWN_PRICE.test(text) ? { value: text } : { problem: 'draftPage.price.problem' }
+}
+
+/** Two of the customer's prices the same as decimals ("18.5" = "18.50"); null = none. */
+export const sameOwnPrice = (a: string | null | undefined, b: string | null | undefined): boolean => {
+  const left = a ?? null
+  const right = b ?? null
+  return left === null || right === null ? left === right : Number(left) === Number(right)
+}
+
+/**
+ * What leaving a "Your price" cell writes: nothing for a reader without the price grain (the page never sends the key then: the grain
+ * filter would refuse the whole body, M-CP-2), nothing when the cell still holds the line's price, a problem when it does not read as a
+ * price; else the line's kind (which route) and the decimal (null clears it).
+ */
+export function ownPriceWriteOf(record: Pick<DraftRecord, 'request' | 'seesPrices'>, lineId: string, typed: string): { problem: string } | { lineKind: 'CATALOGUE' | 'CUSTOM'; value: string | null } | null {
+  if (!record.seesPrices) return null
+  const read = ownPriceOf(typed)
+  if ('problem' in read) return read
+  const catalogue = record.request.lines.find((entry) => entry.id === lineId)
+  const custom = customLinesOf(record.request).find((entry) => entry.id === lineId)
+  const line = catalogue ?? custom
+  if (!line || sameOwnPrice(line.brandUnitPrice, read.value)) return null
+  return { lineKind: catalogue ? 'CATALOGUE' : 'CUSTOM', value: read.value }
+}
+
+/**
+ * What the reader does with "Your price": a price holder types it while the draft may be written (a preview, offline, a draft no
+ * longer one: read only); anyone else reads "Prices are not part of your access." — no field, no figure (M-CP-2).
+ */
+export const yourPriceAccess = (seesPrices: boolean, writeHeld: string | null): 'edit' | 'read' | 'none' => (!seesPrices ? 'none' : writeHeld === null ? 'edit' : 'read')
+
+export interface PriceRow {
+  id: string
+  kind: DraftEntry['kind']
+  seq: number
+  label: string
+  pieces: number
+  /** Our list price on a catalogue line (the price shown); a custom line has none. */
+  ours: string | null
+  /** The customer's own price as the draft holds it. */
+  yours: string | null
+}
+
+/** Part 6's rows: every line by seq with its pieces, our list price beside it on catalogue lines, and the customer's own price. */
+export function priceRowsOf(request: Pick<DraftRequest, 'lines'> & Partial<Pick<DraftRequest, 'customLines'>>, t: Translate, locale?: Locale): PriceRow[] {
+  return entriesInOrder(request).map((entry) =>
+    entry.kind === 'CATALOGUE'
+      ? { id: entry.line.id, kind: entry.kind, seq: entry.line.seq, label: `${entry.line.style.code} ${entry.line.colourway.name}`, pieces: entry.line.pieces, ours: entry.line.unitPriceShown ?? null, yours: entry.line.brandUnitPrice ?? null }
+      : { id: entry.line.id, kind: entry.kind, seq: entry.line.seq, label: customTitleOf(entry.line, t, locale), pieces: entry.line.pieces, ours: null, yours: entry.line.brandUnitPrice ?? null },
+  )
+}
+
+/**
+ * "Your total": each line's own price × its pieces (to the cent) when every line has one — a price typed and not saved yet counts as
+ * typed (`typed`, by line id; a cell that does not read as a price counts as none) —; else null, and how many lines lack it.
+ */
+export function ownTotalOf(rows: readonly Pick<PriceRow, 'id' | 'pieces' | 'yours'>[], typed: Readonly<Record<string, string>> = {}): { total: string | null; missing: number } {
+  let cents = 0
+  let missing = 0
+  for (const row of rows) {
+    const read = typed[row.id] !== undefined ? ownPriceOf(typed[row.id]!) : null
+    const value = read === null ? row.yours : 'value' in read ? read.value : null
+    if (value === null) {
+      missing += 1
+      continue
+    }
+    cents += Math.round(Number(value) * row.pieces * 100)
+  }
+  return { total: missing === 0 && rows.length > 0 ? (cents / 100).toFixed(2) : null, missing }
+}
+// ---- end F-CP-154
