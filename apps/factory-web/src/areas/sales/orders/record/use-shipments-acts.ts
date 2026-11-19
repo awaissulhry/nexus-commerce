@@ -22,6 +22,10 @@ import { joinableShipments } from '../../../warehouse/shipments/api'
 import type { NewShipmentDone } from '../../../warehouse/shipments/new/use-new-shipment'
 import { mayCreateShipment } from '../model'
 import { joinableRows, type JoinableRow } from './shipments/model'
+// F-OP-123 (order page N5): "Record a shipment made elsewhere…" (its container, mounted only while open; its door held with words).
+import { RecordElsewhere } from './shipments/elsewhere/RecordElsewhere'
+import { elsewhereDoor } from './shipments/elsewhere/model'
+import type { Phrase } from '../model'
 
 /**
  * F-OP-134 (N-5): the Shipments tab's container side — B-W2b-398: the card "Delivered (from carrier)" (its own container: it reads
@@ -48,8 +52,8 @@ export function useShipmentsActs(input: {
   /* F-OP-121 */ readonly setNotice: (notice: OrderRecordModel['notice']) => void
 }): {
   delivered: ReactNode
-  model: { shipmentTracking: ReactNode | null; /* F-OP-121 */ newShipment: ReactNode | null; /* F-OP-122 */ joinable: JoinableRow[] | null }
-  actions: { onShipmentTracking: (shipmentId: string) => void; /* F-OP-121 */ onCreateShipment: () => void; /* F-OP-122 */ onJoinShipment: (shipmentId: string) => void }
+  model: { shipmentTracking: ReactNode | null; /* F-OP-121 */ newShipment: ReactNode | null; /* F-OP-122 */ joinable: JoinableRow[] | null; /* F-OP-123 */ elsewhere: { readonly held: Phrase | null; readonly dialog: ReactNode | null } | null }
+  actions: { onShipmentTracking: (shipmentId: string) => void; /* F-OP-121 */ onCreateShipment: () => void; /* F-OP-122 */ onJoinShipment: (shipmentId: string) => void; /* F-OP-123 */ onRecordElsewhere: () => void }
 } {
   const { order, prefix, permissions, reload, api, setNotice } = input
   // ---- F-OP-119 ----
@@ -108,11 +112,22 @@ export function useShipmentsActs(input: {
     },
     [create, joinable, order],
   )
-  const joinableRows = mayJoin && joinable?.orderId === orderId ? joinable.rows : null
+  // (merge op-21: a local name of its own — `joinableRows` is the imported rule the read above calls.)
+  const joinableShown = mayJoin && joinable?.orderId === orderId ? joinable.rows : null
   // ---- end F-OP-122
+  // ---- F-OP-123 (order page N5): Record a shipment made elsewhere… — held with words (the order's state, the rights: D4), else
+  // the dialog's container while open; recorded, the order reads itself again.
+  const [elsewhereOpen, setElsewhereOpen] = useState(false)
+  const closeElsewhere = useCallback(() => setElsewhereOpen(false), [])
+  const elsewhereHeld = order ? elsewhereDoor(order, permissions) : null
+  const elsewhere = order
+    ? { held: elsewhereHeld, dialog: elsewhereOpen && !elsewhereHeld ? createElement(RecordElsewhere, { key: order.id, order, prefix, onDone: () => { setElsewhereOpen(false); reload() }, onClose: closeElsewhere }) : null }
+    : null
+  const onRecordElsewhere = useCallback(() => setElsewhereOpen(true), [])
+  // ---- end F-OP-123
   return {
     delivered: order ? createElement(Deliveries, { orderId: order.id, prefix }) : null,
-    model: { shipmentTracking, newShipment, joinable: joinableRows },
-    actions: { onShipmentTracking, onCreateShipment, onJoinShipment },
+    model: { shipmentTracking, newShipment, joinable: joinableShown, elsewhere /* F-OP-123 */ },
+    actions: { onShipmentTracking, onCreateShipment, onJoinShipment, onRecordElsewhere /* F-OP-123 */ },
   }
 }

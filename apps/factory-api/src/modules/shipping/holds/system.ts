@@ -40,6 +40,9 @@ async function openShipmentIds(db: Reader, where: { readonly shipmentIds?: reado
   const rows = await db.shipment.findMany({
     where: {
       status: { in: [...HOLDABLE_STATUSES] },
+      // B-OP-032 (order page N5, R-2 / R-9): never a shipment made elsewhere — it is recorded DRAFT → SHIPPED in one command (its
+      // holds decided there, in words), so no system hold is synced onto it and factory_packing_refuse_held never fires.
+      origin: 'NEXUS',
       ...(where.shipmentIds ? { id: { in: where.shipmentIds.filter(isUuid) } } : {}),
       // B-OP-041: an order's shipments — made for it, or carrying its garments.
       ...(where.salesOrderId ? shipmentsOfOrderWhere(where.salesOrderId) : {}),

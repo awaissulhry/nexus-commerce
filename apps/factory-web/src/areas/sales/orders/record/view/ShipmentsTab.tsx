@@ -27,6 +27,9 @@ import { WithMessages } from '../../../../../record-panels/i18n' // F-OP-122: th
 import type { JoinableRow } from '../shipments/model'
 import { tabHref } from '../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../lib/tab-link/TabLink'
+// F-OP-123 (order page N5): Record a shipment made elsewhere…, and the "Made elsewhere" chip of a row.
+import { Tag } from '@nexus/ui/primitives'
+import { madeElsewhereChip } from '../shipments/elsewhere/model'
 
 const SHIPMENT_TONE = { DRAFT: 'neutral', PACKED: 'info', SHIPPED: 'info', DELIVERED: 'success', RETURNED: 'warning', CANCELLED: 'danger' } as const
 
@@ -98,6 +101,12 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
               <Link href={createDoor.href}>{t('action.createShipment')}</Link>
             </Button>
           )}
+          {/* F-OP-123: goods that left with a paper DDT written outside Nexus — held with words for who may not (D4). */}
+          {model.elsewhere && (
+            <Button size="sm" heldReason={model.elsewhere.held ? t(model.elsewhere.held.key, model.elsewhere.held.params) : null} onClick={() => actions?.onRecordElsewhere?.()}>
+              {t('elsewhere.title')}
+            </Button>
+          )}
         </div>
         {order.chain.shipments.length === 0 ? (
           <EmptyState title={t('ship.empty.title')} description={t('ship.empty.body')} />
@@ -119,6 +128,8 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
                       {t('ship.alsoCarries', { number: other.number })}
                     </Link>
                   ))}
+                  {/* F-OP-123: made elsewhere, with its paper DDT. */}
+                  {madeElsewhereChip(row) && <Tag tone="neutral">{t(madeElsewhereChip(row)!.key, madeElsewhereChip(row)!.params)}</Tag>}
                 </span>,
                 <Pill key="s" tone={SHIPMENT_TONE[row.status as keyof typeof SHIPMENT_TONE] ?? 'neutral'}>{t(`shipStatus.${row.status}`)}</Pill>,
                 // F-OP-119: who carries it, its tracking and the tracking door (the carrier and tracking only as the read gives them).
@@ -148,6 +159,7 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
       </Card>
       {model.shipmentTracking /* F-OP-119: the tracking dialog of the shipment opened (its container) */}
       {model.newShipment /* F-OP-121: Warehouse's New shipment, opened in place (its container) */}
+      {model.elsewhere?.dialog /* F-OP-123: Record a shipment made elsewhere… (its container, while open) */}
       {delivered}
       <PointsAtOrder model={model.links} actions={actions?.links} prefix={model.prefix} />
       <p className="fw-so-hint">

@@ -982,5 +982,11 @@
       "SHIPMENT_STATE": "The shipment is no longer a draft",
       "CUSTOMER_HOLD": "The customer is on hold"
     }
+  },
+  "elsewhere": {
+    "tag": "Made elsewhere · DDT {ddt}",
+    "tagInvoice": "Made elsewhere · immediate invoice",
+    "noNexusDdt": "Recorded as made elsewhere: it left with paper DDT n. {ddt} of {date}; Nexus issues no DDT of it.",
+    "noNexusDdtInvoice": "Recorded as made elsewhere: an immediate invoice travelled with the goods; Nexus issues no DDT of it."
   }
 }

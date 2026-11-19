@@ -573,6 +573,10 @@ export const orderSchema = z.object({
         // ---- F-OP-122 (B-OP-043, lines-derived): every order the shipment carries, the first first (all of this order's customer) ----
         orders: z.array(z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable() })).optional(),
         // ---- end F-OP-122
+        // ---- F-OP-123 (B-OP-043 / B-OP-032): made elsewhere (recorded with its paper DDT; Nexus issued none) ----
+        origin: z.enum(['NEXUS', 'ELSEWHERE']).optional(),
+        externalDdt: z.object({ number: z.string(), date: z.string() }).nullable().optional(),
+        // ---- end F-OP-123
       }),
     ),
     invoices: z.array(z.object({ id: z.string(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable(), depositRequestId: z.string().nullable().default(null) })),

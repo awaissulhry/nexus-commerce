@@ -252,6 +252,11 @@ export interface OrderRecordModel {
   joinable?: JoinableRow[] | null
   /** F-OP-113: the work-order rows' acts on Production (saves, the floor's told time, the open dialog); absent: none here. */
   workOrderActs?: WorkOrderActsModel | null
+  /**
+   * F-OP-123 (order page N5): "Record a shipment made elsewhere…" — its door held with words (null: open) and its dialog while open
+   * (its container: use-shipments-acts); absent: not offered here (a design case).
+   */
+  elsewhere?: { readonly held: Phrase | null; readonly dialog: ReactNode | null } | null
   /** F-SA-236: the order's customer requests, every state (Changes: waiting on us, history); null: not read here. */
   requests?: Part<BrandRequest[]> | null
   /**
@@ -294,6 +299,8 @@ export interface OrderRecordActions {
   onJoinShipment?: (shipmentId: string) => void
   /** F-OP-113: a work-order row's act in place (due, priority, rush) or from its ⋯ (the dialog's own acts). */
   workOrderActs?: WorkOrderActsActions
+  /** F-OP-123: open "Record a shipment made elsewhere…" (⋯ Next steps, the Shipments card head). */
+  onRecordElsewhere?: () => void
   /** F-OP-111: split the parts off into new orders (the dialog's parts as typed, the optional reason). */
   onSplit?: (input: { parts: readonly SplitPartDraft[]; reason: string }) => void
   /** B-W2b-180 (design sales.orders conn "Portal › Orders & tracking"): open the order in the customer's portal, read-only. */

@@ -982,5 +982,11 @@
       "SHIPMENT_STATE": "La spedizione non è più una bozza",
       "CUSTOMER_HOLD": "Il cliente è bloccato"
     }
+  },
+  "elsewhere": {
+    "tag": "Fatta altrove · DDT {ddt}",
+    "tagInvoice": "Fatta altrove · fattura immediata",
+    "noNexusDdt": "Registrata come fatta altrove: è partita con il DDT cartaceo n. {ddt} del {date}; Nexus non ne emette alcun DDT.",
+    "noNexusDdtInvoice": "Registrata come fatta altrove: con la merce ha viaggiato una fattura immediata; Nexus non ne emette alcun DDT."
   }
 }

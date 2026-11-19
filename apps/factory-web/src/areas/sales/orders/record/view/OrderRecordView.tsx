@@ -247,6 +247,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
         // F-OP-121: Create shipment… in place (as Change promise date…, not repeated here while it is the band's next step).
         ...(createDoor?.kind === 'inPlace' && step.kind !== 'createShipment' ? [{ id: 'ship', label: t('step.createShipment'), onSelect: () => actions?.onCreateShipment?.() }] : []),
         ...(createDoor?.kind === 'warehouse' ? [{ id: 'ship', label: t('action.createShipment'), href: createDoor.href }] : []),
+        // F-OP-123 (order page N5): Record a shipment made elsewhere… (held with its words: the order's state, the rights).
+        ...(model.elsewhere ? [{ id: 'elsewhere', label: t('elsewhere.title'), disabled: !!model.elsewhere.held, description: held(model.elsewhere.held), onSelect: () => actions?.onRecordElsewhere?.() }] : []),
     ],
     edit: [
         ...(!isFinal(order) && model.can.manage

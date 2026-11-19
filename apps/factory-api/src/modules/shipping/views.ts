@@ -119,6 +119,10 @@ export const shipmentSchema = output({
   transportEvidence: output({ status: z.enum(TRANSPORT_EVIDENCE_STATUSES), completedAt: instant().nullable() }),
   /** B-W2b-19 (Intrastat): the mode of transport the office recorded; null: not recorded. */
   transportMode: z.enum(TRANSPORT_MODES).nullable(),
+  /** B-OP-032 (order page N5): NEXUS, or ELSEWHERE (recorded as made outside Nexus: Nexus issues no DDT of it). */
+  origin: z.enum(['NEXUS', 'ELSEWHERE']),
+  /** B-OP-032: the paper DDT a shipment made elsewhere left with; null otherwise (or an immediate invoice travelled instead). */
+  externalDdt: output({ number: z.string(), date: z.iso.date() }).nullable(),
 })
 
 export const oneShipment = output({ shipment: shipmentSchema })
