@@ -156,6 +156,11 @@ export const getShipmentContract = defineContract({ params: shipmentParams, resp
 export const createShipmentContract = defineContract({
   body: input({
     salesOrderId: id(),
+    /**
+     * B-OP-040 (order page N6): every order of the new shipment, the first = salesOrderId; the others are orders of the same
+     * customer that may join it (refused "Several orders in one shipment come with the next update" until the switch).
+     */
+    salesOrderIds: z.array(id()).min(1).max(20).optional(),
     /** The site the goods leave from; default the one site of the lines' work order cells. */
     siteId: id().optional(),
     /** A delivery address of the order's party; default the order's ship-to. */
@@ -404,4 +409,33 @@ export const receiveCarrierReturnContract = defineContract({
     periodLockOverride: periodLockOverride.optional(),
   }),
   response: { 201: output({ carrierReturn: carrierReturnView, valued: z.boolean() }) },
+})
+
+// ---- B-OP-040 (order page N6, lines-derived): several orders of one customer on one shipment, held off ----------------
+
+/** May it join: allowed, or why not (factory-domain joinProblems, the first reason). */
+export const joinVerdictSchema = output({ allowed: z.boolean(), why: z.string().nullable() })
+
+export const shipmentOrderCandidatesContract = defineContract({
+  params: shipmentParams,
+  response: {
+    200: output({
+      shipmentId: id(),
+      number: z.string(),
+      /** The shipment's customer's other open orders (never another customer's), each with its verdict. */
+      orders: z.array(output({ salesOrderId: id(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), joinable: joinVerdictSchema })),
+    }),
+  },
+})
+
+export const joinableShipmentsContract = defineContract({
+  querystring: input({ salesOrderId: id() }),
+  response: {
+    200: output({
+      salesOrderId: id(),
+      number: z.string(),
+      /** The order's customer's DRAFT shipments it is not on yet, each with its verdict. */
+      shipments: z.array(output({ shipmentId: id(), number: z.string(), status: statusSchema, siteId: id(), joinable: joinVerdictSchema })),
+    }),
+  },
 })

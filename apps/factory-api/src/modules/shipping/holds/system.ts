@@ -18,7 +18,7 @@ import { factsOf, lockShipmentRow, placeHoldInCommand, readHolds, releaseHoldInC
  * shipping/holds/system): the balance before shipping, the customer's account on hold, over the credit limit. Run in the
  * tenant's system context (placedById / releasedById null) by
  *
- *   the handler `shipping.systemHolds`   on shipment.created (the new shipment), sales_order.schedule_changed (the order's
+ *   the handler `shipping.systemHolds`   on shipment.created and B-OP-040's shipment.orders_changed (the shipment), sales_order.schedule_changed (the order's
  *                                        open shipments: a before-shipping step made, paid, waived or cancelled),
  *                                        party.hold_placed / party.hold_released, credit_check.recorded and
  *                                        credit_limit.changed (the customer's open shipments)
@@ -151,12 +151,13 @@ interface EventFacts {
 
 /** The open shipments an event concerns. */
 async function shipmentsOfEvent(db: Reader, type: string, payload: EventFacts): Promise<string[]> {
-  if (type === 'shipment.created') return typeof payload.shipmentId === 'string' ? openShipmentIds(db, { shipmentIds: [payload.shipmentId] }) : []
+  // B-OP-040 (N6): the orders a shipment carries changed: its holds follow every order's balance before shipping.
+  if (type === 'shipment.created' || type === 'shipment.orders_changed') return typeof payload.shipmentId === 'string' ? openShipmentIds(db, { shipmentIds: [payload.shipmentId] }) : []
   if (type === 'sales_order.schedule_changed') return typeof payload.orderId === 'string' && isUuid(payload.orderId) ? openShipmentIds(db, { salesOrderId: payload.orderId }) : []
   return typeof payload.partyId === 'string' && isUuid(payload.partyId) ? openShipmentIds(db, { partyId: payload.partyId }) : []
 }
 
-export const SYSTEM_HOLD_EVENTS = ['shipment.created', 'sales_order.schedule_changed', 'party.hold_placed', 'party.hold_released', 'credit_check.recorded', 'credit_limit.changed'] as const
+export const SYSTEM_HOLD_EVENTS = ['shipment.created', 'sales_order.schedule_changed', 'party.hold_placed', 'party.hold_released', 'credit_check.recorded', 'credit_limit.changed', /* B-OP-040 */ 'shipment.orders_changed'] as const
 
 export function systemHoldsHandler(): EventHandler {
   return defineHandler({

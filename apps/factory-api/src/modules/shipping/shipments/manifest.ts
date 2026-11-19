@@ -9,6 +9,9 @@ export const manifest = defineManifest({
   'GET /shipping/ready': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
   'GET /shipping/shipments': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
   'GET /shipping/shipments/:shipmentId': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
+  // B-OP-040 (order page N6): the customer's orders that may join a shipment, and the DRAFT shipments an order may join.
+  'GET /shipping/shipments/:shipmentId/orders/candidates': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
+  'GET /shipping/shipments/joinable': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
   'POST /shipping/shipments': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
   'PATCH /shipping/shipments/:shipmentId': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
   'POST /shipping/shipments/:shipmentId/lines': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },

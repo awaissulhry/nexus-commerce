@@ -8,6 +8,9 @@ import { addressUseProblem } from '@nexus/factory-domain/parties/address-approva
 import { SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { carrierNameFor } from '@nexus/factory-domain/shipping/labels/labels'
 import { lineProblems, lineQuantityProblems, shipmentMachine, type ShipmentStatus, type TransportBy } from '@nexus/factory-domain/shipping/shipments'
+// B-OP-040 (order page N6, lines-derived): several orders of one customer, held off by MULTI_ORDER_OFF until B-OP-047.
+import { joinProblems, type JoinShipment } from '@nexus/factory-domain/shipping/shipments'
+import { joinOrderOf, joinOrdersOf, joinShipmentFacts, ordersChanged, ordersOfShipment } from './orders-of'
 import { repairCellWords } from '@nexus/factory-domain/shipping/shipments/backorder'
 import { transportModeProblems, type TransportMode } from '@nexus/factory-domain/shipping/shipments/transport'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
@@ -218,15 +221,28 @@ function garmentsByCell(lines: readonly { readonly workOrderSizeId: string; read
   return byCell
 }
 
-/** Reads the cells and checks each against the shipment (party, order, site, DRAFT): 400 with every problem. */
+/**
+ * Reads the cells and checks each against the shipment (party, order, site, DRAFT): 400 with every problem. B-OP-040: a
+ * cell of another customer reads as an unknown one; a cell of another order of the customer joins only as joinProblems
+ * allows against `join` (the shipment's first order; MULTI_ORDER_OFF until the switch).
+ */
 async function cellsFor(
   db: CommandTx,
-  shipment: { siteId: string; partyId: string; salesOrderId: string; status: ShipmentStatus },
+  shipment: { siteId: string; partyId: string; salesOrderId: string; status: ShipmentStatus; /* B-OP-040 */ salesOrderIds?: readonly string[]; join?: JoinShipment | null },
   byCell: ReadonlyMap<string, { quantity: number; index: number }>,
   path: string,
 ): Promise<Map<string, ShippableCell>> {
   const rows = await db.workOrderSize.findMany({ where: { id: { in: [...byCell.keys()] } }, select: CELL_SELECT })
   const cells = new Map(rows.map((row) => [row.id, row]))
+  // B-OP-040: the join words of each order of the customer that is not on the shipment yet (read once per order).
+  const on = new Set(shipment.salesOrderIds && shipment.salesOrderIds.length > 0 ? shipment.salesOrderIds : [shipment.salesOrderId])
+  const newOrders = [...new Set(rows.flatMap((row) => (row.partyId === shipment.partyId && row.salesOrderLine && !on.has(row.salesOrderLine.orderId) ? [row.salesOrderLine.orderId] : [])))]
+  const joinRows = newOrders.length > 0 && shipment.join ? await joinOrdersOf(db, newOrders) : new Map()
+  const joining = (orderId: string): string[] | undefined => {
+    if (on.has(orderId)) return undefined
+    const row = joinRows.get(orderId)
+    return row && shipment.join ? joinProblems(shipment.join, joinOrderOf(row)).map((problem) => problem.message) : undefined
+  }
   const shippable = new Map<string, ShippableCell>()
   const problems: Issue[] = []
   for (const [cellId, { quantity, index }] of byCell) {
@@ -247,7 +263,7 @@ async function cellsFor(
       continue
     }
     const ofLine: ShippableCell = { ...cell, salesOrderLineId: cell.salesOrderLineId, partyId: cell.partyId, salesOrderLine: cell.salesOrderLine }
-    problems.push(...lineProblems(shipment, { siteId: ofLine.siteId, partyId: ofLine.partyId, salesOrderId: ofLine.salesOrderLine.orderId }, quantity, at))
+    problems.push(...lineProblems(shipment, { siteId: ofLine.siteId, partyId: ofLine.partyId, salesOrderId: ofLine.salesOrderLine.orderId }, quantity, at, /* B-OP-040 */ joining(ofLine.salesOrderLine.orderId)))
     shippable.set(cellId, ofLine)
   }
   if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'These lines cannot ship on this shipment.', problems)
@@ -318,6 +334,28 @@ async function shipToOf(db: CommandTx, partyId: string, addressId: string, path:
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
 
+/**
+ * B-OP-040: the other orders of a new shipment (salesOrderIds less the first), each checked against the first: an order
+ * the caller may not see, or another customer's, 404 as an unknown one; any other join problem 409 in words
+ * (MULTI_ORDER_OFF until the switch). The answer: the other orders that may join (none while N6 is held off).
+ */
+async function otherOrdersOf(db: CommandTx, context: ReturnType<typeof officeContextOf>, body: CreateShipmentInput, firstId: string, join: JoinShipment | null): Promise<string[]> {
+  const asked = body.salesOrderIds ?? []
+  if (asked.length === 0) return []
+  if (asked[0] !== firstId) throw new ValidationError('The first order of a shipment is its salesOrderId.', [{ path: 'body/salesOrderIds/0', message: 'Expected the salesOrderId first.' }])
+  const others = [...new Set(asked.slice(1))].filter((id) => id !== firstId)
+  if (others.length === 0) return []
+  const rows = await joinOrdersOf(db, others)
+  for (const id of others) {
+    const row = rows.get(id)
+    if (!row || !join || !mayOn(context, SHIPPING_VIEW, { companyId: row.companyId, partyId: row.partyId })) throw new NotFoundError('Sales order not found.')
+    const problems = joinProblems(join, joinOrderOf(row))
+    if (problems.some((problem) => problem.code === 'CUSTOMER')) throw new NotFoundError('Sales order not found.')
+    if (problems.length > 0) throw new InvalidStateError(problems[0]!.message)
+  }
+  return others
+}
+
 // B-SA-004: `shipment` is a row read on the server (or the new shipment's own scope); its partyId names the customer.
 const changed = (tools: CommandTools, shipment: { id: string; number: string; companyId: string; siteId: string; partyId: string }, status: ShipmentStatus, change: 'lines' | 'parcels' | 'serials' | 'details' | 'status') =>
   tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status, change, partyId: shipment.partyId /* B-SA-004 */ } })
@@ -326,6 +364,8 @@ const changed = (tools: CommandTools, shipment: { id: string; number: string; co
 
 export interface CreateShipmentInput {
   readonly salesOrderId: string
+  /** B-OP-040: every order of the new shipment, the first = salesOrderId (refused by MULTI_ORDER_OFF until the switch). */
+  readonly salesOrderIds?: readonly string[] | undefined
   readonly siteId?: string | undefined
   readonly shipToAddressId?: string | undefined
   readonly transportBy?: TransportBy | undefined
@@ -356,13 +396,17 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
     if (order.status === 'CANCELLED' || order.status === 'CLOSED') throw new InvalidStateError(`The sales order is ${order.status}; nothing more ships for it.`)
     // W2b-5 (B-W2b-281): the database refuses a shipment of an order that waits for a yes; say it in words first.
     if (order.status === 'PENDING_APPROVAL') throw new InvalidStateError('The sales order waits for a yes; nothing ships for it until it is confirmed.')
-    const shipment = { siteId, partyId: order.partyId, salesOrderId: order.id, status: 'DRAFT' as const }
-    const cells = byCell.size > 0 ? await cellsFor(client, shipment, byCell, 'body/lines') : new Map<string, ShippableCell>()
     const shipTo = body.shipToAddressId ? await shipToOf(client, order.partyId, body.shipToAddressId, 'body/shipToAddressId') : (order.shipTo as Prisma.InputJsonValue)
+    // B-OP-040 (N6): the other orders asked, each checked against the first (409 in words; an order the caller may not
+    // see, or another customer's, as an unknown one).
+    const join = await joinShipmentFacts(client, { number: null, status: 'DRAFT', siteId, salesOrderId: order.id, shipTo })
+    const others = await otherOrdersOf(client, context, body, order.id, join)
+    const shipment = { siteId, partyId: order.partyId, salesOrderId: order.id, status: 'DRAFT' as const, salesOrderIds: [order.id, ...others], join }
+    const cells = byCell.size > 0 ? await cellsFor(client, shipment, byCell, 'body/lines') : new Map<string, ShippableCell>()
     const settings = await client.shippingSettings.findUnique({ where: { id: siteId }, select: { defaultTransportBy: true, defaultCarrierCode: true, defaultServiceCode: true, integrationAccountId: true } })
-    return { order, siteId, cells, shipTo, settings }
+    return { order, siteId, cells, shipTo, settings, others }
   })
-  const { order, siteId, cells, shipTo, settings } = plan
+  const { order, siteId, cells, shipTo, settings, others } = plan
   const carrierCode = body.carrierCode !== undefined ? blankToNull(body.carrierCode) : (settings?.defaultCarrierCode ?? null)
   const serviceCode = body.serviceCode !== undefined ? blankToNull(body.serviceCode) : carrierCode === settings?.defaultCarrierCode ? (settings?.defaultServiceCode ?? null) : null
   const transportBy = body.transportBy ?? settings?.defaultTransportBy ?? 'CARRIER'
@@ -406,6 +450,8 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
     })
     tools.emit({ type: 'shipment.created', subject: id, companyId: order.companyId, siteId, payload: { shipmentId: id, number: number.formatted, salesOrderId: order.id, siteId, lines: added.length, garments, partyId: order.partyId /* B-SA-004: the order row's customer, the shipment's */ } })
     changed(tools, scope, 'DRAFT', 'lines')
+    // B-OP-040: made with lines of other orders of the customer (only after the switch): their orders joined it.
+    if (others.length > 0) ordersChanged(tools, scope, [order.id], await ordersOfShipment(tools.tx, { id, salesOrderId: order.id }))
     return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, id))!) }
   })
   return result
@@ -427,12 +473,17 @@ async function onShipment<Result>(
 export async function addLines(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; lines: readonly { workOrderSizeId: string; quantity: number }[] }, idempotencyKey?: string) {
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
   const byCell = garmentsByCell(body.lines)
-  const cells = await caller.withClient((client) => cellsFor(client, { ...shipment, status: 'DRAFT' }, byCell, 'body/lines'))
+  // B-OP-040: the orders it carries now, and what another order of the customer would join (MULTI_ORDER_OFF until the switch).
+  const cells = await caller.withClient(async (client) =>
+    cellsFor(client, { ...shipment, status: 'DRAFT', salesOrderIds: await ordersOfShipment(client, shipment), join: await joinShipmentFacts(client, { ...shipment, status: 'DRAFT' }) }, byCell, 'body/lines'),
+  )
   return onShipment(caller, shipment, { name: 'shipping.addLines', idempotencyKey, input: { shipmentId, ...body }, version: body.version }, async (tools) => {
     const current = await lockedStatus(tools, shipment.id, ['DRAFT'], 'its lines change')
+    const before = await ordersOfShipment(tools.tx, current) // B-OP-040
     const added = await addGarments(tools, current, byCell, cells)
     tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { lines: added } })
     changed(tools, current, current.status, 'lines')
+    ordersChanged(tools, current, before, await ordersOfShipment(tools.tx, current)) // B-OP-040
     return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, current.id))!) }
   })
 }
@@ -482,11 +533,14 @@ export async function removeLine(caller: CommandCaller, shipmentId: string, line
   return onShipment(caller, shipment, { name: 'shipping.removeLine', idempotencyKey, input: { shipmentId, lineId, ...query }, version: query.version }, async (tools) => {
     const current = await lockedStatus(tools, shipment.id, ['DRAFT'], 'its lines change')
     const line = await lineOf(tools.tx, current.id, lineId)
+    const before = await ordersOfShipment(tools.tx, current) // B-OP-040
     await lockCells(tools.tx, tenantOf(tools.context), [line.workOrderSizeId])
     await unpackSerialsOf(tools, current, line.serials.map((serial) => ({ ...serial, lineId: line.id })))
     await tools.tx.shipmentLine.delete({ where: { id: line.id }, select: { id: true } })
     tools.audit({ recordType: 'ShipmentLine', recordId: line.id, companyId: current.companyId, siteId: current.siteId, before: { shipmentId: current.id, workOrderSizeId: line.workOrderSizeId, quantity: line.quantity, parcelId: line.parcelId } })
     changed(tools, current, current.status, 'lines')
+    // B-OP-040: an order leaves with its last line (the first order stays the shipment's).
+    ordersChanged(tools, current, before, await ordersOfShipment(tools.tx, current))
     return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, current.id))!) }
   })
 }
