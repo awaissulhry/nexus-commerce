@@ -678,9 +678,9 @@ describe('B-SA-042: Accept runs the change at once; the gap goes to the work ord
   it('shows the extra pieces before Accept and holds Accept until their outcome is chosen; nothing is written meanwhile', async () => {
     const world = await inWork(3, 2)
     const record = await officeRecord(office(), world.request, h.clock.now())
-    expect(record.preview).toMatchObject({ problems: [], workOrders: { extra: [{ workOrderSizeId: world.cell, salesOrderLineId: world.line, size: '52', count: 1, words: { en: 'Extra pieces: 1 52 already cut', it: 'Pezzi in più: 1 52 già tagliati' } }], needsOutcome: true, words: { en: 'Choose what happens to the 1 extra pieces', it: 'Scegli cosa fare dei 1 pezzi in più' } } })
+    expect(record.preview).toMatchObject({ problems: [], workOrders: { extra: [{ workOrderSizeId: world.cell, salesOrderLineId: world.line, size: '52', count: 1, words: { en: 'Extra pieces: 1 52 already cut', it: 'Pezzi in più: 1 52 già tagliati' } }], needsOutcome: true, words: { en: 'Choose what happens to the 1 extra piece', it: 'Scegli cosa fare del 1 pezzo in più' } } })
     const held = await thrown(acceptRequest(office(), world.request, { version: 1 }, undefined, h.clock))
-    expect(held.issues).toEqual([{ path: 'refusal/EXTRA_OUTCOME', message: 'Choose what happens to the 1 extra pieces' }])
+    expect(held.issues).toEqual([{ path: 'refusal/EXTRA_OUTCOME', message: 'Choose what happens to the 1 extra piece' }])
     expect(await size52(world.line)).toBe(4)
     expect((await one('SELECT status::text AS status FROM "OrderChangeRequest" WHERE id = $1', [world.request])).status).toBe('OPEN')
     expect(await changesOf(world.order)).toEqual([])
