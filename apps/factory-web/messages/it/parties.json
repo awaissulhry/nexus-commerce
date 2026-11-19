@@ -274,6 +274,51 @@
       "openOf": "Apri {draft}",
       "noun": "bozza",
       "readOnly": "Sola lettura: {customer} la sta ancora scrivendo."
+    },
+    "designer": {
+      "label": "Designer della fabbrica",
+      "backup": "Sostituto",
+      "none": "Non impostato",
+      "seen": "{customer} vede questo nome",
+      "lostReach": "Non raggiunge più {customer}",
+      "notActive": "Non più attiva",
+      "hint": "{customer} vede solo il nome di questa persona quando chiede aiuto per il design.",
+      "portalOff": "{customer} non ha ancora il portale: il nome compare quando il portale è attivo.",
+      "backupNamed": "Ora il portale indica il sostituto, {name}.",
+      "nobodyNamed": "Ora il portale non indica nessuno: indica un altro designer della fabbrica.",
+      "change": "Cambia…",
+      "title": "Designer della fabbrica per {customer}",
+      "backupHint": "Il sostituto fa le sue veci. L'elenco indica solo le persone dell'ufficio che leggono e rispondono alle conversazioni di {customer}.",
+      "search": "Cerca una persona",
+      "me": "{name} (tu)",
+      "notListed": "{name} (non più nell'elenco)",
+      "partial": "L'elenco mostra le prime 500 persone dell'ufficio.",
+      "nobodyEligible": "Nessuno dell'ufficio legge e risponde ancora alle conversazioni di {customer}.",
+      "apply": "Applica",
+      "saving": "Salvo…",
+      "reading": "Leggo il designer della fabbrica…",
+      "readFailed": "Non riesco a leggere il designer della fabbrica",
+      "choicesFailed": "Non riesco a leggere chi si può indicare",
+      "done": "Il designer della fabbrica di {customer} è salvato.",
+      "stale": "Qualcuno ha cambiato il designer della fabbrica nel frattempo: eccolo com'è ora.",
+      "nothing": "Non cambia nulla: sono già il designer della fabbrica e il sostituto.",
+      "fixFirst": "Correggi prima il campo segnato.",
+      "failed": "Il designer della fabbrica non è stato salvato: riprova.",
+      "notFound": "Cliente non trovato.",
+      "heldEveryCompany": "Per indicare il designer della fabbrica di questo cliente serve il permesso di gestire i partner in ogni azienda con cui lavora.",
+      "refusal": {
+        "NOT_OFFICE": "Solo una persona dell'ufficio può essere il designer della fabbrica.",
+        "NOT_ACTIVE": "Questa persona non è più attiva.",
+        "NO_REACH": "Questa persona non lavora con {customer}: non può leggere e rispondere nelle sue conversazioni.",
+        "BACKUP_ALONE": "Indica prima il designer della fabbrica; il sostituto fa le sue veci.",
+        "SAME_PERSON": "Il sostituto è un'altra persona.",
+        "other": "Questa persona non si può indicare qui: scegli dall'elenco."
+      },
+      "mtm": {
+        "label": "Bozze su misura",
+        "onHint": "Le persone di {customer} possono aggiungere righe su misura alle bozze del portale (accettata, una bozza così diventa prima un preventivo).",
+        "offHint": "Le righe su misura sono chiuse nelle bozze del portale di {customer}: ce le chiedono nei messaggi."
+      }
     }
   },
   "suppliers": {
