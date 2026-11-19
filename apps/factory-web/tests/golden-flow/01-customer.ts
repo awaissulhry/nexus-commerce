@@ -2,6 +2,7 @@ import { expect } from '@playwright/test'
 import { defineStage } from './_harness/stages'
 import { answerOf, dialog, press, routerActivity } from './_harness/ui'
 import { words } from './_harness/words' // F-OP-218
+import { seen } from './_harness/flow' // F-CP-112
 
 /** The customer of the first order (made up): an Italian brand that sells under its own label. */
 export const CUSTOMER = {
@@ -14,7 +15,7 @@ export const CUSTOMER = {
 }
 
 export default defineStage({
-  proves: 'Italian B2B customer with tax identity; VIES proof (fake): an Italian VAT number is not a VIES question, and the screen says so',
+  proves: 'Italian B2B customer with tax identity; VIES proof (fake): an Italian VAT number is not a VIES question, and the screen says so; the customer page opens on All orders (rows=all, one document, no loop), New order and its lines open in place, Clear all goes back to All orders, a docked order shows its own files line (F-CP-112)',
   async run(flow) {
     const sales = await flow.desk('sales')
     const { page } = sales
@@ -48,6 +49,9 @@ export default defineStage({
       // fx-13: a production build prefetches each visible link once (many addresses, once each); a loop asks ONE address again and again.
       expect(seen.mostOneAddress, said).toBeLessThanOrEqual(3)
       await expect(page).toHaveURL(new RegExp(`tab=work.*party=${party.id}`))
+      // F-CP-112 (customer page plan C1, F-CP-101): the customer page opens on All orders — the entry address written once, rows=all.
+      await expect(page).toHaveURL(/[?&]rows=all(&|$)/)
+      expect(page.url()).not.toMatch(/[?&]status=all(&|$)/)
     })
 
     // F-OP-218 (order page plan N4; 11-dock §0, §3.4; D11): the customer page's dock is the same ONE card as the order page's — the pick
@@ -128,6 +132,76 @@ export default defineStage({
       await expect(page.getByRole('button', { name: 'Check VIES' })).toHaveCount(0)
       await flow.shot(page, 'tax-vies')
     })
+
+    // ---- F-CP-112 (customer page plan C2a, F-CP-104 / F-CP-113): New order from the band opens in place — the customer held (no
+    // Change), Add the lines opens the New order page's own editor in a large window — with no document and no address written.
+    await flow.step('New order opens in place on the customer page: the customer held (no Change), its lines in a large window, no navigation', async () => {
+      const P = words('parties')
+      const O = words('orders')
+      await sales.go(`/sales/customers/${party.id}?tab=work`)
+      await expect(page).toHaveURL(/[?&]rows=all(&|$)/)
+      const at = new URL(page.url())
+      const activity = await routerActivity(page, 4_000, async () => {
+        await press(page.getByRole('button', { name: P('customers.band.newOrder'), exact: true }).first())
+        const form = page.getByRole('dialog', { name: O('newOrder.title') }).last()
+        await seen(form, 30_000)
+        // The customer is the page's: picked on open, no search, no Change.
+        await expect(form.getByText(CUSTOMER.legalName).first()).toBeVisible({ timeout: 30_000 })
+        await expect(form.getByRole('button', { name: O('newOrder.change'), exact: true })).toHaveCount(0)
+        await expect(form.getByRole('textbox', { name: O('newOrder.customer'), exact: true })).toHaveCount(0)
+        await press(form.getByRole('button', { name: O('newOrder.addLines'), exact: true }))
+        // The lines window: the New order page's own editor (Discard · Confirm order) over the Work tab.
+        const lines = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: O('newOrder.confirm'), exact: true }) }).last()
+        await seen(lines, 30_000)
+      })
+      const said = activity.lines.join('
+')
+      expect(activity.documents, said).toBe(0)
+      expect(activity.writes, said).toBe(0)
+      expect(new URL(page.url()).pathname, said).toBe(at.pathname)
+      await flow.shot(page, 'customer-new-order-lines-window')
+      // Nothing typed: the window closes without asking and nothing is made.
+      await page.keyboard.press('Escape')
+      const ask = page.getByRole('dialog', { name: O('newOrder.discardAsk.title') })
+      if (await ask.isVisible().catch(() => false)) await press(ask.getByRole('button', { name: O('newOrder.discard'), exact: true }))
+      await expect(page.getByRole('dialog').filter({ has: page.getByRole('button', { name: O('newOrder.confirm'), exact: true }) })).toHaveCount(0, { timeout: 15_000 })
+      expect(((await flow.read(page, `/sales/orders?partyId=${party.id}&limit=5`)).orders as unknown[]).length).toBe(0)
+    })
+
+    // ---- F-CP-112 (F-CP-102): Clear all goes back to the customer page's own default — All orders (rows=all) — not Open orders.
+    await flow.step('Clear all on the customer page goes back to All orders (rows=all), the terms gone', async () => {
+      const S = words('orders-sheet')
+      await sales.go(`/sales/customers/${party.id}?tab=work&rows=all&atRisk=true&invoiced=NONE`)
+      await expect(page).toHaveURL(/[?&]atRisk=true/)
+      await press(page.getByRole('button', { name: S('chips.clearAll'), exact: true }).first())
+      await expect(page).not.toHaveURL(/[?&](atRisk|invoiced)=/, { timeout: 15_000 })
+      await expect(page).toHaveURL(/[?&]rows=all(&|$)/)
+      expect(page.url()).not.toMatch(/[?&]rows=open(&|$)/)
+    })
+
+    // ---- F-CP-112 (F-CP-111): a row of a customer's orders docks that order — its thread and its own files line (the order's set).
+    await flow.step('the dock’s files line: a row of a customer’s orders docks the order with its own files line', async () => {
+      const RTF = words('record-thread-files')
+      const P1 = await flow.seedId('party:P1')
+      const SO1 = await flow.seedId('sales:SO1')
+      await sales.go(`/sales/customers/${P1}?tab=work`)
+      const row = page.locator(`.ag-row[row-id="${SO1}"]`).first()
+      await seen(row, 60_000)
+      await row.locator('.ag-cell[col-id="status"]').first().click()
+      const card = page.locator('.fw-rcf.has-thread > aside.fw-rcf-dock section.fw-rt-column.is-docked')
+      await expect(card).toHaveCount(1, { timeout: 60_000 })
+      const chip = card.locator('.fw-rtf-chip').first()
+      await seen(chip, 60_000)
+      // "Files (N)" — the order's own set, N = its Files tab's count — or, when every file is priced for this reader, the lock's words.
+      const RF = words('record-files')
+      const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const shown = [escape(RTF('chip.label', { count: 7 })).replace('7', '\\d+'), escape(RF('priced.lockedCount', { count: 7 })).replace('7', '\\d+'), escape(RF('priced.lockedCount', { count: 1 }))]
+      await expect(chip).toHaveText(new RegExp(`^(${shown.join('|')})`))
+      await chip.click()
+      await expect(card.locator('.fw-rtf-all').first()).toContainText(RTF('strip.all'))
+      await flow.shot(page, 'customer-dock-order-files')
+    })
+    // ---- end F-CP-112
 
     const saved = (await flow.read(page, `/parties/${party.id}`)).party
     expect(saved).toMatchObject({ code: CUSTOMER.code, legalName: CUSTOMER.legalName })
