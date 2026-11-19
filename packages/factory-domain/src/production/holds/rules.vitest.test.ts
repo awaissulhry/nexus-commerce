@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { HOLD_BRAND_WORDS_MAX, HOLD_LIFT_REASON_MAX, HOLD_NOTE_MAX } from './kinds'
 import { afterHoldEnds, customerWordsOf, holdKindOfList, liftProblems, placeProblems, productionHoldMove, unholdableWords, wordsOrNull, type StandingHold } from './rules'
+// B-OO-005: the order's ONE hold plan.
+import { ORDER_HOLD_HELD, orderHoldHeldWords, orderHoldPlanOf, SHARED_HOLD_WORDS, type OrderHoldWorkOrder } from './rules'
 
 /**
  * B-PR-21 — the plain production hold's rules (production plan §5 "holds (one dialog)", 08-backend §4.5, R-22): the one dialog's
@@ -105,3 +107,78 @@ describe('after a hold ends: the work order leaves ON_HOLD only when no hold nam
     expect(afterHoldEnds({ workOrder: { status: 'RELEASED', holdRecordType: null, holdRecordId: null }, ended: { recordType: 'WorkOrderHold', id: 'p1' }, standing: [] })).toEqual({ action: 'STAY' })
   })
 })
+
+// ---- B-OO-005 (order overview N6, F13, F16): "Hold the whole order" — which work orders the one Hold dialog holds ---------------
+const wo = (number: string, status: string, extra: Partial<OrderHoldWorkOrder> = {}): OrderHoldWorkOrder => ({ id: `id-${number}`, number, status, version: 3, sharedWithOtherCustomers: false, rights: { hold: true }, ...extra })
+
+describe('B-OO-005 orderHoldPlanOf: the ONE plan of "Hold the whole order", the web imports it', () => {
+  it('holds every own open work order the reader may hold, with its version; the plan is not held', () => {
+    const plan = orderHoldPlanOf({ workOrders: [wo('WO-1', 'DRAFT'), wo('WO-2', 'RELEASED', { version: 7 }), wo('WO-3', 'IN_PROGRESS')] })
+    expect(plan).toEqual({ ids: ['id-WO-1', 'id-WO-2', 'id-WO-3'], numbers: ['WO-1', 'WO-2', 'WO-3'], versions: { 'id-WO-1': 3, 'id-WO-2': 7, 'id-WO-3': 3 }, left: [], notReached: 0, held: null })
+  })
+
+  it('none yet: no work order is made for this order (and a cancelled one is no work)', () => {
+    for (const workOrders of [[], [wo('WO-9', 'CANCELLED')]]) {
+      const plan = orderHoldPlanOf({ workOrders })
+      expect(plan).toMatchObject({ ids: [], left: [], held: { code: 'NONE_YET', words: { en: 'Nothing to hold yet: no work order is made for this order.', it: 'Ancora niente da fermare: nessun ordine di lavoro è stato creato per questo ordine.' } } })
+    }
+  })
+
+  it('every one completed: no work is left to stop, its garments take a quality hold; each named with why', () => {
+    const plan = orderHoldPlanOf({ workOrders: [wo('WO-1', 'COMPLETED'), wo('WO-2', 'CLOSED')] })
+    expect(plan.ids).toEqual([])
+    expect(plan.held).toEqual({ code: 'ALL_DONE', words: orderHoldHeldWords('ALL_DONE') })
+    expect(plan.held!.words.en).toMatch(/quality hold/)
+    expect(plan.left.map((entry) => [entry.number, entry.words.en])).toEqual([
+      ['WO-1', 'Completed: no work is left to stop. Hold its garments with a quality hold instead.'],
+      ['WO-2', 'Closed: nothing is left to hold.'],
+    ])
+  })
+
+  it('waiting for a yes: the order waits already, nothing is in work until then', () => {
+    const plan = orderHoldPlanOf({ workOrders: [wo('WO-1', 'DRAFT')], waitingForYes: true })
+    expect(plan).toMatchObject({ ids: [], versions: {}, held: { code: 'WAITING_FOR_YES', words: { en: 'The order waits for a yes: nothing is in work until then.' } } })
+  })
+
+  it('F13 a shared work order is reached and NAMED, left out with "hold it on its page"; the others are held', () => {
+    const shared = wo('WO-4', 'IN_PROGRESS', { sharedWithOtherCustomers: true, rights: { hold: false } })
+    const plan = orderHoldPlanOf({ workOrders: [wo('WO-1', 'DRAFT'), shared] })
+    expect(plan.ids).toEqual(['id-WO-1'])
+    expect(plan.left).toEqual([{ id: 'id-WO-4', number: 'WO-4', words: SHARED_HOLD_WORDS }])
+    expect(SHARED_HOLD_WORDS).toEqual({ en: 'Shared with other customers: hold it on its page.', it: 'Condiviso con altri clienti: mettilo in sospeso dalla sua pagina.' })
+    expect(plan.notReached).toBe(0)
+    // Only shared ones, open: nothing from here, each says why.
+    expect(orderHoldPlanOf({ workOrders: [shared] }).held?.code).toBe('NONE_HOLDABLE')
+  })
+
+  it('F13 one not reached is COUNTED, never named (a set of words of its own); none reached at all: Production holds them', () => {
+    const plan = orderHoldPlanOf({ workOrders: [wo('WO-1', 'DRAFT')], workOrdersLeftOut: 2 })
+    expect(plan).toMatchObject({ ids: ['id-WO-1'], left: [], notReached: 2, held: null })
+    const none = orderHoldPlanOf({ workOrders: [], workOrdersLeftOut: 1 })
+    expect(none.held).toEqual({ code: 'NONE_REACHED', words: { en: '1 work order of this order is not shown to you: ask Production to hold it.', it: '1 ordine di lavoro di questo ordine non ti è visibile: chiedi alla Produzione di metterlo in sospeso.' } })
+    expect(orderHoldPlanOf({ workOrders: [], workOrdersLeftOut: 3 }).held!.words.en).toBe('3 work orders of this order are not shown to you: ask Production to hold them.')
+    // The reached one completed, two not reached: the rest is Production's (never "every one is completed").
+    expect(orderHoldPlanOf({ workOrders: [wo('WO-1', 'COMPLETED')], workOrdersLeftOut: 2 }).held?.code).toBe('NONE_REACHED')
+    // The shared and the not-reached never mix: a shared one is in `left`, the count stays the read's.
+    expect(JSON.stringify(none)).not.toContain('WO-')
+  })
+
+  it('the reader holds none (Sales): held "Production does this"; one ON_HOLD already is left out; every open one on hold: held', () => {
+    const sales = orderHoldPlanOf({ workOrders: [wo('WO-1', 'DRAFT', { rights: { hold: false } }), wo('WO-2', 'IN_PROGRESS', { rights: { hold: false } })] })
+    expect(sales).toMatchObject({ ids: [], held: { code: 'NO_RIGHT', words: { en: 'You may not put work orders on hold: Production does this.' } } })
+    const some = orderHoldPlanOf({ workOrders: [wo('WO-1', 'ON_HOLD'), wo('WO-2', 'RELEASED')] })
+    expect(some.ids).toEqual(['id-WO-2'])
+    expect(some.left).toEqual([{ id: 'id-WO-1', number: 'WO-1', words: { it: 'Già in sospeso.', en: 'On hold already.' } }])
+    expect(orderHoldPlanOf({ workOrders: [wo('WO-1', 'ON_HOLD'), wo('WO-2', 'COMPLETED')] }).held).toEqual({ code: 'ALL_ON_HOLD', words: { en: 'Every open work order of this order is on hold already.', it: 'Ogni ordine di lavoro aperto di questo ordine è già in sospeso.' } })
+  })
+
+  it('every held code has words in both languages', () => {
+    for (const code of ORDER_HOLD_HELD) {
+      const words = orderHoldHeldWords(code, 2)
+      expect(words.en.trim(), code).not.toBe('')
+      expect(words.it.trim(), code).not.toBe('')
+      expect(words.it, code).not.toBe(words.en)
+    }
+  })
+})
+// ---- end B-OO-005

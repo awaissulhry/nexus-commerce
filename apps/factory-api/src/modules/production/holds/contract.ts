@@ -78,7 +78,14 @@ export const placeContract = defineContract({
 
 /** Hold N on the work orders list with a production reason: one hold per work order, all or none, in one command. */
 export const placeManyContract = defineContract({
-  body: input({ ...placeFields, workOrderIds: z.array(id()).min(1).max(HOLD_LIMITS.subjects) }),
+  body: input({
+    ...placeFields,
+    workOrderIds: z.array(id()).min(1).max(HOLD_LIMITS.subjects),
+    // B-OO-005 (order overview N6, F16): each work order's version read, `{ [workOrderId]: version }`; one that changed since → 409
+    // naming it, nothing held. Optional while Production's list (factory-web production/work-orders/daily/api.ts
+    // placeProductionHolds) sends none; the order page's "Hold the whole order…" always sends them (F-OO-108).
+    versions: z.record(z.string(), z.number().int().min(1)).optional(),
+  }),
   response: {
     201: output({
       holds: z.array(workOrderHoldView),

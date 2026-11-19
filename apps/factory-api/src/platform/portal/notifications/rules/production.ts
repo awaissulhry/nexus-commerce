@@ -35,7 +35,8 @@ import type { PartnerDraft, PartnerRule, PartnerRuleContext } from './types'
  *   brand_production.stage_reached     Cutting / Sewing / Quality check / Ready to ship, while the order is still there
  *   brand_production.health_changed    worse, to At risk or Late, while the order still reads it
  *   brand_production.hold_changed      on hold (a hold placed) / resumed (nothing holds it any more); the cause is the event the
- *                                      keeper followed (the envelope's causationId: a hold placed or lifted)
+ *                                      keeper followed (the envelope's causationId: a hold placed or lifted); B-OO-005: ONE notice
+ *                                      per act and order (holding or lifting N work orders of it in one command tells it once)
  *   brand_production.urgency_changed   ours only — set back to Regular, locked at Regular, unlocked — while its urgency switch is
  *                                      on; ONE notice per act (the first of the orders named, "and 2 more"), never the
  *                                      customer's own marks (PW-18), never our yes to its "Urgent – asked"
@@ -96,14 +97,48 @@ function draftOf(order: OwnOrder, messageKey: PartnerMessageKey, extra: Record<s
   return { partyId: order.partyId, companyId: order.companyId, record: named.record, messageKey, params: { ...named.params, ...extra, ...codes }, anchor: null, forReader: productionReader(place), batchId }
 }
 
-/** What moved a hold: the event the keeper followed (the envelope's causation), when the outbox knows it. */
-async function holdCauseOf(context: PartnerRuleContext): Promise<HoldCause | null> {
+// ---- B-OO-005 (order overview F10b; plan.md §3 "one on hold notice per act"): ONE hold notice per act and order ---------------
+/**
+ * What moved a hold: the event the keeper followed (the envelope's causation: a hold placed or lifted), when the outbox knows it
+ * (`cause` null: another event, taken as placed) — B-OO-005: with its id and the act it belongs to: the request
+ * (or job) that wrote it — one request's events share its correlation id (OutboxEvent.correlationId). The keeper's own event
+ * carries the cause's id as its causation, so the act is read on the cause, whatever caller ran the keeper.
+ */
+async function holdCauseRowOf(context: PartnerRuleContext): Promise<{ readonly id: string; readonly cause: HoldCause | null; readonly correlationId: string } | null> {
   const causationId = context.event.causationId
   // A causation that is no event id (a job's own key) is not read: a bad id would fail the fan-out's transaction.
   if (!causationId || !isUuid(causationId)) return null
-  const cause = await context.tx.outboxEvent.findUnique({ where: { id: causationId }, select: { type: true } })
-  return cause && Object.hasOwn(HOLD_CAUSE_OF_EVENT, cause.type) ? HOLD_CAUSE_OF_EVENT[cause.type]! : null
+  const cause = await context.tx.outboxEvent.findUnique({ where: { id: causationId }, select: { id: true, type: true, correlationId: true } })
+  if (!cause) return null
+  return { id: cause.id, cause: Object.hasOwn(HOLD_CAUSE_OF_EVENT, cause.type) ? HOLD_CAUSE_OF_EVENT[cause.type]! : null, correlationId: cause.correlationId }
 }
+
+/**
+ * Whether the same notice of this order was told already for the same act: "Hold the whole order" (and Production's Hold N,
+ * and one Lift for N work orders) is ONE act on several work orders of the order — N hold events, N keeper events — and the
+ * customer is told once. The cheapest correct lookup (13-backend §5): the order's earlier keeper hold events (subject = the order,
+ * the outbox's (tenant, subject, …) index), written after this act's cause and before this event (UUIDv7 ids are in write
+ * order; the keeper writes one order's events one after the other under its lock), whose own cause is of the same act (the
+ * cause's correlation id) and whose notice is the same key. The first of them tells; every later one is skipped.
+ */
+async function toldInTheSameAct(context: PartnerRuleContext, orderId: string, key: PartnerMessageKey, act: { readonly id: string; readonly correlationId: string }): Promise<boolean> {
+  const earlier = await context.tx.outboxEvent.findMany({
+    where: { type: 'brand_production.hold_changed', subject: orderId, id: { gt: act.id, lt: context.event.eventId } },
+    select: { causationId: true, payload: true },
+  })
+  const causeIds = [...new Set(earlier.flatMap((row) => (row.causationId && isUuid(row.causationId) ? [row.causationId] : [])))]
+  if (causeIds.length === 0) return false
+  const causes = new Map((await context.tx.outboxEvent.findMany({ where: { id: { in: causeIds }, correlationId: act.correlationId }, select: { id: true, type: true } })).map((row) => [row.id, row.type]))
+  return earlier.some((row) => {
+    const type = row.causationId ? causes.get(row.causationId) : undefined
+    if (type === undefined) return false
+    const payload = (row.payload ?? {}) as { readonly held?: unknown; readonly kind?: unknown }
+    if (typeof payload.held !== 'boolean' || typeof payload.kind !== 'string') return false
+    const cause = Object.hasOwn(HOLD_CAUSE_OF_EVENT, type) ? HOLD_CAUSE_OF_EVENT[type]! : null
+    return holdNoticeKey({ held: payload.held, kind: payload.kind as BrandHoldKind }, payload.held ? cause : null) === key
+  })
+}
+// ---- end B-OO-005
 
 // ---- B-PR-31 (F-PR-15's ask): a gate and a final inspection, each at the level that shares it ---------------------------------
 /** The customer's level of what it sees of its production (its own PortalSettings row: one per party), or null (no portal row). */
@@ -249,10 +284,15 @@ export const PRODUCTION_RULES: readonly PartnerRule[] = Object.freeze([
     events: ['brand_production.hold_changed'],
     async drafts(context, raw) {
       const event = payloadOf<{ orderId: string; partyId: string; held: boolean; kind: BrandHoldKind }>('brand_production.hold_changed')(raw)
-      const key = holdNoticeKey(event, event.held ? await holdCauseOf(context) : null)
+      // B-OO-005: the cause read once, with its act.
+      const cause = await holdCauseRowOf(context)
+      const key = holdNoticeKey(event, event.held ? (cause?.cause ?? null) : null)
       if (key === null) return []
       const order = await ownOrder(context.tx, event.orderId, event.partyId)
-      return order ? [draftOf(order, key)] : []
+      if (!order) return []
+      // B-OO-005: one notice per act and order — a later hold event of the same act is not told again.
+      if (cause && (await toldInTheSameAct(context, order.id, key, cause))) return []
+      return [draftOf(order, key)]
     },
   },
   {

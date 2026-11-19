@@ -142,3 +142,134 @@ export function afterHoldEnds(input: {
   const named = standing.some((hold) => hold.recordType === workOrder.holdRecordType && hold.id === workOrder.holdRecordId)
   return named ? { action: 'STAY' } : { action: 'REPOINT', to: standing[0]! }
 }
+
+// ---- B-OO-005 (order overview N6, F13, F16; 13-backend §5): "Hold the whole order" — the ONE plan, imported by the web -----
+
+/** Words in both languages of the office (tu). */
+export interface HoldPlanWords {
+  readonly it: string
+  readonly en: string
+}
+
+/** One work order of the order as the office's production read sends it (`work.workOrders[]`). */
+export interface OrderHoldWorkOrder {
+  readonly id: string
+  readonly number: string
+  readonly status: string
+  /** Its version read: the bulk hold sends it back (stale: refused, nothing held). */
+  readonly version: number
+  /** It also makes other customers' work (made before the one-customer rule): changed on its own page only. */
+  readonly sharedWithOtherCustomers: boolean
+  /** The reader's right to hold it (can() over its company, site and customer; false for a shared one). */
+  readonly rights: { readonly hold: boolean }
+}
+
+export interface OrderHoldPlanInput {
+  readonly workOrders: readonly OrderHoldWorkOrder[]
+  /** Live work orders of the order's lines the reader does not reach (`work.workOrdersLeftOut`): counted, never named. */
+  readonly workOrdersLeftOut?: number | undefined
+  /** The order waits for a yes (PENDING_APPROVAL): nothing is in work until then. */
+  readonly waitingForYes?: boolean | undefined
+}
+
+/** Why "Hold the whole order…" is held (no work order to hold), as a code the web may key on, and its words. */
+export const ORDER_HOLD_HELD = ['WAITING_FOR_YES', 'NONE_YET', 'NONE_REACHED', 'NO_RIGHT', 'ALL_DONE', 'ALL_ON_HOLD', 'NONE_HOLDABLE'] as const
+export type OrderHoldHeld = (typeof ORDER_HOLD_HELD)[number]
+
+export interface OrderHoldPlan {
+  /** The work orders the bulk hold places one production (or quality) hold on, in the read's order. */
+  readonly ids: readonly string[]
+  /** Their numbers, in the same order (the one Hold dialog names them). */
+  readonly numbers: readonly string[]
+  /** Their versions read: the body's `versions` (POST /production/work-orders/holds), always sent. */
+  readonly versions: Readonly<Record<string, number>>
+  /** The reached work orders left out, each by its number with why (a shared one: hold it on its page). A cancelled one is no work. */
+  readonly left: readonly { readonly id: string; readonly number: string; readonly words: HoldPlanWords }[]
+  /** Live work orders the reader does not reach: counted here, never named (F13: not the shared ones). */
+  readonly notReached: number
+  /** Nothing to hold: why, in words (null: `ids` holds at least one). */
+  readonly held: { readonly code: OrderHoldHeld; readonly words: HoldPlanWords } | null
+}
+
+/** F13: a shared work order is reached and named, and held from its own page only (its other customers' cells). */
+export const SHARED_HOLD_WORDS: HoldPlanWords = Object.freeze({ it: 'Condiviso con altri clienti: mettilo in sospeso dalla sua pagina.', en: 'Shared with other customers: hold it on its page.' })
+
+const LEFT_WORDS: Readonly<Record<'ON_HOLD' | 'COMPLETED' | 'CLOSED' | 'NO_RIGHT', HoldPlanWords>> = Object.freeze({
+  ON_HOLD: { it: 'Già in sospeso.', en: 'On hold already.' },
+  COMPLETED: { it: 'Completato: non resta lavoro da fermare. Metti invece i suoi capi in blocco qualità.', en: 'Completed: no work is left to stop. Hold its garments with a quality hold instead.' },
+  CLOSED: { it: 'Chiuso: non resta niente da fermare.', en: 'Closed: nothing is left to hold.' },
+  NO_RIGHT: { it: 'Non puoi metterlo in sospeso: lo fa la Produzione.', en: 'Not yours to hold: Production puts work orders on hold.' },
+})
+
+/** The held words of each code; NONE_REACHED counts the work orders the reader does not reach (never names them). */
+export function orderHoldHeldWords(code: OrderHoldHeld, notReached = 0): HoldPlanWords {
+  switch (code) {
+    case 'WAITING_FOR_YES':
+      return { it: "L'ordine aspetta un sì: fino ad allora non c'è niente in lavorazione.", en: 'The order waits for a yes: nothing is in work until then.' }
+    case 'NONE_YET':
+      return { it: 'Ancora niente da fermare: nessun ordine di lavoro è stato creato per questo ordine.', en: 'Nothing to hold yet: no work order is made for this order.' }
+    case 'NONE_REACHED':
+      return notReached === 1
+        ? { it: '1 ordine di lavoro di questo ordine non ti è visibile: chiedi alla Produzione di metterlo in sospeso.', en: '1 work order of this order is not shown to you: ask Production to hold it.' }
+        : { it: `${notReached} ordini di lavoro di questo ordine non ti sono visibili: chiedi alla Produzione di metterli in sospeso.`, en: `${notReached} work orders of this order are not shown to you: ask Production to hold them.` }
+    case 'NO_RIGHT':
+      return { it: 'Non puoi mettere in sospeso gli ordini di lavoro: lo fa la Produzione.', en: 'You may not put work orders on hold: Production does this.' }
+    case 'ALL_DONE':
+      return { it: 'Ogni ordine di lavoro di questo ordine è completato: non resta lavoro da fermare. Metti invece i capi in blocco qualità.', en: 'Every work order of this order is completed: no work is left to stop. Hold its garments with a quality hold instead.' }
+    case 'ALL_ON_HOLD':
+      return { it: 'Ogni ordine di lavoro aperto di questo ordine è già in sospeso.', en: 'Every open work order of this order is on hold already.' }
+    case 'NONE_HOLDABLE':
+      return { it: 'Nessun ordine di lavoro di questo ordine si mette in sospeso da qui: ognuno dice perché.', en: 'No work order of this order is held from here: each one says why.' }
+  }
+}
+
+const DONE: readonly string[] = ['COMPLETED', 'CLOSED']
+
+/**
+ * "Hold the whole order…" (the order's own move, F-OO-108): which of the order's work orders the ONE Hold dialog holds, and which
+ * it leaves out with why. Pure; the web imports it (no web copy) with the production read's work orders and its count of those
+ * the reader does not reach.
+ *
+ *   holds       every reached work order that is not shared, open (DRAFT, RELEASED, IN_PROGRESS: `productionHoldMove` HOLD) and
+ *               the reader's to hold (`rights.hold`), with its version (the bulk hold always sends them: F16)
+ *   left out    (F13, two cases, two sets of words) a SHARED one is reached and named: "hold it on its page"; one ON_HOLD already,
+ *               completed or closed, or not the reader's to hold is named with why; a cancelled one is no work (not named)
+ *   not reached counted, never named (`notReached`)
+ *   held        nothing to hold, first match: the order waits for a yes · no work order is made yet · none is reached · the reader
+ *               holds none of them (Production does) · the rest is not reached (counted) · every one is completed · every open one
+ *               is on hold already · none from here
+ */
+export function orderHoldPlanOf(input: OrderHoldPlanInput): OrderHoldPlan {
+  const notReached = Math.max(0, input.workOrdersLeftOut ?? 0)
+  const heldPlan = (code: OrderHoldHeld, left: OrderHoldPlan['left'] = []): OrderHoldPlan => ({ ids: [], numbers: [], versions: {}, left, notReached, held: { code, words: orderHoldHeldWords(code, notReached) } })
+  if (input.waitingForYes) return heldPlan('WAITING_FOR_YES')
+  const live = input.workOrders.filter((workOrder) => workOrder.status !== 'CANCELLED')
+  if (live.length === 0) return heldPlan(notReached === 0 ? 'NONE_YET' : 'NONE_REACHED')
+
+  const ids: string[] = []
+  const numbers: string[] = []
+  const versions: Record<string, number> = {}
+  const left: { id: string; number: string; words: HoldPlanWords }[] = []
+  for (const workOrder of live) {
+    const leave = (words: HoldPlanWords) => left.push({ id: workOrder.id, number: workOrder.number, words })
+    if (workOrder.sharedWithOtherCustomers) leave(SHARED_HOLD_WORDS)
+    else if (workOrder.status === 'ON_HOLD') leave(LEFT_WORDS.ON_HOLD)
+    else if (workOrder.status === 'COMPLETED' || workOrder.status === 'CLOSED') leave(LEFT_WORDS[workOrder.status])
+    else if (!workOrder.rights.hold) leave(LEFT_WORDS.NO_RIGHT)
+    else {
+      ids.push(workOrder.id)
+      numbers.push(workOrder.number)
+      versions[workOrder.id] = workOrder.version
+    }
+  }
+  if (ids.length > 0) return { ids, numbers, versions, left, notReached, held: null }
+
+  const own = live.filter((workOrder) => !workOrder.sharedWithOtherCustomers)
+  if (own.length > 0 && own.every((workOrder) => !workOrder.rights.hold)) return heldPlan('NO_RIGHT', left)
+  // Each one reached says why; the ones not reached are Production's to hold.
+  if (notReached > 0) return heldPlan('NONE_REACHED', left)
+  if (live.every((workOrder) => DONE.includes(workOrder.status))) return heldPlan('ALL_DONE', left)
+  if (live.filter((workOrder) => !DONE.includes(workOrder.status)).every((workOrder) => workOrder.status === 'ON_HOLD')) return heldPlan('ALL_ON_HOLD', left)
+  return heldPlan('NONE_HOLDABLE', left)
+}
+// ---- end B-OO-005
