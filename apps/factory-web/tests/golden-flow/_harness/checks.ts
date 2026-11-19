@@ -58,6 +58,9 @@ const NOT_WRITES: readonly { readonly path: RegExp; readonly when?: (capture: Ca
     when: (capture) => (capture.body as Record<string, unknown> | undefined)?.appUpdated !== true,
     why: "the tablet's own state report (app version, battery, queue count): bookkeeping written without an audit row by design (a new app version is audited)",
   },
+  // ---- End check (fx-6): the batch picture reads (factory-api modules/product/images/small-pictures.ts; B-SA-074 adds the work orders' one)
+  { path: /^\/(sales\/(orders|quotes|inquiries)|production\/work-orders)\/pictures$/, why: 'the small pictures of a page of records (a read in a POST, its record ids in the body): it answers, it writes nothing' },
+  // ---- end fx-6
 ]
 const notAWrite = (capture: Capture) => NOT_WRITES.some((rule) => rule.path.test(capture.path) && (!rule.when || rule.when(capture)))
 
