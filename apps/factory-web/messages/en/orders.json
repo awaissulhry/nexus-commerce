@@ -1413,6 +1413,14 @@
     "problems_other": "{count} things stop the order",
     "problem": {
       "past": "A date is today or later."
+    },
+    "discardAsk": {
+      "title": "Discard this new order?",
+      "body": "What you typed is lost: the lines ({lines}), the dates and the note. Nothing was saved yet.",
+      "keep": "Keep typing"
+    },
+    "window": {
+      "made": "Order {number} made: it joins the list with the next updates."
     }
   },
   "portal": {
@@ -1790,7 +1798,7 @@
     "checksOpen_other": "{count} checks hold the release",
     "release": {
       "credit": "The customer is over its credit limit: the release waits for a yes on its credit.",
-      "gate": "A compliance gate holds the release: see Compliance › Gate refusals.",
+      "gate": "A compliance gate holds the release: see Compliance › Status board, Gate refusals.",
       "refused_one": "The release check holds it: {count} check changed since it was read — see the list.",
       "refused_other": "The release check holds it: {count} checks changed since they were read — see the list."
     },
@@ -1944,7 +1952,7 @@
     "creditHeld": "{customer}'s credit is held.",
     "reason": "Why the goods were let go anyway",
     "reasonHint": "Recorded with the shipment and written on the order's thread.",
-    "note": "Internal note (optional)",
+    "note": "Office note (optional)",
     "cancel": "Cancel",
     "record_one": "Record shipment ({count} garment)",
     "record_other": "Record shipment ({count} garments)",

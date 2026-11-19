@@ -32,6 +32,10 @@ export const REQUEST_COLUMNS = {
   createdAt: true,
   updatedAt: true,
   createdById: true,
+  // B-CP-075: the parts sent later, and who of the customer saved it last (partner-readable; never an office person).
+  laterParts: true,
+  lastEditedById: true,
+  lastEditedAt: true,
 } as const satisfies Prisma.PortalOrderRequestSelect
 
 export const LINE_COLUMNS = {
@@ -45,11 +49,32 @@ export const LINE_COLUMNS = {
   note: true,
   version: true,
   sizes: { select: { id: true, size: true, quantity: true }, orderBy: { size: 'asc' } },
+  // B-CP-005: the line's kind and its own words (a described or made-to-measure line names no catalogue style and colourway).
+  kind: true,
+  description: true,
+  garmentType: true,
+  // end B-CP-005
+  // B-CP-075: a described or made-to-measure line's colours in words, its total, whether its pieces are its people.
+  colourText: true,
+  quantity: true,
+  byPerson: true,
 } as const satisfies Prisma.PortalOrderRequestLineSelect
 
 export type RequestRow = Prisma.PortalOrderRequestGetPayload<{ select: typeof REQUEST_COLUMNS }>
 export type LineRow = Prisma.PortalOrderRequestLineGetPayload<{ select: typeof LINE_COLUMNS }>
 export type Reader = FactoryClient | CommandTx
+
+// ---- B-CP-005 (schema wave "customer page 1/1"): a request line is of one of three kinds. A CATALOGUE line names a style of
+// the catalogue and one of its colourways (the …_customer_page_guards trigger holds it); a DESCRIBED or MADE_TO_MEASURE
+// line names neither, or only the customer's own style. Whatever reads lines as catalogue lines (the grid, the sizes and
+// colours offered, the list price, merging an upload or a reorder, the order or quote made from them) takes the catalogue
+// lines only; the other kinds are shown and accepted by their own steps (B-CP-075, B-CP-077).
+export type CatalogueLineRow = LineRow & { readonly kind: 'CATALOGUE'; readonly styleId: string; readonly colourwayId: string }
+export const isCatalogueLine = (line: LineRow): line is CatalogueLineRow => line.kind === 'CATALOGUE' && line.styleId !== null && line.colourwayId !== null
+export const catalogueLines = (lines: readonly LineRow[]): CatalogueLineRow[] => lines.filter(isCatalogueLine)
+/** A line in the customer's own words (a described or made-to-measure one): its description, else its garment type. */
+export const ownWordsOf = (line: LineRow): string | null => line.description ?? line.garmentType
+// ---- end B-CP-005
 
 /** An instant as the contracts send it (UTC, milliseconds), or null. */
 export const iso = (value: Date | null): string | null => (value === null ? null : toUtcIso(value))
@@ -93,3 +118,20 @@ export async function readDraftFiles(db: Reader, requestIds: readonly string[], 
   return db.storedFile.findMany({ where: draftFilesWhere(requestIds, lineIds), select: DRAFT_FILE_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 1000 })
 }
 // ---- end B-CP-072
+
+// ---- B-CP-075 (customer page plan C5, 12 §2 part 4): the people of a draft's by-person lines, and who saved the draft last ------
+
+export const PERSON_COLUMNS = { id: true, requestId: true, lineId: true, seq: true, name: true, number: true, measureBy: true, size: true, measurementFileId: true, note: true, version: true } as const satisfies Prisma.PortalOrderRequestPersonSelect
+export type PersonRow = Prisma.PortalOrderRequestPersonGetPayload<{ select: typeof PERSON_COLUMNS }>
+
+/** The people of these requests' lines, by line and place (read in the caller's scope: a portal session sees its party's only). */
+export async function readPeople(db: Reader, requestIds: readonly string[]): Promise<PersonRow[]> {
+  if (requestIds.length === 0) return []
+  return db.portalOrderRequestPerson.findMany({ where: { requestId: { in: [...requestIds] } }, select: PERSON_COLUMNS, orderBy: [{ requestId: 'asc' }, { lineId: 'asc' }, { seq: 'asc' }] })
+}
+
+/** "Saved 10:42 by Marta Bianchi": every draft command of the customer names who saved it (a draft column, frozen at Send). */
+export async function markEdited(tx: CommandTx, requestId: string, userId: string, now: Date): Promise<void> {
+  await tx.portalOrderRequest.update({ where: { id: requestId }, data: { lastEditedById: userId, lastEditedAt: now }, select: { id: true } })
+}
+// ---- end B-CP-075

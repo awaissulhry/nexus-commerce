@@ -555,3 +555,33 @@
   font-weight: 600;
   color: var(--nds-warning-text);
 }
+
+/* ---- F-CP-152 (customer page plan C5, 12 §2 Doors): the party's draft orders to continue (newest 3), under the Start doors. */
+.fw-pch-drafts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pch-drafts-title {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pch-drafts-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pch-drafts-all {
+  align-self: flex-start;
+  font-size: var(--nds-font-size-sm);
+}
+/* ---- end F-CP-152 */

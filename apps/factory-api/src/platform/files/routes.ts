@@ -36,6 +36,9 @@ import { createMarkup, listMarkups } from './markup/markup'
 // B-TH-024: carry a file to another record. B-TH-231: the records it may go to.
 import { useOnContract, useOnTargetsContract } from './contract'
 import { useFileOn, useOnTargets } from './use-on'
+// B-CP-014: mark a file as showing prices.
+import { setPricedContract } from './contract'
+import { setPriced } from './files'
 
 /**
  * Files on R2 (platform part; plan A1 §3.6, features COL-045, COL-050): announce an upload, confirm it, list a record's
@@ -82,6 +85,8 @@ export default defineRoutes('files', manifest, async (app) => {
   })
   // B-TH-231: the records the file may be carried to (same customer or none).
   app.get('/files/:fileId/use-on/targets', { schema: useOnTargetsContract }, async (request) => useOnTargets(request, request.params.fileId, request.query))
+  // B-CP-014: "Mark as priced" (or the mark taken off, by someone who sees prices).
+  app.post('/files/:fileId/priced', { schema: setPricedContract }, async (request) => ({ file: await setPriced(request, request.params.fileId, request.body, idempotencyKeyFrom(request)) }))
 
   app.get('/files/:fileId', { schema: getFileContract }, async (request) => {
     return { file: await getFile(request, request.params.fileId) }

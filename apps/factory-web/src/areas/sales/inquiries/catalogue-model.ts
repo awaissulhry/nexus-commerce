@@ -124,6 +124,8 @@ export interface CatalogueModel {
   readonly dialog: CatalogueDialog | null
   /** Someone else decided or changed it while it was open: when. */
   readonly handled: string | null
+  /** F-CP-107: the customer's portal draft read on its customer page (read only; its title); absent: a sent catalogue order. */
+  readonly draft?: { readonly title: string } | null
 }
 
 export interface CatalogueActions {

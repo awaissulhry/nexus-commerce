@@ -329,7 +329,7 @@
     "newOrderHint": "Scrivete di cosa avete bisogno, come in una e-mail.",
     "ask": "Fai una domanda",
     "askHint": "Una domanda per noi che non riguarda un ordine.",
-    "draft": "Bozza: {subject}",
+    "draft": "Messaggio non ancora inviato: {subject}",
     "draftKept": "tenuta su questo dispositivo · {time}",
     "draftSaved": "salvata alle {time}",
     "continue": "Continua",
@@ -339,5 +339,16 @@
   },
   "waiting": {
     "all": "Tutto ciò che vi aspetta ({count})"
+  },
+  "draftOrders": {
+    "newOrderHint": "Iniziate una bozza d'ordine con i colleghi; arriva alla fabbrica quando la inviate.",
+    "title_one": "Bozze d'ordine ({count})",
+    "title_other": "Bozze d'ordine ({count})",
+    "untitled": "Bozza senza titolo",
+    "facts_one": "{count} riga · modificata il {day}",
+    "facts_other": "{count} righe · modificata il {day}",
+    "continueOne": "Continua {title}",
+    "all_one": "Tutte le {count} bozze d'ordine",
+    "all_other": "Tutte le {count} bozze d'ordine"
   }
 }

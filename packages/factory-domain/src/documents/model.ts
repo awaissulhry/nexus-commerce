@@ -38,6 +38,28 @@ export const DOCUMENT_LANGUAGES = ['it', 'en'] as const
 export type DocumentLanguage = (typeof DOCUMENT_LANGUAGES)[number]
 
 export const isDocumentType = (value: unknown): value is DocumentType => typeof value === 'string' && (DOCUMENT_TYPES as readonly string[]).includes(value)
+
+// ---- B-CP-015 (customer page plan, the money wall D6; review B1 "mark by DocumentType"): which documents show our prices ----
+/**
+ * The documents that show OUR selling prices (Owner picks O1–O3: only the Owner and the people he names see them): their PDF is
+ * born priced (StoredFile.priced, files/priced.ts), opened only by people who see prices. The DDT and the packing list show no
+ * prices; a purchase order shows what we pay a supplier (the cost grain, Owner pick O8: outside this lock). A new type decides
+ * here, once (the record is exhaustive).
+ */
+export const PRICED_DOCUMENT_TYPES: Readonly<Record<DocumentType, boolean>> = Object.freeze({
+  QUOTE: true,
+  PURCHASE_ORDER: false,
+  DDT: false,
+  INVOICE_COPY: true,
+  PACKING_LIST: false,
+  ORDER_CONFIRMATION: true,
+  PROFORMA: true,
+  COMMERCIAL_INVOICE: true,
+})
+
+/** The document of this type shows our selling prices: its file is born priced. */
+export const pricedDocument = (type: DocumentType): boolean => PRICED_DOCUMENT_TYPES[type] === true
+// ---- end B-CP-015
 export const isDocumentLanguage = (value: unknown): value is DocumentLanguage =>
   typeof value === 'string' && (DOCUMENT_LANGUAGES as readonly string[]).includes(value)
 

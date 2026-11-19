@@ -7,7 +7,7 @@ import { scanText } from '../testing/brand-scan'
 import { BRAND_ALPHA } from '../testing/two-brands'
 import { readUnreadWith } from './api'
 import { cellOf, UNREAD_PAGE, unreadAsk, unreadMapOf, unreadValue } from './model'
-import { LastMessageCell } from './view/LastMessageCell'
+import { dockClick, LastMessageCell } from './view/LastMessageCell'
 
 /**
  * B-TH-230 — LastMessageCell (threads plan TH-2, on B-TH-027): ONE read of a page of rows (at most 200, each record once), the cell
@@ -100,3 +100,36 @@ describe('F-OP-213 — `readable` asked by the dock only', () => {
   })
 })
 // ---- end F-OP-213 follow-up
+
+// ---- F-CP-110 (customer page plan C2c): on a page with a dock the cell shows the record's conversation there ------------------------
+describe('F-CP-110: the New messages cell as the dock\'s door', () => {
+  const unread = { newCount: 2, lastAt: '2026-11-17T09:12:00.000Z' }
+
+  it('a button with the link\'s look only when the host gives onOpen; otherwise the link as before (Sales › Orders)', () => {
+    const docked = render(createElement(LastMessageCell, { unread, href: '/w/demo/sales/orders/o1?thread=new', record: 'SO-2026-0142', onOpen: () => undefined }))
+    expect(docked).toContain('<button')
+    expect(docked).toContain('data-door')
+    expect(docked).not.toContain('href=')
+    const linked = render(createElement(LastMessageCell, { unread, href: '/w/demo/sales/orders/o1?thread=new', record: 'SO-2026-0142' }))
+    expect(linked).toContain('href="/w/demo/sales/orders/o1?thread=new"')
+    expect(linked).not.toContain('<button')
+    expect(render(createElement(LastMessageCell, { unread: undefined, href: '/x', record: 'SO-1', onOpen: () => undefined }))).not.toContain('<button')
+  })
+
+  it('a plain click picks the dock; ⌘ / Ctrl keeps the order page\'s thread in a new tab', () => {
+    const opened: string[] = []
+    let picked = 0
+    const open = (href: string) => opened.push(href)
+    dockClick({ metaKey: false, ctrlKey: false }, '/o1?thread=new', () => (picked += 1), open)
+    dockClick({ metaKey: true, ctrlKey: false }, '/o1?thread=new', () => (picked += 1), open)
+    dockClick({ metaKey: false, ctrlKey: true }, '/o1?thread=new', () => (picked += 1), open)
+    expect(picked).toBe(1)
+    expect(opened).toEqual(['/o1?thread=new', '/o1?thread=new'])
+  })
+
+  it('the Orders sheet gives onOpen only on a page with a dock (model.active: the customer page)', () => {
+    const view = readFileSync(new URL('../../areas/sales/orders/list/view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('onOpen={latest.current.model.active ? () => latest.current.actions?.onOpenRow?.(data.id, false) : null}')
+  })
+})
+// ---- end F-CP-110

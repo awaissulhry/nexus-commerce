@@ -20,6 +20,13 @@
 //
 // Every child row carries its parent's partyId in its reference, so it can never belong to another party than its
 // request; uniqueness made of ids only (one open change request per order) is the API's, as in sales.prisma.
+//
+// B-CP-005 (customer page plan, schema wave "customer page 1/1"; design customer-page 12 §1-§2, 11 §1.1): the order
+// request is THE one draft order of the portal. A draft grows step by step: lines of three kinds (catalogue, described,
+// made to measure), the people of a by-person line (PortalOrderRequestPerson: a size, a measurement sheet or "sending
+// later"), the parts marked "sending later", who saved it last, and the customer's own price per line (brandUnitPrice,
+// the price grain), all frozen at Send. A draft with no line yet (only logos, only a sheet) may be kept and shared; Send
+// still needs at least one line with its pieces (sizes, a described total, or people or a sheet on a by-person line).
 
 /// An order request from the portal (SAL-072, SAL-073, SAL-074; design portal.customer.neworder): a draft kept with us
 /// while the customer builds it (the portal's "Draft saved 10:42"), then sent with a number of the company's
@@ -71,6 +78,15 @@ model PortalOrderRequest {
   updatedAt     DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
   /// The partner user who started the draft.
   createdById   String?                  @db.Uuid
+  // ── B-CP-005 (customer page plan, schema wave "customer page 1/1"; S3): the one draft order grows step by step.
+  /// The parts the customer marked "Sending later" (logos, references, people), each once; empty: none. Changed only while
+  /// it is a DRAFT (with its other draft columns), frozen once sent.
+  laterParts     PortalDraftPart[]       @default([])
+  /// Who of the customer's people saved the draft last and when ("Saved 10:42 by …"): both or neither; written by the
+  /// portal with every save while it is a DRAFT, frozen once sent.
+  lastEditedById String?                 @db.Uuid
+  lastEditedAt   DateTime?               @db.Timestamptz(3)
+  // ── end B-CP-005
 
   company    Company                  @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   party      Party                    @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -79,6 +95,8 @@ model PortalOrderRequest {
   salesOrder SalesOrder?              @relation("PortalOrderRequestOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   quote      Quote?                   @relation("PortalOrderRequestQuote", fields: [tenantId, partyId, quoteId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   lines      PortalOrderRequestLine[]
+  // B-CP-005 (S2): the people named on its lines (a roster), removed with their line or the discarded draft.
+  people     PortalOrderRequestPerson[]
 
   @@unique([tenantId, companyId, number])
   // The target of its lines' reference: a line of the same party.
@@ -112,6 +130,10 @@ enum PortalOrderRequestStatus {
 
 /// One line of an order request: one style in one colourway, the size run in its size rows, the price the customer was
 /// shown. Written by the customer while the request is a DRAFT; frozen when it is sent.
+/// B-CP-005 (customer page plan, schema wave "customer page 1/1"; S1, M6): a line of one of three kinds — CATALOGUE (a
+/// style in a colourway, as before), DESCRIBED (the customer's own words, colours in words, maybe its own style, a total or
+/// sizes) or MADE_TO_MEASURE (a garment type, maybe a style, always by person) — its people in PortalOrderRequestPerson, and
+/// the customer's own price beside the one it was shown. The …_customer_page_guards trigger holds each kind's shape.
 model PortalOrderRequestLine {
   id                String   @id @db.Uuid
   tenantId          String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -120,8 +142,10 @@ model PortalOrderRequestLine {
   requestId         String   @db.Uuid
   /// The line's place on the request: 1, 2, 3 …
   seq               Int
-  styleId           String   @db.Uuid
-  colourwayId       String   @db.Uuid
+  /// B-CP-005: a CATALOGUE line names both; a DESCRIBED or MADE_TO_MEASURE line may name the customer's own style (and a
+  /// colourway only with its style), or neither.
+  styleId           String?  @db.Uuid
+  colourwayId       String?  @db.Uuid
   /// A reorder's line: the past order's line it was copied from (of the same party), so the draft names every
   /// difference again (price, style revision, size run, a style no longer sold) when it is opened later.
   sourceOrderLineId String?  @db.Uuid
@@ -135,17 +159,115 @@ model PortalOrderRequestLine {
   createdAt         DateTime @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime @default(now()) @updatedAt @db.Timestamptz(3)
   createdById       String?  @db.Uuid
+  // ── B-CP-005 (S1, M6)
+  /// What kind of line it is (CATALOGUE by default, as every line before this wave).
+  kind              PortalDraftLineKind @default(CATALOGUE)
+  /// DESCRIBED: what the customer wants, in its own words (1 to 2000 characters; required). Null on the other kinds but
+  /// when the customer adds words to them.
+  description       String?
+  /// The colours in the customer's words (up to 200), for a line with no colourway of ours.
+  colourText        String?
+  /// MADE_TO_MEASURE: the garment type, a MeasurementTemplate code (required; that it is an ACTIVE one is the API's).
+  garmentType       String?
+  /// DESCRIBED: the pieces in all, when the customer gives a total instead of sizes (1 to 100 000).
+  quantity          Int?
+  /// Its pieces are its people (PortalOrderRequestPerson): always on a MADE_TO_MEASURE line.
+  byPerson          Boolean  @default(false)
+  /// The customer's own net unit price for the line, typed in the draft by a portal role that sees prices; at least 0;
+  /// frozen at Send with the rest of the line. Null: not typed. Carried into the order's OrderBrandPrice on accept.
+  /// @grain price
+  brandUnitPrice    Decimal? @db.Decimal(18, 6)
+  // ── end B-CP-005
 
   request         PortalOrderRequest       @relation(fields: [tenantId, partyId, requestId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
-  style           Style                    @relation("PortalOrderRequestLineStyle", fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
-  colourway       Colourway                @relation("PortalOrderRequestLineColourway", fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // B-CP-005: optional (a DESCRIBED or MADE_TO_MEASURE line may name none); Restrict, not Prisma's SetNull default for an
+  // optional relation: that would also clear tenantId. A colourway without its style is refused by the guard (the
+  // reference checks nothing while styleId is null).
+  style           Style?                   @relation("PortalOrderRequestLineStyle", fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway       Colourway?               @relation("PortalOrderRequestLineColourway", fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
   sourceOrderLine SalesOrderLine?          @relation("PortalOrderRequestLineSource", fields: [tenantId, partyId, sourceOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   sizes           PortalOrderRequestSize[]
+  // B-CP-005 (S2): the people on a by-person line, removed with it.
+  people          PortalOrderRequestPerson[]
 
   @@unique([tenantId, requestId, seq])
   // The target of its size rows' reference: a size of the same party.
   @@unique([tenantId, partyId, id])
 }
+
+// ── B-CP-005 (customer page plan, schema wave "customer page 1/1"; S1–S3; lead change: "Saved measurements" comes later, so
+// a person is measured by SIZE, SHEET or LATER only)
+
+/// What kind of draft line it is (design 12 §2, part 1 "What you need").
+enum PortalDraftLineKind {
+  /// A style of the customer's catalogue in one of its colourways, its sizes in the size rows.
+  CATALOGUE
+  /// Described by the customer: its words, colours in words, maybe its own style; a total or sizes.
+  DESCRIBED
+  /// Made to measure: a garment type, maybe a style; always by person.
+  MADE_TO_MEASURE
+}
+
+/// How one person of a by-person line is measured (design 12 §2, part 4 "People & sizes").
+enum PortalDraftMeasureBy {
+  /// A size of the range (PortalOrderRequestPerson.size).
+  SIZE
+  /// A measurement sheet the customer uploaded to the draft (a MEASUREMENTS file of this request or one of its lines).
+  SHEET
+  /// The customer sends it later.
+  LATER
+}
+
+/// A part of the draft the customer will send later (design 12 §2, the checklist's "Sending later").
+enum PortalDraftPart {
+  LOGOS
+  REFERENCES
+  PEOPLE
+}
+
+/// One person on a by-person line of an order request (a rider, a team member; design 12 §2, part 4): a name, maybe a
+/// number, and one way to be measured — a size, a measurement sheet the customer uploaded, or "sending later". Written by
+/// the customer while the request is a DRAFT (the …_customer_page_guards trigger), frozen once sent; removed with its line
+/// or the discarded draft (cascade). Personal data of the person named (GDPR art. 6(1)(b): what the order needs); the
+/// office reads it, the floor never. Its party is its request's (the reference holds it).
+model PortalOrderRequestPerson {
+  id                String               @id @db.Uuid
+  tenantId          String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The request's party (the partner role's policy key).
+  partyId           String               @db.Uuid
+  requestId         String               @db.Uuid
+  /// The line of this request the person is on (a by-person line).
+  lineId            String               @db.Uuid
+  /// The person's place on the line: 1, 2, 3 … (rows never jump).
+  seq               Int
+  /// The name as the customer wrote it, 1 to 120 trimmed characters.
+  name              String
+  /// Their number (a race or shirt number), up to 10 trimmed characters.
+  number            String?
+  measureBy         PortalDraftMeasureBy
+  /// SIZE: the size, 1 to 40 trimmed characters (whether the range has it is the API's); null otherwise.
+  size              String?
+  /// SHEET: the measurement sheet, a MEASUREMENTS file of this request or one of its lines; null otherwise.
+  measurementFileId String?              @db.Uuid
+  /// The customer's note on the person, up to 1000.
+  note              String?
+  version           Int                  @default(1)
+  createdAt         DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The partner user who added the person.
+  createdById       String?              @db.Uuid
+
+  request          PortalOrderRequest     @relation(fields: [tenantId, partyId, requestId], references: [tenantId, partyId, id], onDelete: Cascade, onUpdate: Restrict)
+  line             PortalOrderRequestLine @relation(fields: [tenantId, partyId, lineId], references: [tenantId, partyId, id], onDelete: Cascade, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId. A file is never
+  // deleted (its row stays DELETED).
+  measurementFile  StoredFile?            @relation("PortalOrderRequestPersonSheet", fields: [tenantId, measurementFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, lineId, seq])
+  // A request's people (the draft page, the office's read of a draft).
+  @@index([tenantId, requestId])
+}
+// ── end B-CP-005
 
 /// The pieces of one size of an order request's line (the size grid as rows); above 0. Written while the request is a
 /// DRAFT. Whether the style offers the size, and the minimum per size, are the API's (the portal shows them per cell).

@@ -31,8 +31,29 @@ export const CATALOGUE_DOOR_OPEN = true
 /** The address terms of the catalogue door (B-W2b-194): only they open its page, and only while the door is open. */
 export function opensCatalogueDoor(search: Pick<URLSearchParams, 'get'> | null, open: boolean = CATALOGUE_DOOR_OPEN): boolean {
   if (!open || !search) return false
-  return Boolean(search.get('draft') || search.get('way') || search.get('reorder'))
+  // F-CP-152: `way=words` is the request like an e-mail, never the draft's page.
+  const way = search.get('way')
+  return Boolean(search.get('draft') || (way && way !== WORDS_WAY) || search.get('reorder'))
 }
+
+// ---- F-CP-152 (customer page plan C5, 12 §2 Doors): which page `/orders/new` opens --------------------------------------------
+/** "Just write it in words": the request like an e-mail (door A), from the draft start. */
+export const WORDS_WAY = 'words'
+
+/** `/p/<party>/orders/new?way=words` — door A, the request written like an e-mail. */
+export const wordsHref = (prefix: string): string => `${prefix}/orders/new?way=${WORDS_WAY}`
+
+/**
+ * The page `/orders/new` opens: the draft order (its start with no term — Pick styles, Reorder a past order, Upload a sheet, the
+ * drafts to continue — or a draft, a way, a style, a past order) for who keeps drafts; the request like an e-mail for `way=words`
+ * and for who may order but keeps no drafts. The catalogue door closed: always the e-mail.
+ */
+export function newOrderDoorOf(search: Pick<URLSearchParams, 'get'> | null, facts: { mayDraft: boolean }, open: boolean = CATALOGUE_DOOR_OPEN): 'draft' | 'words' {
+  if (!open || search?.get('way') === WORDS_WAY) return 'words'
+  if (opensCatalogueDoor(search, open)) return 'draft'
+  return facts.mayDraft ? 'draft' : 'words'
+}
+// ---- end F-CP-152
 
 // ── B-TH-304: the catalogue door on New order ────────────────────────────────────────────────────────────────────────────
 /** The door's three ways in (B-W2b-194's start), each its page's address; null while the door is closed. */

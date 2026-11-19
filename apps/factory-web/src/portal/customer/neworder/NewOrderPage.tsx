@@ -52,7 +52,6 @@ import {
   refusalOf,
   reorderBody,
   reorderStart,
-  sendHeld,
   sizesBody,
   stylesOf,
   todayIn,
@@ -69,6 +68,21 @@ import type { ReorderModel } from './view/ReorderPanel'
 import type { SheetState } from './view/UploadPanel'
 import { NotInAccess } from './view/parts'
 import { useOrderingWords } from './words'
+// ---- F-CP-150 (customer page plan C5, D9–D11): the draft order page — its conversation docked, who may send, who changed it.
+import { PortalThread } from '../../shell/thread/PortalThread'
+import { fetchColleagues } from './api'
+import { draftDiscardHeld, draftSendHeld, draftTitleOf, mayOf, whoMayOrder } from './model'
+// ---- end F-CP-150
+// ---- F-CP-151 (B-CP-072; D14): the draft's files — announced, PUT to the store, completed; taken out by their version.
+import { useT } from '../../../lib/i18n/provider'
+import { COMPOSE_NS } from '../../../lib/request-compose/model'
+import { heldProblem } from '../../../lib/request-compose/files'
+import { contentTypeOf } from '../../../lib/record-thread/attachments/model'
+import { putToStore, sha256Hex, StoreError } from '../../../record-panels/store'
+import { announceDraftFile, completeDraftFile, removeDraftFile, type DraftFile, type DraftFilePart } from './api'
+import { DRAFT_FILES_MAX, draftFileCount, LATER_PART_OF, laterToggleOf } from './model'
+import type { UploadRow } from './view/DraftFiles'
+// ---- end F-CP-151
 
 /**
  * `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=&reorder=&line=` for a customer (B-W2b-194, SCR-185, on
@@ -81,10 +95,16 @@ import { useOrderingWords } from './words'
  * …/send → the EndState. Writes run one after another (each takes the version the last one left), each with ONE
  * Idempotency-Key per body. No partner live event names an order request: the draft is read again when the tab comes back
  * or the live channel reconnects, and typed work is never overwritten ("it changed elsewhere — read it again").
+ *
+ * F-CP-150 (customer page plan C5, D9–D11): the ONE draft order. A draft is kept with portal.orderDrafts.edit (the brand's Buyer
+ * and Designer; the Admin follows): its Designer starts and fills it without prices, and reads Send held with the names of who may
+ * order (the API's `may`); Reorder a past order needs an access that shows orders. The draft's conversation is docked beside it
+ * from its first save (`PortalOrderRequest`; the factory reads the draft and may answer there) and stays once it is sent. A 409
+ * keeps what was typed and says who changed the draft when the API names them (B-CP-075).
  */
 export function CustomerNewOrderPage() {
   return (
-    <WithMessages namespaces={[NS, 'ds-words', 'lists', 'portal-account']}>
+    <WithMessages namespaces={[NS, 'ds-words', 'lists', 'portal-account', COMPOSE_NS /* F-CP-151: a file's refusal words */]}>
       <NewOrderContainer />
     </WithMessages>
   )
@@ -138,7 +158,10 @@ function NewOrderContainer() {
   const { t, locale } = words
   const offline = useOffline()
   const can = useCallback((permission: string) => frame.me.permissions.includes(permission), [frame.me.permissions])
-  const allowed = frame.kinds.includes('CUSTOMER') && can('portal.orderRequests.manage')
+  // F-CP-150 (D11): the draft is kept with portal.orderDrafts.edit; sending and reordering stay with who may order.
+  const allowed = frame.kinds.includes('CUSTOMER') && can('portal.orderDrafts.edit')
+  const mayOrder = can('portal.orderRequests.manage')
+  const seesOrders = can('portal.salesOrders.view')
   const preview = frame.me.preview
   const draftId = search?.get('draft') ?? null
   const wayParam = search?.get('way')
@@ -172,6 +195,11 @@ function NewOrderContainer() {
   const [address, setAddress] = useState<AddressState | null>(null)
   const [discard, setDiscard] = useState<{ busy: boolean; failed: string | null } | null>(null)
   const [offlineSince, setOfflineSince] = useState<string | null>(null)
+  // ---- F-CP-150: who changed the draft meanwhile (a 409's re-read, once the API names them), and who may send it.
+  const [staleBy, setStaleBy] = useState<string | null>(null)
+  const [orderers, setOrderers] = useState<string[] | null>(null)
+  // ---- end F-CP-150
+  const [uploads, setUploads] = useState<UploadRow[]>([]) // F-CP-151: files going up now, or that did not go
 
   const recordRef = useRef<DraftRecord | null>(null)
   recordRef.current = record
@@ -215,6 +243,8 @@ function NewOrderContainer() {
     setCells({})
     setNotes({})
     setStale(false)
+    setStaleBy(null) // F-CP-150
+    setUploads([]) // F-CP-151
   }, [])
 
   const apply = useCallback((next: DraftRecord) => {
@@ -224,11 +254,21 @@ function NewOrderContainer() {
     setProblem(null)
   }, [])
 
-  const refused = useCallback((error: unknown) => {
-    const kind = kindOf(error)
-    setProblem(refusalOf(kind))
-    if (kind === 'conflict') setStale(true)
-  }, [])
+  const refused = useCallback(
+    (error: unknown) => {
+      const kind = kindOf(error)
+      setProblem(refusalOf(kind))
+      if (kind !== 'conflict') return
+      setStale(true)
+      // F-CP-150: who changed it ("Changed by Marta Bianchi a moment ago") — read, never applied: what was typed stays.
+      const id = recordRef.current?.request.id
+      if (id)
+        fetchDraft(api, id)
+          .then((next) => setStaleBy(next.request.lastEditedBy ?? null))
+          .catch(() => undefined)
+    },
+    [api],
+  )
 
   // ── reads ───────────────────────────────────────────────────────────────────────────────────────────────────────────
   const readDrafts = useCallback(() => {
@@ -268,6 +308,21 @@ function NewOrderContainer() {
     else setOfflineSince(null)
   }, [offline])
 
+  // ---- F-CP-150 (D11): a colleague who fills drafts but may not order reads who may send it (their names; else the admins).
+  const maySend = record ? mayOf(record.request).send : true
+  useEffect(() => {
+    if (maySend || orderers !== null) return
+    if (!can('portal.colleagues.view')) {
+      setOrderers(whoMayOrder(null, frame.me.user.id, admins))
+      return
+    }
+    fetchColleagues(api)
+      .then((answer) => setOrderers(whoMayOrder(answer.people, answer.me, admins)))
+      .catch(() => setOrderers(whoMayOrder(null, frame.me.user.id, admins)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maySend, orderers, api])
+  // ---- end F-CP-150
+
   // ── the start: a way makes a draft ──────────────────────────────────────────────────────────────────────────────────
   const startDraft = useCallback(
     async (chosen: Way, extra: { styles?: readonly string[]; reorder?: string | null; line?: string | null; reuse?: boolean } = {}) => {
@@ -292,7 +347,7 @@ function NewOrderContainer() {
   useEffect(() => {
     if (!allowed || draftId || choosing) return
     if (stylesParam.length > 0) void startDraft('pick', { styles: stylesParam, reuse: true })
-    else if (reorderParam) void startDraft('reorder', { reorder: reorderParam, line: lineParam, reuse: true })
+    else if (reorderParam && mayOrder) void startDraft('reorder', { reorder: reorderParam, line: lineParam, reuse: true }) // F-CP-150
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowed, draftId, stylesParam.join(','), reorderParam])
 
@@ -624,7 +679,7 @@ function NewOrderContainer() {
       return
     }
     const now = recordRef.current!
-    const heldNow = sendHeld(now.request, { preview, offline, busy: false, emptyLine: false })
+    const heldNow = draftSendHeld(now.request, { preview, offline, busy: false, emptyLine: false }, orderers ?? []) // F-CP-150
     if (heldNow) {
       if (heldNow.key === 'held.problems') showMe()
       return
@@ -661,8 +716,9 @@ function NewOrderContainer() {
     const marker = `${record.request.id}|${way}|${stylesParam.join(',')}|${reorderParam ?? ''}`
     if (handled.current === marker) return
     handled.current = marker
-    if (way === 'reorder' && reorder.orders.state === 'loading' && reorder.orders.rows.length === 0) readPastOrders('')
-    if (way === 'reorder' && reorderParam) openPastOrder(reorderParam, lineParam)
+    // F-CP-150 (D11): past orders only for one whose access shows orders (the way is held for anyone else).
+    if (mayOrder && way === 'reorder' && reorder.orders.state === 'loading' && reorder.orders.rows.length === 0) readPastOrders('')
+    if (mayOrder && way === 'reorder' && reorderParam) openPastOrder(reorderParam, lineParam)
     if (stylesParam.length > 0) openPicker(stylesParam)
     // "Pick styles" chosen for an empty draft: the picker opens by itself.
     else if (way === 'pick' && record.request.lines.length === 0) openPicker()
@@ -671,6 +727,7 @@ function NewOrderContainer() {
   }, [phase, record?.request.id, way, stylesParam.join(','), reorderParam])
 
   const chooseWay = (next: Way) => {
+    if (next === 'reorder' && !mayOrder) return // F-CP-150 (D11): held with why on the page
     if (phase === 'start') {
       void startDraft(next)
       return
@@ -691,7 +748,8 @@ function NewOrderContainer() {
       Object.keys(notes).length > 0 ||
       (picker !== null && pickerLineCount({ ...picker, onDraft }) > 0) ||
       sheet.state === 'read' ||
-      (address !== null && addressTyped(address.draft)))
+      (address !== null && addressTyped(address.draft)) ||
+      uploads.some((row) => row.state === 'uploading')) // F-CP-151: never leave half way through an upload
   const recheck = useCallback(() => {
     const current = recordRef.current
     if (!current || current.request.status !== 'DRAFT') return
@@ -714,9 +772,83 @@ function NewOrderContainer() {
   }, [recheck])
   usePortalUnsaved('neworder', { dirty, what: t('unsaved.what'), save: flush })
 
+  // ---- F-CP-151 (B-CP-072; D14): a part's files. Each is checked as the API will (kinds and sizes, never a page or a script),
+  // announced, its bytes PUT to the store, completed (held for the virus scan where one runs); then the draft is read again for its
+  // files (a file moves no version of the draft: a newer version meanwhile goes through the usual re-read). On live the cards show
+  // the e-mail way instead (the API's `uploads`), so nothing is dropped here.
+  const tc = useT(COMPOSE_NS)
+  const failureOf = useCallback(
+    (error: unknown): string => {
+      if (error instanceof StoreError) return tc('files.failed.store')
+      if (!isApiError(error)) return tc('files.failed.network')
+      // The API's own words in the person's language (refusal/TOO_MANY_FILES, refusal/NO_UPLOAD).
+      const refusal = error.issues.find((issue) => issuePath(issue).replace(/\./g, '/').startsWith('refusal/'))
+      if (refusal?.message) return refusal.message
+      return t(error.kind === 'unavailable' ? 'draftPage.files.notNow' : refusalOf(error.kind))
+    },
+    [tc, t],
+  )
+  const refreshFiles = useCallback(async () => {
+    const current = recordRef.current
+    if (!current) return
+    try {
+      const next = await fetchDraft(api, current.request.id)
+      if (next.request.version === recordRef.current?.request.version) apply(next)
+      else recheck()
+    } catch {
+      // The next read (the tab coming back, the live channel) shows them.
+    }
+  }, [api, apply, recheck])
+  const addFiles = async (part: DraftFilePart, list: readonly File[]) => {
+    const current = recordRef.current
+    if (!current || writeHeld({ preview, offline, busy: false })) return
+    let room = DRAFT_FILES_MAX - draftFileCount(current.request)
+    for (const file of list) {
+      const key = newIdempotencyKey()
+      const contentType = contentTypeOf(file).split(';')[0]!.trim().toLowerCase()
+      const problem = room <= 0 ? { words: t('draftPage.files.full') } : (() => {
+        const found = heldProblem({ name: file.name, type: contentType, size: file.size })
+        return found ? { words: tc(found.key, found.params) } : null
+      })()
+      if (problem) {
+        setUploads((rows) => [...rows, { key, part, name: file.name, state: 'failed', failure: problem.words }])
+        continue
+      }
+      room -= 1
+      setUploads((rows) => [...rows, { key, part, name: file.name, state: 'uploading' }])
+      try {
+        const bytes = await file.arrayBuffer()
+        const { file: announced, upload } = await announceDraftFile(api, current.request.id, { part, originalName: file.name, contentType, sizeBytes: file.size, sha256: await sha256Hex(bytes) }, key)
+        await putToStore(upload, new Blob([bytes], { type: contentType }))
+        await completeDraftFile(api, current.request.id, announced.id)
+        setUploads((rows) => rows.filter((row) => row.key !== key))
+      } catch (error) {
+        setUploads((rows) => rows.map((row) => (row.key === key ? { ...row, state: 'failed' as const, failure: failureOf(error) } : row)))
+      }
+    }
+    await refreshFiles()
+  }
+  const removeFile = (file: DraftFile) => {
+    const id = recordRef.current?.request.id
+    if (id) void write(`removeFile:${file.id}:${file.version}`, (_version, key) => removeDraftFile(api, id, file.id, file.version, key))
+  }
+  /** "Sending later" for a part (sheets: People and sizes) — once the API keeps the mark (B-CP-075). */
+  const markLater = (part: DraftFilePart, on: boolean) => {
+    const current = recordRef.current
+    const toggle = current ? laterToggleOf(current.request, LATER_PART_OF[part]) : null
+    if (!current || !toggle || toggle.on === on) return
+    void write(`later:${toggle.next.join(',')}`, (version, key) => changeHeader(api, current.request.id, { version, laterParts: toggle.next }, key))
+  }
+  // ---- end F-CP-151
+
   // ── the band ────────────────────────────────────────────────────────────────────────────────────────────────────────
-  const sendHeldNow = record ? sendHeld(record.request, { preview, offline, busy: busy || saving.length > 0, emptyLine: typedEmpty }) : { key: 'held.busy' }
-  const sendWords = sendHeldNow ? t(sendHeldNow.key, sendHeldNow.count !== undefined ? { count: sendHeldNow.count } : undefined) : null
+  // F-CP-150: held, never hidden — a Designer reads the names of who may order; Discard… held for a colleague who neither orders
+  // nor started the draft.
+  const sendHeldNow = record ? draftSendHeld(record.request, { preview, offline, busy: busy || saving.length > 0, emptyLine: typedEmpty }, orderers ?? []) : ({ key: 'held.busy' } as { key: string; count?: number; names?: string })
+  const sendWords = sendHeldNow ? t(sendHeldNow.key, sendHeldNow.count !== undefined ? { count: sendHeldNow.count } : sendHeldNow.names !== undefined ? { names: sendHeldNow.names } : undefined) : null
+  const discardKey = record ? draftDiscardHeld(record.request, { preview, offline, busy: false }) : held
+  const discardWords = discardKey ? t(discardKey) : null
+  const draftAsk = record ? { type: 'PortalOrderRequest', id: record.request.id, label: draftTitleOf(record.request, t) } : null
   usePortalBand(
     allowed
       ? newOrderBandOf({
@@ -726,7 +858,9 @@ function NewOrderContainer() {
           template: templateHref(locale),
           customerRef: sent?.customerRef ?? record?.request.customerRef ?? null,
           sendHeld: sendWords,
-          discardHeld: heldWords,
+          discardHeld: discardWords,
+          title: record ? draftTitleOf(record.request, t) : null, // F-CP-150
+          ask: draftAsk, // F-CP-150
           onSend: () => void send(),
           onDiscard: () => setDiscard({ busy: false, failed: null }),
         })
@@ -756,7 +890,7 @@ function NewOrderContainer() {
         saving,
         writeHeld: heldWords,
         addAddressHeld,
-        reorder: way === 'reorder' ? { ...reorder, currency: record?.request.currency ?? 'EUR', writeHeld: heldWords } : null,
+        reorder: way === 'reorder' && mayOrder ? { ...reorder, currency: record?.request.currency ?? 'EUR', writeHeld: heldWords } : null, // F-CP-150
         upload: way === 'upload' ? { sheet, templateHref: templateHref(locale), writeHeld: heldWords } : null,
         problem,
         stale,
@@ -766,6 +900,12 @@ function NewOrderContainer() {
         sent,
         closed: record && record.request.status !== 'DRAFT' && !sent ? { status: record.request.status, salesOrder: record.request.salesOrder ? { id: record.request.salesOrder.id } : null } : null, // B-TH-304: no office number
         offlineSince,
+        uploads, // F-CP-151
+        // ---- F-CP-150
+        staleBy,
+        seesOrders,
+        mayOrder,
+        // ---- end F-CP-150
         dialogs: {
           picker: picker ? { ...picker, onDraft, prefix: frame.prefix, writeHeld: heldWords } : null,
           address: address ? { ...address, problems: addressProblems(address.draft) } : null,
@@ -807,7 +947,6 @@ function NewOrderContainer() {
             setCells((now) => ({ ...now, [lineId]: rest }))
             void saveLine(lineId)
           },
-          onAddStyles: () => openPicker(),
         },
         reorder: {
           onSearch: (q) => readPastOrders(q),
@@ -861,7 +1000,18 @@ function NewOrderContainer() {
           onClose: () => setAddress((now) => (now?.busy ? now : null)),
         },
         discard: { onConfirm: () => void confirmDiscard(), onCancel: () => setDiscard((now) => (now?.busy ? now : null)) },
+        // F-CP-151: a part's files.
+        files: { onFiles: (part, list) => void addFiles(part, list), onRemove: removeFile, onLater: markLater },
+        // F-CP-150: a chip of the checklist — its part's card, scrolled into view and focused.
+        onChip: (target) => {
+          const element = document.getElementById(target)
+          element?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+          element?.focus({ preventScroll: true })
+        },
       }}
-    />
+    >
+      {/* F-CP-150 (D10): the draft's ONE conversation, docked from its first save; it stays once the draft is sent. */}
+      {record && draftId && phase !== 'start' ? <PortalThread type="PortalOrderRequest" id={record.request.id} showRecord={false} /> : null}
+    </NewOrderView>
   )
 }

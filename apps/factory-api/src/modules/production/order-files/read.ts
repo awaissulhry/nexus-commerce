@@ -14,6 +14,8 @@ import { PROFILE_RECORD } from '../../sales/mtm/store'
 import { officeContextOf } from '../work-orders/access'
 import { reachesWorkOrder } from '../work-orders/scope'
 import { dayOf, type Reader } from '../work-orders/store'
+// B-CP-023 (customer page plan, the money wall L2; review B1): the order's priced files only for someone who sees prices.
+import { seesPrices } from '@nexus/factory-domain/files/priced'
 
 /**
  * B-PR-44 (production plan L16; Owner point N1, 2026-11-16: "every order already has all its details in the PDF files or in the
@@ -59,6 +61,7 @@ const FILE_SELECT = {
   versionNo: true,
   availableAt: true,
   createdAt: true,
+  priced: true, // B-CP-023
 } as const
 
 export interface OrderFile {
@@ -93,6 +96,8 @@ export interface OrderFilesGroup {
   readonly worksheets: readonly OrderWorksheet[]
   readonly measurementsLeftOut: number
   readonly filesLeftOut: number
+  /** B-CP-023: priced documents left out for a reader who does not see prices (counted, never named). */
+  readonly pricedLeftOut: number
 }
 
 export interface WorkOrderOrderFiles {
@@ -125,6 +130,7 @@ const reachOf = (actor: Actor): Reach => ({
 export async function readOrderFiles(caller: CommandCaller, workOrderId: string): Promise<WorkOrderOrderFiles> {
   const actor = actorOf(officeContextOf(caller))
   const reach = reachOf(actor)
+  const sees = seesPrices(actor) // B-CP-023
   return caller.withClient(async (db) => {
     const workOrder = await reachedWorkOrder(db, actor, workOrderId)
     // Its cells' order lines (a SAMPLE cell of no line names no order), and the lines' orders.
@@ -185,6 +191,7 @@ export async function readOrderFiles(caller: CommandCaller, workOrderId: string)
       const scope = { partyId: order.partyId }
       let measurementsLeftOut = 0
       let filesLeftOut = 0
+      let pricedLeftOut = 0 // B-CP-023
       const own: OrderFile[] = []
       for (const file of files) {
         const lineId = file.recordType === 'SalesOrderLine' ? file.recordId : (upstreamLineOf.get(file.id) ?? null)
@@ -195,6 +202,13 @@ export async function readOrderFiles(caller: CommandCaller, workOrderId: string)
           filesLeftOut += 1
           continue
         }
+        // ---- B-CP-023: a priced document (a confirmation, the customer's PO) without the price grain: counted, never named; the
+        // open route finds it nowhere (./open.ts reads this answer).
+        if (file.priced && !sees) {
+          pricedLeftOut += 1
+          continue
+        }
+        // ---- end B-CP-023
         const bodyData = file.category !== null && BODY_DATA_CATEGORIES.has(file.category)
         if (bodyData && !reach.body(at)) {
           measurementsLeftOut += 1
@@ -234,6 +248,7 @@ export async function readOrderFiles(caller: CommandCaller, workOrderId: string)
         worksheets,
         measurementsLeftOut,
         filesLeftOut,
+        pricedLeftOut, // B-CP-023
       }
     })
     return { workOrder: { id: workOrder.id, number: workOrder.number }, groups, ordersLeftOut: orders.length - shown.length }
@@ -252,6 +267,7 @@ export function orderFilesView(read: WorkOrderOrderFiles) {
       worksheets: group.worksheets.map(({ createdAt, ...sheet }) => ({ ...sheet, createdAt: toUtcIso(createdAt) })),
       measurementsLeftOut: group.measurementsLeftOut,
       filesLeftOut: group.filesLeftOut,
+      pricedLeftOut: group.pricedLeftOut, // B-CP-023
     })),
     ordersLeftOut: read.ordersLeftOut,
   }

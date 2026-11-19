@@ -50,8 +50,11 @@ export interface ThreadFile {
   readonly sourceFileId?: string | null
   /** The source's record, name and version (null: the reader may not open that record). */
   readonly source?: FileSource | null
-  /** B-TH-083: a measurement sheet this reader may not open — no name; "Measurement sheet — you cannot open it". */
-  readonly locked?: 'MEASUREMENTS'
+  /**
+   * B-TH-083: a measurement sheet this reader may not open — no name; "Measurement sheet — you cannot open it".
+   * B-CP-014: PRICED — a file that shows prices, for a reader who does not see prices — no name; "Priced document — you cannot open it".
+   */
+  readonly locked?: 'MEASUREMENTS' | 'PRICED'
   // ---- end B-TH-231
   /** B-TH-283 (B-TH-083): a measurement sheet this reader opens (sales.measurements.view): body data, each opening recorded. */
   readonly sheet?: boolean

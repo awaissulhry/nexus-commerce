@@ -9,6 +9,10 @@ import { legalProblems } from '@nexus/factory-domain/documents/legal'
 import { usableForOrders } from '@nexus/factory-domain/parties/address-approval'
 import { viesStanding } from '@nexus/factory-domain/parties/vies'
 import { quoteDocument, quoteDocumentNumber, quoteMail, type CustomerQuote } from '@nexus/factory-domain/sales/quotes/document'
+// B-CP-015 (the money wall, Owner pick O1): the quote's PDF is born priced and sent only by someone who sees prices.
+import { pricedDocument } from '@nexus/factory-domain/documents/model'
+import { pricedDocumentHeld, seesPrices } from '@nexus/factory-domain/files/priced'
+import { actorOf } from '../../../core/context'
 import { QUOTES_MANAGE, QUOTES_SEND } from '@nexus/factory-domain/sales/quotes/permissions'
 import { versionTaxModeOf, type QuoteVersionStatus } from '@nexus/factory-domain/sales/quotes/quotes'
 import { billToSnapshot, reviseProblem, revisedValidUntil, sendChecks, shipToSnapshot, type AddressFacts, type BillToSnapshot, type SendCheck, type ShipToSnapshot } from '@nexus/factory-domain/sales/quotes/send'
@@ -259,6 +263,8 @@ export async function sendQuote(request: FastifyRequest, quoteId: string, body: 
   const caller: CommandCaller = request
   const context = officeContextOf(caller)
   const quote = await officeQuote(caller, quoteId, QUOTES_SEND)
+  // B-CP-015: the quote's PDF shows prices: sent by someone who sees prices (403 in words; nothing is frozen, made or mailed).
+  if (!seesPrices(actorOf(context))) throw pricedDocumentHeld('send')
   const now = serverClock.now()
 
   // Steps 1 and 2, only for the version the caller read (a repeat or a stale send goes straight to the command: its
@@ -285,6 +291,7 @@ export async function sendQuote(request: FastifyRequest, quoteId: string, body: 
         body: pdf,
         visibility: ['OFFICE', 'PARTNER', 'LINK'],
         partyId: quote.partyId,
+        priced: pricedDocument(composed.type), // B-CP-015
       })
       const terms = acceptLinkTerms(facts.today, customer.validUntil, now)
       const mail = quoteMail({
@@ -420,6 +427,8 @@ export async function sendNewLink(request: FastifyRequest, quoteId: string, body
   const caller: CommandCaller = request
   const context = officeContextOf(caller)
   const quote = await officeQuote(caller, quoteId, QUOTES_SEND)
+  // B-CP-015: the new link's mail carries the priced PDF: sent by someone who sees prices (403 in words).
+  if (!seesPrices(actorOf(context))) throw pricedDocumentHeld('send')
   const now = serverClock.now()
   const today = businessDate(now)
 

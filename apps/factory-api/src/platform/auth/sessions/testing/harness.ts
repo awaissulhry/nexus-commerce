@@ -55,6 +55,11 @@ export function movableClock(start: string | Date = START): MovableClock {
 }
 
 const GENEROUS = { max: 10_000, timeWindowMs: 60_000 }
+/**
+ * The harness app's request budget (core/rate-limit.ts: the Owner's 300 a minute per person is the production number): a test
+ * walks many doors as one person within seconds. A world's own app over the same database takes the same (urgency-world.ts).
+ */
+export const HARNESS_REQUEST_LIMITS = GENEROUS
 export const GENEROUS_LIMITS: AuthRateLimits = { signIn: GENEROUS, resetRequest: GENEROUS, tokenUse: GENEROUS, codes: GENEROUS, linkUse: GENEROUS, floorSignIn: GENEROUS }
 
 /** A sign-in mail as the fake mailbox received it, with the link read from its text. */

@@ -187,7 +187,8 @@
       "showAll": "Mostra tutti gli ordini",
       "gone": "{record} non è più tra «{view}»",
       "view": {
-        "waitingUs": "Tocca a noi"
+        "waitingUs": "Tocca a noi",
+        "drafts": "Bozze di {customer}"
       },
       "dock": {
         "label": "Quale conversazione",
@@ -229,6 +230,50 @@
       "incoming": "In arrivo",
       "noQuotes": "Nessun preventivo aperto per {customer}.",
       "noRequests": "Nessuna richiesta da {customer}."
+    },
+    "drafts": {
+      "col": {
+        "draft": "Bozza",
+        "lines": "Righe",
+        "files": "File",
+        "ready": "Pronta",
+        "changed": "Ultima modifica",
+        "wanted": "Entro il",
+        "value": "Valore ai prezzi mostrati",
+        "messages": "Messaggi"
+      },
+      "untitled": "Bozza senza titolo",
+      "started": "Iniziata il {date} da {name}",
+      "startedNoName": "Iniziata il {date}",
+      "lineCount_one": "{count} riga",
+      "lineCount_other": "{count} righe",
+      "pieceCount_one": "{count} pezzo",
+      "pieceCount_other": "{count} pezzi",
+      "peopleCount_one": "{count} persona",
+      "peopleCount_other": "{count} persone",
+      "logoCount_one": "{count} logo",
+      "logoCount_other": "{count} loghi",
+      "referenceCount_one": "{count} riferimento",
+      "referenceCount_other": "{count} riferimenti",
+      "sheetCount_one": "{count} scheda misure",
+      "sheetCount_other": "{count} schede misure",
+      "ready": "{done} su {of}",
+      "problems_one": "{count} problema",
+      "problems_other": "{count} problemi",
+      "changed": "{time} da {name}",
+      "messages_one": "{count} messaggio",
+      "messages_other": "{count} messaggi",
+      "messagesAsked_one": "{count} messaggio · chiesto al designer della fabbrica",
+      "messagesAsked_other": "{count} messaggi · chiesto al designer della fabbrica",
+      "count_one": "{count} bozza",
+      "count_other": "{count} bozze",
+      "empty": "{customer} non ha bozze nel portale.",
+      "failed": "Non riesco a leggere le bozze",
+      "retry": "Riprova",
+      "open": "Apri",
+      "openOf": "Apri {draft}",
+      "noun": "bozza",
+      "readOnly": "Sola lettura: {customer} la sta ancora scrivendo."
     }
   },
   "suppliers": {

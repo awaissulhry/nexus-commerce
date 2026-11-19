@@ -4,7 +4,18 @@ import { addressProblems, EMPTY_ADDRESS } from '../account/model'
 import { templateHref } from './api'
 import { newOrderBandOf, type NewOrderPhase } from './band'
 import { ADDRESSES, at, catalogueRead, DRAFTS, draftRecord, LINE_TROUSERS, lineOf, orderingWords, PAST_ORDERS, pastOrder, PREFIX, shellOf, styleDetail, TODAY, uploadAnswer } from './design-data'
-import { headerDraftOf, sendHeld } from './model'
+import { headerDraftOf } from './model'
+// ---- F-CP-150 (customer page plan C5, D9–D11; picture 22): the draft order page — docked conversation, held Send, every state.
+import type { PartnerMessage } from '@nexus/ui/patterns/PartnerThread/index'
+import { formatDateTime } from '../../../lib/i18n/format'
+import type { ThreadViewModel } from '../../shell/view/ThreadView'
+import { draftDiscardHeld, draftSendHeld, draftTitleOf } from './model'
+// ---- end F-CP-150
+// ---- F-CP-151 (B-CP-072; D14): the draft's files (made-up names; a line's file names its line by seq on the page).
+import type { DraftFile } from './api'
+import type { UploadRow } from './view/DraftFiles'
+
+// ---- end F-CP-151
 import type { NewOrderViewModel } from './view/NewOrderView'
 import { OrderingCase, type OrderingCaseBuilder } from './view/OrderingCase'
 // B-TH-220: New order as an e-mail, read by Brand Beta (brand B), the made-up reader of every wall scan.
@@ -62,16 +73,75 @@ function model(over: Over = {}): NewOrderViewModel {
     closed: null,
     offlineSince: null,
     dialogs: { picker: null, address: null, discard: null },
+    frame: { mode: 'docked' }, // F-CP-150: the record frame's docked layout whatever the window (the design review)
     ...over,
   }
 }
 
+// F-CP-150: who may order in the made-up company (a Designer's Send names them).
+const ORDERERS = ['Dora Esempio', 'Marta Esempio']
+
 function held(locale: Locale, view: NewOrderViewModel): string | null {
   if (!view.record) return null
   const t = orderingWords(locale).t
-  const reason = sendHeld(view.record.request, { preview: false, offline: view.offlineSince !== null, busy: false, emptyLine: false })
-  return reason ? t(reason.key, reason.count !== undefined ? { count: reason.count } : undefined) : null
+  const reason = draftSendHeld(view.record.request, { preview: false, offline: view.offlineSince !== null, busy: false, emptyLine: false }, ORDERERS)
+  return reason ? t(reason.key, reason.count !== undefined ? { count: reason.count } : reason.names !== undefined ? { names: reason.names } : undefined) : null
 }
+
+// ---- F-CP-150: the draft's conversation (the brand's colleague and the factory; made-up names, no brand named) ----------------
+function draftThread(locale: Locale): ThreadViewModel {
+  const it = locale === 'it'
+  const messages: PartnerMessage[] = [
+    {
+      id: 'd1',
+      side: 'partner',
+      channel: 'portal',
+      author: { name: 'Marta Esempio', mine: true },
+      body: it ? 'Le righe sono pronte; il logo arriva domani. Va bene la taglia 54 anche sui pantaloni?' : 'The lines are ready; the logo comes tomorrow. Is size 54 fine on the trousers too?',
+      attachments: [],
+      at: at(-3),
+      atText: formatDateTime(at(-3), { locale }),
+    },
+    {
+      id: 'd2',
+      side: 'company',
+      channel: 'portal',
+      author: { name: 'Giulia Esempio', mine: false },
+      body: it ? 'Sì, la 54 c’è per entrambi. Leggiamo la bozza: il lavoro parte quando la inviate.' : 'Yes, 54 is there for both. We read the draft: work starts when you send it.',
+      attachments: [],
+      at: at(-2),
+      atText: formatDateTime(at(-2), { locale }),
+    },
+  ]
+  return { state: 'ready', title: orderingWords(locale).t('draftPage.thread'), record: null, companyName: 'Pelletteria Esempio', messages, composer: { value: '', busy: false, heldReason: null, hint: null, limit: 20_000 }, loadMore: null, accessLine: null, failed: null }
+}
+// ---- end F-CP-150
+
+// ---- F-CP-151: the made-up files of a draft.
+const fileOf = (n: number, originalName: string, contentType: string, lineId: string | null = null, status = 'AVAILABLE'): DraftFile => ({
+  id: `0194f0e2-1940-7000-8000-0000000009${String(n).padStart(2, '0')}`,
+  lineId,
+  originalName,
+  kind: contentType.startsWith('image/') ? 'PHOTO' : 'DOCUMENT',
+  contentType,
+  sizeBytes: 180_000 + n * 1_000,
+  status,
+  version: 1,
+  createdAt: at(-4 + n * 0.1),
+})
+const LINE_TWO = '0194f0e2-1940-7000-8000-000000000302'
+const FILES = {
+  logos: [fileOf(1, 'logo-front.ai', 'application/postscript'), fileOf(2, 'sponsor-back.png', 'image/png', LINE_TWO)],
+  references: [fileOf(3, 'pit-shirt-reference.jpg', 'image/jpeg', LINE_TWO), fileOf(4, 'sleeve-stripes.pdf', 'application/pdf', null, 'QUARANTINED')],
+  sheets: [fileOf(5, 'measures-rider-12.pdf', 'application/pdf')],
+}
+const UPLOADS = (locale: Locale): UploadRow[] => [
+  { key: 'u1', part: 'LOGO', name: 'logo-sleeve.eps', state: 'uploading' },
+  { key: 'u2', part: 'LOGO', name: 'logo.svg', state: 'failed', failure: createTranslator(locale, CATALOGUE[locale][COMPOSE_NS] ?? {})('files.problem.page') },
+  { key: 'u3', part: 'REFERENCE', name: 'pit-photo.jpg', state: 'failed', failure: orderingWords(locale).t('draftPage.files.notNow') },
+]
+const many = (count: number) => Array.from({ length: count }, (_, index) => fileOf(10 + (index % 80), `reference-${index + 1}.jpg`, 'image/jpeg'))
+// ---- end F-CP-151
 
 function page(build: (locale: Locale) => Over = () => ({}), phase: NewOrderPhase = 'draft', beta = false): OrderingCaseBuilder {
   return (locale) => {
@@ -80,6 +150,8 @@ function page(build: (locale: Locale) => Over = () => ({}), phase: NewOrderPhase
     // B-TH-304: `beta` — the catalogue door read by Brand Beta (brand B), the made-up reader of every wall scan.
     const base = model({ phase, ...(beta ? { prefix: BETA } : {}), ...over })
     const view = { ...base, sendHeld: over.sendHeld !== undefined ? over.sendHeld : held(locale, base) }
+    // F-CP-150: Discard… held for a colleague who neither orders nor started the draft; the band names the draft and asks about it.
+    const discardKey = view.record ? draftDiscardHeld(view.record.request, { preview: false, offline: view.offlineSince !== null, busy: false }) : null
     const band = newOrderBandOf({
       words,
       phase: view.phase,
@@ -87,9 +159,13 @@ function page(build: (locale: Locale) => Over = () => ({}), phase: NewOrderPhase
       template: templateHref(locale),
       customerRef: view.sent?.customerRef ?? view.record?.request.customerRef ?? null,
       sendHeld: view.sendHeld,
-      discardHeld: view.writeHeld,
+      discardHeld: view.writeHeld ?? (discardKey ? words.t(discardKey) : null),
+      title: view.record ? draftTitleOf(view.record.request, words.t) : null,
+      ask: view.record ? { type: 'PortalOrderRequest', id: view.record.request.id } : null,
     })
-    return { shell: beta ? betaShellOf(locale, band, '/orders/new') : shellOf(locale, band, '/orders/new'), body: { kind: 'neworder', model: view } }
+    // F-CP-150: the draft's conversation docked beside the draft and beside a draft no longer a draft (never on the start).
+    const thread = view.phase !== 'start' && view.record && view.state === 'ready' ? draftThread(locale) : null
+    return { shell: beta ? betaShellOf(locale, band, '/orders/new') : shellOf(locale, band, '/orders/new'), body: { kind: 'neworder', model: view, thread } }
   }
 }
 
@@ -279,7 +355,7 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
     { id: 'start-drafts', label: 'Drafts to continue', model: start(() => ({ drafts: DRAFTS })), note: '“Continue your draft from … · 3 lines” (PressableRow).' },
     { id: 'start-loading', label: 'The drafts loading', model: start(() => ({ state: 'loading' })) },
     { id: 'start-error', label: 'The drafts could not be read', model: start(() => ({ state: 'error' })), note: 'Never drawn as no drafts: the problem in our words + Try again.' },
-    { id: 'draft', label: 'A draft: order details, lines with the size grid, the summary', model: page(), note: 'Saved on leaving a field (SaveStatus); one size grid per line (stacked on a phone); the summary always in view.' },
+    { id: 'draft', label: 'A draft: the checklist, the lines with their size grids, date and delivery, notes, your price — its conversation docked', model: page(), note: 'F-CP-150: saved on leaving a field (“Saved 10:42 · v7”); one size grid per line (stacked on a phone); Send to the factory and Discard… in the band; “The factory can read this draft. Work starts only when you send it.”' },
     { id: 'draft-typed', label: 'Sizes typed, not saved yet', model: page(() => ({ cells: { '0194f0e2-1940-7000-8000-000000000301': { '48': 4, '50': 10, '52': 6, '54': 2 } }, save: { kind: 'saving' }, saving: ['0194f0e2-1940-7000-8000-000000000301'] })), note: 'Leaving the line saves it (PUT with the version).' },
     { id: 'draft-problems', label: 'Send held: problems — Show me', model: page(() => ({ record: problems(), showProblems: true })), note: 'A size not offered (on its cell), a discontinued colour (choose another), a price that changed; Send held with the count; Show me lists them.' },
     { id: 'draft-prices', label: 'Prices changed since you started', model: page(() => ({ record: draftRecord({ lines: [lineOf(1, { unitPriceShown: '400.00', priceNow: '410.00', problems: [{ code: 'PRICE_CHANGED', lineId: '0194f0e2-1940-7000-8000-000000000301', size: null }] }), LINE_TROUSERS()] }) })), note: 'Banner with “Take today’s prices”; the line says “Price now … (was …)”.' },
@@ -290,6 +366,39 @@ export const designScreen = defineDesignScreen<OrderingCaseBuilder>({
     { id: 'draft-head-problem', label: 'A requested date in the past', model: page(() => ({ header: { ...headerDraftOf(draftRecord().request), requestedDate: '2020-01-10' }, headerErrors: { requestedDate: 'head.problem.datePast' }, save: { kind: 'failed', reason: null } })) },
     { id: 'draft-removed', label: 'A line removed, with Undo', model: page((locale) => ({ record: draftRecord({ lines: [LINE_TROUSERS()] }), notice: { lines: [orderingWords(locale).t('notice.removed', { seq: 1, style: 'JKT-100', colour: 'Nero Esempio' })], undo: true } })) },
     { id: 'draft-stale', label: 'Changed elsewhere while typing', model: page(() => ({ stale: true, problem: 'refusal.conflict' })), note: 'What was typed stays; “Read it again”.' },
+    // ---- F-CP-150 (customer page plan C5, D9–D11; picture 22): the draft order page — the brand's Designer, who changed it, every state.
+    {
+      id: 'cp150-designer',
+      label: 'The brand’s Designer: fills the draft without prices; Send held naming who may order',
+      model: page(() => ({ record: draftRecord({ seesPrices: false, request: { may: { send: false, withdraw: false, discard: true } } }), mayOrder: false, seesOrders: false })),
+      note: 'portal.orderDrafts.edit without portal.orderRequests.manage (D11): every part can be filled, Send is held with “Only colleagues who may order send it: …”, Reorder a past order is held (“Your access does not show orders”), Your price says prices are not part of the access — no amount anywhere (M-CP-2).',
+    },
+    { id: 'cp150-saved-by', label: 'Saved by a colleague: who changed it last (once the API names them, B-CP-075)', model: page(() => ({ record: draftRecord({ request: { lastEditedBy: 'Marta Esempio', lastEditedAt: at(-1), note: 'Numbers on the left sleeve too.' } }) })), note: '“Saved 10:42 by Marta Esempio · v7”; without the name (before B-CP-075) “Saved 10:42 · v7”.' },
+    { id: 'cp150-stale', label: 'Changed by a colleague while you typed: what you typed stays', model: page(() => ({ stale: true, staleBy: 'Marta Esempio' })), note: 'A 409 on a write: the ONE banner says the draft changed and who changed it; “Read it again” takes their version; rows keep their order (by seq).' },
+    { id: 'cp150-later', label: 'People and sizes marked “Sending later”', model: page(() => ({ record: draftRecord({ lines: [lineOf(1, { sizes: [], pieces: 0 })], request: { laterParts: ['PEOPLE'] } }) })), note: 'The chip and the card say “Sending later” (B-CP-075 keeps the mark; the roster comes with F-CP-154).' },
+    { id: 'cp150-discard-held', label: 'Discard… held: neither one who orders nor the colleague who started it', model: page(() => ({ record: draftRecord({ seesPrices: false, request: { may: { send: false, withdraw: false, discard: false } } }), mayOrder: false, seesOrders: false })) },
+    { id: 'cp150-narrow', label: 'A phone: the conversation behind “Messages (2 new)”', model: page(() => ({ frame: { mode: 'stacked', newCount: 2 } })), note: 'Below 1280 px the draft leads; the chips scroll sideways inside their strip, never the page.' },
+    { id: 'cp150-offline', label: 'Offline: one banner, writes held', model: page((locale) => ({ offlineSince: at(-0.2), writeHeld: orderingWords(locale).t('held.offline') })) },
+    { id: 'cp150-sent', label: 'Sent: the end state beside its conversation', model: page(() => ({ record: draftRecord({ request: { status: 'SENT' } }), sent: { customerRef: 'BA-PO-4521', lines: 2, pieces: 26, net: '9500.00', currency: 'EUR', seesPrices: true } }), 'sent'), note: 'Their PO, never a request number of ours (B-TH-304); the factory answers in the same conversation.' },
+    { id: 'cp150-refused', label: 'Refused: start a new draft', model: page(() => ({ record: draftRecord({ request: { status: 'REFUSED' } }), closed: { status: 'REFUSED', salesOrder: null } }), 'closed') },
+    { id: 'cp150-withdrawn', label: 'Withdrawn', model: page(() => ({ record: draftRecord({ request: { status: 'WITHDRAWN' } }), closed: { status: 'WITHDRAWN', salesOrder: null } }), 'closed') },
+    {
+      id: 'cp150-accepted-designer',
+      label: 'Accepted, read by the Designer: who follows it (no door to orders)',
+      model: page(() => ({ record: draftRecord({ seesPrices: false, request: { status: 'ACCEPTED' } }), closed: { status: 'ACCEPTED', salesOrder: { id: '0194f0e2-1940-7000-8000-000000000777' } }, seesOrders: false, mayOrder: false }), 'closed'),
+      note: '“The factory made it an order: your buyer follows it.” A Buyer reads “Open the order”.',
+    },
+    // ---- end F-CP-150
+    // ---- F-CP-151 (B-CP-072; D14): the draft's files cards.
+    { id: 'cp151-files', label: 'Files: logos (vector prints best), references, a measurement sheet — uploads open (here)', model: page(() => ({ record: draftRecord({ request: { files: FILES, uploads: { open: true, words: null } } }) })), note: 'Each file says what it is and where it sits (“vector · on the draft”, “picture · on line 2”); one waits for the virus scan; × takes it out by its version. The logos and references chips turn Ready.' },
+    { id: 'cp151-closed', label: 'Uploads closed on live until the virus scanner: the e-mail way in each card', model: page(() => ({ record: draftRecord({ request: { files: FILES, uploads: { open: false, words: 'Uploads from outside are closed for now.' } } }) })), note: 'D14 (O7 not approved): no drop area; “e-mail them to your contact at the factory, naming «BA-PO-4521»”; lines, sizes and notes still work. The API’s English sentence is never shown: the page says it in Italian or English.' },
+    { id: 'cp151-uploading', label: 'A file going up, one refused (an SVG), one that did not go', model: page((locale) => ({ record: draftRecord({ request: { files: { logos: [], references: [], sheets: [] }, uploads: { open: true, words: null } } }), uploads: UPLOADS(locale) })) },
+    { id: 'cp151-full', label: 'The draft holds 50 files: Add held with words', model: page(() => ({ record: draftRecord({ request: { files: { logos: [], references: many(50), sheets: [] }, uploads: { open: true, words: null } } }) })) },
+    { id: 'cp151-later', label: '“We send these later” on Logos (once the API keeps the mark)', model: page(() => ({ record: draftRecord({ request: { files: { logos: [], references: [], sheets: [] }, uploads: { open: true, words: null }, laterParts: ['LOGOS'] } }) })), note: 'The Logos chip says “Sending later”; the toggle shows only once the API answers laterParts (B-CP-075).' },
+    // ---- end F-CP-151
+    // ---- F-CP-152 (12 §2 Doors): the draft start — "Just write it in words" for who may order; Reorder held for a Designer.
+    { id: 'cp152-start-designer', label: 'The draft start, read by the brand’s Designer: Reorder held, no words door', model: page(() => ({ record: null, start: { state: 'ready', drafts: DRAFTS, choosing: null, held: null }, mayOrder: false, seesOrders: false }), 'start'), note: 'A Designer keeps drafts but reads no orders: “Reorder a past order” says “Your access does not show orders”; the request like an e-mail is not theirs (no link). The team’s drafts to continue.' },
+    // ---- end F-CP-152
     { id: 'reorder', label: 'Reorder: the past orders', model: page(() => ({ way: 'reorder', reorder: reorderModel() })), note: 'Their PO first, ours second (RefPair), date, lines, pieces. Enter or a click opens one.' },
     {
       id: 'reorder-order',

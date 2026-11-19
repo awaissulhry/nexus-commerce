@@ -1,4 +1,5 @@
 import { ORDERING_LIMITS, type RequestStatus } from './rules'
+import type { Problem } from './rules' // B-CP-075: each problem's part of the checklist
 
 /**
  * The office's side of a portal order request (B-W2b-190, SAL-074 "portal orders arrive as requests"; design
@@ -78,6 +79,8 @@ export interface DraftFacts {
   readonly pricedLines: number | null
   /** Every problem that holds the send (the header's and the lines'). */
   readonly problems: number
+  /** B-CP-075: the problems by the part they are on (problemPartOf); a part with one is not READY. Absent: none counted per part. */
+  readonly problemsByPart?: Partial<Record<DraftPart, number>> | undefined
 }
 
 export interface DraftReadiness {
@@ -92,9 +95,10 @@ export interface DraftReadiness {
 /** The draft's checklist: each part's state, how many are ready of how many, and the problems that hold the send. */
 export function draftReadiness(facts: DraftFacts): DraftReadiness {
   const optional = (present: boolean, part: DraftLaterPart | null): DraftPartState => (present ? 'READY' : part !== null && facts.later.includes(part) ? 'LATER' : 'OPTIONAL')
-  const people: DraftPartState = facts.lines > 0 && facts.linesWithoutPieces === 0 ? 'READY' : facts.later.includes('PEOPLE') ? 'LATER' : 'MISSING'
+  const held = (part: DraftPart): boolean => (facts.problemsByPart?.[part] ?? 0) > 0 // B-CP-075
+  const people: DraftPartState = facts.lines > 0 && facts.linesWithoutPieces === 0 && !held('PEOPLE') ? 'READY' : facts.later.includes('PEOPLE') ? 'LATER' : 'MISSING'
   const parts: { part: DraftPart; state: DraftPartState }[] = [
-    { part: 'NEED', state: facts.lines > 0 ? 'READY' : 'MISSING' },
+    { part: 'NEED', state: facts.lines > 0 && !held('NEED') ? 'READY' : 'MISSING' },
     { part: 'LOGOS', state: optional(facts.logos > 0, 'LOGOS') },
     { part: 'REFERENCES', state: optional(facts.references > 0, 'REFERENCES') },
     { part: 'PEOPLE', state: people },
@@ -105,3 +109,22 @@ export function draftReadiness(facts: DraftFacts): DraftReadiness {
   return { parts, done: parts.filter((entry) => entry.state === 'READY').length, of: parts.length, problems: facts.problems }
 }
 // ---- end B-CP-071
+
+// ---- B-CP-075 (customer page plan 12 §2: "send problems per part"): the part of the checklist a problem holds ----------------------
+/** NEED: a line's own (what it is, its total, its sizes, a price changed); PEOPLE: a roster's (no one named, a person's size); DATE: the header's date and address. */
+export function problemPartOf(problem: Pick<Problem, 'code' | 'personId'>): DraftPart {
+  if (problem.code === 'DATE_PAST' || problem.code === 'SHIP_TO_ARCHIVED') return 'DATE'
+  if (problem.code === 'NO_PEOPLE' || (problem.personId !== undefined && problem.personId !== null)) return 'PEOPLE'
+  return 'NEED'
+}
+
+/** How many problems each part holds (for draftReadiness' `problemsByPart`). */
+export function problemsByPartOf(problems: readonly Pick<Problem, 'code' | 'personId'>[]): Partial<Record<DraftPart, number>> {
+  const out: Partial<Record<DraftPart, number>> = {}
+  for (const entry of problems) {
+    const part = problemPartOf(entry)
+    out[part] = (out[part] ?? 0) + 1
+  }
+  return out
+}
+// ---- end B-CP-075

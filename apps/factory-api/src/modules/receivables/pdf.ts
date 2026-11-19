@@ -70,7 +70,8 @@ async function letterBytes(caller: CommandCaller, row: ReminderRow, text: { read
 /** The letter's PDF put in the store (outside any transaction), for the send command to record on the reminder. */
 export async function letterPdf(caller: CommandCaller, row: ReminderRow, text: { readonly subject: string | null; readonly body: string | null }, settings: EffectiveSettings, on: BusinessDate): Promise<PreparedGeneratedFile> {
   const { pdf, fileName } = await letterBytes(caller, row, text, settings, on)
-  return putGeneratedFile(processFiles(), caller, { companyId: row.companyId, recordType: 'PaymentReminder', recordId: row.id, kind: 'DOCUMENT', originalName: fileName, contentType: 'application/pdf', body: pdf })
+  // B-CP-015: a reminder letter shows invoice amounts: born priced.
+  return putGeneratedFile(processFiles(), caller, { companyId: row.companyId, recordType: 'PaymentReminder', recordId: row.id, kind: 'DOCUMENT', originalName: fileName, contentType: 'application/pdf', body: pdf, priced: true })
 }
 
 /** GET /receivables/reminders/:id/pdf (receivables.view + the price grain): a LETTER's PDF as it would print now. */

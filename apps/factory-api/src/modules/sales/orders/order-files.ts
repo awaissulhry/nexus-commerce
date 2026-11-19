@@ -30,6 +30,8 @@ import { officeOrder } from './moves'
 import type { OrderRow } from './store'
 // B-OP-043 (order page N6, lines-derived): an order's shipments through their lines.
 import { shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
+// B-CP-023 (customer page plan, the money wall D6, L1; review B1, D1): a priced file only for someone who sees prices.
+import { seesPrices } from '@nexus/factory-domain/files/priced'
 
 /**
  * B-SA-036 (Sales page plan N9, P14, R7; 13-backend B11; review BW-1): EVERY file of one sales order for the office, by where it
@@ -101,10 +103,11 @@ const FILE_SELECT = {
   partyId: true,
   sourceFileId: true,
   createdById: true, // B-OP-050
+  priced: true, // B-CP-023
 } as const
 
 type Db = FactoryClient
-type FileRow = { readonly id: string; readonly companyId: string | null; readonly recordType: string; readonly recordId: string; readonly kind: string; readonly category: string | null; readonly originalName: string; readonly contentType: string; readonly sizeBytes: number; readonly versionNo: number; readonly availableAt: Date | null; readonly createdAt: Date; readonly visibility: readonly string[]; readonly partyId: string | null; readonly sourceFileId: string | null; /* B-OP-050 */ readonly createdById: string | null }
+type FileRow = { readonly id: string; readonly companyId: string | null; readonly recordType: string; readonly recordId: string; readonly kind: string; readonly category: string | null; readonly originalName: string; readonly contentType: string; readonly sizeBytes: number; readonly versionNo: number; readonly availableAt: Date | null; readonly createdAt: Date; readonly visibility: readonly string[]; readonly partyId: string | null; readonly sourceFileId: string | null; /* B-OP-050 */ readonly createdById: string | null; /* B-CP-023 */ readonly priced: boolean }
 
 /** B-OP-050: who added a file, as the office's cards say it (never a worker: the floor is "the floor"). */
 export const ADDED_BY_KINDS = ['PERSON', 'FLOOR', 'CUSTOMER'] as const
@@ -155,7 +158,7 @@ export interface OrderWorksheet {
 
 export interface OfficeOrderFiles {
   readonly order: Pick<OrderRow, 'id' | 'number' | 'companyId' | 'partyId'>
-  readonly groups: readonly { readonly key: OrderFileGroup; readonly files: OrderFile[]; readonly worksheets: OrderWorksheet[]; leftOut: number; measurementsLeftOut: number }[]
+  readonly groups: readonly { readonly key: OrderFileGroup; readonly files: OrderFile[]; readonly worksheets: OrderWorksheet[]; leftOut: number; measurementsLeftOut: number; /* B-CP-023 */ pricedLeftOut: number }[]
   /** Every file of the order this reader may open (a copy folded under another one too): the open route finds a file here. */
   readonly openable: ReadonlyMap<string, OrderFile>
   readonly truncated: boolean
@@ -295,7 +298,10 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
     for (const record of chain.slice(1)) if (!reachesFileRecord(actor, FILES_READ, await scopeOf(record.type, record.id), record.companyId)) return false
     return true
   }
-  const groups = new Map(ORDER_FILE_GROUPS.map((key) => [key, { key, files: [] as OrderFile[], worksheets: [] as OrderWorksheet[], leftOut: 0, measurementsLeftOut: 0 }]))
+  const groups = new Map(ORDER_FILE_GROUPS.map((key) => [key, { key, files: [] as OrderFile[], worksheets: [] as OrderWorksheet[], leftOut: 0, measurementsLeftOut: 0, pricedLeftOut: 0 /* B-CP-023 */ }]))
+  // B-CP-023: a reader who does not see prices gets the order's priced files counted, never named (the Files tab, its open route,
+  // the previews and the dock's files line all read this answer).
+  const sees = seesPrices(actor)
   const shown: { file: FileRow; view: OrderFile }[] = []
   for (const file of files) {
     const lineId = file.recordType === 'SalesOrderLine' ? file.recordId : (upstream.get(file.id) ?? null)
@@ -309,6 +315,12 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
       group.leftOut += 1
       continue
     }
+    // ---- B-CP-023: a priced document without the price grain: counted, never named, never openable.
+    if (file.priced && !sees) {
+      group.pricedLeftOut += 1
+      continue
+    }
+    // ---- end B-CP-023
     const bodyData = file.category !== null && BODY_DATA_CATEGORIES.has(file.category)
     if (bodyData && !can(actor, SALES_MEASUREMENTS_VIEW, { companyId: file.companyId, partyId: order.partyId })) {
       group.measurementsLeftOut += 1
@@ -551,6 +563,8 @@ export const orderFilesContract = defineContract({
           leftOut: z.number().int(),
           /** Body data and worksheets without the measurements right: counted, never named. */
           measurementsLeftOut: z.number().int(),
+          /** B-CP-023: documents that show prices, for a reader who does not see prices: counted, never named ("N priced documents"). */
+          pricedLeftOut: notMoney(z.number().int()),
         }),
       ),
       /** How many files are listed (a count, not money). */
@@ -572,6 +586,7 @@ export async function orderFiles(caller: CommandCaller, orderId: string) {
     worksheets: group.worksheets.map(({ createdAt, ...sheet }) => ({ ...sheet, createdAt: toUtcIso(createdAt) })),
     leftOut: group.leftOut,
     measurementsLeftOut: group.measurementsLeftOut,
+    pricedLeftOut: group.pricedLeftOut, // B-CP-023
   }))
   return { order: { id: read.order.id, number: read.order.number }, groups, total: groups.reduce((sum, group) => sum + group.files.length, 0), truncated: read.truncated, cap: ORDER_FILES_CAP }
 }

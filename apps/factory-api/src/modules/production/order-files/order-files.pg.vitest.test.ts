@@ -9,6 +9,7 @@ import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates' // B-CP-023
 // The factory-db seeds and fixtures are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedAuth } from '../../../../../../packages/factory-db/seed/auth'
@@ -78,8 +79,14 @@ const SESSIONS: Record<string, SessionContext> = {
   'office.p2.companyA': session(grant(['workorders.view', 'files.read', 'threads.read', 'sales.measurements.view'], [ids.b], [companyA])),
   // Every customer's work orders (so the mixed one), but only B's files, threads and measurements.
   'office.all.p2files': session(grant(['workorders.view'], 'all'), grant(['files.read', 'threads.read', 'sales.measurements.view'], [ids.b])),
+  // ---- B-CP-023 (the money wall L2): B's Production manager and Floor supervisor as their templates make them (no money), and
+  // B's person who sees prices.
+  'office.p2.productionManager': session(grant([...templateOf('production_manager')!.permissions], [ids.b])),
+  'office.p2.floorSupervisor': session(grant([...templateOf('floor_supervisor')!.permissions], [ids.b])),
+  'office.p2.prices': session(grant([...PERMISSIONS, 'money.price'], [ids.b])),
+  // ---- end B-CP-023
 }
-const B_SESSIONS = new Set(['office.p2', 'office.p2.thin', 'office.p2.blind', 'office.p2.companyA', 'office.all.p2files'])
+const B_SESSIONS = new Set(['office.p2', 'office.p2.thin', 'office.p2.blind', 'office.p2.companyA', 'office.all.p2files', /* B-CP-023 */ 'office.p2.productionManager', 'office.p2.floorSupervisor', 'office.p2.prices'])
 
 let db: MigratedDatabase
 let database: FactoryDatabase
@@ -342,6 +349,34 @@ describe('PW-16: B’s person never reaches A’s order files', { timeout: 60_00
     expect((await ok('office.all.p2files', 'POST', openOf(w.mixed.workOrderId, files.b.order), {})).file.id).toBe(files.b.order)
   })
 })
+
+// ---- B-CP-023 (customer page plan, the money wall L2; review B1): a priced document of the order, for people who see no prices ----
+describe('B-CP-023: the order’s priced documents only for someone who sees prices: counted, never named', { timeout: 60_000 }, () => {
+  const PRICED_NAME = 'T-PR2B-B order confirmation v1.pdf'
+  let priced = ''
+
+  it('the Production manager and the Floor supervisor get it left out (counted as pricedLeftOut, never named); opening it is the unknown 404', async () => {
+    priced = await fileOn('SalesOrder', w.b.salesOrderId, PRICED_NAME)
+    await admin(`UPDATE "StoredFile" SET priced = true WHERE id = $1`, [priced])
+    for (const sessionName of ['office.p2', 'office.p2.productionManager', 'office.p2.floorSupervisor']) {
+      const answer = await call(sessionName, 'GET', listOf(w.b.workOrderId))
+      expect(answer.status, `${sessionName}: ${answer.raw}`).toBe(200)
+      const group = groupOf(answer.body, w.b.salesOrderId)
+      expect(names(group), sessionName).not.toContain(PRICED_NAME)
+      expect(group.pricedLeftOut, sessionName).toBe(1)
+      expect(answer.raw, sessionName).not.toContain(priced)
+      await notFound(sessionName, 'POST', openOf(w.b.workOrderId, priced), 'File not found.')
+    }
+  })
+
+  it('someone who sees prices lists it by name and opens it through the walled route', async () => {
+    const group = groupOf(await ok('office.p2.prices', 'GET', listOf(w.b.workOrderId)), w.b.salesOrderId)
+    expect(names(group)).toContain(PRICED_NAME)
+    expect(group.pricedLeftOut).toBe(0)
+    expect((await ok('office.p2.prices', 'POST', openOf(w.b.workOrderId, priced), {})).file).toMatchObject({ id: priced, name: PRICED_NAME })
+  })
+})
+// ---- end B-CP-023
 
 describe('what B’s people were answered (T00 scan)', () => {
   it('no answer B’s people got names A: not its names, code, orders, files, worksheets, work orders or ids', () => {

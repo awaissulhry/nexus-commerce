@@ -622,7 +622,27 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    …_carriers_w2b_guards' `factory_shipment_carriers_check` (the typed tracking link: https, ≤ 500, one line, no user-info,
    only with its number; its trigger recreated with the column), …_quality_shipping_guards' `factory_shipment_shipped_has_ddt`
    (R-23: an ELSEWHERE shipment leaves with its paper DDT's number unless an immediate invoice travelled) and …_order_apply_guards'
-   `factory_message_about_ok` (a shipment that carries the order's garments is a part of it)):
+   `factory_message_about_ok` (a shipment that carries the order's garments is a part of it)),
+   `…_customer_page_guards` (customer page plan schema wave 1/1, B-CP-005: the NEW `OrderBrandPrice` (the customer's own price
+   of an order line or its total, sales-brand-prices.prisma: a line row exactly one of unit price and line total, the total
+   row an amount, ≥ 0, the order's currency, a line of its own order, never on a CLOSED or CANCELLED order, the source file a
+   file of its own order of no other customer, `enteredById` exactly when the factory typed it; a portal session writes PORTAL
+   line rows only, the office PORTAL only as a carry: inserted or moved with its line by a split; the partial unique
+   `OrderBrandPrice_one_total`; the partner role has no grant on `enteredById`) and `PortalOrderRequestPerson` (the people of a
+   by-person draft line: DRAFT only, SIZE · SHEET (a MEASUREMENTS file of this request or its lines) · LATER); it redefines
+   …_portal_sales_w2b_guards' `factory_portal_order_request_guard` (laterParts, lastEdited* as draft columns; Send counts a
+   line's pieces by its kind: sizes, a described total, people or a sheet on a by-person line) and
+   `factory_portal_order_request_line_guard` (CATALOGUE · DESCRIBED · MADE_TO_MEASURE shapes, `brandUnitPrice` ≥ 0 and frozen
+   at Send with the line, a by-person line keeps its people), …_order_apply_design_asks_guards' `factory_portal_settings_guard`
+   (the factory designer slot: active office people, a backup only beside a designer and never the same, a customer or a
+   brand only; `mtmDraftsOn` defaults on) and …_followups_sales_w2b5_guards' `factory_stored_file_guard` (`StoredFile.priced`,
+   the money wall's lock flag, may change on a superseded version too); data once: `priced` on the files that show prices and
+   their copies and versions, `requireMfa` on the custom office roles that see prices, costs or margins; the size guard is
+   verified, not redefined),
+   `…_order_page_paper_ddt_guards` (order page B-OP-033, end-check fix op-fx2; no schema folder of its own, a policy folder
+   after it: it redefines …_tax_currency_w2b_guards' `factory_invoice_check_issue` so a TD24's GOODS line without a Nexus DDT
+   passes only when a shipment of the invoice's company and customer recorded ELSEWHERE, not cancelled, carries its order line
+   and the invoice cites that shipment's paper DDT, number and date as recorded, in documentRefs):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

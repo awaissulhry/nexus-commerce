@@ -1,3 +1,7 @@
+import { randomBytes } from 'node:crypto'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -13,6 +17,16 @@ import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
+// op-fx5 (end check): the DDT issue route takes the process's files runtime before it refuses, as every shipping test that
+// calls it gives one (a gateway on the local Redis, the local file store); without it the route loads the whole API
+// configuration, which a test run does not have (on the end check: no FACTORY_REDIS_URL), and answers 500.
+import { localFileStore } from '../../../adapters/local-files/local'
+import { createFilesRuntime, useFiles } from '../../../platform/files/service'
+import { createGateway } from '../../../platform/gateway/gateway'
+import { testRedis, type TestRedis } from '../../../platform/outbox/testing'
+import { createSecretsService } from '../../../platform/secrets/envelope'
+import { localKeyProvider } from '../../../platform/secrets/local'
+// ---- end op-fx5
 
 /**
  * B-OP-032 (order page N5; R-2, R-9, R-10, R-23): "Record a shipment made elsewhere". On the local stack with the app's real
@@ -26,6 +40,8 @@ let db: MigratedDatabase
 let database: FactoryDatabase
 let app: FastifyInstance
 let seedA: ShippingSeed
+let redis: TestRedis | undefined // op-fx5
+let localRoot: string | undefined // op-fx5
 
 const ns = 'shipping-elsewhere'
 const idOf = (key: string) => seedUuid(ns, key)
@@ -90,10 +106,13 @@ const ids: Record<string, string> = {}
 const shipments = async () => (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "Shipment" WHERE "tenantId" = $1`, [A.tenant]))[0]!.n
 
 beforeAll(async () => {
-  db = await migratedDatabase('shipping-elsewhere')
+  db = await migratedDatabase('shipping_elsewhere')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 8 } })
   await seedCore({ db: database, namespace: ns })
   seedA = await seedShipping({ db: database, namespace: ns })
+  // op-fx2 (end check): the seeds' quality releases are the story's days to come (seed-calendar: moved on to stay ahead), and
+  // goods never leave before their release: this file's releases happened two days ago.
+  await force(`UPDATE "QualityRelease" SET "releasedAt" = now() - interval '2 days' WHERE "tenantId" = $1 AND "releasedAt" > now() - interval '2 days'`, [A.tenant])
   // The company's legal data (the DDT routes read them before they refuse a shipment made elsewhere).
   await admin(`UPDATE "Company" SET "vatNumber" = 'IT12345670009', "fiscalCode" = '12345670009', "reaOffice" = 'MI', "reaNumber" = '0000001' WHERE id = $1`, [A.companyA])
   await admin(
@@ -106,6 +125,13 @@ beforeAll(async () => {
     `INSERT INTO "SalesOrder" SELECT (jsonb_populate_record(NULL::"SalesOrder", to_jsonb(o) || jsonb_build_object('id', $2::text, 'partyId', $3::text, 'number', 'SO-BETA-1', 'customerRef', NULL, 'customerSeq', NULL, 'quoteVersionId', NULL))).* FROM "SalesOrder" o WHERE o.id = $1`,
     [so2(), ids.beta1, beta],
   )
+  // op-fx5 (end check): the files runtime the DDT issue route takes (nothing is stored: Nexus issues no DDT of these shipments).
+  redis = testRedis()
+  localRoot = mkdtempSync(join(tmpdir(), 'factory-shipping-elsewhere-test-'))
+  const secrets = createSecretsService({ providers: [localKeyProvider({ masterKey: randomBytes(32), environment: 'test' })] })
+  const gateway = createGateway({ environment: 'test', redis: redis.connect(), prefix: redis.prefix, secrets, sleep: async () => {}, log: { info() {}, warn() {}, error() {} } })
+  useFiles(createFilesRuntime({ gateway, local: localFileStore({ root: localRoot, environment: 'test' }) }))
+  // ---- end op-fx5
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
@@ -113,9 +139,12 @@ beforeAll(async () => {
 }, 180_000)
 
 afterAll(async () => {
+  useFiles(undefined) // op-fx5
   await app?.close()
+  await redis?.cleanup() // op-fx5
   await database?.close()
   await db?.close()
+  if (localRoot) rmSync(localRoot, { recursive: true, force: true }) // op-fx5
 }, 60_000)
 
 describe('B-OP-032: the preview says what the recording would say, nothing written', () => {
@@ -260,7 +289,8 @@ describe('B-OP-032 (R-9): a customer on hold', () => {
       // No system hold is ever synced onto it (holds/system.ts skips a shipment made elsewhere).
       expect(await admin(`SELECT 1 FROM "ShipmentHold" WHERE "shipmentId" = $1`, [answer.shipment.id])).toEqual([])
     } finally {
-      await admin(`UPDATE "PartyHold" SET "releasedAt" = now(), "releaseWords" = 'Test over' WHERE id = $1`, [holdId])
+      // op-fx2 (end check): a hold is released with when, by whom and why, all three.
+      await admin(`UPDATE "PartyHold" SET "releasedAt" = now(), "releasedById" = $2, "releaseWords" = 'Test over' WHERE id = $1`, [holdId, newId()])
     }
   })
 })

@@ -1,6 +1,7 @@
 import type { MenuItemDef } from '@nexus/ui/components'
 import type { PortalBand } from '../../shell/frame'
 import type { OrderingWords } from './words'
+import { newOrderHref } from './model' // F-CP-150
 
 /**
  * The frame's band of New order & reorder (design portal.customer.neworder h): the title, their PO first (RefPair), the
@@ -23,6 +24,10 @@ export function newOrderBandOf(input: {
   discardHeld?: string | null
   onSend?: () => void
   onDiscard?: () => void
+  // ---- F-CP-150 (12 §2): the draft's name ("Draft order · <title>") and its conversation (the ⋯ "Ask a question" focuses the dock).
+  title?: string | null
+  ask?: { type: string; id: string; label?: string | null } | null
+  // ---- end F-CP-150
 }): PortalBand {
   const { t } = input.words
   // No ‹ back: New order is a page of Orders, and the band's Pages already leads to Orders & tracking (a phone keeps the title).
@@ -35,24 +40,27 @@ export function newOrderBandOf(input: {
       status: { label: t('band.pillSent'), tone: 'info' },
       actions: [],
       more: [],
+      ask: input.ask ?? null, // F-CP-150: the thread stays after Send
     }
   }
   if (input.phase === 'draft') {
+    // ---- F-CP-150 (12 §2; picture 22): "‹ New order" (the start, with the drafts), "Draft order · <title>", Discard… and Send to the
+    // factory — both held with words, never hidden (a Designer reads who may send it). Their PO is a field of Date and delivery.
     return {
-      title: t('band.title'),
-      // Their PO is the first field of Order details (no RefPair in the draft's band: on a phone it squeezed the title).
-      status: { label: t('band.pill'), tone: 'info' },
-      actions: [{ id: 'send', label: t('band.send'), variant: 'primary', heldReason: input.sendHeld ?? null, onClick: () => input.onSend?.() }],
-      more: [{ id: 'discard', label: t('band.discard'), disabled: Boolean(input.discardHeld), description: input.discardHeld ?? undefined, onSelect: () => input.onDiscard?.() }, template],
-      keys: [
-        { keys: ['/'], words: t('keys.search') },
-        { keys: ['←', '→', '↑', '↓'], words: t('keys.cells') },
-        { keys: ['↵'], words: t('keys.down') },
-        { keys: ['Esc'], words: t('keys.restore') },
-        { keys: ['⌘', '↵'], words: t('keys.send') },
+      title: input.title ? t('draftPage.titleOf', { title: input.title }) : t('draftPage.title'),
+      back: { href: newOrderHref(input.prefix), label: t('draftPage.back') },
+      actions: [
+        { id: 'discard', label: t('draftPage.discard'), variant: 'secondary', heldReason: input.discardHeld ?? null, onClick: () => input.onDiscard?.() },
+        { id: 'send', label: t('draftPage.send'), variant: 'primary', heldReason: input.sendHeld ?? null, onClick: () => input.onSend?.() },
       ],
+      more: [template],
+      ask: input.ask ?? null,
+      keys: draftKeys(input.words),
     }
+    // ---- end F-CP-150
   }
+  // F-CP-150: a draft no longer a draft keeps its conversation (the ⋯ asks about it) and the way back to the start.
+  if (input.phase === 'closed') return { title: input.title ? t('draftPage.titleOf', { title: input.title }) : t('draftPage.title'), back: { href: newOrderHref(input.prefix), label: t('draftPage.back') }, actions: [], more: [], ask: input.ask ?? null }
   return { title: t('band.title'), actions: [], more: [template] }
 }
 
@@ -85,3 +93,17 @@ export function requestBandOf(input: {
     ...(input.phase === 'compose' ? { keys: [{ keys: ['⌘', '↵'], words: t('request.keySend') }] } : {}),
   }
 }
+
+// ---- F-CP-150 (review G3): the draft page's keys — in the shortcuts dialog (?) and ONE information icon in the draft's footer,
+// never as hints above the cards.
+export function draftKeys(words: OrderingWords): { keys: string[]; words: string }[] {
+  const { t } = words
+  return [
+    { keys: ['←', '→', '↑', '↓'], words: t('keys.cells') },
+    { keys: ['↵'], words: t('keys.down') },
+    { keys: ['Esc'], words: t('keys.restore') },
+    { keys: ['⌘', '↵'], words: t('draftPage.keySend') },
+    { keys: ['⌘', 'J'], words: t('draftPage.keyThread') },
+  ]
+}
+// ---- end F-CP-150

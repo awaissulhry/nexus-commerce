@@ -1,15 +1,17 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { Shirt } from 'lucide-react'
-import { Button } from '@nexus/ui/primitives'
+import { Button, Skeleton } from '@nexus/ui/primitives'
 import { Modal } from '../../i18n/ds-parts'
 import { useT } from '../../i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
 import type { ReadPictures } from '../cache'
 import { moreOf, styleWords, type PictureSource, type RowPicture } from '../model'
 import { useRecordPicture } from '../use-record-picture'
-import { RECORD_PICTURE_NS } from './RecordPicture'
+import { RECORD_PICTURE_NS, RecordPicture } from './RecordPicture'
+import { tilePicture, tileWords, useRecordStyles, type ReadStyles, type StyleTile } from '../styles' // F-CP-110
 import '../record-picture.css'
 
 export interface PictureViewerProps {
@@ -27,6 +29,8 @@ export interface PictureViewerProps {
   readonly recordHref?: string | null
   /** Where the record's other styles are ("+2 more styles: open its lines"); default the record's page. */
   readonly linesHref?: string | null
+  /** F-CP-110: the host's read of the record's lines — with "+N" the viewer shows every style in a strip; none: the lines door only. */
+  readonly readStyles?: ReadStyles | null
   readonly onClose: () => void
 }
 
@@ -34,6 +38,8 @@ export interface PictureViewerProps {
  * F-SA-211 (12-lists-board §2.3) — the picture large: ONE design-system Modal (medium, centred) with the style's code and name, the
  * small preview (fit; the full picture is on the style — never the original here), the way to the record's other styles, and
  * Close · Open <record> · Open style (primary). Esc closes and gives the focus back to the part that opened it (the Modal's).
+ * F-CP-110 (customer page C2c): with "+N" and a host read, a strip "Styles of this order" — each line's picture with its style and
+ * colour; a click shows it large and Open style follows it; reading: skeleton tiles; failed: words, Try again and the lines door.
  */
 export function PictureViewer(props: PictureViewerProps) {
   return (
@@ -43,12 +49,18 @@ export function PictureViewer(props: PictureViewerProps) {
   )
 }
 
-function Viewer({ source, recordId, number, picture: own, styleCount: count, read, demo, held, prefix, recordHref, linesHref, onClose }: PictureViewerProps) {
+function Viewer({ source, recordId, number, picture: own, styleCount: count, read, demo, held, prefix, recordHref, linesHref, readStyles, onClose }: PictureViewerProps) {
   const t = useT(RECORD_PICTURE_NS)
-  const { picture, styleCount, src } = useRecordPicture({ source, recordId, picture: own, styleCount: count, read, demo, held })
-  const style = styleWords(picture)
+  const { picture: first, styleCount, src: firstSrc } = useRecordPicture({ source, recordId, picture: own, styleCount: count, read, demo, held })
   const more = moreOf(styleCount)
   const lines = linesHref ?? recordHref ?? null
+  // ---- F-CP-110: every style of the record (read once when it has "+N"); the tile picked is shown large and Open style follows it.
+  const styles = useRecordStyles(readStyles, recordId, more > 0)
+  const [shown, setShown] = useState<StyleTile | null>(null)
+  const picture = shown ? tilePicture(shown) : first
+  const src = shown ? (shown.small?.url ?? null) : firstSrc
+  const style = styleWords(picture)
+  // ---- end F-CP-110
   return (
     <Modal
       open
@@ -83,7 +95,38 @@ function Viewer({ source, recordId, number, picture: own, styleCount: count, rea
         )}
       </div>
       <p className="fw-rp-note">{t('small')}</p>
-      {more > 0 && lines && (
+      {/* F-CP-110: the styles of this record, each its own picture (never a price). */}
+      {styles.state.status !== 'off' && (
+        <section className="fw-rp-styles" aria-label={t('styles', { number })} aria-busy={styles.state.status === 'reading' || undefined}>
+          <h3 className="fw-rp-styles-h">{t('styles', { number })}</h3>
+          {styles.state.status === 'reading' ? (
+            <ul className="fw-rp-strip">
+              {Array.from({ length: Math.min(more + 1, 6) }, (_, index) => (
+                <li key={index}>
+                  <Skeleton width={40} height={40} />
+                </li>
+              ))}
+            </ul>
+          ) : styles.state.status === 'failed' ? (
+            <p className="fw-rp-note" role="status">
+              {t('stylesFailed')}{' '}
+              <Button size="sm" variant="quiet" onClick={styles.retry}>
+                {t('retry')}
+              </Button>
+            </p>
+          ) : (
+            <ul className="fw-rp-strip">
+              {styles.state.tiles.map((tile) => (
+                <li key={tile.key} className={shown?.key === tile.key ? 'fw-rp-tile is-shown' : 'fw-rp-tile'}>
+                  <RecordPicture source={source} recordId={tile.key} number={number} picture={tilePicture(tile)} styleCount={1} size="line" read={null} held={tile.small} onOpen={() => setShown(tile)} />
+                  <span className="fw-rp-tile-words">{tileWords(tile)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+      {more > 0 && lines && (styles.state.status === 'off' || styles.state.status === 'failed') && (
         <p className="fw-rp-note">
           <Link className="fw-rp-door" href={lines}>
             {t('moreStyles', { count: more })}

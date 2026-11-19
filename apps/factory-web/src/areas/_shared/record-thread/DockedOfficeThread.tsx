@@ -374,7 +374,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   }, [filesAsk, clearFilesAsk, threadFiles, key])
   // ---- end B-TH-264 follow-up
   const fw = useT(FILES_NS)
-  const viewerFiles: ViewerFile[] = viewer ? viewer.files.map((file) => toViewerFile(file, links[file.id] ?? { src: null, downloadHref: null }, fw('locked.sheet'))) : []
+  // B-CP-014: the viewer's lock card names a priced document's lock in its own words (record-files is loaded here).
+  const viewerFiles: ViewerFile[] = viewer ? viewer.files.map((file) => toViewerFile(file, links[file.id] ?? { src: null, downloadHref: null }, file.locked === 'PRICED' ? tf('priced.locked') : fw('locked.sheet'))) : []
 
   const [filesOpen, setFilesOpen] = useState(false)
   // ---- F-SA-237 (sales page plan N9, P14; the T9 rule changes for a SalesOrder, by the lane agreement): on a sales order the Files

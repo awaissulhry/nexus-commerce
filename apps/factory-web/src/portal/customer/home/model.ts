@@ -534,3 +534,33 @@ export function readRecent(raw: string | null): string[] {
     return []
   }
 }
+
+// ---- F-CP-152 (customer page plan C5, 12 §2 Doors): Home's Start card — the party's draft orders to continue ------------------
+/** One draft order on Home: its name (their PO, else "Untitled draft"), its lines and when it changed, where it continues. */
+export interface DraftOrderRow {
+  readonly id: string
+  readonly href: string
+  readonly title: string
+  readonly facts: string
+}
+
+/** The draft orders to continue: the newest `max` (3) of the party's drafts, and how many there are (a team's drafts: any colleague's). */
+export function draftOrdersOf(
+  rows: readonly { readonly id: string; readonly customerRef: string | null; readonly lines: number; readonly updatedAt: string }[],
+  prefix: string,
+  t: (key: string, params?: Readonly<Record<string, string | number>>) => string,
+  day: (iso: string) => string,
+  max = 3,
+): { count: number; items: DraftOrderRow[] } {
+  const newest = [...rows].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  return {
+    count: rows.length,
+    items: newest.slice(0, max).map((row) => ({
+      id: row.id,
+      href: `${prefix}/orders/new?draft=${encodeURIComponent(row.id)}`,
+      title: row.customerRef ?? t('draftOrders.untitled'),
+      facts: t('draftOrders.facts', { count: row.lines, day: day(row.updatedAt) }),
+    })),
+  }
+}
+// ---- end F-CP-152

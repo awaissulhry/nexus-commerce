@@ -541,6 +541,47 @@ describe('an invoice', () => {
   })
 })
 
+// ── B-OP-033 (order page N5; end-check fix op-fx2, …_order_page_paper_ddt_guards) ──────────────────────────────────────────
+describe('a TD24 of goods recorded as made elsewhere (B-OP-033)', () => {
+  it('needs no Nexus DDT only when it cites, as recorded, the paper DDT of a shipment made elsewhere that carries its order line', async () => {
+    // The shipment as B-OP-032 records it, planted by the owner with every trigger off (this file tests the invoice's rule): SHIPPED,
+    // made ELSEWHERE with its paper DDT, one line of SEED-SH-0002's order line.
+    const [source] = await admin('SELECT "salesOrderLineId"::text AS "orderLine", size FROM "ShipmentLine" WHERE id = $1', [seeded.shipping.draftLineId])
+    const shipmentId = randomUUID()
+    const paper = { number: `CART-${tag()}`, date: '2026-11-13' }
+    const planted = async (statements: string, values: unknown[]) => {
+      await db.admin.query('BEGIN')
+      try {
+        await db.admin.query("SET LOCAL session_replication_role = 'replica'")
+        await db.admin.query(statements, values)
+        await db.admin.query('COMMIT')
+      } catch (error) {
+        await db.admin.query('ROLLBACK')
+        throw error
+      }
+    }
+    const copy = (table: string) => `INSERT INTO "${table}" SELECT * FROM jsonb_populate_record(NULL::"${table}", (SELECT to_jsonb(r) || $1::jsonb FROM "${table}" r WHERE r.id = $2::uuid))`
+    await planted(copy('Shipment'), [JSON.stringify({ id: shipmentId, number: `T-SH-${tag()}`, status: 'SHIPPED', origin: 'ELSEWHERE', externalDdtNumber: paper.number, externalDdtDate: paper.date, packedAt: '2026-11-13T08:00:00.000Z', shippedAt: '2026-11-13T08:00:00.000Z' }), seeded.shipping.draftShipmentId])
+    await planted(copy('ShipmentLine'), [JSON.stringify({ id: randomUUID(), shipmentId, parcelId: null }), seeded.shipping.draftLineId])
+    const goods = (documentRefs: unknown) => draft({ docType: 'TD24', documentRefs }, [lineRow('', { salesOrderLineId: source!.orderLine, size: source!.size })])
+    const NO_DDT = /TD24 .* names its DDT/
+    // Not cited, another number or another date: a GOODS line without its DDT is refused, as before.
+    await expect(issue(await goods(null))).rejects.toThrow(NO_DDT)
+    await expect(issue(await goods([{ kind: 'DDT', number: `${paper.number}-X`, date: paper.date }]))).rejects.toThrow(NO_DDT)
+    await expect(issue(await goods([{ kind: 'DDT', number: paper.number, date: '2026-11-12' }]))).rejects.toThrow(NO_DDT)
+    // A line of an order line the shipment does not carry: refused although the paper DDT is cited.
+    await expect(issue(await draft({ docType: 'TD24', documentRefs: [{ kind: 'DDT', ...paper }] }))).rejects.toThrow(NO_DDT)
+    // Cited as recorded (beside the customer's purchase order): issued.
+    const cited = await goods([{ kind: 'PURCHASE_ORDER', number: 'SEED-PO-78' }, { kind: 'DDT', ...paper }])
+    await issue(cited)
+    expect((await admin('SELECT status::text AS status FROM "Invoice" WHERE id = $1', [cited]))[0]).toEqual({ status: 'ISSUED' })
+    // A cancelled shipment covers no line any more.
+    await planted(`UPDATE "Shipment" SET status = 'CANCELLED' WHERE id = $1::uuid`, [shipmentId])
+    await expect(issue(await goods([{ kind: 'DDT', ...paper }]))).rejects.toThrow(NO_DDT)
+  })
+})
+// ── end B-OP-033
+
 // --- credit notes and deposit invoices --------------------------------------------------------------------------------
 
 describe('a credit note (TD04)', () => {

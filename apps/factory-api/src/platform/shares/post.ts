@@ -15,6 +15,8 @@ import { ensureThread } from '../threads/threads'
 import { resolveRecord } from '../threads/records'
 import { inviteLinkOf, linkAttachments, mayOf, messageViewOf, requireLiveShare, SHARE_POST_ACTION, threadOf, THREAD_PARTNER, type PartnerShareRow, type PartnerThreadRow } from './page'
 import { walledForOutside } from '../files/content-wall' // fix-wall-1
+// B-CP-023 (the money wall D6, L1): a priced file the link may not open goes with no message.
+import { PRICED_LOCK } from '@nexus/factory-domain/files/priced'
 
 /**
  * An invited partner writes on the shared record (B-W2b-200; COL-062 "comment"; design links.invite › Messages "post,
@@ -58,6 +60,7 @@ async function attachmentProblems(tx: CommandTx, request: FastifyRequest, thread
     const path = `body/attachments/${index}`
     const row = rows.get(fileId)
     if (!row || walled.has(fileId) /* fix-wall-1: as a wrong id */ || !audienceSees({ audience: 'link', partyId: thread.partyId ?? '', record: { type: thread.recordType, id: thread.recordId } }, { id: row.id, recordType: row.recordType, recordId: row.recordId, visibility: row.visibility as FileAudience[], partyId: row.partyId })) problems.push({ path, message: 'File not found.' })
+    else if (seen.get(fileId)?.locked === PRICED_LOCK) problems.push({ path, message: 'File not found.' }) // B-CP-023: as a wrong id
     else if (!seen.has(fileId)) problems.push({ path, message: 'Only an available file of this record can be attached.' })
   })
   return problems

@@ -12,6 +12,9 @@ import { changeWhatOf, orderChangeBatch } from '@nexus/factory-domain/notificati
 import { EVERY_PARTY_MARKER } from '../../../modules/quality/wall'
 import { wallPartyOf, type WallScope } from '../../threads/records'
 // ---- end B-SA-051
+// ---- B-CP-079: a customer's ask of its factory designer tells who asks and on which record, never the note's words.
+import { isDesignerAskNote } from '@nexus/factory-domain/threads/designer/rules'
+// ---- end B-CP-079
 
 /**
  * Notes and mail on a record (COL-006 mentions, COL-011 followers):
@@ -96,6 +99,13 @@ export const THREAD_RULES: readonly FanOutRule[] = Object.freeze([
       if (!thread || !reader || !mayOnThread(reader.actor, THREADS_READ, thread.recordType, await wallScopeOf(context.tx, thread))) return []
       const label = await recordLabelOf(context.tx, thread.recordType, thread.recordId)
       if (label === null) return []
+      // ---- B-CP-079 (lead pick B6): the note of a customer's ask (its own shape) reads "<customer> asks you, the factory designer, on
+      // <record>" — the customer by its name (the reader reads its record), never the note's excerpt.
+      const message = await context.tx.message.findUnique({ where: { id: payload.messageId }, select: { direction: true, authorKind: true, authorName: true } })
+      const party = message?.authorKind === 'SYSTEM' && thread.partyId !== null ? await context.tx.party.findUnique({ where: { id: thread.partyId }, select: { legalName: true, tradeName: true } }) : null
+      const customer = party ? (party.tradeName ?? party.legalName) : null
+      const asked = message !== null && customer !== null && isDesignerAskNote(message, customer) ? { customer } : null
+      // ---- end B-CP-079
       return [
         {
           userId: payload.userId,
@@ -103,8 +113,8 @@ export const THREAD_RULES: readonly FanOutRule[] = Object.freeze([
           record: { type: thread.recordType, id: thread.recordId, label },
           companyId: thread.companyId,
           anchor: `message:${payload.messageId}`,
-          messageKey: 'notifications.mentioned',
-          params: { actorId: payload.authorId, messageId: payload.messageId },
+          messageKey: asked ? 'notifications.designerAsked' : 'notifications.mentioned', // B-CP-079
+          params: asked ? { customer: asked.customer, messageId: payload.messageId } : { actorId: payload.authorId, messageId: payload.messageId },
           actorId: payload.authorId,
           // B-TH-045: "mentioned you on 12 orders" is one bell item.
           batchId: payload.batchId ?? null,

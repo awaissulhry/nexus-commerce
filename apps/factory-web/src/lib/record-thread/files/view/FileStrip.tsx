@@ -61,7 +61,7 @@ const KIND_ICON: Readonly<Record<FileKind, (size: number) => ReactNode>> = {
  */
 export function FileStrip({ model, actions }: { model: FileStripModel; actions?: FileStripActions }) {
   return (
-    <WithMessages namespaces={[FILES_NS]}>
+    <WithMessages namespaces={[FILES_NS, /* B-CP-014: the priced lock's words */ 'record-files']}>
       <Strip model={model} actions={actions} />
     </WithMessages>
   )
@@ -69,6 +69,7 @@ export function FileStrip({ model, actions }: { model: FileStripModel; actions?:
 
 function Strip({ model, actions }: { model: FileStripModel; actions?: FileStripActions | undefined }) {
   const t = useT(FILES_NS)
+  const pricedWords = useT('record-files') // B-CP-014
   const stripId = useId()
   const listRef = useRef<HTMLUListElement>(null)
   const [focus, setFocus] = useState(0)
@@ -132,7 +133,7 @@ function Strip({ model, actions }: { model: FileStripModel; actions?: FileStripA
               const held = file.status === 'QUARANTINED' || Boolean(file.locked)
               const markWords = [...marks.map((mark) => t(`audience.${mark}`)), ...(more > 0 ? [t('audience.more', { count: more })] : [])]
               // B-TH-283: a sheet this reader opens is named as one ("each opening is recorded").
-              const name = [file.locked ? t('locked.sheet') : file.name, file.sheet ? t('sheet.open') : null, t(`kind.${file.kind}`), version ? t('version', { n: version }) : null, file.status === 'QUARANTINED' ? t('held') : null, ...markWords].filter(Boolean).join(' · ')
+              const name = [file.locked === 'PRICED' ? pricedWords('priced.locked') /* B-CP-014 */ : file.locked ? t('locked.sheet') : file.name, file.sheet ? t('sheet.open') : null, t(`kind.${file.kind}`), version ? t('version', { n: version }) : null, file.status === 'QUARANTINED' ? t('held') : null, ...markWords].filter(Boolean).join(' · ')
               return (
                 <li key={one.key}>
                   <button type="button" data-tile className={`fw-rtf-tile${held ? ' is-held' : ''}`} tabIndex={index === focus ? 0 : -1} aria-label={name} title={name} onFocus={() => setFocus(index)} onClick={(event) => actions?.onOpen?.(file.id, event.currentTarget)}>

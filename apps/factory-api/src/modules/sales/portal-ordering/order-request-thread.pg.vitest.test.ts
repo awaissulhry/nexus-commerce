@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto' // B-CP-023
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
@@ -198,8 +199,36 @@ describe('B-CP-071: a draft has its thread from its first save — its party’s
     // A's viewer keeps no drafts: the draft and its thread are not there for them (neutral 404), nor in their Messages.
     const viewer = await signIn(h, world, world.people.viewer)
     expect((await thread(viewer, draft)).status).toBe(404)
-    expect((await post(viewer, draft, 'Made-up: not my draft.')).status).toBe(404)
+    // Step 0 (end-check red of PA1): a Viewer holds no portal.comment, so the post route itself refuses (403) — the same answer for
+    // an id that does not exist, so it tells nothing of the draft. A viewer who may comment still keeps no drafts: 404, as if absent.
+    expect((await post(viewer, draft, 'Made-up: not my draft.')).status).toBe(403)
+    expect((await post(viewer, newId(), 'Made-up: no such record.')).status).toBe(403)
+    const commenter: Person = { id: newId(), email: `vera.viewer.${NS}@studio-alpha.example`, name: 'Vera Viewer' }
+    await inTenant(h, world, async (client) => {
+      await client.user.create({ data: { id: commenter.id, email: commenter.email, displayName: commenter.name, status: 'ACTIVE', audience: 'PARTNER', partyId: world.p1, partnerKind: 'CUSTOMER', locale: 'en' }, select: { id: true } })
+      for (const key of ['customer-viewer', 'partner-comment']) {
+        const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: world.tenantId, key } }, select: { id: true } })
+        await client.roleAssignment.create({ data: { id: newId(), userId: commenter.id, roleId: role.id, allCompanies: true, partyIds: [world.p1], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+      }
+    })
+    const viewerWhoComments = await signIn(h, world, commenter)
+    expect((await thread(viewerWhoComments, draft)).status).toBe(404)
+    expect((await post(viewerWhoComments, draft, 'Made-up: not my draft.')).status).toBe(404)
     expect(JSON.stringify((await viewer.get('/portal/threads')).body)).not.toContain(draft)
+    // Lead addition 5 (PA1 residual): the unread read leaves a record the reader cannot open out exactly like an unknown id — the
+    // draft's thread holds the buyer's message and our answer (both shared), yet A's viewer reads no count and no hint of it.
+    const unknown = newId()
+    const counted = await viewer.post('/threads/unread', { records: [{ recordType: 'PortalOrderRequest', recordId: draft }, { recordType: 'PortalOrderRequest', recordId: unknown }], readable: true })
+    expect(counted.status, JSON.stringify(counted.body)).toBe(200)
+    expect(counted.body.counts).toEqual([
+      { recordType: 'PortalOrderRequest', recordId: draft, newCount: 0, lastAt: null, readable: false },
+      { recordType: 'PortalOrderRequest', recordId: unknown, newCount: 0, lastAt: null, readable: false },
+    ])
+    const plain = await viewer.post('/threads/unread', { records: [{ recordType: 'PortalOrderRequest', recordId: draft }] })
+    expect(plain.body.counts).toEqual([{ recordType: 'PortalOrderRequest', recordId: draft, newCount: 0, lastAt: null }])
+    // The buyer, who keeps the party's drafts, does count it (our answer is new to them).
+    const theirs = await buyerA.post('/threads/unread', { records: [{ recordType: 'PortalOrderRequest', recordId: draft }], readable: true })
+    expect(theirs.body.counts).toEqual([expect.objectContaining({ recordId: draft, readable: true })])
     // The summary row: the office and the buyer read "Draft"; another customer never.
     expect((await readRecordSummary(office(), { type: 'PortalOrderRequest', id: draft })).summary.state?.code).toBe('DRAFT')
     expect((await buyerA.get(`/records/PortalOrderRequest/${draft}/summary`)).body.summary).toMatchObject({ state: { code: 'DRAFT' }, theirRef: 'PO-SEED-7004' })
@@ -301,7 +330,51 @@ describe('B-CP-071: a draft has its thread from its first save — its party’s
     expect(gone.status, JSON.stringify(gone.body)).toBe(200)
     const events = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'portal_order_request.draft_changed' AND subject = $2 ORDER BY "occurredAt", id`, [world.tenantId, id])
     expect(events.map((row) => row.payload)).toEqual([{ requestId: id, partyId: world.p1 }, { requestId: id, partyId: world.p1 }, { requestId: id, partyId: world.p1 }])
-    expect(EVENT_DEFINITIONS.find((definition) => definition.type === 'portal_order_request.draft_changed')?.live).toEqual({ permission: 'orders.view', fields: ['requestId'] })
+    expect(EVENT_DEFINITIONS.find((definition) => definition.type === 'portal_order_request.draft_changed')?.live).toEqual({ permission: 'orders.view', floor: null, fields: ['requestId'] })
   })
 })
 // ---- end B-CP-071
+
+// ---- B-CP-023 (customer page plan, the money wall D6, L1; lead, PA2): a PRICED file on a portal message — the brand's Buyer (price
+// grain) reads it by name; a Designer (no price grain) reads it locked, with no name, and cannot attach it.
+describe('B-CP-023: a priced file on a portal message', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('as Brand Alpha Designer: a priced file on a message shows locked, no name; the Buyer reads its name', async () => {
+    const designer: Person = { id: newId(), email: `dora.designer.${NS}@studio-alpha.example`, name: 'Made-up Dora Designer' }
+    await inTenant(h, world, async (client) => {
+      await client.user.create({ data: { id: designer.id, email: designer.email, displayName: designer.name, status: 'ACTIVE', audience: 'PARTNER', partyId: world.p1, partnerKind: 'CUSTOMER', locale: 'en' }, select: { id: true } })
+      const grant = async (userId: string, key: string) => {
+        const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: world.tenantId, key } }, select: { id: true } })
+        await client.roleAssignment.create({ data: { id: newId(), userId, roleId: role.id, allCompanies: true, partyIds: [world.p1], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+      }
+      for (const key of ['customer-designer', 'partner-comment']) await grant(designer.id, key)
+      await grant(world.people.buyer.id, 'partner-upload') // the buyer sends the file
+    })
+    const buyer = await signIn(h, world, world.people.buyer)
+    const asDesigner = await signIn(h, world, designer)
+    // The buyer's PO on the catalogue order's thread, shared with A, then marked "this file shows prices".
+    const bytes = Buffer.from('%PDF-1.4\n% made-up purchase order of the CP-023 test\n%%EOF\n')
+    const base = `/portal/threads/PortalOrderRequest/${sent}/files`
+    const announced = await buyer.send('POST', base, { originalName: 'made-up-alpha-po-7001.pdf', contentType: 'application/pdf', sizeBytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }, { headers: { 'idempotency-key': `cp023-${newId()}` } })
+    expect(announced.status, JSON.stringify(announced.body)).toBe(201)
+    const put = await h.app.inject({ method: 'PUT', url: announced.body.upload.url, headers: announced.body.upload.headers, payload: bytes })
+    expect(put.statusCode, put.body).toBeLessThan(300)
+    const fileId = announced.body.file.id as string
+    expect((await buyer.send('POST', `${base}/${fileId}/complete`, {}, { headers: { 'idempotency-key': `cp023-${newId()}` } })).status).toBe(200)
+    await admin('UPDATE "StoredFile" SET priced = true WHERE id = $1', [fileId])
+    const posted = await buyer.send('POST', `/portal/threads/PortalOrderRequest/${sent}/messages`, { body: 'Made-up: our PO with our prices.', attachments: [fileId] }, { headers: { 'idempotency-key': `cp023-${newId()}` } })
+    expect(posted.status, JSON.stringify(posted.body)).toBe(201)
+    const attachmentOf = (body: Json) => body.messages.find((message: Json) => message.id === posted.body.message.id)?.attachments as Json[]
+    // The Buyer (the price grain) reads its name.
+    expect(attachmentOf((await thread(buyer, sent)).body)).toEqual([expect.objectContaining({ id: fileId, originalName: 'made-up-alpha-po-7001.pdf' })])
+    // The Designer reads it locked: counted, no name (opening it is 404 already).
+    const seen = await thread(asDesigner, sent)
+    expect(seen.status, JSON.stringify(seen.body)).toBe(200)
+    expect(attachmentOf(seen.body)).toEqual([expect.objectContaining({ id: fileId, originalName: '', locked: 'PRICED' })])
+    expect(JSON.stringify(seen.body)).not.toContain('made-up-alpha-po-7001')
+    // Nor can the Designer attach it to a message of theirs (as a wrong id).
+    const attach = await asDesigner.send('POST', `/portal/threads/PortalOrderRequest/${sent}/messages`, { body: 'Made-up: see the PO.', attachments: [fileId] }, { headers: { 'idempotency-key': `cp023-${newId()}` } })
+    expect(attach.status).toBe(400)
+    expect(JSON.stringify(attach.body)).toContain('File not found.')
+  })
+})
+// ---- end B-CP-023

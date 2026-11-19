@@ -211,6 +211,7 @@
   "w": {
     "notifications": {
       "mentioned": "{actor} ti ha menzionato su {record}",
+      "designerAsked": "{customer} chiede a te, designer della fabbrica, su {record}",
       "mentionedOn": "{actor} ti ha menzionato su {records} ordini",
       "following": {
         "note": "{actor} ha scritto una nota su {record}, che segui",

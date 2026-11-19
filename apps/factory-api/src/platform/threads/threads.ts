@@ -42,6 +42,8 @@ import { readingOf, whoOf, type Reading } from './reads'
 import { peopleTagsOf, taggedFirst, tagLanguageOf, type TaggedPerson } from './people-tags' // T7
 // B-TH-083: a measurement sheet on a card is locked for an office reader without sales.measurements.view.
 import { isMeasurementSheet, MEASUREMENT_SHEET_PERMISSION } from '@nexus/factory-domain/files/measurements'
+// B-CP-023 (customer page plan, the money wall D6, L1; review B1): a priced file on a message, and as an attachment.
+import { mayOpenPriced, PRICED_LOCK, seesPrices } from '@nexus/factory-domain/files/priced'
 // ---- end B-TH-027 / B-TH-028
 // ---- B-TH-049: a typed amount on an office note (price grain), and the price check of a note for the floor.
 import { DomainError } from '@nexus/factory-domain/core/errors'
@@ -160,6 +162,8 @@ const FILE_COMMON = {
   partyId: true,
   // B-TH-083: a measurement sheet (MEASUREMENTS) is locked for an office reader without the permission.
   category: true,
+  // B-CP-023: a priced file is locked for a reader who does not see prices (any audience).
+  priced: true,
 } as const satisfies Prisma.StoredFileSelect
 /** The partner role cannot read a file's floor site; the office reads it for the audience check. */
 const FILE_OFFICE = { ...FILE_COMMON, floorSiteId: true } as const satisfies Prisma.StoredFileSelect
@@ -390,11 +394,17 @@ async function visibleAttachments(client: FactoryClient | CommandTx, context: Re
     }
     return opens.get(key)!
   }
+  const sees = seesPrices(actor) // B-CP-023
   for (const row of rows) {
     const scope = isOffice(context) ? { companyId: row.companyId } : { companyId: row.companyId, partyId: row.partyId }
     if (!audienceSees(viewer, { ...row, visibility: row.visibility as FileAudience[] })) continue
     if (!isOffice(context) && row.status !== 'AVAILABLE') continue
     if (!can(actor, FILES_READ, scope)) continue
+    // B-CP-023: a priced file the reader may not open is shown locked — counted, "Priced document — you cannot open it", never named.
+    if (!mayOpenPriced(row, sees)) {
+      seen.set(row.id, { id: row.id, kind: row.kind, originalName: '', contentType: row.contentType, sizeBytes: row.sizeBytes, status: row.status, locked: PRICED_LOCK })
+      continue
+    }
     // B-TH-083: a sheet the reader may not open is shown locked — counted and named as a sheet, never by its own name.
     if (isMeasurementSheet(row) && !(await opensSheetsOf(row))) {
       seen.set(row.id, { id: row.id, kind: row.kind, originalName: '', contentType: row.contentType, sizeBytes: row.sizeBytes, status: row.status, locked: 'MEASUREMENTS' })
@@ -744,7 +754,7 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
  */
 export async function attachmentProblems(tx: CommandTx, context: RequestContext, thread: ThreadRow, fileIds: readonly string[], audience: 'OFFICE' | 'PARTNER'): Promise<Issue[]> {
   if (fileIds.length === 0) return []
-  const rows = await tx.storedFile.findMany({ where: { id: { in: [...fileIds] } }, select: { id: true, companyId: true, recordType: true, recordId: true, status: true, partyId: true, category: true } })
+  const rows = await tx.storedFile.findMany({ where: { id: { in: [...fileIds] } }, select: { id: true, companyId: true, recordType: true, recordId: true, status: true, partyId: true, category: true, priced: true /* B-CP-023 */ } })
   const byId = new Map(rows.map((row) => [row.id, row]))
   const actor = actorOf(context)
   const problems: Issue[] = []
@@ -753,10 +763,13 @@ export async function attachmentProblems(tx: CommandTx, context: RequestContext,
   // fix-wall-1: a shared message (a portal reply, a mail) never carries a file whose content is another customer's (the writer's
   // own transaction reads every file of the tenant: the office or the system).
   const walled = audience === 'PARTNER' && thread.partyId ? await contentWalledFor(tx, thread.partyId, rows.map((row) => row.id)) : new Set<string>()
+  // B-CP-023: a priced file goes with a message (an office note, a reply to the customer, a mail: email-out/outbound.ts asks this
+  // check) only from a writer who sees prices; for anyone else it is as unknown as a wrong id. The system writes for itself.
+  const sees = seesPrices(actor)
   fileIds.forEach((fileId, index) => {
     const path = `body/attachments/${index}`
     const row = byId.get(fileId)
-    if (!row || (isOffice(context) && !can(actor, FILES_READ, { companyId: row.companyId })) || (isMeasurementSheet(row) && !opensSheets)) problems.push({ path, message: 'File not found.' })
+    if (!row || (isOffice(context) && !can(actor, FILES_READ, { companyId: row.companyId })) || (isMeasurementSheet(row) && !opensSheets) || !mayOpenPriced(row, sees)) problems.push({ path, message: 'File not found.' })
     else if (row.recordType !== thread.recordType || row.recordId !== thread.recordId) problems.push({ path, message: 'Only a file of this record can be attached.' })
     else if (row.status !== 'AVAILABLE') problems.push({ path, message: `This file is ${row.status}; only an available file can be attached.` })
     else if (audience === 'PARTNER' && row.partyId !== thread.partyId) problems.push({ path, message: "Share the file with the record's party first." })

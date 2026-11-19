@@ -4,9 +4,11 @@ import { useEffect } from 'react'
 import Link from 'next/link'
 import { FileX } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, KeyValue, RecordLayout } from '@nexus/ui/components'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react' // F-CP-113
 import { DetailHeader } from '@nexus/ui/patterns'
 import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { DateField, Textarea, Timeline } from '../../../../../lib/i18n/ds-parts'
+import { DetailModal, Modal } from '../../../../../lib/i18n/ds-parts' // F-CP-113: the window and the Discard question
 import { formatDate } from '../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
@@ -28,16 +30,27 @@ import '../../orders.css'
  * API as it is typed — net, VAT, gross, the deposit and the payment schedule the order will get, the problems in words.
  * Nothing is written before Confirm order; this tab keeps the lines if it is reloaded.
  * F-CP-146: a person without the price grain reads "Priced from <customer>'s price list" above the lines and sends no price.
+ * F-CP-113: two frames of the ONE view — the page (its band) and the window (NewOrderWindow: a DS DetailModal over the customer page,
+ * the band's title, facts and buttons in its header); every part is the same. Discard asks first when something is typed.
  */
 export function NewOrderView({ model, actions }: { model: NewOrderModel; actions?: NewOrderActions }) {
   return (
     <WithMessages namespaces={['orders', 'sales', 'lists']}>
-      <NewOrder model={model} actions={actions} />
+      <NewOrder model={model} actions={actions} frame="page" />
     </WithMessages>
   )
 }
 
-function NewOrder({ model, actions }: { model: NewOrderModel; actions?: NewOrderActions }) {
+/** F-CP-113: the same New order in a large centred window (the customer page's door); × / Esc closes it, the typed lines kept. */
+export function NewOrderWindow({ model, actions }: { model: NewOrderModel; actions?: NewOrderActions }) {
+  return (
+    <WithMessages namespaces={['orders', 'sales', 'lists']}>
+      <NewOrder model={model} actions={actions} frame="window" />
+    </WithMessages>
+  )
+}
+
+function NewOrder({ model, actions, frame }: { model: NewOrderModel; actions?: NewOrderActions; frame: 'page' | 'window' }) {
   const t = useT('orders')
   const locale = useLocale()
   const listHref = `${model.prefix}/sales/orders`
@@ -50,8 +63,9 @@ function NewOrder({ model, actions }: { model: NewOrderModel; actions?: NewOrder
   const { nets, prices } = previewByKey(model.draft, model.preview.value)
   const pieces = model.draft.lines.reduce((sum, line) => sum + piecesOf(line), 0)
 
-  // ⌘↵ confirms (not inside a dialog); leaving with lines typed asks first.
+  // ⌘↵ confirms (not inside a dialog); leaving with lines typed asks first. F-CP-113: the window listens on its own body.
   useEffect(() => {
+    if (frame === 'window') return
     const onKey = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter') return
       if ((event.target as HTMLElement | null)?.closest('[role="dialog"]')) return
@@ -73,6 +87,18 @@ function NewOrder({ model, actions }: { model: NewOrderModel; actions?: NewOrder
 
   if (!model.header || model.party.status !== 'ready') {
     const state = !model.header ? 'missing' : model.party.status
+    // F-CP-113: the window reads its customer in its own body (Reading… / the problem and Try again).
+    if (frame === 'window')
+      return (
+        <DetailModal
+          open
+          onClose={() => actions?.onClose?.()}
+          title={t('newOrder.pageTitle')}
+          loading={state === 'loading'}
+          error={model.party.status === 'error' ? t(model.party.problem) : state === 'missing' ? t('newOrder.state.missing.title') : undefined}
+          onRetry={model.party.status === 'error' ? () => actions?.onRetry?.() : undefined}
+        />
+      )
     return (
       <div className="fw-so">
         <div className="fw-so-band">
@@ -119,40 +145,55 @@ function NewOrder({ model, actions }: { model: NewOrderModel; actions?: NewOrder
   const currency = priced?.currency ?? 'EUR'
   const contact = party?.contacts.find((entry) => entry.id === model.header?.contactId) ?? null
 
-  return (
-    <div className="fw-so">
-      <div className="fw-so-band">
-        <DetailHeader
-          backAsChild
-          backLabel={<Link href={listHref}>{t('record.back')}</Link>}
-          title={
-            <span className="fw-so-title">
-              {t('newOrder.pageTitle')} <span className="fw-so-title-sub">· {party?.legalName ?? '—'}</span>
-            </span>
-          }
-          actions={
-            <span className="fw-so-actions">
-              <Button size="sm" onClick={() => actions?.onDiscard?.()} heldReason={made ? t('newOrder.held.made') : model.busy ? t('held.busy') : null}>
-                {t('newOrder.discard')}
-              </Button>
-              <Button size="sm" variant="primary" heldReason={heldText} onClick={() => actions?.onConfirm?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
-                {model.busy ? t('common.working') : t('newOrder.confirm')}
-              </Button>
-            </span>
-          }
-        />
-        <div className="fw-so-meta-row">
-          <span className="fw-so-meta">
-            <Pill tone="neutral">{t('newOrder.draft')}</Pill>
-            <span className="fw-so-hint" role="status">
-              {model.number === undefined ? t('newOrder.numberLoading') : model.number === null ? t('newOrder.numberUnknown') : t('newOrder.number', { number: model.number })}
-            </span>
-            {model.header.customerRef && <Tag tone="neutral">{t('record.customerRef', { ref: model.header.customerRef })}</Tag>}
-            {contact && <Tag tone="neutral">{t('newOrder.contactIs', { name: contact.name })}</Tag>}
-          </span>
-        </div>
-      </div>
-
+  // ---- F-CP-113: the band's parts, drawn by the page's band or the window's header ----
+  const buttons = (
+    <span className="fw-so-actions">
+      <Button size="sm" onClick={() => actions?.onDiscard?.()} heldReason={made ? t('newOrder.held.made') : model.busy ? t('held.busy') : null}>
+        {t('newOrder.discard')}
+      </Button>
+      <Button size="sm" variant="primary" heldReason={heldText} onClick={() => actions?.onConfirm?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
+        {model.busy ? t('common.working') : t('newOrder.confirm')}
+      </Button>
+    </span>
+  )
+  const facts = (
+    <span className="fw-so-meta">
+      <Pill tone="neutral">{t('newOrder.draft')}</Pill>
+      <span className="fw-so-hint" role="status">
+        {model.number === undefined ? t('newOrder.numberLoading') : model.number === null ? t('newOrder.numberUnknown') : t('newOrder.number', { number: model.number })}
+      </span>
+      {model.header.customerRef && <Tag tone="neutral">{t('record.customerRef', { ref: model.header.customerRef })}</Tag>}
+      {contact && <Tag tone="neutral">{t('newOrder.contactIs', { name: contact.name })}</Tag>}
+    </span>
+  )
+  const title = (
+    <span className="fw-so-title">
+      {t('newOrder.pageTitle')} <span className="fw-so-title-sub">· {party?.legalName ?? '—'}</span>
+    </span>
+  )
+  // F-CP-113: Discard loses what was typed — asked first (the editor sets `discardAsk`).
+  const ask = model.discardAsk ? (
+    <Modal
+      open
+      size="sm"
+      title={t('newOrder.discardAsk.title')}
+      onClose={() => actions?.onDiscardCancel?.()}
+      footer={
+        <>
+          <Button variant="secondary" data-autofocus onClick={() => actions?.onDiscardCancel?.()}>
+            {t('newOrder.discardAsk.keep')}
+          </Button>
+          <Button variant="danger" onClick={() => actions?.onDiscardConfirm?.()}>
+            {t('newOrder.discard')}
+          </Button>
+        </>
+      }
+    >
+      <p>{t('newOrder.discardAsk.body', { lines: model.draft.lines.length })}</p>
+    </Modal>
+  ) : null
+  const body = (
+    <>
       {model.problem && <Banner tone="danger" title={t(model.problem.key, model.problem.params)} />}
       {/* B-TH-231: once the order is made its files' outcome replaces "nothing is saved" (the page stays only for them). */}
       {model.files?.made ? <FilesOutcome model={model.files} actions={actions?.files} /> : <Banner tone="info" title={t('newOrder.nothingSaved')} />}
@@ -261,6 +302,35 @@ function NewOrder({ model, actions }: { model: NewOrderModel; actions?: NewOrder
           </div>
         }
       />
+    </>
+  )
+  if (frame === 'window') {
+    // ⌘↵ confirms from anywhere in the window (not from a dialog above it: the options window, the Discard question).
+    const onKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter') return
+      if ((event.target as HTMLElement | null)?.closest('[role="dialog"]') !== event.currentTarget.closest('[role="dialog"]')) return
+      event.preventDefault()
+      if (!heldText) actions?.onConfirm?.()
+    }
+    return (
+      <>
+        <DetailModal open onClose={() => actions?.onClose?.()} title={title} meta={facts} actions={buttons}>
+          <div className="fw-so" onKeyDown={onKey}>
+            {body}
+          </div>
+        </DetailModal>
+        {ask}
+      </>
+    )
+  }
+  return (
+    <div className="fw-so">
+      <div className="fw-so-band">
+        <DetailHeader backAsChild backLabel={<Link href={listHref}>{t('record.back')}</Link>} title={title} actions={buttons} />
+        <div className="fw-so-meta-row">{facts}</div>
+      </div>
+      {body}
+      {ask}
     </div>
   )
 }

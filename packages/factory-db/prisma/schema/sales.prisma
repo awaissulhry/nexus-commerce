@@ -719,6 +719,10 @@ model SalesOrder {
   // by the key) and the issues raised about it.
   brandProductions    BrandOrderProduction[]
   productionIssues    ProductionIssue[]
+  // B-CP-005 sales-brand-prices.prisma (customer page plan, schema wave "customer page 1/1"): the customer's own prices for
+  // it (per line, or one total for the whole order).
+  /// @not-money the relation to the customer's price rows (the rows carry the grain)
+  brandPrices         OrderBrandPrice[]    @relation("OrderBrandPriceOrder")
 
   @@unique([tenantId, companyId, number])
   // TH-1b (B-TH-104): each customer's own running number, once per company and customer.
@@ -871,6 +875,10 @@ model SalesOrderLine {
   // requests that ask for it.
   portalRequestLines PortalOrderRequestLine[] @relation("PortalOrderRequestLineSource")
   changeRequestLines OrderChangeRequestLine[] @relation("OrderChangeRequestLineOrderLine")
+  // B-CP-005 sales-brand-prices.prisma (customer page plan, schema wave "customer page 1/1"): the customer's own price for
+  // it (one row at most; it holds the line: Restrict, so a split or a removal carries or removes the row first).
+  /// @not-money the relation to the customer's price row (the row carries the grain)
+  brandPrices        OrderBrandPrice[]        @relation("OrderBrandPriceLine")
 
   @@unique([tenantId, orderId, seq])
   // The target of the references from the line's size rows (and the work orders of W1-23).

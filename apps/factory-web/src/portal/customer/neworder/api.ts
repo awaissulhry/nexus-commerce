@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import type { ServerDraftBody } from '../../../lib/request-compose/server-draft' // B-TH-287
+import { PROBLEM_CODES } from '@nexus/factory-domain/sales/portal-ordering/rules' // B-CP-075: the domain's codes, one source
 
 /**
  * New order & reorder in the portal (apps/factory-api modules/sales/portal-ordering, B-W2b-190; SAL-072, SAL-073, SAL-074;
@@ -16,7 +17,9 @@ export const STATUSES = ['DRAFT', 'SENT', 'ACCEPTED', 'REFUSED', 'WITHDRAWN'] as
 export type RequestStatus = (typeof STATUSES)[number]
 export const SOURCES = ['PICKER', 'REORDER', 'UPLOAD'] as const
 export type RequestSource = (typeof SOURCES)[number]
-export const PROBLEM_CODES = ['NO_LINES', 'TOO_MANY_LINES', 'DATE_PAST', 'SHIP_TO_ARCHIVED', 'STYLE_NOT_SOLD', 'COLOUR_DISCONTINUED', 'SIZE_NOT_OFFERED', 'NO_SIZES', 'PRICE_CHANGED'] as const
+// B-CP-075: the problem codes are the domain's own list (one source): a described or made-to-measure line's codes (NO_TOTAL,
+// SIZES_NOT_TOTAL, NO_PEOPLE, MTM_CLOSED, GARMENT_TYPE_GONE) parse too, so a draft with such a line never fails to read.
+export { PROBLEM_CODES }
 export type ProblemCode = (typeof PROBLEM_CODES)[number]
 export const NOTICE_CODES = ['PRICE_CHANGED', 'REVISION_CHANGED', 'SIZES_DROPPED', 'COLOUR_DISCONTINUED', 'STYLE_NOT_SOLD', 'MADE_TO_MEASURE', 'NO_SIZES_LEFT'] as const
 export type NoticeCode = (typeof NOTICE_CODES)[number]
@@ -40,6 +43,21 @@ export const problemSchema = z.object({ code: z.enum(PROBLEM_CODES), lineId: z.s
 export type Problem = z.infer<typeof problemSchema>
 export const noticeSchema = z.object({ code: z.enum(NOTICE_CODES) })
 export type Notice = z.infer<typeof noticeSchema>
+
+// F-CP-151 (B-CP-072): one of a draft's files (its own party's: named, with its version for a removal).
+const draftFileSchema = z.object({
+  id: z.string(),
+  /** The line it is on (null: the draft's own). */
+  lineId: z.string().nullable(),
+  originalName: z.string(),
+  kind: z.string(),
+  contentType: z.string(),
+  sizeBytes: z.number(),
+  status: z.string(),
+  version: z.number(),
+  createdAt: z.string(),
+})
+export type DraftFile = z.infer<typeof draftFileSchema>
 
 export const lineSchema = z.object({
   id: z.string(),
@@ -85,6 +103,20 @@ export const requestSchema = z.object({
   summary: z.object({ lines: z.number(), pieces: z.number(), net: z.string().nullable().optional() }),
   problems: z.array(problemSchema),
   pricesChanged: z.number(),
+  // ---- F-CP-150 (customer page plan C5, D9–D11): what the reader may do beside filling the draft (B-CP-070: a Designer fills,
+  // never sends; a draft is discarded by one who may order or by the colleague who started it) — absent from an older answer: as
+  // before (the Buyer's page). The parts marked "we send it later" and who changed it last come with B-CP-075 (PA2): read as
+  // optional until then (the band says "Saved 10:42" without a name).
+  may: z.object({ send: z.boolean(), withdraw: z.boolean(), discard: z.boolean() }).optional(),
+  laterParts: z.array(z.string()).optional(),
+  lastEditedBy: z.string().nullable().optional(),
+  lastEditedAt: z.string().nullable().optional(),
+  // ---- end F-CP-150
+  // ---- F-CP-151 (B-CP-072): the draft's logos, references and measurement sheets (its own and its lines'), and whether files go
+  // up here now — on live, until the virus scanner runs (D14, O7 not approved), they do not: the page says to e-mail them.
+  files: z.object({ logos: z.array(draftFileSchema), references: z.array(draftFileSchema), sheets: z.array(draftFileSchema) }).optional(),
+  uploads: z.object({ open: z.boolean(), words: z.string().nullable() }).optional(),
+  // ---- end F-CP-151
 })
 export type DraftRequest = z.infer<typeof requestSchema>
 
@@ -130,11 +162,18 @@ export const draftsSchema = z.object({ requests: z.array(draftRowSchema), seesPr
 export const fetchDrafts = async (api: ApiClient, signal?: AbortSignal): Promise<DraftRow[]> =>
   (await api.get('/portal/order-requests', { query: { status: 'DRAFT' }, schema: draftsSchema, signal })).requests
 
+// ---- F-CP-150 (D11): who may send a draft, for the held Send's words (a Designer reads "Only colleagues who may order send it:
+// Marta Bianchi, …"): the organisation's people (portal.colleagues.view), each row's role and status. Nothing else is used.
+export { fetchColleagues } from '../../shared/account/api'
+// ---- end F-CP-150
+
 export interface HeaderBody {
   customerRef?: string | null
   shipToAddressId?: string | null
   requestedDate?: string | null
   note?: string | null
+  /** F-CP-151: the parts the customer sends later (LOGOS, REFERENCES, PEOPLE) — B-CP-075 keeps them (PA2). */
+  laterParts?: string[]
 }
 
 const path = (id: string) => `/portal/order-requests/${encodeURIComponent(id)}`
@@ -178,6 +217,34 @@ export const sentSchema = recordSchema.extend({ sent: z.object({ number: z.strin
 export type SentRecord = z.infer<typeof sentSchema>
 export const sendDraft = (api: ApiClient, id: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<SentRecord> =>
   api.post(`${path(id)}/send`, { body: { version }, schema: sentSchema, idempotencyKey })
+
+// ---- F-CP-151 (customer page plan C5; B-CP-072): a draft's files — POST …/files {part, lineId?, name, type, size, sha256} announces
+// one and says where to PUT its bytes, …/files/:fileId/complete confirms it (held for the virus scan where one runs), DELETE
+// …/files/:fileId?version= takes it out (the FILE's version; the draft as read comes back). A LOGO is filed as artwork, a
+// REFERENCE with no category, a SHEET as a measurement sheet (body data: in the factory only who handles measurements opens it).
+// The body names no party or company: the session's (W-CP-1, W-CP-3).
+export const DRAFT_FILE_PARTS = ['LOGO', 'REFERENCE', 'SHEET'] as const
+export type DraftFilePart = (typeof DRAFT_FILE_PARTS)[number]
+const presignedSchema = z.object({ method: z.enum(['PUT', 'GET']), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: z.string() })
+
+export interface DraftFileAnnounce {
+  part: DraftFilePart
+  lineId?: string | null
+  originalName: string
+  contentType: string
+  sizeBytes: number
+  sha256: string
+}
+
+export const announceDraftFile = (api: ApiClient, id: string, body: DraftFileAnnounce, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(`${path(id)}/files`, { body, schema: z.object({ file: draftFileSchema, upload: presignedSchema }), idempotencyKey })
+
+export const completeDraftFile = (api: ApiClient, id: string, fileId: string, idempotencyKey: string = newIdempotencyKey()): Promise<DraftFile> =>
+  api.post(`${path(id)}/files/${encodeURIComponent(fileId)}/complete`, { body: {}, schema: z.object({ file: draftFileSchema }), idempotencyKey }).then((answer) => answer.file)
+
+export const removeDraftFile = (api: ApiClient, id: string, fileId: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<DraftRecord> =>
+  api.request('DELETE', `${path(id)}/files/${encodeURIComponent(fileId)}`, { query: { version }, schema: recordSchema, idempotencyKey })
+// ---- end F-CP-151
 
 // ── reorder ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export const pastOrderRowSchema = z.object({ id: z.string(), number: z.string(), yourNumber: ownNumber /* B-TH-304 */, customerRef: z.string().nullable(), orderDate: z.string().nullable(), lines: z.number(), pieces: z.number() })

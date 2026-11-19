@@ -119,3 +119,43 @@ button.fw-rp {
 .fw-rp-door:focus-visible {
   text-decoration: underline;
 }
+
+/* F-CP-110: the viewer's styles strip — each line's picture with its style and colour under it (layout only, DS tokens). */
+.fw-rp-styles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-10);
+}
+.fw-rp-styles-h {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+.fw-rp-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-rp-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-4);
+  max-width: 112px;
+}
+.fw-rp-tile.is-shown .fw-rp {
+  outline: 2px solid var(--nds-text-link);
+  outline-offset: 2px;
+}
+.fw-rp-tile-words {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
