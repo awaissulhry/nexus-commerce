@@ -154,8 +154,7 @@ export default defineStage({
         const lines = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: O('newOrder.confirm'), exact: true }) }).last()
         await seen(lines, 30_000)
       })
-      const said = activity.lines.join('
-')
+      const said = activity.lines.join('\n')
       expect(activity.documents, said).toBe(0)
       expect(activity.writes, said).toBe(0)
       expect(new URL(page.url()).pathname, said).toBe(at.pathname)
