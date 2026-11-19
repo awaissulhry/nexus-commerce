@@ -98,6 +98,8 @@ beforeAll(async () => {
   // The system roles as the templates hold them now (parties.hold, parties.privacy, parties.erase for their templates).
   await h.database.withScope({ audience: 'office', tenantId: A.tenant, actorId: newId() }, async (client) => applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId: newId() }))
   office('sales', 'sales')
+  // B-CP-011: the Owner holds the price grain (Sales no longer does): typed lines with a unit price and the credit limit.
+  office('owner', 'owner')
   office('finance', 'finance')
   office('buyer', 'buyer')
   office('warehouse', 'warehouse')
@@ -193,7 +195,8 @@ describe('account on hold (SAL-023)', () => {
   it('warns on the quote; refuses a typed order and a new shipment in words; the order of an accepted quote waits', async () => {
     const { quote } = await ok('sales', 'GET', `/sales/quotes/${q2.id}`)
     expect(quote.issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'ACCOUNT_ON_HOLD', severity: 'WARNING', message: expect.stringContaining('SEED-C1 is on hold (credit: Two invoices overdue by 60 days.)') })]))
-    const preview = await no('sales', 'POST', '/sales/orders/manual/preview', { companyId: A.companyA, partyId: A.p1, customerRef: 'PO-290-1', lines: manualLine() }, 409)
+    // B-CP-011: a typed line with its unit price is the Owner's (Sales sends no price).
+    const preview = await no('owner', 'POST', '/sales/orders/manual/preview', { companyId: A.companyA, partyId: A.p1, customerRef: 'PO-290-1', lines: manualLine() }, 409)
     expect(preview.message).toContain('New orders wait until it is released')
     const shipment = await no('warehouse', 'POST', '/shipping/shipments', { salesOrderId: so1.id, siteId: A.siteA1 }, 409)
     expect(shipment.message).toContain('Shipments wait until it is released')
@@ -225,16 +228,20 @@ describe('account on hold (SAL-023)', () => {
   })
 
   it('a typed order without the PO number is refused at confirm, with it taken', async () => {
-    const preview = await ok('sales', 'POST', '/sales/orders/manual/preview', { companyId: A.companyA, partyId: A.p1, lines: manualLine() })
+    // B-CP-011: the lines carry a unit price: the Owner types them; Sales sending a price is refused (the money wall).
+    const preview = await ok('owner', 'POST', '/sales/orders/manual/preview', { companyId: A.companyA, partyId: A.p1, lines: manualLine() })
     expect(preview.problems.map((problem: Json) => problem.path)).toContain('body/customerRef')
-    const withRef = await ok('sales', 'POST', '/sales/orders/manual/preview', { companyId: A.companyA, partyId: A.p1, customerRef: 'PO-290-2', lines: manualLine() })
+    const withRef = await ok('owner', 'POST', '/sales/orders/manual/preview', { companyId: A.companyA, partyId: A.p1, customerRef: 'PO-290-2', lines: manualLine() })
     expect(withRef.problems.map((problem: Json) => problem.path)).not.toContain('body/customerRef')
+    const priced = await no('sales', 'POST', '/sales/orders/manual/preview', { companyId: A.companyA, partyId: A.p1, customerRef: 'PO-290-2', lines: manualLine() }, 403)
+    expect(priced.message).toBe('This request sends money fields you may not see.')
   })
 })
 
 describe('terms per company (SAL-028, SAL-013)', () => {
   it("reads every company's terms, what is in force and where it comes from", async () => {
-    const { terms } = await ok('sales', 'GET', `/parties/${A.p1}/company-terms`)
+    // B-CP-011: the credit limit is price grain: the Owner reads it; Sales no longer does (below).
+    const { terms } = await ok('owner', 'GET', `/parties/${A.p1}/company-terms`)
     expect(terms.tenantWide).toBe(true)
     const a = terms.companies.find((row: Json) => row.company.id === A.companyA)
     const b = terms.companies.find((row: Json) => row.company.id === A.companyB)
@@ -243,6 +250,9 @@ describe('terms per company (SAL-028, SAL-013)', () => {
     // Without the price grain the limit is left out.
     const blind = await ok('buyer', 'GET', `/parties/${A.p1}/company-terms`)
     expect(blind.terms.companies.find((row: Json) => row.company.id === A.companyA).terms).not.toHaveProperty('creditLimitAmount')
+    const sales = await ok('sales', 'GET', `/parties/${A.p1}/company-terms`)
+    expect(sales.terms.companies.find((row: Json) => row.company.id === A.companyA).terms).toMatchObject({ poNumberRequired: true, depositPct: '30' })
+    expect(sales.terms.companies.find((row: Json) => row.company.id === A.companyA).terms).not.toHaveProperty('creditLimitAmount')
   })
 
   it('makes, changes and ends one company’s terms; a person of B changes only B’s', async () => {

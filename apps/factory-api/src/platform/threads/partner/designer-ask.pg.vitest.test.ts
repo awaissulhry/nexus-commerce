@@ -82,8 +82,9 @@ beforeAll(async () => {
     const permissions = ['threads.read', 'threads.post', 'orders.view', 'files.read', 'parties.view']
     for (const [person, parties] of [[giulia, []], [marta, [world.p1]]] as const) {
       const roleId = newId()
-      await client.user.create({ data: { id: person.id, email: `${person.id.slice(0, 8)}.${NS}@example.com`, displayName: person.name, status: 'ACTIVE', audience: 'OFFICE' }, select: { id: true } })
-      await client.role.create({ data: { id: roleId, key: `t-${NS}-${person.id.slice(0, 8)}`, name: 'T designer (made up)', audience: 'OFFICE', permissions, grains: [] }, select: { id: true } })
+      // A UUIDv7 starts with its clock: two ids made in the same minute share their first characters, so the random tail names them.
+      await client.user.create({ data: { id: person.id, email: `${person.id.slice(-12)}.${NS}@example.com`, displayName: person.name, status: 'ACTIVE', audience: 'OFFICE' }, select: { id: true } })
+      await client.role.create({ data: { id: roleId, key: `t-${NS}-${person.id.slice(-12)}`, name: 'T designer (made up)', audience: 'OFFICE', permissions, grains: [] }, select: { id: true } })
       await client.roleAssignment.create({ data: { id: newId(), userId: person.id, roleId, allCompanies: true, partyIds: [...parties], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
     }
   })

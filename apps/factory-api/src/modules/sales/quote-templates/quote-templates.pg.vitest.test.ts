@@ -47,10 +47,12 @@ const roleOf = (key: string): Permission[] => {
 const grant = (permissions: Permission[], companies: Grant['companies'] = 'all'): Grant => ({ permissions, companies, sites: 'all', parties: 'all' })
 const office = (permissions: Permission[], companies: Grant['companies'] = 'all'): SessionContext => ({ audience: 'office', tenantId: T, actorId: newId(), grants: [grant(permissions, companies)] })
 const SESSIONS: Record<string, SessionContext> = {
+  // B-CP-011 (the money wall): a template's prices are the Owner's to send and read; Sales keeps templates without prices.
+  owner: office(roleOf('owner')),
   sales: office(roleOf('sales')),
   // Sales of company A only: its templates, never one of every company.
   salesA: office(roleOf('sales'), [companyA]),
-  // Sales without the price grain: reads templates, never a line's price.
+  // Sales without the price grain: reads templates, never a line's price. B-CP-011: the same as Sales now.
   noPrice: office(roleOf('sales').filter((name) => name !== 'money.price')),
   planner: office(roleOf('planner')),
   // Reads quotes, keeps no template.
@@ -111,7 +113,8 @@ describe('the templates list and record (SAL-144, SAL-252)', () => {
   })
 
   it('shows a template with its lines; the price only with the price grain', async () => {
-    const { template } = await ok('sales', 'GET', `/sales/quote-templates/${seeded.templateIds.season}`)
+    // B-CP-011: the price reader is the Owner (was Sales); Sales reads the lines without it.
+    const { template } = await ok('owner', 'GET', `/sales/quote-templates/${seeded.templateIds.season}`)
     expect(template).toMatchObject({ validityDays: 45, depositPct: '30', depositKind: 'ACCONTO', incotermPlace: 'Seedville', mayManage: true })
     expect(template.lines.map((line: Json) => [line.seq, line.kind, line.section, line.style.code, line.pieces])).toEqual([
       [10, 'SIZE_GRID', 'Jackets', 'SEED-JKT-01', 8],
@@ -119,8 +122,10 @@ describe('the templates list and record (SAL-144, SAL-252)', () => {
       [30, 'FEE', 'Fees', 'SEED-JKT-05', 0],
     ])
     expect(template.lines[2]).toMatchObject({ feeKind: 'DEVELOPMENT', unitPrice: '500' })
-    const blind = (await ok('noPrice', 'GET', `/sales/quote-templates/${seeded.templateIds.season}`)).template
-    expect('unitPrice' in blind.lines[2]).toBe(false)
+    for (const who of ['noPrice', 'sales']) {
+      const blind = (await ok(who, 'GET', `/sales/quote-templates/${seeded.templateIds.season}`)).template
+      expect('unitPrice' in blind.lines[2], who).toBe(false)
+    }
   })
 })
 
@@ -144,7 +149,9 @@ describe('keeping templates (quotes.templates.manage)', () => {
         { seq: 30, section: 'Fees', kind: 'FEE', feeKind: 'TOOLING', styleId: JKT01, unitPrice: '120', description: 'Made-up embroidery set-up' },
       ],
     }
-    made = (await ok('sales', 'POST', '/sales/quote-templates', body, 201)).template
+    // B-CP-011: a template with prices is the Owner's to make; a Sales worker sending the prices is refused.
+    await no('sales', 'POST', '/sales/quote-templates', body, 403)
+    made = (await ok('owner', 'POST', '/sales/quote-templates', body, 201)).template
     expect(made).toMatchObject({ companyId: companyA, incoterm: 'FCA', acceptanceMode: 'SIGN_AND_PAY', depositPct: '40', status: 'ACTIVE', used: 0, sections: ['Jackets', 'Fees'], version: 1 })
     expect(made.lines.map((line: Json) => [line.seq, line.kind, line.colourwayId, line.pieces])).toEqual([
       [10, 'SIZE_GRID', JKT01_BLK, 3],
@@ -160,7 +167,8 @@ describe('keeping templates (quotes.templates.manage)', () => {
     const base = { companyId: companyA, name: 'Made-up refused' }
     expect((await no('sales', 'POST', '/sales/quote-templates', { ...base, acceptanceMode: 'SIGN_AND_PAY' }, 400)).issues[0]).toMatchObject({ path: 'body/acceptanceMode', message: 'Sign and pay the deposit: the quote must ask a deposit first.' })
     expect((await no('sales', 'POST', '/sales/quote-templates', { ...base, incoterm: 'XYZ', incotermPlace: 'Milano' }, 400)).issues[0].message).toContain('not an Incoterms 2020 rule')
-    expect((await no('sales', 'POST', '/sales/quote-templates', { ...base, lines: [{ seq: 10, kind: 'FEE', styleId: JKT01, unitPrice: '5' }] }, 400)).issues[0].message).toContain('A fee line says what it charges for')
+    // B-CP-011: a fee's price is sent by the Owner (Sales sends none).
+    expect((await no('owner', 'POST', '/sales/quote-templates', { ...base, lines: [{ seq: 10, kind: 'FEE', styleId: JKT01, unitPrice: '5' }] }, 400)).issues[0].message).toContain('A fee line says what it charges for')
     expect((await no('sales', 'POST', '/sales/quote-templates', { ...base, lines: [{ seq: 10, styleId: JKT01, colourwayId: JKT01_BLK, sizes: { '60': 1 } }] }, 400)).issues[0].message).toBe('SEED-JKT-01 has no size 60.')
     // A template of every company needs a grant over every company; the planner keeps none.
     await no('salesA', 'POST', '/sales/quote-templates', { companyId: null, name: 'Made-up for all' }, 403)
@@ -171,7 +179,8 @@ describe('keeping templates (quotes.templates.manage)', () => {
     let template = (await ok('sales', 'PATCH', `/sales/quote-templates/${made.id}`, { version: made.version, name: 'Made-up team kit 2027', validityDays: 25, incoterm: null })).template
     expect(template).toMatchObject({ name: 'Made-up team kit 2027', validityDays: 25, incoterm: null, incotermPlace: null, version: 2 })
     expect((await no('sales', 'PATCH', `/sales/quote-templates/${made.id}`, { version: made.version, validityDays: 30 }, 409)).code).toBe('conflict')
-    template = (await ok('sales', 'PUT', `/sales/quote-templates/${made.id}/lines`, { version: template.version, lines: [made.lines[0], { seq: 20, section: 'Jackets', styleId: JKT01, colourwayId: null, sizes: null }].map(({ id: _id, style: _style, colourway: _colourway, pieces: _pieces, kind, feeKind, ...line }: Json) => ({ ...line, kind, feeKind })) })).template
+    // B-CP-011: the lines carry line 10's price: the Owner replaces them (was Sales).
+    template = (await ok('owner', 'PUT', `/sales/quote-templates/${made.id}/lines`, { version: template.version, lines: [made.lines[0], { seq: 20, section: 'Jackets', styleId: JKT01, colourwayId: null, sizes: null }].map(({ id: _id, style: _style, colourway: _colourway, pieces: _pieces, kind, feeKind, ...line }: Json) => ({ ...line, kind, feeKind })) })).template
     expect(template.lines.map((line: Json) => line.seq)).toEqual([10, 20])
     template = (await ok('sales', 'POST', `/sales/quote-templates/${made.id}/archive`, { version: template.version })).template
     expect(template.status).toBe('ARCHIVED')
@@ -202,7 +211,10 @@ describe('a quote started from a template', () => {
     expect((await ok('sales', 'GET', `/sales/quote-templates/${season}`)).template.used).toBe(template.used + 1)
     // A colourway and pieces picked for the open line: it becomes a line too (the template's own price when it has one).
     const picked = await ok('sales', 'POST', `/sales/quote-templates/${made.id}/quote`, { companyId: companyA, partyId: P1, lines: [{ templateLineId: made.lines[1].id, colourwayId: JKT01_RED, sizes: { '54': 2 } }] }, 201)
-    expect(picked.quote.lines.map((line: Json) => [line.colourwayId, line.quantity, line.unitPrice])).toEqual([[JKT01_BLK, 3, '410'], [JKT01_RED, 2, expect.any(String)]])
+    // B-CP-011: the Sales worker's quote takes the template's prices unseen; the Owner reads them.
+    expect(picked.quote.lines.map((line: Json) => [line.colourwayId, line.quantity, 'unitPrice' in line])).toEqual([[JKT01_BLK, 3, false], [JKT01_RED, 2, false]])
+    const pickedLines = (await ok('owner', 'GET', `/sales/quotes/${picked.quote.id}`)).quote.lines
+    expect(pickedLines.map((line: Json) => [line.colourwayId, line.quantity, line.unitPrice])).toEqual([[JKT01_BLK, 3, '410'], [JKT01_RED, 2, expect.any(String)]])
     expect(picked.leftOut).toEqual([])
   })
 
@@ -228,7 +240,10 @@ describe('a quote saved as a template', () => {
       ['FEE', 'Fees', 'DEVELOPMENT'],
     ])
     // SEED-Q-0003's jacket was priced by hand (no list price): its price stays; the fee keeps its own.
-    expect(template.lines.map((line: Json) => [line.sizes, line.unitPrice])).toEqual([
+    // B-CP-011: Sales saves it without seeing the prices; the Owner reads them.
+    for (const line of template.lines) expect(line).not.toHaveProperty('unitPrice')
+    const kept = (await ok('owner', 'GET', `/sales/quote-templates/${template.id}`)).template
+    expect(kept.lines.map((line: Json) => [line.sizes, line.unitPrice])).toEqual([
       [{ '50': 2, '52': 4, '54': 2 }, '470'],
       [null, '500'],
     ])

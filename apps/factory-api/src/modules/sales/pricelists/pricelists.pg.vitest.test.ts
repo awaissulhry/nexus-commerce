@@ -57,7 +57,10 @@ const fromTemplate = (key: string, companies: ScopeSet = 'all'): Person => {
   return { actorId: newId(), permissions: [...role.permissions, ...grainsOf(role.grains)], companies }
 }
 const PEOPLE: Record<string, Person> = {
-  // Sales keeps the price lists and the customers' terms and picks from the terms library; it sees prices and margin %.
+  // B-CP-011 (the money wall): the Owner keeps the price lists and gives them to customers; he sees every money figure.
+  owner: fromTemplate('owner'),
+  // Sales keeps the customers' terms and picks from the terms library. B-CP-011: it no longer keeps price lists
+  // (no pricelists.manage) and sees no price nor margin % (was: keeps the lists, sees prices and margin %).
   sales: fromTemplate('sales'),
   // Finance keeps the terms library and sees every grain.
   finance: fromTemplate('finance'),
@@ -66,7 +69,7 @@ const PEOPLE: Record<string, Person> = {
   readOnly: fromTemplate('read_only'),
   // Sales over company B only.
   salesB: fromTemplate('sales', [companyB]),
-  // A copy of the sales role without the price grain (a custom role may be).
+  // A copy of the sales role without the price grain (a custom role may be). B-CP-011: the same as Sales now.
   salesNoPrice: { ...fromTemplate('sales'), permissions: fromTemplate('sales').permissions.filter((name) => name !== 'money.price' && name !== 'money.margin') },
 }
 const SESSIONS: Record<string, SessionContext> = Object.fromEntries(
@@ -168,65 +171,77 @@ describe('the payment terms library (FIN-075)', () => {
   })
 })
 
+// B-CP-011 (the money wall): every price list is kept by the Owner here (was Sales: it no longer holds pricelists.manage).
 describe('price lists (SAL-165): a base list, a customer list over it, dated versions', () => {
-  it('sales makes the base list with its first draft version, prices it and activates it', async () => {
-    lists.BASE = (await ok('sales', 'POST', '/sales/price-lists', { companyId: companyA, code: 'pl-base', name: 'Listino base', kind: 'BASE', validFrom: TODAY }, 201)).list
+  it('the owner makes the base list with its first draft version, prices it and activates it', async () => {
+    // B-CP-011: a Sales worker makes no price list any more (pricelists.manage is the price holders').
+    await refused('sales', 'POST', '/sales/price-lists', { companyId: companyA, code: 'pl-sales', name: 'Listino di Sales', kind: 'BASE', validFrom: TODAY }, 403)
+    lists.BASE = (await ok('owner', 'POST', '/sales/price-lists', { companyId: companyA, code: 'pl-base', name: 'Listino base', kind: 'BASE', validFrom: TODAY }, 201)).list
     expect(lists.BASE).toMatchObject({ code: 'PL-BASE', kind: 'BASE', currency: 'EUR', state: 'DRAFT', baseList: null, customers: [], versions: [{ revision: 1, status: 'DRAFT', validFrom: TODAY, validTo: null, entries: 0 }] })
     const v1 = lists.BASE.versions[0]
-    const priced = await ok('sales', 'PUT', `/sales/price-lists/${lists.BASE.id}/versions/${v1.id}/entries`, { version: v1.version, entries: [{ styleId: jacket, colourwayId: null, unitPrice: '450' }] })
-    // Sales sees the margin % at today's standard cost (290.439 at size 52), never the cost (design question S2, answer a).
-    expect(priced.entries).toEqual([{ id: expect.any(String), styleId: jacket, style: { code: 'SEED-JKT-01', name: 'Seed leather jacket', status: expect.any(String) }, colourwayId: null, colourway: null, unitPrice: '450', marginPct: '35.458', belowFloor: false, validFrom: null, validTo: null, version: 1 }])
+    const priced = await ok('owner', 'PUT', `/sales/price-lists/${lists.BASE.id}/versions/${v1.id}/entries`, { version: v1.version, entries: [{ styleId: jacket, colourwayId: null, unitPrice: '450' }] })
+    // B-CP-011: the Owner sees the margin % at today's standard cost (290.439 at size 52) and the cost (was: Sales saw the
+    // margin %, never the cost; design question S2 answer a, reversed by Owner O1).
+    expect(priced.entries).toEqual([{ id: expect.any(String), styleId: jacket, style: { code: 'SEED-JKT-01', name: 'Seed leather jacket', status: expect.any(String) }, colourwayId: null, colourway: null, unitPrice: '450', standardCost: '290.439', marginPct: '35.458', belowFloor: false, validFrom: null, validTo: null, version: 1 }])
     const read = await ok('finance', 'GET', `/sales/price-lists/${lists.BASE.id}/versions/${v1.id}`)
     expect(read.entries[0]).toMatchObject({ unitPrice: '450', standardCost: '290.439', marginPct: '35.458' })
     // Price lists are not the buyer's; a copy of the sales role without the price grain reads no price.
     await refused('buyer', 'GET', `/sales/price-lists/${lists.BASE.id}/versions/${v1.id}`, undefined, 403)
     expect(keysOf((await ok('salesNoPrice', 'GET', `/sales/price-lists/${lists.BASE.id}/versions/${v1.id}`)).entries)).not.toContain('unitPrice')
-    const activated = await ok('sales', 'POST', `/sales/price-lists/${lists.BASE.id}/versions/${v1.id}/activate`, { version: priced.version.version })
-    expect(activated).toMatchObject({ version: { revision: 1, status: 'ACTIVE', validFrom: TODAY, validTo: null, activatedById: PEOPLE.sales!.actorId }, ended: null })
+    // B-CP-011: Sales itself reads which styles the list holds, never a price or a margin, and sends no price.
+    const bySales = keysOf((await ok('sales', 'GET', `/sales/price-lists/${lists.BASE.id}/versions/${v1.id}`)).entries)
+    for (const field of ['unitPrice', 'standardCost', 'marginPct', 'belowFloor']) expect(bySales).not.toContain(field)
+    await refused('sales', 'PUT', `/sales/price-lists/${lists.BASE.id}/versions/${v1.id}/entries`, { version: priced.version.version, entries: [{ styleId: jacket, colourwayId: null, unitPrice: '1' }] }, 403)
+    const activated = await ok('owner', 'POST', `/sales/price-lists/${lists.BASE.id}/versions/${v1.id}/activate`, { version: priced.version.version })
+    expect(activated).toMatchObject({ version: { revision: 1, status: 'ACTIVE', validFrom: TODAY, validTo: null, activatedById: PEOPLE.owner!.actorId }, ended: null })
     // Its prices are fixed now.
-    expect((await refused('sales', 'PUT', `/sales/price-lists/${lists.BASE.id}/versions/${v1.id}/entries`, { version: activated.version.version, entries: [{ styleId: jacket, colourwayId: null, unitPrice: '460' }] }, 409)).code).toBe('invalid_state')
+    expect((await refused('owner', 'PUT', `/sales/price-lists/${lists.BASE.id}/versions/${v1.id}/entries`, { version: activated.version.version, entries: [{ styleId: jacket, colourwayId: null, unitPrice: '460' }] }, 409)).code).toBe('invalid_state')
     expect(await eventsOf(lists.BASE.id)).toEqual(['price_list.changed', 'price_list.version_changed', 'price_list.version_changed', 'price_list.version_activated'])
   })
 
   it('keeps one base list per company and currency, and refuses what cannot go live', async () => {
-    expect((await refused('sales', 'POST', '/sales/price-lists', { companyId: companyA, code: 'PL-BASE-2', name: 'Again', kind: 'BASE' }, 409)).message).toMatch(/PL-BASE is the base list of this company in EUR already/)
-    const group = (await ok('sales', 'POST', '/sales/price-lists', { companyId: companyA, code: 'PL-GRP', name: 'Gruppo rivenditori', kind: 'GROUP' }, 201)).list
+    expect((await refused('owner', 'POST', '/sales/price-lists', { companyId: companyA, code: 'PL-BASE-2', name: 'Again', kind: 'BASE' }, 409)).message).toMatch(/PL-BASE is the base list of this company in EUR already/)
+    const group = (await ok('owner', 'POST', '/sales/price-lists', { companyId: companyA, code: 'PL-GRP', name: 'Gruppo rivenditori', kind: 'GROUP' }, 201)).list
     const draft = group.versions[0]
-    expect((await refused('sales', 'POST', `/sales/price-lists/${group.id}/versions/${draft.id}/activate`, { version: draft.version }, 409)).message).toBe('Version 1 has no prices yet: add styles before activating it.')
-    const priced = await ok('sales', 'PUT', `/sales/price-lists/${group.id}/versions/${draft.id}/entries`, { version: draft.version, entries: [{ styleId: jacket, colourwayId: BLK, unitPrice: '400' }] })
-    const past = await refused('sales', 'POST', `/sales/price-lists/${group.id}/versions/${draft.id}/activate`, { version: priced.version.version, validFrom: YESTERDAY }, 400)
+    expect((await refused('owner', 'POST', `/sales/price-lists/${group.id}/versions/${draft.id}/activate`, { version: draft.version }, 409)).message).toBe('Version 1 has no prices yet: add styles before activating it.')
+    const priced = await ok('owner', 'PUT', `/sales/price-lists/${group.id}/versions/${draft.id}/entries`, { version: draft.version, entries: [{ styleId: jacket, colourwayId: BLK, unitPrice: '400' }] })
+    const past = await refused('owner', 'POST', `/sales/price-lists/${group.id}/versions/${draft.id}/activate`, { version: priced.version.version, validFrom: YESTERDAY }, 400)
     expect(past.issues).toEqual([{ path: 'body/validFrom', message: `A version is activated from today (${TODAY}) or a later day, never back in time: quotes already priced keep their version.` }])
     // A row without its price is refused, never taken as a removal; a stale version is a conflict.
-    await refused('sales', 'PUT', `/sales/price-lists/${group.id}/versions/${draft.id}/entries`, { version: priced.version.version, entries: [{ styleId: jacket, colourwayId: BLK }] }, 400)
-    await refused('sales', 'PUT', `/sales/price-lists/${group.id}/versions/${draft.id}/entries`, { version: 1, entries: [{ styleId: jacket, colourwayId: BLK, unitPrice: '1' }] }, 409)
+    await refused('owner', 'PUT', `/sales/price-lists/${group.id}/versions/${draft.id}/entries`, { version: priced.version.version, entries: [{ styleId: jacket, colourwayId: BLK }] }, 400)
+    await refused('owner', 'PUT', `/sales/price-lists/${group.id}/versions/${draft.id}/entries`, { version: 1, entries: [{ styleId: jacket, colourwayId: BLK, unitPrice: '1' }] }, 409)
     lists.GROUP = group
   })
 
   it("makes the customer's list over the base list, priced only in red", async () => {
-    lists.P1 = (await ok('sales', 'POST', '/sales/price-lists', { companyId: companyA, code: 'PL-P1', name: 'Listino Cliente Uno', kind: 'CUSTOMER', baseListId: lists.BASE.id }, 201)).list
+    lists.P1 = (await ok('owner', 'POST', '/sales/price-lists', { companyId: companyA, code: 'PL-P1', name: 'Listino Cliente Uno', kind: 'CUSTOMER', baseListId: lists.BASE.id }, 201)).list
     const v1 = lists.P1.versions[0]
-    await ok('sales', 'PUT', `/sales/price-lists/${lists.P1.id}/versions/${v1.id}/entries`, { version: v1.version, entries: [{ styleId: jacket, colourwayId: RED, unitPrice: '430' }] })
+    await ok('owner', 'PUT', `/sales/price-lists/${lists.P1.id}/versions/${v1.id}/entries`, { version: v1.version, entries: [{ styleId: jacket, colourwayId: RED, unitPrice: '430' }] })
     // Active since the start of the year (written as the database would after an activation then; the API activates
     // from today on), so the next version can start today and end this one yesterday.
-    await admin(`UPDATE "PriceListVersion" SET status = 'ACTIVE', "validFrom" = $2, "activatedAt" = now(), "activatedById" = $3, version = version + 1 WHERE id = $1`, [v1.id, `${YEAR}-01-01`, PEOPLE.sales!.actorId])
-    lists.P1 = (await ok('sales', 'GET', `/sales/price-lists/${lists.P1.id}`)).list
+    await admin(`UPDATE "PriceListVersion" SET status = 'ACTIVE', "validFrom" = $2, "activatedAt" = now(), "activatedById" = $3, version = version + 1 WHERE id = $1`, [v1.id, `${YEAR}-01-01`, PEOPLE.owner!.actorId])
+    lists.P1 = (await ok('owner', 'GET', `/sales/price-lists/${lists.P1.id}`)).list
     expect(lists.P1).toMatchObject({ state: 'IN_FORCE', baseList: { id: lists.BASE.id, code: 'PL-BASE' }, shownVersion: { revision: 1, status: 'ACTIVE' }, stylesPriced: 1 })
     expect((await ok('sales', 'GET', `/sales/price-lists/${lists.BASE.id}`)).list.fallbackOf).toEqual([{ id: lists.P1.id, code: 'PL-P1', name: 'Listino Cliente Uno', kind: 'CUSTOMER', status: 'ACTIVE' }])
     const page = await ok('readOnly', 'GET', '/sales/price-lists')
     expect(page.lists.map((row: Json) => [row.code, row.state])).toEqual([['PL-BASE', 'IN_FORCE'], ['PL-GRP', 'DRAFT'], ['PL-P1', 'IN_FORCE']])
     expect(page.tiles).toEqual({ inForce: 2, startingIn30Days: 0, endingIn30Days: 0 })
-    expect((await ok('sales', 'GET', '/sales/price-lists?state=DRAFT')).lists.map((row: Json) => row.code)).toEqual(['PL-GRP'])
+    expect((await ok('sales', 'GET', '/sales/price-lists?state=DRAFT')).lists.map((row: Json) => row.code)).toEqual(['PL-GRP']) // B-CP-011: Sales still reads the lists
     // A list never falls back to one that falls back to it.
-    const base = (await ok('sales', 'GET', `/sales/price-lists/${lists.BASE.id}`)).list
-    expect((await refused('sales', 'PATCH', `/sales/price-lists/${lists.BASE.id}`, { version: base.version, baseListId: lists.P1.id }, 400)).message).toBe('PL-P1 falls back to this list already: no circle.')
+    const base = (await ok('owner', 'GET', `/sales/price-lists/${lists.BASE.id}`)).list
+    expect((await refused('owner', 'PATCH', `/sales/price-lists/${lists.BASE.id}`, { version: base.version, baseListId: lists.P1.id }, 400)).message).toBe('PL-P1 falls back to this list already: no circle.')
   })
 })
 
 describe("the customer's commercial terms (SAL-012)", () => {
-  it('sales gives P1 its terms, list, invoicing, Incoterms and minimum order in one change', async () => {
-    const before = (await ok('sales', 'GET', `/parties/${P1}/commercial-terms`)).terms
+  // B-CP-011: the list and the minimum order are the Owner's to give (was Sales'); Sales is refused both.
+  it('the owner gives P1 its terms, list, invoicing, Incoterms and minimum order in one change', async () => {
+    const before = (await ok('owner', 'GET', `/parties/${P1}/commercial-terms`)).terms
     expect(before).toMatchObject({ paymentTermsId: null, priceListId: null, invoiceTiming: 'PER_SHIPMENT', invoiceTypePreset: 'TD01', priceChain: [] })
-    const after = (await ok('sales', 'PATCH', `/parties/${P1}/commercial-terms`, { version: before.version, paymentTermsId: terms.DEP10.id, priceListId: lists.P1.id, invoiceTiming: 'MONTHLY', incoterm: 'DAP', preferredCarrierCode: 'brt', minimumOrderAmount: 100_000 })).terms
+    const notSales = await refused('sales', 'PATCH', `/parties/${P1}/commercial-terms`, { version: before.version, priceListId: lists.P1.id }, 400)
+    expect(notSales.issues).toEqual([{ path: 'body/priceListId', message: 'You may not give customers PL-P1: that needs the right to keep price lists.' }])
+    await refused('sales', 'PATCH', `/parties/${P1}/commercial-terms`, { version: before.version, minimumOrderAmount: 100_000 }, 403)
+    const after = (await ok('owner', 'PATCH', `/parties/${P1}/commercial-terms`, { version: before.version, paymentTermsId: terms.DEP10.id, priceListId: lists.P1.id, invoiceTiming: 'MONTHLY', incoterm: 'DAP', preferredCarrierCode: 'brt', minimumOrderAmount: 100_000 })).terms
     expect(after).toMatchObject({
       paymentTermsId: terms.DEP10.id,
       paymentTerms: { code: 'DEP10', deposit: { sharePct: '30', days: 10 } },
@@ -245,6 +260,10 @@ describe("the customer's commercial terms (SAL-012)", () => {
     expect(await eventsOf(P1)).toContain('party.updated')
     const [audit] = await admin(`SELECT action, after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'parties.setCommercialTerms'`, [P1])
     expect(audit).toMatchObject({ after: { paymentTermsId: terms.DEP10.id, listId: lists.P1.id, invoiceTiming: 'MONTHLY', incoterm: 'DAP' } })
+    // B-CP-011: Sales reads the terms and the list given, never the minimum order (a price).
+    const seen = (await ok('sales', 'GET', `/parties/${P1}/commercial-terms`)).terms
+    expect(seen).toMatchObject({ paymentTermsId: terms.DEP10.id, priceListId: lists.P1.id, incoterm: 'DAP' })
+    expect(keysOf(seen)).not.toContain('minimumOrderAmount')
     // The library and the lists count their customers now.
     expect((await ok('finance', 'GET', `/sales/payment-terms/${terms.DEP10.id}`)).terms.customers).toBe(1)
     expect((await ok('sales', 'GET', `/sales/price-lists/${lists.P1.id}`)).list.customers).toMatchObject([{ id: P1, code: 'SEED-C1' }])
@@ -257,8 +276,9 @@ describe("the customer's commercial terms (SAL-012)", () => {
     // The minimum order is a price: a buyer can neither send nor see it.
     await refused('buyer', 'PATCH', `/parties/${P1}/commercial-terms`, { version: current.version, minimumOrderAmount: 1 }, 403)
     expect(keysOf((await ok('buyer', 'GET', `/parties/${P1}/commercial-terms`)).terms)).not.toContain('minimumOrderAmount')
-    const usd = (await ok('sales', 'POST', '/sales/price-lists', { companyId: companyA, code: 'PL-USD', name: 'Export', kind: 'CONTRACT', currency: 'USD' }, 201)).list
-    expect((await refused('sales', 'PATCH', `/parties/${P1}/commercial-terms`, { version: current.version, priceListId: usd.id }, 400)).message).toBe("PL-USD is in USD; SEED-C1's documents are in EUR.")
+    // B-CP-011: the price list and its giving are the Owner's (was Sales').
+    const usd = (await ok('owner', 'POST', '/sales/price-lists', { companyId: companyA, code: 'PL-USD', name: 'Export', kind: 'CONTRACT', currency: 'USD' }, 201)).list
+    expect((await refused('owner', 'PATCH', `/parties/${P1}/commercial-terms`, { version: current.version, priceListId: usd.id }, 400)).message).toBe("PL-USD is in USD; SEED-C1's documents are in EUR.")
     const supplier = (await ok('sales', 'GET', `/parties/${P2}/commercial-terms`)).terms
     expect((await refused('sales', 'PATCH', `/parties/${P2}/commercial-terms`, { version: supplier.version, incoterm: 'EXW' }, 409)).message).toMatch(/is not a customer: commercial terms are a customer's/)
     await refused('sales', 'PATCH', `/parties/${P1}/commercial-terms`, { version: current.version, incoterm: 'XXX' }, 400)
@@ -267,10 +287,12 @@ describe("the customer's commercial terms (SAL-012)", () => {
 
   it('keeps what customers use: terms and lists are not archived under them', async () => {
     expect((await refused('finance', 'POST', `/sales/payment-terms/${terms.DEP10.id}/archive`, { version: terms.DEP10.version }, 409)).message).toBe('1 customer has DEP10 as its default payment terms: give it other terms first.')
+    // B-CP-011: archiving a list is the Owner's (pricelists.manage); a Sales worker is refused.
     const p1 = (await ok('sales', 'GET', `/sales/price-lists/${lists.P1.id}`)).list
-    expect((await refused('sales', 'POST', `/sales/price-lists/${lists.P1.id}/archive`, { version: p1.version }, 409)).message).toBe('1 customer is priced from PL-P1: give it another list first.')
+    await refused('sales', 'POST', `/sales/price-lists/${lists.P1.id}/archive`, { version: p1.version }, 403)
+    expect((await refused('owner', 'POST', `/sales/price-lists/${lists.P1.id}/archive`, { version: p1.version }, 409)).message).toBe('1 customer is priced from PL-P1: give it another list first.')
     const base = (await ok('sales', 'GET', `/sales/price-lists/${lists.BASE.id}`)).list
-    expect((await refused('sales', 'POST', `/sales/price-lists/${lists.BASE.id}/archive`, { version: base.version }, 409)).message).toBe('PL-P1 falls back to PL-BASE: change it first.')
+    expect((await refused('owner', 'POST', `/sales/price-lists/${lists.BASE.id}/archive`, { version: base.version }, 409)).message).toBe('PL-P1 falls back to PL-BASE: change it first.')
     // Archived terms are never given: BB30FM archived, then refused for a customer.
     const archived = (await ok('finance', 'POST', `/sales/payment-terms/${terms.BB30FM.id}/archive`, { version: terms.BB30FM.version })).terms
     expect(archived.status).toBe('ARCHIVED')
@@ -289,8 +311,9 @@ const addLine = async (session: string, body: Json) => {
 const grid = (rows: [string, number][]) => rows.map(([size, quantity]) => ({ size, quantity }))
 
 describe("a quote takes the customer's terms and reads its list prices", () => {
+  // B-CP-011: the quotes whose prices are read are the Owner's; a Sales worker's quote takes the list's prices unseen.
   it("is made with P1's terms (printed in its language), the deposit they ask and its list version", async () => {
-    quote = (await ok('sales', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1 }, 201)).quote
+    quote = (await ok('owner', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1 }, 201)).quote
     const p1v1 = lists.P1.versions[0]
     expect(quote.current).toMatchObject({
       paymentTermsId: terms.DEP10.id,
@@ -301,58 +324,72 @@ describe("a quote takes the customer's terms and reads its list prices", () => {
       // Nothing quoted yet: 1,000.00 short of P1's minimum order.
       belowMinimum: { minimum: 100_000, short: 100_000 },
     })
-    const english = (await ok('sales', 'PATCH', quoteUrl(quote.id), { version: quote.version, language: 'en' })).quote
+    // B-CP-011: Sales reads the same terms and list version, not what is short of the minimum (a price).
+    const bySales = (await ok('sales', 'GET', quoteUrl(quote.id))).quote.current
+    expect(bySales).toMatchObject({ paymentTermsId: terms.DEP10.id, depositPct: '30', priceList: { code: 'PL-P1', revision: 1 } })
+    expect(bySales).not.toHaveProperty('belowMinimum')
+    const english = (await ok('owner', 'PATCH', quoteUrl(quote.id), { version: quote.version, language: 'en' })).quote
     expect(english.current).toMatchObject({ language: 'en', paymentTerms: '30% with the order, the balance before shipping' })
-    quote = (await ok('sales', 'PATCH', quoteUrl(quote.id), { version: english.version, language: 'it' })).quote
+    quote = (await ok('owner', 'PATCH', quoteUrl(quote.id), { version: english.version, language: 'it' })).quote
   })
 
   it("prices a line from the list: the colourway's own price, else the style's in the list it falls back to", async () => {
-    const red = await addLine('sales', { styleId: jacket, colourwayId: RED, sizes: grid([['50', 1], ['52', 3], ['54', 2]]) })
+    const red = await addLine('owner', { styleId: jacket, colourwayId: RED, sizes: grid([['50', 1], ['52', 3], ['54', 2]]) })
     expect(red).toMatchObject({ listUnitPrice: '430', unitPrice: '430', netAmount: 6 * 43_000 })
-    const black = await addLine('sales', { styleId: jacket, colourwayId: BLK, sizes: grid([['52', 2]]) })
+    const black = await addLine('owner', { styleId: jacket, colourwayId: BLK, sizes: grid([['52', 2]]) })
     expect(black).toMatchObject({ listUnitPrice: '450', unitPrice: '450', netAmount: 90_000 })
-    const discounted = await addLine('sales', { styleId: jacket, colourwayId: BLK, sizes: grid([['54', 1]]), discountPct: '10' })
+    const discounted = await addLine('owner', { styleId: jacket, colourwayId: BLK, sizes: grid([['54', 1]]), discountPct: '10' })
     expect(discounted).toMatchObject({ listUnitPrice: '450', unitPrice: '405', discountPct: '10' })
     // A hand price keeps the list price beside it (the discount rule reads it).
-    const byHand = await addLine('sales', { styleId: jacket, colourwayId: RED, sizes: grid([['50', 1]]), unitPrice: '400' })
+    const byHand = await addLine('owner', { styleId: jacket, colourwayId: RED, sizes: grid([['50', 1]]), unitPrice: '400' })
     expect(byHand).toMatchObject({ listUnitPrice: '430', unitPrice: '400' })
     expect(quote.current.belowMinimum).toBeNull()
     // A line at its list price that changes colour moves to the new colour's list price.
-    const moved = (await ok('sales', 'PATCH', `${quoteUrl(quote.id)}/lines/${red.id}`, { version: quote.version, colourwayId: BLK })).quote
+    const moved = (await ok('owner', 'PATCH', `${quoteUrl(quote.id)}/lines/${red.id}`, { version: quote.version, colourwayId: BLK })).quote
     quote = moved
     expect(moved.lines.find((line: Json) => line.id === red.id)).toMatchObject({ listUnitPrice: '450', unitPrice: '450' })
+    // B-CP-011: a Sales worker reads the lines without a price and sends neither a hand price nor a discount (the price grain).
+    for (const line of (await ok('sales', 'GET', quoteUrl(quote.id))).quote.lines) for (const field of ['listUnitPrice', 'unitPrice', 'netAmount', 'discountPct']) expect(line).not.toHaveProperty(field)
+    await refused('sales', 'POST', `${quoteUrl(quote.id)}/lines`, { version: quote.version, styleId: jacket, colourwayId: RED, sizes: grid([['50', 1]]), unitPrice: '400' }, 403)
+    await refused('sales', 'POST', `${quoteUrl(quote.id)}/lines`, { version: quote.version, styleId: jacket, colourwayId: BLK, sizes: grid([['54', 1]]), discountPct: '10' }, 403)
   })
 
   it('keeps its list version when the next one goes live; a new quote takes the new one', async () => {
-    const draft = (await ok('sales', 'POST', `/sales/price-lists/${lists.P1.id}/versions`, { note: 'Next season' }, 201)).version
+    // B-CP-011: the next version is the Owner's (was Sales').
+    const draft = (await ok('owner', 'POST', `/sales/price-lists/${lists.P1.id}/versions`, { note: 'Next season' }, 201)).version
     expect(draft).toMatchObject({ revision: 2, status: 'DRAFT', entries: 1 })
-    const raised = await ok('sales', 'PUT', `/sales/price-lists/${lists.P1.id}/versions/${draft.id}/entries`, { version: draft.version, entries: [{ styleId: jacket, colourwayId: RED, unitPrice: '445' }, { styleId: jacket, colourwayId: null, unitPrice: '440' }] })
-    const compared = await ok('sales', 'GET', `/sales/price-lists/${lists.P1.id}/versions/${draft.id}/compare?with=${lists.P1.versions[0].id}`)
+    const raised = await ok('owner', 'PUT', `/sales/price-lists/${lists.P1.id}/versions/${draft.id}/entries`, { version: draft.version, entries: [{ styleId: jacket, colourwayId: RED, unitPrice: '445' }, { styleId: jacket, colourwayId: null, unitPrice: '440' }] })
+    const compared = await ok('owner', 'GET', `/sales/price-lists/${lists.P1.id}/versions/${draft.id}/compare?with=${lists.P1.versions[0].id}`)
     expect(compared).toMatchObject({ changed: 2, rows: [{ colourwayId: null, before: null, after: '440', change: 'ADDED' }, { colourwayId: RED, before: '430', after: '445', change: 'CHANGED', changePct: '3.49' }] })
     // One draft at a time.
-    expect((await refused('sales', 'POST', `/sales/price-lists/${lists.P1.id}/versions`, {}, 409)).message).toBe('Version 2 is a draft already: edit its prices, or delete it first.')
-    const live = await ok('sales', 'POST', `/sales/price-lists/${lists.P1.id}/versions/${draft.id}/activate`, { version: raised.version.version, validFrom: TODAY })
+    expect((await refused('owner', 'POST', `/sales/price-lists/${lists.P1.id}/versions`, {}, 409)).message).toBe('Version 2 is a draft already: edit its prices, or delete it first.')
+    const live = await ok('owner', 'POST', `/sales/price-lists/${lists.P1.id}/versions/${draft.id}/activate`, { version: raised.version.version, validFrom: TODAY })
     expect(live).toMatchObject({ version: { revision: 2, status: 'ACTIVE', validFrom: TODAY, validTo: null }, ended: { revision: 1, validTo: YESTERDAY } })
-    const record = (await ok('sales', 'GET', `/sales/price-lists/${lists.P1.id}`)).list
+    const record = (await ok('owner', 'GET', `/sales/price-lists/${lists.P1.id}`)).list
     expect(record.versions.map((version: Json) => [version.revision, version.status, version.validFrom, version.validTo])).toEqual([[2, 'ACTIVE', TODAY, null], [1, 'ACTIVE', `${YEAR}-01-01`, YESTERDAY]])
     // An active version's start is fixed; its end never reaches into the next version.
-    await refused('sales', 'PATCH', `/sales/price-lists/${lists.P1.id}/versions/${record.versions[1].id}`, { version: record.versions[1].version, validFrom: `${YEAR}-02-01` }, 409)
+    await refused('owner', 'PATCH', `/sales/price-lists/${lists.P1.id}/versions/${record.versions[1].id}`, { version: record.versions[1].version, validFrom: `${YEAR}-02-01` }, 409)
     // The open quote keeps version 1: red at 430.
-    const kept = await addLine('sales', { styleId: jacket, colourwayId: RED, sizes: grid([['52', 1]]) })
+    const kept = await addLine('owner', { styleId: jacket, colourwayId: RED, sizes: grid([['52', 1]]) })
     expect(kept).toMatchObject({ listUnitPrice: '430' })
     expect(quote.current.priceList).toMatchObject({ revision: 1 })
+    // B-CP-011: a new quote by a Sales worker takes the new version; its lines take the list's prices unseen (the Owner reads them).
     const fresh = (await ok('sales', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1 }, 201)).quote
     expect(fresh.current.priceList).toMatchObject({ revision: 2 })
     quote = fresh
-    expect(await addLine('sales', { styleId: jacket, colourwayId: RED, sizes: grid([['52', 1]]) })).toMatchObject({ listUnitPrice: '445' })
-    expect(await addLine('sales', { styleId: jacket, colourwayId: BLK, sizes: grid([['52', 1]]) })).toMatchObject({ listUnitPrice: '440' })
+    const redLine = await addLine('sales', { styleId: jacket, colourwayId: RED, sizes: grid([['52', 1]]) })
+    const blackLine = await addLine('sales', { styleId: jacket, colourwayId: BLK, sizes: grid([['52', 1]]) })
+    for (const line of [redLine, blackLine]) for (const field of ['listUnitPrice', 'unitPrice']) expect(line).not.toHaveProperty(field)
+    const priced = (await ok('owner', 'GET', quoteUrl(quote.id))).quote.lines as Json[]
+    expect(priced.find((line) => line.id === redLine.id)).toMatchObject({ listUnitPrice: '445' })
+    expect(priced.find((line) => line.id === blackLine.id)).toMatchObject({ listUnitPrice: '440' })
   })
 
   it("prices a consumer's quote from the company's base list, VAT included", async () => {
-    quote = (await ok('sales', 'POST', '/sales/quotes', { companyId: companyA, partyId: P4 }, 201)).quote
+    quote = (await ok('owner', 'POST', '/sales/quotes', { companyId: companyA, partyId: P4 }, 201)).quote // B-CP-011: the Owner's (prices read)
     expect(quote.current).toMatchObject({ priceBasis: 'GROSS', paymentTermsId: null, priceList: { code: 'PL-BASE' } })
     // 450 net at 22% VAT.
-    expect(await addLine('sales', { styleId: jacket, colourwayId: BLK, sizes: grid([['52', 1]]) })).toMatchObject({ listUnitPrice: '549', unitPrice: '549' })
+    expect(await addLine('owner', { styleId: jacket, colourwayId: BLK, sizes: grid([['52', 1]]) })).toMatchObject({ listUnitPrice: '549', unitPrice: '549' })
   })
 
   it("fixes the rules of terms in use, never their names", async () => {
@@ -371,9 +408,11 @@ describe('a customer\'s list with its "From" day (B-W2b-16: PartyPriceListAssign
     expect(record.customers).toEqual([expect.objectContaining({ id: P1, code: 'SEED-C1', from: TODAY, fromSource: 'ROW' })])
     expect(await admin(`SELECT "priceListId", "validFrom"::text AS "validFrom", "validTo" FROM "PartyPriceListAssignment" WHERE "partyId" = $1`, [P1])).toEqual([{ priceListId: lists.P1.id, validFrom: TODAY, validTo: null }])
     // A second change on the same day is refused in words (the history keeps one list per day); a later day too.
-    const again = await refused('sales', 'POST', `/sales/price-lists/${lists.BASE.id}/customers`, { partyIds: [P1] }, 409)
+    // B-CP-011: giving a list to customers is the Owner's (pricelists.manage); a Sales worker is refused.
+    await refused('sales', 'POST', `/sales/price-lists/${lists.BASE.id}/customers`, { partyIds: [P1] }, 403)
+    const again = await refused('owner', 'POST', `/sales/price-lists/${lists.BASE.id}/customers`, { partyIds: [P1] }, 409)
     expect(again.issues).toEqual([{ path: 'body/validFrom', message: `SEED-C1 has had PL-P1 since ${TODAY}: a customer's list changes at most once a day (its history keeps one list per day). Give the new list from ${addDays(TODAY, 1)}.` }])
-    expect((await refused('sales', 'POST', `/sales/price-lists/${lists.BASE.id}/customers`, { partyIds: [P1], validFrom: addDays(TODAY, 3) }, 400)).issues[0].path).toBe('body/validFrom')
+    expect((await refused('owner', 'POST', `/sales/price-lists/${lists.BASE.id}/customers`, { partyIds: [P1], validFrom: addDays(TODAY, 3) }, 400)).issues[0].path).toBe('body/validFrom')
   })
 
   it('a customer given its list before W2b has no row: the tab says no day; the first change writes the missing row, then ends it', async () => {
@@ -381,7 +420,7 @@ describe('a customer\'s list with its "From" day (B-W2b-16: PartyPriceListAssign
     await admin(`UPDATE "Party" SET "priceListId" = $2 WHERE id = $1`, [P4, lists.P1.id])
     const record = (await ok('sales', 'GET', `/sales/price-lists/${lists.P1.id}`)).list
     expect(record.customers.find((row: Json) => row.id === P4)).toMatchObject({ from: null, fromSource: null })
-    const removed = (await ok('sales', 'POST', `/sales/price-lists/${lists.P1.id}/customers/remove`, { partyIds: [P4] })).list
+    const removed = (await ok('owner', 'POST', `/sales/price-lists/${lists.P1.id}/customers/remove`, { partyIds: [P4] })).list // B-CP-011: the Owner's (pricelists.manage)
     expect(removed.customers.map((row: Json) => row.id)).toEqual([P1])
     const rows = await admin(`SELECT "priceListId", "validFrom"::text AS "validFrom", "validTo"::text AS "validTo" FROM "PartyPriceListAssignment" WHERE "partyId" = $1`, [P4])
     expect(rows).toHaveLength(1)

@@ -213,6 +213,9 @@ describe("a customer's production limits (PW-S01, DB part)", () => {
       `SELECT conname, confdeltype::text AS "onDelete" FROM pg_constraint WHERE conrelid = '"PortalSettings"'::regclass AND contype = 'f' AND confrelid = '"User"'::regclass ORDER BY conname`,
     )
     expect(keys).toEqual([
+      // B-CP-005 (customer page schema wave): the factory designer slot and its backup, named the same way (Restrict).
+      { conname: 'PortalSettings_tenantId_factoryDesignerBackupId_fkey', onDelete: 'r' },
+      { conname: 'PortalSettings_tenantId_factoryDesignerId_fkey', onDelete: 'r' },
       { conname: 'PortalSettings_tenantId_productionApproverId_fkey', onDelete: 'r' },
       { conname: 'PortalSettings_tenantId_productionBackupId_fkey', onDelete: 'r' },
       { conname: 'PortalSettings_tenantId_productionSupervisorId_fkey', onDelete: 'r' },

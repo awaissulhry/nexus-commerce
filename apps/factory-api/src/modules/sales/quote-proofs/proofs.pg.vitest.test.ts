@@ -30,6 +30,8 @@ import { addUser, Browser, enrolTotp, startHarness, type Harness, type TestTenan
 let h: Harness
 let walls: FastifyInstance
 let sales: Browser
+// B-CP-011 (the money wall): the Owner prices the quotes' lines (a Sales worker sends no unitPrice any more).
+let owner: Browser
 
 const NS = 'quote-proofs'
 const seedId = (key: string): string => seedUuid(NS, key)
@@ -97,10 +99,10 @@ const wall = async (session: string, method: 'GET' | 'POST' | 'DELETE', url: str
 
 const quoteUrl = (id: string) => `/sales/quotes/${id}`
 
-/** A quote for P1 with one size-grid line. */
+/** A quote for P1 with one size-grid line. B-CP-011: Sales makes it, the Owner adds the priced line. */
 async function newQuote(): Promise<Json> {
   let quote = (await as(sales, 'POST', '/sales/quotes', { companyId: companyA, partyId: P1, customerRef: 'RFQ-PROOF' }, 201)).quote
-  quote = (await as(sales, 'POST', `${quoteUrl(quote.id)}/lines`, { version: quote.version, styleId: jacket, colourwayId: BLK, sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 2 }], unitPrice: '450' }, 201)).quote
+  quote = (await as(owner, 'POST', `${quoteUrl(quote.id)}/lines`, { version: quote.version, styleId: jacket, colourwayId: BLK, sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 2 }], unitPrice: '450' }, 201)).quote
   return quote
 }
 
@@ -147,6 +149,11 @@ beforeAll(async () => {
   sales = new Browser(h.app)
   expect((await sales.signIn(NS, salesUser.email, salesUser.password)).status).toBe(200)
   await enrolTotp(h, sales)
+  // B-CP-011: the Owner, signed in for real as Sales is (the price holder).
+  const ownerUser = await addUser(h, seedTenant, { email: 'otto.owner@seed-a.example.com', role: 'owner' })
+  owner = new Browser(h.app)
+  expect((await owner.signIn(NS, ownerUser.email, ownerUser.password)).status).toBe(200)
+  await enrolTotp(h, owner)
   walls = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },

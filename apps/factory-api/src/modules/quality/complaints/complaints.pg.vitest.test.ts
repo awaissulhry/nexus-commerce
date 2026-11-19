@@ -55,10 +55,11 @@ const grant = (permissions: Permission[], companies: Grant['companies'] = 'all')
 const office = (permissions: Permission[], companies: Grant['companies'] = 'all', actorId = newId()): (() => SessionContext) => () => ({ audience: 'office', tenantId: T, actorId, grants: [grant(permissions, companies)] })
 const VIEW: Permission[] = ['quality.complaints.view']
 const SESSIONS: Record<string, () => SessionContext> = {
-  sales: office([...VIEW, 'quality.complaints.log', 'threads.read', 'threads.post', 'money.price']),
+  // B-CP-011: Sales holds no price grain (the money wall); the Owner holds it.
+  sales: office([...VIEW, 'quality.complaints.log', 'threads.read', 'threads.post']),
   quality: office([...VIEW, 'quality.complaints.log', 'quality.complaints.manage', 'compliance.register.view', 'quality.ncr.view', 'sales.repairs.view', 'threads.read']),
   registrar: office([...VIEW, 'quality.complaints.manage', 'compliance.register.view', 'compliance.register.manage']),
-  owner: office([...VIEW, 'quality.complaints.acknowledge', 'compliance.register.view']),
+  owner: office([...VIEW, 'quality.complaints.acknowledge', 'compliance.register.view', 'money.price']),
   viewer: office(VIEW),
   companyB: office([...VIEW, 'quality.complaints.log', 'quality.complaints.manage'], [companyB]),
 }
@@ -167,8 +168,12 @@ describe('the list, its tiles and the safety banner', () => {
   })
 
   it("the order's value only with the price grain; the register entry and NCRs only with their own view", async () => {
-    const withPrice = (await ok('sales', 'GET', '/quality/complaints?view=safety')).complaints.find((row: Json) => row.id === seeded.complaintId)
+    // B-CP-011: the Owner reads the order's value; Sales no longer does.
+    const withPrice = (await ok('owner', 'GET', '/quality/complaints?view=safety')).complaints.find((row: Json) => row.id === seeded.complaintId)
     expect(withPrice.order).toMatchObject({ number: expect.any(String), netAmount: expect.any(Number) })
+    const sales = (await ok('sales', 'GET', '/quality/complaints?view=safety')).complaints.find((row: Json) => row.id === seeded.complaintId)
+    expect(sales.order).toBeTruthy()
+    expect(sales.order).not.toHaveProperty('netAmount')
     const without = (await ok('viewer', 'GET', '/quality/complaints?view=safety')).complaints.find((row: Json) => row.id === seeded.complaintId)
     expect(without.order).toBeTruthy()
     expect(without.order.netAmount).toBeUndefined()

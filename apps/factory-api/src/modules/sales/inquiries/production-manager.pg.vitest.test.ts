@@ -36,7 +36,8 @@ const pmTemplate = templateOf('production_manager')!
 const salesTemplate = templateOf('sales')!
 const permissionsOf = (template: typeof pmTemplate) => [...template.permissions, ...template.grains.map((grain) => `money.${grain}`)] as Permission[]
 const office = (permissions: Permission[]): SessionContext => ({ audience: 'office', tenantId: T, actorId: newId(), grants: [{ permissions, companies: 'all', sites: 'all', parties: 'all' }] })
-const SESSIONS: Record<string, SessionContext> = { pm: office(permissionsOf(pmTemplate)), sales: office(permissionsOf(salesTemplate)) }
+// B-CP-011 (the money wall): the sales role holds no price grain either; the owner is the reader of the target price.
+const SESSIONS: Record<string, SessionContext> = { pm: office(permissionsOf(pmTemplate)), sales: office(permissionsOf(salesTemplate)), owner: office(permissionsOf(templateOf('owner')!)) }
 
 let h: Harness
 let app: FastifyInstance
@@ -92,16 +93,20 @@ describe('the production manager reads Incoming (B-TH-014)', () => {
     const { styleDraft, ...answering } = inquiry.actions as Record<string, Json>
     for (const [verb, held] of Object.entries(answering)) expect(held, verb).toEqual({ allowed: false, refusal: { code: 'READ_ONLY', message: expect.stringMatching(/is for sales/) } })
     expect(styleDraft).toMatchObject({ allowed: false, refusal: { code: 'NEEDS_CUSTOMER' } })
-    // Sales reads the same request with its target price and the prospect's contact details.
+    // Sales reads the same request with the prospect's contact details. B-CP-011: without its target price (no price grain);
+    // the owner reads the target price.
     const seen = (await ok('sales', 'GET', `/sales/inquiries/${typed.id}`)).inquiry
-    expect(seen).toMatchObject({ targetUnitPrice: '380', prospectDetails: { email: 'prospect.club@example.com', phone: '+39 000 0000011' } })
+    expect(seen).toMatchObject({ prospectDetails: { email: 'prospect.club@example.com', phone: '+39 000 0000011' } })
+    expect('targetUnitPrice' in seen).toBe(false)
+    expect((await ok('owner', 'GET', `/sales/inquiries/${typed.id}`)).inquiry.targetUnitPrice).toBe('380')
     expect(seen.actions.assign).toEqual({ allowed: true, refusal: null })
-    // P1's request: the line's price shown stays hidden for him; sales reads it.
+    // P1's request: the line's price shown stays hidden for him and (B-CP-011) for sales; the owner reads it.
     const p1 = list.rows.find((row: Json) => row.number === 'SEED-INQ-0004')
     const lines = (await ok('pm', 'GET', `/sales/inquiries/${p1.id}`)).inquiry.lines
     expect(lines).toHaveLength(1)
     expect('unitPriceShown' in lines[0]).toBe(false)
-    expect((await ok('sales', 'GET', `/sales/inquiries/${p1.id}`)).inquiry.lines[0].unitPriceShown).toBe('420')
+    expect('unitPriceShown' in (await ok('sales', 'GET', `/sales/inquiries/${p1.id}`)).inquiry.lines[0]).toBe(false)
+    expect((await ok('owner', 'GET', `/sales/inquiries/${p1.id}`)).inquiry.lines[0].unitPriceShown).toBe('420')
   })
 
   it('searches no prospect by an e-mail address he is not shown, and changes nothing', async () => {

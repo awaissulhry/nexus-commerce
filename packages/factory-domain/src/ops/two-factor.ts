@@ -1,5 +1,5 @@
 import type { Issue } from '../core/errors'
-import type { Grain } from '../auth/grains/grains'
+import { twoFactorGrainsOf, type Grain } from '../auth/grains/grains'
 import { LOCKOUT } from '../auth/lockout/lockout'
 import { templateOf } from '../auth/roles/templates'
 
@@ -9,7 +9,8 @@ import { templateOf } from '../auth/roles/templates'
  * two-factor is proved on the session); this is the switch, with the rules that keep it safe:
  *
  *   - an office role only (the floor's factors are the device and the PIN);
- *   - a role that sees costs or margins always asks for it (W0 rule), and a ready-made role never asks less than its
+ *   - a role that sees prices, costs or margins always asks for it (W0 rule; prices since B-CP-011, Owner O6:
+ *     TWO_FACTOR_GRAINS), and a ready-made role never asks less than its
  *     template (Owner, Administrator, Finance …): the tenant may ASK it of any other ready-made role, and the template
  *     sync keeps that (platform/auth/roles system-roles.ts);
  *   - nobody changes the rule of a role they hold (separation of duties, as for any role edit);
@@ -38,7 +39,8 @@ export type TwoFactorLock = 'floor' | 'money' | 'template'
 
 export function twoFactorLockOf(role: TwoFactorRole): TwoFactorLock | null {
   if (role.audience === 'floor') return 'floor'
-  if (role.grains.some((grain) => grain === 'cost' || grain === 'margin')) return 'money'
+  // B-CP-011: price, cost and margin (TWO_FACTOR_GRAINS).
+  if (twoFactorGrainsOf(role.grains).length > 0) return 'money'
   if (role.system && templateOf(role.key)?.requireMfa === true) return 'template'
   return null
 }
@@ -46,7 +48,7 @@ export function twoFactorLockOf(role: TwoFactorRole): TwoFactorLock | null {
 /** Every refusal of a two-factor change, in words (the web says them in its own; codes travel). */
 export const TWO_FACTOR_REFUSALS = Object.freeze({
   floor: "A floor role never asks for two-factor: the tablet and the PIN are the floor's factors.",
-  money: 'A role that sees costs or margins always asks for two-factor.',
+  money: 'A role that sees prices, costs or margins always asks for two-factor.',
   template: 'This ready-made role always asks for two-factor.',
   already: 'This role asks for two-factor already.',
   notAsked: 'This role does not ask for two-factor.',

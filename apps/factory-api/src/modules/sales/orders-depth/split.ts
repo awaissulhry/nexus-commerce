@@ -17,6 +17,8 @@ import { priceLines, scaledCost, type LineDraft } from '../orders/pricing'
 import { makeScheduleInCommand } from '../orders/schedule'
 import { asDay, hasOrderSeries, lockOrder, readLines, readOrder, type LineRecord } from '../orders/store'
 import { treatmentOfStored } from '../quotes/store'
+// B-CP-024 (customer page plan C3; review G5): the customer's prices follow the lines that move.
+import { carryBrandPricesOnSplit, type SplitCarry } from '../brand-prices/store'
 
 /**
  * Several orders from one quote (B-W2b-303; SAL-201 "splitting one quote into several orders"; plan "Several orders from one
@@ -34,6 +36,9 @@ import { treatmentOfStored } from '../quotes/store'
  *   3. the order keeps the rest: W2a's amendment (orders/amend.ts amendInCommand, its next revision with both snapshots, its
  *      totals, its OPEN payment steps made again; a line left with nothing is removed only when nothing refers to it), without
  *      a re-acceptance (the customer's whole stays the same), then sales_order.split
+ *   B-CP-024: between 2 and 3, the customer's prices follow the lines (brand-prices/store.ts carryBrandPricesOnSplit): a unit price
+ *      moves with a whole line or is copied to a part of one; a line total of a line that moved or changed, and the order's own
+ *      total, are removed (the customer gives them again); each audited under OrderBrandPrice
  */
 
 export interface SplitPartBody {
@@ -115,6 +120,7 @@ export async function splitOrder(caller: CommandCaller, orderId: string, body: S
     const actorId = actorIdOf(tools)
     const stamp = { createdAt: now, updatedAt: now, createdById: actorId }
     const made: { id: string; number: string }[] = []
+    const carries: SplitCarry[] = [] // B-CP-024
 
     // 2. the new orders.
     for (const [index, part] of body.parts.entries()) {
@@ -220,6 +226,7 @@ export async function splitOrder(caller: CommandCaller, orderId: string, body: S
           select: { id: true },
         })
         await tx.salesOrderLineSize.createMany({ data: line.sizes.map((size) => ({ id: newId(), lineId, partyId: fresh.partyId, size: size.size, quantity: size.quantity, unitPrice: size.unitPrice, ...stamp })) })
+        carries.push({ fromLineId: source.id, toOrderId: id, toLineId: lineId, whole: planned[lineIndex]!.whole }) // B-CP-024
         // A whole line's delivery schedule goes with it (the days still ahead: B-W2b-294's carry).
         if (planned[lineIndex]!.whole) {
           for (const delivery of facts.deliveries.filter((row) => row.lineId === source.id && row.deliveryDate.toISOString().slice(0, 10) >= today)) {
@@ -239,6 +246,10 @@ export async function splitOrder(caller: CommandCaller, orderId: string, body: S
       tools.emit({ type: 'sales_order.created', subject: id, companyId: fresh.companyId, payload: { orderId: id, number: number.formatted, quoteId, versionId: fresh.quoteVersionId, partyId: fresh.partyId, depositRequestIds: [] } })
       made.push({ id, number: number.formatted })
     }
+
+    // B-CP-024: the customer's prices follow the lines that moved (a unit price moves or is copied; a line total, and the order's
+    // total, are given again), before the order keeps the rest (the amendment deletes a line left with nothing, and its price).
+    await carryBrandPricesOnSplit(tools, fresh, carries)
 
     // 3. the order keeps the rest (W2a's amendment, no re-acceptance).
     const remaining = (plan as SplitPlan).remaining

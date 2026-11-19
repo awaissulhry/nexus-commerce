@@ -32,8 +32,8 @@ import { assertEveryHandler, everyHandler, searchIndexers, settler } from '../da
  *      and its quote ("Make quote": the inquiry QUOTED, the quote knows its source).
  *   Q  the quote in depth: another request started from the season template (its terms, what it leaves out); the inquiry's quote
  *      filled by a size curve; the jacket's options checked by the rules (a refused pair said in the rule's words) and saved; the
- *      waterfall from the suggested price with a manual change and its reason (refused without one); the promise date from the
- *      calculator, used on the quote.
+ *      waterfall from the suggested price with a manual change and its reason (refused without one), set by the Owner (B-CP-011:
+ *      Sales sees no price and may not set one); the promise date from the calculator, used on the quote.
  *   C  the customer on hold warns on the quote (a warning, never a refusal), the hold released; the credit rule switched on and the
  *      limit lowered; version 1 sent, version 2 compared with it and sent; accepted by link: the order waits (PENDING_APPROVAL) with a
  *      credit HOLD; the asker may not approve, Finance does; the options and schedule carried; two orders from one version (a
@@ -421,23 +421,30 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
     G.optionValues = V
   })
 
-  it('Q04 the waterfall: the jacket priced from its suggested price (cost and the floor’s margin), its options, a 5 % discount and a manual change to a round net with its reason (refused without one); each step from its source', async () => {
+  it('Q04 the waterfall (priced by the Owner): the jacket priced from its suggested price (cost and the floor’s margin), its options, a 5 % discount and a manual change to a round net with its reason (refused without one); each step from its source', async () => {
     const base = `/sales/quotes/${G.quote.id}/lines/${G.lines.jkt05}`
+    const body = { version: G.quote.version, start: 'SUGGESTED', discount: { pct: '5', reasonCode: 'VOLUME' }, net: { unitPrice: '480', reasonCode: 'COMPETITION', note: 'Matched a competing offer for the brand (made up).' } }
+    // B-CP-011 (the money wall): Sales sees no price and may not set one (403, nothing written); the Owner prices the line.
+    await ok(P.sales, 'PUT', `${base}/price`, body, 403)
     // REFUSAL: a manual change without its reason code.
-    const noReason = await call(P.sales.browser, 'PUT', `${base}/price`, { version: G.quote.version, start: 'SUGGESTED', discount: { pct: '5', reasonCode: 'VOLUME' }, net: { unitPrice: '480' } })
+    const noReason = await call(P.owner.browser, 'PUT', `${base}/price`, { version: G.quote.version, start: 'SUGGESTED', discount: { pct: '5', reasonCode: 'VOLUME' }, net: { unitPrice: '480' } })
     expect(noReason.status).toBe(400)
-    const pricing0 = await ok(P.sales, 'GET', `/sales/quotes/${G.quote.id}/pricing`)
+    const pricing0 = await ok(P.owner, 'GET', `/sales/quotes/${G.quote.id}/pricing`)
     const before = (pricing0.lines as Json[]).find((entry) => entry.id === G.lines.jkt05 || entry.lineId === G.lines.jkt05)!
     expect(before.suggested.unitPrice, JSON.stringify(before.suggested)).toEqual(expect.any(String))
-    const priced = await ok(P.sales, 'PUT', `${base}/price`, { version: G.quote.version, start: 'SUGGESTED', discount: { pct: '5', reasonCode: 'VOLUME' }, net: { unitPrice: '480', reasonCode: 'COMPETITION', note: 'Matched a competing offer for the brand (made up).' } })
+    const priced = await ok(P.owner, 'PUT', `${base}/price`, body)
     G.quote = priced.quote
     const kinds = (priced.line.steps as Json[]).map((step) => step.kind)
     expect(kinds[0]).toBe('SUGGESTED')
     expect(kinds).toEqual(expect.arrayContaining(['OPTION', 'DISCOUNT', 'MANUAL', 'NET']))
-    const pricing = await ok(P.sales, 'GET', `/sales/quotes/${G.quote.id}/pricing`)
+    const pricing = await ok(P.owner, 'GET', `/sales/quotes/${G.quote.id}/pricing`)
     const row = (pricing.lines as Json[]).find((entry) => entry.id === G.lines.jkt05 || entry.lineId === G.lines.jkt05)!
     expect(row).toMatchObject({ unitPrice: '480', adjustmentReason: 'COMPETITION' })
     expect(row.why.sentence).toEqual(expect.any(String))
+    // B-CP-011: Sales reads the same waterfall without a figure (no price, no steps, no words of the why).
+    const forSales = ((await ok(P.sales, 'GET', `/sales/quotes/${G.quote.id}/pricing`)).lines as Json[]).find((entry) => entry.id === G.lines.jkt05 || entry.lineId === G.lines.jkt05)!
+    expect(forSales).toMatchObject({ adjustmentReason: 'COMPETITION' })
+    for (const key of ['unitPrice', 'steps', 'why']) expect(forSales).not.toHaveProperty(key)
     await settle()
   })
 
@@ -930,9 +937,14 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
     rma = (await ok(P.warehouse, 'POST', `/sales/returns/${rma.id}/receipts`, { version: rma.version, parcels: 1, parcelCondition: 'INTACT', lines: [{ lineId, quantity: 1 }] }, 201)).return
     await ok(P.warehouse, 'POST', `/sales/returns/${rma.id}/grades`, { version: rma.version, lines: [{ lineId, grade: 'NEW', cause: 'OUR_DEFECT' }] })
     // The wrong-size rule would withhold 10 % of a credit; the cause is ours, so it is dropped (a size exchange credits nothing).
+    // B-CP-011 (the money wall): Sales reads the fee's rule and why it is dropped, never its amount; the Owner reads the amounts.
     const preview = await ok(P.sales, 'POST', `/sales/returns/${rma.id}/fees/preview`, { lines: [{ lineId, disposition: 'CREDIT_ONLY' }] })
-    expect(preview.lines[0].fee, JSON.stringify(preview)).toMatchObject({ ruleId: rule.rule.id, amount: 0, dropped: 'OUR_CAUSE' })
-    expect(preview.lines[0].creditAfter).toBe(preview.lines[0].creditBefore)
+    expect(preview.lines[0].fee, JSON.stringify(preview)).toMatchObject({ ruleId: rule.rule.id, dropped: 'OUR_CAUSE' })
+    for (const key of ['creditBefore', 'creditAfter']) expect(preview.lines[0]).not.toHaveProperty(key)
+    expect(preview.lines[0].fee).not.toHaveProperty('amount')
+    const priced = await ok(P.owner, 'POST', `/sales/returns/${rma.id}/fees/preview`, { lines: [{ lineId, disposition: 'CREDIT_ONLY' }] })
+    expect(priced.lines[0].fee, JSON.stringify(priced)).toMatchObject({ ruleId: rule.rule.id, amount: 0, dropped: 'OUR_CAUSE' })
+    expect(priced.lines[0].creditAfter).toBe(priced.lines[0].creditBefore)
     rma = (await ok(P.sales, 'GET', `/sales/returns/${rma.id}`)).return
     // REFUSAL: a size exchange names another size than the one that came back.
     expect((await ok(P.sales, 'POST', `/sales/returns/${rma.id}/decisions`, { version: rma.version, lines: [{ lineId, disposition: 'SIZE_EXCHANGE', goodsOutcome: 'QUARANTINE', exchangeSize: '52' }] }, 400)).error.message).toMatch(/52/)
@@ -942,7 +954,9 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
     keep(replacement.order.id)
     const order = (await ok(P.sales, 'GET', `/sales/orders/${replacement.order.id}`)).order
     expect(order.lines[0].sizes.map((size: Json) => [size.size, size.quantity])).toEqual([['54', 1]])
-    expect(Number(order.lines[0].unitPrice)).toBe(0)
+    // B-CP-011: "at no price" is read by the Owner; Sales reads the line without a price.
+    expect(order.lines[0]).not.toHaveProperty('unitPrice')
+    expect(Number((await ok(P.owner, 'GET', `/sales/orders/${replacement.order.id}`)).order.lines[0].unitPrice)).toBe(0)
     const outcomes = (await ok(P.sales, 'GET', `/sales/returns/${rma.id}/outcomes`)).return
     expect(outcomes.finish.suggested).toBe('COMPLETED')
     await ok(P.sales, 'POST', `/sales/returns/${rma.id}/finish`, { version: outcomes.version, finishReason: 'COMPLETED' })
@@ -965,10 +979,13 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
     expect(w.h.ses.mails.slice(before).some((mail) => mail.to.includes(BUYER))).toBe(true)
   })
 
-  it('R03 the repair quote: drafted, priced, sent; the repair may not be approved while it waits (refused in words); the brand’s yes recorded by the office: the repair APPROVED; the case told again', async () => {
+  it('R03 the repair quote: drafted, priced (by the Owner), sent; the repair may not be approved while it waits (refused in words); the brand’s yes recorded by the office: the repair APPROVED; the case told again', async () => {
     let view = await ok(P.sales, 'POST', `/sales/repairs/${G.repair.id}/estimates`, { customerNote: 'Return transport included (made up).' }, 201)
     const draft = view.estimates[0]
-    view = await ok(P.sales, 'POST', `/sales/repairs/estimates/${draft.id}/lines`, { version: draft.version, kind: 'LABOUR', description: 'Re-sew the shoulder seam', quantity: '1', minutes: 40, unitPrice: '35.00' }, 201)
+    // B-CP-011 (the money wall): the estimate's priced line is the Owner's; Sales may not send a price (403).
+    const labour = { version: draft.version, kind: 'LABOUR', description: 'Re-sew the shoulder seam', quantity: '1', minutes: 40, unitPrice: '35.00' }
+    await ok(P.sales, 'POST', `/sales/repairs/estimates/${draft.id}/lines`, labour, 403)
+    view = await ok(P.owner, 'POST', `/sales/repairs/estimates/${draft.id}/lines`, labour, 201)
     view = await ok(P.sales, 'POST', `/sales/repairs/estimates/${draft.id}/send`, { version: view.estimates[0].version })
     expect(view.estimates[0].status).toBe('SENT')
     const repair = (await ok(P.sales, 'GET', `/sales/repairs/${G.repair.id}`)).repair

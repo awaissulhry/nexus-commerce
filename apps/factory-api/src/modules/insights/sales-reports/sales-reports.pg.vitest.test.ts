@@ -168,6 +168,8 @@ beforeAll(async () => {
   await copy('Inquiry', srcInquiry, { id: newId(), number: 'T348-INQ-1', companyId: COMPANY_B, customerSeq: null, quoteId: x.q1, receivedAt: new Date('2026-11-02T07:00:00Z'), partyId: c1, contactId: null, status: 'QUOTED', sourceEmailId: null, assigneeId: null })
 
   SESSIONS.sales = session(grantsOf('sales'))
+  // B-CP-011 (the money wall): Sales holds no price grain now; the values are read by the Owner.
+  SESSIONS.owner = session(grantsOf('owner'))
   SESSIONS.manager = session(grantsOf('production_manager'))
   SESSIONS.planner = session(grantsOf('planner'))
   SESSIONS.blind = session(grantsOf('sales', [], ['orders.view', 'sales.returns.view']))
@@ -187,8 +189,13 @@ afterAll(async () => {
 }, 60_000)
 
 describe('order intake (SAL-105)', () => {
-  it('counts the confirmed orders booked in November, by week, at their value now; never waiting, cancelled or a replacement', async () => {
-    const answer = await ok('sales', '/sales/reports/intake')
+  it('counts the confirmed orders booked in November, by week, at their value now (read by the Owner); never waiting, cancelled or a replacement', async () => {
+    // B-CP-011 (the money wall): Sales reads the same orders and pieces without a value.
+    const forSales = await ok('sales', '/sales/reports/intake')
+    expect(forSales).toMatchObject({ sight: { orders: true, values: false } })
+    expect(forSales.all).toMatchObject({ orders: 2, pieces: 30 })
+    expect(forSales.all).not.toHaveProperty('value')
+    const answer = await ok('owner', '/sales/reports/intake')
     expect(answer).toMatchObject({ from: '2026-11-01', to: '2026-11-30', today: '2026-11-30', by: 'week', split: 'none', companyCurrency: 'EUR', sight: { orders: true, values: true } })
     expect(answer.all).toMatchObject({ orders: 2, pieces: 30, value: 305_000, currency: 'EUR', mixedCurrencies: false })
     expect(answer.orders.map((order: Json) => order.number)).toEqual(['T348-SO-2', 'T348-SO-1'])
@@ -198,7 +205,8 @@ describe('order intake (SAL-105)', () => {
   })
 
   it('splits by style (fee lines apart) and season; months; an order split off later counts on its first order’s day', async () => {
-    const byStyle = await ok('sales', '/sales/reports/intake?split=style')
+    // B-CP-011: the values by the Owner.
+    const byStyle = await ok('owner', '/sales/reports/intake?split=style')
     expect(byStyle.groups.map((group: Json) => [group.code ?? group.key, group.figures.pieces, group.figures.value])).toEqual([
       ['SEED-JKT-02', 20, 200_000],
       ['SEED-JKT-01', 10, 100_000],
@@ -210,7 +218,7 @@ describe('order intake (SAL-105)', () => {
       ['none', 1],
       ['season', 1],
     ])
-    const october = await ok('sales', '/sales/reports/intake?from=2026-10-01&to=2026-10-31')
+    const october = await ok('owner', '/sales/reports/intake?from=2026-10-01&to=2026-10-31')
     expect(october.orders.map((order: Json) => [order.number, order.bookedOn, order.splitOff])).toEqual([
       ['T348-SO-6', '2026-10-15', true],
       ['T348-SO-5', '2026-10-15', false],
@@ -221,7 +229,8 @@ describe('order intake (SAL-105)', () => {
 
 describe('the backlog by promise week (SAL-106)', () => {
   it('open pieces at each size’s promise now (the history first), late before today, by customer with horizons', async () => {
-    const answer = await ok('sales', '/sales/reports/backlog')
+    // B-CP-011: the backlog's value read by the Owner (Sales: the rights test below).
+    const answer = await ok('owner', '/sales/reports/backlog')
     expect(answer).toMatchObject({ today: '2026-11-30', by: 'customer' })
     // O1: size 50 6 − 2 shipped = 4 (10 Dec), size 52 4 (re-promised 20 Dec); O5 5 late (20 Nov); O6 3 with no promise.
     expect(answer.all).toMatchObject({ orders: 3, lines: 3, pieces: 16, late: 5, value: 40_000 + 40_000 + 50_000 + 30_000 })
@@ -250,7 +259,8 @@ describe('the backlog by promise week (SAL-106)', () => {
 
 describe('return reasons (SAL-458)', () => {
   it('the lines asked back in November by reason, style, size, customer; the return rate over the pieces shipped', async () => {
-    const answer = await ok('sales', '/sales/reports/returns')
+    // B-CP-011: the value asked back read by the Owner (Sales: the rights test below).
+    const answer = await ok('owner', '/sales/reports/returns')
     expect(answer.all).toMatchObject({ returns: 1, lines: 2, pieces: 3, value: 10_000 })
     expect(answer.shipped).toBe(22)
     expect(answer.returnRatePct).toBe('13.6')
@@ -296,13 +306,17 @@ describe('quote speed and the headline', () => {
   it('first sends of the period, decisions (expired apart), win rate, value won; quotes.view alone reads it', async () => {
     for (const who of ['sales', 'quotesOnly']) {
       const speed = await ok(who, '/sales/reports/quote-speed')
-      expect(speed).toMatchObject({ answered: 2, fromInquiries: 1, accepted: 1, declined: 1, expired: 1, winRatePct: '50.0', medianDecisionHours: 48, won: { value: 300_000 } })
+      expect(speed).toMatchObject({ answered: 2, fromInquiries: 1, accepted: 1, declined: 1, expired: 1, winRatePct: '50.0', medianDecisionHours: 48 })
+      // B-CP-011 (the money wall): no price grain: the value won is not in the answer.
+      expect(speed.won, who).not.toHaveProperty('value')
       expect(speed.medianAnswerMinutes).toBeGreaterThan(0)
     }
+    expect(await ok('owner', '/sales/reports/quote-speed')).toMatchObject({ answered: 2, won: { value: 300_000 } })
   })
 
   it('the five numbers; null where the records are not in the role', async () => {
-    const answer = await ok('sales', '/sales/reports/headline')
+    // B-CP-011: the value by the Owner (Sales: the rights test below).
+    const answer = await ok('owner', '/sales/reports/headline')
     expect(answer.intake).toMatchObject({ orders: 2, pieces: 30, value: 305_000 })
     expect(answer.backlog).toMatchObject({ pieces: 16, late: 5 })
     expect(answer.quotes).toMatchObject({ winRatePct: '50.0', answered: 2 })
@@ -315,12 +329,15 @@ describe('quote speed and the headline', () => {
 
 describe('rights and refusals', () => {
   it('without the price grain: pieces and counts, never an amount; no person in any answer', async () => {
-    for (const path of ['headline', 'intake?split=customer', 'backlog', 'returns']) {
-      const answer = await ok('manager', `/sales/reports/${path}`)
-      expect(answer.sight.values, path).toBe(false)
-      const keys = keysOf(answer)
-      expect(keys, path).not.toContain('value')
-      expect(keys, path).not.toContain('credited')
+    // B-CP-011 (the money wall): Sales holds no price grain now either.
+    for (const who of ['manager', 'sales']) {
+      for (const path of ['headline', 'intake?split=customer', 'backlog', 'returns']) {
+        const answer = await ok(who, `/sales/reports/${path}`)
+        expect(answer.sight.values, `${who} ${path}`).toBe(false)
+        const keys = keysOf(answer)
+        expect(keys, `${who} ${path}`).not.toContain('value')
+        expect(keys, `${who} ${path}`).not.toContain('credited')
+      }
     }
     const manager = await ok('manager', '/sales/reports/intake')
     expect(manager.all).toMatchObject({ orders: 2, pieces: 30 })

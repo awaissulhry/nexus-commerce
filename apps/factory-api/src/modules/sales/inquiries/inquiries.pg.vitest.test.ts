@@ -28,7 +28,8 @@ import { inquiries as exportSource } from './export-source'
  * P2, the jacket SEED-JKT-01 in BLK and RED sizes 50/52/54, the INQUIRY series of company A, SEED-INQ-0001 … 0006, the mail
  * an unknown sender wrote) and, made up here, two mails waiting in Mail to sort (one from P1's buyer with a tech pack attached,
  * one from a stranger) and three office people with the sales role and one without. Every word and number is made up. Run with
- * `node scripts/factory/run-pg-tests.mjs modules/sales/inquiries`.
+ * `node scripts/factory/run-pg-tests.mjs modules/sales/inquiries`. B-CP-011 (the money wall): the sales role holds no price grain,
+ * so the target price is typed and read by the seed's owner; the sales people read the inquiry without it.
  */
 
 vi.setConfig({ testTimeout: 90_000 })
@@ -49,13 +50,17 @@ const YEAR = businessDate(new Date()).slice(0, 4)
 const PEOPLE = { ada: newId(), bruno: newId(), carla: newId(), piero: newId() } as const
 const sales = templateOf('sales')!
 const SALES = [...sales.permissions, ...sales.grains.map((grain) => `money.${grain}`)] as Permission[]
+// B-CP-011: the price persona is the Owner (the seed's owner, seed/roles.ts: a user of the tenant holding the owner role).
+const owner = templateOf('owner')!
+const OWNER = [...owner.permissions, ...owner.grains.map((grain) => `money.${grain}`)] as Permission[]
+const OWNER_ID = idOf('actor')
 const grant = (permissions: Permission[], parties: Grant['parties'] = 'all'): Grant => ({ permissions, companies: 'all', sites: 'all', parties })
 const office = (actorId: string, permissions: Permission[], parties: Grant['parties'] = 'all'): SessionContext => ({ audience: 'office', tenantId: T, actorId, grants: [grant(permissions, parties)] })
 const SESSIONS: Record<string, SessionContext> = {
   ada: office(PEOPLE.ada, SALES),
   bruno: office(PEOPLE.bruno, SALES),
-  // Sales without the price grain: reads inquiries, never their target price, and may not send one.
-  noPrice: office(newId(), SALES.filter((name) => name !== 'money.price')),
+  // B-CP-011: the Owner types and reads the target price (Sales itself holds no price grain now: the old `noPrice`).
+  owner: office(OWNER_ID, OWNER),
   // A role limited to another customer: P1's inquiries are not there for it, a prospect's are.
   otherCustomer: office(newId(), SALES, [newId()]),
   // The planner's template: no inquiries.
@@ -144,8 +149,9 @@ afterAll(async () => {
 describe('an inquiry typed by the office (SAL-032)', () => {
   it('numbers it INQ-, keeps what is asked by size, the target price only with the price grain, and puts it in the queue', async () => {
     const wanted = businessDate(new Date(Date.now() + 40 * 86_400_000))
+    // B-CP-011: the target price is the Owner's to type.
     const { inquiry } = await ok(
-      'ada',
+      'owner',
       'POST',
       '/sales/inquiries',
       {
@@ -164,23 +170,23 @@ describe('an inquiry typed by the office (SAL-032)', () => {
       201,
     )
     phone = inquiry.id
-    expect(inquiry).toMatchObject({ number: expect.stringMatching(new RegExp(`^INQ-${YEAR}-\\d{4}$`)), source: 'PHONE', status: 'NEW', party: { id: P1, code: 'SEED-C1' }, prospect: false, pieces: 30, sizes: '50:5 52:10', targetUnitPrice: '180.5', currency: 'EUR', wantedDate: wanted, contact: { id: P1_BUYER }, createdBy: { id: PEOPLE.ada } })
+    expect(inquiry).toMatchObject({ number: expect.stringMatching(new RegExp(`^INQ-${YEAR}-\\d{4}$`)), source: 'PHONE', status: 'NEW', party: { id: P1, code: 'SEED-C1' }, prospect: false, pieces: 30, sizes: '50:5 52:10', targetUnitPrice: '180.5', currency: 'EUR', wantedDate: wanted, contact: { id: P1_BUYER }, createdBy: { id: OWNER_ID } })
     expect(inquiry.lines.map((line: Json) => [line.seq, line.style?.code ?? null, line.quantity])).toEqual([
       [10, 'SEED-JKT-01', 15],
       [20, null, 15],
     ])
     expect(inquiry.waiting).toMatchObject({ for: 'US', overdue: false })
     expect(inquiry.actions).toMatchObject({ edit: { allowed: true }, quote: { allowed: true }, resume: { allowed: false, refusal: { code: 'NOT_WAITING' } } })
-    // The price grain: without it the target price is not there, and sending one is refused.
-    expect('targetUnitPrice' in (await ok('noPrice', 'GET', `/sales/inquiries/${phone}`)).inquiry).toBe(false)
-    await no('noPrice', 'POST', '/sales/inquiries', { companyId: companyA, source: 'PHONE', partyId: P1, request: 'x', targetUnitPrice: '1' }, 403)
+    // The price grain: without it (B-CP-011: the sales role) the target price is not there, and sending one is refused.
+    expect('targetUnitPrice' in (await ok('ada', 'GET', `/sales/inquiries/${phone}`)).inquiry).toBe(false)
+    await no('ada', 'POST', '/sales/inquiries', { companyId: companyA, source: 'PHONE', partyId: P1, request: 'x', targetUnitPrice: '1' }, 403)
     // The queue: NEW, the maker follows it, the event, the audit row.
     const list = await ok('ada', 'GET', '/sales/inquiries?tile=NEW')
     expect(list.rows.map((row: Json) => row.id)).toContain(phone)
     expect(list.counts.NEW).toBeGreaterThanOrEqual(1)
     expect(Object.keys(list.counts).sort()).toEqual(['ALL', 'DECLINED', 'LOST', 'MINE', 'NEW', 'OPEN', 'QUOTED', 'QUOTED_THIS_WEEK', 'WAITING_CUSTOMER', 'WAITING_US'])
     expect((await events('inquiry.received', phone))[0]!.payload).toMatchObject({ number: inquiry.number, source: 'PHONE', status: 'NEW', partyId: P1 })
-    expect((await one(`SELECT count(*)::int AS n FROM "RecordFollower" WHERE "recordType" = 'Inquiry' AND "recordId" = $1 AND "userId" = $2`, [phone, PEOPLE.ada])).n).toBe(1)
+    expect((await one(`SELECT count(*)::int AS n FROM "RecordFollower" WHERE "recordType" = 'Inquiry' AND "recordId" = $1 AND "userId" = $2`, [phone, OWNER_ID])).n).toBe(1)
     expect((await one(`SELECT action FROM "AuditLog" WHERE "recordType" = 'Inquiry' AND "recordId" = $1 ORDER BY at, id LIMIT 1`, [phone])).action).toBe('sales.inquiries.create')
   })
 
@@ -253,8 +259,12 @@ describe('the quote it becomes (SAL-032)', () => {
     expect((await events('inquiry.closed', phone))[0]!.payload).toMatchObject({ status: 'QUOTED', quoteId: made.quote.id, previousStatus: 'ASSIGNED' })
     expect(await events('quote.created', made.quote.id)).toHaveLength(1)
     // The quote shows where it came from; the inquiry is closed: no second quote, no change but its note.
-    const source = (await ok('ada', 'GET', `/sales/inquiries/source?quoteId=${made.quote.id}`)).inquiry
+    // B-CP-011: the target price is the Owner's read; the seller reads the same source without it.
+    const source = (await ok('owner', 'GET', `/sales/inquiries/source?quoteId=${made.quote.id}`)).inquiry
     expect(source).toMatchObject({ id: phone, status: 'QUOTED', targetUnitPrice: '180.5', techPack: { files: [] } })
+    const sellerSource = (await ok('ada', 'GET', `/sales/inquiries/source?quoteId=${made.quote.id}`)).inquiry
+    expect(sellerSource).toMatchObject({ id: phone, status: 'QUOTED' })
+    expect('targetUnitPrice' in sellerSource).toBe(false)
     expect(refusal(await no('ada', 'POST', `/sales/inquiries/${phone}/quote`, { version: made.inquiry.version }, 409))).toBe('refusal/CLOSED')
     expect(refusal(await no('ada', 'PATCH', `/sales/inquiries/${phone}`, { version: made.inquiry.version, request: 'changed' }, 409))).toBe('refusal/CLOSED')
     const noted = (await ok('ada', 'PATCH', `/sales/inquiries/${phone}`, { version: made.inquiry.version, note: 'Made-up: they call back on Monday.' })).inquiry

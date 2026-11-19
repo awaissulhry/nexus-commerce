@@ -194,7 +194,8 @@ export async function seed(context: SeedContext): Promise<InsightsDepthSeed> {
         formulaIt: 'margine degli ordini ÷ valore degli ordini × 100',
         formulaEn: 'margin of orders ÷ value of orders × 100',
       },
-      { sourceRecords: ['SalesOrder', 'SalesOrderLine'], measureKeys: ['orders.value', 'orders.margin'], ownerRoleId: role('sales'), unit: KpiUnit.PERCENT, grain: KpiGrain.MARGIN },
+      // B-CP-011 (the money wall, Owner O1): Sales sees no margin, so the Owner owns the order margin (was Sales).
+      { sourceRecords: ['SalesOrder', 'SalesOrderLine'], measureKeys: ['orders.value', 'orders.margin'], ownerRoleId: role('owner'), unit: KpiUnit.PERCENT, grain: KpiGrain.MARGIN },
     ),
     kpi(
       K.quotesSent,

@@ -44,6 +44,8 @@ import { localKeyProvider } from '../../../platform/secrets/local'
  * several orders from one (a whole line with its delivery address, sizes of another; the order keeps the rest without a
  * re-acceptance; refusals); the confirmation (made once per contents, out of date after a printed change, sent on the
  * thread, refused while waiting); the sheet import (dry run, an error row in words, the apply, an order imported twice refused).
+ * B-CP-011 (the money wall): the sales role holds no price grain, so the orders and quote lines typed with a price are the
+ * Owner's (a Sales body that sends one is refused 403); Sales still sets priority and seasons, splits, cancels and imports.
  * Run with `node scripts/factory/run-pg-tests.mjs modules/sales/orders-depth/`.
  */
 
@@ -221,11 +223,13 @@ let orderB: Json
 
 describe('priority and the urgent flag (SAL-207)', () => {
   it('a typed order names its season and priority; urgent needs its reason', async () => {
-    expect(paths(await no('sales', 'POST', '/sales/orders/manual', typed('PO-303-A', { priorityLevel: 'URGENT' }), 400))).toEqual(['body/urgentReason'])
-    expect((await no('sales', 'POST', '/sales/orders/manual', typed('PO-303-A', { seasonId: S.fw26 }), 409)).message).toBe('Season FW26 is closed: name an open season, or reopen it first.')
-    orderA = (await ok('sales', 'POST', '/sales/orders/manual', typed('PO-303-A', { seasonId: S.fw27, priorityLevel: 'HIGH' }), 201)).order
+    // B-CP-011: the seller may not send the typed prices (refused, nothing made); the Owner types the orders.
+    await no('sales', 'POST', '/sales/orders/manual', typed('PO-303-A', { seasonId: S.fw27, priorityLevel: 'HIGH' }), 403)
+    expect(paths(await no('owner', 'POST', '/sales/orders/manual', typed('PO-303-A', { priorityLevel: 'URGENT' }), 400))).toEqual(['body/urgentReason'])
+    expect((await no('owner', 'POST', '/sales/orders/manual', typed('PO-303-A', { seasonId: S.fw26 }), 409)).message).toBe('Season FW26 is closed: name an open season, or reopen it first.')
+    orderA = (await ok('owner', 'POST', '/sales/orders/manual', typed('PO-303-A', { seasonId: S.fw27, priorityLevel: 'HIGH' }), 201)).order
     expect(await orderRow(orderA.id)).toMatchObject({ status: 'CONFIRMED', seasonId: S.fw27, priorityLevel: 'HIGH', urgentReason: null })
-    orderB = (await ok('sales', 'POST', '/sales/orders/manual', typed('PO-303-B'), 201)).order
+    orderB = (await ok('owner', 'POST', '/sales/orders/manual', typed('PO-303-B'), 201)).order
   })
 
   it('sets the level at the version read, the reason with URGENT only; the record and the list read it', async () => {
@@ -301,15 +305,16 @@ describe('orders waiting for a yes (SAL-205)', () => {
     const rule = (await ok('owner', 'POST', '/approvals/rules', { kind: 'SALES_ORDER', companyId: A.companyA, name: 'Every order over 1 (made-up)', condition: { combinator: 'and', rows: [{ id: 'r1', field: 'orderValue', operator: 'gt', value: '1' }] }, approver: { roleId: financeRoleId }, sequence: 3, dueHours: 24 }, 201)).rule
     ruleId = rule.id
     await ok('owner', 'PUT', `/approvals/rules/${rule.id}`, { version: rule.version, active: true })
-    waiting = (await ok('sales', 'POST', '/sales/orders/manual', typed('PO-303-W1'), 201)).order
+    // B-CP-011: the Owner types the order (its prices), so the Owner is the asker here.
+    waiting = (await ok('owner', 'POST', '/sales/orders/manual', typed('PO-303-W1'), 201)).order
     expect(waiting.status).toBe('PENDING_APPROVAL')
     const tasks = await tasksOf(waiting.id)
-    expect(tasks).toEqual([expect.objectContaining({ status: 'PENDING', requestedById: PEOPLE.sales })])
-    const state = await ok('sales', 'GET', `/sales/orders/${waiting.id}/approval`)
+    expect(tasks).toEqual([expect.objectContaining({ status: 'PENDING', requestedById: PEOPLE.owner })])
+    const state = await ok('owner', 'GET', `/sales/orders/${waiting.id}/approval`)
     expect(state).toMatchObject({ waiting: true, reasons: [expect.objectContaining({ reason: 'REQUEST_PENDING' })], creditHold: null, may: { ask: false, withdraw: true } })
     expect(state.requests[0]).toMatchObject({ status: 'PENDING', approver: 'Finance', mine: true })
     expect((await no('sales', 'POST', `/sales/orders/${waiting.id}/confirmation`, {}, 409)).message).toMatch(/waits for a yes/)
-    const own = await call('sales', 'POST', `/approvals/tasks/${tasks[0]!.id}/approve`, { version: tasks[0]!.version })
+    const own = await call('owner', 'POST', `/approvals/tasks/${tasks[0]!.id}/approve`, { version: tasks[0]!.version })
     expect([403, 409]).toContain(own.statusCode)
   })
 
@@ -321,13 +326,14 @@ describe('orders waiting for a yes (SAL-205)', () => {
   })
 
   it('a no cancels the waiting order with the reason; a withdrawn request is asked again by another person', async () => {
-    const second = (await ok('sales', 'POST', '/sales/orders/manual', typed('PO-303-W2'), 201)).order
+    // B-CP-011: the typed prices are the Owner's (the asker of these requests).
+    const second = (await ok('owner', 'POST', '/sales/orders/manual', typed('PO-303-W2'), 201)).order
     const [task] = await tasksOf(second.id)
     await ok('finance', 'POST', `/approvals/tasks/${task!.id}/reject`, { version: task!.version, reasonCode: 'NEEDS_CHANGES', reason: 'Made-up: the customer wants other sizes.' })
     expect(await orderRow(second.id)).toMatchObject({ status: 'CANCELLED', cancelReason: 'Turned down (sales order request): Made-up: the customer wants other sizes.' })
-    const third = (await ok('sales', 'POST', '/sales/orders/manual', typed('PO-303-W3'), 201)).order
+    const third = (await ok('owner', 'POST', '/sales/orders/manual', typed('PO-303-W3'), 201)).order
     await no('sales2', 'POST', `/sales/orders/${third.id}/approval/withdraw`, {}, 403)
-    expect((await ok('sales', 'POST', `/sales/orders/${third.id}/approval/withdraw`, { words: 'Made-up: asked too early.' })).withdrawn).toBe(1)
+    expect((await ok('owner', 'POST', `/sales/orders/${third.id}/approval/withdraw`, { words: 'Made-up: asked too early.' })).withdrawn).toBe(1)
     const state = await ok('sales2', 'GET', `/sales/orders/${third.id}/approval`)
     expect(state).toMatchObject({ waiting: true, reasons: [expect.objectContaining({ reason: 'NO_REQUEST' })], may: { ask: true } })
     const asked = await ok('sales2', 'POST', `/sales/orders/${third.id}/approval`, { note: 'Made-up: sizes checked.' }, 201)
@@ -353,8 +359,9 @@ describe("the office's order of an accepted quote: the season goes with it, a ce
 
   it('refuses a size the released revision does not cover, in the rule\'s words; makes it once the scope covers it, with the season', async () => {
     let quote = (await ok('sales', 'POST', '/sales/quotes', { companyId: A.companyA, partyId: p1, customerRef: 'PO-303-Q' }, 201)).quote
-    quote = (await ok('sales', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jkt02.styleId, colourwayId: jkt02.colourwayId, unitPrice: '100', sizes: jkt02.sizes.slice(0, 2).map((size) => ({ size, quantity: 2 })) }, 201)).quote
-    quote = (await ok('sales', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: red.styleId, colourwayId: red.colourwayId, unitPrice: '110', sizes: red.sizes.slice(0, 2).map((size) => ({ size, quantity: 1 })) }, 201)).quote
+    // B-CP-011: the lines typed with a price are the Owner's.
+    quote = (await ok('owner', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jkt02.styleId, colourwayId: jkt02.colourwayId, unitPrice: '100', sizes: jkt02.sizes.slice(0, 2).map((size) => ({ size, quantity: 2 })) }, 201)).quote
+    quote = (await ok('owner', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: red.styleId, colourwayId: red.colourwayId, unitPrice: '110', sizes: red.sizes.slice(0, 2).map((size) => ({ size, quantity: 1 })) }, 201)).quote
     await ok('sales', 'PUT', `/sales/quotes/${quote.id}/season`, { version: quote.version, seasonId: S.fw27 })
     versionId = quote.current.id
     const accepted = await one<Json>(`SELECT v."billTo", v."shipTo" FROM "QuoteVersion" v JOIN "Quote" q ON q.id = v."quoteId" WHERE q."tenantId" = $1 AND q.number = 'SEED-Q-0001'`, [A.tenant])

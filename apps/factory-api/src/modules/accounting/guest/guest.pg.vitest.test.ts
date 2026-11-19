@@ -26,7 +26,9 @@ import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
  * XML only; the supplier invoice 2026/0412 received on 13 November; October's export a DRAFT). Made up here: an adviser
  * firm (the CONSULTANT role) of company A, its accountants, one customer buyer, the bytes of FT-2026-00001's XML.
  *
- *   - finance gives access (step-up; the firm's portal switched on, the invitation mailed, finance follows the firm);
+ *   - B-CP-011 (the money wall, Owner O3): the accountant sees our prices, so only the Owner gives access (finance is refused
+ *     in words) and only the Owner moves its end later; finance moves it earlier and ends it;
+ *   - the Owner gives access (step-up; the firm's portal switched on, the invitation mailed, the Owner follows the firm);
  *   - the accountant signs in: September handed over, October not yet (PERIOD_NOT_SHARED);
  *   - finance exports October: the accountant sees its journals, both sales e-invoices and the Intrastat file, no amount;
  *   - a download and two zips, each in the audit log; refused: another period's file, a file of no period, a period not
@@ -40,6 +42,9 @@ let h: Harness
 let world: PortalWorld
 let finance: Browser
 let financeSecret: string
+// B-CP-011: only the Owner gives the accountant access (and a later end of it).
+let owner: Browser
+let ownerSecret: string
 let viewer: Browser
 const NS = 'accounting-guest-a'
 const T = seedUuid(NS, 'tenant')
@@ -61,6 +66,11 @@ let octoberNumber = ''
 async function asFinance(method: 'POST' | 'PATCH', url: string, body: Json): Promise<{ status: number; body: any }> {
   await stepUp(h, finance, financeSecret)
   return finance.send(method as 'POST', url, body)
+}
+
+async function asOwner(method: 'POST' | 'PATCH', url: string, body: Json): Promise<{ status: number; body: any }> {
+  await stepUp(h, owner, ownerSecret)
+  return owner.send(method as 'POST', url, body)
 }
 
 async function signedIn(email: string): Promise<Browser> {
@@ -131,6 +141,11 @@ beforeAll(async () => {
   finance = new Browser(h.app)
   await finance.signIn(NS, financeUser.email, financeUser.password)
   financeSecret = await enrolTotp(h, finance)
+  const ownerUser = await addUser(h, TENANT, { email: 'olga.owner@example.com', role: 'owner' })
+  await admin(`UPDATE "User" SET "displayName" = 'Olga Rossi' WHERE id = $1`, [ownerUser.id])
+  owner = new Browser(h.app)
+  await owner.signIn(NS, ownerUser.email, ownerUser.password)
+  ownerSecret = await enrolTotp(h, owner)
   const viewerUser = await addUser(h, TENANT, { email: 'rita.reader@example.com', role: 'read_only' })
   viewer = new Browser(h.app)
   await viewer.signIn(NS, viewerUser.email, viewerUser.password)
@@ -146,7 +161,7 @@ afterAll(async () => {
   await h?.close()
 }, 60_000)
 
-describe('finance gives the accountant access (FIN-158, PLT-022)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+describe('the Owner gives the accountant access (FIN-158, PLT-022; B-CP-011)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('lists the firm with nobody yet; refuses without step-up, without the permission, without an end, for a non-adviser', async () => {
     const before = await ok(finance.get(`/accounting/accountants?companyId=${companyA}`))
     expect(before.firms.map((firm: Json) => [firm.party.name, firm.portalOn, firm.people.length])).toContainEqual(['Studio Prova', false, 0])
@@ -160,10 +175,17 @@ describe('finance gives the accountant access (FIN-158, PLT-022)', { timeout: SL
     const { accessUntil: _end, ...noEnd } = body
     expect((await asFinance('POST', '/accounting/accountants', noEnd)).status).toBe(400)
     expect(await problem(asFinance('POST', '/accounting/accountants', { ...body, partyId: world.partyId }), 409)).toEqual(['partyId'])
+    // B-CP-011 (Owner O3): the accountant sees our prices: finance (a price role itself) does not give it; nothing is written.
+    const refused = await asFinance('POST', '/accounting/accountants', body)
+    expect(refused.status, JSON.stringify(refused.body)).toBe(403)
+    expect(refused.body.error.issues).toEqual([{ path: 'roleKey/onlyOwnerGivesPrices', message: 'Only the Owner gives a role that sees prices.' }])
+    expect((await admin(`SELECT count(*)::int AS n FROM "User" WHERE email = $1`, [people.accountant]))[0]!.n).toBe(0)
+    const [settings] = await admin(`SELECT "portalOn" FROM "PortalSettings" WHERE id = $1`, [firmId])
+    expect(settings?.portalOn ?? false).toBe(false)
   })
 
   it('switches the firm’s portal on, invites the accountant, mails the sign-in page, and follows the firm', async () => {
-    const answer = await ok(asFinance('POST', '/accounting/accountants', { companyId: companyA, partyId: firmId, email: people.accountant, displayName: 'Anna Conti', locale: 'it', accessUntil: inAYear() }), 201)
+    const answer = await ok(asOwner('POST', '/accounting/accountants', { companyId: companyA, partyId: firmId, email: people.accountant, displayName: 'Anna Conti', locale: 'it', accessUntil: inAYear() }), 201)
     expect(answer).toMatchObject({ delivery: 'sent', portalSwitchedOn: true, invitation: { email: people.accountant } })
     accountantId = answer.invitation.userId
     const mails = h.ses.mails.filter((mail) => mail.templateKey === 'auth.portal_invitation' && mail.to[0] === people.accountant)
@@ -184,7 +206,8 @@ describe('the accountant’s room (SCR-268)', { timeout: SLOW_TEST_TIMEOUT_MS },
   it('signs in and sees September handed over; October is not yet', async () => {
     accountant = await signedIn(people.accountant)
     const overview = await ok(accountant.get('/portal/accounting'))
-    expect(overview.access).toMatchObject({ firm: { id: firmId, name: 'Studio Prova' }, company: { id: companyA, code: 'SCA' }, givenBy: 'Fiona Neri', preview: false, endsSoon: false })
+    // B-CP-011: the Owner gave it.
+    expect(overview.access).toMatchObject({ firm: { id: firmId, name: 'Studio Prova' }, company: { id: companyA, code: 'SCA' }, givenBy: 'Olga Rossi', preview: false, endsSoon: false })
     expect(overview.access.accessUntil).not.toBeNull()
     expect(overview.months).toEqual([{ month: '2026-09', lock: { level: 'HARD', lockedAt: expect.any(String) }, batches: 1 }])
     expect(overview.choices).toEqual({ months: ['2026-09'], quarters: ['2026-Q3'], years: ['2026'] })
@@ -326,9 +349,16 @@ describe('the end of access (PLT-022)', { timeout: SLOW_TEST_TIMEOUT_MS }, () =>
   it('moves the end, then ends it now: the accountant’s session ends at once', async () => {
     const version = async () => (await admin<{ version: number }>(`SELECT version FROM "User" WHERE id = $1`, [accountantId]))[0]!.version
     const later = new Date(h.clock.now().getTime() + 60 * 86_400_000).toISOString()
-    const moved = await ok(asFinance('PATCH', `/accounting/accountants/${accountantId}`, { companyId: companyA, version: await version(), accessUntil: later }))
+    // B-CP-011: a later end sees our prices longer: only the Owner; finance is refused in words and nothing moves.
+    const refused = await asFinance('PATCH', `/accounting/accountants/${accountantId}`, { companyId: companyA, version: await version(), accessUntil: later })
+    expect(refused.status, JSON.stringify(refused.body)).toBe(403)
+    expect(refused.body.error.issues).toEqual([{ path: 'accessUntil/onlyOwnerGivesPrices', message: 'Only the Owner gives a role that sees prices.' }])
+    const moved = await ok(asOwner('PATCH', `/accounting/accountants/${accountantId}`, { companyId: companyA, version: await version(), accessUntil: later }))
     expect(moved.accessUntil).toBe(later)
     expect((await accountant.get('/portal/accounting')).body.access.accessUntil).toBe(later)
+    // An earlier end lowers it: finance may.
+    const earlier = new Date(h.clock.now().getTime() + 50 * 86_400_000).toISOString()
+    expect((await ok(asFinance('PATCH', `/accounting/accountants/${accountantId}`, { companyId: companyA, version: await version(), accessUntil: earlier }))).accessUntil).toBe(earlier)
     const ended = await ok(asFinance('POST', `/accounting/accountants/${accountantId}/end`, { companyId: companyA, version: await version(), reason: 'The engagement ended (made up).' }))
     expect(ended).toMatchObject({ status: 'DEACTIVATED' })
     expect(ended.sessionsEnded).toBeGreaterThanOrEqual(1)
@@ -338,7 +368,7 @@ describe('the end of access (PLT-022)', { timeout: SLOW_TEST_TIMEOUT_MS }, () =>
 
   it('an access that ends by its date ends by itself', async () => {
     const soon = new Date(h.clock.now().getTime() + 5 * 60_000).toISOString()
-    const answer = await ok(asFinance('POST', '/accounting/accountants', { companyId: companyA, partyId: firmId, email: people.second, displayName: 'Bruno Conti', locale: 'en', accessUntil: soon }), 201)
+    const answer = await ok(asOwner('POST', '/accounting/accountants', { companyId: companyA, partyId: firmId, email: people.second, displayName: 'Bruno Conti', locale: 'en', accessUntil: soon }), 201)
     expect(answer.portalSwitchedOn).toBe(false)
     const second = await signedIn(people.second)
     expect((await second.get('/portal/accounting')).status).toBe(200)

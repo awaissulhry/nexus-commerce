@@ -36,6 +36,8 @@ type Json = Record<string, any>
 type Office = Awaited<ReturnType<UrgencyWorld['officePerson']>>
 type Portal = Awaited<ReturnType<UrgencyWorld['portalPerson']>>
 let sales: Office
+// B-CP-011: the Owner sets a counter's price (Sales holds no price grain: the money wall).
+let owner: Office
 let planner: Office
 let plannerB: Office
 let manager: Office
@@ -82,6 +84,7 @@ beforeAll(async () => {
   const so1 = (await admin<{ id: string; lineId: string }>(`SELECT o.id::text AS id, l.id::text AS "lineId" FROM "SalesOrder" o JOIN "SalesOrderLine" l ON l."orderId" = o.id WHERE o."tenantId" = $1 AND o.number = 'SEED-SO-0001' ORDER BY l.seq LIMIT 1`, [world.ids.tenantId]))[0]!
   orders.so1 = { orderId: so1.id, lineId: so1.lineId }
   sales = await world.officePerson('sara.sales@pr26-office.example.com', 'sales')
+  owner = await world.officePerson('olga.owner@pr26-office.example.com', 'owner')
   planner = await world.officePerson('piero.planner@pr26-office.example.com', 'planner')
   plannerB = await world.officePerson('bianca.planner@pr26-office.example.com', 'planner', [world.ids.b])
   manager = await world.officePerson('marco.manager@pr26-office.example.com', 'production_manager')
@@ -181,7 +184,9 @@ describe('B-PR-26: the factory answers its customers’ requests', { timeout: SL
     // Nothing offered: refused in words; a past date too.
     expect((await send(sales, 'POST', `/production/brand-requests/${change.id}/counter`, { version: 1 })).body.error.issues[0].message).toBe('Say what you offer instead: a date, a price or words.')
     expect((await send(sales, 'POST', `/production/brand-requests/${change.id}/counter`, { version: 1, date: addDays(TODAY(), -1) })).status).toBe(400)
-    const countered = await send(sales, 'POST', `/production/brand-requests/${change.id}/counter`, { version: 1, date: offered, fee: 2500, note: 'Made-up: the earlier date needs overtime.' })
+    // B-CP-011: Sales sees no prices now: its fee is refused (the money wall); the Owner counters with the price.
+    expect((await send(sales, 'POST', `/production/brand-requests/${change.id}/counter`, { version: 1, date: offered, fee: 2500 })).status).toBe(403)
+    const countered = await send(owner, 'POST', `/production/brand-requests/${change.id}/counter`, { version: 1, date: offered, fee: 2500, note: 'Made-up: the earlier date needs overtime.' })
     expect(countered.status, JSON.stringify(countered.body)).toBe(200)
     expect(countered.body.request).toMatchObject({ status: 'COUNTERED', waitingOn: 'CUSTOMER', counter: { date: offered, fee: 2500, priced: true, state: 'WAITING' }, may: { accept: false, refuse: false, counter: false } })
     const approvalId = countered.body.approvalRequestId as string
@@ -219,9 +224,15 @@ describe('B-PR-26: the factory answers its customers’ requests', { timeout: SL
     const agreed = (await read('office.all', `/production/brand-requests/${change.id}`)).request
     expect(agreed).toMatchObject({ status: 'COUNTERED', waitingOn: 'US', counter: { state: 'AGREED' }, may: { accept: true, refuse: false, counter: false } })
     expect((await todayKeys(sales)).some((value) => value.endsWith(`:${change.id}`))).toBe(true)
-    // Not refused after the yes; accepted by Sales (orders.manage), the order's date becomes the counter's.
+    // Not refused after the yes; the order's date becomes the counter's on the accept.
     expect((await send(sales, 'POST', `/production/brand-requests/${change.id}/refuse`, { version: agreed.version, answer: 'No.' })).body.error.issues[0].path).toBe('request/COUNTER_AGREED')
-    const accepted = await send(sales, 'POST', `/sales/change-requests/${change.id}/accept`, { version: agreed.version })
+    // B-CP-026 (Owner answer A): the agreed counter carries a price (its fee): Sales (no price grain) is held in words and nothing
+    // changes; a price holder (the Owner) accepts it (was Sales, orders.manage).
+    const blind = await send(sales, 'POST', `/sales/change-requests/${change.id}/accept`, { version: agreed.version })
+    expect(blind.status, JSON.stringify(blind.body)).toBe(403)
+    expect(blind.body.error.issues[0]).toMatchObject({ path: 'refusal/BLIND_PRICE', message: 'It changes a price you cannot see: someone who sees prices does it.' })
+    expect((await requestRow(change.id)).status).toBe('COUNTERED')
+    const accepted = await send(owner, 'POST', `/sales/change-requests/${change.id}/accept`, { version: agreed.version })
     expect(accepted.status, JSON.stringify(accepted.body)).toBe(200)
     expect(accepted.body.request.status).toBe('ACCEPTED')
     expect((await admin<{ day: string }>(`SELECT to_char("requestedDate", 'YYYY-MM-DD') AS day FROM "SalesOrder" WHERE id = $1`, [orders.so1.orderId]))[0]!.day).toBe(offered)

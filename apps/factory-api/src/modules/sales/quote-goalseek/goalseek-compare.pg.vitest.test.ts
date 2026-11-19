@@ -26,6 +26,8 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
  * the cost grain; and two versions of a quote compared (SAL-158) in VersionCompare's shape, the prices only with the price
  * grain. The seeds' P1 list prices SEED-JKT-01 at 420.00; SEED-Q-0004 is SENT (JKT-01 RED 52 × 3, LIST 430 → MANUAL −10
  * VOLUME → NET 420, DAP). Made-up data; prices worked out by hand.
+ * B-CP-011 (the money wall): the seller (Sales) sees and sends no price any more: the goal-seek is the Owner's; the seller's
+ * reads show no figure and a priced target from the seller is refused.
  * Run with `node scripts/factory/run-pg-tests.mjs modules/sales/quote-goalseek/`.
  */
 
@@ -43,17 +45,20 @@ const jkt01 = seedId('product:style:JKT-01')
 const BLK = seedId('product:colourway:JKT-01:BLK')
 
 const grainsOf = (grains: readonly string[]): Permission[] => grains.map((grain) => `money.${grain}` as Permission)
-const PEOPLE: Record<string, { readonly template: string; readonly role: string | null; readonly dropGrains?: readonly string[] }> = {
+const PEOPLE: Record<string, { readonly template: string; readonly role: string | null; readonly dropGrains?: readonly string[]; readonly addGrains?: readonly string[] }> = {
   seller: { template: 'sales', role: 'sales' },
   owner: { template: 'owner', role: 'owner' },
-  // The sales role without the price and margin grains (a custom role may be).
+  // The sales role without the price and margin grains (a custom role may be). B-CP-011: the Sales template itself now.
   blind: { template: 'sales', role: null, dropGrains: ['price', 'margin'] },
+  // B-CP-011: a custom role with the price and margin grains and no cost grain (Sales' grains before the money wall; only
+  // the Owner gives it now): a margin %, never a margin amount, and no target margin.
+  marginNoCost: { template: 'sales', role: null, addGrains: ['price', 'margin'] },
 }
 const IDS: Record<string, string> = Object.fromEntries(Object.keys(PEOPLE).map((key) => [key, newId()]))
 const SESSIONS: Record<string, SessionContext> = Object.fromEntries(
   Object.entries(PEOPLE).map(([key, person]) => {
     const role = templateOf(person.template)!
-    const grains = role.grains.filter((grain) => !(person.dropGrains ?? []).includes(grain))
+    const grains = [...role.grains.filter((grain) => !(person.dropGrains ?? []).includes(grain)), ...(person.addGrains ?? [])]
     const grant: Grant = { permissions: [...role.permissions, ...grainsOf(grains)], companies: 'all', sites: 'all', parties: 'all' }
     return [key, { audience: 'office', tenantId: tenant, actorId: IDS[key]!, grants: [grant] }]
   }),
@@ -113,8 +118,10 @@ afterAll(async () => {
 
 describe('target price goal-seek (SAL-150)', () => {
   it('shows the waterfall a target unit price gives, the discount needed and the totals, and writes nothing', async () => {
-    expect(lineOf(quote)).toMatchObject({ listUnitPrice: '420', unitPrice: '420' })
-    const preview = await ok('seller', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'UNIT_PRICE', unitPrice: '395' }, preview: true })
+    // B-CP-011: the seller's line took the list's price unseen; the Owner reads it and goal-seeks.
+    for (const field of ['listUnitPrice', 'unitPrice']) expect(lineOf(quote)).not.toHaveProperty(field)
+    expect(lineOf((await ok('owner', 'GET', q(quote.id))).quote)).toMatchObject({ listUnitPrice: '420', unitPrice: '420' })
+    const preview = await ok('owner', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'UNIT_PRICE', unitPrice: '395' }, preview: true })
     const [line] = preview.lines
     expect(line).toMatchObject({ start: { kind: 'LIST', unitPrice: '420' }, from: { unitPrice: '420' }, to: { unitPrice: '395' }, discountPct: '5.9524', pieces: 8 })
     expect(kinds(line.steps)).toEqual([
@@ -123,21 +130,26 @@ describe('target price goal-seek (SAL-150)', () => {
       ['NET', null, '395', null],
     ])
     expect(preview.totals).toMatchObject({ before: { netAmount: 336000 }, after: { netAmount: 316000 } })
-    // The seller holds the margin grain, not the cost grain: a margin %, never a margin amount.
+    // The margin grain without the cost grain: a margin %, never a margin amount (B-CP-011: a custom role now, was the seller;
+    // the Owner holds the cost grain and reads both).
+    const marginOnly = (await ok('marginNoCost', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'UNIT_PRICE', unitPrice: '395' }, preview: true })).lines[0]
+    expect(marginOnly.to).toHaveProperty('marginPct')
+    expect(marginOnly.to).not.toHaveProperty('marginAmount')
     expect(line.to).toHaveProperty('marginPct')
-    expect(line.to).not.toHaveProperty('marginAmount')
+    expect(line.to).toHaveProperty('marginAmount')
     expect(preview).toMatchObject({ preview: true, held: [], words: expect.stringMatching(/^Target unit price: 1 line\(s\) would take the target/) })
-    expect(lineOf((await ok('seller', 'GET', q(quote.id))).quote).unitPrice).toBe('420')
-    // Without the price and margin grains the figures are left out, and a priced target is refused.
-    await refused('blind', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'UNIT_PRICE', unitPrice: '395' }, preview: true }, 403)
+    expect(lineOf((await ok('owner', 'GET', q(quote.id))).quote).unitPrice).toBe('420')
+    // Without the price and margin grains the figures are left out, and a priced target is refused (B-CP-011: the seller too).
+    for (const who of ['blind', 'seller']) await refused(who, 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'UNIT_PRICE', unitPrice: '395' }, preview: true }, 403)
   })
 
   it('writes the same through the line price writer: the waterfall with its TARGET_PRICE reason', async () => {
-    const done = await ok('seller', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'UNIT_PRICE', unitPrice: '395' } })
+    // B-CP-011: written by the Owner (was the seller).
+    const done = await ok('owner', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'UNIT_PRICE', unitPrice: '395' } })
     quote = done.quote
     expect(done.preview).toBe(false)
     expect(lineOf(quote)).toMatchObject({ unitPrice: '395', listUnitPrice: '420' })
-    const pricing = await ok('seller', 'GET', `${q(quote.id)}/pricing`)
+    const pricing = await ok('owner', 'GET', `${q(quote.id)}/pricing`)
     expect(pricing.lines[0]).toMatchObject({ adjustmentReason: 'TARGET_PRICE', stepsProblem: null })
     expect(kinds(pricing.lines[0].steps)).toEqual([
       ['LIST', null, '420', null],
@@ -149,34 +161,37 @@ describe('target price goal-seek (SAL-150)', () => {
   })
 
   it('a discount off the start, and a total reached by one factor', async () => {
-    const discount = await ok('seller', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'DISCOUNT', pct: '10' }, preview: true })
+    // B-CP-011: the Owner's (was the seller's).
+    const discount = await ok('owner', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'DISCOUNT', pct: '10' }, preview: true })
     expect(kinds(discount.lines[0].steps)).toEqual([
       ['LIST', null, '420', null],
       ['DISCOUNT', '-42', '378', 'TARGET_PRICE'],
       ['NET', null, '378', null],
     ])
-    const total = await ok('seller', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'TOTAL', amount: '3000' }, preview: true })
+    const total = await ok('owner', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'TOTAL', amount: '3000' }, preview: true })
     expect(total.lines[0].to.unitPrice).toBe('375')
     expect(total.totals).toMatchObject({ after: { netAmount: 300000 }, target: 300000, gap: 0 })
   })
 
   it('holds a price under cost (an approver must allow it) and asks the cost grain for a target margin', async () => {
     const line = lineOf(quote)
-    const held = await ok('seller', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, lineIds: [line.id], target: { kind: 'UNIT_PRICE', unitPrice: '1' }, preview: true })
+    // B-CP-011: the Owner's goal-seek (was the seller's); the target margin without the cost grain: the custom role above.
+    const held = await ok('owner', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, lineIds: [line.id], target: { kind: 'UNIT_PRICE', unitPrice: '1' }, preview: true })
     expect(held.held).toEqual([{ lineId: line.id, seq: 10, code: 'BELOW_COST', words: expect.stringContaining('would sell below its cost: an approver must allow it') }])
     expect(held.lines[0].belowCost).toBe(true)
-    expect((await refused('seller', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'UNIT_PRICE', unitPrice: '1' } }, 409)).message).toContain('price the line by hand')
-    expect((await refused('seller', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'MARGIN', marginPct: '30' }, preview: true }, 403)).message).toContain('worked out from the cost')
+    expect((await refused('owner', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'UNIT_PRICE', unitPrice: '1' } }, 409)).message).toContain('price the line by hand')
+    expect((await refused('marginNoCost', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'MARGIN', marginPct: '30' }, preview: true }, 403)).message).toContain('worked out from the cost')
+    await refused('seller', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'MARGIN', marginPct: '30' }, preview: true }, 403)
     // The owner holds the cost grain: cost ÷ 0.70, up to the cent.
     const margin = await ok('owner', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version, target: { kind: 'MARGIN', marginPct: '30' }, preview: true })
     const expected = suggestedPriceOf({ unitCost: await unitCostOf(line.id), marginPct: '30', currency: 'EUR' })
     expect(margin.lines[0].to.unitPrice).toBe('unitPrice' in expected ? expected.unitPrice : null)
     expect(margin.lines[0].to).toHaveProperty('marginAmount')
     // A stale review is refused; a fee is priced on its own.
-    await refused('seller', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version - 1, target: { kind: 'UNIT_PRICE', unitPrice: '390' }, preview: true }, 409)
-    const withFee = (await ok('seller', 'POST', `${q(quote.id)}/fees`, { version: quote.version, feeKind: 'SAMPLE', styleId: jkt01, unitPrice: '150' }, 201)).quote
+    await refused('owner', 'POST', `${q(quote.id)}/goal-seek`, { version: quote.version - 1, target: { kind: 'UNIT_PRICE', unitPrice: '390' }, preview: true }, 409)
+    const withFee = (await ok('owner', 'POST', `${q(quote.id)}/fees`, { version: quote.version, feeKind: 'SAMPLE', styleId: jkt01, unitPrice: '150' }, 201)).quote
     const fee = withFee.lines.find((entry: Json) => entry.kind === 'FEE')
-    expect((await refused('seller', 'POST', `${q(quote.id)}/goal-seek`, { version: withFee.version, lineIds: [fee.id], target: { kind: 'UNIT_PRICE', unitPrice: '100' }, preview: true }, 400)).message).toContain('a fee is priced on its own')
+    expect((await refused('owner', 'POST', `${q(quote.id)}/goal-seek`, { version: withFee.version, lineIds: [fee.id], target: { kind: 'UNIT_PRICE', unitPrice: '100' }, preview: true }, 400)).message).toContain('a fee is priced on its own')
   })
 })
 
@@ -186,11 +201,12 @@ describe('two versions of a quote compared (SAL-158)', () => {
     let sent = (await ok('seller', 'GET', q(sentId))).quote
     sent = (await ok('seller', 'POST', `${q(sentId)}/revise`, { version: sent.version, changeNote: 'Made-up: the customer asked for more.' })).quote
     const line = lineOf(sent)
-    sent = (await ok('seller', 'POST', `${q(sentId)}/goal-seek`, { version: sent.version, lineIds: [line.id], target: { kind: 'UNIT_PRICE', unitPrice: '400' } })).quote
+    // B-CP-011: the seller revises, sizes and terms; the price is the Owner's (was the seller's), and so is the price compare.
+    sent = (await ok('owner', 'POST', `${q(sentId)}/goal-seek`, { version: sent.version, lineIds: [line.id], target: { kind: 'UNIT_PRICE', unitPrice: '400' } })).quote
     sent = (await ok('seller', 'POST', `${q(sentId)}/lines/sizes`, { version: sent.version, sizes: ['52'], change: { kind: 'DELTA', pieces: 1 } })).quote
     await ok('seller', 'PUT', `${q(sentId)}/terms`, { version: sent.version, incoterm: 'EXW', incotermPlace: 'Seedville' })
 
-    const compare = await ok('seller', 'GET', `${q(sentId)}/versions/compare`)
+    const compare = await ok('owner', 'GET', `${q(sentId)}/versions/compare`)
     expect([compare.before.label, compare.after.label]).toEqual(['Version 1', 'Version 2'])
     const [terms, lines] = compare.sections
     expect(terms.lines[0].after.fields.incoterm).toBe('EXW Seedville')
@@ -201,13 +217,15 @@ describe('two versions of a quote compared (SAL-158)', () => {
     expect(compare.words).toMatch(/^Terms & delivery: 1 changed · Lines: 1 changed · Prices: 1 changed/)
     expect(compare.changeNote).toContain('52 3 → 4')
     expect(compare.changeNote).toContain('unit price 420 → 400')
-    // Without the price and margin grains: no prices, no margins, and a change note without them.
-    const blind = await ok('blind', 'GET', `${q(sentId)}/versions/compare?from=1&to=2`)
-    expect(blind).not.toHaveProperty('prices')
-    expect(blind).not.toHaveProperty('margin')
-    expect(blind.changeNote).not.toContain('400')
-    expect(blind.words).toBe('Terms & delivery: 1 changed · Lines: 1 changed')
-    expect(blind.differs.map((entry: Json) => entry.section)).toEqual(['terms', 'lines'])
+    // Without the price and margin grains: no prices, no margins, and a change note without them (B-CP-011: the seller too).
+    for (const who of ['blind', 'seller']) {
+      const blind = await ok(who, 'GET', `${q(sentId)}/versions/compare?from=1&to=2`)
+      expect(blind, who).not.toHaveProperty('prices')
+      expect(blind, who).not.toHaveProperty('margin')
+      expect(blind.changeNote, who).not.toContain('400')
+      expect(blind.words, who).toBe('Terms & delivery: 1 changed · Lines: 1 changed')
+      expect(blind.differs.map((entry: Json) => entry.section), who).toEqual(['terms', 'lines'])
+    }
     expect((await refused('seller', 'GET', `${q(sentId)}/versions/compare?from=2&to=2`, undefined, 400)).message).toBe('Pick two different versions to compare.')
     await refused('seller', 'GET', `${q(sentId)}/versions/compare?from=1&to=5`, undefined, 404)
   })

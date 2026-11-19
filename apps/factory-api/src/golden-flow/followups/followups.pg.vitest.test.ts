@@ -360,13 +360,17 @@ describe('the W2b-0 golden flow: the W2a follow-ups through the HTTP routes', { 
     }
     const { order } = await ok(P.sales, 'POST', '/sales/orders/manual', body, 201)
     expect(order).toMatchObject({ status: 'CONFIRMED', depositRequired: true })
+    // B-CP-011 (the money wall): Sales's answer holds no amount; the order's gross is read by finance (a price role).
+    expect(order).not.toHaveProperty('grossAmount')
+    const gross = (await ok(P.finance, 'GET', `/sales/orders/${order.id}`)).order.grossAmount as number
+    expect(gross).toBeGreaterThan(0)
     const request = order.chain.depositRequests[0]
     expect(request).toBeTruthy()
     expect(await admin(w, `SELECT kind::text AS kind, "fiscalDocument"::text AS fiscal, "fiscalRule", amount, status::text AS status FROM "DepositRequest" WHERE id = $1`, [request.id])).toEqual([
-      { kind: 'CAPARRA', fiscal: 'NONE', fiscalRule: 'CAPARRA_CONFIRMATORIA', amount: Math.round(order.grossAmount * 0.3), status: 'OPEN' },
+      { kind: 'CAPARRA', fiscal: 'NONE', fiscalRule: 'CAPARRA_CONFIRMATORIA', amount: Math.round(gross * 0.3), status: 'OPEN' },
     ])
     G.order = order
-    G.deposit = { id: request.id, amount: Math.round(order.grossAmount * 0.3) }
+    G.deposit = { id: request.id, amount: Math.round(gross * 0.3) }
     keep(order.id, request.id)
     expect(await settle()).toContain('deposit_request.created_for_order')
   })

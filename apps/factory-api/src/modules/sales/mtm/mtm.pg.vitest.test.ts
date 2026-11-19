@@ -227,10 +227,14 @@ const quoteVersion = async (id: string) => (await one<{ version: number }>(`SELE
 describe('a quote’s made-to-measure unit (MM1:01, PRD-017; switched off per template)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('W1’s PATCH of SEED-Q-0002 (a seeded unit) no longer answers 500: the unit is one piece', async () => {
     const version = await quoteVersion(S.q2)
-    const patched = await ok('sales', 'PATCH', `/sales/quotes/${S.q2}`, { version, changeNote: 'Made-up change note: the money is refreshed.' })
+    // B-CP-011 (the money wall): the money is the owner's read; the sales role reads the same unit without it.
+    const patched = await ok('owner', 'PATCH', `/sales/quotes/${S.q2}`, { version, changeNote: 'Made-up change note: the money is refreshed.' })
     const unit = patched.quote.lines.find((line: Json) => line.kind === 'MADE_TO_MEASURE')
     expect(unit).toMatchObject({ quantity: 1 })
     expect(unit.netAmount).toBeGreaterThan(0)
+    const seen = (await ok('sales', 'GET', `/sales/quotes/${S.q2}`)).quote.lines.find((line: Json) => line.kind === 'MADE_TO_MEASURE')
+    expect(seen).toMatchObject({ quantity: 1 })
+    expect('netAmount' in seen).toBe(false)
   })
 
   it('REFUSES a unit while made-to-measure has not started for the template, or of a style not flagged', async () => {
@@ -250,7 +254,9 @@ describe('a quote’s made-to-measure unit (MM1:01, PRD-017; switched off per te
 
   it('takes the unit once started: one piece, the base size the measures point to, priced and costed; the profile’s customer only', async () => {
     const version = await quoteVersion(quoteId)
-    const added = await ok('sales', 'POST', `/sales/quotes/${quoteId}/lines/made-to-measure`, { version, styleId: S.jkt01, colourwayId: S.blk, measurementProfileId: rev2, unitPrice: '610' }, 201)
+    // B-CP-011: the sales role may not send a typed price (refused, nothing written); the owner types it and reads the money.
+    await no('sales', 'POST', `/sales/quotes/${quoteId}/lines/made-to-measure`, { version, styleId: S.jkt01, colourwayId: S.blk, measurementProfileId: rev2, unitPrice: '610' }, 403)
+    const added = await ok('owner', 'POST', `/sales/quotes/${quoteId}/lines/made-to-measure`, { version, styleId: S.jkt01, colourwayId: S.blk, measurementProfileId: rev2, unitPrice: '610' }, 201)
     const unit = added.quote.lines.find((line: Json) => line.kind === 'MADE_TO_MEASURE')
     unitLine = unit.id
     // The private rider's quote is VAT included: 610 with 22 % VAT is 500 net.
@@ -269,10 +275,11 @@ describe('a quote’s made-to-measure unit (MM1:01, PRD-017; switched off per te
   })
 
   it('an out-of-chart size on a size-grid line becomes a unit after it (SAL-276); a size of the chart is refused', async () => {
-    const grid = await ok('sales', 'POST', `/sales/quotes/${quoteId}/lines`, { version: await quoteVersion(quoteId), styleId: S.jkt01, colourwayId: S.blk, sizes: [{ size: '52', quantity: 2 }] }, 201)
+    // B-CP-011: the unit takes the grid line's price, the owner's read (the sales role reads no price).
+    const grid = await ok('owner', 'POST', `/sales/quotes/${quoteId}/lines`, { version: await quoteVersion(quoteId), styleId: S.jkt01, colourwayId: S.blk, sizes: [{ size: '52', quantity: 2 }] }, 201)
     const line = grid.quote.lines.find((entry: Json) => entry.kind === 'SIZE_GRID')
     expect((await no('sales', 'POST', `/sales/quotes/${quoteId}/lines/${line.id}/out-of-chart`, { version: await quoteVersion(quoteId), size: '52', measurementProfileId: rev2 }, 409)).message).toContain('is in SEED-JKT-01')
-    const made = await ok('sales', 'POST', `/sales/quotes/${quoteId}/lines/${line.id}/out-of-chart`, { version: await quoteVersion(quoteId), size: '62', measurementProfileId: rev2 }, 201)
+    const made = await ok('owner', 'POST', `/sales/quotes/${quoteId}/lines/${line.id}/out-of-chart`, { version: await quoteVersion(quoteId), size: '62', measurementProfileId: rev2 }, 201)
     const unit = made.quote.lines.find((entry: Json) => entry.seq === line.seq + 1)
     expect(unit).toMatchObject({ kind: 'MADE_TO_MEASURE', quantity: 1, unitPrice: line.unitPrice })
     expect(unit.description).toContain('size 62 out of the chart, made to measure')

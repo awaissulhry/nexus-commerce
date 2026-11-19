@@ -1131,9 +1131,10 @@ export async function setPriced(caller: CommandCaller, fileId: string, input: { 
   if (!(await officeReachesRecord(caller, before)) || !can(actorOf(context), FILES_READ, { companyId: before.companyId })) throw new NotFoundError('File not found.')
   const sees = seesPricesOf(context)
   if (!input.priced && !sees) throw pricedUnmarkHeld()
-  const shown = async (row: Row): Promise<FileView> =>
-    !mayOpenPriced(row, sees) ? lockedView(viewOf(row), PRICED_LOCK) : isMeasurementSheet(row) && !(await opensMeasurementSheets(caller, row)) ? lockedView(viewOf(row)) : viewOf(row)
-  if (before.priced === input.priced) return shown(before)
+  // The answer from the file's view (plain JSON: a command never returns a Date), locked as every list locks it.
+  const shown = async (view: FileView): Promise<FileView> =>
+    !mayOpenPriced(view, sees) ? lockedView(view, PRICED_LOCK) : isMeasurementSheet(view) && !(await opensMeasurementSheets(caller, view)) ? lockedView(view) : view
+  if (before.priced === input.priced) return shown(viewOf(before))
   const { result } = await command(
     caller,
     { name: 'files.setPriced', idempotencyKey, input: { fileId, ...input }, record: { type: 'StoredFile', id: fileId, expectedVersion: input.version } },
@@ -1154,7 +1155,7 @@ export async function setPriced(caller: CommandCaller, fileId: string, input: { 
         companyId: row.companyId,
         payload: { fileId, recordType: row.recordType, recordId: row.recordId, priced: row.priced, fileIds: [fileId, ...changed].slice(0, PRICED_REACH_MAX), partyId: await fileLivePartyId(tx, tenantOf(inside), row) },
       })
-      return row
+      return viewOf(row)
     },
   )
   return shown(result)

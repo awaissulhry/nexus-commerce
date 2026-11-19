@@ -827,7 +827,7 @@
       "error": "Non è stato possibile contare le richieste in arrivo.",
       "new": "Nuove richieste in arrivo",
       "newHint": "Richieste, ordini dal catalogo e richieste di modifica che nessuno ha ancora iniziato: il riquadro Nuove di In arrivo",
-      "catalogue": "Ordini dal catalogo da decidere",
+      "catalogue": "Ordini dal portale da decidere",
       "catalogueHint": "Ordini che i clienti hanno inviato dal catalogo del loro portale, in attesa di Accetta o Rifiuta",
       "waiting": "In attesa nostra da oltre un giorno lavorativo",
       "waitingHint": "Di tutti, come li conta il riquadro di In arrivo (Aspetta me ora elenca solo le tue o di nessuno)",

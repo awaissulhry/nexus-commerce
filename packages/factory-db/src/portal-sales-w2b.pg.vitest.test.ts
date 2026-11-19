@@ -131,10 +131,11 @@ afterAll(async () => {
 }, 60_000)
 
 describe('grants and the seed', () => {
-  it('classifies the six models: office and partner only, no floor, no personal data map; a link inserts a profile, the office updates one', () => {
+  // B-CP-005 (customer page schema wave): + PortalOrderRequestPerson, the people of a by-person draft line (the seventh model).
+  it('classifies the seven models: office and partner only, no floor, no personal data map; a link inserts a profile, the office updates one', () => {
     const ownership = loadOwnership()
     const models = classifiedModels(loadSchema(), ownership).filter(({ model }) => model.file === 'portal-sales.prisma')
-    expect(models.map(({ model }) => model.name).sort()).toEqual(['OrderChangeRequest', 'OrderChangeRequestLine', 'PaymentIntent', 'PortalOrderRequest', 'PortalOrderRequestLine', 'PortalOrderRequestSize'])
+    expect(models.map(({ model }) => model.name).sort()).toEqual(['OrderChangeRequest', 'OrderChangeRequestLine', 'PaymentIntent', 'PortalOrderRequest', 'PortalOrderRequestLine', 'PortalOrderRequestPerson', 'PortalOrderRequestSize'])
     for (const { model, ownership: entry } of models) expect(Object.keys(entry.access).sort(), model.name).toEqual(['factory_partner_runtime', 'factory_runtime'])
     const names = new Set(models.map(({ model }) => model.name))
     expect(personalDataOf(loadSchema(), ownership).filter((entry) => names.has(entry.model))).toEqual([])
