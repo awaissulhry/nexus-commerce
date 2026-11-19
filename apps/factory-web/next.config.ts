@@ -11,12 +11,20 @@ import { officeRedirects } from './src/shell/nav/renamed'
  * route shapes, so type checking needs no API.
  * B-W2b-F57: nor does any of them start with a FACTORY_TRUSTED_PROXIES that is not valid, or on Railway without it (the
  * edges in front of this web: lib/api/forwarded.ts).
+ * fx-8: FACTORY_WEB_BROWSER_FLOW_BUILD=1 marks the browser golden flow's own build (scripts/factory/browser-golden-flow.mjs
+ * --next-start, the GitHub end check): it keeps the test seams `next dev` has (inlined at build time; the floor queue on
+ * window, src/floor/FloorApp.tsx) and leaves type checking to the typecheck job, as `next dev` does. Never a deploy's build:
+ * refused on Railway.
  */
 export default function factoryWebConfig(phase: string): NextConfig {
   const typegenOnly = process.argv.slice(2).includes('typegen')
+  const browserFlowBuild = process.env.FACTORY_WEB_BROWSER_FLOW_BUILD === '1'
   if (!typegenOnly) {
     readFactoryApiUrl(process.env.FACTORY_API_URL)
     readWebTrustedProxies(process.env.FACTORY_TRUSTED_PROXIES, process.env.RAILWAY_ENVIRONMENT)
+    if (browserFlowBuild && process.env.RAILWAY_ENVIRONMENT) {
+      throw new Error('FACTORY_WEB_BROWSER_FLOW_BUILD is set on Railway: only the browser golden flow builds with the test seams')
+    }
   }
   return {
     reactStrictMode: true,
@@ -32,6 +40,9 @@ export default function factoryWebConfig(phase: string): NextConfig {
     // B-W2b-F6 (floor/moves.ts): a floor tablet keeps the pages it prefetched whole for a day, and a move with the network gone
     // waits instead of falling back to a full page load, which ends on the browser's error page.
     experimental: { staleTimes: { static: 86_400 }, useOffline: true },
+    // fx-8: the browser golden flow's own build (above); every other build inlines '' and drops the seams.
+    env: { FACTORY_WEB_BROWSER_FLOW_BUILD: browserFlowBuild ? '1' : '' },
+    ...(browserFlowBuild ? { typescript: { ignoreBuildErrors: true } } : {}),
     // B-TH-216 (threads plan TH-1b): an Office page that changed its address opens from its old one, its query and record id
     // kept (Sales › Inquiries → Sales › Incoming; src/shell/nav/renamed.ts).
     redirects: async () => officeRedirects(),
