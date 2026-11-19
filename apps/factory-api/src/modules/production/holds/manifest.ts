@@ -12,4 +12,6 @@ export const manifest = defineManifest({
   'POST /production/work-orders/:workOrderId/holds/:holdId/lift': { audiences: ['office'], permission: 'workorders.hold', scope: 'record' },
   // The list's Hold N with a production reason: one hold per work order, all or none.
   'POST /production/work-orders/holds': { audiences: ['office'], permission: 'workorders.hold', scope: 'record' },
+  // B-OO-006 (order overview N5): ONE Lift for a pause on N work orders, all or none (workorders.hold over each work order).
+  'POST /production/work-orders/holds/lift': { audiences: ['office'], permission: 'workorders.hold', scope: 'record' },
 })

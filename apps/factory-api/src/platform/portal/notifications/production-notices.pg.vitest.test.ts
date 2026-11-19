@@ -125,6 +125,11 @@ async function tell(type: string, payload: Json): Promise<void> {
     fanOutOptions(),
   )
 }
+// B-OO-005: the three work orders of A's order the whole-order hold takes (A's own and two more of its line).
+const wholeOrder: string[] = []
+/** B-OO-005: each work order's version as stored now (the bulk hold sends them). */
+const versionsOf = async (workOrderIds: readonly string[]): Promise<Record<string, number>> =>
+  Object.fromEntries((await admin<{ id: string; version: number }>('SELECT id::text AS id, version FROM "WorkOrder" WHERE id = ANY($1::uuid[])', [[...workOrderIds]])).map((row) => [row.id, row.version]))
 /** The keeper's handler on the hold events the outbox holds that it has not followed yet (as the worker runs it). */
 const kept = new Set<string>()
 async function keepHolds(): Promise<void> {
@@ -300,6 +305,63 @@ describe('B-PR-31: the customer is told of its own production', { timeout: SLOW_
     expect(await fresh(betaProduction)).toEqual([])
     expect(await fresh(alphaFinance)).toEqual([])
   })
+
+  // ---- B-OO-005 (order overview F10b; plan.md §3 "one on hold notice per act"): N work orders of one order held in ONE act ------
+  it('B-OO-005 hold the whole order: three work orders of one order in one act — three holds, three keeper events, ONE on hold', async () => {
+    for (const size of ['50', '52']) {
+      const made = await office('POST', '/production/work-orders', { siteId: world.w.siteId, lines: [{ salesOrderLineId: world.w.a.salesOrderLineId, sizes: [{ size, quantity: 1 }] }] }, 201)
+      wholeOrder.push(made.workOrder.id as string)
+    }
+    wholeOrder.unshift(world.w.a.workOrderId)
+    const placed = await office('POST', '/production/work-orders/holds', { workOrderIds: wholeOrder, reasonCode: 'MATERIAL_MISSING', note: 'Made-up: the lining ships late (office only).', versions: await versionsOf(wholeOrder) }, 201)
+    expect(placed.workOrders.map((entry: Json) => [entry.id, entry.status, entry.held])).toEqual(wholeOrder.map((id) => [id, 'ON_HOLD', true]))
+    await keepHolds()
+    const causes = (await outbox('work_order_hold.placed')).filter((row) => (placed.holds as Json[]).some((hold) => hold.id === row.payload.holdId))
+    expect(causes).toHaveLength(3)
+    // The keeper follows each hold event: three events of the customer's order, each "on hold" (one act: one request).
+    expect(new Set(causes.map((row) => row.correlationId)).size).toBe(1)
+    const kept = (await outbox('brand_production.hold_changed')).filter((row) => causes.some((cause) => cause.id === row.causationId))
+    expect(kept.map((row) => [row.subject, row.payload.held])).toEqual(causes.map(() => [world.w.a.salesOrderId, true]))
+    await fanOut()
+    const told = (await fresh(alphaBuyer)).filter((notice) => notice.eventType === 'brand_production.hold_changed')
+    expect(told.map(shortOf)).toEqual([{ messageKey: 'portal.production.on_hold', recordId: world.w.a.salesOrderId }])
+    expect(JSON.stringify(told)).not.toContain('lining')
+    expect(await fresh(betaProduction)).toEqual([])
+    expect(await fresh(alphaFinance)).toEqual([])
+    // Lifted one at a time (three acts, each followed as the worker would): the first two leave it on hold (nothing told), the
+    // last tells "resumed" once.
+    for (const [index, hold] of (placed.holds as Json[]).entries()) {
+      await office('POST', `/production/work-orders/${hold.workOrderId}/holds/${hold.id}/lift`, { version: hold.version, reason: 'Made-up: the lining arrived.' })
+      await keepHolds()
+      await fanOut()
+      const now = (await fresh(alphaBuyer)).filter((notice) => notice.eventType === 'brand_production.hold_changed').map(shortOf)
+      expect(now, `lift ${index + 1}`).toEqual(index < 2 ? [] : [{ messageKey: 'portal.production.hold_lifted', recordId: world.w.a.salesOrderId }])
+    }
+    expect(await fresh(betaProduction)).toEqual([])
+  })
+  // ---- end B-OO-005
+
+  // ---- B-OO-006 (order overview N5): ONE Lift for the pause on its N work orders — one act, ONE "resumed" ---------------------------
+  it('B-OO-006 one Lift for the pause on the order’s three work orders: three lifts in one act, ONE resumed', async () => {
+    expect(wholeOrder).toHaveLength(3)
+    const placed = await office('POST', '/production/work-orders/holds', { workOrderIds: wholeOrder, reasonCode: 'CAPACITY', versions: await versionsOf(wholeOrder) }, 201)
+    await keepHolds()
+    await fanOut()
+    expect((await fresh(alphaBuyer)).filter((notice) => notice.eventType === 'brand_production.hold_changed').map(shortOf)).toEqual([{ messageKey: 'portal.production.on_hold', recordId: world.w.a.salesOrderId }])
+    const lifted = await office('POST', '/production/work-orders/holds/lift', { holds: (placed.holds as Json[]).map((hold) => ({ workOrderId: hold.workOrderId, holdId: hold.id, version: hold.version })), reason: 'Made-up: capacity found.' })
+    expect(lifted.workOrders.map((entry: Json) => [entry.id, entry.lifted])).toEqual(wholeOrder.map((id) => [id, true]))
+    await keepHolds()
+    // The keeper reads the order after the act: three events, each "no longer on hold" — told once.
+    const causes = (await outbox('work_order_hold.lifted')).filter((row) => (placed.holds as Json[]).some((hold) => hold.id === row.payload.holdId))
+    expect(causes).toHaveLength(3)
+    const kept = (await outbox('brand_production.hold_changed')).filter((row) => causes.some((cause) => cause.id === row.causationId))
+    expect(kept.map((row) => [row.subject, row.payload.held])).toEqual(causes.map(() => [world.w.a.salesOrderId, false]))
+    await fanOut()
+    expect((await fresh(alphaBuyer)).filter((notice) => notice.eventType === 'brand_production.hold_changed').map(shortOf)).toEqual([{ messageKey: 'portal.production.hold_lifted', recordId: world.w.a.salesOrderId }])
+    expect(await fresh(betaProduction)).toEqual([])
+    expect(await fresh(alphaFinance)).toEqual([])
+  })
+  // ---- end B-OO-006
 
   it('a stage reached and a health worse: told while the order is there, never its first, never stale, never of another customer', async () => {
     const row = `brand-production:${orders.a2}`

@@ -137,6 +137,9 @@ describe('B-PR-10 the brand-wall sweep', () => {
     const office = [...sweeper.routes.values()].filter((route) => isOffice(route)).map((route) => `${route.method} ${route.url}`)
     expect(office.filter((key) => !swept.has(key) && !EXEMPT[key])).toEqual([])
     for (const key of Object.keys(EXEMPT)) expect(sweeper.routes.has(key), `EXEMPT ${key} is a registered route`).toBe(true)
+    // B-OO-006 (order overview N5): the one Lift for N work orders is met by the sweep by itself — swept as a write, never EXEMPT.
+    expect(swept.has('POST /production/work-orders/holds/lift')).toBe(true)
+    expect(EXEMPT['POST /production/work-orders/holds/lift']).toBeUndefined()
     expect(swept.size).toBeGreaterThan(walked.length)
     // The golden production world's traces of A, here too: its portal people and their mails, stock moves of its work orders,
     // its files and threads (fix-pr-7 found the mail log and the stock card leaks only where they were).

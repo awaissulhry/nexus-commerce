@@ -1,5 +1,5 @@
 import type { WorkOrderStatus as DbWorkOrderStatus } from '@nexus/factory-db'
-import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { PRODUCTION_HOLD_LIST, type WorkOrderHoldKind } from '@nexus/factory-domain/production/holds/kinds'
@@ -169,6 +169,8 @@ export interface PlaceWorkOrderHolds {
   readonly requestId?: string | null | undefined
   /** One work order: its version read (else not checked). */
   readonly version?: number | undefined
+  /** B-OO-005: each work order's version read (`{ [workOrderId]: version }`; one left out: not checked). */
+  readonly versions?: Readonly<Record<string, number>> | undefined
 }
 
 export interface PlacedWorkOrderHold {
@@ -215,6 +217,12 @@ export async function placeWorkOrderHoldsInCommand(tools: CommandTools, input: P
     if (!row) throw new NotFoundError('Work order not found.')
     rows.push(row)
   }
+  // B-OO-005 (F16): every version sent is checked under the locks, before anything is written: one that changed → nothing held.
+  const stale = rows.filter((row) => {
+    const sent = input.versions?.[row.id]
+    return sent !== undefined && sent !== row.version
+  })
+  if (stale.length > 0) throw staleWorkOrders(stale, input.workOrderIds)
   const refused = rows.flatMap((row) => {
     const words = unholdableWords(row.number, row.status as WorkOrderStatus)
     return words ? [words] : []
@@ -234,7 +242,8 @@ async function placeOne(
   const actorId = (tools.context as OfficeContext).actorId
   const holdId = newId()
   const move = productionHoldMove(row.status as WorkOrderStatus)
-  await bumpVersion(tx, row.id, input.workOrderIds.length === 1 ? input.version : undefined)
+  // B-OO-005: the version read of each one (checked above), else the one work order's.
+  await bumpVersion(tx, row.id, input.versions?.[row.id] ?? (input.workOrderIds.length === 1 ? input.version : undefined))
   // The work order FIRST (ON_HOLD with this hold as its record), then the hold's row.
   if (move === 'HOLD') {
     await tx.workOrder.update({
@@ -312,7 +321,30 @@ export interface PlaceManyBody {
   readonly reasonCode: string
   readonly note?: string | null | undefined
   readonly brandWords?: string | null | undefined
+  /** B-OO-005: each work order's version read (optional: Production's list sends none yet; the order page always does). */
+  readonly versions?: Readonly<Record<string, number>> | undefined
 }
+
+// ---- B-OO-005 (order overview N6, F16): the bulk hold checks each version sent -------------------------------------------------
+/** One or more work orders changed since they were read: 409 naming each by its number, at `body/versions/<id>`. */
+function staleWorkOrders(stale: readonly Header[], asked: readonly string[]): DomainError {
+  // In the order the body named them (the rows were locked in id order).
+  const rows = [...stale].sort((x, y) => asked.indexOf(x.id) - asked.indexOf(y.id))
+  const message =
+    rows.length === 1
+      ? `Work order ${rows[0]!.number} changed since you read it (now version ${rows[0]!.version}): reload it and hold again. Nothing was held.`
+      : `${rows.length} of these work orders changed since you read them: ${rows.map((row) => row.number).join(', ')}. Reload them and hold again. Nothing was held.`
+  return new DomainError('conflict', message, rows.map((row) => ({ path: `body/versions/${row.id}`, message: `Work order ${row.number} is now at version ${row.version}.` })))
+}
+
+/** A version may only name a work order of this hold. */
+function versionProblems(body: Pick<PlaceManyBody, 'workOrderIds' | 'versions'>): Issue[] {
+  const asked = new Set(body.workOrderIds)
+  return Object.keys(body.versions ?? {})
+    .filter((id) => !asked.has(id))
+    .map((id) => ({ path: `versions/${id}`, message: 'A version only for a work order of this hold.' }))
+}
+// ---- end B-OO-005
 
 /**
  * POST /production/work-orders/holds (workorders.hold): the list's Hold N with a production reason — one PRODUCTION hold per work
@@ -328,6 +360,7 @@ export async function placeWorkOrderHolds(caller: CommandCaller, body: PlaceMany
     if (seen.has(id)) problems.push({ path: `workOrderIds/${index}`, message: 'Name each work order once.' })
     seen.add(id)
   })
+  problems.push(...versionProblems(body)) // B-OO-005
   if (problems.length > 0) refuse(problems, 'The hold is not valid.')
   const rows = await caller.withClient(async (client) => Promise.all(body.workOrderIds.map((id) => (isUuid(id) ? readWorkOrder(client, id) : null))))
   const missing = body.workOrderIds.flatMap((_, index) => {
@@ -337,7 +370,7 @@ export async function placeWorkOrderHolds(caller: CommandCaller, body: PlaceMany
   if (missing.length > 0) refuse(missing, 'Some of these work orders are not found.')
   if (rows.some((row) => !mayOn(context, WORKORDERS_HOLD, row!))) throw new ForbiddenError('You put work orders on hold only where your role reaches.')
   const { result } = await command(caller, { name: 'workorders.placeHolds', idempotencyKey, input: body }, async (tools) => {
-    const placed = await placeWorkOrderHoldsInCommand(tools, { workOrderIds: body.workOrderIds, kind: 'PRODUCTION', reasonCode: body.reasonCode, note: body.note, brandWords: body.brandWords })
+    const placed = await placeWorkOrderHoldsInCommand(tools, { workOrderIds: body.workOrderIds, kind: 'PRODUCTION', reasonCode: body.reasonCode, note: body.note, brandWords: body.brandWords, versions: body.versions /* B-OO-005 */ })
     return {
       holds: await holdViews(tools.tx, placed.map((entry) => entry.hold)),
       workOrders: placed.map((entry) => ({ id: entry.workOrder.id, number: entry.workOrder.number, status: entry.workOrder.status, held: entry.held })),
@@ -437,3 +470,99 @@ export async function liftWorkOrderHold(caller: CommandCaller, workOrderId: stri
   })
   return result
 }
+
+// ---- B-OO-006 (order overview N5, 13-backend §5): ONE Lift for a pause on N work orders -----------------------------------------
+
+export interface LiftManyBody {
+  readonly holds: readonly { readonly workOrderId: string; readonly holdId: string; readonly version: number }[]
+  readonly reason: string
+}
+
+type LiftEntry = LiftManyBody['holds'][number]
+
+/** Work order by work order, then hold by hold, in id order (as the customer's RESUME lifts them). */
+const byWorkOrderThenHold = (x: LiftEntry, y: LiftEntry): number => (x.workOrderId < y.workOrderId ? -1 : x.workOrderId > y.workOrderId ? 1 : x.holdId < y.holdId ? -1 : x.holdId > y.holdId ? 1 : 0)
+
+/** Holds lifted meanwhile: 409 naming each one's work order, nothing lifted. */
+function liftedAlready(numbers: readonly string[]): InvalidStateError {
+  return new InvalidStateError(
+    numbers.length === 1
+      ? `The hold on work order ${numbers[0]} is lifted already: reload it and lift again. Nothing was lifted.`
+      : `${numbers.length} of these holds are lifted already: ${numbers.join(', ')}. Reload them and lift again. Nothing was lifted.`,
+  )
+}
+
+/** Holds changed since they were read: 409 naming each one's work order (at `body/holds/<n>/version`), nothing lifted. */
+function liftStale(stale: readonly { readonly index: number; readonly number: string; readonly version: number | null }[]): DomainError {
+  const message =
+    stale.length === 1
+      ? `The hold on work order ${stale[0]!.number} changed since you read it: reload it and lift again. Nothing was lifted.`
+      : `${stale.length} of these holds changed since you read them: ${stale.map((entry) => entry.number).join(', ')}. Reload them and lift again. Nothing was lifted.`
+  return new DomainError('conflict', message, stale.map((entry) => ({ path: `body/holds/${entry.index}/version`, message: entry.version === null ? 'Read the hold again.' : `The current version is ${entry.version}.` })))
+}
+
+/**
+ * POST /production/work-orders/holds/lift (workorders.hold over each work order): one Lift for a pause on N work orders (the order
+ * page's strip "on N work orders", the one hold dialog). Each plain hold — ours or the customer's own pause (BRAND: "Lift the hold"
+ * is the factory's own act, 08-backend §4.6; the customer is told "resumed" without being asked, which the dialog says) — is lifted
+ * at its version read through the one lift rule (`liftWorkOrderHoldInCommand`), work order by work order in id order, in ONE
+ * command: all or none. A work order the caller does not see is "Work order not found." at its place (the words of an unknown id),
+ * a hold not of that work order "Hold not found." (as an unknown one); one seen but not the caller's to lift is forbidden. A hold
+ * lifted meanwhile, or changed since it was read → 409 naming its work order, nothing lifted. Each work order leaves ON_HOLD only
+ * when no hold names it any more; the customer reads "resumed" once, when its order is free (the keeper reads the order after the
+ * act; one notice per act and order, B-OO-005).
+ */
+export async function liftWorkOrderHolds(caller: CommandCaller, body: LiftManyBody, idempotencyKey?: string) {
+  const context = officeContextOf(caller)
+  const problems = liftProblems(body)
+  const seen = new Set<string>()
+  body.holds.forEach((entry, index) => {
+    if (seen.has(entry.holdId)) problems.push({ path: `holds/${index}/holdId`, message: 'Name each hold once.' })
+    seen.add(entry.holdId)
+  })
+  if (problems.length > 0) refuse(problems, 'The lift is not valid.')
+  const rows = await caller.withClient(async (client) => Promise.all(body.holds.map((entry) => readWorkOrder(client, entry.workOrderId))))
+  const missing = body.holds.flatMap((_, index) => {
+    const row = rows[index]
+    return row && mayOn(context, WORKORDERS_VIEW, row) ? [] : [{ path: `holds/${index}/workOrderId`, message: 'Work order not found.' }]
+  })
+  if (missing.length > 0) refuse(missing, 'Some of these work orders are not found.')
+  if (rows.some((row) => !mayOn(context, WORKORDERS_HOLD, row!))) throw new ForbiddenError('You lift holds only where your role reaches.')
+  // A hold of another work order (another customer's among them) is as unknown as a made-up id.
+  const known = await caller.withClient((client) => client.workOrderHold.findMany({ where: { id: { in: body.holds.map((entry) => entry.holdId) } }, select: { id: true, workOrderId: true } }))
+  const workOrderOfHold = new Map(known.map((hold) => [hold.id, hold.workOrderId]))
+  const unknown = body.holds.flatMap((entry, index) => (workOrderOfHold.get(entry.holdId) === entry.workOrderId ? [] : [{ path: `holds/${index}/holdId`, message: 'Hold not found.' }]))
+  if (unknown.length > 0) refuse(unknown, 'Some of these holds are not found.')
+  const numberOf = new Map(rows.map((row) => [row!.id, row!.number]))
+
+  const { result } = await command(caller, { name: 'workorders.liftHolds', idempotencyKey, input: body }, async (tools) => {
+    const { tx } = tools
+    // Every hold as it is now, before any lift: one that cannot be lifted any more is named, and nothing is lifted.
+    const now = new Map((await tx.workOrderHold.findMany({ where: { id: { in: body.holds.map((entry) => entry.holdId) } }, select: { id: true, status: true, version: true } })).map((hold) => [hold.id, hold]))
+    const lifted = body.holds.filter((entry) => now.get(entry.holdId)?.status !== 'ACTIVE').map((entry) => numberOf.get(entry.workOrderId)!)
+    if (lifted.length > 0) throw liftedAlready(lifted)
+    const stale = body.holds.flatMap((entry, index) => (now.get(entry.holdId)!.version === entry.version ? [] : [{ index, number: numberOf.get(entry.workOrderId)!, version: now.get(entry.holdId)!.version }]))
+    if (stale.length > 0) throw liftStale(stale)
+    // Then each, under its locks (the work order's row, the quality holds being placed on it, the hold's row): checked again there.
+    const done = new Map<string, LiftedWorkOrderHold>()
+    for (const entry of [...body.holds].sort(byWorkOrderThenHold)) {
+      const number = numberOf.get(entry.workOrderId)!
+      try {
+        done.set(entry.holdId, await liftWorkOrderHoldInCommand(tools, { workOrderId: entry.workOrderId, holdId: entry.holdId, reason: body.reason, version: entry.version }))
+      } catch (error) {
+        // Lifted or changed between the read above and its lock: named the same way (the command rolls every lift back).
+        if (error instanceof StaleVersionError) throw liftStale([{ index: body.holds.indexOf(entry), number, version: null }])
+        if (error instanceof InvalidStateError) throw liftedAlready([number])
+        throw error
+      }
+    }
+    const workOrderIds = [...new Set(body.holds.map((entry) => entry.workOrderId))]
+    const after = new Map((await tx.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, status: true } })).map((row) => [row.id, row.status as WorkOrderStatus]))
+    return {
+      holds: await holdViews(tx, body.holds.map((entry) => done.get(entry.holdId)!.hold)),
+      workOrders: workOrderIds.map((id) => ({ id, number: numberOf.get(id)!, status: after.get(id)!, lifted: body.holds.some((entry) => entry.workOrderId === id && done.get(entry.holdId)!.lifted) })),
+    }
+  })
+  return result
+}
+// ---- end B-OO-006

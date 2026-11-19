@@ -1,7 +1,7 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
-import { liftContract, listContract, placeContract, placeManyContract } from './contract'
-import { liftWorkOrderHold, listWorkOrderHolds, placeWorkOrderHold, placeWorkOrderHolds } from './holds'
+import { liftContract, liftManyContract, listContract, placeContract, placeManyContract } from './contract'
+import { liftWorkOrderHold, liftWorkOrderHolds, listWorkOrderHolds, placeWorkOrderHold, placeWorkOrderHolds } from './holds'
 import { manifest } from './manifest'
 
 /**
@@ -13,6 +13,9 @@ export default defineRoutes('production.holds', manifest, async (app) => {
   app.get('/production/work-orders/:workOrderId/holds', { schema: listContract }, async (request) => listWorkOrderHolds(request, request.params.workOrderId))
 
   app.post('/production/work-orders/holds', { schema: placeManyContract }, async (request, reply) => reply.code(201).send(await placeWorkOrderHolds(request, request.body, idempotencyKeyFrom(request))))
+
+  // B-OO-006: one Lift for a pause on N work orders (each hold at its version read), all or none.
+  app.post('/production/work-orders/holds/lift', { schema: liftManyContract }, async (request) => liftWorkOrderHolds(request, request.body, idempotencyKeyFrom(request)))
 
   app.post('/production/work-orders/:workOrderId/holds', { schema: placeContract }, async (request, reply) =>
     reply.code(201).send(await placeWorkOrderHold(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request))),
