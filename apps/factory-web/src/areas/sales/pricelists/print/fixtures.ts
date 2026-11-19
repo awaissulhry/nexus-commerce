@@ -18,7 +18,7 @@ const model = (extra: Partial<PriceListPrintModel> = {}): PriceListPrintModel =>
   person: DEMO_USER.displayName,
   at: NOW,
   company: 'Officina Demo S.r.l.',
-  can: can('sales'),
+  can: can('owner'), // B-CP-011: prices print for a price holder (Sales holds no grain since the money wall)
   back: `/w/DEMO/sales/price-lists/${DETAIL.id}?tab=prices&version=${V2.id}`,
   list: DETAIL,
   prices: { version: V2, entries: withoutCost(V2_DATED) },
@@ -32,9 +32,9 @@ export const designScreen = defineDesignScreen<PriceListPrintModel>({
   title: 'Price list PDF (print view, B-W2b-343)',
   view: PriceListPrintView,
   cases: [
-    { id: 'review', label: 'Sales · MODA-DEMO version 2: prices with their days, breaks, surcharges', model: model(), note: 'Print or save as PDF from the strip; the list, its version, days and currency on top.' },
+    { id: 'review', label: 'Owner · MODA-DEMO version 2: prices with their days, breaks, surcharges', model: model(), note: 'Print or save as PDF from the strip; the list, its version, days and currency on top.' }, // B-CP-011
     { id: 'net-only', label: 'A list whose documents show the net price only', model: model({ rules: { ...RULES, list: { ...RULES.list, showDiscount: false }, breaks: [], sizeSurcharges: [] } }) },
-    { id: 'no-price', label: 'A role without selling prices: nothing printed, the reason said', model: model({ can: can('readOnly'), prices: null, rules: null }) },
+    { id: 'no-price', label: 'Seen as Sales (no price grain since B-CP-011): nothing printed, the reason said', model: model({ can: can('sales'), prices: null, rules: null }) },
     { id: 'loading', label: 'Still reading (Print held with the reason)', model: model({ prices: null, rules: null }) },
     { id: 'error', label: "The price list couldn't be read", model: model({ list: null, prices: null, rules: null, problem: 'problem.read.unavailable' }) },
     { id: 'no-permission', label: 'Planner: no pricelists.view', model: model({ can: can('planner'), list: null, prices: null, rules: null }) },

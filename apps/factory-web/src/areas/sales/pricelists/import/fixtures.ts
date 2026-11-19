@@ -97,13 +97,15 @@ export const designScreen = defineDesignScreen<ImportCase>({
   title: 'Import prices (B-W2b-343)',
   view: ImportDesign,
   cases: [
-    { id: 'upload', label: 'Sales · Import prices: the sheet (the company of the list)', model: c('sales', { sheet: sheet('upload') }), note: 'Rows by list code, style, colourway (or every colourway) and first day; they go into each list\'s draft; nothing is written before Apply.' },
-    { id: 'check', label: 'The dry run: a price raised with its breaks, a dated price added, a row refused', model: c('sales', { sheet: sheet('planned') }) },
-    { id: 'result', label: 'Applied: the result', model: c('sales', { sheet: sheet('applied') }) },
-    { id: 'no-apply', label: 'A role that runs the dry run but may not apply it', model: c('sales', { sheet: sheet('planned', { run: true, apply: false }) }) },
-    { id: 'button', label: 'The band\'s button (closed)', model: c('sales', {}) },
+    { id: 'upload', label: 'Owner · Import prices: the sheet (the company of the list)', model: c('owner', { sheet: sheet('upload') }), note: 'Rows by list code, style, colourway (or every colourway) and first day; they go into each list\'s draft; nothing is written before Apply.' }, // B-CP-011
+    { id: 'check', label: 'The dry run: a price raised with its breaks, a dated price added, a row refused', model: c('owner', { sheet: sheet('planned') }) }, // B-CP-011
+    { id: 'result', label: 'Applied: the result', model: c('owner', { sheet: sheet('applied') }) }, // B-CP-011
+    { id: 'no-apply', label: 'A role that runs the dry run but may not apply it', model: c('owner', { sheet: sheet('planned', { run: true, apply: false }) }) }, // B-CP-011
+    { id: 'button', label: 'The band\'s button (closed)', model: c('owner', {}) }, // B-CP-011
     { id: 'held-manage', label: 'Finance: Import held (pricelists.manage)', model: c('finance', { held: 'import.held.manage' }) },
-    { id: 'held-run', label: 'A role without imports.run: Import held with the reason', model: c('sales', { held: 'import.held.run' }) },
+    { id: 'held-run', label: 'A role without imports.run: Import held with the reason', model: c('owner', { held: 'import.held.run' }) }, // B-CP-011
+    // B-CP-011 (the money wall, Owner O1; follow-up 20): the ONE "Seen as Sales" case — no grain, no pricelists.manage.
+    { id: 'held-sales', label: 'Seen as Sales (no price grain since B-CP-011): Import held (pricelists.manage)', model: c('sales', { held: 'import.held.manage' }) },
     { id: 'held-record', label: 'The record\'s ⋯ Import prices asked without the right: the reason in a dialog', model: c('finance', { held: 'import.held.manage', button: false, refusedOpen: true }) },
   ],
 })
