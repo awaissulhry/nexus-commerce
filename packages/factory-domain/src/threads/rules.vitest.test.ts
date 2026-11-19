@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { askExcerpt, DESIGNER_ASK_EXCERPT, designerAskAuthor, designerAskNote, designerAskWords, isDesignerAskNote, mayAskOn } from './designer/rules' // B-CP-079
+import { EVENT_DEFINITIONS } from '../events/catalogue' // B-CP-079
 import { InvalidStateError } from '../core/errors'
 import { assertTransition } from '../state/machine'
 import {
@@ -88,3 +90,34 @@ describe('thread status', () => {
     expect(() => assertTransition(threadMachine, 'CLOSED', 'CLOSED')).toThrow(InvalidStateError)
   })
 })
+
+// ---- B-CP-079 (customer page plan C7, D12; lead pick B6) ------------------------------------------------------------------------
+describe('B-CP-079: asking the factory designer', () => {
+  it('quotes at most the first 80 characters of the message, on one line, cut with "…"', () => {
+    expect(askExcerpt('  Made-up:\n  a short question  ')).toBe('Made-up: a short question')
+    const long = `${'x'.repeat(DESIGNER_ASK_EXCERPT)}and a price of 410.00 after it`
+    expect(askExcerpt(long)).toBe(`${'x'.repeat(DESIGNER_ASK_EXCERPT)}…`)
+    expect([...askExcerpt('é'.repeat(100))]).toHaveLength(DESIGNER_ASK_EXCERPT + 1)
+    expect(designerAskNote('Brand Alpha', 'Made-up: the logo?')).toBe('Brand Alpha chiede al designer della fabbrica · asks the factory designer: «Made-up: the logo?»')
+  })
+
+  it('knows its own note by its shape: a SYSTEM internal note by "<customer> (portal)"', () => {
+    const note = { direction: 'INTERNAL_NOTE', authorKind: 'SYSTEM', authorName: designerAskAuthor('Brand Alpha') }
+    expect(isDesignerAskNote(note, 'Brand Alpha')).toBe(true)
+    expect(isDesignerAskNote(note, 'Brand Beta')).toBe(false)
+    expect(isDesignerAskNote({ ...note, authorName: null }, 'Brand Alpha')).toBe(false)
+    expect(isDesignerAskNote({ ...note, authorKind: 'USER' }, 'Brand Alpha')).toBe(false)
+  })
+
+  it('asks only on the records a customer writes on; says why not in the portal’s words; ids only in its event', () => {
+    for (const type of ['PortalOrderRequest', 'SalesOrder', 'Inquiry', 'SampleRound', 'Project', 'Party', 'ReturnAuthorisation', 'Complaint']) expect(mayAskOn(type), type).toBe(true)
+    for (const type of ['WorkOrder', 'Invoice', 'Shipment']) expect(mayAskOn(type), type).toBe(false)
+    expect(designerAskWords('ASKED', 'it', 'Giulia Verdi')).toBe('Abbiamo chiesto a Giulia Verdi.')
+    expect(designerAskWords('NOT_HERE', 'en')).toBe('The factory designer cannot be asked here: your message reaches our team.')
+    const event = EVENT_DEFINITIONS.find((definition) => definition.type === 'thread.factory_designer_asked')
+    expect(event).toBeDefined()
+    expect(event!.live ?? null).toBeNull()
+    expect(Object.keys((event!.payload as unknown as { shape: Record<string, unknown> }).shape).sort()).toEqual(['messageId', 'noteId', 'recordId', 'recordType', 'threadId'])
+  })
+})
+// ---- end B-CP-079

@@ -45,6 +45,8 @@ import { clearDraftInCommand } from '../draft-keys'
 import { reopenOnSharedMessage } from '../work-state'
 // ---- fix-wall-1: a file whose content is another customer's (an old copy of a mixed lot's photo) is never shown, counted or attached.
 import { walledForOutside } from '../../files/content-wall'
+// ---- B-CP-079: "Ask the factory designer" rides on the post (checked before it; the note after it).
+import { askDesignerAfterPost, cappedAnswer, planDesignerAsk, type DesignerAskAnswer } from './designer-ask'
 
 /**
  * A record's thread in a portal session (B-W2b-168; COL-059, COL-060; design portal.frame › thread "Ask a question /
@@ -340,6 +342,8 @@ function closedRefusal(caller: PartnerCaller): DomainError {
 export interface PartnerPostInput {
   readonly body: string
   readonly attachments?: readonly string[] | undefined
+  /** B-CP-079: also ask the customer's factory designer (one ask per message; ./designer-ask.ts). */
+  readonly askFactoryDesigner?: boolean | undefined
 }
 
 /** POST /portal/threads/<type>/<id>/messages: the person's post into the record's thread (COL-060). */
@@ -368,6 +372,9 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
     if (!options.firstOfRequest && !options.requester && !can(caller.actor, PORTAL_COMMENT, scope)) throw new ForbiddenError(partnerThreadWords('NO_COMMENT', caller.session.person.locale, caller.session.company.name))
     return threadOf(client, ref)
   })
+  // ---- B-CP-079: the ask is checked BEFORE anything is posted (409 in words: nothing is written, the box keeps the text).
+  const askPlan = input.askFactoryDesigner === true ? await planDesignerAsk(request, caller, ref) : null
+  // ---- end B-CP-079
   let thread = opened
   if (!thread) thread = await openThreadFor(request, caller, ref)
   if (thread.status === 'CLOSED') throw closedRefusal(caller)
@@ -430,7 +437,10 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
     },
   )
   await touchThread(request, caller, result.thread.id, new Date(result.message.at))
-  return result
+  // ---- B-CP-079: the note that asks the factory designer (over the day's cap: posted without it, and the answer says so).
+  const designerAsk: DesignerAskAnswer | null = askPlan === null ? null : askPlan.capped ? cappedAnswer(caller) : await askDesignerAfterPost(request, caller, ref, result, draft.bodyText, askPlan, idempotencyKey)
+  return { ...result, designerAsk }
+  // ---- end B-CP-079
 }
 
 /** The record's thread made in the tenant's system scope (the partner role cannot insert one), for this party only. */
