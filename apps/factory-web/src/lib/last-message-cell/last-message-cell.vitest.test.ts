@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs' // F-OP-213 follow-up
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import type { ApiClient } from '../api/client'
@@ -76,3 +77,26 @@ describe('F-OP-213 — readable per record', () => {
   })
 })
 // ---- end F-OP-213
+
+// ---- F-OP-213 follow-up (B-OP-061 #1711: `readable` is opt-in): only the dock asks it, for the records its pick offers ------------------
+describe('F-OP-213 — `readable` asked by the dock only', () => {
+  const calls: Array<{ path: string; body: unknown }> = []
+  const api = { post: async (path: string, options: { body: unknown }) => (calls.push({ path, body: options.body }), { counts: [{ recordType: 'Party', recordId: 'p1', newCount: 0, lastAt: null, readable: false }] }) } as unknown as ApiClient
+  it('asked: the body says `readable: true` and the rows keep it; not asked (a list\'s cells): the body is the records only', async () => {
+    calls.length = 0
+    const counts = await readUnreadWith(api, { readable: true })([{ recordType: 'Party', recordId: 'p1' }], new AbortController().signal)
+    expect(calls[0]).toEqual({ path: '/threads/unread', body: { records: [{ recordType: 'Party', recordId: 'p1' }], readable: true } })
+    expect(unreadMapOf(counts)).toEqual({ p1: { newCount: 0, lastAt: null, readable: false } })
+    await readUnreadWith(api)([{ recordType: 'SalesOrder', recordId: 'o1' }], new AbortController().signal)
+    expect(calls[1]).toEqual({ path: '/threads/unread', body: { records: [{ recordType: 'SalesOrder', recordId: 'o1' }] } })
+  })
+  it('the sources: the order dock and the customer page\'s own party ask it; every list page reads its cells without it', () => {
+    const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+    expect(read('../../areas/sales/orders/record/dock/OrderDock.tsx')).toContain('readUnreadWith(api, { readable: true })')
+    expect(read('../../areas/sales/customers/record/CustomerRecord.tsx')).toContain('readUnreadWith(api, { readable: true })')
+    for (const list of ['../../areas/sales/orders/list/use-orders-sheet.ts', '../../areas/sales/quotes/list/use-quotes-list.ts', '../../areas/sales/inquiries/use-inquiries-list.ts', '../../areas/purchasing/orders/list/OrdersPage.tsx', '../../portal/customer/orders/OrdersPage.tsx', '../../areas/home/today/following/Following.tsx']) {
+      expect(read(list), list).not.toContain('readable: true')
+    }
+  })
+})
+// ---- end F-OP-213 follow-up

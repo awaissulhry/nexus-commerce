@@ -67,3 +67,13 @@
 .fw-thread-pick-line.is-note {
   font-style: italic;
 }
+
+/* ── F-OP-217 (order page plan N4; 11-dock §2, §7): a card of 480 px or less (one third at 1440, a phone) — the segments keep their
+   short words (above), the second select (which project, which work order) takes the full width under them. ── */
+@container fw-rtcol (max-width: 480px) {
+  .fw-thread-pick-extra,
+  .fw-thread-pick-extra select {
+    width: 100%;
+  }
+}
+/* ── end F-OP-217 */

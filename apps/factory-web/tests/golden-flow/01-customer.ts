@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test'
 import { defineStage } from './_harness/stages'
 import { answerOf, dialog, press, routerActivity } from './_harness/ui'
+import { words } from './_harness/words' // F-OP-218
 
 /** The customer of the first order (made up): an Italian brand that sells under its own label. */
 export const CUSTOMER = {
@@ -47,6 +48,27 @@ export default defineStage({
       // fx-13: a production build prefetches each visible link once (many addresses, once each); a loop asks ONE address again and again.
       expect(seen.mostOneAddress, said).toBeLessThanOrEqual(3)
       await expect(page).toHaveURL(new RegExp(`tab=work.*party=${party.id}`))
+    })
+
+    // F-OP-218 (order page plan N4; 11-dock §0, §3.4; D11): the customer page's dock is the same ONE card as the order page's — the pick
+    // band inside it; All of <customer> read only, with its Head and the foot "Read only. Write in: [<customer> (general)]".
+    await flow.step('the customer page’s dock: the pick band in the one card; All of <customer> with its Head and its read-only foot', async () => {
+      const P = words('parties')
+      const RT = words('record-thread')
+      const OD = words('orders')
+      const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const card = page.locator('.fw-rcf.has-thread > aside.fw-rcf-dock section.fw-rt-column.is-docked')
+      await expect(card).toHaveCount(1, { timeout: 60_000 })
+      const pick = card.locator('.fw-rt-top').getByRole('radiogroup', { name: P('customers.work.dock.label'), exact: true })
+      await expect(pick).toBeVisible()
+      const all = pick.getByRole('radio', { name: new RegExp(`^(${escape(P('customers.work.dock.all', { customer: CUSTOMER.legalName }))}|${escape(RT('allOfCustomer.view.all'))})`) })
+      await all.click()
+      await expect(all).toHaveAttribute('aria-checked', 'true')
+      await expect(page).toHaveURL(/[?&]dock=all/)
+      await expect(card.locator('.fw-rth.fw-aoc-head')).toBeVisible()
+      await expect(card.locator('.fw-rt-foot')).toContainText(`${P('customers.work.dock.readOnly')}. ${OD('record.dock.writeIn')}`)
+      await expect(card.locator('.fw-rt-foot').getByRole('button', { name: P('customers.work.dock.general', { customer: CUSTOMER.legalName }), exact: true })).toBeVisible()
+      await flow.shot(page, 'customer-dock-all')
     })
 
     await flow.step('payment terms on the identity card', async () => {
