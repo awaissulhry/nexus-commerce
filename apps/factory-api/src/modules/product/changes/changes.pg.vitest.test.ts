@@ -282,7 +282,10 @@ describe('a change order with one approval stage (PRD-170, MES-006)', () => {
       expect.objectContaining({ workOrder: expect.objectContaining({ number: 'SEED-WO-0002' }), disposition: 'HOLD' }),
       expect.objectContaining({ workOrder: expect.objectContaining({ number: `T-SA049-${run}` }), disposition: 'FINISH_OLD' }),
     ])
-    expect(order.openWorkOrders.map((row: Json) => row.number)).toContain('SEED-WO-0002')
+    // B-SA-049: WO-0002 is now a line of its own (HOLD), so the open work orders still to decide no longer offer it — nor any
+    // other work order with a line.
+    const stillOpen = order.openWorkOrders.map((row: Json) => row.number)
+    for (const number of ['SEED-WO-0001', 'SEED-WO-0002', `T-SA049-${run}`]) expect(stillOpen).not.toContain(number)
   })
 
   it('names approvers: never the author, only someone who may approve; then submits and freezes the draft', async () => {

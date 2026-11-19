@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  anyOf, // fx-7
   can,
   decide,
   EVERY_PARTY_WORDS,
@@ -134,6 +135,25 @@ describe('can()', () => {
     expect(holds(office(grant(['quotes.view'])), 'quotes.send')).toBe(false)
   })
 })
+
+// ── fx-7 ──
+describe('anyOf()', () => {
+  it('is {} when one part reaches every row: Prisma drops an empty object inside OR (OR [{}] matches no row)', () => {
+    expect(anyOf([{}, { recordType: 'SalesOrder' }])).toEqual({})
+    expect(anyOf([{}, {}])).toEqual({})
+    expect(anyOf([NO_ROWS, {}])).toEqual({})
+  })
+
+  it('ORs the parts that filter, leaves out NO_ROWS, and is NO_ROWS when nothing is left', () => {
+    expect(anyOf([{ partyId: { in: [PARTY_X] } }, { AND: [{ recordType: 'SalesOrder' }, { partyId: { in: [PARTY_Y] } }] }])).toEqual({
+      OR: [{ partyId: { in: [PARTY_X] } }, { AND: [{ recordType: 'SalesOrder' }, { partyId: { in: [PARTY_Y] } }] }],
+    })
+    expect(anyOf([NO_ROWS, { partyId: { in: [PARTY_X] } }])).toEqual({ partyId: { in: [PARTY_X] } })
+    expect(anyOf([NO_ROWS])).toBe(NO_ROWS)
+    expect(anyOf([])).toBe(NO_ROWS)
+  })
+})
+// ── end fx-7 ──
 
 describe('scopeWhere()', () => {
   it('matches no row without the permission', () => {
