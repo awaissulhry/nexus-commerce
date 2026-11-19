@@ -9,7 +9,11 @@ import { batchGroupKey, orderChangeBatch } from '@nexus/factory-domain/notificat
 import type { ErrorReport } from '@nexus/factory-domain/observability/report'
 import { partnerLiveViewFor } from '@nexus/factory-domain/portal/notifications/live'
 import { FLOOR_NOTE_MAX, noPriceIn } from '@nexus/factory-domain/sales/orders/change-notes'
+// B-OP-071: the N6 switch read from the domain (MULTI_ORDER_OFF goes with B-OP-047).
+import * as shipmentsDomain from '@nexus/factory-domain/shipping/shipments'
 // The factory-db seeds are no package export: a test reads them where they live.
+import { seed as seedOrderPage } from '../../../../../packages/factory-db/seed/order-page' // B-OP-071
+import { seed as seedShipping } from '../../../../../packages/factory-db/seed/shipping' // B-OP-071
 import { seed as seedSubcontract } from '../../../../../packages/factory-db/seed/subcontract'
 import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
 import { LOCAL_COOKIE_SECRET } from '../../env'
@@ -20,6 +24,7 @@ import { findMarkers, markersOf, type Marker } from '../../modules/production/te
 import { urgencyWorld, type UrgencyWorld } from '../../modules/production/testing/urgency-world'
 import { orderChangeNotesHandler } from '../../modules/sales/orders/change-notes'
 import { forgetProgress } from '../../modules/sales/portal-orders/progress'
+import { trackingNotesHandler } from '../../modules/shipping/own-transport/tracking-notes' // B-OP-071
 import { createErrorTracker, useErrorTracker } from '../../observability/tracker'
 import { freshGuard, mailedCode, portalBrowser } from '../../platform/auth/portal/testing/portal'
 import type { Answer } from '../../platform/auth/sessions/testing/harness'
@@ -81,6 +86,11 @@ import { announce, drain, pdf, type World } from '../testing/world'
  * portal on and its person), the floor's first bundle (cutting is the floor's flow), the workshop's job (a copy of the seeds' job,
  * issued: subcontracting is purchasing's flow) and nothing else. Every name, address and number is made up.
  * Run with `node scripts/factory/golden-flow.mjs sales-page` (long: alone, nice, one worker).
+ *
+ * B-OP-071 (order page plan, C07): after Z, the same world runs the order page's API flow, O0–OZ (its own head at the end of this
+ * file): an office amend whose work orders follow or wait, an approval decided in place, the settlement share on a shared TD24, a
+ * shipment made elsewhere for a held customer, tracking typed on it, its invoice naming the paper DDT, and a shared shipment of two
+ * orders (after the N6 switch, B-OP-047) — the wall at every step, as above.
  */
 
 let world: UrgencyWorld
@@ -331,6 +341,7 @@ async function alphaMarkers(): Promise<Marker[]> {
   const records: Marker[] = [
     ...[...(G.lines ?? []), ...(G.floorNotes ?? [])].map((text) => ({ label: "Alpha's notes", text })),
     ...[G.sizeRequest?.id, G.designRequest?.id, G.ownRequest?.id, G.change?.id, G.styleChange?.id, G.styleChange?.number, G.job?.id, G.job?.number].filter((text): text is string => typeof text === 'string').map((text) => ({ label: "Alpha's records of the flow", text })),
+    ...pageMarkers(), // B-OP-071: the order page's words and records
   ]
   return [...(await markersOf(world.h.db, world.ids.a)), ...FLOW_WORDS.map((text) => ({ label: "Alpha's flow words", text })), ...records]
 }
@@ -991,3 +1002,530 @@ describe('B-SA-089 golden flow sales page: one change of Alpha’s order told to
     expect(worker.retried).toEqual([])
   })
 })
+
+// ── B-OP-071 (order page plan, set C · C07; 13-backend §13): the order page's API flow, two brands ─────────────────────────────────
+/**
+ * The order page's API flow in the same world, after the sales page's (S0–Z): every act the order page makes on Alpha's orders,
+ * each step ending with the brand wall (`pageWall`: Beta's buyer, `office.p2` and Bice read none of it by any door, their lists hold
+ * none of it, then `betaGetsNothing`: bells, live messages and every answer they got scanned for Alpha's markers, the order page's
+ * words and records among them). Two more office people: Olga (the Owner: every right, she decides) and Wanda (the warehouse:
+ * shipping.manage and shipping.ddt.issue, never shipping.holds.release).
+ *
+ *   O0  the scene: Olga and Wanda; the shipping seed's ids (SEED-SO-0002's free black 52, SEED-SO-0003's free jacket); the order
+ *       page seed's SEED-SH-0004 (two of Alpha's orders on one DRAFT, made past the guards); the tracking notes join the worker
+ *   O1  an office amend under Sales (Bea, no workorders.manage): the preview says what each work order does — the DRAFT follows in
+ *       the click, the RELEASED one waits in words; the amend does exactly that; Sales may not apply the waiting one; Carla applies
+ *       it on its own page (Lower to the order, the reprint mark); the floor note names the work order and no person
+ *   O2  an approval decided in place: a made-up SALES_ORDER rule holds the order Bea types (PENDING_APPROVAL); the order read lists
+ *       the request — held for its asker (her own request, she may withdraw it), allowed for Olga; Olga's yes in place confirms it
+ *   O3  the settlement share on a shared TD24 (two of Alpha's orders on one issued monthly invoice, partly paid, its freight apart:
+ *       the world's set-up, as B-OP-022's): each order reads its own share, the same as its row in Sales › Orders
+ *   O4  a shipment made elsewhere of SEED-SO-0002's free black 52 while Alpha is on a credit hold: Wanda is refused in words and
+ *       nothing is written; Olga (the hold-release right) records it with a reason: SHIPPED, made elsewhere with its paper DDT, the
+ *       override recorded; a Nexus DDT of it refused in words; the hold released again
+ *   O5  tracking typed on it from the order page (number and link): the office line on the order's thread; the portal and the
+ *       tracking page show the number and its link; corrected; cleared
+ *   O6  its invoice names the paper DDT (B-OP-033): the shipment waits in "shipped, not invoiced"; the draft's DDT reference
+ *   O7  BEFORE the switch: a second order on a shipment is held off in words (MULTI_ORDER_OFF), nothing written
+ *   O8  AFTER the switch (B-OP-047; runs once MULTI_ORDER_OFF is gone): one shipment made for two of Alpha's orders through the API
+ *       (SEED-SO-0002's black 52 moved off SEED-SH-0004, SEED-SO-0003's free jacket): both orders' reads carry it with both orders;
+ *       the DDT names one order reference per order; its freight once, each order its share
+ *   OW  the wall at the end: nothing Beta's people got names Alpha; Alpha's buyer never reads Olga's or Wanda's names
+ *   OZ  no route answered 500 and no handler failed during the order page's flow
+ *
+ * Not through a route, each named where it is done: the people's back-dated roles and the two seeds (the world's set-up), the shared
+ * TD24 of O3 (an ISSUED monthly invoice is money's flow: as B-OP-022's rows) and the quality desk's release of O4's black 52 (quality
+ * is the quality suite's flow; the seeds date theirs in the story's days to come, after "now": a copy dated an hour before).
+ * Invoices per order of a shared shipment that LEFT are B-OP-045's (candidates.pg: one per order, the freight on the first order's):
+ * here the shared shipment stays a DRAFT, its second order's jacket being serial-tracked (Q31: its serial is packed at PACKED).
+ * Written against 13-backend §5 before B-OP-032 / B-OP-033 merged: `elsewhereBody` and `holdOverride` hold the body's names.
+ */
+
+/** B-OP-047 deletes MULTI_ORDER_OFF: until then the multi-order steps check the refusal, after it the shared shipment (O7 / O8). */
+const N6_ON = !('MULTI_ORDER_OFF' in shipmentsDomain)
+const MULTI_ORDER_WORDS = 'Several orders in one shipment come with the next update.'
+
+// The order page's own words of Alpha's: none may ever reach Beta.
+const AMEND_REASON = 'Made-up Alpha amend: the store wants one jacket of 50 and two of 52 fewer.'
+const APPROVAL_PO = 'T-OP71-PO-YES'
+const HOLD_WORDS = 'Made-up Alpha hold: two invoices overdue.'
+const HOLD_REASON = 'Made-up Alpha override: the goods left with the driver before the hold was placed.'
+const ELSEWHERE_NOTE = 'Made-up Alpha delivery: taken by the courier from the second warehouse.'
+const PAPER_DDT = 'T-OP71-DDT-0001'
+const TRACKING = ['T-OP71-TRK-0001', 'T-OP71-TRK-0002'] as const
+const LINKS = ['https://track.example.com/T-OP71-TRK-0001', 'https://track.example.com/T-OP71-TRK-0002'] as const
+const PAGE_WORDS = [AMEND_REASON, APPROVAL_PO, HOLD_WORDS, HOLD_REASON, ELSEWHERE_NOTE, PAPER_DDT, ...TRACKING, ...LINKS]
+
+/** The Owner and the warehouse (O0). */
+let olga: Office
+let wanda: Office
+
+/** The order page's records of the flow (filled as the steps make them). */
+const P = {} as {
+  so2: string
+  so3: string
+  /** SEED-SO-0002's black 52 (WO-0001's cell: one garment released and on no shipment) and SEED-SO-0003's jacket (one free). */
+  blk52: string
+  jacket: string
+  siteA1: string
+  /** SEED-SH-0004 and its SEED-SO-0002 line and cell (the order page seed). */
+  sh4: string
+  sh4Line: string
+  sh4Cell: string
+  am: Order
+  released: { id: string; number: string; cell: string }
+  draft: { id: string; number: string; cell: string }
+  changeId: string
+  approvalOrder: string
+  taskId: string
+  money: { o1: string; o2: string; l1: string; l2: string; invoice: string; payment: string }
+  elsewhere: { id: string; number: string }
+  invoiceId: string
+  shared: { id: string; number: string }
+  /** Where Alpha's buyer's answers stood when the order page's flow began (OW). */
+  seenA: number
+  unexpected: number
+}
+
+const isText = (value: unknown): value is string => typeof value === 'string' && value.length > 0
+/** Every id of the order page's records made so far (doors, lists and markers). */
+const pageIds = (): string[] =>
+  [P.am?.orderId, P.released?.id, P.draft?.id, P.changeId, P.approvalOrder, P.taskId, P.money?.o1, P.money?.o2, P.money?.invoice, P.elsewhere?.id, P.invoiceId, P.shared?.id].filter(isText)
+function pageMarkers(): Marker[] {
+  return [
+    ...PAGE_WORDS.map((text) => ({ label: "Alpha's order page words", text })),
+    ...pageIds().map((text) => ({ label: "Alpha's order page records", text })),
+    ...[P.am?.number, P.released?.number, P.draft?.number, P.elsewhere?.number, P.shared?.number].filter(isText).map((text) => ({ label: "Alpha's order page numbers", text })),
+  ]
+}
+
+/** "<number> is released: production applies the change …" (B-OP-012's words, for a reader of work orders). */
+const PRODUCTION = (number: string) => ({ en: `${number} is released: production applies the change (a planner or a production manager).`, it: `${number} è rilasciato: la modifica la applica la produzione (un pianificatore o un responsabile di produzione).` })
+const orderVersion = async (orderId: string): Promise<number> => (await one<{ version: number }>('SELECT version FROM "SalesOrder" WHERE id = $1', [orderId])).version
+const shipmentVersion = async (shipmentId: string): Promise<number> => (await one<{ version: number }>('SELECT version FROM "Shipment" WHERE id = $1', [shipmentId])).version
+const numberOfOrder = async (orderId: string): Promise<string> => (await one<{ number: string }>('SELECT number FROM "SalesOrder" WHERE id = $1', [orderId])).number
+/** The day in Rome of an instant (a paper DDT is dated by the plant's day). */
+const romeDay = (at: Date): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(at)
+/** The system lines on an order's thread that name a text (office-only lines of the shipping handlers). */
+const systemLinesOn = (orderId: string, text: string) =>
+  admin<{ body: string; audience: string; direction: string }>(
+    `SELECT m."bodyText" AS body, m.audience::text AS audience, m.direction::text AS direction FROM "Message" m JOIN "Thread" t ON t.id = m."threadId"
+      WHERE t."tenantId" = $1 AND t."recordType" = 'SalesOrder' AND t."recordId" = $2 AND m."authorKind" = 'SYSTEM' AND m."bodyText" LIKE '%' || $3 || '%' ORDER BY m.at, m.id`,
+    [T(), orderId, text],
+  )
+/** The tracking page of a link (the customer's phone: no sign-in, the link's token). */
+const tokenOf = (url: string): string => decodeURIComponent(url.split('#token=')[1] ?? '')
+async function trackingPage(token: string): Promise<Json> {
+  const answer = await world.h.app.inject({ method: 'GET', url: '/link/tracking', headers: { 'x-factory-link': token, 'user-agent': 'SeedPhone/1.0' } })
+  expect(answer.statusCode, answer.body).toBe(200)
+  return answer.json() as Json
+}
+
+// B-OP-032 / B-OP-033 were built beside this step (C06): the two helpers below hold the names of 13-backend §5's body.
+/** A shipment made elsewhere of SEED-SO-0002's black 52: a carrier booked by hand, the paper DDT that went with the goods. */
+const elsewhereBody = (shippedAt: Date, more: Json = {}): Json => ({
+  salesOrderIds: [P.so2],
+  siteId: P.siteA1,
+  lines: [{ workOrderSizeId: P.blk52, quantity: 1 }],
+  transportBy: 'CARRIER',
+  carrierName: 'Made-up Courier',
+  externalDdt: { number: PAPER_DDT, date: romeDay(shippedAt) },
+  ddtRequired: true,
+  shippedAt: shippedAt.toISOString(),
+  note: ELSEWHERE_NOTE,
+  ...more,
+})
+/** R-9: a person with shipping.holds.release records it while the customer is on hold, with a reason. */
+const holdOverride = (reason: string): Json => ({ holdOverride: { reason } })
+
+/**
+ * The wall at the end of an order page step: Beta's buyer, `office.p2` and Bice read every door of the order page's records of
+ * Alpha's as unknown (the orders, their money, shipments, work orders, the change, the request for a yes, the invoices, the file
+ * previews) and lists without them; then the whole wall of `betaGetsNothing` (bells, live messages, every answer scanned).
+ */
+async function pageWall(step: string): Promise<void> {
+  const orders = [P.am?.orderId, P.approvalOrder, P.money?.o1, P.money?.o2, P.so2, P.so3].filter(isText)
+  for (const id of orders) {
+    for (const url of [`/portal/sales-orders/${id}`, `/portal/sales-orders/${id}/shipments`]) expect((await call(buyerB, 'GET', url)).status, `${step}: Beta's buyer GET ${url}`).toBe(404)
+    for (const url of [`/sales/orders/${id}`, `/invoicing/orders/${id}/settlement`, `/threads/SalesOrder/${id}`]) await asBeta('GET', url, undefined, 404)
+    expect((await call(bice, 'GET', `/sales/orders/${id}`)).status, `${step}: Bice GET order ${id}`).toBe(404)
+  }
+  // The order's file previews (B-OP-050): Alpha's order is unknown, whatever file is asked.
+  await asBeta('POST', `/sales/orders/${P.so2}/files/previews`, { fileIds: [newId()] }, 404)
+  const doors = [
+    ...[P.released?.id, P.draft?.id].filter(isText).map((id) => `/production/work-orders/${id}`),
+    ...(P.changeId ? [`/production/work-order-changes/${P.changeId}`] : []),
+    ...(P.taskId ? [`/approvals/tasks/${P.taskId}`] : []),
+    ...[P.elsewhere?.id, P.shared?.id, P.sh4].filter(isText).flatMap((id) => [`/shipping/shipments/${id}`, `/shipping/shipments/${id}/orders/candidates`]),
+    ...[P.money?.invoice, P.invoiceId].filter(isText).map((id) => `/invoicing/invoices/${id}`),
+  ]
+  for (const url of doors) await asBeta('GET', url, undefined, 404)
+  const ids = pageIds()
+  for (const url of ['/shipping/shipments', '/approvals/tasks?status=ALL', '/invoicing/invoices']) {
+    const text = JSON.stringify(await asBeta('GET', url))
+    for (const id of ids) expect(text.includes(id), `${step}: ${url} lists ${id}`).toBe(false)
+  }
+  const transit = JSON.stringify(await ok(buyerB, 'GET', '/portal/sales-orders/in-transit'))
+  for (const id of ids) expect(transit.includes(id), `${step}: Beta's On the way lists ${id}`).toBe(false)
+  await betaGetsNothing(step)
+}
+
+describe('B-OP-071 golden flow order page: the order page’s acts on Alpha’s orders, Beta gets nothing', { timeout: LONG }, () => {
+  beforeAll(async () => {
+    P.seenA = seen.A.length
+    P.unexpected = unexpected.length
+    olga = await world.officePerson('olga.owner@sa89-office.example.com', 'owner')
+    wanda = await world.officePerson('wanda.warehouse@sa89-office.example.com', 'warehouse')
+    // World set-up (as S0's): their roles hold on the harness clock and the server clock alike.
+    await world.replica([{ sql: `UPDATE "RoleAssignment" SET "validFrom" = now() - interval '1 day' WHERE "userId" = ANY($1::uuid[])`, values: [[olga.id, wanda.id]] }])
+    // The worker's tracking notes (B-OP-030) join the in-process handlers.
+    handlers = [...handlers, trackingNotesHandler()]
+  }, LONG)
+
+  it('O0 the scene: the shipping seed’s free garments of Alpha’s two seeded orders; the order page seed’s shared DRAFT; nothing told', async () => {
+    // Both seeds are idempotent: the shipping seed ran with the world (its ids read again), the order page seed is the world's set-up.
+    const shipping = await seedShipping({ db: world.h.database, namespace: NS })
+    const page = await seedOrderPage({ db: world.h.database, namespace: NS })
+    P.so2 = shipping.quality.production.salesOrderId
+    P.so3 = shipping.quality.serialSalesOrderId
+    P.blk52 = shipping.quality.production.cellIds['BLK-52']
+    P.jacket = shipping.quality.serialCellId
+    P.siteA1 = seedUuid(NS, 'site:A1')
+    P.sh4 = page.sharedShipmentId
+    P.sh4Line = page.lineIds[0]
+    P.sh4Cell = page.cellIds[0]
+    expect(page.salesOrderIds).toEqual([P.so2, P.so3])
+    // Both seeded orders are Alpha's.
+    expect(new Set((await admin<{ partyId: string }>('SELECT "partyId"::text AS "partyId" FROM "SalesOrder" WHERE id = ANY($1::uuid[])', [[P.so2, P.so3]])).map((row) => row.partyId))).toEqual(new Set([world.ids.a]))
+    await settle()
+    for (const person of [buyerA, buyerB, bice, workshop]) await fresh(person)
+    await pageWall('O0')
+  })
+
+  it('O1 an office amend under Sales: the DRAFT work order follows in the click, the RELEASED one waits in words; Carla applies it on its own page (reprint); the floor note names no person', async () => {
+    // A new order of Alpha's private-label jacket (4 of 50, 4 of 52), its two work orders: size 50 RELEASED, size 52 a DRAFT.
+    P.am = await privateLabelOrder('AM')
+    const make = async (size: '50' | '52'): Promise<Json> => (await ok(carla, 'POST', '/production/work-orders', { siteId: world.w.siteId, lines: [{ salesOrderLineId: P.am.lineId, sizes: [{ size, quantity: 4 }] }] }, 201)).workOrder as Json
+    const released = await release((await make('50')).id as string)
+    expect(released.status).toBe('RELEASED')
+    const draft = await make('52')
+    expect(draft.status).toBe('DRAFT')
+    const cellOf = (workOrder: Json, size: string): string => (workOrder.cells as Json[]).find((cell) => cell.size === size)!.id as string
+    P.released = { id: released.id as string, number: released.number as string, cell: cellOf(released, '50') }
+    P.draft = { id: draft.id as string, number: draft.number as string, cell: cellOf(draft, '52') }
+
+    // The Lines edit's preview (B-OP-013): what each work order will do — in Bea's click, or waiting for production.
+    const amend = { version: await orderVersion(P.am.orderId), reason: AMEND_REASON, lines: [{ id: P.am.lineId, sizes: [{ size: '50', quantity: 3 }, { size: '52', quantity: 2 }] }] }
+    const preview = await ok(bea, 'POST', `/sales/orders/${P.am.orderId}/amendments/preview`, amend)
+    expect(preview).toMatchObject({ ok: true, workOrders: { extra: [], needsOutcome: false } })
+    const plan = preview.workOrders.plan as Json[]
+    expect(plan.find((row) => row.workOrderId === P.draft.id)).toMatchObject({ route: 'SET_DRAFT_CELLS', appliesNow: true })
+    expect(plan.find((row) => row.workOrderId === P.released.id)).toMatchObject({ route: 'LOWER_RELEASED', appliesNow: false, reprint: true, held: PRODUCTION(P.released.number) })
+    // A person limited to Beta amends nothing of it (as unknown); nothing is written.
+    await asBeta('POST', `/sales/orders/${P.am.orderId}/amendments`, amend, 404)
+
+    // Apply: the amendment lands; the DRAFT follows in the same command; the RELEASED one waits, PROPOSED, with its words.
+    const applied = await ok(bea, 'POST', `/sales/orders/${P.am.orderId}/amendments`, amend, 201)
+    expect(applied.workOrders.applied).toEqual([{ changeId: expect.any(String), workOrderId: P.draft.id, number: P.draft.number, route: 'SET_DRAFT_CELLS', reprint: false }])
+    expect(applied.workOrders.waiting).toEqual([{ changeId: expect.any(String), workOrderId: P.released.id, number: P.released.number, words: PRODUCTION(P.released.number) }])
+    expect(await lineSize(P.am.lineId, '50')).toBe(3)
+    expect(await lineSize(P.am.lineId, '52')).toBe(2)
+    expect(await cellQuantity(P.draft.cell)).toBe(2)
+    expect(await cellQuantity(P.released.cell)).toBe(4)
+    P.changeId = applied.workOrders.waiting[0].changeId as string
+    await settle()
+
+    // The waiting one, on the work order's own page: Sales may not apply it (workorders.manage); a person limited to Beta does not
+    // reach it; Carla applies it — Lower to the order, the traveller to reprint.
+    const change = (await ok(carla, 'GET', `/production/work-order-changes/${P.changeId}`)).change as Json
+    expect(change).toMatchObject({ status: 'PROPOSED', kind: 'LOWER_TO_ORDER', partyId: world.ids.a, workOrder: { id: P.released.id }, mayDecide: true, proposedBy: { id: bea.id } })
+    expect((await call(bea, 'POST', `/production/work-order-changes/${P.changeId}/apply`, { version: change.version })).status).toBe(403)
+    await asBeta('POST', `/production/work-order-changes/${P.changeId}/apply`, { version: change.version }, 404)
+    expect(await cellQuantity(P.released.cell)).toBe(4)
+    const done = await ok(carla, 'POST', `/production/work-order-changes/${P.changeId}/apply`, { version: change.version })
+    expect(done).toMatchObject({ change: { status: 'APPLIED', decidedBy: { id: carla.id }, lastError: null }, workOrder: { id: P.released.id, status: 'RELEASED' }, reprint: { traveller: true } })
+    expect(await cellQuantity(P.released.cell)).toBe(3)
+    const batch = await correlationOf('work_order_change.applied', 'changeId', P.changeId)
+    await settle()
+
+    // The floor told the new figures on the work order: the work order's number, never a person's name.
+    const notes = await notesOf(batch, P.am.orderId)
+    expect(notes.floor.map((entry) => entry.workOrderId)).toEqual([P.released.id])
+    const floor = await messageOf(notes.floor[0]!.messageId)
+    expect(floor).toMatchObject({ forFloor: true, authorKind: 'SYSTEM', authorName: null })
+    expect(floor.body.startsWith(`${P.released.number} cambiato: taglia `)).toBe(true)
+    expect(floor.body).toContain('50')
+    for (const person of [bea, carla]) expect(floor.body).not.toContain(await nameOfUser(person.id))
+    expect(noPriceIn((await messageOf(notes.messageId)).body)).toBe(true)
+    await pageWall('O1')
+  })
+
+  it('O2 an approval decided in place: the request held for its asker, allowed for the Owner; her yes on the order page confirms it', async () => {
+    // A made-up rule: every order typed for company A waits for the Owner's yes (switched off again at the end of the step).
+    const ownerRole = await one<{ id: string }>(`SELECT id::text AS id FROM "Role" WHERE "tenantId" = $1 AND key = 'owner'`, [T()])
+    const rule = (await stepped(olga, 'POST', '/approvals/rules', { kind: 'SALES_ORDER', companyId: world.w.companyId, name: 'Made-up: every typed order waits for the Owner', condition: { combinator: 'and', rows: [{ id: 'r1', field: 'orderValue', operator: 'gt', value: '1' }] }, approver: { roleId: ownerRole.id }, sequence: 3, dueHours: 24 }, 201)).rule as Json
+    await stepped(olga, 'PUT', `/approvals/rules/${rule.id}`, { version: rule.version, active: true })
+    const typed = { companyId: world.w.companyId, partyId: world.ids.a, customerRef: APPROVAL_PO, lines: [{ styleId: G.privateStyle, colourwayId: seedUuid(NS, 'production:colourway:JKT-02:BLK'), unitPrice: '100', sizes: [{ size: '50', quantity: 2 }] }] }
+    const waiting = (await ok(bea, 'POST', '/sales/orders/manual', typed, 201)).order as Json
+    expect(waiting.status).toBe('PENDING_APPROVAL')
+    P.approvalOrder = waiting.id as string
+    await settle()
+
+    // The asker reads her own request held (nobody approves their own request) and may take it back.
+    const asker = (await ok(bea, 'GET', `/sales/orders/${P.approvalOrder}`)).order as Json
+    const own = (asker.openApprovals as Json[]).find((row) => row.kind === 'SALES_ORDER')!
+    expect(own).toMatchObject({ requester: { me: true }, approve: { allowed: false }, reject: { allowed: false }, withdraw: { allowed: true, why: null } })
+    expect(asker.live.ids.approvalTaskIds).toContain(own.taskId)
+    P.taskId = own.taskId as string
+    expect([403, 409]).toContain((await call(bea, 'POST', `/approvals/tasks/${P.taskId}/approve`, { version: own.version, comment: null })).status)
+    // Bice decides nothing of it; a person limited to Beta reads neither the order nor the request.
+    expect([403, 404]).toContain((await call(bice, 'POST', `/approvals/tasks/${P.taskId}/approve`, { version: own.version, comment: null })).status)
+    await asBeta('GET', `/approvals/tasks/${P.taskId}`, undefined, 404)
+
+    // The Owner reads it allowed, and says yes in place (a step-up first when the rule asks one).
+    const owner = (await ok(olga, 'GET', `/sales/orders/${P.approvalOrder}`)).order as Json
+    const row = (owner.openApprovals as Json[]).find((entry) => entry.taskId === P.taskId)!
+    expect(row).toMatchObject({ kind: 'SALES_ORDER', requester: { me: false }, approver: { me: true }, approve: { allowed: true, why: null }, reject: { allowed: true, why: null }, withdraw: { allowed: false } })
+    if (row.requireStepUp) await olga.stepUp()
+    await ok(olga, 'POST', `/approvals/tasks/${P.taskId}/approve`, { version: row.version, comment: 'Made-up: confirmed from the order page.' })
+    const after = (await ok(olga, 'GET', `/sales/orders/${P.approvalOrder}`)).order as Json
+    expect(after).toMatchObject({ status: 'CONFIRMED', openApprovals: [], openApprovalsHidden: 0 })
+    expect((await ok(bea, 'GET', `/sales/orders/${P.approvalOrder}`)).order.openApprovals).toEqual([])
+
+    const current = (await ok(olga, 'GET', `/approvals/rules/${rule.id}`)).rule as Json
+    await stepped(olga, 'PUT', `/approvals/rules/${rule.id}`, { version: current.version, active: false })
+    await settle()
+    await pageWall('O2')
+  })
+
+  it('O3 the settlement share on a shared TD24: each order reads its own share, the same as its row in Sales › Orders; the freight in no order', async () => {
+    // The world's set-up (money's flow, as B-OP-022's rows): Alpha's monthly TD24 bills two of its orders and the freight, partly paid.
+    //   O1 2 jackets, net 200.00 + VAT 44.00 · O2 6 jackets, net 600.00 + VAT 132.00 · freight 10.00 net (12.20) · gross 988.20
+    //   300.00 paid on the TD24: O1's share 75.00 (200 of 800), O2's 225.00
+    const fx = { o1: newId(), o2: newId(), l1: newId(), l2: newId(), invoice: newId(), payment: newId() }
+    const black = seedUuid(NS, 'production:colourway:JKT-02:BLK')
+    const company = world.w.companyId
+    const order = (id: string, number: string, net: number, vat: number) => ({
+      sql: `INSERT INTO "SalesOrder" (id, "tenantId", "companyId", "partyId", number, status, "orderDate", "taxMode", "billTo", "shipTo", "netAmount", "vatAmount", "grossAmount") VALUES ($1, $2, $3, $4, $5, 'SHIPPED', '2026-11-02', 'IT_B2B', '{}'::jsonb, '{}'::jsonb, $6, $7, $8)`,
+      values: [id, T(), company, world.ids.a, number, net, vat, net + vat],
+    })
+    const line = (id: string, orderId: string, quantity: number, net: number, vat: number) => ({
+      sql: `INSERT INTO "SalesOrderLine" (id, "tenantId", "companyId", "orderId", "partyId", seq, kind, "styleId", "colourwayId", quantity, "unitPrice", "netAmount", "vatRatePct", "vatAmount") VALUES ($1, $2, $3, $4, $5, 10, 'SIZE_GRID', $6, $7, $8, 100, $9, 22, $10)`,
+      values: [id, T(), company, orderId, world.ids.a, G.privateStyle, black, quantity, net, vat],
+    })
+    const invoiceLine = (seq: number, kind: 'GOODS' | 'CHARGE', net: number, quantity: number, orderLineId: string | null) => ({
+      sql: `INSERT INTO "InvoiceLine" (id, "tenantId", "invoiceId", "buyerPartyId", "partyId", seq, kind, description, quantity, "unitPrice", "netAmount", "vatRatePct", "salesOrderLineId", "chargeKind") VALUES ($1, $2, $3, $4, $4, $5, $6, $7, $8, $9, $10, 22, $11, $12)`,
+      values: [newId(), T(), fx.invoice, world.ids.a, seq, kind, `T-OP71 line ${seq} (made up)`, quantity, net / quantity / 100, net, orderLineId, kind === 'CHARGE' ? 'FREIGHT' : null],
+    })
+    await world.replica([
+      order(fx.o1, 'T-OP71-SO-1', 20_000, 4_400),
+      order(fx.o2, 'T-OP71-SO-2', 60_000, 13_200),
+      line(fx.l1, fx.o1, 2, 20_000, 4_400),
+      line(fx.l2, fx.o2, 6, 60_000, 13_200),
+      {
+        sql: `INSERT INTO "Invoice" (id, "tenantId", "companyId", "buyerPartyId", "partyId", "docType", status, number, year, "issueDate", "issuedAt", "billTo", "netTotal", "vatTotal", "grossTotal", "vatSummary") VALUES ($1, $2, $3, $4, $4, 'TD24', 'ISSUED', 'T-OP71-TD24-1', 2026, '2026-11-05', '2026-11-05T09:00:00Z', '{}'::jsonb, 81000, 17820, 98820, '[{"rate":"22.00","nature":null,"legalRef":null,"taxable":81000,"vat":17820,"rounding":0}]'::jsonb)`,
+        values: [fx.invoice, T(), company, world.ids.a],
+      },
+      invoiceLine(1, 'GOODS', 20_000, 2, fx.l1),
+      invoiceLine(2, 'GOODS', 60_000, 6, fx.l2),
+      invoiceLine(3, 'CHARGE', 1_000, 1, null),
+      { sql: `INSERT INTO "Payment" (id, "tenantId", "companyId", "partyId", amount, "receivedOn", "externalRef") VALUES ($1, $2, $3, $4, 30000, '2026-11-10', 'T-OP71-TRN-1')`, values: [fx.payment, T(), company, world.ids.a] },
+      { sql: `INSERT INTO "PaymentAllocation" (id, "tenantId", "companyId", "partyId", "paymentId", "invoiceId", amount) VALUES ($1, $2, $3, $4, $5, $6, 30000)`, values: [newId(), T(), company, world.ids.a, fx.payment, fx.invoice] },
+    ])
+    P.money = fx
+
+    // Each order's Money: its own share, the same paid and still to pay as its row in Sales › Orders.
+    const settlementOf = async (orderId: string): Promise<Json> => (await ok(olga, 'GET', `/invoicing/orders/${orderId}/settlement`)).settlement as Json
+    const list = (await ok(olga, 'GET', `/sales/orders?ids=${fx.o1},${fx.o2}`)).orders as Json[]
+    for (const orderId of [fx.o1, fx.o2]) {
+      const row = list.find((entry) => entry.id === orderId)!
+      const { thisOrder } = await settlementOf(orderId)
+      expect([thisOrder.paid, thisOrder.stillToPay], orderId).toEqual([row.paid, row.balance])
+    }
+    expect((await settlementOf(fx.o1)).thisOrder).toEqual({ paid: 7500, stillToPay: 16900, invoicedShare: 24400, depositsPaid: 0 })
+    expect((await settlementOf(fx.o2)).thisOrder).toEqual({ paid: 22500, stillToPay: 50700, invoicedShare: 73200, depositsPaid: 0 })
+    // The shared invoice beside it: its whole, this order's share and what of it is open, the freight apart, the other order it bills.
+    const first = ((await settlementOf(fx.o1)).invoices as Json[]).find((invoice) => invoice.id === fx.invoice)!
+    expect(first).toMatchObject({ docType: 'TD24', grossTotal: 98820, paidAmount: 30000, share: 24400, openShare: 16900, freight: 1220, otherOrders: [{ id: fx.o2, number: 'T-OP71-SO-2' }], otherOrdersHidden: 0 })
+    const second = ((await settlementOf(fx.o2)).invoices as Json[]).find((invoice) => invoice.id === fx.invoice)!
+    expect(second).toMatchObject({ share: 73200, openShare: 50700, freight: 1220, otherOrders: [{ id: fx.o1, number: 'T-OP71-SO-1' }] })
+    expect(first.share + second.share + first.freight).toBe(first.grossTotal)
+    await pageWall('O3')
+  })
+
+  it('O4 a shipment made elsewhere while Alpha is on hold: the warehouse is refused in words; the Owner records it with a reason; no Nexus DDT of it', async () => {
+    // The world's set-up: the quality desk released one more black 52 of SEED-SO-0002 two hours ago (quality's flow, the quality
+    // suite's): a copy of the seeds' release of that cell, of one garment (the seeds date theirs in the story's days to come).
+    const source = await one<{ id: string }>('SELECT id::text AS id FROM "QualityRelease" WHERE "workOrderSizeId" = $1 ORDER BY "releasedAt", id LIMIT 1', [P.blk52])
+    const releasedAt = new Date(world.h.clock.now().getTime() - 2 * 60 * 60_000)
+    await world.replica([
+      {
+        sql: `INSERT INTO "QualityRelease" SELECT * FROM jsonb_populate_record(NULL::"QualityRelease", (SELECT to_jsonb(r) || $1::jsonb FROM "QualityRelease" r WHERE r.id = $2::uuid))`,
+        values: [JSON.stringify({ id: newId(), number: 'T-OP71-REL-0001', quantity: 1, releasedAt: releasedAt.toISOString(), createdAt: releasedAt.toISOString() }), source.id],
+      },
+    ])
+    // Alpha goes on a credit hold for company A (finance's act, here the Owner's).
+    const placed = (await stepped(olga, 'POST', `/parties/${world.ids.a}/holds`, { companyId: world.w.companyId, reason: 'CREDIT', words: HOLD_WORDS }, 201)).holds as Json
+    expect(placed.onHold).toBe(true)
+    const hold = (placed.holds as Json[]).find((row) => row.inForce && row.reason === 'CREDIT')!
+
+    // The dialog's preview names the hold; the warehouse's record is refused in words, nothing written, her reason changes nothing.
+    const shippedAt = new Date(world.h.clock.now().getTime() - 60 * 60_000)
+    const preview = await ok(wanda, 'POST', '/shipping/shipments/elsewhere/preview', elsewhereBody(shippedAt))
+    expect(JSON.stringify(preview)).toMatch(/hold/i)
+    const refused = await call(wanda, 'POST', '/shipping/shipments/elsewhere', elsewhereBody(shippedAt))
+    expect(refused.status, JSON.stringify(refused.body)).toBe(409)
+    expect(JSON.stringify(refused.body)).toMatch(/hold/i)
+    expect([403, 409]).toContain((await call(wanda, 'POST', '/shipping/shipments/elsewhere', elsewhereBody(shippedAt, holdOverride(HOLD_REASON)))).status)
+    expect(await admin('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND "externalDdtNumber" = $2', [T(), PAPER_DDT])).toEqual([])
+    // A person limited to Beta records nothing on Alpha's order (as unknown).
+    await asBeta('POST', '/shipping/shipments/elsewhere', elsewhereBody(shippedAt, holdOverride(HOLD_REASON)), 404)
+
+    // The Owner holds the hold-release right: with her reason it is recorded — SHIPPED, made elsewhere, its paper DDT.
+    const recorded = (await ok(olga, 'POST', '/shipping/shipments/elsewhere', elsewhereBody(shippedAt, holdOverride(HOLD_REASON)), 201)).shipment as Json
+    expect(recorded).toMatchObject({ status: 'SHIPPED', salesOrderId: P.so2 })
+    P.elsewhere = { id: recorded.id as string, number: recorded.number as string }
+    const order = (await ok(olga, 'GET', `/sales/orders/${P.so2}`)).order as Json
+    expect((order.chain.shipments as Json[]).find((row) => row.id === P.elsewhere.id)).toMatchObject({ origin: 'ELSEWHERE', externalDdt: { number: PAPER_DDT } })
+    // The override recorded: its audit names the reason; an office-only line on the order's thread.
+    const audit = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'shipping.recordedElsewhere' AND "recordId" = $2`, [T(), P.elsewhere.id])
+    expect(audit).toHaveLength(1)
+    expect(JSON.stringify(audit[0]!.after)).toContain(HOLD_REASON)
+    await settle()
+    const lines = await systemLinesOn(P.so2, P.elsewhere.number)
+    expect(lines.length).toBeGreaterThan(0)
+    expect(lines.every((entry) => entry.audience === 'OFFICE')).toBe(true)
+    // Nexus issues no second fiscal number: its DDT is refused in words naming the paper DDT.
+    const ddt = await call(wanda, 'POST', `/shipping/shipments/${P.elsewhere.id}/ddt`, {})
+    expect(ddt.status).toBe(409)
+    expect(JSON.stringify(ddt.body)).toContain(PAPER_DDT)
+    // The same paper DDT is never recorded twice for the customer.
+    const twice = await call(olga, 'POST', '/shipping/shipments/elsewhere', elsewhereBody(shippedAt, holdOverride(HOLD_REASON)))
+    expect(twice.status).not.toBe(201)
+
+    // The hold released again (the paper of the next steps is not held).
+    const released = (await stepped(olga, 'POST', `/parties/${world.ids.a}/holds/${hold.id}/release`, { version: hold.version, words: 'Made-up: both invoices paid.' })).holds as Json
+    expect(released.onHold).toBe(false)
+    await settle()
+    await pageWall('O4')
+  })
+
+  it('O5 tracking typed on it from the order page: the office line; the portal and the tracking page show the number and its link; corrected; cleared', async () => {
+    const put = async (body: Json): Promise<Json> => ok(wanda, 'PUT', `/shipping/shipments/${P.elsewhere.id}/own-transport/tracking`, { version: await shipmentVersion(P.elsewhere.id), ...body })
+    const portalRow = async (): Promise<Json> => ((await ok(buyerA, 'GET', `/portal/sales-orders/${P.so2}/shipments`)).shipments as Json[]).find((row) => row.number === P.elsewhere.number)!
+    // A person limited to Beta types nothing on it (as unknown).
+    await asBeta('PUT', `/shipping/shipments/${P.elsewhere.id}/own-transport/tracking`, { version: await shipmentVersion(P.elsewhere.id), trackingNumber: TRACKING[0] }, 404)
+
+    await put({ trackingNumber: TRACKING[0], trackingUrl: LINKS[0] })
+    await settle()
+    // ONE office-only line on the order's thread (B-OP-030), never the customer's.
+    const office = await systemLinesOn(P.so2, TRACKING[0])
+    expect(office).toHaveLength(1)
+    expect(office[0]).toMatchObject({ audience: 'OFFICE', direction: 'INTERNAL_NOTE' })
+    // The customer's own shipment and "On the way" carry the number and its link (no live tracking: the carrier was booked by hand).
+    expect(await portalRow()).toMatchObject({ typedTrackingNumber: TRACKING[0], typedTrackingUrl: LINKS[0] })
+    const transit = await ok(buyerA, 'GET', '/portal/sales-orders/in-transit')
+    expect((transit.items as Json[]).find((row) => row.number === P.elsewhere.number)).toMatchObject({ typedTrackingNumber: TRACKING[0], typedTrackingUrl: LINKS[0] })
+    // The tracking page of a link made for it (not mailed here).
+    const made = await ok(wanda, 'POST', `/shipping/shipments/${P.elsewhere.id}/tracking-links`, { send: false }, 201)
+    const token = tokenOf(made.url as string)
+    expect((await trackingPage(token)).shipment).toMatchObject({ number: P.elsewhere.number, typedTrackingNumber: TRACKING[0], typedTrackingUrl: LINKS[0] })
+
+    // Corrected: the new number and link everywhere, one more office line.
+    await put({ trackingNumber: TRACKING[1], trackingUrl: LINKS[1] })
+    await settle()
+    expect(await systemLinesOn(P.so2, TRACKING[1])).toHaveLength(1)
+    expect(await portalRow()).toMatchObject({ typedTrackingNumber: TRACKING[1], typedTrackingUrl: LINKS[1] })
+    expect((await trackingPage(token)).shipment).toMatchObject({ typedTrackingNumber: TRACKING[1], typedTrackingUrl: LINKS[1] })
+    // Cleared: the number and its link go together.
+    await put({ trackingNumber: null })
+    await settle()
+    expect(await portalRow()).toMatchObject({ typedTrackingNumber: null, typedTrackingUrl: null })
+    expect((await trackingPage(token)).shipment).toMatchObject({ typedTrackingNumber: null, typedTrackingUrl: null })
+    await pageWall('O5')
+  })
+
+  it('O6 its invoice names the paper DDT: the shipment waits in “shipped, not invoiced”; the draft’s DDT reference (B-OP-033)', async () => {
+    const queue = await ok(olga, 'GET', '/invoicing/shipped-not-invoiced')
+    expect(JSON.stringify(queue)).toContain(P.elsewhere.id)
+    const drafted = (await ok(olga, 'POST', '/invoicing/invoices/from-shipment', { shipmentId: P.elsewhere.id }, 201)).invoice as Json
+    // TD24 when Alpha's terms defer its invoices, else TD01: by the order's terms, never chosen here.
+    expect(['TD01', 'TD24']).toContain(drafted.docType)
+    expect(drafted.documentRefs).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'DDT', number: PAPER_DDT })]))
+    P.invoiceId = drafted.id as string
+    await asBeta('POST', '/invoicing/invoices/from-shipment', { shipmentId: P.elsewhere.id }, 404)
+    await settle()
+    await pageWall('O6')
+  })
+
+  it.runIf(!N6_ON)('O7 before the switch: a second order on one shipment is held off in words, nothing written', async () => {
+    const before = await admin<{ n: number }>('SELECT count(*)::int AS n FROM "Shipment" WHERE "tenantId" = $1', [T()])
+    const both = await call(wanda, 'POST', '/shipping/shipments', { salesOrderId: P.so2, salesOrderIds: [P.so2, P.so3], siteId: P.siteA1 })
+    expect(both.status, JSON.stringify(both.body)).toBe(409)
+    expect(both.body.error.message).toBe(MULTI_ORDER_WORDS)
+    expect(await admin<{ n: number }>('SELECT count(*)::int AS n FROM "Shipment" WHERE "tenantId" = $1', [T()])).toEqual(before)
+    // SEED-SO-0003's free jacket on a DRAFT of SEED-SO-0002 (the lines route): refused in the same words, the DRAFT unchanged.
+    const draft = (await ok(wanda, 'POST', '/shipping/shipments', { salesOrderId: P.so2, siteId: P.siteA1 }, 201)).shipment as Json
+    const added = await call(wanda, 'POST', `/shipping/shipments/${draft.id}/lines`, { version: draft.version, lines: [{ workOrderSizeId: P.jacket, quantity: 1 }] })
+    expect(added.status).toBe(400)
+    expect(added.body.error.issues).toContainEqual({ path: 'body/lines/0/workOrderSizeId', message: MULTI_ORDER_WORDS })
+    await ok(wanda, 'POST', `/shipping/shipments/${draft.id}/cancel`, { version: await shipmentVersion(draft.id as string), reason: 'Made-up: held off until the switch.' })
+    await pageWall('O7')
+  })
+
+  it.runIf(N6_ON)('O8 after the switch: one shipment for two of Alpha’s orders, through the API — on both orders’ reads, one DDT reference per order, its freight once', async () => {
+    // Both orders on one new DRAFT (the first = its order); another customer's order is never offered.
+    const made = (await ok(wanda, 'POST', '/shipping/shipments', { salesOrderId: P.so2, salesOrderIds: [P.so2, P.so3], siteId: P.siteA1 }, 201)).shipment as Json
+    P.shared = { id: made.id as string, number: made.number as string }
+    // SEED-SO-0002's black 52 comes off SEED-SH-0004 (a DRAFT's lines change) onto it, with SEED-SO-0003's free jacket.
+    await ok(wanda, 'DELETE', `/shipping/shipments/${P.sh4}/lines/${P.sh4Line}?version=${await shipmentVersion(P.sh4)}`)
+    await ok(wanda, 'POST', `/shipping/shipments/${P.shared.id}/lines`, { version: await shipmentVersion(P.shared.id), lines: [{ workOrderSizeId: P.sh4Cell, quantity: 1 }, { workOrderSizeId: P.jacket, quantity: 1 }] })
+    const candidates = await ok(wanda, 'GET', `/shipping/shipments/${P.shared.id}/orders/candidates`)
+    const betaOrders = (await admin<{ id: string }>('SELECT id::text AS id FROM "SalesOrder" WHERE "tenantId" = $1 AND "partyId" = $2', [T(), world.ids.b])).map((row) => row.id)
+    for (const id of betaOrders) expect(JSON.stringify(candidates)).not.toContain(id)
+    expect((candidates.orders as Json[]).every((row) => row.joinable.why !== MULTI_ORDER_WORDS)).toBe(true)
+    const changed = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'shipment.orders_changed' AND subject = $2 ORDER BY "occurredAt", id`, [T(), P.shared.id])
+    expect(changed.at(-1)!.payload.salesOrderIds).toEqual([P.so2, P.so3])
+
+    // On both orders' reads, with every order it carries, the first first.
+    for (const orderId of [P.so2, P.so3]) {
+      const { order } = await ok(olga, 'GET', `/sales/orders/${orderId}`)
+      expect(((order.chain.shipments as Json[]).find((row) => row.id === P.shared.id)!.orders as Json[]).map((ref) => ref.id), orderId).toEqual([P.so2, P.so3])
+    }
+    // Its DDT names one order reference per order (B-OP-042), each line under its order.
+    const ddt = await ok(wanda, 'POST', `/shipping/shipments/${P.shared.id}/ddt/preview`, {})
+    expect((ddt.draft.documentRefs as Json[]).filter((ref) => ref.kind === 'SALES_ORDER').map((ref) => ref.number)).toEqual([await numberOfOrder(P.so2), await numberOfOrder(P.so3)])
+    // Its freight once, on the shipment; each order carries its share in its margin, the two shares the one freight.
+    await ok(olga, 'PUT', `/shipping/shipments/${P.shared.id}/freight`, { version: await shipmentVersion(P.shared.id), freightCharge: 1500 })
+    const shares: number[] = []
+    for (const orderId of [P.so2, P.so3]) {
+      const margins = await ok(olga, 'GET', `/costing/margins/orders/${orderId}/documents`)
+      shares.push(((margins.freight.rows as Json[]).find((row) => row.shipment.id === P.shared.id)!.charge as number) ?? 0)
+    }
+    expect(shares.every((share) => share > 0)).toBe(true)
+    expect(Math.abs(shares[0]! + shares[1]! - 1500)).toBeLessThanOrEqual(1)
+    await settle()
+    await pageWall('O8')
+  })
+
+  it('OW the wall at the end: nothing Beta’s people got names Alpha; Alpha’s buyer never reads the Owner’s or the warehouse’s names', async () => {
+    const markers = await alphaMarkers()
+    expect(leaksIn(seen.B, markers)).toEqual([])
+    await liveWall('OW')
+    const people: Marker[] = (await admin<{ id: string; email: string; name: string }>('SELECT id::text AS id, email, "displayName" AS name FROM "User" WHERE id = ANY($1::uuid[])', [[olga.id, wanda.id, carla.id]])).flatMap((row) => [
+      { label: 'office person id', text: row.id },
+      { label: 'office person address', text: row.email },
+      { label: 'office person name', text: row.name },
+    ])
+    const theirs = seen.A.slice(P.seenA)
+    expect(theirs.length).toBeGreaterThan(0)
+    expect(leaksIn(theirs, people)).toEqual([])
+  })
+
+  it('OZ no route answered 500 and no handler failed during the order page’s flow', async () => {
+    await settle()
+    expect(unexpected.slice(P.unexpected).map((report) => `${report.context.method} ${report.context.route}: ${report.name}: ${report.message} ${report.stack.slice(0, 3).join(' | ')}`)).toEqual([])
+    expect(worker.retried).toEqual([])
+  })
+})
+// ── end B-OP-071 ──
