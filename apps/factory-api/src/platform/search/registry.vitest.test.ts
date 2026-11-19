@@ -55,4 +55,20 @@ describe('the indexers folder is the registry (B-W2a-32)', () => {
     expect(everyone).toMatchObject({ partyId: null, everyParty: true })
     // ---- end B-PR-08a part 2
   })
+
+  // op-fx1 (B-OP-044's read named `client`, which this file never had: every shipment read threw a ReferenceError)
+  it("the shipment indexer reads the orders a shipment carries through its own transaction, the first order's words first", async () => {
+    const { default: shipments } = await import('./indexers/shipment')
+    const shipmentId = '00000000-0000-4000-8000-000000000001'
+    const first = '00000000-0000-4000-8000-000000000002'
+    const second = '00000000-0000-4000-8000-000000000003'
+    const tx = {
+      shipment: { findMany: async () => [{ id: shipmentId, companyId: 'c', siteId: 's', partyId: 'p', number: 'SH-1', status: 'SHIPPED', salesOrderId: first, salesOrder: { number: 'SO-1', customerRef: 'PO-1', party: { code: 'ALPHA', legalName: 'Brand Alpha Srl', tradeName: null } }, parcels: [{ trackingNumber: 'TRK-1' }] }] },
+      $queryRaw: async () => [{ shipmentId, orderId: second, number: 'SO-2' }],
+      salesOrder: { findMany: async () => [{ id: first, number: 'SO-1', customerRef: 'PO-1', customerSeq: 1, status: 'SHIPPED', language: 'it' }, { id: second, number: 'SO-2', customerRef: 'PO-2', customerSeq: 2, status: 'SHIPPED', language: 'it' }] },
+    } as unknown as Parameters<SearchIndexer['read']>[0]
+    const [row] = await shipments.read(tx, { ids: [shipmentId] }, 10)
+    expect(row).toMatchObject({ recordId: shipmentId, number: 'SH-1', subtitle: 'SO-1', words: ['ALPHA', 'PO-1', 'TRK-1', 'SO-2', 'PO-2'] })
+  })
+  // ---- end op-fx1
 })

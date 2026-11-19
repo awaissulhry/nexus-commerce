@@ -72,7 +72,7 @@ export function useShipmentsActs(input: {
     (shipment: Shipment, done: NewShipmentDone) => {
       reload()
       // F-OP-122: garments added to a DRAFT already there say so (how many, onto which shipment).
-      const words = done.kind === 'joined' ? { key: 'ship.joined', params: { count: done.garments, number: shipment.number } } : { key: 'ship.created', params: { number: shipment.number } }
+      const words: Phrase /* op-fx1: one phrase, either key */ = done.kind === 'joined' ? { key: 'ship.joined', params: { count: done.garments, number: shipment.number } } : { key: 'ship.created', params: { number: shipment.number } }
       setNotice({ tone: 'success', words, door: { href: `${prefix}/warehouse/shipments/${shipment.id}`, words: { key: 'ship.createdDoor' } } })
     },
     [prefix, reload, setNotice],
