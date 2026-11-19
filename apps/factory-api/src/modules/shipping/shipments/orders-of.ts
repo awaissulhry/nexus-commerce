@@ -90,7 +90,7 @@ export const shipmentsOfOrdersWhere = (salesOrderIds: readonly string[]): Prisma
 
 const JOIN_ORDER_SELECT = { id: true, number: true, partyId: true, companyId: true, status: true, shipTo: true, currency: true, taxMode: true, incoterm: true, billTo: true } as const satisfies Prisma.SalesOrderSelect
 
-type JoinOrderRow = Prisma.SalesOrderGetPayload<{ select: typeof JOIN_ORDER_SELECT }>
+export type JoinOrderRow = Prisma.SalesOrderGetPayload<{ select: typeof JOIN_ORDER_SELECT }>
 
 export const joinOrderOf = (row: JoinOrderRow, siteIds?: readonly string[]): JoinOrder => ({ ...row, status: row.status as string, taxMode: row.taxMode as string, ...(siteIds ? { siteIds } : {}) })
 

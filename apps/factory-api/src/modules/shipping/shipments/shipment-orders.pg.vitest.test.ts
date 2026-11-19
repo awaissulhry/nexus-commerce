@@ -231,6 +231,35 @@ describe('B-OP-040: candidates and joinable answer the same customer only, each 
   })
 })
 
+// B-OP-070 (order page N6, "ship together"; F-OP-121 reads it).
+describe('B-OP-070: ship together — the ready read lists the same customer\'s other orders with their verdict', () => {
+  it('GET /shipping/ready?salesOrderId=&together=1: the asked order first (shipsWith null), then the customer\'s other orders with released garments', async () => {
+    const ready = await ok('warehouse', 'GET', `/shipping/ready?salesOrderId=${so2()}&together=1`)
+    const rows = ready.orders as Json[]
+    expect(rows[0]).toMatchObject({ salesOrderId: so2(), shipsWith: null })
+    const other = rows.find((row) => row.salesOrderId === so3())
+    expect(other).toMatchObject({ partyId: A.alpha, shipsWith: { allowed: false, why: expect.any(String) } })
+    // Held off: every other order is refused, MULTI_ORDER_OFF at the latest.
+    expect(rows.slice(1).every((row) => row.shipsWith.allowed === false)).toBe(true)
+    expect(rows.every((row) => row.partyId === A.alpha)).toBe(true)
+    // Never another customer's order, also for a person who sees every customer.
+    expect(JSON.stringify(ready)).not.toContain(ids.beta1)
+    // Without together: the asked order alone, as before, and no verdict.
+    const alone = await ok('warehouse', 'GET', `/shipping/ready?salesOrderId=${so2()}`)
+    expect((alone.orders as Json[]).map((row) => [row.salesOrderId, row.shipsWith])).toEqual([[so2(), null]])
+  })
+
+  it('a site filter keeps to that site; an order the caller may not see gives nothing more than without together', async () => {
+    const elsewhere = await ok('warehouse', 'GET', `/shipping/ready?salesOrderId=${so2()}&together=1&siteId=${newId()}`)
+    expect(elsewhere.orders).toEqual([])
+    // A person limited to Brand Beta: Alpha's order is out of reach, with together as without.
+    expect((await ok('betaOnly', 'GET', `/shipping/ready?salesOrderId=${so2()}&together=1`)).orders).toEqual([])
+    expect((await ok('betaOnly', 'GET', `/shipping/ready?salesOrderId=${so2()}`)).orders).toEqual([])
+    // Brand Beta's own order (no released garments) lists nothing of Alpha's.
+    expect(JSON.stringify(await ok('warehouse', 'GET', `/shipping/ready?salesOrderId=${ids.beta1}&together=1`))).not.toContain(so2())
+  })
+})
+
 describe('B-OP-040: ordersOfShipment — the orders of its lines, the first order first', () => {
   it('one order per shipment: its first order; a shared shipment made by a raw line: both, the first first; one query for many', async () => {
     const draft = (await ok('warehouse', 'GET', `/shipping/shipments/${ids.draft}`)).shipment

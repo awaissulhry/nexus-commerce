@@ -25,10 +25,18 @@ const version = z.number().int().min(1).optional()
 const garments = () => z.number().int().min(1).max(100_000)
 const lineInput = input({ workOrderSizeId: id(), quantity: garments() })
 
+/** B-OP-040 / B-OP-070: may it join (ship together): allowed, or why not (factory-domain joinProblems, the first reason). */
+export const joinVerdictSchema = output({ allowed: z.boolean(), why: z.string().nullable() })
+
 export const readyContract = defineContract({
   querystring: input({
     siteId: id().optional(),
     salesOrderId: id().optional(),
+    /**
+     * B-OP-070 (order page N6, "ship together"): with salesOrderId, beside that order the SAME customer's other open orders
+     * with released garments, each with `shipsWith` (never another customer's order).
+     */
+    together: z.enum(['1', '0']).optional(),
     partyId: id().optional(),
     /** B-W2a-48: a page of orders at a time (by number); the cursor is the last order of the page before. */
     cursor: id().optional(),
@@ -51,6 +59,8 @@ export const readyContract = defineContract({
           companyId: id(),
           partyId: id(),
           party: output({ code: z.string(), legalName: z.string() }),
+          /** B-OP-070: with together=1, may this order ship with the asked one (joinProblems against it); null: the asked order itself, or no together. */
+          shipsWith: joinVerdictSchema.nullable(),
           cells: z.array(
             output({
               workOrderSizeId: id(),
@@ -412,9 +422,6 @@ export const receiveCarrierReturnContract = defineContract({
 })
 
 // ---- B-OP-040 (order page N6, lines-derived): several orders of one customer on one shipment, held off ----------------
-
-/** May it join: allowed, or why not (factory-domain joinProblems, the first reason). */
-export const joinVerdictSchema = output({ allowed: z.boolean(), why: z.string().nullable() })
 
 export const shipmentOrderCandidatesContract = defineContract({
   params: shipmentParams,
