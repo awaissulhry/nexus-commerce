@@ -521,7 +521,7 @@ function RequestsCard({ order, model, actions, rows }: { order: Order; model: Or
             <WithMessages namespaces={['approvals']}>
               <ul className="fw-so-datelist">
                 {card.still.slice(0, 3).map((row, index) => (
-                  <StillRow key={`${row.kind}:${row.ref?.id ?? index}`} row={row} order={order} model={model} />
+                  <StillRow key={`${row.kind}:${row.ref?.id ?? index}`} row={row} order={order} model={model} actions={actions /* F-OP-116 */} />
                 ))}
               </ul>
             </WithMessages>
