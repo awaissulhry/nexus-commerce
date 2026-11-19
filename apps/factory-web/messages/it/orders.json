@@ -1636,5 +1636,9 @@
       "reason": "Il motivo è al massimo di {count} caratteri.",
       "inWork": "Pezzi di queste righe sono su ordini di lavoro: ciò che resta qui non può scendere sotto."
     }
+  },
+  "wo": {
+    "makeNext": "Crea il prossimo: {style}",
+    "made": "{number} creato (bozza)"
   }
 }

@@ -25,6 +25,9 @@ import type { ToldChanges } from './told' // F-SA-244
 import type { ApiClient } from '../../../../lib/api/client' // F-OP-134: the tab acts hooks' base (RecordActsBase)
 import type { ShipToAddress } from '../api' // F-OP-111
 import type { SplitPartDraft, SplitRefusal } from '../model' // F-OP-111
+// F-OP-112: Make work orders… in place — the Production page's New work order dialog (its model, its actions, the lane's rights).
+import type { NewWorkOrderModel, WorkOrdersListActions } from '../../../production/work-orders/list-model'
+import type { ProductionCan } from '../../../production/_shared/model'
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -108,7 +111,27 @@ export interface SplitState {
 }
 // ---- end F-OP-111
 
+// ---- F-OP-112: Make work orders… in place (use-production-acts: the Production page's own hook, the order fixed) ----
+export interface MakeWorkOrdersModel {
+  /** The New work order dialog while open (its own view, NewWorkOrderDialog); null: closed. */
+  readonly dialog: NewWorkOrderModel | null
+  /** After a draft was made: the next style with open pieces ("Make the next one: <style>"); null: none, or nothing made yet. */
+  readonly next: { readonly styleId: string; readonly code: string } | null
+  /** The production lane's rights the dialog reads (workorders.manage: Create). */
+  readonly can: ProductionCan
+}
+
+export interface MakeWorkOrdersActions {
+  /** Open the dialog with the order fixed (on the next style when one is offered). */
+  readonly onOpen?: () => void
+  /** The dialog's own actions (Cancel, the style step, the lines and sizes, Create). */
+  readonly dialog?: Pick<WorkOrdersListActions, 'onNew' | 'newOrder'>
+}
+// ---- end F-OP-112
+
 export interface OrderRecordModel {
+  /** F-OP-112: Make work orders… on Production (the dialog, the next style); absent: not here (a design case). */
+  makeWorkOrders?: MakeWorkOrdersModel | null
   /** F-OP-111: Split into new orders… — the dialog's addresses, refusals and the orders made; absent: not open here (a design case). */
   split?: SplitState | null
   /** B-W2b-180: ⋯ "See it in the customer's portal" (held: why); null/absent: not offered. */
@@ -220,6 +243,8 @@ export interface PaymentInput {
 }
 
 export interface OrderRecordActions {
+  /** F-OP-112: Make work orders… on Production (open it; the dialog's own actions). */
+  makeWorkOrders?: MakeWorkOrdersActions
   /** F-OP-111: split the parts off into new orders (the dialog's parts as typed, the optional reason). */
   onSplit?: (input: { parts: readonly SplitPartDraft[]; reason: string }) => void
   /** B-W2b-180 (design sales.orders conn "Portal › Orders & tracking"): open the order in the customer's portal, read-only. */

@@ -331,7 +331,19 @@ function RecordContainer({ orderId }: { orderId: string }) {
     pricedStart: (amendment) => depth.actions.onPricedStart?.(amendment),
     permissions: session.permissions, // F-OP-111: the split's Ship to reads the customer's addresses (parties.view)
   })
-  const productionActs = useProductionActs({ api, order: ready, tab, can, permissions: session.permissions, setNotice })
+  const productionActs = useProductionActs({
+    api,
+    order: ready,
+    tab,
+    can,
+    permissions: session.permissions,
+    setNotice,
+    // F-OP-112: a work order made in place reads the order and its production again.
+    reload: () => {
+      void load()
+      production.again()
+    },
+  })
   const shipments = useShipmentsActs({ order: ready, prefix })
   const money = useMoneyActs({
     ...actsBase,

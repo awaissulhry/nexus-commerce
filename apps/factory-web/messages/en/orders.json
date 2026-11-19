@@ -1636,5 +1636,9 @@
       "reason": "The reason is at most {count} characters.",
       "inWork": "Pieces of these lines are on work orders: what stays here cannot go below them."
     }
+  },
+  "wo": {
+    "makeNext": "Make the next one: {style}",
+    "made": "{number} made (draft)"
   }
 }
