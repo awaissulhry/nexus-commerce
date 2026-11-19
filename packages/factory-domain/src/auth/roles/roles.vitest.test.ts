@@ -291,7 +291,8 @@ describe('B-CP-016: the office role "Factory designer" sees no money', () => {
   it('works on artwork and samples with customers: exactly the permissions of the design, all declared', () => {
     expect([...designer.permissions].sort()).toEqual(['files.read', 'files.upload', 'home.view', 'orders.view', 'parties.view', 'product.bom.view', 'product.styles.view', 'sales.inquiries.view', 'sales.samples.view', 'threads.post', 'threads.read', 'views.save'])
     for (const name of designer.permissions) expect(FACTORY_PERMISSIONS.isDeclared(name), name).toBe(true)
-    expect(templateProblems([designer])).toEqual([])
+    // cp-fx6: templateProblems checks a whole set, which always holds the owner (as above: [owner, …]); the designer adds no problem.
+    expect(templateProblems([templateOf('owner')!, designer])).toEqual([])
     // Never a money permission, never a write of an order, a quote or a price; never measurement sheets (body data).
     expect(designer.permissions.filter((name) => name.startsWith('money.'))).toEqual([])
     for (const name of ['orders.manage', 'quotes.view', 'quotes.manage', 'pricelists.view', 'sales.measurements.view', 'product.materials.cost', 'costing.view', 'invoices.view', 'payments.view']) expect(designer.permissions, name).not.toContain(name)
