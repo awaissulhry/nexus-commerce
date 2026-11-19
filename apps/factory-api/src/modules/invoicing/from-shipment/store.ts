@@ -59,7 +59,7 @@ export async function readDdts(db: Reader, where: Prisma.DdtWhereInput, take = 5
       shipment: { select: { number: true, status: true, salesOrderId: true, freightCharge: true, shipTo: true, salesOrder: { select: { currency: true } } } },
     },
   })
-  // B-OP-045: the orders each DDT's shipment carries (one query for all; one order each while N6 is held off).
+  // B-OP-045: the orders each DDT's shipment carries (one query for all; several since B-OP-047).
   const carried = await orderIdsOfShipments(db, rows.map((row) => ({ id: row.shipmentId!, salesOrderId: row.shipment!.salesOrderId })))
   return rows.map((row) => ({
     id: row.id,

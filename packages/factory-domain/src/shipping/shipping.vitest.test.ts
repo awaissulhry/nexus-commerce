@@ -8,10 +8,10 @@ import { SHIPPING_FLOOR_PERMISSIONS, SHIPPING_PERMISSIONS } from './permissions'
 import { packingPrinterProblems, shippingSettingsProblems } from './settings'
 import {
   // B-OP-040 (order page N6).
+  JOIN_PROBLEM_CODES, // B-OP-047
   joinProblems,
   joinShipmentOf,
   joinVerdict,
-  MULTI_ORDER_OFF,
   NOT_A_CELL,
   ordersOn,
   sameShipTo,
@@ -266,18 +266,18 @@ describe('declarations', () => {
   })
 })
 
-// B-OP-040 (order page N6, lines-derived): several orders of one customer on one shipment, held off until B-OP-047.
-describe('several orders of one customer on one shipment (B-OP-040, held off)', () => {
+// B-OP-040 (order page N6, lines-derived): several orders of one customer on one shipment — B-OP-047: switched on.
+describe('several orders of one customer on one shipment (B-OP-040; on since B-OP-047)', () => {
   const milano = { name: 'Brand Alpha store', line1: 'Via Esempio 1', postalCode: '20100', city: 'Milano', country: 'IT' }
   const first: JoinOrder = { id: 'SO-1', number: 'SO-0150', partyId: 'P1', companyId: 'C1', status: 'CONFIRMED', shipTo: milano, currency: 'EUR', taxMode: 'IT_B2B', incoterm: null, billTo: { legalName: 'Brand Alpha', vatNumber: 'IT 0000000000 1' } }
   const shipment = joinShipmentOf(first, { number: 'SH-0012', status: 'DRAFT', siteId: 'A1', siteCompanyId: 'C1', customerHold: null })
   const other = (fields: Partial<JoinOrder> = {}): JoinOrder => ({ ...first, id: 'SO-2', number: 'SO-0151', ...fields })
 
-  it('the same address normalised (case, spaces, postal code), and an order of the same customer is refused only by MULTI_ORDER_OFF', () => {
+  it('the same address normalised (case, spaces, postal code): an order of the same customer, address, currency and terms joins (B-OP-047)', () => {
     expect(sameShipTo(milano, { ...milano, line1: '  via  esempio 1 ', postalCode: '20 100', city: 'MILANO', country: 'it' })).toBe(true)
-    expect(joinProblems(shipment, other({ shipTo: { ...milano, city: ' milano ' }, billTo: { vatNumber: 'IT00000000001' } }))).toEqual([{ code: 'MULTI_ORDER_OFF', message: MULTI_ORDER_OFF }])
-    expect(MULTI_ORDER_OFF).toBe('Several orders in one shipment come with the next update.')
-    expect(joinVerdict(joinProblems(shipment, other()))).toEqual({ allowed: false, code: 'MULTI_ORDER_OFF', why: MULTI_ORDER_OFF })
+    expect(joinProblems(shipment, other({ shipTo: { ...milano, city: ' milano ' }, billTo: { vatNumber: 'IT00000000001' } }))).toEqual([])
+    expect(joinVerdict(joinProblems(shipment, other()))).toEqual({ allowed: true, code: null, why: null })
+    expect(JOIN_PROBLEM_CODES).not.toContain('MULTI_ORDER_OFF')
     expect(joinVerdict([])).toEqual({ allowed: true, code: null, why: null })
     expect(joinVerdict(joinProblems(shipment, other({ currency: 'USD' }))).code).toBe('CURRENCY')
   })
@@ -296,9 +296,9 @@ describe('several orders of one customer on one shipment (B-OP-040, held off)', 
     expect(joinProblems({ ...shipment, status: 'PACKED' }, other())[0]).toEqual({ code: 'SHIPMENT_STATE', message: 'Shipment SH-0012 is PACKED: orders join a shipment only while it is a DRAFT.' })
     expect(joinProblems({ ...shipment, customerHold: 'BRAND-ALPHA is on hold.' }, other())[0]).toEqual({ code: 'CUSTOMER_HOLD', message: 'BRAND-ALPHA is on hold.' })
     expect(joinProblems(shipment, other({ siteIds: ['B1'] }))[0]!.code).toBe('SITE')
-    expect(joinProblems(shipment, other({ siteIds: ['A1', 'B1'] })).map((problem) => problem.code)).toEqual(['MULTI_ORDER_OFF'])
-    // MULTI_ORDER_OFF stays last, under the real reasons.
-    expect(joinProblems(shipment, other({ currency: 'USD', incoterm: 'EXW' })).map((problem) => problem.code)).toEqual(['CURRENCY', 'INCOTERM', 'MULTI_ORDER_OFF'])
+    // Garments at the shipment's site among others: it joins; every real reason is said, in order (B-OP-047: nothing after them).
+    expect(joinProblems(shipment, other({ siteIds: ['A1', 'B1'] }))).toEqual([])
+    expect(joinProblems(shipment, other({ currency: 'USD', incoterm: 'EXW' })).map((problem) => problem.code)).toEqual(['CURRENCY', 'INCOTERM'])
     // A new shipment has no number yet.
     expect(joinProblems({ ...shipment, number: null }, other({ currency: 'USD' }))[0]!.message).toBe('SO-0151 is in USD, this shipment in EUR: one shipment is in one currency.')
   })
@@ -313,8 +313,9 @@ describe('several orders of one customer on one shipment (B-OP-040, held off)', 
     expect(ordersOn({ ...draft, salesOrderIds: ['SO-1', 'SO-2'] })).toEqual(['SO-1', 'SO-2'])
     expect(lineProblems(draft, { siteId: 'A1', partyId: 'P2', salesOrderId: 'SO-9' }, 1, 'body/lines/0')).toEqual([{ path: 'body/lines/0/workOrderSizeId', message: NOT_A_CELL }])
     expect(NOT_A_CELL).toBe('Not a work order cell.')
-    expect(lineProblems(draft, { siteId: 'A1', partyId: 'P1', salesOrderId: 'SO-2' }, 1, 'body/lines/0', [MULTI_ORDER_OFF])).toEqual([{ path: 'body/lines/0/workOrderSizeId', message: MULTI_ORDER_OFF }])
-    // Joining allowed (after the switch): the site rule still holds.
+    const currency = 'SO-0151 is in USD, shipment SH-0012 in EUR: one shipment is in one currency.'
+    expect(lineProblems(draft, { siteId: 'A1', partyId: 'P1', salesOrderId: 'SO-2' }, 1, 'body/lines/0', [currency])).toEqual([{ path: 'body/lines/0/workOrderSizeId', message: currency }])
+    // Joining allowed (B-OP-047): the site rule still holds.
     expect(lineProblems(draft, { siteId: 'A1', partyId: 'P1', salesOrderId: 'SO-2' }, 1, 'body/lines/0', [])).toEqual([])
     expect(lineProblems(draft, { siteId: 'B1', partyId: 'P1', salesOrderId: 'SO-2' }, 1, 'body/lines/0', [])[0]!.message).toMatch(/another site/)
     // An order already on the shipment needs no join.

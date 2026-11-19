@@ -12,6 +12,7 @@ import { PRICED_EMPTY, pricedBodyOf } from '../depth/model'
 import { draftOf, namesOf, newKey, withCells, type DraftLine } from '../daily-model'
 // F-OP-106: the strip's preview (one body, one key; a stale answer dropped), the notice after Apply.
 import { amendBodyOf, amendKeyOf, appliedNotice, reviewHeld, tookPreview } from '../daily-model'
+import { headerChangedOf, SHIP_TO_FIELD_ID } from '../daily-model' // F-OP-110
 import { tellHeld, tickOn } from '../../../home/approvals/requests/model'
 import { readProblem, writeProblem } from '../model'
 // ---- F-OP-111: Split into new orders… (POST …/split; the customer's delivery addresses for a part's Ship to) ----
@@ -50,6 +51,7 @@ export type LinesActsActions = Pick<
   | 'onCancelOrder'
   | 'onPricedOffer'
   | 'onSplit' // F-OP-111
+  | 'onChangeShipTo' // F-OP-110
 >
 
 /** The amendment's body as the API reads it (the preview, Apply, and the priced change it may become; daily-model amendBodyOf). */
@@ -62,10 +64,7 @@ const PREVIEW_REASON = 'Review before applying.'
 const PREVIEW_AFTER_MS = 500
 
 /** The draft's own hold (a typed price that is not one, no line left, nothing changed): nothing is asked of the API then. */
-const draftHeld = (draft: AmendState, value: Order) => {
-  const body = amendBodyOf(draft, value)
-  return reviewHeld(draft.lines, value, { changed: 'customerRef' in body || 'requestedDate' in body })
-}
+const draftHeld = (draft: AmendState, value: Order) => reviewHeld(draft.lines, value, { changed: headerChangedOf(draft, value) /* F-OP-110: the ship-to too */ })
 
 /**
  * F-OP-134 (N-5): the Lines tab's acts — B-W2a-50: "Amend order" holds the draft here (each style read for its sizes and colourways;
@@ -88,6 +87,8 @@ export function useLinesActs(
     readonly pricedStart: (amendment: AmendBody) => void
     /** F-OP-111: the person's rights (a part's Ship to reads the customer's addresses with parties.view). */
     readonly permissions: readonly string[]
+    /** F-OP-110: the page's one focus (an element by its id, once it is drawn): ⋯ Change ship-to… focuses the header's Ship to. */
+    readonly focus?: (id: string) => void
   },
 ): {
   model: LinesActsModel
@@ -99,7 +100,7 @@ export function useLinesActs(
   readCancelCheck: () => void
   opened: (next: RecordDialog | null) => void
 } {
-  const { api, orderId, current, write, version, setNotice, load, order, setDialog, clearChanged, showLines, pricedStart, permissions } = input
+  const { api, orderId, current, write, version, setNotice, load, order, setDialog, clearChanged, showLines, pricedStart, permissions, focus } = input
   const [amend, setAmend] = useState<AmendState | null>(null)
   const amendRef = useRef<AmendState | null>(null)
   amendRef.current = amend
@@ -148,9 +149,16 @@ export function useLinesActs(
       tell: { words: '', chosen: null }, // F-OP-106
       extraOutcome: null, // F-OP-107
       fee: '', // F-OP-108
+      // F-OP-110: Ship to — the order's own until another is picked; the customer's delivery addresses read now (parties.view).
+      shipToAddressId: '',
+      addresses: mayAddresses ? PART_LOADING : null,
     })
     showLines()
     for (const styleId of styleIds) void readStyle(styleId)
+    if (mayAddresses)
+      listShipToAddresses(api, value.partyId)
+        .then((rows) => setAmend((known) => (known ? { ...known, addresses: part(rows) } : known)))
+        .catch((error: unknown) => setAmend((known) => (known ? { ...known, addresses: { value: null, problem: readProblem(error) } } : known)))
   }
   // ---- F-OP-106: the strip's preview — one call at a time; when it comes back the draft is asked again if it moved on meanwhile (an
   // answer is kept with the key it was asked for: the strip draws it only while that key is the draft's, so a stale one never shows).
@@ -226,6 +234,12 @@ export function useLinesActs(
 
   const actions: LinesActsActions = {
     onAmendStart: startAmend,
+    // F-OP-110: ⋯ Change ship-to… — the one edit path: edit mode (kept when already open), Ship to focused.
+    onChangeShipTo: () => {
+      if (!amendRef.current) startAmend()
+      else showLines()
+      focus?.(SHIP_TO_FIELD_ID)
+    },
     onAmendDiscard: () => {
       setAmend(null)
       clearChanged()
@@ -252,11 +266,12 @@ export function useLinesActs(
         // order's own percent of the growth ("Deposit and words…" opens its dialog to set another).
         const done = asPriced
           ? await applyPricedChange(api, orderId, { ...pricedBodyOf({ ...PRICED_EMPTY, fee: draft.fee }, amendBodyOf(draft, value), true), version: value.version, reason, ...extra }, key).then((answer) => ({ order: answer.order, revision: answer.change.revision, workOrders: answer.workOrders }))
-          : await applyAmendment(api, orderId, { version: value.version, reason, ...amendBodyOf(draft, value), ...extra }, key).then((answer) => ({ order: answer.order, revision: answer.amendment?.revision ?? draft.revision /* B-OP-015: none when only the address moved */, workOrders: answer.workOrders }))
+          : await applyAmendment(api, orderId, { version: value.version, reason, ...amendBodyOf(draft, value), ...extra }, key).then((answer) => ({ order: answer.order, revision: answer.amendment?.revision ?? draft.revision /* B-OP-015: none when only the address moved */, workOrders: answer.workOrders, addressOnly: answer.amendment === null /* F-OP-110 */ }))
         setAmend(null)
         clearChanged()
         // "Amendment 3 applied · WO-0311 changed · WO-0312 waits for production": the work orders followed in the same command.
-        setNotice({ tone: 'success', words: appliedNotice(done.revision, done.workOrders, null) })
+        // F-OP-110: only the delivery address moved (no amendment written): said as that.
+        setNotice({ tone: 'success', words: 'addressOnly' in done && done.addressOnly ? { key: 'edit.shipToDone' } : appliedNotice(done.revision, done.workOrders, null) })
         // ---- F-SA-242: ticked, the words go as our message in the order's conversation (the thread's own portal send), after
         // the amendment took; a refusal never undoes the amendment — it is said in the one notice.
         if (tell) {

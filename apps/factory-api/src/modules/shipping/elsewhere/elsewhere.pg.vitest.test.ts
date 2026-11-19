@@ -6,7 +6,6 @@ import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testi
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { ELSEWHERE_WORDS, leftOn, nexusDdtWords, overrideLineOf } from '@nexus/factory-domain/shipping/elsewhere'
-import { MULTI_ORDER_OFF } from '@nexus/factory-domain/shipping/shipments'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedShipping, type ShippingSeed } from '../../../../../../packages/factory-db/seed/shipping'
@@ -161,12 +160,13 @@ describe('B-OP-032: the wall, the rights, several orders', () => {
     expect(error.issues).toContainEqual({ path: 'body/lines/0/workOrderSizeId', message: 'Not a work order cell.' })
   })
 
-  it('recording needs shipping.manage and shipping.ddt.issue; a second order is held off (MULTI_ORDER_OFF)', async () => {
+  it('recording needs shipping.manage and shipping.ddt.issue; a second order is no longer held off (B-OP-047)', async () => {
     const before = await shipments()
     expect((await call('viewer', '/shipping/shipments/elsewhere', body())).statusCode).toBe(403)
     expect((await refused('noDdt', '/shipping/shipments/elsewhere', body(), 403)).message).toBe("Recording the goods' paper DDT needs the right to issue DDTs too.")
     const other = (await admin<{ id: string }>(`SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND "partyId" = $2 AND id <> $3 AND status IN ('CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED') LIMIT 1`, [A.tenant, A.alpha, so2()]))[0]
-    if (other) expect((await refused('warehouse', '/shipping/shipments/elsewhere', body({ salesOrderIds: [so2(), other.id] }), 409)).message).toBe(MULTI_ORDER_OFF)
+    // B-OP-047: a second order of the customer is checked by the real join rules only (the preview writes nothing).
+    if (other) expect((await call('warehouse', '/shipping/shipments/elsewhere/preview', body({ salesOrderIds: [so2(), other.id] }))).body).not.toContain('Several orders in one shipment come with the next update.')
     expect(await shipments()).toBe(before)
   })
 })

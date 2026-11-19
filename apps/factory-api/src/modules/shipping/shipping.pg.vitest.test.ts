@@ -239,10 +239,12 @@ describe('a shipment from released goods only (LOG-001, LOG-002, GAP-002)', () =
     expect((await refused('warehouse', 'POST', `/shipping/shipments/${s1}/lines`, { lines: [{ workOrderSizeId: cells().red52, quantity: 1 }] }, 409)).message).toBe(
       'Only released garments ship: SEED-WO-0001 RED 52 has 1 released (less reversals) and 1 on shipments, so 0 can still ship; 1 asked.',
     )
-    const otherOrder = await refused('warehouse', 'POST', `/shipping/shipments/${s1}/lines`, { lines: [{ workOrderSizeId: cells().jacket, quantity: 1 }] }, 400)
-    // B-OP-040 (order page N6): another order of the same customer joins only as joinProblems allows: held off until B-OP-047.
-    expect(otherOrder.issues).toContainEqual({ path: 'body/lines/0/workOrderSizeId', message: 'Several orders in one shipment come with the next update.' })
-    expect((otherOrder.issues as Json[]).every((issue) => issue.path === 'body/lines/0/workOrderSizeId')).toBe(true)
+    // B-OP-047 (order page N6 on): another open order of the same customer (its address, currency and terms) joins the DRAFT
+    // through its lines; taken off again, the shipment carries its own order only, for what follows.
+    const joined = (await ok('warehouse', 'POST', `/shipping/shipments/${s1}/lines`, { lines: [{ workOrderSizeId: cells().jacket, quantity: 1 }] })).shipment
+    expect((joined.lines as Json[]).map((entry) => entry.workOrderSizeId).sort()).toEqual([cells().blk52, cells().jacket].sort())
+    const jacketLine = (joined.lines as Json[]).find((entry) => entry.workOrderSizeId === cells().jacket)!
+    expect((await ok('warehouse', 'DELETE', `/shipping/shipments/${s1}/lines/${jacketLine.id}`)).shipment.lines).toHaveLength(1)
     const line = (await ok('warehouse', 'GET', `/shipping/shipments/${s1}`)).shipment.lines[0]
     expect((await refused('warehouse', 'PATCH', `/shipping/shipments/${s1}/lines/${line.id}`, { quantity: 2 }, 409)).code).toBe('conflict')
     expect((await refused('warehouse', 'PATCH', `/shipping/shipments/${s1}/lines/${line.id}`, { version: 99, quantity: 1 }, 409)).message).toMatch(/changed since it was read \(version 99\); it is now at version 1/)

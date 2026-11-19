@@ -57,7 +57,7 @@ import type { ElsewhereBody } from './contract'
  * (shipping.holds.release) and says why: then it is recorded over them (the audit's `shipping.recordedElsewhere` and an office
  * line on each order's thread). No system hold is synced onto it (holds/system.ts skips ELSEWHERE). PPE documents not on file
  * never refuse a fact that already happened: recorded, with a warning line on the thread. The same paper DDT is recorded once
- * per customer (R-10, words that name no customer). Several orders: MULTI_ORDER_OFF until the switch (B-OP-047).
+ * per customer (R-10, words that name no customer). Several orders of the customer: by the join rules (B-OP-047: N6 on).
  * The wall: an order the caller may not see — another customer's — is answered as an unknown one, before anything else.
  */
 
@@ -113,7 +113,7 @@ async function planOf(caller: CommandCaller, body: ElsewhereBody, permission: Pe
     if (order.status === 'CANCELLED' || order.status === 'CLOSED') throw new InvalidStateError(`The sales order is ${order.status}; nothing more ships for it.`)
     if (order.status === 'PENDING_APPROVAL') throw new InvalidStateError('The sales order waits for a yes; nothing ships for it until it is confirmed.')
     const shipTo = body.shipToAddressId ? await shipToOf(client, order.partyId, body.shipToAddressId, 'body/shipToAddressId') : (order.shipTo as Prisma.InputJsonValue)
-    // B-OP-040 (N6): the other orders asked, each checked against the first (MULTI_ORDER_OFF until the switch, B-OP-047).
+    // B-OP-040 (N6): the other orders asked, each checked against the first (B-OP-047: the real join rules only).
     const join = await joinShipmentFacts(client, { number: null, status: 'DRAFT', siteId, salesOrderId: order.id, shipTo })
     const others = await otherOrdersOf(client, context, { salesOrderId: order.id, salesOrderIds: body.salesOrderIds }, order.id, join)
     const cells = await cellsFor(client, { siteId, partyId: order.partyId, salesOrderId: order.id, status: 'DRAFT', salesOrderIds: [order.id, ...others], join }, byCell, 'body/lines')

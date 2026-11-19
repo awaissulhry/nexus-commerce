@@ -16,7 +16,6 @@ import { dayInstant, daysUntil, depositGate, isFinal, isShippedInFull, linesNotI
 import { madeForOf, ownProgress } from '../production'
 // F-OP-112: Make work orders… in place — why it waits, and the Production page's own New work order dialog (its view, as it is).
 import { makeHeldOf } from '../production'
-import { NewWorkOrderDialog } from '../../../../production/work-orders/view/NewWorkOrderDialog'
 import { forecastPart } from '../production' // F-SA-234b
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
@@ -65,7 +64,8 @@ import { FilterChip, Select } from '@nexus/ui/primitives'
 import { CellSaveMark, DateField } from '../../../../../lib/i18n/ds-parts'
 import { useScopedT } from '../../../../../lib/i18n/provider'
 import { laterOf, priorityChoices, rowActsOf, stableRows, type RowActs } from '../../../../../lib/production/work-order-acts/model'
-import { WorkOrderActsDialogs } from '../../../../../lib/production/work-order-acts/view/WorkOrderActsDialogs'
+// F-OP-116: a row's waiting work-order changes ("Change waits: 40 → 28 · Apply… / Leave as is…").
+import { changeFiguresOf, changeHeldOf, waitingChangesOf } from '../changes/model'
 // ---- end F-OP-113
 // ---- F-OP-115: the row ⋯'s links (the planning board at the work order, the work order's own page); the gate's Money door is a
 // tab link (F-OP-210: the dock's scope kept, no prefetch) ----
@@ -133,10 +133,10 @@ function WorkOrdersCard({ order, model, actions }: { order: Order; model: OrderR
           </Button>
         )}
       </div>
-      {/* F-OP-112: the Production page's New work order dialog, its order fixed (the style step; Create stays on this page). */}
-      {make?.dialog && <NewWorkOrderDialog model={make.dialog} can={make.can} actions={actions?.makeWorkOrders?.dialog} />}
-      {/* F-OP-113: the dialog a work-order row's ⋯ opened (on the work order read afresh). */}
-      {model.workOrderActs && <WorkOrderActsDialogs model={model.workOrderActs} actions={actions?.workOrderActs} />}
+      {/* F-OP-112: the Production page's New work order dialog, its order fixed — F-OP-102: mounted once for the page (OrderRecordView):
+          the band's primary opens it from any tab. */}
+      {/* F-OP-113: the dialog a work-order row's ⋯ opened (on the work order read afresh) — F-OP-116: mounted once for the page
+          (OrderRecordView), so the waiting list's "Lift the customer's pause…" opens it from any tab. */}
       {!state || state.status === 'loading' ? (
         <div className="fw-so-stack" aria-busy="true">
           {[0, 1].map((index) => (
@@ -234,6 +234,24 @@ function OwnWorkOrders({ work, model, actions, href, order }: { work: Work; mode
           </span>
           {/* F-SA-244 (R2): when the floor of this work order was last told about a change of the order — never who saw it. */}
           {floorAt && <span className="fw-so-cell-sub">{t('told.floorAt', { time: formatTime(floorAt, { locale }) })}</span>}
+          {/* F-OP-116 (10-order-page §5.2): a change waiting on this work order, decided in place (the ONE decide window); a reader who
+              may not decide it reads who does and when they were told. */}
+          {waitingChangesOf(model.orderChanges?.list?.value, row.id).map((change) => {
+            const figures = changeFiguresOf(change)
+            const held = changeHeldOf(change)
+            const heldWords = held ? t(held.key, { time: formatTime(held.params.at, { locale }) }) : model.busy ? t('held.busy') : null
+            return (
+              <span key={change.id} className="fw-so-inline fw-so-cell-sub">
+                <span>{t('wo.changeWaits', { before: figures.before, after: figures.after })}</span>
+                <Button size="sm" heldReason={heldWords} onClick={() => actions?.orderChanges?.onOpen?.(change.id)}>
+                  {t('wo.changeApply')}
+                </Button>
+                <Button size="sm" variant="quiet" heldReason={heldWords} onClick={() => actions?.orderChanges?.onOpen?.(change.id)}>
+                  {t('wo.changeLeave')}
+                </Button>
+              </span>
+            )
+          })}
           {/* F-OP-113 (R-11): a work order shared with other customers is changed on its own page only. */}
           {offer.shared && <span className="fw-so-cell-sub">{say(offer.shared, locale)}</span>}
           {save?.problem && (

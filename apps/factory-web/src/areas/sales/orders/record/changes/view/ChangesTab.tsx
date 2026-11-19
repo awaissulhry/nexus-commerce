@@ -17,6 +17,10 @@ import { PartState } from '../../view/OrderRecordView'
 import { DocumentsTab } from '../../view/DocumentsTab'
 import { RequestsSection, StillToDo } from '../../view/RequestsSection'
 import { HISTORY_CHIPS, historyFor, historyOf, type HistoryChip, type HistoryEntry } from '../model'
+// ---- F-OP-117: the work-order changes of this order ----
+import { changeFiguresOf, changeHeldOf, floorToldOfChange, workOrderChangeRowsOf } from '../model'
+import { outcomeWordsOf } from '../../../../../home/approvals/work-order-changes/model'
+import { said } from '../../../../../home/approvals/requests/model'
 // F-SA-266: each history row's Discuss and Show in the thread; its anchor `change-<id>` ("Show on the page", `?tab=changes#change-<id>`)
 import { DiscussDoor, ShowInThreadDoor } from '../../view/Discuss'
 import type { DiscussPart } from '../../dock/discuss'
@@ -41,7 +45,9 @@ export function ChangesTab({ order, model, actions }: { order: Order; model: Ord
     <div className="fw-so-stack">
       <RequestsSection order={order} model={model} actions={actions} />
       {/* F-SA-243: Still to do under each accepted change (#still-to-do: the band's "Open" lands here). */}
-      <StillToDo order={order} model={model} />
+      <StillToDo order={order} model={model} actions={actions /* F-OP-116: the doors in place */} />
+      {/* F-OP-117: the work-order changes of this order (waiting first, then decided), each decided in place. */}
+      <WorkOrderChanges order={order} model={model} actions={actions} />
       <section id="confirmation" className="fw-so-anchor" aria-labelledby="fw-so-confirmation-title">
         <DocumentsTab order={order} model={model} actions={actions} />
       </section>
@@ -68,6 +74,7 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
     changes: changes?.value?.changes ?? null,
     amendments: changes ? null : (amendments?.value?.amendments ?? null),
     confirmation: model.depth?.confirmation?.value ?? null,
+    workOrderChanges: model.orderChanges?.list?.value ?? null, // F-OP-117: the chip Work orders
   })
   const shown = historyFor(entries, chip)
   const when = (at: string) => t('changes.when', { date: formatDate(at, { locale }), time: formatTime(at, { locale }) })
@@ -76,6 +83,8 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
   const partOf = (entry: HistoryEntry): DiscussPart => {
     if (entry.kind === 'requestAsked' || entry.kind === 'requestAnswered') return { part: t('discuss.request', { kind: w.t(`parts.request.kind.${entry.request.kind}`) }), target: { kind: 'OrderChangeRequest', id: entry.request.id } }
     if (entry.kind === 'amendment') return { part: t('discuss.revision', { revision: entry.revision }), target: null }
+    // F-OP-117: a work-order change is discussed in an office note only (a work-order number never reaches a customer).
+    if (entry.kind === 'workOrderChange') return entry.change.workOrder ? { part: entry.change.workOrder.number, target: { kind: 'WorkOrder', id: entry.change.workOrder.id }, officeOnly: true } : { part: entry.change.salesOrder.number, target: null, officeOnly: true }
     return { part: t(entry.kind === 'confirmationMade' ? 'changes.history.made' : 'changes.history.sent', { version: entry.version }), target: null }
   }
   // ---- F-SA-244: the change's Told line under its row — who was TOLD (the conversation, the bell, the floor, the workshop), never
@@ -165,6 +174,13 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
         return { tone: 'neutral' as const, label: t('changes.history.made', { version: entry.version }), detail: [when(entry.at), entry.by ? t('changes.history.by', { name: entry.by }) : null].filter(Boolean).join(' · ') }
       case 'confirmationSent':
         return { tone: 'success' as const, label: t('changes.history.sent', { version: entry.version }), detail: when(entry.at) }
+      // F-OP-117: a work-order change decided — its work order, what it did to the cells, who decided and when.
+      case 'workOrderChange':
+        return {
+          tone: entry.change.status === 'APPLIED' ? ('success' as const) : ('neutral' as const),
+          label: `${entry.change.workOrder?.number ?? entry.change.madeWorkOrder?.number ?? '—'} · ${said(entry.change.words.status, locale)}`,
+          detail: [when(entry.at), entry.change.decidedBy ? t('changes.history.by', { name: entry.change.decidedBy.name }) : null, entry.change.words.cells].filter(Boolean).join(' · '),
+        }
     }
   }
   return (
@@ -181,3 +197,72 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
     </Card>
   )
 }
+
+// ---- F-OP-117 (10-order-page §6): "Work-order changes of this order" ---------------------------------------------------------------
+/**
+ * The work-order changes an accepted change or an office change of this order proposed — waiting ones first (oldest first), then the
+ * decided ones newest first: the work order, its cells before → after, the extra pieces' outcome, "Told the floor at hh:mm" once
+ * carried out, and for a waiting one Apply… / Leave as is… in place (the ONE decide window here), held for who may not decide. Only
+ * this order's changes (the API's wall); a planner's words are never the customer's.
+ */
+function WorkOrderChanges({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  const part = model.orderChanges?.list ?? null
+  // Not read here (a design case, no right): nothing is claimed — no card.
+  if (!part) return null
+  if (part.value === null) return part.problem ? <PartState problem={part.problem} label={t('wocs.title')} /> : null
+  const rows = workOrderChangeRowsOf(part.value, order.id)
+  const customer = order.party?.legalName ?? null
+  return (
+    <section id="work-order-changes" className="fw-so-anchor" aria-labelledby="fw-so-wocs-title">
+      <Card padded>
+        <div className="fw-so-card-head">
+          <h2 className="fw-so-h2" id="fw-so-wocs-title">
+            {t('wocs.title')}
+          </h2>
+        </div>
+        {rows.length === 0 ? (
+          <EmptyState title={t('wocs.none')} />
+        ) : (
+          <ul className="fw-so-datelist">
+            {rows.map((change) => {
+              const figures = changeFiguresOf(change)
+              const held = changeHeldOf(change)
+              const heldWords = held ? t(held.key, { time: formatTime(held.params.at, { locale }) }) : model.busy ? t('held.busy') : null
+              const outcome = outcomeWordsOf(change, customer)
+              const floor = floorToldOfChange(change)
+              return (
+                <li key={change.id} className="fw-so-still">
+                  <span className="fw-so-stack-tight">
+                    <span className="fw-so-inline">
+                      <strong>{change.workOrder?.number ?? change.madeWorkOrder?.number ?? t('wocs.newDraft')}</strong>
+                      <Pill tone={WOC_TONE[change.status]}>{said(change.words.status, locale)}</Pill>
+                    </span>
+                    <span className="fw-so-cell-sub">{[change.words.cells, t('wo.changeWaits', { before: figures.before, after: figures.after })].join(' · ')}</span>
+                    {outcome && <span className="fw-so-cell-sub">{said(outcome, locale)}</span>}
+                    {floor && <span className="fw-so-cell-sub">{t('told.floorAt', { time: formatTime(floor, { locale }) })}</span>}
+                    {change.status === 'DECLINED' && change.decisionNote && <span className="fw-so-cell-sub">{`“${change.decisionNote}”`}</span>}
+                  </span>
+                  {change.status === 'PROPOSED' && (
+                    <span className="fw-so-inline">
+                      <Button size="sm" heldReason={heldWords} onClick={() => actions?.orderChanges?.onOpen?.(change.id)}>
+                        {t('wo.changeApply')}
+                      </Button>
+                      <Button size="sm" variant="quiet" heldReason={heldWords} onClick={() => actions?.orderChanges?.onOpen?.(change.id)}>
+                        {t('wo.changeLeave')}
+                      </Button>
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </Card>
+    </section>
+  )
+}
+
+const WOC_TONE: Readonly<Record<string, 'warning' | 'success' | 'neutral'>> = Object.freeze({ PROPOSED: 'warning', APPLIED: 'success', DECLINED: 'neutral', STALE: 'neutral' })
+// ---- end F-OP-117

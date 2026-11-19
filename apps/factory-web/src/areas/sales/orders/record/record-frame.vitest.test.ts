@@ -685,3 +685,50 @@ describe('F-OP-215 — the files line counts the order\'s file set (the Files ta
   })
 })
 // ---- end F-OP-215
+
+// ---- F-OP-129 (order page plan N2, N5, N6; 10-order-page §13): the end's design cases draw what each reader is told ------------------
+describe('F-OP-129 — the order page at the end in the design screen: the strip per reader and under cut, the Shipments rows', () => {
+  it('the cases are on SCR-039, each once', () => {
+    const ids = designScreen.cases.map((item) => item.id).filter((id) => id.startsWith('f-op-129-'))
+    expect(ids).toEqual(['f-op-129-strip-sales', 'f-op-129-strip-owner', 'f-op-129-strip-outcome', 'f-op-129-strip-outcome-chosen', 'f-op-129-ship-tracking', 'f-op-129-ship-tracking-sales', 'f-op-129-ship-shared', 'f-op-129-ship-elsewhere'])
+  })
+
+  it('Sales: the DRAFT follows now, the released one waits for production with its words; the Owner: both follow, the work sheet printed again (R-4)', () => {
+    const sales = textOf(draw('f-op-129-strip-sales'))
+    expect(sales).toContain('WO-00023 2 → 1 · follows now')
+    expect(sales).toContain('WO-00022 2 → 1 · waits for production — decide on this page')
+    expect(sales).toContain('WO-00022 is released: production applies the change (a planner or a production manager).')
+    const owner = textOf(draw('f-op-129-strip-owner'))
+    expect(owner).toContain('WO-00022 2 → 1 · follows now')
+    expect(owner).toContain('its work sheet is printed again')
+    expect(owner).not.toContain('waits for production')
+    // Italian too: the same plan in the reader's language.
+    expect(textOf(draw('f-op-129-strip-sales', 'it'))).toContain('WO-00022 è rilasciato')
+  })
+
+  it('under cut: Apply is held until the extra piece’s outcome is picked; with "keep as leftover" it is not', () => {
+    const held = draw('f-op-129-strip-outcome')
+    expect(held).toContain('Choose what happens to the 1 extra piece')
+    expect(textOf(held)).toContain('WO-00021')
+    const chosen = draw('f-op-129-strip-outcome-chosen')
+    expect(chosen).not.toContain('Choose what happens to the 1 extra piece')
+  })
+
+  it('Shipments: a carrier booked by hand with its typed number and "No live tracking"; labels with their parcel numbers; Sales reads the number only', () => {
+    const owner = textOf(draw('f-op-129-ship-tracking'))
+    expect(owner).toContain('BRT, booked by hand')
+    expect(owner).toContain('0123456789')
+    expect(owner).toContain('No live tracking')
+    expect(owner).toContain('GLS-778899')
+    const sales = draw('f-op-129-ship-tracking-sales')
+    expect(sales).toContain('A warehouse person adds tracking.')
+  })
+
+  it('a shared shipment names the other order it carries; one made elsewhere names its paper DDT (F-OP-122, F-OP-123)', () => {
+    expect(textOf(draw('f-op-129-ship-shared'))).toContain('Also carries SO-2026-0151')
+    expect(textOf(draw('f-op-129-ship-elsewhere'))).toContain('Made elsewhere · DDT 123/2026')
+    // The typed link beside the number (F-OP-135): Track ›, https only.
+    expect(draw('f-op-129-ship-tracking')).toContain('href="https://vas.brt.example.com/track?n=0123456789"')
+  })
+})
+// ---- end F-OP-129

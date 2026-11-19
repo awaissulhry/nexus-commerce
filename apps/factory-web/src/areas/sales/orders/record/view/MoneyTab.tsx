@@ -21,6 +21,8 @@ import { PartState } from './OrderRecordView'
 import { waiveHeld } from '../schedule/model'
 import { OpenStepDialog, StepVerbs, WaiveDialog } from '../schedule/view/StepVerbs'
 import { MarginTab } from '../margin/view/MarginTab' // F-SA-230: Margin is Money's last section
+// ---- F-OP-118: Money = this order's share (the totals, the one "Settled when …", each invoice's whole and share, the other orders it bills)
+import { alsoBillsOf, freightOf, settledWhenOf, shareTotalsOf } from '../money-share'
 
 const REQUEST_TONE: Record<DepositRequest['status'], Tone> = { OPEN: 'warning', PAID: 'success', WAIVED: 'neutral', CANCELLED: 'neutral' }
 const INVOICE_TONE: Record<string, Tone> = { DRAFT: 'neutral', ISSUED: 'info', SENT: 'info', DELIVERED: 'success', NOT_DELIVERABLE: 'warning', REJECTED: 'danger', ERROR: 'danger' }
@@ -76,7 +78,6 @@ function MoneyTotals({ order, model, actions }: { order: Order; model: OrderReco
   const locale = useLocale()
   const currency = order.currency
   const settlement = model.settlement?.value ?? null
-  const requests = order.chain.depositRequests
   const gate = depositGate(order)
   const request = gate.request
   const left = request ? stillToPay(request) : null
@@ -100,7 +101,10 @@ function MoneyTotals({ order, model, actions }: { order: Order; model: OrderReco
     ...(model.can.margin ? [{ label: t('summary.margin'), value: order.marginPct === null || order.marginPct === undefined ? t('summary.marginUnknown') : t('summary.marginValue', { pct: percent(order.marginPct, locale) }) }] : []),
     ...(model.can.cost ? [{ label: t('summary.cost'), value: order.costAmount === null || order.costAmount === undefined ? t('summary.costIncomplete') : money(order.costAmount, currency, locale) }] : []),
   ]
-  const depositsPaid = requests.filter((entry) => entry.stepKind !== 'BEFORE_SHIPPING').reduce((sum, entry) => sum + (entry.paidAmount ?? 0), 0)
+  // F-OP-118 (10-order-page §7): this order's share — Order total · Invoiced for this order · Paid on this order · Still to pay on this
+  // order (before the first invoice too) · Deposits received; settled said once, invoice-wide. No figure of the customer as a whole.
+  const totals = shareTotalsOf(order, settlement, { viewInvoices: model.can.viewInvoices })
+  const settledWhen = model.can.viewInvoices ? settledWhenOf(settlement) : null
   return (
     <Card padded>
       <h2 className="fw-so-h2">{t('money.section.totals')}</h2>
@@ -108,23 +112,12 @@ function MoneyTotals({ order, model, actions }: { order: Order; model: OrderReco
         model.can.viewInvoices && model.settlement && !settlement ? (
           <PartState problem={model.settlement.problem} label={t('money.balanceTitle')} onRetry={() => actions?.onRetryPart?.('settlement')} />
         ) : (
-          <MetricStrip
-            metrics={[
-              { label: t('money.gross'), value: money(order.grossAmount, currency, locale) },
-              ...(model.can.viewInvoices && settlement
-                ? [
-                    { label: t('money.invoiced'), value: money(settlement.invoicedAmount, currency, locale) },
-                    { label: t('money.paid'), value: money(settlement.paidAmount, currency, locale) },
-                  ]
-                : []),
-              { label: t('money.depositPaid'), value: money(depositsPaid, currency, locale) },
-              ...(model.can.viewInvoices && settlement ? [{ label: t('money.balance'), value: money(settlement.balanceDueAmount, currency, locale) }] : []),
-            ]}
-          />
+          <MetricStrip metrics={totals.map((total) => ({ label: t(total.key), value: total.amount === null ? '—' : money(total.amount, currency, locale) }))} />
         )
       ) : (
         <p className="fw-so-hint">{t('summary.noPrice')}</p>
       )}
+      {settledWhen && <p className="fw-so-hint">{t(settledWhen.key, settledWhen.params)}</p>}
       <KeyValue dense labelCase="sentence" columns={2} items={facts} />
     </Card>
   )
@@ -368,6 +361,8 @@ function InvoicesCard({ order, model, actions }: { order: Order; model: OrderRec
   const settlement = model.settlement?.value ?? null
   const invoiceHref = (invoice: ChainInvoice) => `${model.prefix}${recordAddress({ type: 'Invoice', id: invoice.id, label: invoice.number ?? undefined, companyId: order.companyId }, OFFICE_PAGES)}`
   const showMoney = model.can.price && !!settlement
+  // F-OP-118: another order of the same customer the invoice bills (the API names only those the reader reaches).
+  const orderHref = (id: string) => `${model.prefix}/sales/orders/${encodeURIComponent(id)}`
   return (
     <Card padded>
       <h2 className="fw-so-h2">{t('money.invoicesTitle')}</h2>
@@ -376,10 +371,13 @@ function InvoicesCard({ order, model, actions }: { order: Order; model: OrderRec
       ) : (
         <SummaryTable
           label={t('money.invoicesTitle')}
-          columns={[t('money.col.number'), t('money.col.kind'), t('money.col.status'), ...(model.sdi ? [t('money.col.sdi')] : []), ...(showMoney ? [t('money.col.gross'), t('money.col.open')] : [])]}
+          // F-OP-118: Number · Kind · Status · SDI · Invoice total (whole) · This order's share · Open (whole).
+          columns={[t('money.col.number'), t('money.col.kind'), t('money.col.status'), ...(model.sdi ? [t('money.col.sdi')] : []), ...(showMoney ? [t('money.invoiceWhole'), t('money.share'), t('money.col.open')] : [])]}
           rows={order.chain.invoices.map((invoice) => {
             const sdi = model.sdi?.[invoice.id]?.value ?? null
             const amounts = settlement?.invoices.find((entry) => entry.id === invoice.id)
+            const also = amounts ? alsoBillsOf(amounts) : null // F-OP-118
+            const freight = amounts && model.can.price ? freightOf(amounts) : null // F-OP-118
             return {
               id: invoice.id,
               cells: [
@@ -391,11 +389,24 @@ function InvoicesCard({ order, model, actions }: { order: Order; model: OrderRec
                     <DiscussDoor order={order} part={t('discuss.invoice', { number: invoice.number ?? t('money.draft') })} target={{ kind: 'Invoice', id: invoice.id }} officeOnly />
                   </span>
                   <span className="fw-so-cell-sub">{invoice.issueDate ? formatDate(dayInstant(invoice.issueDate), { locale }) : '—'}</span>
+                  {/* F-OP-118: a shared invoice names the other orders it bills (links; the same customer's only), counts the rest. */}
+                  {also && (
+                    <span className="fw-so-cell-sub fw-so-inline">
+                      {also.orders.length > 0 && <span>{t('money.alsoBills')}</span>}
+                      {also.orders.map((other) => (
+                        <Link key={other.id} className="fw-so-link" href={orderHref(other.id)}>
+                          {other.number}
+                        </Link>
+                      ))}
+                      {also.hidden > 0 && <span>{t('money.alsoBillsHidden', { count: also.hidden })}</span>}
+                    </span>
+                  )}
+                  {freight !== null && <span className="fw-so-cell-sub">{t('money.freight', { amount: money(freight, order.currency, locale) })}</span>}
                 </span>,
                 t(`docType.${invoice.docType}`),
                 <Pill key="s" tone={INVOICE_TONE[invoice.status] ?? 'neutral'}>{t(`invoiceStatus.${invoice.status}`)}</Pill>,
                 ...(model.sdi ? [sdi ? <Pill key="sdi" tone={SDI_TONE[sdi.state.code]}>{t(`sdi.state.${sdi.state.code}`)}</Pill> : invoice.status === 'DRAFT' ? '—' : <Spinner key="w" size={12} />] : []),
-                ...(showMoney ? [money(amounts?.grossTotal, order.currency, locale), money(amounts?.openAmount, order.currency, locale)] : []),
+                ...(showMoney ? [money(amounts?.grossTotal, order.currency, locale), amounts?.share === undefined ? '—' : money(amounts.share, order.currency, locale), money(amounts?.openAmount, order.currency, locale)] : []),
               ],
             }
           })}
@@ -404,6 +415,14 @@ function InvoicesCard({ order, model, actions }: { order: Order; model: OrderRec
         />
       )}
       {!model.can.viewInvoices && <p className="fw-so-hint">{t('money.noInvoiceRight')}</p>}
+      {/* F-OP-118: no figure of the customer as a whole on the order page — its statement is the customer's page. */}
+      {order.party && (
+        <p className="fw-so-hint">
+          <Link className="fw-so-link" href={`${model.prefix}/sales/customers/${encodeURIComponent(order.partyId)}?tab=money`}>
+            {t('money.statement', { customer: order.party.legalName })}
+          </Link>
+        </p>
+      )}
       {model.settlement?.problem && (
         <p className="fw-so-hint">
           {t(model.settlement.problem)}{' '}

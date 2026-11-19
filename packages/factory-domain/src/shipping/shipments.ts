@@ -97,7 +97,7 @@ export function lineProblems(shipment: LineShipment, cell: LineCell, quantity: n
   if (shipment.status !== 'DRAFT') problems.push({ path: at, message: `The shipment is ${shipment.status}; its lines change only while it is a DRAFT.` })
   if (!Number.isSafeInteger(quantity) || quantity < 1) problems.push({ path: `${at}/quantity`, message: 'A line ships at least one garment.' })
   // B-OP-040 (N6): another customer's garments are never named (the line's FK carries the party too); another order of
-  // the customer joins only as joinProblems allows (MULTI_ORDER_OFF until the switch, B-OP-047).
+  // the customer joins only as joinProblems allows (B-OP-047: N6 is on, the real reasons alone).
   if (cell.partyId !== shipment.partyId) {
     problems.push({ path: `${at}/workOrderSizeId`, message: NOT_A_CELL })
     return problems
@@ -115,16 +115,10 @@ export function lineProblems(shipment: LineShipment, cell: LineCell, quantity: n
 
 // ---- B-OP-040 (order page N6, lines-derived): several orders of one customer on one shipment --------------------------
 
-/**
- * The refusal that holds N6 off until every reader of a shipment's orders reads them through its lines (R-6). The last
- * step of the order page's set C (B-OP-047) deletes it: no flag, no gate.
- */
-export const MULTI_ORDER_OFF = 'Several orders in one shipment come with the next update.'
-
 /** The states of an order whose garments may join a shipment (the DRAFT line guard's list). */
 export const JOIN_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'] as const
 
-export const JOIN_PROBLEM_CODES = ['CUSTOMER', 'COMPANY', 'SITE', 'SHIP_TO', 'CURRENCY', 'TAX_MODE', 'INCOTERM', 'BILL_TO_VAT', 'ORDER_STATE', 'SHIPMENT_STATE', 'CUSTOMER_HOLD', 'MULTI_ORDER_OFF'] as const
+export const JOIN_PROBLEM_CODES = ['CUSTOMER', 'COMPANY', 'SITE', 'SHIP_TO', 'CURRENCY', 'TAX_MODE', 'INCOTERM', 'BILL_TO_VAT', 'ORDER_STATE', 'SHIPMENT_STATE', 'CUSTOMER_HOLD'] as const // B-OP-047: MULTI_ORDER_OFF deleted (N6 on)
 export type JoinProblemCode = (typeof JOIN_PROBLEM_CODES)[number]
 
 export interface JoinProblem {
@@ -194,7 +188,7 @@ function placeWords(order: unknown, shipment: unknown): { readonly order: string
 }
 
 /**
- * Why an order cannot join a shipment (empty: it can), in words, the real reasons first and MULTI_ORDER_OFF last: of the
+ * Why an order cannot join a shipment (empty: it can), in words (B-OP-047: N6 is on — these are the only reasons): of the
  * same customer (another customer's order is answered as an unknown one), company and site's company, the same ship-to,
  * currency, tax mode, Incoterm and bill-to VAT number as the shipment's first order, an open order, the shipment a DRAFT,
  * no hold of the customer.
@@ -222,8 +216,7 @@ export function joinProblems(shipment: JoinShipment, order: JoinOrder): JoinProb
   if (!(JOIN_ORDER_STATUSES as readonly string[]).includes(order.status)) push('ORDER_STATE', `${order.number} is ${order.status}: only an open order (confirmed, in production, ready or partly shipped) joins a shipment.`)
   if (shipment.status !== 'DRAFT') push('SHIPMENT_STATE', `${shipmentName[0]!.toUpperCase()}${shipmentName.slice(1)} is ${shipment.status}: orders join a shipment only while it is a DRAFT.`)
   if (shipment.customerHold) push('CUSTOMER_HOLD', shipment.customerHold)
-  // B-OP-040 (R-6): held off until B-OP-047 deletes this line.
-  push('MULTI_ORDER_OFF', MULTI_ORDER_OFF)
+  // B-OP-047 (R-6): the N6 switch — the MULTI_ORDER_OFF refusal is deleted; every reader reads a shipment's orders through its lines.
   return problems
 }
 

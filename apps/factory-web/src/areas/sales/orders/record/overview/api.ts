@@ -217,7 +217,8 @@ export type People = z.infer<typeof peopleSchema>
 // F-SA-243 (B-SA-050): "Still to do" after the accepted changes, computed from the records — each row names the record that closes it.
 const stillRowSchema = z.object({
   kind: z.string(),
-  ref: z.object({ type: z.string(), id: z.string(), number: z.string().nullable() }).nullable(),
+  // F-OP-116 (B-OP-021): + the record's version (a production task's Done sends it).
+  ref: z.object({ type: z.string(), id: z.string(), number: z.string().nullable(), version: z.number().nullable().optional() }).nullable(),
   words: z.object({ en: z.string(), it: z.string() }),
   since: instant,
   waitingOn: z.string(),

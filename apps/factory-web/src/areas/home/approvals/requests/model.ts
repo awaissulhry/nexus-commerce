@@ -632,17 +632,31 @@ export type CommandState =
   | { readonly phase: 'refused'; readonly key: string; readonly params?: Record<string, string | number> }
 
 /**
- * The commands of the done view, in order: the work orders chosen to stop now (their holds go first, so no new bundle starts while
- * the rest is decided), then each work-order change this reader may carry out now ("Change the work order now": no proposal is
- * approved by its own proposer — the reader holds workorders.manage over it, rule 42). A command done or refused keeps its place.
+ * The commands of the done view, in order: each work-order change this reader may carry out now ("Change the work order now": no
+ * proposal is approved by its own proposer — the reader holds workorders.manage over it, rule 42), then the work orders chosen to stop
+ * now. F-OP-116 (B1): the applies run first and the stops after — a hold placed first would make the work order refuse its own change
+ * (ON_HOLD). R-17: a change Accept already carried out in its own command (its answer's `workOrders.applied[]`) is never applied again.
+ * A command done or refused keeps its place.
  */
-export function doneCommandsOf(plan: Pick<ApplyPlan, 'next'> | null, stops: readonly { readonly id: string; readonly number: string }[]): DoneCommand[] {
-  const out: DoneCommand[] = stops.map((workOrder) => ({ key: `stop:${workOrder.id}`, kind: 'stop', workOrder: { id: workOrder.id, number: workOrder.number } }))
+export function doneCommandsOf(plan: Pick<ApplyPlan, 'next'> | null, stops: readonly { readonly id: string; readonly number: string }[], applied: readonly string[] = []): DoneCommand[] {
+  const done = new Set(applied)
+  const out: DoneCommand[] = []
   for (const step of plan?.next ?? []) {
-    if (!WORK_KINDS.has(step.kind) || step.state !== 'PROPOSED' || !step.mayDoNow || step.ref?.type !== 'WorkOrderChange') continue
+    if (!WORK_KINDS.has(step.kind) || step.state !== 'PROPOSED' || !step.mayDoNow || step.ref?.type !== 'WorkOrderChange' || done.has(step.ref.id)) continue
     out.push({ key: `apply:${step.ref.id}`, kind: 'apply', changeId: step.ref.id, workOrder: step.workOrder, words: step.words })
   }
+  for (const workOrder of stops) out.push({ key: `stop:${workOrder.id}`, kind: 'stop', workOrder: { id: workOrder.id, number: workOrder.number } })
   return out
+}
+
+/**
+ * F-OP-116 (B1): what runs at once after Accept — the stops chosen ("Stop now"), unless a change is still to be carried out by this
+ * reader: then nothing runs by itself (no change is applied without its click) and "Do the next steps" runs the applies first, the
+ * stops after. With auto-apply on (R-17) Accept carried the changes out already, so the stops go at once.
+ */
+export function atAcceptOf(commands: readonly DoneCommand[]): DoneCommand[] {
+  if (commands.some((command) => command.kind === 'apply')) return []
+  return commands.filter((command) => command.kind === 'stop')
 }
 
 /** The commands still to run (not done): "Do the next steps" is offered when two or more are left. */
