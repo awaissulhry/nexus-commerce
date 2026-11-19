@@ -12,7 +12,7 @@ import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { RecordCustomFields } from '../../../../record-panels/custom-fields/RecordCustomFields' // B-TH-280
 import { findMaterials, getMaterial } from '../../../_shared/buying/api'
 import { useCoalesced, useLive } from '../../../_shared/buying/hooks'
-import { buyingCan, part, PART_LOADING, phrase, readProblem, todayIn, writeProblem, type Loaded, type Part, type Phrase } from '../../../_shared/buying/model'
+import { buyingCan, olderRead, part, PART_LOADING, phrase, readProblem, todayIn, writeProblem, type Loaded, type Part, type Phrase } from '../../../_shared/buying/model'
 import { outsideRefusalOf, parseCc, type SendOutside } from '../../../_shared/document-send/model'
 import type { DocumentSendModel } from '../../../_shared/document-send/model'
 import {
@@ -140,9 +140,16 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const sendKey = useRef<string | null>(null)
   const today = todayIn(TIME_ZONE)
 
-  const setValue = useCallback((next: PurchaseOrder) => {
+  // fx-10 (end check): the page never goes back to an older version of its order (olderRead). A live re-read that left
+  // before a write and answered after it put the order as it was back (GitHub run 44446419997, the browser flow's 08-buy:
+  // the re-read left 8 ms after line 10's save, read version 2 and answered after the save's version 3), so line 20's save
+  // sent version 2 and was refused as changed (409). On a slow network a person hits it the same way. Such a read is dropped:
+  // the write's own answer is newer, and its event reads the order again.
+  const setValue = useCallback((next: PurchaseOrder): boolean => {
+    if (olderRead(current.current, next)) return false
     current.current = next
     setOrder({ status: 'ready', value: next })
+    return true
   }, [])
 
   const loadParts = useCallback(() => {
@@ -164,7 +171,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const load = useCallback(async () => {
     try {
       const next = await getOrder(api, orderId)
-      setValue(next)
+      if (!setValue(next)) return // fx-10: an older read than the page holds
       setChanged(null)
       loadParts()
     } catch (error) {

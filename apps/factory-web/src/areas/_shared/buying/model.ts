@@ -20,6 +20,15 @@ export interface Part<T> {
 export const PART_LOADING: Part<never> = Object.freeze({ value: null, problem: null })
 export const part = <T>(value: T): Part<T> => ({ value, problem: null })
 
+/**
+ * fx-10 (end check): true when `next` is the record the page holds at an OLDER version — a read that left before a write
+ * and answered after it. A record page never goes back to it: the next write would send that older version and be refused
+ * as changed (409), though nobody else changed anything. Another record, or no record held yet, is never older.
+ */
+export function olderRead(held: { id: string; version: number } | null | undefined, next: { id: string; version: number }): boolean {
+  return held != null && held.id === next.id && next.version < held.version
+}
+
 /** Words with their values: a message key of `buying` and its parameters. */
 export interface Phrase {
   key: string

@@ -41,7 +41,7 @@ import {
   blankHide,
 } from '../../warehouse/receipts/model'
 import { canOf } from './fixtures'
-import { buyingCan, csvOf, quantity, readProblem, startOfDayIn, todayIn, writeProblem } from './model'
+import { buyingCan, csvOf, olderRead, quantity, readProblem, startOfDayIn, todayIn, writeProblem } from './model'
 
 /**
  * The buying screens (SCR-055, SCR-058/059, SCR-061 … 063): their rules, and every design case in both languages with
@@ -284,4 +284,25 @@ describe('B-TH-263: one dock rule for the purchase order, the subcontract order 
       expect(view).not.toMatch(/key\.toLowerCase\(\) === 'j'/)
     })
   }
+})
+
+// fx-10 (end check): GitHub run 44446419997's browser flow (08-buy) — the order page's live re-read left 8 ms after line
+// 10's save, read version 2 and answered after the save's version 3; line 20's save then sent version 2 and was refused (409).
+describe('fx-10: a record page never goes back to an older read of its record', () => {
+  it('an older version of the same record is an older read; the same or a newer version, another record or none is not', () => {
+    const held = { id: 'po-1', version: 3 }
+    expect(olderRead(held, { id: 'po-1', version: 2 })).toBe(true)
+    expect(olderRead(held, { id: 'po-1', version: 3 })).toBe(false)
+    expect(olderRead(held, { id: 'po-1', version: 4 })).toBe(false)
+    expect(olderRead(held, { id: 'po-2', version: 1 })).toBe(false)
+    expect(olderRead(null, { id: 'po-1', version: 1 })).toBe(false)
+  })
+
+  it('the purchase order page drops such a read: it keeps the write’s answer and sends its version', () => {
+    const container = readFileSync(new URL('../../purchasing/orders/record/OrderRecord.tsx', import.meta.url), 'utf8')
+    const setValue = /const setValue = useCallback\(\(next: PurchaseOrder\): boolean => \{([\s\S]*?)\n {2}\}, \[\]\)/.exec(container)?.[1] ?? ''
+    expect(setValue).toMatch(/if \(olderRead\(current\.current, next\)\) return false[\s\S]*current\.current = next/)
+    // The page's own re-read stops there: no "changed" cleared, no parts read again for an order it did not take.
+    expect(container).toMatch(/const next = await getOrder\(api, orderId\)\s+if \(!setValue\(next\)\) return/)
+  })
 })
