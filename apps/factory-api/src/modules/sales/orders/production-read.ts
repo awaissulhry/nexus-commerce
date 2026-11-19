@@ -8,10 +8,10 @@ import { effectiveHealth, type BrandHealth, type HealthRaise } from '@nexus/fact
 import { standingRaiseOf } from './production-columns' // B-SA-070
 import { nextStageOf, type BrandStage } from '@nexus/factory-domain/production-brand/stages'
 import type { BrandUrgency } from '@nexus/factory-domain/production-brand/urgency'
-import { BLOCKER_OWNER, type Blocker, type BlockerKind, type WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
+import { BLOCKER_OWNER, type Blocker, type BlockerKind, type BlockerRef, type WaitingOn } from '@nexus/factory-domain/production-brand/waiting' // B-OP-021: + BlockerRef
 import { aheadWords, customerUrgencyChipWords, HEALTH_REASON_WORDS, HEALTH_WORDS, OFFICE_WAITING_WORDS, SEWING_NOT_COUNTED_WORDS, STAGE_WORDS, URGENCY_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { daysLate, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
-import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
+import { WORKORDERS_HOLD, WORKORDERS_MANAGE, WORKORDERS_RELEASE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions' // B-OP-021: + manage, release, hold
 import { QUALITY_INSPECTIONS_VIEW } from '@nexus/factory-domain/quality/final/permissions'
 import { QUALITY_NCR_VIEW } from '@nexus/factory-domain/quality/ncr/permissions'
 import { OPEN_NCR_STAGES } from '@nexus/factory-domain/quality/ncr/rules'
@@ -182,6 +182,23 @@ export function inWorkPiecesOf(input: { readonly started: number; readonly cut: 
 /** Whole days from `from` to `to` (later: positive). */
 export const daysBetween = (from: BusinessDate, to: BusinessDate): number => Math.round((Date.parse(`${to}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`)) / 86_400_000)
 
+// ── B-OP-021 (13-backend §3 B6; review R-11): what the order page may do to a work order in place ──────────────────────────────
+/** A work order shared with other customers (made before the one-customer rule) is changed on its own page, never from one order. */
+export const SHARED_WORK_ORDER_WORDS: Words = Object.freeze({ it: 'Condiviso con altri clienti: cambialo dalla sua pagina.', en: 'Shared with other customers: change it on its page.' })
+
+/** The reader's rights over one work order from the order page (`may`: can() over the work order); a shared one: none, in words. */
+export function workOrderRightsOf(may: (permission: Permission) => boolean, shared: boolean): { manage: boolean; release: boolean; hold: boolean; why: Words | null } {
+  if (shared) return { manage: false, release: false, hold: false, why: SHARED_WORK_ORDER_WORDS }
+  return { manage: may(WORKORDERS_MANAGE), release: may(WORKORDERS_RELEASE), hold: may(WORKORDERS_HOLD), why: null }
+}
+
+/** B-OP-021: a blocker's record for this reader: a work order only when the reader reaches it (else no door), every other as it is. */
+export function blockerRefFor(ref: BlockerRef | null | undefined, reaches: (workOrderId: string) => boolean): BlockerRef | null {
+  if (!ref) return null
+  return ref.type === 'WorkOrder' && !reaches(ref.id) ? null : { type: ref.type, id: ref.id }
+}
+// ── end B-OP-021 ──
+
 /** Each blocker in the office's words (tu): what the order waits for. */
 export const BLOCKER_WORDS: Readonly<Record<BlockerKind, Words>> = Object.freeze({
   APPROVAL: { it: 'In attesa del sì del cliente', en: "Waiting for the customer's yes" },
@@ -235,7 +252,7 @@ function loaders(db: Db, context: OfficeContext, order: OrderRow, now: Date) {
     if (ids.length === 0) return []
     return db.workOrder.findMany({
       where: { id: { in: ids } },
-      select: { id: true, number: true, status: true, kind: true, companyId: true, siteId: true, lineId: true, partyId: true, styleId: true, rush: true, dueDate: true },
+      select: { id: true, number: true, status: true, kind: true, companyId: true, siteId: true, lineId: true, partyId: true, styleId: true, rush: true, dueDate: true, /* B-OP-021 */ version: true, releasedAt: true, priority: true },
       orderBy: { number: 'asc' },
     })
   })
@@ -304,12 +321,21 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
   // Who acts next (the kept state first, else the live facts) and each thing it waits for, in words.
   const on: WaitingOn = (row?.waitingOn as WaitingOn | null | undefined) ?? facts?.waiting.on ?? 'US'
   const since = row ? row.waitingSince : (facts?.waiting.since ?? null)
-  const blockers = (facts?.blockers ?? []).map((blocker: Blocker) => ({ kind: blocker.kind, on: BLOCKER_OWNER[blocker.kind], words: BLOCKER_WORDS[blocker.kind], since: blocker.since ? toUtcIso(blocker.since) : null }))
+  // B-OP-021 (B4): each with the record it is about (a work order only for a reader who reaches it) and what a request waiting on us is.
+  const reached = workOrders.filter((workOrder) => reachesWorkOrder(actor, WORKORDERS_VIEW, workOrder))
+  const reachedWork = new Set(reached.map((workOrder) => workOrder.id))
+  const blockers = (facts?.blockers ?? []).map((blocker: Blocker) => ({
+    kind: blocker.kind,
+    on: BLOCKER_OWNER[blocker.kind],
+    words: BLOCKER_WORDS[blocker.kind],
+    since: blocker.since ? toUtcIso(blocker.since) : null,
+    ref: blockerRefFor(blocker.ref, (workOrderId) => reachedWork.has(workOrderId)),
+    sub: blocker.kind === 'BRAND_REQUEST' ? (blocker.sub ?? null) : null,
+  }))
 
   // The holds in plain words (the customer's own reader: a hold of a work order of several customers reads its reason's words).
   const lines = await load.lines()
   const work = workOf(await readWork(db, order.partyId, lines, { words: true }), order.id)
-  const reached = workOrders.filter((workOrder) => reachesWorkOrder(actor, WORKORDERS_VIEW, workOrder))
   const holdRows = notes && reached.length > 0 ? await db.workOrderHold.findMany({ where: { workOrderId: { in: reached.map((workOrder) => workOrder.id) }, status: 'ACTIVE', note: { not: null } }, select: { workOrderId: true, kind: true, note: true, placedAt: true }, orderBy: [{ placedAt: 'asc' }, { id: 'asc' }] }) : []
   const numberOf = new Map(workOrders.map((workOrder) => [workOrder.id, workOrder.number]))
 
@@ -443,9 +469,17 @@ async function workPart(db: Db, context: OfficeContext, order: OrderRow, load: L
       cutWithOtherWork: cutLines.some((line) => line.workOrderId === workOrder.id && sharedCuts.has(line.cutOrderId)),
       due: dayOrNull(workOrder.dueDate),
       daysLate: daysLate(workOrder.status as WorkOrderStatus, dayOrNull(workOrder.dueDate), today),
+      // ── B-OP-021 (B6; review R-11): its version, release and priority; its cells of this order's lines; the reader's rights ──
+      version: workOrder.version,
+      releasedAt: workOrder.releasedAt ? toUtcIso(workOrder.releasedAt) : null,
+      priority: workOrder.priority,
+      cells: own.map((cell) => ({ id: cell.cellId, salesOrderLineId: cell.lineId, size: cell.size, quantity: cell.quantity, cut: counts.get(cell.cellId)?.cut ?? null })),
+      rights: workOrderRightsOf((permission) => reachesWorkOrder(actor, permission, workOrder), workOrder.partyId === null),
+      // ── end B-OP-021 ──
     }
   })
-  const strip = ({ styleId: _styleId, colourwayId: _colourwayId, units: _units, kind: _kind, ...row }: (typeof rows)[number]) => row
+  // B-OP-021: the row keeps its kind (the contract names it); only the grouping's own keys go.
+  const strip = ({ styleId: _styleId, colourwayId: _colourwayId, units: _units, ...row }: (typeof rows)[number]) => row
   const mtm = mtmGroupsOf(rows.filter((row) => row.kind === 'MADE_TO_MEASURE')).map((group) => ({
     style: named(styles.get(group.styleId)),
     colourway: named(colourways.get(group.colourwayId)),
