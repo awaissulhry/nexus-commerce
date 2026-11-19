@@ -14,6 +14,8 @@ import { LEATHER_GARMENT, LEATHER_MIXED, LEATHER_NONE, LEATHER_ONE, LEATHER_OUT_
 // ---- B-TH-265: the work order on RecordFrame — its docked thread (its own notes, or an order's picked beside it), "Order files (n)" ----
 import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import { filesReady, leftOut, orderFilesOf, orderGroup, twoGroupsOf, twoOrdersOf } from './order-files/fixtures'
+// F-CP-161: the priced documents left out for a reader without the price grain.
+import { onlyPricedFor, pricedLeftOutFor } from './order-files/fixtures'
 // F-PR-21
 import { targetsOfRecord } from '../../../_shared/production-supervisor/model'
 // F-PR-22: Ask the supervisor (THE note dialog, made-up).
@@ -269,6 +271,9 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'thread-no-right', label: 'B-TH-265 · Without threads.read: no thread beside the tabs (no Thread button)', model: { ...recordCase('teamLeader', 'IN_PROGRESS'), noThread: true } },
     { id: 'order-files', label: 'B-TH-265 · Order files (4): the order’s confirmation, the lines’ artwork, the worksheet — each opened through the work order’s own route', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS')), { open: true }) }) },
     { id: 'order-files-left-out', label: 'B-TH-265 · Order files: what is left out said as counts, never named', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(leftOut(workOrder('IN_PROGRESS')), { open: true }) }) },
+    // ── F-CP-161 (the money wall) ──
+    { id: 'order-files-priced', label: 'F-CP-161 · As Production manager: the confirmation and the customer’s PO are priced — ONE counted line, never named', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(pricedLeftOutFor(workOrder('IN_PROGRESS')), { open: true }) }), note: '"2 priced documents — you cannot open them · Only people who see prices open it." The artwork and the worksheet open as before; the band counts only what opens.' },
+    { id: 'order-files-only-priced', label: 'F-CP-161 · As Sales worker: only a priced document on the order — the line, never "no files"', model: recordCase('sales', 'IN_PROGRESS', { orderFiles: filesReady(onlyPricedFor(workOrder('IN_PROGRESS')), { open: true }) }) },
     { id: 'order-files-refused', label: 'B-TH-265 · Order files: a file that could not be opened, in words', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS')), { open: true, problem: 'orderFiles.gone' }) }) },
     { id: 'order-files-failed', label: 'B-TH-265 · Order files could not be read: Try again', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: { files: { state: 'error', problem: 'error.offline' }, open: true, opening: null, problem: null } }) },
     { id: 'order-files-none', label: 'B-TH-265 · A work order of no order (stock): no Order files in the band', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS'), [])), threadChoices: [] }) },

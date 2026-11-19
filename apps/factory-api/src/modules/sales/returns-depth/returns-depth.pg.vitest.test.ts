@@ -71,7 +71,9 @@ function templateGrants(role: string): Grant[] {
   const template = templateOf(role)!
   return [{ permissions: [...template.permissions, ...template.grains.map((grain) => grainPermission(grain) as Permission)], companies: 'all', sites: 'all', parties: 'all' }]
 }
-const SALES: Permission[] = ['sales.returns.view', 'sales.returns.manage', 'sales.returns.decide', 'sales.returns.receive', 'sales.returns.inspect', 'orders.view', 'approvals.view', 'approvals.request', 'approvals.decide', 'money.price']
+// B-CP-011 (the money wall): Sales holds no price grain any more (was money.price here): a credit's or a fee's amount is
+// read and sent by the Owner; Sales still makes, binds, receives and decides returns (the default credit, unseen).
+const SALES: Permission[] = ['sales.returns.view', 'sales.returns.manage', 'sales.returns.decide', 'sales.returns.receive', 'sales.returns.inspect', 'orders.view', 'approvals.view', 'approvals.request', 'approvals.decide']
 const office = (permissions: Permission[], actorId = newId()): SessionContext => ({ audience: 'office', tenantId: T, actorId, grants: [grant(permissions)] })
 const SESSIONS: Record<string, SessionContext> = {}
 
@@ -125,7 +127,7 @@ beforeAll(async () => {
   SESSIONS.owner = { audience: 'office', tenantId: T, actorId: PEOPLE.owner, grants: templateGrants('owner') }
   SESSIONS.finance = { audience: 'office', tenantId: T, actorId: PEOPLE.finance, grants: templateGrants('finance') }
   SESSIONS.sales = office(SALES, PEOPLE.sales)
-  SESSIONS.noPrice = office(SALES.filter((permission) => permission !== 'money.price'))
+  SESSIONS.noPrice = office(SALES.filter((permission) => permission !== 'money.price')) // B-CP-011: the same as Sales now
   SESSIONS.viewer = office(['sales.returns.view'])
   SESSIONS.settings = office(['sales.returns.view', 'sales.settings.manage', 'money.price'])
   SESSIONS.settingsNoPrice = office(['sales.returns.view', 'sales.settings.manage'])
@@ -295,16 +297,21 @@ describe('the deadline flags a late arrival; a fee by rule is withheld from the 
   it('the decision withholds the first matching rule’s fee (OTHER: 10 %), the credit after it on the line', async () => {
     const dock = (await ok('dock', 'GET', `/sales/returns/${redRma.id}/dock`)).return
     await ok('dock', 'POST', `/sales/returns/${redRma.id}/grades`, { version: dock.version, lines: [{ lineId: redLine.id, grade: 'GOOD', cause: 'NO_FAULT' }] })
-    const preview = await ok('sales', 'POST', `/sales/returns/${redRma.id}/fees/preview`, { lines: [{ lineId: redLine.id, disposition: 'CREDIT_ONLY' }] })
+    // B-CP-011: the amounts are read as the Owner (was Sales); Sales reads the fee as the role without the price grain does.
+    const preview = await ok('owner', 'POST', `/sales/returns/${redRma.id}/fees/preview`, { lines: [{ lineId: redLine.id, disposition: 'CREDIT_ONLY' }] })
     expect(preview).toMatchObject({ policyNamed: true, channel: 'B2B', noFees: null, lines: [{ creditBefore: 40_000, creditAfter: 36_000, fee: { ruleId: seeded.feeRuleIds.changeOfMind, amount: 4000, dropped: null, words: 'Change of mind: 10 % of the credit', wordsWithAmount: 'Change of mind: 10 % of the credit = 40.00 EUR' } }] })
-    expect((await ok('noPrice', 'POST', `/sales/returns/${redRma.id}/fees/preview`, { lines: [{ lineId: redLine.id, disposition: 'CREDIT_ONLY' }] })).lines[0].fee).not.toHaveProperty('amount')
+    for (const who of ['noPrice', 'sales']) expect((await ok(who, 'POST', `/sales/returns/${redRma.id}/fees/preview`, { lines: [{ lineId: redLine.id, disposition: 'CREDIT_ONLY' }] })).lines[0].fee, who).not.toHaveProperty('amount')
     const record = (await ok('sales', 'GET', `/sales/returns/${redRma.id}`)).return
-    const w2aPreview = await ok('sales', 'POST', `/sales/returns/${redRma.id}/decisions/preview`, { lines: [{ lineId: redLine.id, disposition: 'CREDIT_ONLY', goodsOutcome: 'QUARANTINE' }] })
+    const w2aPreview = await ok('owner', 'POST', `/sales/returns/${redRma.id}/decisions/preview`, { lines: [{ lineId: redLine.id, disposition: 'CREDIT_ONLY', goodsOutcome: 'QUARANTINE' }] })
     expect(w2aPreview.lines[0].creditAmount).toBe(36_000)
-    const decided = await ok('sales', 'POST', `/sales/returns/${redRma.id}/decisions`, { version: record.version, lines: [{ lineId: redLine.id, disposition: 'CREDIT_ONLY', goodsOutcome: 'QUARANTINE' }] })
-    expect(decided.return.lines[0]).toMatchObject({ disposition: 'CREDIT_ONLY', creditAmount: 36_000 })
+    // B-CP-026 (Owner answer A): the credit is an amount Sales cannot see: held for Sales in words (was decided by Sales, B-CP-011);
+    // the Owner decides it, and Sales reads the decision without the amount.
+    expect((await refused('sales', 'POST', `/sales/returns/${redRma.id}/decisions`, { version: record.version, lines: [{ lineId: redLine.id, disposition: 'CREDIT_ONLY', goodsOutcome: 'QUARANTINE' }] }, 403)).issues[0]).toMatchObject({ path: 'refusal/BLIND_PRICE' })
+    const decided = await ok('owner', 'POST', `/sales/returns/${redRma.id}/decisions`, { version: record.version, lines: [{ lineId: redLine.id, disposition: 'CREDIT_ONLY', goodsOutcome: 'QUARANTINE' }] })
+    expect(decided.return.lines[0]).toMatchObject({ disposition: 'CREDIT_ONLY' })
+    expect((await ok('sales', 'GET', `/sales/returns/${redRma.id}`)).return.lines[0]).not.toHaveProperty('creditAmount')
     expect(await lineRow(redLine.id)).toMatchObject({ creditAmount: 36_000, feeAmount: 4000, feeRuleId: seeded.feeRuleIds.changeOfMind })
-    expect((await depthOf(redRma.id)).lines[0].fee).toMatchObject({ ruleName: 'Change of mind', amount: 4000, dropped: null, wordsWithAmount: 'Change of mind: 10 % of the credit = 40.00 EUR' })
+    expect((await depthOf(redRma.id, 'owner')).lines[0].fee).toMatchObject({ ruleName: 'Change of mind', amount: 4000, dropped: null, wordsWithAmount: 'Change of mind: 10 % of the credit = 40.00 EUR' })
     // The rule gave a fee: its terms stay.
     const rule = (await ok('settings', 'GET', `/sales/returns/fee-rules?companyId=${companyA}`)).rules.find((entry: Json) => entry.id === seeded.feeRuleIds.changeOfMind)
     expect(rule.usedBy).toBe(1)
@@ -318,12 +325,14 @@ describe('the deadline flags a late arrival; a fee by rule is withheld from the 
     const record = (await ok('sales', 'GET', `/sales/returns/${sampleRma.id}`)).return
     await ok('sales', 'POST', `/sales/returns/${sampleRma.id}/decisions`, { version: record.version, lines: [{ lineId: current.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP' }] })
     expect(await lineRow(current.lines[0].id)).toMatchObject({ creditAmount: 25_000, feeAmount: 0, feeRuleId: seeded.feeRuleIds.changeOfMind })
-    expect((await depthOf(sampleRma.id)).lines[0].fee).toMatchObject({ amount: 0, dropped: 'OUR_CAUSE', words: 'Change of mind: 10 % of the credit, dropped: the cause is ours (our defect).' })
+    // B-CP-011: the fee's amount is read as the Owner (was Sales).
+    expect((await depthOf(sampleRma.id, 'owner')).lines[0].fee).toMatchObject({ amount: 0, dropped: 'OUR_CAUSE', words: 'Change of mind: 10 % of the credit, dropped: the cause is ours (our defect).' })
   })
 
   it('a return never checked against a policy has no fee (as W2a)', async () => {
     const plain = await newReturn({ invoiceLineId: SAMPLE_LINE })
-    const preview = await ok('sales', 'POST', `/sales/returns/${plain.id}/fees/preview`, { lines: [{ lineId: plain.lines[0].id, disposition: 'CREDIT_ONLY', creditAmount: 1000 }] })
+    // B-CP-011: a credit amount sent is the Owner's (was Sales').
+    const preview = await ok('owner', 'POST', `/sales/returns/${plain.id}/fees/preview`, { lines: [{ lineId: plain.lines[0].id, disposition: 'CREDIT_ONLY', creditAmount: 1000 }] })
     expect(preview).toMatchObject({ policyNamed: false, noFees: expect.stringMatching(/^This return was not checked/), lines: [{ fee: null, creditAfter: 1000 }] })
     await ok('sales', 'POST', `/sales/returns/${plain.id}/cancel`, { version: plain.version, reason: 'Made-up: test over.' })
   })
@@ -333,12 +342,14 @@ describe('credit without a return, within the approval limit (SAL-342)', () => {
   it('without an approval rule switched on, the line is credited at once and the dock takes none of its pieces', async () => {
     const rma = await newReturn({ invoiceLineId: SAMPLE_LINE })
     const line = rma.lines[0]
-    const preview = await ok('sales', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return/preview`, { creditAmount: 7000 })
+    // B-CP-011: the credit's amount is the Owner's to send and read (was Sales'); a Sales worker's amount is refused.
+    await refused('sales', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return/preview`, { creditAmount: 7000 }, 403)
+    const preview = await ok('owner', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return/preview`, { creditAmount: 7000 })
     expect(preview).toMatchObject({ ok: true, value: 25_000, creditAmount: 7000, approval: { needed: false }, effect: 'A credit; the goods stay with the customer (credited without a return); a credit note to make (Finance)' })
-    expect(paths(await refused('sales', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return`, { version: rma.version, creditAmount: 30_000 }, 400))).toEqual(['body/creditAmount'])
-    const credited = await ok('sales', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return`, { version: rma.version, creditAmount: 7000, note: 'Made-up: a small mark, the customer keeps it.' })
+    expect(paths(await refused('owner', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return`, { version: rma.version, creditAmount: 30_000 }, 400))).toEqual(['body/creditAmount'])
+    const credited = await ok('owner', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return`, { version: rma.version, creditAmount: 7000, note: 'Made-up: a small mark, the customer keeps it.' })
     expect(credited).toMatchObject({ credited: true, waiting: null, return: { lines: [{ creditAmount: 7000, creditWithoutReturn: { credited: true, waiting: null } }] } })
-    expect(await lineRow(line.id)).toMatchObject({ disposition: 'CREDIT_ONLY', creditAmount: 7000, creditWithoutReturn: true, decidedById: PEOPLE.sales, feeAmount: null })
+    expect(await lineRow(line.id)).toMatchObject({ disposition: 'CREDIT_ONLY', creditAmount: 7000, creditWithoutReturn: true, decidedById: PEOPLE.owner, feeAmount: null })
     expect((await events('return.credited_without_return', rma.id))[0]?.payload).toEqual({ returnId: rma.id, number: rma.number, partyId: P1, lineIds: [line.id], approvalTaskId: null })
     expect((await events('return.credit_due', rma.id))[0]?.payload).toMatchObject({ lineIds: [line.id] })
     // W2a's record says it; the dock refuses its pieces in words (the guard would refuse the same).
@@ -357,21 +368,22 @@ describe('credit without a return, within the approval limit (SAL-342)', () => {
     await ok('owner', 'PUT', `/approvals/rules/${rule.id}`, { version: rule.version, active: true })
     const rma = await newReturn({ invoiceLineId: SAMPLE_LINE })
     const line = rma.lines[0]
-    const preview = await ok('sales', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return/preview`, { creditAmount: 12_000 })
+    // B-CP-011: the credit's amount is the Owner's (was Sales'): he asks, so he is the one who never approves it.
+    const preview = await ok('owner', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return/preview`, { creditAmount: 12_000 })
     expect(preview.approval).toEqual({ needed: true, approverRoleId: financeRoleId, approverUserId: null, nobodyElse: false })
     // Below the limit: no yes needed (40.00 ≤ 50).
-    expect((await ok('sales', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return/preview`, { creditAmount: 4000 })).approval.needed).toBe(false)
-    const asked = await ok('sales', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return`, { version: rma.version, creditAmount: 12_000, note: 'Made-up: the customer keeps a marked jacket.' }, 202)
+    expect((await ok('owner', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return/preview`, { creditAmount: 4000 })).approval.needed).toBe(false)
+    const asked = await ok('owner', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return`, { version: rma.version, creditAmount: 12_000, note: 'Made-up: the customer keeps a marked jacket.' }, 202)
     expect(asked).toMatchObject({ credited: false, waiting: { approverRoleId: financeRoleId }, return: { lines: [{ creditWithoutReturn: { credited: false, waiting: { taskId: asked.waiting.taskId }, allowed: false } }] } })
     expect(await lineRow(line.id)).toMatchObject({ disposition: null, creditWithoutReturn: false })
     const task = (await ok('finance', 'GET', `/approvals/tasks/${asked.waiting.taskId}`)).task
     expect(task).toMatchObject({ kind: 'CREDIT_WITHOUT_RETURN', record: { type: 'ReturnLine', id: line.id }, recheck: 'CURRENT', approve: { allowed: true } })
     expect(task.changes).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'creditAmount', to: 12_000 })]))
-    // The person who asked holds approvals.decide too: refused, the Owner's rule.
-    expect(paths(await refused('sales', 'POST', `/approvals/tasks/${asked.waiting.taskId}/approve`, { version: task.version }, 403))).toEqual(['refusal/OWN_REQUEST'])
+    // The person who asked holds approvals.decide too: refused, the Owner's rule (B-CP-011: the asker is the Owner now).
+    expect(paths(await refused('owner', 'POST', `/approvals/tasks/${asked.waiting.taskId}/approve`, { version: task.version }, 403))).toEqual(['refusal/OWN_REQUEST'])
     expect((await refused('sales', 'POST', `/sales/returns/${rma.id}/lines/${line.id}/credit-without-return`, { version: rma.version }, 409)).message).toBe('A credit of line 10 without the goods waits for a yes already.')
     await ok('finance', 'POST', `/approvals/tasks/${asked.waiting.taskId}/approve`, { version: task.version, comment: 'Made-up: fine.' })
-    expect(await lineRow(line.id)).toMatchObject({ disposition: 'CREDIT_ONLY', creditAmount: 12_000, creditWithoutReturn: true, decidedById: PEOPLE.sales })
+    expect(await lineRow(line.id)).toMatchObject({ disposition: 'CREDIT_ONLY', creditAmount: 12_000, creditWithoutReturn: true, decidedById: PEOPLE.owner })
     expect((await events('return.credited_without_return', rma.id))[0]?.payload).toMatchObject({ lineIds: [line.id], approvalTaskId: asked.waiting.taskId })
     await ok('owner', 'PUT', `/approvals/rules/${rule.id}`, { version: rule.version + 1, active: false })
   })

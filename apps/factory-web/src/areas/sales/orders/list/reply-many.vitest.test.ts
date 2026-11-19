@@ -6,6 +6,9 @@ import type { ApiClient } from '../../../../lib/api/client'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import { boxState, composerModes, heldForNamesOther, heldReason, startDraft } from '../../../../lib/record-thread/composer/model'
+// F-CP-162: the price warning in N mode (the composer's own flow, F-CP-147).
+import { draftAfter, heldForNamesPrice, pricesInWordsOkOf } from '../../../../lib/record-thread/composer/model'
+import { designScreen as sheetScreen } from './fixtures'
 import { render, textOf } from '../../../../lib/record-thread/parts/testing'
 import { BRAND_ALPHA, BRAND_BETA } from '../../../../lib/testing/two-brands'
 import { postPortalReplyKeyed } from '../../../_shared/record-thread/api'
@@ -127,7 +130,8 @@ describe('F-SA-282: one batch, each order\'s own conversation, one after the oth
     const answers: Record<string, ReplyResult | 'namesOther'> = { [targets[0]!.id]: { state: 'sent' }, [targets[1]!.id]: 'namesOther', [targets[2]!.id]: { state: 'sent' } }
     const done: Array<[string, number]> = []
     const round = await replyRound(targets, async (target) => (seen.push(target.id), answers[target.id]!), (id, _result, count) => done.push([id, count]))
-    expect(round).toEqual({ held: true, posted: 1 })
+    // F-CP-162: the round says which hold stopped it (the names-another-customer hold, or the price warning).
+    expect(round).toEqual({ held: 'namesOther', posted: 1 })
     expect(seen).toEqual([targets[0]!.id, targets[1]!.id]) // nothing more went after the hold
     expect(done).toEqual([[targets[0]!.id, 1]])
   })
@@ -285,3 +289,87 @@ describe('B-SA-070b: Reply to N\'s preview reads "Your order 12" (the customer\'
   })
 })
 // ---- end B-SA-070b
+
+// ── F-CP-162 (customer page lane, the money wall; the API's B-CP-020, the composer's F-CP-147) ──
+describe('F-CP-162: Reply to N whose words look like a price — warned once, never blocked, "Send anyway"', () => {
+  const targets: ReplyTarget[] = replyTargetsOf(alpha)
+  const context = replyComposerContext(BRAND_ALPHA.tradeName)
+  const typed = { ...startDraft(context), body: 'Ready on Friday, at the agreed 45 euro a piece.' }
+
+  it('409 NAMES_A_PRICE is the price warning (not a refusal of the order); the other refusals as before', () => {
+    expect(replyOutcomeOf({ code: 'NAMES_A_PRICE', kind: 'conflict' }, 'Brand Alpha')).toEqual({ kind: 'namesPrice' })
+    expect(replyOutcomeOf({ code: 'NAMES_OTHER_CUSTOMER', kind: 'conflict' }, 'Brand Alpha')).toEqual({ kind: 'namesOther' })
+    expect(replyOutcomeOf({ code: null, kind: 'conflict' }, 'Brand Alpha')).toEqual({ kind: 'refused', why: { key: 'reply.why.refused' } })
+  })
+
+  it('the round stops at the warning: nothing more goes, what went is kept, the held order is still to post', async () => {
+    const seen: string[] = []
+    const answers: Record<string, ReplyResult | 'namesOther' | 'namesPrice'> = { [targets[0]!.id]: { state: 'sent' }, [targets[1]!.id]: 'namesPrice', [targets[2]!.id]: { state: 'sent' } }
+    const results: Record<string, ReplyResult> = {}
+    const round = await replyRound(targets, async (target) => (seen.push(target.id), answers[target.id]!), (id, result) => (results[id] = result))
+    expect(round).toEqual({ held: 'namesPrice', posted: 1 })
+    expect(seen).toEqual([targets[0]!.id, targets[1]!.id])
+    expect(toSend(targets, results).map((target) => target.id)).toEqual([targets[1]!.id, targets[2]!.id])
+  })
+
+  it('the typed text stays with the warning; "Send anyway" only for those very words (a change checks them again)', () => {
+    const held = heldForNamesPrice(typed)
+    expect(held.body).toBe(typed.body)
+    expect(pricesInWordsOkOf(typed)).toBe(false)
+    expect(pricesInWordsOkOf(held)).toBe(true)
+    expect(pricesInWordsOkOf(draftAfter(held, { body: 'Ready on Friday.' }))).toBe(false)
+    // never held by it (warn, never block)
+    expect(heldReason(held, context)).toBeNull()
+  })
+
+  it('"Send anyway" is another request: a new key per order; again with the same words, the same key', () => {
+    let n = 0
+    const fresh = () => `k${++n}`
+    const first = keyFor(undefined, typed.body, false, fresh)
+    const anyway = keyFor(first, typed.body, false, fresh, true)
+    expect(anyway.key).toBe('k2')
+    expect(keyFor(anyway, typed.body, false, fresh, true)).toBe(anyway)
+    expect(keyFor(anyway, typed.body, false, fresh).key).toBe('k3')
+  })
+
+  it('each order\'s reply carries pricesInWordsOk only after the warning (a first try never does), the batch the same', async () => {
+    const calls: Array<{ body: Record<string, unknown> }> = []
+    const api = { post: async (_path: string, options: { body: Record<string, unknown> }) => (calls.push({ body: options.body }), { message: { id: 'm' } }) } as unknown as ApiClient
+    const batchId = 'c3c3c3c3-0000-4000-8000-0000000000c3'
+    await postPortalReplyKeyed(api, { type: 'SalesOrder', id: targets[0]!.id }, { body: typed.body, attachments: [], batchId }, 'k1')
+    await postPortalReplyKeyed(api, { type: 'SalesOrder', id: targets[0]!.id }, { body: typed.body, attachments: [], batchId, pricesInWordsOk: true }, 'k2')
+    expect(calls[0]!.body).not.toHaveProperty('pricesInWordsOk')
+    expect(calls[1]!.body).toMatchObject({ pricesInWordsOk: true, batchId, body: typed.body })
+    // the hook sends the flag from the box's warning (the composer's own rule), never on its own
+    const hook = readFileSync(new URL('./use-reply-many.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('const pricesOk = pricesInWordsOkOf(now.draft)')
+    expect(hook).toContain("...(pricesOk ? { pricesInWordsOk: true } : {})")
+    expect(hook).toContain("held === 'namesPrice' ? { draft: heldForNamesPrice(m.draft) }")
+  })
+
+  it('the window draws the warning and "Send anyway", in Italian and English; the warning repeats no amount', () => {
+    const model: ReplyManyModel = { customer: { id: ALPHA, name: BRAND_ALPHA.tradeName }, targets, batchId: 'c3c3c3c3-0000-4000-8000-0000000000c3', draft: heldForNamesPrice(typed), notes: [], language: 'it', portal: 'on', sending: false, progress: null, results: { [targets[0]!.id]: { state: 'sent' } }, done: false }
+    const en = textOf(render(createElement(ReplyManyBody, { model }), 'en'))
+    expect(en).toContain('This reply names a price. Our people who do not see prices read this thread too. Send it anyway?')
+    expect(en).toContain('Send anyway')
+    expect(en).toContain('Brand Alpha will read this on 2 orders:')
+    const italian = textOf(render(createElement(ReplyManyBody, { model }), 'it'))
+    expect(italian).toContain('Questa risposta indica un prezzo. La leggono anche nostri colleghi che non vedono i prezzi. Inviarla comunque?')
+    expect(italian).toContain('Invia comunque')
+    for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['record-thread-send'])['record-thread-send']!)('namesPrice.reply')).not.toMatch(/\d/)
+    // the dialog brings the warning's catalogue (the Office layout loads `shell` only)
+    expect(readFileSync(new URL('./view/ReplyManyDialog.tsx', import.meta.url), 'utf8')).toContain("namespaces={[SHEET, 'record-thread-composer', 'record-thread-send']}")
+  })
+
+  it('the design cases are a Sales worker\'s (no price grain, no money on the rows)', () => {
+    for (const id of ['cp-162-reply-price', 'cp-162-reply-price-one-sent']) {
+      const found = sheetScreen.cases.find((entry) => entry.id === id)
+      expect(found, id).toBeDefined()
+      const model = found!.model as unknown as { role: string; list: { can: { price: boolean }; replyMany: ReplyManyModel } }
+      expect(model.role).toBe('sales')
+      expect(model.list.can.price).toBe(false)
+      expect(pricesInWordsOkOf(model.list.replyMany.draft)).toBe(true)
+    }
+  })
+})
+// ── end F-CP-162 ──

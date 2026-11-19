@@ -11,6 +11,10 @@ import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { priceText, type SalesFeeKind } from '@nexus/factory-domain/sales/quotes/quotes'
 import type { StoredAcceptanceMode } from '@nexus/factory-domain/sales/quote-terms/rules'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
+// B-CP-026: a replace that would drop prices the caller cannot see is held for a price holder.
+import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
+import { blindPriceHeld } from '@nexus/factory-domain/sales/blind-price'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { officeContextOf, officeQuote, readCurrentVersion, readQuote, type Reader } from '../quotes/store'
 import { assertMayManage, databaseRefusal, invalid, officeTemplate, readTemplate, sizesOf, TEMPLATE_COLUMNS, TEMPLATE_LINE_COLUMNS, templateBrandWhere, templateView, type TemplateRow } from './store'
@@ -314,6 +318,15 @@ export async function updateTemplate(caller: CommandCaller, templateId: string, 
 }
 
 /** PUT /sales/quote-templates/:templateId/lines: the whole list (a line left out is removed). */
+// ── B-CP-026: whether the person sees the template's prices (the price grain over its company; a template of every company:
+// over every company, as keeping it asks).
+const PRICE = grainPermission('price') as Permission
+function seesTemplatePrices(context: OfficeContext, template: Pick<TemplateRow, 'companyId'>): boolean {
+  const actor = actorOf(context)
+  return template.companyId !== null ? can(actor, PRICE, { companyId: template.companyId }) : grantsFor(actor, PRICE).some((grant) => grant.companies === 'all')
+}
+// ── end B-CP-026 ──
+
 export async function replaceLines(caller: CommandCaller, templateId: string, body: ReplaceLinesBody, idempotencyKey?: string) {
   const { context, template } = await officeTemplate(caller, templateId)
   assertMayManage(context, template)
@@ -324,6 +337,10 @@ export async function replaceLines(caller: CommandCaller, templateId: string, bo
     if (current.status === 'ARCHIVED') throw new InvalidStateError('The template is archived: restore it before changing it.')
     await checkLines(tx, lines, current.companyId)
     const before = await tx.quoteTemplateLine.findMany({ where: { templateId: current.id }, select: TEMPLATE_LINE_COLUMNS, orderBy: [{ seq: 'asc' }, { id: 'asc' }] })
+    // ── B-CP-026 (Owner answer A, the money wall): a person without the price grain sends no unit price (the grain filter refuses
+    // one), so replacing lines that hold one would wipe it: held in words, nothing changed; a price holder replaces them.
+    if (before.some((line) => line.unitPrice !== null) && !seesTemplatePrices(context, current)) throw blindPriceHeld('body/lines')
+    // ── end B-CP-026 ──
     await tx.quoteTemplateLine.deleteMany({ where: { templateId: current.id } })
     await writeLines(tools, current.id, lines).catch(databaseRefusal)
     tools.audit({

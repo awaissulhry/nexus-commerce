@@ -247,6 +247,8 @@ describe('T19 on the new columns: the orders file writes what the sheet shows (B
     expect(rowOf(file, 'TH018-B-0001').Brand).toBe('Label not shown, Own collection')
     expect(file.text).not.toContain(nameA)
     expect(file.text).not.toContain('SEED-SO-000')
+    // B-CP-011 (the money wall): this person is Sales, which holds no price grain now: no amount, no net, no gross (named as left out).
+    expect(file.job.omitted.map((column: Json) => column.key).sort()).toEqual(['gross', 'invoicedAmount', 'net'])
     // Asking for A's label: B's own order (it carries the label), nothing of A's.
     const asked = await fileOf('limitedB', `rows=all&brand=${C1}`)
     expect(asked.rows.map((row) => row.Number)).toEqual(['TH018-B-0001'])

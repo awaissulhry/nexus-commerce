@@ -50,6 +50,8 @@ import { PEOPLE_LIMITS, PEOPLE_WORDS, personRow, personShapeProblems, type Perso
 import { customLineProblems, draftStaleWords, MTM_CLOSED_WORDS, type CustomLineInput, type CustomLineKind } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { markEdited, PERSON_COLUMNS, readPeople, type PersonRow } from './store'
 import { checkCustomLine, colleagueNameOf, customLineData, customLineFactsOf, customLineView, insertCustomLine, isCustomLine, isDraftSheet, madeToMeasureOf, ownSheetOf, piecesOfLine, problemView, sheetLinesOf, type MadeToMeasure } from './people'
+// B-CP-076 (customer page plan 11 §1.3 D3): "Your price" — the customer's own net unit price per line, the price grain.
+import { ownPriceView, type OwnPriced } from './people'
 
 /**
  * The customer's order requests in the portal (B-W2b-190; SAL-074 "portal orders arrive as requests", the draft of
@@ -81,6 +83,11 @@ import { checkCustomLine, colleagueNameOf, customLineData, customLineFactsOf, cu
  * and the send is held until none is left. The price a line shows is the customer's list price the day it was added
  * (price grain only); a change since is a problem the customer accepts with /prices before sending: what is sent is what
  * was shown, and the office prices again when it makes the order.
+ *
+ * B-CP-076 (customer page plan 11 §1.3 D3): every line also keeps "Your price" (`brandUnitPrice`), the customer's own net unit
+ * price, written with the line (add, change; a described or made-to-measure line too) by a person with the price grain — the
+ * Buyer, the Admin; a Designer sends none (the grain filter refuses the field, 403) and reads none — frozen at Send with the line.
+ * Accepted as an order, the office's accept carries it onto the order by its line map (OrderBrandPrice, source PORTAL).
  */
 
 const MAX_DRAFTS = 20
@@ -190,6 +197,7 @@ function lineView(line: CatalogueLineRow, catalogue: CustomerCatalogue, source: 
     /** A reorder line's differences from the order it came from (named again whenever the draft is read). */
     notices: source ? [...reorderPlan(source.line, facts, seesPrices).notices] : [],
     problems: lineProblems({ id: line.id, sizes, unitPriceShown: shown }, facts, seesPrices).map(problemView),
+    brandUnitPrice: ownPriceView(line), // B-CP-076
   }
 }
 
@@ -444,12 +452,13 @@ export async function ownDraft(request: FastifyRequest, reader: PortalReader, re
  * the colleague who changed it meanwhile (`staleDraftError`).
  */
 export async function onDraft<Result>(app: FastifyInstance, request: FastifyRequest, name: `${string}.${string}`, row: RequestRow, version: number, input: unknown, idempotencyKey: string | undefined, work: (tools: CommandTools) => Promise<Result>) {
+  const editorId = portalReader(app, request).session.userId // B-CP-075: the portal person who saves (a link context has no actor id)
   try {
     return await commandOn(app, request, { name, idempotencyKey, input, record: { type: 'PortalOrderRequest', id: row.id, expectedVersion: version } }, async (tools) => {
       const current = await readRequest(tools.tx, row.id)
       if (current?.status !== 'DRAFT') throw new InvalidStateError('This request is no longer a draft.')
       const result = await work(tools)
-      await markEdited(tools.tx, row.id, tools.context.actorId, tools.now) // B-CP-075
+      await markEdited(tools.tx, row.id, editorId, tools.now) // B-CP-075
       draftChanged(tools, row) // B-CP-071
       return result
     })
@@ -495,7 +504,7 @@ export async function changeHeader(app: FastifyInstance, request: FastifyRequest
 
 // ---- lines -------------------------------------------------------------------------------------------------------------
 
-export interface NewLine extends LineInput {
+export interface NewLine extends LineInput, OwnPriced /* B-CP-076 */ {
   readonly sourceOrderLineId?: string | null | undefined
 }
 
@@ -516,7 +525,7 @@ export function checkNewLines(lines: readonly NewLine[], catalogue: CustomerCata
 async function insertLine(tx: CommandTx, row: RequestRow, line: NewLine, seq: number, price: string | null, actorId: string, now: Date): Promise<string> {
   const id = newId()
   await tx.portalOrderRequestLine.create({
-    data: { id, partyId: row.partyId, requestId: row.id, seq, styleId: line.styleId, colourwayId: line.colourwayId, sourceOrderLineId: line.sourceOrderLineId ?? null, unitPriceShown: price, note: blankToNull(line.note), createdById: actorId, createdAt: now, updatedAt: now },
+    data: { id, partyId: row.partyId, requestId: row.id, seq, styleId: line.styleId, colourwayId: line.colourwayId, sourceOrderLineId: line.sourceOrderLineId ?? null, unitPriceShown: price, note: blankToNull(line.note), brandUnitPrice: line.brandUnitPrice ?? null /* B-CP-076 */, createdById: actorId, createdAt: now, updatedAt: now },
     select: { id: true },
   })
   await tx.portalOrderRequestSize.createMany({ data: line.sizes.map((ask) => ({ id: newId(), partyId: row.partyId, lineId: id, size: ask.size.trim(), quantity: ask.quantity, createdById: actorId, createdAt: now, updatedAt: now })) })
@@ -591,7 +600,7 @@ export async function addLines(app: FastifyInstance, request: FastifyRequest, re
   const prices = pricesFor(lines, catalogue, reader.seesPrices)
   await onDraft(app, request, 'portalOrdering.addLines', row, body.version, { requestId, lines }, idempotencyKey, async (tools) => {
     const outcome = await addLinesInCommand(tools, row, lines, prices, reader.session.userId, false)
-    tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after: { added: outcome.added, lines: lines.map((line) => ({ styleId: line.styleId, colourwayId: line.colourwayId, sizes: line.sizes, unitPriceShown: markMoney('price', prices.get(`${line.styleId}|${line.colourwayId}`) ?? null) })) } })
+    tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after: { added: outcome.added, lines: lines.map((line) => ({ styleId: line.styleId, colourwayId: line.colourwayId, sizes: line.sizes, unitPriceShown: markMoney('price', prices.get(`${line.styleId}|${line.colourwayId}`) ?? null), brandUnitPrice: markMoney('price', line.brandUnitPrice ?? null) /* B-CP-076 */ })) } })
     return null
   })
   return requestView(app, request, reader, (await ownRequest(request, reader, requestId))!)
@@ -617,7 +626,7 @@ export async function changeLine(
   request: FastifyRequest,
   requestId: string,
   lineId: string,
-  body: { readonly version: number; readonly colourwayId?: string | undefined; readonly sizes?: readonly SizeAsk[] | undefined; readonly note?: string | null | undefined },
+  body: { readonly version: number; readonly colourwayId?: string | undefined; readonly sizes?: readonly SizeAsk[] | undefined; readonly note?: string | null | undefined } & OwnPriced /* B-CP-076 */,
   idempotencyKey?: string,
 ) {
   const reader = portalReader(app, request)
@@ -643,13 +652,15 @@ export async function changeLine(
       await tx.portalOrderRequestSize.deleteMany({ where: { lineId } })
       await tx.portalOrderRequestSize.createMany({ data: next.sizes.map((ask) => ({ id: newId(), partyId: row.partyId, lineId, size: ask.size, quantity: ask.quantity, createdById: reader.session.userId, createdAt: now, updatedAt: now })) })
     }
-    await tx.portalOrderRequestLine.update({ where: { id: lineId }, data: { colourwayId: next.colourwayId, note: blankToNull(next.note), unitPriceShown: price, version: { increment: 1 } }, select: { id: true } })
+    // B-CP-076: "Your price" with the line (absent keeps it, null clears it).
+    const own = body.brandUnitPrice !== undefined ? { brandUnitPrice: body.brandUnitPrice } : {}
+    await tx.portalOrderRequestLine.update({ where: { id: lineId }, data: { colourwayId: next.colourwayId, note: blankToNull(next.note), unitPriceShown: price, ...own, version: { increment: 1 } }, select: { id: true } })
     tools.audit({
       recordType: 'PortalOrderRequest',
       recordId: row.id,
       companyId: row.companyId,
-      before: { lineId, colourwayId: current.colourwayId, sizes: sizesOf(current), note: current.note, unitPriceShown: markMoney('price', priceOrNull(current.unitPriceShown)) },
-      after: { lineId, colourwayId: next.colourwayId, sizes: next.sizes, note: blankToNull(next.note), unitPriceShown: markMoney('price', price) },
+      before: { lineId, colourwayId: current.colourwayId, sizes: sizesOf(current), note: current.note, unitPriceShown: markMoney('price', priceOrNull(current.unitPriceShown)), brandUnitPrice: markMoney('price', priceOrNull(current.brandUnitPrice)) /* B-CP-076 */ },
+      after: { lineId, colourwayId: next.colourwayId, sizes: next.sizes, note: blankToNull(next.note), unitPriceShown: markMoney('price', price), brandUnitPrice: markMoney('price', body.brandUnitPrice === undefined ? priceOrNull(current.brandUnitPrice) : body.brandUnitPrice) /* B-CP-076 */ },
     })
     return null
   })
@@ -827,7 +838,7 @@ function mtmClosed(reader: PortalReader): DomainError {
   return new DomainError('invalid_state', words, [{ path: 'refusal/MTM_CLOSED', message: words }])
 }
 
-export async function addCustomLine(app: FastifyInstance, request: FastifyRequest, requestId: string, body: { readonly version: number; readonly line: CustomLineInput }, idempotencyKey?: string) {
+export async function addCustomLine(app: FastifyInstance, request: FastifyRequest, requestId: string, body: { readonly version: number; readonly line: CustomLineInput & OwnPriced /* B-CP-076 */ }, idempotencyKey?: string) {
   const reader = portalReader(app, request)
   const row = await ownDraft(request, reader, requestId)
   const { catalogue, mtm } = await customFactsOf(app, reader, row, [body.line.styleId])
@@ -839,7 +850,7 @@ export async function addCustomLine(app: FastifyInstance, request: FastifyReques
     if (existing.length >= ORDERING_LIMITS.lines) throw new ValidationError(`At most ${ORDERING_LIMITS.lines} lines per request.`, [{ path: 'body/line', message: `At most ${ORDERING_LIMITS.lines} lines per request.` }])
     const seq = existing.reduce((max, line) => Math.max(max, line.seq), 0) + 1
     const id = await insertCustomLine(tools.tx, row, body.line, seq, reader.session.userId, tools.now)
-    tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after: { added: id, seq, kind: body.line.kind, ...customLineData(body.line), sizes: body.line.sizes ?? [] } })
+    tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after: { added: id, seq, kind: body.line.kind, ...customLineData(body.line), sizes: body.line.sizes ?? [], brandUnitPrice: markMoney('price', body.line.brandUnitPrice ?? null) /* B-CP-076 */ } })
     return null
   })
   return requestView(app, request, reader, (await ownRequest(request, reader, requestId))!)
@@ -852,7 +863,7 @@ async function ownCustomLine(db: Reader, row: RequestRow, lineId: string): Promi
   return line
 }
 
-export async function changeCustomLine(app: FastifyInstance, request: FastifyRequest, requestId: string, lineId: string, body: CustomLineBody & { readonly version: number }, idempotencyKey?: string) {
+export async function changeCustomLine(app: FastifyInstance, request: FastifyRequest, requestId: string, lineId: string, body: CustomLineBody & OwnPriced /* B-CP-076 */ & { readonly version: number }, idempotencyKey?: string) {
   const reader = portalReader(app, request)
   const row = await ownDraft(request, reader, requestId)
   const line = await request.withClient((client) => ownCustomLine(client, row, lineId))
@@ -886,15 +897,22 @@ export async function changeCustomLine(app: FastifyInstance, request: FastifyReq
       if (body.sizes.length > 0) await tx.portalOrderRequestSize.createMany({ data: body.sizes.map((ask) => ({ id: newId(), partyId: row.partyId, lineId, size: ask.size.trim(), quantity: ask.quantity, createdById: reader.session.userId, createdAt: now, updatedAt: now })) })
     }
     const data = customLineData(next)
-    await tx.portalOrderRequestLine.update({ where: { id: lineId }, data: { ...data, version: { increment: 1 } }, select: { id: true } })
-    tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, before: { lineId, ...customLineData(current), sizes: sizesOf(current) }, after: { lineId, ...data, sizes: next.sizes ?? [] } })
+    const own = body.brandUnitPrice !== undefined ? { brandUnitPrice: body.brandUnitPrice } : {} // B-CP-076: absent keeps it, null clears it
+    await tx.portalOrderRequestLine.update({ where: { id: lineId }, data: { ...data, ...own, version: { increment: 1 } }, select: { id: true } })
+    tools.audit({
+      recordType: 'PortalOrderRequest',
+      recordId: row.id,
+      companyId: row.companyId,
+      before: { lineId, ...customLineData(current), sizes: sizesOf(current), brandUnitPrice: markMoney('price', priceOrNull(current.brandUnitPrice)) /* B-CP-076 */ },
+      after: { lineId, ...data, sizes: next.sizes ?? [], brandUnitPrice: markMoney('price', body.brandUnitPrice === undefined ? priceOrNull(current.brandUnitPrice) : body.brandUnitPrice) /* B-CP-076 */ },
+    })
     return null
   })
   return requestView(app, request, reader, (await ownRequest(request, reader, requestId))!)
 }
 
 /** The draft's by-person line for its people (made to measure open for a made-to-measure line), or a refusal in words. */
-async function rosterLine(request: FastifyRequest, reader: PortalReader, app: FastifyInstance, row: RequestRow, lineId: string): Promise<LineRow> {
+async function rosterLine(request: FastifyRequest, reader: PortalReader, row: RequestRow, lineId: string): Promise<LineRow> {
   const line = await request.withClient((client) => ownLine(client, row, lineId))
   if (!line.byPerson) {
     const words = PEOPLE_WORDS.NOT_BY_PERSON[partnerLocaleOf(reader.session.person.locale)]
@@ -918,7 +936,7 @@ async function checkPerson(request: FastifyRequest, row: RequestRow, person: Per
 export async function addPeople(app: FastifyInstance, request: FastifyRequest, requestId: string, lineId: string, body: { readonly version: number; readonly people: readonly PersonInput[] }, idempotencyKey?: string) {
   const reader = portalReader(app, request)
   const row = await ownDraft(request, reader, requestId)
-  await rosterLine(request, reader, app, row, lineId)
+  await rosterLine(request, reader, row, lineId)
   for (const [index, person] of body.people.entries()) await checkPerson(request, row, person, `body/people/${index}`)
   await onDraft(app, request, 'portalOrdering.addPeople', row, body.version, { requestId, lineId, people: body.people.length }, idempotencyKey, async (tools) => {
     const { tx, now } = tools
@@ -959,7 +977,7 @@ export async function changePerson(
 ) {
   const reader = portalReader(app, request)
   const row = await ownDraft(request, reader, requestId)
-  await rosterLine(request, reader, app, row, lineId)
+  await rosterLine(request, reader, row, lineId)
   const person = await request.withClient((client) => ownPerson(client, lineId, personId))
   const measureBy = body.measureBy ?? person.measureBy
   // A new way of being measured starts from its own field (the other one is dropped: personRow keeps only the field of its way).

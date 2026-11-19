@@ -1,7 +1,7 @@
 import type { Issue } from '../../core/errors'
 import { isUuid } from '../../core/ids'
 import type { Grant, Permission, ScopeSet } from '../../core/permissions'
-import { GRAINS, grainPermission, isGrain, type Grain } from '../grains/grains'
+import { GRAINS, grainPermission, grainWords, isGrain, twoFactorGrainsOf, type Grain } from '../grains/grains'
 import { FACTORY_PERMISSIONS, FLOOR_AREA } from '../permissions/catalogue'
 import type { PermissionRegistry } from '../permissions/registry'
 import { templateOf, type RoleContent } from './templates'
@@ -61,12 +61,40 @@ export function roleProblems(
   content.grains.forEach((grain, index) => {
     if (!isGrain(grain)) issues.push({ path: `grains/${index}`, message: `${String(grain)} is not a money grain (${GRAINS.join(', ')}).` })
   })
-  const sensitive = content.grains.filter((grain) => grain === 'cost' || grain === 'margin')
+  // B-CP-011 (Owner O6): price, cost and margin (TWO_FACTOR_GRAINS).
+  const sensitive = twoFactorGrainsOf(content.grains)
   if (sensitive.length > 0 && !content.requireMfa) {
-    issues.push({ path: 'requireMfa', message: `A role that sees ${sensitive.join(' and ')} requires two-factor.` })
+    issues.push({ path: 'requireMfa', message: `A role that sees ${grainWords(sensitive)} requires two-factor.` })
   }
   return issues
 }
+
+// ── B-CP-011 (customer page lane, the money wall; Owner O3): only the Owner gives prices ───────────────────────────────────
+/**
+ * Our prices are seen only by the Owner and the people the Owner names. So a role that holds the price grain (Finance, a
+ * custom "Accountant (prices)", any custom role with it) is given ONLY by a holder of the Owner role: a role assignment, an
+ * invitation's roles, a custom role made or edited to see prices, and the guest Accountant's portal (it sees prices) or a
+ * later end of its access. Lowering (a role without the price grain, an earlier end) and ending stay free: they never widen
+ * the circle. The API asks who holds the Owner role; the words and the code are here.
+ */
+export const ONLY_OWNER_GIVES_PRICES = Object.freeze({
+  /** The last part of the issue path (`roles/0/roleId/onlyOwnerGivesPrices`). */
+  code: 'onlyOwnerGivesPrices',
+  message: 'Only the Owner gives a role that sees prices.',
+} as const)
+
+/** The grain only the Owner gives. */
+export const OWNER_GIVEN_GRAIN: Grain = 'price'
+
+/** A role with these grains sees our prices. */
+export const seesPrices = (grains: readonly string[]): boolean => grains.includes(OWNER_GIVEN_GRAIN)
+
+/** The refusal of giving a role with these grains (at `path`, e.g. `roles/0/roleId`) when the giver is not the Owner. */
+export function priceGiverProblems(grains: readonly string[], giverIsOwner: boolean, path: string): Issue[] {
+  if (giverIsOwner || !seesPrices(grains)) return []
+  return [{ path: `${path}/${ONLY_OWNER_GIVES_PRICES.code}`, message: ONLY_OWNER_GIVES_PRICES.message }]
+}
+// ── end B-CP-011 ──
 
 /** The custom key for a slug, or a problem. */
 export function customKeyProblems(slug: string): Issue[] {

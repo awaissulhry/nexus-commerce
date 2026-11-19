@@ -154,7 +154,10 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
 
   // ---- S: the second order, typed by hand at the customer's price list ---------------------------------------------------
 
-  it('S01 sales types a repeat order for P1: the next number, P1’s list price while typing, no deposit; a size the style does not make is refused in words', async () => {
+  it('S01 sales types a repeat order for P1: the next number, P1’s list price while typing (read by the Owner), no deposit; a size the style does not make is refused in words', async () => {
+    // B-CP-011 (the money wall): Sales types the order and its lines take P1's price list, but Sales sees no money; the prices
+    // are read by the Owner (the same Owner R15 signs in: `??=`, one Owner for the day).
+    G.owner ??= await person(w, 'owner', 'owner')
     const { party } = await ok(P.sales, 'GET', `/parties/${id('party:P1')}`)
     expect(party).toMatchObject({ code: 'SEED-C1', legalName: 'Seed Customer One S.r.l.' })
     G.party = party
@@ -164,24 +167,30 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     // While typing: the first size only, then the whole grid; nothing is written.
     const typing = await ok(P.sales, 'POST', '/sales/orders/manual/preview', stManual([{ size: '50', quantity: 2 }]))
     expect(typing).toMatchObject({ ok: true, number, problems: [] })
-    expect(typing.order.netAmount).toBe(84_000)
+    expect(typing.order).not.toHaveProperty('netAmount')
+    expect((await ok(G.owner, 'POST', '/sales/orders/manual/preview', stManual([{ size: '50', quantity: 2 }]))).order.netAmount).toBe(84_000)
     const preview = await ok(P.sales, 'POST', '/sales/orders/manual/preview', stManual())
     expect(preview).toMatchObject({ ok: true, number, problems: [] })
-    // P1's list SEED-PL-P1: 420.00 for SEED-JKT-01 (the base list's would be 450.00).
-    expect(preview.order).toMatchObject({ currency: 'EUR', taxMode: 'IT_B2B', priceBasis: 'NET', paymentTermsId: id('pricing:terms:BB30FM'), depositPct: null, depositAmount: null, netAmount: ST_NET, vatAmount: ST_VAT, grossAmount: ST_GROSS, schedule: [] })
-    expect(preview.order.lines.map((line: STJson) => [line.seq, line.unitPrice, line.quantity, line.netAmount])).toEqual([[10, '420', ST_PIECES, ST_NET]])
-    // Sales holds the price and margin grains, never the cost.
-    expect(preview.order).not.toHaveProperty('costAmount')
-    expect(preview.order.lines[0]).not.toHaveProperty('costAmount')
+    expect(preview.order).toMatchObject({ currency: 'EUR', taxMode: 'IT_B2B', priceBasis: 'NET', paymentTermsId: id('pricing:terms:BB30FM'), depositPct: null, schedule: [] })
+    expect(preview.order.lines.map((line: STJson) => [line.seq, line.quantity])).toEqual([[10, ST_PIECES]])
+    // B-CP-011: Sales holds no money grain: no price, no net, VAT or gross, no deposit amount, no cost (the keys are absent).
+    for (const key of ['netAmount', 'vatAmount', 'grossAmount', 'depositAmount', 'costAmount']) expect(preview.order).not.toHaveProperty(key)
+    for (const key of ['unitPrice', 'netAmount', 'costAmount']) expect(preview.order.lines[0]).not.toHaveProperty(key)
+    // P1's list SEED-PL-P1: 420.00 for SEED-JKT-01 (the base list's would be 450.00), as the Owner reads the same preview.
+    const priced = await ok(G.owner, 'POST', '/sales/orders/manual/preview', stManual())
+    expect(priced).toMatchObject({ ok: true, number, problems: [] })
+    expect(priced.order).toMatchObject({ currency: 'EUR', taxMode: 'IT_B2B', priceBasis: 'NET', paymentTermsId: id('pricing:terms:BB30FM'), depositPct: null, depositAmount: null, netAmount: ST_NET, vatAmount: ST_VAT, grossAmount: ST_GROSS, schedule: [] })
+    expect(priced.order.lines.map((line: STJson) => [line.seq, line.unitPrice, line.quantity, line.netAmount])).toEqual([[10, '420', ST_PIECES, ST_NET]])
     // Refused in words: a size outside the style's range (SEED-JKT-01 makes 50, 52, 54).
     const wrong = await ok(P.sales, 'POST', '/sales/orders/manual/preview', stManual([{ size: '60', quantity: 1 }]))
     expect(wrong).toMatchObject({ ok: false, order: null })
     expect(wrong.problems).toEqual([expect.objectContaining({ path: 'body/lines/0/sizes/0/size', message: expect.stringMatching(/Not a size/) })])
   })
 
-  it('S02 sales confirms the order: CONFIRMED in one command, no deposit request, no payment milestones; finance sees the cost, sales does not', async () => {
+  it('S02 sales confirms the order: CONFIRMED in one command, no deposit request, no payment milestones; the Owner sees its prices, finance the cost, sales neither', async () => {
     const { order } = await ok(P.sales, 'POST', '/sales/orders/manual', stManual(), 201)
     keep(order.id)
+    // B-CP-011 (the money wall): Sales's answer holds no money; the Owner reads the order's prices (P1's list).
     expect(order).toMatchObject({
       number: G.orderNumberPreview,
       status: 'CONFIRMED',
@@ -190,34 +199,41 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
       orderDate: today(),
       paymentTermsId: id('pricing:terms:BB30FM'),
       depositRequired: false,
-      netAmount: ST_NET,
-      vatAmount: ST_VAT,
-      grossAmount: ST_GROSS,
       locked: true,
       amendments: { count: 0, latestRevision: null },
       chain: { quote: null, depositRequests: [], workOrders: [], shipments: [], invoices: [] },
     })
-    expect(order.lines.map((line: STJson) => [line.seq, line.style?.code, line.colourway?.code, line.unitPrice, line.quantity])).toEqual([[10, 'SEED-JKT-01', 'BLK', '420', ST_PIECES]])
+    for (const key of ['netAmount', 'vatAmount', 'grossAmount']) expect(order).not.toHaveProperty(key)
+    expect(order.lines.map((line: STJson) => [line.seq, line.style?.code, line.colourway?.code, line.quantity])).toEqual([[10, 'SEED-JKT-01', 'BLK', ST_PIECES]])
+    expect(order.lines[0]).not.toHaveProperty('unitPrice')
+    const forOwner = (await ok(G.owner, 'GET', `/sales/orders/${order.id}`)).order
+    expect(forOwner).toMatchObject({ netAmount: ST_NET, vatAmount: ST_VAT, grossAmount: ST_GROSS })
+    expect(forOwner.lines.map((line: STJson) => [line.seq, line.unitPrice, line.quantity])).toEqual([[10, '420', ST_PIECES]])
     expect(order.lines[0].sizes.map((entry: STJson) => [entry.size, entry.quantity])).toEqual(ST_SIZES.map((entry) => [entry.size, entry.quantity]))
     expect(order.progress).toMatchObject({ ordered: ST_PIECES, shipped: 0, toShip: ST_PIECES })
     expect(order.billTo).toMatchObject({ taxMode: 'IT_B2B' })
     // The orders list: no deposit needed (nothing holds the work order's release on a deposit).
     const listed = (await ok(P.sales, 'GET', `/sales/orders?q=${order.number}`)).orders as STJson[]
     expect(listed.find((row) => row.id === order.id)).toMatchObject({ deposit: { state: 'NOT_NEEDED' }, units: ST_PIECES, shippedUnits: 0 })
-    // Paid on invoice terms: no milestones.
+    // Paid on invoice terms: no milestones (B-CP-011: Sales reads the steps, the Owner the amounts).
     const schedule = await ok(P.sales, 'GET', `/sales/orders/${order.id}/schedule`)
-    expect(schedule).toMatchObject({ steps: [], cancelled: [], grossAmount: ST_GROSS, openAmount: 0, paidAmount: 0 })
-    // The grains: sales sees prices and margin %, no cost; finance sees the cost.
+    expect(schedule).toMatchObject({ steps: [], cancelled: [] })
+    for (const key of ['grossAmount', 'openAmount', 'paidAmount']) expect(schedule).not.toHaveProperty(key)
+    expect(await ok(G.owner, 'GET', `/sales/orders/${order.id}/schedule`)).toMatchObject({ steps: [], cancelled: [], grossAmount: ST_GROSS, openAmount: 0, paidAmount: 0 })
+    // The grains (B-CP-011): sales sees no price, no margin %, no cost; the Owner sees the margin %; finance sees the cost.
     expect(order).not.toHaveProperty('costAmount')
     expect(order.lines[0]).not.toHaveProperty('unitCost')
-    expect(order).toHaveProperty('marginPct')
+    expect(order).not.toHaveProperty('marginPct')
+    expect(forOwner).toHaveProperty('marginPct')
     const forFinance = (await ok(P.finance, 'GET', `/sales/orders/${order.id}`)).order
     expect(forFinance).toHaveProperty('costAmount')
     expect(forFinance.lines[0]).toHaveProperty('unitCost')
-    // The order's margin read (B-W2a-29): the value for both, the estimate's cost for finance only.
+    // The order's margin read (B-W2a-29): the value for the Owner (B-CP-011: not for Sales), the estimate's cost for finance.
     const margin = await ok(P.sales, 'GET', `/costing/margins/orders/${order.id}`)
-    expect(margin.lines[0]).toMatchObject({ quantity: ST_PIECES, value: ST_NET })
+    expect(margin.lines[0]).toMatchObject({ quantity: ST_PIECES })
+    expect(margin.lines[0]).not.toHaveProperty('value')
     expect(margin.lines[0]).not.toHaveProperty('estimateCost')
+    expect((await ok(G.owner, 'GET', `/costing/margins/orders/${order.id}`)).lines[0]).toMatchObject({ quantity: ST_PIECES, value: ST_NET })
     expect((await ok(P.finance, 'GET', `/costing/margins/orders/${order.id}`)).lines[0]).toHaveProperty('estimateCost')
     expect(await settle()).toContain('sales_order.created')
     G.order = (await ok(P.sales, 'GET', `/sales/orders/${order.id}`)).order
@@ -227,7 +243,10 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     const change = { reason: 'The customer re-issued its purchase order with a new reference and date.', customerRef: 'PO-GOLDEN-REPEAT-01/B', requestedDate: addDays(today(), 35), lines: [{ id: G.order.lines[0].id }] }
     const review = await ok(P.sales, 'POST', `/sales/orders/${G.order.id}/amendments/preview`, { version: G.order.version, ...change })
     expect(review).toMatchObject({ ok: true, revision: 1, problems: [] })
-    expect(review.diff).toMatchObject({ lines: [], netAmountBefore: ST_NET, netAmountAfter: ST_NET, reacceptanceNeeded: false })
+    // B-CP-011: Sales reads the diff without its net (the Owner reads the net below, unchanged).
+    expect(review.diff).toMatchObject({ lines: [], reacceptanceNeeded: false })
+    expect(review.diff).not.toHaveProperty('netAmountBefore')
+    expect(review.diff).not.toHaveProperty('netAmountAfter')
     expect(review.diff.header.map((entry: STJson) => [entry.field, entry.after])).toEqual([
       ['customerRef', 'PO-GOLDEN-REPEAT-01/B'],
       ['requestedDate', change.requestedDate],
@@ -236,7 +255,9 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     const stale = await ok(P.sales, 'POST', `/sales/orders/${G.order.id}/amendments`, { version: G.order.version + 3, ...change }, 409)
     expect(stale.error.message).toMatch(/changed since it was read .* Reload it and apply the change again\./)
     const applied = await ok(P.sales, 'POST', `/sales/orders/${G.order.id}/amendments`, { version: G.order.version, ...change }, 201)
-    expect(applied.order).toMatchObject({ customerRef: 'PO-GOLDEN-REPEAT-01/B', requestedDate: change.requestedDate, netAmount: ST_NET, reapprovalNeededAt: null, amendments: { count: 1, latestRevision: 1 } })
+    expect(applied.order).toMatchObject({ customerRef: 'PO-GOLDEN-REPEAT-01/B', requestedDate: change.requestedDate, reapprovalNeededAt: null, amendments: { count: 1, latestRevision: 1 } })
+    expect(applied.order).not.toHaveProperty('netAmount')
+    expect((await ok(G.owner, 'GET', `/sales/orders/${G.order.id}`)).order.netAmount).toBe(ST_NET)
     expect(applied.order.lines[0].quantity).toBe(ST_PIECES)
     expect(applied.amendment).toMatchObject({ revision: 1, reacceptance: 'NOT_NEEDED' })
     const list = await ok(P.sales, 'GET', `/sales/orders/${G.order.id}/amendments`)
@@ -1068,8 +1089,12 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     expect(printed.status, String(printed.response.body).slice(0, 300)).toBe(200)
     expect(printed.response.headers['content-type']).toContain('application/pdf')
     expect(printed.response.rawPayload.subarray(0, 5).toString()).toBe('%PDF-')
-    // Sales reads the customer's statement (B-W2a-81 gave the sales template receivables.view, view only).
-    expect((await ok(P.sales, 'GET', `/receivables/customers/${id('party:P1')}/statement?companyId=${companyA()}`, undefined, 200)).lines).toEqual(expect.any(Array))
+    // Sales reads the customer's statement (B-W2a-81 gave the sales template receivables.view, view only); B-CP-011: without
+    // its amounts (no totals, no ageing: the price grain).
+    const forSales = await ok(P.sales, 'GET', `/receivables/customers/${id('party:P1')}/statement?companyId=${companyA()}`, undefined, 200)
+    expect(forSales.lines).toEqual(expect.any(Array))
+    expect(forSales).not.toHaveProperty('totals')
+    expect(forSales).not.toHaveProperty('ageing')
   })
 
   it('T12 the statement is e-mailed to P1’s invoice contact (FAKE SES); the reminder ladder stays OFF (the Owner’s switch): finance cannot switch it on, nothing is prepared for these invoices', async () => {
@@ -1106,12 +1131,15 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     const row = ours.find((line) => line.size === '52')!
     expect(row).toMatchObject({ kind: 'INVOICED', sold: 4, taken: 0, left: 4, ppe: true, siteId: siteA1(), style: { code: 'SEED-JKT-01' }, colourway: { code: 'BLK' } })
     expect(row.batchNumbers).toContain(G.wo.batchNumber)
-    expect(row.pieceValue).toBeGreaterThan(0)
+    // B-CP-011 (the money wall): Sales reads the returnable line without its value; the Owner reads the value.
+    expect(row).not.toHaveProperty('pieceValue')
+    const valued = ((await ok(G.owner, 'GET', `/sales/returns/returnable?companyId=${companyA()}&partyId=${R_P1()}&invoiceId=${G.invoice1.id}`)).lines as Record<string, any>[]).find((line) => line.invoiceLineId === row.invoiceLineId)!
+    expect(valued.pieceValue).toBeGreaterThan(0)
     const tooMany = { companyId: companyA(), partyId: R_P1(), lines: [{ invoiceLineId: row.invoiceLineId, quantity: 5, reasonCode: 'WRONG_SIZE' }] }
     const preview = await ok(P.sales, 'POST', '/sales/returns/preview', tooMany)
     expect(preview).toMatchObject({ ok: false, problems: [{ path: 'body/lines/0/quantity', message: 'At most 4 can come back: 4 sold.' }] })
     expect((await ok(P.sales, 'POST', '/sales/returns', tooMany, 409)).error.issues).toEqual([{ path: 'body/lines/0/quantity', message: 'At most 4 can come back: 4 sold.' }])
-    G.rma = { invoiceLineId: row.invoiceLineId, pieceValue: row.pieceValue }
+    G.rma = { invoiceLineId: row.invoiceLineId, pieceValue: valued.pieceValue }
   })
 
   it('R02 sales makes the RMA for one 52 (wrong size): AUTHORISED and numbered, the batch and site of its shipment, no PPE register entry (not a defect)', async () => {
@@ -1159,19 +1187,32 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
   })
 
   it('R05 sales decides a CREDIT with the jacket back into finished goods (one ADJUSTMENT in): INSPECTED; the worker drafts the TD04 on return.credit_due', async () => {
+    // B-CP-011 (the money wall): Sales decides without a credit value (the default); the values are read by the Owner.
     const record = (await ok(P.sales, 'GET', `/sales/returns/${G.rma.id}`)).return
-    expect(record.lines[0]).toMatchObject({ grade: 'NEW', suggestedOutcome: 'RESTOCK', restockHeld: null, receivedValue: G.rma.pieceValue })
+    expect(record.lines[0]).toMatchObject({ grade: 'NEW', suggestedOutcome: 'RESTOCK', restockHeld: null })
+    expect(record.lines[0]).not.toHaveProperty('receivedValue')
+    expect((await ok(G.owner, 'GET', `/sales/returns/${G.rma.id}`)).return.lines[0]).toMatchObject({ receivedValue: G.rma.pieceValue })
     const fg = G.rma.places.finishedGoods as { id: string; code: string }
     // No creditAmount: CREDIT_ONLY defaults to what came back is worth (the invoice line's net per piece × pieces received).
     const decision = { lineId: G.rma.lineId, disposition: 'CREDIT_ONLY', goodsOutcome: 'RESTOCK', toLocationId: fg.id }
     const preview = await ok(P.sales, 'POST', `/sales/returns/${G.rma.id}/decisions/preview`, { version: record.version, lines: [decision] })
-    expect(preview).toMatchObject({ ok: true, problems: [], lines: [{ lineId: G.rma.lineId, disposition: 'CREDIT_ONLY', goodsOutcome: 'RESTOCK', creditAmount: G.rma.pieceValue, followUp: 'CREDIT_NOTE', place: { id: fg.id, code: fg.code } }] })
-    const decided = await ok(P.sales, 'POST', `/sales/returns/${G.rma.id}/decisions`, { version: record.version, lines: [decision] })
+    expect(preview).toMatchObject({ ok: true, problems: [], lines: [{ lineId: G.rma.lineId, disposition: 'CREDIT_ONLY', goodsOutcome: 'RESTOCK', followUp: 'CREDIT_NOTE', place: { id: fg.id, code: fg.code } }] })
+    expect(preview.lines[0]).not.toHaveProperty('creditAmount')
+    const ownersPreview = await ok(G.owner, 'POST', `/sales/returns/${G.rma.id}/decisions/preview`, { version: record.version, lines: [decision] })
+    expect(ownersPreview).toMatchObject({ ok: true, problems: [], lines: [{ lineId: G.rma.lineId, creditAmount: G.rma.pieceValue }] })
+    // B-CP-026 (Owner answer A): the credit is an amount Sales cannot see — Sales is held in words (nothing decided); the Owner
+    // decides it, and Sales reads the decision without the amount.
+    expect((await ok(P.sales, 'POST', `/sales/returns/${G.rma.id}/decisions`, { version: record.version, lines: [decision] }, 403)).error.issues[0]).toMatchObject({ path: 'refusal/BLIND_PRICE' })
+    const decided = await ok(G.owner, 'POST', `/sales/returns/${G.rma.id}/decisions`, { version: record.version, lines: [decision] })
     expect(decided.return).toMatchObject({
       status: 'INSPECTED',
-      creditTotal: G.rma.pieceValue,
-      lines: [{ disposition: 'CREDIT_ONLY', goodsOutcome: 'RESTOCK', creditAmount: G.rma.pieceValue, followUp: 'CREDIT_NOTE', stock: [{ locationId: fg.id, locationCode: fg.code, quantity: '1' }] }],
+      lines: [{ disposition: 'CREDIT_ONLY', goodsOutcome: 'RESTOCK', followUp: 'CREDIT_NOTE', stock: [{ locationId: fg.id, locationCode: fg.code, quantity: '1' }] }],
     })
+    const salesRead = (await ok(P.sales, 'GET', `/sales/returns/${G.rma.id}`)).return
+    expect(salesRead).not.toHaveProperty('creditTotal')
+    expect(salesRead.lines[0]).not.toHaveProperty('creditAmount')
+    const ownersRead = (await ok(G.owner, 'GET', `/sales/returns/${G.rma.id}`)).return
+    expect(ownersRead).toMatchObject({ status: 'INSPECTED', creditTotal: G.rma.pieceValue, lines: [{ creditAmount: G.rma.pieceValue }] })
     expect(decided.return.lines[0].effect).toContain(`at ${fg.code}; a credit note to make (Finance)`)
     expect(decided.moves).toEqual([{ lineId: G.rma.lineId, moveId: expect.any(String), locationId: fg.id }])
     // B-W2a-F7: the jacket back in stock is valued as a production receipt is, at the BLK 52's standard frozen in M00b.

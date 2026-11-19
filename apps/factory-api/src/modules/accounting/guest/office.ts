@@ -40,6 +40,11 @@ import { DOWNLOAD_ACTION, ZIP_ACTION } from './portal'
  * Reading is accounting.view over the company; the changes are accounting.accountants.manage with a fresh step-up (they
  * open the company's books to an outside firm). A firm of every company is changed only by a grant over every company (as
  * partners.*). Finance holds no partners.*: these routes reach adviser parties and guest people ONLY.
+ *
+ * B-CP-011 (customer page lane, the money wall; Owner O3): the Accountant sees our prices (its invoices and registers), so
+ * giving access and a later end of access are the Owner's only (403 `roleKey/onlyOwnerGivesPrices` or
+ * `accessUntil/onlyOwnerGivesPrices`, "Only the Owner gives a role that sees prices."; the check is in the shared
+ * platform/auth/partners/people.ts commands, so Portal access asks it too). An earlier end and ending it now stay free.
  */
 
 const officeOf = (request: FastifyRequest): OfficeContext => {

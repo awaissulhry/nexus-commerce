@@ -8,7 +8,8 @@ import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { StaleVersionError, type CommandTools, type CommandTx } from '../../../core/command'
 import { handBackInCommand } from '../../portal/tasks/people'
 import { requirePortalTerms } from '../portal/terms'
-import { endAllAssignments } from '../roles/assignments'
+import { assertOwnerGivesPrices, endAllAssignments } from '../roles/assignments'
+import { partnerTemplateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { endSessions } from '../sessions/session-store'
 import { userStatus } from '../users/status'
 import { liveAssignment } from '../roles/access'
@@ -32,6 +33,10 @@ import { lockParty, partnerRoleIds, partyById, personOf, seatsTaken, settingsOf,
  *   status    suspend (sessions end), reactivate, deactivate (sessions end, open invitations stop, every assignment ends);
  *             the user status machine (B-W0)
  *   revoke    an invited person's open invitation stops and the person is DEACTIVATED (invite them again later)
+ *
+ * B-CP-011 (the money wall, Owner O3): the guest Accountant (an outside accounting firm, kind GUEST) sees our prices, so it
+ * is invited, and its access made to end later, only by the Owner (`assertOwnerGivesGuestPrices`), from Finance › Close
+ * (modules/accounting/guest) and from Portal access alike. An earlier end, ending it and a customer's people stay as before.
  */
 
 export interface Changer {
@@ -67,6 +72,8 @@ export async function inviteInCommand({ tx, now, audit, emit, context }: Command
   const settings = await settingsOf(tx, party.id)
   const issues = choiceProblems(work.choice, settings, now)
   if (issues.length > 0) throw new ValidationError('The access is not valid.', issues)
+  // B-CP-011: the guest Accountant sees our prices: only the Owner invites one (403 roleKey/onlyOwnerGivesPrices).
+  await assertOwnerGivesGuestPrices(tx, work.choice.kind, work.choice.roleKey, by, now, 'roleKey')
   // GATE-PRIVACY: no invitation for the portal of a company without its portal terms published (B-W2b-159 terms.ts).
   await requirePortalTerms(tx, work.companyId)
   const roleKeys = roleKeysOf(work.choice.roleKey, work.choice.capabilities)
@@ -162,6 +169,10 @@ export async function changeInCommand({ tx, now, audit, emit }: CommandTools, wo
   const accessChanged = (person.accessUntil?.getTime() ?? null) !== (next.accessUntil?.getTime() ?? null)
   if (accessChanged) changes.push('ACCESS_UNTIL')
   if (changes.length === 0) throw new InvalidStateError('Nothing changes: this is the access the person has.')
+  // B-CP-011: a guest Accountant's later end of access, or a new role, sees our prices longer: only the Owner (an earlier end is free).
+  const later = person.accessUntil !== null && (next.accessUntil === null || next.accessUntil.getTime() > person.accessUntil.getTime())
+  if (changes.includes('ROLE')) await assertOwnerGivesGuestPrices(tx, person.kind, next.roleKey, by, now, 'roleKey')
+  else if (later) await assertOwnerGivesGuestPrices(tx, person.kind, next.roleKey, by, now, 'accessUntil')
 
   if (person.status === 'INVITED') {
     if (!person.invitation) throw new InvalidStateError(PARTNER_WORDS.notInvited)
@@ -183,6 +194,17 @@ export async function changeInCommand({ tx, now, audit, emit }: CommandTools, wo
   emit({ type: 'partner_user.changed', subject: person.id, companyId, payload: { userId: person.id, partyId: work.partyId, changes, status: person.status, byPartner: by.byPartner } })
   return { id: person.id, roleKeys: after, accessUntil: iso(next.accessUntil) }
 }
+
+// ── B-CP-011 (customer page lane, the money wall; Owner O3) ───────────────────────────────────────────────────────────
+/**
+ * A guest's portal role that sees prices (the Accountant) is given by the office only when the giver holds the Owner role.
+ * A customer's people (its Buyer sees its own orders' prices, O4) and a partner admin's colleagues are not asked.
+ */
+async function assertOwnerGivesGuestPrices(tx: CommandTx, kind: string, roleKey: string, by: Changer, now: Date, path: string): Promise<void> {
+  if (kind !== 'GUEST' || by.byPartner) return
+  await assertOwnerGivesPrices(tx, partnerTemplateOf(roleKey)?.grains ?? [], by.actorId, now, path)
+}
+// ── end B-CP-011 ──
 
 /** Ends the person's live PARTNER assignments that are not wanted and gives the missing ones (bound to their party). */
 async function replaceRoles(tx: CommandTx, person: PartnerPerson, wanted: ReadonlyMap<string, string>, at: { readonly now: Date; readonly actorId: string }): Promise<void> {

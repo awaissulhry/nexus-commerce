@@ -1,6 +1,8 @@
 import { OUTCOMES_BY_DISPOSITION, STOCK_OUTCOMES, followUpOf } from '@nexus/factory-domain/sales/returns/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { problemKey } from '../../quality/_shared/model'
+// F-CP-160: the money wall's hold of a return's credit decision (the API's B-CP-026).
+import { BLIND_PRICE_KEY, isBlindPriceRefusal } from '../_shared/blind-price'
 import type {
   ChecklistBody,
   DdtBody,
@@ -333,6 +335,8 @@ const SOLD = /(\d+) sold/i
  */
 export function refusalOf(error: unknown): Words {
   if (!isApiError(error)) return { key: `quality:${problemKey(error)}` }
+  // F-CP-160: "It changes a price you cannot see: someone who sees prices does it." (nothing decided).
+  if (isBlindPriceRefusal(error)) return { key: BLIND_PRICE_KEY }
   const quantity = error.issues.find((entry) => /^(body[./])?(lines[./]\d+[./])?quantity$/.test(issuePath(entry)))
   if (quantity) {
     return refusalOfMessage(quantity.message ?? '')
@@ -586,6 +590,16 @@ export function decisionLinesOf(drafts: Readonly<Record<string, DecisionDraft>>,
   return out
 }
 
+// ── F-CP-160 (customer page lane, the money wall; Owner answer A, the API's B-CP-026) ──
+/**
+ * Deciding a return line's credit is a price holder's: the credit is the line's value (less any fee), an amount a reader without the
+ * price grain cannot see. That reader sends no amount, so only a credit-only line credits anything (the API's default credit is the
+ * line's value for CREDIT_ONLY, nothing for the others): it holds "Decide" in the API's words. A repair, a replacement, a size
+ * exchange, a scrap or a return unchanged are decided as before.
+ */
+export const creditsBlind = (draft: Pick<DecisionDraft, 'disposition'>, price: boolean): boolean => !price && draft.disposition === 'CREDIT_ONLY'
+// ── end F-CP-160 ──
+
 /** What is wrong with the drafts before the preview (keys per line). */
 export function decisionDraftProblems(drafts: Readonly<Record<string, DecisionDraft>>, lines: readonly ReturnLine[], price: boolean): Words[] {
   const out: Words[] = []
@@ -593,6 +607,8 @@ export function decisionDraftProblems(drafts: Readonly<Record<string, DecisionDr
     const draft = drafts[line.id]
     if (!draft || !draft.disposition) continue
     if (draft.disposition === 'SIZE_EXCHANGE' && !draft.exchangeSize) out.push({ key: 'depth:exchange.pickSize', params: { seq: line.seq } })
+    // F-CP-160: a credit is an amount this reader cannot see (B-CP-026): a credit-only line is decided by a price holder.
+    if (creditsBlind(draft, price)) out.push({ key: BLIND_PRICE_KEY })
     if (price && draft.credit.trim() !== '') {
       const credit = minorOf(draft.credit)
       if (credit === null) out.push({ key: 'decide.problem.creditNumber', params: { seq: line.seq } })

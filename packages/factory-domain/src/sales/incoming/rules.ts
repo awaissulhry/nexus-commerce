@@ -84,7 +84,7 @@ export const INCOMING_LIMITS = Object.freeze({
 /** The kind's words (the kind mark of a row, the export's words). */
 export const KIND_WORDS: Readonly<Record<IncomingKind, Words>> = Object.freeze({
   REQUEST: { it: 'Richiesta', en: 'Request' },
-  CATALOGUE_ORDER: { it: 'Ordine dal catalogo', en: 'Catalogue order' },
+  CATALOGUE_ORDER: { it: 'Ordine dal portale', en: 'Portal order' }, // B-CP-077 (12 §7): the code stays CATALOGUE_ORDER
   CHANGE_REQUEST: { it: 'Richiesta di modifica', en: 'Change request' },
 })
 

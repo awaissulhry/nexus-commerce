@@ -152,7 +152,8 @@ export function AnswerDoor(props: { request: BrandRequest; model: OrderRecordMod
 function Answer({ request, model, size = 'sm' }: { request: BrandRequest; model: OrderRecordModel; size?: 'sm' }) {
   const t = useT('orders')
   const a = useT(APPROVALS_NS)
-  const held = waitsForMe(request) ? null : answerHeld(request, 'accept', { offline: false, busy: false }, 'words')
+  // F-CP-160: the reader's price grain (answerHeld holds a priced counter-offer's accept for a reader without it).
+  const held = waitsForMe(request) ? null : answerHeld(request, 'accept', { offline: false, busy: false, price: model.can.price }, 'words')
   const href = model.requestDoor?.hrefOf(request.id) ?? null
   if (held || !href) {
     return (

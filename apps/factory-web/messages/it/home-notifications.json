@@ -291,6 +291,9 @@
         "overdue": "{record}: {count} fatture scadute, un sollecito attende un sì",
         "reconciliationDifference": "I pagamenti non quadrano in {record}: {count} controlli sui pagamenti non superati"
       },
+      "priceCheck": {
+        "customerChanged": "Il prezzo del cliente è cambiato sull’ordine {record}"
+      },
       "changes": {
         "requestRaised": "Nuova richiesta di modifica {record}: {title}",
         "requestAccepted": "{actor} ha accettato la tua richiesta di modifica {record}",

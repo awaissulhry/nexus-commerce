@@ -39,6 +39,7 @@ import { useLinesActs } from './use-lines-acts'
 import { useProductionActs } from './use-production-acts'
 import { useShipmentsActs } from './use-shipments-acts'
 import { useMoneyActs } from './use-money-acts'
+import { usePriceCheckCard } from './use-price-check-card' // F-CP-142: Money's Price check card
 // ---- end F-OP-134
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { useLocale } from '../../../../lib/i18n/provider'
@@ -361,6 +362,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
   })
   // ---- end F-OP-134
 
+  // ---- F-CP-142 (customer page plan C3): Money's "Price check" — read while Money shows, by a price holder only (else one line of
+  // words, no call); its save and take-over say so in the page's one notice.
+  const priceCheck = usePriceCheckCard({ api, orderId, can, tab, version: order.status === 'ready' ? order.value.version : null, permissions: session.permissions, setNotice })
+  // ---- end F-CP-142
   // B-W2a-72: the Margin tab reads the order's margin while it is open.
   // F-SA-230: Margin is Money's last section (#margin), read while Money shows, with the margin grain.
   const margin = useOrderMargin(api, orderId, tab === 'money' && can.margin, session.permissions, order.status === 'ready' ? order.value.version : null)
@@ -628,6 +633,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     amendments,
     changeStyles,
     margin: margin.model,
+    priceCheck: priceCheck.model, // F-CP-142
+    priceCheckDialog: priceCheck.dialog.model, // F-CP-142
     // ---- F-OP-134: what each tab's acts hook holds (the band's portal, people and copy; Overview's line window; the amendment draft,
     // closed lines, the cancel check; the health; the deposit's page and payment, the schedule's verbs) ----
     ...band.model,
@@ -698,6 +705,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
         // ---- end F-OP-134
         onRetry: () => void load(),
         onRetryMargin: margin.retry,
+        priceCheck: priceCheck.actions, // F-CP-142
+        priceCheckDialog: priceCheck.dialog.actions, // F-CP-142
         links: links.actions, // B-TH-256
         // ---- F-SA-232 ----
         onRetryProduction: () => production.again(),

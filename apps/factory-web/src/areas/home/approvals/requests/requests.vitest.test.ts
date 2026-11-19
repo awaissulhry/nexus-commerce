@@ -51,7 +51,8 @@ import { clearRush, liftCustomerPause, probeOpen } from './use-request-review'
  */
 
 const { RUSH, HOLD, CANCEL, AGREED, BATCH, BATCH_ROWS } = REQUEST_FIXTURES
-const free = { offline: false, busy: false }
+// F-CP-160: a reader with the price grain (the money wall's hold of a priced counter-offer is tested on its own).
+const free = { offline: false, busy: false, price: true }
 const notFound = () => new ApiError('not_found', 404, 'not_found', 'Change request not found.', null, [])
 const conflict = (path: string) => new ApiError('conflict', 409, 'invalid_state', 'x', null, [{ path, message: 'x' }])
 
@@ -170,8 +171,8 @@ describe('the answers, held with the reason before the click', () => {
     const lapsed = { ...AGREED, counter: { ...AGREED.counter!, state: 'LAPSED' as const }, may: { accept: false, refuse: true, counter: false, counterWithPrice: false } }
     expect(answerHeld(lapsed, 'accept', free, '')).toBe('customerRequest.held.counterLapsed')
     expect(answerHeld({ ...RUSH, kind: 'RESUME', may: { ...RUSH.may, counter: false } }, 'counter', free, '')).toBe('customerRequest.held.noCounterResume')
-    expect(answerHeld(RUSH, 'accept', { offline: true, busy: false }, '')).toBe('customerRequest.held.offline')
-    expect(answerHeld(RUSH, 'accept', { offline: false, busy: true }, '')).toBe('customerRequest.held.busy')
+    expect(answerHeld(RUSH, 'accept', { offline: true, busy: false, price: true }, '')).toBe('customerRequest.held.offline')
+    expect(answerHeld(RUSH, 'accept', { offline: false, busy: true, price: true }, '')).toBe('customerRequest.held.busy')
   })
 
   it('Suggest something else: at least one of date, fee, words; no date in the past; the fee only with the price grain', () => {
@@ -263,7 +264,7 @@ describe('each kind answers through its own route (plan §3: Sales for change, c
   })
 
   it('PW-12: a batch answer names only that batch’s own requests, each at the version read', async () => {
-    const lines = batchLinesOf(BATCH_ROWS, 'accept')
+    const lines = batchLinesOf(BATCH_ROWS, 'accept', true)
     const items = batchItemsOf(lines)
     const { api, calls } = fakeApi(() => ({ batchId: BATCH, results: [], notFound: 0, requests: [] }))
     await acceptBatch(api, BATCH, { items, answer: null }, 'k-7')
@@ -277,11 +278,11 @@ describe('each kind answers through its own route (plan §3: Sales for change, c
 
 describe('a batch: read again, each checked, the current ones answered (as Approve N)', () => {
   it('each line current or left out with why; the answer’s results by request; a refused call read back onto each request', () => {
-    const lines = batchLinesOf(BATCH_ROWS, 'accept')
+    const lines = batchLinesOf(BATCH_ROWS, 'accept', true)
     expect(lines.filter((line) => line.leftOut === null)).toHaveLength(5)
     expect(lines.find((line) => line.leftOut !== null)?.leftOut).toBe('customerRequest.held.withdrawn')
     // Refusing all checks each request’s right, not the words (the dialog checks them once).
-    expect(batchLinesOf(BATCH_ROWS, 'refuse').filter((line) => line.leftOut === null)).toHaveLength(5)
+    expect(batchLinesOf(BATCH_ROWS, 'refuse', true).filter((line) => line.leftOut === null)).toHaveLength(5)
     const results = batchResultsOf({ results: [{ requestId: 'a', orderId: 'o', orderNumber: 'SO-1', done: true, words: { en: 'Done', it: 'Fatto' }, problem: null }, { requestId: 'b', orderId: 'o2', orderNumber: 'SO-2', done: false, words: null, problem: { code: 'SHIPMENT_PREPARED', message: 'x' } }] })
     expect(results).toEqual({ a: { ok: true, words: { en: 'Done', it: 'Fatto' }, code: null }, b: { ok: false, words: null, code: 'SHIPMENT_PREPARED' } })
     const items = [{ requestId: 'a', version: 1 }, { requestId: 'b', version: 2 }]

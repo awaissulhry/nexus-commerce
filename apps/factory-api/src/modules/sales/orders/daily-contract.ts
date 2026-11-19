@@ -46,8 +46,9 @@ const newLineInput = input({
   sizes: z.array(sizeInput).min(1).max(50),
   /** On the order's basis; none: the customer's list price. */
   unitPrice: money.price(unitPrice().nullish()),
-  /** A discount off the list price, percent (never with a unit price). */
-  discountPct: pct.nullish(),
+  /** A discount off the list price, percent (never with a unit price). B-CP-012 (the money wall, review A8): a percent of
+   * the price is a price: money.price, so the grain filter refuses it from a caller without the price grain. */
+  discountPct: money.price(pct.nullish()),
   description: text(MAX_TEXT.description).nullish(),
   note: text(MAX_TEXT.note).nullish(),
   /** B-W2b-374 (XF3:02): the options chosen when the line is typed (their surcharges join the line's price). */
