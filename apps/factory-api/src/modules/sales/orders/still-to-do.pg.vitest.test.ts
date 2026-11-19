@@ -125,21 +125,21 @@ describe('B-SA-050: Still to do, computed from the records — each row closes w
   })
 
   it('extra pieces charged to the customer wait on the customer until it accepts the priced change; nothing waits for a leftover', async () => {
+    // B-OP-012 (D1): the accepter holds workorders.manage — the lowering is carried out in Accept's own command (never below the
+    // 3 cut), so no work-order change waits on planning; the extra pieces still say who they wait on.
     const charged = await inWork(3, 2)
-    await acceptRequest(everyone(), charged.request, { version: 1, extraOutcome: 'CHARGE' }, undefined, h.clock)
+    const accepted = await acceptRequest(everyone(), charged.request, { version: 1, extraOutcome: 'CHARGE' }, undefined, h.clock)
+    expect(accepted.workOrders).toMatchObject({ applied: [{ workOrderId: charged.workOrder, route: 'LOWER_RELEASED', reprint: true }], waiting: [] })
     const rows = (await stillToDo(everyone(), charged.order)).rows
-    expect(rows.map((row) => [row.kind, row.waitingOn])).toEqual([
-      ['WORK_ORDER_CHANGE', 'PLANNER'],
-      ['EXTRA_PIECES', 'CUSTOMER'],
-    ])
-    expect(rows[1]).toMatchObject({ ref: { type: 'SalesOrderAmendment' }, mayAct: false, words: { en: '1 extra pieces charged: waiting for the customer to accept the priced change' } })
+    expect(rows.map((row) => [row.kind, row.waitingOn])).toEqual([['EXTRA_PIECES', 'CUSTOMER']])
+    expect(rows[0]).toMatchObject({ ref: { type: 'SalesOrderAmendment' }, mayAct: false, words: { en: '1 extra pieces charged: waiting for the customer to accept the priced change' } })
     // The customer's yes clears the order's wait (as orders/reacceptance does): the row closes.
     await h.db.admin.query('UPDATE "SalesOrder" SET "reapprovalNeededAt" = NULL, version = version + 1 WHERE id = $1', [charged.order])
-    expect((await stillToDo(everyone(), charged.order)).rows.map((row) => row.kind)).toEqual(['WORK_ORDER_CHANGE'])
+    expect((await stillToDo(everyone(), charged.order)).rows).toEqual([])
 
     const leftover = await inWork(3, 2)
     await acceptRequest(everyone(), leftover.request, { version: 1, extraOutcome: 'LEFTOVER' }, undefined, h.clock)
-    expect((await stillToDo(everyone(), leftover.order)).rows.map((row) => row.kind)).toEqual(['WORK_ORDER_CHANGE'])
+    expect((await stillToDo(everyone(), leftover.order)).rows).toEqual([])
   })
 
   it('a design change\'s style change waits on product until its change order is released or it is refused', async () => {

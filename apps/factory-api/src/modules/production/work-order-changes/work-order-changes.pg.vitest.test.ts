@@ -70,6 +70,8 @@ const SESSIONS: Record<string, SessionContext> = {
   // Sales proposes (orders.manage over the order, the work order reached with workorders.view) but never decides.
   sales: { audience: 'office', tenantId: A.tenant, actorId: A.member, grants: [grant(['orders.view', 'orders.manage', 'workorders.view'])] },
   betaPlanner: { audience: 'office', tenantId: A.tenant, actorId: newId(), grants: [grant(WORK, [BETA_PARTY])] },
+  // B-OP-012: the seeds' owner limited to Brand Alpha (a planner of one customer: never every customer).
+  alphaPlanner: { audience: 'office', tenantId: A.tenant, actorId: A.actor, grants: [grant(WORK, [A.brand])] },
   partner: { audience: 'partner', tenantId: A.tenant, actorId: newId(), partyId: A.brand, grants: [grant(WORK)] },
 }
 
@@ -372,3 +374,167 @@ describe('live: a work order change reaches production staff without orders.view
   })
 })
 // ── end B-SA-004c ──
+
+// ── B-OP-012 (order page plan N2, decisions D1 + D3; review R-4, R-11, R-17): the work orders follow an office change in its command ──
+/**
+ * An office change of the order (here the amendment and Accept, the runner's callers) carries its work orders along in its own
+ * command: a DRAFT for anyone who may change the order (Sales too), a released one only for a holder of workorders.manage (the
+ * Owner, a planner), never below what is cut, never a mixed one; what may not follow waits, PROPOSED, with its words, and the office
+ * change always lands.
+ */
+describe('B-OP-012: the work orders follow an office change in its command (R-4)', () => {
+  const PRODUCTION = (number: string) => ({ en: `${number} is released: production applies the change (a planner or a production manager).`, it: `${number} è rilasciato: la modifica la applica la produzione (un pianificatore o un responsabile di produzione).` })
+  const orderVersion = async (orderId: string) => (await admin<{ version: number }>(`SELECT version FROM "SalesOrder" WHERE id = $1`, [orderId]))[0]!.version
+  /** The amendment of the order's one line to these sizes: its answer (201), or its refusal's error (any other status asked). */
+  const amend = async (session: string, order: { orderId: string; lineId: string }, sizes: Record<string, number>, more: Json = {}, status = 201): Promise<Json> => {
+    const body = { version: await orderVersion(order.orderId), reason: 'Made-up: the customer changed its sizes', lines: [{ id: order.lineId, sizes: Object.entries(sizes).map(([size, quantity]) => ({ size, quantity })) }], ...more }
+    const response = await call(session, 'POST', `/sales/orders/${order.orderId}/amendments`, body)
+    expect(response.statusCode, response.body).toBe(status)
+    return status === 201 ? response.json() : response.json().error
+  }
+  /** A work order of the order's line making only these sizes, RELEASED when asked. */
+  const workOrderFor = async (order: { lineId: string }, sizes: Record<string, number>, released = false): Promise<Json> => {
+    const { workOrder } = await ok('planner', 'POST', '/production/work-orders', { lines: [{ salesOrderLineId: order.lineId, sizes: Object.entries(sizes).map(([size, quantity]) => ({ size, quantity })) }] }, 201)
+    return released ? (await ok('planner', 'POST', `/production/work-orders/${workOrder.id}/release`, {})).workOrder : workOrder
+  }
+  const quantityOf = async (cellId: string) => (await admin<{ quantity: number }>(`SELECT quantity FROM "WorkOrderSize" WHERE id = $1`, [cellId]))[0]?.quantity ?? null
+  const changesOf = (orderId: string) => admin(`SELECT "workOrderId"::text AS "workOrderId", status::text AS status, "lastError" FROM "WorkOrderChange" WHERE "salesOrderId" = $1 ORDER BY "createdAt", id`, [orderId])
+
+  it('Sales (orders.manage, no workorders.manage) amends: its DRAFT follows in the same command; its RELEASED one waits with words; nobody is asked to apply what was applied', async () => {
+    const order = await salesOrder({ '50': 2, '52': 4 })
+    const released = await workOrderFor(order, { '50': 2 }, true)
+    const draft = await workOrderFor(order, { '52': 4 })
+    await force(`INSERT INTO "RecordFollower" (id, "tenantId", "recordType", "recordId", "userId", reason) VALUES ($1, $2, 'WorkOrder', $3, $4, 'CHOSE')`, [newId(), A.tenant, draft.id, A.actor])
+    const answer = await amend('sales', order, { '50': 1, '52': 3 })
+    expect(answer.workOrders.applied).toEqual([{ changeId: expect.any(String), workOrderId: draft.id, number: draft.number, route: 'SET_DRAFT_CELLS', reprint: false }])
+    expect(answer.workOrders.waiting).toEqual([{ changeId: expect.any(String), workOrderId: released.id, number: released.number, words: PRODUCTION(released.number) }])
+    expect(await quantityOf(cellOf(draft, '52').id)).toBe(3)
+    expect(await quantityOf(cellOf(released, '50').id)).toBe(2)
+    expect(await changesOf(order.orderId)).toEqual(expect.arrayContaining([{ workOrderId: draft.id, status: 'APPLIED', lastError: null }, { workOrderId: released.id, status: 'PROPOSED', lastError: null }]))
+    // The proposal's bell is never rung for a change applied in the same command (its follower would have been told).
+    const appliedId = answer.workOrders.applied[0].changeId as string
+    const [proposed] = await admin(`SELECT id::text AS id, type FROM "OutboxEvent" WHERE subject = $1 AND type = 'work_order_change.proposed'`, [appliedId])
+    expect(await admin(`SELECT type FROM "OutboxEvent" WHERE subject = $1 AND type = 'work_order_change.applied'`, [appliedId])).toHaveLength(1)
+    await fanOut(callerFor(database, systemContext(A.tenant, newId())), { eventId: proposed!.id, type: proposed!.type, payload: { changeId: appliedId, salesOrderId: order.orderId, workOrderId: draft.id, partyId: A.brand, kind: 'LOWER_TO_ORDER', requestId: null, amendmentId: answer.amendment.id, hasExtra: false } } as never)
+    expect(await admin(`SELECT id FROM "Notification" WHERE "eventId" = $1`, [proposed!.id])).toEqual([])
+    // Sales still decides nothing of the released one (workorders.manage over it).
+    const waiting = (await ok('sales', 'GET', `/production/work-order-changes/${answer.workOrders.waiting[0].changeId}`)).change
+    expect((await call('sales', 'POST', `/production/work-order-changes/${waiting.id}/apply`, { version: waiting.version })).statusCode).toBe(403)
+  })
+
+  it('the Owner (orders.manage and workorders.manage): both follow — the released one lowered with the reprint mark, the floor told by the applied event', async () => {
+    const order = await salesOrder({ '50': 2, '52': 4 })
+    const released = await workOrderFor(order, { '50': 2 }, true)
+    const draft = await workOrderFor(order, { '52': 4 })
+    const answer = await amend('planner', order, { '50': 1, '52': 3 })
+    expect(answer.workOrders.waiting).toEqual([])
+    expect(answer.workOrders.applied).toEqual(
+      expect.arrayContaining([
+        { changeId: expect.any(String), workOrderId: released.id, number: released.number, route: 'LOWER_RELEASED', reprint: true },
+        { changeId: expect.any(String), workOrderId: draft.id, number: draft.number, route: 'SET_DRAFT_CELLS', reprint: false },
+      ]),
+    )
+    expect(await quantityOf(cellOf(released, '50').id)).toBe(1)
+    expect(await quantityOf(cellOf(draft, '52').id)).toBe(3)
+    expect((await ok('planner', 'GET', `/production/work-orders/${released.id}`)).workOrder.status).toBe('RELEASED')
+    // sales.orderChangeNotes writes the floor's STOP/CHECK note on these (work_order_change.applied), one per work order.
+    const applied = await admin<{ subject: string }>(`SELECT subject::text AS subject FROM "OutboxEvent" WHERE type = 'work_order_change.applied' AND payload->>'salesOrderId' = $1`, [order.orderId])
+    expect(applied.map((row) => row.subject).sort()).toEqual(answer.workOrders.applied.map((entry: Json) => entry.changeId).sort())
+  })
+
+  it('never below cut: the cell stops at what is cut, the rest are extra pieces with their outcome; without an outcome the amendment is held in words', async () => {
+    const order = await salesOrder({ '52': 4 })
+    const workOrder = await workOrderFor(order, { '52': 4 }, true)
+    await ok('planner', 'POST', `/production/work-orders/${workOrder.id}/start`, {})
+    await force(`INSERT INTO "Bundle" (id, "tenantId", "siteId", "workOrderId", "workOrderSizeId", code, quantity) VALUES ($1, $2, $3, $4, $5, $6, 3)`, [newId(), A.tenant, A.siteA1, workOrder.id, cellOf(workOrder, '52').id, `T-${run}-OP012-BN`])
+    const held = await amend('planner', order, { '52': 1 }, {}, 409)
+    expect(held.issues).toEqual([{ path: 'refusal/EXTRA_OUTCOME', message: 'Choose what happens to the 2 extra pieces' }])
+    expect(await admin(`SELECT id FROM "SalesOrderAmendment" WHERE "orderId" = $1`, [order.orderId])).toEqual([])
+    const answer = await amend('planner', order, { '52': 1 }, { extraOutcome: 'LEFTOVER' })
+    expect(answer.workOrders.applied).toEqual([{ changeId: expect.any(String), workOrderId: workOrder.id, number: workOrder.number, route: 'LOWER_RELEASED', reprint: true }])
+    expect(await quantityOf(cellOf(workOrder, '52').id)).toBe(3)
+    const change = (await ok('planner', 'GET', `/production/work-order-changes/${answer.workOrders.applied[0].changeId}`)).change
+    expect(change).toMatchObject({ status: 'APPLIED', extraOutcome: 'LEFTOVER', extra: [{ size: '52', count: 2 }] })
+  })
+
+  it('ON_HOLD: the change waits with the hold\'s words (kept on it) while the amendment lands', async () => {
+    const order = await salesOrder({ '52': 4 })
+    const workOrder = await workOrderFor(order, { '52': 4 }, true)
+    // On hold (as a production hold leaves it).
+    await force(`UPDATE "WorkOrder" SET status = 'ON_HOLD' WHERE id = $1`, [workOrder.id])
+    const answer = await amend('planner', order, { '52': 2 })
+    const onHold = { en: `${workOrder.number} is on hold: lift the hold first, then apply the change.`, it: `${workOrder.number} è in pausa: togli prima la pausa, poi applica la modifica.` }
+    expect(answer.workOrders).toEqual({ applied: [], waiting: [{ changeId: expect.any(String), workOrderId: workOrder.id, number: workOrder.number, words: onHold }] })
+    expect(answer.amendment).toMatchObject({ revision: 1 })
+    expect(await admin(`SELECT quantity FROM "SalesOrderLineSize" WHERE "lineId" = $1 AND size = '52'`, [order.lineId])).toEqual([{ quantity: 2 }])
+    expect(await quantityOf(cellOf(workOrder, '52').id)).toBe(4)
+    expect(await changesOf(order.orderId)).toEqual([{ workOrderId: workOrder.id, status: 'PROPOSED', lastError: onHold.en }])
+  })
+
+  it('a mixed work order (made before the one-customer rule) always waits, the Owner\'s change too; a planner of one customer is told of "a work order", never its number (R-11, the wall)', async () => {
+    const order = await salesOrder({ '52': 4 })
+    const workOrder = await workOrderFor(order, { '52': 4 })
+    // Made before the one-customer rule: no customer of its own (planted as such a work order is).
+    await force(`UPDATE "WorkOrder" SET "partyId" = NULL WHERE id = $1`, [workOrder.id])
+    const owners = await amend('planner', order, { '52': 3 })
+    expect(owners.workOrders).toEqual({ applied: [], waiting: [{ changeId: expect.any(String), workOrderId: workOrder.id, number: workOrder.number, words: { en: `${workOrder.number} is shared with other customers: change it on its own page.`, it: `${workOrder.number} è condiviso con altri clienti: cambialo dalla sua pagina.` } }] })
+    expect(await quantityOf(cellOf(workOrder, '52').id)).toBe(4)
+    const alphas = await amend('alphaPlanner', order, { '52': 2 })
+    expect(alphas.workOrders).toEqual({ applied: [], waiting: [{ changeId: expect.any(String), workOrderId: null, number: null, words: { en: 'A work order waits: production applies the change on its own page.', it: 'Un ordine di lavoro è in attesa: la modifica la applica la produzione dalla sua pagina.' } }] })
+    expect(JSON.stringify(alphas.workOrders)).not.toContain(workOrder.number)
+    expect(await quantityOf(cellOf(workOrder, '52').id)).toBe(4)
+    // A person limited to another customer reaches neither the order nor its work orders.
+    expect((await refused('betaPlanner', 'POST', `/sales/orders/${order.orderId}/amendments`, { version: await orderVersion(order.orderId), reason: 'Made-up', lines: [{ id: order.lineId, sizes: [{ size: '52', quantity: 1 }] }] }, 404)).message).toBe('Sales order not found.')
+  })
+
+  it('MAKE_MORE makes a new DRAFT, never a released one; a refused make waits with its words and the amendment still lands (the runner)', async () => {
+    const order = await salesOrder({ '52': 2 })
+    const released = await workOrderFor(order, { '52': 2 }, true)
+    const answer = await amend('sales', order, { '52': 4 })
+    expect(answer.workOrders.waiting).toEqual([])
+    expect(answer.workOrders.applied).toEqual([{ changeId: expect.any(String), workOrderId: expect.any(String), number: expect.any(String), route: 'NEW_DRAFT', reprint: false }])
+    const made = answer.workOrders.applied[0]
+    expect(await admin(`SELECT status::text AS status FROM "WorkOrder" WHERE id = $1`, [made.workOrderId])).toEqual([{ status: 'DRAFT' }])
+    expect(await admin(`SELECT size, quantity FROM "WorkOrderSize" WHERE "workOrderId" = $1`, [made.workOrderId])).toEqual([{ size: '52', quantity: 2 }])
+    expect(await admin(`SELECT status::text AS status FROM "WorkOrder" WHERE id = $1`, [released.id])).toEqual([{ status: 'RELEASED' }])
+    expect(await quantityOf(cellOf(released, '52').id)).toBe(2)
+    // No number series: the new DRAFT cannot be made — the command runs again without it, the change waits with the words.
+    const other = await salesOrder({ '52': 2 })
+    const otherReleased = await workOrderFor(other, { '52': 2 }, true)
+    const closed = await admin<{ id: string }>(`SELECT id::text AS id FROM "NumberSeries" WHERE "tenantId" = $1 AND "companyId" = $2 AND kind = 'WORK_ORDER' AND status = 'ACTIVE'`, [A.tenant, A.companyA])
+    await force(`UPDATE "NumberSeries" SET status = 'CLOSED' WHERE id = ANY($1::uuid[])`, [closed.map((row) => row.id)])
+    try {
+      const refusedMake = await amend('sales', other, { '52': 3 })
+      expect(refusedMake.amendment).toMatchObject({ revision: 1 })
+      expect(refusedMake.workOrders).toEqual({ applied: [], waiting: [{ changeId: expect.any(String), workOrderId: null, number: null, words: { en: 'The new work order waits: it could not be made now — see why on the change, then apply it again.', it: 'Il nuovo ordine di lavoro è in attesa: non si è potuto fare ora — vedi il perché sulla modifica, poi applicala di nuovo.' } }] })
+      expect(await changesOf(other.orderId)).toEqual([{ workOrderId: null, status: 'PROPOSED', lastError: expect.stringMatching(/no active work order number series/) }])
+      expect(await quantityOf(cellOf(otherReleased, '52').id)).toBe(2)
+    } finally {
+      await force(`UPDATE "NumberSeries" SET status = 'ACTIVE' WHERE id = ANY($1::uuid[])`, [closed.map((row) => row.id)])
+    }
+  })
+
+  it('Accept with the work orders following, then "Stop now" (B1): Accept\'s answer names what it applied — never applied twice; the hold lands on the changed work order, and an apply on it is refused in words', async () => {
+    const order = await salesOrder({ '52': 4 })
+    const workOrder = await workOrderFor(order, { '52': 4 }, true)
+    const requestId = newId()
+    await force(`INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "orderId", "partyId", kind, status, version, "createdAt") VALUES ($1, $2, $3, $4, $5, 'CHANGE', 'OPEN', 1, $6)`, [requestId, A.tenant, A.companyA, order.orderId, A.brand, new Date('2026-11-12T09:00:00.000Z')])
+    await force(`INSERT INTO "OrderChangeRequestLine" (id, "tenantId", "partyId", "requestId", "orderLineId", size, "quantityBefore", quantity) VALUES ($1, $2, $3, $4, $5, '52', 4, 2)`, [newId(), A.tenant, A.brand, requestId, order.lineId])
+    const accepted = await ok('planner', 'POST', `/sales/change-requests/${requestId}/accept`, { version: 1, answer: 'Made-up: two fewer, done.' })
+    expect(accepted.workOrders).toMatchObject({ proposed: [{ kind: 'LOWER_TO_ORDER', workOrderId: workOrder.id }], applied: [{ workOrderId: workOrder.id, route: 'LOWER_RELEASED', reprint: true }], waiting: [] })
+    expect(await quantityOf(cellOf(workOrder, '52').id)).toBe(2)
+    const change = (await ok('planner', 'GET', `/production/work-order-changes/${accepted.workOrders.applied[0].changeId}`)).change
+    expect(change).toMatchObject({ status: 'APPLIED', requestId })
+    // The review window's "Stop now" after Accept: the work order goes on hold, already changed; applying again is refused.
+    await force(`UPDATE "WorkOrder" SET status = 'ON_HOLD' WHERE id = $1`, [workOrder.id])
+    expect((await refused('planner', 'POST', `/production/work-order-changes/${change.id}/apply`, { version: change.version }, 409)).issues[0].path).toBe('refusal/DECIDED')
+    expect(await quantityOf(cellOf(workOrder, '52').id)).toBe(2)
+    // A later change of the held work order waits for the hold to be lifted, in words.
+    await force(`UPDATE "SalesOrderLineSize" SET quantity = 1 WHERE "lineId" = $1 AND size = '52'`, [order.lineId])
+    const fresh = (await ok('planner', 'GET', `/production/work-orders/${workOrder.id}`)).workOrder
+    const later = (await propose(lowering(order, fresh, '52', 1))).change
+    const onHold = await refused('planner', 'POST', `/production/work-order-changes/${later.id}/apply`, { version: later.version }, 409)
+    expect(onHold.issues).toEqual([{ path: 'refusal/ON_HOLD', message: `${workOrder.number} is on hold: lift the hold first, then apply the change.` }])
+  })
+})
+// ── end B-OP-012 ──

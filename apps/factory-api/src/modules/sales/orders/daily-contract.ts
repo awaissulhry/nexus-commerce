@@ -10,6 +10,8 @@ import { MAX_REASON, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/or
 import { MILESTONE_KINDS, MILESTONE_STATUSES } from '@nexus/factory-domain/sales/orders/schedule'
 import { DEPOSIT_KINDS, MAX_QUOTE_LINES, MAX_SIZE_QUANTITY, MAX_TEXT } from '@nexus/factory-domain/sales/quotes/quotes'
 import { orderView } from './contract'
+// B-OP-012: what the office change's work orders did in its command, and what waits.
+import { followedView } from '../../production/work-order-changes/contract'
 // B-W2b-374: the options of a typed line.
 import { picksBody } from '@nexus/factory-domain/sales/configurator/contracts'
 // B-W2b-303: the season and the priority of a typed order.
@@ -216,7 +218,7 @@ export const previewAmendmentContract = defineContract({
 export const applyAmendmentContract = defineContract({
   params: orderParams,
   body: input({ version, ...amendFields, reason }),
-  response: { 201: output({ order: orderView, amendment: amendmentView }) },
+  response: { 201: output({ order: orderView, amendment: amendmentView, /* B-OP-012 */ workOrders: followedView }) },
 })
 
 export const listAmendmentsContract = defineContract({
@@ -245,6 +247,8 @@ export const closeLinesContract = defineContract({
       reducesDone: z.array(id()),
       /** Pieces work orders still make of a closed line (Production decides about them). */
       stillInWorkOrders: z.array(output({ lineId: id(), pieces: z.number().int() })),
+      /** B-OP-012: the work-order changes the close carried out in its command, and those that wait. */
+      workOrders: followedView,
     }),
   },
 })
@@ -278,6 +282,8 @@ export const cancelContract = defineContract({
       paidDepositRequestIds: z.array(id()),
       /** B-W2a-30 (SAL-211): what it changed and what it left behind. */
       impact: impactView,
+      /** B-OP-012: the work-order changes the cancel carried out in its command, and those that wait. */
+      workOrders: followedView,
     }),
   },
 })

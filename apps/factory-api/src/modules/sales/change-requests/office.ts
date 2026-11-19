@@ -11,6 +11,8 @@ import { colourCutWords, colourKeepsTotal, colourLinesOf } from '@nexus/factory-
 // B-SA-042 (P6', R1): Accept runs the commercial change at once; the gap to the work orders is proposed in the same command.
 import { CHANGE_WORDS, extraOf as extraOfPlanned, type ExtraOutcome, type PlannedChange } from '@nexus/factory-domain/order-apply/rules'
 import { gapOf, proposeGapsInCommand, storedGapLines, workCellsOf } from '../../production/work-order-changes/propose'
+// B-OP-012 (order page plan N2, D1; review R-17): Accept's work orders follow in its command where the accepter may.
+import { withAutoApply } from '../../production/work-order-changes/auto'
 import { plannedGap } from '../orders/amend' // B-SA-045
 // B-SA-047 (R3): a design change accepted only for the customer's own private label, raising the product change request per style.
 import { designHeldOf, designHeldWords, designTitleOf, type DesignHeld } from '@nexus/factory-domain/sales/change-requests/apply-plan'
@@ -504,7 +506,7 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
           return acceptProposals(client, context, { orderId: asked.orderId, date: agreedDateOf(asked), only, now: clock.now(), byAccept: true })
         })
       : null
-  const { result } = await runCommand(caller, { name: 'orders.acceptChangeRequest', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
+  const { result } = await withAutoApply((autoApply) => runCommand(caller, { name: 'orders.acceptChangeRequest', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
     const { tx } = tools
     const row = await openRequestIn(tools, requestId, body.version, 'ACCEPTED')
     const cells = (await readCells(tx, [requestId])).get(requestId) ?? []
@@ -603,7 +605,8 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
     }
     // B-SA-042 (P6', R1): Accept is the commercial decision; the gap it leaves on the order's work orders is proposed in this command
     // (a WorkOrderChange per work order, held for who manages it), and Accept stays held while extra pieces have no outcome.
-    const gap = await proposeGapsInCommand(tools, { order: (await readOrder(tx, order.id))!, requestId, amendmentId, reason, extraOutcome: body.extraOutcome ?? null, requireOutcome: true, lineIds: [...touched], before })
+    // B-OP-012: and carried out where the accepter may (applied[]: the review window never applies them again, R-17).
+    const gap = await proposeGapsInCommand(tools, { order: (await readOrder(tx, order.id))!, requestId, amendmentId, reason, extraOutcome: body.extraOutcome ?? null, requireOutcome: true, lineIds: [...touched], before }, autoApply)
     await tx.orderChangeRequest.update({
       where: { id: requestId },
       data: { status: 'ACCEPTED', answer: blankToNull(body.answer), answeredAt: tools.now, answeredById: context.actorId, amendmentId, updatedAt: tools.now, version: { increment: 1 } },
@@ -616,9 +619,9 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
     const named = gap.proposed.flatMap((change) => (change.workOrderId ? [change.workOrderId] : []))
     const mixed = new Set((named.length > 0 ? await tx.workOrder.findMany({ where: { id: { in: named }, partyId: null }, select: { id: true } }) : []).map((entry) => entry.id))
     const everyCustomer = reachesEveryParty(actorOf(context), WORKORDERS_VIEW, { companyId: order.companyId })
-    const workOrders = { proposed: gap.proposed.map((change) => ({ id: change.id, kind: change.kind, workOrderId: change.workOrderId, number: change.workOrderId && mixed.has(change.workOrderId) && !everyCustomer ? null : change.number })), extra: gap.extra.map((entry) => ({ ...entry, words: CHANGE_WORDS.extra(entry.count, entry.size) })), extraOutcome: gap.extra.length > 0 ? (body.extraOutcome ?? null) : null }
+    const workOrders = { proposed: gap.proposed.map((change) => ({ id: change.id, kind: change.kind, workOrderId: change.workOrderId, number: change.workOrderId && mixed.has(change.workOrderId) && !everyCustomer ? null : change.number })), extra: gap.extra.map((entry) => ({ ...entry, words: CHANGE_WORDS.extra(entry.count, entry.size) })), extraOutcome: gap.extra.length > 0 ? (body.extraOutcome ?? null) : null, /* B-OP-012 */ applied: gap.applied, waiting: gap.waiting }
     return { orderCancelled, cancelFee, split, workOrders, styleChanges }
-  }, { ...COMMAND_SETTINGS, clock })
+  }, { ...COMMAND_SETTINGS, clock }))
   return { request: await viewAfter(caller, requestId), orderCancelled: result.orderCancelled, cancelFee: result.cancelFee ? feeView(result.cancelFee) : null, /* B-PR-27b */ split: result.split, /* B-SA-042 */ workOrders: result.workOrders, /* B-SA-047 */ styleChanges: result.styleChanges }
 }
 

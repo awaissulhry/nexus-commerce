@@ -26,6 +26,8 @@ import { deliveredMoveInCommand } from './delivered'
 // B-SA-042: a cancel proposes the gap to the work orders.
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
 import { proposeGapsInCommand } from '../../production/work-order-changes/propose'
+// B-OP-012 (order page plan N2, D1): the work orders follow the cancel in its command where the person may.
+import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../production/work-order-changes/auto'
 
 /**
  * The sales order's moves (B-W1-25; SAL-204: one writer per move; factory-domain sales/orders salesOrderMachine), each
@@ -182,14 +184,14 @@ export async function cancelOrder(
   orderId: string,
   body: { readonly version?: number | undefined; readonly reason: string; readonly confirmNumber?: string | undefined; /* B-SA-042 */ readonly extraOutcome?: ExtraOutcome | null | undefined },
   idempotencyKey?: string,
-): Promise<{ order: OrderView; paidDepositRequestIds: string[]; impact: ReturnType<typeof impactView> }> {
+): Promise<{ order: OrderView; paidDepositRequestIds: string[]; impact: ReturnType<typeof impactView>; /* B-OP-012 */ workOrders: FollowedWorkOrders }> {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
   if (body.confirmNumber !== undefined && body.confirmNumber.trim() !== order.number) {
     throw new ValidationError(`Type the order number ${order.number} to cancel it.`, [{ path: 'body/confirmNumber', message: `Type ${order.number} to confirm.` }])
   }
-  const { result } = await command(caller, { name: 'orders.cancel', idempotencyKey, input: { orderId, ...body } }, (tools) => cancelOrderInCommand(tools, context.tenantId, order, body))
-  return { order: await recordAfter(caller, order.id), paidDepositRequestIds: result.paidDepositRequestIds, impact: result.impact }
+  const { result } = await withAutoApply((autoApply) => command(caller, { name: 'orders.cancel', idempotencyKey, input: { orderId, ...body } }, (tools) => cancelOrderInCommand(tools, context.tenantId, order, body, { autoApply })))
+  return { order: await recordAfter(caller, order.id), paidDepositRequestIds: result.paidDepositRequestIds, impact: result.impact, workOrders: result.workOrders }
 }
 
 /**
@@ -203,9 +205,9 @@ export async function cancelOrderInCommand(
   tenantId: string,
   order: OrderRow,
   body: { readonly version?: number | undefined; readonly reason: string; /* B-SA-042 */ readonly extraOutcome?: ExtraOutcome | null | undefined },
-  /** B-SA-042: `later` — the caller proposes the gap to the work orders once at its end (Accept of a customer's cancel). */
-  options: { readonly workOrders?: 'now' | 'later' } = {},
-): Promise<{ orderId: string; status: 'CANCELLED'; paidDepositRequestIds: string[]; impact: ReturnType<typeof impactView> }> {
+  /** B-SA-042: `later` — the caller proposes the gap to the work orders once at its end (Accept of a customer's cancel). B-OP-012: `autoApply`. */
+  options: { readonly workOrders?: 'now' | 'later'; readonly autoApply?: AutoApply } = {},
+): Promise<{ orderId: string; status: 'CANCELLED'; paidDepositRequestIds: string[]; impact: ReturnType<typeof impactView>; /* B-OP-012 */ workOrders: FollowedWorkOrders }> {
   const { tx, now } = tools
   const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
   await lockOrderLines(tx, tenantId, lineIds)
@@ -246,8 +248,9 @@ export async function cancelOrderInCommand(
   statusChanged(tools, order, locked.status, 'CANCELLED', 'person')
   // B-SA-042 (P6', R1): what its open work orders still make of it is proposed to them (to nothing, never below cut); the pieces cut
   // get the outcome named, else stay production's to decide (as the impact's "work orders stay open" said before).
-  if (options.workOrders !== 'later') await proposeGapsInCommand(tools, { order: { ...order, status: 'CANCELLED' }, requestId: null, amendmentId: null, reason: reason!, extraOutcome: body.extraOutcome ?? null, requireOutcome: false, lineIds })
-  return { orderId: order.id, status: 'CANCELLED', paidDepositRequestIds: paid, impact: view }
+  // B-OP-012: and carried out where the person may (never below cut: a cut piece stays with its outcome).
+  const gap = options.workOrders !== 'later' ? await proposeGapsInCommand(tools, { order: { ...order, status: 'CANCELLED' }, requestId: null, amendmentId: null, reason: reason!, extraOutcome: body.extraOutcome ?? null, requireOutcome: false, lineIds }, options.autoApply) : null
+  return { orderId: order.id, status: 'CANCELLED', paidDepositRequestIds: paid, impact: view, workOrders: { applied: gap?.applied ?? [], waiting: gap?.waiting ?? [] } }
 }
 
 // ---- close -----------------------------------------------------------------------------------------------------------------

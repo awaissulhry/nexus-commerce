@@ -1,5 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
-import { InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
@@ -20,6 +20,8 @@ import {
 } from '@nexus/factory-domain/production/work-orders/cells'
 import { daysLate, OPEN_STATUSES, type WorkOrderKind, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_MANAGE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
+// B-OP-012 (D1): an office change carries its DRAFT work orders along for the person who may change the order.
+import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
 import { relativeRange, type DayRange, type RelativeDay } from '@nexus/factory-domain/views/quick/relative'
 import { command, type CommandCaller, type CommandSpec, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
@@ -457,14 +459,27 @@ async function linesFor(caller: CommandCaller, lineIds: readonly string[]): Prom
   return reachedLines(context, await caller.withClient((client) => readOrderLines(client, lineIds)), lineIds)
 }
 
-/** B-OP-011: every named line read is one the person sees with workorders.view (else not found, in the words of an unknown id). */
-function reachedLines(context: ReturnType<typeof officeContextOf>, lines: Map<string, LineRow>, lineIds: readonly string[]): Map<string, LineRow> {
+/**
+ * B-OP-011: every named line read is one the person sees with workorders.view (else not found, in the words of an unknown id).
+ * B-OP-012: for an office change of the order, the person who may change that order (orders.manage over its company and customer).
+ */
+function reachedLines(context: ReturnType<typeof officeContextOf>, lines: Map<string, LineRow>, lineIds: readonly string[], right: DraftRight = 'WORK_ORDER'): Map<string, LineRow> {
+  const permission = right === 'ORDER' ? ORDERS_MANAGE : WORKORDERS_VIEW
   for (const lineId of lineIds) {
     const line = lines.get(lineId)
-    if (!line || !can(actorOf(context), WORKORDERS_VIEW, { companyId: line.companyId, partyId: line.partyId })) throw new NotFoundError('Sales order line not found.')
+    if (!line || !can(actorOf(context), permission, { companyId: line.companyId, partyId: line.partyId })) throw new NotFoundError('Sales order line not found.')
   }
   return lines
 }
+
+// ── B-OP-012 (order page plan N2, decision D1; review R-4): who a draft's change is carried out for ──
+/**
+ * 'WORK_ORDER': workorders.manage over the work order (its own routes, the change's apply). 'ORDER': an office change of the order
+ * carries its DRAFT work orders along for the person who may change that order (orders.manage over its company and customer,
+ * checked by the caller): nothing is on the floor yet. A released work order always asks workorders.manage (the caller's rule).
+ */
+export type DraftRight = 'WORK_ORDER' | 'ORDER'
+// ── end B-OP-012 ──
 
 /** The requests' problems against the lines as read under their locks: 400 with every one. */
 function assertCells(requests: readonly (CellRequest & { index: number })[], lines: ReadonlyMap<string, LineRow>, target: CellTarget, path: string): void {
@@ -592,10 +607,10 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
  * change of the order that carries its work orders along (B-OP-012). Every rule of createWorkOrder, read in this transaction;
  * `change.inCommand` (the change APPLIED, naming the DRAFT) runs once the DRAFT is written.
  */
-export async function createWorkOrderInCommand(tools: CommandTools, context: ReturnType<typeof officeContextOf>, body: CreateInput, change: ChangeWorkOrderSource): Promise<{ workOrder: WorkOrderView }> {
+export async function createWorkOrderInCommand(tools: CommandTools, context: ReturnType<typeof officeContextOf>, body: CreateInput, change: ChangeWorkOrderSource, /* B-OP-012 */ right: DraftRight = 'WORK_ORDER'): Promise<{ workOrder: WorkOrderView }> {
   const lineIds = namedLines(body)
-  const lines = reachedLines(context, await readOrderLines(tools.tx, lineIds), lineIds)
-  const plan = await draftPlanOf(tools.tx, context, body, lines, lineIds)
+  const lines = reachedLines(context, await readOrderLines(tools.tx, lineIds), lineIds, right)
+  const plan = await draftPlanOf(tools.tx, context, body, lines, lineIds, undefined, right)
   return writeDraftInCommand(tools, context, body, plan, { change })
 }
 
@@ -623,8 +638,8 @@ interface DraftPlan {
   readonly target: CellTarget
 }
 
-/** The new DRAFT's site, revision, due date and priority, read in `db`; workorders.manage over its site and customer. */
-async function draftPlanOf(db: Reader, context: ReturnType<typeof officeContextOf>, body: CreateInput, lines: ReadonlyMap<string, LineRow>, lineIds: readonly string[], sample?: SampleWorkOrder): Promise<DraftPlan> {
+/** The new DRAFT's site, revision, due date and priority, read in `db`; workorders.manage over its site and customer (B-OP-012: or the order's own right). */
+async function draftPlanOf(db: Reader, context: ReturnType<typeof officeContextOf>, body: CreateInput, lines: ReadonlyMap<string, LineRow>, lineIds: readonly string[], sample?: SampleWorkOrder, right: DraftRight = 'WORK_ORDER'): Promise<DraftPlan> {
   const first = lines.get(lineIds[0]!)!
   // B-W2b-368 (XF1:01): a unit alone, its revision on its one cell; made-to-measure on for its template (GATE-MTM).
   const unit = unitOfRequest(lines, lineIds, sample !== undefined)
@@ -643,7 +658,10 @@ async function draftPlanOf(db: Reader, context: ReturnType<typeof officeContextO
   if (!site || site.companyId !== first.companyId || site.kind !== 'PLANT' || site.status !== 'ACTIVE') {
     throw new ValidationError("Not an active plant of the order's company.", [{ path: 'body/siteId', message: "Expected an active plant (site kind PLANT) of the order lines' company." }])
   }
-  assertMay(context, WORKORDERS_MANAGE, { companyId: site.companyId, siteId: site.id, partyId: first.partyId /* B-PR-03 */ }, 'Sales order line')
+  // B-OP-012 (D1): an office change's new DRAFT is made for the person who may change the order (nothing is on the floor yet).
+  if (right === 'ORDER') {
+    if (!can(actorOf(context), ORDERS_MANAGE, { companyId: site.companyId, partyId: first.partyId })) throw new ForbiddenError()
+  } else assertMay(context, WORKORDERS_MANAGE, { companyId: site.companyId, siteId: site.id, partyId: first.partyId /* B-PR-03 */ }, 'Sales order line')
   const askedId = sample?.revisionId ?? body.styleRevisionId
   const asked = askedId ? await revisionOf(db, style.id, askedId, 'body/styleRevisionId') : null
   const released = await readReleasedRevision(db, style.id)
@@ -929,8 +947,8 @@ export async function setCells(caller: CommandCaller, workOrderId: string, body:
 // ── B-SA-041 (sales page plan; 13-backend B4b): the draft's cells set inside a command that is already open — setCells' own
 // command (the work order's version guards it), and a WorkOrderChange applied on a DRAFT (modules/production/work-order-changes
 // apply.ts, its own command on the change, the work order's row locked first). The caller checked workorders.manage over it.
-/** Sets cells of a DRAFT in an open command (see setCells): every rule of setCells, read in this transaction. */
-export async function setCellsInCommand(tools: CommandTools, context: ReturnType<typeof officeContextOf>, workOrderId: string, requested: CellsInput['cells']): Promise<{ workOrder: WorkOrderView }> {
+/** Sets cells of a DRAFT in an open command (see setCells): every rule of setCells, read in this transaction. B-OP-012: `right` (DraftRight). */
+export async function setCellsInCommand(tools: CommandTools, context: ReturnType<typeof officeContextOf>, workOrderId: string, requested: CellsInput['cells'], right: DraftRight = 'WORK_ORDER'): Promise<{ workOrder: WorkOrderView }> {
   const workOrder = await readWorkOrder(tools.tx, workOrderId)
   if (!workOrder) throw new NotFoundError('Work order not found.')
   if (workOrder.status !== 'DRAFT') throw new InvalidStateError(`Work order ${workOrder.number} is ${workOrder.status}; its cells are frozen (a change is a new work order).`)
@@ -939,11 +957,7 @@ export async function setCellsInCommand(tools: CommandTools, context: ReturnType
     throw new InvalidStateError(`Work order ${workOrder.number} makes the samples of its sample round for no order line: its cells are the round's. Change the round's cells, cancel this work order and make a new one from the round.`)
   }
   const lineIds = [...new Set(requested.map((cell) => cell.salesOrderLineId))]
-  const visible = await readOrderLines(tools.tx, lineIds)
-  for (const lineId of lineIds) {
-    const line = visible.get(lineId)
-    if (!line || !can(actorOf(context), WORKORDERS_VIEW, { companyId: line.companyId, partyId: line.partyId })) throw new NotFoundError('Sales order line not found.')
-  }
+  const visible = reachedLines(context, await readOrderLines(tools.tx, lineIds), lineIds, right)
   assertUnitCells(workOrder, visible, requested)
   const requests = requested.map((cell, index) => ({ ...cell, index }))
   const duplicates = duplicateRequests(requests, 'body/cells')

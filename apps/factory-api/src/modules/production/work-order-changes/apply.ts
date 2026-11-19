@@ -7,7 +7,7 @@ import { officeContextOf } from '../work-orders/access'
 import { lowerToOrderInCommand } from '../work-orders/lower'
 import { bumpVersion, moveInCommand } from '../work-orders/moves'
 import { readWorkOrder } from '../work-orders/store'
-import { createWorkOrderInCommand, setCellsInCommand, type ChangeWorkOrderSource, type CreateInput } from '../work-orders/work-orders'
+import { createWorkOrderInCommand, setCellsInCommand, type ChangeWorkOrderSource, type CreateInput, type DraftRight } from '../work-orders/work-orders'
 import { ChangeRefusedError, refuseChange } from './propose'
 import { CHANGE_COLUMNS, cellsOf, changeViews, mayDecide, readableChange, type ChangeRow } from './read'
 import { decideInCommand } from './decide'
@@ -25,12 +25,13 @@ import { decideInCommand } from './decide'
  *                                        a DRAFT            its cells set (work-orders setCellsInCommand, extracted from setCells)
  *                                        RELEASED / IN_PROGRESS   production's Lower to the order (B-SA-040: never below what is cut)
  *                                        a made-to-measure unit    its unit work order cancelled (a cut unit: refused, scrap it)
- *                                        MAKE_MORE, none named     a new DRAFT made (createWorkOrder on the change: madeWorkOrderId)
+ *                                        MAKE_MORE, none named     a new DRAFT made (createWorkOrderInCommand on the change: madeWorkOrderId)
  *                                      the change APPLIED in the same command (decidedAt, decidedById), audited,
  *                                      work_order_change.applied. A refusal leaves it PROPOSED with its words in `lastError` (a
  *                                      command of its own after the refused one rolled back): never a silent half-update.
  *   POST …/:changeId/decline {version, words}   "Left as is" (words 1 to 300): DECLINED, audited, work_order_change.declined.
- * The decision's writes and STALE are ./decide.ts.
+ * The decision's writes and STALE are ./decide.ts. B-OP-011: the apply itself is applyChangeInCommand (and newDraftBody + madeByChange
+ * for a new DRAFT), so an office change of the order carries its work orders along in its own command (B-OP-012, ./auto.ts).
  */
 
 /** The answer of an apply: the change as it is now, the work order it changed or made, and a reprint mark. */
@@ -65,7 +66,7 @@ async function cutOf(tools: CommandTools, tenantId: string, cells: readonly Chan
 }
 
 /** Should a refusal be kept on the change as `lastError`? A rule's refusal yes; a stale version, an unknown record or a decided one no. */
-function failureWords(error: unknown): string | null {
+export function failureWords(error: unknown): string | null {
   if (error instanceof StaleVersionError || error instanceof IdempotencyKeyReusedError || error instanceof NotFoundError || error instanceof ForbiddenError) return null
   if (error instanceof ChangeRefusedError && error.refusal === 'DECIDED') return null
   if (error instanceof DomainError) return error.message
@@ -109,8 +110,10 @@ export async function applyChange(caller: CommandCaller, changeId: string, body:
 }
 
 /** Why the work order as it is now takes no change (its words name our work order only). */
-const refuseRoute = (refusal: 'WORK_ORDER_DONE' | 'ON_HOLD' | 'NOT_A_DRAFT', number: string): never =>
-  refuseChange(refusal, refusal === 'ON_HOLD' ? CHANGE_WORDS.onHold(number) : refusal === 'NOT_A_DRAFT' ? CHANGE_WORDS.notADraft(number) : CHANGE_WORDS.workOrderDone(number))
+const refuseRoute = (refusal: 'WORK_ORDER_DONE' | 'ON_HOLD' | 'NOT_A_DRAFT', number: string): never => refuseChange(refusal, routeRefusalWords(refusal, number))
+/** B-OP-012: the words of a route's refusal (the order page's "WO-0042 waits: on hold — lift the hold, then Apply"). */
+export const routeRefusalWords = (refusal: 'WORK_ORDER_DONE' | 'ON_HOLD' | 'NOT_A_DRAFT', number: string): Words =>
+  refusal === 'ON_HOLD' ? CHANGE_WORDS.onHold(number) : refusal === 'NOT_A_DRAFT' ? CHANGE_WORDS.notADraft(number) : CHANGE_WORDS.workOrderDone(number)
 
 async function applyNow(caller: CommandCaller, context: OfficeContext, row: ChangeRow, version: number, idempotencyKey: string | undefined): Promise<ApplyAnswer> {
   const { current, cellIds } = await caller.withClient(async (db) => ({
@@ -124,7 +127,7 @@ async function applyNow(caller: CommandCaller, context: OfficeContext, row: Chan
 
   // MAKE_MORE naming no work order: a new DRAFT through the one create, on the change (its APPLIED write in that command).
   if (plan.route === 'NEW_DRAFT') {
-    const body = newDraftBody(row)
+    const body = newDraftBody(cellsOf(row))
     const { result } = await command(caller, spec({ ...body, workOrderChangeId: row.id }), (tools) => createWorkOrderInCommand(tools, context, body, madeByChange(context, row.id)))
     return { workOrderId: result.workOrder.id, reprint: { traveller: false, words: null } }
   }
@@ -136,9 +139,9 @@ async function applyNow(caller: CommandCaller, context: OfficeContext, row: Chan
 // ── B-OP-011 (order page plan N2; 13-backend §1.2): the apply, inside a command that is already open — the route's own command on
 // the change (above), and an office change of the order that carries its work orders along in its command (B-OP-012) ──
 /** MAKE_MORE naming no work order: the new DRAFT's lines, each with the sizes the change asks. */
-export function newDraftBody(row: Pick<ChangeRow, 'cells'>): CreateInput {
+export function newDraftBody(cells: readonly ChangeCell[]): CreateInput {
   const lines = new Map<string, { size: string; quantity: number }[]>()
-  for (const cell of cellsOf(row)) lines.set(cell.salesOrderLineId, [...(lines.get(cell.salesOrderLineId) ?? []), { size: cell.size, quantity: cell.to }])
+  for (const cell of cells) lines.set(cell.salesOrderLineId, [...(lines.get(cell.salesOrderLineId) ?? []), { size: cell.size, quantity: cell.to }])
   return { lines: [...lines].map(([salesOrderLineId, sizes]) => ({ salesOrderLineId, sizes })) }
 }
 
@@ -158,7 +161,7 @@ export const madeByChange = (context: OfficeContext, changeId: string): ChangeWo
  * CHANGED_SINCE; null: read now) — a DRAFT's cells set, a released one lowered (never below cut), a unit or every cell to 0
  * cancelled (a cut unit refused); then APPLIED. Every refusal throws (the caller's command rolls back).
  */
-export async function applyChangeInCommand(tools: CommandTools, context: OfficeContext, changeId: string, expected: ApplyRoute | null): Promise<ApplyAnswer> {
+export async function applyChangeInCommand(tools: CommandTools, context: OfficeContext, changeId: string, expected: ApplyRoute | null, /* B-OP-012 */ right: DraftRight = 'WORK_ORDER'): Promise<ApplyAnswer> {
   const waiting = await waitingIn(tools, changeId)
   const workOrderId = waiting.workOrderId
   if (!workOrderId) throw new Error('work-order changes: a change of no work order makes a new DRAFT (newDraftBody, madeByChange)')
@@ -192,7 +195,7 @@ export async function applyChangeInCommand(tools: CommandTools, context: OfficeC
     if (cut === 0) await moveInCommand(tools, workOrderId, 'CANCELLED', waiting.reason)
     else reprint = await lower()
   } else if (to === 'SET_DRAFT_CELLS') {
-    await setCellsInCommand(tools, context, workOrderId, asked.map((cell) => ({ salesOrderLineId: cell.salesOrderLineId, size: cell.size, quantity: cell.to })))
+    await setCellsInCommand(tools, context, workOrderId, asked.map((cell) => ({ salesOrderLineId: cell.salesOrderLineId, size: cell.size, quantity: cell.to })), right)
   } else {
     reprint = await lower()
   }

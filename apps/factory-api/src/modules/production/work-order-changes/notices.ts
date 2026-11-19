@@ -38,6 +38,7 @@ export const WORK_ORDER_CHANGE_RULES: readonly FanOutRule[] = Object.freeze([
     async drafts(context: RuleContext, raw: unknown): Promise<Draft[]> {
       const payload = workOrderChangeProposed.payload.parse(raw)
       const change = await context.tx.workOrderChange.findUnique({ where: { id: payload.changeId }, select: { id: true, status: true, companyId: true, partyId: true, proposedById: true } })
+      // B-OP-012: a change an office change carried out in its own command (./auto.ts) is APPLIED by now: nobody is asked to apply it.
       if (!change || change.status !== 'PROPOSED') return []
       const workOrder = await workOrderOf(context, payload.workOrderId)
       const order = await context.tx.salesOrder.findUnique({ where: { id: payload.salesOrderId }, select: { id: true, number: true } })

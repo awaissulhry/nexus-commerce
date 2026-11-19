@@ -36,6 +36,8 @@ import { AMENDMENT_CHANGE_COLUMNS, changeFactsOf, pendingChangeYes } from './yes
 import { frozenProblems } from '@nexus/factory-domain/sales/order-changes/freeze'
 // B-SA-041: a put-back makes the change's waiting work-order changes stale.
 import { staleChangesInCommand } from '../../production/work-order-changes/decide'
+// B-OP-012 (order page plan N2, D1): the work orders follow a priced change and a put-back in their command where the person may.
+import { withAutoApply } from '../../production/work-order-changes/auto'
 
 /**
  * Priced change requests after the start, their extra deposit, the new yes and the put-back (B-W2b-309; SAL-219, SAL-221,
@@ -129,9 +131,14 @@ export async function applyPricedChange(caller: CommandCaller, orderId: string, 
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
   // The command's result is plain JSON (a replay answers from its receipt): the amendment's id, never amendInCommand's `before` Map.
-  const { result } = await command(caller, { name: 'orders.pricedChange', idempotencyKey, input: { orderId, ...body } }, async (tools) => ({ amendmentId: (await amendInCommand(tools, context.tenantId, order, amendOf(body), { priced: pricedOf(body) })).amendmentId }))
+  const { result } = await withAutoApply((autoApply) =>
+    command(caller, { name: 'orders.pricedChange', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
+      const done = await amendInCommand(tools, context.tenantId, order, amendOf(body), { priced: pricedOf(body), autoApply })
+      return { amendmentId: done.amendmentId, workOrders: done.workOrders }
+    }),
+  )
   const change = await caller.withClient(async (client) => (await changesOf(client, (await readOrder(client, order.id))!, context)).find((entry) => entry.id === result.amendmentId)!)
-  return { order: await recordAfter(caller, order.id), change }
+  return { order: await recordAfter(caller, order.id), change, /* B-OP-012 */ workOrders: result.workOrders }
 }
 
 // ---- the order's changes ----------------------------------------------------------------------------------------------------
@@ -222,7 +229,7 @@ export function putBackBody(before: OrderSnapshot, linesNow: ReadonlySet<string>
 export async function putBackChange(caller: CommandCaller, orderId: string, amendmentId: string, body: { readonly version: number; readonly reason?: string | undefined }, idempotencyKey?: string) {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
-  const { result } = await command(caller, { name: 'orders.putBackChange', idempotencyKey, input: { orderId, amendmentId, ...body } }, async (tools) => {
+  const { result } = await withAutoApply((autoApply) => command(caller, { name: 'orders.putBackChange', idempotencyKey, input: { orderId, amendmentId, ...body } }, async (tools) => {
     const { tx } = tools
     // amendInCommand takes the locks in their order (lines, deposit requests, then the order at this version).
     const fresh = (await readOrder(tx, order.id))!
@@ -241,7 +248,7 @@ export async function putBackChange(caller: CommandCaller, orderId: string, amen
     }
     // B-SA-041: the work-order changes the change proposed and nobody applied yet are no longer needed (STALE): it is put back.
     await staleChangesInCommand(tools, { amendmentId })
-    const { amendmentId: putBackId } = await amendInCommand(tools, context.tenantId, fresh, amend, { putBack: true })
+    const { amendmentId: putBackId, workOrders } = await amendInCommand(tools, context.tenantId, fresh, amend, { putBack: true, autoApply })
     // Its extra deposit, while nothing is paid on it.
     let depositCancelled = false
     if (row.depositRequestId) {
@@ -261,10 +268,10 @@ export async function putBackChange(caller: CommandCaller, orderId: string, amen
       cleared = count === 1
     }
     tools.audit({ action: 'orders.putBackChange', recordType: 'SalesOrder', recordId: fresh.id, companyId: fresh.companyId, after: { amendmentId, revision: row.revision, putBackAmendmentId: putBackId, putBackRevision: after.revision, depositCancelled, reacceptanceCleared: cleared }, reason })
-    return { amendmentId: putBackId, depositCancelled }
-  })
+    return { amendmentId: putBackId, depositCancelled, workOrders }
+  }))
   const change = await caller.withClient(async (client) => (await changesOf(client, (await readOrder(client, order.id))!, context)).find((entry) => entry.id === result.amendmentId)!)
-  return { order: await recordAfter(caller, order.id), change, depositCancelled: result.depositCancelled }
+  return { order: await recordAfter(caller, order.id), change, depositCancelled: result.depositCancelled, /* B-OP-012 */ workOrders: result.workOrders }
 }
 
 // ---- deposit kinds ---------------------------------------------------------------------------------------------------------
