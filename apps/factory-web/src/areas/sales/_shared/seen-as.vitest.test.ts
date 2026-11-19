@@ -15,10 +15,11 @@ import { designScreen as SECURITY } from '../../admin/security/fixtures'
  * every screen the design index draws. These tests read the cases (their data), the walk at 375 / 1440 / 1920, light and dark, draws them.
  */
 
-const caseOf = <M>(screen: { cases: readonly { id: string; model: M }[] }, id: string): M => {
+// F-CP-148 (end-check fix): a case's model as the test reads it (M: the few fields it checks), whatever the screen's own model type.
+const caseOf = <M>(screen: { cases: readonly { id: string; model: unknown }[] }, id: string): M => {
   const found = screen.cases.find((item) => item.id === id)
   if (!found) throw new Error(`no design case ${id}`)
-  return found.model
+  return found.model as M
 }
 const money = (permissions: readonly string[]) => permissions.filter((permission) => permission.startsWith('money.'))
 

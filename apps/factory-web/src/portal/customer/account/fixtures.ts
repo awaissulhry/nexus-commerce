@@ -119,10 +119,6 @@ function colleaguesOf(locale: Locale, people: readonly Colleague[], admin: boole
     seatsFull: false,
     projectCount: admin ? 2 : 0,
     projects: admin ? { [ME]: ['Kit 2027', 'Rain line'], [id(2)]: ['Kit 2027'], [id(3)]: [] } : null,
-    // ---- F-CP-158 (customer page plan C6, D13): the admin's last two acts as their pop-ups — withdraw an invitation, give access back.
-    { id: 'cp158-team-withdraw', label: 'Pop-up: Withdraw the invitation (it ends: the link no longer signs in)', model: dialogCase(() => ({ kind: 'team', act: 'revoke', people: [{ id: id(5), name: 'Sara Campione' }], skipped: [], busy: false, failed: null })) },
-    { id: 'cp158-team-give-back', label: 'Pop-up: Give access back to a paused colleague (a place is free)', model: dialogCase(() => ({ kind: 'team', act: 'giveBack', people: [{ id: id(2), name: 'Luca Bianchi' }], skipped: [], busy: false, failed: null })), note: 'Held with words while every place is taken (team-seats-full); the code by e-mail first.' },
-    // ---- end F-CP-158
     // ---- end F-CP-153
   }
 }
@@ -358,6 +354,10 @@ export const designScreen = defineDesignScreen<AccountCaseBuilder>({
       model: dialogCase(() => ({ kind: 'project', people: [{ id: id(2), name: 'Luca Bianchi' }], skipped: [], projects: [{ id: id(900), name: 'Kit 2027' }, { id: id(901), name: 'Rain line' }], choice: id(900), busy: false, failed: null })),
       note: 'Only the projects the admin is in; each one added is told once, in their portal.',
     },
+    // ---- F-CP-158 (customer page plan C6, D13; end-check fix: moved here from the model builder): the admin's last two acts as their pop-ups — withdraw an invitation, give access back.
+    { id: 'cp158-team-withdraw', label: 'Pop-up: Withdraw the invitation (it ends: the link no longer signs in)', model: dialogCase(() => ({ kind: 'team', act: 'revoke', people: [{ id: id(5), name: 'Sara Campione' }], skipped: [], busy: false, failed: null })) },
+    { id: 'cp158-team-give-back', label: 'Pop-up: Give access back to a paused colleague (a place is free)', model: dialogCase(() => ({ kind: 'team', act: 'giveBack', people: [{ id: id(2), name: 'Luca Bianchi' }], skipped: [], busy: false, failed: null })), note: 'Held with words while every place is taken (team-seats-full); the code by e-mail first.' },
+    // ---- end F-CP-158
     // ---- end F-CP-153
     { id: 'step-up-wrong', label: 'Pop-up: a wrong code', model: dialogCase((locale) => ({ kind: 'stepUp', to: 'a…a@brand-alpha.example', busy: false, error: words(locale)('stepUp.wrong') })) },
   ],
