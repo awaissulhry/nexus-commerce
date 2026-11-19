@@ -1077,5 +1077,8 @@
     "reason": "Why it is scrapped",
     "reasonNeeded": "Say why the garment is scrapped.",
     "submit": "Scrap the garment"
+  },
+  "moneyWall": {
+    "blindPrice": "It changes a price you cannot see: someone who sees prices does it."
   }
 }

@@ -1,4 +1,6 @@
 import { isApiError, issuePath } from '../../../lib/api/errors'
+// F-CP-160: a price the person cannot see (the API's B-CP-026 refusal) in the money wall's words.
+import { BLIND_PRICE_KEY, isBlindPriceRefusal } from '../_shared/blind-price'
 
 /**
  * The quotes screens' problems in their own words (apps/factory-web CLAUDE.md: never the API's message): a message key
@@ -29,6 +31,8 @@ export interface WriteProblem {
 
 export function writeProblem(error: unknown): WriteProblem {
   if (!isApiError(error)) return { key: 'problem.write.internal', reload: false }
+  // F-CP-160: "It changes a price you cannot see: someone who sees prices does it." (nothing was changed; no read again).
+  if (isBlindPriceRefusal(error)) return { key: BLIND_PRICE_KEY, reload: false }
   if (error.kind === 'conflict') {
     const moved = error.code === 'version_conflict' || error.issues.some((issue) => issuePath(issue).split(/[./]/).includes('version'))
     return { key: moved ? 'problem.write.moved' : 'problem.write.state', reload: true }

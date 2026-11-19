@@ -545,5 +545,8 @@
       "signed_out": "You were signed out: sign in again.",
       "internal": "Something went wrong: try again."
     }
+  },
+  "moneyWall": {
+    "blindPrice": "It changes a price you cannot see: someone who sees prices does it."
   }
 }
