@@ -397,7 +397,7 @@ describe('F-SA-279: the page wires it (the sources)', () => {
     const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
     const dock = tab.slice(tab.indexOf('function Dock('))
     expect(dock).toContain("{ value: 'general', label: t('customers.work.dock.general'")
-    expect(dock).toContain("{ value: 'all', label: t('customers.work.dock.all'")
+    expect(dock).toContain("{ value: 'all' as const, label: t('customers.work.dock.all'") // F-OP-213: offered when readable
     expect(dock).toContain('<AllOfCustomerDock label={`${t(\'customers.work.dock.all\', { customer: customer.name })} · ${t(\'customers.work.dock.readOnly\')}`} model={feed.model} actions={{ ...feed.actions, onAnswer, writeFirst, canAnswer, ...(frame?.compose ? { onCompose: frame.compose } : {}) }} foot={allFoot} />') // F-OP-204, 205, 207: the card with its Head and foot
     expect(dock).toContain('onDraft={(kept) => dock.onDraft(pick, kept)}')
     expect(dock).toContain("note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}")

@@ -64,3 +64,15 @@ describe('the cell', () => {
     expect(scanText(html, BRAND_ALPHA)).toEqual([])
   })
 })
+
+// ---- F-OP-213 (B-OP-061): the read also says whether the reader may read each record's thread; an older answer says nothing ----------
+describe('F-OP-213 — readable per record', () => {
+  it('kept when the API says it (true or false alike for an unknown record and one out of reach); absent when it does not', () => {
+    expect(unreadMapOf([{ recordId: 'p1', newCount: 0, lastAt: null, readable: false }, { recordId: 'o1', newCount: 1, lastAt: null, readable: true }])).toEqual({
+      p1: { newCount: 0, lastAt: null, readable: false },
+      o1: { newCount: 1, lastAt: null, readable: true },
+    })
+    expect(unreadMapOf([{ recordId: 'o1', newCount: 1, lastAt: null }]).o1).not.toHaveProperty('readable')
+  })
+})
+// ---- end F-OP-213

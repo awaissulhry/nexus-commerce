@@ -21,6 +21,7 @@ import { useInProject } from '../../../../products/projects/record/linked/use-in
 import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeOfChoice, scopeOfParam, scopeShown, workOrderGroups, type DockWorkOrder, type OrderScope, type ScopeChoice, type ScopeOffer } from './model'
 import { scopeValueOf } from './model' // F-OP-209
 import { sameScope, scopeOfRecord, scopeParamOf } from './model' // F-OP-212
+import { offerOf } from './model' // F-OP-213
 import { pendingAskOf } from '../../../../_shared/record-frame/model' // F-OP-212
 import { viewOpenOf } from '../../../../_shared/record-frame/model' // F-OP-212
 
@@ -73,7 +74,27 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
   const projects = useInProject(api, { type: 'SalesOrder', id: order.id }, held.includes('threads.read'), prefix)
   const seesWork = held.includes('workorders.view')
   const ownWork = useMemo(() => (seesWork ? (workOrders ?? []) : []), [seesWork, workOrders])
-  const offer: ScopeOffer = { general: true, all: true, projects: projects.map((project) => project.id), workOrders: ownWork.map((row) => row.id) }
+
+  // ── "N new" of each conversation (the reader's own; again on a live message) — F-OP-213: and whether each one may be read ──
+  const [tick, setTick] = useState(0)
+  useLiveBus({ onChange: (change) => change.type.startsWith('thread.') && setTick((value) => value + 1), onReconnect: () => setTick((value) => value + 1) }, held.includes('threads.read'))
+  const unreadRows = useMemo(
+    () => [
+      { recordType: 'SalesOrder', id: order.id },
+      { recordType: 'Party', id: order.partyId },
+      ...projects.map((project) => ({ recordType: 'Project', id: project.id })),
+      ...ownWork.map((row) => ({ recordType: 'WorkOrder', id: row.id })),
+    ],
+    [order.id, order.partyId, projects, ownWork],
+  )
+  const readUnread = useMemo(() => (held.includes('threads.read') ? readUnreadWith(api) : null), [api, held])
+  const unread = useUnread(readUnread, unreadRows, tick)
+  const fresh = (id: string) => unread[id]?.newCount ?? 0
+  const freshOf = (ids: readonly string[]) => ids.reduce((sum, id) => sum + fresh(id), 0)
+  const withNew = (label: string, count: number) => (count > 0 ? t('record.dock.withNew', { label, count }) : label)
+
+  // F-OP-213 (11-dock §5, D4): General only when the reader may read the customer's thread, All only when General is.
+  const offer: ScopeOffer = offerOf({ canRead: held.includes('threads.read'), partyReadable: unread[order.partyId]?.readable, projects: projects.map((project) => project.id), workOrders: ownWork.map((row) => row.id), seesWork })
   const asked = scopeOfParam(params?.get(SCOPE_PARAM))
   const scope = scopeShown(asked, offer)
   const last = useRef<{ project: string | null; wo: string | null }>({ project: null, wo: null })
@@ -99,24 +120,6 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
     if (!target || sameScope(target, now.scope)) return
     now.frame?.setThread?.(scopeValueOf(target, now.narrow, now.closed))
   }, [pending?.ask, targetValue]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── "N new" of each conversation (the reader's own; again on a live message) ──
-  const [tick, setTick] = useState(0)
-  useLiveBus({ onChange: (change) => change.type.startsWith('thread.') && setTick((value) => value + 1), onReconnect: () => setTick((value) => value + 1) }, held.includes('threads.read'))
-  const unreadRows = useMemo(
-    () => [
-      { recordType: 'SalesOrder', id: order.id },
-      { recordType: 'Party', id: order.partyId },
-      ...projects.map((project) => ({ recordType: 'Project', id: project.id })),
-      ...ownWork.map((row) => ({ recordType: 'WorkOrder', id: row.id })),
-    ],
-    [order.id, order.partyId, projects, ownWork],
-  )
-  const readUnread = useMemo(() => (held.includes('threads.read') ? readUnreadWith(api) : null), [api, held])
-  const unread = useUnread(readUnread, unreadRows, tick)
-  const fresh = (id: string) => unread[id]?.newCount ?? 0
-  const freshOf = (ids: readonly string[]) => ids.reduce((sum, id) => sum + fresh(id), 0)
-  const withNew = (label: string, count: number) => (count > 0 ? t('record.dock.withNew', { label, count }) : label)
 
   // ── All of <customer> (read only; read only while it shows) ──
   const feed = useAllOfCustomer(api, { partyId: order.partyId, customerName: customer, enabled: scope.kind === 'all', prefix, canReadFiles: held.includes('files.read') })

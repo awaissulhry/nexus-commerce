@@ -693,7 +693,7 @@ describe('F-OP-203 — the order dock, the customer dock and the work order’s 
 
   it('the hosts keep their shape: <ThreadPick …>{thread}</ThreadPick>, the same props as before', () => {
     expect(order).toMatch(/<ThreadPick label=\{t\('record\.dock\.label'\)\} choices=\{choices\} value=\{choiceOfScope\(scope\)\} onPick=\{[^}]*\} extra=\{extra\}>\s*\{shown\}\s*<\/ThreadPick>/)
-    expect(customer).toContain("<ThreadPick label={t('customers.work.dock.label')} choices={choices} value={dock.scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>")
+    expect(customer).toContain("<ThreadPick label={t('customers.work.dock.label')} choices={choices} value={scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>")
     expect(workOrder).toMatch(/<ThreadPick label=\{t\('thread\.pickLabel'\)\} choices=\{threads\} value=\{pick\} onPick=\{onPick\}>\s*\{children\}\s*<\/ThreadPick>/)
     expect(workOrder).toContain('export function WorkOrderThreads({ choices, pick, onPick, children }: { choices: readonly OrderThreadChoice[]; pick: OrderFilesPick; onPick?: (pick: OrderFilesPick) => void; children: ReactNode })')
   })
