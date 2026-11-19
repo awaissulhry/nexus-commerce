@@ -226,6 +226,11 @@ export interface OrderRecordModel {
   files?: OrderFilesModel | null
   /** F-OP-119: the tracking dialog of the one shipment opened on Shipments (its container: use-shipments-acts); null: none open. */
   shipmentTracking?: ReactNode | null
+  /**
+   * F-OP-123 (order page N5): "Record a shipment made elsewhere…" — its door held with words (null: open) and its dialog while open
+   * (its container: use-shipments-acts); absent: not offered here (a design case).
+   */
+  elsewhere?: { readonly held: Phrase | null; readonly dialog: ReactNode | null } | null
   /** F-SA-236: the order's customer requests, every state (Changes: waiting on us, history); null: not read here. */
   requests?: Part<BrandRequest[]> | null
   /**
@@ -260,6 +265,8 @@ export interface OrderRecordActions {
   makeWorkOrders?: MakeWorkOrdersActions
   /** F-OP-119: open the tracking number of a shipment of the order (Shipments: row ⋯, or Enter on its Tracking cell). */
   onShipmentTracking?: (shipmentId: string) => void
+  /** F-OP-123: open "Record a shipment made elsewhere…" (⋯ Next steps, the Shipments card head). */
+  onRecordElsewhere?: () => void
   /** F-OP-111: split the parts off into new orders (the dialog's parts as typed, the optional reason). */
   onSplit?: (input: { parts: readonly SplitPartDraft[]; reason: string }) => void
   /** B-W2b-180 (design sales.orders conn "Portal › Orders & tracking"): open the order in the customer's portal, read-only. */

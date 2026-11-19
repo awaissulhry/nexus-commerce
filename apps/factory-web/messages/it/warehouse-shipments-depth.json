@@ -965,5 +965,11 @@
     "gone": "Nessuno dei suoi capi è più su questa spedizione.",
     "progressTitle": "{order} su questa spedizione",
     "packField": "Ordini"
+  },
+  "elsewhere": {
+    "tag": "Fatta altrove · DDT {ddt}",
+    "tagInvoice": "Fatta altrove · fattura immediata",
+    "noNexusDdt": "Registrata come fatta altrove: è partita con il DDT cartaceo n. {ddt} del {date}; Nexus non ne emette alcun DDT.",
+    "noNexusDdtInvoice": "Registrata come fatta altrove: con la merce ha viaggiato una fattura immediata; Nexus non ne emette alcun DDT."
   }
 }

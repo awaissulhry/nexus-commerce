@@ -200,6 +200,12 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
             .catch((error: unknown) => setDdt({ value: null, problem: readProblem(error) }))
         } else {
           setDdt(null)
+          // F-OP-123 (N5): a shipment made elsewhere gets no Nexus DDT: no draft and no SAMPLE PDF are read for it.
+          if (value.origin === 'ELSEWHERE') {
+            setPreview(null)
+            setPdf(null)
+            return
+          }
           if (value.status === 'PACKED' || (value.status === 'SHIPPED' && value.ddtRequired) || value.status === 'DRAFT') {
             const answer = await loadPreview(value, null)
             setDdtForm((known) => known ?? ddtFormFor(value, answer))

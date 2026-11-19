@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { FileX, ShieldOff } from 'lucide-react'
 import { Banner, Card, EmptyState, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
-import { formatDateTime, formatTime } from '../../../../../lib/i18n/format'
+import { formatDate, formatDateTime, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { Shipment } from '../../api'
@@ -242,6 +242,7 @@ function ReadyRecord({ shipment, model, actions, thread, printThread, trackingLi
             <>
               {latest && hasLeft(shipment.status) && <Tag tone={TRACKING_TONE[latest] ?? 'neutral'}>{t(`trackingStatus.${latest}`)}</Tag>}
               {!isFinal(shipment.status) && !hasLeft(shipment.status) && open > 0 && <Tag tone="warning">{t('record.checksOpen', { count: open })}</Tag>}
+              {shipment.origin === 'ELSEWHERE' && <Tag tone="neutral">{shipment.externalDdt ? d('elsewhere.tag', { ddt: shipment.externalDdt.number }) : d('elsewhere.tagInvoice')}</Tag> /* F-OP-123 */}
               {/* F-OP-130 (order page N6, R-5): one order as before; several: a chip per order (its number and PO), each a link. */}
               {orders.length === 1 ? (
                 <>
@@ -303,7 +304,12 @@ function ReadyRecord({ shipment, model, actions, thread, printThread, trackingLi
               </Banner>
             )}
             {shipment.status === 'CANCELLED' && <Banner tone="danger" title={t('record.cancelled', { reason: shipment.cancelReason ?? '—' })} />}
-            {shipment.status === 'SHIPPED' && shipment.ddtRequired && !liveDdt && model.ddts.value && <Banner tone="danger" title={t('record.needsDdt')} />}
+            {/* F-OP-123 (N5): a shipment made elsewhere left with its paper DDT: never "issue the replacement DDT". */}
+            {shipment.origin === 'ELSEWHERE' ? (
+              <Banner tone="info" title={shipment.externalDdt ? d('elsewhere.noNexusDdt', { ddt: shipment.externalDdt.number, date: formatDate(`${shipment.externalDdt.date}T12:00:00Z`, { locale }) }) : d('elsewhere.noNexusDdtInvoice')} />
+            ) : (
+              shipment.status === 'SHIPPED' && shipment.ddtRequired && !liveDdt && model.ddts.value && <Banner tone="danger" title={t('record.needsDdt')} />
+            )}
             {depth?.banner}
             {trackingProblem && <Banner tone="warning" title={t('record.trackingProblem')}>{trackingProblem}</Banner>}
             {model.changed && (

@@ -965,5 +965,11 @@
     "gone": "None of its garments is on this shipment any more.",
     "progressTitle": "{order} on this shipment",
     "packField": "Orders"
+  },
+  "elsewhere": {
+    "tag": "Made elsewhere · DDT {ddt}",
+    "tagInvoice": "Made elsewhere · immediate invoice",
+    "noNexusDdt": "Recorded as made elsewhere: it left with paper DDT n. {ddt} of {date}; Nexus issues no DDT of it.",
+    "noNexusDdtInvoice": "Recorded as made elsewhere: an immediate invoice travelled with the goods; Nexus issues no DDT of it."
   }
 }

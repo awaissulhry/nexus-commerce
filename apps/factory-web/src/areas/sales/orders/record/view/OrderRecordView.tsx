@@ -228,6 +228,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
         ...(!isFinal(order) && step.kind !== 'changePromise' ? [{ id: 'promise', label: t('action.promise'), disabled: !!promiseWait, description: held(promiseWait), onSelect: () => actions?.onDialog?.({ kind: 'promise' }) }] : []),
         ...(order.status === 'IN_PRODUCTION' ? [{ id: 'ready', label: t('action.ready'), disabled: !!readyWait, description: held(readyWait), onSelect: () => actions?.onDialog?.({ kind: 'ready' }) }] : []),
         ...(mayCreateShipment(order, model.can) ? [{ id: 'ship', label: t('action.createShipment'), href: createShipmentHref(model.prefix, order.id) }] : []),
+        // F-OP-123 (order page N5): Record a shipment made elsewhere… (held with its words: the order's state, the rights).
+        ...(model.elsewhere ? [{ id: 'elsewhere', label: t('elsewhere.title'), disabled: !!model.elsewhere.held, description: held(model.elsewhere.held), onSelect: () => actions?.onRecordElsewhere?.() }] : []),
     ],
     edit: [
         ...(!isFinal(order) && model.can.manage

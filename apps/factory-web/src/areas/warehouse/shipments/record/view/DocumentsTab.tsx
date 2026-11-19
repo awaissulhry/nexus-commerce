@@ -13,6 +13,7 @@ import type { Ddt, DdtDraft, Shipment, TravelDocument } from '../../api'
 import { DOCUMENT_STATE_TONE, ddtProblemGroups, kilos, languageName, LINK_STATE_TONE } from '../../model'
 import type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model'
 import { PartState } from './ShipmentRecordView'
+import { DEPTH_NS } from '../../queue/shared/depth' // F-OP-123
 // ---- B-TH-264 follow-up (TH-6 part B): the Documents' files open in the docked thread's ONE file viewer (the frame's door).
 import { contentTypeOf } from '../../../../../lib/record-thread/attachments/model'
 import { useRecordFrame, type FrameFile } from '../../../../_shared/record-frame/RecordFrame'
@@ -92,7 +93,24 @@ function DateTime({ at }: { at: string }) {
 
 function DdtCard({ shipment, model, actions, live }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; live: boolean }) {
   const t = useT('shipments')
+  const d = useT(DEPTH_NS) // F-OP-123
+  const locale = useLocale() // F-OP-123
   const shell = useT('shell')
+  // ---- F-OP-123 (order page N5): made elsewhere — its paper DDT is the document; Nexus issues none (no draft, no SAMPLE PDF).
+  if (shipment.origin === 'ELSEWHERE') {
+    return (
+      <Card padded>
+        <div className="fw-sh-card-head">
+          <h2 className="fw-sh-h2">
+            <FileCheck2 size={16} aria-hidden /> {t('docs.ddt.title')}
+          </h2>
+          <Pill tone="neutral">{shipment.externalDdt ? d('elsewhere.tag', { ddt: shipment.externalDdt.number }) : d('elsewhere.tagInvoice')}</Pill>
+        </div>
+        <p className="fw-sh-hint">{shipment.externalDdt ? d('elsewhere.noNexusDdt', { ddt: shipment.externalDdt.number, date: formatDate(`${shipment.externalDdt.date}T12:00:00Z`, { locale }) }) : d('elsewhere.noNexusDdtInvoice')}</p>
+      </Card>
+    )
+  }
+  // ---- end F-OP-123
   const ddt = live ? (model.ddt?.value ?? null) : null
   const preview = model.preview?.value ?? null
   const groups = ddtProblemGroups(preview)

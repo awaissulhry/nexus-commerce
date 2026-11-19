@@ -540,6 +540,10 @@ export const orderSchema = z.object({
         mayTypeTracking: z.object({ allowed: z.boolean(), code: z.string().nullable(), why: z.string().nullable() }).optional(),
         withheld: z.array(z.string()).optional(),
         // ---- end F-OP-119
+        // ---- F-OP-123 (B-OP-043 / B-OP-032): made elsewhere (recorded with its paper DDT; Nexus issued none) ----
+        origin: z.enum(['NEXUS', 'ELSEWHERE']).optional(),
+        externalDdt: z.object({ number: z.string(), date: z.string() }).nullable().optional(),
+        // ---- end F-OP-123
       }),
     ),
     invoices: z.array(z.object({ id: z.string(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable(), depositRequestId: z.string().nullable().default(null) })),

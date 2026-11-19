@@ -291,6 +291,10 @@ export const shipmentSchema = z.object({
   freight: freightSchema,
   /** B-W2a-48 (LOG-090): the intra-EU transport evidence's state (GET …/evidence has the papers). */
   transportEvidence: z.object({ status: z.enum(EVIDENCE_STATUSES), completedAt: instant.nullable() }),
+  // ---- F-OP-123 (order page N5, B-OP-032): recorded as made elsewhere, with the paper DDT it left with (Nexus issues no DDT of it) ----
+  origin: z.enum(['NEXUS', 'ELSEWHERE']).optional(),
+  externalDdt: z.object({ number: z.string(), date: z.string() }).nullable().optional(),
+  // ---- end F-OP-123
 })
 export type Shipment = z.infer<typeof shipmentSchema>
 const oneShipment = z.object({ shipment: shipmentSchema })
