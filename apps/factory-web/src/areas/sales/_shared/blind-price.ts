@@ -9,9 +9,10 @@ import { isApiError, issuePath } from '../../../lib/api/errors'
  * words from its own catalogue under `moneyWall.blindPrice` (sales, sales-configurator, approvals, sales-returns: the same words,
  * a test keeps them equal). Held, never hidden: the button stays and says why.
  *
- * Where the screen can see the act moves a price it holds before the click (a priced counter-offer: `counter.priced`; a
- * credit-only return line). Where it cannot (a template's typed prices and the options' surcharges are the price grain, dropped
- * for this reader) it holds after the API's first refusal, for the same draft.
+ * Every hold comes before the click from a yes/no the API sends to every reader, never an amount: a priced counter-offer
+ * (`counter.priced`), a credit-only return line, and (follow-up 13) a template's `holdsTypedPrices` and the configurator check's
+ * `pricing.optionsMoveMoney` (the typed prices and the surcharges themselves are the price grain, dropped for this reader). A
+ * refusal that still comes (e.g. a price grain over another company only) holds the same draft after the API's first answer.
  */
 
 /** The API's refusal code (factory-domain sales/blind-price `BLIND_PRICE`). */

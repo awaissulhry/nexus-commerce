@@ -137,6 +137,8 @@ export const checkAnswerSchema = z.object({
     repriced: z.boolean(),
     held: z.enum(REPRICE_HELD).nullable(),
     manualKept: z.boolean(),
+    // F-CP-160 (follow-up 13): what the options add moves — a reader without prices leaves the save to a price holder (no amount).
+    optionsMoveMoney: z.boolean(),
     unitPrice: z.string().optional(),
     before: z.string().optional(),
     optionsTotal: z.string().optional(),

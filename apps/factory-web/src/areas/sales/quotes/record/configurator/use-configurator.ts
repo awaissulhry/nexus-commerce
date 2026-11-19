@@ -203,8 +203,8 @@ export function useLineConfigurator(input: LineConfiguratorInput): { model: Conf
   )
 
   const previewValue: CheckAnswer | null = preview.status === 'ready' ? preview.value : null
-  // F-CP-160: `blind` while the draft is the one the API held.
-  const held = saveHeld({ held: view && !view.may.configure ? view.may.held : null, changed, checking: preview.status === 'checking', preview: previewValue, saving, offline: !online, keepPrice, kind: target.kind, blind: blindKey !== null && blindKey === key }, draft, groups)
+  // F-CP-160: `blind` while the draft is the one the API held; `price` holds a money-moving save before the click (follow-up 13).
+  const held = saveHeld({ held: view && !view.may.configure ? view.may.held : null, changed, checking: preview.status === 'checking', preview: previewValue, saving, offline: !online, keepPrice, kind: target.kind, price: grains.price, blind: blindKey !== null && blindKey === key }, draft, groups)
 
   const model: ConfiguratorModel = useMemo(
     () => ({

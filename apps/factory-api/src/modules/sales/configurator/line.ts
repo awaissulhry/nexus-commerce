@@ -288,7 +288,9 @@ export async function checkQuoteLine(caller: CommandCaller, quoteId: string, lin
     const rows = rowsToWrite(check.check.chosen, body.picks, surcharges)
     const names = await valueNameMap(db, rows.map((row) => row.valueId))
     const preview = rows.map((row) => ({ ...row, id: newId() }))
-    let pricing: CheckLineView['pricing'] = { repriced: false, held: restart.kind === 'HELD' ? restart.held : null, manualKept: false, unitPrice: asMoney('price', before), before: asMoney('price', before), optionsTotal: asMoney('price', surchargeTotal(rows.map((row) => ({ amount: row.surchargeAmount })))), change: asMoney('price', null), steps: asMoney('price', null), marginPct: asMoney('margin', marginBefore), marginBefore: asMoney('margin', marginBefore) }
+    // B-CP-026 (follow-up 13): the save's own rule (saveQuoteOptions) said before the click — what the options add moves.
+    const optionsMoveMoney = frozen.ok && optionsMoneyMoved(await quoteOptions(db, line.id), rows)
+    let pricing: CheckLineView['pricing'] = { repriced: false, held: restart.kind === 'HELD' ? restart.held : null, manualKept: false, optionsMoveMoney, unitPrice: asMoney('price', before), before: asMoney('price', before), optionsTotal: asMoney('price', surchargeTotal(rows.map((row) => ({ amount: row.surchargeAmount })))), change: asMoney('price', null), steps: asMoney('price', null), marginPct: asMoney('margin', marginBefore), marginBefore: asMoney('margin', marginBefore) }
     if (frozen.ok && check.check.ok) {
       const planned = await plannedPrice(db, ctx, version, line, restart, chargesOf(preview.map((row) => ({ id: row.id, name: names.get(row.valueId) ?? 'Option', text: row.freeText, amount: row.surchargeAmount, pct: row.surchargePct }))))
       if ('plan' in planned) {
@@ -512,6 +514,8 @@ export async function checkOrderLine(caller: CommandCaller, orderId: string, lin
         repriced: false,
         held: null,
         manualKept: false,
+        // B-CP-026 (follow-up 13): the save's own rule (saveOrderOptions) said before the click — what the options add moves.
+        optionsMoveMoney: surcharges.ok && orderChangeHeld(surcharges.change, false),
         unitPrice: asMoney('price', unitPrice),
         before: asMoney('price', unitPrice),
         optionsTotal: asMoney('price', surchargeTotal(rows.map((row) => ({ amount: row.surchargeAmount })))),

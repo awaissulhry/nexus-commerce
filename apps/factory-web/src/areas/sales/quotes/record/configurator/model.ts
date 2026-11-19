@@ -120,9 +120,11 @@ export interface SaveState {
   /** An order: the options change what they add, and the person has not chosen to keep the accepted price. */
   keepPrice: boolean
   kind: 'QUOTE' | 'ORDER' | 'BENCH'
+  /** F-CP-160 (follow-up 13): the reader holds the price grain (else a save whose options move money is a price holder's). */
+  price: boolean
   /**
-   * F-CP-160: the API held this very draft (B-CP-026): what its options add moves a price this reader cannot see. A reader
-   * without the price grain never sees the surcharges, so the screen learns it from the first refusal; a new choice tries again.
+   * F-CP-160: the API held this very draft (B-CP-026): what its options add moves a price this reader cannot see. Before the click
+   * the check says so (`pricing.optionsMoveMoney`, follow-up 13); a refusal that still comes holds this draft; a new choice tries again.
    */
   blind?: boolean
 }
@@ -145,6 +147,8 @@ export function saveHeld(state: SaveState, draft: readonly DraftPick[], groups: 
   if (state.checking || !state.preview) return { key: 'save.held.checking' }
   if (state.preview.problem) return { words: state.preview.problem }
   if (!state.preview.ok) return { key: 'save.held.blocked' }
+  // F-CP-160 (follow-up 13): the check says what the options add moves: a price holder saves them (held before the click, no amount).
+  if (!state.price && state.preview.pricing.optionsMoveMoney) return { key: BLIND_PRICE_KEY }
   if (state.kind === 'ORDER' && orderChange(state.preview) !== null && !state.keepPrice) return { key: 'save.held.keepPrice' }
   return null
 }

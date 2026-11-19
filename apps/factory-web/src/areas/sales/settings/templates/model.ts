@@ -167,9 +167,12 @@ export const linesChanged = (before: readonly LineDraft[], after: readonly LineD
 /**
  * Replacing a template's lines while one of them holds a typed unit price is a price holder's: a person without the price grain
  * sends no price, so the replace would drop it (the API answers 403 refusal/BLIND_PRICE, nothing changed). That reader never sees
- * the prices (the grain filter drops `unitPrice`), so the dialog learns it from the first refusal (`linesHeld`) and then holds
- * Save in the API's words while the lines differ from the template's; the header alone still saves. A price holder is never held.
+ * the prices (the grain filter drops `unitPrice`); the template says it before the click (`holdsTypedPrices`, follow-up 13: a
+ * yes/no, no price) and a refusal that still comes says it too (`linesHeld`). Save then waits in the API's words while the lines
+ * differ from the template's; the header alone still saves. A price holder is never held.
  */
+export const linesHeldOf = (template: Pick<QuoteTemplate, 'holdsTypedPrices'>): boolean => template.holdsTypedPrices
+
 export function linesBlindHeld(dialog: { readonly linesHeld?: boolean; readonly grains: { price: boolean }; readonly before: TemplateDraft; readonly draft: TemplateDraft }): string | null {
   if (dialog.grains.price || !dialog.linesHeld) return null
   return linesChanged(dialog.before.lines, dialog.draft.lines, dialog.grains) ? BLIND_PRICE_KEY : null

@@ -349,3 +349,31 @@ describe('F-CP-155: the factory designer rows and the made-to-measure drafts swi
   })
 })
 // ---- end F-CP-155
+
+// ---- follow-up 14 (customer page lane, the money wall; the API's B-CP-011): Portal access says who gives a role that sees prices
+describe('follow-up 14: Portal access says the Owner-only refusals in their own words', () => {
+  const forbidden = (path: string) => new ApiError('forbidden', 403, 'forbidden', 'Only the Owner gives a role that sees prices.', 'r', [{ path, message: 'Only the Owner gives a role that sees prices.' }])
+
+  it('inviting a guest Accountant, or giving its role, and a later end of its access: the Owner’s, never "role not offered" or "end of access"', () => {
+    expect(partnerProblem(forbidden('roleKey/onlyOwnerGivesPrices'))).toBe('moneyWall.ownerGives')
+    expect(partnerProblem(forbidden('accessUntil/onlyOwnerGivesPrices'))).toBe('moneyWall.ownerLater')
+    expect(partnerProblem(new ApiError('forbidden', 403, 'forbidden', 'x', 'r', [{ path: ['roleKey', 'onlyOwnerGivesPrices'], message: 'x' }]))).toBe('moneyWall.ownerGives')
+    // the field's own refusals keep their words
+    expect(partnerProblem(new ApiError('invalid', 400, 'validation_failed', 'The access is not valid.', 'r', [{ path: 'roleKey', message: 'x' }]))).toBe('problem.roleNotOffered')
+    expect(partnerProblem(new ApiError('invalid', 400, 'validation_failed', 'The access is not valid.', 'r', [{ path: 'accessUntil', message: 'x' }]))).toBe('problem.accessUntil')
+  })
+
+  it('the words are Finance › Close’s and the catalogue’s rule ("Who sees prices"), in Italian and English, never a key', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const access = messagesFor(locale, ['portal-access'])['portal-access'] as Record<string, string>
+      const accountant = messagesFor(locale, ['portal-accountant'])['portal-accountant'] as Record<string, string>
+      const security = messagesFor(locale, ['admin-security'])['admin-security'] as Record<string, string>
+      expect(access['moneyWall.ownerGives'], locale).toBe(accountant['moneyWall.ownerGives'])
+      expect(access['moneyWall.ownerLater'], locale).toBe(accountant['moneyWall.ownerLater'])
+      expect(access['moneyWall.ownerGives'], locale).toBe(security['sec.priceHolders.hint'])
+    }
+    expect((messagesFor('en', ['portal-access'])['portal-access'] as Record<string, string>)['moneyWall.ownerGives']).toBe('Only the Owner gives a role that sees prices.')
+    expect((messagesFor('it', ['portal-access'])['portal-access'] as Record<string, string>)['moneyWall.ownerGives']).toBe('Solo il titolare dà un ruolo che vede i prezzi.')
+  })
+})
+// ---- end follow-up 14

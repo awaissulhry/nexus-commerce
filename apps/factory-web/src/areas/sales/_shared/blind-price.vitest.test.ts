@@ -6,7 +6,7 @@ import { CATALOGUE, createTranslator, messagesFor } from '../../../lib/i18n/mess
 import { I18nProvider } from '../../../lib/i18n/provider'
 import { BLIND_PRICE_KEY, isBlindPriceRefusal } from './blind-price'
 import { writeProblem } from '../quotes/problems'
-import { emptyDraft, linesBlindHeld, type LineDraft } from '../settings/templates/model'
+import { emptyDraft, linesBlindHeld, linesHeldOf, type LineDraft } from '../settings/templates/model'
 import { designScreen as templatesScreen } from '../settings/templates/fixtures'
 import { saveHeld, saveProblemOf, type SaveState } from '../quotes/record/configurator/model'
 import { designScreen as configuratorScreen } from '../quotes/record/configurator/fixtures'
@@ -20,8 +20,10 @@ import { designScreen as returnsRecordScreen } from '../returns/record/fixtures'
 /**
  * F-CP-160 (customer page lane, the money wall; Owner answer A, the API's B-CP-026) — the four acts that change a price their maker
  * cannot see are held for a reader without the price grain, in the API's words, never hidden and never a blank:
- *   1. a quote template's line replace (held after the API's first refusal while the lines differ; the lines go before the header)
- *   2. a line's options save that moves what they add (held for the draft the API refused)
+ *   1. a quote template's line replace (held before the click by the template's `holdsTypedPrices`, follow-up 13, or after the
+ *      API's first refusal, while the lines differ; the lines go before the header)
+ *   2. a line's options save that moves what they add (held before the click by the check's `optionsMoveMoney`, follow-up 13, or
+ *      for the draft the API refused)
  *   3. accepting a request whose agreed counter-offer carries a fee (held before the click: `counter.priced`)
  *   4. deciding a return line's credit (a credit-only line, held before the click)
  * As a Sales worker each is held in words; as a price holder (the Owner) nothing is held. Run at the end only (Owner rule).
@@ -76,6 +78,29 @@ describe('F-CP-160 · 1. a quote template’s line replace', () => {
   const before = { ...emptyDraft(''), name: 'Demo', lines: [line('a'), line('b')] }
   const fewer = { ...before, lines: [line('a')] }
 
+  // ── follow-up 13: the template's non-money yes/no (`holdsTypedPrices`) holds the replace BEFORE the click ──
+  it('reads the template’s holdsTypedPrices into the hold before the click: Save held while the lines differ, the header alone saves', () => {
+    expect(linesHeldOf({ holdsTypedPrices: true })).toBe(true)
+    expect(linesHeldOf({ holdsTypedPrices: false })).toBe(false)
+    const linesHeld = linesHeldOf({ holdsTypedPrices: true })
+    expect(linesBlindHeld({ grains: { price: false }, linesHeld, before, draft: fewer })).toBe(BLIND_PRICE_KEY)
+    expect(linesBlindHeld({ grains: { price: false }, linesHeld, before, draft: { ...before, name: 'Demo B' } })).toBeNull()
+    expect(linesBlindHeld({ grains: { price: false }, linesHeld: linesHeldOf({ holdsTypedPrices: false }), before, draft: fewer })).toBeNull()
+    expect(linesBlindHeld({ grains: { price: true }, linesHeld, before, draft: fewer })).toBeNull()
+  })
+
+  it('the design case before the click: the template holds a typed price, Save held in words with no refusal and no price', () => {
+    const entry = templatesScreen.cases.find((item) => item.id === 'dialog-sales-before')!.model as unknown as { dialog: { linesHeld?: boolean; problem: unknown; draft: { lines: { unitPrice: string }[] } } }
+    expect(entry.dialog.linesHeld).toBe(true)
+    expect(entry.dialog.problem).toBeNull()
+    expect(entry.dialog.draft.lines.every((line) => line.unitPrice === '')).toBe(true)
+    for (const locale of LOCALES) {
+      const html = draw(templatesScreen, 'dialog-sales-before', locale)
+      expect(html, locale).toContain(API_WORDS[locale].replace(/'/g, '&#x27;'))
+      expect(html).not.toMatch(AMOUNT)
+    }
+  })
+
   it('holds Save for a reader without prices once the API said a line holds one, while the lines differ; never for a price holder', () => {
     expect(linesBlindHeld({ grains: { price: false }, before, draft: fewer })).toBeNull()
     expect(linesBlindHeld({ grains: { price: false }, linesHeld: true, before, draft: fewer })).toBe(BLIND_PRICE_KEY)
@@ -100,13 +125,43 @@ describe('F-CP-160 · 1. a quote template’s line replace', () => {
 })
 
 describe('F-CP-160 · 2. a line’s options save', () => {
-  const state = (over: Partial<SaveState> = {}): SaveState => ({ held: null, changed: true, checking: false, preview: { ok: true, blocks: [], warnings: [], outsideCertificate: false, certificateNotes: [], chosen: [], pricing: { repriced: true, held: null, manualKept: false }, problem: null }, saving: false, offline: false, keepPrice: false, kind: 'QUOTE', ...over })
+  const preview = (optionsMoveMoney: boolean): SaveState['preview'] => ({ ok: true, blocks: [], warnings: [], outsideCertificate: false, certificateNotes: [], chosen: [], pricing: { repriced: true, held: null, manualKept: false, optionsMoveMoney }, problem: null })
+  const state = (over: Partial<SaveState> = {}): SaveState => ({ held: null, changed: true, checking: false, preview: preview(false), saving: false, offline: false, keepPrice: false, kind: 'QUOTE', price: false, ...over })
 
   it('holds Save in the money wall’s words for the draft the API refused; another choice, or no change, as before', () => {
     expect(saveHeld(state({ blind: true }), [], [])).toEqual({ key: BLIND_PRICE_KEY })
     expect(saveHeld(state({ blind: true, kind: 'ORDER' }), [], [])).toEqual({ key: BLIND_PRICE_KEY })
     expect(saveHeld(state(), [], [])).toBeNull()
     expect(saveHeld(state({ blind: true, changed: false }), [], [])).toEqual({ key: 'save.held.unchanged' })
+  })
+
+  // ── follow-up 13: the check's non-money yes/no holds Save BEFORE the click ──
+  it('holds Save before the click when the check says the options move money, for a reader without prices only', () => {
+    expect(saveHeld(state({ preview: preview(true) }), [], [])).toEqual({ key: BLIND_PRICE_KEY })
+    expect(saveHeld(state({ preview: preview(true), kind: 'ORDER' }), [], [])).toEqual({ key: BLIND_PRICE_KEY })
+    expect(saveHeld(state({ preview: preview(false) }), [], [])).toBeNull()
+    // a price holder saves (an order still asks to keep the price only when its change is seen)
+    expect(saveHeld(state({ preview: preview(true), price: true }), [], [])).toBeNull()
+    // the check's own reasons come first: still checking, a block
+    expect(saveHeld(state({ preview: preview(true), checking: true }), [], [])).toEqual({ key: 'save.held.checking' })
+    expect(saveHeld(state({ preview: { ...preview(true)!, ok: false } }), [], [])).toEqual({ key: 'save.held.blocked' })
+  })
+
+  it('the design cases before the click: held in words with no refusal shown and no amount; options that add the same, Save open', () => {
+    const modelOf = (id: string) => configuratorScreen.cases.find((entry) => entry.id === id)!.model as unknown as { saveHeld: unknown; notice: unknown; preview: { value: { pricing: Record<string, unknown> } | null } }
+    for (const id of ['quote-sales-before', 'order-sales-before']) {
+      expect(modelOf(id).saveHeld, id).toEqual({ key: BLIND_PRICE_KEY })
+      expect(modelOf(id).notice, id).toBeNull()
+      expect(Object.keys(modelOf(id).preview.value!.pricing).sort(), id).toEqual(['held', 'manualKept', 'optionsMoveMoney', 'repriced'])
+      for (const locale of LOCALES) {
+        const html = draw(configuratorScreen, id, locale)
+        expect(html, `${id} ${locale}`).toContain(API_WORDS[locale])
+        expect(html).not.toMatch(/\+\s?\d+[.,]\d{2}|\+\s?\d+\s?%/)
+        expect(html).not.toMatch(AMOUNT)
+      }
+    }
+    expect(modelOf('quote-sales-same').saveHeld).toBeNull()
+    expect(draw(configuratorScreen, 'quote-sales-same')).not.toContain(API_WORDS.en)
   })
 
   it('reads the refusal: the money wall (the picks stay, no read again), stale (read again), a missing right', () => {

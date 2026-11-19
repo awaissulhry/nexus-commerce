@@ -177,6 +177,12 @@ export const checkLineView = output({
     repriced: notMoney(z.boolean()),
     held: z.enum(REPRICE_HELD).nullable(),
     manualKept: z.boolean(),
+    /**
+     * B-CP-026 (follow-up 13, the money wall): what the options add moves (a sum a piece other than the line's saved options). Saving
+     * them is then a price holder's (403 refusal/BLIND_PRICE for a person without the price grain), so the web holds Save before the
+     * click. A yes/no for every reader, never the amount (`optionsTotal` and `change` stay money.price).
+     */
+    optionsMoveMoney: notMoney(z.boolean()),
     unitPrice: money.price(z.string()),
     before: money.price(z.string()),
     optionsTotal: money.price(z.string()),
