@@ -234,8 +234,10 @@ describe("B-SA-072 GET /tasks?scope=PARTY: the open tasks on a customer's record
     expect(theirs.total).toBe(0)
     expect({ ...theirs, asOf: null }).toEqual({ ...unknown, asOf: null })
     expect(JSON.stringify(theirs)).not.toContain('SEED-SO-')
-    // Its own customer: its own tasks.
-    expect(((await ok('onlyB', 'GET', `/tasks?scope=PARTY&partyId=${partyB}`)).items as Json[]).map((item) => item.record.id)).toEqual([orderB])
+    // Its own customer: its own tasks (TB-B-01's only: this file's earlier batches gave it open tasks too, end check).
+    const own = (await ok('onlyB', 'GET', `/tasks?scope=PARTY&partyId=${partyB}&limit=200`)).items as Json[]
+    expect(new Set(own.map((item) => item.record.id))).toEqual(new Set([orderB]))
+    expect(own.map((item) => item.id)).toContain(made.find((row) => row.record.id === orderB)!.task.id)
   })
 
   it('without the customer named: refused in words', async () => {

@@ -229,7 +229,8 @@ describe('the page wires the source, the window and the follow-ups', () => {
     const { fileURLToPath } = await import('node:url')
     const page = readFileSync(fileURLToPath(new URL('../Approvals.tsx', import.meta.url)), 'utf8')
     expect(page).toContain('can.requests ? listWaitingRequests(api) : Promise.resolve(null)')
-    expect(page).toContain('probeOpen(api, openId, { tasks: can.tasks, requests: can.requests })')
+    // F-SA-245: a work-order change opens in its own window from Approvals too: the probe asks it third.
+    expect(page).toContain('probeOpen(api, openId, { tasks: can.tasks, requests: can.requests, changes: can.changes })')
     expect(page).toContain("type.startsWith('order_change_request.')")
     const view = readFileSync(fileURLToPath(new URL('../view/InboxView.tsx', import.meta.url)), 'utf8')
     // F-SA-240: the window's own props — the inbox's rows are this door's list.
@@ -276,7 +277,9 @@ describe('F-SA-240: the review window opens from any door with its own props (on
     for (const locale of LOCALES) {
       for (const id of ['f-pr-08-rush', 'f-pr-08-cancel', 'f-pr-08-counter', 'f-pr-08-batch', 'f-pr-08-batch-accept', 'f-pr-08-refused', 'f-pr-08-not-found']) {
         const html = alone(propsOf(id, []), locale)
-        expect(html.length, id).toBeGreaterThan(200)
+        // PW-H01b: another customer's request names nothing — its window is the title and "not there any more" only (a short window).
+        if (id === 'f-pr-08-not-found') expect(textOf(html), locale).toContain(locale === 'en' ? 'This request is not there any more.' : 'Questa richiesta non c’è più.')
+        else expect(html.length, id).toBeGreaterThan(200)
         expect(leftKeys(html, PREFIXES), `${id} (${locale})`).toEqual([])
       }
     }

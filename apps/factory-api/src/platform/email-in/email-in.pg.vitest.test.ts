@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { SLOW_TEST_TIMEOUT_MS } from '../../testing/timeouts'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { MAX_RAW_BYTES } from '@nexus/factory-domain/email-in/rules'
 import { FakeMailBucket } from '../../adapters/ses-inbound/fake'
@@ -492,7 +493,8 @@ describe('mail to sort (COL-023, A2 SCR-019)', () => {
   })
 })
 
-describe('who sees the files (COL-025, COL-050)', () => {
+// End check (11-19): each reader lists every file of the tenant through row-level security (1 s on the Mac, 5.4 s on GitHub).
+describe('who sees the files (COL-025, COL-050)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('a joined mail’s file reaches its own party only; a waiting mail’s file reaches no party; the floor sees neither; no party reads the mail rows', async () => {
     const files = await admin(`SELECT id, "recordType", "partyId" FROM "StoredFile" WHERE "tenantId" = $1 AND kind = 'ATTACHMENT'`, [tenant.id])
     const shared = files.filter((file) => file.partyId === partyOne).map((file) => file.id)

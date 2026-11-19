@@ -55,10 +55,25 @@ function codeFiles(dir) {
   })
 }
 
-function parse(file) {
-  const kind = file.endsWith('.tsx') ? ts.ScriptKind.TSX : /\.[cm]?js$/.test(file) ? ts.ScriptKind.JS : ts.ScriptKind.TS
-  return ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, kind)
+// Speed (end check 11-19): parsing is what the guard spends its time on (~14 000 parses: apps/factory-api/src was parsed
+// twice, by 3 and by 4). Each file is now read once and parsed at most once, and a section parses only a file whose
+// text can hold what it looks for: the name (defineEvent, emit, outboxEvent / OutboxEvent in any case for the SQL), or a
+// backslash, the only way a name or a string's value can differ from its text (\u escapes, any escape in a string).
+const texts = new Map()
+const parsed = new Map()
+function text(file) {
+  if (!texts.has(file)) texts.set(file, readFileSync(file, 'utf8'))
+  return texts.get(file)
 }
+function parse(file) {
+  if (parsed.has(file)) return parsed.get(file)
+  const kind = file.endsWith('.tsx') ? ts.ScriptKind.TSX : /\.[cm]?js$/.test(file) ? ts.ScriptKind.JS : ts.ScriptKind.TS
+  const source = ts.createSourceFile(file, text(file), ts.ScriptTarget.Latest, true, kind)
+  parsed.set(file, source)
+  return source
+}
+/** The file's text holds `name`, or an escape: only then can its code name it. */
+const mayName = (file, name) => text(file).includes(name) || text(file).includes('\\u')
 const at = (source, node) => `${shown(source.fileName)}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`
 const unwrap = (node) => {
   let current = node
@@ -83,9 +98,11 @@ const declaredTypes = new Set()
 const named = (object, name) => object.properties.some((entry) => (ts.isPropertyAssignment(entry) || ts.isShorthandPropertyAssignment(entry)) && ts.isIdentifier(entry.name) && entry.name.text === name)
 const isRuleShaped = (object) => named(object, 'permission') || (object.properties.some(ts.isSpreadAssignment) && named(object, 'floor'))
 for (const file of codeFiles(DOMAIN)) {
-  const source = parse(file)
   const rel = posix(relative(DOMAIN, file))
   const home = /^([a-z][a-z0-9-]*)\/events\.ts$/.exec(rel)
+  // A module's events file is always read (its live-rule constants); any other file only when it can call defineEvent.
+  if (!(home && home[1] !== 'events') && !mayName(file, 'defineEvent')) continue
+  const source = parse(file)
   const liveRules = new Set()
   if (home && home[1] !== 'events') {
     // Constants that hold a live rule (`const live = { permission: …, floor: …, fields: … } as const`).
@@ -177,6 +194,7 @@ if (!existsSync(CATALOGUE)) {
 // --- 3. emits -----------------------------------------------------------------------------------------------------
 let emits = 0
 for (const file of EMITTERS.flatMap((dir) => codeFiles(join(ROOT, dir)))) {
+  if (!mayName(file, 'emit')) continue
   const source = parse(file)
   visit(source, (node) => {
     if (!ts.isCallExpression(node) || calleeName(node) !== 'emit') return
@@ -200,6 +218,8 @@ for (const file of EMITTERS.flatMap((dir) => codeFiles(join(ROOT, dir)))) {
 // --- 4. the outbox table ------------------------------------------------------------------------------------------
 for (const file of TABLE_SCANS.flatMap((dir) => codeFiles(join(ROOT, dir)))) {
   if (shown(file).startsWith(OUTBOX_WRITERS)) continue
+  // The delegate is outboxEvent; the SQL names "OutboxEvent" in any case; a string can spell it only with an escape.
+  if (!/outboxevent/i.test(text(file)) && !text(file).includes('\\')) continue
   const source = parse(file)
   visit(source, (node) => {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && WRITES.has(node.expression.name.text)) {

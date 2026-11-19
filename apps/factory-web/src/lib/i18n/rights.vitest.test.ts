@@ -24,6 +24,10 @@ const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 // The longest name first, so `quality.lots.view` is found whole; a code is not part of a longer dotted word.
 const CODE = new RegExp(`(?<![A-Za-z0-9_.])(?:${[...NAMES].sort((a, b) => b.length - a.length).map(escape).join('|')})(?![A-Za-z0-9_])`, 'g')
 const HAS_CODE = new RegExp(CODE.source)
+// Every code is a dotted name (a word character on each side of a dot), so only a value with such a dot can hold one: the
+// alternation of 500+ names runs on those few hundred values, not on all 200,000 (it took over 5 s on the CI runner, run
+// 44416200778). The same values are found: the first test pins that every name has the dot.
+const DOTTED = /[A-Za-z0-9_]\.[A-Za-z0-9_]/
 
 function catalogueValues(): Array<{ where: string; value: string }> {
   return LOCALES.flatMap((locale) =>
@@ -42,10 +46,11 @@ describe('B-W2b-F51: no message shows a permission code', () => {
     expect(NAMES.length).toBeGreaterThan(500)
     expect(NAMES).toContain('payments.bank.view')
     expect(NAMES).toContain('money.price')
+    expect(NAMES.filter((name) => !DOTTED.test(name))).toEqual([])
   })
 
   it('no value contains a permission code (allow none)', () => {
-    const found = values.flatMap(({ where, value }) => [...value.matchAll(CODE)].map((match) => `${where}: ${match[0]}`))
+    const found = values.filter(({ value }) => DOTTED.test(value)).flatMap(({ where, value }) => [...value.matchAll(CODE)].map((match) => `${where}: ${match[0]}`))
     expect(found).toEqual([])
   })
 

@@ -163,7 +163,7 @@ beforeAll(async () => {
       "colourwayId" = (SELECT c.id FROM "Colourway" c JOIN "Style" st ON st.id = c."styleId" WHERE st."tenantId" = '${T}' AND st.code = 'SEED-LNR-01' ORDER BY c.id LIMIT 1)
       WHERE seq = (SELECT min(seq) FROM l);
     UPDATE o SET id = ${v4('id', salt)}, "partyId" = '${R1}', number = 'TH018-B-0001', "quoteVersionId" = NULL, "customerRef" = 'B-PO-TH018', "seasonId" = NULL,
-      status = 'CONFIRMED', "promiseDate" = current_date - 3, "originalPromiseDate" = current_date - 3, "priorityLevel" = 'HIGH';
+      status = 'CONFIRMED', "promiseDate" = (now() AT TIME ZONE 'Europe/Rome')::date - 3, "originalPromiseDate" = (now() AT TIME ZONE 'Europe/Rome')::date - 3, "priorityLevel" = 'HIGH';
     INSERT INTO "SalesOrder" SELECT * FROM o;
     INSERT INTO "SalesOrderLine" SELECT * FROM l;
     INSERT INTO "SalesOrderLineSize" SELECT * FROM s;

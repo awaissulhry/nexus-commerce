@@ -304,7 +304,8 @@ describe('the owner: everything that waits, from every area and company, ranked'
     // (B-W2b-189: a supplier's profile change and document too, decided on the supplier's record.)
     // (B-W2b-F13b: a delivery address a customer added, decided on the customer's record.)
     // (B-W2b-307: a change order, an SMV change and an inspection plan version, each decided on its own page.)
-    for (const item of answer.items as Json[]) expect(item.category, item.kind).toBe(item.decide === 'REVIEW' || ['NCR_DECISION', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST', 'SUPPLIER_CHANGE', 'SUPPLIER_DOCUMENT', 'DELIVERY_ADDRESS', 'CHANGE_ORDER', 'SMV_CHANGE', 'PLAN_VERSION'].includes(item.kind) ? 'APPROVAL' : 'ALERT')
+    // (B-SA-044: a work-order change waiting to be applied, decided on the work order.)
+    for (const item of answer.items as Json[]) expect(item.category, item.kind).toBe(item.decide === 'REVIEW' || ['NCR_DECISION', 'PORTAL_ORDER_REQUEST', 'ORDER_CHANGE_REQUEST', 'SUPPLIER_CHANGE', 'SUPPLIER_DOCUMENT', 'DELIVERY_ADDRESS', 'CHANGE_ORDER', 'SMV_CHANGE', 'PLAN_VERSION', 'WORK_ORDER_CHANGE'].includes(item.kind) ? 'APPROVAL' : 'ALERT')
     expect(answer.counts.now).toBe((answer.items as Json[]).filter((item) => item.group === 'NOW').length)
     for (const [category, count] of [['APPROVAL', approvals], ['ALERT', alerts]] as const) {
       const pressed = await ok('owner', `/home/today?limit=200&category=${category}`)
@@ -320,7 +321,9 @@ describe('the owner: everything that waits, from every area and company, ranked'
     // B-W2b-307: + CHANGE_ORDER, SMV_CHANGE, PLAN_VERSION, APPROVAL_TASK.
     // B-W2b-385: + INQUIRY_WAITING (inquiries waiting for us over a working day).
     // B-W2b-386: + SHIPMENT_AT_RISK (shipments at risk of missing their promise).
-    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toHaveLength(26)
+    // B-SA-044: + WORK_ORDER_CHANGE (work-order changes waiting for who may apply them).
+    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toHaveLength(27)
+    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toContain('WORK_ORDER_CHANGE')
     for (const entry of answer.counts.byKind as Json[]) {
       const pressed = await ok('owner', `/home/today?limit=200&kind=${entry.kind}`)
       expect(pressed.total, entry.kind).toBe(entry.count)

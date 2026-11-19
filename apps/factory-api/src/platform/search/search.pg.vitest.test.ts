@@ -13,6 +13,7 @@ import { callerFor, type CommandCaller } from '../../core/command'
 import { testAuthenticator, type SessionContext } from '../../core/context'
 import type { Log } from '../../core/queue'
 import { LOCAL_COOKIE_SECRET } from '../../env'
+import { SLOW_TEST_TIMEOUT_MS } from '../../testing/timeouts'
 import { systemContext } from '../outbox/system'
 import type { SearchIndexer } from './indexer'
 import { INDEX_HANDLER, indexEvent, indexNewTenants, REBUILD_HANDLER, rebuildIndex, searchHandlers } from './indexing'
@@ -146,7 +147,7 @@ describe('the index (worker side)', () => {
     expect(types.map((row) => row.recordType)).toEqual(expect.arrayContaining(['Party', 'SalesOrder', 'Style', 'Item', 'WorkOrder', 'Lot', 'Hide']))
     expect(await indexNewTenants({ database, indexers, log: quiet })).toMatchObject({ indexed: 0, failed: 0 })
     expect(await entryCount()).toBe(built)
-  })
+  }, SLOW_TEST_TIMEOUT_MS) // a whole tenant's index of every seed, by every indexer: past vitest's 5 s on a busy runner (CI 11-18)
 
   it('an entry holds the record as people type it, never money', async () => {
     const order = await entry('SalesOrder', id('sales:SO1'))
@@ -180,7 +181,7 @@ describe('the index (worker side)', () => {
     const swept = await rebuildIndex(system, indexers, { recordTypes: ['SalesOrder'], key: `search-rebuild-${newId()}` })
     expect(swept).toMatchObject({ written: 0, removed: 1, recordTypes: ['SalesOrder'] })
     expect(await entry('SalesOrder', ghost)).toBeUndefined()
-  })
+  }, SLOW_TEST_TIMEOUT_MS) // the whole tenant read again
 
   it('an event re-indexes its record and the records that show its name; a replayed event writes nothing', async () => {
     const partyId = id('party:P1')

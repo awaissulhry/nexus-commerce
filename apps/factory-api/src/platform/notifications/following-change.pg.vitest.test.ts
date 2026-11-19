@@ -109,7 +109,7 @@ const bellOf = (person: Person, eventIds: readonly string[]) =>
 const itemsOf = (rows: readonly { groupKey: string }[]) => new Set(rows.map((row) => row.groupKey)).size
 
 beforeAll(async () => {
-  db = await migratedDatabase('sa051_following_change')
+  db = await migratedDatabase('sa051_following')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 8 } })
   await seedCore({ db: database, namespace: ns })
   await seedFiles({ db: database, namespace: ns })

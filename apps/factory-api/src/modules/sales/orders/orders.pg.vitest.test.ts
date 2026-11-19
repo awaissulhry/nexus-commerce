@@ -617,7 +617,8 @@ describe('the list, the board and the tiles (SAL-214: counts that match the list
     // SEED-SO-0001 (the sales seed's) promised in the past: late.
     await admin(`UPDATE "SalesOrder" SET "promiseDate" = '2026-01-10' WHERE number = 'SEED-SO-0001' AND "tenantId" = $1`, [T.a])
     const board = await ok('a.sales', 'GET', '/sales/orders/board')
-    expect(board.lanes).toEqual(['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED'])
+    // B-SA-012 (sales page plan N8, P12): the board's first lane is Waiting for a yes (PENDING_APPROVAL).
+    expect(board.lanes).toEqual(['PENDING_APPROVAL', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED'])
     const total = (await ok('a.sales', 'GET', '/sales/orders?limit=200')).orders.length
     expect(board.byStatus.reduce((sum: number, row: Json) => sum + row.count, 0)).toBe(total)
     for (const row of board.byStatus) expect((await ok('a.sales', 'GET', `/sales/orders?status=${row.status}&limit=200`)).orders.length, row.status).toBe(row.count)
@@ -859,18 +860,22 @@ describe('the lines carry their picture and their artwork count, by the readerâ€
   }
 
   beforeAll(async () => {
-    const lines = await admin<{ id: string; colour: string }>(`SELECT l.id, c.code AS colour FROM "SalesOrderLine" l JOIN "Colourway" c ON c.id = l."colourwayId" WHERE l."orderId" = $1 ORDER BY l.seq`, [order()])
+    // The order's own style and its RED colourway (SEED-SO-0002 is the production seed's order: its lines are of SEED-JKT-02).
+    const lines = await admin<{ id: string; colour: string; styleId: string; colourwayId: string }>(`SELECT l.id, c.code AS colour, l."styleId"::text AS "styleId", l."colourwayId"::text AS "colourwayId" FROM "SalesOrderLine" l JOIN "Colourway" c ON c.id = l."colourwayId" WHERE l."orderId" = $1 ORDER BY l.seq`, [order()])
     expect(lines.map((line) => line.colour).sort()).toEqual(['BLK', 'RED'])
+    expect(new Set(lines.map((line) => line.styleId)).size).toBe(1)
+    const style = lines[0]!.styleId
+    const red = lines.find((line) => line.colour === 'RED')!.colourwayId
     // The style's main picture, RED's own picture (not the main one), and the BLK line's artwork (one ready, one still uploading).
-    files.main = await fileOn('Style', jacket, { name: 'T-SA035 jacket front.jpg', kind: 'PHOTO', contentType: 'image/jpeg' })
-    files.red = await fileOn('Colourway', RED, { name: 'T-SA035 jacket red.jpg', kind: 'PHOTO', contentType: 'image/jpeg' })
+    files.main = await fileOn('Style', style, { name: 'T-SA035 jacket front.jpg', kind: 'PHOTO', contentType: 'image/jpeg' })
+    files.red = await fileOn('Colourway', red, { name: 'T-SA035 jacket red.jpg', kind: 'PHOTO', contentType: 'image/jpeg' })
     const blkLine = lines.find((line) => line.colour === 'BLK')!.id
     files.artwork = await fileOn('SalesOrderLine', blkLine, { name: 'T-SA035 logo.pdf', kind: 'DOCUMENT', contentType: 'application/pdf', category: 'ARTWORK' })
     files.pending = await fileOn('SalesOrderLine', blkLine, { name: 'T-SA035 logo v2.pdf', kind: 'DOCUMENT', contentType: 'application/pdf', category: 'ARTWORK', status: 'PENDING_UPLOAD' })
-    await admin(`UPDATE "StyleImage" SET "isMain" = false WHERE "tenantId" = $1 AND "styleId" = $2`, [T.a, jacket])
+    await admin(`UPDATE "StyleImage" SET "isMain" = false WHERE "tenantId" = $1 AND "styleId" = $2`, [T.a, style])
     await admin(
       `INSERT INTO "StyleImage" (id, "tenantId", "styleId", "colourwayId", "fileId", kind, seq, "isMain") VALUES ($1, $2, $3, NULL, $4, 'PHOTO', 0, true), ($5, $2, $3, $6, $7, 'PHOTO', 1, false)`,
-      [newId(), T.a, jacket, files.main, newId(), RED, files.red],
+      [newId(), T.a, style, files.main, newId(), red, files.red],
     )
   })
 

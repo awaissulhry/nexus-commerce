@@ -274,7 +274,7 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     },
     { id: 'quotes-orders-empty', label: 'F-SA-276 · Work: nothing in production (the way to All orders)', model: workCase('NUOVO-PROVA', { reads: STRIP_READY, rows: [] }) },
     { id: 'quotes-orders-reading', label: 'F-SA-276 · Work: the strip and the rows reading ("—", never 0)', model: workCase('MODA-DEMO', { reads: STRIP_READING, rows: null }) },
-    { id: 'quotes-orders-error', label: "F-SA-276 · Work: the orders couldn't be read (the strip stays usable)", model: workCase('MODA-DEMO', { reads: { ...STRIP_READY, requests: { status: 'failed' } }, rows: [], problem: 'problem.read' }) },
+    { id: 'quotes-orders-error', label: "F-SA-276 · Work: the orders couldn't be read (the strip stays usable)", model: workCase('MODA-DEMO', { reads: { ...STRIP_READY, requests: { status: 'failed' } }, rows: [], problem: 'problem.read.unavailable' }) },
     // ---- F-SA-271: the seven tabs (R5), the landing tab, the band's primary and ⋯ lines.
     { id: 'tabs-landing', label: 'F-SA-271 · No tab asked: the first tab the reader sees (Work for Sales)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')) }) },
     { id: 'tabs-overview-first', label: 'F-SA-271 · A reader without orders.view lands on the Overview', model: record('MODA-DEMO', { tab: 'overview', can: { ...RECORD_CAN, orders: false } }) },

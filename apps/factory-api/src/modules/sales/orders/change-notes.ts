@@ -380,12 +380,13 @@ async function compose(tools: CommandTools, tenantId: string, order: OrderFacts,
       const kind = String(request.kind)
       const asked = { customer: order.customer, at: request.createdAt, what: askWhatOf(kind, request, seqOf) }
       if (request.status === 'WITHDRAWN' && sameInstant(request.withdrawnAt, at)) {
-        return { head: { kind: 'WITHDRAWN', customer: order.customer }, causedById: null, asked, answer: null, done, next, floor, closes, requestId: request.id }
+        // A refusal and a withdrawal are short lines (14-change-flow §2): the head (and a refusal's words), never what was asked.
+        return { head: { kind: 'WITHDRAWN', customer: order.customer }, causedById: null, asked: null, answer: null, done, next, floor, closes, requestId: request.id }
       }
       if (!sameInstant(request.answeredAt, at)) return null
       const by = await nameOf(tx, request.answeredById)
       const causedById = await officePerson(tx, request.answeredById)
-      if (request.status === 'REFUSED') return { head: { kind: 'REFUSED', by }, causedById, asked, answer: request.answer, done, next, floor, closes, requestId: request.id }
+      if (request.status === 'REFUSED') return { head: { kind: 'REFUSED', by }, causedById, asked: null, answer: request.answer, done, next, floor, closes, requestId: request.id }
       if (request.status !== 'ACCEPTED') return null
       const amendment = await tx.salesOrderAmendment.findFirst({ where: { orderId: order.id, OR: [{ requestId: correlationId }, ...(request.amendmentId ? [{ id: request.amendmentId }] : [])] }, select: { revision: true, before: true, after: true } })
       if (amendment) {

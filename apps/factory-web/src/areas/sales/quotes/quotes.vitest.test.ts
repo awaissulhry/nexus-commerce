@@ -327,10 +327,15 @@ describe('every key the quote screens name exists in it and en', () => {
     // B-W2b-307: the inbox in depth (its container, its views and its rules) speaks `approvals-depth` (tested in inbox.vitest).
     // fix-pr-6: F-PR-08's customer requests (`requests/`) speak `approvals` by `customerRequest.*` and `approvals-depth` by `notice.*` and
     // `review.noun`, both tested in requests/requests.vitest.
-    const depth = /home[\\/]approvals[\\/](Approvals\.tsx|api\.ts|inbox\.ts|view[\\/](InboxView|TaskReview|BulkApprove)\.tsx|requests[\\/].*)$/
+    // F-SA-245 (Sales S4, #1668): a work-order change's review (`work-order-changes/`) speaks `approvals` by `workOrderChange.*` and
+    // `approvals-depth` by `notice.*` and `review.noun`, as `requests/` does: its notice and review keys are checked there, below.
+    const depth = /home[\\/]approvals[\\/](Approvals\.tsx|api\.ts|inbox\.ts|view[\\/](InboxView|TaskReview|BulkApprove)\.tsx|requests[\\/].*|work-order-changes[\\/].*)$/
     const keys = [...literalKeys(['areas/home/approvals'], ['tile', 'tableLabel', 'empty', 'col', 'sentence', 'held', 'heldShort', 'review', 'rule', 'rejectDialog', 'notice'], depth), ...approvalsBuilt]
     expect(keys.length).toBeGreaterThan(50)
     expect(keys.filter((key) => !has('approvals', key))).toEqual([])
+    const changes = literalKeys(['areas/home/approvals/work-order-changes'], ['review', 'notice'], /vitest/)
+    expect(changes).toEqual(['notice.changeApplied', 'notice.changeDeclined', 'review.noun'])
+    expect(changes.filter((key) => !has('approvals-depth', key))).toEqual([])
   })
   it('send', () => {
     const keys = [...literalKeys(['areas/_shared/document-send'], ['to', 'cc', 'how', 'message', 'checks', 'held', 'preview', 'result', 'languageName']), ...sendBuilt]

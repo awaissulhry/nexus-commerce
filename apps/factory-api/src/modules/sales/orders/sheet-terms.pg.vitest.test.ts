@@ -69,7 +69,8 @@ async function fileNumbers(session: string, address: string): Promise<string[]> 
   const source = exportSourceOf('sales.orders')!
   const reader = callerFor(database, completeContext(SESSIONS[session]!(), `test-${newId()}`))
   const page = await source.read(reader, source.query(new URLSearchParams(address)), null, 200)
-  return (page.rows as Json[]).map((row) => row.number as string).sort()
+  // The file's own Number cell (the source is wrapped with the custom fields, B-TH-057: its rows are { row, cells }).
+  return page.rows.map((row) => source.columns.number!.value(row, (code) => code) as string).sort()
 }
 async function madeToMeasure(partyId?: string): Promise<string[]> {
   const rows = await admin<{ number: string }>(
@@ -162,8 +163,11 @@ describe('Brand narrows the sheet (B-TH-225)', () => {
     expect(expected).toEqual(expect.arrayContaining(['SEED-SO-0001', 'TEST-SO-R1']))
     expect(await numbers('all', `brand=${C1}`)).toEqual(expected)
     expect(await boardTotal('all', `brand=${C1}`)).toBe(expected.length)
-    // The term keeps every other term: one customer's orders of that label.
-    expect(await numbers('all', `brand=${C1}&partyId=${R1}`)).toEqual(['TEST-SO-R1'])
+    // The term keeps every other term: one customer's orders of that label (SEED-R1's: TEST-SO-R1 and, B-SA-020, its
+    // made-to-measure copy of SEED-SO-0001, which keeps SEED-C1's jacket line).
+    const r1 = await labelled(C1, R1)
+    expect(r1).toEqual(['TEST-SO-MTM-R1', 'TEST-SO-R1'])
+    expect(await numbers('all', `brand=${C1}&partyId=${R1}`)).toEqual(r1)
   })
 
   it('own: only the orders with a line of our own collection', async () => {
@@ -176,8 +180,9 @@ describe('Brand narrows the sheet (B-TH-225)', () => {
   })
 
   it('a person limited to SEED-R1 asking for SEED-C1\'s label sees R1\'s order only, never C1\'s', async () => {
-    expect(await numbers('onlyR1', `brand=${C1}`)).toEqual(['TEST-SO-R1'])
-    expect(await boardTotal('onlyR1', `brand=${C1}`)).toBe(1)
+    const r1 = await labelled(C1, R1) // TEST-SO-R1 and TEST-SO-MTM-R1 (B-SA-020)
+    expect(await numbers('onlyR1', `brand=${C1}`)).toEqual(r1)
+    expect(await boardTotal('onlyR1', `brand=${C1}`)).toBe(r1.length)
     expect(await numbers('onlyR1', 'brand=own')).toEqual(['TEST-SO-R1'])
   })
 
@@ -300,10 +305,14 @@ describe('the rider term and the rider-name search, only for a reader of measure
 
   it('the search finds an order by its unit\'s rider only for a reader of measurements of that customer', async () => {
     expect(await numbers('measures', 'q=Seed%20Team%20Rider')).toEqual(['TEST-SO-MTM-C1'])
-    expect(await numbers('measures', 'q=Seed%20Private%20Rider')).toEqual(['TEST-SO-MTM-R1'])
     expect(await numbers('all', 'q=Seed%20Team%20Rider')).toEqual([])
     expect(await numbers('onlyR1Measures', 'q=Seed%20Team%20Rider')).toEqual([])
-    expect(await numbers('onlyR1Measures', 'q=Seed%20Private%20Rider')).toEqual(['TEST-SO-MTM-R1'])
+    // SEED-R1 is a private rider: "Seed Private Rider" is also the customer's legal name, so every reader of its orders finds them
+    // all by the customer (B-TH-057) — the made-to-measure one among them; a reader of measurements finds nothing more.
+    const privately = ['TEST-SO-MTM-R1', 'TEST-SO-R1']
+    expect(await numbers('all', 'q=Seed%20Private%20Rider')).toEqual(privately)
+    expect(await numbers('measures', 'q=Seed%20Private%20Rider')).toEqual(privately)
+    expect(await numbers('onlyR1Measures', 'q=Seed%20Private%20Rider')).toEqual(privately)
   })
 })
 // ── end B-SA-021 ──

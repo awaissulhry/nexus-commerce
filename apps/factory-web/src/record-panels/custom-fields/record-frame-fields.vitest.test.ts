@@ -15,7 +15,8 @@ const read = (path: string) => readFileSync(new URL(path, SRC), 'utf8')
 const PAGES = [
   { container: 'areas/parties/_shared/PartyRecord.tsx', view: 'areas/parties/_shared/view/PartyRecordView.tsx', type: 'config.recordType', model: 'Party', first: 'overview' },
   { container: 'areas/sales/quotes/record/QuoteRecord.tsx', view: 'areas/sales/quotes/record/view/QuoteRecordView.tsx', type: "'Quote'", model: 'Quote', first: 'lines' },
-  { container: 'areas/sales/orders/record/OrderRecord.tsx', view: 'areas/sales/orders/record/view/OrderRecordView.tsx', type: "'SalesOrder'", model: 'SalesOrder', first: 'lines' },
+  // F-SA-230 (Sales plan N2): the order's seven tabs open on Overview, so its custom fields end the Overview.
+  { container: 'areas/sales/orders/record/OrderRecord.tsx', view: 'areas/sales/orders/record/view/OrderRecordView.tsx', type: "'SalesOrder'", model: 'SalesOrder', first: 'overview' },
   { container: 'areas/products/styles/record/StyleRecord.tsx', view: 'areas/products/styles/record/view/StyleRecordView.tsx', type: "'Style'", model: 'Style', first: 'overview' },
   { container: 'areas/purchasing/orders/record/OrderRecord.tsx', view: 'areas/purchasing/orders/record/view/OrderRecordView.tsx', type: "'PurchaseOrder'", model: 'PurchaseOrder', first: 'lines' },
   { container: 'areas/warehouse/lots/record/LotRecord.tsx', view: 'areas/warehouse/lots/record/view/LotRecordView.tsx', type: "'Lot'", model: 'Lot', first: 'overview' },
@@ -34,12 +35,21 @@ describe('B-TH-280 — every record page that takes custom fields shows them aga
       expect(container).toContain("record-panels/custom-fields/RecordCustomFields'")
       expect(container.match(/<RecordCustomFields /g)?.length).toBe(1)
       expect(container).toContain(`tab === '${page.first}' ? <RecordCustomFields record={{ type: ${page.type}, id: `)
-      expect(container).toMatch(/fields=\{fields \/\* B-TH-280 \*\/\}|fields=\{value && tab === /)
+      // F-SA-270: the party's record is one hook (usePartyRecord) that returns the section as `fields`; its two pages pass it on.
+      expect(container).toMatch(/fields=\{fields \/\* B-TH-280 \*\/\}|fields=\{value && tab === |\n\s+fields \/\* B-TH-280 \*\/,\n/)
       const view = read(page.view)
       expect(view).toContain('fields?: ReactNode')
       expect(view).toMatch(/fields=\{fields \/\* B-TH-280/)
     })
   }
+
+  it("F-SA-270: the customer's page and the supplier's page both pass the party hook's section on to their view", () => {
+    expect(read('areas/parties/_shared/PartyRecord.tsx')).toMatch(/<PartyRecordView [^\n]*fields=\{record\.fields\}/)
+    expect(read('areas/sales/customers/record/CustomerRecord.tsx')).toMatch(/<CustomerRecordView [^\n]*fields=\{record\.fields\}/)
+    const view = read('areas/sales/customers/record/view/CustomerRecordView.tsx')
+    expect(view).toContain('fields?: ReactNode')
+    expect(view).toMatch(/fields=\{fields \/\* B-TH-280/)
+  })
 
   it('the work order only hands the slot down to RecordFrame: no tab body draws it (agreement T1: the production lane’s bodies)', () => {
     const view = read('areas/production/work-orders/record/view/WorkOrderRecordView.tsx')

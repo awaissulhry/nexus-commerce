@@ -14,6 +14,7 @@ import { EXPORT_SOURCES } from './sources'
 import { REPORT_CODE_WORDS, reportCell, reportListKey } from './sources/reports'
 import { salesOrders } from './sources/sales-orders' // B-TH-008
 import { sheetName } from './writer' // B-TH-008
+import { withCustomFields } from '../fields/exports' // fix wave 2: the wrapped source keeps the column rights
 
 /**
  * The export sources (B-W2a-23, B-W2b-11): every list source names a real Office list page, its words in both
@@ -126,10 +127,10 @@ describe('the orders file reads every term the screen reads (B-TH-008)', () => {
   })
 
   it('says every status in both languages (a waiting or delivered order is never a raw code)', () => {
-    for (const locale of ['it', 'en'] as const) {
-      expect(salesOrders.words?.[locale]['status.PENDING_APPROVAL']).toMatch(/approv/)
-      expect(salesOrders.words?.[locale]['status.DELIVERED']).toBeTruthy()
-    }
+    // Round 5 (R9): the English word stays the catalogue's "Waiting for a yes", as the pill, the lane and the tile.
+    expect(salesOrders.words?.it['status.PENDING_APPROVAL']).toMatch(/approv/)
+    expect(salesOrders.words?.en['status.PENDING_APPROVAL']).toBe('Waiting for a yes')
+    for (const locale of ['it', 'en'] as const) expect(salesOrders.words?.[locale]['status.DELIVERED']).toBeTruthy()
   })
 
   it('names the file after what it holds; the Excel tab keeps the rows it holds whole', () => {
@@ -183,7 +184,11 @@ describe('the orders file writes the sheet’s columns and reads its Brand term 
     expect(salesOrders.columns.atRisk!.value(row, say('it'))).toBe('Vicino alla data promessa (mancano 3 giorni)')
     expect(salesOrders.columns.priority!.value(row, say('en'))).toBe('Top')
     expect(salesOrders.columns.priority!.value(row, say('it'))).toBe('Massima')
-    for (const locale of ['it', 'en'] as const) expect(JSON.stringify(salesOrders.words![locale]), locale).not.toMatch(/At risk|A rischio/)
+    // "At risk" is order health only (P15, kept): B-SA-070's Where it is cell says it as health.AT_RISK, and no other word does.
+    for (const locale of ['it', 'en'] as const) {
+      const saying = Object.entries(salesOrders.words![locale]).filter(([, text]) => /At risk|A rischio/.test(text)).map(([code]) => code)
+      expect(saying, locale).toEqual(['health.AT_RISK'])
+    }
   })
 })
 // ── end B-TH-018 ──
@@ -224,6 +229,21 @@ describe('the orders file reads kind=mtm and writes Made to measure and Riders, 
     expect(lacksColumnRight(salesOrders, 'riders', actor(['orders.view']), {})).toBe(true)
     expect(lacksColumnRight(salesOrders, 'number', actor(['orders.view']), {})).toBe(false)
     expect(lacksColumnRight(salesOrders, 'not-a-column', actor(['orders.view']), {})).toBe(false)
+  })
+
+  // Fix wave 2: the routes and the worker hold the list with its custom fields (platform/fields withCustomFields, B-TH-057): the
+  // wrapper keeps each column's own right and reads the refusal on the view's own query, never its { inner, cf } wrapper.
+  it('the wrapped source the routes use keeps the Riders and Supervisor rights and the rider-term refusal', () => {
+    const wrapped = withCustomFields(salesOrders)
+    expect(wrapped).not.toBe(salesOrders)
+    expect(wrapped.columns.riders!.permission).toBe('sales.measurements.view')
+    expect(wrapped.columns.supervisor!.permission).toBe('workorders.view')
+    expect(lacksColumnRight(wrapped, 'riders', actor(['orders.view']), {})).toBe(true)
+    expect(lacksColumnRight(wrapped, 'supervisor', actor(['orders.view']), {})).toBe(true)
+    expect(lacksColumnRight(wrapped, 'supervisor', actor(['orders.view', 'workorders.view']), {})).toBe(false)
+    const query = wrapped.query(new URLSearchParams('profile=0190a1b2-0000-7000-8000-0000000000c1'))
+    expect(wrapped.refusal?.(actor(['orders.view']), query)).toBe('You may not narrow orders by rider.')
+    expect(wrapped.refusal?.(actor(['orders.view', 'sales.measurements.view']), query)).toBeNull()
   })
 })
 // ── end B-SA-020 ──

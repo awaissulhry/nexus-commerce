@@ -199,7 +199,7 @@
     "made_one": "{count} task made",
     "made_other": "{count} tasks made",
     "receipt": "{made} tasks made · {left} left out",
-    "where": "Each task is on its own order: in its thread, in the assignee's Home › Tasks and in the customer's open tasks.",
+    "where": "Each task is on its own order: in its thread, in the assignee's Home › My tasks and in the customer's open tasks.",
     "close": "Close",
     "held": {
       "none": "Tick the orders first.",
