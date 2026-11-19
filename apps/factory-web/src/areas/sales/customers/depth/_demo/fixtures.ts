@@ -1,5 +1,5 @@
 import { CUSTOMERS, at } from '../../../../parties/_shared/fixtures'
-import { DEMO_COMPANIES } from '../../../../../shell/design-data'
+import { DEMO_COMPANIES, rolePermissions } from '../../../../../shell/design-data'
 import type { AccessCopy, CompanyTerms, Erased, Glance, Holds, Privacy, Requirement, Requirements, StyleOption } from '../api'
 import { depthCan, type DepthCan } from '../model'
 
@@ -24,8 +24,8 @@ export const COMPANIES = [
 export const TODAY = '2026-10-29'
 
 export const ALL_CAN: DepthCan = depthCan(['parties.manage', 'parties.hold', 'parties.privacy', 'parties.erase', 'money.price', 'product.styles.view', 'files.read'])
-/** Sales: no erasure (finance's). */
-export const SALES_CAN: DepthCan = { ...ALL_CAN, erase: false }
+/** B-CP-011 (the money wall, Owner O1): the real Sales role — no erasure (finance's), no price grain. */
+export const SALES_CAN: DepthCan = depthCan(rolePermissions('sales'))
 /** A reader: nothing to change, no price grain. */
 export const READ_CAN: DepthCan = depthCan([])
 
