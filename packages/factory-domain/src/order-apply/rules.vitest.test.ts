@@ -80,6 +80,8 @@ describe('the changes an accepted change asks of the work orders (B-SA-041)', ()
     expect(CHANGE_WORDS.changedSince('WO-0042')).toEqual({ en: 'WO-0042 changed since — propose again', it: 'WO-0042 è cambiato nel frattempo: proponi di nuovo' })
     expect(CHANGE_WORDS.extra(2, 'M')).toEqual({ en: 'Extra pieces: 2 M already cut', it: 'Pezzi in più: 2 M già tagliati' })
     expect(CHANGE_WORDS.chooseExtra(2)).toEqual({ en: 'Choose what happens to the 2 extra pieces', it: 'Scegli cosa fare dei 2 pezzi in più' })
+    // op-fx3: one extra piece is said in the singular, never "the 1 extra pieces" / "dei 1 pezzi in più".
+    expect(CHANGE_WORDS.chooseExtra(1)).toEqual({ en: 'Choose what happens to the 1 extra piece', it: 'Scegli cosa fare del 1 pezzo in più' })
   })
 
   it('charges the customer for its extra pieces at their sizes\' prices (B-SA-042, CHARGE)', () => {

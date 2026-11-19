@@ -90,10 +90,13 @@ const ids: Record<string, string> = {}
 const shipments = async () => (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "Shipment" WHERE "tenantId" = $1`, [A.tenant]))[0]!.n
 
 beforeAll(async () => {
-  db = await migratedDatabase('shipping-elsewhere')
+  db = await migratedDatabase('shipping_elsewhere')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 8 } })
   await seedCore({ db: database, namespace: ns })
   seedA = await seedShipping({ db: database, namespace: ns })
+  // op-fx2 (end check): the seeds' quality releases are the story's days to come (seed-calendar: moved on to stay ahead), and
+  // goods never leave before their release: this file's releases happened two days ago.
+  await force(`UPDATE "QualityRelease" SET "releasedAt" = now() - interval '2 days' WHERE "tenantId" = $1 AND "releasedAt" > now() - interval '2 days'`, [A.tenant])
   // The company's legal data (the DDT routes read them before they refuse a shipment made elsewhere).
   await admin(`UPDATE "Company" SET "vatNumber" = 'IT12345670009', "fiscalCode" = '12345670009', "reaOffice" = 'MI', "reaNumber" = '0000001' WHERE id = $1`, [A.companyA])
   await admin(
@@ -260,7 +263,8 @@ describe('B-OP-032 (R-9): a customer on hold', () => {
       // No system hold is ever synced onto it (holds/system.ts skips a shipment made elsewhere).
       expect(await admin(`SELECT 1 FROM "ShipmentHold" WHERE "shipmentId" = $1`, [answer.shipment.id])).toEqual([])
     } finally {
-      await admin(`UPDATE "PartyHold" SET "releasedAt" = now(), "releaseWords" = 'Test over' WHERE id = $1`, [holdId])
+      // op-fx2 (end check): a hold is released with when, by whom and why, all three.
+      await admin(`UPDATE "PartyHold" SET "releasedAt" = now(), "releasedById" = $2, "releaseWords" = 'Test over' WHERE id = $1`, [holdId, newId()])
     }
   })
 })

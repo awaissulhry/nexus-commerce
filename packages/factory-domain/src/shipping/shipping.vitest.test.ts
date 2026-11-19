@@ -262,7 +262,9 @@ describe('declarations', () => {
       // B-OP-040: the orders a shipment carries changed.
       'shipment.orders_changed',
       // B-W2b-170: links to the branded tracking page made.
-      'shipment.tracking_link_made'])
+      'shipment.tracking_link_made',
+      // B-OP-030: the tracking number of a carrier booked by hand typed, corrected or cleared.
+      'shipment.tracking_changed'])
   })
 })
 
