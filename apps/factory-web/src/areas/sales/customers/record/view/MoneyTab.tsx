@@ -13,6 +13,7 @@ import type { OverviewSlot, SupplierDepth } from '../../../../parties/_shared/vi
 import { ReadState } from '../../../../parties/_shared/view/parts'
 import { CUSTOMER_MONEY_NAMESPACE, depositsAndBalances, openToPayOf, receivablesOfCustomer, statementOf } from '../../money/model'
 import type { CustomerMoneyModel } from '../../money/overview'
+import { notEqualDoor } from '../use-customer-work' // F-CP-141: the door to the Work tab's Not equal view
 
 /**
  * F-SA-273 (sales page plan N5, pick P10; 11-customer-page §5): the customer's Money tab — each card its own right, amounts only
@@ -26,8 +27,12 @@ import type { CustomerMoneyModel } from '../../money/overview'
  *                 Open statement (Finance's statement of the customer, company and currency)
  *   Deposits and balances of open orders   the first 10 by balance (a link each) · See all → Work (All orders)
  *   Payment terms read only (the party's) · Edit in Terms & requirements
+ *
+ * F-CP-141 (customer page plan C2d; 11-money §3.2; money wall O1–O3): for a price holder ONE line under the key numbers, "Prices differ
+ * on {count} orders ›", the door to the Work tab's Not equal view — from the customer's own counts (the API walls them to this
+ * customer). Nothing for anyone else: no line, no number, no word that a price differs (the page reads no count for them).
  */
-export function MoneyTab({ model, party, money: moneyModel, overview, depth }: { model: PartyRecordModel; party: Party; money: CustomerMoneyModel | null; overview?: OverviewSlot | undefined; depth?: SupplierDepth | undefined }) {
+export function MoneyTab({ model, party, money: moneyModel, overview, depth, priceDiffer = null }: { model: PartyRecordModel; party: Party; money: CustomerMoneyModel | null; overview?: OverviewSlot | undefined; depth?: SupplierDepth | undefined; /** F-CP-141 */ priceDiffer?: number | null }) {
   const t = useT(CUSTOMER_MONEY_NAMESPACE)
   const tp = useT('parties')
   const locale = useLocale()
@@ -71,9 +76,16 @@ export function MoneyTab({ model, party, money: moneyModel, overview, depth }: {
     ...(overview?.returns ? [overview.returns] : []),
   ].slice(0, 6)
 
+  // F-CP-141: the line only for a price holder, and only when an order's prices differ (0, reading or failed: no line).
+  const differ = price && can.orders && priceDiffer !== null && priceDiffer > 0 ? priceDiffer : null
   return (
     <div className="fw-pty-stack">
       {metrics.length > 0 && <MetricStrip metrics={metrics} />}
+      {differ !== null && (
+        <Link className="fw-pty-link" href={notEqualDoor(recordPath)}>
+          {tp('customers.work.priceDiffer', { count: differ })}
+        </Link>
+      )}
       <div className="fw-pty-two-wide">
         {mcan?.credit && (
           <Card padded>

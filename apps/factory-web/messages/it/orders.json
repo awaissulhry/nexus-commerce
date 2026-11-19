@@ -1994,6 +1994,12 @@
       "NOT_EQUAL": "Mostra solo gli ordini con prezzi diversi",
       "NO_BRAND_PRICE": "Mostra solo gli ordini senza il prezzo del cliente"
     },
+    "chip": {
+      "EQUAL": "Prezzi uguali",
+      "NOT_EQUAL": "Prezzi diversi",
+      "NO_BRAND_PRICE": "Prezzo del cliente non ancora dato"
+    },
+    "showAll": "Mostra tutti gli ordini",
     "edit": "Imposta il prezzo del cliente…",
     "door": "Imposta il prezzo del cliente di {number}",
     "title": "Prezzo del cliente · {number}",

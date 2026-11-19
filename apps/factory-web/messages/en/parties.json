@@ -188,8 +188,11 @@
       "gone": "{record} is no longer in «{view}»",
       "view": {
         "waitingUs": "Waiting on us",
-        "drafts": "Drafts of {customer}"
+        "drafts": "Drafts of {customer}",
+        "notEqual": "Not equal"
       },
+      "priceDiffer_one": "Prices differ on {count} order ›",
+      "priceDiffer_other": "Prices differ on {count} orders ›",
       "dock": {
         "label": "Which thread",
         "general": "{customer} (general)",

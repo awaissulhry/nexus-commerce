@@ -24,6 +24,17 @@ import { workAskAddress } from './use-customer-work'
 import { DOCK_FOLLOW_MS, DOCK_PARAM, DOCK_TABS, dockable, dockAddress, dockFollower, dockKeyOf, dockOnTab, dockTermOf, dockValueOf, draftKeptOf, GENERAL_DOCK, pickOfSummary, scopeOf } from './use-customer-work'
 import { lockedEntry } from '../../orders/list/use-orders-sheet' // fx-12
 import { writeSearch, type HistoryTarget } from '../../../_shared/record-frame/address' // F-OP-211
+// ---- F-CP-141 ----
+import { createElement } from 'react'
+import { renderToString } from 'react-dom/server'
+import { I18nProvider } from '../../../../lib/i18n/provider'
+import { abilitiesOf, boardNarrowOf, extraFromAddress, priceTermOf, withPriceMatch } from '../../orders/model'
+import { canOf } from '../../orders/_demo/fixtures'
+import { extraChips } from '../../orders/list/view/OrdersListView'
+import { MONEY_PRESET, notEqualShown } from './view/WorkTab'
+import { NOT_EQUAL_TERMS, notEqualDoor, priceDifferOf, pricesTouched } from './use-customer-work'
+import { designScreen } from './fixtures'
+// ---- end F-CP-141
 
 /**
  * F-SA-276 (sales page plan N5, N7, N3; picks R5, R9, P10, P17; 11-customer-page §3; 17-review R-1, BW-7): the customer's Work tab —
@@ -644,7 +655,7 @@ describe('F-CP-103: each tile opens the rows it counts; the Views counts come fr
 
   it('no second read: the Work tab hands the sheet the strip\'s read (brand wall: the API walls it to this customer)', () => {
     const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain('viewCounts: workViewCounts(work.reads.board)')
+    expect(tab).toContain('viewCounts: { ...(workViewCounts(work.reads.board) ?? {})') // F-CP-107 / F-CP-141: the drafts' and Not equal's counts beside it
     expect(tab).not.toMatch(/getBoard\(/)
     const hook = readFileSync(new URL('./use-customer-work.ts', import.meta.url), 'utf8')
     expect(hook).toContain("board: () => run('board', () => getBoard(api, '', undefined, partyId))")
@@ -725,3 +736,149 @@ describe('F-CP-113: the lines editor in a large window on the customer page', ()
   })
 })
 // ---- end F-CP-113
+
+// ---- F-CP-141 (customer page plan C2d, C4; 11-money §3.2; 10 §5; review E5, E6): the "Not equal" view ------------------------------
+// `rows=all&priceMatch=NOT_EQUAL`, offered only with the price grain; its preset MONEY_PRESET; its count from the customer's own
+// counts (GET /sales/brand-prices/summary: the API walls it to this customer); the Money tab's "Prices differ on {count} orders ›".
+// Money wall "as Sales worker / as Production manager": no view, no count, no Money line; a shared saved view with the term opened by
+// a non-holder = ONE line (orders.held.noPrice) + Show all orders, and no read carries the term.
+describe('F-CP-141: the Not equal view', () => {
+  const OWNER = canOf('owner')
+  const SALES_WORKER = { ...canOf('sales'), price: false } // the Sales role after B-CP-011
+  const MANAGER = canOf('manager') // the production manager: orders.view, no money grain
+  const search = (address: string) => address.slice(address.indexOf('?') + 1)
+  const html = (id: string, locale: (typeof LOCALES)[number] = 'en') => {
+    const item = designScreen.cases.find((entry) => entry.id === id)!
+    const View = designScreen.view as (props: { model: unknown }) => ReturnType<typeof createElement>
+    return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model: item.model })))
+  }
+
+  it('the address applied twice = the same (fx-12): the view\'s door and the term; the entry writes the lock only, once', () => {
+    const door = notEqualDoor(BASE)
+    expect(door).toBe(`${BASE}?tab=work&${NOT_EQUAL_TERMS}`)
+    const once = workEntry(BASE, ALPHA, params(search(door)))!
+    const written = new URL(`https://x${once}`).searchParams
+    expect([written.get('tab'), written.get('party'), written.get('rows'), written.get('priceMatch')]).toEqual(['work', ALPHA, 'all', 'NOT_EQUAL'])
+    expect(workEntry(BASE, ALPHA, params(search(once)))).toBeNull()
+    // The sheet writes the same terms back (the lock and the page's tab kept), and reading them again writes nothing new.
+    const host = { locked: { party: ALPHA }, keep: ['tab', 'dock'] }
+    const extra = extraFromAddress(params(search(once)), 'all')
+    expect(extra).toEqual({ priceMatch: 'NOT_EQUAL' })
+    const again = sheetAddress(BASE, host, params(search(once)), { rows: 'all', q: '', layout: 'list', extra })
+    expect(new URL(`https://x${again}`).searchParams.get('priceMatch')).toBe('NOT_EQUAL')
+    expect(sheetAddress(BASE, host, params(search(again)), { rows: 'all', q: '', layout: 'list', extra: extraFromAddress(params(search(again)), 'all') })).toBe(again)
+    expect(lockedEntry(BASE, { locked: { party: ALPHA } }, params(search(again)))).toBeNull()
+  })
+
+  it('the term: read from the address (a known value only), written back, sent to the list and its totals — never to the board', () => {
+    expect(extraFromAddress(params('priceMatch=NOT_EQUAL'), 'all').priceMatch).toBe('NOT_EQUAL')
+    expect(extraFromAddress(params('priceMatch=NO_BRAND_PRICE'), 'all').priceMatch).toBe('NO_BRAND_PRICE')
+    expect(extraFromAddress(params('priceMatch=equal'), 'all').priceMatch).toBeUndefined()
+    expect(extraFromAddress(params('priceMatch=MAYBE'), 'all').priceMatch).toBeUndefined()
+    expect(listAddress(BASE, { rows: 'all', q: '', layout: 'list', extra: { priceMatch: 'NOT_EQUAL' } })).toBe(`${BASE}?rows=all&priceMatch=NOT_EQUAL`)
+    expect(rowsQuery('all', '', null, ALPHA, { extra: { priceMatch: 'NOT_EQUAL' } }).priceMatch).toBe('NOT_EQUAL')
+    expect(boardNarrowOf({ extra: { priceMatch: 'NOT_EQUAL' } })).not.toHaveProperty('priceMatch')
+    const api = readFileSync(new URL('../../orders/api.ts', import.meta.url), 'utf8')
+    expect(api.match(/priceMatch: query\.priceMatch \?\? undefined/g)?.length, 'the list and its totals').toBe(2)
+  })
+
+  it('a pick: the view and the term alone in one write; the funnel narrows the view shown; leaving drops the term only', () => {
+    expect(withPriceMatch({ atRisk: true }, 'NOT_EQUAL', true)).toEqual({ priceMatch: 'NOT_EQUAL' })
+    expect(withPriceMatch({ atRisk: true }, 'EQUAL')).toEqual({ atRisk: true, priceMatch: 'EQUAL' })
+    expect(withPriceMatch({ atRisk: true, priceMatch: 'NOT_EQUAL' }, null)).toEqual({ atRisk: true })
+    expect(notEqualShown('all', null, { priceMatch: 'NOT_EQUAL' })).toBe(true)
+    expect(notEqualShown('late', null, { priceMatch: 'NOT_EQUAL' })).toBe(false)
+    expect(notEqualShown('all', 'us', { priceMatch: 'NOT_EQUAL' })).toBe(false)
+    expect(notEqualShown('all', null, { priceMatch: 'EQUAL' })).toBe(false)
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("else if (id === NOT_EQUAL_VIEW) sheet.actions.onPriceMatch?.('NOT_EQUAL', { rows: 'all' })")
+    expect(tab).toContain('const onRows = leave ? (next: RowView) => leave(null, { rows: next }) : sheet.actions.onRows')
+    expect(tab.match(/router\.replace\(/g)?.length, 'still one writer of the entry address').toBe(1)
+    const sheet = readFileSync(new URL('../../orders/list/use-orders-sheet.ts', import.meta.url), 'utf8')
+    expect(sheet).toContain('go({ extra: withPriceMatch(extra, match, !!view && !!match)')
+  })
+
+  it('Not equal only with the price grain: the view, its item, its count; as Sales worker / as Production manager none of them', () => {
+    expect(workViewsOf(OWNER, { drafts: true, priceCheck: true })).toContain(NOT_EQUAL_VIEW)
+    for (const can of [SALES_WORKER, MANAGER]) expect(workViewsOf(can, { drafts: true, priceCheck: true })).not.toContain(NOT_EQUAL_VIEW)
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("...(price ? [{ id: NOT_EQUAL_VIEW, label: t('customers.work.view.notEqual'), active: notEqual }] : [])")
+    expect(tab).toContain('const notEqualCount = price ? priceDifferOf(work.prices) : null')
+    // The Owner's view carries the term's chip; as Sales worker the same address shows no chip and no price word.
+    expect(html('work-not-equal')).toContain('Prices differ')
+    const seen = html('work-not-equal-no-price')
+    expect(seen).not.toContain('Prices differ')
+    expect(seen).not.toContain('>Not equal<')
+  })
+
+  it('the count: the customer\'s own counts (one read, this customer only), read only with the price grain, again on an order\'s change', () => {
+    expect(priceDifferOf({ status: 'ready', value: { partyId: ALPHA, priceNotEqualCount: 2, priceMissingCount: 5 } })).toBe(2)
+    expect(priceDifferOf({ status: 'ready', value: { partyId: ALPHA, priceNotEqualCount: 0, priceMissingCount: 0 } })).toBe(0)
+    for (const read of [{ status: 'reading' }, { status: 'failed' }, { status: 'off' }] as const) expect(priceDifferOf(read)).toBeNull()
+    expect(pricesTouched('sales_order.brand_price_changed')).toBe(true)
+    expect(pricesTouched('sales_order.confirmed')).toBe(true)
+    expect(pricesTouched('thread.message_posted')).toBe(false)
+    const hook = readFileSync(new URL('./use-customer-work.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("api.get('/sales/brand-prices/summary', { query: { partyId }, schema: priceSummarySchema, signal })")
+    expect(hook).toContain('const pricesAllowed = can.orders && can.price === true')
+    expect(hook).toContain("const [prices, setPrices] = useState<Read<PriceSummary>>(pricesAllowed ? READING : OFF)")
+    const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('price: can.price /* F-CP-141 */')
+    expect(page).toContain('priceDiffer={priceDifferOf(work.prices) /* F-CP-141 */}')
+  })
+
+  it('its preset: Number · Status · Our price · Customer\'s price · Price check · Balance; wide Picture · Promised · Paid; Difference in Customise', () => {
+    expect(MONEY_PRESET.shown).toEqual(['number', 'status', 'ourPrice', 'brandPrice', 'priceMatch', 'balance'])
+    expect(MONEY_PRESET.wide).toEqual(['picture', 'promised', 'paid'])
+    expect([...MONEY_PRESET.shown, ...(MONEY_PRESET.wide ?? [])]).not.toContain('priceDiff')
+    expect(workPreset('all', null, true)).toBe(MONEY_PRESET)
+    // Review E5: All orders keeps today's columns (the money comes with the Not equal view or the toggle).
+    expect(workPreset('all', null).shown).not.toContain('ourPrice')
+    expect(workPreset('all', null).wide).not.toContain('priceMatch')
+  })
+
+  it('the Money tab: "Prices differ on {count} orders ›" for a price holder (the Not equal view\'s door); nothing for anyone else', () => {
+    const owner = html('tab-money-price-differ')
+    expect(owner).toContain('Prices differ on 2 orders ›')
+    expect(owner).toContain(`tab=work&amp;rows=all&amp;priceMatch=NOT_EQUAL`)
+    const sales = html('tab-money-price-differ-no-price')
+    expect(sales).not.toContain('Prices differ')
+    expect(sales).not.toContain('priceMatch')
+    expect(html('tab-money-price-differ', 'it')).toContain('Prezzi diversi su 2 ordini ›')
+    const tab = readFileSync(new URL('./view/MoneyTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('const differ = price && can.orders && priceDiffer !== null && priceDiffer > 0 ? priceDiffer : null')
+  })
+
+  it('a non-holder opens a shared view with the term: one line + Show all orders, no read carries it, no address write', () => {
+    for (const can of [SALES_WORKER, MANAGER]) {
+      const seen = priceTermOf({ priceMatch: 'NOT_EQUAL', atRisk: true }, can)
+      expect(seen).toEqual({ extra: { atRisk: true }, held: true })
+    }
+    expect(priceTermOf({ priceMatch: 'NOT_EQUAL' }, OWNER)).toEqual({ extra: { priceMatch: 'NOT_EQUAL' }, held: false })
+    expect(priceTermOf({ atRisk: true }, SALES_WORKER)).toEqual({ extra: { atRisk: true }, held: false })
+    expect(abilitiesOf(['orders.view']).price).toBe(false)
+    const sheet = readFileSync(new URL('../../orders/list/use-orders-sheet.ts', import.meta.url), 'utf8')
+    expect(sheet).toContain('const priceTerm = priceTermOf(extraFromAddress(params, rows), can)')
+    expect(sheet).toContain('if (priceHeld) {')
+    expect(sheet).toContain('const wantsSummary = !priceHeld /* F-CP-141 */')
+    const seen = html('work-not-equal-no-price')
+    expect(seen).toContain('Amounts are shown to people who see prices')
+    expect(seen).toContain('Show all orders')
+    expect(html('work-not-equal-no-price', 'it')).toContain('Gli importi sono visibili a chi vede i prezzi')
+  })
+
+  it('the chip of the term (a price holder\'s), and the words in both languages', () => {
+    const orders = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    const sheetWords = createTranslator('en', messagesFor('en', ['orders-sheet'])['orders-sheet']!)
+    expect(extraChips({ priceMatch: 'NOT_EQUAL' }, orders, sheetWords)).toEqual([{ key: 'priceMatch', label: 'Prices differ' }])
+    for (const locale of LOCALES) {
+      const p = createTranslator(locale, messagesFor(locale, ['parties']).parties!)
+      const o = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['customers.work.view.notEqual']) expect(p(key), `${locale} ${key}`).not.toBe(key)
+      expect(p('customers.work.priceDiffer', { count: 1 }), locale).not.toContain('customers.work')
+      for (const key of ['priceCheck.chip.EQUAL', 'priceCheck.chip.NOT_EQUAL', 'priceCheck.chip.NO_BRAND_PRICE', 'priceCheck.showAll', 'held.noPrice']) expect(o(key), `${locale} ${key}`).not.toBe(key)
+    }
+    expect(createTranslator('it', messagesFor('it', ['parties']).parties!)('customers.work.view.notEqual')).toBe('Prezzi diversi')
+  })
+})
+// ---- end F-CP-141

@@ -124,6 +124,11 @@ export interface OrdersListModel {
   group?: 'party' | null
   /** The door terms beside the rows view (a total opened exactly its rows): each a chip with ✕. */
   extra?: ExtraTerms | null
+  /**
+   * F-CP-141 (money wall): the address names the price check term and the reader sees no price (a shared saved view, a link): no read
+   * carries it, no rows are read — the sheet says so in ONE line ("Amounts are shown to people who see prices") with Show all orders.
+   */
+  priceHeld?: boolean
   /** The view's figures from the server (null while read or not asked; the problem in words when it failed). */
   summary?: { value: OrderSummary | null; problem: string | null } | null
   /** The grouped view: each customer's rows read so far (by customer id), and the groups folded shut. */
@@ -246,7 +251,9 @@ export interface OrdersListActions {
   onExtra?: (extra: ExtraTerms) => void
   // F-CP-140: the Price check cell's funnel — narrows the sheet to the orders whose check reads so (the host gives it with the
   // `priceMatch` term, F-CP-141; without it the cell's words stand alone).
-  onPriceMatch?: (match: PriceMatch) => void
+  // F-CP-141: the term in ONE write — no `view`: the funnel (narrows the view shown); with `view`: that view and the term alone (the
+  // Not equal view: rows=all); null drops it (leaving the Not equal view for `view`). A price holder's only (absent otherwise).
+  onPriceMatch?: (match: PriceMatch | null, view?: { readonly rows: RowView; readonly waiting?: 'us' | null }) => void
   /** The columns on screen changed (the Progress column reads the floor only while shown). */
   onShownColumns?: (ids: readonly string[]) => void
   onInvoiceShipped?: (ids: readonly string[]) => void

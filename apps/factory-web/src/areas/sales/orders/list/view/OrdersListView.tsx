@@ -297,7 +297,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // ── end B-TH-225 / B-TH-226 ──
   // B-TH-244: the grouped view draws its customers' headers even before their rows are read; with no group: the empty states.
   const groupsShown = !!model.group && (model.summary?.value?.groups?.length ?? 0) > 0
-  const state = model.list.problem ? (
+  // F-CP-141 (money wall): a price view opened by a reader without the price grain — ONE line, no rows, the way back.
+  const priceHeld = model.priceHeld ? <PriceHeldLine t={t} onAll={() => actions?.onRows?.('all')} /> : null
+  const state = priceHeld ?? (model.list.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.list.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
   ) : items && items.length === 0 && model.rows === 'uninvoiced' && !groupsShown ? (
     // B-TH-244 (SHEET.overall-F06): nothing shipped waits to be invoiced.
@@ -349,7 +351,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         }
       />
     )
-  ) : undefined
+  ) : undefined) // F-CP-141
 
   // ── B-TH-245 (threads plan TH-4, SHEET-G09; SHEET.brand-fields-F03, -F08): the sheet's cells that edit ──
   const cellHeld = (row: OrderRow): string | null => heldCell(row, t, s)
@@ -430,7 +432,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       )}
       <SheetChips chips={chips} t={s} onClearAll={clearFilters} />
 
-      {model.layout === 'week' && model.week ? (
+      {priceHeld && model.layout !== 'list' ? (
+        priceHeld /* F-CP-141: the board and By promise week hold it the same way */
+      ) : model.layout === 'week' && model.week ? (
         // B-W2b-323: By promise week (the search narrows it; the rows view does not apply: every open line).
         <WeekBoard model={model.week} prefix={model.prefix} search={searchField} onSite={actions?.onWeekSite} onRetry={actions?.onWeekRetry} pictures={{ read: actions?.readPictures, demo: model.demoPictures } /* F-SA-215 */} />
       ) : model.layout === 'board' ? (
@@ -1204,7 +1208,22 @@ export function extraChips(extra: ExtraTerms | null, t: Translate, s: Translate)
   if (extra.atRisk) out.push({ key: 'atRisk', label: s('chips.atRisk') })
   if (extra.currency) out.push({ key: 'currency', label: s('chips.currency', { currency: extra.currency }) })
   if (extra.customerUrgency) out.push({ key: 'customerUrgency', label: s('chips.urgency', { urgency: s(`urgency.${extra.customerUrgency}`) }) })
+  if (extra.priceMatch) out.push({ key: 'priceMatch', label: t(`priceCheck.chip.${extra.priceMatch}`) }) // F-CP-141 (a price holder's only: the sheet drops it otherwise)
   return out
+}
+
+/** F-CP-141 (money wall; 10 §5): the one line a price view says to a reader without the price grain, with the way back to every order. */
+export function PriceHeldLine({ t, onAll }: { t: Translate; onAll: () => void }) {
+  return (
+    <EmptyState
+      title={t('held.noPrice')}
+      action={
+        <Button size="sm" onClick={onAll}>
+          {t('priceCheck.showAll')}
+        </Button>
+      }
+    />
+  )
 }
 
 /**

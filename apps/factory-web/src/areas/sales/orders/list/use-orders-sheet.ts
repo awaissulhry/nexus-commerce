@@ -32,6 +32,8 @@ import { pictureReader } from '../../../../lib/record-picture/api' // F-SA-212
 // ---- B-TH-244 (TH-4: the overall view grouped by customer, honest totals, the later columns, Invoice shipped goods) ----
 import { fromDdtsCandidates, getOrderSummary, type OrderSummary } from '../api'
 import { boardNarrowOf, extraFromAddress, groupFromAddress, noExtra, withoutExtra, type ExtraTerms } from '../model'
+import { priceTermOf, withPriceMatch } from '../model' // F-CP-141: the price check term (a price holder's only)
+import type { PriceMatch } from '../api' // F-CP-141
 import { initiallyCollapsed, toggleGroup } from '../../../../list-frame/groups/model'
 import { groupedItems, groupsToRead, type GroupRows } from './sheet/overall'
 import type { InvoiceDraftsState } from './sheet/overall-parts'
@@ -199,14 +201,17 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const cf = cfFromAddress(params)
   // B-TH-244: the grouping (`?group=party`), the door terms beside the rows view, and the Progress column's read.
   const group = groupFromAddress(params)
-  const extraKey = JSON.stringify(extraFromAddress(params, rows))
+  // F-CP-141 (money wall): without the price grain the price check term is carried by no read; `priceHeld`: the address asked for it.
+  const priceTerm = priceTermOf(extraFromAddress(params, rows), can)
+  const priceHeld = priceTerm.held
+  const extraKey = JSON.stringify(priceTerm.extra)
   const extra = useMemo<ExtraTerms>(() => JSON.parse(extraKey) as ExtraTerms, [extraKey])
   const [progressShown, setProgressShown] = useState(false)
   // F-SA-275: the rows' production part only while a production column is shown (Where it is, Waiting on, Supervisor).
   const [productionShown, setProductionShown] = useState(false)
   const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort, extra, progress: progressShown, kind /* F-SA-221 */, profile /* F-SA-222 */, production: productionShown /* F-SA-275 */, waiting /* F-SA-276 */ }), [brand, company, cf, sort, extra, progressShown, kind, profile, productionShown, waiting])
-  const grouped = layout === 'list' && group === 'party' && !party
-  const wantsSummary = layout === 'list' && (grouped || rows === 'uninvoiced' || !noExtra(extra))
+  const grouped = layout === 'list' && group === 'party' && !party && !priceHeld /* F-CP-141: a held view reads no group's rows */
+  const wantsSummary = !priceHeld /* F-CP-141 */ && layout === 'list' && (grouped || rows === 'uninvoiced' || !noExtra(extra))
 
   const [list, setList] = useState<OrdersListModel['list']>({ items: null, more: false, problem: null })
   const [cursor, setCursor] = useState<string | null>(null)
@@ -297,6 +302,15 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     const id = ++readId.current
     readBoard(id)
     readSummary(id) // B-TH-244
+    // F-CP-141 (money wall): a price view a reader without the price grain opened (a shared saved view, a link) reads no rows: the
+    // sheet holds it in one line with the way back (Show all orders); the board's counts carry no price term.
+    if (priceHeld) {
+      setList({ items: [], more: false, problem: null })
+      setLanes([])
+      setAsOf(new Date().toISOString())
+      setUpdates(0)
+      return
+    }
     // B-TH-244: the grouped view reads its groups' rows itself (each group's own pages), after the figures name the groups.
     if (grouped) {
       if (!silent) {
@@ -350,7 +364,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
       if (id !== readId.current) return
       setList({ items: null, more: false, problem: readProblem(error) })
     }
-  }, [api, rows, q, party, narrow, layout, readBoard, readSummary, grouped])
+  }, [api, rows, q, party, narrow, layout, readBoard, readSummary, grouped, priceHeld /* F-CP-141 */])
 
   // ── B-TH-244: the grouped view opens with every group open up to ten (more: all folded), and reads the open groups' rows ──
   const summaryGroups = summary?.value?.groups ?? null
@@ -731,6 +745,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     list: grouped ? { items: groupedRows, more: false, problem: summary?.problem ?? null } : list,
     group: grouped ? 'party' : null,
     extra,
+    priceHeld, // F-CP-141: the address names the price check term and the reader sees no price (one line, no rows)
     summary,
     groupRows,
     collapsed: collapsed ?? [],
@@ -825,6 +840,10 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     // F-CP-114: the door only with the price grain (no door, no call for anyone else).
     ...(can.price
       ? {
+          // F-CP-141: the price check term in ONE write — the cell's funnel narrows the view shown; a view picked with it (the Not
+          // equal view: rows=all and the term alone) stands alone; null drops it (leaving that view: the next view, its rows).
+          onPriceMatch: (match: PriceMatch | null, view?: { readonly rows: RowView; readonly waiting?: 'us' | null }) =>
+            go({ extra: withPriceMatch(extra, match, !!view && !!match), ...(view ? { rows: view.rows, waiting: view.waiting ?? null } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
           onPriceCheck: (orderId: string) => {
             const row = [...(list.items ?? []), ...Object.values(groupRows).flatMap((entry) => entry.items ?? [])].find((entry) => entry.id === orderId)
             if (row) priceCheck.open({ orderId: row.id, number: row.number })

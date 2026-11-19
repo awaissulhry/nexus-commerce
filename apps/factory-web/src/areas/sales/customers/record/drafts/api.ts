@@ -24,6 +24,9 @@ export const officeDraftSchema = z.object({
   /** Its conversation, for a reader of its thread (null: not one). */
   thread: z.object({ messages: z.number(), lastAt: z.string().nullable(), designerAsked: z.boolean() }).nullable(),
   files: z.object({ logos: z.array(fileSchema), references: z.array(fileSchema), sheets: z.array(fileSchema) }),
+  // F-CP-141 (follow-up 6; the API's B-CP-076): the draft's value in minor units — each line at the price shown, else the customer's
+  // own price, × its pieces (null: a line has neither); the price grain only (absent without it, never 0).
+  draftValueAmount: z.number().nullable().optional(),
 })
 
 export const draftRowSchema = z.object({
