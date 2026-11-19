@@ -44,7 +44,8 @@ export default defineStage({
       const said = seen.lines.join('\n')
       expect(seen.documents, said).toBe(1)
       expect(seen.navigations, said).toBeLessThanOrEqual(5)
-      expect(seen.router, said).toBeLessThanOrEqual(8)
+      // fx-13: a production build prefetches each visible link once (many addresses, once each); a loop asks ONE address again and again.
+      expect(seen.mostOneAddress, said).toBeLessThanOrEqual(3)
       await expect(page).toHaveURL(new RegExp(`tab=work.*party=${party.id}`))
     })
 
