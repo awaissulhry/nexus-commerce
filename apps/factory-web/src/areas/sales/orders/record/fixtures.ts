@@ -88,6 +88,9 @@ import { HOLD_REASONS, PRODUCTION_HOLD_REASONS } from '../../../production/work-
 import { PRODUCTION_READ } from './overview/fixtures'
 import { brandRequest } from '../../../home/approvals/requests/fixtures'
 import { ORDER_ID } from '../_demo/fixtures'
+// F-CP-142: Money's Price check card — the ONE window's made-up check and its states (so/price-check, F-CP-114).
+import { PRICE_CHECK, priceWindowOf } from '../price-check/fixtures'
+import type { PriceCheckCardModel, PriceCheckRead } from './price-check-card'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { APPROVAL_CREDIT, APPROVAL_NOBODY, APPROVAL_PENDING, CHANGES, CHANGES_NONE, CHANGES_WAITING_YES, CONFIRMATION_NONE, CONFIRMATION_OUTDATED, CONFIRMATION_WAITING, depthModel, FREEZE_FINISHED, FREEZE_NONE, MATERIALS_EMPTY, MATERIALS_NOT_PLANNED, orderDepth, PRICED_BLOCKED, pricedOpen } from '../depth/demo/fixtures'
 
@@ -241,6 +244,18 @@ const closed = order('CLOSED', { settled: true, actions: [] })
 const cancelled = order('CANCELLED', { actions: [], chain: { ...confirmed.chain, depositRequests: [deposit({ status: 'CANCELLED' })] } })
 // B-W2b-16: a typed order (no quote): its deposit's page goes to the customer's invoices contact.
 const typed = order('CONFIRMED', { chain: { ...confirmed.chain, quote: null, depositRequests: [deposit({ quoteVersionId: null })] } })
+
+// ---- F-CP-142 (customer page plan C3; picture 21): Money's "Price check" card — made-up checks for each state ----
+const priceCard = (read: PriceCheckRead, canHistory = true): Pick<OrderRecordModel, 'priceCheck'> => ({ priceCheck: { read, canHistory } satisfies PriceCheckCardModel })
+const ready = (check = PRICE_CHECK, extra: Partial<Extract<PriceCheckRead, { state: 'ready' }>> = {}): PriceCheckRead => ({ state: 'ready', check, stale: false, taking: false, problem: null, ...extra })
+const EMPTY_CHECK = {
+  ...PRICE_CHECK,
+  lines: PRICE_CHECK.lines.map((line) => ({ ...line, brandAmount: null, priceMatch: 'NO_BRAND_PRICE' as const, priceDiff: null, row: null })),
+  total: { ...PRICE_CHECK.total, brandPrice: null, priceMatch: 'NO_BRAND_PRICE' as const, priceDiff: null, priceNotEqualLines: 0, priceMissingLines: 3 },
+  fromRequest: { requestId: '0190f0e2-5555-7000-8000-000000000087', number: 'RQ-0087', lines: 2 },
+}
+const CLOSED_CHECK = { ...PRICE_CHECK, status: 'CLOSED', mayWrite: { allowed: false, why: 'closed' } }
+// ---- end F-CP-142
 const CANCEL_REASONS = [
   { code: 'CUSTOMER_REQUEST', labelIt: 'Richiesta del cliente', labelEn: 'Customer request', needsDetail: false },
   { code: 'LEAD_TIME', labelIt: 'Tempi di consegna', labelEn: 'Lead time', needsDetail: false },
@@ -611,6 +626,16 @@ export const designScreen = defineDesignScreen<RecordCase>({
     },
     { id: 'money-page-sent', label: 'Finance · Page sent, waiting for the transfer', model: base('finance', pageSent, { tab: 'money' }) },
     { id: 'money-sales', label: 'Sales · Money: sees the deposit; sending and recording held with the reason', model: base('sales', pageSent, { tab: 'money' }) },
+    // ---- F-CP-142 (customer page plan C3; picture 21): Money › Price check, after Totals ----
+    { id: 'price-check', label: 'Owner · Money › Price check: per line ours against the customer\'s, Not equal · 1 line, where it came from', model: base('owner', pageSent, { tab: 'money', ...priceCard(ready()) }), note: 'Customer\'s price… opens the ONE window (the Work tab\'s too); Change our price › is the order\'s Edit mode; History › the audit of this order\'s customer prices.' },
+    { id: 'price-check-empty', label: 'Owner · Price check: no customer price yet, a request named them (Take them over)', model: base('owner', pageSent, { tab: 'money', ...priceCard(ready(EMPTY_CHECK)) }), note: '"No customer price yet" is never Equal; Customer\'s price… is the primary; the take-over is a row inside the card.' },
+    { id: 'price-check-stale', label: 'Owner · Price check: changed meanwhile — "Here they are now"', model: base('owner', pageSent, { tab: 'money', ...priceCard(ready(PRICE_CHECK, { stale: true })) }) },
+    { id: 'price-check-closed', label: 'Owner · Price check: a closed order keeps its prices (Customer\'s price… held in words)', model: base('owner', pageSent, { tab: 'money', ...priceCard(ready(CLOSED_CHECK), false) }), note: 'History › held: no right to read the audit log.' },
+    { id: 'price-check-loading', label: 'Owner · Price check: reading', model: base('owner', pageSent, { tab: 'money', ...priceCard({ state: 'loading' }) }) },
+    { id: 'price-check-error', label: 'Owner · Price check: could not be read (Try again)', model: base('owner', pageSent, { tab: 'money', ...priceCard({ state: 'failed', problem: 'problem.read.unavailable' }) }) },
+    { id: 'price-check-dialog', label: 'Owner · Price check: the customer\'s-price window open', model: base('owner', pageSent, { tab: 'money', ...priceCard(ready()), priceCheckDialog: priceWindowOf('edit') }) },
+    { id: 'price-check-held', label: 'As Production manager · Money › Price check: one line "Shown to people who see prices", no table, nothing asked', model: base('manager', pageSent, { tab: 'money', ...priceCard({ state: 'held' }) }), note: 'The money wall: as Sales worker the same (the Sales role holds no price since B-CP-011).' },
+    // ---- end F-CP-142
     { id: 'payment-dialog', label: 'Finance · Record the payment: amount, day, bank reference, Issue the TD02 now', model: base('finance', pageSent, { tab: 'money', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { reference: 'CRO-0000-ESEMPIO-88' } }) },
     { id: 'payment-dialog-over', label: 'Finance · Record the payment: more than is left (the rest stays on the payment)', model: base('finance', partPaid, { tab: 'money', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { amount: '2000,00', reference: 'CRO-0000-ESEMPIO-89' } }) },
     { id: 'payment-refused', label: 'Finance · Record the payment: the bank reference was recorded already', model: base('finance', pageSent, { tab: 'money', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { reference: 'CRO-0000-ESEMPIO-01' }, dialogProblem: { key: 'problem.write.reference' } }) },
