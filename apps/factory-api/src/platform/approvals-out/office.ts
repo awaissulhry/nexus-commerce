@@ -11,6 +11,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
 import { parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
 import { linkTokenHash, mintLinkToken } from '@nexus/factory-domain/links/token'
+import { mayOpenPriced, seesPrices } from '@nexus/factory-domain/files/priced' // B-CP-023
 import type { FactoryClient } from '@nexus/factory-db'
 import { command, type CommandTx } from '../../core/command'
 import { actorOf, requireContext, type OfficeContext } from '../../core/context'
@@ -215,16 +216,18 @@ export async function askApproval(request: FastifyRequest, body: AskBody, idempo
 
   const facts = await request.withClient(async (client) => {
     const allowed = await adapter.fileRecords(client, body.recordId)
-    const files = await client.storedFile.findMany({ where: { id: { in: fileIds } }, select: { id: true, recordType: true, recordId: true, status: true, supersededAt: true } })
+    const files = await client.storedFile.findMany({ where: { id: { in: fileIds } }, select: { id: true, recordType: true, recordId: true, status: true, supersededAt: true, priced: true /* B-CP-023 */ } })
     const contact = body.contactId ? await client.partyContact.findFirst({ where: { id: body.contactId, partyId, status: 'ACTIVE' }, select: { email: true, language: true } }) : null
     const party = await client.party.findUnique({ where: { id: partyId }, select: { language: true } })
     const company = await client.company.findUnique({ where: { id: record.companyId }, select: { legalName: true, tradeName: true } })
     const user = await client.user.findUnique({ where: { id: context.actorId }, select: { displayName: true, email: true } })
     return { allowed, files, contact, party, company, user }
   })
+  // B-CP-023 (the money wall D6; review B1): a priced file goes to a partner only from someone who sees prices (else as unknown).
+  const sees = seesPrices(actor)
   fileIds.forEach((fileId, index) => {
     const file = facts.files.find((row) => row.id === fileId)
-    if (!file || !facts.allowed.some((own) => own.type === file.recordType && own.id === file.recordId)) problems.push({ path: `body/fileIds/${index}`, message: 'Not a file of this record (or of the records that go with it).' })
+    if (!file || !facts.allowed.some((own) => own.type === file.recordType && own.id === file.recordId) || !mayOpenPriced(file, sees)) problems.push({ path: `body/fileIds/${index}`, message: 'Not a file of this record (or of the records that go with it).' })
     else if (file.status !== 'AVAILABLE' || file.supersededAt !== null) problems.push({ path: `body/fileIds/${index}`, message: 'Only the current, available version of a file goes with a request.' })
   })
   if (body.contactId && !facts.contact?.email) problems.push({ path: 'body/contactId', message: 'Not an active contact of this partner with an e-mail.' })

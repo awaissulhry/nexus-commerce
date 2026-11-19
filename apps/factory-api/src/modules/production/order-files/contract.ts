@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { notMoney } from '@nexus/factory-domain/money/marked' // B-CP-023: a count, not money
 
 /**
  * B-PR-44: the order files of a work order (one group per order its cells make) and the walled opening of one of them. A file
@@ -53,6 +54,8 @@ export const orderFilesGroupView = output({
   measurementsLeftOut: z.number().int(),
   /** Files of a company the reader does not read files of (counted, never named). */
   filesLeftOut: z.number().int(),
+  /** B-CP-023: documents that show prices, for a reader who does not see prices (counted, never named). */
+  pricedLeftOut: notMoney(z.number().int()),
 })
 
 export const orderFilesContract = defineContract({
