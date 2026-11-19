@@ -292,8 +292,11 @@ export default defineStage({
         201,
       )
       await flow.write(manager.page, 'POST', `/product/styles/${style.id}/revisions`, { changeNote: 'First revision of TH4UI-BETA-01' }, 201)
+      // B-CP-011: (the money wall, Owner answer A) A's order above carries no price (the customer's price list prices it): Sales makes
+      // it. B's carries a typed unit price, a price act for a price holder (Sales: 403): the Owner makes it, as the API twin's S02 does.
+      const owner = await flow.desk('owner')
       const theirs = await flow.write(
-        sales.page,
+        owner.page,
         'POST',
         '/sales/orders/manual',
         { companyId: flow.companyId, partyId: betaId, customerRef: BRAND_BETA.customerRef, promiseDate: dayAhead(50), depositPct: null, lines: [{ styleId: style.id, colourwayId: style.colourways[0].id, unitPrice: '80', sizes: [{ size: '52', quantity: 4 }] }] },
