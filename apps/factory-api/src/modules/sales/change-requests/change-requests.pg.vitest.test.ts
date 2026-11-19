@@ -33,6 +33,8 @@ import { askMessageText } from './portal'
 import { brandRequestImpact } from '../../production/brand-requests/read'
 // B-SA-046c: the planner's "Left as is" closes the work-order change an accepted request left.
 import { declineChange } from '../../production/work-order-changes/apply'
+// The planner's decision on the harness clock too (core/time.ts): Accept proposed the change on it.
+import { useServerClock } from '../../../core/time'
 
 /**
  * Change and cancel requests from the portal on the local stack (B-W2b-183; SAL-077, SAL-078), the customer through the real
@@ -55,6 +57,8 @@ type Json = Record<string, any>
 const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
 const one = async <R = Json>(sql: string, values: unknown[] = []): Promise<R> => (await admin<R>(sql, values))[0]!
 const orderOf = (number: string) => one<{ id: string; version: number; status: string }>('SELECT id, version, status::text AS status FROM "SalesOrder" WHERE "tenantId" = $1 AND number = $2', [T, number])
+/** The customer's next own number (as the database gives one): a planted copy of an order never takes the copied order's. */
+const nextCustomerSeq = async (orderId: string) => (await one<{ seq: number }>('SELECT coalesce(max(o."customerSeq"), 0) + 1 AS seq FROM "SalesOrder" o JOIN "SalesOrder" f ON f.id = $1 WHERE o."tenantId" = f."tenantId" AND o."companyId" = f."companyId" AND o."partyId" = f."partyId"', [orderId])).seq
 const linesOf = (orderId: string) => admin<{ id: string; seq: number }>('SELECT id, seq FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq', [orderId])
 
 const people = { buyer: 'bea.buyer@seed-racing.example', viewer: 'vic.viewer@seed-racing.example', other: 'oli.buyer@brand-alpha.example' }
@@ -294,7 +298,7 @@ describe('a change asked, seen in Approvals and accepted as an amendment (SAL-07
     }
     await planted(
       `INSERT INTO "OrderChangeRequest" SELECT * FROM jsonb_populate_record(NULL::"OrderChangeRequest", (SELECT to_jsonb(r) || $1::jsonb FROM "OrderChangeRequest" r WHERE r.id = $2::uuid))`,
-      [JSON.stringify({ id: ask, kind: 'HOLD', status: 'OPEN', answer: null, answeredAt: null, answeredById: null, amendmentId: null, version: 1 }), request.id],
+      [JSON.stringify({ id: ask, kind: 'HOLD', status: 'OPEN', answer: null, answeredAt: null, answeredById: null, amendmentId: null, /* B-SA-048: the copied ask's own message is its own */ askMessageId: null, version: 1 }), request.id],
     )
     expect((await today(office(), { kind: 'ORDER_CHANGE_REQUEST', limit: 50 })).items).toEqual([])
     await planted('DELETE FROM "OrderChangeRequest" WHERE id = $1', [ask])
@@ -508,7 +512,7 @@ describe('B-PR-25: the asks its limits open, the impact before Send, kept at Sen
     expect(closed.asks[0].verdict.words).toEqual(words)
     const refused = await post(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests`, { kind: 'RUSH', note: 'Our season opens early.' })
     expect(refused.status, JSON.stringify(refused.body)).toBe(409)
-    expect(refused.body.error.issues).toEqual([{ path: 'body/NOT_OPEN', message: `${words.en}.` }])
+    expect(refused.body.error.issues).toEqual([{ path: 'body/NOT_OPEN', message: words.en /* its own two sentences: one period, never "thread.." */ }])
     // The asks the limits list are open; RUSH still is not (it follows the urgency switch only).
     await admin(`UPDATE "PortalSettings" SET "productionAskKinds" = '{HOLD,RESUME,SPLIT_SHIPMENT,SAMPLE_ROUND}', version = version + 1 WHERE id = $1`, [P1])
     const listed = await ok(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests/rules`)
@@ -654,7 +658,7 @@ describe('B-SA-042: Accept runs the change at once; the gap goes to the work ord
     const ids = { order: newId(), line: newId(), workOrder: newId(), cell: newId(), request: newId() }
     const tag = `T-SA042-${++made}-${ids.order.slice(-4)}`
     await planted([
-      copy('SalesOrder', so2.id, { id: ids.order, number: tag, status: 'IN_PRODUCTION', version: 1, reapprovalNeededAt: null }),
+      copy('SalesOrder', so2.id, { id: ids.order, number: tag, status: 'IN_PRODUCTION', version: 1, reapprovalNeededAt: null, customerSeq: await nextCustomerSeq(so2.id) }),
       copy('SalesOrderLine', line!.id, { id: ids.line, orderId: ids.order, seq: 10, quantity: 4, closedShortQuantity: null, closedShortAt: null, closedShortById: null, closeShortReason: null, closedShortReasonCode: null, version: 1 }),
       { sql: `INSERT INTO "SalesOrderLineSize" (id, "tenantId", "lineId", "partyId", size, quantity) VALUES ($1, $2, $3, $4, '52', 4)`, values: [newId(), T, ids.line, P1] },
       copy('WorkOrder', cell!.workOrderId, { id: ids.workOrder, number: `${tag}-WO`, batchNumber: `${tag}-BT`, status: 'IN_PROGRESS', version: 1 }),
@@ -749,11 +753,11 @@ async function designWorld(options: { readonly cut?: number; readonly ownCollect
   const ids = { order: newId(), line10: newId(), line20: newId(), workOrder: newId(), cell: newId(), style: options.ownCollection ? newId() : jkt1!.styleId, file: newId(), betaFile: newId() }
   const tag = `T-SA046-${++designMade}-${ids.order.slice(-4)}`
   const file = (id: string, partyId: string) => ({
-    sql: `INSERT INTO "StoredFile" (id, "tenantId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", "storeAccountId", "storageKey", status, visibility, "partyId") VALUES ($1, $2, 'SalesOrder', $3, 'ATTACHMENT', 'sleeve-sketch.pdf', 'application/pdf', 1200, $4, $5, 'AVAILABLE', '{OFFICE,PARTNER}', $6)`,
+    sql: `INSERT INTO "StoredFile" (id, "tenantId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", sha256, "storeAccountId", "storageKey", status, visibility, "partyId") VALUES ($1, $2, 'SalesOrder', $3, 'ATTACHMENT', 'sleeve-sketch.pdf', 'application/pdf', 1200, repeat('0', 64), $4, $5, 'AVAILABLE', '{OFFICE,PARTNER}', $6)`,
     values: [id, T, ids.order, store!.id, `test/${id}`, partyId],
   })
   await plantedRows([
-    copyOf('SalesOrder', so2.id, { id: ids.order, number: tag, status: 'IN_PRODUCTION', version: 1, reapprovalNeededAt: null }),
+    copyOf('SalesOrder', so2.id, { id: ids.order, number: tag, status: 'IN_PRODUCTION', version: 1, reapprovalNeededAt: null, customerSeq: await nextCustomerSeq(so2.id) }),
     copyOf('SalesOrderLine', jkt2!.id, { id: ids.line10, orderId: ids.order, seq: 10, quantity: 4, closedShortQuantity: null, closedShortAt: null, closedShortById: null, closeShortReason: null, closedShortReasonCode: null, version: 1 }),
     { sql: `INSERT INTO "SalesOrderLineSize" (id, "tenantId", "lineId", "partyId", size, quantity) VALUES ($1, $2, $3, $4, '52', 4)`, values: [newId(), T, ids.line10, P1] },
     ...(options.ownCollection ? [copyOf('Style', jkt1!.styleId, { id: ids.style, code: `${tag}-OWN`, brandPartyId: null })] : []),
@@ -897,7 +901,7 @@ describe('B-SA-046c: an accepted request says on the portal whether we are still
     const ids = { order: newId(), line: newId(), workOrder: newId(), cell: newId(), request: newId() }
     const tag = `T-SA046C-${++made}-${ids.order.slice(-4)}`
     await plantedRows([
-      copyOf('SalesOrder', so2.id, { id: ids.order, number: tag, status: 'IN_PRODUCTION', version: 1, reapprovalNeededAt: null }),
+      copyOf('SalesOrder', so2.id, { id: ids.order, number: tag, status: 'IN_PRODUCTION', version: 1, reapprovalNeededAt: null, customerSeq: await nextCustomerSeq(so2.id) }),
       copyOf('SalesOrderLine', line!.id, { id: ids.line, orderId: ids.order, seq: 10, quantity: 4, closedShortQuantity: null, closedShortAt: null, closedShortById: null, closeShortReason: null, closedShortReasonCode: null, version: 1 }),
       { sql: `INSERT INTO "SalesOrderLineSize" (id, "tenantId", "lineId", "partyId", size, quantity) VALUES ($1, $2, $3, $4, '52', 4)`, values: [newId(), T, ids.line, P1] },
       copyOf('WorkOrder', cell!.workOrderId, { id: ids.workOrder, number: `${tag}-WO`, batchNumber: `${tag}-BT`, status: 'IN_PROGRESS', version: 1 }),
@@ -920,7 +924,13 @@ describe('B-SA-046c: an accepted request says on the portal whether we are still
     for (const key of ['stillToDo', 'steps', 'workOrders', 'waitingOn']) expect(carrying, key).not.toHaveProperty(key)
 
     const change = await one<{ id: string; version: number }>('SELECT id::text AS id, version FROM "WorkOrderChange" WHERE "requestId" = $1', [world.request])
-    await declineChange(office(['orders.view', 'orders.manage', 'workorders.view', 'workorders.manage']), change.id, { version: change.version, words: 'Left as is: the four are made as planned (made-up).' })
+    // Accept proposed the change on the harness clock (ahead of the system's: every sign-in moves it): the planner decides on it too.
+    useServerClock(h.clock)
+    try {
+      await declineChange(office(['orders.view', 'orders.manage', 'workorders.view', 'workorders.manage']), change.id, { version: change.version, words: 'Left as is: the four are made as planned (made-up).' })
+    } finally {
+      useServerClock(undefined)
+    }
     expect((await theirs(world.order, world.request)).followUp).toBe('DONE')
   })
 
@@ -944,7 +954,7 @@ describe("B-SA-046d: the portal's ask names each line with its picture — the p
     const fileId = newId()
     await plantedRows([
       {
-        sql: `INSERT INTO "StoredFile" (id, "tenantId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", "storeAccountId", "storageKey", status, visibility, "sourceFileId") VALUES ($1, $2, 'Style', $3, 'PHOTO', 'front.jpg', 'image/jpeg', 2400, $4, $5, 'AVAILABLE', '{OFFICE}', $6)`,
+        sql: `INSERT INTO "StoredFile" (id, "tenantId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", sha256, "storeAccountId", "storageKey", status, visibility, "sourceFileId") VALUES ($1, $2, 'Style', $3, 'PHOTO', 'front.jpg', 'image/jpeg', 2400, repeat('0', 64), $4, $5, 'AVAILABLE', '{OFFICE}', $6)`,
         values: [fileId, T, line.styleId, store.id, `test/${fileId}`, source],
       },
       { sql: `INSERT INTO "StyleImage" (id, "tenantId", "styleId", "colourwayId", "fileId", kind, seq, "isMain") VALUES ($1, $2, $3, $4, $5, 'PHOTO', 0, false)`, values: [newId(), T, line.styleId, line.colourwayId, fileId] },
@@ -970,7 +980,7 @@ describe("B-SA-046d: the portal's ask names each line with its picture — the p
     const betaFile = newId()
     await plantedRows([
       {
-        sql: `INSERT INTO "StoredFile" (id, "tenantId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", "storeAccountId", "storageKey", status, visibility) VALUES ($1, $2, 'Party', $3, 'PHOTO', 'beta-sample.jpg', 'image/jpeg', 2400, (SELECT id FROM "IntegrationAccount" WHERE "tenantId" = $2 LIMIT 1), $4, 'AVAILABLE', '{OFFICE}')`,
+        sql: `INSERT INTO "StoredFile" (id, "tenantId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", sha256, "storeAccountId", "storageKey", status, visibility) VALUES ($1, $2, 'Party', $3, 'PHOTO', 'beta-sample.jpg', 'image/jpeg', 2400, repeat('0', 64), (SELECT id FROM "IntegrationAccount" WHERE "tenantId" = $2 LIMIT 1), $4, 'AVAILABLE', '{OFFICE}')`,
         values: [betaFile, T, world.partyId, `test/${betaFile}`],
       },
     ])

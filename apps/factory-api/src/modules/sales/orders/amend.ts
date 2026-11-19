@@ -368,7 +368,7 @@ const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tool
 export async function applyAmendment(caller: CommandCaller, orderId: string, body: AmendBody, idempotencyKey?: string): Promise<{ order: OrderView; amendment: AmendmentView }> {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
-  const { result } = await command(caller, { name: 'orders.amend', idempotencyKey, input: { orderId, ...body } }, async (tools) => ({ amendmentId: (await amendInCommand(tools, context.tenantId, order, body)).amendmentId }))
+  const { result } = await command(caller, { name: 'orders.amend', idempotencyKey, input: { orderId, ...body } }, async (tools) => ({ amendmentId: (await amendInCommand(tools, context.tenantId, order, body)).amendmentId /* plain JSON: never its `before` Map */ }))
   const amendment = await caller.withClient(async (client) => {
     const row = await client.salesOrderAmendment.findUniqueOrThrow({ where: { id: result.amendmentId }, select: AMENDMENT_COLUMNS })
     return amendmentViewOf(row, await namesOf(client, [row.createdById]))

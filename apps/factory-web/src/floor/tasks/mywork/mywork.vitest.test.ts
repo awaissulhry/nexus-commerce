@@ -531,8 +531,11 @@ describe('F-SA-247 an order change on the tablet: first with New, a CHECK opens 
     }
     // The screen's own words about an order change name no person, money or customer.
     for (const locale of ['en', 'it'] as const) {
-      const words = messagesFor(locale, ['floor-mywork'])['floor-mywork'] as Record<string, unknown>
-      expect(JSON.stringify(words.orderChange), locale).not.toMatch(/€|prezz|price|cost|paga|\bpay|client|customer|brand|marchio|seen|visto|letto/i)
+      // The catalogue is flat ("orderChange.kind", …): the order change's words are the keys under orderChange.
+      const words = messagesFor(locale, ['floor-mywork'])['floor-mywork'] as Record<string, string>
+      const change = Object.entries(words).filter(([key]) => key.startsWith('orderChange.'))
+      expect(change.length, locale).toBeGreaterThanOrEqual(8)
+      expect(JSON.stringify(Object.fromEntries(change)), locale).not.toMatch(/€|prezz|price|cost|paga|\bpay|client|customer|brand|marchio|seen|visto|letto/i)
     }
   })
 

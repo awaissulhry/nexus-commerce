@@ -914,7 +914,7 @@ export function askLineVerdict(kind: 'SPLIT_SHIPMENT' | 'SAMPLE_ROUND', line: Ru
 }
 
 /** A production ask's refusal at the click: its English words, its code in the path. */
-export const askRefusalOf = (at: string, found: AskVerdict): Issue => ({ path: `${at}/${found.code}`, message: `${found.words.en}.` })
+export const askRefusalOf = (at: string, found: AskVerdict): Issue => ({ path: `${at}/${found.code}`, message: found.words.en.endsWith('.') ? found.words.en /* whole sentences already (ASK_NOT_OPEN_WORDS) */ : `${found.words.en}.` })
 
 // ---- what a production ask names, and its problems ------------------------------------------------------------------------
 

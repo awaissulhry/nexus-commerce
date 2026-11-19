@@ -1,6 +1,6 @@
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 // F-SA-283: the picture part's route and the sources read as written.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -46,6 +46,15 @@ import {
   customerUrgencyMark,
   urgencyFirst,
 } from './model'
+
+// F-SA-283: the DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so the bar's window (its
+// picture part beside the status) is drawn and its words are checked, as the order record's tests do.
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? createElement('section', { role: 'dialog' }, createElement('h2', null, title as never), createElement('p', null, subtitle as never), children as never, footer as never) : null
+  return { ...actual, Modal }
+})
 
 /**
  * Planning › Planning board (SCR-122; B-W2a-45 on the schedule API of B-W2a-34 and the DS PlanningBoard of B-W2a-14):
