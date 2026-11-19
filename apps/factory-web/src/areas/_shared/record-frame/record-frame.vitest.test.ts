@@ -204,7 +204,8 @@ describe('TH-6 part B — the record’s own keys join the band menu’s ONE Key
     const frame = readFileSync(new URL('./RecordFrame.tsx', import.meta.url), 'utf8')
     expect(frame).toContain('readonly keys?: readonly { readonly keys: readonly string[]; readonly label: string }[]')
     expect(frame.indexOf('(band.keys ?? []).map((entry) =>')).toBeGreaterThan(-1)
-    expect(frame.indexOf('(band.keys ?? []).map((entry) =>')).toBeLessThan(frame.indexOf('{FRAME_KEYS.map((entry) =>'))
+    // F-OP-206: the frame's keys come through frameKeysFor (All of <Customer>'s rows where the dock holds it).
+    expect(frame.indexOf('(band.keys ?? []).map((entry) =>')).toBeLessThan(frame.indexOf('{frameKeysFor(pageRecord'))
     expect(frame.match(/id: 'keys', label: t\('keys\.line'\)/g)?.length).toBe(1)
   })
 })
@@ -557,3 +558,21 @@ describe('F-OP-212 — frame asks carry a record', () => {
   })
 })
 // ---- end F-OP-212
+
+// ---- F-OP-206 (order page plan N4; 11-dock §3.3): the Keyboard window's rows of All of <Customer>'s list, only where the dock holds it
+describe('F-OP-206 — the Keyboard window names All of <Customer>\'s keys on the order and customer pages only', () => {
+  it('Enter answers the line, Space shows the whole message; never on a page whose dock has no All of', async () => {
+    const { ALL_OF_KEYS, ALL_OF_PAGES, frameKeysFor } = await import('./model')
+    expect(ALL_OF_KEYS.map((entry) => entry.words)).toEqual(['keys.allAnswer', 'keys.allExpand'])
+    expect(ALL_OF_PAGES).toEqual(['SalesOrder', 'Party'])
+    expect(frameKeysFor({ type: 'SalesOrder' })).toEqual([...FRAME_KEYS, ...ALL_OF_KEYS])
+    expect(frameKeysFor({ type: 'Party' })).toEqual([...FRAME_KEYS, ...ALL_OF_KEYS])
+    for (const other of [{ type: 'WorkOrder' }, { type: 'Invoice' }, null, undefined]) expect(frameKeysFor(other)).toBe(FRAME_KEYS)
+    for (const locale of ['it', 'en'] as const) {
+      const words = CATALOGUE[locale]['record-frame'] ?? {}
+      for (const entry of ALL_OF_KEYS) expect(words[entry.words], `${locale} ${entry.words}`).toBeTruthy()
+    }
+    expect(CATALOGUE.it['record-frame']?.['keys.allExpand']).toContain('mostra tutto il messaggio')
+  })
+})
+// ---- end F-OP-206

@@ -14,13 +14,14 @@ import { useBandSlot } from '../../../shell/office/band-slot'
 import type { DockWidth } from '../../../lib/record-thread/head/model'
 import { useThreadWidth } from '../../../lib/record-thread/head/use-thread-width'
 import { usePrintMode } from '../../../shell/print/print-mode'
-import { arrivalOf, DOCK_COLUMNS, DOCK_FROM, dockWidth, FRAME_KEYS, frameMode, isThreadKey, PHONE_BELOW, type FrameMode } from './model'
+import { arrivalOf, DOCK_COLUMNS, DOCK_FROM, dockWidth, frameMode, isThreadKey, PHONE_BELOW, type FrameMode } from './model'
 import { showsOnArrival, type DockDefault } from './model' // F-SA-263
 import { viewOpenOf } from './model' // F-SA-262
 import type { DiscussAsk, FrameDoor, ShowInThreadAsk } from './model' // F-SA-265
 import type { FrameAnswer } from './model' // F-SA-244
 import type { FrameFilesAsk } from './model' // B-TH-264 follow-up
 import { askRecordOf, type ComposeAsk, type FrameDoorAsk, type FrameRecord } from './model' // F-OP-212: every ask names its record
+import { frameKeysFor } from './model' // F-OP-206
 import { currentAddress, keptScopeOf, withThread, writeSearch } from './address' // F-OP-209: the ONE writer of `thread=`
 // B-TH-229: "Thread · 2 new".
 import { threadButtonWords } from './model'
@@ -605,7 +606,7 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
                 <dd>{entry.label}</dd>
               </div>
             ))}
-            {FRAME_KEYS.map((entry) => (
+            {frameKeysFor(pageRecord /* F-OP-206: All of <Customer>'s rows where the dock holds it */).map((entry) => (
               <div key={entry.words} className="fw-rcf-keyrow">
                 <dt>
                   {entry.keys.map((key) => (

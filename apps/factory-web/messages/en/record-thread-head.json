@@ -1,10 +1,10 @@
 {
   "label": "Thread of {record}",
   "answers": {
-    "us": "Waiting on us · {wait}",
-    "customer": "Waiting on customer · {wait}",
-    "supplier": "Waiting on supplier · {wait}",
-    "partner": "Waiting on partner · {wait}",
+    "us": "This thread waits on us · {wait}",
+    "customer": "This thread waits on the customer · {wait}",
+    "supplier": "This thread waits on the supplier · {wait}",
+    "partner": "This thread waits on the partner · {wait}",
     "tipUs": "{party} wrote last, {when}. Counted in clock hours since that message.",
     "tipParty": "We wrote to {party} last, {when}. Counted in clock hours since that message."
   },

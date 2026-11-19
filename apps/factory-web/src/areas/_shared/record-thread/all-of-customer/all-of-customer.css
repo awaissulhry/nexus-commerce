@@ -1,21 +1,16 @@
-/* F-SA-261: "All of <Customer>" (view/AllOfCustomerFeed.tsx) — the read-only merged feed in the dock: its one line, the two filters,
-   "N new · Show", one message per line (its chip above the conversation's own card, its door under it), the foot. Tokens only. */
+/* F-SA-261: "All of <Customer>" (view/AllOfCustomerFeed.tsx) — the read-only merged feed in the dock: one message per line (its chip
+   above the conversation's own card, its door under it), the foot. Tokens only.
+   F-OP-204: its one line, the two filters and "N new · Show" moved to the pick band and FeedHead (below). */
+/* F-OP-205 (order page plan N4; 11-dock §1, §3.2, §3.5; RC2, RC3): the body of the card — it fills .fw-rt-body (which scrolls, 12/16
+   padded) and draws ONE compact line per message, 8 px apart. Every space was re-read against the px it means (--nds-space-N is N px):
+   the old 2–5 px gaps and the 2 px / 3 px chip padding left the cards touching. */
 .fw-aoc {
   display: flex;
   flex-direction: column;
-  gap: var(--nds-space-4);
+  gap: var(--nds-space-8);
   min-width: 0;
 }
 
-.fw-aoc-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-3);
-  min-width: 0;
-}
-
-.fw-aoc-line,
-.fw-aoc-marks,
 .fw-aoc-note {
   margin: 0;
   color: var(--nds-text-muted);
@@ -23,84 +18,67 @@
   line-height: 1.45;
 }
 
-.fw-aoc-line {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--nds-space-2);
-}
-
-.fw-aoc-line > svg {
-  flex: none;
-  margin-top: 2px;
-}
-
-.fw-aoc-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--nds-space-2);
-}
-
-.fw-aoc-news:empty {
-  display: none;
-}
-
 .fw-aoc-loading {
   display: flex;
   flex-direction: column;
-  gap: var(--nds-space-3);
-}
-
-.fw-aoc-state {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-3);
-  margin: 0;
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-sm);
-}
-
-.fw-aoc-state > p {
-  margin: 0;
+  gap: var(--nds-space-8);
 }
 
 .fw-aoc-list {
   display: flex;
   flex-direction: column;
-  gap: var(--nds-space-5);
+  gap: var(--nds-space-8);
   margin: 0;
   padding: 0;
   list-style: none;
   min-width: 0;
 }
 
-.fw-aoc-item {
+/* One line: its edge says who reads it — blue, the customer too; yellow on the soft warning background, the office only. */
+.fw-aoc-line {
   display: flex;
   flex-direction: column;
-  gap: var(--nds-space-2);
+  gap: var(--nds-space-4);
   min-width: 0;
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-inline-start: 3px solid var(--nds-info);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
 }
 
-.fw-aoc-chiprow {
+.fw-aoc-line:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 2px;
+}
+
+.fw-aoc-line.is-office {
+  border-inline-start-color: var(--nds-warning);
+  background: var(--nds-warning-soft);
+}
+
+.fw-aoc-line-top {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--nds-space-3);
+  gap: var(--nds-space-6);
   min-width: 0;
 }
 
 .fw-aoc-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--nds-space-2);
+  gap: var(--nds-space-4);
   min-width: 0;
   max-width: 100%;
-  padding: 2px var(--nds-space-3);
+  height: 20px;
+  padding: 0 var(--nds-space-8);
   border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-pill);
   background: var(--nds-surface-raised);
   color: var(--nds-text);
-  font-size: var(--nds-font-size-sm);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
   text-decoration: none;
 }
 
@@ -114,7 +92,8 @@
   border-color: var(--nds-border);
 }
 
-.fw-aoc-chip:focus-visible {
+.fw-aoc-chip:focus-visible,
+.fw-aoc-file:focus-visible {
   outline: 2px solid var(--nds-text);
   outline-offset: 2px;
 }
@@ -122,7 +101,7 @@
 .fw-aoc-new {
   display: inline-flex;
   align-items: center;
-  gap: var(--nds-space-2);
+  gap: var(--nds-space-4);
   color: var(--nds-info-text);
   font-size: var(--nds-font-size-xs);
   font-weight: 600;
@@ -135,14 +114,143 @@
   background: var(--nds-info);
 }
 
+.fw-aoc-audience {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-aoc-time {
+  margin-inline-start: auto;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* "author: words", two lines at most (the whole message opens in place). */
+.fw-aoc-gist {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-aoc-author {
+  color: var(--nds-text-strong);
+  font-weight: 600;
+}
+
+.fw-aoc-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-aoc-file {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 180px;
+  height: 20px;
+  padding: 0 var(--nds-space-8);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface);
+  color: var(--nds-text-2);
+  font: inherit;
+  font-size: var(--nds-font-size-xs);
+  cursor: pointer;
+}
+
+.fw-aoc-file > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-aoc-file:hover {
+  background: var(--nds-surface-hover);
+}
+
+.fw-aoc-file.is-more {
+  cursor: default;
+  font-variant-numeric: tabular-nums;
+}
+
 .fw-aoc-doors {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: var(--nds-space-4);
+}
+
+.fw-aoc-whole {
+  padding-top: var(--nds-space-4);
+}
+
+.fw-aoc-whole[hidden] {
+  display: none;
 }
 
 .fw-aoc-foot {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--nds-space-2);
+  gap: var(--nds-space-6);
 }
+/* ── end F-OP-205 */
+
+/* ── F-OP-204 (order page plan N4; 11-dock §3.1; RC1, D6): FeedHead — the thread Head's own 44 px row (.fw-rth, head.css) with the
+   title that truncates, View ▾ and Kind ▾ (their icon only in a card of 480 px or less: their accessible names keep the words), the
+   width menu and ⋯ that never fold; the card's foot ends with its ONE info icon. --nds-space-N is N px. ── */
+.fw-aoc-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-base);
+  font-weight: 600;
+}
+
+.fw-aoc-title > svg {
+  flex: none;
+  color: var(--nds-text-muted);
+}
+
+.fw-aoc-title-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-aoc-menu-words {
+  white-space: nowrap;
+}
+
+.fw-aoc-news {
+  flex: none;
+}
+
+@container fw-rtcol (max-width: 480px) {
+  .fw-aoc-menu-words {
+    display: none;
+  }
+}
+
+.fw-aoc-foot-tip {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: auto;
+}
+/* ── end F-OP-204 */
