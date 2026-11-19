@@ -9,6 +9,8 @@ import { isCurrentVersion } from '@nexus/factory-domain/files/versions/rules'
 import { command, type CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { contextOf, mayWrite, opensMeasurementSheets, readOfficeReached } from '../files' // B-TH-083: opensMeasurementSheets; B-PR-44: readOfficeReached
+import { seesPricesOf } from '../files' // B-CP-014
+import { mayOpenPriced } from '@nexus/factory-domain/files/priced' // B-CP-014
 import { isMeasurementSheet } from '@nexus/factory-domain/files/measurements'
 import { assertGenericPath, readsThroughModule } from '../owned'
 import { activeRulesOf, documentsOf, recordFactsOf, type DocumentRow } from './check'
@@ -43,7 +45,7 @@ const documentOf = (row: Pick<DocumentRow, 'id' | 'category' | 'expiresOn' | 'or
   }
 }
 
-const UNTAGGED_SELECT = { id: true, category: true, status: true, supersededAt: true, expiresOn: true, originalName: true, recordType: true, recordId: true, companyId: true } as const satisfies Prisma.StoredFileSelect
+const UNTAGGED_SELECT = { id: true, category: true, status: true, supersededAt: true, expiresOn: true, originalName: true, recordType: true, recordId: true, companyId: true, priced: true /* B-CP-014 */ } as const satisfies Prisma.StoredFileSelect
 
 export async function recordDocuments(caller: CommandCaller, query: { readonly recordType: string; readonly recordId: string }, now: Date) {
   const context = contextOf(caller)
@@ -67,7 +69,9 @@ export async function recordDocuments(caller: CommandCaller, query: { readonly r
     const party = tagged.filter((row) => !(row.recordType === query.recordType && row.recordId === query.recordId))
     // B-TH-083: a file under a module's own tag that is no document category (a measurement sheet, a line's artwork, a repair's
     // damage photo) is not offered here: its tag is its module's (a sheet's is its lock), and it is no document a rule asks for.
-    const documents = [...own.filter((row) => can(actor, FILES_READ, { companyId: row.companyId }) && (row.category === null || isDocumentCategory(row.category))).map((row) => documentOf(row, today, false)), ...party.filter((row) => row.category !== null && isDocumentCategory(row.category)).map((row) => documentOf(row, today, true))]
+    // B-CP-014: a priced file is not offered to a reader who does not see prices (the record's list shows it locked, unnamed).
+    const sees = seesPricesOf(context)
+    const documents = [...own.filter((row) => can(actor, FILES_READ, { companyId: row.companyId }) && (row.category === null || isDocumentCategory(row.category)) && mayOpenPriced(row, sees)).map((row) => documentOf(row, today, false)), ...party.filter((row) => row.category !== null && isDocumentCategory(row.category)).map((row) => documentOf(row, today, true))]
     const moves: Array<{ toStatus: string; requirements: ReturnType<typeof requirementStates> }> = []
     if (facts && isRequiredRecordType(query.recordType)) {
       const rules = await activeRulesOf(client, query.recordType, facts.companyId ?? (context.audience === 'office' ? (context.companyId ?? null) : null))

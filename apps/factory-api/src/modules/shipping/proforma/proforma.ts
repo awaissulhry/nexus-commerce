@@ -154,6 +154,7 @@ export async function makeProforma(files: FilesRuntime, caller: CommandCaller, b
     // The customer it is made for may read it (a portal or a link carries it); never the floor.
     visibility: ['OFFICE', 'PARTNER'],
     partyId: facts.partyId,
+    priced: true, // B-CP-015 (customer page lane): a proforma shows prices (documents/model pricedDocument('PROFORMA'))
   })
   const { result } = await command(caller, { name: 'shipping.proformaMade', idempotencyKey, input: { ...body, fingerprint } }, async (tools) => {
     const { tx, audit, emit, now } = tools

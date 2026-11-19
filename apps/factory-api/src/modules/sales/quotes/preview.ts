@@ -3,6 +3,9 @@ import { DomainError, type Issue } from '@nexus/factory-domain/core/errors'
 import { composeDocument } from '@nexus/factory-domain/documents/compose'
 import { legalProblems } from '@nexus/factory-domain/documents/legal'
 import { quoteDocument } from '@nexus/factory-domain/sales/quotes/document'
+// B-CP-015 (the money wall, Owner pick O1): the PDF shows prices: opened only by someone who sees prices.
+import { pricedDocumentHeld, seesPrices } from '@nexus/factory-domain/files/priced'
+import { actorOf, requireContext } from '../../../core/context'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { companyLegalOf, documentFileName } from '../../../platform/documents/documents'
@@ -34,6 +37,8 @@ const PREVIEW_NEEDS = new Set(['NO_BILL_TO', 'NO_SHIP_TO', 'NO_VALIDITY', 'BILL_
 export async function previewQuotePdf(request: FastifyRequest, quoteId: string, language: 'it' | 'en' | undefined): Promise<{ pdf: Buffer; fileName: string }> {
   const caller: CommandCaller = request
   const quote = await officeQuote(caller, quoteId)
+  // B-CP-015: 403 in words without the price grain, no PDF (a wrong id is still the quote's 404 first).
+  if (!seesPrices(actorOf(requireContext(request)))) throw pricedDocumentHeld('open')
   const now = serverClock.now()
   const company = await companyLegalOf(caller, quote.companyId)
   const companyLegal = legalProblems(company)

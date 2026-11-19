@@ -6,6 +6,7 @@ import { partnerRoleTemplates, partnerTemplateProblems } from '../roles/partner-
 import { kindFits, partnerKindsOf } from './kinds'
 import { composePartnerMail } from './mail'
 import { accessEndsSoon, allowedRoleKeysProblems, choiceProblems, holdsSeat, offeredTemplates, previewPermissions, roleKeysOf, seatProblem, splitRoleKeys } from './rules'
+import { DESIGNER_REFUSALS, DESIGNER_WORDS, designerState, designerWords, personRefusals, portalDesignerName, slotRefusals } from './designer' // B-CP-078
 
 const NOW = new Date('2026-11-07T09:00:00.000Z')
 const DAY = 24 * 60 * 60_000
@@ -147,3 +148,44 @@ describe('the partner mails', () => {
     expect(mail.text).toContain('Se vi serve ancora, scrivete a Esempio (info@esempio.example).')
   })
 })
+
+// ---- B-CP-078 (customer page plan C7, D12; review C4, F7): the factory designer slot -----------------------------------------------
+describe('B-CP-078: the factory designer of a customer', () => {
+  const office = { audience: 'OFFICE', status: 'ACTIVE', reaches: true }
+
+  it('names only an active office person who reads and writes the customer’s threads; "not office" alone says it all', () => {
+    expect(personRefusals(office)).toEqual([])
+    expect(personRefusals(null)).toEqual(['NOT_OFFICE'])
+    expect(personRefusals({ ...office, audience: 'PARTNER', status: 'SUSPENDED', reaches: false })).toEqual(['NOT_OFFICE'])
+    expect(personRefusals({ ...office, status: 'SUSPENDED' })).toEqual(['NOT_ACTIVE'])
+    expect(personRefusals({ ...office, reaches: false })).toEqual(['NO_REACH'])
+    expect(personRefusals({ ...office, status: 'DEACTIVATED', reaches: false })).toEqual(['NOT_ACTIVE', 'NO_REACH'])
+  })
+
+  it('takes a backup only beside a designer, and never the same person', () => {
+    expect(slotRefusals({ designerId: null, backupId: null })).toEqual([])
+    expect(slotRefusals({ designerId: 'u1', backupId: null })).toEqual([])
+    expect(slotRefusals({ designerId: 'u1', backupId: 'u2' })).toEqual([])
+    expect(slotRefusals({ designerId: null, backupId: 'u2' })).toEqual(['BACKUP_ALONE'])
+    expect(slotRefusals({ designerId: 'u1', backupId: 'u1' })).toEqual(['SAME_PERSON'])
+  })
+
+  it('shows a named person as still reaching the customer, or why not ("No longer reaches Brand Alpha")', () => {
+    expect(designerState(office)).toBe('OK')
+    expect(designerState({ ...office, reaches: false })).toBe('NO_REACH')
+    expect(designerState({ ...office, status: 'SUSPENDED' })).toBe('NOT_ACTIVE')
+    expect(designerState(null)).toBe('NOT_ACTIVE')
+    expect(designerWords('NO_LONGER_REACHES', 'Brand Alpha')).toEqual({ it: 'Non raggiunge più Brand Alpha', en: 'No longer reaches Brand Alpha' })
+    for (const refusal of DESIGNER_REFUSALS) for (const locale of ['it', 'en'] as const) expect(DESIGNER_WORDS[refusal][locale], `${refusal} ${locale}`).toBeTruthy()
+  })
+
+  it('tells the brand one display name: the designer’s while active, else the backup’s, else none', () => {
+    const giulia = { name: 'Giulia Verdi', active: true }
+    const marta = { name: 'Marta Bianchi', active: true }
+    expect(portalDesignerName({ designer: giulia, backup: marta })).toBe('Giulia Verdi')
+    expect(portalDesignerName({ designer: { ...giulia, active: false }, backup: marta })).toBe('Marta Bianchi')
+    expect(portalDesignerName({ designer: { ...giulia, active: false }, backup: { ...marta, active: false } })).toBeNull()
+    expect(portalDesignerName({ designer: null, backup: null })).toBeNull()
+  })
+})
+// ---- end B-CP-078

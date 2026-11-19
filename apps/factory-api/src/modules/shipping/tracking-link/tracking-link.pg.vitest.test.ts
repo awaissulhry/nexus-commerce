@@ -392,29 +392,9 @@ describe('B-OP-034: the typed tracking link on the tracking page', { timeout: SL
   })
 })
 
-describe('Ask for a new link on a dead tracking link', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
-  it('mails a new link to the address the dead one went to, once; a withdrawn one gets nothing', async () => {
-    const before = trackingMails(BUYER_MAIL).length
-    const all = () => h.ses.mails.filter((mail) => mail.templateKey === 'shipping.tracking_link').length
-    const sentBefore = all()
-    // REFUSED (silently): the withdrawn link passed on.
-    expect((await linkCall(copied, 'POST', '/link/renew', {})).statusCode).toBe(202)
-    await h.auth.settled()
-    expect(all()).toBe(sentBefore)
-    h.clock.advance(181 * 24 * 60 * 60 * 1000)
-    expect((await linkCall(mailedToken, 'GET', '/link/tracking')).statusCode).toBe(404)
-    expect((await linkCall(mailedToken, 'POST', '/link/renew', {})).statusCode).toBe(202)
-    await h.auth.settled()
-    const mails = trackingMails(BUYER_MAIL)
-    expect(mails).toHaveLength(before + 1)
-    expect(textOf(mails.at(-1)!.raw)).toContain('come richiesto, ecco un nuovo link per seguire il vostro ordine SEED-PO-78')
-    const renewed = await one(`SELECT "renewalOfId", note FROM "OneOffLink" WHERE "recordId" = $1 AND note = $2`, [SH1, TRACKING_NOTES.RENEWED])
-    expect(renewed.renewalOfId).toBe((await one(`SELECT id FROM "OneOffLink" WHERE "recordId" = $1 AND note = $2`, [SH1, TRACKING_NOTES.SHIPPED])).id)
-    expect((await linkCall(tokenOfMail(mails.at(-1)!.raw), 'GET', '/link/tracking')).statusCode).toBe(200)
-  })
-})
-
 // ---- B-OP-031 (order page plan N5): the tracking page shows the number typed for a carrier booked by hand -------------------------
+// op-fx2 (end check): before the dead link below — it moves the clock 181 days on, past the office's sign-in and the mailed
+// link this block reads.
 describe('B-OP-031: the tracking page shows the typed number; a TEST label’s stays hidden', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('a carrier booked by hand: its typed number on the page (no carrier feeds it); the labelled shipment has none typed', async () => {
     const SH2 = (await one<{ id: string }>(`SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = 'SEED-SH-0002'`, [T])).id
@@ -439,3 +419,26 @@ describe('B-OP-031: the tracking page shows the typed number; a TEST label’s s
   })
 })
 // ---- end B-OP-031
+
+describe('Ask for a new link on a dead tracking link', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('mails a new link to the address the dead one went to, once; a withdrawn one gets nothing', async () => {
+    const before = trackingMails(BUYER_MAIL).length
+    const all = () => h.ses.mails.filter((mail) => mail.templateKey === 'shipping.tracking_link').length
+    const sentBefore = all()
+    // REFUSED (silently): the withdrawn link passed on.
+    expect((await linkCall(copied, 'POST', '/link/renew', {})).statusCode).toBe(202)
+    await h.auth.settled()
+    expect(all()).toBe(sentBefore)
+    h.clock.advance(181 * 24 * 60 * 60 * 1000)
+    expect((await linkCall(mailedToken, 'GET', '/link/tracking')).statusCode).toBe(404)
+    expect((await linkCall(mailedToken, 'POST', '/link/renew', {})).statusCode).toBe(202)
+    await h.auth.settled()
+    const mails = trackingMails(BUYER_MAIL)
+    expect(mails).toHaveLength(before + 1)
+    expect(textOf(mails.at(-1)!.raw)).toContain('come richiesto, ecco un nuovo link per seguire il vostro ordine SEED-PO-78')
+    const renewed = await one(`SELECT "renewalOfId", note FROM "OneOffLink" WHERE "recordId" = $1 AND note = $2`, [SH1, TRACKING_NOTES.RENEWED])
+    expect(renewed.renewalOfId).toBe((await one(`SELECT id FROM "OneOffLink" WHERE "recordId" = $1 AND note = $2`, [SH1, TRACKING_NOTES.SHIPPED])).id)
+    expect((await linkCall(tokenOfMail(mails.at(-1)!.raw), 'GET', '/link/tracking')).statusCode).toBe(200)
+  })
+})
+

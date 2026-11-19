@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { FILE_AUDIENCES, FILE_KINDS, FILE_SCAN_STATUSES, FILE_STATUSES, QUARANTINE_REASONS, RECORD_TYPE } from './rules'
+import { PRICED_LOCK } from '@nexus/factory-domain/files/priced' // B-CP-014
+import { notMoney } from '@nexus/factory-domain/money/marked' // B-CP-014: `priced` is a lock flag, not an amount
 
 /**
  * The files routes' contracts (plan A1 §3.6). A file is never sent through the API: an upload is announced (POST
@@ -56,9 +58,13 @@ export const fileView = output({
   /**
    * MEASUREMENTS: a measurement sheet this office reader may not open (no sales.measurements.view): its name and checksum are
    * left empty — "Measurement sheet — you cannot open it"; the file itself answers 404 to them.
+   * B-CP-014: PRICED — a file that shows prices, for a reader who does not see prices: its name and checksum left empty —
+   * "Priced document — you cannot open it", counted, never named; the file itself answers 404 to them.
    */
-  locked: z.literal('MEASUREMENTS').optional(),
+  locked: z.enum(['MEASUREMENTS', PRICED_LOCK]).optional(),
   // ---- end B-TH-083
+  /** B-CP-014: the file shows prices (born with its document, ticked at upload, or marked): only people who see prices open it. */
+  priced: notMoney(z.boolean()).optional(),
 })
 export type FileView = z.infer<typeof fileView>
 
@@ -123,6 +129,8 @@ export const requestUploadContract = defineContract({
     retainUntil: instant().nullable().optional(),
     /** B-TH-083: "This is a measurement sheet" — filed as MEASUREMENTS, opened only with sales.measurements.view (never for a floor). */
     measurementSheet: z.boolean().optional(),
+    /** B-CP-014: "This file shows prices" — then only people who see prices open it (never for a floor). */
+    priced: notMoney(z.boolean()).optional(),
   }),
   response: { 201: output({ file: fileView, upload: presignedView }) },
 })
@@ -167,6 +175,14 @@ export const deleteFileContract = defineContract({
   querystring: input({ version: z.coerce.number().int().min(1).optional(), reason: z.string().trim().min(3).max(500).optional() }),
   response: one,
 })
+
+// ---- B-CP-014: POST /files/:fileId/priced — "Mark as priced" (anyone who reaches the record), or the mark taken off (price holders only).
+export const setPricedContract = defineContract({
+  params: fileParams,
+  body: input({ priced: notMoney(z.boolean()), version: version() }),
+  response: one,
+})
+// ---- end B-CP-014
 
 const tokenQuery = input({ token: z.string().min(16).max(4096) })
 /** The local store's upload: the raw body, checked against the token's grant. */

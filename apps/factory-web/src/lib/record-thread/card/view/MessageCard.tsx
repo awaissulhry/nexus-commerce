@@ -88,6 +88,7 @@ const MAX_NAMES = 10
 export function MessageCard({ message, context, actions, remind, readOnly = false }: { message: CardMessage; context: CardContext; actions?: CardActions; remind?: ReactNode; readOnly?: boolean }) {
   const t = useT('record-thread-card')
   const frameWords = useT('record-frame') // F-SA-265: the record frame's door words (loaded by the frame around a record page)
+  const pricedWords = useT('record-files') // B-CP-014: a priced document's lock (record-files.json priced.*; THREAD_NAMESPACES loads it)
   const locale = useLocale()
   const intl = INTL_LOCALE[locale]
   const quotedId = useId()
@@ -107,7 +108,7 @@ export function MessageCard({ message, context, actions, remind, readOnly = fals
   const skipped = skippedLine(message.skipped)
   const fold = longFold(text)
   const folded = fold.folds && !allShown
-  const files = cardFiles(message.files, context.canReadFiles, allFiles, { hidden: message.hiddenFiles ?? 0, sheets: message.lockedSheets ?? 0 })
+  const files = cardFiles(message.files, context.canReadFiles, allFiles, { hidden: message.hiddenFiles ?? 0, sheets: message.lockedSheets ?? 0, priced: message.lockedPriced ?? 0 /* B-CP-014 */ })
   const menu = readOnly ? [] : cardActions(message, context) // F-SA-261
   const failed = message.outbox?.state === 'failed'
   const sending = message.outbox?.state === 'sending'
@@ -222,7 +223,7 @@ export function MessageCard({ message, context, actions, remind, readOnly = fals
         </p>
       )}
 
-      {(files.photos.length > 0 || files.others.length > 0 || files.held.length > 0 || files.more > 0 || files.hidden > 0 || files.sheets > 0) && (
+      {(files.photos.length > 0 || files.others.length > 0 || files.held.length > 0 || files.more > 0 || files.hidden > 0 || files.sheets > 0 || (files.priced ?? 0) > 0) /* B-CP-014 */ && (
         <div className="fw-rt-attach">
           {(files.photos.length > 0 || files.more > 0) && (
             <ul className="fw-rt-photos" aria-label={t('files.label')}>
@@ -269,6 +270,13 @@ export function MessageCard({ message, context, actions, remind, readOnly = fals
             <p className="fw-rt-held-file">
               <Lock size={13} aria-hidden />
               <span>{t('files.sheetLocked', { count: files.sheets })}</span>
+            </p>
+          )}
+          {/* B-CP-014: a priced document this reader may not open — the same lock line, its own words, never its name. */}
+          {(files.priced ?? 0) > 0 && (
+            <p className="fw-rt-held-file">
+              <Lock size={13} aria-hidden />
+              <span>{pricedWords('priced.lockedCount', { count: files.priced ?? 0 })}</span>
             </p>
           )}
           {files.hidden > 0 && (

@@ -638,7 +638,11 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    brand only; `mtmDraftsOn` defaults on) and …_followups_sales_w2b5_guards' `factory_stored_file_guard` (`StoredFile.priced`,
    the money wall's lock flag, may change on a superseded version too); data once: `priced` on the files that show prices and
    their copies and versions, `requireMfa` on the custom office roles that see prices, costs or margins; the size guard is
-   verified, not redefined):
+   verified, not redefined),
+   `…_order_page_paper_ddt_guards` (order page B-OP-033, end-check fix op-fx2; no schema folder of its own, a policy folder
+   after it: it redefines …_tax_currency_w2b_guards' `factory_invoice_check_issue` so a TD24's GOODS line without a Nexus DDT
+   passes only when a shipment of the invoice's company and customer recorded ELSEWHERE, not cancelled, carries its order line
+   and the invoice cites that shipment's paper DDT, number and date as recorded, in documentRefs):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

@@ -193,5 +193,11 @@
     "soon_one": "Scade tra {count} giorno ({date})",
     "soon_other": "Scade tra {count} giorni ({date})",
     "valid": "Valido fino al {date}"
+  },
+  "priced": {
+    "locked": "Documento con prezzi — non puoi aprirlo",
+    "lockedWhy": "Lo aprono solo le persone che vedono i prezzi.",
+    "lockedCount_one": "Documento con prezzi — non puoi aprirlo",
+    "lockedCount_other": "{count} documenti con prezzi — non puoi aprirli"
   }
 }

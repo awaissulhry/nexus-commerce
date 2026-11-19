@@ -129,8 +129,17 @@ export const postPartnerMessageContract = defineContract({
     body: z.string().max(MAX_BODY_LENGTH),
     /** Files of this record shared with you (available) to attach. */
     attachments: z.array(id()).max(MAX_ATTACHMENTS).optional(),
+    /** B-CP-079: also ask your factory designer (409 in words when it cannot be asked here; nothing is posted then). */
+    askFactoryDesigner: z.boolean().optional(),
   }),
-  response: { 201: output({ thread: output({ id: id(), status: z.enum(THREAD_STATUSES) }), message: partnerMessageView }) },
+  response: {
+    201: output({
+      thread: output({ id: id(), status: z.enum(THREAD_STATUSES) }),
+      message: partnerMessageView,
+      /** B-CP-079: asked (the name: "We asked Giulia Verdi."), or posted without the ask (the day's asks used up), in words; null: not asked for. */
+      designerAsk: output({ asked: z.boolean(), name: z.string().nullable(), words: z.string() }).nullable().optional(),
+    }),
+  },
 })
 
 /** The party's conversations, newest message first (the Messages list; Home's "recent messages from us"). */

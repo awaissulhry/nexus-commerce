@@ -1798,7 +1798,7 @@
     "checksOpen_other": "{count} controlli bloccano il rilascio",
     "release": {
       "credit": "Il cliente ha superato il fido: il rilascio attende un sì sul fido.",
-      "gate": "Un controllo di conformità blocca il rilascio: vedi Conformità › Blocchi ai controlli.",
+      "gate": "Un controllo di conformità blocca il rilascio: vedi Conformità › Stato conformità, Blocchi ai controlli.",
       "refused_one": "Il controllo di rilascio lo blocca: {count} controllo è cambiato da quando è stato letto — vedi l’elenco.",
       "refused_other": "Il controllo di rilascio lo blocca: {count} controlli sono cambiati da quando sono stati letti — vedi l’elenco."
     },
@@ -1952,7 +1952,7 @@
     "creditHeld": "Il credito di {customer} è bloccato.",
     "reason": "Perché la merce è partita comunque",
     "reasonHint": "Registrato con la spedizione e scritto nella conversazione dell'ordine.",
-    "note": "Nota interna (facoltativa)",
+    "note": "Nota d'ufficio (facoltativa)",
     "cancel": "Annulla",
     "record_one": "Registra spedizione ({count} capo)",
     "record_other": "Registra spedizione ({count} capi)",
