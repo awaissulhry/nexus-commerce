@@ -356,7 +356,7 @@ const built = [
       'intro',
       'search',
       'table',
-      'file',
+      // F-SA-225: no CSV is made in the browser any more (Export N goes through the export job), so `<side>.file` went with it.
       'failedTitle',
       'empty.title',
       'empty.body',
