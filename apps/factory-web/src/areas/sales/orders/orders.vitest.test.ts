@@ -1777,7 +1777,7 @@ describe('F-OP-117: the Changes tab — work-order changes of this order, the Hi
     const still = (mayAct: boolean) => ({ kind: 'WORK_ORDER_CHANGE', ref: null, words: { en: 'x', it: 'x' }, since: '2026-11-17T09:00:00Z', waitingOn: 'PLANNER', mayAct, requestId: null })
     expect(changesDotOf({ onUs: [], still: [still(false)] })).toBe(false)
     expect(changesDotOf({ onUs: [], still: [still(true)] })).toBe(true)
-    const yes = (allowed: boolean, me = false) => ({ key: 'YES:t', kind: 'YES', sub: null, on: 'US' as const, since: null, words: { kind: 'api' as const, words: { en: 'x', it: 'x' } }, door: { kind: 'yes' as const, task: { taskId: 't', kind: 'SALES_ORDER', kindLabel: { en: 'x', it: 'x' }, requestedAt: '2026-11-17T09:00:00Z', requester: { name: 'Luca Prova', me }, approver: { kind: 'ROLE' as const, name: 'Finance', me: false }, version: 1, requireStepUp: false, approve: { allowed, why: null }, reject: { allowed, why: null }, withdraw: { allowed: false, why: null } } } })
+    const yes = (allowed: boolean, me = false) => ({ key: 'YES:t', kind: 'YES', sub: null, ref: null /* F-OP-301 */, on: 'US' as const, since: null, words: { kind: 'api' as const, words: { en: 'x', it: 'x' } }, door: { kind: 'yes' as const, task: { taskId: 't', kind: 'SALES_ORDER', kindLabel: { en: 'x', it: 'x' }, requestedAt: '2026-11-17T09:00:00Z', requester: { name: 'Luca Prova', me }, approver: { kind: 'ROLE' as const, name: 'Finance', me: false }, version: 1, requireStepUp: false, approve: { allowed, why: null }, reject: { allowed, why: null }, withdraw: { allowed: false, why: null } } } })
     expect(changesDotOf({ onUs: [yes(true)], still: [] })).toBe(true)
     expect(changesDotOf({ onUs: [yes(false)], still: [] })).toBe(false)
     expect(changesDotOf({ onUs: [yes(true, true)], still: [] })).toBe(false)
@@ -1786,7 +1786,7 @@ describe('F-OP-117: the Changes tab — work-order changes of this order, the Hi
   it('the wiring: the tabs count Changes from the ONE waiting list (R-22), the section and the chip are drawn, words in it + en', () => {
     const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(view).toContain('const changesCount = waitingCard ? changesBadgeOf(waitingCard) : null')
-    expect(view).toContain('tabCountOf(tab, order, { changes: changesCount /* F-OP-117 */ })')
+    expect(view).toContain('tabCountOf(tab, order, { changes: changesCount /* F-OP-117 */, viewInvoices: model.can.viewInvoices /* F-OP-306 */ })')
     const tab = readFileSync(new URL('./record/changes/view/ChangesTab.tsx', import.meta.url), 'utf8')
     expect(tab).toContain('<WorkOrderChanges order={order} model={model} actions={actions} />')
     expect(tab).toContain('workOrderChanges: model.orderChanges?.list?.value ?? null')
