@@ -2,42 +2,23 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { useOrderMargin } from './margin/use-margin'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { RecordCustomFields } from '../../../../record-panels/custom-fields/RecordCustomFields' // B-TH-280
-import { findStyles, getStyle, listVersions, type StyleDetail, type VersionsAnswer } from '../../quotes/api'
+import { getStyle, listVersions, type StyleDetail, type VersionsAnswer } from '../../quotes/api'
 import {
-  applyAmendment,
-  cancelOrder,
-  changePromise,
-  closeLines,
-  closeOrder,
-  copyAsQuote,
-  getCancelCheck,
   getSchedule,
   listAmendments,
-  previewAmendment,
-  reopenLines,
   getOrder,
   getSdi,
   getSettlement,
   listCancelReasons,
   listOrderWorkOrders,
-  markReady,
-  recordDepositPayment,
-  sendDepositLink,
-  sendToSdi,
   type AmendmentsAnswer,
-  type CancelCheck,
   type CancelReason,
-  type CloseLinesAnswer,
-  type CopyAnswer,
-  type DepositLinkAnswer,
-  type DepositReceived,
   type Order,
   type Schedule,
   type OrderWorkOrder,
@@ -46,17 +27,19 @@ import {
 } from '../api'
 import { isStepUpCancelled, useLive, useStepUp } from '../hooks'
 import { olderRead } from '../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
-import { amendLines, draftOf, namesOf, newKey, withCells } from '../daily-model'
 import { abilitiesOf, landingOf, readProblem, romeToday, writeProblem } from '../model'
 // F-SA-239: the page live part by part (the read's own watch list, one coalesce table, stale tabs, typed work kept).
 import { changedBy, EMPTY_QUEUE, enqueue, nextDue, opened, ORDER_PARTS, partsOf, take, watchedIds, type LiveQueue, type OrderPagePart } from './live'
-import { COMPOSER_EMPTY, PART_LOADING, type AmendState, type Loaded, type OrderRecordModel, type Part, type RecordDialog } from './record-model'
+import { PART_LOADING, type Loaded, type OrderRecordModel, type Part, type RecordActsBase, type RecordDialog } from './record-model'
 import { OrderRecordView } from './view/OrderRecordView'
-// B-W2b-398: the Shipments tab's card "Delivered (from carrier)".
-import { Deliveries } from './shipments/delivered/Deliveries'
-import { partnerProblem, portalAddress } from '../../../admin/users/partners/model'
-import { openPreview } from '../../../admin/users/partners/preview'
-import { useScheduleSteps } from './schedule/use-schedule-steps'
+// ---- F-OP-134 (N-5): one acts hook per tab — the container mounts them and hands the view what they return as plain props ----
+import { useBandActs } from './use-band-acts'
+import { useOverviewActs } from './use-overview-acts'
+import { useLinesActs } from './use-lines-acts'
+import { useProductionActs } from './use-production-acts'
+import { useShipmentsActs } from './use-shipments-acts'
+import { useMoneyActs } from './use-money-acts'
+// ---- end F-OP-134
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOrderDepth } from '../depth/use-order-depth'
@@ -67,8 +50,6 @@ import { OrderLineOptions } from './configurator/OrderLineOptions'
 import { useReviewBanner } from './review-banner/use-review-banner'
 import { ReviewBanner } from './review-banner/view/ReviewBanner'
 import { createElement } from 'react'
-// B-W2b-374: an amendment's new line's options.
-import { NewLineOptions } from '../../_shared/options-entry/NewLineOptions'
 // B-W2b-380 (XF6:02): cost changed since priced, on the order's lines.
 import { useCostChanged } from '../../_shared/cost-changed/use-cost-changed'
 import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark'
@@ -77,15 +58,11 @@ import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordT
 import { printHref } from '../../../../shell/print/print-model'
 // B-TH-256: what points at the order (complaints, returns, planning's re-promises, the gates' refusals).
 import { useOrderLinks } from './links/use-order-links'
-// ---- F-SA-230: the ⋯ menu's People — the production lane's dialogs, reused in place (Assign supervisor…, Ask the supervisor…) ----
-import { useAssignSupervisor } from '../../../_shared/production-supervisor/use-assign-supervisor'
+// F-SA-230: the ⋯ menu's People — the production lane's dialogs' catalogues (the dialogs are use-band-acts').
 import { SUPERVISOR_NS } from '../../../_shared/production-supervisor/model'
-import { useNoteDialog } from '../../../production/_shared/notes/use-note-dialog'
 import { NOTES_NS } from '../../../production/_shared/notes/model'
-// ---- end F-SA-230
 import { useOrderProduction } from './overview/use-order-production' // F-SA-232: Overview's production read (the order's own pieces)
 import { getReadiness, type ReadinessRow } from '../../../production/work-orders/daily/api' // F-SA-234: the work orders' materials
-import { useBrandHealth } from '../../../../lib/production/health/use-health' // F-SA-235: the one HealthCard (moved to lib)
 // F-SA-236: this order's customer requests and the approvals we asked it (Changes).
 import { listOrderRequests, type BrandRequest } from '../../../home/approvals/requests/api'
 import { readRecordRequests, type OfficeRequest } from '../../../../record-panels/approvals/api'
@@ -97,9 +74,6 @@ import type { Work } from './overview/api' // F-SA-262
 import { useRequestReviewDoor } from '../../../home/approvals/requests/use-request-review-door'
 import { doorListOf } from '../../../home/approvals/requests/model'
 import { CustomerOverrideProvider } from '../../../_shared/customer-override/CustomerOverride'
-// F-SA-242: the Amend review's tick writes the customer's words through the thread's own portal send.
-import { postPortalReplyKeyed } from '../../../_shared/record-thread/api'
-import { portalRefusal } from '../../../_shared/record-thread/state'
 // F-SA-244: the conversation side of a change — the told lines of the order's changes, the cards' facts, Who was told.
 import { askFactsOf, changeFactsOf, readToldChanges, type ToldChanges } from './told'
 import { stillRowsOf } from './changes/model'
@@ -115,6 +89,9 @@ import { WhoWasToldDialog } from './WhoWasTold'
  * B-W2a-50: the payment schedule and the amendments (Changes tab) with it; "Amend order" holds the draft here (each style
  * read for its sizes and colourways; Review asks the API's preview, Apply sends the version as read); close and reopen
  * lines; the cancel's impact check when its dialog opens, then the cancel with the typed number; copy as a new quote.
+ * F-OP-134 (N-5): each tab's acts live in their own container hook (use-band-acts, use-overview-acts, use-lines-acts,
+ * use-production-acts, use-shipments-acts, use-money-acts); this container mounts them with the one write and the one dialog slot,
+ * and hands the view what they return as plain props (a view never imports a hook that fetches).
  */
 /** B-W2b-380: no lines yet (the order is read). */
 const NO_LINES: readonly never[] = []
@@ -131,8 +108,6 @@ export function OrderRecord({ orderId }: { orderId: string }) {
 }
 
 const part = <T,>(value: T): Part<T> => ({ value, problem: null })
-/** The reason the review's preview is asked with (the preview writes nothing; Apply sends the typed reason). */
-const PREVIEW_REASON = 'Review before applying.'
 const ISSUED = (status: string) => status !== 'DRAFT'
 
 function RecordContainer({ orderId }: { orderId: string }) {
@@ -166,17 +141,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const [notice, setNotice] = useState<OrderRecordModel['notice']>(null)
   const [dialogProblem, setDialogProblem] = useState<OrderRecordModel['dialogProblem']>(null)
   const [changed, setChanged] = useState<{ at: string; parts?: readonly string[]; by?: string | null } | null>(null)
-  const [sentLink, setSentLink] = useState<DepositLinkAnswer | null>(null)
-  const [recorded, setRecorded] = useState<DepositReceived | null>(null)
-  const [amend, setAmend] = useState<AmendState | null>(null)
-  const amendRef = useRef<AmendState | null>(null)
-  amendRef.current = amend
   const [schedule, setSchedule] = useState<Part<Schedule> | null>(null)
   const [amendments, setAmendments] = useState<Part<AmendmentsAnswer> | null>(null)
   const [changeStyles, setChangeStyles] = useState<Record<string, StyleDetail | null | undefined>>({})
-  const [cancelCheck, setCancelCheck] = useState<Part<CancelCheck> | null>(null)
-  const [closedLines, setClosedLines] = useState<CloseLinesAnswer | null>(null)
-  const [copied, setCopied] = useState<CopyAnswer | null>(null)
   // B-W2b-16: the CANCEL reasons (the code a close of lines names, and its words on a closed line).
   const [cancelReasons, setCancelReasons] = useState<CancelReason[] | null>(null)
   useEffect(() => {
@@ -186,7 +153,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
       .catch(() => setCancelReasons(null))
     return () => abort.abort()
   }, [api])
-  const searchSeq = useRef(0)
   const { stepUp, guard, ensureFresh, submitStepUp, cancelStepUp } = useStepUp(api)
 
   const loadParts = useCallback(
@@ -348,111 +314,39 @@ function RecordContainer({ orderId }: { orderId: string }) {
 
   const version = () => current.current?.version ?? 1
 
-  // ---- B-W2a-50: the amendment draft --------------------------------------------------------------------------------
-  const readStyle = useCallback(
-    (styleId: string) =>
-      getStyle(api, styleId)
-        .then((style) => setAmend((known) => (known ? { ...known, styles: { ...known.styles, [styleId]: style } } : known)))
-        .catch(() => setAmend((known) => (known ? { ...known, styles: { ...known.styles, [styleId]: null } } : known))),
-    [api],
-  )
-  const startAmend = () => {
-    const value = current.current
-    if (!value) return
-    const styleIds = [...new Set(value.lines.map((line) => line.styleId))]
-    setNotice(null)
-    setAmend({
-      revision: (value.amendments.latestRevision ?? 0) + 1,
-      lines: draftOf(value),
-      customerRef: value.customerRef ?? '',
-      requestedDate: value.requestedDate ?? '',
-      styles: Object.fromEntries(styleIds.map((styleId) => [styleId, undefined])),
-      composer: COMPOSER_EMPTY,
-      review: null,
-    })
-    if (tab !== 'lines') router.replace(`${pathname}?tab=lines`)
-    for (const styleId of styleIds) void readStyle(styleId)
-  }
-  const amendBody = (draft: AmendState, value: Order) => {
-    const customerRef = draft.customerRef.trim() || null
-    const requestedDate = draft.requestedDate || null
-    return {
-      lines: amendLines(draft.lines, value),
-      ...(customerRef !== (value.customerRef ?? null) ? { customerRef } : {}),
-      ...(requestedDate !== (value.requestedDate ?? null) ? { requestedDate } : {}),
-    }
-  }
-  const review = () => {
-    const draft = amendRef.current
-    const value = current.current
-    if (!draft || !value) return
-    setDialog({ kind: 'amendReview' })
-    setDialogProblem(null)
-    setAmend((known) => (known ? { ...known, review: { phase: 'reading', preview: null, problem: null } } : known))
-    // The API checks a reason in the preview too: it is asked with a stand-in (nothing is written); the dialog asks the
-    // real reason before Apply, which sends it.
-    previewAmendment(api, orderId, { version: value.version, reason: PREVIEW_REASON, ...amendBody(draft, value) })
-      .then((preview) => setAmend((known) => (known ? { ...known, review: { phase: 'ready', preview, problem: null } } : known)))
-      .catch((error: unknown) => {
-        const words = writeProblem(error)
-        setAmend((known) => (known ? { ...known, review: { phase: 'failed', preview: null, problem: words } } : known))
-        if (words.reload) void load()
-      })
-  }
-  const composerQuery = (query: string) => {
-    const mine = ++searchSeq.current
-    const companyId = current.current?.companyId ?? null
-    if (query.trim() === '') {
-      setAmend((known) => (known ? { ...known, composer: { ...known.composer, query: '', results: null, searching: false, problem: null } } : known))
-      return
-    }
-    setAmend((known) => (known ? { ...known, composer: { ...known.composer, query, searching: true, problem: null } } : known))
-    findStyles(api, query, companyId)
-      .then((results) => mine === searchSeq.current && setAmend((known) => (known ? { ...known, composer: { ...known.composer, results, searching: false } } : known)))
-      .catch((error: unknown) => mine === searchSeq.current && setAmend((known) => (known ? { ...known, composer: { ...known.composer, searching: false, problem: readProblem(error) } } : known)))
-  }
-  const composerPick = (styleId: string | null) => {
-    if (!styleId) {
-      setAmend((known) => (known ? { ...known, composer: { ...known.composer, chosen: null, picked: [] } } : known))
-      return
-    }
-    getStyle(api, styleId)
-      .then((style) => setAmend((known) => (known ? { ...known, styles: { ...known.styles, [styleId]: style }, composer: { ...known.composer, chosen: style, picked: [] } } : known)))
-      .catch((error: unknown) => setAmend((known) => (known ? { ...known, composer: { ...known.composer, problem: readProblem(error) } } : known)))
-  }
-  const composerAdd = () =>
-    setAmend((known) => {
-      const chosen = known?.composer.chosen
-      if (!known || !chosen) return known
-      const have = new Set(known.lines.filter((line) => line.styleId === chosen.id).map((line) => line.colourwayId))
-      const added = known.composer.picked.filter((colourwayId) => !have.has(colourwayId)).map((colourwayId) => ({ key: newKey(chosen.id, colourwayId), lineId: null, styleId: chosen.id, colourwayId, sizes: {}, price: '', locked: false }))
-      return { ...known, lines: [...known.lines, ...added], composer: COMPOSER_EMPTY }
-    })
+  // ---- F-OP-134 (N-5): the tabs' acts, one container hook per tab, each with the one write and the order as last read ----------------
+  const ready = order.status === 'ready' ? order.value : null
+  const actsBase: RecordActsBase = { api, orderId, current, write, version, setNotice, load, loadParts }
+  const band = useBandActs({ ...actsBase, order: ready, permissions: session.permissions })
+  const overview = useOverviewActs()
+  const lines = useLinesActs({
+    ...actsBase,
+    order: ready,
+    setDialog,
+    setDialogProblem,
+    clearChanged: () => setChanged(null),
+    showLines: () => {
+      if (tab !== 'lines') router.replace(`${pathname}?tab=lines`)
+    },
+    pricedStart: (amendment) => depth.actions.onPricedStart?.(amendment),
+  })
+  const productionActs = useProductionActs({ api, order: ready, tab, can, permissions: session.permissions, setNotice })
+  const shipments = useShipmentsActs({ order: ready, prefix })
+  const money = useMoneyActs({
+    ...actsBase,
+    permissions: session.permissions,
+    sdi,
+    setSdi,
+    stepUp: { ensureFresh, guard },
+    onInvoiced: (invoiceId) => router.push(`${prefix}/finance/invoices/${invoiceId}?tab=lines`),
+  })
+  // ---- end F-OP-134
 
   // B-W2a-72: the Margin tab reads the order's margin while it is open.
-  // B-W2a-80: the schedule card's verbs (B-W2a-F2's note): open a before-shipping step, invoice a paid step.
-  const scheduleSteps = useScheduleSteps({
-    api,
-    orderId,
-    permissions: session.permissions,
-    reload: () => {
-      const value = current.current
-      if (value) loadParts(value)
-    },
-    onNotice: (words, tone) => setNotice({ tone, words }),
-    onInvoiced: (invoiceId) => router.push(`${prefix}/finance/invoices/${invoiceId}?tab=lines`),
-    // B-W2b-16: the owner's waive asks a fresh code (the record's step-up).
-    stepUp: { ensureFresh, guard },
-  })
   // F-SA-230: Margin is Money's last section (#margin), read while Money shows, with the margin grain.
   const margin = useOrderMargin(api, orderId, tab === 'money' && can.margin, session.permissions, order.status === 'ready' ? order.value.version : null)
   // B-W2b-380 (XF6:02): the lines' cost sheets (once per revision) while the Lines tab shows them, with the cost grain.
   const costChanges = useCostChanged({ api, companyId: order.status === 'ready' ? order.value.companyId : null, lines: order.status === 'ready' ? order.value.lines : NO_LINES, enabled: order.status === 'ready' && can.cost && tab === 'lines' })
-  // B-W2b-180: "See it in the customer's portal" — the office person's preview of the customer's portal at this order.
-  const [portalOpening, setPortalOpening] = useState(false)
-  const [portalGone, setPortalGone] = useState(false) // F-SA-242
-  const portal = session.permissions.includes('partners.preview') ? { held: null, opening: portalOpening } : { held: { key: 'held.portalRight' }, opening: false }
-
   // B-W2b-323: the orders in depth (reads by tab, writes with the order's version; an answered order replaces the page's).
   const locale = useLocale()
   const depth = useOrderDepth({
@@ -467,7 +361,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     },
     onReload: () => void load(),
     onAmendDone: () => {
-      setAmend(null)
+      lines.endAmend() // F-OP-134: the draft is use-lines-acts'
       setChanged(null)
       setDialog(null)
     },
@@ -486,21 +380,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const pack = depth.model.techPack
   const madeFrom: { id: string; number: string } | null | undefined = !straight || !readsRequests || !pack ? null : pack.value ? (pack.value.inquiry ? { id: pack.value.inquiry.id, number: pack.value.inquiry.number } : null) : undefined
   // ---- end B-TH-228
-  // ---- F-SA-230: the band's ⋯ People — Assign supervisor… (production.brand.manage) and Ask the supervisor… (threads.post: an office
-  // note on THIS order, its supervisor asked), the production lane's own dialogs. A Send reads the order again.
-  const assign = useAssignSupervisor(api, () => void load())
-  const mayNote = session.permissions.includes('threads.post')
-  const note = useNoteDialog(api, { can: mayNote, onDone: () => void load() })
-  const people = {
-    mayAssign: session.permissions.includes('production.brand.manage'),
-    mayNote,
-    assign: assign.model,
-    note: note.model,
-  }
-  // ---- end F-SA-230
-  // ---- F-SA-232: the production read (every part on arrival: the band's health and Overview need it), the line sizes' window ----
+  // ---- F-SA-232: the production read (every part on arrival: the band's health and Overview need it); the line sizes' window is
+  // use-overview-acts' (F-OP-134) ----
   const production = useOrderProduction(api, order.status === 'ready' ? order.value.id : null)
-  const [overviewLine, setOverviewLine] = useState<string | null>(null)
   // ---- end F-SA-232
   // ---- F-SA-234: the materials' readiness of the work orders the production read names (Production › Work orders, while it shows) ----
   const [readiness, setReadiness] = useState<Part<ReadinessRow[]> | null>(null)
@@ -516,13 +398,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     return () => abort.abort()
   }, [api, tab, workIds])
   // ---- end F-SA-234
-  // ---- F-SA-235: the order's health (raise to At risk / clear: production.brand.manage), read while Production shows (workorders.view) ----
-  const healthOwner = useMemo(
-    () => (order.status === 'ready' && tab === 'production' && can.viewWorkOrders ? { orders: [{ id: order.value.id, number: order.value.number }], version: order.value.version } : null),
-    [order, tab, can.viewWorkOrders],
-  )
-  const health = useBrandHealth(api, healthOwner, session.permissions, (words) => setNotice({ tone: 'success', words: { key: words.key === 'health.clearedNotice' ? 'notice.healthCleared' : 'notice.healthRaised' } }))
-  // ---- end F-SA-235
+  // F-SA-235: the order's health (raise to At risk / clear) is use-production-acts' (F-OP-134).
   // ---- F-SA-236: the order's customer requests (every state; the API's wall) and the approvals we asked it (partners.approvals.view),
   // read while Changes shows, again after each change of the order.
   const [requests, setRequests] = useState<Part<BrandRequest[]> | null>(null)
@@ -652,7 +528,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // ---- F-SA-239: what a due part reads (the latest closures, through a ref the timer calls) ----
   runPartsRef.current = (parts) => {
     const open = dialogRef.current
-    const typed = !!amendRef.current || (!!open && open.kind !== 'depositLink' && open.kind !== 'depositPayment' && open.kind !== 'compare')
+    const typed = !!lines.amendRef.current || (!!open && open.kind !== 'depositLink' && open.kind !== 'depositPayment' && open.kind !== 'compare')
     const orderParts = parts.filter((part) => ORDER_PARTS.includes(part))
     if (orderParts.length > 0) {
       // Under typed work the order is not read under it: "Changed by <name> at hh:mm · Reload" (the draft is kept).
@@ -699,51 +575,36 @@ function RecordContainer({ orderId }: { orderId: string }) {
     madeFrom: madeFrom ?? null, // B-TH-228
     madeFromReading: madeFrom === undefined,
     links: links.model, // B-TH-256
-    people, // F-SA-230
     production: production.state, // F-SA-232
     readiness, // F-SA-234
-    health: healthOwner ? health.model : null, // F-SA-235
     requests, // F-SA-236
     requestDoor: { parts: door, hrefOf: (id: string) => door.hrefOf(id), open: (id: string) => door.open(id) /* F-SA-244 */ }, // F-SA-243
     told, // F-SA-244
     files: tab === 'files' ? orderFiles.model : null, // F-SA-237
     askedOfCustomer,
-    overviewLine,
     liveState,
     changed,
     notice,
     busy,
     dialog,
     dialogProblem,
-    sentLink,
-    recorded,
     stepUp,
-    amend,
     schedule,
     amendments,
     changeStyles,
-    cancelCheck,
-    closedLines,
-    copied,
     margin: margin.model,
-    scheduleSteps: scheduleSteps.model,
-    portal,
-    portalGone, // F-SA-242
+    // ---- F-OP-134: what each tab's acts hook holds (the band's portal, people and copy; Overview's line window; the amendment draft,
+    // closed lines, the cancel check; the health; the deposit's page and payment, the schedule's verbs) ----
+    ...band.model,
+    ...overview.model,
+    ...lines.model,
+    ...productionActs.model,
+    ...money.model,
     // B-W2b-340
     lineOptions: order.status === 'ready' ? (line) => createElement(OrderLineOptions, { key: line.id, api, order: order.value, line, permissions: session.permissions, onReload: () => void load() }) : undefined,
     // B-W2b-380 (XF6:02)
     lineCost: order.status === 'ready' ? (line) => createElement(CostChangedMark, { key: `cost-${line.id}`, change: costChanges.get(line.id), currency: order.value.currency }) : undefined,
-    // B-W2b-374 (XF3:02): an amendment's new line takes its options when it is made.
-    newLineOptions: (line) =>
-      createElement(NewLineOptions, {
-        key: line.key,
-        api,
-        styleId: line.styleId,
-        colourwayId: line.colourwayId,
-        line: (({ style, colour }) => ({ style, colour }))(namesOf(line, order.status === 'ready' ? order.value : null, amend?.styles[line.styleId])),
-        picks: line.options ?? [],
-        onChange: (picks) => setAmend((known) => (known ? { ...known, lines: known.lines.map((entry) => (entry.key === line.key ? { ...entry, options: picks } : entry)) } : known)),
-      }),
+    // B-W2b-374 (XF3:02): an amendment's new line's options are use-lines-acts' (F-OP-134).
   }
 
   const value = order.status === 'ready' ? order.value : null
@@ -758,7 +619,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     >
     <OrderRecordView
       model={model}
-      delivered={value ? <Deliveries orderId={value.id} prefix={prefix} /> : null}
+      delivered={shipments.delivered /* B-W2b-398, F-OP-134 */}
       // B-TH-214: the docked thread (Head with Activity's doors, files line, Files view, feed, box); the print view prints the thread with ThreadPrint (B-TH-280).
       // F-SA-262: the dock's pick — This order · <Customer> (general) · Projects ▾ · Work orders ▾ (office only) · All of <Customer>.
       thread={
@@ -789,58 +650,23 @@ function RecordContainer({ orderId }: { orderId: string }) {
       // B-TH-280: the order's custom fields at the end of its first tab; F-SA-233: Overview (they moved from Lines).
       fields={value && tab === 'overview' ? <RecordCustomFields record={{ type: 'SalesOrder', id: value.id }} title={value.number} /> : null}
       actions={{
-        onPortal: () => {
-          const current = order.status === 'ready' ? order.value : null
-          if (!current?.party || portalOpening) return
-          setPortalOpening(true)
-          openPreview(api, current.partyId, portalAddress(current.party.code, { type: 'SalesOrder', id: current.id }))
-            .catch((error: unknown) => {
-              const problem = partnerProblem(error)
-              setNotice({ tone: 'danger', words: { key: problem === 'problem.forbidden' ? 'portal.forbidden' : problem === 'problem.noKind' ? 'portal.noKind' : 'portal.failed' } })
-            })
-            .finally(() => setPortalOpening(false))
-        },
+        // ---- F-OP-134: each tab's acts (the band; Overview; Lines; Production; Money) ----
+        ...band.actions,
+        ...overview.actions,
+        ...lines.actions,
+        ...productionActs.actions,
+        ...money.actions,
+        // ---- end F-OP-134
         onRetry: () => void load(),
         onRetryMargin: margin.retry,
         links: links.actions, // B-TH-256
         // ---- F-SA-232 ----
         onRetryProduction: () => production.again(),
-        health: health.actions, // F-SA-235
         files: orderFiles.actions, // F-SA-237
-        onOpenLine: setOverviewLine,
-        // ---- F-SA-230: the ⋯ People (the production lane's dialogs) ----
-        people: {
-          onAssign: () => {
-            const value = current.current
-            if (!value || !people.mayAssign) return
-            assign.open([{ orderId: value.id, number: value.number, customerRef: value.customerRef, partyId: value.partyId, partyName: value.party?.legalName ?? value.party?.code ?? '—', companyId: value.companyId }])
-          },
-          onAsk: () => {
-            const value = current.current
-            if (!value || !mayNote) return
-            note.open({ workOrders: [], salesOrders: [{ type: 'SalesOrder', id: value.id, label: value.number, partyId: value.partyId, partyName: value.party?.legalName ?? value.party?.code ?? null, companyId: value.companyId }], withoutOrder: 0 }, 'band', 'salesOrders')
-          },
-          assign: assign.actions,
-          note: note.actions,
-        },
         // ---- B-W2b-323 ----
         depth: depth.actions,
-        onPricedOffer: () => {
-          const draft = amendRef.current
-          const value = current.current
-          if (!draft || !value) return
-          setDialog(null)
-          depth.actions.onPricedStart?.(amendBody(draft, value))
-        },
-        scheduleSteps: scheduleSteps.actions,
         onRetryPart: (which) => {
-          if (which === 'cancelCheck') {
-            setCancelCheck(PART_LOADING)
-            getCancelCheck(api, orderId)
-              .then((answer) => setCancelCheck(part(answer)))
-              .catch((error: unknown) => setCancelCheck({ value: null, problem: readProblem(error) }))
-            return
-          }
+          if (which === 'cancelCheck') return lines.readCancelCheck() // F-OP-134: the cancel's impact check is use-lines-acts'
           if (which === 'amendments' && value) return readAmendments(value)
           if (which === 'requests') return readRequests()
           if (value) loadParts(value)
@@ -850,121 +676,13 @@ function RecordContainer({ orderId }: { orderId: string }) {
         onDialog: (next) => {
           setDialog(next)
           setDialogProblem(null)
-          setSentLink(null)
-          setRecorded(null)
-          setClosedLines(null)
-          setCopied(null)
+          // F-OP-134: each tab's acts clear what their last dialog showed (the cancel reads its impact check as it opens).
+          band.opened(next)
+          lines.opened(next)
+          money.opened(next)
           // F-SA-236: Before → after reads the amendments' snapshots as it opens.
           if (next?.kind === 'compare' && current.current && !amendments?.value) readAmendments(current.current)
-          if (next?.kind === 'cancel') {
-            setCancelCheck(PART_LOADING)
-            getCancelCheck(api, orderId)
-              .then((answer) => setCancelCheck(part(answer)))
-              .catch((error: unknown) => setCancelCheck({ value: null, problem: readProblem(error) }))
-          }
         },
-        onPromise: ({ date, reason, lineIds }) => void write(() => changePromise(api, orderId, { version: version(), promiseDate: date, reason, ...(lineIds ? { lineIds } : {}) }), 'notice.promise'),
-        onReady: (reason) => void write(() => markReady(api, orderId, { version: version(), reason }), 'notice.ready'),
-        onClose: (reason) => void write(() => closeOrder(api, orderId, { version: version(), ...(reason ? { reason } : {}) }), 'notice.closed'),
-        onSendLink: (requestId, message) =>
-          void write(
-            async () => {
-              setSentLink(await sendDepositLink(api, requestId, message))
-              return null
-            },
-            null,
-            true,
-          ),
-        onRecordPayment: (requestId, input) => {
-          // One key for the write and its repeat after the code: the API answers the second from its receipt.
-          const key = newIdempotencyKey()
-          const body = { depositRequestId: requestId, amount: input.amount, receivedOn: input.receivedOn, externalRef: input.reference, internalNote: input.note || null, issueDepositInvoice: input.issue }
-          void write(
-            async () => {
-              if (input.issue) await ensureFresh('stepUp.sentence.td02')
-              setRecorded(await guard('stepUp.sentence.td02', () => recordDepositPayment(api, body, key)))
-              return null
-            },
-            null,
-            true,
-          )
-        },
-        onSendSdi: (invoiceId) => {
-          const key = newIdempotencyKey()
-          void write(
-            async () => {
-              const before = sdi?.[invoiceId]?.value ?? (await getSdi(api, invoiceId))
-              await ensureFresh('stepUp.sentence.sdi')
-              const answer = await guard('stepUp.sentence.sdi', () => sendToSdi(api, invoiceId, before.version, key))
-              setSdi((known) => ({ ...(known ?? {}), [invoiceId]: part(answer) }))
-              return null
-            },
-            'notice.sdiSent',
-          )
-        },
-        // ---- B-W2a-50 ----------------------------------------------------------------------------------------------------
-        onAmendStart: startAmend,
-        onAmendDiscard: () => {
-          setAmend(null)
-          setChanged(null)
-        },
-        onAmendCells: (styleId, next) => setAmend((known) => (known ? { ...known, lines: withCells(known.lines, Object.fromEntries(Object.entries(next).filter(([key]) => known.lines.some((line) => line.key === key && line.styleId === styleId)))) } : known)),
-        onAmendPrice: (key, text) => setAmend((known) => (known ? { ...known, lines: known.lines.map((line) => (line.key === key ? { ...line, price: text } : line)) } : known)),
-        onAmendHeader: (field, text) => setAmend((known) => (known ? { ...known, [field]: text } : known)),
-        onAmendReview: review,
-        onAmendApply: (reason, tell) => {
-          const draft = amendRef.current
-          if (!draft) return
-          const key = newIdempotencyKey()
-          void write(async () => {
-            const value = current.current!
-            const answer = await applyAmendment(api, orderId, { version: value.version, reason, ...amendBody(draft, value) }, key)
-            setAmend(null)
-            setChanged(null)
-            setNotice({ tone: 'success', words: { key: answer.amendment.reacceptance === 'NEEDED' ? 'notice.amendedReaccept' : 'notice.amended', params: { revision: answer.amendment.revision } } })
-            // ---- F-SA-242: ticked, the words go as our message in the order's conversation (the thread's own portal send), after
-            // the amendment took; a refusal never undoes the amendment — it is said in the one notice.
-            if (tell) {
-              const revision = answer.amendment.revision
-              try {
-                await postPortalReplyKeyed(api, { type: 'SalesOrder', id: orderId }, { body: tell, attachments: [] }, newIdempotencyKey())
-                setNotice({ tone: 'success', words: { key: 'notice.amendedTold', params: { revision } } })
-              } catch (error) {
-                const refusal = portalRefusal(error)
-                const gone = refusal === 'notice.portal.NO_PORTAL' || refusal === 'notice.portal.NO_PARTY'
-                if (gone) setPortalGone(true)
-                setNotice({ tone: 'warning', words: { key: gone ? 'notice.amendedNotReached' : 'notice.amendedNotTold', params: { revision, customer: value.party?.legalName ?? '' } } })
-              }
-            }
-            // ---- end F-SA-242
-            return answer.order
-          }, null)
-        },
-        onComposerQuery: composerQuery,
-        onComposerPick: composerPick,
-        onComposerToggle: (colourwayId) => setAmend((known) => (known ? { ...known, composer: { ...known.composer, picked: known.composer.picked.includes(colourwayId) ? known.composer.picked.filter((id) => id !== colourwayId) : [...known.composer.picked, colourwayId] } } : known)),
-        onComposerAdd: composerAdd,
-        onCloseLines: (lineIds, reason, reasonCode) =>
-          void write(
-            async () => {
-              const answer = await closeLines(api, orderId, { version: version(), reason, ...(reasonCode ? { reasonCode } : {}), ...(lineIds.length > 0 ? { lineIds } : {}) })
-              setClosedLines(answer)
-              return answer.order
-            },
-            null,
-            true,
-          ),
-        onReopenLines: (lineIds, reason) => void write(async () => (await reopenLines(api, orderId, { version: version(), reason, ...(lineIds.length > 0 ? { lineIds } : {}) })).order, 'notice.reopened'),
-        onCancelOrder: (reason, typed) => void write(async () => (await cancelOrder(api, orderId, { version: version(), reason, confirmNumber: typed })).order, 'notice.cancelled'),
-        onCopyAsQuote: () =>
-          void write(
-            async () => {
-              setCopied(await copyAsQuote(api, orderId))
-              return null
-            },
-            null,
-            true,
-          ),
         onStepUpSubmit: (code) => void submitStepUp(code),
         onStepUpCancel: cancelStepUp,
         onWhoWasTold: (messageId) => setToldOpen(messageId), // F-SA-244: History's Told line

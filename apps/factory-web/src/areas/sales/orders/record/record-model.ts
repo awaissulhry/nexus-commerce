@@ -22,6 +22,7 @@ import type { RequestDoorParts } from '../../../home/approvals/requests/view/Req
 import type { OrderFilesModel } from '../../../../lib/record-thread/files-view/model' // F-SA-237
 import type { FilesViewActions } from '../../../../lib/record-thread/files-view/view/FilesView' // F-SA-237
 import type { ToldChanges } from './told' // F-SA-244
+import type { ApiClient } from '../../../../lib/api/client' // F-OP-134: the tab acts hooks' base (RecordActsBase)
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -35,20 +36,37 @@ export interface Part<T> {
 
 export const PART_LOADING = { value: null, problem: null } as const
 
-export type RecordDialog =
-  | { kind: 'promise' }
-  | { kind: 'ready' }
-  | { kind: 'close' }
-  | { kind: 'depositLink'; requestId: string }
-  | { kind: 'depositPayment'; requestId: string }
-  | { kind: 'sdiSend'; invoiceId: string }
-  // B-W2a-50 (the order every day)
-  | { kind: 'amendReview' }
-  | { kind: 'closeLines' }
-  | { kind: 'reopenLines' }
-  | { kind: 'cancel' }
-  | { kind: 'copyQuote' }
-  | { kind: 'compare'; amendmentId: string }
+// ---- F-OP-134 (N-5): the dialogs split by the tab acts hook that owns them (record/use-*-acts.ts). The page still opens ONE dialog
+// at a time: RecordDialog is the container's one slot, and each hook's `opened` clears what its own dialog showed last.
+/** use-band-acts: the band's primary and its ⋯ (Change promise date, Mark ready, Close order; B-W2a-50: Copy as a new quote). */
+export type BandDialog = { kind: 'promise' } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' }
+/** use-lines-acts: the lines (B-W2a-50: the amendment's review, close and reopen lines, the cancel). */
+export type LinesDialog = { kind: 'amendReview' } | { kind: 'closeLines' } | { kind: 'reopenLines' } | { kind: 'cancel' }
+/** use-money-acts: the deposits and payments (the bank-details page, the payment, the TD02's send to SDI). */
+export type MoneyDialog = { kind: 'depositLink'; requestId: string } | { kind: 'depositPayment'; requestId: string } | { kind: 'sdiSend'; invoiceId: string }
+/** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
+export type ChangesDialog = { kind: 'compare'; amendmentId: string }
+export type RecordDialog = BandDialog | LinesDialog | MoneyDialog | ChangesDialog
+
+/** One write of the page (the container's): the order it answers replaces the page's; a refusal is said in the dialog or the notice. */
+export type RecordWrite = (run: () => Promise<Order | null>, success: string | null, keepDialog?: boolean) => Promise<void>
+
+/** What the container hands every tab acts hook: the API, the order as last read (a write sends its version), the one write. */
+export interface RecordActsBase {
+  readonly api: ApiClient
+  readonly orderId: string
+  /** The order as last read (a ref: an act reads it when it runs, never a value of an older render). */
+  readonly current: { readonly current: Order | null }
+  readonly write: RecordWrite
+  /** The version a write sends (the order as last read). */
+  readonly version: () => number
+  readonly setNotice: (notice: OrderRecordModel['notice']) => void
+  /** Read the order again (and its parts). */
+  readonly load: () => Promise<void>
+  /** Read the order's parts again (work orders, money, versions, schedule). */
+  readonly loadParts: (order: Order) => void
+}
+// ---- end F-OP-134
 
 /** "Add a style" in the lines editor: type a style, pick its colours, Add (their rows open in its grid). */
 export interface ComposerState {

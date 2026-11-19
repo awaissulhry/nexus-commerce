@@ -25,19 +25,18 @@ import { AmendReviewDialog, CancelDialog, CloseLinesDialog, CompareDialog, CopyQ
 export function OrderDialogs({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const dialog = model.dialog
   if (!dialog) return null
+  // F-OP-134: the dialogs by the tab acts hook that owns them (record-model.ts BandDialog · LinesDialog · MoneyDialog · ChangesDialog).
   switch (dialog.kind) {
+    // The band (use-band-acts).
     case 'promise':
       return <PromiseDialog order={order} model={model} actions={actions} />
     case 'ready':
       return <ReadyDialog order={order} model={model} actions={actions} />
     case 'close':
       return <CloseDialog order={order} model={model} actions={actions} />
-    case 'depositLink':
-      return <LinkDialog order={order} requestId={dialog.requestId} model={model} actions={actions} />
-    case 'depositPayment':
-      return <PaymentDialog order={order} requestId={dialog.requestId} model={model} actions={actions} />
-    case 'sdiSend':
-      return <SdiDialog order={order} invoiceId={dialog.invoiceId} model={model} actions={actions} />
+    case 'copyQuote':
+      return <CopyQuoteDialog order={order} model={model} actions={actions} />
+    // Lines (use-lines-acts).
     case 'amendReview':
       return <AmendReviewDialog order={order} model={model} actions={actions} />
     case 'closeLines':
@@ -46,8 +45,14 @@ export function OrderDialogs({ order, model, actions }: { order: Order; model: O
       return <ReopenLinesDialog order={order} model={model} actions={actions} />
     case 'cancel':
       return <CancelDialog order={order} model={model} actions={actions} />
-    case 'copyQuote':
-      return <CopyQuoteDialog order={order} model={model} actions={actions} />
+    // Money (use-money-acts).
+    case 'depositLink':
+      return <LinkDialog order={order} requestId={dialog.requestId} model={model} actions={actions} />
+    case 'depositPayment':
+      return <PaymentDialog order={order} requestId={dialog.requestId} model={model} actions={actions} />
+    case 'sdiSend':
+      return <SdiDialog order={order} invoiceId={dialog.invoiceId} model={model} actions={actions} />
+    // Changes (the container's own read).
     case 'compare':
       return <CompareDialog order={order} amendmentId={dialog.amendmentId} model={model} actions={actions} />
     default:
