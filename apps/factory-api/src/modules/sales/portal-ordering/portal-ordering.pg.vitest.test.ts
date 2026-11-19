@@ -344,9 +344,12 @@ describe('withdraw and discard', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     const other = await ok(browsers.buyer, 'POST', '/portal/order-requests', {}, 201)
     expect(await ok(browsers.buyer, 'DELETE', `/portal/order-requests/${other.request.id}?version=${other.request.version}`)).toEqual({ discarded: true })
     expect((await call(browsers.buyer, 'GET', `/portal/order-requests/${other.request.id}`)).status).toBe(404)
-    // A draft is the customer's: the office does not see it.
+    // B-CP-071 (D10, K9 reversed): the office READS a draft from its first save, read-only — it decides it only once sent.
     const kept = await ok(browsers.buyer, 'POST', '/portal/order-requests', {}, 201)
-    await expect(officeRequestView(office(), kept.request.id)).rejects.toThrow(/not found/)
+    const read = await officeRequestView(office(), kept.request.id)
+    expect(read.request).toMatchObject({ status: 'DRAFT', draft: expect.objectContaining({ readiness: expect.objectContaining({ of: 7 }) }) })
+    expect(read.may).toEqual({ order: false, quote: false, refuse: false })
+    await expect(acceptRequest(office(), kept.request.id, { version: read.request.version, as: 'ORDER' })).rejects.toThrow(/still the customer's draft/)
   })
 })
 

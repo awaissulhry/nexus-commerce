@@ -5,8 +5,8 @@ import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
-import { decisionProblem, refuseReasonProblem, type AcceptAs } from '@nexus/factory-domain/sales/portal-ordering/office'
-import { draftTotals, lineAmount, lineProblems, piecesOfSizes, priceShown, REQUEST_STATUS_WORDS, type RequestSource, type RequestStatus } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import { decisionProblem, draftReadiness, refuseReasonProblem, type AcceptAs, type DraftLaterPart, type DraftPart, type DraftPartState } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { draftTotals, headerProblems, lineAmount, lineProblems, piecesOfSizes, priceShown, REQUEST_STATUS_WORDS, type Problem, type RequestSource, type RequestStatus } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { QUOTES_MANAGE } from '@nexus/factory-domain/sales/quotes/permissions'
 import { priceText } from '@nexus/factory-domain/sales/quotes/quotes'
 import { command, COMMAND_SETTINGS, runCommand, type CommandCaller } from '../../../core/command'
@@ -16,15 +16,22 @@ import { makeManualOrderInCommand, type ManualOrderBody } from '../orders/manual
 import { assertMay, officeContextOf } from '../orders/access'
 import { duplicateInto, type Dropped } from '../quotes/duplicate'
 import { approveWaitingInCommand } from './address-check'
-import { factsOf, readCatalogue } from './catalogue'
-import { dayText, iso, lockRequest, priceOrNull, readLines, readRequest, REQUEST_COLUMNS, type LineRow } from './store'
+import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
+import { dayText, iso, lockRequest, priceOrNull, readLines, readRequest, REQUEST_COLUMNS, type LineRow, type RequestRow } from './store'
+// B-CP-071 (customer page plan D10): the office reads drafts read-only, per customer.
+import { THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
+import type { Actor } from '@nexus/factory-domain/core/permissions'
+import { mayOnThread } from '../../../platform/threads/records'
 
 /**
  * The office's side of portal order requests (B-W2b-190, SAL-074; design home.approvals, sales.orders "the request waits
  * there as Requested"). Office sessions over the requests' company and customer (orders.view to see, orders.manage to
  * decide; quotes.manage too for a quote), like the sales orders.
  *
- *   GET  /sales/order-requests?status=&partyId=&q=      the requests customers sent (never a draft: it is theirs)
+ *   GET  /sales/order-requests?status=&partyId=&q=      the requests customers sent; B-CP-071: status=DRAFT lists ONE
+ *                                                       customer's drafts (partyId required: "Drafts are listed per
+ *                                                       customer"; a customer out of reach: "Customer not found.")
  *   GET  /sales/order-requests/:requestId               one request: the customer, who sent it, the lines and sizes
  *                                                       with the price the customer was shown and the list price today,
  *                                                       what changed since (a style no longer sold, a size not offered),
@@ -38,6 +45,12 @@ import { dayText, iso, lockRequest, priceOrNull, readLines, readRequest, REQUEST
  *
  * A decision moves the request from SENT once (its version is the guard; the database allows nothing else), with its
  * audit row and portal_order_request.accepted / .refused. The sales-order state machine is the sales orders' own.
+ *
+ * B-CP-071 (customer page plan D10, K9 reversed): the office READS a customer's draft from its first save — the list of one
+ * customer's drafts (who started it and who changed it last, the first line as its title, counts, the checklist, its
+ * conversation), and the draft itself read-only (accept and refuse held: "This is still the customer's draft: it is decided once
+ * they send it."). A draft is never in Incoming, Home › Approvals or any count; part 6 "Your price" is counted only for a reader
+ * with the price grain (review B4).
  */
 
 const LIST_MAX = 200
@@ -51,9 +64,10 @@ async function namesOf(caller: CommandCaller, userIds: readonly (string | null)[
 
 export async function listOfficeRequests(caller: CommandCaller, query: { readonly status: RequestStatus | 'OPEN' | 'ALL'; readonly partyId?: string | undefined; readonly q?: string | undefined }) {
   const context = officeContextOf(caller)
+  if (query.status === 'DRAFT') return listDrafts(caller, actorOf(context), query.partyId, query.q) // B-CP-071
   const scope = scopeWhere(actorOf(context), ORDERS_VIEW, SCOPE) as Prisma.PortalOrderRequestWhereInput
   const q = query.q?.trim()
-  const status: Prisma.PortalOrderRequestWhereInput = query.status === 'OPEN' ? { status: 'SENT' } : query.status === 'ALL' ? { status: { not: 'DRAFT' } } : query.status === 'DRAFT' ? { id: { in: [] } } : { status: query.status }
+  const status: Prisma.PortalOrderRequestWhereInput = query.status === 'OPEN' ? { status: 'SENT' } : query.status === 'ALL' ? { status: { not: 'DRAFT' } } : { status: query.status }
   const rows = await caller.withClient((client) =>
     client.portalOrderRequest.findMany({
       where: { AND: [scope, status, ...(query.partyId ? [{ partyId: query.partyId }] : []), ...(q ? [{ OR: [{ number: { contains: q, mode: 'insensitive' as const } }, { customerRef: { contains: q, mode: 'insensitive' as const } }] }] : [])] },
@@ -87,16 +101,155 @@ export async function listOfficeRequests(caller: CommandCaller, query: { readonl
         salesOrderId: row.salesOrderId,
         quoteId: row.quoteId,
         version: row.version,
+        draft: null, // B-CP-071: a sent request is no draft
       }
     }),
   }
 }
 
+// ---- B-CP-071 (D10): a customer's drafts, read-only ----------------------------------------------------------------------------
+
+/** The draft's facts the office reads (a sent request has none). */
+interface DraftView {
+  readonly startedBy: string | null
+  readonly startedAt: string
+  readonly lastEditedBy: string | null
+  readonly lastEditedAt: string
+  /** The first line's style ("JKT-100 Racing jacket"); null: no line yet ("Untitled draft"). */
+  readonly title: string | null
+  /** The people of its roster (B-CP-075). */
+  readonly people: number
+  readonly readiness: { readonly parts: { readonly part: DraftPart; readonly state: DraftPartState }[]; readonly done: number; readonly of: number; readonly problems: number }
+  readonly later: DraftLaterPart[]
+  /** Its conversation, for a reader of its thread (null: not one). */
+  readonly thread: { readonly messages: number; readonly lastAt: string | null; readonly designerAsked: boolean } | null
+  /** What holds its send today (the office's reading: a price change is the customer's to accept). */
+  readonly problems: { readonly code: Problem['code']; readonly lineId: string | null; readonly size: string | null; readonly words: Problem['words'] }[]
+}
+
+/** The newest change of each draft by its customer (the audit's portal rows): who, and when. */
+async function lastEditors(caller: CommandCaller, ids: readonly string[]): Promise<Map<string, { actorId: string; at: Date }>> {
+  if (ids.length === 0) return new Map()
+  const rows = await caller.withClient((client) =>
+    (client as Prisma.TransactionClient).$queryRaw<{ recordId: string; actorId: string; at: Date }[]>`
+      SELECT DISTINCT ON (a."recordId") a."recordId"::text AS "recordId", a."actorId"::text AS "actorId", a."at"
+        FROM "AuditLog" a
+       WHERE a."recordType" = 'PortalOrderRequest' AND a."recordId" = ANY(${[...ids]}::uuid[]) AND a."audience" = 'PARTNER'
+       ORDER BY a."recordId", a."at" DESC, a."id" DESC`,
+  )
+  return new Map(rows.map((row) => [row.recordId, { actorId: row.actorId, at: row.at }]))
+}
+
+/** The drafts' office facts (rows of ONE customer, any of its companies), one read per kind. */
+async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly RequestRow[], lines: readonly LineRow[]): Promise<Map<string, DraftView>> {
+  const out = new Map<string, DraftView>()
+  if (rows.length === 0) return out
+  const day = businessDate(serverClock.now())
+  const ids = rows.map((row) => row.id)
+  const editors = await lastEditors(caller, ids)
+  const names = await namesOf(caller, [...rows.map((row) => row.createdById), ...[...editors.values()].map((entry) => entry.actorId)])
+  const catalogues = new Map<string, CustomerCatalogue>()
+  for (const companyId of new Set(rows.map((row) => row.companyId))) {
+    const styleIds = lines.filter((line) => rows.some((row) => row.id === line.requestId && row.companyId === companyId)).map((line) => line.styleId)
+    catalogues.set(companyId, await caller.withClient((client) => readCatalogue(client, { companyId, partyId: rows[0]!.partyId, day, styleIds })))
+  }
+  const addressIds = [...new Set(rows.flatMap((row) => (row.shipToAddressId ? [row.shipToAddressId] : [])))]
+  const addresses = new Map(addressIds.length === 0 ? [] : (await caller.withClient((client) => client.partyAddress.findMany({ where: { id: { in: addressIds } }, select: { id: true, status: true } }))).map((row) => [row.id, row.status]))
+  const threads = new Map(
+    (await caller.withClient((client) => client.thread.findMany({ where: { recordType: 'PortalOrderRequest', recordId: { in: ids } }, select: { recordId: true, lastMessageAt: true, _count: { select: { messages: true } } } }))).map((row) => [row.recordId, row]),
+  )
+  for (const row of rows) {
+    const own = lines.filter((line) => line.requestId === row.id)
+    const catalogue = catalogues.get(row.companyId)!
+    const scope = { companyId: row.companyId, partyId: row.partyId }
+    const header = headerProblems({ requestedDate: dayText(row.requestedDate), shipToActive: row.shipToAddressId === null ? null : addresses.get(row.shipToAddressId) === 'ACTIVE', lineCount: own.length }, day)
+    const problems = [...header, ...own.flatMap((line) => lineProblems({ id: line.id, sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown) }, factsOf(catalogue, line.styleId, line.colourwayId), false))]
+    const first = own[0] ? catalogue.codes.get(own[0].styleId) : undefined
+    const edited = editors.get(row.id)
+    const thread = threads.get(row.id)
+    const readiness = draftReadiness({
+      lines: own.length,
+      linesWithoutPieces: own.filter((line) => piecesOfSizes(line.sizes) === 0).length,
+      logos: 0,
+      references: 0,
+      requestedDate: row.requestedDate !== null,
+      headerProblems: header.filter((entry) => entry.code !== 'NO_LINES' && entry.code !== 'TOO_MANY_LINES').length,
+      note: row.note !== null,
+      later: [],
+      // Part 6 "Your price" only for a price holder (review B4); the customer's own price per line comes with B-CP-076.
+      pricedLines: can(actor, grainPermission('price'), scope) ? 0 : null,
+      problems: problems.length,
+    })
+    out.set(row.id, {
+      startedBy: row.createdById ? (names.get(row.createdById) ?? null) : null,
+      startedAt: iso(row.createdAt)!,
+      lastEditedBy: edited ? (names.get(edited.actorId) ?? null) : row.createdById ? (names.get(row.createdById) ?? null) : null,
+      lastEditedAt: iso(row.updatedAt)!,
+      title: first ? `${first.code} ${first.name}`.trim() : null,
+      people: 0,
+      readiness: { ...readiness, parts: [...readiness.parts] },
+      later: [],
+      thread: mayOnThread(actor, THREADS_READ, 'PortalOrderRequest', scope) ? { messages: thread?._count.messages ?? 0, lastAt: iso(thread?.lastMessageAt ?? null), designerAsked: false } : null,
+      problems: problems.map((entry) => ({ code: entry.code, lineId: entry.lineId, size: entry.size, words: entry.words })),
+    })
+  }
+  return out
+}
+
+/**
+ * GET /sales/order-requests?status=DRAFT&partyId=: ONE customer's drafts, newest change first — orders.view over the customer
+ * (any of its companies), else "Customer not found." (a customer out of reach is as unknown as a wrong id); without a customer
+ * the list is refused. Never counted anywhere.
+ */
+async function listDrafts(caller: CommandCaller, actor: Actor, partyId: string | undefined, typed: string | undefined) {
+  if (!partyId) throw new ValidationError('Drafts are listed per customer.', [{ path: 'querystring/partyId', message: 'Drafts are listed per customer.' }])
+  const party = isUuid(partyId) ? await caller.withClient((client) => client.party.findUnique({ where: { id: partyId }, select: { id: true, code: true, legalName: true } })) : null
+  if (!party || !can(actor, ORDERS_VIEW, { partyId })) throw new NotFoundError('Customer not found.')
+  const scope = scopeWhere(actor, ORDERS_VIEW, SCOPE) as Prisma.PortalOrderRequestWhereInput
+  const q = typed?.trim()
+  const rows = await caller.withClient((client) =>
+    client.portalOrderRequest.findMany({
+      where: { AND: [scope, { status: 'DRAFT', partyId }, ...(q ? [{ customerRef: { contains: q, mode: 'insensitive' as const } }] : [])] },
+      select: { ...REQUEST_COLUMNS, decidedById: true },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      take: LIST_MAX,
+    }),
+  )
+  const lines = await caller.withClient((client) => readLines(client, rows.map((row) => row.id)))
+  const drafts = await draftViews(caller, actor, rows, lines)
+  return {
+    requests: rows.map((row) => {
+      const totals = draftTotals(lines.filter((line) => line.requestId === row.id).map((line) => ({ sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown) })), true)
+      return {
+        id: row.id,
+        number: row.number,
+        status: row.status as RequestStatus,
+        source: row.source as RequestSource,
+        party: { id: party.id, code: party.code, name: party.legalName },
+        customerRef: row.customerRef,
+        requestedDate: dayText(row.requestedDate),
+        sentAt: null,
+        sentBy: null,
+        decidedAt: null,
+        lines: totals.lines,
+        pieces: totals.pieces,
+        netShown: asMoney('price', totals.net),
+        currency: row.currency,
+        salesOrderId: null,
+        quoteId: null,
+        version: row.version,
+        draft: drafts.get(row.id)!,
+      }
+    }),
+  }
+}
+// ---- end B-CP-071
+
 async function officeRequest(caller: CommandCaller, requestId: string) {
   const context = officeContextOf(caller)
   const row = isUuid(requestId) ? await caller.withClient((client) => client.portalOrderRequest.findUnique({ where: { id: requestId }, select: { ...REQUEST_COLUMNS, decidedById: true } })) : null
-  // A draft is the customer's: the office does not see it.
-  if (!row || row.status === 'DRAFT') throw new NotFoundError('Order request not found.')
+  // B-CP-071 (D10): a draft is read too (read-only: a decision on it is held by decisionProblem); out of reach is not found.
+  if (!row) throw new NotFoundError('Order request not found.')
   assertMay(context, ORDERS_VIEW, { companyId: row.companyId, partyId: row.partyId }, 'Order request')
   return { context, row }
 }
@@ -136,6 +289,7 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
   })
   const totals = draftTotals(lines.map((line) => ({ sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown) })), true)
   const open = row.status === 'SENT'
+  const draft = row.status === 'DRAFT' ? ((await draftViews(caller, actor, [row], lines)).get(row.id) ?? null) : null // B-CP-071
   return {
     request: {
       id: row.id,
@@ -160,6 +314,7 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
       version: row.version,
       lines: views,
       summary: { lines: totals.lines, pieces: totals.pieces, netShown: asMoney('price', totals.net) },
+      draft, // B-CP-071: a draft's office facts (null once sent)
     },
     may: { order: open && can(actor, ORDERS_MANAGE, scope), quote: open && can(actor, ORDERS_MANAGE, scope) && can(actor, QUOTES_MANAGE, scope), refuse: open && can(actor, ORDERS_MANAGE, scope) },
   }

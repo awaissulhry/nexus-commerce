@@ -346,6 +346,7 @@ export async function createDraft(app: FastifyInstance, request: FastifyRequest,
       select: { id: true },
     })
     tools.audit({ recordType: 'PortalOrderRequest', recordId: id, companyId: session.company.id, after: { status: 'DRAFT', source: body.source ?? 'PICKER', ...headerData(body), shipToAddressId: shipTo } })
+    draftChanged(tools, { id, companyId: session.company.id, partyId: session.partyId }) // B-CP-071
     return null
   })
   return requestView(app, request, reader, (await ownRequest(request, reader, id))!)
@@ -363,9 +364,18 @@ function onDraft<Result>(app: FastifyInstance, request: FastifyRequest, name: `$
   return commandOn(app, request, { name, idempotencyKey, input, record: { type: 'PortalOrderRequest', id: row.id, expectedVersion: version } }, async (tools) => {
     const current = await readRequest(tools.tx, row.id)
     if (current?.status !== 'DRAFT') throw new InvalidStateError('This request is no longer a draft.')
-    return work(tools)
+    const result = await work(tools)
+    draftChanged(tools, row) // B-CP-071
+    return result
   })
 }
+
+// ---- B-CP-071 (customer page plan D10; review C2): each change of a draft, one per command, tells the office's Drafts of the
+// customer to read again — ids only; the party routes the live message (a person limited to another customer is never told).
+export function draftChanged(tools: Pick<CommandTools, 'emit'>, row: Pick<RequestRow, 'id' | 'companyId' | 'partyId'>): void {
+  tools.emit({ type: 'portal_order_request.draft_changed', subject: row.id, companyId: row.companyId, payload: { requestId: row.id, partyId: row.partyId } })
+}
+// ---- end B-CP-071
 
 export async function changeHeader(app: FastifyInstance, request: FastifyRequest, requestId: string, body: HeaderBody & { readonly version: number }, idempotencyKey?: string) {
   const reader = portalReader(app, request)
@@ -579,6 +589,7 @@ export async function discardDraft(app: FastifyInstance, request: FastifyRequest
     await tools.tx.portalOrderRequestLine.deleteMany({ where: { requestId: row.id } })
     await tools.tx.portalOrderRequest.delete({ where: { id: row.id }, select: { id: true } })
     tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, before: { status: 'DRAFT', lines: lines.length }, after: { discarded: true } })
+    draftChanged(tools, row) // B-CP-071
     return null
   })
   return { discarded: true as const }

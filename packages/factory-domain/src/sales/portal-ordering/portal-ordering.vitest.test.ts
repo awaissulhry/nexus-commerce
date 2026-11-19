@@ -5,7 +5,7 @@ import { FACTORY_PERMISSIONS } from '../../auth/permissions/catalogue'
 import { partnerTemplateOf } from '../../auth/roles/templates'
 import { EVENT_DEFINITIONS } from '../../events/catalogue'
 import { ATTENTION_KINDS, KIND_RULES } from '../../insights/attention'
-import { decisionProblem, refuseReasonProblem, withdrawProblem } from './office'
+import { decisionProblem, draftReadiness, refuseReasonProblem, withdrawProblem, type DraftFacts } from './office'
 import { PORTAL_ADDRESSES_MANAGE, PORTAL_ADDRESSES_VIEW, PORTAL_CATALOGUE_VIEW, PORTAL_ORDER_DRAFTS_EDIT, PORTAL_ORDER_REQUESTS_MANAGE, PORTAL_ORDERING_PERMISSIONS } from './permissions'
 import { reorderPlan, type ReorderFacts } from './reorder'
 import { PPE_CATEGORIES } from '../../product/styles/rules'
@@ -53,7 +53,9 @@ describe('permissions and templates (B-W2b-190)', () => {
 
   it('declares the request events and the Approvals kind', () => {
     const types = EVENT_DEFINITIONS.map((definition) => definition.type as string)
-    for (const type of ['portal_order_request.sent', 'portal_order_request.accepted', 'portal_order_request.refused', 'portal_order_request.withdrawn']) expect(types).toContain(type)
+    for (const type of ['portal_order_request.sent', 'portal_order_request.accepted', 'portal_order_request.refused', 'portal_order_request.withdrawn', /* B-CP-071 */ 'portal_order_request.draft_changed']) expect(types).toContain(type)
+    // B-CP-071 (review C2): a draft's change reaches screens by its id only; its party routes the message, never a field.
+    expect(EVENT_DEFINITIONS.find((definition) => definition.type === 'portal_order_request.draft_changed')?.live).toEqual({ permission: 'orders.view', fields: ['requestId'] })
     expect(ATTENTION_KINDS).toContain('PORTAL_ORDER_REQUEST')
     expect(KIND_RULES.PORTAL_ORDER_REQUEST).toMatchObject({ category: 'APPROVAL', view: 'orders.view', act: ['orders.manage'], decide: 'OPEN' })
   })
@@ -122,7 +124,7 @@ describe('a draft and its problems (SAL-074)', () => {
 describe('the office decision', () => {
   it('decides a SENT request only, and the customer withdraws only a SENT one', () => {
     expect(decisionProblem('SENT')).toBeNull()
-    expect(decisionProblem('DRAFT')).toMatch(/still writing/)
+    expect(decisionProblem('DRAFT')).toBe("This is still the customer's draft: it is decided once they send it.") // B-CP-071
     expect(decisionProblem('ACCEPTED')).toMatch(/already accepted/)
     expect(withdrawProblem('SENT')).toBeNull()
     expect(withdrawProblem('REFUSED')).toMatch(/already decided/)
@@ -130,6 +132,40 @@ describe('the office decision', () => {
     expect(refuseReasonProblem('Out of season')).toBeNull()
   })
 })
+
+// ---- B-CP-071 (customer page plan D10, review B4): the draft's checklist as the office and the portal read it.
+describe('a draft\'s checklist (B-CP-071)', () => {
+  const facts = (more: Partial<DraftFacts> = {}): DraftFacts => ({ lines: 0, linesWithoutPieces: 0, logos: 0, references: 0, requestedDate: false, headerProblems: 0, note: false, later: [], pricedLines: null, problems: 1, ...more })
+
+  it('starts with what is needed missing and the rest optional; six parts for a reader without the price grain', () => {
+    const empty = draftReadiness(facts())
+    expect(empty.parts).toEqual([
+      { part: 'NEED', state: 'MISSING' },
+      { part: 'LOGOS', state: 'OPTIONAL' },
+      { part: 'REFERENCES', state: 'OPTIONAL' },
+      { part: 'PEOPLE', state: 'MISSING' },
+      { part: 'DATE', state: 'OPTIONAL' },
+      { part: 'NOTES', state: 'OPTIONAL' },
+    ])
+    expect(empty).toMatchObject({ done: 0, of: 6, problems: 1 })
+  })
+
+  it('counts part 6 "Your price" for a price holder only, ready once every line carries the customer\'s price', () => {
+    expect(draftReadiness(facts({ lines: 2, pricedLines: 1 })).of).toBe(7)
+    expect(draftReadiness(facts({ lines: 2, pricedLines: 1 })).parts.find((entry) => entry.part === 'PRICE')?.state).toBe('OPTIONAL')
+    expect(draftReadiness(facts({ lines: 2, pricedLines: 2 })).parts.find((entry) => entry.part === 'PRICE')?.state).toBe('READY')
+    expect(draftReadiness(facts({ lines: 2 })).parts.map((entry) => entry.part)).not.toContain('PRICE')
+  })
+
+  it('reads lines, files, people, the date and the note; "sending later" for logos, references and people; a past date is missing', () => {
+    const full = draftReadiness(facts({ lines: 2, logos: 1, references: 3, requestedDate: true, note: true, problems: 0 }))
+    expect(full).toMatchObject({ done: 6, of: 6, problems: 0 })
+    const later = draftReadiness(facts({ lines: 1, linesWithoutPieces: 1, later: ['LOGOS', 'PEOPLE'] }))
+    expect(later.parts.filter((entry) => entry.state === 'LATER').map((entry) => entry.part)).toEqual(['LOGOS', 'PEOPLE'])
+    expect(draftReadiness(facts({ lines: 1, requestedDate: true, headerProblems: 1 })).parts.find((entry) => entry.part === 'DATE')?.state).toBe('MISSING')
+  })
+})
+// ---- end B-CP-071
 
 describe('reorder (SAL-072)', () => {
   const past = { kind: 'SIZE_GRID' as const, unitPrice: '389.000000', revision: 1, sizes: [{ size: '50', quantity: 2 }, { size: '56', quantity: 1 }] }

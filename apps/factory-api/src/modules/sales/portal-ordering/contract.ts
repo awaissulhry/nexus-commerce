@@ -4,7 +4,7 @@ import { NUMBER_FORMATS } from '@nexus/factory-domain/imports/cells'
 import { CSV_ENCODINGS } from '@nexus/factory-domain/imports/job'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { ADDRESS_APPROVALS, REFUSE_REASON_LIMITS } from '@nexus/factory-domain/parties/address-approval'
-import { ACCEPT_AS } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { ACCEPT_AS, DRAFT_LATER_PARTS, DRAFT_PART_STATES, DRAFT_PARTS } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { REORDER_NOTICES } from '@nexus/factory-domain/sales/portal-ordering/reorder'
 import { ORDERING_LIMITS, PROBLEM_CODES, RANGE_FILTERS, REQUEST_STATUSES, SOURCES } from '@nexus/factory-domain/sales/portal-ordering/rules'
 
@@ -390,6 +390,30 @@ const officeLine = output({
   problems: z.array(output({ code: z.enum(PROBLEM_CODES), size: z.string().nullable(), words })),
 })
 
+// ---- B-CP-071 (customer page plan D10, K9 reversed): a draft as the office reads it (read-only; null once it is sent) ----------
+const officeDraft = output({
+  startedBy: z.string().nullable(),
+  startedAt: at,
+  /** The customer's colleague who changed it last, and when. */
+  lastEditedBy: z.string().nullable(),
+  lastEditedAt: at,
+  /** The first line's style; null: "Untitled draft" (the page's words). */
+  title: z.string().nullable(),
+  /** The people of its roster (B-CP-075). */
+  people: z.number().int(),
+  /**
+   * The checklist (12 §2): each part's state, READY parts of the parts counted, the problems that hold the send. Part 6 "Your
+   * price" is counted only for a reader with the price grain (review B4): `of` is 7 for them, 6 for anyone else.
+   */
+  readiness: output({ parts: z.array(output({ part: z.enum(DRAFT_PARTS), state: z.enum(DRAFT_PART_STATES) })), done: z.number().int(), of: z.number().int(), problems: z.number().int() }),
+  /** The parts the customer marked "we send it later" (B-CP-075). */
+  later: z.array(z.enum(DRAFT_LATER_PARTS)),
+  /** Its conversation, for a reader of its thread (null: not one): messages, the newest, whether the factory designer was asked. */
+  thread: output({ messages: z.number().int(), lastAt: at.nullable(), designerAsked: z.boolean() }).nullable(),
+  problems: z.array(problem),
+})
+// ---- end B-CP-071
+
 const officeRecord = output({
   request: output({
     id: id(),
@@ -415,12 +439,15 @@ const officeRecord = output({
     version,
     lines: z.array(officeLine),
     summary: output({ lines: z.number().int(), pieces: z.number().int(), netShown: money.price(z.string().nullable()) }),
+    /** B-CP-071: a draft's facts (accept and refuse are held while it is one: `may` all false). */
+    draft: officeDraft.nullable(),
   }),
   may: output({ order: z.boolean(), quote: z.boolean(), refuse: z.boolean() }),
 })
 
 export const officeListContract = defineContract({
-  querystring: input({ status: z.enum(['OPEN', 'SENT', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'ALL']).default('OPEN'), partyId: id().optional(), q: z.string().trim().max(80).optional() }),
+  // B-CP-071: DRAFT lists one customer's drafts (partyId required; never in OPEN or ALL).
+  querystring: input({ status: z.enum(['OPEN', 'SENT', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'ALL', 'DRAFT']).default('OPEN'), partyId: id().optional(), q: z.string().trim().max(80).optional() }),
   response: {
     200: output({
       requests: z.array(
@@ -442,6 +469,8 @@ export const officeListContract = defineContract({
           salesOrderId: id().nullable(),
           quoteId: id().nullable(),
           version,
+          /** B-CP-071: a draft's facts (null for a sent request). */
+          draft: officeDraft.nullable(),
         }),
       ),
     }),
