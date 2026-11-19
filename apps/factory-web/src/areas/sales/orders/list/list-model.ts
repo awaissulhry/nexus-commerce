@@ -11,6 +11,7 @@ import type { OrdersImportActions } from '../import/use-orders-import' // B-TH-2
 import type { WeekModel } from '../week/use-promise-week'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet and the Customer switcher) ----
 import type { ReadPictures } from '../../../../lib/record-picture/cache' // F-SA-212: the one picture part's batch read
+import type { ReadStyles } from '../../../../lib/record-picture/styles' // F-CP-110: the viewer's styles strip
 import type { SwitcherState } from '../../_shared/customer-switcher/model' // F-SA-224: the one customer filter
 // ---- B-TH-244 (TH-4: the overall view) ----
 import type { OrderSummary } from '../api'
@@ -207,6 +208,8 @@ export interface OrdersListActions {
   onClearCf?: () => void
   /** F-SA-212: the pictures of the rows the sheet, the phone cards and the board draw (ONE batch read per page: lib/record-picture). */
   readPictures?: ReadPictures
+  /** F-CP-110: an order's lines for the picture viewer's styles strip (the order read, once per viewer); absent: the lines door only. */
+  readStyles?: ReadStyles
   /** B-TH-225: the rest of a row opens the order (⌘ / Ctrl: a new tab). */
   onOpenRow?: (id: string, newTab: boolean) => void
   onMore?: () => void

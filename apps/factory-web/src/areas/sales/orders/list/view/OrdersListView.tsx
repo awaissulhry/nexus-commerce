@@ -810,6 +810,7 @@ function PictureViewerFor({ row, model, actions, onClose }: { row: OrderRow; mod
       prefix={model.prefix}
       recordHref={orderHref(model.prefix, row)}
       linesHref={`${model.prefix}/sales/orders/${encodeURIComponent(row.id)}?tab=lines`}
+      readStyles={actions?.readStyles /* F-CP-110: every style of the order */}
       onClose={onClose}
     />
   )
@@ -833,7 +834,10 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer 
 
   const PictureColumn = ({ data }: ICellRendererParams<OrderRow>) => (data ? <PictureCell row={data} input={input} /> : null)
   // B-TH-230 (grid-F15): the reader's own new messages; the cell is a door to the order's thread at the first new message.
-  const NewMessagesCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <LastMessageCell unread={latest.current.model.unread?.[data.id]} href={`${orderHref(prefix, data)}?thread=new`} record={data.number} /> : null)
+  // F-CP-110: on a page with a dock (the customer page: model.active) the cell shows the order's conversation in that dock; ⌘ / Ctrl
+  // keeps the order page's thread in a new tab; Sales › Orders keeps the link.
+  const NewMessagesCell = ({ data }: ICellRendererParams<OrderRow>) =>
+    data ? <LastMessageCell unread={latest.current.model.unread?.[data.id]} href={`${orderHref(prefix, data)}?thread=new`} record={data.number} onOpen={latest.current.model.active ? () => latest.current.actions?.onOpenRow?.(data.id, false) : null} /> : null
   const NumberCell = ({ data }: ICellRendererParams<OrderRow>) => {
     if (!data) return null
     const opened = orderDoor(prefix, data) as { href: string }
