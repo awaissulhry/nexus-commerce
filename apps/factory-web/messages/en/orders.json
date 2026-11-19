@@ -897,14 +897,17 @@
     "held": {
       "shipped": "A size is under what already shipped: raise it to the pieces shipped",
       "extra_one": "Choose what happens to the {count} extra piece",
-      "extra_other": "Choose what happens to the {count} extra pieces"
+      "extra_other": "Choose what happens to the {count} extra pieces",
+      "fee": "A fee above 0, with at most 2 decimals."
     },
     "workOrders": "What happens to the work orders",
     "planNotRead": "What happens to the work orders could not be read now: it still applies at once, and they follow by the same rules.",
     "followed": {
       "changed": "{numbers} changed",
       "waits": "Waiting for production: {numbers} — decide on this page"
-    }
+    },
+    "applyPriced": "Apply as a priced change",
+    "pricedMore": "Extra deposit and words for the customer…"
   },
   "editor": {
     "add": {

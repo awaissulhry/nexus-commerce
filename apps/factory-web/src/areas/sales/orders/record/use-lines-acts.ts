@@ -6,6 +6,9 @@ import { findStyles, getStyle } from '../../quotes/api'
 import { isApiError } from '../../../../lib/api/errors'
 import { applyAmendment, cancelOrder, closeLines, getCancelCheck, previewAmendment, reopenLines, type CancelCheck, type CloseLinesAnswer, type Order } from '../api'
 import { previewCloseLines, type ClosePreview } from '../api' // F-OP-107
+// F-OP-108: "Apply as a priced change" from the strip (one button; its fee; the extra deposit by the order's own rule).
+import { applyPricedChange } from '../depth/api'
+import { PRICED_EMPTY, pricedBodyOf } from '../depth/model'
 import { draftOf, namesOf, newKey, withCells, type DraftLine } from '../daily-model'
 // F-OP-106: the strip's preview (one body, one key; a stale answer dropped), the notice after Apply.
 import { amendBodyOf, amendKeyOf, appliedNotice, reviewHeld, tookPreview } from '../daily-model'
@@ -34,6 +37,7 @@ export type LinesActsActions = Pick<
   | 'onAmendTell' // F-OP-106
   | 'onAmendApply'
   | 'onAmendOutcome' // F-OP-107
+  | 'onAmendFee' // F-OP-108
   | 'onClosePreview' // F-OP-107
   | 'onComposerQuery'
   | 'onComposerPick'
@@ -141,6 +145,7 @@ export function useLinesActs(
       reason: '', // F-OP-106
       tell: { words: '', chosen: null }, // F-OP-106
       extraOutcome: null, // F-OP-107
+      fee: '', // F-OP-108
     })
     showLines()
     for (const styleId of styleIds) void readStyle(styleId)
@@ -230,7 +235,7 @@ export function useLinesActs(
     onAmendPreview: () => askAgain.current(),
     onAmendReason: (text) => setAmend((known) => (known ? { ...known, reason: text } : known)),
     onAmendTell: (next) => setAmend((known) => (known ? { ...known, tell: { ...known.tell, ...next } } : known)),
-    onAmendApply: () => {
+    onAmendApply: (asPriced) => {
       const draft = amendRef.current
       if (!draft) return
       const key = newIdempotencyKey()
@@ -241,18 +246,22 @@ export function useLinesActs(
         const value = current.current!
         // F-OP-107 (B2): the extra pieces' outcome goes only while the preview names extra pieces.
         const extra = (draft.review?.preview?.workOrders?.extra.length ?? 0) > 0 && draft.extraOutcome ? { extraOutcome: draft.extraOutcome } : {}
-        const answer = await applyAmendment(api, orderId, { version: value.version, reason, ...amendBodyOf(draft, value), ...extra }, key)
+        // F-OP-108: a frozen field makes it a priced change — the strip's fee (typed only with the price grain); the extra deposit is the
+        // order's own percent of the growth ("Deposit and words…" opens its dialog to set another).
+        const done = asPriced
+          ? await applyPricedChange(api, orderId, { ...pricedBodyOf({ ...PRICED_EMPTY, fee: draft.fee }, amendBodyOf(draft, value), true), version: value.version, reason, ...extra }, key).then((answer) => ({ order: answer.order, revision: answer.change.revision, workOrders: answer.workOrders }))
+          : await applyAmendment(api, orderId, { version: value.version, reason, ...amendBodyOf(draft, value), ...extra }, key).then((answer) => ({ order: answer.order, revision: answer.amendment.revision, workOrders: answer.workOrders }))
         setAmend(null)
         clearChanged()
         // "Amendment 3 applied · WO-0311 changed · WO-0312 waits for production": the work orders followed in the same command.
-        setNotice({ tone: 'success', words: appliedNotice(answer.amendment.revision, answer.workOrders, null) })
+        setNotice({ tone: 'success', words: appliedNotice(done.revision, done.workOrders, null) })
         // ---- F-SA-242: ticked, the words go as our message in the order's conversation (the thread's own portal send), after
         // the amendment took; a refusal never undoes the amendment — it is said in the one notice.
         if (tell) {
-          const revision = answer.amendment.revision
+          const revision = done.revision
           try {
             await postPortalReplyKeyed(api, { type: 'SalesOrder', id: orderId }, { body: tell, attachments: [] }, newIdempotencyKey())
-            setNotice({ tone: 'success', words: appliedNotice(revision, answer.workOrders, value.party?.legalName ?? '') })
+            setNotice({ tone: 'success', words: appliedNotice(revision, done.workOrders, value.party?.legalName ?? '') })
           } catch (error) {
             const refusal = portalRefusal(error)
             const gone = refusal === 'notice.portal.NO_PORTAL' || refusal === 'notice.portal.NO_PARTY'
@@ -261,10 +270,11 @@ export function useLinesActs(
           }
         }
         // ---- end F-SA-242
-        return answer.order
+        return done.order
       }, null)
     },
     onAmendOutcome: (outcome) => setAmend((known) => (known ? { ...known, extraOutcome: outcome } : known)), // F-OP-107
+    onAmendFee: (text) => setAmend((known) => (known ? { ...known, fee: text } : known)), // F-OP-108
     // ---- F-OP-107: Close remaining lines' preview of the lines chosen (nothing written) ----
     onClosePreview: (lineIds) => {
       const mine = ++closeSeq.current
@@ -315,7 +325,7 @@ export function useLinesActs(
       )
     },
     // ---- end F-OP-111
-    // B-W2b-323: "Send as a priced change" from Review amendment (the draft's lines go with it).
+    // B-W2b-323: the priced change's own dialog with the draft's lines; F-OP-108: "Deposit and words…" beside the strip's fee.
     onPricedOffer: () => {
       const draft = amendRef.current
       const value = current.current

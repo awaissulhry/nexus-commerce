@@ -184,7 +184,6 @@
   "offer": {
     "priced": "Frozen by the production stage: send it as a priced change the customer accepts.",
     "blocked": "Frozen for good: this change cannot be made any more.",
-    "go": "Send as a priced change",
     "line": "{line}: {field}",
     "order": "The order: {field}"
   },

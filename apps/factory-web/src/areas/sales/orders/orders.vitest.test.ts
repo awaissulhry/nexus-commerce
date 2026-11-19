@@ -1402,3 +1402,47 @@ describe('F-OP-107: below the cut the strip asks what happens to the extra piece
   })
 })
 // ---- end F-OP-107
+
+// ---- F-OP-108: a frozen field turns Apply into "Apply as a priced change" with an optional fee (one button, no FrozenOffer step) ----
+describe('F-OP-108: a frozen field — Apply as a priced change, its optional fee in the strip; frozen for good holds it', () => {
+  const production = order('IN_PRODUCTION')
+  const black = lineOf(production, 10)
+  const frozen = { ok: false, revision: 4, version: 7, problems: [{ path: 'body/lines/10/SIZE_QUANTITY', message: 'x' }], diff: null, workOrders: null, plan: [] }
+
+  it('priced: Apply is not held by the freeze (the fee, when typed, must be one); blocked: held; no frozen field: no offer', async () => {
+    const { amendKeyOf, feeHeld, pricedOfferOf, stripHeld, stripOf } = await import('./daily-model')
+    const { FREEZE_CUT: FREEZE, FREEZE_FINISHED } = await import('./depth/demo/fixtures')
+    const draft = { lines: withCells(draftOf(production), { [black.id]: { '48': 2, '50': 3, '52': 2, '54': 2 } }), customerRef: '', requestedDate: '' }
+    const key = amendKeyOf(draft, production)
+    const strip = stripOf({ order: production, review: { phase: 'ready', key, preview: frozen, problem: null }, key, local: null, price: true, label: () => null })
+    expect(strip.frozen).toHaveLength(1)
+    expect(strip.problems).toEqual([])
+    const priced = pricedOfferOf(strip, FREEZE)
+    expect(priced).toBe('priced')
+    expect(stripHeld(strip, { reason: 'One more 50.', busy: false, local: null, offer: priced, fee: '' })).toBeNull()
+    expect(stripHeld(strip, { reason: 'One more 50.', busy: false, local: null, offer: priced, fee: '25,00' })).toBeNull()
+    expect(stripHeld(strip, { reason: 'One more 50.', busy: false, local: null, offer: priced, fee: '25,5,0' })).toEqual({ key: 'edit.held.fee' })
+    expect(stripHeld(strip, { reason: '', busy: false, local: null, offer: priced, fee: '' })).toEqual({ key: 'amend.held.reason' })
+    expect(pricedOfferOf(strip, FREEZE_FINISHED)).toBe('blocked')
+    expect(stripHeld(strip, { reason: 'x', busy: false, local: null, offer: 'blocked', fee: '' })).toEqual({ key: 'amend.held.problems' })
+    expect(pricedOfferOf({ frozen: [] }, FREEZE)).toBeNull()
+    expect([feeHeld(''), feeHeld('0'), feeHeld('12.50')]).toEqual([false, true, false])
+  })
+
+  it('the page: one button — Apply relabels and sends the priced change (fee, reason, outcome); the FrozenOffer banner has no button', () => {
+    const view = readFileSync(new URL('./record/view/LinesTab.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("t(asPriced ? 'edit.applyPriced' : 'amend.apply')")
+    expect(view).toContain('onClick={() => actions?.onAmendApply?.(asPriced)}')
+    expect(view).toContain("{model.can.price && (\n            <Field label={d('priced.fee')}")
+    const acts = readFileSync(new URL('./record/use-lines-acts.ts', import.meta.url), 'utf8')
+    expect(acts).toContain('await applyPricedChange(api, orderId, { ...pricedBodyOf({ ...PRICED_EMPTY, fee: draft.fee }, amendBodyOf(draft, value), true), version: value.version, reason, ...extra }, key)')
+    const offer = readFileSync(new URL('./changes-depth/view/ChangesDepth.tsx', import.meta.url), 'utf8')
+    expect(offer).not.toContain('onPriced')
+    expect(offer).not.toContain("d('offer.go')")
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['edit.applyPriced', 'edit.held.fee', 'edit.pricedMore']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-OP-108

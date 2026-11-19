@@ -105,6 +105,8 @@ export interface AmendState {
   tell: { readonly words: string; readonly chosen: boolean | null }
   /** F-OP-107 (B2): what happens to pieces already cut beyond the new figures (null: not picked yet). */
   extraOutcome: ExtraOutcome | null
+  /** F-OP-108: the optional fee of a priced change (price grain), as typed; empty: none. */
+  fee: string
 }
 
 // ---- F-OP-111: Split into new orders… (use-lines-acts) ----
@@ -285,7 +287,9 @@ export interface OrderRecordActions {
   onAmendPreview?: () => void
   onAmendReason?: (text: string) => void
   onAmendTell?: (next: { readonly words?: string; readonly chosen?: boolean }) => void
-  onAmendApply?: () => void
+  // F-OP-108: `asPriced` — a frozen field makes it "Apply as a priced change" (the strip's fee goes with it).
+  onAmendApply?: (asPriced?: boolean) => void
+  onAmendFee?: (text: string) => void
   /** F-OP-107 (B2): the extra pieces' outcome (the strip's picker). */
   onAmendOutcome?: (outcome: ExtraOutcome) => void
   /** F-OP-107: read Close remaining lines' preview of the lines chosen. */
@@ -301,7 +305,7 @@ export interface OrderRecordActions {
   onCopyAsQuote?: () => void
   /** B-W2a-72: read the Margin tab again. */
   onRetryMargin?: () => void
-  /** B-W2b-323: the depth's actions, and "Send as a priced change" from Review amendment (the draft's lines go with it). */
+  /** B-W2b-323: the depth's actions; F-OP-108: "Deposit and words…" opens the priced change's own dialog with the draft's lines. */
   depth?: OrderDepthActions
   onPricedOffer?: () => void
   /** B-TH-256: Accept / Decline a re-promise, the "Tell the customer" tick, read the links again. */

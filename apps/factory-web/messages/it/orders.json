@@ -897,14 +897,17 @@
     "held": {
       "shipped": "Una taglia è sotto il già spedito: portala ai capi spediti",
       "extra_one": "Scegli cosa fare del {count} pezzo in più",
-      "extra_other": "Scegli cosa fare dei {count} pezzi in più"
+      "extra_other": "Scegli cosa fare dei {count} pezzi in più",
+      "fee": "Un costo sopra 0, con al massimo 2 decimali."
     },
     "workOrders": "Cosa succede agli ordini di lavoro",
     "planNotRead": "Non è stato possibile leggere ora cosa succede agli ordini di lavoro: si applica comunque subito e seguono con le stesse regole.",
     "followed": {
       "changed": "Ordini di lavoro cambiati: {numbers}",
       "waits": "In attesa della produzione: {numbers} — decidi in questa pagina"
-    }
+    },
+    "applyPriced": "Applica come modifica con prezzo",
+    "pricedMore": "Acconto aggiuntivo e parole per il cliente…"
   },
   "editor": {
     "add": {

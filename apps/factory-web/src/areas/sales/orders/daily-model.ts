@@ -24,6 +24,9 @@ import { outcomeOptionsOf } from '@nexus/factory-domain/sales/change-requests/ap
 import type { ExtraChoice, ExtraPiece } from '../../home/approvals/requests/view/ExtraPieces' // the picker's props (types only)
 import { isFinal, type OrderAbilities, type Phrase, type Tone } from './model'
 import { frozenProblemsOf } from './depth/model' // F-OP-106: the freeze rules' refusals are the strip's own part
+// F-OP-108: a frozen field makes Apply a priced change (the freeze read says whether it still may), with its optional fee.
+import { frozenOffer, PRICED_EMPTY, pricedProblems } from './depth/model'
+import type { Freeze } from './depth/api'
 // B-W2b-374: a new line's options.
 import type { PickBody } from '../quotes/record/configurator/api'
 
@@ -485,6 +488,14 @@ export function stripOf(input: { readonly order: Pick<Order, 'lines'>; readonly 
   }
 }
 
+// ---- F-OP-108: a frozen field turns Apply into "Apply as a priced change" (one button instead of the FrozenOffer step) ----
+/** What a frozen draft may still become: a priced change the customer accepts, nothing any more (blocked), or not frozen (null). */
+export type PricedOffer = 'priced' | 'blocked' | null
+export const pricedOfferOf = (strip: Pick<AmendStrip, 'frozen'>, freeze: Freeze | null): PricedOffer => frozenOffer(frozenProblemsOf(strip.frozen), freeze)
+/** The optional fee typed (price grain) is not one ("25,00": above 0, at most 2 decimals — the priced change's own rule). */
+export const feeHeld = (fee: string): boolean => fee.trim() !== '' && pricedProblems({ ...PRICED_EMPTY, fee }, '', { price: true }).fee !== undefined
+// ---- end F-OP-108
+
 /** Words of a hold: a phrase of this app, or the API's own words (F-OP-107: "Choose what happens to the 4 extra pieces"). */
 export type HeldWords = Phrase | { readonly words: { readonly it: string; readonly en: string } }
 
@@ -495,12 +506,14 @@ export const heldWordsOf = (held: HeldWords, t: (key: string, params?: Record<st
  * Why Apply waits, or null: the work, the draft's own hold, the preview (reading, failed, refused), the extra pieces' outcome not
  * picked yet (F-OP-107, B2: when the preview says it is needed), the reason.
  */
-export function stripHeld(strip: AmendStrip, input: { readonly reason: string; readonly busy: boolean; readonly local: Phrase | null; readonly extraOutcome?: ExtraOutcome | null }): HeldWords | null {
+export function stripHeld(strip: AmendStrip, input: { readonly reason: string; readonly busy: boolean; readonly local: Phrase | null; readonly extraOutcome?: ExtraOutcome | null; readonly offer?: PricedOffer; readonly fee?: string }): HeldWords | null {
   if (input.busy) return phrase('held.busy')
   if (input.local) return input.local
   if (strip.phase === 'reading' || strip.phase === 'idle') return phrase('amend.held.reading')
   if (strip.phase === 'failed') return phrase('amend.held.failed')
-  if (strip.problems.length > 0 || strip.frozen.length > 0) return phrase('amend.held.problems')
+  // F-OP-108: a frozen field holds Apply only when it is frozen for good; else Apply is "Apply as a priced change" (its fee checked).
+  if (strip.problems.length > 0 || (strip.frozen.length > 0 && input.offer !== 'priced')) return phrase('amend.held.problems')
+  if (input.offer === 'priced' && feeHeld(input.fee ?? '')) return phrase('edit.held.fee')
   const outcome = outcomeHeld(strip.extra, input.extraOutcome ?? null)
   if (outcome) return outcome
   if (input.reason.trim() === '') return phrase('amend.held.reason')

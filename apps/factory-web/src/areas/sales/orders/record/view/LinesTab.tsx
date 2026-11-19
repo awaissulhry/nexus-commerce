@@ -20,6 +20,8 @@ import { dayInstant, gridOf, isFinal, styleGroups, type Phrase } from '../../mod
 import { amendKeyOf, amendPairs, changeLabel, namesOf, sizesText, stripHeld, stripOf, workOrderWords, type AmendStrip, type StripChange } from '../../daily-model'
 // ---- F-OP-107 (B2): each cell's floors and the line's figures; the extra-pieces picker (the review window's part) ----
 import { cellFloorsOf, extraChoicesOf, heldWordsOf, lineFiguresOf } from '../../daily-model'
+// ---- F-OP-108: a frozen field turns Apply into "Apply as a priced change" with its optional fee (one button) ----
+import { feeHeld, pricedOfferOf } from '../../daily-model'
 import { ExtraPieces } from '../../../../home/approvals/requests/view/ExtraPieces'
 import { ConversationTick } from '../../../../home/approvals/requests/view/ConversationTick'
 import { tellHeld, tickOn } from '../../../../home/approvals/requests/model'
@@ -244,7 +246,9 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
     return `${names.style} · ${names.colour}`
   }
   const strip = stripOf({ order, review: amend.review, key: amendKeyOf(amend, order), local, price: model.can.price, label })
-  const held = stripHeld(strip, { reason: amend.reason, busy: model.busy, local, extraOutcome: amend.extraOutcome })
+  const offer = pricedOfferOf(strip, model.depth?.freeze?.value ?? null) // F-OP-108
+  const asPriced = offer === 'priced'
+  const held = stripHeld(strip, { reason: amend.reason, busy: model.busy, local, extraOutcome: amend.extraOutcome, offer, fee: amend.fee })
   const heldText = held ? heldWordsOf(held, t, locale) : null
   useEffect(() => {
     if (count === 0) return
@@ -260,7 +264,7 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
       if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter' || model.dialog) return
       if ((event.target as HTMLElement | null)?.closest('[role="dialog"]')) return
       event.preventDefault()
-      if (!heldText) actions?.onAmendApply?.()
+      if (!heldText) actions?.onAmendApply?.(asPriced)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -277,8 +281,8 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
           <Button size="sm" onClick={() => actions?.onAmendDiscard?.()} heldReason={model.busy ? t('held.busy') : null}>
             {t('amend.discard')}
           </Button>
-          <Button size="sm" variant="primary" heldReason={heldText} onClick={() => actions?.onAmendApply?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
-            {model.busy ? t('common.working') : t('amend.apply')}
+          <Button size="sm" variant="primary" heldReason={heldText} onClick={() => actions?.onAmendApply?.(asPriced)} aria-keyshortcuts="Meta+Enter Control+Enter">
+            {model.busy ? t('common.working') : t(asPriced ? 'edit.applyPriced' : 'amend.apply')}
           </Button>
         </span>
         <StripFacts order={order} strip={strip} local={local} model={model} actions={actions} />
@@ -287,7 +291,7 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
           {order.party && <span>{t(tellOn(amend, model) ? 'edit.strip.told' : 'edit.strip.notTold', { customer: order.party.legalName })}</span>}
         </p>
       </div>
-      <WhatChanges order={order} amend={amend} strip={strip} model={model} actions={actions} />
+      <WhatChanges order={order} amend={amend} strip={strip} asPriced={asPriced} model={model} actions={actions} />
       <Banner tone="info" title={t('amend.how')} />
       <Card padded>
         <h2 className="fw-so-h2">{t('amend.header')}</h2>
@@ -356,8 +360,9 @@ function StripFacts({ order, strip, local, model, actions }: { order: Order; str
  * Below the strip: Why (required), the words for the customer and their tick (F-SA-242), what stops the amendment by place, what froze
  * by the production stage (B-W2b-323), re-acceptance (information: it blocks nothing), and Show all changes (lines old → new, header).
  */
-function WhatChanges({ order, amend, strip, model, actions }: { order: Order; amend: AmendState; strip: AmendStrip; model: OrderRecordModel; actions?: OrderRecordActions }) {
+function WhatChanges({ order, amend, strip, asPriced, model, actions }: { order: Order; amend: AmendState; strip: AmendStrip; asPriced: boolean; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
+  const d = useT(DEPTH)
   const locale = useLocale()
   const diff = strip.diff
   const rows = (diff?.lines ?? []).map((line) => {
@@ -382,8 +387,23 @@ function WhatChanges({ order, amend, strip, model, actions }: { order: Order; am
   const tick = { chosen: amend.tell.chosen, reach: model.portalGone ? ('none' as const) : ('portal' as const) }
   return (
     <Card padded className="fw-so-stack">
-      {/* B-W2b-323: frozen by the production stage — what froze, and the way on. */}
-      {strip.frozen.length > 0 && <FrozenOffer order={order} problems={strip.frozen} model={model.depth} onPriced={actions?.onPricedOffer} />}
+      {/* B-W2b-323: frozen by the production stage — what froze, and the way on. F-OP-108: the way on is the strip's one Apply ("Apply
+          as a priced change") with its optional fee (price grain); its own dialog sets an extra deposit or the words per line. */}
+      {strip.frozen.length > 0 && <FrozenOffer order={order} problems={strip.frozen} model={model.depth} />}
+      {asPriced && (
+        <div className="fw-so-two">
+          {model.can.price && (
+            <Field label={d('priced.fee')} hint={d('priced.feeHint', { currency: order.currency })} error={feeHeld(amend.fee) ? d('priced.problem.fee') : undefined}>
+              <Input value={amend.fee} inputMode="decimal" onChange={(event) => actions?.onAmendFee?.(event.target.value)} placeholder="0,00" autoComplete="off" />
+            </Field>
+          )}
+          <div>
+            <Button size="sm" variant="quiet" heldReason={model.busy ? t('held.busy') : null} onClick={() => actions?.onPricedOffer?.()}>
+              {t('edit.pricedMore')}
+            </Button>
+          </div>
+        </div>
+      )}
       {strip.problems.length > 0 && (
         <Banner tone="danger" title={t('amend.problems', { count: strip.problems.length })}>
           <ul className="fw-so-list">
