@@ -10,6 +10,7 @@ import { threadButtonWords } from './model'
 import { askedFiles } from './model'
 import { RecordFrame } from './RecordFrame'
 import { foldedOf } from './RecordFrame' // F-OP-302
+import { applyFold, type FoldItem } from './RecordFrame' // op-fx11
 // F-SA-263
 import { defaultWidthAt, showsOnArrival } from './model'
 import { RecordNotices } from './RecordNotices'
@@ -633,3 +634,43 @@ describe('F-OP-302 follow-up — the save state stays in view, outside the pills
   })
 })
 // ---- end F-OP-302 follow-up
+
+// ---- op-fx11 (end check run 7, the browser golden flow's 07-order): a folded pill is a stand-in kept to be measured — hidden, inert and
+// aria-hidden="true" (as DockedStage's stand-in), never read as the real pill; Details holds the real one.
+describe('op-fx11 — a folded pill is hidden, inert and aria-hidden; one that fits again loses all three', () => {
+  const pill = (attributes: Record<string, string> = {}): FoldItem & { attributes: Record<string, string> } => ({
+    inert: false,
+    style: { visibility: '' },
+    attributes,
+    getAttribute(name) {
+      return this.attributes[name] ?? null
+    },
+    setAttribute(name, value) {
+      this.attributes[name] = value
+    },
+    removeAttribute(name) {
+      delete this.attributes[name]
+    },
+  })
+
+  it('folds and unfolds the three marks together, and leaves an aria-hidden it did not set alone', () => {
+    const first = pill()
+    const second = pill()
+    const own = pill({ 'aria-hidden': 'true' }) // a part that hides itself (an icon): the fold never takes it away
+    applyFold([first, second, own], [false, true, false])
+    expect([first.inert, first.style.visibility, first.attributes['aria-hidden']]).toEqual([false, '', undefined])
+    expect([second.inert, second.style.visibility, second.attributes['aria-hidden']]).toEqual([true, 'hidden', 'true'])
+    expect(own.attributes['aria-hidden']).toBe('true')
+    // The band grew (the dock closed): the folded pill fits again.
+    applyFold([first, second, own], [false, false, false])
+    expect([second.inert, second.style.visibility, second.attributes['aria-hidden']]).toEqual([false, '', undefined])
+    expect(own.attributes['aria-hidden']).toBe('true')
+    // The band shrank: the part that hid itself folds too, and keeps its own mark when it fits again.
+    applyFold([first, second, own], [false, false, true])
+    applyFold([first, second, own], [false, false, false])
+    expect(own.attributes['aria-hidden']).toBe('true')
+    const frame = readFileSync(new URL('./RecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain('applyFold(items, folded)')
+  })
+})
+// ---- end op-fx11
