@@ -199,7 +199,7 @@
     "made_one": "{count} attività creata",
     "made_other": "{count} attività create",
     "receipt": "{made} attività create · {left} escluse",
-    "where": "Ogni attività è sul suo ordine: nella sua conversazione, in Home › Attività di chi la riceve e nelle attività aperte del cliente.",
+    "where": "Ogni attività è sul suo ordine: nella sua conversazione, in Home › Le mie attività di chi la riceve e nelle attività aperte del cliente.",
     "close": "Chiudi",
     "held": {
       "none": "Spunta prima gli ordini.",
