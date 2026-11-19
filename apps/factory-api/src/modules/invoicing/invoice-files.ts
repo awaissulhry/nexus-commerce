@@ -5,7 +5,7 @@ import { isDocumentLanguage } from '@nexus/factory-domain/documents/model'
 import { fatturaPaInputOf, invoiceCopyOf, type BillTo, type IssuedInvoice, type StoredLine } from '@nexus/factory-domain/invoicing/document'
 // B-W2b-374: the options of the order lines billed, on the copy.
 import { orderLinesPrinted } from '../sales/configurator/printed'
-import { buildFatturaPa } from '@nexus/factory-domain/invoicing/fatturapa/build'
+import { citedDdts, buildFatturaPa } from '@nexus/factory-domain/invoicing/fatturapa/build'
 import type { FatturaPaSeller } from '@nexus/factory-domain/invoicing/fatturapa/types'
 import { INVOICES_ISSUE } from '@nexus/factory-domain/invoicing/permissions'
 import { command, type CommandCaller } from '../../core/command'
@@ -80,7 +80,8 @@ export async function issuedInvoiceOf(db: Reader, invoiceId: string): Promise<{ 
     stampDutyAmount: invoice.stampDutyAmount,
     causale: printedCausale(invoice.causale, invoice, printed.exchangeRate && printed.rateDate ? { exchangeRate: printed.exchangeRate, rateDate: printed.rateDate } : null, printed.language),
     purchaseOrders: purchaseOrdersOf(invoice.documentRefs),
-    ddts: ddts.map((ddt) => ({ number: ddt.number, date: day(ddt.documentDate) })),
+    // B-OP-033 (order page N5): beside its lines' Nexus DDTs, the paper DDTs it cites (goods recorded as made elsewhere).
+    ddts: citedDdts(ddts.map((ddt) => ({ number: ddt.number, date: day(ddt.documentDate) })), invoice.documentRefs),
     credits: credits && credits.number && credits.issueDate ? { number: credits.number, issueDate: day(credits.issueDate) } : await depthRelatedOf(db, invoice),
     salesOrder: order ? { number: order.number, date: day(order.orderDate) } : null,
     paymentTerms: paymentTermsOf(invoice.paymentTerms),

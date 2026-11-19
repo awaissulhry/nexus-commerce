@@ -21,11 +21,16 @@ import { orderTermsSource } from '../terms'
 import { draftPlanOf, vatFor } from './draft'
 import { changeFeeLinesFor } from './fees'
 import { lockInvoicing } from './locks'
-import { depositInvoicesOf, orderPrices } from './store'
+import { depositInvoicesOf, orderPrices, /* B-OP-033 */ presetsOf } from './store'
 // B-W2b-330 (SAL-181): the orders' fees, invoiced once.
 import { feeLinesFor } from '../../sales/price-waterfall/fee-invoicing'
 // B-OP-045 (order page N6, lines-derived): the orders a shipment carries.
 import { orderIdsOfShipments, ordersOfShipment } from '../../shipping/shipments/orders-of'
+// B-OP-033 (order page N5): a shipment made elsewhere, invoiced citing its paper DDT.
+import { chooseInvoiceType, presetDeadline, type ShipInvoiceType } from '@nexus/factory-domain/invoicing/from-shipment/deadlines'
+import { PAPER_DDT_REF } from '@nexus/factory-domain/invoicing/fatturapa/build'
+import { formatDateIt } from '@nexus/factory-domain/invoicing/fatturapa/format'
+import { citableOnInvoice } from '@nexus/factory-domain/shipping/elsewhere'
 
 /**
  * Goods shipped WITHOUT a DDT (B-W2b-GB02, G148; B-W1-51's gap "a shipment shipped without a DDT is not in the list"):
@@ -43,6 +48,12 @@ import { orderIdsOfShipments, ordersOfShipment } from '../../shipping/shipments/
  *                   invoice may be made before the goods leave, as it travels with them), priced from the order and taxed
  *                   for the customer today, its freight once (when no invoice bills goods of it yet), the orders' fees
  *                   and the issued deposit invoices deducted, as the DDT draft does (draft.ts). Nothing left → 409 in words.
+ *
+ * B-OP-033 (order page N5): a shipment made ELSEWHERE (B-OP-032) left with a paper DDT, not a Nexus one, so it is in this list
+ * too: its invoice cites the paper DDT ({kind DDT, number, date} in documentRefs → FatturaPA DatiDDT and the copy), and its
+ * type and deadline follow the customer's terms as a DDT's do (deadlines presetDeadline / chooseInvoiceType: TD24 by the 15th
+ * of the next month when deferred, else TD01 within 12 days of the paper DDT). One recorded with an immediate invoice instead
+ * (ddtRequired false) is a TD01 as before. UNVERIFIED (GATE-ACCOUNTANT, plan §7): how the invoice names a paper DDT.
  */
 
 const LIVE = ['DRAFT', 'PACKED', 'SHIPPED', 'DELIVERED'] as const
@@ -61,12 +72,15 @@ export interface ShipmentRow {
   readonly currency: string
   readonly order: string
   readonly lines: readonly { readonly salesOrderLineId: string; readonly size: string; readonly quantity: number }[]
+  /** B-OP-033: made elsewhere, with the paper DDT it left with (its invoice cites it); null: no paper DDT (an immediate invoice). */
+  readonly paperDdt: { readonly number: string; readonly date: BusinessDate } | null
 }
 
 /** The shipments without a DDT these conditions find (cancelled and returned ones never), oldest first. */
 export async function shipmentsWithoutDdt(db: Reader, where: Prisma.ShipmentWhereInput, take = 500): Promise<ShipmentRow[]> {
   const rows = await db.shipment.findMany({
-    where: { AND: [where, { ddtRequired: false, status: { in: [...LIVE] } }] },
+    // B-OP-033: a shipment made elsewhere has no Nexus DDT either (its paper DDT travelled with it).
+    where: { AND: [where, { OR: [{ ddtRequired: false }, { origin: 'ELSEWHERE' }], status: { in: [...LIVE] } }] },
     take,
     orderBy: [{ shippedAt: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }, { id: 'asc' }],
     select: {
@@ -81,6 +95,10 @@ export async function shipmentsWithoutDdt(db: Reader, where: Prisma.ShipmentWher
       freightCharge: true,
       salesOrder: { select: { currency: true } },
       lines: { select: { salesOrderLineId: true, size: true, quantity: true } },
+      // B-OP-033 (the office reads them; invoicing never runs as the floor).
+      origin: true,
+      externalDdtNumber: true,
+      externalDdtDate: true,
     },
   })
   return rows.map((row) => ({
@@ -96,6 +114,7 @@ export async function shipmentsWithoutDdt(db: Reader, where: Prisma.ShipmentWher
     // Shipped ones first, by the moment they left; then the ones still in the house, by when they were made.
     order: `${row.shippedAt ? `0|${row.shippedAt.toISOString()}` : `1|${row.createdAt.toISOString()}`}|${row.number}`,
     lines: row.lines,
+    paperDdt: row.origin === 'ELSEWHERE' && row.externalDdtNumber && row.externalDdtDate ? { number: row.externalDdtNumber, date: day(row.externalDdtDate) } : null, // B-OP-033
   }))
 }
 
@@ -132,6 +151,8 @@ export async function queueWithoutDdt(db: Reader, where: Prisma.ShipmentWhereInp
   const orderIds = [...new Set(open.flatMap((shipment) => carried.get(shipment.id) ?? [shipment.salesOrderId]))]
   const paid = orderIds.length > 0 ? await db.paymentAllocation.findMany({ where: { depositRequest: { orderId: { in: orderIds } } }, select: { amount: true, depositRequest: { select: { orderId: true } } } }) : []
   const orders = new Map((await db.salesOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, number: true } })).map((order) => [order.id, order]))
+  // B-OP-033: a paper DDT's deadline follows the customer's terms, as a Nexus DDT's does.
+  const presets = await presetsOf(db, open.filter((shipment) => shipment.paperDdt !== null).map((shipment) => shipment.partyId))
   return open.map((shipment) => {
     const lines = rows
       .filter((row) => row.ddtId === shipment.id)
@@ -166,7 +187,8 @@ export async function queueWithoutDdt(db: Reader, where: Prisma.ShipmentWhereInp
       valueAmount: asMoney('price', lines.reduce((sum, line) => sum + (line.netAmount ?? 0), 0)),
       depositPaidAmount: asMoney('price', paid.filter((row) => !!row.depositRequest?.orderId && carriedIds.includes(row.depositRequest.orderId)).reduce((sum, row) => sum + row.amount, 0)),
       drafts: [...new Set(lines.flatMap((line) => line.drafts))],
-      deadline: withoutDdtDeadline({ number: shipment.number, date: shipment.shippedOn! }, today),
+      deadline: shipment.paperDdt ? presetDeadline(shipment.paperDdt, presets.get(shipment.partyId)?.preset ?? 'TD01', today) : withoutDdtDeadline({ number: shipment.number, date: shipment.shippedOn! }, today),
+      paperDdt: shipment.paperDdt, // B-OP-033
       freight: { amount: asMoney('price', shipment.freightCharge), currency: shipment.currency },
     }
   })
@@ -190,6 +212,13 @@ export interface FromShipmentAnswer {
 }
 
 const words = (issues: readonly Issue[], fallback: string): string => (issues.length === 1 ? issues[0]!.message : fallback)
+
+/** B-OP-033: the draft's Causale — a deferred invoice's legal words, an immediate one citing the paper DDT, or "without a DDT". */
+function defaultCausale(shipment: string, paper: { readonly number: string; readonly date: BusinessDate } | null, docType: ShipInvoiceType): string {
+  if (!paper) return `Fattura immediata: merce spedita senza DDT (spedizione ${shipment})`
+  if (docType === 'TD24') return 'Fattura differita (art. 21 c.4 lett. a DPR 633/1972)'
+  return `Fattura immediata: merce spedita con DDT n. ${paper.number} del ${formatDateIt(paper.date)} (spedizione ${shipment})`
+}
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
 
 /** invoices.manage: a TD01 draft of what is left of a shipment that leaves without a DDT (its immediate invoice). */
@@ -206,9 +235,10 @@ export async function createFromShipment(caller: CommandCaller, body: FromShipme
 
 async function draftInCommand(tools: CommandTools, body: FromShipmentInput, scope: { companyId: string; partyId: string }, plan: Awaited<ReturnType<typeof draftPlanOf>>): Promise<FromShipmentAnswer> {
   const { tx } = tools
-  const head = await tx.shipment.findUnique({ where: { id: body.shipmentId }, select: { id: true, number: true, status: true, ddtRequired: true, salesOrderId: true } })
+  const head = await tx.shipment.findUnique({ where: { id: body.shipmentId }, select: { id: true, number: true, status: true, ddtRequired: true, salesOrderId: true, /* B-OP-033 */ origin: true } })
   if (!head) throw new NotFoundError('Shipment not found.')
-  if (head.ddtRequired) throw new ConflictError(`Shipment ${head.number} travels with a DDT: invoice its DDT (Invoice shipped goods).`)
+  // B-OP-033: a shipment made elsewhere is invoiced here too, citing its paper DDT.
+  if (head.ddtRequired && head.origin !== 'ELSEWHERE') throw new ConflictError(`Shipment ${head.number} travels with a DDT: invoice its DDT (Invoice shipped goods).`)
   if (head.status === 'CANCELLED' || head.status === 'RETURNED') throw new ConflictError(`Shipment ${head.number} is ${head.status === 'CANCELLED' ? 'cancelled' : 'returned'}: there is nothing to invoice.`)
   // B-OP-045 (order page N6; P9: one invoice per order): the order this draft bills — the one asked (it must be on the
   // shipment: else as an unknown order), else its one order; several orders and none asked: 400 in words.
@@ -238,10 +268,23 @@ async function draftInCommand(tools: CommandTools, body: FromShipmentInput, scop
   // B-OP-045: another invoice of the billed order's goods (the freight goes once, with the first order's goods).
   const placedAny = all.filter((row) => orderOfLine.get(row.salesOrderLineId)?.orderId === billed).some((row) => row.invoiced.gt(0) || row.inDraft.gt(0))
 
+  // B-OP-033 (order page N5): made elsewhere with a paper DDT — the invoice cites it, its type by the customer's terms (TD24 by
+  // the 15th of the next month when deferred, else TD01 within 12 days of the DDT; late: TD01 now, as a DDT's).
+  const paper = shipment!.paperDdt
+  let docType: ShipInvoiceType = 'TD01'
+  let dueBy: BusinessDate | null = null
+  if (paper) {
+    if (!citableOnInvoice(paper.number)) throw new ConflictError(`Paper DDT ${paper.number} of shipment ${shipment!.number} has more than 20 characters, or characters the e-invoice does not take: the invoice cannot cite it. Invoice it by hand and tell the accountant.`)
+    const preset = (await presetsOf(tx, [scope.partyId])).get(scope.partyId)?.preset
+    const choice = chooseInvoiceType([paper], businessDate(tools.now), undefined, 'body/shipmentId', preset)
+    if (!choice.docType) throw new ConflictError(choice.words)
+    docType = choice.docType
+    dueBy = choice.deadline?.dueBy ?? null
+  }
   // The goods lines, priced from the order and taxed for the customer today (the DDT draft's builder, no DDT named).
   const prices = await orderPrices(tx, left.map((row) => row.salesOrderLineId))
-  const date = shipment!.shippedOn ?? businessDate(tools.now)
-  const goods = draftGoodsLines(left.map((row) => ({ ddtId: shipment!.id, ddtNumber: shipment!.number, ddtDate: date, salesOrderLineId: row.salesOrderLineId, size: row.size, quantity: row.toInvoice })), prices, vatFor(plan.profile))
+  const date = paper?.date ?? shipment!.shippedOn ?? businessDate(tools.now)
+  const goods = draftGoodsLines(left.map((row) => ({ ddtId: shipment!.id, ddtNumber: paper?.number ?? shipment!.number, ddtDate: date, salesOrderLineId: row.salesOrderLineId, size: row.size, quantity: row.toInvoice })), prices, vatFor(plan.profile))
   if (goods.problems.length > 0) throw new ConflictError(words(goods.problems, 'The goods cannot be priced from their order.'))
   const billing = invoiceCurrencyOf([...prices.values()].map((price) => price.currency), plan.currency)
   if ('problem' in billing) throw new ConflictError(billing.problem)
@@ -297,13 +340,14 @@ async function draftInCommand(tools: CommandTools, body: FromShipmentInput, scop
       id,
       companyId: scope.companyId,
       buyerPartyId: scope.partyId,
-      docType: 'TD01',
+      docType, // B-OP-033: TD24 or TD01 by the customer's terms for a paper DDT; TD01 without a DDT
       priceBasis: 'NET',
       currency,
       salesOrderId,
       depositRequestId: null,
-      causale: (body.causale === undefined ? `Fattura immediata: merce spedita senza DDT (spedizione ${shipment!.number})` : blankToNull(body.causale))?.slice(0, MAX_CAUSALE) ?? null,
-      documentRefs: refs.length > 0 ? (refs.map((number) => ({ kind: 'PURCHASE_ORDER', number })) as Prisma.InputJsonValue) : null,
+      causale: (body.causale === undefined ? defaultCausale(shipment!.number, paper, docType) : blankToNull(body.causale))?.slice(0, MAX_CAUSALE) ?? null,
+      // B-OP-033: the paper DDT beside the customer's POs (FatturaPA DatiDDT, the copy).
+      documentRefs: refs.length > 0 || paper ? ([...refs.map((number) => ({ kind: 'PURCHASE_ORDER', number })), ...(paper ? [{ kind: PAPER_DDT_REF, number: paper.number, date: paper.date }] : [])] as Prisma.InputJsonValue) : null,
       payment: body.payment ?? null,
       termsSource: body.payment ? null : await orderTermsSource(tx, { salesOrderId, partyId: scope.partyId }),
       internalNote: blankToNull(body.internalNote),
@@ -317,8 +361,9 @@ async function draftInCommand(tools: CommandTools, body: FromShipmentInput, scop
     companyId: scope.companyId,
     after: {
       shipment: shipment!.number,
-      docType: 'TD01',
-      dueBy: shipment!.shippedOn ? withoutDdtDeadline({ number: shipment!.number, date: shipment!.shippedOn }, businessDate(tools.now)).dueBy : null,
+      docType,
+      dueBy: paper ? dueBy : shipment!.shippedOn ? withoutDdtDeadline({ number: shipment!.number, date: shipment!.shippedOn }, businessDate(tools.now)).dueBy : null,
+      paperDdt: paper, // B-OP-033
       pieces: left.reduce((sum, row) => sum.plus(row.toInvoice), new Dec(0)).toString(),
       freight: freightLines.length > 0,
       fees: fees.lines.map((line) => line.salesOrderLineId),
