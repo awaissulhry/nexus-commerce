@@ -14,7 +14,8 @@ import { startsWith, words } from './_harness/words'
  *   1  per scope (This order, <Customer> (general), All of <Customer>): ONE card in the dock — the pick band first, the Head 44 px,
  *      the body that scrolls (the page does not), the foot or the box inside the viewport, at 40 % (Overview) and a third (Lines);
  *   2  the scope stays across tabs, Amend and a reload; an arrival from the orders list starts on This order;
- *   3  no loop: five picks over 10 s write the address with no router request (0 rsc), no document, at most 6 navigations;
+ *   3  no loop: five picks over 10 s write the address with no router request (0 rsc), no document, at most 6 writes of the address
+ *      (each with at most Next's one echo to the same address: routerActivity `writes`);
  *   4  Answer on A's line → This order with the box focused on a reply ("Replying to …"); on the general note → General, Office note;
  *   5  the keyboard walk of All of (J / K, Space), light and dark, the phone (375: the full-width view, ← Back).
  * Not here, said in the report: a project's scope (nothing links a project to this order), a work order's notes (10-work-order checks
@@ -198,7 +199,7 @@ export default defineStage({
       await expect(segment(page, OD('record.dock.order'))).toHaveAttribute('aria-checked', 'true', { timeout: 60_000 })
     })
 
-    await flow.step('3 · no loop: five picks over 10 s — no router request, no document, at most 6 navigations', async () => {
+    await flow.step('3 · no loop: five picks over 10 s — no router request, no document, at most 6 writes of the address', async () => {
       await go('?tab=overview')
       await seen(pickOf(page), 60_000)
       await page.waitForTimeout(3_000) // the page's own first reads and a build's prefetches are done before the window opens
@@ -213,7 +214,9 @@ export default defineStage({
       // F-OP-209: a pick is the frame's ONE history write — the server is never asked for the page again.
       expect(seenNow.router, said).toBe(0)
       expect(seenNow.documents, said).toBe(0)
-      expect(seenNow.navigations, said).toBeLessThanOrEqual(6)
+      // op-fx4: a pick is ONE write of the address; Next 16 echoes each write once to the same address (routerActivity `writes`).
+      expect(seenNow.writes, said).toBeLessThanOrEqual(6)
+      expect(seenNow.navigations, said).toBeLessThanOrEqual(2 * seenNow.writes)
       await expect(page).toHaveURL(/[?&]thread=general/)
     })
 
