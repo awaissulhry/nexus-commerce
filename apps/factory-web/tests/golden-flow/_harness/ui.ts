@@ -106,8 +106,11 @@ export function byApi(what: string): void {
  * frame's navigations, the documents it loads and the Next router's own requests (`rsc: 1`: navigations, prefetches, refreshes,
  * connectivity checks). A page at rest asks a handful; a loop asks hundreds.
  */
-export async function routerActivity(page: Page, ms: number, action: () => Promise<unknown>): Promise<{ navigations: number; documents: number; router: number; lines: string[] }> {
-  const seen = { navigations: 0, documents: 0, router: 0, lines: [] as string[] }
+export async function routerActivity(page: Page, ms: number, action: () => Promise<unknown>): Promise<{ navigations: number; documents: number; router: number; mostOneAddress: number; lines: string[] }> {
+  // fx-13: `mostOneAddress` = the most times ONE address (method + path + query) was asked by the router. A loop asks the same
+  // address again and again; a production build (`next start`) prefetches each visible link once, so the total alone is no sign.
+  const seen = { navigations: 0, documents: 0, router: 0, mostOneAddress: 0, lines: [] as string[] }
+  const perAddress = new Map<string, number>()
   const started = Date.now()
   const note = (what: string) => seen.lines.length < 40 && seen.lines.push(`${((Date.now() - started) / 1000).toFixed(2)} ${what}`)
   const onNavigated = (frame: import('@playwright/test').Frame) => {
@@ -121,7 +124,13 @@ export async function routerActivity(page: Page, ms: number, action: () => Promi
       note(`document ${new URL(request.url()).pathname}`)
     } else if (request.headers()['rsc'] === '1') {
       seen.router += 1
-      note(`router ${request.method()} ${new URL(request.url()).search.replace(/[&?]_rsc=[^&]*/, '')}`)
+      const url = new URL(request.url())
+      const search = url.search.replace(/[&?]_rsc=[^&]*/, '')
+      const key = `${request.method()} ${url.pathname}${search}`
+      const count = (perAddress.get(key) ?? 0) + 1
+      perAddress.set(key, count)
+      seen.mostOneAddress = Math.max(seen.mostOneAddress, count)
+      note(`router ${request.method()} ${url.pathname}${search}`)
     }
   }
   page.on('framenavigated', onNavigated)
