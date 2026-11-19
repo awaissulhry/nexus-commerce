@@ -3,7 +3,7 @@ import { InvalidStateError, NotFoundError, ValidationError, type Issue } from '@
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
-import { amendmentDiff, amendmentProblems, amendStateProblem, nextRevision, snapshotOf, type AmendableLine, type AmendLineInput, type AmendmentDiff, type OrderSnapshot, type SnapshotHeader, type SnapshotLine } from '@nexus/factory-domain/sales/amendments/amendments'
+import { amendmentDiff, amendmentProblems, amendStateProblem, leftOutOf, nextRevision, snapshotOf, type AmendableLine, type AmendLineInput, type AmendmentDiff, type OrderSnapshot, type SnapshotHeader, type SnapshotLine } from '@nexus/factory-domain/sales/amendments/amendments'
 import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
 import { isGoodsLine, isIssueList, MAX_TEXT, priceBasisOf, priceText, sizeGrid, type SizeRow } from '@nexus/factory-domain/sales/quotes/quotes'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
@@ -32,6 +32,9 @@ import { Dec } from '@nexus/factory-domain/tax/decimal'
 import { proposeGapsInCommand, type GapLine } from '../../production/work-order-changes/propose'
 // B-OP-013 (order page plan N2): the previews say what the work orders will do, read as the command reads it.
 import { plannedChangesOf, workOrderPreviewOf } from './work-order-plan'
+// B-OP-014 (order page plan N1): a line work orders make, left out, is closed short in the same command (as a close of lines).
+import { closeShortPlan } from '@nexus/factory-domain/sales/orders/daily'
+import { reducesDoneInCommand, shortLinesOf } from './close-lines'
 // B-OP-012 (order page plan N2, D1): the work orders follow the amendment in its command where the person may.
 import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../production/work-order-changes/auto'
 
@@ -48,7 +51,8 @@ import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../pr
  *      style, colourway, sizes and list price as for a quote line), priced again on the order's basis and VAT (an
  *      existing line keeps its cost per piece, a new one is costed from today's sheet);
  *   3. the lines written (a line left out is removed only when nothing refers to it: no work order, reservation,
- *      planning, shipment or invoice line), the order's totals, reapprovalNeededAt when the net total changed (the
+ *      planning, shipment or invoice line; B-OP-014: one work orders make is closed short instead — the office's own
+ *      amendment, `closeLeftOut` — never deleted, its gap proposed to them), the order's totals, reapprovalNeededAt when the net total changed (the
  *      customer accepts again: the re-acceptance link is W2b, SAL-190), the SalesOrderAmendment with the next revision
  *      and both snapshots (append-only), the OPEN payment steps made again for the new total, an audit row and
  *      sales_order.amended.
@@ -75,12 +79,18 @@ const priceOf = (value: { toString(): string } | null): string | null => (value 
 const placeholderId = (index: number): string => `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
 
 // ── B-SA-042: the gap an amendment leaves on the order's work orders, read from its plan (before anything is written) ──
-/** The lines after the amendment as the gap reads them (a line closed short does not change through an amendment). */
-function gapLinesAfter(after: OrderSnapshot, stored: readonly LineRecord[]): GapLine[] {
+/**
+ * The lines after the amendment as the gap reads them (a line closed short does not change through an amendment). B-OP-014: one
+ * the amendment closes short (`closing`, with what shipped of it per size) wants what shipped of it, as a close of lines reads it.
+ */
+function gapLinesAfter(after: OrderSnapshot, stored: readonly LineRecord[], closing: ReadonlyMap<string, AmendmentPlan['closing'][number]['shipped']> = new Map()): GapLine[] {
   return after.lines.flatMap((line) => {
-    if (line.closedShortQuantity !== null || (line.kind !== 'SIZE_GRID' && line.kind !== 'MADE_TO_MEASURE')) return []
+    if (line.kind !== 'SIZE_GRID' && line.kind !== 'MADE_TO_MEASURE') return []
+    if (line.closedShortQuantity !== null && !closing.has(line.id)) return []
     const own = stored.find((entry) => entry.id === line.id)
     const unit = line.kind === 'MADE_TO_MEASURE'
+    const shipped = closing.get(line.id)
+    if (shipped) return [{ id: line.id, styleId: line.styleId, siteId: own?.siteId ?? null, madeToMeasure: unit, sizes: new Map(line.sizes.map((size) => [size.size, shipped.find((entry) => entry.size === size.size)?.quantity ?? 0])) }]
     const sizes = new Map<string, number>(unit ? (own?.baseSize ? [[own.baseSize, 1]] : []) : line.sizes.map((size) => [size.size, size.quantity]))
     return [{ id: line.id, styleId: line.styleId, siteId: own?.siteId ?? null, madeToMeasure: unit, sizes }]
   })
@@ -93,7 +103,7 @@ const sizesOf = (snapshot: OrderSnapshot): Map<string, Map<string, number>> => n
 const pricesOf = (after: OrderSnapshot): PricedSize[] => after.lines.flatMap((line) => line.sizes.map((size) => ({ lineId: line.id, size: size.size, unitPrice: size.unitPrice ?? line.unitPrice })))
 
 /** The extra pieces an amendment's plan would leave (cut beyond the new figures), with the order's work orders as they are. */
-export async function plannedExtra(db: Reader, tenantId: string, order: Pick<OrderRow, 'id' | 'status'>, plan: Pick<AmendmentPlan, 'before' | 'after' | 'diff'>, stored: readonly LineRecord[]): Promise<ExtraPieces[]> {
+export async function plannedExtra(db: Reader, tenantId: string, order: Pick<OrderRow, 'id' | 'status'>, plan: Pick<AmendmentPlan, 'before' | 'after' | 'diff' | 'closing'>, stored: readonly LineRecord[]): Promise<ExtraPieces[]> {
   return extraOfPlanned((await plannedGap(db, tenantId, order, plan, stored)).changes)
 }
 
@@ -103,10 +113,10 @@ export async function plannedExtra(db: Reader, tenantId: string, order: Pick<Ord
  * B-OP-013: read as the command proposes them — the lines the amendment changes (the diff's), the waiting changes they replace with
  * theirs (./work-order-plan.ts plannedChangesOf) — and with the cells read (what is cut), for the plan rows.
  */
-export async function plannedGap(db: Reader, tenantId: string, order: Pick<OrderRow, 'id' | 'status'>, plan: Pick<AmendmentPlan, 'before' | 'after' | 'diff'>, stored: readonly LineRecord[], closing: readonly GapLine[] = []): Promise<{ changes: PlannedChange[]; cells: WorkCell[] }> {
+export async function plannedGap(db: Reader, tenantId: string, order: Pick<OrderRow, 'id' | 'status'>, plan: Pick<AmendmentPlan, 'before' | 'after' | 'diff' | 'closing'>, stored: readonly LineRecord[], closing: readonly GapLine[] = []): Promise<{ changes: PlannedChange[]; cells: WorkCell[] }> {
   const replaced = new Set(closing.map((line) => line.id))
   const changed = new Set(plan.diff.lines.map((line) => line.lineId))
-  const lines = [...gapLinesAfter(plan.after, stored).filter((line) => changed.has(line.id) && !replaced.has(line.id)), ...closing]
+  const lines = [...gapLinesAfter(plan.after, stored, new Map(plan.closing.map((line) => [line.id, line.shipped]))).filter((line) => changed.has(line.id) && !replaced.has(line.id)), ...closing]
   return plannedChangesOf(db, tenantId, order, lines, sizesOf(plan.before))
 }
 
@@ -176,16 +186,24 @@ export interface AmendmentPlan {
   readonly priced: PricedLines
   /** The lines left out (removed), and the new lines' drafts in `priced` have id null. */
   readonly removed: readonly string[]
+  /** B-OP-014: the lines left out that work orders make: closed short (what is left of each), never deleted; kept in `priced`. */
+  readonly closing: readonly { readonly id: string; readonly seq: number; readonly closedShortQuantity: number; readonly shipped: readonly { readonly size: string; readonly quantity: number }[] }[]
   readonly header: { readonly customerRef: string | null; readonly requestedDate: BusinessDate | null }
   /** B-W2b-374 (XF3:02): the new lines' options by seq (already in their price), written with the lines. */
   readonly options?: ReadonlyMap<number, EntryOptions>
+}
+
+/** B-OP-014: how an amendment treats a line left out that work orders make — the office's own amendment closes it short. */
+export interface PlanOptions {
+  /** Close short a line left out that work orders make (its cells point at it); off: such a line is refused, as before. */
+  readonly closeLeftOut?: boolean
 }
 
 /**
  * The amendment as it would be applied, read in `db` (the command's transaction, or a client for the preview), the
  * order at `status`. Returns the plan or the problems (the API's own checks after the domain's).
  */
-export async function planAmendment(db: Reader, order: OrderRow, status: OrderRow['status'], facts: OrderFacts, body: AmendBody, now: Date): Promise<AmendmentPlan | Issue[]> {
+export async function planAmendment(db: Reader, order: OrderRow, status: OrderRow['status'], facts: OrderFacts, body: AmendBody, now: Date, /* B-OP-014 */ planOptions: PlanOptions = {}): Promise<AmendmentPlan | Issue[]> {
   const stateProblem = amendStateProblem(status)
   if (stateProblem) return [{ path: 'body', message: stateProblem }]
   if (facts.lines.some((line) => line.kind === 'FEE')) return [{ path: 'body', message: 'This order has a fee line: a fee is changed on its own line, so the order is not amended here.' }]
@@ -205,11 +223,22 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
   if (issues.length > 0) return issues
 
   const kept = new Set(body.lines.flatMap((line) => (line.id ? [line.id] : [])))
-  const removed = lines.filter((line) => !kept.has(line.id)).map((line) => line.id)
-  const references = await referencesOf(db, removed)
+  const leftOut = lines.filter((line) => !kept.has(line.id)).map((line) => line.id)
+  const references = await referencesOf(db, leftOut)
+  // B-OP-014 (order page plan N1): the office's own amendment closes short a line left out that work orders make (any cell that
+  // points at it, a cancelled work order's too); every other line left out is removed when nothing refers to it.
+  const madeByWorkOrders = new Set(leftOut.filter((lineId) => references.get(lineId)?.includes('a work order')))
+  const { remove: removed, close } = planOptions.closeLeftOut ? leftOutOf({ lines: body.lines, current }, madeByWorkOrders) : { remove: leftOut, close: [] as string[] }
   for (const lineId of removed) {
     const what = references.get(lineId)
     if (what) issues.push({ path: 'body/lines', message: `Line ${lines.find((line) => line.id === lineId)!.seq} is referred to by ${what.join(', ')}: it cannot be removed; close it short instead, or lower its sizes.` })
+  }
+  // What is left of each line closed short (nothing has shipped in the states an amendment takes): the close's own plan.
+  let closing: AmendmentPlan['closing'] = []
+  if (close.length > 0) {
+    const closePlan = closeShortPlan(status, shortLinesOf(facts), close)
+    if (Array.isArray(closePlan)) issues.push(...closePlan.map((issue) => ({ path: 'body/lines', message: issue.message })))
+    else closing = closePlan.close.map((line) => ({ id: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity, shipped: facts.progress.rows.flatMap((row) => (row.lineId === line.id && row.size !== null && row.shipped > 0 ? [{ size: row.size, quantity: row.shipped }] : [])) }))
   }
 
   const party = await quotePartyOf(db, order.partyId, businessDate(now), now)
@@ -225,7 +254,9 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
   const options = new Map<number, EntryOptions>()
   const vat = lines[0] ? storedVat(treatmentOfStored(lines[0])) : null
   const optionsCtx = { companyId: order.companyId, currency: order.currency, basis: priceBasisOf(order.taxMode), vatRatePct: vat && vat.vatNature === null ? vat.vatRatePct : null }
-  for (const [index, input] of body.lines.entries()) {
+  // B-OP-014: a line closed short stays on the order as it is (its price kept: a closed line is not billed).
+  const inputs: readonly AmendLineInput[] = [...body.lines, ...closing.map((line) => ({ id: line.id }))]
+  for (const [index, input] of inputs.entries()) {
     const at = `body/lines/${index}`
     if (input.id === undefined) {
       const draft = await newLineDraft(db, { companyId: order.companyId, taxMode: order.taxMode, party, chain, cache, now }, { styleId: input.styleId!, colourwayId: input.colourwayId!, sizes: input.sizes ?? [], unitPrice: input.unitPrice, description: input.description, note: input.note }, nextSeq, at)
@@ -303,14 +334,14 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
     requestedDate: body.requestedDate === undefined ? dayOrNull(order.requestedDate) : body.requestedDate,
   }
   const before = snapshotOf(headerOf(order, order), lines.map(lineSnapshot))
-  const closedOf = new Map(lines.map((line) => [line.id, line.closedShortQuantity]))
+  const closedOf = new Map<string, number | null>([...lines.map((line) => [line.id, line.closedShortQuantity] as const), /* B-OP-014 */ ...closing.map((line) => [line.id, line.closedShortQuantity] as const)])
   const after = snapshotOf(
     headerOf(order, priced, header),
     priced.lines.map((line, index) => snapshotLine({ ...line, id: line.id ?? placeholderId(index), closedShortQuantity: line.id ? (closedOf.get(line.id) ?? null) : null })),
   )
   const diff = amendmentDiff(before, after)
   if (diff.empty) return [{ path: 'body/lines', message: 'Nothing changes: the order already looks like this.' }]
-  return { before, after, diff, priced, removed, header, options }
+  return { before, after, diff, priced, removed, closing, header, options }
 }
 
 /** The diff as answered: pieces and sizes for everyone with orders.view, prices only with the price grain. */
@@ -327,6 +358,7 @@ export function diffView(diff: AmendmentDiff) {
       sizes: line.sizes.map((size) => ({ ...size })),
       priceChanged: line.unitPrice !== null,
       textChanged: line.textChanged,
+      closedShort: line.closedShort, // B-OP-014
     })),
     header: diff.header.map((entry) => ({ ...entry })),
     prices: asMoney(
@@ -352,7 +384,8 @@ export async function previewAmendment(caller: CommandCaller, orderId: string, b
   const now = serverClock.now()
   return caller.withClient(async (client) => {
     const facts = await readOrderFacts(client, order)
-    const plan = await planAmendment(client, order, order.status, facts, body, now)
+    // B-OP-014: a line left out that work orders make is closed short (the apply's own plan).
+    const plan = await planAmendment(client, order, order.status, facts, body, now, { closeLeftOut: true })
     const revision = nextRevision((await client.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { revision: true } })).map((row) => row.revision))
     if (isIssueList(plan)) {
       if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
@@ -377,7 +410,7 @@ export async function applyAmendment(caller: CommandCaller, orderId: string, bod
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
   const { result } = await withAutoApply((autoApply) =>
     command(caller, { name: 'orders.amend', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
-      const done = await amendInCommand(tools, context.tenantId, order, body, { autoApply })
+      const done = await amendInCommand(tools, context.tenantId, order, body, { autoApply, /* B-OP-014 */ closeLeftOut: true })
       return { amendmentId: done.amendmentId, workOrders: done.workOrders } /* plain JSON: never its `before` Map */
     }),
   )
@@ -407,6 +440,8 @@ export async function amendInCommand(
     readonly workOrders?: 'now' | 'later'
     /** B-OP-012: the office routes' runner (../../production/work-order-changes/auto.ts); left out: every change waits. */
     readonly autoApply?: AutoApply
+    /** B-OP-014: the office's own amendment — a line left out that work orders make is closed short (PlanOptions). */
+    readonly closeLeftOut?: boolean
   } = {} /* B-W2b-303: a split asks no re-acceptance */,
 ): Promise<{ amendmentId: string; /* B-SA-042 */ changedLineIds: string[]; before: Map<string, Map<string, number>>; /* B-OP-012 */ workOrders: FollowedWorkOrders }> {
   const { tx, now } = tools
@@ -418,7 +453,7 @@ export async function amendInCommand(
   const locked = await lockOrder(tx, order.id, body.version)
   const fresh = (await readOrder(tx, order.id))!
   const facts = await readOrderFacts(tx, fresh)
-  const plan = await planAmendment(tx, fresh, locked.status, facts, body, now)
+  const plan = await planAmendment(tx, fresh, locked.status, facts, body, now, { closeLeftOut: options.closeLeftOut === true })
   if (isIssueList(plan)) {
     if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
     throw invalid(plan)
@@ -487,6 +522,13 @@ export async function amendInCommand(
     })
     await tx.salesOrderLineSize.createMany({ data: sizesOf(id) })
   }
+  // B-OP-014 (order page plan N1): the lines left out that work orders make, closed short as a close of lines closes them (never
+  // deleted: their cells point at them) with the amendment's reason; an APPROVED reduction of their cells is done with it.
+  const closedIds = plan.closing.map((line) => line.id)
+  for (const line of plan.closing) {
+    await tx.salesOrderLine.update({ where: { id: line.id }, data: { closedShortQuantity: line.closedShortQuantity, closedShortAt: now, closedShortById: actorId, closeShortReason: body.reason!.trim(), updatedAt: now, version: { increment: 1 } }, select: { id: true } })
+  }
+  const reducesDone = closedIds.length > 0 ? await reducesDoneInCommand(tools, order, closedIds) : []
   // B-W2b-374 (XF3:02): the new lines' options (the order is CONFIRMED, IN_PRODUCTION or READY: amendStateProblem).
   const optionLineIds = await writeEntryOptions(tools, order.partyId, optionsWritten)
   // The snapshot after names the new lines by the ids they got.
@@ -552,6 +594,8 @@ export async function amendInCommand(
       revision,
       changes: plan.diff.lines.map((line) => ({ change: line.change, lineId: newIds.get(line.lineId) ?? line.lineId, seq: line.seq, piecesBefore: line.piecesBefore, piecesAfter: line.piecesAfter })),
       removedLineIds: plan.removed,
+      // B-OP-014
+      ...(plan.closing.length > 0 ? { closedLines: plan.closing.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity })), reducesDone } : {}),
       netAmount: markMoney('price', plan.diff.netAfter),
       grossAmount: markMoney('price', plan.diff.grossAfter),
       reacceptanceNeeded,
@@ -564,6 +608,8 @@ export async function amendInCommand(
   // B-SA-001: both name the order's customer (the order row's own, read on the server).
   if (optionLineIds.length > 0) tools.emit({ type: 'sales_order.options_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, lineIds: optionLineIds, change: 'CHOSEN', partyId: order.partyId } })
   tools.emit({ type: 'sales_order.amended', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, amendmentId, revision, reacceptanceNeeded, lineIds: changedLineIds, partyId: order.partyId } })
+  // B-OP-014: the lines closed short, as a close of lines announces them (the floor's note, the settlement, the keeper).
+  if (closedIds.length > 0) tools.emit({ type: 'sales_order.lines_closed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'CLOSED', lineIds: closedIds, partyId: order.partyId } })
   // B-W2b-309: sales_order.change_priced; the customer's materials of the changed lines follow their sizes.
   await afterAmendment(tools, fresh, { amendmentId, revision, changedLineIds, extras })
   // B-SA-042: the gap to the order's work orders, proposed in this command (Accept proposes once at its own end). B-OP-012: and

@@ -207,6 +207,8 @@ export const diffView = output({
       /** Its unit price changed (the prices themselves are in `prices`, with the price grain). */
       priceChanged: notMoney(z.boolean()),
       textChanged: z.boolean(),
+      /** B-OP-014: a line left out while work orders make it — closed short (it stays on the order, nothing more made of it). */
+      closedShort: z.boolean(),
     }),
   ),
   header: z.array(output({ field: z.enum(['customerRef', 'requestedDate']), before: z.string().nullable(), after: z.string().nullable() })),

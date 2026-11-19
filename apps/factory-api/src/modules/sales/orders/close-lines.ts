@@ -115,15 +115,7 @@ export async function closeLinesInCommand(
   }
   // B-W2a-13: an APPROVED REDUCE of these lines' cells is done once the order line is lowered.
   const closedIds = plan.close.map((line) => line.id)
-  const cells = await tx.workOrderSize.findMany({ where: { salesOrderLineId: { in: closedIds } }, select: { id: true } })
-  const reduces = cells.length > 0 ? await tx.replacementRequest.findMany({ where: { workOrderSizeId: { in: cells.map((cell) => cell.id) }, kind: 'REDUCE', status: 'APPROVED' }, select: { id: true, companyId: true, workOrderId: true, quantity: true }, orderBy: { id: 'asc' } }) : []
-  const reducesDone: string[] = []
-  for (const reduce of reduces) {
-    const { count } = await tx.replacementRequest.updateMany({ where: { id: reduce.id, status: 'APPROVED' }, data: { status: 'DONE', doneAt: now, updatedAt: now, version: { increment: 1 } } })
-    if (count !== 1) continue
-    reducesDone.push(reduce.id)
-    tools.audit({ action: 'orders.reduceDone', recordType: 'ReplacementRequest', recordId: reduce.id, companyId: reduce.companyId, before: { status: 'APPROVED' }, after: { status: 'DONE', doneAt: toUtcIso(now), orderId: order.id, quantity: reduce.quantity } })
-  }
+  const reducesDone = await reducesDoneInCommand(tools, order, closedIds)
   let status = locked.status
   if (plan.done && locked.status === 'PARTLY_SHIPPED') {
     await tx.salesOrder.update({ where: { id: order.id }, data: { status: 'SHIPPED', updatedAt: now, version: { increment: 1 } }, select: { id: true } })
@@ -153,6 +145,25 @@ export async function closeLinesInCommand(
     stillInWorkOrders: stillInWorkOrdersOf(facts, closedIds),
     workOrders: { applied: gap?.applied ?? [], waiting: gap?.waiting ?? [] },
   }
+}
+
+/**
+ * B-W2a-13: the APPROVED REDUCE replacements of the closed lines' cells, DONE once the order line is lowered (a close of lines; B-OP-014:
+ * an amendment that closes a line it leaves out), each audited. Returns their ids.
+ */
+export async function reducesDoneInCommand(tools: CommandTools, order: Pick<OrderRow, 'id'>, closedIds: readonly string[]): Promise<string[]> {
+  const { tx, now } = tools
+  if (closedIds.length === 0) return []
+  const cells = await tx.workOrderSize.findMany({ where: { salesOrderLineId: { in: [...closedIds] } }, select: { id: true } })
+  const reduces = cells.length > 0 ? await tx.replacementRequest.findMany({ where: { workOrderSizeId: { in: cells.map((cell) => cell.id) }, kind: 'REDUCE', status: 'APPROVED' }, select: { id: true, companyId: true, workOrderId: true, quantity: true }, orderBy: { id: 'asc' } }) : []
+  const done: string[] = []
+  for (const reduce of reduces) {
+    const { count } = await tx.replacementRequest.updateMany({ where: { id: reduce.id, status: 'APPROVED' }, data: { status: 'DONE', doneAt: now, updatedAt: now, version: { increment: 1 } } })
+    if (count !== 1) continue
+    done.push(reduce.id)
+    tools.audit({ action: 'orders.reduceDone', recordType: 'ReplacementRequest', recordId: reduce.id, companyId: reduce.companyId, before: { status: 'APPROVED' }, after: { status: 'DONE', doneAt: toUtcIso(now), orderId: order.id, quantity: reduce.quantity } })
+  }
+  return done
 }
 
 /** What work orders still make of the closed lines (beyond what shipped of them): Production decides about it. */

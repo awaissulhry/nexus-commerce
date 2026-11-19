@@ -307,15 +307,15 @@ describe('amendments (SAL-209, SAL-217): a confirmed order changes only through 
     manual = applied.order
   })
 
-  it('numbers after what the order has (SEED-SO-0001 has amendment 1); a line in work orders may drop under them (B-SA-042), never goes', async () => {
+  it('numbers after what the order has (SEED-SO-0001 has amendment 1); a line in work orders may drop under them (B-SA-042), and is closed short when left out (B-OP-014)', async () => {
     const so1 = await recordOf(seeded.money.sales.orderId)
     const first = so1.lines[0]
     const bump = first.sizes.map((size: Json, index: number) => ({ size: size.size, quantity: size.quantity + (index === 0 ? 1 : 0) }))
     const applied = await ok('sales', 'POST', `${orderUrl(so1.id)}/amendments`, { version: so1.version, reason: 'One more of the first size.', lines: [{ id: first.id, sizes: bump }, ...so1.lines.slice(1).map((line: Json) => ({ id: line.id }))] }, 201)
     expect(applied.amendment.revision).toBe(2)
     // SEED-SO-0002: WO-0001 makes BLK 52 twice (WO-0002 once more) — B-SA-042 (P6', R1): a size may now go under what work orders
-    // make (the gap is proposed to them, never below what is cut); the preview names the extra pieces it would leave. A line in work
-    // orders is still never removed.
+    // make (the gap is proposed to them, never below what is cut); the preview names the extra pieces it would leave. B-OP-014: a line
+    // in work orders left out is closed short (never deleted: their cells point at it), not refused.
     const so2 = await recordOf(seeded.money.shipping.quality.production.salesOrderId)
     const blk = so2.lines.find((line: Json) => line.colourway.code === 'BLK')
     const red = so2.lines.find((line: Json) => line.colourway.code === 'RED')
@@ -323,7 +323,9 @@ describe('amendments (SAL-209, SAL-217): a confirmed order changes only through 
     expect((lower.problems as Json[]).some((issue) => /work orders already make/.test(issue.message))).toBe(false)
     expect(lower.workOrders).toMatchObject({ extra: expect.any(Array), needsOutcome: expect.any(Boolean) })
     const removal = await ok('sales', 'POST', `${orderUrl(so2.id)}/amendments/preview`, { reason: 'Only black.', lines: [{ id: blk.id }] })
-    expect(removal.problems.map((issue: Json) => issue.message)).toEqual([expect.stringMatching(/^Line 20 is in work orders \(3 piece\(s\)\): it cannot be removed/)])
+    expect(removal).toMatchObject({ ok: true, problems: [] })
+    expect(removal.diff.lines.map((line: Json) => [line.change, line.seq, line.closedShort])).toEqual([['REMOVED', 20, true]])
+    expect(removal.workOrders.plan.length).toBeGreaterThan(0)
   })
 })
 
@@ -471,6 +473,55 @@ describe('B-OP-013: the previews say what the work orders will do — and the ap
   })
 })
 // ── end B-OP-013 ──
+
+// ── B-OP-014 (order page plan N1; 13-backend §1.4): a line in work orders left out of an amendment is closed short in its command ──
+describe('B-OP-014: a line work orders make, left out of an amendment, is closed short — its cut pieces need their outcome', () => {
+  it('held without the outcome (nothing written); with it ONE command closes the line short, never deleted, and its gap goes to the work orders', async () => {
+    const order = await orderInWork()
+    // 2 of the BLK 52 pieces on the work order in progress are bundled: cut.
+    const cell = await one<{ id: string }>(`SELECT id::text AS id FROM "WorkOrderSize" WHERE "workOrderId" = $1 AND "salesOrderLineId" = $2 AND size = '52'`, [order.inProgress, order.blk.id])
+    await planted([{ sql: `INSERT INTO "Bundle" (id, "tenantId", "siteId", "workOrderId", "workOrderSizeId", code, quantity) SELECT $1, "tenantId", "siteId", $2, $3, $4, 2 FROM "WorkOrderSize" WHERE id = $3::uuid`, values: [newId(), order.inProgress, cell.id, `T-OP014-BN-${cell.id.slice(-8)}`] }])
+    const body = { reason: 'The customer drops the black jackets.', lines: [{ id: order.red.id }] }
+
+    const preview = await ok('sales', 'POST', `${orderUrl(order.id)}/amendments/preview`, body)
+    expect(preview).toMatchObject({ ok: false, problems: [], workOrders: { needsOutcome: true, words: { en: 'Choose what happens to the 2 extra pieces' } } })
+    expect(preview.diff.lines.map((line: Json) => [line.change, line.lineId, line.piecesBefore, line.piecesAfter, line.closedShort])).toEqual([['REMOVED', order.blk.id, 4, 0, true]])
+    // Closing short moves no money: the line keeps its price (a closed line is not billed); no new acceptance for it.
+    expect(preview.diff).toMatchObject({ netAmountBefore: preview.diff.netAmountAfter, reacceptanceNeeded: false })
+    expect(preview.workOrders.extra.map((entry: Json) => [entry.size, entry.count])).toEqual([['52', 2]])
+
+    const held = await refused('sales', 'POST', `${orderUrl(order.id)}/amendments`, { version: order.version, ...body }, 409)
+    expect(held.issues).toEqual([{ path: 'refusal/EXTRA_OUTCOME', message: 'Choose what happens to the 2 extra pieces' }])
+    expect(await one('SELECT "closedShortQuantity" AS closed FROM "SalesOrderLine" WHERE id = $1', [order.blk.id])).toEqual({ closed: null })
+
+    const applied = await ok('sales', 'POST', `${orderUrl(order.id)}/amendments`, { version: order.version, ...body, extraOutcome: 'LEFTOVER' }, 201)
+    expect(await one('SELECT "closedShortQuantity" AS closed, "closeShortReason" AS reason, "closedShortById"::text AS by FROM "SalesOrderLine" WHERE id = $1', [order.blk.id])).toEqual({ closed: 4, reason: body.reason, by: SALES_ACTOR })
+    expect(applied.order.lines.find((line: Json) => line.id === order.blk.id)).toMatchObject({ closedShort: { quantity: 4, reason: body.reason } })
+    expect(applied.amendment.diff.lines).toEqual([expect.objectContaining({ change: 'REMOVED', lineId: order.blk.id, closedShort: true })])
+    // The work orders, as the preview said: the DRAFT's one cell (BLK 52) goes with the click, so it is cancelled; the work order in
+    // progress waits for production (Sales holds no workorders.manage) with its 2 cut pieces kept as leftover — never below cut.
+    expect(applied.workOrders.applied.map((entry: Json) => entry.route)).toEqual(['CANCEL_WORK_ORDER'])
+    expect(applied.workOrders.waiting).toHaveLength(1)
+    expect(await statusOfWorkOrder(order.draft)).toBe('CANCELLED')
+    expect(await one(`SELECT status::text AS status, "extraOutcome"::text AS outcome, extra FROM "WorkOrderChange" WHERE "workOrderId" = $1 AND "amendmentId" = $2`, [order.inProgress, applied.amendment.id])).toMatchObject({
+      status: 'PROPOSED',
+      outcome: 'LEFTOVER',
+      extra: [expect.objectContaining({ workOrderSizeId: cell.id, size: '52', count: 2 })],
+    })
+    // Announced as a close of lines is (the floor's note, the settlement), beside the amendment.
+    expect((await events('sales_order.lines_closed', order.id)).map((event) => event.payload)).toEqual([expect.objectContaining({ change: 'CLOSED', lineIds: [order.blk.id], partyId: P1 })])
+    expect((await events('sales_order.amended', order.id)).map((event) => event.payload.lineIds)).toEqual([[order.blk.id]])
+  })
+
+  it('a line closed short already is never left out; reopen it first', async () => {
+    const order = await orderInWork()
+    const closed = await ok('sales', 'POST', `${orderUrl(order.id)}/close-lines`, { version: order.version, reason: 'No red after all.', lineIds: [order.red.id] })
+    const refusedLeave = await ok('sales', 'POST', `${orderUrl(order.id)}/amendments/preview`, { reason: 'Only black.', lines: [{ id: order.blk.id }] })
+    expect(refusedLeave).toMatchObject({ ok: false, diff: null, problems: [{ path: 'body/lines', message: `Line ${order.red.seq} is closed short: reopen it before removing it.` }] })
+    expect(closed.order.version).toBeGreaterThan(order.version)
+  })
+})
+// ── end B-OP-014 ──
 
 describe('the cancel with its impact check (SAL-211)', () => {
   it('SEED-SO-0002: names what stops it (a draft work order, goods that left, a draft invoice) and what it would leave behind', async () => {
