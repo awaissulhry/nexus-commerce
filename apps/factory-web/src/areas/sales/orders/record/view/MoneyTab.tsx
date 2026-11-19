@@ -368,7 +368,11 @@ function InvoicesCard({ order, model, actions }: { order: Order; model: OrderRec
   return (
     <Card padded>
       <h2 className="fw-so-h2">{t('money.invoicesTitle')}</h2>
-      {order.chain.invoices.length === 0 ? (
+      {/* F-OP-306 (walk #21): without invoices.view no invoice row (the walk saw a Draft TD24 listed above "Invoices are shown to
+          people who see invoices."): the one sentence, as Overview › Linked records says it. */}
+      {!model.can.viewInvoices ? (
+        <p className="fw-so-hint">{t('money.noInvoiceRight')}</p>
+      ) : order.chain.invoices.length === 0 ? (
         <EmptyState title={t('money.noInvoices.title')} description={t('money.noInvoices.body')} />
       ) : (
         <SummaryTable
@@ -416,7 +420,6 @@ function InvoicesCard({ order, model, actions }: { order: Order; model: OrderRec
           stackOnPhone
         />
       )}
-      {!model.can.viewInvoices && <p className="fw-so-hint">{t('money.noInvoiceRight')}</p>}
       {/* F-OP-118: no figure of the customer as a whole on the order page — its statement is the customer's page. */}
       {order.party && (
         <p className="fw-so-hint">
