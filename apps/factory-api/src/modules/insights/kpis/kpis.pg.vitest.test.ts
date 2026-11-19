@@ -48,10 +48,13 @@ const PEOPLE = { owner: newId(), planner: newId(), sales: newId(), narrow: newId
 type Person = keyof typeof PEOPLE
 const ROLE_OF: Record<Person, string> = { owner: 'owner', planner: 'planner', sales: 'sales', narrow: 'sales', production: 'production_manager', admin: 'admin' }
 const SESSIONS: Record<string, SessionContext> = {}
-const grantOf = (role: string, parties: Grant['parties'] = 'all'): Grant => {
+const grantOf = (role: string, parties: Grant['parties'] = 'all', extra: readonly Permission[] = []): Grant => {
   const template = templateOf(role)!
-  return { permissions: [...template.permissions, ...template.grains.map((grain) => grainPermission(grain) as Permission)], companies: 'all', sites: 'all', parties }
+  return { permissions: [...template.permissions, ...template.grains.map((grain) => grainPermission(grain) as Permission), ...extra], companies: 'all', sites: 'all', parties }
 }
+// B-CP-011 (the money wall): Sales holds no grain now. The customer-limited person is a Sales person the Owner named to see prices
+// (the price and margin grains added, as the Sales template had them), so the order KPIs stay readable live on their own orders.
+const NAMED_GRAINS: Partial<Record<Person, readonly Permission[]>> = { narrow: [grainPermission('price') as Permission, grainPermission('margin') as Permission] }
 
 let h: Harness
 let app: FastifyInstance
@@ -119,7 +122,7 @@ beforeAll(async () => {
   partyNarrow = (await admin<{ partyId: string }>(`SELECT "partyId" FROM "SalesOrder" WHERE "tenantId" = $1 AND status <> 'CANCELLED' GROUP BY "partyId" ORDER BY count(*) DESC, "partyId" LIMIT 1`, [T]))[0]!.partyId
   for (const [person, role] of Object.entries(ROLE_OF) as Array<[Person, string]>) {
     await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [PEOPLE[person], T, `k428-${person}-${run}@example.com`, `Made-up ${person}`])
-    SESSIONS[person] = { audience: 'office', tenantId: T, actorId: PEOPLE[person], grants: [grantOf(role, person === 'narrow' ? [partyNarrow] : 'all')] }
+    SESSIONS[person] = { audience: 'office', tenantId: T, actorId: PEOPLE[person], grants: [grantOf(role, person === 'narrow' ? [partyNarrow] : 'all', NAMED_GRAINS[person])] }
   }
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
@@ -368,9 +371,11 @@ describe('one calculation for every reader (ANA-070)', () => {
       [partyNarrow, anchor, today()],
     ))[0]!.total
     expect(narrow).toMatchObject({ live: true, value: expected ?? '0' })
-    const all = await ok('sales', 'GET', `/insights/kpis/sales.orders_in/value?period=MONTH&periods=1&day=${anchor}`)
+    // B-CP-011: every customer's orders in money read by the Owner; Sales (no price grain) reads no value.
+    const all = await ok('owner', 'GET', `/insights/kpis/sales.orders_in/value?period=MONTH&periods=1&day=${anchor}`)
     expect(all.live).toBe(false)
     expect(Number(all.value)).toBeGreaterThanOrEqual(Number(narrow.value))
+    expect(await ok('sales', 'GET', `/insights/kpis/sales.orders_in/value?period=MONTH&periods=1&day=${anchor}`)).toMatchObject({ value: null, problem: 'NEEDS_GRAIN' })
     const fiscal = await call('owner', 'GET', '/insights/kpis/sales.orders_in/value?period=FISCAL_YEAR')
     expect(fiscal.status).toBe(400)
     expect((await ok('owner', 'GET', `/insights/kpis/sales.orders_in/value?period=FISCAL_YEAR&companyId=${companyA}&periods=1`)).period.key).toMatch(/^FY\d{4}$/)

@@ -20,7 +20,7 @@ import { useAbuseGuard } from '../../../platform/abuse/guard'
 import { usePortalOptions } from '../../../platform/auth/portal/service'
 import { freshGuard, mailedCode, portalBrowser, portalWorld } from '../../../platform/auth/portal/testing/portal'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
-import { addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
+import { addUser, Browser, enrolTotp, HARNESS_REQUEST_LIMITS, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { productionTwoBrands, twoBrandIds, twoBrandSessions, type ProductionTwoBrands } from './two-brands'
 
 /**
@@ -110,8 +110,10 @@ export async function urgencyWorld(label: string, namespace: string, options: Ur
   await h.db.admin.query(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE "tenantId" = $1 AND provider = 'R2'`, [T])
   // fix-pr-4: the test sessions' app carries the harness's office sign-in (the sessions stay the test's): the portal and production
   // routes read the app's clock from it (platform/portal/tasks/clock appClock) and answered 503 "Office sign-in is not configured".
+  // op-fx4 (B-OP-071): and the harness's request budget, as the harness's own app — with the production 300 a minute per person,
+  // `office.p2`'s wall checks (every door of every step, within seconds) were refused 429 rate_limited from the sales-page golden's O2 on.
   const officeApp = await buildApp(
-    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, rateLimit: HARNESS_REQUEST_LIMITS },
     { database: h.database, officeAuth: h.auth, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => sessions[String(request.headers['x-test-session']) as keyof typeof sessions] ?? null) },
   )
   const w = await productionTwoBrands({ db: h.db, database: h.database, app: officeApp, namespace })

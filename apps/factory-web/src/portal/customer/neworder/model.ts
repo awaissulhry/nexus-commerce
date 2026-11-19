@@ -225,6 +225,18 @@ export function problemWords(problem: Problem, lines: readonly DraftLine[], kit:
       const was = kit.price(line?.unitPriceShown)
       return now && was ? t('problem.PRICE_CHANGED', { now, was }) : now ? t('problem.PRICE_NEW', { now }) : t('problem.PRICE_ANY')
     }
+    // ---- B-CP-075: a described or made-to-measure line's own problems (the domain's customLineProblems), in the page's words
+    case 'NO_TOTAL':
+      return t('problem.NO_TOTAL')
+    case 'SIZES_NOT_TOTAL':
+      return t('problem.SIZES_NOT_TOTAL')
+    case 'NO_PEOPLE':
+      return t('problem.NO_PEOPLE')
+    case 'MTM_CLOSED':
+      return t('problem.MTM_CLOSED')
+    case 'GARMENT_TYPE_GONE':
+      return t('problem.GARMENT_TYPE_GONE')
+    // ---- end B-CP-075
   }
 }
 

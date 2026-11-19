@@ -500,7 +500,13 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
           the ONE decide window of a work-order change (Approvals' own; opened by the page's state, Esc returns here). */}
       {model.workOrderActs && <WorkOrderActsDialogs model={model.workOrderActs} actions={actions?.workOrderActs} />}
       {/* F-OP-102 (F-OP-112): Make work orders… — the band's primary, the ⋯ and Production's card open the one dialog here. */}
-      {model.makeWorkOrders?.dialog && <NewWorkOrderDialog model={model.makeWorkOrders.dialog} can={model.makeWorkOrders.can} actions={actions?.makeWorkOrders?.dialog} />}
+      {/* op-fx4: the dialog is production's (useT('production')): the page brings that catalogue with it, as ProductionTab does —
+          without it the dialog showed its keys (new.title, new.create). */}
+      {model.makeWorkOrders?.dialog && (
+        <WithMessages namespaces={['production']}>
+          <NewWorkOrderDialog model={model.makeWorkOrders.dialog} can={model.makeWorkOrders.can} actions={actions?.makeWorkOrders?.dialog} />
+        </WithMessages>
+      )}
       {model.orderChanges?.review && (
         <WorkOrderChangeReview
           review={model.orderChanges.review}

@@ -9,7 +9,7 @@ import type { Grain, PermissionCatalogue, Role } from '../../../shared/api'
 import { GRAINS } from '../../../shared/model'
 import { byArea, permissionKey, type MatrixPermission } from '../../../shared/view/PermissionMatrix'
 import { useRoleWords } from '../../../shared/view/parts'
-import { draftDiff, editablePermissions, grainToggled, refusalWords, reviewRows, toggled, type RoleDraft, type RoleReview } from '../model'
+import { asksTwoFactor, draftDiff, editablePermissions, grainToggled, refusalWords, reviewRows, toggled, type RoleDraft, type RoleReview } from '../model'
 import '../roles-depth.css'
 // B-W2b-F51: a refusal names the missing right in words, never its code.
 import { rightRef } from '../../../../../lib/i18n/rights'
@@ -91,7 +91,8 @@ function Editor({ model, actions }: { model: RoleEditorModel; actions?: RoleEdit
               )
             })}
           </ul>
-          {!role.requireMfa && draft.grains.some((grain) => grain === 'cost' || grain === 'margin') && <p className="fw-adm-hint">{t('saveRole.mfaWhy')}</p>}
+          {/* B-CP-011: prices too (Owner O6). */}
+          {!role.requireMfa && asksTwoFactor(draft.grains) && <p className="fw-adm-hint">{t('saveRole.mfaWhy')}</p>}
         </section>
         <div className="fw-adm-matrix">
           {groups.map((group) => {

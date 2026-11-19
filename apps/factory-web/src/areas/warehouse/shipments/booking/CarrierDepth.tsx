@@ -97,7 +97,9 @@ export function useOwnTransport(shipmentId: string, version: number, can: DepthA
       },
       onTracking: () => {
         const dialog = latest.current.dialog
-        if (dialog?.kind !== 'tracking' || trackingProblem(dialog)) return
+        const loaded = latest.current.transport
+        // op-fx4: the number on record now (an emptied box clears it, its link with it).
+        if (dialog?.kind !== 'tracking' || trackingProblem(dialog, loaded.state === 'ready' ? loaded.value.shipment.manualTrackingNumber : null)) return
         const text = dialog.text.trim()
         // F-OP-135: the link typed beside the number goes with it (blank clears it).
         void write('tracking', (key, transport) => typeTrackingNumber(api, shipmentId, trackingBody(dialog, transport.shipment.version), key), text === '' ? 'transport.done.trackingCleared' : 'transport.done.tracking')

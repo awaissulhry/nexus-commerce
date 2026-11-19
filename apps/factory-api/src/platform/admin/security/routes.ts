@@ -9,6 +9,7 @@ import {
   evidenceContract,
   fingerprintContract,
   pageContract,
+  priceHoldersContract,
   recordDrillContract,
   twoFactorChangeContract,
   twoFactorListContract,
@@ -17,6 +18,7 @@ import {
 import { announceEvidence, completeEvidence, listDrills, readFingerprint, recordDrill } from './drills'
 import { manifest } from './manifest'
 import { securityPage } from './page'
+import { priceHolders } from './price-holders' // B-CP-013
 import { changeTwoFactor, listTwoFactor, previewTwoFactor } from './two-factor'
 import { assertEveryCustomer } from '../../auth/every-customer'
 
@@ -32,6 +34,7 @@ import { assertEveryCustomer } from '../../auth/every-customer'
  *   POST /admin/security/drills/evidence/:fileId/complete  confirm its upload
  *   POST /admin/security/drills                            record a restore drill (compared here, append-only)
  *   GET  /admin/security/attention                         All settings › Needs attention, by what the person may read
+ *   GET  /admin/security/price-holders                     B-CP-013: "Who sees prices" (users.view + the price grain)
  */
 export default defineRoutes('admin-security', manifest, async (app) => {
   const auth = () => officeAuthOf(app)
@@ -60,4 +63,9 @@ export default defineRoutes('admin-security', manifest, async (app) => {
   )
   app.post('/admin/security/drills', { schema: recordDrillContract }, (request) => recordDrill(auth(), request, request.body, idempotencyKeyFrom(request) ?? undefined))
   app.get('/admin/security/attention', { schema: attentionContract }, (request) => attentionList(auth(), request))
+  // B-CP-013: the tenant's people are every customer's (fix-pr-8): a person limited to some customers is refused first.
+  app.get('/admin/security/price-holders', { schema: priceHoldersContract }, async (request) => {
+    assertEveryCustomer(request, 'users.view')
+    return priceHolders(auth(), request)
+  })
 })

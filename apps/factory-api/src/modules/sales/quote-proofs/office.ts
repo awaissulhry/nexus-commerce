@@ -191,6 +191,8 @@ export async function announceProofVersion(files: FilesRuntime, caller: CommandC
     sha256: body.sha256,
     sharing: { visibility: ['OFFICE'], companyId: quote.companyId, floorSiteId: null, partyId: null },
     storeAccountId: await storeAccountOf(caller, quote.companyId),
+    // B-CP-014: a version of a priced proof series is born priced (as every other new version; insertNewVersion checks again).
+    priced: series.some((file) => file.priced),
   }
   const { result } = await command(caller, { name: 'quotes.requestProofVersion', idempotencyKey, input: { quoteId, fileId, ...body } }, async (tools) => {
     await stillOpen(tools, version.id)

@@ -36,6 +36,8 @@ type Json = Record<string, any>
 type Office = Awaited<ReturnType<UrgencyWorld['officePerson']>>
 type Portal = Awaited<ReturnType<UrgencyWorld['portalPerson']>>
 let sales: Office
+// B-CP-011: the Owner sets a counter's price (Sales holds no price grain: the money wall).
+let owner: Office
 let planner: Office
 let plannerB: Office
 let manager: Office
@@ -82,6 +84,7 @@ beforeAll(async () => {
   const so1 = (await admin<{ id: string; lineId: string }>(`SELECT o.id::text AS id, l.id::text AS "lineId" FROM "SalesOrder" o JOIN "SalesOrderLine" l ON l."orderId" = o.id WHERE o."tenantId" = $1 AND o.number = 'SEED-SO-0001' ORDER BY l.seq LIMIT 1`, [world.ids.tenantId]))[0]!
   orders.so1 = { orderId: so1.id, lineId: so1.lineId }
   sales = await world.officePerson('sara.sales@pr26-office.example.com', 'sales')
+  owner = await world.officePerson('olga.owner@pr26-office.example.com', 'owner')
   planner = await world.officePerson('piero.planner@pr26-office.example.com', 'planner')
   plannerB = await world.officePerson('bianca.planner@pr26-office.example.com', 'planner', [world.ids.b])
   manager = await world.officePerson('marco.manager@pr26-office.example.com', 'production_manager')
@@ -181,7 +184,9 @@ describe('B-PR-26: the factory answers its customers’ requests', { timeout: SL
     // Nothing offered: refused in words; a past date too.
     expect((await send(sales, 'POST', `/production/brand-requests/${change.id}/counter`, { version: 1 })).body.error.issues[0].message).toBe('Say what you offer instead: a date, a price or words.')
     expect((await send(sales, 'POST', `/production/brand-requests/${change.id}/counter`, { version: 1, date: addDays(TODAY(), -1) })).status).toBe(400)
-    const countered = await send(sales, 'POST', `/production/brand-requests/${change.id}/counter`, { version: 1, date: offered, fee: 2500, note: 'Made-up: the earlier date needs overtime.' })
+    // B-CP-011: Sales sees no prices now: its fee is refused (the money wall); the Owner counters with the price.
+    expect((await send(sales, 'POST', `/production/brand-requests/${change.id}/counter`, { version: 1, date: offered, fee: 2500 })).status).toBe(403)
+    const countered = await send(owner, 'POST', `/production/brand-requests/${change.id}/counter`, { version: 1, date: offered, fee: 2500, note: 'Made-up: the earlier date needs overtime.' })
     expect(countered.status, JSON.stringify(countered.body)).toBe(200)
     expect(countered.body.request).toMatchObject({ status: 'COUNTERED', waitingOn: 'CUSTOMER', counter: { date: offered, fee: 2500, priced: true, state: 'WAITING' }, may: { accept: false, refuse: false, counter: false } })
     const approvalId = countered.body.approvalRequestId as string

@@ -1,5 +1,5 @@
 import type { Permission } from '../../core/permissions'
-import { GRAINS, isGrain, type Grain } from '../grains/grains'
+import { GRAINS, grainWords, isGrain, twoFactorGrainsOf, type Grain } from '../grains/grains'
 import { FACTORY_PERMISSIONS, FLOOR_AREA, FLOOR_SHARED_PERMISSIONS } from '../permissions/catalogue'
 // B-W2b-162: the partner role templates (audience partner).
 import { partnerRoleTemplates, partnerTemplateProblems, type PartnerRoleTemplate } from './partner-templates'
@@ -224,7 +224,9 @@ import { PORTAL_PROJECTS_ADDS, PROJECTS_ADDS } from '../../projects/permissions'
  * themselves.
  *
  * `requireMfa`: a session holds none of the role's permissions until two-factor was proved on it (A1 §3.10: owner,
- * admin, finance; and every role that sees costs or margins).
+ * admin, finance; and every role that sees costs or margins). B-CP-011 (customer page lane, the money wall; Owner O1, O2,
+ * O6): every role that sees prices too (TWO_FACTOR_GRAINS); our prices are seen only by the Owner and the people he names,
+ * so Sales sees none, and Finance is a price role that only the Owner gives (platform/auth/roles/assignments).
  */
 
 export const ROLE_AUDIENCES = ['office', 'floor'] as const
@@ -1341,7 +1343,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
   }),
   template('finance', {
     name: 'Finance',
-    description: 'Invoices, payments and number series; sees prices, costs, margins and wages.',
+    // B-CP-011 (Owner O2): unchanged content; a price role: only the Owner gives it, and "Who sees prices" lists its holders.
+    description: 'Invoices, payments and number series; sees prices, costs, margins and wages. Only the Owner gives this role.',
     requireMfa: true,
     permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'product.materials.view', 'product.materials.cost', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'invoices.view', 'invoices.manage', 'invoices.issue', 'payments.view', 'payments.record', 'payments.void', 'costing.view', 'costing.rates.manage', 'quotes.view', 'quotes.approve', 'sales.settings.manage', 'companies.bank.view', 'companies.bank.manage', 'orders.view', 'orders.close', 'home.view', 'calendars.view', 'inventory.counts.view', 'inventory.counts.signoff', 'production.scrap.view',
       // B-W2a-21 (standard vs actual): standards, the cost ledger, the costing method (step-up).
@@ -1358,17 +1361,20 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
   }),
   template('sales', {
     name: 'Sales',
-    // Design question S2 (what sales sees of cost), the Owner's answer a: margin % and "under the floor", never a cost
-    // (the quotes API drops the margin AMOUNT without the cost grain). A role that sees margins requires two-factor
-    // (A1 §3.10).
-    description: 'Customers, quotes and orders; sees selling prices and margin %, not costs.',
+    // B-CP-011 (customer page lane, the money wall; Owner O1 of 2026-11-19, reversing design question S2's answer a): Sales
+    // sees no money at all: no selling price, no margin %, no "under the floor", and keeps no price list (pricelists.manage
+    // gone with the grains: no blind price change). Its quotes and orders take the customer's price list; a style without one
+    // is priced by a person who sees prices. Two-factor kept.
+    description: "Customers, quotes and orders; no prices: lines take the customer's price list, a price holder sets the rest.",
     requireMfa: true,
     permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage', 'home.view', 'calendars.view',
-      // B-W2a-19: the customer price lists (keep them) and the payment terms library (pick from it).
-      'pricelists.view', 'pricelists.manage', 'paymentterms.view',
+      // B-W2a-19: the customer price lists (read: which list prices a customer; its prices need the price grain) and the
+      // payment terms library (pick from it). B-CP-011: no longer pricelists.manage (a price holder keeps the lists).
+      'pricelists.view', 'paymentterms.view',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export'],
-    grains: ['price', 'margin'],
+    // B-CP-011 (Owner O1): no grain (was price and margin).
+    grains: [],
   }),
   template('planner', {
     name: 'Planner',
@@ -1740,8 +1746,9 @@ export function templateProblems(templates: readonly RoleTemplate[]): string[] {
     }
     for (const grain of entry.grains) if (!isGrain(grain)) problems.push(`${entry.key}: ${String(grain)} is not a grain`)
     problems.push(...audienceProblems(entry).map((problem) => `${entry.key}: ${problem}`))
-    const sees = entry.grains.filter((grain) => grain === 'cost' || grain === 'margin')
-    if (sees.length > 0 && !entry.requireMfa) problems.push(`${entry.key}: a role that sees ${sees.join(' and ')} requires two-factor`)
+    // B-CP-011: price, cost and margin (TWO_FACTOR_GRAINS), one list for templates, custom roles and the two-factor switch.
+    const sees = twoFactorGrainsOf(entry.grains)
+    if (sees.length > 0 && !entry.requireMfa) problems.push(`${entry.key}: a role that sees ${grainWords(sees)} requires two-factor`)
   }
   if (!keys.has('owner')) problems.push('the owner template is missing')
   return problems

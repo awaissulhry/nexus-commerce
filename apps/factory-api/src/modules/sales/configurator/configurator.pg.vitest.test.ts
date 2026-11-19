@@ -39,7 +39,8 @@ import { carryOptionsAfterYes } from './copy'
  * the liner: a BLOCK), the name on the chest (+15.00, a typed text) and the armour (one, standard by default; "without" is
  * outside the certificate, -25.00); the liner REQUIRES the standard armour (a WARN). SEED-Q-0003 (DRAFT) has JKT-05 BLK
  * configured: SUGGESTED 400 → liner 60 → front 20 → name 15 → 5 % → MANUAL -0.25 → NET 470. SEED-SO-0004 (CONFIRMED) has
- * JKT-05 with the standard armour and the liner. A seller (the sales role: price and margin, no cost grain) and the owner.
+ * JKT-05 with the standard armour and the liner. A seller (the sales role) and the owner. B-CP-011 (the money wall): the sales role
+ * holds no grain now, so the prices, surcharges and waterfalls are read and typed by the owner; the seller reads none of them.
  * Run with `node scripts/factory/run-pg-tests.mjs modules/sales/configurator/`.
  */
 
@@ -60,18 +61,17 @@ const jkt01 = seedId('product:style:JKT-01')
 const BLK = seedId('product:colourway:JKT-01:BLK')
 
 const grainsOf = (grains: readonly string[]): Permission[] => grains.map((grain) => `money.${grain}` as Permission)
-const PEOPLE: Record<string, { readonly template: string; readonly dropGrains?: readonly string[]; readonly drop?: readonly string[] }> = {
+// B-CP-011: the sales template holds no grain now, so `seller` is the reader without the price grain (the old `blind`).
+const PEOPLE: Record<string, { readonly template: string; readonly drop?: readonly string[] }> = {
   seller: { template: 'sales' },
   owner: { template: 'owner' },
-  blind: { template: 'sales', dropGrains: ['price', 'margin'] },
   reader: { template: 'sales', drop: ['quotes.manage', 'orders.manage'] },
 }
 const IDS: Record<string, string> = Object.fromEntries(Object.keys(PEOPLE).map((key) => [key, newId()]))
 const SESSIONS: Record<string, SessionContext> = Object.fromEntries(
   Object.entries(PEOPLE).map(([key, person]) => {
     const role = templateOf(person.template)!
-    const grains = role.grains.filter((grain) => !(person.dropGrains ?? []).includes(grain))
-    const grant: Grant = { permissions: [...role.permissions.filter((permission) => !(person.drop ?? []).includes(permission)), ...grainsOf(grains)], companies: 'all', sites: 'all', parties: 'all' }
+    const grant: Grant = { permissions: [...role.permissions.filter((permission) => !(person.drop ?? []).includes(permission)), ...grainsOf(role.grains)], companies: 'all', sites: 'all', parties: 'all' }
     return [key, { audience: 'office', tenantId: tenant, actorId: IDS[key]!, grants: [grant] }]
   }),
 )
@@ -140,7 +140,8 @@ afterAll(async () => {
 describe("a quote line's configurator (SAL-133, SAL-136, SAL-139)", () => {
   it("reads the style's groups with their surcharges and rules, the chosen values, the check, the price and the choices", async () => {
     const { quoteId, gridLineId } = seeded.draftQuote
-    const view = await ok('seller', 'GET', `${q(quoteId, gridLineId)}/configurator`)
+    // B-CP-011: the prices are the owner's (the sales role sees none).
+    const view = await ok('owner', 'GET', `${q(quoteId, gridLineId)}/configurator`)
     expect(view.document).toMatchObject({ kind: 'QUOTE', number: 'SEED-Q-0003', status: 'DRAFT', currency: 'EUR', priceBasis: 'NET' })
     expect(view.style.code).toBe('SEED-JKT-05')
     expect(view.groups.map((group: Json) => group.code)).toEqual(['SEED-OG-LINER', 'SEED-OG-PERF', 'SEED-OG-NAME', 'SEED-OG-ARMOUR'])
@@ -161,14 +162,14 @@ describe("a quote line's configurator (SAL-133, SAL-136, SAL-139)", () => {
     expect(view.check).toMatchObject({ ok: true, blocks: [], warnings: [], outsideCertificate: false })
     expect(view.pricing).toMatchObject({ holdsOptions: true, held: null, manualKept: true })
     expect(view.line).toMatchObject({ unitPrice: '470', optionsTotal: '95' })
-    // The sales role holds no cost grain: no unit cost; the margin is the margin grain.
-    expect(view.line.unitCost).toBeUndefined()
     expect(view.choices.colours.map((colour: Json) => colour.code)).toEqual(['SEED-BLK', 'SEED-GRY', 'SEED-RED'])
     expect(view.choices.leathers.find((leather: Json) => leather.code === 'SEED-LEA-100').colours.map((colour: Json) => colour.code)).toEqual(['BLK', 'RED'])
     expect(view.may).toMatchObject({ configure: true, held: null, artwork: true })
-    // Without the price grain: no surcharge, price or waterfall figure at all.
-    const blind = await ok('blind', 'GET', `${q(quoteId, gridLineId)}/configurator`)
+    // Without the price grain (B-CP-011: the sales role itself): no surcharge, price, cost, margin or waterfall figure at all.
+    const blind = await ok('seller', 'GET', `${q(quoteId, gridLineId)}/configurator`)
     expect(blind.line.unitPrice).toBeUndefined()
+    expect(blind.line.unitCost).toBeUndefined()
+    expect(blind.line.marginPct).toBeUndefined()
     expect(blind.chosen[0].surchargeAmount).toBeUndefined()
     expect(perf.values[0].surcharge).toBeDefined()
     expect(blind.groups[1].values[0].surcharge).toBeUndefined()
@@ -181,7 +182,8 @@ describe("a quote line's configurator (SAL-133, SAL-136, SAL-139)", () => {
   it('checks a choice without writing: the price it would make through the waterfall, the manual change kept as its amount', async () => {
     const { quoteId, gridLineId } = seeded.draftQuote
     // The liner left out: 400 + front 20 + name 15 = 435, 5 % off = 413.25, the manual -0.25 kept = 413.
-    const check = await ok('seller', 'POST', `${q(quoteId, gridLineId)}/configurator/check`, { picks: [{ valueId: options.valueIds.perfFront }, { valueId: options.valueIds.name, text: 'ROSSI' }] })
+    // B-CP-011: the price it would make is the owner's read (the sales role reads no figure).
+    const check = await ok('owner', 'POST', `${q(quoteId, gridLineId)}/configurator/check`, { picks: [{ valueId: options.valueIds.perfFront }, { valueId: options.valueIds.name, text: 'ROSSI' }] })
     expect(check).toMatchObject({ ok: true, problem: null })
     expect(check.chosen.map((row: Json) => [row.valueId, row.byDefault, row.surchargeAmount])).toEqual([
       [options.valueIds.perfFront, false, '20'],
@@ -211,7 +213,8 @@ describe("a quote line's configurator (SAL-133, SAL-136, SAL-139)", () => {
     expect(both.message).toMatch(/library colour or a material/)
     const [red] = await admin<{ id: string }>(`SELECT id FROM "Colour" WHERE code = 'SEED-RED' AND "tenantId" = $1`, [tenant])
     const [leather] = await admin<{ id: string; colour: string }>(`SELECT i.id, c.id AS colour FROM "Item" i JOIN "ItemColour" c ON c."itemId" = i.id WHERE i.code = 'SEED-LEA-100' AND c.code = 'RED' AND i."tenantId" = $1`, [tenant])
-    const saved = await ok('seller', 'PUT', `${q(quoteId, gridLineId)}/options`, {
+    // B-CP-011: the write whose answer shows the new price is the owner's (the sales role reads no price).
+    const saved = await ok('owner', 'PUT', `${q(quoteId, gridLineId)}/options`, {
       version: quote.version,
       picks: [{ valueId: options.valueIds.perfFront, colourId: red!.id }, { valueId: options.valueIds.name, text: 'BIANCHI', itemId: leather!.id, itemColourId: leather!.colour }],
     })
@@ -222,7 +225,7 @@ describe("a quote line's configurator (SAL-133, SAL-136, SAL-139)", () => {
     expect(saved.line.chosen.find((row: Json) => row.valueId === options.valueIds.name)).toMatchObject({ text: 'BIANCHI', itemId: leather!.id, itemColourId: leather!.colour })
     expect(await valueCodes('QuoteLineOption', gridLineId)).toEqual(['FRONT', 'NAME', 'STD'])
     // B-W2b-330's pricing reads the same waterfall: the OPTION steps name the rows written.
-    const pricing = await ok('seller', 'GET', `/sales/quotes/${quoteId}/pricing`)
+    const pricing = await ok('owner', 'GET', `/sales/quotes/${quoteId}/pricing`)
     const line = pricing.lines.find((row: Json) => row.lineId === gridLineId)
     expect(line.steps.filter((step: Json) => step.kind === 'OPTION').map((step: Json) => step.delta)).toEqual(['20', '15'])
     const audit = await admin<Json>(`SELECT after FROM "AuditLog" WHERE action = 'quotes.configureLine' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 1`, [quoteId])
@@ -241,22 +244,25 @@ describe("a quote line's configurator (SAL-133, SAL-136, SAL-139)", () => {
     // SEED-JKT-01 offers the liner (test data: one offer row).
     await admin(`INSERT INTO "StyleOptionGroup" (id, "tenantId", "styleId", "groupId", seq) VALUES ($1, $2, $3, $4, 10)`, [newId(), tenant, jkt01, options.groupIds.liner])
     let quote = (await ok('seller', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1 }, 201)).quote
-    quote = (await ok('seller', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jkt01, colourwayId: BLK, sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 2 }] }, 201)).quote
+    // B-CP-011: the steps that read or type a price are the owner's (the sales role reads and sends none).
+    quote = (await ok('owner', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jkt01, colourwayId: BLK, sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 2 }] }, 201)).quote
     const atList = quote.lines[0]
     expect(atList).toMatchObject({ unitPrice: '420', listUnitPrice: '420' })
-    const saved = await ok('seller', 'PUT', `${q(quote.id, atList.id)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }] })
+    const saved = await ok('owner', 'PUT', `${q(quote.id, atList.id)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }] })
     quote = saved.quote
     expect(quote.lines[0].unitPrice).toBe('480')
-    const steps = (await ok('seller', 'GET', `/sales/quotes/${quote.id}/pricing`)).lines[0].steps
+    const steps = (await ok('owner', 'GET', `/sales/quotes/${quote.id}/pricing`)).lines[0].steps
     expect(steps.map((step: Json) => [step.kind, step.delta ?? step.unitPrice])).toEqual([['LIST', '420'], ['OPTION', '60'], ['NET', '480']])
     // A price typed by hand (W1's line edit drops the waterfall): the options stay frozen, the price is not moved.
-    quote = (await ok('seller', 'PATCH', `/sales/quotes/${quote.id}/lines/${atList.id}`, { version: quote.version, unitPrice: '455', listUnitPrice: null })).quote
+    // B-CP-011: the sales role may not send a price (refused, nothing written); the owner types it.
+    await refused('seller', 'PATCH', `/sales/quotes/${quote.id}/lines/${atList.id}`, { version: quote.version, unitPrice: '455', listUnitPrice: null }, 403)
+    quote = (await ok('owner', 'PATCH', `/sales/quotes/${quote.id}/lines/${atList.id}`, { version: quote.version, unitPrice: '455', listUnitPrice: null })).quote
     expect(quote.lines[0].unitPrice).toBe('455')
     const held = await ok('seller', 'GET', `${q(quote.id, atList.id)}/configurator`)
     expect(held.pricing).toMatchObject({ holdsOptions: false, held: 'NO_START' })
     const checks = await ok('seller', 'GET', `/sales/quotes/${quote.id}/warnings`)
     expect(checks.warnings.find((warning: Json) => warning.code === 'OPTIONS_NOT_PRICED')).toMatchObject({ severity: 'WARNING' })
-    quote = (await ok('seller', 'PUT', `${q(quote.id, atList.id)}/options`, { version: quote.version, picks: [] })).quote
+    quote = (await ok('owner', 'PUT', `${q(quote.id, atList.id)}/options`, { version: quote.version, picks: [] })).quote
     expect(quote.lines[0].unitPrice).toBe('455')
     expect((await ok('seller', 'GET', `${q(quote.id, atList.id)}/configurator`)).chosen).toEqual([])
   })
@@ -273,7 +279,8 @@ describe("a quote line's configurator (SAL-133, SAL-136, SAL-139)", () => {
     expect(revised.currentRevision).toBe(2)
     const line = revised.lines[0]
     expect(await valueCodes('QuoteLineOption', line.id)).toEqual(['YES'])
-    const view = await ok('seller', 'GET', `${q(revised.id, line.id)}/configurator`)
+    // B-CP-011: the price is the owner's read.
+    const view = await ok('owner', 'GET', `${q(revised.id, line.id)}/configurator`)
     expect(view.pricing).toMatchObject({ holdsOptions: true, held: null })
     expect(view.line.unitPrice).toBe('480')
   })
@@ -317,7 +324,8 @@ describe('the picks travel: to the order and the work order (CF1:03)', () => {
       expect(await carryOptionsAfterYes(system(), orderId)).toEqual({ lines: 1 })
     }
     expect(await valueCodes('SalesOrderLineOption', orderLineId)).toEqual(['FRONT', 'NAME', 'NONE'])
-    const view = await ok('seller', 'GET', `${o(orderId, orderLineId)}/configurator`)
+    // B-CP-011: the surcharges are the owner's read (the sales role reads none).
+    const view = await ok('owner', 'GET', `${o(orderId, orderLineId)}/configurator`)
     expect(view.document).toMatchObject({ kind: 'ORDER', status: 'CONFIRMED' })
     expect(view.chosen.find((row: Json) => row.valueId === options.valueIds.name)).toMatchObject({ text: 'BIANCHI', surchargeAmount: '15' })
     // The quote line's artwork travels without a copy.
@@ -333,11 +341,12 @@ describe('the picks travel: to the order and the work order (CF1:03)', () => {
     expect(view.chosen.find((row: Json) => row.valueId === options.valueIds.name)).toMatchObject({ text: 'VERDI' })
     // The standard armour back: 25.00 more a piece than accepted.
     const more = [{ valueId: options.valueIds.perfFront }, { valueId: options.valueIds.name, text: 'VERDI' }]
-    const check = await ok('seller', 'POST', `${o(orderId, orderLineId)}/configurator/check`, { picks: more })
+    // B-CP-011: what the change costs, and keeping the accepted price, are the owner's (the sales role reads no price).
+    const check = await ok('owner', 'POST', `${o(orderId, orderLineId)}/configurator/check`, { picks: more })
     expect(check.pricing).toMatchObject({ repriced: false, change: '25' })
     const held = await refused('seller', 'PUT', `${o(orderId, orderLineId)}/options`, { version: view.document.version, picks: more }, 409)
     expect(held.message).toMatch(/keep the accepted price, or amend the order/)
-    view = (await ok('seller', 'PUT', `${o(orderId, orderLineId)}/options`, { version: view.document.version, picks: more, keepPrice: true })).line
+    view = (await ok('owner', 'PUT', `${o(orderId, orderLineId)}/options`, { version: view.document.version, picks: more, keepPrice: true })).line
     expect(view.line.unitPrice).toBe((await admin<{ p: string }>(`SELECT trim(trailing '.' from trim(trailing '0' from "unitPrice"::text)) AS p FROM "SalesOrderLine" WHERE id = $1`, [orderLineId]))[0]!.p)
     const event = await admin<Json>(`SELECT payload FROM "OutboxEvent" WHERE type = 'sales_order.options_changed' AND subject = $1`, [orderId])
     expect(event.length).toBeGreaterThan(0)

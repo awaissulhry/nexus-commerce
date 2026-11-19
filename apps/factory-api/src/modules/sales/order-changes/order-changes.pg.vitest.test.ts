@@ -27,7 +27,8 @@ import { REACCEPTANCE_ADAPTER } from '../orders/reacceptance'
  * is real), tenant A from EVERY seed (company A's freeze rules: sizes a priced change from cutting and blocked from
  * finishing, prices a priced change from the release …; SEED-SO-W39-02 in production with P1's woven labels; the approvals
  * seed's rules OFF; the caparra penitenziale OFF). Test sessions hold the role templates' grants. Every name and number is
- * made up.
+ * made up. B-CP-011 (the money wall): the sales role holds no price grain, so a typed price, a fee or a deposit is the Owner's
+ * (a Sales body that sends one is refused 403); Sales still amends sizes, puts back and reads the changes without amounts.
  *
  * What it walks: the company's freeze rules (read, a new rule, one active per field and stage, a later stage never loosening
  * a block, switched off); an order in production (a work order released, one size cut) read field by field and size by size;
@@ -166,8 +167,9 @@ describe("the company's freeze rules (SAL-218)", () => {
 
 describe('what is frozen on an order in production (SAL-218)', () => {
   it('reads the stage of each size and the verdict of each field, a cut size locked with its reason', async () => {
+    // B-CP-011: the typed prices are the Owner's.
     order = (
-      await ok('sales', 'POST', '/sales/orders/manual', {
+      await ok('owner', 'POST', '/sales/orders/manual', {
         companyId: A.companyA,
         partyId: p1,
         customerRef: 'PO-309-A',
@@ -220,10 +222,12 @@ describe('a priced change after the start, its extra deposit (SAL-219, SAL-221)'
   it('previews the parts, the fee and the extra deposit of the growth (the order 30 %); writes them on the amendment; the customer is asked again', async () => {
     const row = await orderRow(order.id)
     const body = { version: row.version, reason: 'Made-up: two more in the cut size, cut on their own.', lines: [{ id: line10.id, sizes: sizesOf(line10, { [cutSize]: 5 }) }, { id: line20.id }], labels: { [line10.id]: 'Two more jackets, cut on their own (made-up)' }, fee: '25.00' }
-    const preview = await ok('sales', 'POST', `/sales/orders/${order.id}/priced-changes/preview`, body)
+    // B-CP-011: the seller may not send the fee (refused, nothing written); the Owner prices the change and reads its parts.
+    await no('sales', 'POST', `/sales/orders/${order.id}/priced-changes/preview`, body, 403)
+    const preview = await ok('owner', 'POST', `/sales/orders/${order.id}/priced-changes/preview`, body)
     expect(preview).toMatchObject({ ok: true, problems: [], parts: [{ label: 'Two more jackets, cut on their own (made-up)', orderLineId: line10.id, amount: 20000 }], feeAmount: 2500, changeAmount: 22500, yes: 'APPLIES_AT_ONCE' /* B-OP-010 */, stage: { stage: 'CUT' } })
     expect(preview.deposit).toMatchObject({ basis: 'ORDER_PERCENT', pct: '30.0000', kind: 'ACCONTO' })
-    const applied = await ok('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, body, 201)
+    const applied = await ok('owner', 'POST', `/sales/orders/${order.id}/priced-changes`, body, 201)
     expect(applied.change).toMatchObject({ revision: 2, priced: true, feeAmount: 2500, changeAmount: 22500, yes: { state: 'NOT_ASKED' }, customer: { decision: 'NOT_ASKED' }, putBack: { may: false } })
     expect(applied.change.deposit).toMatchObject({ kind: 'ACCONTO', status: 'OPEN', amount: preview.deposit.amount, pct: '30.0000' })
     const amendment = await one<Json>(`SELECT "priceDeltaLines", "feeAmount", "depositRequestId", "reapprovalTaskId", "reacceptanceNeeded", "grossAmountAfter" - "grossAmountBefore" AS growth FROM "SalesOrderAmendment" WHERE id = $1`, [applied.change.id])
@@ -242,7 +246,8 @@ describe('a priced change after the start, its extra deposit (SAL-219, SAL-221)'
 
   it('refuses a price the rules block even priced, a priced change with no price, and a reader', async () => {
     const row = await orderRow(order.id)
-    const blocked = await no('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, { version: row.version, reason: 'Made-up: a new price.', lines: [{ id: line10.id, unitPrice: '90' }, { id: line20.id }], fee: '10.00' }, 409)
+    // B-CP-011: a new price and a fee are the Owner's to send.
+    const blocked = await no('owner', 'POST', `/sales/orders/${order.id}/priced-changes`, { version: row.version, reason: 'Made-up: a new price.', lines: [{ id: line10.id, unitPrice: '90' }, { id: line20.id }], fee: '10.00' }, 409)
     expect(blocked.message).toBe('Line 10: Cut leather is priced: no price change any more (made-up).')
     const nothing = await no('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, { version: row.version, reason: 'Made-up: a note.', lines: [{ id: line10.id, note: 'Made-up note' }, { id: line20.id }] }, 409)
     expect(paths(nothing)).toEqual(['body/fee'])
@@ -262,10 +267,11 @@ describe('the non-refundable deposit, switched off (SAL-248)', () => {
     expect(kinds.kinds.find((kind: Json) => kind.kind === 'CAPARRA_PENITENZIALE')).toMatchObject({ available: false, why: { en: expect.stringMatching(/switched off until the accountant's wording/) } })
     let row = await orderRow(order.id)
     const body = (version: number, quantity: number) => ({ version, reason: 'Made-up: one more in the open size.', lines: [{ id: line10.id, sizes: sizesOf(line10, { [openSize]: quantity }) }, { id: line20.id }], fee: '5.00', deposit: { pct: '20', kind: 'CAPARRA_PENITENZIALE' } })
-    expect(paths(await no('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, body(row.version, 5), 409))).toEqual(['body/deposit/kind'])
+    // B-CP-011: the fee and the deposit are the Owner's to send.
+    expect(paths(await no('owner', 'POST', `/sales/orders/${order.id}/priced-changes`, body(row.version, 5), 409))).toEqual(['body/deposit/kind'])
     await admin(`UPDATE "SalesSettings" SET "caparraPenitenzialeEnabled" = true WHERE id = $1`, [A.tenant])
     try {
-      const applied = await ok('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, body(row.version, 5), 201)
+      const applied = await ok('owner', 'POST', `/sales/orders/${order.id}/priced-changes`, body(row.version, 5), 201)
       expect(applied.change.deposit).toMatchObject({ kind: 'CAPARRA_PENITENZIALE', pct: '20.0000' })
       expect(await one<Json>(`SELECT "fiscalDocument"::text AS "fiscalDocument", "fiscalRule" FROM "DepositRequest" WHERE id = $1`, [applied.change.deposit.id])).toEqual({ fiscalDocument: 'NONE', fiscalRule: 'CAPARRA_PENITENZIALE_UNCONFIRMED' })
     } finally {
@@ -313,7 +319,8 @@ describe('an office change applies at once; an old request for a yes is still de
     expect(paths(await no('owner', 'PUT', `/approvals/rules/${ruleId}`, { version: kept.version, name: 'Renamed (made-up)' }, 409))).toEqual(['refusal/RULE_RETIRED'])
     // The preview says it applies at once; the change is taken with no request, and the next one right after it.
     const row = await orderRow(order.id)
-    const preview = await ok('sales', 'POST', `/sales/orders/${order.id}/priced-changes/preview`, { version: row.version, lines: [{ id: line10.id }, { id: line20.id, sizes: sizesOf(line20, { [redSize]: 3 }) }], deposit: null })
+    // B-CP-011: `deposit` is a money field (even null): the Owner's to send.
+    const preview = await ok('owner', 'POST', `/sales/orders/${order.id}/priced-changes/preview`, { version: row.version, lines: [{ id: line10.id }, { id: line20.id, sizes: sizesOf(line20, { [redSize]: 3 }) }], deposit: null })
     expect(preview).toMatchObject({ ok: true, yes: 'APPLIES_AT_ONCE', deposit: null })
     const taken = await ok('sales', 'POST', `/sales/orders/${order.id}/amendments`, { version: row.version, reason: 'Made-up: one more on line 20.', lines: [{ id: line10.id }, { id: line20.id, sizes: sizesOf(line20, { [redSize]: 3 }) }] }, 201)
     expect(await changeTasks(order.id)).toEqual([])

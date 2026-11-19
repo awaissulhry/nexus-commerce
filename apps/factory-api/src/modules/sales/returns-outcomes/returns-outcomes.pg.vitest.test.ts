@@ -66,7 +66,8 @@ function templateGrants(role: string): Grant[] {
   const template = templateOf(role)!
   return [{ permissions: [...template.permissions, ...template.grains.map((grain) => grainPermission(grain) as Permission)], companies: 'all', sites: 'all', parties: 'all' }]
 }
-const SALES: Permission[] = ['sales.returns.view', 'sales.returns.manage', 'sales.returns.decide', 'sales.returns.receive', 'sales.returns.inspect', 'orders.view', 'orders.manage', 'approvals.view', 'approvals.request', 'money.price']
+// B-CP-011 (the money wall): Sales holds no price grain any more (was money.price here): a credit amount sent is the Owner's.
+const SALES: Permission[] = ['sales.returns.view', 'sales.returns.manage', 'sales.returns.decide', 'sales.returns.receive', 'sales.returns.inspect', 'orders.view', 'orders.manage', 'approvals.view', 'approvals.request']
 const office = (permissions: Permission[], actorId = newId()): SessionContext => ({ audience: 'office', tenantId: T, actorId, grants: [grant(permissions)] })
 const SESSIONS: Record<string, SessionContext> = {}
 
@@ -179,7 +180,9 @@ describe('split lines on a partial receipt (SAL-350) and the credit note of a li
     await grade(splitRma.id, parentId)
     await ok('sales', 'POST', `/sales/returns/${splitRma.id}/decisions`, { version: await versionOf(splitRma.id), lines: [{ lineId: parentId, disposition: 'CREDIT_ONLY', goodsOutcome: 'SCRAP' }] })
     expect(await lineRow(parentId)).toMatchObject({ disposition: 'CREDIT_ONLY', creditAmount: 25_000 })
-    const credited = await ok('sales', 'POST', `/sales/returns/${splitRma.id}/lines/${childId}/credit-without-return`, { version: await versionOf(splitRma.id), creditAmount: 20_000, note: 'Made-up: the second jacket stays with the customer.' })
+    // B-CP-011: the credit's amount is the Owner's to send (a Sales worker's is refused by the money wall).
+    await refused('sales', 'POST', `/sales/returns/${splitRma.id}/lines/${childId}/credit-without-return`, { version: await versionOf(splitRma.id), creditAmount: 20_000, note: 'Made-up: the second jacket stays with the customer.' }, 403)
+    const credited = await ok('owner', 'POST', `/sales/returns/${splitRma.id}/lines/${childId}/credit-without-return`, { version: await versionOf(splitRma.id), creditAmount: 20_000, note: 'Made-up: the second jacket stays with the customer.' })
     expect(credited.credited).toBe(true)
     expect(await lineRow(childId)).toMatchObject({ disposition: 'CREDIT_ONLY', creditAmount: 20_000, creditWithoutReturn: true, receivedQuantity: 0 })
     const made = await ok('owner', 'POST', `/invoicing/returns/${splitRma.id}/credit-notes`, {}, 201)

@@ -50,6 +50,8 @@ import { askApproval } from '../../../platform/approvals/engine'
 let h: Harness
 let app: FastifyInstance
 let sales: Browser
+// B-CP-011 (the money wall): the quotes' prices are the Owner's (and the people he names); Sales sees no money.
+let owner: Browser
 
 // F-SA-201: tenant e's SEED-SO-0002 ships in full and is delivered, then closed.
 const NS = { a: 'orders-a', b: 'orders-b', c: 'orders-c', d: 'orders-d', e: 'orders-e' } as const
@@ -135,12 +137,13 @@ const RED_GRID = grid([['50', 1], ['52', 3], ['54', 2]])
 const PROMISE = addDays(TODAY, 60)
 
 /** A quote for P1 (8 × 450 + 6 × 440 = 6240.00 net, 7612.80 gross, deposit 30 % = 2283.84), sent and accepted by link. */
+// B-CP-011: made, priced and sent by the Owner (a Sales worker may not send unitPrice any more).
 async function acceptedQuote(): Promise<{ quoteId: string; versionId: string; number: string }> {
-  let quote = (await as(sales, 'POST', '/sales/quotes', { companyId: companyA, partyId: P1, customerRef: 'RFQ-0077', promiseDate: PROMISE }, 201)).quote
-  quote = (await as(sales, 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jacket, colourwayId: BLK, sizes: BLK_GRID, unitPrice: '450' }, 201)).quote
-  quote = (await as(sales, 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jacket, colourwayId: RED, sizes: RED_GRID, unitPrice: '440' }, 201)).quote
+  let quote = (await as(owner, 'POST', '/sales/quotes', { companyId: companyA, partyId: P1, customerRef: 'RFQ-0077', promiseDate: PROMISE }, 201)).quote
+  quote = (await as(owner, 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jacket, colourwayId: BLK, sizes: BLK_GRID, unitPrice: '450' }, 201)).quote
+  quote = (await as(owner, 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jacket, colourwayId: RED, sizes: RED_GRID, unitPrice: '440' }, 201)).quote
   const before = h.ses.mails.length
-  const sent = await as(sales, 'POST', `/sales/quotes/${quote.id}/send`, { version: quote.version }, 200, { 'idempotency-key': key('send') })
+  const sent = await as(owner, 'POST', `/sales/quotes/${quote.id}/send`, { version: quote.version }, 200, { 'idempotency-key': key('send') })
   const mail = h.ses.mails.slice(before).find((entry) => entry.outboundId === sent.sent?.emailId)!
   const token = decodeURIComponent(/#token=(\S+)/.exec(textOf(mail.raw))?.[1] ?? '')
   const accepted = await h.app.inject({
@@ -215,11 +218,17 @@ beforeAll(async () => {
   )
   const tenantA: TestTenant = { id: T.a, slug: NS.a, companies: [{ id: companyA, code: 'SCA' }] }
   const salesUser = await addUser(h, tenantA, { email: 'olga.orders@seed-a.example.com', role: 'sales' })
+  // B-CP-011: the Owner, signed in for real as Sales is: the one who prices the quotes (the price grain is his).
+  const ownerUser = await addUser(h, tenantA, { email: 'oscar.owner@seed-a.example.com', role: 'owner' })
   // The order screens' reads (SCR-039): a session acting as that real person, so the record can name them.
-  SESSIONS['a.named'] = () => ({ audience: 'office', tenantId: T.a, actorId: salesUser.id, grants: [grant(['orders.view', 'orders.manage', 'money.price', 'money.margin'])] })
+  // B-CP-011: the margin % reader is the Owner now (Sales holds no margin grain).
+  SESSIONS['a.named'] = () => ({ audience: 'office', tenantId: T.a, actorId: ownerUser.id, grants: [grant(['orders.view', 'orders.manage', 'money.price', 'money.margin'])] })
   sales = new Browser(h.app)
   expect((await sales.signIn(NS.a, salesUser.email, salesUser.password)).status).toBe(200)
   await enrolTotp(h, sales)
+  owner = new Browser(h.app)
+  expect((await owner.signIn(NS.a, ownerUser.email, ownerUser.password)).status).toBe(200)
+  await enrolTotp(h, owner)
   for (const tenant of ['b', 'c', 'd', 'e'] as const) await cutDownToShipped(tenant) // F-SA-201: and e
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
@@ -325,8 +334,9 @@ describe('the order from the accepted quote (SAL-200, SAL-203; Owner answer S1: 
     expect((await admin('SELECT count(*)::int AS n FROM "DepositRequest" WHERE "quoteVersionId" = $1', [accepted.versionId]))[0]!.n).toBe(1)
   })
 
-  it('the record (sales, signed in): lines with size grids and per-size progress, the chain, the settlement, what comes next', async () => {
-    const { order: record } = await as(sales, 'GET', orderUrl(order.id))
+  // B-CP-011: the priced record is the Owner's; the Sales worker reads the same record without money (below).
+  it('the record (the owner, signed in): lines with size grids and per-size progress, the chain, the settlement, what comes next', async () => {
+    const { order: record } = await as(owner, 'GET', orderUrl(order.id))
     expect(record).toMatchObject({
       id: order.id,
       number: order.number,
@@ -352,9 +362,13 @@ describe('the order from the accepted quote (SAL-200, SAL-203; Owner answer S1: 
       [10, 'BLK', '450', [['50', 2, 2, null], ['52', 4, 4, null], ['54', 2, 2, null]]],
       [20, 'RED', '440', [['50', 1, 1, null], ['52', 3, 3, null], ['54', 2, 2, null]]],
     ])
-    // The sales template sees prices, not costs.
-    expect(record).not.toHaveProperty('costAmount')
-    expect(record.lines[0]).not.toHaveProperty('unitCost')
+    // B-CP-011 (was: the sales template sees prices, not costs): the Sales worker sees the same record with no money at all.
+    const { order: bySales } = await as(sales, 'GET', orderUrl(order.id))
+    expect(bySales).toMatchObject({ id: order.id, number: order.number, status: 'CONFIRMED', promiseDate: PROMISE, progress: { ordered: 14, toShip: 14 } })
+    for (const field of ['netAmount', 'grossAmount', 'costAmount', 'marginPct']) expect(bySales).not.toHaveProperty(field)
+    expect(bySales.lines.map((line: Json) => [line.seq, line.colourway.code])).toEqual([[10, 'BLK'], [20, 'RED']])
+    for (const field of ['unitPrice', 'unitCost']) expect(bySales.lines[0]).not.toHaveProperty(field)
+    expect(bySales.chain.depositRequests[0]).not.toHaveProperty('amount')
   })
 })
 
@@ -737,7 +751,7 @@ describe('what the order screens read (SCR-039): the deposit as paid and sent, t
 
     const changed = (await ok('a.named', 'PUT', `${orderUrl(order.id)}/promise`, { version: named.version, promiseDate: addDays(TODAY, 80), reason: 'Moved with the customer.' })).order
     const actorId = changed.promiseHistory[0].actorId
-    expect(changed.people).toContainEqual({ id: actorId, name: 'olga orders' })
+    expect(changed.people).toContainEqual({ id: actorId, name: 'oscar owner' }) // B-CP-011: the Owner's session (was the Sales worker's)
     // Ids of no person (the test sessions' earlier changes) are simply not named.
     expect(changed.people.map((person: Json) => person.id)).toEqual([actorId])
   })

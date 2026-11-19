@@ -29,8 +29,8 @@ import { DATABASE_FUTURE_MS, oneClock } from '../testing/world'
  *   G    decline with ONE message (B-TH-043): B's request declined with a reply B reads in its portal; "Not an order" sends nothing.
  *   G15  a reply A reads in its portal, with no mail (B-TH-044); undo send (B-TH-048): a mail on A's order taken back in its window —
  *        never sent, never read by A.
- *   N7   a price in the amount field of an office note (B-TH-049): sales (the price grain) reads it, the production manager the note
- *        without it, A neither.
+ *   N7   a price in the amount field of an office note (B-TH-049): the Owner (the price grain) writes and reads it; Sales and the
+ *        production manager read the note without it (B-CP-011: Sales sees no money and may not send an amount), A neither.
  *   G19/G20 a correction of our portal reply, linked (A reads "corrected below"), a reply that names A's message, a task made from A's
  *        message (B-TH-050).
  *   N10  Customer replies (B-TH-047): A's message on its order waits on us, listed, and counted on Incoming.
@@ -138,7 +138,9 @@ describe('B-TH-054 golden flow TH-3: Incoming over every door, the composer in d
     const second = await A('POST', '/portal/inquiries', { subject: 'Made-up: twelve team jackets', message: 'Made-up: twelve jackets in black.', customerRef: BRAND_ALPHA.customerRef }, 201)
     await settle()
     const lined = await withLines(second.request.id, [{ styleId: jacket.style, colourwayId: jacket.colourway, sizes: { '50': 4, '52': 4, '54': 4 } }])
-    const ordered = await ok(P.sales, 'POST', `/sales/inquiries/${second.request.id}/order`, { version: lined.version, lines: [{ seq: 10, unitPrice: '165' }] }, 201)
+    // B-CP-011 (the money wall): the order with a typed price is the Owner's; Sales may not send a price (403).
+    await ok(P.sales, 'POST', `/sales/inquiries/${second.request.id}/order`, { version: lined.version, lines: [{ seq: 10, unitPrice: '165' }] }, 403)
+    const ordered = await ok(P.owner, 'POST', `/sales/inquiries/${second.request.id}/order`, { version: lined.version, lines: [{ seq: 10, unitPrice: '165' }] }, 201)
     expect(ordered.order).toMatchObject({ status: 'CONFIRMED' })
     G.order = ordered.order
     await settle()
@@ -211,13 +213,18 @@ describe('B-TH-054 golden flow TH-3: Incoming over every door, the composer in d
     expect(bodies).not.toContain('Made-up: the price is wrong in this mail.')
   })
 
-  it('N7 a price in the amount field: sales (the price grain) reads it, the production manager the note without it, customer A neither', async () => {
-    const note = await ok(P.sales, 'POST', `/threads/SalesOrder/${G.order.id}/notes`, { body: 'Made-up: agreed by phone, see the amount.', amount: { value: 158_00, currency: 'EUR' } }, 201)
+  it('N7 a price in the amount field: the Owner (the price grain) reads it, Sales and the production manager the note without it, customer A neither', async () => {
+    // B-CP-011 (the money wall): Sales holds no price grain: it may not send an amount (403) and reads the note without it.
+    await ok(P.sales, 'POST', `/threads/SalesOrder/${G.order.id}/notes`, { body: 'Made-up: agreed by phone, see the amount.', amount: { value: 158_00, currency: 'EUR' } }, 403)
+    const note = await ok(P.owner, 'POST', `/threads/SalesOrder/${G.order.id}/notes`, { body: 'Made-up: agreed by phone, see the amount.', amount: { value: 158_00, currency: 'EUR' } }, 201)
     expect(note.message.amount).toEqual({ value: 15800, currency: 'EUR' })
     G.amountNote = note.message.id
     const managers = ((await ok(P.manager, 'GET', `/threads/SalesOrder/${G.order.id}`)).messages as Json[]).find((message) => message.id === G.amountNote)
     expect(managers?.body).toBe('Made-up: agreed by phone, see the amount.')
     expect(Object.keys(managers ?? {})).not.toContain('amount')
+    const salesSees = ((await ok(P.sales, 'GET', `/threads/SalesOrder/${G.order.id}`)).messages as Json[]).find((message) => message.id === G.amountNote)
+    expect(salesSees?.body).toBe('Made-up: agreed by phone, see the amount.')
+    expect(Object.keys(salesSees ?? {})).not.toContain('amount')
     const portal = await A('GET', `/portal/threads/SalesOrder/${G.order.id}`)
     expect(JSON.stringify(portal)).not.toContain('agreed by phone')
     expect(keysOf(portal)).not.toContain('amount')

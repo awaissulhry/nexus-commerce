@@ -10,7 +10,7 @@ import { defaultLineDescription } from '../quotes/lines'
 import { chainForQuote, keepListVersion, listPriceOf } from '../quotes/list-price'
 import { refreshVersion } from '../quotes/pricing'
 import { assertDraft, assertQuotable, detailInCommand, onQuote } from '../quotes/quotes'
-import { officeQuote, quotePartyOf, readLineRecords, type LineRecord, type QuoteRow, type Reader, type VersionRow } from '../quotes/store'
+import { grainsOf, officeContextOf, officeQuote, quotePartyOf, readLineRecords, type LineRecord, type QuoteRow, type Reader, type VersionRow } from '../quotes/store'
 import { gridFactsOf, labelsOf, planGrid, previewTarget, schedulesOf, sizesRecord, writeGrid, type PlannedGrid } from './grid'
 // B-W2b-374 (XF3:01): a pasted new line's options.
 import type { LinePick } from '@nexus/factory-domain/sales/configurator/rules'
@@ -225,9 +225,18 @@ function answerOf(planned: readonly PlannedRow[], preview: boolean) {
   }
 }
 
+// B-CP-012 (the money wall, review A8): the pasted cells' Price column is a price as much as `rows[].unitPrice` (which the grain
+// filter refuses): a caller without the price grain never writes one blind, it is refused in words before anything is read.
+export const PASTED_PRICE_REFUSAL = 'A price is typed by someone who sees prices: paste the cells without the Price column, the lines take the customer’s price list.'
+
 /** POST /sales/quotes/:quoteId/lines/paste (quotes.manage): see the module comment. */
 export async function pasteLines(caller: CommandCaller, quoteId: string, body: PasteInput, idempotencyKey?: string) {
   const rows = rowsOf(body)
+  // B-CP-012: a pasted price from a caller without the price grain: 403 at the rows that carry one.
+  const priced = rows.filter((row) => row.unitPrice !== null && row.unitPrice.trim() !== '')
+  if (priced.length > 0 && !grainsOf(officeContextOf(caller)).has('price')) {
+    throw new DomainError('forbidden', PASTED_PRICE_REFUSAL, priced.map((row) => ({ path: `rows/${row.row}/unitPrice`, message: PASTED_PRICE_REFUSAL })))
+  }
   const quote = await officeQuote(caller, quoteId, QUOTES_MANAGE)
   if (body.preview) {
     return caller.withClient(async (client) => {
