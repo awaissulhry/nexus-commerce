@@ -944,5 +944,25 @@
       "busy": "Attendi: la mail è in invio.",
       "pickOne": "Scegli almeno un contatto."
     }
+  },
+  "shipOrders": {
+    "of": "Ordini su questa spedizione",
+    "add": "Aggiungi i capi di un ordine…",
+    "addTitle": "Aggiungi un ordine di {customer}",
+    "addHint": "Entrano in questa spedizione solo gli ordini aperti di {customer} che vanno allo stesso indirizzo e attendono in questa sede.",
+    "pick": "Quale ordine",
+    "reading": "Lettura degli ordini aperti di {customer}…",
+    "none": "{customer} non ha altri ordini aperti.",
+    "later": "Più ordini in una spedizione arrivano con il prossimo aggiornamento.",
+    "cannotJoin": "Non può entrare in questa spedizione",
+    "cells": "Capi di {order}",
+    "unread": "Ordine non ancora letto",
+    "takeOff": "Togli i suoi capi",
+    "takeOffTitle": "Togli i capi di {order} da {number}",
+    "takeOffWhat_one": "{count} capo torna a ciò che {order} può ancora spedire e {order} esce da questa spedizione.",
+    "takeOffWhat_other": "{count} capi tornano a ciò che {order} può ancora spedire e {order} esce da questa spedizione.",
+    "takeOffGo": "Toglili",
+    "gone": "Nessuno dei suoi capi è più su questa spedizione.",
+    "progressTitle": "{order} su questa spedizione"
   }
 }

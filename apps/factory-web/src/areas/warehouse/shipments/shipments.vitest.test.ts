@@ -11,6 +11,10 @@ import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { DDT_ROW, documents, draftLoose, labelled, labels, OPEN_ROWS, ownVan, PREVIEW_HELD, PREVIEW_OK, READY, row, shipment } from './_demo/fixtures'
 // F-OP-132 (order page N6): a shipment of two orders.
 import { backorder, SECOND_ORDER, SECOND_READY, secondBackorder, sharedShipment } from './_demo/fixtures'
+// F-OP-130 (order page N6): the record of a shared shipment.
+import { CANDIDATES_HELD } from './_demo/fixtures'
+import { joinHeld } from './model'
+import { leftKeys } from '../../../lib/record-thread/parts/testing'
 import { joinableShipmentsSchema, orderCandidatesSchema, readyOrderSchema, shipmentRowSchema, shipmentSchema } from './api'
 import { lineGroups, lineOrderIds, orderNumbers, orderWords, rowOrders, shipmentOrders } from './model'
 import { queueRowSchema, searchRowSchema } from './queue/api'
@@ -384,3 +388,78 @@ describe('F-OP-132 — a shipment of two orders of one customer: the answers par
   })
 })
 // ---- end F-OP-132
+
+// ---- F-OP-130 (order page N6, R-5): the Warehouse shipment shows every order it carries -------------------------------------------
+describe('F-OP-130 — the shipment record names every order, groups its lines by order and PO, and lets an order join or leave a DRAFT', () => {
+  const drawCase = (id: string, locale: 'it' | 'en' = 'en') => textOf(renderView(recordScreen.view as ComponentType<{ model: unknown }>, recordScreen.cases.find((item) => item.id === id)!.model, locale))
+  const htmlOf = (id: string, locale: 'it' | 'en' = 'en') => renderView(recordScreen.view as ComponentType<{ model: unknown }>, recordScreen.cases.find((item) => item.id === id)!.model, locale)
+
+  it('a shared DRAFT: a chip per order (each a link to it), its lines under each order and PO, Take its garments off for the second only', () => {
+    const html = htmlOf('shared-draft')
+    const text = textOf(html)
+    expect(text).toContain('Order SO-2026-0088 · Customer PO PO-MD-7731')
+    expect(text).toContain('Order SO-2026-0090 · Customer PO PO-MD-7740')
+    expect(html).toContain(`/sales/orders/${SECOND_ORDER.id}?tab=shipments`)
+    expect(text).toContain('SO-2026-0090 · Customer PO PO-MD-7740 3 garments in 1 lines')
+    expect(text.match(/Take its garments off/g)?.length).toBe(1)
+    expect(text).toContain("Add an order's garments…")
+    // Each order's progress, titled by the order.
+    expect(text).toContain('SO-2026-0088 · Customer PO PO-MD-7731 on this shipment')
+    expect(text).toContain('SO-2026-0090 · Customer PO PO-MD-7740 on this shipment')
+  })
+
+  it('one order: the band, the lines and the progress as before (no order headings, nothing to take off)', () => {
+    const text = drawCase('draft')
+    expect(text).toContain('Order SO-2026-0088')
+    expect(text).toContain('The order on this shipment')
+    expect(text).not.toContain('Take its garments off')
+    expect(text).not.toContain('on this shipment SO-')
+    expect(text).toContain("Add an order's garments…")
+  })
+
+  it('whose each line is, while it is read: the lines wait in a group of their own, never under the wrong order, nothing to take off', () => {
+    const text = drawCase('shared-reading')
+    expect(text).toContain('Order not read yet')
+    expect(text).not.toContain('Take its garments off')
+  })
+
+  it('read-only (Sales): every order named, no door to add or take off', () => {
+    const text = drawCase('shared-packed')
+    expect(text).toContain('Order SO-2026-0090 · Customer PO PO-MD-7740')
+    expect(text).not.toContain("Add an order's garments…")
+    expect(text).not.toContain('Take its garments off')
+  })
+
+  it('an order that cannot join is held with why: the hold of several orders in its own words, any other reason the API’s sentence', () => {
+    expect(joinHeld({ allowed: true, why: null })).toBeNull()
+    expect(joinHeld(CANDIDATES_HELD.orders[0]!.joinable)).toEqual({ key: 'shipOrders.later', detail: null })
+    expect(joinHeld(CANDIDATES_HELD.orders[1]!.joinable)).toEqual({ key: 'shipOrders.cannotJoin', detail: 'SO-2026-0094 goes to Bologna, shipment SH-00160 to Milano: one shipment goes to one address.' })
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale]['warehouse-shipments-depth'] ?? {}
+      for (const key of ['shipOrders.later', 'shipOrders.cannotJoin', 'shipOrders.add', 'shipOrders.takeOff', 'shipOrders.takeOffWhat_one', 'shipOrders.takeOffWhat_other', 'shipOrders.progressTitle', 'shipOrders.unread']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
+    expect(CATALOGUE.it['warehouse-shipments-depth']?.['shipOrders.later']).toBe('Più ordini in una spedizione arrivano con il prossimo aggiornamento.')
+  })
+
+  it('no shipOrders key is left on screen in any case, in either language', () => {
+    for (const locale of LOCALES) for (const item of recordScreen.cases) expect(leftKeys(renderView(recordScreen.view as ComponentType<{ model: unknown }>, item.model, locale), ['shipOrders']), `${item.id} (${locale})`).toEqual([])
+  })
+
+  it('the record reads what every order can still ship and each order’s lines; an order leaves line by line, each with the version the one before answered', () => {
+    const source = readFileSync(new URL('./record/ShipmentRecord.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('Promise.all(shipmentOrders(value).map((order) => readyToShip(api, { salesOrderId: order.id })')
+    expect(source).toContain('Promise.all(shipmentOrders(value).map((order) => orderBackorder(api, order.id, value.id)))')
+    expect(source).toContain('for (const lineId of ids) next = await removeLine(api, shipmentId, lineId, next?.version ?? version())')
+    // Never the first order: the shipment was made for it.
+    expect(source).toContain('salesOrderId === value?.salesOrderId) return')
+    expect(source).toContain('orderCandidates(api, value.id)')
+  })
+
+  it('the lists name every order: the CSV of the list and of the queue', () => {
+    const shared = { ...row(3, 'PACKED'), salesOrders: [{ id: 'a', number: 'SO-2026-0083', customerRef: 'PO-1' }, { id: 'b', number: 'SO-2026-0090', customerRef: 'PO-2' }] }
+    const csv = shipmentsCsv([shared], { header: (column) => column, status: (status) => status, carrier: () => 'BRT' })
+    expect(csv).toContain('"SO-2026-0083, SO-2026-0090"')
+    expect(shipmentsCsv([row(3, 'PACKED')], { header: (column) => column, status: (status) => status, carrier: () => 'BRT' })).toContain(',SO-2026-0083,')
+  })
+})
+// ---- end F-OP-130

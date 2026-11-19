@@ -2,6 +2,9 @@ import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Ddt, DdtPreview, DdtRequest, Documents, Labels, ShipmentRow, ShipmentStatus, Shipment, ShipmentQuery, SiteSettings, TransportBy } from './api'
 // F-OP-132 (order page N6): a shipment's several orders.
 import type { Backorder, ShipmentLine, ShipmentOrder } from './api'
+// F-OP-130 (order page N6): the hold of several orders in one shipment, said in the screen's words (B-OP-047 deletes both).
+import { MULTI_ORDER_OFF } from '@nexus/factory-domain/shipping/shipments'
+import type { JoinVerdict } from './api'
 import { SHIPMENT_STATUSES } from './api'
 
 /**
@@ -533,7 +536,7 @@ export function shipmentsCsv(rows: readonly ShipmentRow[], words: { header: (col
   for (const row of rows) {
     const freight = options.price ? [row.freightCharge === undefined || row.freightCharge === null ? null : (row.freightCharge / 100).toFixed(2), row.currency] : []
     lines.push(
-      [row.number, words.status(row.status), row.partyName, row.salesOrderNumber, placeOf(row.shipTo), words.carrier(row), row.parcels, row.grossWeightKg, row.ddt?.number ?? null, row.trackingNumbers.join(' '), row.shippedAt, ...freight]
+      [row.number, words.status(row.status), row.partyName, /* F-OP-130 (N6): every order */ orderNumbers(rowOrders(row)), placeOf(row.shipTo), words.carrier(row), row.parcels, row.grossWeightKg, row.ddt?.number ?? null, row.trackingNumbers.join(' '), row.shippedAt, ...freight]
         .map((value) => cell(value as string | number | null))
         .join(','),
     )
@@ -617,4 +620,18 @@ export const offersTakeOff = (shipment: Pick<Shipment, 'salesOrderId' | 'status'
 
 /** …held while one of its lines holds serials (as a line's own Remove). */
 export const takeOffHeld = (group: LineGroup): Phrase | null => (group.lines.some((line) => line.serials.length > 0) ? { key: 'lines.removeHeld' } : null)
+
+// ---- F-OP-130 (order page N6, R-5): may an order join this DRAFT -------------------------------------------------------------------
+
+/**
+ * Why an order may not join (null: it may), for its held row: while several orders in one shipment are held off, that hold in
+ * the screen's own words (`shipOrders.later`; B-OP-047 deletes MULTI_ORDER_OFF and this branch); any other reason — another
+ * address, another site, another currency, a hold on the customer … — the screen's "Cannot join" with the API's sentence (the
+ * real reason, which names the order and the places) as its detail.
+ */
+export function joinHeld(verdict: JoinVerdict): (Phrase & { detail: string | null }) | null {
+  if (verdict.allowed) return null
+  if (verdict.why === MULTI_ORDER_OFF) return { key: 'shipOrders.later', detail: null }
+  return { key: 'shipOrders.cannotJoin', detail: verdict.why }
+}
 

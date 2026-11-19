@@ -1,6 +1,7 @@
 import type { ShipmentStatus } from '@nexus/factory-domain/shipping/shipments'
 import type { BulkHoldModel } from '../holds/model'
 import { words, type Read, type Words } from './shared/depth'
+import { orderNumbers, rowOrders } from '../model' // F-OP-130 (order page N6)
 import type { AtRisk, CarrierCard, ProblemList, QueueRisk, QueueRow, SearchPage, ShipToday, SiteDay } from './api'
 
 /**
@@ -100,6 +101,7 @@ const cell = (value: string | number | null): string => {
 /** The picked queue rows as CSV (Export N): number, status, risk, order, PO, customer, carrier, ship by, parcels, garments, holds. */
 export function queueCsv(rows: readonly QueueRow[], say: { header: (column: string) => string; status: (status: string) => string; risk: (risk: QueueRisk) => string; hold: (reason: string) => string }): string {
   const columns = ['number', 'status', 'risk', 'order', 'customerPo', 'customer', 'carrier', 'shipBy', 'parcels', 'garments', 'holds'] as const
-  const lines = rows.map((row) => [row.number, say.status(row.status), say.risk(row.risk), row.salesOrderNumber, row.customerRef, row.partyName, row.carrierName ?? row.carrierCode ?? row.transportBy, row.shipBy, row.parcels, row.garments, row.holdReasons.map(say.hold).join(' / ')].map(cell).join(','))
+  // F-OP-130 (order page N6): every order it carries and their POs.
+  const lines = rows.map((row) => [row.number, say.status(row.status), say.risk(row.risk), orderNumbers(rowOrders(row)), rowOrders(row).flatMap((order) => (order.customerRef ? [order.customerRef] : [])).join(', ') || null, row.partyName, row.carrierName ?? row.carrierCode ?? row.transportBy, row.shipBy, row.parcels, row.garments, row.holdReasons.map(say.hold).join(' / ')].map(cell).join(','))
   return [columns.map((column) => cell(say.header(column))).join(','), ...lines].join('\n')
 }

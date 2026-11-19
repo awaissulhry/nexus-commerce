@@ -5,6 +5,9 @@ import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
 import { samplePdf } from '../../../_shared/document-send/sample-pdf'
 import type { Backorder, Ddt, DdtPreview, DdtRow, Documents, Evidence, EvidencePaper, EvidenceStatus, Freight, Labels, PackingListVersion, Parcel, ReadyOrder, Shipment, ShipmentLine, ShipmentRow, ShipmentStatus, Tracking, Voided } from '../api'
+// F-OP-130 (order page N6): the candidates read, held off until the switch.
+import { MULTI_ORDER_OFF } from '@nexus/factory-domain/shipping/shipments'
+import type { OrderCandidates } from '../api'
 import { abilitiesOf, type ShippingAbilities } from '../model'
 
 /**
@@ -482,6 +485,20 @@ export function secondBackorder(): Backorder {
     shipments: [{ id: SHIPMENT_ID, number: 'SH-00160', status: 'DRAFT', shippedAt: null }],
   }
 }
+
+/**
+ * F-OP-130: the customer's other open orders as the candidates read answers them now — every one held (MULTI_ORDER_OFF last,
+ * the real reason first: SO-2026-0094 goes to another address) — and after the switch (B-OP-047), SO-2026-0090 may join.
+ */
+export const CANDIDATES_HELD: OrderCandidates = {
+  shipmentId: SHIPMENT_ID,
+  number: 'SH-00160',
+  orders: [
+    { salesOrderId: SECOND_ORDER.id, number: SECOND_ORDER.number, customerRef: SECOND_ORDER.customerRef, status: 'READY', joinable: { allowed: false, why: MULTI_ORDER_OFF } },
+    { salesOrderId: uid('5150', 22), number: 'SO-2026-0094', customerRef: null, status: 'IN_PRODUCTION', joinable: { allowed: false, why: 'SO-2026-0094 goes to Bologna, shipment SH-00160 to Milano: one shipment goes to one address.' } },
+  ],
+}
+export const CANDIDATES_AFTER: OrderCandidates = { ...CANDIDATES_HELD, orders: [{ ...CANDIDATES_HELD.orders[0]!, joinable: { allowed: true, why: null } }, CANDIDATES_HELD.orders[1]!] }
 
 /** The ready cells of the second order (what it can still put on a DRAFT). */
 export const SECOND_READY: ReadyOrder = {

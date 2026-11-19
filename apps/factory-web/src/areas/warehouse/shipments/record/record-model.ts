@@ -1,4 +1,6 @@
 import type { Backorder, Bought, Ddt, DdtPreview, DdtRow, Documents, Evidence, EvidenceKind, Labels, PackingListVersion, ReadyOrder, SentLinks, Shipment, Tracking, TransportBy, Voided } from '../api'
+// F-OP-130 (order page N6): the orders that may join a DRAFT.
+import type { OrderCandidates } from '../api'
 import type { DdtForm, Phrase, RecordTab, ShippingAbilities } from '../model'
 
 /** SCR-067 — a shipment's view model (ShipmentRecordView draws it and fetches nothing). */
@@ -38,6 +40,9 @@ export type RecordDialog =
   | { kind: 'evidenceComplete' }
   | { kind: 'evidenceReopen' }
   | { kind: 'evidenceNeed'; needed: boolean }
+  // F-OP-130 (order page N6, R-5): another order of the customer joins a DRAFT, or its garments go off it.
+  | { kind: 'addOrder' }
+  | { kind: 'takeOff'; salesOrderId: string }
 
 export interface ShipmentRecordModel {
   /** `/w/<company>`. */
@@ -57,10 +62,17 @@ export interface ShipmentRecordModel {
   labels: Part<Labels> | null
   tracking: Part<Tracking> | null
   documents: Part<Documents>
-  /** What the order can still put on this DRAFT (Add garments). */
-  ready: Part<ReadyOrder | null> | null
-  /** B-W2a-71: the order's lines on this shipment and what stays on backorder (GET …/backorder?shipmentId=). */
-  backorder: Part<Backorder>
+  /** What the order can still put on this DRAFT (Add garments). F-OP-130 (N6): of every order it carries, the first first. */
+  ready: Part<ReadyOrder[]> | null
+  /**
+   * B-W2a-71: the order's lines on this shipment and what stays on backorder (GET …/backorder?shipmentId=). F-OP-130 (N6): of
+   * every order it carries, the first first — each order's lines also say whose each shipment line is (lineGroups).
+   */
+  backorder: Part<Backorder[]>
+  /** F-OP-130 (N6): the customer's other open orders that may join this DRAFT, each with its verdict (read when the dialog opens). */
+  candidates: Part<OrderCandidates> | null
+  /** F-OP-130: the order chosen to join, and what it can still put on this DRAFT. */
+  picked: { salesOrderId: string; ready: Part<ReadyOrder | null> } | null
   /** B-W2a-71: every packing list printed for it, newest first (Documents › Other documents). */
   packingLists: Part<PackingListVersion[]>
   /** B-W2a-71: the intra-EU transport evidence (the Export tab). */
@@ -84,7 +96,7 @@ export interface ShipmentRecordModel {
 
 export interface ShipmentRecordActions {
   onRetry?: () => void
-  onRetryPart?: (part: 'ddts' | 'pdf' | 'preview' | 'labels' | 'tracking' | 'documents' | 'ready' | 'backorder' | 'packingLists' | 'evidence') => void
+  onRetryPart?: (part: 'ddts' | 'pdf' | 'preview' | 'labels' | 'tracking' | 'documents' | 'ready' | 'backorder' | 'packingLists' | 'evidence' | /* F-OP-130 */ 'candidates') => void
   onReload?: () => void
   onDismissNotice?: () => void
   onDialog?: (dialog: RecordDialog | null) => void
@@ -98,6 +110,9 @@ export interface ShipmentRecordActions {
   onSaveParcel?: (parcelId: string | null, measures: { grossWeightKg: string; lengthCm: string; widthCm: string; heightCm: string }) => void
   onRemoveParcel?: (parcelId: string) => void
   onPackingList?: () => void
+  // F-OP-130 (N6): choose the order that joins (null: back to the list), take an order's garments off this DRAFT.
+  onPickOrder?: (salesOrderId: string | null) => void
+  onTakeOff?: (salesOrderId: string) => void
   // Documents
   onDdtForm?: (form: DdtForm) => void
   onPreview?: () => void
