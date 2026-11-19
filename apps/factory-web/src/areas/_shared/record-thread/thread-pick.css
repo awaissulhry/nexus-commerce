@@ -1,18 +1,66 @@
-/* F-SA-260: THE pick of a record's dock (ThreadPick.tsx) — the pick above the ONE thread the dock shows (RecordFrame docks the thread
-   itself), and its one "whose thread" line under it. Moved from the work order's dock (B-TH-265, production.css): the same look. */
+/* F-SA-260: THE pick of a record's dock (ThreadPick.tsx) — the pick of the ONE thread the dock shows, and its one "whose thread" line
+   under it. Moved from the work order's dock (B-TH-265, production.css): the same look.
+   F-OP-202: the pick sits INSIDE the dock's one card — the card's top band (.fw-rt-top, record-thread.css) holds it: the segments
+   with their icons and "N new", the second select under them, the whose-line. --nds-space-N is N px. Tokens only. */
 .fw-thread-pick {
-  flex: none;
   display: flex;
   flex-direction: column;
-  gap: var(--nds-space-4);
+  gap: var(--nds-space-7);
+  min-width: 0;
+}
+
+/* F-OP-202: long words in a wide card (one line, at most 22 characters, the rest in the segment's title); in a card of 480 px or less
+   (the docked column's container fw-rtcol) the short words instead, when the choice has them. */
+.fw-thread-pick-long {
+  display: inline-block;
+  max-width: min(22ch, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.fw-thread-pick-short {
+  display: none;
+}
+
+@container fw-rtcol (max-width: 480px) {
+  .fw-thread-pick-long.has-short {
+    display: none;
+  }
+
+  .fw-thread-pick-short {
+    display: inline;
+  }
+}
+
+/* "N new": the DS Pill (sm) inside the segment, never squeezed. */
+.fw-thread-pick-new {
+  flex: none;
+}
+
+.fw-thread-pick-extra {
   min-width: 0;
 }
 
 .fw-thread-pick-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
   margin: 0;
   color: var(--nds-text-muted);
   font-size: var(--nds-font-size-sm);
   line-height: 1.45;
+}
+
+.fw-thread-pick-line > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* F-OP-202: a work order's notes — office only, in the office tone. */
+.fw-thread-pick-line.is-office {
+  color: var(--nds-warning-text);
 }
 
 /* F-SA-279: the quieter second line ("Draft kept on SO-…"). */

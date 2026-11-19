@@ -161,6 +161,8 @@ export interface NewWorkOrderModel {
   dueDate: string
   busy: boolean
   problem: Phrase | null
+  /** F-OP-112: the order is fixed (the sales order page's "Make work orders…"): no search, the order as the one choice. */
+  fixed?: boolean
 }
 
 export interface NewWorkOrderActions {

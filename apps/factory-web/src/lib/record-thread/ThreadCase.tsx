@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { SplitPane } from '../split-pane/SplitPane'
 import { useT } from '../i18n/provider'
 import { addDropped, draftOfRecordFile, uploadAudience } from './attachments/model'
@@ -40,16 +40,19 @@ export interface ThreadCaseModel {
  * SCR-006-thread: RecordThread v1 as the reading pane or the full page shows it (design review only). The box works: type, switch
  * (R / N), add files, open the send check; a note or a mail joins the feed as "Sending…" — nothing leaves the browser.
  */
-export function ThreadCase({ model, onWidth }: { model: ThreadCaseModel; onWidth?: (choice: DockWidth | 'hide' | 'reset') => void }) {
+export function ThreadCase({ model, onWidth, top /* F-OP-202 */ }: { model: ThreadCaseModel; onWidth?: (choice: DockWidth | 'hide' | 'reset') => void; top?: ReactNode }) {
   return (
     <ThreadMessages>
-      <Case model={model} onWidth={onWidth} />
+      <Case model={model} onWidth={onWidth} top={top} />
     </ThreadMessages>
   )
 }
 
-/** `onWidth`: the record page's frame (SCR-039) takes the width menu; without it the case keeps the width itself. */
-function Case({ model, onWidth }: { model: ThreadCaseModel; onWidth?: (choice: DockWidth | 'hide' | 'reset') => void }) {
+/**
+ * `onWidth`: the record page's frame (SCR-039) takes the width menu; without it the case keeps the width itself. F-OP-202: `top` is
+ * the dock's pick band a record page's design case hands down (its ThreadPick), drawn first inside the column as on the page.
+ */
+function Case({ model, onWidth, top }: { model: ThreadCaseModel; onWidth?: (choice: DockWidth | 'hide' | 'reset') => void; top?: ReactNode }) {
   const t = useT('record-thread')
   const [thread, setThread] = useState(model.thread)
   const [outbox, setOutbox] = useState<OutboxItem[]>([])
@@ -104,7 +107,7 @@ function Case({ model, onWidth }: { model: ThreadCaseModel; onWidth?: (choice: D
   const element = (
     <div className={model.fill ? 'fw-rt-thread-case is-fill' : docked ? 'fw-rt-thread-case is-docked' : 'fw-rt-thread-case'}>
       <RecordThread
-        slots={slots}
+        slots={top ? { ...slots, top } : slots /* F-OP-202 */}
         model={view}
         actions={{
           onDraft: (draft, notes: readonly SwitchNote[]) => set({ draft, notes }),

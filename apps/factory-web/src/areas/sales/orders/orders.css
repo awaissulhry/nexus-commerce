@@ -735,25 +735,8 @@ a.fw-so-countbtn:focus-visible {
   gap: var(--nds-space-8);
 }
 
-/* F-SA-262: All of <customer> in the order's dock — the read-only feed, then "Write in: This order · General" at its foot. */
-.fw-so-dock-all {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: var(--nds-space-8);
-  min-height: 0;
-}
-
-.fw-so-dock-write {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-6);
-  margin: 0;
-  color: var(--nds-text-muted);
-  font-size: var(--nds-font-size-sm);
-}
+/* F-OP-203: All of <customer> in the order's dock is the dock's one card now (DockColumn: .fw-rt-body, .fw-rt-foot in record-thread.css);
+   the old .fw-so-dock-all / .fw-so-dock-write went with it. */
 
 /* ---- F-SA-244: a change's Told line under its History row (layout only). */
 .fw-so-told {

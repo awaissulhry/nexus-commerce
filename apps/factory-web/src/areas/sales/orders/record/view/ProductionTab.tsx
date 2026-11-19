@@ -14,6 +14,9 @@ import type { Order } from '../../api'
 import { productionWordsFor } from '../../../../../lib/production/words'
 import { dayInstant, daysUntil, depositGate, isFinal, isShippedInFull, linesNotInProduction, nextStep, promiseHeld } from '../../model'
 import { madeForOf, ownProgress } from '../production'
+// F-OP-112: Make work orders… in place — why it waits, and the Production page's own New work order dialog (its view, as it is).
+import { makeHeldOf } from '../production'
+import { NewWorkOrderDialog } from '../../../../production/work-orders/view/NewWorkOrderDialog'
 import { forecastPart } from '../production' // F-SA-234b
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
@@ -89,34 +92,31 @@ function milestonesPart(model: OrderRecordModel) {
 function WorkOrdersCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const locale = useLocale()
-  const step = nextStep(order, model.can)
   const state = model.production ?? null
   const read = readOf(state)
   const work = read?.work ?? null
   const withheld = !!read && read.withheld.includes('work')
   const uncovered = work ? work.notInProduction.lines : linesNotInProduction(order)
-  const makeHref = `${model.prefix}/production/work-orders?new=1&order=${encodeURIComponent(order.number)}`
   const mayMake = order.status === 'CONFIRMED' || order.status === 'IN_PRODUCTION'
-  const makeHeld = !model.can.makeWorkOrders ? t('held.noWorkOrders') : order.status === 'CONFIRMED' && step.held ? t(step.held.key, step.held.params?.date ? { date: formatDate(dayInstant(String(step.held.params.date)), { locale }) } : step.held.params) : null
+  // F-OP-112: Make work orders… opens in place (the order fixed); held in words: no right, the deposit waiting or missing.
+  const makeWait = makeHeldOf(order, model.can)
+  const makeHeld = makeWait ? t(makeWait.key, makeWait.params?.date ? { date: formatDate(dayInstant(String(makeWait.params.date)), { locale }) } : makeWait.params) : null
+  const make = model.makeWorkOrders ?? null
+  const makeLabel = make?.next ? t('wo.makeNext', { style: make.next.code }) : t('step.makeWorkOrders')
   const workOrderHref = (row: { id: string; number: string }) => `${model.prefix}${recordAddress({ type: 'WorkOrder', id: row.id, label: row.number, companyId: order.companyId }, OFFICE_PAGES)}`
 
   return (
     <Card padded>
       <div className="fw-so-card-head">
         <h2 className="fw-so-h2">{t('production.title')}</h2>
-        {mayMake &&
-          (makeHeld ? (
-            <Button size="sm" variant="primary" heldReason={makeHeld}>
-              <Factory size={14} aria-hidden /> {t('step.makeWorkOrders')}
-            </Button>
-          ) : (
-            <Button size="sm" variant="primary" asChild>
-              <Link href={makeHref}>
-                <Factory size={14} aria-hidden /> {t('step.makeWorkOrders')}
-              </Link>
-            </Button>
-          ))}
+        {mayMake && (
+          <Button size="sm" variant="primary" heldReason={makeHeld} onClick={() => actions?.makeWorkOrders?.onOpen?.()}>
+            <Factory size={14} aria-hidden /> {makeLabel}
+          </Button>
+        )}
       </div>
+      {/* F-OP-112: the Production page's New work order dialog, its order fixed (the style step; Create stays on this page). */}
+      {make?.dialog && <NewWorkOrderDialog model={make.dialog} can={make.can} actions={actions?.makeWorkOrders?.dialog} />}
       {!state || state.status === 'loading' ? (
         <div className="fw-so-stack" aria-busy="true">
           {[0, 1].map((index) => (

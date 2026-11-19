@@ -100,3 +100,23 @@ export function artworkOfGroup(lines: readonly { readonly artwork?: readonly Art
   const counted = lines.reduce((sum, line) => sum + (line.artworkCount ?? 0), 0)
   return { files, count: files.length > 0 ? files.length : counted }
 }
+
+// ---- F-OP-112 (10-order-page §5.1): Make work orders… in place — the order as the New work order dialog's fixed order, why it waits ----
+import type { OrderOption } from '../../../production/_shared/api'
+import type { Order } from '../api'
+import { nextStep, type OrderAbilities, type Phrase } from '../model'
+
+/** The order as the New work order dialog's one choice (its number, customer, PO, state and pieces; the order fixed, no search). */
+export function orderOptionOf(order: Pick<Order, 'id' | 'number' | 'party' | 'customerRef' | 'status' | 'lines'>): OrderOption {
+  return { id: order.id, number: order.number, partyName: order.party?.legalName ?? order.party?.code ?? '—', customerRef: order.customerRef, status: order.status, units: order.lines.reduce((sum, line) => sum + line.quantity, 0) }
+}
+
+/**
+ * Why "Make work orders…" waits on the order (held in words, never hidden): no right to make work orders (`held.noWorkOrders`), and a
+ * confirmed order's deposit waiting (its due day) or missing — the band's own rule (nextStep). In production: only the right.
+ */
+export function makeHeldOf(order: Order, can: OrderAbilities): Phrase | null {
+  if (!can.makeWorkOrders) return { key: 'held.noWorkOrders' }
+  return order.status === 'CONFIRMED' ? nextStep(order, can).held : null
+}
+// ---- end F-OP-112
