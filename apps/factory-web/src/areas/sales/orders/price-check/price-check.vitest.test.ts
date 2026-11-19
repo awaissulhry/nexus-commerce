@@ -151,7 +151,8 @@ describe('F-CP-114: the window\'s states', () => {
   it('changed meanwhile: ONE banner "Here they are now" and the prices as they are now', () => {
     const html = draw('stale')
     expect(textOf(html)).toContain('Someone changed these prices meanwhile. Here they are now.')
-    expect(html.match(/nds-banner/g)?.length ?? 0).toBeLessThanOrEqual(2)
+    // F-CP-114 (end-check fix): banners counted by their root (a DS Banner also draws nds-banner-icon, -body, -desc inside it).
+    expect(html.match(/class="nds-banner /g)?.length ?? 0).toBe(1)
   })
   it('a closed order keeps its prices: the words, the prices read only (no field to type in)', () => {
     const html = draw('closed')
@@ -206,7 +207,13 @@ describe('F-CP-114: the door on the Work tab — only with the price grain (mone
     expect({ ...canOf('sales'), price: false }.price).toBe(false)
     expect(canOf('manager').price).toBe(false)
     const sheet = readFileSync(new URL('../list/use-orders-sheet.ts', import.meta.url), 'utf8')
-    expect(sheet).toContain('...(can.price\n      ? {\n          onPriceCheck:')
+    // F-CP-114 / F-CP-141 (end-check fix): both doors only inside the price branch (F-CP-141 put the term's funnel first in it).
+    const gate = sheet.indexOf('...(can.price\n      ? {')
+    const branch = sheet.slice(gate, sheet.indexOf('\n      : {}),', gate))
+    expect(gate).toBeGreaterThan(-1)
+    expect(branch).toContain('onPriceCheck:')
+    expect(branch).toContain('onPriceMatch:')
+    expect(sheet.split('onPriceCheck:').length - 1).toBe(1)
     const view = readFileSync(new URL('../list/view/OrdersListView.tsx', import.meta.url), 'utf8')
     // Row ⋯ "Set customer's price…" only with the grain and the host's door; the Customer's price cell is the door (a button).
     expect(view).toContain("...(can.price && act()?.onPriceCheck ? [{ id: 'priceCheck', label: t('priceCheck.edit'), onSelect: () => act()?.onPriceCheck?.(data.id) }] : [])")
