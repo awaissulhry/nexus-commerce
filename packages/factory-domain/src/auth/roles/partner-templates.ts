@@ -63,7 +63,8 @@ const MAIN_ROLES: Readonly<Record<PartnerKind, Readonly<Record<string, MainRole>
     buyer: { name: 'Buyer', description: 'Orders and order requests, deliveries and tracking, with prices.', price: true, allowed: ALL, byDefault: ALL },
     finance: { name: 'Finance', description: 'Invoices, payments and statements, with prices.', price: true, allowed: ALL, byDefault: ['comment', 'upload'] },
     quality: { name: 'Quality', description: 'Certificates and declarations, quality reports, returns and complaints; no prices.', price: false, allowed: ALL, byDefault: ALL },
-    designer: { name: 'Designer', description: 'Samples, tech packs, artwork and design proofs; no prices.', price: false, allowed: ALL, byDefault: ALL },
+    // B-CP-070 (customer page plan D11): + draft orders it starts and fills; a Buyer or the Admin sends them.
+    designer: { name: 'Designer', description: 'Samples, tech packs, artwork and design proofs, and draft orders it starts and fills (a Buyer or the Admin sends them); no prices.', price: false, allowed: ALL, byDefault: ALL },
     // B-PR-13 (production plan §5 Roles, L10): the customer's production person; its permissions in production-brand/permissions.
     production: { name: 'Production', description: 'Orders in production: stages, dates and what waits for it; approvals, urgent orders and messages on its orders, and their shared files; no prices.', price: false, allowed: ALL, byDefault: ALL },
     viewer: { name: 'Viewer', description: 'Sees orders and documents and changes nothing; no prices.', price: false, allowed: ['comment'], byDefault: [] },

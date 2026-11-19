@@ -13,7 +13,9 @@ import { assertOpen, badBody, databaseRefusal, mayManage, mayPost, projectOr404,
  * Project people (threads plan TH-5, B-TH-068; PROJ-G04, PROJ-G05, PROJ-G06; design PROJ.members). A project's people are its
  * thread's followers (collab.prisma RecordFollower): our colleagues — who made it, who leads it, who was added, mentioned or
  * chose to follow — and, on a project shared with an outside company, that company's portal people the office added ONE BY ONE
- * (their rows name their party). The brand's own admin never adds anyone (PROJ.members-F09): only the office does.
+ * (their rows name their party). B-CP-074 (customer page plan D13, K10: PROJ.members-F09 reversed for the brand only): a
+ * customer's portal admin who is a member also adds and takes out its OWN company's people (./portal.ts), through the same
+ * commands below (`addOutsideInCommand`, `removeOutsideInCommand`); the office still adds and removes anyone.
  *
  *   GET    /projects/:projectId/people             threads.read: our team (name, Lead, why they are in, added by whom, muted,
  *                                                  since), the outside company's members, the people invited by link (until
@@ -113,7 +115,8 @@ export async function peopleChoices(caller: CommandCaller, projectId: string, qu
 }
 
 /** Inside a command: a portal person of the project's outside company becomes a member (ADDED, their party). True when added. */
-async function addOutsideInCommand(tools: CommandTools, row: ProjectRow, userId: string, byId: string): Promise<boolean> {
+// B-CP-074: also the brand admin's add (./portal.ts), `byId` then the admin's own id.
+export async function addOutsideInCommand(tools: CommandTools, row: ProjectRow, userId: string, byId: string): Promise<boolean> {
   if (row.partyId === null) refuse('MEMBER_OFFICE_ONLY', 'body/userId')
   const person = await tools.tx.user.findFirst({ where: { id: userId, audience: 'PARTNER', status: 'ACTIVE' }, select: { id: true, partyId: true } })
   // Neutral: a person of another company is "not one of this company's portal people", never who they are.
@@ -143,6 +146,19 @@ export async function addPerson(caller: CommandCaller, projectId: string, body: 
   }).catch(databaseRefusal)
   return projectPeople(caller, projectId)
 }
+
+// ---- B-CP-074: a member of the outside company out of the project (the brand admin's take-out, ./portal.ts; the office's below) --
+/** Inside a command: the person's member row goes (only one of `partyId`'s), audited, the person told once. False: not a member of that company. */
+export async function removeOutsideInCommand(tools: CommandTools, row: ProjectRow, userId: string, partyId: string, byId: string): Promise<boolean> {
+  const entry = isUuid(userId) ? await tools.tx.recordFollower.findFirst({ where: { recordType: 'Project', recordId: row.id, userId, partyId }, select: { id: true, reason: true, muted: true } }) : null
+  if (!entry) return false
+  await tools.tx.recordFollower.delete({ where: { id: entry.id } })
+  tools.audit({ action: 'threads.unfollow', recordType: 'RecordFollower', recordId: entry.id, companyId: row.companyId, before: { reason: entry.reason, muted: entry.muted }, after: { following: false, recordType: 'Project', recordId: row.id, userId, removedBy: byId } })
+  tools.emit({ type: 'thread.followers_changed', subject: row.id, companyId: row.companyId, payload: { recordType: 'Project', recordId: row.id, partyId: row.partyId } })
+  if (userId !== byId) tools.emit({ type: 'project.person_removed', subject: row.id, companyId: row.companyId, payload: { projectId: row.id, number: row.number, partyId: row.partyId, userId, outside: true, byId } })
+  return true
+}
+// ---- end B-CP-074
 
 /** DELETE /projects/:projectId/people/:userId */
 export async function removePerson(caller: CommandCaller, projectId: string, userId: string, idempotencyKey?: string) {
