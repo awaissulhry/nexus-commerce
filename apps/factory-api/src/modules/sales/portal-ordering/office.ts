@@ -3,7 +3,7 @@ import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError } fro
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
-import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
+import { asMoney, markMoney, type Money } from '@nexus/factory-domain/money/marked'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { decisionProblem, draftReadiness, refuseReasonProblem, type AcceptAs, type DraftLaterPart, type DraftPart, type DraftPartState } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { draftTotals, headerProblems, lineAmount, lineProblems, piecesOfSizes, priceShown, REQUEST_STATUS_WORDS, type RequestSource, type RequestStatus } from '@nexus/factory-domain/sales/portal-ordering/rules'
@@ -163,7 +163,7 @@ interface DraftView {
   /** B-CP-072: its logos, references and measurement sheets; a sheet is named only for a reader with sales.measurements.view. */
   readonly files: Record<'logos' | 'references' | 'sheets', OfficeDraftFile[]>
   /** B-CP-076 (review B4): its value at the prices on it (minor units; price grain: null for a reader without it). */
-  readonly draftValueAmount: number | null
+  readonly draftValueAmount: Money<'price', number | null> // B-CP-076 (end-check fix): the price grain, as the contract marks it
 }
 
 /** B-CP-072: a draft's file as the office reads it; `locked`: a measurement sheet this reader may not open (no name). */
@@ -467,8 +467,8 @@ function acceptFactsOf(lines: readonly LineRow[], people: readonly PersonRow[]):
 /** The plan, or its refusal in words: 400 what the office sent, 409 what holds the accept (a line to map, a made-to-measure order). */
 function planOf(input: Parameters<typeof acceptPlanOf>[0]): Extract<AcceptPlan, { kind: 'PLAN' }> {
   const plan = acceptPlanOf(input)
-  if (plan.kind === 'INVALID') throw new ValidationError(plan.words, plan.issues)
-  if (plan.kind === 'HELD') throw new DomainError('invalid_state', plan.words, plan.issues)
+  // B-CP-077 (end-check fix): one test on kind narrows the union (its refusal member's kind is 'HELD' | 'INVALID').
+  if (plan.kind !== 'PLAN') throw plan.kind === 'INVALID' ? new ValidationError(plan.words, plan.issues) : new DomainError('invalid_state', plan.words, plan.issues)
   return plan
 }
 
@@ -635,7 +635,7 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
       after: { status: 'ACCEPTED', as: body.as, salesOrderId, quoteId, number: made.number, prices: markMoney('price', typed), lineMap: lineMap.map((entry) => ({ requestLineId: entry.requestLineId, requestSeq: entry.requestSeq, into: entry.into.map((line) => line.lineId) })) },
     })
     tools.emit({ type: 'portal_order_request.accepted', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number: current.number!, partyId: current.partyId, salesOrderId, quoteId } })
-    return { as: body.as, salesOrderId, quoteId, number: made.number, dropped: made.dropped, warnings: made.warnings, lines: lineMap /* B-CP-077 */, brandPrices /* B-CP-076 */ }
+    return { as: body.as, salesOrderId, quoteId, number: made.number, dropped: made.dropped, warnings: made.warnings, lines: lineMap.map((entry) => ({ ...entry, into: entry.into.map((line) => ({ ...line })) })) /* B-CP-077: the answer's own copy (the contract's arrays) */, brandPrices: asMoney('price', brandPrices) /* B-CP-076: how many customer prices it carried, the price grain (contract) */ }
   }, { ...COMMAND_SETTINGS, clock })
   // B-CP-077: the request's logos carried to what it became (after the command: the order stands even when a file cannot be copied).
   const artwork = await carryArtwork(() => files ?? processFiles(), caller, { id: row.id, companyId: row.companyId, partyId: row.partyId, number: row.number }, result)

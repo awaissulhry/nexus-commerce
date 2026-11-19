@@ -158,7 +158,7 @@ async function linkView(request: FastifyRequest, facts: LinkFacts) {
         note: line.note,
         quantity: line.quantity,
         unitPrice: asMoney('price', line.unitPrice),
-        discountPct: line.discountPct,
+        discountPct: asMoney('price', line.discountPct), // B-CP-012
         netAmount: asMoney('price', line.netAmount),
         vatAmount: asMoney('price', line.vatAmount),
         vatRatePct: line.vatRatePct,

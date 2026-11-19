@@ -1,7 +1,15 @@
 import { readFileSync } from 'node:fs' // F-SA-212
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+// F-CP-157 (end-check fix): a window draws its content inline here (the design cases' accept window is a DS Modal, which the
+// server renderer never opens), as the portal's problem and approvals tests do.
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? createElement('section', { role: 'dialog' }, createElement('h2', null, title as never), createElement('p', null, subtitle as never), children as never, footer as never) : null
+  return { ...actual, Modal }
+})
 import { DECLINE_REASONS, INQUIRY_REFUSALS, INQUIRY_SOURCES, INQUIRY_STATUSES, INQUIRY_TILES, LAWFUL_BASES, quotableLines } from '@nexus/factory-domain/sales/inquiries/rules'
 // B-TH-235: what a request became (Sales › Reports' request figure opens this list with it).
 import { REQUEST_OUTCOMES } from '@nexus/factory-domain/sales/inquiries/rules'
@@ -77,9 +85,10 @@ const owner = inquiriesCan(ROLE_PERMISSIONS.owner)
 const words = (locale: (typeof LOCALES)[number]) => CATALOGUE[locale]['sales-inquiries']!
 
 describe('who may do what, by the role templates', () => {
-  it('sales answers, quotes and sees prices; a reader only reads (no price); the warehouse has no page', () => {
+  // B-CP-011 (end-check fix): the Sales template sees no price (Owner O1, the money wall); the Owner names who does.
+  it('sales answers and quotes, without prices; a reader only reads (no price); the warehouse has no page', () => {
     const sales = inquiriesCan(ROLE_PERMISSIONS.sales)
-    expect([sales.view, sales.manage, sales.quotes, sales.price]).toEqual([true, true, true, true])
+    expect([sales.view, sales.manage, sales.quotes, sales.price]).toEqual([true, true, true, false])
     const reader = inquiriesCan(ROLE_PERMISSIONS.reader)
     expect([reader.view, reader.manage, reader.quotes, reader.price]).toEqual([true, false, false, false])
     expect(inquiriesCan(ROLE_PERMISSIONS.warehouse).view).toBe(false)

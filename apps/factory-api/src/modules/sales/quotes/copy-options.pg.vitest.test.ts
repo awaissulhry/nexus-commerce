@@ -185,14 +185,14 @@ describe('the options travel with every copy (XF3:01)', () => {
     quote = (await ok('owner', 'PUT', `${q(quote.id, sourceLine)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }, { valueId: options.valueIds.perfFront }] })).quote
     // B-CP-011: the seller's read holds no price; the Owner reads 501.
     expect((await ok('seller', 'GET', `/sales/quotes/${quote.id}`)).quote.lines[0]).not.toHaveProperty('unitPrice')
-    expect((await ownerQuoteLines(quote.id))[0].unitPrice).toBe('501')
+    expect((await ownerQuoteLines(quote.id))[0]!.unitPrice).toBe('501')
     const source = await rowsOf('QuoteLineOption', sourceLine)
     // Today the front perforation costs more: the copy keeps the 21 it was sold with (its price, 501, holds them).
     await admin(`UPDATE "OptionEffect" SET "pricePct" = 10 WHERE "valueId" = $1 AND kind = 'PRICE'`, [options.valueIds.perfFront])
     try {
       const made = await ok('seller', 'POST', `/sales/quotes/${quote.id}/duplicate`, {}, 201)
       const line = made.quote.lines[0]
-      expect((await ownerQuoteLines(made.quote.id))[0].unitPrice).toBe('501') // B-CP-011: read as the Owner
+      expect((await ownerQuoteLines(made.quote.id))[0]!.unitPrice).toBe('501') // B-CP-011: read as the Owner
       const copied = await rowsOf('QuoteLineOption', line.id)
       expect(copied.map((row) => [row.code, num(row.surchargeAmount)])).toEqual(source.map((row) => [row.code, num(row.surchargeAmount)]))
       expect(copied.map((row) => [row.code, num(row.surchargeAmount)])).toEqual([['FRONT', 21], ['YES', 60]])
@@ -210,13 +210,13 @@ describe('the options travel with every copy (XF3:01)', () => {
     const lineId = quote.lines[0].id
     // B-CP-026: the liner moves the price: the Owner configures it (the seller is held in words).
     quote = (await ok('owner', 'PUT', `${q(quote.id, lineId)}/options`, { version: quote.version, picks: [{ valueId: options.valueIds.linerYes }] })).quote
-    expect((await ownerQuoteLines(quote.id))[0].unitPrice).toBe('480') // B-CP-011: read as the Owner
+    expect((await ownerQuoteLines(quote.id))[0]!.unitPrice).toBe('480') // B-CP-011: read as the Owner
     // W1's typed price drops the waterfall: the line is at its list again (420), the liner frozen beside it.
     // B-CP-011: the typed price is the Owner's (a Sales worker's is refused).
     await refused('seller', 'PATCH', `${q(quote.id, lineId)}`, { version: quote.version, unitPrice: '420' }, 403)
     quote = (await ok('owner', 'PATCH', `${q(quote.id, lineId)}`, { version: quote.version, unitPrice: '420' })).quote
     const made = await ok('seller', 'POST', `/sales/quotes/${quote.id}/duplicate`, {}, 201)
-    expect((await ownerQuoteLines(made.quote.id))[0].unitPrice).toBe('480')
+    expect((await ownerQuoteLines(made.quote.id))[0]!.unitPrice).toBe('480')
     expect(await codesOf('QuoteLineOption', made.quote.lines[0].id)).toEqual(['YES'])
     const steps = (await ok('owner', 'GET', `/sales/quotes/${made.quote.id}/pricing`)).lines[0].steps.map((step: Json) => step.kind)
     expect(steps).toContain('OPTION')
@@ -237,7 +237,7 @@ describe('the options travel with every copy (XF3:01)', () => {
     expect(source.map((row) => row.code)).toEqual(['YES'])
     const made = await ok('seller', 'POST', `/sales/orders/${order.id}/copy-as-quote`, {}, 201)
     const line = made.quote.lines[0]
-    expect((await ownerQuoteLines(made.quote.id))[0].unitPrice).toBe('480') // B-CP-011: read as the Owner
+    expect((await ownerQuoteLines(made.quote.id))[0]!.unitPrice).toBe('480') // B-CP-011: read as the Owner
     expect((await rowsOf('QuoteLineOption', line.id)).map((row) => [row.code, num(row.surchargeAmount)])).toEqual([['YES', 60]])
   })
 
@@ -250,7 +250,7 @@ describe('the options travel with every copy (XF3:01)', () => {
     const pasted = await ok('seller', 'POST', `/sales/quotes/${quote.id}/lines/paste`, { version: quote.version, text })
     quote = pasted.quote
     expect(await codesOf('QuoteLineOption', quote.lines[0].id)).toEqual(['YES'])
-    expect((await ownerQuoteLines(quote.id))[0].unitPrice).toBe('480') // B-CP-011: read as the Owner
+    expect((await ownerQuoteLines(quote.id))[0]!.unitPrice).toBe('480') // B-CP-011: read as the Owner
     // The same line again: its pieces change, its options stay as they are (said).
     const again = await ok('seller', 'POST', `/sales/quotes/${quote.id}/lines/paste`, { version: quote.version, text: 'Style\tColourway\tOpzioni\t54\nSEED-JKT-01\tBLK\tYES\t1' })
     expect(again.rows[0]).toMatchObject({ action: 'CHANGE', options: 0 })

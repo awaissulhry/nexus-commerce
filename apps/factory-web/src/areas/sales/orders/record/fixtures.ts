@@ -256,7 +256,8 @@ const typed = order('CONFIRMED', { chain: { ...confirmed.chain, quote: null, dep
 
 // ---- F-CP-142 (customer page plan C3; picture 21): Money's "Price check" card — made-up checks for each state ----
 const priceCard = (read: PriceCheckRead, canHistory = true): Pick<OrderRecordModel, 'priceCheck'> => ({ priceCheck: { read, canHistory } satisfies PriceCheckCardModel })
-const ready = (check = PRICE_CHECK, extra: Partial<Extract<PriceCheckRead, { state: 'ready' }>> = {}): PriceCheckRead => ({ state: 'ready', check, stale: false, taking: false, problem: null, ...extra })
+// F-CP-142 (end-check fix): its own name — `ready` is overview/fixtures' production read, imported above.
+const priceReady = (check = PRICE_CHECK, extra: Partial<Extract<PriceCheckRead, { state: 'ready' }>> = {}): PriceCheckRead => ({ state: 'ready', check, stale: false, taking: false, problem: null, ...extra })
 const EMPTY_CHECK = {
   ...PRICE_CHECK,
   lines: PRICE_CHECK.lines.map((line) => ({ ...line, brandAmount: null, priceMatch: 'NO_BRAND_PRICE' as const, priceDiff: null, row: null })),
@@ -687,13 +688,13 @@ export const designScreen = defineDesignScreen<RecordCase>({
     // F-CP-148 (Owner O1): seen as Sales worker the Money tab says the deposit's state in words, the Price check one held line.
     { id: 'money-sales', label: 'Seen as Sales worker · Money: the deposit in words, no amount; Price check one line; sending and recording held', model: noPrice(base('sales', forRole(pageSent, 'manager'), { tab: 'money', ...priceCard({ state: 'held' }) })) },
     // ---- F-CP-142 (customer page plan C3; picture 21): Money › Price check, after Totals ----
-    { id: 'price-check', label: 'Owner · Money › Price check: per line ours against the customer\'s, Not equal · 1 line, where it came from', model: base('owner', pageSent, { tab: 'money', ...priceCard(ready()) }), note: 'Customer\'s price… opens the ONE window (the Work tab\'s too); Change our price › is the order\'s Edit mode; History › the audit of this order\'s customer prices.' },
-    { id: 'price-check-empty', label: 'Owner · Price check: no customer price yet, a request named them (Take them over)', model: base('owner', pageSent, { tab: 'money', ...priceCard(ready(EMPTY_CHECK)) }), note: '"No customer price yet" is never Equal; Customer\'s price… is the primary; the take-over is a row inside the card.' },
-    { id: 'price-check-stale', label: 'Owner · Price check: changed meanwhile — "Here they are now"', model: base('owner', pageSent, { tab: 'money', ...priceCard(ready(PRICE_CHECK, { stale: true })) }) },
-    { id: 'price-check-closed', label: 'Owner · Price check: a closed order keeps its prices (Customer\'s price… held in words)', model: base('owner', pageSent, { tab: 'money', ...priceCard(ready(CLOSED_CHECK), false) }), note: 'History › held: no right to read the audit log.' },
+    { id: 'price-check', label: 'Owner · Money › Price check: per line ours against the customer\'s, Not equal · 1 line, where it came from', model: base('owner', pageSent, { tab: 'money', ...priceCard(priceReady()) }), note: 'Customer\'s price… opens the ONE window (the Work tab\'s too); Change our price › is the order\'s Edit mode; History › the audit of this order\'s customer prices.' },
+    { id: 'price-check-empty', label: 'Owner · Price check: no customer price yet, a request named them (Take them over)', model: base('owner', pageSent, { tab: 'money', ...priceCard(priceReady(EMPTY_CHECK)) }), note: '"No customer price yet" is never Equal; Customer\'s price… is the primary; the take-over is a row inside the card.' },
+    { id: 'price-check-stale', label: 'Owner · Price check: changed meanwhile — "Here they are now"', model: base('owner', pageSent, { tab: 'money', ...priceCard(priceReady(PRICE_CHECK, { stale: true })) }) },
+    { id: 'price-check-closed', label: 'Owner · Price check: a closed order keeps its prices (Customer\'s price… held in words)', model: base('owner', pageSent, { tab: 'money', ...priceCard(priceReady(CLOSED_CHECK), false) }), note: 'History › held: no right to read the audit log.' },
     { id: 'price-check-loading', label: 'Owner · Price check: reading', model: base('owner', pageSent, { tab: 'money', ...priceCard({ state: 'loading' }) }) },
     { id: 'price-check-error', label: 'Owner · Price check: could not be read (Try again)', model: base('owner', pageSent, { tab: 'money', ...priceCard({ state: 'failed', problem: 'problem.read.unavailable' }) }) },
-    { id: 'price-check-dialog', label: 'Owner · Price check: the customer\'s-price window open', model: base('owner', pageSent, { tab: 'money', ...priceCard(ready()), priceCheckDialog: priceWindowOf('edit') }) },
+    { id: 'price-check-dialog', label: 'Owner · Price check: the customer\'s-price window open', model: base('owner', pageSent, { tab: 'money', ...priceCard(priceReady()), priceCheckDialog: priceWindowOf('edit') }) },
     { id: 'price-check-held', label: 'As Production manager · Money › Price check: one line "Shown to people who see prices", no table, nothing asked', model: base('manager', pageSent, { tab: 'money', ...priceCard({ state: 'held' }) }), note: 'The money wall: as Sales worker the same (the Sales role holds no price since B-CP-011).' },
     // ---- end F-CP-142
     { id: 'payment-dialog', label: 'Finance · Record the payment: amount, day, bank reference, Issue the TD02 now', model: base('finance', pageSent, { tab: 'money', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { reference: 'CRO-0000-ESEMPIO-88' } }) },

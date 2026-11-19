@@ -2,6 +2,7 @@ import { ConflictError, ForbiddenError, ValidationError, type Issue } from '@nex
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { asMoneyKeys } from '@nexus/factory-domain/money/marked' // B-CP-017
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { priceText } from '@nexus/factory-domain/sales/quotes/quotes'
 import { parseDecimal } from '@nexus/factory-domain/tax/decimal'
@@ -204,7 +205,8 @@ async function priceCheckView(db: Reader, context: OfficeContext, order: OrderRo
   const resultOf = new Map(check.lines.map((line) => [line.lineId, line]))
   const manages = mayOn(context, ORDERS_MANAGE, order)
   const why = isClosed(order.status) ? BRAND_PRICE_WORDS.closedOrder : !manages ? BRAND_PRICE_WORDS.notAManager : null
-  return {
+  // B-CP-017: every key of the price check is the price grain (contract.ts).
+  return asMoneyKeys('price', {
     orderId: order.id,
     number: order.number,
     currency: order.currency,
@@ -228,7 +230,7 @@ async function priceCheckView(db: Reader, context: OfficeContext, order: OrderRo
     total: { ...check.total, row: rowView(totalRow) },
     fromRequest: take ? { requestId: take.requestId, number: take.number, lines: take.takes.length } : null,
     mayWrite: { allowed: why === null, why },
-  }
+  })
 }
 
 /** GET /sales/orders/:orderId/price-check (see the module's head). */
