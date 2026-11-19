@@ -9,6 +9,10 @@ import { actorOf, type RequestContext } from '../../core/context'
 import { mayOnThread, mayShare } from './records'
 import { wallScopeOf, wallScopesOf } from './records' // B-PR-08a part 2
 import { contextOf, type RecordRef } from './threads' // B-PR-08a part 2: scopeOfThread → wallScopeOf
+// B-OP-061 (order page dock A2): whether the reader may read each record's thread — the thread page's own check.
+import type { Actor } from '@nexus/factory-domain/core/permissions'
+import { THREAD_PLACES, threadPlaceOf } from './records'
+import { officeRecord } from './threads'
 
 /**
  * B-TH-027 (threads plan TH-2, G10; design T1-F04 "2 new", T4-F04 "New since your last visit", PL3-F08, the lists' "New
@@ -25,7 +29,11 @@ import { contextOf, type RecordRef } from './threads' // B-PR-08a part 2: scopeO
  *              new again from a message on ("Mark unread": the mark moves back before it, or goes).
  *   unread     POST /threads/unread: the new-message counts of a page of records (Incoming, Orders, Quotes, the portal's lists),
  *              at most UNREAD_MAX, in ONE grouped read on the messages' (threadId, at) index; a record the person may not read
- *              counts 0, as one with no thread (never "it exists").
+ *              counts 0, as one with no thread (never "it exists"). B-OP-061 (order page dock A2): asked with `readable: true`,
+ *              each row also says whether the person may read the record's thread — the check of GET /threads/<type>/<id>
+ *              (the thread's wall scope when it exists, else the record's own through the threads' record registry; a record whose
+ *              conversation is another's, that one's): an unknown record and another customer's both answer false, alike. A portal
+ *              person: its party's threads that exist (it starts none). Not asked: no row carries it (a list pays no extra read).
  *
  * Who: office people and the party's portal people, each ONLY their own mark — every write and read here takes the person from
  * the session, never from the body (the database lets a portal party write its own party's marks: keeping each person to their
@@ -187,13 +195,34 @@ export interface UnreadCount {
   readonly newCount: number
   /** When the newest new message came (null: nothing new). */
   readonly lastAt: string | null
+  /** B-OP-061: asked with `readable`, whether the person may read the record's thread (false alike: unknown or out of reach). */
+  readonly readable?: boolean
 }
+
+// ── B-OP-061 (order page dock A2; 11-dock §8 A2, §9) ──
+/**
+ * May the office person read the record's thread (GET /threads/<type>/<id>'s own check, nothing more said): the record whose
+ * conversation is another's reads that one (B-SA-048); its thread's wall scope when it has one, else the record's from its resolver
+ * (a work order's, hold's or NCR's through its wall party). A record of no known type, an unknown id and a record of a customer the
+ * person does not reach are all false — the answer never tells them apart.
+ */
+async function officeReadable(client: Reader, actor: Actor, record: RecordRef): Promise<boolean> {
+  const place = (await threadPlaceOf(client, record)) ?? record
+  try {
+    const found = await officeRecord(client, place)
+    return mayOnThread(actor, THREADS_READ, place.type, found.scope)
+  } catch (error) {
+    if (error instanceof NotFoundError) return false
+    throw error
+  }
+}
+// ── end B-OP-061 ──
 
 /**
  * POST /threads/unread: each record's new-message count for the person (office or portal), in the order asked. One read of the
  * threads (each checked as the thread page checks it), then ONE grouped count of the messages after each mark.
  */
-export async function unreadCounts(caller: CommandCaller, records: readonly RecordRef[]): Promise<{ counts: UnreadCount[] }> {
+export async function unreadCounts(caller: CommandCaller, records: readonly RecordRef[], /* B-OP-061 */ options: { readonly readable?: boolean } = {}): Promise<{ counts: UnreadCount[] }> {
   const context = contextOf(caller)
   const who = whoOf(context)
   if (!who) throw new ForbiddenError()
@@ -207,7 +236,22 @@ export async function unreadCounts(caller: CommandCaller, records: readonly Reco
     const scopeOf = await wallScopesOf(client, seen)
     const readable = seen.filter((thread) => mayOnThread(actorOf(context), THREADS_READ, thread.recordType, scopeOf(thread)))
     // ---- end B-PR-08a
-    if (readable.length === 0) return new Map<string, { newCount: number; lastAt: Date | null }>()
+    // ---- B-OP-061: asked, whether each record's thread is readable (a thread read above, else the office's own check of it).
+    const readableOf = new Map<string, boolean>()
+    if (options.readable) {
+      const withThread = new Set(threads.map((thread) => `${thread.recordType}:${thread.recordId}`))
+      const read = new Set(readable.map((thread) => `${thread.recordType}:${thread.recordId}`))
+      for (const record of asked) {
+        const key = `${record.type}:${record.id}`
+        if (readableOf.has(key)) continue
+        // A record whose conversation is another's (the thread page reads that one), or with no thread yet: the office asks the
+        // record itself; a portal person reads only its party's threads that exist.
+        const asOffice = who.office && (Object.hasOwn(THREAD_PLACES, record.type) || !withThread.has(key))
+        readableOf.set(key, asOffice ? await officeReadable(client, actorOf(context), record) : read.has(key))
+      }
+    }
+    // ---- end B-OP-061
+    if (readable.length === 0) return { counts: new Map<string, { newCount: number; lastAt: Date | null }>(), readableOf }
     const ids = readable.map((thread) => thread.id)
     // Two statements, never one with both: the partner role holds no grant on a message's author (a column privilege is checked
     // whether or not the branch runs), and its row-level security keeps it to its party's shared messages.
@@ -231,12 +275,15 @@ export async function unreadCounts(caller: CommandCaller, records: readonly Reco
              AND m."audience" = 'PARTNER'
            GROUP BY m."threadId"`
     const byThread = new Map(rows.map((row) => [row.threadId, row]))
-    return new Map(readable.map((thread) => [`${thread.recordType}:${thread.recordId}`, { newCount: byThread.get(thread.id)?.newCount ?? 0, lastAt: byThread.get(thread.id)?.lastAt ?? null }]))
+    return { counts: new Map(readable.map((thread) => [`${thread.recordType}:${thread.recordId}`, { newCount: byThread.get(thread.id)?.newCount ?? 0, lastAt: byThread.get(thread.id)?.lastAt ?? null }])), readableOf }
   })
   return {
     counts: records.map((record) => {
-      const seen = counted.get(`${record.type}:${record.id}`)
-      return { recordType: record.type, recordId: record.id, newCount: seen?.newCount ?? 0, lastAt: seen?.lastAt ? toUtcIso(seen.lastAt) : null }
+      const key = `${record.type}:${record.id}`
+      const seen = counted.counts.get(key)
+      const row = { recordType: record.type, recordId: record.id, newCount: seen?.newCount ?? 0, lastAt: seen?.lastAt ? toUtcIso(seen.lastAt) : null }
+      // B-OP-061: a record not asked (a type no thread has, an id that is none) is false like any other unknown one.
+      return options.readable ? { ...row, readable: counted.readableOf.get(key) ?? false } : row
     }),
   }
 }
