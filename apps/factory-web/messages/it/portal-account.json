@@ -378,5 +378,80 @@
     "askAdmin": "Il vostro amministratore ({names}) può dirvi di più.",
     "askUs": "Chiedeteci se vi serve.",
     "home": "Torna alla Home"
+  },
+  "team": {
+    "title": "Il vostro team",
+    "col": {
+      "projects": "Progetti"
+    },
+    "act": {
+      "resend": "Invia di nuovo l'invito",
+      "revoke": "Ritira l'invito",
+      "pause": "Sospendi l'accesso",
+      "giveBack": "Riattiva l'accesso",
+      "addToProject": "Aggiungi a un progetto"
+    },
+    "bulk": {
+      "pause_one": "Sospendi 1",
+      "pause_other": "Sospendi {count}",
+      "giveBack_one": "Riattiva 1",
+      "giveBack_other": "Riattiva {count}"
+    },
+    "held": {
+      "customersOnly": "Nel portale lo fa solo l'amministratore di un cliente: chiedeteci.",
+      "notInvited": "Solo per un collega con l'invito ancora aperto.",
+      "notActive": "Solo per un collega attivo.",
+      "notPaused": "Solo per un collega con l'accesso sospeso.",
+      "noProjects": "Non siete ancora in un progetto aperto: chiedeteci prima di aggiungervi."
+    },
+    "seatsFull": "Tutti i {max} posti sono occupati: disattivate qualcuno o chiedeteci più posti.",
+    "skipped": "Escluso — {name}: {why}",
+    "confirm": {
+      "resend": {
+        "title": "Inviare di nuovo l'invito a {name}?",
+        "titleN": "Inviare di nuovo l'invito a {count} colleghi?",
+        "what": "Una nuova e-mail arriva a {names}; il link precedente non funziona più.",
+        "back": "ritira l'invito"
+      },
+      "revoke": {
+        "title": "Ritirare l'invito a {name}?",
+        "titleN": "Ritirare {count} inviti?",
+        "what": "Il link d'invito di {names} non funziona più; potete invitarli di nuovo più avanti.",
+        "back": "invitali di nuovo"
+      },
+      "pause": {
+        "title": "Sospendere l'accesso di {name}?",
+        "titleN": "Sospendere l'accesso di {count} colleghi?",
+        "what": "{names} non può più accedere e ogni sessione aperta si chiude adesso. Il posto resta suo.",
+        "back": "riattiva l'accesso"
+      },
+      "giveBack": {
+        "title": "Riattivare l'accesso di {name}?",
+        "titleN": "Riattivare l'accesso di {count} colleghi?",
+        "what": "{names} può accedere di nuovo, con il ruolo che aveva.",
+        "back": "sospendi di nuovo l'accesso"
+      }
+    },
+    "receipt": {
+      "resend_one": "Abbiamo inviato di nuovo l'invito a {names}.",
+      "resend_other": "Abbiamo inviato di nuovo gli inviti a {names}.",
+      "revoke_one": "L'invito a {names} è stato ritirato.",
+      "revoke_other": "Gli inviti a {names} sono stati ritirati.",
+      "pause_one": "{names} non può più accedere finché non riattivate l'accesso.",
+      "pause_other": "{names} non possono più accedere finché non riattivate l'accesso.",
+      "giveBack_one": "{names} può accedere di nuovo.",
+      "giveBack_other": "{names} possono accedere di nuovo.",
+      "addToProject_one": "Aggiunto a «{project}»: {names}. Lo sa dal suo portale.",
+      "addToProject_other": "Aggiunti a «{project}»: {names}. Ognuno lo sa dal suo portale."
+    },
+    "project": {
+      "title": "Aggiungi {name} a un progetto",
+      "titleN": "Aggiungi {count} colleghi a un progetto",
+      "subtitle": "Solo i progetti in cui siete e solo i vostri colleghi.",
+      "which": "Progetto",
+      "choose": "Scegliete un progetto",
+      "who": "Chi: {names}",
+      "told": "Ognuno lo sa una volta, nel suo portale."
+    }
   }
 }

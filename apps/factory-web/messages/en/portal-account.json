@@ -378,5 +378,80 @@
     "askAdmin": "Your admin ({names}) can tell you more.",
     "askUs": "Ask us if you need it.",
     "home": "Back to Home"
+  },
+  "team": {
+    "title": "Your team",
+    "col": {
+      "projects": "Projects"
+    },
+    "act": {
+      "resend": "Send the invitation again",
+      "revoke": "Withdraw the invitation",
+      "pause": "Pause access",
+      "giveBack": "Give access back",
+      "addToProject": "Add to a project"
+    },
+    "bulk": {
+      "pause_one": "Pause 1",
+      "pause_other": "Pause {count}",
+      "giveBack_one": "Give access back to 1",
+      "giveBack_other": "Give access back to {count}"
+    },
+    "held": {
+      "customersOnly": "Only a customer's admin does this in the portal: ask us.",
+      "notInvited": "Only for a colleague whose invitation is still open.",
+      "notActive": "Only for an active colleague.",
+      "notPaused": "Only for a colleague whose access is paused.",
+      "noProjects": "You are in no open project yet: ask us to add you to one first."
+    },
+    "seatsFull": "All {max} places are taken: deactivate someone or ask us for more places.",
+    "skipped": "Left out — {name}: {why}",
+    "confirm": {
+      "resend": {
+        "title": "Send the invitation to {name} again?",
+        "titleN": "Send the invitation again to {count} colleagues?",
+        "what": "A new e-mail goes to {names}; the earlier link stops working.",
+        "back": "withdraw the invitation"
+      },
+      "revoke": {
+        "title": "Withdraw the invitation to {name}?",
+        "titleN": "Withdraw {count} invitations?",
+        "what": "The invitation link of {names} stops working; you can invite them again later.",
+        "back": "invite them again"
+      },
+      "pause": {
+        "title": "Pause the access of {name}?",
+        "titleN": "Pause the access of {count} colleagues?",
+        "what": "{names} can no longer sign in, and any open session ends now. Their place stays theirs.",
+        "back": "give access back"
+      },
+      "giveBack": {
+        "title": "Give access back to {name}?",
+        "titleN": "Give access back to {count} colleagues?",
+        "what": "{names} can sign in again, with the role they had.",
+        "back": "pause access again"
+      }
+    },
+    "receipt": {
+      "resend_one": "We e-mailed the invitation to {names} again.",
+      "resend_other": "We e-mailed the invitations to {names} again.",
+      "revoke_one": "The invitation to {names} was withdrawn.",
+      "revoke_other": "The invitations to {names} were withdrawn.",
+      "pause_one": "{names} can no longer sign in until you give access back.",
+      "pause_other": "{names} can no longer sign in until you give access back.",
+      "giveBack_one": "{names} can sign in again.",
+      "giveBack_other": "{names} can sign in again.",
+      "addToProject_one": "Added to «{project}»: {names}. Each one is told in their portal.",
+      "addToProject_other": "Added to «{project}»: {names}. Each one is told in their portal."
+    },
+    "project": {
+      "title": "Add {name} to a project",
+      "titleN": "Add {count} colleagues to a project",
+      "subtitle": "Only the projects you are in, and only your own colleagues.",
+      "which": "Project",
+      "choose": "Choose a project",
+      "who": "Who: {names}",
+      "told": "Each one is told once, in their portal."
+    }
   }
 }

@@ -30,6 +30,13 @@ import type { ColleaguesActions, ColleaguesModel } from './view/ColleaguesSectio
 import type { PeopleDialog, PeopleDialogActions, RoleChoice } from './view/PeopleDialogs'
 import type { EmailCardActions, EmailCardModel, SecurityCardModel } from './view/SettingsCards'
 import { failedWords, inviteFailed, roleChoiceOf, stepUpWords } from './words'
+// ---- F-CP-153 (customer page plan C6, D13; review G2, F4): "Your team" — the customer admin's further acts and its projects.
+import { addProjectPerson, fetchProjectPeople, giveAccessBack, pauseAccess, resendInvitation, revokeInvitation } from './api'
+import { bulkPreview, projectsByPerson, seatsFullOf, type TeamAct, type TeamFacts } from './model'
+import type { TeamDialogAct } from './view/PeopleDialogs'
+import { fetchPortalProjects } from '../../customer/projects/api'
+import { isOpenProject } from '@nexus/factory-domain/projects/rules'
+// ---- end F-CP-153
 
 /**
  * The account work every partner kind's page shares (lifted from the customer's Account container, B-W2b-196, by B-W2b-193
@@ -78,7 +85,8 @@ export interface PortalPeople {
 }
 
 export function usePortalPeople({ onReceipt, sees, unsavedId }: PortalPeopleOptions): PortalPeople {
-  const { api, me } = usePortalFrame()
+  const { api, me, kinds } = usePortalFrame()
+  const customer = kinds.includes('CUSTOMER') // F-CP-153: the team's further acts are the customer portal's (review F4)
   const t = useT('portal-account')
   const roleWords = useT('portal')
   const locale = useLocale()
@@ -229,6 +237,106 @@ export function usePortalPeople({ onReceipt, sees, unsavedId }: PortalPeopleOpti
             : null
   const inviteKey = useRef(newIdempotencyKey())
 
+  // ---- F-CP-153: the admin's own projects and which of its colleagues are in each (a customer's admin only; members only, the
+  // API's rule). A failed read leaves the column out — never a wrong "—".
+  const [projects, setProjects] = useState<{ list: { id: string; name: string }[]; byPerson: Record<string, string[]> } | null>(null)
+  const readProjects = useCallback(async () => {
+    if (!customer || !canManage) return setProjects(null)
+    try {
+      const mine = (await fetchPortalProjects(api)).filter((project) => isOpenProject(project.status))
+      const reads = await Promise.all(mine.map(async (project) => ({ project: { id: project.id, name: project.name }, members: (await fetchProjectPeople(api, project.id)).members })))
+      setProjects({ list: mine.map((project) => ({ id: project.id, name: project.name })), byPerson: projectsByPerson(reads) })
+    } catch {
+      setProjects(null)
+    }
+  }, [api, customer, canManage])
+  useEffect(() => {
+    void readProjects()
+  }, [readProjects])
+  const facts: TeamFacts = { customer, seatsFull: seatsFullOf(answer?.seats ?? null), projects: projects?.list.length ?? 0, readOnly }
+  const whyWords = (key: string) => (key === 'team.seatsFull' ? t(key, { max: answer?.seats?.max ?? 0 }) : t(key))
+
+  /** Pause, give back, send the invitation again, withdraw it: the rows it reaches, those left out said first. */
+  const openTeam = (act: TeamDialogAct, rows: readonly ColleagueRow[]) => {
+    const preview = bulkPreview(act, rows, facts)
+    setDialog({ kind: 'team', act, people: preview.apply.map((row) => ({ id: row.id, name: row.name })), skipped: preview.skip.map((entry) => ({ name: entry.row.name, why: whyWords(entry.why) })), busy: false, failed: null })
+  }
+
+  const ACT_CALL: Readonly<Record<TeamDialogAct, (userId: string, version: number) => Promise<unknown>>> = {
+    resend: (userId, version) => resendInvitation(api, userId, version),
+    revoke: (userId, version) => revokeInvitation(api, userId, version),
+    pause: (userId, version) => pauseAccess(api, userId, { version }),
+    giveBack: (userId, version) => giveAccessBack(api, userId, version),
+  }
+
+  const runTeam = async () => {
+    const current = dialogRef.current
+    if (current?.kind !== 'team' || current.people.length === 0) return
+    const { act, people } = current
+    await withStepUp(async () => {
+      setDialog((open) => (open?.kind === 'team' ? { ...open, busy: true, failed: null } : open))
+      try {
+        // Each sends the colleague's version as read just now (review G2: a change meanwhile is a 409, and the list is read again).
+        const fresh = await fetchColleagues(api)
+        for (const person of people) {
+          const row = fresh.people.find((entry) => entry.id === person.id)
+          if (row) await ACT_CALL[act](person.id, row.version)
+        }
+        setDialog(null)
+        setSelected([])
+        say({ tone: 'success', text: t(`team.receipt.${act}`, { names: people.map((person) => person.name).join(', '), count: people.length }) })
+        void readColleagues()
+      } catch (error) {
+        if (isApiError(error) && error.kind === 'step_up') {
+          setDialog((open) => (open?.kind === 'team' ? { ...open, busy: false } : open))
+          throw error
+        }
+        void readColleagues()
+        // Seats full (the office lowered them since): the words of the seats, else ours.
+        const words = isApiError(error) && error.kind === 'conflict' && act === 'giveBack' && answer?.seats?.max != null ? t('team.seatsFull', { max: answer.seats.max }) : failedWords(error, t)
+        setDialog((open) => (open?.kind === 'team' ? { ...open, busy: false, failed: words } : open))
+      }
+    })
+  }
+
+  const openProject = (rows: readonly ColleagueRow[]) => {
+    const preview = bulkPreview('addToProject' satisfies TeamAct, rows, facts)
+    setDialog({ kind: 'project', people: preview.apply.map((row) => ({ id: row.id, name: row.name })), skipped: preview.skip.map((entry) => ({ name: entry.row.name, why: whyWords(entry.why) })), projects: projects?.list ?? [], choice: projects?.list.length === 1 ? projects.list[0]!.id : '', busy: false, failed: null })
+  }
+
+  const addToProject = async () => {
+    const current = dialogRef.current
+    if (current?.kind !== 'project' || current.choice === '' || current.people.length === 0) return
+    const { choice, people } = current
+    const project = projects?.list.find((entry) => entry.id === choice)
+    await withStepUp(async () => {
+      setDialog((open) => (open?.kind === 'project' ? { ...open, busy: true, failed: null } : open))
+      try {
+        // The colleague's version from the project's own choices (who may join it now): one not offered is left as it is.
+        const offered = (await fetchProjectPeople(api, choice)).choices
+        let added = 0
+        for (const person of people) {
+          const choiceRow = offered.find((entry) => entry.userId === person.id)
+          if (!choiceRow) continue
+          await addProjectPerson(api, choice, { userId: person.id, version: choiceRow.version })
+          added += 1
+        }
+        setDialog(null)
+        setSelected([])
+        say({ tone: 'success', text: t('team.receipt.addToProject', { names: people.map((person) => person.name).join(', '), project: project?.name ?? '', count: added }) })
+        void readProjects()
+      } catch (error) {
+        if (isApiError(error) && error.kind === 'step_up') {
+          setDialog((open) => (open?.kind === 'project' ? { ...open, busy: false } : open))
+          throw error
+        }
+        void readProjects()
+        setDialog((open) => (open?.kind === 'project' ? { ...open, busy: false, failed: failedWords(error, t) } : open))
+      }
+    })
+  }
+  // ---- end F-CP-153
+
   const openInvite = () => {
     if (inviteHeld) return
     inviteKey.current = newIdempotencyKey()
@@ -377,6 +485,12 @@ export function usePortalPeople({ onReceipt, sees, unsavedId }: PortalPeopleOpti
       seats: canManage ? (answer?.seats ?? null) : null,
       selected,
       readOnly,
+      // ---- F-CP-153
+      customer,
+      seatsFull: facts.seatsFull,
+      projectCount: facts.projects,
+      projects: customer && canManage && projects ? projects.byPerson : null,
+      // ---- end F-CP-153
     },
     colleaguesActions: {
       onSelected: setSelected,
@@ -387,6 +501,13 @@ export function usePortalPeople({ onReceipt, sees, unsavedId }: PortalPeopleOpti
         setColleagues(loading)
         void readColleagues()
       },
+      // ---- F-CP-153
+      onResend: (row) => openTeam('resend', [row]),
+      onRevoke: (row) => openTeam('revoke', [row]),
+      onPause: (rows) => openTeam('pause', rows),
+      onGiveBack: (rows) => openTeam('giveBack', rows),
+      onAddToProject: openProject,
+      // ---- end F-CP-153
     },
     answer,
     admins,
@@ -449,6 +570,11 @@ export function usePortalPeople({ onReceipt, sees, unsavedId }: PortalPeopleOpti
       },
       onEndOthersConfirm: () => void endOthers(),
       onStepUpCode: (code) => void onStepUpCode(code),
+      // ---- F-CP-153
+      onTeamConfirm: () => void runTeam(),
+      onProjectChoice: (projectId) => setDialog((open) => (open?.kind === 'project' ? { ...open, choice: projectId, failed: null } : open)),
+      onProjectConfirm: () => void addToProject(),
+      // ---- end F-CP-153
     },
   }
 }

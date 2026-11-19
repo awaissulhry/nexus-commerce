@@ -34,8 +34,16 @@ export type PeopleDialog =
   | { kind: 'deactivate'; people: readonly { id: string; name: string }[]; state: 'loading' | 'error' | 'ready'; summary: HandoverSummary | null; choice: string; busy: boolean; failed: string | null }
   | { kind: 'endOthers'; count: number; busy: boolean; failed: string | null }
   | { kind: 'stepUp'; to: string; busy: boolean; error: string | null }
+  // ---- F-CP-153 (customer page plan C6, D13): the invitation again or withdrawn, access paused or given back — one or many, those
+  // left out said with why before anything is sent; and colleagues added to one of the admin's projects.
+  | { kind: 'team'; act: TeamDialogAct; people: readonly { id: string; name: string }[]; skipped: readonly { name: string; why: string }[]; busy: boolean; failed: string | null }
+  | { kind: 'project'; people: readonly { id: string; name: string }[]; skipped: readonly { name: string; why: string }[]; projects: readonly { id: string; name: string }[]; choice: string; busy: boolean; failed: string | null }
+  // ---- end F-CP-153
 
-export const PEOPLE_DIALOGS: ReadonlySet<PeopleDialog['kind']> = new Set(['invite', 'role', 'raise', 'deactivate', 'endOthers', 'stepUp'])
+/** F-CP-153: the acts asked in one confirm (Change role, Deactivate and Add to a project have their own dialogs). */
+export type TeamDialogAct = 'resend' | 'revoke' | 'pause' | 'giveBack'
+
+export const PEOPLE_DIALOGS: ReadonlySet<PeopleDialog['kind']> = new Set(['invite', 'role', 'raise', 'deactivate', 'endOthers', 'stepUp', 'team' /* F-CP-153 */, 'project' /* F-CP-153 */])
 export const isPeopleDialog = (dialog: { kind: string } | null): dialog is PeopleDialog => dialog !== null && PEOPLE_DIALOGS.has(dialog.kind as PeopleDialog['kind'])
 
 export interface PeopleDialogActions {
@@ -50,6 +58,11 @@ export interface PeopleDialogActions {
   onHandoverRetry?: () => void
   onEndOthersConfirm?: () => void
   onStepUpCode?: (code: string) => void
+  // ---- F-CP-153
+  onTeamConfirm?: () => void
+  onProjectChoice?: (projectId: string) => void
+  onProjectConfirm?: () => void
+  // ---- end F-CP-153
 }
 
 export function PeopleDialogs({ dialog, actions, prices = true }: { dialog: PeopleDialog | null; actions?: PeopleDialogActions | undefined; prices?: boolean }) {
@@ -254,6 +267,67 @@ export function PeopleDialogs({ dialog, actions, prices = true }: { dialog: Peop
       />
     )
   }
+
+  // ---- F-CP-153: one confirm for the invitation again / withdrawn, a pause, access given back — who it reaches, who is left out.
+  if (dialog.kind === 'team') {
+    const one = dialog.people.length === 1 ? dialog.people[0]! : null
+    const names = dialog.people.map((person) => person.name).join(', ')
+    return (
+      <ActionConfirm
+        impact={{
+          level: 'confirm',
+          reach: 'local',
+          title: one ? t(`team.confirm.${dialog.act}.title`, { name: one.name }) : t(`team.confirm.${dialog.act}.titleN`, { count: dialog.people.length }),
+          confirmLabel: dialog.busy ? t('state.saving') : t(`team.act.${dialog.act}`),
+          consequences: [t(`team.confirm.${dialog.act}.what`, { names }), ...dialog.skipped.map((entry) => t('team.skipped', { name: entry.name, why: entry.why })), t('raise.stepUp')],
+          reversal: { verb: t(`team.confirm.${dialog.act}.back`), fidelity: dialog.act === 'resend' ? 'none' : 'exact' },
+          ...(dialog.failed ? { refusal: { reason: dialog.failed } } : {}),
+        }}
+        onConfirm={() => (dialog.busy || dialog.people.length === 0 ? undefined : actions?.onTeamConfirm?.())}
+        onCancel={close}
+      />
+    )
+  }
+
+  // ---- F-CP-153: Add to a project — one of the admin's own projects, its own colleagues only.
+  if (dialog.kind === 'project') {
+    return (
+      <Modal
+        open
+        onClose={close}
+        size="md"
+        title={dialog.people.length === 1 ? t('team.project.title', { name: dialog.people[0]!.name }) : t('team.project.titleN', { count: dialog.people.length })}
+        subtitle={t('team.project.subtitle')}
+        footer={
+          <>
+            <Button variant="secondary" onClick={close} disabled={dialog.busy}>
+              {t('dialog.cancel')}
+            </Button>
+            <Button variant="primary" heldReason={dialog.busy ? t('state.saving') : dialog.choice === '' ? t('team.project.choose') : dialog.people.length === 0 ? t('held.noneChosen') : null} onClick={() => actions?.onProjectConfirm?.()}>
+              {t('team.act.addToProject')}
+            </Button>
+          </>
+        }
+      >
+        <div className="fw-pacc-dialog">
+          <Field label={t('team.project.which')}>
+            <Listbox ariaLabel={t('team.project.which')} options={[{ value: '', label: t('team.project.choose') }, ...dialog.projects.map((project) => ({ value: project.id, label: project.name }))]} value={dialog.choice} onChange={(value) => actions?.onProjectChoice?.(value)} width="100%" />
+          </Field>
+          <p>{t('team.project.who', { names: dialog.people.map((person) => person.name).join(', ') })}</p>
+          {dialog.skipped.length > 0 ? (
+            <ul className="fw-pacc-alone">
+              {dialog.skipped.map((entry) => (
+                <li key={entry.name}>{t('team.skipped', { name: entry.name, why: entry.why })}</li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="fw-pacc-muted">{t('team.project.told')}</p>
+          {dialog.failed ? <Banner tone="danger">{dialog.failed}</Banner> : null}
+        </div>
+      </Modal>
+    )
+  }
+  // ---- end F-CP-153
 
   // The step-up: a 6-digit code by e-mail, 5 minutes for the admin's acts.
   return <StepUpModal open title={t('stepUp.title')} sentence={t('stepUp.sentence', { email: dialog.to })} busy={dialog.busy} error={dialog.error} confirmLabel={t('stepUp.confirm')} onSubmit={(code) => actions?.onStepUpCode?.(code)} onClose={close} />

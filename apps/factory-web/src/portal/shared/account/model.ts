@@ -169,3 +169,70 @@ export function maskedEmail(email: string): string {
 
 /** Whether the session's step-up (5 minutes) still holds at `now`. */
 export const stepUpFresh = (until: string | null, now: number): boolean => until !== null && Date.parse(until) - 10_000 > now
+
+// ---- F-CP-153 (customer page plan C6, D13; review G2, F4): "Your team" — what the admin may do with each colleague -------------
+/** The row acts of an admin (⋯), in the menu's order; the bulk acts are a part of them. */
+export const TEAM_ACTS = ['role', 'resend', 'revoke', 'pause', 'giveBack', 'addToProject', 'deactivate'] as const
+export type TeamAct = (typeof TEAM_ACTS)[number]
+export const BULK_ACTS: readonly TeamAct[] = ['pause', 'giveBack', 'addToProject', 'deactivate']
+
+/** The acts the API keeps for a CUSTOMER's admin (review F4): a supplier's or a workshop's admin sees them held, never hidden. */
+export const CUSTOMER_ACTS: readonly TeamAct[] = ['resend', 'revoke', 'pause', 'giveBack', 'addToProject']
+
+export interface TeamFacts {
+  /** The organisation is a customer (the acts above are its own). */
+  customer: boolean
+  /** Every seat is taken: access cannot be given back. */
+  seatsFull: boolean
+  /** The admin is in no project (nothing to add a colleague to). */
+  projects: number
+  readOnly: boolean
+}
+
+/** Why an act cannot be done for this colleague now (a `portal-account` key), or null — held, never hidden. */
+export function teamActHeld(act: TeamAct, row: Pick<ColleagueRow, 'you' | 'status'>, facts: TeamFacts): string | null {
+  if (facts.readOnly) return 'held.preview'
+  if (row.you) return 'held.yourself'
+  if (CUSTOMER_ACTS.includes(act) && !facts.customer) return 'team.held.customersOnly'
+  switch (act) {
+    case 'role':
+    case 'deactivate':
+      return row.status === 'DEACTIVATED' ? 'held.deactivated' : null
+    case 'resend':
+    case 'revoke':
+      return row.status === 'INVITED' ? null : 'team.held.notInvited'
+    case 'pause':
+      return row.status === 'ACTIVE' ? null : 'team.held.notActive'
+    case 'giveBack':
+      return row.status !== 'SUSPENDED' ? 'team.held.notPaused' : facts.seatsFull ? 'team.seatsFull' : null
+    case 'addToProject':
+      return row.status !== 'ACTIVE' ? 'team.held.notActive' : facts.projects === 0 ? 'team.held.noProjects' : null
+  }
+}
+
+/** A bulk act over the chosen rows: those it applies to, and those it leaves out with why (said before anything is sent). */
+export function bulkPreview<Row extends Pick<ColleagueRow, 'id' | 'name' | 'you' | 'status'>>(act: TeamAct, rows: readonly Row[], facts: TeamFacts): { apply: Row[]; skip: { row: Row; why: string }[] } {
+  const apply: Row[] = []
+  const skip: { row: Row; why: string }[] = []
+  for (const row of rows) {
+    const why = teamActHeld(act, row, facts)
+    if (why) skip.push({ row, why })
+    else apply.push(row)
+  }
+  return { apply, skip }
+}
+
+/** Whether every seat is taken (the seats the office set). */
+export const seatsFullOf = (seats: Colleagues['seats']): boolean => seatsHeld(seats) !== null
+
+/** The version an act sends for a colleague: the row as last read (a stale one: the API's 409, and the list is read again). */
+export const versionOf = (answer: Pick<Colleagues, 'people'> | null, userId: string): number | null => answer?.people.find((person) => person.id === userId)?.version ?? null
+
+/** The Projects column: for each colleague, the names of the reader's projects they are in (only projects the reader is in). */
+export function projectsByPerson(reads: readonly { readonly project: { readonly id: string; readonly name: string }; readonly members: readonly { readonly userId: string }[] }[]): Record<string, string[]> {
+  const out: Record<string, string[]> = {}
+  for (const read of reads) for (const member of read.members) (out[member.userId] ??= []).push(read.project.name)
+  for (const names of Object.values(out)) names.sort((a, b) => a.localeCompare(b))
+  return out
+}
+// ---- end F-CP-153
