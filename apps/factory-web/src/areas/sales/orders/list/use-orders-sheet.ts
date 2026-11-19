@@ -54,6 +54,8 @@ import { addTaskHeld, batchBody, createBody, type Assignable, type BatchAnswer, 
 import type { PanelRead } from '../../../../record-panels/model'
 // ---- end F-SA-281
 import { useReplyMany } from './use-reply-many' // F-SA-282
+import { usePriceCheck } from '../price-check/use-price-check' // F-CP-114: the ONE customer's-price window
+import type { PriceCheck } from '../price-check/api' // F-CP-114
 
 /**
  * F-SA-220 (sales page plan N7 / N5, picks R9, P10, P12, P18; 17-review C-2; 12-lists-board §4.5): the ONE Orders sheet, for every
@@ -673,6 +675,18 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   // a Send that posted reads the rows again (their New messages).
   const replyMany = useReplyMany(api, session.permissions, () => void load(true))
   // ---- end F-SA-282
+  // ---- F-CP-114 (customer page plan C2d, C3; review A3): the ONE customer's-price window, opened from a row (⋯ "Set customer's price…",
+  // the Customer's price cell) for a price holder only; it reads that order's price check once. A save puts the order's new figures
+  // in its row where it stands (rows never jump) and says so.
+  const priceCheck = usePriceCheck(api, {
+    onSaved: (check: PriceCheck) => {
+      const apply = <R extends OrderRow>(row: R): R => (row.id === check.orderId ? { ...row, brandPrice: check.total.brandPrice, priceMatch: check.total.priceMatch, priceDiff: check.total.priceDiff, priceNotEqualLines: check.total.priceNotEqualLines } : row)
+      setList((current) => ({ ...current, items: current.items?.map(apply) ?? null }))
+      setGroupRows((current) => Object.fromEntries(Object.entries(current).map(([key, entry]) => [key, { ...entry, items: entry.items?.map(apply) ?? null }])))
+      setNotice({ tone: 'success', words: { key: 'priceCheck.saved', params: { number: check.number } } })
+    },
+  })
+  // ---- end F-CP-114
   const week = usePromiseWeek(api, session, { enabled: layout === 'week', asked: params?.get('site') ?? null, q, tick: weekTick, partyId: party /* B-TH-201 */ })
   // B-TH-293: on one customer's sheet (the switcher's customer) the import is offered that customer's remembered columns.
   const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load(), customer)
@@ -743,6 +757,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     note: note.model,
     bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld /* F-SA-281 */, reply: noteCan /* F-SA-282: threads.post */ },
     replyMany: replyMany.model, // F-SA-282
+    priceCheck: priceCheck.model, // F-CP-114
     task, // F-SA-281
     me: session.user.id, // F-SA-281
     // ---- F-SA-220: the host ----
@@ -807,6 +822,16 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     task: taskActions, // F-SA-281
     onReplyMany: (ids) => replyMany.open(pickedRows(ids), host.locked?.party ?? null), // F-SA-282
     replyMany: replyMany.actions, // F-SA-282
+    // F-CP-114: the door only with the price grain (no door, no call for anyone else).
+    ...(can.price
+      ? {
+          onPriceCheck: (orderId: string) => {
+            const row = [...(list.items ?? []), ...Object.values(groupRows).flatMap((entry) => entry.items ?? [])].find((entry) => entry.id === orderId)
+            if (row) priceCheck.open({ orderId: row.id, number: row.number })
+          },
+          priceCheck: priceCheck.actions,
+        }
+      : {}),
     // ---- end F-SA-280
     onWaiting: (next, view) => go({ waiting: next, ...(view ? { rows: view } : {}), ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
     onSort: (next) => go({ sort: next }), // B-TH-057

@@ -51,6 +51,7 @@ import type { RowView } from '../../orders/model'
 import type { OrdersListModel } from '../../orders/list/list-model'
 import { OrdersListView } from '../../orders/list/view/OrdersListView'
 import { WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
+import { priceWindowOf, type PriceWindowCase } from '../../orders/price-check/fixtures' // F-CP-114
 import { workViewCounts } from './use-customer-work' // F-CP-103: the Views ▾ counts
 import { WaitingStrip } from './view/WaitingStrip'
 import { workEmptyOf, workPreset, workViewsOf } from './view/WorkTab' // F-CP-101: the views and empty states per view
@@ -99,6 +100,8 @@ interface WorkCase {
   readonly linesWindow?: 'lines' | 'discard'
   /** F-CP-107: "Drafts of <customer>" shown (its list, none yet, or one draft open in its window). */
   readonly drafts?: 'list' | 'empty' | 'window'
+  /** F-CP-114: the ONE customer's-price window open over the sheet (typing, changed meanwhile, a closed order). */
+  readonly priceWindow?: PriceWindowCase
 }
 
 /** F-CP-107: made-up portal drafts of the customer (one ready to send, one just started). */
@@ -193,7 +196,7 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
       ? createElement(CustomerDraftsList, {
           model: { customer: name, read: { status: 'ready', rows: work.drafts === 'empty' ? [] : draftRowsOf(party, work.price !== false) }, updates: work.drafts === 'list' ? 1 : 0, activeId: null, views: { model: { ...list, hostViews: [{ id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: name }), active: true }], views: workViewsOf({ price: work.price !== false }, { drafts: true }) } } },
         })
-      : createElement(OrdersListView, { model: list }),
+      : createElement(OrdersListView, { model: work.priceWindow && work.price !== false ? { ...list, priceCheck: priceWindowOf(work.priceWindow) } : list /* F-CP-114 */ }),
     work.drafts === 'window'
       ? createElement(DraftWindow, {
           model: {
@@ -356,6 +359,11 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'work-drafts-empty', label: 'F-CP-107 · Drafts: none in the portal yet', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'empty' }) },
     { id: 'work-drafts-window', label: 'F-CP-107 · A draft open in its window: read only, Accept and Refuse held with why, J / K between drafts', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'window' }) },
     { id: 'work-new-order-discard', label: 'F-CP-113 · Discard asks first when something is typed', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), linesWindow: 'discard' }) },
+    // ---- F-CP-114: "Set customer's price…" (row ⋯, or the Customer's price cell) — the ONE window, price holders only.
+    { id: 'work-price-window', label: 'F-CP-114 · Work: Set customer\'s price… — per line a unit price or a line total, the PO file, an optional order total', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'edit' }) },
+    { id: 'work-price-window-stale', label: 'F-CP-114 · Changed meanwhile (409): "Someone changed these prices meanwhile. Here they are now."', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'stale' }) },
+    { id: 'work-price-window-closed', label: 'F-CP-114 · A closed order keeps its prices: read only, Save held with why', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'closed' }) },
+    { id: 'work-price-window-no-price', label: 'F-CP-114 · As Sales worker (no price grain): no door, no window, no call', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined })), price: false, priceWindow: 'edit' }, { can: { ...RECORD_CAN, price: false } }) },
     { id: 'quotes-orders-empty-production', label: 'F-CP-101 · Work: In production, nothing (the way to All orders)', model: workCase('NUOVO-PROVA', { reads: STRIP_READY, rows: [], view: 'IN_PRODUCTION' }) },
     { id: 'quotes-orders-reading', label: 'F-SA-276 · Work: the strip and the rows reading ("—", never 0)', model: workCase('MODA-DEMO', { reads: STRIP_READING, rows: null }) },
     { id: 'quotes-orders-error', label: "F-SA-276 · Work: the orders couldn't be read (the strip stays usable)", model: workCase('MODA-DEMO', { reads: { ...STRIP_READY, requests: { status: 'failed' } }, rows: [], problem: 'problem.read.unavailable' }) },

@@ -25,6 +25,7 @@ import type { NoteDialogActions, NoteDialogModel } from '../../../production/_sh
 import type { Assignable, BatchAnswer, BatchAssignee, BatchRecord, TaskDraft } from '../../../../record-panels/tasks/model' // F-SA-281
 import type { PanelRead } from '../../../../record-panels/model' // F-SA-281
 import type { ReplyManyActions, ReplyManyModel } from './reply-many' // F-SA-282
+import type { PriceCheckDialogActions, PriceCheckDialogModel } from '../price-check/use-price-check' // F-CP-114
 
 /** SCR-038 — the orders list's view model (OrdersListView draws it and fetches nothing). */
 
@@ -184,6 +185,8 @@ export interface OrdersListModel {
   // ---- end F-SA-281
   // ---- F-SA-282: Reply to <customer> on N… while open (one customer, ≤ 50, one batchId; each order's own conversation)
   replyMany?: ReplyManyModel | null
+  // F-CP-114: the ONE customer's-price window while open (row ⋯ "Set customer's price…", the Customer's price cell; price holders only).
+  priceCheck?: PriceCheckDialogModel | null
   // ---- F-SA-279 (the customer page: a row drives the dock) ----
   /** The order the page's dock shows (marked; null: none), and the words of a phone card's door to its conversation; absent: not a dock list. */
   active?: { readonly id: string | null; readonly cardDoor?: string | null } | null
@@ -275,6 +278,9 @@ export interface OrdersListActions {
   // ---- F-SA-282: Reply to <customer> on N… on the ticked orders, and the window's own actions
   onReplyMany?: (ids: readonly string[]) => void
   replyMany?: ReplyManyActions
+  // F-CP-114: open the customer's-price window of one order (given only to a price holder: no door, no call for anyone else).
+  onPriceCheck?: (orderId: string) => void
+  priceCheck?: PriceCheckDialogActions
   // ---- F-SA-279: the keys moved the focus to a row (the page's dock follows after its rest); a phone card's conversation door ----
   onFocusRow?: (row: OrderRow) => void
   onCardThread?: (row: OrderRow) => void
