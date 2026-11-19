@@ -37,7 +37,8 @@ let h: Harness
 let walls: FastifyInstance
 let sales: Browser
 let finance: Browser
-// B-CP-011 (the money wall): the Owner prices the quotes' lines and reads their money; Sales makes, sends and reads them without it.
+// B-CP-011 (the money wall): the Owner prices the quotes' lines and reads their money; Sales makes and reads them without it.
+// B-CP-015: the quote's PDF shows prices, so the Owner sends it and mails a new link; Sales gets 403 PRICED_DOCUMENT.
 let owner: Browser
 let financeSecret: string
 let other: TestTenant
@@ -98,7 +99,8 @@ async function newQuote(extra: Json = {}): Promise<Json> {
 /** Sends a quote; returns the answer and the token the mail carried (read from the fake mailbox only). */
 async function send(quote: Json, body: Json = {}, idempotencyKey = key('send')): Promise<{ answer: Json; token: string }> {
   const before = h.ses.mails.length
-  const answer = await as(sales, 'POST', `${quoteUrl(quote.id)}/send`, { version: quote.version, ...body }, 200, { 'idempotency-key': idempotencyKey })
+  // B-CP-011: the quote's PDF shows prices: the Owner (a price holder) sends it, never Sales (B-CP-015, 403 PRICED_DOCUMENT).
+  const answer = await as(owner, 'POST', `${quoteUrl(quote.id)}/send`, { version: quote.version, ...body }, 200, { 'idempotency-key': idempotencyKey })
   const mail = h.ses.mails.slice(before).find((entry) => entry.outboundId === answer.sent?.emailId)
   const token = mail ? decodeURIComponent(/#token=(\S+)/.exec(textOf(mail.raw))?.[1] ?? '') : ''
   return { answer, token }
@@ -181,6 +183,14 @@ describe('send: the version frozen, its PDF, the accept link, the mail (SAL-157,
   })
 
   it('freezes the version with its buyer, delivery address, PDF hash and terms; the link is made; the mail leaves with the link', async () => {
+    // B-CP-011: as Sales worker the send is 403 in words (the PDF shows prices): nothing frozen, no link, no mail.
+    const mails = h.ses.mails.length
+    const bySales = await sales.send('POST', `${quoteUrl(first.id)}/send`, { version: first.version, message: FIRST_MESSAGE }, { headers: { 'idempotency-key': key('sales-send') } })
+    expect(bySales.status).toBe(403)
+    expect((bySales.body as Json).error.issues).toEqual([{ path: 'refusal/PRICED_DOCUMENT', message: 'It shows prices: it is sent by someone who sees prices.' }])
+    expect(h.ses.mails.length).toBe(mails)
+    expect((await versionsOf(first.id))[0]).toMatchObject({ status: 'DRAFT', sentAt: null, documentSha256: null })
+    expect((await admin('SELECT count(*)::int AS n FROM "OneOffLink" WHERE "recordId" = $1', [first.id]))[0]!.n).toBe(0)
     const { answer, token } = await send(first, { message: FIRST_MESSAGE }, 'qs-first-send-0001')
     firstSent = answer
     firstToken = token
@@ -210,13 +220,14 @@ describe('send: the version frozen, its PDF, the accept link, the mail (SAL-157,
 
   it('is idempotent: the same key answers the first send, nothing is made or mailed again', async () => {
     const mails = h.ses.mails.length
-    const again = await as(sales, 'POST', `${quoteUrl(first.id)}/send`, { version: first.version, message: FIRST_MESSAGE }, 200, { 'idempotency-key': 'qs-first-send-0001' })
+    // B-CP-011: the Owner repeats its own send (Sales may not send a priced PDF).
+    const again = await as(owner, 'POST', `${quoteUrl(first.id)}/send`, { version: first.version, message: FIRST_MESSAGE }, 200, { 'idempotency-key': 'qs-first-send-0001' })
     expect(again.sent).toEqual(firstSent.sent)
     expect(again.delivery).toBeNull()
     expect(h.ses.mails.length).toBe(mails)
     expect((await admin('SELECT count(*)::int AS n FROM "OneOffLink" WHERE "recordId" = $1', [first.id]))[0]!.n).toBe(1)
     // A new key on the version read before: the version changed (409 naming the current one).
-    const stale = await sales.send('POST', `${quoteUrl(first.id)}/send`, { version: first.version }, { headers: { 'idempotency-key': key() } })
+    const stale = await owner.send('POST', `${quoteUrl(first.id)}/send`, { version: first.version }, { headers: { 'idempotency-key': key() } })
     expect(stale.status).toBe(409)
   })
 })
@@ -424,7 +435,13 @@ describe('the office withdraws, sends a new link; the customer declines, asks fo
     tokens.push(sent.token)
     quote = sent.answer.quote
     const before = h.ses.mails.length
-    const renewed = await as(sales, 'POST', `${quoteUrl(quote.id)}/send-link`, { version: quote.version }, 200, { 'idempotency-key': key('link') })
+    // B-CP-011: the new link's mail carries the priced PDF: as Sales worker 403 in words, nothing revoked or mailed; the Owner sends it.
+    const bySales = await sales.send('POST', `${quoteUrl(quote.id)}/send-link`, { version: quote.version }, { headers: { 'idempotency-key': key('sales-link') } })
+    expect(bySales.status).toBe(403)
+    expect((bySales.body as Json).error.issues).toEqual([{ path: 'refusal/PRICED_DOCUMENT', message: 'It shows prices: it is sent by someone who sees prices.' }])
+    expect(h.ses.mails.length).toBe(before)
+    expect((await admin('SELECT "revokedAt" FROM "OneOffLink" WHERE id = $1', [sent.answer.sent.link.id]))[0]).toEqual({ revokedAt: null })
+    const renewed = await as(owner, 'POST', `${quoteUrl(quote.id)}/send-link`, { version: quote.version }, 200, { 'idempotency-key': key('link') })
     expect(renewed).toMatchObject({ delivery: 'sent', link: { revokedLinkIds: [sent.answer.sent.link.id], to: BUYER } })
     const mail = h.ses.mails.slice(before).find((entry) => entry.outboundId === renewed.link.emailId)!
     const token = decodeURIComponent(/#token=(\S+)/.exec(textOf(mail.raw))![1]!)
