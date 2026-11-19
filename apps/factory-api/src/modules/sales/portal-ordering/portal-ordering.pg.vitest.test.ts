@@ -608,9 +608,14 @@ describe('B-CP-076: "Your price" in the draft, frozen at Send, carried onto the 
     h.clock.set(new Date(Date.now() - 2_000))
   }, 120_000)
 
+  // B-CP-076 (fix wave cp-fx8): the delivery-address cases above make their own address P1's default and then archive it, so P1 has
+  // no default delivery address here and an ORDER accept is refused in words (orders/manual.ts, right). Each draft names the seed's
+  // own delivery address of P1 (Seed Racing workshop: ACTIVE, never checked).
+  const P1_WORKSHOP = seedUuid(NS, 'party-address:P1:workshop')
+
   /** A draft of P1: a black line (Your price `black`), a red line (Your price `red`), a described line of 4 pieces at 395.50; sent or not. */
   async function pricedRequest(ref: string, prices: { black: string | null; red: string | null }, send: boolean): Promise<Json> {
-    const made = await ok(browsers.buyer, 'POST', '/portal/order-requests', { customerRef: ref }, 201)
+    const made = await ok(browsers.buyer, 'POST', '/portal/order-requests', { customerRef: ref, shipToAddressId: P1_WORKSHOP }, 201)
     const url = `/portal/order-requests/${made.request.id}`
     const lines = await ok(browsers.buyer, 'POST', `${url}/lines`, {
       version: made.request.version,

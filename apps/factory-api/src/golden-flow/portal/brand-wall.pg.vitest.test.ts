@@ -328,6 +328,10 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
 
   // ---- B-CP-080 (customer page plan C5–C7, D3, D10–D12; review E3; walls W-CP-1, W-CP-5, W-CP-7, M-CP-1, M-CP-2): the draft order --
   it('B04 Brand Alpha’s draft order: its Designer starts it (a described line, a made-to-measure line whose people are in a sheet, a logo) and asks its factory designer once; the office reads it read-only; the Buyer adds Your price and sends it; the office maps it (a quote: made to measure comes first as a quote); a second draft becomes an order and the customer’s prices carry over by the line map', async () => {
+    // B-CP-080 (fix wave cp-fx8): this step is Brand Alpha's own day and moves its own Home (its order, its files, its artwork to
+    // approve). T05 checks Brand Beta's day (B03) against Alpha's Home on both sides of it: as B02 left it, here before this step.
+    await settle()
+    G.alphaHomeBeforeDraft = await alphaHome()
     const draftWords = 'Alpha team jackets AX-300 with the yellow piping on the collar'
     // The factory designer of Brand Alpha: an office person who reads and writes Alpha's threads, named on "Who looks after".
     G.factoryDesigner = await person(w, 'gioDesigner', 'sales')
@@ -450,6 +454,8 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
     if (project) await asBrand(alpha, seen, 'GET', `/portal/projects/${project.id}/people/choices`, undefined, null)
     await asBrand(alpha, seen, 'GET', '/portal/factory-designer')
     await settle()
+    // B-CP-080 (fix wave cp-fx8): Alpha's Home after its own draft order — what Brand Beta's reads that follow (T02, T03) must not move (T05).
+    G.alphaHomeAfterDraft = await alphaHome()
   })
   // ---- end B-CP-080
 
@@ -516,7 +522,11 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
 
   it('T05 Brand Beta’s jacket, quote, message, task and notices never moved Brand Alpha’s Home numbers', async () => {
     await settle()
-    expect(await alphaHome()).toEqual(G.alphaHome)
+    // B-CP-080 (fix wave cp-fx8): B04, Brand Alpha's own draft order, runs between B02's reading and this step and moves Alpha's own
+    // numbers. So both sides of every Brand Beta step: Beta's day (B03) left Alpha's Home as B02 did (read again before B04), and
+    // nothing since Alpha's own B04 (Beta's sweep T02, the office person limited to Beta T03) moved it.
+    expect(G.alphaHomeBeforeDraft).toEqual(G.alphaHome)
+    expect(await alphaHome()).toEqual(G.alphaHomeAfterDraft)
     // Not vacuous: Brand Beta's own Home counts what waits for it (the artwork to approve).
     const home = await asBrand(beta, seen, 'GET', '/portal/home')
     expect((home.counts as Json[]).some((count) => typeof count.value === 'number' && count.value > 0)).toBe(true)

@@ -414,7 +414,11 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
     expect(refused.error.message).not.toBe('')
     // B-W2b-F40: no perforation chosen, so SEED-JKT-05's step 20 SEED-PERF (front perforation only) is for none of the work
     // order's cells (it was a 500 at the release; P03 releases it without that step).
-    const saved = await ok(P.sales, 'PUT', `${base}/options`, { version: G.quote.version, picks: [{ valueId: V.linerYes }, { valueId: V.name, text: 'ROSSI' }, { valueId: V.armourStd }] })
+    // B-CP-026 (Owner answer A; fix wave cp-fx8): the liner and the name add to the line's price — options that move money are saved by
+    // someone who sees prices: as Sales worker 403 in words (nothing written), the Owner saves them.
+    const picks = [{ valueId: V.linerYes }, { valueId: V.name, text: 'ROSSI' }, { valueId: V.armourStd }]
+    expect(refusalOf(await ok(P.sales, 'PUT', `${base}/options`, { version: G.quote.version, picks }, 403))).toBe('refusal/BLIND_PRICE')
+    const saved = await ok(P.owner, 'PUT', `${base}/options`, { version: G.quote.version, picks })
     G.quote = saved.quote
     const chosen = (await ok(P.sales, 'GET', `${base}/configurator`)).chosen as Json[]
     expect(chosen.map((row) => row.valueId).sort()).toEqual([V.linerYes, V.name, V.armourStd].sort())
@@ -496,7 +500,10 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
     }
     const check = await ok(P.sales, 'GET', `/sales/quotes/${G.quote.id}/send-check`)
     expect(check.checks.filter((entry: Json) => entry.severity === 'BLOCKS'), JSON.stringify(check.checks)).toEqual([])
-    const sent = await ok(P.sales, 'POST', `/sales/quotes/${G.quote.id}/send`, { version: G.quote.version })
+    // B-CP-011 (the money wall; fix wave cp-fx8): the quote's PDF shows our prices — as Sales worker 403 in words (nothing sent); the
+    // Owner sends it.
+    expect(refusalOf(await ok(P.sales, 'POST', `/sales/quotes/${G.quote.id}/send`, { version: G.quote.version }, 403))).toBe('refusal/PRICED_DOCUMENT')
+    const sent = await ok(P.owner, 'POST', `/sales/quotes/${G.quote.id}/send`, { version: G.quote.version })
     expect(sent).toMatchObject({ quote: { status: 'SENT' }, delivery: 'sent' })
     G.quote = sent.quote
     G.recipient = sent.sent.to
@@ -523,7 +530,8 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
       G.quote = (await ok(P.sales, 'POST', `/sales/quotes/${G.quote.id}/approval`, { version: G.quote.version, note: 'More red jackets (made up).' })).quote
       G.quote = (await ok(P.finance, 'POST', `/sales/quotes/${G.quote.id}/approval/approve`, { version: G.quote.version })).quote
     }
-    const sent = await ok(P.sales, 'POST', `/sales/quotes/${G.quote.id}/send`, { version: G.quote.version })
+    // B-CP-011 (fix wave cp-fx8): version 2's PDF shows our prices too — the Owner sends it.
+    const sent = await ok(P.owner, 'POST', `/sales/quotes/${G.quote.id}/send`, { version: G.quote.version })
     G.quote = sent.quote
     G.v2 = sent.sent.versionId
     keep(sent.sent.versionId)
@@ -581,12 +589,15 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
   })
 
   it('C08 the order confirmation: its PDF made (the same contents give the same version back) and mailed to the brand', async () => {
-    const madeOne = await ok(P.sales, 'POST', `/sales/orders/${G.order.id}/confirmation`, { language: 'it' }, 201)
+    // B-CP-011 (the money wall; fix wave cp-fx8): the confirmation shows our prices — as Sales worker 403 in words (nothing made); the
+    // Owner makes it and mails it.
+    expect(refusalOf(await ok(P.sales, 'POST', `/sales/orders/${G.order.id}/confirmation`, { language: 'it' }, 403))).toBe('refusal/PRICED_DOCUMENT')
+    const madeOne = await ok(P.owner, 'POST', `/sales/orders/${G.order.id}/confirmation`, { language: 'it' }, 201)
     expect(madeOne).toMatchObject({ made: true, fileId: expect.any(String) })
     keep(madeOne.fileId)
-    const again = await ok(P.sales, 'POST', `/sales/orders/${G.order.id}/confirmation`, { language: 'it' }, 201)
+    const again = await ok(P.owner, 'POST', `/sales/orders/${G.order.id}/confirmation`, { language: 'it' }, 201)
     expect(again.made).toBe(false)
-    const sent = await ok(P.sales, 'POST', `/sales/orders/${G.order.id}/confirmation/send`, {}, 201)
+    const sent = await ok(P.owner, 'POST', `/sales/orders/${G.order.id}/confirmation/send`, {}, 201)
     expect(JSON.stringify(sent)).not.toMatch(/#token=/)
     const state = (await ok(P.sales, 'GET', `/sales/orders/${G.order.id}/confirmation`)).confirmation
     expect(state, JSON.stringify(state)).toMatchObject({ upToDate: true, sentVersion: expect.any(Number) })
@@ -980,20 +991,23 @@ describe('the W2b-5 golden flow: an inquiry to a confirmed order with options an
   })
 
   it('R03 the repair quote: drafted, priced (by the Owner), sent; the repair may not be approved while it waits (refused in words); the brand’s yes recorded by the office: the repair APPROVED; the case told again', async () => {
-    let view = await ok(P.sales, 'POST', `/sales/repairs/${G.repair.id}/estimates`, { customerNote: 'Return transport included (made up).' }, 201)
+    // B-CP-011 (the money wall; fix wave cp-fx8): an estimate is prices (repairs-depth/estimates.ts PRICES_WORDS): a Sales worker may not
+    // draft one (403 in words); the Owner drafts, prices and sends it, and records the brand's answer.
+    expect((await ok(P.sales, 'POST', `/sales/repairs/${G.repair.id}/estimates`, { customerNote: 'Return transport included (made up).' }, 403)).error.message).toMatch(/^An estimate is prices/)
+    let view = await ok(P.owner, 'POST', `/sales/repairs/${G.repair.id}/estimates`, { customerNote: 'Return transport included (made up).' }, 201)
     const draft = view.estimates[0]
     // B-CP-011 (the money wall): the estimate's priced line is the Owner's; Sales may not send a price (403).
     const labour = { version: draft.version, kind: 'LABOUR', description: 'Re-sew the shoulder seam', quantity: '1', minutes: 40, unitPrice: '35.00' }
     await ok(P.sales, 'POST', `/sales/repairs/estimates/${draft.id}/lines`, labour, 403)
     view = await ok(P.owner, 'POST', `/sales/repairs/estimates/${draft.id}/lines`, labour, 201)
-    view = await ok(P.sales, 'POST', `/sales/repairs/estimates/${draft.id}/send`, { version: view.estimates[0].version })
+    view = await ok(P.owner, 'POST', `/sales/repairs/estimates/${draft.id}/send`, { version: view.estimates[0].version })
     expect(view.estimates[0].status).toBe('SENT')
     const repair = (await ok(P.sales, 'GET', `/sales/repairs/${G.repair.id}`)).repair
     // REFUSAL: W2a's stage route waits for the customer's answer.
     const early = await ok(P.sales, 'POST', `/sales/repairs/${G.repair.id}/stage`, { version: repair.version, to: 'APPROVED', note: 'Approved (made up).' }, 409)
     expect(early.error.message).toMatch(/waits for the customer's answer/)
     const sent = view.estimates[0]
-    const answered = await ok(P.sales, 'POST', `/sales/repairs/estimates/${sent.id}/answer`, { version: sent.version, answer: 'ACCEPTED', how: 'By phone with the brand’s buyer (made up)', answeredByName: 'Seed Buyer One' })
+    const answered = await ok(P.owner, 'POST', `/sales/repairs/estimates/${sent.id}/answer`, { version: sent.version, answer: 'ACCEPTED', how: 'By phone with the brand’s buyer (made up)', answeredByName: 'Seed Buyer One' })
     expect(answered.repair.stage).toBe('APPROVED')
     const moved = await ok(P.sales, 'POST', `/sales/service/cases/${G.case.id}/status`, { version: G.case.version, to: 'WAITING_PART', message: 'The repair is approved; we wait for the thread (made up).' })
     expect(moved.notified).toMatchObject({ sent: true, to: BUYER })

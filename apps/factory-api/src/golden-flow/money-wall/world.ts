@@ -103,8 +103,11 @@ export const CUSTOMER_ROLE_KEYS = Object.freeze(['customer-buyer', 'customer-vie
 export const MONEY = Object.freeze({
   alphaPo: 'Brand Alpha PO MW-4471 ZQXMWPO.pdf',
   alphaPoToken: 'ZQXMWPO',
-  logo: 'Brand Alpha logo MW-4471 ZQXMWLOGO.pdf',
-  logoToken: 'ZQXMWLOGO',
+  // B-CP-022 (fix wave cp-fx8): the plain logo's token shares no letter triple with the priced PO's. The search finds a word that is
+  // only similar (pg_trgm word_similarity ≥ 0.45): ZQXMWLOGO was 0.6 like ZQXMWPO, so M10's search for the priced name found the
+  // note by its logo ("similar") — the priced name itself was never indexed (search/indexers/message.ts, B-CP-023).
+  logo: 'Brand Alpha logo MW-4471 VKJLOGOBT.pdf',
+  logoToken: 'VKJLOGOBT',
   betaPo: 'Brand Beta PO MW-7701.pdf',
   betaRef: 'BETA-PO-MW-7701',
   priceNote: 'MW: the customer’s PO, page 2',
