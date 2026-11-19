@@ -438,7 +438,7 @@ describe('F-SA-262 — the order dock picks ONE conversation, the scope in the a
     expect(dock).toContain("const seesWork = held.includes('workorders.view')")
     // All of <customer>: read only, "Write in: This order · General".
     expect(dock).toContain('<AllOfCustomerDock') // F-OP-204: the card with its Head
-    expect(dock).toContain('actions={{ ...feed.actions, onAnswer }}')
+    expect(dock).toContain('actions={{ ...feed.actions, onAnswer, writeFirst }}')
     expect(dock).toContain("t('record.dock.writeIn')")
     // F-OP-209: the scope is written by the frame's ONE writer (a history replace: Back keeps it; no router.replace).
     expect(dock).toContain('frame?.setThread?.(scopeValueOf(next, narrow), { message: messageId })')

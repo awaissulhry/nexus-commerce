@@ -1,15 +1,17 @@
 'use client'
 
-import type { ReactNode } from 'react'
-import { CornerDownRight } from 'lucide-react'
-import { EmptyState } from '@nexus/ui/components'
+import { useState, type ReactNode } from 'react'
+import { CornerDownRight, Lock, Paperclip } from 'lucide-react'
+import { Banner, EmptyState } from '@nexus/ui/components'
 import { Button, InfoTip, Skeleton } from '@nexus/ui/primitives'
-import { useT } from '../../../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../../../lib/i18n/provider'
+import { dayOf } from '../../../../../lib/record-thread/parts/time' // F-OP-205: a line's time
 import { MessageCard } from '../../../../../lib/record-thread/card/view/MessageCard'
 import { WIDTH_NS } from '../../../../../lib/record-thread/head/view/WidthMenu' // F-OP-204: the Head's words (width, ⋯)
 import { RecordTypeIcon } from '../../../../search/RecordTypeIcon'
 import { PickedDockColumn } from '../../ThreadPick' // F-OP-204: the dock's one card
 import { opensItself, type AllOfCustomerModel, type FeedItem, type FeedKindChoice, type FeedView, type Words } from '../model'
+import { lineTimeOf } from '../model' // F-OP-205
 import { FeedHead } from './FeedHead' // F-OP-204
 import '../all-of-customer.css'
 
@@ -35,6 +37,8 @@ export interface AllOfCustomerFeedActions {
   readonly onAnswer?: (record: FeedRecordRef, messageId: string) => void
   /** A file of a message: the host's viewer. Without it the file is opened in its conversation (onAnswer). */
   readonly onOpenFile?: (fileId: string, record: FeedRecordRef, messageId: string) => void
+  /** F-OP-205: the empty feed's door — "Write the first one in <thread>" (the host's own thread, the box on Office note). */
+  readonly writeFirst?: { readonly thread: string; readonly onWrite: () => void }
 }
 
 /**
@@ -78,30 +82,75 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
   const t = useT('record-thread')
   const customer = model.customerName
   const words = (text: Words) => t(text.key, text.params)
+  // F-OP-205: a line opens its whole card in place on the person's act (More, or Space), and closes again; nothing opens by itself.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set())
+  const toggle = (key: string) =>
+    setOpened((now) => {
+      const next = new Set(now)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  const filtered = model.view !== 'all' || model.kind !== 'every'
+  const today = dayOf(new Date())
 
+  // F-OP-205 (11-dock §3.5): every state inside the card — the pick band, the Head and the foot stay; only the body says it.
   return (
     <div className="fw-aoc">
       {model.status === 'loading' || model.status === 'idle' ? (
         <div className="fw-aoc-loading" aria-busy="true" aria-label={t('allOfCustomer.loading', { customer })}>
           {[0, 1, 2].map((row) => (
-            <Skeleton key={row} height={72} radius={8} />
+            <Skeleton key={row} height={64} radius={8} />
           ))}
         </div>
       ) : model.status === 'failed' ? (
-        <div className="fw-aoc-state" role="alert">
-          <p>{t('allOfCustomer.failed')}</p>
-          <Button size="sm" onClick={() => actions?.onRetry?.()}>
-            {t('allOfCustomer.retry')}
-          </Button>
-        </div>
+        <Banner
+          tone="danger"
+          title={t('allOfCustomer.failed')}
+          action={
+            <Button size="sm" onClick={() => actions?.onRetry?.()}>
+              {t('allOfCustomer.retry')}
+            </Button>
+          }
+        />
       ) : model.status === 'gone' ? (
-        <p className="fw-aoc-state">{t('allOfCustomer.gone')}</p>
+        <EmptyState className="fw-aoc-empty" icon={<Lock size={20} aria-hidden />} title={t('allOfCustomer.gone')} />
+      ) : model.items.length === 0 && filtered ? (
+        <EmptyState
+          className="fw-aoc-empty"
+          title={t('allOfCustomer.empty', { customer })}
+          description={t('allOfCustomer.emptyFiltered')}
+          action={
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                actions?.onView?.('all')
+                actions?.onKind?.('every')
+              }}
+            >
+              {t('allOfCustomer.showEverything')}
+            </Button>
+          }
+        />
       ) : model.items.length === 0 ? (
-        <EmptyState className="fw-aoc-empty" title={t('allOfCustomer.empty', { customer })} description={model.view !== 'all' || model.kind !== 'every' ? t('allOfCustomer.emptyFiltered') : undefined} />
+        <EmptyState
+          className="fw-aoc-empty"
+          title={t('allOfCustomer.empty', { customer })}
+          {...(actions?.writeFirst
+            ? {
+                action: (
+                  <Button size="sm" variant="secondary" onClick={actions.writeFirst.onWrite}>
+                    {t('allOfCustomer.writeFirst', { thread: actions.writeFirst.thread })}
+                  </Button>
+                ),
+              }
+            : {})}
+        />
       ) : (
         <ol className="fw-aoc-list" aria-label={t('allOfCustomer.feedLabel', { customer })}>
           {model.items.map((item) => (
-            <FeedLine key={item.key} item={item} model={model} actions={actions} chip={words(item.chip)} />
+            <FeedLine key={item.key} item={item} model={model} actions={actions} chip={words(item.chip)} open={opened.has(item.key)} onToggle={() => toggle(item.key)} today={today} />
           ))}
         </ol>
       )}
@@ -122,14 +171,25 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
   )
 }
 
-/** One message of the feed: its chip, its card (read only), its door. */
-function FeedLine({ item, model, actions, chip }: { item: FeedItem; model: AllOfCustomerModel; actions: AllOfCustomerFeedActions | undefined; chip: string }) {
+/**
+ * One message of the feed, as ONE compact line (F-OP-205, 11-dock §3.2): row 1 its record chip (a real link: ⌘-click a new tab; a plain
+ * click switches the dock to that conversation), the "New" dot, who reads it and its time; row 2 "author: words" (two lines at most);
+ * row 3 at most three file chips and "+N"; the edge in the audience's colour. More opens the conversation's own card READ ONLY in
+ * place (aria-expanded), Less closes it; the door answers in its conversation.
+ */
+function FeedLine({ item, model, actions, chip, open, onToggle, today }: { item: FeedItem; model: AllOfCustomerModel; actions: AllOfCustomerFeedActions | undefined; chip: string; open: boolean; onToggle: () => void; today: string }) {
   const t = useT('record-thread')
+  const tc = useT('record-thread-card')
+  const locale = useLocale()
   const answer = actions?.onAnswer
   const openFile = (fileId: string) => (actions?.onOpenFile ? actions.onOpenFile(fileId, item.record, item.key) : answer?.(item.record, item.key))
+  const { line, card } = item
+  const author = 'text' in line.author ? line.author.text : tc(line.author.key)
+  const gist = 'text' in line.gist ? line.gist.text : line.gist.ns === 'record-thread-card' ? tc(line.gist.key) : t(line.gist.key)
+  const wholeId = `fw-aoc-whole-${item.key}`
   return (
-    <li className={`fw-aoc-item${item.isNew ? ' is-new' : ''}`}>
-      <div className="fw-aoc-chiprow">
+    <li className={`fw-aoc-line is-${line.audience}${item.isNew ? ' is-new' : ''}`}>
+      <div className="fw-aoc-line-top">
         <a
           className="fw-aoc-chip"
           href={item.href}
@@ -149,9 +209,33 @@ function FeedLine({ item, model, actions, chip }: { item: FeedItem; model: AllOf
             {t('allOfCustomer.new')}
           </span>
         )}
+        <span className="fw-aoc-audience">{line.audience === 'shared' ? t('allOfCustomer.audience.shared', { customer: model.customerName }) : t('allOfCustomer.audience.office')}</span>
+        <time className="fw-aoc-time" dateTime={card.at}>
+          {lineTimeOf(card.at, locale, today)}
+        </time>
       </div>
-      <MessageCard message={item.card} context={model.card} readOnly actions={{ onOpenFile: openFile }} />
+      <p className="fw-aoc-gist">
+        <span className="fw-aoc-author">{author}:</span> {gist}
+      </p>
+      {(line.files.shown.length > 0 || line.files.more > 0) && (
+        <div className="fw-aoc-files">
+          {line.files.shown.map((file) => (
+            <button key={file.id} type="button" className="fw-aoc-file" title={file.name} onClick={() => openFile(file.id)}>
+              <Paperclip size={12} aria-hidden />
+              <span>{file.name}</span>
+            </button>
+          ))}
+          {line.files.more > 0 && (
+            <span className="fw-aoc-file is-more" aria-label={t('allOfCustomer.moreFiles', { count: line.files.more })}>
+              +{line.files.more}
+            </span>
+          )}
+        </div>
+      )}
       <div className="fw-aoc-doors">
+        <Button size="sm" variant="quiet" aria-expanded={open} aria-controls={wholeId} onClick={onToggle}>
+          {t(open ? 'allOfCustomer.less' : 'allOfCustomer.more')}
+        </Button>
         {answer ? (
           <Button size="sm" variant="quiet" aria-label={t('allOfCustomer.answerLabel', { record: chip })} onClick={() => answer(item.record, item.key)}>
             <CornerDownRight size={14} aria-hidden /> {t('allOfCustomer.answer')}
@@ -161,6 +245,9 @@ function FeedLine({ item, model, actions, chip }: { item: FeedItem; model: AllOf
             <CornerDownRight size={14} aria-hidden /> {t('allOfCustomer.answer')}
           </a>
         )}
+      </div>
+      <div id={wholeId} className="fw-aoc-whole" hidden={!open}>
+        {open && <MessageCard message={card} context={model.card} readOnly actions={{ onOpenFile: openFile }} />}
       </div>
     </li>
   )

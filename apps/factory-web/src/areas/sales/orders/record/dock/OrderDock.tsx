@@ -128,6 +128,8 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
     const entry = feed.state.entries.find((one) => one.record.type === record.type && one.record.id === record.id && one.message.id === messageId)
     if (entry) router.push(messageHrefOf(entry, prefix))
   }
+  // F-OP-205: the empty feed's door — the first message goes into this order's thread, the box on Office note (the frame's ask).
+  const writeFirst = { thread: t('record.dock.order'), onWrite: () => (frame?.compose ? frame.compose({ record: { type: 'SalesOrder', id: order.id }, messageId: null, mode: 'note' }) : go(ORDER_SCOPE)) }
 
   // ── the pick ──
   const segments = choicesOffered(offer)
@@ -184,7 +186,7 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
       <AllOfCustomerDock
         label={`${t('record.dock.all', { customer })} · ${t('record.dock.readOnly')}`}
         model={feed.model}
-        actions={{ ...feed.actions, onAnswer }}
+        actions={{ ...feed.actions, onAnswer, writeFirst }}
         customerHref={`${prefix}/sales/customers/${encodeURIComponent(order.partyId)}`}
         foot={
           // Writing always goes into ONE conversation: the two the person may pick here.

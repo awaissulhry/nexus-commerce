@@ -84,6 +84,17 @@
     "notShown_other": "{count} conversations of {customer} you cannot open are left out.",
     "openRecord": "Open {record}",
     "new": "New",
+    "audience": {
+      "shared": "{customer} reads it",
+      "office": "Office only"
+    },
+    "filesOnly": "Files only",
+    "more": "More",
+    "less": "Less",
+    "moreFiles_one": "1 more file",
+    "moreFiles_other": "{count} more files",
+    "writeFirst": "Write the first one in {thread}",
+    "showEverything": "Show everything",
     "answer": "Answer in its conversation",
     "answerLabel": "Answer in the conversation of {record}",
     "chip": {

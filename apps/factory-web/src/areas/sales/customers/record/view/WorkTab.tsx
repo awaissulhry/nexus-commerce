@@ -238,6 +238,8 @@ function Dock({ customer, general, dock, feed, prefix }: DockProps) {
     const entry = feed.state.entries.find((one) => one.record.type === record.type && one.record.id === record.id)
     dock.onAnswer({ type: record.type, id: record.id, label: entry?.record.label ?? record.type, companyId: entry?.record.companyId ?? null }, messageId)
   }
+  // F-OP-205: the empty feed's door — the first message goes into the customer's general thread, the box on Office note.
+  const writeFirst = { thread: t('customers.work.dock.general', { customer: customer.name }), onWrite: () => (frame?.compose ? frame.compose({ record: { type: 'Party', id: customer.id }, messageId: null, mode: 'note' }) : dock.onScope('general')) }
   return (
     <ThreadPick label={t('customers.work.dock.label')} choices={choices} value={dock.scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>
       {dock.scope === 'record' && pick ? (
@@ -255,7 +257,7 @@ function Dock({ customer, general, dock, feed, prefix }: DockProps) {
       ) : dock.scope === 'all' ? (
         // F-OP-203: All of <customer> in the dock's ONE card (DockColumn): the pick band on top, the read-only feed that scrolls.
         // F-OP-204: its Head row (FeedHead); this page IS the customer's, so its ⋯ has no "Open <customer>".
-        <AllOfCustomerDock label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} model={feed.model} actions={{ ...feed.actions, onAnswer }} />
+        <AllOfCustomerDock label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} model={feed.model} actions={{ ...feed.actions, onAnswer, writeFirst }} />
       ) : (
         general
       )}

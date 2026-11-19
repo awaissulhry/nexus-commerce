@@ -84,6 +84,17 @@
     "notShown_other": "{count} conversazioni di {customer} che non puoi aprire sono escluse.",
     "openRecord": "Apri {record}",
     "new": "Nuovo",
+    "audience": {
+      "shared": "{customer} lo legge",
+      "office": "Solo ufficio"
+    },
+    "filesOnly": "Solo file",
+    "more": "Altro",
+    "less": "Meno",
+    "moreFiles_one": "1 altro file",
+    "moreFiles_other": "altri {count} file",
+    "writeFirst": "Scrivi il primo in {thread}",
+    "showEverything": "Mostra tutto",
     "answer": "Rispondi nella sua conversazione",
     "answerLabel": "Rispondi nella conversazione di {record}",
     "chip": {

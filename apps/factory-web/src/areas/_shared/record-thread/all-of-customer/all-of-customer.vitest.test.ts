@@ -28,6 +28,7 @@ import {
 import { AllOfCustomerFeed } from './view/AllOfCustomerFeed'
 import { AllOfCustomerDock } from './view/AllOfCustomerFeed' // F-OP-204
 import { FeedHead } from './view/FeedHead' // F-OP-204
+import { gistOf, GIST_CHARS, LINE_FILES, lineAudienceOf, lineFilesOf, lineTimeOf } from './model' // F-OP-205
 
 /**
  * F-SA-261 (sales page plan R4, P9, N4, N5) — "All of <Customer>", the read-only merged view: its one call, paging (Show older, no
@@ -303,3 +304,94 @@ describe('F-OP-204 — All of <Customer> inside the card: FeedHead, the width me
   })
 })
 // ---- end F-OP-204
+
+// ---- F-OP-205 (order page plan N4; 11-dock §3.2, §3.5; RC2, RC3): ONE compact line per message, the whole card in place, every state
+// inside the card ---------------------------------------------------------------------------------------------------------------------
+describe('F-OP-205 — compact lines, expand in place, the states inside the card', () => {
+  const model = (state: FeedState, over: Partial<Parameters<typeof feedModel>[1]> = {}) => feedModel(state, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true, ...over })
+  const file = (id: string, status: 'AVAILABLE' | 'QUARANTINED' = 'AVAILABLE') => ({ id, name: `${id}.pdf`, sizeBytes: 10, contentType: 'application/pdf', status })
+
+  it('the gist: the message\'s own words in one run (the quoted reply left out), at most two lines\' worth; an erased one says why', () => {
+    const card = cardOfEntry(entry('m1', 10))
+    expect(gistOf({ ...card, body: 'Can we move the delivery?\n\nOn 12 Nov, Alex wrote:\n> the old text' })).toEqual({ text: 'Can we move the delivery?' })
+    expect(gistOf({ ...card, body: 'one\n  two\tthree' })).toEqual({ text: 'one two three' })
+    const long = gistOf({ ...card, body: 'x'.repeat(600) })
+    expect('text' in long && long.text.length).toBe(GIST_CHARS)
+    expect(gistOf({ ...card, erased: true })).toEqual({ key: 'erased.line', ns: 'record-thread-card' })
+    expect(gistOf({ ...card, body: '', files: [file('f1')] })).toEqual({ key: 'allOfCustomer.filesOnly', ns: 'record-thread' })
+  })
+
+  it('at most three file chips and "+N" for the rest; a file in quarantine or without files.read is only counted', () => {
+    expect(LINE_FILES).toBe(3)
+    const five = ['a', 'b', 'c', 'd', 'e'].map((id) => file(id))
+    expect(lineFilesOf(five, true)).toEqual({ shown: five.slice(0, 3), more: 2 })
+    expect(lineFilesOf(five.slice(0, 2), true)).toEqual({ shown: five.slice(0, 2), more: 0 })
+    expect(lineFilesOf([file('q', 'QUARANTINED'), file('a')], true)).toEqual({ shown: [file('a')], more: 1 })
+    expect(lineFilesOf(five, false)).toEqual({ shown: [], more: 5 })
+  })
+
+  it('who reads it: the customer\'s messages and ours reach them; a note stays in the office; the time of day today, else the date', () => {
+    expect(lineAudienceOf({ kind: 'theirs' })).toBe('shared')
+    expect(lineAudienceOf({ kind: 'ours' })).toBe('shared')
+    expect(lineAudienceOf({ kind: 'note' })).toBe('office')
+    expect(lineAudienceOf({ kind: 'floor' })).toBe('office')
+    expect(lineTimeOf('2026-11-18T09:12:00.000Z', 'en', '2026-11-18')).toBe('10:12')
+    expect(lineTimeOf('2026-11-16T09:12:00.000Z', 'en', '2026-11-18')).toMatch(/^16 Nov 10:12$/)
+  })
+
+  it('a line: chip · New · who reads it · time, then "author: words"; the edge in the audience\'s colour; the card only after More', () => {
+    const state = afterFirst(EMPTY_FEED, answer([entry('m2', 20, ORDER, { new: true }), entry('m1', 10, ORDER, { direction: 'INTERNAL_NOTE', audience: 'OFFICE' })]))
+    const html = render(createElement(AllOfCustomerFeed, { model: model(state), actions: { onAnswer: () => undefined } }))
+    expect(html.match(/class="fw-aoc-line is-shared is-new"/g)?.length).toBe(1)
+    expect(html.match(/class="fw-aoc-line is-office"/g)?.length).toBe(1)
+    const text = textOf(html)
+    expect(text).toContain('Brand Alpha reads it')
+    expect(text).toContain('Office only')
+    expect(text).toContain('Madeup Buyer: Message m2')
+    // Collapsed: no card drawn; More says it opens (aria-expanded), the region it controls is there and hidden.
+    expect(html).not.toContain('class="fw-rt-msg ')
+    expect(html.match(/aria-expanded="false"/g)?.length).toBe(2)
+    expect(html).toContain('aria-controls="fw-aoc-whole-m2"')
+    expect(html).toContain('id="fw-aoc-whole-m2" class="fw-aoc-whole" hidden=""')
+    const italian = textOf(render(createElement(AllOfCustomerFeed, { model: model(state) }), 'it'))
+    expect(italian).toContain('Brand Alpha lo legge')
+    expect(italian).toContain('Solo ufficio')
+    expect(italian).toContain('Altro')
+    expect(leftKeys(render(createElement(AllOfCustomerFeed, { model: model(state) }), 'it'), ['allOfCustomer', 'erased'])).toEqual([])
+  })
+
+  it('the states inside the card: three 64 px lines while reading, a danger banner, a lock when out of reach, the empty doors', () => {
+    const reading = render(createElement(AllOfCustomerFeed, { model: model({ ...EMPTY_FEED, status: 'loading' }) }))
+    expect(reading.match(/height:64px/g)?.length).toBe(3)
+    expect(render(createElement(AllOfCustomerFeed, { model: model({ ...EMPTY_FEED, status: 'failed' }) }))).toContain('nds-banner danger')
+    const gone = render(createElement(AllOfCustomerFeed, { model: model({ ...EMPTY_FEED, status: 'gone' }) }))
+    expect(gone).toContain('class="nds-empty fw-aoc-empty"')
+    expect(gone).toContain('lucide-lock')
+    // Empty: the host's own thread to write the first one in; filtered empty: Show everything (View All, Kind Every).
+    const written: string[] = []
+    const empty = textOf(render(createElement(AllOfCustomerFeed, { model: model(ready([])), actions: { writeFirst: { thread: 'This order', onWrite: () => written.push('x') } } })))
+    expect(empty).toContain('Write the first one in This order')
+    expect(textOf(render(createElement(AllOfCustomerFeed, { model: model(ready([])) })))).not.toContain('Write the first one')
+    const filtered = textOf(render(createElement(AllOfCustomerFeed, { model: model(ready([]), { kind: 'QUOTES' }), actions: { writeFirst: { thread: 'This order', onWrite: () => undefined } } })))
+    expect(filtered).toContain('Show everything')
+    expect(filtered).not.toContain('Write the first one')
+    expect(textOf(render(createElement(AllOfCustomerFeed, { model: model(ready([]), { kind: 'QUOTES' }) }), 'it'))).toContain('Mostra tutto')
+  })
+
+  it('the hosts give the empty feed its door (the frame\'s compose ask, the box on Office note); the spaces mean their px', () => {
+    const order = readFileSync(new URL('../../../sales/orders/record/dock/OrderDock.tsx', import.meta.url), 'utf8')
+    expect(order).toContain("frame.compose({ record: { type: 'SalesOrder', id: order.id }, messageId: null, mode: 'note' })")
+    const customer = readFileSync(new URL('../../../sales/customers/record/view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(customer).toContain("frame.compose({ record: { type: 'Party', id: customer.id }, messageId: null, mode: 'note' })")
+    const css = readFileSync(new URL('./all-of-customer.css', import.meta.url), 'utf8')
+    // RC3: the 2–5 px gaps and the 2 px / 3 px chip padding are gone; the line is 8 / 10 px, 8 px apart, its chips 20 px high.
+    expect(css).not.toMatch(/var\(--nds-space-[235]\)/)
+    expect(css).toMatch(/\.fw-aoc-line \{[^}]*padding: var\(--nds-space-8\) var\(--nds-space-10\);/)
+    expect(css).toMatch(/\.fw-aoc-list \{[^}]*gap: var\(--nds-space-8\);/)
+    expect(css).toMatch(/\.fw-aoc-chip \{[^}]*height: 20px;[^}]*padding: 0 var\(--nds-space-8\);/)
+    expect(css).toMatch(/\.fw-aoc-line\.is-office \{[^}]*background: var\(--nds-warning-soft\);/)
+    // RC2: the body scrolls in the card (.fw-rt-body), never the feed itself.
+    expect(css).not.toMatch(/overflow-y:\s*auto/)
+  })
+})
+// ---- end F-OP-205
