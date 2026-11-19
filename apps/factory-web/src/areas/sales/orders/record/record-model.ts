@@ -109,6 +109,10 @@ export interface AmendState {
   extraOutcome: ExtraOutcome | null
   /** F-OP-108: the optional fee of a priced change (price grain), as typed; empty: none. */
   fee: string
+  // ---- F-OP-110: Ship to in the header — the address picked ('' keeps the order's), the customer's delivery addresses (null: no
+  // right to read them, parties.view) ----
+  shipToAddressId?: string
+  addresses?: Part<ShipToAddress[]> | null
 }
 
 // ---- F-OP-111: Split into new orders… (use-lines-acts) ----
@@ -305,7 +309,9 @@ export interface OrderRecordActions {
   onAmendDiscard?: () => void
   onAmendCells?: (styleId: string, next: Record<string, Record<string, number>>) => void
   onAmendPrice?: (key: string, text: string) => void
-  onAmendHeader?: (field: 'customerRef' | 'requestedDate', value: string) => void
+  onAmendHeader?: (field: 'customerRef' | 'requestedDate' | 'shipToAddressId' /* F-OP-110 */, value: string) => void
+  /** F-OP-110: ⋯ Change ship-to… — edit mode with Ship to focused (one edit path). */
+  onChangeShipTo?: () => void
   // ---- F-OP-106: the strip — ask its preview now (blur, Try again), Why, the words for the customer and their tick, ONE Apply
   onAmendPreview?: () => void
   onAmendReason?: (text: string) => void

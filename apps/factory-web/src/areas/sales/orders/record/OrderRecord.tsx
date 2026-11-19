@@ -332,6 +332,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     },
     pricedStart: (amendment) => depth.actions.onPricedStart?.(amendment),
     permissions: session.permissions, // F-OP-111: the split's Ship to reads the customer's addresses (parties.view)
+    focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), // F-OP-110: ⋯ Change ship-to… focuses Ship to
   })
   const productionActs = useProductionActs({
     api,

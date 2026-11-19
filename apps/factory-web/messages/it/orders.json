@@ -946,7 +946,14 @@
       "loses_one": "{numbers} perde questa riga",
       "loses_other": "{numbers} perdono questa riga"
     },
-    "closedShort": "Chiusa in anticipo: la fanno gli ordini di lavoro"
+    "closedShort": "Chiusa in anticipo: la fanno gli ordini di lavoro",
+    "shipTo": "Spedire a",
+    "shipToKeep": "Come ora: {address}",
+    "shipToHeld": "Un altro indirizzo di consegna richiede il diritto di vedere i clienti: l'ordine mantiene il suo indirizzo.",
+    "shipToFailed": "Non è stato possibile leggere gli indirizzi di consegna: l'ordine mantiene il suo indirizzo.",
+    "shipToPrepared": "Si sta preparando una spedizione al vecchio indirizzo: cambialo lì prima",
+    "shipToPreparedOf": "Si sta preparando la spedizione {number} al vecchio indirizzo: cambialo lì prima",
+    "shipToDone": "L'indirizzo di consegna è cambiato."
   },
   "editor": {
     "add": {

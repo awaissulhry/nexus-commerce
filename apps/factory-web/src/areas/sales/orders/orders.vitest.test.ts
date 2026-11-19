@@ -1624,3 +1624,64 @@ describe('F-OP-101: the yes in place — Confirm the order / Refuse… for an ap
   })
 })
 // ---- end F-OP-101
+
+// ---- F-OP-110 (order page N2; 10-order-page §4.5; B-OP-015): Ship to in the edit header ---------------------------------------
+describe('F-OP-110: Ship to in the edit header — the customer\'s own delivery addresses, the prepared shipment named, one edit path', () => {
+  const value = order('CONFIRMED')
+  const draft = (over: Record<string, unknown> = {}) => ({ lines: draftOf(value), customerRef: value.customerRef ?? '', requestedDate: value.requestedDate ?? '', ...over })
+
+  it('the body sends shipToAddressId only when another address is picked; the preview key moves with it; the header counts as changed', async () => {
+    const { amendBodyOf: bodyOf, amendKeyOf: keyOf, headerChangedOf } = await import('./daily-model')
+    expect(bodyOf(draft(), value)).not.toHaveProperty('shipToAddressId')
+    expect(bodyOf(draft({ shipToAddressId: '' }), value)).not.toHaveProperty('shipToAddressId')
+    expect(bodyOf(draft({ shipToAddressId: 'addr-2' }), value)).toMatchObject({ shipToAddressId: 'addr-2' })
+    expect(keyOf(draft({ shipToAddressId: 'addr-2' }), value)).not.toBe(keyOf(draft(), value))
+    expect(headerChangedOf(draft(), value)).toBe(false)
+    expect(headerChangedOf(draft({ shipToAddressId: 'addr-2' }), value)).toBe(true)
+    // Only the address moved: nothing else changed, yet the draft is not "nothing changed" (the API moves it alone, B-OP-015).
+    expect(reviewHeld(draft().lines, value, { changed: headerChangedOf(draft({ shipToAddressId: 'addr-2' }), value) })).toBeNull()
+  })
+
+  it('SHIPMENT_PREPARED is said with that shipment; any other ship-to refusal keeps its words', async () => {
+    const { issueWords: wordsOf, preparedShipmentOf } = await import('./daily-model')
+    const message = "Shipment SHP-2026-0091 is being prepared for the order's address: change it on the shipment first."
+    expect(preparedShipmentOf(message)).toBe('SHP-2026-0091')
+    expect(preparedShipmentOf('Something else')).toBeNull()
+    expect(wordsOf({ path: 'body/shipToAddressId/SHIPMENT_PREPARED', message }, () => null)).toEqual({ key: 'edit.shipToPreparedOf', params: { number: 'SHP-2026-0091' } })
+    expect(wordsOf({ path: 'body/shipToAddressId/SHIPMENT_PREPARED', message: 'x' }, () => null)).toEqual({ key: 'edit.shipToPrepared' })
+    expect(wordsOf({ path: 'body/shipToAddressId', message: 'Not an active delivery address of this customer.' }, () => null)).toEqual({ key: 'issue.shipTo' })
+  })
+
+  it('an address in one line (name · street · postal code town); the order\'s own as written on it', async () => {
+    const { addressLineOf } = await import('./daily-model')
+    expect(addressLineOf({ name: 'Brand Alpha — Magazzino', line1: 'Via Esempio 1', postalCode: '20100', city: 'Milano' })).toBe('Brand Alpha — Magazzino · Via Esempio 1 · 20100 Milano')
+    expect(addressLineOf({ name: null, line1: 'Via Esempio 1', postalCode: '', city: 'Milano' })).toBe('Via Esempio 1 · Milano')
+    expect(addressLineOf(null)).toBeNull()
+    expect(addressLineOf({})).toBeNull()
+  })
+
+  it('the wiring: the addresses are the order\'s customer\'s (parties.view) read with edit mode; ⋯ Change ship-to… opens it with Ship to focused', () => {
+    const acts = readFileSync(new URL('./record/use-lines-acts.ts', import.meta.url), 'utf8')
+    expect(acts).toContain('listShipToAddresses(api, value.partyId)')
+    expect(acts).toContain('addresses: mayAddresses ? PART_LOADING : null')
+    expect(acts).toContain('focus?.(SHIP_TO_FIELD_ID)')
+    expect(acts).toContain("'addressOnly' in done && done.addressOnly ? { key: 'edit.shipToDone' }")
+    const tab = readFileSync(new URL('./record/view/LinesTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("<Select id={SHIP_TO_FIELD_ID} value={amend.shipToAddressId ?? ''}")
+    const container = readFileSync(new URL('./record/OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), // F-OP-110')
+    // The list is the API's wall: GET /parties/:id of the order's own customer, active SHIP_TO addresses ours or approved by us.
+    const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
+    expect(api).toContain("address.status === 'ACTIVE' && address.kinds.includes('SHIP_TO') && (!address.approval || address.approval.status === 'APPROVED')")
+  })
+
+  it('the words exist in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['edit.shipTo', 'edit.shipToHeld', 'edit.shipToFailed', 'edit.shipToPrepared', 'edit.shipToDone']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('edit.shipToKeep', { address: 'x' }), locale).not.toBe('edit.shipToKeep')
+      expect(t('edit.shipToPreparedOf', { number: 'SHP-1' }), locale).toContain('SHP-1')
+    }
+  })
+})
+// ---- end F-OP-110

@@ -591,6 +591,8 @@ export const orderSchema = z.object({
     })
     .optional(),
   // ── end F-SA-239
+  // ---- F-OP-110: where the order ships now (the address as written on the order: name, street, town …); absent in an older answer.
+  shipTo: z.record(z.string(), z.unknown()).nullable().optional(),
   // ---- F-OP-101 (B-OP-020): the order's open requests for a yes this reader may see (oldest first), and how many it may not see
   // (counted, never named); absent in an older answer.
   openApprovals: z.array(openApprovalSchema).optional(),
@@ -828,6 +830,8 @@ export interface AmendBody {
   lines: AmendLineInput[]
   /** F-OP-107 (B2): what happens to pieces already cut beyond the new figures (sent only when the preview names some). */
   extraOutcome?: ExtraOutcome | null
+  /** F-OP-110 (B-OP-015): another delivery address of the order's customer (sent only when one is picked; it may move alone). */
+  shipToAddressId?: string
 }
 
 // ---- F-OP-106 (order page N2; 13-backend §1.2–1.3, B-OP-012 / B-OP-013): what an office change does to the work orders ----

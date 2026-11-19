@@ -946,7 +946,14 @@
       "loses_one": "{numbers} loses this line",
       "loses_other": "{numbers} lose this line"
     },
-    "closedShort": "Closed short: work orders make it"
+    "closedShort": "Closed short: work orders make it",
+    "shipTo": "Ship to",
+    "shipToKeep": "As now: {address}",
+    "shipToHeld": "Another delivery address needs the right to see customers: the order keeps its address.",
+    "shipToFailed": "The delivery addresses could not be read: the order keeps its address.",
+    "shipToPrepared": "A shipment is being prepared for the old address: change it there first",
+    "shipToPreparedOf": "Shipment {number} is being prepared for the old address: change it there first",
+    "shipToDone": "The delivery address is changed."
   },
   "editor": {
     "add": {
