@@ -251,6 +251,59 @@ describe('an order over the limit (SAL-237)', () => {
   })
 })
 
+// ---- B-OO-004 (order overview 13-backend §4, Q3): a refused override — the order stays waiting, the record reads the last answer ----
+describe('B-OO-004 a refused credit override: the hold stands, the order waits, the record reads the last answer', () => {
+  const refused = { orderId: '', checkId: '' }
+  const recordOf = async (session: string) => (await ok(session, 'GET', `/sales/credit/records/SalesOrder/${refused.orderId}`)).customers[0] as Json
+
+  it('Finance says no: request null, may ask again, lastAnswer REJECTED with its words (price reader) and without them (no price)', async () => {
+    // Still over the limit with the company's rule on (the tests above): the Owner's typed order waits for a yes.
+    const made = await ok('owner', 'POST', '/sales/orders/manual', typedOrder('PO-OO004-NO'), 201)
+    expect(made.order.status).toBe('PENDING_APPROVAL')
+    refused.orderId = made.order.id
+    refused.checkId = (await checksOf(refused.orderId))[0]!.id
+    const task = (await tasksOf(refused.checkId))[0]!
+    expect((await recordOf('finance')).held).toMatchObject({ checkId: refused.checkId, request: { taskId: task.id, status: 'PENDING' }, lastAnswer: null })
+
+    const { task: open } = await ok('finance', 'GET', `/approvals/tasks/${task.id}`)
+    await ok('finance', 'POST', `/approvals/tasks/${task.id}/reject`, { version: open.version, reasonCode: 'OVER_BUDGET', reason: 'Made-up: two invoices are 60 days late.' })
+    // No machine change: the order still waits, its hold stands.
+    expect((await one<Json>(`SELECT status::text FROM "SalesOrder" WHERE id = $1`, [refused.orderId])).status).toBe('PENDING_APPROVAL')
+    expect(await checksOf(refused.orderId)).toHaveLength(1)
+
+    const priced = await recordOf('finance')
+    expect(priced.held).toEqual({ checkId: refused.checkId, step: 'ORDER', checkedAt: expect.any(String), request: null, lastAnswer: { status: 'REJECTED', at: expect.any(String), by: 'Made-up finance', reason: 'Made-up: two invoices are 60 days late.' } })
+    expect(priced.may).toEqual({ checkAgain: true, ask: true })
+    // Sales reads that Finance said no, and when — never the words (they may name amounts).
+    const blind = await recordOf('sales')
+    expect(blind.held.lastAnswer).toEqual({ status: 'REJECTED', at: priced.held.lastAnswer.at, by: 'Made-up finance' })
+    expect(blind.held.lastAnswer).not.toHaveProperty('reason')
+    expect(blind.may).toEqual({ checkAgain: true, ask: true })
+  })
+
+  it('ask again: a new request on the same hold, the last answer still read; asked twice → 409', async () => {
+    const { taskId } = await ok('sales', 'POST', `/sales/credit/checks/${refused.checkId}/ask`, { note: 'Made-up: they paid one of the two.' }, 201)
+    await no('sales', 'POST', `/sales/credit/checks/${refused.checkId}/ask`, {}, 409)
+    expect((await recordOf('finance')).held).toMatchObject({ checkId: refused.checkId, request: { taskId, status: 'PENDING' }, lastAnswer: { status: 'REJECTED', by: 'Made-up finance' } })
+    expect((await recordOf('finance')).may).toEqual({ checkAgain: true, ask: false })
+  })
+
+  it('check again, still over: still HOLD, a new check with a new request (no answer on it yet); another customer’s reader: 404 as an unknown order', async () => {
+    const again = await ok('sales', 'POST', `/sales/credit/records/SalesOrder/${refused.orderId}/check`, {})
+    expect(again).toMatchObject({ result: 'HOLD', asked: true, orderGoesOn: false })
+    expect(again.checkId).not.toBe(refused.checkId)
+    expect((await recordOf('finance')).held).toMatchObject({ checkId: again.checkId, request: { status: 'PENDING' }, lastAnswer: null })
+    expect((await one<Json>(`SELECT status::text FROM "SalesOrder" WHERE id = $1`, [refused.orderId])).status).toBe('PENDING_APPROVAL')
+    // Finance of another customer only: the order is not found, in the words of an unknown one.
+    SESSIONS['finance.other'] = { audience: 'office', tenantId: A.tenant, actorId: newId(), grants: grantsOf('finance').map((grant) => ({ ...grant, parties: [p3] })) }
+    const elsewhere = await no('finance.other', 'GET', `/sales/credit/records/SalesOrder/${refused.orderId}`, undefined, 404)
+    const unknown = await no('finance.other', 'GET', `/sales/credit/records/SalesOrder/${newId()}`, undefined, 404)
+    expect(elsewhere.message).toBe(unknown.message)
+    expect(JSON.stringify(elsewhere)).not.toContain('60 days')
+  })
+})
+// ---- end B-OO-004
+
 describe('the quote (SAL-148)', () => {
   it('its check shows the credit and never holds, even with the rule on', async () => {
     const version = await one<{ id: string }>(`SELECT v.id FROM "QuoteVersion" v JOIN "Quote" q ON q.id = v."quoteId" WHERE q."tenantId" = $1 AND q.number = 'SEED-Q-0002' ORDER BY v.revision DESC LIMIT 1`, [A.tenant])

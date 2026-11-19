@@ -54,6 +54,9 @@ const customer = output({
     step,
     checkedAt: instant(),
     request: output({ taskId: id(), status: z.string(), approver: z.string().nullable(), requestedAt: instant(), dueAt: instant().nullable() }).nullable(),
+    // B-OO-004 (order overview 13-backend §4, Q3): the newest decided request for a yes on this hold (null: none). A no leaves the
+    // order waiting; `reason` is Finance's own words, which may name amounts: the price grain only.
+    lastAnswer: output({ status: z.enum(['REJECTED', 'WITHDRAWN']), at: instant(), by: z.string().nullable(), reason: money.price(z.string().nullable()) }).nullable(),
   }).nullable(),
   checks: z.array(checkRow),
   may: output({ checkAgain: z.boolean(), ask: z.boolean() }),
