@@ -7,7 +7,9 @@ B-W0-26).
 
 ## Commands (from the repository root unless noted)
     FACTORY_API_URL=http://127.0.0.1:8190 npm run dev -w @nexus/factory-web     # :3200
-    npm run typecheck -w @nexus/factory-web     # next typegen + tsc; needs no API
+    npm run typecheck -w @nexus/factory-web     # next typegen + typecheck.mjs (op-fx11): `tsc --noEmit -p tsconfig.json`,
+                                                # the same program and options, checked in batches as factory-api's
+                                                # (heap capped at 7 GB, no NODE_OPTIONS needed); needs no API
     cd apps/factory-web && npx vitest run
     cd apps/factory-web && FACTORY_API_URL=http://127.0.0.1:1 npx next build
     node scripts/factory/run-guards.mjs        # check-view-boundaries, check-i18n, check-no-design-route among them

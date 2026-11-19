@@ -2,6 +2,7 @@ import { expect } from '@playwright/test'
 import { STYLE } from './02-style'
 import { SIZES } from './05-quote'
 import { defineStage } from './_harness/stages'
+import { expectBandPill } from './_harness/ui'
 import { words } from './_harness/words'
 
 const O = words('orders')
@@ -22,7 +23,9 @@ export default defineStage({
       // record chain left Lines, its words went).
       const linked = page.getByRole('list', { name: O('overview.linked.title') })
       await expect(linked.getByRole('listitem').filter({ hasText: O('overview.linked.deposit') })).toContainText(O('gate.state.PAID'))
-      await expect(page.getByText(new RegExp(`From quote ${flow.state.quote.number}`)).first()).toBeVisible()
+      // op-fx11 (F-OP-302): "From quote …" is a band pill; on a crowded band (the office’s 1440 px) it may fold behind "+N" and is
+      // read in Details, as a person reads it — never the folded stand-in left in the band to be measured.
+      await expectBandPill(page, new RegExp(`From quote ${flow.state.quote.number}`))
       // F-SA-230: the lines, per colour and size, are the Lines tab's.
       await sales.go(`/sales/orders/${order.id}?tab=lines`)
       const lines = page.getByRole('table', { name: O('lines.gridCaption', { style: STYLE.code }) })

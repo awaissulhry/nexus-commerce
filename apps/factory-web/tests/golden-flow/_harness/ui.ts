@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { words } from './words' // op-fx11
 
 /**
  * Small helpers for the design system's parts the stages meet on every screen (B-W1-06): the open dialog, the date
@@ -95,6 +96,40 @@ export async function chooseFromMenu(trigger: Locator, item: Locator): Promise<v
     await item.click({ timeout: 3_000 })
   }).toPass({ timeout: 45_000 })
 }
+
+// ---- op-fx11 (F-OP-302, end check run 7's 07-order): a pill of the record band, read where a person reads it ----------------------------
+const FRAME = words('record-frame')
+const escapeText = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** The band's "+N", named "N more details: show the details" (one or several). */
+const FOLD_NAME = new RegExp(`^(?:${[1, 2].map((count) => escapeText(FRAME('details.more', { count })).replace(String(count), '\\d+')).join('|')})$`)
+
+/**
+ * The record band (RecordFrame) folds the pills that do not fit its track behind "+N": a folded pill stays in the track only to be
+ * measured again (hidden, inert, aria-hidden), and a text locator still finds it there. So the pill is read where it is drawn: in the
+ * band when it fits, else in Details, which "+N" opens (the count must be there). Details is closed again; returns where it was read.
+ */
+export async function expectBandPill(page: Page, text: string | RegExp, timeout = 30_000): Promise<'band' | 'details'> {
+  const band = page.locator('.fw-rcf-meta')
+  const details = page.getByRole('dialog', { name: FRAME('details.title'), exact: true })
+  let where = 'band' as 'band' | 'details' // set inside the retried read
+  await expect(async () => {
+    if (!(await details.isVisible())) {
+      if ((await band.getByText(text).filter({ visible: true }).count()) > 0) {
+        where = 'band'
+        return
+      }
+      await band.getByRole('button', { name: FOLD_NAME }).first().click({ timeout: 2_000 })
+    }
+    await expect(details.getByText(text).first()).toBeVisible({ timeout: 2_000 })
+    where = 'details'
+  }).toPass({ timeout })
+  if (where === 'details') {
+    await page.keyboard.press('Escape')
+    await expect(details).toHaveCount(0)
+  }
+  return where
+}
+// ---- end op-fx11
 
 /** Marks a part of a stage the screens do not do yet (done through the API instead), in the report. */
 export function byApi(what: string): void {
