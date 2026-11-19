@@ -109,7 +109,6 @@ function Waiting({ model, actions, prefix, yes, onYes }: { model: OrderDepthMode
   const doors = bannerYesOf(yes?.approvals).map((task) => yesDoorOf(task, model.busy || !!yes?.busy))
   const decide = doors.find((door): door is Extract<YesDoor, { kind: 'decide' }> => door.kind === 'decide') ?? null
   const asked = doors.find((door) => door.kind === 'selfAsked') ?? null
-  const say = (phrase: { key: string; params?: Record<string, string | number> } | null) => (phrase ? t(phrase.key, phrase.params) : null)
   // ---- end F-OP-101
   return (
     <div className="fw-sod-wait" role="region" aria-label={d('wait.title')}>
@@ -121,22 +120,11 @@ function Waiting({ model, actions, prefix, yes, onYes }: { model: OrderDepthMode
           <span className="fw-sod-actions">
             {decide ? (
               // F-OP-101: the approver decides in place — Confirm the order (primary) and Refuse… (words required).
-              <>
-                <Button size="sm" variant="primary" heldReason={say(decide.confirmHeld)} onClick={() => onYes?.onConfirm?.(decide.task.taskId)}>
-                  {say(confirmLabelOf(decide.task, locale))}
-                </Button>
-                <Button size="sm" heldReason={say(decide.refuseHeld)} onClick={() => onYes?.onRefuse?.(decide.task.taskId)}>
-                  {t('approval.refuse')}
-                </Button>
-              </>
+              <YesDoorView door={decide} onYes={onYes} />
             ) : request ? (
               <>
                 {/* F-OP-101 (rule 42): the asker sees the yes held, never theirs to give. */}
-                {asked && (
-                  <Button size="sm" variant="primary" heldReason={t('approval.selfAsked')}>
-                    {say(confirmLabelOf(asked.task, locale))}
-                  </Button>
-                )}
+                {asked && <YesDoorView door={asked} onYes={onYes} />}
                 <Button size="sm" heldReason={withdraw ? d(withdraw.key) : model.busy ? d('held.busy') : null} onClick={() => actions?.onDialog?.({ kind: 'withdraw' })}>
                   {d('wait.withdraw')}
                 </Button>
@@ -174,6 +162,32 @@ function Waiting({ model, actions, prefix, yes, onYes }: { model: OrderDepthMode
           </span>
       </Banner>
     </div>
+  )
+}
+
+// ---- F-OP-101: one open yes's door — the approver's Confirm (or Approve) and Refuse…, the asker's Confirm held with its words, who
+// decides for everyone else. The banner draws it, and an old change's yes on its waiting row (F-OP-103).
+export function YesDoorView({ door, onYes }: { door: YesDoor; onYes?: YesActions }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  const say = (phrase: { key: string; params?: Record<string, string | number> } | null) => (phrase ? t(phrase.key, phrase.params) : null)
+  if (door.kind === 'whoDecides') return <span className="fw-sod-hint">{t('approval.whoDecides', { who: door.who })}</span>
+  if (door.kind === 'selfAsked') {
+    return (
+      <Button size="sm" variant="primary" heldReason={t('approval.selfAsked')}>
+        {say(confirmLabelOf(door.task, locale))}
+      </Button>
+    )
+  }
+  return (
+    <>
+      <Button size="sm" variant="primary" heldReason={say(door.confirmHeld)} onClick={() => onYes?.onConfirm?.(door.task.taskId)}>
+        {say(confirmLabelOf(door.task, locale))}
+      </Button>
+      <Button size="sm" heldReason={say(door.refuseHeld)} onClick={() => onYes?.onRefuse?.(door.task.taskId)}>
+        {t('approval.refuse')}
+      </Button>
+    </>
   )
 }
 

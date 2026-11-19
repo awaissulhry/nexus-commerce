@@ -471,7 +471,7 @@ describe('B-OP-021: work orders with version, own cells and rights; the ONE wait
     expect((sales.headline.waiting.blockers as Json[]).filter((blocker) => blocker.ref?.type === 'WorkOrder')).toEqual([])
     // Beta's own order: its reported problem names the issue; nothing of Alpha, and no door to the mixed work order.
     const beta = await ok('office.p2', production(w.b.salesOrderId, 'headline'))
-    expect(beta.headline.waiting.blockers).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'BRAND_REQUEST', on: 'US', sub: 'PROBLEM', ref: { type: 'ProductionIssue', id: w.production.issue.id } })]))
+    expect(beta.headline.waiting.blockers).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'BRAND_REQUEST', on: 'US', sub: 'PROBLEM', ref: { type: 'ProductionIssue', id: w.production.issue.id, messageId: expect.any(String) /* F-OP-103: the message it was raised with */ } })]))
     expect(findMarkers(beta, aMarkers)).toEqual([])
     expect(JSON.stringify(beta)).not.toContain(w.mixed.workOrderId)
   })

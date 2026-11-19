@@ -1569,10 +1569,6 @@
     "requests": {
       "title": "Requests & changes",
       "changes": "Changes ›",
-      "onUs_one": "Waiting on us: {count} request",
-      "onUs_other": "Waiting on us: {count} requests",
-      "onCustomer_one": "Waiting on the customer: {count}",
-      "onCustomer_other": "Waiting on the customer: {count}",
       "nothing": "Nothing waits on us or on the customer",
       "latest": "Latest change: revision {revision} · {date}",
       "still": "Still to do: {count}"
@@ -1756,6 +1752,24 @@
       "NOT_APPROVER": "This yes waits for another approver.",
       "NOT_REQUESTER": "Only the person who asked takes it back.",
       "other": "Refused by a rule of the approval: the order was read again."
+    }
+  },
+  "waiting": {
+    "onUs_one": "Waiting on us: {count}",
+    "onUs_other": "Waiting on us: {count}",
+    "onCustomer_one": "Waiting on {customer}: {count}",
+    "onCustomer_other": "Waiting on {customer}: {count}",
+    "reply": "Reply in the thread",
+    "noThread": "The conversation is not on this page",
+    "counterAgreed": "They agreed to your counter-offer",
+    "counterLapsed": "Your counter-offer lapsed",
+    "problem": "{customer} reported a problem",
+    "repromise": "{customer} refused the new date",
+    "yes": "Waiting for a yes: {kind}",
+    "go": {
+      "production": "Production ›",
+      "money": "Money ›",
+      "changes": "Changes ›"
     }
   }
 }

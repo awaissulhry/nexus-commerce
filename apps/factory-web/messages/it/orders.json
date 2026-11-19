@@ -1569,10 +1569,6 @@
     "requests": {
       "title": "Richieste e modifiche",
       "changes": "Modifiche ›",
-      "onUs_one": "Tocca a noi: {count} richiesta",
-      "onUs_other": "Tocca a noi: {count} richieste",
-      "onCustomer_one": "Tocca al cliente: {count}",
-      "onCustomer_other": "Tocca al cliente: {count}",
       "nothing": "Niente aspetta noi o il cliente",
       "latest": "Ultima modifica: revisione {revision} · {date}",
       "still": "Ancora da fare: {count}"
@@ -1756,6 +1752,24 @@
       "NOT_APPROVER": "Questo sì aspetta un altro approvatore.",
       "NOT_REQUESTER": "Solo chi l'ha chiesta la ritira.",
       "other": "Rifiutata da una regola dell'approvazione: l'ordine è stato riletto."
+    }
+  },
+  "waiting": {
+    "onUs_one": "In attesa di noi: {count}",
+    "onUs_other": "In attesa di noi: {count}",
+    "onCustomer_one": "In attesa di {customer}: {count}",
+    "onCustomer_other": "In attesa di {customer}: {count}",
+    "reply": "Rispondi nella conversazione",
+    "noThread": "La conversazione non è su questa pagina",
+    "counterAgreed": "Hanno accettato la tua controproposta",
+    "counterLapsed": "La tua controproposta è scaduta",
+    "problem": "{customer} ha segnalato un problema",
+    "repromise": "{customer} ha rifiutato la nuova data",
+    "yes": "In attesa di un sì: {kind}",
+    "go": {
+      "production": "Produzione ›",
+      "money": "Importi ›",
+      "changes": "Modifiche ›"
     }
   }
 }

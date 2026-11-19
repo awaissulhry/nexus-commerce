@@ -17,7 +17,7 @@ export const HEADLINE: Headline = {
   stage: { code: 'SEWING', words: w('Sewing', 'Confezione'), since: '2026-11-13', ahead: 1, aheadWords: w('1 line ahead', '1 riga avanti'), sewingNotCounted: false, sewingNotCountedWords: null, next: { code: 'QUALITY', words: w('Quality check', 'Controllo qualità') }, partlyShipped: false },
   inWork: { bundles: 3, pieces: { cutting: 0, sewing: 6, checking: 2, packing: null } },
   health: { code: 'AT_RISK', words: w('At risk', 'A rischio'), computed: 'AT_RISK', raise: null },
-  waiting: { on: 'US', words: w('Waiting on us', 'Tocca a noi'), since: '2026-11-17T09:05:00Z', blockers: [{ kind: 'REQUEST', on: 'US', words: w('A change request', 'Una richiesta di modifica'), since: '2026-11-17T09:05:00Z' }] },
+  waiting: { on: 'US', words: w('Waiting on us', 'Tocca a noi'), since: '2026-11-17T09:05:00Z', blockers: [{ kind: 'BRAND_REQUEST', on: 'US', words: w('A customer request waits for our answer', 'Una richiesta del cliente aspetta la nostra risposta'), since: '2026-11-17T09:05:00Z', ref: { type: 'OrderChangeRequest', id: '0190f0e2-3080-7000-8000-000000000901' }, sub: 'REQUEST' }] }, // F-OP-103: a real blocker kind, with its ref and sub
   held: false,
   holds: [],
   holdNotes: null,
@@ -84,7 +84,7 @@ export const PRODUCTION_READ: OrderProduction = {
 export const CONFIRMED_READ: OrderProduction = {
   ...PRODUCTION_READ,
   order: { ...PRODUCTION_READ.order, status: 'CONFIRMED' },
-  headline: { ...HEADLINE, stage: null, inWork: { bundles: 0, pieces: { cutting: 0, sewing: 0, checking: 0, packing: 0 } }, health: null, waiting: { on: 'BRAND', words: w('Waiting on customer', 'Tocca al cliente'), since: '2026-10-28T15:00:00Z', blockers: [{ kind: 'DEPOSIT', on: 'BRAND', words: w('The deposit', "L'acconto"), since: '2026-10-28T15:00:00Z' }] }, urgency: { ...HEADLINE.urgency, customer: null } },
+  headline: { ...HEADLINE, stage: null, inWork: { bundles: 0, pieces: { cutting: 0, sewing: 0, checking: 0, packing: 0 } }, health: null, waiting: { on: 'BRAND', words: w('Waiting on customer', 'Tocca al cliente'), since: '2026-10-28T15:00:00Z', blockers: [{ kind: 'DEPOSIT', on: 'BRAND', words: w('Deposit not paid yet', 'Acconto non ancora pagato'), since: '2026-10-28T15:00:00Z', ref: { type: 'DepositRequest', id: '0190f0e2-1818-7000-8000-000000000001' }, sub: null }] }, urgency: { ...HEADLINE.urgency, customer: null } },
   lines: LINES.map((line) => ({ ...line, cut: 0, sewn: 0, checked: 0, packed: 0, inWorkOrders: 0, notInWorkOrders: true, sizes: line.sizes.map((entry) => ({ ...entry, cut: 0, sewn: 0, checked: 0, packed: 0 })) })),
 }
 

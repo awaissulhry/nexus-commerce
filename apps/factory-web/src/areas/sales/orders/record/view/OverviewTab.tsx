@@ -29,7 +29,6 @@ import {
   readOf,
   stageStripOf,
   totalOf,
-  waitingInputOf,
   type Figure,
   type LineColumn,
   type LineRow,
@@ -40,11 +39,14 @@ import { PartState } from './OrderRecordView'
 import { SupervisorFact } from '../../../../_shared/production-supervisor/view/SupervisorFact'
 import { NOTES_NS, openHeld as noteHeld } from '../../../../production/_shared/notes/model'
 import { NAMESPACE as DEPTH } from '../../depth/model'
-import { linkedRecordsOf, nextDatesOf, placeWords, requestCountsOf } from '../overview/model'
-// F-SA-243: "Waiting on us: N · Answer…" opens the ONE review window here; "Still to do: N" with its top 3 rows.
+import { linkedRecordsOf, nextDatesOf, placeWords } from '../overview/model'
+// F-SA-243: "Still to do: N" with its top 3 rows. F-OP-103: the ONE waiting list — each row with its one door.
 import { WithMessages } from '../../../../../record-panels/i18n'
-import { askingOf, stillRowsOf } from '../changes/model'
-import { AnswerDoor, StillRow } from './RequestsSection'
+import { StillRow, WaitingRowItem } from './RequestsSection'
+import { rowWordsOf, waitingCardOf, waitingOf, whoActsNextOf, type WaitingRow } from '../overview/model'
+import { useSearchParams } from 'next/navigation'
+import { tabHref } from '../../../../_shared/record-frame/address'
+import { TabLink } from '../../../../../lib/tab-link/TabLink'
 // F-SA-266: Discuss on Overview's rows (a line, a next date, the request that waits on us)
 import { DiscussDoor, FollowersDoor } from './Discuss'
 // ---- end F-SA-233
@@ -62,15 +64,18 @@ const COLUMN_STAGE: Readonly<Record<LineColumn, string>> = Object.freeze({ order
  * FreshnessLine) and the one picture part. Office face only: no operator, no station, no other customer.
  */
 export function OverviewTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const locale = useLocale()
+  // F-OP-103: the ONE waiting list — Who acts next is its first row, the Requests & changes card its rows (the Changes badge, R-22).
+  const rows = waitingOf(readOf(model.production), { requests: model.requests?.value ?? null, approvals: order.openApprovals, recordPayment: model.can.recordPayment, locale })
   return (
     <div className="fw-so-overview">
-      <WhereItIs order={order} model={model} actions={actions} />
+      <WhereItIs order={order} model={model} actions={actions} rows={rows} />
       <ProgressByLine order={order} model={model} actions={actions} />
       {/* F-SA-233: the facts beside each other (a card grid that follows the body's width, never dead space). */}
       <div className="fw-so-overview-cards">
         <PeopleCard order={order} model={model} actions={actions} />
         <NextDatesCard order={order} model={model} />
-        <RequestsCard order={order} model={model} />
+        <RequestsCard order={order} model={model} actions={actions} rows={rows} />
         <LinkedCard order={order} model={model} />
         <FactsCard order={order} model={model} />
       </div>
@@ -78,7 +83,7 @@ export function OverviewTab({ order, model, actions }: { order: Order; model: Or
   )
 }
 
-function WhereItIs({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+function WhereItIs({ order, model, actions, rows }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; rows: readonly WaitingRow[] }) {
   const t = useT('orders')
   const w = useProductionWords()
   const locale = useLocale()
@@ -98,8 +103,11 @@ function WhereItIs({ order, model, actions }: { order: Order; model: OrderRecord
   const exFactory = exFactoryOf(order, headline)
   const health = healthInputOf(order, headline, read?.dates ?? null)
   const inWork = inWorkOf(headline)
+  // F-OP-103: who acts next is the ONE waiting list's first row (its since is the card's).
+  const next = whoActsNextOf(rows, headline)
+  const what = next.row ? rowWordsOf(next.row, { t, kindWords: (kind) => w.t(`parts.request.kind.${kind}`), locale, customer: order.party?.legalName ?? '' }) : null
   const facts = [
-    { label: t('overview.fact.who'), value: <WaitingOnPill face="office" loading={loading} {...waitingInputOf(headline, locale)} /> },
+    { label: t('overview.fact.who'), value: <WaitingOnPill face="office" loading={loading} who={next.who} since={next.since} kind={next.kind} what={what} /> },
     ...(exFactory ? [{ label: t('overview.fact.exFactory'), value: t(exFactory.key, { ...exFactory.params, date: formatDate(dayInstant(String(exFactory.params?.date ?? '')), { locale }) }) }] : []),
     { label: t('overview.fact.health'), value: <HealthPill face="office" loading={loading} {...health} /> },
     ...(headline?.urgency.customer?.code === 'URGENT' ? [{ label: t('overview.fact.customer'), value: <Tag tone="warning">{t('board.customerUrgent')}</Tag> }] : []),
@@ -395,53 +403,63 @@ function NextDatesCard({ order, model }: { order: Order; model: OrderRecordModel
 }
 
 /**
- * O5 Requests & changes: what waits on us (F-SA-243: "Waiting on us: N · Answer…" — the ONE review window on this page), on the
- * customer, "Still to do: N" with its top 3 rows (each a door), the latest change.
+ * O5 Requests & changes — F-OP-103 (10-order-page §3.2): the ONE waiting list's rows, Waiting on us N and Waiting on <Customer> N, each
+ * row with its one door in place; "Still to do: N" with its top 3 rows (each a door); the latest change. "Nothing waits" only when
+ * all three are empty.
  */
-function RequestsCard({ order, model }: { order: Order; model: OrderRecordModel }) {
+function RequestsCard({ order, model, actions, rows }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; rows: readonly WaitingRow[] }) {
   const t = useT('orders')
-  const w = useProductionWords() // F-SA-266: the request's kind in the catalogue's words
   const locale = useLocale()
+  const search = useSearchParams()?.toString() ?? '' // F-OP-210: the tab links keep the dock's scope
+  const recordHref = `${model.prefix}/sales/orders/${order.id}`
   const read = readOf(model.production)
-  const counts = requestCountsOf(read, order)
-  // F-SA-243: the first request waiting on us opens the window (when this page read the requests); the rows still to do.
-  const asking = askingOf(model.requests?.value ?? [])
-  const still = stillRowsOf(read)
-  const nothing = counts.onUs === 0 && counts.onCustomer === 0 && still.length === 0
+  const card = waitingCardOf(rows, read, order)
+  const customer = order.party?.legalName ?? ''
   return (
     <Card padded>
       <div className="fw-so-card-head">
         <h2 className="fw-so-h2">{t('overview.requests.title')}</h2>
-        <Link className="fw-so-link fw-so-hint" href={`${model.prefix}/sales/orders/${order.id}?tab=changes`}>
+        <TabLink className="fw-so-link fw-so-hint" href={tabHref(recordHref, 'changes', search)}>
           {t('overview.requests.changes')}
-        </Link>
+        </TabLink>
       </div>
       <ul className="fw-so-datelist">
-        {counts.onUs > 0 && (
-          <li className="fw-so-still">
-            <span>{t('overview.requests.onUs', { count: counts.onUs })}</span>
-            {asking && <AnswerDoor request={asking.first} model={model} />}
-            {/* F-SA-266: discuss the request that waits on us (its reference; the customer reads its own words). */}
-            {asking && <DiscussDoor order={order} part={t('discuss.request', { kind: w.t(`parts.request.kind.${asking.first.kind}`) })} target={{ kind: 'OrderChangeRequest', id: asking.first.id }} />}
+        {card.onUs.length > 0 && (
+          <li>
+            <span>{t('waiting.onUs', { count: card.onUs.length })}</span>
+            <ul className="fw-so-datelist">
+              {card.onUs.map((row) => (
+                <WaitingRowItem key={row.key} row={row} order={order} model={model} actions={actions} />
+              ))}
+            </ul>
           </li>
         )}
-        {counts.onCustomer > 0 && <li>{t('overview.requests.onCustomer', { count: counts.onCustomer })}</li>}
-        {still.length > 0 && (
+        {card.onCustomer.length > 0 && (
           <li>
-            <Link className="fw-so-link" href={`${model.prefix}/sales/orders/${order.id}?tab=changes#still-to-do`}>
-              {t('overview.requests.still', { count: still.length })}
-            </Link>
+            <span>{t('waiting.onCustomer', { count: card.onCustomer.length, customer })}</span>
+            <ul className="fw-so-datelist">
+              {card.onCustomer.map((row) => (
+                <WaitingRowItem key={row.key} row={row} order={order} model={model} actions={actions} />
+              ))}
+            </ul>
+          </li>
+        )}
+        {card.still.length > 0 && (
+          <li>
+            <TabLink className="fw-so-link" href={`${tabHref(recordHref, 'changes', search)}#still-to-do`}>
+              {t('overview.requests.still', { count: card.still.length })}
+            </TabLink>
             <WithMessages namespaces={['approvals']}>
               <ul className="fw-so-datelist">
-                {still.slice(0, 3).map((row, index) => (
+                {card.still.slice(0, 3).map((row, index) => (
                   <StillRow key={`${row.kind}:${row.ref?.id ?? index}`} row={row} order={order} model={model} />
                 ))}
               </ul>
             </WithMessages>
           </li>
         )}
-        {nothing && <li className="fw-so-hint">{t('overview.requests.nothing')}</li>}
-        {counts.latest && <li className="fw-so-hint">{t('overview.requests.latest', { revision: counts.latest.revision, date: counts.latest.at ? formatDate(counts.latest.at, { locale }) : '—' })}</li>}
+        {card.nothing && <li className="fw-so-hint">{t('overview.requests.nothing')}</li>}
+        {card.latest && <li className="fw-so-hint">{t('overview.requests.latest', { revision: card.latest.revision, date: card.latest.at ? formatDate(card.latest.at, { locale }) : '—' })}</li>}
       </ul>
     </Card>
   )
