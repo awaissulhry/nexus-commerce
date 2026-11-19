@@ -52,7 +52,8 @@ const roleOf = (key: string): Permission[] => {
 }
 const grant = (permissions: Permission[]): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all' })
 const office = (permissions: Permission[]): SessionContext => ({ audience: 'office', tenantId: T, actorId: newId(), grants: [grant(permissions)] })
-const SESSIONS: Record<string, SessionContext> = { sales: office(roleOf('sales')), viewer: office(['quotes.view'] as Permission[]), /* B-W2b-F38: Sales settings */ finance: office(roleOf('finance')) }
+// B-CP-011 (the money wall): the Owner prices the quote's line (a Sales worker sends no unitPrice any more).
+const SESSIONS: Record<string, SessionContext> = { sales: office(roleOf('sales')), owner: office(roleOf('owner')), viewer: office(['quotes.view'] as Permission[]), /* B-W2b-F38: Sales settings */ finance: office(roleOf('finance')) }
 const log = { info() {}, warn() {}, error() {} }
 
 let h: Harness
@@ -85,10 +86,10 @@ let seeded: Awaited<ReturnType<typeof seedSalesPricing>>
 let sentFacts: Json
 const today = businessDate(new Date())
 
-/** A new DRAFT quote for P1 (its PO number given) with one jacket line, no deposit. */
+/** A new DRAFT quote for P1 (its PO number given) with one jacket line, no deposit. B-CP-011: Sales makes it, the Owner prices its line. */
 async function draftQuote(): Promise<Json> {
   let { quote } = await ok('sales', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1, customerRef: `PO-${run}-${++serial}`, depositPct: null }, 201)
-  ;({ quote } = await ok('sales', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: JKT01, colourwayId: BLK, sizes: GRID, unitPrice: '450' }, 201))
+  ;({ quote } = await ok('owner', 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: JKT01, colourwayId: BLK, sizes: GRID, unitPrice: '450' }, 201))
   return quote
 }
 

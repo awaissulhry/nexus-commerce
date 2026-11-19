@@ -50,7 +50,8 @@ afterAll(async () => {
 
 describe('a new role from a ready-made one', () => {
   it('never holds more than its maker, never the owner role; the templates say which the caller may copy', async () => {
-    const desk = await asOwner('/auth/roles', { key: 'role_desk', name: 'Role desk', permissions: ['roles.view', 'roles.manage', 'users.view', 'quotes.view', 'orders.view'], grains: ['price'] })
+    // B-CP-011 (Owner O6): a role that sees prices asks for two-factor.
+    const desk = await asOwner('/auth/roles', { key: 'role_desk', name: 'Role desk', permissions: ['roles.view', 'roles.manage', 'users.view', 'quotes.view', 'orders.view'], grains: ['price'], requireMfa: true })
     expect(desk.status).toBe(200)
     const keeper = await addUser(h, alpha, { email: 'keeper@example.com' })
     expect((await asOwner(`/auth/users/${keeper.id}/roles`, { roleId: desk.body.id, allCompanies: true })).status).toBe(200)
@@ -65,8 +66,13 @@ describe('a new role from a ready-made one', () => {
     expect(ownerTemplates.filter((template) => template.copyable).map((template) => template.key)).toContain('planner')
     expect(ownerTemplates.find((template) => template.key === 'owner')?.copyable).toBe(false)
 
+    // B-CP-011 (Owner O3): the keeper holds the price grain, yet only the Owner makes a role that sees prices.
     await stepUp(h, keeperBrowser, keeperSecret)
-    const within = await keeperBrowser.post('/auth/roles', { key: 'quote_reader', name: 'Quote reader', permissions: ['quotes.view'], grains: ['price'] })
+    const priced = await keeperBrowser.post('/auth/roles', { key: 'quote_reader_prices', name: 'Quote reader (prices)', permissions: ['quotes.view'], grains: ['price'], requireMfa: true })
+    expect(priced.status).toBe(403)
+    expect(priced.body.error.issues).toEqual([{ path: 'body/grains/price/onlyOwnerGivesPrices', message: 'Only the Owner gives a role that sees prices.' }])
+    await stepUp(h, keeperBrowser, keeperSecret)
+    const within = await keeperBrowser.post('/auth/roles', { key: 'quote_reader', name: 'Quote reader', permissions: ['quotes.view'] })
     expect(within.status).toBe(200)
     await stepUp(h, keeperBrowser, keeperSecret)
     const beyond = await keeperBrowser.post('/auth/roles', { key: 'invoice_issuer', name: 'Invoice issuer', permissions: ['quotes.view', 'invoices.issue'], grains: ['cost'], requireMfa: true })

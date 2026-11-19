@@ -233,3 +233,54 @@ describe('T19: screen = file on Sales › Orders (B-TH-008)', { timeout: SLOW_TE
     expect((await viewIds(reader('limited'), source, { query: `rows=all&party=${partyA}` })).ids).toEqual([])
   })
 })
+
+// ── B-CP-018 (customer page plan C2d; screen = file): the price check's term and its four columns ──
+describe('the price check in the file: its term narrows the rows, its columns are the price grain (B-CP-018)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const PRICE_COLUMNS = [...COLUMNS, { key: 'ourPrice', label: 'Nostro prezzo' }, { key: 'brandPrice', label: 'Prezzo del cliente' }, { key: 'priceMatch', label: 'Verifica prezzi' }, { key: 'priceDiff', label: 'Differenza' }]
+  /** The file's rows by heading (a money heading names its currency: read without it) and the job (its left-out columns). */
+  async function fileOf(person: Person, query: string): Promise<{ job: Json; rows: Record<string, string>[] }> {
+    const done = await exported(person, query, { columns: PRICE_COLUMNS })
+    const { download } = await ok(person, 'GET', `/exports/${done.id}/download`)
+    const got = await app.inject({ method: 'GET', url: download.url, headers: download.headers })
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load(got.rawPayload as unknown as ArrayBuffer)
+    const lines: string[][] = []
+    workbook.worksheets[0]!.eachRow((row) => lines.push((row.values as unknown[]).slice(1).map((value) => String(value ?? ''))))
+    const header = lines.findIndex((line) => line[0] === 'Numero')
+    const heads = lines[header]!.map((head) => head.replace(/ \([A-Z]{3}\)$/, ''))
+    return { job: done, rows: lines.slice(header + 1).map((line) => Object.fromEntries(heads.map((head, index) => [head, line[index] ?? '']))) }
+  }
+
+  beforeAll(async () => {
+    // Customer B's orders have no lines (net 0): the customer's total of one says 10.00 (Not equal), of another 0.00 (Equal).
+    for (const [number, amount] of [[ordersB.reaccept, 1_000], [ordersB.promised, 0]] as const) {
+      const order = await one<{ id: string; companyId: string }>('SELECT id, "companyId" FROM "SalesOrder" WHERE "tenantId" = $1 AND number = $2', [T, number])
+      await admin('INSERT INTO "OrderBrandPrice" (id, "tenantId", "companyId", "partyId", "salesOrderId", "netAmount", currency, source, "enteredById", version) VALUES ($1, $2, $3, $4, $5, $6, \'EUR\', \'OFFICE\', $7, 1)', [newId(), T, order.companyId, partyB, order.id, amount, PEOPLE.owner])
+    }
+  })
+
+  it('as Owner: priceMatch narrows the file as the screen; the four columns carry our price, the customer’s, the check and the difference', async () => {
+    const notEqual = await fileOf('owner', `rows=all&party=${partyB}&priceMatch=NOT_EQUAL`)
+    expect(notEqual.rows.map((row) => row.Numero)).toEqual([ordersB.reaccept])
+    expect(notEqual.rows[0]).toMatchObject({ 'Verifica prezzi': 'Diverso', 'Nostro prezzo': '0', 'Prezzo del cliente': '10', Differenza: '-10' })
+    expect(notEqual.job.omitted ?? []).toEqual([])
+    expect((await fileOf('owner', `rows=all&party=${partyB}&priceMatch=EQUAL`)).rows.map((row) => row.Numero)).toEqual([ordersB.promised])
+    const missing = await fileOf('owner', `rows=all&party=${partyB}&priceMatch=NO_BRAND_PRICE`)
+    expect(missing.rows.map((row) => row.Numero)).toEqual([ordersB.plain])
+    expect(missing.rows[0]).toMatchObject({ 'Verifica prezzi': 'Prezzo del cliente non ancora dato', 'Prezzo del cliente': '', Differenza: '' })
+    // Another value is refused (the file would not follow the screen).
+    const refused = await call('owner', 'POST', '/exports', { listKey: 'sales.orders', format: 'CSV', query: 'rows=all&priceMatch=MAYBE', columns: PRICE_COLUMNS, title: 'Ordini di vendita', locale: 'it' })
+    expect(refused.status).toBe(400)
+  })
+
+  it('as Sales worker (no price grain): the term is refused in words; the four columns are left out and named, never empty', async () => {
+    const refused = await call('limited', 'POST', '/exports', { listKey: 'sales.orders', format: 'XLSX', query: `rows=all&party=${partyB}&priceMatch=NOT_EQUAL`, columns: PRICE_COLUMNS, title: 'Ordini di vendita', locale: 'it' })
+    expect(refused.status).toBe(403)
+    expect(refused.body.error.message).toBe('Shown to people who see prices.')
+    const file = await fileOf('limited', `rows=all&party=${partyB}`)
+    expect(file.rows.map((row) => row.Numero).sort()).toEqual(Object.values(ordersB).sort())
+    for (const heading of ['Nostro prezzo', 'Prezzo del cliente', 'Verifica prezzi', 'Differenza']) expect(Object.keys(file.rows[0]!)).not.toContain(heading)
+    expect(file.job.omitted.map((column: Json) => column.key).sort()).toEqual(['brandPrice', 'ourPrice', 'priceDiff', 'priceMatch'])
+  })
+})
+// ── end B-CP-018 ──

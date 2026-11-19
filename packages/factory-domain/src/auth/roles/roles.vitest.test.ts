@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Actor, Permission } from '../../core/permissions'
 import { can, scopeWhere } from '../../core/permissions'
-import { GRAINS, heldGrains, type Grain } from '../grains/grains'
+import { GRAINS, heldGrains, TWO_FACTOR_GRAINS, type Grain } from '../grains/grains'
 import { FACTORY_PERMISSIONS } from '../permissions/catalogue'
 import { definePermissions, permissionRegistry } from '../permissions/registry'
 import {
@@ -12,7 +12,10 @@ import {
   isLive,
   mfaRequiredFor,
   normalizeContent,
+  ONLY_OWNER_GIVES_PRICES,
+  priceGiverProblems,
   roleProblems,
+  seesPrices,
   scopeProblems,
   sessionGrants,
   templateAdds,
@@ -65,7 +68,7 @@ describe('the permission registry', () => {
 })
 
 describe('role templates', () => {
-  it('are valid: declared permissions, grains apart, two-factor for cost and margin, an owner', () => {
+  it('are valid: declared permissions, grains apart, two-factor for price, cost and margin, an owner', () => {
     expect(templateProblems(ROLE_TEMPLATES)).toEqual([])
     expect(ROLE_TEMPLATES.map((entry) => entry.key)).toEqual([
       'owner', 'admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor',
@@ -84,22 +87,40 @@ describe('role templates', () => {
     expect(templateOf('owner')?.grains).toEqual([...GRAINS])
     expect(templateOf('read_only')?.permissions.every((name) => FACTORY_PERMISSIONS.get(name)?.risk === 'read')).toBe(true)
     expect(templateOf('admin')?.requireMfa).toBe(true)
-    // Design question S2, answer a: sales sees margin % and the floor, never a cost, so it requires two-factor.
-    expect(templateOf('sales')).toMatchObject({ grains: ['price', 'margin'], requireMfa: true })
+    // B-CP-011 (the money wall, Owner O1 reverses design question S2's answer a): Sales sees no money and keeps no price
+    // list; two-factor kept.
+    expect(templateOf('sales')).toMatchObject({ grains: [], requireMfa: true, description: "Customers, quotes and orders; no prices: lines take the customer's price list, a price holder sets the rest." })
+    expect(templateOf('sales')?.permissions).not.toContain('pricelists.manage')
+    expect(templateOf('sales')?.permissions).toEqual(expect.arrayContaining(['pricelists.view', 'quotes.manage', 'orders.manage']))
+  })
+
+  it('B-CP-011: Finance keeps its grains (a price role only the Owner gives); every office role seeing price, cost or margin asks for two-factor', () => {
+    expect(templateOf('finance')).toMatchObject({ grains: ['price', 'cost', 'margin', 'wages'], requireMfa: true })
+    expect(templateOf('finance')?.description).toMatch(/Only the Owner gives this role/)
+    expect(TWO_FACTOR_GRAINS).toEqual(['price', 'cost', 'margin'])
+    for (const entry of ROLE_TEMPLATES.filter((template) => template.grains.some((grain) => TWO_FACTOR_GRAINS.includes(grain)))) expect(entry.requireMfa, entry.key).toBe(true)
+    // The office roles that see our prices: the Owner and Finance only (the plan's "Who sees prices", O1-O3).
+    expect(ROLE_TEMPLATES.filter((template) => template.audience === 'office' && template.grains.includes('price')).map((template) => template.key)).toEqual(['owner', 'finance'])
   })
 
   it('finds a template naming an unknown permission, a grain as a permission, or cost without two-factor', () => {
     const owner = templateOf('owner')!
     expect(templateProblems([{ ...owner, permissions: ['quotes.export'] }])).toEqual(['owner: quotes.export is not declared'])
     expect(templateProblems([{ ...owner, permissions: ['money.cost'] }])).toEqual(['owner: money.cost is a grain; list it in grains'])
-    expect(templateProblems([{ ...owner, requireMfa: false }])).toEqual(['owner: a role that sees cost and margin requires two-factor'])
+    expect(templateProblems([{ ...owner, requireMfa: false }])).toEqual(['owner: a role that sees price, cost and margin requires two-factor'])
+    // B-CP-011: prices alone ask for it too.
+    expect(templateProblems([owner, { ...templateOf('planner')!, grains: ['price'] }])).toEqual(['planner: a role that sees price requires two-factor'])
     expect(templateProblems([{ ...owner, key: 'sales' }])).toEqual(['the owner template is missing'])
   })
 })
 
 describe('custom roles', () => {
   it('checks the content and the key', () => {
-    expect(roleProblems({ name: 'Night lead', requireMfa: false, permissions: ['users.view'], grains: ['price'] })).toEqual([])
+    // B-CP-011 (Owner O6): a role that sees prices asks for two-factor.
+    expect(roleProblems({ name: 'Night lead', requireMfa: true, permissions: ['users.view'], grains: ['price'] })).toEqual([])
+    expect(roleProblems({ name: 'Night lead', requireMfa: false, permissions: ['users.view'], grains: ['price'] })).toEqual([{ path: 'requireMfa', message: 'A role that sees price requires two-factor.' }])
+    expect(roleProblems({ name: 'Night lead', requireMfa: false, permissions: ['users.view'], grains: ['wages'] })).toEqual([])
+    expect(roleProblems({ name: 'Desk', requireMfa: false, permissions: ['users.view'], grains: ['price', 'cost', 'margin'] })).toEqual([{ path: 'requireMfa', message: 'A role that sees price, cost and margin requires two-factor.' }])
     expect(roleProblems({ name: '', requireMfa: false, permissions: ['quotes.export', 'money.price'], grains: ['salary' as never, 'cost'] })).toEqual([
       { path: 'name', message: 'Expected 1 to 100 characters.' },
       { path: 'permissions/0', message: 'Not a permission of the factory.' },
@@ -113,7 +134,8 @@ describe('custom roles', () => {
 
   it('refuses the permissions only a one-off link session holds (they come from the link\'s purpose)', () => {
     expect(roleProblems({ name: 'Link sender', requireMfa: false, permissions: ['links.view', 'links.manage'], grains: [] })).toEqual([])
-    expect(roleProblems({ name: 'Customer', requireMfa: false, permissions: ['links.open', 'links.view', 'links.accept'], grains: ['price'] })).toEqual([
+    // B-CP-011: requireMfa true, so only the link permissions are refused (a price role asks for two-factor).
+    expect(roleProblems({ name: 'Customer', requireMfa: true, permissions: ['links.open', 'links.view', 'links.accept'], grains: ['price'] })).toEqual([
       { path: 'permissions/0', message: 'Held only by a one-off link session, from its purpose; a role cannot give it.' },
       { path: 'permissions/2', message: 'Held only by a one-off link session, from its purpose; a role cannot give it.' },
     ])
@@ -228,5 +250,24 @@ describe('an assigner gives roles only within their own roles.assign scope', () 
     expect(uncoveredScope(party, { ...everywhere, partyIds: [A] }, sites)).toEqual([])
     expect(paths(uncoveredScope(party, { ...everywhere, partyIds: [A, B] }, sites))).toEqual(['allCompanies'])
     expect(paths(uncoveredScope(assigner(everywhere, ['users.view']), onlyA, sites))).toEqual(['companyIds'])
+  })
+})
+
+describe('B-CP-011: only the Owner gives a role that sees prices (Owner O3)', () => {
+  it('refuses anyone else a role with the price grain, at the path given; lowering never asks', () => {
+    expect(seesPrices(['price', 'cost'])).toBe(true)
+    expect(seesPrices(['cost', 'margin', 'wages'])).toBe(false)
+    expect(priceGiverProblems(['price'], true, 'roles/0/roleId')).toEqual([])
+    expect(priceGiverProblems(['price', 'cost', 'margin', 'wages'], false, 'roles/0/roleId')).toEqual([{ path: 'roles/0/roleId/onlyOwnerGivesPrices', message: 'Only the Owner gives a role that sees prices.' }])
+    // A role without the price grain (Buyer's cost, a no-money role) is given as before.
+    expect(priceGiverProblems(['cost'], false, 'roleId')).toEqual([])
+    expect(priceGiverProblems([], false, 'roleId')).toEqual([])
+    expect(ONLY_OWNER_GIVES_PRICES).toEqual({ code: 'onlyOwnerGivesPrices', message: 'Only the Owner gives a role that sees prices.' })
+  })
+
+  it('Finance is a price role, Sales and the Administrator are not', () => {
+    expect(seesPrices(templateOf('finance')!.grains)).toBe(true)
+    expect(seesPrices(templateOf('sales')!.grains)).toBe(false)
+    expect(seesPrices(templateOf('admin')!.grains)).toBe(false)
   })
 })

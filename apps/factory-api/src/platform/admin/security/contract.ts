@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { DRILL_KEYS } from '@nexus/factory-domain/ops/drills'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { GRAINS } from '@nexus/factory-domain/auth/grains/grains'
 
 /**
  * Security & health (B-W2a-36; PLT-045, PLT-214; SCR-166). Every answer is facts and states in codes: the web says them
@@ -86,7 +87,7 @@ export const twoFactorRoleView = output({
   requireMfa: z.boolean(),
   /** B-W2b-24: since when it asks (UTC); null when it does not ask, or asked from before the time was kept. */
   requireMfaSince: instant().nullable(),
-  /** Why it cannot be turned off: floor, money (sees costs or margins), template (the ready-made role asks it); null: it can. */
+  /** Why it cannot be turned off: floor, money (sees prices, costs or margins: B-CP-011), template (the ready-made role asks it); null: it can. */
   lock: z.enum(['floor', 'money', 'template']).nullable(),
   /** The ready-made template asks it (a ready-made role never asks less). */
   templateAsks: z.boolean(),
@@ -207,3 +208,58 @@ export const attentionContract = defineContract({
 export type RecordDrillBody = z.infer<typeof recordDrillContract.body>
 export type EvidenceBody = z.infer<typeof evidenceContract.body>
 export type TwoFactorChangeBody = z.infer<typeof twoFactorChangeContract.body>
+
+// ── B-CP-013 (customer page lane, the money wall; Owner O3): "Who sees prices" ───────────────────────────────────────────
+// GET /admin/security/price-holders (users.view + money.price): every person who sees our prices now. Facts and codes only,
+// never a price; the reader must see prices to read it at all.
+
+/** A holder's status: an invited person's role gives nothing yet, a suspended one's nothing until reactivated. */
+export const PRICE_HOLDER_STATUSES = ['INVITED', 'ACTIVE', 'SUSPENDED'] as const
+
+export const priceHolderRoleView = output({
+  assignmentId: id(),
+  roleId: id(),
+  key: z.string(),
+  name: z.string(),
+  system: z.boolean(),
+  /** Every money grain of the role (price among them). */
+  grains: z.array(z.enum(GRAINS)),
+  requireMfa: z.boolean(),
+  /** "All customers", or how many customers the assignment is limited to. */
+  allCustomers: z.boolean(),
+  customers: z.number().int(),
+  allCompanies: z.boolean(),
+  companies: z.number().int(),
+  /** Since when (validFrom) and until when (validTo; null: until ended). */
+  since: instant(),
+  until: instant().nullable(),
+})
+
+export const priceHolderView = output({
+  userId: id(),
+  name: z.string(),
+  status: z.enum(PRICE_HOLDER_STATUSES),
+  /** Two-factor is set up (a confirmed authenticator). */
+  twoFactor: z.boolean(),
+  roles: z.array(priceHolderRoleView),
+})
+
+/** An outside accountant (a guest of an adviser firm) whose portal role sees prices; a guest's access always ends. */
+export const priceGuestView = output({
+  userId: id(),
+  name: z.string(),
+  status: z.enum(PRICE_HOLDER_STATUSES),
+  firm: output({ id: id(), name: z.string() }).nullable(),
+  roleKey: z.string(),
+  until: instant().nullable(),
+})
+
+const priceHoldersAnswer = output({
+  asOf: instant(),
+  people: z.array(priceHolderView),
+  guests: z.array(priceGuestView),
+})
+export type PriceHoldersAnswer = z.infer<typeof priceHoldersAnswer>
+
+export const priceHoldersContract = defineContract({ response: { 200: priceHoldersAnswer } })
+// ── end B-CP-013 ──

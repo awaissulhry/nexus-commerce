@@ -48,11 +48,13 @@ const PEOPLE = {
   boss: { actorId: newId(), permissions: ['quotes.view', 'quotes.manage', 'quotes.send', 'quotes.approve', ...grainsOf(['price', 'cost', 'margin'])] as Permission[] },
   finance: fromTemplate('finance'),
   sales: fromTemplate('sales'),
+  // B-CP-011 (the money wall): the quote's PDF carries its prices: read by the Owner (was Sales).
+  owner: fromTemplate('owner'),
   // An approver without the margin grain: a margin-floor request is not theirs to decide.
   blind: { actorId: newId(), permissions: ['quotes.view', 'quotes.approve', 'money.price'] as Permission[] },
   viewer: { actorId: newId(), permissions: ['quotes.view', 'money.price'] as Permission[] },
 }
-const NAMES: Record<keyof typeof PEOPLE, string> = { boss: 'Bruno Capo', finance: 'Fiona Conti', sales: 'Sara Vendite', blind: 'Bice Cieca', viewer: 'Vito Visto' }
+const NAMES: Record<keyof typeof PEOPLE, string> = { boss: 'Bruno Capo', finance: 'Fiona Conti', sales: 'Sara Vendite', owner: 'Olga Titolare', blind: 'Bice Cieca', viewer: 'Vito Visto' }
 const SESSIONS: Record<string, SessionContext> = Object.fromEntries(
   Object.entries(PEOPLE).map(([key, person]) => {
     const grant: Grant = { permissions: [...person.permissions], companies: 'all', sites: 'all', parties: 'all' }
@@ -147,6 +149,8 @@ describe('the approvals queue (SCR-030): never the requester, a margin-floor req
     // Sales sees it (quotes.view) but holds no quotes.approve: NO_RIGHT.
     const [sales] = (await queue('sales', 'all')).approvals
     expect(sales).toMatchObject({ held: 'NO_RIGHT', mayDecide: false })
+    // B-CP-011: and no money (the Sales role holds no grain any more).
+    for (const field of ['netAmount', 'marginPct', 'marginFloorPct']) expect(field in sales, field).toBe(false)
   })
 
   it('a decision moves it to "decided" for both sides, with the decider by name', async () => {
@@ -167,7 +171,7 @@ describe('the PDF before it is sent (SCR-037) and the names on the versions', ()
     const files = async () => (await admin<{ n: string }>('SELECT count(*)::text AS n FROM "StoredFile" WHERE "recordId" = $1', [quote.id]))[0]!.n
     const before = await files()
     for (const language of ['it', 'en']) {
-      const response = await call('sales', 'GET', `/sales/quotes/${quote.id}/preview?language=${language}`)
+      const response = await call('owner', 'GET', `/sales/quotes/${quote.id}/preview?language=${language}`) // B-CP-011: the prices' reader
       expect(response.statusCode, response.body.slice(0, 200)).toBe(200)
       expect(response.headers['content-type']).toBe('application/pdf')
       expect(String(response.headers['content-disposition'])).toMatch(/^inline; filename=/)
@@ -179,7 +183,7 @@ describe('the PDF before it is sent (SCR-037) and the names on the versions', ()
   it('says what the PDF still needs, in words (a quote without a validity)', async () => {
     quote = (await ok('boss', 'POST', `/sales/quotes/${quote.id}/reopen`, { version: quote.version })).quote
     quote = (await ok('boss', 'PATCH', `/sales/quotes/${quote.id}`, { version: quote.version, validUntil: null })).quote
-    const response = await call('sales', 'GET', `/sales/quotes/${quote.id}/preview`)
+    const response = await call('owner', 'GET', `/sales/quotes/${quote.id}/preview`) // B-CP-011: the prices' reader (was Sales)
     expect(response.statusCode).toBe(409)
     expect(response.json().error.issues.length).toBeGreaterThan(0)
   })

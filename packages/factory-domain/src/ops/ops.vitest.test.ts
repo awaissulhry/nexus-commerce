@@ -16,6 +16,7 @@ import {
   type Fingerprint,
 } from './drills'
 import { affectedHolders, strandsAdmins, twoFactorLockOf, twoFactorProblems, workingAdmins, type AdminSubject, type TwoFactorRole } from './two-factor'
+import { TWO_FACTOR_GRAINS } from '../auth/grains/grains' // B-CP-011
 
 const NOW = new Date('2026-10-30T09:00:00.000Z')
 const print = (seed: string): Fingerprint => Object.fromEntries(DRILL_KEYS.map((key, index) => [key, `${seed}${index}`.padEnd(16, '0').slice(0, 16)])) as unknown as Fingerprint
@@ -76,7 +77,8 @@ describe('restore drills (PLT-214)', () => {
 })
 
 describe('two-factor per role (PLT-045)', () => {
-  const role = (over: Partial<TwoFactorRole> = {}): TwoFactorRole => ({ id: 'r1', key: 'planner', system: true, audience: 'office', requireMfa: false, grains: ['price'], ...over })
+  // B-CP-011: a role that sees prices always asks for two-factor now (TWO_FACTOR_GRAINS), so the plain role sees wages only.
+  const role = (over: Partial<TwoFactorRole> = {}): TwoFactorRole => ({ id: 'r1', key: 'planner', system: true, audience: 'office', requireMfa: false, grains: ['wages'], ...over })
 
   it('asks it of any office role; never lowers a floor, money-seeing or ready-made role that asks it', () => {
     expect(twoFactorProblems(role(), true)).toEqual([])
@@ -87,6 +89,15 @@ describe('two-factor per role (PLT-045)', () => {
     expect(twoFactorLockOf(role({ key: 'owner', requireMfa: true, grains: [] }))).toBe('template')
     expect(twoFactorLockOf(role({ key: 'custom.owner', system: false, requireMfa: true, grains: [] }))).toBeNull()
     expect(twoFactorProblems(role({ requireMfa: true }), true)[0]?.message).toMatch(/already/)
+  })
+
+  it('B-CP-011 (Owner O6): a role that sees prices, costs or margins never stops asking; wages and pay do not lock it', () => {
+    expect(TWO_FACTOR_GRAINS).toEqual(['price', 'cost', 'margin'])
+    for (const grain of ['price', 'cost', 'margin'] as const) {
+      expect(twoFactorLockOf(role({ key: 'custom.desk', system: false, requireMfa: true, grains: [grain] })), grain).toBe('money')
+      expect(twoFactorProblems(role({ key: 'custom.desk', system: false, requireMfa: true, grains: [grain] }), false)).toEqual([{ path: 'changes/0', message: 'A role that sees prices, costs or margins always asks for two-factor.' }])
+    }
+    expect(twoFactorLockOf(role({ key: 'custom.desk', system: false, requireMfa: true, grains: ['wages', 'pay'] }))).toBeNull()
   })
 
   it('never strands the administrators', () => {

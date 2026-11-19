@@ -556,29 +556,26 @@ describe('the W2b-4 golden flow: a style from concept to release with a change o
 
   // ---- O: the order ----------------------------------------------------------------------------------------------------------
 
-  it('O01 sales adds the brand’s German warehouse and types its order: black in three sizes and red, delivered to Germany', async () => {
+  it('O01 sales adds the brand’s German warehouse and the Owner types its order with its prices: black in three sizes and red, delivered to Germany', async () => {
     const { party } = await ok(P.sales, 'POST', `/parties/${id('party:P1')}/addresses`, { kinds: ['SHIP_TO'], name: 'Seed Customer One — Lager Deutschland', line1: 'Musterweg 4', postalCode: '00000', city: 'Musterstadt', country: 'DE' }, 201)
     G.deAddress = (party.addresses as Json[]).find((entry) => entry.city === 'Musterstadt')!
     keep(G.deAddress.id)
-    const { order } = await ok(
-      P.sales,
-      'POST',
-      '/sales/orders/manual',
-      {
-        companyId: companyA(),
-        partyId: id('party:P1'),
-        customerRef: 'PO-GF4-DE-01',
-        promiseDate: addDays(today(), 56),
-        paymentTermsId: id('pricing:terms:BB30FM'),
-        depositPct: null,
-        shipToAddressId: G.deAddress.id,
-        lines: [
-          { styleId: G.style.id, colourwayId: G.colourways.BLK.id, unitPrice: '450', sizes: [{ size: '50', quantity: 1 }, { size: '52', quantity: 2 }, { size: '54', quantity: 1 }] },
-          { styleId: G.style.id, colourwayId: G.colourways.RED.id, unitPrice: '450', sizes: [{ size: '52', quantity: 1 }] },
-        ],
-      },
-      201,
-    )
+    // B-CP-011 (the money wall): an order typed with its prices is the Owner's; Sales may not send a price (403).
+    const body = {
+      companyId: companyA(),
+      partyId: id('party:P1'),
+      customerRef: 'PO-GF4-DE-01',
+      promiseDate: addDays(today(), 56),
+      paymentTermsId: id('pricing:terms:BB30FM'),
+      depositPct: null,
+      shipToAddressId: G.deAddress.id,
+      lines: [
+        { styleId: G.style.id, colourwayId: G.colourways.BLK.id, unitPrice: '450', sizes: [{ size: '50', quantity: 1 }, { size: '52', quantity: 2 }, { size: '54', quantity: 1 }] },
+        { styleId: G.style.id, colourwayId: G.colourways.RED.id, unitPrice: '450', sizes: [{ size: '52', quantity: 1 }] },
+      ],
+    }
+    await ok(P.sales, 'POST', '/sales/orders/manual', body, 403)
+    const { order } = await ok(P.owner, 'POST', '/sales/orders/manual', body, 201)
     expect(order).toMatchObject({ status: 'CONFIRMED', partyId: id('party:P1'), shipTo: { country: 'DE' } })
     G.order = order
     keep(order.id)
@@ -773,8 +770,9 @@ describe('the W2b-4 golden flow: a style from concept to release with a change o
   // ---- P: the production work order ------------------------------------------------------------------------------------------------
 
   it('P01 the brand orders again for Germany, now on revision 2: the label check passes with German; the release is refused on a missing requirement (no German user information), then passes once the inspector files it', async () => {
+    // B-CP-011 (the money wall): the order with its typed price is the Owner's (see O01).
     const { order } = await ok(
-      P.sales,
+      P.owner,
       'POST',
       '/sales/orders/manual',
       {
