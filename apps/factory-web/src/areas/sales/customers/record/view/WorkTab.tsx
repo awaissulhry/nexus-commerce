@@ -22,6 +22,7 @@ import { OrdersListView, WAITING_US_VIEW } from '../../../orders/list/view/Order
 import type { OrdersListModel } from '../../../orders/list/list-model'
 import { WORK_DEFAULT_ROWS, workEntry, type useCustomerWork, type WorkCan } from '../use-customer-work'
 import { workViewCounts } from '../use-customer-work' // F-CP-103: the Views ▾ counts from the strip's one count read
+import type { WorkAsk } from '../use-customer-work' // F-CP-104: the band's New order / ⋯ Import orders, served in place
 // ---- F-SA-279: the dock follows the row; All of <customer> in the dock ----
 import type { useCustomerDock } from '../use-customer-work'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
@@ -75,7 +76,7 @@ export function workViewsOf(can: { readonly price: boolean }, offered: { readonl
 export function workEmptyOf(rows: RowView, waiting: 'us' | null, customer: string, t: (key: string, params?: Record<string, string | number>) => string, allHref: string): OrdersListModel['empty'] {
   if (waiting) return null
   // F-CP-102: each keyed to its view (the sheet shows it on that view when nothing else narrows it).
-  if (rows === 'all') return { title: t('customers.work.emptyAll', { customer }), view: 'all' }
+  if (rows === 'all') return { title: t('customers.work.emptyAll', { customer }), view: 'all', newOrder: true /* F-CP-104: New order beside it */ }
   if (rows === 'IN_PRODUCTION') return { title: t('customers.work.empty', { customer }), link: { href: allHref, label: t('customers.work.showAll') }, view: 'IN_PRODUCTION' }
   return null
 }
@@ -110,6 +111,9 @@ export interface WorkTabProps {
   readonly onFocus?: (pick: DockPick) => void
   /** F-SA-278: the strip's two windows (Waiting for <customer>, Open tasks). */
   readonly onWindow?: StripDoors['onWindow']
+  /** F-CP-104: the page's ask (the band's New order, ⋯ Import orders for <customer>…), served once the sheet is here; then `onAsked`. */
+  readonly ask?: WorkAsk | null
+  readonly onAsked?: () => void
 }
 
 export function WorkTab(props: WorkTabProps) {
@@ -134,7 +138,7 @@ export function WorkTab(props: WorkTabProps) {
   )
 }
 
-function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow }: WorkTabProps) {
+function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow, ask, onAsked }: WorkTabProps) {
   const t = useT('parties')
   const o = useT('orders')
   const params = useSearchParams()
@@ -151,6 +155,17 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     onRowClick: (row, newTab) => (newTab ? window.open(`${prefix}/sales/orders/${encodeURIComponent(row.id)}`, '_blank', 'noopener') : onPick(pickOfRow(row))),
   }
   const sheet = useOrdersSheet(host)
+  // ---- F-CP-104: the band's New order (the customer picked and held: no Change) and ⋯ Import orders open here, once each ask; no
+  // address term is written for them (fx-12: nothing to loop on; a reload does not reopen the window).
+  const latest = useRef(sheet.actions)
+  latest.current = sheet.actions
+  useEffect(() => {
+    if (!ask) return
+    onAsked?.()
+    if (ask === 'new') latest.current.onNewOrder?.(true)
+    else latest.current.onImport?.()
+  }, [ask]) // eslint-disable-line react-hooks/exhaustive-deps
+  // ---- end F-CP-104
   // The review window on this page (the four-door window): the customer's requests that wait on us, a batch as one entry.
   const requests = work.reads.requests.status === 'ready' ? work.reads.requests.value : null
   const list = useMemo(() => doorListOf((requests?.items ?? []).filter((request) => request.waitingOn === 'US')), [requests])

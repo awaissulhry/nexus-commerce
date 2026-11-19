@@ -204,3 +204,49 @@ describe('F-CP-102: Clear all goes back to the host\'s default view', () => {
   })
 })
 // ---- end F-CP-102
+
+// ---- F-CP-104 (customer page plan C2a; review A9): the New order window on a host that holds the customer ---------------------------
+describe('F-CP-104: New order on the customer page holds its customer', () => {
+  it('an old ?new=1 opens the window on arrival; on the customer page it holds the customer (no Change), on Sales › Orders it does not', () => {
+    const customer = draw({ basePath: `/sales/customers/${ALPHA}`, locked: { party: ALPHA }, keep: ['tab'] }, `party=${ALPHA}&tab=work&new=1`).model
+    expect(customer.newOrder?.partyLocked).toBe(true)
+    const orders = draw({ basePath: '/sales/orders' }, `party=${BETA}&new=1`).model
+    expect(orders.newOrder?.partyLocked).toBe(false)
+    expect(draw({ basePath: `/sales/customers/${ALPHA}`, locked: { party: ALPHA } }, `party=${ALPHA}`).model.newOrder).toBeNull()
+  })
+
+  it('New order on a host that holds the customer reads that customer at once (no search); nothing is written into the address', () => {
+    const asked: string[] = []
+    const before = world.api.get
+    world.api.get = ((path: string) => (asked.push(path), new Promise(() => undefined))) as typeof world.api.get
+    try {
+      draw({ basePath: `/sales/customers/${ALPHA}`, locked: { party: ALPHA }, keep: ['tab'] }, `party=${ALPHA}&tab=work`).actions.onNewOrder?.(true)
+    } finally {
+      world.api.get = before
+    }
+    expect(asked.some((path) => path.includes(ALPHA))).toBe(true)
+    expect(nav.replaced).toEqual([])
+    expect(nav.pushed).toEqual([])
+  })
+
+  it('the window: no Change and no search while it holds the customer; its button says "Add the lines" (draft stays the portal\'s word)', () => {
+    const window = readFileSync(new URL('./view/NewOrderDialog.tsx', import.meta.url), 'utf8')
+    expect(window).toContain('{!model.partyLocked && (')
+    expect(window).toContain('{!party && model.partyLocked ? (')
+    expect(window).toContain("t('newOrder.addLines')")
+    const sheet = readFileSync(new URL('./use-orders-sheet.ts', import.meta.url), 'utf8')
+    expect(sheet).toContain('party: current.partyLocked ? current.party : null')
+    for (const locale of ['en', 'it'] as const) {
+      const catalogue = JSON.parse(readFileSync(new URL(`../../../../../messages/${locale}/orders.json`, import.meta.url), 'utf8')) as { newOrder: Record<string, unknown> }
+      expect(catalogue.newOrder.addLines, locale).toBe(locale === 'en' ? 'Add the lines' : 'Aggiungi le righe')
+      expect(catalogue.newOrder.create, `${locale}: the old words are gone`).toBeUndefined()
+    }
+  })
+
+  it('All orders with none yet offers New order in place, held with why without orders.manage', () => {
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain(") : hostEmpty.newOrder ? (")
+    expect(view).toContain("heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewOrder?.(true)}")
+  })
+})
+// ---- end F-CP-104

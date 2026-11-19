@@ -307,6 +307,11 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           <Button size="sm" asChild>
             <Link href={hostEmpty.link.href}>{hostEmpty.link.label}</Link>
           </Button>
+        ) : hostEmpty.newOrder ? (
+          // F-CP-104: the customer page's All orders, none yet — New order in place (held with why without orders.manage).
+          <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewOrder?.(true)}>
+            {t('list.new')}
+          </Button>
         ) : undefined
       }
     />

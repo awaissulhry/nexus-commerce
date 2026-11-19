@@ -8,7 +8,7 @@ import type { ComposerState } from '../record/record-model'
 import type { CustomerFilesActions, CustomerFilesModel } from './view/CustomerFiles'
 
 /**
- * The typed New order (design pop:orders.new → "Create draft order → Lines tab editable until 'Confirm order'";
+ * The typed New order (design pop:orders.new → "Add the lines (F-CP-104; was Create draft order) → Lines tab editable until 'Confirm order'";
  * B-W2a-50 on B-W2a-30's manual entry). The API keeps no draft order: the page holds it (and this browser tab's session
  * storage, so a reload keeps the lines), the API prices it as it is typed (POST …/manual/preview) and makes it at once,
  * CONFIRMED, on "Confirm order". Pure rules here; the page is new/NewOrderPage.tsx.

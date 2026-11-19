@@ -48,6 +48,8 @@ export function CustomerRecordView({
   workCount,
   quotesIncoming,
   threadButton,
+  onNewOrder,
+  onImport,
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
@@ -78,11 +80,14 @@ export function CustomerRecordView({
   quotesIncoming?: ReactNode
   /** F-SA-279: below 1280 px the band's button names the record the dock holds ("Thread · SO-…"); null: "Thread". */
   threadButton?: string | null
+  /** F-CP-104: the band's New order and ⋯ Import orders for <customer>… open on this page (the container asks the Work sheet); absent: the old doors. */
+  onNewOrder?: () => void
+  onImport?: () => void
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -107,6 +112,8 @@ interface CustomerProps {
   workCount?: { readonly count: number | null; readonly attention: boolean } | null | undefined
   quotesIncoming?: ReactNode // F-SA-277
   threadButton?: string | null // F-SA-279
+  onNewOrder?: (() => void) | undefined // F-CP-104
+  onImport?: (() => void) | undefined // F-CP-104
 }
 
 function Customer(props: CustomerProps) {
@@ -119,7 +126,8 @@ function Customer(props: CustomerProps) {
 }
 
 /** F-SA-271: the band's ⋯ lines of the customer (after Start a project), each held with why. */
-function customerMore(model: PartyRecordModel, party: Party, t: ReturnType<typeof useT>, onAddTask?: () => void): MenuItemDef[] {
+// F-CP-104: + Import orders for <customer>… opens the sheet's import on this page (onImport), held without orders.manage.
+function customerMore(model: PartyRecordModel, party: Party, t: ReturnType<typeof useT>, onAddTask?: () => void, onImport?: () => void): MenuItemDef[] {
   const can = model.can
   const name = partyName(party)
   const id = encodeURIComponent(party.id)
@@ -127,7 +135,9 @@ function customerMore(model: PartyRecordModel, party: Party, t: ReturnType<typeo
     { id: 'task', label: t('customers.band.addTask', { customer: name }), onSelect: () => onAddTask?.(), disabled: !can.tasks || !onAddTask, description: can.tasks ? undefined : t('held.right', { right: rightRef('tasks.manage') }) },
     ...(can.orders
       ? [
-          { id: 'import', label: t('customers.band.importOrders', { customer: name }), href: can.ordersManage ? `${model.prefix}/sales/orders?party=${id}&rows=all&import=1` : undefined, disabled: !can.ordersManage, description: can.ordersManage ? undefined : t('held.right', { right: rightRef('orders.manage') }) },
+          onImport
+            ? { id: 'import', label: t('customers.band.importOrders', { customer: name }), onSelect: onImport, disabled: !can.ordersManage, description: can.ordersManage ? undefined : t('held.right', { right: rightRef('orders.manage') }) } // F-CP-104: in place
+            : { id: 'import', label: t('customers.band.importOrders', { customer: name }), href: can.ordersManage ? `${model.prefix}/sales/orders?party=${id}&rows=all&import=1` : undefined, disabled: !can.ordersManage, description: can.ordersManage ? undefined : t('held.right', { right: rightRef('orders.manage') }) },
           { id: 'orders', label: t('customers.openSheet'), href: `${model.prefix}/sales/orders?party=${id}&rows=all` },
         ]
       : []),
@@ -144,7 +154,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -170,19 +180,26 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
   }))
   // F-SA-271: the primary — Activate a prospect, New order for an active customer (orders.manage), none when blocked or archived;
   // Check VIES goes into ⋯ (and stays in Terms › VIES).
+  // F-CP-104 (C2a): New order opens the New order window on this page, the customer held (no Change), no trip to Sales › Orders.
   const primary =
     party.status === 'ACTIVE' ? (
       can.ordersManage ? (
-        <Button size="sm" variant="primary" asChild>
-          <Link href={`${model.prefix}/sales/orders?party=${encodeURIComponent(party.id)}&new=1`}>{t('customers.band.newOrder')}</Link>
-        </Button>
+        onNewOrder ? (
+          <Button size="sm" variant="primary" onClick={onNewOrder}>
+            {t('customers.band.newOrder')}
+          </Button>
+        ) : (
+          <Button size="sm" variant="primary" asChild>
+            <Link href={`${model.prefix}/sales/orders?party=${encodeURIComponent(party.id)}&new=1`}>{t('customers.band.newOrder')}</Link>
+          </Button>
+        )
       ) : (
         <Button size="sm" variant="primary" heldReason={t('held.right', { right: rightRef('orders.manage') })}>
           {t('customers.band.newOrder')}
         </Button>
       )
     ) : party.status === 'PROSPECT' ? undefined : null
-  const { band, viesHeld } = usePartyBand(model, party, actions, { primary, viesInMore: true, more: customerMore(model, party, t, onAddTask) })
+  const { band, viesHeld } = usePartyBand(model, party, actions, { primary, viesInMore: true, more: customerMore(model, party, t, onAddTask, onImport /* F-CP-104 */) })
   const { current } = identitiesOf(party)
 
   return (

@@ -16,6 +16,10 @@ import { OPEN_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { OPEN_ORDERS } from '../../../parties/_shared/model'
 import { workDoor, workViewCounts } from './use-customer-work'
 // ---- end F-CP-103
+// ---- F-CP-104 ----
+import { rightRef } from '../../../../lib/i18n/rights'
+import { workAskAddress } from './use-customer-work'
+// ---- end F-CP-104
 // F-SA-279: the dock follows the row
 import { DOCK_FOLLOW_MS, DOCK_PARAM, DOCK_TABS, dockable, dockAddress, dockFollower, dockKeyOf, dockOnTab, dockTermOf, dockValueOf, draftKeptOf, GENERAL_DOCK, pickOfSummary, scopeOf } from './use-customer-work'
 import { lockedEntry } from '../../orders/list/use-orders-sheet' // fx-12
@@ -577,7 +581,7 @@ describe('F-CP-101: All orders by default, written once', () => {
 
   it('the empty state per view: All orders says no order yet; In production keeps its way to All orders; other views the sheet\'s own', () => {
     const t = createTranslator('en', messagesFor('en', ['parties']).parties!)
-    expect(workEmptyOf('all', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Brand Alpha has no order yet.', view: 'all' })
+    expect(workEmptyOf('all', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Brand Alpha has no order yet.', view: 'all', newOrder: true /* F-CP-104 */ })
     expect(workEmptyOf('IN_PRODUCTION', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Nothing in production for Brand Alpha.', link: { href: '/all', label: 'Show all orders' }, view: 'IN_PRODUCTION' })
     expect(workEmptyOf('late', null, 'Brand Alpha', t, '/all')).toBeNull()
     expect(workEmptyOf('open', 'us', 'Brand Alpha', t, '/all')).toBeNull()
@@ -647,3 +651,49 @@ describe('F-CP-103: each tile opens the rows it counts; the Views counts come fr
   })
 })
 // ---- end F-CP-103
+
+// ---- F-CP-104 (customer page plan C2a; fx-12, review G4, A9): New order and Import orders in place ---------------------------------
+// The band's New order and ⋯ Import orders for <customer>… are asks kept in the page's memory, never address terms: on the Work tab
+// nothing is written (the window opens in place); on another tab the page writes `tab=work`, the Work entry writes its lock and view
+// once, then nothing — two replaces at most, then none. The window holds the page's customer (no Change); held without orders.manage.
+describe('F-CP-104: New order and Import orders open on the customer page', () => {
+  const RECORD = `/w/acme/sales/customers/${ALPHA}`
+  const search = (address: string) => address.slice(address.indexOf('?') + 1)
+
+  it('on the Work tab the ask writes nothing; on another tab ?tab=work, then the entry once, then none (two replaces at most)', () => {
+    expect(workAskAddress(RECORD, 'work')).toBeNull()
+    for (const tab of ['overview', 'quotes', 'money', 'people', 'terms', 'portal']) {
+      const first = workAskAddress(RECORD, tab)!
+      expect(first, tab).toBe(`${RECORD}?tab=work`)
+      const second = workEntry(RECORD, ALPHA, params(search(first)))!
+      expect(new URL(`https://x${second}`).searchParams.get('rows'), tab).toBe('all')
+      expect(workEntry(RECORD, ALPHA, params(search(second))), tab).toBeNull()
+      // No term of the ask anywhere: nothing to loop on, a reload does not reopen the window.
+      for (const address of [first, second]) expect(address, tab).not.toMatch(/[?&](new|import)=/)
+    }
+  })
+
+  it('the page keeps the ask in memory and the Work sheet serves it once (no address write of its own)', () => {
+    const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("const address = workAskAddress(`${prefix}/sales/customers/${encodeURIComponent(partyId)}`, tab)")
+    expect(page).toContain('onAsked={() => setAsk(null) /* F-CP-104 */}')
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("if (ask === 'new') latest.current.onNewOrder?.(true)")
+    expect(tab).toContain('else latest.current.onImport?.()')
+    expect(tab.match(/router\.replace\(/g)?.length).toBe(1)
+  })
+
+  it('the band: New order is a button on this page; ⋯ Import orders opens here; both held with the right\'s words without orders.manage', () => {
+    const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('<Button size="sm" variant="primary" onClick={onNewOrder}>')
+    expect(view).toContain("onSelect: onImport, disabled: !can.ordersManage")
+    expect(view).toContain("heldReason={t('held.right', { right: rightRef('orders.manage') })}")
+    for (const locale of LOCALES) {
+      const words = createTranslator(locale, messagesFor(locale, ['parties']).parties!)('held.right', { right: rightRef('orders.manage') })
+      expect(words, locale).not.toContain('orders.manage')
+      expect(words, locale).not.toBe('held.right')
+    }
+    expect(createTranslator('en', messagesFor('en', ['parties']).parties!)('held.right', { right: rightRef('orders.manage') })).toMatch(/^Needs the right /)
+  })
+})
+// ---- end F-CP-104

@@ -83,6 +83,19 @@ export function workEntry(base: string, partyId: string, params: Params): string
   return changed ? `${base}?${query.toString()}` : null
 }
 
+// ---- F-CP-104 (customer page plan C2a; fx-12, review G4): New order and Import orders in place ------------------------------------
+
+/** What the band (New order) or its ⋯ (Import orders for <customer>…) asks of the Work sheet; held in the page's memory, never in the address. */
+export type WorkAsk = 'new' | 'import'
+
+/**
+ * The one address the band writes for an ask, or null: on the Work tab nothing (the sheet opens its window in place); on any other tab
+ * `?tab=work` — then the Work tab's entry writes its lock and view once, and nothing more (two replaces at most, then none). No term
+ * of the ask is written: nothing to loop on, and a reload does not open the window again.
+ */
+export const workAskAddress = (recordHref: string, tab: string): string | null => (tab === 'work' ? null : `${recordHref}?tab=work`)
+// ---- end F-CP-104
+
 // ---- F-CP-103 (customer page plan C1; review A4): the Overview's tiles open their own view; Views ▾ counts each view ------------------
 
 /** The Work view each Overview tile counts (its door shows exactly those rows): Open orders, In production, Late. */

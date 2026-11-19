@@ -189,7 +189,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const [weekTick, setWeekTick] = useState(0) // B-W2b-323
   const readId = useRef(0)
   const companyId = session.company?.id ?? session.companies[0]?.id ?? ''
-  const [newOrder, setNewOrder] = useState<NewOrderDialogModel | null>(params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId, incomingOf(prefix, session.permissions), can.price /* F-CP-146 */) : null)
+  const [newOrder, setNewOrder] = useState<NewOrderDialogModel | null>(params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId, incomingOf(prefix, session.permissions), can.price /* F-CP-146 */, !!host.locked?.party /* F-CP-104 */) : null)
   const searchSeq = useRef(0)
 
   const go = useCallback(
@@ -797,8 +797,12 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onShowUpdates: () => void load(),
     onOpen: (id) => router.push(`${prefix}/sales/orders/${id}`),
     onDismissNotice: () => setNotice(null),
-    onNewOrder: (open) => setNewOrder(open && can.manage ? emptyNew(session.companies, companyId, incomingOf(prefix, session.permissions), can.price /* F-CP-146 */) : null),
-    onNewCompany: (company) => setNewOrder((current) => (current ? { ...current, companyId: company, party: null, contactId: '' } : current)),
+    // F-CP-104: on a host that holds the customer (the customer page) the window opens with it picked, and keeps it (no Change).
+    onNewOrder: (open) => {
+      setNewOrder(open && can.manage ? emptyNew(session.companies, companyId, incomingOf(prefix, session.permissions), can.price /* F-CP-146 */, !!host.locked?.party /* F-CP-104 */) : null)
+      if (open && can.manage && host.locked?.party) pickNew(host.locked.party) // F-CP-104
+    },
+    onNewCompany: (company) => setNewOrder((current) => (current ? { ...current, companyId: company, party: current.partyLocked ? current.party : null /* F-CP-104 */, contactId: current.partyLocked ? current.contactId : '' } : current)),
     onNewSearch: (query) => newOrder && searchCustomers(query, newOrder.companyId),
     onNewPick: pickNew, // F-SA-271: one pick (also the customer page's New order door)
     onNewField: (field, value) => setNewOrder((current) => (current ? { ...current, [field]: value } : current)),
@@ -820,8 +824,8 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   return { model, actions }
 }
 
-function emptyNew(companies: NewOrderDialogModel['companies'], companyId: string, incomingHref: string | null, price: boolean /* F-CP-146 */): NewOrderDialogModel {
-  return { companies, companyId, results: null, searchProblem: null, party: null, partyProblem: null, contactId: '', customerRef: '', number: undefined, incomingHref, price }
+function emptyNew(companies: NewOrderDialogModel['companies'], companyId: string, incomingHref: string | null, price: boolean /* F-CP-146 */, partyLocked: boolean /* F-CP-104 */): NewOrderDialogModel {
+  return { companies, companyId, results: null, searchProblem: null, party: null, partyProblem: null, contactId: '', customerRef: '', number: undefined, incomingHref, price, partyLocked }
 }
 
 /** B-TH-221: New order's one pointer — a written request goes to Incoming's New request, for who may make one there. */

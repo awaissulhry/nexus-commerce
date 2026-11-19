@@ -45,6 +45,8 @@ export interface NewOrderDialogModel {
   incomingHref?: string | null
   /** F-CP-146 (money wall D1-c): false — the person sees no price: the window says the lines take the customer's price list. */
   price?: boolean
+  /** F-CP-104: the host holds the customer (the customer page): it is picked on open and the window offers no Change. */
+  partyLocked?: boolean
 }
 // B-TH-230
 import type { UnreadMap } from '../../../../lib/last-message-cell/model'
@@ -133,7 +135,8 @@ export interface OrdersListModel {
   /** F-SA-222: what an empty view says on this host (the Made-to-measure page says why: GATE-MTM), when nothing narrows it. */
   // F-CP-102: `view` — the rows view these words are for (the customer page keys them per view): they show on that view when nothing
   // else narrows it; absent: the host's default view only (as before).
-  empty?: { title: string; body?: string | null; link?: { href: string; label: string } | null; view?: RowView | null } | null
+  // F-CP-104: `newOrder` — New order beside the words (held with why without orders.manage; the customer page's All orders).
+  empty?: { title: string; body?: string | null; link?: { href: string; label: string } | null; view?: RowView | null; newOrder?: boolean } | null
   // ---- F-SA-220 (the ONE Orders sheet, use-orders-sheet.ts): the host's ----
   /** The list frame's key: 'sales.orders' on every host (one export source, one set of saved views). */
   listKey?: string

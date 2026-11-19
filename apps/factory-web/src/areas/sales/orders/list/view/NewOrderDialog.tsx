@@ -11,10 +11,12 @@ import type { NewOrderDialogModel, OrdersListActions } from '../list-model'
 
 /**
  * New order (design pop:orders.new, B-W2a-50; SAL-202 manual entry): the selling company when there are several, the
- * customer (search by name, code, VAT number), the contact and the customer's PO, and the number it will get. "Create
- * draft order" opens the order's Lines on the screen — nothing is written until "Confirm order" there (the API keeps
+ * customer (search by name, code, VAT number), the contact and the customer's PO, and the number it will get. "Add the
+ * lines" opens the order's Lines on the screen — nothing is written until "Confirm order" there (the API keeps
  * no draft order). ⌘↵ creates; Esc closes. B-TH-221: one line points a written request (a mail, a letter, a call to answer
  * first) to Incoming's New request.
+ * F-CP-104 (customer page C2a; review A9: "draft" stays the portal's word): on the customer page the customer is the page's own —
+ * read on open, no search and no Change (`partyLocked`).
  */
 export function NewOrderDialog({ model, actions }: { model: NewOrderDialogModel; actions?: OrdersListActions }) {
   const t = useT('orders')
@@ -45,7 +47,7 @@ export function NewOrderDialog({ model, actions }: { model: NewOrderDialogModel;
           <span className="grow" />
           <Button onClick={() => actions?.onNewOrder?.(false)}>{t('common.cancel')}</Button>
           <Button variant="primary" heldReason={held} onClick={create} aria-keyshortcuts="Meta+Enter Control+Enter">
-            {t('newOrder.create')}
+            {t('newOrder.addLines') /* F-CP-104 (review A9) */}
           </Button>
         </>
       }
@@ -77,7 +79,16 @@ export function NewOrderDialog({ model, actions }: { model: NewOrderDialogModel;
             </Select>
           </Field>
         )}
-        {!party ? (
+        {!party && model.partyLocked ? (
+          // F-CP-104: the page's own customer, still read (or why it could not be).
+          model.partyProblem ? (
+            <Banner tone="danger" title={t(model.partyProblem)} />
+          ) : (
+            <p className="fw-so-hint" role="status">
+              <Spinner size={14} /> {t('newOrder.reading')}
+            </p>
+          )
+        ) : !party ? (
           <>
             <Field label={t('newOrder.customer')} hint={t('newOrder.customerHint')}>
               <Input
@@ -126,9 +137,12 @@ export function NewOrderDialog({ model, actions }: { model: NewOrderDialogModel;
           <>
             <div className="fw-so-card-head">
               <strong>{party.legalName}</strong>
-              <Button size="sm" variant="quiet" onClick={() => actions?.onNewPick?.(null)}>
-                {t('newOrder.change')}
-              </Button>
+              {/* F-CP-104: the customer page holds its customer — no Change there. */}
+              {!model.partyLocked && (
+                <Button size="sm" variant="quiet" onClick={() => actions?.onNewPick?.(null)}>
+                  {t('newOrder.change')}
+                </Button>
+              )}
             </div>
             <KeyValue
               dense

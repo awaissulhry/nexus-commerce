@@ -1341,7 +1341,7 @@
     "numberLoading": "Reading the next number…",
     "numberUnknown": "The number is given when the order is confirmed.",
     "number": "It will get number {number} (unless another order takes it first).",
-    "create": "Create draft order",
+    "addLines": "Add the lines",
     "partyStatus": {
       "PROSPECT": "a prospect",
       "ACTIVE": "active",
