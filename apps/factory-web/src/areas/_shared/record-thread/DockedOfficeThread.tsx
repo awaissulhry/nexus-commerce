@@ -70,6 +70,7 @@ import { readUseOnTargets, useFileOn } from './api'
 import { carriable, offeredTargets, openRefusal, queryReady, targetLabel, useOnRefusal } from '../../../lib/record-thread/files/use-on'
 import { UseOnDialog, type UseOnModel } from '../../../lib/record-thread/files/view/UseOnDialog'
 import type { RecordThreadBase, RecordThreadHost } from './use-record-thread'
+import { useDockTop } from './ThreadPick' // F-OP-202: the dock's pick band, the card's first band
 // B-TH-251 (PROJ.linked-F05): "In project …" on the head of a record a project may link.
 import { useInProject } from '../../products/projects/record/linked/use-in-project'
 import { companyPrefix } from '../../../lib/session/session'
@@ -152,6 +153,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const session = useOfficeSession()
   const locale = useLocale()
   const frame = useRecordFrame()
+  const pickBand = useDockTop() // F-OP-202: the ThreadPick around this thread hands its band down (null: no pick on this page)
   const tr = useT('records')
   const tf = useT('record-files')
   const tv = useT(FILES_VIEW_NS)
@@ -1131,5 +1133,5 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
 
   const helpers = mayReply ? <SavedReplies model={{ ...replies, held: offline ? th('held.offline') : null }} onPick={pickReply} onRetry={() => setRepliesSeq((value) => value + 1)} /> : null
 
-  return <RecordThread model={shownModel} actions={threadActions} remind={remind} slots={{ head: headSlot, filesLine, helpers, overlays }} />
+  return <RecordThread model={shownModel} actions={threadActions} remind={remind} slots={{ top: pickBand /* F-OP-202 */, head: headSlot, filesLine, helpers, overlays }} />
 }

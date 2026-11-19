@@ -91,6 +91,11 @@ export interface RecordThreadActions extends FeedActions {
  * and the helpers beside the box (T8). Slots drawn by the office container: this view imports no office code.
  */
 export interface RecordThreadSlots {
+  // ---- F-OP-201 (order page plan N4; 11-dock §0.1, §1): the dock's pick band (ThreadPick's, handed down by the docked container) —
+  // the FIRST band inside the column, drawn also when the feed is forbidden (the person must be able to pick another thread). Absent
+  // on a page without a pick (a quote, an invoice): nothing is drawn, the column is as before.
+  top?: ReactNode
+  // ---- end F-OP-201
   /** The Head (lib/record-thread/head): one 44 px row; not drawn without threads.read. */
   head?: ReactNode
   /** The files line (lib/record-thread/files): absent with no files. */
@@ -152,7 +157,9 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
 
   return (
     <>
-      <section ref={column} className={`fw-rt-column${slots?.head ? ' is-docked' : ''}`} aria-label={t('label', { record: model.title })} onKeyDown={onKeyDown}>
+      <section ref={column} className={`fw-rt-column${slots?.head || slots?.top /* F-OP-201 */ ? ' is-docked' : ''}`} aria-label={t('label', { record: model.title })} onKeyDown={onKeyDown}>
+        {/* F-OP-201: the pick band first — kept when the feed is forbidden (the Head and the files line hide then). */}
+        {slots?.top ? <div className="fw-rt-top">{slots.top}</div> : null}
         {model.feed.state !== 'forbidden' && slots?.head}
         {model.feed.state !== 'forbidden' && slots?.filesLine}
         {model.notice && (

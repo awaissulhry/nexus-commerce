@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Building2, Eye } from 'lucide-react' // F-OP-203: the segments' icons
 import { Button, Skeleton } from '@nexus/ui/primitives'
 import { useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
@@ -9,7 +10,8 @@ import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { CustomerOverrideProvider } from '../../../../_shared/customer-override/CustomerOverride'
 import { OfficeRecordThread } from '../../../../_shared/record-thread/OfficeRecordThread'
-import { ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
+import { PickedDockColumn, ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
+import { RecordTypeIcon } from '../../../../search/RecordTypeIcon' // F-OP-203: the picked record's icon in its segment
 import { doorListOf } from '../../../../home/approvals/requests/model'
 import { useRequestReviewDoor } from '../../../../home/approvals/requests/use-request-review-door'
 import { RequestDoorNoticeBanner, RequestDoorWindow } from '../../../../home/approvals/requests/view/RequestReview'
@@ -194,9 +196,12 @@ type DockProps = { customer: { id: string; name: string }; general: ReactNode; d
  * the same as the order page's (C-13). No threads.read: no dock at all. The page reads All of <customer> (useAllOfCustomer) and
  * hands the dock its feed (end check: a view fetches nothing).
  */
+/** F-OP-203: the dock's catalogues — All of <customer>'s, and the orders' for the pick's short "General" (the order page's word). */
+const CUSTOMER_DOCK_NS = [...ALL_OF_CUSTOMER_NS, 'orders'] as const
+
 export function CustomerDock(props: DockProps) {
   return (
-    <WithMessages namespaces={ALL_OF_CUSTOMER_NS}>
+    <WithMessages namespaces={CUSTOMER_DOCK_NS}>
       <Dock {...props} />
     </WithMessages>
   )
@@ -204,13 +209,16 @@ export function CustomerDock(props: DockProps) {
 
 function Dock({ customer, general, dock, feed, prefix }: DockProps) {
   const t = useT('parties')
+  const o = useT('orders') // F-OP-203
+  const rt = useT('record-thread') // F-OP-203
   if (general === null || general === undefined) return null
   const pick = dock.pick
+  // F-OP-203: each segment with its icon and its short words for a narrow card (the order page's words, C-13).
   const choices: ThreadChoice<'general' | 'record' | 'all'>[] = [
-    { value: 'general', label: t('customers.work.dock.general', { customer: customer.name }), line: t('customers.work.dock.generalLine', { customer: customer.name }) },
-    ...(pick ? [{ value: 'record' as const, label: pick.label, line: t('customers.work.dock.recordLine', { record: pick.label, customer: customer.name }) }] : []),
+    { value: 'general', label: t('customers.work.dock.general', { customer: customer.name }), short: o('record.dock.writeGeneral'), icon: <Building2 size={14} aria-hidden />, line: t('customers.work.dock.generalLine', { customer: customer.name }) },
+    ...(pick ? [{ value: 'record' as const, label: pick.label, icon: <RecordTypeIcon type={pick.type} size={14} />, line: t('customers.work.dock.recordLine', { record: pick.label, customer: customer.name }) }] : []),
     // The feed says itself that it is read only and how to write (its own line).
-    { value: 'all', label: t('customers.work.dock.all', { customer: customer.name }), title: t('customers.work.dock.readOnly'), line: null },
+    { value: 'all', label: t('customers.work.dock.all', { customer: customer.name }), short: rt('allOfCustomer.view.all'), title: t('customers.work.dock.readOnly'), icon: <Eye size={14} aria-hidden />, line: null },
   ]
   const onAnswer = (record: { readonly type: string; readonly id: string }, messageId: string) => {
     const entry = feed.state.entries.find((one) => one.record.type === record.type && one.record.id === record.id)
@@ -231,7 +239,8 @@ function Dock({ customer, general, dock, feed, prefix }: DockProps) {
           onDraft={(kept) => dock.onDraft(pick, kept)}
         />
       ) : dock.scope === 'all' ? (
-        <AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />
+        // F-OP-203: All of <customer> in the dock's ONE card (DockColumn): the pick band on top, the read-only feed that scrolls.
+        <PickedDockColumn label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} body={<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />} />
       ) : (
         general
       )}

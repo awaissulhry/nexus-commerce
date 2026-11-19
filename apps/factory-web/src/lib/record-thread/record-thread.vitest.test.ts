@@ -180,3 +180,87 @@ describe('B-TH-300 — the docked thread', () => {
     }
   })
 })
+
+// ── F-OP-201 (order page plan N4; 11-dock §0.1, §1): the ONE card of a record's dock — slots.top, DockColumn, one band CSS ──────────
+import { createElement } from 'react'
+import { render } from './parts/testing'
+import { RecordThread, type RecordThreadActions } from './RecordThread'
+import { DockColumn } from './DockColumn'
+
+describe('F-OP-201 — the one card: the pick band inside the column, DockColumn, the same band CSS', () => {
+  const noop = () => undefined
+  const actions: RecordThreadActions = { onDraft: noop, onSend: noop, onFiles: noop, onRemoveFile: noop, onRetryFile: noop, onShareFile: noop, onPicker: noop, onAddRecordFiles: noop, onLines: noop, onCheckBack: noop, onCheckRetry: noop, onOutside: noop, onConfirm: noop, onStay: noop, onDiscard: noop }
+  const threadOfCase = (id: string) => designScreen.cases.find((item) => item.id === id)!.model.thread
+  const slots = { top: createElement('p', null, 'THE PICK'), head: createElement('p', null, 'THE HEAD'), filesLine: createElement('p', null, 'THE FILES') }
+
+  it('slots.top is the FIRST band inside the column, before the Head, the files line and the feed', () => {
+    const html = render(createElement(RecordThread, { model: threadOfCase('full-page'), actions, slots }))
+    const column = html.indexOf('class="fw-rt-column is-docked"')
+    const top = html.indexOf('<div class="fw-rt-top"><p>THE PICK</p></div>')
+    expect(column).toBeGreaterThan(-1)
+    expect(top).toBeGreaterThan(column)
+    expect(html.indexOf('THE HEAD')).toBeGreaterThan(top)
+    expect(html.indexOf('THE FILES')).toBeGreaterThan(html.indexOf('THE HEAD'))
+    expect(html.indexOf('role="feed"')).toBeGreaterThan(html.indexOf('THE FILES'))
+  })
+
+  it('a forbidden thread keeps the pick (the person can switch away); the Head, the files line and the box hide as before', () => {
+    const html = render(createElement(RecordThread, { model: threadOfCase('forbidden'), actions, slots }))
+    expect(html).toContain('<div class="fw-rt-top"><p>THE PICK</p></div>')
+    expect(html).not.toContain('THE HEAD')
+    expect(html).not.toContain('THE FILES')
+    expect(html).not.toContain('fw-rt-composer')
+    expect(textOf(html)).toContain('You cannot read this thread')
+  })
+
+  it('no pick: no band, the column as before (a page without a pick: an invoice, a quote)', () => {
+    const html = render(createElement(RecordThread, { model: threadOfCase('full-page'), actions, slots: { head: slots.head } }))
+    expect(html).not.toContain('fw-rt-top')
+    expect(html).toContain('class="fw-rt-column is-docked"')
+    const bare = render(createElement(RecordThread, { model: threadOfCase('full-page'), actions }))
+    expect(bare).not.toContain('fw-rt-top')
+    expect(bare).toContain('class="fw-rt-column"')
+  })
+
+  it('DockColumn draws the same card: section.fw-rt-column.is-docked, named, pick band → Head → body → foot', () => {
+    const html = render(createElement(DockColumn, { label: 'All of Brand Alpha · Read only', top: createElement('p', null, 'THE PICK'), head: createElement('header', null, 'THE HEAD'), body: createElement('ol', null, 'THE LINES'), foot: createElement('span', null, 'THE FOOT') }))
+    expect(html.startsWith('<section class="fw-rt-column is-docked" aria-label="All of Brand Alpha · Read only">')).toBe(true)
+    const top = html.indexOf('<div class="fw-rt-top"><p>THE PICK</p></div>')
+    const head = html.indexOf('<header>THE HEAD</header>')
+    const body = html.indexOf('<div class="fw-rt-body"><ol>THE LINES</ol></div>')
+    const foot = html.indexOf('<div class="fw-rt-foot"><span>THE FOOT</span></div>')
+    expect(top).toBeGreaterThan(-1)
+    expect(head).toBeGreaterThan(top)
+    expect(body).toBeGreaterThan(head)
+    expect(foot).toBeGreaterThan(body)
+    // Nothing to pick, no foot: no empty band.
+    const bare = render(createElement(DockColumn, { label: 'x', body: 'THE LINES' }))
+    expect(bare).not.toContain('fw-rt-top')
+    expect(bare).not.toContain('fw-rt-foot')
+    expect(bare).toContain('<div class="fw-rt-body">THE LINES</div>')
+  })
+
+  it('DockColumn is a view: it imports no office, portal, shell, panel, API or session code and fetches nothing', () => {
+    const source = readFileSync(new URL('./DockColumn.tsx', import.meta.url), 'utf8')
+    expect(source).not.toMatch(/from '[^']*(areas|portal|shell|record-panels|lib\/api|lib\/session)\//)
+    expect(source).not.toMatch(/from '\.\.\//)
+    expect(source).not.toMatch(/\bfetch\(/)
+  })
+
+  it('one band CSS for both: record-thread.css holds .fw-rt-top / .fw-rt-body / .fw-rt-foot once, both parts draw them, tokens only', () => {
+    const css = readFileSync(new URL('./record-thread.css', import.meta.url), 'utf8')
+    for (const band of ['fw-rt-top', 'fw-rt-body', 'fw-rt-foot']) expect(css.match(new RegExp(`\\.${band} \\{`, 'g'))?.length, band).toBe(1)
+    expect(css).toMatch(/\.fw-rt-top \{[^}]*padding: var\(--nds-space-10\) var\(--nds-space-12\) var\(--nds-space-9\);[^}]*border-bottom: 1px solid var\(--nds-border-subtle\);/)
+    expect(css).toMatch(/\.fw-rt-body \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;/)
+    expect(css).toMatch(/\.fw-rt-foot \{[^}]*flex: none;[^}]*border-top: 1px solid var\(--nds-border-subtle\);/)
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i)
+    // The same container (fw-rtcol) for both: the card measures itself.
+    expect(css).toMatch(/\.fw-rt-column\.is-docked \{\s*container: fw-rtcol \/ inline-size;\s*\}/)
+    const dock = readFileSync(new URL('./DockColumn.tsx', import.meta.url), 'utf8')
+    expect(dock).toContain("import './record-thread.css'")
+    expect(dock).toContain('className="fw-rt-column is-docked"')
+    for (const band of ['fw-rt-top', 'fw-rt-body', 'fw-rt-foot']) expect(dock).toContain(`className="${band}"`)
+    expect(readFileSync(new URL('./RecordThread.tsx', import.meta.url), 'utf8')).toContain('<div className="fw-rt-top">{slots.top}</div>')
+  })
+})
+// ── end F-OP-201
