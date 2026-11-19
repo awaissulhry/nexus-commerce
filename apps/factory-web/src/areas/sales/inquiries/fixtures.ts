@@ -35,7 +35,7 @@ import { PRODUCTION_ROWS } from './demo/fixtures'
 import { emptyDecline, emptyLine, HOME_ADDRESS, requestDraftOf, type InquiryTile, type ListAddress, type RecordTab } from './model'
 import { acceptDraftOf, type CatalogueModel } from './catalogue-model'
 // ---- F-CP-157: the accept window's line map ----
-import { JACKET_DETAIL, MAP_RECORD, MAP_STYLES } from './demo/fixtures'
+import { MAP_RECORD, MAP_STYLES } from './demo/fixtures' // JACKET_DETAIL: imported above (end-check fix)
 import { mapStylesOf, type AcceptDraft, type CatalogueDialog } from './catalogue-model'
 // ---- end F-CP-157
 import type { AddressesModel } from './addresses/model' // B-TH-285
