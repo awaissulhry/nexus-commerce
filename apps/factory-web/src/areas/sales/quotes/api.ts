@@ -46,7 +46,9 @@ export const lineSchema = z.object({
   quantity: z.number(),
   listUnitPrice: z.string().nullable().optional(),
   unitPrice: z.string().optional(),
-  discountPct: z.string().nullable(),
+  // B-CP-012 (the money wall): a percent of the price is a price — absent without the price grain (the API drops it), as the
+  // unit price; required here, a Sales worker's every line write answered a quote this shape refused ("Not saved").
+  discountPct: z.string().nullable().optional(),
   netAmount: z.number().optional(),
   vatRatePct: z.string(),
   vatNature: z.string().nullable(),

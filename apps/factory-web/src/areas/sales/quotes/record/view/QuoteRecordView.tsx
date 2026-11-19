@@ -13,6 +13,7 @@ import { previewHref, type QuoteDetail } from '../../api'
 import { customerSeesOf, customerSeesWords, daysUntil, isWideTab, nextStep, QUOTE_TABS, readOnlyReason, STATUS_TONE, type QuoteTab } from '../../model'
 // TH-6 part B (B-TH-257 follow-up): beside the customer's "Withdrawn" (B-TH-095), the office reads when they withdrew the request.
 import { requestWithdrawnOf } from '../../model'
+import { needsApprovalKey } from '../../model' // B-CP-012
 import type { QuoteRecordActions, QuoteRecordViewModel } from '../record-model'
 import type { QuoteDepthSlots } from '../lines-depth/slots'
 import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
@@ -157,6 +158,8 @@ function ReadyRecord({ quote, model, actions, thread, printThread, fields, sendA
 
   const primary = (() => {
     const held = step.held ? t(step.held.key, step.held.params) : model.busy ? t('held.busy') : null
+    // B-CP-012: the broken rules this person reads (a money flag of a grain they lack is left out by the API).
+    const reasons = quote.approval.rules.filter((rule) => rule.broken).map((rule) => t(`reason.${rule.reason}`)).join(' · ')
     switch (step.step) {
       case 'send':
         return (
@@ -167,7 +170,7 @@ function ReadyRecord({ quote, model, actions, thread, printThread, fields, sendA
       case 'askApproval':
         return (
           <>
-            <Button size="sm" heldReason={t('held.needsApproval', { reasons: quote.approval.rules.filter((rule) => rule.broken).map((rule) => t(`reason.${rule.reason}`)).join(' · ') })} onClick={() => undefined}>
+            <Button size="sm" heldReason={t(needsApprovalKey(reasons, 'held') /* B-CP-012 */, { reasons })} onClick={() => undefined}>
               {t('action.send')}
             </Button>
             <Button size="sm" variant="primary" heldReason={held} onClick={() => actions?.onDialog?.('ask')} aria-keyshortcuts="a">
@@ -300,9 +303,9 @@ function ReadyRecord({ quote, model, actions, thread, printThread, fields, sendA
                 ) : (
                   <span className="fw-q-hint">{t(madeOrder.cancelled ? 'record.orderCancelledPlain' : 'record.orderPlain', { number: madeOrder.number })}</span>
                 ))}
-              {saveWords}
             </>
           ),
+          save: saveWords /* F-OP-302 follow-up (cp-fx9): the save state never folds behind "+N" */,
           primary,
           more,
           moreLabel: t('record.more'),

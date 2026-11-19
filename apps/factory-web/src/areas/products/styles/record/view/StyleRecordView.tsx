@@ -348,9 +348,9 @@ function ReadyRecord({ style, model, actions, thread, printThread, fields, techP
                   <Inbox size={12} aria-hidden /> {t('record.madeFrom', { number: madeFrom.number })}
                 </Link>
               )}
-              {saveWords}
             </span>
           ),
+          save: saveWords /* F-OP-302 follow-up (cp-fx9): the save state never folds behind "+N" */,
           primary,
           more,
           moreLabel: t('record.more'),

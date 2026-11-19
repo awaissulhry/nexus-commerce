@@ -14,6 +14,7 @@ import type { QuoteRecordActions, QuoteRecordViewModel } from '../record-model'
 import { sizeGridWords } from './grid-copy'
 import { lineOfColour } from '../lines/key'
 import type { QuoteDepthSlots } from '../lines-depth/slots'
+import { needsApprovalKey } from '../../model' // B-CP-012
 
 /**
  * The Lines tab (design `quote.lines.*`): "Add a style" (type a style, pick its colours, Add: its grid opens ready for
@@ -345,6 +346,7 @@ export function SummaryRail({ quote, model, actions, step }: { quote: QuoteDetai
   const currency = current.currency
   const tone = marginTone(current.marginPct, current.marginFloorPct)
   const broken = quote.approval.rules.filter((rule) => rule.broken)
+  const reasons = broken.map((rule) => t(`reason.${rule.reason}`)).join(' · ') // B-CP-012
   const items = [
     { label: t('summary.lines'), value: t('summary.linesValue', { lines: quote.lines.length, units: unitsOf(quote.lines) }) },
     ...(model.grains.price
@@ -382,7 +384,8 @@ export function SummaryRail({ quote, model, actions, step }: { quote: QuoteDetai
           </div>
         )}
         <p className="fw-q-rail-approval">
-          {quote.approval.needed ? t('summary.needsApproval', { reasons: broken.map((rule) => t(`reason.${rule.reason}`)).join(' · ') }) : t('summary.noApproval')}
+          {/* B-CP-012: no readable reason (Sales: the margin floor is the margin grain's) → "Needs approval" alone. */}
+          {quote.approval.needed ? t(needsApprovalKey(reasons, 'summary'), { reasons }) : t('summary.noApproval')}
         </p>
         {current.validUntil && <p className="fw-q-hint">{t('summary.validUntil', { date: new Intl.DateTimeFormat(INTL_LOCALE[locale], { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${current.validUntil}T00:00:00Z`)) })}</p>}
         {shortcut && (

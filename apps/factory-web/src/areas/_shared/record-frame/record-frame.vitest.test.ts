@@ -611,3 +611,25 @@ describe('F-OP-302 — the band’s pills fold whole behind "+N", never cut; no 
   })
 })
 // ---- end F-OP-302
+
+// ---- F-OP-302 follow-up (end check, cp-fx9 — the browser golden flow's 05-quote): the save state never folds behind "+N" --------------
+// A crowded band (Sales on a draft that needs an approval: Send held + Ask for approval) folded the quote's "All changes saved" with the
+// identity pills — hidden and inert, so the one typing could not see that it saved. The page's save state has its own slot, outside the
+// track the frame folds, after the pills as before.
+describe('F-OP-302 follow-up — the save state stays in view, outside the pills that fold', () => {
+  it('the band draws `save` after the pills\' track, never inside it; the quote and the style pass their save words there', () => {
+    const save = createElement('span', { role: 'status' }, 'All changes saved · 21:35')
+    const band = { back: createElement('a', { href: '/w/demo/sales/quotes' }, 'Quotes'), title: 'QT-2026-00001 · Brand Alpha', status: createElement('span', null, 'Draft'), meta: createElement('span', null, 'r1'), save }
+    const html = render(createElement(RecordFrame, { recordType: 'Quote', personId: 'u1', band, thread: null, threadLabel: 'The quote’s thread', children: createElement('p', null, 'The body') }))
+    expect(html).toContain('<span class="fw-rcf-meta-more"><span>r1</span></span><span role="status">All changes saved · 21:35</span></span>')
+    // Only a save state (no status, no pills) still draws.
+    const alone = render(createElement(RecordFrame, { recordType: 'Quote', personId: 'u1', band: { back: band.back, title: band.title, save }, thread: null, threadLabel: 'The quote’s thread', children: null }))
+    expect(alone).toContain('<span class="fw-rcf-meta"><span role="status">All changes saved · 21:35</span></span>')
+    for (const view of ['../../sales/quotes/record/view/QuoteRecordView.tsx', '../../products/styles/record/view/StyleRecordView.tsx']) {
+      const source = readFileSync(new URL(view, import.meta.url), 'utf8')
+      expect(source, view).toContain('save: saveWords')
+      expect(source, view).not.toMatch(/\{saveWords\}/)
+    }
+  })
+})
+// ---- end F-OP-302 follow-up

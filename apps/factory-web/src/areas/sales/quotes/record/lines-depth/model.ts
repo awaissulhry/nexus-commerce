@@ -105,7 +105,7 @@ export interface TableRow {
   quantity: number
   /** Money only by grain: absent without it (never 0). */
   unitPrice?: string
-  discountPct: string | null
+  discountPct?: string | null // B-CP-012: a price — absent without the grain
   netAmount?: number
   vat: { rate: string; nature: string | null }
   unitCost?: string | null
@@ -136,7 +136,7 @@ export function tableRows(quote: Pick<QuoteDetail, 'lines'>, terms: Pick<QuoteTe
         sizes: sizesText(sizesOfLine(line)),
         quantity: line.quantity,
         ...(line.unitPrice !== undefined ? { unitPrice: line.unitPrice } : {}),
-        discountPct: line.discountPct,
+        ...(line.discountPct !== undefined ? { discountPct: line.discountPct } : {}), // B-CP-012
         ...(line.netAmount !== undefined ? { netAmount: line.netAmount } : {}),
         vat: { rate: line.vatRatePct, nature: line.vatNature },
         ...(line.unitCost !== undefined ? { unitCost: line.unitCost } : {}),
