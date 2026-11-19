@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url' // F-OP-134
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { createElement, type ComponentType } from 'react'
-import { renderView, textOf } from '../../../../lib/record-thread/parts/testing'
+import { leftKeys, renderView, textOf } from '../../../../lib/record-thread/parts/testing'
 import { canOf } from '../_demo/fixtures'
 import { groupedMenu, landingOf, MENU_GROUPS, MERGED_TABS, recordTabs, tabOf } from '../model'
 import { DOCK_DEFAULTS, RECORD_TABS } from '../model' // F-SA-263
@@ -604,3 +604,41 @@ describe('F-OP-213 — scopes by rights: General when its thread is readable, Al
   })
 })
 // ---- end F-OP-213
+
+// ---- F-OP-217 (order page plan N4; 11-dock §2, §3, §7): the dock's scopes in the design screen, and the narrow-card rules ----------------
+describe('F-OP-217 — every dock scope drawn in the one card (design cases), the rules of a card of 480 px or less', () => {
+  const dockOf = (html: string) => html.slice(html.indexOf('class="fw-rcf-dock"'))
+  it('This order, General and a work order: the pick band is the card\'s first band; the work order\'s line in the office tone', () => {
+    for (const id of ['f-op-217-dock-order', 'f-op-217-dock-general', 'f-op-217-dock-work-order']) {
+      const dock = dockOf(draw(id))
+      expect(dock.match(/class="fw-rt-column is-docked"/g)?.length, id).toBe(1)
+      expect(dock.indexOf('class="fw-rt-top"'), id).toBeGreaterThan(dock.indexOf('class="fw-rt-column is-docked"'))
+      expect(dock, id).toContain('class="fw-thread-pick"')
+    }
+    expect(dockOf(draw('f-op-217-dock-work-order'))).toContain('class="fw-thread-pick-line is-office"')
+    expect(textOf(dockOf(draw('f-op-217-dock-general')))).toContain('Moto Demo S.r.l.')
+  })
+  it('All of <customer>: the card with the pick band, its Head, compact lines and the foot "Read only. Write in:" — both languages', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const dock = dockOf(draw('f-op-217-dock-all', locale))
+      const at = (part: string) => dock.indexOf(part)
+      expect(at('class="fw-rt-top"')).toBeGreaterThan(-1)
+      expect(at('class="fw-rt-top"')).toBeLessThan(at('class="fw-rth fw-aoc-head"'))
+      expect(at('class="fw-rth fw-aoc-head"')).toBeLessThan(at('class="fw-rt-body"'))
+      expect(at('class="fw-rt-body"')).toBeLessThan(at('class="fw-rt-foot"'))
+      expect(dock.match(/<article class="fw-aoc-line/g)?.length, locale).toBe(5)
+      expect(dock).toContain('class="fw-aoc-line is-office"')
+      expect(textOf(dock)).toContain(locale === 'en' ? 'Read only. Write in:' : 'Sola lettura. Scrivi in:')
+      expect(leftKeys(dock, ['allOfCustomer', 'record.dock', 'width', 'more'])).toEqual([])
+    }
+  })
+  it('the rules of a narrow card: short words, a full-width second select, the body and foot tighter, the lines and chips within the card', () => {
+    const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+    expect(read('../../../_shared/record-thread/thread-pick.css')).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-thread-pick-extra,\s*\.fw-thread-pick-extra select \{\s*width: 100%;/)
+    expect(read('../../../../lib/record-thread/record-thread.css')).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-rt-body \{\s*padding: var\(--nds-space-10\) var\(--nds-space-12\);/)
+    expect(read('../../../_shared/record-thread/all-of-customer/all-of-customer.css')).toMatch(/\.fw-aoc-chip \{\s*max-width: calc\(100% - var\(--nds-space-24\)\);/)
+    // The phone: the full-width view (thread=open), ← Back above the card, no radius (record-thread.css's phone rule).
+    expect(read('../../../../lib/record-thread/record-thread.css')).toMatch(/@media \(max-width: 719px\) \{\s*\.fw-rt-column \{\s*border-radius: 0;/)
+  })
+})
+// ---- end F-OP-217

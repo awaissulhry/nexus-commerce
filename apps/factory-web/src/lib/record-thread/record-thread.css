@@ -156,3 +156,20 @@
   font-size: var(--nds-font-size-sm);
 }
 /* ── end F-OP-201 */
+
+/* ── F-OP-217 (order page plan N4; 11-dock §7): a card of 480 px or less — the body a little tighter (10 / 12 px), the foot's doors
+   wrap onto a second row (Write in: This order · General), nothing ever leaves the card sideways. ── */
+@container fw-rtcol (max-width: 480px) {
+  .fw-rt-body {
+    padding: var(--nds-space-10) var(--nds-space-12);
+  }
+
+  .fw-rt-foot {
+    gap: var(--nds-space-6) var(--nds-space-8);
+  }
+
+  .fw-rt-top {
+    padding: var(--nds-space-8) var(--nds-space-10);
+  }
+}
+/* ── end F-OP-217 */
