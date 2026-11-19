@@ -596,10 +596,7 @@
   "money": {
     "balanceTitle": "Saldo",
     "gross": "Totale ordine",
-    "invoiced": "Fatturato",
-    "paid": "Pagato sulle fatture",
     "depositPaid": "Acconti ricevuti",
-    "balance": "Saldo da pagare",
     "invoicesTitle": "Fatture e note di credito",
     "noInvoices": {
       "title": "Ancora nulla di fatturato",
@@ -619,7 +616,19 @@
       "totals": "Totali",
       "deposit": "Acconto",
       "margin": "Margine"
-    }
+    },
+    "invoicedShare": "Fatturato per questo ordine",
+    "paidHere": "Pagato su questo ordine",
+    "toPayHere": "Ancora da pagare su questo ordine",
+    "share": "Quota di questo ordine",
+    "invoiceWhole": "Totale fattura",
+    "alsoBills": "Fattura anche",
+    "alsoBillsHidden_one": "e {count} altro ordine che non puoi aprire",
+    "alsoBillsHidden_other": "e altri {count} ordini che non puoi aprire",
+    "freight": "Il trasporto {amount} è in fattura, in nessun ordine",
+    "settledWhen": "Saldato quando {invoice} è pagata per intero",
+    "settledWhenShared": "Saldato quando {invoice} è pagata per intero (fattura anche {numbers})",
+    "statement": "Estratto conto di {customer} ›"
   },
   "docType": {
     "TD01": "Fattura (TD01)",

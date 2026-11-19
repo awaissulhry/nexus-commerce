@@ -688,11 +688,31 @@ export async function sendToSdi(api: ApiClient, invoiceId: string, version: numb
 export const settlementSchema = z.object({
   settled: z.boolean(),
   gaps: z.array(z.string()),
-  invoices: z.array(z.object({ id: z.string(), docType: z.string(), number: z.string().nullable(), status: z.string(), grossTotal: z.number().optional(), paidAmount: z.number().optional(), openAmount: z.number().optional() })),
+  invoices: z.array(
+    z.object({
+      id: z.string(),
+      docType: z.string(),
+      number: z.string().nullable(),
+      status: z.string(),
+      grossTotal: z.number().optional(),
+      paidAmount: z.number().optional(),
+      openAmount: z.number().optional(),
+      // ---- F-OP-118 (B-OP-022): this order's part of the invoice (price grain), the freight in no order, the other orders it bills
+      // (the invoice's own buyer only: named when the reader reaches them, else counted) ----
+      share: z.number().optional(),
+      openShare: z.number().optional(),
+      freight: z.number().optional(),
+      otherOrders: z.array(z.object({ id: z.string(), number: z.string() })).optional(),
+      otherOrdersHidden: z.number().optional(),
+      // ---- end F-OP-118
+    }),
+  ),
   invoicedAmount: z.number().optional(),
   creditedAmount: z.number().optional(),
   paidAmount: z.number().optional(),
   balanceDueAmount: z.number().optional(),
+  // F-OP-118 (B-OP-022): Money = this order's share, by the orders list's own rule (each figure with the price grain only).
+  thisOrder: z.object({ paid: z.number().optional(), stillToPay: z.number().optional(), invoicedShare: z.number().optional(), depositsPaid: z.number().optional() }).optional(),
 })
 export type Settlement = z.infer<typeof settlementSchema>
 
