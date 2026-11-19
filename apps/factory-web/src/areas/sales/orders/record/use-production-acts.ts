@@ -10,14 +10,18 @@ import type { OrderRecordActions, OrderRecordModel } from './record-model'
 import { abilitiesOf as productionAbilitiesOf } from '../../../production/_shared/model'
 import { nextStyleOf, useNewWorkOrder } from '../../../production/work-orders/new/use-new-work-order'
 import { orderOptionOf } from './production'
+// F-OP-113: the work-order rows' acts in place (the lib's one hook: in place Due · Priority · Rush, the row ⋯'s dialogs).
+import { useWorkOrderActs } from '../../../../lib/production/work-order-acts/use-work-order-acts'
 
-export type ProductionActsModel = Pick<OrderRecordModel, 'health' | 'makeWorkOrders'>
-export type ProductionActsActions = Pick<OrderRecordActions, 'health' | 'makeWorkOrders'>
+export type ProductionActsModel = Pick<OrderRecordModel, 'health' | 'makeWorkOrders' | 'workOrderActs' /* F-OP-113 */>
+export type ProductionActsActions = Pick<OrderRecordActions, 'health' | 'makeWorkOrders' | 'workOrderActs' /* F-OP-113 */>
 
 /**
  * F-OP-134 (N-5): the Production tab's acts — F-SA-235: the order's health (raise to At risk / clear: production.brand.manage), read
  * while Production shows (workorders.view); F-OP-112: Make work orders… in place (the Production page's useNewWorkOrder with this order
- * fixed: the style step; Create says "WO-0412 made (draft)" and offers "Make the next one: <style>" while styles remain; no navigation).
+ * fixed: the style step; Create says "WO-0412 made (draft)" and offers "Make the next one: <style>" while styles remain; no navigation);
+ * F-OP-113: the work-order rows' acts (useWorkOrderActs: due, priority and rush in place with the row's version, the row ⋯'s dialogs
+ * on the work order read afresh; a write reads the order's work again, its rows staying where they are).
  * Mounted by the container (OrderRecord.tsx), which hands what it returns to the view as plain props; a view never imports it. The
  * production read itself is the container's (the band and every tab read it).
  */
@@ -31,6 +35,8 @@ export function useProductionActs(input: {
   readonly setNotice: (notice: OrderRecordModel['notice']) => void
   /** F-OP-112: read the order and its production again (a work order was made). */
   readonly reload: () => void
+  /** F-OP-113: read the order's work again in place (a work order changed here: its rows keep their places, no skeleton). */
+  readonly rereadWork?: () => void
 }): { model: ProductionActsModel; actions: ProductionActsActions } {
   const { api, order, tab, can, permissions, setNotice, reload } = input
   // ---- F-SA-235: the order's health, read while Production shows (workorders.view) ----
@@ -62,8 +68,15 @@ export function useProductionActs(input: {
     },
   }
   // ---- end F-OP-112
+  // ---- F-OP-113: the work-order rows' acts; a write says its notice (if any) and reads the order's work again in place ----
+  const rereadWork = input.rereadWork ?? reload
+  const acts = useWorkOrderActs(api, permissions, (written) => {
+    if (written.notice) setNotice({ tone: 'success', words: written.notice })
+    rereadWork()
+  })
+  // ---- end F-OP-113
   return {
-    model: { health: healthOwner ? health.model : null, makeWorkOrders: { dialog: make.model, next, can: productionCan } },
-    actions: { health: health.actions, makeWorkOrders },
+    model: { health: healthOwner ? health.model : null, makeWorkOrders: { dialog: make.model, next, can: productionCan }, workOrderActs: can.viewWorkOrders ? acts.model : null /* F-OP-113 */ },
+    actions: { health: health.actions, makeWorkOrders, workOrderActs: acts.actions /* F-OP-113 */ },
   }
 }

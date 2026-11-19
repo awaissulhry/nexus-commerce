@@ -104,6 +104,52 @@ export const WORK: Work = {
   notInProduction: { lines: 0, pieces: 0 },
 }
 export const WORK_READ: OrderProduction = { ...PRODUCTION_READ, work: WORK }
+
+// ---- F-OP-113 (B-OP-021, B6; R-11): the work orders as the order page acts on them — each row's version, kind, release, priority,
+// its cells of this order's lines and the reader's rights; a third, older work order shared with another customer (read-only here).
+export type WorkRights = { readonly manage: boolean; readonly release: boolean; readonly hold: boolean }
+export const SHARED_WO_ID = '0190f0e2-6060-7000-8000-000000000019'
+const SHARED_WORDS = { en: 'Shared with other customers: change it on its page.', it: 'Condiviso con altri clienti: cambialo dalla sua pagina.' }
+export function workActsRead(rights: WorkRights): OrderProduction {
+  const [first, second] = WORK.workOrders
+  const own = (row: Work['workOrders'][number], line: string, extra: Partial<Work['workOrders'][number]>) => ({
+    ...row,
+    kind: 'STANDARD',
+    cells: [
+      { id: `${row.id.slice(0, -2)}c1`, salesOrderLineId: line, size: 'M', quantity: Math.ceil(row.own.pieces / 2), cut: row.own.cut === null ? null : Math.min(row.own.cut, Math.ceil(row.own.pieces / 2)) },
+      { id: `${row.id.slice(0, -2)}c2`, salesOrderLineId: line, size: 'L', quantity: Math.floor(row.own.pieces / 2), cut: row.own.cut === null ? null : Math.max(0, row.own.cut - Math.ceil(row.own.pieces / 2)) },
+    ],
+    rights: { ...rights, why: null },
+    ...extra,
+  })
+  return {
+    ...WORK_READ,
+    work: {
+      ...WORK,
+      workOrders: [
+        // Listed out of order on purpose: the card shows them by number.
+        own(second!, LINE_RED, { version: 4, releasedAt: '2026-11-10T08:00:00Z', priority: 100, rush: true }),
+        own(first!, LINE_BLK, { version: 7, releasedAt: '2026-11-04T08:00:00Z', priority: 0 }),
+        {
+          ...first!,
+          id: SHARED_WO_ID,
+          number: 'WO-00019',
+          status: 'RELEASED',
+          own: { cells: 1, pieces: 4, cut: 0, sewn: null, checked: 0 },
+          alsoMakes: { orders: [], more: 0 },
+          sharedWithOtherCustomers: true,
+          version: 2,
+          kind: 'STANDARD',
+          releasedAt: '2026-10-28T08:00:00Z',
+          priority: 0,
+          cells: [{ id: '0190f0e2-6060-7000-8000-0000000019c1', salesOrderLineId: LINE_BLK, size: 'S', quantity: 4, cut: 0 }],
+          rights: { manage: false, release: false, hold: false, why: SHARED_WORDS },
+        },
+      ],
+    },
+  }
+}
+// ---- end F-OP-113
 /** Without workorders.view: the work part withheld (the chain's numbers only). */
 export const NO_WORK_READ: OrderProduction = { ...PRODUCTION_READ, work: null, people: null, quality: { issues: null, ncrs: null, final: null }, withheld: ['work', 'people', 'headline.notes', 'quality.issues', 'quality.ncrs', 'quality.final'] }
 
