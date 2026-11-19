@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Building2, Eye, FolderKanban, Lock, ShoppingBag } from 'lucide-react' // F-OP-203: the segments' icons
 import { Button, Select } from '@nexus/ui/primitives'
 import { useT } from '../../../../../lib/i18n/provider'
@@ -18,7 +18,11 @@ import { useAllOfCustomer } from '../../../../_shared/record-thread/all-of-custo
 import { ALL_OF_CUSTOMER_NS, AllOfCustomerFeed } from '../../../../_shared/record-thread/all-of-customer/view/AllOfCustomerFeed'
 import { messageHrefOf } from '../../../../_shared/record-thread/all-of-customer/model'
 import { useInProject } from '../../../../products/projects/record/linked/use-in-project'
-import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeAddress, scopeOfChoice, scopeOfParam, scopeShown, workOrderGroups, type DockWorkOrder, type OrderScope, type ScopeChoice, type ScopeOffer } from './model'
+import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeOfChoice, scopeOfParam, scopeShown, workOrderGroups, type DockWorkOrder, type OrderScope, type ScopeChoice, type ScopeOffer } from './model'
+import { scopeValueOf } from './model' // F-OP-209
+import { sameScope, scopeOfRecord, scopeParamOf } from './model' // F-OP-212
+import { pendingAskOf } from '../../../../_shared/record-frame/model' // F-OP-212
+import { viewOpenOf } from '../../../../_shared/record-frame/model' // F-OP-212
 
 /**
  * F-SA-262 (sales page plan N4; picks P9, P9', R4, R9; 10-order-page §6.1, §6.2; review C-13) — the order page's dock: ONE
@@ -59,8 +63,7 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
   const api = useOfficeApi()
   const session = useOfficeSession()
   const frame = useRecordFrame()
-  const router = useRouter()
-  const pathname = usePathname()
+  const router = useRouter() // a line of another record opens its page (a push); the scope itself is the frame's (F-OP-209)
   const params = useSearchParams()
   const held = session.permissions
   const narrow = frame?.mode === 'stacked'
@@ -77,19 +80,25 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
   if (scope.kind === 'project') last.current.project = scope.id
   if (scope.kind === 'wo') last.current.wo = scope.id
 
-  // A replace: Back keeps the scope; the narrow view stays open while the person picks.
-  const go = (next: OrderScope, messageId: string | null = null) => {
-    const address = scopeAddress(pathname, window.location.search, next, narrow, messageId)
-    if (address !== `${pathname}${window.location.search}`) router.replace(address, { scroll: false })
-  }
+  // F-OP-209: the frame's ONE writer of `thread=` (a history replace, only when the address changes: Back keeps the scope, a pick
+  // asks the server nothing); the narrow view stays open while the person picks. A dock is always inside its frame.
+  const go = (next: OrderScope, messageId: string | null = null) => frame?.setThread?.(scopeValueOf(next, narrow), { message: messageId })
 
   // ── F-SA-265: Discuss and Show in thread are about THIS order: the pick goes to its own conversation first (which reads the ask) ──
-  const asking = frame?.discussAsk?.record.id === order.id || frame?.showAsk?.record.id === order.id
-  const goRef = useRef(go)
-  goRef.current = go
+  // F-OP-212 (11-dock §5, D5): every frame ask names its record (files, Followers…, the owner door, Ask, Discuss, Show, Answer): the
+  // pick goes to that record's thread first — this order's, its customer's general one, a linked project, a work order — keeping the
+  // view as it is (below 1280 px with the view closed: no term, so a file opened from the body never pops the full-width thread open);
+  // that thread then takes the ask. Once per ask: a later pick of the person is never undone.
+  const pending = pendingAskOf(frame)
+  const target = pending ? scopeOfRecord(pending.record, { orderId: order.id, partyId: order.partyId }, offer) : null
+  const targetValue = target ? (scopeParamOf(target) ?? 'order') : null
+  const follow = useRef({ scope, closed: !viewOpenOf(params?.get(SCOPE_PARAM)), narrow, frame })
+  follow.current = { scope, closed: !viewOpenOf(params?.get(SCOPE_PARAM)), narrow, frame }
   useEffect(() => {
-    if (asking && scope.kind !== 'order') goRef.current(ORDER_SCOPE)
-  }, [asking, scope.kind])
+    const now = follow.current
+    if (!target || sameScope(target, now.scope)) return
+    now.frame?.setThread?.(scopeValueOf(target, now.narrow, now.closed))
+  }, [pending?.ask, targetValue]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── "N new" of each conversation (the reader's own; again on a live message) ──
   const [tick, setTick] = useState(0)
