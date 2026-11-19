@@ -46,6 +46,7 @@ import { localKeyProvider } from '../../../platform/secrets/local'
  * thread, refused while waiting); the sheet import (dry run, an error row in words, the apply, an order imported twice refused).
  * B-CP-011 (the money wall): the sales role holds no price grain, so the orders and quote lines typed with a price are the
  * Owner's (a Sales body that sends one is refused 403); Sales still sets priority and seasons, splits, cancels and imports.
+ * B-CP-015: the confirmation shows prices, so the Owner makes and mails it (Sales: 403 PRICED_DOCUMENT, one case each).
  * Run with `node scripts/factory/run-pg-tests.mjs modules/sales/orders-depth/`.
  */
 
@@ -261,12 +262,16 @@ describe('priority and the urgent flag (SAL-207)', () => {
 
 describe('the order confirmation (SAL-208)', () => {
   it('keeps version 1; the same contents give it back; a printed change makes it out of date', async () => {
-    const first = await ok('sales', 'POST', `/sales/orders/${orderA.id}/confirmation`, {}, 201)
+    // B-CP-011: the confirmation shows prices (B-CP-015): as Sales worker making it is 403 in words, nothing made; the Owner makes it.
+    const bySales = await no('sales', 'POST', `/sales/orders/${orderA.id}/confirmation`, {}, 403)
+    expect(bySales.issues).toEqual([{ path: 'refusal/PRICED_DOCUMENT', message: 'It shows prices: it is made by someone who sees prices.' }])
+    expect(await outbox('sales_order.confirmation_made', orderA.id)).toEqual([])
+    const first = await ok('owner', 'POST', `/sales/orders/${orderA.id}/confirmation`, {}, 201)
     expect(first).toMatchObject({ made: true, version: 1, confirmation: { upToDate: true, sentAt: null, versions: [expect.objectContaining({ version: 1, number: `${orderA.number} v1`, sent: false })] } })
     const file = await one<Json>(`SELECT "recordType", "recordId", "contentType", visibility::text[] AS visibility FROM "StoredFile" WHERE id = $1`, [first.fileId])
     expect(file).toMatchObject({ recordType: 'SalesOrder', recordId: orderA.id, contentType: 'application/pdf' })
     expect(file.visibility).toEqual(expect.arrayContaining(['OFFICE', 'PARTNER']))
-    const again = await ok('sales', 'POST', `/sales/orders/${orderA.id}/confirmation`, {}, 201)
+    const again = await ok('owner', 'POST', `/sales/orders/${orderA.id}/confirmation`, {}, 201)
     expect(again).toMatchObject({ made: false, version: 1, fileId: first.fileId })
     const row = await orderRow(orderA.id)
     await ok('sales', 'PUT', `/sales/orders/${orderA.id}/season`, { version: row.version, seasonId: S.ss28 })
@@ -275,7 +280,11 @@ describe('the order confirmation (SAL-208)', () => {
   })
 
   it('sends a new version on the order thread (the FAKE mail account), then sentAt and the version together', async () => {
-    const sent = await ok('sales', 'POST', `/sales/orders/${orderA.id}/confirmation/send`, { to: ['buyer.p1@example.com'] }, 201)
+    // B-CP-011: as Sales worker mailing it is 403 in words (nothing made or mailed); the Owner sends it.
+    const bySales = await no('sales', 'POST', `/sales/orders/${orderA.id}/confirmation/send`, { to: ['buyer.p1@example.com'] }, 403)
+    expect(bySales.issues).toEqual([{ path: 'refusal/PRICED_DOCUMENT', message: 'It shows prices: it is sent by someone who sees prices.' }])
+    expect(await outbox('sales_order.confirmation_sent', orderA.id)).toEqual([])
+    const sent = await ok('owner', 'POST', `/sales/orders/${orderA.id}/confirmation/send`, { to: ['buyer.p1@example.com'] }, 201)
     expect(sent).toMatchObject({ version: 2, made: true, confirmation: { sentVersion: 2, upToDate: true } })
     expect(sent.confirmation.sentAt).not.toBeNull()
     const outbound = await one<Json>(`SELECT subject, "recordType", "recordId", "to" FROM "EmailOutbound" WHERE id = $1`, [sent.outboundId])
@@ -313,7 +322,8 @@ describe('orders waiting for a yes (SAL-205)', () => {
     const state = await ok('owner', 'GET', `/sales/orders/${waiting.id}/approval`)
     expect(state).toMatchObject({ waiting: true, reasons: [expect.objectContaining({ reason: 'REQUEST_PENDING' })], creditHold: null, may: { ask: false, withdraw: true } })
     expect(state.requests[0]).toMatchObject({ status: 'PENDING', approver: 'Finance', mine: true })
-    expect((await no('sales', 'POST', `/sales/orders/${waiting.id}/confirmation`, {}, 409)).message).toMatch(/waits for a yes/)
+    // B-CP-011: the confirmation is a price holder's (B-CP-015); the Owner's is held while the order waits.
+    expect((await no('owner', 'POST', `/sales/orders/${waiting.id}/confirmation`, {}, 409)).message).toMatch(/waits for a yes/)
     const own = await call('owner', 'POST', `/approvals/tasks/${tasks[0]!.id}/approve`, { version: tasks[0]!.version })
     expect([403, 409]).toContain(own.statusCode)
   })

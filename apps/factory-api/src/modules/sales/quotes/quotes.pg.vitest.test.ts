@@ -279,13 +279,14 @@ describe('a quote for the brand customer: 2 colours × 3 sizes (SAL-143, SAL-203
     for (const key of ['unitCost', 'costAmount', 'costSnapshot', 'marginAmount', 'knownTotal']) expect(keys.has(key), key).toBe(false)
     expect(seen.current).toMatchObject({ netAmount: 624000, grossAmount: 761280, costComplete: true, marginPct: '34.5357', marginFloorPct: '20', marginFloorBreached: false })
     expect(seen.lines[0]).toMatchObject({ unitPrice: '450', netAmount: 360000, costComplete: true, marginPct: '35.3272', belowFloor: false })
-    // Answer b (a copy of the role without the margin grain): no margin at all; the rules still say why, in words.
+    // Answer b (a copy of the role without the margin grain): no margin at all; the price rules still say why, in words.
     const blind = await get('salesPriceOnly', quote.id)
     const blindKeys = new Set(keysOf(blind))
     for (const key of ['unitCost', 'costAmount', 'costSnapshot', 'marginAmount', 'knownTotal', 'marginPct', 'marginFloorPct', 'marginFloorBreached', 'belowFloor', 'details']) expect(blindKeys.has(key), key).toBe(false)
     expect(blind.current).toMatchObject({ netAmount: 624000, grossAmount: 761280, costComplete: true })
+    // B-CP-012 (the money wall, views.ts forCaller): the margin floor rule is itself a margin flag — read only with the margin
+    // grain; the discount limit is the price grain's, so this role still reads it.
     expect(blind.approval.rules.map((rule: Json) => [rule.reason, rule.broken, rule.message])).toEqual([
-      ['MARGIN_FLOOR', false, 'The margin is at or above the floor.'],
       ['DISCOUNT_LIMIT', false, 'No discount is over the 15 % limit.'],
     ])
     // The list: the same walls.
