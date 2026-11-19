@@ -18,6 +18,7 @@ import { useAbuseGuard } from '../../platform/abuse/guard'
 import { startHarness, type Harness } from '../../platform/auth/sessions/testing/harness'
 import type { Gateway } from '../../platform/gateway/gateway'
 import { useGateway } from '../../platform/gateway/service'
+import { SLOW_TEST_TIMEOUT_MS } from '../../testing/timeouts'
 import { customerTraces, type CustomerTraces } from './testing/customer-traces'
 import { OWN_STYLE_CODE, productionTwoBrands, twoBrandIds, twoBrandSessions, walkWorkOrderRoutes, workOrderModels, type OfficeSession, type ProductionTwoBrands } from './testing/two-brands'
 import { createWallSweep, EXEMPT, isOffice, UUID, type Finding, type Json, type Method } from './testing/wall-sweep'
@@ -142,7 +143,8 @@ describe('B-PR-10 the brand-wall sweep', () => {
     expect(traces).toEqual({ portalPeople: expect.any(Number), mails: expect.any(Number), stockMoves: expect.any(Number), files: expect.any(Number), threads: expect.any(Number) })
     for (const [kind, count] of Object.entries(traces)) expect(count, `A's ${kind}`).toBeGreaterThan(0)
     sweeper.report('summary', { officeRoutes: office.length, swept: swept.size, walked: walked.length, exempt: EXEMPT, traces, ambiguous: sweeper.ambiguous() })
-  })
+    // fx-3: the walk over every routes file and what it calls is slow by nature (seconds alone, past 5 s on a 2-core runner).
+  }, SLOW_TEST_TIMEOUT_MS)
 
   it('every office GET, called by brand B with brand A ids: as unknown, empty or 403 EVERY_PARTY, never a word of A', async () => {
     const findings: Finding[] = []

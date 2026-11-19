@@ -79,12 +79,6 @@ beforeAll(async () => {
     expect(answer.statusCode, answer.body).toBe(201)
     made[name] = answer.json().workOrder as Json
   }
-  // The "cut" one is in progress with one garment of its cell bundled (written whole, the database's rules off).
-  const cutCell = (made.cut.cells as Json[])[0]!
-  await world.replica([
-    { sql: `UPDATE "WorkOrder" SET status = 'IN_PROGRESS', "releasedAt" = now(), "startedAt" = now() WHERE id = $1::uuid`, values: [made.cut.id] },
-    { sql: `INSERT INTO "Bundle" (id, "tenantId", "siteId", "workOrderId", "workOrderSizeId", code, quantity) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, 1)`, values: [newId(), world.ids.tenantId, world.w.siteId, made.cut.id, cutCell.id, `T-SA042-BN-${newId().slice(-6)}`] },
-  ])
   sales = await world.officePerson('sonia.sales@pr27a-colour-office.example.com', 'sales')
   salesB = await world.officePerson('saul.sales@pr27a-colour-office.example.com', 'sales', [world.ids.b])
   buyerA = await world.portalPerson('ada.buyer@pr27a-colour-brand-alpha.example.com', world.ids.a, ['customer-buyer'])
@@ -173,9 +167,17 @@ describe('B-PR-27a: a line in another colourway, asked from the portal and accep
   })
 
   it('B-SA-042: once something of the line is cut, a colour change is held in words (a cut piece never changes colour), nothing written', async () => {
+    // Asked while nothing of the line is cut (the portal refuses a change of a line whose cutting started: B-W2b-183's rule) …
     const asked = await send(buyerA, 'POST', `/portal/sales-orders/${orders.cut.orderId}/change-requests`, { kind: 'CHANGE', colourways: [{ lineId: orders.cut.lineId, colourwayId: RED }] })
     expect(asked.status, JSON.stringify(asked.body)).toBe(201)
     const requestId = asked.body.request.id as string
+    // … then cutting starts before the answer: the work order in progress, one garment of its cell bundled (written whole, the
+    // database's rules off).
+    const cutCell = (made.cut.cells as Json[])[0]!
+    await world.replica([
+      { sql: `UPDATE "WorkOrder" SET status = 'IN_PROGRESS', "releasedAt" = now(), "startedAt" = now() WHERE id = $1::uuid`, values: [made.cut.id] },
+      { sql: `INSERT INTO "Bundle" (id, "tenantId", "siteId", "workOrderId", "workOrderSizeId", code, quantity) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, 1)`, values: [newId(), world.ids.tenantId, world.w.siteId, made.cut.id, cutCell.id, `T-SA042-BN-${newId().slice(-6)}`] },
+    ])
     const record = await ok(sales, `/sales/change-requests/${requestId}`)
     expect(record.preview.problems).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'request/COLOUR_CUT', message: expect.stringMatching(/^Already cut in .+: 1 pieces\. Suggest something else or refuse\.$/) })]))
     const refused = await send(sales, 'POST', `/sales/change-requests/${requestId}/accept`, { version: 1 })
