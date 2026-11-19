@@ -693,7 +693,7 @@ describe('F-OP-203 — the order dock, the customer dock and the work order’s 
 
   it('the hosts keep their shape: <ThreadPick …>{thread}</ThreadPick>, the same props as before', () => {
     expect(order).toMatch(/<ThreadPick label=\{t\('record\.dock\.label'\)\} choices=\{choices\} value=\{choiceOfScope\(scope\)\} onPick=\{[^}]*\} extra=\{extra\}>\s*\{shown\}\s*<\/ThreadPick>/)
-    expect(customer).toContain("<ThreadPick label={t('customers.work.dock.label')} choices={choices} value={dock.scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>")
+    expect(customer).toContain("<ThreadPick label={t('customers.work.dock.label')} choices={choices} value={scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>")
     expect(workOrder).toMatch(/<ThreadPick label=\{t\('thread\.pickLabel'\)\} choices=\{threads\} value=\{pick\} onPick=\{onPick\}>\s*\{children\}\s*<\/ThreadPick>/)
     expect(workOrder).toContain('export function WorkOrderThreads({ choices, pick, onPick, children }: { choices: readonly OrderThreadChoice[]; pick: OrderFilesPick; onPick?: (pick: OrderFilesPick) => void; children: ReactNode })')
   })
@@ -704,11 +704,12 @@ describe('F-OP-203 — the order dock, the customer dock and the work order’s 
     expect(all).toContain('<AllOfCustomerDock')
     expect(all).toContain("label={`${t('record.dock.all', { customer })} · ${t('record.dock.readOnly')}`}")
     expect(all).toContain('model={feed.model}')
-    expect(all).toContain('actions={{ ...feed.actions, onAnswer, writeFirst }}')
-    expect(all).toMatch(/foot=\{[\s\S]*t\('record\.dock\.writeIn'\)[\s\S]*go\(ORDER_SCOPE\)[\s\S]*go\(\{ kind: 'general' \}\)/)
+    expect(all).toContain('actions={{ ...feed.actions, onAnswer, writeFirst, canAnswer, ...(frame?.compose ? { onCompose: frame.compose } : {}) /* F-OP-207 */ }}')
+    // F-OP-207: "Read only. Write in:" — each door the frame's compose ask (the pick follows), the pick itself the fallback.
+    expect(all).toMatch(/foot=\{[\s\S]*t\('record\.dock\.readOnly'\)\}\. \{t\('record\.dock\.writeIn'\)[\s\S]*writeIn\(\{ type: 'SalesOrder', id: order\.id \}, ORDER_SCOPE\)[\s\S]*writeIn\(\{ type: 'Party', id: order\.partyId \}, \{ kind: 'general' \}\)/)
     expect(all).not.toContain('className=')
     const dock = customer.slice(customer.indexOf('function Dock('))
-    expect(dock).toContain("<AllOfCustomerDock label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} model={feed.model} actions={{ ...feed.actions, onAnswer, writeFirst }} />")
+    expect(dock).toContain("<AllOfCustomerDock label={`${t('customers.work.dock.all', { customer: customer.name })} · ${t('customers.work.dock.readOnly')}`} model={feed.model} actions={{ ...feed.actions, onAnswer, writeFirst, canAnswer, ...(frame?.compose ? { onCompose: frame.compose } : {}) }} foot={allFoot} />")
     const card = read('./all-of-customer/view/AllOfCustomerFeed.tsx')
     expect(card).toContain('<PickedDockColumn')
     expect(card).toContain('head={<FeedHead title={label} model={model} actions={actions} customerHref={customerHref ?? null} />}')

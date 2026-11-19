@@ -496,9 +496,12 @@ describe('F-OP-212 — frame asks carry a record', () => {
     expect(docked).toContain("const askOnArrival = doorAsked === 'approve'")
     expect(docked).not.toMatch(/frame\?\.door === '/)
     expect(docked).toContain('if (!composeAsk || !feedReady || !takesAsk(composeAsk.record, key)) return')
-    expect(docked).toContain("if (composeAsk.mode === 'reply' && composeAsk.messageId && onReply) onReply(composeAsk.messageId)")
+    expect(docked).toContain("const reply = composeAsk.mode === 'reply' && messageId !== null && !!onReply")
     expect(docked).toContain("const switched = switchMode(composer.draft, 'note', composer.context.people)")
-    expect(docked).toContain('void jumpTo(composeAsk.messageId)')
+    expect(docked).toContain('const reached = jumpTo(messageId)')
+    // F-OP-207: a message beyond the first page is read first, then answered.
+    expect(docked).toContain('if (reply && messages.some((message) => message.id === messageId)) onReply?.(messageId)')
+    expect(docked).toContain('else if (reply) void reached.then(() => requestAnimationFrame(() => latestCompose.current.onReply?.(messageId)))')
   })
 
   it('the owner door (who answers the customer, N-1) reaches This order: filled with the order, the order dock moves there, its thread opens the owner dialog', async () => {

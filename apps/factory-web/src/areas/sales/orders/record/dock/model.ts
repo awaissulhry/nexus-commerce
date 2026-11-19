@@ -62,6 +62,20 @@ export interface ScopeOffer {
   readonly workOrders: readonly string[]
 }
 
+// ---- F-OP-213 (order page plan N4; 11-dock §5, D4; B-OP-061): scopes by rights — only what the reader may read is offered.
+/**
+ * The offer: the customer's General thread when its Party thread is readable to this reader (the API's `readable` on
+ * POST /threads/unread — an unknown record and another customer's answer false alike; until the API says, the right threads.read
+ * decides, as before); All of <customer> only when General is (the feed's own wall: it needs the Party thread); the projects
+ * useInProject gives (the ones the reader may open); the work orders of the production read with workorders.view. `readable` is
+ * asked only for records this page already shows.
+ */
+export function offerOf(input: { readonly canRead: boolean; readonly partyReadable: boolean | undefined; readonly projects: readonly string[]; readonly workOrders: readonly string[]; readonly seesWork: boolean }): ScopeOffer {
+  const general = input.canRead && input.partyReadable !== false
+  return { general, all: general, projects: input.projects, workOrders: input.seesWork ? input.workOrders : [] }
+}
+// ---- end F-OP-213
+
 /** The scope shown: the one asked when it is offered, else this order's own (never a hint that another existed). */
 export function scopeShown(scope: OrderScope, offer: ScopeOffer): OrderScope {
   if (scope.kind === 'general') return offer.general ? scope : ORDER_SCOPE
