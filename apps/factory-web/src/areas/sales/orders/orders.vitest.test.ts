@@ -1348,7 +1348,7 @@ describe('F-OP-106: the What changes strip — fed by the preview of THIS draft,
 describe('F-OP-107: below the cut the strip asks what happens to the extra pieces; Close remaining lines and Cancel the same', () => {
   const production = order('IN_PRODUCTION')
   const black = lineOf(production, 10)
-  const chooseWords = { en: 'Choose what happens to the 1 extra pieces', it: 'Scegli cosa fare dei 1 pezzi in più' }
+  const chooseWords = { en: 'Choose what happens to the 1 extra piece', it: 'Scegli cosa fare del 1 pezzo in più' } // op-fx3: the API's words for one piece (CHANGE_WORDS.chooseExtra)
   const extra = { extra: [{ workOrderSizeId: 'ws-1', salesOrderLineId: black.id, size: '48', count: 1, words: { en: 'Extra pieces: 1 48 already cut', it: 'Pezzi in più: 1 48 già tagliati' } }], needsOutcome: true, words: chooseWords, plan: [] }
 
   it('the strip carries the preview\'s extra pieces; Apply waits for an outcome (the API\'s words) until one is picked, then for the reason', async () => {

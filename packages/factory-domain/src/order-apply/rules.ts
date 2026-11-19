@@ -295,6 +295,8 @@ export const CHANGE_WORDS = {
   extraOutcome: (outcome: ExtraOutcome, customer: string): Words =>
     outcome === 'CHARGE' ? { en: 'Keep and charge the customer', it: 'Tieni e addebita al cliente' } : outcome === 'LEFTOVER' ? { en: `Keep as leftover for ${customer}`, it: `Tieni come rimanenza di ${customer}` } : { en: 'Scrap', it: 'Scarta' },
   extra: (count: number, size: string): Words => ({ en: `Extra pieces: ${count} ${size} already cut`, it: `Pezzi in più: ${count} ${size} già tagliati` }),
-  /** Round 4: Accept stays held until what happens to the extra pieces is chosen. */
-  chooseExtra: (count: number): Words => ({ en: `Choose what happens to the ${count} extra pieces`, it: `Scegli cosa fare dei ${count} pezzi in più` }),
+  /** Round 4: Accept stays held until what happens to the extra pieces is chosen. op-fx3: one piece is said in the singular (the
+   *  catalogue's own orders `edit.held.extra_one` words: "the 1 extra piece" / "del 1 pezzo in più"). */
+  chooseExtra: (count: number): Words =>
+    count === 1 ? { en: `Choose what happens to the ${count} extra piece`, it: `Scegli cosa fare del ${count} pezzo in più` } : { en: `Choose what happens to the ${count} extra pieces`, it: `Scegli cosa fare dei ${count} pezzi in più` },
 } as const
