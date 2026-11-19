@@ -79,9 +79,12 @@ const withGrains = (key: string): Permission[] => {
   const template = templateOf(key)!
   return [...template.permissions, ...template.grains.map((grain) => grainPermission(grain) as Permission)]
 }
-const office = (permissions: readonly Permission[]): SessionContext => ({ audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [{ permissions: [...permissions], companies: 'all', sites: 'all', parties: 'all' } satisfies Grant] })
+// B-CP-015 (end-check fix): the Owner's test session is the Owner this file signs in (addUser below): a mail's sender is read from
+// its User row (confirmation.ts "Your user was not found."), so a made-up actor id never reached the send.
+let ownerId = ''
+const office = (permissions: readonly Permission[], actorId: string = newId()): SessionContext => ({ audience: 'office', tenantId: T.tenant, actorId, grants: [{ permissions: [...permissions], companies: 'all', sites: 'all', parties: 'all' } satisfies Grant] })
 const SESSIONS: Record<string, () => SessionContext> = {
-  owner: () => office(withGrains('owner')),
+  owner: () => office(withGrains('owner'), ownerId),
   salesWorker: () => office(templateOf('sales')!.permissions),
   productionManager: () => office(templateOf('production_manager')!.permissions),
 }
@@ -119,6 +122,7 @@ beforeAll(async () => {
   const companies = await admin<{ id: string; code: string }>(`SELECT id, code FROM "Company" WHERE "tenantId" = $1 ORDER BY code`, [T.tenant])
   const tenant: TestTenant = { id: T.tenant, slug: NS, companies }
   const user = await addUser(h, tenant, { email: 'olga.owner.cp015@example.com', role: 'owner' })
+  ownerId = user.id // B-CP-015 (end-check fix)
   owner = new Browser(h.app)
   const signed = await owner.signIn(NS, user.email, user.password)
   expect(signed.status, JSON.stringify(signed.body)).toBe(200)

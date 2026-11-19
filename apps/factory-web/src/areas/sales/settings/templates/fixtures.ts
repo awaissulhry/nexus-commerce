@@ -3,7 +3,7 @@ import { DEMO_COMPANIES } from '../../../../shell/design-data'
 import type { QuoteTemplate, TemplateRow } from '../../quotes/new-from/api'
 import { ROWS } from '../../quotes/list/fixtures'
 import { STYLE, STYLE_ROWS } from '../../quotes/record/fixtures'
-import { draftOf, emptyDraft } from './model'
+import { draftOf, emptyDraft, linesHeldOf } from './model'
 import type { TemplateDialogModel } from './view/TemplateDialog'
 import { TemplatesView, type TemplatesModel } from './view/TemplatesView'
 
@@ -14,8 +14,9 @@ import { TemplatesView, type TemplatesModel } from './view/TemplatesView'
  * new from a quote, archived read only).
  *
  * F-CP-160 (the money wall, B-CP-026): as a Sales worker (no price grain: the API drops every line's price), changing the lines of
- * a template that holds a typed price is refused in words; the dialog then holds Save in the same words while the lines differ,
- * and the header alone still saves.
+ * a template that holds a typed price is a price holder's: the template says so before the click (`holdsTypedPrices`, follow-up
+ * 13: a yes/no, no price) and a refusal that still comes says it too; Save waits in the API's words while the lines differ, and
+ * the header alone still saves.
  */
 
 const COMPANY = DEMO_COMPANIES[0]
@@ -34,6 +35,8 @@ const TEMPLATE: QuoteTemplate = {
   paymentTermsName: null,
   termsText: null,
   termsVersion: '2026-1',
+  // F-CP-160 (follow-up 13): the first line holds a typed price.
+  holdsTypedPrices: true,
   mayManage: true,
   lines: [
     { id: '0190f0e2-7310-7000-8000-000000000001', seq: 10, section: 'Giacche', kind: 'SIZE_GRID', feeKind: null, styleId: STYLE.id, style: { code: STYLE.code, name: STYLE.name, status: 'ACTIVE' }, colourwayId: STYLE.colourways[0]!.id, colourway: { code: STYLE.colourways[0]!.code, name: STYLE.colourways[0]!.name }, sizes: { '50': 2, '52': 4, '54': 2 }, pieces: 8, unitPrice: '450', description: null, note: null },
@@ -75,7 +78,9 @@ export const designScreen = defineDesignScreen<TemplatesModel>({
     { id: 'dialog-archived', label: 'An archived template: read only, restore first', model: model({ status: 'ALL', dialog: dialog({ archived: true }) }) },
     { id: 'dialog-problem', label: 'The template with what stops the save', model: model({ dialog: dialog({ draft: { ...draftOf(TEMPLATE), acceptanceMode: 'SIGN_AND_PAY', depositPct: '', incotermPlace: '' } }) }) },
     // ── F-CP-160 (the money wall) ──
-    { id: 'dialog-sales-lines', label: 'As Sales worker: a line removed, Save open (no price shown)', model: model({ dialog: salesDialog({ draft: LINE_REMOVED }) }), note: 'No price column: the API drops the prices. Save tries; a template whose lines hold a typed price is the price holder’s.' },
+    { id: 'dialog-sales-lines', label: 'As Sales worker: a template with no typed price, a line removed — Save open (no price shown)', model: model({ dialog: salesDialog({ draft: LINE_REMOVED, linesHeld: false }) }), note: 'No price column: the API drops the prices. A template whose lines hold no typed price is changed by Sales (the list prices them at use).' },
+    // follow-up 13: held BEFORE the click (the template's yes/no, no price), no refusal needed.
+    { id: 'dialog-sales-before', label: 'As Sales worker: the template holds a typed price — Save held before the click', model: model({ dialog: salesDialog({ draft: LINE_REMOVED, linesHeld: linesHeldOf(TEMPLATE_NO_PRICE) }) }), note: '"It changes a price you cannot see: someone who sees prices does it." The template says a line holds a typed price (a yes/no, never the price); the header alone still saves.' },
     { id: 'dialog-sales-blind', label: 'As Sales worker: the lines hold a price you cannot see — Save held in words', model: model({ dialog: salesDialog({ draft: LINE_REMOVED, linesHeld: true, problem: { ns: 'sales', key: 'moneyWall.blindPrice' } }) }), note: '"It changes a price you cannot see: someone who sees prices does it." Nothing was saved (the lines go first); the header alone still saves.' },
     { id: 'dialog-sales-header', label: 'As Sales worker: only the header changed after the refusal — Save goes', model: model({ dialog: salesDialog({ draft: { ...draftOf(TEMPLATE_NO_PRICE), name: 'Stagione moto 2027 — squadre B' }, linesHeld: true }) }) },
   ],

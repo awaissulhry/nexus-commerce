@@ -35,7 +35,8 @@ import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
  *      date only is not held
  *   4. deciding a return's credit: "as Sales worker" 403, nothing decided; the Owner decides it
  * The words are "It changes a price you cannot see: someone who sees prices does it." (refusal/BLIND_PRICE), and never an amount.
- * The web holds the same buttons in words later (B-CP-026 names the files). Every name, number and price is made up.
+ * Follow-up 13: the reads say it before the click with a yes/no, never an amount — a template's `holdsTypedPrices`, the
+ * configurator check's `pricing.optionsMoveMoney` — so the web holds the same buttons in words. Every name, number and price is made up.
  * Run with `node scripts/factory/run-pg-tests.mjs sales/orders/blind-price-acts`.
  */
 
@@ -128,6 +129,11 @@ describe('B-CP-026 1. a quote template’s lines that hold a price', { timeout: 
   it('as Sales worker: the replace would wipe the price — 403 in words, nothing changes; the Owner replaces it', async () => {
     const made = (await ok('owner', 'POST', '/sales/quote-templates', { companyId: companyA, name: 'Made-up priced kit', lines: [{ ...plainLine, unitPrice: '399' }] }, 201)).template
     expect(await linesOf(made.id)).toEqual([{ seq: 10, unitPrice: '399.000000' }])
+    // follow-up 13: the template says before the click that a line holds a typed price — to Sales a yes/no, never the price.
+    expect(made.holdsTypedPrices).toBe(true)
+    const asSales = (await ok('sales', 'GET', `/sales/quote-templates/${made.id}`)).template
+    expect(asSales.holdsTypedPrices).toBe(true)
+    expect(asSales.lines[0]).not.toHaveProperty('unitPrice')
     await held('sales', 'PUT', `/sales/quote-templates/${made.id}/lines`, { version: made.version, lines: [plainLine, { ...plainLine, seq: 20, sizes: { '54': 1 } }] }, 'body/lines')
     expect(await linesOf(made.id)).toEqual([{ seq: 10, unitPrice: '399.000000' }])
     expect((await ok('owner', 'GET', `/sales/quote-templates/${made.id}`)).template.version).toBe(made.version)
@@ -138,6 +144,8 @@ describe('B-CP-026 1. a quote template’s lines that hold a price', { timeout: 
 
   it('a template without a typed price: Sales replaces its lines as before (the list prices them at use)', async () => {
     const made = (await ok('sales', 'POST', '/sales/quote-templates', { companyId: companyA, name: 'Made-up list kit', lines: [plainLine] }, 201)).template
+    // follow-up 13: no typed price, nothing held before the click.
+    expect(made.holdsTypedPrices).toBe(false)
     const replaced = (await ok('sales', 'PUT', `/sales/quote-templates/${made.id}/lines`, { version: made.version, lines: [{ ...plainLine, sizes: { '50': 4 } }] })).template
     expect(replaced.lines).toHaveLength(1)
     expect(await linesOf(made.id)).toEqual([{ seq: 10, unitPrice: null }])
@@ -166,6 +174,12 @@ describe('B-CP-026 2. a line’s options whose surcharges move while its price i
     view = (await ok('sales', 'PUT', `${url}/options`, { version: view.document.version, picks: same })).line
     // The name on the chest adds to what the options add: a price decision.
     const more = [...same, { valueId: name, text: 'VERDI' }]
+    // follow-up 13: the check says it before the click — a yes/no for Sales, never the change itself (money.price, dropped).
+    const checked = await ok('sales', 'POST', `${url}/configurator/check`, { picks: more })
+    expect(checked.pricing.optionsMoveMoney).toBe(true)
+    expect(checked.pricing).not.toHaveProperty('change')
+    expect((await ok('sales', 'POST', `${url}/configurator/check`, { picks: same })).pricing.optionsMoveMoney).toBe(false)
+    expect((await ok('owner', 'POST', `${url}/configurator/check`, { picks: more })).pricing.optionsMoveMoney).toBe(true)
     await held('sales', 'PUT', `${url}/options`, { version: view.document.version, picks: more }, 'body/keepPrice')
     await held('sales', 'PUT', `${url}/options`, { version: view.document.version, picks: more, keepPrice: true }, 'body/keepPrice')
     expect(await optionsOf('SalesOrderLineOption', lineId)).toEqual(before)
@@ -189,6 +203,10 @@ describe('B-CP-026 2. a line’s options whose surcharges move while its price i
     const version = (await ok('sales', 'GET', `/sales/quotes/${quoteId}`)).quote.version
     // The name on the chest taken off: what the options add moves (−15.00), so the price the waterfall gives moves.
     const without = before.filter((row) => row.valueId !== name).map((row) => ({ valueId: row.valueId }))
+    // follow-up 13: the check says before the click that the options move money (a yes/no; no surcharge, price or margin).
+    const checked = await ok('sales', 'POST', `${url}/configurator/check`, { picks: without })
+    expect(checked.pricing.optionsMoveMoney).toBe(true)
+    expect(checked.pricing).not.toHaveProperty('optionsTotal')
     await held('sales', 'PUT', `${url}/options`, { version, picks: without }, 'body/picks')
     expect(await optionsOf('QuoteLineOption', lineId)).toEqual(before)
     expect((await one<{ unitPrice: string }>(`SELECT "unitPrice"::text AS "unitPrice" FROM "QuoteLine" WHERE id = $1`, [lineId])).unitPrice).toBe(priceBefore)
@@ -205,6 +223,9 @@ describe('B-CP-026 2. a line’s options whose surcharges move while its price i
     const url = `/sales/quotes/${quote.id}/lines/${line.id}`
     expect((await ok('owner', 'GET', `${url}/configurator`)).pricing).toMatchObject({ held: 'NO_START' })
     const before = await optionsOf('QuoteLineOption', line.id)
+    // follow-up 13: the liner moves money (held before the click), the standard armour adds nothing (Save open).
+    expect((await ok('sales', 'POST', `${url}/configurator/check`, { picks: [{ valueId: liner }, { valueId: armour }] })).pricing.optionsMoveMoney).toBe(true)
+    expect((await ok('sales', 'POST', `${url}/configurator/check`, { picks: [{ valueId: armour }] })).pricing.optionsMoveMoney).toBe(false)
     await held('sales', 'PUT', `${url}/options`, { version: quote.version, picks: [{ valueId: liner }, { valueId: armour }] }, 'body/picks')
     expect(await optionsOf('QuoteLineOption', line.id)).toEqual(before)
     // Options that add nothing (the standard armour, the default): Sales saves them.

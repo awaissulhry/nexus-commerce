@@ -165,6 +165,8 @@ export async function templateView(db: Reader, context: OfficeContext, template:
         note: line.note,
       }
     }),
+    // B-CP-026 (follow-up 13): a line holds a typed price (the replace rule's own fact, templates.ts replaceLines): no amount.
+    holdsTypedPrices: lines.some((line) => line.unitPrice !== null),
     mayManage: mayManage(context, template),
     createdById: template.createdById,
     createdAt: toUtcIso(template.createdAt),

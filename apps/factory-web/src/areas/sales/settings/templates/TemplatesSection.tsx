@@ -10,7 +10,7 @@ import { readProblem, writeProblem } from '../../quotes/problems'
 import { createTemplate, listTemplates, moveTemplate, replaceTemplateLines, templateFromQuote, updateTemplate } from './api'
 // F-CP-160: a line replace refused because it drops a price the person cannot see.
 import { isBlindPriceRefusal } from '../../_shared/blind-price'
-import { draftOf, emptyDraft, headerPatch, linesBody, linesChanged, mayKeep, movableTemplates, templateProblems, type TemplateStatusFilter } from './model'
+import { draftOf, emptyDraft, headerPatch, linesBody, linesChanged, linesHeldOf, mayKeep, movableTemplates, templateProblems, type TemplateStatusFilter } from './model'
 import type { TemplateDialogModel } from './view/TemplateDialog'
 import { TemplatesView, type TemplatesModel } from './view/TemplatesView'
 
@@ -65,7 +65,8 @@ export function QuoteTemplatesSection() {
     getTemplate(api, id)
       .then((template) => {
         const loaded = draftOf(template)
-        setDialog((current) => (current ? { ...current, reading: false, template, draft: loaded, before: loaded, archived: template.status === 'ARCHIVED', mayKeep: template.mayManage, currency: template.currency } : current))
+        // F-CP-160 (follow-up 13): a line holds a typed price: the line replace is held before the click for a reader without prices.
+        setDialog((current) => (current ? { ...current, reading: false, template, draft: loaded, before: loaded, archived: template.status === 'ARCHIVED', mayKeep: template.mayManage, currency: template.currency, linesHeld: linesHeldOf(template) } : current))
       })
       .catch((error: unknown) => setDialog((current) => (current ? { ...current, reading: false, readProblem: readProblem(error) } : current)))
   }

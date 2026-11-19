@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { inShell, type Role } from '../demo/fixtures'
 import type { Accountants, Firm } from './api'
-import { accountantRows, blankInvite, type InviteDraft } from './model'
+import { accountantRows, blankInvite, mayGive, type InviteDraft } from './model'
 import { AccountantAccessView, type AccountantAccessModel } from './view/AccountantAccessView'
 
 /**
@@ -15,7 +15,7 @@ import { AccountantAccessView, type AccountantAccessModel } from './view/Account
  *
  * F-CP-159 (the money wall): the accountant sees our prices, so the Owner gives the access and moves its end later; finance
  * brings it earlier and ends it. The Give access cases are the Owner's; finance and a Sales worker see "Give access…" held
- * in words, a later end held, the API's refusal in the same words.
+ * in words, a later end held, the API's refusal in the same words. Who gives it is the answer's `may.give` (follow-up 13).
  */
 
 const HOUR = 3_600_000
@@ -44,7 +44,8 @@ function answerOf(over: Partial<Accountants> = {}): Accountants {
       { at: at(-4), person: 'Marta Esempio', firm: 'Studio Esempio Commercialisti', what: 'FILE', period: '2026-10', name: 'DEMO_2026-10_sales-journal_0012.csv', files: 1 },
       { at: at(-24 * 9), person: 'Marta Esempio', firm: 'Studio Esempio Commercialisti', what: 'ZIP', period: '2026-Q3', name: 'DEMO_2026-Q3_all.zip', files: 18 },
     ],
-    may: { manage: true },
+    // F-CP-159 (follow-up 13): finance manages the access; only the Owner gives it (`give`).
+    may: { manage: true, give: false },
     asOf: at(0),
     ...over,
   }
@@ -67,8 +68,8 @@ function base(over: Partial<AccountantAccessModel> = {}, answer: Accountants = a
       showLeft,
       downloads: answer.downloads,
       may: answer.may.manage,
-      // F-CP-159: the Owner gives the access; every other role reads it held in words.
-      owner: role === 'owner',
+      // F-CP-159: the Owner gives the access (the answer's `may.give`); every other role reads it held in words.
+      owner: mayGive(answer),
       selected: [],
       busy: null,
       notice: null,
@@ -84,8 +85,9 @@ function base(over: Partial<AccountantAccessModel> = {}, answer: Accountants = a
 const invite = (draft: Partial<InviteDraft> = {}, problem: string | null = null) => ({ draft: { ...blankInvite([STUDIO], TODAY), ...draft }, problems: {}, problem, busy: false, today: TODAY })
 const FILLED: Partial<InviteDraft> = { partyId: STUDIO.party.id, displayName: 'Giorgio Esempio', email: 'giorgio@studio-esempio.example' }
 const rowsOf = (answer: Accountants = answerOf()) => accountantRows(answer, false)
-// F-CP-159: the Owner's cases (Give access, a later end).
-const asOwner = (over: Partial<AccountantAccessModel> = {}, answer: Accountants = answerOf()): Case => base(over, answer, 'owner')
+// F-CP-159: the Owner's cases (Give access, a later end): the list says `may.give` (follow-up 13).
+const OWNER_MAY: Accountants['may'] = { manage: true, give: true }
+const asOwner = (over: Partial<AccountantAccessModel> = {}, answer: Accountants = answerOf({ may: OWNER_MAY })): Case => base(over, answer, 'owner')
 
 function AccessDesign({ model }: { model: Case }) {
   return inShell('/finance/accounting', createElement(AccountantAccessView, { model: model.model }), model.role)
@@ -109,7 +111,7 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'done', label: 'Access given', model: asOwner({ notice: { key: 'office.done.invitedOn', params: { name: 'Giorgio Esempio', email: 'giorgio@studio-esempio.example' }, tone: 'success' } }) },
     { id: 'empty', label: 'Nobody has access yet', model: base({}, answerOf({ firms: [{ ...STUDIO, portalOn: false, people: [] }], downloads: [] })) },
     { id: 'no-firm', label: 'No adviser firm yet', model: base({}, answerOf({ firms: [], downloads: [] })), note: 'Give access waits: add the firm with the Consultant role first.' },
-    { id: 'read-only', label: 'Read only · sees, changes nothing', model: base({}, answerOf({ may: { manage: false } }), 'reader'), note: 'Give access, Change and End are held with who may.' },
+    { id: 'read-only', label: 'Read only · sees, changes nothing', model: base({}, answerOf({ may: { manage: false, give: false } }), 'reader'), note: 'Give access, Change and End are held with who may.' },
     { id: 'loading', label: 'Loading', model: base({ state: 'loading', rows: null, downloads: null }) },
     { id: 'error', label: 'Could not be read', model: base({ state: 'error', rows: null, downloads: null }) },
     { id: 'keys', label: 'Keys in the footer info icon', model: base({ keysOpen: true }) },
@@ -118,7 +120,7 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'change-earlier', label: 'As finance: Change the end, an earlier day', model: base({ change: { row: rowsOf()[1]!, until: at(24 * 40).slice(0, 10), problem: null, busy: false, today: TODAY } }), note: 'An earlier end saves; the line says only the Owner moves it later.' },
     { id: 'change-later-held', label: 'As finance: Change the end, a later day held', model: base({ change: { row: rowsOf()[1]!, until: at(24 * 120).slice(0, 10), problem: null, busy: false, today: TODAY } }), note: 'Save the date waits: "Only the Owner moves the end of access later: you can bring it earlier or end it now."' },
     { id: 'change-refused', label: 'As finance: the API refused a later end', model: base({ change: { row: rowsOf()[1]!, until: at(24 * 40).slice(0, 10), problem: 'moneyWall.ownerLater', busy: false, today: TODAY } }), note: 'A refusal of the API (accessUntil/onlyOwnerGivesPrices) in the same words.' },
-    { id: 'as-sales', label: 'As Sales worker: Give access, Change and End held', model: base({}, answerOf({ may: { manage: false } }), 'sales'), note: 'Sales sees no price and changes no accountant access: Give access says only the Owner gives it, Change and End say who may.' },
+    { id: 'as-sales', label: 'As Sales worker: Give access, Change and End held', model: base({}, answerOf({ may: { manage: false, give: false } }), 'sales'), note: 'Sales sees no price and changes no accountant access: Give access says only the Owner gives it, Change and End say who may.' },
     { id: 'as-owner', label: 'As the Owner: Give access open', model: asOwner(), note: 'Only the Owner gives the access (and moves its end later).' },
   ],
 })

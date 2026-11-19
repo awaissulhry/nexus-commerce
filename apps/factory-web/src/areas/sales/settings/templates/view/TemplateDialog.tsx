@@ -38,7 +38,7 @@ export interface TemplateDialogModel {
   currency: string
   saving: boolean
   problem: Words | null
-  /** F-CP-160: the API said a line holds a price this reader cannot see (B-CP-026): their line replace is a price holder's. */
+  /** F-CP-160: a line holds a price this reader cannot see (B-CP-026; the template's `holdsTypedPrices`, or the API's refusal): their line replace is a price holder's. */
   linesHeld?: boolean
   composer: TemplateComposer
   fromQuote: { query: string; results: QuoteListRow[] | null; chosenId: string; name: string; everyCompany: boolean }
@@ -73,7 +73,7 @@ export function TemplateDialog({ model, actions }: { model: TemplateDialogModel;
   const changed = model.mode === 'new' || Object.keys(headerPatch(model.before, draft)).length > 0 || linesChanged(model.before.lines, draft.lines, model.grains)
   const fromQuote = model.mode === 'new' && model.start === 'quote'
   const chosenQuote = model.fromQuote.results?.find((row) => row.id === model.fromQuote.chosenId) ?? null
-  // F-CP-160: the lines hold a price this reader cannot see (the API said so): Save waits in its words while they differ.
+  // F-CP-160: the lines hold a price this reader cannot see (the template says so, follow-up 13): Save waits in its words while they differ.
   const blindHeld = model.mode === 'edit' ? linesBlindHeld(model) : null
   const saveHeld = readOnly
     ? t(model.archived ? 'tpl.held.archived' : 'tpl.held.right')

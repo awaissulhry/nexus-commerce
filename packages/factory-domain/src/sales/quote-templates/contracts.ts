@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { id, input, instant, output, unitPrice } from '../../core/contracts'
-import { money } from '../../money/marked'
+import { money, notMoney } from '../../money/marked'
 import { DEPOSIT_KINDS, SALES_FEE_KINDS, STORED_DEPOSIT_KINDS } from '../quotes/quotes'
 import { ACCEPTANCE_MODES, STORED_ACCEPTANCE_MODES } from '../quote-terms/rules'
 import { TEMPLATE_LIMITS, TEMPLATE_LINE_KINDS } from './rules'
@@ -156,6 +156,12 @@ export const templateView = output({
   termsText: z.string().nullable(),
   termsVersion: z.string().nullable(),
   lines: z.array(templateLineView),
+  /**
+   * B-CP-026 (follow-up 13, the money wall): a current line holds a typed unit price. Replacing the lines is then a price holder's
+   * (a person without the price grain sends none: the replace would drop it; 403 refusal/BLIND_PRICE), so the web holds that
+   * Save before the click. A yes/no for every reader, never the price itself (the line's `unitPrice` stays money.price).
+   */
+  holdsTypedPrices: notMoney(z.boolean()),
   /** The caller may change it (quotes.templates.manage over its company, or over every company). */
   mayManage: z.boolean(),
   createdById: id().nullable(),

@@ -34,7 +34,7 @@ export interface AccountantAccessModel {
   showLeft: boolean
   downloads: readonly Download[] | null
   may: boolean
-  /** F-CP-159: the reader is the Owner (gives access and moves its end later). */
+  /** F-CP-159: the reader gives the access and moves its end later (the API's `may.give`, follow-up 13: a live Owner-role holder). */
   owner: boolean
   selected: readonly string[]
   /** The act running (a row id or `invite`), or null. */
@@ -134,7 +134,7 @@ function AccessSection({ model, actions }: { model: AccountantAccessModel; actio
     [t, locale],
   )
 
-  const hold = inviteHeld(model.state === 'ready' ? { firms: model.firms, may: { manage: model.may } } : null, model.owner)
+  const hold = inviteHeld(model.state === 'ready' ? { firms: model.firms, may: { manage: model.may, give: model.owner } } : null)
   const chosen = (model.rows ?? []).filter((row) => model.selected.includes(row.id))
   const endAllHeld = !model.may ? t('office.held.noManage') : chosen.length === 0 ? t('office.held.choose') : chosen.some((row) => endHeld(row, true)) ? t('office.held.someLeft') : model.busy ? t('office.held.busy') : null
   const state: ReactNode =

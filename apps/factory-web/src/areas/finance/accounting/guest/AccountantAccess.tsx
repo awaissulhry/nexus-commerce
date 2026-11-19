@@ -5,7 +5,7 @@ import { newIdempotencyKey } from '../../../../lib/api/client'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { isStepUpCancelled, useStepUp } from '../../_shared/hooks'
 import { changeAccountant, endAccountant, fetchAccountants, inviteAccountant, type Accountants } from './api'
-import { accountantRows, blankInvite, changeSaveHeld, dayOf, endOfDay, inviteBody, inviteHeld, inviteProblems, readsAsOwner, untilDay, writeProblemKey, type AccountantRow, type InviteDraft } from './model'
+import { accountantRows, blankInvite, changeSaveHeld, dayOf, endOfDay, inviteBody, inviteHeld, inviteProblems, mayGive, untilDay, writeProblemKey, type AccountantRow, type InviteDraft } from './model'
 import { AccountantAccessView, type AccountantAccessActions, type AccountantAccessModel } from './view/AccountantAccessView'
 
 /**
@@ -16,7 +16,7 @@ import { AccountantAccessView, type AccountantAccessActions, type AccountantAcce
  * period's files in its own portal, `/p/<firm>/accounting`.
  *
  * F-CP-159 (the money wall): the accountant sees our prices, so giving access and a later end are the Owner's (the API's
- * B-CP-011); the session reads as the Owner when it holds every office permission (model.ts says why). Ending it and an
+ * B-CP-011); the list's `may.give` says who gives it (follow-up 13: a live holder of the Owner role). Ending it and an
  * earlier end stay finance's.
  */
 export function AccountantAccess() {
@@ -25,9 +25,9 @@ export function AccountantAccess() {
   const companyId = session.company?.id ?? null
   const companyName = session.company?.name ?? ''
   const today = dayOf(new Date())
-  // F-CP-159: only the Owner gives the access (and a later end of it).
-  const owner = readsAsOwner(session.permissions)
   const [read, setRead] = useState<{ state: 'loading' | 'error' | 'ready'; value: Accountants | null }>({ state: 'loading', value: null })
+  // F-CP-159: only the Owner gives the access (and a later end of it): the API's `may.give` (follow-up 13).
+  const owner = mayGive(read.value)
   const [showLeft, setShowLeft] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
   const [notice, setNotice] = useState<AccountantAccessModel['notice']>(null)
@@ -69,7 +69,7 @@ export function AccountantAccess() {
     onSendInvite: () => {
       if (!invite || !companyId || Object.keys(inviteProblems(invite.draft, today)).length > 0) return
       // F-CP-159: never sent by a reader who is not the Owner (the button is held in words).
-      if (inviteHeld(read.value, owner)) return
+      if (inviteHeld(read.value)) return
       const draft = invite.draft
       setInvite({ ...invite, busy: true, problem: null })
       void guarded(() => inviteAccountant(api, inviteBody(companyId, draft), key.current ?? newIdempotencyKey()))

@@ -166,12 +166,15 @@ describe('the Owner gives the accountant access (FIN-158, PLT-022; B-CP-011)', {
     const before = await ok(finance.get(`/accounting/accountants?companyId=${companyA}`))
     expect(before.firms.map((firm: Json) => [firm.party.name, firm.portalOn, firm.people.length])).toContainEqual(['Studio Prova', false, 0])
     expect(before.may.manage).toBe(true)
+    // B-CP-011 (follow-up 13): the list says before the click who gives the access — finance manages it, the Owner gives it.
+    expect(before.may).toEqual({ manage: true, give: false })
+    expect((await ok(owner.get(`/accounting/accountants?companyId=${companyA}`))).may).toEqual({ manage: true, give: true })
     expect(before.downloads).toEqual([])
     const body = { companyId: companyA, partyId: firmId, email: people.accountant, displayName: 'Anna Conti', locale: 'it', accessUntil: inAYear() }
     h.clock.advance(6 * 60_000)
     expect((await finance.post('/accounting/accountants', body)).status).toBe(403)
     expect((await viewer.post('/accounting/accountants', body)).status).toBe(403)
-    expect((await ok(viewer.get(`/accounting/accountants?companyId=${companyA}`))).may.manage).toBe(false)
+    expect((await ok(viewer.get(`/accounting/accountants?companyId=${companyA}`))).may).toEqual({ manage: false, give: false })
     const { accessUntil: _end, ...noEnd } = body
     expect((await asFinance('POST', '/accounting/accountants', noEnd)).status).toBe(400)
     expect(await problem(asFinance('POST', '/accounting/accountants', { ...body, partyId: world.partyId }), 409)).toEqual(['partyId'])
