@@ -101,6 +101,9 @@ export interface ComposerDraft {
   // writer's tick "This text names no other customer" (`namesNoOtherCustomer`), sent with the next try.
   namesOther?: boolean
   namesNoOtherCustomer?: boolean
+  // ---- F-CP-147 (B-CP-020): the API held these words once — they look like a price (409 NAMES_A_PRICE); the next Send of the SAME
+  // words is "Send anyway" (pricesInWordsOk). A change of the words, of the audience, or a saved reply lets it go (checked again).
+  namesPrice?: boolean
   // ---- F-SA-265 (Discuss): what the message is about — the chip "About: …" above the text, removable (×).
   about?: DraftAbout
 }
@@ -230,8 +233,8 @@ export const replyAudienceOf = (mode: ComposerMode): 'CUSTOMER' | 'OFFICE' => (t
 export function withSavedReply(draft: ComposerDraft, filled: { body: string; audience?: 'CUSTOMER' | 'OFFICE' | undefined; numbers?: readonly { office: string; customer: string | null }[] | undefined }): ComposerDraft {
   const body = draft.body.trim() ? `${draft.body}\n\n${filled.body}` : filled.body
   const named = filled.audience === 'OFFICE' ? (filled.numbers ?? []).filter((pair) => pair.office !== pair.customer) : []
-  // F-SA-282a: new words — the API checks them again, so the hold and the tick go.
-  return { ...withoutNamesOther(draft), body, ...(named.length > 0 ? { numbers: [...(draft.numbers ?? []), ...named.map(({ office, customer }) => ({ office, customer }))] } : {}) }
+  // F-SA-282a: new words — the API checks them again, so the hold and the tick go. F-CP-147: so does the price warning.
+  return { ...withoutNamesPrice(withoutNamesOther(draft)), body, ...(named.length > 0 ? { numbers: [...(draft.numbers ?? []), ...named.map(({ office, customer }) => ({ office, customer }))] } : {}) }
 }
 // ---- end th-backend-g step 1
 
@@ -279,7 +282,8 @@ export function switchMode(draft: ComposerDraft, to: ComposerMode, people: reado
   const linkNotes: SwitchNote[] = correction ? [{ key: 'switch.correction' }] : []
   if (to === 'note') {
     // F-SA-282a: an office note is never checked for another customer's name: the portal's hold and its tick go.
-    const { link: _link, ...rest } = withoutNamesOther(draft)
+    // F-CP-147: another audience, another check — the price warning goes too.
+    const { link: _link, ...rest } = withoutNamesPrice(withoutNamesOther(draft))
     void _link
     return { draft: { ...rest, mode: to, ...keptLink }, notes: linkNotes }
   }
@@ -349,12 +353,32 @@ export const heldForNamesOther = (draft: ComposerDraft): ComposerDraft => ({ ...
 /** A change of the draft in the box: a change of the words lets the hold and the tick go (the API checks the new words again). */
 export function draftAfter(draft: ComposerDraft, next: Partial<ComposerDraft>): ComposerDraft {
   const changed = { ...draft, ...next }
-  return next.body !== undefined && next.body !== draft.body ? withoutNamesOther(changed) : changed
+  // F-CP-147: new words are checked again for a price too (the warning goes with them).
+  return next.body !== undefined && next.body !== draft.body ? withoutNamesPrice(withoutNamesOther(changed)) : changed
 }
 
 /** What the next try in the portal sends: the tick, only when the box asked for it and it is set. */
 export const namesNoOtherCustomerOf = (draft: ComposerDraft): boolean => namesOtherAsked(draft) && draft.namesNoOtherCustomer === true
 // ---- end F-SA-282a
+
+// ---- F-CP-147 (customer page plan C4, the money wall L3; Owner O5 "warn, never block"; B-CP-020) ---------------------------------
+/** The box warns that its words name a price (an office note, or a message in the portal): the API held exactly these words. */
+export const namesPriceAsked = (draft: Pick<ComposerDraft, 'mode' | 'namesPrice'>): boolean => (draft.mode === 'note' || draft.mode === 'portal') && draft.namesPrice === true
+
+/** The draft without the price warning (new words, another audience). */
+export function withoutNamesPrice(draft: ComposerDraft): ComposerDraft {
+  if (draft.namesPrice === undefined) return draft
+  const { namesPrice: _held, ...rest } = draft
+  void _held
+  return rest
+}
+
+/** The text back in the box after the API held it for a price: the same words, the same audience, the warning on. */
+export const heldForNamesPrice = (draft: ComposerDraft): ComposerDraft => ({ ...draft, namesPrice: true })
+
+/** What the next Send carries: "Send anyway" — pricesInWordsOk — only when the box warned for these very words. */
+export const pricesInWordsOkOf = (draft: ComposerDraft): boolean => namesPriceAsked(draft)
+// ---- end F-CP-147
 
 /** Send names who gets it. B-TH-237: "Post to Brand Alpha" in the portal. */
 export const sendKey = (mode: ComposerMode): string => (mode === 'note' ? 'send.note' : mode === 'portal' ? 'send.portal' : 'send.reply')
