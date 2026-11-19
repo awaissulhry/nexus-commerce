@@ -46,7 +46,6 @@
   "allOfCustomer": {
     "title": "Tutto di {customer}",
     "line": "Sola lettura: i messaggi di ordini, preventivi, richieste, progetti e conversazione generale di {customer}. Per scrivere, scegli una conversazione.",
-    "readMarks": "Apri una conversazione per segnarla come letta.",
     "view": {
       "label": "Vista",
       "menu": "Scegli quali messaggi mostra l'elenco",
@@ -76,6 +75,7 @@
     "empty": "Ancora nessun messaggio con {customer}",
     "emptyFiltered": "Niente con questa vista e questo tipo: scegli Tutto e Ogni tipo per vedere ogni messaggio.",
     "feedLabel": "Messaggi con {customer}, i più recenti prima",
+    "keysTip": "J / K scorrono · Invio risponde · Spazio mostra tutto il messaggio. Vedere una riga qui non segna nulla come letto: apri la sua conversazione.",
     "showOlder": "Mostra i più vecchi",
     "olderLoading": "Lettura dei messaggi più vecchi…",
     "olderFailed": "Non è stato possibile leggere i messaggi più vecchi · Riprova",

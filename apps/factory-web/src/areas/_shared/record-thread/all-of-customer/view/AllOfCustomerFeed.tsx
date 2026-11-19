@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { CornerDownRight, Lock, Paperclip } from 'lucide-react'
 import { Banner, EmptyState } from '@nexus/ui/components'
 import { Button, InfoTip, Skeleton } from '@nexus/ui/primitives'
@@ -12,6 +12,7 @@ import { RecordTypeIcon } from '../../../../search/RecordTypeIcon'
 import { PickedDockColumn } from '../../ThreadPick' // F-OP-204: the dock's one card
 import { opensItself, type AllOfCustomerModel, type FeedItem, type FeedKindChoice, type FeedView, type Words } from '../model'
 import { lineTimeOf } from '../model' // F-OP-205
+import { feedKeyOf, linePlaceOf, rovingIndexOf } from '../keys' // F-OP-206: the list's keys, one tab stop
 import { FeedHead } from './FeedHead' // F-OP-204
 import '../all-of-customer.css'
 
@@ -58,14 +59,17 @@ export function AllOfCustomerDock({ label, model, actions, foot, customerHref }:
   )
 }
 
-/** The card's foot: the host's doors, then ONE info icon (the rule: key hints and the like only in the foot's info icon). */
+/**
+ * The card's foot: the host's doors, then ONE info icon (the rule: key hints only in the foot's info icon) — F-OP-206: the list's keys
+ * and that seeing a line marks nothing read.
+ */
 function DockFoot({ children }: { children?: ReactNode }) {
   const t = useT('record-thread')
   return (
     <>
       {children}
       <span className="fw-aoc-foot-tip">
-        <InfoTip tip={t('allOfCustomer.readMarks')} />
+        <InfoTip tip={t('allOfCustomer.keysTip')} />
       </span>
     </>
   )
@@ -93,6 +97,14 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
     })
   const filtered = model.view !== 'all' || model.kind !== 'every'
   const today = dayOf(new Date())
+  // F-OP-206 (11-dock §3.3, D7): ONE tab stop for the list — the line last focused holds it; J / K and the arrows walk the lines.
+  const [active, setActive] = useState(0)
+  const lineRefs = useRef<Array<HTMLElement | null>>([])
+  const roving = rovingIndexOf(active, model.items.length)
+  const moveTo = (index: number) => {
+    setActive(index)
+    lineRefs.current[index]?.focus()
+  }
 
   // F-OP-205 (11-dock §3.5): every state inside the card — the pick band, the Head and the foot stay; only the body says it.
   return (
@@ -148,11 +160,33 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
             : {})}
         />
       ) : (
-        <ol className="fw-aoc-list" aria-label={t('allOfCustomer.feedLabel', { customer })}>
-          {model.items.map((item) => (
-            <FeedLine key={item.key} item={item} model={model} actions={actions} chip={words(item.chip)} open={opened.has(item.key)} onToggle={() => toggle(item.key)} today={today} />
+        // F-OP-206: a feed (busy while older lines are read), each line an article with its place in it.
+        <div className="fw-aoc-list" role="feed" aria-busy={model.older === 'loading'} aria-label={t('allOfCustomer.feedLabel', { customer })}>
+          {model.items.map((item, index) => (
+            <FeedLine
+              key={item.key}
+              item={item}
+              model={model}
+              actions={actions}
+              chip={words(item.chip)}
+              open={opened.has(item.key)}
+              onToggle={() => toggle(item.key)}
+              today={today}
+              place={linePlaceOf(index, model.items.length, model.more)}
+              current={index === roving}
+              lineRef={(element) => {
+                lineRefs.current[index] = element
+              }}
+              onFocusLine={() => setActive(index)}
+              onKey={(event) => {
+                const act = feedKeyOf(event, index, model.items.length)
+                if (!act) return false
+                if (act.kind === 'move') moveTo(act.to)
+                return act
+              }}
+            />
           ))}
-        </ol>
+        </div>
       )}
 
       {model.status === 'ready' && (
@@ -177,7 +211,34 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
  * row 3 at most three file chips and "+N"; the edge in the audience's colour. More opens the conversation's own card READ ONLY in
  * place (aria-expanded), Less closes it; the door answers in its conversation.
  */
-function FeedLine({ item, model, actions, chip, open, onToggle, today }: { item: FeedItem; model: AllOfCustomerModel; actions: AllOfCustomerFeedActions | undefined; chip: string; open: boolean; onToggle: () => void; today: string }) {
+function FeedLine({
+  item,
+  model,
+  actions,
+  chip,
+  open,
+  onToggle,
+  today,
+  place,
+  current,
+  lineRef,
+  onFocusLine,
+  onKey,
+}: {
+  item: FeedItem
+  model: AllOfCustomerModel
+  actions: AllOfCustomerFeedActions | undefined
+  chip: string
+  open: boolean
+  onToggle: () => void
+  today: string
+  /** F-OP-206: its place in the feed, whether it holds the list's one tab stop, and the list's keys (a move is the list's own). */
+  place: { readonly posinset: number; readonly setsize: number }
+  current: boolean
+  lineRef: (element: HTMLElement | null) => void
+  onFocusLine: () => void
+  onKey: (event: KeyboardEvent<HTMLElement>) => ReturnType<typeof feedKeyOf> | false
+}) {
   const t = useT('record-thread')
   const tc = useT('record-thread-card')
   const locale = useLocale()
@@ -187,11 +248,34 @@ function FeedLine({ item, model, actions, chip, open, onToggle, today }: { item:
   const author = 'text' in line.author ? line.author.text : tc(line.author.key)
   const gist = 'text' in line.gist ? line.gist.text : line.gist.ns === 'record-thread-card' ? tc(line.gist.key) : t(line.gist.key)
   const wholeId = `fw-aoc-whole-${item.key}`
+  // F-OP-206: the line is named by its chip, its writer and its time; only the line holding the tab stop lets Tab into its controls.
+  const base = `fw-aoc-${item.key}`
+  const inner = current ? undefined : -1
+  const doorButton = useRef<HTMLButtonElement>(null)
+  const doorLink = useRef<HTMLAnchorElement>(null)
   return (
-    <li className={`fw-aoc-line is-${line.audience}${item.isNew ? ' is-new' : ''}`}>
+    <article
+      ref={lineRef}
+      className={`fw-aoc-line is-${line.audience}${item.isNew ? ' is-new' : ''}`}
+      tabIndex={current ? 0 : -1}
+      aria-posinset={place.posinset}
+      aria-setsize={place.setsize}
+      aria-labelledby={`${base}-chip ${base}-author ${base}-time`}
+      onFocus={onFocusLine}
+      onKeyDown={(event) => {
+        // Keys on the line itself only: a control inside keeps its own (Enter on a button presses it).
+        if (event.target !== event.currentTarget) return
+        const act = onKey(event)
+        if (!act) return
+        event.preventDefault()
+        if (act.kind === 'expand') onToggle()
+        else if (act.kind === 'answer') (doorButton.current ?? doorLink.current)?.click()
+      }}
+    >
       <div className="fw-aoc-line-top">
         <a
           className="fw-aoc-chip"
+          tabIndex={inner}
           href={item.href}
           title={t('allOfCustomer.openRecord', { record: chip })}
           onClick={(event) => {
@@ -201,7 +285,7 @@ function FeedLine({ item, model, actions, chip, open, onToggle, today }: { item:
           }}
         >
           <RecordTypeIcon type={item.record.type} size={14} />
-          <span>{chip}</span>
+          <span id={`${base}-chip`}>{chip}</span>
         </a>
         {item.isNew && (
           <span className="fw-aoc-new">
@@ -210,17 +294,20 @@ function FeedLine({ item, model, actions, chip, open, onToggle, today }: { item:
           </span>
         )}
         <span className="fw-aoc-audience">{line.audience === 'shared' ? t('allOfCustomer.audience.shared', { customer: model.customerName }) : t('allOfCustomer.audience.office')}</span>
-        <time className="fw-aoc-time" dateTime={card.at}>
+        <time id={`${base}-time`} className="fw-aoc-time" dateTime={card.at}>
           {lineTimeOf(card.at, locale, today)}
         </time>
       </div>
       <p className="fw-aoc-gist">
-        <span className="fw-aoc-author">{author}:</span> {gist}
+        <span id={`${base}-author`} className="fw-aoc-author">
+          {author}:
+        </span>{' '}
+        {gist}
       </p>
       {(line.files.shown.length > 0 || line.files.more > 0) && (
         <div className="fw-aoc-files">
           {line.files.shown.map((file) => (
-            <button key={file.id} type="button" className="fw-aoc-file" title={file.name} onClick={() => openFile(file.id)}>
+            <button key={file.id} type="button" className="fw-aoc-file" tabIndex={inner} title={file.name} onClick={() => openFile(file.id)}>
               <Paperclip size={12} aria-hidden />
               <span>{file.name}</span>
             </button>
@@ -233,15 +320,21 @@ function FeedLine({ item, model, actions, chip, open, onToggle, today }: { item:
         </div>
       )}
       <div className="fw-aoc-doors">
-        <Button size="sm" variant="quiet" aria-expanded={open} aria-controls={wholeId} onClick={onToggle}>
+        <Button size="sm" variant="quiet" tabIndex={inner} aria-expanded={open} aria-controls={wholeId} onClick={onToggle}>
           {t(open ? 'allOfCustomer.less' : 'allOfCustomer.more')}
         </Button>
         {answer ? (
-          <Button size="sm" variant="quiet" aria-label={t('allOfCustomer.answerLabel', { record: chip })} onClick={() => answer(item.record, item.key)}>
+          <Button ref={doorButton} size="sm" variant="quiet" tabIndex={inner} aria-label={t('allOfCustomer.answerLabel', { record: chip })} onClick={() => answer(item.record, item.key)}>
             <CornerDownRight size={14} aria-hidden /> {t('allOfCustomer.answer')}
           </Button>
         ) : (
-          <a className="nds-btn sm quiet" href={item.messageHref} aria-label={t('allOfCustomer.answerLabel', { record: chip })}>
+          <a
+            ref={doorLink}
+            className="nds-btn sm quiet"
+            tabIndex={inner}
+            href={item.messageHref}
+            aria-label={t('allOfCustomer.answerLabel', { record: chip })}
+          >
             <CornerDownRight size={14} aria-hidden /> {t('allOfCustomer.answer')}
           </a>
         )}
@@ -249,6 +342,6 @@ function FeedLine({ item, model, actions, chip, open, onToggle, today }: { item:
       <div id={wholeId} className="fw-aoc-whole" hidden={!open}>
         {open && <MessageCard message={card} context={model.card} readOnly actions={{ onOpenFile: openFile }} />}
       </div>
-    </li>
+    </article>
   )
 }

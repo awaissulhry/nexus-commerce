@@ -47,6 +47,11 @@
   background: var(--nds-surface);
 }
 
+.fw-aoc-line:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 2px;
+}
+
 .fw-aoc-line.is-office {
   border-inline-start-color: var(--nds-warning);
   background: var(--nds-warning-soft);

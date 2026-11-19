@@ -29,6 +29,9 @@ import { AllOfCustomerFeed } from './view/AllOfCustomerFeed'
 import { AllOfCustomerDock } from './view/AllOfCustomerFeed' // F-OP-204
 import { FeedHead } from './view/FeedHead' // F-OP-204
 import { gistOf, GIST_CHARS, LINE_FILES, lineAudienceOf, lineFilesOf, lineTimeOf } from './model' // F-OP-205
+import { feedKeyOf, linePlaceOf, rovingIndexOf } from './keys' // F-OP-206
+import { LOCALES } from '../../../../lib/i18n/locales' // F-OP-206
+import { createTranslator, messagesFor } from '../../../../lib/i18n/messages' // F-OP-206
 
 /**
  * F-SA-261 (sales page plan R4, P9, N4, N5) — "All of <Customer>", the read-only merged view: its one call, paging (Show older, no
@@ -181,7 +184,8 @@ describe('F-SA-261 the view, in both languages', () => {
   it('read only: the filters, the chips, "1 new · Show", the New dot, the door, Show older, what is left out — no ⋯ on a card', () => {
     const html = render(createElement(AllOfCustomerDock, { label: 'All of Brand Alpha · Read only', model: model(state), actions: { onAnswer: () => undefined } }))
     const text = textOf(html)
-    expect(html).toContain('aria-label="Open a conversation to mark it read."')
+    // F-OP-206: the foot's ONE info icon says the keys and that seeing a line marks nothing read.
+    expect(html).toContain('aria-label="J / K walk · Enter answers · Space shows the whole message. Seeing a line here marks nothing read: open its thread."')
     expect(text).toContain('View: All')
     expect(text).toContain('Kind: Every kind')
     expect(text).toContain('SO-0142 · Your order 12')
@@ -395,3 +399,66 @@ describe('F-OP-205 — compact lines, expand in place, the states inside the car
   })
 })
 // ---- end F-OP-205
+
+// ---- F-OP-206 (order page plan N4; 11-dock §3.3; D7): the keys and the a11y of the list — a feed of articles, ONE tab stop --------------
+describe('F-OP-206 — J / K walk the lines, Enter answers, Space shows the whole message; one tab stop', () => {
+  const model = (state: FeedState) => feedModel(state, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true })
+  const plain = { metaKey: false, ctrlKey: false, altKey: false }
+
+  it('the walk targets: J / ↓ the next line, K / ↑ the one before, never past either end; Enter the door, Space the whole message', () => {
+    expect(feedKeyOf({ ...plain, key: 'j' }, 0, 3)).toEqual({ kind: 'move', to: 1 })
+    expect(feedKeyOf({ ...plain, key: 'ArrowDown' }, 1, 3)).toEqual({ kind: 'move', to: 2 })
+    expect(feedKeyOf({ ...plain, key: 'j' }, 2, 3)).toEqual({ kind: 'move', to: 2 })
+    expect(feedKeyOf({ ...plain, key: 'k' }, 2, 3)).toEqual({ kind: 'move', to: 1 })
+    expect(feedKeyOf({ ...plain, key: 'ArrowUp' }, 0, 3)).toEqual({ kind: 'move', to: 0 })
+    expect(feedKeyOf({ ...plain, key: 'K' }, 9, 3)).toEqual({ kind: 'move', to: 1 })
+    expect(feedKeyOf({ ...plain, key: 'Enter' }, 0, 3)).toEqual({ kind: 'answer' })
+    expect(feedKeyOf({ ...plain, key: ' ' }, 0, 3)).toEqual({ kind: 'expand' })
+    // ⌘ / Ctrl / Alt and any other key are the browser's (⌘J is the frame's); an empty list takes nothing.
+    for (const held of [{ metaKey: true }, { ctrlKey: true }, { altKey: true }]) expect(feedKeyOf({ ...plain, ...held, key: 'j' }, 0, 3)).toBeNull()
+    for (const key of ['x', 'Tab', 'Escape', '/']) expect(feedKeyOf({ ...plain, key }, 0, 3), key).toBeNull()
+    expect(feedKeyOf({ ...plain, key: 'j' }, 0, 0)).toBeNull()
+  })
+
+  it('the one tab stop stays inside the list as it grows or shrinks; each line\'s place (-1 while older lines may come)', () => {
+    expect(rovingIndexOf(0, 3)).toBe(0)
+    expect(rovingIndexOf(5, 3)).toBe(2)
+    expect(rovingIndexOf(-1, 3)).toBe(0)
+    expect(rovingIndexOf(2, 0)).toBe(-1)
+    expect(linePlaceOf(0, 30, true)).toEqual({ posinset: 1, setsize: -1 })
+    expect(linePlaceOf(2, 3, false)).toEqual({ posinset: 3, setsize: 3 })
+  })
+
+  it('a feed of articles named by chip, writer and time; only the first line is a tab stop, its controls too; busy while older ones come', () => {
+    const state = afterFirst(EMPTY_FEED, answer([entry('m2', 20), entry('m1', 10)], 'c-1'))
+    const html = render(createElement(AllOfCustomerFeed, { model: model(state), actions: { onAnswer: () => undefined } }))
+    expect(html).toMatch(/<div class="fw-aoc-list" role="feed" aria-busy="false" aria-label="Messages with Brand Alpha, newest first">/)
+    expect(html).toContain('<article class="fw-aoc-line is-shared" tabindex="0" aria-posinset="1" aria-setsize="-1" aria-labelledby="fw-aoc-m2-chip fw-aoc-m2-author fw-aoc-m2-time">')
+    expect(html).toContain('<article class="fw-aoc-line is-shared" tabindex="-1" aria-posinset="2" aria-setsize="-1" aria-labelledby="fw-aoc-m1-chip fw-aoc-m1-author fw-aoc-m1-time">')
+    for (const id of ['fw-aoc-m2-chip', 'fw-aoc-m2-author', 'fw-aoc-m2-time']) expect(html).toContain(`id="${id}"`)
+    const second = html.slice(html.indexOf('aria-posinset="2"'))
+    expect(second.match(/<(a|button)[^>]*tabindex="-1"/g)?.length).toBeGreaterThanOrEqual(3)
+    const first = html.slice(html.indexOf('aria-posinset="1"'), html.indexOf('aria-posinset="2"'))
+    expect(first).not.toMatch(/<(a|button)[^>]*tabindex="-1"/)
+    const older = render(createElement(AllOfCustomerFeed, { model: model({ ...state, older: 'loading' }) }))
+    expect(older).toContain('role="feed" aria-busy="true"')
+  })
+
+  it('the sources: keys on the line itself only (a control keeps its own Enter); Enter presses the line\'s door; no list role lost', () => {
+    const view = readFileSync(new URL('./view/AllOfCustomerFeed.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('if (event.target !== event.currentTarget) return')
+    expect(view).toContain("else if (act.kind === 'answer') (doorButton.current ?? doorLink.current)?.click()")
+    expect(view).toContain("if (act.kind === 'expand') onToggle()")
+    expect(view).toContain('lineRefs.current[index]?.focus()')
+    expect(view).not.toContain('<ol')
+  })
+
+  it('the tip in both languages, keys and read marks in ONE place (the foot\'s info icon); the old read-marks line is gone', () => {
+    for (const locale of LOCALES) {
+      const rt = createTranslator(locale, messagesFor(locale, ['record-thread'])['record-thread']!)
+      expect(rt('allOfCustomer.keysTip'), locale).not.toBe('allOfCustomer.keysTip')
+      expect(rt('allOfCustomer.readMarks'), locale).toBe('allOfCustomer.readMarks')
+    }
+  })
+})
+// ---- end F-OP-206
