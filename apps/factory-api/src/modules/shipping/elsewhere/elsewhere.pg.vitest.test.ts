@@ -87,7 +87,6 @@ const body = (over: Json = {}): Json => {
     ...over,
   }
 }
-const orderId = async (number: string): Promise<string> => (await admin<{ id: string }>(`SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND number = $2`, [A.tenant, number]))[0]!.id
 const ids: Record<string, string> = {}
 const shipments = async () => (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "Shipment" WHERE "tenantId" = $1`, [A.tenant]))[0]!.n
 
