@@ -277,6 +277,7 @@ function amendOf(value: Order, change: (lines: DraftLine[]) => DraftLine[] = (li
     reason: '',
     tell: { words: '', chosen: null },
     extraOutcome: null, // F-OP-107
+    fee: '', // op-fx1: F-OP-108's fee as use-lines-acts starts it (empty: none); missing, every design case of the strip threw
     ...over,
   }
   return seen ? { ...draft, review: { ...seen, key: amendKeyOf(draft, value), problem: null } } : draft
