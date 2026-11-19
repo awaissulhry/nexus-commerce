@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CUSTOMER_FEED_KINDS } from '@nexus/factory-domain/sales/customer-feed/kinds'
 import type { ApiClient } from '../../../../lib/api/client'
 import { leftKeys, render, textOf } from '../../../../lib/record-thread/parts/testing'
@@ -31,6 +31,8 @@ import { FeedHead } from './view/FeedHead' // F-OP-204
 import { gistOf, GIST_CHARS, LINE_FILES, lineAudienceOf, lineFilesOf, lineTimeOf } from './model' // F-OP-205
 import { feedKeyOf, linePlaceOf, rovingIndexOf } from './keys' // F-OP-206
 import { answerOf } from './model' // F-OP-207
+import { freshFolder, heldRecordsOf, listKeyOf, onShowOf } from './model' // F-OP-208
+import { FRESH_WAIT_MS } from './use-all-of-customer' // F-OP-208
 import { LOCALES } from '../../../../lib/i18n/locales' // F-OP-206
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages' // F-OP-206
 
@@ -510,3 +512,73 @@ describe('F-OP-207 — Answer per line and the read-only foot', () => {
   })
 })
 // ---- end F-OP-207
+
+// ---- F-OP-208 (order page plan N4; 11-dock §3.6, D8; R-1): a revisit keeps the list; live hints by the records the list holds --------------
+describe('F-OP-208 — revisit keeps the list and reads fresh; a hint on a held record reads again', () => {
+  const held = heldRecordsOf(afterFirst(EMPTY_FEED, answer([entry('m2', 20), entry('m1', 10, GENERAL)])))
+
+  it('the records the list holds; a hint on one of them reads again; any other keeps today\'s rule (customer-side types only)', () => {
+    expect([...held].sort()).toEqual(['Party:p-a', 'SalesOrder:so-1'])
+    expect(liveTouches({ type: 'thread.message_posted', fields: { recordType: 'SalesOrder', recordId: 'so-1' } }, held)).toBe(true)
+    // Not held, a customer-side type: a new thread of this customer may begin (the server sends it only to who reaches the customer).
+    expect(liveTouches({ type: 'thread.message_posted', fields: { recordType: 'Quote', recordId: 'q-new' } }, held)).toBe(true)
+    // Not held and not customer-side: never; another event: never.
+    for (const recordType of ['WorkOrder', 'QualityHold', 'PurchaseOrder']) expect(liveTouches({ type: 'thread.message_posted', fields: { recordType, recordId: 'x' } }, held), recordType).toBe(false)
+    expect(liveTouches({ type: 'sales_order.changed', fields: { recordType: 'SalesOrder', recordId: 'so-1' } }, held)).toBe(false)
+    // The hint names no party: the rule never reads a party id (R-1).
+    const model = readFileSync(new URL('./model.ts', import.meta.url), 'utf8')
+    const rule = model.slice(model.indexOf('export function liveTouches'), model.indexOf('// ---- F-OP-208'))
+    expect(rule).not.toContain('partyId')
+  })
+
+  it('showing the list again: the same customer, View and Kind read fresh behind "N new"; the first visit or another list starts again', () => {
+    const shown = afterFirst(EMPTY_FEED, answer([entry('m1', 10)]))
+    const key = listKeyOf('p-a', 'all', 'every')
+    expect(onShowOf(shown, key, key)).toBe('fresh')
+    expect(onShowOf(shown, null, key)).toBe('first')
+    expect(onShowOf(shown, key, listKeyOf('p-a', 'notes', 'every'))).toBe('first')
+    expect(onShowOf(shown, key, listKeyOf('p-b', 'all', 'every'))).toBe('first')
+    expect(onShowOf({ status: 'failed' }, key, key)).toBe('first')
+    expect(onShowOf({ status: 'loading' }, key, key)).toBe('first')
+    expect(new Set([listKeyOf('p-a', 'all', 'every'), listKeyOf('p-a', 'all', 'QUOTES'), listKeyOf('p-a', 'shared', 'every'), listKeyOf(null, 'all', 'every')]).size).toBe(4)
+  })
+
+  it('live hints fold into one read per burst (800 ms); a cancelled wait reads nothing', () => {
+    vi.useFakeTimers()
+    try {
+      let reads = 0
+      const folder = freshFolder(() => (reads += 1), FRESH_WAIT_MS)
+      folder.hint()
+      folder.hint()
+      vi.advanceTimersByTime(FRESH_WAIT_MS - 1)
+      folder.hint()
+      expect(reads).toBe(0)
+      vi.advanceTimersByTime(1)
+      expect(reads).toBe(1)
+      folder.hint()
+      folder.cancel()
+      vi.advanceTimersByTime(FRESH_WAIT_MS * 2)
+      expect(reads).toBe(1)
+      expect(FRESH_WAIT_MS).toBe(800)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('the container stays mounted and keeps lines, View, Kind and scroll; the view draws the list where it was', () => {
+    const hook = readFileSync(new URL('./use-all-of-customer.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("if (onShowOf(stateRef.current, heldKey.current, listKey) === 'fresh') loadFresh()")
+    expect(hook).toContain('}, [enabled, listKey])')
+    expect(hook).toContain('liveTouches(change, heldRecordsOf(stateRef.current)) && folder.hint()')
+    expect(hook).toContain('scrollTop: scrollTop.current')
+    const view = readFileSync(new URL('./view/AllOfCustomerFeed.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("const scroller = root.current?.closest<HTMLElement>('.fw-rt-body')")
+    expect(view).toContain('if (scrolledTo > 0) scroller.scrollTop = scrolledTo')
+    // The hosts call the container on every render (it reads only while All shows), so leaving All never drops it.
+    const order = readFileSync(new URL('../../../sales/orders/record/dock/OrderDock.tsx', import.meta.url), 'utf8')
+    expect(order).toMatch(/const feed = useAllOfCustomer\(api, \{ partyId: order\.partyId, customerName: customer, enabled: scope\.kind === 'all'/)
+    expect(feedModel(EMPTY_FEED, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true }).scrollTop).toBe(0)
+    expect(feedModel(EMPTY_FEED, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true, scrollTop: 420 }).scrollTop).toBe(420)
+  })
+})
+// ---- end F-OP-208

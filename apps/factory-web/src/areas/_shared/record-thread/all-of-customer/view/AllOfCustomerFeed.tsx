@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { CornerDownRight, Lock, Paperclip } from 'lucide-react'
 import { Banner, EmptyState } from '@nexus/ui/components'
 import { Button, InfoTip, Skeleton } from '@nexus/ui/primitives'
@@ -45,6 +45,8 @@ export interface AllOfCustomerFeedActions {
   readonly canAnswer?: (record: FeedRecordRef) => boolean
   readonly onCompose?: (ask: Extract<FeedDoor, { kind: 'answer' }>['ask']) => void
   // ---- end F-OP-207
+  /** F-OP-208: where the person scrolled the list (the container keeps it for the next visit). */
+  readonly onScroll?: (top: number) => void
 }
 
 /**
@@ -110,10 +112,24 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
     setActive(index)
     lineRefs.current[index]?.focus()
   }
+  // F-OP-208 (11-dock §3.6): a revisit draws the list where it was scrolled (the card's body scrolls, never the page); the person's
+  // scrolling is kept for the next visit.
+  const root = useRef<HTMLDivElement>(null)
+  const keepScroll = useRef(actions?.onScroll)
+  keepScroll.current = actions?.onScroll
+  const scrolledTo = model.scrollTop
+  useLayoutEffect(() => {
+    const scroller = root.current?.closest<HTMLElement>('.fw-rt-body')
+    if (!scroller) return
+    if (scrolledTo > 0) scroller.scrollTop = scrolledTo
+    const onScroll = () => keepScroll.current?.(scroller.scrollTop)
+    scroller.addEventListener('scroll', onScroll, { passive: true })
+    return () => scroller.removeEventListener('scroll', onScroll)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- once per visit
 
   // F-OP-205 (11-dock §3.5): every state inside the card — the pick band, the Head and the foot stay; only the body says it.
   return (
-    <div className="fw-aoc">
+    <div ref={root} className="fw-aoc">
       {model.status === 'loading' || model.status === 'idle' ? (
         <div className="fw-aoc-loading" aria-busy="true" aria-label={t('allOfCustomer.loading', { customer })}>
           {[0, 1, 2].map((row) => (

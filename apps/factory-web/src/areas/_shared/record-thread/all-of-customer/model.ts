@@ -105,11 +105,53 @@ export function showFresh(state: FeedState): FeedState {
   return { ...state, entries: [...pendingOf(state), ...state.entries].sort(compareEntries), fresh: null }
 }
 
-/** A live hint that may concern the feed: a message posted on a conversation of a customer-side record type (the hint names no party). */
-export function liveTouches(change: { readonly type: string; readonly fields: Readonly<Record<string, unknown>> }): boolean {
+/**
+ * A live hint that may concern the feed: a message posted on a conversation of a customer-side record type (the hint names no party).
+ * F-OP-208 (R-1: party ids never reach the browser, so the hint cannot say whose customer it is): a message on a record the list
+ * holds (`held`: its `Type:id` keys) always reads again; any other keeps the rule above (a customer-side type — a new thread of this
+ * customer may begin; the server sends a thread's event only to readers who reach its customer).
+ */
+export function liveTouches(change: { readonly type: string; readonly fields: Readonly<Record<string, unknown>> }, held: ReadonlySet<string> = new Set()): boolean {
+  if (change.type !== 'thread.message_posted') return false
   const type = change.fields.recordType
-  return change.type === 'thread.message_posted' && typeof type === 'string' && customerFeedKindOf(type) !== null
+  const id = change.fields.recordId
+  if (typeof type === 'string' && typeof id === 'string' && held.has(`${type}:${id}`)) return true
+  return typeof type === 'string' && customerFeedKindOf(type) !== null
 }
+
+// ---- F-OP-208 (order page plan N4; 11-dock §3.6, D8): a revisit keeps the list. The container stays mounted with the dock: leaving
+// All of <customer> keeps its lines, its View and Kind and where the list was scrolled; coming back draws them at once and reads the
+// newest page in the background (what is newer waits behind "N new · Show"); the skeleton only on the first visit or a new View / Kind.
+
+/** The records the list holds, as `Type:id` (what a live hint is matched against). */
+export const heldRecordsOf = (state: Pick<FeedState, 'entries'>): ReadonlySet<string> => new Set(state.entries.map((entry) => `${entry.record.type}:${entry.record.id}`))
+
+/** The key of a list: its customer, its View and its Kind (another key starts the list again). */
+export const listKeyOf = (partyId: string | null, view: FeedView, kind: FeedKindChoice): string => `${partyId ?? ''}|${view}|${kind}`
+
+/** What showing the list asks: a fresh read behind "N new" when it holds the same list (a revisit), else the first page again. */
+export function onShowOf(state: Pick<FeedState, 'status'>, heldKey: string | null, key: string): 'fresh' | 'first' {
+  return state.status === 'ready' && heldKey === key ? 'fresh' : 'first'
+}
+
+/** Live hints folded into one read: each hint waits `wait` ms, and hints meanwhile join it (one read per burst). */
+export function freshFolder(read: () => void, wait: number) {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  return {
+    hint: () => {
+      if (timer) return
+      timer = setTimeout(() => {
+        timer = null
+        read()
+      }, wait)
+    },
+    cancel: () => {
+      if (timer) clearTimeout(timer)
+      timer = null
+    },
+  }
+}
+// ---- end F-OP-208
 
 // ── one line ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -175,9 +217,11 @@ export interface AllOfCustomerModel {
   readonly kind: FeedKindChoice
   /** What every card shares (the customer's name on their side; files open with files.read; no reply here). */
   readonly card: CardContext
+  /** F-OP-208: where the list was scrolled when it was last shown (a revisit draws it there again); 0: its top. */
+  readonly scrollTop: number
 }
 
-export function feedModel(state: FeedState, input: { readonly customerName: string; readonly prefix: string; readonly view: FeedView; readonly kind: FeedKindChoice; readonly canReadFiles: boolean }): AllOfCustomerModel {
+export function feedModel(state: FeedState, input: { readonly customerName: string; readonly prefix: string; readonly view: FeedView; readonly kind: FeedKindChoice; readonly canReadFiles: boolean; readonly scrollTop?: number }): AllOfCustomerModel {
   const name = state.customer?.name ?? input.customerName
   return {
     customerName: name,
@@ -200,6 +244,7 @@ export function feedModel(state: FeedState, input: { readonly customerName: stri
     view: input.view,
     kind: input.kind,
     card: { partyName: name, canReadFiles: input.canReadFiles, canReply: false },
+    scrollTop: input.scrollTop ?? 0, // F-OP-208
   }
 }
 
