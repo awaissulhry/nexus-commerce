@@ -93,6 +93,28 @@ export interface ColumnsMenuQuick {
   readonly withheld?: readonly WithheldColumn[]
 }
 
+/**
+ * The built-in views as menu items, the active one ticked. F-CP-103: a view's count at the item's end ("All orders · 24"), muted; the
+ * label stays the view's name. F-CP-107: exported — a list without saved views (the customer's portal drafts) draws the same items
+ * in its own Views menu.
+ */
+export function builtInViewItems(builtIns: ListBuiltInViews): MenuItemDef[] {
+  return builtIns.items.map((view) => ({
+    id: `b-${view.id}`,
+    label: view.count ? (
+      <span className="fw-lt-builtin">
+        <span>{view.label}</span>
+        <span className="fw-lt-builtin-count">{view.count}</span>
+      </span>
+    ) : (
+      view.label
+    ),
+    checked: builtIns.active === view.id,
+    ...(view.hint ? { description: view.hint } : {}),
+    onSelect: () => builtIns.onPick(view.id),
+  }))
+}
+
 /** Columns ▾: views, then the active view's verbs, then Customise (pure, for the tests). */
 export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: ColumnsMenuActions, quick?: ColumnsMenuQuick): MenuItemDef[] {
   const { answer, problem, active, changed } = input
@@ -101,22 +123,7 @@ export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: Col
   if (input.builtIns && input.builtIns.items.length > 0) {
     const builtIns = input.builtIns
     items.push({ id: 'h-builtin', heading: true, label: t('tools.builtIn') })
-    // F-CP-103: a view's count at the item's end ("All orders · 24"), muted; the label stays the view's name.
-    for (const view of builtIns.items)
-      items.push({
-        id: `b-${view.id}`,
-        label: view.count ? (
-          <span className="fw-lt-builtin">
-            <span>{view.label}</span>
-            <span className="fw-lt-builtin-count">{view.count}</span>
-          </span>
-        ) : (
-          view.label
-        ),
-        checked: builtIns.active === view.id,
-        ...(view.hint ? { description: view.hint } : {}),
-        onSelect: () => builtIns.onPick(view.id),
-      })
+    items.push(...builtInViewItems(builtIns))
     items.push({ id: 's-builtin', separator: true })
   }
   items.push({ id: 'h-views', heading: true, label: t('tools.views') })

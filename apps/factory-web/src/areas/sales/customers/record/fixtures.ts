@@ -37,6 +37,15 @@ import { COMPOSER_EMPTY } from '../../orders/record/record-model'
 import type { NewOrderModel } from '../../orders/new/new-model'
 import { NewOrderWindow } from '../../orders/new/view/NewOrderView'
 // ---- end F-CP-113
+// ---- F-CP-107: Drafts of <customer> (made-up portal drafts) and one in its read-only window ----
+import { CATALOGUE_RECORD } from '../../inquiries/demo/fixtures'
+import { inquiriesCan } from '../../inquiries/model'
+import type { DraftRow } from './drafts/api'
+import { draftTitle } from './drafts/model'
+import { CustomerDraftsList } from './drafts/view/CustomerDraftsList'
+import { DraftWindow } from './drafts/view/DraftWindow'
+import { DRAFTS_VIEW } from './view/WorkTab'
+// ---- end F-CP-107
 import type { OrderRow } from '../../orders/api'
 import type { RowView } from '../../orders/model'
 import type { OrdersListModel } from '../../orders/list/list-model'
@@ -88,6 +97,18 @@ interface WorkCase {
   readonly price?: boolean
   /** F-CP-113: the lines window open over the sheet (priced lines; or the Discard question). */
   readonly linesWindow?: 'lines' | 'discard'
+  /** F-CP-107: "Drafts of <customer>" shown (its list, none yet, or one draft open in its window). */
+  readonly drafts?: 'list' | 'empty' | 'window'
+}
+
+/** F-CP-107: made-up portal drafts of the customer (one ready to send, one just started). */
+const draftRowsOf = (party: Party, price: boolean): DraftRow[] => {
+  const file = (id: string, locked = false) => ({ id, lineId: null, originalName: locked ? null : `${id}.pdf`, kind: 'ATTACHMENT', sizeBytes: 120000, status: 'READY', locked })
+  const base = { status: 'DRAFT', party: { id: party.id, code: party.code, name: party.tradeName ?? party.legalName }, customerRef: null, currency: 'EUR', ...(price ? { netShown: '18400.00' } : {}) }
+  return [
+    { ...base, id: 'd0000000-0000-4000-8000-000000000701', number: null, requestedDate: '2026-12-15', lines: 3, pieces: 140, version: 6, draft: { startedBy: 'Giulia Verdi', startedAt: '2026-11-12T09:00:00.000Z', lastEditedBy: 'Giulia Verdi', lastEditedAt: '2026-11-19T10:42:00.000Z', title: 'STY-01 Giacca demo', people: 12, readiness: { parts: [], done: 5, of: price ? 7 : 6, problems: 1 }, later: ['PEOPLE'], thread: { messages: 4, lastAt: '2026-11-19T10:40:00.000Z', designerAsked: true }, files: { logos: [file('l1'), file('l2')], references: [], sheets: [file('s1', true)] } } },
+    { ...base, id: 'd0000000-0000-4000-8000-000000000702', number: null, requestedDate: null, lines: 0, pieces: 0, version: 1, draft: { startedBy: 'Luca Bianchi', startedAt: '2026-11-18T15:10:00.000Z', lastEditedBy: 'Luca Bianchi', lastEditedAt: '2026-11-18T15:20:00.000Z', title: null, people: 0, readiness: { parts: [], done: 1, of: price ? 7 : 6, problems: 0 }, later: [], thread: null, files: { logos: [file('l3')], references: [], sheets: [] } } },
+  ]
 }
 
 /** F-CP-113: the lines window's made-up model (two colour lines, one at the list price, one typed; priced by the API). */
@@ -167,7 +188,22 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
     'div',
     { className: 'fw-cw' },
     createElement(WaitingStrip, { customer: name, reads: work.reads, can: { orders: true, workorders: true, threads: true, partners: true }, doors: { onView: () => undefined, repliesHref: '/w/DEMO/sales/incoming?tile=CUSTOMER_REPLIES', onWindow: () => undefined } }),
-    createElement(OrdersListView, { model: list }),
+    // F-CP-107: Drafts of <customer> in the sheet's place (the same Views ▾, the Drafts view ticked).
+    work.drafts
+      ? createElement(CustomerDraftsList, {
+          model: { customer: name, read: { status: 'ready', rows: work.drafts === 'empty' ? [] : draftRowsOf(party, work.price !== false) }, updates: work.drafts === 'list' ? 1 : 0, activeId: null, views: { model: { ...list, hostViews: [{ id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: name }), active: true }], views: workViewsOf({ price: work.price !== false }, { drafts: true }) } } },
+        })
+      : createElement(OrdersListView, { model: list }),
+    work.drafts === 'window'
+      ? createElement(DraftWindow, {
+          model: {
+            customer: name,
+            title: draftTitle(draftRowsOf(party, true)[0]!, t('customers.drafts.untitled')),
+            nav: { ids: draftRowsOf(party, true).map((row) => row.id), current: draftRowsOf(party, true)[0]!.id },
+            pane: { prefix: '/w/DEMO', can: inquiriesCan(['orders.view', 'orders.manage', 'quotes.manage', 'threads.read', ...(work.price !== false ? ['money.price'] : [])]), offline: false, loaded: { status: 'ready', value: { ...CATALOGUE_RECORD, request: { ...CATALOGUE_RECORD.request, status: 'DRAFT', number: null, sentAt: null, sentBy: null }, may: { order: false, quote: false, refuse: false } } }, notice: null, dialog: null, handled: null, draft: { title: 'STY-01 Giacca demo' } },
+          },
+        })
+      : null,
     work.linesWindow ? createElement(NewOrderWindow, { model: linesWindowOf(work.linesWindow, work.price !== false) }) : null, // F-CP-113
   )
 }
@@ -314,6 +350,11 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     // ---- F-CP-113: "Add the lines" — the New order page's own editor in a large centred window over the Work tab (one editor, two doors).
     { id: 'work-new-order-lines', label: 'F-CP-113 · Work: New order › Add the lines — the lines editor in a large window on this page (no page hop)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), linesWindow: 'lines' }) },
     { id: 'work-new-order-lines-no-price', label: 'F-CP-113 · Sales worker without prices: the same window, "Priced from <customer>\'s price list", no price typed', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), linesWindow: 'lines', price: false }) },
+    // ---- F-CP-107: "Drafts of <customer>" — the customer's portal drafts, read only (a row docks its conversation; Open: its window).
+    { id: 'work-drafts', label: 'F-CP-107 · Work: Drafts of the customer — two portal drafts, read only (one live update waiting)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'list' }) },
+    { id: 'work-drafts-no-price', label: 'F-CP-107 · Drafts as a Sales worker without prices: no Value column, readiness counted of 6', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'list', price: false }) },
+    { id: 'work-drafts-empty', label: 'F-CP-107 · Drafts: none in the portal yet', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'empty' }) },
+    { id: 'work-drafts-window', label: 'F-CP-107 · A draft open in its window: read only, Accept and Refuse held with why, J / K between drafts', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'window' }) },
     { id: 'work-new-order-discard', label: 'F-CP-113 · Discard asks first when something is typed', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), linesWindow: 'discard' }) },
     { id: 'quotes-orders-empty-production', label: 'F-CP-101 · Work: In production, nothing (the way to All orders)', model: workCase('NUOVO-PROVA', { reads: STRIP_READY, rows: [], view: 'IN_PRODUCTION' }) },
     { id: 'quotes-orders-reading', label: 'F-SA-276 · Work: the strip and the rows reading ("—", never 0)', model: workCase('MODA-DEMO', { reads: STRIP_READING, rows: null }) },

@@ -20,7 +20,9 @@ import { fieldLines, inquiriesCan, readProblem, writeProblem, type Loaded, type 
  * catalogue order's thread (RecordThread v1 through the office container, record type PortalOrderRequest). The view draws its model.
  */
 
-export function useCatalogueOrder(options: { readonly requestId: string | null; /** Its company (from the Incoming row; the thread's files and mentions are the company's). */ readonly companyId?: string | null; readonly onDecided?: (requestId: string) => void; readonly onChanged?: () => void }): { model: CatalogueModel; actions: CatalogueActions; thread: ReactNode } {
+// F-CP-107 (customer page plan D10): `draft` — the customer's portal draft read on its customer page, read only (its title; Accept and
+// Refuse held: "The customer is still writing it"); its changes read again quietly (no "someone else handled it": it is theirs).
+export function useCatalogueOrder(options: { readonly requestId: string | null; /** Its company (from the Incoming row; the thread's files and mentions are the company's). */ readonly companyId?: string | null; readonly onDecided?: (requestId: string) => void; readonly onChanged?: () => void; readonly draft?: { readonly title: string } | null }): { model: CatalogueModel; actions: CatalogueActions; thread: ReactNode } {
   const { requestId } = options
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -72,7 +74,8 @@ export function useCatalogueOrder(options: { readonly requestId: string | null; 
     {
       onChange: (change) => {
         if (!change.type.startsWith('portal_order_request.') || !requestId || change.fields.requestId !== requestId) return
-        if (Date.now() - ownWrite.current > 4000) setHandled(formatTime(new Date().toISOString(), { locale }))
+        // F-CP-107: a draft's own changes are the customer's writing, not someone handling it.
+        if (Date.now() - ownWrite.current > 4000 && !told.current.draft) setHandled(formatTime(new Date().toISOString(), { locale }))
         void load(true)
       },
       onReconnect: () => void load(true),
@@ -116,7 +119,7 @@ export function useCatalogueOrder(options: { readonly requestId: string | null; 
     }
   }
 
-  const model: CatalogueModel = { prefix, can, offline, loaded, notice, dialog, handled }
+  const model: CatalogueModel = { prefix, can, offline, loaded, notice, dialog, handled, draft: options.draft ?? null /* F-CP-107 */ }
   const actions: CatalogueActions = {
     onRetry: () => void load(),
     onReload: () => {

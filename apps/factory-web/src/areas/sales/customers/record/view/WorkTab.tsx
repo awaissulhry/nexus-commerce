@@ -27,6 +27,13 @@ import type { WorkAsk } from '../use-customer-work' // F-CP-104: the band's New 
 // ---- F-CP-113: the New order page's own lines editor, in a large window on this page ----
 import type { NewOrderHeader } from '../../../orders/new/new-model'
 import { NewOrderEditor } from '../../../orders/new/NewOrderEditor'
+// ---- F-CP-107: Drafts of <customer> (the customer's portal drafts, read only) ----
+import { writeSearch } from '../../../../_shared/record-frame/address'
+import { useCustomerDrafts } from '../drafts/use-customer-drafts'
+import { draftPick, draftsAddress, draftsNav, draftsShown, draftTitle } from '../drafts/model'
+import { CustomerDraftsList } from '../drafts/view/CustomerDraftsList'
+import { DraftWindow } from '../drafts/view/DraftWindow'
+import type { DraftRow } from '../drafts/api'
 // ---- F-SA-279: the dock follows the row; All of <customer> in the dock ----
 import type { useCustomerDock } from '../use-customer-work'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
@@ -185,10 +192,18 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const rows = sheet.model.rows
   const waiting = sheet.model.waiting ?? null
   const all = `${prefix}${sheetAddress(basePath, host, params, { rows: 'all', q: '', layout: 'list', party: party.id })}`
+  // ---- F-CP-107: "Drafts of <customer>" — `list=drafts` draws the customer's portal drafts (read only) in the sheet's place; the strip
+  // and the Views ▾ stay; a draft's row docks its own conversation, Enter / Open its read-only window.
+  const showDrafts = draftsShown(params)
+  const untitled = t('customers.drafts.untitled')
+  const drafts = useCustomerDrafts(party.id, showDrafts, untitled)
+  const draftRows = drafts.read.status === 'ready' ? drafts.read.rows : null
+  // ---- end F-CP-107
   const model: OrdersListModel = {
     ...sheet.model,
-    views: workViewsOf(sheet.model.can), // F-CP-101: All orders first; Drafts / Not equal join with their steps
-    viewCounts: workViewCounts(work.reads.board), // F-CP-103: "All orders 42 · In production 7 …" — no second read
+    views: workViewsOf(sheet.model.can, { drafts: true }), // F-CP-101: All orders first; F-CP-107: Drafts of <customer>; Not equal with F-CP-141
+    viewCounts: { ...(workViewCounts(work.reads.board) ?? {}), ...(draftRows ? { [DRAFTS_VIEW]: draftRows.length } : {}) }, // F-CP-103 (no second read); F-CP-107: the drafts once read
+    hostViews: [{ id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: party.name }), active: showDrafts }], // F-CP-107
     preset: workPreset(rows, waiting),
     marks: work.marks,
     doorHref: door.hrefOf,
@@ -199,6 +214,11 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   }
   const actions = {
     ...sheet.actions,
+    // F-CP-107: Drafts of <customer> — a person's pick writes `list=drafts` once (the record pages' one history writer; a rows view
+    // picked again goes through the sheet, which drops it).
+    onHostView: (id: string) => {
+      if (id === DRAFTS_VIEW) writeSearch(draftsAddress(`${prefix}${basePath}`, party.id, params))
+    },
     ...(can.threads
       ? {
           onFocusRow: (row: OrderRow) => onFocus?.(pickOfRow(row)),
@@ -217,7 +237,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   }
   // The picked order left the view (it moved on, live): the dock keeps its conversation; one line says so, with the way back.
   const items = sheet.model.list.items
-  const gone = picked && picked.type === 'SalesOrder' && items && sheet.model.updates === 0 && !items.some((row) => row.id === picked.id) && !(rows === 'all' && !waiting)
+  const gone = !showDrafts && picked && picked.type === 'SalesOrder' && items && sheet.model.updates === 0 && !items.some((row) => row.id === picked.id) && !(rows === 'all' && !waiting)
   const viewName = waiting ? t('customers.work.view.waitingUs') : o(`rows.${rows}`)
   return (
     <CustomerOverrideProvider onDone={door.refresh}>
@@ -232,9 +252,29 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
             </Button>
           </p>
         )}
-        <OrdersListView model={model} actions={actions /* F-SA-279 */} />
+        {showDrafts ? (
+          // F-CP-107: the customer's portal drafts, read only (the dock follows a row: the draft's own conversation).
+          <CustomerDraftsList
+            model={{ customer: party.name, read: drafts.read, updates: drafts.updates, activeId: picked && picked.type === 'PortalOrderRequest' ? picked.id : null, views: { model, actions } }}
+            actions={{
+              ...(can.threads ? { onRow: (row: DraftRow) => onPick(draftPick(row, draftTitle(row, untitled))), onFocusRow: (row: DraftRow) => onFocus?.(draftPick(row, draftTitle(row, untitled))) } : {}),
+              onOpen: drafts.onOpen,
+              onRetry: drafts.onRetry,
+              onShowUpdates: drafts.onShowUpdates,
+            }}
+          />
+        ) : (
+          <OrdersListView model={model} actions={actions /* F-SA-279 */} />
+        )}
       </div>
       <RequestDoorWindow door={door} />
+      {drafts.open && drafts.window && draftRows && (
+        // F-CP-107: the draft in its read-only window — Incoming's own container and pane in draft mode; J / K walk the drafts.
+        <DraftWindow
+          model={{ customer: party.name, title: draftTitle(drafts.open, untitled), nav: draftsNav(draftRows, drafts.open.id), pane: drafts.window.model, thread: drafts.window.thread }}
+          actions={{ pane: drafts.window.actions, onGo: drafts.onGo, onClose: drafts.onClose }}
+        />
+      )}
       {lines && (
         // F-CP-113: the same editor as /sales/orders/new, its customer and header set by the New order window.
         <NewOrderEditor
