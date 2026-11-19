@@ -427,7 +427,9 @@ export async function sendFromThread(caller: CommandCaller, record: RecordRef, b
   if (aboutShape.length > 0) throw new ValidationError('The mail is not valid.', aboutShape)
 
   const { result } = await command(caller, { name: 'email.send', idempotencyKey, input: { recordType: record.type, recordId: record.id, ...body } }, async (tools) => {
-    const user = await tools.tx.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { displayName: true, email: true } })
+    // B-CP-023 (end-check fix): a sender who is no person of the tenant is refused in words (as the order confirmation's send is), never a 500.
+    const user = await tools.tx.user.findUnique({ where: { id: context.actorId }, select: { displayName: true, email: true } })
+    if (!user) throw new NotFoundError('Your user was not found.')
     // B-TH-048: the composer's Send waits 10 s, so its sender can take it back (POST …/emails/:emailId/undo).
     const sent = await sendEmail(tools, { ...body, record, sender: { userId: context.actorId, name: user.displayName, email: user.email }, undoWindow: true })
     await clearDraftInCommand(tools, context.actorId, record) // B-TH-092

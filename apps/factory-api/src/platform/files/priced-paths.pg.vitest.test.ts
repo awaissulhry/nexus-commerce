@@ -56,14 +56,17 @@ type Json = Record<string, any>
 const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
 let counter = 0
 const FILES: Permission[] = ['files.read', 'files.upload', 'files.manage', 'threads.read', 'threads.post', 'email.send', 'links.view', 'links.manage', 'orders.view']
-const office = (permissions: readonly Permission[], parties: Grant['parties'] = 'all'): SessionContext => ({ audience: 'office', tenantId: T, actorId: newId(), grants: [{ permissions: [...permissions], companies: 'all', sites: 'all', parties }] })
+// B-CP-023 (end-check fix): each test session is a person of the tenant, as a signed-in office person always is (their User row is
+// made in beforeAll): a mail's sender is read from it (email-out sendFromThread), so an actor with no row never reached the check.
+const ACTORS = { owner: newId(), salesWorker: newId(), productionManager: newId(), planner: newId() } as const
+const office = (actorId: string, permissions: readonly Permission[], parties: Grant['parties'] = 'all'): SessionContext => ({ audience: 'office', tenantId: T, actorId, grants: [{ permissions: [...permissions], companies: 'all', sites: 'all', parties }] })
 const template = (key: string): readonly Permission[] => templateOf(key)!.permissions
 const SESSIONS: Record<string, () => SessionContext> = {
-  owner: () => office([...FILES, 'money.price']),
-  salesWorker: () => office(template('sales')),
-  productionManager: () => office(template('production_manager')),
+  owner: () => office(ACTORS.owner, [...FILES, 'money.price']),
+  salesWorker: () => office(ACTORS.salesWorker, template('sales')),
+  productionManager: () => office(ACTORS.productionManager, template('production_manager')),
   // A Planner who may send share links (links.manage), without prices.
-  planner: () => office([...template('planner'), 'links.view', 'links.manage']),
+  planner: () => office(ACTORS.planner, [...template('planner'), 'links.view', 'links.manage']),
 }
 
 async function call(session: string, method: 'GET' | 'POST', url: string, body?: unknown): Promise<{ status: number; body: Json; raw: string }> {
@@ -102,6 +105,10 @@ beforeAll(async () => {
   h.clock.set(new Date())
   for (const seed of [seedCore, seedNumbering, seedParties, seedFiles, seedEmail, seedProduct, seedSales]) await seed({ db: h.database, namespace: NS })
   await admin(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE "tenantId" = $1 AND provider IN ('R2', 'SES')`, [T])
+  // B-CP-023 (end-check fix): the sessions' people (made up).
+  for (const [key, actorId] of Object.entries(ACTORS)) {
+    await admin('INSERT INTO "User" (id, "tenantId", email, "displayName", status, audience) VALUES ($1, $2, $3, $4, $5, $6)', [actorId, T, `${key.toLowerCase()}.cp023@example.com`, `Made-up ${key}`, 'ACTIVE', 'OFFICE'])
+  }
   const routesRoot = fileURLToPath(new URL('../..', import.meta.url))
   // The office sign-in's own services (a link's address, the office clock) with test sessions.
   app = await buildApp(
