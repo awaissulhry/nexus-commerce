@@ -10,7 +10,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import type { ConditionBody } from '../api'
-import { fieldsOf, MEANINGS, NAMESPACE, said, saveHeld, type ApprovalRulesModel, type RuleDraft } from '../model'
+import { fieldsOf, isRetired, MEANINGS, NAMESPACE, offeredKinds, said, saveHeld, type ApprovalRulesModel, type RuleDraft } from '../model'
 import { startDraft } from '../new-kind/new-kind'
 
 export interface ApprovalRuleDialogActions {
@@ -42,9 +42,12 @@ export function ApprovalRuleDialog({ model, actions, onClose }: { model: Approva
   }, [dialog.draft])
   const kinds = model.kinds.status === 'ready' ? model.kinds.data.kinds : []
   const kind = kinds.find((entry) => entry.kind === draft.kind) ?? null
+  // B-OP-010: a new rule picks only a kind that still takes rules; a rule kept of a retired kind reads, never edits.
+  const choices = rule ? kinds : offeredKinds(kinds)
+  const retired = rule !== null && isRetired(rule)
   const fields = fieldsOf(kind, locale, t('rules.held.money'))
   const builderHeld = draft.condition.rows.length > 0 ? ruleHeldReason(draft.condition, fields, ds.ruleBuilder) : null
-  const readOnly = !model.manage || (rule !== null && !rule.canChange)
+  const readOnly = !model.manage || (rule !== null && !rule.canChange) || retired
   const held = saveHeld(draft, { manage: model.manage, offline: model.offline, busy: model.busy, rule, builderHeld })
   const roles = model.roles.status === 'ready' ? model.roles.data : []
   const meanings = model.kinds.status === 'ready' ? model.kinds.data.meanings : []
@@ -95,6 +98,11 @@ export function ApprovalRuleDialog({ model, actions, onClose }: { model: Approva
       >
         {dialog.problem && <Banner tone="danger" title={t(dialog.problem)} />}
         {rule && !rule.canChange && <Banner tone="warning" title={t(rule.heldReason ? 'rules.held.money' : 'rules.held.cannotChange')} />}
+        {rule && retired && (
+          <Banner tone="info" title={said(rule.retired, locale)}>
+            {t('rules.retiredBody')}
+          </Banner>
+        )}
         {!rule && <Banner tone="info" title={t('rules.dialog.writtenOff')} />}
         {model.kinds.status === 'loading' ? (
           <Skeleton height={120} />
@@ -106,7 +114,7 @@ export function ApprovalRuleDialog({ model, actions, onClose }: { model: Approva
               <Field label={t('rules.dialog.kind')} required hint={rule ? t('rules.dialog.kindFixed') : undefined}>
                 <Select value={draft.kind ?? ''} disabled={rule !== null || readOnly} onChange={(event) => set({ kind: event.target.value || null, condition: { combinator: 'and', rows: [] } })} aria-label={t('rules.dialog.kind')}>
                   <option value="">{t('rules.dialog.pickKind')}</option>
-                  {kinds.map((entry) => (
+                  {choices.map((entry) => (
                     <option key={entry.kind} value={entry.kind}>
                       {said(entry.label, locale)}
                     </option>

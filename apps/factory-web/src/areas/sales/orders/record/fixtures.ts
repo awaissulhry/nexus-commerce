@@ -307,7 +307,8 @@ const W2B_323 = [
   { id: 'w2b-323-ask', label: 'W2b · Sales · Ask for a yes (a note for who decides)', model: d323('sales', waitingOrder, {}, { approval: { value: APPROVAL_NOBODY, problem: null }, dialog: { kind: 'ask', note: 'Cliente storico, prezzo concordato con il titolare.' } }) },
   { id: 'w2b-323-priority', label: 'W2b · Sales · Set priority (⋯): Urgent with its reason', model: d323('sales', production, {}, { dialog: { kind: 'priority', level: 'URGENT', reason: 'Il cliente apre il negozio il 1° dicembre.' } }) },
   { id: 'w2b-323-season', label: 'W2b · Sales · Set season (⋯): the open seasons', model: d323('sales', production, {}, { dialog: { kind: 'season', seasonId: '' }, seasons: [{ id: '0190f0e2-5353-7000-8000-000000000001', companyId: COMPANY, code: 'FW27', name: 'Autunno-inverno 2027', startsOn: '2027-07-01', endsOn: '2028-01-31', orderBookClosesOn: '2027-03-31', status: 'OPEN', state: 'OPEN', version: 1 }, { id: '0190f0e2-5353-7000-8000-000000000002', companyId: COMPANY, code: 'SS27', name: 'Primavera-estate 2027', startsOn: '2027-01-15', endsOn: '2027-06-30', orderBookClosesOn: '2026-10-15', status: 'OPEN', state: 'BOOK_CLOSED', version: 2 }] }) },
-  { id: 'w2b-323-notice', label: 'W2b · Sales · After the priced change: recorded, waiting for a yes', model: d323('sales', amended(production), { tab: 'changes' }, { notice: { tone: 'success', words: { key: 'notice.pricedWaiting', params: { revision: 3 } } } }) },
+  // B-OP-010: a priced change applies at once (no yes is asked any more).
+  { id: 'w2b-323-notice', label: 'W2b · Sales · After the priced change: recorded, applied at once', model: d323('sales', amended(production), { tab: 'changes' }, { notice: { tone: 'success', words: { key: 'notice.priced', params: { revision: 3 } } } }) },
 ]
 
 function OrderDesign({ model }: { model: RecordCase }) {

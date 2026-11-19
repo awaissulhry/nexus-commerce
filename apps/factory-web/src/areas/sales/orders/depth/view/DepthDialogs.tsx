@@ -361,8 +361,8 @@ function PricedDialog({ order, model, actions }: { order: Order; model: OrderDep
           <p className="fw-sod-hint">{deposit && model.can.price && deposit.amount !== undefined ? d('priced.depositValue', { amount: money(deposit.amount, order.currency, locale), pct: Number(deposit.pct).toLocaleString(locale === 'it' ? 'it-IT' : 'en-GB', { maximumFractionDigits: 2 }) }) : d('priced.depositNone')}</p>
         )}
       </fieldset>
-      {value?.yes === 'WOULD_ASK' && <Banner tone="warning" title={d('priced.yes.WOULD_ASK')} />}
-      {value?.yes === 'NOBODY_TO_ASK' && <Banner tone="info" title={d('priced.yes.NOBODY_TO_ASK')} />}
+      {/* B-OP-010: an office change applies at once — no approval. */}
+      {value?.yes === 'APPLIES_AT_ONCE' && <Banner tone="info" title={d('priced.yes.APPLIES_AT_ONCE')} />}
       <p className="fw-sod-hint">{d('priced.customer')}</p>
       <Field label={d('priced.reason')} hint={d('priced.reasonHint')}>
         <Textarea value={draft.reason} onChange={(event) => actions?.onPricedDraft?.({ reason: event.target.value })} rows={2} maxLength={520} />

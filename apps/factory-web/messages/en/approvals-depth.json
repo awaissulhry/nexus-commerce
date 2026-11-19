@@ -397,7 +397,8 @@
       "dueHours": "The time to decide is whole hours, from 1 to 2160.",
       "notRegistered": "This kind of request is not checked yet: its rule cannot be switched on.",
       "reading": "Reading the rules…",
-      "noKinds": "No kind of request can have a rule yet."
+      "noKinds": "No kind of request can have a rule yet.",
+      "retired": "Office changes apply at once: this kind of request asks no yes any more, so its rule is not switched on."
     },
     "problem": {
       "approver": "That approver cannot decide approvals here: pick a role that approves.",
@@ -453,6 +454,7 @@
       "result": "Would have asked for {asked} of the last {tested} ({kind}).",
       "approvers": "Would approve: {names}.",
       "noApprovers": "Nobody holds that role there yet: nobody could approve it."
-    }
+    },
+    "retiredBody": "Kept from before: office changes of an order apply at once, so this rule never asks. A request it asked earlier is still decided in Home › Approvals or on the order. Switch it off to tidy the list."
   }
 }

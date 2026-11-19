@@ -1,4 +1,3 @@
-import { chooseRules } from '@nexus/factory-domain/approvals/rules'
 import { InvalidStateError, NotFoundError, type Issue } from '@nexus/factory-domain/core/errors'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
@@ -17,7 +16,6 @@ import {
   PENITENTIAL_OFF_WORDS,
   pricedInputProblems,
   pricedPartsOf,
-  SALES_ORDER_CHANGE_FIELDS,
   type PricedInput,
   type PricedPart,
 } from '@nexus/factory-domain/sales/order-changes/priced'
@@ -34,10 +32,12 @@ import { amendInCommand, diffView, planAmendment, type AmendBody } from '../orde
 import { officeOrder, recordAfter } from '../orders/moves'
 import { readOrder, readOrderFacts, type OrderRow, type Reader } from '../orders/store'
 import { frozenChangesOf } from './freeze'
-import { AMENDMENT_CHANGE_COLUMNS, changeFactsFor, changeFactsOf, pendingChangeYes } from './yes'
+import { AMENDMENT_CHANGE_COLUMNS, changeFactsOf, pendingChangeYes } from './yes'
 import { frozenProblems } from '@nexus/factory-domain/sales/order-changes/freeze'
 // B-SA-041: a put-back makes the change's waiting work-order changes stale.
 import { staleChangesInCommand } from '../../production/work-order-changes/decide'
+// B-OP-012 (order page plan N2, D1): the work orders follow a priced change and a put-back in their command where the person may.
+import { withAutoApply } from '../../production/work-order-changes/auto'
 
 /**
  * Priced change requests after the start, their extra deposit, the new yes and the put-back (B-W2b-309; SAL-219, SAL-221,
@@ -45,10 +45,10 @@ import { staleChangesInCommand } from '../../production/work-order-changes/decid
  * order.changes.list "Customer re-acceptance: not needed / waiting / accepted").
  *
  *   POST /sales/orders/:orderId/priced-changes/preview   orders.manage: the change as it would be written (W2a's diff), its
- *                                                        parts and fee, the extra deposit, whether a yes would be asked, the
- *                                                        freeze rules' problems — nothing written
+ *                                                        parts and fee, the extra deposit, that it applies at once (B-OP-010:
+ *                                                        no yes is asked), the freeze rules' problems — nothing written
  *   POST /sales/orders/:orderId/priced-changes           orders.manage: ONE command — W2a's amendment carrying its price
- *                                                        (./apply.ts): parts, fee, extra deposit, the new yes; the customer
+ *                                                        (./apply.ts): parts, fee, extra deposit (B-OP-010: no yes); the customer
  *                                                        must accept it again (reacceptanceNeeded: B-W2b-184's REVISED_ORDER
  *                                                        link on the amendment, which now shows the parts, the fee and the
  *                                                        deposit)
@@ -108,14 +108,6 @@ export async function previewPricedChange(caller: CommandCaller, orderId: string
         deposit = { amount: extra.amount, pct: extra.pct, basis: extra.basis, kind, growth }
       }
     }
-    // Whether a yes would be asked (the same rules and facts the command tests).
-    const rules = await client.approvalRule.findMany({ where: { kind: 'SALES_ORDER_CHANGE', active: true, OR: [{ companyId: null }, { companyId: order.companyId }] }, select: { id: true, companyId: true, sequence: true, createdAt: true, active: true, effectiveFrom: true, condition: true, approverRoleId: true, approverUserId: true } })
-    let yes: 'WOULD_ASK' | 'NO_RULE' | 'NOBODY_TO_ASK' = 'NO_RULE'
-    if (rules.length > 0) {
-      const change = { amendmentId: '00000000-0000-4000-8000-000000000000', revision, reason: body.reason ?? '', before: plan.before, after: plan.after, netAmountBefore: plan.diff.netBefore, netAmountAfter: plan.diff.netAfter, grossAmountBefore: plan.diff.grossBefore, grossAmountAfter: plan.diff.grossAfter, priceDeltaLines: parts.length > 0 ? parts : null, feeAmount, depositRequestId: null, stage: frozen.furthest }
-      const choice = chooseRules(rules, { companyId: order.companyId, facts: await changeFactsFor(client, order, change), askers: [context.actorId] }, SALES_ORDER_CHANGE_FIELDS, now)
-      yes = choice.matched.length === 0 ? 'NO_RULE' : choice.deciding === null ? 'NOBODY_TO_ASK' : 'WOULD_ASK'
-    }
     return {
       ok: problems.length === 0,
       problems,
@@ -127,7 +119,8 @@ export async function previewPricedChange(caller: CommandCaller, orderId: string
       /** The net change of the lines plus the fee (what the customer is asked, before VAT). */
       changeAmount: asMoney('price', plan.diff.netAfter - plan.diff.netBefore + (feeAmount ?? 0)),
       deposit: asMoney('price', deposit ? { amount: asMoney('price', deposit.amount), pct: deposit.pct, basis: deposit.basis, kind: deposit.kind, growthAmount: asMoney('price', deposit.growth) } : null),
-      yes,
+      // B-OP-010 (order page plan N2, decision D2): an office change applies at once — "Applies at once — no approval".
+      yes: 'APPLIES_AT_ONCE' as const,
       stage: frozen.furthest ? { stage: frozen.furthest, words: STAGE_WORDS[frozen.furthest] } : null,
     }
   })
@@ -138,9 +131,14 @@ export async function applyPricedChange(caller: CommandCaller, orderId: string, 
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
   // The command's result is plain JSON (a replay answers from its receipt): the amendment's id, never amendInCommand's `before` Map.
-  const { result } = await command(caller, { name: 'orders.pricedChange', idempotencyKey, input: { orderId, ...body } }, async (tools) => ({ amendmentId: (await amendInCommand(tools, context.tenantId, order, amendOf(body), { priced: pricedOf(body) })).amendmentId }))
+  const { result } = await withAutoApply((autoApply) =>
+    command(caller, { name: 'orders.pricedChange', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
+      const done = await amendInCommand(tools, context.tenantId, order, amendOf(body), { priced: pricedOf(body), autoApply })
+      return { amendmentId: done.amendmentId, workOrders: done.workOrders }
+    }),
+  )
   const change = await caller.withClient(async (client) => (await changesOf(client, (await readOrder(client, order.id))!, context)).find((entry) => entry.id === result.amendmentId)!)
-  return { order: await recordAfter(caller, order.id), change }
+  return { order: await recordAfter(caller, order.id), change, /* B-OP-012 */ workOrders: result.workOrders }
 }
 
 // ---- the order's changes ----------------------------------------------------------------------------------------------------
@@ -231,7 +229,7 @@ export function putBackBody(before: OrderSnapshot, linesNow: ReadonlySet<string>
 export async function putBackChange(caller: CommandCaller, orderId: string, amendmentId: string, body: { readonly version: number; readonly reason?: string | undefined }, idempotencyKey?: string) {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
-  const { result } = await command(caller, { name: 'orders.putBackChange', idempotencyKey, input: { orderId, amendmentId, ...body } }, async (tools) => {
+  const { result } = await withAutoApply((autoApply) => command(caller, { name: 'orders.putBackChange', idempotencyKey, input: { orderId, amendmentId, ...body } }, async (tools) => {
     const { tx } = tools
     // amendInCommand takes the locks in their order (lines, deposit requests, then the order at this version).
     const fresh = (await readOrder(tx, order.id))!
@@ -250,7 +248,7 @@ export async function putBackChange(caller: CommandCaller, orderId: string, amen
     }
     // B-SA-041: the work-order changes the change proposed and nobody applied yet are no longer needed (STALE): it is put back.
     await staleChangesInCommand(tools, { amendmentId })
-    const { amendmentId: putBackId } = await amendInCommand(tools, context.tenantId, fresh, amend, { putBack: true })
+    const { amendmentId: putBackId, workOrders } = await amendInCommand(tools, context.tenantId, fresh, amend, { putBack: true, autoApply })
     // Its extra deposit, while nothing is paid on it.
     let depositCancelled = false
     if (row.depositRequestId) {
@@ -270,10 +268,10 @@ export async function putBackChange(caller: CommandCaller, orderId: string, amen
       cleared = count === 1
     }
     tools.audit({ action: 'orders.putBackChange', recordType: 'SalesOrder', recordId: fresh.id, companyId: fresh.companyId, after: { amendmentId, revision: row.revision, putBackAmendmentId: putBackId, putBackRevision: after.revision, depositCancelled, reacceptanceCleared: cleared }, reason })
-    return { amendmentId: putBackId, depositCancelled }
-  })
+    return { amendmentId: putBackId, depositCancelled, workOrders }
+  }))
   const change = await caller.withClient(async (client) => (await changesOf(client, (await readOrder(client, order.id))!, context)).find((entry) => entry.id === result.amendmentId)!)
-  return { order: await recordAfter(caller, order.id), change, depositCancelled: result.depositCancelled }
+  return { order: await recordAfter(caller, order.id), change, depositCancelled: result.depositCancelled, /* B-OP-012 */ workOrders: result.workOrders }
 }
 
 // ---- deposit kinds ---------------------------------------------------------------------------------------------------------

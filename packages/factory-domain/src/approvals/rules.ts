@@ -69,6 +69,16 @@ export const APPROVAL_KIND_WORDS: Readonly<Record<ApprovalTaskKind, Words>> = Ob
   BRAND_OVERRIDE: { en: 'Decision for a customer', it: 'Decisione per conto di un cliente' },
 })
 
+// B-OP-010 (order page plan N2, decision D2; review R-3): a kind no office change asks any more. It stays registered, so an old
+// PENDING request is still decided or taken back in place; Approvals › Rules makes no new rule of it and switches none on, and a
+// rule of it kept from before reads these words (it never fires: nothing asks).
+export const RETIRED_RULE_KINDS: Readonly<Partial<Record<ApprovalTaskKind, Words>>> = Object.freeze({
+  SALES_ORDER_CHANGE: { en: 'Off: office changes apply at once', it: "Disattivata: le modifiche dell'ufficio si applicano subito" },
+})
+/** The words of a retired kind's rules; null: the kind takes rules. */
+export const retiredRuleWords = (kind: string): Words | null => (RETIRED_RULE_KINDS as Readonly<Record<string, Words | undefined>>)[kind] ?? null
+// end B-OP-010
+
 /** What a signature means (PLT-105). */
 export const APPROVAL_MEANINGS = ['REVIEWED', 'APPROVED', 'RELEASED', 'VERIFIED'] as const
 export type ApprovalMeaning = (typeof APPROVAL_MEANINGS)[number]
@@ -494,6 +504,8 @@ export const APPROVAL_REFUSALS = Object.freeze({
   APPROVER_ROLE: 'Name an office role whose people may decide approvals, or one person.',
   APPROVER_PERSON: 'Name an office person who is active and may decide approvals.',
   CHANGE_GRAIN: 'This rule tests a money figure your roles do not show: someone who sees it changes the rule.',
+  // B-OP-010
+  RULE_RETIRED: 'Office changes of an order apply at once: this kind of request asks no yes any more, so no rule of it is made or switched on.',
 })
 export type ApprovalRefusal = keyof typeof APPROVAL_REFUSALS
 

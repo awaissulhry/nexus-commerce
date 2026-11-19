@@ -117,8 +117,7 @@
     "planned": "Pianificato dalla distinta: {made} nuovi, {changed} cambiati, {removed} tolti.",
     "putBack": "L’ordine è tornato com’era.",
     "putBackDeposit": "Revisione {revision} annullata; l’acconto aggiuntivo ancora aperto è stato annullato.",
-    "priced": "Modifica con prezzo {revision} registrata: il cliente la accetta dal link che inviamo.",
-    "pricedWaiting": "Modifica con prezzo {revision} registrata; è in attesa di approvazione in Home › Approvazioni."
+    "priced": "Modifica con prezzo {revision} registrata: il cliente la accetta dal link che inviamo."
   },
   "problem": {
     "read": {
@@ -229,8 +228,7 @@
     "depositValue": "Acconto aggiuntivo {amount} ({pct} % dell’aumento).",
     "depositNone": "Nessun acconto aggiuntivo: l’ordine non aumenta.",
     "yes": {
-      "WOULD_ASK": "Questa modifica attenderà un’approvazione (Home › Approvazioni).",
-      "NOBODY_TO_ASK": "Una regola chiede un’approvazione ma nessun altro può decidere: la chiede un’altra persona dell’ufficio."
+      "APPLIES_AT_ONCE": "Si applica subito — senza approvazione"
     },
     "customer": "Il cliente la accetta o la rifiuta dopo; un rifiuto lo annulla una persona.",
     "reason": "Perché (resta con la modifica)",

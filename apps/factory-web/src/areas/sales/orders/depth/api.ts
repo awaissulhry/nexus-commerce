@@ -33,7 +33,8 @@ export type CustomerDecision = (typeof CUSTOMER_DECISIONS)[number]
 /** The deposit kinds an extra deposit may take; the third stays off until the accountant confirms it (GATE-ACCOUNTANT). */
 export const EXTRA_DEPOSIT_KINDS = ['ACCONTO', 'CAPARRA', 'CAPARRA_PENITENZIALE'] as const
 export type ExtraDepositKind = (typeof EXTRA_DEPOSIT_KINDS)[number]
-export const YES_PREVIEWS = ['WOULD_ASK', 'NO_RULE', 'NOBODY_TO_ASK'] as const
+/** B-OP-010 (order page plan N2, decision D2): an office change asks no yes any more — it applies at once. */
+export const YES_PREVIEWS = ['APPLIES_AT_ONCE'] as const
 export const FINISH_SOURCES = ['STOCK', 'BOARD', 'WORK_ORDER_DUE', 'PLANNED_ORDER', 'CAPABLE', 'NONE'] as const
 export type FinishSource = (typeof FINISH_SOURCES)[number]
 export const RISK_STATES = ['LATE', 'AT_RISK', 'NOT_PROMISED', 'ON_TIME'] as const

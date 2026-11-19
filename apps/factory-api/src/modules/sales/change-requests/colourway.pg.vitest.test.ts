@@ -148,7 +148,7 @@ describe('B-PR-27a: a line in another colourway, asked from the portal and accep
     expect(mine).toMatchObject({ status: 'ACCEPTED', answer: 'Made-up: done, in red.' })
   })
 
-  it('B-SA-042: while nothing of it is cut, a line a work order makes changes colour; the old line\'s cells are proposed lowered in the same command', async () => {
+  it('B-SA-042: while nothing of it is cut, a line a work order makes changes colour; the old line\'s cells are proposed lowered in the same command — B-OP-012: its DRAFT follows at once', async () => {
     const asked = await send(buyerA, 'POST', `/portal/sales-orders/${orders.inWork.orderId}/change-requests`, { kind: 'CHANGE', colourways: [{ lineId: orders.inWork.lineId, colourwayId: RED }] })
     expect(asked.status, JSON.stringify(asked.body)).toBe(201)
     ids.inWork = asked.body.request.id as string
@@ -156,14 +156,16 @@ describe('B-PR-27a: a line in another colourway, asked from the portal and accep
     expect(record.preview).toMatchObject({ ok: true, workOrders: { extra: [], needsOutcome: false } })
     const accepted = await send(sales, 'POST', `/sales/change-requests/${ids.inWork}/accept`, { version: 1 })
     expect(accepted.status, JSON.stringify(accepted.body)).toBe(200)
-    expect(accepted.body.workOrders).toMatchObject({ proposed: [{ kind: 'LOWER_TO_ORDER', workOrderId: made.inWork.id }], extra: [], extraOutcome: null })
+    // B-OP-012 (D1): a DRAFT follows the change for whoever may change the order — Sales here: the old line's cell to 0 cancels it.
+    expect(accepted.body.workOrders).toMatchObject({ proposed: [{ kind: 'LOWER_TO_ORDER', workOrderId: made.inWork.id }], extra: [], extraOutcome: null, applied: [{ workOrderId: made.inWork.id, route: 'CANCEL_WORK_ORDER', reprint: false }], waiting: [] })
     const lines = await linesOf(orders.inWork.orderId)
     expect(lines).toHaveLength(2)
     expect(lines[0]).toMatchObject({ id: orders.inWork.lineId, closedShortQuantity: expect.any(Number) })
-    // One command: the change waits for who manages the work order, the old line's cell to 0 (the draft is cancelled on apply).
+    // One command: the change, the old line's cell to 0 — B-OP-012: applied in it (nothing is on the floor yet), the draft cancelled.
     expect(await admin('SELECT status::text AS status, kind::text AS kind, "requestId"::text AS "requestId", cells FROM "WorkOrderChange" WHERE "salesOrderId" = $1', [orders.inWork.orderId])).toEqual([
-      { status: 'PROPOSED', kind: 'LOWER_TO_ORDER', requestId: ids.inWork, cells: [{ salesOrderLineId: orders.inWork.lineId, size: '50', from: 2, to: 0, workOrderSizeId: (made.inWork.cells as Json[])[0]!.id }] },
+      { status: 'APPLIED', kind: 'LOWER_TO_ORDER', requestId: ids.inWork, cells: [{ salesOrderLineId: orders.inWork.lineId, size: '50', from: 2, to: 0, workOrderSizeId: (made.inWork.cells as Json[])[0]!.id }] },
     ])
+    expect(await admin('SELECT status::text AS status FROM "WorkOrder" WHERE id = $1', [made.inWork.id])).toEqual([{ status: 'CANCELLED' }])
   })
 
   it('B-SA-042: once something of the line is cut, a colour change is held in words (a cut piece never changes colour), nothing written', async () => {

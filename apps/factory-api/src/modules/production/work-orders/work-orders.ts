@@ -1,5 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
-import { InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
@@ -20,6 +20,8 @@ import {
 } from '@nexus/factory-domain/production/work-orders/cells'
 import { daysLate, OPEN_STATUSES, type WorkOrderKind, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_MANAGE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
+// B-OP-012 (D1): an office change carries its DRAFT work orders along for the person who may change the order.
+import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
 import { relativeRange, type DayRange, type RelativeDay } from '@nexus/factory-domain/views/quick/relative'
 import { command, type CommandCaller, type CommandSpec, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
@@ -454,13 +456,30 @@ export async function numberPreview(db: Reader, companyId: string): Promise<stri
  */
 async function linesFor(caller: CommandCaller, lineIds: readonly string[]): Promise<Map<string, LineRow>> {
   const context = officeContextOf(caller)
-  const lines = await caller.withClient((client) => readOrderLines(client, lineIds))
+  return reachedLines(context, await caller.withClient((client) => readOrderLines(client, lineIds)), lineIds)
+}
+
+/**
+ * B-OP-011: every named line read is one the person sees with workorders.view (else not found, in the words of an unknown id).
+ * B-OP-012: for an office change of the order, the person who may change that order (orders.manage over its company and customer).
+ */
+function reachedLines(context: ReturnType<typeof officeContextOf>, lines: Map<string, LineRow>, lineIds: readonly string[], right: DraftRight = 'WORK_ORDER'): Map<string, LineRow> {
+  const permission = right === 'ORDER' ? ORDERS_MANAGE : WORKORDERS_VIEW
   for (const lineId of lineIds) {
     const line = lines.get(lineId)
-    if (!line || !can(actorOf(context), WORKORDERS_VIEW, { companyId: line.companyId, partyId: line.partyId })) throw new NotFoundError('Sales order line not found.')
+    if (!line || !can(actorOf(context), permission, { companyId: line.companyId, partyId: line.partyId })) throw new NotFoundError('Sales order line not found.')
   }
   return lines
 }
+
+// ── B-OP-012 (order page plan N2, decision D1; review R-4): who a draft's change is carried out for ──
+/**
+ * 'WORK_ORDER': workorders.manage over the work order (its own routes, the change's apply). 'ORDER': an office change of the order
+ * carries its DRAFT work orders along for the person who may change that order (orders.manage over its company and customer,
+ * checked by the caller): nothing is on the floor yet. A released work order always asks workorders.manage (the caller's rule).
+ */
+export type DraftRight = 'WORK_ORDER' | 'ORDER'
+// ── end B-OP-012 ──
 
 /** The requests' problems against the lines as read under their locks: 400 with every one. */
 function assertCells(requests: readonly (CellRequest & { index: number })[], lines: ReadonlyMap<string, LineRow>, target: CellTarget, path: string): void {
@@ -542,13 +561,12 @@ export interface PlannedWorkOrderSource {
 // ── B-SA-041 (sales page plan, R1): a new DRAFT made by a WorkOrderChange applied (MAKE_MORE naming no work order) ──
 /**
  * A work order made by applying a WorkOrderChange (modules/production/work-order-changes apply.ts) through this same create (the
- * lines, cells, site, revision, number and checks are W1's): the command is on the change (its version bump locks it, at the
- * version the person read), and `inCommand` (its APPLIED write naming the new work order, audit row and event) runs in the same
- * transaction once the work order is written.
+ * lines, cells, site, revision, number and checks are W1's), inside the command the caller opened (B-OP-011: createWorkOrderInCommand;
+ * the change's own apply puts it on the change, its version bump locking it at the version the person read): `inCommand` (its
+ * APPLIED write naming the new work order, audit row and event) runs in the same transaction once the work order is written.
  */
 export interface ChangeWorkOrderSource {
   readonly changeId: string
-  readonly version: number
   readonly inCommand: (tools: CommandTools, workOrder: { readonly id: string; readonly number: string; readonly pieces: number }) => Promise<void>
 }
 // ── end B-SA-041 ──
@@ -568,44 +586,90 @@ async function revisionOf(db: Reader, styleId: string, revisionId: string, path:
  * the lines fix, else the style's released one. Due date: the earliest promise (or request) of its lines and orders;
  * priority: the highest.
  */
-export async function createWorkOrder(caller: CommandCaller, body: CreateInput, idempotencyKey?: string, sample?: SampleWorkOrder, planned?: PlannedWorkOrderSource, /* B-SA-041 */ change?: ChangeWorkOrderSource): Promise<{ workOrder: WorkOrderView }> {
+export async function createWorkOrder(caller: CommandCaller, body: CreateInput, idempotencyKey?: string, sample?: SampleWorkOrder, planned?: PlannedWorkOrderSource): Promise<{ workOrder: WorkOrderView }> {
   const context = officeContextOf(caller)
+  const lineIds = namedLines(body)
+  const lines = await linesFor(caller, lineIds)
+  const plan = await caller.withClient((client) => draftPlanOf(client, context, body, lines, lineIds, sample))
+  const spec: CommandSpec = sample
+    ? { name: 'workorders.createSample', idempotencyKey, input: { ...body, sampleRoundId: sample.roundId }, record: { type: 'SampleRound', id: sample.roundId, expectedVersion: sample.version } }
+    : planned // B-W2b-293
+      ? { name: 'workorders.createFromPlanned', idempotencyKey, input: { ...body, plannedWorkOrderId: planned.plannedWorkOrderId }, record: { type: 'PlannedWorkOrder', id: planned.plannedWorkOrderId, expectedVersion: planned.version } }
+      : { name: 'workorders.create', idempotencyKey, input: body }
+  const { result } = await command(caller, spec, (tools) => writeDraftInCommand(tools, context, body, plan, { sample, planned }))
+  return result
+}
+
+// ── B-OP-011 (order page plan N2; 13-backend §1.2): the one create, read and written by its route or inside an open command ──
+/**
+ * A new DRAFT made by a WorkOrderChange applied inside a command that is already open (MAKE_MORE naming no work order): the
+ * work-order change's own apply (modules/production/work-order-changes apply.ts, its command on the change), and an office
+ * change of the order that carries its work orders along (B-OP-012). Every rule of createWorkOrder, read in this transaction;
+ * `change.inCommand` (the change APPLIED, naming the DRAFT) runs once the DRAFT is written.
+ */
+export async function createWorkOrderInCommand(tools: CommandTools, context: ReturnType<typeof officeContextOf>, body: CreateInput, change: ChangeWorkOrderSource, /* B-OP-012 */ right: DraftRight = 'WORK_ORDER'): Promise<{ workOrder: WorkOrderView }> {
+  const lineIds = namedLines(body)
+  const lines = reachedLines(context, await readOrderLines(tools.tx, lineIds), lineIds, right)
+  const plan = await draftPlanOf(tools.tx, context, body, lines, lineIds, undefined, right)
+  return writeDraftInCommand(tools, context, body, plan, { change })
+}
+
+/** The order lines a create names, each once (400 otherwise). */
+function namedLines(body: CreateInput): string[] {
   const lineIds = body.lines.map((line) => line.salesOrderLineId)
   const named = new Set<string>()
   body.lines.forEach((line, index) => {
     if (named.has(line.salesOrderLineId)) throw new ValidationError('An order line is named twice.', [{ path: `body/lines/${index}/salesOrderLineId`, message: 'Name each order line once.' }])
     named.add(line.salesOrderLineId)
   })
-  const lines = await linesFor(caller, lineIds)
+  return lineIds
+}
+
+/** What a new DRAFT is made of, read before its writes (see createWorkOrder). */
+interface DraftPlan {
+  readonly lineIds: readonly string[]
+  readonly first: LineRow
+  readonly kind: 'SAMPLE' | 'MADE_TO_MEASURE' | 'SIZE_GRID'
+  readonly style: Prisma.StyleGetPayload<{ select: typeof STYLE_COLUMNS }>
+  readonly site: Prisma.SiteGetPayload<{ select: typeof SITE_COLUMNS }>
+  readonly revisionId: string
+  readonly dueDate: BusinessDate | null
+  readonly priority: number
+  readonly target: CellTarget
+}
+
+/** The new DRAFT's site, revision, due date and priority, read in `db`; workorders.manage over its site and customer (B-OP-012: or the order's own right). */
+async function draftPlanOf(db: Reader, context: ReturnType<typeof officeContextOf>, body: CreateInput, lines: ReadonlyMap<string, LineRow>, lineIds: readonly string[], sample?: SampleWorkOrder, right: DraftRight = 'WORK_ORDER'): Promise<DraftPlan> {
   const first = lines.get(lineIds[0]!)!
   // B-W2b-368 (XF1:01): a unit alone, its revision on its one cell; made-to-measure on for its template (GATE-MTM).
   const unit = unitOfRequest(lines, lineIds, sample !== undefined)
-  if (unit) await caller.withClient((client) => assertUnitStarted(client, unit))
+  if (unit) await assertUnitStarted(db, unit)
   const kind = sample ? 'SAMPLE' : unit ? 'MADE_TO_MEASURE' : 'SIZE_GRID'
 
-  const plan = await caller.withClient(async (client) => {
-    const style = await client.style.findUniqueOrThrow({ where: { id: first.styleId }, select: STYLE_COLUMNS })
-    const lineSites = new Set([...lines.values()].flatMap((line) => (line.siteId ? [line.siteId] : [])))
-    let siteId = body.siteId ?? (lineSites.size === 1 ? [...lineSites][0]! : null)
-    if (!siteId && lineSites.size === 0) {
-      const plants = await client.site.findMany({ where: { companyId: first.companyId, kind: 'PLANT', status: 'ACTIVE' }, select: { id: true } })
-      if (plants.length === 1) siteId = plants[0]!.id
-    }
-    if (!siteId) throw new ValidationError('Name the site that makes it.', [{ path: 'body/siteId', message: 'Required: the lines name no single site and the company has several plants.' }])
-    const site = isUuid(siteId) ? await client.site.findUnique({ where: { id: siteId }, select: SITE_COLUMNS }) : null
-    if (!site || site.companyId !== first.companyId || site.kind !== 'PLANT' || site.status !== 'ACTIVE') {
-      throw new ValidationError("Not an active plant of the order's company.", [{ path: 'body/siteId', message: "Expected an active plant (site kind PLANT) of the order lines' company." }])
-    }
-    assertMay(context, WORKORDERS_MANAGE, { companyId: site.companyId, siteId: site.id, partyId: first.partyId /* B-PR-03 */ }, 'Sales order line')
-    const askedId = sample?.revisionId ?? body.styleRevisionId
-    const asked = askedId ? await revisionOf(client, style.id, askedId, 'body/styleRevisionId') : null
-    const released = await readReleasedRevision(client, style.id)
-    const chosen = revisionFor(asked?.id ?? null, [...lines.values()], released?.id ?? null)
-    if (chosen.problem) throw new ValidationError(chosen.problem, [{ path: 'body/styleRevisionId', message: chosen.problem }])
-    const orders = await client.salesOrder.findMany({ where: { id: { in: [...new Set([...lines.values()].map((line) => line.orderId))] } }, select: { id: true, priority: true, requestedDate: true, promiseDate: true } })
-    return { style, site, revisionId: chosen.revisionId, orders }
-  })
-  const { style, site, revisionId, orders } = plan
+  const style = await db.style.findUniqueOrThrow({ where: { id: first.styleId }, select: STYLE_COLUMNS })
+  const lineSites = new Set([...lines.values()].flatMap((line) => (line.siteId ? [line.siteId] : [])))
+  let siteId = body.siteId ?? (lineSites.size === 1 ? [...lineSites][0]! : null)
+  if (!siteId && lineSites.size === 0) {
+    const plants = await db.site.findMany({ where: { companyId: first.companyId, kind: 'PLANT', status: 'ACTIVE' }, select: { id: true } })
+    if (plants.length === 1) siteId = plants[0]!.id
+  }
+  if (!siteId) throw new ValidationError('Name the site that makes it.', [{ path: 'body/siteId', message: 'Required: the lines name no single site and the company has several plants.' }])
+  const site = isUuid(siteId) ? await db.site.findUnique({ where: { id: siteId }, select: SITE_COLUMNS }) : null
+  if (!site || site.companyId !== first.companyId || site.kind !== 'PLANT' || site.status !== 'ACTIVE') {
+    throw new ValidationError("Not an active plant of the order's company.", [{ path: 'body/siteId', message: "Expected an active plant (site kind PLANT) of the order lines' company." }])
+  }
+  // B-OP-012 (D1): an office change's new DRAFT is made for the person who may change the order (nothing is on the floor yet).
+  if (right === 'ORDER') {
+    if (!can(actorOf(context), ORDERS_MANAGE, { companyId: site.companyId, partyId: first.partyId })) throw new ForbiddenError()
+  } else assertMay(context, WORKORDERS_MANAGE, { companyId: site.companyId, siteId: site.id, partyId: first.partyId /* B-PR-03 */ }, 'Sales order line')
+  const askedId = sample?.revisionId ?? body.styleRevisionId
+  const asked = askedId ? await revisionOf(db, style.id, askedId, 'body/styleRevisionId') : null
+  const released = await readReleasedRevision(db, style.id)
+  const chosen = revisionFor(asked?.id ?? null, [...lines.values()], released?.id ?? null)
+  if (chosen.problem) throw new ValidationError(chosen.problem, [{ path: 'body/styleRevisionId', message: chosen.problem }])
+  const orders = await db.salesOrder.findMany({ where: { id: { in: [...new Set([...lines.values()].map((line) => line.orderId))] } }, select: { id: true, priority: true, requestedDate: true, promiseDate: true } })
+  const revisionId = chosen.revisionId
+
   const orderOf = new Map(orders.map((order) => [order.id, order]))
   const dues = [...lines.values()].flatMap((line) => {
     const order = orderOf.get(line.orderId)
@@ -616,91 +680,94 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
   const priority = body.priority ?? Math.max(0, ...[...lines.values()].map((line) => line.priority ?? orderOf.get(line.orderId)?.priority ?? 0))
   // B-PR-01: one customer per work order, the lines' (B-PR-02's lineProblems refuses a line of another customer).
   const target: CellTarget = { companyId: site.companyId, siteId: site.id, styleId: style.id, styleSizes: style.sizes, styleRevisionId: revisionId, partyId: first.partyId }
+  return { lineIds, first, kind, style, site, revisionId, dueDate, priority, target }
+}
 
-  const spec: CommandSpec = sample
-    ? { name: 'workorders.createSample', idempotencyKey, input: { ...body, sampleRoundId: sample.roundId }, record: { type: 'SampleRound', id: sample.roundId, expectedVersion: sample.version } }
-    : planned // B-W2b-293
-      ? { name: 'workorders.createFromPlanned', idempotencyKey, input: { ...body, plannedWorkOrderId: planned.plannedWorkOrderId }, record: { type: 'PlannedWorkOrder', id: planned.plannedWorkOrderId, expectedVersion: planned.version } }
-      : change // B-SA-041
-        ? { name: 'workorders.applyChange', idempotencyKey, input: { ...body, workOrderChangeId: change.changeId }, record: { type: 'WorkOrderChange', id: change.changeId, expectedVersion: change.version } }
-        : { name: 'workorders.create', idempotencyKey, input: body }
-  const { result } = await command(caller, spec, async (tools) => {
-    const { tx } = tools
-    await lockOrderLines(tx, context.tenantId, lineIds)
-    const current = await readOrderLines(tx, lineIds)
-    const requests: (CellRequest & { index: number; colourwayId: string })[] = []
-    body.lines.forEach((entry, index) => {
-      const line = current.get(entry.salesOrderLineId)!
-      const asked = entry.sizes ? entry.sizes.map((size) => ({ salesOrderLineId: line.id, size: size.size, quantity: size.quantity })) : allOpenCells(line)
-      for (const request of asked) requests.push({ ...request, index, colourwayId: line.colourwayId })
-    })
-    const problems = [...duplicateRequests(requests, 'body/cells'), ...clashProblems(requests, [], 'body/cells')]
-    if (problems.length > 0) throw new ValidationError('These cells cannot be made on one work order.', problems)
-    assertCells(requests, current, target, 'body/lines')
-    const cells = requests.filter((request) => request.quantity > 0)
-    if (cells.length === 0) throw new ValidationError('Nothing is open to make on these order lines.', [{ path: 'body/lines', message: 'Every size of these lines is already on work orders.' }])
-    if (!(await hasSeries(tx, site.companyId, 'WORK_ORDER'))) {
-      throw new InvalidStateError('The company has no active work order number series: an admin sets one up under Numbering (kind WORK_ORDER).')
-    }
+/** The new DRAFT written inside the command (see createWorkOrder); its source's own writes once it is. */
+async function writeDraftInCommand(
+  tools: CommandTools,
+  context: ReturnType<typeof officeContextOf>,
+  body: CreateInput,
+  plan: DraftPlan,
+  source: { readonly sample?: SampleWorkOrder | undefined; readonly planned?: PlannedWorkOrderSource | undefined; readonly change?: ChangeWorkOrderSource | undefined },
+): Promise<{ workOrder: WorkOrderView }> {
+  const { lineIds, first, kind, style, site, revisionId, dueDate, priority, target } = plan
+  const { sample, planned, change } = source
+  const { tx } = tools
+  await lockOrderLines(tx, context.tenantId, lineIds)
+  const current = await readOrderLines(tx, lineIds)
+  const requests: (CellRequest & { index: number; colourwayId: string })[] = []
+  body.lines.forEach((entry, index) => {
+    const line = current.get(entry.salesOrderLineId)!
+    const asked = entry.sizes ? entry.sizes.map((size) => ({ salesOrderLineId: line.id, size: size.size, quantity: size.quantity })) : allOpenCells(line)
+    for (const request of asked) requests.push({ ...request, index, colourwayId: line.colourwayId })
+  })
+  const problems = [...duplicateRequests(requests, 'body/cells'), ...clashProblems(requests, [], 'body/cells')]
+  if (problems.length > 0) throw new ValidationError('These cells cannot be made on one work order.', problems)
+  assertCells(requests, current, target, 'body/lines')
+  const cells = requests.filter((request) => request.quantity > 0)
+  if (cells.length === 0) throw new ValidationError('Nothing is open to make on these order lines.', [{ path: 'body/lines', message: 'Every size of these lines is already on work orders.' }])
+  if (!(await hasSeries(tx, site.companyId, 'WORK_ORDER'))) {
+    throw new InvalidStateError('The company has no active work order number series: an admin sets one up under Numbering (kind WORK_ORDER).')
+  }
 
-    const id = newId()
-    const number = await allocateNumber(tools, { companyId: site.companyId, kind: 'WORK_ORDER' }, { type: 'WorkOrder', id })
-    await tx.workOrder.create({
-      data: {
-        id,
-        companyId: site.companyId,
-        siteId: site.id,
-        number: number.formatted,
-        kind, // B-W2b-368
-        ...(sample ? { sampleRoundId: sample.roundId } : {}),
-        partyId: first.partyId, // B-PR-01: the customer of its lines, never changed
-        styleId: style.id,
-        styleRevisionId: revisionId,
-        dueDate: dueDate ? asDay(dueDate) : null,
-        priority,
-        rush: body.rush ?? false,
-        note: blankToNull(body.note),
-        createdById: actorIdOf(tools),
-      },
-      select: { id: true },
-    })
-    const optionValues = await optionValueIdsOf(tx, cells.map((cell) => cell.salesOrderLineId)) // B-W2b-340
-    const rows = cells.map((cell) => {
-      const line = current.get(cell.salesOrderLineId)!
-      return { id: newId(), siteId: site.id, workOrderId: id, styleId: style.id, colourwayId: line.colourwayId, size: cell.size, quantity: cell.quantity, salesOrderLineId: line.id, partyId: line.partyId, /* B-W2b-340 */ optionValueIds: optionValues.get(line.id) ?? [], /* B-W2b-368 */ ...unitCellProfile(line), createdById: actorIdOf(tools) }
-    })
-    await tx.workOrderSize.createMany({ data: rows })
-    const salesOrderIds = [...new Set(cells.map((cell) => current.get(cell.salesOrderLineId)!.orderId))]
-    const pieces = rows.reduce((sum, row) => sum + row.quantity, 0)
-    tools.audit({
-      recordType: 'WorkOrder',
-      recordId: id,
+  const id = newId()
+  const number = await allocateNumber(tools, { companyId: site.companyId, kind: 'WORK_ORDER' }, { type: 'WorkOrder', id })
+  await tx.workOrder.create({
+    data: {
+      id,
       companyId: site.companyId,
       siteId: site.id,
-      after: {
-        number: number.formatted,
-        status: 'DRAFT',
-        kind, // B-W2b-368
-        ...(sample ? { sampleRoundId: sample.roundId } : {}),
-        partyId: first.partyId, // B-PR-01: the customer of its lines, never changed
-        styleId: style.id,
-        styleRevisionId: revisionId,
-        dueDate,
-        priority,
-        rush: body.rush ?? false,
-        cells: rows.map((row) => ({ id: row.id, salesOrderLineId: row.salesOrderLineId, colourwayId: row.colourwayId, size: row.size, quantity: row.quantity, /* B-W2b-368 */ ...(row.measurementProfileId ? { measurementProfileId: row.measurementProfileId } : {}) })),
-      },
-    })
-    createdEvent(tools, { workOrderId: id, number: number.formatted, partyId: first.partyId /* B-PR-09 */, companyId: site.companyId, siteId: site.id, styleId: style.id, salesOrderIds, cells: rows.length, pieces })
-    if (sample) await sample.inCommand(tools, { id, number: number.formatted })
-    // B-W2b-293: the planned work order it was made from becomes CONVERTED in this transaction.
-    if (planned) await planned.inCommand(tools, { id, number: number.formatted, pieces })
-    // B-SA-041: the WorkOrderChange it was made by becomes APPLIED in this transaction, naming it.
-    if (change) await change.inCommand(tools, { id, number: number.formatted, pieces })
-    return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, id))!, todayOfCommand(tools)) }
+      number: number.formatted,
+      kind, // B-W2b-368
+      ...(sample ? { sampleRoundId: sample.roundId } : {}),
+      partyId: first.partyId, // B-PR-01: the customer of its lines, never changed
+      styleId: style.id,
+      styleRevisionId: revisionId,
+      dueDate: dueDate ? asDay(dueDate) : null,
+      priority,
+      rush: body.rush ?? false,
+      note: blankToNull(body.note),
+      createdById: actorIdOf(tools),
+    },
+    select: { id: true },
   })
-  return result
+  const optionValues = await optionValueIdsOf(tx, cells.map((cell) => cell.salesOrderLineId)) // B-W2b-340
+  const rows = cells.map((cell) => {
+    const line = current.get(cell.salesOrderLineId)!
+    return { id: newId(), siteId: site.id, workOrderId: id, styleId: style.id, colourwayId: line.colourwayId, size: cell.size, quantity: cell.quantity, salesOrderLineId: line.id, partyId: line.partyId, /* B-W2b-340 */ optionValueIds: optionValues.get(line.id) ?? [], /* B-W2b-368 */ ...unitCellProfile(line), createdById: actorIdOf(tools) }
+  })
+  await tx.workOrderSize.createMany({ data: rows })
+  const salesOrderIds = [...new Set(cells.map((cell) => current.get(cell.salesOrderLineId)!.orderId))]
+  const pieces = rows.reduce((sum, row) => sum + row.quantity, 0)
+  tools.audit({
+    recordType: 'WorkOrder',
+    recordId: id,
+    companyId: site.companyId,
+    siteId: site.id,
+    after: {
+      number: number.formatted,
+      status: 'DRAFT',
+      kind, // B-W2b-368
+      ...(sample ? { sampleRoundId: sample.roundId } : {}),
+      partyId: first.partyId, // B-PR-01: the customer of its lines, never changed
+      styleId: style.id,
+      styleRevisionId: revisionId,
+      dueDate,
+      priority,
+      rush: body.rush ?? false,
+      cells: rows.map((row) => ({ id: row.id, salesOrderLineId: row.salesOrderLineId, colourwayId: row.colourwayId, size: row.size, quantity: row.quantity, /* B-W2b-368 */ ...(row.measurementProfileId ? { measurementProfileId: row.measurementProfileId } : {}) })),
+    },
+  })
+  createdEvent(tools, { workOrderId: id, number: number.formatted, partyId: first.partyId /* B-PR-09 */, companyId: site.companyId, siteId: site.id, styleId: style.id, salesOrderIds, cells: rows.length, pieces })
+  if (sample) await sample.inCommand(tools, { id, number: number.formatted })
+  // B-W2b-293: the planned work order it was made from becomes CONVERTED in this transaction.
+  if (planned) await planned.inCommand(tools, { id, number: number.formatted, pieces })
+  // B-SA-041: the WorkOrderChange it was made by becomes APPLIED in this transaction, naming it.
+  if (change) await change.inCommand(tools, { id, number: number.formatted, pieces })
+  return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, id))!, todayOfCommand(tools)) }
 }
+// ── end B-OP-011 ──
 
 /** `workorder.created` of a new DRAFT (B-W2b-284: one emit for both creates; a sample work order without an order line names no order). */
 function createdEvent(tools: CommandTools, made: { workOrderId: string; number: string; /* B-PR-09 */ partyId: string | null; companyId: string; siteId: string; styleId: string; salesOrderIds: string[]; cells: number; pieces: number }): void {
@@ -880,8 +947,8 @@ export async function setCells(caller: CommandCaller, workOrderId: string, body:
 // ── B-SA-041 (sales page plan; 13-backend B4b): the draft's cells set inside a command that is already open — setCells' own
 // command (the work order's version guards it), and a WorkOrderChange applied on a DRAFT (modules/production/work-order-changes
 // apply.ts, its own command on the change, the work order's row locked first). The caller checked workorders.manage over it.
-/** Sets cells of a DRAFT in an open command (see setCells): every rule of setCells, read in this transaction. */
-export async function setCellsInCommand(tools: CommandTools, context: ReturnType<typeof officeContextOf>, workOrderId: string, requested: CellsInput['cells']): Promise<{ workOrder: WorkOrderView }> {
+/** Sets cells of a DRAFT in an open command (see setCells): every rule of setCells, read in this transaction. B-OP-012: `right` (DraftRight). */
+export async function setCellsInCommand(tools: CommandTools, context: ReturnType<typeof officeContextOf>, workOrderId: string, requested: CellsInput['cells'], right: DraftRight = 'WORK_ORDER'): Promise<{ workOrder: WorkOrderView }> {
   const workOrder = await readWorkOrder(tools.tx, workOrderId)
   if (!workOrder) throw new NotFoundError('Work order not found.')
   if (workOrder.status !== 'DRAFT') throw new InvalidStateError(`Work order ${workOrder.number} is ${workOrder.status}; its cells are frozen (a change is a new work order).`)
@@ -890,11 +957,7 @@ export async function setCellsInCommand(tools: CommandTools, context: ReturnType
     throw new InvalidStateError(`Work order ${workOrder.number} makes the samples of its sample round for no order line: its cells are the round's. Change the round's cells, cancel this work order and make a new one from the round.`)
   }
   const lineIds = [...new Set(requested.map((cell) => cell.salesOrderLineId))]
-  const visible = await readOrderLines(tools.tx, lineIds)
-  for (const lineId of lineIds) {
-    const line = visible.get(lineId)
-    if (!line || !can(actorOf(context), WORKORDERS_VIEW, { companyId: line.companyId, partyId: line.partyId })) throw new NotFoundError('Sales order line not found.')
-  }
+  const visible = reachedLines(context, await readOrderLines(tools.tx, lineIds), lineIds, right)
   assertUnitCells(workOrder, visible, requested)
   const requests = requested.map((cell, index) => ({ ...cell, index }))
   const duplicates = duplicateRequests(requests, 'body/cells')

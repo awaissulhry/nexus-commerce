@@ -7,6 +7,8 @@ import { FREEZE_LIMITS, FREEZE_STATES, ORDER_FREEZE_ACTIONS, ORDER_FREEZE_FIELDS
 import { CHANGE_YES_STATES, CUSTOMER_DECISIONS, PRICED_LIMITS } from '@nexus/factory-domain/sales/order-changes/priced'
 import { diffView } from '../orders/daily-contract'
 import { orderView } from '../orders/contract'
+// B-OP-012: what the office change's work orders did in its command, and what waits.
+import { followedView } from '../../production/work-order-changes/contract'
 // B-SA-042: what happens to extra pieces already cut.
 import { EXTRA_OUTCOMES } from '@nexus/factory-domain/order-apply/rules'
 
@@ -145,7 +147,8 @@ export const previewPricedChangeContract = defineContract({
       feeAmount: money.price(z.number().int().nullable()),
       changeAmount: money.price(z.number().int().nullable()),
       deposit: money.price(depositPlan.nullable()),
-      yes: z.enum(['WOULD_ASK', 'NO_RULE', 'NOBODY_TO_ASK']).nullable(),
+      /** B-OP-010: an office change applies at once ("Applies at once — no approval"); null with the problems of no plan. */
+      yes: z.enum(['APPLIES_AT_ONCE']).nullable(),
       stage: output({ stage, words }).nullable(),
     }),
   },
@@ -172,7 +175,7 @@ const changeView = output({
 export const applyPricedChangeContract = defineContract({
   params: orderParams,
   body: input({ version, ...pricedFields, reason: z.string().trim().min(1).max(MAX_REASON) }),
-  response: { 201: output({ order: orderView, change: changeView }) },
+  response: { 201: output({ order: orderView, change: changeView, /* B-OP-012 */ workOrders: followedView }) },
 })
 
 export const listChangesContract = defineContract({
@@ -183,7 +186,7 @@ export const listChangesContract = defineContract({
 export const putBackContract = defineContract({
   params: input({ orderId: id(), amendmentId: id() }),
   body: input({ version, reason: z.string().trim().max(MAX_REASON).optional() }),
-  response: { 201: output({ order: orderView, change: changeView, depositCancelled: z.boolean() }) },
+  response: { 201: output({ order: orderView, change: changeView, depositCancelled: z.boolean(), /* B-OP-012 */ workOrders: followedView }) },
 })
 
 export const depositKindsContract = defineContract({

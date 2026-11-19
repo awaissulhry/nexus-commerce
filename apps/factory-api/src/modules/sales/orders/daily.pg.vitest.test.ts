@@ -119,6 +119,8 @@ beforeAll(async () => {
   await seedCompliance({ db: h.database, namespace: NS })
   await seedCosting({ db: h.database, namespace: NS })
   seeded = await seedPricing({ db: h.database, namespace: NS })
+  // B-OP-012: Sales is an active office person, so its office changes propose (and carry along) the gap to the work orders.
+  await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, 'daily-sales@example.com', 'Made-up Sales', 'ACTIVE')`, [SALES_ACTOR, T])
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
@@ -385,6 +387,9 @@ describe('close remaining lines (SAL-210) and reopen them', () => {
     await admin(`UPDATE "ReplacementRequest" SET status = 'APPROVED', "decidedAt" = now(), "decidedById" = $2 WHERE id = $1`, [reduceId, newId()])
 
     const record = await recordOf(so2())
+    // B-OP-012: the released SEED-WO-0001's cells as they are before the close.
+    const released = () => admin<{ id: string; quantity: number }>('SELECT id::text AS id, quantity FROM "WorkOrderSize" WHERE "workOrderId" = $1 ORDER BY id', [production.workOrderId])
+    const releasedBefore = await released()
     expect(record.dailyActions.find((action: Json) => action.action === 'amend')).toMatchObject({ allowed: false })
     await refused('sales', 'POST', `${orderUrl(so2())}/amendments`, { version: record.version, reason: 'More.', lines: record.lines.map((line: Json) => ({ id: line.id })) }, 409)
     await refused('sales', 'POST', `${orderUrl(so2())}/close-lines`, { version: record.version, reason: '  ' }, 400)
@@ -399,6 +404,14 @@ describe('close remaining lines (SAL-210) and reopen them', () => {
     expect(closed.order.lines[0].closedShort).toMatchObject({ quantity: 3, byId: SALES_ACTOR, reason: 'The customer takes what shipped; the rest is not made.' })
     expect((await events('sales_order.lines_closed', so2())).map((event) => event.payload.change)).toEqual(['CLOSED'])
     expect((await events('sales_order.status_changed', so2())).at(-1)!.payload).toMatchObject({ from: 'PARTLY_SHIPPED', to: 'SHIPPED', by: 'person' })
+    // B-OP-012 (D1, the wall): Sales (orders.manage, no workorders.manage nor workorders.view) closes — the released SEED-WO-0001
+    // waits for production, untouched; the answer names no work order to a person who does not reach them.
+    expect(await released()).toEqual(releasedBefore)
+    expect(await admin('SELECT status::text AS status FROM "WorkOrderChange" WHERE "workOrderId" = $1', [production.workOrderId])).toEqual(expect.arrayContaining([{ status: 'PROPOSED' }]))
+    expect(closed.workOrders.waiting.length).toBeGreaterThan(0)
+    for (const entry of [...closed.workOrders.applied, ...closed.workOrders.waiting]) expect(entry).toMatchObject({ workOrderId: null, number: null })
+    for (const entry of closed.workOrders.waiting) expect(entry.words).toEqual({ en: 'A work order waits: production applies the change on its own page.', it: 'Un ordine di lavoro è in attesa: la modifica la applica la produzione dalla sua pagina.' })
+    expect(JSON.stringify(closed.workOrders)).not.toMatch(/SEED-WO-/)
   })
 
   it('reopen lines: the closed pieces are back to ship, the order PARTLY_SHIPPED again', async () => {

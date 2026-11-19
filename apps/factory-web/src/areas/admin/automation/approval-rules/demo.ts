@@ -39,6 +39,16 @@ export const DEMO_KINDS: KindsAnswer = {
         },
       ],
     },
+    // B-OP-010: a kind nothing asks any more (office changes apply at once): listed for its old rules, never offered for a new one.
+    {
+      kind: 'SALES_ORDER_CHANGE',
+      recordType: 'SalesOrder',
+      label: words('Sales order change', "Modifica dell'ordine di vendita"),
+      askable: false,
+      offered: false,
+      retired: words('Off: office changes apply at once', "Disattivata: le modifiche dell'ufficio si applicano subito"),
+      fields: [{ id: 'changeValue', label: words('change in value (net)', 'variazione di valore (netto)'), kind: 'number', unit: null, grain: 'price', options: [], min: null, max: null, heldReason: null }],
+    },
   ],
   notRegistered: ['PRICE_CHANGE', 'STOCK_ADJUSTMENT'],
   meanings: [
@@ -124,3 +134,16 @@ export const DEMO_TEST: RuleDialogState = {
 }
 /** A rule whose threshold the reader's grains do not show: "…", and the rule is held for them. */
 export const DEMO_HELD_RULE: ApprovalRule = { ...DEMO_APPROVAL_RULES[0]!, sentence: words("Purchase order: order value over … → Finance, signed 'Released'", "Ordine d'acquisto: valore dell'ordine oltre … → Finanza, firmato 'Rilasciato'"), condition: { combinator: 'and', rows: [{ id: 'r1', field: 'orderValue', operator: 'gt', value: null, held: true }] }, canChange: false, heldReason: 'A threshold in a grain you do not hold.' }
+/** B-OP-010: a rule kept from before of a kind nothing asks any more (office changes apply at once): it never fires. */
+export const DEMO_RETIRED_RULE: ApprovalRule = rule(4, {
+  kind: 'SALES_ORDER_CHANGE',
+  kindLabel: words('Sales order change', "Modifica dell'ordine di vendita"),
+  retired: words('Off: office changes apply at once', "Disattivata: le modifiche dell'ufficio si applicano subito"),
+  name: 'Orders that grow',
+  sentence: words('Sales order change: change in value (net) over 0 → Finance', 'Modifica dell’ordine di vendita: variazione di valore (netto) oltre 0 → Finanza'),
+  condition: { combinator: 'and', rows: [{ id: 'r4', field: 'changeValue', operator: 'gt', value: '0', held: false }] },
+  signatureMeaning: null,
+  requireStepUp: false,
+  fired30Days: 0,
+  version: 2,
+})

@@ -397,7 +397,8 @@
       "dueHours": "Il tempo per decidere è in ore intere, da 1 a 2160.",
       "notRegistered": "Questo tipo di richiesta non è ancora controllabile: la sua regola non si può accendere.",
       "reading": "Lettura delle regole…",
-      "noKinds": "Nessun tipo di richiesta può ancora avere una regola."
+      "noKinds": "Nessun tipo di richiesta può ancora avere una regola.",
+      "retired": "Le modifiche dell'ufficio si applicano subito: questo tipo di richiesta non chiede più un sì, quindi la sua regola non si accende."
     },
     "problem": {
       "approver": "Quell’approvatore non può decidere approvazioni qui: scegli un ruolo che approva.",
@@ -453,6 +454,7 @@
       "result": "Avrebbe chiesto per {asked} degli ultimi {tested} ({kind}).",
       "approvers": "Approverebbe: {names}.",
       "noApprovers": "Nessuno ha ancora quel ruolo lì: nessuno potrebbe approvarla."
-    }
+    },
+    "retiredBody": "Rimasta da prima: le modifiche dell'ufficio a un ordine si applicano subito, quindi questa regola non chiede mai. Una richiesta fatta prima si decide ancora in Home › Approvazioni o sull'ordine. Spegnila per riordinare l'elenco."
   }
 }
