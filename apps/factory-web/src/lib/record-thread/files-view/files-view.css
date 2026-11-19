@@ -33,3 +33,39 @@
 
 /* B-TH-231: a row's "Use on another record…" under its marks. */
 .fw-rtv-row-actions { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); }
+
+/* ---- F-OP-125 (order page N7 "files like Gmail"; 10-order-page §9.1): the order's file cards. DS tokens only (the DS MediaCard is
+   English-only and refuses blob:). A grid of 176 px cards (150 px under 480 px; 140 px in the thread's Files window); a 132 px
+   preview; the box shows on hover, focus or chosen (always on touch); Download and Open in the conversation likewise, always in the
+   tab order. ---- */
+.fw-rtv-cards { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: var(--nds-space-10); }
+@media (max-width: 480px) { .fw-rtv-cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
+.fw-rtv-order.is-window .fw-rtv-cards { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.fw-rtv-order { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
+.fw-rtv-card { position: relative; display: flex; flex-direction: column; gap: var(--nds-space-4); padding: var(--nds-space-6); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); background: var(--nds-surface); min-width: 0; }
+.fw-rtv-card:hover { border-color: var(--nds-border); }
+.fw-rtv-card.is-chosen { border-color: var(--nds-tonal-border); background: var(--nds-info-soft); }
+.fw-rtv-card-check { position: absolute; top: var(--nds-space-10); left: var(--nds-space-10); z-index: 1; padding: var(--nds-space-2); border-radius: var(--nds-radius-sm); background: var(--nds-surface); box-shadow: var(--nds-shadow-tip); opacity: 0; }
+.fw-rtv-card:hover .fw-rtv-card-check,
+.fw-rtv-card:focus-within .fw-rtv-card-check,
+.fw-rtv-card.is-chosen .fw-rtv-card-check { opacity: 1; }
+.fw-rtv-card-open { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; padding: 0; border: 0; border-radius: var(--nds-radius-md); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.fw-rtv-card-open:focus-visible { outline: 2px solid var(--nds-text-strong); outline-offset: 2px; }
+.fw-rtv-card-preview { position: relative; height: 132px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--nds-space-6); border-radius: var(--nds-radius-md); background: var(--nds-surface-sunken); color: var(--nds-text-2); overflow: hidden; }
+.fw-rtv-card-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fw-rtv-card-preview.is-page { padding: var(--nds-space-6); }
+.fw-rtv-card-preview.is-page img { object-fit: contain; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-xs); }
+.fw-rtv-card-preview.is-locked { padding: var(--nds-space-8); color: var(--nds-warning-text); background: var(--nds-warning-soft); font-size: var(--nds-font-size-sm); text-align: center; }
+.fw-rtv-card-preview .fw-rtv-card-note { padding: 0 var(--nds-space-8); font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); text-align: center; }
+.fw-rtv-card-name { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-weight: 600; color: var(--nds-text-link); }
+.fw-rtv-card-open:hover .fw-rtv-card-name { text-decoration: underline; }
+.fw-rtv-card-meta { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.fw-rtv-card-actions { display: flex; flex-wrap: wrap; gap: var(--nds-space-4); opacity: 0; }
+.fw-rtv-card:hover .fw-rtv-card-actions,
+.fw-rtv-card:focus-within .fw-rtv-card-actions { opacity: 1; }
+@media (hover: none) {
+  .fw-rtv-card-check,
+  .fw-rtv-card-actions { opacity: 1; }
+}
+.fw-rtv-foot { display: flex; justify-content: flex-end; }
+/* ---- end F-OP-125 ---- */

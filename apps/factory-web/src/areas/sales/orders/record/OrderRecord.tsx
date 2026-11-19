@@ -458,12 +458,15 @@ function RecordContainer({ orderId }: { orderId: string }) {
   })
   // ---- end F-SA-243
   // ---- F-SA-237: the order's files, read while Files shows (the thread's window reads the same route); shared by files.manage ----
+  // F-OP-125 (N-1): THE order-files container of this page — mounted once, its read kept, the same model for the Files tab and (F-OP-215)
+  // the dock: one read, one count.
   const orderFiles = useOrderFiles(api, {
     orderId: readyId,
     enabled: tab === 'files',
     partyId: order.status === 'ready' ? order.value.partyId : null,
     canShare: session.permissions.includes('files.manage'),
     onProblem: (key) => setNotice({ tone: 'danger', words: { key: key === 'order.shareFailed' ? 'files.shareFailed' : 'files.openFailed' } }),
+    keep: true, // F-OP-125: the page's one read
   })
   // ---- end F-SA-237
 
@@ -560,7 +563,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
         .then((rows) => setWorkOrders(part(rows)))
         .catch(() => undefined)
     if (parts.includes('changes') && (tabRef.current === 'changes' || wantsRef.current /* F-SA-243 */)) readRequests()
-    if (parts.includes('files') && tabRef.current === 'files') orderFiles.reload()
+    if (parts.includes('files')) orderFiles.reload() // F-OP-125: read again when shown, else the next time it is wanted
   }
   reconnectRef.current = () => {
     void load()
@@ -590,7 +593,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     requests, // F-SA-236
     requestDoor: { parts: door, hrefOf: (id: string) => door.hrefOf(id), open: (id: string) => door.open(id) /* F-SA-244 */ }, // F-SA-243
     told, // F-SA-244
-    files: tab === 'files' ? orderFiles.model : null, // F-SA-237
+    files: orderFiles.model, // F-SA-237; F-OP-125: the page's one read, kept across tabs
     askedOfCustomer,
     liveState,
     changed,

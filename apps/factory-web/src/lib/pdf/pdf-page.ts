@@ -1,18 +1,19 @@
 import { openPdf } from '@nexus/ui/components/PdfViewer/index'
-import { loadPdfJs } from '../../lib/pdf/load-pdfjs'
+import { loadPdfJs } from './load-pdfjs'
 
 /**
  * One page of a PDF drawn as a picture (about 1600 px wide) with the page count, for "Mark the photo" on a document of the
- * request (the marks are an overlay on that page; nothing is burned into the PDF). Browser only (a canvas).
+ * request (the marks are an overlay on that page; nothing is burned into the PDF). Browser only (a canvas). F-OP-126: moved here from
+ * links/approve (the order's file cards draw page 1 too); `width` — how wide it is drawn (a card's preview asks a small one).
  */
-export async function pdfPageImage(bytes: Uint8Array, page: number): Promise<{ src: string; width: number; height: number; pages: number }> {
+export async function pdfPageImage(bytes: Uint8Array, page: number, width = 1600): Promise<{ src: string; width: number; height: number; pages: number }> {
   const { promise } = openPdf(loadPdfJs, bytes.slice())
   const document = await promise
   try {
     const number = Math.min(Math.max(1, page), document.numPages)
     const pdfPage = await document.getPage(number)
     const base = pdfPage.getViewport({ scale: 1 })
-    const viewport = pdfPage.getViewport({ scale: Math.min(3, 1600 / Math.max(1, base.width)) })
+    const viewport = pdfPage.getViewport({ scale: Math.min(3, width / Math.max(1, base.width)) })
     const canvas = window.document.createElement('canvas')
     canvas.width = Math.round(viewport.width)
     canvas.height = Math.round(viewport.height)

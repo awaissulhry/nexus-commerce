@@ -12,7 +12,9 @@ import type { OrderRecordModel } from '../record-model'
  * F-SA-237 (sales page plan N9, picks P14, R7; 10-order-page §2.7) — Files: every file of the order by where it comes from, the SAME
  * body as the thread's Files window on this order, from the SAME walled read (`GET /sales/orders/:orderId/files`): who can see each
  * file, where it sits, "also on …" as the read names it, Open through the order's own route, Open in the conversation (the dock shows
- * and scrolls to the message), Download N · Share N own; "N files you cannot open", counted, never named.
+ * and scrolls to the message), Download N · Share N own; "N files you cannot open", counted, never named. F-OP-125–127: the files are
+ * cards with lazy previews, and Open shows them in the ONE viewer the body draws from the page's container (← / → every file in display
+ * order; body data only when asked, its opening recorded; Esc gives the focus back to the card; "Go to message" shows it in the dock).
  */
 export function FilesTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: { readonly files?: FilesViewActions } }) {
   const t = useT('orders')
