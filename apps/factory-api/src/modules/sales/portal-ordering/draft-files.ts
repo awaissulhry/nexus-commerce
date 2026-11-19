@@ -16,6 +16,8 @@ import { partnerUploader } from '../../../platform/threads/partner/service'
 import { portalReader, type PortalReader } from '../portal-orders/access'
 import { discardDraft, draftChanged, draftFileView, ownDraft, removeLine, requestView } from './requests'
 import { DRAFT_FILE_COLUMNS, draftFilesWhere, readLines, type RequestRow } from './store'
+import { markEdited } from './store' // B-CP-075: who saved the draft
+import type { CommandTools } from '../../../core/command'
 
 /**
  * B-CP-072 (customer page plan C5, 12 §2 parts 2–4; D14 — O7, the virus scanner's spend, is NOT approved): the files of a draft
@@ -68,14 +70,26 @@ async function draftFile(uploader: CommandCaller, row: RequestRow, fileId: strin
   return { file, lineId: file.recordType === DRAFT_FILE_RECORDS.line ? file.recordId : null }
 }
 
-/** The draft's audit row and its live news, in the person's own scope (the files module's rows name the system). */
-async function recordOnDraft(app: FastifyInstance, request: FastifyRequest, row: RequestRow, name: `${string}.${string}`, idempotencyKey: string | undefined, after: Record<string, unknown>): Promise<void> {
+/**
+ * The draft's audit row and its live news, in the person's own scope (the files module's rows name the system). B-CP-075: who saved
+ * the draft (the draft's version stays: parallel uploads never 409 each other), and `also` what the file's move changes on the draft.
+ */
+async function recordOnDraft(app: FastifyInstance, request: FastifyRequest, row: RequestRow, name: `${string}.${string}`, idempotencyKey: string | undefined, after: Record<string, unknown>, also?: (tools: CommandTools) => Promise<Record<string, unknown>>): Promise<void> {
   await commandOn(app, request, { name, idempotencyKey: idempotencyKey ? `${idempotencyKey}:draft` : undefined, input: { requestId: row.id, ...after } }, async (tools) => {
-    tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after })
+    const more = also ? await also(tools) : {}
+    tools.audit({ recordType: 'PortalOrderRequest', recordId: row.id, companyId: row.companyId, after: { ...after, ...more } })
+    await markEdited(tools.tx, row.id, tools.context.actorId, tools.now) // B-CP-075
     draftChanged(tools, row)
     return null
   })
 }
+
+// ---- B-CP-075: a measurement sheet taken out of the draft — the people it measured are "sending later" again (the roster stays).
+async function sheetPeopleLater(tools: CommandTools, row: RequestRow, fileId: string): Promise<Record<string, unknown>> {
+  const moved = await tools.tx.portalOrderRequestPerson.updateMany({ where: { requestId: row.id, measurementFileId: fileId }, data: { measureBy: 'LATER', measurementFileId: null, version: { increment: 1 } } })
+  return moved.count > 0 ? { peopleNowLater: moved.count } : {}
+}
+// ---- end B-CP-075
 
 /** POST /portal/order-requests/:requestId/files */
 export async function announceDraftFile(files: FilesRuntime, app: FastifyInstance, request: FastifyRequest, requestId: string, body: DraftFileBody, idempotencyKey?: string) {
@@ -133,7 +147,7 @@ export async function removeDraftFile(files: FilesRuntime, app: FastifyInstance,
   const remover = partnerUploader(request, reader.session.tenantId, row.companyId, row.partyId, [FILES_DELETE])
   const { lineId } = await draftFile(remover, row, fileId)
   await deleteFile(files, remover, fileId, { version, reason: 'Taken out of the draft order by the customer.' }, idempotencyKey)
-  await recordOnDraft(app, request, row, 'portalOrdering.removeDraftFile', idempotencyKey, { fileId, lineId, removed: true })
+  await recordOnDraft(app, request, row, 'portalOrdering.removeDraftFile', idempotencyKey, { fileId, lineId, removed: true }, (tools) => sheetPeopleLater(tools, row, fileId)) // B-CP-075
   return requestView(app, request, reader, await ownDraft(request, reader, requestId))
 }
 

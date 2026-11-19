@@ -115,7 +115,23 @@ export interface LineFacts {
   readonly priceNow: string | null
 }
 
-export const PROBLEM_CODES = ['NO_LINES', 'TOO_MANY_LINES', 'DATE_PAST', 'SHIP_TO_ARCHIVED', 'STYLE_NOT_SOLD', 'COLOUR_DISCONTINUED', 'SIZE_NOT_OFFERED', 'NO_SIZES', 'PRICE_CHANGED'] as const
+export const PROBLEM_CODES = [
+  'NO_LINES',
+  'TOO_MANY_LINES',
+  'DATE_PAST',
+  'SHIP_TO_ARCHIVED',
+  'STYLE_NOT_SOLD',
+  'COLOUR_DISCONTINUED',
+  'SIZE_NOT_OFFERED',
+  'NO_SIZES',
+  'PRICE_CHANGED',
+  // B-CP-075: a described or made-to-measure line's own problems (customLineProblems).
+  'NO_TOTAL',
+  'SIZES_NOT_TOTAL',
+  'NO_PEOPLE',
+  'MTM_CLOSED',
+  'GARMENT_TYPE_GONE',
+] as const
 export type ProblemCode = (typeof PROBLEM_CODES)[number]
 
 export interface Problem {
@@ -125,9 +141,11 @@ export interface Problem {
   /** A size it is on, when it is one size's. */
   readonly size: string | null
   readonly words: Words
+  /** B-CP-075: the person of the line's roster it is on (null or absent: the line's own). */
+  readonly personId?: string | null
 }
 
-const problem = (code: ProblemCode, words: Words, lineId: string | null = null, size: string | null = null): Problem => ({ code, lineId, size, words })
+const problem = (code: ProblemCode, words: Words, lineId: string | null = null, size: string | null = null, personId: string | null = null): Problem => ({ code, lineId, size, words, personId })
 
 /** The problems of a line's own shape (before it is written): sizes, quantities, note. Messages in words, for 400 issues. */
 export function lineShapeProblems(line: LineInput): string[] {
@@ -203,12 +221,15 @@ export function heldWords(count: number): Words | null {
 
 export const piecesOfSizes = (sizes: readonly SizeAsk[]): number => sizes.reduce((sum, row) => sum + row.quantity, 0)
 
-/** Lines, pieces and the net total of the prices shown (null when a line has no price shown, or for a person without prices). */
-export function draftTotals(lines: readonly { readonly sizes: readonly SizeAsk[]; readonly unitPriceShown: string | null }[], seesPrices: boolean): { lines: number; pieces: number; net: string | null } {
+/**
+ * Lines, pieces and the net total of the prices shown (null when a line has no price shown, or for a person without prices).
+ * B-CP-075: `pieces`, when given, is the line's own count by its kind (linePieces: a described total, a roster); else its sizes.
+ */
+export function draftTotals(lines: readonly { readonly sizes: readonly SizeAsk[]; readonly unitPriceShown: string | null; readonly pieces?: number | undefined }[], seesPrices: boolean): { lines: number; pieces: number; net: string | null } {
   let pieces = 0
   let net: Decimal | null = seesPrices ? new Dec(0) : null
   for (const line of lines) {
-    const count = piecesOfSizes(line.sizes)
+    const count = line.pieces ?? piecesOfSizes(line.sizes)
     pieces += count
     if (net !== null) net = line.unitPriceShown === null ? null : net.plus(new Dec(line.unitPriceShown).times(count))
   }
@@ -243,3 +264,145 @@ export const REQUEST_NOTICE: Words = Object.freeze({
 
 export const SOURCES = ['PICKER', 'REORDER', 'UPLOAD'] as const
 export type RequestSource = (typeof SOURCES)[number]
+
+// ---- B-CP-075 (customer page plan C5; 12 §2 parts 1 and 4; review A5, F1, F2): every kind of draft line -----------------------
+/**
+ * A draft holds lines of three kinds (PortalOrderRequestLine.kind; the …_customer_page_guards trigger holds the same shapes):
+ *
+ *   CATALOGUE        a style of the customer's catalogue in one of its colourways, its size grid (the rules above)
+ *   DESCRIBED        the customer's own words (1 to 2000), colours in words, maybe its own private-label style; it needs a TOTAL
+ *                    of pieces to be sent — the split by size may follow after Send (review A5: one rule) — or, by person, its
+ *                    people
+ *   MADE_TO_MEASURE  a garment type (an ACTIVE measurement template's code: the API checks it), maybe a style of its catalogue;
+ *                    always by person. Open for every customer by default (PortalSettings.mtmDraftsOn, lead pick); a customer
+ *                    the office switched off keeps no made-to-measure line ("ask us in the messages"). Drafts only: a quote or
+ *                    an order made to measure still follows GATE-MTM.
+ *
+ * A by-person line takes its pieces from its people (./people.ts: a size, a measurement sheet, or "sending later"); a measurement
+ * sheet on the line stands for its roster ("People: in the attached sheet", review A5), so a team with one sheet for twelve
+ * riders sends without typing twelve names.
+ */
+export const LINE_KINDS = ['CATALOGUE', 'DESCRIBED', 'MADE_TO_MEASURE'] as const
+export type LineKind = (typeof LINE_KINDS)[number]
+/** The kinds in the customer's own words: no size grid of the catalogue (the draft's `customLines`). */
+export const CUSTOM_LINE_KINDS = ['DESCRIBED', 'MADE_TO_MEASURE'] as const
+export type CustomLineKind = (typeof CUSTOM_LINE_KINDS)[number]
+
+export const CUSTOM_LINE_LIMITS = Object.freeze({ description: 2000, colourText: 200, garmentType: 40, total: 100_000 })
+
+/** What a described or made-to-measure line holds (a new one, or one as it would be after a change). */
+export interface CustomLineInput {
+  readonly kind: CustomLineKind
+  readonly description?: string | null | undefined
+  readonly colourText?: string | null | undefined
+  readonly styleId?: string | null | undefined
+  readonly colourwayId?: string | null | undefined
+  readonly garmentType?: string | null | undefined
+  readonly quantity?: number | null | undefined
+  readonly byPerson?: boolean | undefined
+  readonly sizes?: readonly SizeAsk[] | undefined
+  readonly note?: string | null | undefined
+}
+
+const filled = (value: string | null | undefined): boolean => value !== undefined && value !== null && value.trim() !== ''
+
+/** The problems of a described or made-to-measure line's own shape (before it is written), in words for 400 issues. */
+export function customLineShapeProblems(line: CustomLineInput): string[] {
+  const out: string[] = []
+  const sizes = line.sizes ?? []
+  const byPerson = line.kind === 'MADE_TO_MEASURE' ? true : line.byPerson === true
+  if (line.kind === 'DESCRIBED' && !filled(line.description)) out.push('Say in your words what you need (1 to 2000 characters).')
+  if (filled(line.description) && line.description!.trim().length > CUSTOM_LINE_LIMITS.description) out.push(`A description is at most ${CUSTOM_LINE_LIMITS.description} characters.`)
+  if (filled(line.colourText) && line.colourText!.trim().length > CUSTOM_LINE_LIMITS.colourText) out.push(`The colours in words are at most ${CUSTOM_LINE_LIMITS.colourText} characters.`)
+  if (line.kind === 'MADE_TO_MEASURE') {
+    if (!filled(line.garmentType) || line.garmentType!.trim().length > CUSTOM_LINE_LIMITS.garmentType) out.push('Choose the garment type to make to measure.')
+    if (line.byPerson === false) out.push('A made-to-measure line is always by person.')
+    if (line.quantity !== undefined && line.quantity !== null) out.push('A made-to-measure line counts its people, not a total.')
+  } else if (line.quantity !== undefined && line.quantity !== null && (!Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > CUSTOM_LINE_LIMITS.total)) {
+    out.push(`A total is 1 to ${CUSTOM_LINE_LIMITS.total} pieces.`)
+  }
+  if (filled(line.colourwayId) && !filled(line.styleId)) out.push('A colour of ours goes with its style.')
+  if (byPerson && (sizes.length > 0 || (line.quantity !== undefined && line.quantity !== null))) out.push('A line by person takes its pieces from its people: no total and no sizes.')
+  if (sizes.length > 0) out.push(...lineShapeProblems({ styleId: '', colourwayId: '', sizes, note: null }))
+  if (line.note && line.note.trim().length > ORDERING_LIMITS.lineNote) out.push(`A line's note is at most ${ORDERING_LIMITS.lineNote} characters.`)
+  return [...new Set(out)]
+}
+
+/** A line's pieces by its kind: by person its people; a described line its total (else its sizes); a catalogue line its sizes. */
+export function linePieces(line: { readonly kind: LineKind; readonly quantity: number | null; readonly sizes: readonly SizeAsk[]; readonly byPerson: boolean; readonly people: number }): number {
+  if (line.byPerson) return line.people
+  if (line.kind === 'DESCRIBED' && line.quantity !== null) return line.quantity
+  return piecesOfSizes(line.sizes)
+}
+
+/**
+ * Send's rule of a line's pieces, as the database holds it: size rows; a described line's total; a by-person line's people, or a
+ * measurement sheet on the line that stands for them ("People: in the attached sheet").
+ */
+export function lineHasPieces(line: { readonly kind: LineKind; readonly quantity: number | null; readonly sizes: readonly SizeAsk[]; readonly byPerson: boolean; readonly people: number; readonly sheetOnLine: boolean }): boolean {
+  return line.sizes.length > 0 || (line.kind === 'DESCRIBED' && line.quantity !== null) || (line.byPerson && (line.people > 0 || line.sheetOnLine))
+}
+
+/** The facts of a described or made-to-measure line as the draft and the catalogue hold them today. */
+export interface CustomLineFacts {
+  readonly id: string
+  readonly kind: CustomLineKind
+  readonly quantity: number | null
+  readonly sizes: readonly SizeAsk[]
+  readonly byPerson: boolean
+  /** Its people (a person measured by a size names it). */
+  readonly people: readonly { readonly id: string; readonly size: string | null }[]
+  /** A measurement sheet sits on the line: it stands for the roster. */
+  readonly sheetOnLine: boolean
+  /** The style it names, as the customer's catalogue holds it today (null: none named). */
+  readonly style: { readonly code: string; readonly sold: boolean; readonly range: readonly string[] } | null
+  /** The colour of ours it names (null: none named). */
+  readonly colourway: { readonly name: string; readonly active: boolean } | null
+  /** MADE_TO_MEASURE: the customer may keep made-to-measure lines (PortalSettings.mtmDraftsOn). */
+  readonly mtmOpen: boolean
+  /** MADE_TO_MEASURE: its garment type, and whether an ACTIVE measurement template has that code today. */
+  readonly garmentType: { readonly code: string; readonly active: boolean } | null
+}
+
+/** The portal's words when made to measure is switched off for the customer ("voi"). */
+export const MTM_CLOSED_WORDS: Words = Object.freeze({ it: 'Il su misura non è ancora aperto per voi: chiedeteci nei messaggi.', en: 'Made to measure is not open for you yet: ask us in the messages.' })
+
+/** What holds the send of a described or made-to-measure line (named whenever the draft is read; the send is held until none is left). */
+export function customLineProblems(line: CustomLineFacts): Problem[] {
+  const out: Problem[] = []
+  if (line.kind === 'MADE_TO_MEASURE') {
+    if (!line.mtmOpen) out.push(problem('MTM_CLOSED', MTM_CLOSED_WORDS, line.id))
+    else if (line.garmentType !== null && !line.garmentType.active) {
+      const code = line.garmentType.code
+      out.push(problem('GARMENT_TYPE_GONE', { it: `Il su misura ${code} non è più offerto: scegliete un altro tipo di capo.`, en: `Made to measure ${code} is no longer offered: choose another garment type.` }, line.id))
+    }
+  }
+  if (line.style !== null && !line.style.sold) {
+    const code = line.style.code
+    out.push(problem('STYLE_NOT_SOLD', { it: `${code} non è più in vendita per voi: toglietelo dalla riga.`, en: `${code} is no longer sold to you: take it off the line.` }, line.id))
+  }
+  if (line.colourway !== null && !line.colourway.active) out.push(problem('COLOUR_DISCONTINUED', { it: `Il colore ${line.colourway.name} non è più disponibile: sceglietene un altro.`, en: `${line.colourway.name} is discontinued: choose another colour.` }, line.id))
+  if (line.byPerson) {
+    if (line.people.length === 0 && !line.sheetOnLine) out.push(problem('NO_PEOPLE', { it: 'Indicate le persone, o allegate la loro scheda misure.', en: 'Name the people, or attach their measurement sheet.' }, line.id))
+  } else if (line.kind === 'DESCRIBED') {
+    const sum = piecesOfSizes(line.sizes)
+    if (line.quantity === null) out.push(problem('NO_TOTAL', { it: 'Indicate quanti pezzi in tutto (le taglie possono seguire).', en: 'Say how many pieces in all (the sizes may follow).' }, line.id))
+    else if (line.sizes.length > 0 && sum !== line.quantity) out.push(problem('SIZES_NOT_TOTAL', { it: `Le taglie fanno ${sum} pezzi, il totale dice ${line.quantity}.`, en: `The sizes add up to ${sum} pieces, the total says ${line.quantity}.` }, line.id))
+  }
+  // A size a style does not have: on the line (a described one's split) or on a person (its size).
+  if (line.style !== null && line.style.sold && line.style.range.length > 0) {
+    const code = line.style.code
+    const words = (size: string): Words => ({ it: `La taglia ${size} non è nella scala di ${code}.`, en: `Size ${size} is not in the range of ${code}.` })
+    for (const ask of line.sizes) if (!line.style.range.includes(ask.size)) out.push(problem('SIZE_NOT_OFFERED', words(ask.size), line.id, ask.size))
+    for (const person of line.people) if (person.size !== null && !line.style.range.includes(person.size)) out.push(problem('SIZE_NOT_OFFERED', words(person.size), line.id, person.size, person.id))
+  }
+  return out
+}
+
+/** B-CP-075: the 409 of a draft a colleague changed meanwhile — it names them (the party's own person; never an office name). */
+export function draftStaleWords(input: { readonly name: string | null; readonly self: boolean; readonly version: number }): Words {
+  if (input.self) return { it: `Avete modificato questa bozza in un'altra finestra (ora versione ${input.version}): rileggetela.`, en: `You changed this draft in another window (now version ${input.version}): read it again.` }
+  if (input.name !== null) return { it: `${input.name} ha modificato questa bozza dopo che l'avete letta (ora versione ${input.version}): rileggetela.`, en: `${input.name} changed this draft since you read it (now version ${input.version}): read it again.` }
+  return { it: `Questa bozza è cambiata dopo che l'avete letta (ora versione ${input.version}): rileggetela.`, en: `This draft changed since you read it (now version ${input.version}): read it again.` }
+}
+// ---- end B-CP-075

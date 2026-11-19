@@ -8,6 +8,9 @@ import { ACCEPT_AS, DRAFT_LATER_PARTS, DRAFT_PART_STATES, DRAFT_PARTS } from '@n
 import { REORDER_NOTICES } from '@nexus/factory-domain/sales/portal-ordering/reorder'
 import { ORDERING_LIMITS, PROBLEM_CODES, RANGE_FILTERS, REQUEST_STATUSES, SOURCES } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { DRAFT_FILE_PARTS } from '@nexus/factory-domain/sales/portal-ordering/draft-files' // B-CP-072
+// B-CP-075: the lines of the customer's own kinds, their people, the parts sent later.
+import { MEASURE_BY, PEOPLE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/people'
+import { CUSTOM_LINE_KINDS, CUSTOM_LINE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/rules'
 
 /**
  * Portal ordering (B-W2b-190; SAL-071, SAL-072, SAL-073, SAL-074, SAL-079; design portal.customer.catalogue,
@@ -29,7 +32,8 @@ const yourNumber = output({ seq: z.number().int(), words }).nullable()
 const requestParams = input({ requestId: id() })
 const sizeAsk = input({ size: z.string().trim().min(1).max(ORDERING_LIMITS.size), quantity: z.number().int().min(1).max(ORDERING_LIMITS.quantity) })
 const sizes = z.array(sizeAsk).min(1).max(ORDERING_LIMITS.sizesPerLine)
-const problem = output({ code: z.enum(PROBLEM_CODES), lineId: id().nullable(), size: z.string().nullable(), words })
+// B-CP-075: + the part of the checklist it holds and the person of a roster it is on ("send problems per part").
+const problem = output({ code: z.enum(PROBLEM_CODES), part: z.enum(DRAFT_PARTS), lineId: id().nullable(), size: z.string().nullable(), personId: id().nullable(), words })
 const notice = output({ code: z.enum(REORDER_NOTICES), words })
 const sizeRow = output({ size: z.string(), quantity: z.number().int() })
 
@@ -37,6 +41,44 @@ const sizeRow = output({ size: z.string(), quantity: z.number().int() })
 const draftFile = output({ id: id(), lineId: id().nullable(), originalName: z.string(), kind: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), version, createdAt: at })
 const draftFiles = output({ logos: z.array(draftFile), references: z.array(draftFile), sheets: z.array(draftFile) })
 // ---- end B-CP-072
+
+// ---- B-CP-075 (customer page plan C5; 12 §2 parts 1 and 4): the described and made-to-measure lines and their people ------------
+/** A person of a by-person line: a measurement sheet the customer reads by name; the office without sales.measurements.view: locked, nameless. */
+const person = output({
+  id: id(),
+  seq: z.number().int(),
+  version,
+  name: z.string(),
+  number: z.string().nullable(),
+  measureBy: z.enum(MEASURE_BY),
+  size: z.string().nullable(),
+  sheet: output({ id: id(), originalName: z.string().nullable(), locked: z.boolean() }).nullable(),
+  note: z.string().nullable(),
+})
+const customLine = output({
+  id: id(),
+  seq: z.number().int(),
+  version,
+  kind: z.enum(CUSTOM_LINE_KINDS),
+  description: z.string().nullable(),
+  colourText: z.string().nullable(),
+  /** A described line's own private-label style, or the style a made-to-measure line is made from (null: none named). */
+  style: named.nullable(),
+  colourway: named.nullable(),
+  /** MADE_TO_MEASURE: the garment type (a measurement template's code) and its name. */
+  garmentType: output({ code: z.string(), words }).nullable(),
+  /** DESCRIBED: the pieces in all (the split by size may follow after Send). */
+  quantity: z.number().int().nullable(),
+  sizes: z.array(sizeRow),
+  byPerson: z.boolean(),
+  pieces: z.number().int(),
+  people: z.array(person),
+  /** By person, no one typed, a measurement sheet on the line: "People: in the attached sheet". */
+  peopleInSheet: z.boolean(),
+  note: z.string().nullable(),
+  problems: z.array(problem),
+})
+// ---- end B-CP-075
 
 // ---- the catalogue -----------------------------------------------------------------------------------------------------
 
@@ -105,6 +147,7 @@ const line = output({
   id: id(),
   seq: z.number().int(),
   version,
+  kind: z.literal('CATALOGUE'), // B-CP-075: the other kinds are the request's customLines
   style: named,
   colourway: named,
   sizes: z.array(output({ size: z.string(), quantity: z.number().int(), offered: z.boolean() })),
@@ -164,6 +207,15 @@ const requestBody = output({
   files: draftFiles,
   /** B-CP-072 (D14): files go up here now; else why not, in words (live, until the virus scanner runs: send them by e-mail). */
   uploads: output({ open: z.boolean(), words: z.string().nullable() }),
+  // ---- B-CP-075: the lines in the customer's own words (described, made to measure; with `lines`, one draft by seq), the parts it
+  // sends later, who of the customer saved it last (a display name, never an id or an e-mail), and made to measure for it.
+  customLines: z.array(customLine),
+  laterParts: z.array(z.enum(DRAFT_LATER_PARTS)),
+  lastEditedBy: z.string().nullable(),
+  lastEditedAt: at.nullable(),
+  /** A draft's: whether it may hold made-to-measure lines, and the garment types it may choose (null once it is sent). */
+  madeToMeasure: output({ open: z.boolean(), words: words.nullable(), garmentTypes: z.array(output({ code: z.string(), words })) }).nullable(),
+  // ---- end B-CP-075
 })
 
 const address = output({
@@ -192,6 +244,8 @@ const header = {
   shipToAddressId: id().nullish(),
   requestedDate: day.nullish(),
   note: z.string().trim().max(ORDERING_LIMITS.note).nullish(),
+  /** B-CP-075: the parts the customer sends later (each once; [] clears them) — a DRAFT's. */
+  laterParts: z.array(z.enum(DRAFT_LATER_PARTS)).max(DRAFT_LATER_PARTS.length).optional(),
 }
 
 const newLine = input({ styleId: id(), colourwayId: id(), sizes, note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish() })
@@ -246,6 +300,41 @@ export const sendContract = defineContract({
   response: { 200: record.extend({ sent: output({ number: z.string(), confirmBy: z.null(), words }) }) },
 })
 export const withdrawContract = defineContract({ params: requestParams, body: input({ version }), response: { 200: record } })
+
+// ---- B-CP-075: described and made-to-measure lines (a line out: DELETE …/lines/:lineId), and the people of a by-person line -----
+const customLineFields = {
+  description: z.string().trim().max(CUSTOM_LINE_LIMITS.description).nullish(),
+  colourText: z.string().trim().max(CUSTOM_LINE_LIMITS.colourText).nullish(),
+  styleId: id().nullish(),
+  colourwayId: id().nullish(),
+  garmentType: z.string().trim().max(CUSTOM_LINE_LIMITS.garmentType).nullish(),
+  quantity: z.number().int().min(1).max(CUSTOM_LINE_LIMITS.total).nullish(),
+  byPerson: z.boolean().optional(),
+  /** A described line's split by size ([] clears it). */
+  sizes: z.array(sizeAsk).max(ORDERING_LIMITS.sizesPerLine).optional(),
+  note: z.string().trim().max(ORDERING_LIMITS.lineNote).nullish(),
+}
+const personFields = {
+  name: z.string().trim().min(1).max(PEOPLE_LIMITS.name),
+  number: z.string().trim().max(PEOPLE_LIMITS.number).nullish(),
+  measureBy: z.enum(MEASURE_BY),
+  size: z.string().trim().max(PEOPLE_LIMITS.size).nullish(),
+  /** SHEET: a measurement sheet of this draft (its own or one of its lines'). */
+  measurementFileId: id().nullish(),
+  note: z.string().trim().max(PEOPLE_LIMITS.note).nullish(),
+}
+const lineParams = input({ requestId: id(), lineId: id() })
+const personParams = input({ requestId: id(), lineId: id(), personId: id() })
+export const addCustomLineContract = defineContract({ params: requestParams, body: input({ version, line: input({ kind: z.enum(CUSTOM_LINE_KINDS), ...customLineFields }) }), response: { 200: record } })
+export const changeCustomLineContract = defineContract({ params: lineParams, body: input({ version, ...customLineFields }), response: { 200: record } })
+export const addPeopleContract = defineContract({ params: lineParams, body: input({ version, people: z.array(input(personFields)).min(1).max(PEOPLE_LIMITS.perLine) }), response: { 200: record } })
+export const changePersonContract = defineContract({
+  params: personParams,
+  body: input({ version, name: personFields.name.optional(), number: personFields.number, measureBy: personFields.measureBy.optional(), size: personFields.size, measurementFileId: personFields.measurementFileId, note: personFields.note }),
+  response: { 200: record },
+})
+export const removePersonContract = defineContract({ params: personParams, querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: record } })
+// ---- end B-CP-075
 
 // ---- B-CP-072: a draft's files (announce, complete, remove) ------------------------------------------------------------------
 
@@ -475,6 +564,8 @@ const officeRecord = output({
     summary: output({ lines: z.number().int(), pieces: z.number().int(), netShown: money.price(z.string().nullable()) }),
     /** B-CP-071: a draft's facts (accept and refuse are held while it is one: `may` all false). */
     draft: officeDraft.nullable(),
+    /** B-CP-075: the described and made-to-measure lines with their people (a measurement sheet locked without sales.measurements.view); accept is held while one is on the request (B-CP-077 maps them). */
+    customLines: z.array(customLine),
   }),
   may: output({ order: z.boolean(), quote: z.boolean(), refuse: z.boolean() }),
 })

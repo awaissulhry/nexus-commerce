@@ -16,6 +16,10 @@ import { appClock, commandOn } from '../../../platform/portal/tasks/clock'
 import { portalReader } from '../portal-orders/access'
 import { readCatalogue, uploadIndexOf } from './catalogue'
 import { addLinesInCommand, draftChanged, ownRequest, pricesFor, requestView } from './requests'
+// B-CP-075: who saved the draft, and a 409 that names the colleague who changed it meanwhile.
+import { staleDraftError } from './requests'
+import { StaleVersionError } from '../../../core/command'
+import { markEdited } from './store'
 import { readRequest } from './store'
 
 /**
@@ -112,6 +116,7 @@ export async function uploadSheet(app: FastifyInstance, request: FastifyRequest,
     const current = await readRequest(tools.tx, row.id)
     if (current?.status !== 'DRAFT') throw new InvalidStateError('This request is no longer a draft.')
     const outcome = await addLinesInCommand(tools, row, withNotes, prices, reader.session.userId, true)
+    await markEdited(tools.tx, row.id, reader.session.userId, tools.now) // B-CP-075
     tools.audit({
       recordType: 'PortalOrderRequest',
       recordId: row.id,
@@ -120,6 +125,8 @@ export async function uploadSheet(app: FastifyInstance, request: FastifyRequest,
     })
     draftChanged(tools, row) // B-CP-071
     return outcome
+  }).catch(async (error: unknown) => {
+    throw error instanceof StaleVersionError ? await staleDraftError(app, request, row.id) : error // B-CP-075
   })
   return { dryRun, applied: true as const, added: result.added.length, merged: [...result.merged], kept: [...result.kept], record: await requestView(app, request, reader, await ownRequest(request, reader, requestId)) }
 }

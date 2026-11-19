@@ -36,11 +36,18 @@ import {
   templateContract,
   uploadContract,
   withdrawContract,
+  // B-CP-075: described and made-to-measure lines, and the people of a by-person line.
+  addCustomLineContract,
+  changeCustomLineContract,
+  addPeopleContract,
+  changePersonContract,
+  removePersonContract,
 } from './contract'
 import { manifest } from './manifest'
 import { acceptRequest, listOfficeRequests, officeRequestView, refuseRequest } from './office'
 import { pastOrder, pastOrders, reorderInto } from './reorder'
 import { addLines, changeHeader, changeLine, createDraft, getRequest, listRequests, sendRequest, takeTodaysPrices, withdrawRequest } from './requests'
+import { addCustomLine, addPeople, changeCustomLine, changePerson, removePerson } from './requests' // B-CP-075
 // B-CP-072: the draft's files; a discarded draft and a line taken out take theirs with them.
 import { announceDraftFile, completeDraftFile, discardDraftWithFiles, removeDraftFile, removeLineWithFiles } from './draft-files'
 import { orderTemplate, uploadSheet } from './upload'
@@ -74,6 +81,16 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   app.post('/portal/order-requests/:requestId/files', { schema: announceDraftFileContract }, async (request, reply) => reply.code(201).send(await announceDraftFile(processFiles(), app, request, request.params.requestId, request.body, idempotencyKeyFrom(request))))
   app.post('/portal/order-requests/:requestId/files/:fileId/complete', { schema: completeDraftFileContract }, async (request) => completeDraftFile(processFiles(), app, request, request.params.requestId, request.params.fileId, idempotencyKeyFrom(request)))
   app.delete('/portal/order-requests/:requestId/files/:fileId', { schema: removeDraftFileContract }, async (request) => removeDraftFile(processFiles(), app, request, request.params.requestId, request.params.fileId, request.query.version, idempotencyKeyFrom(request)))
+  // B-CP-075: described and made-to-measure lines (a line out: DELETE …/lines/:lineId), and the people of a by-person line.
+  app.post('/portal/order-requests/:requestId/custom-lines', { schema: addCustomLineContract }, async (request) => addCustomLine(app, request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
+  app.put('/portal/order-requests/:requestId/custom-lines/:lineId', { schema: changeCustomLineContract }, async (request) => changeCustomLine(app, request, request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
+  app.post('/portal/order-requests/:requestId/lines/:lineId/people', { schema: addPeopleContract }, async (request) => addPeople(app, request, request.params.requestId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
+  app.put('/portal/order-requests/:requestId/lines/:lineId/people/:personId', { schema: changePersonContract }, async (request) =>
+    changePerson(app, request, request.params.requestId, request.params.lineId, request.params.personId, request.body, idempotencyKeyFrom(request)),
+  )
+  app.delete('/portal/order-requests/:requestId/lines/:lineId/people/:personId', { schema: removePersonContract }, async (request) =>
+    removePerson(app, request, request.params.requestId, request.params.lineId, request.params.personId, request.query.version, idempotencyKeyFrom(request)),
+  )
   app.post('/portal/order-requests/:requestId/send', { schema: sendContract }, async (request) => sendRequest(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
   app.post('/portal/order-requests/:requestId/withdraw', { schema: withdrawContract }, async (request) => withdrawRequest(app, request, request.params.requestId, request.body.version, idempotencyKeyFrom(request)))
 

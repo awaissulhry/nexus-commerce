@@ -17,6 +17,8 @@ import { afterCursor, cursorOf, type RecordRef } from '../threads/threads'
 import { resolveRecord } from '../threads/records'
 import { shareRecordOf } from './records'
 import { walledForOutside } from '../files/content-wall' // fix-wall-1
+// B-CP-023 (the money wall D6, L1): a priced file on a message, for a link without the price grain.
+import { mayOpenPriced, PRICED_LOCK, seesPrices, type PricedLock } from '@nexus/factory-domain/files/priced'
 
 /**
  * What an invited partner reads (B-W2b-200; COL-061, COL-062; design links.invite, SCR-270: why you are here, the record,
@@ -61,7 +63,7 @@ const MESSAGE_PARTNER = { id: true, threadId: true, direction: true, channel: tr
 export type PartnerMessageRow = Prisma.MessageGetPayload<{ select: typeof MESSAGE_PARTNER }>
 export const THREAD_PARTNER = { id: true, companyId: true, siteId: true, partyId: true, recordType: true, recordId: true, status: true } as const satisfies Prisma.ThreadSelect
 export type PartnerThreadRow = Prisma.ThreadGetPayload<{ select: typeof THREAD_PARTNER }>
-const FILE_PARTNER = { id: true, companyId: true, recordType: true, recordId: true, kind: true, originalName: true, contentType: true, sizeBytes: true, status: true, visibility: true, partyId: true } as const satisfies Prisma.StoredFileSelect
+const FILE_PARTNER = { id: true, companyId: true, recordType: true, recordId: true, kind: true, originalName: true, contentType: true, sizeBytes: true, status: true, visibility: true, partyId: true, /* B-CP-023 */ priced: true } as const satisfies Prisma.StoredFileSelect
 
 /** The audit action of an invited partner's post: its actor is the link (`mine` on the page). */
 export const SHARE_POST_ACTION = 'shares.post'
@@ -102,14 +104,20 @@ export const threadOf = (client: Client, ref: RecordRef): Promise<PartnerThreadR
 /** The attached files the link may see: of its record, shared with its party's links, available. */
 export async function linkAttachments(client: Client, request: FastifyRequest, fileIds: readonly string[]) {
   const link = linkSessionOf(request)
-  const seen = new Map<string, { id: string; kind: string; originalName: string; contentType: string; sizeBytes: number; status: string }>()
+  const seen = new Map<string, { id: string; kind: string; originalName: string; contentType: string; sizeBytes: number; status: string; /* B-CP-023 */ locked?: PricedLock }>()
   const ids = [...new Set(fileIds)]
   if (ids.length === 0) return seen
   const viewer = { audience: 'link' as const, partyId: link.partyId, record: link.record }
   const actor = actorOf(requireContext(request))
+  const sees = seesPrices(actor) // B-CP-023: the link's own capped price grain
   for (const row of await client.storedFile.findMany({ where: { id: { in: ids } }, select: FILE_PARTNER })) {
     if (row.status !== 'AVAILABLE' || !audienceSees(viewer, { ...row, visibility: row.visibility as FileAudience[] })) continue
     if (!can(actor, FILES_READ, { companyId: row.companyId, partyId: row.partyId })) continue
+    // B-CP-023: a priced file the link may not open is shown locked — counted, never named (opening is 404).
+    if (!mayOpenPriced(row, sees)) {
+      seen.set(row.id, { id: row.id, kind: row.kind, originalName: '', contentType: row.contentType, sizeBytes: row.sizeBytes, status: row.status, locked: PRICED_LOCK })
+      continue
+    }
     seen.set(row.id, { id: row.id, kind: row.kind, originalName: row.originalName, contentType: row.contentType, sizeBytes: row.sizeBytes, status: row.status })
   }
   return seen
@@ -125,7 +133,7 @@ async function minePosts(request: FastifyRequest, link: LinkSession, rows: reado
   return new Set(audits.map((row) => row.recordId))
 }
 
-export function messageViewOf(row: PartnerMessageRow, companyName: string, attachments: ReadonlyMap<string, { id: string; kind: string; originalName: string; contentType: string; sizeBytes: number }>, mine: ReadonlySet<string>) {
+export function messageViewOf(row: PartnerMessageRow, companyName: string, attachments: ReadonlyMap<string, { id: string; kind: string; originalName: string; contentType: string; sizeBytes: number; /* B-CP-023 */ locked?: PricedLock }>, mine: ReadonlySet<string>) {
   const side = sideOf(row.direction)
   return {
     id: row.id,
@@ -135,7 +143,7 @@ export function messageViewOf(row: PartnerMessageRow, companyName: string, attac
     body: row.bodyText,
     attachments: row.attachmentFileIds.flatMap((fileId) => {
       const seen = attachments.get(fileId)
-      return seen ? [{ id: seen.id, kind: seen.kind, originalName: seen.originalName, contentType: seen.contentType, sizeBytes: seen.sizeBytes }] : []
+      return seen ? [{ id: seen.id, kind: seen.kind, originalName: seen.originalName, contentType: seen.contentType, sizeBytes: seen.sizeBytes, ...(seen.locked ? { locked: seen.locked } : {}) /* B-CP-023 */ }] : []
     }),
     at: toUtcIso(row.at),
   }

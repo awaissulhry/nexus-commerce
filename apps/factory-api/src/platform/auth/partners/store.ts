@@ -60,6 +60,8 @@ export interface PortalSettingsView {
   /** Read only here: saved by B-PR-42a's route (production.brand.manage, L21). */
   readonly productionSupervisorId: string | null
   readonly productionBackupId: string | null
+  /** B-CP-078: made-to-measure lines in the customer's portal drafts (on by default; drafts only). */
+  readonly mtmDraftsOn: boolean
 }
 
 const SETTINGS_SELECT = {
@@ -76,6 +78,7 @@ const SETTINGS_SELECT = {
   overrideFourEyes: true,
   productionSupervisorId: true,
   productionBackupId: true,
+  mtmDraftsOn: true, // B-CP-078
 } as const
 
 /** A party's portal settings (id = the party's id, B-W2b-152); no row: everything OFF, no limit (B-PR-14: Status only, urgency off, quota 3, no asks). */
@@ -97,6 +100,7 @@ export async function settingsOf(client: Reader, partyId: string): Promise<Porta
     overrideFourEyes: false,
     productionSupervisorId: null,
     productionBackupId: null,
+    mtmDraftsOn: true, // B-CP-078: the column's default
   }
 }
 
