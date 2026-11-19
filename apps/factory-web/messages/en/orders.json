@@ -974,7 +974,11 @@
     "shipToFailed": "The delivery addresses could not be read: the order keeps its address.",
     "shipToPrepared": "A shipment is being prepared for the old address: change it there first",
     "shipToPreparedOf": "Shipment {number} is being prepared for the old address: change it there first",
-    "shipToDone": "The delivery address is changed."
+    "shipToDone": "The delivery address is changed.",
+    "pricedHeld": {
+      "apply": "A priced change is made by someone who sees prices.",
+      "net": "Net: shown to people who see prices"
+    }
   },
   "editor": {
     "add": {
@@ -2036,6 +2040,41 @@
     "notAFile": "Not a file of this order: pick another.",
     "refusedLine": "This price cannot be saved like this.",
     "otherCurrency_one": "{count} customer's price in another currency is left out (never converted).",
-    "otherCurrency_other": "{count} customer's prices in another currency are left out (never converted)."
+    "otherCurrency_other": "{count} customer's prices in another currency are left out (never converted).",
+    "card": {
+      "title": "Price check",
+      "edit": "Customer's price…",
+      "changeOurs": "Change our price ›",
+      "history": "History ›",
+      "historyHeld": "The history needs the right to read the audit log.",
+      "total": "Total",
+      "tableLabel": "Price check of {number}",
+      "col": {
+        "theirs": "Customer's unit price",
+        "ourAmount": "Our amount",
+        "theirAmount": "Customer's amount",
+        "check": "Check",
+        "diff": "Difference"
+      },
+      "hint": "Difference = our price minus the customer's: + we ask more, − we ask less. Without VAT, exact to the cent.",
+      "missing": "{missing} of {lines} lines without the customer's price",
+      "notChecked": "Not checked: a line without pieces or without a price",
+      "emptyTitle": "No customer price yet",
+      "emptyBody": "The check says Equal only when the customer's price and ours are the same to the cent, without VAT.",
+      "sources": "Where the customer's price came from",
+      "linesOf_one": "line {list}",
+      "linesOf_other": "lines {list}",
+      "typedBy": "typed by {name}, {date}",
+      "note": "“{note}”",
+      "priced": "Priced document",
+      "takeOverLabel": "The customer's request named its prices",
+      "takeOver": "Request {number} named the customer's prices",
+      "takeOverNoNumber": "The customer's request named its prices",
+      "takeOverLines_one": "for 1 line",
+      "takeOverLines_other": "for {count} lines",
+      "takeOverAction": "Take them over",
+      "taking": "Taking them over…",
+      "takenOver": "The customer's prices of {number} are taken over from its request."
+    }
   }
 }

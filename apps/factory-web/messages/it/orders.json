@@ -974,7 +974,11 @@
     "shipToFailed": "Non è stato possibile leggere gli indirizzi di consegna: l'ordine mantiene il suo indirizzo.",
     "shipToPrepared": "Si sta preparando una spedizione al vecchio indirizzo: cambialo lì prima",
     "shipToPreparedOf": "Si sta preparando la spedizione {number} al vecchio indirizzo: cambialo lì prima",
-    "shipToDone": "L'indirizzo di consegna è cambiato."
+    "shipToDone": "L'indirizzo di consegna è cambiato.",
+    "pricedHeld": {
+      "apply": "Una modifica con prezzi la fa chi vede i prezzi.",
+      "net": "Imponibile: visibile a chi vede i prezzi"
+    }
   },
   "editor": {
     "add": {
@@ -2036,6 +2040,41 @@
     "notAFile": "Non è un file di questo ordine: scegline un altro.",
     "refusedLine": "Questo prezzo non si può salvare così.",
     "otherCurrency_one": "{count} prezzo del cliente in un'altra valuta è escluso (mai convertito).",
-    "otherCurrency_other": "{count} prezzi del cliente in un'altra valuta sono esclusi (mai convertiti)."
+    "otherCurrency_other": "{count} prezzi del cliente in un'altra valuta sono esclusi (mai convertiti).",
+    "card": {
+      "title": "Verifica prezzi",
+      "edit": "Prezzo del cliente…",
+      "changeOurs": "Cambia il nostro prezzo ›",
+      "history": "Storico ›",
+      "historyHeld": "Per lo storico serve il diritto di leggere il registro attività.",
+      "total": "Totale",
+      "tableLabel": "Verifica prezzi di {number}",
+      "col": {
+        "theirs": "Prezzo unitario del cliente",
+        "ourAmount": "Nostro importo",
+        "theirAmount": "Importo del cliente",
+        "check": "Verifica",
+        "diff": "Differenza"
+      },
+      "hint": "Differenza = il nostro prezzo meno quello del cliente: + chiediamo di più, − chiediamo di meno. IVA esclusa, al centesimo.",
+      "missing": "{missing} righe su {lines} senza prezzo del cliente",
+      "notChecked": "Non verificata: una riga senza pezzi o senza prezzo",
+      "emptyTitle": "Prezzo del cliente non ancora dato",
+      "emptyBody": "La verifica dice Uguale solo quando il prezzo del cliente e il nostro sono uguali al centesimo, IVA esclusa.",
+      "sources": "Da dove viene il prezzo del cliente",
+      "linesOf_one": "riga {list}",
+      "linesOf_other": "righe {list}",
+      "typedBy": "inserito da {name}, {date}",
+      "note": "«{note}»",
+      "priced": "Documento con prezzi",
+      "takeOverLabel": "La richiesta del cliente indica i suoi prezzi",
+      "takeOver": "La richiesta {number} indica i prezzi del cliente",
+      "takeOverNoNumber": "La richiesta del cliente indica i suoi prezzi",
+      "takeOverLines_one": "per 1 riga",
+      "takeOverLines_other": "per {count} righe",
+      "takeOverAction": "Riprendili",
+      "taking": "Li riprendo…",
+      "takenOver": "I prezzi del cliente di {number} sono ripresi dalla sua richiesta."
+    }
   }
 }

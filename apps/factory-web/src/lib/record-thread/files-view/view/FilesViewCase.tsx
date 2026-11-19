@@ -63,6 +63,7 @@ function Case({ model }: { model: FilesViewCaseModel }) {
               onUploadChange: (change) => setUpload((ask) => (ask ? { ...ask, ...change } : ask)),
               onUploadCancel: () => setUpload(null),
               onUploadConfirm: () => setUpload(null),
+              onPriced: () => undefined, // F-CP-144: the mark's button shows; nothing is sent in a design case
               onUseOn: (ids) =>
                 setUseOn({
                   files: files.filter((file) => ids.includes(file.id)).map((file) => ({ id: file.id, name: file.name })),

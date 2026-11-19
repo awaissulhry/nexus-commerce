@@ -15,8 +15,11 @@ import { designScreen as overviewScreen } from '../overview/fixtures'
 import { designScreen as rolesScreen } from '../roles/fixtures'
 import { ATTENTION_KINDS, DRILL_STATES, PROTECTION_FACTS, PROTECTION_STATES, REFUSAL_CODES, STATUS_PARTS, STATUS_STATES, type AttentionItem, type Drill, type StatusLine, type TwoFactorRole } from './api'
 import { designScreen } from './fixtures'
+import { PRICE_HOLDERS } from './fixtures' // F-CP-145
+import { rolePermissions } from '../../../shell/design-data' // F-CP-145
 import { designScreen as jobsScreen } from './jobs/fixtures'
 import { bulkHeld, canTake, changesFor, drillFormErrors, drillPreview, emptyDrillForm, overallOf, refusalWords, rowHeld, STATUS_LINKS, statusWords } from './model'
+import { grainsShown, MAKE_PRICE_ROLE, priceHolderCount, reachWords, securityCan, withoutTwoFactorOf } from './model' // F-CP-145
 import { adminHref } from '../shared/model'
 import { attentionColumns, attentionWords } from './view/AttentionSection'
 import { drillColumns, twoFactorColumns } from './view/SecurityView'
@@ -273,3 +276,65 @@ describe('every link Security & health builds resolves to a route', () => {
   })
 })
 // ── end B-W2b-F56 ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+// ── F-CP-145 (customer page plan O3, the money wall; design 11-money §4.4) ─────────────────────────────────────────────────────
+// "Who sees prices" on Admin › Security: the rows (each role with the money it sees, its reach, since / until, two-factor), the outside
+// accountants until their end of access, the footer; read only by a person who sees prices — as Administrator / as Sales worker no
+// card and no call (the API answers 403 to them anyway).
+describe('Who sees prices (F-CP-145)', () => {
+  const role = PRICE_HOLDERS.people[2]!.roles[0]!
+
+  it('is read only by a person who sees prices and may see users: never by an Administrator or a Sales worker', () => {
+    expect(securityCan(new Set(['security.view', 'users.view', 'money.price'])).prices).toBe(true)
+    expect(securityCan(new Set(['security.view', 'users.view'])).prices).toBe(false)
+    expect(securityCan(new Set(['security.view', 'money.price'])).prices).toBe(false)
+    // The ready-made roles' permissions never carry a grain: an Administrator and a Sales worker hold no money.price.
+    for (const key of ['admin', 'sales'] as const) expect(securityCan(new Set(rolePermissions(key))).prices, key).toBe(false)
+  })
+
+  it('says each role\'s money, reach and dates in words', () => {
+    expect(grainsShown({ grains: ['margin', 'price', 'unknown'] })).toEqual(['price', 'margin'])
+    expect(reachWords({ allCustomers: true, customers: 0, allCompanies: true, companies: 0 })).toEqual([{ key: 'sec.priceHolders.reach.all' }])
+    expect(reachWords(role)).toEqual([
+      { key: 'sec.priceHolders.reach.some', params: { count: 3 } },
+      { key: 'sec.priceHolders.reach.companies', params: { count: 1 } },
+    ])
+    expect(priceHolderCount(PRICE_HOLDERS)).toBe(5)
+    expect(withoutTwoFactorOf(PRICE_HOLDERS).map((person) => person.name)).toEqual(['Paolo Fittizio', 'Sofia Prova'])
+    expect(MAKE_PRICE_ROLE).toBe('/roles?new=finance')
+  })
+
+  it('draws the rows, the guests until their end, the rule and the footer; the link opens New role on Finance', () => {
+    const drawn = render(designScreen as DesignScreen<unknown>, designScreen.cases.find((item) => item.id === 'prices')!.model, 'en')
+    expect(drawn).toContain('Who sees prices')
+    expect(drawn).toContain('Only the Owner gives a role that sees prices.')
+    expect(drawn).toContain('Only you and the people listed here see our prices.')
+    expect(drawn).toContain('Lucia Demo')
+    expect(drawn).toContain('3 customers')
+    expect(drawn).toContain('Not set up yet')
+    expect(drawn).toContain('Invited')
+    expect(drawn).toContain('Studio Contabile Esempio')
+    expect(drawn).toContain('Until ')
+    expect(drawn).toContain('/w/DEMO/admin/roles?new=finance')
+    const held = render(designScreen as DesignScreen<unknown>, designScreen.cases.find((item) => item.id === 'prices-no-guests')!.model, 'en')
+    expect(held).toContain('No outside accountant sees our prices.')
+    expect(held).not.toContain('/w/DEMO/admin/roles?new=finance')
+  })
+
+  it('as Administrator / as Sales worker: no card at all (no price grain, no call)', () => {
+    for (const id of ['prices-as-admin', 'normal']) {
+      const drawn = render(designScreen as DesignScreen<unknown>, designScreen.cases.find((item) => item.id === id)!.model, 'en')
+      expect(drawn, id).not.toContain('Who sees prices')
+      expect(drawn, id).not.toContain('Only you and the people listed here see our prices.')
+    }
+  })
+
+  it('has the states the design names, in it too', () => {
+    const ids = designScreen.cases.map((item) => item.id)
+    for (const state of ['prices', 'prices-loading', 'prices-error', 'prices-no-guests', 'prices-as-admin']) expect(ids).toContain(state)
+    const italian = render(designScreen as DesignScreen<unknown>, designScreen.cases.find((item) => item.id === 'prices')!.model, 'it')
+    expect(italian).toContain('Chi vede i prezzi')
+    expect(italian).toContain('Solo il titolare dà un ruolo che vede i prezzi.')
+  })
+})
+// ── end F-CP-145 ─────────────────────────────────────────────────────────────────────────────────────────────────────────

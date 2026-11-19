@@ -1,6 +1,7 @@
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { compareFingerprints, DRILL_KEYS, drillProblems, drillResultOf, parseFingerprint, type DrillCheck, type Fingerprint } from '@nexus/factory-domain/ops/drills'
 import type { Drill, DrillStatus, FingerprintAnswer, SecurityFacts, StatusLine, TwoFactorChange, TwoFactorList, TwoFactorPreview, TwoFactorRole } from './api'
+import type { PriceHolderRole, PriceHolders } from './api' // F-CP-145
 import type { SecurityDepthModel } from './sessions/view/SecurityDepth'
 
 /**
@@ -37,6 +38,13 @@ export interface SecurityViewModel {
   live?: 'connecting' | 'live' | 'offline'
   /** B-W2b-413: the W2b sections (sessions/view/SecurityDepth). */
   depth?: SecurityDepthModel
+  /**
+   * F-CP-145 (the money wall, Owner O3): "Who sees prices" — read only for a person who sees prices and may see users; absent (or
+   * no-right) for anyone else: no card, no call.
+   */
+  priceHolders?: Read<PriceHolders>
+  /** F-CP-145: roles.manage — "Make a role that sees prices only ›" opens New role on Finance (else held in words). */
+  canMakeRole?: boolean
 }
 
 // ---- Is everything working? ------------------------------------------------------------------------------------------
@@ -199,5 +207,30 @@ export function securityCan(held: ReadonlySet<string>) {
     record: held.has('security.drills.record'),
     roles: held.has('roles.view'),
     changeRoles: held.has('roles.manage'),
+    // F-CP-145: "Who sees prices" is itself behind the money wall (users.view and the price grain; the API answers 403 otherwise).
+    prices: held.has('users.view') && held.has('money.price'),
   }
 }
+
+// ---- F-CP-145 (customer page plan O3; design 11-money §4.4): "Who sees prices" ---------------------------------------------------
+
+/** Where "Make a role that sees prices only ›" goes: Admin › Roles with New role started on Finance (the Owner keeps only the price). */
+export const MAKE_PRICE_ROLE = '/roles?new=finance'
+
+/** The money a role sees, in the catalogue's order (an unknown grain is left out): keys of `admin` `grains.short.*`. */
+export const GRAIN_ORDER = ['price', 'cost', 'margin', 'wages', 'pay'] as const
+export const grainsShown = (role: Pick<PriceHolderRole, 'grains'>): string[] => GRAIN_ORDER.filter((grain) => role.grains.includes(grain))
+
+/** A role's reach in words: all customers, or how many (and the companies when not all). Keys of `admin-security`. */
+export function reachWords(role: Pick<PriceHolderRole, 'allCustomers' | 'customers' | 'allCompanies' | 'companies'>): { key: string; params?: Record<string, number> }[] {
+  const words: { key: string; params?: Record<string, number> }[] = [role.allCustomers ? { key: 'sec.priceHolders.reach.all' } : { key: 'sec.priceHolders.reach.some', params: { count: role.customers } }]
+  if (!role.allCompanies) words.push({ key: 'sec.priceHolders.reach.companies', params: { count: role.companies } })
+  return words
+}
+
+/** How many people see our prices: the office people listed and the outside accountants. */
+export const priceHolderCount = (answer: Pick<PriceHolders, 'people' | 'guests'>): number => answer.people.length + answer.guests.length
+
+/** The people without two-factor set up (their role asks it at their next sign-in). */
+export const withoutTwoFactorOf = (answer: Pick<PriceHolders, 'people'>) => answer.people.filter((person) => !person.twoFactor)
+// ---- end F-CP-145
