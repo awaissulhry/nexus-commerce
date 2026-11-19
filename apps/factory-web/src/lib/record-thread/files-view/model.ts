@@ -1,5 +1,7 @@
 import type { FileAudience, FileKind } from '../../../record-panels/model'
 import { fileSeries, recordFiles, type FileOrigin, type FileSeries, type FilesParty, type ThreadFile } from '../files/model'
+import { isPicture } from '@nexus/factory-domain/files/thumbs/strip' // F-OP-125: the previews route's own picture rule
+import type { ViewerFile } from '../popups/model' // F-OP-127
 
 /**
  * B-TH-299 — the Files view (threads plan T9; features T9-F01…F06, F09, F10, F13): every file of ONE record (its POST /files
@@ -155,6 +157,19 @@ export interface OrderFile {
   readonly inThread: { readonly messageId: string } | null
   /** F-SA-238: a library document (a DDT, an invoice …) in its own words; absent: a plain file. */
   readonly documentWords?: { readonly it: string; readonly en: string } | null
+  /** F-OP-125 (B-OP-050, office only): who added it — a person or the customer by name; the floor never by a worker's name. */
+  readonly addedBy?: { readonly kind: 'PERSON' | 'FLOOR' | 'CUSTOMER'; readonly name: string | null } | null
+}
+
+/** F-OP-125 (B5): a made-to-measure line's newest worksheet (body data; opened by the made-to-measure route, each opening recorded). */
+export interface OrderWorksheet {
+  readonly documentId: string
+  readonly profileId: string
+  readonly line: { readonly id: string; readonly seq: number }
+  readonly version: number
+  readonly number: string | null
+  readonly language: string
+  readonly createdAt: string
 }
 
 export interface OrderFilesGroup {
@@ -162,6 +177,8 @@ export interface OrderFilesGroup {
   /** The group's words as the read gives them (it + en). */
   readonly words: { readonly it: string; readonly en: string }
   readonly files: readonly OrderFile[]
+  /** F-OP-125 (B5): the LINES group's MTM worksheets the read sends (the measurements right only; else counted in measurementsLeftOut). */
+  readonly worksheets?: readonly OrderWorksheet[]
   readonly leftOut: number
   readonly measurementsLeftOut: number
 }
@@ -181,6 +198,10 @@ export interface OrderFilesModel {
   /** files.manage: share the order's OWN files with its customer. */
   readonly canShare: boolean
   readonly busy?: boolean
+  /** F-OP-126: the previews read for the cards in view, by file id (absent: the kind's icon until it comes). */
+  readonly previews?: Readonly<Record<string, CardPreview>>
+  /** F-OP-127: the ONE viewer while open — the walk of every file in display order, the one shown, the card to give the focus back to. */
+  readonly viewer?: { readonly files: readonly ViewerFile[]; readonly index: number; readonly returnTo: HTMLElement | null } | null
   /**
    * F-SA-238: `customer` — the portal's face of the same body: the customer's own shared files only, no audience label (all are
    * theirs), no "also on", no left-out count (never "n hidden"), no choosing or sharing; default `office`.
@@ -188,8 +209,8 @@ export interface OrderFilesModel {
   readonly face?: 'office' | 'customer'
 }
 
-/** The groups that list a file or count one the reader may not open (an empty group says nothing). */
-export const orderGroupsShown = (read: OrderFilesRead): OrderFilesGroup[] => read.groups.filter((group) => group.files.length > 0 || group.leftOut + group.measurementsLeftOut > 0)
+/** The groups that list a file (or a worksheet, F-OP-125) or count one the reader may not open (an empty group says nothing). */
+export const orderGroupsShown = (read: OrderFilesRead): OrderFilesGroup[] => read.groups.filter((group) => group.files.length > 0 || (group.worksheets?.length ?? 0) > 0 || group.leftOut + group.measurementsLeftOut > 0)
 
 /** "N files you cannot open": every group's left-out files and body data without the right, counted. */
 export const orderLeftOut = (read: OrderFilesRead): number => read.groups.reduce((sum, group) => sum + group.leftOut + group.measurementsLeftOut, 0)
@@ -219,6 +240,7 @@ export function portalFilesRead(read: { readonly order: { readonly id: string };
       key: group.key,
       words: group.words,
       files: group.files.map((file) => ({ ...file, from: { type: file.from.type, id: file.from.id, label: file.from.label ?? '' }, audience: 'CUSTOMER_CAN_SEE' as const, bodyData: false, alsoOn: [], alsoOnOther: 0, inThread: null })),
+      worksheets: [], // F-OP-125: none in the portal
       leftOut: 0,
       measurementsLeftOut: 0,
     })),
@@ -234,3 +256,54 @@ export function sourceOf(file: Pick<OrderFile, 'from' | 'inThread'>, orderId: st
   return { key: 'order.source.from', params: { record: file.from.label } }
 }
 // ── end F-SA-237
+
+// ── F-OP-125 (order page plan N7 "files like Gmail"; 10-order-page §9.1): the order's file cards ───────────────────────────────────
+/** What a card's preview area shows (the API's previews route says the same kinds, B-OP-050 previewKindOf). */
+export type CardKind = 'PICTURE' | 'PDF' | 'OTHER' | 'LOCKED'
+
+/** A card's kind (the previews route's own rule, B-OP-050 previewKindOf): body data is LOCKED whatever it is (a lock, never a picture); a
+ *  picture (factory-domain isPicture); a PDF; anything else (Word, Excel, a ZIP …). */
+export function cardKindOf(file: Pick<OrderFile, 'contentType' | 'bodyData'>): CardKind {
+  if (file.bodyData) return 'LOCKED'
+  if (isPicture(file.contentType)) return 'PICTURE'
+  return file.contentType.split(';')[0]!.trim().toLowerCase() === 'application/pdf' ? 'PDF' : 'OTHER'
+}
+
+/** The card's type word, as a mail client says it: the name's extension ("PDF", "DOCX", "JPG"), else the type's ("PNG"); never a sentence. */
+export function typeLabelOf(file: Pick<OrderFile, 'name' | 'contentType'>): string {
+  const dot = file.name.lastIndexOf('.')
+  const extension = dot > 0 && dot < file.name.length - 1 ? file.name.slice(dot + 1) : ''
+  if (/^[A-Za-z0-9]{1,5}$/.test(extension)) return extension.toUpperCase()
+  const subtype = file.contentType.split(';')[0]!.split('/')[1] ?? ''
+  return /^[A-Za-z0-9]{1,5}$/.test(subtype) ? subtype.toUpperCase() : ''
+}
+
+/** "added by <name>" (office only): a person or the customer by name; the floor as "the floor" — never a worker; nobody known: none. */
+export function addedByOf(file: Pick<OrderFile, 'addedBy'>): { readonly key: string; readonly params?: Readonly<Record<string, string>> } | null {
+  const who = file.addedBy
+  if (!who) return null
+  if (who.kind === 'FLOOR') return { key: 'card.addedByFloor' }
+  return who.name ? { key: 'card.addedBy', params: { name: who.name } } : null
+}
+
+/** The LINES group's worksheets (B5), in line order. */
+export const orderWorksheetsOf = (group: Pick<OrderFilesGroup, 'worksheets'>): OrderWorksheet[] => [...(group.worksheets ?? [])].sort((a, b) => a.line.seq - b.line.seq)
+
+/** The cards in the order they are drawn (each group's files, then its worksheets): the keys and the viewer walk them. */
+export const cardOrderOf = (read: OrderFilesRead): string[] => orderGroupsShown(read).flatMap((group) => [...group.files.map((file) => file.id), ...orderWorksheetsOf(group).map((sheet) => worksheetCardId(sheet))])
+
+/** A worksheet's card id (never a file id: it opens through the made-to-measure route). */
+export const worksheetCardId = (sheet: Pick<OrderWorksheet, 'documentId'>): string => `worksheet:${sheet.documentId}`
+
+/** ← / → / ↑ / ↓ over the cards: the next card's place, a grid row being `columns` cards; null at either end (no wrap). */
+export function cardStep(at: number, count: number, key: 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown', columns: number): number | null {
+  const step = key === 'ArrowLeft' ? -1 : key === 'ArrowRight' ? 1 : key === 'ArrowUp' ? -Math.max(1, columns) : Math.max(1, columns)
+  const next = at + step
+  return next < 0 || next >= count ? null : next
+}
+// ── end F-OP-125
+
+// ── F-OP-126 (review R-14): what a card's preview area shows once its preview is read (none yet: the kind's icon) ──
+/** picture: the small preview's address; page: PDF page 1 drawn here (a data URL); largePdf: "Large PDF: open it to see it"; icon: none. */
+export type CardPreview = { readonly kind: 'picture'; readonly src: string } | { readonly kind: 'page'; readonly src: string } | { readonly kind: 'largePdf' } | { readonly kind: 'icon' }
+// ── end F-OP-126

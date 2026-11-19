@@ -34,6 +34,8 @@ import {
   type Role,
 } from '../_demo/fixtures'
 import { ddtFormFor } from '../model'
+// F-OP-130 (order page N6): a shipment of two orders of one customer (shown as it will be after the switch, B-OP-047).
+import { CANDIDATES_AFTER, CANDIDATES_HELD, SECOND_ORDER, SECOND_READY, secondBackorder, sharedShipment } from '../_demo/fixtures'
 import type { ShipmentRecordModel } from './record-model'
 import { ShipmentRecordView } from './view/ShipmentRecordView'
 // ---- B-TH-264: the shipment's docked thread in the design cases (RecordFrame beside every tab) ----
@@ -78,8 +80,10 @@ const base = (role: Role, input: Shipment, over: Partial<ShipmentRecordModel> = 
       labels: can.pack ? { value: labels(value), problem: null } : null,
       tracking: value.parcels.some((entry) => entry.trackingNumber) ? { value: tracking(value, value.status === 'DELIVERED'), problem: null } : null,
       documents: { value: documents(value.status === 'DRAFT' ? 'onFile' : 'attached', value.status === 'SHIPPED' || value.status === 'DELIVERED' ? LINKS : []), problem: null },
-      ready: value.status === 'DRAFT' && can.manage ? { value: READY[0]!, problem: null } : null,
-      backorder: { value: backorder(), problem: null },
+      ready: value.status === 'DRAFT' && can.manage ? { value: [READY[0]!], problem: null } : null,
+      backorder: { value: [backorder()], problem: null },
+      candidates: null, // F-OP-130
+      picked: null, // F-OP-130
       packingLists: { value: value.status === 'DRAFT' || value.status === 'CANCELLED' ? [] : PACKING_LISTS, problem: null },
       evidence: { value: evidence(value.transportEvidence.status), problem: null },
       voided: null,
@@ -173,8 +177,8 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'part-failed', label: 'A part could not be read (Documents): in words with Try again', model: base('warehouse', packed, { tab: 'documents', documents: { value: null, problem: 'problem.read.unavailable' } }) },
     // ---- B-W2a-71 (every day) ----
     { id: 'backorder-partial', label: 'Lines: the order on this shipment, 2 garments stay on backorder (1 ready, 1 to make)', model: base('warehouse', packed) },
-    { id: 'backorder-complete', label: 'Lines: this shipment completes the order', model: base('warehouse', packed, { backorder: { value: backorder('complete'), problem: null } }) },
-    { id: 'backorder-closed', label: 'Lines: a line closed short (its rest never ships)', model: base('warehouse', packed, { backorder: { value: backorder('closed'), problem: null } }) },
+    { id: 'backorder-complete', label: 'Lines: this shipment completes the order', model: base('warehouse', packed, { backorder: { value: [backorder('complete')], problem: null } }) },
+    { id: 'backorder-closed', label: 'Lines: a line closed short (its rest never ships)', model: base('warehouse', packed, { backorder: { value: [backorder('closed')], problem: null } }) },
     { id: 'backorder-failed', label: 'Lines: the backorder could not be read (Try again)', model: base('warehouse', packed, { backorder: { value: null, problem: 'problem.read.unavailable' } }) },
     { id: 'other-documents', label: 'Documents: Other documents — the packing list\'s versions, Print all (the driver\'s pack)', model: packedWithDdt('warehouse', { tab: 'documents' }) },
     { id: 'other-none', label: 'Documents: no packing list made yet', model: packedWithDdt('warehouse', { tab: 'documents', packingLists: { value: [], problem: null } }) },
@@ -203,6 +207,20 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'complete-short', label: 'Mark complete held: one paper only', model: germanCase('finance', 'PARTIAL', { dialog: { kind: 'evidenceComplete' } }) },
     { id: 'reopen-dialog', label: 'Reopen the evidence (a paper found wrong)', model: germanCase('finance', 'COMPLETE', { dialog: { kind: 'evidenceReopen' } }) },
     { id: 'need-dialog', label: 'Needs no evidence (with the reason)', model: germanCase('finance', 'AWAITED', { dialog: { kind: 'evidenceNeed', needed: false } }) },
+    // ---- F-OP-130 (order page N6, R-5): several orders of one customer on one shipment ----
+    {
+      id: 'shared-draft',
+      label: 'Two orders on one DRAFT (after the switch): a chip per order, the lines under each order and PO, Take its garments off',
+      model: base('warehouse', sharedShipment('DRAFT'), { backorder: { value: [backorder(), secondBackorder()], problem: null }, ready: { value: [READY[0]!, SECOND_READY], problem: null } }),
+      note: 'Until the switch (B-OP-047) no shipment carries a second order: this is what Warehouse shows after it. The first order stays (the shipment was made for it); another one leaves with its garments.',
+    },
+    { id: 'shared-packed', label: 'Two orders, packed: every order named, each order’s progress', model: base('sales', sharedShipment('PACKED'), { backorder: { value: [backorder(), secondBackorder()], problem: null } }) },
+    { id: 'shared-reading', label: 'Two orders: whose each line is, still being read (a line never under the wrong order)', model: base('warehouse', sharedShipment('DRAFT'), { backorder: { value: null, problem: null } }) },
+    { id: 'add-order', label: 'Add an order’s garments… — each order held with why (several orders in one shipment: next update)', model: base('warehouse', draftLoose(), { dialog: { kind: 'addOrder' }, candidates: { value: CANDIDATES_HELD, problem: null } }), note: 'Only this shipment’s own customer’s open orders are listed, never another customer’s, not even held. Every one says why it cannot join; the real reason first.' },
+    { id: 'add-order-none', label: 'Add an order’s garments… — the customer has no other open order', model: base('warehouse', draftLoose(), { dialog: { kind: 'addOrder' }, candidates: { value: { ...CANDIDATES_HELD, orders: [] }, problem: null } }) },
+    { id: 'add-order-cells', label: 'Add an order’s garments… (after the switch): SO-2026-0090 chosen, its sizes with each cap', model: base('warehouse', draftLoose(), { dialog: { kind: 'addOrder' }, candidates: { value: CANDIDATES_AFTER, problem: null }, picked: { salesOrderId: SECOND_ORDER.id, ready: { value: SECOND_READY, problem: null } } }) },
+    { id: 'add-lines-shared', label: 'Add garments on two orders: the sizes under each order and PO', model: base('warehouse', sharedShipment('DRAFT'), { dialog: { kind: 'addLines' }, ready: { value: [READY[0]!, SECOND_READY], problem: null }, backorder: { value: [backorder(), secondBackorder()], problem: null } }) },
+    { id: 'take-off', label: 'Take SO-2026-0090’s garments off SH-00160', model: base('warehouse', sharedShipment('DRAFT'), { dialog: { kind: 'takeOff', salesOrderId: SECOND_ORDER.id }, backorder: { value: [backorder(), secondBackorder()], problem: null } }) },
     { id: 'loading', label: 'Loading', model: base('warehouse', packed, { shipment: { status: 'loading' } }) },
     { id: 'not-found', label: 'Not found (or another company)', model: base('warehouse', packed, { shipment: { status: 'not_found' } }) },
     { id: 'no-permission', label: 'No permission', model: base('warehouse', packed, { shipment: { status: 'forbidden' } }) },

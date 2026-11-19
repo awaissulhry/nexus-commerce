@@ -281,7 +281,8 @@ async function placeOf(db: Reader, recordType: RequirementRecordType, recordId: 
     const shipment = await db.shipment.findUnique({ where: { id: recordId }, select: { partyId: true, companyId: true, siteId: true, number: true, salesOrderId: true } })
     if (!shipment) return null
     const lines = await db.shipmentLine.findMany({ where: { shipmentId: recordId }, select: { salesOrderLineId: true } })
-    // A shipment without lines yet shows its order's styles (what will be packed).
+    // A shipment without lines yet shows its order's styles (what will be packed). B-OP-043 (N6): fine as the first order —
+    // with lines, the styles are its lines' (every order it carries); without, it carries its first order only.
     const styleIds = lines.length > 0 ? await stylesOfOrderLines(db, lines.map((line) => line.salesOrderLineId)) : [...new Set((await db.salesOrderLine.findMany({ where: { orderId: shipment.salesOrderId }, select: { styleId: true } })).map((line) => line.styleId))]
     return { partyId: shipment.partyId, companyId: shipment.companyId, siteId: shipment.siteId, number: shipment.number, styleIds, permission: SHIPPING_VIEW }
   }

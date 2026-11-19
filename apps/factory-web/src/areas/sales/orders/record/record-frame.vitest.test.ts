@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url' // F-OP-134
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { createElement, type ComponentType } from 'react'
-import { renderView, textOf } from '../../../../lib/record-thread/parts/testing'
+import { leftKeys, renderView, textOf } from '../../../../lib/record-thread/parts/testing'
 import { canOf } from '../_demo/fixtures'
 import { groupedMenu, landingOf, MENU_GROUPS, MERGED_TABS, recordTabs, tabOf } from '../model'
 import { DOCK_DEFAULTS, RECORD_TABS } from '../model' // F-SA-263
@@ -604,3 +604,84 @@ describe('F-OP-213 — scopes by rights: General when its thread is readable, Al
   })
 })
 // ---- end F-OP-213
+
+// ---- F-OP-217 (order page plan N4; 11-dock §2, §3, §7): the dock's scopes in the design screen, and the narrow-card rules ----------------
+describe('F-OP-217 — every dock scope drawn in the one card (design cases), the rules of a card of 480 px or less', () => {
+  const dockOf = (html: string) => html.slice(html.indexOf('class="fw-rcf-dock"'))
+  it('This order, General and a work order: the pick band is the card\'s first band; the work order\'s line in the office tone', () => {
+    for (const id of ['f-op-217-dock-order', 'f-op-217-dock-general', 'f-op-217-dock-work-order']) {
+      const dock = dockOf(draw(id))
+      expect(dock.match(/class="fw-rt-column is-docked"/g)?.length, id).toBe(1)
+      expect(dock.indexOf('class="fw-rt-top"'), id).toBeGreaterThan(dock.indexOf('class="fw-rt-column is-docked"'))
+      expect(dock, id).toContain('class="fw-thread-pick"')
+    }
+    expect(dockOf(draw('f-op-217-dock-work-order'))).toContain('class="fw-thread-pick-line is-office"')
+    expect(textOf(dockOf(draw('f-op-217-dock-general')))).toContain('Moto Demo S.r.l.')
+  })
+  it('All of <customer>: the card with the pick band, its Head, compact lines and the foot "Read only. Write in:" — both languages', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const dock = dockOf(draw('f-op-217-dock-all', locale))
+      const at = (part: string) => dock.indexOf(part)
+      expect(at('class="fw-rt-top"')).toBeGreaterThan(-1)
+      expect(at('class="fw-rt-top"')).toBeLessThan(at('class="fw-rth fw-aoc-head"'))
+      expect(at('class="fw-rth fw-aoc-head"')).toBeLessThan(at('class="fw-rt-body"'))
+      expect(at('class="fw-rt-body"')).toBeLessThan(at('class="fw-rt-foot"'))
+      expect(dock.match(/<article class="fw-aoc-line/g)?.length, locale).toBe(5)
+      expect(dock).toContain('class="fw-aoc-line is-office"')
+      expect(textOf(dock)).toContain(locale === 'en' ? 'Read only. Write in:' : 'Sola lettura. Scrivi in:')
+      expect(leftKeys(dock, ['allOfCustomer', 'record.dock', 'width', 'more'])).toEqual([])
+    }
+  })
+  it('the rules of a narrow card: short words, a full-width second select, the body and foot tighter, the lines and chips within the card', () => {
+    const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+    expect(read('../../../_shared/record-thread/thread-pick.css')).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-thread-pick-extra,\s*\.fw-thread-pick-extra select \{\s*width: 100%;/)
+    expect(read('../../../../lib/record-thread/record-thread.css')).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-rt-body \{\s*padding: var\(--nds-space-10\) var\(--nds-space-12\);/)
+    expect(read('../../../_shared/record-thread/all-of-customer/all-of-customer.css')).toMatch(/\.fw-aoc-chip \{\s*max-width: calc\(100% - var\(--nds-space-24\)\);/)
+    // The phone: the full-width view (thread=open), ← Back above the card, no radius (record-thread.css's phone rule).
+    expect(read('../../../../lib/record-thread/record-thread.css')).toMatch(/@media \(max-width: 719px\) \{\s*\.fw-rt-column \{\s*border-radius: 0;/)
+  })
+})
+// ---- end F-OP-217
+
+// ---- F-OP-215 (order page plan N4; 11-dock §6.2, D2; review N-1): the dock's files line on the order = the order's file set ------------
+describe('F-OP-215 — the files line counts the order\'s file set (the Files tab\'s count); All files opens the Files tab', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  it('the order\'s set as tiles: one per listed file, the count = read.total; body data locked; what the customer sees marked theirs', async () => {
+    const { stripFilesOf } = await import('../../../_shared/record-thread/use-order-files')
+    const { fileSeries, filesChip } = await import('../../../../lib/record-thread/files/model')
+    const { ORDER_FILES } = await import('./overview/fixtures')
+    const tiles = stripFilesOf(ORDER_FILES, 'party-a')
+    expect(tiles.map((tile) => tile.name)).toEqual(['Ordine firmato.pdf', 'Note ufficio.pdf', 'Logo ricamo.pdf', 'Taglio nero.jpg'])
+    expect(filesChip(fileSeries(tiles)).count).toBe(ORDER_FILES.total)
+    expect(tiles[0]).toMatchObject({ visibility: ['OFFICE', 'PARTNER'], partyId: 'party-a', messageId: '0190f0e2-8282-7000-8000-000000000001', status: 'AVAILABLE' })
+    expect(tiles[1]).toMatchObject({ visibility: ['OFFICE'], partyId: null })
+    expect(tiles[3]).toMatchObject({ kind: 'PHOTO', recordType: 'WorkOrder' })
+    const body = stripFilesOf({ ...ORDER_FILES, groups: [{ ...ORDER_FILES.groups[0]!, files: [{ ...ORDER_FILES.groups[0]!.files[0]!, bodyData: true }] }], total: 1 }, null)
+    expect(body[0]).toMatchObject({ locked: 'MEASUREMENTS' })
+    // The strip draws "Files (4)", the Files tab's own count (model.files.read.total).
+    const { render, textOf: text } = await import('../../../../lib/record-thread/parts/testing')
+    const { FileStrip } = await import('../../../../lib/record-thread/files/view/FileStrip')
+    expect(text(render(createElement(FileStrip, { model: { files: tiles, party: null, open: false } })))).toContain(`Files (${ORDER_FILES.total})`)
+    expect(read('./view/OrderRecordView.tsx')).toContain("count: tab === 'files' ? (model.files?.read?.total ?? null)")
+  })
+  it('the dock reads no files of its own on the order: the page\'s ONE container, its tiles and All files to the Files tab', () => {
+    const docked = read('../../../_shared/record-thread/DockedOfficeThread.tsx')
+    expect(docked).toContain("const hostFiles = key.type === 'SalesOrder' ? (host.orderFiles ?? null) : null")
+    expect(docked).toContain("orderId: key.type === 'SalesOrder' && !hostFiles ? key.id : null")
+    expect(docked).toContain('const orderFiles = hostFiles ?? ownOrderFiles')
+    expect(docked).toContain('onAllFiles: () => (hostFiles ? hostFiles.onAll() : setFilesOpen(true)),')
+    expect(docked).toContain('model={{ files: stripFiles, party: filesParty')
+    const page = read('./OrderRecord.tsx')
+    expect(page.match(/useOrderFiles\(api, \{/g)).toHaveLength(1)
+    expect(page).toContain("enabled: tab === 'files' || session.permissions.includes('files.read'),")
+    expect(page).toContain("router.replace(tabAddress(pathname, window.location.search, 'files', { narrow: narrowNow() }), { scroll: false })")
+    expect(page.match(/orderFiles=\{orderFilesHost \/\* F-OP-215 \*\/\}/g)).toHaveLength(2)
+    const dock = read('./dock/OrderDock.tsx')
+    expect(dock).toContain('{...(orderFiles ? { orderFiles } : {}) /* F-OP-215 */}')
+    // Only This order's thread gets it (General, a project, a work order keep their own files).
+    const order = dock.slice(dock.lastIndexOf('shown = <OfficeRecordThread key="order"'))
+    expect(order).toContain('orderFiles')
+    expect(dock.slice(dock.indexOf('shown = <OfficeRecordThread key="general"'), dock.indexOf('} else if (scope.kind === \'project\'')).includes('orderFiles')).toBe(false)
+  })
+})
+// ---- end F-OP-215

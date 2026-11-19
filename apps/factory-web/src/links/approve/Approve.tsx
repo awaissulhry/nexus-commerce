@@ -9,7 +9,7 @@ import { pictureAddress } from '../../lib/proofs/address'
 import { LinkBrandingContext } from '../../shell/links/view/LinkFrameView'
 import { answerLinkApproval, linkFileBytes, readLinkApproval, type ApprovalFile, type LinkDecision } from './api'
 import { answerProblem, answerRefusal, isPdf, isPicture, markable, markupBodyOf, readRefusal, type ApproveViewModel, type MarkingState } from './model'
-import { pdfPageImage, pictureSize } from './pdf-page'
+import { pdfPageImage, pictureSize } from '../../lib/pdf/pdf-page' // F-OP-126: one PDF page helper for the app (moved to lib/pdf)
 import { ApproveView } from './view/ApproveView'
 
 const START: ApproveViewModel = { link: 'valid', page: null, files: {}, open: null, decision: null, comment: '', markup: null, marking: null, answer: 'idle', problem: null, field: null }

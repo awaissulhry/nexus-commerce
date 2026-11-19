@@ -12,6 +12,11 @@ import { annulPhrase, carrierWords, ddtProblemGroups, kilos, newShipmentLines, n
 import type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model'
 import { DailyDialog } from './DailyDialogs'
 import { close, Frame } from './DialogFrame'
+// F-OP-130 (order page N6, R-5): another order of the customer joins a DRAFT, or its garments go off it.
+import { RadioCard } from '@nexus/ui/primitives'
+import type { ReadyCell, ReadyOrder } from '../../api'
+import { joinHeld, lineGroups, orderWords, takeOffHeld } from '../../model'
+import { DEPTH_NS } from '../../queue/shared/depth'
 
 /**
  * A shipment's dialogs (design sh-issue-ddt, sh-buy, sh-handover, sh-annul; W1): Issue DDT (what the office says on it,
@@ -46,6 +51,11 @@ export function ShipmentDialogs({ shipment, model, actions }: { shipment: Shipme
       return <SendLinkDialog {...props} />
     case 'unpack':
       return <UnpackDialog {...props} />
+    // F-OP-130 (order page N6)
+    case 'addOrder':
+      return <AddOrderDialog {...props} />
+    case 'takeOff':
+      return <TakeOffDialog {...props} salesOrderId={dialog.salesOrderId} />
     default:
       // B-W2a-71: Void labels, the freight charged, the transport evidence.
       return <DailyDialog {...props} />
@@ -311,15 +321,18 @@ function DeliveryDialog({ shipment, model, actions }: DialogProps) {
 
 // ---- Add garments ---------------------------------------------------------------------------------------------------------
 
+// F-OP-130 (order page N6, R-5): what EVERY order the shipment carries can still put on it; with several orders the sizes stand
+// under each order and PO ("SO-0150 · Customer PO 4471"), each with its cap.
 function AddLinesDialog({ model, actions }: DialogProps) {
   const t = useT('shipments')
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const ready = model.ready
-  const order = ready?.value ?? null
-  const cells = (order?.cells ?? []).filter((cell) => cell.shippable > 0)
+  const orders = (ready?.value ?? []).map((order) => ({ order, cells: order.cells.filter((cell) => cell.shippable > 0) })).filter((entry) => entry.cells.length > 0)
+  const cells = orders.flatMap((entry) => entry.cells)
   const lines = newShipmentLines(cells, quantities)
   const problems = newShipmentProblems(cells, quantities)
   const held = model.busy ? t('held.busy') : problems.length > 0 ? t('new.held.range') : lines.length === 0 ? t('new.held.none') : null
+  const set = (cellId: string, next: number) => setQuantities((current) => ({ ...current, [cellId]: next }))
   return (
     <Frame title={t('addLines.title')} held={held} go={() => actions?.onAddLines?.(lines)} goLabel={t('addLines.go', { count: lines.reduce((sum, line) => sum + line.quantity, 0) })} onClose={close(actions)} problem={model.dialogProblem} size="lg">
       {!ready || (!ready.value && !ready.problem) ? (
@@ -330,15 +343,139 @@ function AddLinesDialog({ model, actions }: DialogProps) {
         <Banner tone="warning" title={t(ready.problem)} />
       ) : cells.length === 0 ? (
         <p className="fw-sh-hint">{t('addLines.none')}</p>
+      ) : (ready.value?.length ?? 0) > 1 ? (
+        orders.map((entry) => (
+          <fieldset key={entry.order.salesOrderId} className="fw-sh-sizes">
+            <legend className="fw-sh-h3">{orderWords(entry.order, (ref) => t('record.customerRef', { ref }))}</legend>
+            <CellSteppers cells={entry.cells} quantities={quantities} problems={problems} onChange={set} />
+          </fieldset>
+        ))
       ) : (
-        <div className="fw-sh-size-grid">
-          {cells.map((cell) => (
-            <Field key={cell.workOrderSizeId} label={`${cell.styleCode} · ${cell.colourwayName} · ${cell.size}`} hint={t('new.cap', { count: cell.shippable, batch: cell.batchNumber ?? cell.workOrderNumber })} error={problems.find((entry) => entry.cellId === cell.workOrderSizeId) ? t('new.problem.range', { max: cell.shippable }) : undefined}>
-              <NumberStepper size="sm" min={0} max={cell.shippable} value={quantities[cell.workOrderSizeId] ?? 0} onChange={(next) => setQuantities((current) => ({ ...current, [cell.workOrderSizeId]: next }))} decrementLabel={t('new.minus', { size: cell.size })} incrementLabel={t('new.plus', { size: cell.size })} />
-            </Field>
-          ))}
+        <CellSteppers cells={cells} quantities={quantities} problems={problems} onChange={set} />
+      )}
+    </Frame>
+  )
+}
+
+/** The sizes a DRAFT can still take, each 0 … its cap (what quality released and no shipment holds yet). */
+function CellSteppers({ cells, quantities, problems, onChange }: { cells: readonly ReadyCell[]; quantities: Readonly<Record<string, number>>; problems: ReturnType<typeof newShipmentProblems>; onChange: (cellId: string, next: number) => void }) {
+  const t = useT('shipments')
+  return (
+    <div className="fw-sh-size-grid">
+      {cells.map((cell) => (
+        <Field key={cell.workOrderSizeId} label={`${cell.styleCode} · ${cell.colourwayName} · ${cell.size}`} hint={t('new.cap', { count: cell.shippable, batch: cell.batchNumber ?? cell.workOrderNumber })} error={problems.find((entry) => entry.cellId === cell.workOrderSizeId) ? t('new.problem.range', { max: cell.shippable }) : undefined}>
+          <NumberStepper size="sm" min={0} max={cell.shippable} value={quantities[cell.workOrderSizeId] ?? 0} onChange={(next) => onChange(cell.workOrderSizeId, next)} decrementLabel={t('new.minus', { size: cell.size })} incrementLabel={t('new.plus', { size: cell.size })} />
+        </Field>
+      ))}
+    </div>
+  )
+}
+
+// ---- F-OP-130 (order page N6, R-5): Add an order's garments… / Take its garments off -----------------------------------------------
+
+/**
+ * Add an order's garments… (a DRAFT, shipping.manage): 1 the customer's other open orders (the candidates read: only this
+ * shipment's own customer, never another's, not even held), each one that cannot join listed held with why — while several
+ * orders in one shipment are held off, every one says so; 2 its sizes, each capped. Add sends them through the lines route.
+ */
+function AddOrderDialog({ shipment, model, actions }: DialogProps) {
+  const t = useT('shipments')
+  const d = useT(DEPTH_NS)
+  const [quantities, setQuantities] = useState<Record<string, number>>({})
+  const customer = shipment.party.legalName
+  const po = (ref: string) => t('record.customerRef', { ref })
+  const candidates = model.candidates
+  const picked = model.picked
+  const chosen = candidates?.value?.orders.find((order) => order.salesOrderId === picked?.salesOrderId && order.joinable.allowed) ?? null
+  const ready: ReadyOrder | null = picked?.ready.value ?? null
+  const cells = (ready?.cells ?? []).filter((cell) => cell.shippable > 0)
+  const lines = chosen ? newShipmentLines(cells, quantities) : []
+  const problems = newShipmentProblems(cells, quantities)
+  const held = model.busy ? t('held.busy') : !chosen ? t('new.held.order') : problems.length > 0 ? t('new.held.range') : lines.length === 0 ? t('new.held.none') : null
+  const pick = (salesOrderId: string | null) => {
+    setQuantities({})
+    actions?.onPickOrder?.(salesOrderId)
+  }
+  return (
+    <Frame title={d('shipOrders.addTitle', { customer })} subtitle={shipment.number} held={held} go={() => actions?.onAddLines?.(lines)} goLabel={t('addLines.go', { count: lines.reduce((sum, line) => sum + line.quantity, 0) })} onClose={close(actions)} problem={model.dialogProblem} size="lg">
+      {!chosen ? (
+        !candidates || (!candidates.value && !candidates.problem) ? (
+          <p className="fw-sh-hint" role="status">
+            <Spinner size={14} /> {d('shipOrders.reading', { customer })}
+          </p>
+        ) : candidates.problem ? (
+          <Banner
+            tone="warning"
+            title={t(candidates.problem)}
+            action={
+              <Button size="sm" onClick={() => actions?.onRetryPart?.('candidates')}>
+                {t('common.retry')}
+              </Button>
+            }
+          />
+        ) : candidates.value!.orders.length === 0 ? (
+          <p className="fw-sh-hint">{d('shipOrders.none', { customer })}</p>
+        ) : (
+          <div className="fw-sh-stack">
+            <p className="fw-sh-hint">{d('shipOrders.addHint', { customer })}</p>
+            <div className="fw-sh-choices" role="radiogroup" aria-label={d('shipOrders.pick')}>
+              {candidates.value!.orders.map((order) => {
+                const why = joinHeld(order.joinable)
+                const whyWords = why ? `${d(why.key)}${why.detail ? `: ${why.detail}` : ''}` : null
+                return (
+                  // Held, never hidden nor disabled: it keeps its focus and says why (aria-disabled; choosing it does nothing).
+                  <RadioCard
+                    key={order.salesOrderId}
+                    name="fw-sh-add-order"
+                    checked={picked?.salesOrderId === order.salesOrderId}
+                    selected={picked?.salesOrderId === order.salesOrderId}
+                    aria-disabled={why ? true : undefined}
+                    onChange={() => (why ? undefined : pick(order.salesOrderId))}
+                    title={orderWords({ number: order.number, customerRef: order.customerRef }, po)}
+                    description={whyWords ?? undefined}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        )
+      ) : (
+        <div className="fw-sh-stack">
+          <div className="fw-sh-card-head">
+            <h3 className="fw-sh-h3">{d('shipOrders.cells', { order: orderWords({ number: chosen.number, customerRef: chosen.customerRef }, po) })}</h3>
+            <Button size="sm" variant="quiet" onClick={() => pick(null)}>
+              {t('new.back')}
+            </Button>
+          </div>
+          {!picked || (!picked.ready.value && !picked.ready.problem) ? (
+            <p className="fw-sh-hint" role="status">
+              <Spinner size={14} /> {t('new.loading')}
+            </p>
+          ) : picked.ready.problem ? (
+            <Banner tone="warning" title={t(picked.ready.problem)} />
+          ) : cells.length === 0 ? (
+            <p className="fw-sh-hint">{t('addLines.none')}</p>
+          ) : (
+            <CellSteppers cells={cells} quantities={quantities} problems={problems} onChange={(cellId, next) => setQuantities((current) => ({ ...current, [cellId]: next }))} />
+          )}
         </div>
       )}
+    </Frame>
+  )
+}
+
+/** Take its garments off (a DRAFT, an order other than the first): every line of that order goes, and the order with them. */
+function TakeOffDialog({ shipment, model, actions, salesOrderId }: DialogProps & { salesOrderId: string }) {
+  const t = useT('shipments')
+  const d = useT(DEPTH_NS)
+  const group = lineGroups(shipment, model.backorder.value).find((entry) => entry.order?.id === salesOrderId) ?? null
+  const order = group?.order?.number ?? ''
+  const count = group?.lines.reduce((sum, line) => sum + line.quantity, 0) ?? 0
+  const lineHeld = group ? takeOffHeld(group) : null
+  const held = model.busy ? t('held.busy') : !group ? d('shipOrders.gone') : lineHeld ? t(lineHeld.key, lineHeld.params) : null
+  return (
+    <Frame title={d('shipOrders.takeOffTitle', { order, number: shipment.number })} held={held} go={() => actions?.onTakeOff?.(salesOrderId)} goLabel={d('shipOrders.takeOffGo')} onClose={close(actions)} problem={model.dialogProblem} size="sm" tone="danger">
+      <p>{group ? d('shipOrders.takeOffWhat', { count, order }) : d('shipOrders.gone')}</p>
     </Frame>
   )
 }

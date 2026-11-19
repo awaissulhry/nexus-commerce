@@ -1,4 +1,6 @@
 import { definePartnerView, equalsTyped, holdsTyped, idsOf } from '../view'
+// B-OP-044 (order page N6, lines-derived): the orders a shipment carries.
+import { orderRefsOfShipments } from '../../../../modules/shipping/shipments/orders-of'
 
 /**
  * Transport documents (DDT; modules/shipping/ddt; the index's ../../indexers/ddt.ts) addressed to the partner: a
@@ -19,13 +21,16 @@ export default definePartnerView({
         documentDate: true,
         sourceType: true,
         sourceId: true,
-        shipment: { select: { number: true, salesOrder: { select: { number: true, customerRef: true } } } },
+        shipmentId: true, // B-OP-044
+        shipment: { select: { number: true, salesOrderId: true, salesOrder: { select: { number: true, customerRef: true } } } },
         cancellations: { select: { id: true }, take: 1 },
       },
     })
     // A workshop's kit went with its job: the job's number (the partner reads its own subcontract orders).
     const jobIds = [...new Set(rows.filter((row) => row.sourceType === 'SubcontractOrder' && row.sourceId).map((row) => row.sourceId!))]
     const jobs = new Map(jobIds.length > 0 ? (await client.subcontractOrder.findMany({ where: { id: { in: jobIds } }, select: { id: true, number: true } })).map((job) => [job.id, job.number]) : [])
+    // B-OP-044 (order page N6): the other orders a DDT's shipment carries are matched too (the partner's own).
+    const ordersOf = await orderRefsOfShipments(client, rows.flatMap((row) => (row.shipmentId && row.shipment ? [{ id: row.shipmentId, salesOrderId: row.shipment.salesOrderId }] : [])))
     return rows.map((row) => {
       const job = row.sourceType === 'SubcontractOrder' && row.sourceId ? (jobs.get(row.sourceId) ?? null) : null
       return {
@@ -36,14 +41,21 @@ export default definePartnerView({
         subtitle: row.shipment?.number ?? job,
         status: row.cancellations.length > 0 ? 'CANCELLED' : 'ISSUED',
         date: row.documentDate,
-        words: [row.shipment?.number, row.shipment?.salesOrder.number, job],
+        words: [row.shipment?.number, row.shipment?.salesOrder.number, job, ...(row.shipmentId ? (ordersOf.get(row.shipmentId) ?? []).slice(1).flatMap((ref) => [ref.number, ref.customerRef]) : [])],
       }
     })
   },
   async lookup(client, typed, take) {
     return idsOf(
       await client.ddt.findMany({
-        where: { OR: [{ number: equalsTyped(typed) }, { shipment: { is: { salesOrder: { customerRef: holdsTyped(typed) } } } }] },
+        where: {
+          OR: [
+            { number: equalsTyped(typed) },
+            { shipment: { is: { salesOrder: { customerRef: holdsTyped(typed) } } } },
+            // B-OP-044: the PO of any order its shipment carries.
+            { shipment: { is: { lines: { some: { salesOrderLine: { order: { customerRef: holdsTyped(typed) } } } } } } },
+          ],
+        },
         select: { id: true },
         orderBy: { documentDate: 'desc' },
         take,

@@ -10,6 +10,9 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { Shipment } from '../../api'
 import { actsOnShipments, carrierWords, hasLeft, isFinal, isWideTab, nextStep, openChecks, placeOf, readyChecks, RECORD_TABS, STATUS_TONE, TRACKING_TONE, type RecordTab, type StepKind } from '../../model'
+// F-OP-130 (order page N6, R-5): every order the shipment carries.
+import { orderWords, shipmentOrders } from '../../model'
+import { DEPTH_NS } from '../../queue/shared/depth'
 // ---- B-TH-264: the shipment on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
@@ -47,7 +50,7 @@ export type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model
 // view shows of it.
 export function ShipmentRecordView({ model, actions, thread, printThread, trackingLink, depth }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; thread?: ReactNode; printThread?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
   return (
-    <WithMessages namespaces={['shipments', 'lists', 'records']}>
+    <WithMessages namespaces={['shipments', 'lists', 'records', /* F-OP-130 */ DEPTH_NS]}>
       <ShipmentRecord model={model} actions={actions} thread={thread} printThread={printThread} trackingLink={trackingLink} depth={depth} />
     </WithMessages>
   )
@@ -108,7 +111,11 @@ const STEP_DIALOG: Record<Exclude<StepKind, 'pack'>, 'issueDdt' | 'buyLabels' | 
 
 function ReadyRecord({ shipment, model, actions, thread, printThread, trackingLink, depth }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; thread?: ReactNode; printThread?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
   const t = useT('shipments')
+  const d = useT(DEPTH_NS) // F-OP-130
   const locale = useLocale()
+  // F-OP-130 (order page N6, R-5): the orders it carries (its lines' orders), the first first; one while N6 is held off.
+  const orders = shipmentOrders(shipment)
+  const orderHref = (orderId: string) => `${model.prefix}/sales/orders/${orderId}?tab=shipments`
   const recordHref = `${model.prefix}/warehouse/shipments/${shipment.id}`
   const liveDdt = model.ddts.value?.find((row) => row.status === 'LIVE') ?? null
   const facts = { shipment, ddt: liveDdt, labels: model.labels?.value ?? null, documents: model.documents.value }
@@ -192,7 +199,8 @@ function ReadyRecord({ shipment, model, actions, thread, printThread, trackingLi
     ...(shipment.status === 'DRAFT' || shipment.status === 'PACKED' ? [{ id: 'cancel', label: t('action.cancel'), disabled: !!cancelHeld, description: cancelHeld ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'cancel' }) }] : []),
     // B-W2a-71: the driver's pack (design tab:sh-tab-pack "All documents"), in a new tab.
     ...(shipment.status !== 'CANCELLED' ? [{ id: 'pack', label: t('action.pack'), href: `${recordHref}/pack`, target: '_blank' as const }] : []),
-    ...(model.can.viewOrders ? [{ id: 'order', label: t('action.openOrder', { number: shipment.salesOrder.number }), href: `${model.prefix}/sales/orders/${shipment.salesOrderId}?tab=shipments` }] : []),
+    // F-OP-130 (N6): Open order … for every order it carries.
+    ...(model.can.viewOrders ? orders.map((order, index) => ({ id: index === 0 ? 'order' : `order-${order.id}`, label: t('action.openOrder', { number: order.number }), href: orderHref(order.id) })) : []),
     {
       id: 'copy',
       label: t('action.copyNumber'),
@@ -234,14 +242,35 @@ function ReadyRecord({ shipment, model, actions, thread, printThread, trackingLi
             <>
               {latest && hasLeft(shipment.status) && <Tag tone={TRACKING_TONE[latest] ?? 'neutral'}>{t(`trackingStatus.${latest}`)}</Tag>}
               {!isFinal(shipment.status) && !hasLeft(shipment.status) && open > 0 && <Tag tone="warning">{t('record.checksOpen', { count: open })}</Tag>}
-              {model.can.viewOrders ? (
-                <Link className="fw-sh-link fw-sh-hint" href={`${model.prefix}/sales/orders/${shipment.salesOrderId}?tab=shipments`}>
-                  {t('record.order', { number: shipment.salesOrder.number })}
-                </Link>
+              {/* F-OP-130 (order page N6, R-5): one order as before; several: a chip per order (its number and PO), each a link. */}
+              {orders.length === 1 ? (
+                <>
+                  {model.can.viewOrders ? (
+                    <Link className="fw-sh-link fw-sh-hint" href={orderHref(orders[0]!.id)}>
+                      {t('record.order', { number: orders[0]!.number })}
+                    </Link>
+                  ) : (
+                    <span className="fw-sh-hint">{t('record.order', { number: orders[0]!.number })}</span>
+                  )}
+                  {orders[0]!.customerRef && <Tag tone="neutral">{t('record.customerRef', { ref: orders[0]!.customerRef })}</Tag>}
+                </>
               ) : (
-                <span className="fw-sh-hint">{t('record.order', { number: shipment.salesOrder.number })}</span>
+                <span className="fw-sh-inline" role="list" aria-label={d('shipOrders.of')}>
+                  {orders.map((order) => (
+                    <span key={order.id} role="listitem">
+                      <Tag tone="neutral">
+                        {model.can.viewOrders ? (
+                          <Link className="fw-sh-link" href={orderHref(order.id)}>
+                            {t('record.order', { number: orderWords(order, (ref) => t('record.customerRef', { ref })) })}
+                          </Link>
+                        ) : (
+                          t('record.order', { number: orderWords(order, (ref) => t('record.customerRef', { ref })) })
+                        )}
+                      </Tag>
+                    </span>
+                  ))}
+                </span>
               )}
-              {shipment.salesOrder.customerRef && <Tag tone="neutral">{t('record.customerRef', { ref: shipment.salesOrder.customerRef })}</Tag>}
               <span className="fw-sh-hint">
                 {t(carrier.key, carrier.params)}
                 {shipment.serviceCode ? ` · ${shipment.serviceCode}` : ''}

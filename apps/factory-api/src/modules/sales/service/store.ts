@@ -104,6 +104,8 @@ export interface Delivery {
   readonly delivered: boolean
 }
 
+// B-OP-043 (order page N6): `salesOrderId` is the shipment's first order, fine as such: a garment's own order is its cell's
+// line's (GarmentFacts.salesOrderId), and a delivery names only its customer and day.
 const deliveryOf = (shipment: { id: string; number: string; partyId: string; companyId: string; salesOrderId: string; shippedAt: Date | null; deliveredAt: Date | null }): Delivery => ({
   shipmentId: shipment.id,
   number: shipment.number,

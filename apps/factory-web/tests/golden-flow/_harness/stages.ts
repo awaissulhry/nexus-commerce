@@ -46,10 +46,17 @@ export function defineStage(spec: StageSpec): StageSpec {
 const DIR = fileURLToPath(new URL('../', import.meta.url))
 const FILE = /^(\d{2}[a-z]?-[a-z0-9-]+)\.ts$/
 
-/** The plan's stages and any other stage file of the folder, in name order. */
+/**
+ * F-OP-218: stages that run right after a plan stage, in the same run (its world is warm): the order page's dock (th8-dock) after
+ * 07-order. Each also runs alone on a fresh stack (`--stages th8-dock`): it makes the world it needs.
+ */
+export const AFTER_STAGES: Readonly<Record<string, readonly string[]>> = Object.freeze({ '07-order': ['th8-dock'] })
+
+/** The plan's stages and any other stage file of the folder, in name order; a stage of AFTER_STAGES right after its own. */
 export function stageNames(): string[] {
   const files = readdirSync(DIR).map((name) => FILE.exec(name)?.[1]).filter((name): name is string => Boolean(name))
-  return [...new Set<string>([...PLAN_STAGES, ...files])].sort()
+  const ordered = [...new Set<string>([...PLAN_STAGES, ...files])].sort()
+  return ordered.flatMap((name) => [name, ...(AFTER_STAGES[name] ?? [])]) // F-OP-218
 }
 
 export type Loaded = { readonly kind: 'missing' } | { readonly kind: 'stage'; readonly stage: StageSpec }

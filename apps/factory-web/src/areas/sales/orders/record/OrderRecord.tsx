@@ -67,6 +67,7 @@ import { getReadiness, type ReadinessRow } from '../../../production/work-orders
 import { listOrderRequests, type BrandRequest } from '../../../home/approvals/requests/api'
 import { readRecordRequests, type OfficeRequest } from '../../../../record-panels/approvals/api'
 import { useOrderFiles } from '../../../_shared/record-thread/use-order-files' // F-SA-237: the order's files (one read, two places)
+import type { OrderFilesHost } from '../../../_shared/record-thread/use-order-files' // F-OP-215
 import { OrderDock } from './dock/OrderDock' // F-SA-262: the dock's pick of ONE conversation
 import { aboutPlace } from './dock/discuss' // F-SA-266: "Show on the page" — a message about a part of the order jumps back to its row
 import { narrowNow, tabAddress } from '../../../_shared/record-frame/address' // F-OP-210: the in-page moves keep the dock's scope
@@ -459,14 +460,32 @@ function RecordContainer({ orderId }: { orderId: string }) {
   })
   // ---- end F-SA-243
   // ---- F-SA-237: the order's files, read while Files shows (the thread's window reads the same route); shared by files.manage ----
+  // F-OP-125 (N-1): THE order-files container of this page — mounted once, its read kept, the same model for the Files tab and (F-OP-215)
+  // the dock: one read, one count.
   const orderFiles = useOrderFiles(api, {
     orderId: readyId,
-    enabled: tab === 'files',
+    // F-OP-215: wanted on every tab where the reader may read files — the dock's files line counts this one set (one read per page).
+    enabled: tab === 'files' || session.permissions.includes('files.read'),
     partyId: order.status === 'ready' ? order.value.partyId : null,
     canShare: session.permissions.includes('files.manage'),
     onProblem: (key) => setNotice({ tone: 'danger', words: { key: key === 'order.shareFailed' ? 'files.shareFailed' : 'files.openFailed' } }),
+    keep: true, // F-OP-125: the page's one read
   })
   // ---- end F-SA-237
+  // ---- F-OP-215 (11-dock §6.2): the dock gets this container (no read of its own): "All files" opens the Files tab (the dock's scope
+  // kept; below 1280 px the full-width thread gives way), a tile opens the file in the ONE viewer there.
+  const toFiles = () => router.replace(tabAddress(pathname, window.location.search, 'files', { narrow: narrowNow() }), { scroll: false })
+  const orderFilesHost: OrderFilesHost = {
+    model: orderFiles.model,
+    actions: orderFiles.actions,
+    reload: orderFiles.reload,
+    onAll: toFiles,
+    onOpen: (fileId, opener) => {
+      toFiles()
+      orderFiles.actions.onOrderOpen?.(fileId, 'preview', opener)
+    },
+  }
+  // ---- end F-OP-215
 
   // ---- F-SA-266: "Show on the page" — the message's part: its tab (a replace: no history entry), then its row in view with the focus
   // (the row is drawn after the tab's read: looked for a few frames).
@@ -561,7 +580,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
         .then((rows) => setWorkOrders(part(rows)))
         .catch(() => undefined)
     if (parts.includes('changes') && (tabRef.current === 'changes' || wantsRef.current /* F-SA-243 */)) readRequests()
-    if (parts.includes('files') && tabRef.current === 'files') orderFiles.reload()
+    if (parts.includes('files')) orderFiles.reload() // F-OP-125: read again when shown, else the next time it is wanted
   }
   reconnectRef.current = () => {
     void load()
@@ -591,7 +610,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     requests, // F-SA-236
     requestDoor: { parts: door, hrefOf: (id: string) => door.hrefOf(id), open: (id: string) => door.open(id) /* F-SA-244 */ }, // F-SA-243
     told, // F-SA-244
-    files: tab === 'files' ? orderFiles.model : null, // F-SA-237
+    files: orderFiles.model, // F-SA-237; F-OP-125: the page's one read, kept across tabs
     askedOfCustomer,
     liveState,
     changed,
@@ -644,6 +663,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
               printHref={printHref(pathname, params?.toString() ?? '')}
               showOnPage={showOnPage /* F-SA-266 */}
               changeSide={changeSide /* F-SA-244 */}
+              orderFiles={orderFilesHost /* F-OP-215 */}
             />
           ) : (
             <OfficeRecordThread
@@ -654,6 +674,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
               party={null}
               partyRole="customer"
               printHref={printHref(pathname, params?.toString() ?? '')}
+              orderFiles={orderFilesHost /* F-OP-215 */}
             />
           )
         ) : null

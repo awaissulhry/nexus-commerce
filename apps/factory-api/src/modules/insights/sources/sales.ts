@@ -9,6 +9,8 @@ import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { LEFT } from '../../sales/orders/store'
 import { asDay, capped, dayOrNull, partyNames, SOURCE_LIMIT, type Source } from './common'
+// B-OP-045 (order page N6, lines-derived): pieces by the order of each line.
+import { piecesByOrderOf, shipmentsOfOrdersWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * Sales (B-W1-25 orders, B-W1-21 quotes): orders late or at risk against their promise (the orders module's daysLate),
@@ -29,8 +31,10 @@ export const orderPromise: Source = async ({ caller, viewer }) => {
     const { rows, complete } = capped(found, SOURCE_LIMIT)
     const ids = rows.map((row) => row.id)
     const ordered = ids.length > 0 ? await db.salesOrderLine.groupBy({ by: ['orderId'], where: { orderId: { in: ids } }, _sum: { quantity: true } }) : []
-    const shipments = ids.length > 0 ? await db.shipment.findMany({ where: { salesOrderId: { in: ids }, status: { in: [...LEFT] } }, select: { id: true, salesOrderId: true } }) : []
-    const shipped = shipments.length > 0 ? await db.shipmentLine.groupBy({ by: ['shipmentId'], where: { shipmentId: { in: shipments.map((row) => row.id) } }, _sum: { quantity: true } }) : []
+    // B-OP-045 (order page N6, lines-derived): the shipments that left made for these orders or carrying their garments; each
+    // order's shipped pieces are its own lines' (a shared shipment counts on each order).
+    const shipments = ids.length > 0 ? await db.shipment.findMany({ where: { ...shipmentsOfOrdersWhere(ids), status: { in: [...LEFT] } }, select: { id: true } }) : []
+    const shippedOf = await piecesByOrderOf(db, shipments.map((row) => row.id), ids)
     const names = await partyNames(db, rows.map((row) => row.partyId))
     const candidates: AttentionCandidate[] = []
     for (const row of rows) {
@@ -38,7 +42,7 @@ export const orderPromise: Source = async ({ caller, viewer }) => {
       const state = orderPromiseState(row.status, promiseDate, viewer.today)
       if (!state || promiseDate === null) continue
       const units = ordered.find((entry) => entry.orderId === row.id)?._sum.quantity ?? 0
-      const left = shipped.filter((entry) => shipments.some((shipment) => shipment.id === entry.shipmentId && shipment.salesOrderId === row.id)).reduce((sum, entry) => sum + (entry._sum.quantity ?? 0), 0)
+      const left = shippedOf.get(row.id) ?? 0 // B-OP-045
       const customer = names.get(row.partyId) ?? 'the customer'
       const words = orderPromiseWords({ number: row.number, customer, state: state.state, days: state.days, promiseDate, toShip: Math.max(0, units - left) })
       candidates.push({

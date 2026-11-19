@@ -145,7 +145,8 @@ export async function garmentOf(db: Reader, serial: string | null | undefined): 
       serial: true,
       createdAt: true,
       workOrderSize: { select: { styleId: true, size: true, partyId: true, salesOrderLine: { select: { orderId: true } }, workOrder: { select: { number: true, batchNumber: true, companyId: true } } } },
-      shipmentLine: { select: { shipment: { select: { id: true, number: true, partyId: true, companyId: true, status: true, salesOrderId: true } } } },
+      // B-OP-045 (order page N6): the garment's own order is its shipment line's (a shared shipment carries several orders).
+      shipmentLine: { select: { salesOrderLine: { select: { orderId: true } }, shipment: { select: { id: true, number: true, partyId: true, companyId: true, status: true, salesOrderId: true } } } },
     },
   })
   if (!row) return null
@@ -163,7 +164,8 @@ export async function garmentOf(db: Reader, serial: string | null | undefined): 
     workOrderNumber: cell.workOrder.number,
     batchNumber: cell.workOrder.batchNumber,
     // Only a shipment that left with it (a DRAFT or PACKED one may still change).
-    shipment: shipment && (shipment.status === 'SHIPPED' || shipment.status === 'DELIVERED' || shipment.status === 'RETURNED') ? { id: shipment.id, number: shipment.number, partyId: shipment.partyId, companyId: shipment.companyId, salesOrderId: shipment.salesOrderId } : null,
+    // B-OP-045: salesOrderId = the order of the garment's own line on it (one order: the shipment's, as before).
+    shipment: shipment && (shipment.status === 'SHIPPED' || shipment.status === 'DELIVERED' || shipment.status === 'RETURNED') ? { id: shipment.id, number: shipment.number, partyId: shipment.partyId, companyId: shipment.companyId, salesOrderId: row.shipmentLine?.salesOrderLine.orderId ?? shipment.salesOrderId } : null,
   }
 }
 

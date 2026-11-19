@@ -30,6 +30,8 @@ import { draftDdt } from '@nexus/factory-domain/shipping/ddt'
 import type { CompanyLegal } from '@nexus/factory-domain/documents/model'
 import { readDdtFacts } from '../ddt/store'
 import { readShipment } from '../store'
+// B-OP-043: the office's ship-to check (SHIPMENT_PREPARED through the lines).
+import { shipToProblem } from '../../sales/change-requests/office'
 
 /**
  * B-OP-040 / B-OP-070 (order page N6, lines-derived; R-6): several orders of ONE customer on one shipment, held off by
@@ -62,7 +64,7 @@ const SESSIONS: Record<string, SessionContext> = {
   viewer: office([grant(['shipping.view'])]),
   // A person limited to Brand Alpha, and one limited to Brand Beta (B's view of A's records: as unknown ones).
   alphaOnly: office([grant(ALL, [A.alpha])]),
-  betaOnly: office([grant(ALL, [beta])]),
+  betaOnly: office([grant([...ALL, 'orders.view'], [beta])]),
 }
 
 type Json = Record<string, any>
@@ -320,6 +322,23 @@ describe('B-OP-040: ordersOfShipment — the orders of its lines, the first orde
     expect(changes.every((row) => row.payload.partyId === A.alpha)).toBe(true)
   })
 
+  // B-OP-043 (order page N6): the order read's shipments are those made for it or carrying its garments, each with its orders.
+  it('B-OP-043: the shared shipment is on both orders\' reads with every order it carries, the first first', async () => {
+    for (const orderId of [so2(), so3()]) {
+      const { order } = await ok('warehouse', 'GET', `/sales/orders/${orderId}`)
+      const child = (order.chain.shipments as Json[]).find((row) => row.id === ids.child)
+      expect(child, orderId).toMatchObject({ origin: 'NEXUS', externalDdt: null })
+      expect(child!.orders.map((ref: Json) => ref.id)).toEqual([so2(), so3()])
+      expect(order.badges.shipments).toBe((order.chain.shipments as Json[]).filter((row) => row.status !== 'CANCELLED').length)
+    }
+    // The orders are always of the order's own customer.
+    const { order } = await ok('warehouse', 'GET', `/sales/orders/${so3()}`)
+    const refs = (order.chain.shipments as Json[]).flatMap((row) => row.orders as Json[])
+    expect(JSON.stringify(refs)).not.toContain(ids.beta1)
+    // A person limited to Brand Beta reads none of it.
+    expect((await call('betaOnly', 'GET', `/sales/orders/${so3()}`)).statusCode).toBe(404)
+  })
+
   it('an order with garments on a DRAFT shipment of another order refuses its own cancel, in words', async () => {
     const number = (await admin<{ number: string }>(`SELECT number FROM "SalesOrder" WHERE id = $1`, [so3()]))[0]!.number
     // Its garments are on the split's child now (a shipment made for SEED-SO-0002).
@@ -327,5 +346,30 @@ describe('B-OP-040: ordersOfShipment — the orders of its lines, the first orde
     const order = await ok('warehouse', 'GET', `/sales/orders/${so3()}`)
     const refusal = await refused('warehouse', 'POST', `/sales/orders/${so3()}/cancel`, { version: order.order?.version ?? order.version, reason: 'Test: garments on a shared shipment', confirmNumber: number }, 409)
     expect(refusal.message).toContain(`Take ${number}'s garments off ${shipmentNumber} first`)
+  })
+
+  // B-OP-043 (B-OP-015's refusal moved): the order's ship-to waits while a shipment being prepared carries its garments, also
+  // one made for another of its customer's orders. A line of SO-ALPHA-2 is put on the DRAFT of SEED-SO-0002 past the guards.
+  it('B-OP-043: SHIPMENT_PREPARED through the lines — a DRAFT carrying the order\'s garments holds its ship-to change', async () => {
+    const address = newId()
+    await admin(
+      `INSERT INTO "PartyAddress" (id, "tenantId", "partyId", kinds, status, name, line1, "postalCode", city, country) VALUES ($1, $2, $3, '{SHIP_TO}', 'ACTIVE', 'Brand Alpha store', 'Via Esempio 30', '00000', 'Seedville', 'IT')`,
+      [address, A.tenant, A.alpha],
+    )
+    const office = { id: ids.alpha2!, partyId: A.alpha }
+    expect(await scoped((client) => shipToProblem(client, office, address, 'OFFICE'))).toBeNull()
+    const alphaLine = (await admin<{ id: string }>(`SELECT id FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1`, [ids.alpha2]))[0]!.id
+    const lineId = newId()
+    await force(
+      `INSERT INTO "ShipmentLine" (id, "tenantId", "siteId", "partyId", "shipmentId", "workOrderId", "workOrderSizeId", "salesOrderLineId", size, quantity)
+       SELECT $1, c."tenantId", c."siteId", s."partyId", s.id, c."workOrderId", c.id, $4, c.size, 1 FROM "WorkOrderSize" c, "Shipment" s WHERE c.id = $2 AND s.id = $3`,
+      [lineId, cells().blk52, ids.draft, alphaLine],
+    )
+    const draftNumber = (await admin<{ number: string }>(`SELECT number FROM "Shipment" WHERE id = $1`, [ids.draft]))[0]!.number
+    expect(await scoped((client) => shipToProblem(client, office, address, 'OFFICE'))).toEqual({
+      path: 'body/shipToAddressId/SHIPMENT_PREPARED',
+      message: `Shipment ${draftNumber} is being prepared for the order's address: change it on the shipment first.`,
+    })
+    await force(`DELETE FROM "ShipmentLine" WHERE id = $1`, [lineId])
   })
 })

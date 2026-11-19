@@ -254,3 +254,20 @@
   margin-inline-start: auto;
 }
 /* ── end F-OP-204 */
+
+/* ── F-OP-217 (order page plan N4; 11-dock §7): All of <customer> in a card of 480 px or less (one third at 1440, a phone) — each line
+   full width, its chip never wider than the line, the time under the chip when they do not fit side by side, the doors on one row. ── */
+@container fw-rtcol (max-width: 480px) {
+  .fw-aoc-line {
+    padding: var(--nds-space-8);
+  }
+
+  .fw-aoc-chip {
+    max-width: calc(100% - var(--nds-space-24));
+  }
+
+  .fw-aoc-doors {
+    justify-content: flex-start;
+  }
+}
+/* ── end F-OP-217 */

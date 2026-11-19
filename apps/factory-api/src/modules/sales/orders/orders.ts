@@ -34,6 +34,8 @@ import { officeOrder, recordAfter } from './moves'
 import { idsTermOf, orderProductionColumns, waitingUsWhere } from './production-columns'
 import { asDay, dayOf, dayOrNull, LEFT } from './store'
 import type { OrderView } from './views'
+// B-OP-043 (order page N6, lines-derived): the orders a shipment carries.
+import { orderIdsOfShipments, piecesByOrderOf, shipmentsOfOrdersWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * The office's sales orders (B-W1-25; SAL-200, SAL-204, SAL-206, SAL-214; A2 SCR-038 "Orders", SCR-039 "Order record"):
@@ -338,9 +340,13 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
     const lines = ids.length > 0 ? await client.salesOrderLine.groupBy({ by: ['orderId'], where: { orderId: { in: ids } }, _sum: { quantity: true }, _count: { _all: true } }) : []
     // B-TH-017: + the request's id (its deposit invoice) and every shipment (their delivery notes).
     const deposits = ids.length > 0 ? await client.depositRequest.findMany({ where: { orderId: { in: ids }, ...ORDER_DEPOSIT_ONLY }, select: { id: true, orderId: true, status: true, dueDate: true }, orderBy: { dueDate: 'asc' } }) : []
-    const allShipments = ids.length > 0 ? await client.shipment.findMany({ where: { salesOrderId: { in: ids } }, select: { id: true, salesOrderId: true, status: true } }) : []
+    // B-OP-043 (order page N6, lines-derived): the orders' shipments — made for them or carrying their garments — each with the
+    // page's orders it carries; an order's shipped pieces are its own lines' (a shared shipment counts on each order).
+    const shipmentRows = ids.length > 0 ? await client.shipment.findMany({ where: shipmentsOfOrdersWhere(ids), select: { id: true, salesOrderId: true, status: true } }) : []
+    const carried = await orderIdsOfShipments(client, shipmentRows)
+    const allShipments = shipmentRows.map((row) => ({ ...row, salesOrderIds: (carried.get(row.id) ?? [row.salesOrderId]).filter((orderId) => ids.includes(orderId)) }))
     const shipments = allShipments.filter((row) => (LEFT as readonly string[]).includes(row.status))
-    const shipped = shipments.length > 0 ? await client.shipmentLine.groupBy({ by: ['shipmentId'], where: { shipmentId: { in: shipments.map((row) => row.id) } }, _sum: { quantity: true } }) : []
+    const shippedPieces = await piecesByOrderOf(client, shipments.map((row) => row.id), ids)
     const versionIds = page.flatMap((row) => (row.quoteVersionId ? [row.quoteVersionId] : []))
     const versions = versionIds.length > 0 ? await client.quoteVersion.findMany({ where: { id: { in: versionIds } }, select: { id: true, quoteId: true, revision: true } }) : []
     const quotes = versions.length > 0 ? await client.quote.findMany({ where: { id: { in: [...new Set(versions.map((row) => row.quoteId))] } }, select: { id: true, number: true } }) : []
@@ -357,10 +363,7 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
       allShipments,
     )
     const shippedOf = new Map<string, number>()
-    for (const row of shipped) {
-      const orderId = shipments.find((shipment) => shipment.id === row.shipmentId)!.salesOrderId
-      shippedOf.set(orderId, (shippedOf.get(orderId) ?? 0) + (row._sum.quantity ?? 0))
-    }
+    for (const [orderId, pieces] of shippedPieces) shippedOf.set(orderId, pieces) // B-OP-043
     // B-TH-059: the later columns (open pieces, progress when asked, paid and balance, sites, note, priority, at risk, customer urgency).
     const later = await orderLaterColumns(
       client,
