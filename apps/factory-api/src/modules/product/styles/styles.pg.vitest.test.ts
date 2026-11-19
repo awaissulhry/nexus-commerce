@@ -16,6 +16,7 @@ import { seed as seedQuality } from '../../../../../../packages/factory-db/seed/
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
+import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts' // fx-7
 
 /**
  * Styles, colourways, size scales and the colour x size SKU matrix on the local stack (B-W1-11; features PRD-001,
@@ -519,7 +520,8 @@ describe('the seed style (packages/factory-db seed/product.ts)', () => {
   })
 })
 
-describe('garment numbering per style (Q31): PUT /product/styles/:styleId/garment-tracking', () => {
+// fx-7: slow by nature (many board reads and writes / its own seeding), past vitest's 5 s on GitHub's 2-core runner; no assertion changed.
+describe('garment numbering per style (Q31): PUT /product/styles/:styleId/garment-tracking', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('is set while nothing was numbered: version-guarded, audited, announced; refused without the permission', async () => {
     const made = (
       await ok('maker', 'POST', '/product/styles', { code: 'GT-NUM-01', name: 'Numbered jacket (made up)', productType: 'JACKET', sizeScaleId: euScale.id, sizes: ['50', '52'], colourways: [{ code: 'BLK', name: 'Black' }] }, 201)

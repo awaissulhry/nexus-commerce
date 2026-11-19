@@ -85,7 +85,9 @@ afterAll(async () => {
   await db?.close()
 }, 60_000)
 
-describe('the brand wall (W01, W37)', () => {
+// fx-7: the file's first partner reads (a dozen scoped queries on fresh connections) passed vitest's 5 s on GitHub's 2-core
+// runner (5.1 s; every assertion holds locally). The API's SLOW_TEST_TIMEOUT_MS (60 s); no assertion changed.
+describe('the brand wall (W01, W37)', { timeout: 60_000 }, () => {
   it("a customer reads its own requests and their lines, never another customer's, a prospect's or another tenant's", async () => {
     const own = await sql(partner(A.P1), `SELECT id, number, "customerRef", status::text AS status FROM "Inquiry" ORDER BY number`)
     expect(own).toEqual([{ id: s.inquiryIds.quoted, number: 'SEED-INQ-0004', customerRef: 'SEED-BA-PO-12', status: 'QUOTED' }])

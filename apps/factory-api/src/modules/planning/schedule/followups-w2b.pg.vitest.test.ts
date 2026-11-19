@@ -19,6 +19,7 @@ import { seed as seedPlanning } from '../../../../../../packages/factory-db/seed
 import { seed as seedSchedule } from '../../../../../../packages/factory-db/seed/schedule'
 import { seed as seedSubcontract } from '../../../../../../packages/factory-db/seed/subcontract'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
+import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts' // fx-7
 // ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
 await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
@@ -228,7 +229,8 @@ describe('Z7:05, Z7:06 customer and family; lanes without a calendar', () => {
   })
 })
 
-describe('Z7:03 stable codes for the board', () => {
+// fx-7: slow by nature (many board reads and writes / its own seeding), past vitest's 5 s on GitHub's 2-core runner; no assertion changed.
+describe('Z7:03 stable codes for the board', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('a refused move, a stale slot, a held publish and a placement skipped each carry their code', async () => {
     const wo1 = await workOrderId('SEED-WO-0001')
     const cutting = (await admin<{ id: string; version: number; workOrderOperationId: string; workCentreId: string }>(

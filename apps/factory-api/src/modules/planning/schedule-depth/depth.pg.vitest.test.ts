@@ -15,6 +15,7 @@ import { seed as seedPlanning } from '../../../../../../packages/factory-db/seed
 import { seed as seedSchedule } from '../../../../../../packages/factory-db/seed/schedule'
 import { seed as seedSubcontract } from '../../../../../../packages/factory-db/seed/subcontract'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
+import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts' // fx-7
 // ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
 await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
@@ -106,7 +107,8 @@ afterAll(async () => {
   vi.useRealTimers()
 })
 
-describe('moves that know the material (PLN-134)', () => {
+// fx-7: slow by nature (many board reads and writes / its own seeding), past vitest's 5 s on GitHub's 2-core runner; no assertion changed.
+describe('moves that know the material (PLN-134)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it("gives a work order's earliest start with material on the board, the check of a drop, a move's answer and the problems list", async () => {
     const answer = await board()
     const wo1 = answer.workOrders.find((row: Json) => row.number === 'SEED-WO-0001')
