@@ -1,4 +1,5 @@
 import { kept, ROWS, section, type PersonSource, type PlannedRecord } from './type'
+import { NONE, type Reader, type PersonFacts } from './type' // B-CP-075
 
 /**
  * The records about the person beyond their own row (B-W2b-405; PLT-202, PLT-203). Business documents that only name the person
@@ -12,6 +13,9 @@ import { kept, ROWS, section, type PersonSource, type PlannedRecord } from './ty
  *   workRecords      WORKER: attendance, clock events, absences, overtime, skills, training, scans, the leaver case (listed:
  *                    employment records the law keeps with the employee); the notice acknowledgements KEPT (NOTICE_PROOF)
  *   accountRecords   USER: sessions, roles held, the staff notice acknowledgements KEPT (NOTICE_PROOF)
+ *   rosterRecords    B-CP-075: CONTACT of a customer: the people its portal draft orders name by the same name (a rider, a team member:
+ *                    name, number, how measured); listed, and KEPT (CUSTOMER) — the customer's order requests name them, and the
+ *                    office holds no write grant on a customer's roster (a draft's people go when the customer discards it)
  */
 
 const byDate = { createdAt: 'asc' as const }
@@ -149,3 +153,29 @@ export const accountRecords: PersonSource = {
     return acks.map((row) => kept('StaffNoticeAck', row.id, 'NOTICE_PROOF'))
   },
 }
+
+// ---- B-CP-075 (customer page plan C5, 12 §8 S2; GDPR art. 6(1)(b)): the people a customer named on its portal order requests -------
+/** The roster rows of the person's own party that carry the person's name (case aside); none for an erased person or one of no party. */
+async function rosterRowsOf(db: Reader, person: PersonFacts) {
+  if (!person.partyId || person.erased || person.name.trim() === '') return []
+  const rows = await db.portalOrderRequestPerson.findMany({
+    where: { partyId: person.partyId, name: { equals: person.name.trim(), mode: 'insensitive' } },
+    select: { id: true, seq: true, name: true, number: true, measureBy: true, size: true, note: true, createdAt: true, request: { select: { number: true, status: true } } },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: ROWS + 1,
+  })
+  return rows.map(({ request, ...row }) => ({ ...row, requestNumber: request.number, requestStatus: request.status }))
+}
+
+export const rosterRecords: PersonSource = {
+  key: 'rosterRecords',
+  kinds: ['CONTACT'],
+  async collect(db, person) {
+    const rows = await rosterRowsOf(db, person)
+    return rows.length === 0 ? NONE : { sections: [section('orderRequestPeople', "People named on the customer's order requests", rows)], fileRecords: [] }
+  },
+  async plan(db, person) {
+    return (await rosterRowsOf(db, person)).map((row) => kept('PortalOrderRequestPerson', row.id, 'CUSTOMER', ['name', 'number', 'note']))
+  },
+}
+// ---- end B-CP-075

@@ -90,4 +90,14 @@ export const events = [
     payload: z.strictObject({ recordType: z.string(), recordId: z.uuid(), userId: z.uuid(), byId: z.uuid() }),
   }),
   // ---- end B-TH-068
+  // ---- B-CP-079 (customer page plan C7, D12): a customer asked its factory designer from a portal thread — the office-only note
+  // that mentions the designer (and the backup) is written; its mentions tell them (thread.user_mentioned). Ids only, no live rule:
+  // the note's own thread.message_posted refreshes the record's screens; the customer is never told of it.
+  defineEvent({
+    type: 'thread.factory_designer_asked',
+    context: 'threads',
+    description: "A customer asked its factory designer from a portal thread: an office-only note on the record mentions the designer and the backup.",
+    payload: z.strictObject({ threadId: z.uuid(), messageId: z.uuid(), noteId: z.uuid(), recordType: z.string(), recordId: z.uuid() }),
+  }),
+  // ---- end B-CP-079
 ] as const

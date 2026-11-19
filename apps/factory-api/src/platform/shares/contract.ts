@@ -79,7 +79,8 @@ export const revokeContract = defineContract({
 
 // ---- the invited partner (the RECORD_INVITE link) ----------------------------------------------------------------------
 
-const attachment = output({ id: id(), kind: z.string(), originalName: z.string(), contentType: z.string(), sizeBytes: z.number().int() })
+// B-CP-023: PRICED — a file that shows prices, for a link without the price grain: no name ("Priced document — you cannot open it").
+const attachment = output({ id: id(), kind: z.string(), originalName: z.string(), contentType: z.string(), sizeBytes: z.number().int(), locked: z.literal('PRICED').optional() })
 const message = output({
   id: id(),
   side: z.enum(['COMPANY', 'PARTNER']),
