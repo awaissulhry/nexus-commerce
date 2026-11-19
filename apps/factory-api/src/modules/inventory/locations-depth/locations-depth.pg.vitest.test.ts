@@ -11,6 +11,7 @@ import { command } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { pdfFlatText, pdfPageCount } from '../../../platform/documents/testing/pdf-text'
+import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
 import { ALL_INVENTORY, startInventoryFixture, type InventoryFixture } from '../ledger/testing/fixture'
 import { locationsImportAdapter } from '../locations/importer'
 
@@ -157,7 +158,10 @@ describe('location types (SCM-177)', () => {
   })
 })
 
-describe('bin labels (SCM-178)', () => {
+// fx-9 (end check 11-19): the first test here is the file's first read of three scopes (floor A1, floor A2, tenant B), each
+// a new Prisma client (made and its queries compiled at first use, client.ts B-W2b-F9): 0.8 s on the Mac, 6.6 s on GitHub's
+// 2-core runner with 2 workers, past vitest's 5 s.
+describe('bin labels (SCM-178)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('gives the suggested code or a typed one, unique in the tenant; the scan names the place (the floor: its own site)', async () => {
     const given = await ok(call('manager', 'PUT', `/inventory/locations/${ids.bin1}/label-code`, { version: (await place(ids.bin1)).version }))
     expect(given).toMatchObject({ location: { code: 'A1-BIN-01', labelCode: 'A1-BIN-01' }, printed: 0 })

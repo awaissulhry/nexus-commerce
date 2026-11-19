@@ -102,6 +102,32 @@ describe('the runtime login', () => {
   })
 })
 
+// ---- fx-9 (end check 11-19): close() returns once the pool's connections have closed
+describe('closing', () => {
+  it('returns once every connection of its pool has closed, so a database dropped next terminates none of them', async () => {
+    // Each connection the pool opens, and whether it has closed ('end': its socket is gone, the server saw it leave).
+    const closed = new Map<pg.Client, boolean>()
+    class Watched extends pg.Client {
+      constructor(config?: string | pg.ClientConfig) {
+        super(config)
+        closed.set(this, false)
+        this.once('end', () => closed.set(this, true))
+      }
+    }
+    const name = `fx9-close-${randomBytes(4).toString('hex')}`
+    const opened = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 4, application_name: name, Client: Watched } })
+    await Promise.all(Array.from({ length: 4 }, () => opened.withScope(office(a), (client) => client.company.count())))
+    expect(closed.size).toBeGreaterThan(0)
+    await opened.close()
+    // pg-pool's end() alone resolves before its idle connections have closed: a DROP DATABASE … WITH (FORCE) right then
+    // terminated them, and their FATAL 57P01 came back as the pool's unhandled 'error' after every test had passed.
+    expect([...closed.values()]).not.toContain(false)
+    const live = await db.admin.query<{ n: number }>('SELECT count(*)::int AS n FROM pg_stat_activity WHERE application_name = $1', [name])
+    expect(live.rows[0]!.n).toBe(0)
+  })
+})
+// ---- end fx-9
+
 describe('scopes', () => {
   it.each<[string, unknown, string]>([
     ['no audience', { tenantId: randomUUID() }, 'scope_required'],
