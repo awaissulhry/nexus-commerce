@@ -5,7 +5,7 @@ import type { ApiClient } from '../../../../../lib/api/client'
 import { newIdempotencyKey } from '../../../../../lib/api/client'
 import { partnerProblem } from '../../../../admin/users/partners/model'
 import { readDesignerChoices, readFactoryDesigner, setFactoryDesigner } from './api'
-import { applyHeldOf, designerDraftOf, designerRefusalOf, draftProblems, type DesignerActions, type DesignerDialog, type DesignerModel, type DesignerRead } from './model'
+import { applyHeldOf, designerDraftOf, designerRefusalOf, type DesignerActions, type DesignerDialog, type DesignerModel, type DesignerRead } from './model'
 
 /**
  * F-CP-155 (customer page plan C7, D12; the API's B-CP-078) — the container of the factory designer rows: one read of the slot
@@ -59,9 +59,8 @@ export function useFactoryDesigner(input: { readonly api: ApiClient; readonly pa
       onDraft: (patch) => setDialog((current) => (current ? { ...current, draft: { ...current.draft, ...patch, ...(patch.designerId === null ? { backupId: null } : {}) }, fields: {}, problem: null } : current)),
       onApply: async () => {
         const { read: now, dialog: open } = latest.current
+        // Held (saving, the list still read, nothing changes, a field to fix: the window shows each in words): nothing is sent.
         if (now.status !== 'ready' || !open || applyHeldOf(open, now.slot)) return
-        const problems = draftProblems(open.draft)
-        if (Object.keys(problems).length > 0) return setDialog({ ...open, fields: problems })
         setDialog({ ...open, busy: true, fields: {}, problem: null })
         try {
           const slot = await setFactoryDesigner(api, partyId, { ...open.draft, version: now.slot.version }, key.current ?? newIdempotencyKey())
