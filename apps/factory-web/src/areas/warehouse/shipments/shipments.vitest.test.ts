@@ -12,11 +12,10 @@ import { DDT_ROW, documents, draftLoose, labelled, labels, OPEN_ROWS, ownVan, PR
 // F-OP-132 (order page N6): a shipment of two orders.
 import { backorder, SECOND_ORDER, SECOND_READY, secondBackorder, sharedShipment } from './_demo/fixtures'
 // F-OP-130 (order page N6): the record of a shared shipment.
-import { CANDIDATES_HELD } from './_demo/fixtures'
+import { CANDIDATES_AFTER } from './_demo/fixtures' // B-OP-047: the candidates as the read answers them now
 import { joinHeld } from './model'
 // F-OP-121: New shipment's ship-together helpers.
 import { ordersOfNew, togetherRows } from './model'
-import { MULTI_ORDER_OFF } from '@nexus/factory-domain/shipping/shipments'
 import { leftKeys } from '../../../lib/record-thread/parts/testing'
 // F-OP-131 (order page N6): the driver's pack.
 import { designScreen as packScreen } from './pack/fixtures'
@@ -365,8 +364,8 @@ describe('F-OP-132 — a shipment of two orders of one customer: the answers par
   })
 
   it('candidates, joinable shipments and ship together parse with their verdicts (the API words kept as they are)', () => {
-    const candidates = orderCandidatesSchema.parse({ shipmentId: two.id, number: two.number, orders: [{ salesOrderId: orderIds[1], number: 'SO-2026-0090', customerRef: 'PO-MD-7740', status: 'READY', joinable: { allowed: false, why: 'Several orders in one shipment come with the next update.' } }] })
-    expect(candidates.orders[0]!.joinable).toEqual({ allowed: false, why: 'Several orders in one shipment come with the next update.' })
+    const candidates = orderCandidatesSchema.parse({ shipmentId: two.id, number: two.number, orders: [{ salesOrderId: orderIds[1], number: 'SO-2026-0090', customerRef: 'PO-MD-7740', status: 'READY', joinable: { allowed: false, why: 'SO-2026-0090 goes to Bologna, shipment SH-00160 to Milano: one shipment goes to one address.' } }] }) // B-OP-047: a reason that still exists
+    expect(candidates.orders[0]!.joinable).toEqual({ allowed: false, why: 'SO-2026-0090 goes to Bologna, shipment SH-00160 to Milano: one shipment goes to one address.' })
     const joinable = joinableShipmentsSchema.parse({ salesOrderId: orderIds[1], number: 'SO-2026-0090', shipments: [{ shipmentId: two.id, number: two.number, status: 'DRAFT', siteId: two.siteId, joinable: { allowed: true, why: null } }] })
     expect(joinable.shipments[0]!.joinable.allowed).toBe(true)
     const together = readyOrderSchema.parse({ ...SECOND_READY, shipsWith: { allowed: false, why: 'SO-2026-0090 goes to Bologna, this shipment to Milano: one shipment goes to one address.' } })
@@ -442,10 +441,10 @@ describe('F-OP-130 — the shipment record names every order, groups its lines b
   })
 
   // F-OP-121 (lead addition): every reason in the screen's own words by its code (it + en), never the API's English sentence.
-  it('an order that cannot join is held with why: the hold of several orders and every other reason in the screen’s own words', () => {
+  it('an order that cannot join is held with why, every reason in the screen’s own words (B-OP-047: several orders are on)', () => {
     expect(joinHeld({ allowed: true, why: null })).toBeNull()
-    expect(joinHeld(CANDIDATES_HELD.orders[0]!.joinable)).toEqual({ key: 'shipOrders.later', detail: null })
-    expect(joinHeld(CANDIDATES_HELD.orders[1]!.joinable)).toEqual({ key: 'shipOrders.why.SHIP_TO', detail: null })
+    expect(joinHeld(CANDIDATES_AFTER.orders[0]!.joinable)).toBeNull()
+    expect(joinHeld(CANDIDATES_AFTER.orders[1]!.joinable)).toEqual({ key: 'shipOrders.why.SHIP_TO', detail: null })
     // An older answer without a code: "Cannot join this shipment", the sentence never on screen.
     expect(joinHeld({ allowed: false, why: 'SO-1 goes to Bologna.' })).toEqual({ key: 'shipOrders.cannotJoin', detail: null })
     for (const locale of LOCALES) {
@@ -454,9 +453,10 @@ describe('F-OP-130 — the shipment record names every order, groups its lines b
     }
     for (const locale of LOCALES) {
       const words = CATALOGUE[locale]['warehouse-shipments-depth'] ?? {}
-      for (const key of ['shipOrders.later', 'shipOrders.cannotJoin', 'shipOrders.add', 'shipOrders.takeOff', 'shipOrders.takeOffWhat_one', 'shipOrders.takeOffWhat_other', 'shipOrders.progressTitle', 'shipOrders.unread']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+      for (const key of ['shipOrders.cannotJoin', 'shipOrders.add', 'shipOrders.takeOff', 'shipOrders.takeOffWhat_one', 'shipOrders.takeOffWhat_other', 'shipOrders.progressTitle', 'shipOrders.unread']) expect(words[key], `${locale} ${key}`).toBeTruthy()
     }
-    expect(CATALOGUE.it['warehouse-shipments-depth']?.['shipOrders.later']).toBe('Più ordini in una spedizione arrivano con il prossimo aggiornamento.')
+    // B-OP-047: the held-off words are gone with the hold.
+    for (const locale of LOCALES) expect(CATALOGUE[locale]['warehouse-shipments-depth']?.['shipOrders.later'], locale).toBeUndefined()
   })
 
   it('no shipOrders key is left on screen in any case, in either language', () => {
@@ -504,15 +504,15 @@ describe("F-OP-131 — the driver's sheet names each order the shipment carries,
 // ── F-OP-121 (order page plan N6): New shipment from the order page — this order, the customer's others beside it ─────────────────
 describe('F-OP-121: New shipment with the same customer’s other orders (ship together)', () => {
   const held = { ...SECOND_READY, salesOrderId: 'other-held', number: 'SO-2026-0095', shipsWith: { allowed: false, code: 'SITE' as const, why: 'SO-2026-0095 waits at another site.' } }
-  const off = { ...SECOND_READY, salesOrderId: 'other-off', number: 'SO-2026-0096', shipsWith: { allowed: false, code: 'MULTI_ORDER_OFF' as const, why: MULTI_ORDER_OFF } }
+  const off = { ...SECOND_READY, salesOrderId: 'other-off', number: 'SO-2026-0096', shipsWith: { allowed: false, code: 'CUSTOMER_HOLD' as const, why: 'BRAND-ALPHA is on hold.' } } // B-OP-047
   const free = { ...SECOND_READY, salesOrderId: 'other-free', number: 'SO-2026-0097', shipsWith: { allowed: true, code: null, why: null } }
   const first = { ...SECOND_READY, salesOrderId: 'first', number: 'SO-2026-0090', shipsWith: null }
   const model = { orders: [first, held, off, free], salesOrderId: 'first', together: true, others: ['other-free'] }
 
-  it('offers the other orders held with their reason (another site, several orders held off), never the order itself', () => {
+  it('offers the other orders held with their reason (another site, a hold on the customer), never the order itself', () => {
     expect(togetherRows(model).map((row) => [row.order.salesOrderId, row.held?.key ?? null])).toEqual([
       ['other-held', 'shipOrders.why.SITE'],
-      ['other-off', 'shipOrders.later'],
+      ['other-off', 'shipOrders.why.CUSTOMER_HOLD'],
       ['other-free', null],
     ])
     // Not from the order page: no other orders offered.

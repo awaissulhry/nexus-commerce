@@ -221,6 +221,8 @@ const salesAcceptSchema = z.object({
       proposed: z.array(z.object({ id: z.string(), kind: z.enum(WORK_ORDER_CHANGE_KINDS), workOrderId: z.string().nullable(), number: z.string().nullable() })),
       extra: z.array(z.object({ workOrderSizeId: z.string(), salesOrderLineId: z.string(), size: z.string(), count: z.number(), words })),
       extraOutcome: z.enum(EXTRA_OUTCOMES).nullable(),
+      // F-OP-116 (B-OP-012, R-17): the changes Accept carried out in its own command (the window never applies them again).
+      applied: z.array(z.object({ changeId: z.string() })).optional(),
     })
     .optional(),
   styleChanges: z.array(z.object({ id: z.string(), number: z.string(), style: z.object({ id: z.string(), code: z.string(), name: z.string() }) })).optional(),

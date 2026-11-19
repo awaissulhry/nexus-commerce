@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react' // F-OP-102: useRef
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation' // F-OP-210: the tab links keep the dock's scope
 import { FileX, ShieldOff } from 'lucide-react'
@@ -25,10 +25,20 @@ import { ShipmentsTab } from './ShipmentsTab'
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { depthMenuItems, DepthNotice, DepthPills, WaitingBanner } from '../../depth/view/DepthBand'
 import { RefuseYesDialog } from '../../depth/view/DepthBand' // F-OP-101
+// ---- F-OP-116: the page's work-order dialogs and the ONE decide window of a work-order change ----
+import { WorkOrderActsDialogs } from '../../../../../lib/production/work-order-acts/view/WorkOrderActsDialogs'
+import { NewWorkOrderDialog } from '../../../../production/work-orders/view/NewWorkOrderDialog' // F-OP-102
+import { WorkOrderChangeReview } from '../../../../home/approvals/work-order-changes/view/WorkOrderChangeReview'
 import { DepthDialogs } from '../../depth/view/DepthDialogs'
 import { NAMESPACE as DEPTH } from '../../depth/model'
+import { askHeld, openRequest, withdrawHeld } from '../../depth/model' // F-OP-102: the band's Ask / Take back
 // ---- B-TH-214: the order on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { useRecordFrame, type RecordFrameState } from '../../../../_shared/record-frame/RecordFrame' // F-OP-102: the owner door
+import { makeHeldOf } from '../production' // F-OP-102
+import { makeInMenu } from '../../model' // F-OP-102
+import { linesNotInProduction } from '../../model' // F-OP-102
+import { planningHref } from '../../../../../lib/production/work-order-acts/model' // F-OP-102
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-210
 import { TabLink } from '../../../../../lib/tab-link/TabLink' // F-OP-210
@@ -48,6 +58,7 @@ import { FilesTab } from './FilesTab' // F-SA-237
 import { RequestDoorNoticeBanner, RequestDoorWindow } from '../../../../home/approvals/requests/view/RequestReview'
 import { RequestBandNotices } from './RequestsSection'
 import { bandHealthOf, healthInputOf, readOf } from '../overview/model'
+import { changesBadgeOf, changesDotOf, waitingCardOf, waitingOf } from '../overview/model' // F-OP-117: the Changes count, R-22
 import { createShipmentDoor } from '../shipments/model' // F-OP-121
 // ---- end F-SA-232
 
@@ -139,14 +150,30 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   const t = useT('orders')
   const d = useT(DEPTH) // B-W2b-323
   const locale = useLocale()
+  const frameRef = useRef<RecordFrameState | null>(null) // F-OP-102: the frame's doors for the band's ⋯ (FrameBridge fills it)
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
   // F-OP-210 (11-dock §4; RC4): every tab link keeps the dock's scope (`thread=`): a pick in the dock survives a change of tab.
   const search = useSearchParams()?.toString() ?? ''
   const step = nextStep(order, model.can)
   const createDoor = createShipmentDoor(order, model.can, model.prefix, !!actions?.onCreateShipment) // F-OP-121
   const stepHeld = step.held ? t(step.held.key, step.held.params?.date ? { ...step.held.params, date: formatDate(dayInstant(String(step.held.params.date)), { locale }) } : step.held.params) : model.busy ? t('held.busy') : null
-  const makeHref = `${model.prefix}/production/work-orders?new=1&order=${encodeURIComponent(order.number)}`
   const gate = depositGate(order)
+  // ---- F-OP-102 (10-order-page §2.1): the primary by state, in place — Make work orders… opens its dialog here (F-OP-112); while the
+  // order waits for a yes, the approver confirms it here (F-OP-101), anyone else asks for it or takes their request back (the depth's
+  // own dialogs and holds). ⌘↵ runs the same.
+  const approval = model.depth?.approval?.value ?? null
+  const yesRequest = approval ? openRequest(approval) : null
+  const yesWait = step.kind === 'askYes' && approval && model.depth ? (yesRequest ? withdrawHeld(approval, model.depth.can) : askHeld(approval, model.depth.can)) : null
+  const primaryHeld = step.kind === 'askYes' ? (stepHeld ?? (yesWait ? d(yesWait.key) : !approval ? d('held.reading') : null)) : stepHeld
+  const runPrimary = () => {
+    if (step.kind === 'makeWorkOrders') return actions?.makeWorkOrders?.onOpen?.()
+    if (step.kind === 'confirmYes' && step.taskId) return actions?.yes?.onConfirm?.(step.taskId)
+    if (step.kind === 'askYes') return actions?.depth?.onDialog?.(yesRequest ? { kind: 'withdraw' } : { kind: 'ask', note: '' })
+    if (step.kind === 'createShipment') return actions?.onCreateShipment?.() // F-OP-121: in place
+    if (step.kind === 'close' || step.kind === 'changePromise') actions?.onDialog?.({ kind: step.kind === 'close' ? 'close' : 'promise' })
+  }
+  const primaryLabel = step.kind === 'confirmYes' ? t('approval.confirm') : step.kind === 'askYes' ? d(yesRequest ? 'wait.withdraw' : 'wait.ask') : step.kind ? t(`step.${step.kind}`) : ''
+  // ---- end F-OP-102
 
   // Keys: ⌘↵ the next step (never while typing or inside a dialog). ⌘J is the frame's (the thread).
   useEffect(() => {
@@ -154,14 +181,11 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       const target = event.target as HTMLElement | null
       const typing = !!target && (!!target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)
       if (target?.closest('[role="dialog"]') || model.dialog) return
-      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !typing && step.kind && !stepHeld) {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !typing && step.kind && !primaryHeld) {
         event.preventDefault()
-        if (step.kind === 'makeWorkOrders') window.location.assign(makeHref)
-        else if (step.kind === 'createShipment') {
-          // F-OP-121: in place; without the container, Warehouse's New shipment with this order chosen.
-          if (createDoor?.kind === 'warehouse') window.location.assign(createDoor.href)
-          else actions?.onCreateShipment?.()
-        } else actions?.onDialog?.({ kind: step.kind === 'close' ? 'close' : 'promise' })
+        // F-OP-121: Create shipment… without the container goes to Warehouse's New shipment with this order chosen.
+        if (step.kind === 'createShipment' && createDoor?.kind === 'warehouse') window.location.assign(createDoor.href)
+        else runPrimary() // F-OP-102: the primary, in place
       }
     }
     window.addEventListener('keydown', onKey)
@@ -173,6 +197,12 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   // F-SA-232: Overview carries a mark while the order is late or at risk (the band's same chip, the same read).
   const production = readOf(model.production)
   const attention = bandHealthOf(healthInputOf(order, production?.headline ?? null, production?.dates ?? null))
+  // ---- F-OP-117 (R-22): Changes counts the ONE waiting list's rows — the Overview card's own (null before the production read: no
+  // number that is not true); its dot when one of them waits on this reader.
+  const waitingCard = production?.headline ? waitingCardOf(waitingOf(production, { requests: model.requests?.value ?? null, approvals: order.openApprovals, recordPayment: model.can.recordPayment, locale }), production, order) : null
+  const changesCount = waitingCard ? changesBadgeOf(waitingCard) : null
+  const changesDot = waitingCard ? changesDotOf(waitingCard) : false
+  // ---- end F-OP-117
   const tabs: TabItem[] = recordTabs(model.can).map((tab) => ({
     id: tab,
     href: tabHref(recordHref, tab, search), // F-OP-210
@@ -182,6 +212,12 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
           {t(`tab.${tab}`)}
           <span className="fw-so-dot" aria-label={t('tab.attention')} role="img" />
         </span>
+      ) : tab === 'changes' && changesDot ? (
+        // F-OP-117: one of the waiting rows is this reader's to do.
+        <span className="fw-so-tablabel">
+          {t(`tab.${tab}`)}
+          <span className="fw-so-dot" aria-label={t('badge.yourTurn')} role="img" />
+        </span>
       ) : tab === 'money' && openDeposits > 0 ? (
         <span className="fw-so-tablabel">
           {t(`tab.${tab}`)}
@@ -190,7 +226,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       ) : (
         t(`tab.${tab}`)
       ),
-    count: tab === 'files' ? (model.files?.read?.total ?? null) : tabCountOf(tab, order), // F-SA-237: the files the reader may open
+    count: tab === 'files' ? (model.files?.read?.total ?? null) : tabCountOf(tab, order, { changes: changesCount /* F-OP-117 */ }), // F-SA-237: the files the reader may open
   }))
   // F-SA-230: a section an old address named (`?tab=margin` → Money #margin) comes into view once its tab is drawn.
   useEffect(() => {
@@ -198,30 +234,16 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
     if (id) document.getElementById(id)?.scrollIntoView({ block: 'start' })
   }, [model.tab])
 
+  // F-OP-102: one primary by state, every one in place (no page change).
   const primary =
-    step.kind === 'makeWorkOrders' ? (
-      stepHeld ? (
-        <Button size="sm" variant="primary" heldReason={stepHeld}>
-          {t('step.makeWorkOrders')}
-        </Button>
-      ) : (
-        <Button size="sm" variant="primary" asChild aria-keyshortcuts="Meta+Enter Control+Enter">
-          <Link href={makeHref}>{t('step.makeWorkOrders')}</Link>
-        </Button>
-      )
-    ) : step.kind === 'createShipment' && createDoor?.kind === 'warehouse' ? (
+    step.kind === 'createShipment' && createDoor?.kind === 'warehouse' ? (
       // F-OP-121: without the container (a design case), Warehouse's New shipment with this order chosen.
       <Button size="sm" variant="primary" asChild aria-keyshortcuts="Meta+Enter Control+Enter">
         <Link href={createDoor.href}>{t('action.createShipment')}</Link>
       </Button>
-    ) : step.kind === 'createShipment' ? (
-      // F-OP-121: Create shipment… opens Warehouse's New shipment in place (this order and the customer's others).
-      <Button size="sm" variant="primary" heldReason={stepHeld} onClick={() => actions?.onCreateShipment?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
-        {t('step.createShipment')}
-      </Button>
     ) : step.kind ? (
-      <Button size="sm" variant="primary" heldReason={stepHeld} onClick={() => actions?.onDialog?.({ kind: step.kind === 'close' ? 'close' : 'promise' })} aria-keyshortcuts="Meta+Enter Control+Enter">
-        {t(`step.${step.kind}`)}
+      <Button size="sm" variant="primary" heldReason={primaryHeld} onClick={runPrimary} aria-keyshortcuts="Meta+Enter Control+Enter">
+        {primaryLabel}
       </Button>
     ) : null
 
@@ -240,10 +262,16 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   const notes = useT(NOTES_NS)
   const people = model.people ?? null
   const askWait = people ? noteHeld(people.mayNote, 1) : null
+  // ---- F-OP-102 (10-order-page §2.2): the ⋯ re-cut — Make work orders… also while in production with lines not in work orders;
+  // Change ship-to… (edit mode with Ship to focused: one edit path); Who answers the customer… (the conversation's owner door);
+  // Open in Planning › (the first work order). "Ask the customer to re-confirm…" is deferred (F-OP-105): no item.
+  const makeWait = makeHeldOf(order, model.can)
+  const firstWorkOrder = order.chain.workOrders[0] ?? null
   const groups: Partial<Record<MenuGroup, MenuItemDef[]>> = {
     next: [
         ...(!isFinal(order) && step.kind !== 'changePromise' ? [{ id: 'promise', label: t('action.promise'), disabled: !!promiseWait, description: held(promiseWait), onSelect: () => actions?.onDialog?.({ kind: 'promise' }) }] : []),
         ...(order.status === 'IN_PRODUCTION' ? [{ id: 'ready', label: t('action.ready'), disabled: !!readyWait, description: held(readyWait), onSelect: () => actions?.onDialog?.({ kind: 'ready' }) }] : []),
+        ...(makeInMenu(order, linesNotInProduction(order)) ? [{ id: 'make', label: t('bandMenu.makeWorkOrders'), disabled: !!makeWait, description: makeWait ? t(makeWait.key, makeWait.params?.date ? { date: formatDate(dayInstant(String(makeWait.params.date)), { locale }) } : makeWait.params) : undefined, onSelect: () => actions?.makeWorkOrders?.onOpen?.() }] : []),
         // F-OP-121: Create shipment… in place (as Change promise date…, not repeated here while it is the band's next step).
         ...(createDoor?.kind === 'inPlace' && step.kind !== 'createShipment' ? [{ id: 'ship', label: t('step.createShipment'), onSelect: () => actions?.onCreateShipment?.() }] : []),
         ...(createDoor?.kind === 'warehouse' ? [{ id: 'ship', label: t('action.createShipment'), href: createDoor.href }] : []),
@@ -254,25 +282,33 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
         ...(!isFinal(order) && model.can.manage
           ? [
               { id: 'amend', label: t('action.amend'), disabled: !!amendWait || !!model.amend, description: model.amend ? t('held.amending') : held(amendWait), onSelect: () => actions?.onAmendStart?.() },
-              { id: 'closeLines', label: t('action.closeLines'), disabled: !!closeLinesWait, description: held(closeLinesWait), onSelect: () => actions?.onDialog?.({ kind: 'closeLines' }) },
-              ...(order.lines.some((line) => line.closedShort) ? [{ id: 'reopenLines', label: t('action.reopenLines'), disabled: !!reopenWait, description: held(reopenWait), onSelect: () => actions?.onDialog?.({ kind: 'reopenLines' }) }] : []),
+              // F-OP-110: the delivery address moves through the edit header (the same edit path); while editing it focuses the field.
+              { id: 'shipTo', label: t('bandMenu.changeShipTo'), disabled: !!amendWait, description: held(amendWait), onSelect: () => actions?.onChangeShipTo?.() },
               // F-OP-111: Split into new orders… (the parts become orders of their own; the deposit stays here).
               { id: 'split', label: t('split.action'), disabled: !!splitWait, description: held(splitWait), onSelect: () => actions?.onDialog?.({ kind: 'split' }) },
+              { id: 'closeLines', label: t('action.closeLines'), disabled: !!closeLinesWait, description: held(closeLinesWait), onSelect: () => actions?.onDialog?.({ kind: 'closeLines' }) },
+              ...(order.lines.some((line) => line.closedShort) ? [{ id: 'reopenLines', label: t('action.reopenLines'), disabled: !!reopenWait, description: held(reopenWait), onSelect: () => actions?.onDialog?.({ kind: 'reopenLines' }) }] : []),
             ]
           : []),
         // B-W2b-323: Set priority…, Set season…
         ...depthMenuItems(order, model.depth, actions?.depth, d),
     ],
-    people: people
-        ? [
-            { id: 'assignSupervisor', label: t('menu.assignSupervisor'), disabled: !people.mayAssign, description: people.mayAssign ? undefined : sup('held.noRight'), onSelect: () => actions?.people?.onAssign?.() },
-            { id: 'askSupervisor', label: t('menu.askSupervisor'), disabled: !!askWait, description: askWait ? notes(askWait.key, askWait.params) : undefined, onSelect: () => actions?.people?.onAsk?.() },
-          ]
-      : [],
+    people: [
+        ...(people
+          ? [
+              { id: 'assignSupervisor', label: t('menu.assignSupervisor'), disabled: !people.mayAssign, description: people.mayAssign ? undefined : sup('held.noRight'), onSelect: () => actions?.people?.onAssign?.() },
+              { id: 'askSupervisor', label: t('menu.askSupervisor'), disabled: !!askWait, description: askWait ? notes(askWait.key, askWait.params) : undefined, onSelect: () => actions?.people?.onAsk?.() },
+            ]
+          : []),
+        // F-OP-102 (N-1): who answers the customer is the order conversation's owner — its own dialog (the frame's door).
+        ...(thread ? [{ id: 'whoAnswers', label: t('bandMenu.whoAnswers'), onSelect: () => frameRef.current?.openDoor?.('owner') }] : []),
+    ],
     goTo: [
         ...(order.chain.quote && model.can.viewQuotes ? [{ id: 'quote', label: t('action.openQuote', { number: order.chain.quote.number }), href: `${model.prefix}/sales/quotes/${order.chain.quote.id}` }] : []),
         // B-W2b-180 (design conn "Portal › Orders & tracking"): the order as the customer sees it in their portal, read-only.
         ...(model.portal ? [{ id: 'portal', label: t('action.portal'), disabled: !!model.portal.held || model.portal.opening, description: model.portal.opening ? t('held.portalOpening') : held(model.portal.held), onSelect: () => actions?.onPortal?.() }] : []),
+        // F-OP-102: Planning's board at the order's first work order (line, workshop, start and outside are Planning's).
+        ...(firstWorkOrder && model.workOrderActs?.can.planning && !isFinal(order) ? [{ id: 'planning', label: t('wo.link.planning'), href: planningHref(model.prefix, firstWorkOrder.id) }] : []),
     ],
     copy: [
         {
@@ -287,6 +323,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
   }
   const cancelItem: MenuItemDef[] = !isFinal(order) && model.can.manage ? [{ id: 'cancel', label: t('action.cancel'), tone: 'danger' as const, disabled: !!cancelWait, description: held(cancelWait), onSelect: () => actions?.onDialog?.({ kind: 'cancel' }) }] : []
   const more: MenuItemDef[] = groupedMenu(groups, cancelItem, (group) => t(`menu.group.${group}`))
+
   // ---- end F-SA-230
 
   const depositRequest = gate.request
@@ -353,6 +390,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
           moreLabel: t('record.more'),
         }}
       >
+        {/* F-OP-102: the band's ⋯ reaches the frame's doors through this (the band's items are built outside the frame). */}
+        <FrameBridge into={frameRef} />
         {/* F-OP-210: the factory's TabLink (no prefetch: a pick re-writes every tab's href). */}
         <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" linkAs={TabLink} />
 
@@ -457,6 +496,21 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       {/* F-SA-243: the ONE review window (Home › Approvals' own) opened on this page from its doors; Esc returns to the same tab. */}
       {model.requestDoor && <RequestDoorWindow door={model.requestDoor.parts} />}
       {model.depth && <DepthDialogs order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />}
+      {/* F-OP-116: the work-order rows' dialogs, once for the page (a row's ⋯, the waiting list's "Lift the customer's pause…"), and
+          the ONE decide window of a work-order change (Approvals' own; opened by the page's state, Esc returns here). */}
+      {model.workOrderActs && <WorkOrderActsDialogs model={model.workOrderActs} actions={actions?.workOrderActs} />}
+      {/* F-OP-102 (F-OP-112): Make work orders… — the band's primary, the ⋯ and Production's card open the one dialog here. */}
+      {model.makeWorkOrders?.dialog && <NewWorkOrderDialog model={model.makeWorkOrders.dialog} can={model.makeWorkOrders.can} actions={actions?.makeWorkOrders?.dialog} />}
+      {model.orderChanges?.review && (
+        <WorkOrderChangeReview
+          review={model.orderChanges.review}
+          prefix={model.prefix}
+          offline={model.liveState === 'offline'}
+          busy={model.orderChanges.busy}
+          nav={{ ids: (model.orderChanges.list?.value ?? []).filter((change) => change.status === 'PROPOSED').map((change) => change.id), onOpen: actions?.orderChanges?.onOpen }}
+          actions={actions?.orderChanges}
+        />
+      )}
       <DeclineDialog model={model.links} actions={actions?.links} />
       {/* F-SA-230: the production lane's own dialogs, mounted as they are. */}
       {model.people?.assign && <AssignSupervisorDialog model={model.people.assign} actions={actions?.people?.assign} />}
@@ -477,6 +531,13 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
 }
 
 const ordersHref = (prefix: string) => `${prefix}/sales/orders`
+
+/** F-OP-102: hands the frame around the page to the band's ⋯ (its items are made outside the frame's context); draws nothing. */
+function FrameBridge({ into }: { into: { current: RecordFrameState | null } }) {
+  const frame = useRecordFrame()
+  into.current = frame
+  return null
+}
 
 /** A tab's part while it loads, or when its read failed (never drawn as empty): with Try again. */
 export function PartState({ problem, onRetry, label }: { problem: string | null; onRetry?: () => void; label: string }) {

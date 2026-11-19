@@ -43,6 +43,10 @@ export interface NewOrderDialogModel {
   number: string | null | undefined
   /** B-TH-221: the one pointer — a written request goes to Incoming's New request (null: the person makes no request). */
   incomingHref?: string | null
+  /** F-CP-146 (money wall D1-c): false — the person sees no price: the window says the lines take the customer's price list. */
+  price?: boolean
+  /** F-CP-104: the host holds the customer (the customer page): it is picked on open and the window offers no Change. */
+  partyLocked?: boolean
 }
 // B-TH-230
 import type { UnreadMap } from '../../../../lib/last-message-cell/model'
@@ -129,7 +133,10 @@ export interface OrdersListModel {
   /** F-SA-222: a rider's orders (`?profile=`): the rider's name once read (undefined while read, null when not found). */
   profile?: { id: string; name: string | null | undefined } | null
   /** F-SA-222: what an empty view says on this host (the Made-to-measure page says why: GATE-MTM), when nothing narrows it. */
-  empty?: { title: string; body?: string | null; link?: { href: string; label: string } | null } | null
+  // F-CP-102: `view` — the rows view these words are for (the customer page keys them per view): they show on that view when nothing
+  // else narrows it; absent: the host's default view only (as before).
+  // F-CP-104: `newOrder` — New order beside the words (held with why without orders.manage; the customer page's All orders).
+  empty?: { title: string; body?: string | null; link?: { href: string; label: string } | null; view?: RowView | null; newOrder?: boolean } | null
   // ---- F-SA-220 (the ONE Orders sheet, use-orders-sheet.ts): the host's ----
   /** The list frame's key: 'sales.orders' on every host (one export source, one set of saved views). */
   listKey?: string
@@ -149,7 +156,16 @@ export interface OrdersListModel {
   /** The host's built-in views, in its order (ids of builtInViewsOf; absent: every one of the sheet's). */
   views?: readonly string[] | null
   /** The host's default rows view, written into the address on entry: not a narrowing (no chip, no "Viewing …" line). */
+  // F-CP-102: the sheet sets it from the host's `clearTo` (absent: Open orders); Clear all and a view chip's ✕ go back to it.
   defaultRows?: RowView | null
+  /**
+   * F-CP-102: the host's own views in Views ▾ (not rows views of the sheet: the customer page's Drafts of <customer> and Not equal),
+   * placed where `views` names their ids; `active` ticks the one the address shows (it wins over the rows view); picked through
+   * `actions.onHostView`.
+   */
+  hostViews?: ReadonlyArray<{ readonly id: string; readonly label: string; readonly active?: boolean }> | null
+  /** F-CP-103 (review A4): the count beside each Views ▾ item, by view id, from the host's one count read (absent id: no number). */
+  viewCounts?: Readonly<Record<string, number>> | null
   /** The columns the host shows at first, and from 1800 px (a person's Customise wins); absent: the sheet's own. */
   preset?: { readonly shown: readonly string[]; readonly wide?: readonly string[] } | null
   /** A real link on the toolbar's right ("Work orders of <customer> ›"). */
@@ -241,6 +257,8 @@ export interface OrdersListActions {
   task?: { readonly onCreate: (draft: TaskDraft) => Promise<boolean>; readonly onSend: (draft: TaskDraft, assignee: BatchAssignee) => Promise<BatchAnswer | null>; readonly onRetryPeople: () => void; readonly onClose: () => void }
   /** F-SA-276: the waiting term (null clears it); `rows` with it (the built-in view "Waiting on us": the open ones). */
   onWaiting?: (waiting: 'us' | null, rows?: RowView) => void
+  /** F-CP-102: one of the host's own views picked in Views ▾ (model.hostViews). */
+  onHostView?: (id: string) => void
   // ---- F-SA-280 ----
   onAssignSupervisor?: (ids: readonly string[]) => void
   supervisor?: AssignSupervisorActions

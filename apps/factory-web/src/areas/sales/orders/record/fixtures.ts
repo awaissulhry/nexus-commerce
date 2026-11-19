@@ -2,6 +2,7 @@ import { createElement, Fragment } from 'react'
 import { Building2, Eye, Lock, ShoppingBag } from 'lucide-react' // F-OP-217: the dock's segments
 import { defineDesignScreen, type DesignCase } from '../../../../lib/design/design-screen'
 import type { OpenApproval, Order, OrderLine } from '../api' // F-OP-101: OpenApproval
+import type { AmendPreview, WorkOrderPlan } from '../api' // F-OP-129: the edit strip's previews
 import { amendKeyOf, draftOf, newKey, type AmendReview, type DraftLine } from '../daily-model'
 import { STEP_UP_CLOSED } from '../hooks'
 import type { NewOrderModel } from '../new/new-model'
@@ -446,6 +447,111 @@ const F_SA_243: DesignCase<RecordCase>[] = [
 ]
 // ---- end F-SA-243
 
+// ---- F-OP-129 (order page plan N2, N5, N6; 10-order-page §13 design cases): what the strip says each work order does, per reader
+// (Sales: a released one waits; the Owner: both follow, R-4), the extra pieces' outcome under cut, and the Shipments rows — a typed
+// number ("No live tracking"), labels, the number held for Sales, a shared shipment and one made elsewhere. The yes in place is
+// F-OP-101's (f-op-101-*), the work-order rows' acts F-OP-113's; each case is looked at in light and dark at 375, 1440 and 1920. ----
+const RED_ID = production.lines.find((line) => line.id === LINE_RED)!.colourwayId
+/** WO-00023: a DRAFT of the red 54 (the demo's two work orders are WO-00021 in progress, WO-00022 released). */
+const DRAFT_WO_ID = '0190f0e2-9191-7000-8000-000000000023'
+const RELEASED_WAITS = { en: 'WO-00022 is released: production applies the change (a planner or a production manager).', it: 'WO-00022 è rilasciato: la modifica la applica la produzione (un pianificatore o un responsabile di produzione).' }
+/** Red 52 and 54 one fewer each (6 → 4 pieces, net 2,640.00 → 1,760.00). */
+const fewerRed = (lines: DraftLine[]): DraftLine[] => lines.map((line) => (line.lineId === LINE_RED ? { ...line, sizes: { ...line.sizes, '52': 1, '54': 1 } } : line))
+const RED_DIFF: NonNullable<AmendPreview['diff']> = {
+  lines: [{ change: 'CHANGED', lineId: LINE_RED, seq: 20, styleId: STYLE_ID, colourwayId: RED_ID, piecesBefore: 6, piecesAfter: 4, sizes: [{ size: '52', before: 2, after: 1 }, { size: '54', before: 2, after: 1 }], priceChanged: false, textChanged: false }],
+  header: [],
+  prices: [{ lineId: LINE_RED, unitPrice: null, netBefore: 264000, netAfter: 176000 }],
+  netAmountBefore: 624000,
+  netAmountAfter: 536000,
+  grossAmountBefore: 761280,
+  grossAmountAfter: 653920,
+  reacceptanceNeeded: true,
+}
+/** What the work orders do with the red change: WO-00022 (released) follows only for a reader with workorders.manage; the DRAFT always. */
+const redPlan = (releasedFollows: boolean): WorkOrderPlan[] => [
+  { kind: 'LOWER_TO_ORDER', workOrderId: WORK_ORDERS[1]!.id, number: 'WO-00022', status: 'RELEASED', route: 'LOWER_RELEASED', cells: [{ lineId: LINE_RED, size: '52', from: 2, to: 1, cut: 0 }], extra: 0, appliesNow: releasedFollows, held: releasedFollows ? null : RELEASED_WAITS, reprint: true },
+  { kind: 'LOWER_TO_ORDER', workOrderId: DRAFT_WO_ID, number: 'WO-00023', status: 'DRAFT', route: 'SET_DRAFT_CELLS', cells: [{ lineId: LINE_RED, size: '54', from: 2, to: 1, cut: 0 }], extra: 0, appliesNow: true, held: null, reprint: false },
+]
+const redPreview = (releasedFollows: boolean): AmendPreview => ({ ...AMEND_PREVIEW, diff: RED_DIFF, workOrders: { extra: [], needsOutcome: false, words: null, plan: redPlan(releasedFollows) } })
+/** Black 50 one fewer under cut: both 50s of WO-00021 are cut — 1 extra piece, its outcome picked before Apply. */
+const fewerBlack50 = (lines: DraftLine[]): DraftLine[] => lines.map((line) => (line.lineId === LINE_BLK ? { ...line, sizes: { ...line.sizes, '50': 1 } } : line))
+const OUTCOME_PREVIEW: AmendPreview = {
+  ...AMEND_PREVIEW,
+  ok: false,
+  diff: {
+    lines: [{ change: 'CHANGED', lineId: LINE_BLK, seq: 10, styleId: STYLE_ID, colourwayId: BLK.id, piecesBefore: 8, piecesAfter: 7, sizes: [{ size: '50', before: 2, after: 1 }], priceChanged: false, textChanged: false }],
+    header: [],
+    prices: [{ lineId: LINE_BLK, unitPrice: null, netBefore: 360000, netAfter: 315000 }],
+    netAmountBefore: 624000,
+    netAmountAfter: 579000,
+    grossAmountBefore: 761280,
+    grossAmountAfter: 706380,
+    reacceptanceNeeded: true,
+  },
+  workOrders: {
+    extra: [{ workOrderSizeId: '0190f0e2-9191-7000-8000-0000000021c1', salesOrderLineId: LINE_BLK, size: '50', count: 1, words: { en: '1 piece of 50 is already cut', it: '1 pezzo della 50 è già tagliato' } }],
+    needsOutcome: true,
+    words: { en: '1 piece of WO-00021 is cut beyond the new figures', it: '1 pezzo di WO-00021 è tagliato oltre le nuove quantità' },
+    plan: [{ kind: 'LOWER_TO_ORDER', workOrderId: WORK_ORDERS[0]!.id, number: 'WO-00021', status: 'IN_PROGRESS', route: 'LOWER_RELEASED', cells: [{ lineId: LINE_BLK, size: '50', from: 2, to: 2, cut: 2 }], extra: 1, appliesNow: true, held: null, reprint: true }],
+  },
+}
+const LESS_RED = 'Il cliente toglie una rossa 52 e una 54.'
+const LESS_BLACK = 'Il cliente toglie una nera 50.'
+
+type ShipmentRow = Order['chain']['shipments'][number]
+const OTHER_ORDER = { id: '0190f0e2-5151-7000-8000-000000000151', number: 'SO-2026-0151', customerRef: 'PO-ESEMPIO-151' }
+const THIS_ORDER = { id: ORDER_ID, number: 'SO-2026-0088', customerRef: 'PO-ESEMPIO-88' }
+const TYPED_ROW: ShipmentRow = {
+  id: '0190f0e2-8181-7000-8000-000000000051',
+  number: 'SH-2026-0051',
+  status: 'SHIPPED',
+  shippedAt: at(18, 9, 0, 11),
+  deliveredAt: null,
+  version: 3,
+  transportBy: 'CARRIER',
+  carrier: { code: 'BRT', name: 'BRT' },
+  tracking: { number: '0123456789', source: 'TYPED', parcels: [], live: false, url: 'https://vas.brt.example.com/track?n=0123456789' },
+  expectedDeliveryAt: null,
+  ddt: { number: '151/2026', date: '2026-11-18' },
+  mayTypeTracking: { allowed: true, code: null, why: null },
+  withheld: [],
+  orders: [THIS_ORDER],
+  origin: 'NEXUS',
+  externalDdt: null,
+}
+const LABELLED_ROW: ShipmentRow = {
+  ...TYPED_ROW,
+  id: '0190f0e2-8181-7000-8000-000000000052',
+  number: 'SH-2026-0052',
+  carrier: { code: 'GLS', name: 'GLS' },
+  tracking: { number: null, source: 'PARCELS', parcels: [{ number: 'GLS-778899', url: 'https://gls.example.com/track/GLS-778899' }], live: true },
+  ddt: { number: '152/2026', date: '2026-11-19' },
+  mayTypeTracking: { allowed: false, code: 'LABELLED', why: null },
+}
+const SHARED_ROW: ShipmentRow = { ...TYPED_ROW, id: '0190f0e2-8181-7000-8000-000000000053', number: 'SH-2026-0053', tracking: null, orders: [THIS_ORDER, OTHER_ORDER] }
+const ELSEWHERE_ROW: ShipmentRow = {
+  ...TYPED_ROW,
+  id: '0190f0e2-8181-7000-8000-000000000054',
+  number: 'SH-2026-0054',
+  carrier: { code: null, name: 'Corriere Esempio' },
+  tracking: null,
+  ddt: null,
+  mayTypeTracking: { allowed: true, code: null, why: null },
+  origin: 'ELSEWHERE',
+  externalDdt: { number: '123/2026', date: '2026-11-17' },
+}
+const withShipments = (rows: ShipmentRow[]): Order => ({ ...shipped, chain: { ...shipped.chain, shipments: rows } })
+const F_OP_129: DesignCase<RecordCase>[] = [
+  { id: 'f-op-129-strip-sales', label: 'F-OP-129 · Sales · Edit mode: What changes — WO-00023 (a draft) follows now; WO-00022 is released: it waits for production, decided on this page', model: base('sales', production, { amend: amendOf(production, fewerRed, { reason: LESS_RED }, { phase: 'ready', preview: redPreview(false) }) }) },
+  { id: 'f-op-129-strip-owner', label: 'F-OP-129 · Owner · Edit mode: both work orders follow in the click (R-4); WO-00022’s work sheet is printed again', model: base('owner', production, { amend: amendOf(production, fewerRed, { reason: LESS_RED }, { phase: 'ready', preview: redPreview(true) }) }) },
+  { id: 'f-op-129-strip-outcome', label: 'F-OP-129 · Owner · Edit mode under cut: 1 piece of 50 is already cut — Apply held until its outcome is picked', model: base('owner', production, { amend: amendOf(production, fewerBlack50, { reason: LESS_BLACK }, { phase: 'ready', preview: OUTCOME_PREVIEW }) }) },
+  { id: 'f-op-129-strip-outcome-chosen', label: 'F-OP-129 · Owner · Edit mode under cut: kept as leftover for the customer — Apply', model: base('owner', production, { amend: amendOf(production, fewerBlack50, { reason: LESS_BLACK, extraOutcome: 'LEFTOVER' }, { phase: 'ready', preview: OUTCOME_PREVIEW }) }) },
+  { id: 'f-op-129-ship-tracking', label: 'F-OP-129 · Owner · Shipments: "BRT, booked by hand" with its typed number, No live tracking and Track ›; GLS labels with their parcel numbers (typing held: labels bought)', model: base('owner', withShipments([TYPED_ROW, LABELLED_ROW]), { tab: 'shipments' }) },
+  { id: 'f-op-129-ship-tracking-sales', label: 'F-OP-129 · Sales · Shipments: the typed number read only — "A warehouse person adds tracking"', model: base('sales', withShipments([{ ...TYPED_ROW, mayTypeTracking: { allowed: false, code: 'NO_RIGHT', why: null } }]), { tab: 'shipments' }) },
+  { id: 'f-op-129-ship-shared', label: 'F-OP-129 · Owner · Shipments: a shared shipment — "Also carries SO-2026-0151" (its link)', model: base('owner', withShipments([SHARED_ROW, TYPED_ROW]), { tab: 'shipments' }) },
+  { id: 'f-op-129-ship-elsewhere', label: 'F-OP-129 · Owner · Shipments: made elsewhere — "Made elsewhere · DDT 123/2026", no Nexus DDT', model: base('owner', withShipments([ELSEWHERE_ROW, TYPED_ROW]), { tab: 'shipments' }) },
+]
+// ---- end F-OP-129
 // ---- F-OP-113 ----
 const MANAGE_ALL: WorkRights = { manage: true, release: true, hold: true }
 const NO_RIGHTS: WorkRights = { manage: false, release: false, hold: false }
@@ -657,5 +763,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'f-op-217-dock-general', label: 'F-OP-217 · Sales · Dock: Moto Demo (general) — the customer’s general thread, the pick band in its card', model: { ...base('sales', production, { tab: 'overview' }), dock: 'general' } },
     { id: 'f-op-217-dock-work-order', label: 'F-OP-217 · Sales · Dock: a work order’s notes — office only, the whose-line in the office tone, no mail', model: { ...base('sales', production, { tab: 'production' }), dock: 'wo' } },
     { id: 'f-op-217-dock-all', label: 'F-OP-217 · Sales · Dock: All of Moto Demo — read only: its Head, compact lines (the customer’s, ours, an office note, General, another order with files), the foot “Read only. Write in:”', model: { ...base('sales', production, { tab: 'lines' }), dock: 'all' } },
+    // ---- F-OP-129: the order page at the end — the edit strip per reader and under cut, the Shipments rows (tracking, shared, made elsewhere) ----
+    ...F_OP_129,
   ],
 })

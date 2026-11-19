@@ -957,7 +957,6 @@
     "pick": "Quale ordine",
     "reading": "Lettura degli ordini aperti di {customer}…",
     "none": "{customer} non ha altri ordini aperti.",
-    "later": "Più ordini in una spedizione arrivano con il prossimo aggiornamento.",
     "cannotJoin": "Non può entrare in questa spedizione",
     "cells": "Capi di {order}",
     "unread": "Ordine non ancora letto",

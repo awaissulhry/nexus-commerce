@@ -23,7 +23,7 @@ import '../../depth/depth.css'
 export function ConfirmationCard({ order, model, actions, prefix }: { order: Order; model: OrderDepthModel | undefined; actions?: OrderDepthActions; prefix: string }) {
   if (!model?.confirmation) return null
   return (
-    <WithMessages namespaces={[NAMESPACE]}>
+    <WithMessages namespaces={[NAMESPACE, 'orders' /* F-CP-146: pricedPdf.held */]}>
       <Confirmation order={order} model={model} actions={actions} prefix={prefix} />
     </WithMessages>
   )
@@ -31,6 +31,7 @@ export function ConfirmationCard({ order, model, actions, prefix }: { order: Ord
 
 function Confirmation({ order, model, actions, prefix }: { order: Order; model: OrderDepthModel; actions?: OrderDepthActions; prefix: string }) {
   const d = useT(NAMESPACE)
+  const o = useT('orders') // F-CP-146
   const locale = useLocale()
   const frame = useRecordFrame()
   const part = model.confirmation!
@@ -82,8 +83,10 @@ function Confirmation({ order, model, actions, prefix }: { order: Order; model: 
       <FileText size={13} aria-hidden /> {state === 'outdated' ? d('confirmation.makeNew', { version: (newest?.version ?? 0) + 1 }) : d('confirmation.make')}
     </Button>
   )
+  // F-CP-146 (money wall D1-c): the confirmation shows prices — it is sent by someone who sees prices (said on the button).
+  const pricedHeld = model.can.price ? null : o('pricedPdf.held')
   const send = model.can.manage ? (
-    <Button size="sm" variant={state === 'none' ? 'secondary' : 'primary'} heldReason={held ? d(held.key) : busy} onClick={() => actions?.onDialog?.({ kind: 'send', cc: '', subject: '', message: '' })}>
+    <Button size="sm" variant={state === 'none' ? 'secondary' : 'primary'} heldReason={pricedHeld ?? (held ? d(held.key) : busy)} onClick={() => actions?.onDialog?.({ kind: 'send', cc: '', subject: '', message: '' })}>
       <Send size={13} aria-hidden /> {d('confirmation.send')}
     </Button>
   ) : null

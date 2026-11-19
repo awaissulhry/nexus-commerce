@@ -3,7 +3,6 @@ import type { Ddt, DdtPreview, DdtRequest, Documents, Labels, ShipmentRow, Shipm
 // F-OP-132 (order page N6): a shipment's several orders.
 import type { Backorder, ShipmentLine, ShipmentOrder } from './api'
 // F-OP-130 (order page N6): the hold of several orders in one shipment, said in the screen's words (B-OP-047 deletes both).
-import { MULTI_ORDER_OFF } from '@nexus/factory-domain/shipping/shipments'
 import type { JoinVerdict } from './api'
 // F-OP-121: New shipment's model (the orders it would carry) and the ready orders.
 import type { ReadyOrder } from './api'
@@ -630,14 +629,13 @@ export const takeOffHeld = (group: LineGroup): Phrase | null => (group.lines.som
 // ---- F-OP-130 (order page N6, R-5): may an order join this DRAFT -------------------------------------------------------------------
 
 /**
- * Why an order may not join (null: it may), for its held row: while several orders in one shipment are held off, that hold in
- * the screen's own words (`shipOrders.later`; B-OP-047 deletes MULTI_ORDER_OFF and this branch); any other reason — another
- * address, another site, another currency, a hold on the customer … — by its code in the screen's own words (`shipOrders.why.*`,
- * F-OP-121 lead addition: the API's English sentence is never on screen); an answer without a code: "Cannot join".
+ * Why an order may not join (null: it may), for its held row: its reason — another address, another site, another currency, a
+ * hold on the customer … — by its code in the screen's own words (`shipOrders.why.*`, F-OP-121 lead addition: the API's English
+ * sentence is never on screen); an answer without a code: "Cannot join". B-OP-047: several orders in one shipment are on (the
+ * MULTI_ORDER_OFF hold and its words are gone).
  */
 export function joinHeld(verdict: JoinVerdict): (Phrase & { detail: string | null }) | null {
   if (verdict.allowed) return null
-  if (verdict.code === 'MULTI_ORDER_OFF' || verdict.why === MULTI_ORDER_OFF) return { key: 'shipOrders.later', detail: null }
   // F-OP-121 (lead addition): the reason's code in the screen's own words (it + en), never the API's English sentence.
   if (verdict.code && (JOIN_PROBLEM_CODES as readonly string[]).includes(verdict.code)) return { key: `shipOrders.why.${verdict.code}`, detail: null }
   return { key: 'shipOrders.cannotJoin', detail: null }

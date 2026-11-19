@@ -608,10 +608,14 @@ export const orderSchema = z.object({
     })
     .optional(),
   // ── end F-SA-239
+  // ---- F-OP-110: where the order ships now (the address as written on the order: name, street, town …); absent in an older answer.
+  shipTo: z.record(z.string(), z.unknown()).nullable().optional(),
   // ---- F-OP-101 (B-OP-020): the order's open requests for a yes this reader may see (oldest first), and how many it may not see
   // (counted, never named); absent in an older answer.
   openApprovals: z.array(openApprovalSchema).optional(),
   openApprovalsHidden: z.number().optional(),
+  // F-OP-117 (B-OP-020): the Money and Shipments tabs' counts (counts only; the Changes count is the page's ONE waiting list, R-22).
+  badges: z.object({ money: z.object({ invoices: z.number(), openDeposits: z.number() }), shipments: z.number() }).optional(),
   // ---- end F-OP-101
 })
 export type Order = z.infer<typeof orderSchema>
@@ -701,11 +705,31 @@ export async function sendToSdi(api: ApiClient, invoiceId: string, version: numb
 export const settlementSchema = z.object({
   settled: z.boolean(),
   gaps: z.array(z.string()),
-  invoices: z.array(z.object({ id: z.string(), docType: z.string(), number: z.string().nullable(), status: z.string(), grossTotal: z.number().optional(), paidAmount: z.number().optional(), openAmount: z.number().optional() })),
+  invoices: z.array(
+    z.object({
+      id: z.string(),
+      docType: z.string(),
+      number: z.string().nullable(),
+      status: z.string(),
+      grossTotal: z.number().optional(),
+      paidAmount: z.number().optional(),
+      openAmount: z.number().optional(),
+      // ---- F-OP-118 (B-OP-022): this order's part of the invoice (price grain), the freight in no order, the other orders it bills
+      // (the invoice's own buyer only: named when the reader reaches them, else counted) ----
+      share: z.number().optional(),
+      openShare: z.number().optional(),
+      freight: z.number().optional(),
+      otherOrders: z.array(z.object({ id: z.string(), number: z.string() })).optional(),
+      otherOrdersHidden: z.number().optional(),
+      // ---- end F-OP-118
+    }),
+  ),
   invoicedAmount: z.number().optional(),
   creditedAmount: z.number().optional(),
   paidAmount: z.number().optional(),
   balanceDueAmount: z.number().optional(),
+  // F-OP-118 (B-OP-022): Money = this order's share, by the orders list's own rule (each figure with the price grain only).
+  thisOrder: z.object({ paid: z.number().optional(), stillToPay: z.number().optional(), invoicedShare: z.number().optional(), depositsPaid: z.number().optional() }).optional(),
 })
 export type Settlement = z.infer<typeof settlementSchema>
 
@@ -845,6 +869,8 @@ export interface AmendBody {
   lines: AmendLineInput[]
   /** F-OP-107 (B2): what happens to pieces already cut beyond the new figures (sent only when the preview names some). */
   extraOutcome?: ExtraOutcome | null
+  /** F-OP-110 (B-OP-015): another delivery address of the order's customer (sent only when one is picked; it may move alone). */
+  shipToAddressId?: string
 }
 
 // ---- F-OP-106 (order page N2; 13-backend §1.2–1.3, B-OP-012 / B-OP-013): what an office change does to the work orders ----
@@ -1154,3 +1180,10 @@ export async function listShipToAddresses(api: ApiClient, partyId: string, signa
   return party.addresses.filter((address) => address.status === 'ACTIVE' && address.kinds.includes('SHIP_TO') && (!address.approval || address.approval.status === 'APPROVED'))
 }
 // ---- end F-OP-111
+
+// ---- F-OP-116 (B-OP-025, R-12): Done on one of the order's own production tasks (Still to do), by the task's own right ----
+/** POST /sales/orders/:orderId/still-to-do/tasks/:taskId/done {version}: its assignee or tasks.manage over its work order; else 403. */
+export async function doneStillToDoTask(api: ApiClient, orderId: string, taskId: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<{ id: string; status: string; version: number }> {
+  return (await api.post(`${orderPath(orderId)}/still-to-do/tasks/${encodeURIComponent(taskId)}/done`, { body: { version }, schema: z.object({ task: z.object({ id: z.string(), status: z.string(), version: z.number() }) }), idempotencyKey })).task
+}
+// ---- end F-OP-116

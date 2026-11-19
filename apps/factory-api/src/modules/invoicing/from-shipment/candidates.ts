@@ -38,7 +38,7 @@ import { orderIdsOfShipments, shipmentsOfOrdersWhere } from '../../shipping/ship
  *
  * B-OP-045 (order page N6, lines-derived): a DDT may carry the goods of several orders of one customer (its shipment's lines'
  * orders); only the chosen orders' lines are read, so a chosen order's DDT never brings an unchosen order's goods into the
- * draft, and each draft lists one row per (DDT, order). While N6 is held off a DDT carries one order.
+ * draft, and each draft lists one row per (DDT, order); a DDT may carry several orders (B-OP-047: N6 on).
  */
 
 type HeldReason = (typeof CANDIDATE_HELD_REASONS)[number]

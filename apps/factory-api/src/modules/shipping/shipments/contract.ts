@@ -175,7 +175,7 @@ export const createShipmentContract = defineContract({
     salesOrderId: id(),
     /**
      * B-OP-040 (order page N6): every order of the new shipment, the first = salesOrderId; the others are orders of the same
-     * customer that may join it (refused "Several orders in one shipment come with the next update" until the switch).
+     * customer that may join it (by the join rules; B-OP-047: N6 on).
      */
     salesOrderIds: z.array(id()).min(1).max(20).optional(),
     /** The site the goods leave from; default the one site of the lines' work order cells. */
@@ -428,7 +428,7 @@ export const receiveCarrierReturnContract = defineContract({
   response: { 201: output({ carrierReturn: carrierReturnView, valued: z.boolean() }) },
 })
 
-// ---- B-OP-040 (order page N6, lines-derived): several orders of one customer on one shipment, held off ----------------
+// ---- B-OP-040 (order page N6, lines-derived): several orders of one customer on one shipment (on: B-OP-047) ---------
 
 export const shipmentOrderCandidatesContract = defineContract({
   params: shipmentParams,

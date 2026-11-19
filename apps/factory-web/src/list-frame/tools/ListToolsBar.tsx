@@ -50,7 +50,8 @@ export interface ColumnsMenuInput {
  * changes the list's terms (a saved view open on screen then reads "· changed").
  */
 export interface ListBuiltInViews {
-  readonly items: ReadonlyArray<{ readonly id: string; readonly label: string; readonly hint?: string | null }>
+  /** F-CP-103: `count` — how many rows the view holds, written in the person's language (absent: no number, never a guess). */
+  readonly items: ReadonlyArray<{ readonly id: string; readonly label: string; readonly hint?: string | null; readonly count?: string | null }>
   /** The built-in view the address shows (null: none of them). */
   readonly active: string | null
   readonly onPick: (id: string) => void
@@ -100,7 +101,22 @@ export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: Col
   if (input.builtIns && input.builtIns.items.length > 0) {
     const builtIns = input.builtIns
     items.push({ id: 'h-builtin', heading: true, label: t('tools.builtIn') })
-    for (const view of builtIns.items) items.push({ id: `b-${view.id}`, label: view.label, checked: builtIns.active === view.id, ...(view.hint ? { description: view.hint } : {}), onSelect: () => builtIns.onPick(view.id) })
+    // F-CP-103: a view's count at the item's end ("All orders · 24"), muted; the label stays the view's name.
+    for (const view of builtIns.items)
+      items.push({
+        id: `b-${view.id}`,
+        label: view.count ? (
+          <span className="fw-lt-builtin">
+            <span>{view.label}</span>
+            <span className="fw-lt-builtin-count">{view.count}</span>
+          </span>
+        ) : (
+          view.label
+        ),
+        checked: builtIns.active === view.id,
+        ...(view.hint ? { description: view.hint } : {}),
+        onSelect: () => builtIns.onPick(view.id),
+      })
     items.push({ id: 's-builtin', separator: true })
   }
   items.push({ id: 'h-views', heading: true, label: t('tools.views') })

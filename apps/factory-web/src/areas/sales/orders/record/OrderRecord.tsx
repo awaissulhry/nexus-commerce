@@ -332,6 +332,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     },
     pricedStart: (amendment) => depth.actions.onPricedStart?.(amendment),
     permissions: session.permissions, // F-OP-111: the split's Ship to reads the customer's addresses (parties.view)
+    focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), // F-OP-110: ⋯ Change ship-to… focuses Ship to
   })
   const productionActs = useProductionActs({
     api,
@@ -347,6 +348,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     },
     // F-OP-113: a work order changed in place reads the order's work again, in place (its rows keep their places).
     rereadWork: () => production.again(['work', 'headline', 'changes']),
+    offline: liveState === 'offline', // F-OP-116: the decide window holds its writes offline
   })
   const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */, api /* F-OP-121 */, setNotice /* F-OP-121 */ })
   const money = useMoneyActs({
@@ -582,6 +584,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
         .then((rows) => setWorkOrders(part(rows)))
         .catch(() => undefined)
     if (parts.includes('changes') && (tabRef.current === 'changes' || wantsRef.current /* F-SA-243 */)) readRequests()
+    if (parts.includes('changes')) productionActs.rereadChanges() // F-OP-116: a work-order change proposed, applied or left as is
     if (parts.includes('files')) orderFiles.reload() // F-OP-125: read again when shown, else the next time it is wanted
   }
   reconnectRef.current = () => {
