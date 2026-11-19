@@ -7,6 +7,7 @@ import { ADDRESS_APPROVALS, REFUSE_REASON_LIMITS } from '@nexus/factory-domain/p
 import { ACCEPT_AS, DRAFT_LATER_PARTS, DRAFT_PART_STATES, DRAFT_PARTS } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { REORDER_NOTICES } from '@nexus/factory-domain/sales/portal-ordering/reorder'
 import { ORDERING_LIMITS, PROBLEM_CODES, RANGE_FILTERS, REQUEST_STATUSES, SOURCES } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import { DRAFT_FILE_PARTS } from '@nexus/factory-domain/sales/portal-ordering/draft-files' // B-CP-072
 
 /**
  * Portal ordering (B-W2b-190; SAL-071, SAL-072, SAL-073, SAL-074, SAL-079; design portal.customer.catalogue,
@@ -31,6 +32,11 @@ const sizes = z.array(sizeAsk).min(1).max(ORDERING_LIMITS.sizesPerLine)
 const problem = output({ code: z.enum(PROBLEM_CODES), lineId: id().nullable(), size: z.string().nullable(), words })
 const notice = output({ code: z.enum(REORDER_NOTICES), words })
 const sizeRow = output({ size: z.string(), quantity: z.number().int() })
+
+// ---- B-CP-072 (customer page plan C5): a draft's files, as the customer reads them -------------------------------------------
+const draftFile = output({ id: id(), lineId: id().nullable(), originalName: z.string(), kind: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), version, createdAt: at })
+const draftFiles = output({ logos: z.array(draftFile), references: z.array(draftFile), sheets: z.array(draftFile) })
+// ---- end B-CP-072
 
 // ---- the catalogue -----------------------------------------------------------------------------------------------------
 
@@ -154,6 +160,10 @@ const requestBody = output({
    * Buyer, the Admin), discard the draft (who may order, or the colleague who started it). False: held, with the page's words.
    */
   may: output({ send: z.boolean(), withdraw: z.boolean(), discard: z.boolean() }),
+  /** B-CP-072: its logos, references and measurement sheets (the draft's own and its lines'). */
+  files: draftFiles,
+  /** B-CP-072 (D14): files go up here now; else why not, in words (live, until the virus scanner runs: send them by e-mail). */
+  uploads: output({ open: z.boolean(), words: z.string().nullable() }),
 })
 
 const address = output({
@@ -236,6 +246,27 @@ export const sendContract = defineContract({
   response: { 200: record.extend({ sent: output({ number: z.string(), confirmBy: z.null(), words }) }) },
 })
 export const withdrawContract = defineContract({ params: requestParams, body: input({ version }), response: { 200: record } })
+
+// ---- B-CP-072: a draft's files (announce, complete, remove) ------------------------------------------------------------------
+
+const fileParams = input({ requestId: id(), fileId: id() })
+export const announceDraftFileContract = defineContract({
+  params: requestParams,
+  body: input({
+    /** LOGO (filed as ARTWORK), REFERENCE, SHEET (a measurement sheet, MEASUREMENTS). */
+    part: z.enum(DRAFT_FILE_PARTS),
+    /** On one line of the draft (null: the draft's own). */
+    lineId: id().nullish(),
+    originalName: z.string().trim().min(1).max(255),
+    contentType: z.string().trim().min(1).max(100),
+    sizeBytes: z.number().int().min(1),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  }),
+  response: { 201: output({ file: draftFile, upload: output({ method: z.string(), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: instant() }) }) },
+})
+export const completeDraftFileContract = defineContract({ params: fileParams, response: { 200: output({ file: draftFile }) } })
+export const removeDraftFileContract = defineContract({ params: fileParams, querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: record } })
+// ---- end B-CP-072
 
 // ---- reorder -----------------------------------------------------------------------------------------------------------
 
@@ -391,6 +422,7 @@ const officeLine = output({
 })
 
 // ---- B-CP-071 (customer page plan D10, K9 reversed): a draft as the office reads it (read-only; null once it is sent) ----------
+const officeDraftFile = output({ id: id(), lineId: id().nullable(), originalName: z.string().nullable(), kind: z.string(), sizeBytes: z.number().int(), status: z.string(), locked: z.boolean() }) // B-CP-072
 const officeDraft = output({
   startedBy: z.string().nullable(),
   startedAt: at,
@@ -411,6 +443,8 @@ const officeDraft = output({
   /** Its conversation, for a reader of its thread (null: not one): messages, the newest, whether the factory designer was asked. */
   thread: output({ messages: z.number().int(), lastAt: at.nullable(), designerAsked: z.boolean() }).nullable(),
   problems: z.array(problem),
+  /** B-CP-072: its files by part; a measurement sheet without sales.measurements.view is `locked` and nameless. */
+  files: output({ logos: z.array(officeDraftFile), references: z.array(officeDraftFile), sheets: z.array(officeDraftFile) }),
 })
 // ---- end B-CP-071
 

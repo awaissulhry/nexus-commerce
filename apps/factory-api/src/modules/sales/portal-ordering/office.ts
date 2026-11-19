@@ -17,12 +17,15 @@ import { assertMay, officeContextOf } from '../orders/access'
 import { duplicateInto, type Dropped } from '../quotes/duplicate'
 import { approveWaitingInCommand } from './address-check'
 import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
-import { dayText, iso, lockRequest, priceOrNull, readLines, readRequest, REQUEST_COLUMNS, type LineRow, type RequestRow } from './store'
+import { dayText, iso, lockRequest, priceOrNull, readDraftFiles, readLines, readRequest, REQUEST_COLUMNS, type DraftFileRow, type LineRow, type RequestRow } from './store'
 // B-CP-071 (customer page plan D10): the office reads drafts read-only, per customer.
 import { THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
 import type { Actor } from '@nexus/factory-domain/core/permissions'
 import { mayOnThread } from '../../../platform/threads/records'
+// B-CP-072: a draft's files by part; a measurement sheet is named only with sales.measurements.view.
+import { draftFilesByPart } from '@nexus/factory-domain/sales/portal-ordering/draft-files'
+import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions'
 
 /**
  * The office's side of portal order requests (B-W2b-190, SAL-074; design home.approvals, sales.orders "the request waits
@@ -125,7 +128,22 @@ interface DraftView {
   readonly thread: { readonly messages: number; readonly lastAt: string | null; readonly designerAsked: boolean } | null
   /** What holds its send today (the office's reading: a price change is the customer's to accept). */
   readonly problems: { readonly code: Problem['code']; readonly lineId: string | null; readonly size: string | null; readonly words: Problem['words'] }[]
+  /** B-CP-072: its logos, references and measurement sheets; a sheet is named only for a reader with sales.measurements.view. */
+  readonly files: Record<'logos' | 'references' | 'sheets', OfficeDraftFile[]>
 }
+
+/** B-CP-072: a draft's file as the office reads it; `locked`: a measurement sheet this reader may not open (no name). */
+interface OfficeDraftFile {
+  readonly id: string
+  readonly lineId: string | null
+  readonly originalName: string | null
+  readonly kind: string
+  readonly sizeBytes: number
+  readonly status: string
+  readonly locked: boolean
+}
+
+const officeFileOf = (file: DraftFileRow & { readonly lineId: string | null }, locked: boolean): OfficeDraftFile => ({ id: file.id, lineId: file.lineId, originalName: locked ? null : file.originalName, kind: file.kind, sizeBytes: file.sizeBytes, status: file.status, locked })
 
 /** The newest change of each draft by its customer (the audit's portal rows): who, and when. */
 async function lastEditors(caller: CommandCaller, ids: readonly string[]): Promise<Map<string, { actorId: string; at: Date }>> {
@@ -158,6 +176,7 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
   const threads = new Map(
     (await caller.withClient((client) => client.thread.findMany({ where: { recordType: 'PortalOrderRequest', recordId: { in: ids } }, select: { recordId: true, lastMessageAt: true, _count: { select: { messages: true } } } }))).map((row) => [row.recordId, row]),
   )
+  const storedFiles = await caller.withClient((client) => readDraftFiles(client, ids, lines.map((line) => line.id))) // B-CP-072
   for (const row of rows) {
     const own = lines.filter((line) => line.requestId === row.id)
     const catalogue = catalogues.get(row.companyId)!
@@ -167,11 +186,15 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
     const first = own[0] ? catalogue.codes.get(own[0].styleId) : undefined
     const edited = editors.get(row.id)
     const thread = threads.get(row.id)
+    // B-CP-072: this draft's own files and its lines' (a sheet locked for a reader without sales.measurements.view).
+    const lineIds = new Set(own.map((line) => line.id))
+    const files = draftFilesByPart(storedFiles.filter((file) => (file.recordType === 'PortalOrderRequest' ? file.recordId === row.id : lineIds.has(file.recordId))), row.id)
+    const sheetsLocked = !can(actor, SALES_MEASUREMENTS_VIEW, scope)
     const readiness = draftReadiness({
       lines: own.length,
       linesWithoutPieces: own.filter((line) => piecesOfSizes(line.sizes) === 0).length,
-      logos: 0,
-      references: 0,
+      logos: files.logos.length,
+      references: files.references.length,
       requestedDate: row.requestedDate !== null,
       headerProblems: header.filter((entry) => entry.code !== 'NO_LINES' && entry.code !== 'TOO_MANY_LINES').length,
       note: row.note !== null,
@@ -191,6 +214,7 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
       later: [],
       thread: mayOnThread(actor, THREADS_READ, 'PortalOrderRequest', scope) ? { messages: thread?._count.messages ?? 0, lastAt: iso(thread?.lastMessageAt ?? null), designerAsked: false } : null,
       problems: problems.map((entry) => ({ code: entry.code, lineId: entry.lineId, size: entry.size, words: entry.words })),
+      files: { logos: files.logos.map((file) => officeFileOf(file, false)), references: files.references.map((file) => officeFileOf(file, false)), sheets: files.sheets.map((file) => officeFileOf(file, sheetsLocked)) },
     })
   }
   return out

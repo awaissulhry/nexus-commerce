@@ -24,7 +24,7 @@ import { messageLinksOf, NO_LINKS, type MessageLinks } from '../threads'
 // ---- B-TH-085: the customer attaches files to its own record from the portal (behind the outside-upload gate and the scanner).
 import { PORTAL_UPLOAD } from '@nexus/factory-domain/auth/partners/permissions'
 import { FILES_MANAGE, FILES_UPLOAD } from '@nexus/factory-domain/auth/permissions/catalogue'
-import type { Grant } from '@nexus/factory-domain/core/permissions'
+import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { isMeasurementSheet } from '@nexus/factory-domain/files/measurements'
 import { PORTAL_FILES_PER_RECORD, portalFileKindOf, portalUploadWords } from '@nexus/factory-domain/threads/partner/uploads'
 import { SYSTEM_ACTOR_ID, type SystemContext } from '../../../core/context'
@@ -497,9 +497,10 @@ export interface PartnerFileOptions {
 export const UPLOAD_ACTION = 'portal.attachFile'
 
 /** The tenant's system holding files.upload and files.manage over the record's company and the party only. */
-function partnerUploader(request: FastifyRequest, tenantId: string, companyId: string | null, partyId: string): CommandCaller {
+// B-CP-072: also the draft order's files (modules/sales/portal-ordering/draft-files.ts), with files.delete for the customer's removal.
+export function partnerUploader(request: FastifyRequest, tenantId: string, companyId: string | null, partyId: string, more: readonly Permission[] = []): CommandCaller {
   const view = Object.create(request) as FastifyRequest
-  const grant: Grant = { permissions: [FILES_UPLOAD, FILES_MANAGE], companies: companyId ? [companyId] : 'all', sites: 'all', parties: [partyId] }
+  const grant: Grant = { permissions: [FILES_UPLOAD, FILES_MANAGE, ...more], companies: companyId ? [companyId] : 'all', sites: 'all', parties: [partyId] }
   const context: SystemContext = Object.freeze({ audience: 'system', tenantId, actorId: SYSTEM_ACTOR_ID, requestId: String(request.id), grants: [grant] })
   view.factoryContext = context
   return view as CommandCaller

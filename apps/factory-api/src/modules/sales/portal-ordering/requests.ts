@@ -31,12 +31,17 @@ import { portalOf } from '../../../platform/auth/portal/service'
 import { appClock, commandOn } from '../../../platform/portal/tasks/clock'
 import { portalReader, type PortalReader } from '../portal-orders/access'
 import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
-import { dayText, dayValue, iso, lockRequest, priceOrNull, readLines, readRequest, REQUEST_COLUMNS, type LineRow, type Reader, type RequestRow } from './store'
+import { dayText, dayValue, iso, lockRequest, priceOrNull, readDraftFiles, readLines, readRequest, REQUEST_COLUMNS, type DraftFileRow, type LineRow, type Reader, type RequestRow } from './store'
 // B-TH-304: the customer's own order numbers in the catalogue door (pick A).
 import { customerNumberOf, type CustomerNumber } from '@nexus/factory-domain/sales/customer-numbers'
 // B-CP-070 (D11): who sends and who discards a draft.
 import { can } from '@nexus/factory-domain/core/permissions'
 import { PORTAL_ORDER_REQUESTS_MANAGE } from '@nexus/factory-domain/sales/portal-ordering/permissions'
+// B-CP-072: the draft's files by part, and whether files may go up here now (the outside-upload gate, D14).
+import { draftFilesByPart } from '@nexus/factory-domain/sales/portal-ordering/draft-files'
+import { PORTAL_UPLOAD } from '@nexus/factory-domain/auth/partners/permissions'
+import { portalUploadWords } from '@nexus/factory-domain/threads/partner/uploads'
+import { outsideUploadsWords } from '../../../platform/files/multipart/outside'
 
 /**
  * The customer's order requests in the portal (B-W2b-190; SAL-074 "portal orders arrive as requests", the draft of
@@ -196,6 +201,9 @@ export async function requestView(app: FastifyInstance, request: FastifyRequest,
   const totals = draftTotals(lines.map((line) => ({ sizes: sizesOf(line), unitPriceShown: priceOrNull(line.unitPriceShown) })), reader.seesPrices)
   const outcome = await outcomeOf(request, row)
   const may = mayOn(reader, row) // B-CP-070
+  // B-CP-072: its files (the party's own, partner scope) by part; on live, files wait for the virus scanner (the e-mail way).
+  const files = draftFilesByPart(await request.withClient((client) => readDraftFiles(client, [row.id], lines.map((line) => line.id))), row.id)
+  const closed = uploadsClosed(reader, row)
   return {
     request: {
       id: row.id,
@@ -225,6 +233,9 @@ export async function requestView(app: FastifyInstance, request: FastifyRequest,
       notice: REQUEST_NOTICE,
       // B-CP-070: send / withdraw (who may order), discard (who may order, or the one who started the draft).
       may: { send: draft && may.order, withdraw: row.status === 'SENT' && may.order, discard: draft && may.discard },
+      // B-CP-072: logos, references and measurement sheets (the draft's own and its lines'); uploads open here, or why not.
+      files: { logos: files.logos.map(draftFileView), references: files.references.map(draftFileView), sheets: files.sheets.map(draftFileView) },
+      uploads: { open: closed === null, words: closed },
     },
     addresses: addresses.map(({ approvalStatus, refuseReason, ...address }) => ({ ...address, isDefault: address.isDefaultShipTo, approval: approvalView({ approvalStatus, refuseReason }) })),
     seesPrices: reader.seesPrices,
@@ -243,6 +254,28 @@ function mayOn(reader: PortalReader, row: Pick<RequestRow, 'companyId' | 'partyI
 /** The refusal of a discard by a colleague who neither orders nor started the draft (the page names who may). */
 const DISCARD_HELD = 'Only the colleague who started this draft, or one who may send orders, discards it.'
 // ---- end B-CP-070
+
+/** B-CP-072: why files cannot go up onto this request now, in the person's words (null: they can) — said before one is dropped. */
+function uploadsClosed(reader: PortalReader, row: Pick<RequestRow, 'status' | 'companyId' | 'partyId'>): string | null {
+  const gate = outsideUploadsWords()
+  if (gate !== null) return gate
+  if (row.status !== 'DRAFT') return portalUploadWords('REQUEST_CLOSED', reader.session.person.locale)
+  if (reader.session.preview) return 'A preview of the portal sends no file.'
+  return can(reader.actor, PORTAL_UPLOAD, { companyId: row.companyId, partyId: row.partyId }) ? null : portalUploadWords('NO_UPLOAD', reader.session.person.locale)
+}
+
+/** B-CP-072: a draft's file as the customer reads it (its own party's: named, with its version for a removal). */
+export const draftFileView = (file: DraftFileRow & { readonly lineId: string | null }) => ({
+  id: file.id,
+  lineId: file.lineId,
+  originalName: file.originalName,
+  kind: file.kind,
+  contentType: file.contentType,
+  sizeBytes: file.sizeBytes,
+  status: file.status,
+  version: file.version,
+  createdAt: iso(file.createdAt)!,
+})
 
 /** The order or quote a request became (partner reads: their number). */
 async function outcomeOf(request: FastifyRequest, row: Pick<RequestRow, 'salesOrderId' | 'quoteId'>) {
@@ -353,7 +386,7 @@ export async function createDraft(app: FastifyInstance, request: FastifyRequest,
 }
 
 /** The draft of the party, for a change by its own session: DRAFT, or 409 in words. */
-async function ownDraft(request: FastifyRequest, reader: PortalReader, requestId: string): Promise<RequestRow> {
+export async function ownDraft(request: FastifyRequest, reader: PortalReader, requestId: string): Promise<RequestRow> {
   const row = await ownRequest(request, reader, requestId)
   if (row.status !== 'DRAFT') throw new InvalidStateError(row.status === 'SENT' ? 'This request was sent: withdraw it to change it, or ask us.' : 'This request is no longer a draft.')
   return row

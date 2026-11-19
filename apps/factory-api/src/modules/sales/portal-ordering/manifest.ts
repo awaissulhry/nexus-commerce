@@ -21,6 +21,10 @@ export const manifest = defineManifest({
   'PUT /portal/order-requests/:requestId/lines/:lineId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'DELETE /portal/order-requests/:requestId/lines/:lineId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'POST /portal/order-requests/:requestId/prices': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  // B-CP-072: the draft's files (logos, references, measurement sheets); the handler also asks portal.upload.
+  'POST /portal/order-requests/:requestId/files': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'POST /portal/order-requests/:requestId/files/:fileId/complete': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  'DELETE /portal/order-requests/:requestId/files/:fileId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'POST /portal/order-requests/:requestId/send': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   'POST /portal/order-requests/:requestId/withdraw': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
   // Reorder (SAL-072): a past order is the orders' business — kept with portal.orderRequests.manage (a Designer reads no order).

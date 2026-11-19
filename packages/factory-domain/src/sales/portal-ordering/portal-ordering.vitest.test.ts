@@ -12,6 +12,7 @@ import { PPE_CATEGORIES } from '../../product/styles/rules'
 import { PPE_WORDS } from './rules'
 import { draftTotals, headerProblems, heldWords, lineProblems, lineShapeProblems, lowestPrice, mayOffer, offeredSizes, rangeLabel, type LineFacts } from './rules'
 import { linesOfReady, portalOrderLinesImporter, refusedRowsCsv, uploadVerdicts, type CatalogueEntry } from './upload'
+import { DRAFT_FILE_CATEGORY, DRAFT_FILES_MAX, draftFilePartOf, draftFilesByPart, draftFileWords } from './draft-files' // B-CP-072
 
 const P1 = '00000000-0000-4000-8000-000000000001'
 const P2 = '00000000-0000-4000-8000-000000000002'
@@ -166,6 +167,39 @@ describe('a draft\'s checklist (B-CP-071)', () => {
   })
 })
 // ---- end B-CP-071
+
+// ---- B-CP-072 (customer page plan C5): a draft's files by part.
+describe('a draft\'s files (B-CP-072)', () => {
+  it('files a logo as ARTWORK, a sheet as MEASUREMENTS, a reference with no category, and reads them back the same way', () => {
+    expect(DRAFT_FILE_CATEGORY).toEqual({ LOGO: 'ARTWORK', REFERENCE: null, SHEET: 'MEASUREMENTS' })
+    for (const [part, category] of Object.entries(DRAFT_FILE_CATEGORY)) expect(draftFilePartOf(category)).toBe(part)
+    expect(draftFilePartOf('PROOF')).toBe('REFERENCE')
+  })
+
+  it('groups the draft\'s own files and its lines\' by part, leaving out another record\'s', () => {
+    const R = '00000000-0000-4000-8000-0000000000r1'
+    const grouped = draftFilesByPart(
+      [
+        { id: 'f1', recordType: 'PortalOrderRequest', recordId: R, category: 'ARTWORK' },
+        { id: 'f2', recordType: 'PortalOrderRequestLine', recordId: 'line-1', category: 'MEASUREMENTS' },
+        { id: 'f3', recordType: 'PortalOrderRequest', recordId: R, category: null },
+        { id: 'f4', recordType: 'PortalOrderRequest', recordId: 'another-request', category: 'ARTWORK' },
+        { id: 'f5', recordType: 'SalesOrder', recordId: R, category: 'ARTWORK' },
+      ],
+      R,
+    )
+    expect(grouped.logos.map((file) => [file.id, file.lineId])).toEqual([['f1', null]])
+    expect(grouped.sheets.map((file) => [file.id, file.lineId])).toEqual([['f2', 'line-1']])
+    expect(grouped.references.map((file) => file.id)).toEqual(['f3'])
+  })
+
+  it('refuses the file after DRAFT_FILES_MAX in the person\'s words, never naming anyone', () => {
+    expect(DRAFT_FILES_MAX).toBe(50)
+    expect(draftFileWords('TOO_MANY_FILES', 'en')).toBe('This draft already holds 50 files: remove one, or write to us in the messages for the rest.')
+    expect(draftFileWords('TOO_MANY_FILES', 'it')).toContain('50 file')
+  })
+})
+// ---- end B-CP-072
 
 describe('reorder (SAL-072)', () => {
   const past = { kind: 'SIZE_GRID' as const, unitPrice: '389.000000', revision: 1, sizes: [{ size: '50', quantity: 2 }, { size: '56', quantity: 1 }] }
