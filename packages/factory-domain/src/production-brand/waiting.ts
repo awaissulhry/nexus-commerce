@@ -52,10 +52,30 @@ export const BLOCKER_OWNER: Readonly<Record<BlockerKind, WaitingOn>> = Object.fr
   NO_MOVE: 'US',
 })
 
+// ── B-OP-021 (order page plan N1; 13-backend §3 B4): what an office blocker names — the office only (the customer's reads keep
+// `waiting` alone, and FORBIDDEN_BRAND_KEYS holds `blockers` out of every customer read) ──
+/**
+ * A customer request that waits on us, by what it is: a request still OPEN, a counter-offer it agreed to or that lapsed (ours to
+ * carry out or answer), a problem it reported, a new date it refused (its follow-up open).
+ */
+export const BLOCKER_SUBS = ['REQUEST', 'COUNTER', 'PROBLEM', 'REPROMISE'] as const
+export type BlockerSub = (typeof BLOCKER_SUBS)[number]
+
+/** The one record a blocker is about (the order page's door to it): its model and id. */
+export interface BlockerRef {
+  readonly type: string
+  readonly id: string
+}
+// ── end B-OP-021 ──
+
 export interface Blocker {
   readonly kind: BlockerKind
   /** When it started (asked, opened, held, issued…; null: not known). */
   readonly since: Date | null
+  /** B-OP-021 (office only): the record it is about; null or absent: no one record (a material the plan finds late). */
+  readonly ref?: BlockerRef | null
+  /** B-OP-021 (office only): what a BRAND_REQUEST is; null or absent for every other kind. */
+  readonly sub?: BlockerSub | null
 }
 
 export interface Waiting {

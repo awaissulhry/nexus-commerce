@@ -3,7 +3,7 @@ import { businessDate, defineContract, id, input, instant, output } from '@nexus
 import { BRAND_HEALTHS, HEALTH_REASON_CODES } from '@nexus/factory-domain/production-brand/health'
 import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
 import { BRAND_URGENCIES } from '@nexus/factory-domain/production-brand/urgency'
-import { BLOCKER_KINDS, WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
+import { BLOCKER_KINDS, BLOCKER_SUBS, WAITING_ON } from '@nexus/factory-domain/production-brand/waiting' // B-OP-021: + BLOCKER_SUBS
 import { SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { GATE_KINDS, GATE_STATES, LEATHER_STATES, MILESTONE_KINDS, MILESTONE_STATES, PASS_VIAS } from '@nexus/factory-domain/planning/milestones/rules'
 import { FINISH_SOURCES } from '@nexus/factory-domain/planning/promise-keep/risk' // F-SA-234b
@@ -85,7 +85,24 @@ export const headlineView = output({
     words,
     since: instant().nullable(),
     /** Each thing it waits for, in words (whose move it is: `on`). */
-    blockers: z.array(output({ kind: z.enum(BLOCKER_KINDS), on: z.enum(WAITING_ON), words, since: instant().nullable() })),
+    blockers: z.array(
+      output({
+        kind: z.enum(BLOCKER_KINDS),
+        on: z.enum(WAITING_ON),
+        words,
+        since: instant().nullable(),
+        // ── B-OP-021 (13-backend §3 B4): the ONE waiting list of the order page (its band, its card and its pill read these rows) ──
+        /**
+         * The record it is about, the door to it: OrderChangeRequest, ProductionIssue, ApprovalRequest, PartnerTask, DepositRequest,
+         * OrderGate or WorkOrder (a work order only for a reader who reaches it with workorders.view); null: no one record, or one
+         * the reader may not open.
+         */
+        ref: output({ type: z.string(), id: id() }).nullable(),
+        /** A BRAND_REQUEST waiting on us: a request still open, a counter-offer agreed or lapsed, a reported problem, a refused new date. */
+        sub: z.enum(BLOCKER_SUBS).nullable(),
+        // ── end B-OP-021 ──
+      }),
+    ),
   }),
   /** A live work order of its lines is on hold. */
   held: z.boolean(),
@@ -162,6 +179,21 @@ export const workView = output({
       cutWithOtherWork: z.boolean(),
       due: businessDate().nullable(),
       daysLate: z.number().int().nullable(),
+      // ── B-OP-021 (13-backend §3 B6; review R-11): what the order page acts on in place ──
+      /** Its version (every write sends it), kind, release and priority. */
+      version: z.number().int(),
+      kind: z.string(),
+      releasedAt: instant().nullable(),
+      priority: z.number().int(),
+      /** Its cells of THIS order's lines only (never another order's or another customer's), each with its pieces cut (null: none counted). */
+      cells: z.array(output({ id: id(), salesOrderLineId: id(), size: z.string(), quantity: z.number().int(), cut: z.number().int().nullable() })),
+      /**
+       * What the reader may do to it from here, by its own rights over the work order (can(): its company, site and customer). One
+       * shared with other customers (`sharedWithOtherCustomers`, made before the one-customer rule) is changed on its own page only:
+       * every right false, with the words.
+       */
+      rights: output({ manage: z.boolean(), release: z.boolean(), hold: z.boolean(), why: words.nullable() }),
+      // ── end B-OP-021 ──
     }),
   ),
   /** Made to measure: one work order per unit, grouped per style × colourway (one row, never twelve). */
@@ -263,7 +295,8 @@ export const changesView = output({
     rows: z.array(
       output({
         kind: z.enum(STILL_KINDS),
-        ref: output({ type: z.string(), id: id(), number: z.string().nullable() }).nullable(),
+        /** B-OP-021: + the record's version, for the act done in place (null: a record with none — an amendment, a re-promise). */
+        ref: output({ type: z.string(), id: id(), number: z.string().nullable(), version: z.number().int().nullable() }).nullable(),
         words,
         since: instant(),
         waitingOn: z.enum(APPLY_TEAMS),

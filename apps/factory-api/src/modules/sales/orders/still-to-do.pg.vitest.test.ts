@@ -115,7 +115,8 @@ describe('B-SA-050: Still to do, computed from the records — each row closes w
     const change = await one<{ id: string; version: number }>('SELECT id::text AS id, version FROM "WorkOrderChange" WHERE "requestId" = $1', [world.request])
     const open = await stillToDo(everyone(), world.order)
     expect(open.rows).toEqual([
-      expect.objectContaining({ kind: 'WORK_ORDER_CHANGE', ref: { type: 'WorkOrderChange', id: change.id, number: world.number }, waitingOn: 'PLANNER', mayAct: true, requestId: world.request, words: { en: `${world.number}: make 52 4 → 3`, it: `${world.number}: produci 52 4 → 3` } }),
+      // B-OP-021: the ref carries the record's version (the act done in place sends it).
+      expect.objectContaining({ kind: 'WORK_ORDER_CHANGE', ref: { type: 'WorkOrderChange', id: change.id, number: world.number, version: change.version }, waitingOn: 'PLANNER', mayAct: true, requestId: world.request, words: { en: `${world.number}: make 52 4 → 3`, it: `${world.number}: produci 52 4 → 3` } }),
     ])
     // Left as is: the only stored decision, with its words — the row is gone, the plan reads it.
     await declineChange(everyone(), change.id, { version: change.version, words: 'The customer takes the fourth one after all.' })
