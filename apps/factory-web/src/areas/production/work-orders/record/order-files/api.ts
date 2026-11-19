@@ -7,6 +7,8 @@ import { newIdempotencyKey, type ApiClient } from '../../../../../lib/api/client
  *   order's own files, its lines' and their quote lines' artwork, the made-to-measure worksheets (only with sales.measurements.view),
  *   whether the reader may read the order's thread, and what was left out, COUNTED and never named (files of a company the reader
  *   does not read, body data without the measurements right, whole orders of a customer the reader does not reach).
+ *   F-CP-161 (the money wall, the API's B-CP-023): and the priced documents (a confirmation, the customer's PO) of a reader without the
+ *   price grain, `pricedLeftOut` — counted, never named; the open route finds them nowhere.
  * - `POST …/order-files/:fileId/open` (workorders.view): ONE file through that route's own wall, a 60-second address; a body-data file's
  *   opening is recorded on its order. The generic file preview (files/:id/preview) is never what the work order links to.
  */
@@ -39,6 +41,8 @@ const group = z.object({
   worksheets: z.array(worksheet),
   measurementsLeftOut: z.number(),
   filesLeftOut: z.number(),
+  // F-CP-161: priced documents left out for a reader who does not see prices (B-CP-023; 0 from an API before it).
+  pricedLeftOut: z.number().int().min(0).default(0),
 })
 export type OrderFilesGroup = z.infer<typeof group>
 
