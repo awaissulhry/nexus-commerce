@@ -5,6 +5,8 @@ import { createShipmentDoor } from './model'
 import { canOf, order } from '../../_demo/fixtures'
 // F-OP-122: shared shipments.
 import { alsoCarries, joinableRows } from './model'
+import { typedLinkOf } from './model' // F-OP-135
+import { trackingBody, trackingProblem } from '../../../../warehouse/shipments/booking/model'
 import type { JoinableShipments } from '../../../../warehouse/shipments/api'
 import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
@@ -148,3 +150,39 @@ describe('F-OP-122: a shared shipment names its other orders; the customer’s D
   })
 })
 // ── end F-OP-122 ──
+
+// ── F-OP-135 (B-OP-034): the link typed beside a hand-booked carrier's number — the row's Track › ──────────────────────────────────────
+describe('F-OP-135: the typed link is the row’s Track › (https only)', () => {
+  const typed = (url: string | null | undefined, number: string | null = 'T-123') => row({ tracking: { number, source: 'TYPED', parcels: [], live: false, url } })
+  it('an https link typed beside the number; anything else, or no number, none', () => {
+    expect(typedLinkOf(typed('https://track.example.com/T-123'))).toBe('https://track.example.com/T-123')
+    expect(typedLinkOf(typed('http://track.example.com/T-123'))).toBeNull()
+    expect(typedLinkOf(typed('javascript:alert(1)'))).toBeNull()
+    expect(typedLinkOf(typed(null))).toBeNull()
+    expect(typedLinkOf(typed(undefined))).toBeNull()
+    expect(typedLinkOf(typed('https://track.example.com/T-123', null))).toBeNull()
+    // A label's parcels keep their own pages; the row has no typed link then.
+    expect(typedLinkOf(row({ tracking: { number: null, source: 'PARCELS', parcels: [{ number: 'A1', url: 'https://carrier.example.com/A1' }], live: true, url: null } }))).toBeNull()
+  })
+  it('the tracking dialog’s "Link (optional, https)": only with its number, the API’s own rule; blank clears it', () => {
+    const dialog = (text: string, link?: string) => ({ kind: 'tracking' as const, text, ...(link === undefined ? {} : { link }) })
+    expect(trackingProblem(dialog('T-1', 'https://track.example.com/T-1'))).toBeNull()
+    expect(trackingProblem(dialog('T-1'))).toBeNull()
+    expect(trackingProblem(dialog('', 'https://track.example.com/T-1'))?.key).toBe('transport.form.linkNeedsNumber')
+    for (const bad of ['http://track.example.com/T-1', 'https://someone:secret@track.example.com/T-1', 'javascript:alert(1)', `https://track.example.com/${'x'.repeat(500)}`]) expect(trackingProblem(dialog('T-1', bad))?.key, bad).toBe('transport.form.trackingLink')
+    expect(trackingBody(dialog(' T-1 ', ' https://track.example.com/T-1 '), 4)).toEqual({ version: 4, trackingNumber: 'T-1', trackingUrl: 'https://track.example.com/T-1' })
+    expect(trackingBody(dialog('T-1', ''), 4)).toEqual({ version: 4, trackingNumber: 'T-1', trackingUrl: null })
+    // The number cleared clears its link too.
+    expect(trackingBody(dialog('', 'https://track.example.com/T-1'), 4)).toEqual({ version: 4, trackingNumber: null, trackingUrl: null })
+  })
+  it('the words exist in both languages', () => {
+    for (const locale of LOCALES) {
+      const depth = messagesFor(locale, ['warehouse-shipments-depth'])['warehouse-shipments-depth']!
+      for (const key of ['transport.trackingLink', 'transport.trackingLinkHint', 'transport.form.linkNeedsNumber']) expect(createTranslator(locale, depth)(key), `${locale} ${key}`).not.toBe(key)
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      expect(t('ship.track'), locale).not.toBe('ship.track')
+      expect(t('ship.trackLink', { number: 'SH-0091' }), locale).toContain('SH-0091')
+    }
+  })
+})
+// ── end F-OP-135 ──

@@ -566,7 +566,9 @@
       "pickStatus": "Pick what happened.",
       "when": "The time is not a time.",
       "future": "The time is in the future.",
-      "beforeLeft": "The time is before the goods left."
+      "beforeLeft": "The time is before the goods left.",
+      "linkNeedsNumber": "A tracking link is typed only with its tracking number.",
+      "trackingLink": "An https address of at most {max} characters on one line, with no name or password in it."
     },
     "refusal": {
       "LEFT": "The goods have left.",
@@ -578,7 +580,9 @@
       "CARRIER_TRACKED": "The carrier's own tracking follows it: nothing to type.",
       "CUSTOMER_COLLECTS": "The customer collects: no status to type.",
       "ARRIVED": "It has arrived already."
-    }
+    },
+    "trackingLink": "Link (optional, https)",
+    "trackingLinkHint": "The carrier’s tracking page; the customer opens it with Track ›. Typed only with its number."
   },
   "check": {
     "title": "Check before printing",

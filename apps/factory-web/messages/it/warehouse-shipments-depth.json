@@ -566,7 +566,9 @@
       "pickStatus": "Scegli cosa è successo.",
       "when": "L'orario non è valido.",
       "future": "L'orario è nel futuro.",
-      "beforeLeft": "L'orario è prima della partenza della merce."
+      "beforeLeft": "L'orario è prima della partenza della merce.",
+      "linkNeedsNumber": "Un link di tracciamento si scrive solo con il suo numero di tracciamento.",
+      "trackingLink": "Un indirizzo https di al massimo {max} caratteri su una riga, senza nome né password."
     },
     "refusal": {
       "LEFT": "La merce è partita.",
@@ -578,7 +580,9 @@
       "CARRIER_TRACKED": "La segue il tracciamento del vettore: niente da inserire.",
       "CUSTOMER_COLLECTS": "Ritira il cliente: nessuno stato da inserire.",
       "ARRIVED": "È già arrivata."
-    }
+    },
+    "trackingLink": "Link (facoltativo, https)",
+    "trackingLinkHint": "La pagina di tracciamento del corriere; il cliente la apre con Segui ›. Si scrive solo con il suo numero."
   },
   "check": {
     "title": "Controllo prima della stampa",

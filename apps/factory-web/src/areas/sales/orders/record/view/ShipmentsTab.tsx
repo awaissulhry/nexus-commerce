@@ -21,6 +21,7 @@ import { carrierOf, shownShipments, trackingDoorOf, trackingOf, type ShipmentRow
 import { createShipmentDoor } from '../shipments/model' // F-OP-121
 // F-OP-122: shared shipments — the other orders a shipment carries, and the customer's DRAFTs this order may join (held with why).
 import { alsoCarries } from '../shipments/model'
+import { typedLinkOf } from '../shipments/model' // F-OP-135: the typed link's Track ›
 import { DEPTH_NS } from '../../../../warehouse/shipments/queue/shared/depth'
 import { tabHref } from '../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../lib/tab-link/TabLink'
@@ -181,6 +182,7 @@ function TrackingCell({ row, shipmentHref, onOpen }: { row: ShipmentRow; shipmen
   const t = useT('orders')
   const tracking = trackingOf(row)
   const door = trackingDoorOf(row)
+  const link = typedLinkOf(row) // F-OP-135
   return (
     <span className="fw-so-inline">
       {tracking?.typed ? (
@@ -188,6 +190,12 @@ function TrackingCell({ row, shipmentHref, onOpen }: { row: ShipmentRow; shipmen
           <span>{tracking.typed}</span>
           <CopyNumber text={tracking.typed} />
           <Pill tone="neutral">{t('ship.noLive')}</Pill>
+          {/* F-OP-135: the carrier's page typed beside the number (https only), in a new tab. */}
+          {link && (
+            <a className="fw-so-link" href={link} target="_blank" rel="noopener noreferrer" aria-label={t('ship.trackLink', { number: row.number })}>
+              {t('ship.track')}
+            </a>
+          )}
         </>
       ) : null}
       {tracking?.parcels.map((parcel) =>

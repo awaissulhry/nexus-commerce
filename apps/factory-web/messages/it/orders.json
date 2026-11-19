@@ -593,7 +593,9 @@
       "add": "Aggiungi i capi di questo ordine…"
     },
     "joined_one": "{count} capo aggiunto a {number} (bozza)",
-    "joined_other": "{count} capi aggiunti a {number} (bozza)"
+    "joined_other": "{count} capi aggiunti a {number} (bozza)",
+    "track": "Segui ›",
+    "trackLink": "Segui la spedizione {number} sul sito del corriere"
   },
   "shipStatus": {
     "DRAFT": "Bozza",

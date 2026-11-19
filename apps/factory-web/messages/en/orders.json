@@ -593,7 +593,9 @@
       "add": "Add this order's garments…"
     },
     "joined_one": "{count} garment added to {number} (draft)",
-    "joined_other": "{count} garments added to {number} (draft)"
+    "joined_other": "{count} garments added to {number} (draft)",
+    "track": "Track ›",
+    "trackLink": "Track shipment {number} on the carrier’s site"
   },
   "shipStatus": {
     "DRAFT": "Draft",

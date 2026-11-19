@@ -534,7 +534,17 @@ export const orderSchema = z.object({
         version: z.number().optional(),
         transportBy: z.enum(['CARRIER', 'SENDER', 'RECIPIENT']).optional(),
         carrier: z.object({ code: z.string().nullable(), name: z.string().nullable() }).nullable().optional(),
-        tracking: z.object({ number: z.string().nullable(), source: z.enum(['TYPED', 'PARCELS']), parcels: z.array(z.object({ number: z.string(), url: z.string().nullable() })), live: z.boolean() }).nullable().optional(),
+        tracking: z
+          .object({
+            number: z.string().nullable(),
+            source: z.enum(['TYPED', 'PARCELS']),
+            parcels: z.array(z.object({ number: z.string(), url: z.string().nullable() })),
+            live: z.boolean(),
+            /** F-OP-135 (B-OP-034): the link typed beside the number ("Track ›", https only). */
+            url: z.string().nullable().optional(),
+          })
+          .nullable()
+          .optional(),
         expectedDeliveryAt: instant.nullable().optional(),
         ddt: z.object({ number: z.string(), date: z.string() }).nullable().optional(),
         mayTypeTracking: z.object({ allowed: z.boolean(), code: z.string().nullable(), why: z.string().nullable() }).optional(),

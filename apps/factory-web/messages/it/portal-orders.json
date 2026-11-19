@@ -420,8 +420,12 @@
     "copyLinkTooMany": "I link di questa spedizione sono già stati copiati: inoltrate uno di quelli.",
     "typed": {
       "label": "Numero di tracciamento",
-      "noLive": "Nessun tracciamento in tempo reale"
-    }
+      "noLive": "Nessun tracciamento in tempo reale",
+      "track": "Segui ›",
+      "trackOf": "Segui la spedizione {number} sul sito del corriere"
+    },
+    "also_one": "Anche {count} pezzo del vostro ordine {order}",
+    "also_other": "Anche {count} pezzi del vostro ordine {order}"
   },
   "toShip": {
     "title": "Ancora da spedire",

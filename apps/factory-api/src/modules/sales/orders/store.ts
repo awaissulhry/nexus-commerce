@@ -275,7 +275,7 @@ export async function hasOrderSeries(db: Reader, companyId: string): Promise<boo
 }
 
 // ── B-OP-023 (order page plan N5; review R-7): each shipment of the order as its Shipments tab reads it ───────────────────────────
-const SHIPMENT_DETAIL = { id: true, companyId: true, siteId: true, version: true, status: true, transportBy: true, carrierCode: true, carrierName: true, manualTrackingNumber: true, expectedDeliveryAt: true } as const satisfies Prisma.ShipmentSelect
+const SHIPMENT_DETAIL = { id: true, companyId: true, siteId: true, version: true, status: true, transportBy: true, carrierCode: true, carrierName: true, manualTrackingNumber: true, /* F-OP-135 */ manualTrackingUrl: true, expectedDeliveryAt: true } as const satisfies Prisma.ShipmentSelect
 const PARCEL_DETAIL = { shipmentId: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true } as const satisfies Prisma.ParcelSelect
 
 export interface ShipmentDetails {

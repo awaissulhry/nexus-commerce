@@ -108,3 +108,10 @@ export function joinableRows(shipments: JoinableShipments['shipments']): Joinabl
   })
 }
 // ── end F-OP-122 ──
+
+// ── F-OP-135 (order page plan N5/N6, B-OP-034): the link typed beside a hand-booked carrier's number ─────────────────────────────────
+/** The row's Track ›: the tracking link typed beside the number (https only, checked again here); null: none, or not a typed number. */
+export function typedLinkOf(row: ShipmentRow): string | null {
+  return row.tracking?.source === 'TYPED' && row.tracking.number ? httpsOrNull(row.tracking.url) : null
+}
+// ── end F-OP-135 ──
