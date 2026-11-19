@@ -265,3 +265,127 @@ describe('B-TH-273 — record pages without Messages: the conversation docks in 
   })
 })
 // ---- end B-TH-273
+
+// ---- F-CP-156 (customer page plan C7, D12; 12 §5; B-CP-078, B-CP-079): "Ask <name>, factory designer" under the portal thread ------
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { DESIGNER_ASK_RECORD_TYPES, DESIGNER_ASK_WORDS, DESIGNER_ASKS_PER_DAY } from '@nexus/factory-domain/threads/designer/rules'
+import type { ApiClient } from '../../lib/api/client'
+import { createTranslator, messagesFor } from '../../lib/i18n/messages'
+import { I18nProvider } from '../../lib/i18n/provider'
+import { fetchFactoryDesigner, postMessage } from './api'
+import { DESIGNER_ASK_RECORDS, designerAskedOf, designerBoxShows, designerChipShows, designerRefusalKey, withDesignerMention } from './thread-model'
+import { ThreadView, type ThreadViewModel } from './view/ThreadView'
+
+describe('F-CP-156 — Ask the factory designer: the box, the one @ chip, held words keep the text, the cap', () => {
+  const NAME = 'Giulia Esempio'
+  const tr = (locale: 'it' | 'en') => createTranslator(locale, CATALOGUE[locale].portal ?? {})
+  const threadModel = (over: Partial<ThreadViewModel> = {}): ThreadViewModel => ({
+    state: 'ready',
+    title: 'Messages',
+    record: null,
+    companyName: 'Pelletteria Esempio',
+    messages: [],
+    composer: { value: 'Can the stripes follow our reference @', busy: false, heldReason: null, hint: null, limit: THREAD_BODY_LIMIT },
+    loadMore: null,
+    accessLine: null,
+    failed: null,
+    designer: { name: NAME, ask: false, chip: true, held: null },
+    ...over,
+  })
+  const draw = (locale: 'it' | 'en', model: ThreadViewModel) => renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(ThreadView, { model })))
+
+  it('the box: a name to ask, a record the customer may ask on (a draft order too), a box to write in — else no box', () => {
+    expect([...DESIGNER_ASK_RECORDS]).toEqual([...DESIGNER_ASK_RECORD_TYPES])
+    expect(designerBoxShows({ name: NAME, type: 'PortalOrderRequest', canPost: true })).toBe(true)
+    expect(designerBoxShows({ name: NAME, type: 'SalesOrder', canPost: true })).toBe(true)
+    expect(designerBoxShows({ name: null, type: 'PortalOrderRequest', canPost: true })).toBe(false)
+    expect(designerBoxShows({ name: '  ', type: 'PortalOrderRequest', canPost: true })).toBe(false)
+    expect(designerBoxShows({ name: NAME, type: 'Invoice', canPost: true })).toBe(false)
+    expect(designerBoxShows({ name: NAME, type: 'PortalOrderRequest', canPost: false })).toBe(false)
+    for (const locale of ['it', 'en'] as const) {
+      const html = draw(locale, threadModel({ designer: { name: NAME, ask: false, chip: false, held: null } }))
+      expect(html, locale).toContain(tr(locale)('thread.designer.ask', { name: NAME }))
+      expect(html, locale).toContain(tr(locale)('thread.designer.hint', { name: NAME }))
+      expect(html, locale).toContain('type="checkbox"')
+      // Never who read it (no "seen by", Statuto art. 4).
+      expect(html, locale).not.toMatch(/seen by|read by|visto da|letto da/i)
+      expect(draw(locale, threadModel({ designer: null })), locale).not.toContain('type="checkbox"')
+    }
+    expect(tr('en')('thread.designer.ask', { name: NAME })).toBe('Ask Giulia Esempio, factory designer')
+    expect(tr('it')('thread.designer.ask', { name: NAME })).toBe('Chiedi a Giulia Esempio, designer della fabbrica')
+  })
+
+  it('the chip: typing "@" shows ONE chip with that one name; pressing it puts "@<name> " in the text (and ticks the box)', () => {
+    expect(designerChipShows('Can the stripes follow our reference @', NAME)).toBe(true)
+    expect(designerChipShows('@gi', NAME)).toBe(true)
+    expect(designerChipShows('ciao @GIU', NAME)).toBe(true)
+    expect(designerChipShows('ciao @Marco', NAME)).toBe(false)
+    expect(designerChipShows('write to ada@example.com', NAME)).toBe(false)
+    expect(designerChipShows('No at sign here', NAME)).toBe(false)
+    expect(designerChipShows(`@${NAME} can you check`, NAME)).toBe(false)
+    expect(designerChipShows('@', null)).toBe(false)
+    expect(withDesignerMention('Can the stripes follow our reference @Gi', NAME)).toBe('Can the stripes follow our reference @Giulia Esempio ')
+    expect(withDesignerMention('@', NAME)).toBe('@Giulia Esempio ')
+    expect(withDesignerMention('', NAME)).toBe('@Giulia Esempio ')
+    expect(withDesignerMention('Hello', NAME)).toBe('Hello @Giulia Esempio ')
+    for (const locale of ['it', 'en'] as const) {
+      const html = draw(locale, threadModel())
+      expect(html, locale).toContain(tr(locale)('thread.designer.chip', { name: NAME }))
+      // ONE chip, one name.
+      expect(html.split('fw-pthread-designer-chip').length - 1, locale).toBe(1)
+      expect(draw(locale, threadModel({ designer: { name: NAME, ask: true, chip: false, held: null } })), locale).not.toContain('fw-pthread-designer-chip')
+    }
+  })
+
+  it('held words keep the text: a refusal before the post (nothing posted) says why in the portal’s words, the typed text stays', () => {
+    expect(designerRefusalKey(['refusal/DESIGNER_NO_DESIGNER'])).toBe('thread.designer.noDesigner')
+    expect(designerRefusalKey(['refusal.DESIGNER_NOT_HERE'])).toBe('thread.designer.notHere')
+    expect(designerRefusalKey(['body'])).toBeNull()
+    expect(designerRefusalKey([])).toBeNull()
+    for (const locale of ['it', 'en'] as const) {
+      // The page's words are the domain's own (it "voi", en).
+      expect(tr(locale)('thread.designer.noDesigner')).toBe(DESIGNER_ASK_WORDS.NO_DESIGNER[locale])
+      expect(tr(locale)('thread.designer.notHere')).toBe(DESIGNER_ASK_WORDS.NOT_HERE[locale])
+      expect(tr(locale)('thread.designer.asked', { name: NAME })).toBe(DESIGNER_ASK_WORDS.ASKED[locale].replace('{name}', NAME))
+      const typed = 'Can the stripes follow our reference PDF?'
+      const html = draw(locale, threadModel({ composer: { value: typed, busy: false, heldReason: null, hint: null, limit: THREAD_BODY_LIMIT }, failed: tr(locale)('thread.designer.notHere'), designer: { name: NAME, ask: false, chip: false, held: null } }))
+      expect(html, locale).toContain(typed)
+      expect(html, locale).toContain(tr(locale)('thread.designer.notHere').replace(/'/g, '&#x27;'))
+    }
+  })
+
+  it('cap words: over the day’s asks the message goes without the ask and the page says so; asked: "We asked <name>."', () => {
+    expect(designerAskedOf({ asked: true, name: NAME })).toEqual({ key: 'thread.designer.asked', name: NAME })
+    expect(designerAskedOf({ asked: false, name: null })).toEqual({ key: 'thread.designer.capped' })
+    expect(designerAskedOf(null)).toBeNull()
+    expect(designerAskedOf(undefined)).toBeNull()
+    for (const locale of ['it', 'en'] as const) {
+      expect(tr(locale)('thread.designer.capped')).toBe(DESIGNER_ASK_WORDS.CAPPED[locale])
+      expect(tr(locale)('thread.designer.capped')).toContain(String(DESIGNER_ASKS_PER_DAY))
+    }
+    expect(tr('en')('thread.designer.asked', { name: NAME })).toBe('We asked Giulia Esempio.')
+  })
+
+  it('W-CP-5: the post carries the ask only when ticked and names no person; the one name comes from the portal’s own read', async () => {
+    const calls: { path: string; body?: unknown }[] = []
+    const api = {
+      post: async (path: string, options: { body?: unknown }) => {
+        calls.push({ path, body: options.body })
+        return { message: {}, designerAsk: { asked: true, name: NAME, words: 'x' } }
+      },
+      get: async (path: string) => {
+        calls.push({ path })
+        return { name: NAME }
+      },
+    } as unknown as ApiClient
+    await postMessage(api, 'PortalOrderRequest', 'd1', 'Hello', 'key-1', { askFactoryDesigner: true })
+    await postMessage(api, 'PortalOrderRequest', 'd1', 'Hello', 'key-2')
+    expect(await fetchFactoryDesigner(api)).toBe(NAME)
+    expect(calls.map((call) => call.path)).toEqual(['/portal/threads/PortalOrderRequest/d1/messages', '/portal/threads/PortalOrderRequest/d1/messages', '/portal/factory-designer'])
+    expect(calls[0]!.body).toEqual({ body: 'Hello', askFactoryDesigner: true })
+    expect(calls[1]!.body).toEqual({ body: 'Hello' })
+    expect(JSON.stringify(calls.map((call) => call.body))).not.toMatch(/designerId|userId|party|company/i)
+  })
+})
+// ---- end F-CP-156
