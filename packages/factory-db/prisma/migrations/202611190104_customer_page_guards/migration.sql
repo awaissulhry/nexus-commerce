@@ -43,8 +43,9 @@
 -- "factory_money_rome_day" (…_money_w2a_guards, in the request guard as before).
 --
 -- Data (D1, once; the Factory is not live, so only seed and test rows move): StoredFile.priced for the files that show
--- prices (order confirmations, price lists, proformas, commercial invoices, a shipment pack made with a priced part, invoice
--- copies, sent quotes, payment reminder letters, statements) and every copy and version of them; Role.requireMfa for the
+-- prices (order confirmations, price lists, proformas, commercial invoices, CN22 and CN23 customs papers (their values), a
+-- shipment pack made with a priced part, invoice copies and the invoices' FatturaPA XML, sent quotes, payment reminder
+-- letters, statements) and every copy and version of them; Role.requireMfa for the
 -- custom office roles that see prices, costs or margins (plan O6). A NOTICE says how many rows moved.
 
 -- =====================================================================================================================
@@ -916,19 +917,21 @@ $$;
 -- trigger holds as it is (the StoredFile guard above lets a superseded or deleted file take the mark).
 
 -- The files that show prices: the confirmations, price lists, proformas (of a shipment, a sample shipment or a deposit
--- request) and commercial invoices the documents platform made (GeneratedDocument), a shipment pack made once the
--- shipment had a proforma or a commercial invoice (it may hold one), every invoice's PDF copy, every sent quote (the
+-- request), commercial invoices and CN22 / CN23 customs declarations (the values of the contents; lead decision 11-19) the
+-- documents platform made (GeneratedDocument), a shipment pack made once the shipment had a proforma or a commercial
+-- invoice (it may hold one), every invoice's PDF copy and its FatturaPA XML (lead decision 11-19), every sent quote (the
 -- quote's fiscal archive PDF), every payment reminder letter, every statement sent (its audit row names the file).
 UPDATE "StoredFile" f
    SET "priced" = true
  WHERE NOT f."priced"
-   AND (f."id" IN (SELECT g."fileId" FROM "GeneratedDocument" g WHERE g."kind" IN ('ORDER_CONFIRMATION', 'PRICE_LIST', 'PROFORMA', 'COMMERCIAL_INVOICE'))
+   AND (f."id" IN (SELECT g."fileId" FROM "GeneratedDocument" g WHERE g."kind" IN ('ORDER_CONFIRMATION', 'PRICE_LIST', 'PROFORMA', 'COMMERCIAL_INVOICE', 'CN22', 'CN23'))
         OR f."id" IN (SELECT g."fileId" FROM "GeneratedDocument" g
                        WHERE g."kind" = 'SHIPMENT_PACK'
                          AND EXISTS (SELECT 1 FROM "GeneratedDocument" p
                                       WHERE p."tenantId" = g."tenantId" AND p."recordType" = g."recordType" AND p."recordId" = g."recordId"
                                         AND p."kind" IN ('PROFORMA', 'COMMERCIAL_INVOICE') AND p."createdAt" <= g."createdAt"))
         OR f."id" IN (SELECT i."pdfFileId" FROM "Invoice" i WHERE i."pdfFileId" IS NOT NULL)
+        OR f."id" IN (SELECT i."xmlFileId" FROM "Invoice" i WHERE i."xmlFileId" IS NOT NULL)
         OR (f."recordType" = 'Quote' AND f."kind" = 'FISCAL_ARCHIVE')
         OR f."recordType" = 'PaymentReminder'
         OR f."id" IN (SELECT (a."after"->>'fileId')::uuid FROM "AuditLog" a

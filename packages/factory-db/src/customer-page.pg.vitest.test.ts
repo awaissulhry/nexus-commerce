@@ -669,7 +669,7 @@ describe('the data step (D1): priced documents and two-factor on price roles', (
     return text.slice(at)
   }
 
-  it('marks the documents that show prices, their copies and versions; nothing else', async () => {
+  it('marks the documents that show prices (CN22 / CN23 and the invoices\' XML too), their copies and versions; nothing else', async () => {
     const now = new Date().toISOString()
     const confirmation = await plantFile({ recordType: 'SalesOrder', recordId: cp.orderId })
     await plantRow('GeneratedDocument', { id: randomUUID(), tenantId: a.tenantId, companyId: companyA, recordType: 'SalesOrder', recordId: cp.orderId, kind: 'ORDER_CONFIRMATION', version: 901, fingerprint: 'test', language: 'it', fileId: confirmation, createdAt: now })
@@ -683,10 +683,19 @@ describe('the data step (D1): priced documents and two-factor on price roles', (
     const packList = await plantFile({ recordType: 'Shipment', recordId: randomUUID() })
     await plantRow('GeneratedDocument', { id: randomUUID(), tenantId: a.tenantId, companyId: companyA, recordType: 'Shipment', recordId: randomUUID(), kind: 'PACKING_LIST', version: 1, fingerprint: 'test', language: 'it', fileId: packList, createdAt: now })
     const plain = await plantFile({ recordType: 'SalesOrder', recordId: cp.orderId })
+    // Lead decision 11-19: the customs papers' values and the invoices' FatturaPA XML are prices too.
+    const cn22 = await plantFile({ recordType: 'Shipment', recordId: randomUUID() })
+    await plantRow('GeneratedDocument', { id: randomUUID(), tenantId: a.tenantId, companyId: companyA, recordType: 'Shipment', recordId: randomUUID(), kind: 'CN22', version: 1, fingerprint: 'test', language: 'it', fileId: cn22, createdAt: now })
+    const cn23 = await plantFile({ recordType: 'Shipment', recordId: randomUUID() })
+    await plantRow('GeneratedDocument', { id: randomUUID(), tenantId: a.tenantId, companyId: companyA, recordType: 'Shipment', recordId: randomUUID(), kind: 'CN23', version: 1, fingerprint: 'test', language: 'it', fileId: cn23, createdAt: now })
     await db.admin.query(dataStep())
-    const priced = await admin(`SELECT id::text AS id, priced FROM "StoredFile" WHERE id = ANY($1::uuid[])`, [[confirmation, copy, copyOfCopy, later, quote, reminder, statement, packList, plain]])
+    // The seeded invoices' XML (seed/money.ts).
+    const xml = await admin(`SELECT f.priced FROM "Invoice" i JOIN "StoredFile" f ON f."tenantId" = i."tenantId" AND f.id = i."xmlFileId" WHERE i."tenantId" = $1::uuid`, [a.tenantId])
+    expect(xml.length).toBeGreaterThan(0)
+    expect(xml.every((row) => row.priced === true)).toBe(true)
+    const priced = await admin(`SELECT id::text AS id, priced FROM "StoredFile" WHERE id = ANY($1::uuid[])`, [[confirmation, copy, copyOfCopy, later, quote, reminder, statement, cn22, cn23, packList, plain]])
     const of = (id: string) => priced.find((row) => row.id === id)?.priced
-    for (const id of [confirmation, copy, copyOfCopy, later, quote, reminder, statement]) expect(of(id), id).toBe(true)
+    for (const id of [confirmation, copy, copyOfCopy, later, quote, reminder, statement, cn22, cn23]) expect(of(id), id).toBe(true)
     for (const id of [packList, plain]) expect(of(id), id).toBe(false)
   })
 

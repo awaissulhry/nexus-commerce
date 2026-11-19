@@ -125,8 +125,8 @@ model StoredFile {
   /// only). Hidden from the floor.
   documentTypeCode String?
   /// B-CP-005 (customer page plan, schema wave "customer page 1/1"; the money wall, design 11 D6): the file shows prices
-  /// (an order confirmation, a quote, an invoice copy, a proforma, a commercial invoice, a price list, a statement, the
-  /// customer's own PO): only people who see prices open it (the API's lock). Born with its document, or set by a person; a
+  /// (an order confirmation, a quote, an invoice copy and its FatturaPA XML, a proforma, a commercial invoice, a CN22 or CN23,
+  /// a price list, a statement, the customer's own PO): only people who see prices open it (the API's lock). Born with its document, or set by a person; a
   /// lock flag, not content: it may change on a live file, a superseded version and a deleted one (a mark reaches every
   /// version of the series). Copies and new versions carry it (the API).
   /// @not-money a lock flag: the file shows prices
