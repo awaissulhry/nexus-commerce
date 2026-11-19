@@ -46,7 +46,7 @@ export async function prepareCorrectedFiles(runtime: FilesRuntime, caller: Comma
   }
   const language = isDocumentLanguage(found.language) ? found.language : 'it'
   const composed = composeDocument({ ...invoiceCopyOf(issued, language), company: await companyLegalOf(caller, companyId), sample: false })
-  const base = { companyId, recordType: 'Invoice', recordId: issued.id, kind: 'FISCAL_ARCHIVE' as const }
+  const base = { companyId, recordType: 'Invoice', recordId: issued.id, kind: 'FISCAL_ARCHIVE' as const, priced: true /* B-CP-015: the corrected XML and copy show prices */ }
   const xml = await putGeneratedFile(runtime, caller, { ...base, originalName: doc.fileName, contentType: 'application/xml', body: Buffer.from(doc.xml, 'utf8') })
   const pdf = await putGeneratedFile(runtime, caller, { ...base, originalName: documentFileName(composed), contentType: 'application/pdf', body: await renderDocumentPdf(composed) })
   return { xml, pdf, xmlText: doc.xml, fileName: doc.fileName }

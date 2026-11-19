@@ -6,6 +6,7 @@ import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type Clock } from '@nexus/factory-domain/core/time'
 import { composeDocument, type ComposedDocument } from '@nexus/factory-domain/documents/compose'
 import { attachDocumentLogo, type CompanyLegal, type DocumentInput, type DocumentLanguage, type DocumentType } from '@nexus/factory-domain/documents/model'
+import { pricedDocument } from '@nexus/factory-domain/documents/model' // B-CP-015
 import { sampleDocument } from '@nexus/factory-domain/documents/sample'
 import type { CommandCaller } from '../../core/command'
 import { documentLogoIn } from '../branding/logo'
@@ -138,6 +139,7 @@ export async function storeDocumentPdf(runtime: FilesRuntime, caller: CommandCal
       visibility: request.visibility,
       floorSiteId: request.floorSiteId,
       partyId: request.partyId,
+      priced: pricedDocument(composed.type), // B-CP-015: born priced by its type
     },
     {
       commandName: 'documents.render',

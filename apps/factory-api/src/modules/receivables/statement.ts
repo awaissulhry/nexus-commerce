@@ -223,6 +223,7 @@ export async function sendStatement(caller: CommandCaller, partyId: string, body
     body: pdf,
     visibility: ['OFFICE', 'PARTNER'],
     partyId,
+    priced: true, // B-CP-015: a statement shows invoice amounts
   })
   const { result } = await receivablesCommand(caller, { name: 'receivables.sendStatement', idempotencyKey, input: { partyId, ...body } }, async (tools) => {
     const file = await recordGeneratedFile(tools, prepared, { action: 'receivables.statement', details: { layout: 'STATEMENT/1', from: data.statement.from, to: data.statement.to, currency: data.currency, language } })
