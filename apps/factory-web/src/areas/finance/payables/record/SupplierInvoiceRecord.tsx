@@ -10,6 +10,7 @@ import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { storeUrl } from '../../../../record-panels/store'
 import { romeToday } from '../../costing/model'
 import { useCoalesced, useLive } from '../../_shared/hooks'
+import { olderRead } from '../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 // B-W2b-425: the leather area check, dual approval and the payment batch.
 import { AreaCheck } from '../area-check/AreaCheck'
 import { DualApproval } from '../dual-approval/DualApproval'
@@ -88,16 +89,21 @@ export function SupplierInvoiceRecord({ invoiceId }: { invoiceId: string }) {
     [api, can.manage],
   )
 
-  const setValue = useCallback((next: SupplierInvoice) => {
+  // fx-11 (end check): the page never goes back to an older version of its invoice (olderRead, as the purchase order since fx-10): a live
+  // re-read that left before a write and answered after it would put the invoice as it was back, and the next write would send that
+  // version and be refused as changed (409). Such a read is dropped: the write's own answer is newer, and its event reads it again.
+  const setValue = useCallback((next: SupplierInvoice): boolean => {
+    if (olderRead(current.current, next)) return false
     current.current = next
     setInvoice({ status: 'ready', value: next })
+    return true
   }, [])
 
   const load = useCallback(async () => {
     if (!can.view) return
     try {
       const next = await getInvoice(api, invoiceId)
-      setValue(next)
+      if (!setValue(next)) return // fx-11: an older read than the page holds
       setChanged(null)
       readCandidates(next)
     } catch (error) {

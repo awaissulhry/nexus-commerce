@@ -12,7 +12,8 @@ import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { RecordCustomFields } from '../../../../record-panels/custom-fields/RecordCustomFields' // B-TH-280
 import { findMaterials, getMaterial } from '../../../_shared/buying/api'
 import { useCoalesced, useLive } from '../../../_shared/buying/hooks'
-import { buyingCan, olderRead, part, PART_LOADING, phrase, readProblem, todayIn, writeProblem, type Loaded, type Part, type Phrase } from '../../../_shared/buying/model'
+import { olderRead } from '../../../../lib/records/older-read' // fx-11: the one rule of every record page
+import { buyingCan, part, PART_LOADING, phrase, readProblem, todayIn, writeProblem, type Loaded, type Part, type Phrase } from '../../../_shared/buying/model'
 import { outsideRefusalOf, parseCc, type SendOutside } from '../../../_shared/document-send/model'
 import type { DocumentSendModel } from '../../../_shared/document-send/model'
 import {

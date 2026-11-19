@@ -7,6 +7,7 @@ import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useCoalesced, useLive } from '../../../_shared/buying/hooks'
+import { olderRead } from '../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 import { listLocations, type SiteLocations } from '../../../_shared/stock/api'
 import {
   addLine,
@@ -146,7 +147,10 @@ function CountRecordContainer({ countId }: { countId: string }) {
       return
     }
     try {
-      setRecord({ status: 'ready', value: await countRecord(api, countId) })
+      const next = await countRecord(api, countId)
+      // fx-11 (end check): a live re-read that left before a write and answered after it never puts the count as it was back
+      // (olderRead): the next write would send that version and be refused as changed (409).
+      setRecord((held) => (held.status === 'ready' && olderRead(held.value, next) ? held : { status: 'ready', value: next }))
       loadPlaces()
       setAsOf(new Date().toISOString())
     } catch (error) {

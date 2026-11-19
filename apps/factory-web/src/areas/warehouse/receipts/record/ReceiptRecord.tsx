@@ -10,6 +10,7 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { pickerReasons, type PickerReason } from '../../../_shared/reasons/api'
 import { downloadText, useCoalesced, useLive } from '../../../_shared/buying/hooks'
+import { olderRead } from '../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 import { buyingCan, csvOf, part, PART_LOADING, phrase, readProblem, writeProblem, type Loaded, type Part, type Phrase } from '../../../_shared/buying/model'
 import { getReceipt, receiptLots, reverseReceipt, type LotWithHides, type Receipt } from '../api'
 import {
@@ -136,17 +137,21 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
       .catch((error: unknown) => setDiscrepancies({ value: null, problem: readSay(error) }))
   }, [api, receiptId])
 
+  // fx-11 (end check): a read that left before a write and answered after it never puts the receipt as it was back
+  // (olderRead): the next write would send that version and be refused as changed (409).
+  const takeRead = useCallback((next: Receipt) => setReceipt((held) => (held.status === 'ready' && olderRead(held.value, next) ? held : { status: 'ready', value: next })), [])
+
   const reloadReceipt = useCallback(async () => {
     try {
-      setReceipt({ status: 'ready', value: await getReceipt(api, receiptId) })
+      takeRead(await getReceipt(api, receiptId))
     } catch {
       // The record stays as read; the next live change or Reload reads it again.
     }
-  }, [api, receiptId])
+  }, [api, receiptId, takeRead])
 
   const load = useCallback(async () => {
     try {
-      setReceipt({ status: 'ready', value: await getReceipt(api, receiptId) })
+      takeRead(await getReceipt(api, receiptId))
       setChanged(null)
       loadLots()
       loadDiscrepancies()
@@ -155,7 +160,7 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
       else if (isApiError(error) && error.kind === 'forbidden') setReceipt({ status: 'forbidden' })
       else setReceipt({ status: 'error', problem: readProblem(error) })
     }
-  }, [api, receiptId, loadLots, loadDiscrepancies])
+  }, [api, receiptId, loadLots, loadDiscrepancies, takeRead])
 
   useEffect(() => {
     void load()
