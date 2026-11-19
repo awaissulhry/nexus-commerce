@@ -79,7 +79,9 @@
   "where": {
     "title": "Where it is",
     "sub": "The latest news of your shipment, in your language.",
-    "steps": "Where shipment {number} is"
+    "steps": "Where shipment {number} is",
+    "shared_one": "This shipment carries your order {order} and {count} piece of other orders.",
+    "shared_other": "This shipment carries your order {order} and {count} pieces of other orders."
   },
   "parcels": {
     "label_one": "{count} parcel",

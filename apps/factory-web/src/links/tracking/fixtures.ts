@@ -26,7 +26,7 @@ const page = (over: Partial<TrackingPage> = {}): TrackingPage => ({
     returnedAt: null,
     expectedDeliveryAt: '2026-11-13T11:00:00.000Z',
   },
-  order: { customerRef: '4500-1234', number: '#42' /* fix-portal-numbers-1: the customer's own number, never SO-… */ },
+  order: { customerRef: '4500-1234', number: '#42' /* fix-portal-numbers-1: the customer's own number, never SO-… */, otherPieces: 0 /* F-OP-133 */ },
   pill: 'IN_TRANSIT',
   problem: null,
   steps: [
@@ -118,6 +118,9 @@ export const designScreen = defineDesignScreen<TrackingViewModel>({
     { id: 'delivered', label: 'Delivered: when and where, the page open until 60 days after', model: ready(delivered) },
     { id: 'delayed', label: 'Problem: the carrier reports a delay on parcel 2', model: ready({ pill: 'PROBLEM', problem: 'DELAYED', parcels: [page().parcels[0]!, { ...page().parcels[1]!, status: 'EXCEPTION' }], events: [{ id: uid(6), status: 'EXCEPTION', place: 'Bologna Interporto', occurredAt: '2026-11-12T17:00:00.000Z', parcelSeq: 2 }, ...page().events] }) },
     { id: 'returned', label: 'Problem: the goods came back to us (no claim from here)', model: ready({ shipment: { ...page().shipment, status: 'RETURNED', returnedAt: '2026-11-18T09:00:00.000Z', expectedDeliveryAt: null }, pill: 'PROBLEM', problem: 'RETURNED', claim: { held: 'RETURNED' }, events: [{ id: uid(7), status: 'RETURNED', place: 'Milano Hub', occurredAt: '2026-11-17T08:00:00.000Z', parcelSeq: null }, ...page().events] }) },
+    // F-OP-133 (order page N6, R-5 + R-18): the shipment also carries 3 pieces of the customer's other orders (after the switch).
+    { id: 'shared', label: 'A shipment shared with other orders: this order, and only how many pieces of other orders travel with it', model: ready({ order: { ...page().order, otherPieces: 3 } }), note: 'The link may be passed on (the customer’s own shop): the page never names another order or its PO.' },
+    { id: 'shared-one', label: 'Shared with one piece of another order', model: ready({ order: { customerRef: null, number: '#42', otherPieces: 1 } }) },
     { id: 'one-parcel', label: 'One parcel: "Track on the carrier\'s site" in the head', model: ready({ parcels: [page().parcels[0]!] }) },
     { id: 'own-van', label: 'Our own van: no carrier, no scans, no carrier site', model: ready({ shipment: { ...page().shipment, transportBy: 'SENDER', carrierName: null, expectedDeliveryAt: null }, parcels: [{ seq: 1, trackingNumber: null, carrierPage: null, status: null }], events: [] }) },
     { id: 'no-scans', label: 'Left us, no carrier scan yet', model: ready({ events: [], steps: page().steps.map((step) => (step.code === 'COLLECTED' ? { ...step, state: 'CURRENT' } : step.code === 'IN_TRANSIT' ? { ...step, state: 'TODO', at: null } : step)), pill: 'COLLECTED' }) },
