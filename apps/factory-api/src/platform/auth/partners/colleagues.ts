@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { isPartnerKind, type PartnerKind } from '@nexus/factory-domain/auth/partners/kinds'
 import { PORTAL_COLLEAGUES_MANAGE } from '@nexus/factory-domain/auth/partners/permissions'
-import { accessEndsSoon, PARTNER_WORDS, type AccessChoice } from '@nexus/factory-domain/auth/partners/rules'
+import { accessEndsSoon, PARTNER_WORDS, seatProblem, splitRoleKeys, type AccessChoice } from '@nexus/factory-domain/auth/partners/rules'
 import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { partnerTemplateOf } from '@nexus/factory-domain/auth/roles/templates'
-import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { holds } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { actorOf, requireContext } from '../../../core/context'
@@ -15,8 +15,8 @@ import { emailOrThrow } from '../users/email'
 import { adminFacts, userStatus } from '../users/status'
 import type { ColleagueChangeBody, ColleagueInviteBody } from './contract'
 import { mailInvitation, rolesView } from './office'
-import { changeInCommand, inviteInCommand, statusInCommand } from './people'
-import { PERSON_SELECT, peopleOf, personOf, settingsOf, withAccess, type PartnerPerson } from './store'
+import { changeInCommand, inviteInCommand, revokeInCommand, statusInCommand } from './people'
+import { lockParty, PERSON_SELECT, peopleOf, personOf, seatsTaken, settingsOf, withAccess, type PartnerPerson } from './store'
 
 /**
  * The partner's own people in the portal (B-W2b-162; SAL-060, SAL-059, SAL-069, SCM-092; design portal.customer.account and
@@ -29,10 +29,18 @@ import { PERSON_SELECT, peopleOf, personOf, settingsOf, withAccess, type Partner
  *   POST  /portal/colleagues                   the admin invites a colleague (within the factory's limits)
  *   PATCH /portal/colleagues/:userId           the admin changes a colleague's role or capabilities ("raises a role")
  *   POST  /portal/colleagues/:userId/deactivate
+ *   B-CP-073 (customer page plan D13, C6; review G2, F4) — a CUSTOMER's admin runs its own team further (a supplier's or a
+ *   workshop's admin reaches none of these: 403, the API is the customer's):
+ *   POST  /portal/colleagues/:userId/invitation          the invitation again (an INVITED person only; the newest one's role)
+ *   POST  /portal/colleagues/:userId/invitation/revoke   the open invitation withdrawn (the person DEACTIVATED: invite again later)
+ *   POST  /portal/colleagues/:userId/suspend             access paused {version, reason?} (their sessions end at once)
+ *   POST  /portal/colleagues/:userId/reactivate          access given back {version} (held while every seat of maxUsers is taken)
+ *   Each sends the person row's version (a stale one: 409).
  * The admin's acts need a step-up by e-mail code on the session (B-W2b-159 requirePortalStepUp) and reach only colleagues of
  * the admin's own kind, never the admin's own access. They run as the partner person in the office scope (the partner role
  * writes no Role, RoleAssignment or Invitation): the same commands as the office's (people.ts), `byPartner` in their audit
- * rows and events. A colleague the admin invites gets the admin's own end of access, if any (never a longer one).
+ * rows and events. A colleague the admin invites gets the admin's own end of access, if any (never a longer one). Seats and
+ * the roles offered stay the office's (Portal access).
  */
 
 const iso = (value: Date | null): string | null => (value ? toUtcIso(value) : null)
@@ -190,3 +198,98 @@ export async function deactivateColleague(app: FastifyInstance, request: Fastify
   )
   return result
 }
+
+// ---- B-CP-073 (customer page plan D13, C6; review G2 every act sends the person's version, F4 customer only) --------------------
+
+/** The CUSTOMER admin's kind: these acts are the customer portal's (a supplier's or workshop's admin: 403, like any non-admin). */
+function customerAdmin(session: PortalSession): PartnerKind {
+  const kind = adminKind(session)
+  if (kind !== 'CUSTOMER') throw new ForbiddenError()
+  return kind
+}
+
+/** The colleague reached for an act (own party, own kind, never the admin), at the version the admin read (else 409). */
+async function colleagueAt(app: FastifyInstance, session: PortalSession, userId: string, version: number): Promise<PartnerPerson> {
+  const person = await reachColleague(app, session, customerAdmin(session), userId)
+  if (person.version !== version) throw new ConflictError(`This colleague changed since you read it (now version ${person.version}). Read it again.`)
+  return person
+}
+
+/** POST /portal/colleagues/:userId/invitation — the invitation again, with the newest one's role and end of access. */
+export async function resendColleagueInvitation(app: FastifyInstance, request: FastifyRequest, userId: string, body: { readonly version: number }, idempotencyKey?: string) {
+  const p = portalOf(app)
+  const session = portalSessionOf(request)
+  customerAdmin(session)
+  requirePortalStepUp(app, request)
+  const person = await colleagueAt(app, session, userId, body.version)
+  if (person.status !== 'INVITED' || person.kind === null) throw new InvalidStateError('Only an invited colleague is sent the invitation again.')
+  const latest = await p.auth.inTenant(session.tenantId, session.userId, (client) =>
+    client.invitation.findFirst({ where: { userId, audience: 'PARTNER' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { partnerRoleKeys: true, accessUntil: true } }),
+  )
+  const split = splitRoleKeys(latest?.partnerRoleKeys ?? [])
+  if (!latest || split.roleKey === null) throw new InvalidStateError(PARTNER_WORDS.notInvited)
+  const now = p.auth.clock.now()
+  // Never longer than the admin's own end of access (as an invitation the admin sends).
+  const until = latest.accessUntil && latest.accessUntil > now ? latest.accessUntil : null
+  const capped = session.person.accessUntil && (until === null || until > session.person.accessUntil) ? session.person.accessUntil : until
+  const choice: AccessChoice = { kind: person.kind, roleKey: split.roleKey, capabilities: split.capabilities, accessUntil: capped }
+  const outcome = await p.auth.command(
+    contextOf(app, request, session),
+    { name: 'portal.resendInvitation', idempotencyKey, input: { userId, version: body.version, sessionId: session.id }, record: { type: 'User', id: userId, expectedVersion: body.version } },
+    (tools) => inviteInCommand(tools, { partyId: session.partyId, companyId: session.company.id, email: person.email, displayName: person.displayName, locale: person.locale === 'en' ? 'en' : 'it', choice }, { actorId: session.userId, byPartner: true }),
+  )
+  if (outcome.replayed) return { invitation: outcome.result.invitation, delivery: 'already_sent' as const }
+  await mailInvitation(p.auth, request, { tenantId: session.tenantId, companyId: session.company.id, invitedBy: `${session.person.displayName} (${session.party.name})`, result: outcome.result, roleKey: choice.roleKey })
+  return { invitation: outcome.result.invitation, delivery: 'sent' as const }
+}
+
+/** POST /portal/colleagues/:userId/invitation/revoke — the open invitation withdrawn; the person is DEACTIVATED. */
+export async function revokeColleagueInvitation(app: FastifyInstance, request: FastifyRequest, userId: string, body: { readonly version: number }, idempotencyKey?: string) {
+  const p = portalOf(app)
+  const session = portalSessionOf(request)
+  customerAdmin(session)
+  requirePortalStepUp(app, request)
+  const person = await colleagueAt(app, session, userId, body.version)
+  if (person.status !== 'INVITED' || !person.invitation) throw new InvalidStateError(PARTNER_WORDS.notInvited)
+  const invitationId = person.invitation.id
+  const { result } = await p.auth.command(
+    contextOf(app, request, session),
+    {
+      name: 'portal.revokeInvitation',
+      idempotencyKey,
+      input: { userId, invitationId, version: body.version, sessionId: session.id },
+      record: { type: 'User', id: userId, expectedVersion: body.version, transition: { machine: userStatus, to: 'DEACTIVATED' as const, facts: adminFacts(userId, p.auth.clock.now()) } },
+    },
+    (tools) => revokeInCommand(tools, { partyId: session.partyId, userId, invitationId }, { actorId: session.userId, byPartner: true }, session.company.id),
+  )
+  return result
+}
+
+/** POST /portal/colleagues/:userId/suspend — access paused (their sessions end); /reactivate — access given back (a seat must be free). */
+export async function pauseColleague(app: FastifyInstance, request: FastifyRequest, userId: string, body: { readonly version: number; readonly reason?: string | undefined }, change: 'suspend' | 'reactivate', idempotencyKey?: string) {
+  const p = portalOf(app)
+  const session = portalSessionOf(request)
+  customerAdmin(session)
+  requirePortalStepUp(app, request)
+  await colleagueAt(app, session, userId, body.version)
+  const { result } = await p.auth.command(
+    contextOf(app, request, session),
+    {
+      name: change === 'suspend' ? 'portal.suspendColleague' : 'portal.reactivateColleague',
+      idempotencyKey,
+      input: { userId, ...body, sessionId: session.id },
+      record: { type: 'User', id: userId, expectedVersion: body.version, transition: { machine: userStatus, to: change === 'suspend' ? ('SUSPENDED' as const) : ('ACTIVE' as const), facts: adminFacts(userId, p.auth.clock.now()) } },
+    },
+    async (tools) => {
+      if (change === 'reactivate') {
+        // Held while the others take every seat (the office may have lowered maxUsers since the pause): the party locked, counted once.
+        await lockParty(tools.tx, session.partyId)
+        const seat = seatProblem(await settingsOf(tools.tx, session.partyId), await seatsTaken(tools.tx, session.partyId, tools.now, userId), session.party.name)
+        if (seat) throw new ConflictError(seat)
+      }
+      return statusInCommand(tools, { partyId: session.partyId, userId, change, reason: body.reason }, { actorId: session.userId, byPartner: true }, session.company.id)
+    },
+  )
+  return result
+}
+// ---- end B-CP-073

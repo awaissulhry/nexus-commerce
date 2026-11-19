@@ -130,7 +130,7 @@ describe('the office invites; the first sign-in gives the role (SAL-060, PLT-006
     expect((await bea.get('/portal/me')).body.permissions).toEqual([])
     await acknowledge(bea)
     // B-PR-13: the Buyer also sees production and marks orders urgent. B-TH-066 (#1575): + the projects it is added to.
-    expect((await bea.get('/portal/me')).body.permissions).toEqual(['files.read', 'money.price', 'portal.addresses.view', 'portal.approvals.view', 'portal.approve', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.comment', 'portal.customerDocuments.conformity', 'portal.customerDocuments.view', 'portal.home.view', 'portal.orderRequests.manage', 'portal.production.urgency', 'portal.production.view', 'portal.projects.view', 'portal.returns.request', 'portal.returns.view', 'portal.salesOrders.ask', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'portal.upload', 'threads.read'])
+    expect((await bea.get('/portal/me')).body.permissions).toEqual(['files.read', 'money.price', 'portal.addresses.view', 'portal.approvals.view', 'portal.approve', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.comment', 'portal.customerDocuments.conformity', 'portal.customerDocuments.view', 'portal.home.view', /* B-CP-070 */ 'portal.orderDrafts.edit', 'portal.orderRequests.manage', 'portal.production.urgency', 'portal.production.view', 'portal.projects.view', 'portal.returns.request', 'portal.returns.view', 'portal.salesOrders.ask', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'portal.upload', 'threads.read'])
     const access = await bea.get('/portal/access')
     expect(access.body).toMatchObject({ kind: 'CUSTOMER', role: { key: 'customer-buyer', name: 'Buyer', seesPrices: true, admin: false }, capabilities: ['comment', 'upload', 'approve'], admins: [], preview: false })
     const team = await bea.get('/portal/colleagues')
@@ -516,3 +516,108 @@ describe("B-PR-14 a customer's production limits card (PW-S01, PW-08b, PW-15)", 
   })
   // ---- end B-PR-15
 })
+
+// ---- B-CP-073 (customer page plan D13, C6; review G2 every act sends the person's version, F4 customers only; wall W-CP-4) -----
+describe("B-CP-073 a customer's admin runs its own team: resend, withdraw, pause, give back", { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const act = (browser: Browser, userId: string, path: string, body: Record<string, unknown>) => browser.post(`/portal/colleagues/${userId}${path}`, body)
+  let ava: Browser
+  const avaEmail = 'ava.admin.cp073@brand-alpha.example'
+  const idOf = async (email: string) => (await inWorld(h, world, (client) => client.user.findFirstOrThrow({ where: { email }, select: { id: true } }))).id
+
+  it('every act asks a step-up and the person’s version (stale: 409); resend mails again; withdraw deactivates; never one’s own access', async () => {
+    expect((await invite({ email: avaEmail, displayName: 'Ava Admin', roleKey: 'customer-admin' })).status).toBe(200)
+    ava = await signedIn(avaEmail)
+    await acknowledge(ava)
+    await portalStepUp(ava, avaEmail)
+    const cleo = await ava.post('/portal/colleagues', { email: 'cleo.cp073@brand-alpha.example', displayName: 'Cleo Viewer', roleKey: 'customer-viewer' })
+    expect(cleo.status, JSON.stringify(cleo.body)).toBe(200)
+    const cleoId = cleo.body.invitation.userId as string
+    expect(invitationMails('cleo.cp073@brand-alpha.example')).toHaveLength(1)
+    // No fresh step-up: refused before anything is written.
+    h.clock.advance(6 * 60_000)
+    const held = await act(ava, cleoId, '/invitation', { version: await versionOf(cleoId) })
+    expect(held.status).toBe(403)
+    expect(held.body.error.issues).toEqual([expect.objectContaining({ path: 'stepUp' })])
+    await portalStepUp(ava, avaEmail)
+    expect((await act(ava, cleoId, '/invitation', { version: (await versionOf(cleoId)) + 1 })).status).toBe(409)
+    const again = await act(ava, cleoId, '/invitation', { version: await versionOf(cleoId) })
+    expect(again.status, JSON.stringify(again.body)).toBe(200)
+    expect(again.body).toMatchObject({ delivery: 'sent', invitation: { userId: cleoId, roleKeys: ['customer-viewer'] } })
+    expect(invitationMails('cleo.cp073@brand-alpha.example')).toHaveLength(2)
+    expect((await events('partner_user.invited')).at(-1)).toMatchObject({ userId: cleoId, byPartner: true })
+    const withdrawn = await act(ava, cleoId, '/invitation/revoke', { version: await versionOf(cleoId) })
+    expect(withdrawn.status, JSON.stringify(withdrawn.body)).toBe(200)
+    expect(withdrawn.body).toMatchObject({ id: cleoId, status: 'DEACTIVATED' })
+    expect((await events('partner_user.changed')).at(-1)).toMatchObject({ userId: cleoId, changes: ['INVITATION_REVOKED'], byPartner: true })
+    // Withdrawn: nothing to send again.
+    expect((await act(ava, cleoId, '/invitation', { version: await versionOf(cleoId) })).status).toBe(409)
+    // Never one's own access.
+    const avaId = await idOf(avaEmail)
+    const own = await act(ava, avaId, '/suspend', { version: await versionOf(avaId) })
+    expect(own.status).toBe(403)
+    expect(own.body.error.message).toBe("You cannot change your own access; ask another admin of your organisation, or the factory.")
+  })
+
+  it('pauses a colleague (their sessions end at once, the audit says byPartner) and gives access back — held while every seat is taken', async () => {
+    await portalStepUp(ava, avaEmail)
+    const dinoEmail = 'dino.cp073@brand-alpha.example'
+    expect((await ava.post('/portal/colleagues', { email: dinoEmail, displayName: 'Dino Viewer', roleKey: 'customer-viewer' })).status).toBe(200)
+    const dino = await signedIn(dinoEmail)
+    await acknowledge(dino)
+    const dinoId = await idOf(dinoEmail)
+    const paused = await act(ava, dinoId, '/suspend', { version: await versionOf(dinoId), reason: 'Made-up: on leave until spring' })
+    expect(paused.status, JSON.stringify(paused.body)).toBe(200)
+    expect(paused.body).toMatchObject({ id: dinoId, status: 'SUSPENDED' })
+    expect(paused.body.sessionsEnded).toBeGreaterThanOrEqual(1)
+    expect((await dino.get('/portal/me')).status).toBe(401)
+    const audit = await h.db.admin.query(`SELECT after FROM "AuditLog" WHERE "tenantId" = $1 AND "recordType" = 'User' AND "recordId" = $2 AND action = 'portal.suspendColleague'`, [tenant.id, dinoId])
+    expect(audit.rows[0]!.after).toMatchObject({ status: 'SUSPENDED', byPartner: true })
+    // The office lowers the seats to the people it has without Dino: giving access back is held, in words.
+    const tab = (await owner.get(`/partners/${world.partyId}`)).body
+    const lowered = await asOwner('post', `/partners/${world.partyId}/settings`, { maxUsers: tab.seats.taken - 1, version: tab.settings.version })
+    expect(lowered.status, JSON.stringify(lowered.body)).toBe(200)
+    const full = await act(ava, dinoId, '/reactivate', { version: await versionOf(dinoId) })
+    expect(full.status).toBe(409)
+    expect(full.body.error.message).toContain(`holds at most ${tab.seats.taken - 1}`)
+    expect((await inWorld(h, world, (client) => client.user.findUniqueOrThrow({ where: { id: dinoId }, select: { status: true } }))).status).toBe('SUSPENDED')
+    const raised = await asOwner('post', `/partners/${world.partyId}/settings`, { maxUsers: null, version: lowered.body.settings.version })
+    expect(raised.status, JSON.stringify(raised.body)).toBe(200)
+    const back = await act(ava, dinoId, '/reactivate', { version: await versionOf(dinoId) })
+    expect(back.status, JSON.stringify(back.body)).toBe(200)
+    expect(back.body).toMatchObject({ id: dinoId, status: 'ACTIVE' })
+    expect((await events('partner_user.changed')).at(-1)).toMatchObject({ userId: dinoId, changes: ['REACTIVATED'], status: 'ACTIVE', byPartner: true })
+  })
+
+  it('W-CP-4: never another organisation’s person (404, as a wrong id); own kind only; a supplier’s admin reaches none of the four (403)', async () => {
+    // Another customer's person: not found, the same words as a wrong id.
+    const beta = await party(['CUSTOMER'])
+    const bettaInvite = await invite({ email: 'betta.cp073@brand-beta.example', displayName: 'Betta Viewer', roleKey: 'customer-viewer' }, beta)
+    expect(bettaInvite.status, JSON.stringify(bettaInvite.body)).toBe(200)
+    const bettaId = bettaInvite.body.invitation.userId as string
+    await portalStepUp(ava, avaEmail)
+    for (const path of ['/invitation', '/invitation/revoke', '/suspend', '/reactivate']) {
+      const answer = await act(ava, bettaId, path, { version: await versionOf(bettaId) })
+      expect(answer.status, path).toBe(404)
+      expect(answer.body.error.message, path).toBe('Colleague not found.')
+      expect(JSON.stringify(answer.body), path).not.toMatch(/Betta|brand-beta/)
+    }
+    // A company that is a customer and a supplier: its customer admin never reaches its supplier people; its supplier admin none of the four.
+    const mixed = await party(['CUSTOMER', 'SUPPLIER'])
+    const custAdmin = 'carla.admin.cp073@mixed.example'
+    const supAdmin = 'sara.admin.cp073@mixed.example'
+    expect((await invite({ email: custAdmin, displayName: 'Carla Admin', roleKey: 'customer-admin', kind: 'CUSTOMER' }, mixed)).status).toBe(200)
+    expect((await invite({ email: supAdmin, displayName: 'Sara Admin', roleKey: 'supplier-admin', kind: 'SUPPLIER' }, mixed)).status).toBe(200)
+    const orders = await invite({ email: 'otto.cp073@mixed.example', displayName: 'Otto Orders', roleKey: 'supplier-orders', kind: 'SUPPLIER' }, mixed)
+    const ottoId = orders.body.invitation.userId as string
+    const carla = await signedIn(custAdmin)
+    await acknowledge(carla)
+    await portalStepUp(carla, custAdmin)
+    expect((await act(carla, ottoId, '/invitation', { version: await versionOf(ottoId) })).status).toBe(404)
+    const sara = await signedIn(supAdmin)
+    await acknowledge(sara)
+    await portalStepUp(sara, supAdmin)
+    for (const path of ['/invitation', '/invitation/revoke', '/suspend', '/reactivate']) expect((await act(sara, ottoId, path, { version: await versionOf(ottoId) })).status, path).toBe(403)
+    expect(invitationMails('otto.cp073@mixed.example')).toHaveLength(1)
+  })
+})
+// ---- end B-CP-073

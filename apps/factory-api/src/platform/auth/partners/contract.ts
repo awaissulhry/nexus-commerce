@@ -255,6 +255,18 @@ export const colleagueDeactivateContract = defineContract({
   response: { 200: changed.extend({ sessionsEnded: z.number().int() }) },
 })
 
+// ---- B-CP-073 (customer page plan D13; review G2): a customer's admin runs its own team — every act sends the person's version.
+const colleagueParams = input({ userId: id() })
+const colleagueVersion = input({ version: z.number().int().min(1) })
+export const colleagueResendContract = defineContract({ params: colleagueParams, body: colleagueVersion, response: { 200: invited } })
+export const colleagueRevokeContract = defineContract({ params: colleagueParams, body: colleagueVersion, response: { 200: changed } })
+export const colleagueStatusContract = defineContract({
+  params: colleagueParams,
+  body: input({ version: z.number().int().min(1), reason: z.string().trim().min(1).max(500).optional() }),
+  response: { 200: changed.extend({ sessionsEnded: z.number().int() }) },
+})
+// ---- end B-CP-073
+
 // --- B-PR-14: a customer's production limits (the limits card; its own route, partners.production.manage + step-up) --------
 
 const wordsView = output({ en: z.string(), it: z.string() })

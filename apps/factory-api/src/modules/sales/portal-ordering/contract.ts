@@ -4,9 +4,10 @@ import { NUMBER_FORMATS } from '@nexus/factory-domain/imports/cells'
 import { CSV_ENCODINGS } from '@nexus/factory-domain/imports/job'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { ADDRESS_APPROVALS, REFUSE_REASON_LIMITS } from '@nexus/factory-domain/parties/address-approval'
-import { ACCEPT_AS } from '@nexus/factory-domain/sales/portal-ordering/office'
+import { ACCEPT_AS, DRAFT_LATER_PARTS, DRAFT_PART_STATES, DRAFT_PARTS } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { REORDER_NOTICES } from '@nexus/factory-domain/sales/portal-ordering/reorder'
 import { ORDERING_LIMITS, PROBLEM_CODES, RANGE_FILTERS, REQUEST_STATUSES, SOURCES } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import { DRAFT_FILE_PARTS } from '@nexus/factory-domain/sales/portal-ordering/draft-files' // B-CP-072
 
 /**
  * Portal ordering (B-W2b-190; SAL-071, SAL-072, SAL-073, SAL-074, SAL-079; design portal.customer.catalogue,
@@ -31,6 +32,11 @@ const sizes = z.array(sizeAsk).min(1).max(ORDERING_LIMITS.sizesPerLine)
 const problem = output({ code: z.enum(PROBLEM_CODES), lineId: id().nullable(), size: z.string().nullable(), words })
 const notice = output({ code: z.enum(REORDER_NOTICES), words })
 const sizeRow = output({ size: z.string(), quantity: z.number().int() })
+
+// ---- B-CP-072 (customer page plan C5): a draft's files, as the customer reads them -------------------------------------------
+const draftFile = output({ id: id(), lineId: id().nullable(), originalName: z.string(), kind: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), version, createdAt: at })
+const draftFiles = output({ logos: z.array(draftFile), references: z.array(draftFile), sheets: z.array(draftFile) })
+// ---- end B-CP-072
 
 // ---- the catalogue -----------------------------------------------------------------------------------------------------
 
@@ -149,6 +155,15 @@ const requestBody = output({
   pricesChanged: notMoney(z.number().int()),
   /** "This is a request. We confirm price, quantities and date with you …" (B-TH-041: never by when). */
   notice: words,
+  /**
+   * B-CP-070 (D11): what the reader may do now beside filling the draft — send it and withdraw it once sent (who may order: the
+   * Buyer, the Admin), discard the draft (who may order, or the colleague who started it). False: held, with the page's words.
+   */
+  may: output({ send: z.boolean(), withdraw: z.boolean(), discard: z.boolean() }),
+  /** B-CP-072: its logos, references and measurement sheets (the draft's own and its lines'). */
+  files: draftFiles,
+  /** B-CP-072 (D14): files go up here now; else why not, in words (live, until the virus scanner runs: send them by e-mail). */
+  uploads: output({ open: z.boolean(), words: z.string().nullable() }),
 })
 
 const address = output({
@@ -231,6 +246,27 @@ export const sendContract = defineContract({
   response: { 200: record.extend({ sent: output({ number: z.string(), confirmBy: z.null(), words }) }) },
 })
 export const withdrawContract = defineContract({ params: requestParams, body: input({ version }), response: { 200: record } })
+
+// ---- B-CP-072: a draft's files (announce, complete, remove) ------------------------------------------------------------------
+
+const fileParams = input({ requestId: id(), fileId: id() })
+export const announceDraftFileContract = defineContract({
+  params: requestParams,
+  body: input({
+    /** LOGO (filed as ARTWORK), REFERENCE, SHEET (a measurement sheet, MEASUREMENTS). */
+    part: z.enum(DRAFT_FILE_PARTS),
+    /** On one line of the draft (null: the draft's own). */
+    lineId: id().nullish(),
+    originalName: z.string().trim().min(1).max(255),
+    contentType: z.string().trim().min(1).max(100),
+    sizeBytes: z.number().int().min(1),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  }),
+  response: { 201: output({ file: draftFile, upload: output({ method: z.string(), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: instant() }) }) },
+})
+export const completeDraftFileContract = defineContract({ params: fileParams, response: { 200: output({ file: draftFile }) } })
+export const removeDraftFileContract = defineContract({ params: fileParams, querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: record } })
+// ---- end B-CP-072
 
 // ---- reorder -----------------------------------------------------------------------------------------------------------
 
@@ -385,6 +421,33 @@ const officeLine = output({
   problems: z.array(output({ code: z.enum(PROBLEM_CODES), size: z.string().nullable(), words })),
 })
 
+// ---- B-CP-071 (customer page plan D10, K9 reversed): a draft as the office reads it (read-only; null once it is sent) ----------
+const officeDraftFile = output({ id: id(), lineId: id().nullable(), originalName: z.string().nullable(), kind: z.string(), sizeBytes: z.number().int(), status: z.string(), locked: z.boolean() }) // B-CP-072
+const officeDraft = output({
+  startedBy: z.string().nullable(),
+  startedAt: at,
+  /** The customer's colleague who changed it last, and when. */
+  lastEditedBy: z.string().nullable(),
+  lastEditedAt: at,
+  /** The first line's style; null: "Untitled draft" (the page's words). */
+  title: z.string().nullable(),
+  /** The people of its roster (B-CP-075). */
+  people: z.number().int(),
+  /**
+   * The checklist (12 §2): each part's state, READY parts of the parts counted, the problems that hold the send. Part 6 "Your
+   * price" is counted only for a reader with the price grain (review B4): `of` is 7 for them, 6 for anyone else.
+   */
+  readiness: output({ parts: z.array(output({ part: z.enum(DRAFT_PARTS), state: z.enum(DRAFT_PART_STATES) })), done: z.number().int(), of: z.number().int(), problems: z.number().int() }),
+  /** The parts the customer marked "we send it later" (B-CP-075). */
+  later: z.array(z.enum(DRAFT_LATER_PARTS)),
+  /** Its conversation, for a reader of its thread (null: not one): messages, the newest, whether the factory designer was asked. */
+  thread: output({ messages: z.number().int(), lastAt: at.nullable(), designerAsked: z.boolean() }).nullable(),
+  problems: z.array(problem),
+  /** B-CP-072: its files by part; a measurement sheet without sales.measurements.view is `locked` and nameless. */
+  files: output({ logos: z.array(officeDraftFile), references: z.array(officeDraftFile), sheets: z.array(officeDraftFile) }),
+})
+// ---- end B-CP-071
+
 const officeRecord = output({
   request: output({
     id: id(),
@@ -410,12 +473,15 @@ const officeRecord = output({
     version,
     lines: z.array(officeLine),
     summary: output({ lines: z.number().int(), pieces: z.number().int(), netShown: money.price(z.string().nullable()) }),
+    /** B-CP-071: a draft's facts (accept and refuse are held while it is one: `may` all false). */
+    draft: officeDraft.nullable(),
   }),
   may: output({ order: z.boolean(), quote: z.boolean(), refuse: z.boolean() }),
 })
 
 export const officeListContract = defineContract({
-  querystring: input({ status: z.enum(['OPEN', 'SENT', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'ALL']).default('OPEN'), partyId: id().optional(), q: z.string().trim().max(80).optional() }),
+  // B-CP-071: DRAFT lists one customer's drafts (partyId required; never in OPEN or ALL).
+  querystring: input({ status: z.enum(['OPEN', 'SENT', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'ALL', 'DRAFT']).default('OPEN'), partyId: id().optional(), q: z.string().trim().max(80).optional() }),
   response: {
     200: output({
       requests: z.array(
@@ -437,6 +503,8 @@ export const officeListContract = defineContract({
           salesOrderId: id().nullable(),
           quoteId: id().nullable(),
           version,
+          /** B-CP-071: a draft's facts (null for a sent request). */
+          draft: officeDraft.nullable(),
         }),
       ),
     }),

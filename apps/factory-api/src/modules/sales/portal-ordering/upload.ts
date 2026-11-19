@@ -15,7 +15,7 @@ import { templateFile } from '../../../platform/imports/templates/template'
 import { appClock, commandOn } from '../../../platform/portal/tasks/clock'
 import { portalReader } from '../portal-orders/access'
 import { readCatalogue, uploadIndexOf } from './catalogue'
-import { addLinesInCommand, ownRequest, pricesFor, requestView } from './requests'
+import { addLinesInCommand, draftChanged, ownRequest, pricesFor, requestView } from './requests'
 import { readRequest } from './store'
 
 /**
@@ -118,6 +118,7 @@ export async function uploadSheet(app: FastifyInstance, request: FastifyRequest,
       companyId: row.companyId,
       after: { upload: { fileName: body.fileName, rows: verdicts.length, ready, refused: verdicts.length - ready }, added: outcome.added, merged: outcome.merged, kept: outcome.kept, lines: withNotes.map((line) => ({ styleId: line.styleId, colourwayId: line.colourwayId, sizes: line.sizes, unitPriceShown: markMoney('price', prices.get(`${line.styleId}|${line.colourwayId}`) ?? null) })) },
     })
+    draftChanged(tools, row) // B-CP-071
     return outcome
   })
   return { dryRun, applied: true as const, added: result.added.length, merged: [...result.merged], kept: [...result.kept], record: await requestView(app, request, reader, await ownRequest(request, reader, requestId)) }
