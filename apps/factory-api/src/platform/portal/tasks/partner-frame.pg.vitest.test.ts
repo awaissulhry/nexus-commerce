@@ -99,7 +99,8 @@ beforeAll(async () => {
   const seller = await addUser(h, tenant, { email: 'sam.sales@portal-frame-a.example', role: 'sales' })
   sales = new Browser(h.app)
   await sales.signIn(SLUG, seller.email, seller.password)
-  // Sales and read-only see margins or costs: their roles need two-factor proved on the session.
+  // B-CP-011: Sales sees no prices or margins any more, but its role still asks two-factor (requireMfa): both people here prove
+  // two-factor on the session.
   await enrolTotp(h, sales)
   const reader = await addUser(h, tenant, { email: 'rita.readonly@portal-frame-a.example' })
   await addRole(h, tenant, reader.id, 'read_only')

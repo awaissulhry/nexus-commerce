@@ -25,10 +25,11 @@ import { DATABASE_FUTURE_MS, oneClock } from '../testing/world'
  *
  *   S   the sales office makes P1 into Brand Alpha (customer A) and P3 into Brand Beta (customer B), each with its portal; customer
  *       B gets a small credit limit and the company's rule "Orders over the credit limit" is switched on.
- *   G3  customer A's portal request (text only) gets its lines from the office and a file shared with A; Make order makes ONE order
- *       of A — CONFIRMED, the file carried to it (Use on…); A's portal reads "Order confirmed" with its own order number and the
- *       copied file on the order. Customer B's request becomes an order WAITING for approval (over its limit): said so to the
- *       office and to B ("waiting for our approval"), never "confirmed".
+ *   G3  customer A's portal request (text only) gets its lines from the office and a file shared with A; Make order (by the Owner,
+ *       who types its price; B-CP-011: Sales may not, 403) makes ONE order of A — CONFIRMED, the file carried to it (Use on…);
+ *       A's portal reads "Order confirmed" with its own order number and the copied file on the order. Customer B's request
+ *       becomes an order WAITING for approval (over its limit): said so to the office and to B ("waiting for our approval"),
+ *       never "confirmed".
  *   L2-G18 the production manager makes a style draft from A's second request: a DRAFT style for A's own label, the request's
  *       file carried, the request still open and naming it.
  *   G10 unread per person: the office's counts of a page of records, the "New since your last visit" line, read marks; A's portal
@@ -151,7 +152,9 @@ describe('B-TH-037 golden flow TH-2: a request becomes an order, a style draft, 
     const jacket = await styleOf('SEED-JKT-02', 'BLK')
     const lined = await withLines(G.request.id, [{ styleId: jacket.style, colourwayId: jacket.colourway, sizes: { '50': 4, '52': 4, '54': 4 } }])
     expect(lined.actions.order).toEqual({ allowed: true, refusal: null })
-    const made = await ok(P.sales, 'POST', `/sales/inquiries/${G.request.id}/order`, { version: lined.version, lines: [{ seq: 10, unitPrice: '165' }] }, 201)
+    // B-CP-011 (the money wall): an order with a typed price is made by the Owner; Sales may not send a price (403).
+    await ok(P.sales, 'POST', `/sales/inquiries/${G.request.id}/order`, { version: lined.version, lines: [{ seq: 10, unitPrice: '165' }] }, 403)
+    const made = await ok(P.owner, 'POST', `/sales/inquiries/${G.request.id}/order`, { version: lined.version, lines: [{ seq: 10, unitPrice: '165' }] }, 201)
     expect(made.order).toMatchObject({ status: 'CONFIRMED', waitsFor: null })
     expect(made.said.en).toContain('is confirmed')
     expect(made.inquiry).toMatchObject({ status: 'ORDERED', order: { id: made.order.id, status: 'CONFIRMED' } })
@@ -178,7 +181,8 @@ describe('B-TH-037 golden flow TH-2: a request becomes an order, a style draft, 
     await settle()
     const liner = await styleOf('TH2-OWN-01', 'GRY')
     const lined = await withLines(G.betaRequest.id, [{ styleId: liner.style, colourwayId: liner.colourway, sizes: { '52': 3 } }])
-    const made = await ok(P.sales, 'POST', `/sales/inquiries/${G.betaRequest.id}/order`, { version: lined.version, lines: [{ seq: 10, unitPrice: '60' }] }, 201)
+    // B-CP-011: the typed price is the Owner's (see G3 above).
+    const made = await ok(P.owner, 'POST', `/sales/inquiries/${G.betaRequest.id}/order`, { version: lined.version, lines: [{ seq: 10, unitPrice: '60' }] }, 201)
     expect(made.order).toMatchObject({ status: 'PENDING_APPROVAL', waitsFor: 'CREDIT' })
     expect(made.said.en).toContain('waits for approval')
     G.betaOrder = made.order

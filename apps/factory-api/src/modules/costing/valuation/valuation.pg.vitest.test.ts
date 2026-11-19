@@ -60,6 +60,9 @@ const fromTemplate = (name: string): SessionContext => {
 const SESSIONS: Record<string, SessionContext> = {
   finance: fromTemplate('finance'),
   sales: fromTemplate('sales'),
+  // B-CP-011 (the money wall): Sales holds no grain now; a role the Owner names to see prices and margins (Sales' permissions
+  // with the price and margin grains, as the Sales template had them) reads the margin %, never a cost.
+  pricedSales: office([grain([...templateOf('sales')!.permissions, 'money.price', 'money.margin'])]),
   warehouse: fromTemplate('warehouse'),
   planner: fromTemplate('planner'),
   production: office([grain(['workorders.view', 'inventory.issue', 'inventory.stock.view', 'costing.view', 'costing.ledger.manage'])]),
@@ -261,16 +264,22 @@ describe('order margin from estimate to actual (FIN-047)', () => {
     await refused('warehouse', '/costing/margins', 403)
   })
 
-  it("shows sales the margin %, never a cost or a margin amount (Owner answer S2)", async () => {
-    const answer = await ok('sales', 'GET', '/costing/margins')
+  it("shows a role named to see margins the margin %, never a cost or a margin amount (Owner answer S2); sales (B-CP-011) neither the value nor the margin %", async () => {
+    const answer = await ok('pricedSales', 'GET', '/costing/margins')
     const so1 = answer.rows.find((row: Json) => row.order.number === 'SEED-SO-0001')
     expect(so1).toMatchObject({ quotedValue: 504_000, quotedMarginPct: '28.4524', estimateMarginPct: '28.4524' })
     expect(keysOf(answer).filter((name) => COST.test(name) || AMOUNT.test(name))).toEqual([])
     expect(answer.tiles.averageMarginPct).toBe('28.013')
-    const detail = await ok('sales', 'GET', `/costing/margins/orders/${await orderOf('SEED-SO-0002')}`)
+    const detail = await ok('pricedSales', 'GET', `/costing/margins/orders/${await orderOf('SEED-SO-0002')}`)
     expect(detail.waterfall).toBeNull()
     expect(keysOf(detail).filter((name) => COST.test(name) || AMOUNT.test(name))).toEqual([])
     expect(detail.estimate.marginPct).toBe('27.2221')
+    // B-CP-011 (the money wall): Sales holds no grain: the same rows without the value, the margin % or a cost.
+    const blind = await ok('sales', 'GET', '/costing/margins')
+    const blindSo1 = (blind.rows as Json[]).find((row) => row.order.number === 'SEED-SO-0001')!
+    expect(blindSo1).toBeDefined()
+    for (const name of ['quotedValue', 'quotedMarginPct', 'estimateMarginPct']) expect(blindSo1).not.toHaveProperty(name)
+    expect(keysOf(blind).filter((name) => COST.test(name) || AMOUNT.test(name) || /MarginPct$/.test(name))).toEqual([])
   })
 
   it('explains one order: the parts at each stage, its lines and the work orders behind them', async () => {

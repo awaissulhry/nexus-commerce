@@ -257,7 +257,9 @@ let promised = ''
 describe('the fitting result and the alteration loop (SAL-297)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('makes the unit’s order (B-W2b-358) and its promise', async () => {
     const quote = (await ok('sales', 'POST', '/sales/quotes', { companyId: companyA, partyId: S.r1 }, 201)).quote
-    await ok('sales', 'POST', `/sales/quotes/${quote.id}/lines/made-to-measure`, { version: quote.version, styleId: S.jkt01, colourwayId: S.blk, measurementProfileId: rev1, unitPrice: '610' }, 201)
+    // B-CP-011 (the money wall): the sales role may not send a typed price (refused, nothing written); the owner types it.
+    await no('sales', 'POST', `/sales/quotes/${quote.id}/lines/made-to-measure`, { version: quote.version, styleId: S.jkt01, colourwayId: S.blk, measurementProfileId: rev1, unitPrice: '610' }, 403)
+    await ok('owner', 'POST', `/sales/quotes/${quote.id}/lines/made-to-measure`, { version: quote.version, styleId: S.jkt01, colourwayId: S.blk, measurementProfileId: rev1, unitPrice: '610' }, 201)
     const version = await one<{ id: string }>(`SELECT id FROM "QuoteVersion" WHERE "quoteId" = $1 ORDER BY revision DESC LIMIT 1`, [quote.id])
     const accepted = await one<{ billTo: Json; shipTo: Json }>(`SELECT v."billTo", v."shipTo" FROM "QuoteVersion" v JOIN "Quote" q ON q.id = v."quoteId" WHERE q."tenantId" = $1 AND q.number = 'SEED-Q-0001'`, [T])
     // Test data past its guards: the version accepted (the customer's yes is B-W1-24's link).

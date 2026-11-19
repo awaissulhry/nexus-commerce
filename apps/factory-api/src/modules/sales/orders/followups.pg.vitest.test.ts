@@ -28,7 +28,8 @@ import { addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type T
  * page goes to the customer's invoices contact on the order's thread; the owner waives a step before shipping (its request
  * too) with a reason and a fresh step-up; a closed-short line keeps its CANCEL reason code and the reopen clears it (also a
  * code planted before: B-W2b-03's note — a DB 500 before this step); raising a quote approval limit asks for step-up. Every
- * name, price and number is made up. Run with `node scripts/factory/run-pg-tests.mjs sales/orders/followups`.
+ * name, price and number is made up. B-CP-011 (the money wall): the sales session holds no money grain, so the order typed with a
+ * price and the margin floor are the signed-in owner's. Run with `node scripts/factory/run-pg-tests.mjs sales/orders/followups`.
  */
 
 let h: Harness
@@ -54,7 +55,8 @@ const key = (label = 'k'): string => `followups-${label}-${++counter}-${newId()}
 
 const grant = (permissions: Permission[]): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all' })
 const office = (permissions: Permission[], actorId = newId()): (() => SessionContext) => () => ({ audience: 'office', tenantId: T, actorId, grants: [grant(permissions)] })
-const SALES: Permission[] = ['orders.view', 'orders.manage', 'quotes.view', 'quotes.manage', 'paymentterms.view', 'money.price', 'money.cost', 'money.margin', 'sales.settings.manage']
+// B-CP-011 (the money wall): Sales holds no money grain (no money.price, money.cost or money.margin any more).
+const SALES: Permission[] = ['orders.view', 'orders.manage', 'quotes.view', 'quotes.manage', 'paymentterms.view', 'sales.settings.manage']
 const SESSIONS: Record<string, () => SessionContext> = {
   sales: office(SALES),
   // Holds the waive right (a test session has no office sign-in: refusals before the step-up only).
@@ -136,7 +138,8 @@ let typed: Json
 
 describe("a typed order's deposit: its event and its page (Z4:06)", () => {
   it('each deposit request made on the order has deposit_request.created_for_order (the deposit, the balance before shipping)', async () => {
-    typed = (await ok('sales', 'POST', '/sales/orders/manual', MANUAL, 201)).order
+    // B-CP-011: the line typed with a price is the owner's.
+    typed = (await as(owner.browser, 'POST', '/sales/orders/manual', MANUAL, 201)).order
     const [deposit, balance] = typed.chain.depositRequests as [Json, Json]
     expect([deposit.stepKind, balance.stepKind]).toEqual(['DEPOSIT', 'BEFORE_SHIPPING'])
     expect(await events('deposit_request.created_for_order', deposit.id)).toEqual([{ depositRequestId: deposit.id, orderId: typed.id, number: typed.number, partyId: P1, stepKind: 'DEPOSIT', fiscalDocument: 'TD02', dueDate: deposit.dueDate }])
@@ -240,7 +243,8 @@ describe('closed-short reason codes (Z4:09)', () => {
 
 describe('raising a quote approval limit asks for step-up (Z4:08)', () => {
   it('a lower discount limit or a higher margin floor saves at once; a raised limit needs a fresh step-up', async () => {
-    const first = (await ok('sales', 'PUT', '/sales/settings', { companyId: companyA, marginFloorPct: '25', discountLimitPct: '10', defaultValidityDays: 30, defaultDepositPct: '30' })).settings
+    // B-CP-011: the margin floor is a margin figure: the owner's to send (the sales session holds no margin grain).
+    const first = (await as(owner.browser, 'PUT', '/sales/settings', { companyId: companyA, marginFloorPct: '25', discountLimitPct: '10', defaultValidityDays: 30, defaultDepositPct: '30' })).settings
     expect(first).toMatchObject({ marginFloorPct: '25', discountLimitPct: '10' })
     // Raising the discount limit, or lowering the margin floor, lets more quotes through without an approver: the owner's
     // last step-up is more than five minutes old.
@@ -248,7 +252,7 @@ describe('raising a quote approval limit asks for step-up (Z4:08)', () => {
     expect((await as(owner.browser, 'PUT', '/sales/settings', { companyId: companyA, version: first.version, marginFloorPct: '25', discountLimitPct: '18', defaultValidityDays: 30, defaultDepositPct: '30' }, 403)).error.issues).toEqual([{ path: 'stepUp', message: 'Required.' }])
     expect((await as(owner.browser, 'PUT', '/sales/settings', { companyId: companyA, version: first.version, marginFloorPct: '20', discountLimitPct: '10', defaultValidityDays: 30, defaultDepositPct: '30' }, 403)).error.issues).toEqual([{ path: 'stepUp', message: 'Required.' }])
     // Other fields, and tightening, need none.
-    const tighter = (await ok('sales', 'PUT', '/sales/settings', { companyId: companyA, version: first.version, marginFloorPct: '26', discountLimitPct: '9', defaultValidityDays: 45, defaultDepositPct: '30' })).settings
+    const tighter = (await as(owner.browser, 'PUT', '/sales/settings', { companyId: companyA, version: first.version, marginFloorPct: '26', discountLimitPct: '9', defaultValidityDays: 45, defaultDepositPct: '30' })).settings
     expect(tighter).toMatchObject({ marginFloorPct: '26', discountLimitPct: '9', defaultValidityDays: 45 })
     await stepUp(h, owner.browser, owner.secret)
     const raised = (await as(owner.browser, 'PUT', '/sales/settings', { companyId: companyA, version: tighter.version, marginFloorPct: '20', discountLimitPct: '18', defaultValidityDays: 45, defaultDepositPct: '30' })).settings

@@ -72,14 +72,18 @@ const fromTemplate = (key: string): Person => {
 const withoutGrain = (person: Person, grain: string): Person => ({ ...person, permissions: person.permissions.filter((name) => name !== `money.${grain}`) })
 const QUOTES: Permission[] = ['quotes.view', 'quotes.manage']
 const PEOPLE: Record<string, Person> = {
-  // The templates as they are: sales sees prices and the margin % against the floor, never a cost (the Owner's answer a
-  // to design question S2); finance everything, and approves.
+  // The templates as they are: finance everything, and approves. B-CP-011 (the money wall; Owner O1 of 2026-11-19, reversing
+  // the Owner's answer a to design question S2): sales sees no money at all (was: prices and the margin % against the floor).
   sales: fromTemplate('sales'),
   finance: fromTemplate('finance'),
   // Finance over company A only: it keeps company A's sales settings, never the tenant-wide ones.
   financeA: { ...fromTemplate('finance'), companies: [companyA] },
   // A copy of the sales role without the margin grain (S2's answer b, as a custom role may be): prices only.
-  salesPriceOnly: withoutGrain(fromTemplate('sales'), 'margin'),
+  // B-CP-011: the Sales template holds no grain now, so this custom role is the sales role WITH the price grain alone.
+  salesPriceOnly: withoutGrain({ ...fromTemplate('sales'), permissions: [...fromTemplate('sales').permissions, ...grainsOf(['price', 'margin'])] }, 'margin'),
+  // B-CP-011: S2's answer a, now a custom role's (the Owner gives it): the sales role with the price and margin grains and no
+  // cost grain: the margin % against the floor, never a cost or the margin amount.
+  salesMargin: { ...fromTemplate('sales'), permissions: [...fromTemplate('sales').permissions, ...grainsOf(['price', 'margin'])] },
   // A manager who may edit and approve, with every grain: asks, then may not approve their own request.
   // B-W2b-358: a made-to-measure line names a rider's profile, read with sales.measurements.view.
   boss: { tenantId: tenant, actorId: newId(), permissions: [...QUOTES, 'quotes.approve', 'sales.measurements.view', ...grainsOf(['price', 'cost', 'margin'])], companies: 'all' },
@@ -211,11 +215,12 @@ describe('a quote for the brand customer: 2 colours × 3 sizes (SAL-143, SAL-203
       validUntil: addDays(TODAY, 30),
       depositPct: '30',
       depositKind: 'ACCONTO',
-      netAmount: 0,
-      grossAmount: 0,
     })
-    // The floor the version is checked against: margin grain (sales sees it; the price-only copy does not).
-    expect(quote.current.marginFloorPct).toBe('20')
+    // B-CP-011: Sales' answer holds no money (no totals, no floor); a price role (Finance) reads them.
+    for (const field of ['netAmount', 'grossAmount', 'marginFloorPct']) expect(quote.current, field).not.toHaveProperty(field)
+    expect((await get('finance', quote.id)).current).toMatchObject({ netAmount: 0, grossAmount: 0 })
+    // The floor the version is checked against: margin grain (the margin role sees it; the price-only copy and Sales do not).
+    expect((await get('salesMargin', quote.id)).current.marginFloorPct).toBe('20')
     expect((await get('salesPriceOnly', quote.id)).current.marginFloorPct).toBeUndefined()
     expect((await get('finance', quote.id)).current.marginFloorPct).toBe('20')
     expect(quote.issues.map((issue: Json) => [issue.code, issue.severity])).toEqual([['NO_LINES', 'BLOCKS']])
@@ -260,10 +265,16 @@ describe('a quote for the brand customer: 2 colours × 3 sizes (SAL-143, SAL-203
     expect(row).toEqual({ netAmount: 624000, costAmount: 408497, marginFloorBreached: false, floor: '20.0000' })
   })
 
-  it('sales sees prices and the margin % against the floor, never a cost or the margin amount; without the margin grain no margin (S2)', async () => {
-    // Answer a (the sales template: the margin grain without the cost grain): percentages against the floor, never an
-    // amount that gives the cost away (net − margin).
-    const seen = await get('sales', quote.id)
+  it('sales sees no money; the margin grain without the cost grain sees the margin % against the floor, never a cost or the margin amount; without the margin grain no margin (S2)', async () => {
+    // B-CP-011 (Owner O1): the sales template holds no grain: no price, no margin, no cost; what blocks still reads in words.
+    const bySales = await get('sales', quote.id)
+    const salesKeys = new Set(keysOf(bySales))
+    for (const key of ['unitCost', 'costAmount', 'costSnapshot', 'marginAmount', 'knownTotal', 'unitPrice', 'netAmount', 'grossAmount', 'vatAmount', 'depositAmount', 'marginPct', 'marginFloorPct', 'marginFloorBreached', 'belowFloor', 'details']) expect(salesKeys.has(key), key).toBe(false)
+    expect(bySales.current).toMatchObject({ costComplete: true })
+    expect(bySales.lines.map((line: Json) => [line.seq, line.quantity])).toEqual([[10, 8], [20, 6]])
+    // Answer a (B-CP-011: a custom role now, was the sales template: the margin grain without the cost grain): percentages
+    // against the floor, never an amount that gives the cost away (net − margin).
+    const seen = await get('salesMargin', quote.id)
     const keys = new Set(keysOf(seen))
     for (const key of ['unitCost', 'costAmount', 'costSnapshot', 'marginAmount', 'knownTotal']) expect(keys.has(key), key).toBe(false)
     expect(seen.current).toMatchObject({ netAmount: 624000, grossAmount: 761280, costComplete: true, marginPct: '34.5357', marginFloorPct: '20', marginFloorBreached: false })
@@ -281,9 +292,13 @@ describe('a quote for the brand customer: 2 colours × 3 sizes (SAL-143, SAL-203
     const listed = (await ok('salesPriceOnly', 'GET', '/sales/quotes')).quotes
     expect(listed).toEqual([expect.objectContaining({ id: quote.id, number: quote.number, partyName: 'Seed Customer One S.r.l.', lineCount: 2, units: 14, netAmount: 624000, approval: null })])
     expect(Object.keys(listed[0])).not.toContain('marginPct')
-    const [row] = (await ok('sales', 'GET', '/sales/quotes')).quotes
+    const [row] = (await ok('salesMargin', 'GET', '/sales/quotes')).quotes
     expect(row).toMatchObject({ marginPct: '34.5357', marginFloorBreached: false })
     for (const key of ['costAmount', 'marginAmount']) expect(Object.keys(row), key).not.toContain(key)
+    // B-CP-011: Sales' row of the list holds no money.
+    const [salesRow] = (await ok('sales', 'GET', '/sales/quotes')).quotes
+    expect(salesRow).toMatchObject({ id: quote.id, number: quote.number, lineCount: 2, units: 14 })
+    for (const key of ['netAmount', 'marginPct', 'marginFloorBreached', 'costAmount', 'marginAmount']) expect(Object.keys(salesRow), key).not.toContain(key)
   })
 
   it('asking for an approval when no rule breaks is refused: the quote can be sent as it is', async () => {
@@ -558,8 +573,9 @@ describe('the sales settings: the quote rules of the tenant and of a company (SA
       // B-W2b-F38: both reminders off without a row (the Owner's default); finance may change them.
       reminders: { quoteRemindersEnabled: false, fittingRemindersEnabled: false, source: 'DEFAULT', canManage: true },
     })
-    expect((await ok('sales', 'GET', settingsUrl)).settings.inForce).toEqual({ marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' })
-    expect((await ok('salesPriceOnly', 'GET', settingsUrl)).settings.inForce).toEqual({ discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' })
+    // B-CP-011: the floor is the margin grain: the margin role reads it; Sales (no grain) and the price-only copy do not.
+    expect((await ok('salesMargin', 'GET', settingsUrl)).settings.inForce).toEqual({ marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' })
+    for (const who of ['sales', 'salesPriceOnly']) expect((await ok(who, 'GET', settingsUrl)).settings.inForce, who).toEqual({ discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' })
   })
 
   it('finance sets the tenant-wide rules; a new quote takes them (validity, deposit, the floor it is checked against)', async () => {
