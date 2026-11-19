@@ -113,6 +113,9 @@ async function officeFiles(flow: Flow, office: Desk, inquiryId: string): Promise
 async function sendRequest(desk: PortalDesk, input: { subject: string; message: string; customerRef: string; files: readonly Upload[]; sheets?: readonly string[] }): Promise<{ seq: number; id: string }> {
   const { page } = desk
   await desk.go('/orders/new')
+  // F-CP-152 (customer page PW1, #1728): New order opens on the draft order's start; the request like an e-mail is behind
+  // "Just write it in words".
+  await page.getByRole('link', { name: ORDERING('draftPage.start.words'), exact: true }).click()
   await page.getByLabel(COMPOSE('subject.label'), { exact: true }).fill(input.subject)
   await page.getByRole('textbox', { name: COMPOSE('message.label'), exact: true }).fill(input.message)
   // The drop area once the portal said files go (GET /portal/inquiries/open: open on the local stack); the input behind "browse".
