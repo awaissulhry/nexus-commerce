@@ -9,7 +9,10 @@ import { DOCK_DEFAULTS, RECORD_TABS } from '../model' // F-SA-263
 import { defaultWidthAt } from '../../../_shared/record-frame/model' // F-SA-263
 import { designScreen } from './fixtures'
 // F-SA-262: the order dock's scope (the pick of ONE conversation)
-import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeAddress, scopeOfChoice, scopeOfParam, scopeParamOf, scopeShown, workOrderGroups } from './dock/model'
+import { choiceOfScope, choicesOffered, ORDER_SCOPE, SCOPE_PARAM, scopeOfChoice, scopeOfParam, scopeParamOf, scopeShown, workOrderGroups } from './dock/model'
+import { scopeValueOf } from './dock/model' // F-OP-209
+import { withThread } from '../../../_shared/record-frame/address' // F-OP-209
+import { tabAddress, tabHref } from '../../../_shared/record-frame/address' // F-OP-210
 import { viewOpenOf } from '../../../_shared/record-frame/model'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
@@ -139,8 +142,11 @@ describe('the order on RecordFrame', () => {
     for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'nope', '']) expect(landingOf(name), name).toEqual({ tab: 'overview', anchor: null, moved: false })
     expect(tabOf(null)).toBe('overview')
     // The page writes the new address (Back keeps it): OrderRecord replaces an old id with its tab and #section.
+    // F-OP-210: through tabAddress (the dock's scope kept).
     const container = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
-    expect(container).toContain("router.replace(`${pathname}?${next.toString()}${landing.anchor ? `#${landing.anchor}` : ''}`, { scroll: false })")
+    expect(container).toContain('router.replace(tabAddress(pathname, window.location.search, landing.tab, { anchor: landing.anchor, arrival: true }), { scroll: false })')
+    // An arrival keeps every term as it came: the frame and the thread read `new`, `open` and the message after it.
+    expect(tabAddress('/w/DEMO/sales/orders/o1', '?tab=dates&thread=new&message=m1', 'production', { anchor: 'dates', arrival: true })).toBe('/w/DEMO/sales/orders/o1?tab=production&thread=new&message=m1#dates')
   })
 
   it('the page mounts the office thread docked; the files leave the tabs (the thread’s Files view)', () => {
@@ -359,13 +365,15 @@ describe('F-SA-262 — the order dock picks ONE conversation, the scope in the a
     expect(scopeParamOf({ kind: 'wo', id: W })).toBe(`wo:${W}`)
     expect(scopeParamOf({ kind: 'project', id: P })).toBe(`project:${P}`)
   })
+  // F-OP-209: the address is the frame's ONE writer's (rf/address.ts withThread); the dock gives it the scope's value.
   it('a replace keeps every other term; the narrow view stays open (`open` for this order); a line of All of opens at its message', () => {
     const base = '/w/DEMO/sales/orders/o1'
-    expect(scopeAddress(base, '?tab=lines', { kind: 'general' }, false)).toBe(`${base}?tab=lines&thread=general`)
-    expect(scopeAddress(base, '?tab=lines&thread=general', ORDER_SCOPE, false)).toBe(`${base}?tab=lines`)
-    expect(scopeAddress(base, '?tab=lines&thread=general', ORDER_SCOPE, true)).toBe(`${base}?tab=lines&thread=open`)
-    expect(scopeAddress(base, '?tab=lines&thread=all&message=m1', { kind: 'wo', id: W }, false)).toBe(`${base}?tab=lines&thread=wo%3A${W}`)
-    expect(scopeAddress(base, '?thread=all', ORDER_SCOPE, false, 'm7')).toBe(`${base}?message=m7`)
+    const at = (search: string, scope: Parameters<typeof scopeValueOf>[0], narrow: boolean, message: string | null = null) => withThread(`${base}${search}`, scopeValueOf(scope, narrow), { message })
+    expect(at('?tab=lines', { kind: 'general' }, false)).toBe(`${base}?tab=lines&thread=general`)
+    expect(at('?tab=lines&thread=general', ORDER_SCOPE, false)).toBe(`${base}?tab=lines`)
+    expect(at('?tab=lines&thread=general', ORDER_SCOPE, true)).toBe(`${base}?tab=lines&thread=open`)
+    expect(at('?tab=lines&thread=all&message=m1', { kind: 'wo', id: W }, false)).toBe(`${base}?tab=lines&thread=wo%3A${W}`)
+    expect(at('?thread=all', ORDER_SCOPE, false, 'm7')).toBe(`${base}?message=m7`)
   })
   it('the frame keeps the narrow view open while a scope is in the address (Back keeps the scope)', () => {
     expect(viewOpenOf('open')).toBe(true)
@@ -431,8 +439,9 @@ describe('F-SA-262 — the order dock picks ONE conversation, the scope in the a
     // All of <customer>: read only, "Write in: This order · General".
     expect(dock).toContain('<AllOfCustomerFeed model={feed.model} actions={{ ...feed.actions, onAnswer }} />')
     expect(dock).toContain("t('record.dock.writeIn')")
-    // The scope is written by a replace (Back keeps it).
-    expect(dock).toContain('router.replace(address, { scroll: false })')
+    // F-OP-209: the scope is written by the frame's ONE writer (a history replace: Back keeps it; no router.replace).
+    expect(dock).toContain('frame?.setThread?.(scopeValueOf(next, narrow), { message: messageId })')
+    expect(dock).not.toContain('router.replace')
     const page = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
     expect(page).toContain('<OrderDock')
   })
@@ -514,3 +523,40 @@ describe('F-OP-134 — one acts hook per tab, mounted by the container, never by
   })
 })
 // ---- end F-OP-134
+
+// ---- F-OP-210 (order page plan N4; 11-dock §4; review R-19, RC4): the tabs and the page's in-page moves keep the dock's scope -------
+describe('F-OP-210 — the tabs and the in-page moves keep `thread=`', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const BASE = '/w/DEMO/sales/orders/o1'
+  it('the tabs: tabHref and the factory TabLink (no prefetch: a pick re-writes every tab\'s href); the band\'s Money and Changes links too', () => {
+    const view = source('./view/OrderRecordView.tsx')
+    expect(view).toContain('href: tabHref(recordHref, tab, search), // F-OP-210')
+    expect(view).toContain('linkAs={TabLink}')
+    expect(view).toContain("<TabLink href={tabHref(recordHref, 'money', search) /* F-OP-210 */}>")
+    expect(view).toContain("<TabLink href={tabHref(recordHref, 'changes', search) /* F-OP-210 */}>")
+    expect(view).not.toMatch(/\$\{recordHref\}\?tab=/)
+    const link = readFileSync(new URL('../../../../lib/tab-link/TabLink.tsx', import.meta.url), 'utf8')
+    expect(link).toContain('<NextLink href={href} prefetch={false} {...rest}>')
+    // A pick in the dock is in every tab's link.
+    expect(tabHref(BASE, 'production', '?tab=lines&thread=all')).toBe(`${BASE}?tab=production&thread=all`)
+  })
+  it('the drawn tab bar: real links, the same addresses as before while no scope is picked', () => {
+    const html = draw('thread-docked')
+    for (const tab of ['overview', 'lines', 'production', 'changes', 'money', 'shipments', 'files']) expect(html, tab).toMatch(new RegExp(`href="[^"]*/sales/orders/[^"?]+\\?tab=${tab}"`))
+  })
+  it('Amend keeps the scope and every other term (no more `?tab=lines` alone); below 1280 px the full-width thread gives way', () => {
+    const container = source('./OrderRecord.tsx')
+    expect(container).toContain("router.replace(tabAddress(pathname, window.location.search, 'lines', { narrow: narrowNow() }))")
+    expect(container).not.toContain('router.replace(`${pathname}?tab=lines`)')
+    expect(tabAddress(BASE, '?tab=overview&thread=all&open=r1', 'lines')).toBe(`${BASE}?tab=lines&thread=all&open=r1`)
+    expect(tabAddress(BASE, '?tab=overview&thread=all', 'lines', { narrow: true })).toBe(`${BASE}?tab=lines`)
+  })
+  it('Show on the page, Still to do and an old tab\'s landing through tabAddress; no move of the page writes `thread=` by hand', () => {
+    const container = source('./OrderRecord.tsx')
+    expect(container).toContain('router.replace(tabAddress(pathname, window.location.search, place.tab, { narrow: narrowNow(), anchor: place.anchor }), { scroll: false })')
+    expect(container).toContain("router.replace(tabAddress(pathname, window.location.search, 'changes', { narrow: narrowNow(), anchor: 'still-to-do' }), { scroll: false })")
+    expect(container).not.toMatch(/\.(set|delete)\('thread'/)
+    expect(tabAddress(BASE, '?tab=overview&thread=general&message=m1', 'changes', { anchor: 'still-to-do' })).toBe(`${BASE}?tab=changes&thread=general#still-to-do`)
+  })
+})
+// ---- end F-OP-210

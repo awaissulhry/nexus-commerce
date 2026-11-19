@@ -60,6 +60,8 @@ import { useRecordFrame } from '../record-frame/RecordFrame'
 import { askedFiles } from '../record-frame/model' // B-TH-264 follow-up
 import { stepNearest } from '../record-frame/model' // F-SA-265: Show in thread
 import { withAbout } from '../../../lib/record-thread/composer/model' // F-SA-265: Discuss
+import { switchMode } from '../../../lib/record-thread/composer/model' // F-OP-212: Answer as an office note
+import { takesAsk } from '../record-frame/model' // F-OP-212: an ask is taken only by its record's thread
 // F-SA-244: the conversation side of a change (the customer's ask, a change's line) and the door to a conversation held elsewhere.
 import { withChangeSide, type CardAsk, type CardChange } from '../../../lib/record-thread/card/model'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
@@ -297,7 +299,10 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const approvals = useApprovals({ api, record: key, title: host.title, can: { view: held.has('partners.approvals.view'), ask: held.has('partners.approvals.ask') }, files: base.files, party: party ? { name: party.name, emails: [] } : null, reloadThread: () => void base.loadThread() })
   const shares = useShares({ api, record: key, can: { view: held.has('partners.shares.view'), manage: held.has('partners.shares.manage') }, reloadThread: () => void base.loadThread() })
   // R-8: `panel=approvals` (an old address) opens Ask once the frame says so.
-  const askOnArrival = frame?.door === 'approve'
+  // F-OP-212 (11-dock §5, D5): a door is taken only by the thread it is for (a page that names no record: its one thread, as before);
+  // the page's dock moves its pick to that thread first.
+  const doorAsked = frame?.door && takesAsk(frame.door.record, key) ? frame.door.door : null
+  const askOnArrival = doorAsked === 'approve'
   useEffect(() => {
     if (!askOnArrival || !approvals.model) return
     approvals.actions.onAsk?.(true)
@@ -352,7 +357,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const filesAsk = frame?.filesAsk ?? null
   const clearFilesAsk = frame?.clearFiles
   useEffect(() => {
-    if (!filesAsk) return
+    if (!filesAsk || !takesAsk(filesAsk.record, key)) return // F-OP-212: only the thread of the ask's record opens its viewer
     const { files, index } = askedFiles(filesAsk, threadFiles, key)
     clearFilesAsk?.()
     if (files.length === 0) return
@@ -679,7 +684,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       target?.focus({ preventScroll: true })
     })
   }, [showAsk, clearShow, key, notify])
-  const followersAsked = frame?.door === 'followers'
+  const followersAsked = doorAsked === 'followers' // F-OP-212: this thread's own door only
   const clearDoor = frame?.clearDoor
   useEffect(() => {
     if (!followersAsked) return
@@ -687,6 +692,42 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     clearDoor?.()
   }, [followersAsked, clearDoor])
   // ---- end F-SA-265
+  // ---- F-OP-212 (review N-1): the door to choose who answers the customer — the owner dialog of THIS thread (the order's Overview
+  // "Answers the customer · Change…", F-OP-104), once the thread's head is read (who answers is the API's); held words when the
+  // person may not write here (offline, no threads.post), never a dialog that cannot save.
+  const ownerAsked = doorAsked === 'owner'
+  const headRead = !!base.server.head
+  useEffect(() => {
+    if (!ownerAsked || !headRead) return
+    clearDoor?.()
+    if (offline) return notify({ ns: HEAD_NS, key: 'held.offline', tone: 'warning' })
+    if (!can.post) return notify({ ns: HEAD_NS, key: 'held.noRight', params: { right: rightRef('threads.post') }, tone: 'warning' })
+    setOwning({ busy: false, problem: null })
+  }, [ownerAsked, headRead, clearDoor, offline, can.post, notify])
+  // Answer / Reply in the thread: this thread's own ask, once its feed is read — it opens at the message (`jumpTo`), the box on Reply
+  // (the card's own Reply: the customer reads it) or on Office note, and takes the focus. A lost ask is no focus, never a wrong thread.
+  const composeAsk = frame?.composeAsk ?? null
+  const clearCompose = frame?.clearCompose
+  const feedReady = model.feed.state === 'ready'
+  const latestCompose = useRef({ onReply: actions.onReply, jumpTo: base.jumpTo })
+  latestCompose.current = { onReply: actions.onReply, jumpTo: base.jumpTo }
+  useEffect(() => {
+    if (!composeAsk || !feedReady || !takesAsk(composeAsk.record, key)) return
+    clearCompose?.()
+    const { composer, onDraft: setDraft } = latestBox.current
+    const { onReply, jumpTo } = latestCompose.current
+    if (composeAsk.mode === 'reply' && composeAsk.messageId && onReply) onReply(composeAsk.messageId)
+    else {
+      const switched = switchMode(composer.draft, 'note', composer.context.people)
+      setDraft?.(switched.draft, switched.notes)
+    }
+    if (composeAsk.messageId) {
+      setView('all')
+      void jumpTo(composeAsk.messageId)
+    }
+    requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('.fw-rcf-dock .fw-rt-composer textarea')?.focus())
+  }, [composeAsk, clearCompose, feedReady, key])
+  // ---- end F-OP-212
   // ---- F-SA-279: whether the box holds a draft, told to a host that keeps it in words when its dock moves on.
   const draftKept = model.composer.draft.body.trim() !== '' || model.composer.files.length > 0
   const onDraft = host.onDraft

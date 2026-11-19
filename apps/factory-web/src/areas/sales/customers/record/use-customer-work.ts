@@ -16,10 +16,11 @@ import { useCoalesced } from '../../orders/hooks'
 import type { WaitingMarks } from '../../orders/list/sheet/model'
 import { MERGED_TERMS } from '../../../parties/_shared/model'
 // ---- F-SA-279: the dock follows the row (the address term `dock=`, the summary read that checks a docked record) ----
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { CUSTOMER_FEED_TYPES } from '@nexus/factory-domain/sales/customer-feed/kinds'
 import { readRecordSummary } from '../../../_shared/record-summary/api'
 // ---- end F-SA-279
+import { writeSearch } from '../../../_shared/record-frame/address' // F-OP-211: the record pages' ONE history writer
 
 /**
  * F-SA-276 (sales page plan N5, picks R5, R9, P10, P17; 11-customer-page §3.2, §3.4, §3.10, §3.11): the customer's Work tab beside
@@ -447,21 +448,19 @@ export function draftKeptOf(drafts: ReadonlyMap<string, string>, shown: string |
  */
 export function useCustomerDock(partyId: string, tab: string) {
   const api = useOfficeApi()
-  const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
   const term = dockOnTab(tab, dockTermOf(params?.get(DOCK_PARAM)))
   const [pick, setPick] = useState<DockPick | null>(null)
   const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(new Map())
   const known = useRef(new Map<string, DockPick>())
-  // A replace, never a push: Back leaves the page.
+  // A replace, never a push: Back leaves the page. F-OP-211 (11-dock §4): through the record pages' ONE history writer, the order
+  // page's (writeSearch: only a different address — fx-12's rule — and no server round trip per row; Next 16 syncs the terms).
   const write = useCallback(
     (next: DockTerm, messageId: string | null = null) => {
-      const search = window.location.search
-      const address = dockAddress(pathname, search, next, messageId)
-      if (address !== `${pathname}${search}`) router.replace(address, { scroll: false })
+      writeSearch(dockAddress(pathname, window.location.search, next, messageId))
     },
-    [router, pathname],
+    [pathname],
   )
   // A record picked: its conversation docks; anything the page may not dock (a work order, a change request) docks nothing.
   const apply = useCallback(
