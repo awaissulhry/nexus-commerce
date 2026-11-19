@@ -619,14 +619,14 @@ describe('B-OP-041: a shared shipment shows on both orders in the shipping core'
       [step, orders().so3],
     )
     const system = callerFor(database, systemContext(A.tenant, `b-op-041-${run}`))
-    await syncSystemHolds(system, [shared.id])
+    await syncSystemHolds(system, [shared.id!]) // op-fx1: set by the first case of this describe
     const held = await admin<{ reason: string; words: string; releasedAt: Date | null }>(`SELECT reason::text AS reason, words, "releasedAt" FROM "ShipmentHold" WHERE "shipmentId" = $1 AND reason = 'BALANCE_UNPAID'`, [shared.id])
     expect(held).toEqual([expect.objectContaining({ releasedAt: null })])
     expect(held[0]!.words).toContain(await number(orders().so3))
     expect(held[0]!.words).not.toContain(await number(orders().so2))
     // Paid: the hold lifts itself.
     await forced(`UPDATE "SalesOrderMilestone" SET status = 'PAID', "paidAt" = now() WHERE id = $1`, [step])
-    await syncSystemHolds(system, [shared.id])
+    await syncSystemHolds(system, [shared.id!]) // op-fx1: set by the first case of this describe
     expect((await admin<{ releasedAt: Date | null }>(`SELECT "releasedAt" FROM "ShipmentHold" WHERE "shipmentId" = $1 AND reason = 'BALANCE_UNPAID'`, [shared.id]))[0]!.releasedAt).not.toBeNull()
   })
 

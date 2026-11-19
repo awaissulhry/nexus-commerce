@@ -13,6 +13,7 @@ import { REQUEST_CASES, REQUEST_FIXTURES } from './fixtures'
 // F-SA-240: the window from four doors — its own props, the door's list, the door's parts.
 import { answerProblem, doorAddress, doorListOf, doorTargetOf, KNOWN_REQUEST_REFUSALS } from './model'
 import { RequestDoorNoticeBanner, RequestDoorWindow, RequestReview, type RequestDoorParts, type RequestReviewProps } from './view/RequestReview'
+import type { ExtraPiecesProps } from './view/ExtraPieces' // op-fx1
 
 // The DS windows open only in a browser (after hydration, in a portal): here they draw in place — the window's title, subtitle,
 // meta, its error, its content and its footer's buttons; a review's title, rows, lead and Save; a dialog's title, body and footer.
@@ -366,9 +367,10 @@ describe('F-SA-240: the review window opens from any door with its own props (on
 // ---- F-OP-107 (order page B2): the extra-pieces part on plain props — the review window draws what it drew before ----------------
 describe('F-OP-107: ExtraPieces takes {pieces, outcomes, chosen, onChoose}; the review window moved to the same props', () => {
   const { PLAN, PLAN_AFTER } = REQUEST_FIXTURES
-  const draw = async (locale: Locale, props: Record<string, unknown>) => {
+  // op-fx1: the part's own props type (a loose Record cast no longer compiles against ExtraPiecesProps).
+  const draw = async (locale: Locale, props: ExtraPiecesProps) => {
     const { ExtraPieces } = await import('./view/ExtraPieces')
-    return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(ExtraPieces as ComponentType<Record<string, unknown>>, props)))
+    return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(ExtraPieces, props)))
   }
   const propsOf = async (plan: typeof PLAN, done: boolean) => {
     const { outcomeHeld } = await import('./model')
@@ -387,7 +389,7 @@ describe('F-OP-107: ExtraPieces takes {pieces, outcomes, chosen, onChoose}; the 
   })
 
   it('an outcome this reader may not choose stays, focusable, with why; nothing at all without pieces', async () => {
-    const held = { ...(await propsOf(PLAN, false)), outcomes: [{ outcome: 'CHARGE', words: { en: 'Keep and charge the customer', it: 'Tieni e addebita al cliente' }, held: { en: 'Charging the customer needs the right to see prices', it: 'Per addebitare al cliente serve il permesso di vedere i prezzi' } }] }
+    const held = { ...(await propsOf(PLAN, false)), outcomes: [{ outcome: 'CHARGE' as const, words: { en: 'Keep and charge the customer', it: 'Tieni e addebita al cliente' }, held: { en: 'Charging the customer needs the right to see prices', it: 'Per addebitare al cliente serve il permesso di vedere i prezzi' } }] }
     const html = await draw('en', held)
     expect(html).toContain('aria-disabled="true"')
     expect(html).toContain('Charging the customer needs the right to see prices')

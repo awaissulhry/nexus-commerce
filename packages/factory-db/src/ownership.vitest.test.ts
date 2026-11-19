@@ -304,6 +304,7 @@ describe('model ownership', () => {
       'OptionGroup',
       'OptionRule',
       'OptionValue',
+      'OrderBrandPrice', // B-CP-005
       'OrderChangeRequest',
       'OrderChangeRequestLine',
       'OrderFreezeRule',
@@ -368,6 +369,7 @@ describe('model ownership', () => {
       'PointOfMeasure',
       'PortalOrderRequest',
       'PortalOrderRequestLine',
+      'PortalOrderRequestPerson', // B-CP-005
       'PortalOrderRequestSize',
       'PortalSettings',
       'PortalSignInCode',

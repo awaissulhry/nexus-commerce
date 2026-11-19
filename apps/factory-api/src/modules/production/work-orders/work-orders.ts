@@ -632,7 +632,8 @@ interface DraftPlan {
   readonly kind: 'SAMPLE' | 'MADE_TO_MEASURE' | 'SIZE_GRID'
   readonly style: Prisma.StyleGetPayload<{ select: typeof STYLE_COLUMNS }>
   readonly site: Prisma.SiteGetPayload<{ select: typeof SITE_COLUMNS }>
-  readonly revisionId: string
+  /** op-fx1: the revision chosen (revisionFor); null — the style has none released yet, as before B-OP-012 split the plan out. */
+  readonly revisionId: string | null
   readonly dueDate: BusinessDate | null
   readonly priority: number
   readonly target: CellTarget

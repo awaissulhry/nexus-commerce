@@ -18,6 +18,7 @@ import { duplicateInto, type Dropped } from '../quotes/duplicate'
 import { approveWaitingInCommand } from './address-check'
 import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
 import { dayText, iso, lockRequest, priceOrNull, readDraftFiles, readLines, readRequest, REQUEST_COLUMNS, type DraftFileRow, type LineRow, type RequestRow } from './store'
+import { catalogueLines, isCatalogueLine, ownWordsOf, type CatalogueLineRow } from './store' // B-CP-005
 // B-CP-071 (customer page plan D10): the office reads drafts read-only, per customer.
 import { THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
@@ -168,7 +169,8 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
   const names = await namesOf(caller, [...rows.map((row) => row.createdById), ...[...editors.values()].map((entry) => entry.actorId)])
   const catalogues = new Map<string, CustomerCatalogue>()
   for (const companyId of new Set(rows.map((row) => row.companyId))) {
-    const styleIds = lines.filter((line) => rows.some((row) => row.id === line.requestId && row.companyId === companyId)).map((line) => line.styleId)
+    // B-CP-005: the catalogue lines' styles (a described or made-to-measure line names no catalogue style).
+    const styleIds = catalogueLines(lines.filter((line) => rows.some((row) => row.id === line.requestId && row.companyId === companyId))).map((line) => line.styleId)
     catalogues.set(companyId, await caller.withClient((client) => readCatalogue(client, { companyId, partyId: rows[0]!.partyId, day, styleIds })))
   }
   const addressIds = [...new Set(rows.flatMap((row) => (row.shipToAddressId ? [row.shipToAddressId] : [])))]
@@ -182,8 +184,13 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
     const catalogue = catalogues.get(row.companyId)!
     const scope = { companyId: row.companyId, partyId: row.partyId }
     const header = headerProblems({ requestedDate: dayText(row.requestedDate), shipToActive: row.shipToAddressId === null ? null : addresses.get(row.shipToAddressId) === 'ACTIVE', lineCount: own.length }, day)
-    const problems = [...header, ...own.flatMap((line) => lineProblems({ id: line.id, sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown) }, factsOf(catalogue, line.styleId, line.colourwayId), false))]
-    const first = own[0] ? catalogue.codes.get(own[0].styleId) : undefined
+    // B-CP-005: the catalogue's checks for its own lines; the title is the first line's style, or a described or made-to-measure
+    // line's own words.
+    const problems = [...header, ...catalogueLines(own).flatMap((line) => lineProblems({ id: line.id, sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown) }, factsOf(catalogue, line.styleId, line.colourwayId), false))]
+    const head = own[0]
+    const first = head && isCatalogueLine(head) ? catalogue.codes.get(head.styleId) : undefined
+    const ownWords = head && !isCatalogueLine(head) ? ownWordsOf(head) : null
+    // end B-CP-005
     const edited = editors.get(row.id)
     const thread = threads.get(row.id)
     // B-CP-072: this draft's own files and its lines' (a sheet locked for a reader without sales.measurements.view).
@@ -208,7 +215,7 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
       startedAt: iso(row.createdAt)!,
       lastEditedBy: edited ? (names.get(edited.actorId) ?? null) : row.createdById ? (names.get(row.createdById) ?? null) : null,
       lastEditedAt: iso(row.updatedAt)!,
-      title: first ? `${first.code} ${first.name}`.trim() : null,
+      title: first ? `${first.code} ${first.name}`.trim() : ownWords, // B-CP-005: else the line's own words
       people: 0,
       readiness: { ...readiness, parts: [...readiness.parts] },
       later: [],
@@ -282,7 +289,10 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
   const { context, row } = await officeRequest(caller, requestId)
   const day = businessDate(serverClock.now())
   const lines = await caller.withClient((client) => readLines(client, [row.id]))
-  const catalogue = await caller.withClient((client) => readCatalogue(client, { companyId: row.companyId, partyId: row.partyId, day, styleIds: lines.map((line) => line.styleId) }))
+  // B-CP-005: the catalogue lines are read with the catalogue; a described or made-to-measure line is the office's to map
+  // first (B-CP-077) and is shown by its kind there, not as a style it does not have (it counts in the totals).
+  const listed = catalogueLines(lines)
+  const catalogue = await caller.withClient((client) => readCatalogue(client, { companyId: row.companyId, partyId: row.partyId, day, styleIds: listed.map((line) => line.styleId) }))
   const party = await caller.withClient((client) => client.party.findUnique({ where: { id: row.partyId }, select: { id: true, code: true, legalName: true } }))
   const shipTo = row.shipToAddressId ? await caller.withClient((client) => client.partyAddress.findUnique({ where: { id: row.shipToAddressId! }, select: { id: true, name: true, line1: true, line2: true, postalCode: true, city: true, province: true, country: true, status: true, approvalStatus: true } })) : null
   const names = await namesOf(caller, [row.sentById, row.decidedById, row.createdById])
@@ -290,7 +300,7 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
   const quote = row.quoteId ? await caller.withClient((client) => client.quote.findUnique({ where: { id: row.quoteId! }, select: { id: true, number: true } })) : null
   const actor = actorOf(context)
   const scope = { companyId: row.companyId, partyId: row.partyId }
-  const views = lines.map((line) => {
+  const views = listed.map((line) => { // B-CP-005: catalogue lines
     const facts = factsOf(catalogue, line.styleId, line.colourwayId)
     const sizes = line.sizes.map((size) => ({ size: size.size, quantity: size.quantity }))
     const shown = priceOrNull(line.unitPriceShown)
@@ -353,7 +363,8 @@ export interface AcceptBody {
   readonly lines?: readonly { readonly lineId: string; readonly unitPrice?: string | undefined }[] | undefined
 }
 
-const linesFor = (lines: readonly LineRow[], prices: AcceptBody['lines']) =>
+// B-CP-005: an order is made from catalogue lines (a style and colourway of the catalogue); see notCatalogueProblem.
+const linesFor = (lines: readonly CatalogueLineRow[], prices: AcceptBody['lines']) =>
   lines.map((line) => ({
     styleId: line.styleId,
     colourwayId: line.colourwayId,
@@ -361,6 +372,16 @@ const linesFor = (lines: readonly LineRow[], prices: AcceptBody['lines']) =>
     unitPrice: prices?.find((entry) => entry.lineId === line.id)?.unitPrice,
     note: line.note,
   }))
+
+// ---- B-CP-005: a described or made-to-measure line has no style and colourway of the catalogue to make an order or a quote
+// line from: the office maps it first (B-CP-077, the request-line → order-line map). Until then the accept is held, in words
+// that name the lines.
+function notCatalogueProblem(lines: readonly LineRow[]): string | null {
+  const others = lines.filter((line) => !isCatalogueLine(line)).map((line) => line.seq)
+  if (others.length === 0) return null
+  return `${others.length === 1 ? `Line ${others[0]} is` : `Lines ${others.join(', ')} are`} described or made to measure, not from the catalogue: map ${others.length === 1 ? 'it' : 'them'} to a style before making an order or a quote.`
+}
+// ---- end B-CP-005
 
 /** `clock`: the routes pass the app's (B-W2b-F13b: a waiting ship-to approved here is never decided before it was asked). */
 export async function acceptRequest(caller: CommandCaller, requestId: string, body: AcceptBody, idempotencyKey?: string, clock: Clock = serverClock) {
@@ -371,13 +392,20 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
   const problem = decisionProblem(row.status as RequestStatus)
   if (problem) throw new InvalidStateError(problem)
   const lines = await caller.withClient((client) => readLines(client, [row.id]))
+  const notCatalogue = notCatalogueProblem(lines) // B-CP-005
+  if (notCatalogue) throw new InvalidStateError(notCatalogue) // B-CP-005
   for (const [index, entry] of (body.lines ?? []).entries()) if (!lines.some((line) => line.id === entry.lineId)) throw new ValidationError('Not a line of this request.', [{ path: `body/lines/${index}/lineId`, message: 'Not a line of this request.' }])
   const { result } = await runCommand(caller, { name: 'portalOrdering.accept', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const current = await lockRequest(tx, requestId, body.version)
     const again = decisionProblem(current.status as RequestStatus)
     if (again) throw new InvalidStateError(again)
-    const fresh = await readLines(tx, [current.id])
+    // B-CP-005: the lines as they are now (a sent request's lines never change; read again inside the command), catalogue ones.
+    const read = await readLines(tx, [current.id])
+    const stillNot = notCatalogueProblem(read)
+    if (stillNot) throw new InvalidStateError(stillNot)
+    const fresh = catalogueLines(read)
+    // end B-CP-005
     // B-W2b-F13b: a delivery address the customer added for this request waits for our check: accepting the request
     // approves it first, in this command (the order or quote may then use it).
     if (current.shipToAddressId) await approveWaitingInCommand(tools, current.shipToAddressId, { type: 'PortalOrderRequest', id: current.id, number: current.number })

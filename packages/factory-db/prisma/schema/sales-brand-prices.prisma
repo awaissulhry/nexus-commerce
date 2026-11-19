@@ -1,0 +1,83 @@
+// The customer's own prices for an order (customer page plan, schema wave "customer page 1/1", B-CP-005; design
+// customer-page 11 §1.1, C3; Owner picks O1-O4): what the customer says it pays, beside our price, so the price check
+// (Equal / Not equal / No customer price yet, the difference) is computed on every read and replaces the Owner's sheet. One
+// row per order line (the customer's net unit price, or its line total) or one row for the whole order (a PO with a total
+// only). Never stored: the check, the difference, the order's sum (apps/factory-api's sales/brand-prices, factory-domain
+// sales/brand-prices/match.ts).
+//
+//   OrderBrandPrice  of one sales order of one customer (the foreign key: the order's own company and customer), maybe of
+//                    one of its lines (Restrict: a split or a removed line carries or removes its row first). The source:
+//                    PORTAL (the customer typed it, or the office carried it from the customer's own portal request), the
+//                    CUSTOMER_PO (typed by us from the customer's PO, maybe naming that file) or OFFICE (typed by us).
+//                    Every price column and the note are the price grain: the money wall shows them only to people who see
+//                    prices, and the history is the audit under recordType OrderBrandPrice (never the order's, so no
+//                    order timeline shows it).
+//
+// Who writes what (ownership/sales-brand-prices.json; the …_customer_page_guards trigger holds it for every login, the owner
+// included): the office (factory_runtime) writes every kind of row through apps/factory-api with command(); a portal session
+// (factory_partner_runtime, behind its party's wall) reads its own orders' rows and writes its own PORTAL line rows, never
+// who in the office typed one (enteredById: no grant). Nothing is written once the order is CLOSED or CANCELLED (READY,
+// shipped and delivered orders stay writable: the price is often checked at invoicing; SalesOrderLine freezes after READY,
+// which is why this is a table of its own). The floor reads none of it.
+
+/// The customer's own price for a sales order (C3): one line's net unit price or line total, or the order's total. At most
+/// one row per line (the unique key) and one total row per order (the partial unique index "OrderBrandPrice_one_total" of
+/// …_customer_page_guards). A line row holds exactly one of unitPrice and netAmount, the total row netAmount only; both at
+/// least 0; in the order's currency (no exchange rate, ever).
+model OrderBrandPrice {
+  id               String                @id @db.Uuid
+  tenantId         String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer (the partner role's policy key): the order's own, fixed (the foreign key).
+  companyId        String                @db.Uuid
+  partyId          String                @db.Uuid
+  /// The sales order. A row moves to another order of the same company and customer only with its line (a split).
+  salesOrderId     String                @db.Uuid
+  /// The order line (a line of this order); null: the customer's total for the whole order.
+  salesOrderLineId String?               @db.Uuid
+  /// A line row: the customer's net unit price, without VAT; at least 0.
+  /// @grain price
+  unitPrice        Decimal?              @db.Decimal(18, 6)
+  /// A line row: the customer's line total; the total row: the order's total; without VAT, minor units, at least 0.
+  /// @grain price
+  netAmount        Int?
+  /// ISO 4217: the order's currency (the guard).
+  currency         String
+  source           OrderBrandPriceSource
+  /// The customer's PO it was typed from: a file of this order (not deleted), never another customer's; the API marks it
+  /// priced.
+  sourceFileId     String?               @db.Uuid
+  /// The customer's or our words about it, 1 to 1000 trimmed characters (the price grain: it may name a price).
+  /// @grain price
+  note             String?
+  /// The office person who typed it (CUSTOMER_PO and OFFICE: required); null on a PORTAL row, the customer's own (its
+  /// person is in the audit). The partner role has no grant on it.
+  enteredById      String?               @db.Uuid
+  /// When it was typed (or carried from the portal request).
+  enteredAt        DateTime              @default(now()) @db.Timestamptz(3)
+  version          Int                   @default(1)
+  createdAt        DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+
+  // The order's own company and customer; the line of the same customer (that it is a line of THIS order is the guard's).
+  order      SalesOrder      @relation("OrderBrandPriceOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  line       SalesOrderLine? @relation("OrderBrandPriceLine", fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  sourceFile StoredFile?     @relation("OrderBrandPriceSourceFile", fields: [tenantId, sourceFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One row per line (a total row has none: the partial unique index holds one per order).
+  @@unique([tenantId, salesOrderLineId])
+  // An order's rows (the price check, the list's columns).
+  @@index([tenantId, salesOrderId])
+  // A customer's rows (its summary; the partner role's policy key).
+  @@index([tenantId, partyId])
+}
+
+/// Where the customer's price came from (shown in words: "From the portal", "From the customer's PO", "Typed by the factory").
+enum OrderBrandPriceSource {
+  /// The customer typed it in the portal, or the office carried it from the customer's own portal request.
+  PORTAL
+  /// Typed by us from the customer's purchase order.
+  CUSTOMER_PO
+  /// Typed by us.
+  OFFICE
+}

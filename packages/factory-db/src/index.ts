@@ -298,6 +298,7 @@ export type {
   OptionGroup,
   OptionRule,
   OptionValue,
+  OrderBrandPrice, // B-CP-005
   OrderChangeRequest,
   OrderChangeRequestLine,
   OrderFreezeRule,
@@ -362,6 +363,7 @@ export type {
   PointOfMeasure,
   PortalOrderRequest,
   PortalOrderRequestLine,
+  PortalOrderRequestPerson, // B-CP-005
   PortalOrderRequestSize,
   PortalSettings,
   PortalSignInCode,
@@ -959,6 +961,7 @@ export {
   OptionGroupTakes,
   OptionRuleKind,
   OptionRuleSeverity,
+  OrderBrandPriceSource, // B-CP-005
   OrderChangeRequestKind,
   OrderChangeRequestStatus,
   OrderFreezeAction,
@@ -1034,6 +1037,9 @@ export {
   PlyRunStatus,
   PoDateChangeSource,
   PointOfMeasureKind,
+  PortalDraftLineKind, // B-CP-005
+  PortalDraftMeasureBy, // B-CP-005
+  PortalDraftPart, // B-CP-005
   PortalOrderRequestSource,
   PortalOrderRequestStatus,
   PortalSignInCodePurpose,

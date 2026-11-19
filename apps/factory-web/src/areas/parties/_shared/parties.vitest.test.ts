@@ -320,9 +320,18 @@ function literalKeys(): string[] {
     // B-W2b-334: the supplier in depth (purchasing/suppliers/depth, /list) speaks `purchasing-suppliers-depth` (its own test).
     // B-W2b-324: the customer in depth (sales/customers/depth) speaks `sales-customers-depth` (its own test).
     for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`) && !path.includes(`${join('customers', 'portal')}`) && !path.includes(`${join('suppliers', 'portal')}`) && !path.includes(`${join('suppliers', 'questionnaire')}`) && !path.includes(`${join('suppliers', 'depth')}`) && !path.includes(`${join('suppliers', 'list')}`) && !path.includes(`${join('customers', 'depth')}`)))
-      for (const match of readFileSync(file, 'utf8').matchAll(pattern)) if (!NOT_KEYS.has(match[1]!)) keys.add(match[1]!)
+      for (const match of readFileSync(file, 'utf8').matchAll(pattern)) if (!NOT_KEYS.has(match[1]!) && !ORDERS_READ.test(match.input.slice(Math.max(0, match.index - 2), match.index))) keys.add(match[1]!)
   return [...keys].sort()
 }
+// ---- op-fx1: F-OP-203's customer dock reads two of the order dock's words through the orders translator (`const o = useT('orders')`,
+// its WithMessages loads 'orders'): those keys are the orders catalogue's, checked there (both locales), never taken for parties keys.
+const ORDERS_READ = /\bo\($/
+function ordersReadKeys(): string[] {
+  const keys = new Set<string>()
+  for (const file of sources(join(SRC, 'sales/customers'))) for (const match of readFileSync(file, 'utf8').matchAll(/\bo\(['"`]([A-Za-z0-9_.]+)['"`]/g)) keys.add(match[1]!)
+  return [...keys].sort()
+}
+// ---- end op-fx1
 const has = (key: string) =>
   LOCALES.every((locale) => key in (CATALOGUE[locale].parties ?? {}) || (`${key}_one` in (CATALOGUE[locale].parties ?? {}) && `${key}_other` in (CATALOGUE[locale].parties ?? {})))
 
@@ -383,6 +392,9 @@ describe('every string of the four screens exists in it and en (PLAN §4.6)', ()
     const keys = [...literalKeys(), ...built]
     expect(keys.length).toBeGreaterThan(400)
     expect([...new Set(keys)].filter((key) => !has(key))).toEqual([])
+    // op-fx1: the keys read through the orders translator exist in the orders catalogue, in both languages.
+    expect(ordersReadKeys()).toEqual(['record.dock.writeGeneral', 'record.dock.writeIn'])
+    expect(ordersReadKeys().filter((key) => !LOCALES.every((locale) => key in (CATALOGUE[locale].orders ?? {})))).toEqual([])
   })
 })
 

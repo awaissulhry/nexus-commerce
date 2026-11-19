@@ -122,7 +122,7 @@ async function applyNow(caller: CommandCaller, context: OfficeContext, row: Chan
   const route = applyRouteOf({ kind: row.kind, workOrderId: row.workOrderId }, current, row.kind === 'LOWER_TO_ORDER' && takesEveryCell(cellsOf(row), cellIds))
   if ('refusal' in route) refuseRoute(route.refusal, current?.number ?? '')
   const plan = route as { route: ApplyRoute }
-  const spec = (input: Record<string, unknown>) => ({ name: 'workorders.applyChange' as const, idempotencyKey, input, record: { type: 'WorkOrderChange', id: row.id, expectedVersion: version } })
+  const spec = (input: Record<string, unknown>) => ({ name: 'workorders.applyChange' as const, idempotencyKey, input, record: { type: 'WorkOrderChange' as const, id: row.id, expectedVersion: version } })
 
   // MAKE_MORE naming no work order: a new DRAFT through the one create, on the change (its APPLIED write in that command).
   if (plan.route === 'NEW_DRAFT') {
