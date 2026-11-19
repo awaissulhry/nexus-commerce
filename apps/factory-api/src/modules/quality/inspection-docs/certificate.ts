@@ -17,6 +17,8 @@ import { namesOf } from '../amendments/records'
 import { shippedOfCell, type Reader } from '../final/store'
 import { renderQualityDocument } from './pdf'
 import { keepVersionInCommand, keptVersionView, prepareVersion, type DocumentRecord } from './versions'
+// B-OP-042 (order page N6, lines-derived): the orders a shipment carries.
+import { orderRefsOfShipment, orderWordsOf } from '../../shipping/shipments/orders-of'
 
 /**
  * The certificate of conformity of a shipment (B-W2b-123; QHS-059 "a customer ask, not law"): our statement that the
@@ -101,6 +103,8 @@ async function composeCertificate(caller: CommandCaller, shipmentId: string, opt
     const language = await languageOf(db, shipment, options.language)
     const party = await db.party.findUnique({ where: { id: shipment.partyId }, select: { legalName: true } })
     const order = await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { number: true, customerRef: true } })
+    // B-OP-042 (order page N6, lines-derived): the certificate names every order the shipment carries (the customer's own).
+    const orderWords = orderWordsOf(await orderRefsOfShipment(db, shipment), order)
     const ddt = await db.ddt.findFirst({ where: { shipmentId: shipment.id, cancellations: { none: {} } }, select: { number: true, documentDate: true }, orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }] })
     const declarations = (await readDocuments(db, shipment)).documents.documents
       // Every PPE style's DoC: its number and language, or (number null) "not on file", never left out in silence.
@@ -113,7 +117,7 @@ async function composeCertificate(caller: CommandCaller, shipmentId: string, opt
       company: { name: legalName(legal, language), lines: legalLines(legal, language), legal: legalFooter(legal, language) },
       shipment: { number: shipment.number, shippedOn: shipment.shippedAt ? businessDate(shipment.shippedAt) : null },
       customer: { name: party?.legalName ?? '-', vatNumber: null },
-      order: order ? { number: order.number, customerRef: order.customerRef } : null,
+      order: order ? { number: orderWords.orderNumber ?? order.number, customerRef: orderWords.customerRef } : null,
       ddt: ddt ? { number: ddt.number, date: ddt.documentDate.toISOString().slice(0, 10) } : null,
       lines: facts.lines,
       declarations,

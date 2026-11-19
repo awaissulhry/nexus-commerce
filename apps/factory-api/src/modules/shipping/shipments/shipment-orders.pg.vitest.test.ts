@@ -25,6 +25,11 @@ import { testRedis, type TestRedis } from '../../../platform/outbox/testing'
 import { createSecretsService } from '../../../platform/secrets/envelope'
 import { localKeyProvider } from '../../../platform/secrets/local'
 import { orderIdsOfShipments, orderRefsOfShipments } from './orders-of'
+// B-OP-042: the DDT of a shared shipment (its facts as the API reads them, drafted by the domain).
+import { draftDdt } from '@nexus/factory-domain/shipping/ddt'
+import type { CompanyLegal } from '@nexus/factory-domain/documents/model'
+import { readDdtFacts } from '../ddt/store'
+import { readShipment } from '../store'
 
 /**
  * B-OP-040 / B-OP-070 (order page N6, lines-derived; R-6): several orders of ONE customer on one shipment, held off by
@@ -279,6 +284,19 @@ describe('B-OP-040: ordersOfShipment — the orders of its lines, the first orde
     expect(refs.get(shared.id)!.map((ref) => ref.id)).toEqual([so2(), so3()])
     // The orders are always the shipment's own customer's.
     expect(new Set((await admin<{ partyId: string }>(`SELECT "partyId" FROM "SalesOrder" WHERE id = ANY($1::uuid[])`, [both.get(shared.id)])).map((row) => row.partyId))).toEqual(new Set([A.alpha]))
+  })
+
+  // B-OP-042 (order page N6): the DDT names every order (refs per order) and groups its lines by order.
+  it('B-OP-042: a DDT of the shared shipment: one SALES_ORDER (+ CUSTOMER_ORDER) reference per order, its lines grouped by order', async () => {
+    const company: CompanyLegal = { legalName: 'Fabbrica Esempio S.r.l.', address: { line1: 'Via Esempio 1', postalCode: '20121', city: 'Milano', province: 'MI', country: 'IT' }, vatNumber: 'IT12345670009', fiscalCode: '12345670009', reaOffice: 'MI', reaNumber: '0000001', shareCapital: null, currency: 'EUR' }
+    const numbers = await admin<{ id: string; number: string }>(`SELECT id, number FROM "SalesOrder" WHERE id = ANY($1::uuid[])`, [[so2(), so3()]])
+    const numberOf = (id: string) => numbers.find((row) => row.id === id)!.number
+    const facts = await scoped(async (client) => readDdtFacts(client, (await readShipment(client, ids.shared!))!, company))
+    expect((facts.orders ?? []).map((order) => order.number)).toEqual([numberOf(so2()), numberOf(so3())])
+    const { draft } = draftDdt(facts, {}, new Date())
+    expect(draft.documentRefs.filter((ref) => ref.kind === 'SALES_ORDER').map((ref) => ref.number)).toEqual([numberOf(so2()), numberOf(so3())])
+    // The first order's goods first; each line names its order (several orders).
+    expect(draft.lines.map((line) => line.description.includes(numberOf(so2())) ? 'first' : line.description.includes(numberOf(so3())) ? 'second' : 'none')).toEqual(['first', 'second'])
   })
 
   it('an order with garments on a DRAFT shipment of another order refuses its own cancel, in words', async () => {

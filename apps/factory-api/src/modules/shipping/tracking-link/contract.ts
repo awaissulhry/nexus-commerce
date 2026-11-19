@@ -81,7 +81,15 @@ export const trackingPageView = output({
   }),
   /** "Your order 4500-1234": the customer's own reference first, then ours. */
   // fix-portal-numbers-1 (B-TH-303): `number` is the customer's own order number ("#12"), never the office's SO-… series.
-  order: output({ customerRef: z.string().nullable(), number: z.string().nullable() }),
+  order: output({
+    customerRef: z.string().nullable(),
+    number: z.string().nullable(),
+    /**
+     * B-OP-042 (order page N6, R-18): a link may be passed on (the customer's own shop): it names ONE order, the one it was
+     * made for (the shipment's first), and only how many pieces of the customer's other orders travel with it (0: none).
+     */
+    otherPieces: z.number().int().min(0),
+  }),
   pill: z.enum(TRACKING_PILLS),
   problem: z.enum(TRACKING_PROBLEMS).nullable(),
   steps: z.array(output({ code: z.enum(TRACKING_STEPS), state: z.enum(STEP_STATES), at: instant().nullable() })),

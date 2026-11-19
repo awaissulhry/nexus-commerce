@@ -14,6 +14,8 @@ import { tenantOf } from '../cells'
 import { readShipment, type ShipmentHeader } from '../store'
 import { benchShipment } from './garments'
 import { contentsOf, numberedOf, readBench, renumberCartons, type Bench } from './store'
+// B-OP-042 (order page N6, lines-derived): the orders a shipment carries.
+import { orderRefsOfShipment } from '../shipments/orders-of'
 
 /**
  * A carton's shipping marks printed (B-W2b-384; LOG-013; design floor.pack "Close carton … prints its marks"): the
@@ -58,6 +60,16 @@ const address = (value: unknown): MarkAddress => (value && typeof value === 'obj
 async function marksOf(reader: CommandCaller, shipment: ShipmentHeader, bench: Bench, cartons: Bench['parcels']): Promise<{ parcelId: string; marks: CartonMarks }[]> {
   return reader.withClient(async (client) => {
     const order = await client.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { number: true, customerRef: true, language: true } })
+    // B-OP-042 (order page N6, lines-derived; R-8: read as the office or the tenant's system, never as the floor): each carton
+    // names the orders and POs of its own garments, the first order first (the first order's while it holds none).
+    const orders = await orderRefsOfShipment(client, shipment)
+    const orderLineIds = [...new Set(bench.lines.map((line) => line.salesOrderLineId))]
+    const orderOfLine = new Map((orderLineIds.length > 0 ? await client.salesOrderLine.findMany({ where: { id: { in: orderLineIds } }, select: { id: true, orderId: true } }) : []).map((row) => [row.id, row.orderId]))
+    const ordersIn = (parcelId: string) => {
+      const ids = new Set(contentsOf(bench, parcelId).map((content) => orderOfLine.get(bench.lines.find((line) => line.id === content.shipmentLineId)?.salesOrderLineId ?? '')))
+      const refs = orders.filter((ref) => ids.has(ref.id))
+      return refs.length > 0 ? refs : orders.slice(0, 1)
+    }
     const company = await client.company.findUnique({ where: { id: shipment.companyId }, select: { legalName: true, tradeName: true } })
     const settings = await client.shippingSettings.findUnique({ where: { id: shipment.siteId }, select: { senderAddress: true } })
     const templates = await client.shippingMarkTemplate.findMany({ where: { companyId: shipment.companyId, active: true, OR: [{ partyId: shipment.partyId }, { partyId: null }] }, select: { partyId: true, fields: true, language: true, active: true } })
@@ -78,8 +90,9 @@ async function marksOf(reader: CommandCaller, shipment: ShipmentHeader, bench: B
         maker: company?.tradeName || company?.legalName || null,
         sender: settings ? address(settings.senderAddress) : null,
         shipTo: address(header?.shipTo),
-        customerOrder: order?.customerRef ?? null,
-        orderNumber: order?.number ?? '',
+        // B-OP-042: the carton's own orders (one: as before).
+        customerOrder: ordersIn(parcel.id).length > 1 ? [...new Set(ordersIn(parcel.id).flatMap((ref) => (ref.customerRef ? [ref.customerRef] : [])))].join(', ') || null : (ordersIn(parcel.id)[0]?.customerRef ?? order?.customerRef ?? null),
+        orderNumber: ordersIn(parcel.id).map((ref) => ref.number).join(', ') || (order?.number ?? ''),
         shipmentNumber: shipment.number,
         cartonNumber: draft ? parcel.seq : (parcel.cartonNumber ?? parcel.seq),
         cartonCount: draft ? count : (parcel.cartonCount ?? count),

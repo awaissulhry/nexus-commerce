@@ -224,6 +224,30 @@ describe('the packing list', () => {
     expect(composed.facts.map((fact) => fact.value)).toEqual(['SO-0003', 'PO-78', '2', '6'])
     expect(composed.totals).toEqual([])
   })
+
+  // B-OP-042 (order page N6): a packing list of a shipment that carries two orders of one customer.
+  it('names every order the shipment carries: one SALES_ORDER and CUSTOMER_ORDER reference each, the first first', () => {
+    const base = {
+      number: 'SH-2026-00002',
+      date: '2026-11-23',
+      language: 'it' as const,
+      currency: 'EUR' as const,
+      party: { name: 'Cliente Esempio S.r.l.', address: null },
+      shipTo: null,
+      salesOrderNumber: 'SO-0003',
+      customerRef: 'PO-78',
+      parcels: [{ id: 'P1', seq: 1, grossWeightKg: '1.0000' }],
+      lines: [{ parcelId: 'P1', styleCode: 'JKT-02', styleName: 'Giacca', colourway: 'Nero', size: '50', quantity: 1, batchNumber: null, serials: [] }],
+    }
+    const two = packingListDocument({ ...base, orders: [{ number: 'SO-0003', customerRef: 'PO-78' }, { number: 'SO-0004', customerRef: null }] })
+    expect(two.references).toEqual([
+      { kind: 'SALES_ORDER', number: 'SO-0003' },
+      { kind: 'CUSTOMER_ORDER', number: 'PO-78' },
+      { kind: 'SALES_ORDER', number: 'SO-0004' },
+    ])
+    // One order: as before.
+    expect(packingListDocument(base).references).toEqual(packingListDocument({ ...base, orders: [{ number: 'SO-0003', customerRef: 'PO-78' }] }).references)
+  })
 })
 
 describe('declarations', () => {

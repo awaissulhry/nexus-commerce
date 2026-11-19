@@ -4,6 +4,8 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { joinProblems, joinShipmentOf, joinVerdict, type JoinOrder, type JoinProblem, type JoinShipment, type ShipmentStatus } from '@nexus/factory-domain/shipping/shipments'
 import type { CommandCaller, CommandTools, CommandTx } from '../../../core/command'
+import type { BusinessDate } from '@nexus/factory-domain/core/time'
+import type { DocumentReference } from '@nexus/factory-domain/documents/model'
 import { holdWordsAt } from '../../parties/holds/stops'
 import { assertMay, mayOn, officeContextOf } from '../access'
 import { readShipment, type ShipmentHeader } from '../store'
@@ -79,6 +81,50 @@ export async function orderRefsOfShipments(db: Reader, shipments: readonly Shipm
 export async function orderRefsOfShipment(db: Reader, shipment: ShipmentKey): Promise<ShipmentOrderRef[]> {
   return (await orderRefsOfShipments(db, [shipment])).get(shipment.id) ?? []
 }
+
+/**
+ * B-OP-042: the order words of a mail or a paper to the shipment's own customer: every order's number, and its POs (one
+ * order: its own number and PO, as before). Never for a page that may be passed on (the tracking link names its own order).
+ */
+export function orderWordsOf(orders: readonly Pick<ShipmentOrderRef, 'number' | 'customerRef'>[], first: { readonly number: string; readonly customerRef: string | null } | null): { orderNumber: string | null; customerRef: string | null } {
+  if (orders.length <= 1) return { orderNumber: orders[0]?.number ?? first?.number ?? null, customerRef: orders[0]?.customerRef ?? first?.customerRef ?? null }
+  const refs = [...new Set(orders.flatMap((ref) => (ref.customerRef ? [ref.customerRef] : [])))]
+  return { orderNumber: orders.map((ref) => ref.number).join(', '), customerRef: refs.length > 0 ? refs.join(', ') : null }
+}
+
+/** B-OP-042: an order as the shipment's papers name it (DDT, customs, proforma). */
+export interface PaperOrder {
+  readonly id: string
+  readonly number: string
+  readonly orderDate: Date
+  readonly customerRef: string | null
+  readonly paymentTerms: string | null
+}
+
+/** B-OP-042: every order a shipment carries as its papers name them, the first first. */
+export async function paperOrdersOf(db: Reader, shipment: ShipmentKey): Promise<PaperOrder[]> {
+  const ids = await ordersOfShipment(db, shipment)
+  const rows = await db.salesOrder.findMany({ where: { id: { in: ids } }, select: { id: true, number: true, orderDate: true, customerRef: true, paymentTerms: true } })
+  return ids.flatMap((id) => rows.filter((row) => row.id === id))
+}
+
+/** B-OP-042: one SALES_ORDER and one CUSTOMER_ORDER reference per order (documentRefs is a list: no schema change). */
+export function orderReferencesOf(orders: readonly PaperOrder[], dayOf: (value: Date) => BusinessDate): DocumentReference[] {
+  return orders.flatMap((order): DocumentReference[] => [
+    { kind: 'SALES_ORDER', number: order.number, date: dayOf(order.orderDate) },
+    ...(order.customerRef ? [{ kind: 'CUSTOMER_ORDER' as const, number: order.customerRef }] : []),
+  ])
+}
+
+/** B-OP-042: the payment terms the papers print: the first order's, and each other order's that differ (joined). */
+export function paymentTermsOf(orders: readonly PaperOrder[]): string | null {
+  if (orders.length <= 1) return orders[0]?.paymentTerms ?? null
+  const terms = [...new Set(orders.flatMap((order) => (order.paymentTerms && order.paymentTerms.trim() !== '' ? [order.paymentTerms.trim()] : [])))]
+  return terms.length > 0 ? terms.join('; ') : null
+}
+
+/** B-OP-042: where an order's lines go among a paper's lines: the first order's first (a large step per order). */
+export const orderPlaceOf = (orders: readonly { readonly id: string }[], orderId: string | null | undefined): number => Math.max(0, orders.findIndex((order) => order.id === orderId)) * 1_000_000
 
 /** The shipments that carry an order: made for it (its first order), or with a line of it. */
 export const shipmentsOfOrderWhere = (salesOrderId: string): Prisma.ShipmentWhereInput => ({ OR: [{ salesOrderId }, { lines: { some: { salesOrderLine: { orderId: salesOrderId } } } }] })
