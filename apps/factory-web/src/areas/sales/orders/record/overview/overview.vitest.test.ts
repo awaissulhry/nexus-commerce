@@ -1044,7 +1044,14 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
       const text = textOf(html)
       expect(text).toContain(locale === 'en' ? 'Holds are on Overview · dates are in Next dates' : 'I blocchi sono in Panoramica · le date in Prossime date')
       expect(text).toContain(locale === 'en' ? 'Our counter-offer: Change · line 20 · L 2 → 3' : 'La nostra controproposta: Modifica · riga 20 · L 2 → 3')
-      expect(text).not.toMatch(/Counter-offer sent|Controproposta inviata/)
+      // End check fix wave: our OPEN counter-offer waits on the customer, so it is said in "Waiting on the customer" in the card's words,
+      // never "Counter-offer sent". The agreed counter-offer waits on us and keeps the shared RequestCard with its state pill (F-OP-301:
+      // a request waiting on us keeps its card; F-OO-204: Changes keeps the state pill), so the check reads that list, not the whole tab.
+      const onCustomerAt = html.indexOf(`<h2 class="fw-so-h2">${locale === 'en' ? 'Waiting on the customer' : 'Tocca al cliente'}</h2>`)
+      expect(onCustomerAt).toBeGreaterThan(-1)
+      const onCustomer = textOf(html.slice(onCustomerAt, html.indexOf('</ul>', onCustomerAt)))
+      expect(onCustomer).toContain(locale === 'en' ? 'Our counter-offer: Change · line 20 · L 2 → 3' : 'La nostra controproposta: Modifica · riga 20 · L 2 → 3')
+      expect(onCustomer).not.toMatch(/Counter-offer sent|Controproposta inviata/)
       // What we asked: its own question, its due day and its state (the record-approvals' words) — and no door on Changes.
       const artwork = itemOf(html, RQ_ASKED[0]!.question)
       expect(textOf(artwork)).toContain(locale === 'en' ? 'Waiting for the answer' : 'In attesa di risposta')

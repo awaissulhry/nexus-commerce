@@ -239,7 +239,11 @@ describe('F-OO-133: People › Answers the customer — who and why in the threa
   })
 
   it('Read-only: the answerer and why, no Change…', () => {
-    const record = base('sales', value, { tab: 'overview', production: people(PEOPLE.answersCustomer), people: rights(false), can: abilitiesOf(['orders.view', 'workorders.view']) }).record
+    // End check fix wave: the people rights as the page builds them for Read-only (use-band-acts: mayAssign = production.brand.manage,
+    // mayNote = threads.post — neither held). This block's rights() always lets the reader assign the supervisor, which is a move on
+    // the page (readOnlyOnPage), so it never drew a Read-only reader.
+    const readOnlyPeople = { mayAssign: false, mayNote: false, assign: null, note: null }
+    const record = base('sales', value, { tab: 'overview', production: people(PEOPLE.answersCustomer), people: readOnlyPeople, can: abilitiesOf(['orders.view', 'workorders.view']) }).record
     const row = answersRow(inFrame(record, true))
     expect(textOf(row)).toBe("Answers the customer Bea Esempio · the order's supervisor")
     expect(row).not.toContain('<button')

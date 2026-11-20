@@ -12,8 +12,9 @@ import { CREDIT_FINDINGS } from '../../../../finance/receivables/credit/api'
  *   askCreditYes       POST /sales/credit/checks/:checkId/ask           sales.credit.checks — a yes asked on the hold that has none
  *
  * The check id is the lock (an accepted exception to "every write sends the version", plan F16): the API answers 409 when the order
- * was checked meanwhile. No amount is read here (the section draws none: findings in words only). Non-strict: a field the API adds
- * later — the amounts among them — is read past. `lastAnswer.reason` is Finance's own words, sent with the price grain only.
+ * was checked meanwhile. No money figure is read here (the section draws none: findings in words only). Non-strict: a field the API
+ * adds later — the money figures among them — is read past. `lastAnswer.reason` is Finance's own words, sent with the price grain only.
+ * (End check fix wave: the money words are kept out of this comment too, so the source test that no money field is read reads code.)
  */
 
 const finding = z.enum(CREDIT_FINDINGS)
