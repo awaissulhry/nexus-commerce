@@ -135,8 +135,12 @@ export function madeExtraSizesOf(row: Pick<LineRow, 'lineIds'>, lines: readonly 
   return lines.filter((line) => row.lineIds.includes(line.lineId)).flatMap((line) => line.sizes.filter((size) => size.madeExtra > 0).map((size) => ({ size: size.size, count: size.madeExtra })))
 }
 
-/** "1 48 · 2 50": the sizes part of the made-extra words ("… more than ordered: cut or planned to cut", the API's own words). */
-export const madeExtraSizesText = (sizes: readonly MadeExtraSize[]): string => sizes.map((entry) => (entry.size ? `${entry.count} ${entry.size}` : String(entry.count))).join(' · ')
+/**
+ * "Size 48: 1 · Size 50: 2": the sizes part of the made-extra words ("… more than ordered (cut or planned to cut)", the API's own
+ * words). Walk follow-up (W04): the size named before its count (`sizeWords`: progress.extraSize) — "1 48" ran them together; a unit
+ * with no size (made to measure): its count alone.
+ */
+export const madeExtraSizesText = (sizes: readonly MadeExtraSize[], sizeWords: (size: string, count: number) => string): string => sizes.map((entry) => (entry.size ? sizeWords(entry.size, entry.count) : String(entry.count))).join(' · ')
 
 /**
  * A row's pills, in their order — closed short (the order read's own line), on hold (a held work order makes one of its cells), not

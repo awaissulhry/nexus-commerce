@@ -1833,7 +1833,8 @@
   },
   "progress": {
     "inWork": "Negli ordini di lavoro: {done} di {total}",
-    "madeExtra": "{sizes} in più dell'ordine: tagliati o da tagliare",
+    "madeExtra": "{sizes} in più dell'ordine (tagliati o da tagliare)",
+    "extraSize": "Taglia {size}: {count}",
     "noPicture": "Ancora nessuna immagine",
     "addPicture": "Aggiungila nel modello ›",
     "addPictureOf": "Aggiungi l'immagine di {name} nel suo modello",

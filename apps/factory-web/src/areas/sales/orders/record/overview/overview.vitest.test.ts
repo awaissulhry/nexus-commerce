@@ -491,7 +491,8 @@ describe('F-OP-304: Still to do — "Nothing left to do" only when nothing stand
       expect(text).not.toContain(locale === 'en' ? 'Nothing left to do for the accepted changes.' : 'Per le modifiche accettate non resta nulla da fare.')
       expect(text).toContain(locale === 'en' ? 'Made extra' : 'Fatti in più')
       // F-OO-121: the API's words since B-OO-015 (the floor holds a cut order's planned lines too).
-      expect(text).toContain(locale === 'en' ? 'Line 10 · 1 48 more than ordered: cut or planned to cut' : "Riga 10 · 1 48 in più dell'ordine: tagliati o da tagliare")
+      // Walk follow-up (W04): the size named before its count.
+      expect(text).toContain(locale === 'en' ? 'Line 10 · Size 48: 1 more than ordered (cut or planned to cut)' : "Riga 10 · Taglia 48: 1 in più dell'ordine (tagliati o da tagliare)")
     }
     // F-OO-205: SO-0002's case has its step still to do now; the case with nothing left is the Changes tab with no request waiting.
     expect(textOf(draw('f-oo-204-changes-nothing'))).toContain('Nothing left to do for the accepted changes.')

@@ -78,8 +78,8 @@ function usePillWords(): (pill: LinePill) => string {
       case 'inWork':
         return t('progress.inWork', { done: pill.done, total: pill.total })
       case 'madeExtra':
-        // B-OO-015: one wording with the API's — "1 48 more than ordered: cut or planned to cut".
-        return t('progress.madeExtra', { sizes: madeExtraSizesText(pill.sizes) })
+        // B-OO-015: one wording with the API's — "Size 48: 1 more than ordered (cut or planned to cut)".
+        return t('progress.madeExtra', { sizes: madeExtraSizesText(pill.sizes, (size, count) => t('progress.extraSize', { size, count })) })
       case 'late':
         return pill.days ? w.t('parts.health.lateBy', { count: pill.days }) : w.t('parts.health.LATE')
     }
@@ -276,8 +276,8 @@ function LineSizes({ order, row, rows, label, sub, pills, moves, model, actions 
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
   const read = readOf(model.production)
   const sizes = lineSizesOf(row, read?.lines ?? [], read?.dates ?? null, label)
-  // F-OO-121 (B-OO-015): a size's extra pieces in the API's words ("1 48 more than ordered: cut or planned to cut").
-  const extraWords = (size: string, count: number) => (count > 0 ? t('progress.madeExtra', { sizes: madeExtraSizesText([{ size, count }]) }) : '—')
+  // F-OO-121 (B-OO-015): a size's extra pieces in the API's words ("Size 48: 1 more than ordered (cut or planned to cut)").
+  const extraWords = (size: string, count: number) => (count > 0 ? t('progress.madeExtra', { sizes: madeExtraSizesText([{ size, count }], (name, pieces) => t('progress.extraSize', { size: name, count: pieces })) }) : '—')
   const work = lineWorkOf(row, read) // F-OO-126
   return (
     <DetailModal

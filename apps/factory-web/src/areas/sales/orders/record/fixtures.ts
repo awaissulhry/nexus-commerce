@@ -552,7 +552,7 @@ const SO3_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!,
 const EXTRA_READ = {
   ...SO2_READ,
   changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } }, // F-OO-205: no step left (SO-0002's own is not here)
-  lines: PRODUCTION_READ.lines!.map((line, index) => (index === 0 ? { ...line, madeExtra: 1, sizes: line.sizes.map((size, at) => (at === 0 ? { ...size, madeExtra: 1, madeExtraWords: { en: `1 ${size.size ?? ''} more than ordered: cut or planned to cut`, it: `1 ${size.size ?? ''} in più dell'ordine: tagliati o da tagliare` } } : size)) } : line)),
+  lines: PRODUCTION_READ.lines!.map((line, index) => (index === 0 ? { ...line, madeExtra: 1, sizes: line.sizes.map((size, at) => (at === 0 ? { ...size, madeExtra: 1, madeExtraWords: { en: `Size ${size.size ?? ''}: 1 more than ordered (cut or planned to cut)`, it: `Taglia ${size.size ?? ''}: 1 in più dell'ordine (tagliati o da tagliare)` } /* the API's MADE_EXTRA_WORDS, word for word */ } : size)) } : line)),
 }
 const F_OP_301: DesignCase<RecordCase>[] = [
   { id: 'f-op-301-so2-overview', label: 'F-OP-301 · Production manager · Overview: Waiting on us 1 (a change request), on the customer 1, Still to do 1 — "Changes (3) ›", the badge\'s number (F-OO-205); the two gates are dates (F-OO-202)', model: base('manager', production, { tab: 'overview', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },

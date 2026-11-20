@@ -1833,7 +1833,8 @@
   },
   "progress": {
     "inWork": "In work orders: {done} of {total}",
-    "madeExtra": "{sizes} more than ordered: cut or planned to cut",
+    "madeExtra": "{sizes} more than ordered (cut or planned to cut)",
+    "extraSize": "Size {size}: {count}",
     "noPicture": "No picture yet",
     "addPicture": "Add on the style ›",
     "addPictureOf": "Add the picture of {name} on its style",
