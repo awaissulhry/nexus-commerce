@@ -112,7 +112,9 @@ describe('B-W2b-323 — the lists this app mirrors are the domain’s', () => {
 describe('rights, priority and the selection', () => {
   it('the depth reads by permission', () => {
     expect(depthCanOf(['orders.view', 'planning.promise.view'])).toMatchObject({ view: true, manage: false, promise: true, planning: false })
-    expect(depthCan('sales')).toMatchObject({ manage: true, price: true, promise: true, planning: false, importRun: true })
+    // B-CP-011 (the money wall, Owner O1; follow-up 17): the real Sales role holds no price grain; the Owner does.
+    expect(depthCan('sales')).toMatchObject({ manage: true, price: false, promise: true, planning: false, importRun: true })
+    expect(depthCan('owner')).toMatchObject({ manage: true, price: true })
     expect(depthCan('manager')).toMatchObject({ manage: false, planning: true })
   })
 

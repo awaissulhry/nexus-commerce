@@ -26,13 +26,22 @@ const P = '/w/DEMO'
 const row = (n: number) => LIST_ROWS[n]!
 const sales = canOf('sales')
 const manager = canOf('manager')
+const owner = canOf('owner') // B-CP-011: the price holder of these checks (Sales holds no grain since the money wall)
 const tFor = (locale: (typeof LOCALES)[number]) => createTranslator(locale, messagesFor(locale, [NAMESPACE])[NAMESPACE]!)
 
 describe('Invoiced: the word for every reader, the amount only with the price grain', () => {
   const shipped = row(7) // SHIPPED: invoiced in part
-  it('sales (price grain): the word and the amount', () => {
-    expect(invoicedCell(shipped, sales)).toEqual({ word: 'invoiced.PART', amount: 267400 })
+  // B-CP-011 (the money wall, Owner O1; follow-up 17): the amount is a price holder's; Sales reads the word only.
+  it('the Owner (price grain): the word and the amount', () => {
+    expect(invoicedCell(shipped, owner)).toEqual({ word: 'invoiced.PART', amount: 267400 })
   })
+  it('seen as Sales (no price grain): the word, no amount — even were one sent (the API leaves it out)', () => {
+    expect(sales.price).toBe(false)
+    expect(forRole(shipped, 'sales').invoiced?.amount).toBeUndefined()
+    expect(invoicedCell(forRole(shipped, 'sales'), sales)).toEqual({ word: 'invoiced.PART', amount: null })
+    expect(invoicedCell(shipped, sales).amount).toBeNull()
+  })
+  // ---- end B-CP-011
   it('the production manager: the word, no amount (the API leaves it out; the cell never shows 0)', () => {
     const seen = forRole(shipped, 'manager')
     expect(seen.invoiced?.amount).toBeUndefined()

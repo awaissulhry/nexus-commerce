@@ -184,8 +184,8 @@ function sheet(role: Role, over: Partial<OrdersListModel> = {}): ListCase {
 // ── end B-TH-225 / B-TH-226 ──
 
 // ── F-CP-140: made-up price checks (ours = the row's Net; the customer's typed from its PO or the portal) ──
-/** The Sales role after the money wall (B-CP-011): no price grain. */
-const SALES_WORKER = { ...canOf('sales'), price: false }
+/** The Sales role after the money wall (B-CP-011): no price grain — the real role (follow-up 17: the demo's Sales holds none). */
+const SALES_WORKER = canOf('sales')
 const PRICE_LAYOUT = ['picture', 'number', 'customer', 'status', 'ourPrice', 'brandPrice', 'priceMatch', 'priceDiff']
 const PRICED_ROWS = OPEN_ROWS.map((entry, index) => {
   const net = entry.netAmount ?? 0
@@ -219,11 +219,12 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'finance', label: 'Finance: prices, no changes to orders; the deposit column first', model: base('finance') },
     { id: 'manager', label: 'Production manager: no money (no Net column); Make work orders in a confirmed order’s ⋯', model: base('manager') },
     { id: 'help', label: '? the keys of this list', model: base('sales', { helpOpen: true }) },
-    { id: 'board', label: 'Board by state (Sales): lanes with counts and values; cards never drag', model: board('sales'), note: 'j / k walk the cards, Enter opens. Closed and cancelled are counted under the board.' },
+    // B-CP-011 (the money wall, Owner O1; follow-up 17): a case that shows values is a price holder's; Sales reads no price.
+    { id: 'board', label: 'Board by state (Owner): lanes with counts and values; cards never drag', model: board('owner'), note: 'j / k walk the cards, Enter opens. Closed and cancelled are counted under the board.' }, // B-CP-011
     { id: 'board-owner', label: 'Board (Owner): a confirmed order with its deposit paid offers Make work orders', model: board('owner') },
     { id: 'board-manager', label: 'Board (Production manager): no values without the price grain', model: board('manager') },
     { id: 'board-late', label: 'Board with Late pressed: the lanes count what they read', model: board('sales', { rows: 'late', lanes: lanesOf('sales', LIST_ROWS.filter((entry) => (entry.daysLate ?? 0) > 0)) }) },
-    { id: 'board-more', label: 'Board: a lane with more than 50 orders (no value shown as the whole)', model: board('sales', { rows: 'deposit', lanes: lanesOf('sales', LIST_ROWS, { CONFIRMED: { more: true } }) }) },
+    { id: 'board-more', label: 'Board (Owner): a lane with more than 50 orders (no value shown as the whole)', model: board('owner', { rows: 'deposit', lanes: lanesOf('owner', LIST_ROWS, { CONFIRMED: { more: true } }) }) }, // B-CP-011
     { id: 'board-loading', label: 'Board: lanes reading', model: board('sales', { lanes: BOARD_LANES.map((status) => ({ status, items: null, more: false, problem: null })), asOf: null, live: 'connecting' }) },
     { id: 'board-lane-error', label: 'Board: one lane could not be read (in words, Try again)', model: board('sales', { lanes: lanesOf('sales', LIST_ROWS, { READY: { items: null, problem: 'problem.read.unavailable' } }) }) },
     { id: 'board-closed', label: 'Board with Closed chosen: closed orders are not on the board', model: board('sales', { rows: 'CLOSED', lanes: [] }) },
@@ -241,7 +242,7 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'new-order-held', label: 'W2a · Finance · New order held: taking orders is the sales right', model: base('finance') },
     { id: 'board-live', label: 'W2a · Owner · Board by state (follows live; Board in a new tab); a ready order offers Create shipment', model: board('owner'), note: 'Board in a new tab opens ?view=board: left open on a second screen it reads its lanes again on every change.' },
     // ---- B-W2a-72: Margin % (as estimated now; costing.view + the margin grain) ----
-    { id: 'w2a-margin-column', label: 'W2a · Sales · Margin % as estimated now (a negative one in danger; "—" when its cost cannot be told; "…" while read)', model: base('sales', { margins: LIST_MARGINS }) },
+    { id: 'w2a-margin-column', label: 'W2a · Owner · Margin % as estimated now (a negative one in danger; "—" when its cost cannot be told; "…" while read)', model: base('owner', { margins: LIST_MARGINS }) }, // B-CP-011
     // ---- B-W2b-323: priority and season, Set priority, Print confirmation, Import orders, By promise week ----
     { id: 'w2b-323-priority', label: 'W2b · Sales · Priority (changed in place) and Season columns; the fifth tile', model: base('sales', { depth: listDepth('sales'), week: weekModel(), importer: { held: null, sheet: null } }), note: 'Change a Priority cell: it saves at once (↻ then ✓). URGENT asks its reason. ⋯ on a row: Print confirmation (a new tab). ⋯ in the band: Import orders.' },
     { id: 'w2b-323-inline-saves', label: 'W2b · Sales · Inline priority: one saving, one saved, one refused (the reason on the mark)', model: base('sales', { depth: listDepth('sales', { saves: new Map([[OPEN_ROWS[0]!.id, { state: 'saving' }], [OPEN_ROWS[1]!.id, { state: 'saved' }], [OPEN_ROWS[2]!.id, { state: 'refused', reason: { key: 'problem.write.moved' } }]]) }), week: weekModel(), importer: { held: null, sheet: null } }) },

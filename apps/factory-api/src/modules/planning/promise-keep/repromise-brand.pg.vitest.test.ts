@@ -48,6 +48,8 @@ let owner: Awaited<ReturnType<UrgencyWorld['officePerson']>>
 let sue: Awaited<ReturnType<UrgencyWorld['officePerson']>>
 let order = { orderId: '', number: '', lineId: '' }
 let today = ''
+/** op-fx12: the order's promise as made (urgency-world's addOrder: a fixed 20 Dec), read back before any re-promise. */
+let promised = ''
 let refusedRequest = ''
 let refusedProposal = ''
 /** fix-pr-10: the question the first test asks. A later test that reads it fails in these words when the first one failed (before, it
@@ -76,7 +78,9 @@ async function as(browser: Person['browser'], method: 'GET' | 'POST', url: strin
 
 /** Planning proposes a new date for a size of the order's line; sales (another person) accepts it, asking the customer. */
 async function newDateAsked(size: string, days: number): Promise<{ proposalId: string; requestId: string; to: string }> {
-  const to = plusDays(today, days)
+  // op-fx12: counted from the promise read (today once it has passed), never from today alone: on 20 Nov in Rome "today + 30"
+  // WAS the order's fixed 20 Dec, and the re-promise was refused 400 "Size 50 is promised for 2026-12-20 already." (end check run 8).
+  const to = plusDays(promised > today ? promised : today, days)
   const { proposal } = await office('office.all', 'POST', `/planning/promises/order-lines/${order.lineId}/re-promise`, 200, { sizes: [{ size, date: to }], reasonCode: 'CAPACITY' })
   const accepted = await office('office.p1', 'POST', `/planning/promises/re-promises/${proposal.id}/accept`, 200, { tell: false, askBrand: true })
   expect(accepted).toMatchObject({ told: false, proposal: { state: 'ACCEPTED', customerAnswer: { state: 'WAITING' } }, brandAsk: { requestId: expect.any(String) } })
@@ -93,6 +97,7 @@ beforeAll(async () => {
   beatrice = await world.portalPerson('beatrice.buyer@brand-beta.example.com', world.ids.b, ['customer-buyer', 'partner-approve'])
   // Brand A's order of one goods line at the world's plant, promised for 20 Dec (addOrder); Sue supervises brand A's orders.
   order = await world.addOrder(world.ids.a, 'RP', '2026-11-01')
+  promised = (await one<{ day: string }>('SELECT "promiseDate"::text AS day FROM "SalesOrder" WHERE id = $1', [order.orderId])).day // op-fx12
   await world.replica([{ sql: 'UPDATE "SalesOrderLine" SET "siteId" = $1 WHERE id = $2', values: [world.w.siteId, order.lineId] }])
   await admin('UPDATE "PortalSettings" SET "productionSupervisorId" = $1, "productionSupervisorSetAt" = now(), version = version + 1 WHERE id = $2', [sue.id, world.ids.a])
 }, 600_000)
