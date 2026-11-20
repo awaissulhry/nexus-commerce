@@ -9,6 +9,10 @@ import { ApiError } from '../../../lib/api/errors'
 import { useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
 import { API_SKIP_SENTENCES, ASSIGN_MAX, SUPERVISOR_NS, assignHeld, assignProblemOf, commonPeople, markKeyOf, resultOf, scopesOf, skipKeyOf, supervisorFactOf, targetsOfRecord, targetsOfRows, type AssignSupervisorModel, type SupervisorTarget } from './model'
+import { NOT_YET_SENTENCE, SUPERVISOR_HELDS, supervisorHeldOf } from './model' // F-OO-132
+import { SUPERVISED_ORDER_STATES } from '@nexus/factory-domain/production-brand/supervisor' // F-OO-132
+import { SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders' // F-OO-132
+import { messagesFor } from '../../../lib/i18n/messages' // F-OO-132
 import { AssignSupervisorBody } from './view/AssignSupervisorDialog'
 import { SupervisorFact } from './view/SupervisorFact'
 
@@ -168,8 +172,8 @@ describe('F-PR-21 — the band fact (by name inside one record only)', () => {
     expect(recordCase('supervisor-not-set')).toContain('Supervisor: not set')
     expect(recordCase('supervisor-order', 'it')).toContain('Supervisore Bea Esempio · questo ordine')
     // A work order of no customer order draws no supervisor at all.
-    expect(textOf(render(createElement(SupervisorFact, { fact: { kind: 'none' }, can: true }), 'en'))).not.toContain('Supervisor')
-    expect(textOf(render(createElement(SupervisorFact, { fact: { kind: 'notSet' }, can: false }), 'en'))).toContain('Supervisor: not set')
+    expect(textOf(render(createElement(SupervisorFact, { fact: { kind: 'none' }, face: 'line', held: null }), 'en'))).not.toContain('Supervisor')
+    expect(textOf(render(createElement(SupervisorFact, { fact: { kind: 'notSet' }, face: 'line', held: 'noRight' }), 'en'))).toContain('Supervisor: not set')
   })
 })
 
@@ -212,3 +216,84 @@ describe('F-PR-21 — Work orders: the Supervisor column, Mine, Assign superviso
     expect(page).toContain("supervisorCan = { manage: session.permissions.includes('production.brand.manage') }")
   })
 })
+
+// ---- F-OO-132 (order overview lane; 10-design §3.2; 13-backend B-OO-008; review F10): the fact's two faces, Change… held in words ----
+describe('F-OO-132 — SupervisorFact: the line face (the work order pages, as before) and the row face (the order Overview)', () => {
+  const bea = { kind: 'person' as const, name: 'Bea Esempio', active: true, from: 'ORDER' as const, me: false, muted: false }
+  const draw = (props: Record<string, unknown>, locale: 'it' | 'en' = 'en') => render(createElement(SupervisorFact, { fact: bea, face: 'row', held: null, ...props } as never), locale)
+  /** A word of this catalogue as written (the catalogue is flat: `held.notYet`). */
+  const say = (locale: 'it' | 'en', key: string): string | undefined => messagesFor(locale, [SUPERVISOR_NS])[SUPERVISOR_NS]?.[key]
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const IT_NOT_YET = 'Questo ordine aspetta un sì: il supervisore si sceglie quando è confermato.'
+
+  it('held by the order’s status, in the API’s order: no right first; a waiting order "not yet"; out of the supervised states "no longer"', () => {
+    const want: Record<string, string | null> = { PENDING_APPROVAL: 'notYet', CONFIRMED: null, IN_PRODUCTION: null, READY: null, PARTLY_SHIPPED: null, SHIPPED: 'noLonger', DELIVERED: 'noLonger', CLOSED: 'noLonger', CANCELLED: 'noLonger' }
+    // Every status of an order is said (none falls through unseen); the supervised states are the keeper's.
+    expect(Object.keys(want).sort()).toEqual([...SALES_ORDER_STATUSES].sort())
+    for (const status of SALES_ORDER_STATUSES) {
+      expect(supervisorHeldOf(true, status), status).toBe(want[status])
+      expect(supervisorHeldOf(false, status), status).toBe('noRight')
+    }
+    expect([...SUPERVISED_ORDER_STATES].sort()).toEqual(['CONFIRMED', 'IN_PRODUCTION', 'PARTLY_SHIPPED', 'READY'])
+  })
+
+  it('each held reason in its own words (en + it); "not yet" is B-OO-008’s sentence — ONE wording with the API (assign.ts)', () => {
+    for (const locale of ['en', 'it'] as const) for (const held of SUPERVISOR_HELDS) expect(say(locale, `held.${held}`), `${locale} ${held}`).toBeTruthy()
+    expect(say('en', 'held.notYet')).toBe(NOT_YET_SENTENCE)
+    expect(say('it', 'held.notYet')).toBe(IT_NOT_YET)
+    expect(say('en', 'held.noLonger')).toBe('This order is no longer in production: its supervisor stays.')
+    // The API skips a waiting order with the same sentence (assign.ts, or the domain words it imports; never urgency.ts / health.ts).
+    const api = ['../../../../../factory-api/src/modules/production/supervisor/assign.ts', '../../../../../../packages/factory-domain/src/production-brand/words.ts'].map(source).join('\n')
+    expect(api).toContain(NOT_YET_SENTENCE)
+    expect(api).toContain(IT_NOT_YET)
+    // …and the assign dialog says that skip from its code.
+    expect(skipKeyOf(NOT_YET_SENTENCE)).toBe('skip.notYet')
+    expect(say('en', 'skip.notYet')).toBe('this order waits for a yes: its supervisor is set once it is confirmed.')
+    // Drawn: held, focusable, the reason said (never disabled, never hidden).
+    expect(draw({ held: 'notYet', onChange: () => {} })).toContain(`aria-description="${NOT_YET_SENTENCE}"`)
+    expect(draw({ held: 'notYet', onChange: () => {} }, 'it')).toContain(`aria-description="${IT_NOT_YET}"`)
+    expect(draw({ held: 'noLonger', onChange: () => {} })).toContain('aria-description="This order is no longer in production: its supervisor stays."')
+    expect(draw({ held: null, onChange: () => {} })).not.toContain('aria-disabled')
+  })
+
+  it('the line face is the work order band’s fact as before: the icon, "Supervisor {name} · this order", Change… — its two callers pass it', () => {
+    const line = render(createElement(SupervisorFact, { fact: bea, face: 'line', held: null }), 'en')
+    expect(line.startsWith('<span class="fw-psv-fact"><svg')).toBe(true)
+    expect(textOf(line)).toBe('Supervisor Bea Esempio · this order Change…')
+    expect(line).not.toContain('aria-disabled')
+    expect(render(createElement(SupervisorFact, { fact: bea, face: 'line', held: 'noRight' }), 'en')).toContain('aria-description="Setting a production supervisor needs the right to manage customers')
+    // The work order pages hold it for the right only, as before (their fact spans orders: no order status there).
+    for (const path of ['../../production/work-orders/record/view/BandFacts.tsx', '../../production/work-orders/record/customer/view/CustomerCard.tsx']) {
+      const caller = source(path)
+      expect(caller, path).toContain('<SupervisorFact face="line"')
+      expect(caller, path).toContain("held={model.supervisor.can ? null : 'noRight'}")
+    }
+    const view = source('./view/SupervisorFact.tsx')
+    expect(view).toContain('<UserCog size={13} aria-hidden />')
+    expect(view).toContain("{t('fact.label', { name: fact.name })} <span className=\"fw-psv-hint\">· {t(`fact.from.${fact.from}`)}</span>")
+    // The order Overview passes the row face with the order's own hold.
+    const people = source('../../sales/orders/record/view/overview/PeopleCard.tsx')
+    expect(people).toContain('face="row"')
+    expect(people).toContain('held={supervisorHeldOf(!!model.people?.mayAssign, order.status)}')
+  })
+
+  it('the row face: the value and the doors cells — no icon, no word "Supervisor"; "Not set"; Change… and Ask only where the caller gives them', () => {
+    const row = draw({ onChange: () => {} })
+    expect(row).not.toContain('<svg')
+    expect(row).not.toContain('fw-psv-fact')
+    expect(row.startsWith('<span class="fw-psv-value">')).toBe(true)
+    expect(row).toContain('<span class="fw-psv-doors">')
+    expect(textOf(row)).toBe('Bea Esempio · this order Change…')
+    expect(textOf(draw({ onChange: () => {} }, 'it'))).toBe('Bea Esempio · questo ordine Cambia…')
+    // No door given (Read-only): the value alone.
+    const bare = draw({})
+    expect(bare).not.toContain('<button')
+    expect(bare).not.toContain('fw-psv-doors')
+    expect(textOf(draw({ fact: { kind: 'notSet' } }))).toBe('Not set')
+    expect(textOf(draw({ fact: { kind: 'notSet' } }, 'it'))).toBe('Non impostato')
+    expect(textOf(draw({ fact: { ...bea, active: false } }))).toContain('no longer active')
+    expect(textOf(draw({ ask: { label: 'Ask', held: null, onAsk: () => {} } }))).toBe('Bea Esempio · this order Ask')
+    expect(textOf(render(createElement(SupervisorFact, { fact: { kind: 'none' }, face: 'row', held: null }), 'en'))).toBe('')
+  })
+})
+// ---- end F-OO-132

@@ -2,6 +2,9 @@ import type { Prisma } from '@nexus/factory-db'
 import type { Permission, ScopedRecord } from '@nexus/factory-domain/core/permissions'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { EVERY_PARTY_MARKER } from '../../modules/quality/wall'
+// B-OO-014: a sales order's custom values keep the order's version and its freeze.
+import { InvalidStateError, NotFoundError } from '@nexus/factory-domain/core/errors'
+import { StaleVersionError, type CommandTools } from '../../core/command'
 
 /**
  * The records that take custom fields (B-W2b-421; PLT-111): ONE line each. Every list frame, record form, filter, export
@@ -113,3 +116,52 @@ export async function recordsByKey(client: Client, record: Pick<CustomRecord, 'm
   }
   return new Map([...found].filter(([, list]) => list.length === 1).map(([key, list]) => [key, list[0]!]))
 }
+
+// ── B-OO-014 (order overview §8.3: the lost update vs the Orders sheet; closed orders) ──────────────────────────────────────
+/**
+ * A sales order's custom values are part of the order. The Orders sheet (platform/views/bulk/targets/sales-orders.ts) edits them at
+ * the ORDER's version and never in a closed or cancelled order; every other write of them keeps both rules here — the record
+ * page's PUT (./fields.ts writeValues) and the import (./importer.ts). The sheet keeps its own lock and version move. Every other
+ * record type keeps no version of its own for its values (unchanged).
+ */
+const FINAL_ORDER_STATES: readonly string[] = ['CLOSED', 'CANCELLED']
+
+/** The sheet's words for an order that never changes again (one wording: the sheet, the record page and the import). */
+export const finalOrderWords = (number: string, status: string): string => `Sales order ${number} is ${status.toLowerCase()}: it never changes.`
+
+/** A record's state for its custom values: the version they are written at (null: a type that keeps none), and why they may not change at all (the sheet's words), or null. */
+export interface RecordState {
+  readonly version: number | null
+  readonly final: string | null
+}
+
+/** Read (no lock): the GET's editHeld and recordVersion, and the import's row check. */
+export async function recordStateOf(client: Client, record: Pick<CustomRecord, 'model'>, recordId: string): Promise<RecordState> {
+  if (record.model !== 'SalesOrder') return { version: null, final: null }
+  const order = await client.salesOrder.findUnique({ where: { id: recordId }, select: { number: true, status: true, version: true } })
+  if (!order) return { version: null, final: null }
+  return { version: order.version, final: FINAL_ORDER_STATES.includes(order.status) ? finalOrderWords(order.number, order.status) : null }
+}
+
+/**
+ * Around the write of a record's custom values, inside its command: a sales order is locked first (FOR UPDATE, before any value is
+ * written), refused when closed or cancelled (409, the sheet's words), checked against the version the person read when sent
+ * (`recordVersion`; stale: 409, "changed since it was read"); then `write` runs, and once it set or cleared something the order's
+ * version moves by one with updatedAt — so the sheet's next edit at the old row version is stale, never a silent overwrite. A
+ * write that changes nothing moves nothing. Answers the record's version after (null: a record type that keeps none).
+ */
+export async function touchRecordInCommand(tools: CommandTools, record: Pick<CustomRecord, 'model'>, facts: Pick<RecordFacts, 'id'>, recordVersion: number | undefined, write: () => Promise<boolean>): Promise<number | null> {
+  if (record.model !== 'SalesOrder') {
+    await write()
+    return null
+  }
+  const rows = await tools.tx.$queryRaw<{ number: string; status: string; version: number }[]>`SELECT number, status::text AS status, version FROM "SalesOrder" WHERE id = ${facts.id}::uuid FOR UPDATE`
+  const order = rows[0]
+  if (!order) throw new NotFoundError('Order not found.')
+  if (FINAL_ORDER_STATES.includes(order.status)) throw new InvalidStateError(finalOrderWords(order.number, order.status))
+  if (recordVersion !== undefined && recordVersion !== order.version) throw new StaleVersionError('SalesOrder', facts.id, order.version, recordVersion)
+  if (!(await write())) return order.version
+  await tools.tx.salesOrder.update({ where: { id: facts.id }, data: { version: order.version + 1, updatedAt: tools.now }, select: { id: true } })
+  return order.version + 1
+}
+// ── end B-OO-014 ──

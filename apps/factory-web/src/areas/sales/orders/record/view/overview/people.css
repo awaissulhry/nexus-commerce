@@ -1,0 +1,40 @@
+/* ── F-OO-131 (order overview lane; 10-design §3.1) — People: one aligned list, the label | the value | one door ─────────────────
+   Each row is the Overview's shared card row (.fw-so-ov-row, overview.css) laid on the list's own columns (subgrid), so every label,
+   value and door lines up with the rows above it. Below a 480 px card the doors wrap under the words, to the right (the shared
+   rule); below a 360 px card (a phone) a row stacks: the label above its value, the doors under it. Layout only, tokens only. */
+.fw-so-people-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  gap: var(--nds-space-10) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-so-people-list > .fw-so-ov-row {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.fw-so-people-label {
+  color: var(--nds-text-muted);
+}
+
+@container fw-so-ov-card (max-width: 479px) {
+  .fw-so-people-list {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  /* F-OO-132: the supervisor's doors (SupervisorFact's row face) wrap under the words as every row's doors do. */
+  .fw-so-people-list > .fw-so-ov-row > .fw-psv-doors {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}
+
+@container fw-so-ov-card (max-width: 359px) {
+  .fw-so-people-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

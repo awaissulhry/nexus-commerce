@@ -426,6 +426,18 @@
     "artworkOpen": "Apri le grafiche nel visualizzatore"
   },
   "dates": {
+    "promisedExFactory": "Promesso (franco fabbrica)",
+    "promisedMoved_one": "{date} · spostata {count} volta · {days} g dalla prima promessa",
+    "promisedMoved_other": "{date} · spostata {count} volte · {days} g dalla prima promessa",
+    "promisedMovedOnly_one": "{date} · spostata {count} volta",
+    "promisedMovedOnly_other": "{date} · spostata {count} volte",
+    "planSays": "Il piano dice pronto",
+    "planAfter": "{date} · {days} g dopo la promessa",
+    "planBefore": "{date} · {days} g prima della promessa",
+    "planSame": "{date} · il giorno della promessa",
+    "planNone": "Ancora niente lo pianifica",
+    "fromPlan": "(dal piano)",
+    "requestedByCustomer": "Richiesto dal cliente",
     "title": "Date e tappe",
     "ordered": "Ordinato",
     "requested": "Richiesto",
@@ -984,6 +996,39 @@
     "pricedHeld": {
       "apply": "Una modifica con prezzi la fa chi vede i prezzi.",
       "net": "Imponibile: visibile a chi vede i prezzi"
+    }
+  },
+  "facts": {
+    "requested": {
+      "title": "Cambia la data richiesta di {number}",
+      "date": "Nuova data richiesta",
+      "dateHint": "Da oggi in poi. Salvata come modifica {revision}.",
+      "reasonHint": "Resta con la modifica nella scheda Modifiche.",
+      "problem": {
+        "past": "La data richiesta è da oggi in poi",
+        "same": "È già la data richiesta"
+      }
+    },
+    "payment": "Pagamento · valuta",
+    "languageTax": "Lingua · regime fiscale",
+    "made": "Creato",
+    "madeBy": "{date} da {name} · modificato il {changed}",
+    "madeNoName": "{date} · modificato il {changed}",
+    "ordered": "ordinato il {date}",
+    "fixed": "Fisso",
+    "fixedTitle": "Fissato quando l'ordine è stato creato; non cambia.",
+    "set": "Imposta…",
+    "unread": "Non è stato possibile leggerlo",
+    "note": {
+      "label": "Nota dell'ufficio",
+      "tag": "Solo l'ufficio la vede",
+      "empty": "Nessuna nota",
+      "title": "Nota dell'ufficio · {number}",
+      "hint": "La legge solo l'ufficio; il cliente mai.",
+      "go": "Salva la nota",
+      "long": "La nota è al massimo di {max} caratteri",
+      "same": "È già questa la nota",
+      "saved": "Nota dell'ufficio salvata."
     }
   },
   "editor": {
@@ -1555,7 +1600,6 @@
   "overview": {
     "where": "A che punto è",
     "progress": "Avanzamento per riga",
-    "progressHint": "I pezzi di questo ordine · una riga apre le sue taglie",
     "ahead_one": "{count} riga avanti",
     "ahead_other": "{count} righe avanti",
     "bundles_one": "Fasci in lavorazione: {count} a {stage}",
@@ -1581,13 +1625,10 @@
     "col": {
       "line": "Riga"
     },
-    "lineName": "Riga {seq} · {stage}",
     "lineNoStage": "Riga {seq}",
     "lineOpen": "Apri le taglie della riga {seq} · {name}",
     "total_one": "Totale · {count} riga",
     "total_other": "Totale · {count} righe",
-    "madeExtra_one": "{count} pezzo fatto in più",
-    "madeExtra_other": "{count} pezzi fatti in più",
     "sizes": {
       "label": "Spediti e fine prevista per taglia",
       "size": "Taglia",
@@ -1602,16 +1643,13 @@
       "title": "Persone",
       "backup": "Sostituto",
       "answers": "Risponde al cliente",
-      "madeBy": "Creato da",
-      "madeByOn": "{name} · {date}",
       "where": "Dove si produce",
       "notPlanned": "Non ancora pianificato",
       "held": "Chi ci lavora è visibile a chi segue la produzione."
     },
     "dates": {
       "title": "Prossime date",
-      "all": "Tutte le date ›",
-      "none": "Nessuna data ancora: le tappe le fissa la pianificazione"
+      "all": "Tutte le date ›"
     },
     "requests": {
       "title": "Richieste e modifiche",
@@ -1636,19 +1674,42 @@
     },
     "facts": {
       "title": "Dati dell'ordine",
-      "customerRef": "Ordine del cliente",
-      "language": "Lingua",
-      "lang": {
-        "it": "Italiano",
-        "en": "Inglese"
-      },
-      "made": "Creato · modificato",
-      "madeValue": "{made} · {changed}"
+      "customerRef": "Ordine del cliente"
     }
   },
   "mtm": {
     "units_one": "Su misura · {count} unità",
     "units_other": "Su misura · {count} unità"
+  },
+  "progress": {
+    "inWork": "Negli ordini di lavoro: {done} di {total}",
+    "madeExtra": "{sizes} in più dell'ordine: tagliati o da tagliare",
+    "noPicture": "Ancora nessuna immagine",
+    "addPicture": "Aggiungila nel modello ›",
+    "addPictureOf": "Aggiungi l'immagine di {name} nel suo modello",
+    "moves": "Azioni per la riga {seq} · {name}",
+    "move": {
+      "make": "Crea ordini di lavoro per questa riga…",
+      "close": "Chiudi in anticipo questa riga…",
+      "reopen": "Riapri questa riga…",
+      "change": "Cambia quantità o taglie…",
+      "discuss": "Discuti questa riga"
+    },
+    "held": {
+      "allInWork": "Ogni pezzo di questa riga è già negli ordini di lavoro",
+      "closedLine": "Questa riga è chiusa in anticipo: prima riaprila",
+      "nothingLeft": "Di questa riga non resta nulla da chiudere: è spedita per intero"
+    },
+    "work": {
+      "title": "I suoi ordini di lavoro",
+      "of_one": "{status} · {count} pezzo di questa riga",
+      "of_other": "{status} · {count} pezzi di questa riga",
+      "none": "Ancora nessun ordine di lavoro per questa riga",
+      "held": "I suoi ordini di lavoro sono visibili a chi segue la produzione."
+    },
+    "final": {
+      "none": "Ancora nessun controllo finale"
+    }
   },
   "files": {
     "title": "File",
@@ -1681,6 +1742,10 @@
     "revision": "revisione {revision}",
     "step": "rata {seq}",
     "yourOrderSeq": "il vostro ordine {seq}"
+  },
+  "people": {
+    "supervisor": "Supervisore",
+    "followers": "Chi segue ›"
   },
   "told": {
     "title": "Chi è stato avvisato",

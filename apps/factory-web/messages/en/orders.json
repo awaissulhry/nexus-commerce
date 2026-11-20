@@ -426,6 +426,18 @@
     "artworkOpen": "Open the artwork in the viewer"
   },
   "dates": {
+    "promisedExFactory": "Promised (ex-factory)",
+    "promisedMoved_one": "{date} · moved {count}× · {days} d since first promised",
+    "promisedMoved_other": "{date} · moved {count}× · {days} d since first promised",
+    "promisedMovedOnly_one": "{date} · moved {count}×",
+    "promisedMovedOnly_other": "{date} · moved {count}×",
+    "planSays": "Plan says ready",
+    "planAfter": "{date} · {days} d after the promise",
+    "planBefore": "{date} · {days} d before the promise",
+    "planSame": "{date} · on the promise day",
+    "planNone": "Nothing plans it yet",
+    "fromPlan": "(from the plan)",
+    "requestedByCustomer": "Requested by customer",
     "title": "Dates & milestones",
     "ordered": "Ordered",
     "requested": "Requested",
@@ -984,6 +996,39 @@
     "pricedHeld": {
       "apply": "A priced change is made by someone who sees prices.",
       "net": "Net: shown to people who see prices"
+    }
+  },
+  "facts": {
+    "requested": {
+      "title": "Change the requested date of {number}",
+      "date": "New requested date",
+      "dateHint": "Today or later. Saved as amendment {revision}.",
+      "reasonHint": "Kept with the amendment on the Changes tab.",
+      "problem": {
+        "past": "The requested date is today or later",
+        "same": "It is the requested date already"
+      }
+    },
+    "payment": "Payment · currency",
+    "languageTax": "Language · tax mode",
+    "made": "Made",
+    "madeBy": "{date} by {name} · changed {changed}",
+    "madeNoName": "{date} · changed {changed}",
+    "ordered": "ordered {date}",
+    "fixed": "Fixed",
+    "fixedTitle": "Set when the order was made; it does not change.",
+    "set": "Set…",
+    "unread": "Could not be read",
+    "note": {
+      "label": "Office note",
+      "tag": "Only the office sees it",
+      "empty": "No note",
+      "title": "Office note · {number}",
+      "hint": "Only the office reads it; the customer never does.",
+      "go": "Save note",
+      "long": "The note is at most {max} characters",
+      "same": "It is the note already",
+      "saved": "Office note saved."
     }
   },
   "editor": {
@@ -1555,7 +1600,6 @@
   "overview": {
     "where": "Where it is now",
     "progress": "Progress by line",
-    "progressHint": "This order's own pieces · a line opens its sizes",
     "ahead_one": "{count} line ahead",
     "ahead_other": "{count} lines ahead",
     "bundles_one": "Bundles in work: {count} at {stage}",
@@ -1581,13 +1625,10 @@
     "col": {
       "line": "Line"
     },
-    "lineName": "Line {seq} · {stage}",
     "lineNoStage": "Line {seq}",
     "lineOpen": "Open the sizes of line {seq} · {name}",
     "total_one": "Total · {count} line",
     "total_other": "Total · {count} lines",
-    "madeExtra_one": "{count} piece made extra",
-    "madeExtra_other": "{count} pieces made extra",
     "sizes": {
       "label": "Shipped and the finish forecast by size",
       "size": "Size",
@@ -1602,16 +1643,13 @@
       "title": "People",
       "backup": "Backup",
       "answers": "Answers the customer",
-      "madeBy": "Made by",
-      "madeByOn": "{name} · {date}",
       "where": "Where it is made",
       "notPlanned": "Not planned yet",
       "held": "Who works on it is shown to people who follow production."
     },
     "dates": {
       "title": "Next dates",
-      "all": "All dates ›",
-      "none": "No dates set yet — Planning sets the gates"
+      "all": "All dates ›"
     },
     "requests": {
       "title": "Requests & changes",
@@ -1636,19 +1674,42 @@
     },
     "facts": {
       "title": "Order facts",
-      "customerRef": "Customer PO",
-      "language": "Language",
-      "lang": {
-        "it": "Italian",
-        "en": "English"
-      },
-      "made": "Made · changed",
-      "madeValue": "{made} · {changed}"
+      "customerRef": "Customer PO"
     }
   },
   "mtm": {
     "units_one": "Made to measure · {count} unit",
     "units_other": "Made to measure · {count} units"
+  },
+  "progress": {
+    "inWork": "In work orders: {done} of {total}",
+    "madeExtra": "{sizes} more than ordered: cut or planned to cut",
+    "noPicture": "No picture yet",
+    "addPicture": "Add on the style ›",
+    "addPictureOf": "Add the picture of {name} on its style",
+    "moves": "Actions for line {seq} · {name}",
+    "move": {
+      "make": "Make work orders for this line…",
+      "close": "Close this line short…",
+      "reopen": "Reopen this line…",
+      "change": "Change quantity or sizes…",
+      "discuss": "Discuss this line"
+    },
+    "held": {
+      "allInWork": "Every piece of this line is in work orders",
+      "closedLine": "This line is closed short: reopen it first",
+      "nothingLeft": "Nothing of this line is left to close: it shipped in full"
+    },
+    "work": {
+      "title": "Its work orders",
+      "of_one": "{status} · {count} piece of this line",
+      "of_other": "{status} · {count} pieces of this line",
+      "none": "No work order makes this line yet",
+      "held": "Its work orders are shown to people who follow production."
+    },
+    "final": {
+      "none": "No final inspection yet"
+    }
   },
   "files": {
     "title": "Files",
@@ -1681,6 +1742,10 @@
     "revision": "revision {revision}",
     "step": "payment step {seq}",
     "yourOrderSeq": "your order {seq}"
+  },
+  "people": {
+    "supervisor": "Supervisor",
+    "followers": "Followers ›"
   },
   "told": {
     "title": "Who was told",

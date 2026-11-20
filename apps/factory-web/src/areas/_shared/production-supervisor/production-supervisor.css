@@ -7,6 +7,23 @@
   min-width: 0;
 }
 
+/* ---- F-OO-132: the 'row' face — its value cell and its doors cell (the caller's row places them; the doors keep to the right). */
+.fw-psv-value {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-psv-doors {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+/* ---- end F-OO-132 */
+
 .fw-psv-dialog {
   display: flex;
   flex-direction: column;
