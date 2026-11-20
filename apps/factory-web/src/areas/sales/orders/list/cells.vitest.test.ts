@@ -231,7 +231,7 @@ describe('F-CP-107 (cp-fx16): Where it is never repeats the Status the row shows
     expect(statusShownOf({ shown: ['picture', 'number', 'status', 'whereItIs'] })).toBe(true)
     expect(statusShownOf({ shown: ['picture', 'number', 'whereItIs'] })).toBe(false) // In production
     const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain("setStatusShown(ids.includes('status'))")
+    expect(view).toContain("setShowsStatus(ids.includes('status'))")
     expect(view).toContain('actions?.onShownColumns?.(ids)') // B-TH-244 still told
     expect(view).toContain('statusShown={statusShown')
   })
