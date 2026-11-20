@@ -788,6 +788,9 @@
     "dateHint": "Da oggi in poi. La prima promessa resta registrata.",
     "why": "Perché (lo legge il cliente)",
     "pick": "Scegli un motivo",
+    "officeReason": {
+      "YOUR_CHANGE": "Il cliente ha chiesto la modifica"
+    },
     "customerReads": "Il cliente legge:",
     "note": "La tua nota (solo ufficio)",
     "reason": "Perché",
@@ -1637,6 +1640,7 @@
       },
       "credit": {
         "waits": "Blocco fido — aspetta il sì di {who}",
+        "asked": "Blocco fido — aspetta un sì già chiesto",
         "nobody": "Blocco fido — nessuno ha ancora chiesto un sì"
       },
       "review_one": "Aspetta il controllo della fabbrica di {count} capo su misura",
@@ -1832,7 +1836,8 @@
   },
   "progress": {
     "inWork": "Negli ordini di lavoro: {done} di {total}",
-    "madeExtra": "{sizes} in più dell'ordine: tagliati o da tagliare",
+    "madeExtra": "{sizes} in più dell'ordine (tagliati o da tagliare)",
+    "extraSize": "Taglia {size}: {count}",
     "noPicture": "Ancora nessuna immagine",
     "addPicture": "Aggiungila nel modello ›",
     "addPictureOf": "Aggiungi l'immagine di {name} nel suo modello",
@@ -2120,7 +2125,7 @@
     "change": "Cambia…",
     "ownDates": "Le date dell'ordine",
     "backupFor": "per tutti gli ordini di {customer}",
-    "backupElsewhere": "Cambialo nella pagina di {customer} ›"
+    "backupElsewhere": "Apri il cliente ›"
   },
   "wocs": {
     "title": "Modifiche agli ordini di lavoro di questo ordine",
@@ -2344,6 +2349,9 @@
     "inv": {
       "issued_one": "{count} emessa",
       "issued_other": "{count} emesse",
+      "noneIssued": "nessuna emessa",
+      "issuedOf_one": "{count} emessa ({of})",
+      "issuedOf_other": "{count} emesse ({of})",
       "draft_one": "{count} in bozza",
       "draft_other": "{count} in bozza",
       "creditNote_one": "{count} nota di credito",

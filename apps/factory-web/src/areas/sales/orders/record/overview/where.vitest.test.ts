@@ -304,6 +304,11 @@ describe('F-OO-104: the strips — the yes, the credit, the review, the deposit,
     expect(kinds(stripsOf({ ...order('PENDING_APPROVAL'), waits: undefined }, null, APPROVAL_PENDING, FAILED_STATE).strips)).toEqual(['yes'])
     // Held by its credit only: the credit strip, nobody asked for the override yet; no yes strip of the order's own.
     expect(stripsOf({ ...order('PENDING_APPROVAL'), waits: ['CREDIT_HOLD'] }, null, null, FAILED_STATE).strips).toEqual([{ key: 'credit', kind: 'credit', task: null, asked: false, who: null, since: null }])
+    // Walk #2: a credit yes asked that this reader sees no task of (no approvals list: Production, Warehouse) is still asked — the
+    // yes's read names it (creditHold.requestTaskId); "nobody asked" only when that read says none is asked.
+    const creditRead = (requestTaskId: string | null): Approval => ({ ...APPROVAL_NOBODY, reasons: [{ reason: 'CREDIT_HOLD' }], creditHold: { checkId: 'c-hold', requestTaskId }, requests: [] })
+    expect(stripsOf({ ...order('PENDING_APPROVAL'), openApprovals: [], waits: undefined }, null, creditRead('t-hidden'), FAILED_STATE).strips).toEqual([{ key: 'credit', kind: 'credit', task: null, asked: true, who: null, since: null }])
+    expect(stripsOf({ ...order('PENDING_APPROVAL'), openApprovals: [], waits: undefined }, null, creditRead(null), FAILED_STATE).strips).toEqual([{ key: 'credit', kind: 'credit', task: null, asked: false, who: null, since: null }])
     // A release held by the credit while the order is in work: its override's yes is a strip too (never hidden: it is no request).
     const inWork = stripsOf({ ...order('IN_PRODUCTION'), openApprovals: [task('CREDIT_OVERRIDE', 't-release', '2026-11-15T09:00:00Z')] }, readWith([]))
     expect(inWork.strips).toMatchObject([{ kind: 'credit', asked: true, task: { taskId: 't-release' } }])
@@ -430,7 +435,7 @@ describe('F-OO-105: the strips\' doors — the band\'s yes, the payment, the row
   })
 
   it('the words exist in both languages, office "tu" in Italian', () => {
-    const KEYS = ['where.strips', 'where.strip.yes.waits', 'where.strip.yes.asked', 'where.strip.yes.nobody', 'where.strip.credit.waits', 'where.strip.credit.nobody', 'where.strip.reviewUnits', 'where.strip.reviewDoor.open', 'where.strip.reviewDoor.noRight', 'where.strip.reviewDoor.several', 'where.strip.deposit.waiting', 'where.strip.deposit.overdue', 'where.strip.deposit.open', 'where.strip.quality', 'where.strip.qualityPlain', 'where.strip.production', 'where.strip.productionPlain', 'where.strip.pause', 'where.strip.andMore', 'where.strip.qualityWho', 'where.strip.release', 'where.strip.releaseOf', 'where.strip.openWo', 'where.strip.failed', 'where.strip.showMore', 'where.strip.showFewer']
+    const KEYS = ['where.strips', 'where.strip.yes.waits', 'where.strip.yes.asked', 'where.strip.yes.nobody', 'where.strip.credit.waits', 'where.strip.credit.asked' /* walk #2 */, 'where.strip.credit.nobody', 'where.strip.reviewUnits', 'where.strip.reviewDoor.open', 'where.strip.reviewDoor.noRight', 'where.strip.reviewDoor.several', 'where.strip.deposit.waiting', 'where.strip.deposit.overdue', 'where.strip.deposit.open', 'where.strip.quality', 'where.strip.qualityPlain', 'where.strip.production', 'where.strip.productionPlain', 'where.strip.pause', 'where.strip.andMore', 'where.strip.qualityWho', 'where.strip.release', 'where.strip.releaseOf', 'where.strip.openWo', 'where.strip.failed', 'where.strip.showMore', 'where.strip.showFewer']
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of KEYS) expect(t(key, { who: 'X', date: 'D', reasons: 'R', numbers: 'N', number: 'N', count: 2 }), `${locale} ${key}`).not.toBe(key)
@@ -442,6 +447,8 @@ describe('F-OO-105: the strips\' doors — the band\'s yes, the payment, the row
     expect(it('where.strip.on', { count: 1, numbers: 'WO-00021' })).toBe('su 1 ordine di lavoro: WO-00021')
     expect([en('where.strip.notReached', { count: 1 }), it('where.strip.notReached', { count: 1 })]).toEqual(['and 1 work order outside what you can open', 'e 1 ordine di lavoro fuori da ciò che puoi aprire'])
     expect([en('where.strip.credit.waits', { who: 'Finance' }), it('where.strip.credit.waits', { who: 'Finance' })]).toEqual(["Credit hold — waits for Finance's yes", 'Blocco fido — aspetta il sì di Finance'])
+    // Walk #2: asked of someone this reader cannot name — the yes strip's own words ("a yes that is asked"), never "nobody asked".
+    expect([en('where.strip.credit.asked'), it('where.strip.credit.asked')]).toEqual(['Credit hold — waits for a yes that is asked', 'Blocco fido — aspetta un sì già chiesto'])
     expect([en('where.strip.release'), it('where.strip.release')]).toEqual(['Release on Quality ›', 'Sblocca in Qualità ›'])
     // Office "tu": the Italian never says "voi" / "vostro" (the portal's).
     const strip = itWordsUnder('where.')
@@ -757,6 +764,29 @@ describe('F-OO-106: the credit strip — Check credit again, Ask for a yes… on
     expect(creditAskNoticeOf(null)).toEqual({ tone: 'success', words: { key: 'where.credit.askedSomeone' } })
   })
 
+  it('walk #2: the credit part reads the yes\'s read — a hold the order read does not name is seen; without the credit right, who decides', () => {
+    // The order read sends no `waits`, and no CREDIT_OVERRIDE task this reader may see: only the yes's read names the hold.
+    const value: Order = { ...order('PENDING_APPROVAL'), openApprovals: [] }
+    const hold = { creditHold: { checkId: CHECK, requestTaskId: 't-hidden' } }
+    const base = { api: {} as unknown as ApiClient, orderId: value.id, current: { current: value }, version: () => value.version, setNotice: () => undefined, load: async () => undefined, loadParts: () => undefined, write: async () => undefined } as unknown as RecordActsBase
+    const creditOf = (permissions: readonly string[], approval: typeof hold | null): CreditState | null | undefined => {
+      let credit: CreditState | null | undefined
+      function Harness() {
+        credit = useOverviewActs({ base, credit: { permissions, approval } }).model.credit
+        return null
+      }
+      render(createElement(Harness), 'en')
+      return credit
+    }
+    // Production, Warehouse (no credit right): the strip's "who decides" line (creditLinesOf); nothing is read.
+    expect(creditOf([], hold)).toEqual({ view: false, record: null })
+    expect(creditLinesOf(creditOf([], hold) ?? null, true)).toEqual([{ phrase: { key: 'where.credit.whoDecides' } }])
+    // Sales or Finance (the credit right): the hold's credit is read (keyed: its read starts on mount).
+    expect(creditOf(['sales.credit.view'], hold)).toEqual({ view: true, record: null })
+    // The yes's read not there yet (or failed): no hold claimed.
+    expect(creditOf([], null)).toBeNull()
+  })
+
   it('the hook: Check credit again and Ask send no version (the check id is the lock), through the page\'s one write; a refusal stays in the dialog', async () => {
     const value: Order = { ...order('PENDING_APPROVAL'), openApprovals: [] }
     const after = customer({ may: { checkAgain: true, ask: false } }, { request: { taskId: 't-new', status: 'PENDING', approver: 'Finance', requestedAt: '2026-11-20T09:00:00Z', dueAt: null } })
@@ -881,7 +911,9 @@ describe('F-OO-106: the credit strip — Check credit again, Ask for a yes… on
       const client = readFileSync(new URL('../credit/api.ts', import.meta.url), 'utf8')
       for (const money of ['limit:', 'exposure', 'openOrders', 'available', 'overLimitBy', 'usedPct', 'amount']) expect(client, money).not.toContain(money)
       const container = readFileSync(new URL('../OrderRecord.tsx', import.meta.url), 'utf8')
-      expect(container).toContain("credit: { permissions: session.permissions, reread: () => { depth.actions.onRetry?.('approval'); production.again(['headline']) } } /* F-OO-106 */")
+      // Walk #2: + the yes's read (a credit hold the order read does not name), so the hook is mounted after the depth read.
+      expect(container).toContain("credit: { permissions: session.permissions, reread: () => { depth.actions.onRetry?.('approval'); production.again(['headline']) }, approval: depth.model.approval?.value ?? null /* walk #2 */ } /* F-OO-106 */")
+      expect(container.indexOf('const overview = useOverviewActs(')).toBeGreaterThan(container.indexOf('const depth = useOrderDepth('))
     })
 
     it('the words exist in both languages, office "tu" in Italian', () => {

@@ -220,7 +220,9 @@ export function whereStripsOf(order: StripOrder, read: Pick<OrderProduction, 'he
   // The credit hold: its override's yes when one is asked (it may also hold a release while the order is in work).
   const credit = tasks.find((task) => task.kind === 'CREDIT_OVERRIDE') ?? null
   if (credit || (waits && (reasons.includes('CREDIT_HOLD') || !!approval?.creditHold))) {
-    strips.push({ key: 'credit', kind: 'credit', task: credit, asked: !!credit, who: credit?.approver.name ?? null, since: credit?.requestedAt ?? null })
+    // F-OO-106 (walk #2): a credit yes asked that this reader sees no task of is still asked — the yes's read (orders.view) names it
+    // (`creditHold.requestTaskId`), so a reader without the approvals list never reads "nobody asked" over a yes that waits.
+    strips.push({ key: 'credit', kind: 'credit', task: credit, asked: !!credit || !!approval?.creditHold?.requestTaskId, who: credit?.approver.name ?? null, since: credit?.requestedAt ?? null })
   }
   if (waits && reasons.includes('MEASUREMENTS')) strips.push({ key: 'review', kind: 'review', count: order.madeToMeasure?.waitingReview ?? null, since: null })
 

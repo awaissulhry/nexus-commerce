@@ -13,8 +13,9 @@ import { createShipmentDoor, createShipmentHeld, type CreateShipmentDoor } from 
  *
  *   Work orders   "4 · 2 in work · 1 draft · 1 on hold · 1 done" (D3: their statuses; the stage is Where it is now's) — Production
  *   Shipments     "3 · last DDT 101/2026" — Shipments, where every DDT is
- *   Invoices      "1 issued · 1 draft · 1 credit note · 1 deposit invoice" — Money › Invoices, where the credit notes are; without
- *                 invoices.view the Money tab's own sentence alone (F-OP-306)
+ *   Invoices      "3 issued (1 credit note, 1 deposit invoice) · 1 draft", "none issued · 1 draft" — Money › Invoices, where the
+ *                 credit notes are; without invoices.view the Money tab's own sentence alone (F-OP-306). Walk #8, #9: the issued count
+ *                 leads — the Money badge's own number — and the credit notes and deposit invoices are said as part of it
  *   Complaints · Returns   their counts (GET …/links) — Shipments' "Complaints & returns"
  *
  * Every number is the domain's ONE count rule (`orderLinkCountsOf`, B-OO-012): live records only, what was cancelled said in words
@@ -42,12 +43,26 @@ export interface LinkedRow {
   /** The number that leads the value ("4 · …"); null: the value is its parts alone (invoices). */
   readonly count: number | null
   /** The value's parts in words, each non-zero one only (joined with " · " on screen). */
-  readonly parts: readonly Phrase[]
+  readonly parts: readonly LinkedPart[]
   /** Where the value opens (the order's own tab, the dock's scope kept); null: nothing to open. */
   readonly href: string | null
   /** Held for this reader: the sentence it reads alone, no label and no number (F-OP-306). */
   readonly held: Phrase | null
   readonly door: LinkedDoor | null
+}
+
+/** A part of a row's value; walk #8: `of` — what it holds, said in it as `{of}` ("3 issued (1 credit note, 1 deposit invoice)"). */
+export type LinkedPart = Phrase & { readonly of?: readonly Phrase[] }
+
+/**
+ * Walk #8, #9 (D8: one rule): the invoices lead with the issued count — the number the Money badge counts (tabCountOf), "none issued"
+ * when it is 0 — with the credit notes and deposit invoices said as part of it (one count, never read as more invoices), then the
+ * drafts, which the badge leaves out.
+ */
+export function invoicePartsOf(invoices: { readonly issued: number; readonly drafts: number; readonly creditNotes: number; readonly deposits: number }): LinkedPart[] {
+  const of = ([['linked.inv.creditNote', invoices.creditNotes], ['linked.inv.deposit', invoices.deposits]] as const).filter(([, count]) => count > 0).map(([key, count]) => phrase(key, { count }))
+  const issued: LinkedPart = invoices.issued === 0 ? phrase('linked.inv.noneIssued') : of.length > 0 ? { ...phrase('linked.inv.issuedOf', { count: invoices.issued }), of } : phrase('linked.inv.issued', { count: invoices.issued })
+  return [issued, ...(invoices.drafts > 0 ? [phrase('linked.inv.draft', { count: invoices.drafts })] : [])]
 }
 
 /** A part of the quiet last line: where the order came from, the deposit that waits for nothing, an order of the same quote. */
@@ -107,7 +122,7 @@ export function linkedRowsOf(input: LinkedInput): LinkedView {
 
   const rows: LinkedRow[] = []
   const none: LinkedKind[] = []
-  const ready = (kind: LinkedKind, count: number | null, parts: readonly Phrase[], href: string | null, door: LinkedDoor | null = null) => rows.push({ kind, state: 'ready', count, parts, href, held: null, door })
+  const ready = (kind: LinkedKind, count: number | null, parts: readonly LinkedPart[], href: string | null, door: LinkedDoor | null = null) => rows.push({ kind, state: 'ready', count, parts, href, held: null, door })
 
   const wo = counts.workOrders
   if (wo.live + wo.cancelled > 0 || make) ready('workOrders', wo.live, nonZero([['linked.wo.inWork', wo.inWork], ['linked.wo.draft', wo.draft], ['linked.wo.onHold', wo.onHold], ['linked.wo.done', wo.done], ['linked.wo.cancelled', wo.cancelled]]), wo.live + wo.cancelled > 0 ? tab('production') : null, make)
@@ -123,7 +138,7 @@ export function linkedRowsOf(input: LinkedInput): LinkedView {
   if (!can.viewInvoices) rows.push({ kind: 'invoices', state: 'held', count: null, parts: [], href: null, held: phrase('money.noInvoiceRight'), door: null })
   else {
     const inv = counts.invoices
-    if (inv.issued + inv.drafts > 0) ready('invoices', null, nonZero([['linked.inv.issued', inv.issued], ['linked.inv.draft', inv.drafts], ['linked.inv.creditNote', inv.creditNotes], ['linked.inv.deposit', inv.deposits]]), tab('money', 'invoices'))
+    if (inv.issued + inv.drafts > 0) ready('invoices', null, invoicePartsOf(inv) /* walk #8, #9 */, tab('money', 'invoices'))
     else none.push('invoices')
   }
 

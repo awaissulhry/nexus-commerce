@@ -2,11 +2,13 @@
    One grid for the card (the label | the value | one door): the own dates' list and the gates' list lie on its columns (subgrid),
    each row on theirs, so every label, value and door lines up across both; a 1 px rule parts the gates from the own dates.
    "Plan says ready" sits under the promise, indented; its words turn amber when the plan ends after the promise (or nothing plans
-   an order that has one). Below a 480 px card the doors wrap under the words (the shared row, overview.css); below a 360 px card
-   (a phone) a row stacks: the label above its value, the doors under it. Layout only, tokens only. */
+   an order that has one). Layout only, tokens only.
+   F-OO-141 (walk #1: the dates were crushed with the dock open): the label column fits its words up to 40 % of the card — a long gate
+   name wraps, it never squeezes the value — and below a 480 px card a row stacks: the label on its own line, then the value with
+   its door beside it, to the right. So a value always has room for its day ("02/12/2026" never breaks or runs past the edge). */
 .fw-so-dates-grid {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) auto;
+  grid-template-columns: fit-content(40%) minmax(0, 1fr) auto;
   gap: var(--nds-space-10) var(--nds-space-12);
   min-width: 0;
 }
@@ -40,6 +42,11 @@
   padding-left: var(--nds-space-12);
 }
 
+/* Walk #1: a value wraps at its spaces only — a day or a number is never broken inside. */
+.fw-so-dates-value {
+  overflow-wrap: normal;
+}
+
 .fw-so-dates-warn {
   color: var(--nds-warning-text);
 }
@@ -61,18 +68,35 @@
   padding-left: var(--nds-space-12);
 }
 
+/* Walk #1: below a 480 px card (1440 with the dock open, a phone) a row stacks — the label on its own line, the value under it with
+   its door beside it, to the right (the shared row would drop the door under the words: not here). Under the promise both stay
+   indented. */
 @container fw-so-ov-card (max-width: 479px) {
   .fw-so-dates-grid {
-    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .fw-so-dates-rows > .fw-so-ov-row > .fw-so-dates-label {
+    grid-column: 1 / -1;
+  }
+
+  .fw-so-dates-rows > .fw-so-ov-row > .fw-so-ov-doors {
+    grid-column: 2;
+  }
+
+  .fw-so-dates-value.is-under {
+    padding-left: var(--nds-space-12);
+  }
+
+  /* F-OO-143: the refused new date's sentence takes the value's place, Decide… beside it. */
+  .fw-so-dates-wide {
+    grid-column: 1;
   }
 }
 
 @container fw-so-ov-card (max-width: 359px) {
-  .fw-so-dates-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .fw-so-dates-label.is-under {
+  .fw-so-dates-label.is-under,
+  .fw-so-dates-value.is-under {
     padding-left: 0;
   }
 

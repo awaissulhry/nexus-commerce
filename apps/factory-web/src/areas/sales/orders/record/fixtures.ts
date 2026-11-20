@@ -540,7 +540,8 @@ export const SO2_BLOCKERS = [
   blockerOf('GATE', 'US', 'A gate is not passed yet', '2026-11-02T08:00:00Z', { type: 'OrderGate', id: '0190f0e2-6161-7000-8000-000000000001' }),
   blockerOf('GATE', 'US', 'A gate is not passed yet', '2026-11-02T08:00:00Z', { type: 'OrderGate', id: '0190f0e2-6161-7000-8000-000000000002' }),
   blockerOf('BRAND_REQUEST', 'US', 'A customer request waits for our answer', SO2_REQUEST.askedAt, { type: 'OrderChangeRequest', id: SO2_REQUEST.id }, 'REQUEST'),
-  blockerOf('APPROVAL', 'BRAND', "Waiting for the customer's yes", '2026-11-05T09:00:00Z', { type: 'ApprovalRequest', id: '0190f0e2-6262-7000-8000-000000000001' }),
+  // Walk #3: the API names what an approval we asked asks (its kind) — production-read blockerWordsOf.
+  blockerOf('APPROVAL', 'BRAND', "Waiting for the customer's yes: Artwork", '2026-11-05T09:00:00Z', { type: 'ApprovalRequest', id: '0190f0e2-6262-7000-8000-000000000001' }),
 ]
 // F-OO-205 (lead note, W03): SO-0002 has one step still to do (planning lowers WO-00021's 54 to 0) — the design screen shows its real
 // Changes count, 3 (1 on us, 1 on the customer, 1 still to do), the same as the unit test.
@@ -551,7 +552,7 @@ const SO3_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!,
 const EXTRA_READ = {
   ...SO2_READ,
   changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } }, // F-OO-205: no step left (SO-0002's own is not here)
-  lines: PRODUCTION_READ.lines!.map((line, index) => (index === 0 ? { ...line, madeExtra: 1, sizes: line.sizes.map((size, at) => (at === 0 ? { ...size, madeExtra: 1, madeExtraWords: { en: `1 ${size.size ?? ''} more than ordered: cut or planned to cut`, it: `1 ${size.size ?? ''} in più dell'ordine: tagliati o da tagliare` } } : size)) } : line)),
+  lines: PRODUCTION_READ.lines!.map((line, index) => (index === 0 ? { ...line, madeExtra: 1, sizes: line.sizes.map((size, at) => (at === 0 ? { ...size, madeExtra: 1, madeExtraWords: { en: `Size ${size.size ?? ''}: 1 more than ordered (cut or planned to cut)`, it: `Taglia ${size.size ?? ''}: 1 in più dell'ordine (tagliati o da tagliare)` } /* the API's MADE_EXTRA_WORDS, word for word */ } : size)) } : line)),
 }
 const F_OP_301: DesignCase<RecordCase>[] = [
   { id: 'f-op-301-so2-overview', label: 'F-OP-301 · Production manager · Overview: Waiting on us 1 (a change request), on the customer 1, Still to do 1 — "Changes (3) ›", the badge\'s number (F-OO-205); the two gates are dates (F-OO-202)', model: base('manager', production, { tab: 'overview', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
@@ -602,8 +603,8 @@ const rqBlocker = (kind: string, on: 'US' | 'BRAND', en: string, it: string, sin
 export const RQ_BLOCKERS = [
   rqBlocker('GATE', 'US', 'A gate is not passed yet', 'Un controllo non è ancora superato', '2026-11-02T08:00:00Z', { type: 'OrderGate', id: rqId(801) }),
   rqBlocker('BRAND_REQUEST', 'US', 'A customer request waits for our answer', 'Una richiesta del cliente aspetta la nostra risposta', RQ_ASK.askedAt, { type: 'OrderChangeRequest', id: RQ_ASK.id }, 'REQUEST'),
-  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes", 'Aspetta il sì del cliente', RQ_ASKED[0]!.createdAt, { type: 'ApprovalRequest', id: RQ_ASKED[0]!.id }),
-  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes", 'Aspetta il sì del cliente', RQ_ASKED[1]!.createdAt, { type: 'ApprovalRequest', id: RQ_ASKED[1]!.id }),
+  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes: Artwork", 'In attesa del sì del cliente: Grafica', RQ_ASKED[0]!.createdAt, { type: 'ApprovalRequest', id: RQ_ASKED[0]!.id }), // walk #3: the API's words (its kind)
+  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes: Sample", 'In attesa del sì del cliente: Campione', RQ_ASKED[1]!.createdAt, { type: 'ApprovalRequest', id: RQ_ASKED[1]!.id }), // walk #3: the API's words (its kind)
   rqBlocker('BRAND_REQUEST', 'US', 'A customer request waits for our answer', 'Una richiesta del cliente aspetta la nostra risposta', '2026-11-10T09:00:00Z', { type: 'OrderChangeRequest', id: RQ_AGREED.id }, 'COUNTER'),
   rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes", 'Aspetta il sì del cliente', '2026-11-13T09:00:00Z', { type: 'OrderChangeRequest', id: RQ_COUNTERED.id }),
   rqBlocker('BRAND_PAUSE', 'BRAND', 'The customer paused the work', 'Il cliente ha messo in pausa il lavoro', '2026-11-13T15:00:00Z', { type: 'WorkOrder', id: WORK_ORDERS[0]!.id }),
@@ -611,7 +612,7 @@ export const RQ_BLOCKERS = [
   rqBlocker('QUALITY_HOLD', 'US', 'A quality hold stops the work', 'Un blocco qualità ferma il lavoro', '2026-11-14T08:30:00Z', { type: 'WorkOrder', id: WORK_ORDERS[1]!.id }),
   rqBlocker('BRAND_REQUEST', 'US', 'The customer reported a problem', 'Il cliente ha segnalato un problema', '2026-11-14T11:00:00Z', { type: 'ProductionIssue', id: rqId(802), messageId: rqId(803) }, 'PROBLEM'),
   rqBlocker('PARTNER_TASK', 'BRAND', "An open task on the customer's portal", 'Un compito aperto nel portale del cliente', '2026-11-15T09:00:00Z', { type: 'PartnerTask', id: rqId(804) }),
-  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes", 'Aspetta il sì del cliente', RQ_ASKED[2]!.createdAt, { type: 'ApprovalRequest', id: RQ_ASKED[2]!.id }),
+  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes: Design proof", 'In attesa del sì del cliente: Bozza del design', RQ_ASKED[2]!.createdAt, { type: 'ApprovalRequest', id: RQ_ASKED[2]!.id }), // walk #3: the API's words (its kind)
 ]
 const rqStill = (n: number, kind: string, ref: { type: string; id: string; number: string | null; version?: number }, en: string, it: string, since: string, waitingOn: string, mayAct: boolean) => ({ kind, ref, words: { en, it }, since, waitingOn, mayAct, requestId: n <= 2 ? RQ_ASK.id : null })
 export const RQ_STILL = [

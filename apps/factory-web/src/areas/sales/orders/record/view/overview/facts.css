@@ -1,11 +1,53 @@
 /* ── F-OO-209 (order overview 11-design §7): Order facts — each fact is the Overview's shared card row (overview.css .fw-so-ov-row:
-   label | value | door, the door under the words below a 480 px card), the facts in two columns from an 800 px card
-   (.fw-so-ov-cols). Here only the list's own reset, the label's quiet colour, a value that wraps, and "Fixed" (quiet words in the
+   label | value | door), the facts in two columns from an 800 px card (.fw-so-ov-cols); walk #7 below: one label column, the door
+   on its row. Here only the list's own reset, the label's quiet colour, a value that wraps, and "Fixed" (quiet words in the
    door's place, never a control). Tokens only. ── */
 .fw-so-facts {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* ── F-OO-209 (walk #7: the facts were ragged) — ONE label column for the whole card: the list is the grid (label | value | door) and
+   each fact lies on its columns (subgrid), so every value starts at the same x; from an 800 px card two such column sets side by side
+   (24 px apart). A fact's door stays on its row while the card is 360 px or wider (the shared row drops it under the words below
+   480 px: not here); below 360 px (a phone) a fact stacks, its door under it to the right. ── */
+.fw-so-ov-cols.fw-so-facts {
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  gap: var(--nds-space-10) var(--nds-space-12);
+}
+
+.fw-so-facts > .fw-so-ov-row {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.fw-so-facts > .fw-so-ov-row > .fw-so-ov-doors {
+  grid-column: auto;
+}
+
+@container fw-so-ov-card (min-width: 800px) {
+  .fw-so-ov-cols.fw-so-facts {
+    grid-template-columns: max-content minmax(0, 1fr) auto 0 max-content minmax(0, 1fr) auto;
+  }
+
+  .fw-so-facts > .fw-so-ov-row:not(.fw-so-fact-note):nth-child(odd) {
+    grid-column: 1 / span 3;
+  }
+
+  .fw-so-facts > .fw-so-ov-row:not(.fw-so-fact-note):nth-child(even) {
+    grid-column: 5 / span 3;
+  }
+}
+
+@container fw-so-ov-card (max-width: 359px) {
+  .fw-so-ov-cols.fw-so-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-so-facts > .fw-so-ov-row:not(.fw-so-fact-note) > .fw-so-ov-doors {
+    grid-column: 1 / -1;
+  }
 }
 
 .fw-so-fact-label {

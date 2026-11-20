@@ -85,7 +85,10 @@ describe('F-OO-131: People — one aligned list, label | value | one door; Follo
     const html = card(record)
     expect(rowOf(html, 'Supervisor')).not.toContain('>Ask</button>')
     expect(rowOf(html, 'Answers the customer')).not.toContain('<button')
-    expect(textOf(rowOf(html, 'Backup'))).toContain('Change it on Moto Demo S.r.l.')
+    // Walk #12: the backup's link says where it goes — never "Change" (a link to the customer's page) — and it wraps, never cut.
+    expect(textOf(rowOf(html, 'Backup'))).toContain('Open the customer ›')
+    expect(textOf(rowOf(html, 'Backup'))).not.toMatch(/Change/)
+    expect(rowOf(html, 'Backup')).not.toContain('fw-so-cell-sub')
     expect(textOf(html)).toContain('Bea Esempio')
   })
 

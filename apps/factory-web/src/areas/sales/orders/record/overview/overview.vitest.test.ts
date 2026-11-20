@@ -444,7 +444,8 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
     expect(changes.split('1 waiting').length - 1).toBe(2)
     expect(changes).not.toContain('3 waiting')
     expect(changes).not.toContain('A gate is not passed yet')
-    expect(changes).toContain("Waiting for the customer's yes")
+    // Walk #3: an approval we asked whose question this reader does not read says what it asks — the API's words name its kind.
+    expect(changes).toContain("Waiting for the customer's yes: Artwork")
     expect(changes).not.toContain('Nothing waits on the customer')
     expect(changes).not.toContain('Nothing waits on us')
     // On Changes no row has a door back to Changes itself.
@@ -490,7 +491,8 @@ describe('F-OP-304: Still to do — "Nothing left to do" only when nothing stand
       expect(text).not.toContain(locale === 'en' ? 'Nothing left to do for the accepted changes.' : 'Per le modifiche accettate non resta nulla da fare.')
       expect(text).toContain(locale === 'en' ? 'Made extra' : 'Fatti in più')
       // F-OO-121: the API's words since B-OO-015 (the floor holds a cut order's planned lines too).
-      expect(text).toContain(locale === 'en' ? 'Line 10 · 1 48 more than ordered: cut or planned to cut' : "Riga 10 · 1 48 in più dell'ordine: tagliati o da tagliare")
+      // Walk follow-up (W04): the size named before its count.
+      expect(text).toContain(locale === 'en' ? 'Line 10 · Size 48: 1 more than ordered (cut or planned to cut)' : "Riga 10 · Taglia 48: 1 in più dell'ordine (tagliati o da tagliare)")
     }
     // F-OO-205: SO-0002's case has its step still to do now; the case with nothing left is the Changes tab with no request waiting.
     expect(textOf(draw('f-oo-204-changes-nothing'))).toContain('Nothing left to do for the accepted changes.')

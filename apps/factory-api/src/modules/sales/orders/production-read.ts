@@ -44,6 +44,7 @@ import type { PlaceKind } from './production-contract' // B-OO-008
 import { dayOf, dayOrNull, readLines, readOrderFacts, type LineRecord, type OrderRow } from './store'
 // B-SA-043: the order's extra pieces (cut beyond what it now wants), office only.
 import { madeExtraOf } from './made-extra'
+import { APPROVAL_KINDS, KIND_RULES, type ApprovalKind } from '@nexus/factory-domain/approvals-out/kinds' // walk #3: what an approval we asked asks
 // B-SA-050: Still to do, computed from the records.
 import { stillToDoOf } from './still-to-do'
 // B-OO-008 (order overview N7, N8): who answers the customer by the threads' own owner chain, office only (W08).
@@ -228,6 +229,28 @@ export const BLOCKER_WORDS: Readonly<Record<BlockerKind, Words>> = Object.freeze
   NO_MOVE: { it: 'Fermo di produzione', en: 'Production hold' },
 })
 
+// ── walk #3 (order overview walk fix round): an approval we asked of the customer says what it asks ──────────────────────────────
+/**
+ * A blocker's words for the office. An approval we asked of the customer (an ApprovalRequest) names what it asks — its kind's own name
+ * ("Waiting for the customer's yes: Artwork"), so it never reads like the order's own yes. Never its question: that is free text the
+ * approvals list shows only with partners.approvals.view (and a revised order's names money). A kind not read: the plain words.
+ */
+export function blockerWordsOf(blocker: Pick<Blocker, 'kind' | 'ref'>, askedKinds: ReadonlyMap<string, ApprovalKind>): Words {
+  const kind = blocker.kind === 'APPROVAL' && blocker.ref?.type === 'ApprovalRequest' ? askedKinds.get(blocker.ref.id) : undefined
+  const name = kind ? KIND_RULES[kind].name : null
+  return name ? { it: `${BLOCKER_WORDS.APPROVAL.it}: ${name.it}`, en: `${BLOCKER_WORDS.APPROVAL.en}: ${name.en}` } : BLOCKER_WORDS[blocker.kind]
+}
+
+/** walk #3: the kinds of the approvals we asked that the blockers name (one read; a kind the schema does not know is left out). */
+async function askedKindsOf(db: Db, blockers: readonly Blocker[]): Promise<Map<string, ApprovalKind>> {
+  const ids = [...new Set(blockers.flatMap((blocker) => (blocker.kind === 'APPROVAL' && blocker.ref?.type === 'ApprovalRequest' ? [blocker.ref.id] : [])))]
+  if (ids.length === 0) return new Map()
+  const rows = await db.approvalRequest.findMany({ where: { id: { in: ids } }, select: { id: true, kind: true } })
+  const known: ReadonlySet<string> = new Set(APPROVAL_KINDS)
+  return new Map(rows.flatMap((row) => (known.has(row.kind) ? [[row.id, row.kind as ApprovalKind] as const] : [])))
+}
+// ── end walk #3 ──
+
 // ── B-OO-007 (order overview plan §6; review F11; N10b) ──────────────────────────────────────────────────────────────────────
 /**
  * What still waits once production is over (the office strip state ALL_DONE or STOPPED: shipped, delivered, closed, cancelled):
@@ -367,10 +390,11 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
   // B-OP-021 (B4): each with the record it is about (a work order only for a reader who reaches it) and what a request waiting on us is.
   const reached = workOrders.filter((workOrder) => reachesWorkOrder(actor, WORKORDERS_VIEW, workOrder))
   const reachedWork = new Set(reached.map((workOrder) => workOrder.id))
+  const askedKinds = await askedKindsOf(db, waits) // walk #3
   const blockers = waits.map((blocker: Blocker) => ({
     kind: blocker.kind,
     on: BLOCKER_OWNER[blocker.kind],
-    words: BLOCKER_WORDS[blocker.kind],
+    words: blockerWordsOf(blocker, askedKinds), // walk #3: an approval we asked names what it asks
     since: blocker.since ? toUtcIso(blocker.since) : null,
     ref: blockerRefFor(blocker.ref, (workOrderId) => reachedWork.has(workOrderId)),
     sub: blocker.kind === 'BRAND_REQUEST' ? (blocker.sub ?? null) : null,

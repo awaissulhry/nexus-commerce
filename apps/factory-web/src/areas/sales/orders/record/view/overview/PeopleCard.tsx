@@ -89,12 +89,13 @@ function PeopleBody({ order, model, actions }: { order: Order; model: OrderRecor
               {...(model.people && !readOnly ? { ask: { label: notes('open.askFact'), held: askWait ? notes(askWait.key, askWait.params) : null, onAsk: () => actions?.people?.onAsk?.() } } : {})}
             />
           </li>
-          {/* F-OP-104: the backup is the customer's own setting (for every order of it): read here, changed on its page. */}
+          {/* F-OP-104: the backup is the customer's own setting (for every order of it): read here, changed on its page.
+              Walk #12: its link says where it goes ("Open the customer ›"), never "Change" to a reader who may not, and it wraps (never cut). */}
           <li className="fw-so-ov-row">
             <span className="fw-so-people-label">{t('overview.people.backup')}</span>
             <span className="fw-so-stack-tight">
               <span>{view.people.backup ? `${view.people.backup.name} · ${t('doors.backupFor', { customer })}` : '—'}</span>
-              <Link className="fw-so-link fw-so-cell-sub" href={`${model.prefix}/sales/customers/${encodeURIComponent(order.partyId)}`}>
+              <Link className="fw-so-link fw-so-hint" href={`${model.prefix}/sales/customers/${encodeURIComponent(order.partyId)}`}>
                 {t('doors.backupElsewhere', { customer })}
               </Link>
             </span>

@@ -78,8 +78,8 @@ function usePillWords(): (pill: LinePill) => string {
       case 'inWork':
         return t('progress.inWork', { done: pill.done, total: pill.total })
       case 'madeExtra':
-        // B-OO-015: one wording with the API's — "1 48 more than ordered: cut or planned to cut".
-        return t('progress.madeExtra', { sizes: madeExtraSizesText(pill.sizes) })
+        // B-OO-015: one wording with the API's — "Size 48: 1 more than ordered (cut or planned to cut)".
+        return t('progress.madeExtra', { sizes: madeExtraSizesText(pill.sizes, (size, count) => t('progress.extraSize', { size, count })) })
       case 'late':
         return pill.days ? w.t('parts.health.lateBy', { count: pill.days }) : w.t('parts.health.LATE')
     }
@@ -276,8 +276,8 @@ function LineSizes({ order, row, rows, label, sub, pills, moves, model, actions 
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
   const read = readOf(model.production)
   const sizes = lineSizesOf(row, read?.lines ?? [], read?.dates ?? null, label)
-  // F-OO-121 (B-OO-015): a size's extra pieces in the API's words ("1 48 more than ordered: cut or planned to cut").
-  const extraWords = (size: string, count: number) => (count > 0 ? t('progress.madeExtra', { sizes: madeExtraSizesText([{ size, count }]) }) : '—')
+  // F-OO-121 (B-OO-015): a size's extra pieces in the API's words ("Size 48: 1 more than ordered (cut or planned to cut)").
+  const extraWords = (size: string, count: number) => (count > 0 ? t('progress.madeExtra', { sizes: madeExtraSizesText([{ size, count }], (name, pieces) => t('progress.extraSize', { size: name, count: pieces })) }) : '—')
   const work = lineWorkOf(row, read) // F-OO-126
   return (
     <DetailModal
@@ -314,23 +314,27 @@ function LineSizes({ order, row, rows, label, sub, pills, moves, model, actions 
         </span>
       }
     >
-      {sizes.units !== null ? (
-        <p className="fw-so-hint">{t('overview.sizes.units')}</p>
-      ) : (
-        <div className="fw-so-stack">
-          <PiecesGrid colourways={[sizes.colourway]} />
-          <SummaryTable
-            label={t('overview.sizes.label')}
-            columns={[t('overview.sizes.size'), w.t('parts.pieces.stages.SHIPPED'), t('overview.sizes.finish'), t('overview.sizes.extra')]}
-            align={['left', 'right', 'right', 'right']}
-            stackOnPhone
-            rows={sizes.sizes.map((size) => ({ id: size.size, cells: [size.size, String(size.shipped), size.finish ? formatDate(dayInstant(size.finish), { locale }) : t('overview.sizes.noForecast'), extraWords(size.size, size.madeExtra)] }))}
-          />
-        </div>
-      )}
-      {/* F-OO-126: what makes the line, and its final inspections (read only: signed on Quality). */}
-      <LineWorkPart work={work} order={order} model={model} />
-      <LineFinalsPart finals={lineFinalsOf(work, read)} />
+      {/* Walk #15e: the window's three blocks (the sizes, its work orders, its final inspections) one stack apart — no heading touches
+          the table above it. */}
+      <div className="fw-so-stack">
+        {sizes.units !== null ? (
+          <p className="fw-so-hint">{t('overview.sizes.units')}</p>
+        ) : (
+          <div className="fw-so-stack">
+            <PiecesGrid colourways={[sizes.colourway]} />
+            <SummaryTable
+              label={t('overview.sizes.label')}
+              columns={[t('overview.sizes.size'), w.t('parts.pieces.stages.SHIPPED'), t('overview.sizes.finish'), t('overview.sizes.extra')]}
+              align={['left', 'right', 'right', 'right']}
+              stackOnPhone
+              rows={sizes.sizes.map((size) => ({ id: size.size, cells: [size.size, String(size.shipped), size.finish ? formatDate(dayInstant(size.finish), { locale }) : t('overview.sizes.noForecast'), extraWords(size.size, size.madeExtra)] }))}
+            />
+          </div>
+        )}
+        {/* F-OO-126: what makes the line, and its final inspections (read only: signed on Quality). */}
+        <LineWorkPart work={work} order={order} model={model} />
+        <LineFinalsPart finals={lineFinalsOf(work, read)} />
+      </div>
     </DetailModal>
   )
 }

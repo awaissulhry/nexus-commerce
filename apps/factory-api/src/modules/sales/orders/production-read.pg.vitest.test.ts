@@ -378,7 +378,7 @@ describe('B-SA-043: the order’s lines name the pieces made extra per size (off
     const answer = await ok('office.all', production(alpha.so1, 'lines'))
     const line = (answer.lines as Json[])[0]!
     expect(line).toMatchObject({ lineId: alpha.line1, madeExtra: 5 })
-    expect((line.sizes as Json[]).find((size) => size.size === '50')).toMatchObject({ madeExtra: 5, madeExtraWords: { en: '5 50 more than ordered: cut or planned to cut', it: "5 50 in più dell'ordine: tagliati o da tagliare" } }) // B-OO-015: the words say what they count
+    expect((line.sizes as Json[]).find((size) => size.size === '50')).toMatchObject({ madeExtra: 5, madeExtraWords: { en: 'Size 50: 5 more than ordered (cut or planned to cut)', it: "Taglia 50: 5 in più dell'ordine (tagliati o da tagliare)" } }) // B-OO-015: the words say what they count (walk follow-up: the size first)
     expect((line.sizes as Json[]).find((size) => size.size === '52')).toMatchObject({ madeExtra: 0, madeExtraWords: null })
   })
 })

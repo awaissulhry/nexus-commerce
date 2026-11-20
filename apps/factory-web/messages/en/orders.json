@@ -788,6 +788,9 @@
     "dateHint": "From today on. The first promise stays on record.",
     "why": "Why (the customer reads it)",
     "pick": "Pick a reason",
+    "officeReason": {
+      "YOUR_CHANGE": "The customer asked for the change"
+    },
     "customerReads": "The customer reads:",
     "note": "Your note (office only)",
     "reason": "Why",
@@ -1637,6 +1640,7 @@
       },
       "credit": {
         "waits": "Credit hold — waits for {who}'s yes",
+        "asked": "Credit hold — waits for a yes that is asked",
         "nobody": "Credit hold — nobody asked for a yes yet"
       },
       "review_one": "Waits for the factory review of {count} made-to-measure unit",
@@ -1832,7 +1836,8 @@
   },
   "progress": {
     "inWork": "In work orders: {done} of {total}",
-    "madeExtra": "{sizes} more than ordered: cut or planned to cut",
+    "madeExtra": "{sizes} more than ordered (cut or planned to cut)",
+    "extraSize": "Size {size}: {count}",
     "noPicture": "No picture yet",
     "addPicture": "Add on the style ›",
     "addPictureOf": "Add the picture of {name} on its style",
@@ -2120,7 +2125,7 @@
     "change": "Change…",
     "ownDates": "The order's own dates",
     "backupFor": "for every order of {customer}",
-    "backupElsewhere": "Change it on {customer}'s page ›"
+    "backupElsewhere": "Open the customer ›"
   },
   "wocs": {
     "title": "Work-order changes of this order",
@@ -2344,6 +2349,9 @@
     "inv": {
       "issued_one": "{count} issued",
       "issued_other": "{count} issued",
+      "noneIssued": "none issued",
+      "issuedOf_one": "{count} issued ({of})",
+      "issuedOf_other": "{count} issued ({of})",
       "draft_one": "{count} draft",
       "draft_other": "{count} drafts",
       "creditNote_one": "{count} credit note",

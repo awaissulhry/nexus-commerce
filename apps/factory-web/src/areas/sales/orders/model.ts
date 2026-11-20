@@ -727,8 +727,18 @@ export function promiseProblems(input: { date: string; reasonCode: string | null
 // ---- F-OO-142 (order overview §4.3; B-OO-009): the promise dialog's reason list — the code the customer reads, the office's own note ----
 export const isPromiseReasonCode = (value: string | null | undefined): value is PromiseReasonCode => typeof value === 'string' && (PROMISE_REASON_CODES as readonly string[]).includes(value)
 
-/** The list's choices in the office's language: the customer's own words for each curated reason (one wording, never a synonym). */
-export const promiseReasonChoices = (locale: Locale): { value: PromiseReasonCode; label: string }[] => PROMISE_REASON_CODES.map((code) => ({ value: code, label: PROMISE_REASON_WORDS[code][locale] }))
+/**
+ * The list's choices in the office's language: each curated reason in the words the customer reads (one wording, never a synonym) —
+ * except where those words speak TO the customer. Walk follow-up (Z01): "Changed at your request" / "Modifica richiesta da voi" is the
+ * customer's own voice, so the office's list says it in office words (`say(PROMISE_REASON_OFFICE_KEYS[code])`, orders catalogue); the
+ * customer's words stay in the "The customer reads:" preview (promiseReasonPreview).
+ */
+export const PROMISE_REASON_OFFICE_KEYS: Readonly<Partial<Record<PromiseReasonCode, string>>> = Object.freeze({ YOUR_CHANGE: 'promise.officeReason.YOUR_CHANGE' })
+export const promiseReasonChoices = (locale: Locale, say: (key: string) => string): { value: PromiseReasonCode; label: string }[] =>
+  PROMISE_REASON_CODES.map((code) => {
+    const office = PROMISE_REASON_OFFICE_KEYS[code]
+    return { value: code, label: office ? say(office) : PROMISE_REASON_WORDS[code][locale] }
+  })
 
 /**
  * What the customer reads for the picked reason, in Italian AND English (the portal shows each reader's language: review F10), the

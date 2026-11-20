@@ -7,6 +7,7 @@ import { blockerRefFor, SHARED_WORK_ORDER_WORDS, workOrderRightsOf } from './pro
 import { BLOCKER_KINDS } from '@nexus/factory-domain/production-brand/waiting'
 // B-OO-007: what still waits after production; a first promise is not a move.
 import { officeBlockersOf, promiseMovesOf } from './production-read'
+import { blockerWordsOf } from './production-read' // walk #3
 import type { Blocker } from '@nexus/factory-domain/production-brand/waiting'
 
 /**
@@ -169,3 +170,25 @@ describe('B-OO-007: after production only the requests wait; a first promise is 
   })
 })
 // ── end B-OO-007 ──
+
+// ── walk #3 (order overview walk fix round): an approval we asked of the customer says what it asks ──
+describe('walk #3: an approval we asked names what it asks (its kind), never only "the customer\'s yes"', () => {
+  const asked = (id: string): Blocker => ({ kind: 'APPROVAL', since: null, ref: { type: 'ApprovalRequest', id } })
+  const kinds = new Map([['a-artwork', 'ARTWORK' as const], ['a-sample', 'SAMPLE' as const]])
+
+  it('says the kind in the office words, English and Italian', () => {
+    expect(blockerWordsOf(asked('a-artwork'), kinds)).toEqual({ en: "Waiting for the customer's yes: Artwork", it: 'In attesa del sì del cliente: Grafica' })
+    expect(blockerWordsOf(asked('a-sample'), kinds)).toEqual({ en: "Waiting for the customer's yes: Sample", it: 'In attesa del sì del cliente: Campione' })
+  })
+
+  it('a kind not read, our counter-offer (its request says it) and every other blocker: the plain words', () => {
+    expect(blockerWordsOf(asked('a-unknown'), kinds)).toEqual(BLOCKER_WORDS.APPROVAL)
+    expect(blockerWordsOf({ kind: 'APPROVAL', ref: { type: 'OrderChangeRequest', id: 'a-artwork' } }, kinds)).toEqual(BLOCKER_WORDS.APPROVAL)
+    for (const kind of BLOCKER_KINDS) expect(blockerWordsOf({ kind, ref: null }, kinds), kind).toEqual(BLOCKER_WORDS[kind])
+  })
+
+  it('never the question (free text, shown only with the approvals right): the words are the kind\'s name alone', () => {
+    const words = blockerWordsOf(asked('a-artwork'), kinds)
+    expect(words.en.split(': ')).toEqual(["Waiting for the customer's yes", 'Artwork'])
+  })
+})

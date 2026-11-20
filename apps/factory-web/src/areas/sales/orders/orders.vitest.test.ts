@@ -2010,9 +2010,17 @@ describe('F-OO-142: the promise dialog picks a curated reason the customer reads
       { locale: 'it', words: PROMISE_REASON_WORDS.YOUR_CHANGE.it },
     ])
     for (const code of PROMISE_REASON_CODES) expect(promiseReasonPreview(code, 'it')!.map((entry) => entry.words)).toEqual([PROMISE_REASON_WORDS[code].it, PROMISE_REASON_WORDS[code].en])
-    // The list: every curated code, in the office's language — the customer's own words (one wording, no synonym).
-    expect(promiseReasonChoices('en')).toEqual(PROMISE_REASON_CODES.map((code) => ({ value: code, label: PROMISE_REASON_WORDS[code].en })))
-    expect(promiseReasonChoices('it').map((choice) => choice.label)).toEqual(PROMISE_REASON_CODES.map((code) => PROMISE_REASON_WORDS[code].it))
+    // The list: every curated code, in the office's language — the customer's own words (one wording, no synonym), except the one
+    // that speaks to the customer (walk follow-up Z01): "Changed at your request" reads as office words in the list.
+    const office = (locale: 'en' | 'it') => {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      return (key: string) => t(key)
+    }
+    expect(promiseReasonChoices('en', office('en'))).toEqual(PROMISE_REASON_CODES.map((code) => ({ value: code, label: code === 'YOUR_CHANGE' ? 'The customer asked for the change' : PROMISE_REASON_WORDS[code].en })))
+    expect(promiseReasonChoices('it', office('it')).map((choice) => choice.label)).toEqual(PROMISE_REASON_CODES.map((code) => (code === 'YOUR_CHANGE' ? 'Il cliente ha chiesto la modifica' : PROMISE_REASON_WORDS[code].it)))
+    // Never the customer's voice in the office's list ("your", "voi"); the customer's words stay in the preview (above).
+    expect(promiseReasonChoices('en', office('en')).map((choice) => choice.label).join(' | ')).not.toMatch(/\byour\b/i)
+    expect(promiseReasonChoices('it', office('it')).map((choice) => choice.label).join(' | ')).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
   })
 
   it('drawn: "Why (the customer reads it)", the list, "The customer reads:" in Italian and English, "Your note (office only)"; no pick → held "Pick why"', () => {
@@ -2023,9 +2031,11 @@ describe('F-OO-142: the promise dialog picks a curated reason the customer reads
     // The note is the office's: in its own field, never in the customer's preview.
     const preview = en.slice(en.indexOf('The customer reads:'), en.indexOf('Your note (office only)'))
     expect(preview).not.toContain(NOTE)
-    // Every curated reason is in the list (a <select>, each <option> the customer's words).
+    // Every curated reason is in the list (a <select>, each <option> in office words: walk follow-up Z01).
     const html = render(recordScreen as unknown as DesignScreen<unknown>, promiseCase('promise-dialog'), 'en')
     for (const code of PROMISE_REASON_CODES) expect(html, code).toContain(`<option value="${code}"`)
+    expect(html).toMatch(/<option value="YOUR_CHANGE"[^>]*>The customer asked for the change<\/option>/)
+    expect(html).not.toContain('Changed at your request')
     // Nothing picked yet: no preview, Change the date held with "Pick why".
     const pick = render(recordScreen as unknown as DesignScreen<unknown>, promiseCase('f-oo-142-promise-pick'), 'en')
     expect(textOf(pick)).not.toContain('The customer reads:')
@@ -2083,10 +2093,11 @@ describe('F-OO-206: the tab badges count what the Linked records card counts (or
     // Money: 3 issued (the credit note and the deposit invoice among them; the draft apart) + 1 open deposit request.
     expect(tabCountOf('money', value)).toBe(counts.invoices.issued + counts.depositRequests.open)
     expect(tabCountOf('money', value)).toBe(4)
-    expect(row('invoices').parts).toContainEqual({ key: 'linked.inv.issued', params: { count: 3 } })
-    expect(row('invoices').parts).toContainEqual({ key: 'linked.inv.draft', params: { count: 1 } })
-    expect(row('invoices').parts).toContainEqual({ key: 'linked.inv.creditNote', params: { count: 1 } })
-    expect(row('invoices').parts).toContainEqual({ key: 'linked.inv.deposit', params: { count: 1 } })
+    // Walk #8: the credit note and the deposit invoice are said as part of the 3 issued (one count); the draft apart.
+    expect(row('invoices').parts).toEqual([
+      { key: 'linked.inv.issuedOf', params: { count: 3 }, of: [{ key: 'linked.inv.creditNote', params: { count: 1 } }, { key: 'linked.inv.deposit', params: { count: 1 } }] },
+      { key: 'linked.inv.draft', params: { count: 1 } },
+    ])
     // Lines and Changes as before; the files and the Overview count nothing here.
     expect(tabCountOf('lines', value)).toBe(value.lines.length)
     expect(tabCountOf('changes', value, { changes: 3 })).toBe(3)

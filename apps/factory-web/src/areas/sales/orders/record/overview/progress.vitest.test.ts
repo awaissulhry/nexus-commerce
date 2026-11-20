@@ -159,16 +159,19 @@ describe('F-OO-121: a line’s pills — at most two in the cell, in their order
     for (const kind of ['notInWorkOrders', 'closedShort', 'inWork'] as const) expect(pillToneOf({ kind, count: 1, done: 1, total: 2 } as never), kind).toBe('neutral')
   })
 
-  it('made extra: one wording with the API’s (B-OO-015, T01 #1768) — "N <size> more than ordered: cut or planned to cut", en + it', () => {
+  it('made extra: one wording with the API’s (B-OO-015, T01 #1768; walk follow-up: the size first) — "Size <size>: N more than ordered (cut or planned to cut)", en + it', () => {
     const sizes = madeExtraSizesOf({ lineIds: [LINE_RED] }, scene().read.lines!)
     expect(sizes).toEqual([{ size: '50', count: 1 }])
-    expect(madeExtraSizesText([{ size: 'M', count: 4 }])).toBe('4 M')
-    expect(madeExtraSizesText([{ size: '48', count: 1 }, { size: '50', count: 2 }, { size: null, count: 1 }])).toBe('1 48 · 2 50 · 1')
     const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
     const it = createTranslator('it', messagesFor('it', ['orders']).orders!)
+    const sizeEn = (size: string, count: number) => en('progress.extraSize', { size, count })
+    expect(madeExtraSizesText([{ size: 'M', count: 4 }], sizeEn)).toBe('Size M: 4')
+    expect(madeExtraSizesText([{ size: '48', count: 1 }, { size: '50', count: 2 }, { size: null, count: 1 }], sizeEn)).toBe('Size 48: 1 · Size 50: 2 · 1')
     // The API's MADE_EXTRA_WORDS.madeExtra(4, 'M') (apps/factory-api/src/modules/sales/orders/made-extra.ts), word for word.
-    expect(en('progress.madeExtra', { sizes: '4 M' })).toBe('4 M more than ordered: cut or planned to cut')
-    expect(it('progress.madeExtra', { sizes: '4 M' })).toBe("4 M in più dell'ordine: tagliati o da tagliare")
+    expect(en('progress.madeExtra', { sizes: madeExtraSizesText([{ size: 'M', count: 4 }], sizeEn) })).toBe('Size M: 4 more than ordered (cut or planned to cut)')
+    expect(it('progress.madeExtra', { sizes: madeExtraSizesText([{ size: 'M', count: 4 }], (size, count) => it('progress.extraSize', { size, count })) })).toBe("Taglia M: 4 in più dell'ordine (tagliati o da tagliare)")
+    // Never the count and a numeric size run together ("1 48 more…").
+    expect(en('progress.madeExtra', { sizes: madeExtraSizesText([{ size: '48', count: 1 }], sizeEn) })).not.toMatch(/\b1 48\b/)
     // The old words went from the catalogue and from the card.
     expect(en('overview.madeExtra', { count: 2 })).toBe('overview.madeExtra')
     expect(read('../view/overview/ProgressCard.tsx')).not.toContain("t('overview.madeExtra'")
