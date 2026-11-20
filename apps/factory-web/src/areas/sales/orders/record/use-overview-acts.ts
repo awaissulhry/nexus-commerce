@@ -15,6 +15,7 @@ import { useGateActs, type GateActsInput } from './use-gate-acts' // F-OO-145: N
 import { askCreditYes, checkCreditAgain, getRecordCredit, type CreditCustomer } from './credit/api'
 import { creditAskedOf, creditAskNoticeOf, creditCheckNoticeOf, creditHoldWaits, creditRefusalOf, type CreditNotice, type CreditState } from './overview/where'
 import { readProblem } from '../model'
+import type { Approval } from '../depth/api' // walk #2: the yes's read names a credit hold the order read does not
 // ---- end F-OO-106
 
 export type OverviewActsModel = Pick<OrderRecordModel, 'overviewLine' | 'gateActs' /* F-OO-145 */ | 'credit' /* F-OO-106 */>
@@ -111,6 +112,11 @@ export function useOverviewActs(
 export interface CreditInput {
   readonly permissions: readonly string[]
   readonly reread?: () => void
+  /**
+   * F-OO-106 (walk #2): the yes's read (GET …/approval, orders.view) — the order read sends no `waits`, so without it a hold with no
+   * yes asked (or one this reader sees no task of) looked like no hold: nothing read, and no "who decides" said. Absent: not read.
+   */
+  readonly approval?: Pick<Approval, 'creditHold'> | null
 }
 
 /**
@@ -124,9 +130,9 @@ export interface CreditInput {
 function useOrderCredit(base: RecordActsBase | undefined, input: CreditInput | undefined, setDialog: ((dialog: RecordDialog | null) => void) | undefined): { model: CreditState | null; actions: NonNullable<OverviewActsActions['credit']> } {
   const view = !!input?.permissions.includes('sales.credit.view')
   const order = base?.current.current ?? null
-  const waits = !!order && creditHoldWaits(order)
+  const waits = !!order && creditHoldWaits(order, input?.approval) // walk #2: the yes's read says the order waits on its credit too
   const orderId = order?.id ?? null
-  const asked = order?.openApprovals?.find((task) => task.kind === 'CREDIT_OVERRIDE')?.taskId ?? ''
+  const asked = order?.openApprovals?.find((task) => task.kind === 'CREDIT_OVERRIDE')?.taskId ?? input?.approval?.creditHold?.requestTaskId ?? ''
   const key = view && waits && order ? `${order.id}:${order.version}:${asked}` : null
   const [record, setRecord] = useState<CreditState['record']>(null)
   const [tick, setTick] = useState(0)

@@ -1637,6 +1637,7 @@
       },
       "credit": {
         "waits": "Blocco fido — aspetta il sì di {who}",
+        "asked": "Blocco fido — aspetta un sì già chiesto",
         "nobody": "Blocco fido — nessuno ha ancora chiesto un sì"
       },
       "review_one": "Aspetta il controllo della fabbrica di {count} capo su misura",

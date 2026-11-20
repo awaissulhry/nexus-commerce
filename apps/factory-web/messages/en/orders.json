@@ -1637,6 +1637,7 @@
       },
       "credit": {
         "waits": "Credit hold — waits for {who}'s yes",
+        "asked": "Credit hold — waits for a yes that is asked",
         "nobody": "Credit hold — nobody asked for a yes yet"
       },
       "review_one": "Waits for the factory review of {count} made-to-measure unit",

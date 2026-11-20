@@ -206,7 +206,8 @@ function StripRow({ strip, doors, order, model, actions, now }: { strip: WhereSt
       case 'yes':
         return strip.who ? t('where.strip.yes.waits', { who: strip.who }) : strip.asked ? t('where.strip.yes.asked') : t('where.strip.yes.nobody')
       case 'credit':
-        return strip.who ? t('where.strip.credit.waits', { who: strip.who }) : t('where.strip.credit.nobody')
+        // F-OO-106 (walk #2): asked of someone this reader cannot name — "waits for a yes that is asked", never "nobody asked".
+        return strip.who ? t('where.strip.credit.waits', { who: strip.who }) : strip.asked ? t('where.strip.credit.asked') : t('where.strip.credit.nobody')
       case 'review':
         return strip.count ? t('where.strip.review', { count: strip.count }) : t('where.strip.reviewUnits')
       case 'deposit':

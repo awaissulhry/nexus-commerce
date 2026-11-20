@@ -325,12 +325,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const ready = order.status === 'ready' ? order.value : null
   const actsBase: RecordActsBase = { api, orderId, current, write, version, setNotice, load, loadParts }
   const band = useBandActs({ ...actsBase, order: ready, permissions: session.permissions, stepUp: { ensureFresh, guard }, setDialog /* F-OP-101: the yes in place */, againProduction: production.again /* F-OO-142: a promise save reads the headline and dates again */ })
-  // F-OO-125: a line's Change quantity or sizes… starts the amendment (Lines' acts) and focuses its style group (the page's one focus);
-  // F-OO-144: the requested date's Change… opens its small dialog in the page's one slot; F-OO-210: the office note writes through
-  // the Orders sheet's own write with the page's one write (the acts base).
-  // F-OO-145: Next dates' gates — Planning's own dialogs from the production read's dates, their writes through the one write.
-  // F-OO-106: the order's own credit hold (read with sales.credit.view); after a credit act the yes's read and the headline again.
-  const overview = useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), setDialog /* F-OO-144 */, base: actsBase /* F-OO-210 */, gates: { production: production.state, again: production.again, permissions: session.permissions, me: session.user.id, prefix, live: liveState } /* F-OO-145 */, credit: { permissions: session.permissions, reread: () => { depth.actions.onRetry?.('approval'); production.again(['headline']) } } /* F-OO-106 */ })
   const lines = useLinesActs({
     ...actsBase,
     order: ready,
@@ -399,6 +393,13 @@ function RecordContainer({ orderId }: { orderId: string }) {
       setDialog(null)
     },
   })
+  // F-OO-125: a line's Change quantity or sizes… starts the amendment (Lines' acts) and focuses its style group (the page's one focus);
+  // F-OO-144: the requested date's Change… opens its small dialog in the page's one slot; F-OO-210: the office note writes through
+  // the Orders sheet's own write with the page's one write (the acts base).
+  // F-OO-145: Next dates' gates — Planning's own dialogs from the production read's dates, their writes through the one write.
+  // F-OO-106: the order's own credit hold (read with sales.credit.view); after a credit act the yes's read and the headline again.
+  // F-OO-106 (walk #2): mounted after the depth read — the credit part reads the yes's read (a credit hold the order read does not name).
+  const overview = useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), setDialog /* F-OO-144 */, base: actsBase /* F-OO-210 */, gates: { production: production.state, again: production.again, permissions: session.permissions, me: session.user.id, prefix, live: liveState } /* F-OO-145 */, credit: { permissions: session.permissions, reread: () => { depth.actions.onRetry?.('approval'); production.again(['headline']) }, approval: depth.model.approval?.value ?? null /* walk #2 */ } /* F-OO-106 */ })
 
   const reviewBanner = useReviewBanner(api, order.status === 'ready' ? order.value : null, session.permissions, prefix) // B-W2b-368
   // B-TH-256: read with the order and again whenever it is read again; an accepted or declined re-promise reads the order again.
