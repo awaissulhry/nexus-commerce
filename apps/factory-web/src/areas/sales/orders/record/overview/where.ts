@@ -10,6 +10,7 @@ import type { Approval } from '../../depth/api'
 import { openRequest } from '../../depth/model'
 import { depositGate } from '../../model'
 import type { OrderProduction, Words } from './api'
+import type { Work } from './api' // F-OO-108: the work part the order's hold plan reads
 import { waitingOf, type WaitingRow, type WaitingState } from './model'
 // ---- end F-OO-104
 // ---- F-OO-105: each strip's real door — the band's yes, the depth's ask / take back, the payment, the row's Lift, Quality, the review
@@ -30,6 +31,10 @@ import { isApiError } from '../../../../../lib/api/errors'
 import { writeProblem } from '../../model'
 import type { CreditCheckAnswer, CreditCustomer } from '../credit/api'
 // ---- end F-OO-106
+// ---- F-OO-108: "Hold the whole order…" — the domain's ONE plan from the production read's rows (lib/production/work-order-acts) ----
+import type { OrderHoldPlan } from '@nexus/factory-domain/production/holds/rules'
+import { HELD_FOR_SALES, orderHoldOf } from '../../../../../lib/production/work-order-acts/model'
+// ---- end F-OO-108
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Where it is now", its rules moved out of model.ts (F-SA-232). The health
@@ -292,7 +297,8 @@ export type StripDoor =
   | { readonly kind: 'lift'; readonly row: WorkOrderOwn; readonly label: 'wo.act.lift' | 'wo.liftPause'; readonly held: Phrase | null }
   /** A shared work order's own page (it makes other customers' work: lifted there). */
   | { readonly kind: 'workOrder'; readonly href: string; readonly number: string }
-  | { readonly kind: 'quality'; readonly href: string; readonly number: string }
+  /** F-OO-108 (W07's note): `held` — Quality's holds do not open for this reader (quality.holds.view): the door is held with who does it. */
+  | { readonly kind: 'quality'; readonly href: string; readonly number: string; readonly held?: Phrase | null }
   | { readonly kind: 'review'; readonly href: string | null; readonly held: Phrase | null }
   // ---- F-OO-106: the order's own credit hold — Check credit again (held without the credit right), Ask for a yes… (only when one may
   // be asked: its check id is the lock), Try again when its read failed ----
@@ -356,7 +362,10 @@ export function stripDoorsOf(strip: WhereStrip, input: StripDoorsInput): StripDo
     }
     case 'quality': {
       const first = strip.workOrders.reached[0]
-      return first ? [{ kind: 'quality', href: `${input.prefix}/quality/holds${holdsAddress({ view: 'open', subjectType: 'WorkOrder', subjectId: first.id })}`, number: first.number ?? '—' }] : []
+      if (!first) return []
+      const href = `${input.prefix}/quality/holds${holdsAddress({ view: 'open', subjectType: 'WorkOrder', subjectId: first.id })}`
+      // F-OO-108: without quality.holds.view the Quality page refuses the reader: held with who releases it (Sales, Planner, Finance).
+      return [input.acts && !input.acts.qualityView ? { kind: 'quality', href, number: first.number ?? '—', held: phrase('where.hold.qualityNoRight') } : { kind: 'quality', href, number: first.number ?? '—' }]
     }
     case 'production':
     case 'pause': {
@@ -392,14 +401,16 @@ export function stripDoorsOf(strip: WhereStrip, input: StripDoorsInput): StripDo
  * (F8), never here; the yes is its strip's. A move the reader may not run shows held with words (the band hides Cancel without
  * orders.manage: here it is held with why). Read-only: no row at all; a closed or cancelled order: none either (nothing applies).
  */
-export const WHERE_MOVES = ['ready', 'elsewhere', 'cancel', 'close'] as const
+export const WHERE_MOVES = ['ready', 'hold' /* F-OO-108 */, 'elsewhere', 'cancel', 'close'] as const
 export type WhereMoveId = (typeof WHERE_MOVES)[number]
 
 export interface WhereMove {
   readonly id: WhereMoveId
   readonly label: Phrase
-  /** The band's own rule's words (null: it runs). */
-  readonly held: Phrase | null
+  /** The band's own rule's words (null: it runs); F-OO-108: Hold the whole order… — the domain plan's own words (both languages). */
+  readonly held: Phrase | Words | null
+  /** F-OO-108: Hold the whole order… — the plan the ONE Hold dialog opens on, and the made-to-measure units it cannot hold from here. */
+  readonly hold?: { readonly plan: OrderHoldPlan; readonly units: number }
 }
 
 /** The buttons in view (at most 2 with Hold the whole order…, F-OO-108) and the rest under More ▾: at most 3 visible in all. */
@@ -408,18 +419,56 @@ export interface WhereMoves {
   readonly more: readonly WhereMove[]
 }
 
-export function whereMovesOf(order: Order, input: { readonly can: OrderAbilities; readonly readOnly: boolean; /** The made-elsewhere door (its container's, held with its words); absent: not offered here. */ readonly elsewhere: { readonly held: Phrase | null } | null | undefined }): WhereMoves | null {
+export function whereMovesOf(
+  order: Order,
+  input: {
+    readonly can: OrderAbilities
+    readonly readOnly: boolean
+    /** The made-elsewhere door (its container's, held with its words); absent: not offered here. */
+    readonly elsewhere: { readonly held: Phrase | null } | null | undefined
+    /** F-OO-108: the production read's work part (null: not read yet) and the page's acts rights (null: the acts are not here). */
+    readonly work?: Pick<Work, 'workOrders' | 'workOrdersLeftOut' | 'mtm'> | null
+    readonly acts?: ActsCan | null
+  },
+): WhereMoves | null {
   if (input.readOnly) return null
   const shown: WhereMove[] = []
   const more: WhereMove[] = []
   if (order.status === 'IN_PRODUCTION') shown.push({ id: 'ready', label: phrase('action.ready'), held: readyHeld(order, input.can) })
-  // F-OO-108 (W11): "Hold the whole order…" joins `shown` here.
+  // F-OO-108: "Hold the whole order…" — while there is work it may stop (confirmed to partly shipped), on the domain's plan.
+  const hold = holdOrderMoveOf(order, input.work ?? null, input.acts ?? null)
+  if (hold) shown.push(hold)
   if (input.elsewhere && ELSEWHERE_FROM.includes(order.status)) more.push({ id: 'elsewhere', label: phrase('elsewhere.title'), held: input.elsewhere.held })
   if (CANCEL_STATUSES.includes(order.status)) more.push({ id: 'cancel', label: phrase('action.cancel'), held: cancelHeld(order, input.can) })
   if (isShippedInFull(order)) more.push({ id: 'close', label: phrase('step.close'), held: closeHeld(order, input.can) })
   return shown.length + more.length > 0 ? { shown, more } : null
 }
 // ---- end F-OO-107
+
+// ---- F-OO-108 (order overview §1.4, §1.5; B-OO-005, review F13, F16): "Hold the whole order…" — the order's own move ----------------
+/** The states with work a hold may stop (before production: nothing is in work; after it: nothing is left to stop). */
+export const HOLD_ORDER_FROM: readonly Order['status'][] = Object.freeze(['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'])
+
+/**
+ * Hold the whole order…: the ONE Hold dialog on the domain's plan (`orderHoldPlanOf`, through the acts' `orderHoldOf`: no web copy) —
+ * held, with words, while the work orders are not read yet, without the acts here (Production does it), with the plan's own words
+ * when it holds none (nothing to hold yet, every open one on hold already, every one completed …; NO_RIGHT: "Production does this —
+ * a planner or the production manager", the row's own words); with only made-to-measure units in work: each is held on its own page.
+ */
+export function holdOrderMoveOf(order: Pick<Order, 'status'>, work: Pick<Work, 'workOrders' | 'workOrdersLeftOut' | 'mtm'> | null, acts: Pick<ActsCan, 'view'> | null): WhereMove | null {
+  if (!HOLD_ORDER_FROM.includes(order.status)) return null
+  const label = phrase('where.hold.label')
+  if (!work) return { id: 'hold', label, held: phrase('where.hold.reading') }
+  const plan = orderHoldOf(work.workOrders, { leftOut: work.workOrdersLeftOut, waitingForYes: false })
+  const units = work.mtm.reduce((sum, group) => sum + group.workOrders, 0)
+  const hold = { plan, units }
+  if (!acts?.view) return { id: 'hold', label, held: HELD_FOR_SALES, hold }
+  if (!plan.held) return { id: 'hold', label, held: null, hold }
+  if (plan.held.code === 'NO_RIGHT') return { id: 'hold', label, held: HELD_FOR_SALES, hold }
+  if (plan.held.code === 'NONE_YET' && units > 0) return { id: 'hold', label, held: phrase('where.hold.onlyUnits'), hold }
+  return { id: 'hold', label, held: plan.held.words, hold }
+}
+// ---- end F-OO-108
 
 // ---- F-OO-106 (order overview §1.3, §1.4; review F8, F16; B-OO-004): the order's own credit hold, decided from its strip ----------
 /**

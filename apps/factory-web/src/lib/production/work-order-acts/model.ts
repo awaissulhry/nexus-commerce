@@ -1,5 +1,9 @@
 import { isApiError, issuePath } from '../../api/errors'
 import { releaseRefusalCodes, writeProblem as productionWriteProblem } from '../../../areas/production/_shared/model'
+// ---- F-OO-108: "Hold the whole order…" — the domain's ONE plan, the production lane's refusal words ----
+import { orderHoldPlanOf, type OrderHoldPlan } from '@nexus/factory-domain/production/holds/rules'
+import { dailyProblem, type PlaceHoldInput } from '../../../areas/production/work-orders/daily/model'
+// ---- end F-OO-108
 
 /**
  * F-OP-113 (order page plan 10-order-page §5.2; review R-11, B6) — what a person may do to one work order from a page that is not the
@@ -73,11 +77,13 @@ export interface ActsCan {
   readonly reopen: boolean
   /** planning.view: Open in Planning ›. */
   readonly planning: boolean
+  /** F-OO-108 (W07's note): quality.holds.view — Quality's holds open for this reader ("Release on Quality ›"; Sales, Planner, Finance lack it). */
+  readonly qualityView: boolean
 }
 
 export function actsCanOf(permissions: readonly string[]): ActsCan {
   const held = new Set(permissions)
-  return { view: held.has('workorders.view'), qualityHold: held.has('quality.holds.place') /* F-OP-114 */, reopen: held.has('workorders.reopen'), planning: held.has('planning.view') }
+  return { view: held.has('workorders.view'), qualityHold: held.has('quality.holds.place') /* F-OP-114 */, reopen: held.has('workorders.reopen'), planning: held.has('planning.view'), qualityView: held.has('quality.holds.view') /* F-OO-108 */ }
 }
 
 export const INLINE_FIELDS = ['due', 'priority', 'rush'] as const
@@ -216,3 +222,56 @@ export function cancelHeld(check: { readonly cancellable: boolean; readonly refu
 /** The planning board at one work order (its bar's detail opens: line, workshop, start, an outside operation). */
 export const planningHref = (prefix: string, workOrderId: string): string => `${prefix}/planning/board?wo=${encodeURIComponent(workOrderId)}`
 // ---- end F-OP-115
+
+// ---- F-OO-108 (order overview §1.4, §1.5; B-OO-005, review F13, F16): "Hold the whole order…" — the domain's ONE plan ------------
+/**
+ * The plan of "Hold the whole order…" from the rows of the order's production read: the domain's `orderHoldPlanOf` (no web copy) —
+ * a held row counts as ON_HOLD, a row the reader may not change (shared, or its rights' words) as shared, an older row without a
+ * version or rights as not the reader's to hold. `leftOut`: the work orders this reader does not reach (counted, never named).
+ */
+export function orderHoldOf(rows: readonly ActsRow[], input: { readonly leftOut: number; readonly waitingForYes: boolean }): OrderHoldPlan {
+  return orderHoldPlanOf({
+    workOrders: rows.map((row) => ({
+      id: row.id,
+      number: row.number,
+      status: row.held && HOLDABLE_STATUSES.includes(row.status) ? 'ON_HOLD' : row.status,
+      version: row.version ?? 0,
+      sharedWithOtherCustomers: row.sharedWithOtherCustomers || !!row.rights?.why,
+      rights: { hold: !!row.rights?.hold && row.version !== undefined },
+    })),
+    workOrdersLeftOut: input.leftOut,
+    waitingForYes: input.waitingForYes,
+  })
+}
+
+/**
+ * What "Hold the whole order…" sends for the reason picked, every work order of the plan at once: a production reason — one plain
+ * hold per work order (POST /production/work-orders/holds) with EVERY version read (F16: a stale one refuses them all); a quality
+ * reason — one quality hold over them (POST /quality/holds, whose route takes no version).
+ */
+export function orderHoldWriteOf(plan: Pick<OrderHoldPlan, 'ids' | 'versions'>, input: Pick<PlaceHoldInput, 'kind' | 'reasonCode' | 'reasonNote' | 'customerWords'>) {
+  const workOrderIds = [...plan.ids]
+  if (input.kind === 'PRODUCTION') return { route: 'production' as const, body: { reasonCode: input.reasonCode, note: input.reasonNote, brandWords: input.customerWords, workOrderIds, versions: Object.fromEntries(workOrderIds.map((id) => [id, plan.versions[id]!])) } }
+  return { route: 'quality' as const, body: { workOrderIds, reasonCode: input.reasonCode, reasonNote: input.reasonNote } }
+}
+
+/**
+ * Why "Hold the whole order…" was refused, said in its dialog: a work order changed since it was read (B-OO-005's 409 names it at
+ * `body/versions/<id>`: nothing was held; the plan is read again) — by its number; else the production lane's words for the kind.
+ */
+export function orderHoldProblemOf(error: unknown, plan: Pick<OrderHoldPlan, 'ids' | 'numbers'>): Phrase {
+  if (isApiError(error) && error.kind === 'conflict') {
+    const ids = error.issues.map(issuePath).flatMap((path) => {
+      const at = path.split(/[./]/)
+      const index = at.indexOf('versions')
+      return index >= 0 && at[index + 1] ? [at[index + 1]!] : []
+    })
+    const numbers = ids.flatMap((id) => {
+      const at = plan.ids.indexOf(id)
+      return at >= 0 ? [plan.numbers[at]!] : []
+    })
+    if (numbers.length > 0) return { key: 'orders:where.hold.stale', params: { count: numbers.length, numbers: numbers.join(', ') } }
+  }
+  return fromWorkOrders(dailyProblem(error))
+}
+// ---- end F-OO-108

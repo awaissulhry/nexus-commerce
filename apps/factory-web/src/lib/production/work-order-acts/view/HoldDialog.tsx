@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { PauseCircle, Unlock } from 'lucide-react'
 import { Banner, EmptyState, Field } from '@nexus/ui/components'
 import { Button, Input, Select, Spinner, Tag } from '@nexus/ui/primitives'
@@ -78,7 +78,12 @@ function Problem({ parts }: { parts: HoldParts }) {
 
 // ---- Put on hold ----------------------------------------------------------------------------------------------------------------
 
-export function HoldDialog({ numbers, workOrderIds, parts, onCancel, onPlace }: { numbers: string[]; workOrderIds: string[]; parts: HoldParts; onCancel: () => void; onPlace?: (input: PlaceHoldInput) => void }) {
+/**
+ * F-OO-108 ("Hold the whole order…" on the sales order's Overview): `notes` — what the order's plan leaves out, each with why (a shared
+ * work order, one not reached, the made-to-measure units), drawn under the work orders it holds; `heldBy` — the plan's own words when
+ * it holds none (Put on hold held with them). Every other caller passes neither: their dialog is as it was.
+ */
+export function HoldDialog({ numbers, workOrderIds, parts, onCancel, onPlace, notes, heldBy }: { numbers: string[]; workOrderIds: string[]; parts: HoldParts; onCancel: () => void; onPlace?: (input: PlaceHoldInput) => void; notes?: ReactNode; heldBy?: string | null }) {
   const t = useScopedT(DAILY_NAMESPACE)
   const locale = useLocale()
   const [note, setNote] = useState(parts.draft?.note ?? '')
@@ -98,7 +103,7 @@ export function HoldDialog({ numbers, workOrderIds, parts, onCancel, onPlace }: 
   const reason = all?.find((entry) => entry.list === list && entry.code === reasonCode) ?? null
   const kind = reason ? (holdKindOf(reason) ?? 'QUALITY') : null
   const held = placeHeld(reasonCode, note, all ? all.filter((entry) => !list || entry.list === list) : null, parts.busy, { can: parts.can, customerWords })
-  const go = held || !kind ? null : () => onPlace?.({ kind, workOrderIds, reasonCode, reasonNote: note.trim() || null, customerWords: kind === 'PRODUCTION' ? customerWords.trim() || null : null })
+  const go = heldBy || held || !kind ? null : () => onPlace?.({ kind, workOrderIds, reasonCode, reasonNote: note.trim() || null, customerWords: kind === 'PRODUCTION' ? customerWords.trim() || null : null })
   const optionValue = (entry: { list: string; code: string }) => `${entry.list}:${entry.code}`
   return (
     <Modal
@@ -108,7 +113,7 @@ export function HoldDialog({ numbers, workOrderIds, parts, onCancel, onPlace }: 
       size="md"
       footer={
         <Footer onCancel={onCancel}>
-          <Button size="sm" variant="primary" heldReason={say(t, held)} onClick={() => go?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
+          <Button size="sm" variant="primary" heldReason={heldBy || say(t, held)} onClick={() => go?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
             {parts.busy ? <Spinner size={12} /> : <PauseCircle size={13} aria-hidden />} {numbers.length === 1 ? t('hold.go') : t('hold.goMany', { count: numbers.length })}
           </Button>
         </Footer>
@@ -119,6 +124,7 @@ export function HoldDialog({ numbers, workOrderIds, parts, onCancel, onPlace }: 
         <Problem parts={parts} />
         <p>{kind === 'PRODUCTION' ? t('hold.bodyProduction') : t('hold.body')}</p>
         {numbers.length > 1 && <p className="fw-woa-hint">{numbers.join(' · ')}</p>}
+        {notes /* F-OO-108: what the order's plan leaves out, with why */}
         <Field label={t('hold.reason')} hint={t('hold.reasonKinds')}>
           {offered === null ? (
             <p className="fw-woa-hint" role="status">

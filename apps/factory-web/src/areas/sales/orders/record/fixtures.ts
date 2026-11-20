@@ -80,6 +80,7 @@ import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, NO_WORK_READ, ORDER_FILES,
 import { workActsRead, type WorkRights } from './overview/fixtures'
 import { ROLES } from '../_demo/fixtures'
 import { actsCanOf } from '../../../../lib/production/work-order-acts/model'
+import { orderHoldOf } from '../../../../lib/production/work-order-acts/model' // F-OO-108: the domain's plan, as the page makes it
 import type { ActsDialog, WorkOrderActsModel } from '../../../../lib/production/work-order-acts/use-work-order-acts'
 // ---- F-OO-105: the strips' cases — a work order shared with another customer, the deposit the order asked, a Read-only reader ----
 import { SHARED_WO_ID } from './overview/fixtures'
@@ -646,7 +647,8 @@ const MANAGE_ALL: WorkRights = { manage: true, release: true, hold: true }
 const NO_RIGHTS: WorkRights = { manage: false, release: false, hold: false }
 const WORK_ORDERS_IDS = [WORK_ORDERS[0]!.id, WORK_ORDERS[1]!.id] as const
 function woActs(role: keyof typeof ROLES, over: Partial<WorkOrderActsModel> = {}): WorkOrderActsModel {
-  return { can: actsCanOf(ROLES[role]), saves: {}, toldAt: {}, dialog: null, reasons: null, split: null, close: CLOSE_NONE, ...over }
+  // F-OO-108: the Owner reads Quality's holds (the real role holds every right; the design list here names the order page's only).
+  return { can: actsCanOf(role === 'owner' ? [...ROLES[role], 'quality.holds.view'] : ROLES[role]), saves: {}, toldAt: {}, dialog: null, reasons: null, split: null, close: CLOSE_NONE, ...over }
 }
 // ---- end F-OP-113
 // ---- F-OP-114 / F-OP-115: a row's dialog on its work order read afresh; the close's model when nothing is open ----
@@ -753,6 +755,24 @@ const F_OO_106: DesignCase<RecordCase>[] = [
   { id: 'f-oo-106-ask-nobody', label: 'F-OO-106 · Sales · Ask for a yes…: nobody to ask — the customer pays, or Finance raises the limit (Ask held)', model: creditCase('sales', { view: true, record: { value: creditOf(), problem: null } }, { dialog: { kind: 'creditAsk', checkId: CREDIT_CHECK_ID, refused: { key: 'where.credit.refused.nobody' } } }) },
 ]
 // ---- end F-OO-106
+
+// ---- F-OO-108 (order overview §1.4, §1.5; B-OO-005, review F13, F16): "Hold the whole order…" in the moves row — the Owner (it holds
+// WO-00021; WO-00022 is on hold already, WO-00019 is shared: hold it on its page, 1 outside what you can open, 12 made-to-measure
+// units from their own pages), Sales (held: Production does this), nothing in work yet (held, the plan's words), the dialog open on
+// the plan and refused because a work order changed since it was read. Look at 375 / 1440 / 1920, light + dark.
+const HOLD_READ = workActsRead(MANAGE_ALL)
+const HOLD_PLAN = orderHoldOf(HOLD_READ.work!.workOrders, { leftOut: HOLD_READ.work!.workOrdersLeftOut, waitingForYes: false })
+const HOLD_UNITS = HOLD_READ.work!.mtm.reduce((sum, group) => sum + group.workOrders, 0)
+const NOTHING_READ = { ...CONFIRMED_READ, work: { ...HOLD_READ.work!, workOrders: [], mtm: [], workOrdersLeftOut: 0 } }
+const holdOpen = (over: { readonly problem?: { key: string; params?: Record<string, string | number> } | null } = {}) => woActs('owner', { reasons: [...HOLD_REASONS, ...PRODUCTION_HOLD_REASONS], holdOrder: { number: 'SO-2026-0088', plan: HOLD_PLAN, units: HOLD_UNITS, busy: false, problem: over.problem ?? null } })
+const F_OO_108: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-108-moves', label: 'F-OO-108 · Owner · Overview in work: Mark ready… and Hold the whole order… beside More ▾', model: base('owner', production, { tab: 'overview', production: ready(HOLD_READ), workOrderActs: woActs('owner'), liveState: 'live' }) },
+  { id: 'f-oo-108-moves-sales', label: 'F-OO-108 · Sales · Hold the whole order… held — Production does this (a planner or the production manager)', model: base('sales', production, { tab: 'overview', production: ready(workActsRead(NO_RIGHTS)), workOrderActs: woActs('sales'), liveState: 'live' }) },
+  { id: 'f-oo-108-nothing', label: 'F-OO-108 · Owner · a confirmed order with no work order yet: Hold the whole order… held — nothing to hold yet', model: base('owner', confirmed, { tab: 'overview', production: ready(NOTHING_READ), workOrderActs: woActs('owner'), liveState: 'live' }) },
+  { id: 'f-oo-108-dialog', label: 'F-OO-108 · Owner · Hold the whole order…: the ONE Hold dialog on WO-00021, and what it leaves out — WO-00022 on hold already, WO-00019 shared, 1 not reached, 12 made-to-measure units', model: base('owner', production, { tab: 'overview', production: ready(HOLD_READ), workOrderActs: holdOpen(), liveState: 'live' }) },
+  { id: 'f-oo-108-dialog-stale', label: 'F-OO-108 · Owner · the same dialog after WO-00021 changed since it was read: nothing was held, the list read again', model: base('owner', production, { tab: 'overview', production: ready(HOLD_READ), workOrderActs: holdOpen({ problem: { key: 'orders:where.hold.stale', params: { count: 1, numbers: 'WO-00021' } } }), liveState: 'live' }) },
+]
+// ---- end F-OO-108
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-039',
@@ -953,6 +973,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     ...F_OO_102, // F-OO-102: the headline and the dots before, after and without production
     ...F_OO_105, // F-OO-105: the strips with their real doors (holds, the deposit, the credit; Owner, Sales, Read-only)
     ...F_OO_106, // F-OO-106: the order's own credit hold — Check credit again, Ask for a yes…, the last no, who checks it
+    ...F_OO_108, // F-OO-108: Hold the whole order… — the move, held for Sales and with nothing yet, the ONE Hold dialog on the plan
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
     ...F_OP_301, // F-OP-301 (walk #1, #2, #3)

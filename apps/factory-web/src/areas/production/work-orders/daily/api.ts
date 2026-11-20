@@ -159,10 +159,14 @@ export function placeProductionHold(api: ApiClient, workOrderId: string, body: P
   })
 }
 
-/** workorders.hold: the list's Hold N with a production reason — one hold per work order, all or none, in one command. */
-export function placeProductionHolds(api: ApiClient, body: ProductionHoldBody & { readonly workOrderIds: readonly string[] }, idempotencyKey = newIdempotencyKey()) {
+/**
+ * workorders.hold: the list's Hold N with a production reason — one hold per work order, all or none, in one command.
+ * F-OO-108 (B-OO-005, plan F16): `versions` — each work order's version read, `{ [workOrderId]: version }`: one that changed since is
+ * refused (409 naming it, nothing held). The order page's "Hold the whole order…" always sends them; Production's list sends none yet.
+ */
+export function placeProductionHolds(api: ApiClient, body: ProductionHoldBody & { readonly workOrderIds: readonly string[]; readonly versions?: Readonly<Record<string, number>> }, idempotencyKey = newIdempotencyKey()) {
   return api.post('/production/work-orders/holds', {
-    body: { ...placeBody(body), workOrderIds: [...body.workOrderIds] },
+    body: { ...placeBody(body), workOrderIds: [...body.workOrderIds], ...(body.versions ? { versions: { ...body.versions } } : {}) },
     schema: z.object({ holds: z.array(workOrderHoldSchema), workOrders: z.array(z.object({ id: z.string(), number: z.string(), status: woStatus, held: z.boolean() })) }),
     idempotencyKey,
   })

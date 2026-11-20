@@ -19,6 +19,11 @@ import { useSplit, type SplitActions, type SplitModel } from '../../../areas/pro
 import { useClose, type CloseActions, type CloseModel } from '../../../areas/production/work-orders/close/use-close'
 import { getWorkOrderCancelCheck, type WorkOrderCancelCheck } from './api'
 // ---- end F-OP-115
+// ---- F-OO-108: "Hold the whole order…" — the domain's ONE plan, the bulk place with every version read ----
+import { orderHoldPlanOf, type OrderHoldPlan } from '@nexus/factory-domain/production/holds/rules'
+import { placeProductionHolds } from '../../../areas/production/work-orders/daily/api'
+import { orderHoldProblemOf, orderHoldWriteOf } from './model'
+// ---- end F-OO-108
 
 /** One row's in-place save: the cell that is saving, or why the last write was refused (said on the row). */
 export interface RowSave {
@@ -48,6 +53,23 @@ export interface ActsDialog {
   readonly cancelCheck?: Part<WorkOrderCancelCheck>
 }
 
+// ---- F-OO-108 (order overview §1.4; B-OO-005, F13, F16) ----
+/**
+ * "Hold the whole order…" open (the sales order's Overview): the domain's ONE plan — the work orders it holds, each with its version
+ * read (the bulk place always sends them), and those it leaves out with why (a shared one: hold it on its page; one not reached:
+ * counted) — and the made-to-measure units, each held on its own page (counted). One write; a refusal stays in the dialog.
+ */
+export interface OrderHoldDialog {
+  /** The sales order's number (the notice names it). */
+  readonly number: string
+  readonly plan: OrderHoldPlan
+  /** Its made-to-measure units (their work orders are held from their own pages): counted, said. */
+  readonly units: number
+  readonly busy: boolean
+  readonly problem: Phrase | null
+}
+// ---- end F-OO-108
+
 export interface WorkOrderActsModel {
   readonly can: ActsCan
   /** Per work order id: its in-place save. */
@@ -63,6 +85,8 @@ export interface WorkOrderActsModel {
   /** Close… · Reopen…: the close's own model (its check, its dialog); drawn with CloseParts. */
   readonly close: CloseModel
   // ---- end F-OP-115
+  /** F-OO-108: "Hold the whole order…" while open (its plan, the write); absent / null: closed. */
+  readonly holdOrder?: OrderHoldDialog | null
 }
 
 export interface WorkOrderActsActions {
@@ -84,6 +108,11 @@ export interface WorkOrderActsActions {
   split?: SplitActions
   close?: CloseActions
   // ---- end F-OP-115
+  // ---- F-OO-108: "Hold the whole order…" — open it on the plan, place the holds (all or none, every version sent), close it ----
+  onHoldOrder?: (input: { readonly number: string; readonly plan: OrderHoldPlan; readonly units: number }) => void
+  onPlaceOrderHold?: (input: PlaceHoldInput) => void
+  onCloseOrderHold?: () => void
+  // ---- end F-OO-108
 }
 
 /** What the page says after a write (its one banner), and whether the order's production read is read again. */
@@ -104,6 +133,7 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
   const [toldAt, setToldAt] = useState<Record<string, string>>({})
   const [dialog, setDialog] = useState<ActsDialog | null>(null)
   const [reasons, setReasons] = useState<PickerReason[] | null>(null) // F-OP-114
+  const [holdOrder, setHoldOrder] = useState<OrderHoldDialog | null>(null) // F-OO-108
   /** The newest version a write of this page answered, per work order (a second edit before the read comes again sends it). */
   const known = useRef<Record<string, number>>({})
   const turn = useRef(0)
@@ -191,6 +221,7 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
         // Said in the dialog; the next Hold… asks again.
         reasonsAsked.current = false
         setDialog((now) => (now && now.kind === 'hold' ? { ...now, problem: fromWorkOrders({ key: dailyReadProblem(error) }) } : now))
+        setHoldOrder((now) => (now ? { ...now, problem: fromWorkOrders({ key: dailyReadProblem(error) }) } : now)) // F-OO-108
       })
   }, [api])
   // ---- end F-OP-114
@@ -276,6 +307,22 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
   }, [closeTarget, closeKind, close.actions])
   // ---- end F-OP-115
 
+  // ---- F-OO-108: after a refusal, the work orders the plan holds are read afresh (their versions, their states) and the plan made
+  // again by the domain's own rule — what is held already or done since is left out with why; the next Put on hold sends the new versions.
+  const replan = useCallback(
+    (open: OrderHoldDialog) => {
+      Promise.all(open.plan.ids.map((id) => getWorkOrder(api, id)))
+        .then((rows) => {
+          for (const row of rows) answered(row)
+          const fresh = orderHoldPlanOf({ workOrders: rows.map((row) => ({ id: row.id, number: row.number, status: row.status, version: row.version, sharedWithOtherCustomers: false, rights: { hold: true } })) })
+          setHoldOrder((now) => (now ? { ...now, plan: { ...fresh, left: [...now.plan.left, ...fresh.left], notReached: now.plan.notReached } } : now))
+        })
+        .catch(() => undefined)
+    },
+    [api, answered],
+  )
+  // ---- end F-OO-108
+
   const actions: WorkOrderActsActions = {
     onDue: (row, day) => inline(row, 'due', { dueDate: day || null }),
     onPriority: (row, priority) => inline(row, 'priority', { priority }),
@@ -341,7 +388,35 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
       },
     },
     // ---- end F-OP-115
+    // ---- F-OO-108: "Hold the whole order…" — the ONE Hold dialog on the plan's work orders; a production reason: one hold per work
+    // order with every version read (B-OO-005: a stale one refuses them all, naming it); a quality reason: one quality hold over them.
+    onHoldOrder: (input) => {
+      setHoldOrder({ number: input.number, plan: input.plan, units: input.units, busy: false, problem: null })
+      readReasons()
+    },
+    onPlaceOrderHold: (input) => {
+      const open = holdOrder
+      if (!open || open.busy || open.plan.ids.length === 0) return
+      const key = newIdempotencyKey()
+      const ids = [...open.plan.ids]
+      setHoldOrder({ ...open, busy: true, problem: null })
+      const write = orderHoldWriteOf(open.plan, input)
+      const place = write.route === 'production' ? placeProductionHolds(api, write.body, key) : placeHold(api, write.body, key)
+      place
+        .then(() => {
+          setHoldOrder(null)
+          for (const id of ids) told(id)
+          written.current({ notice: { key: 'where.hold.notice', params: { count: ids.length, number: open.number } } })
+        })
+        .catch((error: unknown) => {
+          setHoldOrder((now) => (now ? { ...now, busy: false, problem: orderHoldProblemOf(error, open.plan) } : now))
+          replan(open)
+          written.current({ notice: null })
+        })
+    },
+    onCloseOrderHold: () => setHoldOrder((now) => (now?.busy ? now : null)),
+    // ---- end F-OO-108
   }
 
-  return { model: { can, saves, toldAt, dialog, reasons /* F-OP-114 */, split: split.model, close: close.model /* F-OP-115 */ }, actions }
+  return { model: { can, saves, toldAt, dialog, reasons /* F-OP-114 */, split: split.model, close: close.model /* F-OP-115 */, holdOrder /* F-OO-108 */ }, actions }
 }

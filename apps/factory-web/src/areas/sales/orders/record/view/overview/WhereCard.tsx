@@ -322,6 +322,13 @@ function StripDoorView({ door, order, model, actions }: { door: StripDoor; order
         </Button>
       )
     case 'quality':
+      // F-OO-108: Quality's holds do not open for this reader — the door is held with who releases it (never a link that refuses).
+      if (door.held)
+        return (
+          <Button size="sm" variant="quiet" heldReason={t(door.held.key, door.held.params)}>
+            {t('where.strip.release')}
+          </Button>
+        )
       return (
         <Button size="sm" variant="quiet" asChild>
           <Link href={door.href} aria-label={t('where.strip.releaseOf', { number: door.number })}>
@@ -372,18 +379,24 @@ function StripDoorView({ door, order, model, actions }: { door: StripDoor; order
 function Moves({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
-  const moves = whereMovesOf(order, { can: model.can, readOnly, elsewhere: model.elsewhere })
+  const locale = useLocale()
+  // F-OO-108: Hold the whole order… reads the production read's work orders and the page's acts (its dialog is theirs).
+  const moves = whereMovesOf(order, { can: model.can, readOnly, elsewhere: model.elsewhere, work: readOf(model.production)?.work ?? null, acts: model.workOrderActs?.can ?? null })
   if (!moves) return null
-  const heldOf = (move: WhereMove): string | null => (move.held ? t(move.held.key, move.held.params) : model.busy ? t('held.busy') : null)
-  const run = (id: WhereMoveId): void => {
+  // A held move says why: the band's words (a phrase), or the hold plan's own words (both languages, the domain's).
+  const heldOf = (move: WhereMove): string | null => (move.held ? ('key' in move.held ? t(move.held.key, move.held.params) : say(move.held, locale)) : model.busy ? t('held.busy') : null)
+  const run = (move: WhereMove): void => {
+    const id: WhereMoveId = move.id
     if (id === 'elsewhere') return actions?.onRecordElsewhere?.()
+    // F-OO-108: the ONE Hold dialog (the work-order acts'), on the plan's work orders with their versions.
+    if (id === 'hold') return move.hold ? actions?.workOrderActs?.onHoldOrder?.({ number: order.number, plan: move.hold.plan, units: move.hold.units }) : undefined
     actions?.onDialog?.({ kind: id })
   }
   return (
     <>
       <div className="fw-so-where-moves" role="group" aria-label={t('where.moves')}>
         {moves.shown.map((move) => (
-          <Button key={move.id} size="sm" heldReason={heldOf(move)} onClick={() => run(move.id)}>
+          <Button key={move.id} size="sm" heldReason={heldOf(move)} onClick={() => run(move)}>
             {t(move.label.key)}
           </Button>
         ))}
@@ -397,7 +410,7 @@ function Moves({ order, model, actions }: { order: Order; model: OrderRecordMode
             triggerProps={{ className: 'nds-btn sm', 'aria-label': t('where.moreOf', { number: order.number }) }}
             items={moves.more.map((move) => {
               const held = heldOf(move)
-              return { id: move.id, label: t(move.label.key), ...(move.id === 'cancel' ? { tone: 'danger' as const } : {}), disabled: !!held, ...(held ? { description: held } : { onSelect: () => run(move.id) }) }
+              return { id: move.id, label: t(move.label.key), ...(move.id === 'cancel' ? { tone: 'danger' as const } : {}), disabled: !!held, ...(held ? { description: held } : { onSelect: () => run(move) }) }
             })}
           />
         )}

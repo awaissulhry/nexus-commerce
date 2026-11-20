@@ -1712,6 +1712,22 @@
     "refuse": {
       "credit": "A no leaves it held: nothing is cancelled",
       "order": "A no cancels the order"
+    },
+    "hold": {
+      "label": "Hold the whole order…",
+      "reading": "The order's work orders are still being read",
+      "onlyUnits": "Only made-to-measure units are in work: each is held from its own page",
+      "qualityNoRight": "Quality releases it: Quality's holds open for a quality inspector or the Owner",
+      "leftTitle": "Not held from here",
+      "left": "{number} — {words}",
+      "notReached_one": "{count} work order outside what you can open is not held from here: Production holds it",
+      "notReached_other": "{count} work orders outside what you can open are not held from here: Production holds them",
+      "units_one": "{count} made-to-measure unit is held from its own page",
+      "units_other": "{count} made-to-measure units are held from their own pages",
+      "stale_one": "{numbers} changed since it was read: nothing was held. The list was read again — hold again.",
+      "stale_other": "{numbers} changed since they were read: nothing was held. The list was read again — hold again.",
+      "notice_one": "{count} work order of {number} is on hold",
+      "notice_other": "{count} work orders of {number} are on hold"
     }
   },
   "overview": {

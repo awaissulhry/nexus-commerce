@@ -1712,6 +1712,22 @@
     "refuse": {
       "credit": "Un no lo lascia bloccato: non si annulla niente",
       "order": "Un no annulla l'ordine"
+    },
+    "hold": {
+      "label": "Metti in sospeso tutto l'ordine…",
+      "reading": "Gli ordini di lavoro dell'ordine sono ancora in lettura",
+      "onlyUnits": "In lavorazione ci sono solo capi su misura: ognuno si mette in sospeso dalla sua pagina",
+      "qualityNoRight": "Lo sblocca la qualità: i blocchi qualità si aprono per un ispettore qualità o il titolare",
+      "leftTitle": "Non messi in sospeso da qui",
+      "left": "{number} — {words}",
+      "notReached_one": "{count} ordine di lavoro fuori da ciò che puoi aprire non si mette in sospeso da qui: lo fa la Produzione",
+      "notReached_other": "{count} ordini di lavoro fuori da ciò che puoi aprire non si mettono in sospeso da qui: lo fa la Produzione",
+      "units_one": "{count} capo su misura si mette in sospeso dalla sua pagina",
+      "units_other": "{count} capi su misura si mettono in sospeso dalle loro pagine",
+      "stale_one": "{numbers} è cambiato da quando è stato letto: non è stato messo in sospeso niente. L'elenco è stato riletto — riprova.",
+      "stale_other": "{numbers} sono cambiati da quando sono stati letti: non è stato messo in sospeso niente. L'elenco è stato riletto — riprova.",
+      "notice_one": "{count} ordine di lavoro di {number} è in sospeso",
+      "notice_other": "{count} ordini di lavoro di {number} sono in sospeso"
     }
   },
   "overview": {

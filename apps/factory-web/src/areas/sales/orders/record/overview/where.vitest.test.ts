@@ -33,6 +33,8 @@ import { cancelHeld, closeHeld, readOnlyOnPage, readyHeld } from '../../model'
 import { elsewhereDoor } from '../shipments/elsewhere/model'
 import { WHERE_MOVES, whereMovesOf } from './where'
 // ---- end F-OO-107
+import { HOLD_ORDER_FROM, holdOrderMoveOf } from './where' // F-OO-108: Hold the whole order…
+import { workActsRead } from './fixtures' // F-OO-108: a read with each row's version and rights
 // ---- F-OO-106: the order's own credit hold — its doors, lines, refusals, notices; the hook's two acts with a fake API
 import { createElement } from 'react'
 import { ApiError } from '../../../../../lib/api/errors'
@@ -536,14 +538,19 @@ describe('F-OO-107: the moves row — Mark ready…, More ▾ (made elsewhere, C
     return { value, can, permissions, readOnly, moves: whereMovesOf(value, { can, readOnly, elsewhere: { held: elsewhereDoor(value, permissions) } }) }
   }
   const ids = (moves: ReturnType<typeof whereMovesOf>) => (moves ? [moves.shown.map((move) => move.id), moves.more.map((move) => move.id)] : null)
-  const heldOf = (moves: ReturnType<typeof whereMovesOf>, id: (typeof WHERE_MOVES)[number]) => [...(moves?.shown ?? []), ...(moves?.more ?? [])].find((move) => move.id === id)?.held?.key ?? null
+  // F-OO-108: a held move's words are a phrase (its key) or the hold plan's own words (said by their English here).
+  const heldOf = (moves: ReturnType<typeof whereMovesOf>, id: (typeof WHERE_MOVES)[number]) => {
+    const held = [...(moves?.shown ?? []), ...(moves?.more ?? [])].find((move) => move.id === id)?.held ?? null
+    return held ? ('key' in held ? held.key : held.en) : null
+  }
   /** [in view, under More ▾] per state, for every role that changes anything on the page. */
+  // F-OO-108: Hold the whole order… is in view while there is work it may stop (confirmed to partly shipped).
   const BY_STATUS: Readonly<Record<OrderStatus, readonly [string[], string[]] | null>> = {
     PENDING_APPROVAL: [[], ['cancel']],
-    CONFIRMED: [[], ['elsewhere', 'cancel']],
-    IN_PRODUCTION: [['ready'], ['elsewhere', 'cancel']],
-    READY: [[], ['elsewhere', 'cancel']],
-    PARTLY_SHIPPED: [[], ['elsewhere']],
+    CONFIRMED: [['hold'], ['elsewhere', 'cancel']],
+    IN_PRODUCTION: [['ready', 'hold'], ['elsewhere', 'cancel']],
+    READY: [['hold'], ['elsewhere', 'cancel']],
+    PARTLY_SHIPPED: [['hold'], ['elsewhere']],
     SHIPPED: [[], ['close']],
     DELIVERED: [[], ['close']],
     CLOSED: null,
@@ -566,8 +573,8 @@ describe('F-OO-107: the moves row — Mark ready…, More ▾ (made elsewhere, C
     }
     // The labels are the band's own words; Make work orders…, Create shipment…, Change promise and the yes are never here (F8).
     const { moves } = movesOf('IN_PRODUCTION', 'Owner')
-    expect([...moves!.shown, ...moves!.more].map((move) => move.label.key)).toEqual(['action.ready', 'elsewhere.title', 'action.cancel'])
-    expect(WHERE_MOVES).toEqual(['ready', 'elsewhere', 'cancel', 'close'])
+    expect([...moves!.shown, ...moves!.more].map((move) => move.label.key)).toEqual(['action.ready', 'where.hold.label', 'elsewhere.title', 'action.cancel'])
+    expect(WHERE_MOVES).toEqual(['ready', 'hold', 'elsewhere', 'cancel', 'close'])
   })
 
   it('parity: each move\'s held words are the band\'s own function\'s (readyHeld, cancelHeld, closeHeld, the made-elsewhere door)', () => {
@@ -575,7 +582,8 @@ describe('F-OO-107: the moves row — Mark ready…, More ▾ (made elsewhere, C
       for (const role of ['Owner', 'Sales', 'Planner', 'Warehouse'] as const) {
         const { value, can, permissions, moves } = movesOf(status, role)
         for (const move of [...(moves?.shown ?? []), ...(moves?.more ?? [])]) {
-          const band = move.id === 'ready' ? readyHeld(value, can) : move.id === 'cancel' ? cancelHeld(value, can) : move.id === 'close' ? closeHeld(value, can) : elsewhereDoor(value, permissions)
+          // F-OO-108: Hold the whole order… is held by the hold plan (here no work part is read: still being read).
+          const band = move.id === 'ready' ? readyHeld(value, can) : move.id === 'cancel' ? cancelHeld(value, can) : move.id === 'close' ? closeHeld(value, can) : move.id === 'hold' ? holdOrderMoveOf(value, null, null)!.held : elsewhereDoor(value, permissions)
           expect(move.held, `${status} ${role} ${move.id}`).toEqual(band)
         }
       }
@@ -878,3 +886,68 @@ describe('F-OO-106: the credit strip — Check credit again, Ask for a yes… on
   })
 })
 // ---- end F-OO-106
+
+// ---- F-OO-108 (order overview §1.4, §1.5; B-OO-005, review F13, F16; W07's note): Hold the whole order… and Quality's door ----------
+describe('F-OO-108: Hold the whole order… in the moves row — the domain plan, held with words; Release on Quality held without its right', () => {
+  const MANAGE = { manage: true, release: true, hold: true }
+  const NONE = { manage: false, release: false, hold: false }
+  const owner = actsCanOf(rolePermissions('owner'))
+  const sales = actsCanOf(rolePermissions('sales'))
+
+  it('offered while there is work to stop; held while not read, for Sales, and with the plan\'s words when it holds none', () => {
+    expect(HOLD_ORDER_FROM).toEqual(['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'])
+    for (const status of ['PENDING_APPROVAL', 'SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'] as const) expect(holdOrderMoveOf(order(status), workActsRead(MANAGE).work, owner), status).toBeNull()
+    expect(holdOrderMoveOf(order('IN_PRODUCTION'), null, owner)!.held).toEqual({ key: 'where.hold.reading' })
+    // The Owner: live, on the plan (WO-00021 held with its version; WO-00022 on hold already and WO-00019 shared are left out with why).
+    const live = holdOrderMoveOf(order('IN_PRODUCTION'), workActsRead(MANAGE).work, owner)!
+    expect(live.held).toBeNull()
+    expect([live.hold!.plan.numbers, live.hold!.plan.versions, live.hold!.plan.left.map((entry) => entry.number), live.hold!.plan.notReached, live.hold!.units]).toEqual([['WO-00021'], { [WORK.workOrders[0]!.id]: 7 }, ['WO-00022', 'WO-00019'], 1, 12])
+    // Sales: Production does this (the row's own words); without the acts on the page: the same.
+    expect(holdOrderMoveOf(order('IN_PRODUCTION'), workActsRead(NONE).work, sales)!.held).toEqual({ key: 'wo.heldHold' })
+    expect(holdOrderMoveOf(order('IN_PRODUCTION'), workActsRead(MANAGE).work, null)!.held).toEqual({ key: 'wo.heldHold' })
+    // Nothing in work yet: the plan's words; only made-to-measure units: each from its own page.
+    const empty = { ...WORK, workOrders: [], mtm: [], workOrdersLeftOut: 0 }
+    expect(holdOrderMoveOf(order('CONFIRMED'), empty, owner)!.held).toEqual({ it: 'Ancora niente da fermare: nessun ordine di lavoro è stato creato per questo ordine.', en: 'Nothing to hold yet: no work order is made for this order.' })
+    expect(holdOrderMoveOf(order('CONFIRMED'), { ...empty, mtm: WORK.mtm }, owner)!.held).toEqual({ key: 'where.hold.onlyUnits' })
+    // Every open one on hold already.
+    const held = workActsRead(MANAGE).work!
+    const allHeld = { ...held, workOrders: held.workOrders.filter((entry) => !entry.sharedWithOtherCustomers).map((entry) => ({ ...entry, held: true, status: 'ON_HOLD' })), workOrdersLeftOut: 0 }
+    expect(holdOrderMoveOf(order('IN_PRODUCTION'), allHeld, owner)!.held).toEqual({ it: 'Ogni ordine di lavoro aperto di questo ordine è già in sospeso.', en: 'Every open work order of this order is on hold already.' })
+    // In the row: in view after Mark ready…, before More ▾ — at most 3 in view.
+    const moves = whereMovesOf(order('IN_PRODUCTION'), { can: abilitiesOf(rolePermissions('owner')), readOnly: false, elsewhere: { held: null }, work: workActsRead(MANAGE).work, acts: owner })!
+    expect(moves.shown.map((move) => move.id)).toEqual(['ready', 'hold'])
+  })
+
+  it('Release on Quality ›: held with who releases it for a reader without quality.holds.view (Sales, Planner, Finance); a link for Quality and the Owner', () => {
+    const strip: WhereStrip = { key: 'quality', kind: 'quality', blocker: 'QUALITY_HOLD', reasons: [], workOrders: { reached: [{ id: 'w-1', number: 'WO-00022', shared: false }], notReached: 0 }, since: null }
+    const input = (acts: ReturnType<typeof actsCanOf>): StripDoorsInput => ({ prefix: '/w/DEMO', order: order('IN_PRODUCTION'), can: abilitiesOf(rolePermissions('owner')), readOnly: false, busy: false, approval: null, depthCan: { manage: true }, work: [], acts })
+    for (const role of ['sales', 'planner', 'finance'] as const) expect(stripDoorsOf(strip, input(actsCanOf(rolePermissions(role)))), role).toMatchObject([{ kind: 'quality', held: { key: 'where.hold.qualityNoRight' } }])
+    for (const permissions of [rolePermissions('owner'), ['workorders.view', 'quality.holds.view']]) expect(stripDoorsOf(strip, input(actsCanOf(permissions))), permissions.length > 2 ? 'owner' : 'quality').toEqual([{ kind: 'quality', href: '/w/DEMO/quality/holds?subjectType=WorkOrder&subjectId=w-1', number: 'WO-00022' }])
+  })
+
+  describe('drawn', () => {
+    const view = designScreen.view as ComponentType<{ model: unknown }>
+    const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, locale)
+    const rowOf = (html: string) => html.slice(html.indexOf('class="fw-so-where-moves"'), html.indexOf('</div>', html.indexOf('class="fw-so-where-moves"')))
+
+    it('the Owner: Hold the whole order… live beside Mark ready…; Sales: held — Production does it; nothing yet: the plan\'s words', () => {
+      expect(rowOf(draw('f-oo-108-moves'))).toMatch(/<button[^>]*>Hold the whole order…<\/button>/)
+      expect(rowOf(draw('f-oo-108-moves'))).not.toMatch(/aria-description="[^"]*"[^>]*>Hold the whole order…/)
+      expect(rowOf(draw('f-oo-108-moves-sales'))).toMatch(/aria-disabled="true"[^>]*aria-description="Production does this — a planner or the production manager"[^>]*>Hold the whole order…/)
+      expect(rowOf(draw('f-oo-108-nothing'))).toMatch(/aria-description="Nothing to hold yet: no work order is made for this order\."[^>]*>Hold the whole order…/)
+      expect(rowOf(draw('f-oo-108-moves', 'it'))).toContain("Metti in sospeso tutto l'ordine…".replace("'", '&#x27;'))
+      // Sales' Release on Quality › is held with who releases it (the Quality page would refuse it).
+      expect(draw('f-oo-105-holds-sales')).toMatch(/aria-description="Quality releases it: Quality&#x27;s holds open for a quality inspector or the Owner"[^>]*>Release on Quality ›/)
+    })
+
+    it('the words exist in both languages, office "tu" in Italian', () => {
+      for (const locale of LOCALES) {
+        const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+        for (const key of ['label', 'reading', 'onlyUnits', 'qualityNoRight', 'leftTitle', 'left']) expect(t(`where.hold.${key}`, { number: 'N', words: 'W' }), `${locale} ${key}`).not.toBe(`where.hold.${key}`)
+        for (const key of ['notReached', 'units', 'stale', 'notice']) for (const count of [1, 2]) expect(t(`where.hold.${key}`, { count, numbers: 'N', number: 'SO-1' }), `${locale} ${key} ${count}`).not.toBe(`where.hold.${key}`)
+      }
+      expect(JSON.stringify(messagesFor('it', ['orders']).orders!.where.hold)).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
+    })
+  })
+})
+// ---- end F-OO-108
