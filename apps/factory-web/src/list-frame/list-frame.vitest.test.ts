@@ -330,3 +330,118 @@ describe('F-SA-279: a list that drives a dock (opt-in active)', () => {
   })
 })
 // ---- end F-SA-279
+
+// ---- B-TH-245 (cp-fx13, walk L1): the row's ⋯ answers Enter / Space while the list tools are mounted (the cells edit)
+import { readsOnly } from '@nexus/ui/grid/gridDefaults'
+import { CELL_CONTROL, type ReadKeyFacts } from '@nexus/ui/grid/readGridKeys'
+import type { GridApi } from '@nexus/ui/grid'
+import { plainCellKey, plainCellKeyDown, type PlainCellGrid } from './w2b/cell-keys'
+
+describe('B-TH-245 (cp-fx13): a cell that never edits keeps its keys in a list whose cells edit (the list tools mounted)', () => {
+  it('the cause: with the tools the inline edit is on, the grid is a spreadsheet, and the DS reading keys are off for it', () => {
+    const edit = readFileSync(new URL('./w2b/edit.tsx', import.meta.url), 'utf8')
+    // The inline edit needs the tools (they carry the save): without them the grid reads and Enter pressed the ⋯ before.
+    expect(edit).toContain('const active = !!edit && edit.inline !== false && !edit.held && !!transport && !!listKey')
+    const frame = readFileSync(new URL('./ListFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain('{...(inline.active ? { readOnlyEdit: true, onCellEditRequest: inline.onCellEditRequest, cellSelection: true } : {})}')
+    expect(readsOnly({ cellSelection: true, columnDefs: [{ colId: 'note', editable: () => true }, { colId: 'more', pinned: 'right' }] })).toBe(false)
+    expect(readsOnly({ cellSelection: undefined, columnDefs: [{ colId: 'number' }, { colId: 'more', pinned: 'right' }] })).toBe(true)
+    // The fix: while the cells edit, the frame gives the cells that do not edit their keys back (on its grid, not the page's).
+    expect(frame).toContain('usePlainCellKeys<T>(gridEl, inline.active && !printing, { api: () => apiRef.current, edits: (row, colId) => isGroupMarker(row) || inlineRef.current.editableFor(row, colId) })')
+    expect(frame).toContain('ref={setGridEl')
+  })
+
+  const facts = (over: Partial<ReadKeyFacts> = {}): ReadKeyFacts => ({ key: 'Enter', shift: false, modifier: false, composing: false, prevented: false, on: 'cell', selectionCell: false, ownKeys: false, controls: 1, index: -1, buttonLike: true, checkbox: false, formGrid: false, opensRows: true, ...over })
+
+  it('the rule: Enter / Space press the cell\'s one button, Enter moves into several, Tab walks them, Esc back to the cell', () => {
+    expect(plainCellKey(facts(), false)).toEqual({ do: 'press' })
+    expect(plainCellKey(facts({ key: ' ' }), false)).toEqual({ do: 'press' })
+    expect(plainCellKey(facts({ controls: 3, buttonLike: false }), false)).toEqual({ do: 'control', to: 0 })
+    expect(plainCellKey(facts({ key: 'Tab', on: 'control', index: 0, controls: 2, buttonLike: false }), false)).toEqual({ do: 'control', to: 1 })
+    expect(plainCellKey(facts({ key: 'Escape', on: 'control', index: 0 }), false)).toEqual({ do: 'cell' })
+  })
+
+  it('the rest stays the spreadsheet\'s and the list\'s: Tab out of a cell, Enter on a cell without a control, a cell that edits, the keys of the list', () => {
+    // Tab order unchanged: AG's Tab from the cell, and from a cell's last control (never "leave the grid" from here).
+    expect(plainCellKey(facts({ key: 'Tab' }), false)).toBeNull()
+    expect(plainCellKey(facts({ key: 'Tab', on: 'control', index: 0 }), false)).toBeNull()
+    // Enter on a cell without a control: the frame's own Enter (it opens the row), as before.
+    expect(plainCellKey(facts({ controls: 0, buttonLike: false }), false)).toBeNull()
+    // A cell that edits keeps Enter / F2 for its editor; AG's selection cell keeps Space.
+    expect(plainCellKey(facts(), true)).toBeNull()
+    expect(plainCellKey(facts({ selectionCell: true }), false)).toBeNull()
+    // ⌘↵ (a new tab), j / k / x / ? / o (the footer's keys), Space on a link (it ticks the row; the link's own Space peeks).
+    expect(plainCellKey(facts({ modifier: true }), false)).toBeNull()
+    for (const key of ['j', 'k', 'x', '/', '?', 'o']) expect(plainCellKey(facts({ key }), false), key).toBeNull()
+    expect(plainCellKey(facts({ key: ' ', buttonLike: false }), false)).toBeNull()
+    expect(plainCellKey(facts({ key: ' ', on: 'control', index: 0 }), false)).toBeNull()
+    expect(plainCellKey(facts({ checkbox: true }), false)).toBeNull()
+    expect(plainCellKey(facts({ prevented: true }), false)).toBeNull()
+  })
+
+  // A made-up grid with the tools mounted: row 0's ⋯ cell holds the DS Menu's trigger (one button; a click opens its menu), and
+  // its note cell edits (the inline edit's rule says so).
+  type Row = { id: string }
+  const madeUpGrid = (editing = false) => {
+    const menu = { open: false }
+    const focused: string[] = []
+    const asked: string[] = []
+    const row = { getAttribute: (name: string) => (name === 'row-index' ? '0' : null) }
+    const trigger: Record<string, unknown> = {
+      matches: (selector: string) => selector.split(',').some((part) => /^button\b/.test(part.trim())),
+      contains: (node: unknown) => node === trigger,
+      focus: () => focused.push('trigger'),
+      click: () => (menu.open = !menu.open),
+    }
+    const cellOf = (colId: string, controls: unknown[]) => {
+      const cell: Record<string, unknown> = {
+        getAttribute: (name: string) => (name === 'col-id' ? colId : null),
+        closest: (selector: string) => (selector === '.ag-cell' ? cell : selector === '[row-index]' ? row : null),
+        querySelectorAll: (selector: string) => (asked.push(selector), controls),
+        focus: () => focused.push(`cell:${colId}`),
+      }
+      return cell
+    }
+    const more = cellOf('more', [trigger])
+    trigger.closest = (selector: string) => (selector === '.ag-cell' ? more : selector === '[row-index]' ? row : null)
+    const note = cellOf('note', [])
+    const root = { contains: () => true } as unknown as HTMLElement
+    const api = {
+      isDestroyed: () => false,
+      getEditingCells: () => (editing ? [{}] : []),
+      getDisplayedRowAtIndex: (index: number) => (index === 0 ? { data: { id: 'so-1' } } : undefined),
+      getColumn: () => ({ getColDef: () => ({}) }),
+      getGridOption: () => undefined,
+    } as unknown as GridApi<Row>
+    const grid: PlainCellGrid<Row> = { api: () => api, edits: (_row, colId) => colId === 'note' }
+    const press = (key: string, target: unknown, over: Partial<KeyboardEvent> = {}) =>
+      plainCellKeyDown({ key, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, isComposing: false, defaultPrevented: false, target, ...over } as unknown as KeyboardEvent, root, grid, () => true)
+    return { menu, focused, asked, trigger, more, note, press }
+  }
+
+  it('Enter on the ⋯ cell opens the row menu WITH the tools mounted; Esc from its button goes back to the cell; Space opens it too', () => {
+    const grid = madeUpGrid()
+    expect(grid.press('Enter', grid.more)).toBe(true)
+    expect(grid.menu.open).toBe(true)
+    expect(grid.focused).toEqual(['trigger'])
+    expect(grid.asked).toEqual([CELL_CONTROL])
+    // The menu closed (its own Esc puts the focus on its button); Esc on the button: the cell (the list's j / k go on from there).
+    grid.menu.open = false
+    expect(grid.press('Escape', grid.trigger)).toBe(true)
+    expect(grid.focused[grid.focused.length - 1]).toBe('cell:more')
+    expect(grid.press(' ', grid.more)).toBe(true)
+    expect(grid.menu.open).toBe(true)
+  })
+
+  it('a cell that edits, a cell while another edits, and ⌘↵ are left to the grid and the list', () => {
+    const grid = madeUpGrid()
+    expect(grid.press('Enter', grid.note)).toBe(false)
+    expect(grid.press('Enter', grid.more, { metaKey: true })).toBe(false)
+    expect(grid.press('Tab', grid.more)).toBe(false)
+    expect(grid.menu.open).toBe(false)
+    const busy = madeUpGrid(true)
+    expect(busy.press('Enter', busy.more)).toBe(false)
+    expect(busy.menu.open).toBe(false)
+  })
+})
+// ---- end B-TH-245 (cp-fx13)
