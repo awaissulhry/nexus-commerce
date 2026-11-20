@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import type { ComponentType } from 'react'
 import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
@@ -8,6 +8,9 @@ import { order } from '../../_demo/fixtures'
 import { designScreen } from '../fixtures'
 import { SO2_BLOCKERS } from '../fixtures' // F-OP-301
 import { CONFIRMED_READ, HEADLINE, LINES, PRODUCTION_READ } from './fixtures'
+import { GATE, PEOPLE } from './fixtures' // F-OO-208
+import { datesSchema, peopleSchema, productionSchema } from './api' // F-OO-208
+import { orderSchema, type Order } from '../../api' // F-OO-208
 import { mergeRead } from './model' // F-OO-100: each section's own rules are tested in its file (where, progress, people, dates, linked, facts)
 import { changesBadgeOf, rowWordsOf, waitingCardOf, waitingOf, whoActsNextOf, type WaitingRow } from './model' // F-OP-103
 import { orderWaitingOf } from './model' // F-OP-301
@@ -504,3 +507,49 @@ describe('F-OO-100: OverviewTab keeps the layout, each card is its own file, eac
   })
 })
 // ---- end F-OO-100
+
+// ---- F-OO-208 (13-backend §14; B-OO-008, B-OO-010, B-OO-013): the read schemas in one step — every new field optional ------------
+describe('F-OO-208: the page reads the new fields, and still reads an older answer without them', () => {
+  it('production read: who answers the customer and why, a place\'s kind and since, a gate\'s version and moves — with and without', () => {
+    // With: each new field is read as the API sends it.
+    const read = productionSchema.parse({ ...PRODUCTION_READ, people: PEOPLE, dates: { ...PRODUCTION_READ.dates!, gates: [GATE] } })
+    expect(read.people?.answersCustomer).toEqual({ id: PEOPLE.answersCustomer!.id, name: 'Bea Esempio', active: true, source: 'SUPERVISOR' })
+    expect(read.people?.places.map((place) => [place.kind, place.since])).toEqual([
+      ['PLANT', null],
+      ['WORKSHOP', '2026-11-10'],
+    ])
+    expect(read.dates?.gates[0]).toMatchObject({ version: 3, actions: { pass: { allowed: true, refusal: null }, startBefore: { allowed: false, refusal: { code: 'OWN_GATE' } }, edit: { allowed: true }, remove: { allowed: false, needs: 'planning.milestones.manage' } } })
+    // Without (an older answer): the same parts read, the new fields absent — nothing refused, nothing made up.
+    const answerer = PEOPLE.answersCustomer!
+    const olderPeople = { ...PEOPLE, answersCustomer: { id: answerer.id, name: answerer.name, active: answerer.active }, places: PEOPLE.places.map((place) => ({ site: place.site, line: place.line, team: place.team, workshop: place.workshop })) }
+    const people = peopleSchema.parse(olderPeople)
+    expect(people.answersCustomer).toEqual({ id: answerer.id, name: 'Bea Esempio', active: true })
+    expect(people.places.map((place) => [place.workshop?.name ?? place.site?.code, place.kind, place.since])).toEqual([
+      ['STAB-N', undefined, undefined],
+      ['Laboratorio Esempio', undefined, undefined],
+    ])
+    const olderGate = Object.fromEntries(Object.entries(GATE).filter(([key]) => key !== 'version' && key !== 'actions'))
+    const dates = datesSchema.parse({ ...PRODUCTION_READ.dates!, gates: [olderGate] })
+    expect(dates.gates[0]).toMatchObject({ id: GATE.id, kind: 'PP_SAMPLE', state: 'WAITING' })
+    expect([dates.gates[0]!.version, dates.gates[0]!.actions]).toEqual([undefined, undefined])
+    expect(productionSchema.safeParse(PRODUCTION_READ).success).toBe(true)
+    // The lists are the API's own: an unknown source, place kind or refusal code is not read as something else.
+    expect(peopleSchema.safeParse({ ...PEOPLE, answersCustomer: { ...answerer, source: 'SOMEONE' } }).success).toBe(false)
+    expect(peopleSchema.safeParse({ ...PEOPLE, places: [{ ...PEOPLE.places[0]!, kind: 'STATION' }] }).success).toBe(false)
+    expect(datesSchema.safeParse({ ...PRODUCTION_READ.dates!, gates: [{ ...GATE, actions: { ...GATE.actions!, pass: { allowed: false, refusal: { code: 'NOT_A_CODE', message: 'x' }, needs: null } } }] }).success).toBe(false)
+  })
+
+  it('order read: the office note, the Incoterm, its place and ship complete — with and without', () => {
+    const fields = orderSchema.pick({ internalNote: true, incoterm: true, incotermPlace: true, shipComplete: true })
+    expect(fields.parse({ internalNote: 'Solo ufficio: imballo doppio.', incoterm: 'EXW', incotermPlace: 'Monza', shipComplete: true })).toEqual({ internalNote: 'Solo ufficio: imballo doppio.', incoterm: 'EXW', incotermPlace: 'Monza', shipComplete: true })
+    expect(fields.parse({ internalNote: null, incoterm: null, incotermPlace: null, shipComplete: false })).toEqual({ internalNote: null, incoterm: null, incotermPlace: null, shipComplete: false })
+    expect(fields.parse({})).toEqual({})
+    // A whole older answer (the demo order has none of the four) still parses; a newer one keeps them.
+    expect(orderSchema.safeParse(order('IN_PRODUCTION')).success).toBe(true)
+    expect(orderSchema.parse({ ...order('IN_PRODUCTION'), internalNote: 'x', incoterm: 'DAP', incotermPlace: null, shipComplete: false })).toMatchObject({ internalNote: 'x', incoterm: 'DAP', incotermPlace: null, shipComplete: false })
+    // Optional in the type too: a page that reads them says what is there, and nothing when an older answer lacks them.
+    expectTypeOf<Order['incoterm']>().toEqualTypeOf<string | null | undefined>()
+    expectTypeOf<Order['shipComplete']>().toEqualTypeOf<boolean | undefined>()
+  })
+})
+// ---- end F-OO-208

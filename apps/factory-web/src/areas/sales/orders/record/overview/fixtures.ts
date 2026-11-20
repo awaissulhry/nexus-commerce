@@ -1,6 +1,7 @@
 import { LINE_BLK, LINE_RED, ORDER_ID, WORK_ORDERS } from '../../_demo/fixtures'
 import { MILESTONES } from '../../depth/demo/fixtures'
 import type { Headline, OrderProduction, ProductionLine, Work } from './api'
+import type { Gate, People } from './api' // F-OO-208
 import type { ProductionState } from './model'
 import type { OrderFilesRead } from '../../../../../lib/record-thread/files-view/model' // F-SA-237
 
@@ -104,6 +105,40 @@ export const WORK: Work = {
   notInProduction: { lines: 0, pieces: 0 },
 }
 export const WORK_READ: OrderProduction = { ...PRODUCTION_READ, work: WORK }
+
+// ---- F-OO-208 (B-OO-008, B-OO-010): the read's new fields as the API sends them (made up) — People: who answers the customer and
+// why (the order's supervisor), the places told apart (a plant line; an outside workshop since its issue day); a gate with its
+// version and this reader's moves (pass allowed; start before refused in words; edit allowed; remove needs Planning's right).
+export const PEOPLE: People = {
+  supervisor: { id: '0190f0e2-9191-7000-8000-000000000001', name: 'Bea Esempio', active: true, from: 'ORDER', me: false },
+  backup: { id: '0190f0e2-9191-7000-8000-000000000002', name: 'Carlo Prova', active: true },
+  answersCustomer: { id: '0190f0e2-9191-7000-8000-000000000001', name: 'Bea Esempio', active: true, source: 'SUPERVISOR' },
+  places: [
+    { site: named('STAB-N', 'Stabilimento Nord'), line: named('L2', 'Linea 2'), team: null, workshop: null, kind: 'PLANT', since: null },
+    { site: null, line: null, team: null, workshop: { name: 'Laboratorio Esempio' }, kind: 'WORKSHOP', since: '2026-11-10' },
+  ],
+}
+export const GATE: Gate = {
+  id: '0190f0e2-9292-7000-8000-000000000001',
+  kind: 'PP_SAMPLE',
+  label: null,
+  targetDate: '2026-11-20',
+  sampleRound: null,
+  owner: { id: '0190f0e2-9191-7000-8000-000000000003', name: 'Paola Esempio' },
+  state: 'WAITING',
+  passedOn: null,
+  via: null,
+  startedBefore: null,
+  leather: null,
+  version: 3,
+  actions: {
+    pass: { allowed: true, refusal: null, needs: null },
+    startBefore: { allowed: false, refusal: { code: 'OWN_GATE', message: "Starting before the gate needs someone who is neither the gate's planner nor the person who added it: ask a colleague who may." }, needs: null },
+    edit: { allowed: true, refusal: null, needs: null },
+    remove: { allowed: false, refusal: null, needs: 'planning.milestones.manage' },
+  },
+}
+// ---- end F-OO-208
 
 // ---- F-OP-113 (B-OP-021, B6; R-11): the work orders as the order page acts on them — each row's version, kind, release, priority,
 // its cells of this order's lines and the reader's rights; a third, older work order shared with another customer (read-only here).
