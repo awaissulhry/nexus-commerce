@@ -1,6 +1,6 @@
 import type { Translate } from '../../../../../lib/i18n/messages'
 import { rightRef } from '../../../../../lib/i18n/rights' // F-OO-133: the right that choosing who answers needs, in words
-import type { OrderProduction, People } from './api'
+import type { People } from './api'
 import type { ProductionState } from './model'
 
 /**
@@ -8,11 +8,48 @@ import type { ProductionState } from './model'
  * only, never an operator; Statuto art. 4).
  */
 
-/** Where the order is made, as places only (a site · a line · a team by name, or an outside workshop) — never an operator. */
-export function placeWords(place: NonNullable<OrderProduction['people']>['places'][number]): string {
-  if (place.workshop) return place.workshop.name
-  return [place.site?.name ?? place.site?.code, place.line?.name ?? place.line?.code, place.team?.name ?? place.team?.code].filter((part): part is string => !!part).join(' · ')
+// ---- F-OO-134 (order overview lane; 10-design §3.2; B-OO-008): Where it is made — one line per place, plant or outside told apart ----
+/** One line of "Where it is made": a plant's site › line · team in words, or an outside workshop and the day its job went out. */
+export type PlaceLine =
+  | { readonly kind: 'PLANT'; readonly words: string }
+  | { readonly kind: 'WORKSHOP'; readonly name: string; readonly since: string | null }
+
+/**
+ * Where the order is made, one line per place — places only, never an operator (Statuto art. 4; F-SA-233). A plant line reads
+ * "Seed plant A1 › Line 2 · Team Blu" (each part by its name, else its code; a part not planned is left out); an outside workshop
+ * keeps its name and the day its first job still out there was issued (B-OO-008's `since`). The kind is the API's (B-OO-008: only the
+ * LIVE work orders name a place); an older answer without it: a place with a workshop is outside. Derived from the plan, never set
+ * here. None: [] (the card says "Not planned yet").
+ */
+export function placeLinesOf(places: People['places']): PlaceLine[] {
+  return places.map((place): PlaceLine => {
+    const outside = place.kind ? place.kind === 'WORKSHOP' : !!place.workshop
+    if (outside) return { kind: 'WORKSHOP', name: place.workshop?.name ?? '', since: place.since ?? null }
+    const part = (value: { readonly code: string; readonly name: string } | null) => (value ? value.name || value.code : null)
+    const site = part(place.site)
+    const rest = [part(place.line), part(place.team)].filter((words): words is string => !!words).join(' · ')
+    return { kind: 'PLANT', words: site && rest ? `${site} › ${rest}` : (site ?? rest) }
+  })
 }
+
+/** A place line in words: the plant's as it is; outside "Outside: {name} · since {date}" (no day known: "Outside: {name}"). */
+export function placeLineWords(line: PlaceLine, t: Translate, day: (value: string) => string): string {
+  if (line.kind === 'PLANT') return line.words
+  return line.since ? t('people.outsideSince', { name: line.name, date: day(line.since) }) : t('people.outside', { name: line.name })
+}
+
+/** The work orders that name no place (B-OO-008: production-read's NO_PLACE_WORK_ORDERS) — Planning's board is not opened at one. */
+const NO_PLACE_STATUSES: readonly string[] = ['CANCELLED', 'CLOSED']
+
+/**
+ * "Open in Planning ›" (planning.view): the planning board at the order's first live work order — where the line, the workshop and
+ * the start are planned (they are Planning's, never set here). No live work order, or a final order: no link (the band's ⋯ rule).
+ */
+export function planningWorkOrderOf(workOrders: readonly { readonly id: string; readonly status: string }[], may: { readonly plan: boolean; readonly final: boolean }): string | null {
+  if (!may.plan || may.final) return null
+  return workOrders.find((workOrder) => !NO_PLACE_STATUSES.includes(workOrder.status))?.id ?? null
+}
+// ---- end F-OO-134
 
 // ---- F-OO-131 (order overview lane; 10-design §3): People as one aligned list — what the card draws from the read --------------
 /**

@@ -1695,7 +1695,9 @@
   },
   "people": {
     "supervisor": "Supervisor",
-    "followers": "Followers ›"
+    "followers": "Followers ›",
+    "outside": "Outside: {name}",
+    "outsideSince": "Outside: {name} · since {date}"
   },
   "told": {
     "title": "Who was told",

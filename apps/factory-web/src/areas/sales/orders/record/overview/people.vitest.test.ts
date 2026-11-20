@@ -10,7 +10,7 @@ import { base } from '../fixtures'
 import type { OrderRecordModel } from '../record-model'
 import { PeopleCard } from '../view/overview/PeopleCard'
 import { FAILED_STATE, LOADING_STATE, NO_WORK_READ, PEOPLE, PRODUCTION_READ, ready } from './fixtures'
-import { peopleViewOf, placeWords } from './people'
+import { peopleViewOf } from './people'
 // ---- F-OO-133: the real answerer, its held door, and the re-read after the owner changed ----
 import type { ComponentType } from 'react'
 import { renderView } from '../../../../../lib/record-thread/parts/testing'
@@ -18,15 +18,15 @@ import { rightRef } from '../../../../../lib/i18n/rights'
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { designScreen } from '../fixtures'
 import { answererWordsOf, answerHeldOf, OWNER_WORDS_NS } from './people'
+// ---- F-OO-134: where it is made, one line per place; Open in Planning › ----
+import { formatDate } from '../../../../../lib/i18n/format'
+import { dayInstant } from '../../model'
+import type { WorkOrderActsModel } from '../../../../../lib/production/work-order-acts/use-work-order-acts'
+import { placeLinesOf, placeLineWords, planningWorkOrderOf } from './people'
 
 /** F-OO-100 (order overview lane: one file per section) — People's rules, moved with people.ts out of overview.vitest.test.ts unchanged. */
 
-describe('Overview’s facts (F-SA-233): People', () => {
-  it('people: places only — a site · line · team, or an outside workshop; never an operator', () => {
-    expect(placeWords({ site: { code: 'S1', name: 'Main site' }, line: { code: 'L2', name: 'Line 2' }, team: null, workshop: null })).toBe('Main site · Line 2')
-    expect(placeWords({ site: null, line: null, team: null, workshop: { name: 'Workshop Beta Leather' } })).toBe('Workshop Beta Leather')
-  })
-})
+// F-OO-134: placeWords became placeLinesOf (one line per place, plant or outside told apart) — its test is F-OO-134's below.
 
 // ---- F-OO-131 (order overview lane; 10-design §3): People as one aligned list ------------------------------------------------------
 describe('F-OO-131: People — one aligned list, label | value | one door; Followers in the head; Made by and Told left', () => {
@@ -61,7 +61,8 @@ describe('F-OO-131: People — one aligned list, label | value | one door; Follo
     expect(rowOf(html, 'Backup')).toMatch(/href="\/w\/DEMO\/sales\/customers\/[^"]+"/)
     expect(textOf(rowOf(html, 'Answers the customer'))).toContain('Bea Esempio')
     expect(textOf(rowOf(html, 'Answers the customer'))).toContain('Change…')
-    expect(textOf(rowOf(html, 'Where it is made'))).toContain('Stabilimento Nord · Linea 2 · Laboratorio Esempio')
+    // F-OO-134: one line per place (a plant line, an outside workshop), "(from the plan)".
+    expect(textOf(rowOf(html, 'Where it is made'))).toContain('Stabilimento Nord › Linea 2 Outside: Laboratorio Esempio')
     // One place per fact: Made by is Order facts' (F-OO-209), Told about changes the foot of Requests & changes (F-OO-205).
     expect(textOf(html)).not.toContain('Made by')
     expect(textOf(html)).not.toContain('Told about changes')
@@ -266,3 +267,87 @@ describe('F-OO-133: People › Answers the customer — who and why in the threa
   })
 })
 // ---- end F-OO-133
+
+// ---- F-OO-134 (10-design §3.2; B-OO-008): Where it is made — one line per place, plant or outside told apart; Open in Planning › ------
+describe('F-OO-134: People › Where it is made — a plant line or an outside workshop since its day, "(from the plan)", Open in Planning › with planning.view', () => {
+  const named = (code: string, name: string) => ({ code, name })
+  const plant = (over: Partial<(typeof PEOPLE)['places'][number]> = {}) => ({ site: named('A1', 'Seed plant A1'), line: named('L2', 'Line 2'), team: named('BLU', 'Team Blu'), workshop: null, kind: 'PLANT' as const, since: null, ...over })
+  const outside = (name: string, since: string | null) => ({ site: null, line: null, team: null, workshop: { name }, kind: 'WORKSHOP' as const, since })
+  const t = (locale: 'en' | 'it') => createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+  const day = (locale: 'en' | 'it') => (value: string) => formatDate(dayInstant(value), { locale })
+  const value = order('IN_PRODUCTION')
+  const LIVE_WO = value.chain.workOrders[0]!.id
+  const acts = (planning: boolean) => ({ can: { view: true, qualityHold: false, reopen: false, planning } }) as unknown as WorkOrderActsModel
+  const people = { mayAssign: true, mayNote: true, assign: null, note: null }
+  const whereRow = (html: string, locale: 'en' | 'it' = 'en') => html.split('<li class="fw-so-ov-row">').slice(1).find((row) => textOf(row).startsWith(locale === 'en' ? 'Where it is made' : 'Dove si produce')) ?? ''
+  const card = (over: Partial<OrderRecordModel>, locale: 'en' | 'it' = 'en', status: Parameters<typeof order>[0] = 'IN_PRODUCTION') => {
+    const shown = order(status)
+    return whereRow(render(createElement(PeopleCard, { order: shown, model: base('owner', shown, { tab: 'overview', production: ready({ ...PRODUCTION_READ, people: PEOPLE }), people, ...over }).record }), locale), locale)
+  }
+
+  it('placeLinesOf: a plant line "site › line · team" (a part not planned left out, its code without a name); an outside workshop with its day; none: no line', () => {
+    expect(placeLinesOf([plant()])).toEqual([{ kind: 'PLANT', words: 'Seed plant A1 › Line 2 · Team Blu' }])
+    expect(placeLinesOf([plant({ team: null })])).toEqual([{ kind: 'PLANT', words: 'Seed plant A1 › Line 2' }])
+    expect(placeLinesOf([plant({ line: null, team: null })])).toEqual([{ kind: 'PLANT', words: 'Seed plant A1' }])
+    expect(placeLinesOf([plant({ site: null })])).toEqual([{ kind: 'PLANT', words: 'Line 2 · Team Blu' }])
+    expect(placeLinesOf([plant({ line: named('L3', '') })])[0]).toEqual({ kind: 'PLANT', words: 'Seed plant A1 › L3 · Team Blu' })
+    expect(placeLinesOf([outside('Seed Leather Supplier S.p.A.', '2026-11-18')])).toEqual([{ kind: 'WORKSHOP', name: 'Seed Leather Supplier S.p.A.', since: '2026-11-18' }])
+    expect(placeLinesOf([outside('Laboratorio Esempio', null)])).toEqual([{ kind: 'WORKSHOP', name: 'Laboratorio Esempio', since: null }])
+    // Plant first, then outside — in the API's order (B-OO-008), one line each.
+    expect(placeLinesOf(PEOPLE.places).map((line) => line.kind)).toEqual(['PLANT', 'WORKSHOP'])
+    // An older answer without the kind: a place with a workshop is outside.
+    expect(placeLinesOf([{ site: null, line: null, team: null, workshop: { name: 'Workshop Beta Leather' } }])).toEqual([{ kind: 'WORKSHOP', name: 'Workshop Beta Leather', since: null }])
+    expect(placeLinesOf([{ site: named('S1', 'Main site'), line: named('L2', 'Line 2'), team: null, workshop: null }])).toEqual([{ kind: 'PLANT', words: 'Main site › Line 2' }])
+    expect(placeLinesOf([])).toEqual([])
+  })
+
+  it('the words: "Outside: {name} · since {date}" (no day: "Outside: {name}"), en + it; a plant line as it is', () => {
+    expect(placeLineWords({ kind: 'WORKSHOP', name: 'Seed Leather Supplier S.p.A.', since: '2026-11-18' }, t('en'), day('en'))).toBe(`Outside: Seed Leather Supplier S.p.A. · since ${day('en')('2026-11-18')}`)
+    expect(placeLineWords({ kind: 'WORKSHOP', name: 'Seed Leather Supplier S.p.A.', since: '2026-11-18' }, t('it'), day('it'))).toBe(`Esterno: Seed Leather Supplier S.p.A. · dal ${day('it')('2026-11-18')}`)
+    expect(placeLineWords({ kind: 'WORKSHOP', name: 'Laboratorio Esempio', since: null }, t('en'), day('en'))).toBe('Outside: Laboratorio Esempio')
+    expect(placeLineWords({ kind: 'WORKSHOP', name: 'Laboratorio Esempio', since: null }, t('it'), day('it'))).toBe('Esterno: Laboratorio Esempio')
+    expect(placeLineWords({ kind: 'PLANT', words: 'Seed plant A1 › Line 2 · Team Blu' }, t('en'), day('en'))).toBe('Seed plant A1 › Line 2 · Team Blu')
+    for (const locale of LOCALES) for (const key of ['people.outside', 'people.outsideSince', 'dates.fromPlan', 'wo.link.planning']) expect(t(locale)(key, { name: 'x', date: 'y' }), `${locale} ${key}`).not.toBe(key)
+  })
+
+  it('planningWorkOrderOf: the first live work order with planning.view; none without the right, on a final order, or with no live work order', () => {
+    const rows = [{ id: 'w0', status: 'CANCELLED' }, { id: 'w1', status: 'CLOSED' }, { id: 'w2', status: 'IN_PROGRESS' }, { id: 'w3', status: 'RELEASED' }]
+    expect(planningWorkOrderOf(rows, { plan: true, final: false })).toBe('w2')
+    expect(planningWorkOrderOf(rows, { plan: false, final: false })).toBeNull()
+    expect(planningWorkOrderOf(rows, { plan: true, final: true })).toBeNull()
+    expect(planningWorkOrderOf(rows.slice(0, 2), { plan: true, final: false })).toBeNull()
+    expect(planningWorkOrderOf([], { plan: true, final: false })).toBeNull()
+  })
+
+  it('the card: one line per place, "(from the plan)", Open in Planning › at the first live work order (planning.view), en + it', () => {
+    const row = card({ workOrderActs: acts(true) })
+    expect(textOf(row)).toBe(`Where it is made Stabilimento Nord › Linea 2 Outside: Laboratorio Esempio · since ${day('en')('2026-11-10')} (from the plan) Open in Planning ›`)
+    expect(row).toContain(`href="/w/DEMO/planning/board?wo=${encodeURIComponent(LIVE_WO)}"`)
+    expect(row.match(/<span>[^<]+<\/span>/g)?.length, 'one line per place').toBe(2)
+    expect(textOf(card({ workOrderActs: acts(true) }, 'it'))).toBe(`Dove si produce Stabilimento Nord › Linea 2 Esterno: Laboratorio Esempio · dal ${day('it')('2026-11-10')} (dal piano) Apri in Pianificazione ›`)
+    // Derived: no Change… on this row, ever.
+    expect(row).not.toContain('<button')
+  })
+
+  it('without planning.view, or on a final order: no Planning link; Read-only keeps the link (a link, not a move); nothing planned: "Not planned yet", no "(from the plan)"', () => {
+    expect(card({ workOrderActs: acts(false) })).not.toContain('/planning/board')
+    expect(card({ workOrderActs: null })).not.toContain('/planning/board')
+    for (const status of ['CLOSED', 'CANCELLED'] as const) expect(card({ workOrderActs: acts(true) }, 'en', status), status).not.toContain('/planning/board')
+    const readOnly = card({ workOrderActs: acts(true), people: { ...people, mayAssign: false }, can: abilitiesOf(['orders.view', 'workorders.view', 'planning.view']) })
+    expect(readOnly).toContain('/planning/board?wo=')
+    const none = whereRow(render(createElement(PeopleCard, { order: value, model: base('owner', value, { tab: 'overview', production: ready({ ...PRODUCTION_READ, people: { ...PEOPLE, places: [] } }), people, workOrderActs: acts(true) }).record })))
+    expect(textOf(none)).toBe('Where it is made Not planned yet Open in Planning ›')
+    expect(textOf(none)).not.toContain('(from the plan)')
+  })
+
+  it('the source: the rules in people.ts (placeWords is gone), the card never sets a place', () => {
+    const rules = readFileSync(new URL('./people.ts', import.meta.url), 'utf8')
+    expect(rules).not.toContain('export function placeWords(')
+    expect(rules).toContain("const NO_PLACE_STATUSES: readonly string[] = ['CANCELLED', 'CLOSED']")
+    const view = readFileSync(new URL('../view/overview/PeopleCard.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('{placeLineWords(line, t, day)}')
+    expect(view).toContain("{t('dates.fromPlan')}")
+    expect(view).toContain('planningHref(model.prefix, planning)')
+  })
+})
+// ---- end F-OO-134

@@ -3,12 +3,15 @@
 import Link from 'next/link'
 import { Card } from '@nexus/ui/components'
 import { Button, Skeleton } from '@nexus/ui/primitives'
-import { useT } from '../../../../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../../../../lib/i18n/provider'
+import { formatDate } from '../../../../../../lib/i18n/format' // F-OO-134: a workshop's day
 import { WithMessages } from '../../../../../../record-panels/i18n' // F-OO-133: the thread head's words (who answers, and why)
 import type { Order } from '../../../api'
 import { readOnlyOnPage } from '../../../model' // F-OO-131: Read-only sees no moves (the band's own rule)
+import { dayInstant, isFinal } from '../../../model' // F-OO-134
+import { planningHref } from '../../../../../../lib/production/work-order-acts/model' // F-OO-134: Open in Planning › (as the band's ⋯)
 import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame' // F-OP-104: the owner door
-import { peopleViewOf, placeWords } from '../../overview/people'
+import { peopleViewOf, placeLinesOf, placeLineWords, planningWorkOrderOf } from '../../overview/people'
 import { answererWordsOf, answerHeldOf, OWNER_WORDS_NS } from '../../overview/people' // F-OO-133
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { PartState } from '../OrderRecordView' // F-OO-131: a failed read says so (never an empty card)
@@ -46,6 +49,7 @@ function People({ order, model, actions }: { order: Order; model: OrderRecordMod
   const t = useT('orders')
   const notes = useT(NOTES_NS)
   const head = useT(OWNER_WORDS_NS) // F-OO-133
+  const locale = useLocale() // F-OO-134
   const frame = useRecordFrame() // F-OP-104: "Answers the customer · Change…" is the conversation's owner door
   const customer = order.party?.legalName ?? ''
   const view = peopleViewOf(model.production)
@@ -56,6 +60,9 @@ function People({ order, model, actions }: { order: Order; model: OrderRecordMod
   // F-OO-133: Change… (the owner door) held where it cannot save: no conversation on this page (the frame offers its doors only with
   // one), or no right to write in it.
   const answerHeld = answerHeldOf({ thread: !!frame?.discuss && !!frame.openDoor, mayWrite: model.people ? model.people.mayNote : null })
+  // F-OO-134: Planning's board at the first live work order (planning.view; not on a final order) — a link, so Read-only keeps it.
+  const planning = planningWorkOrderOf(order.chain.workOrders, { plan: !!model.workOrderActs?.can.planning, final: isFinal(order) })
+  const day = (value: string) => formatDate(dayInstant(value), { locale })
   return (
     <Card padded className="fw-so-people">
       <div className="fw-so-card-head">
@@ -106,9 +113,27 @@ function People({ order, model, actions }: { order: Order; model: OrderRecordMod
               </span>
             )}
           </li>
+          {/* F-OO-134: one line per place — a plant line, or an outside workshop since the day its job went out; derived from the plan
+              and never set here ("(from the plan)"); Open in Planning › where the line, the workshop and the start are planned. */}
           <li className="fw-so-ov-row">
             <span className="fw-so-people-label">{t('overview.people.where')}</span>
-            <span>{view.people.places.length > 0 ? view.people.places.map(placeWords).join(' · ') : t('overview.people.notPlanned')}</span>
+            {view.people.places.length > 0 ? (
+              <span className="fw-so-stack-tight">
+                {placeLinesOf(view.people.places).map((line, index) => (
+                  <span key={`${line.kind}-${index}`}>{placeLineWords(line, t, day)}</span>
+                ))}
+                <span className="fw-so-hint">{t('dates.fromPlan')}</span>
+              </span>
+            ) : (
+              <span>{t('overview.people.notPlanned')}</span>
+            )}
+            {planning && (
+              <span className="fw-so-ov-doors">
+                <Link className="fw-so-link" href={planningHref(model.prefix, planning)}>
+                  {t('wo.link.planning')}
+                </Link>
+              </span>
+            )}
           </li>
         </ul>
       )}

@@ -493,7 +493,7 @@ describe('F-OO-100: OverviewTab keeps the layout, each card is its own file, eac
   it('model.ts keeps what more than one place reads (the ONE waiting list among it); each section\'s rules live in its own file', () => {
     const model = read('./model.ts')
     for (const name of ['export function orderWaitingOf(', 'export function waitingOf(', 'export function whoActsNextOf(', 'export function healthInputOf(', 'export function bandHealthOf(', 'export const readOf', 'export function mergeRead(', 'export const REQUESTED_FIELD_ID', 'export const say']) expect(model, name).toContain(name)
-    const homes = { where: ['headlineOf', 'stageStripOf', 'preparingNote', 'inWorkOf', 'exFactoryOf'], progress: ['lineStageOf', 'lineRowsOf', 'totalOf', 'lineSizesOf', 'walkOf'], people: ['placeWords'], dates: ['nextDatesOf'], linked: ['linkedRecordsOf'] } as const
+    const homes = { where: ['headlineOf', 'stageStripOf', 'preparingNote', 'inWorkOf', 'exFactoryOf'], progress: ['lineStageOf', 'lineRowsOf', 'totalOf', 'lineSizesOf', 'walkOf'], people: ['placeLinesOf' /* F-OO-134: replaces placeWords */], dates: ['nextDatesOf'], linked: ['linkedRecordsOf'] } as const
     for (const [section, names] of Object.entries(homes)) {
       const text = read(`./${section}.ts`)
       for (const name of names) {
