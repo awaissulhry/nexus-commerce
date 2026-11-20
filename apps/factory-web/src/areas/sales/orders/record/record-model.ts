@@ -125,6 +125,18 @@ export function requestedHeld(order: Order, model: Pick<OrderRecordModel, 'can' 
 }
 // ---- end F-OO-144
 
+// ---- F-OO-110 (order overview §1.4; N3, B-OO-003): cancel a waiting order ----
+/**
+ * A waiting order's cancel also takes back the yes asked on it (the API withdraws its open SALES_ORDER and CREDIT_OVERRIDE requests
+ * in the same command, cancelOrderInCommand): the Cancel dialog says so — only while it waits and a yes is asked on it (one this
+ * reader sees, or one counted but not shown). Nobody asked yet: nothing is taken back, nothing said.
+ */
+export function cancelTakesBackYes(order: Pick<Order, 'status' | 'openApprovals' | 'openApprovalsHidden'>): boolean {
+  if (order.status !== 'PENDING_APPROVAL') return false
+  return (order.openApprovals ?? []).some((task) => task.kind === 'SALES_ORDER' || task.kind === 'CREDIT_OVERRIDE') || (order.openApprovalsHidden ?? 0) > 0
+}
+// ---- end F-OO-110
+
 /** One write of the page (the container's): the order it answers replaces the page's; a refusal is said in the dialog or the notice. */
 export type RecordWrite = (run: () => Promise<Order | null>, success: string | null, keepDialog?: boolean) => Promise<void>
 

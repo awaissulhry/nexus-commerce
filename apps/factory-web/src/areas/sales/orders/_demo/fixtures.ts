@@ -274,7 +274,8 @@ const actionsFor = (status: OrderStatus, settled: boolean): Order['actions'] => 
   const actions: Order['actions'] = []
   if (status !== 'CLOSED' && status !== 'CANCELLED') actions.push({ action: 'changePromise', allowed: true, needsReason: true, held: null })
   if (status === 'IN_PRODUCTION') actions.push({ action: 'markReady', allowed: true, needsReason: true, held: null })
-  if (status === 'CONFIRMED' || status === 'IN_PRODUCTION' || status === 'READY') actions.push({ action: 'cancel', allowed: true, needsReason: true, held: null })
+  // F-OO-110 (B-OO-003): a waiting order is cancelled too — the API's orderActions lists it (CANCEL_STATUSES), so the design cases do.
+  if (status === 'CONFIRMED' || status === 'IN_PRODUCTION' || status === 'READY' || status === 'PENDING_APPROVAL') actions.push({ action: 'cancel', allowed: true, needsReason: true, held: null })
   if (status === 'SHIPPED' || status === 'DELIVERED') actions.push({ action: 'close', allowed: true, needsReason: !settled, held: settled ? null : 'Not settled.' }) // F-SA-201: as the API
   return actions
 }

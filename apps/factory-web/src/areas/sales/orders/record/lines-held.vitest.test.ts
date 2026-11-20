@@ -19,6 +19,14 @@ import { LinesEditor, type LinesEditorModel } from './view/LinesEditor'
 import { requestedBodyOf, requestedHeld, requestedProblem } from './record-model'
 import { RequestedDateDialog } from './view/RequestedDateDialog'
 import { base } from './fixtures'
+// ---- F-OO-110: cancel a waiting order — the band's own rule (cancelHeld through actionOf), the dialog's line ----
+import { canOf, CANCEL_CHECK } from '../_demo/fixtures'
+import { actionOf, cancelHeld } from '../model'
+import { cancelTakesBackYes } from './record-model'
+import { CancelDialog } from './view/DailyDialogs'
+import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
+import type { CancelCheck, OpenApproval } from '../api'
+// ---- end F-OO-110
 
 // F-OO-124: the DS Modal draws into a portal once hydrated, never on the server: here it draws in place, so the dialog can be read
 // (the page cases below draw no dialog: they are unchanged by it).
@@ -322,3 +330,51 @@ describe('F-OO-144: the requested date\'s small dialog — every line as it is, 
   })
 })
 // ---- end F-OO-144
+
+// ---- F-OO-110 (order overview §1.4; N3, B-OO-003): cancel a waiting order — Cancel order… through actionOf, the yes taken back ----
+describe('F-OO-110: cancel a waiting order — Cancel order… appears through actionOf; the dialog says the yes asked on it is taken back', () => {
+  const asked = (kind: string): OpenApproval => ({ taskId: `t-${kind}`, kind, kindLabel: { en: kind, it: kind }, requestedAt: '2026-11-18T09:30:00Z', requester: { name: 'Luca Prova', me: false }, approver: { kind: 'ROLE', name: 'Finance', me: false }, version: 1, requireStepUp: false, approve: { allowed: true, why: null }, reject: { allowed: true, why: null }, withdraw: { allowed: false, why: null } })
+  const waiting: Order = { ...order('PENDING_APPROVAL'), openApprovals: [asked('SALES_ORDER')] }
+
+  it('cancelHeld on PENDING_APPROVAL: the API lists the cancel (B-OO-003), so it runs for who changes orders; held for anyone else', () => {
+    expect(actionOf(order('PENDING_APPROVAL'), 'cancel')).toEqual({ action: 'cancel', allowed: true, needsReason: true, held: null })
+    expect(cancelHeld(order('PENDING_APPROVAL'), canOf('sales'))).toBeNull()
+    expect(cancelHeld(order('PENDING_APPROVAL'), canOf('owner'))).toBeNull()
+    expect(cancelHeld(order('PENDING_APPROVAL'), canOf('manager'))).toEqual({ key: 'held.noManage' })
+    // Shipped states keep theirs: no cancel listed, held with the state's words.
+    expect(cancelHeld(order('PARTLY_SHIPPED'), canOf('sales'))).toEqual({ key: 'held.cancelState' })
+  })
+
+  it('the yes is taken back only while the order waits and one is asked on it (seen, or counted but not shown)', () => {
+    expect(cancelTakesBackYes(waiting)).toBe(true)
+    expect(cancelTakesBackYes({ ...waiting, openApprovals: [asked('CREDIT_OVERRIDE')] })).toBe(true)
+    expect(cancelTakesBackYes({ ...waiting, openApprovals: [], openApprovalsHidden: 1 })).toBe(true)
+    expect(cancelTakesBackYes({ ...waiting, openApprovals: [] })).toBe(false)
+    expect(cancelTakesBackYes({ ...order('IN_PRODUCTION'), openApprovals: [asked('SALES_ORDER')] })).toBe(false)
+  })
+
+  it('the dialog line, en + it — only on a waiting order with a yes asked, and only when the cancel may go', () => {
+    const check: CancelCheck = { ...CANCEL_CHECK, status: 'PENDING_APPROVAL', impact: { cancellable: true, blocks: [], touches: [], leavesBehind: [] }, leatherCut: [] }
+    const record = base('sales', waiting).record
+    const draw = (on: Order, value: CancelCheck, locale: (typeof LOCALES)[number] = 'en') => render(createElement(CancelDialog, { order: on, model: { ...record, dialog: { kind: 'cancel' }, cancelCheck: { value, problem: null } } }), locale)
+    expect(draw(waiting, check)).toContain('The yes asked on it is taken back')
+    expect(draw(waiting, check, 'it')).toContain('Il sì chiesto viene ritirato')
+    expect(draw({ ...waiting, openApprovals: [] }, check)).not.toContain('The yes asked on it is taken back')
+    expect(draw({ ...order('IN_PRODUCTION'), openApprovals: [asked('SALES_ORDER')] }, { ...check, status: 'IN_PRODUCTION' })).not.toContain('The yes asked on it is taken back')
+    expect(draw(waiting, { ...check, impact: { ...check.impact, cancellable: false } })).not.toContain('The yes asked on it is taken back')
+    for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['orders']).orders!)('where.cancel.yesTakenBack'), locale).not.toBe('where.cancel.yesTakenBack')
+  })
+
+  it('drawn: a waiting order\'s Overview offers Cancel order… under More ▾ (live), and its dialog says the yes is taken back', () => {
+    const view = designScreen.view as ComponentType<{ model: unknown }>
+    const draw = (id: string) => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, 'en')
+    const more = draw('f-oo-110-waiting')
+    expect(more).toContain('aria-label="More moves for SO-2026-0088"')
+    expect(draw('f-oo-110-cancel')).toContain('The yes asked on it is taken back')
+    // The F-CP-108 export blocks of DailyDialogs stay (the Orders sheet's row mounts this very dialog).
+    const source = readFileSync(new URL('./view/DailyDialogs.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('export function CancelDialog({ order, model, actions }: { order: Order; model: CommandDialogModel; actions?: CommandDialogActions } /* F-CP-108: type only */)')
+    expect(source).toContain("import type { CommandDialogActions, CommandDialogModel } from './Dialogs' // F-CP-108: type only")
+  })
+})
+// ---- end F-OO-110

@@ -1755,6 +1755,9 @@
       "meanwhile": "A hold was lifted or changed meanwhile: nothing was lifted. The holds were read again.",
       "notice_one": "{count} hold lifted: the work order goes on once no other hold names it",
       "notice_other": "{count} holds lifted: each work order goes on once no other hold names it"
+    },
+    "cancel": {
+      "yesTakenBack": "The yes asked on it is taken back"
     }
   },
   "overview": {

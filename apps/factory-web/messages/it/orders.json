@@ -1755,6 +1755,9 @@
       "meanwhile": "Un blocco è stato tolto o cambiato nel frattempo: non si è tolto niente. I blocchi sono stati riletti.",
       "notice_one": "Tolto {count} blocco: l'ordine di lavoro riparte appena nessun altro blocco lo ferma",
       "notice_other": "Tolti {count} blocchi: ogni ordine di lavoro riparte appena nessun altro blocco lo ferma"
+    },
+    "cancel": {
+      "yesTakenBack": "Il sì chiesto viene ritirato"
     }
   },
   "overview": {

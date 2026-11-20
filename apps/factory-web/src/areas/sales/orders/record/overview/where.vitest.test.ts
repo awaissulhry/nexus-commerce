@@ -527,8 +527,8 @@ describe('F-OO-105: the strips drawn — the yes for its approver, asker and any
 describe('F-OO-107: the moves row — Mark ready…, More ▾ (made elsewhere, Cancel, Close): status × role, the band\'s own held words', () => {
   const ROLES = { Owner: 'owner', Sales: 'sales', Planner: 'planner', Warehouse: 'warehouse', 'Read-only': 'read_only' } as const
   type RoleName = keyof typeof ROLES
-  /** The order at a state as the API lists its actions (B-OO-003: a waiting order may be cancelled too). */
-  const at = (status: OrderStatus): Order => (status === 'PENDING_APPROVAL' ? { ...order(status), actions: [...order(status).actions, { action: 'cancel', allowed: true, needsReason: true, held: null }] } : order(status))
+  /** The order at a state as the API lists its actions (B-OO-003: a waiting order may be cancelled too — F-OO-110: the demo lists it). */
+  const at = (status: OrderStatus): Order => order(status)
   const movesOf = (status: OrderStatus, role: RoleName) => {
     const permissions = rolePermissions(ROLES[role])
     const can = abilitiesOf(permissions)

@@ -89,6 +89,7 @@ import { abilitiesOf } from '../model'
 import { rolePermissions } from '../../../../shell/design-data'
 // ---- end F-OO-105
 import type { CreditCustomer, CreditHeld } from './credit/api' // F-OO-106: the order's credit read (made up; no amount)
+import type { CancelCheck } from '../api' // F-OO-110: a waiting order's cancel check
 // F-OP-114 / F-OP-115: the row's dialogs on a work order read afresh (the production lane's own fixtures).
 import { releaseCheck, workOrder as productionWorkOrder } from '../../../production/_shared/fixtures'
 import { HOLD_REASONS, PRODUCTION_HOLD_REASONS } from '../../../production/work-orders/daily/demo/fixtures'
@@ -820,6 +821,16 @@ const F_OO_109: DesignCase<RecordCase>[] = [
 ]
 // ---- end F-OO-109
 
+// ---- F-OO-110 (order overview §1.4; N3, B-OO-003): cancel a waiting order — Overview's More ▾ offers Cancel order… (live for Sales)
+// and its dialog says the yes asked on it is taken back. Look at 375 / 1440 / 1920, light + dark.
+const WAITING_ASKED = { ...waitingOrder, openApprovals: [YES_TASK] }
+const CANCEL_WAITING: CancelCheck = { ...CANCEL_CHECK, status: 'PENDING_APPROVAL', impact: { cancellable: true, blocks: [], touches: [], leavesBehind: [] }, leatherCut: [] }
+const F_OO_110: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-110-waiting', label: 'F-OO-110 · Sales · an order waiting for a yes: More ▾ offers Cancel order… (B-OO-003)', model: base('sales', WAITING_ASKED, { tab: 'overview', production: ready(CONFIRMED_READ), liveState: 'live' }) },
+  { id: 'f-oo-110-cancel', label: 'F-OO-110 · Sales · Cancel order… on a waiting order: nothing left behind, "The yes asked on it is taken back"', model: base('sales', WAITING_ASKED, { tab: 'overview', dialog: { kind: 'cancel' }, cancelCheck: { value: CANCEL_WAITING, problem: null } }) },
+]
+// ---- end F-OO-110
+
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-039',
   title: 'Order studio: lines, dates, production, shipments, invoices & payments with the deposit, documents',
@@ -1021,6 +1032,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     ...F_OO_106, // F-OO-106: the order's own credit hold — Check credit again, Ask for a yes…, the last no, who checks it
     ...F_OO_108, // F-OO-108: Hold the whole order… — the move, held for Sales and with nothing yet, the ONE Hold dialog on the plan
     ...F_OO_109, // F-OO-109: ONE Lift for the customer's pause on N work orders — the door, held for Sales, the dialog
+    ...F_OO_110, // F-OO-110: cancel a waiting order — Cancel order… under More ▾, the yes taken back
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
     ...F_OP_301, // F-OP-301 (walk #1, #2, #3)
