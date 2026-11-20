@@ -1659,7 +1659,6 @@
       "complaints": "Reclami",
       "returns": "Resi",
       "sameQuote": "Stesso preventivo",
-      "sameQuoteValue": "{number}",
       "leftOut_one": "{count} ordine di lavoro non mostrato",
       "leftOut_other": "{count} ordini di lavoro non mostrati"
     },
@@ -2156,5 +2155,39 @@
     "more_other": "Altri {count} in Modifiche ›",
     "seeHolds": "Cosa ferma l'ordine: vedi A che punto è",
     "seeDates": "Date in attesa: vedi Prossime date"
+  },
+  "linked": {
+    "value": "{value} ›",
+    "labelled": "{label}: {value}",
+    "none": "Ancora nessuno: {kinds}",
+    "unread": "Non è stato possibile leggerli",
+    "wo": {
+      "inWork_one": "{count} in lavorazione",
+      "inWork_other": "{count} in lavorazione",
+      "draft_one": "{count} in bozza",
+      "draft_other": "{count} in bozza",
+      "onHold_one": "{count} in sospeso",
+      "onHold_other": "{count} in sospeso",
+      "done_one": "{count} finito",
+      "done_other": "{count} finiti",
+      "cancelled_one": "{count} annullato",
+      "cancelled_other": "{count} annullati"
+    },
+    "ship": {
+      "lastDdt": "ultimo DDT {number}",
+      "noDdt": "nessun DDT ancora",
+      "cancelled_one": "{count} annullata",
+      "cancelled_other": "{count} annullate"
+    },
+    "inv": {
+      "issued_one": "{count} emessa",
+      "issued_other": "{count} emesse",
+      "draft_one": "{count} in bozza",
+      "draft_other": "{count} in bozza",
+      "creditNote_one": "{count} nota di credito",
+      "creditNote_other": "{count} note di credito",
+      "deposit_one": "{count} fattura di acconto",
+      "deposit_other": "{count} fatture di acconto"
+    }
   }
 }

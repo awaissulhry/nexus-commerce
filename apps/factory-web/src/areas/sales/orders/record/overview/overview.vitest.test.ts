@@ -555,7 +555,7 @@ describe('F-OO-100: OverviewTab keeps the layout, each card is its own file, eac
     // F-OO-202 (F14): "who acts next" left with its only drawing — the keeper's waitingOn is the one rule.
     expect(model).not.toContain('export function whoActsNextOf(')
     // F-OO-103: where.ts keeps the headline and the stages (the facts' rules left with the facts).
-    const homes = { where: ['headlineOf', 'stageStripOf'], progress: ['lineRowsOf', 'totalOf', 'lineSizesOf', 'figureFaceOf', 'linePillsOf', 'madeExtraSizesOf'] /* F-OO-121: walkOf and lineStageOf went */, people: ['placeWords'], dates: ['nextDatesOf'], linked: ['linkedRecordsOf'] } as const
+    const homes = { where: ['headlineOf', 'stageStripOf'], progress: ['lineRowsOf', 'totalOf', 'lineSizesOf', 'figureFaceOf', 'linePillsOf', 'madeExtraSizesOf'] /* F-OO-121: walkOf and lineStageOf went */, people: ['placeWords'], dates: ['nextDatesOf'], linked: ['linkedRowsOf'] /* F-OO-207: the rows by the one count rule */ } as const
     for (const [section, names] of Object.entries(homes)) {
       const text = read(`./${section}.ts`)
       for (const name of names) {
@@ -689,7 +689,9 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
     // orders.css lost only the old grid rule (the order page lane's file: nothing else of it changed).
     const orders = read('../../orders.css')
     expect(orders).not.toMatch(/\.fw-so-overview-cards \{/)
-    for (const kept of ['.fw-so-overview {', '.fw-so-datelist {', '.fw-so-linked {', '.fw-so-countbtn {']) expect(orders, kept).toContain(kept)
+    for (const kept of ['.fw-so-overview {', '.fw-so-datelist {']) expect(orders, kept).toContain(kept)
+    // F-OO-207: Linked records' count chips left with their card's rows (record/view/overview/linked.css).
+    for (const gone of ['.fw-so-linked {', '.fw-so-countbtn {']) expect(orders, gone).not.toContain(gone)
     // F-OO-103: "Where it is now"'s own rules left it for the card's own file.
     expect(read('../view/overview/where.css')).toContain('.fw-so-where {')
   })
