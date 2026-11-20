@@ -80,6 +80,7 @@ import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, NO_WORK_READ, ORDER_FILES,
 import { workActsRead, type WorkRights } from './overview/fixtures'
 import { ROLES } from '../_demo/fixtures'
 import { actsCanOf } from '../../../../lib/production/work-order-acts/model'
+import { orderHoldOf } from '../../../../lib/production/work-order-acts/model' // F-OO-108: the domain's plan, as the page makes it
 import type { ActsDialog, WorkOrderActsModel } from '../../../../lib/production/work-order-acts/use-work-order-acts'
 // ---- F-OO-105: the strips' cases — a work order shared with another customer, the deposit the order asked, a Read-only reader ----
 import { SHARED_WO_ID } from './overview/fixtures'
@@ -87,9 +88,12 @@ import { DEPOSIT_ID } from '../_demo/fixtures'
 import { abilitiesOf } from '../model'
 import { rolePermissions } from '../../../../shell/design-data'
 // ---- end F-OO-105
+import type { CreditCustomer, CreditHeld } from './credit/api' // F-OO-106: the order's credit read (made up; no amount)
+import type { CancelCheck } from '../api' // F-OO-110: a waiting order's cancel check
 // F-OP-114 / F-OP-115: the row's dialogs on a work order read afresh (the production lane's own fixtures).
 import { releaseCheck, workOrder as productionWorkOrder } from '../../../production/_shared/fixtures'
 import { HOLD_REASONS, PRODUCTION_HOLD_REASONS } from '../../../production/work-orders/daily/demo/fixtures'
+import { CUSTOMER_PAUSE, plainHolds } from '../../../production/work-orders/daily/demo/fixtures' // F-OO-109: each work order's pause as read
 // F-SA-243: the order's requests (the shared request fixtures) and its production read with Still to do.
 import type { OfficeRequest } from '../../../../record-panels/approvals/api' // F-OO-204: the approvals we asked the customer
 import { PRODUCTION_READ } from './overview/fixtures'
@@ -753,7 +757,8 @@ const MANAGE_ALL: WorkRights = { manage: true, release: true, hold: true }
 const NO_RIGHTS: WorkRights = { manage: false, release: false, hold: false }
 const WORK_ORDERS_IDS = [WORK_ORDERS[0]!.id, WORK_ORDERS[1]!.id] as const
 function woActs(role: keyof typeof ROLES, over: Partial<WorkOrderActsModel> = {}): WorkOrderActsModel {
-  return { can: actsCanOf(ROLES[role]), saves: {}, toldAt: {}, dialog: null, reasons: null, split: null, close: CLOSE_NONE, ...over }
+  // F-OO-108: the Owner reads Quality's holds (the real role holds every right; the design list here names the order page's only).
+  return { can: actsCanOf(role === 'owner' ? [...ROLES[role], 'quality.holds.view'] : ROLES[role]), saves: {}, toldAt: {}, dialog: null, reasons: null, split: null, close: CLOSE_NONE, ...over }
 }
 // ---- end F-OP-113
 // ---- F-OP-114 / F-OP-115: a row's dialog on its work order read afresh; the close's model when nothing is open ----
@@ -826,10 +831,113 @@ const F_OO_105: DesignCase<RecordCase>[] = [
   { id: 'f-oo-105-read-only', label: 'F-OO-105 · Read-only · the same holds: the words only — no door, no button', model: readOnlyCase(base('sales', production, { tab: 'overview', production: ready(holdsRead(NO_RIGHTS)), workOrderActs: woActs('sales'), liveState: 'live' })) },
   { id: 'f-oo-105-deposit', label: 'F-OO-105 · Finance · a confirmed order: "Deposit not paid yet · due 04/11/2026" — Record the payment', model: base('finance', confirmed, { tab: 'overview', production: ready(DEPOSIT_READ), liveState: 'live' }) },
   { id: 'f-oo-105-deposit-manager', label: 'F-OO-105 · Production manager · the same deposit: Record the payment held (the finance right) beside Money ›', model: base('manager', confirmed, { tab: 'overview', production: ready(DEPOSIT_READ), liveState: 'live' }) },
-  { id: 'f-oo-105-credit', label: 'F-OO-105 · Owner · a credit hold: "Credit hold — waits for Finance’s yes" — Approve: Credit override and Refuse…', model: d323('owner', { ...waitingOrder, waits: ['CREDIT_HOLD'], openApprovals: [CREDIT_TASK] }, { tab: 'overview' }, { approval: { value: { ...APPROVAL_CREDIT, reasons: [{ reason: 'CREDIT_HOLD' }] }, problem: null } }) },
+  { id: 'f-oo-105-credit', label: 'F-OO-105 · Owner · a credit hold: "Credit hold — waits for Finance’s yes" — Approve: Credit override and Refuse…', model: d323('owner', { ...waitingOrder, openApprovals: [CREDIT_TASK] }, { tab: 'overview' }, { approval: { value: { ...APPROVAL_CREDIT, reasons: [{ reason: 'CREDIT_HOLD' }] }, problem: null } }) }, // F-OO-106: no `waits` (the order read sends none: the yes's read says why)
   { id: 'f-oo-105-more', label: 'F-OO-105 · Owner · five strips (a release held by the credit, the three holds, an open nonconformance): four, then "Show 1 more"', model: base('owner', { ...production, openApprovals: [CREDIT_TASK] }, { tab: 'overview', production: ready(holdsRead(MANAGE_ALL, [blockerOf('NONCONFORMANCE', 'US', 'An open nonconformance', '2026-11-15T10:00:00Z', { type: 'WorkOrder', id: WORK_ORDERS[1]!.id })])), workOrderActs: woActs('owner'), liveState: 'live' }) },
 ]
 // ---- end F-OO-105
+
+// ---- F-OO-106 (order overview §1.3, §1.4; review F8, F16; B-OO-004): the order's own credit hold, decided from its strip. Sales after
+// Finance's no (no price grain: the no's words are not sent) — Check credit again, Ask for a yes…; the Owner reads the no's words; the
+// approver of an open credit yes — Approve, Refuse…, Check credit again (no Ask beside an open yes), and what a no does; the production
+// manager — no credit right: who checks it, in words; the read failed — Try again; the two dialogs, one with "nobody to ask".
+// Never an amount. Look at 375 / 1440 / 1920, light + dark.
+const CREDIT_CHECK_ID = '0190f0e2-9797-7000-8000-000000000001'
+const creditOf = (over: Partial<CreditCustomer> = {}, held: Partial<CreditHeld> = {}): CreditCustomer => ({
+  party: { id: '0190f0e2-7a00-7000-8000-0000000000c1', code: 'MOTO-DEMO', name: 'Moto Demo S.r.l.' },
+  onHold: false,
+  findings: ['OVER_LIMIT', 'OVERDUE'],
+  held: { checkId: CREDIT_CHECK_ID, step: 'ORDER', checkedAt: '2026-11-10T09:00:00Z', request: null, lastAnswer: null, ...held },
+  may: { checkAgain: true, ask: true },
+  ...over,
+})
+const SAID_NO = { status: 'REJECTED' as const, at: '2026-11-18T10:00:00Z', by: 'Marco Demo' }
+/** The yes's read of an order held for credit with no yes open (Finance said no): only the credit hold, nobody asked. */
+const APPROVAL_CREDIT_NONE = { ...APPROVAL_CREDIT, reasons: [{ reason: 'CREDIT_HOLD' as const }], creditHold: { checkId: CREDIT_CHECK_ID, requestTaskId: null }, requests: [] }
+const creditCase = (role: Role, credit: OrderRecordModel['credit'], over: { readonly open?: boolean; readonly dialog?: OrderRecordModel['dialog'] } = {}): RecordCase =>
+  d323(role, { ...waitingOrder, openApprovals: over.open ? [CREDIT_TASK] : [] }, { tab: 'overview', credit, dialog: over.dialog ?? null }, { approval: { value: over.open ? { ...APPROVAL_CREDIT, reasons: [{ reason: 'CREDIT_HOLD' }] } : APPROVAL_CREDIT_NONE, problem: null } })
+const F_OO_106: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-106-credit-sales', label: 'F-OO-106 · Sales · a credit hold after Finance said no: "Found: Over the limit · Invoices overdue", "Marco Demo said no on 18/11/2026" — Check credit again, Ask for a yes…', model: creditCase('sales', { view: true, record: { value: creditOf({}, { lastAnswer: SAID_NO }), problem: null } }) },
+  { id: 'f-oo-106-credit-owner', label: 'F-OO-106 · Owner · the same hold: the no with its words (the price grain), the customer on hold', model: creditCase('owner', { view: true, record: { value: creditOf({ onHold: true, findings: ['OVER_LIMIT', 'ON_HOLD'] }, { lastAnswer: { ...SAID_NO, reason: 'Two invoices are overdue since October' } }), problem: null } }) },
+  { id: 'f-oo-106-credit-approver', label: 'F-OO-106 · Owner · a credit yes open for you: Approve, Refuse…, Check credit again — no Ask beside it; "A no leaves it held"', model: creditCase('owner', { view: true, record: { value: creditOf({ may: { checkAgain: true, ask: false } }, { request: { taskId: CREDIT_TASK.taskId, status: 'PENDING', approver: 'Finance', requestedAt: CREDIT_TASK.requestedAt, dueAt: null } }), problem: null } }, { open: true }) },
+  { id: 'f-oo-106-credit-manager', label: 'F-OO-106 · Production manager · no credit right: nothing read — "Sales or Finance check the credit again or ask for a yes"', model: creditCase('manager', { view: false, record: null }) },
+  { id: 'f-oo-106-credit-failed', label: 'F-OO-106 · Sales · the credit could not be read: said, with Try again', model: creditCase('sales', { view: true, record: { value: null, problem: 'problem.read.unavailable' } }) },
+  { id: 'f-oo-106-check-dialog', label: 'F-OO-106 · Sales · Check credit again: what it does — the order confirmed at once, or a yes asked', model: creditCase('sales', { view: true, record: { value: creditOf(), problem: null } }, { dialog: { kind: 'creditCheck' } }) },
+  { id: 'f-oo-106-ask-nobody', label: 'F-OO-106 · Sales · Ask for a yes…: nobody to ask — the customer pays, or Finance raises the limit (Ask held)', model: creditCase('sales', { view: true, record: { value: creditOf(), problem: null } }, { dialog: { kind: 'creditAsk', checkId: CREDIT_CHECK_ID, refused: { key: 'where.credit.refused.nobody' } } }) },
+]
+// ---- end F-OO-106
+
+// ---- F-OO-108 (order overview §1.4, §1.5; B-OO-005, review F13, F16): "Hold the whole order…" in the moves row — the Owner (it holds
+// WO-00021; WO-00022 is on hold already, WO-00019 is shared: hold it on its page, 1 outside what you can open, 12 made-to-measure
+// units from their own pages), Sales (held: Production does this), nothing in work yet (held, the plan's words), the dialog open on
+// the plan and refused because a work order changed since it was read. Look at 375 / 1440 / 1920, light + dark.
+const HOLD_READ = workActsRead(MANAGE_ALL)
+const HOLD_PLAN = orderHoldOf(HOLD_READ.work!.workOrders, { leftOut: HOLD_READ.work!.workOrdersLeftOut, waitingForYes: false })
+const HOLD_UNITS = HOLD_READ.work!.mtm.reduce((sum, group) => sum + group.workOrders, 0)
+const NOTHING_READ = { ...CONFIRMED_READ, work: { ...HOLD_READ.work!, workOrders: [], mtm: [], workOrdersLeftOut: 0 } }
+const holdOpen = (over: { readonly problem?: { key: string; params?: Record<string, string | number> } | null } = {}) => woActs('owner', { reasons: [...HOLD_REASONS, ...PRODUCTION_HOLD_REASONS], holdOrder: { number: 'SO-2026-0088', plan: HOLD_PLAN, units: HOLD_UNITS, busy: false, problem: over.problem ?? null } })
+const F_OO_108: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-108-moves', label: 'F-OO-108 · Owner · Overview in work: Mark ready… and Hold the whole order… beside More ▾', model: base('owner', production, { tab: 'overview', production: ready(HOLD_READ), workOrderActs: woActs('owner'), liveState: 'live' }) },
+  { id: 'f-oo-108-moves-sales', label: 'F-OO-108 · Sales · Hold the whole order… held — Production does this (a planner or the production manager)', model: base('sales', production, { tab: 'overview', production: ready(workActsRead(NO_RIGHTS)), workOrderActs: woActs('sales'), liveState: 'live' }) },
+  { id: 'f-oo-108-nothing', label: 'F-OO-108 · Owner · a confirmed order with no work order yet: Hold the whole order… held — nothing to hold yet', model: base('owner', confirmed, { tab: 'overview', production: ready(NOTHING_READ), workOrderActs: woActs('owner'), liveState: 'live' }) },
+  { id: 'f-oo-108-dialog', label: 'F-OO-108 · Owner · Hold the whole order…: the ONE Hold dialog on WO-00021, and what it leaves out — WO-00022 on hold already, WO-00019 shared, 1 not reached, 12 made-to-measure units', model: base('owner', production, { tab: 'overview', production: ready(HOLD_READ), workOrderActs: holdOpen(), liveState: 'live' }) },
+  { id: 'f-oo-108-dialog-stale', label: 'F-OO-108 · Owner · the same dialog after WO-00021 changed since it was read: nothing was held, the list read again', model: base('owner', production, { tab: 'overview', production: ready(HOLD_READ), workOrderActs: holdOpen({ problem: { key: 'orders:where.hold.stale', params: { count: 1, numbers: 'WO-00021' } } }), liveState: 'live' }) },
+]
+// ---- end F-OO-108
+
+// ---- F-OO-109 (order overview §1.3; N5, B-OO-006): ONE Lift for the customer's pause on N work orders — the strip's Lift the
+// customer's pause… (the Owner: live; Sales: held, Production does it), the dialog with each one's pause and what stays (a quality
+// hold on WO-00022, WO-00019 shared, 1 not reached), the customer told once; refused because one changed meanwhile; still reading.
+const PAUSE_BLOCKERS = [
+  blockerOf('BRAND_PAUSE', 'BRAND', "Paused at the customer's request", '2026-11-13T09:00:00Z', { type: 'WorkOrder', id: WORK_ORDERS[0]!.id }),
+  blockerOf('BRAND_PAUSE', 'BRAND', "Paused at the customer's request", '2026-11-13T09:00:00Z', { type: 'WorkOrder', id: WORK_ORDERS[1]!.id }),
+  blockerOf('BRAND_PAUSE', 'BRAND', "Paused at the customer's request", '2026-11-13T09:00:00Z', { type: 'WorkOrder', id: SHARED_WO_ID }),
+  blockerOf('BRAND_PAUSE', 'BRAND', "Paused at the customer's request", '2026-11-13T09:00:00Z', null),
+]
+const pausedRead = (rights: WorkRights) => {
+  const read = workActsRead(rights)
+  return {
+    ...read,
+    headline: { ...read.headline!, held: true, holds: [{ kind: 'BRAND' as const, words: W105("Paused at the customer's request", 'In pausa su richiesta del cliente'), since: '2026-11-13' }], waiting: { ...read.headline!.waiting, blockers: PAUSE_BLOCKERS } },
+    work: { ...read.work!, workOrders: read.work!.workOrders.map((row) => (row.sharedWithOtherCustomers ? row : { ...row, held: true, status: 'ON_HOLD' })) },
+  }
+}
+const pauseOn = (id: string, number: string, holdId: string, quality = 0) => {
+  const holds = plainHolds([{ ...CUSTOMER_PAUSE, id: holdId, workOrderId: id }], quality)
+  return { ...holds, workOrder: { ...holds.workOrder, id, number } }
+}
+const liftOpen = (over: { readonly problem?: { key: string; params?: Record<string, string | number> } | null; readonly reading?: boolean } = {}) =>
+  woActs('owner', {
+    reasons: [...HOLD_REASONS, ...PRODUCTION_HOLD_REASONS],
+    liftMany: {
+      kind: 'BRAND',
+      workOrders: [
+        { id: WORK_ORDERS[0]!.id, number: 'WO-00021', holds: { value: pauseOn(WORK_ORDERS[0]!.id, 'WO-00021', '0190f0e2-5252-7000-8000-000000000021'), problem: null } },
+        { id: WORK_ORDERS[1]!.id, number: 'WO-00022', holds: over.reading ? { value: null, problem: null } : { value: pauseOn(WORK_ORDERS[1]!.id, 'WO-00022', '0190f0e2-5252-7000-8000-000000000022', 1), problem: null } },
+      ],
+      shared: ['WO-00019'],
+      notReached: 1,
+      busy: false,
+      problem: over.problem ?? null,
+    },
+  })
+const F_OO_109: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-109-lift', label: 'F-OO-109 · Owner · the customer’s pause on WO-00021 and WO-00022 (and WO-00019 shared, 1 not reached): ONE Lift the customer’s pause…', model: base('owner', production, { tab: 'overview', production: ready(pausedRead(MANAGE_ALL)), workOrderActs: woActs('owner'), liveState: 'live' }) },
+  { id: 'f-oo-109-lift-sales', label: 'F-OO-109 · Sales · the same pause: Lift the customer’s pause… held — Production does it', model: base('sales', production, { tab: 'overview', production: ready(pausedRead(NO_RIGHTS)), workOrderActs: woActs('sales'), liveState: 'live' }) },
+  { id: 'f-oo-109-lift-dialog', label: 'F-OO-109 · Owner · the ONE lift: each work order’s pause, one reason, all or none; a quality hold stays on WO-00022; WO-00019 on its page; the customer told once', model: base('owner', production, { tab: 'overview', production: ready(pausedRead(MANAGE_ALL)), workOrderActs: liftOpen(), liveState: 'live' }) },
+  { id: 'f-oo-109-lift-stale', label: 'F-OO-109 · Owner · the same lift refused: WO-00022 changed since it was read — nothing was lifted, the holds read again', model: base('owner', production, { tab: 'overview', production: ready(pausedRead(MANAGE_ALL)), workOrderActs: liftOpen({ problem: { key: 'orders:where.lift.stale', params: { count: 1, numbers: 'WO-00022' } } }), liveState: 'live' }) },
+  { id: 'f-oo-109-lift-reading', label: 'F-OO-109 · Owner · the lift while WO-00022’s holds are still read: Lift held', model: base('owner', production, { tab: 'overview', production: ready(pausedRead(MANAGE_ALL)), workOrderActs: liftOpen({ reading: true }), liveState: 'live' }) },
+]
+// ---- end F-OO-109
+
+// ---- F-OO-110 (order overview §1.4; N3, B-OO-003): cancel a waiting order — Overview's More ▾ offers Cancel order… (live for Sales)
+// and its dialog says the yes asked on it is taken back. Look at 375 / 1440 / 1920, light + dark.
+const WAITING_ASKED = { ...waitingOrder, openApprovals: [YES_TASK] }
+const CANCEL_WAITING: CancelCheck = { ...CANCEL_CHECK, status: 'PENDING_APPROVAL', impact: { cancellable: true, blocks: [], touches: [], leavesBehind: [] }, leatherCut: [] }
+const F_OO_110: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-110-waiting', label: 'F-OO-110 · Sales · an order waiting for a yes: More ▾ offers Cancel order… (B-OO-003)', model: base('sales', WAITING_ASKED, { tab: 'overview', production: ready(CONFIRMED_READ), liveState: 'live' }) },
+  { id: 'f-oo-110-cancel', label: 'F-OO-110 · Sales · Cancel order… on a waiting order: nothing left behind, "The yes asked on it is taken back"', model: base('sales', WAITING_ASKED, { tab: 'overview', dialog: { kind: 'cancel' }, cancelCheck: { value: CANCEL_WAITING, problem: null } }) },
+]
+// ---- end F-OO-110
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-039',
@@ -1033,6 +1141,10 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'overview-failed', label: "F-SA-232 · Overview: the production couldn't be read (this part only, Try again)", model: base('sales', production, { tab: 'overview', production: FAILED_STATE, liveState: 'offline' }) },
     ...F_OO_102, // F-OO-102: the headline and the dots before, after and without production
     ...F_OO_105, // F-OO-105: the strips with their real doors (holds, the deposit, the credit; Owner, Sales, Read-only)
+    ...F_OO_106, // F-OO-106: the order's own credit hold — Check credit again, Ask for a yes…, the last no, who checks it
+    ...F_OO_108, // F-OO-108: Hold the whole order… — the move, held for Sales and with nothing yet, the ONE Hold dialog on the plan
+    ...F_OO_109, // F-OO-109: ONE Lift for the customer's pause on N work orders — the door, held for Sales, the dialog
+    ...F_OO_110, // F-OO-110: cancel a waiting order — Cancel order… under More ▾, the yes taken back
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
     ...F_OP_301, // F-OP-301 (walk #1, #2, #3)

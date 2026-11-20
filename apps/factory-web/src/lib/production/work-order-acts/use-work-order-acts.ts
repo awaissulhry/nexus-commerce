@@ -19,6 +19,15 @@ import { useSplit, type SplitActions, type SplitModel } from '../../../areas/pro
 import { useClose, type CloseActions, type CloseModel } from '../../../areas/production/work-orders/close/use-close'
 import { getWorkOrderCancelCheck, type WorkOrderCancelCheck } from './api'
 // ---- end F-OP-115
+// ---- F-OO-108: "Hold the whole order…" — the domain's ONE plan, the bulk place with every version read ----
+import { orderHoldPlanOf, type OrderHoldPlan } from '@nexus/factory-domain/production/holds/rules'
+import { placeProductionHolds } from '../../../areas/production/work-orders/daily/api'
+import { orderHoldProblemOf, orderHoldWriteOf } from './model'
+// ---- end F-OO-108
+// ---- F-OO-109: ONE Lift for a hold standing on N work orders ----
+import { liftProductionHolds } from '../../../areas/production/work-orders/daily/api'
+import { liftManyHoldsOf, liftManyProblemOf, type LiftKind, type LiftManyWorkOrder } from './model'
+// ---- end F-OO-109
 
 /** One row's in-place save: the cell that is saving, or why the last write was refused (said on the row). */
 export interface RowSave {
@@ -48,6 +57,41 @@ export interface ActsDialog {
   readonly cancelCheck?: Part<WorkOrderCancelCheck>
 }
 
+// ---- F-OO-108 (order overview §1.4; B-OO-005, F13, F16) ----
+/**
+ * "Hold the whole order…" open (the sales order's Overview): the domain's ONE plan — the work orders it holds, each with its version
+ * read (the bulk place always sends them), and those it leaves out with why (a shared one: hold it on its page; one not reached:
+ * counted) — and the made-to-measure units, each held on its own page (counted). One write; a refusal stays in the dialog.
+ */
+export interface OrderHoldDialog {
+  /** The sales order's number (the notice names it). */
+  readonly number: string
+  readonly plan: OrderHoldPlan
+  /** Its made-to-measure units (their work orders are held from their own pages): counted, said. */
+  readonly units: number
+  readonly busy: boolean
+  readonly problem: Phrase | null
+}
+// ---- end F-OO-108
+
+// ---- F-OO-109 (order overview §1.3; N5, B-OO-006) ----
+/**
+ * Lift… for a strip that holds N work orders (the sales order's Overview): each one's plain holds read afresh (the per-work-order
+ * read), those of the strip's kind lifted with ONE reason in ONE call — all or none. What it does not lift is said: a shared work
+ * order (lifted on its own page) and those this reader does not reach (counted). One work order: the row's own Lift… (unchanged).
+ */
+export interface LiftManyDialog {
+  readonly kind: LiftKind
+  readonly workOrders: readonly LiftManyWorkOrder[]
+  /** Shared with other customers (lifted on their own pages): their numbers. */
+  readonly shared: readonly string[]
+  /** Work orders the reader does not reach: counted, never named. */
+  readonly notReached: number
+  readonly busy: boolean
+  readonly problem: Phrase | null
+}
+// ---- end F-OO-109
+
 export interface WorkOrderActsModel {
   readonly can: ActsCan
   /** Per work order id: its in-place save. */
@@ -63,6 +107,10 @@ export interface WorkOrderActsModel {
   /** Close… · Reopen…: the close's own model (its check, its dialog); drawn with CloseParts. */
   readonly close: CloseModel
   // ---- end F-OP-115
+  /** F-OO-108: "Hold the whole order…" while open (its plan, the write); absent / null: closed. */
+  readonly holdOrder?: OrderHoldDialog | null
+  /** F-OO-109: Lift… for N work orders while open (each one's holds, the write); absent / null: closed. */
+  readonly liftMany?: LiftManyDialog | null
 }
 
 export interface WorkOrderActsActions {
@@ -84,6 +132,17 @@ export interface WorkOrderActsActions {
   split?: SplitActions
   close?: CloseActions
   // ---- end F-OP-115
+  // ---- F-OO-108: "Hold the whole order…" — open it on the plan, place the holds (all or none, every version sent), close it ----
+  onHoldOrder?: (input: { readonly number: string; readonly plan: OrderHoldPlan; readonly units: number }) => void
+  onPlaceOrderHold?: (input: PlaceHoldInput) => void
+  onCloseOrderHold?: () => void
+  // ---- end F-OO-108
+  // ---- F-OO-109: Lift… for N work orders — open it (each one's holds read), the ONE Lift, close it, read the holds again ----
+  onLiftMany?: (input: { readonly kind: LiftKind; readonly workOrders: readonly { readonly id: string; readonly number: string }[]; readonly shared: readonly string[]; readonly notReached: number }) => void
+  onLiftManyGo?: (reason: string) => void
+  onCloseLiftMany?: () => void
+  onRetryLiftMany?: () => void
+  // ---- end F-OO-109
 }
 
 /** What the page says after a write (its one banner), and whether the order's production read is read again. */
@@ -104,6 +163,8 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
   const [toldAt, setToldAt] = useState<Record<string, string>>({})
   const [dialog, setDialog] = useState<ActsDialog | null>(null)
   const [reasons, setReasons] = useState<PickerReason[] | null>(null) // F-OP-114
+  const [holdOrder, setHoldOrder] = useState<OrderHoldDialog | null>(null) // F-OO-108
+  const [liftMany, setLiftMany] = useState<LiftManyDialog | null>(null) // F-OO-109
   /** The newest version a write of this page answered, per work order (a second edit before the read comes again sends it). */
   const known = useRef<Record<string, number>>({})
   const turn = useRef(0)
@@ -191,6 +252,7 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
         // Said in the dialog; the next Hold… asks again.
         reasonsAsked.current = false
         setDialog((now) => (now && now.kind === 'hold' ? { ...now, problem: fromWorkOrders({ key: dailyReadProblem(error) }) } : now))
+        setHoldOrder((now) => (now ? { ...now, problem: fromWorkOrders({ key: dailyReadProblem(error) }) } : now)) // F-OO-108
       })
   }, [api])
   // ---- end F-OP-114
@@ -276,6 +338,37 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
   }, [closeTarget, closeKind, close.actions])
   // ---- end F-OP-115
 
+  // ---- F-OO-108: after a refusal, the work orders the plan holds are read afresh (their versions, their states) and the plan made
+  // again by the domain's own rule — what is held already or done since is left out with why; the next Put on hold sends the new versions.
+  const replan = useCallback(
+    (open: OrderHoldDialog) => {
+      Promise.all(open.plan.ids.map((id) => getWorkOrder(api, id)))
+        .then((rows) => {
+          for (const row of rows) answered(row)
+          const fresh = orderHoldPlanOf({ workOrders: rows.map((row) => ({ id: row.id, number: row.number, status: row.status, version: row.version, sharedWithOtherCustomers: false, rights: { hold: true } })) })
+          setHoldOrder((now) => (now ? { ...now, plan: { ...fresh, left: [...now.plan.left, ...fresh.left], notReached: now.plan.notReached } } : now))
+        })
+        .catch(() => undefined)
+    },
+    [api, answered],
+  )
+  // ---- end F-OO-108
+
+  // ---- F-OO-109: each work order's plain holds, read afresh (the one per-work-order read; at most 100 work orders) ----
+  const readLiftHolds = useCallback(
+    (ids: readonly string[]) => {
+      const set = (id: string, holds: LiftManyWorkOrder['holds']) => setLiftMany((now) => (now ? { ...now, workOrders: now.workOrders.map((entry) => (entry.id === id ? { ...entry, holds } : entry)) } : now))
+      for (const id of ids) {
+        set(id, READING)
+        listProductionHolds(api, id)
+          .then((value) => set(id, { value, problem: null }))
+          .catch((error: unknown) => set(id, { value: null, problem: dailyReadProblem(error) }))
+      }
+    },
+    [api],
+  )
+  // ---- end F-OO-109
+
   const actions: WorkOrderActsActions = {
     onDue: (row, day) => inline(row, 'due', { dueDate: day || null }),
     onPriority: (row, priority) => inline(row, 'priority', { priority }),
@@ -341,7 +434,65 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
       },
     },
     // ---- end F-OP-115
+    // ---- F-OO-108: "Hold the whole order…" — the ONE Hold dialog on the plan's work orders; a production reason: one hold per work
+    // order with every version read (B-OO-005: a stale one refuses them all, naming it); a quality reason: one quality hold over them.
+    onHoldOrder: (input) => {
+      setHoldOrder({ number: input.number, plan: input.plan, units: input.units, busy: false, problem: null })
+      readReasons()
+    },
+    onPlaceOrderHold: (input) => {
+      const open = holdOrder
+      if (!open || open.busy || open.plan.ids.length === 0) return
+      const key = newIdempotencyKey()
+      const ids = [...open.plan.ids]
+      setHoldOrder({ ...open, busy: true, problem: null })
+      const write = orderHoldWriteOf(open.plan, input)
+      const place = write.route === 'production' ? placeProductionHolds(api, write.body, key) : placeHold(api, write.body, key)
+      place
+        .then(() => {
+          setHoldOrder(null)
+          for (const id of ids) told(id)
+          written.current({ notice: { key: 'where.hold.notice', params: { count: ids.length, number: open.number } } })
+        })
+        .catch((error: unknown) => {
+          setHoldOrder((now) => (now ? { ...now, busy: false, problem: orderHoldProblemOf(error, open.plan) } : now))
+          replan(open)
+          written.current({ notice: null })
+        })
+    },
+    onCloseOrderHold: () => setHoldOrder((now) => (now?.busy ? now : null)),
+    // ---- end F-OO-108
+    // ---- F-OO-109: Lift… for N — each one's holds read afresh; ONE call lifts every standing hold of the strip's kind (all or none)
+    onLiftMany: (input) => {
+      setLiftMany({ kind: input.kind, workOrders: input.workOrders.map((entry) => ({ id: entry.id, number: entry.number, holds: READING })), shared: input.shared, notReached: input.notReached, busy: false, problem: null })
+      readLiftHolds(input.workOrders.map((entry) => entry.id))
+      readReasons() // the reasons' words of our own holds (as the row's Lift… says them)
+    },
+    onLiftManyGo: (reason) => {
+      const open = liftMany
+      if (!open || open.busy) return
+      const holds = liftManyHoldsOf(open.workOrders, open.kind)
+      if (holds.length === 0) return
+      const key = newIdempotencyKey()
+      setLiftMany({ ...open, busy: true, problem: null })
+      liftProductionHolds(api, { holds, reason: reason.trim() }, key)
+        .then((answer) => {
+          setLiftMany(null)
+          for (const workOrder of answer.workOrders) told(workOrder.id)
+          written.current({ notice: { key: 'where.lift.notice', params: { count: holds.length } } })
+        })
+        .catch((error: unknown) => {
+          setLiftMany((now) => (now ? { ...now, busy: false, problem: liftManyProblemOf(error, holds, open.workOrders) } : now))
+          readLiftHolds(open.workOrders.map((entry) => entry.id)) // what changed since it was read shows again
+          written.current({ notice: null })
+        })
+    },
+    onCloseLiftMany: () => setLiftMany((now) => (now?.busy ? now : null)),
+    onRetryLiftMany: () => {
+      if (liftMany) readLiftHolds(liftMany.workOrders.filter((entry) => entry.holds.problem).map((entry) => entry.id))
+    },
+    // ---- end F-OO-109
   }
 
-  return { model: { can, saves, toldAt, dialog, reasons /* F-OP-114 */, split: split.model, close: close.model /* F-OP-115 */ }, actions }
+  return { model: { can, saves, toldAt, dialog, reasons /* F-OP-114 */, split: split.model, close: close.model /* F-OP-115 */, holdOrder /* F-OO-108 */, liftMany /* F-OO-109 */ }, actions }
 }

@@ -28,6 +28,7 @@ import {
 } from '../../daily-model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { dialogLinesOf } from '../record-model' // F-OO-124: one line's row ⋯ opens with only that line ticked
+import { cancelTakesBackYes } from '../record-model' // F-OO-110: a waiting order's cancel takes back the yes asked on it
 import { DialogProblem, Frame } from './Dialogs'
 import type { CommandDialogActions, CommandDialogModel } from './Dialogs' // F-CP-108: type only (the Cancel the Orders sheet's row mounts)
 // ---- F-OP-107 (B2): Close remaining lines and Cancel say what happens to each work order, and pick the extra pieces' outcome ----
@@ -308,6 +309,8 @@ export function CancelDialog({ order, model, actions }: { order: Order; model: C
             <ConfirmPhraseField phrase={order.number} value={typed} onChange={setTyped} />
           </>
         )}
+        {/* F-OO-110 (B-OO-003): a waiting order's cancel takes back the yes asked on it (the API withdraws it in the same command). */}
+        {check.impact.cancellable && cancelTakesBackYes(order) && <p className="fw-so-hint">{t('where.cancel.yesTakenBack')}</p>}
         <p className="fw-so-hint">{t('cancel.reversal')}</p>
       </>
     )

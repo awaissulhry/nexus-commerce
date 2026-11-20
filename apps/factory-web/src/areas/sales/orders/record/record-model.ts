@@ -42,6 +42,7 @@ import type { PriceCheckCardActions, PriceCheckCardModel } from './price-check-c
 import type { PriceCheckDialogActions, PriceCheckDialogModel } from '../price-check/use-price-check'
 import { amendBodyOf, amendHeld, draftOf } from '../daily-model' // F-OO-144: Requested's small dialog (the amend builder, its rule)
 import type { MilestonesActions, MilestonesModel } from '../../../planning/milestones/view-model' // F-OO-145: Planning's gate dialogs in place
+import type { CreditState } from './overview/where' // F-OO-106: the order's own credit hold
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -76,7 +77,9 @@ export type ChangesDialog = { kind: 'compare'; amendmentId: string }
  * F-OO-210: use-overview-acts — Order facts' office note (the sheet's own write). `refused`: its refusal in this page's words, said in
  * the dialog (what was typed stays; a new opening starts without it).
  */
-export type OverviewDialog = { kind: 'note'; refused?: Phrase }
+// F-OO-106: "Where it is now"'s credit strip — Check credit again (a confirm) and Ask for a yes… on the hold's check (its id: the
+// lock); `refused`: the API's refusal in this page's words, said in the dialog (nobody to ask, checked meanwhile …).
+export type OverviewDialog = { kind: 'note'; refused?: Phrase } | { kind: 'creditCheck'; refused?: Phrase } | { kind: 'creditAsk'; checkId: string; refused?: Phrase }
 export type RecordDialog = BandDialog | LinesDialog | MoneyDialog | ChangesDialog | OverviewDialog /* F-OO-210 */
 
 // ---- F-OO-124: the lines Close remaining lines / Reopen lines opens with ticked ----
@@ -122,6 +125,18 @@ export function requestedHeld(order: Order, model: Pick<OrderRecordModel, 'can' 
   return amendHeld(order, model.can) ?? (model.amend ? { key: 'held.amending' } : null)
 }
 // ---- end F-OO-144
+
+// ---- F-OO-110 (order overview §1.4; N3, B-OO-003): cancel a waiting order ----
+/**
+ * A waiting order's cancel also takes back the yes asked on it (the API withdraws its open SALES_ORDER and CREDIT_OVERRIDE requests
+ * in the same command, cancelOrderInCommand): the Cancel dialog says so — only while it waits and a yes is asked on it (one this
+ * reader sees, or one counted but not shown). Nobody asked yet: nothing is taken back, nothing said.
+ */
+export function cancelTakesBackYes(order: Pick<Order, 'status' | 'openApprovals' | 'openApprovalsHidden'>): boolean {
+  if (order.status !== 'PENDING_APPROVAL') return false
+  return (order.openApprovals ?? []).some((task) => task.kind === 'SALES_ORDER' || task.kind === 'CREDIT_OVERRIDE') || (order.openApprovalsHidden ?? 0) > 0
+}
+// ---- end F-OO-110
 
 /** One write of the page (the container's): the order it answers replaces the page's; a refusal is said in the dialog or the notice. */
 export type RecordWrite = (run: () => Promise<Order | null>, success: string | null, keepDialog?: boolean) => Promise<void>
@@ -362,6 +377,11 @@ export interface OrderRecordModel {
    * page's read) with the gate dialog open; null/absent: not here (a design case without it).
    */
   gateActs?: MilestonesModel | null
+  /**
+   * F-OO-106: the order's credit while it waits on its own credit hold — read with sales.credit.view only (use-overview-acts);
+   * absent: not here (a design case without it).
+   */
+  credit?: CreditState | null
   // F-OO-121: product.styles.manage — a line with no picture offers "Add on the style ›" (anyone else reads the words alone); absent: no.
   stylesManage?: boolean
   /** F-SA-232: the page's live stream (the freshness line says "Live · as of 10:42" only when pushed). */
@@ -481,6 +501,8 @@ export interface OrderRecordActions {
   onNoteSave?: (note: string) => void
   /** F-OO-145: a gate's Move the date… (onEdit), Mark done… (onPass), Start before the gate… (onStartBefore) and the dialogs' own acts. */
   gateActs?: MilestonesActions
+  /** F-OO-106: the credit strip's own acts — the dialogs' Check again and Ask (the page's one write), read the credit again. */
+  credit?: { readonly onCheck?: () => void; readonly onAsk?: (checkId: string, note: string) => void; readonly onRetry?: () => void }
   /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
   people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
   /** F-CP-142: the Price check card (Customer's price…, Take them over, Try again) and the ONE window's own actions. */

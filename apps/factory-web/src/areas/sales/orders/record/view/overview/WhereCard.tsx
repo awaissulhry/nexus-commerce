@@ -28,6 +28,13 @@ import { dayInstant, readOnlyOnPage } from '../../../model'
 import { STRIPS_SHOWN, stripDoorsOf, whereStripsOf, type StripDoor, type StripDoorsInput, type WhereStrip } from '../../overview/where'
 // ---- end F-OO-105
 import { whereMovesOf, type WhereMove, type WhereMoveId } from '../../overview/where' // F-OO-107: the order's own moves
+// ---- F-OO-106: the credit strip's own doors, lines and dialogs (Check credit again, Ask for a yes…) — the page's dialog frame ----
+import { Banner, Field } from '@nexus/ui/components'
+import { Textarea } from '../../../../../../lib/i18n/ds-parts'
+import { WithMessages } from '../../../../../../record-panels/i18n'
+import { CREDIT_ASK_NOTE_MAX, creditLinesOf, refuseLineOf } from '../../overview/where'
+import { Frame } from '../Dialogs'
+// ---- end F-OO-106
 
 /**
  * F-OO-100 (order overview lane: one file per card) — "Where it is now".
@@ -69,7 +76,10 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
         {!loading && quiet ? <p className="fw-so-hint">{quiet}</p> : null}
       </div>
       {/* ---- F-OO-103: the strips slot — one strip per hold or wait, most blocking first, each with its real door (F-OO-104, F-OO-105) ---- */}
-      <Strips order={order} model={model} actions={actions} waiting={waiting} retry={!stagesShown(words.state)} />
+      {/* F-OO-106: the credit strip names what its check found in the Finance page's own words (sales-credit finding.*). */}
+      <WithMessages namespaces={CREDIT_NS}>
+        <Strips order={order} model={model} actions={actions} waiting={waiting} retry={!stagesShown(words.state)} />
+      </WithMessages>
       {stagesShown(words.state) ? (
         <div className="fw-so-where-stages">
           {/* F-OP-104: the stages are one real link to Production's work orders. F-OO-102: drawn in the headline's own state. */}
@@ -90,6 +100,8 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
       ) : null}
       {/* ---- F-OO-103: the moves slot — the order's own moves: Mark ready…, Hold the whole order…, More ▾ (F-OO-107, F-OO-108) ---- */}
       <Moves order={order} model={model} actions={actions} />
+      {/* F-OO-106: the credit strip's dialogs, in the page's one slot (Overview's own: use-overview-acts). */}
+      <CreditDialogs order={order} model={model} actions={actions} />
     </Card>
   )
 }
@@ -134,6 +146,7 @@ function Strips({ order, model, actions, waiting, retry }: { order: Order; model
     depthCan: model.depth?.can ?? null,
     work: read?.work?.workOrders ?? [],
     acts: model.workOrderActs?.can ?? null,
+    credit: model.credit ?? null, // F-OO-106
   }
   const shown = all ? strips : strips.slice(0, STRIPS_SHOWN)
   const now = Date.now()
@@ -182,6 +195,7 @@ function numbersOf(t: (key: string, params?: Record<string, string | number>) =>
 /** One strip: its mark, its words with the age (the day in its title), its quiet lines, its doors. */
 function StripRow({ strip, doors, order, model, actions, now }: { strip: WhereStrip; doors: readonly StripDoor[]; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; now: number }) {
   const t = useT('orders')
+  const c = useT(CREDIT_NS[0]) // F-OO-106: the findings in Finance's own words
   const w = useProductionWords()
   const locale = useLocale()
   const day = (value: string) => formatDate(/^\d{4}-\d{2}-\d{2}$/.test(value) ? dayInstant(value) : value, { locale })
@@ -220,6 +234,14 @@ function StripRow({ strip, doors, order, model, actions, now }: { strip: WhereSt
     if (strip.kind === 'quality') lines.push(t('where.strip.qualityWho'))
   }
   if (strip.kind === 'review' && order.lines.filter((line) => line.kind === 'MADE_TO_MEASURE').length > 1) lines.push(t('where.strip.reviewDoor.several'))
+  // ---- F-OO-106: the credit strip's own lines — what was found, the last answer to a yes, who checks it; never an amount ----
+  if (strip.kind === 'credit')
+    for (const line of creditLinesOf(model.credit ?? null, order.status === 'PENDING_APPROVAL'))
+      lines.push(t(line.phrase.key, { ...(line.phrase.params ?? {}), ...(line.date ? { date: day(line.date) } : {}), ...(line.findings ? { findings: line.findings.map((code) => c(`finding.${code}`)).join(' · ') } : {}) }))
+  // What a no does, beside a yes decided here (the band's Refuse… dialog says nothing of it): the credit's leaves it held, the order's cancels it.
+  const refuse = refuseLineOf(strip, doors)
+  if (refuse) lines.push(t(refuse.key))
+  // ---- end F-OO-106
   const age = ageOf(strip.since, now)
   return (
     <li className="fw-so-ov-row fw-so-strip" data-tone={toneOf(strip, model.today)}>
@@ -293,6 +315,13 @@ function StripDoorView({ door, order, model, actions }: { door: StripDoor; order
           {t(door.label)}
         </Button>
       )
+    // F-OO-109: Lift… for the strip's own work orders — the ONE lift dialog (the work-order acts'), all or none.
+    case 'liftMany':
+      return (
+        <Button size="sm" heldReason={door.held ? scoped(door.held.key, door.held.params) : null} onClick={() => actions?.workOrderActs?.onLiftMany?.({ kind: door.holdKind, workOrders: door.workOrders, shared: door.shared, notReached: door.notReached })}>
+          {t(door.label)}
+        </Button>
+      )
     case 'workOrder':
       return (
         <Button size="sm" variant="quiet" asChild>
@@ -300,6 +329,13 @@ function StripDoorView({ door, order, model, actions }: { door: StripDoor; order
         </Button>
       )
     case 'quality':
+      // F-OO-108: Quality's holds do not open for this reader — the door is held with who releases it (never a link that refuses).
+      if (door.held)
+        return (
+          <Button size="sm" variant="quiet" heldReason={t(door.held.key, door.held.params)}>
+            {t('where.strip.release')}
+          </Button>
+        )
       return (
         <Button size="sm" variant="quiet" asChild>
           <Link href={door.href} aria-label={t('where.strip.releaseOf', { number: door.number })}>
@@ -307,6 +343,26 @@ function StripDoorView({ door, order, model, actions }: { door: StripDoor; order
           </Link>
         </Button>
       )
+    // ---- F-OO-106: the order's own credit hold — its dialogs in the page's one slot; Try again when its read failed ----
+    case 'creditCheck':
+      return (
+        <Button size="sm" heldReason={door.held ? t(door.held.key, door.held.params) : null} onClick={() => actions?.onDialog?.({ kind: 'creditCheck' })}>
+          {t('where.credit.check')}
+        </Button>
+      )
+    case 'creditAsk':
+      return (
+        <Button size="sm" heldReason={door.held ? t(door.held.key, door.held.params) : null} onClick={() => actions?.onDialog?.({ kind: 'creditAsk', checkId: door.checkId })}>
+          {t('where.credit.ask')}
+        </Button>
+      )
+    case 'creditRetry':
+      return (
+        <Button size="sm" onClick={() => actions?.credit?.onRetry?.()}>
+          {t('common.retry')}
+        </Button>
+      )
+    // ---- end F-OO-106
     case 'review':
       return door.href ? (
         <Button size="sm" variant="quiet" asChild>
@@ -330,18 +386,25 @@ function StripDoorView({ door, order, model, actions }: { door: StripDoor; order
 function Moves({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
-  const moves = whereMovesOf(order, { can: model.can, readOnly, elsewhere: model.elsewhere })
+  const locale = useLocale()
+  // F-OO-108: Hold the whole order… reads the production read's work orders and the page's acts (its dialog is theirs).
+  const read = readOf(model.production)
+  const moves = whereMovesOf(order, { can: model.can, readOnly, elsewhere: model.elsewhere, work: read ? (read.work ?? null) : undefined, acts: model.workOrderActs?.can ?? null })
   if (!moves) return null
-  const heldOf = (move: WhereMove): string | null => (move.held ? t(move.held.key, move.held.params) : model.busy ? t('held.busy') : null)
-  const run = (id: WhereMoveId): void => {
+  // A held move says why: the band's words (a phrase), or the hold plan's own words (both languages, the domain's).
+  const heldOf = (move: WhereMove): string | null => (move.held ? ('key' in move.held ? t(move.held.key, move.held.params) : say(move.held, locale)) : model.busy ? t('held.busy') : null)
+  const run = (move: WhereMove): void => {
+    const id: WhereMoveId = move.id
     if (id === 'elsewhere') return actions?.onRecordElsewhere?.()
+    // F-OO-108: the ONE Hold dialog (the work-order acts'), on the plan's work orders with their versions.
+    if (id === 'hold') return move.hold ? actions?.workOrderActs?.onHoldOrder?.({ number: order.number, plan: move.hold.plan, units: move.hold.units }) : undefined
     actions?.onDialog?.({ kind: id })
   }
   return (
     <>
       <div className="fw-so-where-moves" role="group" aria-label={t('where.moves')}>
         {moves.shown.map((move) => (
-          <Button key={move.id} size="sm" heldReason={heldOf(move)} onClick={() => run(move.id)}>
+          <Button key={move.id} size="sm" heldReason={heldOf(move)} onClick={() => run(move)}>
             {t(move.label.key)}
           </Button>
         ))}
@@ -355,7 +418,7 @@ function Moves({ order, model, actions }: { order: Order; model: OrderRecordMode
             triggerProps={{ className: 'nds-btn sm', 'aria-label': t('where.moreOf', { number: order.number }) }}
             items={moves.more.map((move) => {
               const held = heldOf(move)
-              return { id: move.id, label: t(move.label.key), ...(move.id === 'cancel' ? { tone: 'danger' as const } : {}), disabled: !!held, ...(held ? { description: held } : { onSelect: () => run(move.id) }) }
+              return { id: move.id, label: t(move.label.key), ...(move.id === 'cancel' ? { tone: 'danger' as const } : {}), disabled: !!held, ...(held ? { description: held } : { onSelect: () => run(move) }) }
             })}
           />
         )}
@@ -366,3 +429,61 @@ function Moves({ order, model, actions }: { order: Order; model: OrderRecordMode
   )
 }
 // ---- end F-OO-107
+
+// ---- F-OO-106 (order overview §1.4; review F8, F16): Check credit again and Ask for a yes… — the page's own dialog frame ------------
+/** The Finance page's catalogue: the credit strip names what its check found in its words. */
+const CREDIT_NS = ['sales-credit'] as const
+
+/**
+ * The credit strip's two dialogs (the page's one slot, Overview's: `creditCheck`, `creditAsk`). Check credit again: what it does, then
+ * Check again — no version: the check id is the lock (a "checked meanwhile" is said here). Ask for a yes…: a word for who decides
+ * (optional), then Ask — "nobody to ask" is said here and holds Ask (the customer pays, or Finance raises the limit). Esc closes
+ * (DS Modal), not while the act goes; what was typed stays after a refusal.
+ */
+function CreditDialogs({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const dialog = model.dialog
+  if (dialog?.kind === 'creditCheck') return <CreditCheckDialog order={order} model={model} actions={actions} refused={dialog.refused ?? null} />
+  if (dialog?.kind === 'creditAsk') return <CreditAskDialog key={dialog.checkId} order={order} model={model} actions={actions} checkId={dialog.checkId} refused={dialog.refused ?? null} />
+  return null
+}
+
+function CreditCheckDialog({ order, model, actions, refused }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; refused: Phrase | null }) {
+  const t = useT('orders')
+  return (
+    <Frame
+      title={t('where.credit.checkTitle', { customer: order.party?.legalName ?? order.number })}
+      held={model.busy ? t('held.busy') : null}
+      go={() => actions?.credit?.onCheck?.()}
+      goLabel={model.busy ? t('common.working') : t('where.credit.checkGo')}
+      onClose={() => !model.busy && actions?.onDialog?.(null)}
+      problem={refused ? <Banner tone="danger" title={t(refused.key, refused.params)} /> : null}
+      size="sm"
+    >
+      <p>{t('where.credit.checkBody')}</p>
+    </Frame>
+  )
+}
+
+function CreditAskDialog({ order, model, actions, checkId, refused }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; checkId: string; refused: Phrase | null }) {
+  const t = useT('orders')
+  const [note, setNote] = useState(model.draft?.message ?? '')
+  // Nobody to ask: asking again changes nothing — Ask is held with the same words.
+  const held = model.busy ? t('held.busy') : refused?.key === 'where.credit.refused.nobody' ? t(refused.key) : null
+  return (
+    <Frame
+      title={t('where.credit.askTitle', { number: order.number })}
+      held={held}
+      go={() => actions?.credit?.onAsk?.(checkId, note)}
+      goLabel={model.busy ? t('common.working') : t('where.credit.askGo')}
+      onClose={() => !model.busy && actions?.onDialog?.(null)}
+      problem={refused ? <Banner tone="danger" title={t(refused.key, refused.params)} /> : null}
+      size="sm"
+    >
+      <p className="fw-so-hint">{t('where.credit.askBody')}</p>
+      <Field label={t('where.credit.askNote')} hint={t('where.credit.askHint', { count: CREDIT_ASK_NOTE_MAX })}>
+        <Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} maxLength={CREDIT_ASK_NOTE_MAX} />
+      </Field>
+    </Frame>
+  )
+}
+// ---- end F-OO-106

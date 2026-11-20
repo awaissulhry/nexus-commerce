@@ -8,6 +8,7 @@ import { Modal, Textarea } from '../../../i18n/ds-parts'
 import { useLocale, useScopedT } from '../../../i18n/provider'
 import { NOTE_MAX, type Phrase } from '../model'
 import type { ActsDialog, WorkOrderActsActions, WorkOrderActsModel } from '../use-work-order-acts'
+import type { OrderHoldDialog as OrderHoldDialogState } from '../use-work-order-acts' // F-OO-108
 import './work-order-acts.css'
 // F-OP-114: the ONE Put on hold / Release the hold / Release (moved here from the work order's pages).
 import { HoldDialog, LiftHoldDialog, type HoldParts } from './HoldDialog'
@@ -44,7 +45,7 @@ const say = (t: ReturnType<typeof useScopedT>, phrase: Phrase | null): string | 
  * to pick (R-16) — the stock issued to it, the workshops it is at). Each brings its catalogues, so it draws on any page.
  */
 export function WorkOrderActsDialogs({ model, actions }: { model: WorkOrderActsModel; actions?: WorkOrderActsActions }) {
-  if (!model.dialog) return null
+  if (!model.dialog && !model.holdOrder /* F-OO-108 */ && !model.liftMany /* F-OO-109 */) return null
   return (
     <WithMessages namespaces={DIALOG_NAMESPACES}>
       <ActsDialogs model={model} actions={actions} />
@@ -56,6 +57,13 @@ export function WorkOrderActsDialogs({ model, actions }: { model: WorkOrderActsM
 const DIALOG_NAMESPACES = ['orders', 'production', 'production-work-orders', SHIFT_NAMESPACE] as const
 
 function ActsDialogs({ model, actions }: { model: WorkOrderActsModel; actions?: WorkOrderActsActions }) {
+  if (model.holdOrder) return <OrderHoldDialog model={model} open={model.holdOrder} actions={actions} /> // F-OO-108
+  // F-OO-109: Lift… for a strip on N work orders — the ONE lift dialog with the list (one work order: its row's Lift…, below).
+  if (model.liftMany) {
+    const open = model.liftMany
+    const parts: HoldParts = { reasons: model.reasons, can: { holdsPlace: model.can.qualityHold, productionHold: true }, busy: open.busy, problem: open.problem }
+    return <LiftHoldDialog holdId={null} parts={parts} onCancel={() => actions?.onCloseLiftMany?.()} many={{ kind: open.kind, workOrders: open.workOrders, shared: open.shared, notReached: open.notReached, onLift: actions?.onLiftManyGo, onRetry: actions?.onRetryLiftMany }} />
+  }
   const dialog = model.dialog
   if (!dialog) return null
   const close = () => actions?.onCloseDialog?.()
@@ -254,3 +262,33 @@ function NoteDialog({ dialog, actions }: { dialog: ActsDialog; actions?: WorkOrd
     </Modal>
   )
 }
+
+// ---- F-OO-108 (order overview §1.4; B-OO-005, review F13, F16): "Hold the whole order…" — the ONE Hold dialog on the plan -----------
+/**
+ * The sales order's "Hold the whole order…": the shared Hold dialog (both kinds, each with its right) on the work orders the domain's
+ * plan holds, and under them what it leaves out, each with why — a work order shared with other customers (held on its own page), one
+ * held already or done (its words), those this reader does not reach (counted, never named), the made-to-measure units (each held on
+ * its own page). A production hold sends every version read (all or none); when the plan holds none any more, Put on hold says why.
+ */
+function OrderHoldDialog({ model, open, actions }: { model: WorkOrderActsModel; open: OrderHoldDialogState; actions?: WorkOrderActsActions }) {
+  const t = useScopedT(NS)
+  const locale = useLocale()
+  const { plan } = open
+  const words = (entry: { readonly it: string; readonly en: string }) => (locale === 'it' ? entry.it : entry.en)
+  const parts: HoldParts = { reasons: model.reasons, can: { holdsPlace: model.can.qualityHold, productionHold: plan.ids.length > 0 }, busy: open.busy, problem: open.problem }
+  const notes = (
+    <>
+      {plan.left.length > 0 && (
+        <ul className="fw-woa-list" aria-label={t('where.hold.leftTitle')}>
+          {plan.left.map((entry) => (
+            <li key={entry.id}>{t('where.hold.left', { number: entry.number, words: words(entry.words) })}</li>
+          ))}
+        </ul>
+      )}
+      {plan.notReached > 0 && <p className="fw-woa-hint">{t('where.hold.notReached', { count: plan.notReached })}</p>}
+      {open.units > 0 && <p className="fw-woa-hint">{t('where.hold.units', { count: open.units })}</p>}
+    </>
+  )
+  return <HoldDialog numbers={[...plan.numbers]} workOrderIds={[...plan.ids]} parts={parts} onCancel={() => actions?.onCloseOrderHold?.()} onPlace={actions?.onPlaceOrderHold} notes={notes} heldBy={plan.ids.length === 0 && plan.held ? words(plan.held.words) : null} />
+}
+// ---- end F-OO-108

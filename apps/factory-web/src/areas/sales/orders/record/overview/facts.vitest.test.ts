@@ -344,7 +344,8 @@ describe('F-OO-210: the office note', () => {
 
   it('the wiring: the page\'s one slot, the container\'s acts base; the customer never reads the note (no portal-orders read carries it)', () => {
     const container = readFileSync(new URL('../OrderRecord.tsx', import.meta.url), 'utf8')
-    expect(container).toContain('setDialog /* F-OO-144 */, base: actsBase /* F-OO-210 */ })')
+    // F-OO-106: the line goes on after the base (F-OO-145's gates, F-OO-106's credit): the pin reads up to the base.
+    expect(container).toContain('setDialog /* F-OO-144 */, base: actsBase /* F-OO-210 */')
     const dialogs = readFileSync(new URL('../view/Dialogs.tsx', import.meta.url), 'utf8')
     expect(dialogs).toContain("case 'note':\n      return <OrderNoteDialog order={order} model={model} actions={actions} />")
     expect(readFileSync(new URL('../view/overview/FactsCard.tsx', import.meta.url), 'utf8')).toContain("onClick={() => actions?.onDialog?.({ kind: 'note' })}")
