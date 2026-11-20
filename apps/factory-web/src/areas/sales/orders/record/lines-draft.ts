@@ -4,6 +4,8 @@ import type { PickBody } from '../../quotes/record/configurator/api'
 import type { CellFloors } from '../daily-model'
 import type { Phrase } from '../model'
 import { AUTOMATIC_REASONS, type AutomaticReasonKind } from '@nexus/factory-domain/sales/amendments/reasons' // F-OL-03
+import { catalogueFor, createTranslator } from '../../../../lib/i18n/messages' // F-OL-08: the customer's own words
+import type { Locale } from '../../../../lib/i18n/locales'
 
 /**
  * F-OL-01 (Order LINES lane, plan v2 §1; 10-design-tab §11, §15; 18-lead-settles F5, F27, F31) — the Lines tab's draft, pure: the
@@ -529,3 +531,21 @@ export function autoReasonOf(reason: string | null | undefined): Phrase | null {
   return kind ? phrase(`lines.autoReason.${kind}`) : null
 }
 // ---- end F-OL-03
+
+// ---- F-OL-08 (Order LINES lane): the question the customer reads ---------------------------------------------------------------
+
+/** The language the customer reads this order in (the order's own; the portal speaks Italian or English). */
+export const customerLocaleOf = (order: Pick<Order, 'language'>): Locale => (order.language === 'en' ? 'en' : 'it')
+
+/**
+ * The question "accept the new order" (REVISED_ORDER) as the CUSTOMER reads it: the words typed in Review and save as they are; none
+ * typed, the default in the order's language and in the words an outside reader gets (the portal says "voi", never the office "tu")
+ * — never the office person's own language.
+ */
+export function customerQuestionOf(order: Pick<Order, 'language' | 'number'>, typed: string): string {
+  const words = typed.trim()
+  if (words !== '') return words
+  const locale = customerLocaleOf(order)
+  return createTranslator(locale, catalogueFor(locale, 'orders', 'outside'))('review.question', { number: order.number })
+}
+// ---- end F-OL-08

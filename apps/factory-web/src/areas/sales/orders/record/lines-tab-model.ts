@@ -104,7 +104,8 @@ export interface LinesTabActions {
   readonly onReviewTell?: (next: { readonly words?: string; readonly chosen?: boolean }) => void
   readonly onReviewOutcome?: (outcome: ExtraOutcome) => void
   readonly onReviewFee?: (text: string) => void
-  /** Save changes: the reason in words (none: the server's automatic words) and the question the customer is asked (when ticked). */
+  /** Save changes: the reason in words (none: the server's automatic words) and the words typed for the customer (none: the default
+   * question in the customer's language — F-OL-08). */
   readonly onSave?: (input: { readonly reason?: string; readonly question: string }) => void
   readonly onAskAgain?: () => void
   readonly onAskDismiss?: () => void

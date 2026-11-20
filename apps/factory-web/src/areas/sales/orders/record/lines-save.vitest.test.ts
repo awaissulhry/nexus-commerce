@@ -6,7 +6,7 @@ import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import { render, textOf } from '../../../../lib/record-thread/parts/testing'
 import { AMEND_PREVIEW, LINE_BLK, LINE_RED, order } from '../_demo/fixtures'
 import type { AmendPreview } from '../api'
-import { autoReasonOf, EMPTY_HISTORY, feeProblem, removeLine, savedNotice, setCell } from './lines-draft'
+import { autoReasonOf, customerLocaleOf, customerQuestionOf, EMPTY_HISTORY, feeProblem, removeLine, savedNotice, setCell } from './lines-draft'
 import { AUTOMATIC_REASONS } from '@nexus/factory-domain/sales/amendments/reasons'
 import type { ReviewState } from './lines-tab-model'
 import { ReviewSave } from './view/lines/ReviewSave'
@@ -117,7 +117,7 @@ describe('F-OL-03: the container — only my changes sent, the ask after a ticke
     expect(hook).toContain('lines: bodyLinesOf(historyRef.current.draft, order)')
     expect(hook).toContain('askCustomer: ask }, idempotency)')
     expect(hook).toContain("kind: 'REVISED_ORDER', recordType: 'SalesOrder'")
-    expect(hook).toContain('if (ask && !priced) void askCustomer(question, value)')
+    expect(hook).toContain('if (ask && !priced) void askCustomer(customerQuestionOf(value, question), value)')
     expect(hook).toContain("if (words.key === 'problem.write.moved')")
     expect(hook).toContain('const rebased = rebaseDraft(base, order, historyRef.current.draft)')
     // The draft empties before the answered order lands: my own save is never "rebased".
@@ -133,3 +133,27 @@ describe('F-OL-03: the container — only my changes sent, the ask after a ticke
     expect(read('./view/lines/SaveBar.tsx')).toContain('saveShortcut')
   })
 })
+
+// ---- F-OL-08 (Order LINES lane): the customer reads the default question in THEIR language, in the portal's words ----
+describe('F-OL-08: the REVISED_ORDER question — the words typed, else the default in the order\'s language (the portal\'s "voi")', () => {
+  it('none typed: the order\'s language, whatever the office person reads; typed: as typed', () => {
+    const italian = customerQuestionOf({ language: 'it', number: 'SO-2026-0088' }, '   ')
+    expect(italian).toBe("Controllate le modifiche all'ordine SO-2026-0088 e accettate il nuovo ordine.")
+    // The portal's register (voi), never the office's "tu".
+    expect(italian).not.toMatch(/\b(?:Controlla|accetta)\b/)
+    expect(customerQuestionOf({ language: 'en', number: 'SO-2026-0088' }, '')).toBe('Please check the changes to order SO-2026-0088 and accept the new order.')
+    // A language the portal does not speak: Italian, as the ask itself is sent.
+    expect(customerLocaleOf({ language: 'de' })).toBe('it')
+    expect(customerQuestionOf({ language: 'en', number: 'SO-2026-0088' }, ' Le nuove taglie vanno bene? ')).toBe('Le nuove taglie vanno bene?')
+  })
+
+  it('the window sends only what was typed; the container picks the default in the customer\'s language and sends that language', () => {
+    const review = read('./view/lines/ReviewSave.tsx')
+    expect(review).toContain('question: review.tell.words.trim() })')
+    expect(review).not.toContain("t('review.question'")
+    const hook = read('./use-lines-draft.ts')
+    expect(hook).toContain('customerQuestionOf(value, question)')
+    expect(hook).toContain('language: customerLocaleOf(value) })')
+  })
+})
+// ---- end F-OL-08

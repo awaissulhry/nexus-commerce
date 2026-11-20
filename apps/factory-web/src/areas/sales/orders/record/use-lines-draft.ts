@@ -19,6 +19,8 @@ import {
   addSize,
   askDefaultOf,
   bodyLinesOf,
+  customerLocaleOf,
+  customerQuestionOf,
   draftKeyOf,
   EMPTY_HISTORY,
   isEmptyDraft,
@@ -265,8 +267,9 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
           setMoved(null)
           setReview(null)
           setNotice({ tone: 'success', words: savedNotice(done.workOrders, ask) })
-          // The ask (a plain change: a priced change asks through its own link): its failure never undoes the save.
-          if (ask && !priced) void askCustomer(question, value)
+          // The ask (a plain change: a priced change asks through its own link): its failure never undoes the save. F-OL-08: the
+          // question in the customer's language (the words typed, else the default in the order's language), never the office's.
+          if (ask && !priced) void askCustomer(customerQuestionOf(value, question), value)
           if (tell) void tellCustomer(tell, value)
           return done.order
         } catch (error) {
@@ -289,7 +292,7 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
 
   const askCustomer = async (question: string, value: Order) => {
     try {
-      await askApproval(api, { kind: 'REVISED_ORDER', recordType: 'SalesOrder', recordId: value.id, question, dueAt: new Date(Date.now() + ASK_DAYS * 86_400_000).toISOString(), fileIds: [], send: true, language: value.language === 'en' ? 'en' : 'it' })
+      await askApproval(api, { kind: 'REVISED_ORDER', recordType: 'SalesOrder', recordId: value.id, question, dueAt: new Date(Date.now() + ASK_DAYS * 86_400_000).toISOString(), fileIds: [], send: true, language: customerLocaleOf(value) })
       setAskFailed(null)
     } catch {
       setAskFailed(question)
