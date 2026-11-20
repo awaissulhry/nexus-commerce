@@ -1555,7 +1555,6 @@
   "overview": {
     "where": "Where it is now",
     "progress": "Progress by line",
-    "progressHint": "This order's own pieces · a line opens its sizes",
     "ahead_one": "{count} line ahead",
     "ahead_other": "{count} lines ahead",
     "bundles_one": "Bundles in work: {count} at {stage}",
@@ -1581,13 +1580,10 @@
     "col": {
       "line": "Line"
     },
-    "lineName": "Line {seq} · {stage}",
     "lineNoStage": "Line {seq}",
     "lineOpen": "Open the sizes of line {seq} · {name}",
     "total_one": "Total · {count} line",
     "total_other": "Total · {count} lines",
-    "madeExtra_one": "{count} piece made extra",
-    "madeExtra_other": "{count} pieces made extra",
     "sizes": {
       "label": "Shipped and the finish forecast by size",
       "size": "Size",
@@ -1649,6 +1645,13 @@
   "mtm": {
     "units_one": "Made to measure · {count} unit",
     "units_other": "Made to measure · {count} units"
+  },
+  "progress": {
+    "inWork": "In work orders: {done} of {total}",
+    "madeExtra": "{sizes} more than ordered: cut or planned to cut",
+    "noPicture": "No picture yet",
+    "addPicture": "Add on the style ›",
+    "addPictureOf": "Add the picture of {name} on its style"
   },
   "files": {
     "title": "Files",

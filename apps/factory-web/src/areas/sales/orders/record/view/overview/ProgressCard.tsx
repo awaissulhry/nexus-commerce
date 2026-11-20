@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Card, EmptyState, SummaryTable } from '@nexus/ui/components'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { DetailModal } from '../../../../../../lib/i18n/ds-parts'
@@ -11,7 +12,11 @@ import { RecordPicture } from '../../../../../../lib/record-picture/view/RecordP
 import type { Order } from '../../../api'
 import { dayInstant } from '../../../model'
 import { readOf } from '../../overview/model'
-import { LINE_COLUMNS, lineRowsOf, lineSizesOf, nothingCutYet, totalOf, type Figure, type LineColumn, type LineRow } from '../../overview/progress'
+import { LINE_COLUMNS, lineRowsOf, lineSizesOf, totalOf, type LineRow } from '../../overview/progress'
+// ---- F-OO-121: the clean line cell — quiet "—", at most two pills, the missing picture ----
+import { figureFaceOf, LINE_PILLS_SHOWN, linePillsOf, madeExtraSizesText, pillToneOf, stylePictureHref, type FigureFace, type LinePill } from '../../overview/progress'
+import './progress.css'
+// ---- end F-OO-121
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { PartState } from '../OrderRecordView'
 import { useSearchParams } from 'next/navigation'
@@ -23,18 +28,21 @@ import { DiscussDoor } from '../Discuss' // F-SA-266: Discuss on a line's row
  * F-OO-100 (order overview lane: one file per card) — "Progress by line", moved out of OverviewTab.tsx unchanged (F-SA-232: the
  * order's OWN pieces per colour line, the made-to-measure units of one style × colourway as one row; "Not counted here", never 0),
  * whose row opens the line's sizes in a centred window (‹ › walk the lines).
+ * F-OO-121 (10-design §2.2): the line cell says its name, "Line 10" and at most two pills — no stage word, no hint, no "Nothing cut
+ * yet"; a line with no work order is "—" with no sub; a line with no picture says so, with the style's door for who may add one.
  */
 
 /** F-OP-302 (walk #4): Progress by line's column widths — the line a third, the six counts share the rest. */
 const PROGRESS_WIDTHS: readonly (string | undefined)[] = ['34%']
 
 /** The columns' words: the shared pieces catalogue's (production `parts.pieces.stages.*`, Shipped added there). */
-const COLUMN_STAGE: Readonly<Record<LineColumn, string>> = Object.freeze({ ordered: 'ORDERED', cut: 'CUT', sewn: 'SEWN', checked: 'INSPECTED', packed: 'PACKED', shipped: 'SHIPPED' })
+const COLUMN_STAGE: Readonly<Record<(typeof LINE_COLUMNS)[number], string>> = Object.freeze({ ordered: 'ORDERED', cut: 'CUT', sewn: 'SEWN', checked: 'INSPECTED', packed: 'PACKED', shipped: 'SHIPPED' })
 
-/** One figure cell: the count, or "—" with "Not counted here" (never a made-up 0). */
-function FigureCell({ value }: { value: Figure }) {
+/** One figure cell: the count; F-OO-121: "—" alone on a line with no work order; or "—" with "Not counted here" (never a made-up 0). */
+function FigureCell({ face }: { face: FigureFace }) {
   const w = useProductionWords()
-  if (value !== null) return <span>{value}</span>
+  if (face.kind === 'count') return <span>{face.value}</span>
+  if (face.kind === 'none') return <span>—</span>
   return (
     <span className="fw-so-cell">
       <span aria-hidden>—</span>
@@ -42,6 +50,45 @@ function FigureCell({ value }: { value: Figure }) {
     </span>
   )
 }
+
+// ---- F-OO-121: a pill's words (the catalogue's own where they exist: closed short, on hold, not in work orders, late) ----
+function usePillWords(): (pill: LinePill) => string {
+  const t = useT('orders')
+  const w = useProductionWords()
+  return (pill) => {
+    switch (pill.kind) {
+      case 'closedShort':
+        return t('lines.closedShort', { count: pill.count })
+      case 'onHold':
+        return t('production.held')
+      case 'notInWorkOrders':
+        return t('overview.notInWorkOrders')
+      case 'inWork':
+        return t('progress.inWork', { done: pill.done, total: pill.total })
+      case 'madeExtra':
+        // B-OO-015: one wording with the API's — "1 48 more than ordered: cut or planned to cut".
+        return t('progress.madeExtra', { sizes: madeExtraSizesText(pill.sizes) })
+      case 'late':
+        return pill.days ? w.t('parts.health.lateBy', { count: pill.days }) : w.t('parts.health.LATE')
+    }
+  }
+}
+
+/** The pills as DS Tags; in the line cell each stays on one line (its full words in its title and in the line's window). */
+function Pills({ pills, truncate }: { pills: readonly LinePill[]; truncate?: boolean }) {
+  const words = usePillWords()
+  if (pills.length === 0) return null
+  return (
+    <span className="fw-so-inline">
+      {pills.map((pill) => (
+        <Tag key={pill.kind} tone={pillToneOf(pill)} truncate={truncate} title={truncate ? words(pill) : undefined}>
+          {words(pill)}
+        </Tag>
+      ))}
+    </span>
+  )
+}
+// ---- end F-OO-121
 
 export function ProgressCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
@@ -64,26 +111,24 @@ export function ProgressCard({ order, model, actions }: { order: Order; model: O
   if (state.status === 'failed' || !read?.lines) return <PartState problem={state.status === 'failed' ? state.problem : 'problem.read.internal'} label={t('overview.progress')} onRetry={() => actions?.onRetryProduction?.()} />
   const rows = lineRowsOf(read.lines, order)
   const total = totalOf(rows)
+  const totalQuiet = rows.every((row) => row.quiet) // F-OO-121: no line in work orders yet — the total says "—" too
   const nameOf = (row: LineRow) => `${row.style?.code ?? '—'} · ${row.colourway?.name ?? row.colourway?.code ?? '—'}`
-  const stageOf = (row: LineRow) =>
-    row.mtm
-      ? t('mtm.units', { count: row.mtm.units })
-      : row.stage
-        ? t('overview.lineName', { seq: row.seq, stage: w.t(`parts.stage.${row.stage}`) })
-        : t('overview.lineNoStage', { seq: row.seq })
+  // F-OO-121: "Line 10" (made to measure: its units) — no stage word per line.
+  const subOf = (row: LineRow) => (row.mtm ? t('mtm.units', { count: row.mtm.units }) : t('overview.lineNoStage', { seq: row.seq }))
+  const pillInput = { order, read, today: model.today }
   const columns = [t('overview.col.line'), ...LINE_COLUMNS.map((column) => w.t(`parts.pieces.stages.${COLUMN_STAGE[column]}`))]
   const open = model.overviewLine ? (rows.find((row) => row.id === model.overviewLine) ?? null) : null
   return (
     <Card padded>
+      {/* F-OO-121: the hint went; "Pieces as of 19:36" stands at the head's right (OW-7: said, never hidden). */}
       <div className="fw-so-card-head">
         <h2 className="fw-so-h2">{t('overview.progress')}</h2>
-        <span className="fw-so-hint">{t('overview.progressHint')}</span>
+        {rows.length > 0 && <span className="fw-so-hint">{t('overview.piecesAsOf', { time: formatTime(read.asOf, { locale }) })}</span>}
       </div>
       {rows.length === 0 ? (
         <EmptyState title={w.t('parts.pieces.none')} />
       ) : (
         <>
-          {nothingCutYet(rows) && <p className="fw-so-hint">{w.t('parts.pieces.nothingCut')}</p>}
           <SummaryTable
             label={t('overview.progress')}
             columns={columns}
@@ -101,7 +146,10 @@ export function ProgressCard({ order, model, actions }: { order: Order; model: O
                   cells: [
                     // F-SA-266: the line's own Discuss beside the button that opens its sizes (one line: its reference; a made-to-measure
                     // group of units: in words, in an office note).
+                    // F-OO-121: the button holds the picture, the name and "Line 10"; under them its pills and a missing picture (its
+                    // door is a link: never inside the button).
                     <span key="l" className="fw-so-inline">
+                    <span className="fw-so-ov-line">
                     <button type="button" className="fw-so-lineopen" onClick={() => actions?.onOpenLine?.(row.id)} aria-label={t('overview.lineOpen', { seq: row.seq, name: nameOf(row) })}>
                       <RecordPicture
                         source="order"
@@ -113,37 +161,49 @@ export function ProgressCard({ order, model, actions }: { order: Order; model: O
                       />
                       <span className="fw-so-cell">
                         <span>{nameOf(row)}</span>
-                        <span className="fw-so-cell-sub">{stageOf(row)}</span>
-                        {/* F-OP-302 (walk #4, #20): the line's pills on their own wrapping row under its stage — never inside the
-                            one-line sub (cut at 375) and never over the Ordered number. */}
-                        {(row.notInWorkOrders || row.madeExtra > 0) && (
-                          <span className="fw-so-inline">
-                            {row.notInWorkOrders && <Tag tone="neutral">{t('overview.notInWorkOrders')}</Tag>}
-                            {row.madeExtra > 0 && <Tag tone="warning">{t('overview.madeExtra', { count: row.madeExtra })}</Tag>}
-                          </span>
-                        )}
+                        <span className="fw-so-cell-sub">{subOf(row)}</span>
                       </span>
                     </button>
+                    {/* F-OP-302 (walk #4, #20): the line's pills on their own wrapping row under its stage — never inside the
+                        one-line sub (cut at 375) and never over the Ordered number. F-OO-121: two at most, in their order. */}
+                    <Pills pills={linePillsOf(row, pillInput, LINE_PILLS_SHOWN)} truncate />
+                    {!line?.picture && <NoPicture row={row} model={model} name={nameOf(row)} />}
+                    </span>
                     <DiscussDoor order={order} part={t('discuss.line', { seq: row.seq, name: nameOf(row) })} target={row.lineIds.length === 1 ? { kind: 'SalesOrderLine', id: row.lineIds[0]! } : null} />
                     </span>,
-                    ...LINE_COLUMNS.map((column) => <FigureCell key={column} value={row.figures[column]} />),
+                    ...LINE_COLUMNS.map((column) => <FigureCell key={column} face={figureFaceOf(row.figures[column], row.quiet, column)} />),
                   ],
                 }
               }),
-              { id: 'total', cells: [<strong key="t">{t('overview.total', { count: rows.length })}</strong>, ...LINE_COLUMNS.map((column) => <FigureCell key={column} value={total[column]} />)] },
+              { id: 'total', cells: [<strong key="t">{t('overview.total', { count: rows.length })}</strong>, ...LINE_COLUMNS.map((column) => <FigureCell key={column} face={figureFaceOf(total[column], totalQuiet, column)} />)] },
             ]}
           />
-          {/* OW-7: the piece counts are at most a minute old (the server keeps them a minute); said, never hidden. */}
-          <p className="fw-so-hint">{t('overview.piecesAsOf', { time: formatTime(read.asOf, { locale }) })}</p>
         </>
       )}
-      {open && <LineSizes order={order} row={open} rows={rows} label={nameOf(open)} stage={stageOf(open)} model={model} actions={actions} />}
+      {open && <LineSizes order={order} row={open} rows={rows} label={nameOf(open)} sub={subOf(open)} pills={linePillsOf(open, pillInput, Number.POSITIVE_INFINITY)} model={model} actions={actions} />}
     </Card>
   )
 }
 
+// ---- F-OO-121: a line with no picture — the words, and the style's door for who may add one (product.styles.manage) ----
+function NoPicture({ row, model, name }: { row: LineRow; model: OrderRecordModel; name: string }) {
+  const t = useT('orders')
+  return (
+    <span className="fw-so-inline fw-so-hint">
+      <span>{t('progress.noPicture')}</span>
+      {model.stylesManage && row.styleId && (
+        <Link className="fw-so-link" href={stylePictureHref(model.prefix, row.styleId)} aria-label={t('progress.addPictureOf', { name })}>
+          {t('progress.addPicture')}
+        </Link>
+      )}
+    </span>
+  )
+}
+// ---- end F-OO-121
+
 /** The line's sizes in a centred DS DetailModal (‹ › and the keys walk the lines): PiecesGrid + shipped + the finish forecast per size. */
-function LineSizes({ order, row, rows, label, stage, model, actions }: { order: Order; row: LineRow; rows: readonly LineRow[]; label: string; stage: string; model: OrderRecordModel; actions?: OrderRecordActions }) {
+// F-OO-121: the subtitle says "Line 10" (no stage word) and the meta every pill of the line.
+function LineSizes({ order, row, rows, label, sub, pills, model, actions }: { order: Order; row: LineRow; rows: readonly LineRow[]; label: string; sub: string; pills: readonly LinePill[]; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const w = useProductionWords()
   const locale = useLocale()
@@ -151,13 +211,15 @@ function LineSizes({ order, row, rows, label, stage, model, actions }: { order: 
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
   const read = readOf(model.production)
   const sizes = lineSizesOf(row, read?.lines ?? [], read?.dates ?? null, label)
-  const extraWords = (count: number) => (count > 0 ? t('overview.madeExtra', { count }) : '—')
+  // F-OO-121 (B-OO-015): a size's extra pieces in the API's words ("1 48 more than ordered: cut or planned to cut").
+  const extraWords = (size: string, count: number) => (count > 0 ? t('progress.madeExtra', { sizes: madeExtraSizesText([{ size, count }]) }) : '—')
   return (
     <DetailModal
       open
       onClose={() => actions?.onOpenLine?.(null)}
       title={label}
-      subtitle={stage}
+      subtitle={sub}
+      meta={pills.length > 0 ? <Pills pills={pills} /> : undefined}
       nav={{ ids: rows.map((entry) => entry.id), current: row.id, onGo: (id) => actions?.onOpenLine?.(id), noun: t('overview.sizes.noun') }}
       footer={
         // F-OP-104: beside Open in Lines, Open in Production (the line's place there); both keep the dock's scope.
@@ -181,7 +243,7 @@ function LineSizes({ order, row, rows, label, stage, model, actions }: { order: 
             columns={[t('overview.sizes.size'), w.t('parts.pieces.stages.SHIPPED'), t('overview.sizes.finish'), t('overview.sizes.extra')]}
             align={['left', 'right', 'right', 'right']}
             stackOnPhone
-            rows={sizes.sizes.map((size) => ({ id: size.size, cells: [size.size, String(size.shipped), size.finish ? formatDate(dayInstant(size.finish), { locale }) : t('overview.sizes.noForecast'), extraWords(size.madeExtra)] }))}
+            rows={sizes.sizes.map((size) => ({ id: size.size, cells: [size.size, String(size.shipped), size.finish ? formatDate(dayInstant(size.finish), { locale }) : t('overview.sizes.noForecast'), extraWords(size.size, size.madeExtra)] }))}
           />
         </div>
       )}

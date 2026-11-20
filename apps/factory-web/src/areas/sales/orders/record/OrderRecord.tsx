@@ -616,6 +616,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     madeFromReading: madeFrom === undefined,
     links: links.model, // B-TH-256
     production: production.state, // F-SA-232
+    stylesManage: session.permissions.includes('product.styles.manage'), // F-OO-121: a line's missing picture is added on its style
     readiness, // F-SA-234
     requests, // F-SA-236
     requestDoor: { parts: door, hrefOf: (id: string) => door.hrefOf(id), open: (id: string) => door.open(id) /* F-SA-244 */ }, // F-SA-243
