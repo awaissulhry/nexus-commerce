@@ -6,7 +6,8 @@ import { eventFor } from '@nexus/factory-domain/events/define'
 import { assertOneParty, brandHealthChanged, brandHoldChanged, brandStageReached, type BrandHoldKind } from '@nexus/factory-domain/production-brand/events'
 import { effectiveHealth, raiseStands, type BrandHealth, type HealthRaise, type HealthReasonCode } from '@nexus/factory-domain/production-brand/health'
 import { brandStageRank, movedForward, type BrandStage } from '@nexus/factory-domain/production-brand/stages'
-import { handStands } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-004
+import { HAND_STAGE_NOTICE_DELAY_MS, handStands } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-004, B-MS-008
+import { STAGE_NOTICE_KEYS } from '@nexus/factory-domain/production-brand/notices' // B-MS-008
 import type { Waiting, WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
 import { ForbiddenError } from '@nexus/factory-domain/core/errors'
 import { callerFor, COMMAND_SETTINGS, runCommand, type CommandCaller, type CommandSettings, type CommandTools } from '../../../core/command'
@@ -50,6 +51,12 @@ import { ordersOfShipment } from '../../shipping/shipments/orders-of'
  *                    the customer reads), so a floor Cutting under a hand Sewing tells nothing. Each end the keeper writes is
  *                    also one row on the SalesOrder (`production.brandKeeper.handCleared` {stage, floor, why}; never a `status`
  *                    key, which the portal's order history reads: R6), so the order's History says it.
+ *   undo window      B-MS-008 (Owner D4; review R3a): a stage set by hand is told with `byHand`, and its notice waits 10 minutes
+ *                    (the partner fan-out's delayMs). When the stage the customer reads moves off a stage whose by-hand notice
+ *                    still waits — a Clear, a Change, the floor passing it, the order leaving production — that stage gets the
+ *                    marker `production.brandKeeper.stageUntold` (untellWaiting): the notice's own check drops it, and the stage
+ *                    counts as never told, so the floor reaching it later tells it. A stage counts as told only while its NEWEST
+ *                    marker is stageTold (tellStageOnce).
  *   health           the computed health (facts.ts) and when it changed; the factory's raise to At risk is dropped once 7
  *                    days passed or the computed health changed (health.ts raiseStands). `brand_production.health_changed`
  *                    when the health the customer reads (effectiveHealth) changed, `byNote` when only the raise's drop did it.
@@ -82,6 +89,9 @@ import { ordersOfShipment } from '../../shipping/shipments/orders-of'
 export const KEEP_COMMAND = 'production.brandKeeper'
 /** The audit marker of a stage told to the customer (once per order and stage). */
 export const STAGE_TOLD = 'production.brandKeeper.stageTold'
+// B-MS-008: a stage told by hand whose notice was still waiting its window when the customer stopped reading it (a Clear, a Change):
+// never told after all — the newest marker of a stage says whether it counts as told (tellStageOnce).
+export const STAGE_UNTOLD = 'production.brandKeeper.stageUntold'
 
 // ── B-MS-004: the stage set by hand ──
 /** The office's set or change of the stage by hand (./stage): its command, and the action of its audit rows. */
@@ -385,6 +395,8 @@ export interface KeptInCommand {
   readonly wrote: boolean
   /** A stage set by hand ended in this pass, and why (null: none ended). */
   readonly handDropped: HandDrop | null
+  /** B-MS-008: the stages this pass left untold (their by-hand notice still waited its window: untellWaiting). */
+  readonly untold: readonly BrandStage[]
 }
 
 /**
@@ -401,7 +413,7 @@ export async function keepInCommand(tools: CommandTools, orderId: string, cause:
   const { tx, now } = tools
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.brand-keeper', ${orderId}::uuid), 0))`
   const facts = await readOrderProductionFacts(tx, keeperPlanningContext(context.tenantId, context.requestId), orderId, now, { health: cause.health !== false, ...(risks ? { risks } : {}) })
-  if (!facts) return { facts: null, rowId: null, told: [], wrote: false, handDropped: null }
+  if (!facts) return { facts: null, rowId: null, told: [], wrote: false, handDropped: null, untold: [] }
   const row = await readRow(tx, orderId)
   const plan = facts.kept
     ? planKeep({ row, target: targetOf(facts, row), now, today: businessDate(now), ...(cause.clearHand ? { clearHand: true } : {}) })
@@ -410,13 +422,15 @@ export async function keepInCommand(tools: CommandTools, orderId: string, cause:
       : null
   // An order no longer kept tells no hold (as before: the keeper did not look at it).
   const written = await writePlan(tools, facts, row, plan, facts.kept ? cause : { what: cause.what })
-  return { facts, rowId: written.rowId, told: written.told, wrote: written.wrote, handDropped: plan?.data.handDropped ?? null }
+  return { facts, rowId: written.rowId, told: written.told, wrote: written.wrote, handDropped: plan?.data.handDropped ?? null, untold: written.untold }
 }
 
 /**
  * Tells the customer a stage it now reads — once per order and stage (the marker STAGE_TOLD on the row: a stage reached, taken back
  * and reached again is not told again) — in the order's own customer's name (PW-P07: the order's row and its production row agree).
- * The keeper's tell, and B-MS-005's set by hand (./stage). False: told before.
+ * The keeper's tell, and B-MS-005's set by hand (./stage). False: told before. B-MS-008: a stage counts as told only while its
+ * NEWEST marker is STAGE_TOLD (a STAGE_UNTOLD after it — its by-hand notice never went: untellWaiting — tells it again); `byHand`
+ * (the set by hand) marks the tell and its event, so its notice waits the undo window.
  */
 export async function tellStageOnce(
   tools: CommandTools,
@@ -424,14 +438,101 @@ export async function tellStageOnce(
   row: { readonly id: string; readonly partyId: string },
   stage: BrandStage,
   previous: BrandStage | null,
+  byHand = false, // B-MS-008
 ): Promise<boolean> {
-  const already = await tools.tx.auditLog.findFirst({ where: { recordType: 'BrandOrderProduction', recordId: row.id, action: STAGE_TOLD, after: { path: ['stage'], equals: stage } }, select: { id: true } })
-  if (already) return false
+  const newest = await newestMarkerOf(tools.tx, row.id, stage) // B-MS-008
+  if (newest?.action === STAGE_TOLD) return false
   assertOneParty({ partyId: order.partyId, orderIds: [order.id] }, new Map([[order.id, row.partyId]]))
-  tools.audit({ action: STAGE_TOLD, recordType: 'BrandOrderProduction', recordId: row.id, companyId: order.companyId, after: { salesOrderId: order.id, stage, previous } })
-  tools.emit(eventFor(brandStageReached, { subject: order.id, companyId: order.companyId, payload: { orderId: order.id, partyId: order.partyId, stage, previous } }))
+  const hand = byHand ? { byHand: true } : {} // B-MS-008: the floor's tell is as before, with no flag
+  tools.audit({ action: STAGE_TOLD, recordType: 'BrandOrderProduction', recordId: row.id, companyId: order.companyId, after: { salesOrderId: order.id, stage, previous, ...hand } })
+  tools.emit(eventFor(brandStageReached, { subject: order.id, companyId: order.companyId, payload: { orderId: order.id, partyId: order.partyId, stage, previous, ...hand } }))
   return true
 }
+
+// ── B-MS-008 (Owner D4: the 10-minute undo window; review R3a) ──
+/** One stage marker of a production row, as read (STAGE_TOLD or STAGE_UNTOLD): its stage, a tell by hand, when, by which request. */
+export interface StageMarker {
+  readonly action: string
+  readonly stage: BrandStage
+  readonly byHand: boolean
+  readonly at: Date
+  readonly requestId: string
+}
+
+const STAGE_MARKERS = [STAGE_TOLD, STAGE_UNTOLD]
+const MARKER_SELECT = { action: true, after: true, at: true, requestId: true } as const
+const markerOf = (row: { readonly action: string; readonly after: unknown; readonly at: Date; readonly requestId: string }): StageMarker | null => {
+  const after = jsonObject(row.after)
+  return after && typeof after.stage === 'string' ? { action: row.action, stage: after.stage as BrandStage, byHand: after.byHand === true, at: row.at, requestId: row.requestId } : null
+}
+
+/**
+ * The newest marker of one stage on a row (null: none). Newest by id — ids are made in order when the command's rows are written,
+ * under the order's lock — never by `at`: two commands may share a clock instant (a test clock) or start in another order than
+ * they commit.
+ */
+async function newestMarkerOf(db: Reader, rowId: string, stage: BrandStage): Promise<StageMarker | null> {
+  const row = await db.auditLog.findFirst({ where: { recordType: 'BrandOrderProduction', recordId: rowId, action: { in: STAGE_MARKERS }, after: { path: ['stage'], equals: stage } }, select: MARKER_SELECT, orderBy: { id: 'desc' } })
+  return row ? markerOf(row) : null
+}
+
+/**
+ * Pure: the stages whose by-hand notice may still wait its window and that the customer no longer reads (`shown`) — the NEWEST
+ * marker of the stage is a tell by hand of less than HAND_STAGE_NOTICE_DELAY_MS before `now` — in stage order, each with its tell's
+ * time. `markers`: the row's, newest first.
+ */
+export function waitingTellsOff(markers: readonly StageMarker[], shown: BrandStage, now: Date): { readonly stage: BrandStage; readonly at: Date }[] {
+  const seen = new Set<BrandStage>()
+  const waiting: { stage: BrandStage; at: Date }[] = []
+  for (const marker of markers) {
+    if (seen.has(marker.stage)) continue
+    seen.add(marker.stage)
+    if (marker.action !== STAGE_TOLD || !marker.byHand || marker.stage === shown) continue
+    if (now.getTime() - marker.at.getTime() >= HAND_STAGE_NOTICE_DELAY_MS) continue
+    waiting.push({ stage: marker.stage, at: marker.at })
+  }
+  return waiting.sort((a, b) => brandStageRank(a.stage) - brandStageRank(b.stage))
+}
+
+/**
+ * The customer stopped reading a stage whose by-hand notice still waits its window (`shown`: the stage it reads after this
+ * command's write — a Clear, a Change, the floor passing it, the order leaving production): that notice will not be made (its own
+ * check: the stage the customer reads when the worker tells it), so the stage gets the marker STAGE_UNTOLD and counts as never told
+ * (tellStageOnce tells it when the order reaches it again). A notice the worker already made (a job run early) stays told. `skip`:
+ * stages this command left untold already. The stages left untold.
+ */
+export async function untellWaiting(
+  tools: CommandTools,
+  order: { readonly id: string; readonly companyId: string },
+  rowId: string,
+  shown: BrandStage,
+  skip: readonly BrandStage[] = [],
+): Promise<BrandStage[]> {
+  const since = new Date(tools.now.getTime() - HAND_STAGE_NOTICE_DELAY_MS)
+  const rows = await tools.tx.auditLog.findMany({ where: { recordType: 'BrandOrderProduction', recordId: rowId, action: { in: STAGE_MARKERS }, at: { gte: since } }, select: MARKER_SELECT, orderBy: { id: 'desc' }, take: 50 })
+  const untold: BrandStage[] = []
+  for (const { stage, at } of waitingTellsOff(rows.flatMap((row) => markerOf(row) ?? []), shown, tools.now)) {
+    if (skip.includes(stage)) continue
+    const key = STAGE_NOTICE_KEYS[stage]
+    const made = key ? await tools.tx.notification.findFirst({ where: { eventType: brandStageReached.type, recordId: order.id, messageKey: key, createdAt: { gte: at } }, select: { id: true } }) : null
+    if (made) continue
+    tools.audit({ action: STAGE_UNTOLD, recordType: 'BrandOrderProduction', recordId: rowId, companyId: order.companyId, after: { salesOrderId: order.id, stage } })
+    untold.push(stage)
+  }
+  return untold
+}
+
+/**
+ * The partner notice's side (platform/portal/notifications/rules/production): a stage told by hand is made only while ITS tell — the
+ * request that wrote it — is still the newest marker of that stage. A Clear or a Change since (STAGE_UNTOLD), or a later tell (it
+ * carries a notice of its own), means this one is not made: the customer is told each stage once. No marker: the notice's own check
+ * alone.
+ */
+export async function handTellStands(db: Reader, rowId: string, stage: BrandStage, requestId: string): Promise<boolean> {
+  const newest = await newestMarkerOf(db, rowId, stage)
+  return newest === null || (newest.action === STAGE_TOLD && newest.byHand && newest.requestId === requestId)
+}
+// ── end B-MS-008 ──
 
 /** A plain JSON object of an audit row (else null). */
 const jsonObject = (value: unknown): Record<string, unknown> | null => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null)
@@ -450,10 +551,11 @@ export async function floorDayOf(db: Reader, rowId: string, floor: BrandStage, n
 }
 // ── end B-MS-004 ──
 
-async function writePlan(tools: CommandTools, facts: OrderProductionFacts, row: KeeperRow | null, plan: KeepPlan | null, cause: KeepCause): Promise<{ told: string[]; wrote: boolean; rowId: string | null }> {
+async function writePlan(tools: CommandTools, facts: OrderProductionFacts, row: KeeperRow | null, plan: KeepPlan | null, cause: KeepCause): Promise<{ told: string[]; wrote: boolean; rowId: string | null; untold: BrandStage[] }> {
   const { tx, now } = tools
   const order = facts.order
   const told: string[] = []
+  let untold: BrandStage[] = [] // B-MS-008
   let rowId = row?.id ?? null
   if (plan !== null && planChanges(plan)) {
     const { raiseDropped, handDropped, ...columns } = plan.data
@@ -504,6 +606,9 @@ async function writePlan(tools: CommandTools, facts: OrderProductionFacts, row: 
         reason: `Kept: ${cause.what}.`,
       })
     }
+    // B-MS-008: the stage the customer reads moved — a stage whose by-hand notice still waits its window, and that it no longer reads,
+    // is left untold (told when the order reaches it again).
+    if (row !== null && columns.stage !== undefined) untold = await untellWaiting(tools, order, row.id, columns.stage)
     // B-MS-004 (R6): the order's own History says the hand stage ended — one office row on the SalesOrder, never with a `status`
     // key (the portal's order history and madeWaiting read that key of every SalesOrder audit row). A person's Clear writes its
     // own row (./stage).
@@ -538,7 +643,7 @@ async function writePlan(tools: CommandTools, facts: OrderProductionFacts, row: 
     told.push('brand_production.hold_changed')
   }
   // Nothing written nor told (another keeper did it under the lock): the caller records its own one row (keepOrder).
-  return { told, wrote: told.length > 0 || (plan !== null && planChanges(plan)), rowId }
+  return { told, wrote: told.length > 0 || (plan !== null && planChanges(plan)), rowId, untold }
 }
 
 // ---- the worker's handler ----------------------------------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { STAGE_SET_REFUSAL_WORDS, floorAlreadyWords } from '@nexus/factory-domain/production-brand/stage-set'
+import { HAND_STAGE_NOTICE_DELAY_MS } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-008
 import { ApiError } from '../../../../../lib/api/errors'
 import type { ApiClient } from '../../../../../lib/api/client'
 import { LOCALES } from '../../../../../lib/i18n/locales'
@@ -290,3 +291,18 @@ describe('F-MS-103: the dialog drawn — the stages held with their words, Chang
     expect(card).toContain('<StageHandDialogs order={order} model={model} actions={actions} />')
   })
 })
+
+// ── B-MS-008 (Owner D4: the 10-minute undo window) ──
+describe('B-MS-008: the dialog\'s window is the one the API\'s notice waits — the domain\'s constant, the words unchanged', () => {
+  it('10 minutes from HAND_STAGE_NOTICE_DELAY_MS; Clear… reads "not told yet" up to the last millisecond of it', () => {
+    expect(NOTICE_WAIT_MINUTES * 60_000).toBe(HAND_STAGE_NOTICE_DELAY_MS)
+    const set = Date.parse(HAND_AT)
+    expect(clearLinesOf(HAND_READ.headline, set + HAND_STAGE_NOTICE_DELAY_MS - 1)![0]!.key).toBe('where.manual.clearUntold')
+    expect(clearLinesOf(HAND_READ.headline, set + HAND_STAGE_NOTICE_DELAY_MS)![0]!.key).toBe('where.manual.clearTold')
+    // No copy of the number in the model: it reads the domain's.
+    const source = readFileSync(new URL('./stage-by-hand.ts', import.meta.url), 'utf8')
+    expect(source).toContain("import { HAND_STAGE_NOTICE_DELAY_MS } from '@nexus/factory-domain/production-brand/stage-set'")
+    expect(source).not.toMatch(/NOTICE_WAIT_MINUTES = \d/)
+  })
+})
+// ── end B-MS-008 ──

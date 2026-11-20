@@ -4,6 +4,8 @@ import { lineStageFactsOf, type LineSizeRow } from './facts'
 import { brandKeeperHandler, HOLD_EVENTS, KEEPER_EVENTS, planChanges, planKeep, STAGE_EVENTS, type KeeperRow, type KeeperTarget } from './keeper'
 import { planLeaving } from './keeper' // B-MS-004
 import type { BrandStage } from '@nexus/factory-domain/production-brand/stages' // B-MS-004
+import { HAND_STAGE_NOTICE_DELAY_MS } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-008
+import { STAGE_TOLD, STAGE_UNTOLD, waitingTellsOff, type StageMarker } from './keeper' // B-MS-008
 
 /**
  * B-PR-17 — the keeper's plan, pure (production plan §4; review fixes R-20, R-21, R-35, R-69): what it writes and tells for
@@ -211,3 +213,40 @@ describe('B-MS-004: the stage set by hand (design A: `stage` is the shown one; e
   })
 })
 // ── end B-MS-004 ──
+
+// ── B-MS-008 (Owner D4: the 10-minute undo window; review R3a) ──
+describe('B-MS-008: which stages a move leaves untold — a by-hand tell still in its window, no longer read', () => {
+  const AT = new Date('2026-11-20T10:00:00.000Z')
+  const later = (minutes: number) => new Date(AT.getTime() + minutes * 60_000)
+  const told = (stage: BrandStage, byHand = true, at = AT): StageMarker => ({ action: STAGE_TOLD, stage, byHand, at, requestId: 'req-set' })
+  const untold = (stage: BrandStage, at = AT): StageMarker => ({ action: STAGE_UNTOLD, stage, byHand: false, at, requestId: 'req-clear' })
+
+  it('a Clear inside the window: the stage set by hand is left untold; the stage the customer reads now never is', () => {
+    expect(waitingTellsOff([told('SEWING')], 'PREPARING', later(3))).toEqual([{ stage: 'SEWING', at: AT }])
+    expect(waitingTellsOff([told('SEWING')], 'SEWING', later(3))).toEqual([])
+  })
+
+  it('after the window it was told and stays told; the floor\'s own tell (no flag) is never untold', () => {
+    expect(HAND_STAGE_NOTICE_DELAY_MS).toBe(600_000)
+    expect(waitingTellsOff([told('SEWING')], 'PREPARING', later(9.99))).toHaveLength(1)
+    expect(waitingTellsOff([told('SEWING')], 'PREPARING', later(10))).toEqual([])
+    expect(waitingTellsOff([told('CUTTING', false)], 'PREPARING', later(1))).toEqual([])
+  })
+
+  it('only the NEWEST marker of each stage counts (newest first): untold already, or told again by hand since', () => {
+    expect(waitingTellsOff([untold('SEWING', later(2)), told('SEWING')], 'PREPARING', later(3))).toEqual([])
+    expect(waitingTellsOff([told('SEWING', true, later(4)), untold('SEWING', later(2)), told('SEWING')], 'PREPARING', later(5))).toEqual([{ stage: 'SEWING', at: later(4) }])
+  })
+
+  it('a Change up inside the window leaves the stage it replaced untold, in stage order; the new one waits its own window', () => {
+    const markers = [told('QUALITY', true, later(2)), told('CUTTING'), told('PREPARING', false, later(-60))]
+    expect(waitingTellsOff(markers, 'QUALITY', later(2))).toEqual([{ stage: 'CUTTING', at: AT }])
+    // Then a Clear back to Preparing: Quality check still waits (Cutting is untold already); with no untold yet, both, in stage order.
+    expect(waitingTellsOff([untold('CUTTING', later(2)), ...markers], 'PREPARING', later(4))).toEqual([{ stage: 'QUALITY', at: later(2) }])
+    expect(waitingTellsOff(markers, 'PREPARING', later(4))).toEqual([
+      { stage: 'CUTTING', at: AT },
+      { stage: 'QUALITY', at: later(2) },
+    ])
+  })
+})
+// ── end B-MS-008 ──

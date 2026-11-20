@@ -9,7 +9,7 @@ import { command, StaleVersionError, type CommandCaller } from '../../../core/co
 import { officeContextOf } from '../work-orders/access'
 import type { Reader } from '../work-orders/store'
 import { lockOrder, officeOrder } from './health'
-import { CLEAR_BRAND_STAGE, keepInCommand, SET_BRAND_STAGE, tellStageOnce } from './keeper'
+import { CLEAR_BRAND_STAGE, keepInCommand, SET_BRAND_STAGE, tellStageOnce, untellWaiting } from './keeper' // B-MS-008: untellWaiting
 
 /**
  * B-MS-005 — the office sets an order's stage by hand (set-the-stage-by-hand plan.md D1–D9, design A; review fixes R1, R4, R6, R9,
@@ -41,6 +41,11 @@ import { CLEAR_BRAND_STAGE, keepInCommand, SET_BRAND_STAGE, tellStageOnce } from
  * move of the stage the customer reads is told once (./keeper tellStageOnce), in the order's own customer's name, with the stage
  * before the set as `previous` (Preparing for a row just made, so the first-stage rule does not swallow it: R1). No new event and no
  * new worker handler: the customer reads a plain stage and the usual notice, never "by hand", the reason, the note or who.
+ *
+ * B-MS-008 (Owner D4: the 10-minute undo window; review R3a): the set's tell carries `byHand`, so the customer's notice waits 10
+ * minutes (the partner fan-out's delayMs); the portal reads the stage at once. A Change or a Clear inside the window leaves the stage
+ * it replaces untold (./keeper untellWaiting: the notice is dropped by its own check, and the stage is told when the floor reaches
+ * it); after the window a notice sent stays sent.
  */
 
 const HAND_SELECT = {
@@ -169,9 +174,12 @@ export async function setBrandStage(caller: CommandCaller, orderId: string, body
     })
     // R6: the order's own History — from → to as `stage`, the note in `after`; never a `status` key.
     tools.audit({ recordType: 'SalesOrder', recordId: orderId, companyId: facts.order.companyId, before: { stage: row.stage }, after: { stage, floor, reasonCode, note }, reason })
-    // A forward move of what the customer reads: told once, from the stage before the set (Preparing for a row just made, R1). A
-    // Change going down is written and never told.
-    if (movedForward(row.stage, stage)) await tellStageOnce(tools, facts.order, row, stage, row.stage)
+    // B-MS-008: a Change inside the window — the stage it replaces, whose notice still waits, is left untold (the keeper's pass
+    // above already left untold what it moved off).
+    if (row.stage !== stage) await untellWaiting(tools, facts.order, row.id, stage, kept.untold)
+    // A forward move of what the customer reads: told once, from the stage before the set (Preparing for a row just made, R1),
+    // B-MS-008: by hand — its notice waits the undo window. A Change going down is written and never told.
+    if (movedForward(row.stage, stage)) await tellStageOnce(tools, facts.order, row, stage, row.stage, true)
     return viewOf(tools.tx, orderId, floor)
   })
   return result
@@ -188,6 +196,7 @@ export async function clearBrandStage(caller: CommandCaller, orderId: string, ve
     if (before === null || before.stageSet === null) throw new InvalidStateError(NO_HAND_STAGE_WORDS.en)
     // R12, R15: the keeper's own pass with the hand stage cleared, in this command — the five columns cleared and `stage` back to the
     // live floor's (no goods line: where the work reached) in one write, on the floor's own day; a step back is never told.
+    // B-MS-008: inside the window the stage cleared is left untold in that same pass (./keeper untellWaiting).
     const kept = await keepInCommand(tools, orderId, { what: CLEAR_BRAND_STAGE, health: false, clearHand: true })
     if (!kept.facts) throw new NotFoundError('Sales order not found.')
     const { facts } = kept

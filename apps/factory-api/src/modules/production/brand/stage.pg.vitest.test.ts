@@ -223,9 +223,10 @@ describe('B-MS-005: set the stage by hand (production.brand.manage)', () => {
     expect(await rowOf(orderId)).toMatchObject({ stage: 'CUTTING', stageSet: 'CUTTING', reason: 'OUTAGE', note: NOTE, setById: owner, version: 2 })
     // Made at Preparing (its first-stage marker), then Cutting from Preparing: the customer's notice rule tells Cutting alone.
     const events = await toldSince(before, orderId)
+    // B-MS-008: the set's tell says it was by hand (its notice waits the undo window); the keeper's first stage does not.
     expect(events).toEqual([
       { orderId, partyId: ids.a, stage: 'PREPARING', previous: null },
-      { orderId, partyId: ids.a, stage: 'CUTTING', previous: 'PREPARING' },
+      { orderId, partyId: ids.a, stage: 'CUTTING', previous: 'PREPARING', byHand: true },
     ])
     expect(events.map((event) => stageNoticeKey(event as { stage: BrandStage; previous: BrandStage | null }, 'CUTTING')).filter((key) => key !== null)).toEqual(['portal.production.cutting'])
     expect(await markersOf(orderId)).toEqual(['PREPARING', 'CUTTING'])
@@ -239,7 +240,7 @@ describe('B-MS-005: set the stage by hand (production.brand.manage)', () => {
     const before = await told()
     const answer = await set('office.planner', orderId, { stage: 'SEWING', reasonCode: 'FEW_PEOPLE', version: made.version })
     expect(answer).toMatchObject({ floor: 'PREPARING', stage: 'SEWING', byHand: { stage: 'SEWING', reasonCode: 'FEW_PEOPLE', note: null }, version: made.version + 1 })
-    expect(await toldSince(before, orderId)).toEqual([{ orderId, partyId: ids.b, stage: 'SEWING', previous: 'PREPARING' }])
+    expect(await toldSince(before, orderId)).toEqual([{ orderId, partyId: ids.b, stage: 'SEWING', previous: 'PREPARING', byHand: true }]) // B-MS-008
     expect(await markersOf(orderId)).toEqual(['PREPARING', 'SEWING'])
     // B's portal role: the plain Sewing of its own order; each of the five columns is denied.
     const portalB = { audience: 'partner' as const, tenantId: ids.tenantId, actorId: w.second.userId, partyId: ids.b }

@@ -20,6 +20,8 @@ import { PORTAL_SALES_ORDERS_VIEW } from '@nexus/factory-domain/sales/portal-ord
 import type { CommandTx } from '../../../../core/command'
 import type { PartnerReader } from '../../tasks/people'
 import { orderNamed } from './records'
+// B-MS-008: a stage told by hand is made only while its tell stands (the keeper's stage markers).
+import { handTellStands } from '../../../../modules/production/brand/keeper'
 // B-SA-054: the workshop told of an order change (its floor note's event).
 import { events as productionEvents } from '@nexus/factory-domain/production/events'
 import { PORTAL_JOBS_VIEW } from '@nexus/factory-domain/purchasing/portal-jobs/permissions'
@@ -32,7 +34,8 @@ import type { PartnerDraft, PartnerRule, PartnerRuleContext } from './types'
  * other brand. But we, as the production unit, should be able to see it all. And manage it all as well."). Which event makes
  * which notice is factory-domain production-brand/notices.ts (pure); this file reads the records and makes the drafts:
  *
- *   brand_production.stage_reached     Cutting / Sewing / Quality check / Ready to ship, while the order is still there
+ *   brand_production.stage_reached     Cutting / Sewing / Quality check / Ready to ship, while the order is still there; B-MS-008: a
+ *                                      stage set by hand after its 10-minute window, only while its own tell still stands
  *   brand_production.health_changed    worse, to At risk or Late, while the order still reads it
  *   brand_production.hold_changed      on hold (a hold placed) / resumed (nothing holds it any more); the cause is the event the
  *                                      keeper followed (the envelope's causationId: a hold placed or lifted); B-OO-005: ONE notice
@@ -85,7 +88,7 @@ async function ownOrder(tx: CommandTx, orderId: string, partyId: string): Promis
 async function productionRowOf(tx: CommandTx, order: OwnOrder) {
   const row = await tx.brandOrderProduction.findFirst({
     where: { key: `brand-production:${order.id}` },
-    select: { partyId: true, stage: true, health: true, healthSet: true, healthReasonCode: true, healthSetUntil: true },
+    select: { id: true /* B-MS-008 */, partyId: true, stage: true, health: true, healthSet: true, healthReasonCode: true, healthSetUntil: true },
   })
   return row && row.partyId === order.partyId ? row : null
 }
@@ -252,13 +255,16 @@ export const PRODUCTION_RULES: readonly PartnerRule[] = Object.freeze([
     name: 'portalProduction.stageReached',
     events: ['brand_production.stage_reached'],
     async drafts(context, raw) {
-      const event = payloadOf<{ orderId: string; partyId: string; stage: BrandStage; previous: BrandStage | null }>('brand_production.stage_reached')(raw)
+      const event = payloadOf<{ orderId: string; partyId: string; stage: BrandStage; previous: BrandStage | null; byHand?: boolean }>('brand_production.stage_reached')(raw)
       // Decided on the payload first (a first stage, a move back: nothing to read).
       if (stageNoticeKey(event, event.stage) === null) return []
       const order = await ownOrder(context.tx, event.orderId, event.partyId)
       if (!order) return []
       const row = await productionRowOf(context.tx, order)
       const key = stageNoticeKey(event, (row?.stage as BrandStage | undefined) ?? null)
+      // B-MS-008: a stage set by hand waited its 10-minute window; told only while its own tell is still the newest word on that stage
+      // (a Clear or a Change since left it untold; a later tell carries its own notice): each stage is told once.
+      if (key && row && event.byHand === true && !(await handTellStands(context.tx, row.id, event.stage, context.event.correlationId))) return []
       return key ? [draftOf(order, key)] : []
     },
   },
