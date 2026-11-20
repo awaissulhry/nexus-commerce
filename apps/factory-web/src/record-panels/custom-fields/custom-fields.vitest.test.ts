@@ -1,9 +1,17 @@
+import { readFileSync } from 'node:fs'
+import { createElement, type ComponentType } from 'react'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../lib/api/errors'
+import type { DesignScreen } from '../../lib/design/design-screen'
+import { LOCALES } from '../../lib/i18n/locales'
+import { render, textOf } from '../../lib/record-thread/parts/testing'
 import type { Field } from '../../areas/admin/fields/api'
 import { DEMO_ORDER_FIELDS } from '../../areas/admin/fields/demo'
 import type { RecordValue } from './api'
 import { changedCount, changesOf, draftOf, fieldsRecordOf, inputOf, readNumber, saveFaultOf, valueWords } from './model'
+import { foldedRead, portalTagOf } from './model' // F-OO-212
+import { designScreen } from './fixtures' // F-OO-212
+import { CustomFieldsPanel, type CustomFieldsModel } from './view/CustomFieldsPanel' // F-OO-212
 
 /**
  * The custom-fields section of a record (B-W2b-431, SCR-520), pure: which panels have one, a typed number in either
@@ -95,3 +103,85 @@ describe('a refused save', () => {
     expect(saveFaultOf(new Error('boom'), sent)).toEqual({ key: 'cf.fault.failed', code: null })
   })
 })
+
+// ---- F-OO-212 (order overview 11-design §8.2; review F9): the shared panel — only the filled rows, the empty ones folded, who sees a
+// field shown in the portal. It reaches EVERY record page (quote, style, work order …): one shared part, exactly the same.
+describe('F-OO-212: only filled rows, "Not filled: …" folded, the "Customer sees it" tag; edit mode lists every field', () => {
+  const caseOf = (id: string) => (designScreen as DesignScreen<CustomFieldsModel>).cases.find((entry) => entry.id === id)!.model
+  const draw = (model: CustomFieldsModel, locale: (typeof LOCALES)[number]) => render(createElement(CustomFieldsPanel as ComponentType<{ model: CustomFieldsModel }>, { model }), locale)
+  const count = (text: string, words: string) => text.split(words).length - 1
+
+  it('foldedRead: a field with a value is a row (also one the reader may not see in words); one with none folds, in the sections\' order', () => {
+    const fields = [field('box_type'), field('gift_note'), field('fair_date'), field('reference_style')]
+    const read = foldedRead(fields, [row('gift_note', 'Hi'), row('reference_style', 'abc' /* no words: a record the reader may not open */), row('fair_date', null), row('box_type', '')])
+    expect(read.sections.map((section) => [section.section, section.fields.map((entry) => entry.code)])).toEqual([
+      ['packing', ['gift_note']],
+      ['custom', ['reference_style']],
+    ])
+    expect(read.empty.map((entry) => entry.code)).toEqual(['box_type', 'fair_date'])
+    // Nothing filled: no section at all, every field folded.
+    expect(foldedRead(fields, [])).toEqual({ sections: [], empty: fields })
+  })
+
+  it('portalTagOf: the customer on a quote or an order, the supplier on a purchase order, the partner on a party; none elsewhere', () => {
+    expect(portalTagOf('ORDER')).toBe('cf.portal.customer')
+    expect(portalTagOf('QUOTE')).toBe('cf.portal.customer')
+    expect(portalTagOf('PURCHASE_ORDER')).toBe('cf.portal.supplier')
+    expect(portalTagOf('CUSTOMER')).toBe('cf.portal.party')
+    for (const none of ['STYLE', 'MATERIAL', 'LOT', 'WORK_ORDER'] as const) expect(portalTagOf(none), none).toBeNull()
+    expect(portalTagOf(null)).toBeNull()
+  })
+
+  it('draws EN + IT: the empty fields in the folded line, the required one says so; the filled rows only', () => {
+    const en = textOf(draw(caseOf('f-oo-212-folded'), 'en'))
+    expect(en).toContain('Not filled: Box type (required), Fair date')
+    expect(count(en, 'Fair date')).toBe(1)
+    expect(en).toContain('Gift note')
+    const it_ = textOf(draw(caseOf('f-oo-212-folded'), 'it'))
+    expect(it_).toContain('Non compilati: Tipo di scatola (obbligatorio), Data della fiera')
+    expect(count(it_, 'Data della fiera')).toBe(1)
+    // One empty field: the singular form.
+    const one = { ...caseOf('values'), values: caseOf('values').values.filter((value) => value.code !== 'fair_date') }
+    expect(textOf(draw(one, 'it'))).toContain('Non compilato: Data della fiera')
+    expect(textOf(draw(one, 'en'))).toContain('Not filled: Fair date')
+    // Every field filled: no folded line.
+    for (const locale of LOCALES) expect(textOf(draw(caseOf('values'), locale))).not.toMatch(/Not filled:|Non compilat[oi]:/)
+  })
+
+  it('none filled yet: one line naming every field, the required one first as it comes', () => {
+    expect(textOf(draw(caseOf('empty-values'), 'en'))).toContain('None filled yet: Box type (required), Gift note, Carton weight')
+    expect(textOf(draw(caseOf('empty-values'), 'it'))).toContain('Nessuno ancora compilato: Tipo di scatola (obbligatorio), Biglietto')
+  })
+
+  it('"Customer sees it" on the label of a field shown in the portal (an order), in edit mode too; none where the portal reads nothing', () => {
+    const values = textOf(draw(caseOf('values'), 'en'))
+    // Box type and Agreed discount are shown in the portal; the other fields are not.
+    expect(count(values, 'Customer sees it')).toBe(2)
+    expect(count(textOf(draw(caseOf('values'), 'it')), 'Lo vede il cliente')).toBe(2)
+    expect(textOf(draw(caseOf('editing'), 'en'))).toContain('Customer sees it')
+    for (const locale of LOCALES) expect(textOf(draw(caseOf('f-oo-212-no-portal'), locale))).not.toMatch(/Customer sees it|Lo vede il cliente/)
+    // A purchase order's fields are read by the supplier, a party's by the partner itself.
+    expect(textOf(draw({ ...caseOf('values'), portalTag: 'cf.portal.supplier' }, 'en'))).toContain('Supplier sees it')
+    expect(textOf(draw({ ...caseOf('values'), portalTag: 'cf.portal.party' }, 'it'))).toContain('Lo vedono nel loro portale')
+  })
+
+  it('edit mode still lists every field (an empty one too) and folds nothing; the admin hint stays as today, no "Manage fields ›"', () => {
+    const editing = { ...caseOf('f-oo-212-folded'), editing: true }
+    for (const locale of LOCALES) {
+      const text = textOf(draw(editing, locale))
+      expect(text).toContain(locale === 'en' ? 'Fair date' : 'Data della fiera')
+      expect(text).toContain(locale === 'en' ? 'Box type' : 'Tipo di scatola')
+      expect(text).not.toMatch(/Not filled:|Non compilat[oi]:|None filled yet|Nessuno ancora compilato/)
+    }
+    const read = textOf(draw(caseOf('f-oo-212-folded'), 'en'))
+    expect(read).toContain('Fields added without code in Admin › Fields & lists.')
+    expect(read).not.toContain('Manage fields')
+    // No link to Admin › Fields & lists in the panel (dropped: review F9); the hint's words stay for every reader.
+    expect(readFileSync(new URL('./view/CustomFieldsPanel.tsx', import.meta.url), 'utf8')).not.toMatch(/href=\{[^}]*admin\/fields/)
+  })
+
+  it('the panel learns who reads the portal from its record type (one line in the container hook)', () => {
+    expect(readFileSync(new URL('./use-custom-fields.ts', import.meta.url), 'utf8')).toContain('portalTag: portalTagOf(recordType),')
+  })
+})
+// ---- end F-OO-212

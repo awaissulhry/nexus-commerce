@@ -15,6 +15,7 @@ import type { Order } from '../../api'
 import { badPrice, changeOf, draftGrid, draftGroups, namesOf, piecesOf, type DraftLine } from '../../daily-model'
 import { cellIssuesOf, type CellFloors, type CellIssueKind, type LineFigures } from '../../daily-model' // F-OP-107
 import type { ComposerState, EditorActions } from '../record-model'
+import { amendStyleAnchorOf } from '../record-model' // F-OO-125
 
 /** What the lines editor draws: an amendment of an order's lines, or the lines of a typed New order. */
 export interface LinesEditorModel {
@@ -296,10 +297,12 @@ function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines:
       ],
     }
   })
+  // F-OO-125: in edit mode a style group is an anchor (Overview's line "Change quantity or sizes…" focuses it; named by its heading).
+  const anchor = model.mode === 'amend' ? amendStyleAnchorOf(styleId) : null
   return (
-    <Card padded className="fw-so-block">
+    <Card padded className="fw-so-block" {...(anchor ? { id: anchor, tabIndex: -1, role: 'group', 'aria-labelledby': `${anchor}-title` } : {})}>
       <div className="fw-so-card-head">
-        <h2 className="fw-so-h3">
+        <h2 className="fw-so-h3" id={anchor ? `${anchor}-title` : undefined}>
           {first.style} · {name}
         </h2>
         {style === undefined && (

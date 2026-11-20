@@ -6,9 +6,13 @@ import { createWorkOrder, findOrders, getOpenLines, type OpenLines, type OrderOp
 import { readProblem, writeProblem } from '../../_shared/model'
 import { linesOfStyle, NO_NEW_ORDER, openGridOf, pickedAfter, stylesOf, type NewWorkOrderActions, type NewWorkOrderModel } from '../list-model'
 
-/** The style a work order makes, its lines picked (the open size-grid lines; a made-to-measure unit is ticked alone) and their open sizes. */
-export function pickOfStyle(lines: OpenLines | null, styleId: string | null): Pick<NewWorkOrderModel, 'styleId' | 'picked' | 'grid'> {
-  const own = linesOfStyle(lines, styleId).filter((line) => !line.madeToMeasure && line.sizes.some((size) => size.open > 0))
+/**
+ * The style a work order makes, its lines picked (the open size-grid lines; a made-to-measure unit is ticked alone) and their open sizes.
+ * F-OO-123: `lineId` — one line asked (the order page's Overview › Progress by line ⋯ "Make work orders for this line…"): only that line
+ * is ticked, when it is of this style and still open (a made-to-measure unit too: it is ticked alone); without it, as before.
+ */
+export function pickOfStyle(lines: OpenLines | null, styleId: string | null, lineId?: string | null): Pick<NewWorkOrderModel, 'styleId' | 'picked' | 'grid'> {
+  const own = linesOfStyle(lines, styleId).filter((line) => (lineId ? line.id === lineId : !line.madeToMeasure) && line.sizes.some((size) => size.open > 0))
   return { styleId, picked: own.map((line) => line.id), grid: Object.fromEntries(own.map((line) => [line.id, openGridOf(line)])) }
 }
 
@@ -53,7 +57,7 @@ export function useNewWorkOrder(
     /** The draft was made: the dialog has closed; what was asked is given with it (the order page reads the next style from it). */
     readonly onMade: (made: WorkOrder, asked: NewWorkOrderModel) => void
   },
-): { model: NewWorkOrderModel | null; open: (start?: { order: OrderOption; styleId?: string | null }) => void; close: () => void; actions: NewWorkOrderActions } {
+): { model: NewWorkOrderModel | null; open: (start?: { order: OrderOption; styleId?: string | null; /* F-OO-123 */ lineId?: string | null }) => void; close: () => void; actions: NewWorkOrderActions } {
   const [model, setModel] = useState<NewWorkOrderModel | null>(null)
   const modelRef = useRef<NewWorkOrderModel | null>(null)
   modelRef.current = model
@@ -86,14 +90,19 @@ export function useNewWorkOrder(
     // Only when the dialog opens.
   }, [model !== null]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** The order chosen: its open lines read, the style step taken (the style asked, else the first with open pieces). */
+  /**
+   * The order chosen: its open lines read, the style step taken (the style asked, else the first with open pieces). F-OO-123: a line
+   * asked with its style — that style still open: only that line ticked (else the style step as before).
+   */
   const chooseOrder = useCallback(
-    async (order: OrderOption | null, asked: string | null = null) => {
+    async (order: OrderOption | null, asked: string | null = null, lineId: string | null = null) => {
       setModel((current) => (current ? { ...current, chosen: order, lines: null, linesProblem: null, styleId: null, picked: [], grid: {}, problem: null } : current))
       if (!order) return
       try {
         const lines = await getOpenLines(api, order.id)
-        setModel((current) => (!current || current.chosen?.id !== order.id ? current : { ...current, lines, ...styleStepOf(lines, asked) }))
+        const step = styleStepOf(lines, asked)
+        const picked = lineId && step.styleId === asked ? pickOfStyle(lines, asked, lineId) : step // F-OO-123
+        setModel((current) => (!current || current.chosen?.id !== order.id ? current : { ...current, lines, ...picked }))
       } catch (error) {
         setModel((current) => (current && current.chosen?.id === order.id ? { ...current, linesProblem: readProblem(error) } : current))
       }
@@ -122,11 +131,11 @@ export function useNewWorkOrder(
   }, [api])
 
   const open = useCallback(
-    (start?: { order: OrderOption; styleId?: string | null }) => {
+    (start?: { order: OrderOption; styleId?: string | null; /* F-OO-123 */ lineId?: string | null }) => {
       if (!start) return setModel({ ...NO_NEW_ORDER })
-      // The order page: the order fixed (no search), then the style step.
+      // The order page: the order fixed (no search), then the style step (F-OO-123: or that one line of it).
       setModel({ ...NO_NEW_ORDER, fixed: true, query: start.order.number, orders: [start.order] })
-      void chooseOrder(start.order, start.styleId ?? null)
+      void chooseOrder(start.order, start.styleId ?? null, start.lineId ?? null)
     },
     [chooseOrder],
   )

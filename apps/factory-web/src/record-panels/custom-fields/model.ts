@@ -7,6 +7,7 @@ import { formatDate, formatNumber } from '../../lib/i18n/format'
 import type { Locale } from '../../lib/i18n/locales'
 import type { Field, RecordKey } from '../../areas/admin/fields/api'
 import { labelIn } from '../../areas/admin/fields/model'
+import { previewSections } from '../../areas/admin/fields/model' // F-OO-212
 import type { RecordValue, ValueEntry } from './api'
 
 /**
@@ -219,6 +220,55 @@ export function valueWords(field: Field, row: RecordValue | undefined, locale: L
       return { text: typeof stored === 'string' ? stored : null }
   }
 }
+
+// ---- F-OO-212 (order overview 11-design §8.2; review F9): the section as read — only the filled rows, the empty ones folded ----------
+
+/** The section as read: each section with only its filled fields (a section with none is left out), and the fields with no value. */
+export interface FoldedRead {
+  readonly sections: readonly { readonly section: string; readonly fields: readonly Field[] }[]
+  /** No value stored, in the sections' order: folded into one line ("Not filled: Fair date (required)"). */
+  readonly empty: readonly Field[]
+}
+
+/**
+ * A field with a value stored is a row — also one the reader may not see in words ("Not visible to you", "A record you may not open");
+ * a field with none folds into the one "Not filled" line. Edit mode still lists every field (the panel's own).
+ */
+export function foldedRead(fields: readonly Field[], values: readonly RecordValue[]): FoldedRead {
+  const byCode = new Map(values.map((value) => [value.code, value]))
+  const filled = (field: Field): boolean => {
+    const row = byCode.get(field.code)
+    const stored = row ? storedOf(row.value) : null
+    // An empty text or list (an older import) says nothing either: it folds too.
+    return stored !== null && stored !== '' && !(Array.isArray(stored) && stored.length === 0)
+  }
+  const all = previewSections(fields)
+  return {
+    sections: all.map((section) => ({ section: section.section, fields: section.fields.filter(filled) })).filter((section) => section.fields.length > 0),
+    empty: all.flatMap((section) => section.fields.filter((field) => !filled(field))),
+  }
+}
+
+/**
+ * Who reads a field shown in the portal on this record type — the tag on its label (a `cf.portal.*` key): the customer on a quote or an
+ * order, the supplier on a purchase order, the partner itself on a party (the customer's and the supplier's page read one set of
+ * fields); none where the portal reads nothing (style, material, lot, work order: the admin holds "Shown in the portal" there).
+ */
+export function portalTagOf(recordType: RecordKey | null): string | null {
+  switch (recordType) {
+    case 'QUOTE':
+    case 'ORDER':
+      return 'cf.portal.customer'
+    case 'PURCHASE_ORDER':
+      return 'cf.portal.supplier'
+    case 'CUSTOMER':
+    case 'SUPPLIER':
+      return 'cf.portal.party'
+    default:
+      return null
+  }
+}
+// ---- end F-OO-212
 
 /** A refused or failed save in our words, and the field it points at (by the order of the entries sent). */
 export function saveFaultOf(error: unknown, sent: readonly ValueEntry[]): { key: string; code: string | null } {
