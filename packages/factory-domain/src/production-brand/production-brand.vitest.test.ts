@@ -47,6 +47,9 @@ import { changedAtWords, changedByUsAtWords, NOT_KEPT_YET_WORDS, NOTHING_TO_UNDO
 // B-OO-011
 import { APPROVAL_TASK_KINDS } from '../approvals/rules'
 import { BLOCKER_PLACE, BLOCKER_PLACES, BLOCKER_SUBS, BRAND_REQUEST_PLACE, ORDER_YES_KINDS, placeOf, YES_PLACE, type Blocker } from './waiting'
+// B-OO-007
+import { SALES_ORDER_STATUSES } from '../sales/orders/orders'
+import { isAfterProduction, OFFICE_STRIP_STATES, officeStripStateOf } from './stages'
 
 const line = (facts: Partial<LineStageFacts> = {}): LineStageFacts => ({ reached: null, allReleased: false, done: false, sewingCounted: true, ...facts })
 
@@ -741,3 +744,31 @@ describe('B-OO-011 one place per waiting row: HOLD, DATE or REQUEST, keyed on ki
   })
 })
 // ── end B-OO-011 ──
+
+// ── B-OO-007 (order overview plan §6; review F11): the office's strip state, from the order's status alone ──
+describe('B-OO-007 the office strip state: waiting, current, all done, stopped', () => {
+  it('each status reads one state', () => {
+    const stateOf = Object.fromEntries(SALES_ORDER_STATUSES.map((status) => [status, officeStripStateOf(status)]))
+    expect(stateOf).toEqual({
+      PENDING_APPROVAL: 'WAITING',
+      CONFIRMED: 'CURRENT',
+      IN_PRODUCTION: 'CURRENT',
+      READY: 'CURRENT',
+      PARTLY_SHIPPED: 'CURRENT',
+      SHIPPED: 'ALL_DONE',
+      DELIVERED: 'ALL_DONE',
+      CLOSED: 'ALL_DONE',
+      CANCELLED: 'STOPPED',
+    })
+    for (const status of SALES_ORDER_STATUSES) expect(OFFICE_STRIP_STATES).toContain(officeStripStateOf(status))
+  })
+
+  it('production is over only when all is done or the order stopped (a partly shipped order is still current)', () => {
+    expect(OFFICE_STRIP_STATES.filter(isAfterProduction)).toEqual(['ALL_DONE', 'STOPPED'])
+    expect(isAfterProduction(officeStripStateOf('PARTLY_SHIPPED'))).toBe(false)
+    expect(isAfterProduction(officeStripStateOf('PENDING_APPROVAL'))).toBe(false)
+    expect(isAfterProduction(officeStripStateOf('SHIPPED'))).toBe(true)
+    expect(isAfterProduction(officeStripStateOf('CANCELLED'))).toBe(true)
+  })
+})
+// ── end B-OO-007 ──

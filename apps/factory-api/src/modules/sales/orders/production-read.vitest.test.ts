@@ -5,6 +5,9 @@ import { alsoMakesOf, BLOCKER_WORDS, daysBetween, inWorkPiecesOf, mtmGroupsOf, o
 // B-OP-021: a work order's rights from the order page, and a blocker's door behind the wall.
 import { blockerRefFor, SHARED_WORK_ORDER_WORDS, workOrderRightsOf } from './production-read'
 import { BLOCKER_KINDS } from '@nexus/factory-domain/production-brand/waiting'
+// B-OO-007: what still waits after production; a first promise is not a move.
+import { officeBlockersOf, promiseMovesOf } from './production-read'
+import type { Blocker } from '@nexus/factory-domain/production-brand/waiting'
 
 /**
  * B-SA-031 / B-SA-032 — the office's read of one order's production, its pure parts (the PG suite production-read.pg.vitest.test.ts
@@ -126,3 +129,43 @@ describe('B-OP-021: what the order page may do to a work order, and where a bloc
   })
 })
 // ── end B-OP-021 ──
+
+// ── B-OO-007 (order overview plan §6; review F11; N10b) ──
+describe('B-OO-007: after production only the requests wait; a first promise is not a move', () => {
+  const at = new Date('2026-11-10T08:00:00.000Z')
+  const every: Blocker[] = [
+    { kind: 'NO_MOVE', since: at, ref: { type: 'WorkOrder', id: 'wo-1' } },
+    { kind: 'BRAND_PAUSE', since: at, ref: { type: 'WorkOrder', id: 'wo-2' } },
+    { kind: 'DEPOSIT', since: at, ref: null },
+    { kind: 'GATE', since: at, ref: { type: 'OrderGate', id: 'g-1' } },
+    { kind: 'MATERIAL_SHORT', since: null, ref: null },
+    { kind: 'BRAND_REQUEST', since: at, ref: { type: 'ApprovalRequest', id: 'a-1' }, sub: 'REPROMISE' },
+    { kind: 'BRAND_REQUEST', since: at, ref: { type: 'ProductionIssue', id: 'p-1' }, sub: 'PROBLEM' },
+    { kind: 'BRAND_REQUEST', since: at, ref: { type: 'OrderChangeRequest', id: 'r-1' }, sub: 'REQUEST' },
+    { kind: 'APPROVAL', since: at, ref: { type: 'ApprovalRequest', id: 'a-2' } },
+  ]
+
+  it('a current order (or one that waits for a yes) keeps every blocker', () => {
+    for (const status of ['PENDING_APPROVAL', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'] as const) expect(officeBlockersOf(status, every)).toEqual(every)
+  })
+
+  it('shipped, delivered, closed or cancelled: the holds and the dates go (a refused new date too), the requests stay', () => {
+    for (const status of ['SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'] as const) {
+      const kept = officeBlockersOf(status, every)
+      expect(kept.map((blocker) => blocker.ref?.id)).toEqual(['p-1', 'r-1', 'a-2'])
+    }
+    expect(officeBlockersOf('SHIPPED', [])).toEqual([])
+  })
+
+  it('counts the promise moves without the row that set a first promise', () => {
+    // A first promise (the order had none), then two moves.
+    expect(promiseMovesOf([{ promiseDate: null, originalPromiseDate: null }, { promiseDate: '2026-12-01', originalPromiseDate: '2026-12-01' }, { promiseDate: '2026-12-08', originalPromiseDate: '2026-12-01' }])).toBe(2)
+    // A line change on an order with no promise yet is a first promise too; one of an order promised already is a move.
+    expect(promiseMovesOf([{ lines: { 'l-1': null }, originalPromiseDate: null }])).toBe(0)
+    expect(promiseMovesOf([{ lines: { 'l-1': '2026-12-01' }, originalPromiseDate: '2026-11-28' }])).toBe(1)
+    // A row that does not say (no originalPromiseDate, or no before at all) counts, as before.
+    expect(promiseMovesOf([{ promiseDate: '2026-12-01' }, null, 'text'])).toBe(3)
+    expect(promiseMovesOf([])).toBe(0)
+  })
+})
+// ── end B-OO-007 ──
