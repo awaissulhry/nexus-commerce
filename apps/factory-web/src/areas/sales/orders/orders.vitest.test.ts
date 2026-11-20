@@ -2168,3 +2168,18 @@ describe('F-OO-206: the tab badges count what the Linked records card counts (or
   })
 })
 // ---- end F-OO-206
+
+// ---- F-OP-317 (order page walk #22): a line picture's small preview from the order read opens through this app's /api when the
+// local store answers it as a path on the API (the walk's 404 at the web origin); a store's absolute address is used as it is ----
+describe('F-OP-317: the order read\'s line picture address goes through /api like every other picture read', () => {
+  it('a local-store path gets the /api prefix once; an absolute address and no preview stay as they are', async () => {
+    const { orderLineSchema } = await import('./api')
+    const picture = orderLineSchema.shape.picture
+    const at = '2026-11-20T10:00:00.000Z'
+    expect(picture.parse({ fileId: 'f1', contentType: 'image/jpeg', small: { url: '/local-files?token=abc.def', expiresAt: at } })?.small?.url).toBe('/api/local-files?token=abc.def')
+    expect(picture.parse({ fileId: 'f1', contentType: 'image/jpeg', small: { url: 'https://store.example.com/k?sig=1', expiresAt: at } })?.small?.url).toBe('https://store.example.com/k?sig=1')
+    expect(picture.parse({ fileId: 'f1', contentType: 'image/jpeg', small: null })?.small).toBeNull()
+    expect(picture.parse(undefined)).toBeUndefined()
+  })
+})
+// ---- end F-OP-317

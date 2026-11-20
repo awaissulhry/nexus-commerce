@@ -483,3 +483,18 @@ describe('B-SA-046d: the design change names each line with its picture', () => 
   })
 })
 // ── end B-SA-046d ──
+
+// ---- F-OP-317 (order page walk #22): the Ask window's line picture (the portal's own walled read) opens a local-store path through
+// this app's /api, as the office's reads do; a store's absolute address is used as it is ----
+describe('F-OP-317: the portal line picture address goes through /api', () => {
+  it('a local-store path gets the /api prefix; an absolute address and no picture stay as they are', async () => {
+    const { rulesSchema } = await import('./api')
+    const picture = rulesSchema.shape.lines.element.shape.picture
+    const at = '2026-11-20T10:00:00.000Z'
+    expect(picture.parse({ small: { url: '/local-files?token=abc.def', expiresAt: at } })?.small?.url).toBe('/api/local-files?token=abc.def')
+    expect(picture.parse({ small: { url: 'https://store.example.com/k?sig=1', expiresAt: at } })?.small?.url).toBe('https://store.example.com/k?sig=1')
+    expect(picture.parse({ small: null })?.small).toBeNull()
+    expect(picture.parse(null)).toBeNull()
+  })
+})
+// ---- end F-OP-317
