@@ -1605,7 +1605,53 @@
       "waiting": "La produzione parte quando l'ordine è confermato",
       "reached": "Il lavoro era arrivato a {stage} quando è stato annullato"
     },
-    "stagesDone": "Apri gli ordini di lavoro in Produzione · tutte le fasi completate"
+    "stagesDone": "Apri gli ordini di lavoro in Produzione · tutte le fasi completate",
+    "strips": "Cosa ferma l'ordine",
+    "strip": {
+      "yes": {
+        "waits": "Aspetta il sì di {who}",
+        "asked": "Aspetta un sì già chiesto",
+        "nobody": "Aspetta un sì: nessuno l'ha ancora chiesto"
+      },
+      "credit": {
+        "waits": "Blocco fido — aspetta il sì di {who}",
+        "nobody": "Blocco fido — nessuno ha ancora chiesto un sì"
+      },
+      "review_one": "Aspetta il controllo della fabbrica di {count} capo su misura",
+      "review_other": "Aspetta il controllo della fabbrica di {count} capi su misura",
+      "reviewUnits": "Aspetta il controllo della fabbrica dei suoi capi su misura",
+      "reviewDoor": {
+        "open": "Apri il controllo ›",
+        "noRight": "Aprire il controllo richiede il diritto di vedere le misure",
+        "several": "Ogni capo apre il suo controllo nell'avviso sopra le schede"
+      },
+      "deposit": {
+        "waiting": "Acconto non ancora pagato · scade il {date}",
+        "overdue": "Acconto scaduto dal {date}",
+        "open": "Acconto non ancora pagato"
+      },
+      "quality": "Blocco qualità — {reasons}",
+      "qualityPlain": "Blocco qualità",
+      "production": "Fermo di produzione — {reasons}",
+      "productionPlain": "Fermo di produzione",
+      "pause": "In pausa su richiesta del cliente",
+      "on_one": "su {count} ordine di lavoro: {numbers}",
+      "on_other": "su {count} ordini di lavoro: {numbers}",
+      "andMore": "{numbers} e altri {count}",
+      "notReached_one": "e {count} ordine di lavoro fuori da ciò che puoi aprire",
+      "notReached_other": "e {count} ordini di lavoro fuori da ciò che puoi aprire",
+      "onlyNotReached_one": "su {count} ordine di lavoro fuori da ciò che puoi aprire",
+      "onlyNotReached_other": "su {count} ordini di lavoro fuori da ciò che puoi aprire",
+      "shared_one": "{numbers} fa anche il lavoro di un altro cliente: si sblocca dalla sua pagina",
+      "shared_other": "{numbers} fanno anche il lavoro di un altro cliente: ognuno si sblocca dalla sua pagina",
+      "qualityWho": "Lo sblocca la qualità: un ispettore qualità o il titolare, con il codice",
+      "release": "Sblocca in Qualità ›",
+      "releaseOf": "Sblocca in Qualità: i blocchi di {number}",
+      "openWo": "Apri {number} ›",
+      "failed": "Impossibile leggere i blocchi",
+      "showMore": "Mostra altri {count}",
+      "showFewer": "Mostra meno"
+    }
   },
   "overview": {
     "where": "A che punto è",

@@ -18,6 +18,16 @@ import { FAILED_STATE, LOADING_STATE, ready, WORK } from './fixtures'
 import { orderWaitingOf, type ProductionState } from './model'
 import { STRIP_KINDS, STRIPS_SHOWN, whereStripsOf, type WhereStrip } from './where'
 // ---- end F-OO-104
+// ---- F-OO-105: the strips' doors and their draws
+import { readFileSync } from 'node:fs'
+import type { ComponentType } from 'react'
+import { renderView, textOf } from '../../../../../lib/record-thread/parts/testing'
+import { designScreen } from '../fixtures'
+import { abilitiesOf } from '../../model'
+import { rolePermissions } from '../../../../../shell/design-data'
+import { actsCanOf } from '../../../../../lib/production/work-order-acts/model'
+import { stripDoorsOf, workOrderHref, type StripDoor, type StripDoorsInput } from './where'
+// ---- end F-OO-105
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Where it is now"'s rules, moved with where.ts out of overview.vitest.test.ts
@@ -278,3 +288,210 @@ describe('F-OO-104: the strips — the yes, the credit, the review, the deposit,
   })
 })
 // ---- end F-OO-104
+
+// ---- F-OO-105 (order overview §1.3; review F1, F8, F13): each strip's real doors — held with words, ≤ 3 buttons, Read-only words only ----
+describe('F-OO-105: the strips\' doors — the band\'s yes, the payment, the row\'s Lift, Quality, the review; held with words', () => {
+  const words = (en: string) => ({ en, it: `${en} (it)` })
+  const task = (over: Partial<OpenApproval> = {}): OpenApproval => ({ taskId: 't-1', kind: 'SALES_ORDER', kindLabel: { en: 'Sales order', it: 'Ordine di vendita' }, requestedAt: '2026-11-18T09:30:00Z', requester: { name: 'Luca Prova', me: false }, approver: { kind: 'ROLE', name: 'Finance', me: false }, version: 1, requireStepUp: false, approve: { allowed: true, why: null }, reject: { allowed: true, why: null }, withdraw: { allowed: false, why: null }, ...over })
+  const OTHER = 'This request waits for another approver: it is not addressed to you or to a role you hold over its company.'
+  const SELF = 'You asked for this: nobody approves their own request, the Owner included.'
+  const askedByOther: Approval = { ...APPROVAL_PENDING, requests: APPROVAL_PENDING.requests.map((request) => ({ ...request, mine: false })), may: { ask: false, withdraw: false } }
+  const owner = rolePermissions('owner')
+  const input = (over: Partial<StripDoorsInput> = {}): StripDoorsInput => ({ prefix: '/w/DEMO', order: order('IN_PRODUCTION'), can: abilitiesOf(owner), readOnly: false, busy: false, approval: null, depthCan: { manage: true }, work: [], acts: actsCanOf(owner), ...over })
+  const yes = (strip: Partial<Extract<WhereStrip, { kind: 'yes' | 'credit' }>> = {}): WhereStrip => ({ key: 'yes', kind: 'yes', task: null, asked: false, who: null, since: null, ...strip })
+  const hold = (kind: 'quality' | 'production' | 'pause' | 'other', reached: { id: string; number: string; shared?: boolean }[], notReached = 0): WhereStrip => ({ key: kind, kind, blocker: 'NO_MOVE', reasons: [words('x')], workOrders: { reached: reached.map((entry) => ({ shared: false, ...entry })), notReached }, since: null })
+  const kindsOf = (doors: readonly StripDoor[]) => doors.map((door) => (door.kind === 'yes' ? `yes:${door.door.kind}` : door.kind))
+  const heldOf = (doors: readonly StripDoor[]) => doors.map((door) => ('held' in door ? (door.held?.key ?? null) : door.kind === 'yes' && door.door.kind === 'decide' ? (door.door.confirmHeld?.key ?? null) : null))
+  /** The visible buttons a strip draws: the yes as YesDoorView draws it (decide 2, the asker's held yes 1), every other door 1. */
+  const buttons = (doors: readonly StripDoor[]) => doors.reduce((sum, door) => sum + (door.kind === 'yes' ? (door.door.kind === 'decide' ? 2 : door.door.kind === 'selfAsked' ? 1 : 0) : 1), 0)
+  const all: StripDoor[][] = []
+  const doorsOf = (strip: WhereStrip, over: Partial<StripDoorsInput> = {}) => {
+    const doors = stripDoorsOf(strip, input(over))
+    all.push(doors)
+    return doors
+  }
+
+  it('the order\'s yes, as the band\'s banner: the approver decides here; the asker sees it held and takes it back; anyone else reads who decides', () => {
+    // The approver who did not ask: Confirm the order + Refuse… (YesDoorView), nothing else.
+    expect(kindsOf(doorsOf(yes({ task: task(), asked: true, who: 'Finance' }), { approval: askedByOther }))).toEqual(['yes:decide'])
+    // The asker: the yes held ("another person decides") and Take the request back (theirs).
+    const asker = doorsOf(yes({ task: task({ requester: { name: 'Giulia Esempio', me: true }, approve: { allowed: false, why: SELF }, reject: { allowed: false, why: SELF } }), asked: true, who: 'Finance' }), { approval: APPROVAL_PENDING })
+    expect([kindsOf(asker), heldOf(asker)]).toEqual([['yes:selfAsked', 'withdraw'], [null, null]])
+    // Anyone else: who decides is the strip's own words; Take the request back held with why (not theirs; no right to change orders).
+    const other = task({ approve: { allowed: false, why: OTHER }, reject: { allowed: false, why: OTHER } })
+    expect([kindsOf(doorsOf(yes({ task: other, asked: true, who: 'Finance' }), { approval: askedByOther })), heldOf(doorsOf(yes({ task: other, asked: true, who: 'Finance' }), { approval: askedByOther }))]).toEqual([['withdraw'], ['held.withdrawNotYours']])
+    expect(heldOf(doorsOf(yes({ task: other, asked: true }), { approval: askedByOther, depthCan: { manage: false } }))).toEqual(['held.noManage'])
+    // Nobody asked yet: Ask for a yes (held with the depth's words for who may not); the yes's read not in: no door to guess.
+    expect([kindsOf(doorsOf(yes(), { approval: APPROVAL_NOBODY })), heldOf(doorsOf(yes(), { approval: APPROVAL_NOBODY }))]).toEqual([['ask'], [null]])
+    expect(heldOf(doorsOf(yes(), { approval: APPROVAL_NOBODY, depthCan: { manage: false } }))).toEqual(['held.noManage'])
+    expect(doorsOf(yes(), { approval: null })).toEqual([])
+    // A write running: the approver's yes held with its words.
+    expect(heldOf(doorsOf(yes({ task: task(), asked: true }), { busy: true, approval: askedByOther }))).toEqual(['held.busy'])
+  })
+
+  it('the credit hold: its override\'s yes the same way (Approve: Credit override + Refuse…); nobody asked: no door here yet (F-OO-106)', () => {
+    const credit = task({ kind: 'CREDIT_OVERRIDE', kindLabel: { en: 'Credit override', it: 'Sblocco fido' } })
+    expect(kindsOf(doorsOf(yes({ key: 'credit', kind: 'credit', task: credit, asked: true, who: 'Finance' })))).toEqual(['yes:decide'])
+    expect(doorsOf(yes({ key: 'credit', kind: 'credit', task: { ...credit, approve: { allowed: false, why: OTHER }, reject: { allowed: false, why: OTHER } }, asked: true, who: 'Finance' }))).toEqual([])
+    expect(doorsOf(yes({ key: 'credit', kind: 'credit' }))).toEqual([])
+  })
+
+  it('the deposit: Record the payment (held without the finance right, beside Money ›); none asked: Money ›', () => {
+    const waiting: WhereStrip = { key: 'deposit', kind: 'deposit', state: 'WAITING', requestId: 'd-1', due: '2026-11-04', since: null }
+    expect(doorsOf(waiting)).toEqual([{ kind: 'payment', requestId: 'd-1', held: null }])
+    expect(doorsOf(waiting, { can: abilitiesOf(rolePermissions('sales')) })).toEqual([{ kind: 'payment', requestId: 'd-1', held: { key: 'held.noPayments' } }, { kind: 'tab', tab: 'money', anchor: null }])
+    expect(doorsOf(waiting, { busy: true })).toEqual([{ kind: 'payment', requestId: 'd-1', held: { key: 'held.busy' } }])
+    expect(doorsOf({ ...waiting, state: 'MISSING', requestId: null, due: null })).toEqual([{ kind: 'tab', tab: 'money', anchor: null }])
+  })
+
+  it('quality: Release on Quality › — Quality\'s holds of the work order (its work-order filter); none reached: words only', () => {
+    expect(doorsOf(hold('quality', [{ id: '0190f0e2-9191-7000-8000-000000000022', number: 'WO-00022' }]))).toEqual([{ kind: 'quality', href: '/w/DEMO/quality/holds?subjectType=WorkOrder&subjectId=0190f0e2-9191-7000-8000-000000000022', number: 'WO-00022' }])
+    expect(doorsOf(hold('quality', [], 2))).toEqual([])
+  })
+
+  it('production and the pause: Lift… on ONE work order (its row\'s own rule and words); several: Production › holds; only a shared one: its page', () => {
+    const row = (id: string, rights: { hold: boolean }) => ({ ...WORK.workOrders[0]!, id, number: 'WO-00021', status: 'ON_HOLD', held: true, version: 7, rights: { manage: rights.hold, release: rights.hold, hold: rights.hold, why: null } })
+    const lift = doorsOf(hold('production', [{ id: 'wo-1', number: 'WO-00021' }]), { work: [row('wo-1', { hold: true })] })
+    expect(lift).toMatchObject([{ kind: 'lift', label: 'wo.act.lift', held: null, row: { id: 'wo-1' } }])
+    expect(doorsOf(hold('pause', [{ id: 'wo-1', number: 'WO-00021' }]), { work: [row('wo-1', { hold: true })] })).toMatchObject([{ kind: 'lift', label: 'wo.liftPause', held: null }])
+    // Sales: the row's own words — production does it (a planner or the production manager).
+    expect(doorsOf(hold('production', [{ id: 'wo-1', number: 'WO-00021' }]), { work: [row('wo-1', { hold: false })], acts: actsCanOf(rolePermissions('sales')) })).toMatchObject([{ kind: 'lift', held: { key: 'wo.heldHold' } }])
+    // Several, or one beside a work order not reached, or the row not read: Production › holds (each row's own Lift; one Lift for N is F-OO-109).
+    const tab = [{ kind: 'tab', tab: 'production', anchor: 'holds' }]
+    expect(doorsOf(hold('production', [{ id: 'wo-1', number: 'WO-00021' }, { id: 'wo-2', number: 'WO-00022' }]), { work: [row('wo-1', { hold: true })] })).toEqual(tab)
+    expect(doorsOf(hold('pause', [{ id: 'wo-1', number: 'WO-00021' }], 1), { work: [row('wo-1', { hold: true })] })).toEqual(tab)
+    expect(doorsOf(hold('production', [{ id: 'wo-1', number: 'WO-00021' }]), { work: [] })).toEqual(tab)
+    // Only a shared one: its own page (it is lifted there); nothing reached: words only.
+    expect(doorsOf(hold('pause', [{ id: 'wo-s', number: 'WO-00019', shared: true }], 1))).toEqual([{ kind: 'workOrder', href: workOrderHref('/w/DEMO', 'wo-s'), number: 'WO-00019' }])
+    expect(workOrderHref('/w/DEMO', 'wo-s')).toBe('/w/DEMO/production/work-orders/wo-s')
+    expect(doorsOf(hold('pause', [], 1))).toEqual([])
+    expect(doorsOf(hold('other', [{ id: 'wo-1', number: 'WO-00021' }]))).toEqual(tab)
+  })
+
+  it('the review: Open the review › on its one unit (the review banner\'s own door), held without the measurements right; several: none here', () => {
+    const unit = { ...order('PENDING_APPROVAL').lines[0]!, kind: 'MADE_TO_MEASURE', rider: { profileId: 'p-1', name: 'Demo Rider', garmentType: 'JACKET', revision: 2 } }
+    const one = { ...order('PENDING_APPROVAL'), lines: [unit] }
+    const review: WhereStrip = { key: 'review', kind: 'review', count: 1, since: null }
+    expect(doorsOf(review, { order: one })).toEqual([{ kind: 'review', href: '/w/DEMO/sales/made-to-measure/p-1?do=review', held: null }])
+    expect(doorsOf(review, { order: one, can: abilitiesOf(rolePermissions('finance')) })).toEqual([{ kind: 'review', href: null, held: { key: 'where.strip.reviewDoor.noRight' } }])
+    expect(doorsOf(review, { order: { ...one, lines: [unit, { ...unit, id: 'line-2' }] } })).toEqual([])
+  })
+
+  it('Read-only: words only — no door on any strip; never more than 3 buttons in a strip', () => {
+    const strips: WhereStrip[] = [
+      yes({ task: task(), asked: true }),
+      yes({ key: 'credit', kind: 'credit', task: task({ kind: 'CREDIT_OVERRIDE' }), asked: true }),
+      { key: 'review', kind: 'review', count: 1, since: null },
+      { key: 'deposit', kind: 'deposit', state: 'WAITING', requestId: 'd-1', due: null, since: null },
+      hold('quality', [{ id: 'wo-1', number: 'WO-00021' }]),
+      hold('production', [{ id: 'wo-1', number: 'WO-00021' }, { id: 'wo-2', number: 'WO-00022' }]),
+      hold('pause', [{ id: 'wo-s', number: 'WO-00019', shared: true }]),
+    ]
+    const readOnly = rolePermissions('read_only')
+    for (const strip of strips) expect(stripDoorsOf(strip, input({ readOnly: true, can: abilitiesOf(readOnly), acts: actsCanOf(readOnly), approval: APPROVAL_NOBODY })), strip.key).toEqual([])
+    // Every door list this block made: the budget of the plan (at most 3 visible buttons per row group, F8).
+    expect(all.length).toBeGreaterThan(10)
+    for (const doors of all) expect(buttons(doors), JSON.stringify(kindsOf(doors))).toBeLessThanOrEqual(3)
+  })
+
+  it('the words exist in both languages, office "tu" in Italian', () => {
+    const KEYS = ['where.strips', 'where.strip.yes.waits', 'where.strip.yes.asked', 'where.strip.yes.nobody', 'where.strip.credit.waits', 'where.strip.credit.nobody', 'where.strip.reviewUnits', 'where.strip.reviewDoor.open', 'where.strip.reviewDoor.noRight', 'where.strip.reviewDoor.several', 'where.strip.deposit.waiting', 'where.strip.deposit.overdue', 'where.strip.deposit.open', 'where.strip.quality', 'where.strip.qualityPlain', 'where.strip.production', 'where.strip.productionPlain', 'where.strip.pause', 'where.strip.andMore', 'where.strip.qualityWho', 'where.strip.release', 'where.strip.releaseOf', 'where.strip.openWo', 'where.strip.failed', 'where.strip.showMore', 'where.strip.showFewer']
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of KEYS) expect(t(key, { who: 'X', date: 'D', reasons: 'R', numbers: 'N', number: 'N', count: 2 }), `${locale} ${key}`).not.toBe(key)
+      for (const key of ['where.strip.review', 'where.strip.on', 'where.strip.notReached', 'where.strip.onlyNotReached', 'where.strip.shared']) for (const count of [1, 2]) expect(t(key, { count, numbers: 'N' }), `${locale} ${key} ${count}`).not.toBe(key)
+    }
+    const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    const it = createTranslator('it', messagesFor('it', ['orders']).orders!)
+    expect(en('where.strip.on', { count: 2, numbers: 'WO-00021, WO-00022' })).toBe('on 2 work orders: WO-00021, WO-00022')
+    expect(it('where.strip.on', { count: 1, numbers: 'WO-00021' })).toBe('su 1 ordine di lavoro: WO-00021')
+    expect([en('where.strip.notReached', { count: 1 }), it('where.strip.notReached', { count: 1 })]).toEqual(['and 1 work order outside what you can open', 'e 1 ordine di lavoro fuori da ciò che puoi aprire'])
+    expect([en('where.strip.credit.waits', { who: 'Finance' }), it('where.strip.credit.waits', { who: 'Finance' })]).toEqual(["Credit hold — waits for Finance's yes", 'Blocco fido — aspetta il sì di Finance'])
+    expect([en('where.strip.release'), it('where.strip.release')]).toEqual(['Release on Quality ›', 'Sblocca in Qualità ›'])
+    // Office "tu": the Italian never says "voi" / "vostro" (the portal's).
+    const strip = JSON.stringify(messagesFor('it', ['orders']).orders!.where)
+    expect(strip).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
+  })
+})
+
+describe('F-OO-105: the strips drawn — the yes for its approver, asker and anyone else; the holds for the Owner, Sales and Read-only', () => {
+  const view = designScreen.view as ComponentType<{ model: unknown }>
+  const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, locale)
+  /** The strips' own markup (section 1's list). */
+  const stripsOf = (html: string): string => {
+    const from = html.indexOf('class="fw-so-strips"')
+    return from < 0 ? '' : html.slice(from, html.indexOf('</ul>', from))
+  }
+
+  it('the yes: the approver gets Confirm the order and Refuse…; the asker the held yes and Take the request back; anyone else who decides', () => {
+    const approver = stripsOf(draw('f-op-101-approver-yes'))
+    expect(textOf(approver)).toContain("Waits for Finance's yes")
+    for (const words of ['Confirm the order', 'Refuse…']) expect(textOf(approver), words).toContain(words)
+    expect(approver).toMatch(/<time datetime="2026-11-18T09:30:00Z"/i)
+    const asker = stripsOf(draw('f-op-101-self-asked'))
+    expect(asker).toContain('aria-description="You asked for this yes: another person decides"')
+    expect(textOf(asker)).toContain('Take the request back')
+    const other = stripsOf(draw('f-op-101-who-decides'))
+    expect(textOf(other)).toContain("Waits for Finance's yes")
+    expect(textOf(other)).not.toContain('Confirm the order')
+    // Its Take back is held with why (only the asker; the production manager changes no order).
+    expect(other).toMatch(/aria-disabled="true"[^>]*aria-description="Changing an order needs the sales right to manage orders"[^>]*>Take the request back/)
+    const it = textOf(stripsOf(draw('f-op-101-approver-yes', 'it')))
+    for (const words of ['Aspetta il sì di Finance', 'Conferma l', 'Rifiuta']) expect(it, words).toContain(words)
+  })
+
+  it('the holds (Owner): one strip per kind with its work orders, who releases quality, the shared one and the one not reached; each its door', () => {
+    const html = stripsOf(draw('f-oo-105-holds'))
+    const text = textOf(html)
+    for (const words of ['Quality hold — Shade difference on the leather', 'on 1 work order: WO-00022', 'Quality releases it: a quality inspector or the Owner, with a code', 'Release on Quality ›', 'Production hold — Leather check with the tannery', 'on 1 work order: WO-00021', 'Lift the hold…', "Paused at the customer's request", 'on 2 work orders: WO-00019 and 1 work order outside what you can open', "WO-00019 also makes another customer's work: it is lifted on its own page", 'Open WO-00019 ›']) expect(text, words).toContain(words)
+    // Most blocking first: quality, production, the customer's pause.
+    const at = ['Quality hold', 'Production hold', 'Paused at the customer'].map((words) => text.indexOf(words))
+    expect([...at].sort((a, b) => a - b)).toEqual(at)
+    expect(html).toContain('href="/w/DEMO/quality/holds?subjectType=WorkOrder&amp;subjectId=')
+    expect(html).toContain('aria-label="Release on Quality: the holds of WO-00022"')
+    expect(html).toMatch(/data-tone="danger"/)
+    // The Owner may lift: the button is live.
+    expect(html).not.toMatch(/aria-description="[^"]*"[^>]*>Lift the hold…/)
+    const it = textOf(stripsOf(draw('f-oo-105-holds', 'it')))
+    for (const words of ['Blocco qualità — Differenza di tonalità della pelle', 'su 1 ordine di lavoro: WO-00022', 'Sblocca in Qualità ›', 'Fermo di produzione — Verifica della pelle con la conceria', 'Togli il blocco…', 'In pausa su richiesta del cliente', 'e 1 ordine di lavoro fuori da ciò che puoi aprire', 'Apri WO-00019 ›']) expect(it, words).toContain(words)
+  })
+
+  it('Sales: Lift the hold… held with who does it; Read-only: the same words, no button at all (and the deposit, the credit, "Show 1 more")', () => {
+    expect(stripsOf(draw('f-oo-105-holds-sales'))).toMatch(/aria-disabled="true"[^>]*aria-description="Production does this — a planner or the production manager"[^>]*>Lift the hold…/)
+    const readOnly = stripsOf(draw('f-oo-105-read-only'))
+    expect(textOf(readOnly)).toContain('Quality hold — Shade difference on the leather')
+    expect(readOnly).not.toContain('<button')
+    expect(readOnly).not.toContain('<a ')
+    // The deposit: Finance records it; the production manager reads it held beside Money ›.
+    const finance = stripsOf(draw('f-oo-105-deposit'))
+    expect(textOf(finance)).toContain('Deposit not paid yet · due 04/11/2026')
+    expect(finance).toMatch(/<button[^>]*>Record the payment<\/button>/)
+    const manager = stripsOf(draw('f-oo-105-deposit-manager'))
+    expect(manager).toMatch(/aria-description="Recording payments needs the finance right"[^>]*>Record the payment/)
+    expect(textOf(manager)).toContain('Money ›')
+    // The credit hold's yes for its approver.
+    const credit = textOf(stripsOf(draw('f-oo-105-credit')))
+    for (const words of ["Credit hold — waits for Finance's yes", 'Approve: Credit override', 'Refuse…']) expect(credit, words).toContain(words)
+    // Five strips: four drawn, "Show 1 more" under them.
+    const more = draw('f-oo-105-more')
+    expect(stripsOf(more).match(/<li class="fw-so-ov-row fw-so-strip"/g) ?? []).toHaveLength(4)
+    expect(textOf(more)).toContain('Show 1 more')
+  })
+
+  it('source: the yes door is DepthBand\'s YesDoorView (imported, never copied); Lift is the row\'s own act; the strips read the ONE waiting list', () => {
+    const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8')
+    expect(card).toContain("import { YesDoorView } from '../../../depth/view/DepthBand'")
+    expect(card).toContain('<YesDoorView door={door.door} onYes={actions?.yes} />')
+    expect(card).toContain("actions?.workOrderActs?.onAct?.(door.row, 'lift')")
+    expect(card).toContain("actions?.onDialog?.({ kind: 'depositPayment', requestId: door.requestId })")
+    expect(card).toContain('whereStripsOf(order, read, approval, waiting)')
+    // where.ts takes the yes rule from the depth (yesDoorOf, askHeld, withdrawHeld) and the Lift rule from the row's acts — no copy.
+    const rules = readFileSync(new URL('./where.ts', import.meta.url), 'utf8')
+    for (const part of ["from '../../depth/model'", 'rowActsOf(row, input.acts)', 'yesDoorOf(strip.task, input.busy)', "holdsAddress({ view: 'open', subjectType: 'WorkOrder', subjectId: first.id })"]) expect(rules, part).toContain(part)
+    // The strips' CSS: DS tone tokens only (light and dark), no raw colour.
+    const css = readFileSync(new URL('../view/overview/where.css', import.meta.url), 'utf8')
+    for (const rule of ['.fw-so-strips {', '.fw-so-strip {', ".fw-so-strip[data-tone='danger'] {", '.fw-so-strip-said {']) expect(css, rule).toContain(rule)
+    expect(css).toContain('var(--nds-danger)')
+  })
+})
+// ---- end F-OO-105

@@ -31,3 +31,59 @@
   gap: var(--nds-space-6);
   min-width: 0;
 }
+
+/* ── F-OO-105 (order overview §1.3): the strips — one row per hold or wait, most blocking first. Each is the shared card row
+   (overview.css .fw-so-ov-row: mark | words | doors; in a narrow card the doors wrap under the words), with a left rule in its
+   tone (DS tone tokens, light and dark). "Show {n} more" sits under the list. ── */
+.fw-so-strips-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-so-strips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  align-self: stretch;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-so-strip {
+  align-items: start;
+  padding-block: var(--nds-space-2);
+  padding-inline-start: var(--nds-space-8);
+  border-inline-start: var(--nds-space-3) solid var(--nds-warning);
+}
+
+.fw-so-strip[data-tone='danger'] {
+  border-inline-start-color: var(--nds-danger);
+}
+
+.fw-so-strip[data-tone='info'] {
+  border-inline-start-color: var(--nds-info);
+}
+
+.fw-so-strip-mark {
+  display: inline-flex;
+  padding-block-start: var(--nds-space-3);
+  color: var(--nds-text-muted);
+}
+
+/* The words wrap (never a sideways scroll at 375); the quiet lines under them. */
+.fw-so-strip-said {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.fw-so-strip-reading {
+  align-self: stretch;
+}

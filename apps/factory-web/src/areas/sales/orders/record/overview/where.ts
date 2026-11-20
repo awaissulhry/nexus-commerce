@@ -12,6 +12,14 @@ import { depositGate } from '../../model'
 import type { OrderProduction, Words } from './api'
 import { waitingOf, type WaitingRow, type WaitingState } from './model'
 // ---- end F-OO-104
+// ---- F-OO-105: each strip's real door — the band's yes, the depth's ask / take back, the payment, the row's Lift, Quality, the review
+import { holdsAddress } from '../../../../quality/holds/model'
+import { recordHref as profileHref } from '../../../mtm/model'
+import { askHeld, withdrawHeld, yesDoorOf, type DepthCan, type YesDoor } from '../../depth/model'
+import { rowActsOf, type ActsCan } from '../../../../../lib/production/work-order-acts/model'
+import type { OrderAbilities } from '../../model'
+import type { WorkOrderOwn } from './api'
+// ---- end F-OO-105
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Where it is now", its rules moved out of model.ts (F-SA-232). The health
@@ -242,3 +250,108 @@ export function whereStripsOf(order: StripOrder, read: Pick<OrderProduction, 'he
   return { strips: [...strips, ...holdStrips], holds }
 }
 // ---- end F-OO-104
+
+// ---- F-OO-105 (order overview §1.3; review F1, F8, F13): each strip's real doors — at most 3 visible buttons per strip ----
+/**
+ * What a strip lets this reader do, each door the real one, held with words when the reader may not (never hidden without why):
+ *
+ *   the order's yes    the band's own door (YesDoorView): Confirm the order + Refuse… for an approver who did not ask; held for the
+ *                      asker, with Take the request back; anyone else reads who decides (in the strip's words) and the Take back
+ *                      held with why — nobody asked yet: Ask for a yes (the depth's dialogs and holds, as the banner)
+ *   the credit hold    its override's yes the same way (Approve: Credit override + Refuse…); Check credit again / Ask… are F-OO-106's
+ *   the review         Open the review › — the unit's factory review (the review banner's own door; several units: each opens from
+ *                      the banner), held without the right to see measurements
+ *   the deposit        Record the payment (the money dialog on its request), held without payments.record beside Money ›; none
+ *                      asked: Money › (where the deposit is asked)
+ *   quality            Release on Quality › — Quality's holds of the work order (a release needs a signature and a fresh code)
+ *   production, pause  Lift… on ONE work order (the shared HoldDialog of its row, held with who does it); several: Production ›
+ *                      holds (one Lift for N is F-OO-109); only a shared one: its own page, where it is lifted
+ *
+ * Read-only on the page: words only, no door at all.
+ */
+export type StripDoor =
+  | { readonly kind: 'yes'; readonly door: YesDoor }
+  /** The depth's Ask for a yes / Take the request back (its own dialogs), held in the depth's words. */
+  | { readonly kind: 'ask' | 'withdraw'; readonly held: Phrase | null }
+  | { readonly kind: 'payment'; readonly requestId: string; readonly held: Phrase | null }
+  /** A tab of this page at its section: Money (the deposit to ask), Production › holds (each work order's own Lift). */
+  | { readonly kind: 'tab'; readonly tab: 'money' | 'production'; readonly anchor: string | null }
+  | { readonly kind: 'lift'; readonly row: WorkOrderOwn; readonly label: 'wo.act.lift' | 'wo.liftPause'; readonly held: Phrase | null }
+  /** A shared work order's own page (it makes other customers' work: lifted there). */
+  | { readonly kind: 'workOrder'; readonly href: string; readonly number: string }
+  | { readonly kind: 'quality'; readonly href: string; readonly number: string }
+  | { readonly kind: 'review'; readonly href: string | null; readonly held: Phrase | null }
+
+export interface StripDoorsInput {
+  readonly prefix: string
+  readonly order: Pick<Order, 'lines'>
+  readonly can: Pick<OrderAbilities, 'recordPayment' | 'measurements'>
+  /** Read-only on the page (the band's rule, readOnlyOnPage): words only. */
+  readonly readOnly: boolean
+  /** A write of the page runs: every door held with its words. */
+  readonly busy: boolean
+  /** The yes's own read (its request, Ask / Take back) and the depth's rights; null: not read here. */
+  readonly approval: Pick<Approval, 'requests' | 'may' | 'waiting'> | null
+  readonly depthCan: Pick<DepthCan, 'manage'> | null
+  /** The production read's work orders (each one's version and the reader's rights) and the page's acts rights; null: none here. */
+  readonly work: readonly WorkOrderOwn[]
+  readonly acts: ActsCan | null
+}
+
+/** A work order's own page. */
+export const workOrderHref = (prefix: string, workOrderId: string): string => `${prefix}/production/work-orders/${encodeURIComponent(workOrderId)}`
+
+export function stripDoorsOf(strip: WhereStrip, input: StripDoorsInput): StripDoor[] {
+  if (input.readOnly) return []
+  const busy = input.busy ? phrase('held.busy') : null
+  switch (strip.kind) {
+    case 'yes': {
+      // The banner's own doors (DepthBand's Waiting): the approver decides here; who decides is the strip's words for anyone else.
+      const door = strip.task ? yesDoorOf(strip.task, input.busy) : null
+      const doors: StripDoor[] = door && door.kind !== 'whoDecides' ? [{ kind: 'yes', door }] : []
+      const approval = input.approval
+      if ((door && door.kind === 'decide') || !approval) return doors
+      const depthCan = input.depthCan ?? { manage: false }
+      const withdraw: StripDoor = { kind: 'withdraw', held: withdrawHeld(approval, depthCan) ?? busy }
+      const ask: StripDoor = { kind: 'ask', held: askHeld(approval, depthCan) ?? busy }
+      return [...doors, openRequest(approval) || strip.asked ? withdraw : ask]
+    }
+    case 'credit': {
+      const door = strip.task ? yesDoorOf(strip.task, input.busy) : null
+      return door && door.kind !== 'whoDecides' ? [{ kind: 'yes', door }] : []
+    }
+    case 'review': {
+      const units = input.order.lines.filter((line) => line.kind === 'MADE_TO_MEASURE')
+      if (units.length !== 1) return []
+      const rider = units[0]!.rider ?? null
+      if (!input.can.measurements || !rider) return [{ kind: 'review', href: null, held: phrase('where.strip.reviewDoor.noRight') }]
+      return [{ kind: 'review', href: profileHref(input.prefix, rider.profileId, 'measurements', 'review'), held: null }]
+    }
+    case 'deposit': {
+      const money: StripDoor = { kind: 'tab', tab: 'money', anchor: null }
+      if (strip.state === 'MISSING' || !strip.requestId) return [money]
+      if (!input.can.recordPayment) return [{ kind: 'payment', requestId: strip.requestId, held: phrase('held.noPayments') }, money]
+      return [{ kind: 'payment', requestId: strip.requestId, held: busy }]
+    }
+    case 'quality': {
+      const first = strip.workOrders.reached[0]
+      return first ? [{ kind: 'quality', href: `${input.prefix}/quality/holds${holdsAddress({ view: 'open', subjectType: 'WorkOrder', subjectId: first.id })}`, number: first.number ?? '—' }] : []
+    }
+    case 'production':
+    case 'pause': {
+      const own = strip.workOrders.reached.filter((entry) => !entry.shared)
+      const shared = strip.workOrders.reached.filter((entry) => entry.shared)
+      if (own.length === 1 && shared.length === 0 && strip.workOrders.notReached === 0) {
+        const row = input.work.find((entry) => entry.id === own[0]!.id) ?? null
+        const lift = row && input.acts ? (rowActsOf(row, input.acts).menu.find((entry) => entry.act === 'lift') ?? null) : null
+        if (row && lift) return [{ kind: 'lift', row, label: strip.kind === 'pause' ? 'wo.liftPause' : 'wo.act.lift', held: lift.held ?? busy }]
+      }
+      if (own.length > 0) return [{ kind: 'tab', tab: 'production', anchor: 'holds' }]
+      const first = shared[0]
+      return first ? [{ kind: 'workOrder', href: workOrderHref(input.prefix, first.id), number: first.number ?? '—' }] : []
+    }
+    case 'other':
+      return strip.workOrders.reached.length > 0 ? [{ kind: 'tab', tab: 'production', anchor: 'holds' }] : []
+  }
+}
+// ---- end F-OO-105
