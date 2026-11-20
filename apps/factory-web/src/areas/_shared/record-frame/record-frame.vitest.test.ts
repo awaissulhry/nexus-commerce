@@ -310,7 +310,6 @@ describe('F-SA-263 — the dock adapts per tab and remembers', () => {
     const root = new URL('../../', import.meta.url)
     const pages = [
       'compliance/techfiles/record/view/TechFileRecordView.tsx',
-      'production/work-orders/record/view/WorkOrderRecordView.tsx',
       'products/samples/record/view/SampleRecordView.tsx',
       'products/styles/record/view/StyleRecordView.tsx',
       'purchasing/orders/record/view/OrderRecordView.tsx',
@@ -332,6 +331,13 @@ describe('F-SA-263 — the dock adapts per tab and remembers', () => {
     const order = readFileSync(new URL('sales/orders/record/view/OrderRecordView.tsx', root), 'utf8')
     expect(order).toContain('defaultWidth={DOCK_DEFAULTS[model.tab]}')
     expect(order).toContain('dockTab={model.tab}')
+    // F-OP-316 (order page follow-up 12, #1797): the work-order page keeps ONE dock width per viewport on every tab (N4),
+    // so it passes the shared DOCK_DEFAULT, never a per-tab 'grid', and names no tab.
+    const workOrder = readFileSync(new URL('production/work-orders/record/view/WorkOrderRecordView.tsx', root), 'utf8')
+    expect(workOrder).not.toMatch(/\swide=\{/)
+    expect(workOrder).toMatch(/defaultWidth=\{DOCK_DEFAULT \/\* F-SA-263; F-OP-316/)
+    expect(workOrder).not.toMatch(/\? 'grid' : undefined/)
+    expect(workOrder).not.toContain('dockTab=')
   })
 
   it('a page with no `defaultWidth` draws the 40 % columns (SSR: nothing chosen yet), with the dock open', () => {
