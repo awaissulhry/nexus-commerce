@@ -247,7 +247,10 @@ export default defineStage({
       // design, op-19): the page holds the yes in the stale words before any press (op-fx4: the read says so, F-OP-101) and offers
       // the no, given in place with a reason and words.
       const { page } = owner
-      await owner.go(`/sales/orders/${world.w3902.id}?tab=lines`) // F-OO-111: the banner stays on Lines
+      // End check fix wave: this yes is the old change's (SALES_ORDER_CHANGE), which no banner ever holds (depth/model.ts
+      // BANNER_YES_KINDS: the order's own and the credit's only): it is decided on its waiting row, place REQUEST, which Overview's
+      // Requests & changes draws among the rows waiting on us (every one shown, F-OO-205). Lines draws no such row.
+      await owner.go(`/sales/orders/${world.w3902.id}?tab=overview`)
       const yes = page.getByRole('button', { name: YES }).first()
       await seen(yes, 60_000)
       const refuse = page.getByRole('button', { name: OD('approval.refuse'), exact: true }).first()
