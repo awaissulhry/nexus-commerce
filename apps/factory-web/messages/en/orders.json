@@ -2345,6 +2345,9 @@
     "inv": {
       "issued_one": "{count} issued",
       "issued_other": "{count} issued",
+      "noneIssued": "none issued",
+      "issuedOf_one": "{count} issued ({of})",
+      "issuedOf_other": "{count} issued ({of})",
       "draft_one": "{count} draft",
       "draft_other": "{count} drafts",
       "creditNote_one": "{count} credit note",

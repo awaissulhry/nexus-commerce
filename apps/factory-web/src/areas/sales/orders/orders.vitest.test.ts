@@ -2083,10 +2083,11 @@ describe('F-OO-206: the tab badges count what the Linked records card counts (or
     // Money: 3 issued (the credit note and the deposit invoice among them; the draft apart) + 1 open deposit request.
     expect(tabCountOf('money', value)).toBe(counts.invoices.issued + counts.depositRequests.open)
     expect(tabCountOf('money', value)).toBe(4)
-    expect(row('invoices').parts).toContainEqual({ key: 'linked.inv.issued', params: { count: 3 } })
-    expect(row('invoices').parts).toContainEqual({ key: 'linked.inv.draft', params: { count: 1 } })
-    expect(row('invoices').parts).toContainEqual({ key: 'linked.inv.creditNote', params: { count: 1 } })
-    expect(row('invoices').parts).toContainEqual({ key: 'linked.inv.deposit', params: { count: 1 } })
+    // Walk #8: the credit note and the deposit invoice are said as part of the 3 issued (one count); the draft apart.
+    expect(row('invoices').parts).toEqual([
+      { key: 'linked.inv.issuedOf', params: { count: 3 }, of: [{ key: 'linked.inv.creditNote', params: { count: 1 } }, { key: 'linked.inv.deposit', params: { count: 1 } }] },
+      { key: 'linked.inv.draft', params: { count: 1 } },
+    ])
     // Lines and Changes as before; the files and the Overview count nothing here.
     expect(tabCountOf('lines', value)).toBe(value.lines.length)
     expect(tabCountOf('changes', value, { changes: 3 })).toBe(3)

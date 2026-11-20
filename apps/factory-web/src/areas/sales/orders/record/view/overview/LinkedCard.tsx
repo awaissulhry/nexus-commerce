@@ -83,7 +83,8 @@ function RowValue({ row }: { row: LinkedRow }) {
   const t = useT('orders')
   if (row.state === 'reading') return <Skeleton height={16} width={64} />
   if (row.state === 'unread') return <span className="fw-so-hint">{t('linked.unread')}</span>
-  const value = [...(row.count !== null ? [String(row.count)] : []), ...row.parts.map((part) => t(part.key, part.params))].join(' · ')
+  // Walk #8: a part that holds others says them in it ("3 issued (1 credit note, 1 deposit invoice)").
+  const value = [...(row.count !== null ? [String(row.count)] : []), ...row.parts.map((part) => t(part.key, part.of ? { ...part.params, of: part.of.map((inner) => t(inner.key, inner.params)).join(', ') } : part.params))].join(' · ')
   return row.href ? (
     <TabLink className="fw-so-link" href={row.href}>
       {t('linked.value', { value })}

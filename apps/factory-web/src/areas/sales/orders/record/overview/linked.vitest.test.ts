@@ -11,6 +11,9 @@ import { base } from '../fixtures'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { LinkedCard } from '../view/overview/LinkedCard'
 import { linkedRowsOf, type LinkedKind, type LinkedView } from './linked'
+import { invoicePartsOf } from './linked' // walk #8, #9
+import { tabCountOf } from '../../model' // walk #9: the Money badge's one rule
+import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 
 /**
  * F-OO-100 (order overview lane: one file per section) — Linked records' rules.
@@ -51,6 +54,27 @@ const MIXED: Order = (() => {
   }
 })()
 
+describe('walk #8, #9: the invoices lead with the Money badge\'s own number; a deposit invoice is one of the issued ones', () => {
+  const words = (inv: { issued: number; drafts: number; creditNotes: number; deposits: number }, locale: 'en' | 'it' = 'en') => {
+    const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+    return invoicePartsOf(inv).map((part) => t(part.key, part.of ? { ...part.params, of: part.of.map((inner) => t(inner.key, inner.params)).join(', ') } : part.params)).join(' · ')
+  }
+
+  it('one deposit invoice issued reads as ONE invoice; nothing issued but a draft leads with "none issued" (the badge\'s 0)', () => {
+    expect([words({ issued: 1, drafts: 0, creditNotes: 0, deposits: 1 }), words({ issued: 1, drafts: 0, creditNotes: 0, deposits: 1 }, 'it')]).toEqual(['1 issued (1 deposit invoice)', '1 emessa (1 fattura di acconto)'])
+    expect([words({ issued: 0, drafts: 1, creditNotes: 0, deposits: 0 }), words({ issued: 0, drafts: 1, creditNotes: 0, deposits: 0 }, 'it')]).toEqual(['none issued · 1 draft', 'nessuna emessa · 1 in bozza'])
+    expect(words({ issued: 2, drafts: 0, creditNotes: 0, deposits: 0 })).toBe('2 issued')
+  })
+
+  it('the lead number is the Money badge\'s invoice count (tabCountOf: issued, drafts apart)', () => {
+    const draftOnly: Order = { ...MIXED, chain: { ...MIXED.chain, invoices: [MIXED.chain.invoices[3]!], depositRequests: [] } }
+    expect(tabCountOf('money', draftOnly, { viewInvoices: true })).toBe(0)
+    expect(rowOf(linkedRowsOf(input(draftOnly)), 'invoices')!.parts[0]).toEqual({ key: 'linked.inv.noneIssued' })
+    const mixed: Order = { ...MIXED, chain: { ...MIXED.chain, depositRequests: [] } }
+    expect(rowOf(linkedRowsOf(input(mixed)), 'invoices')!.parts[0]!.params).toEqual({ count: tabCountOf('money', mixed, { viewInvoices: true }) })
+  })
+})
+
 describe('F-OO-207: Linked records — one row per kind through the ONE count rule; the work orders\' statuses (D3); cancelled in words (D8)', () => {
   it('the numbers are the domain\'s orderLinkCountsOf (live only), each part said only when not zero; cancelled apart, never added in', () => {
     const view = linkedRowsOf(input(MIXED))
@@ -71,11 +95,10 @@ describe('F-OO-207: Linked records — one row per kind through the ONE count ru
     expect(ship.parts).toEqual([{ key: 'linked.ship.lastDdt', params: { number: '101/2026' } }, { key: 'linked.ship.cancelled', params: { count: 1 } }])
     const invoices = rowOf(view, 'invoices')!
     expect(invoices).toMatchObject({ count: null, href: `${PREFIX}/sales/orders/${MIXED.id}?tab=money#invoices` })
+    // Walk #8: the credit note and the deposit invoice are said AS PART of the issued ones (one count), then the drafts.
     expect(invoices.parts).toEqual([
-      { key: 'linked.inv.issued', params: { count: counts.invoices.issued } },
+      { key: 'linked.inv.issuedOf', params: { count: counts.invoices.issued }, of: [{ key: 'linked.inv.creditNote', params: { count: 1 } }, { key: 'linked.inv.deposit', params: { count: 1 } }] },
       { key: 'linked.inv.draft', params: { count: 1 } },
-      { key: 'linked.inv.creditNote', params: { count: 1 } },
-      { key: 'linked.inv.deposit', params: { count: 1 } },
     ])
     // Shipments before any DDT: "no DDT yet" (never "shipped").
     const packed = { ...MIXED, chain: { ...MIXED.chain, shipments: [{ id: 's1', number: 'SH-1', status: 'PACKED', shippedAt: null, deliveredAt: null }] } }
@@ -84,8 +107,8 @@ describe('F-OO-207: Linked records — one row per kind through the ONE count ru
 
   it('draws EN + IT: the label, the value as one real link ("… ›"), in the kinds\' order', () => {
     const want = {
-      en: ['Work orders 5 · 2 in work · 1 draft · 1 on hold · 1 done · 1 cancelled ›', 'Shipments 2 · last DDT 101/2026 · 1 cancelled ›', 'Invoices 3 issued · 1 draft · 1 credit note · 1 deposit invoice ›'],
-      it: ['Ordini di lavoro 5 · 2 in lavorazione · 1 in bozza · 1 in sospeso · 1 finito · 1 annullato ›', 'Spedizioni 2 · ultimo DDT 101/2026 · 1 annullata ›', 'Fatture 3 emesse · 1 in bozza · 1 nota di credito · 1 fattura di acconto ›'],
+      en: ['Work orders 5 · 2 in work · 1 draft · 1 on hold · 1 done · 1 cancelled ›', 'Shipments 2 · last DDT 101/2026 · 1 cancelled ›', 'Invoices 3 issued (1 credit note, 1 deposit invoice) · 1 draft ›'],
+      it: ['Ordini di lavoro 5 · 2 in lavorazione · 1 in bozza · 1 in sospeso · 1 finito · 1 annullato ›', 'Spedizioni 2 · ultimo DDT 101/2026 · 1 annullata ›', 'Fatture 3 emesse (1 nota di credito, 1 fattura di acconto) · 1 in bozza ›'],
     } as const
     for (const locale of ['en', 'it'] as const) {
       const text = textOf(card(MIXED, 'owner', locale))

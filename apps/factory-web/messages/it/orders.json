@@ -2345,6 +2345,9 @@
     "inv": {
       "issued_one": "{count} emessa",
       "issued_other": "{count} emesse",
+      "noneIssued": "nessuna emessa",
+      "issuedOf_one": "{count} emessa ({of})",
+      "issuedOf_other": "{count} emesse ({of})",
       "draft_one": "{count} in bozza",
       "draft_other": "{count} in bozza",
       "creditNote_one": "{count} nota di credito",
