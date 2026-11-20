@@ -31,6 +31,7 @@ import { readDdtFacts } from '../ddt/store'
 import { readShipment } from '../store'
 // B-OP-043: the office's ship-to check (SHIPMENT_PREPARED through the lines).
 import { shipToProblem } from '../../sales/change-requests/office'
+import { orderLinkCountsOf } from '@nexus/factory-domain/sales/orders/linked-counts' // F-OO-206: the one count rule
 
 /**
  * B-OP-040 / B-OP-070 (order page N6, lines-derived; R-6): several orders of ONE customer on one shipment, held off by
@@ -337,7 +338,11 @@ describe('B-OP-040: ordersOfShipment — the orders of its lines, the first orde
       const child = (order.chain.shipments as Json[]).find((row) => row.id === ids.child)
       expect(child, orderId).toMatchObject({ origin: 'NEXUS', externalDdt: null })
       expect(child!.orders.map((ref: Json) => ref.id)).toEqual([so2(), so3()])
-      expect(order.badges.shipments).toBe((order.chain.shipments as Json[]).filter((row) => row.status !== 'CANCELLED').length)
+      // F-OO-206 (order overview §6; Owner D8): the read sends no badges; the tab and the Linked records card count the chain by
+      // the one rule, which counts the shared shipment on both orders (every shipment not cancelled).
+      expect(order).not.toHaveProperty('badges')
+      expect(orderLinkCountsOf(order.chain).shipments.live).toBe((order.chain.shipments as Json[]).filter((row) => row.status !== 'CANCELLED').length)
+      expect(orderLinkCountsOf(order.chain).shipments.live).toBeGreaterThan(0)
     }
     // The orders are always of the order's own customer.
     const { order } = await ok('warehouse', 'GET', `/sales/orders/${so3()}`)
