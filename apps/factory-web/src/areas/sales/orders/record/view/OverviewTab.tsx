@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react' // F-OO-211
 import { Tag } from '@nexus/ui/primitives'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { HealthPill } from '../../../../../lib/production/view/HealthPill'
@@ -29,8 +30,10 @@ import './overview/overview.css' // F-OO-201: the pairs and the shared card row
  * F-OO-100: each card is its own file in view/overview/ (its rules in overview/<section>.ts); this file draws them in order.
  * F-OO-103: "Where it is now" is now the headline (status · stage), its strips, the stages and the order's moves — what it showed
  * before (who acts next, the ex-factory date, the health, Urgent, the bundles) lives in one other place each (WhereCard.tsx says where).
+ * F-OO-211 (11-design §8.1): `customFields` — the order's custom fields (the container's, built once) are the 7 + 8 pair's second card,
+ * beside Order facts; when no field applies (or the reader may not see them) they draw nothing and Order facts takes the row.
  */
-export function OverviewTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+export function OverviewTab({ order, model, actions, customFields }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; /* F-OO-211 */ customFields?: ReactNode }) {
   const locale = useLocale()
   // F-OP-103: the ONE waiting list — the Requests & changes card its rows (the Changes badge, R-22). F-OO-202: each row has its place:
   // Where it is now reads `waiting.holds`, Next dates `waiting.dates`, Requests & changes `waiting.card` (no "who acts next", F14).
@@ -53,6 +56,7 @@ export function OverviewTab({ order, model, actions }: { order: Order; model: Or
       {/* Order facts, with Custom fields as the pair's second card (F-OO-211); alone, Order facts takes the row. */}
       <div className="fw-so-ov-pair">
         <FactsCard order={order} model={model} actions={actions /* F-OO-209: its doors */} />
+        {customFields /* F-OO-211: the order's custom fields (RecordCustomFields: nothing when no field applies) */}
       </div>
     </div>
   )

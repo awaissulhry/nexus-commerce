@@ -5,6 +5,7 @@ import { Banner, Card, EmptyState, Field as DsField, KeyValue } from '@nexus/ui/
 import { Button, Input, RadioCard, SegmentedControl, Skeleton, Tag } from '@nexus/ui/primitives'
 import { DateField, EditModeBar, Listbox, MultiSelect } from '../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../lib/i18n/provider'
+import type { Translate } from '../../../lib/i18n/messages' // F-OO-213
 import { WithMessages } from '../../i18n'
 import type { Field } from '../../../areas/admin/fields/api'
 import { FIELDS_NS, labelIn, previewSections, sectionText } from '../../../areas/admin/fields/model'
@@ -34,6 +35,17 @@ export interface CustomFieldsModel {
   saveFault: string | null
   /** Someone else changed the values while this person edits. */
   changedElsewhere: boolean
+  // ---- F-OO-213 (B-OO-014; 11-design §8.2, §8.3): the record's own state for its values ----
+  /** Why Edit is held for every reader: 'FINAL' — the record never changes again (a closed or cancelled order); 'ROLE' / null / absent:
+   *  only the role holds it (`canEdit`). */
+  editHeld?: 'FINAL' | 'ROLE' | null
+  /** The record's own version moved since it was read (someone changed the order first): Save again / Discard mine; the draft kept. */
+  recordChanged?: boolean
+  /** The fields someone saved meanwhile (by code), named under "Someone saved these fields first". */
+  changedFields?: readonly string[]
+  // ---- end F-OO-213
+  /** F-OO-211: read-only on this page (a reader who can change nothing there): the values, and no Edit at all. */
+  readOnly?: boolean
   /** Who a person field may name. */
   people: readonly { id: string; name: string }[]
   /** The record's files a file field may name (null: the person may not read its files). */
@@ -47,6 +59,8 @@ export interface CustomFieldsActions {
   onDiscard?: () => void
   onDraft?: (code: string, value: DraftValue) => void
   onSave?: () => void
+  /** F-OO-213: after "Someone changed {record} first": read the record again and send the same changes at its new version. */
+  onSaveAgain?: () => void
   onRetry?: () => void
   onReload?: () => void
   /** Open (a code and what is typed) or close (null) the link picker. */
@@ -63,6 +77,9 @@ export interface CustomFieldsActions {
  * F-OO-212 (order overview 11-design §8.2; it reaches every record page: one shared part): read, only the filled fields are rows —
  * the empty ones fold into one line, "Not filled: Fair date (required)" ("None filled yet: …" when none is) — and a field shown in
  * the portal carries "Customer sees it" (the portal's reader of this record type) on its label, in edit mode too. Edit lists every field.
+ * F-OO-213 (11-design §8.2): a closed or cancelled order holds Edit in words ("SO-0042 is closed or cancelled: its fields no longer
+ * change."); someone changed the order first: "Someone changed SO-0042 first" with Save again and Discard mine (the draft kept); the
+ * fields a colleague saved meanwhile are named under "Someone saved these fields first".
  */
 export function CustomFieldsPanel({ model, actions }: { model: CustomFieldsModel; actions?: CustomFieldsActions }) {
   return (
@@ -110,15 +127,36 @@ function Panel({ model, actions }: { model: CustomFieldsModel; actions?: CustomF
           <h3 className="fw-cf-title">{t('cf.title')}</h3>
           <p className="fw-cf-muted">{t('cf.hint', { record: recordLabel })}</p>
         </div>
-        {!model.editing && (
-          <Button size="sm" heldReason={model.canEdit ? null : t('cf.noEdit', { record: recordLabel })} onClick={() => actions?.onEdit?.()}>
+        {!model.editing && !model.readOnly /* F-OO-211 */ && (
+          <Button size="sm" heldReason={editHeldWords(model, t)} onClick={() => actions?.onEdit?.()}>
             <Pencil size={13} aria-hidden /> {t('cf.edit')}
           </Button>
         )}
       </div>
+      {/* F-OO-213: the order moved since it was read (its version): what was typed stays — Save again, or Discard mine. */}
+      {model.recordChanged && (
+        <Banner
+          tone="warning"
+          title={t('cf.recordChanged', { record: recordLabel })}
+          action={
+            <>
+              <Button size="sm" variant="primary" heldReason={model.saving ? t('cf.saving') : null} onClick={() => actions?.onSaveAgain?.()}>
+                {t('cf.saveAgain')}
+              </Button>
+              <Button size="sm" onClick={() => actions?.onDiscard?.()}>
+                {t('cf.discardMine')}
+              </Button>
+            </>
+          }
+        >
+          {t('cf.recordChangedBody')}
+        </Banner>
+      )}
       {model.changedElsewhere && (
         <Banner tone="info" title={t('cf.changedTitle')} action={<Button size="sm" onClick={() => actions?.onReload?.()}><RefreshCw size={13} aria-hidden /> {t('cf.reload')}</Button>}>
           {t('cf.changedBody')}
+          {/* F-OO-213: which fields a colleague saved meanwhile (found by Save again). */}
+          {(model.changedFields?.length ?? 0) > 0 && <span className="fw-cf-changed">{t('cf.changedFields', { fields: changedLabels(model, locale) })}</span>}
         </Banner>
       )}
       {model.editing && (
@@ -133,7 +171,7 @@ function Panel({ model, actions }: { model: CustomFieldsModel; actions?: CustomF
           onDiscard={() => actions?.onDiscard?.()}
         />
       )}
-      {model.saveFault && <Banner tone="danger" title={t(model.saveFault)} />}
+      {model.saveFault && <Banner tone="danger" title={t(model.saveFault, { record: recordLabel } /* F-OO-213: cf.heldFinal names the record */)} />}
       {shown.map((section) => (
         <div key={section.section} className="fw-cf-section">
           {(shown.length > 1 || section.section !== 'custom') && <h4 className="fw-cf-section-title">{sectionText(section.section) ?? t('section.custom')}</h4>}
@@ -169,6 +207,21 @@ function Panel({ model, actions }: { model: CustomFieldsModel; actions?: CustomF
     </section>
   )
 }
+
+// ---- F-OO-213: why Edit waits — a closed or cancelled order first (nobody may: the record never changes again), then the role ----
+function editHeldWords(model: CustomFieldsModel, t: Translate): string | null {
+  if (model.editHeld === 'FINAL') return t('cf.heldFinal', { record: model.recordLabel })
+  return model.canEdit ? null : t('cf.noEdit', { record: model.recordLabel })
+}
+
+/** The fields a colleague saved meanwhile, by their labels in the reader's language (a code the section no longer lists as itself). */
+function changedLabels(model: CustomFieldsModel, locale: Parameters<typeof labelIn>[1]): string {
+  return (model.changedFields ?? []).map((code) => {
+    const field = model.fields.find((entry) => entry.code === code)
+    return field ? labelIn(field, locale) : code
+  }).join(', ')
+}
+// ---- end F-OO-213
 
 // ---- F-OO-212: "Not filled: Fair date (required), Rush packaging" — or "None filled yet: …" when no field is filled ----
 function NotFilled({ empty, none }: { empty: readonly Field[]; none: boolean }) {

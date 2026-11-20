@@ -356,7 +356,8 @@ describe('F-OO-110: cancel a waiting order — Cancel order… appears through a
   it('the dialog line, en + it — only on a waiting order with a yes asked, and only when the cancel may go', () => {
     const check: CancelCheck = { ...CANCEL_CHECK, status: 'PENDING_APPROVAL', impact: { cancellable: true, blocks: [], touches: [], leavesBehind: [] }, leatherCut: [] }
     const record = base('sales', waiting).record
-    const draw = (on: Order, value: CancelCheck, locale: (typeof LOCALES)[number] = 'en') => render(createElement(CancelDialog, { order: on, model: { ...record, dialog: { kind: 'cancel' }, cancelCheck: { value, problem: null } } }), locale)
+    // quick-check fix (W11): the dialog's model is CommandDialogModel (F-CP-108: no `dialog` in it) — the literal names only what it reads.
+    const draw = (on: Order, value: CancelCheck, locale: (typeof LOCALES)[number] = 'en') => render(createElement(CancelDialog, { order: on, model: { ...record, cancelCheck: { value, problem: null } } }), locale)
     expect(draw(waiting, check)).toContain('The yes asked on it is taken back')
     expect(draw(waiting, check, 'it')).toContain('Il sì chiesto viene ritirato')
     expect(draw({ ...waiting, openApprovals: [] }, check)).not.toContain('The yes asked on it is taken back')

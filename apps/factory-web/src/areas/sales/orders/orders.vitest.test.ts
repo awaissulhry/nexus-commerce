@@ -1643,14 +1643,19 @@ describe('F-OP-101: the yes in place — Confirm the order / Refuse… for an ap
   })
 
   it('design cases: the approver sees Confirm the order and Refuse…; the asker sees it held; another reads who decides', () => {
-    const approver = render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-op-101-approver-yes'), 'en')
+    // F-OO-111: the yes banner steps back on Overview (section 1's yes strip has the same doors: where.vitest): read on Lines, where it stays.
+    const onLines = (id: string) => {
+      const model = caseOf(id) as unknown as { record: Record<string, unknown> }
+      return { ...model, record: { ...model.record, tab: 'lines' } }
+    }
+    const approver = render(recordScreen as unknown as DesignScreen<unknown>, onLines('f-op-101-approver-yes'), 'en')
     expect(approver).toContain('Confirm the order')
     expect(approver).toContain('Refuse…')
-    const asker = render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-op-101-self-asked'), 'en')
+    const asker = render(recordScreen as unknown as DesignScreen<unknown>, onLines('f-op-101-self-asked'), 'en')
     expect(asker).toContain('You asked for this yes: another person decides')
     expect(asker).toContain('Take the request back')
-    expect(textOf(render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-op-101-who-decides'), 'it'))).toContain('Chi decide: Finance')
-    const other = render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-op-101-who-decides'), 'en')
+    expect(textOf(render(recordScreen as unknown as DesignScreen<unknown>, onLines('f-op-101-who-decides'), 'it'))).toContain('Chi decide: Finance')
+    const other = render(recordScreen as unknown as DesignScreen<unknown>, onLines('f-op-101-who-decides'), 'en')
     expect(other).toContain('Who decides: Finance')
     expect(other).not.toContain('Confirm the order')
     // op-fx1: the Refuse… dialog's own words are read in record/refuse-yes-dialog.vitest.test.ts (a DS dialog never draws on the

@@ -16,8 +16,12 @@ type Choice = { readonly id: string; readonly name: string }
  * that applies). The choices a person field and a file field offer are read only when the person starts editing: the
  * record's people (`GET …/people`) with threads.post, its files (`GET /files`) with files.read (without it the file field says
  * so: `files` null). A failed read of either leaves the choices empty; a value already set still shows its own words.
+ * F-OO-213 (B-OO-014): `version` and `onSaved` — a page whose record's values are part of the record (the order page: a sales order)
+ * gives the version it read (sent with each save) and hears the version a save moved it to (it reads the record again, quietly).
+ * Every other record page gives neither and behaves as before.
+ * F-OO-211: `readOnly` — a reader who can change nothing on the page (the order page's read-only reader) sees the values and no Edit.
  */
-export function RecordCustomFields({ record, title }: { record: { type: string; id: string }; title: string }) {
+export function RecordCustomFields({ record, title, version, onSaved, readOnly = false }: { record: { type: string; id: string }; title: string; /* F-OO-213 */ version?: number; onSaved?: (version: number) => void; /* F-OO-211 */ readOnly?: boolean }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const key = useMemo(() => ({ type: record.type, id: record.id }), [record.type, record.id])
@@ -49,7 +53,7 @@ export function RecordCustomFields({ record, title }: { record: { type: string; 
     }
   }, [api, key, mayPeople, mayFiles])
 
-  const section = useCustomFields({ api, record: key, title, people, files })
+  const section = useCustomFields({ api, record: key, title, people, files, version, onSaved }) // F-OO-213: the record's version
   // Edit first reads the choices (once per record), then opens the section's edit as before.
   const actions: CustomFieldsActions = {
     ...section.actions,
@@ -59,5 +63,7 @@ export function RecordCustomFields({ record, title }: { record: { type: string; 
     },
   }
   if (!section.model) return null
-  return <CustomFieldsPanel model={section.model} actions={actions} />
+  // F-OO-211: read-only on this page — the values, no Edit at all (lane rule: read-only sees no moves).
+  const model = readOnly ? { ...section.model, readOnly: true } : section.model
+  return <CustomFieldsPanel model={model} actions={actions} />
 }

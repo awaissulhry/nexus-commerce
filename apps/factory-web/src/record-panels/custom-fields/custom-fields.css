@@ -87,3 +87,10 @@
 .fw-cf-folded {
   overflow-wrap: anywhere;
 }
+
+/* F-OO-213: the fields a colleague saved meanwhile, on their own line under "Someone saved these fields first". */
+.fw-cf-changed {
+  display: block;
+  margin-top: var(--nds-space-6);
+  overflow-wrap: anywhere;
+}

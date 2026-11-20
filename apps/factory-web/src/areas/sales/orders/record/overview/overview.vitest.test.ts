@@ -118,7 +118,8 @@ describe('Overview’s facts (F-SA-233)', () => {
       expect(text).not.toContain(locale === 'en' ? 'Nothing waits on us or on the customer' : 'Niente aspetta noi o il cliente')
     }
     const container = readFileSync(new URL('../OrderRecord.tsx', import.meta.url), 'utf8')
-    expect(container).toContain("fields={value && tab === 'overview' ?")
+    // F-OO-211: built once on Overview and handed down as customFields (beside Order facts), no longer the frame's slot.
+    expect(container).toContain("const customFields = value && tab === 'overview' ? <RecordCustomFields ")
     const lines = readFileSync(new URL('../view/LinesTab.tsx', import.meta.url), 'utf8')
     expect(lines).not.toContain('function RecordChain')
   })
@@ -377,7 +378,6 @@ describe('F-OP-104: Overview doors — the stages a real link, Open in Productio
 
 // ---- F-OP-301 (walk #1, #2, #3; plan N1 "Waiting"): the header, the card, the Changes badge and the Changes tab read ONE list ------
 describe('F-OP-301: one waiting list for the header, the card, the Changes badge and the Changes tab (the walk\'s SO-0002 and SO-0003)', () => {
-  const amendments = { count: 0, latestRevision: null, latestAt: null }
   const so2Request = { id: '0190f0e2-3080-7000-8000-000000000821', status: 'OPEN', kind: 'CHANGE', counter: null } as never
   const readWith = (blockers: unknown[], waiting: { on: 'US' | 'BRAND'; since: string | null }, still: unknown[] = []) =>
     ({ status: 'ready', read: { ...PRODUCTION_READ, headline: { ...HEADLINE, waiting: { ...HEADLINE.waiting, ...waiting, blockers } }, changes: { openRequests: [], stillToDo: { rows: still, count: still.length, workOrdersLeftOut: 0 } } } }) as never
@@ -387,7 +387,7 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
   // asked of the customer and Still to do: SEED-SO-0002's 1 + 1 + 1 = 3 (it was 5: the two gates counted too).
   it('SO-0002: a change request waits on us, a yes we asked on the customer, one step still to do — the badge 3; its two gates are dates', () => {
     const still = { kind: 'WORK_ORDER_CHANGE', ref: null, words: { en: 'SEED-WO-0001: make 54 → 0', it: 'SEED-WO-0001: fai 54 → 0' }, since: '2026-11-16T09:00:00Z', waitingOn: 'PLANNER', mayAct: false, requestId: null }
-    const waiting = orderWaitingOf({ openApprovals: [], amendments }, page(readWith(SO2_BLOCKERS, { on: 'BRAND', since: '2026-11-05T09:00:00Z' }, [still])), 'en')
+    const waiting = orderWaitingOf({ openApprovals: [] }, page(readWith(SO2_BLOCKERS, { on: 'BRAND', since: '2026-11-05T09:00:00Z' }, [still])), 'en')
     if (waiting.status !== 'ready') throw new Error('ready')
     expect(waiting.card.onUs.map((row) => row.kind)).toEqual(['BRAND_REQUEST'])
     expect(waiting.card.onCustomer.map((row) => [row.kind, row.ref])).toEqual([['APPROVAL', { type: 'ApprovalRequest', id: '0190f0e2-6262-7000-8000-000000000001' }]])
@@ -403,7 +403,7 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
 
   // F-OO-202: rewritten — no "who acts next" any more (F14): the call says nothing waits in every place; the kept wait is read by nobody.
   it('SO-0003: nothing waits — no request, no hold, no date, badge 0 (never the kept "Waiting on us · 5 d"); a step still to do counts', () => {
-    const waiting = orderWaitingOf({ openApprovals: [], amendments }, page(readWith([], { on: 'US', since: '2026-11-14T17:00:00Z' }), null), 'en')
+    const waiting = orderWaitingOf({ openApprovals: [] }, page(readWith([], { on: 'US', since: '2026-11-14T17:00:00Z' }), null), 'en')
     if (waiting.status !== 'ready') throw new Error('ready')
     expect(waiting.card.nothing).toBe(true)
     expect(changesBadgeOf(waiting.card)).toBe(0)
@@ -411,15 +411,15 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
     expect('next' in waiting).toBe(false)
     // A Still to do row (the card's third list) is something to do: the card is not empty and the badge counts it.
     const still = { kind: 'EXTRA_PIECES', ref: null, words: { en: 'Scrap 2', it: 'Scarta 2' }, since: '2026-11-17T13:02:00Z', waitingOn: 'CUSTOMER', mayAct: false, requestId: null }
-    const withStill = orderWaitingOf({ openApprovals: [], amendments }, page(readWith([], { on: 'US', since: '2026-11-14T17:00:00Z' }, [still]), null), 'en')
+    const withStill = orderWaitingOf({ openApprovals: [] }, page(readWith([], { on: 'US', since: '2026-11-14T17:00:00Z' }, [still]), null), 'en')
     if (withStill.status !== 'ready') throw new Error('ready')
     expect(withStill.card.nothing).toBe(false)
     expect(changesBadgeOf(withStill.card)).toBe(1)
   })
 
   it('walk #3: before the production read is in, nothing is claimed (loading); a failed read says so; never "Nothing waits"', () => {
-    expect(orderWaitingOf({ openApprovals: [], amendments }, page({ status: 'loading' }), 'en')).toEqual({ status: 'loading' })
-    expect(orderWaitingOf({ openApprovals: [], amendments }, page({ status: 'failed', problem: 'problem.read.unavailable' }), 'en')).toEqual({ status: 'failed', problem: 'problem.read.unavailable' })
+    expect(orderWaitingOf({ openApprovals: [] }, page({ status: 'loading' }), 'en')).toEqual({ status: 'loading' })
+    expect(orderWaitingOf({ openApprovals: [] }, page({ status: 'failed', problem: 'problem.read.unavailable' }), 'en')).toEqual({ status: 'failed', problem: 'problem.read.unavailable' })
     for (const id of ['overview-loading', 'overview-failed', 'f-op-301-reading-changes']) {
       for (const locale of ['en', 'it'] as const) {
         const text = textOf(draw(id, locale))
@@ -701,6 +701,66 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
 })
 // ---- end F-OO-201
 
+// ---- F-OO-211 (11-design §8.1, §8.2): the custom fields are the 7 + 8 pair's second card; with none, Order facts takes the row --------
+describe('F-OO-211: Custom fields beside Order facts (order page only); none → Order facts spans the row; Read-only has no Edit', () => {
+  const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr'])
+  /** The markup of the element whose opening tag starts at `at`, and where each direct child starts in it. */
+  const elementAt = (html: string, at: number): { readonly markup: string; readonly children: readonly number[] } => {
+    const tag = /<(\/?)([a-zA-Z][\w-]*)[^>]*?(\/?)>/g
+    tag.lastIndex = at
+    let depth = 0
+    const children: number[] = []
+    for (let match = tag.exec(html); match; match = tag.exec(html)) {
+      const [, closing, name, selfClosing] = match
+      if (closing) {
+        depth -= 1
+        if (depth === 0) return { markup: html.slice(at, tag.lastIndex), children }
+        continue
+      }
+      if (depth === 1) children.push(match.index)
+      if (!VOID.has(name!.toLowerCase()) && !selfClosing) depth += 1
+    }
+    throw new Error(`the element at ${at} never closes`)
+  }
+  /** The Overview's last pair (Order facts and, when given, Custom fields): its cards' text, in order. */
+  const lastPair = (html: string) => {
+    const at = [...html.matchAll(/<div class="fw-so-ov-pair">/g)].map((match) => match.index!).at(-1)!
+    const pair = elementAt(html, at)
+    return { cards: pair.children.map((child) => textOf(elementAt(html, child).markup)), markup: pair.markup }
+  }
+
+  it('with fields: the third pair holds Order facts then Custom fields (EN + IT); drawn once — never again at the body\'s end', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw('f-oo-211-facts-fields', locale)
+      const { cards } = lastPair(html)
+      expect(cards, locale).toHaveLength(2)
+      expect(cards[0], locale).toContain(locale === 'en' ? 'Order facts' : "Dati dell'ordine")
+      expect(cards[1], locale).toContain(locale === 'en' ? 'Custom fields' : 'Campi personalizzati')
+      expect(cards[1], locale).toContain(locale === 'en' ? 'Not filled: Box type (required), Fair date' : 'Non compilati: Tipo di scatola (obbligatorio), Data della fiera')
+      expect(html.split('fw-cf-card').length - 1, locale).toBe(1)
+    }
+  })
+
+  it('without fields (none applies, or the reader may not see them): Order facts alone in its pair, spanning the row (the overview case)', () => {
+    const html = draw('overview')
+    expect(html).not.toContain('fw-cf-card')
+    const { cards } = lastPair(html)
+    expect(cards).toHaveLength(1)
+    expect(cards[0]).toContain('Order facts')
+  })
+
+  it('Read-only: the values beside Order facts and no Edit; a closed order holds Edit in words; the order changed first: Save again / Discard mine', () => {
+    const readOnly = lastPair(draw('f-oo-211-fields-read-only'))
+    expect(readOnly.cards[1]).toContain('Custom fields')
+    expect(readOnly.cards[1]).not.toMatch(/\bEdit\b/)
+    const closed = lastPair(draw('f-oo-213-closed')).markup
+    expect(closed).toMatch(/aria-description="SO-2026-\d{4} is closed or cancelled: its fields no longer change\."/)
+    const changed = lastPair(draw('f-oo-213-order-changed')).cards[1]!
+    for (const words of ['Someone changed SO-2026-', 'Save again', 'Discard mine']) expect(changed, words).toContain(words)
+  })
+})
+// ---- end F-OO-211
+
 // ---- F-OO-102 (order overview §1.2; review F11): the headline and the dots read ONE state — the overview drawn before, after and without production
 describe('F-OO-102: "Where it is now" per state — waiting no dots, shipped every stage done, cancelled where the work had reached', () => {
   const milestones = (html: string, state: string) => html.match(new RegExp(`class="nds-milestone" data-state="${state}"`, 'g'))?.length ?? 0
@@ -804,14 +864,13 @@ describe('F-OO-103: "Where it is now" keeps its title, Live, the headline and th
 
 // ---- F-OO-202 (review F15, F14; plan §9; Owner D8): ONE waiting call with places — the domain's map; the card holds requests only ----
 describe('F-OO-202: one waiting call, each row in its place — holds to Where it is now, dates to Next dates, requests to the card and the badge', () => {
-  const amendments = { count: 0, latestRevision: null, latestAt: null }
   const words = (en: string) => ({ en, it: `${en} (it)` })
   const blocker = (kind: string, on: 'US' | 'BRAND' | 'SUPPLIER' | 'WORKSHOP', since: string | null, ref: { type: string; id: string } | null = null, sub: 'REQUEST' | 'COUNTER' | 'PROBLEM' | 'REPROMISE' | null = null) => ({ kind, on, words: words(kind), since, ref, sub })
   const task = (kind: string, taskId: string, requestedAt: string) =>
     ({ taskId, kind, kindLabel: { en: kind, it: kind }, requestedAt, requester: { name: 'Luca Prova', me: false }, approver: { kind: 'ROLE' as const, name: 'Finance', me: false }, version: 1, requireStepUp: false, approve: { allowed: true, why: null }, reject: { allowed: true, why: null }, withdraw: { allowed: false, why: null } })
   const stateOf = (blockers: ReturnType<typeof blocker>[], approvals: ReturnType<typeof task>[] = [], still: unknown[] = []) => {
     const production = { status: 'ready', read: { ...PRODUCTION_READ, headline: { ...HEADLINE, waiting: { ...HEADLINE.waiting, blockers } }, changes: { openRequests: [], stillToDo: { rows: still, count: still.length, workOrdersLeftOut: 0 } } } } as never
-    const state = orderWaitingOf({ openApprovals: approvals, amendments }, { production, requests: { value: [] }, can: { recordPayment: true } }, 'en')
+    const state = orderWaitingOf({ openApprovals: approvals }, { production, requests: { value: [] }, can: { recordPayment: true } }, 'en')
     if (state.status !== 'ready') throw new Error('ready')
     return state
   }

@@ -98,6 +98,10 @@ import { CUSTOMER_PAUSE, plainHolds } from '../../../production/work-orders/dail
 import type { OfficeRequest } from '../../../../record-panels/approvals/api' // F-OO-204: the approvals we asked the customer
 import { PRODUCTION_READ } from './overview/fixtures'
 import { PEOPLE } from './overview/fixtures' // F-OO-133: the overview case draws the real People card
+// ---- F-OO-211 / F-OO-213: the order's custom fields beside Order facts (the shared panel and its own design data, SCR-520) ----
+import { CustomFieldsPanel, type CustomFieldsModel } from '../../../../record-panels/custom-fields/view/CustomFieldsPanel'
+import { designScreen as fieldsScreen } from '../../../../record-panels/custom-fields/fixtures'
+// ---- end F-OO-211
 import { brandRequest } from '../../../home/approvals/requests/fixtures'
 import { ORDER_ID } from '../_demo/fixtures'
 // F-CP-142: Money's Price check card — the ONE window's made-up check and its states (so/price-check, F-CP-114).
@@ -144,7 +148,7 @@ function OrderThread() {
 /** The element a design case passes to OrderRecordView as its `thread`. */
 export const orderDesignThread = () => createElement(OrderThread)
 
-type RecordCase = { role: Role; record: OrderRecordModel; draft?: undefined; /** F-OP-217: the dock's scope (absent: the order's thread alone). */ dock?: DockScope } | { role: Role; draft: NewOrderModel; record?: undefined; dock?: undefined }
+type RecordCase = { role: Role; record: OrderRecordModel; draft?: undefined; /** F-OP-217: the dock's scope (absent: the order's thread alone). */ dock?: DockScope; /** F-OO-211: the order's custom fields beside Order facts (the panel's own model; absent: none apply). */ customFields?: CustomFieldsModel } | { role: Role; draft: NewOrderModel; record?: undefined; dock?: undefined; customFields?: undefined }
 
 // ---- F-OP-217 (order page plan N4; 11-dock §2, §3, §7): the dock's scopes in SCR-039 — the pick band inside the ONE card on This order,
 // <Customer> (general), a work order's notes (office only: its line in the office tone) and All of <Customer> (read only: its Head, the
@@ -489,7 +493,9 @@ function OrderDesign({ model }: { model: RecordCase }) {
   if (model.draft) return inShell('/sales/orders/new', createElement(NewOrderView, { model: model.draft }), model.role)
   // F-OP-217: a case may dock a scope of the pick (the order page's dock), else the order's thread alone.
   const thread = model.dock ? createElement(DesignDock, { scope: model.dock, prefix: model.record.prefix }) : orderDesignThread()
-  return inShell(`/sales/orders/${model.record.order.status === 'ready' ? model.record.order.value.id : 'x'}`, createElement(OrderRecordView, { model: model.record, thread }), model.role)
+  // F-OO-211: a case may give the order's custom fields (drawn by Overview beside Order facts, as the container's RecordCustomFields).
+  const customFields = model.customFields ? createElement(CustomFieldsPanel, { model: model.customFields }) : undefined
+  return inShell(`/sales/orders/${model.record.order.status === 'ready' ? model.record.order.value.id : 'x'}`, createElement(OrderRecordView, { model: model.record, thread, customFields }), model.role)
 }
 
 // ---- F-SA-243: Brand Alpha asks on this order (M 40 → 36); a change accepted yesterday still has a work-order change for planning
@@ -939,6 +945,21 @@ const F_OO_110: DesignCase<RecordCase>[] = [
 ]
 // ---- end F-OO-110
 
+// ---- F-OO-211 (11-design §8.1, §8.2): the order's custom fields are Overview's 7 + 8 pair — beside Order facts (2 equal columns from a
+// 720 px Overview, one below); with none, Order facts takes the row; Read-only: the values, no Edit; F-OO-213: someone changed the order
+// first (Save again / Discard mine); a closed order holds Edit in words. Look at 375 / 1440 / 1920, dock open and closed, light + dark.
+const fieldsOf = (id: string, over: Partial<CustomFieldsModel> = {}): CustomFieldsModel => ({ ...(fieldsScreen.cases.find((item) => item.id === id)!.model as CustomFieldsModel), recordLabel: production.number, ...over })
+const FACTS_READ = { tab: 'overview' as const, production: ready({ ...PRODUCTION_READ, people: PEOPLE }), people: { mayAssign: false, mayNote: true, assign: null, note: null }, liveState: 'live' as const }
+/** A record case with the order's custom fields beside Order facts (a new order's draft has none). */
+const withFields = (item: RecordCase, customFields: CustomFieldsModel): RecordCase => (item.record ? { ...item, customFields } : item)
+const F_OO_211: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-211-facts-fields', label: 'F-OO-211 · Sales · Overview: Order facts and Custom fields side by side (the 7 + 8 pair) — two not filled, folded; "Customer sees it" on the portal\'s fields', model: withFields(base('sales', production, FACTS_READ), fieldsOf('f-oo-212-folded')) },
+  { id: 'f-oo-211-fields-read-only', label: 'F-OO-211 · Read-only · Overview: the custom fields beside Order facts, no Edit', model: withFields(readOnlyCase(base('sales', production, FACTS_READ)), fieldsOf('values', { canEdit: false, readOnly: true })) },
+  { id: 'f-oo-213-order-changed', label: 'F-OO-213 · Sales · Overview: someone changed the order first — what was typed stays: Save again, Discard mine', model: withFields(base('sales', production, FACTS_READ), fieldsOf('f-oo-213-record-changed')) },
+  { id: 'f-oo-213-closed', label: 'F-OO-213 · Owner · a closed order: its custom fields hold Edit — "its fields no longer change"', model: withFields(base('owner', closed, { tab: 'overview' }), fieldsOf('f-oo-213-final', { recordLabel: closed.number })) },
+]
+// ---- end F-OO-211
+
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-039',
   title: 'Order studio: lines, dates, production, shipments, invoices & payments with the deposit, documents',
@@ -1145,6 +1166,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     ...F_OO_108, // F-OO-108: Hold the whole order… — the move, held for Sales and with nothing yet, the ONE Hold dialog on the plan
     ...F_OO_109, // F-OO-109: ONE Lift for the customer's pause on N work orders — the door, held for Sales, the dialog
     ...F_OO_110, // F-OO-110: cancel a waiting order — Cancel order… under More ▾, the yes taken back
+    ...F_OO_211, // F-OO-211 / F-OO-213: the custom fields beside Order facts — read-only, the order changed first, a closed order
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
     ...F_OP_301, // F-OP-301 (walk #1, #2, #3)

@@ -380,7 +380,7 @@ function StripDoorView({ door, order, model, actions }: { door: StripDoor; order
 // ---- F-OO-107 (order overview §1.5; review F8): the order's own moves — the band's dialogs, held with the band's own words ----------
 /**
  * Mark ready… in view; Record a shipment made elsewhere…, Cancel order…, Close order… under More ▾ — each opening the SAME dialog as
- * the band (the page's one dialog slot; made elsewhere: its container's dialog, drawn here while open). A move the reader may not run
+ * the band (the page's one dialog slot; made elsewhere: its container's dialog, mounted once by the page). A move the reader may not run
  * is held with words (a held menu item says why). Read-only: no row.
  */
 function Moves({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
@@ -423,8 +423,7 @@ function Moves({ order, model, actions }: { order: Order; model: OrderRecordMode
           />
         )}
       </div>
-      {/* F-OP-123: Record a shipment made elsewhere… — its container's dialog while open (Shipments draws it too; one tab at a time). */}
-      {model.elsewhere?.dialog}
+      {/* F-OP-123: Record a shipment made elsewhere… — its dialog is the page's, mounted once (OrderRecordView, F-OO-111). */}
     </>
   )
 }

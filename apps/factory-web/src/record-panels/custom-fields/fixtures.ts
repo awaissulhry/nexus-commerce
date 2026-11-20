@@ -112,6 +112,20 @@ export const designScreen = defineDesignScreen<CustomFieldsModel>({
       label: 'A record type the portal does not read (a style): no "Customer sees it" tag, whatever the field says',
       model: model({ recordLabel: 'STY-DEMO-0108', portalTag: null }),
     },
+    // ---- F-OO-213 (order overview 11-design §8.2, §8.3; B-OO-014): the order's version with its values ----
+    {
+      id: 'f-oo-213-record-changed',
+      label: 'Someone changed the order first (its version): what was typed stays — Save again, Discard mine',
+      model: model({ editing: true, recordChanged: true, draft: { ...draftOf(ACTIVE, VALUES), gift_note: 'Happy anniversary!' } }),
+      note: 'Save again reads the order again and sends the same changes at its new version, unless one of these fields was saved meanwhile.',
+    },
+    {
+      id: 'f-oo-213-changed-fields',
+      label: 'Save again found a field a colleague saved meanwhile: named under "Someone saved these fields first"',
+      model: model({ editing: true, changedElsewhere: true, changedFields: ['gift_note'], draft: { ...draftOf(ACTIVE, VALUES), gift_note: 'Happy anniversary!' } }),
+    },
+    { id: 'f-oo-213-final', label: 'A closed or cancelled order: Edit held — "its fields no longer change"', model: model({ editHeld: 'FINAL' }), note: 'Hover or focus Edit: the words say why, for every reader.' },
+    // ---- end F-OO-213
     { id: 'loading', label: 'Loading', model: model({ state: 'loading', fields: [], values: [], draft: {} }) },
     { id: 'error', label: 'The custom fields could not be read', model: model({ state: 'error', fault: 'cf.fault.offline', fields: [], values: [], draft: {} }) },
   ],

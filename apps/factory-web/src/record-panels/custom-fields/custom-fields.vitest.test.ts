@@ -12,6 +12,9 @@ import { changedCount, changesOf, draftOf, fieldsRecordOf, inputOf, readNumber, 
 import { foldedRead, portalTagOf } from './model' // F-OO-212
 import { designScreen } from './fixtures' // F-OO-212
 import { CustomFieldsPanel, type CustomFieldsModel } from './view/CustomFieldsPanel' // F-OO-212
+import type { ApiClient } from '../../lib/api/client' // F-OO-213
+import { writeValues, type ValueEntry } from './api' // F-OO-213
+import { saveAgainOf, sentRecordVersion } from './model' // F-OO-213
 
 /**
  * The custom-fields section of a record (B-W2b-431, SCR-520), pure: which panels have one, a typed number in either
@@ -185,3 +188,149 @@ describe('F-OO-212: only filled rows, "Not filled: …" folded, the "Customer se
   })
 })
 // ---- end F-OO-212
+
+// ---- F-OO-213 (order overview 11-design §8.2, §8.3; B-OO-014): the custom values keep the order's version — the lost update vs the
+// Orders sheet. The order page gives its version; every other record page gives none and behaves as before.
+describe('F-OO-213: the save sends the order version only when given; "Someone changed {record} first" · Save again / Discard mine; FINAL holds Edit', () => {
+  const caseOf = (id: string) => (designScreen as DesignScreen<CustomFieldsModel>).cases.find((entry) => entry.id === id)!.model
+  const draw = (model: CustomFieldsModel, locale: (typeof LOCALES)[number]) => render(createElement(CustomFieldsPanel as ComponentType<{ model: CustomFieldsModel }>, { model }), locale)
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  /** A fake client: what each call sent, and the answer it gives. */
+  const fakeApi = (answer: unknown) => {
+    const calls: { method: string; path: string; body: unknown; key: unknown }[] = []
+    const api = {
+      request: async (method: string, path: string, options: { body?: unknown; idempotencyKey?: unknown }) => (calls.push({ method, path, body: options.body, key: options.idempotencyKey }), answer),
+    } as unknown as ApiClient
+    return { api, calls }
+  }
+  const ANSWER = { recordType: 'ORDER', recordId: 'o-1', fields: [], values: [], canEdit: true, editHeld: null, recordVersion: 8, set: ['gift_note'], cleared: [] }
+  const ENTRIES: ValueEntry[] = [{ code: 'gift_note', value: 'Thanks', version: 2 }]
+
+  it('the PUT carries recordVersion only when given (the order page); every other record page sends the values alone', async () => {
+    const withVersion = fakeApi(ANSWER)
+    await writeValues(withVersion.api, 'ORDER', 'o-1', ENTRIES, 'k-1', 7)
+    expect(withVersion.calls).toEqual([{ method: 'PUT', path: '/fields/values/ORDER/o-1', body: { values: ENTRIES, recordVersion: 7 }, key: 'k-1' }])
+    const without = fakeApi(ANSWER)
+    await writeValues(without.api, 'QUOTE', 'q-1', ENTRIES, 'k-2')
+    expect(without.calls[0]!.body).toEqual({ values: ENTRIES })
+    expect(Object.keys(without.calls[0]!.body as object)).not.toContain('recordVersion')
+  })
+
+  it('the version sent: none unless the page gives one; else the newer of the page\'s read and the section\'s own last read', () => {
+    expect(sentRecordVersion(undefined, 7)).toBeUndefined()
+    expect(sentRecordVersion(undefined, null)).toBeUndefined()
+    // The page's read is newer (its own Set priority… moved it): the page's.
+    expect(sentRecordVersion(8, 7)).toBe(8)
+    // The section read the order later (Discard mine, Save again, its own save): the section's.
+    expect(sentRecordVersion(5, 7)).toBe(7)
+    // An older answer without the record's version: the page's.
+    expect(sentRecordVersion(5, null)).toBe(5)
+    expect(sentRecordVersion(5, undefined)).toBe(5)
+  })
+
+  it('a 409 on the ORDER\'s version is the record\'s own refusal (Save again / Discard mine); a closed order is FINAL; a value\'s 409 stays "someone saved first"', () => {
+    // StaleVersionError on the SalesOrder (B-OO-014 touchRecordInCommand): code conflict, the issue `version`.
+    const stale = new ApiError('conflict', 409, 'conflict', 'This SalesOrder changed since it was read (version 7); it is now at version 8.', null, [{ path: 'version', message: 'The current version is 8.' }])
+    expect(saveFaultOf(stale, ENTRIES)).toEqual({ key: 'cf.recordChanged', code: null, record: 'stale' })
+    // A closed or cancelled order (the Orders sheet's words): invalid_state.
+    const final = new ApiError('conflict', 409, 'invalid_state', 'Sales order SO-1 is closed: it never changes.')
+    expect(saveFaultOf(final, ENTRIES)).toEqual({ key: 'cf.heldFinal', code: null, record: 'final' })
+    // A value someone saved first: as before (the old banner), at its field.
+    const value = new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'body/values/0/version', message: 'The current version is 3.' }])
+    expect(saveFaultOf(value, ENTRIES)).toEqual({ key: 'cf.fault.stale', code: 'gift_note' })
+    expect(saveFaultOf(value, ENTRIES).record).toBeUndefined()
+  })
+
+  it('Save again re-sends the same changes with the version read again — unless one of their fields was saved meanwhile, or the order closed', async () => {
+    const fields = [field('gift_note'), field('box_type')]
+    const fresh = (over: Record<string, unknown> = {}) => ({ fields, values: [row('gift_note', 'Hi', 2)], editHeld: null, recordVersion: 9, ...over }) as Parameters<typeof saveAgainOf>[1]
+    // Nobody saved these fields meanwhile (a colleague only set the priority): send at the version read again.
+    const again = saveAgainOf(ENTRIES, fresh())
+    expect(again).toEqual({ kind: 'send', recordVersion: 9 })
+    const sent = fakeApi(ANSWER)
+    await writeValues(sent.api, 'ORDER', 'o-1', ENTRIES, 'k-3', sentRecordVersion(7, again.kind === 'send' ? again.recordVersion : undefined))
+    expect(sent.calls[0]!.body).toEqual({ values: ENTRIES, recordVersion: 9 })
+    // A field this edit changes was saved meanwhile (its version moved), or cleared, or is gone: named, never sent over it.
+    expect(saveAgainOf(ENTRIES, fresh({ values: [row('gift_note', 'Hello', 3)] }))).toEqual({ kind: 'changed', codes: ['gift_note'] })
+    expect(saveAgainOf(ENTRIES, fresh({ values: [] }))).toEqual({ kind: 'changed', codes: ['gift_note'] })
+    expect(saveAgainOf(ENTRIES, fresh({ fields: [field('box_type')] }))).toEqual({ kind: 'changed', codes: ['gift_note'] })
+    // A field that had no value and still has none: unchanged.
+    expect(saveAgainOf([{ code: 'box_type', value: 'GIFT', version: null }], fresh())).toEqual({ kind: 'send', recordVersion: 9 })
+    // Closed or cancelled meanwhile: nothing sent.
+    expect(saveAgainOf(ENTRIES, fresh({ editHeld: 'FINAL' }))).toEqual({ kind: 'final' })
+    // An older answer without the record's version: sent without one.
+    expect(saveAgainOf(ENTRIES, fresh({ recordVersion: undefined }))).toEqual({ kind: 'send', recordVersion: undefined })
+  })
+
+  it('draws "Someone changed SO-DEMO-0042 first" with Save again and Discard mine (EN + IT), the draft kept in edit mode', () => {
+    const changed = { ...caseOf('editing'), recordChanged: true }
+    const en = draw(changed, 'en')
+    expect(textOf(en)).toContain('Someone changed SO-DEMO-0042 first')
+    expect(textOf(en)).toContain('What you typed is kept.')
+    expect(en).toMatch(/<button[^>]*>Save again<\/button>/)
+    expect(en).toMatch(/<button[^>]*>Discard mine<\/button>/)
+    // The draft stays: still in edit mode, the typed value in its box.
+    expect(en).toContain('Happy anniversary!')
+    const it_ = textOf(draw(changed, 'it'))
+    for (const words of ['Qualcuno ha cambiato SO-DEMO-0042 prima', 'Salva di nuovo', 'Scarta le mie']) expect(it_, words).toContain(words)
+    // Without it: no such banner (the old "Someone saved these fields first" stays for a value conflict).
+    expect(textOf(draw(caseOf('editing'), 'en'))).not.toContain('Someone changed')
+    expect(textOf(draw(caseOf('changed'), 'en'))).toContain('Someone saved these fields first')
+  })
+
+  it('a value conflict found by Save again names the fields a colleague saved meanwhile (EN + IT)', () => {
+    const named = { ...caseOf('changed'), changedFields: ['gift_note', 'fair_date'] }
+    expect(textOf(draw(named, 'en'))).toContain('Changed meanwhile: Gift note, Fair date')
+    expect(textOf(draw(named, 'it'))).toContain('Cambiati nel frattempo: Biglietto, Data della fiera')
+    expect(textOf(draw(caseOf('changed'), 'en'))).not.toContain('Changed meanwhile')
+  })
+
+  it('FINAL holds Edit for everyone with its words (EN + IT), before the role; ROLE keeps "not in your role"', () => {
+    const final = draw({ ...caseOf('values'), editHeld: 'FINAL' }, 'en')
+    expect(final).toMatch(/aria-disabled="true"[^>]*aria-description="SO-DEMO-0042 is closed or cancelled: its fields no longer change\."/)
+    expect(draw({ ...caseOf('values'), editHeld: 'FINAL' }, 'it')).toContain('aria-description="SO-DEMO-0042 è chiuso o annullato: i suoi campi non cambiano più."')
+    // A reader without the right, on a closed order: the order's words first (nobody may).
+    expect(draw({ ...caseOf('reader'), editHeld: 'FINAL' }, 'en')).toContain('aria-description="SO-DEMO-0042 is closed or cancelled: its fields no longer change."')
+    expect(draw({ ...caseOf('reader'), editHeld: 'ROLE' }, 'en')).toContain('aria-description="Changing SO-DEMO-0042 is not in your role."')
+    // Open order with the right: Edit free.
+    expect(draw({ ...caseOf('values'), editHeld: null }, 'en')).not.toMatch(/aria-description="[^"]*(closed or cancelled|not in your role)/)
+    // The refusal when it closed while typing: the same words, naming the record.
+    expect(textOf(draw({ ...caseOf('values'), saveFault: 'cf.heldFinal' }, 'en'))).toContain('SO-DEMO-0042 is closed or cancelled: its fields no longer change.')
+  })
+
+  it('the wiring: the hook sends the record version through sentRecordVersion, hears the new one only when the page gave one, Save again reads first', () => {
+    const hook = source('./use-custom-fields.ts')
+    expect(hook).toContain('await send(entries, sentRecordVersion(version, read.recordVersion))')
+    expect(hook).toContain('const answer = await writeValues(api, recordType, record.id, entries, newIdempotencyKey(), recordVersion)')
+    expect(hook).toContain("if (version !== undefined && typeof answer.recordVersion === 'number') onSaved?.(answer.recordVersion)")
+    // Save again: the record read again, the rule, then the same send at the version read again.
+    const again = hook.slice(hook.indexOf('const saveAgain = async'), hook.indexOf('// ---- end F-OO-213', hook.indexOf('const saveAgain = async')))
+    expect(again.indexOf('await readValues(api, recordType, record.id)')).toBeLessThan(again.indexOf('saveAgainOf(entries, fresh)'))
+    expect(again).toContain('await send(entries, sentRecordVersion(version, again.recordVersion))')
+    // A 409 on the record's version keeps the draft (no setEditing(false), no new read under it) and opens the banner.
+    expect(hook).toContain("if (fault.record === 'stale') return setRecordChanged(true)")
+    // Discard mine reads it again.
+    expect(hook).toContain('if (changedElsewhere || recordChanged) void load(true)')
+    const container = source('./RecordCustomFields.tsx')
+    expect(container).toContain('useCustomFields({ api, record: key, title, people, files, version, onSaved })')
+  })
+
+  it('only the order page gives its version (and reads the order again after a save); every other record page gives none', () => {
+    const order = readFileSync(new URL('../../areas/sales/orders/record/OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(order).toContain('version={value.version /* F-OO-213 */} onSaved={fieldsSaved}')
+    expect(order).toMatch(/const fieldsSaved = \(saved: number\) => \{\s*if \(\(current\.current\?\.version \?\? 0\) < saved\) void load\(\)\s*\}/)
+    for (const page of ['areas/parties/_shared/PartyRecord.tsx', 'areas/sales/quotes/record/QuoteRecord.tsx', 'areas/products/styles/record/StyleRecord.tsx', 'areas/purchasing/orders/record/OrderRecord.tsx', 'areas/warehouse/lots/record/LotRecord.tsx', 'areas/production/work-orders/record/WorkOrderRecord.tsx']) {
+      const text = readFileSync(new URL(`../../${page}`, import.meta.url), 'utf8')
+      const mount = text.slice(text.indexOf('<RecordCustomFields '), text.indexOf('/>', text.indexOf('<RecordCustomFields ')))
+      expect(mount, page).not.toMatch(/\bversion=|\bonSaved=/)
+    }
+  })
+
+  it('every F-OO-213 word exists in both languages with the same placeholders', () => {
+    for (const locale of LOCALES) {
+      const text = draw({ ...caseOf('editing'), recordChanged: true, changedElsewhere: true, changedFields: ['gift_note'] }, locale)
+      expect(text, locale).not.toMatch(/\bcf\.[a-zA-Z.]+/)
+    }
+  })
+})
+// ---- end F-OO-213

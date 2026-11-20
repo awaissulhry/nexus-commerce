@@ -303,7 +303,8 @@ interface WaitingPage {
   readonly can: { readonly recordPayment: boolean }
 }
 
-export function orderWaitingOf(order: Pick<Order, 'openApprovals' | 'amendments'>, page: WaitingPage, locale: string): WaitingState {
+// Z02 cleanup (W08's note): the call reads the order's open yeses only (the amendments left the card with F-OO-205).
+export function orderWaitingOf(order: Pick<Order, 'openApprovals'>, page: WaitingPage, locale: string): WaitingState {
   const state = page.production ?? null
   if (state?.status === 'loading') return { status: 'loading' }
   if (state?.status === 'failed') return { status: 'failed', problem: state.problem }
