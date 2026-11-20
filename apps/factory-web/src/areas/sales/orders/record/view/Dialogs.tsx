@@ -27,7 +27,7 @@ export type CommandDialogActions = Pick<OrderRecordActions, 'onDialog' | 'onRead
 
 /**
  * The order studio's dialogs: Change promise date (the order or chosen lines, the reason; the first promise never
- * changes), Mark ready (a reason, while quality release is not in use), Close order (settled: a confirm; not settled:
+ * changes), Mark ready (a reason; F-OO-112: only once quality released every piece), Close order (settled: a confirm; not settled:
  * what is missing and a reason), Send the bank-details page (the DEPOSIT_INFO link to the quote's contact, an optional
  * message), Record the payment (amount, day, bank reference; "Issue the deposit invoice (TD02) now" when the rule asks
  * one — a fresh authenticator code then), Send the TD02 to SDI. Esc closes; the focus returns to the opener (DS Modal);

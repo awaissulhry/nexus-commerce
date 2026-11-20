@@ -102,6 +102,10 @@ import {
 import { designScreen as recordScreen } from './record/fixtures'
 import { artworkOfGroup } from './record/production' // F-SA-231b
 import { textOf } from '../../../lib/record-thread/parts/testing' // F-SA-231b
+// ---- F-OO-112 (B-OO-002, Owner D1): Mark ready after quality released every piece ----
+import { orderActions, READY_QUALITY_WORDS, releasedPiecesOf } from '@nexus/factory-domain/sales/orders/orders'
+import { readyHeld } from './model'
+// ---- end F-OO-112
 
 const params = (query: string) => new URLSearchParams(query)
 
@@ -1893,3 +1897,56 @@ describe('F-OP-303: the read-only banner only for a reader who can change nothin
   })
 })
 // ---- end F-OP-303
+
+// ---- F-OO-112 (order overview N13, Owner D1; B-OO-002): readyHeld reads the API's markReady — held with the N of M words ------------
+describe('F-OO-112: Mark ready waits for quality — readyHeld reads the API\'s markReady (allowed, else the N of M words from the order read)', () => {
+  /** The demo order in production (quality released 7 of its 14 pieces) with its actions as the API's own map gives them. */
+  const asApi = (value: ReturnType<typeof order>, released: boolean) => ({
+    ...value,
+    actions: orderActions(value.status, { released, releasedPieces: releasedPiecesOf(value.lines.map((line) => ({ kind: line.kind, rows: line.sizes.map((size) => size.progress) }))) }).map((entry) => ({ action: entry.action, allowed: entry.allowed, needsReason: entry.needsReason, held: entry.held })),
+  })
+  const inProduction = order('IN_PRODUCTION')
+
+  it('allowed → null; held → the N of M words (the counts from the order read\'s line sizes); the right first; no action → the state words', () => {
+    expect(readyHeld(asApi(inProduction, true), canOf('owner'))).toBeNull()
+    expect(readyHeld(asApi(inProduction, false), canOf('owner'))).toEqual({ key: 'held.readyQuality', params: { n: 7, m: 14 } })
+    // The same counts as the API's own held words (one rule at both ends).
+    expect(asApi(inProduction, false).actions.find((entry) => entry.action === 'markReady')?.held).toBe('Quality releases the garments: 7 of 14 released. The order turns Ready by itself when all are.')
+    // Without orders.manage the right is said first (as before); a state with no markReady keeps its words.
+    expect(readyHeld(asApi(inProduction, false), canOf('manager'))).toEqual({ key: 'held.noManage' })
+    expect(readyHeld(asApi(order('READY'), true), canOf('owner'))).toEqual({ key: 'held.readyState' })
+    // A size released beyond its order never makes up for another (each size up to what it has to release); a fee line is never counted.
+    const lines = inProduction.lines.map((line, index) => (index === 0 ? { ...line, sizes: line.sizes.map((size, n) => ({ ...size, progress: { ...size.progress, released: n === 0 ? 5 : size.progress.released } })) } : line))
+    const fee = { ...inProduction.lines[1]!, id: 'fee-line', kind: 'FEE', sizes: [{ size: null, quantity: 1, unitPrice: null, progress: { ...inProduction.lines[1]!.progress, ordered: 1, released: 0 } }] }
+    expect(readyHeld({ ...asApi(inProduction, false), lines: [...lines, fee] }, canOf('owner'))).toEqual({ key: 'held.readyQuality', params: { n: 8, m: 14 } })
+  })
+
+  it('the words, it + en, are the domain\'s READY_QUALITY_WORDS (the API\'s held words) with the counts', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      expect(t('held.readyQuality', { n: 3, m: 7 }), locale).toBe(READY_QUALITY_WORDS[locale].replace('{n}', '3').replace('{m}', '7'))
+    }
+    expect(createTranslator('en', messagesFor('en', ['orders']).orders!)('held.readyQuality', { n: 3, m: 7 })).toBe('Quality releases the garments: 3 of 7 released. The order turns Ready by itself when all are.')
+    expect(createTranslator('it', messagesFor('it', ['orders']).orders!)('held.readyQuality', { n: 3, m: 7 })).toBe("Il rilascio lo fa la qualità: 3 su 7 rilasciati. L'ordine diventa Pronto da solo quando lo sono tutti.")
+    // The dialog no longer says "while quality release is not used" (it is always in use).
+    for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['orders']).orders!)('ready.body'), locale).not.toMatch(/not used|non si usa/)
+  })
+
+  it('drawn: the Overview\'s Mark ready… is held with the counts in both languages; the band\'s ⋯ says a held phrase with its values', () => {
+    const held = recordScreen.cases.find((item) => item.id === 'f-oo-112-ready-held')!
+    const en = render(recordScreen as unknown as DesignScreen<unknown>, held.model, 'en')
+    expect(en).toMatch(/aria-disabled="true"[^>]*aria-description="Quality releases the garments: 7 of 14 released. The order turns Ready by itself when all are."[^>]*>Mark ready…/)
+    const it = render(recordScreen as unknown as DesignScreen<unknown>, held.model, 'it')
+    expect(it).toContain('Il rilascio lo fa la qualità: 7 su 14 rilasciati.')
+    // The catch-up: every piece released, the dialog opens with its reason.
+    const dialog = render(recordScreen as unknown as DesignScreen<unknown>, recordScreen.cases.find((item) => item.id === 'ready-dialog')!.model, 'en')
+    expect(dialog.length).toBeGreaterThan(200)
+    const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('(phrase ? t(phrase.key, phrase.params) : undefined)')
+    expect(view).toContain("description: held(readyWait)")
+    const rules = readFileSync(new URL('./model.ts', import.meta.url), 'utf8')
+    expect(rules).toContain('export function readyHeld(order: Order, can: OrderAbilities): Phrase | null {')
+    expect(rules).toContain("import { releasedPiecesOf } from '@nexus/factory-domain/sales/orders/orders'")
+  })
+})
+// ---- end F-OO-112

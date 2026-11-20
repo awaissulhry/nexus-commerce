@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { CANCEL_STATUSES, orderActions } from '@nexus/factory-domain/sales/orders/orders'
+import { releasedPiecesOf } from '@nexus/factory-domain/sales/orders/orders' // F-OO-112: the API's counts on the fixture
 import { ApiError } from '../../../../../lib/api/errors'
 import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
@@ -34,11 +35,17 @@ const words = (locale: (typeof LOCALES)[number]) => {
   return { t, s, say: (value: Words) => wordsText(value, t, s, locale) }
 }
 
-/** A full order of a state, its actions as the API's own map gives them (factory-domain orderActions; settled unless asked). */
-function full(status: OrderStatus, over: Partial<Order> & { settled?: boolean } = {}): Order {
-  const value = order(status, over)
+/**
+ * A full order of a state, its actions as the API's own map gives them (factory-domain orderActions; settled unless asked). F-OO-112
+ * (B-OO-002, Owner D1): quality released every piece unless asked (`released: false`: the demo's 7 of 14) — Mark ready is allowed then,
+ * so the parity compares the row with readyHeld on a released fixture; the quality hold is the window's (its own test below).
+ */
+function full(status: OrderStatus, over: Partial<Order> & { settled?: boolean; released?: boolean } = {}): Order {
+  const { released = true, ...rest } = over // F-OO-112
+  const value = order(status, rest)
   const settled = over.settled ?? true
-  const actions = orderActions(status, { settlement: { settled, missing: settled ? [] : [{ code: 'BALANCE_DUE', message: 'The invoices are not paid in full.' }], source: 'invoicing' } }).map((entry) => ({ action: entry.action, allowed: entry.allowed, needsReason: entry.needsReason, held: entry.held }))
+  const releasedPieces = releasedPiecesOf(value.lines.map((line) => ({ kind: line.kind, rows: line.sizes.map((size) => size.progress) }))) // F-OO-112
+  const actions = orderActions(status, { released, releasedPieces, settlement: { settled, missing: settled ? [] : [{ code: 'BALANCE_DUE', message: 'The invoices are not paid in full.' }], source: 'invoicing' } }).map((entry) => ({ action: entry.action, allowed: entry.allowed, needsReason: entry.needsReason, held: entry.held }))
   return { ...value, actions, settlement: { ...value.settlement, settled } }
 }
 
@@ -90,7 +97,8 @@ describe('F-CP-108 — the PARITY test: A14\'s map on a full order of each statu
         // Shipped or delivered: Close order…, held as closeHeld (settled; "not settled" is the window's, from the read).
         expect(has(steps, 'close')).toBe(step.kind === 'close')
         if (step.kind === 'close') expect(heldOf(steps, 'close')).toEqual(closeHeld(value, can))
-        // In production: Mark ready…, held as readyHeld (the API's markReady action is there).
+        // In production: Mark ready…, held as readyHeld (the API's markReady action is there) — F-OO-112: on a released fixture (`full`'s
+        // default); the quality hold is the window's, from the read (as Close's "not settled"): see the F-OO-112 test.
         expect(has(steps, 'ready')).toBe(!!actionOf(value, 'markReady'))
         if (has(steps, 'ready')) expect(heldOf(steps, 'ready')).toEqual(readyHeld(value, can))
         // Cancel order…: where the API offers the cancel; held as cancelHeld.
@@ -133,6 +141,29 @@ describe('F-CP-108 — the PARITY test: A14\'s map on a full order of each statu
     expect(confirmHeldOf(full('CONFIRMED'))).toEqual({ key: 'commands.confirmState', sheet: true })
   })
 })
+
+// ---- F-OO-112 (order overview N13, Owner D1; B-OO-002): Mark ready only after quality released every piece — the hold is the window's ----
+describe('F-OO-112 — the row holds Mark ready by the right only (as Close); the window and Mark N ready say the quality hold in words', () => {
+  it('quality released 7 of 14: the row\'s Mark ready… opens its window, which says the N of M words; Mark N ready puts it under "Not on"', () => {
+    const can = canOf('owner')
+    const held = full('IN_PRODUCTION', { released: false })
+    expect(heldOf(rowStepsOf(rowOf(held), can), 'ready')).toBeNull()
+    expect(windowHeldOf('ready', held, can)).toEqual({ key: 'held.readyQuality', params: { n: 7, m: 14 } })
+    expect(windowHeldOf('ready', held, can)).toEqual(readyHeld(held, can))
+    expect(words('en').say(windowHeldOf('ready', held, can)!)).toBe('Quality releases the garments: 7 of 14 released. The order turns Ready by itself when all are.')
+    expect(words('it').say(windowHeldOf('ready', held, can)!)).toBe("Il rilascio lo fa la qualità: 7 su 14 rilasciati. L'ordine diventa Pronto da solo quando lo sono tutti.")
+    // Released: the window opens (the catch-up before the system moves it).
+    expect(windowHeldOf('ready', full('IN_PRODUCTION'), can)).toBeNull()
+    // Mark N ready: the held one is named with its words, the released one runs (the same readyHeld; the bulk code is unchanged).
+    const target = (id: string, number: string) => ({ id, number, customerRef: null })
+    const preview = manyPreview('ready', [target('a', 'SO-1'), target('b', 'SO-2')], { a: { state: 'ready', order: held }, b: { state: 'ready', order: full('IN_PRODUCTION') } }, can)
+    expect(preview.runs.map((line) => line.target.number)).toEqual(['SO-2'])
+    expect(preview.notOn.map((line) => [line.target.number, line.why])).toEqual([['SO-1', { key: 'held.readyQuality', params: { n: 7, m: 14 } }]])
+    // Without orders.manage the row and the window say the right first (unchanged).
+    expect(heldOf(rowStepsOf(rowOf(held), canOf('manager')), 'ready')).toEqual(windowHeldOf('ready', held, canOf('manager')))
+  })
+})
+// ---- end F-OO-112
 
 describe('F-CP-108 — never a system move, no free status', () => {
   it('the commands are the order page\'s five; Partly shipped, Closed and Cancelled offer none; no command names a state', () => {

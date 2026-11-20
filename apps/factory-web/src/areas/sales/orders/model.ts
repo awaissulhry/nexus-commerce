@@ -28,6 +28,7 @@ import { PRICE_MATCHES, type PriceMatch } from './api' // F-CP-141: the price ch
 import type { DockDefault } from '../../_shared/record-frame/model' // F-SA-263
 // ---- F-OP-111: Split into new orders… (the API's own limits; the body the split sends) ----
 import { ORDERS_DEPTH_LIMITS } from '@nexus/factory-domain/sales/orders-depth/rules'
+import { releasedPiecesOf } from '@nexus/factory-domain/sales/orders/orders' // F-OO-112: Mark ready's held counts (B-OO-002's one rule)
 import type { ApiIssue } from '../../../lib/api/errors'
 import type { SplitBody } from './api'
 
@@ -683,10 +684,19 @@ export function cancelHeld(order: Order, can: OrderAbilities): Phrase | null {
   return null
 }
 
+// ---- F-OO-112 (order overview N13, Owner D1; B-OO-002): Mark ready reads the API's markReady — listed while in production, allowed only
+// once quality released every piece; held with the counts ("Quality releases the garments: 3 of 7 released. …", held.readyQuality), the
+// numbers from the order read's line sizes by the domain's one rule. The signature stays (the customer page lane's row window and bulk
+// Mark N ready read it: their row holds Ready by the right only, as Close — the quality hold is the window's, from the read).
 export function readyHeld(order: Order, can: OrderAbilities): Phrase | null {
   if (!can.manage) return phrase('held.noManage')
-  return actionOf(order, 'markReady') ? null : phrase('held.readyState')
+  const action = actionOf(order, 'markReady')
+  if (!action) return phrase('held.readyState')
+  if (action.allowed) return null
+  const pieces = releasedPiecesOf(order.lines.map((line) => ({ kind: line.kind, rows: line.sizes.map((size) => size.progress) })))
+  return phrase('held.readyQuality', { n: pieces.released, m: pieces.toRelease })
 }
+// ---- end F-OO-112
 
 export function promiseHeld(order: Order, can: OrderAbilities): Phrase | null {
   if (!can.manage) return phrase('held.noManage')
