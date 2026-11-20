@@ -426,6 +426,39 @@
     "rider": "Rider: {rider} · {garment}, revision {revision}",
     "artworkOpen": "Open the artwork in the viewer"
   },
+  "save": {
+    "held": {
+      "clash_one": "Choose for {count} cell changed by both",
+      "clash_other": "Choose for {count} cells changed by both",
+      "shipped": "{colour}, size {size}: {count} already shipped — raise it to {count}",
+      "price": "{colour}: the price is not a number",
+      "needsPrice": "{colour} needs a price: someone who sees prices sets it",
+      "noPieces": "{colour}: type its pieces",
+      "lockedForGood": "{colour}, size {size} is locked for good: put it back",
+      "empty": "An order keeps at least one line: to stop the whole order, cancel it"
+    }
+  },
+  "lineMenu": {
+    "options": "Options and artwork…",
+    "readyBy": "Ready-by date…",
+    "close": "Close with fewer pieces…",
+    "reopen": "Reopen this line…",
+    "split": "Move to a new order…",
+    "make": "Make work orders…",
+    "discuss": "Discuss this line",
+    "remove": "Remove line",
+    "putBack": "Put back",
+    "group": {
+      "change": "Change",
+      "pieces": "Pieces"
+    },
+    "held": {
+      "readyByShipped": "Its lines are fixed once anything shipped: change the order's ready-by date instead",
+      "splitClosed": "A line closed with fewer pieces stays on this order",
+      "splitInWork": "Every piece of this line is in work orders: it stays with this order",
+      "removeClosed": "A line closed with fewer pieces stays: reopen it first"
+    }
+  },
   "dates": {
     "promisedExFactory": "Promised (ex-factory)",
     "promisedMoved_one": "{date} · moved {count}× · {days} d since first promised",

@@ -10,6 +10,7 @@ import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
 import { APPLY_ROUTES } from '@nexus/factory-domain/order-apply/plan'
 import { WORK_ORDER_CHANGE_KINDS, type ApplyRoute } from '@nexus/factory-domain/order-apply/rules'
 import type { PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise' // F-OO-142
+import { styleRowSchema } from '../quotes/api' // F-OL-01: the style search of one order (Add a style)
 
 /**
  * Every call of the sales order screens (SCR-038 list and board, SCR-039 the order studio), with the answer's shape
@@ -479,6 +480,8 @@ export const orderLineSchema = z.object({
   // line's rider, only with sales.measurements.view (null otherwise): name, garment type, revision — never a measurement.
   artwork: z.array(z.object({ fileId: z.string(), name: z.string(), contentType: z.string(), sizeBytes: z.number() })).optional(),
   rider: z.object({ profileId: z.string(), name: z.string(), garmentType: z.string(), revision: z.number() }).nullable().optional(),
+  // F-OL-01: a charge line's kind (DEVELOPMENT, SAMPLE, TOOLING; not money) for the Lines tab's Charges block; absent: not read.
+  feeKind: z.string().nullable().optional(),
 })
 export type OrderLine = z.infer<typeof orderLineSchema>
 
@@ -662,7 +665,8 @@ export async function getOrder(api: ApiClient, id: string, signal?: AbortSignal)
 
 /** A new promise date with its reason, for the order or some of its lines (the first promise never changes). */
 // F-OO-142 (B-OO-009): why = `reasonCode`, the curated reason the customer reads; `reason` = the office's own note (may be empty).
-export async function changePromise(api: ApiClient, id: string, body: { version: number; promiseDate: string; reasonCode: PromiseReasonCode; reason: string; lineIds?: string[] }): Promise<Order> {
+// F-OL-01: the reason is optional (ol-s1, B-OL-004: empty → the server writes its automatic words); so is the code.
+export async function changePromise(api: ApiClient, id: string, body: { version: number; promiseDate: string; reasonCode?: PromiseReasonCode; reason?: string; lineIds?: string[] }): Promise<Order> {
   return (await api.request('PUT', `${orderPath(id)}/promise`, { body, schema: one, idempotencyKey: newIdempotencyKey() })).order
 }
 
@@ -897,8 +901,13 @@ export interface AmendBody {
   reason?: string
   customerRef?: string | null
   requestedDate?: string | null
-  /** Every line the order keeps (a line left out is removed). */
-  lines: AmendLineInput[]
+  /**
+   * Every line the order keeps (a line left out is removed). F-OL-01: optional (ol-s1, B-OL-020) — absent: every goods line as it is
+   * (the Overview windows Customer PO and Ship to send `{ version, customerRef }` / `{ version, shipToAddressId }`).
+   */
+  lines?: AmendLineInput[]
+  /** F-OL-01 (ol-s1, B-OL-005): ask the customer to accept the new order (the Review window's ONE tick); absent: the server's default. */
+  askCustomer?: boolean
   /** F-OP-107 (B2): what happens to pieces already cut beyond the new figures (sent only when the preview names some). */
   extraOutcome?: ExtraOutcome | null
   /** F-OP-110 (B-OP-015): another delivery address of the order's customer (sent only when one is picked; it may move alone). */
@@ -1024,6 +1033,9 @@ export const amendPreviewSchema = z.object({
   diff: diffSchema.nullable(),
   // F-OP-106: the extra pieces it would leave (B-SA-042) and what each work order would do (B-OP-013, `workOrders.plan`).
   workOrders: workOrderPreviewSchema.nullable().default(null),
+  // F-OL-01 (ol-s1, B-OL-005): the amount changes (every reader, not money) and it goes up (the price grain only; absent without it).
+  amountChanges: z.boolean().optional(),
+  totalUp: z.boolean().optional(),
 })
 export type AmendPreview = z.infer<typeof amendPreviewSchema>
 
@@ -1036,7 +1048,8 @@ export function previewAmendment(api: ApiClient, orderId: string, body: AmendBod
  * "Apply amendment" with the order's version as read (a stale one: 409). F-OP-106: it applies at once (no yes is asked) and answers
  * the work orders that followed in the same command and those that wait (B-OP-012).
  */
-export function applyAmendment(api: ApiClient, orderId: string, body: AmendBody & { version: number; reason: string }, idempotencyKey: string): Promise<{ order: Order; amendment: Amendment | null; workOrders: Followed }> {
+// F-OL-01: `reason` optional (ol-s1, B-OL-004).
+export function applyAmendment(api: ApiClient, orderId: string, body: AmendBody & { version: number; reason?: string }, idempotencyKey: string): Promise<{ order: Order; amendment: Amendment | null; workOrders: Followed }> {
   // B-OP-015: `amendment` is null when only the delivery address changed (it moved alone; no amendment is written).
   return api.post(`${orderPath(orderId)}/amendments`, { body, schema: z.object({ order: orderSchema, amendment: amendmentSchema.nullable(), workOrders: followedSchema.default(NOTHING_FOLLOWED) }), idempotencyKey })
 }
@@ -1052,7 +1065,8 @@ const closeLinesSchema = z.object({
 export type CloseLinesAnswer = z.infer<typeof closeLinesSchema>
 
 /** "Close remaining lines": what is left of the lines named (none: every open line) will not be made or shipped. */
-export function closeLines(api: ApiClient, orderId: string, body: { version: number; reason: string; reasonCode?: string; lineIds?: string[]; /* F-OP-107 */ extraOutcome?: ExtraOutcome }): Promise<CloseLinesAnswer> {
+// F-OL-01: `reason` optional (ol-s1, B-OL-004).
+export function closeLines(api: ApiClient, orderId: string, body: { version: number; reason?: string; reasonCode?: string; lineIds?: string[]; /* F-OP-107 */ extraOutcome?: ExtraOutcome }): Promise<CloseLinesAnswer> {
   return api.post(`${orderPath(orderId)}/close-lines`, { body, schema: closeLinesSchema, idempotencyKey: newIdempotencyKey() })
 }
 
@@ -1070,7 +1084,8 @@ export function previewCloseLines(api: ApiClient, orderId: string, lineIds: read
 // ---- end F-OP-107
 
 /** "Reopen lines" (the close's reversal). */
-export function reopenLines(api: ApiClient, orderId: string, body: { version: number; reason: string; lineIds?: string[] }): Promise<{ order: Order; reopened: string[] }> {
+// F-OL-01: `reason` optional (ol-s1, B-OL-004).
+export function reopenLines(api: ApiClient, orderId: string, body: { version: number; reason?: string; lineIds?: string[] }): Promise<{ order: Order; reopened: string[] }> {
   return api.post(`${orderPath(orderId)}/reopen-lines`, { body, schema: z.object({ order: orderSchema, reopened: z.array(z.string()) }), idempotencyKey: newIdempotencyKey() })
 }
 
@@ -1219,3 +1234,18 @@ export async function doneStillToDoTask(api: ApiClient, orderId: string, taskId:
   return (await api.post(`${orderPath(orderId)}/still-to-do/tasks/${encodeURIComponent(taskId)}/done`, { body: { version }, schema: z.object({ task: z.object({ id: z.string(), status: z.string(), version: z.number() }) }), idempotencyKey })).task
 }
 // ---- end F-OP-116
+
+// ---- F-OL-01 (Order LINES lane; ol-s1, B-OL-033): the style search of ONE order — our collection and this customer's own styles only
+// (another customer's style answers as an unknown one: the brand wall), each active colourway saying whether the customer's price
+// list prices it (`listPriced`; absent in an older answer: not known — never claimed either way). Add a style reads only this.
+export const orderStyleRowSchema = styleRowSchema.extend({
+  colourways: z.array(z.object({ id: z.string(), listPriced: z.boolean().optional() })).optional(),
+})
+export type OrderStyleRow = z.infer<typeof orderStyleRowSchema>
+
+/** GET /product/styles?forOrder=<orderId>&q= (the order's company and customer are the API's; ≤ 20 rows). */
+export async function findStylesForOrder(api: ApiClient, orderId: string, query: string, signal?: AbortSignal): Promise<OrderStyleRow[]> {
+  const answer = await api.get('/product/styles', { query: { forOrder: orderId, q: query.trim() || undefined, limit: 20 }, schema: z.object({ styles: z.array(orderStyleRowSchema) }), signal })
+  return answer.styles
+}
+// ---- end F-OL-01

@@ -426,6 +426,39 @@
     "rider": "Pilota: {rider} · {garment}, revisione {revision}",
     "artworkOpen": "Apri le grafiche nel visualizzatore"
   },
+  "save": {
+    "held": {
+      "clash_one": "Scegli per {count} casella cambiata da entrambi",
+      "clash_other": "Scegli per {count} caselle cambiate da entrambi",
+      "shipped": "{colour}, taglia {size}: {count} già spediti — alzala a {count}",
+      "price": "{colour}: il prezzo non è un numero",
+      "needsPrice": "{colour} ha bisogno di un prezzo: lo imposta chi vede i prezzi",
+      "noPieces": "{colour}: scrivi i capi",
+      "lockedForGood": "{colour}, taglia {size} è bloccata per sempre: rimettila com'era",
+      "empty": "Un ordine tiene almeno una riga: per fermare tutto l'ordine, annullalo"
+    }
+  },
+  "lineMenu": {
+    "options": "Opzioni e grafica…",
+    "readyBy": "Data di pronto…",
+    "close": "Chiudi con meno capi…",
+    "reopen": "Riapri questa riga…",
+    "split": "Sposta in un nuovo ordine…",
+    "make": "Crea ordini di lavoro…",
+    "discuss": "Discuti questa riga",
+    "remove": "Togli la riga",
+    "putBack": "Rimetti",
+    "group": {
+      "change": "Cambia",
+      "pieces": "Capi"
+    },
+    "held": {
+      "readyByShipped": "Le righe sono fisse appena parte qualcosa: cambia invece la data di pronto dell'ordine",
+      "splitClosed": "Una riga chiusa con meno capi resta su questo ordine",
+      "splitInWork": "Ogni capo di questa riga è negli ordini di lavoro: resta su questo ordine",
+      "removeClosed": "Una riga chiusa con meno capi resta: prima riaprila"
+    }
+  },
   "dates": {
     "promisedExFactory": "Promesso (franco fabbrica)",
     "promisedMoved_one": "{date} · spostata {count} volta · {days} g dalla prima promessa",

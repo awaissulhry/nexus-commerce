@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ChevronDown, MoreHorizontal } from 'lucide-react' // F-OO-122, F-OO-126
+import { ChevronDown } from 'lucide-react' // F-OO-126
 import { Card, EmptyState, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { DetailModal } from '../../../../../../lib/i18n/ds-parts'
@@ -11,17 +11,16 @@ import { useProductionWords } from '../../../../../../lib/production/words'
 import { PiecesGrid } from '../../../../../../lib/production/view/PiecesGrid'
 import { RecordPicture } from '../../../../../../lib/record-picture/view/RecordPicture'
 import type { Order } from '../../../api'
-import { dayInstant, type Phrase } from '../../../model'
+import { dayInstant } from '../../../model'
 import { readOf } from '../../overview/model'
 import { LINE_COLUMNS, lineRowsOf, lineSizesOf, totalOf, type LineRow } from '../../overview/progress'
 // ---- F-OO-121: the clean line cell — quiet "—", at most two pills, the missing picture ----
 import { figureFaceOf, LINE_PILLS_SHOWN, linePillsOf, madeExtraSizesText, pillToneOf, stylePictureHref, type FigureFace, type LinePill } from '../../overview/progress'
 import './progress.css'
 // ---- end F-OO-121
-// ---- F-OO-122: the row ⋯ — the line's moves through the page's own doors (the line doors of F-OO-123/124/125, the conversation) ----
-import { lineMovesOf, lineMovesShown, type LineMove } from '../../overview/progress'
-import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
-import { discussAboutOf } from '../../dock/discuss'
+// ---- F-OO-122 → F-OL-01 (c): the row ⋯ — the ONE line list (line-moves.ts) and its one router (LineMenu), shared with the Lines table ----
+import { lineMovesShown } from '../../line-moves'
+import { LineMenuButton, useLineMenu } from '../LineMenu'
 // ---- end F-OO-122
 // ---- F-OO-126: the line's window — its work orders (their pages) and their final inspections ----
 import { lineFinalsOf, lineWorkOf, type LineFinals, type LineWork } from '../../overview/progress'
@@ -111,47 +110,18 @@ interface LineMoves {
 }
 
 function useLineMoves(order: Order, model: OrderRecordModel, actions?: OrderRecordActions): LineMoves {
-  const t = useT('orders')
-  const locale = useLocale()
-  const frame = useRecordFrame()
-  const lines = readOf(model.production)?.lines ?? []
-  const heldWords = (held: Phrase) => t(held.key, held.params?.date ? { ...held.params, date: formatDate(dayInstant(String(held.params.date)), { locale }) } : held.params)
-  // F-SA-266: the line's Discuss, as DiscussDoor builds it (one line: its reference; a made-to-measure group: words, an office note).
-  const discuss = (row: LineRow, name: string) => {
-    const yourOrder = order.customerSeq ? t('discuss.yourOrderSeq', { seq: order.customerSeq }) : t('discuss.yourOrder')
-    const about = discussAboutOf(order, { yourOrder, firstLine: (words) => t('discuss.firstLine', { thing: words }) }, { part: t('discuss.line', { seq: row.seq, name }), target: row.lineIds.length === 1 ? { kind: 'SalesOrderLine', id: row.lineIds[0]! } : null })
-    frame?.discuss?.({ record: { type: 'SalesOrder', id: order.id }, about })
-  }
-  const run = (row: LineRow, name: string, move: LineMove) => {
-    if (move.id === 'make') actions?.makeWorkOrders?.onOpenLine?.(move.lineId)
-    else if (move.id === 'close') actions?.onDialog?.({ kind: 'closeLines', lineIds: move.lineIds })
-    else if (move.id === 'reopen') actions?.onDialog?.({ kind: 'reopenLines', lineIds: move.lineIds })
-    else if (move.id === 'change') actions?.onLineChange?.(move.styleId)
-    else discuss(row, name)
-  }
-  const movesOf = (row: LineRow) => lineMovesOf(row, order, model.can, { lines, thread: !!frame?.discuss })
+  // F-OL-01 (c): the same list the Lines table draws (lineMovesOf with the row's lines), run through the same router.
+  const menu = useLineMenu(order, model, actions)
   return {
-    shown: lineMovesShown(model),
-    itemsOf: (row, name, first) =>
-      movesOf(row).map((move) => ({
-        id: move.id,
-        label: t(`progress.move.${move.id}`),
-        disabled: !!move.held,
-        description: move.held ? heldWords(move.held) : undefined,
-        onSelect: move.held
-          ? undefined
-          : () => {
-              first?.()
-              run(row, name, move)
-            },
-      })),
+    shown: lineMovesShown(model.can),
+    itemsOf: (row, name, first) => menu.itemsOf(menu.movesOf(row.lineIds), { seq: row.seq, name }, first),
   }
 }
 
 /** The row's ⋯ (the DS Menu; its name says the line). */
 function LineMovesMenu({ row, name, moves }: { row: LineRow; name: string; moves: LineMoves }) {
   const t = useT('orders')
-  return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('progress.moves', { seq: row.seq, name }) }} items={moves.itemsOf(row, name)} />
+  return <LineMenuButton label={t('progress.moves', { seq: row.seq, name })} items={moves.itemsOf(row, name)} />
 }
 // ---- end F-OO-122
 

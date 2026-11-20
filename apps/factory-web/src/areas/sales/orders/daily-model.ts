@@ -58,8 +58,8 @@ export function amendHeld(order: Order, can: OrderAbilities): Phrase | null {
   if (!can.manage) return phrase('held.noManage')
   if (isFinal(order)) return phrase('held.final')
   if (!AMEND_STATUSES.includes(order.status)) return phrase('held.amendShipped')
-  // B-W2b-368 (XF1:01): a made-to-measure unit is amended with its order (kept as it is); a fee line still is not (the API's rule).
-  if (order.lines.some((line) => line.kind === 'FEE')) return phrase('held.amendFee')
+  // B-W2b-368 (XF1:01): a made-to-measure unit is amended with its order (kept as it is). F-OL-01 (ol-s1, B-OL-012): a fee line no
+  // longer holds a change — the server keeps it as it is (`held.amendFee` went).
   const daily = dailyOf(order, 'amend')
   if (daily && !daily.allowed) return phrase('held.amendState')
   return null

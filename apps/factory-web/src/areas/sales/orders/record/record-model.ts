@@ -43,6 +43,7 @@ import type { PriceCheckDialogActions, PriceCheckDialogModel } from '../price-ch
 import { amendBodyOf, amendHeld, draftOf } from '../daily-model' // F-OO-144: Requested's small dialog (the amend builder, its rule)
 import type { MilestonesActions, MilestonesModel } from '../../../planning/milestones/view-model' // F-OO-145: Planning's gate dialogs in place
 import type { CreditState } from './overview/where' // F-OO-106: the order's own credit hold
+import type { LinesTabActions, LinesTabModel } from './lines-tab-model' // F-OL-01: the Lines tab (use-lines-draft.ts)
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -63,12 +64,14 @@ export const PART_LOADING = { value: null, problem: null } as const
 // F-OO-143 (replaces F-OP-105): `followUp` — Next dates' Decide… on a new date the customer refused: the ONE promise dialog with the
 // refused request named (its follow-up task has the request's id); a new date closes it in the same command (B-OP-025). Absent:
 // Change… (the band, Next dates' Promised row, Production › Dates).
-export type BandDialog = { kind: 'promise'; followUp?: { readonly requestId: string } } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' } | { kind: 'refuseYes'; taskId: string }
+// F-OL-01: `lineIds` — a line's ⋯ "Ready-by date…" opens the ONE promise dialog on that line (absent: the whole order, as before).
+export type BandDialog = { kind: 'promise'; followUp?: { readonly requestId: string }; lineIds?: readonly string[] } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' } | { kind: 'refuseYes'; taskId: string }
 /** use-lines-acts: the lines (close and reopen lines, the cancel; F-OP-111: the split; F-OP-106: the amendment has no dialog — its strip). */
 // F-OO-124: Close short / Reopen ONE line (Overview › Progress by line ⋯): `lineIds` — the lines the dialog opens ticked (absent: every
 // line it offers, as the band's ⋯ and the Lines tab open it).
 // F-OO-144: `requested` — Next dates' "Requested by customer" Change…: a small dialog, ONE amendment (every line as it is + the new date).
-export type LinesDialog = { kind: 'closeLines'; lineIds?: readonly string[] } | { kind: 'reopenLines'; lineIds?: readonly string[] } | { kind: 'cancel' } | { kind: 'split' } | { kind: 'requested' }
+// F-OL-01: `lineId` — a line's ⋯ "Move to a new order…" opens the split with that line's pieces in the first part.
+export type LinesDialog = { kind: 'closeLines'; lineIds?: readonly string[] } | { kind: 'reopenLines'; lineIds?: readonly string[] } | { kind: 'cancel' } | { kind: 'split'; lineId?: string } | { kind: 'requested' }
 /** use-money-acts: the deposits and payments (the bank-details page, the payment, the TD02's send to SDI). */
 export type MoneyDialog = { kind: 'depositLink'; requestId: string } | { kind: 'depositPayment'; requestId: string } | { kind: 'sdiSend'; invoiceId: string }
 /** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
@@ -391,6 +394,10 @@ export interface OrderRecordModel {
   priceCheck?: PriceCheckCardModel | null
   priceCheckDialog?: PriceCheckDialogModel | null
   // ---- end F-CP-142
+  // ---- F-OL-01: the Lines tab — the draft of my changes, Review and save, Add a style, two people (use-lines-draft.ts); absent: a
+  // design case that draws the order as saved.
+  linesTab?: LinesTabModel | null
+  // ---- end F-OL-01
   /** Design cases: what a dialog holds typed. */
   draft?: { date?: string; reason?: string; reasonCode?: string; lineIds?: string[]; scope?: 'order' | 'lines'; amount?: string; reference?: string; receivedOn?: string; issue?: boolean; message?: string; typed?: string }
 }
@@ -508,6 +515,8 @@ export interface OrderRecordActions {
   /** F-CP-142: the Price check card (Customer's price…, Take them over, Try again) and the ONE window's own actions. */
   priceCheck?: PriceCheckCardActions
   priceCheckDialog?: PriceCheckDialogActions
+  /** F-OL-01: the Lines tab's acts (the table's cells, the bar, Review and save, Add a style, the row ⋯'s table acts, the doors). */
+  linesTab?: LinesTabActions
 }
 
 /** The lines editor's own actions (the amendment and the typed New order share it). */
