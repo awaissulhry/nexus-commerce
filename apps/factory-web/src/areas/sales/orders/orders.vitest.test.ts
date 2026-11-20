@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs' // F-SA-213
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SDI_NEXT_ACTIONS as DOMAIN_SDI_ACTIONS, SDI_STATE_CODES as DOMAIN_SDI_CODES } from '@nexus/factory-domain/invoicing/sdi/words'
 import { INVOICE_DOC_TYPES as DOMAIN_DOC_TYPES, INVOICE_STATUSES as DOMAIN_INVOICE_STATUSES } from '@nexus/factory-domain/invoicing/invoices'
 import { LINK_STATES as DOMAIN_LINK_STATES } from '@nexus/factory-domain/links/purposes'
@@ -115,6 +115,17 @@ import { orderLinkCountsOf } from '@nexus/factory-domain/sales/orders/linked-cou
 import { linkedRowsOf } from './record/overview/linked'
 import { orderSchema } from './api'
 // ---- end F-OO-206
+
+// ---- F-OO-142 (end check fix wave): the DS Modal draws into a portal once hydrated, never on the server, so the promise dialog's
+// words could not be read here. As lines-held's, facts' and where's dialog tests do: an open Modal draws in place (title,
+// subtitle, body, footer); a closed one draws nothing, so a case with no dialog draws as before.
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? createElement('section', { role: 'dialog', 'data-modal': '' }, createElement('h2', null, title as never), subtitle != null ? createElement('p', null, subtitle as never) : null, children as never, footer as never) : null
+  return { ...actual, Modal }
+})
+// ---- end F-OO-142
 
 const params = (query: string) => new URLSearchParams(query)
 

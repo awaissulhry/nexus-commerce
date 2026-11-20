@@ -63,7 +63,8 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
   const quiet = words.note ? t(words.note.key, words.note.stage ? { stage: w.t(`parts.stage.${words.note.stage}`) } : undefined) : null
   const strip = stageStripOf(order, headline, read?.dates ?? null) // F-OO-102: the dots in the headline's own state
   // F-OP-301 (walk #2): section 1 names no wait at all now (Who acts next lives in Requests & changes' groups, F-OO-103), so it can
-  // never say a stale "Waiting on us · 5 d" beside a card that says nothing waits — and it never reads the kept `headline.waiting`.
+  // never say a stale "Waiting on us · 5 d" beside a card that says nothing waits — and it never reads the headline's kept waiting list
+  // (end check fix wave: named in words, so the source test that no such read exists reads only code).
   // F-OO-104: its strips name what stops the order (holds, the yes, the deposit) — the ONE list's HOLD rows, never a "waiting on".
   return (
     <Card padded className="fw-so-where">
