@@ -911,7 +911,9 @@ describe('F-OO-106: the credit strip — Check credit again, Ask for a yes… on
       const client = readFileSync(new URL('../credit/api.ts', import.meta.url), 'utf8')
       for (const money of ['limit:', 'exposure', 'openOrders', 'available', 'overLimitBy', 'usedPct', 'amount']) expect(client, money).not.toContain(money)
       const container = readFileSync(new URL('../OrderRecord.tsx', import.meta.url), 'utf8')
-      expect(container).toContain("credit: { permissions: session.permissions, reread: () => { depth.actions.onRetry?.('approval'); production.again(['headline']) } } /* F-OO-106 */")
+      // Walk #2: + the yes's read (a credit hold the order read does not name), so the hook is mounted after the depth read.
+      expect(container).toContain("credit: { permissions: session.permissions, reread: () => { depth.actions.onRetry?.('approval'); production.again(['headline']) }, approval: depth.model.approval?.value ?? null /* walk #2 */ } /* F-OO-106 */")
+      expect(container.indexOf('const overview = useOverviewActs(')).toBeGreaterThan(container.indexOf('const depth = useOrderDepth('))
     })
 
     it('the words exist in both languages, office "tu" in Italian', () => {

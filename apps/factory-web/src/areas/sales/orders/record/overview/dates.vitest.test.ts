@@ -148,10 +148,13 @@ describe('F-OO-141: Next dates — the promise first, what the plan says against
     it('the plan after the promise is amber (the cause of "At risk"); nothing planned: "Nothing plans it yet", amber', () => {
       const late = card({ production: withPlan('2026-12-20') })
       expect(textOf(late)).toContain(`${day('2026-12-20')} · 5 d after the promise`)
-      expect(late).toContain('<span class="fw-so-dates-warn">')
+      expect(late).toContain('<span class="fw-so-dates-value is-under fw-so-dates-warn">')
+      expect(textOf(late)).toContain('(from the plan)')
       const none = card({ production: withPlan(null) })
       expect(textOf(none)).toContain('Plan says ready Nothing plans it yet')
-      expect(none).toContain('<span class="fw-so-dates-warn">')
+      expect(none).toContain('<span class="fw-so-dates-value is-under fw-so-dates-warn">')
+      // Walk #11: no "(from the plan)" beside "Nothing plans it yet" — there is no plan it comes from.
+      expect(textOf(none)).not.toContain('(from the plan)')
       expect(card()).not.toContain('fw-so-dates-warn')
     })
 
@@ -187,9 +190,12 @@ describe('F-OO-141: Next dates — the promise first, what the plan says against
       expect(view).toContain("import './dates.css'")
       for (const gone of ['overview.dates.none', 'milestone.kind.', 'exFactory']) expect(view, gone).not.toContain(gone)
       const css = readFileSync(new URL('../view/overview/dates.css', import.meta.url), 'utf8')
-      expect(css).toMatch(/\.fw-so-dates-grid \{\s*display: grid;\s*grid-template-columns: max-content minmax\(0, 1fr\) auto;/)
+      // Walk #1: the label column fits its words up to 40 % of the card (a long gate name wraps, the value keeps its room) …
+      expect(css).toMatch(/\.fw-so-dates-grid \{\s*display: grid;\s*grid-template-columns: fit-content\(40%\) minmax\(0, 1fr\) auto;/)
       expect(css).toMatch(/\.fw-so-dates-rows > \.fw-so-ov-row \{\s*grid-column: 1 \/ -1;\s*grid-template-columns: subgrid;/)
-      expect(css).toMatch(/@container fw-so-ov-card \(max-width: 359px\) \{\s*\.fw-so-dates-grid \{\s*grid-template-columns: minmax\(0, 1fr\);/)
+      // … and below a 480 px card a row stacks: the label on its own line, the value with its door beside it.
+      expect(css).toMatch(/@container fw-so-ov-card \(max-width: 479px\) \{\s*\.fw-so-dates-grid \{\s*grid-template-columns: minmax\(0, 1fr\) auto;\s*\}\s*\.fw-so-dates-rows > \.fw-so-ov-row > \.fw-so-dates-label \{\s*grid-column: 1 \/ -1;\s*\}\s*\.fw-so-dates-rows > \.fw-so-ov-row > \.fw-so-ov-doors \{\s*grid-column: 2;/)
+      expect(css).not.toMatch(/overflow-wrap: anywhere/)
       expect(css).toContain('color: var(--nds-warning-text);')
       expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
       expect(css).not.toMatch(/container(-type)?:/)
