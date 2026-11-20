@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import type { ReactNode } from 'react' // F-OP-301
 import { Banner, Card, EmptyState } from '@nexus/ui/components'
 import { Button, Pill, Skeleton } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime, formatTime } from '../../../../../lib/i18n/format'
@@ -22,6 +21,7 @@ import { readOf } from '../overview/model'
 import type { Order } from '../../api'
 import { askingOf, askWordsOf, decisionBandOf, stillGroupsOf, stillRowsOf, type StillRowOf } from '../changes/model'
 import { stillDoorsOf } from '../changes/model' // F-OP-116
+import { rowAgeOf } from '../changes/model' // F-OO-204: a waiting row's age
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
 // ---- F-OP-103: a row of the ONE waiting list and its one door (the review window, the thread, the yes, the payment, a tab) ----
@@ -67,7 +67,6 @@ export function RequestsSection({ order, model, actions }: { order: Order; model
 function Requests({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const a = useT(APPROVALS_NS)
-  const ra = useT(RECORD_APPROVALS_NS)
   const w = useProductionWords()
   const locale = useLocale()
   // F-OP-301 (walk #1): the ONE waiting list — the same call Overview's card and the Changes badge make, so the counts agree.
@@ -75,95 +74,79 @@ function Requests({ order, model, actions }: { order: Order; model: OrderRecordM
   const card = waiting.status === 'ready' ? waiting.card : null
   const part = model.requests ?? null
   const requestsReading = !!part && part.value === null && part.problem === null
-  const asked = model.askedOfCustomer?.value ?? []
   /** Not ready: the production read's state in this card's words (it reads, or it failed with Try again); never "nothing" before it. */
   const notReady = (label: string) => (waiting.status === 'ready' ? null : <PartState problem={waiting.status === 'failed' ? waiting.problem : null} label={label} onRetry={() => actions?.onRetryProduction?.()} />)
   return (
-    <div className="fw-so-cards fw-so-cards--wide">
-      <Card padded>
-        <div className="fw-so-card-head">
-          <h2 className="fw-so-h2">{t('changes.onUs.title')}</h2>
-          {card && card.onUs.length > 0 && <span className="fw-so-hint">{t('changes.onUs.count', { count: card.onUs.length })}</span>}
-        </div>
-        {!card ? (
-          notReady(t('changes.onUs.title'))
-        ) : card.onUs.length === 0 ? (
-          <p className="fw-so-hint">{t('changes.onUs.nothing')}</p>
-        ) : (
-          <div className="fw-so-stack">
-            {card.onUs.map((row) => {
-              const request = row.door.kind === 'answer' ? row.door.request : null
-              // A request the page has not read yet: its card comes with the read.
-              if (row.door.kind === 'answer' && !request && requestsReading) return <Skeleton key={row.key} height={64} />
-              if (!request) {
-                return (
-                  <ul key={row.key} className="fw-so-datelist">
-                    <WaitingRowItem row={row} order={order} model={model} actions={actions} here="changes" />
-                  </ul>
-                )
-              }
-              return (
-                <div key={row.key} id={rowAnchor('OrderChangeRequest', request.id) /* F-SA-266 */} tabIndex={-1}>
-                  <RequestCard
-                    face="office"
-                    request={cardInputOf(request, null, { say: a, locale, day: w.day, money: (minor, currency) => money(minor, currency, locale) })}
-                    action={
-                      <span className="fw-so-inline">
-                        {/* F-SA-243: Answer… opens the ONE review window on this page (Esc returns here); held with the reason when
-                            another team answers the kind ("Production answers a pause"). F-OP-301: an agreed or lapsed counter waits
-                            on us too — Answer… as well. */}
-                        <AnswerDoor request={request} model={model} />
-                        {/* F-SA-266: discuss this request (its reference; the customer reads its own words). */}
-                        <DiscussDoor order={order} part={t('discuss.request', { kind: w.t(`parts.request.kind.${request.kind}`) })} target={{ kind: 'OrderChangeRequest', id: request.id }} />
-                      </span>
-                    }
-                  />
-                </div>
-              )
-            })}
+    <>
+      {/* F-OO-204 (review F6; D8): one quiet line at the head of Changes — the holds and the dates left this tab's lists (and its badge)
+          for the Overview's own cards; it says where they are, so "No request waits" never reads as "nothing waits". */}
+      <p className="fw-so-hint">{t('requests.changesNote')}</p>
+      <div className="fw-so-cards fw-so-cards--wide">
+        <Card padded>
+          <div className="fw-so-card-head">
+            <h2 className="fw-so-h2">{t('changes.onUs.title')}</h2>
+            {card && card.onUs.length > 0 && <span className="fw-so-hint">{t('changes.onUs.count', { count: card.onUs.length })}</span>}
           </div>
-        )}
-      </Card>
-      <Card padded>
-        <div className="fw-so-card-head">
-          <h2 className="fw-so-h2">{t('changes.onCustomer.title')}</h2>
-          {card && card.onCustomer.length > 0 && <span className="fw-so-hint">{t('changes.onUs.count', { count: card.onCustomer.length })}</span>}
-        </div>
-        {!card ? (
-          notReady(t('changes.onCustomer.title'))
-        ) : card.onCustomer.length === 0 ? (
-          <EmptyState title={t('changes.onCustomer.nothing')} />
-        ) : (
-          <ul className="fw-so-datelist">
-            {card.onCustomer.map((row) => {
-              // F-OP-301: an approval we asked, in its own question with its due day and state (record-approvals' words); our open
-              // counter-offer in its own words; the rest in the list's words.
-              const approval = row.ref?.type === 'ApprovalRequest' ? (asked.find((entry) => entry.id === row.ref!.id) ?? null) : null
-              const counter = row.kind === 'APPROVAL' && row.ref?.type === 'OrderChangeRequest'
-              return (
-                <WaitingRowItem
-                  key={row.key}
-                  row={row}
-                  order={order}
-                  model={model}
-                  actions={actions}
-                  here="changes"
-                  words={approval?.question ?? (counter ? t('changes.onUs.countered') : null)}
-                  extra={
-                    approval ? (
-                      <>
-                        {approval.dueAt ? ` · ${t('changes.onCustomer.due', { date: formatDate(approval.dueAt, { locale }) })}` : ''}{' '}
-                        <Pill tone="warning">{ra(`status.${approval.status}`)}</Pill>
-                      </>
-                    ) : null
-                  }
-                />
-              )
-            })}
-          </ul>
-        )}
-      </Card>
-    </div>
+          {!card ? (
+            notReady(t('changes.onUs.title'))
+          ) : card.onUs.length === 0 ? (
+            <p className="fw-so-hint">{t('changes.onUs.nothing')}</p>
+          ) : (
+            <div className="fw-so-stack">
+              {card.onUs.map((row) => {
+                const request = row.door.kind === 'answer' ? row.door.request : null
+                // A request the page has not read yet: its card comes with the read.
+                if (row.door.kind === 'answer' && !request && requestsReading) return <Skeleton key={row.key} height={64} />
+                if (!request) {
+                  return (
+                    <ul key={row.key} className="fw-so-datelist">
+                      <WaitingRowItem row={row} order={order} model={model} actions={actions} here="changes" />
+                    </ul>
+                  )
+                }
+                return (
+                  <div key={row.key} id={rowAnchor('OrderChangeRequest', request.id) /* F-SA-266 */} tabIndex={-1}>
+                    <RequestCard
+                      face="office"
+                      request={cardInputOf(request, null, { say: a, locale, day: w.day, money: (minor, currency) => money(minor, currency, locale) })}
+                      action={
+                        <span className="fw-so-inline">
+                          {/* F-SA-243: Answer… opens the ONE review window on this page (Esc returns here); held with the reason when
+                              another team answers the kind ("Production answers a pause"). F-OP-301: an agreed or lapsed counter waits
+                              on us too — Answer… as well. */}
+                          <AnswerDoor request={request} model={model} />
+                          {/* F-SA-266: discuss this request (its reference; the customer reads its own words). */}
+                          <DiscussDoor order={order} part={t('discuss.request', { kind: w.t(`parts.request.kind.${request.kind}`) })} target={{ kind: 'OrderChangeRequest', id: request.id }} />
+                        </span>
+                      }
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Card>
+        <Card padded>
+          <div className="fw-so-card-head">
+            <h2 className="fw-so-h2">{t('changes.onCustomer.title')}</h2>
+            {card && card.onCustomer.length > 0 && <span className="fw-so-hint">{t('changes.onUs.count', { count: card.onCustomer.length })}</span>}
+          </div>
+          {!card ? (
+            notReady(t('changes.onCustomer.title'))
+          ) : card.onCustomer.length === 0 ? (
+            <EmptyState title={t('changes.onCustomer.nothing')} />
+          ) : (
+            <ul className="fw-so-datelist">
+              {/* F-OP-301: an approval we asked, in its own question with its due day and state (record-approvals' words). F-OO-204: our
+                  open counter-offer in the card's words ("Our counter-offer: …") with Open… — the same row as on Overview. */}
+              {card.onCustomer.map((row) => (
+                <WaitingRowItem key={row.key} row={row} order={order} model={model} actions={actions} here="changes" />
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+    </>
   )
 }
 
@@ -257,11 +240,8 @@ export function StillRow({ row, order, model, actions }: { row: StillRowOf; orde
   const t = useT('orders')
   const a = useT(APPROVALS_NS)
   const locale = useLocale()
-  const search = useSearchParams()?.toString() ?? '' // F-OP-116: the order's own tabs keep the dock's scope
   const state = stillStateOf(row)
   const team = TEAM_WORDS[row.waitingOn as ApplyTeam]
-  const door = stillDoorsOf(row, { prefix: model.prefix, record: `${model.prefix}/sales/orders/${order.id}`, address: (ref) => recordAddress({ type: ref.type, id: ref.id, label: ref.number ?? undefined, companyId: order.companyId, siteId: null }, OFFICE_PAGES), search })
-  const busy = model.busy ? t('held.busy') : null
   return (
     <li className="fw-so-still">
       <span className="fw-so-stack-tight">
@@ -269,40 +249,58 @@ export function StillRow({ row, order, model, actions }: { row: StillRowOf; orde
         <span className="fw-so-cell-sub">{[team ? said(team, locale) : null, t('changes.still.since', { when: formatDateTime(row.since, { locale }) })].filter(Boolean).join(' · ')}</span>
       </span>
       <span className="fw-so-inline">
+        {/* F-OO-204: the state pill is Changes' own (Overview's card says whose turn it is in the held words). */}
         <Pill tone={state.tone}>{a(state.key)}</Pill>
-        {/* F-OP-116: the door in place. */}
-        {door.kind === 'change' && (
-          <>
-            <Button size="sm" heldReason={door.held ? t('wo.waitsPlannerShort') : busy} onClick={() => actions?.orderChanges?.onOpen?.(door.changeId)}>
-              {t('wo.changeApply')}
-            </Button>
-            <Button size="sm" variant="quiet" heldReason={door.held ? t('wo.waitsPlannerShort') : busy} onClick={() => actions?.orderChanges?.onOpen?.(door.changeId)}>
-              {t('wo.changeLeave')}
-            </Button>
-          </>
-        )}
-        {door.kind === 'repromise' && (
-          <>
-            <Button size="sm" heldReason={door.held ? t('wo.repromiseHeld') : busy} onClick={() => actions?.links?.onAccept?.(door.proposalId)}>
-              {t('links.rePromise.accept')}
-            </Button>
-            <Button size="sm" variant="quiet" heldReason={door.held ? t('wo.repromiseHeld') : busy} onClick={() => actions?.links?.onDeclineStart?.(door.proposalId)}>
-              {t('links.rePromise.decline')}
-            </Button>
-          </>
-        )}
-        {door.kind === 'task' && (
-          <Button size="sm" heldReason={door.held ? t('wo.heldHold') : door.version === null ? t('held.busy') : busy} onClick={() => door.version !== null && actions?.onTaskDone?.(door.taskId, door.version)}>
-            {t('wo.done')}
-          </Button>
-        )}
-        {door.kind === 'link' && (
-          <Button size="sm" variant="quiet" asChild>
-            <Link href={door.href}>{t(`wo.go.${door.label}`)}</Link>
-          </Button>
-        )}
+        <StillDoorView row={row} order={order} model={model} actions={actions} />
       </span>
     </li>
+  )
+}
+
+/**
+ * F-OO-204 (11-design §5.3): a Still to do row's door, in place — ONE copy, drawn by Changes' rows and by Overview's card (F-OP-116's
+ * doors, unchanged): Apply… / Leave as is… (the ONE decide window), Accept / Decline… (planning's re-promise), Done (a task, its own
+ * right), or a real link (Scrap ›, Products ›, Subcontracting ›). Each held in its own words; every write sends its version.
+ */
+export function StillDoorView({ row, order, model, actions }: { row: StillRowOf; order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const search = useSearchParams()?.toString() ?? '' // F-OP-116: the order's own tabs keep the dock's scope
+  const door = stillDoorsOf(row, { prefix: model.prefix, record: `${model.prefix}/sales/orders/${order.id}`, address: (ref) => recordAddress({ type: ref.type, id: ref.id, label: ref.number ?? undefined, companyId: order.companyId, siteId: null }, OFFICE_PAGES), search })
+  const busy = model.busy ? t('held.busy') : null
+  return (
+    <>
+      {/* F-OP-116: the door in place. */}
+      {door.kind === 'change' && (
+        <>
+          <Button size="sm" heldReason={door.held ? t('wo.waitsPlannerShort') : busy} onClick={() => actions?.orderChanges?.onOpen?.(door.changeId)}>
+            {t('wo.changeApply')}
+          </Button>
+          <Button size="sm" variant="quiet" heldReason={door.held ? t('wo.waitsPlannerShort') : busy} onClick={() => actions?.orderChanges?.onOpen?.(door.changeId)}>
+            {t('wo.changeLeave')}
+          </Button>
+        </>
+      )}
+      {door.kind === 'repromise' && (
+        <>
+          <Button size="sm" heldReason={door.held ? t('wo.repromiseHeld') : busy} onClick={() => actions?.links?.onAccept?.(door.proposalId)}>
+            {t('links.rePromise.accept')}
+          </Button>
+          <Button size="sm" variant="quiet" heldReason={door.held ? t('wo.repromiseHeld') : busy} onClick={() => actions?.links?.onDeclineStart?.(door.proposalId)}>
+            {t('links.rePromise.decline')}
+          </Button>
+        </>
+      )}
+      {door.kind === 'task' && (
+        <Button size="sm" heldReason={door.held ? t('wo.heldHold') : door.version === null ? t('held.busy') : busy} onClick={() => door.version !== null && actions?.onTaskDone?.(door.taskId, door.version)}>
+          {t('wo.done')}
+        </Button>
+      )}
+      {door.kind === 'link' && (
+        <Button size="sm" variant="quiet" asChild>
+          <Link href={door.href}>{t(`wo.go.${door.label}`)}</Link>
+        </Button>
+      )}
+    </>
   )
 }
 
@@ -382,21 +380,51 @@ function Still({ order, model, actions }: { order: Order; model: OrderRecordMode
 
 // ---- F-OP-103 (10-order-page §3.2): one row of the ONE waiting list — its words, since when, and its ONE door ---------------------
 /** A waiting row: what waits (the API's words or the page's), since when, its door; an answer row keeps its Discuss (F-SA-266). */
-// F-OP-301 (walk #1): the Changes tab draws the same rows — `here` (the tab it is drawn on: no door back to itself), `words` (an
-// approval we asked in its own question), `extra` (its due day and state after the since).
-export function WaitingRowItem({ row, order, model, actions, here, words: own, extra }: { row: WaitingRow; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; here?: 'changes'; words?: string | null; extra?: ReactNode }) {
+// F-OP-301 (walk #1): the Changes tab draws the same rows — `here` (the tab it is drawn on: no door back to itself); an approval we
+// asked says its own question, then its due day and state after the since.
+// F-OO-204 (11-design §5.2, §5.4): on Overview's card a row is `words | age | door` — the age ("15 d") with its exact day in the
+// title, no Discuss (it stays on Changes' request cards), and Read-only (`readOnly`) sees the words and the age, no door. A request
+// is said whole as the band says it ("<Customer> asks: Change · line 10 · M 40 → 36").
+export function WaitingRowItem({ row, order, model, actions, here, readOnly = false }: { row: WaitingRow; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; here?: 'changes'; readOnly?: boolean }) {
   const t = useT('orders')
+  const ra = useT(RECORD_APPROVALS_NS)
   const w = useProductionWords()
   const locale = useLocale()
-  const words = own || rowWordsOf(row, { t, kindWords: (kind) => w.t(`parts.request.kind.${kind}`), locale, customer: order.party?.legalName ?? '' })
+  const approval = row.ref?.type === 'ApprovalRequest' ? ((model.askedOfCustomer?.value ?? []).find((entry) => entry.id === row.ref!.id) ?? null) : null
+  const due = approval?.dueAt ? t('changes.onCustomer.due', { date: formatDate(approval.dueAt, { locale }) }) : null
+  const words =
+    approval?.question ??
+    rowWordsOf(row, {
+      t,
+      kindWords: (kind) => w.t(`parts.request.kind.${kind}`),
+      locale,
+      customer: order.party?.legalName ?? '',
+      askWords: (request) => askWordsOf(request, { kind: w.t(`parts.request.kind.${request.kind}`), say: t, day: w.day }), // F-OO-204
+    })
+  if (here !== 'changes') {
+    // F-OO-204: Overview's card row (the shared card row's columns: requests.css lays them out).
+    return (
+      <li className="fw-so-ov-row fw-so-rq-row">
+        <span>{due ? `${words} · ${due}` : words}</span>
+        <RowAge since={row.since} asOf={readOf(model.production)?.asOf ?? null} />
+        <span className="fw-so-ov-doors">
+          <WaitingDoorView door={row.door} order={order} model={model} actions={actions} readOnly={readOnly} />
+        </span>
+      </li>
+    )
+  }
   return (
     <li className="fw-so-still">
       <span className="fw-so-stack-tight">
         <span>{words}</span>
-        {(row.since || extra) && (
+        {(row.since || approval) && (
           <span className="fw-so-cell-sub">
             {row.since ? t('changes.still.since', { when: formatDateTime(row.since, { locale }) }) : null}
-            {extra}
+            {approval ? (
+              <>
+                {due ? ` · ${due}` : ''} <Pill tone="warning">{ra(`status.${approval.status}`)}</Pill>
+              </>
+            ) : null}
           </span>
         )}
       </span>
@@ -408,8 +436,29 @@ export function WaitingRowItem({ row, order, model, actions, here, words: own, e
   )
 }
 
-/** The row's one door, in place: Answer… (the review window here), Reply in the thread, the yes, Record the payment, or a tab ›. */
-function WaitingDoorView({ door, order, model, actions, here }: { door: WaitingDoor; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; here?: 'changes' }) {
+/**
+ * F-OO-204: how long a row waits — "15 d" (the parts' words), counted to the production read's own time; its exact day in the title
+ * ("since 02/11/2026, 09:00"); no start known: "—". Shared by the card's request and Still to do rows.
+ */
+export function RowAge({ since, asOf }: { since: string | null; asOf: string | null }) {
+  const t = useT('orders')
+  const w = useProductionWords()
+  const locale = useLocale()
+  const age = rowAgeOf(since, asOf)
+  if (!since || !age) return <span className="fw-so-rq-age">—</span>
+  return (
+    <time className="fw-so-rq-age" dateTime={since} title={t('changes.still.since', { when: formatDateTime(since, { locale }) })}>
+      {w.say(age)}
+    </time>
+  )
+}
+
+/**
+ * The row's one door, in place: Answer… (the review window here), Open… (our counter-offer, the same window), Reply in the thread, the
+ * yes, Record the payment, Lift…, or a tab ›; "Their turn" (words, no button) for what we asked the customer. F-OO-204: Read-only gets
+ * no door, only the words.
+ */
+function WaitingDoorView({ door, order, model, actions, here, readOnly = false }: { door: WaitingDoor; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; here?: 'changes'; readOnly?: boolean }) {
   const t = useT('orders')
   const scoped = useScopedT('orders') // F-OP-116: a held phrase may name another catalogue
   const frame = useRecordFrame()
@@ -420,6 +469,10 @@ function WaitingDoorView({ door, order, model, actions, here }: { door: WaitingD
       <TabLink href={`${tabHref(recordHref, tab, search)}${anchor ? `#${anchor}` : ''}`}>{t(`waiting.go.${tab}`)}</TabLink>
     </Button>
   )
+  // F-OO-204: what we asked the customer is theirs to answer — said on Overview's card (Changes lists it under "Waiting on the
+  // customer", its state beside it); never a button, for anyone.
+  if (door.kind === 'their') return here === 'changes' ? null : <span className="fw-so-hint">{t('waiting.theirTurn')}</span>
+  if (readOnly) return null
   switch (door.kind) {
     case 'answer':
       // The request as this page read it opens the ONE review window; not read (yet): Changes, where it is listed.
@@ -440,8 +493,28 @@ function WaitingDoorView({ door, order, model, actions, here }: { door: WaitingD
           {t('deposit.record')}
         </Button>
       )
+    case 'open': {
+      // F-OO-204 (11-design §5.3): our open counter-offer opens the ONE review window on this page (`?open=`: our counter, and Decide
+      // for <customer> for the one who may); it only opens, so it is never held for a right.
+      const href = model.requestDoor?.hrefOf(door.requestId) ?? null
+      if (!href) {
+        return (
+          <Button size="sm" heldReason={t('band.answerNone')}>
+            {t('waiting.open')}
+          </Button>
+        )
+      }
+      return (
+        <Button size="sm" asChild>
+          <Link href={href} scroll={false}>
+            {t('waiting.open')}
+          </Link>
+        </Button>
+      )
+    }
     case 'tab':
-      return door.tab === here ? null : tabLink(door.tab, door.anchor) // F-OP-301: never a door to the tab it is drawn on
+      // F-OO-204: a row's tab is Production or Money (what waits on the customer has its own door now), never the tab drawn on.
+      return tabLink(door.tab, door.anchor)
     case 'lift': {
       // F-OP-116: the work-order row's own Lift (F-OP-114, one copy), on the row the production read gives; held with who does it.
       const row = (readOf(model.production)?.work?.workOrders ?? []).find((entry) => entry.id === door.workOrderId) ?? null

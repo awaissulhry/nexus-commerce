@@ -888,7 +888,9 @@ describe('F-SA-236: Changes — waiting on us, waiting on the customer, the hist
     expect(card).toContain('frame.openFiles')
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['changes.onUs.title', 'changes.onUs.nothing', 'changes.onUs.countered', 'changes.onCustomer.title', 'changes.onCustomer.reaccept', 'changes.confirmation.title', 'changes.confirmation.yes', 'changes.history.title', 'changes.history.priced', ...HISTORY_CHIPS.map((chip) => `changes.history.chips.${chip}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      // F-OO-204: the counter-offer row says the card's own words ("Our counter-offer: …", waiting.counterOpen): `changes.onUs.countered` went.
+      for (const key of ['changes.onUs.title', 'changes.onUs.nothing', 'changes.onCustomer.title', 'changes.onCustomer.reaccept', 'changes.confirmation.title', 'changes.confirmation.yes', 'changes.history.title', 'changes.history.priced', ...HISTORY_CHIPS.map((chip) => `changes.history.chips.${chip}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      expect(t('changes.onUs.countered'), `${locale}: changes.onUs.countered`).toBe('changes.onUs.countered')
     }
   })
 })

@@ -1332,14 +1332,13 @@
     "reacceptance": "Customer re-acceptance",
     "onUs": {
       "title": "Waiting on us",
-      "nothing": "Nothing waits on us",
-      "countered": "Counter-offer sent · waits for the customer",
+      "nothing": "No request waits on us",
       "count_one": "{count} waiting",
       "count_other": "{count} waiting"
     },
     "onCustomer": {
       "title": "Waiting on the customer",
-      "nothing": "Nothing waits on the customer",
+      "nothing": "No request waits on the customer",
       "reaccept": "The changed order waits for the customer's new yes",
       "since": "since {date}",
       "due": "due {date}"
@@ -1936,14 +1935,17 @@
     }
   },
   "waiting": {
-    "onUs_one": "Waiting on us: {count}",
-    "onUs_other": "Waiting on us: {count}",
-    "onCustomer_one": "Waiting on {customer}: {count}",
-    "onCustomer_other": "Waiting on {customer}: {count}",
+    "onUs_one": "Waiting on us · {count}",
+    "onUs_other": "Waiting on us · {count}",
+    "onCustomer_one": "Waiting on {customer} · {count}",
+    "onCustomer_other": "Waiting on {customer} · {count}",
     "reply": "Reply in the thread",
     "noThread": "The conversation is not on this page",
-    "counterAgreed": "They agreed to your counter-offer",
-    "counterLapsed": "Your counter-offer lapsed",
+    "counterAgreed": "{customer} agreed to your counter-offer: {what}",
+    "counterLapsed": "Your counter-offer lapsed: {what}",
+    "counterOpen": "Our counter-offer: {what}",
+    "open": "Open…",
+    "theirTurn": "Their turn",
     "problem": "{customer} reported a problem",
     "repromise": "{customer} refused the new date",
     "yes": "Waiting for a yes: {kind}",
@@ -2148,5 +2150,8 @@
       "taking": "Taking them over…",
       "takenOver": "The customer's prices of {number} are taken over from its request."
     }
+  },
+  "requests": {
+    "changesNote": "Holds are on Overview · dates are in Next dates"
   }
 }

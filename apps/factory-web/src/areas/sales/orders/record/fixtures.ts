@@ -85,6 +85,7 @@ import type { ActsDialog, WorkOrderActsModel } from '../../../../lib/production/
 import { releaseCheck, workOrder as productionWorkOrder } from '../../../production/_shared/fixtures'
 import { HOLD_REASONS, PRODUCTION_HOLD_REASONS } from '../../../production/work-orders/daily/demo/fixtures'
 // F-SA-243: the order's requests (the shared request fixtures) and its production read with Still to do.
+import type { OfficeRequest } from '../../../../record-panels/approvals/api' // F-OO-204: the approvals we asked the customer
 import { PRODUCTION_READ } from './overview/fixtures'
 import { brandRequest } from '../../../home/approvals/requests/fixtures'
 import { ORDER_ID } from '../_demo/fixtures'
@@ -528,6 +529,80 @@ const F_OP_301: DesignCase<RecordCase>[] = [
 ]
 // ---- end F-OP-301
 
+// ---- F-OO-204 (order overview §5.2, §5.3): the order's requests and changes as one made-up world — Moto Demo's change waits on us
+// (said whole: "Change · line 10 · M 40 → 36", 15 d), its agreed counter-offer too, and a problem it reported; our counter-offer on
+// line 20 waits on the customer (Open…: the ONE review window), so do the artwork, the sample and the proof we asked (each its own
+// question and due day: "Their turn") and a task on its portal; Still to do: four steps. The order's holds (a quality hold, the
+// customer's pause on two work orders) and a gate are not requests: Where it is now and Next dates draw them. ----
+const rqId = (n: number) => `0190f0e2-3131-7000-8000-${String(n).padStart(12, '0')}`
+const rqCell = (seq: 10 | 20, size: string, before: number, asked: number) => ({ ...ASK.cells[0]!, lineId: seq === 10 ? LINE_BLK : LINE_RED, seq, size, before, asked })
+const rqCounter = (n: number, state: 'WAITING' | 'AGREED', at: string) => ({ approvalRequestId: rqId(700 + n), at, date: null, fee: null, note: null, priced: false, offer: { en: 'Our counter-offer', it: 'La nostra controproposta' }, state, words: state === 'AGREED' ? { en: 'The customer said yes: accept to carry it out.', it: 'Il cliente ha detto sì: accetta per eseguirla.' } : { en: "Waits for the customer's answer", it: 'Aspetta la risposta del cliente' } })
+export const RQ_ASK = brandRequest(31, { ...ASK, id: rqId(31), askedAt: '2026-11-03T09:00:00Z', cells: [rqCell(10, 'M', 40, 36)], note: 'Four fewer M: the shop cut its order.' })
+export const RQ_AGREED = brandRequest(32, { ...ASK, id: rqId(32), status: 'COUNTERED', askedAt: '2026-11-08T09:00:00Z', cells: [rqCell(10, 'L', 30, 32)], counter: rqCounter(32, 'AGREED', '2026-11-10T09:00:00Z') })
+export const RQ_COUNTERED = brandRequest(33, { ...ASK, id: rqId(33), status: 'COUNTERED', waitingOn: 'CUSTOMER', askedAt: '2026-11-12T09:00:00Z', cells: [rqCell(20, 'L', 2, 3)], counter: rqCounter(33, 'WAITING', '2026-11-13T09:00:00Z') })
+const rqAsked = (n: number, kind: OfficeRequest['kind'], question: string, dueAt: string, createdAt: string): OfficeRequest => ({
+  id: rqId(600 + n),
+  companyId: COMPANY,
+  kind,
+  record: { type: 'SalesOrder', id: ORDER_ID, words: { it: 'SO-2026-0088', en: 'SO-2026-0088' } },
+  party: { id: PARTY.id, name: 'Moto Demo S.r.l.' },
+  contactId: null,
+  question,
+  dueAt,
+  status: 'OPEN',
+  answer: null,
+  withdrawn: null,
+  askedBy: 'Carlo Prova',
+  createdAt,
+  files: [],
+  links: [],
+  may: { withdraw: true },
+  version: 1,
+})
+export const RQ_ASKED: OfficeRequest[] = [
+  rqAsked(1, 'ARTWORK', 'Artwork for the hang tag', '2026-12-02T16:00:00Z', '2026-11-04T09:00:00Z'),
+  rqAsked(2, 'SAMPLE', 'The second fit sample of the black jacket', '2026-11-28T16:00:00Z', '2026-11-06T09:00:00Z'),
+  rqAsked(3, 'PROOF', 'The print proof of the inner label', '2026-11-30T16:00:00Z', '2026-11-16T09:00:00Z'),
+]
+const rqBlocker = (kind: string, on: 'US' | 'BRAND', en: string, it: string, since: string, ref: { type: string; id: string; messageId?: string } | null, sub: 'REQUEST' | 'COUNTER' | 'PROBLEM' | null = null) => ({ kind, on, words: { en, it }, since, ref, sub })
+export const RQ_BLOCKERS = [
+  rqBlocker('GATE', 'US', 'A gate is not passed yet', 'Un controllo non è ancora superato', '2026-11-02T08:00:00Z', { type: 'OrderGate', id: rqId(801) }),
+  rqBlocker('BRAND_REQUEST', 'US', 'A customer request waits for our answer', 'Una richiesta del cliente aspetta la nostra risposta', RQ_ASK.askedAt, { type: 'OrderChangeRequest', id: RQ_ASK.id }, 'REQUEST'),
+  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes", 'Aspetta il sì del cliente', RQ_ASKED[0]!.createdAt, { type: 'ApprovalRequest', id: RQ_ASKED[0]!.id }),
+  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes", 'Aspetta il sì del cliente', RQ_ASKED[1]!.createdAt, { type: 'ApprovalRequest', id: RQ_ASKED[1]!.id }),
+  rqBlocker('BRAND_REQUEST', 'US', 'A customer request waits for our answer', 'Una richiesta del cliente aspetta la nostra risposta', '2026-11-10T09:00:00Z', { type: 'OrderChangeRequest', id: RQ_AGREED.id }, 'COUNTER'),
+  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes", 'Aspetta il sì del cliente', '2026-11-13T09:00:00Z', { type: 'OrderChangeRequest', id: RQ_COUNTERED.id }),
+  rqBlocker('BRAND_PAUSE', 'BRAND', 'The customer paused the work', 'Il cliente ha messo in pausa il lavoro', '2026-11-13T15:00:00Z', { type: 'WorkOrder', id: WORK_ORDERS[0]!.id }),
+  rqBlocker('BRAND_PAUSE', 'BRAND', 'The customer paused the work', 'Il cliente ha messo in pausa il lavoro', '2026-11-13T15:00:00Z', { type: 'WorkOrder', id: WORK_ORDERS[1]!.id }),
+  rqBlocker('QUALITY_HOLD', 'US', 'A quality hold stops the work', 'Un blocco qualità ferma il lavoro', '2026-11-14T08:30:00Z', { type: 'WorkOrder', id: WORK_ORDERS[1]!.id }),
+  rqBlocker('BRAND_REQUEST', 'US', 'The customer reported a problem', 'Il cliente ha segnalato un problema', '2026-11-14T11:00:00Z', { type: 'ProductionIssue', id: rqId(802), messageId: rqId(803) }, 'PROBLEM'),
+  rqBlocker('PARTNER_TASK', 'BRAND', "An open task on the customer's portal", 'Un compito aperto nel portale del cliente', '2026-11-15T09:00:00Z', { type: 'PartnerTask', id: rqId(804) }),
+  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes", 'Aspetta il sì del cliente', RQ_ASKED[2]!.createdAt, { type: 'ApprovalRequest', id: RQ_ASKED[2]!.id }),
+]
+const rqStill = (n: number, kind: string, ref: { type: string; id: string; number: string | null; version?: number }, en: string, it: string, since: string, waitingOn: string, mayAct: boolean) => ({ kind, ref, words: { en, it }, since, waitingOn, mayAct, requestId: n <= 2 ? RQ_ASK.id : null })
+export const RQ_STILL = [
+  rqStill(1, 'WORK_ORDER_CHANGE', { type: 'WorkOrderChange', id: rqId(901), number: 'WO-00021' }, 'WO-00021: make 54 → 0', 'WO-00021: produci 54 → 0', '2026-11-14T09:00:00Z', 'PLANNER', false),
+  rqStill(2, 'EXTRA_PIECES', { type: 'WorkOrder', id: WORK_ORDERS[0]!.id, number: 'WO-00021' }, 'Scrap the 2 extra pieces of WO-00021, with their approval', 'Scarta i 2 pezzi in più di WO-00021, con la loro approvazione', '2026-11-15T09:00:00Z', 'PLANNER', false),
+  rqStill(3, 'WORK_IN_PROGRESS_TASK', { type: 'Task', id: rqId(902), number: null, version: 2 }, 'Tell the floor about the new collar', 'Avvisa il reparto del nuovo collo', '2026-11-16T09:00:00Z', 'SALES', true),
+  rqStill(4, 'STYLE_CHANGE', { type: 'Style', id: rqId(903), number: 'DEMO-JKT-01' }, 'Change the collar on DEMO-JKT-01', 'Cambia il collo di DEMO-JKT-01', '2026-11-17T09:00:00Z', 'PRODUCT', false),
+]
+export const RQ_READ = {
+  ...PRODUCTION_READ,
+  headline: { ...PRODUCTION_READ.headline!, waiting: { ...PRODUCTION_READ.headline!.waiting, on: 'BRAND' as const, since: RQ_ASK.askedAt, blockers: RQ_BLOCKERS } },
+  changes: { openRequests: [{ id: RQ_ASK.id, kind: 'CHANGE', status: 'OPEN', since: RQ_ASK.askedAt, batchId: null }], stillToDo: { rows: RQ_STILL, count: RQ_STILL.length, workOrdersLeftOut: 0 } },
+}
+/** Nothing waits for an answer, while the order's quality hold and a gate do (Where it is now and Next dates say them). */
+const RQ_NONE_READ = { ...RQ_READ, headline: { ...RQ_READ.headline, waiting: { ...RQ_READ.headline.waiting, on: 'US' as const, blockers: RQ_BLOCKERS.filter((row) => row.kind === 'QUALITY_HOLD' || row.kind === 'GATE') } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
+const RQ_DOOR = { ...DOOR_STUB, parts: { ...DOOR_STUB.parts, window: { ...DOOR_STUB.parts.window, nav: { ids: [RQ_ASK.id, RQ_AGREED.id, RQ_COUNTERED.id] } } } }
+/** The world's model on a tab (the reader's own rights; the order's requests, the approvals we asked, the review window's door). */
+export const requestsWorld = (role: Role, tab: 'overview' | 'changes', read: Parameters<typeof ready>[0] = RQ_READ, over: Partial<OrderRecordModel> = {}) =>
+  base(role, production, { tab, production: ready(read), requests: { value: [RQ_ASK, RQ_AGREED, RQ_COUNTERED], problem: null }, askedOfCustomer: { value: RQ_ASKED, problem: null }, requestDoor: RQ_DOOR, liveState: 'live', ...over })
+const F_OO_204: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-204-changes', label: 'F-OO-204 · Sales · Changes: the head says where the holds and dates are; on us the change (Answer…), the agreed counter-offer, the problem; on the customer our counter-offer (Open…: the ONE review window), what we asked (its question, due day, state); Still to do with its state pills', model: requestsWorld('sales', 'changes') },
+  { id: 'f-oo-204-changes-nothing', label: 'F-OO-204 · Sales · Changes: no request waits — said as such (never "Nothing waits": a quality hold and a gate do, on Overview)', model: requestsWorld('sales', 'changes', RQ_NONE_READ, { requests: { value: [], problem: null }, askedOfCustomer: { value: [], problem: null } }) },
+]
+// ---- end F-OO-204
+
 // ---- F-OP-129 (order page plan N2, N5, N6; 10-order-page §13 design cases): what the strip says each work order does, per reader
 // (Sales: a released one waits; the Owner: both follow, R-4), the extra pieces' outcome under cut, and the Shipments rows — a typed
 // number ("No live tracking"), labels, the number held for Sales, a shared shipment and one made elsewhere. The yes in place is
@@ -867,6 +942,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
     ...F_OP_301, // F-OP-301 (walk #1, #2, #3)
+    ...F_OO_204, // F-OO-204: the request rows and their doors (Changes)
     // ---- B-W2b-323: orders in depth (priority, season, the yes, what is frozen, priced changes, materials, confirmation, tech pack, forecast, milestones) ----
     ...W2B_323,
     // ---- F-OP-217: the dock's scopes, each inside the one card (look at them at 1440 with the dock a third and 40 %, and at 375) ----
