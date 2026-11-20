@@ -1622,7 +1622,56 @@
       "waiting": "Production starts once the order is confirmed",
       "reached": "Work had reached {stage} when it was cancelled"
     },
-    "stagesDone": "Open the work orders in Production · every stage done"
+    "stagesDone": "Open the work orders in Production · every stage done",
+    "strips": "What holds the order",
+    "strip": {
+      "yes": {
+        "waits": "Waits for {who}'s yes",
+        "asked": "Waits for a yes that is asked",
+        "nobody": "Waits for a yes: nobody asked for it yet"
+      },
+      "credit": {
+        "waits": "Credit hold — waits for {who}'s yes",
+        "nobody": "Credit hold — nobody asked for a yes yet"
+      },
+      "review_one": "Waits for the factory review of {count} made-to-measure unit",
+      "review_other": "Waits for the factory review of {count} made-to-measure units",
+      "reviewUnits": "Waits for the factory review of its made-to-measure units",
+      "reviewDoor": {
+        "open": "Open the review ›",
+        "noRight": "Opening the review needs the right to see measurements",
+        "several": "Each unit opens its own review in the notice above the tabs"
+      },
+      "deposit": {
+        "waiting": "Deposit not paid yet · due {date}",
+        "overdue": "Deposit overdue since {date}",
+        "open": "Deposit not paid yet"
+      },
+      "quality": "Quality hold — {reasons}",
+      "qualityPlain": "Quality hold",
+      "production": "Production hold — {reasons}",
+      "productionPlain": "Production hold",
+      "pause": "Paused at the customer's request",
+      "on_one": "on {count} work order: {numbers}",
+      "on_other": "on {count} work orders: {numbers}",
+      "andMore": "{numbers} and {count} more",
+      "notReached_one": "and {count} work order outside what you can open",
+      "notReached_other": "and {count} work orders outside what you can open",
+      "onlyNotReached_one": "on {count} work order outside what you can open",
+      "onlyNotReached_other": "on {count} work orders outside what you can open",
+      "shared_one": "{numbers} also makes another customer's work: it is lifted on its own page",
+      "shared_other": "{numbers} also make another customer's work: each is lifted on its own page",
+      "qualityWho": "Quality releases it: a quality inspector or the Owner, with a code",
+      "release": "Release on Quality ›",
+      "releaseOf": "Release on Quality: the holds of {number}",
+      "openWo": "Open {number} ›",
+      "failed": "Holds could not be read",
+      "showMore": "Show {count} more",
+      "showFewer": "Show fewer"
+    },
+    "moves": "The order's moves",
+    "more": "More",
+    "moreOf": "More moves for {number}"
   },
   "overview": {
     "where": "Where it is now",
