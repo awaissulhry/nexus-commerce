@@ -309,11 +309,17 @@ describe('B-SA-032 work, dates and quality: what is made together with other wor
     expect(findMarkers(limited, bMarkers)).toEqual([])
   })
 
-  it('dates: the Sales template (no planning.view) reads its order’s gates and milestones, read only — no action; the forecast only with planning.promise.view', async () => {
+  // B-OO-010: the gates now carry what this reader may do (Planning's own rule): the Sales template reads each held, by the right it lacks.
+  it('dates: the Sales template (no planning.view) reads its order’s gates and milestones, each move held by the right it lacks; the forecast only with planning.promise.view', async () => {
     const answer = await ok('sales.p1', production(w.a.salesOrderId, 'dates'))
     const gate = (answer.dates.gates as Json[]).find((row) => row.id === alpha.gate)
-    expect(gate).toMatchObject({ kind: 'PP_SAMPLE', state: 'WAITING' })
-    expect(gate).not.toHaveProperty('actions')
+    expect(gate).toMatchObject({ kind: 'PP_SAMPLE', state: 'WAITING', version: expect.any(Number) })
+    expect(gate!.actions).toMatchObject({
+      pass: { allowed: false, needs: 'planning.milestones.manage' },
+      startBefore: { allowed: false, needs: 'planning.milestones.override' },
+      edit: { allowed: false, needs: 'planning.milestones.manage' },
+      remove: { allowed: false, needs: 'planning.milestones.manage' },
+    })
     expect(answer.dates).not.toHaveProperty('mayAddGate')
     expect((answer.dates.milestones as Json[]).map((row) => row.kind)).toEqual(expect.arrayContaining(['GATE', 'SHIP']))
     expect(answer.dates.planned).toEqual({ cutStart: null, sewStart: null, finish: null })
@@ -600,3 +606,88 @@ describe('B-OO-007: after production no health and no hold or date wait (request
   })
 })
 // ── end B-OO-007 ──
+
+// ── B-OO-010 (order overview N9; 13-backend §8) ──
+/**
+ * Each gate of the office read carries its version and what THIS reader may do, as Planning's own read (readWorld) builds them for
+ * the same person: a planner may pass a waiting gate and start before it — unless they plan that gate themselves (OWN_GATE); a
+ * passed gate is kept (edit PASSED, remove KEPT); the Sales template reads every move held by the permission it lacks. The writes
+ * stay Planning's routes. The test adds to SO-A1 a waiting gate of no planner, a waiting gate the planner plans and a passed gate.
+ */
+describe('B-OO-010: each gate carries its version and what this reader may do (Planning’s own rule)', { timeout: 60_000 }, () => {
+  const PLANNER = newId()
+  const gate = { plain: newId(), own: newId(), passed: newId() }
+  const gatesOf = async (sessionName: string, orderId: string): Promise<Map<string, Json>> => new Map(((await ok(sessionName, production(orderId, 'dates'))).dates.gates as Json[]).map((row) => [row.id as string, row]))
+  const allowed = { allowed: true, refusal: null, needs: null }
+
+  beforeAll(async () => {
+    SESSIONS.planner = { audience: 'office', tenantId: ids.tenantId, actorId: PLANNER, grants: [grant(['orders.view', 'planning.view', 'planning.milestones.manage', 'planning.milestones.override'], 'all')] }
+    const passer = lit(seedUuid(ns, 'actor'))
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "OrderGate" (id, "tenantId", "companyId", "partyId", "salesOrderId", kind, "targetDate", "ownerId", "passedAt", "passedById")
+         SELECT ${lit(gate.plain)}, "tenantId", "companyId", "partyId", id, 'PP_SAMPLE', (current_date + 4), NULL, NULL, NULL FROM "SalesOrder" WHERE id = ${lit(alpha.so1)};
+       INSERT INTO "OrderGate" (id, "tenantId", "companyId", "partyId", "salesOrderId", kind, "targetDate", "ownerId", "passedAt", "passedById")
+         SELECT ${lit(gate.own)}, "tenantId", "companyId", "partyId", id, 'SAMPLE_APPROVED', (current_date + 6), ${lit(PLANNER)}, NULL, NULL FROM "SalesOrder" WHERE id = ${lit(alpha.so1)};
+       INSERT INTO "OrderGate" (id, "tenantId", "companyId", "partyId", "salesOrderId", kind, "targetDate", "ownerId", "passedAt", "passedById")
+         SELECT ${lit(gate.passed)}, "tenantId", "companyId", "partyId", id, 'LAB_PASSED', (current_date - 2), NULL, now() - interval '1 day', ${passer} FROM "SalesOrder" WHERE id = ${lit(alpha.so1)};
+       UPDATE "OrderGate" SET version = 3 WHERE id = ${lit(gate.plain)};
+       COMMIT;`,
+    )
+  })
+
+  it('a planner may pass and start before a waiting gate of no planner', async () => {
+    const gates = await gatesOf('planner', alpha.so1)
+    expect(gates.get(gate.plain)).toMatchObject({ kind: 'PP_SAMPLE', state: 'WAITING', version: 3 })
+    expect(gates.get(gate.plain)!.actions).toEqual({ pass: allowed, startBefore: allowed, edit: allowed, remove: allowed })
+  })
+
+  it('the Sales template reads each move held: pass, edit and remove need planning.milestones.manage, start before planning.milestones.override', async () => {
+    const gates = await gatesOf('sales.all', alpha.so1)
+    expect(gates.get(gate.plain)!.actions).toEqual({
+      pass: { allowed: false, refusal: null, needs: 'planning.milestones.manage' },
+      startBefore: { allowed: false, refusal: null, needs: 'planning.milestones.override' },
+      edit: { allowed: false, refusal: null, needs: 'planning.milestones.manage' },
+      remove: { allowed: false, refusal: null, needs: 'planning.milestones.manage' },
+    })
+    // The office read's own rights (workorders.view, …) give no planning move either.
+    expect((await gatesOf('office.all', alpha.so1)).get(gate.plain)!.actions.pass).toEqual({ allowed: false, refusal: null, needs: 'planning.milestones.manage' })
+  })
+
+  it('the gate’s own planner may not start before it (OWN_GATE), in words; they may still pass it', async () => {
+    const own = (await gatesOf('planner', alpha.so1)).get(gate.own)!
+    expect(own.actions.startBefore).toMatchObject({ allowed: false, needs: null, refusal: { code: 'OWN_GATE', message: expect.stringContaining('ask a colleague') } })
+    expect(own.actions.pass).toEqual(allowed)
+  })
+
+  it('a passed gate is kept: edit refused (PASSED), remove refused (KEPT), pass refused (PASSED)', async () => {
+    const passed = (await gatesOf('planner', alpha.so1)).get(gate.passed)!
+    expect(passed).toMatchObject({ kind: 'LAB_PASSED', state: 'PASSED', via: 'OFFICE' })
+    expect(passed.actions.edit).toMatchObject({ allowed: false, needs: null, refusal: { code: 'PASSED' } })
+    expect(passed.actions.remove).toMatchObject({ allowed: false, needs: null, refusal: { code: 'KEPT' } })
+    expect(passed.actions.pass).toMatchObject({ allowed: false, refusal: { code: 'PASSED' } })
+    expect(passed.actions.startBefore).toMatchObject({ allowed: false, refusal: { code: 'PASSED' } })
+  })
+
+  it('versions and actions are Planning’s own read for the same person (GET /planning/milestones)', async () => {
+    const office = await gatesOf('planner', alpha.so1)
+    const planning = (await ok('planner', `/planning/milestones?orderId=${alpha.so1}`)).orders as Json[]
+    const order = planning.find((row) => row.id === alpha.so1)!
+    expect((order.gates as Json[]).map((row) => row.id).sort()).toEqual([...office.keys()].sort())
+    for (const row of order.gates as Json[]) {
+      expect({ id: row.id, version: office.get(row.id)!.version, actions: office.get(row.id)!.actions }).toEqual({ id: row.id, version: row.version, actions: row.actions })
+    }
+    // A write through Planning moves the version both reads show (here by hand: only the reads are under test).
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "OrderGate" SET version = version + 1 WHERE id = ${lit(gate.plain)}; COMMIT;`)
+    expect((await gatesOf('planner', alpha.so1)).get(gate.plain)!.version).toBe(4)
+  })
+
+  it('the brand wall: a Beta-limited person gets the answer of an unknown id, never Alpha’s gates', async () => {
+    const unknown = await call('office.p2', production(newId(), 'dates'))
+    const refused = await call('office.p2', production(alpha.so1, 'dates'))
+    expect([refused.status, refused.body.error?.message]).toEqual([404, unknown.body.error?.message])
+    expect(refused.raw).not.toContain(gate.plain)
+  })
+})
+// ── end B-OO-010 ──

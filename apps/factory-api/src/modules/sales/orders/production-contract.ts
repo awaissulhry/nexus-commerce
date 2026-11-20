@@ -7,6 +7,7 @@ import { BLOCKER_KINDS, BLOCKER_SUBS, WAITING_ON } from '@nexus/factory-domain/p
 import { SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { GATE_KINDS, GATE_STATES, LEATHER_STATES, MILESTONE_KINDS, MILESTONE_STATES, PASS_VIAS } from '@nexus/factory-domain/planning/milestones/rules'
 import { FINISH_SOURCES } from '@nexus/factory-domain/planning/promise-keep/risk' // F-SA-234b
+import { gateView as planningGateView } from '../../planning/milestones/contract' // B-OO-010: a gate's version and actions, Planning's own shape
 // B-SA-050: Still to do (its kinds; who it waits on: the apply plan's teams).
 import { APPLY_TEAMS, STILL_KINDS } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 
@@ -234,10 +235,19 @@ const gateRow = output({
   via: z.enum(PASS_VIAS).nullable(),
   startedBefore: output({ at: instant(), by: output({ id: id(), name: z.string() }).nullable(), reason: z.string() }).nullable(),
   leather: z.enum(LEATHER_STATES).nullable(),
+  // ── B-OO-010 (order overview N9; 13-backend §8) ──
+  /** Its version: Planning's writes send it (POST /planning/milestones/gates/pass, PATCH …/gates/:gateId, POST …/gates/:gateId/remove, POST …/gates/:gateId/start-before). */
+  version: planningGateView.shape.version,
+  /**
+   * What THIS reader may do to it, as Planning's own read says (readWorld: its rights over the order's company and customer, and the
+   * gate's own refusals): pass, start before, edit, remove — each allowed, or refused in words with its code, or the permission it needs.
+   */
+  actions: planningGateView.shape.actions,
+  // ── end B-OO-010 ──
 })
 
 export const datesView = output({
-  /** Its gates, read only (keeping them stays Planning's: no action here). */
+  /** Its gates (B-OO-010: each with its version and what this reader may do; the writes stay Planning's routes). */
   gates: z.array(gateRow),
   milestones: z.array(
     output({
