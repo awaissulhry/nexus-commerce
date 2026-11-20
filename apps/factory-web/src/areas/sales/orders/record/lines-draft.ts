@@ -3,6 +3,7 @@ import type { AmendLineInput, Followed, Order, OrderLine } from '../api'
 import type { PickBody } from '../../quotes/record/configurator/api'
 import type { CellFloors } from '../daily-model'
 import type { Phrase } from '../model'
+import { AUTOMATIC_REASONS, type AutomaticReasonKind } from '@nexus/factory-domain/sales/amendments/reasons' // F-OL-03
 
 /**
  * F-OL-01 (Order LINES lane, plan v2 §1; 10-design-tab §11, §15; 18-lead-settles F5, F27, F31) — the Lines tab's draft, pure: the
@@ -532,4 +533,13 @@ export function savedNotice(followed: Followed, asked: boolean): Phrase {
 
 /** A change fee as typed (price readers, a priced change): empty, or 0 and more with at most 2 decimals (0 allowed: B-OL-016). */
 export const feeProblem = (fee: string): boolean => fee.trim() !== '' && !/^\d{1,12}([.,]\d{1,2})?$/.test(fee.trim())
+// ---- end F-OL-03
+
+// ---- F-OL-03 (ol-s1, B-OL-004): a reason nobody typed is the server's automatic words, stored in English: said in the reader's words ----
+/** The stored reason in this app's words when it is the server's automatic one ("Changed on the order page." → lines.autoReason.amend); null: typed (shown as typed). */
+export function autoReasonOf(reason: string | null | undefined): Phrase | null {
+  const stored = typeof reason === 'string' ? reason.trim() : ''
+  const kind = (Object.keys(AUTOMATIC_REASONS) as AutomaticReasonKind[]).find((entry) => AUTOMATIC_REASONS[entry] === stored)
+  return kind ? phrase(`lines.autoReason.${kind}`) : null
+}
 // ---- end F-OL-03

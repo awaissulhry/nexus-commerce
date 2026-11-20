@@ -6,7 +6,8 @@ import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import { render, textOf } from '../../../../lib/record-thread/parts/testing'
 import { AMEND_PREVIEW, LINE_BLK, LINE_RED, order } from '../_demo/fixtures'
 import type { AmendPreview } from '../api'
-import { EMPTY_HISTORY, feeProblem, removeLine, savedNotice, setCell } from './lines-draft'
+import { autoReasonOf, EMPTY_HISTORY, feeProblem, removeLine, savedNotice, setCell } from './lines-draft'
+import { AUTOMATIC_REASONS } from '@nexus/factory-domain/sales/amendments/reasons'
 import type { ReviewState } from './lines-tab-model'
 import { ReviewSave } from './view/lines/ReviewSave'
 import { SaveBar } from './view/lines/SaveBar'
@@ -39,6 +40,17 @@ describe('F-OL-03: the notice after a save and the fee of a priced change', () =
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const which of ['plain', 'changed', 'waits', 'both']) for (const asked of ['', 'Asked']) expect(t(`save.done.${which}${asked}`, { changed: 'WO-1', waits: 'WO-2' }), `${locale} ${which}${asked}`).not.toMatch(/save\.done|\{/)
+    }
+  })
+
+  it('a reason nobody typed (the server\'s automatic words, ol-s1) is said in the reader\'s words; a typed one as typed', () => {
+    expect(autoReasonOf(AUTOMATIC_REASONS.amend)).toEqual({ key: 'lines.autoReason.amend' })
+    expect(autoReasonOf(AUTOMATIC_REASONS.close)).toEqual({ key: 'lines.autoReason.close' })
+    expect(autoReasonOf('Il cliente vuole due giacche in più.')).toBeNull()
+    expect(autoReasonOf(null)).toBeNull()
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const kind of Object.keys(AUTOMATIC_REASONS)) expect(t(`lines.autoReason.${kind}`), `${locale} ${kind}`).not.toBe(`lines.autoReason.${kind}`)
     }
   })
 

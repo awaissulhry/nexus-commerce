@@ -20,7 +20,7 @@ import type { Freeze } from '../../../depth/api'
 import { dayInstant } from '../../../model'
 import { rowAnchor } from '../../dock/discuss'
 import { artworkOfGroup } from '../../production'
-import { badPriceText, clashKey, type Clash, type LinesDraft, type NoteField } from '../../lines-draft'
+import { autoReasonOf, badPriceText, clashKey, type Clash, type LinesDraft, type NoteField } from '../../lines-draft'
 import {
   cellId,
   cellOfRow,
@@ -520,6 +520,11 @@ function ColourCell({ row, ctx, notes, open, onOpen }: { row: CardRow; ctx: Line
   const removed = row.kind === 'line' && row.removed
   const closed = line ? closedFiguresOf(line) : null
   const mtm = line ? mtmOf(line) : null
+  // F-OL-03: a reason nobody typed is the server's automatic words: said in the reader's words (who and when are said beside it).
+  const autoReason = (reason: string) => {
+    const auto = autoReasonOf(reason)
+    return auto ? t(auto.key) : reason
+  }
   const quiet: ReactNode[] = []
   if (removed && line && line.progress.inWorkOrders > 0) quiet.push(<span key="close">{t('lines.row.closesShort')}</span>)
   if (closed && line?.closedShort) {
@@ -528,7 +533,7 @@ function ColourCell({ row, ctx, notes, open, onOpen }: { row: CardRow; ctx: Line
       <span key="closed">
         {t('lines.short.figures', closed)}
         {by ? ` · ${t('lines.short.by', { name: by, day: line.closedShort.at ? formatDate(line.closedShort.at, { locale }) : '—' })}` : ''}
-        {line.closedShort.reason ? ` · ${line.closedShort.reason}` : ''}
+        {line.closedShort.reason ? ` · ${autoReason(line.closedShort.reason)}` : ''}
       </span>,
     )
   }

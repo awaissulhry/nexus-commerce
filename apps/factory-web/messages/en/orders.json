@@ -554,7 +554,13 @@
       "ofWhichVatNoRate": "of which VAT"
     },
     "empty": "No lines yet",
-    "emptyHint": "An order keeps at least one line: add a style."
+    "emptyHint": "An order keeps at least one line: add a style.",
+    "autoReason": {
+      "amend": "Changed on the order page",
+      "close": "Closed on the order page",
+      "reopen": "Reopened on the order page",
+      "promise": "Date changed on the order page"
+    }
   },
   "review": {
     "title": "Review and save · {number}",

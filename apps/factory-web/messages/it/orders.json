@@ -554,7 +554,13 @@
       "ofWhichVatNoRate": "di cui IVA"
     },
     "empty": "Ancora nessuna riga",
-    "emptyHint": "Un ordine tiene almeno una riga: aggiungi un modello."
+    "emptyHint": "Un ordine tiene almeno una riga: aggiungi un modello.",
+    "autoReason": {
+      "amend": "Modificato dalla pagina dell'ordine",
+      "close": "Chiusa dalla pagina dell'ordine",
+      "reopen": "Riaperta dalla pagina dell'ordine",
+      "promise": "Data cambiata dalla pagina dell'ordine"
+    }
   },
   "review": {
     "title": "Rivedi e salva · {number}",
