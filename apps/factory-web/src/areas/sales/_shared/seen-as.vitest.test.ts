@@ -58,9 +58,9 @@ describe('follow-up 5: the design data’s Sales role holds no price grain (Owne
 
 describe('F-CP-148: "Seen as" — every office money screen as the Owner, a Sales worker and a Production manager (Brand Alpha: the portal’s own cases)', () => {
   type RecordCase = { record?: { can: { price: boolean } } }
-  it('the order: the Sales worker’s Lines, Money and Files without the price grain; the Owner’s files and edit mode with it', () => {
+  it('the order: the Sales worker’s Lines, Money and Files without the price grain; the Owner’s files and Lines changes with it', () => {
     for (const id of ['sales-lines', 'money-sales', 'cp-148-files-sales']) expect(caseOf<RecordCase>(ORDER, id).record?.can.price, id).toBe(false)
-    for (const id of ['cp-148-files-owner', 'cp-148-edit-owner', 'price-check']) expect(caseOf<RecordCase>(ORDER, id).record?.can.price, id).toBe(true)
+    for (const id of ['cp-148-files-owner', 'lines-changing', 'price-check']) expect(caseOf<RecordCase>(ORDER, id).record?.can.price, id).toBe(true)
     expect(caseOf<RecordCase>(ORDER, 'cp-148-files-manager').record?.can.price).toBe(false)
   })
 
@@ -131,8 +131,9 @@ describe('follow-ups 17 + 20: the orders’, the price lists’ and the customer
     }
   })
 
-  it('every Sales case of the order and its changes reads no price; a Sales edit mode starts from what Sales reads (no price typed)', () => {
-    type RecordCase = { role: string; record?: { can: { price: boolean }; order: { status: string; value?: unknown }; amend?: { lines: { price?: string }[] } | null }; draft?: { can: { price: boolean } } }
+  // F-OL-05: the Lines tab's draft holds only what the person typed — Sales types no price (no price column), so none is there.
+  it('every Sales case of the order and its changes reads no price; a Sales draft on Lines holds no price typed', () => {
+    type RecordCase = { role: string; record?: { can: { price: boolean }; order: { status: string; value?: unknown }; linesTab?: { draft: { lines: Record<string, { price?: string }>; added: { price: string }[] } } | null }; draft?: { can: { price: boolean } } }
     const sales = [...ORDER.cases, ...ORDER_CHANGES.cases].filter((item) => (item.model as RecordCase).role === 'sales')
     expect(sales.length).toBeGreaterThan(80)
     for (const item of sales) {
@@ -140,7 +141,8 @@ describe('follow-ups 17 + 20: the orders’, the price lists’ and the customer
       if (record) {
         expect(record.can.price, item.id).toBe(false)
         expect(JSON.stringify(record.order.value ?? null), item.id).not.toMatch(PRICED)
-        for (const line of record.amend?.lines ?? []) expect(line.price ?? '', item.id).toBe('')
+        for (const edit of Object.values(record.linesTab?.draft.lines ?? {})) expect(edit.price ?? '', item.id).toBe('')
+        for (const row of record.linesTab?.draft.added ?? []) expect(row.price, item.id).toBe('')
       }
       if (draft) expect(draft.can.price, item.id).toBe(false)
     }

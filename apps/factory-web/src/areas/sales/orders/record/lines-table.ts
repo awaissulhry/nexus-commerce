@@ -365,10 +365,3 @@ export const orderTotalOf = (rows: readonly TotalRow[]): TotalRow | null => rows
 export const cellId = (key: string, size: string): string => `lines-cell-${key}-${size}`
 /** A row's Unit price box (Money › "Change our price ›" focuses it). */
 export const priceCellId = (key: string): string => `lines-price-${key}`
-
-/** The first box of a row (its first offered size), else its price box; null: nothing typeable. */
-export function firstBoxOf(row: CardRow, sizes: readonly string[], offered: readonly string[] | null): string | null {
-  if (row.kind === 'line' && (!row.typeable || row.removed)) return null
-  const size = sizes.find((entry) => offered === null || offered.includes(entry)) ?? null
-  return size ? cellId(row.key, size) : null
-}

@@ -537,7 +537,8 @@ function ColourCell({ row, ctx, notes, open, onOpen }: { row: CardRow; ctx: Line
       </span>,
     )
   }
-  if (mtm && line) quiet.push(<span key="rider">{line.rider ? t('lines.rider', { rider: line.rider.name, garment: line.rider.garmentType, revision: line.rider.revision }) : model.can.measurements ? null : t('lines.mtm.noRider')}</span>)
+  // The rider is named only when the read gives it (sales.measurements.view); without the right only "Made to measure" (F-SA-231b).
+  if (mtm && line?.rider) quiet.push(<span key="rider">{t('lines.rider', { rider: line.rider.name, garment: line.rider.garmentType, revision: line.rider.revision })}</span>)
   const hasNotes = notes.notes > 0 || notes.files > 0
   if (!removed && (hasNotes || ctx.boxes))
     quiet.push(

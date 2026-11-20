@@ -4,7 +4,7 @@ import { expectNothingOf } from './_harness/brand-scan'
 import { seen, type Desk, type Flow } from './_harness/flow'
 import { defineStage } from './_harness/stages'
 import { ensureBrand, signInToPortal, type PortalDesk } from './_harness/two-brands'
-import { answerOf, byApi, chooseFromMenu, day, dialog, press, routerActivity } from './_harness/ui'
+import { answerOf, byApi, day, dialog, press, routerActivity } from './_harness/ui'
 import { startsWith, words } from './_harness/words'
 
 /**
@@ -21,8 +21,8 @@ import { startsWith, words } from './_harness/words'
  *      no price): the acts with prices are the Owner's or Finance's; Sales keeps the no-price ones (the quantity change of step 3, D1);
  *   2  make a work order in place (the planner, the Production tab): a DRAFT of the new order; the production lane releases it
  *      (set-up: 10-work-order's flow);
- *   3  amend (Sales, edit mode): the strip says what each work order does — the released one waits for production, the new pieces
- *      follow now as a new DRAFT; Apply; the planner decides the waiting change on the order page (Lower to the order);
+ *   3  Lines changed in place (Sales, F-OL-05): Review and save says what each work order does — the released one waits for
+ *      production, the new pieces follow now as a new DRAFT; Save changes; the planner decides the waiting change on the order page;
  *   4  tracking typed, corrected and cleared on SEED-SO-0003's shipment (a carrier booked by hand): "No live tracking";
  *   5  a shipment made elsewhere: the dialog on SEED-SO-0002 — its released garments, the paper DDT, no Nexus DDT number; the live
  *      rules said under the fields;
@@ -36,7 +36,7 @@ import { startsWith, words } from './_harness/words'
  *  10  F-OO-215: sections 8 and 7 — a custom value saved beside Order facts sends the order's version (B-OO-014) and the page reads the
  *      order again (the office note saved next goes through at the new version); the sheet's edit at the version read before is stale.
  * Not here, said in the report: cut pieces (the floor's flow: the extra-pieces outcome is held by the design case
- * f-op-129-strip-outcome, B-OP-071 O1 and the unit tests of F-OP-107), the record of a shipment made elsewhere whose garments the seeds
+ * lines-review-outcome, B-OP-071 O1 and the unit tests of F-OP-107), the record of a shipment made elsewhere whose garments the seeds
  * date in the story's days ahead (B-OP-071 O4 records one), and the invoices of a shared shipment that left (B-OP-045).
  */
 
@@ -295,28 +295,32 @@ export default defineStage({
       return { id: made.id as string, number: made.number as string }
     })
 
-    await flow.step('3 · amend in edit mode (Sales): the strip says the released work order waits and the new pieces follow now; Apply; the planner decides the waiting change in place', async () => {
+    await flow.step('3 · Lines changed in place (Sales): Review and save says the released work order waits and the new pieces follow now; Save changes; the planner decides the waiting change in place', async () => {
       const { page } = sales
       await sales.go(`/sales/orders/${world.order.id}?tab=lines`)
-      const more = page.getByRole('button', { name: OD('record.more'), exact: true }).first()
-      await seen(more, 60_000)
-      // op-fx4: opened again until Amend is picked — the band's ⋯ is drawn before the page answers clicks (next start's first paint).
-      await chooseFromMenu(more, page.getByRole('menuitem', { name: startsWith(OD('action.amend')) }).first())
-      await page.waitForURL(/[?&]tab=lines/)
-      // One more 50 (a new DRAFT follows now), one fewer 52 (the released work order waits for production).
-      await page.getByRole('textbox', { name: /, size 50$/ }).first().fill('5')
+      // F-OL-05: no edit mode — the boxes are in the table ("{colour}, size {size}"). One more 50 (a new DRAFT follows now), one
+      // fewer 52 (the released work order waits for production).
+      const size50 = page.getByRole('textbox', { name: /, size 50$/ }).first()
+      await seen(size50, 60_000)
+      await size50.fill('5')
       await page.getByRole('textbox', { name: /, size 52$/ }).first().fill('3')
-      const reason = page.getByRole('textbox', { name: startsWith(OD('amend.reason')) })
-      if ((await reason.count()) > 0) await reason.first().fill(AMEND_REASON)
-      const strip = page.locator('.fw-so-strip-line')
-      await seen(strip.filter({ hasText: OD('edit.strip.wo.waits') }).first(), 60_000)
-      await expect(strip.filter({ hasText: OD('edit.strip.wo.waits') }).first()).toContainText(workOrder.number)
-      await seen(strip.filter({ hasText: OD('edit.strip.wo.now') }).first())
-      await flow.shot(page, 'strip-sales')
-      const applied = await answerOf(page, 'POST', /^\/sales\/orders\/[^/]+\/amendments$/, () => press(page.getByRole('button', { name: OD('amend.apply'), exact: true })))
+      await press(page.getByRole('button', { name: OD('save.review'), exact: true }))
+      const review = dialog(page)
+      await seen(review, 60_000)
+      const why = review.getByRole('textbox', { name: startsWith(OD('review.whyWords')) })
+      if ((await why.count()) > 0) await why.first().fill(AMEND_REASON)
+      // The customer's tick: not asked here (the ask is the approvals lane's flow).
+      const ask = review.getByRole('checkbox', { name: startsWith(lead(OD('review.ask'))) })
+      if ((await ask.count()) > 0 && (await ask.first().isChecked())) await ask.first().uncheck()
+      const production = review.getByRole('region', { name: OD('review.production'), exact: true })
+      await seen(production.getByText(OD('edit.strip.wo.waits'), { exact: false }).first(), 60_000)
+      await expect(production.getByText(OD('edit.strip.wo.waits'), { exact: false }).first()).toContainText(workOrder.number)
+      await seen(production.getByText(OD('edit.strip.wo.now'), { exact: false }).first())
+      await flow.shot(page, 'review-sales')
+      const applied = await answerOf(page, 'POST', /^\/sales\/orders\/[^/]+\/amendments$/, () => press(review.getByRole('button', { name: OD('review.save'), exact: true })))
       expect((applied.workOrders.waiting as Json[]).map((entry) => entry.workOrderId)).toEqual([workOrder.id])
       expect((applied.workOrders.applied as Json[]).map((entry) => entry.route)).toEqual(['NEW_DRAFT'])
-      await seen(page.getByText(startsWith(lead(OD('edit.done.both')))).first(), 60_000)
+      await seen(page.getByText(startsWith(lead(OD('save.done.both')))).first(), 60_000)
       await flow.settle()
 
       // The planner decides it on the order page (F-OP-116, A14): under the work order's row "Change waits: 4 → 3 · Apply… /

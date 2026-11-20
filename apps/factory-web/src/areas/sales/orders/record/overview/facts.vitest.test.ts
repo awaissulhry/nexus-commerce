@@ -189,7 +189,7 @@ describe('F-OO-209: Order facts drawn', () => {
   it('Customer PO\'s Change… opens its small window in the page\'s one slot (no edit mode, no focus asked); Ship to its own', () => {
     const calls: unknown[] = []
     function Harness() {
-      const acts = useOverviewActs({ focus: (id) => calls.push(`focus ${id}`), setDialog: (dialog) => calls.push(dialog) })
+      const acts = useOverviewActs({ setDialog: (dialog) => calls.push(dialog) })
       acts.actions.onCustomerRefChange?.()
       return null
     }

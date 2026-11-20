@@ -225,20 +225,6 @@ export const piecesOfNew = (line: Pick<NewLine, 'sizes'>): number => Object.valu
 
 export const isEmptyDraft = (draft: LinesDraft): boolean => Object.keys(draft.lines).length === 0 && draft.added.length === 0
 
-/** What one saved line's edit changes. */
-export interface LineChange {
-  readonly sizes: boolean
-  readonly price: boolean
-  readonly text: boolean
-  readonly removed: boolean
-}
-
-export function lineChangeOf(draft: LinesDraft, lineId: string): LineChange | null {
-  const edit = draft.lines[lineId]
-  if (!edit) return null
-  return { sizes: !!edit.sizes && Object.keys(edit.sizes).length > 0, price: edit.price !== undefined, text: edit.description !== undefined || edit.note !== undefined, removed: !!edit.removed }
-}
-
 /** The bar's count: one per line that changes (sizes, price, notes), one per removed line, one per new row — the entries Review lists. */
 export const changeCountOf = (draft: LinesDraft): number => Object.keys(draft.lines).length + draft.added.length
 

@@ -487,7 +487,7 @@ describe('F-SA-262 — the order dock picks ONE conversation, the scope in the a
 
 // ---- F-OP-134 (N-5): the order page's acts live in one container hook per tab; the views draw what they return -------------------
 describe('F-OP-134 — one acts hook per tab, mounted by the container, never by a view', () => {
-  const HOOKS = ['use-band-acts', 'use-overview-acts', 'use-lines-acts', 'use-production-acts', 'use-shipments-acts', 'use-money-acts'] as const
+  const HOOKS = ['use-band-acts', 'use-overview-acts', 'use-lines-acts', 'use-lines-draft' /* F-OL-03 */, 'use-production-acts', 'use-shipments-acts', 'use-money-acts'] as const
   const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
   /** Every file in a `view/` folder under record/ (the views draw one model and fetch nothing). */
   const views = (dir: URL): string[] =>
@@ -509,11 +509,14 @@ describe('F-OP-134 — one acts hook per tab, mounted by the container, never by
     for (const call of ['changePromise(', 'markReady(', 'closeOrder(', 'copyAsQuote(', 'applyAmendment(', 'previewAmendment(', 'closeLines(', 'reopenLines(', 'cancelOrder(', 'getCancelCheck(', 'sendDepositLink(', 'recordDepositPayment(', 'sendToSdi(', 'useScheduleSteps(', 'useBrandHealth(', 'useAssignSupervisor(', 'useNoteDialog(', 'openPreview(', 'postPortalReplyKeyed(']) expect(container, call).not.toContain(call)
   })
 
-  it('each hook holds its own acts (the band: promise, ready, close, copy, portal, people; Lines: amend, close / reopen lines, cancel; Money: deposits and payments)', () => {
+  it('each hook holds its own acts (the band: promise, ready, close, copy, portal, people; Lines: the draft\'s save, close / reopen lines, cancel; Money: deposits and payments)', () => {
     const band = source('./use-band-acts.ts')
     for (const call of ['changePromise(', 'markReady(', 'closeOrder(', 'copyAsQuote(', 'openPreview(', 'useAssignSupervisor(', 'useNoteDialog(']) expect(band, call).toContain(call)
     const lines = source('./use-lines-acts.ts')
-    for (const call of ['applyAmendment(', 'previewAmendment(', 'closeLines(', 'reopenLines(', 'cancelOrder(', 'getCancelCheck(', 'postPortalReplyKeyed(']) expect(lines, call).toContain(call)
+    for (const call of ['applyAmendment(', 'closeLines(', 'reopenLines(', 'cancelOrder(', 'getCancelCheck(']) expect(lines, call).toContain(call)
+    // F-OL-03: the Lines tab's draft — its preview, its save, the ask and the words to the customer — is use-lines-draft's.
+    const draft = source('./use-lines-draft.ts')
+    for (const call of ['previewAmendment(', 'applyAmendment(', 'applyPricedChange(', 'askApproval(', 'postPortalReplyKeyed(', 'findStylesForOrder(']) expect(draft, call).toContain(call)
     const money = source('./use-money-acts.ts')
     for (const call of ['sendDepositLink(', 'recordDepositPayment(', 'sendToSdi(', 'useScheduleSteps(']) expect(money, call).toContain(call)
     expect(source('./use-production-acts.ts')).toContain('useBrandHealth(')
@@ -563,7 +566,7 @@ describe('F-OP-210 — the tabs and the in-page moves keep `thread=`', () => {
     const html = draw('thread-docked')
     for (const tab of ['overview', 'lines', 'production', 'changes', 'money', 'shipments', 'files']) expect(html, tab).toMatch(new RegExp(`href="[^"]*/sales/orders/[^"?]+\\?tab=${tab}"`))
   })
-  it('Amend keeps the scope and every other term (no more `?tab=lines` alone); below 1280 px the full-width thread gives way', () => {
+  it('a door to Lines keeps the scope and every other term (no more `?tab=lines` alone); below 1280 px the full-width thread gives way', () => {
     const container = source('./OrderRecord.tsx')
     expect(container).toContain("router.replace(tabAddress(pathname, window.location.search, 'lines', { narrow: narrowNow() }))")
     expect(container).not.toContain('router.replace(`${pathname}?tab=lines`)')
@@ -702,31 +705,33 @@ describe('F-OP-215 — the files line counts the order\'s file set (the Files ta
 // ---- end F-OP-215
 
 // ---- F-OP-129 (order page plan N2, N5, N6; 10-order-page §13): the end's design cases draw what each reader is told ------------------
-describe('F-OP-129 — the order page at the end in the design screen: the strip per reader and under cut, the Shipments rows', () => {
+// F-OL-05 (Order LINES lane): the edit strip went with the old edit mode — what each work order does is the Review window's Production
+// part now (lines-review-wo-*, lines-review-outcome*), the same words per reader.
+describe('F-OP-129 — the order page at the end in the design screen: Review and save\'s production part per reader and under cut, the Shipments rows', () => {
   it('the cases are on SCR-039, each once', () => {
-    const ids = designScreen.cases.map((item) => item.id).filter((id) => id.startsWith('f-op-129-'))
-    expect(ids).toEqual(['f-op-129-strip-sales', 'f-op-129-strip-owner', 'f-op-129-strip-outcome', 'f-op-129-strip-outcome-chosen', 'f-op-129-ship-tracking', 'f-op-129-ship-tracking-sales', 'f-op-129-ship-shared', 'f-op-129-ship-elsewhere'])
+    const ids = designScreen.cases.map((item) => item.id).filter((id) => id.startsWith('f-op-129-') || id.startsWith('lines-review-wo-') || id.startsWith('lines-review-outcome'))
+    expect(ids).toEqual(['lines-review-wo-sales', 'lines-review-wo-owner', 'lines-review-outcome', 'lines-review-outcome-none', 'f-op-129-ship-tracking', 'f-op-129-ship-tracking-sales', 'f-op-129-ship-shared', 'f-op-129-ship-elsewhere'])
   })
 
   it('Sales: the DRAFT follows now, the released one waits for production with its words; the Owner: both follow, the work sheet printed again (R-4)', () => {
-    const sales = textOf(draw('f-op-129-strip-sales'))
+    const sales = textOf(draw('lines-review-wo-sales'))
     expect(sales).toContain('WO-00023 2 → 1 · follows now')
     expect(sales).toContain('WO-00022 2 → 1 · waits for production — decide on this page')
     expect(sales).toContain('WO-00022 is released: production applies the change (a planner or a production manager).')
-    const owner = textOf(draw('f-op-129-strip-owner'))
+    const owner = textOf(draw('lines-review-wo-owner'))
     expect(owner).toContain('WO-00022 2 → 1 · follows now')
     expect(owner).toContain('its work sheet is printed again')
     expect(owner).not.toContain('waits for production')
     // Italian too: the same plan in the reader's language.
-    expect(textOf(draw('f-op-129-strip-sales', 'it'))).toContain('WO-00022 è rilasciato')
+    expect(textOf(draw('lines-review-wo-sales', 'it'))).toContain('WO-00022 è rilasciato')
   })
 
-  it('under cut: Apply is held until the extra piece’s outcome is picked; with "keep as leftover" it is not', () => {
-    const held = draw('f-op-129-strip-outcome')
+  it('under cut: "Keep for this customer" picked for you (Save changes live); with nothing picked Save changes is held for it', () => {
+    const held = draw('lines-review-outcome-none')
     expect(held).toContain('Choose what happens to the 1 extra piece')
     expect(textOf(held)).toContain('WO-00021')
-    const chosen = draw('f-op-129-strip-outcome-chosen')
-    expect(chosen).not.toContain('Choose what happens to the 1 extra piece')
+    const chosen = draw('lines-review-outcome')
+    expect(chosen).not.toContain('aria-description="Choose what happens to the 1 extra piece"')
   })
 
   it('Shipments: a carrier booked by hand with its typed number and "No live tracking"; labels with their parcel numbers; Sales reads the number only', () => {

@@ -91,9 +91,6 @@ export function mergeRead(known: OrderProduction | null, next: OrderProduction):
 
 // ── F-SA-233 (sales page plan N2, picks P2, P3, P16; 10-order-page §2.1 O3–O8; review C-20) ──────────────────────────────────────
 
-/** F-OP-104: the requested date's field on Lines in edit mode (its id: Next dates' "Change…" focuses it). */
-export const REQUESTED_FIELD_ID = 'amend-requested-date'
-
 // ---- F-OP-103 (order page plan N1; 10-order-page §3.2; 13-backend B4; review R-21, R-22): the ONE waiting list ----------------------
 /**
  * The order's waiting list, ONE source for Overview's cards and the Changes badge (R-22; the dock does not read it, R-21): each blocker

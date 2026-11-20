@@ -9,7 +9,7 @@ import { I18nProvider } from '../../../../lib/i18n/provider'
 import { canOf, order } from '../_demo/fixtures'
 import { PRICE_CHECK } from '../price-check/fixtures'
 import { designScreen } from './fixtures'
-import { asksPriceCheck, BRAND_PRICE_EVENT, changeOursHeldOf, customerUnitOf, editHeldOf, HISTORY_TYPE, historyHref, isEmptyCheck, seqList, sourceLinesOf, takeOverRefusalOf, totalPiecesOf, type PriceCheckRead } from './price-check-card'
+import { asksPriceCheck, BRAND_PRICE_EVENT, customerUnitOf, editHeldOf, HISTORY_TYPE, historyHref, isEmptyCheck, seqList, sourceLinesOf, takeOverRefusalOf, totalPiecesOf, type PriceCheckRead } from './price-check-card'
 import type { OrderRecordModel } from './record-model'
 import { PriceCheckSection } from './view/PriceCheckSection'
 
@@ -23,7 +23,7 @@ import { PriceCheckSection } from './view/PriceCheckSection'
 const ORDER = order('CONFIRMED')
 const ready = (extra: Partial<Extract<PriceCheckRead, { state: 'ready' }>> = {}): PriceCheckRead => ({ state: 'ready', check: PRICE_CHECK, stale: false, taking: false, problem: null, ...extra })
 const record = (price: boolean, read: PriceCheckRead | null, over: Partial<OrderRecordModel> = {}) =>
-  ({ prefix: '/w/DEMO', can: { ...canOf('owner'), price }, amend: null, priceCheck: read ? { read, canHistory: true } : null, ...over }) as unknown as OrderRecordModel
+  ({ prefix: '/w/DEMO', can: { ...canOf('owner'), price }, priceCheck: read ? { read, canHistory: true } : null, ...over }) as unknown as OrderRecordModel
 const draw = (model: OrderRecordModel, locale: Locale = 'en') =>
   renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['orders', 'shell']) }, createElement(PriceCheckSection, { record: model, order: ORDER })))
 
@@ -55,9 +55,7 @@ describe('F-CP-142: the card\'s rules', () => {
     expect(editHeldOf({ status: 'CLOSED', mayWrite: { allowed: false, why: null } })).toEqual({ key: 'priceCheck.closed' })
     expect(editHeldOf({ status: 'CANCELLED', mayWrite: { allowed: false, why: null } })).toEqual({ key: 'priceCheck.closed' })
     expect(editHeldOf({ status: 'IN_PRODUCTION', mayWrite: { allowed: false, why: 'x' } })).toEqual({ key: 'held.noManage' })
-    expect(changeOursHeldOf(true, null)).toEqual({ key: 'held.amending' })
-    expect(changeOursHeldOf(false, { key: 'held.noManage' })).toEqual({ key: 'held.noManage' })
-    expect(changeOursHeldOf(false, null)).toBeNull()
+    // F-OL-04: "Change our price ›" lands on Lines' price box, held by the amendment's own rule (amendHeld) — no edit mode to wait for.
   })
 
   it('the Total row\'s pieces, a line total has no unit price, the sources grouped in the lines\' order', () => {

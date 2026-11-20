@@ -11,7 +11,6 @@ import {
   chargesOf,
   closedFiguresOf,
   columnsOf,
-  firstBoxOf,
   headOf,
   lineAmountOf,
   linesReaderOf,
@@ -23,6 +22,7 @@ import {
   orderTotalOf,
   ownDatesOf,
   patternOf,
+  priceCellId,
   priceLockOf,
   styleCardsOf,
   taxBasisOf,
@@ -120,10 +120,9 @@ describe('F-OL-01 (d): a cell — its value, "was", "min" where cut or shipped b
     expect(locksOfCard(card!, freeze).map((entry) => entry.size)).toEqual(['50', '52'])
   })
 
-  it('the doors land on a box: the row\'s first offered size; a removed or plain row has none', () => {
-    const row = lineRow(production, LINE_BLK)
-    expect(firstBoxOf(row, ['48', '50'], null)).toBe(cellId(LINE_BLK, '48'))
-    expect(firstBoxOf(lineRow(production, LINE_BLK, true), ['48'], null)).toBeNull()
+  it('the doors land on a box by its id: a size box per row and size, a price box per row', () => {
+    expect(cellId(LINE_BLK, '48')).toBe(`lines-cell-${LINE_BLK}-48`)
+    expect(priceCellId(LINE_BLK)).toBe(`lines-price-${LINE_BLK}`)
   })
 })
 

@@ -351,18 +351,16 @@ describe('F-OP-104: Overview doors — the stages a real link, Open in Productio
   })
 
   // F-OO-144 (order overview, review F7): the requested date's Change… opens its small dialog in the page's one slot — the hop to Lines
-  // went; the Lines edit mode's field keeps its id.
-  it('the requested date\'s Change…: its small dialog in the page\'s one slot (no hop to Lines); the Lines field keeps its id', async () => {
-    const { REQUESTED_FIELD_ID } = await import('./model')
+  // went. F-OL-05: the Lines edit mode (and its field ids) went whole: Lines holds only lines.
+  it('the requested date\'s Change…: its small dialog in the page\'s one slot (no hop to Lines); Lines has no order field', () => {
     const acts = readFileSync(new URL('../use-overview-acts.ts', import.meta.url), 'utf8')
     expect(acts).toContain("onRequestedChange: () => input.setDialog?.({ kind: 'requested' })")
-    expect(acts).not.toContain('input.focus?.(REQUESTED_FIELD_ID)')
+    expect(acts).not.toContain('input.focus?.(')
     const container = readFileSync(new URL('../OrderRecord.tsx', import.meta.url), 'utf8')
-    expect(container).toContain('useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), setDialog /* F-OO-144 */')
+    expect(container).toContain('useOverviewActs({ setDialog /* F-OO-144 */')
     const lines = readFileSync(new URL('../view/LinesTab.tsx', import.meta.url), 'utf8')
-    expect(lines).toContain('<DateField id={REQUESTED_FIELD_ID}')
-    expect(REQUESTED_FIELD_ID).toBe('amend-requested-date')
-    // The view never imports an acts hook (view-boundaries rule 2): the id lives in the pure model.
+    expect(lines).not.toMatch(/REQUESTED_FIELD_ID|CUSTOMER_REF_FIELD_ID|SHIP_TO_FIELD_ID/)
+    // The view never imports an acts hook (view-boundaries rule 2).
     expect(lines).not.toContain("from '../use-overview-acts'")
   })
 

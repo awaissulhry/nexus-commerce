@@ -407,7 +407,6 @@
   "lines": {
     "readOnly": "What the customer ordered, as accepted. Changes go through Amend order.",
     "vatNature": "VAT {nature}",
-    "orderDate": "As the order",
     "revision": "Made to rev {revision}",
     "noRevision": "Revision chosen by the work order",
     "gridCaption": "{style}: ordered pieces by colour and size",
@@ -415,7 +414,6 @@
     "col": {
       "colour": "Colour",
       "pieces": "Pieces",
-      "shipped": "Shipped",
       "unitNet": "Unit price (net)",
       "unitGross": "Unit price (VAT incl.)",
       "net": "Net",
@@ -432,7 +430,6 @@
     "units": "Units",
     "artwork_one": "Artwork ({count})",
     "artwork_other": "Artwork ({count})",
-    "closedBy": "Closed short by {name}, {day}",
     "note": "Note: {note}",
     "rider": "Rider: {rider} · {garment}, revision {revision}",
     "artworkOpen": "Open the artwork in the viewer",
@@ -506,8 +503,7 @@
       "unit_other": "{count} units · base size {size}",
       "units_one": "{count} unit",
       "units_other": "{count} units",
-      "fixed": "A made-to-measure unit keeps its size and price; only its notes change here.",
-      "noRider": "Rider: shown to people who see measurements"
+      "fixed": "A made-to-measure unit keeps its size and price; only its notes change here."
     },
     "notes": {
       "count_one": "{count} note",
@@ -1201,39 +1197,15 @@
     }
   },
   "amend": {
-    "start": "Amend order",
-    "title": "Amendment {revision} — not applied",
-    "count_one": "{count} change",
-    "count_other": "{count} changes",
-    "barLabel": "Amendment draft",
-    "discard": "Discard",
-    "how": "Change the sizes and prices below, add a colour or a style, or set a line to 0 to remove it. Nothing changes until you apply the amendment.",
-    "howNoPrice": "Change the sizes below, add a colour or a style, or set a line to 0 to remove it. Nothing changes until you apply the amendment.",
-    "header": "Order details",
-    "customerRef": "Customer PO",
-    "requestedDate": "Requested by the customer",
-    "requestedHint": "Today or later; empty: none.",
     "failed": "The amendment could not be checked.",
-    "problems_one": "{count} thing stops the amendment:",
-    "problems_other": "{count} things stop the amendment:",
-    "reaccept": "The net total changes: the customer must accept the order again. The order shows “waiting for the customer”; the acceptance link is not there yet, so tell the customer yourself.",
-    "noReaccept": "The net total does not change: the customer does not need to accept again.",
-    "tableLabel": "Lines old → new",
     "field": {
       "customerRef": "Customer PO",
       "requestedDate": "Requested date"
     },
-    "reason": "Why the order changes",
-    "reasonHint": "It stays with the amendment, in the Changes tab.",
-    "apply": "Apply amendment",
     "held": {
       "price": "A typed price is not a price: check it",
       "empty": "An order keeps at least one line: to stop the whole order, cancel it",
-      "nothing": "Nothing changes yet",
-      "reading": "Checking the amendment first",
-      "failed": "The check failed: try again",
-      "problems": "Fix what stops the amendment first",
-      "reason": "Say why the order changes"
+      "reading": "Checking the amendment first"
     },
     "tell": {
       "words": "Words for the customer (optional)",
@@ -1242,13 +1214,8 @@
   },
   "edit": {
     "appliesAtOnce": "Applies at once — no approval",
-    "showAll": "Show all changes",
     "strip": {
       "reading": "Working out what changes…",
-      "pieces": "Pieces {before} → {after} ({delta})",
-      "net": "Net {before} → {after} ({delta})",
-      "told": "{customer} is told",
-      "notTold": "{customer} is not told",
       "wo": {
         "change": "{number} {before} → {after}",
         "cancel": "{number} cancelled",
@@ -1270,20 +1237,11 @@
       "bothTold": "Amendment {revision} applied · {changed} changed · waiting for production: {waits} — decide on this page · {customer} told."
     },
     "floor": {
-      "shipped": "{count} already shipped: it cannot go lower",
-      "cut": "{count} already cut beyond this",
-      "inWork": "the work order follows"
-    },
-    "figures": {
-      "cut": "Cut {count}",
-      "sewn": "Sewn {count}",
-      "shipped": "Shipped {count}"
+      "shipped": "{count} already shipped: it cannot go lower"
     },
     "held": {
-      "shipped": "A size is under what already shipped: raise it to the pieces shipped",
       "extra_one": "Choose what happens to the {count} extra piece",
-      "extra_other": "Choose what happens to the {count} extra pieces",
-      "fee": "A fee above 0, with at most 2 decimals."
+      "extra_other": "Choose what happens to the {count} extra pieces"
     },
     "workOrders": "What happens to the work orders",
     "planNotRead": "What happens to the work orders could not be read now: it still applies at once, and they follow by the same rules.",
@@ -1291,29 +1249,12 @@
       "changed": "{numbers} changed",
       "waits": "Waiting for production: {numbers} — decide on this page"
     },
-    "applyPriced": "Apply as a priced change",
-    "pricedMore": "Extra deposit and words for the customer…",
-    "line": {
-      "text": "Text…",
-      "description": "Description",
-      "note": "Note for production (no prices)",
-      "remove": "Remove line",
-      "removed": "Removed: type its sizes again to keep it",
-      "loses_one": "{numbers} loses this line",
-      "loses_other": "{numbers} lose this line"
-    },
-    "closedShort": "Closed short: work orders make it",
     "shipTo": "Ship to",
-    "shipToKeep": "As now: {address}",
     "shipToHeld": "Another delivery address needs the right to see customers: the order keeps its address.",
     "shipToFailed": "The delivery addresses could not be read: the order keeps its address.",
     "shipToPrepared": "A shipment is being prepared for the old address: change it there first",
     "shipToPreparedOf": "Shipment {number} is being prepared for the old address: change it there first",
-    "shipToDone": "The delivery address is changed.",
-    "pricedHeld": {
-      "apply": "A priced change is made by someone who sees prices.",
-      "net": "Net: shown to people who see prices"
-    }
+    "shipToDone": "The delivery address is changed."
   },
   "facts": {
     "requested": {
@@ -1371,7 +1312,6 @@
     },
     "empty": {
       "title": "No lines yet",
-      "amend": "Add a style above: an order keeps at least one line.",
       "new": "Add a style above, pick its colours and type the pieces per size."
     },
     "gridCaption": "Pieces of {style} by colour and size",
@@ -1605,8 +1545,6 @@
     "col": {
       "line": "Line",
       "change": "Change",
-      "sizes": "Sizes old → new",
-      "pieces": "Pieces",
       "price": "Unit price",
       "before": "Before",
       "after": "After",
@@ -1639,9 +1577,6 @@
       "CHANGED": "Changed",
       "same": "Unchanged"
     },
-    "sizesSame": "Sizes unchanged",
-    "pieces": "{before} → {after}",
-    "priceSame": "Unchanged",
     "madeBy": "Made by",
     "byAt": "{name}, {date}",
     "reason": "Reason",

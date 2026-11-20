@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OrderRecordActions, OrderRecordModel, RecordActsBase, RecordDialog } from './record-model'
-import { amendStyleAnchorOf } from './record-model' // F-OO-125
 // ---- F-OO-210: the office note through the Orders sheet's own write (the list tools' bulk apply) ----
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { applyBulk } from '../../../_shared/list-tools/api'
@@ -24,7 +23,7 @@ import { clearNoticeOf, setNoticeOf, stageByHandBodyOf, stageRefusalOf, versionO
 // ---- end F-MS-103
 
 export type OverviewActsModel = Pick<OrderRecordModel, 'overviewLine' | 'gateActs' /* F-OO-145 */ | 'credit' /* F-OO-106 */ | 'stageHand' /* F-MS-103 */>
-export type OverviewActsActions = Pick<OrderRecordActions, 'onOpenLine' | 'onRequestedChange' | 'onLineChange' /* F-OO-125 */ | 'onCustomerRefChange' /* F-OO-209 */ | 'onNoteSave' /* F-OO-210 */ | 'gateActs' /* F-OO-145 */ | 'credit' /* F-OO-106 */ | 'stageHand' /* F-MS-103 */>
+export type OverviewActsActions = Pick<OrderRecordActions, 'onOpenLine' | 'onRequestedChange' | 'onCustomerRefChange' /* F-OO-209 → F-OL-04 */ | 'onNoteSave' /* F-OO-210 */ | 'gateActs' /* F-OO-145 */ | 'credit' /* F-OO-106 */ | 'stageHand' /* F-MS-103 */>
 
 /**
  * F-OP-134 (N-5): Overview's acts — F-SA-232: the line whose sizes the centred window shows (Overview › Progress by line). Mounted by
@@ -32,10 +31,9 @@ export type OverviewActsActions = Pick<OrderRecordActions, 'onOpenLine' | 'onReq
  * read Overview draws is the container's (the band and every tab read it).
  * F-OO-144 (order overview 10-design §4.2; review F7): Next dates' requested date "Change…" opens the small dialog in the page's one
  * dialog slot (`{ kind: 'requested' }`; its write is Lines' amendment, use-lines-acts) — the F-OP-104 hop to Lines went.
- * F-OO-125 (order overview 10-design §2.3): a line's "Change quantity or sizes…" — the same one edit path (Amend on Lines), with that
- * line's style group focused (`amend-style-<styleId>` in LinesEditor). No second editor.
- * F-OO-209 (order overview 11-design §7.2): Order facts' Customer PO "Change…" — the same one edit path, the customer PO focused
- * (CUSTOMER_REF_FIELD_ID on the Lines edit header). Ship to keeps the band's own door (use-lines-acts onChangeShipTo).
+ * F-OL-04 (Order LINES lane, pick D7): Order facts' Customer PO "Change…" opens its own small window (the amendment with no lines);
+ * Ship to keeps the band's own door (use-lines-acts onChangeShipTo). F-OL-05: the old "Change quantity or sizes…" hop to the Lines edit
+ * mode went — a line's ⋯ is the ONE list (line-moves.ts), its table acts are the Lines tab's (use-lines-draft.ts).
  * F-OO-210 (order overview 11-design §7.3; Owner D4): the office note's Save note — the Orders sheet's own write (`applyBulk`, list
  * `sales.orders`: the command sales.orders.editCells, which checks the version, refuses a closed or cancelled order and moves the
  * version), through the page's one write; the order is read again after it.
@@ -44,8 +42,6 @@ export type OverviewActsActions = Pick<OrderRecordActions, 'onOpenLine' | 'onReq
  */
 export function useOverviewActs(
   input: {
-    readonly startAmend?: () => void
-    readonly focus?: (id: string) => void
     /** F-OO-144: the page's one dialog slot (the container's). */
     readonly setDialog?: (dialog: RecordDialog | null) => void
     /** F-OO-210: the API, the order as last read and the page's one write (the container's acts base). */
@@ -71,11 +67,6 @@ export function useOverviewActs(
       gateActs: gates.actions, // F-OO-145: Move the date…, Mark done…, Start before the gate… and the dialogs' own acts
       // F-OO-144: the small dialog (held there by amendHeld, as the door is); no page hop.
       onRequestedChange: () => input.setDialog?.({ kind: 'requested' }),
-      // F-OO-125: edit mode (an open draft kept: use-lines-acts' onAmendStart), the line's style group focused.
-      onLineChange: (styleId) => {
-        input.startAmend?.()
-        input.focus?.(amendStyleAnchorOf(styleId))
-      },
       // F-OL-04 (pick D7): Order facts' Customer PO "Change…" opens its small window (the amendment with no lines), no hop to Lines.
       onCustomerRefChange: () => input.setDialog?.({ kind: 'customerRef' }),
       // ---- F-OO-210: one row of the sheet's write — the order, its version as read, the note. A refusal stays in the dialog in the

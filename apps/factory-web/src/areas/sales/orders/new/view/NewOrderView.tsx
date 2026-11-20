@@ -219,7 +219,7 @@ function NewOrder({ model, actions, frame }: { model: NewOrderModel; actions?: N
             {/* F-CP-146 (money wall D1-c): without the price grain no price is typed or sent — the lines take the customer's price list. */}
             {!model.can.price && <p className="fw-so-hint">{t('priced.fromList', { customer: party?.legalName ?? '—' })}</p>}
             <LinesEditor
-              model={{ mode: 'new', lines: model.draft.lines, order: null, styles: model.styles, composer: model.composer, price: model.can.price, currency, priceBasis: priced?.priceBasis ?? 'NET', minimums: {}, nets: model.can.price ? nets : undefined, listPrices: prices, busy: model.busy, newLineOptions: model.newLineOptions /* B-W2b-374 */ }}
+              model={{ mode: 'new', lines: model.draft.lines, order: null, styles: model.styles, composer: model.composer, price: model.can.price, currency, priceBasis: priced?.priceBasis ?? 'NET', nets: model.can.price ? nets : undefined, listPrices: prices, busy: model.busy, newLineOptions: model.newLineOptions /* B-W2b-374 */ }}
               actions={{ onCells: actions?.onCells, onPrice: actions?.onPrice, onComposerQuery: actions?.onComposerQuery, onComposerPick: actions?.onComposerPick, onComposerToggle: actions?.onComposerToggle, onComposerAdd: actions?.onComposerAdd }}
             />
             {model.files && <CustomerFiles model={model.files} actions={actions?.files} />}

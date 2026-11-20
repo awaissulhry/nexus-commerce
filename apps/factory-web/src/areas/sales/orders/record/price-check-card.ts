@@ -41,11 +41,6 @@ export interface PriceCheckCardModel {
   readonly canHistory: boolean
 }
 
-/** "Change our price ›" is the order's own Edit mode (one edit path, F-OP-106): held while it is open, else with the order's reason. */
-export function changeOursHeldOf(amending: boolean, held: Phrase | null): Phrase | null {
-  return amending ? { key: 'held.amending' } : held
-}
-
 export interface PriceCheckCardActions {
   /** Customer's price… — the ONE window (F-CP-114), read and saved by its own hook. */
   onEdit?: () => void

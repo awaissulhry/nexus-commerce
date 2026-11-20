@@ -535,54 +535,8 @@ fieldset.fw-so-choices {
 }
 
 /* ---- B-W2a-50: the order every day ---- */
-/* The amendment's bar (EditModeBar, composed: the DS one speaks English only): sticky under the band while scrolling. */
-.fw-so-amendbar {
-  position: sticky;
-  top: var(--nds-space-8);
-  z-index: var(--nds-z-actionbar);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--nds-space-8) var(--nds-space-16);
-  padding: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-14);
-  border: 1px solid var(--nds-border-strong);
-  border-radius: var(--nds-radius-md);
-  background: var(--nds-surface-raised);
-  box-shadow: var(--nds-shadow-pop);
-  min-width: 0;
-}
-
-.fw-so-amendbar-words {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--nds-space-8);
-  min-width: 0;
-}
-
-/* ---- F-OP-106: the "What changes" strip — its facts and "Applies at once" on lines of their own under the bar's first line (they wrap
-   at 375 px; Apply stays on the first line). A work order that waits for production reads in the warning text tone. ---- */
-.fw-so-strip-line {
-  flex-basis: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-4) var(--nds-space-12, var(--nds-space-10));
-  margin: 0;
-  min-width: 0;
-}
-
-.fw-so-strip-line > span + span::before {
-  content: '·';
-  margin-inline-end: var(--nds-space-8);
-  color: var(--nds-text-muted);
-}
-
-.fw-so-strip-waits {
-  color: var(--nds-warning-text);
-}
-/* ---- end F-OP-106 ---- */
+/* F-OL-05 (Order LINES lane): the amendment's bar and the "What changes" strip went with the old edit mode (the Lines tab's
+   save bar and Review and save are lines.css's). */
 
 .fw-so-composer {
   display: flex;
@@ -625,16 +579,6 @@ fieldset.fw-so-colours {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-2, 2px);
-}
-
-/* A line closed short: its tag and reason under the colour, wrapping (never cut). */
-.fw-so-closed {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-4) var(--nds-space-6);
-  margin-top: var(--nds-space-4);
-  white-space: normal;
 }
 
 /* B-TH-231 — New order's fold "Customer files": held in the page, attached right after Confirm. */
