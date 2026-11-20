@@ -98,6 +98,7 @@ import { CUSTOMER_PAUSE, plainHolds } from '../../../production/work-orders/dail
 import type { OfficeRequest } from '../../../../record-panels/approvals/api' // F-OO-204: the approvals we asked the customer
 import { PRODUCTION_READ } from './overview/fixtures'
 import { PEOPLE } from './overview/fixtures' // F-OO-133: the overview case draws the real People card
+import { HAND_FREE_READ, HAND_NOWORK_READ, HAND_OLD_READ, HAND_PAUSED_READ, HAND_READ } from './overview/fixtures' // F-MS-102
 // ---- F-OO-211 / F-OO-213: the order's custom fields beside Order facts (the shared panel and its own design data, SCR-520) ----
 import { CustomFieldsPanel, type CustomFieldsModel } from '../../../../record-panels/custom-fields/view/CustomFieldsPanel'
 import { designScreen as fieldsScreen } from '../../../../record-panels/custom-fields/fixtures'
@@ -961,6 +962,29 @@ const F_OO_211: DesignCase<RecordCase>[] = [
 ]
 // ---- end F-OO-211
 
+// ---- F-MS-102 (set the stage by hand, 04 §2.2–2.5): "Where it is now" with a stage set by hand — a Planner's door under the dots, the
+// row (who, when, why, what the floor says, the office's note) with Change… and Clear…, 9 days old (amber, "check it"), an order no work
+// order records yet (as SEED-SO-W39-02), held on a Confirmed order and during the customer's pause, none on a shipped order, held for
+// Sales, the row alone for Read-only. The right is production.brand.manage (the health raise's). Look at 375 / 1440 / 1920, light + dark,
+// keyboard only: the strip's link, then the door (or Change…, Clear…), then the moves.
+const PLANNER_PERMISSIONS = rolePermissions('planner')
+const handCan = (permissions: readonly string[]) => ({ stageHand: { can: permissions.includes('production.brand.manage') } })
+/** A Planner on the order (production.brand.manage; the demo's `manager` role carries no money, as a planner). */
+const plannerCase = (value: Order, over: Partial<OrderRecordModel>) => base('manager', value, { can: abilitiesOf(PLANNER_PERMISSIONS), ...handCan(PLANNER_PERMISSIONS), tab: 'overview', liveState: 'live', ...over })
+const noWorkYet = order('IN_PRODUCTION', { chain: { ...production.chain, workOrders: [] } })
+const F_MS_102: DesignCase<RecordCase>[] = [
+  { id: 'f-ms-door', label: 'F-MS-102 · Planner · In production at Sewing: "Set the stage by hand…" beside the quiet line under the dots', model: plannerCase(production, { production: ready(HAND_FREE_READ) }) },
+  { id: 'f-ms-hand', label: 'F-MS-102 · Planner · Sewing set by hand over the floor\'s Preparing: the tag, who, when, why, the floor\'s counts, the office\'s note — Change… Clear…', model: plannerCase(production, { production: ready(HAND_READ) }) },
+  { id: 'f-ms-hand-old', label: 'F-MS-102 · Planner · the same, set 9 days ago: the amber rule and tag, "check it"', model: plannerCase(production, { production: ready(HAND_OLD_READ) }) },
+  { id: 'f-ms-hand-nowork', label: 'F-MS-102 · Planner · Cutting set by hand on an order no work order records yet (as SEED-SO-W39-02): "it stands until you clear it or the order ships"', model: plannerCase(noWorkYet, { production: ready(HAND_NOWORK_READ) }) },
+  { id: 'f-ms-confirmed', label: 'F-MS-102 · Planner · a Confirmed order: the door held — production has not started yet (R4)', model: plannerCase(confirmed, { production: ready(CONFIRMED_READ) }) },
+  { id: 'f-ms-paused', label: 'F-MS-102 · Planner · the customer\'s own pause: the door held — lift the pause first (R19)', model: plannerCase(production, { production: ready(HAND_PAUSED_READ) }) },
+  { id: 'f-ms-shipped', label: 'F-MS-102 · Planner · a shipped order: every stage done, no door (R5)', model: plannerCase(shipped, { production: ready() }) },
+  { id: 'f-ms-sales', label: 'F-MS-102 · Sales · the row, Change… and Clear… held — production does this (a planner or the production manager)', model: base('sales', production, { tab: 'overview', production: ready(HAND_READ), liveState: 'live', ...handCan(rolePermissions('sales')) }) },
+  { id: 'f-ms-read-only', label: 'F-MS-102 · Read-only · the row says it, no door', model: readOnlyCase(base('sales', production, { tab: 'overview', production: ready(HAND_READ), liveState: 'live', ...handCan(READ_ONLY_PERMISSIONS) })) },
+]
+// ---- end F-MS-102
+
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-039',
   title: 'Order studio: lines, dates, production, shipments, invoices & payments with the deposit, documents',
@@ -1168,6 +1192,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     ...F_OO_109, // F-OO-109: ONE Lift for the customer's pause on N work orders — the door, held for Sales, the dialog
     ...F_OO_110, // F-OO-110: cancel a waiting order — Cancel order… under More ▾, the yes taken back
     ...F_OO_211, // F-OO-211 / F-OO-213: the custom fields beside Order facts — read-only, the order changed first, a closed order
+    ...F_MS_102, // F-MS-102: the stage set by hand — the door under the dots, the row with Change… and Clear…, held, none
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
     ...F_OP_301, // F-OP-301 (walk #1, #2, #3)

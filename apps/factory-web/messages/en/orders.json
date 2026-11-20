@@ -1780,7 +1780,7 @@
       "change": "Change…",
       "changeAria": "Change the stage set by hand on {number}",
       "clear": "Clear…",
-      "clearAria": "Back to the floor's stage on {number}",
+      "clearAria": "Clear the stage set by hand on {number}: back to the floor's stage",
       "held": {
         "reading": "The stage is still being read"
       },

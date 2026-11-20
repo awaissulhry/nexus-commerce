@@ -1193,3 +1193,117 @@ describe('F-OO-205: Requests & changes — Waiting on us · N, Waiting on <custo
   })
 })
 // ---- end F-OO-205
+
+// ---- F-MS-102 (set the stage by hand, 04 §2.2–2.5, §8): the Where card draws it — the door under the dots, the hand row, held, none ----
+describe('F-MS-102: "Where it is now" draws a stage set by hand — the door on the quiet line, the row under it, the moves untouched', () => {
+  /** Section 1's own markup: from its card up to the next card's heading (Progress by line). */
+  const sectionOf = (html: string): string => {
+    const from = html.indexOf('fw-so-where')
+    const title = html.indexOf('<h2 class="fw-so-h2">', from)
+    return html.slice(from, html.indexOf('<h2 class="fw-so-h2">', title + 1))
+  }
+  /** The hand stage's row: from its row up to the moves row. */
+  const rowOf = (html: string): string => html.slice(html.indexOf('class="fw-so-ov-row fw-so-hand"'), html.indexOf('class="fw-so-where-moves"'))
+  const SET_BY = { en: 'Stages are set by the floor and quality, or by hand when the floor cannot record them', it: 'Le fasi le segnano il reparto e la qualità, o a mano quando il reparto non può registrarle' } as const
+  const HELD_SALES = 'Production does this — a planner or the production manager'
+
+  it('section 1 keeps its order: the headline, the strip\'s one link, the quiet line, the hand row, the moves row', () => {
+    const html = sectionOf(draw('f-ms-hand'))
+    const at = ['<p class="fw-so-headline">In production · Sewing</p>', 'class="fw-prp-strip-go"', SET_BY.en, 'class="fw-so-ov-row fw-so-hand"', 'class="fw-so-where-moves"'].map((part) => html.indexOf(part))
+    expect(at.every((index) => index >= 0), at.join(',')).toBe(true)
+    expect([...at].sort((a, b) => a - b)).toEqual(at)
+    // The strip stays ONE link holding no control; its current dot says "Set by hand" (shown, never set there), and its name too.
+    const from = html.indexOf('class="fw-prp-strip-go"')
+    const link = html.slice(from, html.indexOf('</a>', from))
+    expect(link).not.toContain('<button')
+    expect(link).toContain('<span class="nds-milestone-note">Set by hand</span>')
+    expect(html).toContain('aria-label="Open the work orders in Production · now Sewing, set by hand"')
+    // Tab order: the strip's link, then Change… and Clear…, then the moves.
+    expect(html.indexOf('>Change…<')).toBeGreaterThan(html.indexOf('class="fw-so-ov-row fw-so-hand"'))
+    expect(html.indexOf('>Clear…<')).toBeGreaterThan(html.indexOf('>Change…<'))
+    expect(html.indexOf('>Clear…<')).toBeLessThan(html.indexOf('class="fw-so-where-moves"'))
+  })
+
+  it('a Planner, nothing set: "Set the stage by hand…" open on the quiet line under the dots, no row', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = sectionOf(draw('f-ms-door', locale))
+      const line = html.slice(html.indexOf('class="fw-so-where-setby"'), html.indexOf('class="fw-so-where-moves"'))
+      expect(line, locale).toContain(SET_BY[locale])
+      expect(line, locale).toMatch(locale === 'en' ? /<button(?![^>]*aria-disabled)[^>]*>Set the stage by hand…<\/button>/ : /<button(?![^>]*aria-disabled)[^>]*>Imposta la fase a mano…<\/button>/)
+      expect(html, locale).not.toContain('class="fw-so-ov-row fw-so-hand"')
+      expect(html, locale).not.toContain('nds-milestone-note">Set by hand')
+    }
+  })
+
+  it('set by hand: the tag, the stage, who (an office person), when, why; what the floor\'s counts say; the office\'s note — never a floor worker', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const row = rowOf(sectionOf(draw('f-ms-hand', locale)))
+      const text = textOf(row)
+      const words =
+        locale === 'en'
+          ? ['Set by hand', 'Sewing · by Bea Esempio', 'System or scanners down', "The floor's counts say Preparing: it clears by itself when the floor reaches Sewing", 'Office only — Tablet del reparto taglio offline dalle 14:00.', 'Change…', 'Clear…']
+          : ['Impostata a mano', 'Confezione · da Bea Esempio', 'Sistema o lettori fuori uso', 'I conteggi del reparto dicono In preparazione: si toglie da sola quando il reparto arriva a Confezione', 'Solo ufficio — Tablet del reparto taglio offline dalle 14:00.', 'Cambia…', 'Togli…']
+      for (const word of words) expect(text, `${locale}: ${word}`).toContain(word)
+      expect(row, locale).toContain('data-tone="info"')
+      expect(row, locale).toContain('class="nds-tag info"')
+      expect(row, locale).toMatch(/<time[^>]*>[^<]+<\/time>/)
+      expect(text, locale).not.toMatch(/\b(?:operator|operatore|station|postazione)\b/i)
+    }
+    // Change… and Clear… name the order (each name starts with its visible words).
+    const html = draw('f-ms-hand')
+    expect(html).toContain('aria-label="Change the stage set by hand on SO-2026-0088"')
+    expect(html).toContain('aria-label="Clear the stage set by hand on SO-2026-0088: back to the floor&#x27;s stage"')
+    // The headline and the dots show the stage set: they always agree.
+    expect(textOf(sectionOf(html))).toContain('In production · Sewing')
+  })
+
+  it('9 days on: the warning rule and tag, "check it" with its days', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const row = rowOf(sectionOf(draw('f-ms-hand-old', locale)))
+      expect(row, locale).toContain('data-tone="warning"')
+      expect(row, locale).toContain('class="nds-tag warning"')
+      expect(textOf(row), locale).toContain(locale === 'en' ? 'Set by hand 9 d ago and the floor has not reached it: check it' : 'Impostata a mano 9 g fa e il reparto non ci è ancora arrivato: controllala')
+    }
+    expect(rowOf(sectionOf(draw('f-ms-hand')))).not.toContain('check it')
+  })
+
+  it('no work order on the order (as SEED-SO-W39-02): Cutting, "No work order records this order…", never the floor\'s line', () => {
+    const text = textOf(rowOf(sectionOf(draw('f-ms-hand-nowork'))))
+    for (const words of ['Set by hand', 'Cutting · by Bea Esempio', 'Too few people to record the work', 'No work order records this order: it stands until you clear it or the order ships']) expect(text, words).toContain(words)
+    expect(text).not.toContain("The floor's counts say")
+    expect(text).not.toContain('Office only')
+  })
+
+  it('held, never hidden: Confirmed (R4), the customer\'s pause (R19), Sales (wo.heldHold); none on a shipped order (R5); Read-only: the row, no door', () => {
+    expect(sectionOf(draw('f-ms-confirmed'))).toMatch(/aria-disabled="true"[^>]*aria-description="Production has not started yet: a stage is set by hand only once the order is in production\."[^>]*>Set the stage by hand…/)
+    expect(sectionOf(draw('f-ms-paused'))).toMatch(/aria-disabled="true"[^>]*aria-description="Paused at the customer&#x27;s request: lift the pause first\."[^>]*>Set the stage by hand…/)
+    const sales = sectionOf(draw('f-ms-sales'))
+    for (const door of ['Change…', 'Clear…']) expect(sales, door).toMatch(new RegExp(`aria-disabled="true"[^>]*aria-description="${HELD_SALES}"[^>]*>${door}`))
+    expect(textOf(rowOf(sales))).toContain('Sewing · by Bea Esempio')
+    const shipped = sectionOf(draw('f-ms-shipped'))
+    expect(textOf(shipped)).toContain(SET_BY.en)
+    for (const part of ['Set the stage by hand…', 'class="fw-so-ov-row fw-so-hand"']) expect(shipped, part).not.toContain(part)
+    const readOnly = sectionOf(draw('f-ms-read-only'))
+    expect(textOf(rowOf(readOnly))).toContain("The floor's counts say Preparing")
+    for (const door of ['Set the stage by hand…', '>Change…<', '>Clear…<']) expect(readOnly, door).not.toContain(door)
+  })
+
+  it('the moves row is untouched (the door is not a move); the frame\'s source keeps the row and its door under the dots, where.css tokens only', () => {
+    const html = draw('f-ms-hand')
+    const from = html.indexOf('class="fw-so-where-moves"')
+    expect(html.slice(from, html.indexOf('</div>', from))).not.toMatch(/Set the stage by hand|Change…|Clear…/)
+    const card = read('../view/overview/WhereCard.tsx')
+    const stages = card.indexOf('<StageStrip')
+    expect(card.indexOf('className="fw-so-where-setby"')).toBeGreaterThan(stages)
+    expect(card.indexOf('<HandRowView ')).toBeGreaterThan(card.indexOf('className="fw-so-where-setby"'))
+    expect(card.indexOf('<HandRowView ')).toBeLessThan(card.indexOf('<Moves '))
+    const css = read('../view/overview/where.css')
+    for (const rule of ['.fw-so-where-setby {', '.fw-so-hand {', ".fw-so-hand[data-tone='warning'] {", '.fw-so-hand-said {']) expect(css, rule).toContain(rule)
+    expect(css).toContain('border-inline-start: var(--nds-space-3) solid var(--nds-info)')
+    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|\bpx\b/)
+    const rules = read('./where.ts')
+    const moves = rules.slice(rules.indexOf('export function whereMovesOf('), rules.indexOf('// ---- end F-OO-107'))
+    expect(moves).not.toMatch(/byHand|stageSet|where\.manual/)
+  })
+})
+// ---- end F-MS-102

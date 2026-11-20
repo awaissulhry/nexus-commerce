@@ -1780,7 +1780,7 @@
       "change": "Cambia…",
       "changeAria": "Cambia la fase impostata a mano su {number}",
       "clear": "Togli…",
-      "clearAria": "Torna alla fase del reparto su {number}",
+      "clearAria": "Togli la fase impostata a mano su {number}: torna alla fase del reparto",
       "held": {
         "reading": "La fase è ancora in lettura"
       },
