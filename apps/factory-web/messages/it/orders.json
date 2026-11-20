@@ -665,7 +665,11 @@
       "more_other": "e altre {count}",
       "keep": "Continua a cambiare",
       "go_one": "Scarta {count} modifica",
-      "go_other": "Scarta {count} modifiche"
+      "go_other": "Scarta {count} modifiche",
+      "leaveTitle_one": "Uscire con {count} modifica non salvata?",
+      "leaveTitle_other": "Uscire con {count} modifiche non salvate?",
+      "stay": "Resta",
+      "leave": "Esci e scarta"
     },
     "done": {
       "plain": "Salvato.",

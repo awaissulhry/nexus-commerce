@@ -7,7 +7,7 @@ import { EditModeBar } from '../../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../../lib/i18n/provider'
 import type { Order } from '../../../api'
 import { changeCountOf, type LinesDraft } from '../../lines-draft'
-import type { LinesTabActions } from '../../lines-tab-model'
+import type { LinesTabActions, LinesTabModel } from '../../lines-tab-model'
 import { Frame } from '../Dialogs'
 import { lineNameOf } from './StyleTable'
 
@@ -37,8 +37,7 @@ export function SaveBar({ order, draft, canUndo, held, saving, actions }: { orde
     return () => window.removeEventListener('keydown', onKey)
   }, [])
   if (count === 0) return null
-  const names = [...Object.keys(draft.lines), ...draft.added.map((line) => line.key)].map((key) => lineNameOf(order, draft, key))
-  const list = names.length > 3 ? `${names.slice(0, 3).join(', ')} ${t('save.discard.more', { count: names.length - 3 })}` : names.join(', ')
+  const list = lostListOf(order, draft, t)
   return (
     <div className="fw-lt-bar">
       <EditModeBar
@@ -77,5 +76,37 @@ export function SaveBar({ order, draft, canUndo, held, saving, actions }: { orde
         </Frame>
       )}
     </div>
+  )
+}
+
+/** What is lost, in words: "line 2 · BLK · Nero, …", at most 3 then "and {n} more" (Discard and leaving say the same). */
+function lostListOf(order: Order, draft: LinesDraft, t: (key: string, params?: Record<string, string | number>) => string): string {
+  const names = [...Object.keys(draft.lines), ...draft.added.map((line) => line.key)].map((key) => lineNameOf(order, draft, key))
+  return names.length > 3 ? `${names.slice(0, 3).join(', ')} ${t('save.discard.more', { count: names.length - 3 })}` : names.join(', ')
+}
+
+/**
+ * F-OL-07 (Order LINES lane; 11-design-dialogs D-k, W2) — an in-app link away from the order while the table holds changes not saved:
+ * "Leave with {n} changes not saved?", what is lost, **Stay** (the first choice; Esc) and **Leave and discard** (danger). Mounted once
+ * for the page, so a link on any tab of the order asks the same; a tab of the order itself never asks. Fetches nothing.
+ */
+export function LeaveConfirm({ order, tab, actions }: { order: Order; tab: LinesTabModel | null | undefined; actions?: LinesTabActions }) {
+  const t = useT('orders')
+  if (!tab?.leaving) return null
+  const count = changeCountOf(tab.draft)
+  return (
+    <Frame
+      title={t('save.discard.leaveTitle', { count })}
+      held={null}
+      go={() => actions?.onLeaveGo?.()}
+      goLabel={t('save.discard.leave')}
+      onClose={() => actions?.onLeaveStay?.()}
+      problem={null}
+      size="sm"
+      tone="danger"
+      closeLabel={t('save.discard.stay')}
+    >
+      <p className="fw-so-hint">{t('save.discard.body', { list: lostListOf(order, tab.draft, t) })}</p>
+    </Frame>
   )
 }

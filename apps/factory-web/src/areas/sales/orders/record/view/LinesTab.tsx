@@ -49,7 +49,9 @@ function LinesView({ order, model, actions }: { order: Order; model: OrderRecord
   const styles = tab?.styles ?? {}
   const cards = styleCardsOf(order, draft, styles)
   const basis = taxBasisOf(order)
-  const totals = totalsOf(order, draft, cards)
+  // F-OL-09: the server's figures of THIS draft once its preview answered; until then the client estimate.
+  const figures = tab?.figures ?? null
+  const totals = totalsOf(order, draft, cards, figures)
   const ctx: LinesCtx = {
     order,
     model,
@@ -66,6 +68,7 @@ function LinesView({ order, model, actions }: { order: Order; model: OrderRecord
     styles,
     basis,
     colleague: tab?.moved?.by ?? null,
+    figures,
   }
   // F-OL-03: what holds "Review and save…", in order, said for its cell (a size locked for good never changes).
   const lockedForGood = frozenCells(ctx.freeze).filter((cell) => cell.state === 'BLOCKED').map((cell) => ({ lineId: cell.lineId, size: cell.size }))
