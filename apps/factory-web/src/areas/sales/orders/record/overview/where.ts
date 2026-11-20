@@ -186,7 +186,8 @@ export interface WhereStrips {
 export const STRIPS_SHOWN = 4
 
 /** Each hold kind of the waiting list that has a strip of its own, in its blocking order; any other HOLD kind is `other`. */
-const HOLD_STRIPS: Readonly<Record<string, 'quality' | 'production' | 'pause'>> = Object.freeze({ QUALITY_HOLD: 'quality', NO_MOVE: 'production', BRAND_PAUSE: 'pause' })
+// quick-check fix (W07): Partial — any other hold kind is absent here (its own strip, 'other'), so the lookup says it may be undefined.
+const HOLD_STRIPS: Readonly<Partial<Record<string, 'quality' | 'production' | 'pause'>>> = Object.freeze({ QUALITY_HOLD: 'quality', NO_MOVE: 'production', BRAND_PAUSE: 'pause' })
 /** The headline's hold words (`headline.holds[].kind`) each strip reads its reasons from. */
 const REASON_KIND = Object.freeze({ quality: 'QUALITY', production: 'PRODUCTION', pause: 'BRAND' } as const)
 const ORDER_OF: readonly StripKind[] = STRIP_KINDS

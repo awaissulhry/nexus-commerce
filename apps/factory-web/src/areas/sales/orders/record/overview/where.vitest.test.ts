@@ -54,6 +54,14 @@ vi.mock('@nexus/ui/components', async (original) => {
 })
 // ---- end F-OO-106
 
+// quick-check fix (W07/W11): a catalogue is FLAT ('where.credit.check' → text; lib/i18n/messages.ts), so `.orders!.where.credit` was
+// undefined (a type error, and a throw at run time). The Italian texts under a key prefix, as one string (never empty: the keys exist).
+const itWordsUnder = (...prefixes: readonly string[]): string => {
+  const words = Object.entries(messagesFor('it', ['orders']).orders!).filter(([key]) => prefixes.some((prefix) => key.startsWith(prefix))).map(([, text]) => text)
+  expect(words.length, prefixes.join(', ')).toBeGreaterThan(0)
+  return JSON.stringify(words)
+}
+
 /**
  * F-OO-100 (order overview lane: one file per section) — "Where it is now"'s rules, moved with where.ts out of overview.vitest.test.ts
  * (F-SA-232: the headline sentence per state, the five stages, the health only from the reads). F-OO-101 / 102 / 103 / 202 rewrote
@@ -436,7 +444,7 @@ describe('F-OO-105: the strips\' doors — the band\'s yes, the payment, the row
     expect([en('where.strip.credit.waits', { who: 'Finance' }), it('where.strip.credit.waits', { who: 'Finance' })]).toEqual(["Credit hold — waits for Finance's yes", 'Blocco fido — aspetta il sì di Finance'])
     expect([en('where.strip.release'), it('where.strip.release')]).toEqual(['Release on Quality ›', 'Sblocca in Qualità ›'])
     // Office "tu": the Italian never says "voi" / "vostro" (the portal's).
-    const strip = JSON.stringify(messagesFor('it', ['orders']).orders!.where)
+    const strip = itWordsUnder('where.')
     expect(strip).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
   })
 })
@@ -880,7 +888,7 @@ describe('F-OO-106: the credit strip — Check credit again, Ask for a yes… on
         const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
         for (const key of [...KEYS, 'where.refuse.credit', 'where.refuse.order']) expect(t(key, { who: 'X', date: 'D', reason: 'R', findings: 'F', customer: 'C', number: 'N', count: 2 }), `${locale} ${key}`).not.toBe(key)
       }
-      const words = JSON.stringify([messagesFor('it', ['orders']).orders!.where.credit, messagesFor('it', ['orders']).orders!.where.refuse])
+      const words = itWordsUnder('where.credit.', 'where.refuse.')
       expect(words).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
     })
   })
@@ -948,7 +956,7 @@ describe('F-OO-108: Hold the whole order… in the moves row — the domain plan
         for (const key of ['label', 'reading', 'onlyUnits', 'qualityNoRight', 'leftTitle', 'left']) expect(t(`where.hold.${key}`, { number: 'N', words: 'W' }), `${locale} ${key}`).not.toBe(`where.hold.${key}`)
         for (const key of ['notReached', 'units', 'stale', 'notice']) for (const count of [1, 2]) expect(t(`where.hold.${key}`, { count, numbers: 'N', number: 'SO-1' }), `${locale} ${key} ${count}`).not.toBe(`where.hold.${key}`)
       }
-      expect(JSON.stringify(messagesFor('it', ['orders']).orders!.where.hold)).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
+      expect(itWordsUnder('where.hold.')).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
     })
   })
 })
@@ -997,7 +1005,7 @@ describe('F-OO-109: the strip\'s Lift… on several of its own work orders opens
       for (const key of ['body', 'list', 'on', 'noneOn', 'reading', 'readFailed', 'allOrNone', 'customer', 'held.failed', 'held.none', 'meanwhile']) expect(t(`where.lift.${key}`, { number: 'N', words: 'W' }), `${locale} ${key}`).not.toBe(`where.lift.${key}`)
       for (const key of ['title', 'titlePause', 'notReached', 'go', 'stale', 'notice']) for (const count of [1, 2]) expect(t(`where.lift.${key}`, { count, numbers: 'N' }), `${locale} ${key} ${count}`).not.toBe(`where.lift.${key}`)
     }
-    expect(JSON.stringify(messagesFor('it', ['orders']).orders!.where.lift)).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
+    expect(itWordsUnder('where.lift.')).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
   })
 })
 // ---- end F-OO-109
