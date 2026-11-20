@@ -103,15 +103,11 @@ const send = (requestId: string, number = `RQ-T-${randomUUID().slice(0, 8)}`, sc
  */
 const serverNow = async (ms = 0): Promise<string> =>
   ((await admin(`SELECT clock_timestamp() + $1::int * interval '1 millisecond' AS at`, [ms]))[0]!.at as Date).toISOString()
-/**
- * A new OPEN change request of P1 on `orderId`, made by the customer from the seed's OPEN one. B-OO-016 (Owner D9): on
- * SEED-SO-0003 unless `changes` names another order — the seed's own request is on SEED-SO-0002, which the seed then moves to
- * PARTLY_SHIPPED (its facts), and a partly shipped order is asked no change any more (only a cancel, a rush, a pause or a resume).
- */
+/** A new OPEN change request of P1 on `orderId`, made by the customer from the seed's OPEN one. */
 async function newChange(changes: Record<string, unknown> = {}): Promise<string> {
   const id = randomUUID()
   const at = await serverNow()
-  await copyRow('OrderChangeRequest', seeded.changes.open, { id, orderId: seeded.orders.so3, createdAt: at, updatedAt: at, ...changes }, partner())
+  await copyRow('OrderChangeRequest', seeded.changes.open, { id, createdAt: at, updatedAt: at, ...changes }, partner())
   return id
 }
 /** A new CREATED payment intent made by the office from the seed's CREATED one, with `changes`. */
@@ -173,20 +169,6 @@ describe('grants and the seed', () => {
       { revision: 2, submittedViaLinkId: seeded.measurementLinkId, noticeVersionId: seeded.publicNoticeId, photosDeleteAfter: null },
     ])
     expect(await sql(office(), `SELECT "cancelCutoffStatus"::text AS s, "cancelCutoffDays" AS d, "changeCutoffStatus"::text AS c FROM "SalesSettings" WHERE id = $1::uuid`, a.tenantId)).toEqual([{ s: 'IN_PRODUCTION', d: 14, c: 'READY' }])
-    // B-OO-016 (Owner D9): SEED-SO-0002 last follows its facts as the system does — its work order released, then SH-0001 left
-    // with part of it — one audit row per move: the first at the release, the second at the write (the order's updatedAt), never
-    // ahead of today (SH-0001 leaves in the seeds' future); SEED-SO-0001 and SEED-SO-0003 keep CONFIRMED.
-    expect(await sql(office(), `SELECT number, status::text AS status FROM "SalesOrder" WHERE id IN ($1::uuid, $2::uuid, $3::uuid) ORDER BY number`, seeded.orders.so1, seeded.orders.so2, seeded.orders.so3)).toEqual([
-      { number: 'SEED-SO-0001', status: 'CONFIRMED' },
-      { number: 'SEED-SO-0002', status: 'PARTLY_SHIPPED' },
-      { number: 'SEED-SO-0003', status: 'CONFIRMED' },
-    ])
-    const facts = (await sql(office(), `SELECT (SELECT "releasedAt" FROM "WorkOrder" WHERE number = 'SEED-WO-0001') AS released, (SELECT "updatedAt" FROM "SalesOrder" WHERE id = $1::uuid) AS written`, seeded.orders.so2))[0]!
-    expect((facts.written as Date).getTime()).toBeLessThanOrEqual(Date.now())
-    expect(await sql(office(), `SELECT at, audience::text AS audience, "actorId"::text AS "actorId", action, before, after, reason FROM "AuditLog" WHERE "recordType" = 'SalesOrder' AND "recordId" = $1::uuid ORDER BY at`, seeded.orders.so2)).toEqual([
-      { at: facts.released, audience: 'SYSTEM', actorId: '00000000-0000-7000-8000-000000000000', action: 'orders.follow', before: { status: 'CONFIRMED' }, after: { status: 'IN_PRODUCTION' }, reason: 'Followed: work order SEED-WO-0001 released.' },
-      { at: facts.written, audience: 'SYSTEM', actorId: '00000000-0000-7000-8000-000000000000', action: 'orders.follow', before: { status: 'IN_PRODUCTION' }, after: { status: 'PARTLY_SHIPPED' }, reason: 'Followed: shipment SEED-SH-0001 shipped.' },
-    ])
   })
 
   it('a partner reads its own party only, never who decided or answered nor the provider account; the floor reads none of it', async () => {
@@ -312,9 +294,6 @@ describe('change and cancel requests', () => {
       await bypass(`UPDATE "SalesOrder" SET status = 'CONFIRMED' WHERE id = $1::uuid`, [seeded.orders.so3])
     }
     expect(await newChange({ orderId: seeded.orders.so3, kind: 'CANCEL', reasonCode: 'LEAD_TIME' })).toMatch(/-/)
-    // B-OO-016: SEED-SO-0002 is PARTLY_SHIPPED (the seed, its facts): no change any more; a cancel of what has not left still is.
-    await expect(newChange({ orderId: seeded.orders.so2 })).rejects.toThrow(/is PARTLY_SHIPPED; a change or a cancel is asked only while it is CONFIRMED, IN_PRODUCTION or READY \(a PARTLY_SHIPPED order: a cancel, a rush, a pause or a resume\)/)
-    expect(await newChange({ orderId: seeded.orders.so2, kind: 'CANCEL', reasonCode: 'LEAD_TIME' })).toMatch(/-/)
     // Another party's order is not a reference of P1's request.
     await expect(newChange({ partyId: P2 })).rejects.toThrow(/row-level security/)
   })
@@ -352,21 +331,18 @@ describe('change and cancel requests', () => {
     // An amendment of another order is not a reference of this request (its key names the order).
     const other = randomUUID()
     await copyRow('SalesOrderAmendment', seeded.amendmentId, { id: other, revision: 78, requestId: 'test-157-amendment-2', createdAt: await serverNow(1000) })
-    // B-OO-016: on SEED-SO-0003 (newChange's order), an order still open to a change.
-    const so3Change = await newChange()
-    await update(office(), 'OrderChangeRequest', so3Change, `status = 'ACCEPTED', "answeredAt" = now(), "answeredById" = $2::uuid`, a.actorId)
-    await expect(update(office(), 'OrderChangeRequest', so3Change, `"amendmentId" = $2::uuid`, other)).rejects.toThrow(/foreign key/)
+    const so2Change = await newChange()
+    await update(office(), 'OrderChangeRequest', so2Change, `status = 'ACCEPTED', "answeredAt" = now(), "answeredById" = $2::uuid`, a.actorId)
+    await expect(update(office(), 'OrderChangeRequest', so2Change, `"amendmentId" = $2::uuid`, other)).rejects.toThrow(/foreign key/)
   })
 
   it('the cells it asks: a line of its own order, while OPEN; a cancel asks 0, a change a different number; never changed or removed', async () => {
     const firstCell = (await admin(`SELECT id, "orderLineId" FROM "OrderChangeRequestLine" WHERE "requestId" = $1::uuid ORDER BY id LIMIT 1`, [seeded.changes.open]))[0]!
     const cell = (requestId: string, changes: Record<string, unknown> = {}) => copyRow('OrderChangeRequestLine', firstCell.id as string, { id: randomUUID(), requestId, size: `T${randomUUID().slice(0, 4)}`, ...changes }, partner())
-    // B-OO-016: the change on SEED-SO-0003 (newChange's order; SEED-SO-0002 is partly shipped), so its cells name SO-0003's line.
-    const so3Line = (await admin(`SELECT id FROM "SalesOrderLine" WHERE "orderId" = $1::uuid ORDER BY seq LIMIT 1`, [seeded.orders.so3]))[0]!.id as string
     const change = await newChange()
-    expect(await cell(change, { orderLineId: so3Line })).toBe(1)
-    await expect(cell(change, { orderLineId: so3Line, quantity: 4, quantityBefore: 4 })).rejects.toThrow(/a change a different number/)
-    await expect(cell(change, { orderLineId: so3Line, quantity: -1 })).rejects.toThrow(/0 to 100000 pieces/)
+    expect(await cell(change)).toBe(1)
+    await expect(cell(change, { quantity: 4, quantityBefore: 4 })).rejects.toThrow(/a change a different number/)
+    await expect(cell(change, { quantity: -1 })).rejects.toThrow(/0 to 100000 pieces/)
     const so1Line = (await admin(`SELECT id FROM "SalesOrderLine" WHERE "orderId" = $1::uuid LIMIT 1`, [seeded.orders.so1]))[0]!.id as string
     await expect(cell(change, { orderLineId: so1Line })).rejects.toThrow(/asks for a line of its own order/)
     const cancel = await newChange({ orderId: seeded.orders.so2, kind: 'CANCEL', reasonCode: 'PRICE' })

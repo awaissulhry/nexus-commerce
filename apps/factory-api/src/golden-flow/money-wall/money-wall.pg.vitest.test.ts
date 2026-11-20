@@ -115,7 +115,7 @@ const companyA = () => id('company:A')
 const today = () => businessDate(new Date())
 const P1 = () => id('party:P1')
 const P3 = () => id('party:P3')
-/** THE money order: Brand Alpha's SEED-SO-0002 (PARTLY_SHIPPED: B-OO-016, its facts), its two lines, its work order SEED-WO-0001. */
+/** THE money order: Brand Alpha's SEED-SO-0002 (CONFIRMED), its two lines, its work order SEED-WO-0001. */
 const SO2 = () => id('production:sales-order:SO-0002')
 const LINE10 = () => id('production:sales-order:SO-0002:10')
 const LINE20 = () => id('production:sales-order:SO-0002:20')
@@ -683,15 +683,14 @@ describe('B-CP-022 the money wall: every persona, every surface, as Sales worker
     const view = await ok(P.sales, 'GET', `${optionsUrl}/configurator`)
     const more = [{ valueId: liner }, { valueId: armour }, { valueId: name, text: 'VERDI' }]
     await blindHeld(P.sales, 'PUT', `${optionsUrl}/options`, { version: view.document.version, picks: more, keepPrice: true }, 'body/keepPrice')
-    // 3. A priced counter-offer: Brand Alpha asks a design change of its order's jacket; the Owner counters with a fee; the Sales
-    // worker's accept would agree a price it cannot see. B-OO-016 (Owner D9): asked of SEED-SO-0004's line, an order that may still
-    // change — SEED-SO-0002 is PARTLY_SHIPPED (its facts), and a partly shipped order is asked no design change any more.
+    // 3. A priced counter-offer: Brand Alpha asks a design change of its own-label jacket; the Owner counters with a fee; the Sales
+    // worker's accept would agree a price it cannot see.
     // B-CP-026 (fix wave cp-fx8): a customer's design ask is off until its production card opens it (B-SA-005b; the sales-page flow's
     // S0): the Owner opens it for Brand Alpha first — else Alpha's ask is refused NOT_OPEN before any price is in play.
     await stepped(w, P.owner)
     const card = await ok(P.owner, 'GET', `/partners/${P1()}/production`)
     expect((await ok(P.owner, 'PUT', `/partners/${P1()}/production`, { productionAskKinds: ['DESIGN'], version: card.production.version })).production.askKinds).toEqual(['DESIGN'])
-    const asked = (await asBrand(A.buyer, seen, 'POST', `/portal/sales-orders/${so4.orderId}/change-requests`, { kind: 'DESIGN', note: 'Made-up: a darker yellow piping on the collar.', lineIds: [so4.lineId] }, 201)).request
+    const asked = (await asBrand(A.buyer, seen, 'POST', `/portal/sales-orders/${SO2()}/change-requests`, { kind: 'DESIGN', note: 'Made-up: a darker yellow piping on the collar.', lineIds: [LINE10()] }, 201)).request
     await stepped(w, P.owner)
     const countered = (await ok(P.owner, 'POST', `/production/brand-requests/${asked.id}/counter`, { version: asked.version, fee: 15_000, note: 'Made-up: possible with a fee for the new piping.' })).request
     expect(countered).toMatchObject({ status: 'COUNTERED' })

@@ -102,15 +102,11 @@ const newOrder = async (status = 'CONFIRMED'): Promise<string> => {
   await plant('SalesOrder', production.urgentAsk.orderId, { id, number: `T-PR23-${id.slice(0, 8)}`, customerSeq: null, status })
   return id
 }
-/**
- * A new OPEN request of P1, asked by its buyer from the seed's OPEN change (its words kept), with `changes`. B-OO-016 (Owner D9):
- * on `asking` (a CONFIRMED order of P1) unless `changes` names another order — the seed's own change is on SEED-SO-0002, which the
- * seed then moves to PARTLY_SHIPPED (its facts), and a partly shipped order is asked only a cancel, a rush, a pause or a resume.
- */
+/** A new OPEN request of P1, asked by its buyer from the seed's OPEN change (its words kept), with `changes`. */
 async function ask(changes: Record<string, unknown> = {}, scope: FactoryScope = p1()): Promise<string> {
   const id = randomUUID()
   const at = await serverNow()
-  await copyRow('OrderChangeRequest', sales.changes.open, { id, orderId: asking, createdAt: at, updatedAt: at, ...changes }, scope)
+  await copyRow('OrderChangeRequest', sales.changes.open, { id, createdAt: at, updatedAt: at, ...changes }, scope)
   return id
 }
 /** A line of request `requestId`, written by P1's buyer from the seed's first asked cell, with `changes`. */
@@ -133,8 +129,6 @@ const answerAs = (scope: FactoryScope, id: string, status: 'APPROVED' | 'REFUSED
 const U = { office: '', other: '', suspended: '' }
 /** A P1 order line whose style has another colourway, on an order a change is asked of. */
 let line: { id: string; orderId: string; styleId: string; colourwayId: string; other: string }
-/** B-OO-016: the CONFIRMED order of P1 `ask` asks on by default (made in beforeAll). */
-let asking = ''
 
 beforeAll(async () => {
   db = await migratedDatabase('brandasks')
@@ -157,7 +151,6 @@ beforeAll(async () => {
     [a.tenantId, P1],
   )
   line = found as typeof line
-  asking = await newOrder() // B-OO-016
 }, 1_500_000)
 
 afterAll(async () => {

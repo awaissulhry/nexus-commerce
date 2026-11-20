@@ -65,11 +65,11 @@ const AMEND_REASON = 'Made-up: Brand Alpha wants one more 50 and one fewer 52.'
 const REFUSE_WORDS = 'Made-up: asked about an older version of the order; ask it again on this one.'
 // ---- F-OO-215 (order overview lane): SEED-SO-0002's Overview ----
 /**
- * SEED-SO-0002's headline as the seed gives it: its status words (its stage follows them, "Partly shipped · …"). B-OO-016 (Owner D9,
- * his pick A): the seed gives SEED-SO-0002 the status its facts give, PARTLY_SHIPPED (SEED-WO-0001 released, SEED-SH-0001 left with
- * part of it). Every other check of steps 9 and 10 asserts behaviour, never this status.
+ * SEED-SO-0002's headline as the seed gives it ON MAIN: its status words (its stage follows them, "Confirmed · …"). The Owner still
+ * decides the seed's status (A: Partly shipped, a later small PR oo-s01, which changes THIS constant; B: Confirmed, as now). Every
+ * other check of steps 9 and 10 asserts behaviour, never this status.
  */
-const SO2_HEADLINE = OD('status.PARTLY_SHIPPED')
+const SO2_HEADLINE = OD('status.CONFIRMED')
 /** This stage's own order custom field (for every customer, office only) and its made-up values. */
 const FIELD = { code: 'th9ui_box_note', labelEn: 'Box note TH9 (made up)', labelIt: 'Nota scatola TH9 (inventata)' } as const
 const FIELD_VALUE = 'Made-up: two jackets per box, TH9 page'
