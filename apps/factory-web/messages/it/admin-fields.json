@@ -428,6 +428,15 @@
     "fixFirst_other": "Correggi prima {count} campi.",
     "nothingChanged": "Non è ancora cambiato nulla.",
     "notFilled": "Non compilato",
+    "notFilledList_one": "Non compilato: {fields}",
+    "notFilledList_other": "Non compilati: {fields}",
+    "noneFilled": "Nessuno ancora compilato: {fields}",
+    "requiredField": "{field} (obbligatorio)",
+    "portal": {
+      "customer": "Lo vede il cliente",
+      "supplier": "Lo vede il fornitore",
+      "party": "Lo vedono nel loro portale"
+    },
     "hiddenRecord": "Una scheda che non puoi aprire",
     "hiddenValue": "Non visibile per te",
     "inactive": "Non più offerto",

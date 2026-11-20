@@ -8,6 +8,7 @@ import { searchRecords } from '../../areas/search/api'
 import type { Field } from '../../areas/admin/fields/api'
 import { readValues, writeValues, type RecordValue } from './api'
 import { changesOf, draftOf, fieldsRecordOf, saveFaultOf, type Draft, type DraftValue, type RefDraft } from './model'
+import { portalTagOf } from './model' // F-OO-212
 import type { CustomFieldsActions, CustomFieldsModel } from './view/CustomFieldsPanel'
 
 const LINK_PAUSE_MS = 250
@@ -141,6 +142,7 @@ export function useCustomFields({ api, record, title, people, files }: { api: Ap
       ? null
       : {
           recordLabel: title,
+          portalTag: portalTagOf(recordType), // F-OO-212: "Customer sees it" (who reads a field shown in the portal here)
           state: read.state,
           fault: read.fault,
           fields: read.fields,

@@ -428,6 +428,15 @@
     "fixFirst_other": "Fix {count} fields first.",
     "nothingChanged": "Nothing changed yet.",
     "notFilled": "Not filled",
+    "notFilledList_one": "Not filled: {fields}",
+    "notFilledList_other": "Not filled: {fields}",
+    "noneFilled": "None filled yet: {fields}",
+    "requiredField": "{field} (required)",
+    "portal": {
+      "customer": "Customer sees it",
+      "supplier": "Supplier sees it",
+      "party": "Seen in their portal"
+    },
     "hiddenRecord": "A record you may not open",
     "hiddenValue": "Not visible to you",
     "inactive": "No longer offered",
