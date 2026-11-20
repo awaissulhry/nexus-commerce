@@ -25,6 +25,11 @@ import { CANCEL_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { cancelHeld, closeHeld, isShippedInFull, readyHeld } from '../../model'
 import { ELSEWHERE_FROM } from '../shipments/elsewhere/model'
 // ---- end F-OO-107
+// ---- F-OO-106: the order's own credit hold — its read, Check credit again, Ask for a yes…, the answers in words ----
+import { isApiError } from '../../../../../lib/api/errors'
+import { writeProblem } from '../../model'
+import type { CreditCheckAnswer, CreditCustomer } from '../credit/api'
+// ---- end F-OO-106
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Where it is now", its rules moved out of model.ts (F-SA-232). The health
@@ -186,7 +191,9 @@ const byStart = (a: string | null, b: string | null): number => (a === null || b
 /** The earliest of some instants or days (null: none known). */
 const earliestOf = (values: readonly (string | null | undefined)[]): string | null => values.filter((value): value is string => !!value).sort(byStart)[0] ?? null
 
-type StripOrder = Pick<Order, 'status' | 'openApprovals' | 'waits' | 'madeToMeasure' | 'depositRequired' | 'chain'>
+// F-OO-106: the order read (orderSchema) sends no `waits` or `madeToMeasure` — the list rows do — so they are optional here: read when
+// a caller has them (a list row, a design case), else the yes's own read says why the order waits.
+type StripOrder = Pick<Order, 'status' | 'openApprovals' | 'depositRequired' | 'chain'> & { readonly waits?: readonly string[] | null; readonly madeToMeasure?: { readonly waitingReview: number } | null }
 
 export function whereStripsOf(order: StripOrder, read: Pick<OrderProduction, 'headline' | 'work'> | null | undefined, approval: Pick<Approval, 'reasons' | 'creditHold' | 'requests'> | null | undefined, waiting: WaitingState): WhereStrips {
   const holds = waiting.status === 'loading' ? 'reading' : waiting.status === 'failed' ? 'failed' : 'read'
@@ -263,7 +270,8 @@ export function whereStripsOf(order: StripOrder, read: Pick<OrderProduction, 'he
  *   the order's yes    the band's own door (YesDoorView): Confirm the order + Refuse… for an approver who did not ask; held for the
  *                      asker, with Take the request back; anyone else reads who decides (in the strip's words) and the Take back
  *                      held with why — nobody asked yet: Ask for a yes (the depth's dialogs and holds, as the banner)
- *   the credit hold    its override's yes the same way (Approve: Credit override + Refuse…); Check credit again / Ask… are F-OO-106's
+ *   the credit hold    its override's yes the same way (Approve: Credit override + Refuse…); F-OO-106: then, on the order's own
+ *                      hold (its credit read), Check credit again and Ask for a yes… (only when one may be asked)
  *   the review         Open the review › — the unit's factory review (the review banner's own door; several units: each opens from
  *                      the banner), held without the right to see measurements
  *   the deposit        Record the payment (the money dialog on its request), held without payments.record beside Money ›; none
@@ -286,6 +294,11 @@ export type StripDoor =
   | { readonly kind: 'workOrder'; readonly href: string; readonly number: string }
   | { readonly kind: 'quality'; readonly href: string; readonly number: string }
   | { readonly kind: 'review'; readonly href: string | null; readonly held: Phrase | null }
+  // ---- F-OO-106: the order's own credit hold — Check credit again (held without the credit right), Ask for a yes… (only when one may
+  // be asked: its check id is the lock), Try again when its read failed ----
+  | { readonly kind: 'creditCheck'; readonly held: Phrase | null }
+  | { readonly kind: 'creditAsk'; readonly checkId: string; readonly held: Phrase | null }
+  | { readonly kind: 'creditRetry' }
 
 export interface StripDoorsInput {
   readonly prefix: string
@@ -301,6 +314,8 @@ export interface StripDoorsInput {
   /** The production read's work orders (each one's version and the reader's rights) and the page's acts rights; null: none here. */
   readonly work: readonly WorkOrderOwn[]
   readonly acts: ActsCan | null
+  /** F-OO-106: the order's credit as this page reads it (absent / null: not read here). */
+  readonly credit?: CreditState | null
 }
 
 /** A work order's own page. */
@@ -323,7 +338,8 @@ export function stripDoorsOf(strip: WhereStrip, input: StripDoorsInput): StripDo
     }
     case 'credit': {
       const door = strip.task ? yesDoorOf(strip.task, input.busy) : null
-      return door && door.kind !== 'whoDecides' ? [{ kind: 'yes', door }] : []
+      // F-OO-106: then the order's own hold's doors (its read: Check credit again, Ask for a yes… only when one may be asked).
+      return [...(door && door.kind !== 'whoDecides' ? [{ kind: 'yes' as const, door }] : []), ...creditDoorsOf(input.credit ?? null, busy)]
     }
     case 'review': {
       const units = input.order.lines.filter((line) => line.kind === 'MADE_TO_MEASURE')
@@ -404,3 +420,125 @@ export function whereMovesOf(order: Order, input: { readonly can: OrderAbilities
   return shown.length + more.length > 0 ? { shown, more } : null
 }
 // ---- end F-OO-107
+
+// ---- F-OO-106 (order overview §1.3, §1.4; review F8, F16; B-OO-004): the order's own credit hold, decided from its strip ----------
+/**
+ * The order's credit as the page reads it: only with sales.credit.view (`view`), and only while the order waits on its own credit
+ * hold (`creditHoldWaits`). A reader without the right reads who decides, in words; nobody reads an amount here (findings only).
+ */
+export interface CreditState {
+  /** sales.credit.view: the reader reads the order's credit (else who decides is said in words). */
+  readonly view: boolean
+  /** The order's credit (its one customer) while it waits on a credit hold; null: not read (no right, or nothing held). */
+  readonly record: { readonly value: CreditCustomer | null; readonly problem: string | null } | null
+}
+
+/** The order waits on its own credit hold (its waiting reasons, else a credit yes asked on it): its credit is read then. */
+export function creditHoldWaits(order: Pick<Order, 'status' | 'openApprovals'> & { readonly waits?: readonly string[] | null }, approval?: Pick<Approval, 'creditHold'> | null): boolean {
+  if (order.status !== 'PENDING_APPROVAL') return false
+  return !!approval?.creditHold || !!order.waits?.includes('CREDIT_HOLD') || (order.openApprovals ?? []).some((task) => task.kind === 'CREDIT_OVERRIDE')
+}
+
+/**
+ * The hold's own doors after its yes (F8: at most 3 buttons — the approver's two and Check credit again; "Ask for a yes…" only when
+ * one may be asked, so never beside a yes that is open): Check credit again, held with words without the credit right; Ask for a yes…
+ * on the hold's check (its id: the lock). Not read (no right, still reading, nothing held): none; the read failed: Try again.
+ */
+export function creditDoorsOf(credit: CreditState | null, busy: Phrase | null): StripDoor[] {
+  const record = credit?.view ? credit.record : null
+  if (!record) return []
+  if (!record.value) return record.problem ? [{ kind: 'creditRetry' }] : []
+  const { held, may } = record.value
+  if (!held) return []
+  const check: StripDoor = { kind: 'creditCheck', held: may.checkAgain ? busy : phrase('where.credit.held.noRight') }
+  return may.ask ? [check, { kind: 'creditAsk', checkId: held.checkId, held: busy }] : [check]
+}
+
+/** A quiet line of the credit strip: a phrase of the orders catalogue, the day it names, the findings it lists. */
+export interface CreditLine {
+  readonly phrase: Phrase
+  /** An instant the line names as `{date}` (the view says it in the page's way). */
+  readonly date?: string
+  /** What the check found, named as `{findings}` in the Finance page's own words (`sales-credit` finding.*). */
+  readonly findings?: readonly CreditCustomer['findings'][number][]
+}
+
+/**
+ * The credit strip's quiet lines, never an amount: what the check found (the Finance page's own words), the last answer to a yes
+ * asked on it ("Finance said no on 18/11/2026: …" — the words only with the price grain, as the API sends them; a request taken
+ * back), and for a reader without the credit right who checks it. The read failed: said, with Try again among the doors.
+ */
+export function creditLinesOf(credit: CreditState | null, waits: boolean): CreditLine[] {
+  if (!waits || !credit) return []
+  if (!credit.view) return [{ phrase: phrase('where.credit.whoDecides') }]
+  const value = credit.record?.value ?? null
+  if (!value) return credit.record?.problem ? [{ phrase: phrase('where.credit.failed') }] : []
+  const lines: CreditLine[] = []
+  const found = [...new Set([...value.findings, ...(value.onHold && !value.findings.includes('ON_HOLD') ? (['ON_HOLD'] as const) : [])])]
+  if (found.length > 0) lines.push({ phrase: phrase('where.credit.found'), findings: found })
+  const answer = value.held?.lastAnswer ?? null
+  if (answer?.status === 'REJECTED') {
+    const reason = answer.reason?.trim() || null
+    if (answer.by) lines.push({ phrase: phrase(reason ? 'where.credit.saidNoWhy' : 'where.credit.saidNo', { who: answer.by, ...(reason ? { reason } : {}) }), date: answer.at })
+    else lines.push({ phrase: phrase(reason ? 'where.credit.saidNoSomeoneWhy' : 'where.credit.saidNoSomeone', reason ? { reason } : undefined), date: answer.at })
+  } else if (answer?.status === 'WITHDRAWN') {
+    lines.push({ phrase: answer.by ? phrase('where.credit.takenBack', { who: answer.by }) : phrase('where.credit.takenBackSystem'), date: answer.at })
+  }
+  return lines
+}
+
+/** Who a yes on the hold is asked of now (its open request's approver), as the credit read names it. */
+export const creditAskedOf = (value: CreditCustomer | null): string | null => value?.held?.request?.approver ?? null
+
+/** A notice of the page after a credit act: its tone and words. */
+export interface CreditNotice {
+  readonly tone: 'success' | 'info' | 'warning'
+  readonly words: Phrase
+}
+
+/**
+ * "Check credit again" answered: passed — the order is confirmed (or it still waits for its other yes or review); still held — a yes
+ * was asked (of whom the read names now), or nobody may say yes (the customer pays, or Finance raises the limit).
+ */
+export function creditCheckNoticeOf(answer: CreditCheckAnswer, who: string | null): CreditNotice {
+  if (answer.result !== 'HOLD') return answer.orderGoesOn ? { tone: 'success', words: phrase('where.credit.passed') } : { tone: 'success', words: phrase('where.credit.passedWaits') }
+  if (answer.asked) return { tone: 'info', words: who ? phrase('where.credit.stillAsked', { who }) : phrase('where.credit.stillAskedSomeone') }
+  return { tone: 'warning', words: phrase('where.credit.stillNobody') }
+}
+
+/** "Ask for a yes…" answered: a yes was asked (of whom the read names now). */
+export const creditAskNoticeOf = (who: string | null): CreditNotice => ({ tone: 'success', words: who ? phrase('where.credit.asked', { who }) : phrase('where.credit.askedSomeone') })
+
+/** The API's issue words a refusal of the credit routes carries (apps/factory-api sales/credit/override.ts), each with its meaning. */
+const CREDIT_REFUSALS: Readonly<Record<string, string>> = Object.freeze({ 'Nobody to ask.': 'where.credit.refused.nobody', 'No rule.': 'where.credit.refused.noRule', 'Asked already.': 'where.credit.refused.asked', 'Checked meanwhile.': 'where.credit.refused.meanwhile' })
+
+/**
+ * A refused credit act in this page's words, said in its dialog: nobody to ask (no credit rule names someone else who may say yes),
+ * no rule any more, a yes asked already, or checked meanwhile — the check id is the lock: a newer check, or the hold gone, is
+ * "checked meanwhile" (the credit is read again). Without the right: the held words. Anything else: the page's write words.
+ */
+export function creditRefusalOf(error: unknown): Phrase {
+  if (isApiError(error)) {
+    if (error.kind === 'conflict') {
+      const key = error.issues.map((issue) => CREDIT_REFUSALS[issue.message ?? ''] ?? null).find((entry) => entry !== null)
+      return phrase(key ?? 'where.credit.refused.meanwhile')
+    }
+    if (error.kind === 'forbidden') return phrase('where.credit.held.noRight')
+  }
+  return { key: writeProblem(error).key }
+}
+
+/**
+ * Beside a yes this reader decides here (Refuse… in view), what a no does — the Refuse… dialog is the band's (DepthBand, imported
+ * as it is), so the strip says it: a no on the credit leaves it held and cancels nothing (the hold stays, B-OO-004: no machine change);
+ * a no on the order's own yes cancels the order (the approval engine's rejectedInCommand).
+ */
+export function refuseLineOf(strip: WhereStrip, doors: readonly StripDoor[]): Phrase | null {
+  if (strip.kind !== 'yes' && strip.kind !== 'credit') return null
+  if (!doors.some((door) => door.kind === 'yes' && door.door.kind === 'decide')) return null
+  return phrase(strip.kind === 'credit' ? 'where.refuse.credit' : 'where.refuse.order')
+}
+
+/** The ask's note (the API keeps at most 4000; the dialog asks a word, at most 1000). */
+export const CREDIT_ASK_NOTE_MAX = 1000
+// ---- end F-OO-106

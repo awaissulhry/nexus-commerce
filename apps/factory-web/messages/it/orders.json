@@ -1671,7 +1671,48 @@
     },
     "moves": "Le azioni dell'ordine",
     "more": "Altro",
-    "moreOf": "Altre azioni per {number}"
+    "moreOf": "Altre azioni per {number}",
+    "credit": {
+      "check": "Controlla di nuovo il fido",
+      "ask": "Chiedi un sì…",
+      "held": {
+        "noRight": "Controllare il fido richiede il diritto sul fido (vendite o amministrazione)"
+      },
+      "whoDecides": "Vendite o Amministrazione ricontrollano il fido o chiedono un sì",
+      "failed": "Impossibile leggere il fido",
+      "found": "Trovato: {findings}",
+      "saidNo": "{who} ha detto no il {date}",
+      "saidNoWhy": "{who} ha detto no il {date}: “{reason}”",
+      "saidNoSomeone": "Il sì è stato rifiutato il {date}",
+      "saidNoSomeoneWhy": "Il sì è stato rifiutato il {date}: “{reason}”",
+      "takenBack": "{who} ha ritirato la richiesta di un sì il {date}",
+      "takenBackSystem": "La richiesta di un sì è stata ritirata il {date}",
+      "checkTitle": "Controllare di nuovo il fido di {customer}?",
+      "checkBody": "Nexus rilegge ora il fido, gli ordini aperti e le fatture scadute. Se passa, l'ordine è confermato subito; se no, resta in attesa e viene chiesto un sì.",
+      "checkGo": "Controlla",
+      "askTitle": "Chiedi un sì sul fido di {number}",
+      "askBody": "La regola del fido indica chi decide; l'ordine resta in attesa finché non dice sì o no.",
+      "askNote": "Una parola per chi decide (facoltativa)",
+      "askHint": "Al massimo {count} caratteri.",
+      "askGo": "Chiedi",
+      "passed": "Fido superato: l'ordine è confermato",
+      "passedWaits": "Fido superato: l'ordine aspetta ancora l'altro passaggio indicato sopra",
+      "stillAsked": "Ancora bloccato: è stato chiesto un sì a {who}",
+      "stillAskedSomeone": "Ancora bloccato: è stato chiesto un sì",
+      "stillNobody": "Ancora bloccato: nessuno può dire sì — il cliente paga o l'Amministrazione alza il fido",
+      "asked": "È stato chiesto un sì a {who}",
+      "askedSomeone": "È stato chiesto un sì",
+      "refused": {
+        "meanwhile": "È stato controllato nel frattempo: il fido è stato riletto",
+        "nobody": "Nessuna regola del fido indica un'altra persona che può dire sì: il cliente paga, oppure l'Amministrazione alza il fido.",
+        "noRule": "Nessuna regola del fido è più attiva: controlla invece di nuovo il fido.",
+        "asked": "Su questo blocco è già chiesto un sì: il fido è stato riletto"
+      }
+    },
+    "refuse": {
+      "credit": "Un no lo lascia bloccato: non si annulla niente",
+      "order": "Un no annulla l'ordine"
+    }
   },
   "overview": {
     "where": "A che punto è",

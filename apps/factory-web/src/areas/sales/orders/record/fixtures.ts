@@ -87,6 +87,7 @@ import { DEPOSIT_ID } from '../_demo/fixtures'
 import { abilitiesOf } from '../model'
 import { rolePermissions } from '../../../../shell/design-data'
 // ---- end F-OO-105
+import type { CreditCustomer, CreditHeld } from './credit/api' // F-OO-106: the order's credit read (made up; no amount)
 // F-OP-114 / F-OP-115: the row's dialogs on a work order read afresh (the production lane's own fixtures).
 import { releaseCheck, workOrder as productionWorkOrder } from '../../../production/_shared/fixtures'
 import { HOLD_REASONS, PRODUCTION_HOLD_REASONS } from '../../../production/work-orders/daily/demo/fixtures'
@@ -718,10 +719,40 @@ const F_OO_105: DesignCase<RecordCase>[] = [
   { id: 'f-oo-105-read-only', label: 'F-OO-105 · Read-only · the same holds: the words only — no door, no button', model: readOnlyCase(base('sales', production, { tab: 'overview', production: ready(holdsRead(NO_RIGHTS)), workOrderActs: woActs('sales'), liveState: 'live' })) },
   { id: 'f-oo-105-deposit', label: 'F-OO-105 · Finance · a confirmed order: "Deposit not paid yet · due 04/11/2026" — Record the payment', model: base('finance', confirmed, { tab: 'overview', production: ready(DEPOSIT_READ), liveState: 'live' }) },
   { id: 'f-oo-105-deposit-manager', label: 'F-OO-105 · Production manager · the same deposit: Record the payment held (the finance right) beside Money ›', model: base('manager', confirmed, { tab: 'overview', production: ready(DEPOSIT_READ), liveState: 'live' }) },
-  { id: 'f-oo-105-credit', label: 'F-OO-105 · Owner · a credit hold: "Credit hold — waits for Finance’s yes" — Approve: Credit override and Refuse…', model: d323('owner', { ...waitingOrder, waits: ['CREDIT_HOLD'], openApprovals: [CREDIT_TASK] }, { tab: 'overview' }, { approval: { value: { ...APPROVAL_CREDIT, reasons: [{ reason: 'CREDIT_HOLD' }] }, problem: null } }) },
+  { id: 'f-oo-105-credit', label: 'F-OO-105 · Owner · a credit hold: "Credit hold — waits for Finance’s yes" — Approve: Credit override and Refuse…', model: d323('owner', { ...waitingOrder, openApprovals: [CREDIT_TASK] }, { tab: 'overview' }, { approval: { value: { ...APPROVAL_CREDIT, reasons: [{ reason: 'CREDIT_HOLD' }] }, problem: null } }) }, // F-OO-106: no `waits` (the order read sends none: the yes's read says why)
   { id: 'f-oo-105-more', label: 'F-OO-105 · Owner · five strips (a release held by the credit, the three holds, an open nonconformance): four, then "Show 1 more"', model: base('owner', { ...production, openApprovals: [CREDIT_TASK] }, { tab: 'overview', production: ready(holdsRead(MANAGE_ALL, [blockerOf('NONCONFORMANCE', 'US', 'An open nonconformance', '2026-11-15T10:00:00Z', { type: 'WorkOrder', id: WORK_ORDERS[1]!.id })])), workOrderActs: woActs('owner'), liveState: 'live' }) },
 ]
 // ---- end F-OO-105
+
+// ---- F-OO-106 (order overview §1.3, §1.4; review F8, F16; B-OO-004): the order's own credit hold, decided from its strip. Sales after
+// Finance's no (no price grain: the no's words are not sent) — Check credit again, Ask for a yes…; the Owner reads the no's words; the
+// approver of an open credit yes — Approve, Refuse…, Check credit again (no Ask beside an open yes), and what a no does; the production
+// manager — no credit right: who checks it, in words; the read failed — Try again; the two dialogs, one with "nobody to ask".
+// Never an amount. Look at 375 / 1440 / 1920, light + dark.
+const CREDIT_CHECK_ID = '0190f0e2-9797-7000-8000-000000000001'
+const creditOf = (over: Partial<CreditCustomer> = {}, held: Partial<CreditHeld> = {}): CreditCustomer => ({
+  party: { id: '0190f0e2-7a00-7000-8000-0000000000c1', code: 'MOTO-DEMO', name: 'Moto Demo S.r.l.' },
+  onHold: false,
+  findings: ['OVER_LIMIT', 'OVERDUE'],
+  held: { checkId: CREDIT_CHECK_ID, step: 'ORDER', checkedAt: '2026-11-10T09:00:00Z', request: null, lastAnswer: null, ...held },
+  may: { checkAgain: true, ask: true },
+  ...over,
+})
+const SAID_NO = { status: 'REJECTED' as const, at: '2026-11-18T10:00:00Z', by: 'Marco Demo' }
+/** The yes's read of an order held for credit with no yes open (Finance said no): only the credit hold, nobody asked. */
+const APPROVAL_CREDIT_NONE = { ...APPROVAL_CREDIT, reasons: [{ reason: 'CREDIT_HOLD' as const }], creditHold: { checkId: CREDIT_CHECK_ID, requestTaskId: null }, requests: [] }
+const creditCase = (role: Role, credit: OrderRecordModel['credit'], over: { readonly open?: boolean; readonly dialog?: OrderRecordModel['dialog'] } = {}): RecordCase =>
+  d323(role, { ...waitingOrder, openApprovals: over.open ? [CREDIT_TASK] : [] }, { tab: 'overview', credit, dialog: over.dialog ?? null }, { approval: { value: over.open ? { ...APPROVAL_CREDIT, reasons: [{ reason: 'CREDIT_HOLD' }] } : APPROVAL_CREDIT_NONE, problem: null } })
+const F_OO_106: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-106-credit-sales', label: 'F-OO-106 · Sales · a credit hold after Finance said no: "Found: Over the limit · Invoices overdue", "Marco Demo said no on 18/11/2026" — Check credit again, Ask for a yes…', model: creditCase('sales', { view: true, record: { value: creditOf({}, { lastAnswer: SAID_NO }), problem: null } }) },
+  { id: 'f-oo-106-credit-owner', label: 'F-OO-106 · Owner · the same hold: the no with its words (the price grain), the customer on hold', model: creditCase('owner', { view: true, record: { value: creditOf({ onHold: true, findings: ['OVER_LIMIT', 'ON_HOLD'] }, { lastAnswer: { ...SAID_NO, reason: 'Two invoices are overdue since October' } }), problem: null } }) },
+  { id: 'f-oo-106-credit-approver', label: 'F-OO-106 · Owner · a credit yes open for you: Approve, Refuse…, Check credit again — no Ask beside it; "A no leaves it held"', model: creditCase('owner', { view: true, record: { value: creditOf({ may: { checkAgain: true, ask: false } }, { request: { taskId: CREDIT_TASK.taskId, status: 'PENDING', approver: 'Finance', requestedAt: CREDIT_TASK.requestedAt, dueAt: null } }), problem: null } }, { open: true }) },
+  { id: 'f-oo-106-credit-manager', label: 'F-OO-106 · Production manager · no credit right: nothing read — "Sales or Finance check the credit again or ask for a yes"', model: creditCase('manager', { view: false, record: null }) },
+  { id: 'f-oo-106-credit-failed', label: 'F-OO-106 · Sales · the credit could not be read: said, with Try again', model: creditCase('sales', { view: true, record: { value: null, problem: 'problem.read.unavailable' } }) },
+  { id: 'f-oo-106-check-dialog', label: 'F-OO-106 · Sales · Check credit again: what it does — the order confirmed at once, or a yes asked', model: creditCase('sales', { view: true, record: { value: creditOf(), problem: null } }, { dialog: { kind: 'creditCheck' } }) },
+  { id: 'f-oo-106-ask-nobody', label: 'F-OO-106 · Sales · Ask for a yes…: nobody to ask — the customer pays, or Finance raises the limit (Ask held)', model: creditCase('sales', { view: true, record: { value: creditOf(), problem: null } }, { dialog: { kind: 'creditAsk', checkId: CREDIT_CHECK_ID, refused: { key: 'where.credit.refused.nobody' } } }) },
+]
+// ---- end F-OO-106
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-039',
@@ -921,6 +952,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'overview-failed', label: "F-SA-232 · Overview: the production couldn't be read (this part only, Try again)", model: base('sales', production, { tab: 'overview', production: FAILED_STATE, liveState: 'offline' }) },
     ...F_OO_102, // F-OO-102: the headline and the dots before, after and without production
     ...F_OO_105, // F-OO-105: the strips with their real doors (holds, the deposit, the credit; Owner, Sales, Read-only)
+    ...F_OO_106, // F-OO-106: the order's own credit hold — Check credit again, Ask for a yes…, the last no, who checks it
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
     ...F_OP_301, // F-OP-301 (walk #1, #2, #3)

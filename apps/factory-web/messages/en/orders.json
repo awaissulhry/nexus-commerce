@@ -1671,7 +1671,48 @@
     },
     "moves": "The order's moves",
     "more": "More",
-    "moreOf": "More moves for {number}"
+    "moreOf": "More moves for {number}",
+    "credit": {
+      "check": "Check credit again",
+      "ask": "Ask for a yes…",
+      "held": {
+        "noRight": "Checking credit needs the credit right (sales or finance)"
+      },
+      "whoDecides": "Sales or Finance check the credit again or ask for a yes",
+      "failed": "The credit could not be read",
+      "found": "Found: {findings}",
+      "saidNo": "{who} said no on {date}",
+      "saidNoWhy": "{who} said no on {date}: “{reason}”",
+      "saidNoSomeone": "The yes was refused on {date}",
+      "saidNoSomeoneWhy": "The yes was refused on {date}: “{reason}”",
+      "takenBack": "{who} took the request for a yes back on {date}",
+      "takenBackSystem": "The request for a yes was taken back on {date}",
+      "checkTitle": "Check {customer}'s credit again?",
+      "checkBody": "Nexus reads the limit, the open orders and the overdue invoices now. If it passes, the order is confirmed at once. If not, it keeps waiting and a yes is asked.",
+      "checkGo": "Check again",
+      "askTitle": "Ask for a yes on {number}'s credit",
+      "askBody": "The credit rule names who decides; the order keeps waiting until they say yes or no.",
+      "askNote": "A word for who decides (optional)",
+      "askHint": "At most {count} characters.",
+      "askGo": "Ask",
+      "passed": "Credit passed: the order is confirmed",
+      "passedWaits": "Credit passed: the order still waits for its other step above",
+      "stillAsked": "Still held: a yes was asked of {who}",
+      "stillAskedSomeone": "Still held: a yes was asked",
+      "stillNobody": "Still held: nobody may say yes — the customer pays or Finance raises the limit",
+      "asked": "A yes was asked of {who}",
+      "askedSomeone": "A yes was asked",
+      "refused": {
+        "meanwhile": "It was checked meanwhile: the credit was read again",
+        "nobody": "No credit rule names someone else who may say yes: the customer pays, or Finance raises the limit.",
+        "noRule": "No credit rule is switched on any more: check the credit again instead.",
+        "asked": "A yes is asked on this hold already: the credit was read again"
+      }
+    },
+    "refuse": {
+      "credit": "A no leaves it held: nothing is cancelled",
+      "order": "A no cancels the order"
+    }
   },
   "overview": {
     "where": "Where it is now",
