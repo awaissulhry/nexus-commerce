@@ -407,7 +407,6 @@
   "lines": {
     "readOnly": "Cosa ha ordinato il cliente, come accettato. Le modifiche passano da Modifica ordine.",
     "vatNature": "IVA {nature}",
-    "orderDate": "Come l'ordine",
     "revision": "Fatto sulla rev. {revision}",
     "noRevision": "Revisione scelta dall'ordine di lavoro",
     "gridCaption": "{style}: capi ordinati per colore e taglia",
@@ -415,12 +414,15 @@
     "col": {
       "colour": "Colore",
       "pieces": "Capi",
-      "shipped": "Spediti",
       "unitNet": "Prezzo unitario (imponibile)",
       "unitGross": "Prezzo unitario (IVA incl.)",
       "net": "Imponibile",
       "vat": "IVA",
-      "promise": "Promessa"
+      "promise": "Promessa",
+      "unitPrice": "Prezzo unitario",
+      "exVat": "(IVA esclusa)",
+      "lineTotal": "Totale riga",
+      "readyBy": "Pronto entro"
     },
     "closedShort_one": "Chiusa in anticipo: {count} pezzo",
     "closedShort_other": "Chiusa in anticipo: {count} pezzi",
@@ -428,10 +430,287 @@
     "units": "Capi",
     "artwork_one": "Grafiche ({count})",
     "artwork_other": "Grafiche ({count})",
-    "closedBy": "Chiuso in meno da {name}, {day}",
     "note": "Nota: {note}",
     "rider": "Pilota: {rider} · {garment}, revisione {revision}",
-    "artworkOpen": "Apri le grafiche nel visualizzatore"
+    "artworkOpen": "Apri le grafiche nel visualizzatore",
+    "head": {
+      "pieces_one": "{count} capo",
+      "pieces_other": "{count} capi",
+      "lines_one": "{count} riga",
+      "lines_other": "{count} righe",
+      "charges_one": "{count} costo",
+      "charges_other": "{count} costi",
+      "readyBy": "Pronto entro il {date}",
+      "noReadyBy": "Ancora nessuna data di pronto",
+      "readyByChange": "Cambia la data di pronto di tutto l'ordine",
+      "late_one": "{count} giorno di ritardo",
+      "late_other": "{count} giorni di ritardo",
+      "firstPromised": "prima pronto entro il {date}",
+      "total": "Totale ordine {amount}",
+      "totalVat": "Totale (IVA inclusa) {amount}",
+      "salesHow": "Cambi capi, taglie e note; i prezzi li imposta chi li vede.",
+      "more": "Altro per le righe"
+    },
+    "menu": {
+      "closeLines": "Chiudi righe con meno capi…"
+    },
+    "style": {
+      "open": "Apri il modello {code}"
+    },
+    "pattern": {
+      "approved": "Cartamodello v{revision} · approvato",
+      "notApproved": "Cartamodello v{revision} · non ancora approvato",
+      "none": "Versione del cartamodello: la sceglie la produzione"
+    },
+    "locks_one": "{count} taglia bloccata dalle regole dell'azienda",
+    "locks_other": "{count} taglie bloccate dalle regole dell'azienda",
+    "lockOf": "{colour} {size}: da {stage}",
+    "leaves": "Questo modello esce dall'ordine",
+    "freezeUnread": "Non siamo riusciti a leggere le regole di blocco dell'azienda: si controllano quando rivedi.",
+    "floorsUnread": "Non siamo riusciti a leggere cosa è tagliato: si controlla quando rivedi.",
+    "cell": {
+      "label": "{colour}, taglia {size}",
+      "notOffered": "non disponibile per questo colore",
+      "min": "min {count}",
+      "minShipped": "Minimo {count}: {shipped} già spediti",
+      "minCut": "{count} già tagliati",
+      "cutBeyond": "{count} tagliati in più: scegli dove vanno quando rivedi",
+      "was": "era {value}",
+      "locked": "Bloccata da {stage} per regola dell'azienda: un cambio qui va accettato dal cliente.",
+      "lockedForGood": "Bloccata per sempre da {stage}: non può cambiare.",
+      "priceShipped_one": "{count} spedito: il prezzo resta. Un prezzo spedito si cambia con una nota di credito.",
+      "priceShipped_other": "{count} spediti: il prezzo resta. Un prezzo spedito si cambia con una nota di credito."
+    },
+    "row": {
+      "shipped_one": "{count} spedito",
+      "shipped_other": "{count} spediti",
+      "sizesApart_one": "{count} taglia con prezzo a parte",
+      "sizesApart_other": "{count} taglie con prezzo a parte",
+      "new": "Nuova",
+      "removed": "Tolta",
+      "closesShort": "Si chiuderà con meno capi: la fanno ordini di lavoro",
+      "newActions": "Azioni della nuova riga · {name}",
+      "orderDate": "La data dell'ordine",
+      "listPrice": "Prezzo dal listino di {customer}"
+    },
+    "short": {
+      "tag": "Chiusa con meno capi",
+      "figures": "{ordered} ordinati · {make} da fare · {cancelled} annullati",
+      "by": "da {name}, il {day}"
+    },
+    "mtm": {
+      "unit_one": "{count} capo · taglia base {size}",
+      "unit_other": "{count} capi · taglia base {size}",
+      "units_one": "{count} capo",
+      "units_other": "{count} capi",
+      "fixed": "Un capo su misura tiene taglia e prezzo; qui cambiano solo le note."
+    },
+    "notes": {
+      "count_one": "{count} nota",
+      "count_other": "{count} note",
+      "files_one": "{count} file",
+      "files_other": "{count} file",
+      "add": "Aggiungi una nota",
+      "customer": "Sull'ordine — la vede il cliente",
+      "floor": "Per il reparto — senza prezzi",
+      "filesLabel": "File"
+    },
+    "addSize": "Taglia",
+    "addSizeLabel": "Aggiungi una taglia",
+    "addColour": "Aggiungi un colore",
+    "keys": "Tasti",
+    "keysList": "Tab casella dopo · Invio giù · Esc rimette la casella · ⌘Z annulla · ⌘S rivedi e salva",
+    "total": "Totale",
+    "clash": "tu {mine} · {name} {theirs}",
+    "keepMine": "Tieni il mio",
+    "takeTheirs": "Prendi il suo",
+    "charges": {
+      "title": "Costi aggiuntivi",
+      "kind": {
+        "DEVELOPMENT": "Sviluppo",
+        "SAMPLE": "Campionatura",
+        "TOOLING": "Attrezzature",
+        "other": "Costo"
+      },
+      "forStyle": "per {style}",
+      "once": "fatturato una volta",
+      "fromQuote": "Un costo si cambia dal preventivo"
+    },
+    "sum": {
+      "subtotal": "Imponibile",
+      "vat": "IVA {rate} %",
+      "vatNone": {
+        "export": "IVA: nessuna · esportazione fuori UE",
+        "intraEu": "IVA: nessuna · cessione a impresa UE",
+        "other": "IVA: nessuna"
+      },
+      "code": "Codice in fattura: {code}",
+      "total": "Totale (IVA inclusa)",
+      "ofWhichVat": "di cui IVA {rate} %",
+      "ofWhichVatNoRate": "di cui IVA"
+    },
+    "empty": "Ancora nessuna riga",
+    "emptyHint": "Un ordine tiene almeno una riga: aggiungi un modello.",
+    "autoReason": {
+      "amend": "Modificato dalla pagina dell'ordine",
+      "close": "Chiusa dalla pagina dell'ordine",
+      "reopen": "Riaperta dalla pagina dell'ordine",
+      "promise": "Data cambiata dalla pagina dell'ordine"
+    },
+    "addStyle": {
+      "title": "Aggiungi un modello a {number}",
+      "scope": "La nostra collezione e i modelli di {customer}.",
+      "already": "Già su questo ordine",
+      "noList": "Nessun prezzo di listino per {customer}: lo aggiunge chi vede i prezzi",
+      "after": "Le nuove righe compaiono in fondo alla scheda del modello, con Nuova; i capi li scrivi nella tabella."
+    },
+    "addColourTitle": "Aggiungi un colore a {style}",
+    "addColourPick": "Scegli un colore",
+    "addColourGo": "Aggiungi il colore",
+    "addColourNone": "Ogni colore di questo modello è già sull'ordine.",
+    "addColourCopy": "Copia le taglie di",
+    "addColourEmpty": "Niente: una riga vuota"
+  },
+  "orderFacts": {
+    "ref": {
+      "title": "Ordine del cliente di {number}",
+      "same": "È già l'ordine del cliente",
+      "go": "Cambia l'ordine del cliente",
+      "hint": "Vuoto: nessuno. Si stampa sull'ordine e sui suoi documenti.",
+      "done": "L'ordine del cliente è cambiato."
+    },
+    "shipTo": {
+      "title": "Dove si spedisce {number}",
+      "now": "Ora",
+      "go": "Spedisci qui",
+      "pick": "Scegli un indirizzo",
+      "same": "L'ordine si spedisce già lì",
+      "none": "Nessun altro indirizzo di consegna di {customer}: aggiungilo sul cliente.",
+      "only": "Solo gli indirizzi di consegna di {customer}"
+    }
+  },
+  "review": {
+    "title": "Rivedi e salva · {number}",
+    "what": "Cosa cambia",
+    "line": "Riga {seq} · {name}",
+    "price": "prezzo {before} → {after}",
+    "notes": "note cambiate",
+    "added_one": "Nuova · {count} capo",
+    "added_other": "Nuova · {count} capi",
+    "removed": "Tolta",
+    "closesShort": "Tolta — si chiude con meno capi: la fanno ordini di lavoro",
+    "total": "Totale ordine {before} → {after} ({delta})",
+    "totalVat": "Totale (IVA inclusa) {before} → {after} ({delta})",
+    "pieces": "Capi {before} → {after} ({delta})",
+    "amountNeutral": "L'importo cambia",
+    "production": "Produzione",
+    "noWo": "Ancora nessun ordine di lavoro: in produzione non cambia nulla",
+    "why": "Perché (facoltativo)",
+    "whyPick": {
+      "customer": "L'ha chiesto il cliente",
+      "mistake": "Errore nostro",
+      "production": "Produzione",
+      "other": "Altro…"
+    },
+    "whyWords": "Aggiungi parole (facoltative)",
+    "whyHint": "Vuoto: lo storico tiene chi l'ha cambiato e quando.",
+    "customer": "Il cliente",
+    "ask": "Chiedi a {customer} di accettare il nuovo ordine",
+    "askUp": "Spuntato perché il totale sale. Ricevono un link nel portale e per e-mail; il lavoro intanto va avanti.",
+    "askChanges": "Spuntato perché l'importo cambia. Ricevono un link nel portale e per e-mail.",
+    "askOn": "Ricevono un link nel portale e per e-mail; il lavoro intanto va avanti.",
+    "askOff": "Non spuntato: non viene chiesto nulla.",
+    "askRule": "La regola dell'azienda chiede il sì del cliente per questo cambio.",
+    "question": "Controllate le modifiche all'ordine {number} e accettate il nuovo ordine.",
+    "fee": "Costo della modifica (facoltativo)",
+    "feeHint": "0 o più, in {currency}.",
+    "priced": "Bloccato dalla regola dell'azienda: si chiede al cliente di accettare questo cambio.",
+    "blocked": "Bloccato per sempre: questo cambio non si può più fare.",
+    "problems_one": "{count} cosa blocca il cambio:",
+    "problems_other": "{count} cose bloccano il cambio:",
+    "changed": "L'ordine è cambiato nel frattempo: le tue modifiche restano, il resto è nuovo. Controlla di nuovo.",
+    "nothingSent": "Nulla viene salvato o inviato finché non premi Salva le modifiche.",
+    "back": "Indietro",
+    "save": "Salva le modifiche",
+    "held": {
+      "reading": "Calcolo di cosa cambia…",
+      "failed": "La verifica non è riuscita: riprova",
+      "problems": "Prima sistema ciò che blocca il cambio",
+      "blocked": "Bloccato per sempre: prima rimetti quelle caselle",
+      "fee": "Un costo da 0 in su, con al massimo 2 decimali."
+    }
+  },
+  "save": {
+    "held": {
+      "clash_one": "Scegli per {count} casella cambiata da entrambi",
+      "clash_other": "Scegli per {count} caselle cambiate da entrambi",
+      "shipped": "{colour}, taglia {size}: {count} già spediti — alzala a {count}",
+      "price": "{colour}: il prezzo non è un numero",
+      "needsPrice": "{colour} ha bisogno di un prezzo: lo imposta chi vede i prezzi",
+      "noPieces": "{colour}: scrivi i capi",
+      "lockedForGood": "{colour}, taglia {size} è bloccata per sempre: rimettila com'era",
+      "empty": "Un ordine tiene almeno una riga: per fermare tutto l'ordine, annullalo"
+    },
+    "count_one": "{count} modifica non salvata",
+    "count_other": "{count} modifiche non salvate",
+    "undo": "Annulla l'ultimo passo",
+    "nothingToUndo": "Ancora nulla da annullare",
+    "review": "Rivedi e salva…",
+    "saving": "Salvataggio…",
+    "discard": {
+      "title_one": "Scartare {count} modifica?",
+      "title_other": "Scartare {count} modifiche?",
+      "body": "Ciò che hai cambiato nella tabella va perso: {list}.",
+      "more_one": "e {count} altra",
+      "more_other": "e altre {count}",
+      "keep": "Continua a cambiare",
+      "go_one": "Scarta {count} modifica",
+      "go_other": "Scarta {count} modifiche"
+    },
+    "done": {
+      "plain": "Salvato.",
+      "plainAsked": "Salvato · al cliente si chiede di accettare il nuovo ordine.",
+      "changed": "Salvato · ordini di lavoro cambiati: {changed}.",
+      "changedAsked": "Salvato · ordini di lavoro cambiati: {changed} · al cliente si chiede di accettare il nuovo ordine.",
+      "waits": "Salvato · in attesa della produzione: {waits} — decidi in questa pagina.",
+      "waitsAsked": "Salvato · in attesa della produzione: {waits} — decidi in questa pagina · al cliente si chiede di accettare il nuovo ordine.",
+      "both": "Salvato · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina.",
+      "bothAsked": "Salvato · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina · al cliente si chiede di accettare il nuovo ordine."
+    },
+    "notTold": "Salvato; le parole non sono arrivate nella conversazione dell'ordine: scrivile lì.",
+    "notReached": "Salvato; non c'è modo di raggiungere {customer}: aggiungi un contatto.",
+    "askFailed": "Non è stato possibile chiedere a {customer} di accettare il nuovo ordine. La modifica è salvata.",
+    "askAgain": "Chiedi di nuovo",
+    "moved": "{name} ha salvato una modifica alle {time}: cambiano {lines}. Le tue modifiche restano.",
+    "movedNone": "{name} ha salvato una modifica alle {time}. Le tue modifiche restano.",
+    "gone_one": "{count} riga che hai cambiato è stata tolta nel frattempo: le tue modifiche su di essa non ci sono più.",
+    "gone_other": "{count} righe che hai cambiato sono state tolte nel frattempo: le tue modifiche su di esse non ci sono più.",
+    "show": "Mostra",
+    "lineName": "riga {seq} ({colour})"
+  },
+  "lineMenu": {
+    "options": "Opzioni e grafica…",
+    "readyBy": "Data di pronto…",
+    "close": "Chiudi con meno capi…",
+    "reopen": "Riapri questa riga…",
+    "split": "Sposta in un nuovo ordine…",
+    "make": "Crea ordini di lavoro…",
+    "discuss": "Discuti questa riga",
+    "remove": "Togli la riga",
+    "putBack": "Rimetti",
+    "group": {
+      "change": "Cambia",
+      "pieces": "Capi"
+    },
+    "held": {
+      "readyByShipped": "Le righe sono fisse appena parte qualcosa: cambia invece la data di pronto dell'ordine",
+      "splitClosed": "Una riga chiusa con meno capi resta su questo ordine",
+      "splitInWork": "Ogni capo di questa riga è negli ordini di lavoro: resta su questo ordine",
+      "removeClosed": "Una riga chiusa con meno capi resta: prima riaprila",
+      "detail": "Questo motivo chiede qualche parola"
+    },
+    "optional": "facoltativo",
+    "changeLines": "Cambia le righe"
   },
   "dates": {
     "promisedExFactory": "Promesso (franco fabbrica)",
@@ -918,39 +1197,15 @@
     }
   },
   "amend": {
-    "start": "Modifica ordine",
-    "title": "Modifica {revision} — non applicata",
-    "count_one": "{count} cambiamento",
-    "count_other": "{count} cambiamenti",
-    "barLabel": "Bozza della modifica",
-    "discard": "Scarta",
-    "how": "Cambia qui sotto taglie e prezzi, aggiungi un colore o un modello, o porta una riga a 0 per toglierla. Non cambia nulla finché non applichi la modifica.",
-    "howNoPrice": "Cambia qui sotto le taglie, aggiungi un colore o un modello, o porta una riga a 0 per toglierla. Non cambia nulla finché non applichi la modifica.",
-    "header": "Dati dell'ordine",
-    "customerRef": "Ordine del cliente",
-    "requestedDate": "Data richiesta dal cliente",
-    "requestedHint": "Oggi o dopo; vuota: nessuna.",
     "failed": "Non è stato possibile verificare la modifica.",
-    "problems_one": "{count} cosa blocca la modifica:",
-    "problems_other": "{count} cose bloccano la modifica:",
-    "reaccept": "Il totale imponibile cambia: il cliente deve accettare di nuovo l'ordine. L'ordine mostra «in attesa del cliente»; il link di accettazione non c'è ancora, quindi avvisa tu il cliente.",
-    "noReaccept": "Il totale imponibile non cambia: il cliente non deve accettare di nuovo.",
-    "tableLabel": "Righe prima → dopo",
     "field": {
       "customerRef": "Ordine del cliente",
       "requestedDate": "Data richiesta"
     },
-    "reason": "Perché l'ordine cambia",
-    "reasonHint": "Resta con la modifica, nella scheda Modifiche.",
-    "apply": "Applica la modifica",
     "held": {
       "price": "Un prezzo scritto non è un prezzo: controllalo",
       "empty": "Un ordine tiene almeno una riga: per fermare tutto l'ordine, annullalo",
-      "nothing": "Non cambia ancora nulla",
-      "reading": "Prima la verifica della modifica",
-      "failed": "La verifica non è riuscita: riprova",
-      "problems": "Prima sistema ciò che blocca la modifica",
-      "reason": "Scrivi perché l'ordine cambia"
+      "reading": "Prima la verifica della modifica"
     },
     "tell": {
       "words": "Parole per il cliente (facoltative)",
@@ -959,13 +1214,8 @@
   },
   "edit": {
     "appliesAtOnce": "Si applica subito — senza approvazione",
-    "showAll": "Mostra tutte le modifiche",
     "strip": {
       "reading": "Calcolo di cosa cambia…",
-      "pieces": "Capi {before} → {after} ({delta})",
-      "net": "Imponibile {before} → {after} ({delta})",
-      "told": "{customer} viene avvisato",
-      "notTold": "{customer} non viene avvisato",
       "wo": {
         "change": "{number} {before} → {after}",
         "cancel": "{number} annullato",
@@ -987,20 +1237,11 @@
       "bothTold": "Modifica {revision} applicata · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina · {customer} avvisato."
     },
     "floor": {
-      "shipped": "{count} già spediti: non può scendere",
-      "cut": "{count} già tagliati oltre",
-      "inWork": "l'ordine di lavoro segue"
-    },
-    "figures": {
-      "cut": "Tagliati {count}",
-      "sewn": "Cuciti {count}",
-      "shipped": "Spediti {count}"
+      "shipped": "{count} già spediti: non può scendere"
     },
     "held": {
-      "shipped": "Una taglia è sotto il già spedito: portala ai capi spediti",
       "extra_one": "Scegli cosa fare del {count} pezzo in più",
-      "extra_other": "Scegli cosa fare dei {count} pezzi in più",
-      "fee": "Un costo sopra 0, con al massimo 2 decimali."
+      "extra_other": "Scegli cosa fare dei {count} pezzi in più"
     },
     "workOrders": "Cosa succede agli ordini di lavoro",
     "planNotRead": "Non è stato possibile leggere ora cosa succede agli ordini di lavoro: si applica comunque subito e seguono con le stesse regole.",
@@ -1008,29 +1249,12 @@
       "changed": "Ordini di lavoro cambiati: {numbers}",
       "waits": "In attesa della produzione: {numbers} — decidi in questa pagina"
     },
-    "applyPriced": "Applica come modifica con prezzo",
-    "pricedMore": "Acconto aggiuntivo e parole per il cliente…",
-    "line": {
-      "text": "Testo…",
-      "description": "Descrizione",
-      "note": "Nota per la produzione (senza prezzi)",
-      "remove": "Togli la riga",
-      "removed": "Tolta: scrivi di nuovo le taglie per tenerla",
-      "loses_one": "{numbers} perde questa riga",
-      "loses_other": "{numbers} perdono questa riga"
-    },
-    "closedShort": "Chiusa in anticipo: la fanno gli ordini di lavoro",
     "shipTo": "Spedire a",
-    "shipToKeep": "Come ora: {address}",
     "shipToHeld": "Un altro indirizzo di consegna richiede il diritto di vedere i clienti: l'ordine mantiene il suo indirizzo.",
     "shipToFailed": "Non è stato possibile leggere gli indirizzi di consegna: l'ordine mantiene il suo indirizzo.",
     "shipToPrepared": "Si sta preparando una spedizione al vecchio indirizzo: cambialo lì prima",
     "shipToPreparedOf": "Si sta preparando la spedizione {number} al vecchio indirizzo: cambialo lì prima",
-    "shipToDone": "L'indirizzo di consegna è cambiato.",
-    "pricedHeld": {
-      "apply": "Una modifica con prezzi la fa chi vede i prezzi.",
-      "net": "Imponibile: visibile a chi vede i prezzi"
-    }
+    "shipToDone": "L'indirizzo di consegna è cambiato."
   },
   "facts": {
     "requested": {
@@ -1088,7 +1312,6 @@
     },
     "empty": {
       "title": "Ancora nessuna riga",
-      "amend": "Aggiungi un modello qui sopra: un ordine tiene almeno una riga.",
       "new": "Aggiungi un modello qui sopra, scegli i colori e scrivi i pezzi per taglia."
     },
     "gridCaption": "Pezzi di {style} per colore e taglia",
@@ -1322,8 +1545,6 @@
     "col": {
       "line": "Riga",
       "change": "Cambiamento",
-      "sizes": "Taglie prima → dopo",
-      "pieces": "Pezzi",
       "price": "Prezzo unitario",
       "before": "Prima",
       "after": "Dopo",
@@ -1356,9 +1577,6 @@
       "CHANGED": "Cambiata",
       "same": "Invariata"
     },
-    "sizesSame": "Taglie invariate",
-    "pieces": "{before} → {after}",
-    "priceSame": "Invariato",
     "madeBy": "Fatta da",
     "byAt": "{name}, {date}",
     "reason": "Motivo",

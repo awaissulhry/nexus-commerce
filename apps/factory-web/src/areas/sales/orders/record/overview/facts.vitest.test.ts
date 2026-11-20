@@ -12,7 +12,6 @@ import { depthCanOf } from '../../depth/model'
 import type { OrderDepthModel } from '../../depth/use-order-depth'
 import { base } from '../fixtures'
 import type { OrderRecordModel } from '../record-model'
-import { CUSTOMER_REF_FIELD_ID } from '../record-model'
 import { useOverviewActs } from '../use-overview-acts'
 import { FactsCard } from '../view/overview/FactsCard'
 import { factsDoorsOf, incotermOf, languageOf, madeOf, shipToOf } from './facts'
@@ -186,17 +185,18 @@ describe('F-OO-209: Order facts drawn', () => {
     expect(readFileSync(new URL('../view/overview/FactsCard.tsx', import.meta.url), 'utf8')).not.toMatch(/requestedDate|dates\.requested/)
   })
 
-  it('the one edit path: Customer PO\'s Change… starts (or keeps) edit mode and focuses the PO field, which carries the id', () => {
-    const calls: string[] = []
+  // F-OL-04 (pick D7): the order fields left the Lines tab — Customer PO's Change… opens its own small window (no hop to Lines).
+  it('Customer PO\'s Change… opens its small window in the page\'s one slot (no edit mode, no focus asked); Ship to its own', () => {
+    const calls: unknown[] = []
     function Harness() {
-      const acts = useOverviewActs({ startAmend: () => calls.push('edit mode'), focus: (id) => calls.push(`focus ${id}`) })
+      const acts = useOverviewActs({ setDialog: (dialog) => calls.push(dialog) })
       acts.actions.onCustomerRefChange?.()
       return null
     }
     render(createElement(Harness), 'en')
-    expect(calls).toEqual(['edit mode', `focus ${CUSTOMER_REF_FIELD_ID}`])
-    const lines = readFileSync(new URL('../view/LinesTab.tsx', import.meta.url), 'utf8')
-    expect(lines).toContain('<Input id={CUSTOMER_REF_FIELD_ID} value={amend.customerRef}')
+    expect(calls).toEqual([{ kind: 'customerRef' }])
+    expect(readFileSync(new URL('../use-lines-acts.ts', import.meta.url), 'utf8')).toContain("setDialog({ kind: 'shipTo' })")
+    expect(readFileSync(new URL('../view/LinesTab.tsx', import.meta.url), 'utf8')).not.toContain('CUSTOMER_REF_FIELD_ID')
     const card = readFileSync(new URL('../view/overview/FactsCard.tsx', import.meta.url), 'utf8')
     expect(card).toContain('onClick={() => actions?.onCustomerRefChange?.()}')
     expect(card).toContain('onClick={() => actions?.onChangeShipTo?.()}')

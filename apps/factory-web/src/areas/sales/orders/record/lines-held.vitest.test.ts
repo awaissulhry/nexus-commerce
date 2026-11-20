@@ -1,21 +1,21 @@
 import { readFileSync } from 'node:fs'
-import { createElement, type ComponentType } from 'react'
+import { createElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { DesignScreen } from '../../../../lib/design/design-screen'
 import { LOCALES } from '../../../../lib/i18n/locales'
-import { render, renderView } from '../../../../lib/record-thread/parts/testing'
-import { AMEND_PREVIEW, forRole, LINE_BLK, LINE_RED, order } from '../_demo/fixtures'
-import type { AmendPreview, Order } from '../api'
-import { amendBodyOf, amendKeyOf, draftOf, stripHeld, stripOf, type AmendReview } from '../daily-model'
+import { render, textOf } from '../../../../lib/record-thread/parts/testing'
+import { forRole, LINE_BLK, LINE_RED, order } from '../_demo/fixtures'
+import type { Order } from '../api'
 import { closedShort, designScreen } from './fixtures'
+import { bodyLinesOf, EMPTY_HISTORY, setCell } from './lines-draft'
+import { LinesTab } from './view/LinesTab'
 // ---- F-OO-124: the Close / Reopen dialogs drawn with one line asked ----
 import { dialogLinesOf, type OrderRecordModel, type RecordDialog } from './record-model'
 import { CloseLinesDialog, ReopenLinesDialog } from './view/DailyDialogs'
-// ---- F-OO-125: a line's "Change quantity or sizes…" — the Lines edit mode, its style group focused ----
-import { amendStyleAnchorOf, COMPOSER_EMPTY } from './record-model'
+import { COMPOSER_EMPTY } from './record-model'
 import { useOverviewActs } from './use-overview-acts'
 import { LinesEditor, type LinesEditorModel } from './view/LinesEditor'
-// ---- F-OO-144: Requested by customer's small dialog — ONE amendment (every line as it is, the new date, the version) ----
+// ---- F-OO-144: Requested by customer's small dialog — ONE amendment (no lines since ol-s1, the new date, the version) ----
 import { requestedBodyOf, requestedHeld, requestedProblem } from './record-model'
 import { RequestedDateDialog } from './view/RequestedDateDialog'
 import { base } from './fixtures'
@@ -38,79 +38,52 @@ vi.mock('@nexus/ui/components', async (original) => {
 // ---- end F-OO-124
 
 /**
- * F-CP-149 (customer page plan C4, the money wall; review A8, D5: A08 shipped blanks for readers without prices) — the order page's
- * Lines edit mode as Sales worker (no price grain since B-CP-011) and as Production manager: the strip says "Net: shown to people who
- * see prices" where the net would be, the fee's place says "Shown to people who see prices", and "Apply as a priced change" is held
- * "A priced change is made by someone who sees prices." — never a blank, never a blind priced change; the amendment's body carries no
- * price key. Kept out of so/orders.vitest.test.ts (the order lane's). Every name and number is made up.
+ * F-CP-149 → F-OL-05 (the money wall on the Lines tab changed in place; Order LINES lane): Sales (no price grain since B-CP-011) sees no
+ * price column, no total, no amount in Review and save — not even which way the total moved — and one line why; its draft and its save
+ * carry no price key (the API refuses one: the grain filter). Then the dialogs the line ⋯ opens, the doors that land on a box, and the
+ * requested date's small window (no lines, Why optional). Every name and number is made up.
  */
 
-const value = forRole(order('CONFIRMED'), 'manager')
-const draft = { lines: draftOf(value).map((line, index) => (index === 0 ? { ...line, sizes: { ...line.sizes, '50': (line.sizes['50'] ?? 0) + 1 } } : line)), customerRef: value.customerRef ?? '', requestedDate: value.requestedDate ?? '' }
-const key = amendKeyOf(draft, value)
-const review = (preview: AmendPreview): AmendReview => ({ phase: 'ready', key, preview, problem: null })
-const frozen = { ok: false, revision: 4, version: 7, problems: [{ path: 'body/lines/10/SIZE_QUANTITY', message: 'x' }], diff: null, workOrders: null } as unknown as AmendPreview
-const label = () => 'DEMO-JKT-01 · Nero'
+/** The Lines tab of a design case, drawn alone (the band, the dock and the thread are other tests'). */
+const drawCase = (id: string, locale: (typeof LOCALES)[number] = 'en') => {
+  const item = (designScreen as DesignScreen<unknown>).cases.find((entry) => entry.id === id)
+  expect(item, id).toBeDefined()
+  const record = (item!.model as { record: OrderRecordModel }).record
+  return render(createElement(LinesTab, { order: (record.order as { value: Order }).value, model: record }), locale)
+}
 
-describe('F-CP-149: the strip as a reader without prices', () => {
-  it('the net\'s place is held in words, never a blank; with the price grain the net itself', () => {
-    const held = stripOf({ order: value, review: review(AMEND_PREVIEW), key, local: null, price: false, label })
-    expect(held.phase).toBe('ready')
-    expect(held.net).toBeNull()
-    expect(held.netHeld).toBe(true)
-    const owner = stripOf({ order: value, review: review(AMEND_PREVIEW), key, local: null, price: true, label })
-    expect(owner.netHeld).toBe(false)
-    // Nothing to say yet (reading, idle): no held line either.
-    expect(stripOf({ order: value, review: null, key, local: null, price: false, label }).netHeld).toBe(false)
-  })
-
-  it('"Apply as a priced change" is held for a reader without prices — whatever the reason and the fee typed', () => {
-    const strip = stripOf({ order: value, review: review(frozen), key, local: null, price: false, label })
-    expect(strip.frozen.length).toBeGreaterThan(0)
-    expect(stripHeld(strip, { reason: 'Una giacca in più.', busy: false, local: null, offer: 'priced', fee: '', price: false })).toEqual({ key: 'edit.pricedHeld.apply' })
-    expect(stripHeld(strip, { reason: 'Una giacca in più.', busy: false, local: null, offer: 'priced', fee: '25,00', price: false })).toEqual({ key: 'edit.pricedHeld.apply' })
-    // A price holder applies it (its fee checked as before).
-    expect(stripHeld(strip, { reason: 'Una giacca in più.', busy: false, local: null, offer: 'priced', fee: '', price: true })).toBeNull()
-    // Not a priced change: nothing new is held.
-    const plain = stripOf({ order: value, review: review(AMEND_PREVIEW), key, local: null, price: false, label })
-    expect(stripHeld(plain, { reason: 'Una giacca in più.', busy: false, local: null, offer: null, fee: '', price: false })).toBeNull()
-  })
-
-  it('the amendment\'s body carries no price key for a reader without prices (the API refuses one: the grain filter)', () => {
-    const body = JSON.stringify(amendBodyOf(draft, value))
+describe('F-CP-149 → F-OL-05: the money wall on the Lines tab', () => {
+  it('Sales\' draft and save carry no price key (only the cells typed): the grain filter has nothing to refuse', () => {
+    const value = forRole(order('CONFIRMED'), 'sales')
+    const body = JSON.stringify(bodyLinesOf(setCell(EMPTY_HISTORY, value, LINE_BLK, '50', 3).draft, value))
     expect(body).not.toMatch(/unitPrice|netAmount|fee|amount/i)
   })
-})
 
-describe('F-CP-149: the edit mode drawn', () => {
-  const render = (id: string, locale: (typeof LOCALES)[number]) => {
-    const screen = designScreen as DesignScreen<unknown>
-    const item = screen.cases.find((entry) => entry.id === id)
-    expect(item, id).toBeDefined()
-    return renderView(screen.view as ComponentType<{ model: unknown }>, item!.model, locale)
-  }
-
-  it('as Sales worker without prices: "Net: shown to people who see prices" in the strip (en, it)', () => {
-    expect(render('f-cp-149-strip-no-price', 'en')).toContain('Net: shown to people who see prices')
-    expect(render('f-cp-149-strip-no-price', 'it')).toContain('Imponibile: visibile a chi vede i prezzi')
-  })
-
-  it('frozen: Apply as a priced change held in words, the fee\'s place held, no amount on the strip', () => {
+  it('drawn as Sales (en, it): no Unit price, no Line total, no currency; the one line why prices are hidden', () => {
     for (const locale of LOCALES) {
-      const html = render('f-cp-149-priced-held', locale)
-      expect(html).toContain(locale === 'en' ? 'A priced change is made by someone who sees prices.' : 'Una modifica con prezzi la fa chi vede i prezzi.')
-      expect(html).toContain(locale === 'en' ? 'Shown to people who see prices' : 'Visibili a chi vede i prezzi')
-      expect(html).not.toMatch(/\bedit\.pricedHeld\.[a-z]+/)
+      const text = textOf(drawCase('lines-sales', locale))
+      expect(text).toContain(locale === 'en' ? 'You change pieces, sizes and notes; prices are set by someone who sees them.' : 'Cambi capi, taglie e note; i prezzi li imposta chi li vede.')
+      expect(text).not.toMatch(locale === 'en' ? /Unit price|Line total|Order total/ : /Prezzo unitario|Totale riga|Totale ordine/)
+      expect(text).not.toMatch(/€|EUR/)
     }
+    // The Owner reads them.
+    expect(textOf(drawCase('lines-view'))).toContain('Unit price')
   })
 
-  it('LinesTab keeps the held parts in marked blocks (the order lane\'s file)', () => {
-    const tab = readFileSync(new URL('./view/LinesTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain("!model.can.price && strip.netHeld && <span className=\"fw-so-hint\">{t('edit.pricedHeld.net')}</span>")
-    expect(tab).toContain('price: model.can.price /* F-CP-149 */')
-    expect(tab.match(/F-CP-149/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
+  it('Review and save as Sales: the pieces only and "The amount changes"; a locked change has no fee field — the customer is asked by the rule', () => {
+    for (const locale of LOCALES) {
+      const text = textOf(drawCase('lines-review-sales', locale))
+      expect(text).toContain(locale === 'en' ? 'The amount changes' : "L'importo cambia")
+      expect(text).not.toMatch(/€|EUR|goes up|goes down/)
+    }
+    const locked = textOf(drawCase('lines-review-locked-sales'))
+    expect(locked).not.toContain('Change fee')
+    expect(locked).toContain("Your company's rule asks the customer's yes for this change.")
+    // The Owner's locked change: the fee optional (0 allowed).
+    expect(textOf(drawCase('lines-review-locked'))).toContain('Change fee (optional)')
   })
 })
+
 
 // ---- F-OO-124 (order overview 10-design §2.3): Close short / Reopen ONE line — the row ⋯ opens the same dialog, only that line ticked
 describe('F-OO-124: Close this line short… / Reopen this line… — only that line ticked; the band ⋯ still ticks every line', () => {
@@ -173,56 +146,29 @@ describe('F-OO-124: Close this line short… / Reopen this line… — only that
 })
 // ---- end F-OO-124
 
-// ---- F-OO-125 (order overview 10-design §2.3): Change quantity or sizes… for one line — the ONE edit path, its style group focused ---
-describe('F-OO-125: Change quantity or sizes… — the Lines edit mode with the line\'s style group as the anchor focused', () => {
-  const value = forRole(order('IN_PRODUCTION'), 'sales')
-  const styleId = value.lines[0]!.styleId
-  const editor = (mode: LinesEditorModel['mode']): LinesEditorModel => ({ mode, lines: draftOf(value), order: value, styles: {}, composer: COMPOSER_EMPTY, price: false, currency: 'EUR', priceBasis: 'NET', minimums: {}, busy: false })
-
-  it('the anchor id is drawn on the style group in edit mode (focusable, named by its heading); a typed New order draws none', () => {
-    expect(amendStyleAnchorOf(styleId)).toBe(`amend-style-${styleId}`)
-    for (const locale of LOCALES) {
-      const html = render(createElement(LinesEditor, { model: editor('amend') }), locale)
-      expect(html).toContain(`id="amend-style-${styleId}"`)
-      expect(html).toContain('tabindex="-1"')
-      expect(html).toContain(`aria-labelledby="amend-style-${styleId}-title"`)
-      expect(html).toContain(`id="amend-style-${styleId}-title"`)
-    }
-    expect(render(createElement(LinesEditor, { model: editor('new') }), 'en')).not.toContain('amend-style-')
+// ---- F-OO-125 → F-OL-05: a line's door lands on the Lines tab's box (no edit mode, no style-group anchor) ----
+describe('F-OL-05: the doors land on a box of the Lines table — the old "Change quantity or sizes…" hop and its anchor went', () => {
+  it('the container lands on the line\'s first box (or its price box), else the row; the band and Money ask it', () => {
+    const hook = readFileSync(new URL('./use-lines-draft.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('if (typeable && box === \'price\' && can.price) focus(priceCellId(line.id))')
+    expect(hook).toContain('else if (typeable && firstSize) focus(cellId(line.id, firstSize))')
+    expect(hook).toContain("else focus(rowAnchor('SalesOrderLine', line.id))")
+    expect(readFileSync(new URL('./use-overview-acts.ts', import.meta.url), 'utf8')).not.toContain('onLineChange')
   })
 
-  it('the focus is asked: onLineChange starts (or keeps) edit mode, then focuses that style group — no second editor', () => {
-    const calls: string[] = []
-    function Harness() {
-      const acts = useOverviewActs({ startAmend: () => calls.push('edit mode'), focus: (id) => calls.push(`focus ${id}`) })
-      acts.actions.onLineChange?.(styleId)
-      return null
-    }
-    render(createElement(Harness), 'en')
-    expect(calls).toEqual(['edit mode', `focus amend-style-${styleId}`])
-  })
-
-  it('the wiring: an open draft is kept (never started over); the container hands the one focus and edit mode as for the requested date', () => {
-    const acts = readFileSync(new URL('./use-lines-acts.ts', import.meta.url), 'utf8')
-    expect(acts).toContain('onAmendStart: () => (amendRef.current ? showLines() : startAmend()),')
-    const overview = readFileSync(new URL('./use-overview-acts.ts', import.meta.url), 'utf8')
-    expect(overview).toContain('input.focus?.(amendStyleAnchorOf(styleId))')
-    const container = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
-    // F-OO-144: the container also hands the page's one dialog slot (Requested's small dialog).
-    expect(container).toContain('useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), setDialog /* F-OO-144 */')
-    expect(container).toContain('...overview.actions,')
-    // The one edit path: the editor stays the Lines tab's; no view opens a second one.
-    expect(readFileSync(new URL('./view/LinesEditor.tsx', import.meta.url), 'utf8')).toContain("const anchor = model.mode === 'amend' ? amendStyleAnchorOf(styleId) : null")
+  it('the typed New order keeps today\'s editor (no anchor, no edit mode of its own)', () => {
+    const value = forRole(order('IN_PRODUCTION'), 'sales')
+    const editor: LinesEditorModel = { mode: 'new', lines: [], order: value, styles: {}, composer: COMPOSER_EMPTY, price: false, currency: 'EUR', priceBasis: 'NET', busy: false }
+    expect(render(createElement(LinesEditor, { model: editor }), 'en')).not.toContain('amend-style-')
+    expect(readFileSync(new URL('./view/LinesEditor.tsx', import.meta.url), 'utf8')).not.toMatch(/amendStyleAnchorOf|LineActs|onRemove|onText/)
   })
 })
-// ---- end F-OO-125
+// ---- end F-OL-05
 
-// ---- F-OO-144 (order overview 10-design §4.2; review F7): "Requested by customer" — a small dialog, ONE amendment, no API change ----
-describe('F-OO-144: the requested date\'s small dialog — every line as it is, the new date, the version; held by amendHeld', () => {
+// ---- F-OO-144 (order overview 10-design §4.2; review F7) → F-OL-04: "Requested by customer" — a small dialog, ONE amendment, no lines ----
+describe('F-OO-144: the requested date\'s small dialog — no lines (ol-s1), the new date, the version; Why optional; held by amendHeld', () => {
   const NEW_DATE = '2026-12-20'
   const WHY = 'Il cliente apre il negozio una settimana dopo.'
-  /** The order's own sizes of a line (what "as it is" means), as an amendment line sends them. */
-  const sizesOf = (line: Order['lines'][number]) => line.sizes.flatMap((size) => (size.size !== null && size.quantity > 0 ? [{ size: size.size, quantity: size.quantity }] : []))
   /** The opening tag of the dialog's Go button (its words are its label). */
   const goTag = (html: string, label: string) => {
     const at = html.indexOf(`>${label}</button>`)
@@ -230,69 +176,50 @@ describe('F-OO-144: the requested date\'s small dialog — every line as it is, 
     return html.slice(html.lastIndexOf('<button', at), at)
   }
 
-  it('the body carries every line unchanged (its whole size grid, no price, no text), the new date, the version and the reason', () => {
+  it('the body: the date, the version and the reason only when typed — no line (every line stays as it is now), no price, no header', () => {
     for (const role of ['owner', 'sales'] as const) {
       const value = forRole(order('IN_PRODUCTION'), role)
-      const body = requestedBodyOf(value, NEW_DATE, `  ${WHY}  `)
-      expect(body.version).toBe(value.version)
-      expect(body.reason).toBe(WHY)
-      expect(body.requestedDate).toBe(NEW_DATE)
-      expect(body.lines).toEqual(value.lines.map((line) => ({ id: line.id, sizes: sizesOf(line) })))
-      // Nothing else of the header moves: the customer PO and the delivery address are not sent; no price key (a price holder too).
-      expect(Object.keys(body).sort()).toEqual(['lines', 'reason', 'requestedDate', 'version'])
-      expect(JSON.stringify(body)).not.toMatch(/unitPrice|description|note|customerRef|shipToAddressId/)
+      expect(requestedBodyOf(value, NEW_DATE, `  ${WHY}  `)).toEqual({ version: value.version, requestedDate: NEW_DATE, reason: WHY })
+      expect(requestedBodyOf(value, NEW_DATE, '   ')).toEqual({ version: value.version, requestedDate: NEW_DATE })
+      expect(JSON.stringify(requestedBodyOf(value, NEW_DATE, WHY))).not.toMatch(/lines|unitPrice|customerRef|shipToAddressId/)
     }
   })
 
-  it('a line closed short (or made to measure) is kept as it is ({ id } only): no line is removed or closed short by mistake', () => {
-    const value: Order = { ...closedShort, status: 'IN_PRODUCTION' }
-    const body = requestedBodyOf(value, NEW_DATE, WHY)
-    expect(body.lines).toHaveLength(value.lines.length)
-    expect(body.lines.find((entry) => 'id' in entry && entry.id === LINE_RED)).toEqual({ id: LINE_RED })
-    expect(body.lines.find((entry) => 'id' in entry && entry.id === LINE_BLK)).toEqual({ id: LINE_BLK, sizes: sizesOf(value.lines.find((line) => line.id === LINE_BLK)!) })
-  })
-
-  it('the dialog\'s own problems: a date from today on, not the requested date already, then why', () => {
+  it('the dialog\'s own problems: a date from today on, not the requested date already; Why is optional', () => {
     const today = '2026-10-29'
     const current = '2026-12-10'
     expect(requestedProblem({ date: '', reason: WHY, today, current })).toEqual({ key: 'promise.problem.date' })
     expect(requestedProblem({ date: '2026-10-28', reason: WHY, today, current })).toEqual({ key: 'facts.requested.problem.past' })
     expect(requestedProblem({ date: current, reason: WHY, today, current })).toEqual({ key: 'facts.requested.problem.same' })
-    expect(requestedProblem({ date: NEW_DATE, reason: '   ', today, current })).toEqual({ key: 'promise.problem.reason' })
+    expect(requestedProblem({ date: NEW_DATE, reason: '   ', today, current })).toBeNull()
     expect(requestedProblem({ date: today, reason: WHY, today, current })).toBeNull()
-    expect(requestedProblem({ date: NEW_DATE, reason: WHY, today, current: null })).toBeNull()
   })
 
-  it('held by the amendment\'s own rule (amendHeld): no right, a closed order, shipped, a fee line; and while a draft is open on Lines', () => {
+  it('held by the amendment\'s own rule (amendHeld): no right, a closed order, shipped — a fee line no longer holds it (B-OL-012)', () => {
     const sales = base('sales', order('IN_PRODUCTION')).record
     const value = (sales.order as { value: Order }).value
     expect(requestedHeld(value, sales)).toBeNull()
     expect(requestedHeld(value, base('manager', order('IN_PRODUCTION')).record)).toEqual({ key: 'held.noManage' })
     expect(requestedHeld({ ...value, status: 'CLOSED' }, sales)).toEqual({ key: 'held.final' })
     expect(requestedHeld({ ...value, status: 'SHIPPED' }, sales)).toEqual({ key: 'held.amendShipped' })
-    expect(requestedHeld({ ...value, lines: value.lines.map((line, index) => (index === 0 ? { ...line, kind: 'FEE' as const } : line)) }, sales)).toEqual({ key: 'held.amendFee' })
-    const amend = { revision: 1, lines: draftOf(value), customerRef: '', requestedDate: '', styles: {}, composer: COMPOSER_EMPTY, review: null, reason: '', tell: { words: '', chosen: null }, extraOutcome: null, fee: '' }
-    expect(requestedHeld(value, { ...sales, amend })).toEqual({ key: 'held.amending' })
+    expect(requestedHeld({ ...value, lines: value.lines.map((line, index) => (index === 0 ? { ...line, kind: 'FEE' as const } : line)) }, sales)).toBeNull()
   })
 
-  it('drawn (en, it): the date and why, "Saved as amendment 1", "Applies at once — no approval"; Go held in words until both are typed', () => {
+  it('drawn (en, it): the date and "Why · optional", "Saved as amendment 1", "Applies at once — no approval"; Go held until a date', () => {
     const sales = base('sales', order('IN_PRODUCTION')).record
     const value = (sales.order as { value: Order }).value
     const draw = (model: OrderRecordModel, locale: (typeof LOCALES)[number], on: Order = value) => render(createElement(RequestedDateDialog, { order: on, model: { ...model, dialog: { kind: 'requested' } } }), locale)
     const en = draw(sales, 'en')
-    for (const words of ['Change the requested date of SO-2026-0088', 'New requested date', 'Today or later. Saved as amendment 1.', 'Applies at once — no approval', 'Why']) expect(en, words).toContain(words)
+    for (const words of ['Change the requested date of SO-2026-0088', 'New requested date', 'Today or later. Saved as amendment 1.', 'Applies at once — no approval', 'Why · optional']) expect(en, words).toContain(words)
     expect(goTag(en, 'Change the date')).toContain('aria-description="Choose a date"')
     const it = draw(sales, 'it')
-    for (const words of ['Cambia la data richiesta di SO-2026-0088', 'Nuova data richiesta', 'Da oggi in poi. Salvata come modifica 1.', 'Si applica subito — senza approvazione']) expect(it, words).toContain(words)
-    expect(goTag(it, 'Cambia la data')).toContain('aria-description="Scegli una data"')
-    // Typed: Go is live.
-    expect(goTag(draw({ ...sales, draft: { date: NEW_DATE, reason: WHY } }, 'en'), 'Change the date')).not.toContain('aria-disabled')
-    // The requested date already: said at the field and on Go.
-    const same = draw({ ...sales, draft: { date: value.requestedDate!, reason: WHY } }, 'en')
-    expect(same).toContain('It is the requested date already')
+    for (const words of ['Cambia la data richiesta di SO-2026-0088', 'Nuova data richiesta', 'Da oggi in poi. Salvata come modifica 1.', 'Si applica subito — senza approvazione', 'Perché · facoltativo']) expect(it, words).toContain(words)
+    // A date typed, no reason: Go is live.
+    expect(goTag(draw({ ...sales, draft: { date: NEW_DATE, reason: '' } }, 'en'), 'Change the date')).not.toContain('aria-disabled')
+    expect(draw({ ...sales, draft: { date: value.requestedDate!, reason: WHY } }, 'en')).toContain('It is the requested date already')
   })
 
-  it('the amendHeld words on Go: the production manager (no orders.manage), a closed order, a draft open on Lines (en, it)', () => {
+  it('the amendHeld words on Go: the production manager (no orders.manage), a closed order (en, it)', () => {
     const typed = { draft: { date: NEW_DATE, reason: WHY } }
     const draw = (model: OrderRecordModel, on: Order, locale: (typeof LOCALES)[number]) => render(createElement(RequestedDateDialog, { order: on, model: { ...model, ...typed, dialog: { kind: 'requested' } } }), locale)
     const manager = base('manager', order('IN_PRODUCTION')).record
@@ -301,14 +228,12 @@ describe('F-OO-144: the requested date\'s small dialog — every line as it is, 
     expect(goTag(draw(manager, value, 'it'), 'Cambia la data')).toContain('aria-description="Cambiare un ordine richiede il diritto vendite di gestire gli ordini"')
     const sales = base('sales', order('IN_PRODUCTION')).record
     expect(goTag(draw(sales, { ...value, status: 'CLOSED' }, 'en'), 'Change the date')).toContain('aria-description="A closed or cancelled order never changes"')
-    const amend = { revision: 1, lines: draftOf(value), customerRef: '', requestedDate: '', styles: {}, composer: COMPOSER_EMPTY, review: null, reason: '', tell: { words: '', chosen: null }, extraOutcome: null, fee: '' }
-    expect(goTag(draw({ ...sales, amend }, value, 'en'), 'Change the date')).toContain('aria-description="The lines are being amended: review or discard the amendment first"')
   })
 
   it('the door opens the dialog in the page\'s one slot (no hop to Lines, no focus asked); the wiring', () => {
     const calls: unknown[] = []
     function Harness() {
-      const acts = useOverviewActs({ startAmend: () => calls.push('edit mode'), focus: (id) => calls.push(`focus ${id}`), setDialog: (dialog) => calls.push(dialog) })
+      const acts = useOverviewActs({ setDialog: (dialog) => calls.push(dialog) })
       acts.actions.onRequestedChange?.()
       return null
     }
@@ -325,7 +250,7 @@ describe('F-OO-144: the requested date\'s small dialog — every line as it is, 
   it('every new word exists in both languages', () => {
     for (const locale of LOCALES) {
       const html = render(createElement(RequestedDateDialog, { order: order('IN_PRODUCTION'), model: { ...base('sales', order('IN_PRODUCTION')).record, dialog: { kind: 'requested' } } }), locale)
-      expect(html).not.toMatch(/\bfacts\.requested\.[a-zA-Z.]+/)
+      expect(html).not.toMatch(/\bfacts\.requested\.[a-zA-Z.]+|\blineMenu\.[a-zA-Z.]+/)
     }
   })
 })
@@ -379,25 +304,3 @@ describe('F-OO-110: cancel a waiting order — Cancel order… appears through a
   })
 })
 // ---- end F-OO-110
-
-// ---- F-OP-312 (order page follow-up 13): the amendment's "how" never tells a reader without the price grain to change prices ----
-describe('F-OP-312: Amend order says "Change the sizes below…" to a reader who sees no price, "…sizes and prices…" to one who does', () => {
-  const view = designScreen.view as ComponentType<{ model: unknown }>
-  const draw = (id: string, locale: (typeof LOCALES)[number]) => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, locale)
-  it('drawn: Sales (no price grain, B-CP-011) reads the no-price words; the Owner the priced ones — in Italian and English', () => {
-    expect(draw('amend-start', 'en')).toContain('Change the sizes below, add a colour or a style, or set a line to 0 to remove it.')
-    expect(draw('amend-start', 'en')).not.toContain('sizes and prices')
-    expect(draw('amend-start', 'it')).toContain('Cambia qui sotto le taglie, aggiungi un colore o un modello')
-    expect(draw('amend-start', 'it')).not.toContain('taglie e prezzi')
-    expect(draw('amend-draft', 'en')).toContain('Change the sizes and prices below')
-    expect(draw('amend-draft', 'it')).toContain('Cambia qui sotto taglie e prezzi')
-  })
-  it('the two wordings exist in both languages and differ only by the prices', () => {
-    for (const locale of LOCALES) {
-      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['amend.how', 'amend.howNoPrice']) expect(t(key), `${locale} ${key}`).not.toBe(key)
-      expect(t('amend.howNoPrice'), locale).not.toMatch(/prezz|price/i)
-    }
-  })
-})
-// ---- end F-OP-312

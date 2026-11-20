@@ -298,8 +298,9 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
     edit: [
         ...(!isFinal(order) && model.can.manage
           ? [
-              { id: 'amend', label: t('action.amend'), disabled: !!amendWait || !!model.amend, description: model.amend ? t('held.amending') : held(amendWait), onSelect: () => actions?.onAmendStart?.() },
-              // F-OP-110: the delivery address moves through the edit header (the same edit path); while editing it focuses the field.
+              // F-OL-04 (Order LINES lane): "Amend order" → "Change the lines": the Lines tab, its first box focused (no edit mode).
+              { id: 'lines', label: t('lineMenu.changeLines'), disabled: !!amendWait, description: held(amendWait), onSelect: () => actions?.linesTab?.onLand?.({ lineId: null, box: 'first' }) },
+              // F-OL-04 (pick D7): Change ship-to… opens the Ship to window (the address alone, no edit mode).
               { id: 'shipTo', label: t('bandMenu.changeShipTo'), disabled: !!amendWait, description: held(amendWait), onSelect: () => actions?.onChangeShipTo?.() },
               // F-OP-111: Split into new orders… (the parts become orders of their own; the deposit stays here).
               { id: 'split', label: t('split.action'), disabled: !!splitWait, description: held(splitWait), onSelect: () => actions?.onDialog?.({ kind: 'split' }) },
@@ -518,6 +519,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
       {/* F-OO-111 (W07's follow-up): Record a shipment made elsewhere… — its container's dialog while open, mounted ONCE for the page, so
           the band's ⋯ item opens it on every tab (Overview's More ▾ and the Shipments card head open the same one). */}
       {model.elsewhere?.dialog}
+      {/* F-OL-04: a line's options window (the line ⋯ of Lines and of Overview open it), mounted once for the page. */}
+      {model.linesTab?.options}
       {/* F-OP-101: Refuse… of an open yes (the page's one dialog slot). */}
       {model.dialog?.kind === 'refuseYes' && <RefuseYesDialog order={order} model={model} actions={{ onDialog: () => actions?.onDialog?.(null), yes: actions?.yes }} />}
       {/* F-SA-243: the ONE review window (Home › Approvals' own) opened on this page from its doors; Esc returns to the same tab. */}

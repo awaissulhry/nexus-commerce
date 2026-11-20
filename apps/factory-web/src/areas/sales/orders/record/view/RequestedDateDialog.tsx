@@ -45,7 +45,8 @@ export function RequestedDateDialog({ order, model, actions }: { order: Order; m
       <Field label={t('facts.requested.date')} hint={t('facts.requested.dateHint', { revision })} error={dateProblem}>
         <DateField value={date} onChange={setDate} min={model.today} locale={INTL_LOCALE[locale]} ariaLabel={t('facts.requested.date')} />
       </Field>
-      <Field label={t('promise.reason')} hint={t('facts.requested.reasonHint')}>
+      {/* F-OL-04: Why is optional (ol-s1, B-OL-004: none — the server's automatic words). */}
+      <Field label={`${t('promise.reason')} · ${t('lineMenu.optional')}`} hint={t('facts.requested.reasonHint')}>
         <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={REASON_MAX} />
       </Field>
       <p className="fw-so-hint">{t('edit.appliesAtOnce')}</p>

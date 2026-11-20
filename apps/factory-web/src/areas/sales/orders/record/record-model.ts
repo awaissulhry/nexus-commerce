@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react' // B-W2b-340
 import type { StyleDetail, StyleRow, VersionsAnswer } from '../../quotes/api'
 import type { AmendmentsAnswer, CancelCheck, CancelReason, CloseLinesAnswer, CopyAnswer, DepositLinkAnswer, DepositReceived, Order, OrderWorkOrder, Schedule, SdiStatus, Settlement } from '../api'
-import type { AmendReview, DraftLine } from '../daily-model' // F-OP-106: the strip's preview
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules' // F-OP-107 (B2)
 import type { ClosePreview } from '../api' // F-OP-107
 import type { MarginTabModel } from './margin/model'
@@ -40,9 +39,10 @@ import type { ChangeReviewActions, ChangeReviewModel } from '../../../home/appro
 // F-CP-142: Money's "Price check" card and the ONE customer's-price window it opens (so/price-check, F-CP-114).
 import type { PriceCheckCardActions, PriceCheckCardModel } from './price-check-card'
 import type { PriceCheckDialogActions, PriceCheckDialogModel } from '../price-check/use-price-check'
-import { amendBodyOf, amendHeld, draftOf } from '../daily-model' // F-OO-144: Requested's small dialog (the amend builder, its rule)
+import { amendHeld } from '../daily-model' // F-OO-144: Requested's small dialog (the amendment's own rule)
 import type { MilestonesActions, MilestonesModel } from '../../../planning/milestones/view-model' // F-OO-145: Planning's gate dialogs in place
 import type { CreditState } from './overview/where' // F-OO-106: the order's own credit hold
+import type { LinesTabActions, LinesTabModel } from './lines-tab-model' // F-OL-01: the Lines tab (use-lines-draft.ts)
 import type { Words } from './overview/api' // F-MS-102: a refusal of the stage set by hand in the domain's own words
 import type { StageByHandAsk } from './overview/stage-by-hand' // F-MS-103: what the stage dialog sends
 
@@ -65,12 +65,15 @@ export const PART_LOADING = { value: null, problem: null } as const
 // F-OO-143 (replaces F-OP-105): `followUp` — Next dates' Decide… on a new date the customer refused: the ONE promise dialog with the
 // refused request named (its follow-up task has the request's id); a new date closes it in the same command (B-OP-025). Absent:
 // Change… (the band, Next dates' Promised row, Production › Dates).
-export type BandDialog = { kind: 'promise'; followUp?: { readonly requestId: string } } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' } | { kind: 'refuseYes'; taskId: string }
+// F-OL-01: `lineIds` — a line's ⋯ "Ready-by date…" opens the ONE promise dialog on that line (absent: the whole order, as before).
+export type BandDialog = { kind: 'promise'; followUp?: { readonly requestId: string }; lineIds?: readonly string[] } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' } | { kind: 'refuseYes'; taskId: string }
 /** use-lines-acts: the lines (close and reopen lines, the cancel; F-OP-111: the split; F-OP-106: the amendment has no dialog — its strip). */
 // F-OO-124: Close short / Reopen ONE line (Overview › Progress by line ⋯): `lineIds` — the lines the dialog opens ticked (absent: every
 // line it offers, as the band's ⋯ and the Lines tab open it).
 // F-OO-144: `requested` — Next dates' "Requested by customer" Change…: a small dialog, ONE amendment (every line as it is + the new date).
-export type LinesDialog = { kind: 'closeLines'; lineIds?: readonly string[] } | { kind: 'reopenLines'; lineIds?: readonly string[] } | { kind: 'cancel' } | { kind: 'split' } | { kind: 'requested' }
+// F-OL-01: `lineId` — a line's ⋯ "Move to a new order…" opens the split with that line's pieces in the first part.
+// F-OL-04: `customerRef` / `shipTo` — Overview › Order facts' small windows (the amendment with no lines, ol-s1 B-OL-020).
+export type LinesDialog = { kind: 'closeLines'; lineIds?: readonly string[] } | { kind: 'reopenLines'; lineIds?: readonly string[] } | { kind: 'cancel' } | { kind: 'split'; lineId?: string } | { kind: 'requested' } | { kind: 'customerRef' } | { kind: 'shipTo' }
 /** use-money-acts: the deposits and payments (the bank-details page, the payment, the TD02's send to SDI). */
 export type MoneyDialog = { kind: 'depositLink'; requestId: string } | { kind: 'depositPayment'; requestId: string } | { kind: 'sdiSend'; invoiceId: string }
 /** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
@@ -101,35 +104,29 @@ export function dialogLinesOf(dialog: RecordDialog | null, kind: 'closeLines' | 
 }
 // ---- end F-OO-124
 
-/** F-OO-125: a style group's card in the Lines edit mode (Overview › Progress by line ⋯ "Change quantity or sizes…" focuses it). */
-export const amendStyleAnchorOf = (styleId: string): string => `amend-style-${styleId}`
-
-/** F-OO-209: the customer PO field of the Lines edit mode (Overview › Order facts' Customer PO "Change…" focuses it: one edit path). */
-export const CUSTOMER_REF_FIELD_ID = 'amend-customer-ref'
-
 // ---- F-OO-144 (order overview 10-design §4.2; review F7): "Requested by customer" — a small dialog, no page hop, no API change ----
 /**
- * The ONE amendment the dialog sends, built by the amend builder the Lines edit mode uses (daily-model amendBodyOf): every line as it
- * is (its whole size grid, no price, no text: so no line can be removed or closed short by mistake), the new requested date, the
- * order's version as read and the reason. The customer PO and the delivery address stay as they are (not sent).
+ * The ONE amendment the dialog sends — F-OL-04 (ol-s1, B-OL-020, B-OL-004): with NO lines (every line stays as it is NOW: never another
+ * person's change put back), the new requested date, the order's version as read and the reason only when typed. The customer PO and
+ * the delivery address stay as they are (not sent).
  */
-export function requestedBodyOf(order: Order, date: string, reason: string) {
-  const body = amendBodyOf({ lines: draftOf(order), customerRef: order.customerRef ?? '', requestedDate: date }, order)
-  return { version: order.version, reason: reason.trim(), ...body }
+export function requestedBodyOf(order: Pick<Order, 'version'>, date: string, reason: string): { version: number; requestedDate: string; reason?: string } {
+  const why = reason.trim()
+  return { version: order.version, requestedDate: date, ...(why ? { reason: why } : {}) }
 }
 
-/** The dialog's own problem with what is typed, or null: a date from today on, not the requested date already; a reason. */
+/** The dialog's own problem with what is typed, or null: a date from today on, not the requested date already (Why is optional). */
 export function requestedProblem(input: { readonly date: string; readonly reason: string; readonly today: string; readonly current: string | null }): Phrase | null {
   if (input.date === '') return { key: 'promise.problem.date' }
   if (input.date < input.today) return { key: 'facts.requested.problem.past' }
   if (input.date === input.current) return { key: 'facts.requested.problem.same' }
-  if (input.reason.trim() === '') return { key: 'promise.problem.reason' }
+  // F-OL-04: Why is optional (ol-s1, B-OL-004).
   return null
 }
 
-/** Why the dialog's Change the date waits: the amendment's own rule (amendHeld), else a draft open on Lines (review or discard it first). */
-export function requestedHeld(order: Order, model: Pick<OrderRecordModel, 'can' | 'amend'>): Phrase | null {
-  return amendHeld(order, model.can) ?? (model.amend ? { key: 'held.amending' } : null)
+/** Why the dialog's Change the date waits: the amendment's own rule (F-OL-05: a draft on Lines no longer holds it — it is rebased). */
+export function requestedHeld(order: Order, model: Pick<OrderRecordModel, 'can'>): Phrase | null {
+  return amendHeld(order, model.can)
 }
 // ---- end F-OO-144
 
@@ -165,7 +162,7 @@ export interface RecordActsBase {
 }
 // ---- end F-OP-134
 
-/** "Add a style" in the lines editor: type a style, pick its colours, Add (their rows open in its grid). */
+/** "Add a style" in the lines editor (the typed New order): type a style, pick its colours, Add (their rows open in its grid). */
 export interface ComposerState {
   query: string
   /** null: not searched yet (or a search is on its way when `searching`). */
@@ -177,31 +174,6 @@ export interface ComposerState {
 }
 
 export const COMPOSER_EMPTY: ComposerState = Object.freeze({ query: '', results: null, searching: false, problem: null, chosen: null, picked: [] }) as ComposerState
-
-/** "Amend order" (design order.lines.cards: the lines become an amendment draft; F-OP-106: its strip says what changes, ONE Apply). */
-export interface AmendState {
-  /** The number the amendment will get ("Amendment 2 — not applied"). */
-  revision: number
-  lines: DraftLine[]
-  customerRef: string
-  requestedDate: string
-  /** Each style of the draft as read (sizes, colourways, offered sizes): undefined while read, null when it failed. */
-  styles: Record<string, StyleDetail | null | undefined>
-  composer: ComposerState
-  /** F-OP-106: the strip's read of the API's preview (asked 500 ms after the last edit and on blur, for the key of the draft then). */
-  review: AmendReview | null
-  // ---- F-OP-106: the strip's Why (required) and the words for the customer with their tick (null: not touched) ----
-  reason: string
-  tell: { readonly words: string; readonly chosen: boolean | null }
-  /** F-OP-107 (B2): what happens to pieces already cut beyond the new figures (null: not picked yet). */
-  extraOutcome: ExtraOutcome | null
-  /** F-OP-108: the optional fee of a priced change (price grain), as typed; empty: none. */
-  fee: string
-  // ---- F-OP-110: Ship to in the header — the address picked ('' keeps the order's), the customer's delivery addresses (null: no
-  // right to read them, parties.view) ----
-  shipToAddressId?: string
-  addresses?: Part<ShipToAddress[]> | null
-}
 
 // ---- F-OP-111: Split into new orders… (use-lines-acts) ----
 export interface SplitState {
@@ -308,8 +280,6 @@ export interface OrderRecordModel {
   recorded: DepositReceived | null
   stepUp: StepUpState
   // ---- B-W2a-50 ----------------------------------------------------------------------------------------------------------
-  /** The Lines tab as an amendment draft; null: read-only. */
-  amend: AmendState | null
   /** The payment schedule (Invoices & payments): null until read. */
   schedule: Part<Schedule> | null
   /** The Changes tab's amendments: null until read. */
@@ -333,12 +303,8 @@ export interface OrderRecordModel {
   /** B-W2b-323: the orders in depth (priority, season, the yes it waits for, what is frozen, priced changes, the customer's
    *  materials, the confirmation, the tech pack, the finish forecast, the milestones); absent: not drawn. */
   depth?: OrderDepthModel
-  /** B-W2b-340: a colour line's "Options" (the configurator of the order line, its own container); absent: not drawn. */
-  lineOptions?: (line: Order['lines'][number]) => ReactNode
   /** B-W2b-380 (XF6:02): the line's "cost changed since priced" mark (the cost grain; nothing when it did not move). */
   lineCost?: (line: Order['lines'][number]) => ReactNode
-  /** B-W2b-374 (XF3:02): an amendment's new line's Options (OrderRecord mounts NewLineOptions). */
-  newLineOptions?: (line: DraftLine) => ReactNode
   /** B-W2b-368 (XF1:02): "Waits for the factory review" (./review-banner), drawn by the container; absent: nothing to say. */
   reviewBanner?: ReactNode
   /** B-TH-256: what points at the order (./links) — its complaints and returns, planning's open re-promises, the gates' refusals; absent: not read. */
@@ -403,6 +369,10 @@ export interface OrderRecordModel {
   priceCheck?: PriceCheckCardModel | null
   priceCheckDialog?: PriceCheckDialogModel | null
   // ---- end F-CP-142
+  // ---- F-OL-01: the Lines tab — the draft of my changes, Review and save, Add a style, two people (use-lines-draft.ts); absent: a
+  // design case that draws the order as saved.
+  linesTab?: LinesTabModel | null
+  // ---- end F-OL-01
   /** Design cases: what a dialog holds typed. */
   draft?: { date?: string; reason?: string; reasonCode?: string; lineIds?: string[]; scope?: 'order' | 'lines'; amount?: string; reference?: string; receivedOn?: string; issue?: boolean; message?: string; typed?: string }
 }
@@ -457,31 +427,10 @@ export interface OrderRecordActions {
   onStepUpSubmit?: (code: string) => void
   onStepUpCancel?: () => void
   // ---- B-W2a-50 ----------------------------------------------------------------------------------------------------------
-  onAmendStart?: () => void
-  onAmendDiscard?: () => void
-  onAmendCells?: (styleId: string, next: Record<string, Record<string, number>>) => void
-  onAmendPrice?: (key: string, text: string) => void
-  onAmendHeader?: (field: 'customerRef' | 'requestedDate' | 'shipToAddressId' /* F-OP-110 */, value: string) => void
-  /** F-OP-110: ⋯ Change ship-to… — edit mode with Ship to focused (one edit path). */
+  /** F-OL-04: ⋯ Change ship-to… and Order facts' Ship to "Change…" — the Ship to window. */
   onChangeShipTo?: () => void
-  // ---- F-OP-106: the strip — ask its preview now (blur, Try again), Why, the words for the customer and their tick, ONE Apply
-  onAmendPreview?: () => void
-  onAmendReason?: (text: string) => void
-  onAmendTell?: (next: { readonly words?: string; readonly chosen?: boolean }) => void
-  // F-OP-108: `asPriced` — a frozen field makes it "Apply as a priced change" (the strip's fee goes with it).
-  onAmendApply?: (asPriced?: boolean) => void
-  onAmendFee?: (text: string) => void
-  /** F-OP-109: a line's Text… (its description or note for production), and Remove line (every size to 0). */
-  onAmendText?: (key: string, field: 'description' | 'note', text: string) => void
-  onAmendRemove?: (key: string) => void
-  /** F-OP-107 (B2): the extra pieces' outcome (the strip's picker). */
-  onAmendOutcome?: (outcome: ExtraOutcome) => void
   /** F-OP-107: read Close remaining lines' preview of the lines chosen. */
   onClosePreview?: (lineIds: readonly string[]) => void
-  onComposerQuery?: (query: string) => void
-  onComposerPick?: (styleId: string | null) => void
-  onComposerToggle?: (colourwayId: string) => void
-  onComposerAdd?: () => void
   // F-OP-107: with the extra pieces' outcome picked in the dialog (null: none — production decides).
   onCloseLines?: (lineIds: string[], reason: string, reasonCode: string, extraOutcome?: ExtraOutcome | null) => void
   onReopenLines?: (lineIds: string[], reason: string) => void
@@ -489,9 +438,8 @@ export interface OrderRecordActions {
   onCopyAsQuote?: () => void
   /** B-W2a-72: read the Margin tab again. */
   onRetryMargin?: () => void
-  /** B-W2b-323: the depth's actions; F-OP-108: "Deposit and words…" opens the priced change's own dialog with the draft's lines. */
+  /** B-W2b-323: the depth's actions. */
   depth?: OrderDepthActions
-  onPricedOffer?: () => void
   /** B-TH-256: Accept / Decline a re-promise, the "Tell the customer" tick, read the links again. */
   links?: LinksActions
   /** F-SA-237: the Files tab's open, select and bulk actions. */
@@ -503,11 +451,9 @@ export interface OrderRecordActions {
   onOpenLine?: (rowId: string | null) => void
   /** F-OP-104: Next dates' requested date "Change…"; F-OO-144: it opens the small dialog (`{ kind: 'requested' }`), no page hop. */
   onRequestedChange?: () => void
-  /** F-OO-144: the dialog's Change the date — ONE amendment: every line as it is, the new date, the version, the reason. */
+  /** F-OO-144: the dialog's Change the date — ONE amendment (F-OL-04: no lines), the new date, the version, the reason when typed. */
   onRequestedDate?: (input: { readonly date: string; readonly reason: string }) => void
-  /** F-OO-125: a line's "Change quantity or sizes…" (Overview › Progress by line ⋯) — edit mode on Lines, its style group focused. */
-  onLineChange?: (styleId: string) => void
-  /** F-OO-209: Order facts' Customer PO "Change…" — edit mode on Lines, the customer PO focused (the one edit path). */
+  /** F-OL-04: Order facts' Customer PO "Change…" — its small window. */
   onCustomerRefChange?: () => void
   /** F-OO-210: the office note dialog's Save note — the Orders sheet's own write (sales.orders.editCells) with the order's version. */
   onNoteSave?: (note: string) => void
@@ -525,15 +471,18 @@ export interface OrderRecordActions {
   /** F-CP-142: the Price check card (Customer's price…, Take them over, Try again) and the ONE window's own actions. */
   priceCheck?: PriceCheckCardActions
   priceCheckDialog?: PriceCheckDialogActions
+  /** F-OL-01: the Lines tab's acts (the table's cells, the bar, Review and save, Add a style, the row ⋯'s table acts, the doors). */
+  linesTab?: LinesTabActions
+  /** F-OL-04: Order facts' Customer PO window — the amendment with no lines `{ version, customerRef }` (Why optional). */
+  onCustomerRef?: (input: { readonly value: string; readonly reason: string }) => void
+  /** F-OL-04: Order facts' Ship to window (and the band's ⋯ Change ship-to…) — `{ version, shipToAddressId }`. */
+  onShipTo?: (addressId: string) => void
 }
 
-/** The lines editor's own actions (the amendment and the typed New order share it). */
+/** The lines editor's own actions (the typed New order's; F-OL-05: the order's lines change in the Lines tab's table). */
 export interface EditorActions {
   onCells?: (styleId: string, next: Record<string, Record<string, number>>) => void
   onPrice?: (key: string, text: string) => void
-  /** F-OP-109 (amend mode): a line's description or note for production; Remove line. */
-  onText?: (key: string, field: 'description' | 'note', text: string) => void
-  onRemove?: (key: string) => void
   onComposerQuery?: (query: string) => void
   onComposerPick?: (styleId: string | null) => void
   onComposerToggle?: (colourwayId: string) => void

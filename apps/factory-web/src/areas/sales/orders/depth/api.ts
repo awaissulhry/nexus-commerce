@@ -261,6 +261,8 @@ export interface PricedBody {
   deposit?: { pct?: string; amount?: string; dueDate?: string; kind?: ExtraDepositKind } | null
   /** F-OP-108 (B2): what happens to pieces already cut beyond the new figures (the edit strip's picker). */
   extraOutcome?: ExtraOutcome
+  /** F-OL-01 (ol-s1, B-OL-005, B-OL-016): ask the customer to accept (the Review window's one tick); a change may cost 0 (no fee). */
+  askCustomer?: boolean
 }
 
 export const pricedPreviewSchema = z.object({
@@ -275,6 +277,9 @@ export const pricedPreviewSchema = z.object({
   deposit: z.object({ amount: z.number().optional(), pct: z.string(), kind: z.string(), growthAmount: z.number().optional() }).nullable().optional(),
   yes: z.enum(YES_PREVIEWS).nullable(),
   stage: z.object({ stage: z.enum(FREEZE_STAGES) }).nullable(),
+  // F-OL-01 (ol-s1, B-OL-005): the amount changes (every reader) and it goes up (the price grain only).
+  amountChanges: z.boolean().optional(),
+  totalUp: z.boolean().optional(),
 })
 export type PricedPreview = z.infer<typeof pricedPreviewSchema>
 
@@ -283,7 +288,8 @@ export function previewPricedChange(api: ApiClient, orderId: string, body: Price
 }
 
 /** A priced change applies at once (B-OP-010); F-OP-108: it answers the work orders that followed in its command and those that wait. */
-export function applyPricedChange(api: ApiClient, orderId: string, body: PricedBody & { version: number; reason: string }, idempotencyKey: string): Promise<{ order: Order; change: Change; workOrders: Followed }> {
+// F-OL-01: `reason` optional (ol-s1, B-OL-004).
+export function applyPricedChange(api: ApiClient, orderId: string, body: PricedBody & { version: number; reason?: string }, idempotencyKey: string): Promise<{ order: Order; change: Change; workOrders: Followed }> {
   return api.post(`${orderPath(orderId)}/priced-changes`, { body, schema: z.object({ order: orderSchema, change: changeSchema, /* F-OP-108 */ workOrders: followedSchema.default(NOTHING_FOLLOWED) }), idempotencyKey })
 }
 

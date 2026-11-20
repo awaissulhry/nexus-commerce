@@ -16,6 +16,7 @@ import { CancelDialog, CloseLinesDialog, CompareDialog, CopyQuoteDialog, ReopenL
 import { SplitOrderDialog } from './SplitOrderDialog' // F-OP-111
 import { RequestedDateDialog } from './RequestedDateDialog' // F-OO-144
 import { OrderNoteDialog } from './OrderNoteDialog' // F-OO-210
+import { CustomerRefDialog, ShipToDialog } from './OrderFactsDialogs' // F-OL-04: Order facts' Customer PO and Ship to windows
 import { followUpOf } from '../overview/dates' // F-OO-143: the promise dialog opened by Decide… names the customer's refusal
 // F-OO-142 (order overview §4.3; B-OO-009): the reason list — what the customer reads, in Italian and English; the office's own note.
 import { isPromiseReasonCode, promiseReasonChoices, promiseReasonPreview } from '../../model'
@@ -61,6 +62,10 @@ export function OrderDialogs({ order, model, actions }: { order: Order; model: O
       return <SplitOrderDialog order={order} model={model} actions={actions} />
     case 'requested': // F-OO-144: Next dates' "Requested by customer" — one amendment (every line as it is + the new date)
       return <RequestedDateDialog order={order} model={model} actions={actions} />
+    case 'customerRef': // F-OL-04: Order facts' Customer PO — the amendment with no lines
+      return <CustomerRefDialog order={order} model={model} actions={actions} />
+    case 'shipTo': // F-OL-04: Order facts' Ship to (and the band's ⋯ Change ship-to…) — the address alone
+      return <ShipToDialog order={order} model={model} actions={actions} />
     // Money (use-money-acts).
     case 'depositLink':
       return <LinkDialog order={order} requestId={dialog.requestId} model={model} actions={actions} />
@@ -140,19 +145,20 @@ function PromiseDialog({ order, model, actions }: { order: Order; model: OrderRe
   const t = useT('orders')
   const locale = useLocale()
   const linesAllowed = linePromisesAllowed(order)
-  const [scope, setScope] = useState<'order' | 'lines'>(model.draft?.scope ?? 'order')
+  // F-OL-04: a line's ⋯ "Ready-by date…" opens the dialog on that line (Chosen lines, it ticked).
+  const asked = model.dialog?.kind === 'promise' ? (model.dialog.lineIds ?? null) : null
+  const [scope, setScope] = useState<'order' | 'lines'>(model.draft?.scope ?? (asked && asked.length > 0 ? 'lines' : 'order'))
   const [date, setDate] = useState(model.draft?.date ?? '')
   // F-OO-142: why is picked from the curated reasons (the customer reads its words); the note is the office's own.
   const draftCode = model.draft?.reasonCode
   const [reasonCode, setReasonCode] = useState<string>(isPromiseReasonCode(draftCode) ? draftCode : '')
   const [note, setNote] = useState(model.draft?.reason ?? '')
-  const [lineIds, setLineIds] = useState<string[]>(model.draft?.lineIds ?? [])
+  const [lineIds, setLineIds] = useState<string[]>(model.draft?.lineIds ?? (asked ? [...asked] : [])) // F-OL-04
   const problems = promiseProblems({ date, reasonCode, today: model.today, current: order.promiseDate, lineIds, allLines: scope === 'order' })
   const firstProblem = problems.date ?? problems.lines ?? problems.reasonCode ?? null
   const held = model.busy ? t('held.busy') : firstProblem ? t(firstProblem) : null
-  const go = () => {
-    if (isPromiseReasonCode(reasonCode)) actions?.onPromise?.({ date, reasonCode, note, lineIds: scope === 'lines' ? lineIds : null })
-  }
+  // F-OL-04: the reason is optional (none picked: the server's automatic words).
+  const go = () => actions?.onPromise?.({ date, reasonCode: isPromiseReasonCode(reasonCode) ? reasonCode : null, note, lineIds: scope === 'lines' ? lineIds : null })
   const preview = promiseReasonPreview(reasonCode, order.language)
   // F-OO-143 (replaces F-OP-105): opened by Next dates' Decide… — the customer's refusal said first; the new date closes its follow-up in
   // the same command (B-OP-025: the whole order's, or with chosen lines only the refused line's). The ONE dialog: no second editor.
@@ -195,7 +201,8 @@ function PromiseDialog({ order, model, actions }: { order: Order; model: OrderRe
       </Field>
       {/* ---- F-OO-142: why, from the curated list (the customer reads its words, shown in Italian and English); the office's own note.
           Walk follow-up (Z01): the list says each reason in office words; the customer's own words only in "The customer reads:". ---- */}
-      <Field label={t('promise.why')}>
+      {/* F-OL-04: optional (ol-s1, B-OL-004) — the label says so. */}
+      <Field label={`${t('promise.why')} · ${t('lineMenu.optional')}`}>
         <Select value={reasonCode} onChange={(event) => setReasonCode(event.target.value)}>
           <option value="">{t('promise.pick')}</option>
           {promiseReasonChoices(locale, (key) => t(key)).map((choice) => (

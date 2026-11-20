@@ -2,46 +2,36 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Plus, Search } from 'lucide-react'
-import { Banner, Card, Disclosure, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
-import { SizeGridEditor, type SizeGridIssue } from '@nexus/ui/grid/size-grid/index'
+import { Banner, Card, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
+import { SizeGridEditor } from '@nexus/ui/grid/size-grid/index'
 import { Button, Checkbox, Input, RadioCard, Spinner, Tag } from '@nexus/ui/primitives'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
-import { Textarea } from '../../../../../lib/i18n/ds-parts' // F-OP-109
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { StyleDetail } from '../../../quotes/api'
 import { money, unitPrice } from '../../../quotes/model'
 import { sizeGridWords } from '../../../quotes/record/view/grid-copy'
 import type { Order } from '../../api'
 import { badPrice, changeOf, draftGrid, draftGroups, namesOf, piecesOf, type DraftLine } from '../../daily-model'
-import { cellIssuesOf, type CellFloors, type CellIssueKind, type LineFigures } from '../../daily-model' // F-OP-107
 import type { ComposerState, EditorActions } from '../record-model'
-import { amendStyleAnchorOf } from '../record-model' // F-OO-125
 
-/** What the lines editor draws: an amendment of an order's lines, or the lines of a typed New order. */
+/**
+ * What the lines editor draws: the lines of a typed New order. F-OL-05 (Order LINES lane): an order's own lines change in the Lines
+ * tab's table (view/lines/StyleTable.tsx) — the old "Amend order" mode of this editor went (its anchors, Text…, Remove line, floors).
+ */
 export interface LinesEditorModel {
-  mode: 'amend' | 'new'
+  mode: 'new'
   lines: DraftLine[]
-  /** The order amended (names, prices as accepted, what work orders make); null for a typed order. */
+  /** null: a typed order (no order yet). */
   order: Order | null
   styles: Record<string, StyleDetail | null | undefined>
   composer: ComposerState
   price: boolean
   currency: string
   priceBasis: 'NET' | 'GROSS'
-  /** Pieces work orders already make, by line and size. */
-  minimums: Record<string, Record<string, number>>
-  /** F-OP-107 (B2): each cell's floors — what is cut and what shipped (the production read's own cells). */
-  floors?: CellFloors
-  /** F-OP-107: each order line's "Cut 40 · Sewn 32 · Shipped 0" (the production read); absent: not said (a typed order). */
-  figures?: Record<string, LineFigures>
-  /** F-OP-109: a removed line's work orders that lose it (the preview's plan: "WO-0311 loses this line"), by order line. */
-  losing?: Record<string, { readonly numbers: string; readonly count: number }>
   /** A typed order: each line's net and its resolved unit price, from the preview (by line key). */
   nets?: Record<string, number | undefined>
   listPrices?: Record<string, string | undefined>
   busy: boolean
-  /** B-W2b-323: the size cells a freeze rule locked, marked with their reason ("Cutting started — size frozen"). */
-  frozen?: readonly SizeGridIssue[]
   /** B-W2b-374 (XF3:02): a new line's Options (its container, mounted by the page). */
   newLineOptions?: (line: DraftLine) => ReactNode
 }
@@ -190,44 +180,6 @@ function Composer({ composer, actions, busy }: { composer: ComposerState; action
   )
 }
 
-// ---- F-OP-107 ----
-const FLOOR_TONE: Readonly<Record<CellIssueKind, 'error' | 'warning'>> = Object.freeze({ shipped: 'error', cut: 'warning', inWork: 'warning' })
-
-/** "Cut 40 · Sewn 32 · Shipped 0" (a step not counted there is left out, never a made-up 0). */
-function figuresText(figures: LineFigures, t: (key: string, params?: Record<string, string | number>) => string): string {
-  return [...(figures.cut !== null ? [t('edit.figures.cut', { count: figures.cut })] : []), ...(figures.sewn !== null ? [t('edit.figures.sewn', { count: figures.sewn })] : []), t('edit.figures.shipped', { count: figures.shipped })].join(' · ')
-}
-// ---- end F-OP-107
-
-// ---- F-OP-109: per line in edit mode — Text… (the description and the note for production, never a price) and Remove line ----
-function LineActs({ line, model, actions }: { line: DraftLine; model: LinesEditorModel; actions?: EditorActions }) {
-  const t = useT('orders')
-  const removed = !!line.lineId && piecesOf(line) === 0
-  const losing = line.lineId ? model.losing?.[line.lineId] : undefined
-  return (
-    <span className="fw-so-stack-tight">
-      <span className="fw-so-inline">
-        <Disclosure summary={t('edit.line.text')}>
-          <span className="fw-so-stack-tight">
-            <Field label={t('edit.line.description')}>
-              <Textarea value={line.text?.description ?? ''} onChange={(event) => actions?.onText?.(line.key, 'description', event.target.value)} rows={2} maxLength={1000} />
-            </Field>
-            <Field label={t('edit.line.note')}>
-              <Textarea value={line.text?.note ?? ''} onChange={(event) => actions?.onText?.(line.key, 'note', event.target.value)} rows={2} maxLength={2000} />
-            </Field>
-          </span>
-        </Disclosure>
-        {line.lineId && (
-          <Button size="sm" variant="quiet" heldReason={removed ? t('edit.line.removed') : model.busy ? t('held.busy') : null} onClick={() => actions?.onRemove?.(line.key)}>
-            {t('edit.line.remove')}
-          </Button>
-        )}
-      </span>
-      {removed && losing && <span className="fw-so-cell-sub">{t('edit.line.loses', { numbers: losing.numbers, count: losing.count })}</span>}
-    </span>
-  )
-}
-// ---- end F-OP-109
 
 function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines: DraftLine[]; model: LinesEditorModel; actions?: EditorActions }) {
   const t = useT('orders')
@@ -238,12 +190,6 @@ function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines:
   const grid = draftGrid(lines, style, model.order)
   const first = namesOf(lines[0]!, model.order, style)
   const name = style?.name ?? model.order?.lines.find((line) => line.styleId === styleId)?.style?.name ?? ''
-  // F-OP-107 (B2): each cell's strongest floor it is typed under — shipped (error: Apply waits), cut, in work orders (warnings).
-  const issues: SizeGridIssue[] = [
-    ...cellIssuesOf(lines, model.floors ?? {}, model.minimums).map((cell) => ({ colour: cell.key, size: cell.size, tone: FLOOR_TONE[cell.kind], message: t(`edit.floor.${cell.kind}`, { count: cell.count }) })),
-    // B-W2b-323: the locked cells of this style's lines (a warning: the value stands; a change goes as a priced change).
-    ...(model.frozen ?? []).filter((issue) => lines.some((line) => line.key === issue.colour)),
-  ]
   const locked = lines.filter((line) => line.locked)
   const editable = lines.filter((line) => !line.locked)
   const columns = [t('lines.col.colour'), t('lines.col.pieces'), ...(model.price ? [t(model.priceBasis === 'GROSS' ? 'lines.col.unitGross' : 'lines.col.unitNet'), ...(model.nets ? [t('lines.col.net')] : [])] : []), t('editor.col.change')]
@@ -257,10 +203,6 @@ function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines:
       cells: [
         <span key="c" className="fw-so-cell">
           {names.colour}
-          {/* F-OP-107: what is cut, sewn and shipped of the line (a step not counted there is not said). */}
-          {line.lineId && model.figures?.[line.lineId] && <span className="fw-so-cell-sub">{figuresText(model.figures[line.lineId]!, t)}</span>}
-          {/* F-OP-109: edit mode's own per line — Text… (description, note for production) and Remove line (a line in work orders too). */}
-          {model.mode === 'amend' && <LineActs line={line} model={model} actions={actions} />}
           {/* B-W2b-374 (XF3:02): a new line takes its options when it is made. */}
           {!line.lineId && model.newLineOptions?.(line)}
         </span>,
@@ -297,12 +239,10 @@ function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines:
       ],
     }
   })
-  // F-OO-125: in edit mode a style group is an anchor (Overview's line "Change quantity or sizes…" focuses it; named by its heading).
-  const anchor = model.mode === 'amend' ? amendStyleAnchorOf(styleId) : null
   return (
-    <Card padded className="fw-so-block" {...(anchor ? { id: anchor, tabIndex: -1, role: 'group', 'aria-labelledby': `${anchor}-title` } : {})}>
+    <Card padded className="fw-so-block">
       <div className="fw-so-card-head">
-        <h2 className="fw-so-h3" id={anchor ? `${anchor}-title` : undefined}>
+        <h2 className="fw-so-h3">
           {first.style} · {name}
         </h2>
         {style === undefined && (
@@ -319,7 +259,6 @@ function StyleCard({ styleId, lines, model, actions }: { styleId: string; lines:
             sizes={grid.sizes}
             value={grid.value}
             onChange={(next) => actions?.onCells?.(styleId, next)}
-            issues={issues}
             caption={t('editor.gridCaption', { style: first.style })}
             locale={INTL_LOCALE[locale]}
             copy={copy}

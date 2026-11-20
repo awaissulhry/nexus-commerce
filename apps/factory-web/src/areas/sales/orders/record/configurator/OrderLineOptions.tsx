@@ -18,6 +18,11 @@ export interface OrderLineOptionsProps {
   permissions: readonly string[]
   /** The record reads the order again after a write (its version moved). */
   onReload: () => void
+  // ---- F-OL-04 (Order LINES lane): opened from the line's ⋯ (Lines, Overview): the window alone, no button of its own; closed by its
+  // caller. Absent: the "Options" button as before.
+  opened?: boolean
+  onClose?: () => void
+  // ---- end F-OL-04
 }
 
 /**
@@ -30,6 +35,13 @@ export interface OrderLineOptionsProps {
 export function OrderLineOptions(props: OrderLineOptionsProps) {
   const [open, setOpen] = useState(false)
   if (props.line.kind === 'FEE') return null
+  // F-OL-04: the window opened by the line's ⋯ (one door: the ⋯ list's "Options and artwork…").
+  if (props.opened)
+    return (
+      <ConfiguratorMessages>
+        <OptionsWindow {...props} onClose={() => props.onClose?.()} />
+      </ConfiguratorMessages>
+    )
   return (
     <ConfiguratorMessages>
       <Opener {...props} open={open} onOpen={setOpen} />
@@ -50,6 +62,16 @@ function Opener({ open, onOpen, ...props }: OrderLineOptionsProps & { open: bool
         </Modal>
       )}
     </>
+  )
+}
+
+/** F-OL-04: the window alone (the ⋯'s door). */
+function OptionsWindow({ onClose, ...props }: OrderLineOptionsProps & { onClose: () => void }) {
+  const { t } = useConfiguratorWords()
+  return (
+    <Modal open onClose={onClose} title={t('order.dialog', { seq: props.line.seq })} size="xl">
+      <Dialog {...props} />
+    </Modal>
   )
 }
 

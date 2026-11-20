@@ -163,7 +163,8 @@ export function CloseLinesDialog({ order, model, actions }: { order: Order; mode
       {/* F-OP-107: what happens to each work order once the preview is read; until then (or when it is not), what work orders still make. */}
       {stillMade > 0 && planState !== 'ready' && <Banner tone="warning" title={t('closeLines.inWorkOrders', { count: stillMade })} />}
       {chosen.length > 0 && <FollowPlan order={order} model={model} state={planState} plan={preview?.workOrders?.plan ?? []} extra={preview?.workOrders ?? null} outcome={outcome} onOutcome={setOutcome} name={`fw-so-close-extra-${order.id}`} />}
-      <Field label={t('closeLines.reasonCode')} hint={model.cancelReasons === null || model.cancelReasons === undefined ? t('closeLines.reasonCodeNone') : undefined} required>
+      {/* F-OL-04 (ol-s1, B-OL-004): the reason is optional — none: the server's automatic words. */}
+      <Field label={`${t('closeLines.reasonCode')} · ${t('lineMenu.optional')}`} hint={model.cancelReasons === null || model.cancelReasons === undefined ? t('closeLines.reasonCodeNone') : undefined}>
         <Select value={reasonCode} disabled={!model.cancelReasons || model.cancelReasons.length === 0} onChange={(event) => setReasonCode(event.target.value)} aria-label={t('closeLines.reasonCode')}>
           <option value="">{t('closeLines.pickReasonCode')}</option>
           {(model.cancelReasons ?? []).map((entry) => (
@@ -173,7 +174,7 @@ export function CloseLinesDialog({ order, model, actions }: { order: Order; mode
           ))}
         </Select>
       </Field>
-      <Field label={t('closeLines.reason')} hint={t('closeLines.reasonHint')}>
+      <Field label={`${t('closeLines.reason')} · ${t('lineMenu.optional')}`} hint={t('closeLines.reasonHint')}>
         <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={1000} />
       </Field>
       <p className="fw-so-hint">{t('closeLines.reversal')}</p>
@@ -187,7 +188,8 @@ export function ReopenLinesDialog({ order, model, actions }: { order: Order; mod
   const closedOnes = closedLines(order)
   const [chosen, setChosen] = useState<string[]>(() => dialogLinesOf(model.dialog, 'reopenLines', closedOnes.map((line) => line.id), model.draft?.lineIds)) // F-OO-124
   const [reason, setReason] = useState(model.draft?.reason ?? '')
-  const held = model.busy ? t('held.busy') : chosen.length === 0 ? t('reopen.held.none') : reason.trim() === '' ? t('reopen.held.reason') : null
+  // F-OL-04 (ol-s1, B-OL-004): Why is optional (none: the server's automatic words).
+  const held = model.busy ? t('held.busy') : chosen.length === 0 ? t('reopen.held.none') : null
   return (
     <Frame title={t('reopen.title', { number: order.number })} held={held} go={() => actions?.onReopenLines?.(chosen.length === closedOnes.length ? [] : chosen, reason.trim())} goLabel={model.busy ? t('common.working') : t('reopen.go', { count: chosen.length })} onClose={close(actions)} problem={<DialogProblem model={model} />}>
       <p className="fw-so-hint">{t('reopen.body')}</p>
@@ -212,7 +214,7 @@ export function ReopenLinesDialog({ order, model, actions }: { order: Order; mod
           )
         })}
       </fieldset>
-      <Field label={t('reopen.reason')}>
+      <Field label={`${t('reopen.reason')} · ${t('lineMenu.optional')}`}>
         <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={1000} />
       </Field>
     </Frame>

@@ -26,6 +26,7 @@ import { DiscussDoor, ShowInThreadDoor } from '../../view/Discuss'
 import type { DiscussPart } from '../../dock/discuss'
 // F-SA-244: each change's Told line ("Told: conversation · bell to 6 people · floor note on WO-0311 · workshop notice") → Who was told.
 import { toldOfHistory, toldParts } from '../../told'
+import { autoReasonOf } from '../../lines-draft' // F-OL-03: the automatic reasons in words
 
 /**
  * F-SA-236 (sales page plan N2, N3, P5; 10-order-page §2.4) — Changes, one newest-first story:
@@ -139,7 +140,8 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
           label: (
             <span className="fw-so-inline">
               <strong>{t('changes.revision', { revision: entry.revision })}</strong>
-              <span>{entry.reason}</span>
+              {/* F-OL-03 (ol-s1, B-OL-004): a reason nobody typed is the server's automatic words — said in the reader's words. */}
+              <span>{autoReasonOf(entry.reason) ? t(autoReasonOf(entry.reason)!.key) : entry.reason}</span>
               {entry.priced && <Pill tone="info">{t('changes.history.priced')}</Pill>}
             </span>
           ),

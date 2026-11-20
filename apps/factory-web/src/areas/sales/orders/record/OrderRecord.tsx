@@ -41,6 +41,7 @@ import { useProductionActs } from './use-production-acts'
 import { useShipmentsActs } from './use-shipments-acts'
 import { useMoneyActs } from './use-money-acts'
 import { usePriceCheckCard } from './use-price-check-card' // F-CP-142: Money's Price check card
+import { useLinesDraft } from './use-lines-draft' // F-OL-03: the Lines tab's draft, Review and save, two people
 // ---- end F-OP-134
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { useLocale } from '../../../../lib/i18n/provider'
@@ -325,18 +326,11 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const ready = order.status === 'ready' ? order.value : null
   const actsBase: RecordActsBase = { api, orderId, current, write, version, setNotice, load, loadParts }
   const band = useBandActs({ ...actsBase, order: ready, permissions: session.permissions, stepUp: { ensureFresh, guard }, setDialog /* F-OP-101: the yes in place */, againProduction: production.again /* F-OO-142: a promise save reads the headline and dates again */ })
+  // F-OL-05: the lines' own windows (close, reopen, cancel, split, the order fields); the old amendment draft went (use-lines-draft.ts).
   const lines = useLinesActs({
     ...actsBase,
-    order: ready,
     setDialog,
-    clearChanged: () => setChanged(null),
-    showLines: () => {
-      // F-OP-210: Amend keeps the dock's scope and every other term (below 1280 px the full-width thread gives way to Lines).
-      if (tab !== 'lines') router.replace(tabAddress(pathname, window.location.search, 'lines', { narrow: narrowNow() }))
-    },
-    pricedStart: (amendment) => depth.actions.onPricedStart?.(amendment),
     permissions: session.permissions, // F-OP-111: the split's Ship to reads the customer's addresses (parties.view)
-    focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), // F-OP-110: ⋯ Change ship-to… focuses Ship to
   })
   const productionActs = useProductionActs({
     api,
@@ -388,11 +382,30 @@ function RecordContainer({ orderId }: { orderId: string }) {
     },
     onReload: () => void load(),
     onAmendDone: () => {
-      lines.endAmend() // F-OP-134: the draft is use-lines-acts'
       setChanged(null)
       setDialog(null)
     },
   })
+  // ---- F-OL-03 (Order LINES lane): the Lines tab's draft of MY changes, Review and save, Add a style, two people — mounted after the
+  // depth read (the company's freeze rules make a change priced); a door lands on a box through the page's one focus.
+  const linesDraft = useLinesDraft({
+    ...actsBase,
+    order: ready,
+    can,
+    freeze: depth.model.freeze?.value ?? null,
+    language: locale === 'en' ? 'en' : 'it',
+    showLines: () => {
+      if (tab !== 'lines') router.replace(tabAddress(pathname, window.location.search, 'lines', { narrow: narrowNow() }))
+    },
+    focus: (anchor) => setFocusRow({ anchor, at: Date.now() }),
+    // F-OL-04: the line's ⋯ "Options and artwork…" opens today's window (OrderLineOptions, its own container) for that line.
+    options: (lineId, onClose) => {
+      const value = current.current
+      const line = value?.lines.find((entry) => entry.id === lineId)
+      return value && line ? createElement(OrderLineOptions, { key: `options-${lineId}`, api, order: value, line, permissions: session.permissions, onReload: () => void load(), opened: true, onClose }) : null
+    },
+  })
+  // ---- end F-OL-03
   // F-OO-125: a line's Change quantity or sizes… starts the amendment (Lines' acts) and focuses its style group (the page's one focus);
   // F-OO-144: the requested date's Change… opens its small dialog in the page's one slot; F-OO-210: the office note writes through
   // the Orders sheet's own write with the page's one write (the acts base).
@@ -400,7 +413,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // F-OO-106: the order's own credit hold (read with sales.credit.view); after a credit act the yes's read and the headline again.
   // F-OO-106 (walk #2): mounted after the depth read — the credit part reads the yes's read (a credit hold the order read does not name).
   // F-MS-103: the stage set by hand (production.brand.manage) — Set, Change and Clear through the one write, the headline read again.
-  const overview = useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), setDialog /* F-OO-144 */, base: actsBase /* F-OO-210 */, gates: { production: production.state, again: production.again, permissions: session.permissions, me: session.user.id, prefix, live: liveState } /* F-OO-145 */, credit: { permissions: session.permissions, reread: () => { depth.actions.onRetry?.('approval'); production.again(['headline']) }, approval: depth.model.approval?.value ?? null /* walk #2 */ } /* F-OO-106 */, stage: { permissions: session.permissions, production: production.state, reread: () => production.again(['headline']) } /* F-MS-103: the stage set by hand, then the headline again */ })
+  const overview = useOverviewActs({ setDialog /* F-OO-144 */, base: actsBase /* F-OO-210 */, gates: { production: production.state, again: production.again, permissions: session.permissions, me: session.user.id, prefix, live: liveState } /* F-OO-145 */, credit: { permissions: session.permissions, reread: () => { depth.actions.onRetry?.('approval'); production.again(['headline']) }, approval: depth.model.approval?.value ?? null /* walk #2 */ } /* F-OO-106 */, stage: { permissions: session.permissions, production: production.state, reread: () => production.again(['headline']) } /* F-MS-103: the stage set by hand, then the headline again */ })
 
   const reviewBanner = useReviewBanner(api, order.status === 'ready' ? order.value : null, session.permissions, prefix) // B-W2b-368
   // B-TH-256: read with the order and again whenever it is read again; an accepted or declined re-promise reads the order again.
@@ -588,7 +601,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     const open = dialogRef.current
     // Z02 cleanup (W11's note): the credit's Check again dialog holds nothing typed (it only says what the check does): a live change
     // reads the order under it, as under the deposit's and Before → after.
-    const typed = !!lines.amendRef.current || (!!open && open.kind !== 'depositLink' && open.kind !== 'depositPayment' && open.kind !== 'compare' && open.kind !== 'creditCheck')
+    // F-OL-03: the Lines draft no longer holds the order back — it is rebased on the fresh order (use-lines-draft.ts).
+    const typed = !!open && (open.kind !== 'depositLink' && open.kind !== 'depositPayment' && open.kind !== 'compare' && open.kind !== 'creditCheck')
     const orderParts = parts.filter((part) => ORDER_PARTS.includes(part))
     if (orderParts.length > 0) {
       // Under typed work the order is not read under it: "Changed by <name> at hh:mm · Reload" (the draft is kept).
@@ -657,19 +671,18 @@ function RecordContainer({ orderId }: { orderId: string }) {
     margin: margin.model,
     priceCheck: priceCheck.model, // F-CP-142
     priceCheckDialog: priceCheck.dialog.model, // F-CP-142
-    // ---- F-OP-134: what each tab's acts hook holds (the band's portal, people and copy; Overview's line window; the amendment draft,
-    // closed lines, the cancel check; the health; the deposit's page and payment, the schedule's verbs) ----
+    // ---- F-OP-134: what each tab's acts hook holds (the band's portal, people and copy; Overview's line window; closed lines, the
+    // cancel check; the health; the deposit's page and payment, the schedule's verbs) ----
     ...band.model,
     ...overview.model,
     ...lines.model,
     ...productionActs.model,
     ...money.model,
     ...shipments.model, // F-OP-119: the tracking dialog of the shipment opened
-    // B-W2b-340
-    lineOptions: order.status === 'ready' ? (line) => createElement(OrderLineOptions, { key: line.id, api, order: order.value, line, permissions: session.permissions, onReload: () => void load() }) : undefined,
+    // B-W2b-340 → F-OL-04: a line's options window opens from its ⋯ (linesTab.options below), no button per line any more.
     // B-W2b-380 (XF6:02)
     lineCost: order.status === 'ready' ? (line) => createElement(CostChangedMark, { key: `cost-${line.id}`, change: costChanges.get(line.id), currency: order.value.currency }) : undefined,
-    // B-W2b-374 (XF3:02): an amendment's new line's options are use-lines-acts' (F-OP-134).
+    linesTab: linesDraft.model, // F-OL-03
   }
 
   const value = order.status === 'ready' ? order.value : null
@@ -734,6 +747,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
         ...shipments.actions, // F-OP-119
         // ---- end F-OP-134
         onRetry: () => void load(),
+        linesTab: linesDraft.actions, // F-OL-03
         onRetryMargin: margin.retry,
         priceCheck: priceCheck.actions, // F-CP-142
         priceCheckDialog: priceCheck.dialog.actions, // F-CP-142

@@ -4,7 +4,7 @@ import { Building2, Eye, Lock, ShoppingBag } from 'lucide-react' // F-OP-217: th
 import { defineDesignScreen, type DesignCase } from '../../../../lib/design/design-screen'
 import type { OpenApproval, Order, OrderLine } from '../api' // F-OP-101: OpenApproval
 import type { AmendPreview, WorkOrderPlan } from '../api' // F-OP-129: the edit strip's previews
-import { amendKeyOf, draftOf, newKey, type AmendReview, type DraftLine } from '../daily-model'
+import { newKey, type DraftLine } from '../daily-model'
 import { STEP_UP_CLOSED } from '../hooks'
 import type { NewOrderModel } from '../new/new-model'
 import { NewOrderView } from '../new/view/NewOrderView'
@@ -53,7 +53,11 @@ import {
   WORK_ORDERS,
   type Role,
 } from '../_demo/fixtures'
-import { COMPOSER_EMPTY, type AmendState, type OrderRecordModel } from './record-model'
+import { COMPOSER_EMPTY, type OrderRecordModel } from './record-model'
+// ---- F-OL-05 (Order LINES lane): the new Lines tab's cases — the draft of my changes, Review and save, two people, Add a style ----
+import { addLines, EMPTY_HISTORY, newLineKey, removeLine, setCell, setNewLine, type DraftHistory, type NewLine } from './lines-draft'
+import type { LinesTabModel, ReviewState } from './lines-tab-model'
+// ---- end F-OL-05
 import { OrderRecordView } from './view/OrderRecordView'
 // ---- B-TH-214: the docked thread the order's cases show (RecordFrame beside every tab) ----
 import { dockedThread } from '../../../../lib/record-thread/fixtures'
@@ -220,7 +224,6 @@ export const base = (role: Role, value: Order, over: Partial<OrderRecordModel> =
       sentLink: null,
       recorded: null,
       stepUp: STEP_UP_CLOSED,
-      amend: null,
       schedule: { value: forRole(value.status === 'CONFIRMED' ? { ...SCHEDULE, steps: SCHEDULE.steps.map((step) => (step.kind === 'DEPOSIT' ? { ...step, status: 'OPEN' as const, paidAt: null } : step)) } : SCHEDULE, role), problem: null },
       amendments: { value: value.amendments.count > 0 ? amendmentsFor(role) : NO_AMENDMENTS, problem: null },
       changeStyles: {},
@@ -318,34 +321,36 @@ const RECORDED = {
 
 export const amended = (value: Order): Order => ({ ...value, amendments: AMENDED_SUMMARY, reapprovalNeededAt: at(30, 11, 5), customerRef: 'PO-ESEMPIO-88B' })
 
-/**
- * The amendment draft of an order (optionally with typed changes). F-OP-106: `seen` is the strip's preview, read for THIS draft
- * (its key is the draft's: a design case draws what the strip shows once the preview came).
- */
-function amendOf(value: Order, change: (lines: DraftLine[]) => DraftLine[] = (lines) => lines, over: Partial<AmendState> = {}, seen?: Pick<AmendReview, 'phase' | 'preview'>): AmendState {
-  const draft: AmendState = {
-    revision: (value.amendments.latestRevision ?? 0) + 1,
-    lines: change(draftOf(value)),
-    customerRef: value.customerRef ?? '',
-    requestedDate: value.requestedDate ?? '',
-    styles: { [STYLE_ID]: STYLE },
-    composer: COMPOSER_EMPTY,
-    review: null,
-    reason: '',
-    tell: { words: '', chosen: null },
-    extraOutcome: null, // F-OP-107
-    fee: '', // op-fx1: F-OP-108's fee as use-lines-acts starts it (empty: none); missing, every design case of the strip threw
-    ...over,
-  }
-  return seen ? { ...draft, review: { ...seen, key: amendKeyOf(draft, value), problem: null } } : draft
+
+// ---- F-OL-05 (Order LINES lane): the Lines tab's state for a case — the draft of MY changes, Review and save, Add a style ----
+/** The tab's model with nothing typed yet (the style read), changed by `over`. */
+export function tabOf(over: Partial<LinesTabModel> = {}): LinesTabModel {
+  return { draft: EMPTY_HISTORY.draft, canUndo: false, clashes: [], moved: null, styles: { [STYLE_ID]: STYLE }, unlisted: new Set<string>(), review: null, addStyle: null, addColour: null, askFailed: false, portalGone: false, options: null, saving: false, ...over }
 }
-/** B-W2b-323: black 50 one more (a cut size: frozen by the stage). */
-const oneMore50 = (lines: DraftLine[]): DraftLine[] => lines.map((line) => (line.lineId === LINE_BLK ? { ...line, sizes: { ...line.sizes, '50': 3 } } : line))
-const moreBlack = (lines: DraftLine[]): DraftLine[] => [
-  ...lines.map((line) => (line.lineId === LINE_BLK ? { ...line, sizes: { ...line.sizes, '50': 3, '52': 3 } } : line)),
-  { key: newKey(STYLE_ID, BRN.id), lineId: null, styleId: STYLE_ID, colourwayId: BRN.id, sizes: { '50': 2, '52': 2 }, price: '450', locked: false },
-]
-const underMade = (lines: DraftLine[]): DraftLine[] => lines.map((line) => (line.lineId === LINE_BLK ? { ...line, sizes: { ...line.sizes, '48': 1 } } : line))
+/** Brown of the demo style as a new row (Add a style / + Add a colour), its pieces typed in the table. */
+const BROWN_ROW: NewLine = { key: newLineKey(STYLE_ID, BRN.id), styleId: STYLE_ID, colourwayId: BRN.id, colour: `${BRN.code} · ${BRN.name}`, style: { code: STYLE.code, name: STYLE.name }, sizes: {}, price: '', description: '', note: '' }
+/** Three changes: black 50 and 52 one more, red removed, brown new with 50: 2 · 52: 2. */
+const threeChanges = (value: Order): DraftHistory => {
+  let history = setCell(EMPTY_HISTORY, value, LINE_BLK, '50', 3)
+  history = setCell(history, value, LINE_BLK, '52', 3)
+  history = removeLine(history, value, LINE_RED)
+  history = addLines(history, value, [BROWN_ROW])
+  history = setNewLine(history, BROWN_ROW.key, { size: '50', pieces: 2 })
+  return setNewLine(history, BROWN_ROW.key, { size: '52', pieces: 2 })
+}
+/** Black 50 one more (a cut size: a company rule may freeze it). */
+const oneMore50 = (value: Order): DraftHistory => setCell(EMPTY_HISTORY, value, LINE_BLK, '50', 3)
+/** Red 52 and 54 one fewer each (6 → 4 pieces). */
+const fewerRed = (value: Order): DraftHistory => setCell(setCell(EMPTY_HISTORY, value, LINE_RED, '52', 1), value, LINE_RED, '54', 1)
+/** Black 50 one fewer under cut. */
+const fewerBlack50 = (value: Order): DraftHistory => setCell(EMPTY_HISTORY, value, LINE_BLK, '50', 1)
+/** The Review window with the server's preview of the draft. */
+const reviewOf = (preview: AmendPreview | null, over: Partial<ReviewState> = {}): ReviewState => ({ phase: preview ? 'ready' : 'reading', key: 'design', preview, problem: null, why: null, words: '', ask: null, tell: { words: '', chosen: null }, extraOutcome: null, fee: '', changedMeanwhile: false, ...over })
+/** The same preview as the API answers it to Sales (no price grain): no prices, no amounts — only "The amount changes". */
+const SALES_PREVIEW: AmendPreview = { ...AMEND_PREVIEW, amountChanges: true, diff: AMEND_PREVIEW.diff ? { lines: AMEND_PREVIEW.diff.lines, header: AMEND_PREVIEW.diff.header, prices: [], reacceptanceNeeded: AMEND_PREVIEW.diff.reacceptanceNeeded } : null }
+/** A case's tab holding `history` (Undo offered once something was typed). */
+const tabWith = (history: DraftHistory, over: Partial<LinesTabModel> = {}): LinesTabModel => tabOf({ draft: history.draft, canUndo: history.undo.length > 0, ...over })
+// ---- end F-OL-05
 
 /** A partly shipped order whose red line was closed short (2 pieces of 54 will not be made). */
 export const closedShort = (() => {
@@ -439,22 +444,12 @@ const W2B_323 = [
   { id: 'w2b-323-materials-error', label: "W2b · Sales · Customer materials couldn't load (Try again; the rest stays usable)", model: d323('sales', production, {}, { materials: { value: null, problem: 'problem.read.unavailable' } }) },
   { id: 'w2b-323-materials-loading', label: 'W2b · Sales · Customer materials reading', model: d323('sales', production, {}, { materials: { value: null, problem: null } }) },
   { id: 'w2b-323-manager-lines', label: 'W2b · Production manager · Lines: frozen sizes and materials read-only (Plan held)', model: d323('manager', production) },
-  { id: 'w2b-323-amend-frozen', label: 'W2b · Sales · Amend order: the cut sizes marked in the grid with their reason', model: d323('sales', asSales(production), { amend: amendOf(asSales(production)) }) }, // B-CP-011
-  { id: 'w2b-323-review-frozen', label: 'W2b · Owner · What changes: frozen by the stage — Apply as a priced change, with its optional fee', model: d323('owner', production, { amend: amendOf(production, oneMore50, {}, { phase: 'ready', preview: frozenPreview }) }) }, // B-CP-011
-  // ---- F-CP-149 (customer page plan C4, the money wall; review A8, D5): the Lines edit mode for a reader without prices — as Sales
-  // worker since B-CP-011 (here: the Sales fixtures' rights without the price grain) — held words in the net's and the fee's place.
-  { id: 'f-cp-149-strip-no-price', label: 'As Sales worker without prices · Edit mode: What changes — pieces, "Net: shown to people who see prices" (never a blank)', model: noPrice(d323('sales', forRole(confirmed, 'manager'), { amend: amendOf(forRole(confirmed, 'manager'), oneMore50, { reason: 'Una giacca nera in più.' }, { phase: 'ready', preview: AMEND_PREVIEW }) })) },
-  {
-    id: 'f-cp-149-priced-held',
-    label: 'As Sales worker without prices · Frozen by the stage: "Apply as a priced change" held — "A priced change is made by someone who sees prices."',
-    model: noPrice(d323('sales', forRole(production, 'manager'), { amend: amendOf(forRole(production, 'manager'), oneMore50, { reason: 'Una giacca nera in più.' }, { phase: 'ready', preview: frozenPreview }) })),
-    note: 'The fee\'s place says "Shown to people who see prices"; the extra deposit\'s dialog is held with the same words.',
-  },
-  // ---- end F-CP-149
-  // ---- F-CP-148 (the money wall): the same edit mode seen as the Owner — the net's change in figures (a price holder's own view)
-  { id: 'cp-148-edit-owner', label: 'F-CP-148 · Seen as Owner · Edit mode: What changes — the pieces and the net in figures, Apply for a price holder', model: d323('owner', confirmed, { amend: amendOf(confirmed, oneMore50, { reason: 'Una giacca nera in più.' }, { phase: 'ready', preview: AMEND_PREVIEW }) }) },
-  // ---- end F-CP-148
-  { id: 'w2b-323-review-blocked', label: 'W2b · Sales · What changes: frozen for good (finished pieces) — no way', model: d323('sales', asSales(production), { amend: amendOf(asSales(production), oneMore50, {}, { phase: 'ready', preview: frozenPreview }) }, { freeze: { value: FREEZE_FINISHED, problem: null } }) }, // B-CP-011
+  // ---- F-OL-05 (Order LINES lane): the company's lock said on the cell before typing; a frozen change is the SAME Review window ----
+  { id: 'lines-locked', label: 'Lines · Sales · Black 48 · 50 locked by the company\'s rule (the lock line, the 🔒 on the cell, said before typing)', model: d323('sales', asSales(production), { linesTab: tabOf() }) }, // B-CP-011
+  { id: 'lines-review-locked', label: 'Lines · Owner · Review and save: locked by the company\'s rule — the customer is asked (the rule), the change fee optional (0 allowed)', model: d323('owner', production, { linesTab: tabWith(oneMore50(production), { review: reviewOf(frozenPreview as unknown as AmendPreview) }) }) },
+  { id: 'lines-review-locked-sales', label: 'Lines · Sales · Review and save, locked: no money anywhere — no fee, the customer is asked (no charge)', model: noPrice(d323('sales', asSales(production), { linesTab: tabWith(oneMore50(asSales(production)), { review: reviewOf(frozenPreview as unknown as AmendPreview) }) })) },
+  { id: 'lines-changing', label: 'Lines · Owner · Three changes in place: "was 2" on black 50 and 52, red struck with Put back, brown New — the bar "3 changes not saved"', model: d323('owner', confirmed, { linesTab: tabWith(threeChanges(confirmed)) }) },
+  { id: 'lines-review-blocked', label: 'Lines · Sales · Review and save: locked for good (finished pieces) — Save changes held', model: d323('sales', asSales(production), { linesTab: tabWith(oneMore50(asSales(production)), { review: reviewOf(frozenPreview as unknown as AmendPreview) }) }, { freeze: { value: FREEZE_FINISHED, problem: null } }) },
   { id: 'w2b-323-priced', label: 'W2b · Owner · Priced change: one more in 50 priced, the fee, the extra deposit (30 % of the growth), it waits for a yes', model: d323('owner', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen() }), note: 'The kind lists the caparra penitenziale held: off until the accountant confirms it.' }, // B-CP-011
   { id: 'w2b-323-priced-blocked', label: 'W2b · Owner · Priced change refused: the size cannot change any more', model: d323('owner', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen(PRICED_BLOCKED) }) }, // B-CP-011
   { id: 'w2b-323-priced-reading', label: 'W2b · Owner · Priced change: pricing', model: d323('owner', production, {}, { dialog: { kind: 'priced' }, priced: { ...pricedOpen(), preview: { phase: 'reading', value: null, problem: null } } }) }, // B-CP-011
@@ -663,8 +658,6 @@ const RED_ID = production.lines.find((line) => line.id === LINE_RED)!.colourwayI
 /** WO-00023: a DRAFT of the red 54 (the demo's two work orders are WO-00021 in progress, WO-00022 released). */
 const DRAFT_WO_ID = '0190f0e2-9191-7000-8000-000000000023'
 const RELEASED_WAITS = { en: 'WO-00022 is released: production applies the change (a planner or a production manager).', it: 'WO-00022 è rilasciato: la modifica la applica la produzione (un pianificatore o un responsabile di produzione).' }
-/** Red 52 and 54 one fewer each (6 → 4 pieces, net 2,640.00 → 1,760.00). */
-const fewerRed = (lines: DraftLine[]): DraftLine[] => lines.map((line) => (line.lineId === LINE_RED ? { ...line, sizes: { ...line.sizes, '52': 1, '54': 1 } } : line))
 const RED_DIFF: NonNullable<AmendPreview['diff']> = {
   lines: [{ change: 'CHANGED', lineId: LINE_RED, seq: 20, styleId: STYLE_ID, colourwayId: RED_ID, piecesBefore: 6, piecesAfter: 4, sizes: [{ size: '52', before: 2, after: 1 }, { size: '54', before: 2, after: 1 }], priceChanged: false, textChanged: false }],
   header: [],
@@ -681,8 +674,6 @@ const redPlan = (releasedFollows: boolean): WorkOrderPlan[] => [
   { kind: 'LOWER_TO_ORDER', workOrderId: DRAFT_WO_ID, number: 'WO-00023', status: 'DRAFT', route: 'SET_DRAFT_CELLS', cells: [{ lineId: LINE_RED, size: '54', from: 2, to: 1, cut: 0 }], extra: 0, appliesNow: true, held: null, reprint: false },
 ]
 const redPreview = (releasedFollows: boolean): AmendPreview => ({ ...AMEND_PREVIEW, diff: RED_DIFF, workOrders: { extra: [], needsOutcome: false, words: null, plan: redPlan(releasedFollows) } })
-/** Black 50 one fewer under cut: both 50s of WO-00021 are cut — 1 extra piece, its outcome picked before Apply. */
-const fewerBlack50 = (lines: DraftLine[]): DraftLine[] => lines.map((line) => (line.lineId === LINE_BLK ? { ...line, sizes: { ...line.sizes, '50': 1 } } : line))
 const OUTCOME_PREVIEW: AmendPreview = {
   ...AMEND_PREVIEW,
   ok: false,
@@ -703,8 +694,6 @@ const OUTCOME_PREVIEW: AmendPreview = {
     plan: [{ kind: 'LOWER_TO_ORDER', workOrderId: WORK_ORDERS[0]!.id, number: 'WO-00021', status: 'IN_PROGRESS', route: 'LOWER_RELEASED', cells: [{ lineId: LINE_BLK, size: '50', from: 2, to: 2, cut: 2 }], extra: 1, appliesNow: true, held: null, reprint: true }],
   },
 }
-const LESS_RED = 'Il cliente toglie una rossa 52 e una 54.'
-const LESS_BLACK = 'Il cliente toglie una nera 50.'
 
 type ShipmentRow = Order['chain']['shipments'][number]
 const OTHER_ORDER = { id: '0190f0e2-5151-7000-8000-000000000151', number: 'SO-2026-0151', customerRef: 'PO-ESEMPIO-151' }
@@ -750,10 +739,11 @@ const ELSEWHERE_ROW: ShipmentRow = {
 }
 const withShipments = (rows: ShipmentRow[]): Order => ({ ...shipped, chain: { ...shipped.chain, shipments: rows } })
 const F_OP_129: DesignCase<RecordCase>[] = [
-  { id: 'f-op-129-strip-sales', label: 'F-OP-129 · Sales · Edit mode: What changes — WO-00023 (a draft) follows now; WO-00022 is released: it waits for production, decided on this page', model: base('sales', asSales(production), { amend: amendOf(asSales(production), fewerRed, { reason: LESS_RED }, { phase: 'ready', preview: redPreview(false) }) }) }, // B-CP-011
-  { id: 'f-op-129-strip-owner', label: 'F-OP-129 · Owner · Edit mode: both work orders follow in the click (R-4); WO-00022’s work sheet is printed again', model: base('owner', production, { amend: amendOf(production, fewerRed, { reason: LESS_RED }, { phase: 'ready', preview: redPreview(true) }) }) },
-  { id: 'f-op-129-strip-outcome', label: 'F-OP-129 · Owner · Edit mode under cut: 1 piece of 50 is already cut — Apply held until its outcome is picked', model: base('owner', production, { amend: amendOf(production, fewerBlack50, { reason: LESS_BLACK }, { phase: 'ready', preview: OUTCOME_PREVIEW }) }) },
-  { id: 'f-op-129-strip-outcome-chosen', label: 'F-OP-129 · Owner · Edit mode under cut: kept as leftover for the customer — Apply', model: base('owner', production, { amend: amendOf(production, fewerBlack50, { reason: LESS_BLACK, extraOutcome: 'LEFTOVER' }, { phase: 'ready', preview: OUTCOME_PREVIEW }) }) },
+  // ---- F-OL-05: the Review window's production part (was the edit strip): each work order follows now or waits for production ----
+  { id: 'lines-review-wo-sales', label: 'Lines · Sales · Review and save: WO-00023 (a draft) follows now; WO-00022 is released — it waits for production, decided on this page', model: base('sales', asSales(production), { linesTab: tabWith(fewerRed(asSales(production)), { review: reviewOf(redPreview(false)) }) }) }, // B-CP-011
+  { id: 'lines-review-wo-owner', label: 'Lines · Owner · Review and save: both work orders follow in the click (R-4); WO-00022\'s work sheet is printed again', model: base('owner', production, { linesTab: tabWith(fewerRed(production), { review: reviewOf(redPreview(true)) }) }) },
+  { id: 'lines-review-outcome', label: 'Lines · Owner · Review and save under cut: 1 piece of 50 is already cut — "Keep for this customer" picked for you', model: base('owner', production, { linesTab: tabWith(fewerBlack50(production), { review: reviewOf(OUTCOME_PREVIEW, { extraOutcome: 'LEFTOVER' }) }) }) },
+  { id: 'lines-review-outcome-none', label: 'Lines · Owner · Review and save under cut, nothing picked yet: Save changes held until its outcome is picked', model: base('owner', production, { linesTab: tabWith(fewerBlack50(production), { review: reviewOf(OUTCOME_PREVIEW) }) }) },
   { id: 'f-op-129-ship-tracking', label: 'F-OP-129 · Owner · Shipments: "BRT, booked by hand" with its typed number, No live tracking and Track ›; GLS labels with their parcel numbers (typing held: labels bought)', model: base('owner', withShipments([TYPED_ROW, LABELLED_ROW]), { tab: 'shipments' }) },
   { id: 'f-op-129-ship-tracking-sales', label: 'F-OP-129 · Sales · Shipments: the typed number read only — "A warehouse person adds tracking"', model: base('sales', withShipments([{ ...TYPED_ROW, mayTypeTracking: { allowed: false, code: 'NO_RIGHT', why: null } }]), { tab: 'shipments' }) },
   { id: 'f-op-129-ship-shared', label: 'F-OP-129 · Owner · Shipments: a shared shipment — "Also carries SO-2026-0151" (its link)', model: base('owner', withShipments([SHARED_ROW, TYPED_ROW]), { tab: 'shipments' }) },
@@ -1112,16 +1102,23 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'not-found', label: 'Not found (another company, or a wrong address)', model: { ...base('sales', confirmed), record: { ...base('sales', confirmed).record, order: { status: 'not_found' } } } },
     { id: 'no-permission', label: 'No permission (orders.view over its company and customer)', model: { ...base('sales', confirmed), record: { ...base('sales', confirmed).record, order: { status: 'forbidden' } } } },
     // ---- B-W2a-50: the order every day ------------------------------------------------------------------------------------
-    { id: 'amend-start', label: 'W2a · Sales · Amend order: the lines become a draft; Review held until something changes', model: base('sales', asSales(confirmed), { amend: amendOf(asSales(confirmed)) }), note: 'Type in the grid (arrows, paste); the bar counts the lines that change; ⌘↵ = Review.' }, // B-CP-011
-    { id: 'amend-draft', label: 'W2a · Owner · Amendment draft: black 50 and 52 one more, brown added at 450', model: base('owner', confirmed, { amend: amendOf(confirmed, moreBlack) }) }, // B-CP-011
-    { id: 'amend-under-work-orders', label: 'W2a · Sales · In production: a size typed under what work orders make (held, said in the grid)', model: base('sales', asSales(production), { amend: amendOf(asSales(production), underMade) }) }, // B-CP-011
-    { id: 'amend-composer', label: 'W2a · Sales · Amendment: Add a style — the style picked, its colours to add', model: base('sales', asSales(confirmed), { amend: amendOf(asSales(confirmed), (lines) => lines, { composer: { ...COMPOSER_EMPTY, query: 'DEMO', results: STYLE_ROWS, chosen: STYLE, picked: [BRN.id] } }) }) }, // B-CP-011
-    { id: 'amend-search', label: 'W2a · Sales · Amendment: Add a style — the search results', model: base('sales', asSales(confirmed), { amend: amendOf(asSales(confirmed), (lines) => lines, { composer: { ...COMPOSER_EMPTY, query: 'DEMO', results: STYLE_ROWS } }) }) }, // B-CP-011
-    { id: 'amend-review', label: 'W2a · Owner · What changes: pieces and net old → new, the customer accepts again (Show all changes: by size)', model: base('owner', confirmed, { amend: amendOf(confirmed, moreBlack, { reason: 'Il cliente aggiunge due giacche nere e quattro marroni.' }, { phase: 'ready', preview: AMEND_PREVIEW }) }) }, // B-CP-011
-    { id: 'amend-review-reading', label: 'W2a · Owner · What changes: working it out (Apply held while it reads)', model: base('owner', confirmed, { amend: amendOf(confirmed, moreBlack, {}, { phase: 'reading', preview: null }) }) }, // B-CP-011
-    { id: 'amend-review-problems', label: 'W2a · Owner · What changes: refused by place, in words (Apply held)', model: base('owner', production, { amend: amendOf(production, moreBlack, {}, { phase: 'ready', preview: AMEND_PREVIEW_PROBLEMS }) }) }, // B-CP-011
-    { id: 'amend-review-moved', label: 'W2a · Owner · Apply refused: someone changed the order meanwhile (read again)', model: base('owner', confirmed, { amend: amendOf(confirmed, moreBlack, { reason: 'Due giacche in più.' }, { phase: 'ready', preview: AMEND_PREVIEW }), notice: { tone: 'danger', words: { key: 'problem.write.moved' } } }) }, // B-CP-011
-    { id: 'amend-held-shipped', label: 'W2a · Sales · Partly shipped: Amend order held — the lines are fixed once anything shipped', model: base('sales', order('PARTLY_SHIPPED')) },
+    // ---- F-OL-05 (Order LINES lane, plan v2): the Lines tab changed in place — no edit mode (look at 375 / 1440 / 1920, light + dark) ----
+    { id: 'lines-view', label: 'Lines · Owner · The tab: "14 pieces · 2 lines · Ready by …", one table per style, thin boxes, Unit price and Line total, the totals', model: base('owner', production, { linesTab: tabOf() }), note: 'Keyboard: Tab walks the boxes, Enter goes down, Esc puts a box back, ⌘Z takes the last edit back, ⌘S opens Review and save.' },
+    { id: 'lines-sales', label: 'Lines · Sales · No money anywhere: no price column, no totals; one line why; boxes for sizes and notes', model: base('sales', asSales(production), { linesTab: tabOf() }) }, // B-CP-011
+    { id: 'lines-sales-changing', label: 'Lines · Sales · Changing: "was 2", the bar — and still no money (the draft holds no price)', model: base('sales', asSales(confirmed), { linesTab: tabWith(threeChanges(asSales(confirmed))) }) }, // B-CP-011
+    { id: 'lines-read-only', label: 'Lines · Read-only · Plain numbers, no box, no Add a style, no ⋯, no bar', model: readOnlyCase(base('sales', asSales(production), { linesTab: tabOf() })) },
+    { id: 'lines-undo', label: 'Lines · Owner · One change: "1 change not saved · Undo last edit"', model: base('owner', confirmed, { linesTab: tabWith(oneMore50(confirmed)) }) },
+    { id: 'lines-review', label: 'Lines · Owner · Review and save: what changes per line, the total before → after, Why (optional), the tick "Ask … to accept the new order" (the total goes up)', model: base('owner', confirmed, { linesTab: tabWith(threeChanges(confirmed), { review: reviewOf({ ...AMEND_PREVIEW, totalUp: true, amountChanges: true }) }) }) },
+    { id: 'lines-review-sales', label: 'Lines · Sales · Review and save: the pieces only, "The amount changes" — never which way; the tick on', model: base('sales', asSales(confirmed), { linesTab: tabWith(threeChanges(asSales(confirmed)), { review: reviewOf(SALES_PREVIEW) }) }) }, // B-CP-011
+    { id: 'lines-review-reading', label: 'Lines · Owner · Review and save: working out what changes (Save changes held)', model: base('owner', confirmed, { linesTab: tabWith(threeChanges(confirmed), { review: reviewOf(null) }) }) },
+    { id: 'lines-review-problems', label: 'Lines · Owner · Review and save: refused by place, in words (Save changes held)', model: base('owner', production, { linesTab: tabWith(threeChanges(production), { review: reviewOf(AMEND_PREVIEW_PROBLEMS) }) }) },
+    { id: 'lines-review-moved', label: 'Lines · Owner · Review and save: someone saved meanwhile — said at the top, the preview asked again', model: base('owner', confirmed, { linesTab: tabWith(threeChanges(confirmed), { review: reviewOf({ ...AMEND_PREVIEW, totalUp: true, amountChanges: true }, { changedMeanwhile: true }) }) }) },
+    { id: 'lines-moved', label: 'Lines · Owner · Someone saved meanwhile: "Bea Esempio saved a change at 10:42: line 10 (BLK · Nero) moved. Your changes are kept." · a cell both changed: Keep mine / Take theirs', model: base('owner', confirmed, { linesTab: tabWith(oneMore50(confirmed), { moved: { by: 'Bea Esempio', at: at(29, 10, 42), lineIds: [LINE_BLK], gone: [] }, clashes: [{ lineId: LINE_BLK, field: { kind: 'size', size: '50' }, mine: '3', theirs: '4' }] }) }) },
+    { id: 'lines-ask-failed', label: 'Lines · Owner · Saved, but the ask could not be sent: "Ask again" (the save stands)', model: base('owner', confirmed, { linesTab: tabOf({ askFailed: true }), notice: { tone: 'success', words: { key: 'save.done.plainAsked' } } }) },
+    { id: 'lines-add-style', label: 'Lines · Owner · Add a style: our collection and this customer\'s own styles; black and red on the order already', model: base('owner', confirmed, { linesTab: tabOf({ addStyle: { query: 'DEMO', results: [{ ...STYLE_ROWS[0]!, colourways: STYLE.colourways.map((colourway) => ({ id: colourway.id, listPriced: colourway.id !== BRN.id })) }], searching: false, problem: null, row: { ...STYLE_ROWS[0]!, colourways: STYLE.colourways.map((colourway) => ({ id: colourway.id, listPriced: colourway.id !== BRN.id })) }, chosen: STYLE, picked: [BRN.id] } }) }) },
+    { id: 'lines-add-style-sales', label: 'Lines · Sales · Add a style: brown has no list price for this customer — held in the dialog (someone who sees prices adds it)', model: base('sales', asSales(confirmed), { linesTab: tabOf({ addStyle: { query: 'DEMO', results: null, searching: false, problem: null, row: { ...STYLE_ROWS[0]!, colourways: STYLE.colourways.map((colourway) => ({ id: colourway.id, listPriced: colourway.id !== BRN.id })) }, chosen: STYLE, picked: [BRN.id] } }) }) }, // B-CP-011
+    { id: 'lines-add-colour', label: 'Lines · Owner · + Add a colour: brown (not on the order yet), "Copy the sizes of: BLK · Nero"', model: base('owner', confirmed, { linesTab: tabOf({ addColour: { styleId: STYLE_ID } }) }) },
+    { id: 'lines-partly-shipped', label: 'Lines · Sales · Partly shipped: plain numbers and today\'s held words (changes on a partly shipped order come later)', model: base('sales', order('PARTLY_SHIPPED'), { linesTab: tabOf() }) },
     { id: 'amended-band', label: 'W2a · Sales · An amended order: “Amended · rev 2”, waiting for the customer to accept again', model: base('sales', amended(production)) },
     { id: 'close-lines-dialog', label: 'W2a · Sales · Close remaining lines: what will not be made or shipped, the reason, the reversal', model: base('sales', order('PARTLY_SHIPPED'), { dialog: { kind: 'closeLines' }, draft: { reason: 'Il cliente non vuole il resto.' } }) },
     { id: 'close-lines-done', label: 'W2a · Sales · Lines closed: what work orders still make is Production’s', model: base('sales', closedShort, { dialog: { kind: 'closeLines' }, closedLines: { order: closedShort, closed: [{ lineId: LINE_RED, seq: 20, closedShortQuantity: 2 }], reducesDone: [], stillInWorkOrders: [{ lineId: LINE_RED, pieces: 2 }], workOrders: { applied: [], waiting: [] } } }) },

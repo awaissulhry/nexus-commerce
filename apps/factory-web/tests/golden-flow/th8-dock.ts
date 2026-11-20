@@ -13,7 +13,7 @@ import { startsWith, words } from './_harness/words'
  * an office note in A's general thread (set-up: no screen writes it here). Then, as Sales at 1440 × 900:
  *   1  per scope (This order, <Customer> (general), All of <Customer>): ONE card in the dock — the pick band first, the Head 44 px,
  *      the body that scrolls (the page does not), the foot or the box inside the viewport, at 40 % (Overview) and a third (Lines);
- *   2  the scope stays across tabs, Amend and a reload; an arrival from the orders list starts on This order;
+ *   2  the scope stays across tabs, the band's Change the lines and a reload; an arrival from the orders list starts on This order;
  *   3  no loop: five picks over 10 s write the address with no router request (0 rsc), no document, at most 6 writes of the address
  *      (each with at most Next's one echo to the same address: routerActivity `writes`);
  *   4  Answer on A's line → This order with the box focused on a reply ("Replying to …"); on the general note → General, Office note;
@@ -166,7 +166,7 @@ export default defineStage({
       await flow.shot(page, 'dock-order-third')
     })
 
-    await flow.step('2 · the scope stays across tabs, Amend and a reload; an arrival from the orders list starts on This order', async () => {
+    await flow.step('2 · the scope stays across tabs, Change the lines and a reload; an arrival from the orders list starts on This order', async () => {
       await go('?tab=overview')
       await pick(page, OD('record.dock.all', { customer }), RT('allOfCustomer.view.all'))
       await page.waitForURL(/[?&]thread=all/)
@@ -177,20 +177,20 @@ export default defineStage({
         await expect(page, `${OD(tab)} keeps All of`).toHaveURL(/[?&]thread=all/)
         await seen(feedHead(page))
       }
-      // Amend (the band's ⋯): Lines in its edit mode, the scope kept; Discard leaves it.
+      // F-OL-05: Change the lines (the band's ⋯) lands on Lines — no edit mode, the table changes in place — the scope kept.
+      await tabs.getByRole('link', { name: startsWith(OD('tab.overview')) }).click()
+      await page.waitForURL(/[?&]tab=overview/)
       const more = page.getByRole('button', { name: OD('record.more'), exact: true }).first()
-      const amend = page.getByRole('menuitem', { name: startsWith(OD('action.amend')) })
+      const change = page.getByRole('menuitem', { name: startsWith(OD('lineMenu.changeLines')) })
       await more.click()
-      if ((await amend.count()) > 0 && (await amend.first().isEnabled())) {
-        await amend.first().click()
+      if ((await change.count()) > 0 && (await change.first().isEnabled())) {
+        await change.first().click()
         await page.waitForURL(/[?&]tab=lines/)
-        await expect(page, 'Amend keeps All of').toHaveURL(/[?&]thread=all/)
+        await expect(page, 'Change the lines keeps All of').toHaveURL(/[?&]thread=all/)
         await seen(feedHead(page))
-        const discard = page.getByRole('button', { name: OD('amend.discard'), exact: true })
-        if (await discard.isVisible().catch(() => false)) await discard.click()
       } else {
         await page.keyboard.press('Escape')
-        test.info().annotations.push({ type: 'not here', description: 'Amend is held on this order (its state): the scope across Amend is held by the unit tests of F-OP-210' })
+        test.info().annotations.push({ type: 'not here', description: 'Changing the lines is held on this order (its state): the scope across the door is held by the unit tests of F-OP-210' })
       }
       await page.reload()
       await seen(feedHead(page), 60_000)
