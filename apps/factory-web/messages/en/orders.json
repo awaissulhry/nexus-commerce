@@ -2031,7 +2031,7 @@
       "noteHint": "One line, at most {max} characters. Never name a person on the floor.",
       "customer": "The customer reads it as a plain stage: never the reason, the note or who set it.",
       "told": "When the stage moves forward, the customer is told after {minutes} minutes: clear it before then and it is not told. After that, clearing it does not take back what the customer read.",
-      "back": "Going back: the customer reads {customer} again and is not told.",
+      "back": "Going back: the customer reads {customer} and is not told.",
       "same": "The customer keeps reading {customer}: it is not told again.",
       "cuts": "The customer's changes are judged on the floor's records: key the cuts in as soon as the floor can.",
       "clears": "It clears by itself once the floor's counts reach {stage}.",
@@ -2044,7 +2044,8 @@
       "clearTitle": "Back to the floor's stage?",
       "clearTold": "The customer has been told {customer}; it is not told it again.",
       "clearUntold": "Set less than {minutes} minutes ago: the customer has not been told {customer} yet, and is not told it now.",
-      "clearFloor": "It reads {customer} again, with no notice.",
+      "clearNever": "The customer has not been told {customer}, and is not told it now.",
+      "clearFloor": "The customer reads {customer} now, with no notice.",
       "clearGo": "Back to {stage}",
       "clearGoPlain": "Back to the floor's stage"
     }

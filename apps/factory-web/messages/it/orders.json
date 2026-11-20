@@ -2031,7 +2031,7 @@
       "noteHint": "Una riga, al massimo {max} caratteri. Non nominare chi lavora in reparto.",
       "customer": "Il cliente la legge come una fase normale: mai il motivo, la nota o chi l'ha impostata.",
       "told": "Quando la fase va avanti, il cliente riceve l'avviso dopo {minutes} minuti: se la togli prima, non lo riceve. Dopo, togliendola non riprendi ciò che il cliente ha letto.",
-      "back": "Si torna indietro: il cliente legge di nuovo {customer} e non riceve avvisi.",
+      "back": "Si torna indietro: il cliente legge {customer} e non riceve avvisi.",
       "same": "Il cliente continua a leggere {customer}: non riceve un nuovo avviso.",
       "cuts": "Le modifiche del cliente si valutano sui dati del reparto: registra i tagli appena il reparto può.",
       "clears": "Si toglie da sola quando i conteggi del reparto arrivano a {stage}.",
@@ -2044,7 +2044,8 @@
       "clearTitle": "Tornare alla fase del reparto?",
       "clearTold": "Il cliente ha già ricevuto l'avviso di {customer}; non lo riceve di nuovo.",
       "clearUntold": "Impostata meno di {minutes} minuti fa: il cliente non ha ancora ricevuto l'avviso di {customer}, e ora non lo riceve.",
-      "clearFloor": "Legge di nuovo {customer}, senza avvisi.",
+      "clearNever": "Il cliente non ha ricevuto l'avviso di {customer}, e ora non lo riceve.",
+      "clearFloor": "Il cliente ora legge {customer}, senza avvisi.",
       "clearGo": "Torna a {stage}",
       "clearGoPlain": "Torna alla fase del reparto"
     }

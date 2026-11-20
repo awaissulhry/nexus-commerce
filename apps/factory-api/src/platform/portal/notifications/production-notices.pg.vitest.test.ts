@@ -479,6 +479,10 @@ describe('B-PR-31: the customer is told of its own production', { timeout: SLOW_
     await byHand('DELETE', left.orderId)
     await set(left.orderId, 'CUTTING')
     expect(await markersOf(left.orderId)).toEqual([['told', 'CUTTING', true]])
+    // B-MS-008 (ms-fx1; Z01 note 2): set again it has a new set time, yet the customer WAS told Cutting — the office's headline (what
+    // Clear… says) reads the keeper's markers and the notice made, never the set's time.
+    const noticeOf = async (orderId: string) => (await office('GET', `/sales/orders/${orderId}/production?parts=headline`)).headline.stage.byHand.notice
+    expect(await noticeOf(left.orderId)).toEqual({ told: true, waitsUntil: null })
     await fanOut()
     expect(await toldA(left.orderId)).toEqual([])
 
@@ -493,8 +497,14 @@ describe('B-PR-31: the customer is told of its own production', { timeout: SLOW_
       ['told', 'SEWING', true],
     ])
     expect((await reachedOf(again.orderId)).map((row) => row.payload.byHand)).toEqual([true, true])
+    // B-MS-008 (ms-fx1): the newest tell still waits its window — Clear… says when it goes; once the notice is made, told.
+    const waiting = await noticeOf(again.orderId)
+    expect(waiting).toEqual({ told: false, waitsUntil: expect.any(String) })
+    const lastTell = (await reachedOf(again.orderId)).at(-1)!
+    expect(Date.parse(waiting.waitsUntil as string)).toBe(new Date(lastTell.occurredAt).getTime() + 600_000)
     await fanOut()
     expect(await toldA(again.orderId)).toEqual(['portal.production.sewing'])
+    expect(await noticeOf(again.orderId)).toEqual({ told: true, waitsUntil: null })
 
     // Never "by hand", the reason, the note or who in what A was told; B was told nothing; the finance person sees no production.
     const toA = (await noticesOf(alphaBuyer.id)).filter((notice) => [cleared.orderId, left.orderId, again.orderId].includes(notice.recordId))
