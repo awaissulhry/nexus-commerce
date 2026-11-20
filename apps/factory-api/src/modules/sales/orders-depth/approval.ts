@@ -2,13 +2,14 @@ import type { Prisma } from '@nexus/factory-db'
 import { chooseRules } from '@nexus/factory-domain/approvals/rules'
 import { DomainError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
-import { ORDER_STEPS, type CreditStep } from '@nexus/factory-domain/sales/credit/credit'
+import { ORDER_STEPS } from '@nexus/factory-domain/sales/credit/credit'
 import { SALES_ORDER_CHANGES, SALES_ORDER_FIELDS, salesOrderFacts, WAIT_WORDS, type OrderShape, type SalesOrderPriorityLevel, type WaitReason } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { askApproval, withdrawPending } from '../../../platform/approvals/engine'
 import type { TaskRef } from '../../../platform/approvals/kinds/kind'
-import { newestCheck } from '../credit/check'
+// B-OO-003: the standing credit hold lives beside the credit check (the cancel reads it too).
+import { creditHoldOf } from '../credit/check'
 import { officeContextOf } from '../orders/access'
 import { cancelOrderInCommand } from '../orders/moves'
 import { officeOrder } from '../orders/moves'
@@ -33,7 +34,8 @@ import { waitsForMeasures } from '../mtm/order-gate'
  *                                 {PENDING_APPROVAL → CONFIRMED} (B-W2b-294's handler carries the delivery schedule then),
  *                                 unless the order's credit HOLD still stands (B-W2b-304): it keeps waiting for that.
  *   rejectedInCommand             the no: CANCELLED with the approver's reason (W1's cancel: deposit requests and payment
- *                                 steps cancelled with it); the credit override asked on it is withdrawn.
+ *                                 steps cancelled with it); the credit override asked on it is withdrawn (B-OO-003: by the
+ *                                 cancel itself, as for any waiting order a person cancels).
  *   approvalState / askAgain / withdraw
  *                                 GET /sales/orders/:orderId/approval (why it waits and who decides), POST …/approval (ask
  *                                 again after a no-longer-standing request), POST …/approval/withdraw (the asker takes it
@@ -83,14 +85,6 @@ export async function orderShapeOf(db: Reader, order: { readonly id: string; rea
   }
 }
 
-/** The order's credit HOLD that still stands (its newest ORDER / PORTAL / API check, no override row), or null. */
-export async function creditHoldOf(db: Reader, orderId: string): Promise<{ checkId: string; pendingTaskId: string | null } | null> {
-  const step = (await db.creditCheck.findFirst({ where: { recordType: 'SalesOrder', recordId: orderId, step: { in: [...ORDER_STEPS] } }, orderBy: [{ checkedAt: 'desc' }, { id: 'desc' }], select: { step: true } }))?.step
-  if (!step) return null
-  const last = await newestCheck(db, { step: step as CreditStep, recordType: 'SalesOrder', recordId: orderId })
-  return last?.held ? { checkId: last.id, pendingTaskId: last.pendingTaskId } : null
-}
-
 const lockRow = (tx: CommandTx, orderId: string) => tx.$queryRaw`SELECT 1 FROM "SalesOrder" WHERE id = ${orderId}::uuid FOR UPDATE`
 
 /** SALES_ORDER's yes (platform/approvals/kinds/sales-order.ts onApproved), in the approver's command. */
@@ -121,8 +115,7 @@ export async function rejectedInCommand(tools: CommandTools, task: TaskRef): Pro
   const order = await readOrder(tools.tx, task.recordId)
   if (!order || order.status !== 'PENDING_APPROVAL') return
   const reason = `Turned down (sales order request): ${row?.rejectReason?.trim() || 'no reason given'}`.slice(0, 500)
-  const hold = await creditHoldOf(tools.tx, order.id)
-  if (hold?.pendingTaskId) await withdrawPending(tools, { kind: 'CREDIT_OVERRIDE', recordId: hold.checkId, byId: officeActor(tools), words: 'The order was turned down.' })
+  // B-OO-003: the cancel of a waiting order withdraws the credit override asked on it (first, before the order's locks, as here).
   await cancelOrderInCommand(tools, tenantOf(tools), order, { reason })
 }
 

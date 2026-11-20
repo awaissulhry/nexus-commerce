@@ -7,6 +7,7 @@ import { BLOCKER_KINDS, BLOCKER_SUBS, WAITING_ON } from '@nexus/factory-domain/p
 import { SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { GATE_KINDS, GATE_STATES, LEATHER_STATES, MILESTONE_KINDS, MILESTONE_STATES, PASS_VIAS } from '@nexus/factory-domain/planning/milestones/rules'
 import { FINISH_SOURCES } from '@nexus/factory-domain/planning/promise-keep/risk' // F-SA-234b
+import { gateView as planningGateView } from '../../planning/milestones/contract' // B-OO-010: a gate's version and actions, Planning's own shape
 // B-SA-050: Still to do (its kinds; who it waits on: the apply plan's teams).
 import { APPLY_TEAMS, STILL_KINDS } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 
@@ -64,7 +65,11 @@ export const headlineView = output({
     bundles: z.number().int(),
     pieces: output({ cutting: z.number().int(), sewing: z.number().int().nullable(), checking: z.number().int().nullable(), packing: z.number().int().nullable() }),
   }),
-  /** The order's health as the keeper keeps it (null: no state kept yet: the order read's daysLate says "Late" then). */
+  /**
+   * The order's health as the keeper keeps it (null: no state kept yet: the order read's daysLate says "Late" then).
+   * B-OO-007 (F11): null too once production is over (shipped, delivered, closed, cancelled: the domain's officeStripStateOf is
+   * ALL_DONE or STOPPED) — nothing is "now" then.
+   */
   health: output({
     code: z.enum(BRAND_HEALTHS),
     words,
@@ -84,7 +89,11 @@ export const headlineView = output({
     on: z.enum(WAITING_ON),
     words,
     since: instant().nullable(),
-    /** Each thing it waits for, in words (whose move it is: `on`). */
+    /**
+     * Each thing it waits for, in words (whose move it is: `on`). B-OO-007 (F11): once production is over only the requests stay (the
+     * domain's placeOf REQUEST: a customer's open request or problem, a yes asked of it, a portal task); a hold or a date is moot, and
+     * `on` / `since` are then the same rule (waitingOn) over what still waits.
+     */
     blockers: z.array(
       output({
         kind: z.enum(BLOCKER_KINDS),
@@ -115,7 +124,7 @@ export const headlineView = output({
     date: businessDate().nullable(),
     first: businessDate().nullable(),
     moved: z.boolean(),
-    /** How many times it was changed (its audit rows). */
+    /** How many times it moved (its audit rows; B-OO-007 N10b: less the one that set a first promise — that is not a move). */
     moves: z.number().int(),
     /** Days the promise moved since the first one (later: positive). */
     slipDays: z.number().int().nullable(),
@@ -226,10 +235,19 @@ const gateRow = output({
   via: z.enum(PASS_VIAS).nullable(),
   startedBefore: output({ at: instant(), by: output({ id: id(), name: z.string() }).nullable(), reason: z.string() }).nullable(),
   leather: z.enum(LEATHER_STATES).nullable(),
+  // ── B-OO-010 (order overview N9; 13-backend §8) ──
+  /** Its version: Planning's writes send it (POST /planning/milestones/gates/pass, PATCH …/gates/:gateId, POST …/gates/:gateId/remove, POST …/gates/:gateId/start-before). */
+  version: planningGateView.shape.version,
+  /**
+   * What THIS reader may do to it, as Planning's own read says (readWorld: its rights over the order's company and customer, and the
+   * gate's own refusals): pass, start before, edit, remove — each allowed, or refused in words with its code, or the permission it needs.
+   */
+  actions: planningGateView.shape.actions,
+  // ── end B-OO-010 ──
 })
 
 export const datesView = output({
-  /** Its gates, read only (keeping them stays Planning's: no action here). */
+  /** Its gates (B-OO-010: each with its version and what this reader may do; the writes stay Planning's routes). */
   gates: z.array(gateRow),
   milestones: z.array(
     output({

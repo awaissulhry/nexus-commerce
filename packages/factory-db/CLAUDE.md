@@ -642,7 +642,11 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    `…_order_page_paper_ddt_guards` (order page B-OP-033, end-check fix op-fx2; no schema folder of its own, a policy folder
    after it: it redefines …_tax_currency_w2b_guards' `factory_invoice_check_issue` so a TD24's GOODS line without a Nexus DDT
    passes only when a shipment of the invoice's company and customer recorded ELSEWHERE, not cancelled, carries its order line
-   and the invoice cites that shipment's paper DDT, number and date as recorded, in documentRefs):
+   and the invoice cites that shipment's paper DDT, number and date as recorded, in documentRefs),
+   `…_order_overview_guards` (order overview plan schema wave 1/1, B-OO-015, N12 + D7; no schema folder of its own, a policy
+   folder after it: it redefines …_order_apply_guards' `factory_work_order_cell_floor` so the garments on cut orders count
+   per material — the cut order's kind, item and colour — and the floor takes the largest material, not the sum of every
+   material: a garment takes its lining AND its leather; two cut orders or lines of ONE material still add up):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

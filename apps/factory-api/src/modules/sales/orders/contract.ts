@@ -26,6 +26,7 @@ import { APPROVAL_TASK_KINDS } from '@nexus/factory-domain/approvals/rules' // B
 import { OWN_TRANSPORT_REFUSALS } from '@nexus/factory-domain/shipping/own-transport/rules'
 import { TRANSPORT_BY } from '@nexus/factory-domain/shipping/shipments'
 import { PRICE_MATCHES } from '@nexus/factory-domain/sales/brand-prices/match' // B-CP-018
+import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise' // B-OO-009
 
 /**
  * The sales orders' contracts (B-W1-25; A2 SCR-038 "Orders", SCR-039 "Order record"). Money is marked: prices and totals
@@ -553,7 +554,12 @@ export const promiseContract = defineContract({
   body: input({
     version,
     promiseDate: businessDate(),
-    reason,
+    // ── B-OO-009 (order overview N10): why, as one of the curated reasons the customer reads, and/or the office's own note ──
+    /** The curated reason (its words are what the customer reads); an unknown code is a 400. */
+    reasonCode: z.enum(PROMISE_REASON_CODES).optional(),
+    /** The office's note (never shown to the customer); may be left out or empty when a code is sent; neither is a 400. */
+    reason: z.string().trim().max(MAX_REASON).optional(),
+    // ── end B-OO-009 ──
     /** Only these lines get the new promise; none: the whole order. */
     lineIds: z.array(id()).max(200).optional(),
   }),

@@ -4,7 +4,7 @@ import { partnerTemplateOf, ROLE_TEMPLATES } from '../../auth/roles/templates'
 import { orderProgress } from '../orders/orders'
 import { PORTAL_SALES_ORDERS_VIEW } from './permissions'
 import { progressOf, percentOf } from './progress'
-import { customerPromiseHistory, promiseReasonOf } from './promise'
+import { customerPromiseHistory, PROMISE_REASON_CODES, promiseReasonOf, promiseReasonText } from './promise'
 import { customerShipmentStatusOf, shipmentMilestonesOf, stillToShipOf } from './shipments'
 import { chipCounts, customerStatusOf, inChip, isStillToShip, milestonesOf, weekOf, type MilestoneFacts } from './status'
 
@@ -107,6 +107,25 @@ describe('the promise in customer words (PLN-178)', () => {
     expect(promiseReasonOf('LATE: whatever')).toBe('PLANNING')
     expect(promiseReasonOf(null)).toBe('PLANNING')
   })
+
+  // ── B-OO-009 (order overview N10): the promise reason as a field ──
+  it('B-OO-009: the stored reason is the code, then the office note; it reads back as the code, the note never in the customer words', () => {
+    expect(promiseReasonText('CAPACITY', '  line 2 down for a week ')).toBe('CAPACITY: line 2 down for a week')
+    expect(promiseReasonText('CAPACITY', '')).toBe('CAPACITY')
+    expect(promiseReasonText('CAPACITY', undefined)).toBe('CAPACITY')
+    expect(promiseReasonText(undefined, ' Leather late. ')).toBe('Leather late.')
+    expect(promiseReasonText(null, '   ')).toBe('')
+    for (const code of PROMISE_REASON_CODES) {
+      expect(promiseReasonOf(promiseReasonText(code, 'call Marco: the buyer is slow'))).toBe(code)
+      expect(promiseReasonOf(promiseReasonText(code, null))).toBe(code)
+    }
+    // A note whose own words name another code never wins over the code picked.
+    expect(promiseReasonOf(promiseReasonText('TRANSPORT', 'QUALITY: not really'))).toBe('TRANSPORT')
+    const [move] = customerPromiseHistory([{ at: new Date('2026-11-03T09:00:00.000Z'), from: '2026-12-01', to: '2026-12-08', lineIds: [], reason: promiseReasonText('CAPACITY', 'line 2 down') }], () => undefined)
+    expect(move!.reason).toEqual({ code: 'CAPACITY', words: { it: 'Capacità produttiva', en: 'Production capacity' } })
+    expect(JSON.stringify(move)).not.toMatch(/line 2 down/)
+  })
+  // ── end B-OO-009 ──
 
   it('lists the moves newest first with the lines by number and the day in Rome', () => {
     const history = customerPromiseHistory(

@@ -82,3 +82,8 @@
   max-height: 240px;
   overflow-y: auto;
 }
+
+/* F-OO-212: the empty fields folded into one quiet line ("Not filled: Fair date (required), …"): long labels wrap at 375 px. */
+.fw-cf-folded {
+  overflow-wrap: anywhere;
+}

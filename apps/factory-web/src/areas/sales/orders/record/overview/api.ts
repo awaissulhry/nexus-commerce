@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { ApiClient } from '../../../../../lib/api/client'
 import { FINISH_SOURCES } from '../../depth/api' // F-SA-234b
+import { GATE_REFUSALS } from '@nexus/factory-domain/planning/milestones/rules' // F-OO-208: a gate's refusal codes, as Planning reads them
 
 /**
  * F-SA-232 (sales page plan N2; 10-order-page §3 OR1, OR2) — the order page's reads of production, the office twin of the portal's
@@ -32,6 +33,13 @@ export type WaitingOn = (typeof WAITING_ON)[number]
 /** F-OP-103 (B-OP-021): what a customer request waiting on us is (the domain's BLOCKER_SUBS). */
 export const BLOCKER_SUBS = ['REQUEST', 'COUNTER', 'PROBLEM', 'REPROMISE'] as const
 export type BlockerSub = (typeof BLOCKER_SUBS)[number]
+// ---- F-OO-208 (B-OO-008): where "Answers the customer" comes from (the thread owner's chain, the API's platform/threads/owner.ts
+// OWNER_SOURCES: set on the thread, the record's assignee, the order's supervisor, its maker), and what a place is ----
+export const OWNER_SOURCES = ['SET', 'ASSIGNEE', 'SUPERVISOR', 'MAKER'] as const
+export type OwnerSource = (typeof OWNER_SOURCES)[number]
+export const PLACE_KINDS = ['PLANT', 'WORKSHOP'] as const
+export type PlaceKind = (typeof PLACE_KINDS)[number]
+// ---- end F-OO-208
 
 const pieces = {
   ordered: z.number(),
@@ -158,6 +166,12 @@ export type Work = z.infer<typeof workSchema>
 export type WorkOrderOwn = Work['workOrders'][number]
 export type MtmGroupRead = Work['mtm'][number]
 
+// ---- F-OO-208 (B-OO-010): what THIS reader may do with a gate — each move allowed or refused in words with its code and the right it
+// needs — exactly as Planning's own read builds it (api/planning/milestones/world.ts); the writes stay Planning's routes ----
+const gateRefusal = z.object({ code: z.enum(GATE_REFUSALS), message: z.string() })
+const gateAction = z.object({ allowed: z.boolean(), refusal: gateRefusal.nullable(), needs: z.string().nullable() })
+export type GateAction = z.infer<typeof gateAction>
+// ---- end F-OO-208
 const gateRow = z.object({
   id: z.string(),
   kind: z.string(),
@@ -170,6 +184,9 @@ const gateRow = z.object({
   via: z.string().nullable(),
   startedBefore: z.object({ at: instant, by: z.object({ id: z.string(), name: z.string() }).nullable(), reason: z.string() }).nullable(),
   leather: z.string().nullable(),
+  // F-OO-208 (B-OO-010): + the gate's version (every write sends it) and this reader's moves; absent in an older answer.
+  version: z.number().optional(),
+  actions: z.object({ pass: gateAction, startBefore: gateAction, edit: gateAction, remove: gateAction }).optional(),
 })
 export const datesSchema = z.object({
   gates: z.array(gateRow),
@@ -209,8 +226,10 @@ export type Quality = z.infer<typeof qualitySchema>
 export const peopleSchema = z.object({
   supervisor: z.object({ id: z.string(), name: z.string(), active: z.boolean(), from: z.enum(['ORDER', 'BRAND']), me: z.boolean() }).nullable(),
   backup: person.nullable(),
-  answersCustomer: person.nullable(),
-  places: z.array(z.object({ site: named.nullable(), line: named.nullable(), team: named.nullable(), workshop: z.object({ name: z.string() }).nullable() })),
+  // F-OO-208 (B-OO-008): + where the answerer comes from (the owner chain's step); absent in an older answer.
+  answersCustomer: person.extend({ source: z.enum(OWNER_SOURCES).optional() }).nullable(),
+  // F-OO-208 (B-OO-008): + a plant or an outside workshop, and a workshop's issued day (`since`); absent in an older answer.
+  places: z.array(z.object({ site: named.nullable(), line: named.nullable(), team: named.nullable(), workshop: z.object({ name: z.string() }).nullable(), kind: z.enum(PLACE_KINDS).optional(), since: day.nullable().optional() })),
 })
 export type People = z.infer<typeof peopleSchema>
 

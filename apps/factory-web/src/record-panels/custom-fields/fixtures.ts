@@ -46,6 +46,7 @@ const people = [
 function model(overrides: Partial<CustomFieldsModel> = {}): CustomFieldsModel {
   return {
     recordLabel: 'SO-DEMO-0042',
+    portalTag: 'cf.portal.customer', // F-OO-212: an order — the customer reads the fields shown in the portal
     state: 'ready',
     fault: null,
     fields: ACTIVE,
@@ -63,6 +64,9 @@ function model(overrides: Partial<CustomFieldsModel> = {}): CustomFieldsModel {
     ...overrides,
   }
 }
+
+/** F-OO-212: an order with its box type and fair date not filled yet (the box type is required). */
+const FOLDED_VALUES = VALUES.filter((value) => value.code !== 'box_type' && value.code !== 'fair_date')
 
 const READER_FIELDS = ACTIVE.filter((field) => field.audience === 'INTERNAL')
 const READER_VALUES = VALUES.filter((value) => READER_FIELDS.some((field) => field.code === value.code)).map((value) => (value.code === 'reference_style' ? { ...value, wordsIt: null, wordsEn: null } : value))
@@ -95,7 +99,19 @@ export const designScreen = defineDesignScreen<CustomFieldsModel>({
     },
     { id: 'changed', label: 'Someone saved first', model: model({ editing: true, changedElsewhere: true }), note: 'The draft stays until Read again.' },
     { id: 'saving', label: 'Saving', model: model({ editing: true, saving: true, draft: { ...draftOf(ACTIVE, VALUES), gift_note: 'Thanks!' } }) },
-    { id: 'empty-values', label: 'No value filled yet', model: model({ values: [], draft: draftOf(ACTIVE, []) }) },
+    { id: 'empty-values', label: 'No value filled yet', model: model({ values: [], draft: draftOf(ACTIVE, []) }), note: 'F-OO-212: one folded line, "None filled yet: Box type (required), …".' },
+    // ---- F-OO-212 (order overview 11-design §8.2): only the filled rows; the empty ones folded; who sees a field shown in the portal ----
+    {
+      id: 'f-oo-212-folded',
+      label: 'Two fields empty: folded into one line, the required one says so; "Customer sees it" on the fields the customer reads',
+      model: model({ values: FOLDED_VALUES, draft: draftOf(ACTIVE, FOLDED_VALUES) }),
+      note: 'Read: only the filled rows. The empty ones fold into "Not filled: Box type (required), Fair date". Edit still lists every field.',
+    },
+    {
+      id: 'f-oo-212-no-portal',
+      label: 'A record type the portal does not read (a style): no "Customer sees it" tag, whatever the field says',
+      model: model({ recordLabel: 'STY-DEMO-0108', portalTag: null }),
+    },
     { id: 'loading', label: 'Loading', model: model({ state: 'loading', fields: [], values: [], draft: {} }) },
     { id: 'error', label: 'The custom fields could not be read', model: model({ state: 'error', fault: 'cf.fault.offline', fields: [], values: [], draft: {} }) },
   ],

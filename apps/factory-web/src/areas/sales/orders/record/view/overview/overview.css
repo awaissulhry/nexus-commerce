@@ -1,0 +1,75 @@
+/* ── F-OO-201 (order overview lane; review F4: the pairs) — the Overview's grid and its shared card row ──────────────────────────
+   "Where it is now" and "Progress by line" take the full width. Then the cards in pairs, each pair its own row: [People, Next dates],
+   [Requests & changes, Linked records], [Order facts, Custom fields]. A pair is 2 equal columns while the Overview is at least
+   720 px wide, 1 column below; a pair with one card gives it the whole row (never an empty cell); the two cards of a pair stretch
+   to one height, so their bottoms line up. Each card's own CSS is its own file beside it (one file per card). */
+
+/* The Overview is the container the pairs read (its width, not the page's: the dock open or closed). */
+.fw-so-overview {
+  container: fw-so-ov / inline-size;
+}
+
+.fw-so-ov-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+@container fw-so-ov (min-width: 720px) {
+  .fw-so-ov-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fw-so-ov-pair > :only-child {
+  grid-column: 1 / -1;
+}
+
+/* Every card of the Overview is a container: a row inside reads the card's own width. */
+.fw-so-overview > :not(.fw-so-ov-pair),
+.fw-so-ov-pair > * {
+  container: fw-so-ov-card / inline-size;
+}
+
+/* The shared card row: label | value | doors. Below a 480 px card the doors wrap under the words, kept to the right. */
+.fw-so-ov-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-so-ov-doors {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+
+@container fw-so-ov-card (max-width: 479px) {
+  .fw-so-ov-row {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .fw-so-ov-row > .fw-so-ov-doors {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}
+
+/* Order facts and Custom fields: their rows in two columns inside a card of 800 px or more. */
+.fw-so-ov-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-8) var(--nds-space-24);
+  min-width: 0;
+}
+
+@container fw-so-ov-card (min-width: 800px) {
+  .fw-so-ov-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
