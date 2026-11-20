@@ -4,6 +4,8 @@ import { followOrder } from './moves'
 import { followDepositInCommand } from './schedule'
 // B-OP-043 (order page N6, lines-derived): the orders a shipment carries.
 import { ordersOfShipment } from '../../shipping/shipments/orders-of'
+// B-OO-001 (order overview N4): the one order a released (or taken-back) cell makes.
+import { orderOfCell } from '../../production/brand/facts'
 
 /**
  * The worker's handlers that keep a sales order's state with its facts (B-W1-25; SAL-204: the system is the one writer of
@@ -14,6 +16,13 @@ import { ordersOfShipment } from '../../shipping/shipments/orders-of'
  *                                  never moves an order: B-W1-38 leaves it to sales)
  *   sales.ordersFollowShipments    shipment.status_changed to SHIPPED, DELIVERED or RETURNED: the shipped quantities
  *                                  (PARTLY_SHIPPED, SHIPPED; back to PARTLY_SHIPPED when a shipment came back)
+ *   sales.ordersFollowQuality      B-OO-001 (order overview N4, Owner D2): quality.garments_released — the order of the
+ *                                  cell's line goes READY once quality released every piece and nothing shipped (READY
+ *                                  is skipped once anything shipped); quality.release_reversed — the ONE cause that moves
+ *                                  a READY order back to IN_PRODUCTION (not every piece released any more, nothing
+ *                                  shipped). A REPAIR cell is not the order's production and a SAMPLE cell names no line:
+ *                                  neither moves anything (store `readOrderFacts`, `orderOfCell`). The keeper derives the
+ *                                  stage apart; this moves the order's status only
  *   sales.ordersFollowSettlement   order.fully_settled (B-W1-51, the money module): a SHIPPED order closes when the
  *                                  settlement port (the money module's computation, read again under the order's lock)
  *                                  says it is settled; the event is only the trigger. order.unsettled needs nothing
@@ -53,6 +62,24 @@ export function orderHandlers(): EventHandler[] {
         for (const orderId of orderIds) await followOrder(caller, orderId, { what: `shipment ${payload.number ?? payload.shipmentId} ${payload.to.toLowerCase()}`, causationId: event.eventId })
       },
     }),
+    // ── B-OO-001 (order overview N4, Owner D2): the order follows quality ──────────────────────────────────────────────
+    defineHandler({
+      name: 'sales.ordersFollowQuality',
+      events: ['quality.garments_released', 'quality.release_reversed'],
+      attempts: 10,
+      async handle(event, { caller }) {
+        const payload = event.payload as { workOrderSizeId?: string; number?: string; quantity?: number }
+        if (!payload.workOrderSizeId) return
+        const cellId = payload.workOrderSizeId
+        // The cell's own line names ONE order of one customer (the line FK carries the party).
+        const orderIds = await caller.withClient((client) => orderOfCell(client, cellId))
+        const reversal = event.type === 'quality.release_reversed'
+        const of = payload.number ?? 'a work order'
+        const what = reversal ? `a quality release of ${of} was taken back` : `quality released ${payload.quantity ?? 'some'} garment(s) of ${of}`
+        for (const orderId of orderIds) await followOrder(caller, orderId, { what, causationId: event.eventId, reversal })
+      },
+    }),
+    // ── end B-OO-001 ──
     defineHandler({
       name: 'sales.ordersFollowSettlement',
       // Declared and emitted by the money module (B-W1-51 settleOrders); the trigger only: followOrder asks the port.

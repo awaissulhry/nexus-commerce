@@ -444,6 +444,21 @@ describe('B-TH-223 — Orders & requests read by Brand Beta', () => {
     expect(BETA_ROWS.some((row) => ROWS.some((alpha) => alpha.id === row.id || (alpha.number !== null && alpha.number === row.number)))).toBe(false)
   })
 
+  // cp-walk (customer page review walk, brand wall): the print case named Brand Alpha S.r.l. over Brand Beta's own request and PO
+  // (REQUESTS are Brand Beta's). A print is ONE customer's: Brand Beta's shell, rows, name — nothing of the Alpha world.
+  it('the print of Orders & requests is one customer\'s own: Brand Beta\'s rows and name, nothing of Brand Alpha', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const html = render(locale, 'print')
+      expect(scanText(html, BRAND_ALPHA), locale).toEqual([])
+      expect(html.match(/\bBA-PO-\d+/)?.[0] ?? null, locale).toBeNull()
+      expect(html, locale).toContain('Brand Beta GmbH')
+      const body = (screen.cases.find((item) => item.id === 'print')!.model as CustomerCaseBuilder)(locale).body as unknown as { model: { rows: unknown; partyName: string } }
+      const data = JSON.stringify(body.model)
+      expect(scanText(data, BRAND_ALPHA), locale).toEqual([])
+      expect(data).toContain('BETA-PO-')
+    }
+  })
+
   it('every case of the list draws its own numbers, never the office’s order numbers', () => {
     for (const entry of screen.cases.filter((item) => item.id !== 'no-access')) {
       const html = render('en', entry.id)

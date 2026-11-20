@@ -122,7 +122,8 @@ describe('F-CP-108 — the PARITY test: A14\'s map on a full order of each statu
       expect(door?.kind, name).toBe(name)
       expect(step.kind === 'confirmYes', name).toBe(door?.kind === 'decide')
       if (step.kind === 'confirmYes') expect(step.taskId).toBe(door?.task.taskId)
-      expect(rowStepsOf(rowOf(value), can).map((entry) => entry.command), name).toEqual(['confirm'])
+      // B-OO-003 (order overview N3): a waiting order is cancelled too (CANCEL_STATUSES): Cancel order… follows Confirm or refuse….
+      expect(rowStepsOf(rowOf(value), can).map((entry) => entry.command), name).toEqual(['confirm', 'cancel'])
     }
     expect(confirmHeldOf(full('PENDING_APPROVAL', { openApprovals: [YES.decide] }))).toBeNull()
     expect(confirmHeldOf(full('PENDING_APPROVAL', { openApprovals: [YES.selfAsked] }))).toEqual({ key: 'approval.selfAsked' })

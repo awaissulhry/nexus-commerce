@@ -217,6 +217,21 @@ describe('the order: status, promise, lines (SAL-075, SAL-081)', { timeout: SLOW
     expect((await browsers.other.get(`/portal/sales-orders/${so2}`)).status).toBe(404)
     expect((await browsers.designer.get(`/portal/sales-orders/${so2}`)).status).toBe(403)
   })
+
+  // ── B-OO-009 (order overview N10): the office picks a curated reason; the customer reads its words, never the office's note ──
+  it('B-OO-009: a promise moved with CAPACITY and a note shows CAPACITY in the customer words, and never the note', async () => {
+    const so3 = await orderId('SEED-SO-0003')
+    const current = await one<{ version: number; promise: string | null }>('SELECT version, "promiseDate"::text AS promise FROM "SalesOrder" WHERE id = $1', [so3])
+    const moved = addDays(current.promise !== null && current.promise > TODAY ? current.promise : TODAY, 9)
+    await changePromise(office(), so3, { version: current.version, promiseDate: moved, reasonCode: 'CAPACITY', reason: 'line 2 down, call Marco' })
+    const record = await ok(browsers.buyer, `/portal/sales-orders/${so3}`)
+    expect(record.promiseHistory[0]).toMatchObject({ to: moved, lines: [], reason: { code: 'CAPACITY', words: { it: 'Capacità produttiva', en: 'Production capacity' } } })
+    expect(JSON.stringify(record)).not.toMatch(/line 2 down|Marco/)
+    const viewer = await ok(browsers.viewer, `/portal/sales-orders/${so3}`)
+    expect(viewer.promiseHistory[0].reason.code).toBe('CAPACITY')
+    expect(JSON.stringify(viewer)).not.toMatch(/line 2 down|Marco/)
+  })
+  // ── end B-OO-009 ──
 })
 
 describe('production progress per customer switch (SAL-076, C1)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {

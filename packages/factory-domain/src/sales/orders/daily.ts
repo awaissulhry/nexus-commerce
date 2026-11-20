@@ -215,6 +215,8 @@ export function cancelImpact(facts: CancelFacts): CancelImpact {
   const leavesBehind: ImpactItem[] = []
   const item = (code: ImpactCode, message: string, refs: ImpactRef[], amount: MinorUnits | null = null): ImpactItem => ({ code, message, refs, amount })
 
+  // B-OO-003 (order overview N3): a waiting order (PENDING_APPROVAL) is one of CANCEL_STATUSES, so it gets no STATE block; the
+  // only open states left out of them shipped something (the words below).
   if (!CANCEL_STATUSES.includes(facts.status)) {
     const why = FINAL_STATUSES.includes(facts.status) ? `The order is ${facts.status}: it never changes.` : `The order is ${facts.status}: goods left, so it is no longer cancelled (a return or a credit note is the way back).`
     blocks.push(item('STATE', why, []))

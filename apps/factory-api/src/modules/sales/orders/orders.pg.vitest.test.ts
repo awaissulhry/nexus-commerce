@@ -33,6 +33,8 @@ import { seed as seedAccounting } from '../../../../../../packages/factory-db/se
 import { seed as seedSalesOrdersDepth, type SalesOrdersDepthSeed } from '../../../../../../packages/factory-db/seed/sales-orders-depth'
 import { command } from '../../../core/command'
 import { askApproval } from '../../../platform/approvals/engine'
+// B-OO-013: the portal's own order contracts (what a customer's answer may carry: zod drops every other key).
+import { listContract as portalListContract, recordContract as portalRecordContract } from '../portal-orders/contract'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A1 §2.5 "Sales order"; PLAN
@@ -54,7 +56,8 @@ let sales: Browser
 let owner: Browser
 
 // F-SA-201: tenant e's SEED-SO-0002 ships in full and is delivered, then closed.
-const NS = { a: 'orders-a', b: 'orders-b', c: 'orders-c', d: 'orders-d', e: 'orders-e' } as const
+// B-OO-001: tenant g's SEED-SO-0003 and SEED-SO-0002 follow quality's releases and reversals ('orders-f' is B-OP-020's own).
+const NS = { a: 'orders-a', b: 'orders-b', c: 'orders-c', d: 'orders-d', e: 'orders-e', g: 'orders-g' } as const
 type TenantKey = keyof typeof NS
 const idIn = (tenant: TenantKey, key: string) => seedUuid(NS[tenant], key)
 const T = Object.fromEntries((Object.keys(NS) as TenantKey[]).map((key) => [key, idIn(key, 'tenant')])) as Record<TenantKey, string>
@@ -138,12 +141,19 @@ const PROMISE = addDays(TODAY, 60)
 
 /** A quote for P1 (8 × 450 + 6 × 440 = 6240.00 net, 7612.80 gross, deposit 30 % = 2283.84), sent and accepted by link. */
 // B-CP-011: made, priced and sent by the Owner (a Sales worker may not send unitPrice any more).
-async function acceptedQuote(): Promise<{ quoteId: string; versionId: string; number: string }> {
+// B-OO-013: `terms` (the quote's delivery terms, PUT …/terms on the draft) go with the quote before it is sent.
+async function acceptedQuote(terms?: Json): Promise<{ quoteId: string; versionId: string; number: string }> {
   let quote = (await as(owner, 'POST', '/sales/quotes', { companyId: companyA, partyId: P1, customerRef: 'RFQ-0077', promiseDate: PROMISE }, 201)).quote
   quote = (await as(owner, 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jacket, colourwayId: BLK, sizes: BLK_GRID, unitPrice: '450' }, 201)).quote
   quote = (await as(owner, 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jacket, colourwayId: RED, sizes: RED_GRID, unitPrice: '440' }, 201)).quote
+  let sendVersion: number = quote.version
+  if (terms) {
+    const answer = await owner.send('PUT', `/sales/quotes/${quote.id}/terms`, { version: quote.version, ...terms }, { headers: { 'idempotency-key': key('terms') } })
+    expect(answer.status, JSON.stringify(answer.body)).toBe(200)
+    sendVersion = (answer.body as Json).quoteVersion
+  }
   const before = h.ses.mails.length
-  const sent = await as(owner, 'POST', `/sales/quotes/${quote.id}/send`, { version: quote.version }, 200, { 'idempotency-key': key('send') })
+  const sent = await as(owner, 'POST', `/sales/quotes/${quote.id}/send`, { version: sendVersion }, 200, { 'idempotency-key': key('send') })
   const mail = h.ses.mails.slice(before).find((entry) => entry.outboundId === sent.sent?.emailId)!
   const token = decodeURIComponent(/#token=(\S+)/.exec(textOf(mail.raw))?.[1] ?? '')
   const accepted = await h.app.inject({
@@ -396,6 +406,26 @@ describe('dates (SAL-206): a new promise needs a reason; the first promise never
     await expect(admin(`UPDATE "SalesOrder" SET "originalPromiseDate" = '2027-01-01' WHERE id = $1`, [order.id])).rejects.toThrow(/first promised date .* is set once/)
     order = { ...order, version: lineChanged.version }
   })
+
+  // ── B-OO-009 (order overview N10): the promise reason as a field — a curated code the customer reads, and/or the office's note ──
+  it('B-OO-009: a reason code with or without a note is stored as CODE: note; neither, or an unknown code, is a 400', async () => {
+    const url = `${orderUrl(order.id)}/promise`
+    const later = addDays(TODAY, 100)
+    const neither = await refused('a.sales', 'PUT', url, { version: order.version, promiseDate: later }, 400)
+    expect(neither.issues.map((issue: Json) => issue.path)).toContain('body/reason')
+    expect((await refused('a.sales', 'PUT', url, { version: order.version, promiseDate: later, reason: '   ' }, 400)).issues.map((issue: Json) => issue.path)).toContain('body/reason')
+    const unknown = await refused('a.sales', 'PUT', url, { version: order.version, promiseDate: later, reasonCode: 'WEATHER', reason: 'Snow on the pass.' }, 400)
+    expect(unknown.issues.map((issue: Json) => issue.path)).toContain('body/reasonCode')
+    const coded = (await ok('a.sales', 'PUT', url, { version: order.version, promiseDate: later, reasonCode: 'CAPACITY', reason: '  Line 2 is down for a week.  ' })).order
+    expect(coded.promiseHistory[0]).toMatchObject({ to: later, lineIds: [], reason: 'CAPACITY: Line 2 is down for a week.' })
+    // A code alone (the note left empty): the code is the reason.
+    const alone = (await ok('a.sales', 'PUT', url, { version: coded.version, promiseDate: addDays(TODAY, 101), reasonCode: 'TRANSPORT', reason: '' })).order
+    expect(alone.promiseHistory[0]).toMatchObject({ to: addDays(TODAY, 101), reason: 'TRANSPORT' })
+    const stored = await admin<{ reason: string }>(`SELECT reason FROM "AuditLog" WHERE action = 'orders.changePromise' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 2`, [order.id])
+    expect(stored.map((row) => row.reason)).toEqual(['TRANSPORT', 'CAPACITY: Line 2 is down for a week.'])
+    order = { ...order, version: alone.version }
+  })
+  // ── end B-OO-009 ──
 })
 
 describe('production and shipping move the order (SAL-204: the system is their one writer)', () => {
@@ -501,6 +531,92 @@ describe('production and shipping move the order (SAL-204: the system is their o
     expect(record).toMatchObject({ status: 'SHIPPED', daysLate: null, progress: { ordered: 2, shipped: 2, toShip: 0 }, actions: [{ action: 'changePromise' }, { action: 'close', allowed: true, needsReason: true }] })
   })
 })
+
+// ── B-OO-001 (order overview N4, Owner D2): the order follows quality; back to IN_PRODUCTION only on a reversal ──────────────
+describe('the order follows quality (B-OO-001): READY after the last release, back only on a reversal, skipped once anything shipped', () => {
+  const so3 = () => seeded.g.quality.serialSalesOrderId
+  const followQuality = (type: 'quality.garments_released' | 'quality.release_reversed', cellId: string, number: string, attempts = 1) =>
+    (async () => {
+      const event = envelope('g', type, { workOrderSizeId: cellId, number, quantity: 1 })
+      for (let attempt = 1; attempt <= attempts; attempt++) await handler('sales.ordersFollowQuality').handle(event, { caller: systemCaller('g'), attempt })
+    })()
+  const workOrderReleased = () =>
+    handler('sales.ordersFollowWorkOrders').handle(envelope('g', 'workorder.released', { workOrderId: seeded.g.quality.serialWorkOrderId, number: 'SEED-WO-0003', salesOrderIds: [so3()] }), { caller: systemCaller('g'), attempt: 1 })
+  const follows = async (orderId: string) => (await auditsOf(orderId)).filter((row) => row.action === 'orders.follow').map((row) => [row.before.status, row.after.status, row.reason])
+  /** Tenant g's SEED-SO-0003 asks `pieces` × BLK 52 (WO-0003 makes 4; quality released 2 of them, the quality seed). */
+  const orderPieces = async (pieces: number) => {
+    await admin('UPDATE "SalesOrderLineSize" s SET quantity = $2 FROM "SalesOrderLine" l WHERE s."lineId" = l.id AND l."orderId" = $1', [so3(), pieces])
+    await admin('UPDATE "SalesOrderLine" SET quantity = $2 WHERE "orderId" = $1', [so3(), pieces])
+  }
+
+  it('a release while pieces are still to release moves nothing; the last one makes it READY once (a replay: no second command or audit row)', async () => {
+    await workOrderReleased()
+    expect(await statusOf(so3())).toBe('IN_PRODUCTION')
+    const before = (await auditsOf(so3())).length
+    // 2 of the 4 released: nothing to follow, no command.
+    await followQuality('quality.garments_released', seeded.g.quality.serialCellId, 'SEED-WO-0003')
+    expect([await statusOf(so3()), (await auditsOf(so3())).length]).toEqual(['IN_PRODUCTION', before])
+    // The order now asks the 2 quality released: the release's handler moves it, once.
+    await orderPieces(2)
+    await followQuality('quality.garments_released', seeded.g.quality.serialCellId, 'SEED-WO-0003', 2)
+    expect(await statusOf(so3())).toBe('READY')
+    expect(await follows(so3())).toEqual([
+      ['CONFIRMED', 'IN_PRODUCTION', 'Followed: work order SEED-WO-0003 released.'],
+      ['IN_PRODUCTION', 'READY', 'Followed: quality released 1 garment(s) of SEED-WO-0003.'],
+    ])
+    expect((await statusEvents(so3())).map((row) => [row.payload.from, row.payload.to, row.payload.by])).toEqual([
+      ['CONFIRMED', 'IN_PRODUCTION', 'system'],
+      ['IN_PRODUCTION', 'READY', 'system'],
+    ])
+    expect((await auditsOf(so3())).filter((row) => row.action === 'orders.follow').map((row) => row.audience)).toEqual(['SYSTEM', 'SYSTEM'])
+  })
+
+  it('a later release or a work order released never moves a READY order back, even with a piece left to release', async () => {
+    // One more piece asked than quality released (the facts a taken-back release leaves; the reversal row is quality's own).
+    await orderPieces(3)
+    const before = (await auditsOf(so3())).length
+    await followQuality('quality.garments_released', seeded.g.quality.serialCellId, 'SEED-WO-0003')
+    await workOrderReleased()
+    expect([await statusOf(so3()), (await auditsOf(so3())).length]).toEqual(['READY', before])
+  })
+
+  it('a release taken back moves it back to IN_PRODUCTION (the system, once); with every piece still released it stays READY', async () => {
+    await followQuality('quality.release_reversed', seeded.g.quality.serialCellId, 'SEED-WO-0003', 2)
+    expect(await statusOf(so3())).toBe('IN_PRODUCTION')
+    expect((await follows(so3())).at(-1)).toEqual(['READY', 'IN_PRODUCTION', 'Followed: a quality release of SEED-WO-0003 was taken back.'])
+    expect((await statusEvents(so3())).at(-1)!.payload).toMatchObject({ from: 'READY', to: 'IN_PRODUCTION', by: 'system', partyId: idIn('g', 'party:P1') })
+    expect((await follows(so3())).filter(([from, to]) => from === 'READY' && to === 'IN_PRODUCTION')).toHaveLength(1)
+    // Back to 2: READY again; a reversal event while every piece is still released moves nothing.
+    await orderPieces(2)
+    await followQuality('quality.garments_released', seeded.g.quality.serialCellId, 'SEED-WO-0003')
+    expect(await statusOf(so3())).toBe('READY')
+    const before = (await auditsOf(so3())).length
+    await followQuality('quality.release_reversed', seeded.g.quality.serialCellId, 'SEED-WO-0003')
+    expect([await statusOf(so3()), (await auditsOf(so3())).length]).toEqual(['READY', before])
+  })
+
+  it('a piece shipped before the last release: never READY (part shipped instead), and a reversal never moves it back', async () => {
+    // Tenant g's SEED-SO-0002 cut down to what quality released (BLK 50, one BLK 52, RED 52); SH-0001 already left with 2 of them.
+    const so2 = seeded.g.quality.production.salesOrderId
+    await admin(
+      `DELETE FROM "SalesOrderLineSize" s USING "SalesOrderLine" l, "Colourway" c
+        WHERE s."lineId" = l.id AND c.id = l."colourwayId" AND l."orderId" = $1 AND NOT ((c.code = 'BLK' AND s.size IN ('50', '52')) OR (c.code = 'RED' AND s.size = '52'))`,
+      [so2],
+    )
+    await admin(`UPDATE "SalesOrderLineSize" s SET quantity = 1 FROM "SalesOrderLine" l WHERE s."lineId" = l.id AND l."orderId" = $1`, [so2])
+    await admin(`UPDATE "SalesOrderLine" l SET quantity = (SELECT sum(s.quantity) FROM "SalesOrderLineSize" s WHERE s."lineId" = l.id) WHERE l."orderId" = $1`, [so2])
+    const blk52 = seeded.g.quality.production.cellIds['BLK-52']
+    await followQuality('quality.garments_released', blk52, 'SEED-WO-0001')
+    expect(await follows(so2)).toEqual([
+      ['CONFIRMED', 'IN_PRODUCTION', 'Followed: quality released 1 garment(s) of SEED-WO-0001.'],
+      ['IN_PRODUCTION', 'PARTLY_SHIPPED', 'Followed: quality released 1 garment(s) of SEED-WO-0001.'],
+    ])
+    const before = (await auditsOf(so2)).length
+    await followQuality('quality.release_reversed', blk52, 'SEED-WO-0001')
+    expect([await statusOf(so2), (await auditsOf(so2)).length]).toEqual(['PARTLY_SHIPPED', before])
+  })
+})
+// ── end B-OO-001 ──
 
 describe('closing (PLAN §4.7: the close command asks whether every line is shipped, invoiced and paid)', () => {
   it('not settled: refused without a reason, forbidden with one for a person without orders.close, closed by one with it', async () => {
@@ -1102,6 +1218,41 @@ describe('the order read carries its open requests for a yes, decided in place (
     for (const type of ['approval.requested', 'approval.decided', 'approval.withdrawn', 'approval.stale']) expect(partsOf(type)).toEqual(['order', 'changes'])
     expect(partsOf('approval.rule_changed')).toBeUndefined()
   })
+
+  // ── B-OO-003 (order overview N3): a waiting order is cancelled; its requests for a yes are withdrawn with it ──────────────────
+  it('B-OO-003: a person with orders.manage cancels the waiting order; its SALES_ORDER and CREDIT_OVERRIDE requests are withdrawn', async () => {
+    SESSIONS['f.sales'] = person(newId, ['orders.view', 'orders.manage'])
+    SESSIONS['f.otherSales'] = person(newId, ['orders.view', 'orders.manage'], [seedUuid(NS_F, 'party:P3')])
+    const orderId = depth.waitingOrderId
+    const taskStatus = async (taskId: string) => (await one<{ status: string }>('SELECT status::text AS status FROM "ApprovalTask" WHERE id = $1', [taskId])).status
+    // W39-01 still waits for its credit hold (its yes was said above): the member asks the order's yes once more, as before.
+    const ownerRole = await one<{ id: string }>(`SELECT id FROM "Role" WHERE "tenantId" = $1 AND key = 'owner'`, [TF])
+    const caller = callerFor(h.database, { audience: 'office', tenantId: TF, actorId: depth.memberId, requestId: newId(), grants: [grant(['orders.view', 'orders.manage', 'approvals.request'])] })
+    const { result } = await command(caller, { name: 'approvals.request', input: { kind: 'SALES_ORDER', recordId: orderId } }, (tools) =>
+      askApproval(tools, { kind: 'SALES_ORDER', recordId: orderId, requester: { userId: depth.memberId }, whenNoRule: { approverRoleId: ownerRole.id, requireStepUp: false } }),
+    )
+    if (!result.asked) throw new Error('the second SALES_ORDER request was not asked')
+    expect([await taskStatus(result.taskId), await taskStatus(depth.taskIds.override1)]).toEqual(['PENDING', 'PENDING'])
+
+    const order = await read('f.sales', orderId)
+    expect(order.status).toBe('PENDING_APPROVAL')
+    expect(order.actions.find((action: Json) => action.action === 'cancel')).toMatchObject({ allowed: true, needsReason: true, held: null })
+    // The impact check of a waiting order: no "goods left" STATE block.
+    const check = await ok('f.sales', 'GET', `${orderUrl(orderId)}/cancel-check`)
+    expect(check.impact.blocks.map((item: Json) => item.code)).not.toContain('STATE')
+    // Read-only: 403; a person limited to another customer: the words of an unknown order (404); nothing withdrawn.
+    const body = { version: order.version, reason: 'Made-up: the customer withdrew while it waited.' }
+    await refused('f.reader', 'POST', `${orderUrl(orderId)}/cancel`, body, 403)
+    await refused('f.otherSales', 'POST', `${orderUrl(orderId)}/cancel`, body, 404)
+    expect([await taskStatus(result.taskId), await taskStatus(depth.taskIds.override1)]).toEqual(['PENDING', 'PENDING'])
+
+    const cancelled = (await ok('f.sales', 'POST', `${orderUrl(orderId)}/cancel`, body)).order
+    expect(cancelled).toMatchObject({ status: 'CANCELLED', version: order.version + 1 })
+    expect([await taskStatus(result.taskId), await taskStatus(depth.taskIds.override1)]).toEqual(['WITHDRAWN', 'WITHDRAWN'])
+    expect((await auditsOf(orderId)).find((row) => row.after?.status === 'CANCELLED')).toMatchObject({ before: { status: 'PENDING_APPROVAL' }, reason: body.reason, audience: 'OFFICE' })
+    expect((await statusEvents(orderId)).at(-1)!.payload).toMatchObject({ from: 'PENDING_APPROVAL', to: 'CANCELLED', by: 'person' })
+  })
+  // ── end B-OO-003 ──
 })
 // ---- end B-OP-020
 
@@ -1169,3 +1320,34 @@ describe('the order read’s shipments: carrier, tracking, DDT and whether the n
   })
 })
 // ---- end B-OP-023
+
+// ── B-OO-013 (order overview §7): the office order read says the delivery terms; the portal's order read never does ──────────
+describe('the office order read carries the Incoterm, its place and ship complete (B-OO-013; read only, office only)', () => {
+  const TERMS_KEYS = ['incoterm', 'incotermPlace', 'shipComplete'] as const
+
+  it('an order made from a quote with EXW + a place reads them back as accepted; an order with none reads null / false', async () => {
+    const sold = await acceptedQuote({ incoterm: 'EXW', incotermPlace: 'Seedville', shipComplete: true })
+    const made = await one<{ id: string }>('SELECT id FROM "SalesOrder" WHERE "quoteVersionId" = $1', [sold.versionId])
+    const read = (await ok('a.sales', 'GET', orderUrl(made.id))).order
+    expect({ incoterm: read.incoterm, incotermPlace: read.incotermPlace, shipComplete: read.shipComplete }).toEqual({ incoterm: 'EXW', incotermPlace: 'Seedville', shipComplete: true })
+    // The same as the row the carry wrote (quote-terms/carry.ts): the read adds nothing of its own.
+    expect(await one('SELECT incoterm, "incotermPlace", "shipComplete" FROM "SalesOrder" WHERE id = $1', [made.id])).toEqual({ incoterm: 'EXW', incotermPlace: 'Seedville', shipComplete: true })
+    // A reader of orders alone (no money grain) reads them too: they are no money.
+    expect((await ok('a.viewer', 'GET', orderUrl(made.id))).order).toMatchObject({ incoterm: 'EXW', incotermPlace: 'Seedville', shipComplete: true })
+    // The seeded SEED-SO-0002 was typed with none: null, null, ship as ready.
+    const seededOrder = (await ok('a.sales', 'GET', orderUrl(seeded.a.quality.production.salesOrderId))).order
+    expect({ incoterm: seededOrder.incoterm, incotermPlace: seededOrder.incotermPlace, shipComplete: seededOrder.shipComplete }).toEqual({ incoterm: null, incotermPlace: null, shipComplete: false })
+    // Another customer's person: the order is not found, as an unknown id.
+    expect((await call('a.otherParty', 'GET', orderUrl(made.id))).status).toBe(404)
+  })
+
+  it("the portal's order reads (the record and the list) carry no such key: the customer's answer drops what its contract does not name", () => {
+    const record = Object.keys(portalRecordContract.response[200].shape.order.shape)
+    const row = Object.keys(portalListContract.response[200].shape.items.element.shape)
+    for (const name of TERMS_KEYS) {
+      expect(record).not.toContain(name)
+      expect(row).not.toContain(name)
+    }
+  })
+})
+// ── end B-OO-013 ──
