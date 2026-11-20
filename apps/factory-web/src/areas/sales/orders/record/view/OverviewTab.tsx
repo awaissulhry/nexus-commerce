@@ -27,10 +27,13 @@ import './overview/overview.css' // F-OO-201: the pairs and the shared card row
  * centred window (‹ › walk the lines). The production lane's parts in place (StageStrip, HealthPill, WaitingOnPill, PiecesGrid,
  * FreshnessLine) and the one picture part. Office face only: no operator, no station, no other customer.
  * F-OO-100: each card is its own file in view/overview/ (its rules in overview/<section>.ts); this file draws them in order.
+ * F-OO-103: "Where it is now" is now the headline (status · stage), its strips, the stages and the order's moves — what it showed
+ * before (who acts next, the ex-factory date, the health, Urgent, the bundles) lives in one other place each (WhereCard.tsx says where).
  */
 export function OverviewTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const locale = useLocale()
-  // F-OP-103: the ONE waiting list — Who acts next is its first row, the Requests & changes card its rows (the Changes badge, R-22).
+  // F-OP-103: the ONE waiting list — the Requests & changes card its rows (the Changes badge, R-22). F-OO-202: each row has its place:
+  // Where it is now reads `waiting.holds`, Next dates `waiting.dates`, Requests & changes `waiting.card` (no "who acts next", F14).
   // F-OP-301 (walk #1–#3): through the ONE call the badge and the Changes tab make too; nothing claimed before the production read.
   const waiting = orderWaitingOf(order, model, locale)
   return (

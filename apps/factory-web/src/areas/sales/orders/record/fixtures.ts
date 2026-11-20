@@ -501,7 +501,8 @@ const F_SA_243: DesignCase<RecordCase>[] = [
 
 // ---- F-OP-301 (walk #1, #2): the walk's two orders in made-up words — "SO-0002": two gates not passed and a change request wait on
 // us, a yes we asked waits on the customer (header, card, badge and the Changes tab all say 3 + 1); "SO-0003": nothing waits, while
-// the kept state still says "Waiting on us" since 5 days (the header must not say it beside a card that says nothing waits). ----
+// the kept state still says "Waiting on us" since 5 days (the header must not say it beside a card that says nothing waits).
+// F-OO-202: the gates are dates now (Next dates), so the card, the badge and the Changes tab say 1 + 1. ----
 const SO2_REQUEST = brandRequest(21, { ...ASK, id: '0190f0e2-3080-7000-8000-000000000821', askedAt: '2026-11-04T09:00:00Z', note: 'One more black 52 instead of the 54.' })
 const blockerOf = (kind: string, on: 'US' | 'BRAND', en: string, since: string, ref: { type: string; id: string } | null, sub: 'REQUEST' | null = null) => ({ kind, on, words: { en, it: `${en} (it)` }, since, ref, sub })
 export const SO2_BLOCKERS = [
@@ -518,9 +519,9 @@ const EXTRA_READ = {
   lines: PRODUCTION_READ.lines!.map((line, index) => (index === 0 ? { ...line, madeExtra: 1, sizes: line.sizes.map((size, at) => (at === 0 ? { ...size, madeExtra: 1, madeExtraWords: { en: `1 ${size.size ?? ''} more than ordered: cut or planned to cut`, it: `1 ${size.size ?? ''} in più dell'ordine: tagliati o da tagliare` } } : size)) } : line)),
 }
 const F_OP_301: DesignCase<RecordCase>[] = [
-  { id: 'f-op-301-so2-overview', label: 'F-OP-301 · Production manager · Overview: Waiting on us 3 (two gates, a change request) and on the customer 1 — the Changes badge says 4', model: base('manager', production, { tab: 'overview', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
-  { id: 'f-op-301-so2-changes', label: 'F-OP-301 · Production manager · Changes: the same 3 waiting on us and the yes we asked of the customer (never "Nothing waits on the customer")', model: base('manager', production, { tab: 'changes', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
-  { id: 'f-op-301-so3-overview', label: 'F-OP-301 · Production manager · Overview: nothing waits — Who acts next says so too (not the kept "Waiting on us · 5 d")', model: base('manager', production, { tab: 'overview', production: ready(SO3_READ), requests: null, liveState: 'live' }) },
+  { id: 'f-op-301-so2-overview', label: 'F-OP-301 · Production manager · Overview: Waiting on us 1 (a change request) and on the customer 1 — the Changes badge says 2; the two gates are dates (F-OO-202)', model: base('manager', production, { tab: 'overview', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
+  { id: 'f-op-301-so2-changes', label: 'F-OP-301 · Production manager · Changes: the same request waiting on us and the yes we asked of the customer (never "Nothing waits on the customer"); the gates are not requests (F-OO-202)', model: base('manager', production, { tab: 'changes', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
+  { id: 'f-op-301-so3-overview', label: 'F-OP-301 · Production manager · Overview: nothing waits — Requests & changes says so once, and nothing says the kept "Waiting on us · 5 d" (F-OO-103)', model: base('manager', production, { tab: 'overview', production: ready(SO3_READ), requests: null, liveState: 'live' }) },
   { id: 'f-op-301-reading-changes', label: 'F-OP-301 · Changes while the production read is out: both cards read (never "Nothing waits" before it)', model: base('sales', production, { tab: 'changes', production: LOADING_STATE, liveState: 'connecting' }) },
   // F-OP-304 (walk #7): no step left, but pieces of line 10 were made extra — their own list, never rows under "Nothing left to do".
   { id: 'f-op-304-still-extra', label: 'F-OP-304 · Production manager · Changes › Still to do: no step left; "Made extra" lists line 10\'s pieces under its own heading', model: base('manager', production, { tab: 'changes', production: ready(EXTRA_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
@@ -657,6 +658,16 @@ const CANCEL_CUT = {
   atWorkshop: [],
 }
 // ---- end F-OP-114 / F-OP-115
+// ---- F-OO-102 (order overview §1.2; review F11): "Where it is now" before, after and without production — the headline and the dots
+// read ONE state (the domain's officeStripStateOf): waiting for a yes (no dots: none is now; the quiet line says when production
+// starts), shipped (every stage done), cancelled at Cutting (no dots; where the work had reached). Light and dark, 375 / 1440 / 1920. ----
+const CUT_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, stage: { ...PRODUCTION_READ.headline!.stage!, code: 'CUTTING' as const, words: { en: 'Cutting', it: 'Taglio' } } } }
+const F_OO_102: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-102-waiting', label: 'F-OO-102 · Sales · Overview of an order waiting for a yes: "Waiting for a yes" and when production starts — no dots (no stage is now)', model: base('sales', waitingOrder, { tab: 'overview', production: ready(CONFIRMED_READ), liveState: 'live' }) },
+  { id: 'f-oo-102-shipped', label: 'F-OO-102 · Sales · Overview of a shipped order: "Shipped 20/11/2026", every stage done, "set by the floor and quality"', model: base('sales', shipped, { tab: 'overview', production: ready(), liveState: 'live' }) },
+  { id: 'f-oo-102-cancelled', label: 'F-OO-102 · Sales · Overview of a cancelled order: "Cancelled", the work had reached Cutting — no dots', model: base('sales', order('CANCELLED'), { tab: 'overview', production: ready(CUT_READ), liveState: 'live' }) },
+]
+// ---- end F-OO-102
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-039',
@@ -847,11 +858,12 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'cp-148-files-manager', label: 'F-CP-148 · Seen as Production manager · Files: the same counted lock line; the artwork and the photos open', model: base('manager', production, { tab: 'files', files: { read: PRICED_LOCKED, problem: null, selected: [], canShare: false } }) },
     // ---- end F-CP-148
     // ---- F-SA-232: Overview, the first tab ("where is it now", progress by line — the order's own pieces) ----
-    { id: 'overview', label: 'F-SA-232 · Sales · Overview: Sewing · 1 line ahead, at risk, waiting on us, Urgent (customer), 3 bundles in work; the lines’ own pieces (Rosso: sewing not counted here)', model: base('sales', production, { tab: 'overview', production: ready(), liveState: 'live' }) },
-    { id: 'overview-confirmed', label: 'F-SA-232 · Sales · Overview before any work order: Confirmed · waiting for the deposit; Preparing — work orders are made after the deposit', model: base('sales', confirmed, { tab: 'overview', production: ready(CONFIRMED_READ), liveState: 'live' }) },
+    { id: 'overview', label: 'F-SA-232 · Sales · Overview: In production · Sewing (F-OO-101: status · stage); at risk and Urgent (customer) in the band, waiting on us in Requests & changes (F-OO-103); the lines’ own pieces (Rosso: sewing not counted here)', model: base('sales', production, { tab: 'overview', production: ready(), liveState: 'live' }) },
+    { id: 'overview-confirmed', label: 'F-SA-232 · Sales · Overview before any work order: Confirmed · Preparing (F-OO-101); the deposit it waits for is the deposit strip’s (F-OO-105)', model: base('sales', confirmed, { tab: 'overview', production: ready(CONFIRMED_READ), liveState: 'live' }) },
     { id: 'overview-sizes', label: 'F-SA-232 · Sales · Overview: line 10’s sizes in the centred window (PiecesGrid, shipped, the finish forecast)', model: base('sales', production, { tab: 'overview', production: ready(), overviewLine: LINE_BLK, liveState: 'live' }) },
     { id: 'overview-loading', label: 'F-SA-232 · Overview reading (skeletons, never a 0)', model: base('sales', production, { tab: 'overview', production: LOADING_STATE, liveState: 'connecting' }) },
     { id: 'overview-failed', label: "F-SA-232 · Overview: the production couldn't be read (this part only, Try again)", model: base('sales', production, { tab: 'overview', production: FAILED_STATE, liveState: 'offline' }) },
+    ...F_OO_102, // F-OO-102: the headline and the dots before, after and without production
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
     ...F_OP_301, // F-OP-301 (walk #1, #2, #3)

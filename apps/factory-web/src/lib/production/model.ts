@@ -2,6 +2,7 @@ import type { Tone } from '@nexus/ui/primitives'
 import { eachDay, isoWeekday } from '@nexus/factory-domain/calendars/dates'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import type { PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise'
+import type { OfficeStripState } from '@nexus/factory-domain/production-brand/stages' // F-OO-102
 
 /**
  * F-PR-01 — the shared production parts' rules, without a screen (production plan §4, `09-design.md` §1, readability
@@ -88,6 +89,12 @@ export interface StageStripInput {
   readonly sewingCounted?: boolean
   /** The work cannot go on: the current stage is blocked, and why (written by the caller). */
   readonly blocked?: { readonly why?: string | null } | null
+  /**
+   * F-OO-102 (order overview §1.2; review F11): the office's strip state, the domain's `officeStripStateOf` — OFFICE ONLY (the
+   * customer's portal never passes it, so its strip does not change). WAITING: every stage to come; ALL_DONE: every stage done;
+   * STOPPED: no strip; CURRENT or absent: the stage now, as before.
+   */
+  readonly state?: OfficeStripState
 }
 
 /** A plain step for the DS MilestoneTracker; dates still as calendar days (the part writes them). */
@@ -106,6 +113,19 @@ export interface StageStep {
  * tracker has no blocked state; the part adds the blocked mark beside it). Sewing not scanned: its step says so.
  */
 export function stageSteps(input: StageStripInput): StageStep[] {
+  // F-OO-102: the office's state first — stopped (cancelled): no steps; waiting for a yes: all to come; production over: all done.
+  if (input.state === 'STOPPED') return []
+  if (input.state === 'WAITING' || input.state === 'ALL_DONE') {
+    const state = input.state === 'WAITING' ? 'todo' : 'done'
+    return PLAIN_STAGES.map((stage) => ({
+      id: stage,
+      label: phrase(`parts.stage.${stage}`),
+      state,
+      date: state === 'done' ? (input.reached?.[stage] ?? null) : null,
+      expected: state === 'done' ? null : (input.expected?.[stage] ?? null),
+      note: null,
+    }))
+  }
   if (input.stage === null) return []
   const at = PLAIN_STAGES.indexOf(input.stage)
   return PLAIN_STAGES.map((stage, index) => {
