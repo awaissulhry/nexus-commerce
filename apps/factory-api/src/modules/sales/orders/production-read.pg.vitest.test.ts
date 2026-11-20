@@ -21,6 +21,10 @@ import { findMarkers, markersOf, productionTwoBrands, twoBrandIds, twoBrandSessi
 import { forgetProgress } from '../portal-orders/progress'
 import { FINISH_SOURCES } from '@nexus/factory-domain/planning/promise-keep/risk' // F-SA-234b
 import { SHARED_WORK_ORDER_WORDS } from './production-read' // B-OP-021
+// B-OO-007: after production; the portal stays out of the office read.
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { placeOf, waitingOn, type BlockerKind, type BlockerSub } from '@nexus/factory-domain/production-brand/waiting'
 
 /**
  * B-SA-031 / B-SA-032 — the office's read of one sales order's production (`GET /sales/orders/:orderId/production`) and its
@@ -305,11 +309,17 @@ describe('B-SA-032 work, dates and quality: what is made together with other wor
     expect(findMarkers(limited, bMarkers)).toEqual([])
   })
 
-  it('dates: the Sales template (no planning.view) reads its order’s gates and milestones, read only — no action; the forecast only with planning.promise.view', async () => {
+  // B-OO-010: the gates now carry what this reader may do (Planning's own rule): the Sales template reads each held, by the right it lacks.
+  it('dates: the Sales template (no planning.view) reads its order’s gates and milestones, each move held by the right it lacks; the forecast only with planning.promise.view', async () => {
     const answer = await ok('sales.p1', production(w.a.salesOrderId, 'dates'))
     const gate = (answer.dates.gates as Json[]).find((row) => row.id === alpha.gate)
-    expect(gate).toMatchObject({ kind: 'PP_SAMPLE', state: 'WAITING' })
-    expect(gate).not.toHaveProperty('actions')
+    expect(gate).toMatchObject({ kind: 'PP_SAMPLE', state: 'WAITING', version: expect.any(Number) })
+    expect(gate!.actions).toMatchObject({
+      pass: { allowed: false, needs: 'planning.milestones.manage' },
+      startBefore: { allowed: false, needs: 'planning.milestones.override' },
+      edit: { allowed: false, needs: 'planning.milestones.manage' },
+      remove: { allowed: false, needs: 'planning.milestones.manage' },
+    })
     expect(answer.dates).not.toHaveProperty('mayAddGate')
     expect((answer.dates.milestones as Json[]).map((row) => row.kind)).toEqual(expect.arrayContaining(['GATE', 'SHIP']))
     expect(answer.dates.planned).toEqual({ cutStart: null, sewStart: null, finish: null })
@@ -364,7 +374,7 @@ describe('B-SA-043: the order’s lines name the pieces made extra per size (off
     const answer = await ok('office.all', production(alpha.so1, 'lines'))
     const line = (answer.lines as Json[])[0]!
     expect(line).toMatchObject({ lineId: alpha.line1, madeExtra: 5 })
-    expect((line.sizes as Json[]).find((size) => size.size === '50')).toMatchObject({ madeExtra: 5, madeExtraWords: { en: 'Made extra: 5 50', it: 'Fatti in più: 5 50' } })
+    expect((line.sizes as Json[]).find((size) => size.size === '50')).toMatchObject({ madeExtra: 5, madeExtraWords: { en: '5 50 more than ordered: cut or planned to cut', it: "5 50 in più dell'ordine: tagliati o da tagliare" } }) // B-OO-015: the words say what they count
     expect((line.sizes as Json[]).find((size) => size.size === '52')).toMatchObject({ madeExtra: 0, madeExtraWords: null })
   })
 })
@@ -486,3 +496,198 @@ describe('B-OP-021: work orders with version, own cells and rights; the ONE wait
   })
 })
 // ── end B-OP-021 ──
+
+// ── B-OO-007 (order overview plan §6, §5; review F11; N10b) ──
+/**
+ * Nothing is "now" once production is over: a shipped (ALL_DONE) or cancelled (STOPPED) order reads no health and no hold or date
+ * wait — a customer's open problem still waits on us. The test gives Beta's order a health, a gate (a date) and a production hold on
+ * its own work order (a hold), then sets its status to SHIPPED and to CANCELLED by hand (the guards off: only the read is under test)
+ * and puts it back. The customer's portal reads the keeper's row and its own reader: the office read changes neither (the row is the
+ * same before and after; no portal module imports the office read). "Moved N×": an order with no promise gets its first one through
+ * the real route (0 moves), then a second (1 move).
+ */
+describe('B-OO-007: after production no health and no hold or date wait (requests stay); a first promise is not a move', { timeout: 60_000 }, () => {
+  const beta = { gate: newId(), hold: newId(), status: '', closedAt: null as Date | null, cancelReason: null as string | null }
+  const unpromised = { id: newId(), number: 'T-OO007-SO-P' }
+  const keeperRow = async () => (await admin(`SELECT stage::text AS stage, "stageAt", health::text AS health, "waitingOn"::text AS "waitingOn", "waitingSince", version FROM "BrandOrderProduction" WHERE "salesOrderId" = $1`, [w.b.salesOrderId]))[0]
+  const setBetaStatus = async (status: string, closedAt: Date | null, cancelReason: string | null) => {
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "SalesOrder" SET status = '${status}', "closedAt" = ${closedAt ? `'${closedAt.toISOString()}'` : 'NULL'}, "cancelReason" = ${cancelReason ? `'${cancelReason.replace(/'/g, "''")}'` : 'NULL'} WHERE id = ${lit(w.b.salesOrderId)}; COMMIT;`)
+    forgetProgress()
+  }
+  const isProblem = (blocker: Json) => blocker.kind === 'BRAND_REQUEST' && blocker.sub === 'PROBLEM' && blocker.ref?.id === w.production.issue.id
+  const placeOfRow = (blocker: Json) => placeOf({ kind: blocker.kind as BlockerKind, sub: (blocker.sub ?? null) as BlockerSub | null })
+
+  beforeAll(async () => {
+    SESSIONS['office.manage'] = session(grant(['orders.view', 'orders.manage', 'workorders.view'], 'all'))
+    const [order] = await admin<{ status: string; closedAt: Date | null; cancelReason: string | null }>(`SELECT status::text AS status, "closedAt", "cancelReason" FROM "SalesOrder" WHERE id = $1`, [w.b.salesOrderId])
+    Object.assign(beta, { status: order!.status, closedAt: order!.closedAt, cancelReason: order!.cancelReason })
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       UPDATE "BrandOrderProduction" SET health = 'ON_TRACK' WHERE "salesOrderId" = ${lit(w.b.salesOrderId)};
+       INSERT INTO "OrderGate" (id, "tenantId", "companyId", "partyId", "salesOrderId", kind, "targetDate")
+         SELECT ${lit(beta.gate)}, "tenantId", "companyId", "partyId", id, 'LAB_PASSED', (current_date + 10) FROM "SalesOrder" WHERE id = ${lit(w.b.salesOrderId)};
+       INSERT INTO "WorkOrderHold" (id, "tenantId", "companyId", "siteId", "workOrderId", kind, "reasonCode", status, "placedAt", "placedById")
+         SELECT ${lit(beta.hold)}, "tenantId", "companyId", "siteId", id, 'PRODUCTION', 'OTHER', 'ACTIVE', now() - interval '1 day', ${lit(seedUuid(ns, 'actor'))} FROM "WorkOrder" WHERE id = ${lit(w.b.workOrderId)};
+       COMMIT;`,
+    )
+    // An order of Alpha with no promise yet (its first one comes through the route below).
+    const [owner] = await admin<{ companyId: string }>(`SELECT "companyId" FROM "SalesOrder" WHERE id = $1`, [alpha.so1])
+    await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId: seedUuid(ns, 'actor') }, (client) =>
+      client.salesOrder.create({
+        data: { id: unpromised.id, companyId: owner!.companyId, partyId: ids.a, number: unpromised.number, customerRef: 'T-OO007-PO-P', status: 'CONFIRMED', orderDate: new Date('2026-11-03T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' } },
+        select: { id: true },
+      }),
+    )
+    forgetProgress()
+  })
+
+  afterAll(async () => {
+    if (beta.status) await setBetaStatus(beta.status, beta.closedAt, beta.cancelReason)
+  })
+
+  it('while in production Beta’s order reads its health, its hold, its date and the customer’s open problem', async () => {
+    const { headline } = await ok('office.all', production(w.b.salesOrderId, 'headline'))
+    expect(headline.health).toMatchObject({ code: 'ON_TRACK' })
+    const blockers = headline.waiting.blockers as Json[]
+    expect(blockers).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'GATE', ref: { type: 'OrderGate', id: beta.gate } }), expect.objectContaining({ kind: 'NO_MOVE', ref: { type: 'WorkOrder', id: w.b.workOrderId } })]))
+    expect(blockers.some(isProblem)).toBe(true)
+    expect(new Set(blockers.map(placeOfRow))).toEqual(new Set(['HOLD', 'DATE', 'REQUEST']))
+  })
+
+  for (const [status, closed] of [['SHIPPED', false], ['CANCELLED', true]] as const) {
+    it(`${status}: no health, no hold or date blocker; the customer’s open problem still waits on us; who acts next is the one rule over what still waits`, async () => {
+      const before = await keeperRow()
+      await setBetaStatus(status, closed ? new Date() : null, closed ? 'Made-up: the customer withdrew the order.' : null)
+      const answer = await ok('office.all', production(w.b.salesOrderId, 'headline'))
+      expect(answer.order.status).toBe(status)
+      const { headline } = answer
+      expect(headline.health).toBeNull()
+      const blockers = headline.waiting.blockers as Json[]
+      for (const blocker of blockers) expect(placeOfRow(blocker), JSON.stringify(blocker)).toBe('REQUEST')
+      expect(blockers.find((blocker) => blocker.ref?.id === beta.gate)).toBeUndefined()
+      expect(blockers.filter((blocker) => blocker.kind === 'NO_MOVE' || blocker.kind === 'BRAND_PAUSE' || blocker.kind === 'QUALITY_HOLD')).toEqual([])
+      expect(blockers.filter(isProblem)).toHaveLength(1)
+      const rule = waitingOn(blockers.map((blocker) => ({ kind: blocker.kind as BlockerKind, since: blocker.since ? new Date(blocker.since) : null })))
+      expect({ on: headline.waiting.on, since: headline.waiting.since }).toEqual({ on: rule.on, since: rule.since ? rule.since.toISOString() : null })
+      expect(headline.waiting.on).toBe(blockers.some((blocker) => blocker.on === 'BRAND') ? 'BRAND' : 'US')
+      // The stage the work had reached stays (the office says "work had reached …"); the customer's history row is untouched.
+      expect(await keeperRow()).toEqual(before)
+      await setBetaStatus(beta.status, beta.closedAt, beta.cancelReason)
+    })
+  }
+
+  it('the portal does not read the office read: no portal module imports it (production-contract is the office’s, routes.ts)', () => {
+    const root = fileURLToPath(new URL('../../..', import.meta.url))
+    const sources = (readdirSync(root, { recursive: true }) as string[]).filter((path) => path.endsWith('.ts') && !/\.(vitest\.)?test\.ts$/.test(path))
+    const importers = sources.filter((path) => /from\s+'(?:\.\/|[^']*\/orders\/)production-(?:contract|read)'/.test(readFileSync(join(root, path), 'utf8'))).map((path) => path.split('\\').join('/')).sort()
+    expect(importers).toContain('modules/sales/orders/routes.ts')
+    expect(importers.filter((path) => /portal/.test(path))).toEqual([])
+  })
+
+  it('a first promise is not a move: 0 after the first, 1 after the second (the audit keeps both)', async () => {
+    const later = (days: number) => businessDate(new Date(Date.now() + days * 86_400_000))
+    const [stored] = await admin<{ version: number }>(`SELECT version FROM "SalesOrder" WHERE id = $1`, [unpromised.id])
+    const promise = async (version: number, promiseDate: string, reason: string) => {
+      const answer = await app.inject({ method: 'PUT', url: `/sales/orders/${unpromised.id}/promise`, headers: { 'x-test-session': 'office.manage' }, payload: { version, promiseDate, reason } })
+      expect(answer.statusCode, answer.body).toBe(200)
+      return (answer.json() as { order: { version: number } }).order.version
+    }
+    const none = (await ok('office.all', production(unpromised.id, 'headline'))).headline.promise
+    expect(none).toMatchObject({ date: null, first: null, moved: false, moves: 0 })
+    const version = await promise(stored!.version, later(30), 'Made-up: the first promise.')
+    const firstRead = (await ok('office.all', production(unpromised.id, 'headline'))).headline.promise
+    expect(firstRead).toMatchObject({ date: later(30), first: later(30), moved: false, moves: 0, slipDays: 0 })
+    await promise(version, later(37), 'Made-up: the lining comes a week late.')
+    const secondRead = (await ok('office.all', production(unpromised.id, 'headline'))).headline.promise
+    expect(secondRead).toMatchObject({ date: later(37), first: later(30), moved: true, moves: 1, slipDays: 7 })
+    const audits = await admin<{ n: string }>(`SELECT count(*)::text AS n FROM "AuditLog" WHERE "recordType" = 'SalesOrder' AND "recordId" = $1 AND action = 'orders.changePromise'`, [unpromised.id])
+    expect(audits[0]!.n).toBe('2')
+  })
+})
+// ── end B-OO-007 ──
+
+// ── B-OO-010 (order overview N9; 13-backend §8) ──
+/**
+ * Each gate of the office read carries its version and what THIS reader may do, as Planning's own read (readWorld) builds them for
+ * the same person: a planner may pass a waiting gate and start before it — unless they plan that gate themselves (OWN_GATE); a
+ * passed gate is kept (edit PASSED, remove KEPT); the Sales template reads every move held by the permission it lacks. The writes
+ * stay Planning's routes. The test adds to SO-A1 a waiting gate of no planner, a waiting gate the planner plans and a passed gate.
+ */
+describe('B-OO-010: each gate carries its version and what this reader may do (Planning’s own rule)', { timeout: 60_000 }, () => {
+  const PLANNER = newId()
+  const gate = { plain: newId(), own: newId(), passed: newId() }
+  const gatesOf = async (sessionName: string, orderId: string): Promise<Map<string, Json>> => new Map(((await ok(sessionName, production(orderId, 'dates'))).dates.gates as Json[]).map((row) => [row.id as string, row]))
+  const allowed = { allowed: true, refusal: null, needs: null }
+
+  beforeAll(async () => {
+    SESSIONS.planner = { audience: 'office', tenantId: ids.tenantId, actorId: PLANNER, grants: [grant(['orders.view', 'planning.view', 'planning.milestones.manage', 'planning.milestones.override'], 'all')] }
+    const passer = lit(seedUuid(ns, 'actor'))
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "OrderGate" (id, "tenantId", "companyId", "partyId", "salesOrderId", kind, "targetDate", "ownerId", "passedAt", "passedById")
+         SELECT ${lit(gate.plain)}, "tenantId", "companyId", "partyId", id, 'PP_SAMPLE', (current_date + 4), NULL, NULL, NULL FROM "SalesOrder" WHERE id = ${lit(alpha.so1)};
+       INSERT INTO "OrderGate" (id, "tenantId", "companyId", "partyId", "salesOrderId", kind, "targetDate", "ownerId", "passedAt", "passedById")
+         SELECT ${lit(gate.own)}, "tenantId", "companyId", "partyId", id, 'SAMPLE_APPROVED', (current_date + 6), ${lit(PLANNER)}, NULL, NULL FROM "SalesOrder" WHERE id = ${lit(alpha.so1)};
+       INSERT INTO "OrderGate" (id, "tenantId", "companyId", "partyId", "salesOrderId", kind, "targetDate", "ownerId", "passedAt", "passedById")
+         SELECT ${lit(gate.passed)}, "tenantId", "companyId", "partyId", id, 'LAB_PASSED', (current_date - 2), NULL, now() - interval '1 day', ${passer} FROM "SalesOrder" WHERE id = ${lit(alpha.so1)};
+       UPDATE "OrderGate" SET version = 3 WHERE id = ${lit(gate.plain)};
+       COMMIT;`,
+    )
+  })
+
+  it('a planner may pass and start before a waiting gate of no planner', async () => {
+    const gates = await gatesOf('planner', alpha.so1)
+    expect(gates.get(gate.plain)).toMatchObject({ kind: 'PP_SAMPLE', state: 'WAITING', version: 3 })
+    expect(gates.get(gate.plain)!.actions).toEqual({ pass: allowed, startBefore: allowed, edit: allowed, remove: allowed })
+  })
+
+  it('the Sales template reads each move held: pass, edit and remove need planning.milestones.manage, start before planning.milestones.override', async () => {
+    const gates = await gatesOf('sales.all', alpha.so1)
+    expect(gates.get(gate.plain)!.actions).toEqual({
+      pass: { allowed: false, refusal: null, needs: 'planning.milestones.manage' },
+      startBefore: { allowed: false, refusal: null, needs: 'planning.milestones.override' },
+      edit: { allowed: false, refusal: null, needs: 'planning.milestones.manage' },
+      remove: { allowed: false, refusal: null, needs: 'planning.milestones.manage' },
+    })
+    // The office read's own rights (workorders.view, …) give no planning move either.
+    expect((await gatesOf('office.all', alpha.so1)).get(gate.plain)!.actions.pass).toEqual({ allowed: false, refusal: null, needs: 'planning.milestones.manage' })
+  })
+
+  it('the gate’s own planner may not start before it (OWN_GATE), in words; they may still pass it', async () => {
+    const own = (await gatesOf('planner', alpha.so1)).get(gate.own)!
+    expect(own.actions.startBefore).toMatchObject({ allowed: false, needs: null, refusal: { code: 'OWN_GATE', message: expect.stringContaining('ask a colleague') } })
+    expect(own.actions.pass).toEqual(allowed)
+  })
+
+  it('a passed gate is kept: edit refused (PASSED), remove refused (KEPT), pass refused (PASSED)', async () => {
+    const passed = (await gatesOf('planner', alpha.so1)).get(gate.passed)!
+    expect(passed).toMatchObject({ kind: 'LAB_PASSED', state: 'PASSED', via: 'OFFICE' })
+    expect(passed.actions.edit).toMatchObject({ allowed: false, needs: null, refusal: { code: 'PASSED' } })
+    expect(passed.actions.remove).toMatchObject({ allowed: false, needs: null, refusal: { code: 'KEPT' } })
+    expect(passed.actions.pass).toMatchObject({ allowed: false, refusal: { code: 'PASSED' } })
+    expect(passed.actions.startBefore).toMatchObject({ allowed: false, refusal: { code: 'PASSED' } })
+  })
+
+  it('versions and actions are Planning’s own read for the same person (GET /planning/milestones)', async () => {
+    const office = await gatesOf('planner', alpha.so1)
+    const planning = (await ok('planner', `/planning/milestones?orderId=${alpha.so1}`)).orders as Json[]
+    const order = planning.find((row) => row.id === alpha.so1)!
+    expect((order.gates as Json[]).map((row) => row.id).sort()).toEqual([...office.keys()].sort())
+    for (const row of order.gates as Json[]) {
+      expect({ id: row.id, version: office.get(row.id)!.version, actions: office.get(row.id)!.actions }).toEqual({ id: row.id, version: row.version, actions: row.actions })
+    }
+    // A write through Planning moves the version both reads show (here by hand: only the reads are under test).
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "OrderGate" SET version = version + 1 WHERE id = ${lit(gate.plain)}; COMMIT;`)
+    expect((await gatesOf('planner', alpha.so1)).get(gate.plain)!.version).toBe(4)
+  })
+
+  it('the brand wall: a Beta-limited person gets the answer of an unknown id, never Alpha’s gates', async () => {
+    const unknown = await call('office.p2', production(newId(), 'dates'))
+    const refused = await call('office.p2', production(alpha.so1, 'dates'))
+    expect([refused.status, refused.body.error?.message]).toEqual([404, unknown.body.error?.message])
+    expect(refused.raw).not.toContain(gate.plain)
+  })
+})
+// ── end B-OO-010 ──

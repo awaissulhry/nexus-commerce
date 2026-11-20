@@ -73,6 +73,11 @@ export function useProductionActs(input: {
     onOpen: () => {
       if (order && productionCan.manage) make.open({ order: orderOptionOf(order), styleId: next?.styleId ?? null })
     },
+    // F-OO-123: Overview › Progress by line ⋯ "Make work orders for this line…" — the same dialog, the line's style, only it ticked.
+    onOpenLine: (lineId: string) => {
+      const styleId = order?.lines.find((line) => line.id === lineId)?.styleId
+      if (order && styleId && productionCan.manage) make.open({ order: orderOptionOf(order), styleId, lineId })
+    },
     dialog: {
       onNew: (open: boolean) => {
         if (!open) make.close()

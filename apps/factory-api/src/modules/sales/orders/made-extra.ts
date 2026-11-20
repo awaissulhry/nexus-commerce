@@ -10,7 +10,9 @@ import type { Reader } from './store'
  * cancelled; the database's floor, as the cell guard reads it) beyond what the line now wants (a line closed short: what shipped).
  * Never in a portal answer: the customer reads at most its ordered figure (sales/portal-orders progress caps every stage at it).
  *
- *   madeExtraOf          per line and size: ordered (wanted now), cut, extra, "Made extra: 4 M" / "Fatti in più: 4 M"
+ *   madeExtraOf          per line and size: ordered (wanted now), cut, extra, "4 M more than ordered: cut or planned to cut" /
+ *                        "4 M in più dell'ordine: tagliati o da tagliare" (B-OO-015: the floor also holds what a cut order
+ *                        plans to cut, so the words say both; the largest material, never the sum of every material)
  *   materialUsedForExtra per customer-supplied material row: what of it the extra pieces took (the line's planned need per piece
  *                        on its work orders × the extra pieces), "Used for extra pieces" / "Usato per pezzi in più"
  */
@@ -25,7 +27,8 @@ export interface MadeExtra {
 }
 
 export const MADE_EXTRA_WORDS = {
-  madeExtra: (count: number, size: string): Words => ({ en: `Made extra: ${count} ${size}`, it: `Fatti in più: ${count} ${size}` }),
+  // B-OO-015 (order overview N12, Q9): the words say what they count — the floor holds a cut order's planned lines too.
+  madeExtra: (count: number, size: string): Words => ({ en: `${count} ${size} more than ordered: cut or planned to cut`, it: `${count} ${size} in più dell'ordine: tagliati o da tagliare` }),
   usedForExtra: (): Words => ({ en: 'Used for extra pieces', it: 'Usato per pezzi in più' }),
 } as const
 

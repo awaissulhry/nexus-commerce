@@ -862,7 +862,7 @@ describe('B-SA-089 golden flow sales page: one change of Alpha’s order told to
     // The customer's progress never counts above what it ordered.
     const progress = await ok(buyerA, 'GET', `/portal/sales-orders/${G.X.orderId}/progress`)
     for (const entry of progress.lines as Json[]) for (const size of entry.sizes as Json[]) expect(size.cut ?? 0, `size ${size.size}`).toBeLessThanOrEqual(size.ordered)
-    expect(JSON.stringify(progress)).not.toMatch(/madeExtra|Made extra|Pezzi in più/)
+    expect(JSON.stringify(progress)).not.toMatch(/madeExtra|Made extra|Pezzi in più|more than ordered|in più dell'ordine/) // B-OO-015: the office's words, never the portal's
 
     // A new size change of the cut line is refused in the cut's words (the portal's cut-off, unchanged); the design change still
     // waiting holds no size ask of the order.

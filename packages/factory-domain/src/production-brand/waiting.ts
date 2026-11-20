@@ -1,3 +1,5 @@
+import type { ApprovalTaskKind } from '../approvals/rules' // B-OO-011
+
 /**
  * B-PR-13 (production plan §4 "Waiting on"; 07-control §4.1): who an order in production waits on, pure. The API finds the
  * blockers of the customer's own order from real data; each has an owner and the time it started:
@@ -96,6 +98,68 @@ export function waitingOn(blockers: readonly Blocker[]): Waiting {
   }
   return { on: 'US', since: null }
 }
+
+// ── B-OO-011 (order overview plan §9; review F3, F15): ONE place per waiting row — the office only ──
+/**
+ * Where the order page shows each thing the order waits for, decided once here (the web stamps it, the office read uses it):
+ *
+ *   HOLD     something stops the work: the deposit, the customer's pause, our production hold, a quality hold, a nonconformance,
+ *            the release check — Where it is now
+ *   DATE     something has a day: a gate, a short material, work out at a workshop, the customer's own material, and a new date
+ *            the customer refused (BRAND_REQUEST · REPROMISE: answered with the promise, so it leaves the Changes badge) — Next dates
+ *   REQUEST  someone must answer: a customer request still open, a counter-offer agreed or lapsed, a problem it reported, a yes
+ *            asked of the customer, an open task on its portal — Requests & changes
+ *
+ * Who acts next stays `waitingOn` (the keeper's one rule, read by the orders list and the portal): a place never changes it.
+ */
+export const BLOCKER_PLACES = ['HOLD', 'DATE', 'REQUEST'] as const
+export type BlockerPlace = (typeof BLOCKER_PLACES)[number]
+
+/** Each blocker kind's place (a BRAND_REQUEST's own place follows its sub: BRAND_REQUEST_PLACE). */
+export const BLOCKER_PLACE: Readonly<Record<BlockerKind, BlockerPlace>> = Object.freeze({
+  APPROVAL: 'REQUEST',
+  PARTNER_TASK: 'REQUEST',
+  DEPOSIT: 'HOLD',
+  CUSTOMER_MATERIAL: 'DATE',
+  BRAND_PAUSE: 'HOLD',
+  MATERIAL_SHORT: 'DATE',
+  SUBCONTRACT: 'DATE',
+  BRAND_REQUEST: 'REQUEST',
+  GATE: 'DATE',
+  RELEASE_CHECK: 'HOLD',
+  QUALITY_HOLD: 'HOLD',
+  NONCONFORMANCE: 'HOLD',
+  NO_MOVE: 'HOLD',
+})
+
+/** A customer request waiting on us, by what it is: a refused new date is a date (F3); the others are requests. */
+export const BRAND_REQUEST_PLACE: Readonly<Record<BlockerSub, BlockerPlace>> = Object.freeze({
+  REQUEST: 'REQUEST',
+  COUNTER: 'REQUEST',
+  PROBLEM: 'REQUEST',
+  REPROMISE: 'DATE',
+})
+
+/** The place of one blocker, keyed on its kind and, for a BRAND_REQUEST, its sub (none: a request). */
+export function placeOf(blocker: { readonly kind: BlockerKind; readonly sub?: BlockerSub | null }): BlockerPlace {
+  if (blocker.kind === 'BRAND_REQUEST' && blocker.sub) return BRAND_REQUEST_PLACE[blocker.sub]
+  return BLOCKER_PLACE[blocker.kind]
+}
+
+/**
+ * The yes the order read lists (`openApprovals`: the approval engine's kinds of one order — its own SALES_ORDER, an old
+ * SALES_ORDER_CHANGE, a CREDIT_OVERRIDE of its credit hold) and each one's place: the order's yes and the credit hold stop the
+ * order (HOLD); a yes for a change of a confirmed order is a request (REQUEST).
+ */
+export const ORDER_YES_KINDS = ['SALES_ORDER', 'SALES_ORDER_CHANGE', 'CREDIT_OVERRIDE'] as const satisfies readonly ApprovalTaskKind[]
+export type OrderYesKind = (typeof ORDER_YES_KINDS)[number]
+
+export const YES_PLACE: Readonly<Record<OrderYesKind, BlockerPlace>> = Object.freeze({
+  SALES_ORDER: 'HOLD',
+  CREDIT_OVERRIDE: 'HOLD',
+  SALES_ORDER_CHANGE: 'REQUEST',
+})
+// ── end B-OO-011 ──
 
 /** What the customer reads: only You or Us. */
 export const BRAND_SIDES = ['YOU', 'US'] as const

@@ -10,12 +10,16 @@ import type { Field } from '../../../areas/admin/fields/api'
 import { FIELDS_NS, labelIn, previewSections, sectionText } from '../../../areas/admin/fields/model'
 import type { RecordValue } from '../api'
 import { changedCount, DEFAULT_CURRENCY, valueWords, type Draft, type DraftValue, type RefDraft } from '../model'
+import { foldedRead, type FoldedRead } from '../model' // F-OO-212
 import '../custom-fields.css'
 
 /** The ONE view model of a record's custom-fields section (use-custom-fields.ts maps the API to it). */
 export interface CustomFieldsModel {
   /** The record's name as its page shows it (SO-0042). */
   recordLabel: string
+  /** F-OO-212: who reads a field shown in the portal on this record type (a `cf.portal.*` key: "Customer sees it"); null or absent:
+   *  the portal reads nothing of this record type, so no label carries the tag. */
+  portalTag?: string | null
   state: 'loading' | 'ready' | 'error'
   /** A failed read, a `cf.fault.*` key. */
   fault: string | null
@@ -56,6 +60,9 @@ export interface CustomFieldsActions {
  * their values in the reader's language — a money field only with its grain, a personal one only with the right (the API
  * leaves the others out) — and, for a person who may change the record, Edit: one control per type, ⌘S saves every change
  * at once, each refusal said at its field. A value the list no longer offers stays, marked.
+ * F-OO-212 (order overview 11-design §8.2; it reaches every record page: one shared part): read, only the filled fields are rows —
+ * the empty ones fold into one line, "Not filled: Fair date (required)" ("None filled yet: …" when none is) — and a field shown in
+ * the portal carries "Customer sees it" (the portal's reader of this record type) on its label, in edit mode too. Edit lists every field.
  */
 export function CustomFieldsPanel({ model, actions }: { model: CustomFieldsModel; actions?: CustomFieldsActions }) {
   return (
@@ -89,6 +96,10 @@ function Panel({ model, actions }: { model: CustomFieldsModel; actions?: CustomF
   }
   const sections = previewSections(model.fields)
   const byCode = new Map(model.values.map((value) => [value.code, value]))
+  // F-OO-212: read, only the filled rows (a section with none left out); the empty fields in one folded line.
+  const read = foldedRead(model.fields, model.values)
+  const shown: FoldedRead['sections'] = model.editing ? sections : read.sections
+  const portalTag = model.portalTag ?? null
   const count = model.editing ? changedCount(model.fields, model.values, model.draft) : 0
   const problems = Object.keys(model.problems).length
 
@@ -123,13 +134,13 @@ function Panel({ model, actions }: { model: CustomFieldsModel; actions?: CustomF
         />
       )}
       {model.saveFault && <Banner tone="danger" title={t(model.saveFault)} />}
-      {sections.map((section) => (
+      {shown.map((section) => (
         <div key={section.section} className="fw-cf-section">
-          {(sections.length > 1 || section.section !== 'custom') && <h4 className="fw-cf-section-title">{sectionText(section.section) ?? t('section.custom')}</h4>}
+          {(shown.length > 1 || section.section !== 'custom') && <h4 className="fw-cf-section-title">{sectionText(section.section) ?? t('section.custom')}</h4>}
           {model.editing ? (
             <div className="fw-cf-grid">
               {section.fields.map((field) => (
-                <EditControl key={field.code} field={field} model={model} actions={actions} />
+                <EditControl key={field.code} field={field} model={model} actions={actions} portalTag={portalTag} />
               ))}
             </div>
           ) : (
@@ -147,17 +158,28 @@ function Panel({ model, actions }: { model: CustomFieldsModel; actions?: CustomF
                       {words.inactive && <Tag tone="neutral">{t('cf.inactive')}</Tag>}
                     </span>
                   )
-                return { label: <FieldLabel field={field} />, value }
+                return { label: <FieldLabel field={field} portalTag={portalTag} />, value }
               })}
             />
           )}
         </div>
       ))}
+      {/* F-OO-212: the empty fields, folded into one line (a required one says so). */}
+      {!model.editing && read.empty.length > 0 && <NotFilled empty={read.empty} none={read.sections.length === 0} />}
     </section>
   )
 }
 
-function FieldLabel({ field }: { field: Field }) {
+// ---- F-OO-212: "Not filled: Fair date (required), Rush packaging" — or "None filled yet: …" when no field is filled ----
+function NotFilled({ empty, none }: { empty: readonly Field[]; none: boolean }) {
+  const t = useT(FIELDS_NS)
+  const locale = useLocale()
+  const fields = empty.map((field) => (field.required ? t('cf.requiredField', { field: labelIn(field, locale) }) : labelIn(field, locale))).join(', ')
+  return <p className="fw-cf-muted fw-cf-folded">{none ? t('cf.noneFilled', { fields }) : t('cf.notFilledList', { count: empty.length, fields })}</p>
+}
+// ---- end F-OO-212
+
+function FieldLabel({ field, portalTag = null }: { field: Field; /* F-OO-212 */ portalTag?: string | null }) {
   const t = useT(FIELDS_NS)
   const locale = useLocale()
   return (
@@ -165,11 +187,13 @@ function FieldLabel({ field }: { field: Field }) {
       <span>{labelIn(field, locale)}</span>
       {field.audience === 'MONEY' && field.grain && <Tag tone="info">{t(`grain.${field.grain}`)}</Tag>}
       {field.audience === 'PERSONAL' && <Tag tone="warning">{t('cf.personal')}</Tag>}
+      {/* F-OO-212: a field the portal's reader sees ("Customer sees it"): said before anyone types internal words into it. */}
+      {portalTag && field.shownInPortal && <Tag tone="info">{t(portalTag)}</Tag>}
     </span>
   )
 }
 
-function EditControl({ field, model, actions }: { field: Field; model: CustomFieldsModel; actions?: CustomFieldsActions }) {
+function EditControl({ field, model, actions, portalTag = null }: { field: Field; model: CustomFieldsModel; actions?: CustomFieldsActions; /* F-OO-212 */ portalTag?: string | null }) {
   const t = useT(FIELDS_NS)
   const locale = useLocale()
   const draft = model.draft[field.code]
@@ -323,7 +347,7 @@ function EditControl({ field, model, actions }: { field: Field; model: CustomFie
       control = <Input value={typeof draft === 'string' ? draft : ''} maxLength={4000} onChange={(event) => set(event.target.value)} />
   }
   return (
-    <DsField label={<FieldLabel field={field} />} required={field.required} hint={hint} error={problem ? t(problem, { field: label }) : undefined}>
+    <DsField label={<FieldLabel field={field} portalTag={portalTag} />} required={field.required} hint={hint} error={problem ? t(problem, { field: label }) : undefined}>
       {control}
     </DsField>
   )

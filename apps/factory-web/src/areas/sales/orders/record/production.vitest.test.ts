@@ -320,6 +320,61 @@ describe('F-OP-112: Make work orders… in place — the style step, the next st
 })
 // ---- end F-OP-112
 
+// ---- F-OO-123 (order overview 10-design §2.3): Make work orders for ONE line — the same dialog, only that line ticked ----------------
+describe('F-OO-123: Make work orders for this line… — pickOfStyle with a lineId ticks only that line; without it, as today', () => {
+  type Open = import('../../../production/_shared/api').OpenLines
+  const style = { id: 's-jkt', code: 'DEMO-JKT-01' }
+  const line = (id: string, seq: number, open: number[], over: Partial<Open['lines'][number]> = {}): Open['lines'][number] => ({
+    id,
+    seq,
+    kind: 'SIZE_GRID',
+    styleId: style.id,
+    styleCode: style.code,
+    styleName: 'Giacca demo',
+    colourwayId: `${id}-c`,
+    colourwayCode: `C${seq}`,
+    madeToMeasure: false,
+    sizes: open.map((n, index) => ({ size: String(48 + index * 2), ordered: n + 1, onWorkOrders: 1, open: n })),
+    ...over,
+  })
+  const lines: Open = {
+    salesOrder: { id: 'so1', number: 'SO-2026-0088', status: 'CONFIRMED' },
+    numberPreview: 'WO-0412',
+    lines: [line('l1', 10, [2, 0, 3]), line('l2', 20, [1, 4]), line('l3', 30, [1], { madeToMeasure: true }), line('l4', 40, [0, 0])],
+  }
+
+  it('a line asked: only it is ticked, with its open sizes; the other open lines of the style stay unticked', async () => {
+    const { pickOfStyle } = await import('../../../production/work-orders/new/use-new-work-order')
+    expect(pickOfStyle(lines, style.id, 'l2')).toEqual({ styleId: style.id, picked: ['l2'], grid: { l2: { '48': 1, '50': 4 } } })
+    // A made-to-measure unit asked is ticked alone (the unit rule); a line with nothing open, or of another style, ticks nothing.
+    expect(pickOfStyle(lines, style.id, 'l3').picked).toEqual(['l3'])
+    expect(pickOfStyle(lines, style.id, 'l4')).toEqual({ styleId: style.id, picked: [], grid: {} })
+    expect(pickOfStyle(lines, 's-other', 'l2').picked).toEqual([])
+  })
+
+  it('without a line (and with null): as today — every open size-grid line of the style, never a made-to-measure unit', async () => {
+    const { pickOfStyle } = await import('../../../production/work-orders/new/use-new-work-order')
+    const today = { styleId: style.id, picked: ['l1', 'l2'], grid: { l1: { '48': 2, '52': 3 }, l2: { '48': 1, '50': 4 } } }
+    expect(pickOfStyle(lines, style.id)).toEqual(today)
+    expect(pickOfStyle(lines, style.id, null)).toEqual(today)
+  })
+
+  it('the wiring: the hook\'s open takes the line (its other callers unchanged); the order page opens it with the line\'s style', () => {
+    const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+    const hook = read('../../../production/work-orders/new/use-new-work-order.ts')
+    expect(hook).toContain('void chooseOrder(start.order, start.styleId ?? null, start.lineId ?? null)')
+    expect(hook).toContain('const picked = lineId && step.styleId === asked ? pickOfStyle(lines, asked, lineId) : step // F-OO-123')
+    // The Production page's own door is untouched (no line: the search, then the style step).
+    expect(read('../../../production/work-orders/WorkOrdersPage.tsx')).toContain('if (open) newWorkOrder.open()')
+    const acts = read('./use-production-acts.ts')
+    expect(acts).toContain('onOpenLine: (lineId: string) => {')
+    expect(acts).toContain('if (order && styleId && productionCan.manage) make.open({ order: orderOptionOf(order), styleId, lineId })')
+    // The band's door is as before (the next style offered, every open line of it).
+    expect(acts).toContain('if (order && productionCan.manage) make.open({ order: orderOptionOf(order), styleId: next?.styleId ?? null })')
+  })
+})
+// ---- end F-OO-123
+
 // ---- F-OP-113 (10-order-page §5.2; review R-11, B6): the work-order rows — in place, the row ⋯, a shared row read-only ------------
 describe('F-OP-113: the work-order rows act in place; a work order shared with other customers offers nothing but its link', () => {
   const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
