@@ -42,6 +42,9 @@ export interface StageStripProps extends StageStripInput {
  * width). A blocked stage keeps the tracker's current step and adds a blocked mark with why in words beside it (DS gap G1,
  * plan §8: the tracker has no blocked state; until the Owner's word the mark lives here). Unknown stage: "—", never step
  * 1. Office dates read "Planned"; the customer's "Expected by". Never interactive except the date's history.
+ * F-MS-101: a stage set by hand (the office's one named exception, when the floor cannot record the work) is SHOWN here, never set
+ * here: the office card passes the stage the customer reads and the current step's note "Set by hand" (`note`); its door lives on
+ * the card, outside this part (a link holds no other control). The portal passes no note: its strip is unchanged.
  */
 export function StageStrip({ face, layout = 'auto', label, promise, loading, problem, onRetry, stageHref, stageLinkLabel, ...input }: StageStripProps) {
   const w = useProductionWords()

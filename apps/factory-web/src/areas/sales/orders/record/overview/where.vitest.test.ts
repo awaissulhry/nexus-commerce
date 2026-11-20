@@ -44,6 +44,11 @@ import { creditAskNoticeOf, creditCheckNoticeOf, creditDoorsOf, creditHoldWaits,
 import type { CreditCustomer } from '../credit/api'
 import { useOverviewActs } from '../use-overview-acts'
 import type { RecordActsBase, RecordDialog } from '../record-model'
+// ---- F-MS-101: the stage set by hand — the row under the dots, its one door, the domain's words
+import { HAND_AT, HAND_BY, HAND_FREE_READ, HAND_NOWORK_READ, HAND_OLD_READ, HAND_PAUSED_READ, HAND_READ } from './fixtures'
+import { handDoorOf, handRowOf, pausedByCustomer } from './where'
+import { STAGE_SET_REFUSAL_WORDS } from '@nexus/factory-domain/production-brand/stage-set'
+// ---- end F-MS-101
 
 // F-OO-106: the DS Modal draws only after it mounts in a browser — here a plain section, so a dialog's words are read on the server
 // too (as lines-held's and facts' dialog tests do). Only an open dialog draws; no other case changes.
@@ -637,7 +642,8 @@ describe('F-OO-107: the moves row — Mark ready…, More ▾ (made elsewhere, C
     const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, locale)
     const html = draw('overview')
     const row = html.slice(html.indexOf('class="fw-so-where-moves"'), html.indexOf('</div>', html.indexOf('class="fw-so-where-moves"')))
-    expect(html.indexOf('class="fw-so-where-moves"')).toBeGreaterThan(html.indexOf('Stages are set by the floor and quality, never by hand'))
+    // F-MS-101 (R21): the quiet line's new words; the moves row still comes after it (the door is not a move).
+    expect(html.indexOf('class="fw-so-where-moves"')).toBeGreaterThan(html.indexOf('Stages are set by the floor and quality, or by hand when the floor cannot record them'))
     expect(row).toMatch(/<button[^>]*>Mark ready…<\/button>/)
     expect(row).toContain('aria-label="More moves for SO-2026-0088"')
     expect(textOf(row)).toContain('More')
@@ -1043,3 +1049,142 @@ describe('F-OO-109: the strip\'s Lift… on several of its own work orders opens
   })
 })
 // ---- end F-OO-109
+
+// ---- F-MS-101 (set the stage by hand, 04 §2; review R4, R5, R19, R21): the hand stage's row under the dots and its ONE door ------------
+
+describe('F-MS-101: the stage set by hand — the row under the dots (who, when, why, the floor) and its one door', () => {
+  const TODAY = '2026-10-29'
+  type HandStage = NonNullable<Headline['stage']>['byHand']
+  const at = (code: BrandStage, byHand: HandStage = null): Headline => ({ ...HEADLINE, stage: { ...HEADLINE.stage!, code, byHand, version: 3 } })
+  const ROLES = { Owner: 'owner', Planner: 'planner', 'Production manager': 'production_manager', Sales: 'sales', Warehouse: 'warehouse', 'Read-only': 'read_only' } as const
+  type RoleName = keyof typeof ROLES
+  /** As the card: the hand right is production.brand.manage; Read-only by the band's rule. */
+  const rightsOf = (role: RoleName) => {
+    const permissions = rolePermissions(ROLES[role])
+    const brand = permissions.includes('production.brand.manage')
+    return { brand, readOnly: readOnlyOnPage(abilitiesOf(permissions), { assignSupervisor: brand, qualityHold: permissions.includes('quality.holds.place') }) }
+  }
+  const noWork = (value: Order): Order => ({ ...value, chain: { ...value.chain, workOrders: [] } })
+
+  it('the row: Sewing over the floor\'s Preparing — who (an office person), when, why, what the floor says; the office\'s note', () => {
+    expect(handRowOf(order('IN_PRODUCTION'), HAND_READ.headline, TODAY)).toEqual({
+      stage: 'SEWING',
+      tone: 'info',
+      by: 'Bea Esempio',
+      at: HAND_AT,
+      reason: { key: 'where.manual.reasons.OUTAGE' },
+      lines: [{ key: 'where.manual.floor', stage: 'SEWING', floor: 'PREPARING' }],
+      note: 'Tablet del reparto taglio offline dalle 14:00.',
+      stripNote: { key: 'where.manual.tag' },
+    })
+    // Nothing set (or an older answer without the field, or the headline not read): no row.
+    for (const headline of [HAND_FREE_READ.headline, HEADLINE, null, undefined]) expect(handRowOf(order('IN_PRODUCTION'), headline, TODAY)).toBeNull()
+    // Without the notes gate the API sends no who and no note: neither is said (never "by —").
+    const hidden = handRowOf(order('IN_PRODUCTION'), at('SEWING', { ...HAND_BY, by: null, note: null }), TODAY)
+    expect([hidden?.by, hidden?.note]).toEqual([null, null])
+    // A blank note is no note; a reason code this page does not know is not said (never the code).
+    expect(handRowOf(order('IN_PRODUCTION'), at('SEWING', { ...HAND_BY, note: '   ' }), TODAY)?.note).toBeNull()
+    expect(handRowOf(order('IN_PRODUCTION'), at('SEWING', { ...HAND_BY, reasonCode: 'NOT_A_CODE' }), TODAY)?.reason).toBeNull()
+    for (const code of ['OUTAGE', 'FEW_PEOPLE', 'OUTSIDE', 'OTHER']) expect(handRowOf(order('IN_PRODUCTION'), at('SEWING', { ...HAND_BY, reasonCode: code }), TODAY)?.reason).toEqual({ key: `where.manual.reasons.${code}` })
+    // The row names an office person or nobody: never a person of the floor (the read has no such field).
+    expect(JSON.stringify(handRowOf(order('IN_PRODUCTION'), HAND_READ.headline, TODAY))).not.toMatch(/operator|operatore|station|postazione/i)
+  })
+
+  it('after 7 days (the domain\'s handSetOld): the warning tone and "check it" with its days; 6 days stays info', () => {
+    expect(handRowOf(order('IN_PRODUCTION'), HAND_OLD_READ.headline, TODAY)).toMatchObject({ tone: 'warning', lines: [{ key: 'where.manual.floor', stage: 'SEWING', floor: 'PREPARING' }, { key: 'where.manual.old', days: 9 }] })
+    expect(handRowOf(order('IN_PRODUCTION'), at('SEWING', { ...HAND_BY, at: '2026-10-23T09:00:00Z' }), TODAY)).toMatchObject({ tone: 'info', lines: [{ key: 'where.manual.floor' }] })
+    expect(handRowOf(order('IN_PRODUCTION'), at('SEWING', { ...HAND_BY, at: '2026-10-22T09:00:00Z' }), TODAY)).toMatchObject({ tone: 'warning', lines: [{ key: 'where.manual.floor' }, { key: 'where.manual.old', days: 7 }] })
+  })
+
+  it('no work order on the order (as SEED-SO-W39-02): "No work order records this order" instead of the floor\'s line; cancelled ones record nothing', () => {
+    expect(handRowOf(noWork(order('IN_PRODUCTION')), HAND_NOWORK_READ.headline, TODAY)).toMatchObject({ stage: 'CUTTING', reason: { key: 'where.manual.reasons.FEW_PEOPLE' }, lines: [{ key: 'where.manual.noWork' }], note: null })
+    const value = order('IN_PRODUCTION')
+    const cancelled: Order = { ...value, chain: { ...value.chain, workOrders: value.chain.workOrders.map((entry) => ({ ...entry, status: 'CANCELLED' })) } }
+    expect(handRowOf(cancelled, HAND_READ.headline, TODAY)?.lines).toEqual([{ key: 'where.manual.noWork' }])
+  })
+
+  it('only while the work is current: never on a waiting, shipped, delivered, closed or cancelled order, whatever a late read says (R5)', () => {
+    for (const status of ['PENDING_APPROVAL', 'SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'] as const) expect(handRowOf(order(status), HAND_READ.headline, TODAY), status).toBeNull()
+    for (const status of ['IN_PRODUCTION', 'PARTLY_SHIPPED'] as const) expect(handRowOf(order(status), HAND_READ.headline, TODAY)?.stage, status).toBe('SEWING')
+  })
+
+  it('the door: status × role — In production and Partly shipped; held on Confirmed (R4); never after production, waiting or Ready (R5); Read-only none', () => {
+    const KIND: Readonly<Record<OrderStatus, 'set' | null>> = { PENDING_APPROVAL: null, CONFIRMED: 'set', IN_PRODUCTION: 'set', READY: null, PARTLY_SHIPPED: 'set', SHIPPED: null, DELIVERED: null, CLOSED: null, CANCELLED: null }
+    for (const status of ORDER_STATUSES) {
+      for (const role of Object.keys(ROLES) as RoleName[]) {
+        const { brand, readOnly } = rightsOf(role)
+        const door = handDoorOf(order(status), HAND_FREE_READ.headline, brand, readOnly, false)
+        if (role === 'Read-only') {
+          expect(readOnly, status).toBe(true)
+          expect(door, `${status} ${role}`).toBeNull()
+          continue
+        }
+        expect(readOnly, `${status} ${role}`).toBe(false)
+        expect(door?.kind ?? null, `${status} ${role}`).toBe(KIND[status])
+        if (!door || door.kind !== 'set') continue
+        // The right speaks first (Production does this); a Confirmed order: production has not started yet; else it may be set.
+        expect(door.held, `${status} ${role}`).toEqual(!brand ? { key: 'wo.heldHold' } : status === 'CONFIRMED' ? STAGE_SET_REFUSAL_WORDS.NOT_STARTED : null)
+      }
+    }
+    // The right is the health raise's (production.brand.manage): Owner, Planner, Production manager — never Sales or the warehouse.
+    expect((Object.keys(ROLES) as RoleName[]).filter((role) => rightsOf(role).brand)).toEqual(['Owner', 'Planner', 'Production manager'])
+    expect(STAGE_SET_REFUSAL_WORDS.NOT_STARTED.en).toBe('Production has not started yet: a stage is set by hand only once the order is in production.')
+  })
+
+  it('the door by the stage: Preparing to Sewing open; Quality check — only quality\'s release is ahead; Ready — nothing; no stage, still reading; a write', () => {
+    for (const code of ['PREPARING', 'CUTTING', 'SEWING'] as const) expect(handDoorOf(order('IN_PRODUCTION'), at(code), true, false, false), code).toEqual({ kind: 'set', held: null })
+    expect(handDoorOf(order('IN_PRODUCTION'), at('QUALITY'), true, false, false)).toEqual({ kind: 'set', held: STAGE_SET_REFUSAL_WORDS.NEVER_READY })
+    expect(handDoorOf(order('PARTLY_SHIPPED'), at('READY'), true, false, false)).toEqual({ kind: 'set', held: STAGE_SET_REFUSAL_WORDS.ALREADY_READY })
+    expect(handDoorOf(order('IN_PRODUCTION'), { ...HEADLINE, stage: null }, true, false, false)).toEqual({ kind: 'set', held: STAGE_SET_REFUSAL_WORDS.NOTHING_LEFT })
+    for (const headline of [null, undefined]) expect(handDoorOf(order('IN_PRODUCTION'), headline, true, false, false)).toEqual({ kind: 'set', held: { key: 'where.manual.held.reading' } })
+    // A write running: held.busy — after the state's own words; without the right, the right's words first.
+    expect(handDoorOf(order('IN_PRODUCTION'), at('SEWING'), true, false, true)).toEqual({ kind: 'set', held: { key: 'held.busy' } })
+    expect(handDoorOf(order('IN_PRODUCTION'), at('QUALITY'), true, false, true)).toEqual({ kind: 'set', held: STAGE_SET_REFUSAL_WORDS.NEVER_READY })
+    expect(handDoorOf(order('IN_PRODUCTION'), at('QUALITY'), false, false, true)).toEqual({ kind: 'set', held: { key: 'wo.heldHold' } })
+  })
+
+  it('the customer\'s own pause holds the set and Change… ("lift the pause first", R19); Clear… stays open; our own hold allows it', () => {
+    expect(pausedByCustomer(HAND_PAUSED_READ.headline)).toBe(true)
+    expect(handDoorOf(order('IN_PRODUCTION'), HAND_PAUSED_READ.headline, true, false, false)).toEqual({ kind: 'set', held: STAGE_SET_REFUSAL_WORDS.PAUSED })
+    const paused = HAND_PAUSED_READ.headline!
+    expect(handDoorOf(order('IN_PRODUCTION'), { ...paused, stage: { ...paused.stage!, byHand: HAND_BY } }, true, false, false)).toEqual({ kind: 'standing', change: STAGE_SET_REFUSAL_WORDS.PAUSED, clear: null })
+    expect(STAGE_SET_REFUSAL_WORDS.PAUSED.en).toBe("Paused at the customer's request: lift the pause first.")
+    // Our own production hold (NO_MOVE) or quality's: the Blocked pill stays, and the stage may be set.
+    const ours: Headline = { ...at('SEWING'), held: true, waiting: { ...HEADLINE.waiting, blockers: [{ kind: 'NO_MOVE', on: 'US', words: { en: 'On hold', it: 'In sospeso' }, since: null, ref: null, sub: null }] } }
+    expect(pausedByCustomer(ours)).toBe(false)
+    expect(handDoorOf(order('IN_PRODUCTION'), ours, true, false, false)).toEqual({ kind: 'set', held: null })
+  })
+
+  it('while a hand stage stands: Change… and Clear… (held by the right, a write), never the Set door; at Quality check it may still be changed (D9)', () => {
+    for (const status of ['IN_PRODUCTION', 'PARTLY_SHIPPED'] as const) expect(handDoorOf(order(status), HAND_READ.headline, true, false, false), status).toEqual({ kind: 'standing', change: null, clear: null })
+    expect(handDoorOf(order('IN_PRODUCTION'), HAND_READ.headline, false, false, false)).toEqual({ kind: 'standing', change: { key: 'wo.heldHold' }, clear: { key: 'wo.heldHold' } })
+    expect(handDoorOf(order('IN_PRODUCTION'), HAND_READ.headline, true, false, true)).toEqual({ kind: 'standing', change: { key: 'held.busy' }, clear: { key: 'held.busy' } })
+    expect(handDoorOf(order('IN_PRODUCTION'), HAND_READ.headline, true, true, false)).toBeNull()
+    expect(handDoorOf(order('IN_PRODUCTION'), at('QUALITY', { ...HAND_BY, stage: 'QUALITY' }), true, false, false)).toEqual({ kind: 'standing', change: null, clear: null })
+    for (const status of ['SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'] as const) expect(handDoorOf(order(status), HAND_READ.headline, true, false, false), status).toBeNull()
+  })
+
+  it('the door is not a move: WHERE_MOVES stays; every word in both languages (office "tu", "la fase" feminine), none says "never by hand"', () => {
+    expect(WHERE_MOVES).toEqual(['ready', 'hold', 'elsewhere', 'cancel', 'close'])
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      const keys = ['open', 'tag', 'noWork', 'change', 'clear', 'held.reading', 'reasons.OUTAGE', 'reasons.FEW_PEOPLE', 'reasons.OUTSIDE', 'reasons.OTHER']
+      for (const key of keys) expect(t(`where.manual.${key}`), `${locale} ${key}`).not.toBe(`where.manual.${key}`)
+      for (const key of ['by', 'floor', 'old', 'stagesLink', 'changeAria', 'clearAria']) expect(t(`where.manual.${key}`, { who: 'x', floor: 'x', stage: 'x', age: 'x', number: 'x' }), `${locale} ${key}`).not.toBe(`where.manual.${key}`)
+    }
+    const it = createTranslator('it', messagesFor('it', ['orders']).orders!)
+    expect([it('where.manual.tag'), it('where.manual.noWork'), it('where.manual.old', { age: '9 g' })]).toEqual(['Impostata a mano', "Nessun ordine di lavoro registra questo ordine: resta finché non la togli o l'ordine parte", 'Impostata a mano 9 g fa e il reparto non ci è ancora arrivato: controllala'])
+    expect(itWordsUnder('where.manual.')).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
+  })
+
+  it('source: the rules and words are the domain\'s (stage-set), never a web copy; the comments say the new rule (R21)', () => {
+    const rules = readFileSync(new URL('./where.ts', import.meta.url), 'utf8')
+    expect(rules).toContain("from '@nexus/factory-domain/production-brand/stage-set'")
+    expect(rules).not.toMatch(/function (?:handSetOld|handStands|shownStageOf|handStageChoicesOf)\b/)
+    expect(rules).not.toMatch(/never by hand|never set here|never a hand\b/)
+    const strip = readFileSync(new URL('../../../../../lib/production/view/StageStrip.tsx', import.meta.url), 'utf8')
+    expect(strip).toContain('is SHOWN here, never set')
+    expect(readFileSync(new URL('../view/overview/where.css', import.meta.url), 'utf8')).not.toContain('never by hand')
+  })
+})
+// ---- end F-MS-101

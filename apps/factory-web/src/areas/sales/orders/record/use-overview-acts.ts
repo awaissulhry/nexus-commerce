@@ -17,9 +17,15 @@ import { creditAskedOf, creditAskNoticeOf, creditCheckNoticeOf, creditHoldWaits,
 import { readProblem } from '../model'
 import type { Approval } from '../depth/api' // walk #2: the yes's read names a credit hold the order read does not
 // ---- end F-OO-106
+// ---- F-MS-103: the stage set by hand — its two writes (PUT / DELETE …/stage) through the page's one write, its words ----
+import { useLocale } from '../../../../lib/i18n/provider'
+import { clearBrandStage, setBrandStage } from './overview/api'
+import { readOf, type ProductionState } from './overview/model'
+import { clearNoticeOf, setNoticeOf, stageByHandBodyOf, stageRefusalOf, versionOf } from './overview/stage-by-hand'
+// ---- end F-MS-103
 
-export type OverviewActsModel = Pick<OrderRecordModel, 'overviewLine' | 'gateActs' /* F-OO-145 */ | 'credit' /* F-OO-106 */>
-export type OverviewActsActions = Pick<OrderRecordActions, 'onOpenLine' | 'onRequestedChange' | 'onLineChange' /* F-OO-125 */ | 'onCustomerRefChange' /* F-OO-209 */ | 'onNoteSave' /* F-OO-210 */ | 'gateActs' /* F-OO-145 */ | 'credit' /* F-OO-106 */>
+export type OverviewActsModel = Pick<OrderRecordModel, 'overviewLine' | 'gateActs' /* F-OO-145 */ | 'credit' /* F-OO-106 */ | 'stageHand' /* F-MS-103 */>
+export type OverviewActsActions = Pick<OrderRecordActions, 'onOpenLine' | 'onRequestedChange' | 'onLineChange' /* F-OO-125 */ | 'onCustomerRefChange' /* F-OO-209 */ | 'onNoteSave' /* F-OO-210 */ | 'gateActs' /* F-OO-145 */ | 'credit' /* F-OO-106 */ | 'stageHand' /* F-MS-103 */>
 
 /**
  * F-OP-134 (N-5): Overview's acts — F-SA-232: the line whose sizes the centred window shows (Overview › Progress by line). Mounted by
@@ -49,15 +55,19 @@ export function useOverviewActs(
     readonly gates?: GateActsInput
     /** F-OO-106: the reader's rights (sales.credit.view reads the order's credit) and what else is read again after a credit act. */
     readonly credit?: CreditInput
+    /** F-MS-103: the reader's rights (production.brand.manage), the production read (the headline's version) and its re-read. */
+    readonly stage?: StageInput
   } = {},
 ): { model: OverviewActsModel; actions: OverviewActsActions } {
   const [overviewLine, setOverviewLine] = useState<string | null>(null)
   const gates = useGateActs(input.gates, input.base) // F-OO-145
   const credit = useOrderCredit(input.base, input.credit, input.setDialog) // F-OO-106
+  const stage = useStageByHand(input.base, input.stage, input.setDialog) // F-MS-103
   return {
-    model: { overviewLine, gateActs: gates.model /* F-OO-145 */, credit: credit.model /* F-OO-106 */ },
+    model: { overviewLine, gateActs: gates.model /* F-OO-145 */, credit: credit.model /* F-OO-106 */, stageHand: stage.model /* F-MS-103 */ },
     actions: {
       credit: credit.actions, // F-OO-106: Check credit again, Ask for a yes…, Try again
+      stageHand: stage.actions, // F-MS-103: the dialog's Set / Change, Clear…'s confirm
       onOpenLine: setOverviewLine,
       gateActs: gates.actions, // F-OO-145: Move the date…, Mark done…, Start before the gate… and the dialogs' own acts
       // F-OO-144: the small dialog (held there by amendHeld, as the door is); no page hop.
@@ -197,3 +207,71 @@ function useOrderCredit(base: RecordActsBase | undefined, input: CreditInput | u
 }
 type CreditDialog = Extract<RecordDialog, { kind: 'creditCheck' | 'creditAsk' }>
 // ---- end F-OO-106
+
+// ---- F-MS-103 (set the stage by hand, 04 §3; review R1, R3b, R9): Set, Change and Clear — through the page's one write ---------------
+/** What the container hands the stage part: the reader's rights, the production read (its headline's version), the headline's re-read. */
+export interface StageInput {
+  readonly permissions: readonly string[]
+  readonly production: ProductionState | null
+  readonly reread?: () => void
+}
+
+/**
+ * The stage set by hand: production.brand.manage may (the health raise's right; anyone else reads the door held). Each act goes
+ * through the page's one write, its dialog open while it goes (`keepDialog`), with a fresh Idempotency-Key and the headline's
+ * production version as read when it runs (null only when the order has no row yet: the set makes it). Answered: the dialog closes and
+ * the page's notice says what the customer reads now ("Sewing set by hand: the customer reads Sewing." / "Back to the floor's stage:
+ * Preparing."). Refused: the dialog stays with what was typed and says why in the page's words (a 409: "The stage changed meanwhile:
+ * it was read again."). Either way the order and the headline are read again.
+ */
+function useStageByHand(base: RecordActsBase | undefined, input: StageInput | undefined, setDialog: ((dialog: RecordDialog | null) => void) | undefined): { model: OrderRecordModel['stageHand']; actions: NonNullable<OverviewActsActions['stageHand']> } {
+  const locale = useLocale()
+  const can = !!input?.permissions.includes('production.brand.manage')
+  // The headline as last read (a ref: an act reads it when it runs, never a value of an older render).
+  const headline = useRef(readOf(input?.production ?? null)?.headline ?? null)
+  headline.current = readOf(input?.production ?? null)?.headline ?? null
+  const reread = useRef(input?.reread)
+  reread.current = input?.reread
+
+  const act = (open: StageDialog, run: (api: RecordActsBase['api'], orderId: string) => Promise<Phrase>) => {
+    if (!base || !setDialog) return
+    void base.write(
+      async () => {
+        const value = base.current.current
+        if (!value) return null
+        setDialog(open) // an earlier refusal is not said again while this one is asked
+        try {
+          const notice = await run(base.api, value.id)
+          setDialog(null)
+          base.setNotice({ tone: 'success', words: notice })
+        } catch (error) {
+          setDialog({ ...open, refused: stageRefusalOf(error) })
+        }
+        reread.current?.()
+        return null
+      },
+      null,
+      true,
+    )
+  }
+
+  return {
+    model: input ? { can } : null,
+    actions: {
+      onSet: (ask) =>
+        act({ kind: 'stageByHand', mode: ask.mode }, async (api, orderId) => {
+          const body = stageByHandBodyOf(ask, headline.current)
+          await setBrandStage(api, orderId, body, newIdempotencyKey())
+          return setNoticeOf(body.stage, locale)
+        }),
+      onClear: () =>
+        act({ kind: 'stageClear' }, async (api, orderId) => {
+          const floor = headline.current?.stage?.byHand?.floor?.code ?? null
+          const answer = await clearBrandStage(api, orderId, versionOf(headline.current), newIdempotencyKey())
+          return clearNoticeOf(answer.stage ?? floor, locale)
+        }),
+    },
+  }
+}
+type StageDialog = Extract<RecordDialog, { kind: 'stageByHand' | 'stageClear' }>
+// ---- end F-MS-103

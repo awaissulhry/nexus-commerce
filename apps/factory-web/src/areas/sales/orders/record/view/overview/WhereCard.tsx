@@ -35,6 +35,14 @@ import { WithMessages } from '../../../../../../record-panels/i18n'
 import { CREDIT_ASK_NOTE_MAX, creditLinesOf, refuseLineOf } from '../../overview/where'
 import { Frame } from '../Dialogs'
 // ---- end F-OO-106
+// ---- F-MS-102: the stage set by hand — its row (the DS Tag, the hand and lock marks) and its ONE door under the dots ----
+import { Tag } from '@nexus/ui/primitives'
+import { Hand, Lock } from 'lucide-react'
+import { formatDateTime } from '../../../../../../lib/i18n/format'
+import type { PlainStage } from '../../../../../../lib/production/model'
+import { handDoorOf, handRowOf, type HandDoor, type HandRow } from '../../overview/where'
+// ---- end F-MS-102
+import { StageHandDialogs, useSayHand } from './StageByHandDialog' // F-MS-103: the dialog (Set / Change) and Clear…'s confirm
 
 /**
  * F-OO-100 (order overview lane: one file per card) — "Where it is now".
@@ -62,6 +70,12 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
   const sentence = [words.status ? dated(words.status) : null, words.stage ? w.t(`parts.stage.${words.stage}`) : null].filter(Boolean).join(' · ')
   const quiet = words.note ? t(words.note.key, words.note.stage ? { stage: w.t(`parts.stage.${words.note.stage}`) } : undefined) : null
   const strip = stageStripOf(order, headline, read?.dates ?? null) // F-OO-102: the dots in the headline's own state
+  // ---- F-MS-102: a stage set by hand — its row under the quiet line, the current dot's note, and the ONE door (absent `stageHand`:
+  // not offered here; Read-only: none, the row still says it) ----
+  const hand = handRowOf(order, headline, model.today)
+  const handDoor = model.stageHand ? handDoorOf(order, headline, model.stageHand.can, readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold }), model.busy) : null
+  const sayHand = useSayHand()
+  // ---- end F-MS-102
   // F-OP-301 (walk #2): section 1 names no wait at all now (Who acts next lives in Requests & changes' groups, F-OO-103), so it can
   // never say a stale "Waiting on us · 5 d" beside a card that says nothing waits — and it never reads the headline's kept waiting list
   // (end check fix wave: named in words, so the source test that no such read exists reads only code).
@@ -89,23 +103,99 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
             layout="auto"
             label={t('overview.where')}
             {...strip}
+            note={hand ? t(hand.stripNote.key) : strip.note /* F-MS-102: the current dot says "Set by hand" (shown here, never set) */}
             stageHref={`${tabHref(`${model.prefix}/sales/orders/${order.id}`, 'production', search)}#work-orders`}
-            stageLinkLabel={words.state === 'ALL_DONE' ? t('where.stagesDone') : t('doors.stages', { stage: strip.stage ? w.t(`parts.stage.${strip.stage}`) : w.t('parts.stage.unknown') })}
+            stageLinkLabel={words.state === 'ALL_DONE' ? t('where.stagesDone') : hand && strip.stage ? t('where.manual.stagesLink', { stage: w.t(`parts.stage.${strip.stage}`) }) : t('doors.stages', { stage: strip.stage ? w.t(`parts.stage.${strip.stage}`) : w.t('parts.stage.unknown') })}
             loading={loading}
             problem={state?.status === 'failed'}
             onRetry={() => actions?.onRetryProduction?.()}
           />
-          {/* F-OO-102: derived, and it says so. */}
-          {!loading && state?.status !== 'failed' ? <p className="fw-so-hint">{w.t('parts.stage.office.setBy')}</p> : null}
+          {/* F-OO-102: derived, and it says so. F-MS-102: or set by hand when the floor cannot record it — the door on the same quiet line
+              (a group of its own, outside the strip's one link), then the hand stage's row while one stands; the moves row is untouched. */}
+          {!loading && state?.status !== 'failed' ? (
+            <>
+              <div className="fw-so-where-setby">
+                <p className="fw-so-hint">{w.t('parts.stage.office.setBy')}</p>
+                {handDoor?.kind === 'set' ? (
+                  <span className="fw-so-where-hand-door">
+                    <Button size="sm" heldReason={sayHand(handDoor.held)} onClick={() => actions?.onDialog?.({ kind: 'stageByHand', mode: 'set' })}>
+                      {t('where.manual.open')}
+                    </Button>
+                  </span>
+                ) : null}
+              </div>
+              {hand ? <HandRowView order={order} row={hand} door={handDoor?.kind === 'standing' ? handDoor : null} actions={actions} /> : null}
+            </>
+          ) : null}
         </div>
       ) : null}
       {/* ---- F-OO-103: the moves slot — the order's own moves: Mark ready…, Hold the whole order…, More ▾ (F-OO-107, F-OO-108) ---- */}
       <Moves order={order} model={model} actions={actions} />
       {/* F-OO-106: the credit strip's dialogs, in the page's one slot (Overview's own: use-overview-acts). */}
       <CreditDialogs order={order} model={model} actions={actions} />
+      {/* F-MS-103: the stage set by hand — Set / Change (one dialog) and Clear…, in the page's one slot (use-overview-acts). */}
+      <StageHandDialogs order={order} model={model} actions={actions} />
     </Card>
   )
 }
+
+// ---- F-MS-102 (set the stage by hand, 04 §2.2–2.5, §8): the hand stage's row — the card's shared row, ONE place ----------------------
+// F-MS-103: its words (useSayHand) are the dialog's, shared from StageByHandDialog.tsx.
+/**
+ * The card's shared row (mark | words | doors) under the quiet line, with a left rule in the info tone (warning after 7 days): the DS
+ * Tag "Set by hand", then the stage, the office person who set it, when and why; what the floor's counts say (or that no work order
+ * records the order); "check it" after 7 days; the office's note (office only, the lock). Change… and Clear… at the right edge, held
+ * with words; at a narrow card they wrap under the words. It names an office person only, never anyone of the floor.
+ */
+function HandRowView({ order, row, door, actions }: { order: Order; row: HandRow; door: Extract<HandDoor, { kind: 'standing' }> | null; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const w = useProductionWords()
+  const locale = useLocale()
+  const sayHand = useSayHand()
+  const stage = (code: PlainStage) => w.t(`parts.stage.${code}`)
+  const reason = row.reason ? t(row.reason.key) : null
+  const lines = row.lines.map((line) => t(line.key, { ...(line.stage ? { stage: stage(line.stage) } : {}), ...(line.floor ? { floor: stage(line.floor) } : {}), ...(line.days !== undefined ? { age: w.t('parts.age.days', { count: line.days }) } : {}) }))
+  return (
+    <div className="fw-so-ov-row fw-so-hand" data-tone={row.tone}>
+      <span className="fw-so-hand-mark">
+        <Hand size={14} aria-hidden />
+      </span>
+      <span className="fw-so-hand-said">
+        <span className="fw-so-hand-line">
+          <Tag tone={row.tone}>{t('where.manual.tag')}</Tag>
+          <span>
+            {[stage(row.stage), row.by ? t('where.manual.by', { who: row.by }) : null].filter(Boolean).join(' · ')}
+            {' · '}
+            <time dateTime={row.at}>{formatDateTime(row.at, { locale })}</time>
+            {reason ? ` · ${reason}` : null}
+          </span>
+        </span>
+        {lines.map((line) => (
+          <span key={line} className="fw-so-hint">
+            {line}
+          </span>
+        ))}
+        {row.note ? (
+          <span className="fw-so-hint fw-so-hand-note">
+            <Lock size={12} aria-hidden />
+            <span>{`${w.t('parts.health.officeOnly')} — ${row.note}`}</span>
+          </span>
+        ) : null}
+      </span>
+      {door ? (
+        <span className="fw-so-ov-doors">
+          <Button size="sm" heldReason={sayHand(door.change)} aria-label={t('where.manual.changeAria', { number: order.number })} onClick={() => actions?.onDialog?.({ kind: 'stageByHand', mode: 'change' })}>
+            {t('where.manual.change')}
+          </Button>
+          <Button size="sm" variant="quiet" heldReason={sayHand(door.clear)} aria-label={t('where.manual.clearAria', { number: order.number })} onClick={() => actions?.onDialog?.({ kind: 'stageClear' })}>
+            {t('where.manual.clear')}
+          </Button>
+        </span>
+      ) : null}
+    </div>
+  )
+}
+// ---- end F-MS-102
 
 // ---- F-OO-105 (order overview §1.3; review F1, F8, F13): the strips — words, age, and each one's real doors ----------------------
 /** Each strip's tone (its left rule) and mark: what stops the work hardest reads danger. */

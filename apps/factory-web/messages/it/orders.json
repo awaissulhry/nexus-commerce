@@ -1775,6 +1775,56 @@
     },
     "cancel": {
       "yesTakenBack": "Il sì chiesto viene ritirato"
+    },
+    "manual": {
+      "open": "Imposta la fase a mano…",
+      "tag": "Impostata a mano",
+      "by": "da {who}",
+      "floor": "I conteggi del reparto dicono {floor}: si toglie da sola quando il reparto arriva a {stage}",
+      "noWork": "Nessun ordine di lavoro registra questo ordine: resta finché non la togli o l'ordine parte",
+      "old": "Impostata a mano {age} fa e il reparto non ci è ancora arrivato: controllala",
+      "stagesLink": "Apri gli ordini di lavoro in Produzione · ora {stage}, impostata a mano",
+      "change": "Cambia…",
+      "changeAria": "Cambia la fase impostata a mano su {number}",
+      "clear": "Togli…",
+      "clearAria": "Togli la fase impostata a mano su {number}: torna alla fase del reparto",
+      "held": {
+        "reading": "La fase è ancora in lettura",
+        "stage": "Scegli prima una fase."
+      },
+      "reasons": {
+        "OUTAGE": "Sistema o lettori fuori uso",
+        "FEW_PEOPLE": "Troppo poche persone per registrare il lavoro",
+        "OUTSIDE": "Lavoro presso un terzista",
+        "OTHER": "Altro (scrivilo nella nota)"
+      },
+      "title": "Imposta a mano la fase di {number}",
+      "changeTitle": "Cambia la fase impostata a mano su {number}",
+      "body": "Usala quando il reparto non può registrare il lavoro. Cambia solo la fase: gli ordini di lavoro e i loro conteggi restano come li ha registrati il reparto.",
+      "pick": "Dove si trova davvero il lavoro",
+      "rowDone": "Fatta, dai conteggi del reparto",
+      "rowNow": "Ora, dai conteggi del reparto",
+      "rowSet": "Impostata a mano ora",
+      "reason": "Motivo (solo ufficio)",
+      "noteHint": "Una riga, al massimo {max} caratteri. Non nominare chi lavora in reparto.",
+      "customer": "Il cliente la legge come una fase normale: mai il motivo, la nota o chi l'ha impostata.",
+      "told": "Quando la fase va avanti, il cliente riceve l'avviso dopo {minutes} minuti: se la togli prima, non lo riceve. Dopo, togliendola non riprendi ciò che il cliente ha letto.",
+      "back": "Si torna indietro: il cliente legge di nuovo {customer} e non riceve avvisi.",
+      "same": "Il cliente continua a leggere {customer}: non riceve un nuovo avviso.",
+      "cuts": "Le modifiche del cliente si valutano sui dati del reparto: registra i tagli appena il reparto può.",
+      "clears": "Si toglie da sola quando i conteggi del reparto arrivano a {stage}.",
+      "go": "Imposta la fase",
+      "changeGo": "Cambia la fase",
+      "refused": "La fase è cambiata nel frattempo: è stata riletta.",
+      "notice": "Fase {stage} impostata a mano: il cliente legge {customer}.",
+      "cleared": "Di nuovo la fase del reparto: {floor}.",
+      "clearedPlain": "Di nuovo la fase del reparto.",
+      "clearTitle": "Tornare alla fase del reparto?",
+      "clearTold": "Il cliente ha già ricevuto l'avviso di {customer}; non lo riceve di nuovo.",
+      "clearUntold": "Impostata meno di {minutes} minuti fa: il cliente non ha ancora ricevuto l'avviso di {customer}, e ora non lo riceve.",
+      "clearFloor": "Legge di nuovo {customer}, senza avvisi.",
+      "clearGo": "Torna a {stage}",
+      "clearGoPlain": "Torna alla fase del reparto"
     }
   },
   "overview": {

@@ -916,7 +916,7 @@
       "office": {
         "planned": "Planned {date}",
         "promised": "Ex-factory {date}",
-        "setBy": "Stages are set by the floor and quality, never by hand"
+        "setBy": "Stages are set by the floor and quality, or by hand when the floor cannot record them"
       },
       "customer": {
         "expected": "Expected by {date}",
