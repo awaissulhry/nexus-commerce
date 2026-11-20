@@ -17,6 +17,7 @@ import { BRAND_HEALTHS, HEALTH_REASON_CODES } from '@nexus/factory-domain/produc
 import { ISSUE_SOURCES, ISSUE_STATUSES } from '@nexus/factory-domain/production-brand/issues' // B-PR-15
 import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels'
+import { STAGE_SET_REASON_CODES } from '@nexus/factory-domain/production-brand/stage-set' // T-MS-001
 import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages' // B-PR-15
 import { BRAND_URGENCIES, URGENCY_ACTORS } from '@nexus/factory-domain/production-brand/urgency' // B-PR-15
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting' // B-PR-15
@@ -70,6 +71,7 @@ import {
   ShadeRule,
   SkillKind,
   SkillLevel,
+  StageSetReason, // T-MS-001
   SwatchKind,
   Tannage,
   Uom,
@@ -171,6 +173,8 @@ export const MIRRORS: readonly Mirror[] = Object.freeze([
   mirror('IssueStatus', IssueStatus, 'production-brand/issues ISSUE_STATUSES', ISSUE_STATUSES, true),
   mirror('WorkOrderHoldKind', WorkOrderHoldKind, 'production/holds/kinds WORK_ORDER_HOLD_KINDS', WORK_ORDER_HOLD_KINDS, true),
   mirror('WorkOrderHoldStatus', WorkOrderHoldStatus, 'production/holds/kinds WORK_ORDER_HOLD_STATUSES', WORK_ORDER_HOLD_STATUSES, true),
+  // T-MS-001 (set the stage by hand, schema wave 'stage by hand 1/1'): why a stage was set by hand (B-MS-001's list).
+  mirror('StageSetReason', StageSetReason, 'production-brand/stage-set STAGE_SET_REASON_CODES', STAGE_SET_REASON_CODES, true),
   // B-PR-23 (production plan, schema wave 4/5): the counter-offer's state, the new sample, swatch and gate kinds, and the
   // override's approval kind. ApprovalKind (+ FABRIC, TRIM, REPROMISE, COUNTER_OFFER) is not paired yet: its domain list is
   // approvals-out/kinds APPROVAL_KINDS with a rule per kind, which B-PR-24 writes (its step); pair it there.
