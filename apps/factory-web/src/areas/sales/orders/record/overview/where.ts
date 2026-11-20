@@ -282,8 +282,9 @@ export function whereStripsOf(order: StripOrder, read: Pick<OrderProduction, 'he
  *   the deposit        Record the payment (the money dialog on its request), held without payments.record beside Money ›; none
  *                      asked: Money › (where the deposit is asked)
  *   quality            Release on Quality › — Quality's holds of the work order (a release needs a signature and a fresh code)
- *   production, pause  Lift… on ONE work order (the shared HoldDialog of its row, held with who does it); several: Production ›
- *                      holds (one Lift for N is F-OO-109); only a shared one: its own page, where it is lifted
+ *   production, pause  Lift… on ONE work order (the shared HoldDialog of its row, held with who does it); F-OO-109: several of its
+ *                      own — ONE Lift for all of them (all or none); a row not read: Production › holds; only a shared one: its own
+ *                      page, where it is lifted
  *
  * Read-only on the page: words only, no door at all.
  */
@@ -295,6 +296,11 @@ export type StripDoor =
   /** A tab of this page at its section: Money (the deposit to ask), Production › holds (each work order's own Lift). */
   | { readonly kind: 'tab'; readonly tab: 'money' | 'production'; readonly anchor: string | null }
   | { readonly kind: 'lift'; readonly row: WorkOrderOwn; readonly label: 'wo.act.lift' | 'wo.liftPause'; readonly held: Phrase | null }
+  /**
+   * F-OO-109: Lift… for the strip's own work orders (two or more) — ONE dialog, each one's holds read afresh, ONE call (all or none);
+   * the shared ones (their own pages) and those not reached are said in it.
+   */
+  | { readonly kind: 'liftMany'; readonly holdKind: 'PRODUCTION' | 'BRAND'; readonly workOrders: readonly { readonly id: string; readonly number: string }[]; readonly shared: readonly string[]; readonly notReached: number; readonly label: 'wo.act.lift' | 'wo.liftPause'; readonly held: Phrase | null }
   /** A shared work order's own page (it makes other customers' work: lifted there). */
   | { readonly kind: 'workOrder'; readonly href: string; readonly number: string }
   /** F-OO-108 (W07's note): `held` — Quality's holds do not open for this reader (quality.holds.view): the door is held with who does it. */
@@ -376,6 +382,15 @@ export function stripDoorsOf(strip: WhereStrip, input: StripDoorsInput): StripDo
         const lift = row && input.acts ? (rowActsOf(row, input.acts).menu.find((entry) => entry.act === 'lift') ?? null) : null
         if (row && lift) return [{ kind: 'lift', row, label: strip.kind === 'pause' ? 'wo.liftPause' : 'wo.act.lift', held: lift.held ?? busy }]
       }
+      // ---- F-OO-109: two or more of its own — ONE Lift (each row read with its version and rights; held with who does it) ----
+      const label = strip.kind === 'pause' ? 'wo.liftPause' : 'wo.act.lift'
+      const rows = own.map((entry) => input.work.find((row) => row.id === entry.id) ?? null)
+      if (own.length > 1 && input.acts?.view && rows.every((row) => row && row.version !== undefined && row.rights)) {
+        const held = rows.some((row) => !row!.rights!.hold || !!row!.rights!.why) ? HELD_FOR_SALES : busy
+        const numbers = (entries: readonly StripWorkOrder[]) => entries.map((entry) => entry.number ?? '—')
+        return [{ kind: 'liftMany', holdKind: strip.kind === 'pause' ? 'BRAND' : 'PRODUCTION', workOrders: own.map((entry) => ({ id: entry.id, number: entry.number ?? '—' })), shared: numbers(shared), notReached: strip.workOrders.notReached, label, held }]
+      }
+      // ---- end F-OO-109
       if (own.length > 0) return [{ kind: 'tab', tab: 'production', anchor: 'holds' }]
       const first = shared[0]
       return first ? [{ kind: 'workOrder', href: workOrderHref(input.prefix, first.id), number: first.number ?? '—' }] : []

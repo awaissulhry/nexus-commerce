@@ -182,6 +182,21 @@ export function liftProductionHold(api: ApiClient, workOrderId: string, holdId: 
 }
 // ---- end F-PR-05b
 
+// ---- F-OO-109 (order overview N5; B-OO-006): ONE Lift for a hold standing on N work orders ---------------------------------------
+/**
+ * workorders.hold over each work order: every plain hold named (its work order, its version read) lifted with one reason, in ONE
+ * command — all or none (a hold lifted or changed meanwhile: 409 naming its work order, nothing lifted). The customer is told
+ * "resumed" once, when the last one lets the work go on.
+ */
+export function liftProductionHolds(api: ApiClient, body: { readonly holds: readonly { readonly workOrderId: string; readonly holdId: string; readonly version: number }[]; readonly reason: string }, idempotencyKey = newIdempotencyKey()) {
+  return api.post('/production/work-orders/holds/lift', {
+    body: { holds: body.holds.map((hold) => ({ workOrderId: hold.workOrderId, holdId: hold.holdId, version: hold.version })), reason: body.reason },
+    schema: z.object({ holds: z.array(workOrderHoldSchema), workOrders: z.array(z.object({ id: z.string(), number: z.string(), status: woStatus, lifted: z.boolean() })) }),
+    idempotencyKey,
+  })
+}
+// ---- end F-OO-109
+
 // ---- report finished to stock ----------------------------------------------------------------------------------------------------
 
 export const finishedSchema = z.object({

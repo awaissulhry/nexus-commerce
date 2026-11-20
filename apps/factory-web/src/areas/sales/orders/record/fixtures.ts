@@ -92,6 +92,7 @@ import type { CreditCustomer, CreditHeld } from './credit/api' // F-OO-106: the 
 // F-OP-114 / F-OP-115: the row's dialogs on a work order read afresh (the production lane's own fixtures).
 import { releaseCheck, workOrder as productionWorkOrder } from '../../../production/_shared/fixtures'
 import { HOLD_REASONS, PRODUCTION_HOLD_REASONS } from '../../../production/work-orders/daily/demo/fixtures'
+import { CUSTOMER_PAUSE, plainHolds } from '../../../production/work-orders/daily/demo/fixtures' // F-OO-109: each work order's pause as read
 // F-SA-243: the order's requests (the shared request fixtures) and its production read with Still to do.
 import { PRODUCTION_READ } from './overview/fixtures'
 import { PEOPLE } from './overview/fixtures' // F-OO-133: the overview case draws the real People card
@@ -774,6 +775,51 @@ const F_OO_108: DesignCase<RecordCase>[] = [
 ]
 // ---- end F-OO-108
 
+// ---- F-OO-109 (order overview §1.3; N5, B-OO-006): ONE Lift for the customer's pause on N work orders — the strip's Lift the
+// customer's pause… (the Owner: live; Sales: held, Production does it), the dialog with each one's pause and what stays (a quality
+// hold on WO-00022, WO-00019 shared, 1 not reached), the customer told once; refused because one changed meanwhile; still reading.
+const PAUSE_BLOCKERS = [
+  blockerOf('BRAND_PAUSE', 'BRAND', "Paused at the customer's request", '2026-11-13T09:00:00Z', { type: 'WorkOrder', id: WORK_ORDERS[0]!.id }),
+  blockerOf('BRAND_PAUSE', 'BRAND', "Paused at the customer's request", '2026-11-13T09:00:00Z', { type: 'WorkOrder', id: WORK_ORDERS[1]!.id }),
+  blockerOf('BRAND_PAUSE', 'BRAND', "Paused at the customer's request", '2026-11-13T09:00:00Z', { type: 'WorkOrder', id: SHARED_WO_ID }),
+  blockerOf('BRAND_PAUSE', 'BRAND', "Paused at the customer's request", '2026-11-13T09:00:00Z', null),
+]
+const pausedRead = (rights: WorkRights) => {
+  const read = workActsRead(rights)
+  return {
+    ...read,
+    headline: { ...read.headline!, held: true, holds: [{ kind: 'BRAND' as const, words: W105("Paused at the customer's request", 'In pausa su richiesta del cliente'), since: '2026-11-13' }], waiting: { ...read.headline!.waiting, blockers: PAUSE_BLOCKERS } },
+    work: { ...read.work!, workOrders: read.work!.workOrders.map((row) => (row.sharedWithOtherCustomers ? row : { ...row, held: true, status: 'ON_HOLD' })) },
+  }
+}
+const pauseOn = (id: string, number: string, holdId: string, quality = 0) => {
+  const holds = plainHolds([{ ...CUSTOMER_PAUSE, id: holdId, workOrderId: id }], quality)
+  return { ...holds, workOrder: { ...holds.workOrder, id, number } }
+}
+const liftOpen = (over: { readonly problem?: { key: string; params?: Record<string, string | number> } | null; readonly reading?: boolean } = {}) =>
+  woActs('owner', {
+    reasons: [...HOLD_REASONS, ...PRODUCTION_HOLD_REASONS],
+    liftMany: {
+      kind: 'BRAND',
+      workOrders: [
+        { id: WORK_ORDERS[0]!.id, number: 'WO-00021', holds: { value: pauseOn(WORK_ORDERS[0]!.id, 'WO-00021', '0190f0e2-5252-7000-8000-000000000021'), problem: null } },
+        { id: WORK_ORDERS[1]!.id, number: 'WO-00022', holds: over.reading ? { value: null, problem: null } : { value: pauseOn(WORK_ORDERS[1]!.id, 'WO-00022', '0190f0e2-5252-7000-8000-000000000022', 1), problem: null } },
+      ],
+      shared: ['WO-00019'],
+      notReached: 1,
+      busy: false,
+      problem: over.problem ?? null,
+    },
+  })
+const F_OO_109: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-109-lift', label: 'F-OO-109 · Owner · the customer’s pause on WO-00021 and WO-00022 (and WO-00019 shared, 1 not reached): ONE Lift the customer’s pause…', model: base('owner', production, { tab: 'overview', production: ready(pausedRead(MANAGE_ALL)), workOrderActs: woActs('owner'), liveState: 'live' }) },
+  { id: 'f-oo-109-lift-sales', label: 'F-OO-109 · Sales · the same pause: Lift the customer’s pause… held — Production does it', model: base('sales', production, { tab: 'overview', production: ready(pausedRead(NO_RIGHTS)), workOrderActs: woActs('sales'), liveState: 'live' }) },
+  { id: 'f-oo-109-lift-dialog', label: 'F-OO-109 · Owner · the ONE lift: each work order’s pause, one reason, all or none; a quality hold stays on WO-00022; WO-00019 on its page; the customer told once', model: base('owner', production, { tab: 'overview', production: ready(pausedRead(MANAGE_ALL)), workOrderActs: liftOpen(), liveState: 'live' }) },
+  { id: 'f-oo-109-lift-stale', label: 'F-OO-109 · Owner · the same lift refused: WO-00022 changed since it was read — nothing was lifted, the holds read again', model: base('owner', production, { tab: 'overview', production: ready(pausedRead(MANAGE_ALL)), workOrderActs: liftOpen({ problem: { key: 'orders:where.lift.stale', params: { count: 1, numbers: 'WO-00022' } } }), liveState: 'live' }) },
+  { id: 'f-oo-109-lift-reading', label: 'F-OO-109 · Owner · the lift while WO-00022’s holds are still read: Lift held', model: base('owner', production, { tab: 'overview', production: ready(pausedRead(MANAGE_ALL)), workOrderActs: liftOpen({ reading: true }), liveState: 'live' }) },
+]
+// ---- end F-OO-109
+
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-039',
   title: 'Order studio: lines, dates, production, shipments, invoices & payments with the deposit, documents',
@@ -974,6 +1020,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     ...F_OO_105, // F-OO-105: the strips with their real doors (holds, the deposit, the credit; Owner, Sales, Read-only)
     ...F_OO_106, // F-OO-106: the order's own credit hold — Check credit again, Ask for a yes…, the last no, who checks it
     ...F_OO_108, // F-OO-108: Hold the whole order… — the move, held for Sales and with nothing yet, the ONE Hold dialog on the plan
+    ...F_OO_109, // F-OO-109: ONE Lift for the customer's pause on N work orders — the door, held for Sales, the dialog
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
     ...F_OP_301, // F-OP-301 (walk #1, #2, #3)

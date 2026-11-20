@@ -1728,6 +1728,33 @@
       "stale_other": "{numbers} sono cambiati da quando sono stati letti: non è stato messo in sospeso niente. L'elenco è stato riletto — riprova.",
       "notice_one": "{count} ordine di lavoro di {number} è in sospeso",
       "notice_other": "{count} ordini di lavoro di {number} sono in sospeso"
+    },
+    "lift": {
+      "title_one": "Togli il blocco di produzione su {count} ordine di lavoro",
+      "title_other": "Togli il blocco di produzione su {count} ordini di lavoro",
+      "titlePause_one": "Togli la pausa del cliente su {count} ordine di lavoro",
+      "titlePause_other": "Togli la pausa del cliente su {count} ordini di lavoro",
+      "body": "Ogni blocco qui sotto si toglie con un solo motivo, in una volta.",
+      "list": "I blocchi da togliere",
+      "on": "{number} — {words}",
+      "noneOn": "{number}: nessuno di questi blocchi è ancora attivo",
+      "reading": "Lettura dei blocchi di {number}…",
+      "readFailed": "Impossibile leggere i blocchi di {number}.",
+      "allOrNone": "Tutti o nessuno: se uno è cambiato nel frattempo, non si toglie niente e l'elenco viene riletto.",
+      "customer": "Il cliente viene avvisato una volta sola che il lavoro è ripreso, non per ogni ordine di lavoro.",
+      "notReached_one": "{count} ordine di lavoro fuori da ciò che puoi aprire resta bloccato: lo toglie la Produzione",
+      "notReached_other": "{count} ordini di lavoro fuori da ciò che puoi aprire restano bloccati: li toglie la Produzione",
+      "go_one": "Togli {count} blocco",
+      "go_other": "Togli {count} blocchi",
+      "held": {
+        "failed": "Impossibile leggere i blocchi di un ordine di lavoro: riprova.",
+        "none": "Nessuno di questi blocchi è ancora attivo."
+      },
+      "stale_one": "{numbers} è cambiato da quando è stato letto: non si è tolto niente. I blocchi sono stati riletti — riprova.",
+      "stale_other": "{numbers} sono cambiati da quando sono stati letti: non si è tolto niente. I blocchi sono stati riletti — riprova.",
+      "meanwhile": "Un blocco è stato tolto o cambiato nel frattempo: non si è tolto niente. I blocchi sono stati riletti.",
+      "notice_one": "Tolto {count} blocco: l'ordine di lavoro riparte appena nessun altro blocco lo ferma",
+      "notice_other": "Tolti {count} blocchi: ogni ordine di lavoro riparte appena nessun altro blocco lo ferma"
     }
   },
   "overview": {

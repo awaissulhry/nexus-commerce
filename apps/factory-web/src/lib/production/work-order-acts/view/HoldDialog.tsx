@@ -11,6 +11,7 @@ import { wordsIn } from '../../../../areas/_shared/reasons/model'
 import type { ProductionHolds } from '../../../../areas/production/work-orders/daily/api'
 import { DAILY_NAMESPACE, dialogReasons, HOLD_DIALOG_LIMITS, holdKindOf, liftHeld, placeHeld, plainHoldsOf, plainHoldWords, type DailyCan, type PlaceHoldInput } from '../../../../areas/production/work-orders/daily/model'
 import type { Part, Phrase } from '../model'
+import { liftManyHeld, liftManyHoldsOf, type LiftKind, type LiftManyWorkOrder } from '../model' // F-OO-109: ONE Lift for N work orders
 import './work-order-acts.css'
 
 /**
@@ -183,8 +184,16 @@ export function HoldDialog({ numbers, workOrderIds, parts, onCancel, onPlace, no
 /**
  * `holdId`: the plain hold to lift. Null (F-OP-114, a row's ⋯ on the order page): the work order's first standing plain hold — and
  * when none stands, the words of what holds it (a quality hold, or another record) and Release held with them.
+ * F-OO-109 (order overview N5): `many` — a strip's hold on N work orders (the sales order's Overview): each one's plain holds as read
+ * afresh, those of its kind lifted with ONE reason in ONE call, all or none (LiftManyHolds below). One work order: today's dialog.
  */
-export function LiftHoldDialog({ holdId, parts, onCancel, onLift, onRetry }: { holdId: string | null; parts: HoldParts; onCancel: () => void; onLift?: (input: { holdId: string; version: number; reason: string }) => void; onRetry?: () => void }) {
+export function LiftHoldDialog({ holdId, parts, onCancel, onLift, onRetry, many }: { holdId: string | null; parts: HoldParts; onCancel: () => void; onLift?: (input: { holdId: string; version: number; reason: string }) => void; onRetry?: () => void; many?: LiftManyParts | null }) {
+  if (many && many.workOrders.length > 1) return <LiftManyHolds many={many} parts={parts} onCancel={onCancel} />
+  return <LiftOneHold holdId={holdId} parts={parts} onCancel={onCancel} onLift={onLift} onRetry={onRetry} />
+}
+
+/** The plain hold of ONE work order, lifted with why (F-PR-05b): the dialog as it always was. */
+function LiftOneHold({ holdId, parts, onCancel, onLift, onRetry }: { holdId: string | null; parts: HoldParts; onCancel: () => void; onLift?: (input: { holdId: string; version: number; reason: string }) => void; onRetry?: () => void }) {
   const t = useScopedT(DAILY_NAMESPACE)
   const locale = useLocale()
   const [reason, setReason] = useState(parts.draft?.liftReason ?? '')
@@ -247,3 +256,89 @@ export function LiftHoldDialog({ holdId, parts, onCancel, onLift, onRetry }: { h
   )
 }
 // ---- end F-PR-05b
+
+// ---- F-OO-109 (order overview §1.3; N5, B-OO-006): ONE Lift for a hold standing on N work orders --------------------------------
+/** What the Lift for N draws: the strip's kind, each work order's holds as read, what it does not lift, and its own acts. */
+export interface LiftManyParts {
+  readonly kind: LiftKind
+  readonly workOrders: readonly LiftManyWorkOrder[]
+  /** Shared with other customers: lifted on their own pages (their numbers). */
+  readonly shared: readonly string[]
+  /** Work orders the reader does not reach: they stay held (counted, never named). */
+  readonly notReached: number
+  readonly onLift?: (reason: string) => void
+  readonly onRetry?: () => void
+}
+
+/**
+ * Lift… for a strip on N work orders: every standing plain hold of its kind, by work order, with its words; ONE reason; ONE call that
+ * lifts them all or none ("Lift 3 holds"). It says what stays: a quality hold on a work order (quality releases it), a shared work
+ * order (its own page), those this reader does not reach; and that the customer is told once that the work resumed.
+ */
+function LiftManyHolds({ many, parts, onCancel }: { many: LiftManyParts; parts: HoldParts; onCancel: () => void }) {
+  const t = useScopedT(DAILY_NAMESPACE)
+  const locale = useLocale()
+  const [reason, setReason] = useState(parts.draft?.liftReason ?? '')
+  const holds = liftManyHoldsOf(many.workOrders, many.kind)
+  const held = say(t, liftManyHeld(many.workOrders, many.kind, parts.can, reason, parts.busy))
+  const go = held ? null : () => many.onLift?.(reason.trim())
+  const count = many.workOrders.length
+  return (
+    <Modal
+      open
+      onClose={onCancel}
+      title={many.kind === 'BRAND' ? t('orders:where.lift.titlePause', { count }) : t('orders:where.lift.title', { count })}
+      size="md"
+      footer={
+        <Footer onCancel={onCancel}>
+          <Button size="sm" variant="primary" heldReason={held} onClick={() => go?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
+            {parts.busy ? <Spinner size={12} /> : <Unlock size={13} aria-hidden />} {t('orders:where.lift.go', { count: holds.length })}
+          </Button>
+        </Footer>
+      }
+    >
+      {/* No form element (F-PR-16): Enter in a one-line field sends nothing; the button and ⌘↵ send. */}
+      <div className="fw-woa-dialog" onKeyDown={submitKeys(go)}>
+        <Problem parts={parts} />
+        <p>{t('orders:where.lift.body')}</p>
+        <ul className="fw-woa-list" aria-label={t('orders:where.lift.list')}>
+          {many.workOrders.map((entry) => {
+            const read = entry.holds.value
+            const standing = plainHoldsOf(read).standing.filter((hold) => hold.kind === many.kind)
+            return (
+              <li key={entry.id}>
+                {entry.holds.problem ? (
+                  <span className="fw-woa-hint">
+                    {t('orders:where.lift.readFailed', { number: entry.number })}{' '}
+                    <Button size="sm" onClick={() => many.onRetry?.()}>
+                      {t('common.retry')}
+                    </Button>
+                  </span>
+                ) : !read ? (
+                  <span className="fw-woa-hint" role="status">
+                    <Spinner size={12} /> {t('orders:where.lift.reading', { number: entry.number })}
+                  </span>
+                ) : standing.length === 0 ? (
+                  t('orders:where.lift.noneOn', { number: entry.number })
+                ) : (
+                  t('orders:where.lift.on', { number: entry.number, words: standing.map((hold) => (hold.kind === 'BRAND' ? t('holds.customerPause') : plainHoldWords(hold, parts.reasons ? [...parts.reasons] : null, locale))).join(' · ') })
+                )}
+                {read && read.qualityHoldsActive > 0 && <span className="fw-woa-hint"> {t('liftHold.qualityStays', { count: read.qualityHoldsActive })}</span>}
+              </li>
+            )
+          })}
+        </ul>
+        <Field label={t('liftHold.reason')} hint={t('liftHold.reasonHint')}>
+          <Input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={HOLD_DIALOG_LIMITS.liftReason} />
+        </Field>
+        <ul className="fw-woa-list">
+          <li>{t('orders:where.lift.allOrNone')}</li>
+          <li>{t('orders:where.lift.customer')}</li>
+          {many.shared.length > 0 && <li>{t('orders:where.strip.shared', { count: many.shared.length, numbers: many.shared.join(', ') })}</li>}
+          {many.notReached > 0 && <li>{t('orders:where.lift.notReached', { count: many.notReached })}</li>}
+        </ul>
+      </div>
+    </Modal>
+  )
+}
+// ---- end F-OO-109

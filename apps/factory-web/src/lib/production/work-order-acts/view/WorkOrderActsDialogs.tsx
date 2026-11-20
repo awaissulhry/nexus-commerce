@@ -45,7 +45,7 @@ const say = (t: ReturnType<typeof useScopedT>, phrase: Phrase | null): string | 
  * to pick (R-16) — the stock issued to it, the workshops it is at). Each brings its catalogues, so it draws on any page.
  */
 export function WorkOrderActsDialogs({ model, actions }: { model: WorkOrderActsModel; actions?: WorkOrderActsActions }) {
-  if (!model.dialog && !model.holdOrder /* F-OO-108 */) return null
+  if (!model.dialog && !model.holdOrder /* F-OO-108 */ && !model.liftMany /* F-OO-109 */) return null
   return (
     <WithMessages namespaces={DIALOG_NAMESPACES}>
       <ActsDialogs model={model} actions={actions} />
@@ -58,6 +58,12 @@ const DIALOG_NAMESPACES = ['orders', 'production', 'production-work-orders', SHI
 
 function ActsDialogs({ model, actions }: { model: WorkOrderActsModel; actions?: WorkOrderActsActions }) {
   if (model.holdOrder) return <OrderHoldDialog model={model} open={model.holdOrder} actions={actions} /> // F-OO-108
+  // F-OO-109: Lift… for a strip on N work orders — the ONE lift dialog with the list (one work order: its row's Lift…, below).
+  if (model.liftMany) {
+    const open = model.liftMany
+    const parts: HoldParts = { reasons: model.reasons, can: { holdsPlace: model.can.qualityHold, productionHold: true }, busy: open.busy, problem: open.problem }
+    return <LiftHoldDialog holdId={null} parts={parts} onCancel={() => actions?.onCloseLiftMany?.()} many={{ kind: open.kind, workOrders: open.workOrders, shared: open.shared, notReached: open.notReached, onLift: actions?.onLiftManyGo, onRetry: actions?.onRetryLiftMany }} />
+  }
   const dialog = model.dialog
   if (!dialog) return null
   const close = () => actions?.onCloseDialog?.()

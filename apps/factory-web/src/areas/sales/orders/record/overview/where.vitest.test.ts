@@ -951,3 +951,51 @@ describe('F-OO-108: Hold the whole order… in the moves row — the domain plan
   })
 })
 // ---- end F-OO-108
+
+// ---- F-OO-109 (order overview §1.3; N5, B-OO-006; W07's note): Lift… for a strip on N work orders — the ONE lift ---------------------
+describe('F-OO-109: the strip\'s Lift… on several of its own work orders opens the ONE lift (all or none); one stays today\'s Lift…', () => {
+  const owner = rolePermissions('owner')
+  const input = (over: Partial<StripDoorsInput> = {}): StripDoorsInput => ({ prefix: '/w/DEMO', order: order('IN_PRODUCTION'), can: abilitiesOf(owner), readOnly: false, busy: false, approval: null, depthCan: { manage: true }, work: [], acts: actsCanOf(owner), ...over })
+  const row = (id: string, number: string, hold: boolean) => ({ ...WORK.workOrders[0]!, id, number, status: 'ON_HOLD', held: true, version: 7, rights: { manage: hold, release: hold, hold, why: null } })
+  const pause = (reached: { id: string; number: string; shared?: boolean }[], notReached = 0): WhereStrip => ({ key: 'pause', kind: 'pause', blocker: 'BRAND_PAUSE', reasons: [], workOrders: { reached: reached.map((entry) => ({ shared: false, ...entry })), notReached }, since: null })
+  const TWO = [{ id: 'w-1', number: 'WO-00021' }, { id: 'w-2', number: 'WO-00022' }]
+
+  it('several own, each read: ONE Lift with the strip\'s kind, the shared ones and those not reached carried; held for Sales; busy', () => {
+    const work = [row('w-1', 'WO-00021', true), row('w-2', 'WO-00022', true)]
+    expect(stripDoorsOf(pause([...TWO, { id: 'w-s', number: 'WO-00019', shared: true }], 1), input({ work }))).toEqual([{ kind: 'liftMany', holdKind: 'BRAND', workOrders: TWO, shared: ['WO-00019'], notReached: 1, label: 'wo.liftPause', held: null }])
+    const production: WhereStrip = { ...pause(TWO), key: 'production', kind: 'production', blocker: 'NO_MOVE' } as WhereStrip
+    expect(stripDoorsOf(production, input({ work }))).toMatchObject([{ kind: 'liftMany', holdKind: 'PRODUCTION', label: 'wo.act.lift', held: null }])
+    // Sales (no hold right on a row): held with who does it; a write running: held with its words.
+    expect(stripDoorsOf(pause(TWO), input({ work: [row('w-1', 'WO-00021', true), row('w-2', 'WO-00022', false)] }))).toMatchObject([{ kind: 'liftMany', held: { key: 'wo.heldHold' } }])
+    expect(stripDoorsOf(pause(TWO), input({ work, busy: true }))).toMatchObject([{ kind: 'liftMany', held: { key: 'held.busy' } }])
+    // A row not read, or the acts not here: Production › holds (each row's own Lift there), as before.
+    expect(stripDoorsOf(pause(TWO), input({ work: [work[0]!] }))).toEqual([{ kind: 'tab', tab: 'production', anchor: 'holds' }])
+    expect(stripDoorsOf(pause(TWO), input({ work, acts: null }))).toEqual([{ kind: 'tab', tab: 'production', anchor: 'holds' }])
+    // One of its own alone: today's Lift… on that row (unchanged).
+    expect(stripDoorsOf(pause([TWO[0]!]), input({ work }))).toMatchObject([{ kind: 'lift', label: 'wo.liftPause', row: { id: 'w-1' } }])
+    // Read-only: no door.
+    expect(stripDoorsOf(pause(TWO), input({ work, readOnly: true }))).toEqual([])
+  })
+
+  it('drawn: the Owner\'s Lift the customer\'s pause… is live; Sales\' is held — Production does it', () => {
+    const view = designScreen.view as ComponentType<{ model: unknown }>
+    const draw = (id: string) => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, 'en')
+    const stripsOf = (html: string): string => html.slice(html.indexOf('class="fw-so-strips"'), html.indexOf('</ul>', html.indexOf('class="fw-so-strips"')))
+    const owner = stripsOf(draw('f-oo-109-lift'))
+    expect(textOf(owner)).toContain('on 4 work orders: WO-00019, WO-00021 and 1 more and 1 work order outside what you can open')
+    expect(owner).toMatch(/<button[^>]*>Lift the customer&#x27;s pause…<\/button>/)
+    expect(stripsOf(draw('f-oo-109-lift-sales'))).toMatch(/aria-disabled="true"[^>]*aria-description="Production does this — a planner or the production manager"[^>]*>Lift the customer&#x27;s pause…/)
+    const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8')
+    expect(card).toContain('actions?.workOrderActs?.onLiftMany?.({ kind: door.holdKind, workOrders: door.workOrders, shared: door.shared, notReached: door.notReached })')
+  })
+
+  it('the words exist in both languages, office "tu" in Italian', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['body', 'list', 'on', 'noneOn', 'reading', 'readFailed', 'allOrNone', 'customer', 'held.failed', 'held.none', 'meanwhile']) expect(t(`where.lift.${key}`, { number: 'N', words: 'W' }), `${locale} ${key}`).not.toBe(`where.lift.${key}`)
+      for (const key of ['title', 'titlePause', 'notReached', 'go', 'stale', 'notice']) for (const count of [1, 2]) expect(t(`where.lift.${key}`, { count, numbers: 'N' }), `${locale} ${key} ${count}`).not.toBe(`where.lift.${key}`)
+    }
+    expect(JSON.stringify(messagesFor('it', ['orders']).orders!.where.lift)).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
+  })
+})
+// ---- end F-OO-109

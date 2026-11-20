@@ -4,6 +4,10 @@ import { releaseRefusalCodes, writeProblem as productionWriteProblem } from '../
 import { orderHoldPlanOf, type OrderHoldPlan } from '@nexus/factory-domain/production/holds/rules'
 import { dailyProblem, type PlaceHoldInput } from '../../../areas/production/work-orders/daily/model'
 // ---- end F-OO-108
+// ---- F-OO-109: ONE Lift for a hold standing on N work orders — each one's plain holds as read, the production lane's limits ----
+import type { ProductionHolds } from '../../../areas/production/work-orders/daily/api'
+import { HOLD_DIALOG_LIMITS, plainHoldsOf } from '../../../areas/production/work-orders/daily/model'
+// ---- end F-OO-109
 
 /**
  * F-OP-113 (order page plan 10-order-page §5.2; review R-11, B6) — what a person may do to one work order from a page that is not the
@@ -275,3 +279,70 @@ export function orderHoldProblemOf(error: unknown, plan: Pick<OrderHoldPlan, 'id
   return fromWorkOrders(dailyProblem(error))
 }
 // ---- end F-OO-108
+
+// ---- F-OO-109 (order overview §1.3; N5, B-OO-006): ONE Lift for a hold standing on N work orders --------------------------------
+/** The kind of plain hold a strip lifts: ours (PRODUCTION) or the customer's accepted pause (BRAND). */
+export type LiftKind = 'PRODUCTION' | 'BRAND'
+
+/** One work order of a Lift for N: its number and its plain holds as read afresh (the per-work-order read, GET …/holds). */
+export interface LiftManyWorkOrder {
+  readonly id: string
+  readonly number: string
+  readonly holds: Part<ProductionHolds>
+}
+
+/** One hold the ONE Lift sends: its work order, its id, its version as read. */
+export interface LiftOne {
+  readonly workOrderId: string
+  readonly holdId: string
+  readonly version: number
+}
+
+/** What the ONE Lift sends: each work order's standing plain holds of the strip's kind, each at its version read, in the list's order. */
+export function liftManyHoldsOf(workOrders: readonly LiftManyWorkOrder[], kind: LiftKind): LiftOne[] {
+  return workOrders.flatMap((entry) =>
+    plainHoldsOf(entry.holds.value)
+      .standing.filter((hold) => hold.kind === kind)
+      .map((hold) => ({ workOrderId: entry.id, holdId: hold.id, version: hold.version })),
+  )
+}
+
+/**
+ * Why the ONE Lift waits (the production lane's words, `orders:` for this dialog's own): the hold right, the holds still read (or a
+ * read failed: Try again), none of the kind standing any more, why — in one line, within its limit — and a write running.
+ */
+export function liftManyHeld(workOrders: readonly LiftManyWorkOrder[], kind: LiftKind, can: { readonly productionHold: boolean }, reason: string, busy: boolean): Phrase | null {
+  if (!can.productionHold) return { key: 'held.noProductionHold' }
+  if (workOrders.some((entry) => entry.holds.problem)) return { key: 'orders:where.lift.held.failed' }
+  if (workOrders.some((entry) => !entry.holds.value)) return { key: 'held.loading' }
+  if (liftManyHoldsOf(workOrders, kind).length === 0) return { key: 'orders:where.lift.held.none' }
+  if (reason.trim() === '') return { key: 'liftHold.held.reason' }
+  if (/[\r\n]/.test(reason)) return { key: 'liftHold.held.line' }
+  if (reason.trim().length > HOLD_DIALOG_LIMITS.liftReason) return { key: 'liftHold.held.long', params: { count: HOLD_DIALOG_LIMITS.liftReason } }
+  if (busy) return { key: 'held.busy' }
+  return null
+}
+
+/**
+ * Why the ONE Lift was refused — all or none, so nothing was lifted: a hold changed since it was read (409 at `body/holds/<n>/…`,
+ * B-OO-006: by its work order's number) or lifted meanwhile (the holds are read again); else the production lane's words.
+ */
+export function liftManyProblemOf(error: unknown, sent: readonly LiftOne[], workOrders: readonly Pick<LiftManyWorkOrder, 'id' | 'number'>[]): Phrase {
+  if (isApiError(error) && error.kind === 'conflict') {
+    const numbers = [
+      ...new Set(
+        error.issues.map(issuePath).flatMap((path) => {
+          const at = path.split(/[./]/)
+          const index = at.indexOf('holds')
+          const hold = index >= 0 ? sent[Number(at[index + 1])] : undefined
+          const workOrder = hold ? workOrders.find((entry) => entry.id === hold.workOrderId) : undefined
+          return workOrder ? [workOrder.number] : []
+        }),
+      ),
+    ]
+    if (numbers.length > 0) return { key: 'orders:where.lift.stale', params: { count: numbers.length, numbers: numbers.join(', ') } }
+    return { key: 'orders:where.lift.meanwhile' }
+  }
+  return fromWorkOrders(dailyProblem(error))
+}
+// ---- end F-OO-109

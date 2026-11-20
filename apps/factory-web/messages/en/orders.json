@@ -1728,6 +1728,33 @@
       "stale_other": "{numbers} changed since they were read: nothing was held. The list was read again — hold again.",
       "notice_one": "{count} work order of {number} is on hold",
       "notice_other": "{count} work orders of {number} are on hold"
+    },
+    "lift": {
+      "title_one": "Lift the production hold on {count} work order",
+      "title_other": "Lift the production hold on {count} work orders",
+      "titlePause_one": "Lift the customer's pause on {count} work order",
+      "titlePause_other": "Lift the customer's pause on {count} work orders",
+      "body": "Every hold below is lifted with one reason, in one go.",
+      "list": "The holds lifted",
+      "on": "{number} — {words}",
+      "noneOn": "{number}: none of these holds stands any more",
+      "reading": "Reading the holds of {number}…",
+      "readFailed": "The holds of {number} could not be read.",
+      "allOrNone": "All or none: if one changed meanwhile, nothing is lifted and the list is read again.",
+      "customer": "The customer is told once that the work resumed — not once per work order.",
+      "notReached_one": "{count} work order outside what you can open stays held: Production lifts it",
+      "notReached_other": "{count} work orders outside what you can open stay held: Production lifts them",
+      "go_one": "Lift {count} hold",
+      "go_other": "Lift {count} holds",
+      "held": {
+        "failed": "The holds of a work order could not be read: try again.",
+        "none": "None of these holds stands any more."
+      },
+      "stale_one": "{numbers} changed since it was read: nothing was lifted. The holds were read again — lift again.",
+      "stale_other": "{numbers} changed since they were read: nothing was lifted. The holds were read again — lift again.",
+      "meanwhile": "A hold was lifted or changed meanwhile: nothing was lifted. The holds were read again.",
+      "notice_one": "{count} hold lifted: the work order goes on once no other hold names it",
+      "notice_other": "{count} holds lifted: each work order goes on once no other hold names it"
     }
   },
   "overview": {

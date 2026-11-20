@@ -315,6 +315,13 @@ function StripDoorView({ door, order, model, actions }: { door: StripDoor; order
           {t(door.label)}
         </Button>
       )
+    // F-OO-109: Lift… for the strip's own work orders — the ONE lift dialog (the work-order acts'), all or none.
+    case 'liftMany':
+      return (
+        <Button size="sm" heldReason={door.held ? scoped(door.held.key, door.held.params) : null} onClick={() => actions?.workOrderActs?.onLiftMany?.({ kind: door.holdKind, workOrders: door.workOrders, shared: door.shared, notReached: door.notReached })}>
+          {t(door.label)}
+        </Button>
+      )
     case 'workOrder':
       return (
         <Button size="sm" variant="quiet" asChild>
