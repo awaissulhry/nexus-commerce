@@ -58,12 +58,26 @@ export const PART_LOADING = { value: null, problem: null } as const
 // F-OP-101: Refuse… of an open yes (its task; the words are typed in the dialog).
 export type BandDialog = { kind: 'promise' } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' } | { kind: 'refuseYes'; taskId: string }
 /** use-lines-acts: the lines (close and reopen lines, the cancel; F-OP-111: the split; F-OP-106: the amendment has no dialog — its strip). */
-export type LinesDialog = { kind: 'closeLines' } | { kind: 'reopenLines' } | { kind: 'cancel' } | { kind: 'split' }
+// F-OO-124: Close short / Reopen ONE line (Overview › Progress by line ⋯): `lineIds` — the lines the dialog opens ticked (absent: every
+// line it offers, as the band's ⋯ and the Lines tab open it).
+export type LinesDialog = { kind: 'closeLines'; lineIds?: readonly string[] } | { kind: 'reopenLines'; lineIds?: readonly string[] } | { kind: 'cancel' } | { kind: 'split' }
 /** use-money-acts: the deposits and payments (the bank-details page, the payment, the TD02's send to SDI). */
 export type MoneyDialog = { kind: 'depositLink'; requestId: string } | { kind: 'depositPayment'; requestId: string } | { kind: 'sdiSend'; invoiceId: string }
 /** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
 export type ChangesDialog = { kind: 'compare'; amendmentId: string }
 export type RecordDialog = BandDialog | LinesDialog | MoneyDialog | ChangesDialog
+
+// ---- F-OO-124: the lines Close remaining lines / Reopen lines opens with ticked ----
+/**
+ * The dialog's own lines when it names them (a line's row ⋯ — only those it still offers: a line closed or reopened meanwhile is not
+ * ticked), else what a design case typed, else every line it offers (the band's ⋯, the Lines tab).
+ */
+export function dialogLinesOf(dialog: RecordDialog | null, kind: 'closeLines' | 'reopenLines', offered: readonly string[], typed?: readonly string[]): string[] {
+  const asked = dialog?.kind === kind && 'lineIds' in dialog ? dialog.lineIds : undefined
+  if (asked) return offered.filter((id) => asked.includes(id))
+  return [...(typed ?? offered)]
+}
+// ---- end F-OO-124
 
 /** One write of the page (the container's): the order it answers replaces the page's; a refusal is said in the dialog or the notice. */
 export type RecordWrite = (run: () => Promise<Order | null>, success: string | null, keepDialog?: boolean) => Promise<void>

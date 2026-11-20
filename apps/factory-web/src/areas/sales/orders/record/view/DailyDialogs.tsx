@@ -27,6 +27,7 @@ import {
   type CompareRow,
 } from '../../daily-model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
+import { dialogLinesOf } from '../record-model' // F-OO-124: one line's row ⋯ opens with only that line ticked
 import { DialogProblem, Frame } from './Dialogs'
 import type { CommandDialogActions, CommandDialogModel } from './Dialogs' // F-CP-108: type only (the Cancel the Orders sheet's row mounts)
 // ---- F-OP-107 (B2): Close remaining lines and Cancel say what happens to each work order, and pick the extra pieces' outcome ----
@@ -100,7 +101,7 @@ function Followed({ followed }: { followed: { readonly applied: readonly { reado
 export function CloseLinesDialog({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const open = closableLines(order)
-  const [chosen, setChosen] = useState<string[]>(model.draft?.lineIds ?? open.map((entry) => entry.line.id))
+  const [chosen, setChosen] = useState<string[]>(() => dialogLinesOf(model.dialog, 'closeLines', open.map((entry) => entry.line.id), model.draft?.lineIds)) // F-OO-124
   const [reason, setReason] = useState(model.draft?.reason ?? '')
   // B-W2b-16: why, as a code of the CANCEL list (the words stay beside it).
   const [reasonCode, setReasonCode] = useState(model.draft?.reasonCode ?? '')
@@ -183,7 +184,7 @@ export function ReopenLinesDialog({ order, model, actions }: { order: Order; mod
   const t = useT('orders')
   const locale = useLocale()
   const closedOnes = closedLines(order)
-  const [chosen, setChosen] = useState<string[]>(model.draft?.lineIds ?? closedOnes.map((line) => line.id))
+  const [chosen, setChosen] = useState<string[]>(() => dialogLinesOf(model.dialog, 'reopenLines', closedOnes.map((line) => line.id), model.draft?.lineIds)) // F-OO-124
   const [reason, setReason] = useState(model.draft?.reason ?? '')
   const held = model.busy ? t('held.busy') : chosen.length === 0 ? t('reopen.held.none') : reason.trim() === '' ? t('reopen.held.reason') : null
   return (
