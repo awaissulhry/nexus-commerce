@@ -16,6 +16,7 @@ import { RequestsCard } from './overview/RequestsCard'
 import { LinkedCard } from './overview/LinkedCard'
 import { FactsCard } from './overview/FactsCard'
 // ---- end F-OO-100
+import './overview/overview.css' // F-OO-201: the pairs and the shared card row
 
 /**
  * F-SA-232 (sales page plan N2, picks P2, P3, P4, P15, R9; 10-order-page §2.1 O1, O2; review OW-6, OW-7) — Overview, the order page's
@@ -36,12 +37,18 @@ export function OverviewTab({ order, model, actions }: { order: Order; model: Or
     <div className="fw-so-overview">
       <WhereCard order={order} model={model} actions={actions} waiting={waiting} />
       <ProgressCard order={order} model={model} actions={actions} />
-      {/* F-SA-233: the facts beside each other (a card grid that follows the body's width, never dead space). */}
-      <div className="fw-so-overview-cards">
+      {/* F-OO-201 (F4): then the cards in pairs, each pair its own row — 2 equal columns while the Overview is 720 px or wider, 1
+          below; a card alone takes the whole row; the two cards of a pair stretch to one height (overview.css). */}
+      <div className="fw-so-ov-pair">
         <PeopleCard order={order} model={model} actions={actions} />
         <DatesCard order={order} model={model} actions={actions} />
+      </div>
+      <div className="fw-so-ov-pair">
         <RequestsCard order={order} model={model} actions={actions} waiting={waiting} />
         <LinkedCard order={order} model={model} />
+      </div>
+      {/* Order facts, with Custom fields as the pair's second card (F-OO-211); alone, Order facts takes the row. */}
+      <div className="fw-so-ov-pair">
         <FactsCard order={order} model={model} />
       </div>
     </div>

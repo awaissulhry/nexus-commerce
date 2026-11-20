@@ -553,3 +553,81 @@ describe('F-OO-208: the page reads the new fields, and still reads an older answ
   })
 })
 // ---- end F-OO-208
+
+// ---- F-OO-201 (review F4: the pairs): sections 1 and 2 full width, then the cards in pairs — one rule at 720 px, a card alone spans -
+describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a pair is 2 columns from 720 px, a card alone spans', () => {
+  const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr'])
+  /** The element whose opening tag starts at `at` in React's static markup: where it ends, where each direct child starts. */
+  const elementAt = (html: string, at: number): { readonly end: number; readonly children: readonly number[] } => {
+    const tag = /<(\/?)([a-zA-Z][\w-]*)[^>]*?(\/?)>/g
+    tag.lastIndex = at
+    let depth = 0
+    const children: number[] = []
+    for (let match = tag.exec(html); match; match = tag.exec(html)) {
+      const [, closing, name, selfClosing] = match
+      if (closing) {
+        depth -= 1
+        if (depth === 0) return { end: tag.lastIndex, children }
+        continue
+      }
+      if (depth === 1) children.push(match.index)
+      if (!VOID.has(name!.toLowerCase()) && !selfClosing) depth += 1
+    }
+    throw new Error(`the element at ${at} never closes`)
+  }
+  /** A card's heading (the first `fw-so-h2` inside the element at `at`), as a reader sees it. */
+  const headOf = (html: string, at: number): string | null => {
+    const match = /<h2 class="fw-so-h2">([^<]*)<\/h2>/.exec(html.slice(at, elementAt(html, at).end))
+    return match ? textOf(match[1]!) : null
+  }
+
+  it('draws [People, Next dates], [Requests & changes, Linked records], [Order facts] as .fw-so-ov-pair after Where and Progress, in order', () => {
+    const want = {
+      en: { full: ['Where it is now', 'Progress by line'], pairs: [['People', 'Next dates'], ['Requests & changes', 'Linked records'], ['Order facts']] },
+      it: { full: ['A che punto è', 'Avanzamento per riga'], pairs: [['Persone', 'Prossime date'], ['Richieste e modifiche', 'Record collegati'], ["Dati dell'ordine"]] },
+    } as const
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw('overview', locale)
+      const root = html.indexOf('<div class="fw-so-overview">')
+      expect(root, locale).toBeGreaterThan(-1)
+      const children = elementAt(html, root).children
+      // Where it is now, Progress by line, then three pairs: nothing else at the Overview's top level.
+      expect(children, locale).toHaveLength(5)
+      expect(children.slice(0, 2).map((at) => headOf(html, at))).toEqual(want[locale].full)
+      const pairs = children.slice(2)
+      for (const at of pairs) expect(html.startsWith('<div class="fw-so-ov-pair">', at), locale).toBe(true)
+      expect(pairs.map((at) => elementAt(html, at).children.map((card) => headOf(html, card)))).toEqual(want[locale].pairs)
+    }
+    // The old one-grid wrapper is gone from the page.
+    expect(draw('overview')).not.toContain('fw-so-overview-cards')
+  })
+
+  it('a card alone in its pair spans the row: Order facts while Custom fields are not in the pair; a pair of two stays two', () => {
+    const html = draw('overview')
+    const pairs = [...html.matchAll(/<div class="fw-so-ov-pair">/g)].map((match) => match.index!)
+    expect(pairs.map((at) => elementAt(html, at).children.length)).toEqual([2, 2, 1])
+    expect(read('../view/overview/overview.css')).toMatch(/\.fw-so-ov-pair > :only-child \{\s*grid-column: 1 \/ -1;\s*\}/)
+  })
+
+  it('the css: the Overview is the container; 1 column, 2 equal ones from 720 px; the cards stretch; the shared row and the facts\' columns', () => {
+    const css = read('../view/overview/overview.css')
+    expect(css).toMatch(/\.fw-so-overview \{\s*container: fw-so-ov \/ inline-size;\s*\}/)
+    expect(css).toMatch(/\.fw-so-ov-pair \{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\);\s*align-items: stretch;/)
+    expect(css).toMatch(/@container fw-so-ov \(min-width: 720px\) \{\s*\.fw-so-ov-pair \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/)
+    // Every card reads its own width: the doors wrap under the words below a 480 px card; Facts and Custom fields go 2 columns from 800 px.
+    expect(css).toMatch(/\.fw-so-overview > :not\(\.fw-so-ov-pair\),\s*\.fw-so-ov-pair > \* \{\s*container: fw-so-ov-card \/ inline-size;/)
+    expect(css).toMatch(/\.fw-so-ov-row \{\s*display: grid;\s*grid-template-columns: max-content minmax\(0, 1fr\) auto;/)
+    expect(css).toMatch(/@container fw-so-ov-card \(max-width: 479px\) \{[^@]*\.fw-so-ov-row > \.fw-so-ov-doors \{\s*grid-column: 1 \/ -1;\s*justify-self: end;/)
+    expect(css).toMatch(/@container fw-so-ov-card \(min-width: 800px\) \{\s*\.fw-so-ov-cols \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/)
+    // Tokens only (no raw colour, no new size outside the scale).
+    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
+    const tab = read('../view/OverviewTab.tsx')
+    expect(tab).toContain("import './overview/overview.css'")
+    expect(tab).not.toContain('fw-so-overview-cards')
+    // orders.css lost only the old grid rule (the order page lane's file: nothing else of it changed).
+    const orders = read('../../orders.css')
+    expect(orders).not.toMatch(/\.fw-so-overview-cards \{/)
+    for (const kept of ['.fw-so-overview {', '.fw-so-where {', '.fw-so-datelist {', '.fw-so-linked {', '.fw-so-countbtn {']) expect(orders, kept).toContain(kept)
+  })
+})
+// ---- end F-OO-201
