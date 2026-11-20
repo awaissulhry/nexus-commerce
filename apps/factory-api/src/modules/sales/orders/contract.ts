@@ -503,6 +503,8 @@ export const listOrdersContract = defineContract({
           production: output({
             stage: z.enum(BRAND_STAGES).nullable(),
             stageSince: businessDate().nullable(),
+            /** B-MS-006 (R17): the stage was set by hand and stands, since when — the list's mark, the Work tab's and the file's; null: none. */
+            stageByHand: output({ since: instant() }).nullable(),
             health: z.enum(BRAND_HEALTHS).nullable(),
             waitingOn: z.enum(WAITING_ON).nullable(),
             since: instant().nullable(),

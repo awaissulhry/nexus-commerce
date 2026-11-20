@@ -17,6 +17,8 @@ import { dayOf, type Reader } from './store'
  * Orders offers them in Customise). Read for one page of rows from the keeper's STORED state — never the facts of each order:
  *
  *   stage, stageSince   the plain stage the customer reads too (BrandOrderProduction.stage, since its day); null: no row yet
+ *   stageByHand         B-MS-006 (R17): that stage was set by hand and stands, since when (office only: the Sales list's mark, the
+ *                       customer's Work tab and the export's "Sewing (by hand)" read this one field); null: the floor's own
  *   health              the shown one: the keeper's computed health, raised to At risk while a factory raise stands (the same rule
  *                       as the order page's headline, factory-domain production-brand/health effectiveHealth); null: none
  *   waitingOn, since    who acts next as the keeper keeps it (the customer, a supplier, a workshop, us) and since when
@@ -42,6 +44,8 @@ export type ProductionWithheld = (typeof PRODUCTION_WITHHELD)[number]
 export interface ProductionColumns {
   readonly stage: BrandStage | null
   readonly stageSince: BusinessDate | null
+  /** B-MS-006: the stage was set by hand and stands, since that instant (null: the floor's own stage, or no row). */
+  readonly stageByHand: { readonly since: string } | null
   readonly health: BrandHealth | null
   readonly waitingOn: WaitingOn | null
   readonly since: string | null
@@ -102,7 +106,7 @@ export async function orderProductionColumns(client: Reader, actor: Actor, viewe
   const ids = orders.map((order) => order.id)
   const rows = await client.brandOrderProduction.findMany({
     where: { salesOrderId: { in: ids } },
-    select: { salesOrderId: true, key: true, stage: true, stageAt: true, health: true, healthSet: true, healthReasonCode: true, healthSetUntil: true, waitingOn: true, waitingSince: true },
+    select: { salesOrderId: true, key: true, stage: true, stageAt: true, /* B-MS-006 */ stageSet: true, stageSetAt: true, health: true, healthSet: true, healthReasonCode: true, healthSetUntil: true, waitingOn: true, waitingSince: true },
   })
   // One row per order (`brand-production:<salesOrderId>`); a copy of the isolation tests (a `-…` suffix) never counts.
   const rowOf = new Map(rows.filter((row) => row.key === brandProductionKey(row.salesOrderId)).map((row) => [row.salesOrderId, row]))
@@ -125,6 +129,7 @@ export async function orderProductionColumns(client: Reader, actor: Actor, viewe
     out.set(order.id, {
       stage: row ? (row.stage as BrandStage) : null,
       stageSince: row ? businessDate(row.stageAt) : null,
+      stageByHand: row && row.stageSet !== null && row.stageSetAt !== null ? { since: toUtcIso(row.stageSetAt) } : null, // B-MS-006
       health: row ? shownHealthOf(row, today) : null,
       waitingOn: (row?.waitingOn as WaitingOn | null | undefined) ?? null,
       since: row?.waitingSince ? toUtcIso(row.waitingSince) : null,

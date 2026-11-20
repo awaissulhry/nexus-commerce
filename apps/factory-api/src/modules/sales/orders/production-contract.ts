@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { BRAND_HEALTHS, HEALTH_REASON_CODES } from '@nexus/factory-domain/production-brand/health'
 import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
+import { HAND_STAGES, STAGE_SET_REASON_CODES } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-006
 import { BRAND_URGENCIES } from '@nexus/factory-domain/production-brand/urgency'
 import { BLOCKER_KINDS, BLOCKER_SUBS, WAITING_ON } from '@nexus/factory-domain/production-brand/waiting' // B-OP-021: + BLOCKER_SUBS
 import { SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-depth/rules'
@@ -61,6 +62,23 @@ export const headlineView = output({
     sewingNotCountedWords: words.nullable(),
     next: output({ code: z.enum(BRAND_STAGES), words }).nullable(),
     partlyShipped: z.boolean(),
+    // ── B-MS-006 (set the stage by hand; R9) ──
+    /**
+     * The stage set by hand while it stands (office only; the customer never reads any of it): the stage and why, the floor's own
+     * stage from the live facts (null: no goods line open), when; the office's note and who set it only with workorders.view (else
+     * null and `headline.notes` withheld). null: none stands.
+     */
+    byHand: output({
+      stage: z.enum(HAND_STAGES),
+      reasonCode: z.enum(STAGE_SET_REASON_CODES),
+      floor: output({ code: z.enum(BRAND_STAGES), words }).nullable(),
+      at: instant(),
+      note: z.string().nullable(),
+      by: person.nullable(),
+    }).nullable(),
+    /** The production state's version: a set, change or clear by hand sends it back; null: no production state yet (a set sends null). */
+    version: z.number().int().nullable(),
+    // ── end B-MS-006 ──
   }).nullable(),
   /** What is in work now, as counts only: the order's ACTIVE bundles and its pieces between the steps (never a person). */
   inWork: output({
