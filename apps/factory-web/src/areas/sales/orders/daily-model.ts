@@ -524,11 +524,6 @@ export function compareRows(before: OrderSnapshot, after: OrderSnapshot): Compar
     .sort((a, b) => a.seq - b.seq)
 }
 
-  sizes
-    .filter((size) => size.before !== size.after)
-    .map((size) => `${size.size}: ${size.before} → ${size.after}`)
-    .join(' · ')
-
 /** The money change of an amendment (price grain), or null without it. */
 export function moneyChange(diff: Pick<AmendmentDiff, 'netAmountBefore' | 'netAmountAfter'>): { before: number; after: number; delta: number } | null {
   if (diff.netAmountBefore === undefined || diff.netAmountAfter === undefined) return null
