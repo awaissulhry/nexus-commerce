@@ -477,7 +477,18 @@
     "age": "{days} d",
     "ageToday": "today",
     "refusedDialog": "{customer} refused the new date: the promise stays {current} until you change it. A new date closes this.",
-    "refusedDialogLines": "{customer} refused the new date: the promise stays {current} until you change it. A new date for its line closes this."
+    "refusedDialogLines": "{customer} refused the new date: the promise stays {current} until you change it. A new date for its line closes this.",
+    "gateMove": "Move the date…",
+    "gateDiscuss": "Discuss this date",
+    "gateWaits": "waits {days} d",
+    "gateWaitsToday": "waits since today",
+    "gatesMore_one": "{count} more in All dates ›",
+    "gatesMore_other": "{count} more in All dates ›",
+    "gateEdited": "Gate changed.",
+    "gatePassed_one": "Gate marked done.",
+    "gatePassed_other": "{count} gates marked done.",
+    "gateStarted_one": "Started before the gate: the order's work orders may be planned.",
+    "gateStarted_other": "Started before {count} gates: the order's work orders may be planned."
   },
   "production": {
     "title": "Work orders",

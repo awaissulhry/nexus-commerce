@@ -40,6 +40,7 @@ import type { ChangeReviewActions, ChangeReviewModel } from '../../../home/appro
 import type { PriceCheckCardActions, PriceCheckCardModel } from './price-check-card'
 import type { PriceCheckDialogActions, PriceCheckDialogModel } from '../price-check/use-price-check'
 import { amendBodyOf, amendHeld, draftOf } from '../daily-model' // F-OO-144: Requested's small dialog (the amend builder, its rule)
+import type { MilestonesActions, MilestonesModel } from '../../../planning/milestones/view-model' // F-OO-145: Planning's gate dialogs in place
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -355,6 +356,11 @@ export interface OrderRecordModel {
   health?: HealthModel | null
   /** F-SA-232: the line whose sizes the centred window shows (Overview › Progress by line); null: closed. */
   overviewLine?: string | null
+  /**
+   * F-OO-145: Next dates' steps before production — Planning's own model for THIS order (use-gate-acts: a one-order subset of the
+   * page's read) with the gate dialog open; null/absent: not here (a design case without it).
+   */
+  gateActs?: MilestonesModel | null
   // F-OO-121: product.styles.manage — a line with no picture offers "Add on the style ›" (anyone else reads the words alone); absent: no.
   stylesManage?: boolean
   /** F-SA-232: the page's live stream (the freshness line says "Live · as of 10:42" only when pushed). */
@@ -471,6 +477,8 @@ export interface OrderRecordActions {
   onCustomerRefChange?: () => void
   /** F-OO-210: the office note dialog's Save note — the Orders sheet's own write (sales.orders.editCells) with the order's version. */
   onNoteSave?: (note: string) => void
+  /** F-OO-145: a gate's Move the date… (onEdit), Mark done… (onPass), Start before the gate… (onStartBefore) and the dialogs' own acts. */
+  gateActs?: MilestonesActions
   /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
   people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
   /** F-CP-142: the Price check card (Customer's price…, Take them over, Try again) and the ONE window's own actions. */

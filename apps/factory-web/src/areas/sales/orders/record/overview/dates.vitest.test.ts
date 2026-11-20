@@ -6,7 +6,7 @@ import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 import { render, textOf } from '../../../../../lib/record-thread/parts/testing'
 import { order } from '../../_demo/fixtures'
-import { abilitiesOf, dayInstant } from '../../model'
+import { abilitiesOf, dayInstant, romeToday } from '../../model'
 import { base } from '../fixtures'
 import type { OrderRecordModel } from '../record-model'
 import { DatesCard } from '../view/overview/DatesCard'
@@ -21,6 +21,19 @@ import { OrderDialogs } from '../view/Dialogs'
 import { changesBadgeOf, orderWaitingOf, type WaitingState } from './model'
 import { ageDaysOf, ageWordsOf, decideDialogOf, followUpOf, refusedDatesOf } from './dates'
 // ---- end F-OO-143
+// ---- F-OO-145: the steps before production in place ----
+import { readdirSync, statSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { GATE_REFUSALS } from '@nexus/factory-domain/planning/milestones/rules'
+import type { ApiClient } from '../../../../../lib/api/client'
+import { milestonesSchema } from '../../../../planning/milestones/api'
+import { DEFAULT_CONTROLS, emptyDraft } from '../../../../planning/milestones/model'
+import { sendGateDialog, useGateActs } from '../use-gate-acts'
+import type { RecordActsBase } from '../record-model'
+import { GATE } from './fixtures'
+import type { Gate } from './api'
+import { gateChangesOf, gateDatesOf, gateDraftOf, gateMovesOf, gateMovesShown, gateWorldOf, planningGateHref, planningGateOf } from './dates'
+// ---- end F-OO-145
 
 /** F-OO-100 (order overview lane: one file per section) — Next dates' rules, moved with dates.ts out of overview.vitest.test.ts. */
 
@@ -129,7 +142,8 @@ describe('F-OO-141: Next dates — the promise first, what the plan says against
     it('the open gates after a rule, late first, each with its target and lateness (Discuss stays the gate’s by its reference)', () => {
       const html = card({ production: withPlan('2026-12-10', { milestones: [...PRODUCTION_READ.dates!.milestones, milestone('late', 'GATE', '2026-11-20', 3)] }) })
       expect(html).toContain('<ul class="fw-so-dates-rows is-gates"')
-      expect(textOf(html)).toContain(`Pre-production sample target ${day('2026-11-20')} 3 days late`)
+      // F-OO-145: + the gate's state between (Planning's words); its Discuss is an item of More ▾ (F-OO-145's tests).
+      expect(textOf(html)).toContain(`Pre-production sample target ${day('2026-11-20')} · To come · 3 days late`)
     })
 
     it('Read-only: the dates and what the plan says, no Change…; reading: the own dates and a line; failed: said, with Try again', () => {
@@ -280,3 +294,231 @@ describe('F-OO-143: a refused new date under the promise, and Decide… → the 
   })
 })
 // ---- end F-OO-143
+
+// ---- F-OO-145 (order overview lane; 10-design §4.2; B-OO-010): the steps before production with Planning's own dialogs in place -----
+describe('F-OO-145: gate rows and More ▾ — Planning’s own dialogs from a one-order model of the read, each move held by the gate’s own actions', () => {
+  const value = order('IN_PRODUCTION')
+  const pt = (locale: 'en' | 'it') => createTranslator(locale, messagesFor(locale, ['planning-milestones'])['planning-milestones']!)
+  const en = pt('en')
+  const ita = pt('it')
+  // Three open gates and a fourth (late first, then by target): each a milestone of the read joined to its gate (version, moves).
+  const gateOf = (id: string, over: Partial<Gate> = {}): Gate => ({ ...GATE, id, ...over })
+  const row = (id: string, target: string, late: number | null, state = 'WAITING', gateKind = 'PP_SAMPLE') => ({ id: `gate:${id}`, kind: 'GATE', gateId: id, gateKind, label: null, target, actual: null, state, late, owner: null })
+  const DATES = {
+    ...PRODUCTION_READ.dates!,
+    gates: [gateOf('g1'), gateOf('g2', { kind: 'TRIMS_IN' }), gateOf('g3'), gateOf('g4')],
+    milestones: [...PRODUCTION_READ.dates!.milestones, row('g1', '2026-11-05', null), row('g2', '2026-10-20', 9, 'WAITING', 'TRIMS_IN'), row('g3', '2026-11-01', null, 'STARTED_BEFORE'), row('g4', '2026-11-20', null)],
+  }
+  // The ONE waiting list's DATE rows of two gates: g1 waits since 26/10 (3 d on 29/10); g2 is Trims in, so the read calls it material short.
+  const WAITS = [
+    { place: 'DATE' as const, ref: { type: 'OrderGate', id: 'g1' }, since: '2026-10-26T08:00:00Z' },
+    { place: 'DATE' as const, ref: { type: 'OrderGate', id: 'g2' }, since: '2026-10-10T08:00:00Z' },
+    { place: 'REQUEST' as const, ref: { type: 'OrderGate', id: 'g3' }, since: '2026-10-01T08:00:00Z' },
+  ]
+  const SALES_ACTIONS: NonNullable<Gate['actions']> = {
+    pass: { allowed: false, refusal: null, needs: 'planning.milestones.manage' },
+    startBefore: { allowed: false, refusal: null, needs: 'planning.milestones.override' },
+    edit: { allowed: false, refusal: null, needs: 'planning.milestones.manage' },
+    remove: { allowed: false, refusal: null, needs: 'planning.milestones.manage' },
+  }
+
+  it('the rows: late first, three at most, then "n more"; each with its state, its gate and its age from its own DATE row', () => {
+    const { rows, more } = gateDatesOf(DATES, WAITS, TODAY)
+    expect(rows.map((entry) => entry.gateId)).toEqual(['g2', 'g3', 'g1'])
+    expect(more).toBe(1)
+    expect(rows.map((entry) => entry.state)).toEqual(['WAITING', 'STARTED_BEFORE', 'WAITING'])
+    expect(rows.map((entry) => entry.age)).toEqual([19, null, 3]) // g3's row is no DATE row: no age claimed
+    expect(rows[0]!.gate).toEqual(DATES.gates[1])
+    expect(gateDatesOf(DATES, WAITS, TODAY, 10).more).toBe(0)
+    expect(gateDatesOf(null, WAITS, TODAY)).toEqual({ rows: [], more: 0 })
+    // The ONE list for the ages (never a second rule): nextDatesOf's order and fields kept.
+    expect(rows.map(({ id, gateId, gateKind, label, target, late }) => ({ id, gateId, gateKind, label, target, late }))).toEqual(nextDatesOf(DATES))
+  })
+
+  it('the moves held by the gate’s own actions in Planning’s words (its needs, its refusal code), never the API’s English message', () => {
+    const moves = (gate: Gate | null, t = en, input = { thread: true, planningView: true, busy: false }) => gateMovesOf(gate, value.id, input, t)
+    // The planner of the demo gate: Move and Mark done may go; Start before refused (its own gate), in words.
+    expect(moves(GATE)).toEqual([
+      { id: 'move', held: null },
+      { id: 'done', held: null },
+      { id: 'startBefore', held: en('refusal.OWN_GATE') },
+      { id: 'discuss', held: null },
+      { id: 'planning', held: null },
+    ])
+    expect(moves(GATE, ita)[2]!.held).toBe(ita('refusal.OWN_GATE'))
+    expect(en('refusal.OWN_GATE')).not.toBe(GATE.actions!.startBefore.refusal!.message)
+    // Sales sees them held: the right each needs (Planning's needs.* words), en + it.
+    const sales = moves(gateOf('s', { actions: SALES_ACTIONS }))
+    expect(sales.map((move) => move.held)).toEqual([en('needs.planning.milestones.manage'), en('needs.planning.milestones.manage'), en('needs.planning.milestones.override'), null, null])
+    expect(moves(gateOf('s', { actions: SALES_ACTIONS }), ita)[0]!.held).toBe(ita('needs.planning.milestones.manage'))
+    // No conversation on the page: no Discuss; no planning.view: Open in Planning held in words; busy: Planning's "Saving…".
+    expect(moves(GATE, en, { thread: false, planningView: false, busy: false }).map((move) => [move.id, move.held])).toEqual([['move', null], ['done', null], ['startBefore', en('refusal.OWN_GATE')], ['planning', en('needs.planning.view')]])
+    expect(moves(GATE, en, { thread: true, planningView: true, busy: true }).slice(0, 3).map((move) => move.held)).toEqual([en('held.busy'), en('held.busy'), en('held.busy')])
+    // A gate the read cannot say whole (an older answer, an unknown kind) or none: its dialogs "Not possible now.".
+    for (const unknown of [null, gateOf('o', { actions: undefined, version: undefined }), gateOf('k', { kind: 'NEW_KIND' })]) expect(moves(unknown).slice(0, 3).map((move) => move.held), String(unknown?.id)).toEqual([en('held.unknown'), en('held.unknown'), en('held.unknown')])
+    // Every refusal code and every right the read can name has catalogue words in both languages.
+    for (const t of [en, ita]) {
+      for (const code of GATE_REFUSALS) expect(t(`refusal.${code}`), code).not.toBe(`refusal.${code}`)
+      for (const needs of ['planning.milestones.manage', 'planning.milestones.override', 'planning.view']) expect(t(`needs.${needs}`), needs).not.toBe(`needs.${needs}`)
+    }
+  })
+
+  it('Read-only sees no More ▾ unless the read lets this reader move a gate; Open in Planning lands on the gate', () => {
+    const rows = (actions: Gate['actions']) => [{ gate: gateOf('x', { actions }) }]
+    expect(gateMovesShown(false, rows(SALES_ACTIONS))).toBe(true)
+    expect(gateMovesShown(true, rows(SALES_ACTIONS))).toBe(false)
+    expect(gateMovesShown(true, rows({ ...SALES_ACTIONS, pass: { allowed: true, refusal: null, needs: null } }))).toBe(true)
+    expect(gateMovesShown(true, [{ gate: null }])).toBe(false)
+    expect(planningGateHref('/w/DEMO', 'SO-2026-0088', 'g1')).toBe('/w/DEMO/planning/milestones?q=SO-2026-0088&open=gate%3Ag1')
+    expect(planningGateHref('/w/DEMO', 'SO-2026-0088', null)).toBe('/w/DEMO/planning/milestones?q=SO-2026-0088')
+  })
+
+  it('the one-order model is an honest subset of Planning’s read: its own schema takes it; the read’s values, nothing made up a dialog reads', () => {
+    const world = gateWorldOf(value, DATES, TODAY)!
+    expect(milestonesSchema.safeParse(world).success).toBe(true)
+    expect(world.today).toBe(TODAY)
+    expect(world.orders).toHaveLength(1)
+    const [one] = world.orders
+    expect(one).toMatchObject({ id: value.id, number: value.number, companyId: value.companyId, customer: { id: value.partyId, code: 'MOTO-DEMO', name: 'Moto Demo S.r.l.' }, status: value.status, promiseDate: value.promiseDate })
+    // Add a gate is not offered here; no tile is counted; no other order.
+    expect(one!.mayAddGate.allowed).toBe(false)
+    expect(Object.values(world.tiles).every((count) => count === 0)).toBe(true)
+    // Each gate as read: its kind, words, target, round, planner shown, state, version and THIS reader's moves.
+    const gate = one!.gates.find((entry) => entry.id === 'g1')!
+    expect(gate).toMatchObject({ id: 'g1', salesOrderId: value.id, kind: GATE.kind, label: GATE.label, targetDate: GATE.targetDate, owner: GATE.owner, state: GATE.state, version: GATE.version, actions: GATE.actions })
+    // What the order read does not carry is not guessed: the stored planner id and maker, the passing of an open gate, Remove's count.
+    expect(gate).toMatchObject({ ownerId: null, makerId: null, passedAt: null, passedBy: null, holds: 0 })
+    // An older answer (no version, no moves) or an unknown kind is left out of Planning's model, never half-built.
+    expect(planningGateOf(gateOf('o', { version: undefined }), value.id)).toBeNull()
+    expect(planningGateOf(gateOf('a', { actions: undefined }), value.id)).toBeNull()
+    expect(planningGateOf(gateOf('k', { kind: 'NEW_KIND' }), value.id)).toBeNull()
+    expect(gateWorldOf(value, null, TODAY)).toBeNull()
+  })
+
+  it('Move the date…: the draft as read; Save sends only what the person changed (the planner only when picked); the kind never', () => {
+    const gate = planningGateOf(GATE, value.id)!
+    const draft = gateDraftOf(gate)
+    expect(draft).toEqual({ kind: 'PP_SAMPLE', label: '', targetDate: '2026-11-20', sampleRoundId: '', ownerId: GATE.owner!.id })
+    expect(gateChangesOf(draft, draft)).toEqual({})
+    expect(gateChangesOf(draft, { ...draft, targetDate: '2026-11-27' })).toEqual({ targetDate: '2026-11-27' })
+    expect(gateChangesOf(draft, { ...draft, label: ' Prototype ' })).toEqual({ label: 'Prototype' })
+    // "Me" picked: the planner becomes the reader (null, as Planning's own body says it).
+    expect(gateChangesOf(draft, { ...draft, ownerId: '' })).toEqual({ ownerId: null })
+    expect(gateChangesOf(emptyDraft('PP_SAMPLE'), { ...emptyDraft('PP_SAMPLE'), targetDate: '' })).toEqual({})
+  })
+
+  it('the writes: Planning’s own routes, each with the gate’s version (only the changes; Mark done today without a day; the reason trimmed)', async () => {
+    const calls: { method: string; path: string; body: unknown }[] = []
+    const answer = { gate: GATE }
+    const api = {
+      request: async (method: string, path: string, options: { body: unknown }) => (calls.push({ method, path, body: options.body }), answer),
+      post: async (path: string, options: { body: unknown }) => (calls.push({ method: 'POST', path, body: options.body }), path.endsWith('/pass') ? { passed: [{ id: GATE.id, version: 4 }] } : answer),
+    } as unknown as ApiClient
+    const gate = planningGateOf(GATE, value.id)!
+    const initial = gateDraftOf(gate)
+    const input = { gates: [gate], initial, today: TODAY }
+    expect(await sendGateDialog(api, { kind: 'edit', gateId: GATE.id, draft: { ...initial, targetDate: '2026-11-27' }, choices: null, busy: false, problem: null }, input)).toEqual({ key: 'dates.gateEdited' })
+    expect(await sendGateDialog(api, { kind: 'pass', gateIds: [GATE.id], on: TODAY, busy: false, problem: null }, input)).toEqual({ key: 'dates.gatePassed', params: { count: 1 } })
+    await sendGateDialog(api, { kind: 'pass', gateIds: [GATE.id], on: '2026-10-28', busy: false, problem: null }, input)
+    expect(await sendGateDialog(api, { kind: 'startBefore', gateIds: [GATE.id], reason: '  The sample is on its way  ', busy: false, problem: null }, input)).toEqual({ key: 'dates.gateStarted', params: { count: 1 } })
+    const at = `/planning/milestones/gates/${GATE.id}`
+    expect(calls).toEqual([
+      { method: 'PATCH', path: at, body: { version: 3, targetDate: '2026-11-27' } },
+      { method: 'POST', path: '/planning/milestones/gates/pass', body: { gates: [{ id: GATE.id, version: 3 }] } },
+      { method: 'POST', path: '/planning/milestones/gates/pass', body: { gates: [{ id: GATE.id, version: 3 }], on: '2026-10-28' } },
+      { method: 'POST', path: `${at}/start-before`, body: { version: 3, reason: 'The sample is on its way' } },
+    ])
+    // The page's notices in both languages (Planning's own words).
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const [key, params] of [['dates.gateEdited', {}], ['dates.gatePassed', { count: 2 }], ['dates.gateStarted', { count: 1 }], ['dates.gateMove', {}], ['dates.gateDiscuss', {}], ['dates.gateWaits', { days: 3 }], ['dates.gateWaitsToday', {}], ['dates.gatesMore', { count: 2 }]] as const) expect(t(key, params), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+
+  it('the hook builds Planning’s model from the page’s read (rights, today, no dialog yet) and hands its acts', () => {
+    let got: ReturnType<typeof useGateActs> | undefined
+    const actsBase = { api: {} as ApiClient, orderId: value.id, current: { current: value }, version: () => value.version, setNotice: () => undefined, load: async () => undefined, loadParts: () => undefined, write: async () => undefined } as unknown as RecordActsBase
+    function Harness({ permissions }: { permissions: readonly string[] }) {
+      got = useGateActs({ production: ready({ ...PRODUCTION_READ, dates: DATES }), again: () => undefined, permissions, me: 'me', prefix: '/w/DEMO', live: 'live' }, actsBase)
+      return null
+    }
+    render(createElement(Harness, { permissions: ['orders.view', 'planning.view'] }), 'en')
+    expect(got!.model?.world).toEqual({ status: 'ready', value: gateWorldOf(value, DATES, romeToday()) })
+    expect(got!.model).toMatchObject({ prefix: '/w/DEMO', me: 'me', can: { view: true, manage: false, override: false }, dialog: null, live: 'live' })
+    for (const act of ['onEdit', 'onDraft', 'onSaveGate', 'onPass', 'onPassDay', 'onPassConfirm', 'onStartBefore', 'onReason', 'onStartConfirm', 'onCloseDialog'] as const) expect(typeof got!.actions[act], act).toBe('function')
+    // No page (a design case): no model.
+    function Bare() {
+      got = useGateActs(undefined, undefined)
+      return null
+    }
+    render(createElement(Bare), 'en')
+    expect(got!.model).toBeNull()
+  })
+
+  describe('drawn', () => {
+    const day = (date: string, locale: 'en' | 'it' = 'en') => formatDate(dayInstant(date), { locale })
+    const read = { ...PRODUCTION_READ, dates: DATES, headline: { ...HEADLINE, waiting: { ...HEADLINE.waiting, blockers: [...HEADLINE.waiting.blockers, { kind: 'GATE', on: 'US' as const, words: { en: 'A gate is not passed yet', it: 'Un passaggio non è ancora superato' }, since: '2026-10-26T08:00:00Z', ref: { type: 'OrderGate', id: 'g1' }, sub: null }] } } }
+    const waiting = orderWaitingOf(value, { production: ready(read), requests: null, can: { recordPayment: false } }, 'en')
+    const card = (role: 'owner' | 'sales' = 'owner', over: Partial<OrderRecordModel> = {}, locale: 'en' | 'it' = 'en') => render(createElement(DatesCard, { order: value, model: base(role, value, { tab: 'overview', production: ready(read), ...over }).record, waiting }), locale)
+
+    it('each gate: target · state · late (or how long it waits) · More ▾ named for the gate; then "1 more in All dates ›"', () => {
+      const text = textOf(card())
+      expect(text).toContain(`Trims in target ${day('2026-10-20')} · Waiting · 9 days late More`)
+      expect(text).toContain(`Pre-production sample target ${day('2026-11-05')} · Waiting · waits 3 d More`)
+      expect(text).toContain(`target ${day('2026-11-01')} · Started before More`)
+      expect(text).toContain('1 more in All dates ›')
+      expect(card()).toContain(`aria-label="${en('row.menu', { name: 'Pre-production sample', order: value.number })}"`)
+      const italian = textOf(card('owner', {}, 'it'))
+      for (const words of ['In attesa · aspetta da 3 g Altro', 'Partito prima', 'Ancora 1 in Tutte le date ›']) expect(italian, words).toContain(words)
+    })
+
+    it('Sales sees More ▾ (its items held in words: the pure moves above); Read-only without a gate right sees none', () => {
+      expect(textOf(card('sales'))).toContain('More')
+      const readOnly = card('owner', { can: abilitiesOf(['orders.view']) }) // the fixture's gates allow pass and edit: a planner moves them
+      expect(textOf(readOnly)).toContain('More')
+      const salesRead = { ...read, dates: { ...DATES, gates: DATES.gates.map((gate) => ({ ...gate, actions: SALES_ACTIONS })) } }
+      const none = render(createElement(DatesCard, { order: value, model: base('owner', value, { tab: 'overview', production: ready(salesRead), can: abilitiesOf(['orders.view']) }).record, waiting }), 'en')
+      expect(none).not.toContain('<button')
+    })
+
+    it('Planning’s own dialogs open in place from the one-order model (Change the gate, Mark done, Start before the gate)', () => {
+      const world = gateWorldOf(value, DATES, TODAY)!
+      const model = (dialog: NonNullable<OrderRecordModel['gateActs']>['dialog']) => ({ prefix: '/w/DEMO', can: { view: true, manage: true, override: true }, me: 'me', controls: DEFAULT_CONTROLS, world: { status: 'ready' as const, value: world }, live: 'live' as const, updates: 0, notice: null, dialog })
+      const gate = world.orders[0]!.gates.find((entry) => entry.id === 'g1')!
+      const edit = textOf(card('owner', { gateActs: model({ kind: 'edit', gateId: 'g1', draft: gateDraftOf(gate), choices: null, busy: false, problem: null }) }))
+      expect(edit).toContain(en('form.editTitle', { name: en('kind.PP_SAMPLE') }))
+      expect(edit).toContain(en('form.subtitle', { order: value.number, customer: 'Moto Demo S.r.l.' }))
+      const pass = textOf(card('owner', { gateActs: model({ kind: 'pass', gateIds: ['g1'], on: TODAY, busy: false, problem: 'refusal.changed' }) }))
+      expect(pass).toContain(en('pass.title', { count: 1 }))
+      expect(pass).toContain(en('refusal.changed'))
+      const start = textOf(card('owner', { gateActs: model({ kind: 'startBefore', gateIds: ['g1'], reason: '', busy: false, problem: null }) }, 'it'))
+      expect(start).toContain(ita('start.title', { count: 1 }))
+      expect(textOf(card('owner', { gateActs: model(null) }))).not.toContain(en('form.editTitle', { name: en('kind.PP_SAMPLE') }))
+    })
+
+    it('the source: the hook lives in the container’s chain (use-overview-acts), never in a view; GateDialogs is Planning’s, not a copy', () => {
+      const here = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+      expect(here('../use-overview-acts.ts')).toContain('const gates = useGateActs(input.gates, input.base)')
+      expect(here('../OrderRecord.tsx')).toContain('gates: { production: production.state, again: production.again, permissions: session.permissions, me: session.user.id, prefix, live: liveState } /* F-OO-145 */')
+      const views = (dir: URL): string[] =>
+        readdirSync(dir).flatMap((name) => {
+          const at = new URL(name, dir)
+          if (statSync(at).isDirectory()) return views(new URL(`${name}/`, dir))
+          return /\.tsx?$/.test(name) && !name.includes('.vitest.') && at.pathname.includes('/view/') ? [fileURLToPath(at)] : []
+        })
+      for (const file of views(new URL('../', import.meta.url))) expect(readFileSync(file, 'utf8'), file).not.toMatch(/from '[^']*\/use-gate-acts'/)
+      const view = here('../view/overview/DatesCard.tsx')
+      expect(view).toContain("import { GateDialogs } from '../../../../../planning/milestones/view/GateDialogs'")
+      expect(view).toContain('<GateDialogs model={model.gateActs} actions={gateActs} words={{ t: p, locale }} />')
+      // ONE GateDialogs for Planning's gates: no copy of it under the order page.
+      expect(views(new URL('../', import.meta.url)).some((file) => /GateDialogs/.test(file))).toBe(false)
+      // The hook opens only Change the gate, Mark done and Start before (never Add, Remove or the keys); its writes are Planning's api.
+      const hook = here('../use-gate-acts.ts')
+      for (const kind of ["kind: 'add'", "kind: 'remove'", "kind: 'keys'"]) expect(hook, kind).not.toContain(kind)
+      for (const call of ['editGate(', 'passGates(', 'startBefore(', 'base.write(']) expect(hook, call).toContain(call)
+      expect(hook).not.toMatch(/api\.(post|request|get)\(/)
+      expect(hook).not.toContain('.message')
+    })
+  })
+})
+// ---- end F-OO-145

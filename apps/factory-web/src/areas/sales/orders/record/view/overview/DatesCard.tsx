@@ -1,6 +1,6 @@
 'use client'
 
-import { Card } from '@nexus/ui/components'
+import { Card, Menu, type MenuItemDef } from '@nexus/ui/components' // F-OO-145: a gate's More ▾
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
@@ -9,17 +9,25 @@ import { dayInstant, promiseHeld, readOnlyOnPage, type Phrase } from '../../../m
 import { amendHeld } from '../../../daily-model' // F-OP-104
 import { NAMESPACE as DEPTH } from '../../../depth/model'
 import { readOf } from '../../overview/model'
-import { nextDatesOf, planSaysOf, planWarns, promiseRowOf, type PlanSays } from '../../overview/dates'
+import { planSaysOf, planWarns, promiseRowOf, type PlanSays } from '../../overview/dates'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { useSearchParams } from 'next/navigation'
 import { tabHref } from '../../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
-import { DiscussDoor } from '../Discuss' // F-SA-266: Discuss on a next date's row
 import './dates.css' // F-OO-141: the card's own rows
 // ---- F-OO-143: the new date the customer refused (the ONE waiting list's DATE row) and Decide… (the ONE promise dialog) ----
 import type { WaitingState } from '../../overview/model'
 import { ageWordsOf, decideDialogOf, refusedDatesOf } from '../../overview/dates'
 // ---- end F-OO-143
+// ---- F-OO-145: the steps before production in place — Planning's own dialogs (GateDialogs) and words, the gate's moves held by its read ----
+import { ChevronDown } from 'lucide-react'
+import { WithMessages } from '../../../../../../record-panels/i18n'
+import { GateDialogs } from '../../../../../planning/milestones/view/GateDialogs'
+import { NAMESPACE as PLANNING } from '../../../../../planning/milestones/model'
+import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
+import { discussAboutOf } from '../../dock/discuss'
+import { gateDatesOf, gateMovesOf, gateMovesShown, planningGateHref, type GateDate, type GateMove } from '../../overview/dates'
+// ---- end F-OO-145
 
 /**
  * F-OO-100 (order overview lane: one file per card) — moved out of OverviewTab.tsx unchanged.
@@ -37,8 +45,23 @@ import { ageWordsOf, decideDialogOf, refusedDatesOf } from '../../overview/dates
  * F-OO-143 (10-design §4.2; review F1, F3; replaces F-OP-105): under the promise, each new date the customer refused (the ONE waiting
  * list's DATE row, `waiting.dates`: OverviewTab's one call) — "{customer} refused the new date · 2 d", no date (F1) — with Decide…:
  * the ONE promise dialog with the follow-up named (held by promiseHeld, as Change…); a new date closes it in the same command.
+ *
+ * F-OO-145 (10-design §4.2; B-OO-010): each open gate (late first, three at most, then "{n} more in All dates ›") says its target, its
+ * state and how late it is — or how long it waits (its own DATE row's age) — with More ▾: Move the date… · Mark done… · Start before
+ * the gate… (Planning's OWN dialogs, mounted here from use-gate-acts' one-order model: never a copy) · Discuss this date · Open in
+ * Planning ›. Each is held by the gate's own actions in Planning's words (the right it needs, its refusal code; never the API's
+ * English); Sales sees them held. Read-only sees no More ▾ unless the read lets this reader move a gate.
  */
-export function DatesCard({ order, model, actions, waiting }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; /** F-OO-143: the ONE waiting list (OverviewTab's call). */ waiting?: WaitingState }) {
+export function DatesCard(props: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; /** F-OO-143: the ONE waiting list (OverviewTab's call). */ waiting?: WaitingState }) {
+  // F-OO-145: Planning's catalogue for its dialogs and its held words (the gate's needs and refusals), beside the page's own.
+  return (
+    <WithMessages namespaces={[PLANNING]}>
+      <Dates {...props} />
+    </WithMessages>
+  )
+}
+
+function Dates({ order, model, actions, waiting }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; waiting?: WaitingState }) {
   const t = useT('orders')
   const d = useT(DEPTH)
   const locale = useLocale()
@@ -48,7 +71,6 @@ export function DatesCard({ order, model, actions, waiting }: { order: Order; mo
   const day = (value: string) => formatDate(dayInstant(value), { locale })
   const promise = promiseRowOf(order, read?.headline ?? null)
   const plan = planSaysOf(order, promise?.date ?? null, read?.dates ?? null)
-  const gates = nextDatesOf(read?.dates ?? null)
   const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
   const promiseWait = promiseHeld(order, model.can)
   const requestedWait = amendHeld(order, model.can)
@@ -59,6 +81,34 @@ export function DatesCard({ order, model, actions, waiting }: { order: Order; mo
   const customer = order.party?.legalName ?? ''
   const say = (words: Phrase): string => t(words.key, words.params)
   const age = (days: number | null): string | null => (days === null ? null : say(ageWordsOf(days)))
+  // ---- F-OO-145: the open gates with their state and age, and their moves (Planning's dialogs; its words for why one waits) ----
+  const p = useT(PLANNING)
+  const frame = useRecordFrame()
+  const gates = gateDatesOf(read?.dates ?? null, dateRows, model.today)
+  const movesShown = gateMovesShown(readOnly, gates.rows)
+  const gateActs = actions?.gateActs
+  // F-SA-266: a gate is discussed by its reference (the customer reads its own words).
+  const discuss = (row: GateDate, what: string) => {
+    const yourOrder = order.customerSeq ? t('discuss.yourOrderSeq', { seq: order.customerSeq }) : t('discuss.yourOrder')
+    const about = discussAboutOf(order, { yourOrder, firstLine: (words) => t('discuss.firstLine', { thing: words }) }, { part: row.target ? `${what} · ${day(row.target)}` : what, target: row.gateId ? { kind: 'OrderGate', id: row.gateId } : null })
+    frame?.discuss?.({ record: { type: 'SalesOrder', id: order.id }, about })
+  }
+  const moveWords: Readonly<Record<GateMove, string>> = { move: t('dates.gateMove'), done: p('row.done'), startBefore: p('row.startBefore'), discuss: t('dates.gateDiscuss'), planning: t('wo.link.planning') }
+  const run = (move: GateMove, row: GateDate, what: string) => {
+    const gateId = row.gateId
+    if (move === 'discuss') return discuss(row, what)
+    if (!gateId) return
+    if (move === 'move') gateActs?.onEdit?.(gateId)
+    else if (move === 'done') gateActs?.onPass?.([gateId])
+    else if (move === 'startBefore') gateActs?.onStartBefore?.([gateId])
+  }
+  const itemsOf = (row: GateDate, what: string): MenuItemDef[] =>
+    gateMovesOf(row.gate, order.id, { thread: !!frame?.discuss, planningView: !!model.gateActs?.can.view, busy: !!model.busy }, p).map((move): MenuItemDef => {
+      if (move.id === 'planning' && !move.held) return { id: move.id, label: moveWords.planning, href: planningGateHref(model.prefix, order.number, row.gateId) }
+      return { id: move.id, label: moveWords[move.id], disabled: !!move.held, description: move.held ?? undefined, onSelect: move.held ? undefined : () => run(move.id, row, what) }
+    })
+  const waits = (days: number): string => (days === 0 ? t('dates.gateWaitsToday') : t('dates.gateWaits', { days }))
+  // ---- end F-OO-145
   const planWords = (value: PlanSays): string => {
     if (value.kind === 'none') return t('dates.planNone')
     if (value.kind === 'plain') return day(value.date)
@@ -135,33 +185,56 @@ export function DatesCard({ order, model, actions, waiting }: { order: Order; mo
               <Skeleton height={22} />
             </li>
           </ul>
-        ) : gates.length > 0 ? (
+        ) : gates.rows.length > 0 ? (
           <ul className="fw-so-dates-rows is-gates" aria-label={d('milestone.title')}>
-            {gates.map((row) => {
-              // F-SA-266: a gate is discussed by its reference (the customer reads its own words).
+            {/* F-OO-145: target · state · late (or how long it waits), More ▾ with Planning's own dialogs; then "{n} more in All dates ›". */}
+            {gates.rows.map((row) => {
               const what = row.label ?? d(`gate.${row.gateKind ?? 'OTHER'}`)
-              const gateId = row.gateId
+              const late = row.late !== null && row.late > 0 ? row.late : null
               return (
                 <li key={row.id} className="fw-so-ov-row">
                   <span className="fw-so-dates-label">{what}</span>
                   <span>
-                    {row.target ? d('milestone.target', { date: day(row.target) }) : '—'}
-                    {row.late !== null && row.late > 0 && (
+                    {row.target ? d('milestone.target', { date: day(row.target) }) : p('row.noTarget')}
+                    {` · ${p(`state.${row.state}`)}`}
+                    {late !== null ? (
                       <>
-                        {' '}
-                        <Tag tone="warning">{d('milestone.lateBy', { count: row.late })}</Tag>
+                        {' · '}
+                        <Tag tone="warning">{d('milestone.lateBy', { count: late })}</Tag>
                       </>
-                    )}
+                    ) : row.age !== null ? (
+                      ` · ${waits(row.age)}`
+                    ) : null}
                   </span>
-                  <span className="fw-so-ov-doors">
-                    <DiscussDoor order={order} part={row.target ? `${what} · ${day(row.target)}` : what} target={gateId ? { kind: 'OrderGate', id: gateId } : null} />
-                  </span>
+                  {movesShown && (
+                    <span className="fw-so-ov-doors">
+                      <Menu
+                        align="right"
+                        label={
+                          <>
+                            {t('col.more')} <ChevronDown size={14} aria-hidden />
+                          </>
+                        }
+                        triggerProps={{ 'aria-label': p('row.menu', { name: what, order: order.number }) }}
+                        items={itemsOf(row, what)}
+                      />
+                    </span>
+                  )}
                 </li>
               )
             })}
+            {gates.more > 0 && (
+              <li className="fw-so-dates-note">
+                <TabLink className="fw-so-link fw-so-hint" href={`${tabHref(`${model.prefix}/sales/orders/${order.id}`, 'production', search)}#dates`}>
+                  {t('dates.gatesMore', { count: gates.more })}
+                </TabLink>
+              </li>
+            )}
           </ul>
         ) : null}
       </div>
+      {/* F-OO-145: Planning's own gate dialogs (Change the gate, Mark done, Start before the gate), from use-gate-acts' one-order model. */}
+      {model.gateActs?.dialog && <GateDialogs model={model.gateActs} actions={gateActs} words={{ t: p, locale }} />}
     </Card>
   )
 }
