@@ -62,7 +62,8 @@ export function ReviewSave({ order, draft, review, seesPrices, freeze, floors, p
                 ? heldWordsOf(extraHeld, t, locale)
                 : null
   const why = (pick: (typeof WHY_PICKS)[number]) => t(`review.whyPick.${pick}`)
-  const go = () => actions?.onSave?.({ reason: reasonOf(review.why, review.words, why), question: review.tell.words.trim() || t('review.question', { number: order.number }) })
+  // F-OL-08: the words typed go as they are; none typed, the container asks in the CUSTOMER's language (never the office's).
+  const go = () => actions?.onSave?.({ reason: reasonOf(review.why, review.words, why), question: review.tell.words.trim() })
   const pieces = piecesBeforeAfter(draft, order)
   const vat = order.priceBasis === 'GROSS' || (order.vatAmount ?? 0) > 0
   const before = vat ? diff?.grossAmountBefore : diff?.netAmountBefore

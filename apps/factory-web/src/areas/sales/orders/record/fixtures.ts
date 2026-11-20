@@ -57,6 +57,7 @@ import { COMPOSER_EMPTY, type OrderRecordModel } from './record-model'
 // ---- F-OL-05 (Order LINES lane): the new Lines tab's cases — the draft of my changes, Review and save, two people, Add a style ----
 import { addLines, EMPTY_HISTORY, newLineKey, removeLine, setCell, setNewLine, type DraftHistory, type NewLine } from './lines-draft'
 import type { LinesTabModel, ReviewState } from './lines-tab-model'
+import { serverFiguresOf } from './lines-table' // F-OL-09
 // ---- end F-OL-05
 import { OrderRecordView } from './view/OrderRecordView'
 // ---- B-TH-214: the docked thread the order's cases show (RecordFrame beside every tab) ----
@@ -325,15 +326,16 @@ export const amended = (value: Order): Order => ({ ...value, amendments: AMENDED
 // ---- F-OL-05 (Order LINES lane): the Lines tab's state for a case — the draft of MY changes, Review and save, Add a style ----
 /** The tab's model with nothing typed yet (the style read), changed by `over`. */
 export function tabOf(over: Partial<LinesTabModel> = {}): LinesTabModel {
-  return { draft: EMPTY_HISTORY.draft, canUndo: false, clashes: [], moved: null, styles: { [STYLE_ID]: STYLE }, unlisted: new Set<string>(), review: null, addStyle: null, addColour: null, askFailed: false, portalGone: false, options: null, saving: false, ...over }
+  return { draft: EMPTY_HISTORY.draft, canUndo: false, clashes: [], moved: null, styles: { [STYLE_ID]: STYLE }, unlisted: new Set<string>(), review: null, addStyle: null, addColour: null, askFailed: false, portalGone: false, options: null, saving: false, leaving: false, figures: null, ...over }
 }
 /** Brown of the demo style as a new row (Add a style / + Add a colour), its pieces typed in the table. */
 const BROWN_ROW: NewLine = { key: newLineKey(STYLE_ID, BRN.id), styleId: STYLE_ID, colourwayId: BRN.id, colour: `${BRN.code} · ${BRN.name}`, style: { code: STYLE.code, name: STYLE.name }, sizes: {}, price: '', description: '', note: '' }
 /** Three changes: black 50 and 52 one more, red removed, brown new with 50: 2 · 52: 2. */
-const threeChanges = (value: Order): DraftHistory => {
+const threeChanges = (value: Order): DraftHistory => removeLine(blackAndBrown(value), value, LINE_RED)
+/** F-OL-09: black 50 and 52 one more, brown new with 50: 2 · 52: 2 — the draft AMEND_PREVIEW answers (its figures). */
+const blackAndBrown = (value: Order): DraftHistory => {
   let history = setCell(EMPTY_HISTORY, value, LINE_BLK, '50', 3)
   history = setCell(history, value, LINE_BLK, '52', 3)
-  history = removeLine(history, value, LINE_RED)
   history = addLines(history, value, [BROWN_ROW])
   history = setNewLine(history, BROWN_ROW.key, { size: '50', pieces: 2 })
   return setNewLine(history, BROWN_ROW.key, { size: '52', pieces: 2 })
@@ -1109,6 +1111,10 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'lines-read-only', label: 'Lines · Read-only · Plain numbers, no box, no Add a style, no ⋯, no bar', model: readOnlyCase(base('sales', asSales(production), { linesTab: tabOf() })) },
     { id: 'lines-undo', label: 'Lines · Owner · One change: "1 change not saved · Undo last edit"', model: base('owner', confirmed, { linesTab: tabWith(oneMore50(confirmed)) }) },
     { id: 'lines-review', label: 'Lines · Owner · Review and save: what changes per line, the total before → after, Why (optional), the tick "Ask … to accept the new order" (the total goes up)', model: base('owner', confirmed, { linesTab: tabWith(threeChanges(confirmed), { review: reviewOf({ ...AMEND_PREVIEW, totalUp: true, amountChanges: true }) }) }) },
+    // ---- F-OL-10 (Order LINES lane): the tick off, and the tab at 375 ----
+    { id: 'lines-review-tick-off', label: 'Lines · Owner · Review and save with the tick taken off: "Not ticked: they are not asked." — Save changes asks the customer nothing', model: base('owner', confirmed, { linesTab: tabWith(threeChanges(confirmed), { review: reviewOf({ ...AMEND_PREVIEW, totalUp: true, amountChanges: true }, { ask: false }) }) }) },
+    { id: 'lines-phone', label: 'Lines · Owner · Changing at 375 px: each colour row a card (its sizes five to a row, each named by its size, "was 2" under the box), the save bar wraps — sentence + Undo, then Discard + Review and save…', model: base('owner', confirmed, { linesTab: tabWith(threeChanges(confirmed)) }), note: 'Look at it at 375 px (and 1440 / 1920), light and dark: no sideways scroll.' },
+    // ---- end F-OL-10
     { id: 'lines-review-sales', label: 'Lines · Sales · Review and save: the pieces only, "The amount changes" — never which way; the tick on', model: base('sales', asSales(confirmed), { linesTab: tabWith(threeChanges(asSales(confirmed)), { review: reviewOf(SALES_PREVIEW) }) }) }, // B-CP-011
     { id: 'lines-review-reading', label: 'Lines · Owner · Review and save: working out what changes (Save changes held)', model: base('owner', confirmed, { linesTab: tabWith(threeChanges(confirmed), { review: reviewOf(null) }) }) },
     { id: 'lines-review-problems', label: 'Lines · Owner · Review and save: refused by place, in words (Save changes held)', model: base('owner', production, { linesTab: tabWith(threeChanges(production), { review: reviewOf(AMEND_PREVIEW_PROBLEMS) }) }) },
@@ -1118,6 +1124,8 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'lines-add-style', label: 'Lines · Owner · Add a style: our collection and this customer\'s own styles; black and red on the order already', model: base('owner', confirmed, { linesTab: tabOf({ addStyle: { query: 'DEMO', results: [{ ...STYLE_ROWS[0]!, colourways: STYLE.colourways.map((colourway) => ({ id: colourway.id, listPriced: colourway.id !== BRN.id })) }], searching: false, problem: null, row: { ...STYLE_ROWS[0]!, colourways: STYLE.colourways.map((colourway) => ({ id: colourway.id, listPriced: colourway.id !== BRN.id })) }, chosen: STYLE, picked: [BRN.id] } }) }) },
     { id: 'lines-add-style-sales', label: 'Lines · Sales · Add a style: brown has no list price for this customer — held in the dialog (someone who sees prices adds it)', model: base('sales', asSales(confirmed), { linesTab: tabOf({ addStyle: { query: 'DEMO', results: null, searching: false, problem: null, row: { ...STYLE_ROWS[0]!, colourways: STYLE.colourways.map((colourway) => ({ id: colourway.id, listPriced: colourway.id !== BRN.id })) }, chosen: STYLE, picked: [BRN.id] } }) }) }, // B-CP-011
     { id: 'lines-add-colour', label: 'Lines · Owner · + Add a colour: brown (not on the order yet), "Copy the sizes of: BLK · Nero"', model: base('owner', confirmed, { linesTab: tabOf({ addColour: { styleId: STYLE_ID } }) }) },
+    { id: 'lines-figures', label: 'Lines · Owner · Changing, the preview back: each line total and the totals are the SERVER\'s figures ("was" beside them); before it answers the table shows its own estimate', model: base('owner', confirmed, { linesTab: tabWith(blackAndBrown(confirmed), { figures: serverFiguresOf(AMEND_PREVIEW, confirmed) }) }) }, // F-OL-09
+    { id: 'lines-leave', label: 'Lines · Owner · An in-app link away from the order with 3 changes not saved: "Leave with 3 changes not saved?" — Stay / Leave and discard (asked on any tab; another tab of the order asks nothing)', model: base('owner', confirmed, { tab: 'overview', linesTab: tabWith(threeChanges(confirmed), { leaving: true }) }) }, // F-OL-07
     { id: 'lines-partly-shipped', label: 'Lines · Sales · Partly shipped: plain numbers and today\'s held words (changes on a partly shipped order come later)', model: base('sales', order('PARTLY_SHIPPED'), { linesTab: tabOf() }) },
     { id: 'amended-band', label: 'W2a · Sales · An amended order: “Amended · rev 2”, waiting for the customer to accept again', model: base('sales', amended(production)) },
     { id: 'close-lines-dialog', label: 'W2a · Sales · Close remaining lines: what will not be made or shipped, the reason, the reversal', model: base('sales', order('PARTLY_SHIPPED'), { dialog: { kind: 'closeLines' }, draft: { reason: 'Il cliente non vuole il resto.' } }) },

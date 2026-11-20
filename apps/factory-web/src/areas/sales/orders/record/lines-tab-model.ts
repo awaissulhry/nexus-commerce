@@ -4,6 +4,7 @@ import type { StyleDetail } from '../../quotes/api'
 import type { AmendPreview, OrderStyleRow } from '../api'
 import type { Phrase } from '../model'
 import type { Clash, LinesDraft, NoteField, WhyPick } from './lines-draft'
+import type { ServerFigures } from './lines-table' // F-OL-09
 
 /**
  * F-OL-01 (Order LINES lane, plan v2 §1) — what the Lines tab draws and what it asks, as plain props: the container hook
@@ -79,6 +80,10 @@ export interface LinesTabModel {
   readonly options: ReactNode | null
   /** A save is running. */
   readonly saving: boolean
+  /** F-OL-07: an in-app link away from the order waits for "Stay" or "Leave and discard" (the changes not saved). */
+  readonly leaving: boolean
+  /** F-OL-09: the server's figures of THIS draft (its preview answered; price readers); null: the table's client estimate. */
+  readonly figures: ServerFigures | null
 }
 
 export interface LinesTabActions {
@@ -102,7 +107,8 @@ export interface LinesTabActions {
   readonly onReviewTell?: (next: { readonly words?: string; readonly chosen?: boolean }) => void
   readonly onReviewOutcome?: (outcome: ExtraOutcome) => void
   readonly onReviewFee?: (text: string) => void
-  /** Save changes: the reason in words (none: the server's automatic words) and the question the customer is asked (when ticked). */
+  /** Save changes: the reason in words (none: the server's automatic words) and the words typed for the customer (none: the default
+   * question in the customer's language — F-OL-08). */
   readonly onSave?: (input: { readonly reason?: string; readonly question: string }) => void
   readonly onAskAgain?: () => void
   readonly onAskDismiss?: () => void
@@ -123,4 +129,7 @@ export interface LinesTabActions {
   readonly onOptions?: (lineId: string | null) => void
   /** A door lands on a row (Overview's ⋯, the band's "Change the lines", Money's "Change our price ›"): the Lines tab, the box focused. */
   readonly onLand?: (target: { readonly lineId: string | null; readonly box: 'first' | 'price' }) => void
+  // ---- F-OL-07: leaving the order with changes ----
+  readonly onLeaveStay?: () => void
+  readonly onLeaveGo?: () => void
 }

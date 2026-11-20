@@ -40,6 +40,7 @@ import {
   type CellLock,
   type Column,
   type LinesReader,
+  type ServerFigures,
   type StyleCardModel,
   type TaxBasis,
 } from '../../lines-table'
@@ -73,6 +74,8 @@ export interface LinesCtx {
   readonly basis: TaxBasis
   /** Who saved meanwhile (the clash words "Bea 5"). */
   readonly colleague: string | null
+  /** F-OL-09: the server's figures of THIS draft once its preview answered (price readers); null: the client estimate fills the gap. */
+  readonly figures: ServerFigures | null
 }
 
 type Translate = (key: string, params?: Record<string, string | number>) => string
@@ -476,7 +479,7 @@ function FactCell({ column, row, card, ctx, typeable, notes, open, onOpen }: { c
       )
     }
     case 'lineTotal': {
-      const amount = lineAmountOf(row, draft)
+      const amount = lineAmountOf(row, draft, ctx.figures) // F-OL-09
       return (
         <td className={`fw-lt-fact fw-lt-num${amount.was !== null ? ' fw-lt-changed' : ''}`} data-label={t('lines.col.lineTotal')}>
           <span>{amountText(amount.now, locale)}</span>
@@ -634,7 +637,7 @@ function Foot({ card, columns, ctx, first }: { card: StyleCardModel; columns: re
   const live = card.rows.filter((row) => !(row.kind === 'line' && row.removed))
   const sizeTotal = (size: string) => live.reduce((sum, row) => sum + (row.kind === 'line' && row.line.kind !== 'SIZE_GRID' ? 0 : cellOfRow(row, size, { draft, offered: null }).value), 0)
   const pieces = live.reduce((sum, row) => sum + (row.kind === 'new' ? Object.values(row.row.sizes).reduce((total, value) => total + value, 0) : piecesNow(row, draft)), 0)
-  const amounts = live.map((row) => lineAmountOf(row, draft).now)
+  const amounts = live.map((row) => lineAmountOf(row, draft, ctx.figures).now) // F-OL-09
   const money = amounts.every((amount) => amount !== null) ? amounts.reduce<number>((sum, amount) => sum + (amount ?? 0), 0) : null
   return (
     <tfoot>

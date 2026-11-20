@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { getStyle, type StyleDetail } from '../../quotes/api'
-import { applyAmendment, findStylesForOrder, previewAmendment, type Order, type OrderStyleRow } from '../api'
+import { applyAmendment, findStylesForOrder, previewAmendment, type AmendPreview, type Order, type OrderStyleRow } from '../api'
 import { applyPricedChange, type Freeze } from '../depth/api'
 import { frozenOffer, frozenProblemsOf, PRICED_EMPTY, pricedBodyOf } from '../depth/model'
 import { readProblem, writeProblem, type OrderAbilities } from '../model'
@@ -19,6 +19,8 @@ import {
   addSize,
   askDefaultOf,
   bodyLinesOf,
+  customerLocaleOf,
+  customerQuestionOf,
   draftKeyOf,
   EMPTY_HISTORY,
   isEmptyDraft,
@@ -38,7 +40,8 @@ import {
   type DraftHistory,
   type NewLine,
 } from './lines-draft'
-import { cellId, priceCellId } from './lines-table'
+import { cellId, priceCellId, serverFiguresOf } from './lines-table'
+import { leavingHrefOf } from './leave-guard' // F-OL-07
 import type { AddStyleState, LinesTabActions, LinesTabModel, MovedState, ReviewState } from './lines-tab-model'
 import type { RecordActsBase } from './record-model'
 
@@ -67,15 +70,19 @@ export interface LinesDraftInput extends RecordActsBase {
   readonly focus: (id: string) => void
   /** Today's options window of one saved line (OrderLineOptions, its own container); null: none. */
   readonly options: (lineId: string, onClose: () => void) => ReactNode
+  /** F-OL-07: go to an in-app address (the router's push) — after "Leave and discard". */
+  readonly go: (href: string) => void
 }
 
 const REVIEW_EMPTY = { phase: 'reading', preview: null, problem: null, why: null, words: '', ask: null, tell: { words: '', chosen: null }, extraOutcome: null, fee: '', changedMeanwhile: false } as const
 const ADD_EMPTY: AddStyleState = Object.freeze({ query: '', results: null, searching: false, problem: null, row: null, chosen: null, picked: [] }) as AddStyleState
 /** The customer's answer is asked for within a week (the ask's own default otherwise). */
 const ASK_DAYS = 7
+/** F-OL-09: the server's figures of the draft are asked this long after the last edit (one call at a time; a stale answer dropped). */
+const FIGURES_AFTER_MS = 600
 
 export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; actions: LinesTabActions; hasDraft: () => boolean } {
-  const { api, orderId, current, write, setNotice, load, order, can, freeze, language, showLines, focus, options } = input
+  const { api, orderId, current, write, setNotice, load, order, can, freeze, language, showLines, focus, options, go } = input
   const [history, setHistoryState] = useState<DraftHistory>(EMPTY_HISTORY)
   const historyRef = useRef(history)
   const setHistory = useCallback((next: DraftHistory | ((known: DraftHistory) => DraftHistory)) => {
@@ -100,6 +107,8 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
   const [portalGone, setPortalGone] = useState(false)
   const [optionsFor, setOptionsFor] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // F-OL-09: the last preview of a draft (its key): the table's server figures while it is THIS draft's.
+  const [seen, setSeen] = useState<{ readonly key: string; readonly preview: AmendPreview } | null>(null)
   const searchSeq = useRef(0)
   const askingStyles = useRef(new Set<string>())
 
@@ -133,14 +142,15 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
     asking.current = key
     setReview((open) => (open ? { ...open, key, phase: 'reading', preview: null, problem: null } : open))
     previewAmendment(api, orderId, { version: order.version, lines: bodyLinesOf(historyRef.current.draft, order) })
-      .then((preview) =>
+      .then((preview) => {
+        setSeen({ key, preview }) // F-OL-09: the table's figures too
         setReview((open) => {
           if (!open || open.key !== key) return open
           // Pieces already cut beyond the new figures: "Keep for this customer" picked for you (never "put in stock").
           const extraOutcome: ExtraOutcome | null = open.extraOutcome ?? ((preview.workOrders?.extra.length ?? 0) > 0 ? 'LEFTOVER' : null)
           return { ...open, phase: 'ready', preview, problem: null, extraOutcome }
-        }),
-      )
+        })
+      })
       .catch((error: unknown) => {
         const words = writeProblem(error)
         setReview((open) => (open && open.key === key ? { ...open, phase: 'failed', preview: null, problem: words, changedMeanwhile: open.changedMeanwhile || words.reload } : open))
@@ -150,6 +160,59 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
         if (asking.current === key) asking.current = null
       })
   }, [reviewOpen, key, api, orderId, order, load, setReview])
+
+  // ---- F-OL-09: honest money while editing — the preview of THIS draft, asked in the background for a price reader (Sales reads no
+  // money: nothing asked), 600 ms after the last edit; its figures replace the table's client estimate once they are back (the
+  // estimate only fills the gap). Review's own preview gives them too. A refused draft keeps the estimate (Review says why). ----
+  const seenKey = seen?.key ?? null
+  const draftEmpty = isEmptyDraft(history.draft)
+  const figuresSeq = useRef(0)
+  useEffect(() => {
+    if (!can.price || !order || !key || draftEmpty || reviewOpen || seenKey === key) return
+    const timer = setTimeout(() => {
+      const mine = ++figuresSeq.current
+      previewAmendment(api, orderId, { version: order.version, lines: bodyLinesOf(historyRef.current.draft, order) })
+        .then((preview) => mine === figuresSeq.current && setSeen({ key, preview }))
+        .catch(() => undefined) // the estimate stays; Review asks again and says why
+    }, FIGURES_AFTER_MS)
+    return () => clearTimeout(timer)
+  }, [can.price, order, key, draftEmpty, reviewOpen, seenKey, api, orderId])
+  const figures = can.price && order && seen && seen.key === key ? serverFiguresOf(seen.preview, order) : null
+  // ---- end F-OL-09
+
+  // ---- F-OL-07 (D-k, W2): leaving the order with changes asks first — an in-app link to another page (another order too) waits for
+  // "Leave and discard"; a tab of this order keeps the draft and asks nothing; closing the browser tab asks through the browser, on
+  // every tab of the order (the save bar's own guard lives on Lines only). Back / forward are the browser's and are not held. ----
+  const [leaving, setLeaving] = useState<string | null>(null)
+  useEffect(() => {
+    if (draftEmpty) return
+    const onClick = (event: MouseEvent) => {
+      const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null
+      const href = leavingHrefOf(event, anchor instanceof HTMLAnchorElement ? { href: anchor.href, target: anchor.target, download: anchor.hasAttribute('download') } : null, window.location)
+      if (!href) return
+      // Before the link's own handler (the router's): the capture phase on the window, then nothing else hears the click.
+      event.preventDefault()
+      event.stopPropagation()
+      setLeaving(href)
+    }
+    const onUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('click', onClick, true)
+    window.addEventListener('beforeunload', onUnload)
+    return () => {
+      window.removeEventListener('click', onClick, true)
+      window.removeEventListener('beforeunload', onUnload)
+    }
+  }, [draftEmpty])
+  const discard = () => {
+    setHistory(EMPTY_HISTORY)
+    setClashes([])
+    setMoved(null)
+    setReview(null)
+  }
+  // ---- end F-OL-07
 
   // ---- the line's options window (today's container) ----
   const optionsNode = optionsFor ? options(optionsFor, () => setOptionsFor(null)) : null
@@ -227,8 +290,9 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
           setMoved(null)
           setReview(null)
           setNotice({ tone: 'success', words: savedNotice(done.workOrders, ask) })
-          // The ask (a plain change: a priced change asks through its own link): its failure never undoes the save.
-          if (ask && !priced) void askCustomer(question, value)
+          // The ask (a plain change: a priced change asks through its own link): its failure never undoes the save. F-OL-08: the
+          // question in the customer's language (the words typed, else the default in the order's language), never the office's.
+          if (ask && !priced) void askCustomer(customerQuestionOf(value, question), value)
           if (tell) void tellCustomer(tell, value)
           return done.order
         } catch (error) {
@@ -251,7 +315,7 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
 
   const askCustomer = async (question: string, value: Order) => {
     try {
-      await askApproval(api, { kind: 'REVISED_ORDER', recordType: 'SalesOrder', recordId: value.id, question, dueAt: new Date(Date.now() + ASK_DAYS * 86_400_000).toISOString(), fileIds: [], send: true, language: value.language === 'en' ? 'en' : 'it' })
+      await askApproval(api, { kind: 'REVISED_ORDER', recordType: 'SalesOrder', recordId: value.id, question, dueAt: new Date(Date.now() + ASK_DAYS * 86_400_000).toISOString(), fileIds: [], send: true, language: customerLocaleOf(value) })
       setAskFailed(null)
     } catch {
       setAskFailed(question)
@@ -302,11 +366,14 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
       setHistory((known) => putBack(known, value, lineId))
     },
     onUndo: () => setHistory((known) => undoLast(known)),
-    onDiscard: () => {
-      setHistory(EMPTY_HISTORY)
-      setClashes([])
-      setMoved(null)
-      setReview(null)
+    onDiscard: () => discard(),
+    // F-OL-07: Stay keeps every change; Leave and discard empties the draft, then goes where the link pointed.
+    onLeaveStay: () => setLeaving(null),
+    onLeaveGo: () => {
+      const href = leaving
+      discard()
+      setLeaving(null)
+      if (href) go(href)
     },
     onAddSize: (styleId, size) => setHistory((known) => addSize(known, styleId, size)),
     onReadStyle: (styleId) => {
@@ -394,7 +461,7 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
   }
 
   return {
-    model: { draft: history.draft, canUndo: history.undo.length > 0, clashes, moved, styles, unlisted, review, addStyle, addColour, askFailed: askFailed !== null, portalGone, options: optionsNode, saving },
+    model: { draft: history.draft, canUndo: history.undo.length > 0, clashes, moved, styles, unlisted, review, addStyle, addColour, askFailed: askFailed !== null, portalGone, options: optionsNode, saving, leaving: leaving !== null, figures },
     actions,
     hasDraft: () => !isEmptyDraft(historyRef.current.draft),
   }

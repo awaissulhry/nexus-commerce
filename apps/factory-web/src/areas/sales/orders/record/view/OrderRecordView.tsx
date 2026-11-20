@@ -19,6 +19,7 @@ import { ChangesTab } from '../changes/view/ChangesTab'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
 import { LinesTab } from './LinesTab'
+import { LeaveConfirm } from './lines/SaveBar' // F-OL-07
 import { MoneyTab } from './MoneyTab'
 import { ProductionTab } from './ProductionTab'
 import { ShipmentsTab } from './ShipmentsTab'
@@ -521,6 +522,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
       {model.elsewhere?.dialog}
       {/* F-OL-04: a line's options window (the line ⋯ of Lines and of Overview open it), mounted once for the page. */}
       {model.linesTab?.options}
+      {/* F-OL-07: leaving the order by an in-app link with changes not saved asks first — on every tab, once for the page. */}
+      <LeaveConfirm order={order} tab={model.linesTab} actions={actions?.linesTab} />
       {/* F-OP-101: Refuse… of an open yes (the page's one dialog slot). */}
       {model.dialog?.kind === 'refuseYes' && <RefuseYesDialog order={order} model={model} actions={{ onDialog: () => actions?.onDialog?.(null), yes: actions?.yes }} />}
       {/* F-SA-243: the ONE review window (Home › Approvals' own) opened on this page from its doors; Esc returns to the same tab. */}

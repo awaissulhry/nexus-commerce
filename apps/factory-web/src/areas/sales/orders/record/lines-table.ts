@@ -1,10 +1,10 @@
 import { parsePrice } from '../../quotes/model'
 import type { StyleDetail } from '../../quotes/api'
-import type { Order, OrderLine } from '../api'
+import type { AmendPreview, Order, OrderLine } from '../api'
 import type { CellFloors } from '../daily-model'
 import type { Freeze, FreezeStage } from '../depth/api'
 import type { OrderAbilities } from '../model'
-import { baseSizesOf, cellOf, goodsLines, piecesOfLine, piecesOfNew, typeable, type LinesDraft, type NewLine } from './lines-draft'
+import { baseSizesOf, cellOf, goodsLines, newLineKey, piecesOfLine, piecesOfNew, typeable, type LinesDraft, type NewLine } from './lines-draft'
 import { lineMovesShown } from './line-moves'
 
 /**
@@ -214,12 +214,55 @@ export function unitPriceOf(row: CardRow, draft: LinesDraft): string | null {
   return (typed !== undefined ? parsePrice(typed) : null) ?? row.line.unitPrice ?? null
 }
 
+// ---- F-OL-09 (Order LINES lane): the server's figures while editing -------------------------------------------------------------
+
+/** One figure before → after, in minor units. */
+export interface FigurePair {
+  readonly before: number
+  readonly after: number
+}
+
+/** The preview's money of THIS draft (price readers only): per row and for the order. */
+export interface ServerFigures {
+  /** Per row — a saved line by its id, a new row by its key — its net before → after, as the server priced it. */
+  readonly lines: Readonly<Record<string, FigurePair>>
+  readonly net: FigurePair | null
+  readonly gross: FigurePair | null
+}
+
 /**
- * A row's line total in minor units: as the server priced it while I changed nothing of it; else the same arithmetic on my cells
- * (each size × its own price, else the line's) — an estimate the Review window replaces with the server's figures. null: unknown
- * (no price to multiply: a new row on the customer's list price).
+ * The server's figures from a preview of the draft: each priced line's net (a new row found by its style and colour), the order's net
+ * and gross. null: no figures — the preview refused the draft, or it carries no prices (the reader has no price grain: Sales never
+ * reads money, and the API sends none).
  */
-export function lineAmountOf(row: CardRow, draft: LinesDraft): { readonly now: number | null; readonly was: number | null } {
+export function serverFiguresOf(preview: Pick<AmendPreview, 'ok' | 'diff'> | null | undefined, order: Pick<Order, 'lines'>): ServerFigures | null {
+  const diff = preview?.ok ? preview.diff : null
+  if (!diff?.prices) return null
+  const saved = new Set(order.lines.map((line) => line.id))
+  const added = new Map(diff.lines.filter((entry) => entry.change === 'ADDED').map((entry) => [entry.lineId, newLineKey(entry.styleId, entry.colourwayId)]))
+  const lines: Record<string, FigurePair> = {}
+  for (const price of diff.prices) {
+    const key = saved.has(price.lineId) ? price.lineId : added.get(price.lineId)
+    if (key) lines[key] = { before: price.netBefore, after: price.netAfter }
+  }
+  const pair = (before: number | undefined, after: number | undefined): FigurePair | null => (before === undefined || after === undefined ? null : { before, after })
+  return { lines, net: pair(diff.netAmountBefore, diff.netAmountAfter), gross: pair(diff.grossAmountBefore, diff.grossAmountAfter) }
+}
+
+/** "was" beside a figure only when it moved. */
+const wasOf = (pair: FigurePair): number | null => (pair.after !== pair.before ? pair.before : null)
+// ---- end F-OL-09
+
+/**
+ * A row's line total in minor units. F-OL-09: once the preview of THIS draft answered (`server`), the server's figure; until then (or
+ * while it is asked again) a CLIENT ESTIMATE that only fills the gap: as the server priced it while I changed nothing of it, else the
+ * same arithmetic on my cells (each size × its own price, else the line's). null: unknown (no price to multiply: a new row on the
+ * customer's list price, until the server prices it).
+ */
+export function lineAmountOf(row: CardRow, draft: LinesDraft, server: ServerFigures | null = null): { readonly now: number | null; readonly was: number | null } {
+  const own = server?.lines[row.kind === 'new' ? row.row.key : row.line.id]
+  if (own && !(row.kind === 'line' && row.removed)) return { now: own.after, was: row.kind === 'line' ? wasOf(own) : null }
+  // ---- the client estimate (F-OL-09: only until the server's figures are back) ----
   if (row.kind === 'new') {
     const price = cents(parsePrice(row.row.price))
     return { now: price === null ? null : piecesOfNew(row.row) * price, was: null }
@@ -322,12 +365,14 @@ export interface TotalRow {
 
 /**
  * The totals block, under Line total: VAT net — Subtotal (excl. VAT) · VAT 22 % · Total (VAT incl.); no VAT on the sale — Subtotal ·
- * VAT: none · Total; a consumer's gross — Total (VAT incl.) · of which VAT. With my draft the net moves by my rows' estimates (the
- * same arithmetic as the server: pieces × price; the VAT at the order's rate) with "was" beside it; the Review window says the
- * server's figures.
+ * VAT: none · Total; a consumer's gross — Total (VAT incl.) · of which VAT, with "was" beside a figure that moved. F-OL-09: once the
+ * preview of THIS draft answered (`server`), the server's net and gross; until then a CLIENT ESTIMATE that only fills the gap: the
+ * saved net moved by my rows' estimates (pieces × price; the VAT at the order's rate).
  */
-export function totalsOf(order: Pick<Order, 'priceBasis' | 'lines' | 'netAmount' | 'vatAmount' | 'grossAmount'>, draft: LinesDraft, cards: readonly StyleCardModel[]): TotalRow[] {
+export function totalsOf(order: Pick<Order, 'priceBasis' | 'lines' | 'netAmount' | 'vatAmount' | 'grossAmount'>, draft: LinesDraft, cards: readonly StyleCardModel[], server: ServerFigures | null = null): TotalRow[] {
   const basis = taxBasisOf(order)
+  if (server?.net) return serverTotalsOf(order, basis, server.net, server.gross)
+  // ---- the client estimate (F-OL-09: only until the server's figures are back) ----
   const savedNet = order.netAmount ?? null
   let delta = 0
   let known = true
@@ -353,6 +398,25 @@ export function totalsOf(order: Pick<Order, 'priceBasis' | 'lines' | 'netAmount'
     { key: 'subtotal', amount: net, was: moved ? savedNet : null },
     { key: 'vat', amount: vat, was: moved ? (order.vatAmount ?? null) : null },
     { key: 'total', amount: gross, was: moved ? (order.grossAmount ?? null) : null, grand: true },
+  ]
+}
+
+/** F-OL-09: the totals as the server figured them for the draft (the VAT is gross less net when the server says the gross). */
+function serverTotalsOf(order: Pick<Order, 'vatAmount' | 'grossAmount'>, basis: TaxBasis, net: FigurePair, gross: FigurePair | null): TotalRow[] {
+  const vat = gross ? { before: gross.before - net.before, after: gross.after - net.after } : null
+  if (basis.kind === 'gross')
+    return [
+      { key: 'total', amount: gross?.after ?? order.grossAmount ?? null, was: gross ? wasOf(gross) : null, grand: true },
+      { key: 'ofWhichVat', amount: vat?.after ?? order.vatAmount ?? null, was: vat ? wasOf(vat) : null },
+    ]
+  if (basis.kind === 'vatNone') return [{ key: 'subtotal', amount: net.after, was: wasOf(net) }, { key: 'vatNone', amount: 0, was: null }, { key: 'total', amount: net.after, was: wasOf(net), grand: true }]
+  const vatAfter = vat?.after ?? Math.round((net.after * Number(basis.rate)) / 100)
+  const vatBefore = vat?.before ?? order.vatAmount ?? null
+  const total = gross ?? { before: net.before + (vatBefore ?? 0), after: net.after + vatAfter }
+  return [
+    { key: 'subtotal', amount: net.after, was: wasOf(net) },
+    { key: 'vat', amount: vatAfter, was: vatBefore !== null && vatBefore !== vatAfter ? vatBefore : null },
+    { key: 'total', amount: total.after, was: wasOf(total), grand: true },
   ]
 }
 

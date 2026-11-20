@@ -7,6 +7,7 @@ import { fifteenthOfNextMonth } from '@nexus/factory-domain/invoicing/fatturapa/
 import { supplierInvoiceXml } from '@nexus/factory-domain/payables/testing'
 import { addDays } from '@nexus/factory-domain/planning/buy'
 import { dueDateOf } from '@nexus/factory-domain/sales/terms/terms'
+import { AUTOMATIC_REASONS } from '@nexus/factory-domain/sales/amendments/reasons' // F-OL-06: S03b
 import { seedAt } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' calendar
 import { textOf } from '../../adapters/ses/fake'
 import { callerFor } from '../../core/command'
@@ -266,6 +267,31 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     expect(applied.amendment).toMatchObject({ revision: 1, reacceptance: 'NOT_NEEDED' })
     const list = await ok(P.sales, 'GET', `/sales/orders/${G.order.id}/amendments`)
     expect(list.amendments.map((entry: STJson) => [entry.revision, entry.reacceptance, entry.createdById])).toEqual([[1, 'NOT_NEEDED', P.sales.id]])
+    expect(await settle()).toContain('sales_order.amended')
+    G.order = (await ok(P.sales, 'GET', `/sales/orders/${G.order.id}`)).order
+  })
+
+  // F-OL-06 (Order LINES lane; B-OL-004, B-OL-005): the Lines tab saves a change with no reason and, when the office takes the tick
+  // off, asks the customer nothing — even when the total goes up. The piece is put back the same way, so the day goes on at 8 pieces.
+  it('S03b sales adds one piece with no reason and the tick off: no re-acceptance asked, the automatic reason stored; the piece put back the same way', async () => {
+    const line = G.order.lines[0]
+    const sizes = (line.sizes as STJson[]).map((size) => ({ size: size.size, quantity: size.quantity }))
+    const plus = sizes.map((size, index) => (index === 0 ? { ...size, quantity: size.quantity + 1 } : size))
+    // The full set of lines (a line left out is removed): every other line as it is.
+    const others = (G.order.lines as STJson[]).slice(1).map((entry) => ({ id: entry.id }))
+    // What the tick would default to: Sales reads that the amount changes, never which way (`totalUp` is the price grain's).
+    const review = await ok(P.sales, 'POST', `/sales/orders/${G.order.id}/amendments/preview`, { version: G.order.version, lines: [{ id: line.id, sizes: plus }, ...others] })
+    expect(review).toMatchObject({ ok: true, amountChanges: true })
+    expect(review).not.toHaveProperty('totalUp')
+    const more = await ok(P.sales, 'POST', `/sales/orders/${G.order.id}/amendments`, { version: G.order.version, lines: [{ id: line.id, sizes: plus }, ...others], askCustomer: false }, 201)
+    expect(more.amendment).toMatchObject({ revision: 2, reacceptance: 'NOT_NEEDED', reason: AUTOMATIC_REASONS.amend })
+    expect(more.order).toMatchObject({ reapprovalNeededAt: null, amendments: { count: 2, latestRevision: 2 } })
+    expect(more.order.lines[0].quantity).toBe(ST_PIECES + 1)
+    const back = await ok(P.sales, 'POST', `/sales/orders/${G.order.id}/amendments`, { version: more.order.version, lines: [{ id: line.id, sizes }, ...others], askCustomer: false }, 201)
+    expect(back.amendment).toMatchObject({ revision: 3, reacceptance: 'NOT_NEEDED', reason: AUTOMATIC_REASONS.amend })
+    expect(back.order).toMatchObject({ reapprovalNeededAt: null })
+    expect(back.order.lines[0].quantity).toBe(ST_PIECES)
+    expect((await ok(G.owner, 'GET', `/sales/orders/${G.order.id}`)).order.netAmount).toBe(ST_NET)
     expect(await settle()).toContain('sales_order.amended')
     G.order = (await ok(P.sales, 'GET', `/sales/orders/${G.order.id}`)).order
   })
