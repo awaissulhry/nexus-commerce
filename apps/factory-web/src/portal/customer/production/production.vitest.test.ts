@@ -1,4 +1,6 @@
 import { createElement } from 'react'
+import { readdirSync, readFileSync, statSync } from 'node:fs' // F-MS-105
+import { fileURLToPath } from 'node:url' // F-MS-105
 import { describe, expect, it } from 'vitest'
 import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
 import { ApiError } from '../../../lib/api/errors'
@@ -15,6 +17,7 @@ import {
   healthInputOf,
   keepMine,
   listQuery,
+  cutStartedOf, // F-MS-105
   markActionOf,
   markedNotice,
   markRefusal,
@@ -158,7 +161,8 @@ describe('Mark urgent / Mark regular (L18: at once inside the quota and before C
   it('over the quota, from Cutting, already asked: held with the words (Ask us comes with F-PR-23)', () => {
     expect(markActionOf(row('b4'), { ...FACTS, use: { ...USE, used: 3, left: 0 } }, 'en', en)?.held).toBe('3 of 3 urgent used. Set one back to Regular first.')
     expect(markActionOf(row('b4'), { ...FACTS, use: { ...USE, used: 0, max: 0, left: 0 } }, 'en', en)?.held).toBe('Urgent marks on your orders are asked of us.')
-    expect(markActionOf(row('b4', { stage: { ...row('x').stage!, code: 'CUTTING' } }), FACTS, 'en', en)?.held).toBe('Cutting has started on this order.')
+    // F-MS-105: "Cutting has started" when cutting really started (the API's cutStarted), not because of the stage.
+    expect(markActionOf(row('b4', { stage: { ...row('x').stage!, code: 'CUTTING' }, cutStarted: true }), FACTS, 'en', en)?.held).toBe('Cutting has started on this order.')
     expect(markActionOf(row('b4', { urgency: urgency({ asked: true }) }), FACTS, 'en', en)?.held).toBe('You asked us to make it urgent: we answer you soon.')
   })
 
@@ -194,6 +198,51 @@ describe('Mark urgent / Mark regular (L18: at once inside the quota and before C
     expect(undoRefusal(conflict('body/batchId', 'not_found'), en)).toBe('This change is not found: nothing to undo.')
   })
 })
+
+// ---- F-MS-105 (set the stage by hand; R8, R-61, R13): the portal's hints follow the API's cutStarted, never the stage; nothing on the
+// portal says the stage was set by hand.
+describe('F-MS-105: Mark urgent follows the real cuts (cutStarted), never the stage', () => {
+  const CUTTING = { ...row('x').stage!, code: 'CUTTING' as const, words: { it: 'Taglio', en: 'Cutting' } }
+  it('a Cutting row with nothing cut (the stage moved on ahead of the floor) offers Mark urgent at once; cut, it holds', () => {
+    expect(markActionOf(row('b4', { stage: CUTTING, cutStarted: false }), FACTS, 'en', en)).toEqual({ urgency: 'URGENT', held: null })
+    expect(markActionOf(row('b4', { stage: CUTTING, cutStarted: true }), FACTS, 'en', en)).toEqual({ urgency: 'URGENT', held: 'Cutting has started on this order.' })
+    // The stored stage may still say Preparing while a bundle was made: the cuts decide (as the API's mark does).
+    expect(markActionOf(row('b4', { cutStarted: true }), FACTS, 'it', t('it'))?.held).toBe(t('it')('held.cut'))
+    // An answer before the field: not started (the API decides on its own cut facts and says so in the result).
+    expect(markActionOf(row('b4', { stage: CUTTING }), FACTS, 'en', en)?.held).toBeNull()
+    // Back to Regular stays free whatever was cut.
+    expect(markActionOf(row('b2', { urgency: URGENT(1), stage: CUTTING, cutStarted: true }), FACTS, 'en', en)).toEqual({ urgency: 'REGULAR', held: null })
+  })
+
+  it('one field, one rule: cutStartedOf reads cutStarted only', () => {
+    expect([cutStartedOf({ cutStarted: true }), cutStartedOf({ cutStarted: false }), cutStartedOf({})]).toEqual([true, false, false])
+    expect(productionListSchema.parse(list({ items: [row('b4', { cutStarted: true })] })).items[0]?.cutStarted).toBe(true)
+    expect(productionListSchema.parse(list({ items: [row('b4')] })).items[0]?.cutStarted).toBeUndefined()
+    // The three hints call it; none of them reads the stage to decide.
+    const sources = ['./model.ts', './bulk/model.ts', './bulk/ask-model.ts'].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
+    for (const source of sources) {
+      expect(source).toContain('cutStartedOf(row)')
+      expect(source).not.toMatch(/row\.stage(\?)?\.code !== 'PREPARING'/)
+    }
+  })
+
+  it('nothing on the portal says a stage was set by hand: no hand key read anywhere, no such words in its catalogues', () => {
+    const files = (dir: URL): string[] =>
+      readdirSync(dir).flatMap((name) => {
+        const entry = new URL(name, dir)
+        if (statSync(entry).isDirectory()) return files(new URL(`${name}/`, dir))
+        return /\.(ts|tsx)$/.test(name) && !name.endsWith('.vitest.test.ts') ? [fileURLToPath(entry)] : []
+      })
+    const portal = files(new URL('../../', import.meta.url))
+    expect(portal.length).toBeGreaterThan(50)
+    for (const path of portal) expect(readFileSync(path, 'utf8'), path).not.toMatch(/\b(byHand|stageByHand|stageSet\w*)\b/)
+    for (const path of files(new URL('./', import.meta.url))) expect(readFileSync(path, 'utf8'), path).not.toMatch(/by hand|a mano/i)
+    for (const locale of ['en', 'it'] as const) {
+      for (const ns of [NS, 'portal-orders']) expect(JSON.stringify(CATALOGUE[locale][ns] ?? {}), `${locale} ${ns}`).not.toMatch(/by hand|\(a mano\)|impostat[ao] a mano/i)
+    }
+  })
+})
+// ---- end F-MS-105
 
 describe('the Urgent order dialog (drag, keyboard grip, buttons; only urgent orders move)', () => {
   it('Move to top, whether it changed, and "Keep my order" over a list that moved', () => {

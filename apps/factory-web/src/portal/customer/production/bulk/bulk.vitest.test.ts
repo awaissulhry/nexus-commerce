@@ -98,13 +98,14 @@ function row(id: string, seq: number, over: Partial<ProductionRow> = {}): Produc
 }
 
 const USE = { used: 2, max: 3, agreed: 0, left: 1, over: false, words: { it: '2 urgenti su 3', en: '2 of 3 urgent used' } }
-// b1, b2 urgent; b3, b4 regular before Cutting; b5 cut; b6 locked by us; b7 asked already.
+// b1, b2 urgent; b3, b4 regular before Cutting; b5 cut (F-MS-105: the floor's real cut, `cutStarted`); b6 locked by us; b7 asked
+// already.
 const ROWS: ProductionRow[] = [
   row('b1', 1, { urgency: URGENT(1) }),
   row('b2', 2, { urgency: URGENT(2) }),
   row('b3', 3),
   row('b4', 4),
-  row('b5', 5, { stage: STAGE('CUTTING') }),
+  row('b5', 5, { stage: STAGE('CUTTING'), cutStarted: true }),
   row('b6', 6, { urgency: urgency({ locked: true, lockWords: { it: 'Riportato a normale da noi: materiale non arrivato', en: 'Set to Regular by us: material not in' } }) }),
   row('b7', 7, { urgency: urgency({ asked: true, askedWords: { it: 'Urgente – richiesto', en: 'Urgent – asked' } }) }),
 ]
@@ -240,6 +241,27 @@ describe('the review before Send names each order and what will happen', () => {
     expect(reviewHeldOf(top, FACTS, en)).toBe('Nothing to send: each order you picked is as it should be already, or cannot change now.')
   })
 })
+
+// ---- F-MS-105 (R8, R-61): the review decides "cutting has started" on the API's cutStarted (the row's mark and "Ask us" read the same
+// field), never on the stage: a stage moved on ahead of the floor with nothing cut is marked at once, as the API will do.
+describe('F-MS-105: the review follows the real cuts, never the stage', () => {
+  it('a Cutting row with nothing cut is Urgent at once; a Preparing row with a bundle made is asked of us', () => {
+    const rows = [row('h1', 1, { stage: STAGE('SEWING'), cutStarted: false }), row('h2', 2, { cutStarted: true }), row('h3', 3, { stage: STAGE('CUTTING') })]
+    const review = markReviewOf(rows, 'URGENT', { ...USE, used: 0, left: 3 }, FACTS, 'en', en)
+    expect(review.rows.map((entry) => [entry.id, entry.will, entry.next, entry.note])).toEqual([
+      ['h1', 'NOW', 'Urgent 1', null],
+      ['h2', 'ASK_CUT', 'Urgent – asked', 'Cutting has started on this order: asked of us, we answer you.'],
+      // An answer before the field: not started (the API reads its own cut facts and says so in the row's result).
+      ['h3', 'NOW', 'Urgent 2', null],
+    ])
+    expect(review.send).toEqual(['h1', 'h2', 'h3'])
+    // A role that may not ask: the cut row cannot, with why; the uncut Cutting row still goes at once.
+    const reader = markReviewOf(rows.slice(0, 2), 'URGENT', { ...USE, used: 0, left: 3 }, { mayAsk: false }, 'en', en)
+    expect(reader.rows.map((entry) => entry.will)).toEqual(['NOW', 'CANNOT'])
+    expect(reader.rows[1]?.note).toBe('Cutting has started on this order. Asking us needs the Buyer or Production role.')
+  })
+})
+// ---- end F-MS-105
 
 describe('after Send: one result per row, Undo', () => {
   it('done with its own place, asked of us, refused in its words, an id not in the answer "not found"; the Done line counts', () => {

@@ -12,6 +12,8 @@ import type { OrderRow } from '../api'
 import { NAMESPACE } from './sheet/model'
 import { heldCell, orderEditOf } from './view/OrdersListView'
 import { I18nProvider } from '../../../../lib/i18n/provider' // F-CP-107 (cp-fx16)
+import type { BusinessDate } from '@nexus/factory-domain/core/time' // F-MS-104
+import { productionWordsFor } from '../../../../lib/production/words' // F-MS-104
 
 /**
  * B-TH-245 (threads plan TH-4, picture 27; features SHEET.brand-fields-F03 edit a custom value in a cell, -F08 Edit N,
@@ -321,3 +323,111 @@ describe('F-CP-140: the Price check cell and the Difference', () => {
   })
 })
 // ---- end F-CP-140
+
+// ---- F-MS-104 (set the stage by hand, 04 §5; R17; the API's B-MS-006): the list's "set by hand" mark — part of the stage (the dense
+// cell keeps the stage and the health), the hidden words and the DS Tooltip (no name, no reason in a list), amber after 7 days with
+// "check it" in words (never the colour alone), and the phone line "Sewing (by hand) · At risk". Without a hand stage: unchanged.
+describe('F-MS-104: a stage set by hand in Where it is', () => {
+  const TODAY = '2026-11-20' as BusinessDate
+  const part = (over: Partial<NonNullable<OrderRow['production']>> = {}): NonNullable<OrderRow['production']> => ({ stage: 'SEWING', stageSince: '2026-11-10', health: 'AT_RISK', waitingOn: null, since: null, held: false, supervisorMark: 'SOMEONE_ELSE', openRequests: 0, openIssues: 0, withheld: [], ...over })
+  const row = (over: Partial<NonNullable<OrderRow['production']>> = {}, rest: Partial<OrderRow> = {}): OrderRow => ({ ...LIST_ROWS[0]!, status: 'IN_PRODUCTION', production: part(over), ...rest })
+  const set = (since: string) => ({ stageByHand: { since } })
+  const textOfHtml = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&#x27;/g, "'").replace(/\s+/g, ' ').trim()
+  const markupOf = async (r: OrderRow, locale: (typeof LOCALES)[number] = 'en') => {
+    const { WhereItIsCell } = await import('./sheet/parts')
+    const words = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+    const sheet = createTranslator(locale, messagesFor(locale, [NAMESPACE])[NAMESPACE]!)
+    return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: {} }, createElement(WhereItIsCell, { row: r, t: words, s: sheet })))
+  }
+  const wordsOf = (locale: (typeof LOCALES)[number]) => {
+    const words = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+    const pw = productionWordsFor(locale)
+    return { status: (status: string) => words(`status.${status}`), stage: (stage: string) => pw(`parts.stage.${stage}`), health: (chip: string) => pw(`parts.health.${chip}`), byHand: (stage: string) => words('list.byHand.phone', { stage }) }
+  }
+  const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString()
+
+  it('the API row parses stageByHand (since when it was set); null and an older answer without it stay valid', async () => {
+    const { orderRowSchema } = await import('../api')
+    expect(orderRowSchema.parse(row(set('2026-11-18T09:00:00.000Z'))).production?.stageByHand).toEqual({ since: '2026-11-18T09:00:00.000Z' })
+    expect(orderRowSchema.parse(row({ stageByHand: null })).production?.stageByHand).toBeNull()
+    expect(orderRowSchema.parse(row()).production?.stageByHand).toBeUndefined()
+  })
+
+  it('whereLineOf: the stage keeps its place and gains the mark; amber from 7 days (company days); without it no new key', async () => {
+    const { whereLineOf } = await import('./sheet/model')
+    expect(whereLineOf(row(set('2026-11-18T09:00:00.000Z')), TODAY)).toEqual({ kind: 'stage', stage: 'SEWING', health: 'AT_RISK', held: false, byHand: { old: false } })
+    expect(whereLineOf(row(set('2026-11-14T09:00:00.000Z')), TODAY)).toMatchObject({ byHand: { old: false } }) // 6 days
+    expect(whereLineOf(row(set('2026-11-13T09:00:00.000Z')), TODAY)).toMatchObject({ byHand: { old: true } }) // 7 days
+    expect(whereLineOf(row(set('2026-11-13')), TODAY)).toMatchObject({ byHand: { old: true } }) // a day, as an answer may send it
+    // No hand stage (null, or an answer before it): exactly the line of F-SA-275, no `byHand` key at all.
+    expect(whereLineOf(row({ stageByHand: null }), TODAY)).toStrictEqual({ kind: 'stage', stage: 'SEWING', health: 'AT_RISK', held: false })
+    expect(whereLineOf(row(), TODAY)).toStrictEqual({ kind: 'stage', stage: 'SEWING', health: 'AT_RISK', held: false })
+    // No stage kept, or not read: the hand changes nothing.
+    expect(whereLineOf(row({ stage: null, ...set('2026-11-18T09:00:00.000Z') }), TODAY)).toEqual({ kind: 'status' })
+  })
+
+  it('the phone line (and the grid value): "Sewing (by hand) · At risk" / "Confezione (a mano) · A rischio"; without it as before', async () => {
+    const { whereTextOf } = await import('./sheet/model')
+    expect(whereTextOf(row(set('2026-11-18T09:00:00.000Z')), wordsOf('en'), TODAY)).toBe('Sewing (by hand) · At risk')
+    expect(whereTextOf(row(set('2026-11-18T09:00:00.000Z')), wordsOf('it'), TODAY)).toBe('Confezione (a mano) · A rischio')
+    expect(whereTextOf(row({ ...set('2026-11-18T09:00:00.000Z'), health: null }), wordsOf('en'), TODAY)).toBe('Sewing (by hand)')
+    expect(whereTextOf(row(), wordsOf('en'), TODAY)).toBe('Sewing · At risk')
+    expect(whereTextOf(row({ stage: null }), wordsOf('en'), TODAY)).toBe('In production')
+    expect(whereTextOf(LIST_ROWS[0]!, wordsOf('en'), TODAY)).toBe('')
+    // The view says the line through the model (one rule), with the list's own words.
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('whereTextOf(row, {')
+    expect(view).toContain("t('list.byHand.phone', { stage })")
+  })
+
+  it('the cell: the 12 px hand right after the stage (aria-hidden), the hidden words, the DS Tooltip; the pieces line stays', async () => {
+    const markup = await markupOf(row(set(daysAgo(1)), { progress: { inWork: 300, cut: 300, sewn: 120, finished: 0 } }))
+    expect(markup).toMatch(/<b>Sewing<\/b><span class="nds-tooltip"[^>]*><span class="fw-sheet-hand" data-by-hand="">/)
+    const svg = markup.match(/<svg[^>]*lucide-hand[^>]*>/)?.[0] ?? ''
+    expect(svg).toContain('width="12"')
+    expect(svg).toContain('aria-hidden="true"')
+    expect(markup).toContain('<span class="nds-vh">set by hand</span>')
+    expect(textOfHtml(markup)).toContain('120 of 300 sewn')
+    // The dense cell keeps two marks: the stage (with its hand) and the health; the hand is no chip of its own.
+    expect(markup).not.toMatch(/nds-tag[^"]*"[^>]*>[^<]*(by hand|a mano)/)
+    // 7 days or more: amber, and the words say "check it" (never the colour alone).
+    const old = await markupOf(row(set(daysAgo(9))))
+    expect(old).toContain('class="fw-sheet-hand old" data-by-hand="old"')
+    expect(old).toContain('<span class="nds-vh">set by hand 7 or more days ago: check it</span>')
+    const italian = await markupOf(row(set(daysAgo(1))), 'it')
+    expect(italian).toContain('<span class="nds-vh">impostata a mano</span>')
+    expect(italian).toContain('<b>Confezione</b>')
+  })
+
+  it('without a hand stage the cell is drawn exactly as before (F-SA-275 and cp-fx16 stay)', async () => {
+    const plain = row({}, { progress: { inWork: 300, cut: 300, sewn: 120, finished: 0 } })
+    const before = await markupOf(plain)
+    expect(before).not.toContain('fw-sheet-hand')
+    expect(textOfHtml(before)).not.toMatch(/by hand/i)
+    expect(await markupOf(row({ stageByHand: null }, { progress: { inWork: 300, cut: 300, sewn: 120, finished: 0 } }))).toBe(before)
+    expect(textOfHtml(before)).toContain('120 of 300 sewn')
+  })
+
+  it('the amber is the warning token in the sheet\'s own styles (no new raw colour); the Work tab draws this same cell', () => {
+    const css = readFileSync(new URL('./sheet/sheet.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-sheet-hand\.old \{\s*color: var\(--nds-warning\);/)
+    const block = css.slice(css.indexOf('.fw-sheet-hand {'), css.indexOf('.fw-sheet-hand.old'))
+    expect(block).not.toMatch(/#[0-9a-f]{3,6}\b|rgb\(/i)
+    const work = readFileSync(new URL('../../customers/record/view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(work).toContain("from '../../../orders/list/view/OrdersListView'")
+  })
+
+  it('every word in both languages: the hidden words, the tip (who and why live on the order), the amber words, the phone line', () => {
+    for (const locale of LOCALES) {
+      const words = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['list.byHand.mark', 'list.byHand.oldMark', 'list.byHand.tip', 'list.byHand.oldTip', 'list.byHand.phone']) expect(words(key, { days: 7, stage: 'X' }), `${locale} ${key}`).not.toBe(key)
+      expect(words('list.byHand.oldMark', { days: 7 }), locale).toContain('7')
+      expect(words('list.byHand.phone', { stage: 'X' }), locale).toMatch(/^X \(/)
+    }
+    const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    const italian = createTranslator('it', messagesFor('it', ['orders']).orders!)
+    expect([en('list.byHand.mark'), en('list.byHand.tip'), en('list.byHand.phone', { stage: 'Sewing' })]).toEqual(['set by hand', 'Set by hand — the order says who and why', 'Sewing (by hand)'])
+    expect([italian('list.byHand.mark'), italian('list.byHand.tip'), italian('list.byHand.phone', { stage: 'Confezione' })]).toEqual(['impostata a mano', "Impostata a mano — l'ordine dice chi e perché", 'Confezione (a mano)'])
+  })
+})
+// ---- end F-MS-104

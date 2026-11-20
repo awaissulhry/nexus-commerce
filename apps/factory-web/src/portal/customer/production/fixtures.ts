@@ -76,12 +76,13 @@ function row(n: number, over: Partial<ProductionRow> = {}): ProductionRow {
     next: { kind: 'STAGE', stage: 'CUTTING', gate: null, date: null, words: STAGES.CUTTING },
     count: null,
     problem: null,
+    cutStarted: false, // F-MS-105: nothing cut yet (the floor's own facts, as the API answers)
     ...over,
   }
 }
 
 const ROWS: ProductionRow[] = [
-  row(1, { urgency: URGENT(1), stage: stage('SEWING', '2026-11-14'), next: { kind: 'STAGE', stage: 'QUALITY', gate: null, date: '2026-11-24', words: STAGES.QUALITY } }),
+  row(1, { urgency: URGENT(1), stage: stage('SEWING', '2026-11-14'), cutStarted: true, next: { kind: 'STAGE', stage: 'QUALITY', gate: null, date: '2026-11-24', words: STAGES.QUALITY } }),
   row(2, {
     urgency: URGENT(2),
     promiseDate: '2026-12-09',
@@ -90,9 +91,9 @@ const ROWS: ProductionRow[] = [
     health: { code: 'AT_RISK', words: w('At risk', 'A rischio'), reason: { code: 'MATERIAL_LATE', words: w('Material late', 'Materiale in ritardo') } },
   }),
   row(3, { waiting: YOU, next: { kind: 'GATE', stage: null, gate: 'PP_SAMPLE', date: '2026-11-21', words: w('PP sample', 'Campione di pre-produzione') } }),
-  row(4, { stage: stage('CUTTING', '2026-11-16'), next: { kind: 'STAGE', stage: 'SEWING', gate: null, date: null, words: STAGES.SEWING } }),
+  row(4, { stage: stage('CUTTING', '2026-11-16'), cutStarted: true, next: { kind: 'STAGE', stage: 'SEWING', gate: null, date: null, words: STAGES.SEWING } }),
   row(5, { urgency: urgency({ locked: true, lockWords: w('Set to Regular by us: material not in', 'Riportato a normale da noi: materiale non arrivato') }) }),
-  row(6, { urgency: urgency({ asked: true, askedWords: w('Urgent – asked', 'Urgente – richiesto') }), stage: stage('CUTTING', '2026-11-17') }),
+  row(6, { urgency: urgency({ asked: true, askedWords: w('Urgent – asked', 'Urgente – richiesto') }), stage: stage('CUTTING', '2026-11-17'), cutStarted: true }),
   row(7, { marks: { ...NO_MARKS, onHold: true, words: [w('On hold: waiting for your artwork', 'In attesa: aspettiamo la vostra grafica')] }, waiting: YOU }),
 ]
 

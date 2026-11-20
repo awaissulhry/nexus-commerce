@@ -48,6 +48,7 @@ import { partnerOrder, portalReader, type PortalReader } from '../../sales/porta
 import { progressFor } from '../../sales/portal-orders/progress'
 import { dayOf, dayOrNull, namesOf, orderHistory, readLines, type PortalLine } from '../../sales/portal-orders/store'
 import { GOODS_LINE_KINDS, isKeptState, keeperPlanningContext, readOrderProductionFacts } from '../brand/facts'
+import { liveCutsOf } from '../brand/urgency' // B-MS-007
 import {
   readGates,
   readOpenRequests,
@@ -96,6 +97,12 @@ import { PRODUCTION_CHIPS, type ProductionChip } from './contract'
  * The partner read comes first (its own orders, rows, lines and requests: ./access.ts); the office's facts are read only for the
  * order ids it returned and its own party. No answer names a supervisor, an office person, a note, a place in our queue, a count
  * of other customers, a line, a lane, a load, a lot or a work order (factory-domain production-brand/portal-read).
+ *
+ * B-MS-007 (set the stage by hand, R8, R-61): each list row and the order say `cutStarted`, whether cutting REALLY started (the
+ * floor's live cut facts, production/brand/urgency liveCutsOf: leather logged or a bundle made of one of its cells), read once per
+ * page in the tenant's scope for the order ids the partner read found. It is the one field the portal's "Mark urgent" hints read,
+ * because the mark itself decides on those facts and never on the stored stage, which the office may have set by hand. The stage,
+ * its since, the file and the Ready chip read the row as they always did; no answer says a stage was set by hand.
  */
 
 const LIVE = { events: ['brand_production.stage_reached', 'brand_production.health_changed', 'brand_production.urgency_changed', 'brand_production.hold_changed'] }
@@ -139,6 +146,8 @@ interface ProductionRead {
   readonly facts: ReadonlyMap<string, { readonly stage: OrderStage | null; readonly waiting: Waiting }>
   /** Its own orders named by a problem's answer ("Answered in your order 13": its own number, else its PO). */
   readonly names: ReadonlyMap<string, { readonly id: string; readonly number: string; readonly customerRef: string | null; readonly customerSeq: number | null }>
+  /** B-MS-007: the orders whose cutting really started (the floor's live cut facts; never the stored stage). */
+  readonly cuts: ReadonlySet<string>
 }
 
 const goodsOf = (lines: readonly PortalLine[]): PortalLine[] => lines.filter((line) => (GOODS_LINE_KINDS as readonly string[]).includes(line.kind))
@@ -158,7 +167,7 @@ async function factsOf(reader: PortalReader, request: FastifyRequest, orderIds: 
 }
 
 /** Everything a production read needs about these orders (all of them the session's party's, read in its scope first). */
-async function readProduction(app: FastifyInstance, request: FastifyRequest, now: Date, scope: { readonly orderIds?: readonly string[]; readonly facts?: boolean } = {}): Promise<ProductionRead> {
+async function readProduction(app: FastifyInstance, request: FastifyRequest, now: Date, scope: { readonly orderIds?: readonly string[]; readonly facts?: boolean; readonly cuts?: boolean } = {}): Promise<ProductionRead> {
   const reader = portalReader(app, request)
   const partyId = reader.session.partyId
   const partner = await request.withClient(async (client) => {
@@ -176,7 +185,9 @@ async function readProduction(app: FastifyInstance, request: FastifyRequest, now
     const work = await readWork(client, partyId, partner.lines.filter((line) => wanted.includes(line.orderId)), { words: false })
     const gates = shares(settings.level, 'gates') ? await readGates(client, partyId, wanted) : new Map<string, BrandGate[]>()
     const planned = shares(settings.level, 'gates') ? await readPlanned(client, new Map(wanted.map((orderId) => [orderId, workOf(work, orderId).ownWorkOrderIds] as const))) : new Map<string, PlannedDates>()
-    return { settings, problems, work, gates, planned }
+    // B-MS-007: one read of the live cut facts for the page's own order ids (the Home's counts need none).
+    const cuts = scope.cuts === false ? new Set<string>() : new Set((await liveCutsOf(client, wanted)).keys())
+    return { settings, problems, work, gates, planned, cuts }
   })
   const facts = scope.facts === false ? new Map<string, { stage: OrderStage | null; waiting: Waiting }>() : await factsOf(reader, request, wanted.filter((orderId) => !partner.rows.has(orderId)), now)
   const answeredIn = [...new Set(tenant.problems.flatMap((problem) => (problem.answeredInOrderId && problem.answeredInOrderId !== problem.orderId ? [problem.answeredInOrderId] : [])))]
@@ -326,6 +337,7 @@ async function listRowOf(read: ProductionRead, styles: Styles, order: BrandOrder
     originalPromiseDate,
     promiseMoved: originalPromiseDate !== null && promiseDate !== originalPromiseDate,
     stage,
+    cutStarted: read.cuts.has(order.id), // B-MS-007
     health: healthOf(read.rows.get(order.id), read.today),
     waiting: waitingOf(read, order.id),
     marks: marksOf(read, order),
@@ -392,7 +404,7 @@ export async function productionList(app: FastifyInstance, request: FastifyReque
  * orders), so a tile and the list it opens agree. Nothing of another customer is read or counted.
  */
 export async function productionCounts(app: FastifyInstance, request: FastifyRequest, now: Date): Promise<{ readonly waitingOnYou: number; readonly atRisk: number; readonly onHold: number }> {
-  const read = await readProduction(app, request, now)
+  const read = await readProduction(app, request, now, { cuts: false }) // B-MS-007: no tile reads the cuts
   let waitingOnYou = 0
   let atRisk = 0
   let onHold = 0
@@ -590,6 +602,7 @@ export async function productionOrder(app: FastifyInstance, request: FastifyRequ
           sewingNotCountedWords: live?.sewingNotCounted ? SEWING_NOT_COUNTED_WORDS : null,
         }
       : null,
+    cutStarted: view.cuts.has(order.id), // B-MS-007
     health: healthOf(view.rows.get(order.id), view.today),
     waiting: waitingOf(view, order.id),
     marks: marksOf(view, brandOrder),

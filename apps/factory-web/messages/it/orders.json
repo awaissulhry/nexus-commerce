@@ -160,7 +160,14 @@
     },
     "viewing": "Mostra: {view}",
     "new": "Nuovo ordine",
-    "keyNew": "Nuovo ordine"
+    "keyNew": "Nuovo ordine",
+    "byHand": {
+      "mark": "impostata a mano",
+      "oldMark": "impostata a mano da {days} o più giorni: controllala",
+      "tip": "Impostata a mano — l'ordine dice chi e perché",
+      "oldTip": "Impostata a mano da {days} o più giorni — controllala sull'ordine, che dice chi e perché",
+      "phone": "{stage} (a mano)"
+    }
   },
   "col": {
     "number": "Numero",

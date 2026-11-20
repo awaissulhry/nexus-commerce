@@ -160,7 +160,14 @@
     },
     "viewing": "Showing: {view}",
     "new": "New order",
-    "keyNew": "New order"
+    "keyNew": "New order",
+    "byHand": {
+      "mark": "set by hand",
+      "oldMark": "set by hand {days} or more days ago: check it",
+      "tip": "Set by hand — the order says who and why",
+      "oldTip": "Set by hand {days} or more days ago — check it on the order, which says who and why",
+      "phone": "{stage} (by hand)"
+    }
   },
   "col": {
     "number": "Number",
