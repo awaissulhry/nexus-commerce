@@ -29,7 +29,12 @@ import { startsWith, words } from './_harness/words'
  *   6  a combined shipment of two orders (B-OP-047: N6 on) made in place on SEED-SO-0003 with SEED-SO-0002 added, "Also carries" on
  *      both orders; customer B's orders never offered;
  *   7  the files viewer walk by keys (→ / ←, Esc back to the card);
- *   8  two customers: B's portal answers A's orders with the neutral refusal; A's pages hold nothing of B; the page at rest asks little.
+ *   8  two customers: B's portal answers A's orders with the neutral refusal; A's pages hold nothing of B; the page at rest asks little;
+ *   9  F-OO-215 (order overview lane): SEED-SO-0002's Overview, sections 1–6 — the headline (SO2_HEADLINE), the strips and the moves
+ *      row, a line's ⋯, the People rows, Next dates (Decide… when a refused date waits; Requested in its small dialog), Requests &
+ *      changes whose groups add up to "Changes (N) ›" and the Changes badge, Linked records' counts = the tab badges;
+ *  10  F-OO-215: sections 8 and 7 — a custom value saved beside Order facts sends the order's version (B-OO-014) and the page reads the
+ *      order again (the office note saved next goes through at the new version); the sheet's edit at the version read before is stale.
  * Not here, said in the report: cut pieces (the floor's flow: the extra-pieces outcome is held by the design case
  * f-op-129-strip-outcome, B-OP-071 O1 and the unit tests of F-OP-107), the record of a shipment made elsewhere whose garments the seeds
  * date in the story's days ahead (B-OP-071 O4 records one), and the invoices of a shared shipment that left (B-OP-045).
@@ -37,6 +42,7 @@ import { startsWith, words } from './_harness/words'
 
 const OD = words('orders')
 const PROD = words('production')
+const CF = words('admin-fields') // F-OO-215: the custom fields panel's words
 const APPROVALS = words('approvals')
 const DEPTH = words('warehouse-shipments-depth')
 const POPUPS = words('record-thread-popups')
@@ -57,6 +63,19 @@ const TRACK_LINK = 'https://track.example.com/T-TH9-TRK-0002'
 const PAPER_DDT = 'T-TH9-77/2026'
 const AMEND_REASON = 'Made-up: Brand Alpha wants one more 50 and one fewer 52.'
 const REFUSE_WORDS = 'Made-up: asked about an older version of the order; ask it again on this one.'
+// ---- F-OO-215 (order overview lane): SEED-SO-0002's Overview ----
+/**
+ * SEED-SO-0002's headline as the seed gives it ON MAIN: its status words (its stage follows them, "Confirmed · …"). The Owner still
+ * decides the seed's status (A: Partly shipped, a later small PR oo-s01, which changes THIS constant; B: Confirmed, as now). Every
+ * other check of steps 9 and 10 asserts behaviour, never this status.
+ */
+const SO2_HEADLINE = OD('status.CONFIRMED')
+/** This stage's own order custom field (for every customer, office only) and its made-up values. */
+const FIELD = { code: 'th9ui_box_note', labelEn: 'Box note TH9 (made up)', labelIt: 'Nota scatola TH9 (inventata)' } as const
+const FIELD_VALUE = 'Made-up: two jackets per box, TH9 page'
+const SHEET_VALUE = 'Made-up: from the sheet at the old version, TH9'
+const OFFICE_NOTE = 'Made-up: call before delivery, TH9 office note.'
+// ---- end F-OO-215
 
 type Json = Record<string, any>
 type Made = { id: string; number: string }
@@ -83,7 +102,8 @@ const shipmentRow = (page: Page, number: string): Locator => page.getByRole('row
 async function yesInPlace(flow: Flow, desks: readonly Desk[], orderId: string): Promise<Desk> {
   for (const desk of desks) {
     const { page } = desk
-    await desk.go(`/sales/orders/${orderId}?tab=overview`)
+    // F-OO-111: the yes banner steps back on Overview (section 1's strip has the same doors, step 9): read on Lines, where it stays.
+    await desk.go(`/sales/orders/${orderId}?tab=lines`)
     const yes = page.getByRole('button', { name: YES }).first()
     // op-fx4 (F-OP-101's doors): a reader who is not its approver reads who decides and gets no yes; the asker's yes is held.
     const notTheirs = page.getByText(new RegExp(`${escape(lead(OD('approval.whoDecides')))}|${escape(OD('approval.selfAsked'))}`))
@@ -112,6 +132,34 @@ async function typeTracking(page: Page, number: string, tracking: string | null,
   await expect(box).toBeHidden({ timeout: 30_000 })
 }
 
+// ---- F-OO-215: the Overview's cards and the tab badges, as a reader finds them ----
+/** An Overview card by its heading (the cards without a class of their own: Progress, Linked records, Order facts). */
+const cardOf = (page: Page, title: string): Locator => page.locator('.fw-so-overview .nds-card').filter({ has: page.getByRole('heading', { name: title, exact: true }) })
+/** A tab's badge (its count), or null when the tab draws none. */
+async function badgeOf(page: Page, tab: string): Promise<number | null> {
+  const count = tabs(page).getByRole('link', { name: startsWith(OD(`tab.${tab}`)) }).first().locator('.nds-tab-count')
+  return (await count.count()) > 0 ? Number((await count.innerText()).trim()) : null
+}
+/** The first number of a text ("5 · 2 in work" → 5), or null. */
+const leadingNumber = (text: string): number | null => {
+  const match = /^\s*(\d+)/.exec(text)
+  return match ? Number(match[1]) : null
+}
+/** Opens a door (a dialog) and closes it with Escape — or, held, notes its words in the report; never pressed when held. */
+async function openAndClose(page: Page, door: Locator, what: string): Promise<void> {
+  await seen(door, 60_000)
+  if ((await door.getAttribute('aria-disabled')) === 'true') {
+    notHere(`${what}: held for this reader — ${(await door.getAttribute('aria-description')) ?? 'no words'}`)
+    return
+  }
+  await press(door)
+  const box = dialog(page)
+  await seen(box, 60_000)
+  await page.keyboard.press('Escape')
+  await expect(box).toBeHidden({ timeout: 30_000 })
+}
+// ---- end F-OO-215
+
 /** Opens an address of A's record in B's portal and waits for its neutral words; the page holds nothing of A. */
 async function refusedToBeta(beta: PortalDesk, path: string, ofAlpha: readonly string[], where: string): Promise<void> {
   await beta.go(path)
@@ -121,7 +169,7 @@ async function refusedToBeta(beta: PortalDesk, path: string, ofAlpha: readonly s
 
 export default defineStage({
   proves:
-    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders made in place (B-OP-047); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal',
+    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders made in place (B-OP-047); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal; SEED-SO-0002’s Overview sections 1–8 (F-OO-215): the headline, strips and moves, a line’s ⋯, People, Next dates, Requests & changes = the Changes badge, Linked records = the tab badges, a custom value saved beside Order facts at the order’s version (the sheet’s edit at the old version stale), the office note saved after it',
   async run(flow: Flow) {
     const sales = await flow.desk('sales')
     const alphaId = await flow.seedId('party:P1')
@@ -173,7 +221,8 @@ export default defineStage({
       // The yes the Owner asked (the set-up's made-up rule holds her typed order): held for its asker (rule 42, the Owner included),
       // confirmed in place by Finance with the code; the rule off again.
       expect(world.order.status, 'the made-up rule holds the typed order').toBe('PENDING_APPROVAL')
-      await owner.go(`/sales/orders/${world.order.id}?tab=overview`)
+      // F-OO-111: the yes banner is read on Lines (it steps back on Overview, where section 1's strip has the same doors).
+      await owner.go(`/sales/orders/${world.order.id}?tab=lines`)
       const own = owner.page.getByRole('button', { name: YES })
       await seen(owner.page.getByText(OD('approval.selfAsked')).first(), 60_000)
       if ((await own.count()) > 0) await expect(own.first(), 'nobody approves their own request').toBeDisabled()
@@ -186,10 +235,10 @@ export default defineStage({
 
       // SEED-SO-W39-01 waits for its credit yes, Finance's: the Owner reads who decides (no yes of hers); Finance reads the yes held in
       // its stale words (the seeds' made-up fingerprint) and the no as its door — not decided here.
-      await owner.go(`/sales/orders/${world.w3901.id}?tab=overview`)
+      await owner.go(`/sales/orders/${world.w3901.id}?tab=lines`) // F-OO-111: the banner's "Who decides" stays on Lines
       await seen(owner.page.getByText(OD('approval.whoDecides', { who: 'Finance' })).first(), 60_000)
       await expect(owner.page.getByRole('button', { name: YES }), 'the Owner is not its approver').toHaveCount(0)
-      await finance.go(`/sales/orders/${world.w3901.id}?tab=overview`)
+      await finance.go(`/sales/orders/${world.w3901.id}?tab=lines`) // F-OO-111
       await expect(finance.page.getByRole('button', { name: OD('approval.refuse'), exact: true }).first(), 'its no is Finance’s door').toBeEnabled({ timeout: 60_000 })
       await expect(finance.page.getByRole('button', { name: YES }).first(), 'its yes is stale: held').toBeDisabled()
       await flow.shot(finance.page, 'yes-stale-held')
@@ -198,7 +247,7 @@ export default defineStage({
       // design, op-19): the page holds the yes in the stale words before any press (op-fx4: the read says so, F-OP-101) and offers
       // the no, given in place with a reason and words.
       const { page } = owner
-      await owner.go(`/sales/orders/${world.w3902.id}?tab=overview`)
+      await owner.go(`/sales/orders/${world.w3902.id}?tab=lines`) // F-OO-111: the banner stays on Lines
       const yes = page.getByRole('button', { name: YES }).first()
       await seen(yes, 60_000)
       const refuse = page.getByRole('button', { name: OD('approval.refuse'), exact: true }).first()
@@ -435,5 +484,157 @@ export default defineStage({
       await seen(alpha.page.getByText(PO_REF).first(), 60_000)
       await expectNothingOf(alpha.page, BRAND_BETA, world.betaNumbers, 'alpha portal order')
     })
+
+    // ---- F-OO-215 (order overview lane, plan sections 1–8): SEED-SO-0002's Overview, read by Sales (orders.manage, no prices) ----------
+    await flow.step('9 · SEED-SO-0002’s Overview, sections 1–6: the headline, the strips and the moves row, a line’s ⋯, People, Next dates (Decide…, Requested), Requests & changes = the Changes badge, Linked records = the tab badges', async () => {
+      const { page } = sales
+      await sales.go(`/sales/orders/${world.so2.id}?tab=overview`)
+      await seen(page.locator('.fw-so-overview'), 60_000)
+
+      // 1 · Where it is now: the headline (status · stage, SO2_HEADLINE first), the strips (at most 4 shown, each at most 3 real
+      // buttons, its words), the order's own moves (More ▾ named for the order, every move there held with words or live).
+      const where = page.locator('.fw-so-where')
+      await expect(where.locator('.fw-so-headline')).toHaveText(startsWith(SO2_HEADLINE), { timeout: 60_000 })
+      const strips = where.getByRole('list', { name: OD('where.strips'), exact: true })
+      if ((await strips.count()) > 0) {
+        const shown = strips.locator('li.fw-so-strip')
+        const count = await shown.count()
+        expect(count, 'at most four strips in view').toBeLessThanOrEqual(4)
+        for (let index = 0; index < count; index += 1) {
+          expect(await shown.nth(index).getByRole('button').count(), `strip ${index + 1}: at most three buttons`).toBeLessThanOrEqual(3)
+          expect((await shown.nth(index).locator('.fw-so-strip-said').innerText()).trim(), `strip ${index + 1} says why`).not.toBe('')
+        }
+      } else notHere('the strips: nothing holds SEED-SO-0002 in this world (no hold, no yes, no deposit waits)')
+      const moves = where.getByRole('group', { name: OD('where.moves'), exact: true })
+      if ((await moves.count()) > 0) {
+        const more = moves.getByRole('button', { name: OD('where.moreOf', { number: world.so2.number }), exact: true })
+        if ((await more.count()) > 0) {
+          await press(more)
+          await seen(page.getByRole('menuitem').first())
+          await page.keyboard.press('Escape')
+        }
+      } else notHere('the moves row: SEED-SO-0002 offers this reader no move of its own here (a final order, or read-only)')
+      await flow.shot(page, 'overview-where')
+
+      // 2 · Progress by line: a line's ⋯ offers the line's own moves (each the band's dialog, held with words when it may not run).
+      const lineMoves = cardOf(page, OD('overview.progress')).getByRole('button', { name: startsWith(lead(OD('progress.moves'))) }).first()
+      if ((await lineMoves.count()) > 0) {
+        await press(lineMoves)
+        const moveWords = (['make', 'close', 'reopen', 'change', 'discuss'] as const).map((move) => escape(OD(`progress.move.${move}`)))
+        await seen(page.getByRole('menuitem', { name: new RegExp(`^(${moveWords.join('|')})`) }).first())
+        await page.keyboard.press('Escape')
+      } else notHere('a line’s ⋯: no line of SEED-SO-0002 offers this reader a move')
+
+      // 3 · People: one list — the supervisor, the backup, who answers the customer (a name and why, or "No owner yet": never "—"),
+      // where it is made; or, for a reader who does not follow production, the card says who sees it.
+      const people = page.locator('.fw-so-people')
+      const supervisorRow = people.locator('li').filter({ has: page.locator('.fw-so-people-label', { hasText: OD('people.supervisor') }) })
+      await seen(supervisorRow.first().or(people.getByText(OD('overview.people.held'))), 60_000)
+      if ((await supervisorRow.count()) > 0) {
+        for (const label of [OD('overview.people.backup'), OD('overview.people.answers'), OD('overview.people.where')]) await seen(people.locator('.fw-so-people-label', { hasText: label }).first())
+        const answers = people.locator('li').filter({ has: page.locator('.fw-so-people-label', { hasText: OD('overview.people.answers') }) }).first()
+        expect((await answers.innerText()).replace(OD('overview.people.answers'), '').trim(), 'who answers the customer is named (or "No owner yet"), never "—"').not.toMatch(/^—/)
+      }
+
+      // 4 · Next dates: Decide… on a new date the customer refused (the ONE promise dialog), Requested by customer's Change… in its
+      // small dialog (an amendment: opened and closed here, nothing written).
+      const dates = page.locator('.fw-so-dates')
+      await seen(dates, 60_000)
+      const decide = dates.getByRole('button', { name: OD('dates.decide'), exact: true })
+      if ((await decide.count()) > 0) await openAndClose(page, decide.first(), 'Next dates’ Decide…')
+      else notHere('Decide…: no new date of SEED-SO-0002 was refused by the customer in this world')
+      const requested = dates.locator('li').filter({ hasText: OD('dates.requestedByCustomer') }).getByRole('button', { name: OD('doors.change'), exact: true })
+      await openAndClose(page, requested.first(), 'Requested by customer’s Change…')
+
+      // 5 · Requests & changes: its groups (on us · on the customer · still to do) add up to "Changes (N) ›", which is the Changes badge.
+      const requests = page.locator('.fw-so-rq')
+      await seen(requests, 60_000)
+      const changesLink = requests.getByRole('link', { name: new RegExp(`^${escape(lead(OD('requests.changesCount')))}\\s*\\d+\\)`) })
+      await seen(changesLink, 60_000)
+      const changes = Number(/\((\d+)\)/.exec(await changesLink.innerText())![1])
+      const heads = await requests.locator('.fw-so-rq-group > h3').allInnerTexts()
+      const groups = heads.map((head) => Number(/·\s*(\d+)\s*$/.exec(head)?.[1] ?? NaN))
+      expect(groups.every((count) => Number.isInteger(count)), `each group says its count: ${heads.join(' | ')}`).toBe(true)
+      expect(groups.reduce((sum, count) => sum + count, 0), `the groups add up to Changes (${changes})`).toBe(changes)
+      expect(await badgeOf(page, 'changes'), 'the Changes badge is the card’s number').toBe(changes)
+      // The walk's seed says 1 / 1 / 1 and Changes (3) on main; what this world shows is noted (behaviour is asserted above).
+      test.info().annotations.push({ type: 'SEED-SO-0002 requests', description: `${heads.join(' · ') || 'none'} · Changes (${changes})` })
+
+      // 6 · Linked records: one count rule — the Work orders and Shipments rows' number is the Production / Shipments badge.
+      const linked = cardOf(page, OD('overview.linked.title'))
+      await seen(linked, 60_000)
+      for (const [label, tab] of [[OD('overview.linked.workOrders'), 'production'], [OD('overview.linked.shipments'), 'shipments']] as const) {
+        const row = linked.locator('li.fw-so-ov-row').filter({ has: page.locator('.fw-so-linked-label', { hasText: label }) })
+        const badge = await badgeOf(page, tab)
+        if ((await row.count()) === 0) {
+          // None yet (the quiet line): no number on the card, and none (or 0) on the tab.
+          expect(badge ?? 0, `${label}: none on the card, none on the ${tab} tab`).toBe(0)
+          continue
+        }
+        // The row is label | value | doors: its value ("5 · 2 in work · …", a link to the tab) starts with the live count.
+        const shown = leadingNumber(await row.first().locator(':scope > *').nth(1).innerText())
+        expect(shown, `${label}: the card says a number`).not.toBeNull()
+        expect(badge, `${label}: the card's number is the ${tab} badge`).toBe(shown)
+      }
+      await expectNothingOf(page, BRAND_BETA, world.betaNumbers, 'SEED-SO-0002 overview')
+      await flow.shot(page, 'overview-so2')
+    })
+
+    await flow.step('10 · SEED-SO-0002’s Overview, sections 8 and 7: a custom value saved beside Order facts at the order’s version (the sheet at the old version is stale), then the office note saved at the new one', async () => {
+      const { page } = sales
+      // Set-up: this stage's order custom field, for every customer, office only (th4-sheet makes one through Admin › Fields & lists).
+      const owner = await flow.desk('owner')
+      const known = ((await flow.read(owner.page, '/fields/editor?recordType=ORDER')).fields ?? []) as Json[]
+      if (!known.some((field) => field.code === FIELD.code)) {
+        byApi('this stage’s order custom field (th4-sheet makes one through Admin › Fields & lists)')
+        await flow.write(owner.page, 'POST', '/auth/office/step-up', { code: await flow.code(owner.person) })
+        await flow.write(owner.page, 'POST', '/fields', { recordType: 'ORDER', type: 'TEXT', shownInPortal: false, ...FIELD }, 201)
+      }
+      await sales.go(`/sales/orders/${world.so2.id}?tab=overview`)
+
+      // 8 · Custom fields: the pair's second card, beside Order facts (the order page only: never at the body's end).
+      const fields = page.getByRole('region', { name: CF('cf.title'), exact: true })
+      await seen(fields, 60_000)
+      await expect(page.locator('.fw-so-ov-pair').filter({ has: fields }).getByRole('heading', { name: OD('overview.facts.title'), exact: true })).toBeVisible()
+      await expect(page.getByRole('region', { name: CF('cf.title'), exact: true })).toHaveCount(1)
+      const before = (await flow.read(page, `/sales/orders/${world.so2.id}`)).order.version as number
+      await press(fields.getByRole('button', { name: CF('cf.edit'), exact: true }))
+      await fields.getByRole('textbox', { name: startsWith(FIELD.labelEn) }).fill(FIELD_VALUE)
+      // The save sends the order's version as read (B-OO-014) and moves it by one.
+      const sent = page.waitForRequest((request) => request.method() === 'PUT' && /\/fields\/values\/ORDER\/[^/?]+$/.test(new URL(request.url()).pathname), { timeout: 60_000 })
+      // F-OO-213: the page reads the order again once the save moved its version (no live message says it).
+      const reread = page.waitForResponse(async (response) => response.request().method() === 'GET' && new URL(response.url()).pathname === `/api/sales/orders/${world.so2.id}` && response.status() === 200 && ((await response.json().catch(() => null)) as Json | null)?.order?.version === before + 1, { timeout: 60_000 })
+      const saved = await answerOf(page, 'PUT', /^\/fields\/values\/ORDER\/[^/]+$/, () => press(fields.getByRole('button', { name: startsWith(CF('cf.save')) }).first()))
+      expect((await sent).postDataJSON(), 'the save sends the order’s version').toMatchObject({ recordVersion: before })
+      expect(saved.recordVersion, 'the order’s version moved with its value').toBe(before + 1)
+      await reread // the page holds the order at its new version: the next command (the office note) is sent at it
+      await seen(fields.getByText(FIELD_VALUE), 60_000)
+      await flow.shot(page, 'custom-value-saved')
+
+      // The Orders sheet's edit at the version it read before the page's save: stale, the page's value stays (the lost update, fixed).
+      byApi('the Orders sheet’s apply at the version read before the page’s save (th4-sheet walks the sheet’s screens)')
+      const late = await flow.write(page, 'POST', '/views/bulk/apply', { listKey: 'sales.orders', rows: [{ id: world.so2.id, version: before, changes: { [`cf:${FIELD.code}`]: SHEET_VALUE } }] })
+      expect((late.results as Json[])[0], 'the sheet at the old version').toMatchObject({ ok: false, refusal: { code: 'stale' } })
+      const values = (await flow.read(page, `/fields/values/ORDER/${world.so2.id}`)).values as Json[]
+      expect(values.find((value) => value.code === FIELD.code)?.value, 'the page’s value stays').toBe(FIELD_VALUE)
+
+      // 7 · Order facts: the office note, saved through the sheet's own write at the version the page holds NOW — the page read the
+      // order again after the custom value moved it (F-OO-213), so this is not refused as changed.
+      const facts = cardOf(page, OD('overview.facts.title'))
+      const noteRow = facts.locator('li.fw-so-fact-note')
+      await seen(noteRow, 60_000)
+      await press(noteRow.getByRole('button', { name: OD('doors.change'), exact: true }))
+      const box = dialog(page)
+      await seen(box.getByText(OD('facts.note.title', { number: world.so2.number })), 60_000)
+      await box.getByRole('textbox', { name: startsWith(OD('facts.note.label')) }).fill(OFFICE_NOTE)
+      const applied = await answerOf(page, 'POST', /^\/views\/bulk\/apply$/, () => press(box.getByRole('button', { name: OD('facts.note.go'), exact: true })))
+      expect((applied.results as Json[])[0], 'the note at the page’s version').toMatchObject({ ok: true })
+      await seen(page.getByText(OD('facts.note.saved')).first(), 60_000)
+      await seen(noteRow.getByText(OFFICE_NOTE), 60_000)
+      expect((await flow.read(page, `/sales/orders/${world.so2.id}`)).order.version, 'the note moved the version once more').toBe(before + 2)
+      await flow.shot(page, 'office-note-saved')
+      await flow.settle()
+    })
+    // ---- end F-OO-215
   },
 })
