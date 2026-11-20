@@ -5,7 +5,7 @@ import { AlertTriangle, ClipboardList, Eye, FileSpreadsheet, History, Lock, Refr
 import { Banner, Card, Field, PressableRow, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
 import { EndState } from '@nexus/ui/components/EndState/index'
 import { SaveStatus, type SaveStatusState } from '@nexus/ui/components/SaveStatus/index'
-import { Button, Input, RadioCard, Select } from '@nexus/ui/primitives'
+import { Button, Input, Select } from '@nexus/ui/primitives' // follow-up 22: the start's ways are Cards that are buttons, no RadioCard
 import { DateField, Textarea, useDsWords } from '../../../../lib/i18n/ds-parts'
 import type { DraftRecord, DraftRow, RequestStatus } from '../api'
 import type { NewOrderPhase } from '../band'
@@ -423,6 +423,8 @@ function StartSection({ model, actions }: { model: NewOrderViewModel; actions?: 
   // continue. ("Describe it" comes with the described lines, F-CP-154.)
   const reorderHeld = reorderHeldKey(model.mayOrder ?? true)
   const wordsLink = (model.mayOrder ?? true) ? wordsHref(model.prefix) : null
+  // follow-up 22 (cp-fx12): while a way makes its draft, another press starts nothing (one draft per deliberate press).
+  const startBusy = model.start.choosing !== null || model.start.describing === true
   return (
     <Card padded>
       <section className="fw-pno-section" aria-labelledby="start-title">
@@ -432,35 +434,26 @@ function StartSection({ model, actions }: { model: NewOrderViewModel; actions?: 
         <fieldset className="fw-pno-ways" disabled={model.start.held !== null}>
           <legend className="fw-pno-quiet">{t('start.intro')}</legend>
           {/* F-CP-154 (12 §2 Doors): "Describe it" first — the new draft opens with its "Describe what you need" window. */}
-          <RadioCard
-            name="way"
-            value="describe"
-            checked={false}
-            selected={false}
-            onChange={() => actions?.onAddKind?.('described')}
-            title={
-              <span className="fw-pno-waytitle">
-                <NotebookPen size={18} aria-hidden /> {t('draftPage.start.describe')}
-              </span>
-            }
-            description={model.start.describing ? t('state.saving') : t('draftPage.start.describeHint')}
+          <WayCard
+            id="describe"
+            icon={<NotebookPen size={18} aria-hidden />}
+            title={t('draftPage.start.describe')}
+            hint={model.start.describing ? t('state.saving') : t('draftPage.start.describeHint')}
+            busy={startBusy}
+            onStart={() => actions?.onAddKind?.('described')}
           />
           {WAYS.map((way) => {
             const held = way === 'reorder' && reorderHeld ? t(reorderHeld) : null
             return (
-              <RadioCard
+              <WayCard
                 key={way}
-                name="way"
-                value={way}
-                checked={model.way === way}
-                selected={model.way === way}
-                onChange={() => (held ? undefined : actions?.onWay?.(way))}
-                title={
-                  <span className="fw-pno-waytitle">
-                    {WAY_ICON[way]} {t(`start.way.${way}`)}
-                  </span>
-                }
-                description={model.start.choosing === way ? t('state.saving') : (held ?? t(`start.wayHint.${way}`))}
+                id={way}
+                icon={WAY_ICON[way]}
+                title={t(`start.way.${way}`)}
+                hint={model.start.choosing === way ? t('state.saving') : (held ?? t(`start.wayHint.${way}`))}
+                held={held !== null}
+                busy={startBusy}
+                onStart={() => actions?.onWay?.(way)}
               />
             )
           })}
@@ -491,6 +484,26 @@ function StartSection({ model, actions }: { model: NewOrderViewModel; actions?: 
     </Card>
   )
 }
+
+// ---- follow-up 22 (cp-fx12; design 12 §2 Doors): a way in is an ACTION, not a choice. As radio cards an arrow key moved AND picked,
+// so ArrowDown from "Describe it" started a "Pick styles" draft nobody asked for. Each way is the design system's Card that is a button
+// (`Card onClick`): only Enter, Space or a click starts it; Tab goes from way to way and an arrow key starts nothing. Its name is the
+// title, its hint (or "Saving…", or why it is held) its description; a held way stays focusable, says why and starts nothing.
+function WayCard({ id, icon, title, hint, held = false, busy, onStart }: { id: string; icon: ReactNode; title: string; hint: string; held?: boolean; busy: boolean; onStart: () => void }) {
+  const titleId = `start-way-${id}`
+  const hintId = `start-way-${id}-hint`
+  return (
+    <Card padded className="fw-pno-way" onClick={() => (held || busy ? undefined : onStart())} aria-labelledby={titleId} aria-describedby={hintId} aria-disabled={held ? true : undefined}>
+      <span id={titleId} className="fw-pno-waytitle">
+        {icon} {title}
+      </span>
+      <span id={hintId} className="fw-pno-wayhint">
+        {hint}
+      </span>
+    </Card>
+  )
+}
+// ---- end follow-up 22
 
 // ── F-CP-150: the part cards ──────────────────────────────────────────────────────────────────────────────────────────────
 
