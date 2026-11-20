@@ -32,6 +32,8 @@ import { closeRefusedFollowUpsInCommand } from './still-to-do'
 import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../production/work-order-changes/auto'
 // B-OO-003 (order overview N3): a waiting order's standing credit hold (its override request is withdrawn with the cancel).
 import { creditHoldOf } from '../credit/check'
+// B-OO-009 (order overview N10): the promise reason as a field (the curated code, then the office's note).
+import { promiseReasonText, type PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise'
 
 /**
  * The sales order's moves (B-W1-25; SAL-204: one writer per move; factory-domain sales/orders salesOrderMachine), each
@@ -95,23 +97,35 @@ const reasonOf = (value: string | null | undefined): string | null => (typeof va
 export interface PromiseInput {
   readonly version?: number | undefined
   readonly promiseDate: BusinessDate
+  /** The reason as stored: B-OO-009, the route's `CODE: note` (promiseReasonText), or a caller's own words. */
   readonly reason: string
   /** Only these lines get the new promise (their own date); none: the whole order. */
   readonly lineIds?: readonly string[] | undefined
+}
+
+/** B-OO-009 (order overview N10): the promise route's body — the curated reason code and/or the office's own note. */
+export interface PromiseBody extends Omit<PromiseInput, 'reason'> {
+  readonly reasonCode?: PromiseReasonCode | undefined
+  readonly reason?: string | undefined
 }
 
 /**
  * orders.manage: a new promise date with a reason (SAL-206; the design's "Change promise date"), for the order or for
  * some of its lines. The first promise (originalPromiseDate) is never overwritten: an order promised for the first time
  * gets it set to this date, once (the trigger holds it too). Lines change only before anything shipped.
+ * B-OO-009: the reason is the picked code (the customer reads its curated words) and/or the office's note (never the
+ * customer's), stored as `CODE: note`; neither is refused with the domain's words (400).
  */
-export async function changePromise(caller: CommandCaller, orderId: string, body: PromiseInput, idempotencyKey?: string): Promise<{ order: OrderView }> {
+export async function changePromise(caller: CommandCaller, orderId: string, body: PromiseBody, idempotencyKey?: string): Promise<{ order: OrderView }> {
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
   // B-OP-025: the new date answers the customer's refusal of an earlier one — its follow-up closes in the same command (+ audit).
   const context = officeContextOf(caller)
+  // B-OO-009: one stored reason for the audit row, the lines' promise rows and the closed follow-ups.
+  const reason = promiseReasonText(body.reasonCode, body.reason)
+  const change: PromiseInput = { version: body.version, promiseDate: body.promiseDate, reason, lineIds: body.lineIds }
   await command(caller, { name: 'orders.changePromise', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
-    const done = await changePromiseInCommand(tools, order, body)
-    const followUpsClosed = await closeRefusedFollowUpsInCommand(tools, context, order, done.lineIds, body.reason.trim())
+    const done = await changePromiseInCommand(tools, order, change)
+    const followUpsClosed = await closeRefusedFollowUpsInCommand(tools, context, order, done.lineIds, reason)
     return { ...done, followUpsClosed }
   })
   return { order: await recordAfter(caller, order.id) }

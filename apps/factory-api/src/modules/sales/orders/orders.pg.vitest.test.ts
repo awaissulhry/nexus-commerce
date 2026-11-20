@@ -397,6 +397,26 @@ describe('dates (SAL-206): a new promise needs a reason; the first promise never
     await expect(admin(`UPDATE "SalesOrder" SET "originalPromiseDate" = '2027-01-01' WHERE id = $1`, [order.id])).rejects.toThrow(/first promised date .* is set once/)
     order = { ...order, version: lineChanged.version }
   })
+
+  // ── B-OO-009 (order overview N10): the promise reason as a field — a curated code the customer reads, and/or the office's note ──
+  it('B-OO-009: a reason code with or without a note is stored as CODE: note; neither, or an unknown code, is a 400', async () => {
+    const url = `${orderUrl(order.id)}/promise`
+    const later = addDays(TODAY, 100)
+    const neither = await refused('a.sales', 'PUT', url, { version: order.version, promiseDate: later }, 400)
+    expect(neither.issues.map((issue: Json) => issue.path)).toContain('body/reason')
+    expect((await refused('a.sales', 'PUT', url, { version: order.version, promiseDate: later, reason: '   ' }, 400)).issues.map((issue: Json) => issue.path)).toContain('body/reason')
+    const unknown = await refused('a.sales', 'PUT', url, { version: order.version, promiseDate: later, reasonCode: 'WEATHER', reason: 'Snow on the pass.' }, 400)
+    expect(unknown.issues.map((issue: Json) => issue.path)).toContain('body/reasonCode')
+    const coded = (await ok('a.sales', 'PUT', url, { version: order.version, promiseDate: later, reasonCode: 'CAPACITY', reason: '  Line 2 is down for a week.  ' })).order
+    expect(coded.promiseHistory[0]).toMatchObject({ to: later, lineIds: [], reason: 'CAPACITY: Line 2 is down for a week.' })
+    // A code alone (the note left empty): the code is the reason.
+    const alone = (await ok('a.sales', 'PUT', url, { version: coded.version, promiseDate: addDays(TODAY, 101), reasonCode: 'TRANSPORT', reason: '' })).order
+    expect(alone.promiseHistory[0]).toMatchObject({ to: addDays(TODAY, 101), reason: 'TRANSPORT' })
+    const stored = await admin<{ reason: string }>(`SELECT reason FROM "AuditLog" WHERE action = 'orders.changePromise' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 2`, [order.id])
+    expect(stored.map((row) => row.reason)).toEqual(['TRANSPORT', 'CAPACITY: Line 2 is down for a week.'])
+    order = { ...order, version: alone.version }
+  })
+  // ── end B-OO-009 ──
 })
 
 describe('production and shipping move the order (SAL-204: the system is their one writer)', () => {

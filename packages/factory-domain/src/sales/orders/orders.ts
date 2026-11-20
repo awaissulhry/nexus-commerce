@@ -386,7 +386,8 @@ export interface PromiseChange {
  */
 export function promiseProblems(change: PromiseChange): Issue[] {
   const issues: Issue[] = []
-  if (typeof change.reason !== 'string' || change.reason.trim() === '') issues.push({ path: 'body/reason', message: 'Say why the promise changes (it stays in the order history).' })
+  // B-OO-009: the reason is the picked code and/or the office's note (portal-orders/promise `promiseReasonText`): neither is refused.
+  if (typeof change.reason !== 'string' || change.reason.trim() === '') issues.push({ path: 'body/reason', message: 'Pick why the promise changes, or say it in words (it stays in the order history).' })
   if (change.promiseDate < change.today) issues.push({ path: 'body/promiseDate', message: `A new promise is a day from today (${change.today}) on.` })
   if (change.lineIds.length === 0 && change.current === change.promiseDate) issues.push({ path: 'body/promiseDate', message: `The order is already promised for ${change.promiseDate}.` })
   const seen = new Set<string>()
