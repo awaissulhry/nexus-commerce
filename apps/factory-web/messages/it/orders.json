@@ -1647,8 +1647,6 @@
       "title": "Persone",
       "backup": "Sostituto",
       "answers": "Risponde al cliente",
-      "madeBy": "Creato da",
-      "madeByOn": "{name} · {date}",
       "where": "Dove si produce",
       "notPlanned": "Non ancora pianificato",
       "held": "Chi ci lavora è visibile a chi segue la produzione."

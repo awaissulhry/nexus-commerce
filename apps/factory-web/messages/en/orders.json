@@ -1647,8 +1647,6 @@
       "title": "People",
       "backup": "Backup",
       "answers": "Answers the customer",
-      "madeBy": "Made by",
-      "madeByOn": "{name} · {date}",
       "where": "Where it is made",
       "notPlanned": "Not planned yet",
       "held": "Who works on it is shown to people who follow production."

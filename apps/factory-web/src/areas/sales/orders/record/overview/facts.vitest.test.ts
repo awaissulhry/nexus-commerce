@@ -173,6 +173,19 @@ describe('F-OO-209: Order facts drawn', () => {
     expect(textOf(draw({ ...value, orderDate: '2026-10-27', createdById: null }, modelOf('sales', value)))).toContain('28/10/2026 · changed 29/10/2026 · ordered 27/10/2026')
   })
 
+  it('one place per fact: Made lives here (People\'s Made by words went), the requested date is Next dates\' (no Requested row here)', () => {
+    const value = withFacts()
+    for (const locale of LOCALES) {
+      const text = textOf(draw(value, modelOf('sales', value), locale))
+      expect(text, locale).toContain(locale === 'en' ? 'Made 28/10/2026 by Sara Vendite' : 'Creato 28/10/2026 da Sara Vendite')
+      expect(text, locale).not.toContain(locale === 'en' ? 'Requested' : 'Richiest')
+      const catalogue = JSON.parse(readFileSync(new URL(`../../../../../../messages/${locale}/orders.json`, import.meta.url), 'utf8')) as { overview: { people: Record<string, unknown> } }
+      expect(Object.keys(catalogue.overview.people), locale).not.toContain('madeBy')
+      expect(Object.keys(catalogue.overview.people), locale).not.toContain('madeByOn')
+    }
+    expect(readFileSync(new URL('../view/overview/FactsCard.tsx', import.meta.url), 'utf8')).not.toMatch(/requestedDate|dates\.requested/)
+  })
+
   it('the one edit path: Customer PO\'s Change… starts (or keeps) edit mode and focuses the PO field, which carries the id', () => {
     const calls: string[] = []
     function Harness() {
