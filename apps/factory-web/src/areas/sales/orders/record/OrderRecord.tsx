@@ -410,6 +410,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // use-overview-acts' (F-OP-134) ----
   const production = useOrderProduction(api, order.status === 'ready' ? order.value.id : null)
   // ---- end F-SA-232
+  // ---- F-OO-133 (B-OO-008: the owner change emits no event): the dock changed who answers This order's conversation — People only is
+  // read again (Answers the customer and why); the other parts keep their figures.
+  const rereadPeople = () => production.again(['people'])
+  // ---- end F-OO-133
   // ---- F-SA-234: the materials' readiness of the work orders the production read names (Production › Work orders, while it shows) ----
   const [readiness, setReadiness] = useState<Part<ReadinessRow[]> | null>(null)
   const readWork = production.state?.status === 'ready' ? production.state.read.work : null
@@ -679,6 +683,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
               showOnPage={showOnPage /* F-SA-266 */}
               changeSide={changeSide /* F-SA-244 */}
               orderFiles={orderFilesHost /* F-OP-215 */}
+              onOwnerChanged={rereadPeople /* F-OO-133 */}
             />
           ) : (
             <OfficeRecordThread
@@ -690,6 +695,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
               partyRole="customer"
               printHref={printHref(pathname, params?.toString() ?? '')}
               orderFiles={orderFilesHost /* F-OP-215 */}
+              onOwnerChanged={rereadPeople /* F-OO-133 */}
             />
           )
         ) : null

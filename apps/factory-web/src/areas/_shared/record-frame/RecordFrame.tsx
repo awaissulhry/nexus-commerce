@@ -22,6 +22,7 @@ import type { FrameAnswer } from './model' // F-SA-244
 import type { FrameFilesAsk } from './model' // B-TH-264 follow-up
 import { askRecordOf, type ComposeAsk, type FrameDoorAsk, type FrameRecord } from './model' // F-OP-212: every ask names its record
 import { frameKeysFor } from './model' // F-OP-206
+import { takesAsk } from './model' // F-OO-135: a count is kept only for the page's own conversation
 import { currentAddress, keptScopeOf, withThread, writeSearch } from './address' // F-OP-209: the ONE writer of `thread=`
 // B-TH-229: "Thread · 2 new".
 import { threadButtonWords } from './model'
@@ -160,6 +161,13 @@ export interface RecordFrameState {
   readonly composeAsk?: ComposeAsk | null
   readonly clearCompose?: () => void
   // ---- end F-OP-212
+  // ---- F-OO-135 (order overview §3.1): how many follow the page's own conversation, as the docked thread read them — it reports them
+  // as it reports its new messages (`reportNew`), with the record they are of (only the page's own is kept: the dock may show
+  // another); null: not read yet, or the dock left it. Only where the page has a conversation; the order's People head reads it
+  // ("Followers · 4 ›"), no other page does.
+  readonly followers?: number | null
+  readonly reportFollowers?: (count: number | null, record: FrameRecord) => void
+  // ---- end F-OO-135
 }
 
 /** F-OP-209: how `setThread` writes — the message to open the thread at (absent: dropped), a push (the narrow view opening). */
@@ -342,6 +350,12 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
   const [filesAsk, setFilesAsk] = useState<FrameFilesAsk | null>(null) // B-TH-264 follow-up
   // B-TH-229 (band-F05, PL1-F04): the reader's own new messages, as the docked thread read them.
   const [fresh, setFresh] = useState(0)
+  // ---- F-OO-135: the followers of the page's own conversation, as the docked thread read them (a page that names no record: its one).
+  const [followers, setFollowers] = useState<number | null>(null)
+  const reportFollowers = useCallback((count: number | null, about: FrameRecord) => {
+    if (takesAsk(pageRecordRef.current, about)) setFollowers(count)
+  }, [])
+  // ---- end F-OO-135
   const before = useRef<DockWidth>('forty')
   const scrollKept = useRef<number | null>(null)
 
@@ -564,8 +578,9 @@ function Frame({ recordType, personId, band, thread, threadLabel, defaultWidth /
       ...(hasThread ? { discuss, discussAsk, clearDiscuss, showInThread, showAsk, clearShow } : {}) /* F-SA-265: only where the page has a conversation */,
       ...(hasThread ? { compose, composeAsk, clearCompose } : {}) /* F-OP-212 */,
       ...(hasThread && answer ? { answer } : {}) /* F-SA-244: only where the page has the review window and a conversation */,
+      ...(hasThread ? { followers, reportFollowers } : {}) /* F-OO-135: only where the page has a conversation */,
     }),
-    [mode, width, phone, choose, closeView, door, openDoor, showThread, hasThread, setThread, openFiles, filesAsk, clearFiles, discuss, discussAsk, clearDiscuss, showInThread, showAsk, clearShow, answer, compose, composeAsk, clearCompose],
+    [mode, width, phone, choose, closeView, door, openDoor, showThread, hasThread, setThread, openFiles, filesAsk, clearFiles, discuss, discussAsk, clearDiscuss, showInThread, showAsk, clearShow, answer, compose, composeAsk, clearCompose, followers, reportFollowers],
   )
 
   const buttonWords = threadButtonWords(fresh) // B-TH-229
