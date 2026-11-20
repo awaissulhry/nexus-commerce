@@ -1552,12 +1552,19 @@
     "assignSupervisor": "Assegna supervisore…",
     "askSupervisor": "Chiedi al supervisore…"
   },
+  "where": {
+    "headline": {
+      "closedShipped": "Chiuso · spedito il {shipped}"
+    },
+    "note": {
+      "waiting": "La produzione parte quando l'ordine è confermato",
+      "reached": "Il lavoro era arrivato a {stage} quando è stato annullato"
+    }
+  },
   "overview": {
     "where": "A che punto è",
     "progress": "Avanzamento per riga",
     "progressHint": "I pezzi di questo ordine · una riga apre le sue taglie",
-    "ahead_one": "{count} riga avanti",
-    "ahead_other": "{count} righe avanti",
     "bundles_one": "Fasci in lavorazione: {count} a {stage}",
     "bundles_other": "Fasci in lavorazione: {count} a {stage}",
     "notInWorkOrders": "Non ancora negli ordini di lavoro",
@@ -1567,7 +1574,6 @@
     "exFactoryMoved": "Franco fabbrica {date} · spostata {count} volte · {days} g dalla prima promessa",
     "piecesAsOf": "Pezzi alle {time}",
     "headline": {
-      "waitingDeposit": "Confermato · in attesa dell'acconto",
       "shipped": "Spedito il {shipped}",
       "delivered": "Spedito il {shipped} · consegnato il {delivered}"
     },

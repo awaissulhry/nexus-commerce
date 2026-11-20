@@ -10,7 +10,7 @@ import { HealthPill } from '../../../../../../lib/production/view/HealthPill'
 import { StageStrip } from '../../../../../../lib/production/view/StageStrip'
 import { WaitingOnPill } from '../../../../../../lib/production/view/WaitingOnPill'
 import type { Order } from '../../../api'
-import { dayInstant } from '../../../model'
+import { dayInstant, type Phrase } from '../../../model'
 import { healthInputOf, readOf, rowWordsOf, type WaitingState } from '../../overview/model' // F-OP-301 (walk #1–#3): the ONE waiting list's state
 import { exFactoryOf, headlineOf, inWorkOf, preparingNote, stageStripOf } from '../../overview/where'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
@@ -33,13 +33,11 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
   const read = readOf(state)
   const headline = read?.headline ?? null
   const loading = !state || state.status === 'loading'
+  // F-OO-101: the status word, then the stage word ("In production · Quality check"); dated words say their days in the page's way.
   const words = headlineOf(order, headline)
-  const sentence =
-    words.kind === 'stage'
-      ? [w.t(`parts.stage.${words.stage}`), words.ahead ? t(words.ahead.key, words.ahead.params) : null].filter(Boolean).join(' · ')
-      : words.kind === 'unknown'
-        ? w.t('parts.stage.unknown')
-        : t(words.phrase.key, Object.fromEntries(Object.entries(words.phrase.params ?? {}).map(([key, value]) => [key, typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? formatDate(value, { locale }) : value])))
+  const dated = (phrase: Phrase): string => t(phrase.key, Object.fromEntries(Object.entries(phrase.params ?? {}).map(([key, value]) => [key, typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? formatDate(value, { locale }) : value])))
+  const sentence = [words.status ? dated(words.status) : null, words.stage ? w.t(`parts.stage.${words.stage}`) : null].filter(Boolean).join(' · ')
+  const quiet = words.note ? t(words.note.key, words.note.stage ? { stage: w.t(`parts.stage.${words.note.stage}`) } : undefined) : null
   const strip = stageStripOf(order, headline, read?.dates ?? null, locale)
   const preparing = preparingNote(order, headline)
   const exFactory = exFactoryOf(order, headline)
@@ -71,6 +69,7 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
         <FreshnessLine mode={model.liveState === 'live' ? 'live' : model.liveState === 'offline' ? 'offline' : 'connecting'} asOf={read?.asOf ?? null} />
       </div>
       {loading ? <Skeleton width={260} height={24} /> : <p className="fw-so-headline">{sentence}</p>}
+      {!loading && quiet ? <p className="fw-so-hint">{quiet}</p> : null}
       <KeyValue dense labelCase="sentence" columns={2} items={facts} />
       {/* F-OP-104: the stages are one real link to Production's work orders (the ex-factory date and its moves are the facts' line). */}
       <StageStrip

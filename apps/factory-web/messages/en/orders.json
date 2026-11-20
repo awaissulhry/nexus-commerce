@@ -1552,12 +1552,19 @@
     "assignSupervisor": "Assign supervisor…",
     "askSupervisor": "Ask the supervisor…"
   },
+  "where": {
+    "headline": {
+      "closedShipped": "Closed · shipped {shipped}"
+    },
+    "note": {
+      "waiting": "Production starts once the order is confirmed",
+      "reached": "Work had reached {stage} when it was cancelled"
+    }
+  },
   "overview": {
     "where": "Where it is now",
     "progress": "Progress by line",
     "progressHint": "This order's own pieces · a line opens its sizes",
-    "ahead_one": "{count} line ahead",
-    "ahead_other": "{count} lines ahead",
     "bundles_one": "Bundles in work: {count} at {stage}",
     "bundles_other": "Bundles in work: {count} at {stage}",
     "notInWorkOrders": "Not in work orders yet",
@@ -1567,7 +1574,6 @@
     "exFactoryMoved": "Ex-factory {date} · moved {count}× · {days} d since first promised",
     "piecesAsOf": "Pieces as of {time}",
     "headline": {
-      "waitingDeposit": "Confirmed · waiting for the deposit",
       "shipped": "Shipped {shipped}",
       "delivered": "Shipped {shipped} · delivered {delivered}"
     },

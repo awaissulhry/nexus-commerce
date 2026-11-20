@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { LOCALES } from '../../../../../lib/i18n/locales'
+import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 import { order } from '../../_demo/fixtures'
+import { ORDER_STATUSES, type OrderStatus } from '../../api' // F-OO-101
+import { BRAND_STAGES, type BrandStage, type Headline } from './api' // F-OO-101
 import { CONFIRMED_READ, HEADLINE, PRODUCTION_READ } from './fixtures'
 import { exFactoryOf, headlineOf, inWorkOf, preparingNote, stageStripOf } from './where'
 import { bandHealthOf, healthInputOf, waitingOf, whoActsNextOf } from './model'
@@ -9,21 +13,68 @@ import { bandHealthOf, healthInputOf, waitingOf, whoActsNextOf } from './model'
  * unchanged (F-SA-232: the headline sentence per state, the five stages, who acts next, the health only from the reads).
  */
 
-describe('"Where it is now": one sentence per state', () => {
-  it('in production: the plain stage and "1 line ahead"; before: the commercial words; after: shipped and delivered', () => {
-    expect(headlineOf(order('IN_PRODUCTION'), HEADLINE)).toEqual({ kind: 'stage', stage: 'SEWING', ahead: { key: 'overview.ahead', params: { count: 1 } } })
-    expect(headlineOf(order('IN_PRODUCTION'), { ...HEADLINE, stage: { ...HEADLINE.stage!, ahead: 0 } })).toEqual({ kind: 'stage', stage: 'SEWING', ahead: null })
-    expect(headlineOf(order('PENDING_APPROVAL'), HEADLINE)).toEqual({ kind: 'phrase', phrase: { key: 'status.PENDING_APPROVAL' } })
-    expect(headlineOf(order('CONFIRMED'), CONFIRMED_READ.headline)).toEqual({ kind: 'phrase', phrase: { key: 'overview.headline.waitingDeposit' } })
-    const shipped = order('SHIPPED')
-    const words = headlineOf(shipped, HEADLINE)
-    expect(words.kind).toBe('phrase')
-    if (words.kind === 'phrase') expect(words.phrase.key).toMatch(/^overview\.headline\.(shipped|delivered)$|^status\.SHIPPED$/)
-    expect(headlineOf(order('CANCELLED'), HEADLINE)).toEqual({ kind: 'phrase', phrase: { key: 'status.CANCELLED' } })
-    // In production with no stage read: "Stage not known yet", never step 1.
-    expect(headlineOf(order('IN_PRODUCTION'), { ...HEADLINE, stage: null })).toEqual({ kind: 'unknown' })
+// ---- F-OO-101 (order overview §1.2; review F8): the headline is the status AND the stage — rewritten from "one sentence per state" ----
+describe('F-OO-101: the headline is the status and the stage, one sentence the dots agree with', () => {
+  const at = (code: BrandStage): Headline => ({ ...HEADLINE, stage: { ...HEADLINE.stage!, code } })
+  const shipment = (id: string, shippedAt: string | null, deliveredAt: string | null) => ({ id, number: `SH-${id}`, status: deliveredAt ? 'DELIVERED' : 'SHIPPED', shippedAt, deliveredAt })
+  const shippedAs = (status: OrderStatus, shipments: ReturnType<typeof shipment>[]) => ({ ...order(status), chain: { ...order(status).chain, shipments } })
+  const SHIPMENTS = [shipment('1', '2026-11-12T10:00:00Z', '2026-11-14T11:00:00Z'), shipment('2', '2026-11-20T10:00:00Z', null)]
+
+  it('every status × stage of the table: the status word, then the stage word — and never "· 1 line ahead"', () => {
+    // Waiting for a yes: the status alone, and its quiet line (whatever the read says of the stage).
+    expect(headlineOf(order('PENDING_APPROVAL'), HEADLINE)).toEqual({ state: 'WAITING', status: { key: 'status.PENDING_APPROVAL' }, stage: null, note: { key: 'where.note.waiting' } })
+    // Confirmed: "Confirmed · Preparing" before any work order (no stage read, or the read's own Preparing); a stage reached is said.
+    expect(headlineOf(order('CONFIRMED'), CONFIRMED_READ.headline)).toEqual({ state: 'CURRENT', status: { key: 'status.CONFIRMED' }, stage: 'PREPARING', note: null })
+    expect(headlineOf(order('CONFIRMED'), at('PREPARING'))).toEqual({ state: 'CURRENT', status: { key: 'status.CONFIRMED' }, stage: 'PREPARING', note: null })
+    expect(headlineOf(order('CONFIRMED'), at('QUALITY'))).toEqual({ state: 'CURRENT', status: { key: 'status.CONFIRMED' }, stage: 'QUALITY', note: null })
+    // In production, Ready, Partly shipped: status · stage; no stage read: "Stage not known yet", never step 1.
+    for (const status of ['IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'] as const) {
+      for (const code of BRAND_STAGES.filter((stage) => !(status === 'READY' && stage === 'READY'))) expect(headlineOf(order(status), at(code)), `${status} ${code}`).toEqual({ state: 'CURRENT', status: { key: `status.${status}` }, stage: code, note: null })
+      expect(headlineOf(order(status), { ...HEADLINE, stage: null }), status).toEqual({ state: 'CURRENT', status: { key: `status.${status}` }, stage: 'unknown', note: null })
+    }
+    // One word per thing: the status Ready with the stage Ready to ship is "Ready to ship" alone (never "Ready · Ready to ship").
+    expect(headlineOf(order('READY'), at('READY'))).toEqual({ state: 'CURRENT', status: null, stage: 'READY', note: null })
+    // "· 1 line ahead" is gone (F8): the read still says it (aheadWords), the headline never does.
+    expect(HEADLINE.stage!.ahead).toBe(1)
+    for (const status of ORDER_STATUSES) expect(JSON.stringify(headlineOf(order(status), HEADLINE)), status).not.toMatch(/ahead/)
   })
 
+  it('after production: shipped on its last day (delivered only once the order is), closed with it; cancelled says where work had reached', () => {
+    // The newest shipment's day; an older shipment's arrival is never the order's.
+    expect(headlineOf(shippedAs('SHIPPED', SHIPMENTS), HEADLINE)).toEqual({ state: 'ALL_DONE', status: { key: 'overview.headline.shipped', params: { shipped: '2026-11-20T10:00:00Z' } }, stage: null, note: null })
+    const delivered = [SHIPMENTS[0]!, shipment('2', '2026-11-20T10:00:00Z', '2026-11-22T09:00:00Z')]
+    expect(headlineOf(shippedAs('DELIVERED', delivered), HEADLINE)).toEqual({ state: 'ALL_DONE', status: { key: 'overview.headline.delivered', params: { shipped: '2026-11-20T10:00:00Z', delivered: '2026-11-22T09:00:00Z' } }, stage: null, note: null })
+    expect(headlineOf(shippedAs('CLOSED', SHIPMENTS), HEADLINE)).toEqual({ state: 'ALL_DONE', status: { key: 'where.headline.closedShipped', params: { shipped: '2026-11-20T10:00:00Z' } }, stage: null, note: null })
+    // No shipment day known (closed short, say): the status word alone.
+    expect(headlineOf(shippedAs('CLOSED', []), HEADLINE)).toEqual({ state: 'ALL_DONE', status: { key: 'status.CLOSED' }, stage: null, note: null })
+    expect(headlineOf(shippedAs('SHIPPED', []), HEADLINE)).toEqual({ state: 'ALL_DONE', status: { key: 'status.SHIPPED' }, stage: null, note: null })
+    // Cancelled: the status word; where the work had reached once it was beyond Preparing (nothing begun: nothing said).
+    expect(headlineOf(order('CANCELLED'), at('CUTTING'))).toEqual({ state: 'STOPPED', status: { key: 'status.CANCELLED' }, stage: null, note: { key: 'where.note.reached', stage: 'CUTTING' } })
+    expect(headlineOf(order('CANCELLED'), at('PREPARING'))).toEqual({ state: 'STOPPED', status: { key: 'status.CANCELLED' }, stage: null, note: null })
+    expect(headlineOf(order('CANCELLED'), null)).toEqual({ state: 'STOPPED', status: { key: 'status.CANCELLED' }, stage: null, note: null })
+  })
+
+  it('the words: each status and stage word exists in both languages; the new lines in both languages; the old ones are gone', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      const p = createTranslator(locale, messagesFor(locale, ['production']).production!)
+      for (const status of ORDER_STATUSES) expect(t(`status.${status}`), `${locale} ${status}`).not.toBe(`status.${status}`)
+      for (const stage of [...BRAND_STAGES, 'unknown']) expect(p(`parts.stage.${stage}`), `${locale} ${stage}`).not.toBe(`parts.stage.${stage}`)
+      expect(t('where.note.waiting'), locale).not.toBe('where.note.waiting')
+      expect(t('where.note.reached', { stage: p('parts.stage.CUTTING') })).toBe(locale === 'en' ? 'Work had reached Cutting when it was cancelled' : 'Il lavoro era arrivato a Taglio quando è stato annullato')
+      expect(t('where.headline.closedShipped', { shipped: '20/11/2026' })).toBe(locale === 'en' ? 'Closed · shipped 20/11/2026' : 'Chiuso · spedito il 20/11/2026')
+      // "1 line ahead" and "Confirmed · waiting for the deposit" left the catalogue with the headline that said them.
+      for (const key of ['overview.ahead', 'overview.headline.waitingDeposit']) expect(t(key, { count: 1 }), `${locale} ${key}`).toBe(key)
+    }
+    // One word per thing: the status "Ready" and the stage "Ready to ship" are two words, never the same one.
+    const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    const stageEn = createTranslator('en', messagesFor('en', ['production']).production!)
+    expect([en('status.READY'), stageEn('parts.stage.READY')]).toEqual(['Ready', 'Ready to ship'])
+  })
+})
+// ---- end F-OO-101
+
+describe('"Where it is now": the stages and the facts', () => {
   it('the stages: the stage now with its day, the working plan, blocked with why; before any work order Preparing after the deposit', () => {
     const strip = stageStripOf(order('IN_PRODUCTION'), HEADLINE, PRODUCTION_READ.dates, 'en')
     expect(strip).toMatchObject({ stage: 'SEWING', reached: { SEWING: '2026-11-13' }, sewingCounted: true, blocked: null, expected: { CUTTING: '2026-11-10', SEWING: '2026-11-13', QUALITY: '2026-12-10' } })
