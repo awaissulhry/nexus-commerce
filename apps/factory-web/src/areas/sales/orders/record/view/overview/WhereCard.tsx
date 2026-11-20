@@ -388,7 +388,8 @@ function Moves({ order, model, actions }: { order: Order; model: OrderRecordMode
   const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
   const locale = useLocale()
   // F-OO-108: Hold the whole order… reads the production read's work orders and the page's acts (its dialog is theirs).
-  const moves = whereMovesOf(order, { can: model.can, readOnly, elsewhere: model.elsewhere, work: readOf(model.production)?.work ?? null, acts: model.workOrderActs?.can ?? null })
+  const read = readOf(model.production)
+  const moves = whereMovesOf(order, { can: model.can, readOnly, elsewhere: model.elsewhere, work: read ? (read.work ?? null) : undefined, acts: model.workOrderActs?.can ?? null })
   if (!moves) return null
   // A held move says why: the band's words (a phrase), or the hold plan's own words (both languages, the domain's).
   const heldOf = (move: WhereMove): string | null => (move.held ? ('key' in move.held ? t(move.held.key, move.held.params) : say(move.held, locale)) : model.busy ? t('held.busy') : null)

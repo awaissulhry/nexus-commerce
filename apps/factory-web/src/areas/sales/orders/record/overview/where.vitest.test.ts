@@ -583,7 +583,7 @@ describe('F-OO-107: the moves row — Mark ready…, More ▾ (made elsewhere, C
         const { value, can, permissions, moves } = movesOf(status, role)
         for (const move of [...(moves?.shown ?? []), ...(moves?.more ?? [])]) {
           // F-OO-108: Hold the whole order… is held by the hold plan (here no work part is read: still being read).
-          const band = move.id === 'ready' ? readyHeld(value, can) : move.id === 'cancel' ? cancelHeld(value, can) : move.id === 'close' ? closeHeld(value, can) : move.id === 'hold' ? holdOrderMoveOf(value, null, null)!.held : elsewhereDoor(value, permissions)
+          const band = move.id === 'ready' ? readyHeld(value, can) : move.id === 'cancel' ? cancelHeld(value, can) : move.id === 'close' ? closeHeld(value, can) : move.id === 'hold' ? holdOrderMoveOf(value, undefined, null)!.held : elsewhereDoor(value, permissions)
           expect(move.held, `${status} ${role} ${move.id}`).toEqual(band)
         }
       }
@@ -897,7 +897,9 @@ describe('F-OO-108: Hold the whole order… in the moves row — the domain plan
   it('offered while there is work to stop; held while not read, for Sales, and with the plan\'s words when it holds none', () => {
     expect(HOLD_ORDER_FROM).toEqual(['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'])
     for (const status of ['PENDING_APPROVAL', 'SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'] as const) expect(holdOrderMoveOf(order(status), workActsRead(MANAGE).work, owner), status).toBeNull()
-    expect(holdOrderMoveOf(order('IN_PRODUCTION'), null, owner)!.held).toEqual({ key: 'where.hold.reading' })
+    expect(holdOrderMoveOf(order('IN_PRODUCTION'), undefined, owner)!.held).toEqual({ key: 'where.hold.reading' })
+    // The work orders withheld from this reader (no right to see them): Production does it.
+    expect(holdOrderMoveOf(order('IN_PRODUCTION'), null, owner)!.held).toEqual({ key: 'wo.heldHold' })
     // The Owner: live, on the plan (WO-00021 held with its version; WO-00022 on hold already and WO-00019 shared are left out with why).
     const live = holdOrderMoveOf(order('IN_PRODUCTION'), workActsRead(MANAGE).work, owner)!
     expect(live.held).toBeNull()

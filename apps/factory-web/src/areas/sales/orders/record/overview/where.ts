@@ -441,7 +441,10 @@ export function whereMovesOf(
     readonly readOnly: boolean
     /** The made-elsewhere door (its container's, held with its words); absent: not offered here. */
     readonly elsewhere: { readonly held: Phrase | null } | null | undefined
-    /** F-OO-108: the production read's work part (null: not read yet) and the page's acts rights (null: the acts are not here). */
+    /**
+     * F-OO-108: the production read's work part — undefined: not read yet; null: withheld (no right to see the work orders) — and the
+     * page's acts rights (null: the acts are not here).
+     */
     readonly work?: Pick<Work, 'workOrders' | 'workOrdersLeftOut' | 'mtm'> | null
     readonly acts?: ActsCan | null
   },
@@ -451,7 +454,7 @@ export function whereMovesOf(
   const more: WhereMove[] = []
   if (order.status === 'IN_PRODUCTION') shown.push({ id: 'ready', label: phrase('action.ready'), held: readyHeld(order, input.can) })
   // F-OO-108: "Hold the whole order…" — while there is work it may stop (confirmed to partly shipped), on the domain's plan.
-  const hold = holdOrderMoveOf(order, input.work ?? null, input.acts ?? null)
+  const hold = holdOrderMoveOf(order, input.work, input.acts ?? null)
   if (hold) shown.push(hold)
   if (input.elsewhere && ELSEWHERE_FROM.includes(order.status)) more.push({ id: 'elsewhere', label: phrase('elsewhere.title'), held: input.elsewhere.held })
   if (CANCEL_STATUSES.includes(order.status)) more.push({ id: 'cancel', label: phrase('action.cancel'), held: cancelHeld(order, input.can) })
@@ -466,14 +469,16 @@ export const HOLD_ORDER_FROM: readonly Order['status'][] = Object.freeze(['CONFI
 
 /**
  * Hold the whole order…: the ONE Hold dialog on the domain's plan (`orderHoldPlanOf`, through the acts' `orderHoldOf`: no web copy) —
- * held, with words, while the work orders are not read yet, without the acts here (Production does it), with the plan's own words
+ * held, with words, while the work orders are not read yet (`work` undefined), when they are withheld from this reader (null) or the
+ * acts are not here (Production does it), with the plan's own words
  * when it holds none (nothing to hold yet, every open one on hold already, every one completed …; NO_RIGHT: "Production does this —
  * a planner or the production manager", the row's own words); with only made-to-measure units in work: each is held on its own page.
  */
-export function holdOrderMoveOf(order: Pick<Order, 'status'>, work: Pick<Work, 'workOrders' | 'workOrdersLeftOut' | 'mtm'> | null, acts: Pick<ActsCan, 'view'> | null): WhereMove | null {
+export function holdOrderMoveOf(order: Pick<Order, 'status'>, work: Pick<Work, 'workOrders' | 'workOrdersLeftOut' | 'mtm'> | null | undefined, acts: Pick<ActsCan, 'view'> | null): WhereMove | null {
   if (!HOLD_ORDER_FROM.includes(order.status)) return null
   const label = phrase('where.hold.label')
-  if (!work) return { id: 'hold', label, held: phrase('where.hold.reading') }
+  if (work === undefined) return { id: 'hold', label, held: phrase('where.hold.reading') }
+  if (work === null) return { id: 'hold', label, held: HELD_FOR_SALES }
   const plan = orderHoldOf(work.workOrders, { leftOut: work.workOrdersLeftOut, waitingForYes: false })
   const units = work.mtm.reduce((sum, group) => sum + group.workOrders, 0)
   const hold = { plan, units }
