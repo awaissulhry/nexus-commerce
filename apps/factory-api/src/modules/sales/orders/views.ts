@@ -117,6 +117,9 @@ const LIVE_RULES: readonly { readonly match: (type: string) => boolean; readonly
     parts: ['headline', 'people'],
   },
   { match: (type) => type.startsWith('workorder.') || type.startsWith('work_order_hold.') || type === 'change_order.changed', parts: ['work', 'headline'] },
+  // B-OO-008 (N8): a work order made, released, moved to a line, closed or cancelled changes "Where it's made" (People). The owner
+  // of the order's conversation emits no event: the page re-reads People after its own change.
+  { match: (type) => type.startsWith('workorder.'), parts: ['people'] },
   {
     match: (type) => ['production.cut_logged', 'production.cut_reversed', 'production.bundle_created', 'production.bundle_voided', 'production.bundle_split', 'production.scan_recorded', 'quality.garments_released', 'quality.release_reversed'].includes(type),
     parts: ['lines', 'headline'],
@@ -462,6 +465,10 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
     priceBasis: priceBasisOf(order.taxMode),
     billTo: order.billTo as Record<string, unknown>,
     shipTo: order.shipTo as Record<string, unknown>,
+    // B-OO-013: the Incoterm, its place and ship complete, read only (the office's Order facts; the portal's read has none).
+    incoterm: order.incoterm,
+    incotermPlace: order.incotermPlace,
+    shipComplete: order.shipComplete,
     paymentTerms: order.paymentTerms,
     paymentTermsId: order.paymentTermsId,
     requestedDate: dayOrNull(order.requestedDate),

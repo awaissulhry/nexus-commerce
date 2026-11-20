@@ -15,6 +15,7 @@ import { ApiError } from '../../core/errors'
 import { systemCallerOf } from '../files/files'
 import type { CreateFieldBody, EditFieldBody, FieldView, PicklistView, WriteValuesBody } from './contract'
 import { CUSTOM_RECORDS, customRecordOf, recordFactsOf, recordsOfModel, type CustomRecord, type CustomRecordKey, type RecordFacts } from './records'
+import { recordStateOf, touchRecordInCommand } from './records' // B-OO-014
 import { fieldById, fieldsOfModel, fieldsSeen, markedValue, picklistsOf, referenceWords, saidInWords, valueCounts, valuesOfRecords, writeValuesInCommand, type FieldRow, type PicklistRow, type ValueRow } from './registry'
 
 /**
@@ -556,7 +557,12 @@ async function recordAnswer(client: Client, who: Actor, record: CustomRecord, fa
   const fields = fieldsSeen(who, await fieldsOfModel(client, record.model), facts.companyId, facts.partyId ?? null)
   const values = (await valuesOfRecords(client, record.model, [facts.id], fields.map((field) => field.id))).get(facts.id) ?? new Map<string, ValueRow>()
   const references = await referenceWords(client, who, fields, values.values())
-  return { recordType: record.key, recordId: facts.id, fields: fields.map(fieldViewOf), values: valueViewsOf(fields, values, references), canEdit: can(who, record.edit, facts) }
+  // B-OO-014: why the values may not change (a closed or cancelled order first: nobody may; then the reader's role), and the
+  // record's own version a save sends back (a sales order's; null for a record type that keeps none). canEdit stays the right.
+  const state = await recordStateOf(client, record, facts.id)
+  const canEdit = can(who, record.edit, facts)
+  const editHeld: 'FINAL' | 'ROLE' | null = state.final !== null ? 'FINAL' : canEdit ? null : 'ROLE'
+  return { recordType: record.key, recordId: facts.id, fields: fields.map(fieldViewOf), values: valueViewsOf(fields, values, references), canEdit, editHeld, recordVersion: state.version }
 }
 
 /** GET /fields/values/:recordType/:recordId: the record's custom-fields section (the record's view permission). */
@@ -572,9 +578,15 @@ export async function writeValues(caller: CommandCaller, recordType: CustomRecor
   const record = recordOf(recordType)
   const facts = await caller.withClient((client) => recordFor(client, who, record, recordId))
   if (!can(who, record.edit, facts)) throw new ForbiddenError(`Changing the custom fields of ${aRecord(record)} needs the right to change it.`)
-  const { result } = await command(caller, { name: 'fields.setValues', idempotencyKey, input: { recordType, recordId, values: body.values } }, async (tools) =>
+  const { result } = await command(caller, { name: 'fields.setValues', idempotencyKey, input: { recordType, recordId, values: body.values, ...(body.recordVersion === undefined ? {} : { recordVersion: body.recordVersion }) } }, async (tools) =>
     saidInWords(async () => {
-      const written = await writeValuesInCommand(tools, record, facts, body.values.map((entry) => ({ code: entry.code, value: entry.value ?? null, version: entry.version })), who, actorIdOf(tools.context))
+      let written: { readonly set: string[]; readonly cleared: string[] } = { set: [], cleared: [] }
+      // B-OO-014: a sales order is locked, refused when closed or cancelled, checked at the version the page read (`recordVersion`,
+      // when sent) and its version moved with its values — the Orders sheet's next edit at the old version is stale, never an overwrite.
+      await touchRecordInCommand(tools, record, facts, body.recordVersion, async () => {
+        written = await writeValuesInCommand(tools, record, facts, body.values.map((entry) => ({ code: entry.code, value: entry.value ?? null, version: entry.version })), who, actorIdOf(tools.context))
+        return written.set.length > 0 || written.cleared.length > 0
+      })
       if (written.set.length === 0 && written.cleared.length === 0) tools.audit({ recordType: record.model, recordId, companyId: facts.companyId, after: { values: 0 } })
       return { ...(await recordAnswer(tools.tx, who, record, facts)), ...written }
     }),
