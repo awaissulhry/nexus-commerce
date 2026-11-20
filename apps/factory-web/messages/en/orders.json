@@ -488,7 +488,8 @@
     "gatePassed_one": "Gate marked done.",
     "gatePassed_other": "{count} gates marked done.",
     "gateStarted_one": "Started before the gate: the order's work orders may be planned.",
-    "gateStarted_other": "Started before {count} gates: the order's work orders may be planned."
+    "gateStarted_other": "Started before {count} gates: the order's work orders may be planned.",
+    "waitsOnSupplier": "waits on the supplier"
   },
   "production": {
     "title": "Work orders",

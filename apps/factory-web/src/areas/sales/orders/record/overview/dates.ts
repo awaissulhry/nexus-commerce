@@ -8,7 +8,7 @@ import type { WaitingRow } from './model'
 import type { BandDialog, RecordDialog } from '../record-model'
 // ---- end F-OO-143
 // ---- F-OO-145: the steps before production in place — Planning's own gate model (a one-order subset of its read), its held words ----
-import type { Gate } from './api'
+import type { Gate, Words } from './api'
 import type { GateBody, Gate as PlanningGate, Milestone as PlanningMilestone, Milestones, Order as PlanningOrder } from '../../../../planning/milestones/api'
 import { bodyOf, DEFAULT_CONTROLS, heldOf, queryOf, type GateDraft, type Translate } from '../../../../planning/milestones/model'
 import { GATE_KINDS, GATE_STATES, LEATHER_STATES, MILESTONE_KINDS, MILESTONE_STATES, PASS_VIAS, WAITING_TILES } from '@nexus/factory-domain/planning/milestones/rules'
@@ -274,3 +274,48 @@ export const gateMovesShown = (readOnly: boolean, gates: readonly Pick<GateDate,
 /** Open in Planning ›: Time & action, searched by the order's number, the gate's dialog open (a gate the read did not name: the search alone). */
 export const planningGateHref = (prefix: string, number: string, gateId: string | null): string => `${prefix}/planning/milestones?${queryOf({ ...DEFAULT_CONTROLS, q: number, open: gateId ? `gate:${gateId}` : null })}`
 // ---- end F-OO-145
+
+// ---- F-OO-146 (order overview 10-design §4.2; moved from section 5): the material and workshop waits, from the ONE waiting list --------
+/** A wait with a day that is no gate of the read: material short, work out at an outside workshop (any other DATE kind too: never hidden). */
+export interface WaitDate {
+  readonly key: string
+  /** The waiting rows' kind (MATERIAL_SHORT, SUBCONTRACT, …): one row per kind. */
+  readonly kind: string
+  /** What waits, in the read's own words (it + en: "Material short", "At an outside workshop"); null: the read sent none. */
+  readonly words: Words | null
+  /** SUBCONTRACT: the work orders out at a workshop, by number — those this reader reaches (the read names no other). */
+  readonly workOrders: readonly string[]
+  /** Days since the oldest of its rows began to wait; null: not known. */
+  readonly age: number | null
+  /** Its door, the ONE list's own: the tab ›, at its anchor (#dates for a material, #holds for a workshop). */
+  readonly door: { readonly tab: 'production' | 'money' | 'changes'; readonly anchor: string | null }
+}
+
+/**
+ * Next dates' waits that are no gate (the ONE list's DATE rows, `waiting.dates`): one row per kind, in the list's order (oldest first),
+ * its age the oldest of its rows. Left to their own rows: a refused new date (F-OO-143) and a wait about an open gate of the read — a
+ * gate row says it, with that age (Trims in comes as "material short": F-OO-145). With the dates not read, such a wait keeps its own
+ * row (never hidden).
+ */
+export function waitDatesOf(rows: readonly WaitingRow[], dates: Dates | null | undefined, input: { readonly numberOf: (workOrderId: string) => string | null; readonly today: string }): WaitDate[] {
+  const gateIds = new Set(nextDatesOf(dates, Number.MAX_SAFE_INTEGER).flatMap((row) => (row.gateId ? [row.gateId] : [])))
+  const own = rows.filter((row) => row.place === 'DATE' && !(row.kind === 'BRAND_REQUEST' && row.sub === 'REPROMISE') && !(row.ref?.type === 'OrderGate' && gateIds.has(row.ref.id)))
+  return [...new Set(own.map((row) => row.kind))].map((kind): WaitDate => {
+    const mine = own.filter((row) => row.kind === kind)
+    const first = mine[0]!
+    const ages = mine.flatMap((row) => {
+      const days = ageDaysOf(row.since, input.today)
+      return days === null ? [] : [days]
+    })
+    const numbers = mine.flatMap((row) => (row.ref?.type === 'WorkOrder' ? [input.numberOf(row.ref.id)] : [])).filter((number): number is string => number !== null)
+    return {
+      key: `${kind}:${first.key}`,
+      kind,
+      words: first.words.kind === 'api' ? first.words.words : null,
+      workOrders: kind === 'SUBCONTRACT' ? [...new Set(numbers)] : [],
+      age: ages.length > 0 ? Math.max(...ages) : null,
+      door: first.door.kind === 'tab' ? { tab: first.door.tab, anchor: first.door.anchor } : { tab: 'production', anchor: null },
+    }
+  })
+}
+// ---- end F-OO-146

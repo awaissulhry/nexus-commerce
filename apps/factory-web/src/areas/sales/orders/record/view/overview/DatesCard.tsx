@@ -28,6 +28,10 @@ import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
 import { discussAboutOf } from '../../dock/discuss'
 import { gateDatesOf, gateMovesOf, gateMovesShown, planningGateHref, type GateDate, type GateMove } from '../../overview/dates'
 // ---- end F-OO-145
+// ---- F-OO-146: the material and workshop waits (the ONE waiting list's DATE rows), each with its door ----
+import { say as sayWords } from '../../overview/model'
+import { waitDatesOf, type WaitDate } from '../../overview/dates'
+// ---- end F-OO-146
 
 /**
  * F-OO-100 (order overview lane: one file per card) — moved out of OverviewTab.tsx unchanged.
@@ -51,6 +55,10 @@ import { gateDatesOf, gateMovesOf, gateMovesShown, planningGateHref, type GateDa
  * the gate… (Planning's OWN dialogs, mounted here from use-gate-acts' one-order model: never a copy) · Discuss this date · Open in
  * Planning ›. Each is held by the gate's own actions in Planning's words (the right it needs, its refusal code; never the API's
  * English); Sales sees them held. Read-only sees no More ▾ unless the read lets this reader move a gate.
+ *
+ * F-OO-146 (10-design §4.2; moved from section 5): after the gates, the waits with a day that are no gate — "Material short · waits on
+ * the supplier · 4 d", "At an outside workshop · WO-0003 · 5 d" — one row per kind from the ONE waiting list, each with its door
+ * (Production ›, at #dates or #holds: a link, so Read-only has it too).
  */
 export function DatesCard(props: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; /** F-OO-143: the ONE waiting list (OverviewTab's call). */ waiting?: WaitingState }) {
   // F-OO-145: Planning's catalogue for its dialogs and its held words (the gate's needs and refusals), beside the page's own.
@@ -109,6 +117,11 @@ function Dates({ order, model, actions, waiting }: { order: Order; model: OrderR
     })
   const waits = (days: number): string => (days === 0 ? t('dates.gateWaitsToday') : t('dates.gateWaits', { days }))
   // ---- end F-OO-145
+  // ---- F-OO-146: the material and workshop waits (a work order named only when this reader reaches it) ----
+  const numberOf = (id: string): string | null => order.chain.workOrders.find((row) => row.id === id)?.number ?? read?.work?.workOrders.find((row) => row.id === id)?.number ?? null
+  const waitRows = waitDatesOf(dateRows, read?.dates ?? null, { numberOf, today: model.today })
+  const waitValue = (row: WaitDate): string => [row.kind === 'MATERIAL_SHORT' ? t('dates.waitsOnSupplier') : null, row.workOrders.length > 0 ? row.workOrders.join(', ') : null, age(row.age)].filter(Boolean).join(' · ') || '—'
+  // ---- end F-OO-146
   const planWords = (value: PlanSays): string => {
     if (value.kind === 'none') return t('dates.planNone')
     if (value.kind === 'plain') return day(value.date)
@@ -185,7 +198,7 @@ function Dates({ order, model, actions, waiting }: { order: Order; model: OrderR
               <Skeleton height={22} />
             </li>
           </ul>
-        ) : gates.rows.length > 0 ? (
+        ) : gates.rows.length > 0 || waitRows.length > 0 ? (
           <ul className="fw-so-dates-rows is-gates" aria-label={d('milestone.title')}>
             {/* F-OO-145: target · state · late (or how long it waits), More ▾ with Planning's own dialogs; then "{n} more in All dates ›". */}
             {gates.rows.map((row) => {
@@ -230,6 +243,18 @@ function Dates({ order, model, actions, waiting }: { order: Order; model: OrderR
                 </TabLink>
               </li>
             )}
+            {/* F-OO-146: the waits with a day that are no gate (material short, at an outside workshop), each with its tab ›. */}
+            {waitRows.map((row) => (
+              <li key={row.key} className="fw-so-ov-row">
+                <span className="fw-so-dates-label">{row.words ? sayWords(row.words, locale) : row.kind}</span>
+                <span>{waitValue(row)}</span>
+                <span className="fw-so-ov-doors">
+                  <Button size="sm" variant="quiet" asChild>
+                    <TabLink href={`${tabHref(`${model.prefix}/sales/orders/${order.id}`, row.door.tab, search)}${row.door.anchor ? `#${row.door.anchor}` : ''}`}>{t(`waiting.go.${row.door.tab}`)}</TabLink>
+                  </Button>
+                </span>
+              </li>
+            ))}
           </ul>
         ) : null}
       </div>

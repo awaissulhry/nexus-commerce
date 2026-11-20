@@ -34,6 +34,7 @@ import { GATE } from './fixtures'
 import type { Gate } from './api'
 import { gateChangesOf, gateDatesOf, gateDraftOf, gateMovesOf, gateMovesShown, gateWorldOf, planningGateHref, planningGateOf } from './dates'
 // ---- end F-OO-145
+import { waitDatesOf } from './dates' // F-OO-146
 
 /** F-OO-100 (order overview lane: one file per section) — Next dates' rules, moved with dates.ts out of overview.vitest.test.ts. */
 
@@ -522,3 +523,78 @@ describe('F-OO-145: gate rows and More ▾ — Planning’s own dialogs from a o
   })
 })
 // ---- end F-OO-145
+
+// ---- F-OO-146 (order overview lane; 10-design §4.2; moved from section 5): the material and workshop waits in Next dates ----------
+describe('F-OO-146: material and workshop rows from the ONE waiting list’s DATE place, with their ages and their doors', () => {
+  const value = order('IN_PRODUCTION') // its chain names WO-00021
+  const WO = value.chain.workOrders[0]!
+  const w = (en: string, it: string) => ({ en, it })
+  type Blocker = Headline['waiting']['blockers'][number]
+  const blocker = (kind: string, since: string | null, ref: Blocker['ref'], words = w(kind, kind), sub: Blocker['sub'] = null): Blocker => ({ kind, on: 'US', words, since, ref, sub })
+  const MATERIAL = w('Material short', 'Materiale mancante')
+  const WORKSHOP = w('At an outside workshop', 'Presso un laboratorio esterno')
+  // A gate g1 open in the read (its own row says it); Trims in on g1 comes as "material short" with the gate's ref.
+  const DATES = { ...PRODUCTION_READ.dates!, gates: [{ ...GATE, id: 'g1', kind: 'TRIMS_IN' }], milestones: [...PRODUCTION_READ.dates!.milestones, { id: 'gate:g1', kind: 'GATE', gateId: 'g1', gateKind: 'TRIMS_IN', label: null, target: '2026-11-02', actual: null, state: 'WAITING', late: null, owner: null }] }
+  const BLOCKERS: Blocker[] = [
+    ...HEADLINE.waiting.blockers,
+    blocker('MATERIAL_SHORT', null, null, MATERIAL), // a work order's material is late (no start known)
+    blocker('MATERIAL_SHORT', '2026-10-20T08:00:00Z', { type: 'OrderGate', id: 'g1' }, MATERIAL), // Trims in: the gate's own row
+    blocker('SUBCONTRACT', '2026-10-24T08:00:00Z', { type: 'WorkOrder', id: WO.id }, WORKSHOP), // out at a workshop since 24/10
+    blocker('SUBCONTRACT', '2026-10-27T08:00:00Z', null, WORKSHOP), // another, of a work order this reader does not reach
+    blocker('BRAND_REQUEST', '2026-10-27T09:00:00Z', { type: 'ApprovalRequest', id: 'r1' }, w('x', 'x'), 'REPROMISE'), // F-OO-143's row
+    blocker('NO_MOVE', '2026-10-25T08:00:00Z', { type: 'WorkOrder', id: WO.id }, w('Production hold', 'Fermo di produzione')), // a hold: section 1
+  ]
+  const read = { ...PRODUCTION_READ, dates: DATES, headline: { ...HEADLINE, waiting: { ...HEADLINE.waiting, blockers: BLOCKERS } } }
+  const waiting = orderWaitingOf(value, { production: ready(read), requests: null, can: { recordPayment: false } }, 'en')
+  const dates = waiting.status === 'ready' ? waiting.dates : []
+  const numberOf = (id: string) => (id === WO.id ? WO.number : null)
+
+  it('one row per kind from the DATE rows (oldest first), its age the oldest; a refused date, a hold and an open gate’s wait are not here', () => {
+    expect(waitDatesOf(dates, DATES, { numberOf, today: TODAY })).toEqual([
+      { key: expect.stringMatching(/^SUBCONTRACT:/), kind: 'SUBCONTRACT', words: WORKSHOP, workOrders: [WO.number], age: 5, door: { tab: 'production', anchor: 'holds' } },
+      { key: expect.stringMatching(/^MATERIAL_SHORT:/), kind: 'MATERIAL_SHORT', words: MATERIAL, workOrders: [], age: null, door: { tab: 'production', anchor: 'dates' } },
+    ])
+    // The dates not read: the gate's wait keeps its own row (never hidden) — it joins Material short, with its age.
+    expect(waitDatesOf(dates, null, { numberOf, today: TODAY }).find((row) => row.kind === 'MATERIAL_SHORT')?.age).toBe(9)
+    // Any other wait with a day (a kind this card has no words for) keeps a row with the read's words and its door.
+    const other = waitDatesOf([{ key: 'k', kind: 'CUSTOMER_MATERIAL', sub: null, ref: null, on: 'BRAND', since: '2026-10-28T08:00:00Z', words: { kind: 'api', words: w('The customer’s material is not in yet', 'Materiale del cliente non ancora arrivato') }, door: { kind: 'tab', tab: 'production', anchor: 'holds' }, place: 'DATE' }], null, { numberOf, today: TODAY })
+    expect(other).toEqual([{ key: 'CUSTOMER_MATERIAL:k', kind: 'CUSTOMER_MATERIAL', words: w('The customer’s material is not in yet', 'Materiale del cliente non ancora arrivato'), workOrders: [], age: 1, door: { tab: 'production', anchor: 'holds' } }])
+    expect(waitDatesOf([], DATES, { numberOf, today: TODAY })).toEqual([])
+  })
+
+  describe('drawn', () => {
+    const card = (over: Partial<OrderRecordModel> = {}, locale: 'en' | 'it' = 'en', production = ready(read)) => render(createElement(DatesCard, { order: value, model: base('owner', value, { tab: 'overview', production, ...over }).record, waiting: orderWaitingOf(value, { production, requests: null, can: { recordPayment: false } }, locale) }), locale)
+
+    it('after the gates: "At an outside workshop WO-00021 · 5 d", "Material short waits on the supplier", each with Production › at its anchor', () => {
+      const html = card()
+      const text = textOf(html)
+      expect(text).toContain(`At an outside workshop ${WO.number} · 5 d Production ›`)
+      expect(text).toContain('Material short waits on the supplier Production ›')
+      expect(text.indexOf('Trims in')).toBeLessThan(text.indexOf('At an outside workshop'))
+      // The Trims in gate says its own age; its wait is not drawn twice.
+      expect(text.match(/Material short/g)).toHaveLength(1)
+      expect(html).toMatch(/href="[^"]*production[^"]*#holds"/)
+      expect(html).toMatch(/href="[^"]*production[^"]*#dates"/)
+      const italian = textOf(card({}, 'it'))
+      expect(italian).toContain(`Presso un laboratorio esterno ${WO.number} · 5 g Produzione ›`)
+      expect(italian).toContain('Materiale mancante aspetta il fornitore Produzione ›')
+    })
+
+    it('a link, so Read-only has it too; with no open gate the block still draws the waits; nothing while the list is read', () => {
+      expect(textOf(card({ can: abilitiesOf(['orders.view']) }))).toContain('Material short waits on the supplier Production ›')
+      const noGate = ready({ ...read, dates: { ...DATES, gates: [], milestones: PRODUCTION_READ.dates!.milestones } })
+      const html = card({}, 'en', noGate)
+      expect(html).toContain('<ul class="fw-so-dates-rows is-gates"')
+      expect(textOf(html)).toContain('At an outside workshop')
+      expect(textOf(card({ production: LOADING_STATE }, 'en', LOADING_STATE))).not.toContain('Material short')
+    })
+
+    it('the words, both languages ("tu"); the source keeps the ONE list (no read of its own)', () => {
+      for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['orders']).orders!)('dates.waitsOnSupplier'), locale).not.toBe('dates.waitsOnSupplier')
+      const view = readFileSync(new URL('../view/overview/DatesCard.tsx', import.meta.url), 'utf8')
+      expect(view).toContain('const waitRows = waitDatesOf(dateRows, read?.dates ?? null, { numberOf, today: model.today })')
+      expect(view).toContain("{t(`waiting.go.${row.door.tab}`)}")
+    })
+  })
+})
+// ---- end F-OO-146

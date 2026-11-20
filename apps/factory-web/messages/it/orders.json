@@ -488,7 +488,8 @@
     "gatePassed_one": "Gate segnato fatto.",
     "gatePassed_other": "{count} gate segnati fatti.",
     "gateStarted_one": "Partito prima del gate: gli ordini di lavoro dell'ordine si possono pianificare.",
-    "gateStarted_other": "Partito prima di {count} gate: gli ordini di lavoro dell'ordine si possono pianificare."
+    "gateStarted_other": "Partito prima di {count} gate: gli ordini di lavoro dell'ordine si possono pianificare.",
+    "waitsOnSupplier": "aspetta il fornitore"
   },
   "production": {
     "title": "Ordini di lavoro",
