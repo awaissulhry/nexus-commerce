@@ -230,10 +230,13 @@ describe('dates and the promise (SAL-206): the first promise is never overwritte
     expect(daysLate('CONFIRMED', null, '2026-11-13')).toBeNull()
   })
 
-  it('a reason, a day from today on, a different day, lines of this order once', () => {
+  it('a reason that fits (none is fine: B-OL-004), a day from today on, a different day, lines of this order once', () => {
     const base = { status: 'CONFIRMED' as const, current: '2026-12-10', promiseDate: '2026-12-20', reason: 'Leather arrives late.', lineIds: [], knownLineIds: ['L1', 'L2'], today: '2026-11-01' }
     expect(promiseProblems(base)).toEqual([])
-    expect(promiseProblems({ ...base, reason: ' ' }).map((issue) => issue.path)).toEqual(['body/reason'])
+    // B-OL-004 (order lines plan D2): no reason is fine (the API stores the automatic words); one too long is refused.
+    expect(promiseProblems({ ...base, reason: ' ' })).toEqual([])
+    expect(promiseProblems({ ...base, reason: undefined })).toEqual([])
+    expect(promiseProblems({ ...base, reason: 'x'.repeat(1001) }).map((issue) => issue.path)).toEqual(['body/reason'])
     expect(promiseProblems({ ...base, promiseDate: '2026-10-31' }).map((issue) => issue.path)).toEqual(['body/promiseDate'])
     expect(promiseProblems({ ...base, promiseDate: '2026-12-10' })).toEqual([{ path: 'body/promiseDate', message: 'The order is already promised for 2026-12-10.' }])
     // A line may get the order's day.

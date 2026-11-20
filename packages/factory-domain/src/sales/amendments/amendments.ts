@@ -25,8 +25,8 @@ import type { LinePick } from '../configurator/rules'
  *             change named for the Owner): a size MAY drop under what work orders make — the gap becomes a WorkOrderChange
  *             proposed in the same command (factory-domain order-apply), the work order never goes below what is cut, and
  *             pieces cut beyond the new figure are extra pieces with a named outcome; a made-to-measure unit is cancel only
- *   money     the lines priced again on the order's basis and VAT; the customer must accept again when the net total
- *             changed (SalesOrder.reapprovalNeededAt; the re-acceptance link is W2b, SAL-190)
+ *   money     the lines priced again on the order's basis and VAT; the customer accepts again when asked (B-OL-005: the
+ *             office's tick, else when the total goes up; SalesOrder.reapprovalNeededAt; the re-acceptance link, SAL-190)
  */
 
 export const AMEND_STATUSES: readonly SalesOrderStatus[] = LINE_CHANGE_STATUSES
@@ -129,7 +129,10 @@ export interface AmendmentDiff {
   readonly netAfter: MinorUnits
   readonly grossBefore: MinorUnits
   readonly grossAfter: MinorUnits
-  /** The net total changed: the customer must accept the order again (SAL-190, W2b link). */
+  /**
+   * The net total changed (the amount moves, never which way: every reader of the diff may know it). B-OL-005 (order lines plan
+   * D3): whether the customer is asked to accept the order again is the office's choice, `customerAsked` below.
+   */
   readonly reacceptanceNeeded: boolean
   /** Nothing changes at all. */
   readonly empty: boolean
@@ -279,15 +282,15 @@ export function amendStateProblem(status: SalesOrderStatus): string | null {
 }
 
 /**
- * The problems of an amendment's lines, in words, by path (body/lines/<i>/…): a reason; at least one line; existing
+ * The problems of an amendment's lines, in words, by path (body/lines/<i>/…): a reason that fits (B-OL-004: none is fine); at least one line; existing
  * lines named once (B-SA-042: a size under what work orders make is allowed; B-OP-014: a line they make may be left out —
  * it is closed short, `leftOutOf`); a made-to-measure line or a line closed short unchanged and never left out; a new line
  * names its style and colourway; whole pieces. Style, colourway and sizes offered are the API's checks (they read the catalogue).
  */
 export function amendmentProblems(check: AmendmentCheck): Issue[] {
   const issues: Issue[] = []
-  if (typeof check.reason !== 'string' || check.reason.trim() === '') issues.push({ path: 'body/reason', message: 'Say why the order changes (it stays with the amendment).' })
-  else if (check.reason.trim().length > MAX_REASON) issues.push({ path: 'body/reason', message: `At most ${MAX_REASON} characters.` })
+  // B-OL-004 (D2): the reason is optional (none: the amendment stores ./reasons AUTOMATIC_REASONS.amend); typed, it fits the column.
+  if (typeof check.reason === 'string' && check.reason.trim().length > MAX_REASON) issues.push({ path: 'body/reason', message: `At most ${MAX_REASON} characters.` })
   if (check.lines.length === 0) issues.push({ path: 'body/lines', message: 'An order keeps at least one line: to stop the whole order, cancel it.' })
   if (check.lines.length > MAX_QUOTE_LINES) issues.push({ path: 'body/lines', message: `An order holds at most ${MAX_QUOTE_LINES} lines.` })
   const current = new Map(check.current.map((line) => [line.id, line]))
@@ -351,6 +354,29 @@ export function leftOutOf(check: Pick<AmendmentCheck, 'lines' | 'current'>, made
   return { remove, close }
 }
 // ── end B-OP-014 ──
+
+// ── B-OL-005 (order lines plan D3; 18 F10): the customer accepts the new order again only when asked ──
+/** The money of a change as the ask reads it: the order's net before and after, and a fee charged on top (minor units). */
+export interface ChangeMoney {
+  readonly netBefore: MinorUnits
+  readonly netAfter: MinorUnits
+  /** A priced change's fee (its extra pieces' CHARGE too); null or absent: none. */
+  readonly feeAmount?: MinorUnits | null | undefined
+}
+
+/** What the customer pays goes up: a higher net, or a fee charged (the preview's `totalUp`, for readers with the price grain). */
+export const totalGoesUp = (money: ChangeMoney): boolean => money.netAfter > money.netBefore || (money.feeAmount ?? 0) > 0
+
+/** The amount moves at all, never which way (the preview's `amountChanges`, every writer: Sales never learns the direction). */
+export const amountMoves = (money: ChangeMoney): boolean => money.netAfter !== money.netBefore || (money.feeAmount ?? 0) > 0
+
+/**
+ * Whether a change asks the customer to accept the order again (SalesOrderAmendment.reacceptanceNeeded and the order's
+ * reapprovalNeededAt): the office's tick (`askCustomer`), else only when what the customer pays goes up — before B-OL-005 every
+ * change that moved the net asked, one that lowered it too. A split and a put-back never ask (their callers say so).
+ */
+export const customerAsked = (askCustomer: boolean | null | undefined, money: ChangeMoney): boolean => (typeof askCustomer === 'boolean' ? askCustomer : totalGoesUp(money))
+// ── end B-OL-005 ──
 
 /** The next amendment's number on an order: one more than the highest so far (1 for the first). */
 export const nextRevision = (revisions: readonly number[]): number => Math.max(0, ...revisions) + 1

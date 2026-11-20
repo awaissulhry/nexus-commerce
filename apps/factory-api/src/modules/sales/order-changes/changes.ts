@@ -2,7 +2,7 @@ import { InvalidStateError, NotFoundError, type Issue } from '@nexus/factory-dom
 import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
-import { amendmentDiff, nextRevision, type AmendLineInput, type OrderSnapshot } from '@nexus/factory-domain/sales/amendments/amendments'
+import { amendmentDiff, amountMoves, nextRevision, totalGoesUp, type AmendLineInput, type OrderSnapshot } from '@nexus/factory-domain/sales/amendments/amendments' // B-OL-005: + amountMoves, totalGoesUp
 import { STAGE_WORDS } from '@nexus/factory-domain/sales/order-changes/freeze'
 import {
   CHANGE_YES_WORDS,
@@ -51,9 +51,10 @@ import { withAutoApply } from '../../production/work-order-changes/auto'
  *                                                        no yes is asked), the freeze rules' problems — nothing written
  *   POST /sales/orders/:orderId/priced-changes           orders.manage: ONE command — W2a's amendment carrying its price
  *                                                        (./apply.ts): parts, fee, extra deposit (B-OP-010: no yes); the customer
- *                                                        must accept it again (reacceptanceNeeded: B-W2b-184's REVISED_ORDER
- *                                                        link on the amendment, which now shows the parts, the fee and the
- *                                                        deposit)
+ *                                                        accepts it again when asked (B-OL-005: `askCustomer`, else when the
+ *                                                        total goes up or a fee is charged; reacceptanceNeeded: B-W2b-184's
+ *                                                        REVISED_ORDER link on the amendment, which shows the parts, the fee and
+ *                                                        the deposit)
  *   GET  /sales/orders/:orderId/changes                  orders.view: every change newest first — what changed, its price
  *                                                        (the price grain), the extra deposit, the yes and the customer's
  *                                                        decision in words, and whether it may be put back
@@ -70,7 +71,7 @@ import { withAutoApply } from '../../production/work-order-changes/auto'
 export interface PricedBody extends AmendBody, PricedInput {}
 
 const pricedOf = (body: PricedBody): PricedInput => ({ labels: body.labels, fee: body.fee, deposit: body.deposit })
-const amendOf = (body: PricedBody): AmendBody => ({ version: body.version, reason: body.reason, customerRef: body.customerRef, requestedDate: body.requestedDate, lines: body.lines, /* B-SA-042 */ extraOutcome: body.extraOutcome })
+const amendOf = (body: PricedBody): AmendBody => ({ version: body.version, reason: body.reason, customerRef: body.customerRef, requestedDate: body.requestedDate, lines: body.lines, /* B-SA-042 */ extraOutcome: body.extraOutcome, /* B-OL-005 */ askCustomer: body.askCustomer })
 
 const partView = (part: PricedPart) => ({ label: part.label, orderLineId: part.orderLineId ?? null, amount: asMoney('price', part.amount) })
 
@@ -82,11 +83,11 @@ export async function previewPricedChange(caller: CommandCaller, orderId: string
   const priced = pricedOf(body)
   return caller.withClient(async (client) => {
     const facts = await readOrderFacts(client, order)
-    // W2a's review asks no reason yet (the dialog's stand-in, as B-W2a-50's preview).
+    // B-OL-004 (order lines plan D2): a reason is optional, so the review needs no stand-in for it any more.
     // B-OP-014: the office's own change closes short a line it leaves out that work orders make (as its apply does).
-    const plan = await planAmendment(client, order, order.status, facts, { ...amendOf(body), reason: body.reason?.trim() || 'Review before applying.' }, now, { closeLeftOut: true })
+    const plan = await planAmendment(client, order, order.status, facts, amendOf(body), now, { closeLeftOut: true })
     const revision = nextRevision((await client.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { revision: true } })).map((row) => row.revision))
-    const empty = { revision, version: order.version, diff: null, parts: asMoney('price', [] as ReturnType<typeof partView>[]), feeAmount: asMoney('price', null), changeAmount: asMoney('price', null), deposit: asMoney('price', null), yes: null, stage: null, /* B-OP-013 */ workOrders: null }
+    const empty = { revision, version: order.version, diff: null, parts: asMoney('price', [] as ReturnType<typeof partView>[]), feeAmount: asMoney('price', null), changeAmount: asMoney('price', null), deposit: asMoney('price', null), yes: null, stage: null, /* B-OP-013 */ workOrders: null, /* B-OL-005 */ amountChanges: false, totalUp: asMoney('price', false) }
     if (isIssueList(plan)) {
       if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
       return { ok: false, problems: plan, ...empty }
@@ -98,7 +99,7 @@ export async function previewPricedChange(caller: CommandCaller, orderId: string
     problems.push(...frozenProblems(frozen.changes, true))
     const parts = pricedPartsOf(plan.diff.lines, new Map(Object.entries(priced.labels ?? {})))
     const feeAmount = problems.some((issue) => issue.path === 'body/fee') ? null : feeMinorOf(priced.fee, order.currency)
-    if (parts.length === 0 && feeAmount === null) problems.push({ path: 'body/fee', message: 'A priced change carries its price: a change that moves the net of a line, or a change fee. Send it as a plain amendment otherwise.' })
+    // B-OL-016 (order lines plan O8; 18 F25): no part and no fee is fine — a priced change of nothing is "no charge".
     const own = await client.depositRequest.findFirst({ where: { AND: [{ OR: [{ orderId: order.id }, ...(order.quoteVersionId ? [{ quoteVersionId: order.quoteVersionId }] : [])] }, ORDER_DEPOSIT_ONLY], status: { not: 'CANCELLED' } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { depositPct: true, kind: true } })
     const growth = plan.diff.grossAfter - plan.diff.grossBefore
     let deposit: { amount: number; pct: string; basis: string; kind: string; growth: number } | null = null
@@ -129,6 +130,9 @@ export async function previewPricedChange(caller: CommandCaller, orderId: string
       yes: 'APPLIES_AT_ONCE' as const,
       stage: frozen.furthest ? { stage: frozen.furthest, words: STAGE_WORDS[frozen.furthest] } : null,
       workOrders,
+      // B-OL-005 (order lines plan D3; 18 F10): the amount moves (every writer); what the customer pays goes up (the price grain).
+      amountChanges: amountMoves({ netBefore: plan.diff.netBefore, netAfter: plan.diff.netAfter, feeAmount }),
+      totalUp: asMoney('price', totalGoesUp({ netBefore: plan.diff.netBefore, netAfter: plan.diff.netAfter, feeAmount })),
     }
   })
 }

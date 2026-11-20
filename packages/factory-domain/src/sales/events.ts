@@ -296,7 +296,8 @@ export const events = [
   defineEvent({
     type: 'sales_order.amended',
     context: 'sales',
-    description: 'A confirmed sales order was amended (its lines, sizes or prices): the amendment keeps the order before and after; the customer accepts again when the net total changed.',
+    // B-OL-005 (order lines plan D3): `reacceptanceNeeded` carries the office's choice (its tick; not said: the total went up).
+    description: 'A confirmed sales order was amended (its lines, sizes or prices): the amendment keeps the order before and after; the customer accepts it again when the office asked it.',
     payload: z.strictObject({ orderId: z.uuid(), number: z.string(), amendmentId: z.uuid(), revision: z.number().int(), reacceptanceNeeded: z.boolean(), lineIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-001 */ }),
     live: { ...orderLive, fields: ['orderId', 'number', 'revision', 'reacceptanceNeeded'] },
   }),

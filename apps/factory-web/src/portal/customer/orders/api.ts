@@ -207,7 +207,8 @@ export const orderLineSchema = z.object({
 })
 export type OrderLine = z.infer<typeof orderLineSchema>
 
-export const promiseMoveSchema = z.object({ on: z.string(), from: z.string().nullable(), to: z.string(), lines: z.array(z.number()), reason: z.object({ code: z.string(), words }) })
+// B-OL-004: `reason` null — the office gave no reason (none is shown).
+export const promiseMoveSchema = z.object({ on: z.string(), from: z.string().nullable(), to: z.string(), lines: z.array(z.number()), reason: z.object({ code: z.string(), words }).nullable() })
 export type PromiseMoveRead = z.infer<typeof promiseMoveSchema>
 
 export const depositSchema = z.object({ id: z.string(), kind: z.string(), status: z.string(), amount: price, currency: z.string(), dueDate: z.string(), paidAt: z.string().nullable() })

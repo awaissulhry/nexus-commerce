@@ -438,15 +438,16 @@ export interface PromiseChange {
 }
 
 /**
- * What stops a promise change (SAL-206; the design's "Change promise date" dialog): a reason, a day from today on, a
+ * What stops a promise change (SAL-206; the design's "Change promise date" dialog): a reason too long (B-OL-004: none is fine), a day from today on, a
  * different day for the whole order, lines of this order (each once). The first promise is never overwritten (the
  * caller keeps originalPromiseDate; a first promise sets it). A final order and a line change after shipping started are
  * state refusals the caller makes (`promiseStateProblem`).
  */
 export function promiseProblems(change: PromiseChange): Issue[] {
   const issues: Issue[] = []
-  // B-OO-009: the reason is the picked code and/or the office's note (portal-orders/promise `promiseReasonText`): neither is refused.
-  if (typeof change.reason !== 'string' || change.reason.trim() === '') issues.push({ path: 'body/reason', message: 'Pick why the promise changes, or say it in words (it stays in the order history).' })
+  // B-OO-009: the reason is the picked code and/or the office's note (portal-orders/promise `promiseReasonText`).
+  // B-OL-004 (order lines plan D2): neither is fine — the API then stores amendments/reasons AUTOMATIC_REASONS.promise; typed, it fits.
+  if (typeof change.reason === 'string' && change.reason.trim().length > MAX_REASON) issues.push({ path: 'body/reason', message: `At most ${MAX_REASON} characters.` })
   if (change.promiseDate < change.today) issues.push({ path: 'body/promiseDate', message: `A new promise is a day from today (${change.today}) on.` })
   if (change.lineIds.length === 0 && change.current === change.promiseDate) issues.push({ path: 'body/promiseDate', message: `The order is already promised for ${change.promiseDate}.` })
   const seen = new Set<string>()

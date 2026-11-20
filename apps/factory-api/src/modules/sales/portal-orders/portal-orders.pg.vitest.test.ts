@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { addDays } from '@nexus/factory-domain/sales/quotes/quotes'
+import { AUTOMATIC_REASONS } from '@nexus/factory-domain/sales/amendments/reasons' // B-OL-004
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedShipping } from '../../../../../../packages/factory-db/seed/shipping'
@@ -232,6 +233,22 @@ describe('the order: status, promise, lines (SAL-075, SAL-081)', { timeout: SLOW
     expect(JSON.stringify(viewer)).not.toMatch(/line 2 down|Marco/)
   })
   // ── end B-OO-009 ──
+
+  // ── B-OL-004 (order lines plan D2; 18 F23): a promise moved with no reason shows no reason — never "Our planning changed" ──
+  it('B-OL-004: a promise moved with no reason given shows the move with no reason to the customer', async () => {
+    const so3 = await orderId('SEED-SO-0003')
+    const current = await one<{ version: number; promise: string | null }>('SELECT version, "promiseDate"::text AS promise FROM "SalesOrder" WHERE id = $1', [so3])
+    const moved = addDays(current.promise !== null && current.promise > TODAY ? current.promise : TODAY, 5)
+    await changePromise(office(), so3, { version: current.version, promiseDate: moved })
+    const stored = await one<{ reason: string }>(`SELECT reason FROM "AuditLog" WHERE action = 'orders.changePromise' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 1`, [so3])
+    expect(stored.reason).toBe(AUTOMATIC_REASONS.promise)
+    const record = await ok(browsers.buyer, `/portal/sales-orders/${so3}`)
+    expect(record.promiseHistory[0]).toEqual({ on: expect.any(String), from: current.promise, to: moved, lines: [], reason: null })
+    expect(JSON.stringify(record)).not.toMatch(/order page|Our planning changed|La nostra pianificazione/)
+    // The earlier move with its code keeps its reason.
+    expect(record.promiseHistory.slice(1).map((move: Json) => move.reason?.code ?? null)).toContain('CAPACITY')
+  })
+  // ── end B-OL-004 ──
 })
 
 describe('production progress per customer switch (SAL-076, C1)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {

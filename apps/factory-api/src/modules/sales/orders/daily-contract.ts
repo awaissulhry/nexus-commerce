@@ -155,8 +155,13 @@ const amendFields = {
   reason: z.string().trim().max(MAX_REASON).optional(),
   customerRef: text(MAX_TEXT.customerRef).nullish(),
   requestedDate: businessDate().nullish(),
-  /** Every line the order keeps (a line left out is removed). */
-  lines: z.array(amendLine).min(1).max(MAX_QUOTE_LINES),
+  /**
+   * Every line the order keeps (a line left out is removed). B-OL-020 (order lines plan D7): left out — every goods line as it is,
+   * so the Overview's windows send the order's field alone: `{ version, customerRef }`, `{ version, shipToAddressId }`.
+   */
+  lines: z.array(amendLine).min(1).max(MAX_QUOTE_LINES).optional(),
+  /** B-OL-005 (order lines plan D3): ask the customer to accept the new order again; left out: only when the total goes up. */
+  askCustomer: z.boolean().optional(),
   /** B-SA-042 (R1): what happens to pieces already cut beyond the new figures; required when the change leaves some. */
   extraOutcome: z.enum(EXTRA_OUTCOMES).nullish(),
   /** B-OP-015: a new delivery address, an ACTIVE one of the order's customer (GET /parties/:partyId); none: unchanged. */
@@ -223,7 +228,10 @@ export const diffView = output({
   netAmountAfter: money.price(z.number().int()),
   grossAmountBefore: money.price(z.number().int()),
   grossAmountAfter: money.price(z.number().int()),
-  /** The net total changed: the customer must accept the order again. */
+  /**
+   * The net total changed (never which way). B-OL-005 (order lines plan D3): whether the customer is asked is the office's choice
+   * — the preview's `amountChanges` / `totalUp` give the tick its default; the amendment's `reacceptance` says what was chosen.
+   */
   reacceptanceNeeded: z.boolean(),
 })
 
@@ -234,7 +242,7 @@ const amendmentView = output({
   createdAt: instant(),
   createdById: id().nullable(),
   createdBy: z.string().nullable(),
-  /** NEEDED: the customer must accept the order again (the re-acceptance link is W2b, SAL-190). */
+  /** NEEDED: the customer must accept the order again (B-OL-005: the office asked it; the re-acceptance link, SAL-190). */
   reacceptance: z.enum(['NEEDED', 'NOT_NEEDED']),
   diff: diffView,
   /** The order before and after, frozen: header and lines with sizes and prices (never a cost). */
@@ -255,13 +263,19 @@ export const previewAmendmentContract = defineContract({
       /* B-SA-042, B-OP-013 */ workOrders: workOrderPreviewView.nullable(),
       /** B-OP-015: the new delivery address asked; `amendment` false: only the address changes (no amendment is written). */
       shipTo: output({ addressId: id(), amendment: z.boolean() }).nullable(),
+      // ── B-OL-005 (order lines plan D3; 18 F10): what the Review window's one tick "Ask the customer to accept" starts from ──
+      /** The amount changes (the net, or a fee charged): for every writer, never which way. */
+      amountChanges: notMoney(z.boolean()),
+      /** What the customer pays goes up (a higher net, or a fee): only with the price grain (Sales never learns the direction). */
+      totalUp: money.price(z.boolean()),
     }),
   },
 })
 
 export const applyAmendmentContract = defineContract({
   params: orderParams,
-  body: input({ version, ...amendFields, reason }),
+  // B-OL-004 (order lines plan D2): the reason is optional, as on the preview (none: the server stores the automatic words).
+  body: input({ version, ...amendFields }),
   // B-OP-015: `amendment` null when only the delivery address changed (it moved alone).
   response: { 201: output({ order: orderView, amendment: amendmentView.nullable(), /* B-OP-012 */ workOrders: followedView }) },
 })
@@ -275,7 +289,8 @@ export const listAmendmentsContract = defineContract({
 
 const linesBody = input({
   version,
-  reason,
+  /** B-OL-004 (order lines plan D2): optional (none: the server stores the automatic words; a code that asks for detail still wants words). */
+  reason: z.string().trim().max(MAX_REASON).optional(),
   /** None: every open line with something left (close), every closed line (reopen). */
   lineIds: z.array(id()).max(MAX_QUOTE_LINES).optional(),
 })

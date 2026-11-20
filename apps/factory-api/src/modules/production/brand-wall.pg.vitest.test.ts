@@ -215,6 +215,32 @@ describe('B-PR-10 the brand-wall sweep', () => {
     expect(idsIn((await as('office.p2', 'GET', `/product/styles?status=ALL&q=${OWN_STYLE_CODE}`)).body).has(w.styleId), 'our own collection').toBe(true)
   })
 
+  // ── B-OL-033 (order lines plan, 18 F1): the style search for an order ("Add a style") ──
+  it('B-OL-033: the style search for an order lists our own collection and that customer’s own styles only; another customer’s order is not found', async () => {
+    const privateOfA = await admin<{ id: string }>(`SELECT id FROM "Style" WHERE "brandPartyId" = $1 AND "tenantId" = $2`, [ids.a, ids.tenantId])
+    expect(privateOfA.length).toBeGreaterThan(0)
+    // Brand B's order, read by the production unit: never one of A's private styles; our own collection is offered.
+    const forB = await as('office.all', 'GET', `/product/styles?status=ALL&limit=200&forOrder=${w.b.salesOrderId}`)
+    expect(forB.status).toBe(200)
+    for (const style of privateOfA) expect(idsIn(forB.body).has(style.id), `A's style ${style.id} offered for B's order`).toBe(false)
+    expect((forB.body.styles as Json[]).some((row) => row.id === w.styleId), 'our own collection').toBe(true)
+    expect((forB.body.styles as Json[]).every((row) => Array.isArray(row.colourways)), 'each row names its colourways').toBe(true)
+    // A's own order offers A's own styles.
+    const forA = await as('office.all', 'GET', `/product/styles?status=ALL&limit=200&forOrder=${w.a.salesOrderId}`)
+    expect(privateOfA.some((style) => idsIn(forA.body).has(style.id))).toBe(true)
+    // A person limited to brand B asking with A's order: word for word the answer to an unknown order, never a style of A's.
+    const asked = await as('office.p2', 'GET', `/product/styles?status=ALL&forOrder=${w.a.salesOrderId}`)
+    const unknown = await as('office.p2', 'GET', `/product/styles?status=ALL&forOrder=${newId()}`)
+    expect([asked.status, asked.body.error?.message]).toEqual([404, unknown.body.error?.message])
+    expect(unknown.status).toBe(404)
+    for (const style of privateOfA) expect(idsIn(asked.body).has(style.id)).toBe(false)
+    // B's own order, for B's own person: its own styles and ours, never A's.
+    const own = await as('office.p2', 'GET', `/product/styles?status=ALL&limit=200&forOrder=${w.b.salesOrderId}`)
+    expect(own.status).toBe(200)
+    for (const style of privateOfA) expect(idsIn(own.body).has(style.id)).toBe(false)
+  })
+  // ── end B-OL-033 ──
+
   it('the subcontract orders’ own list: an order for another customer’s work order is hidden even from a person who reaches its workshop', async () => {
     const orders = await admin<{ id: string; partyId: string }>(`SELECT s.id, s."partyId" FROM "SubcontractOrder" s JOIN "WorkOrder" o ON o.id = s."workOrderId" WHERE o."partyId" = $1`, [ids.a])
     expect(orders.length).toBeGreaterThan(0)
