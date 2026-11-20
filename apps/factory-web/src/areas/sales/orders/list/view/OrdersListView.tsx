@@ -124,6 +124,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const r = useT('records') // F-SA-281
   const locale = useLocale()
   const wide = useWide(model.wide) // B-TH-225: Ordered, Margin %, Priority, Season and From quote at 1920
+  // F-CP-107 (cp-fx16): is the Status column on screen (the frame tells; a person's Customise wins)? Until it tells: the preset's.
+  const [statusShown, setStatusShown] = useState(() => statusShownOf(model.preset ?? null))
+  // ---- end F-CP-107 (cp-fx16)
   const [viewer, setViewer] = useState<string | null>(model.viewerOpen ?? null)
   const latest = useRef({ model, actions })
   latest.current = { model, actions }
@@ -243,9 +246,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // F-SA-212: the phone card's aside is the picture part at its phone size (the DS card's draw override).
   const cardFields = useMemo(() => cardFieldsOf((row) => <RecordPicture source="order" recordId={row.id} number={row.number} picture={row.picture} styleCount={row.styleCount} size="phone" read={latest.current.actions?.readPictures} demo={latest.current.model.demoPictures?.[row.id]} onOpen={() => setViewer(row.id)} />), [])
   const columns = useMemo<ColDef<OrderRow>[]>(
-    () => sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer: setViewer }),
+    () => sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer: setViewer, statusShown /* F-CP-107 (cp-fx16) */ }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
-    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, r /* F-SA-281 */, model.bulkCan?.task /* F-SA-281 */],
+    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, r /* F-SA-281 */, model.bulkCan?.task /* F-SA-281 */, statusShown /* F-CP-107 (cp-fx16): Where it is redraws when Status comes or goes */],
   )
 
   // F-SA-276: the host's default view is not a narrowing; the waiting term is.
@@ -493,7 +496,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           groups={groups /* B-TH-244 */}
           custom={{ recordType: 'ORDER', companyId: model.company?.id ?? null, partyId: model.customer?.id ?? null, partyOf: (row) => row.partyId, partyFieldsOnPartySheet: true, edit: { held: cellHeld } } /* B-TH-241 / B-TH-242 / B-TH-245: a customer's own columns on its sheet only, edited in their cells */}
           edit={orderEdit /* B-TH-245: the order note and the custom values in their cells; Edit N with the preview; lines never */}
-          onShownColumns={actions?.onShownColumns /* B-TH-244: Progress reads the floor only while shown */}
+          onShownColumns={(ids) => {
+            setStatusShown(ids.includes('status')) // F-CP-107 (cp-fx16)
+            actions?.onShownColumns?.(ids) // B-TH-244: Progress reads the floor only while shown
+          }}
           builtInViews={{ items: builtInViewsOf(model, t, s, (value) => formatNumber(value, locale) /* F-CP-103 */), active: builtInActive(model), onPick: (id) => pickBuiltIn(id, model, actions) /* F-SA-221, F-SA-276 */ }}
           viewName={customerName ? s('views.suggest', { customer: customerName }) : null /* B-TH-243: a customer's sheet saved under its name */}
           // B-TH-057: a header click sorts every page on the server (the address keeps it); the grid only shows the arrow.
@@ -834,6 +840,8 @@ interface ColumnsInput {
   wide: boolean
   latest: { current: { model: OrdersListModel; actions?: OrdersListActions } }
   onViewer: (id: string) => void
+  /** F-CP-107 (cp-fx16): the Status column is on screen — Where it is then never repeats the status of a row with no stage. */
+  statusShown?: boolean
 }
 
 /**
@@ -869,8 +877,8 @@ function PictureViewerFor({ row, model, actions, onClose }: { row: OrderRow; mod
  * tab); Brand, Status and Company narrow the sheet (the funnel mark); a cell the reader may not open says why on hover; the
  * rest of the row opens the order. Money columns are absent without their grain, never zero.
  */
-function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer }: ColumnsInput): ColDef<OrderRow>[] {
-  const input: ColumnsInput = { t, s, d, l, m, r, locale, model, wide, latest, onViewer }
+function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown = false }: ColumnsInput): ColDef<OrderRow>[] {
+  const input: ColumnsInput = { t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown }
   const { prefix, can } = model
   const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
   const act = () => latest.current.actions
@@ -1127,7 +1135,7 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer 
     if (line.kind === 'status') return t(`status.${row.status}`)
     return [pw(`parts.stage.${line.stage}`), line.health ? pw(`parts.health.${HEALTH_CHIP[line.health]}`) : null].filter(Boolean).join(' · ')
   }
-  const WhereCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <WhereItIsCell row={data} t={t} s={s} /> : null)
+  const WhereCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <WhereItIsCell row={data} t={t} s={s} statusShown={statusShown /* F-CP-107 (cp-fx16) */} /> : null)
   const WaitingCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <WaitingOnCell row={data} mark={latest.current.model.marks?.[data.id]} prefix={prefix} doorHref={latest.current.model.doorHref} s={s} now={now} /> : null)
   const SupervisorColumn = ({ data }: ICellRendererParams<OrderRow>) => (data && m ? <SupervisorCell row={data} s={s} marks={m} /> : null)
   // ---- end F-SA-275
@@ -1240,6 +1248,9 @@ const MANY_ICON: Readonly<Record<ManyCommand, typeof PackageCheck>> = { ready: P
 export function withMovedMark(column: ColDef<OrderRow>, moved: () => readonly string[]): ColDef<OrderRow> {
   return { ...column, cellClassRules: { ...(column.cellClassRules ?? {}), 'fw-cmd-left': (params: { data?: OrderRow }) => !!params.data && moved().includes(params.data.id) } }
 }
+
+/** F-CP-107 (cp-fx16): the Status column at first — a host's preset shows it only when it names it; without a preset it shows. */
+export const statusShownOf = (preset: OrdersListModel['preset'] | null): boolean => !preset || preset.shown.includes('status')
 
 /** F-SA-276: the host's first columns (its view's preset; from 1800 px its wide ones too); ⋯ always; a person's Customise wins. */
 export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean): ColDef<OrderRow> {

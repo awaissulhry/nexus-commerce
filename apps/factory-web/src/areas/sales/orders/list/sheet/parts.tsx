@@ -230,11 +230,16 @@ export function SheetChips({ chips, t, onClearAll }: { chips: readonly SheetChip
  * own pieces ("120 of 300 sewn") or "Sewing not counted here" (never 0). No stage kept (waiting for a yes, shipped, closed…): the
  * order's status. Not read: "—".
  */
-export function WhereItIsCell({ row, t, s }: { row: OrderRow; t: Translate; s: Translate }) {
+export function WhereItIsCell({ row, t, s, statusShown = false }: { row: OrderRow; t: Translate; s: Translate; statusShown?: boolean }) {
   const w = useProductionWords()
   const line = whereLineOf(row)
   const pieces = piecesLineOf(row)
   if (line.kind === 'unread') return <span className="fw-sheet-plain">—</span>
+  // F-CP-107 (cp-fx16): the same fact never twice in one row — no stage kept while the row shows the Status column: only this
+  // order's pieces ("Not in work yet"); "—" while they were not read. Status hidden (Customise, a view without it): the status here.
+  if (line.kind === 'status' && statusShown)
+    return pieces ? <span className="fw-sheet-sub">{pieces.production ? w.t(pieces.key, pieces.params) : s(pieces.key, pieces.params)}</span> : <span className="fw-sheet-plain">—</span>
+  // ---- end F-CP-107 (cp-fx16)
   return (
     <span className="fw-sheet-cell">
       {line.kind === 'status' ? (
