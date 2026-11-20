@@ -2,7 +2,7 @@
 
 import { useId, type ReactNode } from 'react'
 import { Card } from '@nexus/ui/components'
-import { Button, Skeleton } from '@nexus/ui/primitives'
+import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../../record-panels/i18n'
@@ -22,6 +22,8 @@ const QUOTE_TERMS = 'sales-quotes-depth'
  * band's own ⋯ Change ship-to…), Priority and Season with Set… (the depth's own dialogs), the rest Fixed (set when the order was
  * made: payment · currency, Incoterm, language · tax mode) and Made (derived). Each door is held with words (amendHeld,
  * depthEditHeld: a closed or cancelled order holds them all); a read-only reader sees the facts and no door. Fetches nothing.
+ * F-OO-210 (Owner D4): the office note as the last, whole row — "Only the office sees it", Change… opens its dialog in the page's
+ * one slot ({ kind: 'note' }), saved by the Orders sheet's own write.
  */
 export function FactsCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   return (
@@ -89,16 +91,29 @@ function Facts({ order, model, actions }: { order: Order; model: OrderRecordMode
           />
         )}
         <Fact label={t('facts.made')} value={madeWords} door={null} />
+        {/* F-OO-210 (Owner D4): the office note, the whole row — only when the read sends it (never an empty note over one not read). */}
+        {order.internalNote !== undefined && (
+          <Fact
+            wide
+            label={
+              <>
+                {t('facts.note.label')} <Tag tone="neutral">{t('facts.note.tag')}</Tag>
+              </>
+            }
+            value={order.internalNote?.trim() ? <span className="fw-so-fact-text">{order.internalNote}</span> : <span className="fw-so-hint">{t('facts.note.empty')}</span>}
+            door={doors ? (describedBy) => <Door label={t('doors.change')} held={say(doors.note)} describedBy={describedBy} onClick={() => actions?.onDialog?.({ kind: 'note' })} /> : null}
+          />
+        )}
       </ul>
     </Card>
   )
 }
 
 /** One fact: its label, its value, and its door (Change… / Set…, held with words) or "Fixed" — the Overview's shared card row. */
-function Fact({ label, value, door }: { label: string; value: ReactNode; door: ((describedBy: string) => ReactNode) | null }) {
+function Fact({ label, value, door, wide = false }: { label: ReactNode; value: ReactNode; door: ((describedBy: string) => ReactNode) | null; /* F-OO-210: the whole row */ wide?: boolean }) {
   const id = useId()
   return (
-    <li className="fw-so-ov-row fw-so-fact">
+    <li className={wide ? 'fw-so-ov-row fw-so-fact fw-so-fact-note' : 'fw-so-ov-row fw-so-fact'}>
       <span id={id} className="fw-so-fact-label">
         {label}
       </span>

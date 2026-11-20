@@ -67,7 +67,12 @@ export type LinesDialog = { kind: 'closeLines'; lineIds?: readonly string[] } | 
 export type MoneyDialog = { kind: 'depositLink'; requestId: string } | { kind: 'depositPayment'; requestId: string } | { kind: 'sdiSend'; invoiceId: string }
 /** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
 export type ChangesDialog = { kind: 'compare'; amendmentId: string }
-export type RecordDialog = BandDialog | LinesDialog | MoneyDialog | ChangesDialog
+/**
+ * F-OO-210: use-overview-acts — Order facts' office note (the sheet's own write). `refused`: its refusal in this page's words, said in
+ * the dialog (what was typed stays; a new opening starts without it).
+ */
+export type OverviewDialog = { kind: 'note'; refused?: Phrase }
+export type RecordDialog = BandDialog | LinesDialog | MoneyDialog | ChangesDialog | OverviewDialog /* F-OO-210 */
 
 // ---- F-OO-124: the lines Close remaining lines / Reopen lines opens with ticked ----
 /**
@@ -459,6 +464,8 @@ export interface OrderRecordActions {
   onLineChange?: (styleId: string) => void
   /** F-OO-209: Order facts' Customer PO "Change…" — edit mode on Lines, the customer PO focused (the one edit path). */
   onCustomerRefChange?: () => void
+  /** F-OO-210: the office note dialog's Save note — the Orders sheet's own write (sales.orders.editCells) with the order's version. */
+  onNoteSave?: (note: string) => void
   /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
   people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
   /** F-CP-142: the Price check card (Customer's price…, Take them over, Try again) and the ONE window's own actions. */

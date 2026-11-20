@@ -1006,7 +1006,18 @@
     "fixed": "Fixed",
     "fixedTitle": "Set when the order was made; it does not change.",
     "set": "Set…",
-    "unread": "Could not be read"
+    "unread": "Could not be read",
+    "note": {
+      "label": "Office note",
+      "tag": "Only the office sees it",
+      "empty": "No note",
+      "title": "Office note · {number}",
+      "hint": "Only the office reads it; the customer never does.",
+      "go": "Save note",
+      "long": "The note is at most {max} characters",
+      "same": "It is the note already",
+      "saved": "Office note saved."
+    }
   },
   "editor": {
     "add": {

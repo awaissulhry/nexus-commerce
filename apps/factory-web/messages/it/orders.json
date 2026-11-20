@@ -1006,7 +1006,18 @@
     "fixed": "Fisso",
     "fixedTitle": "Fissato quando l'ordine è stato creato; non cambia.",
     "set": "Imposta…",
-    "unread": "Non è stato possibile leggerlo"
+    "unread": "Non è stato possibile leggerlo",
+    "note": {
+      "label": "Nota dell'ufficio",
+      "tag": "Solo l'ufficio la vede",
+      "empty": "Nessuna nota",
+      "title": "Nota dell'ufficio · {number}",
+      "hint": "La legge solo l'ufficio; il cliente mai.",
+      "go": "Salva la nota",
+      "long": "La nota è al massimo di {max} caratteri",
+      "same": "È già questa la nota",
+      "saved": "Nota dell'ufficio salvata."
+    }
   },
   "editor": {
     "add": {
