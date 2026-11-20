@@ -64,10 +64,31 @@ export interface PricedLines {
   readonly costAmount: MinorUnits | null
 }
 
-/** Every line priced on the basis with the treatment, and the totals (the cost only when every line has one). */
-export function priceLines(basis: PriceBasis, currency: string, treatment: VatTreatment, lines: readonly LineDraft[]): PricedLines {
+// ── B-OL-012 (order lines plan O12): a charge (fee) line no longer blocks an amendment ──
+/**
+ * A line the amendment keeps as it is stored and never writes — the order's charge (FEE) lines: no size rows, its own pieces at
+ * its own price (sales/quotes `priceVersion` prices such a row as a quote's fee line, B-W2b-330) — priced with the lines so the
+ * order's totals still hold it, as they did when the order was made.
+ */
+export interface FixedLine {
+  readonly seq: number
+  readonly unitPrice: string
+  readonly quantity: number
+  readonly costAmount: MinorUnits | null
+}
+// ── end B-OL-012 ──
+
+/**
+ * Every line priced on the basis with the treatment, and the totals (the cost only when every line has one). B-OL-012: `fixed`
+ * rows (the order's charge lines) count in the totals only; `lines` answers the drafts, in their order.
+ */
+export function priceLines(basis: PriceBasis, currency: string, treatment: VatTreatment, lines: readonly LineDraft[], fixed: readonly FixedLine[] = []): PricedLines {
   // B-W2b-368: a made-to-measure unit (no size rows) is its one piece (./amendments/mtm).
-  const priced = priceVersion({ basis, currency, treatment, lines: lines.map((line) => ({ seq: line.seq, unitPrice: line.unitPrice, listUnitPrice: null, sizes: line.sizes, costAmount: line.costAmount, ...unitPiece(line) })), depositPct: null, rules: QUOTE_RULE_DEFAULTS })
+  const rows = [
+    ...lines.map((line) => ({ seq: line.seq, unitPrice: line.unitPrice, listUnitPrice: null, sizes: line.sizes, costAmount: line.costAmount, ...unitPiece(line) })),
+    /* B-OL-012 */ ...fixed.map((line) => ({ seq: line.seq, unitPrice: line.unitPrice, listUnitPrice: null, sizes: [], costAmount: line.costAmount, quantity: line.quantity })),
+  ]
+  const priced = priceVersion({ basis, currency, treatment, lines: rows, depositPct: null, rules: QUOTE_RULE_DEFAULTS })
   const vat = storedVat(treatment)
   return {
     lines: lines.map((line, index) => ({ ...line, quantity: priced.lines[index]!.quantity, netAmount: priced.lines[index]!.netAmount, vatAmount: priced.lines[index]!.vatAmount, vatRatePct: vat.vatRatePct, vatNature: vat.vatNature })),

@@ -410,6 +410,47 @@ describe('B-OL-004 + B-OL-015: no reason needed (the automatic words are stored)
 })
 // ── end B-OL-004 + B-OL-015 ──
 
+// ── B-OL-012 (order lines plan O12): a charge (fee) line no longer blocks the order ──
+describe('B-OL-012: an order with a charge line takes an amendment; the charge stays as stored and still counts in the totals', () => {
+  it('amends the goods; the totals are goods + the charge; the charge row and its snapshot are unchanged', async () => {
+    // B-CP-011: the typed price of MANUAL is the Owner's.
+    const order = (await ok('owner', 'POST', '/sales/orders/manual', { ...MANUAL, customerRef: 'PO-OL012-1' }, 201)).order
+    const [blk, red] = order.lines
+    // A development charge (50.00 × 1) written whole, as an accepted quote's fee line is, and the order's totals with it:
+    // 2880.00 + 50.00 net, VAT 22 % 644.60, 3574.60 gross.
+    const feeId = newId()
+    await planted([
+      copyRow('SalesOrderLine', red.id, { id: feeId, seq: 90, kind: 'FEE', feeKind: 'DEVELOPMENT', quantity: 1, unitPrice: '50.000000', netAmount: 5_000, vatAmount: 1_100, costAmount: null, unitCost: null, description: 'Made-up development charge', note: null, quoteLineId: null, version: 1 }),
+      { sql: 'UPDATE "SalesOrder" SET "netAmount" = "netAmount" + 5000, "vatAmount" = "vatAmount" + 1100, "grossAmount" = "grossAmount" + 6100 WHERE id = $1', values: [order.id] },
+    ])
+    const record = await recordOf(order.id, 'owner')
+    expect(record).toMatchObject({ netAmount: 293_000, grossAmount: 357_460 })
+    const feeRow = () => one('SELECT kind::text AS kind, "unitPrice"::text AS "unitPrice", quantity, "netAmount", "vatAmount", version FROM "SalesOrderLine" WHERE id = $1', [feeId])
+    const feeBefore = await feeRow()
+    // One more black 52 (P1's list: 420.00): the goods go 2880.00 → 3300.00, the charge stays 50.00.
+    const change = { version: record.version, lines: [{ id: blk.id, sizes: grid([['50', 2], ['52', 3]]) }, { id: red.id }] }
+    const preview = await ok('owner', 'POST', `${orderUrl(order.id)}/amendments/preview`, change)
+    expect(preview).toMatchObject({ ok: true, problems: [] })
+    expect(preview.diff).toMatchObject({ netAmountBefore: 293_000, netAmountAfter: 335_000 })
+    expect(preview.diff.lines.map((line: Json) => line.lineId)).toEqual([blk.id])
+    const applied = await ok('sales', 'POST', `${orderUrl(order.id)}/amendments`, change, 201)
+    expect(await one('SELECT "netAmount", "vatAmount", "grossAmount" FROM "SalesOrder" WHERE id = $1', [order.id])).toMatchObject({ netAmount: 335_000, vatAmount: 73_700, grossAmount: 408_700 })
+    expect(await feeRow()).toEqual(feeBefore)
+    expect(feeBefore).toMatchObject({ kind: 'FEE', unitPrice: '50.000000', quantity: 1, netAmount: 5_000 })
+    // Both snapshots carry the charge as stored; the change names only the black line.
+    const row = await one('SELECT before, after FROM "SalesOrderAmendment" WHERE id = $1', [applied.amendment.id])
+    const feeOf = (snapshot: Json) => (snapshot.lines as Json[]).find((line) => line.id === feeId)
+    expect(feeOf(row.after)).toEqual(feeOf(row.before))
+    expect(feeOf(row.after)).toMatchObject({ kind: 'FEE', quantity: 1, netAmount: 5_000, sizes: [] })
+    expect(applied.amendment.diff.lines.map((line: Json) => line.lineId)).toEqual([blk.id])
+    // The charge never takes a part in the next change either: leaving it out of the body keeps it.
+    const next = await ok('sales', 'POST', `${orderUrl(order.id)}/amendments/preview`, { version: applied.order.version, lines: [{ id: blk.id }, { id: red.id, sizes: grid([['52', 2]]) }] })
+    expect(next).toMatchObject({ ok: true })
+    expect(next.diff.lines.map((line: Json) => [line.lineId, line.change])).toEqual([[red.id, 'CHANGED']])
+  })
+})
+// ── end B-OL-012 ──
+
 // ── B-OL-033 (order lines plan, 18 F1 and F24): the style search for an order ("Add a style") ──
 describe('B-OL-033: the style search for an order — our collection and this customer’s own styles, and whether its list prices each colour', () => {
   it('P1’s order lists P1’s own styles and our own collection, never another customer’s; each colour says whether P1’s list prices it', async () => {

@@ -235,8 +235,10 @@ export interface PlanOptions {
 export async function planAmendment(db: Reader, order: OrderRow, status: OrderRow['status'], facts: OrderFacts, body: AmendBody, now: Date, /* B-OP-014 */ planOptions: PlanOptions = {}): Promise<AmendmentPlan | Issue[]> {
   const stateProblem = amendStateProblem(status)
   if (stateProblem) return [{ path: 'body', message: stateProblem }]
-  if (facts.lines.some((line) => line.kind === 'FEE')) return [{ path: 'body', message: 'This order has a fee line: a fee is changed on its own line, so the order is not amended here.' }]
   const lines = facts.lines.filter(isGoodsLine)
+  // B-OL-012 (order lines plan O12): a charge (fee) line no longer blocks the order. It is never named nor left out (it is no goods
+  // line), never written: it stays as stored, in both snapshots unchanged, and still counts in the totals (a fixed row of the pricing).
+  const fees = facts.lines.filter((line) => line.kind === 'FEE')
   // B-W2b-368 (XF1:01): an order with a made-to-measure unit is amended too; the unit is kept as it was sold (./amendments/mtm).
   const inWorkOrders = new Map<string, Map<string, number>>()
   for (const row of facts.progress.rows) {
@@ -357,19 +359,23 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
   if (issues.length === 0) issues.push(...(await amendedLineProblems(db, order, drafts.filter((draft) => draft.changed))))
   if (issues.length > 0) return issues
   drafts.sort((a, b) => a.seq - b.seq)
-  const priced = priceLines(priceBasisOf(order.taxMode), order.currency, treatmentOfStored(lines[0]!), drafts)
+  const fixed = fees.map((line) => ({ seq: line.seq, unitPrice: priceText(line.unitPrice.toString()), quantity: line.quantity, costAmount: line.costAmount })) // B-OL-012
+  const priced = priceLines(priceBasisOf(order.taxMode), order.currency, treatmentOfStored(lines[0]!), drafts, fixed)
   const header = {
     customerRef: body.customerRef === undefined ? order.customerRef : blankToNull(body.customerRef),
     requestedDate: body.requestedDate === undefined ? dayOrNull(order.requestedDate) : body.requestedDate,
   }
-  const before = snapshotOf(headerOf(order, order), lines.map(lineSnapshot))
+  const before = snapshotOf(headerOf(order, order), [...lines, /* B-OL-012 */ ...fees].map(lineSnapshot))
   const closedOf = new Map<string, number | null>([
     ...lines.map((line) => [line.id, reopen.has(line.id) ? null : line.closedShortQuantity] as const),
     /* B-OP-014 */ ...closing.map((line) => [line.id, line.closedShortQuantity] as const),
   ])
   const after = snapshotOf(
     headerOf(order, priced, header),
-    priced.lines.map((line, index) => snapshotLine({ ...line, id: line.id ?? placeholderId(index), closedShortQuantity: line.id ? (closedOf.get(line.id) ?? null) : null })),
+    [
+      ...priced.lines.map((line, index) => snapshotLine({ ...line, id: line.id ?? placeholderId(index), closedShortQuantity: line.id ? (closedOf.get(line.id) ?? null) : null })),
+      /* B-OL-012: the charge lines as stored (no change in the diff) */ ...fees.map(lineSnapshot),
+    ],
   )
   const diff = amendmentDiff(before, after)
   if (diff.empty) return [{ path: 'body/lines', message: NOTHING_CHANGES }]
