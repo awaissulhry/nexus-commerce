@@ -53,7 +53,13 @@
       "assignedTask_one": "{who} ha assegnato {count} attività",
       "assignedTask_other": "{who} ha assegnato {count} attività",
       "uploaded_one": "{who} ha aggiunto {count} file",
-      "uploaded_other": "{who} ha aggiunto {count} file"
+      "uploaded_other": "{who} ha aggiunto {count} file",
+      "setStageByHand_one": "{who} ha impostato la fase a mano {count} volta",
+      "setStageByHand_other": "{who} ha impostato la fase a mano {count} volte",
+      "clearedStageByHand_one": "{who} ha tolto la fase impostata a mano {count} volta",
+      "clearedStageByHand_other": "{who} ha tolto la fase impostata a mano {count} volte",
+      "stageByHandEnded_one": "{who} ha chiuso la fase impostata a mano {count} volta",
+      "stageByHandEnded_other": "{who} ha chiuso la fase impostata a mano {count} volte"
     }
   },
   "changes": {
@@ -95,7 +101,10 @@
     "approved": "lo ha approvato",
     "confirmed": "lo ha confermato",
     "cancelled": "lo ha annullato",
-    "changed": "ha modificato il record"
+    "changed": "ha modificato il record",
+    "setStageByHand": "ha impostato la fase a mano",
+    "clearedStageByHand": "ha tolto la fase impostata a mano",
+    "stageByHandEnded": "ha chiuso la fase impostata a mano: si vede di nuovo la fase del reparto"
   },
   "live": {
     "bar_one": "{count} nuovo messaggio",

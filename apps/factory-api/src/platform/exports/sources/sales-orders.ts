@@ -22,6 +22,7 @@ import { RIDER_TERM_REFUSAL } from '../../../modules/sales/orders/orders' // B-S
 // B-SA-070: the production columns (Where it is, Waiting on, Supervisor) and the `waiting=us` term.
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { HEALTH_WORDS, OFFICE_WAITING_WORDS, STAGE_WORDS } from '@nexus/factory-domain/production-brand/words'
+import { STAGE_BY_HAND_WORDS } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-006
 import { BRAND_HEALTHS } from '@nexus/factory-domain/production-brand/health'
 import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
@@ -229,14 +230,20 @@ function priceMatchTerm(address: URLSearchParams): Pick<ListFilters, 'priceMatch
 }
 // ── end B-CP-018 ──
 
-/** The Where it is cell: the plain stage and the shown health ("Sewing · At risk"); nothing kept yet: empty. */
-function whereText(row: Row, words: (code: string) => string): string | null {
+/**
+ * The Where it is cell: the plain stage and the shown health ("Sewing · At risk"); nothing kept yet: empty. B-MS-006 (R17): a stage
+ * set by hand reads "Sewing (by hand) · At risk" (the office's file only; exported for its unit test).
+ */
+export function whereText(row: Pick<Row, 'production'>, words: (code: string) => string): string | null {
   const production = row.production
   if (!production || (production.stage === null && production.health === null)) return null
-  return [production.stage ? words(`stage.${production.stage}`) : null, production.health ? words(`health.${production.health}`) : null].filter((part) => part !== null).join(' · ')
+  const stage = production.stage ? `${words(`stage.${production.stage}`)}${production.stageByHand ? ` ${words('stage.byHand')}` : ''}` : null
+  return [stage, production.health ? words(`health.${production.health}`) : null].filter((part) => part !== null).join(' · ')
 }
 
-const productionWords = (locale: ExportLocale): Record<string, string> => ({
+/** The production columns' words of the file's locale (exported for its unit test). */
+export const productionWords = (locale: ExportLocale): Record<string, string> => ({
+  'stage.byHand': STAGE_BY_HAND_WORDS[locale], // B-MS-006
   ...Object.fromEntries(BRAND_STAGES.map((stage) => [`stage.${stage}`, STAGE_WORDS[stage][locale]])),
   ...Object.fromEntries(BRAND_HEALTHS.map((health) => [`health.${health}`, HEALTH_WORDS[health][locale]])),
   ...Object.fromEntries(WAITING_ON.map((on) => [`waitingOn.${on}`, OFFICE_WAITING_WORDS[on][locale]])),

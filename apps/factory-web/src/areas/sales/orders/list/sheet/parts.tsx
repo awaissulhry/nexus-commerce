@@ -3,8 +3,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { Filter, X } from 'lucide-react'
-import { Button, FilterChip, Pill, Tag } from '@nexus/ui/primitives' // F-SA-275: + Pill
+import { Filter, Hand, X } from 'lucide-react' // F-MS-104: + Hand
+import { Button, FilterChip, Pill, Tag, Tooltip } from '@nexus/ui/primitives' // F-SA-275: + Pill; F-MS-104: + Tooltip
+import { STAGE_SET_CHECK_DAYS } from '@nexus/factory-domain/production-brand/stage-set' // F-MS-104
 import type { Door, Phrase } from './model'
 import './sheet.css'
 // ---- F-SA-275: the production columns' cells (the shared health chip and the production parts' words, the supervisor marks) ----
@@ -225,10 +226,30 @@ export function SheetChips({ chips, t, onClearAll }: { chips: readonly SheetChip
 
 // ── F-SA-275 (sales page plan N5 / N2, picks R5, P10, P4; 11-customer-page §3.5): Where it is, Waiting on, Supervisor ──────────────
 
+// ── F-MS-104 ──
+/**
+ * F-MS-104 (04 §5, R17): beside a stage set by hand, a 12 px hand (aria-hidden) and the same words for a screen reader; the DS
+ * Tooltip says the order holds who and why (no name, no reason in the list). Amber once it was set 7 days ago or more, and then the
+ * words say "check it" too (never the colour alone). Part of the stage, not a third mark: the dense cell keeps the stage and health.
+ */
+export function ByHandMark({ old, t }: { old: boolean; t: Translate }) {
+  const days = STAGE_SET_CHECK_DAYS
+  return (
+    <Tooltip label={t(old ? 'list.byHand.oldTip' : 'list.byHand.tip', { days })} portal>
+      <span className={old ? 'fw-sheet-hand old' : 'fw-sheet-hand'} data-by-hand={old ? 'old' : ''}>
+        <Hand size={12} aria-hidden />
+        <span className="nds-vh">{t(old ? 'list.byHand.oldMark' : 'list.byHand.mark', { days })}</span>
+      </span>
+    </Tooltip>
+  )
+}
+// ── end F-MS-104 ──
+
 /**
  * Where it is: the plain stage (the words the customer reads too) and the health chip (no "why" in a dense cell), then this order's
  * own pieces ("120 of 300 sewn") or "Sewing not counted here" (never 0). No stage kept (waiting for a yes, shipped, closed…): the
- * order's status. Not read: "—".
+ * order's status. Not read: "—". F-MS-104: a stage set by hand carries its mark (ByHandMark); the customer page's Work tab draws
+ * this same cell.
  */
 export function WhereItIsCell({ row, t, s, statusShown = false }: { row: OrderRow; t: Translate; s: Translate; statusShown?: boolean }) {
   const w = useProductionWords()
@@ -247,6 +268,7 @@ export function WhereItIsCell({ row, t, s, statusShown = false }: { row: OrderRo
       ) : (
         <span className="fw-sheet-where">
           <b>{w.t(`parts.stage.${line.stage}`)}</b>
+          {line.byHand && <ByHandMark old={line.byHand.old} t={t} /> /* F-MS-104 */}
           {line.health && <HealthPill face="office" explain={false} computed={HEALTH_CHIP[line.health]} daysLate={row.daysLate} />}
           {line.held && <Tag tone="warning">{w.t('parts.stage.blocked')}</Tag>}
         </span>

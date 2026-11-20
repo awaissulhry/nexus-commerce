@@ -4,7 +4,7 @@ import { isApiError, issuePath } from '../../../../lib/api/errors'
 import type { Locale } from '../../../../lib/i18n/locales'
 import type { ProductionRow, UndoAnswer, UrgencyAnswer, UrgencyOutcome, UrgentUse, Words } from '../api'
 import { URGENCY_OUTCOMES } from '../api'
-import { rowName, urgencyCell, urgencyText, urgentRowsOf, type Tone } from '../model'
+import { cutStartedOf, rowName, urgencyCell, urgencyText, urgentRowsOf, type Tone } from '../model' // F-MS-105: + cutStartedOf
 import type { ProblemOrder } from '../problem/model'
 import type { BulkAskKind, WithdrawAnswer } from './api'
 import type { ChangeRules } from '../../orders/api' // F-PR-23b
@@ -198,9 +198,10 @@ const willNote = (key: string | null, t: Translate): string | null => (key ? t(k
 
 /**
  * Mark urgent or Mark regular of the picked rows, in the list's order, as the API will decide them (markDecision): back to Regular
- * is always free; Urgent is at once inside the quota and before Cutting (each new one at the end of its own list: "Urgent 3"),
- * asked of us over the quota or from Cutting (when the person may ask), never while we locked the order or an "Urgent – asked"
- * waits. The stage is the stored one (a hint): the API reads the live cut facts and says so in the row's result.
+ * is always free; Urgent is at once inside the quota and before cutting started (each new one at the end of its own list: "Urgent
+ * 3"), asked of us over the quota or once cutting started (when the person may ask), never while we locked the order or an "Urgent
+ * – asked" waits. F-MS-105: "cutting started" is the API's `cutStarted` (cutStartedOf, the same field as the row's mark and "Ask
+ * us"), never the stage; the API reads the live cut facts again and says so in the row's result.
  */
 export function markReviewOf(picked: readonly ProductionRow[], kind: 'URGENT' | 'REGULAR', use: UrgentUse | null, facts: Pick<BulkFacts, 'mayAsk'>, locale: Locale, t: Translate): Review {
   let used = use?.used ?? 0
@@ -218,7 +219,7 @@ export function markReviewOf(picked: readonly ProductionRow[], kind: 'URGENT' | 
     if (urgency.code === 'URGENT') return { id: row.id, name, now, next: t('bulk.review.stays'), note: willNote('bulk.review.alreadyUrgent', t), will: 'SAME' }
     if (urgency.locked) return cannot(urgency.lockWords ? say(urgency.lockWords, locale) : t('held.locked'))
     if (urgency.asked) return cannot(t('held.asked'))
-    if (row.stage && row.stage.code !== 'PREPARING') {
+    if (cutStartedOf(row)) { // F-MS-105
       if (!facts.mayAsk) return cannot(t('bulk.review.cutNoAsk'))
       return { id: row.id, name, now, next: t('bulk.review.asked'), note: t('bulk.review.askedCut'), will: 'ASK_CUT' }
     }

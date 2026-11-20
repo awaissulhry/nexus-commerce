@@ -818,3 +818,86 @@ describe('B-OO-008: the real answerer with its source; places from live work ord
   })
 })
 // ── end B-OO-008 ──
+
+// ── B-MS-006 (set the stage by hand; R9, R17) ──
+describe('B-MS-006: the office reads who, why and the floor of a stage set by hand; the list carries one stageByHand', { timeout: 60_000 }, () => {
+  const owner = seedUuid(ns, 'actor')
+  const HAND_NOTE = 'T-MS006 office note: the scanners were down all morning'
+  const handOrder = newId()
+  const plainOrder = newId()
+
+  beforeAll(async () => {
+    // Two more orders of Alpha with one line and no work order (the floor at Preparing): one with a stage set by hand (written as
+    // B-MS-005's command writes it — the guard is real: `stage` equals it, the seeds' owner an active office person), one with no
+    // production state yet.
+    const [harnessLine] = await admin<{ colourwayId: string; companyId: string }>(`SELECT "colourwayId", "companyId" FROM "SalesOrderLine" WHERE id = $1`, [w.a.salesOrderLineId])
+    await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId: owner }, (client) =>
+      client.$transaction(async (tx) => {
+        for (const [orderId, tag] of [[handOrder, 'HAND'], [plainOrder, 'PLAIN']] as const) {
+          const lineId = newId()
+          await tx.salesOrder.create({
+            data: { id: orderId, companyId: harnessLine!.companyId, partyId: ids.a, number: `T-MS006-SO-${tag}`, customerRef: `T-MS006-PO-${tag}`, status: 'CONFIRMED', orderDate: new Date('2026-11-03T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' }, promiseDate: new Date('2026-12-20T00:00:00.000Z') },
+            select: { id: true },
+          })
+          await tx.salesOrderLine.create({
+            data: { id: lineId, companyId: harnessLine!.companyId, orderId, partyId: ids.a, seq: 10, kind: 'SIZE_GRID', styleId: w.styleId, colourwayId: harnessLine!.colourwayId, quantity: 4, unitPrice: '100.000000', netAmount: 40_000, vatRatePct: '22.00', vatAmount: 8_800 },
+            select: { id: true },
+          })
+          await tx.salesOrderLineSize.createMany({ data: [['50', 2], ['52', 2]].map(([size, quantity]) => ({ id: newId(), lineId, partyId: ids.a, size: size as string, quantity: quantity as number })) })
+        }
+      }),
+    )
+    await admin(
+      `INSERT INTO "BrandOrderProduction" (id, "tenantId", "companyId", "partyId", "salesOrderId", key, stage, "stageAt", "stageSet", "stageSetReason", "stageSetNote", "stageSetAt", "stageSetById")
+       SELECT $1, o."tenantId", o."companyId", o."partyId", o.id, 'brand-production:' || o.id, 'SEWING', now(), 'SEWING', 'OUTAGE', $3, now(), $4 FROM "SalesOrder" o WHERE o.id = $2`,
+      [newId(), handOrder, HAND_NOTE, owner],
+    )
+  })
+
+  it('the production unit reads the hand stage: why, the floor’s own stage, when, the office’s note and who; the row’s version', async () => {
+    const { headline } = await ok('office.all', production(handOrder, 'headline'))
+    expect(headline.stage).toMatchObject({
+      code: 'SEWING',
+      ahead: 0,
+      sewingNotCounted: false,
+      byHand: { stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { en: 'Preparing', it: 'In preparazione' } }, at: expect.any(String), note: HAND_NOTE, by: { id: owner, name: 'Seed Owner', active: true } },
+      version: 1,
+    })
+  })
+
+  it('the Sales template (no workorders.view): why, the floor and when — never the note nor who (headline.notes withheld)', async () => {
+    const answer = await ok('sales.all', production(handOrder, 'headline'))
+    expect(answer.withheld).toContain('headline.notes')
+    expect(answer.headline.stage.byHand).toEqual({ stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { en: 'Preparing', it: 'In preparazione' } }, at: expect.any(String), note: null, by: null })
+    expect(JSON.stringify(answer)).not.toContain(HAND_NOTE)
+  })
+
+  it('no production state yet: the live stage, no hand stage, version null (a set by hand sends null and makes the row)', async () => {
+    const { headline } = await ok('office.all', production(plainOrder, 'headline'))
+    expect(headline.stage).toMatchObject({ code: 'PREPARING', since: null, byHand: null, version: null })
+  })
+
+  it('the list (and so the Work tab and the file) carries one stageByHand {since}; none for the floor’s own stage', async () => {
+    const list = await ok('office.all', `/sales/orders?limit=50&production=true&ids=${handOrder},${plainOrder}`)
+    const byId = new Map((list.orders as Json[]).map((row) => [row.id as string, row]))
+    expect(byId.get(handOrder)!.production).toMatchObject({ stage: 'SEWING', stageByHand: { since: expect.any(String) } })
+    expect(byId.get(plainOrder)!.production).toMatchObject({ stage: null, stageByHand: null })
+    expect(JSON.stringify(list)).not.toContain(HAND_NOTE)
+  })
+
+  it('the wall: a Beta-limited person gets the unknown id’s answer, never a word of the hand stage', async () => {
+    const answer = await call('office.p2', production(handOrder, 'headline'))
+    expect(answer.status).toBe(404)
+    expect(answer.raw).not.toContain(HAND_NOTE)
+    expect(answer.body.error?.message).toBe((await call('office.p2', production(newId(), 'headline'))).body.error?.message)
+  })
+
+  it('once it ends (the five columns cleared), the headline and the list read the plain stage again', async () => {
+    await admin(`UPDATE "BrandOrderProduction" SET "stageSet" = NULL, "stageSetReason" = NULL, "stageSetNote" = NULL, "stageSetAt" = NULL, "stageSetById" = NULL, version = version + 1 WHERE key = $1`, [`brand-production:${handOrder}`])
+    const { headline } = await ok('office.all', production(handOrder, 'headline'))
+    expect(headline.stage).toMatchObject({ code: 'SEWING', byHand: null, version: 2 })
+    const list = await ok('office.all', `/sales/orders?limit=50&production=true&ids=${handOrder}`)
+    expect((list.orders as Json[])[0]!.production.stageByHand).toBeNull()
+  })
+})
+// ── end B-MS-006 ──

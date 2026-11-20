@@ -102,9 +102,10 @@ async function readState(db: Reader, orderId: string): Promise<StateRow | null> 
 
 /**
  * The order the caller may see (its company and customer, with workorders.view or production.brand.manage; else not found, as an
- * unknown id) and act on with `permission` (else forbidden).
+ * unknown id) and act on with `permission` (else forbidden). B-MS-005: exported — the set by hand (./stage) reads it FIRST, before
+ * any state (R11).
  */
-async function officeOrder(caller: CommandCaller, orderId: string, permission?: Permission): Promise<OrderRow> {
+export async function officeOrder(caller: CommandCaller, orderId: string, permission?: Permission): Promise<OrderRow> {
   const actor = actorOf(officeContextOf(caller))
   const order = await caller.withClient((client) => readOrder(client, orderId))
   const at = order ? { companyId: order.companyId, partyId: order.partyId } : null
@@ -153,8 +154,8 @@ export async function getBrandHealth(caller: CommandCaller, orderId: string) {
   return caller.withClient(async (client) => ({ health: await viewOf(client, order, await readState(client, orderId), businessDate(serverClock.now())) }))
 }
 
-/** The keeper's own lock of the order (./keeper keepOrder): a raise and a keeper pass never cross. */
-const lockOrder = (tools: CommandTools, orderId: string) => tools.tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.brand-keeper', ${orderId}::uuid), 0))`
+/** The keeper's own lock of the order (./keeper keepOrder): a raise and a keeper pass never cross. B-MS-005: exported (./stage). */
+export const lockOrder = (tools: CommandTools, orderId: string) => tools.tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.brand-keeper', ${orderId}::uuid), 0))`
 
 /** Under the lock: the order still in production, its production state made, at the version sent. */
 async function lockedState(tools: CommandTools, orderId: string, version: number | undefined): Promise<{ order: OrderRow; row: StateRow }> {

@@ -4,7 +4,7 @@ import type { AskBody, ChangeRules, ImpactRead } from '../../orders/api'
 import { verdictKey } from '../../orders/ask-model'
 import { recordHref } from '../../orders/model'
 import type { ProductionRow, UrgentUse } from '../api'
-import { rowName } from '../model'
+import { cutStartedOf, rowName } from '../model' // F-MS-105: + cutStartedOf
 import { BULK_REASON_MAX, type AskManyAnswer, type BulkAskKind } from './api'
 import { commonHeld, type BulkFacts, type RowResult } from './model'
 
@@ -26,12 +26,13 @@ const say = (words: { readonly it: string; readonly en: string }, locale: Locale
 // ── "Ask us" on a single row: the order's own Ask dialog at Urgent (F-PR-13 `?ask=RUSH`) ─────────────────────────────────
 /**
  * Where a row's "Ask us" leads, or null when it is not drawn: only while the customer's urgency is on, the person may ask, and its
- * Mark urgent waits on the limit or on Cutting (never on our lock, never while an "Urgent – asked" waits).
+ * Mark urgent waits on the limit or on cutting having started (F-MS-105: cutStartedOf, the API's `cutStarted`, never the stage;
+ * never on our lock, never while an "Urgent – asked" waits).
  */
-export function askUsHrefOf(prefix: string, row: Pick<ProductionRow, 'id' | 'urgency' | 'stage'>, facts: { readonly urgencyOn: boolean; readonly mayAsk: boolean; readonly use: UrgentUse | null }): string | null {
+export function askUsHrefOf(prefix: string, row: Pick<ProductionRow, 'id' | 'urgency' | 'cutStarted'>, facts: { readonly urgencyOn: boolean; readonly mayAsk: boolean; readonly use: UrgentUse | null }): string | null {
   const urgency = row.urgency
   if (!facts.urgencyOn || !facts.mayAsk || !urgency || urgency.code !== 'REGULAR' || urgency.locked || urgency.asked) return null
-  const cut = row.stage !== null && row.stage.code !== 'PREPARING'
+  const cut = cutStartedOf(row) // F-MS-105
   const full = facts.use !== null && facts.use.left <= 0
   return cut || full ? recordHref(prefix, row.id, 'status', { ask: 'RUSH' }) : null
 }
