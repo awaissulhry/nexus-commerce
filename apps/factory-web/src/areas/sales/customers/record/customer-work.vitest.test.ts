@@ -9,6 +9,7 @@ import { builtInActive, builtInViewsOf, pickBuiltIn, WAITING_US_VIEW, withPreset
 import { marksOf, sourcesTouched, STRIP_GROUPS, tileOf, tilesShown, workAttention, workEntry, WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
 import { valueOf } from './view/WaitingStrip'
 import { pickOfRow, WORK_VIEWS, workPreset } from './view/WorkTab'
+import { ALL_ORDERS_PRESET, WORK_MIN } from './view/WorkTab' // F-CP-107 (cp-fx16)
 import { DRAFTS_VIEW, NOT_EQUAL_VIEW, workEmptyOf, workViewsOf } from './view/WorkTab' // F-CP-101
 import { rowsFromAddress } from '../../orders/model' // F-CP-101: Sales › Orders keeps Open
 // ---- F-CP-103 ----
@@ -139,6 +140,39 @@ describe('F-SA-276: the four views (no tabs inside the tab)', () => {
     expect(withPreset({ colId: 'supervisor' }, live, true).hide).toBe(false)
     expect(withPreset({ colId: 'supervisor' }, live, false).hide).toBe(true)
   })
+  // ---- F-CP-107 (cp-fx16; oo-walk 15 b): All orders at 1440 beside the dock cut "SEED-SO-W39-…" and "Waiting for a y…" ----
+  it('F-CP-107 (cp-fx16): All orders — the number and the status whole beside the dock: honest min widths, Picture in the table from 1800 px', () => {
+    expect(workPreset('all', null)).toBe(ALL_ORDERS_PRESET)
+    // The longest number (a seed's SEED-SO-W39-01: 142 px with the cell's padding) and status words ("In attesa di approvazione": 195 px).
+    expect(WORK_MIN).toEqual({ number: 144, status: 196 })
+    expect(withPreset({ colId: 'number', minWidth: 128 }, ALL_ORDERS_PRESET, false).minWidth).toBe(144)
+    expect(withPreset({ colId: 'status', minWidth: 112 }, ALL_ORDERS_PRESET, false).minWidth).toBe(196)
+    expect(withPreset({ colId: 'promised', minWidth: 108 }, ALL_ORDERS_PRESET, false).minWidth).toBe(108) // the sheet's own
+    // Sales › Orders (no preset) keeps the sheet's widths.
+    expect(withPreset({ colId: 'status', minWidth: 112 }, null, false).minWidth).toBe(112)
+    // Picture: the table only from 1800 px; the phone card keeps it (its aside, as before).
+    expect(withPreset({ colId: 'picture' }, ALL_ORDERS_PRESET, false).hide).toBe(true)
+    expect(withPreset({ colId: 'picture' }, ALL_ORDERS_PRESET, true).hide).toBe(false)
+    expect(withPreset({ colId: 'picture' }, ALL_ORDERS_PRESET, false, true).hide).toBe(false)
+    for (const id of ['number', 'status', 'whereItIs', 'promised', 'newMessages']) expect(withPreset({ colId: id }, ALL_ORDERS_PRESET, false).hide, id).toBe(false)
+    // The budget (measured on the design case): select 43 + the columns' mins + ⋯ 64 fit the body beside the dock — 863 px @1440,
+    // 1183 px @1920 — so no sideways scroll; flex fills the rest (no dead space).
+    const view = readFileSync(new URL('../../orders/list/view/OrdersListView.tsx', import.meta.url), 'utf8')
+    const minOf = (id: string): number => {
+      const own = ALL_ORDERS_PRESET.min?.[id]
+      if (own) return own
+      const match = view.match(new RegExp(`colId: '${id}'[^}]*?minWidth: (\\d+)`))
+      expect(match, id).not.toBeNull()
+      return Number(match![1])
+    }
+    const SELECT = 43
+    const narrow = ALL_ORDERS_PRESET.shown.filter((id) => !ALL_ORDERS_PRESET.tableWide?.includes(id))
+    expect(SELECT + narrow.reduce((sum, id) => sum + minOf(id), 0) + minOf('more')).toBeLessThanOrEqual(863)
+    // Priority is a depth column (minWidth 108 in the sheet's depth map).
+    const wideMin = (id: string) => (id === 'priority' ? 108 : minOf(id))
+    expect(SELECT + ALL_ORDERS_PRESET.shown.reduce((sum, id) => sum + minOf(id), 0) + (ALL_ORDERS_PRESET.wide ?? []).reduce((sum, id) => sum + wideMin(id), 0) + minOf('more')).toBeLessThanOrEqual(1183)
+  })
+  // ---- end F-CP-107 (cp-fx16)
   it('a row picks the dock\'s order (its own thread); the tab is drawn by the page (R5)', () => {
     expect(pickOfRow({ id: 'o1', number: 'SO-2026-0142', companyId: 'c1' })).toEqual({ type: 'SalesOrder', id: 'o1', label: 'SO-2026-0142', companyId: 'c1' })
     const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
