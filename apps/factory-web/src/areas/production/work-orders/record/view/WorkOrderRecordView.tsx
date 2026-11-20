@@ -9,7 +9,7 @@ import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useScopedT, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { WorkOrder } from '../../../_shared/api'
-import { isWideTab, mayCancel, nextStep, openChecks, RECORD_TABS, STATUS_TONE, type RecordTab } from '../../../_shared/model'
+import { DOCK_DEFAULT, mayCancel, nextStep, openChecks, RECORD_TABS, STATUS_TONE, type RecordTab } from '../../../_shared/model' // F-OP-316: DOCK_DEFAULT
 // ---- F-PR-06: the tabs 7 → 6 — Cutting & bundles (one tab; the Cut record merged in), Operations & WIP (one table) ----
 import { CuttingTab } from '../../cutting/view/CuttingTab'
 import { cuttingTabCount } from '../../cutting/model'
@@ -312,7 +312,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
       thread={thread ?? null}
       printThread={printThread}
       fields={fields /* B-TH-280 */}
-      defaultWidth={isWideTab(model.tab) ? 'grid' : undefined /* F-SA-263 */}
+      defaultWidth={DOCK_DEFAULT /* F-SA-263; F-OP-316 (order page follow-up 12): one width per viewport on every tab */}
       band={{
         back: <Link href={`${model.prefix}/production/work-orders`}>{t('record.back')}</Link>,
         title: (
