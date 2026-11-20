@@ -20,9 +20,9 @@ import { admin, announce, call, ok, pdf, putBytes, stepped, type Method, type Pe
  *            Administrator · Finance · Factory designer (office role `designer`); and two for the brand wall and follow-up 2: a
  *            Finance limited to Brand Beta, and a Sales worker with a price role limited to Brand Alpha.
  *   portal   Brand Alpha's Buyer (its main portal person), Designer, Production and Viewer; Brand Beta's Buyer.
- *   money    SEED-SO-0002 (Brand Alpha, PARTLY_SHIPPED — B-OO-016, its facts; its work order SEED-WO-0001): the customer's PO
- *            ticked "shows prices", the customer's price per line (one Equal, one Not equal), its confirmation PDF (born priced), an
- *            Owner's note carrying the PO and a plain logo; Brand Beta's own order and its own PO.
+ *   money    SEED-SO-0002 (Brand Alpha, CONFIRMED; its work order SEED-WO-0001): the customer's PO ticked "shows prices", the
+ *            customer's price per line (one Equal, one Not equal), its confirmation PDF (born priced), an Owner's note carrying the PO
+ *            and a plain logo; Brand Beta's own order and its own PO.
  *
  * Every name, address, number and price is made up (example addresses only).
  */

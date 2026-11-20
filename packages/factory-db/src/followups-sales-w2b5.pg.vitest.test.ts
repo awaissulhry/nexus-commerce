@@ -307,10 +307,9 @@ describe('a FEE line credited against the bulk order (SAL-181)', () => {
       [T.tenant],
     )
     bulk = await idOf(`SELECT id::text AS id FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'SEED-SO-0001'`, [T.tenant])
-    // The fee's own order: a new order of the same company and customer. B-OO-016 (Owner D9): CONFIRMED — SEED-SO-0002 is
-    // PARTLY_SHIPPED now (its facts), and a copy keeps the status it copies (its lines then never change).
+    // The fee's own order: a new order of the same company and customer.
     feeOrder = randomUUID()
-    expect(await copyRow(office(), 'SalesOrder', line.order as string, { id: feeOrder, number: tag('T-SO'), quoteVersionId: null, status: 'CONFIRMED' })).toBe(1)
+    expect(await copyRow(office(), 'SalesOrder', line.order as string, { id: feeOrder, number: tag('T-SO'), quoteVersionId: null })).toBe(1)
     fee = randomUUID()
     expect(await copyRow(office(), 'SalesOrderLine', line.id as string, { id: fee, orderId: feeOrder, seq: 10, kind: 'FEE', feeKind: 'DEVELOPMENT', quantity: 1, quoteLineId: null, priceSteps: null, measurementProfileId: null })).toBe(1)
   })

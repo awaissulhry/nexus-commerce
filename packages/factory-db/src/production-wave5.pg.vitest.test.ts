@@ -234,15 +234,11 @@ describe('a sample decision put back (…_production_wave5_samples_guards, EXTRA
 })
 
 describe("a counter-offer's yes put back (…_production_wave5_counter_guards, EXTRA 2)", () => {
-  /**
-   * A new OPEN request of P1 (a copy of the seed's OPEN change, by its buyer), countered by the office; returns both ids.
-   * B-OO-016 (Owner D9): asked of a new CONFIRMED order — the seed's own change is on SEED-SO-0002, which the seed then moves to
-   * PARTLY_SHIPPED (its facts), and a partly shipped order is asked no change any more.
-   */
+  /** A new OPEN request of P1 (a copy of the seed's OPEN change, by its buyer), countered by the office; returns both ids. */
   async function countered(): Promise<{ asked: string; counter: string }> {
     const asked = randomUUID()
     const at = await serverNow()
-    await copyRow('OrderChangeRequest', sales.changes.open, { id: asked, orderId: await newOrder(), createdAt: at, updatedAt: at }, p1())
+    await copyRow('OrderChangeRequest', sales.changes.open, { id: asked, createdAt: at, updatedAt: at }, p1())
     const counter = await approval({ kind: 'COUNTER_OFFER', recordType: 'OrderChangeRequest', recordId: asked })
     expect(await update(office(), 'OrderChangeRequest', asked, `status = 'COUNTERED', "counterApprovalId" = $2::uuid, "counteredAt" = now(), "counteredById" = $3::uuid, "counterDate" = $4::date, version = version + 1`, counter, U.office, NEXT_WEEK())).toBe(1)
     return { asked, counter }

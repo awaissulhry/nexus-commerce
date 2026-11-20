@@ -181,10 +181,6 @@ async function removeRow(table: string, pk: string, id: unknown): Promise<void> 
 // line of the same order that has none (testing/customer-page.ts leaves SEED-SO-0001's second line free); every other copy
 // is taken as it is.
 async function adjustCopy(model: string, copy: Record<string, unknown>): Promise<Record<string, unknown>> {
-  // B-OO-016 (order overview lane, Owner D9): the first change request is P1's OPEN change on SEED-SO-0002, which the portal
-  // sales seed then moves to PARTLY_SHIPPED (its facts). A partly shipped order is asked no change any more, only a cancel (of
-  // what has not left), a rush, a pause or a resume (the change-request trigger): so the copy asks the cancel, with a reason code.
-  if (model === 'OrderChangeRequest' && copy.kind === 'CHANGE') return { ...copy, kind: 'CANCEL', reasonCode: 'LEAD_TIME' }
   if (model !== 'OrderBrandPrice' || copy.salesOrderLineId === null || copy.salesOrderLineId === undefined) return copy
   const [free] = await admin(
     `SELECT l.id::text AS id FROM "SalesOrderLine" l
