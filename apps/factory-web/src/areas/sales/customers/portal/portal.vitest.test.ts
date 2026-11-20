@@ -467,3 +467,62 @@ describe('follow-up 15: Portal access holds a role only the Owner gives before t
   })
 })
 // ---- end B-CP-011 follow-up 15
+
+// ---- L5 (cp-fx14; customer page walk; #1767 follow-up 15): SCR-033-portal has the design cases of the role only the Owner gives —
+// an adviser's portal read by Sales (the guest Accountant held in the 403's words, Invite held) and by the Owner (it can be picked).
+import { designScreen as portalScreen } from './fixtures'
+import { createTranslator } from '../../../../lib/i18n/messages'
+import type { PortalAccessModel } from './model'
+
+describe('walk L5: SCR-033-portal — an adviser’s portal: Sales sees the Accountant held in the 403’s words, the Owner picks it', () => {
+  const screen = portalScreen as DesignScreen<PortalAccessModel>
+  const caseOf = (id: string): PortalAccessModel => {
+    const item = screen.cases.find((entry) => entry.id === id)
+    if (!item) throw new Error(id)
+    return item.model
+  }
+  const drawCase = (id: string, locale: 'en' | 'it') => {
+    const View = screen.view as ComponentType<{ model: PortalAccessModel }>
+    return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model: caseOf(id) })))
+  }
+  const ownerGivesWords = (locale: 'en' | 'it') => createTranslator(locale, messagesFor(locale, ['portal-access'])['portal-access'] ?? {})('moneyWall.ownerGives')
+  const accountantOf = (access: PortalAccess) => access.roles.find((role) => role.key === 'guest-accountant')!
+
+  it('Sales on an adviser’s portal: Invite held before the click in the 403’s words (it + en); the page is the adviser’s alone', () => {
+    const sales = caseOf('cp-1767-adviser-sales')
+    expect(sales.access!.kinds).toEqual(['GUEST'])
+    expect(sales.access!.mayGivePriceRole).toBe(false)
+    expect(accountantOf(sales.access!)).toMatchObject({ kind: 'GUEST', seesPrices: true, ownerGives: true })
+    expect(inviteHeld(sales.access!, sales.can)).toBe('moneyWall.ownerGives')
+    expect(ownerGivesWords('en')).toBe('Only the Owner gives a role that sees prices.')
+    for (const locale of ['en', 'it'] as const) {
+      const html = drawCase('cp-1767-adviser-sales', locale)
+      expect(html, locale).toContain(ownerGivesWords(locale))
+      expect(html, locale).toContain('Studio Esempio')
+      // One party per page: never Moda Demo's name, people or requests on the adviser's page (the record, the tab, the thread).
+      expect(html, locale).not.toMatch(/Moda Demo|Marco Prova|Sara Demo/)
+    }
+  })
+
+  it('Sales inviting on a customer that is also an adviser: the guest Accountant card held, never taken; the Owner picks it', () => {
+    const invite = caseOf('cp-1767-adviser-sales-invite')
+    const access = invite.access!
+    expect(access.kinds).toEqual(['CUSTOMER', 'GUEST'])
+    expect(inviteHeld(access, invite.can)).toBeNull()
+    expect(roleHeld(accountantOf(access), access)).toBe('moneyWall.ownerGives')
+    expect(invite.dialog).toEqual({ kind: 'invite' })
+    expect(invite.inviteDraft).toMatchObject({ kind: 'GUEST', roleKey: '' })
+    expect(inviteProblems(invite.inviteDraft!, access, DEMO_TODAY)).toMatchObject({ roleKey: 'moneyWall.ownerGives' })
+    expect(firstRole(access, 'GUEST')).toBeUndefined()
+    expect(firstRole(access, 'CUSTOMER')?.key).toBe('customer-buyer')
+
+    const owner = caseOf('cp-1767-adviser-owner')
+    expect(owner.access!.mayGivePriceRole).toBe(true)
+    expect(inviteHeld(owner.access!, owner.can)).toBeNull()
+    expect(roleHeld(accountantOf(owner.access!), owner.access!)).toBeNull()
+    expect(owner.inviteDraft).toMatchObject({ kind: 'GUEST', roleKey: 'guest-accountant' })
+    expect(inviteProblems(owner.inviteDraft!, owner.access!, DEMO_TODAY)).toEqual({})
+    for (const locale of ['en', 'it'] as const) expect(drawCase('cp-1767-adviser-owner', locale), locale).not.toContain(ownerGivesWords(locale))
+  })
+})
+// ---- end L5

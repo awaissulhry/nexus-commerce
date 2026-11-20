@@ -423,7 +423,7 @@ describe('F-SA-283 — the planning board: the work order’s style picture in t
     for (const locale of LOCALES) {
       const html = render(designScreen as unknown as DesignScreen<unknown>, bar.model, locale)
       expect(html, locale).toContain('class="fw-pb-dialog-head"')
-      expect(html, locale).toContain('fw-rp fw-rp-board')
+      expect(html, locale).toContain('fw-rpic fw-rpic-board')
       // The design index reads nothing: the placeholder in words (never "no right"), never a wait that does not end.
       expect(html, locale).toContain(locale === 'en' ? `aria-label="${WO101!.number} has no picture yet"` : `aria-label="${WO101!.number} non ha ancora un&#x27;immagine"`)
       expect(html, locale).not.toContain('Reading the picture of')
