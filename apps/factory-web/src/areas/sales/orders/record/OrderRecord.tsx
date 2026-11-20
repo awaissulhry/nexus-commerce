@@ -462,7 +462,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const changesPart = production.state?.status === 'ready' ? production.state.read.changes : undefined
   // F-SA-244: and while the order's own conversation is on the page (the dock, by default): its asks' cards draw their live chips.
   const mayThread = session.permissions.includes('threads.read')
-  const wantsRequests = tab === 'changes' || (changesPart?.openRequests.length ?? 0) > 0 || (changesPart?.stillToDo?.rows.length ?? 0) > 0 || mayThread
+  // Walk #3: and while an approval we asked of the customer waits — its row on Overview says its own question (partners.approvals.view).
+  const asksCustomer = production.state?.status === 'ready' && (production.state.read.headline?.waiting.blockers ?? []).some((blocker) => blocker.kind === 'APPROVAL' && blocker.ref?.type === 'ApprovalRequest')
+  const wantsRequests = tab === 'changes' || (changesPart?.openRequests.length ?? 0) > 0 || (changesPart?.stillToDo?.rows.length ?? 0) > 0 || mayThread || asksCustomer
   const wantsRef = useRef(wantsRequests)
   wantsRef.current = wantsRequests
   useEffect(() => {

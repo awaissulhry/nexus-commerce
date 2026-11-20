@@ -444,7 +444,8 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
     expect(changes.split('1 waiting').length - 1).toBe(2)
     expect(changes).not.toContain('3 waiting')
     expect(changes).not.toContain('A gate is not passed yet')
-    expect(changes).toContain("Waiting for the customer's yes")
+    // Walk #3: an approval we asked whose question this reader does not read says what it asks — the API's words name its kind.
+    expect(changes).toContain("Waiting for the customer's yes: Artwork")
     expect(changes).not.toContain('Nothing waits on the customer')
     expect(changes).not.toContain('Nothing waits on us')
     // On Changes no row has a door back to Changes itself.
