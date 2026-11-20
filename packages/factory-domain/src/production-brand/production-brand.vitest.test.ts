@@ -44,6 +44,9 @@ import { placeInUrgentList, ranksOf, URGENCY_OUTCOMES } from './urgency'
 import { lockReasonProblems, URGENCY_LOCK_REASON_MAX, URGENCY_OFFICE_BATCH_MAX } from './urgency'
 import { ALREADY_LOCKED_WORDS, customerUrgencyChipWords, NO_OVERRIDE_RIGHT_WORDS, NOT_LOCKED_WORDS } from './words'
 import { changedAtWords, changedByUsAtWords, NOT_KEPT_YET_WORDS, NOTHING_TO_UNDO_WORDS, NOTHING_UNDONE_WORDS, ORDER_NOT_FOUND_WORDS, URGENT_ORDER_UNCHANGED_WORDS } from './words'
+// B-OO-011
+import { APPROVAL_TASK_KINDS } from '../approvals/rules'
+import { BLOCKER_PLACE, BLOCKER_PLACES, BLOCKER_SUBS, BRAND_REQUEST_PLACE, ORDER_YES_KINDS, placeOf, YES_PLACE, type Blocker } from './waiting'
 
 const line = (facts: Partial<LineStageFacts> = {}): LineStageFacts => ({ reached: null, allReleased: false, done: false, sewingCounted: true, ...facts })
 
@@ -687,3 +690,54 @@ describe("B-PR-22b the factory's set-back reason and the board's chip", () => {
     }
   })
 })
+
+// ── B-OO-011 (order overview plan §9; review F3, F14, F15): ONE place per waiting row ──
+describe('B-OO-011 one place per waiting row: HOLD, DATE or REQUEST, keyed on kind + sub', () => {
+  it('every blocker kind has a place, as the plan lists them', () => {
+    for (const kind of BLOCKER_KINDS) expect(BLOCKER_PLACES).toContain(BLOCKER_PLACE[kind])
+    const kindsIn = (place: string) => BLOCKER_KINDS.filter((kind) => placeOf({ kind }) === place).sort()
+    expect(kindsIn('HOLD')).toEqual(['BRAND_PAUSE', 'DEPOSIT', 'NONCONFORMANCE', 'NO_MOVE', 'QUALITY_HOLD', 'RELEASE_CHECK'])
+    expect(kindsIn('DATE')).toEqual(['CUSTOMER_MATERIAL', 'GATE', 'MATERIAL_SHORT', 'SUBCONTRACT'])
+    expect(kindsIn('REQUEST')).toEqual(['APPROVAL', 'BRAND_REQUEST', 'PARTNER_TASK'])
+  })
+
+  it('a customer request by its sub: a refused new date (REPROMISE) is a date (F3); an open request, a counter-offer and a problem are requests', () => {
+    for (const sub of BLOCKER_SUBS) expect(BLOCKER_PLACES).toContain(BRAND_REQUEST_PLACE[sub])
+    expect(placeOf({ kind: 'BRAND_REQUEST', sub: 'REPROMISE' })).toBe('DATE')
+    for (const sub of ['REQUEST', 'COUNTER', 'PROBLEM'] as const) expect(placeOf({ kind: 'BRAND_REQUEST', sub })).toBe('REQUEST')
+    // No sub (an older row): a request.
+    expect(placeOf({ kind: 'BRAND_REQUEST', sub: null })).toBe('REQUEST')
+    expect(placeOf({ kind: 'BRAND_REQUEST' })).toBe('REQUEST')
+    // A sub on another kind changes nothing (the office read sends a sub only on a BRAND_REQUEST).
+    expect(placeOf({ kind: 'GATE', sub: 'REPROMISE' })).toBe('DATE')
+    expect(placeOf({ kind: 'NO_MOVE', sub: 'REQUEST' })).toBe('HOLD')
+  })
+
+  it('every yes the order read lists has a place: the order\'s yes and the credit hold stop it (HOLD), a yes for a change is a request', () => {
+    for (const kind of ORDER_YES_KINDS) {
+      expect(APPROVAL_TASK_KINDS as readonly string[]).toContain(kind)
+      expect(BLOCKER_PLACES).toContain(YES_PLACE[kind])
+    }
+    expect(YES_PLACE).toEqual({ SALES_ORDER: 'HOLD', CREDIT_OVERRIDE: 'HOLD', SALES_ORDER_CHANGE: 'REQUEST' })
+  })
+
+  it('waitingOn answers as before for the same blockers: a place never changes who acts next (the keeper\'s one rule, F14)', () => {
+    const at = (iso: string) => new Date(iso)
+    const blockers: Blocker[] = [
+      { kind: 'BRAND_REQUEST', since: at('2026-11-03T08:00:00Z'), sub: 'REPROMISE' },
+      { kind: 'NO_MOVE', since: at('2026-11-04T08:00:00Z') },
+      { kind: 'GATE', since: at('2026-11-02T08:00:00Z') },
+      { kind: 'DEPOSIT', since: at('2026-11-06T08:00:00Z') },
+      { kind: 'PARTNER_TASK', since: at('2026-11-05T08:00:00Z') },
+    ]
+    // The customer first (its deposit and its portal task), since the earliest of them — whatever card each row lives on.
+    expect(waitingOn(blockers)).toEqual({ on: 'BRAND', since: at('2026-11-05T08:00:00Z') })
+    // The same rows grouped by place, put back together in any order: the same answer.
+    const byPlace = BLOCKER_PLACES.flatMap((place) => blockers.filter((blocker) => placeOf(blocker) === place))
+    expect(waitingOn(byPlace)).toEqual(waitingOn(blockers))
+    expect(waitingOn([...blockers].reverse())).toEqual(waitingOn(blockers))
+    // Without the customer's rows: us (a gate, our hold, a refused date all wait on us), since the earliest.
+    expect(waitingOn(blockers.filter((blocker) => BLOCKER_OWNER[blocker.kind] !== 'BRAND'))).toEqual({ on: 'US', since: at('2026-11-02T08:00:00Z') })
+  })
+})
+// ── end B-OO-011 ──
