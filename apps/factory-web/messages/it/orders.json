@@ -560,6 +560,37 @@
       "close": "Chiusa dalla pagina dell'ordine",
       "reopen": "Riaperta dalla pagina dell'ordine",
       "promise": "Data cambiata dalla pagina dell'ordine"
+    },
+    "addStyle": {
+      "title": "Aggiungi un modello a {number}",
+      "scope": "La nostra collezione e i modelli di {customer}.",
+      "already": "Già su questo ordine",
+      "noList": "Nessun prezzo di listino per {customer}: lo aggiunge chi vede i prezzi",
+      "after": "Le nuove righe compaiono in fondo alla scheda del modello, con Nuova; i capi li scrivi nella tabella."
+    },
+    "addColourTitle": "Aggiungi un colore a {style}",
+    "addColourPick": "Scegli un colore",
+    "addColourGo": "Aggiungi il colore",
+    "addColourNone": "Ogni colore di questo modello è già sull'ordine.",
+    "addColourCopy": "Copia le taglie di",
+    "addColourEmpty": "Niente: una riga vuota"
+  },
+  "orderFacts": {
+    "ref": {
+      "title": "Ordine del cliente di {number}",
+      "same": "È già l'ordine del cliente",
+      "go": "Cambia l'ordine del cliente",
+      "hint": "Vuoto: nessuno. Si stampa sull'ordine e sui suoi documenti.",
+      "done": "L'ordine del cliente è cambiato."
+    },
+    "shipTo": {
+      "title": "Dove si spedisce {number}",
+      "now": "Ora",
+      "go": "Spedisci qui",
+      "pick": "Scegli un indirizzo",
+      "same": "L'ordine si spedisce già lì",
+      "none": "Nessun altro indirizzo di consegna di {customer}: aggiungilo sul cliente.",
+      "only": "Solo gli indirizzi di consegna di {customer}"
     }
   },
   "review": {
@@ -679,8 +710,11 @@
       "readyByShipped": "Le righe sono fisse appena parte qualcosa: cambia invece la data di pronto dell'ordine",
       "splitClosed": "Una riga chiusa con meno capi resta su questo ordine",
       "splitInWork": "Ogni capo di questa riga è negli ordini di lavoro: resta su questo ordine",
-      "removeClosed": "Una riga chiusa con meno capi resta: prima riaprila"
-    }
+      "removeClosed": "Una riga chiusa con meno capi resta: prima riaprila",
+      "detail": "Questo motivo chiede qualche parola"
+    },
+    "optional": "facoltativo",
+    "changeLines": "Cambia le righe"
   },
   "dates": {
     "promisedExFactory": "Promesso (franco fabbrica)",

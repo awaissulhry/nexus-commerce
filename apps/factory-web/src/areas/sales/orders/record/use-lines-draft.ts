@@ -365,7 +365,8 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
     onAddStyleAdd: () => {
       const open = addStyle
       if (!open?.chosen) return
-      const rows = newRows(open.chosen, open.picked)
+      // Sales never adds a colour no price list prices for this customer (held in the dialog: someone who sees prices adds it).
+      const rows = newRows(open.chosen, open.picked.filter((id) => can.price || open.row?.colourways?.find((entry) => entry.id === id)?.listPriced !== false))
       const notPriced = (open.row?.colourways ?? []).filter((entry) => entry.listPriced === false).map((entry) => entry.id)
       if (notPriced.length > 0) setUnlisted((known) => new Set([...known, ...notPriced]))
       setAddStyle(null)

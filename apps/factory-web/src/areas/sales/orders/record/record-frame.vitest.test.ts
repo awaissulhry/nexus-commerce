@@ -748,17 +748,17 @@ describe('F-OP-129 — the order page at the end in the design screen: the strip
 })
 // ---- end F-OP-129
 
-// ---- F-OP-305 (order page walk #16, Lines part): Amend order is held with words, never hidden, for a reader without orders.manage ----
-describe('F-OP-305: Lines draws Amend order (and Close remaining lines) held for a reader without orders.manage', () => {
-  it('the production manager sees Amend order held "Changing an order needs the sales right to manage orders" (en, it)', () => {
+// ---- F-OP-305 → F-OL-02 (Order LINES lane, 18-lead-settles F6): the Lines tab for a reader without orders.manage — no box, no Add a
+// style, no save bar; the production manager keeps the tab ⋯ with its own act (Make work orders…), never a held edit mode.
+describe('F-OL-02: Lines for the production manager (no orders.manage) — plain numbers, no Add a style, the tab ⋯ with Make work orders', () => {
+  it('drawn (en, it): no box, no Add a style, no "Amend order"; the ⋯ "More for the lines" is there', () => {
     for (const locale of ['en', 'it'] as const) {
       const html = draw('manager-lines', locale)
-      expect(textOf(html)).toContain(locale === 'en' ? 'Amend order' : 'Modifica ordine')
-      expect(html).toContain(locale === 'en' ? 'aria-description="Changing an order needs the sales right to manage orders"' : 'aria-description="Cambiare un ordine richiede il diritto vendite di gestire gli ordini"')
+      expect(textOf(html)).not.toContain(locale === 'en' ? 'Amend order' : 'Modifica ordine')
+      expect(textOf(html)).not.toContain(locale === 'en' ? 'Add a style' : 'Aggiungi un modello')
+      expect(html).not.toMatch(/<input[^>]*aria-label="[^"]*, (?:size|taglia) /)
+      expect(html).toContain(locale === 'en' ? 'aria-label="More for the lines"' : 'aria-label="Altro per le righe"')
     }
-    // A final order offers no change at all (nothing to hold).
-    const tab = readFileSync(new URL('./view/LinesTab.tsx', import.meta.url), 'utf8')
-    expect(tab).not.toContain('{model.can.manage && !isFinal(order) && (')
   })
 })
 // ---- end F-OP-305

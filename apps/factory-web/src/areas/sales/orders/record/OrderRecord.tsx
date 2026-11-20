@@ -406,7 +406,12 @@ function RecordContainer({ orderId }: { orderId: string }) {
       if (tab !== 'lines') router.replace(tabAddress(pathname, window.location.search, 'lines', { narrow: narrowNow() }))
     },
     focus: (anchor) => setFocusRow({ anchor, at: Date.now() }),
-    options: () => null,
+    // F-OL-04: the line's ⋯ "Options and artwork…" opens today's window (OrderLineOptions, its own container) for that line.
+    options: (lineId, onClose) => {
+      const value = current.current
+      const line = value?.lines.find((entry) => entry.id === lineId)
+      return value && line ? createElement(OrderLineOptions, { key: `options-${lineId}`, api, order: value, line, permissions: session.permissions, onReload: () => void load(), opened: true, onClose }) : null
+    },
   })
   // ---- end F-OL-03
   // F-OO-125: a line's Change quantity or sizes… starts the amendment (Lines' acts) and focuses its style group (the page's one focus);

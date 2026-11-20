@@ -744,7 +744,8 @@ export function promiseProblems(input: { date: string; reasonCode: string | null
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) problems.date = 'promise.problem.date'
   else if (input.date < input.today) problems.date = 'promise.problem.past'
   else if (input.allLines && input.date === input.current) problems.date = 'promise.problem.same'
-  if (!isPromiseReasonCode(input.reasonCode)) problems.reasonCode = 'promise.problem.code'
+  // F-OL-04 (ol-s1, B-OL-004): the reason is optional — none picked: the server writes its automatic words (a code typed wrong still says so).
+  if (input.reasonCode !== null && input.reasonCode !== '' && !isPromiseReasonCode(input.reasonCode)) problems.reasonCode = 'promise.problem.code'
   if (!input.allLines && input.lineIds.length === 0) problems.lines = 'promise.problem.lines'
   return problems
 }
@@ -778,15 +779,18 @@ export function promiseReasonPreview(code: string | null, orderLanguage: string)
 /** What the dialog hands the band's write: the new day, the picked reason, the office's note (may be empty), the lines (null: the order). */
 export interface PromiseInput {
   readonly date: string
-  readonly reasonCode: PromiseReasonCode
+  /** F-OL-04: null — no reason picked (optional, B-OL-004). */
+  readonly reasonCode: PromiseReasonCode | null
   readonly note: string
   readonly lineIds: readonly string[] | null
 }
 
 /** The promise write's body (PUT …/promise, B-OO-009): the order's version, the day, `reasonCode` (what the customer reads) and `reason`
  * (the office's note, trimmed; empty is allowed with a code); `lineIds` only for chosen lines. */
-export function promiseBodyOf(input: PromiseInput, version: number): { version: number; promiseDate: string; reasonCode: PromiseReasonCode; reason: string; lineIds?: string[] } {
-  return { version, promiseDate: input.date, reasonCode: input.reasonCode, reason: input.note.trim(), ...(input.lineIds ? { lineIds: [...input.lineIds] } : {}) }
+// F-OL-04: the code and the note go only when given (both optional since ol-s1, B-OL-004).
+export function promiseBodyOf(input: PromiseInput, version: number): { version: number; promiseDate: string; reasonCode?: PromiseReasonCode; reason?: string; lineIds?: string[] } {
+  const note = input.note.trim()
+  return { version, promiseDate: input.date, ...(input.reasonCode ? { reasonCode: input.reasonCode } : {}), ...(note ? { reason: note } : {}), ...(input.lineIds ? { lineIds: [...input.lineIds] } : {}) }
 }
 // ---- end F-OO-142
 

@@ -50,6 +50,10 @@ import { draftHoldsOf, holdPhrase } from '../lines-draft'
 import { SaveBar } from './lines/SaveBar'
 import { ReviewSave } from './lines/ReviewSave'
 // ---- end F-OL-03
+// ---- F-OL-04: Add a style, + Add a colour, the key n ----
+import { AddColourDialog, AddStyleDialog } from './lines/AddStyleDialog'
+import { ADD_STYLE_ID } from './lines/LinesHead'
+// ---- end F-OL-04
 
 /**
  * F-OL-02 (Order LINES lane, plan v2 §1; 10-design-tab; replaces F-SA-231's view mode) — Lines, the commercial truth, changed in
@@ -99,6 +103,22 @@ function LinesView({ order, model, actions }: { order: Order; model: OrderRecord
   const lockedForGood = frozenCells(ctx.freeze).filter((cell) => cell.state === 'BLOCKED').map((cell) => ({ lineId: cell.lineId, size: cell.size }))
   const holds = draftHoldsOf(draft, order, { floors: ctx.floors, clashes: ctx.clashes.length, lockedForGood, unlisted: tab?.unlisted })
   const say = (phrase: Phrase) => t(phrase.key, phrase.params)
+  // F-OL-04: n (not while typing, not inside a window) focuses "Add a style" (who changes lines).
+  useEffect(() => {
+    if (!reader.writes) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'n' || event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return
+      const button = document.getElementById(ADD_STYLE_ID)
+      if (!button) return
+      event.preventDefault()
+      button.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [reader.writes])
+  const addColourCard = tab?.addColour ? cards.find((card) => card.styleId === tab.addColour!.styleId) : undefined
   return (
     <div className="fw-lt">
       <LinesHead order={order} model={model} actions={actions} head={headOf(order, draft)} total={orderTotalOf(totals)} basis={basis} reader={reader} held={held} busy={busy} />
@@ -106,16 +126,28 @@ function LinesView({ order, model, actions }: { order: Order; model: OrderRecord
       {model.production?.status === 'failed' && reader.writes && <p className="fw-lt-quiet">{t('lines.floorsUnread')}</p>}
       {cards.length === 0 ? (
         <Card padded>
-          <EmptyState title={t('lines.empty')} description={t('lines.emptyHint')} />
+          <EmptyState
+            title={t('lines.empty')}
+            description={t('lines.emptyHint')}
+            action={
+              boxes ? (
+                <Button size="sm" variant="primary" onClick={() => actions?.linesTab?.onAddStyleOpen?.()}>
+                  {t('editor.add.title')}
+                </Button>
+              ) : undefined
+            }
+          />
         </Card>
       ) : (
         cards.map((card, index) => <StyleTable key={card.styleId} card={card} first={index === 0} ctx={ctx} />)
       )}
       <ChargesBlock order={order} reader={reader} />
       {reader.prices && cards.length > 0 && <TotalsBlock order={order} rows={totals} basis={basis} />}
-      {tab?.options}
       {/* ---- F-OL-03: the save bar (only while the draft holds a change), the ONE Review window ---- */}
       {tab && reader.writes && <SaveBar order={order} draft={draft} canUndo={tab.canUndo} held={busy ? t('held.busy') : holds[0] ? say(holdPhrase(holds[0], (key) => lineNameOf(order, draft, key))) : null} saving={tab.saving} actions={actions?.linesTab} />}
+      {/* ---- F-OL-04: Add a style (the order's own search), + Add a colour ---- */}
+      {tab?.addStyle && <AddStyleDialog order={order} draft={draft} state={tab.addStyle} seesPrices={reader.prices} actions={actions?.linesTab} />}
+      {addColourCard && <AddColourDialog card={addColourCard} style={styles[addColourCard.styleId]} actions={actions?.linesTab} />}
       {tab?.review && <ReviewSave order={order} draft={draft} review={tab.review} seesPrices={reader.prices} freeze={ctx.freeze} floors={ctx.floors} portalGone={tab.portalGone} saving={busy} actions={actions?.linesTab} />}
     </div>
   )

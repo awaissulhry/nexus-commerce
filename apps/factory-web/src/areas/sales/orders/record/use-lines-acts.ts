@@ -54,6 +54,8 @@ export type LinesActsActions = Pick<
   | 'onSplit' // F-OP-111
   | 'onChangeShipTo' // F-OP-110
   | 'onRequestedDate' // F-OO-144
+  | 'onCustomerRef' // F-OL-04
+  | 'onShipTo' // F-OL-04
 >
 
 /** The amendment's body as the API reads it (the preview, Apply, and the priced change it may become; daily-model amendBodyOf). */
@@ -238,11 +240,12 @@ export function useLinesActs(
     // F-OO-125: a door that opens edit mode (Overview's line "Change quantity or sizes…", the requested date's Change…) while a draft is
     // open keeps the draft (Lines shown) — it never starts over on what was typed.
     onAmendStart: () => (amendRef.current ? showLines() : startAmend()),
-    // F-OP-110: ⋯ Change ship-to… — the one edit path: edit mode (kept when already open), Ship to focused.
+    // F-OL-04 (pick D7): ⋯ Change ship-to… and Order facts' Ship to "Change…" open the Ship to window (the addresses read as it opens).
     onChangeShipTo: () => {
-      if (!amendRef.current) startAmend()
-      else showLines()
-      focus?.(SHIP_TO_FIELD_ID)
+      const value = current.current
+      setDialog({ kind: 'shipTo' })
+      if (value && mayAddresses) readAddresses(value.partyId)
+      else setAddresses(null)
     },
     onAmendDiscard: () => {
       setAmend(null)
@@ -315,14 +318,15 @@ export function useLinesActs(
     onCloseLines: (lineIds, reason, reasonCode, extraOutcome) =>
       void write(
         async () => {
-          const answer = await closeLines(api, orderId, { version: version(), reason, ...(reasonCode ? { reasonCode } : {}), ...(lineIds.length > 0 ? { lineIds } : {}), ...(extraOutcome ? { extraOutcome } : {}) /* F-OP-107 */ })
+          // F-OL-04: the reason only when typed (optional since ol-s1).
+          const answer = await closeLines(api, orderId, { version: version(), ...(reason.trim() ? { reason: reason.trim() } : {}), ...(reasonCode ? { reasonCode } : {}), ...(lineIds.length > 0 ? { lineIds } : {}), ...(extraOutcome ? { extraOutcome } : {}) /* F-OP-107 */ })
           setClosedLines(answer)
           return answer.order
         },
         null,
         true,
       ),
-    onReopenLines: (lineIds, reason) => void write(async () => (await reopenLines(api, orderId, { version: version(), reason, ...(lineIds.length > 0 ? { lineIds } : {}) })).order, 'notice.reopened'),
+    onReopenLines: (lineIds, reason) => void write(async () => (await reopenLines(api, orderId, { version: version(), ...(reason.trim() ? { reason: reason.trim() } : {}) /* F-OL-04 */, ...(lineIds.length > 0 ? { lineIds } : {}) })).order, 'notice.reopened'),
     onCancelOrder: (reason, typed, extraOutcome) => void write(async () => (await cancelOrder(api, orderId, { version: version(), reason, confirmNumber: typed, ...(extraOutcome ? { extraOutcome } : {}) /* F-OP-107 */ })).order, 'notice.cancelled'),
     // ---- F-OP-111: the parts become orders of their own (the order's version as read); the dialog then shows them, each a link, and
     // the page stays. A refusal is said at its place (a part, or the split as a whole) beside the dialog's one problem line.
@@ -363,6 +367,27 @@ export function useLinesActs(
       }, null)
     },
     // ---- end F-OO-144
+    // ---- F-OL-04 (pick D7; ol-s1 B-OL-020): Order facts' Customer PO and Ship to — the amendment with NO lines, the version as read, the
+    // reason only when typed. The address alone writes no amendment (said as that).
+    onCustomerRef: ({ value, reason }) => {
+      const key = newIdempotencyKey()
+      void write(async () => {
+        const current0 = current.current!
+        const answer = await applyAmendment(api, orderId, { version: current0.version, customerRef: value || null, ...(reason ? { reason } : {}) }, key)
+        setNotice({ tone: 'success', words: { key: 'orderFacts.ref.done' } })
+        return answer.order
+      }, null)
+    },
+    onShipTo: (addressId) => {
+      const key = newIdempotencyKey()
+      void write(async () => {
+        const current0 = current.current!
+        const answer = await applyAmendment(api, orderId, { version: current0.version, shipToAddressId: addressId }, key)
+        setNotice({ tone: 'success', words: { key: 'edit.shipToDone' } })
+        return answer.order
+      }, null)
+    },
+    // ---- end F-OL-04
     // B-W2b-323: the priced change's own dialog with the draft's lines; F-OP-108: "Deposit and words…" beside the strip's fee.
     onPricedOffer: () => {
       const draft = amendRef.current
@@ -401,7 +426,7 @@ export function useLinesActs(
       // F-OP-111: the split opens with nothing said yet; its Ship to reads the customer's delivery addresses (parties.view).
       setRefusals([])
       setMade(null)
-      if (next?.kind === 'split') {
+      if (next?.kind === 'split' || next?.kind === 'shipTo' /* F-OL-04: Ship to reads the same addresses */) {
         const value = current.current
         if (value && mayAddresses) readAddresses(value.partyId)
         else setAddresses(null)

@@ -560,6 +560,37 @@
       "close": "Closed on the order page",
       "reopen": "Reopened on the order page",
       "promise": "Date changed on the order page"
+    },
+    "addStyle": {
+      "title": "Add a style to {number}",
+      "scope": "Our collection and {customer}'s own styles.",
+      "already": "Already on this order",
+      "noList": "No list price for {customer}: someone who sees prices adds it",
+      "after": "The new rows appear at the end of the style's card, tagged New; you type the pieces in the table."
+    },
+    "addColourTitle": "Add a colour to {style}",
+    "addColourPick": "Pick a colour",
+    "addColourGo": "Add the colour",
+    "addColourNone": "Every colour of this style is on the order already.",
+    "addColourCopy": "Copy the sizes of",
+    "addColourEmpty": "Nothing: an empty row"
+  },
+  "orderFacts": {
+    "ref": {
+      "title": "Customer PO of {number}",
+      "same": "It is the customer PO already",
+      "go": "Change the customer PO",
+      "hint": "Empty: none. It prints on the order and its papers.",
+      "done": "The customer PO is changed."
+    },
+    "shipTo": {
+      "title": "Where {number} ships",
+      "now": "Now",
+      "go": "Ship here",
+      "pick": "Pick an address",
+      "same": "The order ships there already",
+      "none": "No other delivery address of {customer}: add one on the customer.",
+      "only": "{customer}'s own delivery addresses only"
     }
   },
   "review": {
@@ -679,8 +710,11 @@
       "readyByShipped": "Its lines are fixed once anything shipped: change the order's ready-by date instead",
       "splitClosed": "A line closed with fewer pieces stays on this order",
       "splitInWork": "Every piece of this line is in work orders: it stays with this order",
-      "removeClosed": "A line closed with fewer pieces stays: reopen it first"
-    }
+      "removeClosed": "A line closed with fewer pieces stays: reopen it first",
+      "detail": "This reason asks for a few words"
+    },
+    "optional": "optional",
+    "changeLines": "Change the lines"
   },
   "dates": {
     "promisedExFactory": "Promised (ex-factory)",

@@ -121,13 +121,15 @@ export const closedLines = (order: Pick<Order, 'lines'>): OrderLine[] => [...ord
  * The close's own problem with the lines chosen (the API holds the same rule), or null. B-W2b-16: when the CANCEL list is
  * read, a code of it is asked too (the words stay required); a list that could not be read asks none (the API takes none).
  */
-export function closeChoiceProblem(order: Pick<Order, 'lines'>, chosen: readonly string[], reason: string, reasonCode = '', reasons: readonly { readonly code: string }[] | null = null): Phrase | null {
+export function closeChoiceProblem(order: Pick<Order, 'lines'>, chosen: readonly string[], reason: string, reasonCode = '', reasons: readonly { readonly code: string; readonly needsDetail?: boolean }[] | null = null): Phrase | null {
   if (chosen.length === 0) return phrase('closeLines.problem.none')
   const anyShipped = order.lines.some((line) => line.progress.shipped > 0)
   const stillOpen = order.lines.filter((line) => !line.closedShort && !chosen.includes(line.id) && leftOf(line) > 0)
   if (!anyShipped && stillOpen.length === 0 && order.lines.filter((line) => !line.closedShort && !chosen.includes(line.id)).length === 0) return phrase('closeLines.problem.all')
-  if (reasons && reasons.length > 0 && !reasons.some((entry) => entry.code === reasonCode)) return phrase('closeLines.problem.reasonCode')
-  if (reason.trim() === '') return phrase('closeLines.problem.reason')
+  // F-OL-04 (ol-s1, B-OL-004): the code and the words are optional (none: the server's automatic words); a code picked must be one of
+  // the list, and a code that asks for detail still wants a few words (the API's own rule: 3 characters).
+  if (reasonCode !== '' && reasons && reasons.length > 0 && !reasons.some((entry) => entry.code === reasonCode)) return phrase('closeLines.problem.reasonCode')
+  if (reasonCode !== '' && reasons?.find((entry) => entry.code === reasonCode)?.needsDetail && reason.trim().length < 3) return phrase('lineMenu.held.detail')
   return null
 }
 

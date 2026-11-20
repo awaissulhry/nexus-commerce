@@ -13,7 +13,7 @@ import type { PriceCheck } from '../../price-check/api'
 import { sourceWords } from '../../price-check/model'
 import { PriceCheckDialog } from '../../price-check/PriceCheckDialog'
 import type { PriceCheckDialogActions, PriceCheckDialogModel } from '../../price-check/use-price-check'
-import { changeOursHeldOf, customerUnitOf, editHeldOf, historyHref, isEmptyCheck, seqList, sourceLinesOf, totalPiecesOf, type PriceCheckCardActions, type PriceCheckCardModel } from '../price-check-card'
+import { customerUnitOf, editHeldOf, historyHref, isEmptyCheck, seqList, sourceLinesOf, totalPiecesOf, type PriceCheckCardActions, type PriceCheckCardModel } from '../price-check-card'
 import type { Order, PriceMatch } from '../../api'
 import { amendHeld } from '../../daily-model'
 import type { Phrase } from '../../model'
@@ -37,7 +37,8 @@ export function PriceCheckSection({ record, order, actions }: { record: OrderRec
   const model = record.priceCheck
   const dialog = record.priceCheckDialog ? { model: record.priceCheckDialog, actions: actions?.priceCheckDialog ?? {} } : undefined
   return (
-    <PriceCheckCard model={model} seesPrices={record.can.price} actions={actions?.priceCheck} dialog={dialog} prefix={record.prefix} orderId={order.id} changeHeld={changeOursHeldOf(!!record.amend, amendHeld(order, record.can))} onChangeOurs={actions?.onAmendStart} />
+    // F-OL-04: "Change our price ›" lands on Lines, the first line's Unit price box focused; held with words without orders.manage.
+    <PriceCheckCard model={model} seesPrices={record.can.price} actions={actions?.priceCheck} dialog={dialog} prefix={record.prefix} orderId={order.id} changeHeld={amendHeld(order, record.can)} onChangeOurs={() => actions?.linesTab?.onLand?.({ lineId: null, box: 'price' })} />
   )
 }
 
@@ -51,7 +52,7 @@ function PriceCheckCard({ model, seesPrices, actions, dialog, prefix, orderId, c
   prefix: string
   orderId: string
   changeHeld: Phrase | null
-  /** The order's Edit mode (F-OP-106): Change our price ›. */
+  /** F-OL-04: Change our price › — the Lines tab, the price box focused. */
   onChangeOurs?: (() => void) | undefined
 }) {
   const t = useT('orders')

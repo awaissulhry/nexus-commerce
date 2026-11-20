@@ -248,14 +248,15 @@ describe('the record: the next step by state, held with its reason', () => {
     expect(order('DELIVERED').actions.map((entry) => entry.action)).toEqual(['changePromise', 'close'])
   })
   // F-OO-142 (B-OO-009): why is a curated reason the customer reads, picked from the list ("Pick why"); the note is the office's own.
-  it('a promise change: a day from today, a picked reason, a line when lines are chosen', () => {
+  // F-OL-04 (ol-s1, B-OL-004): the reason is optional — none picked is no problem (the server's automatic words); a wrong code still is.
+  it('a promise change: a day from today, a reason optional (a code the API does not know refused), a line when lines are chosen', () => {
     expect(promiseProblems({ date: '', reasonCode: 'CAPACITY', today: TODAY, current: null, lineIds: [], allLines: true })).toEqual({ date: 'promise.problem.date' })
     expect(promiseProblems({ date: '2026-10-28', reasonCode: 'CAPACITY', today: TODAY, current: null, lineIds: [], allLines: true })).toEqual({ date: 'promise.problem.past' })
     expect(promiseProblems({ date: '2026-12-15', reasonCode: 'CAPACITY', today: TODAY, current: '2026-12-15', lineIds: [], allLines: true })).toEqual({ date: 'promise.problem.same' })
-    expect(promiseProblems({ date: '2026-12-15', reasonCode: '', today: TODAY, current: null, lineIds: [], allLines: false })).toEqual({ reasonCode: 'promise.problem.code', lines: 'promise.problem.lines' })
-    // A code the API does not know is no pick; a typed sentence neither.
+    expect(promiseProblems({ date: '2026-12-15', reasonCode: '', today: TODAY, current: null, lineIds: [], allLines: false })).toEqual({ lines: 'promise.problem.lines' })
+    // A code the API does not know is refused; none picked is fine (optional).
     expect(promiseProblems({ date: TODAY, reasonCode: 'WEATHER', today: TODAY, current: '2026-12-15', lineIds: [], allLines: true })).toEqual({ reasonCode: 'promise.problem.code' })
-    expect(promiseProblems({ date: TODAY, reasonCode: null, today: TODAY, current: '2026-12-15', lineIds: [], allLines: true })).toEqual({ reasonCode: 'promise.problem.code' })
+    expect(promiseProblems({ date: TODAY, reasonCode: null, today: TODAY, current: '2026-12-15', lineIds: [], allLines: true })).toEqual({})
     expect(promiseProblems({ date: TODAY, reasonCode: 'MATERIAL_LATE', today: TODAY, current: '2026-12-15', lineIds: [], allLines: true })).toEqual({})
   })
   it('tabs from the address; the chain’s ids for live events', () => {
@@ -651,15 +652,18 @@ describe('B-W2b-16: waive a step, the close\'s reason code', () => {
     expect(waiveReasonProblem('ok')).toBe('schedule.verbs.waiveReasonHeld')
     expect(waiveReasonProblem('Long-standing customer.')).toBeNull()
   })
-  it('asks a code of the cancel list when the list is read; none when it could not be read', () => {
+  // F-OL-04 (ol-s1, B-OL-004): the code and the words are optional; a code picked is one of the list; one that asks for detail wants words.
+  it('the reason is optional: no code and no words is fine; a code not on the list is refused; a code asking for detail wants a few words', () => {
     const value = order('PARTLY_SHIPPED')
-    const reasons = [{ code: 'CUSTOMER_REQUEST' }, { code: 'OTHER' }]
+    const reasons = [{ code: 'CUSTOMER_REQUEST' }, { code: 'OTHER', needsDetail: true }]
     const first = value.lines[0]!.id
-    expect(closeChoiceProblem(value, [first], 'The rest is not wanted.', '', reasons)?.key).toBe('closeLines.problem.reasonCode')
+    expect(closeChoiceProblem(value, [first], '', '', reasons)).toBeNull()
     expect(closeChoiceProblem(value, [first], 'The rest is not wanted.', 'NOPE', reasons)?.key).toBe('closeLines.problem.reasonCode')
     expect(closeChoiceProblem(value, [first], 'The rest is not wanted.', 'CUSTOMER_REQUEST', reasons)).toBeNull()
     expect(closeChoiceProblem(value, [first], 'The rest is not wanted.', '', null)).toBeNull()
-    expect(closeChoiceProblem(value, [first], ' ', 'CUSTOMER_REQUEST', reasons)?.key).toBe('closeLines.problem.reason')
+    expect(closeChoiceProblem(value, [first], ' ', 'CUSTOMER_REQUEST', reasons)).toBeNull()
+    expect(closeChoiceProblem(value, [first], 'ok', 'OTHER', reasons)?.key).toBe('lineMenu.held.detail')
+    expect(closeChoiceProblem(value, [first], 'Not wanted', 'OTHER', reasons)).toBeNull()
   })
 })
 
@@ -1889,9 +1893,12 @@ describe('F-OP-102: the band primary by state, in place, and the ⋯ re-cut (set
     expect(view).toContain("onSelect: () => frameRef.current?.openDoor?.('owner')")
     expect(view).toContain('planningHref(model.prefix, firstWorkOrder.id)')
     expect(view).not.toMatch(/reconfirm/i)
-    // Edit's order: Amend · Change ship-to… · Split… · Close remaining lines… · Reopen lines… · (Set priority…, Set season…).
+    // Edit's order: Change the lines · Change ship-to… · Split… · Close remaining lines… · Reopen lines… · (Set priority…, Set season…).
+    // F-OL-04: "Amend order" became "Change the lines" (the Lines tab, its first box focused: no edit mode).
     const at = (id: string) => view.indexOf(`id: '${id}'`)
-    expect(at('amend')).toBeLessThan(at('shipTo'))
+    expect(view).toContain("onSelect: () => actions?.linesTab?.onLand?.({ lineId: null, box: 'first' })")
+    expect(view).not.toContain("id: 'amend'")
+    expect(at('lines')).toBeLessThan(at('shipTo'))
     expect(at('shipTo')).toBeLessThan(at('split'))
     expect(at('split')).toBeLessThan(at('closeLines'))
     expect(at('closeLines')).toBeLessThan(at('reopenLines'))
@@ -2027,11 +2034,13 @@ describe('F-OO-142: the promise dialog picks a curated reason the customer reads
   const draw = (id: string, locale: (typeof LOCALES)[number]) => textOf(render(recordScreen as unknown as DesignScreen<unknown>, promiseCase(id), locale)).replace(/\s+/g, ' ')
   const NOTE = 'La pelle nera arriva una settimana dopo.'
 
-  it('a code is required; the body is { reasonCode, reason } — the note trimmed (empty allowed), lineIds only for chosen lines', () => {
+  it('the body is { reasonCode, reason } — each only when given (optional since ol-s1), the note trimmed, lineIds only for chosen lines', () => {
     expect(PROMISE_REASON_CODES.every((code) => isPromiseReasonCode(code))).toBe(true)
     for (const no of ['', 'WEATHER', 'material_late', null, undefined]) expect(isPromiseReasonCode(no), String(no)).toBe(false)
     expect(promiseBodyOf({ date: '2026-12-29', reasonCode: 'MATERIAL_LATE', note: `  ${NOTE}  `, lineIds: null }, 4)).toEqual({ version: 4, promiseDate: '2026-12-29', reasonCode: 'MATERIAL_LATE', reason: NOTE })
-    expect(promiseBodyOf({ date: '2026-12-29', reasonCode: 'TRANSPORT', note: '   ', lineIds: ['L20'] }, 5)).toEqual({ version: 5, promiseDate: '2026-12-29', reasonCode: 'TRANSPORT', reason: '', lineIds: ['L20'] })
+    expect(promiseBodyOf({ date: '2026-12-29', reasonCode: 'TRANSPORT', note: '   ', lineIds: ['L20'] }, 5)).toEqual({ version: 5, promiseDate: '2026-12-29', reasonCode: 'TRANSPORT', lineIds: ['L20'] })
+    // F-OL-04: nothing picked, nothing typed — neither is sent (the server writes its automatic words).
+    expect(promiseBodyOf({ date: '2026-12-29', reasonCode: null, note: '', lineIds: null }, 5)).toEqual({ version: 5, promiseDate: '2026-12-29' })
     // What the API stores from it (B-OO-009) reads back as the picked code — never the note.
     const stored = promiseReasonText('MATERIAL_LATE', NOTE)
     expect(stored).toBe(`MATERIAL_LATE: ${NOTE}`)
@@ -2068,7 +2077,7 @@ describe('F-OO-142: the promise dialog picks a curated reason the customer reads
     expect(promiseReasonChoices('it', office('it')).map((choice) => choice.label).join(' | ')).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
   })
 
-  it('drawn: "Why (the customer reads it)", the list, "The customer reads:" in Italian and English, "Your note (office only)"; no pick → held "Pick why"', () => {
+  it('drawn: "Why (the customer reads it) · optional", the list, "The customer reads:" in Italian and English, "Your note (office only)"; no pick held nothing (F-OL-04)', () => {
     const en = draw('promise-dialog', 'en')
     for (const words of ['Why (the customer reads it)', 'Pick a reason', 'Material delivery late', 'The customer reads:', 'Italian', '“Consegna dei materiali in ritardo”', 'English', '“Material delivery late”', 'Your note (office only)']) expect(en, words).toContain(words)
     const it = draw('promise-dialog', 'it')
@@ -2081,11 +2090,12 @@ describe('F-OO-142: the promise dialog picks a curated reason the customer reads
     for (const code of PROMISE_REASON_CODES) expect(html, code).toContain(`<option value="${code}"`)
     expect(html).toMatch(/<option value="YOUR_CHANGE"[^>]*>The customer asked for the change<\/option>/)
     expect(html).not.toContain('Changed at your request')
-    // Nothing picked yet: no preview, Change the date held with "Pick why".
+    // Nothing picked yet: no preview, and Change the date is NOT held for it (F-OL-04: the reason is optional since ol-s1).
     const pick = render(recordScreen as unknown as DesignScreen<unknown>, promiseCase('f-oo-142-promise-pick'), 'en')
     expect(textOf(pick)).not.toContain('The customer reads:')
     const go = pick.slice(pick.lastIndexOf('<button', pick.indexOf('>Change the date</button>')), pick.indexOf('>Change the date</button>'))
-    expect(go).toContain('aria-description="Pick why"')
+    expect(go).not.toContain('aria-description="Pick why"')
+    expect(textOf(pick)).toContain('Why (the customer reads it) · optional')
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of ['promise.why', 'promise.pick', 'promise.customerReads', 'promise.note', 'promise.problem.code']) expect(t(key), `${locale} ${key}`).not.toBe(key)

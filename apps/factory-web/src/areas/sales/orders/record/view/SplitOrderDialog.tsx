@@ -27,7 +27,13 @@ export function SplitOrderDialog({ order, model, actions }: { order: Order; mode
   const t = useT('orders')
   const sales = useT('sales')
   const lines = useMemo(() => splitLinesOf(order), [order])
-  const [parts, setParts] = useState<SplitPartDraft[]>(() => [splitPartOf(order)])
+  // F-OL-04: a line's ⋯ "Move to a new order…" opens with that line's pieces that may move in the first part (each capped).
+  const [parts, setParts] = useState<SplitPartDraft[]>(() => {
+    const asked = model.dialog?.kind === 'split' ? model.dialog.lineId : undefined
+    const line = asked ? lines.find((entry) => entry.lineId === asked) : undefined
+    const first = splitPartOf(order)
+    return [line ? { ...first, grid: { [line.lineId]: Object.fromEntries(line.sizes.filter((size) => size.open > 0).map((size) => [size.size, size.open])) } } : first]
+  })
   const [reason, setReason] = useState('')
   const split = model.split ?? null
   const made = split?.made ?? null

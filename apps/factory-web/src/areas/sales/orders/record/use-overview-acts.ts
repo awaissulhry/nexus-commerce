@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OrderRecordActions, OrderRecordModel, RecordActsBase, RecordDialog } from './record-model'
 import { amendStyleAnchorOf } from './record-model' // F-OO-125
-import { CUSTOMER_REF_FIELD_ID } from './record-model' // F-OO-209
 // ---- F-OO-210: the office note through the Orders sheet's own write (the list tools' bulk apply) ----
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { applyBulk } from '../../../_shared/list-tools/api'
@@ -77,11 +76,8 @@ export function useOverviewActs(
         input.startAmend?.()
         input.focus?.(amendStyleAnchorOf(styleId))
       },
-      // F-OO-209: edit mode (an open draft kept), the customer PO focused.
-      onCustomerRefChange: () => {
-        input.startAmend?.()
-        input.focus?.(CUSTOMER_REF_FIELD_ID)
-      },
+      // F-OL-04 (pick D7): Order facts' Customer PO "Change…" opens its small window (the amendment with no lines), no hop to Lines.
+      onCustomerRefChange: () => input.setDialog?.({ kind: 'customerRef' }),
       // ---- F-OO-210: one row of the sheet's write — the order, its version as read, the note. A refusal stays in the dialog in the
       // page's words (stale: someone changed it first, read again; closed or cancelled; the right); taken: the dialog closes, the notice
       // says so. Either way the order is read again (its note and its new version).

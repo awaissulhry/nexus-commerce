@@ -40,7 +40,7 @@ import type { ChangeReviewActions, ChangeReviewModel } from '../../../home/appro
 // F-CP-142: Money's "Price check" card and the ONE customer's-price window it opens (so/price-check, F-CP-114).
 import type { PriceCheckCardActions, PriceCheckCardModel } from './price-check-card'
 import type { PriceCheckDialogActions, PriceCheckDialogModel } from '../price-check/use-price-check'
-import { amendBodyOf, amendHeld, draftOf } from '../daily-model' // F-OO-144: Requested's small dialog (the amend builder, its rule)
+import { amendHeld } from '../daily-model' // F-OO-144: Requested's small dialog (the amendment's own rule)
 import type { MilestonesActions, MilestonesModel } from '../../../planning/milestones/view-model' // F-OO-145: Planning's gate dialogs in place
 import type { CreditState } from './overview/where' // F-OO-106: the order's own credit hold
 import type { LinesTabActions, LinesTabModel } from './lines-tab-model' // F-OL-01: the Lines tab (use-lines-draft.ts)
@@ -73,7 +73,8 @@ export type BandDialog = { kind: 'promise'; followUp?: { readonly requestId: str
 // line it offers, as the band's ⋯ and the Lines tab open it).
 // F-OO-144: `requested` — Next dates' "Requested by customer" Change…: a small dialog, ONE amendment (every line as it is + the new date).
 // F-OL-01: `lineId` — a line's ⋯ "Move to a new order…" opens the split with that line's pieces in the first part.
-export type LinesDialog = { kind: 'closeLines'; lineIds?: readonly string[] } | { kind: 'reopenLines'; lineIds?: readonly string[] } | { kind: 'cancel' } | { kind: 'split'; lineId?: string } | { kind: 'requested' }
+// F-OL-04: `customerRef` / `shipTo` — Overview › Order facts' small windows (the amendment with no lines, ol-s1 B-OL-020).
+export type LinesDialog = { kind: 'closeLines'; lineIds?: readonly string[] } | { kind: 'reopenLines'; lineIds?: readonly string[] } | { kind: 'cancel' } | { kind: 'split'; lineId?: string } | { kind: 'requested' } | { kind: 'customerRef' } | { kind: 'shipTo' }
 /** use-money-acts: the deposits and payments (the bank-details page, the payment, the TD02's send to SDI). */
 export type MoneyDialog = { kind: 'depositLink'; requestId: string } | { kind: 'depositPayment'; requestId: string } | { kind: 'sdiSend'; invoiceId: string }
 /** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
@@ -112,13 +113,14 @@ export const CUSTOMER_REF_FIELD_ID = 'amend-customer-ref'
 
 // ---- F-OO-144 (order overview 10-design §4.2; review F7): "Requested by customer" — a small dialog, no page hop, no API change ----
 /**
- * The ONE amendment the dialog sends, built by the amend builder the Lines edit mode uses (daily-model amendBodyOf): every line as it
- * is (its whole size grid, no price, no text: so no line can be removed or closed short by mistake), the new requested date, the
- * order's version as read and the reason. The customer PO and the delivery address stay as they are (not sent).
+ * The ONE amendment the dialog sends (F-OL-04: with no lines since ol-s1 — every line stays as it is now): the new requested date, the
+ * order's version as read and the reason when typed. The customer PO and the delivery address stay as they are (not sent).
  */
-export function requestedBodyOf(order: Order, date: string, reason: string) {
-  const body = amendBodyOf({ lines: draftOf(order), customerRef: order.customerRef ?? '', requestedDate: date }, order)
-  return { version: order.version, reason: reason.trim(), ...body }
+// F-OL-04 (ol-s1, B-OL-020, B-OL-004): the amendment with NO lines (every line stays as it is NOW: never another person's change put
+// back), the new date, the version, the reason only when typed.
+export function requestedBodyOf(order: Pick<Order, 'version'>, date: string, reason: string): { version: number; requestedDate: string; reason?: string } {
+  const why = reason.trim()
+  return { version: order.version, requestedDate: date, ...(why ? { reason: why } : {}) }
 }
 
 /** The dialog's own problem with what is typed, or null: a date from today on, not the requested date already; a reason. */
@@ -126,7 +128,7 @@ export function requestedProblem(input: { readonly date: string; readonly reason
   if (input.date === '') return { key: 'promise.problem.date' }
   if (input.date < input.today) return { key: 'facts.requested.problem.past' }
   if (input.date === input.current) return { key: 'facts.requested.problem.same' }
-  if (input.reason.trim() === '') return { key: 'promise.problem.reason' }
+  // F-OL-04: Why is optional (ol-s1, B-OL-004).
   return null
 }
 
@@ -534,6 +536,10 @@ export interface OrderRecordActions {
   priceCheckDialog?: PriceCheckDialogActions
   /** F-OL-01: the Lines tab's acts (the table's cells, the bar, Review and save, Add a style, the row ⋯'s table acts, the doors). */
   linesTab?: LinesTabActions
+  /** F-OL-04: Order facts' Customer PO window — the amendment with no lines `{ version, customerRef }` (Why optional). */
+  onCustomerRef?: (input: { readonly value: string; readonly reason: string }) => void
+  /** F-OL-04: Order facts' Ship to window (and the band's ⋯ Change ship-to…) — `{ version, shipToAddressId }`. */
+  onShipTo?: (addressId: string) => void
 }
 
 /** The lines editor's own actions (the amendment and the typed New order share it). */
