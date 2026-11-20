@@ -646,7 +646,14 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    `…_order_overview_guards` (order overview plan schema wave 1/1, B-OO-015, N12 + D7; no schema folder of its own, a policy
    folder after it: it redefines …_order_apply_guards' `factory_work_order_cell_floor` so the garments on cut orders count
    per material — the cut order's kind, item and colour — and the floor takes the largest material, not the sum of every
-   material: a garment takes its lining AND its leather; two cut orders or lines of ONE material still add up):
+   material: a garment takes its lining AND its leather; two cut orders or lines of ONE material still add up),
+   `…_brand_production_stage_set_guards` (set the stage by hand, T-MS-001, schema wave 'stage by hand 1/1', design A; after
+   its schema folder `…_brand_production_stage_set` (StageSetReason + BrandOrderProduction's five nullable stageSet…
+   columns, all hidden from the partner role) and before its policy folder: it redefines …_brand_production_guards'
+   `factory_brand_order_production_guard` whole, + the stage set by hand: CUTTING, SEWING or QUALITY only and `stage` equal
+   to it while it stands (the keeper clears it in the same write in which the floor passes it), its reason, when and by
+   whom all or none, the note only beside it (one line of at most 200, required for OTHER), the setter an active office
+   person when set or changed):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

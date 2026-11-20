@@ -24,6 +24,10 @@ import { seedSecondBrand, type SecondBrand } from './testing/second-brand'
  *     only to AT_RISK, all or none; one row per order (the key); ProductionIssue about one customer's record, with its task and
  *     a message of its record's own thread, answeredAt exactly when ANSWERED, escalation step 0-2, never deleted; the hold's
  *     life; WorkOrder_production_holds: no leaving ON_HOLD while an ACTIVE WorkOrderHold names it.
+ *   - T-MS-001 (set the stage by hand, design A; review R10, R11; …_brand_production_stage_set_guards): the partner role reads
+ *     none of the five stageSet… columns (the customer never learns a stage was set by hand), only the plain stage; the hand
+ *     stage CUTTING, SEWING or QUALITY only, and `stage` equal to it while it stands; its reason, when and by whom all or none;
+ *     the note only beside it, one line of at most 200, required for OTHER; set or changed by an active office person only.
  * The refusals are check_violation (SQLSTATE 23514); their messages are read through raw SQL.
  */
 
@@ -125,7 +129,8 @@ describe('what the partner role reads (PW-15, DB part)', () => {
   })
 
   it('never reads the office’s note, who raised the health, who set or locked an urgency, the supervisor or since when', async () => {
-    for (const column of ['healthNote', 'healthSetById', 'urgencySetById', 'urgencyLockedById', 'supervisorId', 'supervisorAssignedAt', 'createdById']) {
+    // T-MS-001 (R11): + the five columns of the stage set by hand.
+    for (const column of ['healthNote', 'healthSetById', 'urgencySetById', 'urgencyLockedById', 'supervisorId', 'supervisorAssignedAt', 'createdById', 'stageSet', 'stageSetReason', 'stageSetNote', 'stageSetAt', 'stageSetById']) {
       const [grant] = await admin(`SELECT has_column_privilege($1, '"BrandOrderProduction"', $2, 'SELECT') AS granted`, [PARTNER_ROLE, column])
       expect(grant!.granted, column).toBe(false)
       await expect(sql(partnerOf(P1, buyer), `SELECT "${column}" FROM "BrandOrderProduction" LIMIT 1`), column).rejects.toThrow(DENIED)
@@ -249,6 +254,70 @@ describe('BrandOrderProduction (…_brand_production_guards)', () => {
     // The raise drops whole.
     await expect(update('BrandOrderProduction', row, { healthSet: null, healthReasonCode: null, healthSetAt: null, healthSetById: null, healthSetUntil: null })).rejects.toThrow(/only beside a raise/)
     expect(await update('BrandOrderProduction', row, { healthSet: null, healthReasonCode: null, healthSetAt: null, healthSetById: null, healthSetUntil: null, healthNote: null })).toBe(1)
+  })
+
+  // T-MS-001: the stage set by hand (design A; review R10).
+  it('T-MS-001: sets the stage by hand to Cutting, Sewing or Quality only, and shows it while it stands; its reason, when and by whom, all or none', async () => {
+    const SET_AT = '2026-11-20T08:00:00.000Z'
+    const row = await productionRow(await newOrder(), { stage: 'CUTTING', stageAt: SET_AT })
+    const hand = { stage: 'SEWING', stageAt: SET_AT, stageSet: 'SEWING', stageSetReason: 'OUTAGE', stageSetAt: SET_AT, stageSetById: a.actorId }
+    // Never PREPARING, never READY (only quality's release of every piece makes an order Ready).
+    await expect(update('BrandOrderProduction', row, { ...hand, stage: 'READY', stageSet: 'READY' })).rejects.toThrow(/CUTTING, SEWING or QUALITY only/)
+    await expect(update('BrandOrderProduction', row, { ...hand, stage: 'PREPARING', stageSet: 'PREPARING' })).rejects.toThrow(/CUTTING, SEWING or QUALITY only/)
+    // While it stands the order shows it (the keeper writes the higher of the floor's and the hand's into `stage`).
+    await expect(update('BrandOrderProduction', row, { ...hand, stage: 'CUTTING' })).rejects.toThrow(/shows its stage set by hand/)
+    await expect(update('BrandOrderProduction', row, { ...hand, stage: 'QUALITY' })).rejects.toThrow(/shows its stage set by hand/)
+    // Its reason code, when and by whom: all four or none.
+    for (const column of ['stageSetReason', 'stageSetAt', 'stageSetById']) {
+      await expect(update('BrandOrderProduction', row, { ...hand, [column]: null }), column).rejects.toThrow(/reason code, when and by whom, or there is none/)
+    }
+    await expect(update('BrandOrderProduction', row, { stageSetReason: 'OUTAGE', stageSetAt: SET_AT, stageSetById: a.actorId })).rejects.toThrow(/reason code, when and by whom, or there is none/)
+    expect(await update('BrandOrderProduction', row, hand)).toBe(1)
+    // The customer reads the plain stage only (`stage` stays granted; the five columns are hidden, see above).
+    expect(await sql(partnerOf(P1, buyer), `SELECT stage::text AS stage FROM "BrandOrderProduction" WHERE id = $1::uuid`, row)).toEqual([{ stage: 'SEWING' }])
+    await expect(sql(partnerOf(P1, buyer), `SELECT "stageSet" FROM "BrandOrderProduction" WHERE id = $1::uuid`, row)).rejects.toThrow(DENIED)
+    // The floor passes it: the keeper clears the five in the same write that moves the stage; moving the stage alone is refused.
+    await expect(update('BrandOrderProduction', row, { stage: 'QUALITY', stageAt: NOW() })).rejects.toThrow(/shows its stage set by hand/)
+    expect(await update('BrandOrderProduction', row, { stage: 'QUALITY', stageAt: NOW(), stageSet: null, stageSetReason: null, stageSetAt: null, stageSetById: null })).toBe(1)
+    // The set may make the row (no row yet, R1): the same rules on insert.
+    expect(await productionRow(await newOrder(), { stage: 'CUTTING', stageSet: 'CUTTING', stageSetReason: 'FEW_PEOPLE', stageSetAt: SET_AT, stageSetById: a.actorId })).toBeTruthy()
+    await expect(productionRow(await newOrder(), { stageSet: 'CUTTING', stageSetReason: 'FEW_PEOPLE', stageSetAt: SET_AT, stageSetById: a.actorId })).rejects.toThrow(/shows its stage set by hand/)
+  })
+
+  it('T-MS-001: the office’s note only beside a stage set by hand, one line of at most 200, required for OTHER', async () => {
+    const SET_AT = '2026-11-20T08:00:00.000Z'
+    const row = await productionRow(await newOrder(), { stage: 'CUTTING', stageAt: SET_AT })
+    const hand = { stage: 'SEWING', stageAt: SET_AT, stageSet: 'SEWING', stageSetReason: 'OUTSIDE', stageSetAt: SET_AT, stageSetById: a.actorId }
+    await expect(update('BrandOrderProduction', row, { stageSetNote: 'Made-up: the scanners are down.' })).rejects.toThrow(/stands only beside it/)
+    await expect(update('BrandOrderProduction', row, { ...hand, stageSetNote: 'x'.repeat(201) })).rejects.toThrow(/one line of at most 200/)
+    await expect(update('BrandOrderProduction', row, { ...hand, stageSetNote: 'Two\nlines' })).rejects.toThrow(/one line of at most 200/)
+    await expect(update('BrandOrderProduction', row, { ...hand, stageSetNote: '   ' })).rejects.toThrow(/one line of at most 200/)
+    // Something else (OTHER) says why in the note.
+    await expect(update('BrandOrderProduction', row, { ...hand, stageSetReason: 'OTHER' })).rejects.toThrow(/another reason \(OTHER\) says why/)
+    expect(await update('BrandOrderProduction', row, { ...hand, stageSetReason: 'OTHER', stageSetNote: 'x'.repeat(200) })).toBe(1)
+    expect(await update('BrandOrderProduction', row, { stageSetNote: 'Made-up: the cutting room’s tablet is away for repair.' })).toBe(1)
+    // Cleared: the five go together (a note left behind is refused), with the stage back to the floor's.
+    await expect(update('BrandOrderProduction', row, { stage: 'CUTTING', stageSet: null, stageSetReason: null, stageSetAt: null, stageSetById: null })).rejects.toThrow(/stands only beside it/)
+    expect(await update('BrandOrderProduction', row, { stage: 'CUTTING', stageAt: NOW(), stageSet: null, stageSetReason: null, stageSetNote: null, stageSetAt: null, stageSetById: null })).toBe(1)
+  })
+
+  it('T-MS-001: a stage is set by hand by an active office person only — never a portal person, a floor worker or a suspended person', async () => {
+    const SET_AT = '2026-11-20T08:00:00.000Z'
+    const row = await productionRow(await newOrder(), { stage: 'CUTTING', stageAt: SET_AT })
+    const hand = { stage: 'SEWING', stageAt: SET_AT, stageSet: 'SEWING', stageSetReason: 'OUTAGE', stageSetAt: SET_AT, stageSetById: a.actorId }
+    // The customer's own buyer, Plant A1's operator (a floor worker, not a person of the office) and a suspended person.
+    for (const setter of [buyer, second.userId, production.operatorId, U.suspended]) {
+      await expect(update('BrandOrderProduction', row, { ...hand, stageSetById: setter }), setter).rejects.toThrow(/by an active office person/)
+      await expect(productionRow(await newOrder(), { ...hand, stageSetById: setter }), setter).rejects.toThrow(/by an active office person/)
+    }
+    const planner = await person()
+    expect(await update('BrandOrderProduction', row, { ...hand, stageSetById: planner })).toBe(1)
+    // Made inactive later, the person stays named while the hand stage stands (the lock's rule) ...
+    expect(await update('User', planner, { status: 'SUSPENDED' })).toBe(1)
+    expect(await update('BrandOrderProduction', row, { waitingOn: 'US', waitingSince: NOW() })).toBe(1)
+    // ... but a new act in their name (a Change: a new time) is refused; an active person may change it.
+    await expect(update('BrandOrderProduction', row, { stage: 'QUALITY', stageSet: 'QUALITY', stageSetAt: '2026-11-20T09:00:00.000Z' })).rejects.toThrow(/by an active office person/)
+    expect(await update('BrandOrderProduction', row, { stage: 'QUALITY', stageSet: 'QUALITY', stageSetAt: '2026-11-20T09:00:00.000Z', stageSetById: a.actorId })).toBe(1)
   })
 
   it('waits since a time only on someone', async () => {

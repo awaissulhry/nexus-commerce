@@ -10,6 +10,9 @@
 //                         foreign key). Its customer reads it through the partner role, its own rows only (the party key),
 //                         never the office's note on a raise, who raised it, who set or locked an urgency, nor the
 //                         supervisor and since when (PW-15). The old "rank" columns are not made: urgency replaces them.
+//                         T-MS-001 (set the stage by hand, design A; review R10, R11): an office person may put the stage
+//                         ahead while the floor cannot record the work (the five stageSet… columns); the customer reads
+//                         the plain stage only and never learns it was set by hand (all five hidden from its role).
 //   ProductionIssue       an issue that needs an answer (L24): a note of the office with "Needs an answer" (OFFICE) or a
 //                         customer's "Report a problem" (BRAND), on a sales order or a work order of ONE customer, with its
 //                         Task and its message (plain ids: collab.prisma and threads.prisma stay untouched); one Task per
@@ -18,13 +21,14 @@
 //
 // The hand-written …_brand_production_guards hold the shape for every login, the owner included (the urgent place exactly
 // while Urgent, a locked order Regular, the supervisor with since when, an issue answered exactly when ANSWERED, its
-// escalation step 0 to 2); neither table is ever deleted from. WorkOrderHold (the plain production hold of the same wave)
-// lives in production.prisma.
+// escalation step 0 to 2; T-MS-001: …_brand_production_stage_set_guards redefines the row's function whole, + the stage set
+// by hand); neither table is ever deleted from. WorkOrderHold (the plain production hold of the same wave) lives in
+// production.prisma.
 
 /// The production state of one sales order for its customer (B-PR-15): the plain stage, the health and what it waits on (the
 /// keeper's, B-PR-17), the factory's raise of the health, the customer's urgency and the factory's lock, the supervisor of
-/// the order. Made when the order is CONFIRMED; kept as history once the order leaves production (a shipped order keeps its
-/// last urgency); never deleted.
+/// the order, the stage set by hand (T-MS-001). Made when the order is CONFIRMED; kept as history once the order leaves
+/// production (a shipped order keeps its last urgency); never deleted.
 model BrandOrderProduction {
   id                   String        @id @db.Uuid
   tenantId             String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -35,10 +39,29 @@ model BrandOrderProduction {
   salesOrderId         String        @db.Uuid
   /// `brand-production:<salesOrderId>`: one row per order (the unique key; the isolation tests' copies add a `-…` suffix).
   key                  String
-  /// The plain stage the customer reads (PREPARING, CUTTING, SEWING, QUALITY, READY: its slowest unfinished line) and since
-  /// when (factory-domain production-brand/stages).
+  /// The plain stage the customer reads (PREPARING, CUTTING, SEWING, QUALITY, READY) and since when: the floor's (its slowest
+  /// unfinished line, factory-domain production-brand/stages), or the one set by hand while it leads (T-MS-001: stageSet;
+  /// the keeper writes the higher of the two, production-brand/stage-set shownStageOf). The floor's own stage is not stored
+  /// here: a reader that needs it reads the floor's facts.
   stage                BrandStage    @default(PREPARING)
   stageAt              DateTime      @default(now()) @db.Timestamptz(3)
+  // ── T-MS-001: the stage set by hand (set-the-stage-by-hand plan, design A; review R10, R11, R21) ──
+  /// The stage an office person set by hand while the floor cannot record the work: CUTTING, SEWING or QUALITY only (never
+  /// PREPARING, never READY), ahead of the floor's; while it stands, `stage` equals it. It ends when the floor reaches it
+  /// (the keeper clears the five columns in the same write that moves `stage`), by Clear, or when the order leaves
+  /// production. Hidden from the customer's role, as are the four below: the customer never learns a stage was set by hand.
+  stageSet             BrandStage?
+  /// Why (production-brand/stage-set STAGE_SET_REASON_CODES), when and by whom (an active office person; a plain id, no
+  /// foreign key, as healthSetById): all four with the hand stage, or none.
+  stageSetReason       StageSetReason?
+  /// The office's own words beside it (one line, at most 200; required for OTHER): never the customer's to read; the hint
+  /// asks never to name a person on the floor.
+  /// @internal
+  stageSetNote         String?
+  stageSetAt           DateTime?     @db.Timestamptz(3)
+  /// @internal
+  stageSetById         String?       @db.Uuid
+  // ── end T-MS-001 ──
   /// The computed health (LATE, AT_RISK, NO_DATE, ON_TRACK; null: nothing left to make) and when it last changed.
   health               BrandHealth?
   healthAt             DateTime?     @db.Timestamptz(3)
@@ -170,6 +193,15 @@ enum BrandStage {
   SEWING
   QUALITY
   READY
+}
+
+/// T-MS-001: why a stage was set by hand (factory-domain production-brand/stage-set STAGE_SET_REASON_CODES): the system or the
+/// scanners are down, too few people to record the work, the work is at an outside workshop, something else (with a note).
+enum StageSetReason {
+  OUTAGE
+  FEW_PEOPLE
+  OUTSIDE
+  OTHER
 }
 
 /// The health of an order (factory-domain production-brand/health BRAND_HEALTHS), worst first.
