@@ -9,7 +9,7 @@ import { dayInstant, promiseHeld, readOnlyOnPage, type Phrase } from '../../../m
 import { amendHeld } from '../../../daily-model' // F-OP-104
 import { NAMESPACE as DEPTH } from '../../../depth/model'
 import { readOf } from '../../overview/model'
-import { planSaysOf, planWarns, promiseRowOf, type PlanSays } from '../../overview/dates'
+import { planSaysOf, planTagged, planWarns, promiseRowOf, type PlanSays } from '../../overview/dates' // walk #11: planTagged
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { useSearchParams } from 'next/navigation'
 import { tabHref } from '../../../../../_shared/record-frame/address'
@@ -45,6 +45,8 @@ import { waitDatesOf, type WaitDate } from '../../overview/dates'
  * customer with its Change…; then the open gates (late first), parted by a rule. The shipping milestone (its target IS the promise)
  * and "Production start" are not listed; with no open gate the gates' block is left out (no "No dates set yet"). Read-only sees no
  * Change…; a failed read says so with Try again (the order's own dates still show).
+ * Walk fixes: each value is `fw-so-dates-value` (dates.css: the label column fits up to 40 % of the card; below a 480 px card a row
+ * stacks, the label above its value and door — #1); "(from the plan)" only beside a day the plan gives (`planTagged`, #11).
  *
  * F-OO-143 (10-design §4.2; review F1, F3; replaces F-OP-105): under the promise, each new date the customer refused (the ONE waiting
  * list's DATE row, `waiting.dates`: OverviewTab's one call) — "{customer} refused the new date · 2 d", no date (F1) — with Decide…:
@@ -141,7 +143,7 @@ function Dates({ order, model, actions, waiting }: { order: Order; model: OrderR
         <ul className="fw-so-dates-rows" aria-label={t('doors.ownDates')}>
           <li className="fw-so-ov-row">
             <span className="fw-so-dates-label">{t('dates.promisedExFactory')}</span>
-            <span>{promise ? (promise.moved ? t(promise.moved.key, { ...promise.moved.params, date: day(promise.date) }) : day(promise.date)) : '—'}</span>
+            <span className="fw-so-dates-value">{promise ? (promise.moved ? t(promise.moved.key, { ...promise.moved.params, date: day(promise.date) }) : day(promise.date)) : '—'}</span>
             {!readOnly && (
               <span className="fw-so-ov-doors">
                 <Button size="sm" variant="quiet" heldReason={busy ?? (promiseWait ? t(promiseWait.key, promiseWait.params) : null)} onClick={() => actions?.onDialog?.({ kind: 'promise' })}>
@@ -153,8 +155,9 @@ function Dates({ order, model, actions, waiting }: { order: Order; model: OrderR
           {plan && (
             <li className="fw-so-ov-row">
               <span className="fw-so-dates-label is-under">{t('dates.planSays')}</span>
-              <span className={planWarns(plan) ? 'fw-so-dates-warn' : undefined}>{planWords(plan)}</span>
-              <span className="fw-so-ov-doors fw-so-hint">{t('dates.fromPlan')}</span>
+              <span className={planWarns(plan) ? 'fw-so-dates-value is-under fw-so-dates-warn' : 'fw-so-dates-value is-under'}>{planWords(plan)}</span>
+              {/* Walk #11: "(from the plan)" only beside a day the plan gives — never beside "Nothing plans it yet". */}
+              {planTagged(plan) && <span className="fw-so-ov-doors fw-so-hint">{t('dates.fromPlan')}</span>}
             </li>
           )}
           {/* F-OO-143 (replaces F-OP-105): a new date the customer refused, under the promise; Decide… → the ONE promise dialog. */}
@@ -172,7 +175,7 @@ function Dates({ order, model, actions, waiting }: { order: Order; model: OrderR
           ))}
           <li className="fw-so-ov-row">
             <span className="fw-so-dates-label">{t('dates.requestedByCustomer')}</span>
-            <span>{order.requestedDate ? day(order.requestedDate) : '—'}</span>
+            <span className="fw-so-dates-value">{order.requestedDate ? day(order.requestedDate) : '—'}</span>
             {!readOnly && (
               <span className="fw-so-ov-doors">
                 <Button size="sm" variant="quiet" heldReason={busy ?? (requestedWait ? t(requestedWait.key, requestedWait.params) : null)} onClick={() => actions?.onRequestedChange?.()}>
@@ -207,7 +210,7 @@ function Dates({ order, model, actions, waiting }: { order: Order; model: OrderR
               return (
                 <li key={row.id} className="fw-so-ov-row">
                   <span className="fw-so-dates-label">{what}</span>
-                  <span>
+                  <span className="fw-so-dates-value">
                     {row.target ? d('milestone.target', { date: day(row.target) }) : p('row.noTarget')}
                     {` · ${p(`state.${row.state}`)}`}
                     {late !== null ? (
@@ -247,7 +250,7 @@ function Dates({ order, model, actions, waiting }: { order: Order; model: OrderR
             {waitRows.map((row) => (
               <li key={row.key} className="fw-so-ov-row">
                 <span className="fw-so-dates-label">{row.words ? sayWords(row.words, locale) : row.kind}</span>
-                <span>{waitValue(row)}</span>
+                <span className="fw-so-dates-value">{waitValue(row)}</span>
                 <span className="fw-so-ov-doors">
                   <Button size="sm" variant="quiet" asChild>
                     <TabLink href={`${tabHref(`${model.prefix}/sales/orders/${order.id}`, row.door.tab, search)}${row.door.anchor ? `#${row.door.anchor}` : ''}`}>{t(`waiting.go.${row.door.tab}`)}</TabLink>

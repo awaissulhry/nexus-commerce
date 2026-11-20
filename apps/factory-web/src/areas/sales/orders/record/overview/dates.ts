@@ -93,6 +93,9 @@ export function planSaysOf(order: Pick<Order, 'status'>, promise: string | null,
 export const planWarns = (plan: PlanSays): boolean => plan.kind === 'after' || (plan.kind === 'none' && plan.warn)
 // ---- end F-OO-141
 
+// F-OO-141 (walk #11): "(from the plan)" names where a day comes from — never beside "Nothing plans it yet" (no plan to come from).
+export const planTagged = (plan: PlanSays): boolean => plan.kind !== 'none'
+
 // ---- F-OO-143 (order overview 10-design §4.2; review F1, F3; replaces F-OP-105): the new date the customer refused ----------------
 /**
  * How long a waiting row has waited: whole days from the Rome day it started to today (Rome); 0 the same day; null when the read

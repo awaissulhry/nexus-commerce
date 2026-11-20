@@ -13,7 +13,7 @@ import { DatesCard } from '../view/overview/DatesCard'
 import type { Order } from '../../api'
 import type { Headline, OrderProduction } from './api'
 import { FAILED_STATE, HEADLINE, LOADING_STATE, PRODUCTION_READ, ready } from './fixtures'
-import { nextDatesOf, planSaysOf, planWarns, promiseRowOf } from './dates'
+import { nextDatesOf, planSaysOf, planTagged, planWarns, promiseRowOf } from './dates' // walk #11: planTagged
 // ---- F-OO-143: the refused new date and Decide… ----
 import { TODAY } from '../../_demo/fixtures'
 import type { BandDialog } from '../record-model'
@@ -101,6 +101,10 @@ describe('F-OO-141: Next dates — the promise first, what the plan says against
     expect(planWarns({ kind: 'same', date: '2026-12-15' })).toBe(false)
     expect(planWarns({ kind: 'none', warn: true })).toBe(true)
     expect(planWarns({ kind: 'none', warn: false })).toBe(false)
+    // Walk #11: "(from the plan)" only beside a day the plan gives — never beside "Nothing plans it yet".
+    for (const plan of [{ kind: 'after', date: '2026-12-13', days: 2 }, { kind: 'before', date: '2026-12-10', days: 5 }, { kind: 'same', date: '2026-12-15' }, { kind: 'plain', date: '2026-12-13' }] as const) expect(planTagged(plan), plan.kind).toBe(true)
+    expect(planTagged({ kind: 'none', warn: true })).toBe(false)
+    expect(planTagged({ kind: 'none', warn: false })).toBe(false)
   })
 
   it('the words in both languages ("tu"); "moved 1×" / "spostata 1 volta" by its count', () => {
