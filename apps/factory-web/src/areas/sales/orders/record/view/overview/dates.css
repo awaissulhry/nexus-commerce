@@ -1,0 +1,67 @@
+/* ── F-OO-141 (order overview lane; 10-design §4.1) — Next dates: the order's own dates, then its open gates ──────────────────────
+   One grid for the card (the label | the value | one door): the own dates' list and the gates' list lie on its columns (subgrid),
+   each row on theirs, so every label, value and door lines up across both; a 1 px rule parts the gates from the own dates.
+   "Plan says ready" sits under the promise, indented; its words turn amber when the plan ends after the promise (or nothing plans
+   an order that has one). Below a 480 px card the doors wrap under the words (the shared row, overview.css); below a 360 px card
+   (a phone) a row stacks: the label above its value, the doors under it. Layout only, tokens only. */
+.fw-so-dates-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  gap: var(--nds-space-10) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-so-dates-rows {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  row-gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-so-dates-rows > .fw-so-ov-row {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.fw-so-dates-rows.is-gates {
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-so-dates-label {
+  color: var(--nds-text-muted);
+}
+
+.fw-so-dates-label.is-under {
+  padding-left: var(--nds-space-12);
+}
+
+.fw-so-dates-warn {
+  color: var(--nds-warning-text);
+}
+
+/* A line of the gates' block that is no row (reading, or could not be read). */
+.fw-so-dates-note {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+@container fw-so-ov-card (max-width: 479px) {
+  .fw-so-dates-grid {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+}
+
+@container fw-so-ov-card (max-width: 359px) {
+  .fw-so-dates-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-so-dates-label.is-under {
+    padding-left: 0;
+  }
+}

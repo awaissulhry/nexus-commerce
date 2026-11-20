@@ -1,6 +1,6 @@
 'use client'
 
-import { History, MessageSquarePlus, Users } from 'lucide-react'
+import { History, MessageSquarePlus } from 'lucide-react'
 import { Button, ToolbarButton } from '@nexus/ui/primitives'
 import { useT } from '../../../../../lib/i18n/provider'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
@@ -31,14 +31,17 @@ export function ShowInThreadDoor({ order, at }: { order: { readonly id: string }
   return <ToolbarButton icon={<History size={14} aria-hidden />} label={f('discuss.showInThread')} onClick={() => frame.showInThread?.({ record: { type: 'SalesOrder', id: order.id }, at })} />
 }
 
-/** "Followers…" (O3 People): the thread's followers, opened from the body (the frame's door; only where the page has a conversation). */
+/**
+ * "Followers ›" (O3 People): the thread's followers, opened from the body (the frame's door; only where the page has a conversation).
+ * F-OO-131 (10-design §3.1): the People card's head link, in its words (`people.followers`); its count comes with F-OO-135.
+ */
 export function FollowersDoor() {
   const frame = useRecordFrame()
-  const f = useT('record-frame')
+  const t = useT('orders')
   if (!frame?.discuss || !frame.openDoor) return null
   return (
     <Button size="sm" variant="quiet" onClick={() => frame.openDoor?.('followers')}>
-      <Users size={13} aria-hidden /> {f('discuss.followers')}
+      {t('people.followers')}
     </Button>
   )
 }
