@@ -50,6 +50,17 @@
   min-width: 0;
 }
 
+/* F-OO-143: a row said in one sentence (the customer refused the new date · its age) takes the label's and the value's columns; under
+   the promise it is indented as "Plan says ready" is. */
+.fw-so-dates-wide {
+  grid-column: 1 / span 2;
+  min-width: 0;
+}
+
+.fw-so-dates-wide.is-under {
+  padding-left: var(--nds-space-12);
+}
+
 @container fw-so-ov-card (max-width: 479px) {
   .fw-so-dates-grid {
     grid-template-columns: max-content minmax(0, 1fr);
@@ -62,6 +73,15 @@
   }
 
   .fw-so-dates-label.is-under {
+    padding-left: 0;
+  }
+
+  /* F-OO-143: one column on a phone — the sentence takes it whole, not indented. */
+  .fw-so-dates-wide {
+    grid-column: 1 / -1;
+  }
+
+  .fw-so-dates-wide.is-under {
     padding-left: 0;
   }
 }

@@ -213,10 +213,11 @@ p.fw-so-hint[role='status'] {
   border-color: var(--nds-border-strong);
 }
 
-/* A phone card's photo is 48 px (the part's board size is 64, 72 from 1680 px wide). */
+/* A phone card's photo is 48 px (the part's board size is 64, 72 from 1680 px wide).
+   F-CP-107 (cp-fx14): the record picture's class family is `fw-rpic` (was `fw-rp`: clash with Incoming's reading pane). */
 @media (max-width: 719px) {
-  .fw-so-card .fw-rp-board {
-    --fw-rp-size: 48px;
+  .fw-so-card .fw-rpic-board {
+    --fw-rpic-size: 48px;
   }
 }
 

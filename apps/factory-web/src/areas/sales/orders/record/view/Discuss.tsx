@@ -33,15 +33,22 @@ export function ShowInThreadDoor({ order, at }: { order: { readonly id: string }
 
 /**
  * "Followers ›" (O3 People): the thread's followers, opened from the body (the frame's door; only where the page has a conversation).
- * F-OO-131 (10-design §3.1): the People card's head link, in its words (`people.followers`); its count comes with F-OO-135.
+ * F-OO-131 (10-design §3.1): the People card's head link, in its words (`people.followers`).
+ * F-OO-135: "Followers · 4 ›" — the count the docked thread read of This order's conversation and reported to the frame (as its new
+ * messages); no second read. Not read yet (or the dock shows another conversation): "Followers ›". No conversation here: no door.
  */
 export function FollowersDoor() {
   const frame = useRecordFrame()
-  const t = useT('orders')
   if (!frame?.discuss || !frame.openDoor) return null
+  return <FollowersLink count={frame.followers ?? null} onOpen={() => frame.openDoor?.('followers')} />
+}
+
+/** F-OO-135: the head link itself, in its words — with the reported count, or without one while none is known. */
+export function FollowersLink({ count, onOpen }: { count: number | null; onOpen: () => void }) {
+  const t = useT('orders')
   return (
-    <Button size="sm" variant="quiet" onClick={() => frame.openDoor?.('followers')}>
-      {t('people.followers')}
+    <Button size="sm" variant="quiet" onClick={onOpen}>
+      {count === null ? t('people.followers') : t('people.followersCount', { count })}
     </Button>
   )
 }

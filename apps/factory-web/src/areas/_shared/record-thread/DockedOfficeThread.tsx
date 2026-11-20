@@ -129,6 +129,11 @@ export interface DockedHost extends RecordThreadHost {
   // window reads the same container (no second read). Absent (every other record, every other scope): the record's own files, as before.
   orderFiles?: OrderFilesHost
   // ---- end F-OP-215
+  // ---- F-OO-133 (order overview §3.2; B-OO-008: the owner change emits no event): the dock changed who answers this conversation
+  // (its owner dialog, from the Head or from the body's owner door) — the page reads again what it shows of it (the order's People).
+  // Absent (every other record and scope): nothing more happens.
+  onOwnerChanged?: () => void
+  // ---- end F-OO-133
 }
 
 const NAMESPACES = [HEAD_NS, FILES_NS, FILES_VIEW_NS, POPUPS_NS, HELPERS_NS, 'records', 'record-approvals', SHARES_NS, 'record-files', 'home-mywork', /* F-SA-244: the place door */ 'record-thread-card']
@@ -681,6 +686,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       setOwning(null)
       base.notify(owner && ownerId ? { ns: HEAD_NS, key: 'owner.done', params: { name: owner.name }, tone: 'success' } : { ns: HEAD_NS, key: 'owner.doneRecord', tone: 'success' })
       void base.loadThread()
+      host.onOwnerChanged?.() // F-OO-133: the page reads its side again (no event comes)
     } catch (error) {
       const kind = isApiError(error) ? error.kind : 'network'
       setOwning({ busy: false, problem: th(`owner.problem.${kind === 'forbidden' || kind === 'step_up' ? 'forbidden' : kind === 'invalid' ? 'invalid' : kind === 'not_found' ? 'notFound' : kind === 'network' || kind === 'unavailable' ? 'network' : 'failed'}`) })
@@ -775,6 +781,13 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const reportNew = frame?.reportNew
   useEffect(() => reportNew?.(base.newCount), [reportNew, base.newCount])
   useEffect(() => () => reportNew?.(0), [reportNew])
+  // ---- F-OO-135 (order overview §3.1): how many follow this conversation, told to the frame as the new messages are, with its record
+  // (the frame keeps only the page's own: the order's People head says "Followers · 4 ›"); null before the read and once the dock left.
+  const reportFollowers = frame?.reportFollowers
+  const followerCount = followers.data?.count ?? null
+  useEffect(() => reportFollowers?.(followerCount, key), [reportFollowers, followerCount, key])
+  useEffect(() => () => reportFollowers?.(null, key), [reportFollowers, key])
+  // ---- end F-OO-135
 
   // ── B-TH-288 (B-TH-093; T1-F13): Done — a work state apart from Close; whoever may write on the conversation, online ───────────
   const [doneBusy, setDoneBusy] = useState(false)

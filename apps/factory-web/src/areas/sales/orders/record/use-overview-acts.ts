@@ -10,9 +10,10 @@ import { applyBulk } from '../../../_shared/list-tools/api'
 import { problemOf } from '../../../../list-frame/tools/transport'
 import { noteBodyOf, noteFailureOf, noteRefusalOf } from './overview/facts'
 import type { Phrase } from '../model'
+import { useGateActs, type GateActsInput } from './use-gate-acts' // F-OO-145: Next dates' gates with Planning's own dialogs
 
-export type OverviewActsModel = Pick<OrderRecordModel, 'overviewLine'>
-export type OverviewActsActions = Pick<OrderRecordActions, 'onOpenLine' | 'onRequestedChange' | 'onLineChange' /* F-OO-125 */ | 'onCustomerRefChange' /* F-OO-209 */ | 'onNoteSave' /* F-OO-210 */>
+export type OverviewActsModel = Pick<OrderRecordModel, 'overviewLine' | 'gateActs' /* F-OO-145 */>
+export type OverviewActsActions = Pick<OrderRecordActions, 'onOpenLine' | 'onRequestedChange' | 'onLineChange' /* F-OO-125 */ | 'onCustomerRefChange' /* F-OO-209 */ | 'onNoteSave' /* F-OO-210 */ | 'gateActs' /* F-OO-145 */>
 
 /**
  * F-OP-134 (N-5): Overview's acts — F-SA-232: the line whose sizes the centred window shows (Overview › Progress by line). Mounted by
@@ -27,6 +28,8 @@ export type OverviewActsActions = Pick<OrderRecordActions, 'onOpenLine' | 'onReq
  * F-OO-210 (order overview 11-design §7.3; Owner D4): the office note's Save note — the Orders sheet's own write (`applyBulk`, list
  * `sales.orders`: the command sales.orders.editCells, which checks the version, refuses a closed or cancelled order and moves the
  * version), through the page's one write; the order is read again after it.
+ * F-OO-145 (order overview 10-design §4.2): Next dates' steps before production — Planning's own gate dialogs from a one-order model of
+ * the page's read (use-gate-acts, mounted here: the container's hook), their writes Planning's routes through the page's one write.
  */
 export function useOverviewActs(
   input: {
@@ -36,13 +39,17 @@ export function useOverviewActs(
     readonly setDialog?: (dialog: RecordDialog | null) => void
     /** F-OO-210: the API, the order as last read and the page's one write (the container's acts base). */
     readonly base?: RecordActsBase
+    /** F-OO-145: the production read and its re-read, the reader's rights and id, the prefix, the live stream (Planning's model). */
+    readonly gates?: GateActsInput
   } = {},
 ): { model: OverviewActsModel; actions: OverviewActsActions } {
   const [overviewLine, setOverviewLine] = useState<string | null>(null)
+  const gates = useGateActs(input.gates, input.base) // F-OO-145
   return {
-    model: { overviewLine },
+    model: { overviewLine, gateActs: gates.model /* F-OO-145 */ },
     actions: {
       onOpenLine: setOverviewLine,
+      gateActs: gates.actions, // F-OO-145: Move the date…, Mark done…, Start before the gate… and the dialogs' own acts
       // F-OO-144: the small dialog (held there by amendHeld, as the door is); no page hop.
       onRequestedChange: () => input.setDialog?.({ kind: 'requested' }),
       // F-OO-125: edit mode (an open draft kept: use-lines-acts' onAmendStart), the line's style group focused.

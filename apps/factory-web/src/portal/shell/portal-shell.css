@@ -846,4 +846,18 @@
   font-size: var(--nds-font-size-xs);
   color: var(--nds-text-muted);
 }
+
+/* F-CP-156 (cp-fx14, walk L3): held, not disabled — the box keeps its readable label (never the disabled grey, 1.8:1) and says why
+   beside it in the DS text colour with a lock; a held box does not invite a click. */
+.fw-pthread-designer[data-held] .fw-pthread-designer-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}
+.fw-pthread-designer[data-held] label,
+.fw-pthread-designer[data-held] input[type='checkbox'] {
+  cursor: default;
+}
 /* ---- end F-CP-156 */
