@@ -453,20 +453,39 @@ describe('production and shipping move the order (SAL-204: the system is their o
     await refused('a.sales', 'POST', `${orderUrl(so3)}/cancel`, { version: before.version, reason: 'The customer withdrew.' }, 409)
   })
 
-  it('ready by hand: IN_PRODUCTION → READY with a reason while quality release is not in use', async () => {
+  // B-OO-002 (order overview N13, Owner D1): Mark ready only after quality released every piece — quality release is always in use.
+  it('ready by hand: held with the N of M words until quality released every piece (409), then the catch-up before the handler runs', async () => {
     const so3 = seeded.a.quality.serialSalesOrderId
+    /** SEED-SO-0003 asks `pieces` × BLK 52 (WO-0003 makes 4; quality released 2 of them, the quality seed): admin SQL for the facts. */
+    const orderPieces = async (pieces: number) => {
+      await admin('UPDATE "SalesOrderLineSize" s SET quantity = $2 FROM "SalesOrderLine" l WHERE s."lineId" = l.id AND l."orderId" = $1', [so3, pieces])
+      await admin('UPDATE "SalesOrderLine" SET quantity = $2 WHERE "orderId" = $1', [so3, pieces])
+    }
     const { order: record } = await ok('a.sales', 'GET', orderUrl(so3))
     // B-W2a-30: cancel is offered while IN_PRODUCTION too, held here by SH-0002 being packed for it.
     expect(record.actions.map((action: Json) => action.action)).toEqual(['changePromise', 'markReady', 'cancel'])
     expect(record.actions[2]).toMatchObject({ allowed: false, held: expect.stringMatching(/SEED-SH-0002/) })
+    // Quality released 2 of the 4 jackets: Mark ready is listed, held with the counts.
+    expect(record.actions[1]).toEqual({ action: 'markReady', allowed: false, needsReason: true, held: 'Quality releases the garments: 2 of 4 released. The order turns Ready by itself when all are.' })
     await refused('a.sales', 'POST', `${orderUrl(so3)}/ready`, { version: record.version, reason: '' }, 400)
     await refused('a.viewer', 'POST', `${orderUrl(so3)}/ready`, { version: record.version, reason: 'Quality signed the paper sheet.' }, 403)
-    const ready = (await ok('a.sales', 'POST', `${orderUrl(so3)}/ready`, { version: record.version, reason: 'Quality signed the paper sheet for all four.' })).order
-    expect(ready).toMatchObject({ status: 'READY', version: record.version + 1 })
-    // Quality released 2 of the 4 jackets: the person's reason carried the move, and the audit row says so.
-    expect((await auditsOf(so3)).at(-1)).toMatchObject({ action: 'orders.markReady', audience: 'OFFICE', reason: 'Quality signed the paper sheet for all four.', before: { status: 'IN_PRODUCTION' }, after: { status: 'READY', releasedByQuality: false } })
+    // A person's reason alone no longer opens it (the customer list's bulk Mark N ready gets the same 409 per order).
+    const held = await refused('a.sales', 'POST', `${orderUrl(so3)}/ready`, { version: record.version, reason: 'Quality signed the paper sheet for all four.' }, 409)
+    expect(held.message).toMatch(/every piece still to ship released by quality \(2 of 4 released\)/)
+    expect([await statusOf(so3), (await one('SELECT version FROM "SalesOrder" WHERE id = $1', [so3])).version]).toEqual(['IN_PRODUCTION', record.version])
+    expect((await auditsOf(so3)).filter((row) => row.action === 'orders.markReady')).toEqual([])
+
+    // The order now asks the 2 quality released, and the release handler has not run yet: allowed — the catch-up by hand.
+    await orderPieces(2)
+    const { order: released } = await ok('a.sales', 'GET', orderUrl(so3))
+    expect(released.actions.find((action: Json) => action.action === 'markReady')).toEqual({ action: 'markReady', allowed: true, needsReason: true, held: null })
+    const ready = (await ok('a.sales', 'POST', `${orderUrl(so3)}/ready`, { version: released.version, reason: 'Quality released the last two; the system had not moved it yet.' })).order
+    expect(ready).toMatchObject({ status: 'READY', version: released.version + 1 })
+    expect((await auditsOf(so3)).at(-1)).toMatchObject({ action: 'orders.markReady', audience: 'OFFICE', reason: 'Quality released the last two; the system had not moved it yet.', before: { status: 'IN_PRODUCTION' }, after: { status: 'READY', releasedByQuality: true } })
     expect((await statusEvents(so3)).at(-1)!.payload).toMatchObject({ from: 'IN_PRODUCTION', to: 'READY', by: 'person' })
     await refused('a.sales', 'POST', `${orderUrl(so3)}/ready`, { version: ready.version, reason: 'Again.' }, 409)
+    // The seed's 4 again, so the tests that follow read SEED-SO-0003 as before (READY, BLK 52 × 4).
+    await orderPieces(4)
   })
 
   it('SEED-SO-0002: cancel names the draft work order and what cannot be undone; the release handler follows every fact at once', async () => {

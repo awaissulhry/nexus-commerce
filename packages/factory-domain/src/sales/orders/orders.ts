@@ -28,7 +28,9 @@ import { priceBasisOf, type SalesFeeKind, type SalesLineKind } from '../quotes/q
  *                    (Owner D2): back from READY by the system ONLY when a quality release is taken back
  *                    (quality.release_reversed: `reversalMoves`), not every piece is released any more and nothing shipped
  *   READY            the system, when quality has released every ordered piece (B-OO-001: quality.garments_released, and
- *                    every follow); by hand with a reason (orders.manage) while quality release is not in use
+ *                    every follow); B-OO-002 (order overview N13, Owner D1): by hand with a reason (orders.manage) only once
+ *                    quality released every piece too — the catch-up before the system's follow. Quality release is always in
+ *                    use (no setting turns it off; only released garments ship), so a reason never opens READY on its own
  *   PARTLY_SHIPPED   the system, from the shipped quantities (shipment.status_changed): part of the order left
  *   SHIPPED          the system, from the shipped quantities: every ordered piece left (a returned shipment brings a
  *                    SHIPPED order back to PARTLY_SHIPPED)
@@ -105,9 +107,11 @@ export interface SalesOrderFacts {
   readonly shipped?: ShippedState
   /** Quality released every ordered piece (releases less their reversals). */
   readonly released?: boolean
+  /** B-OO-002: how many of the pieces quality has to release it released (`releasedPiecesOf`): the held words' counts. */
+  readonly releasedPieces?: ReleasedPieces
   /** Is it settled? (CLOSED) */
   readonly settlement?: SettlementAnswer
-  /** The reason a person gave: a cancellation, a ready by hand, a close while not settled. */
+  /** The reason a person gave: a cancellation, a ready by hand (kept; B-OO-002: it never opens READY), a close while not settled. */
   readonly reason?: string | null
   /**
    * B-W2b-398 (LOG-067): every shipment of the order that left has arrived: at least one DELIVERED and none still travelling
@@ -125,6 +129,33 @@ const hasReason = (facts: SalesOrderFacts): boolean => typeof facts.reason === '
 
 const missingWords = (settlement: SettlementAnswer | undefined): string =>
   settlement && settlement.missing.length > 0 ? settlement.missing.map((entry) => entry.message).join(' ') : 'nothing says so yet'
+
+// ── B-OO-002 (order overview N13, Owner D1): Mark ready only after quality released every piece ───────────────────────────────
+/** How many of the pieces quality has to release it released (`releasedPiecesOf`). */
+export interface ReleasedPieces {
+  readonly released: number
+  readonly toRelease: number
+}
+
+/**
+ * Mark ready waits for quality, in words with the counts (it + en): the API's held words of `markReady` say the English, the
+ * office web's `held.readyQuality` says the same in both languages (its catalogue test reads these).
+ */
+export const READY_QUALITY_WORDS: Readonly<{ readonly en: string; readonly it: string }> = Object.freeze({
+  en: 'Quality releases the garments: {n} of {m} released. The order turns Ready by itself when all are.',
+  it: "Il rilascio lo fa la qualità: {n} su {m} rilasciati. L'ordine diventa Pronto da solo quando lo sono tutti.",
+})
+
+const countsIn = (words: string, pieces: ReleasedPieces): string => words.replace('{n}', String(pieces.released)).replace('{m}', String(pieces.toRelease))
+
+/** markReady's held words: with the counts when the caller read them (the API always does). */
+const readyHeldWords = (pieces: ReleasedPieces | undefined): string =>
+  pieces ? countsIn(READY_QUALITY_WORDS.en, pieces) : 'Quality releases the garments. The order turns Ready by itself when all are.'
+
+/** What the READY guard misses (the 409's words). */
+const readyMissingWords = (pieces: ReleasedPieces | undefined): string =>
+  pieces ? `every piece still to ship released by quality (${pieces.released} of ${pieces.toRelease} released)` : 'every piece still to ship released by quality'
+// ── end B-OO-002 ──
 
 export const salesOrderMachine = defineMachine<SalesOrderStatus, SalesOrderFacts>({
   name: 'sales order',
@@ -151,7 +182,8 @@ export const salesOrderMachine = defineMachine<SalesOrderStatus, SalesOrderFacts
         : (facts.releasedWorkOrders ?? 0) > 0
           ? []
           : ['a released work order of its lines'],
-    READY: (facts) => (facts.released === true || hasReason(facts) ? [] : ['every ordered piece released by quality, or a reason (quality release is not in use yet)']),
+    // B-OO-002 (Owner D1): quality's release only — a person's reason never opens it (quality release is always in use).
+    READY: (facts) => (facts.released === true ? [] : [readyMissingWords(facts.releasedPieces)]),
     PARTLY_SHIPPED: (facts) => (facts.shipped === 'PARTLY' ? [] : ['part of the order shipped and part not']),
     SHIPPED: (facts) => (facts.shipped === 'ALL' ? [] : ['every ordered piece shipped']),
     // B-W2b-398 (LOG-067)
@@ -351,6 +383,33 @@ export function orderProgress(facts: ProgressFacts): OrderProgress {
     shipped: all ? 'ALL' : any ? 'PARTLY' : 'NONE',
     released: goods.length > 0 && goods.every((row) => row.released + row.closedShort >= row.ordered),
   }
+}
+
+/** One line as `releasedPiecesOf` reads it: its kind and its sizes' numbers (the API's progress rows, the web's line sizes). */
+export interface ReleaseLine {
+  readonly kind: string
+  readonly rows: readonly Pick<Progress, 'ordered' | 'released' | 'closedShort'>[]
+}
+
+/**
+ * B-OO-002 (order overview N13, Owner D1): how many of the pieces quality has to release it released — Mark ready's held words
+ * ("2 of 4 released"), the same at both ends (the API from its progress rows, the office web from the order read's line sizes).
+ * Each size counts up to what it has to release (ordered less closed short): a size released beyond its order never makes up for
+ * another, so `released === toRelease` exactly when `orderProgress` says `released` (an order with goods). A FEE line is never
+ * made or released (B-W2b-330): left out. Pure.
+ */
+export function releasedPiecesOf(lines: readonly ReleaseLine[]): ReleasedPieces {
+  let released = 0
+  let toRelease = 0
+  for (const line of lines) {
+    if (line.kind === 'FEE') continue
+    for (const row of line.rows) {
+      const target = Math.max(0, row.ordered - row.closedShort)
+      toRelease += target
+      released += Math.min(Math.max(0, row.released), target)
+    }
+  }
+  return { released, toRelease }
 }
 
 // ---- dates ------------------------------------------------------------------------------------------------------------
@@ -564,7 +623,12 @@ export interface ActionView {
 export function orderActions(status: SalesOrderStatus, facts: SalesOrderFacts): ActionView[] {
   const actions: ActionView[] = []
   if (!FINAL_STATUSES.includes(status)) actions.push({ action: 'changePromise', allowed: true, needsReason: true, held: null })
-  if (status === 'IN_PRODUCTION') actions.push({ action: 'markReady', allowed: true, needsReason: true, held: null })
+  // B-OO-002 (order overview N13, Owner D1): listed while in production, allowed only once quality released every piece (the
+  // catch-up before the system's own follow); held with the counts, so a person never tells the customer "Ready" while nothing may ship.
+  if (status === 'IN_PRODUCTION') {
+    const released = facts.released === true
+    actions.push({ action: 'markReady', allowed: released, needsReason: true, held: released ? null : readyHeldWords(facts.releasedPieces) })
+  }
   if (CANCEL_STATUSES.includes(status)) {
     const check = canTransition(salesOrderMachine, status, 'CANCELLED', { ...facts, reason: 'asked' })
     actions.push({ action: 'cancel', allowed: check.ok, needsReason: true, held: check.ok ? null : `Cancelling needs ${check.missing.join(' and ')}.` })
