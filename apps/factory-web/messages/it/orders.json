@@ -2121,7 +2121,7 @@
     "change": "Cambia…",
     "ownDates": "Le date dell'ordine",
     "backupFor": "per tutti gli ordini di {customer}",
-    "backupElsewhere": "Cambialo nella pagina di {customer} ›"
+    "backupElsewhere": "Apri il cliente ›"
   },
   "wocs": {
     "title": "Modifiche agli ordini di lavoro di questo ordine",
