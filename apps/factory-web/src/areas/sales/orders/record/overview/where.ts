@@ -1,13 +1,15 @@
 import { PLAIN_STAGES, type PlainStage, type StageStripInput } from '../../../../../lib/production/model'
 import { officeStripStateOf, type OfficeStripState } from '@nexus/factory-domain/production-brand/stages' // F-OO-101: the ONE strip state
 import type { Order } from '../../api'
-import { depositGate, type Phrase } from '../../model'
+import type { Phrase } from '../../model'
 import type { BrandStage, Dates, Headline } from './api'
 
 /**
- * F-OO-100 (order overview lane: one file per section) — "Where it is now", its rules moved out of model.ts unchanged (F-SA-232:
- * one sentence, the ex-factory date and how it moved, the five plain stages, what is in work as counts). Who acts next and the
- * health stay in model.ts: the band and the ONE waiting list read them too.
+ * F-OO-100 (order overview lane: one file per section) — "Where it is now", its rules moved out of model.ts (F-SA-232). The health
+ * stays in model.ts: the band reads it too.
+ *
+ * F-OO-101 / F-OO-102 / F-OO-103: the headline is the status and the stage, the five stages read the same office state, and the
+ * section keeps only that (the facts that left live on in one other place each: WhereCard.tsx says where).
  */
 
 const phrase = (key: string, params?: Record<string, string | number>): Phrase => (params ? { key, params } : { key })
@@ -89,26 +91,16 @@ export function stageStripOf(order: Pick<Order, 'status'>, headline: Headline | 
 }
 
 /**
- * F-OO-102: the quiet line under the dots ("Stages are set by the floor and quality, never by hand", the production parts' words)
- * shows where the dots are drawn — never while the order waits for a yes or once it is cancelled.
+ * F-OO-102: the dots are drawn — with their quiet line ("Stages are set by the floor and quality, never by hand") — only where they say
+ * something true: while the work is current and once production is over; never while the order waits for a yes (no stage is now)
+ * or once it is cancelled (the headline's line says where the work had reached).
  */
-export const stagesNoteShown = (state: OfficeStripState): boolean => state === 'CURRENT' || state === 'ALL_DONE'
+export const stagesShown = (state: OfficeStripState): boolean => state === 'CURRENT' || state === 'ALL_DONE'
 
-/** Why the StageStrip waits at Preparing: work orders are made after the deposit. */
-export function preparingNote(order: Pick<Order, 'status' | 'depositRequired' | 'chain'>, headline: Headline | null | undefined): Phrase | null {
-  if (order.status !== 'CONFIRMED' || headline?.stage) return null
-  const gate = depositGate(order)
-  return gate.state === 'WAITING' || gate.state === 'MISSING' ? phrase('overview.afterDeposit') : null
-}
-
-/** "Bundles in work: 3 at Sewing" — counts only (the order's ACTIVE bundles), never a name or a station; none: nothing said. */
-export function inWorkOf(headline: Headline | null | undefined): { readonly count: number; readonly stage: PlainStage } | null {
-  const stage = headline?.stage ?? null
-  if (!headline || !stage || headline.inWork.bundles <= 0) return null
-  return { count: headline.inWork.bundles, stage: plainStageOf(stage.code) }
-}
-
-/** The ex-factory line: the promise and how it moved ("moved 2× · +6 d since first promised"); null without a promise. */
+/**
+ * The ex-factory line: the promise and how it moved ("moved 2× · +6 d since first promised"); null without a promise.
+ * F-OO-103: section 1 no longer draws it — the promise lives in Next dates' Promised row (F-OO-141 may read it from here).
+ */
 export function exFactoryOf(order: Pick<Order, 'promiseDate'>, headline: Headline | null | undefined): Phrase | null {
   const date = headline?.promise.date ?? order.promiseDate
   if (!date) return null

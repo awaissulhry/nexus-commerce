@@ -1,0 +1,33 @@
+/* ── F-OO-103 (order overview §1.1): "Where it is now", the section 1 frame — the title and "Live · as of", the headline (the status
+   and the stage) with its quiet line, the strips slot (F-OO-104 / F-OO-105), the five stages with their quiet line, the moves slot
+   (F-OO-107). The card is a container already (overview.css makes every Overview card `fw-so-ov-card`): no container here.
+   Its rules came from so/orders.css (.fw-so-where, .fw-so-headline). Tokens only. ── */
+.fw-so-where {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+/* The headline and its quiet line sit close together; at 375 the headline wraps (never a sideways scroll). */
+.fw-so-where-said {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-so-headline {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-medium);
+  overflow-wrap: break-word;
+}
+
+/* The five stages and their quiet line ("set by the floor and quality, never by hand") under them. */
+.fw-so-where-stages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}

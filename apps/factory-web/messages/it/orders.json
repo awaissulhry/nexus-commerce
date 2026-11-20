@@ -1566,10 +1566,7 @@
     "where": "A che punto è",
     "progress": "Avanzamento per riga",
     "progressHint": "I pezzi di questo ordine · una riga apre le sue taglie",
-    "bundles_one": "Fasci in lavorazione: {count} a {stage}",
-    "bundles_other": "Fasci in lavorazione: {count} a {stage}",
     "notInWorkOrders": "Non ancora negli ordini di lavoro",
-    "afterDeposit": "Gli ordini di lavoro si fanno dopo l'acconto",
     "exFactory": "Franco fabbrica {date}",
     "exFactoryMovedOnly": "Franco fabbrica {date} · spostata {count} volte",
     "exFactoryMoved": "Franco fabbrica {date} · spostata {count} volte · {days} g dalla prima promessa",
@@ -1579,11 +1576,7 @@
       "delivered": "Spedito il {shipped} · consegnato il {delivered}"
     },
     "fact": {
-      "who": "Chi deve agire",
-      "exFactory": "Franco fabbrica",
-      "health": "Stato",
-      "customer": "Cliente",
-      "inWork": "In lavorazione"
+      "exFactory": "Franco fabbrica"
     },
     "col": {
       "line": "Riga"

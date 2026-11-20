@@ -5,7 +5,8 @@ import { order } from '../../_demo/fixtures'
 import { ORDER_STATUSES, type OrderStatus } from '../../api' // F-OO-101
 import { BRAND_STAGES, type BrandStage, type Headline } from './api' // F-OO-101
 import { CONFIRMED_READ, HEADLINE, PRODUCTION_READ } from './fixtures'
-import { exFactoryOf, headlineOf, inWorkOf, preparingNote, stageStripOf, stagesNoteShown } from './where'
+import { exFactoryOf, headlineOf, stageStripOf, stagesShown } from './where'
+import * as where from './where' // F-OO-103: what section 1's rules still export
 import { bandHealthOf, healthInputOf, waitingOf, whoActsNextOf } from './model'
 
 /**
@@ -76,15 +77,15 @@ describe('F-OO-101: the headline is the status and the stage, one sentence the d
 
 describe('"Where it is now": the stages and the facts', () => {
   // F-OO-102: rewritten — the strip carries the office state (the headline's own); the blocked why left the current dot (the strips say it).
-  it('the stages: the stage now with its day, the working plan, the blocked mark without its why; before any work order Preparing after the deposit', () => {
+  it('the stages: the stage now with its day, the working plan, the blocked mark without its why; before any work order Preparing', () => {
     const strip = stageStripOf(order('IN_PRODUCTION'), HEADLINE, PRODUCTION_READ.dates)
     expect(strip).toMatchObject({ state: 'CURRENT', stage: 'SEWING', reached: { SEWING: '2026-11-13' }, sewingCounted: true, blocked: null, expected: { CUTTING: '2026-11-10', SEWING: '2026-11-13', QUALITY: '2026-12-10' } })
     const holds = [{ kind: 'QUALITY' as const, words: { en: 'Quality hold', it: 'Sospensione qualità' }, since: '2026-11-14' }]
     const held = stageStripOf(order('IN_PRODUCTION'), { ...HEADLINE, held: true, holds }, null)
     expect(held.blocked).toEqual({ why: null })
     expect(JSON.stringify(held)).not.toContain('Quality hold')
-    expect(stageStripOf(order('CONFIRMED'), CONFIRMED_READ.headline, null)).toMatchObject({ state: 'CURRENT', stage: 'PREPARING' })
-    expect(preparingNote(order('CONFIRMED'), CONFIRMED_READ.headline)).toEqual({ key: 'overview.afterDeposit' })
+    // F-OO-103: Preparing carries no deposit note any more ("Work orders are made after the deposit" is the deposit strip's, F-OO-105).
+    expect(stageStripOf(order('CONFIRMED'), CONFIRMED_READ.headline, null)).toEqual({ state: 'CURRENT', stage: 'PREPARING', expected: { CUTTING: null, SEWING: null, QUALITY: null }, blocked: null })
     expect(stageStripOf(order('IN_PRODUCTION'), { ...HEADLINE, stage: null }, null)).toEqual({ state: 'CURRENT', stage: null })
   })
 
@@ -95,18 +96,19 @@ describe('"Where it is now": the stages and the facts', () => {
     // After shipping the keeper stops: the kept stage keeps its day, every stage reads done, a hold still kept marks nothing.
     const held = { ...HEADLINE, held: true, holds: [{ kind: 'PRODUCTION' as const, words: { en: 'x', it: 'x' }, since: '2026-11-14' }] }
     for (const status of ['SHIPPED', 'DELIVERED', 'CLOSED'] as const) expect(stageStripOf(order(status), held, PRODUCTION_READ.dates), status).toEqual({ state: 'ALL_DONE', stage: 'SEWING', reached: { SEWING: '2026-11-13' } })
-    // The quiet line under the dots shows where they are drawn.
-    expect(ORDER_STATUSES.filter((status) => stagesNoteShown(headlineOf(order(status), HEADLINE).state))).toEqual(['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'DELIVERED'])
+    // The dots (and their quiet line) are drawn only where they say something true.
+    expect(ORDER_STATUSES.filter((status) => stagesShown(headlineOf(order(status), HEADLINE).state))).toEqual(['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'DELIVERED'])
   })
 
-  it('who acts next, the ex-factory slip, the bundles as counts only (OW-6), the health from the keeper else the order’s lateness', () => {
+  // F-OO-103: rewritten — the bundles in work left section 1 (Progress by line counts each step; the design case proves they are not
+  // drawn here); the ex-factory slip is the Promised row's (Next dates), the health the band's.
+  it('who acts next, the ex-factory slip, the health from the keeper else the order’s lateness; no bundles rule here any more', () => {
     // F-OP-103: who acts next is the ONE waiting list's first row.
     const rows = waitingOf({ headline: HEADLINE }, { requests: [], approvals: [], recordPayment: false, locale: 'it' })
     expect(whoActsNextOf(rows, HEADLINE)).toMatchObject({ who: 'US', since: '2026-11-17T09:05:00Z', kind: 'request' })
     expect(whoActsNextOf([], null)).toEqual({ who: undefined, since: null, kind: 'record', row: null, still: null })
     expect(exFactoryOf(order('IN_PRODUCTION'), HEADLINE)).toEqual({ key: 'overview.exFactoryMoved', params: { date: '2026-12-15', count: 2, days: '+6' } })
-    expect(inWorkOf(HEADLINE)).toEqual({ count: 3, stage: 'SEWING' })
-    expect(inWorkOf(CONFIRMED_READ.headline)).toBeNull()
+    for (const gone of ['inWorkOf', 'preparingNote']) expect(gone in where, gone).toBe(false)
     const atRisk = healthInputOf(order('IN_PRODUCTION'), HEADLINE)
     expect(atRisk.computed).toBe('AT_RISK')
     expect(bandHealthOf(atRisk)).toBe(true)

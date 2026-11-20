@@ -654,17 +654,7 @@ fieldset.fw-so-colours {
   gap: var(--nds-space-16);
   min-width: 0;
 }
-.fw-so-where {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-12);
-  min-width: 0;
-}
-.fw-so-headline {
-  margin: 0;
-  font-size: var(--nds-font-size-xl);
-  font-weight: var(--nds-font-weight-medium);
-}
+/* F-OO-103: "Where it is now"'s own rules (.fw-so-where, .fw-so-headline) went to record/view/overview/where.css. */
 /* A line's first cell is the button that opens its sizes: the picture beside its name and stage. */
 .fw-so-lineopen {
   display: inline-flex;

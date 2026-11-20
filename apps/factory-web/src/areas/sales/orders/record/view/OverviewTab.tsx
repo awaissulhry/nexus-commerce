@@ -27,6 +27,8 @@ import './overview/overview.css' // F-OO-201: the pairs and the shared card row
  * centred window (‹ › walk the lines). The production lane's parts in place (StageStrip, HealthPill, WaitingOnPill, PiecesGrid,
  * FreshnessLine) and the one picture part. Office face only: no operator, no station, no other customer.
  * F-OO-100: each card is its own file in view/overview/ (its rules in overview/<section>.ts); this file draws them in order.
+ * F-OO-103: "Where it is now" is now the headline (status · stage), its strips, the stages and the order's moves — what it showed
+ * before (who acts next, the ex-factory date, the health, Urgent, the bundles) lives in one other place each (WhereCard.tsx says where).
  */
 export function OverviewTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const locale = useLocale()

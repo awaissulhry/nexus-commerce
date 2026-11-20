@@ -48,19 +48,23 @@ describe('the production read on the page: a re-read keeps the other parts', () 
 })
 
 describe('the Overview cases draw in both languages, never a 0 for a step not counted, never a worker', () => {
-  it('in production: the sentence, who acts next, the ex-factory slip, Urgent (customer), the bundles, the stages, "Not counted here"', () => {
+  // F-OO-103: rewritten — who acts next, the ex-factory slip and the bundles left section 1 (each lives in one other place: the F-OO-103
+  // block below proves it); the band keeps At risk and Urgent (customer).
+  it('in production: the sentence, the band\'s At risk and Urgent (customer), the stages, "Not counted here"', () => {
     const text = textOf(draw('overview'))
     // F-OO-101: the headline is the status and the stage ("In production · Sewing"); "· 1 line ahead" is not said (F8).
     expect(text).not.toMatch(/line ahead|riga avanti/)
-    for (const words of ['Where it is now', 'In production · Sewing', 'Waiting on us', 'moved 2×', '+6 d since first promised', 'At risk', 'Urgent (customer)', 'Bundles in work: 3 at Sewing', 'Progress by line', 'Cut and bundled', 'Checked', 'Shipped', 'Not counted here', 'Total · 2 lines', 'Pieces as of']) expect(text, words).toContain(words)
+    for (const words of ['Where it is now', 'In production · Sewing', 'Waiting on us', 'At risk', 'Urgent (customer)', 'Progress by line', 'Cut and bundled', 'Checked', 'Shipped', 'Not counted here', 'Total · 2 lines', 'Pieces as of']) expect(text, words).toContain(words)
     const it = textOf(draw('overview', 'it'))
-    for (const words of ['A che punto è', 'In produzione · Confezione', 'Avanzamento per riga', 'Tagliati e in fasci', 'Spediti', 'Non contato qui', 'Urgente (cliente)', 'Fasci in lavorazione: 3 a Confezione']) expect(it, words).toContain(words)
+    for (const words of ['A che punto è', 'In produzione · Confezione', 'Avanzamento per riga', 'Tagliati e in fasci', 'Spediti', 'Non contato qui', 'Urgente (cliente)']) expect(it, words).toContain(words)
     expect(text).not.toMatch(/\b(?:operator|operatore|station|postazione)\b/i)
   })
 
-  it('before any work order: Confirmed · Preparing (F-OO-101), Preparing with why, "Not in work orders yet", "Nothing cut yet"', () => {
+  // F-OO-103: rewritten — the deposit note on Preparing left section 1 (the deposit strip says it, F-OO-105).
+  it('before any work order: Confirmed · Preparing (F-OO-101), Preparing, "Not in work orders yet", "Nothing cut yet"', () => {
     const text = textOf(draw('overview-confirmed'))
-    for (const words of ['Confirmed · Preparing', 'Work orders are made after the deposit', 'Not in work orders yet', 'Nothing cut yet']) expect(text, words).toContain(words)
+    for (const words of ['Confirmed · Preparing', 'Not in work orders yet', 'Nothing cut yet']) expect(text, words).toContain(words)
+    expect(text).not.toContain('Work orders are made after the deposit')
   })
 
   it('loading says it reads (no figure), a failed read says so in this part only with Try again', () => {
@@ -73,8 +77,11 @@ describe('the Overview cases draw in both languages, never a 0 for a step not co
   it('every overview word exists in both languages', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['tab.overview', 'tab.attention', 'overview.where', 'overview.progress', 'overview.progressHint', 'overview.notInWorkOrders', 'overview.afterDeposit', 'overview.piecesAsOf', 'overview.headline.shipped', 'overview.headline.delivered', 'overview.fact.who', 'overview.fact.exFactory', 'overview.fact.health', 'overview.fact.customer', 'overview.fact.inWork', 'overview.col.line', 'overview.sizes.label', 'overview.sizes.finish', 'overview.sizes.units', 'overview.sizes.openLines']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
-      for (const key of ['overview.bundles', 'overview.total', 'overview.madeExtra', 'mtm.units']) expect(t(key, { count: 2, stage: 'x' }), `${locale}: ${key}`).not.toBe(key)
+      for (const key of ['tab.overview', 'tab.attention', 'overview.where', 'overview.progress', 'overview.progressHint', 'overview.notInWorkOrders', 'overview.piecesAsOf', 'overview.headline.shipped', 'overview.headline.delivered', 'overview.fact.exFactory', 'overview.col.line', 'overview.sizes.label', 'overview.sizes.finish', 'overview.sizes.units', 'overview.sizes.openLines']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      for (const key of ['overview.total', 'overview.madeExtra', 'mtm.units']) expect(t(key, { count: 2, stage: 'x' }), `${locale}: ${key}`).not.toBe(key)
+      // F-OO-103: section 1's own facts left the catalogue with the card's facts (Ex-factory stays: Next dates says it).
+      for (const key of ['overview.fact.who', 'overview.fact.health', 'overview.fact.customer', 'overview.fact.inWork', 'overview.afterDeposit']) expect(t(key), `${locale}: ${key}`).toBe(key)
+      expect(t('overview.bundles', { count: 2, stage: 'x' }), `${locale}: overview.bundles`).toBe('overview.bundles')
       const p = createTranslator(locale, messagesFor(locale, ['production']).production!)
       expect(p('parts.pieces.stages.SHIPPED')).not.toBe('parts.pieces.stages.SHIPPED')
     }
@@ -253,8 +260,11 @@ describe('F-OP-103: the ONE waiting list — every blocker and open yes is one r
     const tab = readFileSync(new URL('../view/OverviewTab.tsx', import.meta.url), 'utf8')
     // F-OP-301: through the ONE call the badge and the Changes tab make too.
     expect(tab).toContain('const waiting = orderWaitingOf(order, model, locale)')
-    // F-OO-100: "Where it is now" is its own file; it reads the state of OverviewTab's one call.
-    expect(read('../view/overview/WhereCard.tsx')).toContain("const next = waiting.status === 'ready' ? waiting.next : null")
+    // F-OO-100: "Where it is now" is its own file. F-OO-103: it says no "who acts next" any more (Requests & changes' groups do), so it
+    // reads neither the list's first row nor the kept `headline.waiting`.
+    const where = read('../view/overview/WhereCard.tsx')
+    expect(where).not.toContain('waiting.next')
+    expect(where).not.toMatch(/headline\??\.waiting/)
     // R-21: the dock does not read this list (its pill names the thread).
     const dock = readFileSync(new URL('../dock/OrderDock.tsx', import.meta.url), 'utf8')
     expect(dock).not.toContain('waitingOf(')
@@ -400,9 +410,11 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
     // On Changes no row has a door back to Changes itself.
     expect(changes).not.toContain('Changes ›')
     const so3 = textOf(draw('f-op-301-so3-overview')).replace(/\s+/g, ' ')
-    // The header's fact says the card's own words (the kept "Waiting on us · 5 d" is not said); the card says them too.
-    expect(so3).toContain('Who acts next Nothing waits on us or on the customer')
-    expect(so3.split('Nothing waits on us or on the customer').length - 1).toBe(2)
+    // F-OO-103: rewritten — section 1 names no wait any more, so the kept "Waiting on us · 5 d" is said nowhere; the card says its own
+    // words once (it was twice: Who acts next and the card).
+    expect(so3).not.toContain('Who acts next')
+    expect(so3).not.toContain('Waiting on us · 5 d')
+    expect(so3.split('Nothing waits on us or on the customer').length - 1).toBe(1)
     // The badge and the dot read the same call (no second rule in the page).
     const page = readFileSync(new URL('../view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(page).toContain('const waiting = orderWaitingOf(order, model, locale)')
@@ -629,7 +641,9 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
     // orders.css lost only the old grid rule (the order page lane's file: nothing else of it changed).
     const orders = read('../../orders.css')
     expect(orders).not.toMatch(/\.fw-so-overview-cards \{/)
-    for (const kept of ['.fw-so-overview {', '.fw-so-where {', '.fw-so-datelist {', '.fw-so-linked {', '.fw-so-countbtn {']) expect(orders, kept).toContain(kept)
+    for (const kept of ['.fw-so-overview {', '.fw-so-datelist {', '.fw-so-linked {', '.fw-so-countbtn {']) expect(orders, kept).toContain(kept)
+    // F-OO-103: "Where it is now"'s own rules left it for the card's own file.
+    expect(read('../view/overview/where.css')).toContain('.fw-so-where {')
   })
 })
 // ---- end F-OO-201
@@ -668,3 +682,69 @@ describe('F-OO-102: "Where it is now" per state — waiting no dots, shipped eve
   })
 })
 // ---- end F-OO-102
+
+// ---- F-OO-103 (order overview §1.1, §1.6; review F8, F14): the section 1 frame — what it keeps, what left and where each lives on ----
+describe('F-OO-103: "Where it is now" keeps its title, Live, the headline and the stages; the facts left, each to one other place', () => {
+  /** Section 1's own markup: from its card up to the next card's heading (Progress by line). */
+  const sectionOne = (html: string): string => {
+    const from = html.indexOf('fw-so-where')
+    const title = html.indexOf('<h2 class="fw-so-h2">', from)
+    return html.slice(from, html.indexOf('<h2 class="fw-so-h2">', title + 1))
+  }
+  const CASES = ['overview', 'overview-confirmed', 'f-oo-102-waiting', 'f-oo-102-shipped', 'f-oo-102-cancelled', 'f-op-301-so2-overview', 'f-op-301-so3-overview']
+  const GONE = {
+    en: ['Who acts next', 'Waiting on', 'Nothing waits', 'Ex-factory', 'moved', 'Health', 'At risk', 'On track', 'Urgent', 'In work', 'Bundles in work', 'Work orders are made after the deposit'],
+    it: ['Chi deve agire', 'Tocca a', 'Niente aspetta', 'Franco fabbrica', 'spostata', 'A rischio', 'Urgente', 'Fasci in lavorazione', "Gli ordini di lavoro si fanno dopo l'acconto"],
+  } as const
+
+  it('design cases: none of the removed facts in section 1 — Who acts next, Ex-factory, Health, Customer · Urgent, In work, the deposit note', () => {
+    for (const locale of ['en', 'it'] as const) {
+      for (const id of CASES) {
+        const html = sectionOne(draw(id, locale))
+        expect(html, `${locale} ${id}`).toContain(locale === 'en' ? 'Where it is now' : 'A che punto è')
+        const text = textOf(html)
+        for (const words of GONE[locale]) expect(text, `${locale} ${id}: ${words}`).not.toContain(words)
+        // No facts grid (the DS KeyValue) in section 1 any more.
+        expect(html, `${locale} ${id}`).not.toContain('nds-kv')
+      }
+    }
+    // Each fact lives on in ONE other place: the band keeps At risk and the customer's Urgent; Requests & changes says who waits.
+    const page = textOf(draw('overview'))
+    for (const words of ['At risk', 'Urgent (customer)', 'Waiting on us: 1']) expect(page, words).toContain(words)
+  })
+
+  it('it keeps the title, "Live · as of", the headline (with its quiet line) and the stages\' one link, in this order', () => {
+    const html = sectionOne(draw('overview'))
+    const at = ['<h2 class="fw-so-h2">Where it is now</h2>', 'fw-prp-fresh', '<p class="fw-so-headline">In production · Sewing</p>', 'class="fw-prp-strip-go"', 'Stages are set by the floor and quality, never by hand'].map((part) => html.indexOf(part))
+    expect(at.every((index) => index >= 0), at.join(',')).toBe(true)
+    expect([...at].sort((a, b) => a - b)).toEqual(at)
+    // Waiting for a yes and cancelled keep the title, Live and the headline with its quiet line; there are no dots to link.
+    for (const id of ['f-oo-102-waiting', 'f-oo-102-cancelled']) {
+      const frame = sectionOne(draw(id))
+      expect(frame, id).toContain('fw-prp-fresh')
+      expect(frame, id).toMatch(/<p class="fw-so-headline">[^<]+<\/p><p class="fw-so-hint">[^<]+<\/p>/)
+      expect(frame, id).not.toContain('fw-prp-strip')
+    }
+  })
+
+  it('the frame\'s source: a strips slot and a moves slot in place, no fact\'s part left; its own where.css (tokens only, no container of its own)', () => {
+    const card = read('../view/overview/WhereCard.tsx')
+    const strips = card.indexOf('F-OO-103: the strips slot')
+    const stages = card.indexOf('<StageStrip')
+    const moves = card.indexOf('F-OO-103: the moves slot')
+    expect(strips).toBeGreaterThan(card.indexOf('className="fw-so-headline"'))
+    expect(stages).toBeGreaterThan(strips)
+    expect(moves).toBeGreaterThan(stages)
+    for (const gone of ['KeyValue', 'WaitingOnPill', 'HealthPill', 'exFactoryOf', 'inWorkOf', 'preparingNote', 'whoActsNext', "'overview.fact.", 'board.customerUrgent']) expect(card, gone).not.toContain(gone)
+    expect(card).toContain("import './where.css'")
+    const css = read('../view/overview/where.css')
+    for (const rule of ['.fw-so-where {', '.fw-so-where-said {', '.fw-so-headline {', '.fw-so-where-stages {']) expect(css, rule).toContain(rule)
+    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|\bpx\b/)
+    expect(css).not.toMatch(/container(?:-type|-name)?:/)
+    // so/orders.css lost the card's rules (the order page lane's file: only these lines), and keeps a pointer to where they went.
+    const orders = read('../../orders.css')
+    expect(orders).not.toMatch(/\.fw-so-where \{|\.fw-so-headline \{/)
+    expect(orders).toContain('record/view/overview/where.css')
+  })
+})
+// ---- end F-OO-103
