@@ -948,3 +948,36 @@ describe('F-CP-111 — the docked order\'s files line is the order\'s file set (
   })
 })
 // ---- end F-CP-111
+
+// ---- cp-walk (customer page review walk): the Work design cases draw what the live Work tab draws ----
+// The walk found the SCR-033 Work cases short of the live page's parts: the band's New order held for the Owner ("Needs the right
+// Work on sales orders": the design's record rights had no orders.manage), and no row ⋯ Next steps, no Set customer's price…, none of
+// the bar's Reply to N · Mark N ready… · Close N… · Confirm N… (the design gave the sheet none of the doors use-orders-sheet gives).
+describe('cp-walk: the Work design cases draw the live page\'s band and the sheet\'s doors', () => {
+  const html = (id: string) => {
+    const item = designScreen.cases.find((entry) => entry.id === id)!
+    const View = designScreen.view as (props: { model: unknown }) => ReturnType<typeof createElement>
+    return renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(View, { model: item.model })))
+  }
+  const NEEDS_ORDERS = 'Needs the right Work on sales orders'
+  it('the band\'s New order opens for a person who takes orders (the Owner, Sales); held in words only without orders.manage', () => {
+    for (const id of ['quotes-orders', 'work-new-order', 'work-new-order-no-price', 'work-bulk-bar']) expect(html(id), id).not.toContain(NEEDS_ORDERS)
+    for (const id of ['cp-148-work-manager', 'work-bulk-bar-manager']) expect(html(id), id).toContain(NEEDS_ORDERS)
+  })
+  it('three orders ticked: Reply to N, Mark 3 ready…, Close 3…, Confirm 3…; the production manager: only Mark 3 ready…, held in words', () => {
+    const owner = html('work-bulk-bar')
+    for (const words of ['Reply to Moda Demo on 3…', 'Mark 3 ready…', 'Close 3…', 'Confirm 3…']) expect(owner, words).toContain(words)
+    const manager = html('work-bulk-bar-manager')
+    expect(manager).toContain('Mark 3 ready…')
+    for (const words of ['Reply to Moda Demo on 3…', 'Close 3…', 'Confirm 3…']) expect(manager, words).not.toContain(words)
+  })
+  it('the doors the live sheet has: Next steps and the bulk commands for everyone; Set customer\'s price… only with the price grain', async () => {
+    const { workDoors } = await import('./fixtures')
+    const owner = workDoors({}, true)
+    expect([!!owner.onCommand, !!owner.onCommandMany, !!owner.onReplyMany, !!owner.onPriceCheck]).toEqual([true, true, true, true])
+    expect(workDoors({}, false).onPriceCheck, 'money wall: no door without the price grain').toBeUndefined()
+    const manager = workDoors({ role: 'manager' }, false)
+    expect([!!manager.onCommand, !!manager.onCommandMany, !!manager.onReplyMany, !!manager.onPriceCheck]).toEqual([true, true, false, false])
+  })
+})
+// ---- end cp-walk
