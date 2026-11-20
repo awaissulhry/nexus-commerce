@@ -74,7 +74,8 @@ const PO_REF = 'T-TH9-PO-0001'
 const TRACKING = ['T-TH9-TRK-0001', 'T-TH9-TRK-0002'] as const
 const TRACK_LINK = 'https://track.example.com/T-TH9-TRK-0002'
 const PAPER_DDT = 'T-TH9-77/2026'
-const AMEND_REASON = 'Made-up: Brand Alpha wants one more 50 and one fewer 52.'
+const AMEND_REASON = 'Made-up: Brand Alpha wants two more 50 and one fewer 52.'
+const DSW = words('ds-words') // F-OL-06: the DS bar's own words (its region)
 const REFUSE_WORDS = 'Made-up: asked about an older version of the order; ask it again on this one.'
 // ---- F-OO-215 (order overview lane): SEED-SO-0002's Overview ----
 /**
@@ -313,29 +314,57 @@ export default defineStage({
     await flow.step('3 · Lines changed in place (Sales): Review and save says the released work order waits and the new pieces follow now; Save changes; the planner decides the waiting change in place', async () => {
       const { page } = sales
       await sales.go(`/sales/orders/${world.order.id}?tab=lines`)
-      // F-OL-05: no edit mode — the boxes are in the table ("{colour}, size {size}"). One more 50 (a new DRAFT follows now), one
-      // fewer 52 (the released work order waits for production).
-      const size50 = page.getByRole('textbox', { name: /, size 50$/ }).first()
+      // F-OL-06 (Order LINES lane): no edit mode — the boxes are in the table, each named "{colour}, size {size}". Two more 50 (a new
+      // DRAFT follows now), one fewer 52 (the released work order waits for production): one piece more, so the amount changes.
+      const table = page.locator('.fw-lt')
+      const size50 = table.getByRole('textbox', { name: /, size 50$/ }).first()
+      const size52 = table.getByRole('textbox', { name: /, size 52$/ }).first()
       await seen(size50, 60_000)
-      await size50.fill('5')
-      await page.getByRole('textbox', { name: /, size 52$/ }).first().fill('3')
-      await press(page.getByRole('button', { name: OD('save.review'), exact: true }))
+      await expect(size50).toHaveValue('4')
+      await size50.fill('6')
+      await size52.fill('3')
+      // The mark beside each changed cell ("was 4") and the bar: ONE line changed, "1 change not saved".
+      await expect(table.getByText(OD('lines.cell.was', { value: 4 }), { exact: true })).toHaveCount(2)
+      const bar = page.getByRole('region', { name: DSW('editModeBar.region'), exact: true })
+      await seen(bar.getByText(OD('save.count', { count: 1 }), { exact: true }))
+      // Sales sees no money while changing: no price column, no line total, no totals, no currency anywhere on the tab.
+      await expect(table.getByRole('columnheader', { name: OD('lines.col.unitPrice'), exact: true })).toHaveCount(0)
+      await expect(table.getByRole('columnheader', { name: OD('lines.col.lineTotal'), exact: true })).toHaveCount(0)
+      await expect(table).not.toContainText('€')
+      await seen(table.getByText(OD('lines.head.salesHow'), { exact: true }))
+      await flow.shot(page, 'lines-changing-sales')
+      await press(bar.getByRole('button', { name: OD('save.review'), exact: true }))
       const review = dialog(page)
       await seen(review, 60_000)
-      const why = review.getByRole('textbox', { name: startsWith(OD('review.whyWords')) })
-      if ((await why.count()) > 0) await why.first().fill(AMEND_REASON)
-      // The customer's tick: not asked here (the ask is the approvals lane's flow).
-      const ask = review.getByRole('checkbox', { name: startsWith(lead(OD('review.ask'))) })
-      if ((await ask.count()) > 0 && (await ask.first().isChecked())) await ask.first().uncheck()
       const production = review.getByRole('region', { name: OD('review.production'), exact: true })
       await seen(production.getByText(OD('edit.strip.wo.waits'), { exact: false }).first(), 60_000)
       await expect(production.getByText(OD('edit.strip.wo.waits'), { exact: false }).first()).toContainText(workOrder.number)
       await seen(production.getByText(OD('edit.strip.wo.now'), { exact: false }).first())
+      // Review and save for Sales: the pieces 8 → 9, "The amount changes" — never an amount, never which way it moved.
+      await seen(review.getByText(OD('review.pieces', { before: 8, after: 9, delta: '+1' }), { exact: true }))
+      await seen(review.getByText(OD('review.amountNeutral'), { exact: true }))
+      await expect(review).not.toContainText('€')
+      const why = review.getByRole('textbox', { name: startsWith(OD('review.whyWords')) })
+      if ((await why.count()) > 0) await why.first().fill(AMEND_REASON)
+      // The tick: on by default (the amount changes, as Sales reads it), said in words; taken off here (the ask is the approvals
+      // lane's flow), and then the words say the customer is not asked.
+      const ask = review.getByRole('checkbox', { name: startsWith(lead(OD('review.ask'))) })
+      await expect(ask).toBeChecked()
+      await seen(review.getByText(OD('review.askChanges'), { exact: true }))
+      await ask.uncheck()
+      await seen(review.getByText(OD('review.askOff'), { exact: true }))
       await flow.shot(page, 'review-sales')
       const applied = await answerOf(page, 'POST', /^\/sales\/orders\/[^/]+\/amendments$/, () => press(review.getByRole('button', { name: OD('review.save'), exact: true })))
       expect((applied.workOrders.waiting as Json[]).map((entry) => entry.workOrderId)).toEqual([workOrder.id])
       expect((applied.workOrders.applied as Json[]).map((entry) => entry.route)).toEqual(['NEW_DRAFT'])
-      await seen(page.getByText(startsWith(lead(OD('save.done.both')))).first(), 60_000)
+      // Not ticked: nothing asked of the customer (no re-acceptance), and no REVISED_ORDER question sent.
+      expect(applied.amendment).toMatchObject({ reacceptance: 'NOT_NEEDED' })
+      // The toast names what followed and what waits; the bar is gone, the boxes say the saved pieces.
+      const changed = (applied.workOrders.applied as Json[]).map((entry) => entry.number).filter(Boolean).join(', ')
+      await seen(page.getByText(OD('save.done.both', { changed, waits: workOrder.number }), { exact: true }).first(), 60_000)
+      await expect(bar).toHaveCount(0)
+      await expect(size50).toHaveValue('6')
+      await expect(size52).toHaveValue('3')
       await flow.settle()
 
       // The planner decides it on the order page (F-OP-116, A14): under the work order's row "Change waits: 4 → 3 · Apply… /

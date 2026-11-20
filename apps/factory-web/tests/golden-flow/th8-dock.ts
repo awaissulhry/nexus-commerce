@@ -13,7 +13,8 @@ import { startsWith, words } from './_harness/words'
  * an office note in A's general thread (set-up: no screen writes it here). Then, as Sales at 1440 × 900:
  *   1  per scope (This order, <Customer> (general), All of <Customer>): ONE card in the dock — the pick band first, the Head 44 px,
  *      the body that scrolls (the page does not), the foot or the box inside the viewport, at 40 % (Overview) and a third (Lines);
- *   2  the scope stays across tabs, the band's Change the lines and a reload; an arrival from the orders list starts on This order;
+ *   2  the scope stays across tabs, the band's Change the lines (the dock stays put while the save bar shows; Discard on the bar)
+ *      and a reload; an arrival from the orders list starts on This order;
  *   3  no loop: five picks over 10 s write the address with no router request (0 rsc), no document, at most 6 writes of the address
  *      (each with at most Next's one echo to the same address: routerActivity `writes`);
  *   4  Answer on A's line → This order with the box focused on a reply ("Replying to …"); on the general note → General, Office note;
@@ -188,6 +189,24 @@ export default defineStage({
         await page.waitForURL(/[?&]tab=lines/)
         await expect(page, 'Change the lines keeps All of').toHaveURL(/[?&]thread=all/)
         await seen(feedHead(page))
+        // F-OL-06 (Order LINES lane): one size typed in the table shows the save bar at the bottom; the dock does not move for it.
+        const before = await boxOf(cardOf(page))
+        const size50 = page.locator('.fw-lt').getByRole('textbox', { name: /, size 50$/ }).first()
+        await expect(size50).toHaveValue('2')
+        await size50.fill('3')
+        const bar = page.getByRole('region', { name: DS('editModeBar.region'), exact: true })
+        await seen(bar.getByText(OD('save.count', { count: 1 }), { exact: true }))
+        const after = await boxOf(cardOf(page))
+        for (const side of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(after[side] - before[side]), `the dock's ${side} while the bar shows`).toBeLessThanOrEqual(1)
+        await flow.shot(page, 'dock-with-save-bar')
+        // Discard on the bar asks first ("Discard 1 change?", naming the line); Keep changing is the first choice; Discard empties it.
+        await bar.getByRole('button', { name: DS('editModeBar.discard'), exact: true }).click()
+        const confirm = page.getByRole('dialog', { name: OD('save.discard.title', { count: 1 }) })
+        await seen(confirm)
+        await confirm.getByRole('button', { name: OD('save.discard.go', { count: 1 }), exact: true }).click()
+        await expect(bar).toHaveCount(0)
+        await expect(size50).toHaveValue('2')
+        await expect(page, 'Discard keeps All of').toHaveURL(/[?&]thread=all/)
       } else {
         await page.keyboard.press('Escape')
         test.info().annotations.push({ type: 'not here', description: 'Changing the lines is held on this order (its state): the scope across the door is held by the unit tests of F-OP-210' })

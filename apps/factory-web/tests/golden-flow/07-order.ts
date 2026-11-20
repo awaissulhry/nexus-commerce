@@ -27,12 +27,18 @@ export default defineStage({
       // op-fx11 (F-OP-302): "From quote …" is a band pill; on a crowded band (the office’s 1440 px) it may fold behind "+N" and is
       // read in Details, as a person reads it — never the folded stand-in left in the band to be measured.
       await expectBandPill(page, new RegExp(`From quote ${flow.state.quote.number}`))
-      // F-SA-230: the lines, per colour and size, are the Lines tab's.
+      // F-SA-230: the lines, per colour and size, are the Lines tab's. F-OL-06 (Order LINES lane): one table per style, changed in
+      // place — Sales changes lines, so each size is a box named "{colour}, size {size}" holding its pieces; the row says the total.
       await sales.go(`/sales/orders/${order.id}?tab=lines`)
       const lines = page.getByRole('table', { name: O('lines.gridCaption', { style: STYLE.code }) })
       const row = lines.getByRole('row', { name: /RED · Rosso/ })
       await expect(row).toBeVisible()
-      expect((await row.getByRole('cell').allInnerTexts()).map((text) => text.trim()).slice(-4)).toEqual(['2', '4', '2', '8'])
+      for (const [size, pieces] of Object.entries(SIZES)) await expect(row.getByRole('textbox', { name: O('lines.cell.label', { colour: 'RED · Rosso', size }), exact: true })).toHaveValue(String(pieces))
+      const total = Object.values(SIZES).reduce((sum, pieces) => sum + pieces, 0)
+      await expect(row.locator('td.fw-lt-fact strong').first()).toHaveText(String(total))
+      // Sales sees no money on Lines: no price column, no line total, no currency.
+      await expect(lines.getByRole('columnheader', { name: O('lines.col.unitPrice'), exact: true })).toHaveCount(0)
+      await expect(lines).not.toContainText('€')
       await flow.shot(page, 'order-studio')
     })
 
