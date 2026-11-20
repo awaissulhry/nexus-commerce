@@ -56,9 +56,11 @@ describe('the Overview cases draw in both languages, never a 0 for a step not co
     expect(text).not.toMatch(/\b(?:operator|operatore|station|postazione)\b/i)
   })
 
-  it('before any work order: Confirmed · waiting for the deposit, Preparing with why, "Not in work orders yet", "Nothing cut yet"', () => {
+  it('before any work order: Confirmed · waiting for the deposit, Preparing with why, "Not in work orders yet" (F-OO-121: no "Nothing cut yet")', () => {
     const text = textOf(draw('overview-confirmed'))
-    for (const words of ['Confirmed · waiting for the deposit', 'Work orders are made after the deposit', 'Not in work orders yet', 'Nothing cut yet']) expect(text, words).toContain(words)
+    for (const words of ['Confirmed · waiting for the deposit', 'Work orders are made after the deposit', 'Not in work orders yet']) expect(text, words).toContain(words)
+    // F-OO-121: the card no longer says "Nothing cut yet" (each line's "—" and its pill say it).
+    expect(text).not.toContain('Nothing cut yet')
   })
 
   it('loading says it reads (no figure), a failed read says so in this part only with Try again', () => {
@@ -71,8 +73,8 @@ describe('the Overview cases draw in both languages, never a 0 for a step not co
   it('every overview word exists in both languages', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['tab.overview', 'tab.attention', 'overview.where', 'overview.progress', 'overview.progressHint', 'overview.notInWorkOrders', 'overview.afterDeposit', 'overview.piecesAsOf', 'overview.headline.waitingDeposit', 'overview.headline.shipped', 'overview.headline.delivered', 'overview.fact.who', 'overview.fact.exFactory', 'overview.fact.health', 'overview.fact.customer', 'overview.fact.inWork', 'overview.col.line', 'overview.sizes.label', 'overview.sizes.finish', 'overview.sizes.units', 'overview.sizes.openLines']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
-      for (const key of ['overview.ahead', 'overview.bundles', 'overview.total', 'overview.madeExtra', 'mtm.units']) expect(t(key, { count: 2, stage: 'x' }), `${locale}: ${key}`).not.toBe(key)
+      for (const key of ['tab.overview', 'tab.attention', 'overview.where', 'overview.progress', 'overview.notInWorkOrders', 'overview.afterDeposit', 'overview.piecesAsOf', 'overview.headline.waitingDeposit', 'overview.headline.shipped', 'overview.headline.delivered', 'overview.fact.who', 'overview.fact.exFactory', 'overview.fact.health', 'overview.fact.customer', 'overview.fact.inWork', 'overview.col.line', 'overview.sizes.label', 'overview.sizes.finish', 'overview.sizes.units', 'overview.sizes.openLines']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      for (const key of ['overview.ahead', 'overview.bundles', 'overview.total', 'mtm.units']) expect(t(key, { count: 2, stage: 'x' }), `${locale}: ${key}`).not.toBe(key)
       const p = createTranslator(locale, messagesFor(locale, ['production']).production!)
       expect(p('parts.pieces.stages.SHIPPED')).not.toBe('parts.pieces.stages.SHIPPED')
     }
@@ -308,7 +310,8 @@ describe('F-OP-104: Overview doors — the stages a real link, Open in Productio
     expect(source).toContain("onClick={() => frame?.openDoor?.('owner')}")
     expect(source).toContain("onClick={() => actions?.onDialog?.({ kind: 'promise' })}")
     expect(source).toContain('onClick={() => actions?.onRequestedChange?.()}')
-    expect(source).toContain("#line-${row.lineIds[0] ?? row.id}")
+    // F-OO-126: the line window's Open in Production lands on the work orders (was the line's row, #line-<id>).
+    expect(source).toContain("#work-orders`}>{t('doors.openInProduction')}")
     const model = overviewRules() // F-OO-100: model.ts and the section files (linked.ts builds the tab links)
     expect(model).not.toMatch(/`\$\{record\}\?tab=/)
   })
@@ -422,7 +425,8 @@ describe('F-OP-302: Progress by line — the line column has room and its pills 
       expect(html, id).not.toMatch(/class="fw-so-cell-sub"[^>]*>[^<]*<span class="nds-tag/)
     }
     const confirmed = draw('overview-confirmed')
-    expect(confirmed).toMatch(/<span class="fw-so-inline"><span class="nds-tag[^"]*">Not in work orders yet<\/span>/)
+    // F-OO-121: a pill in the line cell keeps its words in its title (one line; the line's window shows them whole).
+    expect(confirmed).toMatch(/<span class="fw-so-inline"><span class="nds-tag[^"]*"[^>]*>Not in work orders yet<\/span>/)
   })
 })
 // ---- end F-OP-302
@@ -434,7 +438,8 @@ describe('F-OP-304: Still to do — "Nothing left to do" only when nothing stand
       const text = textOf(draw('f-op-304-still-extra', locale))
       expect(text).not.toContain(locale === 'en' ? 'Nothing left to do for the accepted changes.' : 'Per le modifiche accettate non resta nulla da fare.')
       expect(text).toContain(locale === 'en' ? 'Made extra' : 'Fatti in più')
-      expect(text).toContain(locale === 'en' ? 'Line 10 · Made extra: 1' : 'Riga 10 · Fatti in più: 1')
+      // F-OO-121: the API's words since B-OO-015 (the floor holds a cut order's planned lines too).
+      expect(text).toContain(locale === 'en' ? 'Line 10 · 1 48 more than ordered: cut or planned to cut' : "Riga 10 · 1 48 in più dell'ordine: tagliati o da tagliare")
     }
     expect(textOf(draw('f-op-301-so2-changes'))).toContain('Nothing left to do for the accepted changes.')
   })
@@ -495,7 +500,7 @@ describe('F-OO-100: OverviewTab keeps the layout, each card is its own file, eac
   it('model.ts keeps what more than one place reads (the ONE waiting list among it); each section\'s rules live in its own file', () => {
     const model = read('./model.ts')
     for (const name of ['export function orderWaitingOf(', 'export function waitingOf(', 'export function whoActsNextOf(', 'export function healthInputOf(', 'export function bandHealthOf(', 'export const readOf', 'export function mergeRead(', 'export const REQUESTED_FIELD_ID', 'export const say']) expect(model, name).toContain(name)
-    const homes = { where: ['headlineOf', 'stageStripOf', 'preparingNote', 'inWorkOf', 'exFactoryOf'], progress: ['lineStageOf', 'lineRowsOf', 'totalOf', 'lineSizesOf', 'walkOf'], people: ['placeWords'], dates: ['nextDatesOf'], linked: ['linkedRecordsOf'] } as const
+    const homes = { where: ['headlineOf', 'stageStripOf', 'preparingNote', 'inWorkOf', 'exFactoryOf'], progress: ['lineRowsOf', 'totalOf', 'lineSizesOf', 'figureFaceOf', 'linePillsOf', 'madeExtraSizesOf'] /* F-OO-121: walkOf and lineStageOf went */, people: ['placeWords'], dates: ['nextDatesOf'], linked: ['linkedRecordsOf'] } as const
     for (const [section, names] of Object.entries(homes)) {
       const text = read(`./${section}.ts`)
       for (const name of names) {

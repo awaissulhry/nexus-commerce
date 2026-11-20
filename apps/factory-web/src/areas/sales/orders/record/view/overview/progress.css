@@ -1,0 +1,27 @@
+/* ── F-OO-121 (order overview lane, 10-design §2.2) — "Progress by line": the line cell ─────────────────────────────────────────────
+   The button that opens the line's sizes holds the picture and the words (name, "Line 10"); under the words, in the same column, the
+   line's pills and a missing picture's words with the style's door (a link, so never inside the button). The button takes the cell's
+   two columns as a subgrid, so the rows under it line up with the name whatever the picture's size. Layout only, tokens only. */
+.fw-so-ov-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--nds-space-8);
+  row-gap: var(--nds-space-4);
+  align-items: center;
+  justify-items: start;
+  min-width: 0;
+}
+
+.fw-so-ov-line > .fw-so-lineopen {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  max-width: 100%;
+}
+
+.fw-so-ov-line > :not(.fw-so-lineopen) {
+  grid-column: 2;
+  max-width: 100%;
+}
+/* ── end F-OO-121 */

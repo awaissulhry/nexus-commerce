@@ -1,12 +1,24 @@
-import type { PiecesColourway, PlainStage } from '../../../../../lib/production/model'
+import type { PiecesColourway } from '../../../../../lib/production/model'
 import type { Order } from '../../api'
+import { daysUntil } from '../../model' // F-OO-121: a late line's days
 import { groupMadeToMeasure, unitsOf } from '../../mtm-groups'
-import type { Dates, ProductionLine } from './api'
+import type { Dates, OrderProduction, ProductionLine } from './api'
+import type { MtmGroupRead, Quality } from './api' // F-OO-126
+// ---- F-OO-122: the row ⋯ — the band's own held rules, the page's read-only rule ----
+import { amendHeld, closableLines, closeLinesHeld, reopenHeld } from '../../daily-model'
+import { readOnlyOnPage, type OrderAbilities, type Phrase } from '../../model'
+import { makeHeldOf } from '../production'
+import type { OrderRecordModel } from '../record-model'
+// ---- end F-OO-122
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Progress by line", its rules moved out of model.ts unchanged (F-SA-232:
  * the order's OWN pieces per line: Ordered · Cut and bundled · Sewn · Checked · Packed · Shipped; "Not counted here" where a site
  * does not count a step, never 0), whose row opens the line's sizes. Every figure is the production read's (B-SA-031).
+ *
+ * F-OO-121 (10-design §2.2): the line cell is clean — no stage word per line (the order's stage is "Where it is now"), at most two
+ * pills in a fixed order (the rest in the line's window), a line with no work order "—" with no sub (office only: the portal's
+ * own rule, portal-orders/progress.ts, is untouched), and the made-extra pill in the API's words (B-OO-015).
  */
 
 // ---- O2 "Progress by line" -----------------------------------------------------------------------------------------------------
@@ -31,32 +43,16 @@ export interface LineRow {
   readonly colourwayId: string | null
   readonly mtm: { readonly units: number } | null
   readonly figures: Readonly<Record<LineColumn, Figure>>
-  /** Where the line is: its plain stage from its own counts; null: not in work orders yet. */
-  readonly stage: PlainStage | null
   readonly notInWorkOrders: boolean
+  /** F-OO-121: no work order makes the line yet — its steps say "—" alone (never 0, never "Not counted here"; office only). */
+  readonly quiet: boolean
+  /** F-OO-121: the line's pieces in work orders ("In work orders: 4 of 7"). */
+  readonly inWorkOrders: number
   /** Office only: pieces cut beyond what the line now wants (a change lowered it after cutting). */
   readonly madeExtra: number
 }
 
 const sumOf = (values: readonly Figure[]): Figure => (values.every((value) => value === null) ? null : values.reduce<number>((sum, value) => sum + (value ?? 0), 0))
-
-/** A line's plain stage from its own counts: the first step not done (a step not counted is passed over); nothing cut: Preparing. */
-export function lineStageOf(figures: Readonly<Record<LineColumn, Figure>>): PlainStage {
-  const ordered = figures.ordered ?? 0
-  if (ordered <= 0) return 'PREPARING'
-  if ((figures.cut ?? 0) === 0 && figures.cut !== null) return 'PREPARING'
-  const steps: readonly [LineColumn, PlainStage][] = [
-    ['cut', 'CUTTING'],
-    ['sewn', 'SEWING'],
-    ['checked', 'QUALITY'],
-    ['packed', 'READY'],
-  ]
-  for (const [column, stage] of steps) {
-    const value = figures[column]
-    if (value !== null && value < ordered) return stage
-  }
-  return 'READY'
-}
 
 /**
  * The rows of "Progress by line": one per colour line in the order's own figures; the made-to-measure units of one style × colourway
@@ -81,8 +77,9 @@ export function lineRowsOf(lines: readonly ProductionLine[], order: Pick<Order, 
       colourwayId: source?.colourwayId ?? null,
       mtm: entry.kind === 'mtm' ? { units: unitsOf(members) } : null,
       figures,
-      stage: notInWorkOrders ? null : lineStageOf(figures),
       notInWorkOrders,
+      quiet: notInWorkOrders,
+      inWorkOrders: members.reduce((sum, line) => sum + line.inWorkOrders, 0),
       madeExtra: members.reduce((sum, line) => sum + line.madeExtra, 0),
     }
   })
@@ -93,8 +90,133 @@ export function totalOf(rows: readonly LineRow[]): Record<LineColumn, Figure> {
   return Object.fromEntries(LINE_COLUMNS.map((column) => [column, sumOf(rows.map((row) => row.figures[column]))])) as Record<LineColumn, Figure>
 }
 
-/** Nothing of the order is cut yet (counted and zero, or not counted at all): "Nothing cut yet". */
-export const nothingCutYet = (rows: readonly LineRow[]): boolean => rows.length > 0 && rows.every((row) => (row.figures.cut ?? 0) === 0)
+// ---- F-OO-121: what a figure cell draws, the line's pills, its picture --------------------------------------------------------
+
+/** A figure cell: the count; "—" alone (a quiet line: nothing counted yet); or "—" with "Not counted here" (a site counts no such step). */
+export type FigureFace = { readonly kind: 'count'; readonly value: number } | { readonly kind: 'none' } | { readonly kind: 'notCounted' }
+
+/**
+ * A quiet line (no work order yet) draws "—" with no sub for a step at 0 or not counted; Ordered is always its count. The total row is
+ * quiet when every line is. Anything counted (a piece shipped from stock) stays its number.
+ */
+export function figureFaceOf(value: Figure, quiet: boolean, column: LineColumn): FigureFace {
+  if (quiet && column !== 'ordered' && (value === null || value === 0)) return { kind: 'none' }
+  return value === null ? { kind: 'notCounted' } : { kind: 'count', value }
+}
+
+/** One size's pieces made beyond what it now wants (the API's B-OO-015 floor: cut or planned to cut). */
+export interface MadeExtraSize {
+  readonly size: string | null
+  readonly count: number
+}
+
+/** A line's pills, in their order: closed short, on hold, not (or partly) in work orders, made extra, late. */
+export type LinePill =
+  | { readonly kind: 'closedShort'; readonly count: number }
+  | { readonly kind: 'onHold' }
+  | { readonly kind: 'notInWorkOrders' }
+  | { readonly kind: 'inWork'; readonly done: number; readonly total: number }
+  | { readonly kind: 'madeExtra'; readonly sizes: readonly MadeExtraSize[] }
+  | { readonly kind: 'late'; readonly days: number | null }
+
+/** The line cell shows two pills at most; the line's window shows every one. */
+export const LINE_PILLS_SHOWN = 2
+
+export interface LinePillInput {
+  readonly order: Pick<Order, 'lines' | 'promiseDate'>
+  /** The production read (null: not read yet — no pill it would give is claimed). */
+  readonly read: Pick<OrderProduction, 'lines' | 'work' | 'dates'> | null
+  /** Today in the site's zone (YYYY-MM-DD): the days a late line is past its promise. */
+  readonly today: string
+}
+
+/** The sizes of a row made beyond what they want, in the read's size order (a made-to-measure unit: its count alone). */
+export function madeExtraSizesOf(row: Pick<LineRow, 'lineIds'>, lines: readonly ProductionLine[]): MadeExtraSize[] {
+  return lines.filter((line) => row.lineIds.includes(line.lineId)).flatMap((line) => line.sizes.filter((size) => size.madeExtra > 0).map((size) => ({ size: size.size, count: size.madeExtra })))
+}
+
+/** "1 48 · 2 50": the sizes part of the made-extra words ("… more than ordered: cut or planned to cut", the API's own words). */
+export const madeExtraSizesText = (sizes: readonly MadeExtraSize[]): string => sizes.map((entry) => (entry.size ? `${entry.count} ${entry.size}` : String(entry.count))).join(' · ')
+
+/**
+ * A row's pills, in their order — closed short (the order read's own line), on hold (a held work order makes one of its cells), not
+ * in work orders yet or only some of its pieces (not said for a line closed short: its pill says it), made extra (per size), late
+ * (the finish forecast says LATE; the days past the line's own promise, else the order's). `cap` = how many the place shows.
+ */
+export function linePillsOf(row: LineRow, input: LinePillInput, cap: number = LINE_PILLS_SHOWN): LinePill[] {
+  const own = input.order.lines.filter((line) => row.lineIds.includes(line.id))
+  const pills: LinePill[] = []
+  const closed = own.reduce((sum, line) => sum + (line.closedShort?.quantity ?? 0), 0)
+  if (closed > 0) pills.push({ kind: 'closedShort', count: closed })
+  const held = (input.read?.work?.workOrders ?? []).some((workOrder) => workOrder.held && (workOrder.cells ?? []).some((cell) => row.lineIds.includes(cell.salesOrderLineId)))
+  if (held) pills.push({ kind: 'onHold' })
+  if (row.notInWorkOrders) pills.push({ kind: 'notInWorkOrders' })
+  else if (closed === 0 && row.inWorkOrders < (row.figures.ordered ?? 0)) pills.push({ kind: 'inWork', done: row.inWorkOrders, total: row.figures.ordered ?? 0 })
+  const extra = madeExtraSizesOf(row, input.read?.lines ?? [])
+  if (extra.length > 0) pills.push({ kind: 'madeExtra', sizes: extra })
+  if ((input.read?.dates?.forecast ?? []).some((entry) => row.lineIds.includes(entry.lineId) && entry.risk === 'LATE')) {
+    const promise = own.find((line) => line.promiseDate)?.promiseDate ?? input.order.promiseDate
+    pills.push({ kind: 'late', days: promise ? Math.max(0, -daysUntil(promise, input.today)) : null })
+  }
+  return pills.slice(0, cap)
+}
+
+/** A pill's tone: what stops or runs late warns; a plain fact is neutral. */
+export const pillToneOf = (pill: LinePill): 'neutral' | 'warning' | 'danger' => (pill.kind === 'late' ? 'danger' : pill.kind === 'onHold' || pill.kind === 'madeExtra' ? 'warning' : 'neutral')
+
+/** The style page where a line's missing picture is added (product.styles.manage). */
+export const stylePictureHref = (prefix: string, styleId: string): string => `${prefix}/products/styles/${encodeURIComponent(styleId)}`
+// ---- end F-OO-121
+
+// ---- F-OO-122 (10-design §2.3; review F8: §2's ⋯ holds the LINE moves only) --------------------------------------------------
+/**
+ * A line's moves, each the page's one path for it — never a second editor:
+ *   make     Make work orders for this line…  the Production page's New work order dialog, only this line ticked (F-OO-123)
+ *   close    Close this line short…           Close remaining lines with this line ticked (F-OO-124)
+ *   reopen   Reopen this line…                Reopen lines with this line ticked (F-OO-124)
+ *   change   Change quantity or sizes…        the Lines edit mode at the line's style (F-OO-125)
+ *   discuss  Discuss this line                the order's conversation, about the line (only where the page has one)
+ * A move the reader may not run now is held with the band's own words (makeHeldOf, closeLinesHeld, reopenHeld, amendHeld), plus the
+ * line's own reason (every piece in work orders, closed short, nothing left to close).
+ */
+export type LineMove =
+  | { readonly id: 'make'; readonly lineId: string; readonly held: Phrase | null }
+  | { readonly id: 'close'; readonly lineIds: readonly string[]; readonly held: Phrase | null }
+  | { readonly id: 'reopen'; readonly lineIds: readonly string[]; readonly held: Phrase | null }
+  | { readonly id: 'change'; readonly styleId: string; readonly held: Phrase | null }
+  | { readonly id: 'discuss'; readonly held: null }
+
+/** Work orders are made while the order is confirmed or in production (the band's Make work orders…; other states offer none). */
+export const MAKE_STATUSES: readonly Order['status'][] = ['CONFIRMED', 'IN_PRODUCTION']
+
+const said = (key: string): Phrase => ({ key })
+
+export function lineMovesOf(row: LineRow, order: Order, can: OrderAbilities, input: { readonly lines: readonly ProductionLine[]; readonly thread: boolean }): LineMove[] {
+  const own = order.lines.filter((line) => row.lineIds.includes(line.id))
+  const open = own.filter((line) => !line.closedShort)
+  const closed = own.filter((line) => line.closedShort)
+  const moves: LineMove[] = []
+  if (MAKE_STATUSES.includes(order.status)) {
+    // The line (a made-to-measure group: one unit, still open, not yet in work orders in full) the dialog opens with.
+    const members = input.lines.filter((line) => open.some((entry) => entry.id === line.lineId))
+    const short = members.find((line) => line.inWorkOrders < line.ordered) ?? null
+    const held = !can.makeWorkOrders ? said('held.noWorkOrders') : open.length === 0 ? said('progress.held.closedLine') : !short ? said('progress.held.allInWork') : makeHeldOf(order, can)
+    moves.push({ id: 'make', lineId: short?.lineId ?? open[0]?.id ?? row.lineIds[0]!, held })
+  }
+  if (open.length > 0 || closed.length === 0) {
+    const closable = new Set(closableLines(order).map((entry) => entry.line.id))
+    const lineIds = open.filter((line) => closable.has(line.id)).map((line) => line.id)
+    moves.push({ id: 'close', lineIds, held: closeLinesHeld(order, can) ?? (lineIds.length === 0 ? said('progress.held.nothingLeft') : null) })
+  }
+  if (closed.length > 0) moves.push({ id: 'reopen', lineIds: closed.map((line) => line.id), held: reopenHeld(order, can) })
+  if (row.styleId) moves.push({ id: 'change', styleId: row.styleId, held: amendHeld(order, can) })
+  if (input.thread) moves.push({ id: 'discuss', held: null })
+  return moves
+}
+
+/** Read-only (the page's own rule, F-OP-303: no right the page acts on) sees no ⋯ at all — not the column, not the window's menu. */
+export const lineMovesShown = (model: Pick<OrderRecordModel, 'can' | 'people' | 'workOrderActs'>): boolean => !readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
+// ---- end F-OO-122
 
 // ---- the line's sizes (a centred window; J / K walk the lines) -----------------------------------------------------------------
 
@@ -122,10 +244,55 @@ export function lineSizesOf(row: LineRow, lines: readonly ProductionLine[], date
   }
 }
 
-/** J / K: the next or the previous row (it wraps). */
-export function walkOf(rows: readonly LineRow[], current: string | null, step: 1 | -1): string | null {
-  if (rows.length === 0) return null
-  const at = rows.findIndex((row) => row.id === current)
-  if (at === -1) return rows[0]!.id
-  return rows[(at + step + rows.length) % rows.length]!.id
+// ---- F-OO-126 (10-design §2.4): the line's window — the work orders that make it and their final inspections ------------------
+export interface LineWorkRow {
+  readonly id: string
+  readonly number: string
+  readonly status: string
+  readonly held: boolean
+  /** Its pieces of THIS line (the line's cells it makes; a shared work order lends nothing of another customer). */
+  readonly pieces: number
 }
+
+/**
+ * The work orders of a line, from the read's cells (F-OP-113):
+ *   unread    not read yet, or an older read without the cells — nothing is claimed (never "none")
+ *   withheld  the reader may not read work orders (workorders.view): the words say who reads them
+ *   mtm       made to measure: one work order per unit — the group's count and states (Production lists the units)
+ *   rows      the work orders, by number; `leftOut`: the order's work orders the reader does not reach (so "none" is not said)
+ */
+export type LineWork =
+  | { readonly kind: 'unread' }
+  | { readonly kind: 'withheld' }
+  | { readonly kind: 'mtm'; readonly group: MtmGroupRead | null }
+  | { readonly kind: 'rows'; readonly rows: readonly LineWorkRow[]; readonly leftOut: number }
+
+export function lineWorkOf(row: LineRow, read: Pick<OrderProduction, 'work' | 'withheld'> | null): LineWork {
+  if (!read) return { kind: 'unread' }
+  if (read.work === null || read.withheld.includes('work')) return { kind: 'withheld' }
+  if (read.work === undefined) return { kind: 'unread' }
+  if (row.mtm) return { kind: 'mtm', group: read.work.mtm.find((group) => group.style?.code === row.style?.code && group.colourway?.code === row.colourway?.code) ?? null }
+  const rows = read.work.workOrders.flatMap((workOrder) => {
+    const mine = (workOrder.cells ?? []).filter((cell) => row.lineIds.includes(cell.salesOrderLineId))
+    return mine.length === 0 ? [] : [{ id: workOrder.id, number: workOrder.number, status: workOrder.status, held: workOrder.held, pieces: mine.reduce((sum, cell) => sum + cell.quantity, 0) }]
+  })
+  if (rows.length === 0 && read.work.workOrders.some((workOrder) => workOrder.cells === undefined)) return { kind: 'unread' }
+  return { kind: 'rows', rows: rows.sort((a, b) => a.number.localeCompare(b.number)), leftOut: read.work.workOrdersLeftOut }
+}
+
+export type FinalInspection = NonNullable<Quality['final']>[number]
+
+/**
+ * The final inspections of the line's work orders (read only: an inspection is signed on Quality). Withheld without the inspections
+ * right; unread when the line's work orders are not known (withheld, made to measure, not read) — never "none" then.
+ */
+export type LineFinals = { readonly kind: 'unread' } | { readonly kind: 'withheld' } | { readonly kind: 'rows'; readonly rows: readonly FinalInspection[] }
+
+export function lineFinalsOf(work: LineWork, read: Pick<OrderProduction, 'quality' | 'withheld'> | null): LineFinals {
+  const finals = read?.quality?.final
+  if (read && (finals === null || read.withheld.includes('quality.final'))) return { kind: 'withheld' }
+  if (!finals || work.kind !== 'rows') return { kind: 'unread' }
+  const ids = new Set(work.rows.map((entry) => entry.id))
+  return { kind: 'rows', rows: finals.filter((entry) => ids.has(entry.workOrderId)) }
+}
+// ---- end F-OO-126

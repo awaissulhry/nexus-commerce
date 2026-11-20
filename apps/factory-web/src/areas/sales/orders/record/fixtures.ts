@@ -512,10 +512,10 @@ export const SO2_BLOCKERS = [
 ]
 const SO2_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'BRAND' as const, words: { en: 'Waiting on customer', it: 'Tocca al cliente' }, since: '2026-11-05T09:00:00Z', blockers: SO2_BLOCKERS } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
 const SO3_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'US' as const, words: { en: 'Waiting on us', it: 'Tocca a noi' }, since: '2026-11-14T17:00:00Z', blockers: [] } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
-// F-OP-304 (walk #7): line 10 cut one piece beyond what its first size now wants.
+// F-OP-304 (walk #7): line 10 cut one piece beyond what its first size now wants. F-OO-121: in the API's words since B-OO-015.
 const EXTRA_READ = {
   ...SO2_READ,
-  lines: PRODUCTION_READ.lines!.map((line, index) => (index === 0 ? { ...line, madeExtra: 1, sizes: line.sizes.map((size, at) => (at === 0 ? { ...size, madeExtra: 1, madeExtraWords: { en: `Made extra: 1 ${size.size ?? ''}`, it: `Fatti in più: 1 ${size.size ?? ''}` } } : size)) } : line)),
+  lines: PRODUCTION_READ.lines!.map((line, index) => (index === 0 ? { ...line, madeExtra: 1, sizes: line.sizes.map((size, at) => (at === 0 ? { ...size, madeExtra: 1, madeExtraWords: { en: `1 ${size.size ?? ''} more than ordered: cut or planned to cut`, it: `1 ${size.size ?? ''} in più dell'ordine: tagliati o da tagliare` } } : size)) } : line)),
 }
 const F_OP_301: DesignCase<RecordCase>[] = [
   { id: 'f-op-301-so2-overview', label: 'F-OP-301 · Production manager · Overview: Waiting on us 3 (two gates, a change request) and on the customer 1 — the Changes badge says 4', model: base('manager', production, { tab: 'overview', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
