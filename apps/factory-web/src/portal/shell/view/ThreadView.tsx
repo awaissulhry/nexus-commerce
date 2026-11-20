@@ -8,6 +8,9 @@ import { useT } from '../../../lib/i18n/provider'
 // F-CP-156: "Ask <name>, factory designer" under the thread (the DS PartnerThread unchanged).
 import { AtSign } from 'lucide-react'
 import { Checkbox, FilterChip } from '@nexus/ui/primitives'
+// F-CP-156 (cp-fx14, walk L3): the held box says why beside it (a lock and the words), never a disabled grey.
+import { Lock } from 'lucide-react'
+import { useId } from 'react'
 
 /**
  * Ask a question / Messages (design portal.frame › thread; COL-059, COL-060): ONE conversation per record, shared with us —
@@ -56,6 +59,9 @@ export function ThreadView({ model, onChange, onSend, onMore, onRetry, headingLe
   const t = useT('portal')
   const ds = useDsWords()
   const pins = model.pins ?? []
+  // F-CP-156 (cp-fx14, walk L3): the box's held words (null: it may be ticked) and the id the box is described by.
+  const held = model.designer?.held ?? null
+  const hintId = useId()
   return (
     <div className="fw-pthread">
       {/* B-TH-286 (T2-F07): what was pinned on this record, above the conversation; nothing when nothing is pinned (T2-F09). */}
@@ -102,21 +108,31 @@ export function ThreadView({ model, onChange, onSend, onMore, onRetry, headingLe
       />
       {/* F-CP-156: under the DS thread — the ONE "@" chip while an "@" is typed, then the box and its hint. */}
       {model.designer && model.composer ? (
-        <div className="fw-pthread-designer">
+        <div className="fw-pthread-designer" data-held={held !== null ? '' : undefined}>
           {model.designer.chip ? (
             <FilterChip className="fw-pthread-designer-chip" onClick={() => onDesignerChip?.()}>
               <AtSign size={12} aria-hidden /> {t('thread.designer.chip', { name: model.designer.name })}
             </FilterChip>
           ) : null}
+          {/* F-CP-156 (cp-fx14, walk L3): held, not disabled — the box stays focusable with a readable label, says why in words
+              beside it (aria-describedby) and does not change; the DS Checkbox has no held state (packages/ui as it is). */}
           <Checkbox
             checked={model.designer.ask}
-            disabled={model.designer.held !== null}
-            title={model.designer.held ?? undefined}
-            onChange={(event) => onAskDesigner?.(event.target.checked)}
+            aria-disabled={held !== null ? true : undefined}
+            aria-describedby={hintId}
+            onChange={(event) => {
+              if (held === null) onAskDesigner?.(event.target.checked)
+            }}
             label={<strong>{t('thread.designer.ask', { name: model.designer.name })}</strong>}
           />
-          <p className="fw-pthread-designer-hint">
-            {model.designer.held ?? `${t('thread.designer.hint', { name: model.designer.name })} ${t('thread.designer.typeAt', { name: model.designer.name })}`}
+          <p className="fw-pthread-designer-hint" id={hintId}>
+            {held !== null ? (
+              <>
+                <Lock size={12} aria-hidden /> <span>{held}</span>
+              </>
+            ) : (
+              `${t('thread.designer.hint', { name: model.designer.name })} ${t('thread.designer.typeAt', { name: model.designer.name })}`
+            )}
           </p>
         </div>
       ) : null}
