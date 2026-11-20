@@ -88,15 +88,17 @@ export type { OrderRecordActions, OrderRecordModel } from '../record-model'
  */
 // B-W2b-398: `delivered` is the Shipments tab's card "Delivered (from carrier)". B-TH-214: `thread` the docked thread (the
 // office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
-export function OrderRecordView({ model, actions, thread, printThread, fields, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; /* B-TH-280: the custom fields (Lines only) */ fields?: ReactNode; delivered?: ReactNode }) {
+// F-OO-211 (11-design §8.1): `customFields` — the order's custom fields (the container's RecordCustomFields, built once), drawn by
+// Overview beside Order facts (the 7 + 8 pair); the order page no longer fills the frame's `fields` slot (every other record page does).
+export function OrderRecordView({ model, actions, thread, printThread, customFields, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; /* F-OO-211 */ customFields?: ReactNode; delivered?: ReactNode }) {
   return (
     <WithMessages namespaces={['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */, SUPERVISOR_NS, NOTES_NS /* F-SA-230 */]}>
-      <OrderRecord model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} delivered={delivered} />
+      <OrderRecord model={model} actions={actions} thread={thread} printThread={printThread} customFields={customFields} delivered={delivered} />
     </WithMessages>
   )
 }
 
-function OrderRecord({ model, actions, thread, printThread, fields, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; fields?: ReactNode; delivered?: ReactNode }) {
+function OrderRecord({ model, actions, thread, printThread, customFields, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; customFields?: ReactNode; delivered?: ReactNode }) {
   const t = useT('orders')
   const listHref = `${model.prefix}/sales/orders`
   const loaded = model.order
@@ -144,10 +146,10 @@ function OrderRecord({ model, actions, thread, printThread, fields, delivered }:
       </RecordFrame>
     )
   }
-  return <ReadyRecord order={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} delivered={delivered} />
+  return <ReadyRecord order={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} customFields={customFields} delivered={delivered} />
 }
 
-function ReadyRecord({ order, model, actions, thread, printThread, fields, delivered }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; fields?: ReactNode; delivered?: ReactNode }) {
+function ReadyRecord({ order, model, actions, thread, printThread, customFields, delivered }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; customFields?: ReactNode; delivered?: ReactNode }) {
   const t = useT('orders')
   const d = useT(DEPTH) // B-W2b-323
   const locale = useLocale()
@@ -347,7 +349,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
         threadLabel={t('record.dockLabel')}
         thread={thread ?? null}
         printThread={printThread}
-        fields={fields /* B-TH-280 */}
+        // F-OO-211: no `fields` here — the order's custom fields are Overview's card beside Order facts (the frame slot is the other pages').
         // F-SA-263: "hidden" kept for every order. F-OP-301 (walk #5): one dock width per viewport on every tab (DOCK_DEFAULTS), and a
         // width the person picks holds on every tab.
         defaultWidth={DOCK_DEFAULTS[model.tab]}
@@ -475,7 +477,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
         </RecordNotices>
 
         <div className="fw-so-main">
-          {model.tab === 'overview' && <OverviewTab order={order} model={model} actions={actions} />}
+          {model.tab === 'overview' && <OverviewTab order={order} model={model} actions={actions} customFields={customFields /* F-OO-211 */} />}
           {model.tab === 'lines' && <LinesTab order={order} model={model} actions={actions} />}
           {/* F-SA-230 / F-SA-234 / F-SA-235: Production — the work orders with the order's own pieces, the dates and milestones (#dates),
               holds, quality & problems, the specs in force (the tech pack), the customer's materials. */}

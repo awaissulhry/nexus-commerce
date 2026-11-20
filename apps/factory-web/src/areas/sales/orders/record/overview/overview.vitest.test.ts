@@ -118,7 +118,8 @@ describe('Overview’s facts (F-SA-233)', () => {
       expect(text).not.toContain(locale === 'en' ? 'Nothing waits on us or on the customer' : 'Niente aspetta noi o il cliente')
     }
     const container = readFileSync(new URL('../OrderRecord.tsx', import.meta.url), 'utf8')
-    expect(container).toContain("fields={value && tab === 'overview' ?")
+    // F-OO-211: built once on Overview and handed down as customFields (beside Order facts), no longer the frame's slot.
+    expect(container).toContain("const customFields = value && tab === 'overview' ? <RecordCustomFields ")
     const lines = readFileSync(new URL('../view/LinesTab.tsx', import.meta.url), 'utf8')
     expect(lines).not.toContain('function RecordChain')
   })
@@ -700,6 +701,66 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
   })
 })
 // ---- end F-OO-201
+
+// ---- F-OO-211 (11-design §8.1, §8.2): the custom fields are the 7 + 8 pair's second card; with none, Order facts takes the row --------
+describe('F-OO-211: Custom fields beside Order facts (order page only); none → Order facts spans the row; Read-only has no Edit', () => {
+  const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr'])
+  /** The markup of the element whose opening tag starts at `at`, and where each direct child starts in it. */
+  const elementAt = (html: string, at: number): { readonly markup: string; readonly children: readonly number[] } => {
+    const tag = /<(\/?)([a-zA-Z][\w-]*)[^>]*?(\/?)>/g
+    tag.lastIndex = at
+    let depth = 0
+    const children: number[] = []
+    for (let match = tag.exec(html); match; match = tag.exec(html)) {
+      const [, closing, name, selfClosing] = match
+      if (closing) {
+        depth -= 1
+        if (depth === 0) return { markup: html.slice(at, tag.lastIndex), children }
+        continue
+      }
+      if (depth === 1) children.push(match.index)
+      if (!VOID.has(name!.toLowerCase()) && !selfClosing) depth += 1
+    }
+    throw new Error(`the element at ${at} never closes`)
+  }
+  /** The Overview's last pair (Order facts and, when given, Custom fields): its cards' text, in order. */
+  const lastPair = (html: string) => {
+    const at = [...html.matchAll(/<div class="fw-so-ov-pair">/g)].map((match) => match.index!).at(-1)!
+    const pair = elementAt(html, at)
+    return { cards: pair.children.map((child) => textOf(elementAt(html, child).markup)), markup: pair.markup }
+  }
+
+  it('with fields: the third pair holds Order facts then Custom fields (EN + IT); drawn once — never again at the body\'s end', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw('f-oo-211-facts-fields', locale)
+      const { cards } = lastPair(html)
+      expect(cards, locale).toHaveLength(2)
+      expect(cards[0], locale).toContain(locale === 'en' ? 'Order facts' : "Dati dell'ordine")
+      expect(cards[1], locale).toContain(locale === 'en' ? 'Custom fields' : 'Campi personalizzati')
+      expect(cards[1], locale).toContain(locale === 'en' ? 'Not filled: Box type (required), Fair date' : 'Non compilati: Tipo di scatola (obbligatorio), Data della fiera')
+      expect(html.split('fw-cf-card').length - 1, locale).toBe(1)
+    }
+  })
+
+  it('without fields (none applies, or the reader may not see them): Order facts alone in its pair, spanning the row (the overview case)', () => {
+    const html = draw('overview')
+    expect(html).not.toContain('fw-cf-card')
+    const { cards } = lastPair(html)
+    expect(cards).toHaveLength(1)
+    expect(cards[0]).toContain('Order facts')
+  })
+
+  it('Read-only: the values beside Order facts and no Edit; a closed order holds Edit in words; the order changed first: Save again / Discard mine', () => {
+    const readOnly = lastPair(draw('f-oo-211-fields-read-only'))
+    expect(readOnly.cards[1]).toContain('Custom fields')
+    expect(readOnly.cards[1]).not.toMatch(/\bEdit\b/)
+    const closed = lastPair(draw('f-oo-213-closed')).markup
+    expect(closed).toMatch(/aria-description="SO-2026-\d{4} is closed or cancelled: its fields no longer change\."/)
+    const changed = lastPair(draw('f-oo-213-order-changed')).cards[1]!
+    for (const words of ['Someone changed SO-2026-', 'Save again', 'Discard mine']) expect(changed, words).toContain(words)
+  })
+})
+// ---- end F-OO-211
 
 // ---- F-OO-102 (order overview §1.2; review F11): the headline and the dots read ONE state — the overview drawn before, after and without production
 describe('F-OO-102: "Where it is now" per state — waiting no dots, shipped every stage done, cancelled where the work had reached', () => {

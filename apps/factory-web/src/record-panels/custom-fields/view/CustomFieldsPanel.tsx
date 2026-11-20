@@ -44,6 +44,8 @@ export interface CustomFieldsModel {
   /** The fields someone saved meanwhile (by code), named under "Someone saved these fields first". */
   changedFields?: readonly string[]
   // ---- end F-OO-213
+  /** F-OO-211: read-only on this page (a reader who can change nothing there): the values, and no Edit at all. */
+  readOnly?: boolean
   /** Who a person field may name. */
   people: readonly { id: string; name: string }[]
   /** The record's files a file field may name (null: the person may not read its files). */
@@ -125,7 +127,7 @@ function Panel({ model, actions }: { model: CustomFieldsModel; actions?: CustomF
           <h3 className="fw-cf-title">{t('cf.title')}</h3>
           <p className="fw-cf-muted">{t('cf.hint', { record: recordLabel })}</p>
         </div>
-        {!model.editing && (
+        {!model.editing && !model.readOnly /* F-OO-211 */ && (
           <Button size="sm" heldReason={editHeldWords(model, t)} onClick={() => actions?.onEdit?.()}>
             <Pencil size={13} aria-hidden /> {t('cf.edit')}
           </Button>

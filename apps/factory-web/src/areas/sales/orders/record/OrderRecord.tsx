@@ -28,6 +28,7 @@ import {
 import { isStepUpCancelled, useLive, useStepUp } from '../hooks'
 import { olderRead } from '../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 import { abilitiesOf, landingOf, readProblem, romeToday, writeProblem } from '../model'
+import { readOnlyOnPage } from '../model' // F-OO-211: the custom fields' read-only reader (the view's own rule)
 // F-SA-239: the page live part by part (the read's own watch list, one coalesce table, stale tabs, typed work kept).
 import { changedBy, EMPTY_QUEUE, enqueue, nextDue, opened, ORDER_PARTS, partsOf, take, watchedIds, type LiveQueue, type OrderPagePart } from './live'
 import { PART_LOADING, type Loaded, type OrderRecordModel, type Part, type RecordActsBase, type RecordDialog } from './record-model'
@@ -666,6 +667,12 @@ function RecordContainer({ orderId }: { orderId: string }) {
   }
 
   const value = order.status === 'ready' ? order.value : null
+  // ---- F-OO-211 (11-design §8.1): the order's custom fields are built ONCE here and are Overview's second card beside Order facts (the
+  // 7 + 8 pair), no longer the frame's slot at the body's end; the frame slot stays for every other record page. Read-only for a
+  // reader who can change nothing on this page (the view's own rule): no Edit at all.
+  const fieldsReadOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
+  const customFields = value && tab === 'overview' ? <RecordCustomFields record={{ type: 'SalesOrder', id: value.id }} title={value.number} version={value.version /* F-OO-213 */} onSaved={fieldsSaved} readOnly={fieldsReadOnly} /> : null
+  // ---- end F-OO-211
 
   // F-SA-243: "Decide for <customer>" on a counter-offer in the window reads it and the requests again once done.
   return (
@@ -709,8 +716,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
         ) : null
       }
       printThread={value ? <ThreadPrint record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party?.legalName ?? ''}`} party={value.party ? { id: value.partyId, name: value.party.legalName } : null} /> : null}
-      // B-TH-280: the order's custom fields at the end of its first tab; F-SA-233: Overview (they moved from Lines).
-      fields={value && tab === 'overview' ? <RecordCustomFields record={{ type: 'SalesOrder', id: value.id }} title={value.number} version={value.version /* F-OO-213 */} onSaved={fieldsSaved} /> : null}
+      // B-TH-280: the order's custom fields; F-SA-233: on Overview; F-OO-211: beside Order facts (Overview's 7 + 8 pair).
+      customFields={customFields}
       actions={{
         // ---- F-OP-134: each tab's acts (the band; Overview; Lines; Production; Money) ----
         ...band.actions,

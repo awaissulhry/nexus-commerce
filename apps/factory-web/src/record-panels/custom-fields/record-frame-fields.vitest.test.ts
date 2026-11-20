@@ -6,6 +6,9 @@ import { RECORD_OF_MODEL } from './model'
  * B-TH-280 — the record's custom-fields section (B-W2b-431, SCR-520) back on the record pages: the old record panels drew it above
  * their tabs, and the TH-6 record frames dropped it with them. RecordCustomFields is the container; each page whose record type takes
  * custom fields passes it to RecordFrame's `fields` slot on its FIRST tab only (the body column's end; the print view prints it too).
+ * F-OO-211 (order overview 11-design §8.1): the ORDER page is the one exception — its custom fields are Overview's card beside Order
+ * facts (the 7 + 8 pair), handed down as `customFields`, never to the frame's slot; the frame slot stays for every other record page.
+ * (The threads lane's pinning guard, rewritten here: tell its follow-ups file.)
  */
 
 const SRC = new URL('../../', import.meta.url)
@@ -15,8 +18,7 @@ const read = (path: string) => readFileSync(new URL(path, SRC), 'utf8')
 const PAGES = [
   { container: 'areas/parties/_shared/PartyRecord.tsx', view: 'areas/parties/_shared/view/PartyRecordView.tsx', type: 'config.recordType', model: 'Party', first: 'overview' },
   { container: 'areas/sales/quotes/record/QuoteRecord.tsx', view: 'areas/sales/quotes/record/view/QuoteRecordView.tsx', type: "'Quote'", model: 'Quote', first: 'lines' },
-  // F-SA-230 (Sales plan N2): the order's seven tabs open on Overview, so its custom fields end the Overview.
-  { container: 'areas/sales/orders/record/OrderRecord.tsx', view: 'areas/sales/orders/record/view/OrderRecordView.tsx', type: "'SalesOrder'", model: 'SalesOrder', first: 'overview' },
+  // F-OO-211: the sales order left this list — its custom fields are Overview's card beside Order facts (the describe below).
   { container: 'areas/products/styles/record/StyleRecord.tsx', view: 'areas/products/styles/record/view/StyleRecordView.tsx', type: "'Style'", model: 'Style', first: 'overview' },
   { container: 'areas/purchasing/orders/record/OrderRecord.tsx', view: 'areas/purchasing/orders/record/view/OrderRecordView.tsx', type: "'PurchaseOrder'", model: 'PurchaseOrder', first: 'lines' },
   { container: 'areas/warehouse/lots/record/LotRecord.tsx', view: 'areas/warehouse/lots/record/view/LotRecordView.tsx', type: "'Lot'", model: 'Lot', first: 'overview' },
@@ -25,7 +27,8 @@ const PAGES = [
 
 describe('B-TH-280 — every record page that takes custom fields shows them again, at the end of its first tab', () => {
   it('the pages cover every record type of the fields registry that has a record-frame page (Item has none)', () => {
-    const covered = new Set<string>(PAGES.map((page) => page.model))
+    // F-OO-211: the sales order is covered by its own page's describe below (beside Order facts, not the frame's slot).
+    const covered = new Set<string>([...PAGES.map((page) => page.model), 'SalesOrder'])
     for (const model of Object.keys(RECORD_OF_MODEL).filter((one) => one !== 'Item')) expect(covered.has(model), model).toBe(true)
   })
 
@@ -59,13 +62,57 @@ describe('B-TH-280 — every record page that takes custom fields shows them aga
   })
 })
 
+// ---- F-OO-211 (order overview 11-design §8.1): the order's custom fields beside Order facts, on the order page only ----------------------
+describe('F-OO-211 — the order page builds its custom fields once and Overview draws them beside Order facts; the frame slot is the other pages\'', () => {
+  const container = read('areas/sales/orders/record/OrderRecord.tsx')
+  const view = read('areas/sales/orders/record/view/OrderRecordView.tsx')
+  const tab = read('areas/sales/orders/record/view/OverviewTab.tsx')
+
+  it('the container builds <RecordCustomFields> of the order ONCE, on Overview, with its version and read-only, and hands it on as customFields', () => {
+    expect(container).toContain("record-panels/custom-fields/RecordCustomFields'")
+    expect(container.match(/<RecordCustomFields /g)?.length).toBe(1)
+    expect(container).toContain("const customFields = value && tab === 'overview' ? <RecordCustomFields record={{ type: 'SalesOrder', id: value.id }} title={value.number} version={value.version /* F-OO-213 */} onSaved={fieldsSaved} readOnly={fieldsReadOnly} /> : null")
+    // Read-only by the view's own rule (no second rule for who changes nothing here).
+    expect(container).toContain('const fieldsReadOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })')
+    expect(container).toContain('customFields={customFields}')
+    // Never the frame's slot on the order page.
+    expect(container).not.toMatch(/\bfields=\{/)
+  })
+
+  it('OrderRecordView passes it to OverviewTab as customFields and never as fields= to RecordFrame', () => {
+    expect(view).toContain('customFields?: ReactNode')
+    expect(view).toContain('<OverviewTab order={order} model={model} actions={actions} customFields={customFields /* F-OO-211 */} />')
+    expect(view).not.toMatch(/\bfields=\{/)
+    expect(view).not.toMatch(/\bfields\?: ReactNode/)
+    // It reaches RecordFrame's body only through Overview (one tab at a time): the frame gets no `fields` prop at all.
+    const at = view.indexOf("record={{ type: 'SalesOrder', id: order.id }")
+    expect(at).toBeGreaterThan(-1)
+    expect(view.slice(at, view.indexOf('band={{', at))).not.toMatch(/^\s*fields=/m)
+  })
+
+  it('OverviewTab draws it inside the 7 + 8 pair, after Order facts (alone, Order facts takes the row)', () => {
+    const pair = tab.slice(tab.lastIndexOf('<div className="fw-so-ov-pair">'), tab.indexOf('</div>', tab.lastIndexOf('<div className="fw-so-ov-pair">')))
+    expect(pair.indexOf('<FactsCard ')).toBeGreaterThan(-1)
+    expect(pair.indexOf('{customFields')).toBeGreaterThan(pair.indexOf('<FactsCard '))
+    expect(tab).toContain('customFields?: ReactNode')
+  })
+
+  it('the frame slot stays for every other record page (RecordFrame keeps `fields`)', () => {
+    expect(read('areas/_shared/record-frame/RecordFrame.tsx')).toContain('readonly fields?: ReactNode')
+    for (const page of PAGES) expect(read(page.view), page.view).toMatch(/fields=\{fields \/\* B-TH-280/)
+  })
+})
+// ---- end F-OO-211
+
 describe('B-TH-280 — RecordCustomFields, the container', () => {
   const source = readFileSync(new URL('./RecordCustomFields.tsx', import.meta.url), 'utf8')
 
   it('draws the section with the same hook and view the old panels used; nothing at all when there is no section', () => {
     // F-OO-213: the record's version and the page's onSaved go with it (only the order page gives them).
     expect(source).toContain('useCustomFields({ api, record: key, title, people, files, version, onSaved })')
-    expect(source).toContain('<CustomFieldsPanel model={section.model} actions={actions} />')
+    // F-OO-211: read-only on the page: the same model with no Edit.
+    expect(source).toContain('<CustomFieldsPanel model={model} actions={actions} />')
+    expect(source).toContain('const model = readOnly ? { ...section.model, readOnly: true } : section.model')
     expect(source).toContain('if (!section.model) return null')
   })
 
