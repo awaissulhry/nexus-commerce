@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
@@ -35,6 +35,17 @@ import type { Gate } from './api'
 import { gateChangesOf, gateDatesOf, gateDraftOf, gateMovesOf, gateMovesShown, gateWorldOf, planningGateHref, planningGateOf } from './dates'
 // ---- end F-OO-145
 import { waitDatesOf } from './dates' // F-OO-146
+
+// ---- F-OO-143 / F-OO-145 (end check fix wave): the DS Modal draws into a portal once hydrated, never on the server, so the promise
+// dialog (Decide…) and Planning's gate dialogs could not be read here. As lines-held's, facts' and where's dialog tests do: an open
+// Modal draws in place (title, subtitle, body, footer); a closed one draws nothing, so the card without a dialog draws as before.
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? createElement('section', { role: 'dialog', 'data-modal': '' }, createElement('h2', null, title as never), subtitle != null ? createElement('p', null, subtitle as never) : null, children as never, footer as never) : null
+  return { ...actual, Modal }
+})
+// ---- end F-OO-143 / F-OO-145
 
 /** F-OO-100 (order overview lane: one file per section) — Next dates' rules, moved with dates.ts out of overview.vitest.test.ts. */
 
