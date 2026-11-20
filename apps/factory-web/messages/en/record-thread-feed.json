@@ -53,7 +53,13 @@
       "assignedTask_one": "{who} assigned {count} task",
       "assignedTask_other": "{who} assigned {count} tasks",
       "uploaded_one": "{who} added {count} file",
-      "uploaded_other": "{who} added {count} files"
+      "uploaded_other": "{who} added {count} files",
+      "setStageByHand_one": "{who} set the stage by hand {count} time",
+      "setStageByHand_other": "{who} set the stage by hand {count} times",
+      "clearedStageByHand_one": "{who} cleared the stage set by hand {count} time",
+      "clearedStageByHand_other": "{who} cleared the stage set by hand {count} times",
+      "stageByHandEnded_one": "{who} ended the stage set by hand {count} time",
+      "stageByHandEnded_other": "{who} ended the stage set by hand {count} times"
     }
   },
   "changes": {
@@ -95,7 +101,10 @@
     "approved": "approved it",
     "confirmed": "confirmed it",
     "cancelled": "cancelled it",
-    "changed": "changed the record"
+    "changed": "changed the record",
+    "setStageByHand": "set the stage by hand",
+    "clearedStageByHand": "cleared the stage set by hand",
+    "stageByHandEnded": "ended the stage set by hand: the floor's own stage shows again"
   },
   "live": {
     "bar_one": "{count} new message",
