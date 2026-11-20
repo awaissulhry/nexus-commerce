@@ -171,7 +171,7 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
       </Card>
       {model.shipmentTracking /* F-OP-119: the tracking dialog of the shipment opened (its container) */}
       {model.newShipment /* F-OP-121: Warehouse's New shipment, opened in place (its container) */}
-      {model.elsewhere?.dialog /* F-OP-123: Record a shipment made elsewhere… (its container, while open) */}
+      {/* F-OP-123: Record a shipment made elsewhere… — its dialog is the page's, mounted once (OrderRecordView, F-OO-111). */}
       {delivered}
       <PointsAtOrder model={model.links} actions={actions?.links} prefix={model.prefix} />
       <p className="fw-so-hint">

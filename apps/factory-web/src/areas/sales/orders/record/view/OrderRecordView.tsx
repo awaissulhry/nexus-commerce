@@ -61,6 +61,7 @@ import { RequestBandNotices } from './RequestsSection'
 import { bandHealthOf, healthInputOf, readOf } from '../overview/model'
 import { changesBadgeOf, changesDotOf, orderWaitingOf } from '../overview/model' // F-OP-117: the Changes count, R-22 (F-OP-301: the ONE call)
 import { createShipmentDoor } from '../shipments/model' // F-OP-121
+import { answerHeldOf, OWNER_WORDS_NS } from '../overview/people' // F-OO-111 (BC-2): "Who answers the customer…" held in the card's words
 // ---- end F-SA-232
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'
@@ -92,7 +93,7 @@ export type { OrderRecordActions, OrderRecordModel } from '../record-model'
 // Overview beside Order facts (the 7 + 8 pair); the order page no longer fills the frame's `fields` slot (every other record page does).
 export function OrderRecordView({ model, actions, thread, printThread, customFields, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; /* F-OO-211 */ customFields?: ReactNode; delivered?: ReactNode }) {
   return (
-    <WithMessages namespaces={['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */, SUPERVISOR_NS, NOTES_NS /* F-SA-230 */]}>
+    <WithMessages namespaces={['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */, SUPERVISOR_NS, NOTES_NS /* F-SA-230 */, OWNER_WORDS_NS /* F-OO-111 */]}>
       <OrderRecord model={model} actions={actions} thread={thread} printThread={printThread} customFields={customFields} delivered={delivered} />
     </WithMessages>
   )
@@ -268,6 +269,12 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
   const notes = useT(NOTES_NS)
   const people = model.people ?? null
   const askWait = people ? noteHeld(people.mayNote, 1) : null
+  // ---- F-OO-111 (BC-2, 10-design §1.7): "Who answers the customer…" is held without threads.post — the People card's own rule and words
+  // for the same door (answerHeldOf: choosing who answers needs the right to write in the conversation), never hidden.
+  const head = useT(OWNER_WORDS_NS)
+  const answerWait = answerHeldOf({ thread: !!thread, mayWrite: people ? people.mayNote : null })
+  const answerWords = answerWait ? (answerWait.ns === OWNER_WORDS_NS ? head(answerWait.key, answerWait.params) : t(answerWait.key)) : undefined
+  // ---- end F-OO-111
   // ---- F-OP-102 (10-order-page §2.2): the ⋯ re-cut — Make work orders… also while in production with lines not in work orders;
   // Change ship-to… (edit mode with Ship to focused: one edit path); Who answers the customer… (the conversation's owner door);
   // Open in Planning › (the first work order). "Ask the customer to re-confirm…" is deferred (F-OP-105): no item.
@@ -307,7 +314,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
             ]
           : []),
         // F-OP-102 (N-1): who answers the customer is the order conversation's owner — its own dialog (the frame's door).
-        ...(thread ? [{ id: 'whoAnswers', label: t('bandMenu.whoAnswers'), onSelect: () => frameRef.current?.openDoor?.('owner') }] : []),
+        ...(thread ? [{ id: 'whoAnswers', label: t('bandMenu.whoAnswers'), disabled: !!answerWait /* F-OO-111 */, description: answerWords, onSelect: () => frameRef.current?.openDoor?.('owner') }] : []),
     ],
     goTo: [
         ...(order.chain.quote && model.can.viewQuotes ? [{ id: 'quote', label: t('action.openQuote', { number: order.chain.quote.number }), href: `${model.prefix}/sales/quotes/${order.chain.quote.id}` }] : []),
@@ -334,6 +341,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
 
   const depositRequest = gate.request
   const depositOverdue = gate.state === 'WAITING' && !!depositRequest && depositRequest.dueDate < model.today
+  // F-OO-111 (BC-1): the tab the yes and deposit banners show on — every tab but Overview (its strips say them, with the same doors).
+  const notOverview = model.tab !== 'overview'
   const toMoney = (
     <Button size="sm" variant="quiet" asChild>
       <TabLink href={tabHref(recordHref, 'money', search) /* F-OP-210 */}>{t('tab.money')}</TabLink>
@@ -431,13 +440,15 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
           <LinksSaid model={model.links} actions={actions?.links} />
           {model.depth && <DepthNotice model={model.depth} actions={actions?.depth} />}
           {order.status === 'CANCELLED' && <Banner tone="danger" title={t('record.cancelled', { reason: order.cancelReason ?? '—' })} />}
-          {depositOverdue && depositRequest && <Banner tone="danger" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toMoney} />}
-          {gate.state === 'MISSING' && !isFinal(order) && <Banner tone="danger" title={t('record.depositMissing')} action={toMoney} />}
+          {/* F-OO-111 (BC-1, Owner D5): on Overview the deposit and the yes banners step back — section 1's strips say the same with the
+              same doors (one place per fact); on every other tab they stay. Every band tag stays. */}
+          {depositOverdue && depositRequest && notOverview && <Banner tone="danger" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toMoney} />}
+          {gate.state === 'MISSING' && !isFinal(order) && notOverview && <Banner tone="danger" title={t('record.depositMissing')} action={toMoney} />}
           {/* B-TH-256: a compliance gate still blocks a work order or a shipment of this order (the gate's own words). */}
           <GateNotices model={model.links} prefix={model.prefix} />
           {/* B-W2b-323: the yes the order waits for. */}
           {/* F-OP-101: the approver decides it here (the order read's open yes). */}
-          {model.depth && <WaitingBanner model={model.depth} actions={actions?.depth} prefix={model.prefix} yes={{ approvals: order.openApprovals, busy: model.busy }} onYes={actions?.yes} />}
+          {model.depth && notOverview /* F-OO-111 */ && <WaitingBanner model={model.depth} actions={actions?.depth} prefix={model.prefix} yes={{ approvals: order.openApprovals, busy: model.busy }} onYes={actions?.yes} />}
           {/* F-SA-243: after an answer the window's own notice; "<Customer> asks: … · Answer…" and "Change of hh:mm: N steps need a
               decision · Open" (only while a row asks this reader) — one banner place, the most serious first. */}
           {model.requestDoor && <RequestDoorNoticeBanner door={model.requestDoor.parts} />}
@@ -459,7 +470,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
           )}
           {/* B-TH-256: planning proposes new dates: Accept / Decline (orders.manage, never the proposer), "Tell the customer" only ticked. */}
           <RePromiseNotices model={model.links} actions={actions?.links} />
-          {gate.state === 'WAITING' && !depositOverdue && depositRequest && <Banner tone="info" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toMoney} />}
+          {gate.state === 'WAITING' && !depositOverdue && depositRequest && notOverview /* F-OO-111 */ && <Banner tone="info" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toMoney} />}
           {model.changed && (
             <Banner
               tone="info"
@@ -499,6 +510,9 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
       </RecordFrame>
 
       <OrderDialogs order={order} model={model} actions={actions} />
+      {/* F-OO-111 (W07's follow-up): Record a shipment made elsewhere… — its container's dialog while open, mounted ONCE for the page, so
+          the band's ⋯ item opens it on every tab (Overview's More ▾ and the Shipments card head open the same one). */}
+      {model.elsewhere?.dialog}
       {/* F-OP-101: Refuse… of an open yes (the page's one dialog slot). */}
       {model.dialog?.kind === 'refuseYes' && <RefuseYesDialog order={order} model={model} actions={{ onDialog: () => actions?.onDialog?.(null), yes: actions?.yes }} />}
       {/* F-SA-243: the ONE review window (Home › Approvals' own) opened on this page from its doors; Esc returns to the same tab. */}

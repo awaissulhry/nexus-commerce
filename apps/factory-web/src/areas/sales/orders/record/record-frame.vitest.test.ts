@@ -18,6 +18,12 @@ import { viewOpenOf } from '../../../_shared/record-frame/model'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import type { BandDialog, ChangesDialog, LinesDialog, MoneyDialog, OverviewDialog, RecordDialog } from './record-model' // F-OP-134, F-OO-210
+// ---- F-OO-111: the banners on Overview and the band's "Who answers the customer…" ----
+import { order } from '../_demo/fixtures'
+import { base } from './fixtures'
+import { answerHeldOf, OWNER_WORDS_NS } from './overview/people'
+import { rightRef } from '../../../../lib/i18n/rights'
+// ---- end F-OO-111
 
 // The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so a dialog's words are checked.
 vi.mock('@nexus/ui/components', async (original) => {
@@ -751,3 +757,83 @@ describe('F-OP-305: Lines draws Amend order (and Close remaining lines) held for
   })
 })
 // ---- end F-OP-305
+
+// ---- F-OO-111 (10-design §1.7 BC-1, BC-2; Owner D5): on Overview the yes and deposit banners step back — section 1's strips say the
+// same with the same doors; on every other tab they stay; every band tag stays. "Who answers the customer…" is held without threads.post.
+describe('F-OO-111 — the yes and deposit banners step back on Overview (present on Lines); the ⋯ "Who answers the customer…" held in words', () => {
+  type Case = { role: string; record: { tab: string } & Record<string, unknown> }
+  const caseOf = (id: string) => designScreen.cases.find((item) => item.id === id)!.model as unknown as Case
+  const onTab = (model: Case, tab: string) => ({ ...model, record: { ...model.record, tab } })
+  const drawn = (model: unknown, locale: 'en' | 'it' = 'en') => renderView(view, model, locale)
+  const DEPOSIT_OPEN = { en: 'Deposit open — due', it: 'Acconto aperto — scade il' } as const
+  const DEPOSIT_MISSING = { en: 'Deposit not asked', it: 'Acconto non chiesto' } as const
+
+  it('the yes banner: absent on Overview (the strip draws its doors), present on Lines — in both languages', () => {
+    for (const id of ['f-op-101-approver-yes', 'f-op-101-self-asked', 'f-op-101-who-decides']) {
+      for (const locale of ['en', 'it'] as const) {
+        const overview = drawn(caseOf(id), locale)
+        expect(overview, `${id} ${locale} overview`).not.toContain('class="fw-sod-wait"')
+        // The strip is there instead, with the yes's words (one place per fact).
+        expect(overview, `${id} ${locale} strip`).toContain('class="fw-so-strips"')
+        expect(drawn(onTab(caseOf(id), 'lines'), locale), `${id} ${locale} lines`).toContain('class="fw-sod-wait"')
+      }
+    }
+  })
+
+  it('the deposit banners (open, overdue, not asked): absent on Overview, present on Lines and Money', () => {
+    const open = caseOf('f-oo-105-deposit')
+    const record = open.record as unknown as { order: { value: ReturnType<typeof order> } }
+    const value = record.order.value
+    const overdue = { ...open, record: { ...open.record, order: { status: 'ready', value: { ...value, chain: { ...value.chain, depositRequests: value.chain.depositRequests.map((request) => ({ ...request, dueDate: '2020-01-02' })) } } } } }
+    const missing = { ...base('owner', order('CONFIRMED', { chain: { ...order().chain, depositRequests: [] } }), { tab: 'overview' }) } as unknown as Case
+    for (const locale of ['en', 'it'] as const) {
+      for (const [model, words] of [[open, DEPOSIT_OPEN], [overdue, DEPOSIT_OPEN], [missing, DEPOSIT_MISSING]] as const) {
+        expect(textOf(drawn(model, locale)), `${words.en} ${locale} overview`).not.toContain(words[locale])
+        for (const tab of ['lines', 'money']) expect(textOf(drawn(onTab(model as Case, tab), locale)), `${words.en} ${locale} ${tab}`).toContain(words[locale])
+      }
+    }
+  })
+
+  it('only the yes and deposit banners step back: every band tag stays on Overview (D5), the other notices keep their place', () => {
+    const view_ = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view_).toContain("const notOverview = model.tab !== 'overview'")
+    // Its declaration and exactly four banners that read it: the deposit open (overdue, waiting), the deposit not asked, the yes.
+    expect(view_.match(/notOverview/g)?.length).toBe(5)
+    for (const kept of ["{order.customerRef && <Tag tone=\"neutral\">{t('record.customerRef', { ref: order.customerRef })}</Tag>}", "{!order.chain.quote && !model.madeFrom && !model.madeFromReading && <Tag tone=\"neutral\">{t('record.typed')}</Tag>}", '{model.depth && <DepthPills model={model.depth} />}', '{model.reviewBanner}', '<RequestBandNotices order={order} model={model} />']) expect(view_, kept).toContain(kept)
+    // The customer PO tag still drawn on Overview (the band serves every tab).
+    expect(textOf(draw('overview'))).toContain('Customer PO PO-ESEMPIO-88')
+  })
+
+  it('W07\'s follow-up: "Record a shipment made elsewhere…" is mounted ONCE, by the page — the band\'s ⋯ opens it on every tab', () => {
+    const dialogOn = (file: string) => (readFileSync(new URL(file, import.meta.url), 'utf8').match(/model\.elsewhere\?\.dialog\b/g) ?? []).length
+    expect(dialogOn('./view/OrderRecordView.tsx')).toBe(1)
+    for (const tab of ['./view/overview/WhereCard.tsx', './view/ShipmentsTab.tsx', './view/OverviewTab.tsx', './view/LinesTab.tsx', './view/ProductionTab.tsx', './view/MoneyTab.tsx', './view/FilesTab.tsx', './changes/view/ChangesTab.tsx']) expect(dialogOn(tab), tab).toBe(0)
+    // Outside the tabs' bodies: beside the page's other dialogs.
+    const view_ = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view_.indexOf('{model.elsewhere?.dialog}')).toBeGreaterThan(view_.indexOf('<OrderDialogs order={order} model={model} actions={actions} />'))
+    // Its doors stay: the band's ⋯ item, Overview's More ▾ and the Shipments card head all call the same act.
+    expect(view_).toContain("onSelect: () => actions?.onRecordElsewhere?.()")
+    expect(readFileSync(new URL('./view/ShipmentsTab.tsx', import.meta.url), 'utf8')).toContain('onClick={() => actions?.onRecordElsewhere?.()}')
+  })
+
+  it('BC-2: "Who answers the customer…" is held without threads.post, in the People card\'s own words for the same door (en + it)', () => {
+    expect(answerHeldOf({ thread: true, mayWrite: false })).toEqual({ ns: OWNER_WORDS_NS, key: 'held.noRight', params: { right: rightRef('threads.post') } })
+    expect(answerHeldOf({ thread: true, mayWrite: true })).toBeNull()
+    expect(answerHeldOf({ thread: true, mayWrite: null })).toBeNull()
+    for (const locale of LOCALES) {
+      const head = createTranslator(locale, messagesFor(locale, [OWNER_WORDS_NS])[OWNER_WORDS_NS]!)
+      const words = head('held.noRight', { right: rightRef('threads.post') })
+      expect(words, locale).not.toBe('held.noRight')
+      expect(words, locale).not.toContain('threads.post')
+      expect(words, locale).not.toContain('{right}')
+    }
+    const view_ = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view_).toContain('const answerWait = answerHeldOf({ thread: !!thread, mayWrite: people ? people.mayNote : null })')
+    expect(view_).toContain("{ id: 'whoAnswers', label: t('bandMenu.whoAnswers'), disabled: !!answerWait /* F-OO-111 */, description: answerWords, onSelect: () => frameRef.current?.openDoor?.('owner') }")
+    // The thread head's catalogue comes with the page (its words are said in the band's ⋯).
+    expect(view_).toContain('OWNER_WORDS_NS /* F-OO-111 */]')
+    // The People card holds its Change… by the same rule (one rule, two doors).
+    expect(readFileSync(new URL('./view/overview/PeopleCard.tsx', import.meta.url), 'utf8')).toContain('answerHeldOf({ thread:')
+  })
+})
+// ---- end F-OO-111

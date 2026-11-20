@@ -619,7 +619,9 @@ describe('F-OO-107: the moves row — Mark ready…, More ▾ (made elsewhere, C
     expect(moves).toContain('readyHeld(order, input.can)')
     for (const gone of ['makeHeldOf', 'makeWorkOrders', 'createShipment', 'promise']) expect(moves, gone).not.toContain(gone)
     const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8')
-    for (const part of ['actions?.onDialog?.({ kind: id })', 'actions?.onRecordElsewhere?.()', '{model.elsewhere?.dialog}', "'aria-label': t('where.moreOf', { number: order.number })"]) expect(card, part).toContain(part)
+    for (const part of ['actions?.onDialog?.({ kind: id })', 'actions?.onRecordElsewhere?.()', "'aria-label': t('where.moreOf', { number: order.number })"]) expect(card, part).toContain(part)
+    // F-OO-111: the made-elsewhere dialog is the page's, mounted once (OrderRecordView): the band's ⋯ opens it on every tab.
+    expect(card).not.toContain('{model.elsewhere?.dialog}')
     expect(card.indexOf('<Moves ')).toBeGreaterThan(card.indexOf('F-OO-103: the moves slot'))
   })
 
