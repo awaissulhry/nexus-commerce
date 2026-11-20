@@ -9,6 +9,9 @@ import { BLOCKER_KINDS } from '@nexus/factory-domain/production-brand/waiting'
 import { officeBlockersOf, promiseMovesOf } from './production-read'
 import { blockerWordsOf } from './production-read' // walk #3
 import type { Blocker } from '@nexus/factory-domain/production-brand/waiting'
+// B-MS-006: the headline's stage block with a stage set by hand, and the export's words for it.
+import { headlineStageOf, type HeadlineStageRow } from './production-read'
+import { productionWords, whereText } from '../../../platform/exports/sources/sales-orders'
 
 /**
  * B-SA-031 / B-SA-032 — the office's read of one order's production, its pure parts (the PG suite production-read.pg.vitest.test.ts
@@ -192,3 +195,64 @@ describe('walk #3: an approval we asked names what it asks (its kind), never onl
     expect(words.en.split(': ')).toEqual(["Waiting for the customer's yes", 'Artwork'])
   })
 })
+
+// ── B-MS-006 ──
+describe('B-MS-006: the headline reads the stage set by hand (who and the note behind the notes gate) and the row’s version', () => {
+  const SET_AT = new Date('2026-11-18T09:30:00.000Z')
+  const stored = (over: Partial<HeadlineStageRow> = {}): HeadlineStageRow => ({
+    stage: 'SEWING',
+    stageAt: SET_AT,
+    stageSet: 'SEWING',
+    stageSetReason: 'OUTAGE',
+    stageSetNote: 'Made-up: the tablets were down all morning.',
+    stageSetAt: SET_AT,
+    version: 4,
+    ...over,
+  })
+  const floor = { stage: 'PREPARING' as const, ahead: 0, next: 'CUTTING' as const, sewingNotCounted: false }
+  const planner = { id: ALPHA, name: 'Made-up Planner', active: true }
+
+  it('a hand Sewing over a floor at Preparing: the stage the customer reads, why, the floor’s own stage, when, the note and who; the version', () => {
+    expect(headlineStageOf({ row: stored(), live: floor, partlyShipped: false, notes: true, setBy: planner })).toEqual({
+      code: 'SEWING',
+      words: { it: 'Cucitura', en: 'Sewing' },
+      since: '2026-11-18',
+      ahead: 0,
+      aheadWords: null,
+      sewingNotCounted: false,
+      sewingNotCountedWords: null,
+      next: { code: 'QUALITY', words: { it: 'Controllo qualità', en: 'Quality check' } },
+      partlyShipped: false,
+      byHand: { stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { it: 'In preparazione', en: 'Preparing' } }, at: '2026-11-18T09:30:00.000Z', note: 'Made-up: the tablets were down all morning.', by: planner },
+      version: 4,
+    })
+  })
+
+  it('without workorders.view (the notes gate): why, the floor and when stay; the note and who are null', () => {
+    expect(headlineStageOf({ row: stored(), live: floor, partlyShipped: false, notes: false, setBy: planner })?.byHand).toEqual({ stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { it: 'In preparazione', en: 'Preparing' } }, at: '2026-11-18T09:30:00.000Z', note: null, by: null })
+  })
+
+  it('no hand stage: byHand null, the version of the row; ahead and "sewing not counted" from live facts that agree', () => {
+    const plain = headlineStageOf({ row: stored({ stage: 'CUTTING', stageSet: null, stageSetReason: null, stageSetNote: null, stageSetAt: null }), live: { stage: 'CUTTING', ahead: 1, next: 'SEWING', sewingNotCounted: true }, partlyShipped: true, notes: true, setBy: null })
+    expect(plain).toMatchObject({ code: 'CUTTING', ahead: 1, sewingNotCounted: true, partlyShipped: true, byHand: null, version: 4 })
+    // Under a hand stage the live facts never agree: "1 line ahead" and "sewing not counted" vanish.
+    expect(headlineStageOf({ row: stored(), live: { stage: 'CUTTING', ahead: 1, next: 'SEWING', sewingNotCounted: true }, partlyShipped: false, notes: true, setBy: null })).toMatchObject({ ahead: 0, sewingNotCounted: false, byHand: { floor: { code: 'CUTTING' } } })
+  })
+
+  it('no row yet: the live stage, no since, no hand stage, version null (a set by hand then sends null and makes the row); nothing at all: null', () => {
+    expect(headlineStageOf({ row: null, live: floor, partlyShipped: false, notes: true, setBy: null })).toMatchObject({ code: 'PREPARING', since: null, byHand: null, version: null })
+    expect(headlineStageOf({ row: null, live: null, partlyShipped: false, notes: true, setBy: null })).toBeNull()
+  })
+
+  it("the export's Where it is cell: \"Sewing (by hand) · At risk\" (en + it) only while a hand stage stands", () => {
+    type Production = NonNullable<Parameters<typeof whereText>[0]['production']>
+    const row = (stageByHand: Production['stageByHand']) => ({ production: { stage: 'SEWING', health: 'AT_RISK', stageByHand } as unknown as Production })
+    const en = (code: string) => productionWords('en')[code] ?? code
+    const it = (code: string) => productionWords('it')[code] ?? code
+    expect(whereText(row({ since: '2026-11-18T09:30:00.000Z' }), en)).toBe('Sewing (by hand) · At risk')
+    expect(whereText(row({ since: '2026-11-18T09:30:00.000Z' }), it)).toBe('Cucitura (a mano) · A rischio')
+    expect(whereText(row(null), en)).toBe('Sewing · At risk')
+    expect(whereText({ production: undefined }, en)).toBeNull()
+  })
+})
+// ── end B-MS-006 ──

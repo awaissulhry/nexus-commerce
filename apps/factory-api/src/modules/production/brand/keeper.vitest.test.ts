@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { orderStageOf } from '@nexus/factory-domain/production-brand/stages'
 import { lineStageFactsOf, type LineSizeRow } from './facts'
 import { brandKeeperHandler, HOLD_EVENTS, KEEPER_EVENTS, planChanges, planKeep, STAGE_EVENTS, type KeeperRow, type KeeperTarget } from './keeper'
+import { planLeaving } from './keeper' // B-MS-004
+import type { BrandStage } from '@nexus/factory-domain/production-brand/stages' // B-MS-004
 
 /**
  * B-PR-17 — the keeper's plan, pure (production plan §4; review fixes R-20, R-21, R-35, R-69): what it writes and tells for
@@ -18,6 +20,7 @@ const row = (over: Partial<KeeperRow> = {}): KeeperRow => ({
   partyId: '0195a000-0000-7000-8000-0000000000aa',
   salesOrderId: '0195a000-0000-7000-8000-0000000000bb',
   stage: 'PREPARING',
+  stageSet: null, // B-MS-004: no stage set by hand (every plan below stays as it was)
   health: 'ON_TRACK',
   healthSet: null,
   healthReasonCode: null,
@@ -27,7 +30,7 @@ const row = (over: Partial<KeeperRow> = {}): KeeperRow => ({
   version: 3,
   ...over,
 })
-const target = (over: Partial<KeeperTarget> = {}): KeeperTarget => ({ stage: 'PREPARING', computed: 'ON_TRACK', waiting: { on: 'US', since: EARLIER }, ...over })
+const target = (over: Partial<KeeperTarget> = {}): KeeperTarget => ({ stage: 'PREPARING', reached: 'PREPARING' /* B-MS-004 */, computed: 'ON_TRACK', waiting: { on: 'US', since: EARLIER }, ...over })
 const plan = (r: KeeperRow | null, t: KeeperTarget, today = TODAY) => planKeep({ row: r, target: t, now: NOW, today })
 
 describe('the row is made when the order is CONFIRMED (R-21)', () => {
@@ -146,3 +149,65 @@ describe('what the keeper follows (R-69)', () => {
     expect(STAGE_EVENTS.some((type) => (HOLD_EVENTS as readonly string[]).includes(type))).toBe(false)
   })
 })
+
+// ── B-MS-004 ──
+describe('B-MS-004: the stage set by hand (design A: `stage` is the shown one; every decision reads the floor of this pass)', () => {
+  /** A row whose stage was set by hand (while it stands `stage` equals it: the database's guard). */
+  const hand = (stage: BrandStage, over: Partial<KeeperRow> = {}): KeeperRow => row({ stage, stageSet: stage, ...over })
+
+  it('the floor moves under it: nothing written to the stage, nothing told', () => {
+    expect(planChanges(plan(hand('SEWING'), target({ stage: 'CUTTING', reached: 'CUTTING' })))).toBe(false)
+    expect(planChanges(plan(hand('QUALITY'), target({ stage: 'SEWING', reached: 'SEWING' })))).toBe(false)
+  })
+
+  it('the floor reaches it: the hand stage ends (its columns cleared in the same write), the stage stays, nothing told', () => {
+    const reached = plan(hand('SEWING'), target({ stage: 'SEWING', reached: 'SEWING' }))!
+    expect(reached.data).toEqual({ handDropped: 'REACHED' })
+    expect(reached.stageReached).toBeNull()
+    expect(planChanges(reached)).toBe(true)
+  })
+
+  it("the floor passes it: it ends, and the floor's stage is written and told from the hand stage", () => {
+    const passed = plan(hand('SEWING'), target({ stage: 'QUALITY', reached: 'QUALITY' }))!
+    expect(passed.data).toEqual({ handDropped: 'REACHED', stage: 'QUALITY', stageAt: NOW })
+    expect(passed.stageReached).toEqual({ stage: 'QUALITY', previous: 'SEWING' })
+  })
+
+  it('no goods line left open: it ends, the stage is where the work reached, nothing told', () => {
+    const none = plan(hand('QUALITY'), target({ stage: null, reached: 'SEWING', computed: null }))!
+    expect(none.data).toMatchObject({ handDropped: 'NO_LINE', stage: 'SEWING', stageAt: NOW })
+    expect(none.stageReached).toBeNull()
+    // Where the work reached is the hand stage itself: the stage stays.
+    expect(plan(hand('SEWING'), target({ stage: null, reached: 'SEWING', computed: null }))!.data).toMatchObject({ handDropped: 'NO_LINE' })
+    expect(plan(hand('SEWING'), target({ stage: null, reached: 'SEWING', computed: null }))!.data.stage).toBeUndefined()
+  })
+
+  it('the floor goes back under it: nothing written, nothing told; once it ended, a step back is written and never told', () => {
+    expect(planChanges(plan(hand('SEWING'), target({ stage: 'PREPARING', reached: 'PREPARING' })))).toBe(false)
+    const back = plan(row({ stage: 'SEWING' }), target({ stage: 'CUTTING', reached: 'CUTTING' }))!
+    expect(back.data).toEqual({ stage: 'CUTTING', stageAt: NOW })
+    expect(back.stageReached).toBeNull()
+  })
+
+  it('a raise and a hand stage dropped in one update', () => {
+    const both = plan(hand('SEWING', { healthSet: 'AT_RISK', healthReasonCode: 'CAPACITY', healthSetUntil: TODAY }), target({ stage: 'QUALITY', reached: 'QUALITY' }))!
+    expect(both.data).toEqual({ handDropped: 'REACHED', stage: 'QUALITY', stageAt: NOW, raiseDropped: true })
+    expect(both.stageReached).toEqual({ stage: 'QUALITY', previous: 'SEWING' })
+    expect(both.healthChanged).toEqual({ health: 'ON_TRACK', previous: 'AT_RISK', byNote: true })
+  })
+
+  it("a person's Clear: it ends, the floor's stage is written back and never told; without a hand stage Clear changes nothing", () => {
+    const cleared = planKeep({ row: hand('SEWING'), target: target({ stage: 'PREPARING' }), now: NOW, today: TODAY, clearHand: true })!
+    expect(cleared.data).toEqual({ handDropped: 'CLEARED', stage: 'PREPARING', stageAt: NOW })
+    expect(cleared.stageReached).toBeNull()
+    expect(planChanges(planKeep({ row: row(), target: target(), now: NOW, today: TODAY, clearHand: true }))).toBe(false)
+  })
+
+  it('the order left production (planLeaving): it ends, the stage is where the work reached, nothing told; no hand stage: nothing', () => {
+    expect(planLeaving({ row: hand('SEWING'), reached: 'CUTTING', now: NOW })).toEqual({ create: false, data: { handDropped: 'LEFT_PRODUCTION', stage: 'CUTTING', stageAt: NOW }, stageReached: null, healthChanged: null })
+    expect(planLeaving({ row: hand('SEWING'), reached: 'SEWING', now: NOW })!.data).toEqual({ handDropped: 'LEFT_PRODUCTION' })
+    expect(planLeaving({ row: hand('SEWING'), reached: 'PREPARING', now: NOW, why: 'CLEARED' })!.data).toEqual({ handDropped: 'CLEARED', stage: 'PREPARING', stageAt: NOW })
+    expect(planLeaving({ row: row(), reached: 'CUTTING', now: NOW })).toBeNull()
+  })
+})
+// ── end B-MS-004 ──

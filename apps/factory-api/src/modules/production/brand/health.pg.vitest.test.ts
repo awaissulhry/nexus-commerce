@@ -269,6 +269,7 @@ describe('the keeper drops what the raise wrote (B-PR-17 planKeep, pure)', () =>
     partyId: ids.b,
     salesOrderId: newId(),
     stage: 'PREPARING',
+    stageSet: null, // B-MS-004: no stage set by hand
     health: 'ON_TRACK',
     healthSet: 'AT_RISK',
     healthReasonCode: 'CAPACITY',
@@ -279,7 +280,7 @@ describe('the keeper drops what the raise wrote (B-PR-17 planKeep, pure)', () =>
   })
   const keep = (at: string, computed: 'ON_TRACK' | 'NO_DATE') => {
     const kept = row(raiseUntil(today))
-    return planKeep({ row: kept, target: { stage: 'PREPARING', computed, waiting: { on: 'US', since: kept.waitingSince } }, now: new Date(), today: at })!
+    return planKeep({ row: kept, target: { stage: 'PREPARING', reached: 'PREPARING' /* B-MS-004 */, computed, waiting: { on: 'US', since: kept.waitingSince } }, now: new Date(), today: at })!
   }
 
   it('it stands up to the sixth day, drops on the seventh (the customer is told by the drop), and drops at once when the computed health changes', () => {

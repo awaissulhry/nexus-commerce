@@ -4,6 +4,9 @@ import { BRAND_HEALTHS, HEALTH_NOTE_MAX, HEALTH_REASON_CODES } from '@nexus/fact
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
 // B-PR-22b: the customer's urgency as the office steers it.
 import { BRAND_URGENCIES, URGENCY_ACTORS, URGENCY_LOCK_REASON_MAX, URGENCY_OFFICE_BATCH_MAX, URGENCY_OUTCOMES } from '@nexus/factory-domain/production-brand/urgency'
+// B-MS-005: the stage set by hand.
+import { HAND_STAGES, STAGE_SET_REASON_CODES } from '@nexus/factory-domain/production-brand/stage-set'
+import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
 
 /**
  * The customer's production state of one sales order, as the OFFICE reads and steers it (production plan §4 "Health"; review fix
@@ -165,3 +168,49 @@ export const customerUrgencyContract = defineContract({
   },
 })
 // ── end B-PR-22b ──
+
+// ── B-MS-005 ──
+/**
+ * B-MS-005 (set the stage by hand, plan.md D1–D9; review fixes R1, R4, R9, R11, R12, R19): the office sets an order's stage by hand
+ * while the floor cannot record the work — Cutting, Sewing or Quality check, only ahead of the live floor, with a reason and an
+ * office-only note — changes it (the same PUT while one stands; it may go lower while it stays above the floor), or clears it.
+ * production.brand.manage over the order's company and customer. Every write takes an Idempotency-Key and the production state's
+ * version as read: a required key, null only while the order has no production state yet (R1: the set makes it). Refusals in words:
+ * `body/<field>` (400: Preparing or Ready asked, a reason not in the list, Something else without a note, a note of two lines or
+ * too long), the order's state (409: not In production or Partly shipped, nothing left to make, the customer's own pause, the floor
+ * already there; a Clear with none standing), a stale version (409, path `version`). The customer never reads any of it: its portal
+ * reads the plain stage only (no route here is a portal route).
+ */
+export const stageByHandView = output({
+  orderId: id(),
+  /** The floor's own stage as read under the keeper's lock (null: no goods line is open). */
+  floor: z.enum(BRAND_STAGES).nullable(),
+  /** The stage the customer reads (the keeper's shown stage: the floor's, or the one set by hand while it leads). */
+  stage: z.enum(BRAND_STAGES),
+  /** The stage set by hand while it stands: why, the office's own note, when and by whom (null: no longer a user of the tenant). */
+  byHand: output({ stage: z.enum(HAND_STAGES), reasonCode: z.enum(STAGE_SET_REASON_CODES), note: z.string().nullable(), setAt: instant(), setBy: person.nullable() }).nullable(),
+  /** The production state's version (send it back with the next change or clear). */
+  version: z.number().int(),
+})
+
+export const setStageContract = defineContract({
+  params: orderParams,
+  body: input({
+    /** Any stage: only Cutting, Sewing and Quality check are taken (Preparing and Ready are refused in words). */
+    stage: z.enum(BRAND_STAGES),
+    /** Why the floor could not record it (office only). */
+    reasonCode: z.enum(STAGE_SET_REASON_CODES),
+    /** The office's own words: one line of at most 200 characters, required for OTHER (judged in words); never the customer's. */
+    note: z.string().max(1000).nullish(),
+    /** The production state's version as read; null only while the order has none yet. */
+    version: z.number().int().min(1).nullable(),
+  }),
+  response: { 200: stageByHandView },
+})
+
+export const clearStageContract = defineContract({
+  params: orderParams,
+  querystring: input({ version: z.coerce.number().int().min(1) }),
+  response: { 200: stageByHandView },
+})
+// ── end B-MS-005 ──

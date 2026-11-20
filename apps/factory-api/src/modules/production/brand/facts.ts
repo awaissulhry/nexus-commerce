@@ -4,6 +4,7 @@ import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time
 import { riskOf, type RiskState } from '@nexus/factory-domain/planning/promise-keep/risk'
 import { computedHealth, type BrandHealth } from '@nexus/factory-domain/production-brand/health'
 import { orderStageOf, type LineStageFacts, type OrderStage } from '@nexus/factory-domain/production-brand/stages'
+import { reachedStageOf, type BrandStage } from '@nexus/factory-domain/production-brand/stages' // B-MS-004
 import { waitingOn, type Blocker, type Waiting } from '@nexus/factory-domain/production-brand/waiting'
 import type { OrderFreezeStage } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { depositGate, type DepositStatus } from '@nexus/factory-domain/production/work-orders/release'
@@ -73,6 +74,10 @@ export interface OrderProductionFacts {
   /** The plain stage (its slowest unfinished line, how many lines are ahead, the next stage, "sewing not counted here"); null:
    * no goods line is open, the order left My production. */
   readonly stage: OrderStage | null
+  // B-MS-004 (set the stage by hand, R2): where the work reached, `done` ignored (stages reachedStageOf: each line by the furthest
+  // its cells reached, the order by its slowest line; PREPARING with no line) — the keeper writes it back when a stage set by hand
+  // ends with no goods line open, or when the order leaves production, so "the work had reached …" says only what the floor did.
+  readonly reached: BrandStage
   /** The order is PARTLY_SHIPPED (the "Partly shipped" mark beside the stage). */
   readonly partlyShipped: boolean
   /** The computed health (null: nothing left to make); `undefined` when the read was asked without health. */
@@ -311,6 +316,7 @@ export async function readOrderProductionFacts(db: Reader, context: OfficeContex
     order: { id: order.id, companyId: order.companyId, partyId: order.partyId, number: order.number, status: order.status },
     kept: isKeptState(order.status),
     stage,
+    reached: reachedStageOf(lineFacts), // B-MS-004
     partlyShipped: order.status === 'PARTLY_SHIPPED',
     computed,
     waiting: waitingOn(blockers),
