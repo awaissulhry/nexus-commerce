@@ -1682,6 +1682,10 @@
     "step": "payment step {seq}",
     "yourOrderSeq": "your order {seq}"
   },
+  "people": {
+    "supervisor": "Supervisor",
+    "followers": "Followers ›"
+  },
   "told": {
     "title": "Who was told",
     "subtitle": "{order} · change of {time}",

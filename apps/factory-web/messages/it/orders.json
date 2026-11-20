@@ -1682,6 +1682,10 @@
     "step": "rata {seq}",
     "yourOrderSeq": "il vostro ordine {seq}"
   },
+  "people": {
+    "supervisor": "Supervisore",
+    "followers": "Chi segue ›"
+  },
   "told": {
     "title": "Chi è stato avvisato",
     "subtitle": "{order} · modifica delle {time}",
