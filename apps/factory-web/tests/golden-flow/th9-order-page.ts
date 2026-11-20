@@ -6,6 +6,10 @@ import { defineStage } from './_harness/stages'
 import { ensureBrand, signInToPortal, type PortalDesk } from './_harness/two-brands'
 import { answerOf, byApi, chooseFromMenu, day, dialog, press, routerActivity } from './_harness/ui'
 import { startsWith, words } from './_harness/words'
+// F-MS-106 (set the stage by hand): the customer's own stage and count words, and the domain's held words (no catalogue key has them).
+import { COUNT_TO_FOLLOW_WORDS } from '@nexus/factory-domain/production-brand/portal-read'
+import { STAGE_SET_REFUSAL_WORDS } from '@nexus/factory-domain/production-brand/stage-set'
+import { STAGE_WORDS } from '@nexus/factory-domain/production-brand/words'
 
 /**
  * F-OP-129 — UI golden flow TH-9: THE ORDER PAGE AT THE END (order page plan N1–N6; 10-order-page §2, §5, §7, §8, §13; review R-4,
@@ -35,6 +39,12 @@ import { startsWith, words } from './_harness/words'
  *      changes whose groups add up to "Changes (N) ›" and the Changes badge, Linked records' counts = the tab badges;
  *  10  F-OO-215: sections 8 and 7 — a custom value saved beside Order facts sends the order's version (B-OO-014) and the page reads the
  *      order again (the office note saved next goes through at the new version); the sheet's edit at the version read before is stale.
+ *  11  F-MS-106 (set the stage by hand): SEED-SO-W39-02, the Owner's own case (In production, no work order, no production state
+ *      yet): the Planner sets Sewing by hand (System or scanners down, a note) — the headline "In production · Sewing", the hand row
+ *      with who and why, the Orders list's hand mark, the History line; P1's buyer reads a plain Sewing (no count is claimed: the
+ *      floor counts sewing only on a work order), may still mark it Urgent (nothing cut), never "by hand"; Change… down to Cutting
+ *      (a correction) — the buyer reads "Cutting · Count to follow"; Clear… → Preparing again; Sales sees the door held in words, and
+ *      so does a Confirmed order.
  * Not here, said in the report: cut pieces (the floor's flow: the extra-pieces outcome is held by the design case
  * f-op-129-strip-outcome, B-OP-071 O1 and the unit tests of F-OP-107), the record of a shipment made elsewhere whose garments the seeds
  * date in the story's days ahead (B-OP-071 O4 records one), and the invoices of a shared shipment that left (B-OP-045).
@@ -48,6 +58,9 @@ const DEPTH = words('warehouse-shipments-depth')
 const POPUPS = words('record-thread-popups')
 const PO = words('portal-orders')
 const SHIP = words('shipments')
+// F-MS-106: the portal's production list and the order's History.
+const PPROD = words('portal-production')
+const FEED = words('record-thread-feed')
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** A catalogue sentence's words before its first placeholder (the key's raw text). */
@@ -76,6 +89,8 @@ const FIELD_VALUE = 'Made-up: two jackets per box, TH9 page'
 const SHEET_VALUE = 'Made-up: from the sheet at the old version, TH9'
 const OFFICE_NOTE = 'Made-up: call before delivery, TH9 office note.'
 // ---- end F-OO-215
+// ---- F-MS-106: the office's note beside the stage set by hand (never the customer's to read; never a person of the floor) ----
+const HAND_NOTE = 'Made-up: the sewing room tablets were offline all morning, TH9.'
 
 type Json = Record<string, any>
 type Made = { id: string; number: string }
@@ -639,5 +654,144 @@ export default defineStage({
       await flow.settle()
     })
     // ---- end F-OO-215
+
+    // ---- F-MS-106 (set the stage by hand: the browser end test; review R1, R3, R4, R8, R13, R17; Owner D1–D9) -----------------------
+    await flow.step('11 · the stage set by hand on SEED-SO-W39-02 (the Owner’s case): the Planner sets Sewing — headline, the hand row, the list’s mark, the History; P1 reads a plain Sewing, may still mark it Urgent; Change… to Cutting reads "Count to follow"; Clear… → Preparing; held for Sales and on a Confirmed order', async () => {
+      const planner = await flow.desk('planner')
+      const { page } = planner
+      const order = world.w3902
+      const where = page.locator('.fw-so-where')
+      const headline = where.locator('.fw-so-headline')
+      const handRow = where.locator('.fw-so-hand')
+      const stageWord = (code: 'PREPARING' | 'CUTTING' | 'SEWING') => PROD(`parts.stage.${code}`)
+      const hand = /^\/production\/brand-orders\/[^/]+\/stage$/
+      const fresh = (await flow.read(page, `/sales/orders/${order.id}`)).order as Json
+      expect(fresh.status, 'SEED-SO-W39-02 is in production').toBe('IN_PRODUCTION')
+      // Set-up: P1 shares its production progress (+ Progress) for this step, so its buyer reads a stage's count words — the limits
+      // card's own write (customer page; th-stages walk the card); put back as it was at the step's end.
+      byApi('P1’s production share level for this step (the customer page’s limits card)')
+      const owner = await flow.desk('owner')
+      const shareLevel = async (level: string): Promise<void> => {
+        const limits = (await flow.read(owner.page, `/partners/${alphaId}/production`)).production as Json
+        await flow.write(owner.page, 'POST', '/auth/office/step-up', { code: await flow.code(owner.person) })
+        await flow.write(owner.page, 'PUT', `/partners/${alphaId}/production`, { productionLevel: level, version: limits.version })
+      }
+      const sharedBefore = ((await flow.read(owner.page, `/partners/${alphaId}/production`)).production as Json).level as string
+      if (sharedBefore === 'STATUS') await shareLevel('PROGRESS')
+
+      // Set the stage by hand…: the door under the dots; the ONE dialog — Sewing, System or scanners down, the office's note; the
+      // lines say the customer reads a plain stage and is told after the 10-minute window (R3b), and the cut-offs stay the floor's.
+      await planner.go(`/sales/orders/${order.id}?tab=overview`)
+      await expect(headline).toHaveText(`${OD('status.IN_PRODUCTION')} · ${stageWord('PREPARING')}`, { timeout: 60_000 })
+      const door = where.getByRole('button', { name: OD('where.manual.open'), exact: true })
+      await seen(door, 60_000)
+      await expect(door, 'a Planner may set it').not.toHaveAttribute('aria-disabled', 'true', { timeout: 60_000 })
+      await press(door)
+      const box = dialog(page)
+      await seen(box.getByText(OD('where.manual.title', { number: order.number })), 60_000)
+      await box.getByRole('radio', { name: startsWith(stageWord('SEWING')) }).check()
+      await box.getByRole('combobox', { name: OD('where.manual.reason'), exact: true }).selectOption('OUTAGE')
+      await box.getByRole('textbox', { name: startsWith(PROD('raise.note')) }).fill(HAND_NOTE)
+      for (const line of [OD('where.manual.customer'), OD('where.manual.told', { minutes: 10 }), OD('where.manual.cuts')]) await seen(box.getByText(line, { exact: true }))
+      await flow.shot(page, 'hand-stage-dialog')
+      const set = await answerOf(page, 'PUT', hand, () => press(box.getByRole('button', { name: OD('where.manual.go'), exact: true })))
+      expect(set, 'made at Preparing and set to Sewing by hand (R1)').toMatchObject({ floor: 'PREPARING', stage: 'SEWING', byHand: { stage: 'SEWING', reasonCode: 'OUTAGE', note: HAND_NOTE } })
+      const who = set.byHand.setBy.name as string
+      await expect(box).toBeHidden({ timeout: 30_000 })
+
+      // The headline and the hand row: who and why, the office's note, no work order records it (it stands until cleared).
+      await expect(headline).toHaveText(`${OD('status.IN_PRODUCTION')} · ${stageWord('SEWING')}`, { timeout: 60_000 })
+      await seen(handRow, 60_000)
+      for (const text of [OD('where.manual.tag'), OD('where.manual.by', { who }), OD('where.manual.reasons.OUTAGE'), OD('where.manual.noWork'), HAND_NOTE]) await expect(handRow, text).toContainText(text)
+      await flow.shot(page, 'hand-stage-set')
+
+      // The History says it (the order's own row of the act), after a fresh read of the page.
+      await planner.go(`/sales/orders/${order.id}?tab=overview`)
+      await seen(page.locator('aside.fw-rcf-dock').getByText(new RegExp(escape(FEED('verb.setStageByHand')))).first(), 60_000)
+
+      // The Orders list, searched for this one order: the same Sewing, with its small hand mark (its words for a screen reader, the
+      // tip). The list holds that order alone, so its words are read in the list as a whole (a grid row may be split in parts).
+      await planner.go(`/sales/orders?q=${encodeURIComponent(order.number)}`)
+      await seen(page.getByRole('link', { name: order.number, exact: true }), 60_000)
+      await expect(page.locator('main')).toContainText(OD('list.byHand.mark'), { timeout: 60_000 })
+      await flow.shot(page, 'hand-stage-list')
+
+      // P1's buyer: a plain Sewing on its order — no count is claimed (the floor counts sewing only on a work order: never "0 of 8
+      // sewn"), never "by hand", the reason, the note or who; its own "Mark urgent" is still offered (nothing cut: R8).
+      const alpha = await signInToPortal(flow, BRAND_ALPHA, alphaId)
+      const portalText = async () => (await alpha.page.locator('main').innerText().catch(() => '')) || (await alpha.page.locator('body').innerText())
+      const saysNothingOfTheHand = async (place: string) => {
+        const text = await portalText()
+        for (const word of ['by hand', HAND_NOTE, who, OD('where.manual.reasons.OUTAGE')]) expect(text, `${place}: ${word}`).not.toContain(word)
+        // R13: a stage's count of 0 reads "Count to follow", never "0 of 8 cut" (the count words of factory-domain portal-read).
+        expect(text, `${place}: no "0 of N" count`).not.toMatch(/\b0 of \d+ (cut|sewn|checked|packed)\b/)
+      }
+      await alpha.go(`/orders/${order.id}`)
+      await seen(alpha.page.getByText(STAGE_WORDS.SEWING.en, { exact: true }).first(), 60_000)
+      await saysNothingOfTheHand('P1’s order at Sewing')
+      await flow.shot(alpha.page, 'hand-stage-portal-sewing')
+      await alpha.go('/production')
+      const ref = fresh.customerRef as string | null
+      if (ref) {
+        const menu = alpha.page.getByRole('button', { name: new RegExp(`^${escape(lead(PPROD('row.menu')))}\\s*${escape(ref)}`) }).first()
+        await seen(menu, 60_000)
+        await press(menu)
+        await seen(alpha.page.getByRole('menuitem', { name: PPROD('row.open'), exact: true }))
+        const mark = alpha.page.getByRole('menuitem', { name: startsWith(PPROD('row.markUrgent')) }).first()
+        if ((await mark.count()) > 0) {
+          await expect(mark, 'never held for a cut that did not happen').not.toContainText(PPROD('held.cut'))
+          if ((await mark.getAttribute('aria-disabled')) === 'true') notHere(`P1’s Mark urgent on SEED-SO-W39-02: held for another reason — ${(await mark.innerText()).trim()}`)
+        } else notHere('P1’s Mark urgent on SEED-SO-W39-02: urgency is off for P1 in this world')
+        await alpha.page.keyboard.press('Escape')
+      } else notHere('P1’s production list row of SEED-SO-W39-02: it has no reference of the customer to find it by')
+      await saysNothingOfTheHand('P1’s production list')
+
+      // Change… down to Cutting (a correction, D9: never told) — the buyer reads "Cutting · Count to follow" (R13: nothing cut yet).
+      await planner.go(`/sales/orders/${order.id}?tab=overview`)
+      await press(where.getByRole('button', { name: OD('where.manual.changeAria', { number: order.number }), exact: true }))
+      const change = dialog(page)
+      await seen(change.getByText(OD('where.manual.changeTitle', { number: order.number })), 60_000)
+      await change.getByRole('radio', { name: startsWith(stageWord('CUTTING')) }).check()
+      await seen(change.getByText(OD('where.manual.back', { customer: STAGE_WORDS.CUTTING.en }), { exact: true }))
+      const changed = await answerOf(page, 'PUT', hand, () => press(change.getByRole('button', { name: OD('where.manual.changeGo'), exact: true })))
+      expect(changed).toMatchObject({ floor: 'PREPARING', stage: 'CUTTING', byHand: { stage: 'CUTTING', reasonCode: 'OUTAGE' } })
+      await expect(headline).toHaveText(`${OD('status.IN_PRODUCTION')} · ${stageWord('CUTTING')}`, { timeout: 60_000 })
+      await alpha.go(`/orders/${order.id}`)
+      await seen(alpha.page.getByText(`${STAGE_WORDS.CUTTING.en} · ${COUNT_TO_FOLLOW_WORDS.en}`, { exact: true }).first(), 60_000)
+      await saysNothingOfTheHand('P1’s order at Cutting')
+      await flow.shot(alpha.page, 'hand-stage-portal-cutting')
+
+      // Clear… → back to the floor's stage, Preparing: inside the window the customer was not told and is not told now.
+      await planner.go(`/sales/orders/${order.id}?tab=overview`)
+      await press(where.getByRole('button', { name: OD('where.manual.clearAria', { number: order.number }), exact: true }))
+      const clear = dialog(page)
+      await seen(clear.getByText(OD('where.manual.clearTitle'), { exact: true }), 60_000)
+      await seen(clear.getByText(OD('where.manual.clearUntold', { minutes: 10, customer: STAGE_WORDS.CUTTING.en }), { exact: true }))
+      const cleared = await answerOf(page, 'DELETE', hand, () => press(clear.getByRole('button', { name: OD('where.manual.clearGo', { stage: stageWord('PREPARING') }), exact: true })))
+      expect(cleared).toMatchObject({ floor: 'PREPARING', stage: 'PREPARING', byHand: null })
+      await expect(headline).toHaveText(`${OD('status.IN_PRODUCTION')} · ${stageWord('PREPARING')}`, { timeout: 60_000 })
+      await expect(handRow).toHaveCount(0, { timeout: 60_000 })
+      await seen(where.getByRole('button', { name: OD('where.manual.open'), exact: true }), 60_000)
+      await flow.shot(page, 'hand-stage-cleared')
+
+      // Sales sees the door held, in words (Production does this); a Confirmed order shows it held (production has not started).
+      await sales.go(`/sales/orders/${order.id}?tab=overview`)
+      const salesDoor = sales.page.locator('.fw-so-where').getByRole('button', { name: OD('where.manual.open'), exact: true })
+      await seen(salesDoor, 60_000)
+      await expect(salesDoor).toHaveAttribute('aria-disabled', 'true')
+      await expect(salesDoor).toHaveAttribute('aria-description', OD('wo.heldHold'))
+      const confirmed = (((await flow.read(page, `/sales/orders?partyId=${alphaId}&status=CONFIRMED&limit=5`)).orders ?? []) as Json[])[0]
+      if (confirmed) {
+        await planner.go(`/sales/orders/${confirmed.id as string}?tab=overview`)
+        const held = where.getByRole('button', { name: OD('where.manual.open'), exact: true })
+        await seen(held, 60_000)
+        await expect(held).toHaveAttribute('aria-disabled', 'true')
+        await expect(held).toHaveAttribute('aria-description', STAGE_SET_REFUSAL_WORDS.NOT_STARTED.en)
+        await flow.shot(page, 'hand-stage-held-confirmed')
+      } else notHere('a Confirmed order of P1 in this world: none, so its held door is the unit tests’ (where.vitest)')
+      if (sharedBefore === 'STATUS') await shareLevel('STATUS')
+      await flow.settle()
+    })
+    // ---- end F-MS-106
   },
 })
