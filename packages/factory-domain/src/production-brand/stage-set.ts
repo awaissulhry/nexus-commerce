@@ -201,3 +201,14 @@ export function handSetOld(setAt: Date | string, today: BusinessDate): boolean {
 
 /** Beside a stage set by hand in the office's export: "Sewing (by hand)". Never a customer's word. */
 export const STAGE_BY_HAND_WORDS: Words = Object.freeze({ it: '(a mano)', en: '(by hand)' })
+
+// ── B-MS-008 (Owner D4; review R3a) ──
+/**
+ * The undo window: how long the customer's notice of a stage set by hand forward waits before the worker makes it (Owner D4: 10
+ * minutes), so a mistake cleared or changed inside it is never told. Only the notice waits — the portal reads the stage at once —
+ * and only a stage set by hand: the floor's own stages are told at once. The event says so with its `byHand` flag (./events
+ * stageNoticeWaitMs); a Clear or a Change inside the window leaves the stage untold (the API's keeper), so the real stage is told
+ * when the floor reaches it.
+ */
+export const HAND_STAGE_NOTICE_DELAY_MS = 600_000
+// ── end B-MS-008 ──

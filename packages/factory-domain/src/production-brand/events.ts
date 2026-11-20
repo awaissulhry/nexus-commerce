@@ -5,6 +5,7 @@ import { WORKORDERS_VIEW } from '../production/work-orders/permissions'
 import { BRAND_HEALTHS } from './health'
 import { ISSUE_RECORD_TYPES, ISSUE_SOURCES } from './issues'
 import { BRAND_STAGES } from './stages'
+import { HAND_STAGE_NOTICE_DELAY_MS } from './stage-set' // B-MS-008
 import { SUPERVISOR_SOURCES } from './supervisor'
 import { BRAND_URGENCIES, URGENCY_ACTORS } from './urgency'
 
@@ -16,7 +17,8 @@ import { BRAND_URGENCIES, URGENCY_ACTORS } from './urgency'
  * `brand_production.ranked` (the customer's urgency replaced its "rank").
  *
  *   brand_production.stage_reached       an order's plain stage moved forward (stages.ts movedForward; a stage going back is
- *                                        never told)
+ *                                        never told); B-MS-008: `byHand` when a person set it by hand — its notice waits the
+ *                                        10-minute undo window (stageNoticeWaitMs)
  *   brand_production.health_changed      an order's health changed: computed, or raised to At risk by a person (byNote) or
  *                                        that raise dropped
  *   brand_production.urgency_changed     the customer's urgency of its orders changed: marked Urgent or Regular, its Urgent list
@@ -68,9 +70,29 @@ export const brandStageReached = defineEvent({
     stage: z.enum(BRAND_STAGES),
     /** The stage before (null: the order had none yet). */
     previous: z.enum(BRAND_STAGES).nullable(),
+    // B-MS-008: a stage set by hand (true; absent: the floor's) — its notice waits the undo window (stageNoticeWaitMs). A flag only:
+    // never the reason, the note or who, never a live field, never a notice param (the customer never reads "by hand").
+    byHand: z.boolean().optional(),
   }),
   live: live(['orderId', 'partyId', 'stage']),
 })
+
+// ── B-MS-008 (Owner D4; review R3a) ──
+/**
+ * How long the partner notice of an event waits before the worker makes it (the portal fan-out handler's delayMs, from the event
+ * alone): a stage set by hand (`byHand`) waits the rest of its 10-minute window, counted from the act (`occurredAt`); every other
+ * event, the floor's stages included, 0 — at once. The notice's own check is the real guard (a job may run early: a retry, another
+ * clock): the worker tells a stage only while the customer still reads it, so a Clear or a Change inside the window is never told.
+ */
+export function stageNoticeWaitMs(event: { readonly type: string; readonly payload: unknown; readonly occurredAt: string }, now: Date): number {
+  if (event.type !== brandStageReached.type) return 0
+  const payload = event.payload as { readonly byHand?: unknown } | null
+  if (payload === null || typeof payload !== 'object' || payload.byHand !== true) return 0
+  const at = Date.parse(event.occurredAt)
+  if (!Number.isFinite(at)) return HAND_STAGE_NOTICE_DELAY_MS
+  return Math.min(HAND_STAGE_NOTICE_DELAY_MS, Math.max(0, at + HAND_STAGE_NOTICE_DELAY_MS - now.getTime()))
+}
+// ── end B-MS-008 ──
 
 export const brandHealthChanged = defineEvent({
   type: 'brand_production.health_changed',

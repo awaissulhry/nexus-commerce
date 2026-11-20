@@ -1,4 +1,5 @@
 import { HAND_STAGES, STAGE_SET_REASON_CODES, STAGE_SET_REFUSAL_WORDS, floorAlreadyWords, handStageChoicesOf, stageSetAskProblems, type HandStage, type HandStageChoice, type StageSetReasonCode } from '@nexus/factory-domain/production-brand/stage-set'
+import { HAND_STAGE_NOTICE_DELAY_MS } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-008
 import { STAGE_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { isApiError } from '../../../../../lib/api/errors'
 import type { Locale } from '../../../../../lib/i18n/locales'
@@ -32,9 +33,9 @@ import { plainStageOf, type HandWords } from './where'
 
 /**
  * The window before the customer is told of a stage set by hand forward (Owner D4: 10 minutes; a mistake cleared inside it is never
- * told). Z01 (B-MS-008) reads it from the domain's HAND_STAGE_NOTICE_DELAY_MS once that constant exists; the words say it now.
+ * told), in minutes for the words: B-MS-008, the domain's HAND_STAGE_NOTICE_DELAY_MS — the one the API's notice waits.
  */
-export const NOTICE_WAIT_MINUTES = 10
+export const NOTICE_WAIT_MINUTES = HAND_STAGE_NOTICE_DELAY_MS / 60_000
 
 /** One row of the stage pick: its stage, the domain's choice, whether it is pickable, and its line under the title (null: none). */
 export interface StageChoiceRow {
@@ -168,7 +169,7 @@ export function clearLinesOf(headline: Headline | null | undefined, now: number)
   const hand = headline?.stage?.byHand ?? null
   if (!hand) return null
   const at = Date.parse(hand.at)
-  const inside = Number.isFinite(at) && now - at < NOTICE_WAIT_MINUTES * 60_000
+  const inside = Number.isFinite(at) && now - at < HAND_STAGE_NOTICE_DELAY_MS // B-MS-008
   const lines: DialogLine[] = [inside ? { key: 'where.manual.clearUntold', customer: STAGE_WORDS[hand.stage], minutes: NOTICE_WAIT_MINUTES } : { key: 'where.manual.clearTold', customer: STAGE_WORDS[hand.stage] }]
   if (hand.floor) lines.push({ key: 'where.manual.clearFloor', customer: STAGE_WORDS[hand.floor.code] })
   return lines

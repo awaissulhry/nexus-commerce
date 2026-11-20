@@ -11,6 +11,9 @@ import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
 import { freshGuard } from '../../auth/portal/testing/portal'
 import { systemContext } from '../../outbox/system'
 import { partnerFanOut, partnerFanOutEvents } from './fan-out'
+// B-MS-008: the undo window of a stage set by hand (the handler's delay, the keeper's markers).
+import { partnerNotificationsHandler } from './fan-out'
+import { STAGE_TOLD, STAGE_UNTOLD } from '../../../modules/production/brand/keeper'
 import { unsubscribeKeyOf } from './mail'
 
 /**
@@ -387,6 +390,121 @@ describe('B-PR-31: the customer is told of its own production', { timeout: SLOW_
     expect(await fresh(alphaBuyer)).toEqual([])
     expect(await fresh(alphaFinance)).toEqual([])
   })
+
+  // ── B-MS-008 (set the stage by hand: the 10-minute undo window, Owner D4; review R3a) ───────────────────────────────────────────────
+  it('B-MS-008 the undo window: set by hand and cleared inside it, never told — the floor reaching it later is; set and left, told once after it; set, cleared and set again, told once', async () => {
+    const waits = partnerNotificationsHandler({ cookieSecret: () => 'unused: no event is handled here' }).delayMs!
+    const stageUrl = (orderId: string) => `/production/brand-orders/${orderId}/stage`
+    const versionOf = async (orderId: string) => (await admin<{ version: number }>('SELECT version FROM "BrandOrderProduction" WHERE key = $1', [`brand-production:${orderId}`]))[0]!.version
+    const stageOf = async (orderId: string) => (await admin<{ stage: string; stageSet: string | null }>('SELECT stage::text AS stage, "stageSet"::text AS "stageSet" FROM "BrandOrderProduction" WHERE key = $1', [`brand-production:${orderId}`]))[0]!
+    /** The planner (production.brand.manage) through the real routes: set or change, and clear. */
+    async function byHand(method: 'PUT' | 'DELETE', orderId: string, body?: Json): Promise<Json> {
+      const url = method === 'PUT' ? stageUrl(orderId) : `${stageUrl(orderId)}?version=${await versionOf(orderId)}`
+      const answer = await planner.browser.send(method, url, method === 'PUT' ? { ...body, version: await versionOf(orderId) } : undefined, key())
+      expect(answer.status, `${method} ${url}: ${JSON.stringify(answer.body).slice(0, 600)}`).toBe(200)
+      return answer.body as Json
+    }
+    const set = (orderId: string, stage: string) => byHand('PUT', orderId, { stage, reasonCode: 'OUTAGE', note: 'Made-up: the scanners were down all morning (office only).' })
+    /** The stage markers of an order's production row, oldest first: [action, stage, by hand]. */
+    const markersOf = async (orderId: string) =>
+      (await admin<{ action: string; after: Json }>(`SELECT a.action, a.after FROM "AuditLog" a JOIN "BrandOrderProduction" p ON p.id = a."recordId" WHERE a."recordType" = 'BrandOrderProduction' AND a.action = ANY($2::text[]) AND p.key = $1 ORDER BY a.id`, [`brand-production:${orderId}`, [STAGE_TOLD, STAGE_UNTOLD]])).map((row) => [row.action === STAGE_TOLD ? 'told' : 'untold', row.after.stage, row.after.byHand === true])
+    const reachedOf = async (orderId: string) => (await outbox('brand_production.stage_reached')).filter((row) => row.subject === orderId)
+    const toldA = async (orderId: string) => (await fresh(alphaBuyer)).filter((notice) => notice.eventType === 'brand_production.stage_reached' && notice.recordId === orderId).map((notice) => notice.messageKey)
+
+    // Three made-up orders of A in production with no work order (the floor at Preparing), as SEED-SO-W39-02.
+    const [cleared, left, again] = [await world.addOrder(world.ids.a, 'H1', '2026-10-03'), await world.addOrder(world.ids.a, 'H2', '2026-10-03'), await world.addOrder(world.ids.a, 'H3', '2026-10-03')]
+    await world.replica([{ sql: `UPDATE "SalesOrder" SET status = 'IN_PRODUCTION' WHERE id = ANY($1::uuid[])`, values: [[cleared.orderId, left.orderId, again.orderId]] }])
+
+    // 1. Set to Sewing by hand: the customer's stage reads Sewing at once; the notice is marked by hand and waits the 10 minutes.
+    expect(await set(cleared.orderId, 'SEWING')).toMatchObject({ floor: 'PREPARING', stage: 'SEWING', byHand: { stage: 'SEWING' } })
+    const [handEvent] = await reachedOf(cleared.orderId)
+    expect(handEvent!.payload).toEqual({ orderId: cleared.orderId, partyId: world.ids.a, stage: 'SEWING', previous: 'PREPARING', byHand: true })
+    const at = new Date(handEvent!.occurredAt)
+    expect(waits(envelopeOf(handEvent!), at)).toBe(600_000)
+    expect(waits(envelopeOf(handEvent!), new Date(at.getTime() + 4 * 60_000))).toBe(360_000)
+    // Cleared inside the window: Preparing again; Sewing is left untold.
+    expect(await byHand('DELETE', cleared.orderId)).toMatchObject({ floor: 'PREPARING', stage: 'PREPARING', byHand: null })
+    expect(await markersOf(cleared.orderId)).toEqual([
+      ['told', 'SEWING', true],
+      ['untold', 'SEWING', false],
+    ])
+    // The worker makes the notice once the window is over (here: now): the customer no longer reads Sewing — never told.
+    await fanOut()
+    expect(await toldA(cleared.orderId)).toEqual([])
+
+    // The floor really reaches Sewing later (a bundle cut and a sewing scan on its work order, as the floor records them; the keeper
+    // as the worker runs it): Sewing IS told — at once, the floor's own stage never waits.
+    const made = await office('POST', '/production/work-orders', { siteId: world.w.siteId, lines: [{ salesOrderLineId: cleared.lineId, sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 2 }] }] }, 201)
+    const workOrderId = made.workOrder.id as string
+    const seedWo = (await admin<{ id: string }>(`SELECT id::text AS id FROM "WorkOrder" WHERE "tenantId" = $1 AND number = 'SEED-WO-0001'`, [T()]))[0]!.id
+    const seedOp = (await admin<{ id: string }>(`SELECT o.id::text AS id FROM "WorkOrderOperation" o JOIN "WorkCentre" c ON c.id = o."workCentreId" WHERE o."workOrderId" = $1 AND c.kind = 'SEWING' AND o."scanRequired" ORDER BY o.seq LIMIT 1`, [seedWo]))[0]!.id
+    const seedScan = (await admin<{ id: string }>(`SELECT id::text AS id FROM "OperationScan" WHERE "workOrderOperationId" = $1 AND kind = 'REPORT' AND "correctsId" IS NULL ORDER BY "serverTime", id LIMIT 1`, [seedOp]))[0]!.id
+    const seedBundle = (await admin<{ id: string }>(`SELECT id::text AS id FROM "Bundle" WHERE "workOrderId" = $1 ORDER BY id LIMIT 1`, [seedWo]))[0]!.id
+    const cell = (await admin<{ id: string }>(`SELECT id::text AS id FROM "WorkOrderSize" WHERE "workOrderId" = $1 AND size = '50'`, [workOrderId]))[0]!.id
+    const [bundle, operation, scan] = [newId(), newId(), newId()]
+    await world.replica([
+      {
+        sql: `INSERT INTO "Bundle" SELECT (jsonb_populate_record(NULL::"Bundle", to_jsonb(b) || jsonb_build_object('id', $1::text, 'workOrderId', $2::text, 'workOrderSizeId', $3::text, 'code', $4::text, 'replacedCodes', '[]'::jsonb, 'clientEventId', NULL, 'status', 'ACTIVE'))).* FROM "Bundle" b WHERE b.id = $5::uuid`,
+        values: [bundle, workOrderId, cell, `T-MS008-BN-${bundle.slice(-8)}`, seedBundle],
+      },
+      {
+        sql: `INSERT INTO "WorkOrderOperation" SELECT (jsonb_populate_record(NULL::"WorkOrderOperation", to_jsonb(o) || jsonb_build_object('id', $1::text, 'workOrderId', $2::text, 'seq', 20, 'scanRequired', true))).* FROM "WorkOrderOperation" o WHERE o.id = $3::uuid`,
+        values: [operation, workOrderId, seedOp],
+      },
+      {
+        sql: `INSERT INTO "OperationScan" SELECT (jsonb_populate_record(NULL::"OperationScan", to_jsonb(s) || jsonb_build_object('id', $1::text, 'workOrderId', $2::text, 'workOrderOperationId', $3::text, 'bundleId', $4::text, 'clientScanId', $5::text, 'correctsId', NULL, 'kind', 'REPORT'))).* FROM "OperationScan" s WHERE s.id = $6::uuid`,
+        values: [scan, workOrderId, operation, bundle, `T-MS008-${scan.slice(-8)}`, seedScan],
+      },
+    ])
+    const scanId = newId()
+    await brandKeeperHandler().handle(
+      { eventId: scanId, type: 'production.scan_recorded', version: 1, context: 'production', tenantId: T(), companyId: world.w.companyId, siteId: null, subject: workOrderId, correlationId: `test-${scanId}`, causationId: null, source: 'test', occurredAt: new Date().toISOString(), payload: { workOrderId, operationId: operation } } as EventEnvelope,
+      { caller: system(), attempt: 1 },
+    )
+    expect(await stageOf(cleared.orderId)).toEqual({ stage: 'SEWING', stageSet: null })
+    const floorEvent = (await reachedOf(cleared.orderId)).at(-1)!
+    expect(floorEvent.payload).toEqual({ orderId: cleared.orderId, partyId: world.ids.a, stage: 'SEWING', previous: 'PREPARING' })
+    expect(waits(envelopeOf(floorEvent), new Date(floorEvent.occurredAt))).toBe(0)
+    expect((await markersOf(cleared.orderId)).at(-1)).toEqual(['told', 'SEWING', false])
+    await fanOut()
+    expect(await toldA(cleared.orderId)).toEqual(['portal.production.sewing'])
+
+    // 2. Set to Cutting by hand and left: the worker makes the notice after the window — told once. A Clear after it takes nothing
+    // back and leaves nothing untold: set again, it is not told twice.
+    await set(left.orderId, 'CUTTING')
+    await fanOut()
+    expect(await toldA(left.orderId)).toEqual(['portal.production.cutting'])
+    await fanOut()
+    expect(await toldA(left.orderId)).toEqual([])
+    await byHand('DELETE', left.orderId)
+    await set(left.orderId, 'CUTTING')
+    expect(await markersOf(left.orderId)).toEqual([['told', 'CUTTING', true]])
+    await fanOut()
+    expect(await toldA(left.orderId)).toEqual([])
+
+    // 3. Set, cleared and set again inside the window: the customer reads Sewing, and is told it ONCE — the first tell's notice gives
+    // way to the newer one (its own tell no longer stands).
+    await set(again.orderId, 'SEWING')
+    await byHand('DELETE', again.orderId)
+    await set(again.orderId, 'SEWING')
+    expect(await markersOf(again.orderId)).toEqual([
+      ['told', 'SEWING', true],
+      ['untold', 'SEWING', false],
+      ['told', 'SEWING', true],
+    ])
+    expect((await reachedOf(again.orderId)).map((row) => row.payload.byHand)).toEqual([true, true])
+    await fanOut()
+    expect(await toldA(again.orderId)).toEqual(['portal.production.sewing'])
+
+    // Never "by hand", the reason, the note or who in what A was told; B was told nothing; the finance person sees no production.
+    const toA = (await noticesOf(alphaBuyer.id)).filter((notice) => [cleared.orderId, left.orderId, again.orderId].includes(notice.recordId))
+    expect(toA).toHaveLength(3)
+    expect(JSON.stringify(toA)).not.toMatch(/by hand|\(a mano\)|impostat[ao] a mano|byHand|OUTAGE|scanners|office only/i)
+    for (const notice of toA) expect(notice.params).toEqual({ yourKind: 'ORDER', yourSeq: notice.params.yourSeq })
+    expect(await fresh(betaProduction)).toEqual([])
+    expect(await fresh(alphaFinance)).toEqual([])
+  })
+  // ── end B-MS-008
 
   it('a problem it reported on two orders, answered in one order’s conversation: "answered" and "answered in your order N", one bell group; an office issue tells nothing', async () => {
     const batchId = newId()
