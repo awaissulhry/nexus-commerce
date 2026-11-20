@@ -1,4 +1,5 @@
 import type { OrderFreezeStage } from '../sales/order-changes/freeze'
+import type { SalesOrderStatus } from '../sales/orders/orders' // B-OO-007
 
 /**
  * B-PR-13 (production plan §4 "5 plain stages"; threads rule 8 "only true states"): the stage a customer reads of its order
@@ -89,3 +90,39 @@ export function orderStageOf(lines: readonly LineStageFacts[]): OrderStage | nul
 /** A forward move only (the keeper's stage notice fires on it; a stage going back never tells the customer). */
 export const movedForward = (previous: BrandStage | null, next: BrandStage | null): boolean =>
   next !== null && (previous === null || brandStageRank(next) > brandStageRank(previous))
+
+// ── B-OO-007 (order overview plan §6; review F11): the office's strip state — the ONE phase rule (the web imports it) ──
+/**
+ * How the office's stage strip reads one order, from its status alone (the stage itself stays the floor's and quality's):
+ *
+ *   WAITING   the order waits for a yes (PENDING_APPROVAL): nothing is current yet, every stage is to come
+ *   CURRENT   confirmed, in production, ready or partly shipped: the stage is now
+ *   ALL_DONE  shipped, delivered or closed: every stage is done, nothing is "now" (no health, no hold or date wait)
+ *   STOPPED   cancelled: no stage is current; the office says where the work had reached
+ *
+ * Office only: the customer's portal keeps its own reader (it never reads this state).
+ */
+export const OFFICE_STRIP_STATES = ['WAITING', 'CURRENT', 'ALL_DONE', 'STOPPED'] as const
+export type OfficeStripState = (typeof OFFICE_STRIP_STATES)[number]
+
+export function officeStripStateOf(status: SalesOrderStatus): OfficeStripState {
+  switch (status) {
+    case 'PENDING_APPROVAL':
+      return 'WAITING'
+    case 'CONFIRMED':
+    case 'IN_PRODUCTION':
+    case 'READY':
+    case 'PARTLY_SHIPPED':
+      return 'CURRENT'
+    case 'SHIPPED':
+    case 'DELIVERED':
+    case 'CLOSED':
+      return 'ALL_DONE'
+    case 'CANCELLED':
+      return 'STOPPED'
+  }
+}
+
+/** Production is over for the office (shipped, delivered, closed or cancelled): nothing of it is "now" any more. */
+export const isAfterProduction = (state: OfficeStripState): boolean => state === 'ALL_DONE' || state === 'STOPPED'
+// ── end B-OO-007 ──

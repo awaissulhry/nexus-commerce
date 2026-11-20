@@ -7,8 +7,11 @@ import { PLANNING_PROMISE_VIEW } from '@nexus/factory-domain/planning/promise/pe
 import { effectiveHealth, type BrandHealth, type HealthRaise } from '@nexus/factory-domain/production-brand/health'
 import { standingRaiseOf } from './production-columns' // B-SA-070
 import { nextStageOf, type BrandStage } from '@nexus/factory-domain/production-brand/stages'
+import { isAfterProduction, officeStripStateOf } from '@nexus/factory-domain/production-brand/stages' // B-OO-007
 import type { BrandUrgency } from '@nexus/factory-domain/production-brand/urgency'
 import { BLOCKER_OWNER, type Blocker, type BlockerKind, type BlockerRef, type WaitingOn } from '@nexus/factory-domain/production-brand/waiting' // B-OP-021: + BlockerRef
+import { placeOf, waitingOn } from '@nexus/factory-domain/production-brand/waiting' // B-OO-007
+import type { SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders' // B-OO-007
 import { aheadWords, customerUrgencyChipWords, HEALTH_REASON_WORDS, HEALTH_WORDS, OFFICE_WAITING_WORDS, SEWING_NOT_COUNTED_WORDS, STAGE_WORDS, URGENCY_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { daysLate, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_HOLD, WORKORDERS_MANAGE, WORKORDERS_RELEASE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions' // B-OP-021: + manage, release, hold
@@ -50,7 +53,8 @@ import { stillToDoOf } from './still-to-do'
  * "N lines ahead", "sewing not counted here", what it waits on), the keeper's stored state (health, its raise, waiting, the
  * customer's urgency, the supervisor), the counts of its OWN cells (portal-orders/progress readCellCounts, kept a minute under the
  * portal's own key), the holds in plain words (brand-portal readWork), the published plan's days (readPlanned), Time & action's
- * world under orders.view (planning/milestones readWorld: the gates, start and ship; no action), the issues and NCRs of the order
+ * world under orders.view (planning/milestones readWorld: the gates, start and ship; B-OO-010: each gate's version and what the
+ * reader may do, by Planning's own rule — the writes stay Planning's routes), the issues and NCRs of the order
  * (B-SA-033's filters), and the supervisor resolver.
  *
  *   headline  the plain stage (since, ahead, sewing not counted), what is in work as counts (bundles; pieces between the steps),
@@ -63,7 +67,8 @@ import { stillToDoOf } from './still-to-do'
  *             "made together with other work" and a shared cut order "cut together with other work" — never another customer's
  *             name, number or count; made-to-measure units grouped per style × colourway; the work orders the reader does not
  *             reach counted ("1 work order not shown"), never named                                         workorders.view
- *   dates     the gates and milestones (read only), the published plan's days, the forecast per line   orders.view (+ planning.promise.view)
+ *   dates     the gates (B-OO-010: + version, actions) and milestones, the published plan's days, the forecast per line
+ *                                                                                    orders.view (+ planning.promise.view)
  *   quality   open issues (workorders.view), open NCRs behind the brand wall (quality.ncr.view), final inspections of the work
  *             orders the reader reaches (quality.inspections.view)
  *   people    the supervisor and where from, the customer's backup, who answers the customer (the order thread's owner), the
@@ -219,6 +224,28 @@ export const BLOCKER_WORDS: Readonly<Record<BlockerKind, Words>> = Object.freeze
   NO_MOVE: { it: 'Fermo di produzione', en: 'Production hold' },
 })
 
+// ── B-OO-007 (order overview plan §6; review F11; N10b) ──────────────────────────────────────────────────────────────────────
+/**
+ * What still waits once production is over (the office strip state ALL_DONE or STOPPED: shipped, delivered, closed, cancelled):
+ * only the requests (a customer's open request or problem, a yes asked of it, a portal task) — a hold or a date is moot then.
+ * While the order is current (or waits for a yes) every blocker stays.
+ */
+export function officeBlockersOf(status: SalesOrderStatus, blockers: readonly Blocker[]): Blocker[] {
+  if (!isAfterProduction(officeStripStateOf(status))) return [...blockers]
+  return blockers.filter((blocker) => placeOf(blocker) === 'REQUEST')
+}
+
+/**
+ * How many times the promise MOVED: the order's `orders.changePromise` audit rows (their `before`), less the ones that set a first
+ * promise — an order with no promise yet records `before.originalPromiseDate: null` (sales/orders moves.ts, the order's and the
+ * lines' change alike). A row that does not say counts, as before.
+ */
+export function promiseMovesOf(befores: readonly unknown[]): number {
+  const first = (before: unknown): boolean => before !== null && typeof before === 'object' && 'originalPromiseDate' in before && (before as { originalPromiseDate: unknown }).originalPromiseDate === null
+  return befores.filter((before) => !first(before)).length
+}
+// ── end B-OO-007 ──
+
 // ---- the read ---------------------------------------------------------------------------------------------------------------------
 
 /** Subcontract orders whose pieces are out at the workshop (production/brand facts' own set). */
@@ -308,8 +335,11 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
   const inWork = { bundles, pieces: inWorkPiecesOf({ started: Math.min(whole.ordered, started.reduce((sum, cell) => sum + cell.quantity, 0)), cut: whole.cut, sewn: whole.sewn, checked: whole.inspected, packed: whole.packed }) }
 
   // The keeper's health, raised to At risk by a person while the raise stands (its note and who raised it: office only).
-  const raise: HealthRaise | null = row ? standingRaiseOf(row, today) : null // B-SA-070: the one reading of a standing raise (./production-columns)
-  const effective = row ? effectiveHealth(row.health as BrandHealth | null, raise) : null
+  // B-OO-007 (F11): once production is over (shipped, delivered, closed, cancelled) nothing is "now": no health (the keeper's last row
+  // stays the customer's history, untouched).
+  const afterProduction = isAfterProduction(officeStripStateOf(order.status as SalesOrderStatus))
+  const raise: HealthRaise | null = row && !afterProduction ? standingRaiseOf(row, today) : null // B-SA-070: the one reading of a standing raise (./production-columns)
+  const effective = row && !afterProduction ? effectiveHealth(row.health as BrandHealth | null, raise) : null
   const raisedBy = row && notes && raise && row.healthSetById ? ((await peopleById(db, [row.healthSetById])).get(row.healthSetById) ?? null) : null
   const health =
     row && effective && effective.health !== null
@@ -322,12 +352,16 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
       : null
 
   // Who acts next (the kept state first, else the live facts) and each thing it waits for, in words.
-  const on: WaitingOn = (row?.waitingOn as WaitingOn | null | undefined) ?? facts?.waiting.on ?? 'US'
-  const since = row ? row.waitingSince : (facts?.waiting.since ?? null)
+  // B-OO-007 (F11): after production only the requests still wait (a hold or a date is moot); who acts next is then the same one
+  // rule (waitingOn) over what still waits — the keeper no longer keeps the order, so its row would name a wait that is gone.
+  const waits = officeBlockersOf(order.status as SalesOrderStatus, facts?.blockers ?? [])
+  const after = afterProduction ? waitingOn(waits) : null
+  const on: WaitingOn = after ? after.on : ((row?.waitingOn as WaitingOn | null | undefined) ?? facts?.waiting.on ?? 'US')
+  const since = after ? after.since : row ? row.waitingSince : (facts?.waiting.since ?? null)
   // B-OP-021 (B4): each with the record it is about (a work order only for a reader who reaches it) and what a request waiting on us is.
   const reached = workOrders.filter((workOrder) => reachesWorkOrder(actor, WORKORDERS_VIEW, workOrder))
   const reachedWork = new Set(reached.map((workOrder) => workOrder.id))
-  const blockers = (facts?.blockers ?? []).map((blocker: Blocker) => ({
+  const blockers = waits.map((blocker: Blocker) => ({
     kind: blocker.kind,
     on: BLOCKER_OWNER[blocker.kind],
     words: BLOCKER_WORDS[blocker.kind],
@@ -345,7 +379,8 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
   // The promise and how far it moved, the three urgencies.
   const date = dayOrNull(order.promiseDate)
   const first = dayOrNull(order.originalPromiseDate)
-  const moves = await db.auditLog.count({ where: { recordType: 'SalesOrder', recordId: order.id, action: 'orders.changePromise' } })
+  // B-OO-007 (N10b): a first promise is not a move (its audit row says the order had none).
+  const moves = promiseMovesOf((await db.auditLog.findMany({ where: { recordType: 'SalesOrder', recordId: order.id, action: 'orders.changePromise' }, select: { before: true } })).map((audit) => audit.before))
   const priority = await db.salesOrder.findUnique({ where: { id: order.id }, select: { priorityLevel: true, urgentReason: true } })
   const level = (priority?.priorityLevel ?? 'NORMAL') as SalesOrderPriorityLevel
   const customer = (await countedUrgencyOf(db, [order.id])).get(order.id) ?? null
@@ -535,7 +570,8 @@ async function forecastOf(caller: CommandCaller, context: OfficeContext, lines: 
 
 async function datesPart(db: Db, context: OfficeContext, order: OrderRow, load: Loaders, now: Date) {
   const world = { actor: actorOf(context), actorId: context.actorId, now }
-  // Time & action's own world of this one order, under orders.view (the Sales template holds no planning.view); no action.
+  // Time & action's own world of this one order, under orders.view (the Sales template holds no planning.view). B-OO-010: each gate's
+  // actions are readWorld's for THIS reader (planning.milestones.manage / .override over the order, and the gate's own refusals).
   const read = await readWorld(db, world, { orderIds: [order.id] }, { permission: ORDERS_VIEW })
   const view = read.orders.find((entry) => entry.id === order.id)
   const own = (await load.workOrders()).filter((workOrder) => workOrder.partyId === order.partyId).map((workOrder) => workOrder.id)
@@ -553,6 +589,9 @@ async function datesPart(db: Db, context: OfficeContext, order: OrderRow, load: 
       via: gate.via,
       startedBefore: gate.startedBefore,
       leather: gate.leather,
+      // B-OO-010 (N9): its version and what THIS reader may do, as Planning's own read built them (writes stay Planning's routes).
+      version: gate.version,
+      actions: gate.actions,
     })),
     milestones: (view?.milestones ?? []).map((row) => ({ id: row.id, kind: row.kind, gateId: row.gateId, gateKind: row.gateKind, label: row.label, target: row.target, actual: row.actual, state: row.state, late: row.late, owner: row.owner })),
     late: view?.late ?? 0,
