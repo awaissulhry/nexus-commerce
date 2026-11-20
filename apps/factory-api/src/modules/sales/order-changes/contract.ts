@@ -176,7 +176,8 @@ const changeView = output({
 
 export const applyPricedChangeContract = defineContract({
   params: orderParams,
-  body: input({ version, ...pricedFields, reason: z.string().trim().min(1).max(MAX_REASON) }),
+  // B-OL-004 (order lines plan D2): the reason is optional (none: the server stores the automatic words).
+  body: input({ version, ...pricedFields }),
   response: { 201: output({ order: orderView, change: changeView, /* B-OP-012 */ workOrders: followedView }) },
 })
 

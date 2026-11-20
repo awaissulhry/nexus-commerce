@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { amendmentDiff, amendmentProblems, amendStateProblem, leftOutOf, nextRevision, snapshotOf, type AmendableLine, type SnapshotHeader, type SnapshotLine } from './amendments'
+import { AUTOMATIC_REASONS, isAutomaticReason, reasonOr } from './reasons' // B-OL-004
 
 const header: SnapshotHeader = { customerRef: 'PO-1', requestedDate: null, promiseDate: '2026-12-20', paymentTerms: 'Bonifico', currency: 'EUR', taxMode: 'IT_B2B', netAmount: 624_000, vatAmount: 137_280, grossAmount: 761_280 }
 const blk: SnapshotLine = {
@@ -63,7 +64,7 @@ describe('what an amendment may do (SAL-209)', () => {
     expect(amendStateProblem('PARTLY_SHIPPED')).toMatch(/its lines no longer change/)
   })
 
-  it('a reason; under what work orders make is allowed (B-SA-042); a line closed short is never left out (B-OP-014: one in work orders is)', () => {
+  it('no reason needed (B-OL-004); under what work orders make is allowed (B-SA-042); a line closed short is never left out (B-OP-014: one in work orders is)', () => {
     const problems = amendmentProblems({
       status: 'CONFIRMED',
       reason: ' ',
@@ -76,13 +77,31 @@ describe('what an amendment may do (SAL-209)', () => {
       ],
     })
     // B-SA-042 (P6', R1): line 0 lowers size 52 under what work orders make (4, 3 asked): allowed now, the gap goes to the work order.
-    expect(problems.map((issue) => issue.path)).toEqual(['body/reason', 'body/lines/1/sizes', 'body/lines/2/colourwayId', 'body/lines/3/id'])
+    // B-OL-004 (D2): a blank reason is no problem any more (the server stores the automatic words).
+    expect(problems.map((issue) => issue.path)).toEqual(['body/lines/1/sizes', 'body/lines/2/colourwayId', 'body/lines/3/id'])
     expect(problems.some((issue) => issue.message.includes('work orders already make'))).toBe(false)
     const removal = amendmentProblems({ status: 'CONFIRMED', reason: 'Customer asked.', current, lines: [{ id: 'L2' }] })
     // B-OP-014: line 10 (in work orders) left out is closed short, not refused; line 30 (closed short already) still is.
     expect(removal.map((issue) => issue.message)).toEqual(['Line 30 is closed short: reopen it before removing it.'])
     expect(amendmentProblems({ status: 'CONFIRMED', reason: 'Customer asked.', current, lines: [{ id: 'L1' }, { id: 'L2', sizes: [{ size: '52', quantity: 4 }] }, { id: 'L3' }] })).toEqual([])
   })
+
+  // ── B-OL-004 (order lines plan D2; 18 F22) ──
+  it('B-OL-004: a reason is optional — none or blank is fine, one too long is refused; the automatic words per act', () => {
+    const lines = [{ id: 'L1' }, { id: 'L2' }, { id: 'L3' }]
+    expect(amendmentProblems({ status: 'CONFIRMED', reason: undefined, current, lines })).toEqual([])
+    expect(amendmentProblems({ status: 'CONFIRMED', reason: '   ', current, lines })).toEqual([])
+    expect(amendmentProblems({ status: 'CONFIRMED', reason: 'x'.repeat(1001), current, lines }).map((issue) => issue.path)).toEqual(['body/reason'])
+    expect(reasonOr('amend', undefined)).toBe('Changed on the order page.')
+    expect(reasonOr('close', '  ')).toBe('Closed on the order page.')
+    expect(reasonOr('reopen', null)).toBe('Reopened on the order page.')
+    expect(reasonOr('promise', '')).toBe('Date changed on the order page.')
+    expect(reasonOr('amend', '  The customer asked by phone. ')).toBe('The customer asked by phone.')
+    for (const words of Object.values(AUTOMATIC_REASONS)) expect(isAutomaticReason(words)).toBe(true)
+    expect(isAutomaticReason('The customer asked by phone.')).toBe(false)
+    expect(isAutomaticReason(null)).toBe(false)
+  })
+  // ── end B-OL-004 ──
 
   it('numbers amendments one after another', () => {
     expect(nextRevision([])).toBe(1)

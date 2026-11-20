@@ -261,7 +261,8 @@ export const previewAmendmentContract = defineContract({
 
 export const applyAmendmentContract = defineContract({
   params: orderParams,
-  body: input({ version, ...amendFields, reason }),
+  // B-OL-004 (order lines plan D2): the reason is optional, as on the preview (none: the server stores the automatic words).
+  body: input({ version, ...amendFields }),
   // B-OP-015: `amendment` null when only the delivery address changed (it moved alone).
   response: { 201: output({ order: orderView, amendment: amendmentView.nullable(), /* B-OP-012 */ workOrders: followedView }) },
 })
@@ -275,7 +276,8 @@ export const listAmendmentsContract = defineContract({
 
 const linesBody = input({
   version,
-  reason,
+  /** B-OL-004 (order lines plan D2): optional (none: the server stores the automatic words; a code that asks for detail still wants words). */
+  reason: z.string().trim().max(MAX_REASON).optional(),
   /** None: every open line with something left (close), every closed line (reopen). */
   lineIds: z.array(id()).max(MAX_QUOTE_LINES).optional(),
 })

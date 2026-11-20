@@ -4,6 +4,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { amendmentDiff, amendmentProblems, amendStateProblem, leftOutOf, nextRevision, snapshotOf, type AmendableLine, type AmendLineInput, type AmendmentDiff, type OrderSnapshot, type SnapshotHeader, type SnapshotLine } from '@nexus/factory-domain/sales/amendments/amendments'
+import { reasonOr } from '@nexus/factory-domain/sales/amendments/reasons' // B-OL-004
 import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
 import { isGoodsLine, isIssueList, MAX_TEXT, priceBasisOf, priceText, sizeGrid, type SizeRow } from '@nexus/factory-domain/sales/quotes/quotes'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
@@ -44,7 +45,7 @@ import { removeBrandPricesOfLines } from '../brand-prices/store'
 /**
  * Order amendments (B-W2a-30; SAL-209, SAL-217; the design's "Amend order" → "Review amendment" → Changes tab). A
  * confirmed order's lines change only here (W1's promise change writes only dates): ONE command on the order
- * (orders.manage; a reason) —
+ * (orders.manage; a reason, B-OL-004: else the automatic words) —
  *
  *   1. the lines' work-order locks (no work order is made for them meanwhile), the money locks of the open
  *      before-shipping steps' deposit requests (B-W2a-F2), then the order's row FOR UPDATE at the version read;
@@ -248,7 +249,8 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
   const current: AmendableLine[] = lines.map((line) => ({ id: line.id, seq: line.seq, kind: line.kind, closedShort: line.closedShortQuantity !== null && !reopen.has(line.id), sizes: line.sizes.map(({ size, quantity }) => ({ size, quantity })), inWorkOrders: inWorkOrders.get(line.id) ?? new Map() }))
   const issues = amendmentProblems({ status, reason: body.reason, lines: body.lines, current })
   if (body.customerRef !== undefined && body.customerRef !== null && body.customerRef.trim().length > MAX_TEXT.customerRef) issues.push({ path: 'body/customerRef', message: `At most ${MAX_TEXT.customerRef} characters.` })
-  if (body.requestedDate !== undefined && body.requestedDate !== null && body.requestedDate < businessDate(now)) issues.push({ path: 'body/requestedDate', message: 'A requested date is today or later.' })
+  // B-OL-015 (order lines plan §2): checked only when it changes — the order's own requested date, passed since, never blocks a change.
+  if (body.requestedDate !== undefined && body.requestedDate !== null && body.requestedDate !== dayOrNull(order.requestedDate) && body.requestedDate < businessDate(now)) issues.push({ path: 'body/requestedDate', message: 'A requested date is today or later.' })
   if (issues.length > 0) return issues
 
   const kept = new Set(body.lines.flatMap((line) => (line.id ? [line.id] : [])))
@@ -456,7 +458,7 @@ export async function applyAmendment(caller: CommandCaller, orderId: string, bod
         const locked = await lockOrder(tools.tx, order.id, body.version)
         const state = amendStateProblem(locked.status)
         if (state) throw new InvalidStateError(state)
-        await moveShipTo(tools, (await readOrder(tools.tx, order.id))!, body.shipToAddressId!, body.reason!.trim(), 'OFFICE')
+        await moveShipTo(tools, (await readOrder(tools.tx, order.id))!, body.shipToAddressId!, reasonOr('amend', body.reason) /* B-OL-004 */, 'OFFICE')
         const none: FollowedWorkOrders = { applied: [], waiting: [] }
         return { amendmentId: null as string | null, workOrders: none }
       }
@@ -501,6 +503,8 @@ export async function amendInCommand(
   } = {} /* B-W2b-303: a split asks no re-acceptance */,
 ): Promise<{ amendmentId: string; /* B-SA-042 */ changedLineIds: string[]; before: Map<string, Map<string, number>>; /* B-OP-012 */ workOrders: FollowedWorkOrders }> {
   const { tx, now } = tools
+  // B-OL-004 (order lines plan D2): the reason typed, else the automatic words (stored as they are; the screen translates them).
+  const reason = reasonOr('amend', body.reason)
   const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
   await lockOrderLines(tx, tenantId, lineIds)
   // B-W2a-F2: the deposit requests of the open before-shipping steps, before the order's row (a payment takes a
@@ -527,7 +531,7 @@ export async function amendInCommand(
   const changeOptions: ChangeOptions = { split: options.reacceptance === false, priced, putBack: options.putBack === true }
   await beforeAmendmentWrites(tools, fresh, plan, changeOptions)
   // B-OP-015: a new delivery address with the amendment (an ACTIVE one of the customer; refused while a shipment is being prepared).
-  if (body.shipToAddressId) await moveShipTo(tools, fresh, body.shipToAddressId, body.reason!.trim(), 'OFFICE')
+  if (body.shipToAddressId) await moveShipTo(tools, fresh, body.shipToAddressId, reason, 'OFFICE')
   const actorId = actorIdOf(tools)
   // Removed lines (nothing refers to them: planAmendment checked).
   // B-CP-024: their customer's prices go first, audited (the foreign key is Restrict); one given meanwhile is named in words.
@@ -588,7 +592,7 @@ export async function amendInCommand(
   // deleted: their cells point at them) with the amendment's reason; an APPROVED reduction of their cells is done with it.
   const closedIds = plan.closing.map((line) => line.id)
   for (const line of plan.closing) {
-    await tx.salesOrderLine.update({ where: { id: line.id }, data: { closedShortQuantity: line.closedShortQuantity, closedShortAt: now, closedShortById: actorId, closeShortReason: body.reason!.trim(), updatedAt: now, version: { increment: 1 } }, select: { id: true } })
+    await tx.salesOrderLine.update({ where: { id: line.id }, data: { closedShortQuantity: line.closedShortQuantity, closedShortAt: now, closedShortById: actorId, closeShortReason: reason, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
   }
   const reducesDone = closedIds.length > 0 ? await reducesDoneInCommand(tools, order, closedIds) : []
   // B-OP-014: a put-back reopens the lines its change closed short, as Reopen lines does (the four columns and the code cleared).
@@ -630,7 +634,7 @@ export async function amendInCommand(
       orderId: order.id,
       partyId: order.partyId,
       revision,
-      reason: body.reason!.trim(),
+      reason,
       before: plan.before as unknown as Prisma.InputJsonValue,
       after: after as unknown as Prisma.InputJsonValue,
       netAmountBefore: plan.diff.netBefore,
@@ -671,7 +675,7 @@ export async function amendInCommand(
       // B-W2b-374
       ...(optionsWritten.length > 0 ? { options: entryOptionsAudit(optionsWritten) } : {}),
     },
-    reason: body.reason!.trim(),
+    reason,
   })
   // B-SA-001: both name the order's customer (the order row's own, read on the server).
   if (optionLineIds.length > 0) tools.emit({ type: 'sales_order.options_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, lineIds: optionLineIds, change: 'CHOSEN', partyId: order.partyId } })
@@ -686,7 +690,7 @@ export async function amendInCommand(
   const before = sizesOf(plan.before)
   let workOrders: FollowedWorkOrders = { applied: [], waiting: [] }
   if (options.workOrders !== 'later') {
-    const gap = await proposeGapsInCommand(tools, { order: { ...fresh, status: locked.status }, requestId: options.requestId ?? null, amendmentId, reason: body.reason!.trim(), extraOutcome: body.extraOutcome ?? null, requireOutcome: options.putBack !== true /* a put-back leaves them to production */, lineIds: changedLineIds, before }, options.autoApply)
+    const gap = await proposeGapsInCommand(tools, { order: { ...fresh, status: locked.status }, requestId: options.requestId ?? null, amendmentId, reason, extraOutcome: body.extraOutcome ?? null, requireOutcome: options.putBack !== true /* a put-back leaves them to production */, lineIds: changedLineIds, before }, options.autoApply)
     workOrders = { applied: gap.applied, waiting: gap.waiting }
   }
   return { amendmentId, changedLineIds, before, workOrders }

@@ -18,6 +18,10 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
 import { systemContext } from '../../../platform/outbox/system'
 import { orderHandlers } from './handlers'
+// B-OL-004: the automatic words, and the customer's re-acceptance page read as the portal reads it.
+import { AUTOMATIC_REASONS } from '@nexus/factory-domain/sales/amendments/reasons'
+import type { RequestRef } from '../../../platform/approvals-out/adapter'
+import { REACCEPTANCE_ADAPTER } from './reacceptance'
 // ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
 await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
@@ -286,9 +290,10 @@ describe('amendments (SAL-209, SAL-217): a confirmed order changes only through 
     expect(review.diff).not.toHaveProperty('netAmountBefore')
     const priced = await ok('owner', 'POST', `${orderUrl(manual.id)}/amendments/preview`, { version: manual.version, ...change() })
     expect(priced.diff).toMatchObject({ netAmountBefore: 288_000, netAmountAfter: 415_000, reacceptanceNeeded: true })
+    // B-OL-004 (order lines plan D2): a reason is optional — the review without one is the same review.
     const noReason = await ok('sales', 'POST', `${orderUrl(manual.id)}/amendments/preview`, { ...change(), reason: '' })
-    expect(noReason).toMatchObject({ ok: false, diff: null })
-    expect(noReason.problems.map((issue: Json) => issue.path)).toEqual(['body/reason'])
+    expect(noReason).toMatchObject({ ok: true, problems: [] })
+    expect(noReason.diff.lines.map((line: Json) => [line.change, line.seq])).toEqual(review.diff.lines.map((line: Json) => [line.change, line.seq]))
     const viewer = await ok('viewer', 'GET', `${orderUrl(manual.id)}/amendments`)
     expect(viewer.amendments).toEqual([])
   })
@@ -354,6 +359,56 @@ describe('amendments (SAL-209, SAL-217): a confirmed order changes only through 
     expect(removal.workOrders.plan.length).toBeGreaterThan(0)
   })
 })
+
+// ── B-OL-004 + B-OL-015 (order lines plan D2, §2; 18 F22, F23): a reason is optional; a kept past requested date never blocks ──
+describe('B-OL-004 + B-OL-015: no reason needed (the automatic words are stored); the requested date is checked only when it changes', () => {
+  let typed: Json
+  const linesOf = (order: Json) => order.lines.map((line: Json) => ({ id: line.id }))
+
+  it('an amendment, a close and a reopen without a reason store the automatic words; the customer’s page leaves them out', async () => {
+    // B-CP-011: the typed price of MANUAL is the Owner's.
+    typed = (await ok('owner', 'POST', '/sales/orders/manual', { ...MANUAL, customerRef: 'PO-OL004-1' }, 201)).order
+    const [blk, red] = typed.lines
+    const applied = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments`, { version: typed.version, lines: [{ id: blk.id, sizes: grid([['50', 2], ['52', 3]]) }, { id: red.id }] }, 201)
+    expect(applied.amendment.reason).toBe(AUTOMATIC_REASONS.amend)
+    expect((await one('SELECT reason FROM "SalesOrderAmendment" WHERE id = $1', [applied.amendment.id])).reason).toBe(AUTOMATIC_REASONS.amend)
+    expect((await one(`SELECT reason FROM "AuditLog" WHERE action = 'orders.amend' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 1`, [typed.id])).reason).toBe(AUTOMATIC_REASONS.amend)
+    // The REVISED_ORDER page (B-W2b-184) the customer reads: no "Why it changed" for automatic words, its reason empty.
+    const content = await h.database.withScope({ audience: 'office', tenantId: T, actorId: SALES_ACTOR }, (client) => REACCEPTANCE_ADAPTER.content(client as never, { recordId: applied.amendment.id } as RequestRef, 'en'))
+    expect(content.facts.map((fact) => fact.label)).not.toContain('Why it changed')
+    expect(content.revisedOrder).toMatchObject({ reason: '' })
+    expect(JSON.stringify(content)).not.toContain(AUTOMATIC_REASONS.amend)
+    // A reason typed is stored and shown as typed.
+    const said = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments`, { version: applied.order.version, reason: '  The customer asked by phone.  ', lines: [{ id: blk.id, sizes: grid([['50', 2], ['52', 2]]) }, { id: red.id }] }, 201)
+    expect(said.amendment.reason).toBe('The customer asked by phone.')
+    const saidContent = await h.database.withScope({ audience: 'office', tenantId: T, actorId: SALES_ACTOR }, (client) => REACCEPTANCE_ADAPTER.content(client as never, { recordId: said.amendment.id } as RequestRef, 'en'))
+    expect(saidContent.facts).toEqual(expect.arrayContaining([{ label: 'Why it changed', value: 'The customer asked by phone.' }]))
+    // Close one line and reopen it, neither with a reason.
+    const closed = await ok('sales', 'POST', `${orderUrl(typed.id)}/close-lines`, { version: said.order.version, lineIds: [red.id] })
+    expect(closed.order.lines.find((line: Json) => line.id === red.id).closedShort).toMatchObject({ reason: AUTOMATIC_REASONS.close })
+    expect((await one('SELECT "closeShortReason" FROM "SalesOrderLine" WHERE id = $1', [red.id])).closeShortReason).toBe(AUTOMATIC_REASONS.close)
+    const reopened = await ok('sales', 'POST', `${orderUrl(typed.id)}/reopen-lines`, { version: closed.order.version, lineIds: [red.id] })
+    expect(reopened.reopened).toEqual([red.id])
+    expect((await one(`SELECT reason FROM "AuditLog" WHERE action = 'orders.reopenLines' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 1`, [typed.id])).reason).toBe(AUTOMATIC_REASONS.reopen)
+    typed = reopened.order
+  })
+
+  it('a requested date the order keeps, passed since, never blocks a change; a new one in the past still does', async () => {
+    const past = addDays(TODAY, -3)
+    // The order was asked for three days ago (as an import would leave it): its requested date is in the past now.
+    await planted([{ sql: 'UPDATE "SalesOrder" SET "requestedDate" = $2::date WHERE id = $1', values: [typed.id, past] }])
+    const record = await recordOf(typed.id)
+    expect(record.requestedDate).toBe(past)
+    // The screen sends the date it read with the change: kept as it is, it is no new date.
+    const kept = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments`, { version: record.version, requestedDate: past, customerRef: 'PO-OL004-2', lines: linesOf(record) }, 201)
+    expect(kept.order).toMatchObject({ customerRef: 'PO-OL004-2', requestedDate: past })
+    // Another past day is a new date: refused in words, nothing written.
+    const moved = await refused('sales', 'POST', `${orderUrl(typed.id)}/amendments`, { version: kept.order.version, requestedDate: addDays(TODAY, -2), lines: linesOf(kept.order) }, 400)
+    expect(moved.issues).toEqual([{ path: 'body/requestedDate', message: 'A requested date is today or later.' }])
+    typed = kept.order
+  })
+})
+// ── end B-OL-004 + B-OL-015 ──
 
 // ── B-OL-033 (order lines plan, 18 F1 and F24): the style search for an order ("Add a style") ──
 describe('B-OL-033: the style search for an order — our collection and this customer’s own styles, and whether its list prices each colour', () => {
@@ -708,7 +763,8 @@ describe('close remaining lines (SAL-210) and reopen them', () => {
     const releasedBefore = await released()
     expect(record.dailyActions.find((action: Json) => action.action === 'amend')).toMatchObject({ allowed: false })
     await refused('sales', 'POST', `${orderUrl(so2())}/amendments`, { version: record.version, reason: 'More.', lines: record.lines.map((line: Json) => ({ id: line.id })) }, 409)
-    await refused('sales', 'POST', `${orderUrl(so2())}/close-lines`, { version: record.version, reason: '  ' }, 400)
+    // B-OL-004: words are optional now; too many are still refused (nothing written).
+    await refused('sales', 'POST', `${orderUrl(so2())}/close-lines`, { version: record.version, reason: 'x'.repeat(1001) }, 400)
     const closed = await ok('sales', 'POST', `${orderUrl(so2())}/close-lines`, { version: record.version, reason: 'The customer takes what shipped; the rest is not made.' })
     expect(closed.closed.map((line: Json) => [line.seq, line.closedShortQuantity])).toEqual([
       [10, 3],

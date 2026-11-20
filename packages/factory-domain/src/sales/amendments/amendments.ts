@@ -279,15 +279,15 @@ export function amendStateProblem(status: SalesOrderStatus): string | null {
 }
 
 /**
- * The problems of an amendment's lines, in words, by path (body/lines/<i>/…): a reason; at least one line; existing
+ * The problems of an amendment's lines, in words, by path (body/lines/<i>/…): a reason that fits (B-OL-004: none is fine); at least one line; existing
  * lines named once (B-SA-042: a size under what work orders make is allowed; B-OP-014: a line they make may be left out —
  * it is closed short, `leftOutOf`); a made-to-measure line or a line closed short unchanged and never left out; a new line
  * names its style and colourway; whole pieces. Style, colourway and sizes offered are the API's checks (they read the catalogue).
  */
 export function amendmentProblems(check: AmendmentCheck): Issue[] {
   const issues: Issue[] = []
-  if (typeof check.reason !== 'string' || check.reason.trim() === '') issues.push({ path: 'body/reason', message: 'Say why the order changes (it stays with the amendment).' })
-  else if (check.reason.trim().length > MAX_REASON) issues.push({ path: 'body/reason', message: `At most ${MAX_REASON} characters.` })
+  // B-OL-004 (D2): the reason is optional (none: the amendment stores ./reasons AUTOMATIC_REASONS.amend); typed, it fits the column.
+  if (typeof check.reason === 'string' && check.reason.trim().length > MAX_REASON) issues.push({ path: 'body/reason', message: `At most ${MAX_REASON} characters.` })
   if (check.lines.length === 0) issues.push({ path: 'body/lines', message: 'An order keeps at least one line: to stop the whole order, cancel it.' })
   if (check.lines.length > MAX_QUOTE_LINES) issues.push({ path: 'body/lines', message: `An order holds at most ${MAX_QUOTE_LINES} lines.` })
   const current = new Map(check.current.map((line) => [line.id, line]))

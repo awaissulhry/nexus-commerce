@@ -82,9 +82,9 @@ export async function previewPricedChange(caller: CommandCaller, orderId: string
   const priced = pricedOf(body)
   return caller.withClient(async (client) => {
     const facts = await readOrderFacts(client, order)
-    // W2a's review asks no reason yet (the dialog's stand-in, as B-W2a-50's preview).
+    // B-OL-004 (order lines plan D2): a reason is optional, so the review needs no stand-in for it any more.
     // B-OP-014: the office's own change closes short a line it leaves out that work orders make (as its apply does).
-    const plan = await planAmendment(client, order, order.status, facts, { ...amendOf(body), reason: body.reason?.trim() || 'Review before applying.' }, now, { closeLeftOut: true })
+    const plan = await planAmendment(client, order, order.status, facts, amendOf(body), now, { closeLeftOut: true })
     const revision = nextRevision((await client.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { revision: true } })).map((row) => row.revision))
     const empty = { revision, version: order.version, diff: null, parts: asMoney('price', [] as ReturnType<typeof partView>[]), feeAmount: asMoney('price', null), changeAmount: asMoney('price', null), deposit: asMoney('price', null), yes: null, stage: null, /* B-OP-013 */ workOrders: null }
     if (isIssueList(plan)) {

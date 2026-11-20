@@ -8,6 +8,7 @@ import { words, type RecordAdapter } from '../../../platform/approvals-out/adapt
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { formatDate, formatMoney } from '@nexus/factory-domain/documents/format'
 import { diffView } from './amend'
+import { isAutomaticReason } from '@nexus/factory-domain/sales/amendments/reasons' // B-OL-004
 
 /**
  * The customer's re-acceptance of a revised order (B-W2b-184; SAL-222; W2a's SalesOrderAmendment, B-W2a-30: an amendment
@@ -92,11 +93,13 @@ export const REACCEPTANCE_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>(
     const colourwayIds = [...new Set(diff.lines.map((line) => line.colourwayId))]
     const styles = await client.style.findMany({ where: { id: { in: styleIds } }, select: { id: true, code: true, name: true } })
     const colourways = await client.colourway.findMany({ where: { id: { in: colourwayIds } }, select: { id: true, code: true, name: true } })
+    // B-OL-004 (order lines plan D2): an automatic reason (nobody typed one) is the office's, never the customer's to read.
+    const typed = isAutomaticReason(row.reason) ? '' : row.reason
     return {
       facts: [
         { label: words(locale, 'Ordine', 'Order'), value: row.order.number },
         { label: words(locale, 'Revisione', 'Revision'), value: String(row.revision) },
-        { label: words(locale, 'Perché è cambiato', 'Why it changed'), value: row.reason },
+        ...(typed === '' ? [] : [{ label: words(locale, 'Perché è cambiato', 'Why it changed'), value: typed }]),
         { label: words(locale, 'Attenzione', 'Please note'), value: words(locale, "La vostra accettazione precedente decade se cambia il valore netto dell'ordine.", 'Your earlier acceptance ends if the net value changes.') },
         // B-W2b-309 (SAL-219, SAL-221): the price of a change after production started, and the extra deposit it asks.
         ...(await pricedFacts(client, row, locale)),
@@ -104,7 +107,7 @@ export const REACCEPTANCE_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>(
       revisedOrder: {
         orderNumber: row.order.number,
         revision: row.revision,
-        reason: row.reason,
+        reason: typed, // B-OL-004: '' — no reason given
         currency: row.order.currency,
         diff: diffView(diff),
         styles: Object.fromEntries(styles.map((style) => [style.id, { code: style.code, name: style.name }])),

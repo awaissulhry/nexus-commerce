@@ -235,7 +235,8 @@ export const productionOrderSchema = z.object({
   marks,
   holds: z.array(z.object({ kind: z.enum(BRAND_HOLD_READS), since: z.string(), words })),
   urgency: urgency.nullable(),
-  promiseHistory: z.array(z.object({ on: z.string(), from: z.string().nullable(), to: z.string(), lines: z.array(z.number()), reason: z.object({ code: z.enum(PROMISE_REASON_CODES), words }) })),
+  // B-OL-004: `reason` null — the office gave no reason (none is shown).
+  promiseHistory: z.array(z.object({ on: z.string(), from: z.string().nullable(), to: z.string(), lines: z.array(z.number()), reason: z.object({ code: z.enum(PROMISE_REASON_CODES), words }).nullable() })),
   /** + Progress: the pieces of its own cells (F-PR-12a writes the stage's count in the "In production" note; F-PR-12b draws them). */
   progress: z
     .object({

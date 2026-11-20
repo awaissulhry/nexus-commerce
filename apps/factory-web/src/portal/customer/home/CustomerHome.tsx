@@ -386,7 +386,7 @@ function HomeContainer() {
     if (why[orderId]?.state === 'ready' || why[orderId]?.state === 'loading') return
     setWhy((current) => ({ ...current, [orderId]: { state: 'loading', words: null } }))
     fetchPromiseHistory(api, orderId)
-      .then((history) => setWhy((current) => ({ ...current, [orderId]: { state: 'ready', words: history[0]?.reason.words[locale] ?? null } })))
+      .then((history) => setWhy((current) => ({ ...current, [orderId]: { state: 'ready', words: history[0]?.reason?.words[locale] ?? null /* B-OL-004 */ } })))
       .catch(() => setWhy((current) => ({ ...current, [orderId]: { state: 'error', words: null } })))
   }
 
