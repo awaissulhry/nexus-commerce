@@ -48,8 +48,8 @@ describe('sizes and fit', () => {
   it('a cell 36 px, a board card 64 px (72 from 1680 px wide), a phone card 48 px, an order line 40 / 56 px', () => {
     expect(PICTURE_PX).toEqual({ cell: 36, board: 64, phone: 48, line: 40, lineLarge: 56 })
     const css = readFileSync(join(HERE, 'record-picture.css'), 'utf8')
-    expect(css).toMatch(/@media \(min-width: 1680px\)\s*\{\s*\.fw-rp-board\s*\{\s*--fw-rp-size: 72px;/)
-    for (const [size, px] of Object.entries(PICTURE_PX)) expect(css, size).toContain(`--fw-rp-size: ${px}px;`)
+    expect(css).toMatch(/@media \(min-width: 1680px\)\s*\{\s*\.fw-rpic-board\s*\{\s*--fw-rpic-size: 72px;/)
+    for (const [size, px] of Object.entries(PICTURE_PX)) expect(css, size).toContain(`--fw-rpic-size: ${px}px;`)
   })
   it('a cell crops (today\'s look); a card, a phone card and a line fit (a garment photo is portrait)', () => {
     expect(PICTURE_FIT).toEqual({ cell: 'cover', board: 'contain', phone: 'contain', line: 'contain', lineLarge: 'contain' })
@@ -258,3 +258,31 @@ describe('F-CP-110: the picture viewer shows every style of the record', () => {
   })
 })
 // ---- end F-CP-110
+
+// ---- F-CP-107 (cp-fx14; customer page walk L2): the picture part's class family is its own — `fw-rpic`, never Incoming's
+// reading pane's `fw-rp` (inquiries/view/pane/pane.css). Both style sheets are loaded at once: one shared name made this part's
+// `all: unset; flex: none; align-items / justify-content: center; background; border` land on the pane (SCR-105's pane over the list,
+// the customer's draft window narrow and centred) and the pane's `height: 100%` / `.fw-rp-wait` on this part.
+describe('F-CP-107 — the picture part has its own class family (fw-rpic); it shares no class with the reading pane', () => {
+  const classesOf = (css: string): Set<string> => new Set([...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)].map((match) => match[1]!).filter((name) => !name.startsWith('is-')))
+  const picture = classesOf(readFileSync(join(HERE, 'record-picture.css'), 'utf8'))
+  const pane = classesOf(readFileSync(join(HERE, '../../areas/sales/inquiries/view/pane/pane.css'), 'utf8'))
+
+  it('every class of the part is fw-rpic / fw-rpic-*; the reading pane keeps fw-rp; the two share none', () => {
+    expect(picture.size).toBeGreaterThan(15)
+    for (const name of picture) expect(name).toMatch(/^fw-rpic(-|$)/)
+    expect(pane.has('fw-rp')).toBe(true)
+    expect([...picture].filter((name) => pane.has(name))).toEqual([])
+    expect([...pane].filter((name) => /^fw-rpic(-|$)/.test(name))).toEqual([])
+  })
+
+  it('the part and its viewer draw only fw-rpic classes (never fw-rp / fw-rp-*)', () => {
+    for (const file of ['view/RecordPicture.tsx', 'view/PictureViewer.tsx']) expect(readFileSync(join(HERE, file), 'utf8'), file).not.toMatch(/fw-rp(?![a-zA-Z0-9])/)
+    for (const size of ['cell', 'board', 'phone', 'line', 'lineLarge'] as const) {
+      const html = render(createElement(RecordPicture, { source: 'workorder', recordId: 'wo-1', number: 'WO-0012', size }))
+      expect(html, size).toContain(`class="fw-rpic fw-rpic-${size === 'lineLarge' ? 'line-large' : size} fw-rpic-none"`)
+      expect(html, size).not.toMatch(/fw-rp(?![a-zA-Z0-9])/)
+    }
+  })
+})
+// ---- end F-CP-107

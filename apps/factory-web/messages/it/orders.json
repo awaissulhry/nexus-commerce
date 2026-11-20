@@ -998,6 +998,39 @@
       "net": "Imponibile: visibile a chi vede i prezzi"
     }
   },
+  "facts": {
+    "requested": {
+      "title": "Cambia la data richiesta di {number}",
+      "date": "Nuova data richiesta",
+      "dateHint": "Da oggi in poi. Salvata come modifica {revision}.",
+      "reasonHint": "Resta con la modifica nella scheda Modifiche.",
+      "problem": {
+        "past": "La data richiesta è da oggi in poi",
+        "same": "È già la data richiesta"
+      }
+    },
+    "payment": "Pagamento · valuta",
+    "languageTax": "Lingua · regime fiscale",
+    "made": "Creato",
+    "madeBy": "{date} da {name} · modificato il {changed}",
+    "madeNoName": "{date} · modificato il {changed}",
+    "ordered": "ordinato il {date}",
+    "fixed": "Fisso",
+    "fixedTitle": "Fissato quando l'ordine è stato creato; non cambia.",
+    "set": "Imposta…",
+    "unread": "Non è stato possibile leggerlo",
+    "note": {
+      "label": "Nota dell'ufficio",
+      "tag": "Solo l'ufficio la vede",
+      "empty": "Nessuna nota",
+      "title": "Nota dell'ufficio · {number}",
+      "hint": "La legge solo l'ufficio; il cliente mai.",
+      "go": "Salva la nota",
+      "long": "La nota è al massimo di {max} caratteri",
+      "same": "È già questa la nota",
+      "saved": "Nota dell'ufficio salvata."
+    }
+  },
   "editor": {
     "add": {
       "title": "Aggiungi un modello",
@@ -1564,42 +1597,32 @@
     "assignSupervisor": "Assegna supervisore…",
     "askSupervisor": "Chiedi al supervisore…"
   },
+  "where": {
+    "headline": {
+      "closedShipped": "Chiuso · spedito il {shipped}"
+    },
+    "note": {
+      "waiting": "La produzione parte quando l'ordine è confermato",
+      "reached": "Il lavoro era arrivato a {stage} quando è stato annullato"
+    },
+    "stagesDone": "Apri gli ordini di lavoro in Produzione · tutte le fasi completate"
+  },
   "overview": {
     "where": "A che punto è",
     "progress": "Avanzamento per riga",
-    "progressHint": "I pezzi di questo ordine · una riga apre le sue taglie",
-    "ahead_one": "{count} riga avanti",
-    "ahead_other": "{count} righe avanti",
-    "bundles_one": "Fasci in lavorazione: {count} a {stage}",
-    "bundles_other": "Fasci in lavorazione: {count} a {stage}",
     "notInWorkOrders": "Non ancora negli ordini di lavoro",
-    "afterDeposit": "Gli ordini di lavoro si fanno dopo l'acconto",
-    "exFactory": "Franco fabbrica {date}",
-    "exFactoryMovedOnly": "Franco fabbrica {date} · spostata {count} volte",
-    "exFactoryMoved": "Franco fabbrica {date} · spostata {count} volte · {days} g dalla prima promessa",
     "piecesAsOf": "Pezzi alle {time}",
     "headline": {
-      "waitingDeposit": "Confermato · in attesa dell'acconto",
       "shipped": "Spedito il {shipped}",
       "delivered": "Spedito il {shipped} · consegnato il {delivered}"
-    },
-    "fact": {
-      "who": "Chi deve agire",
-      "exFactory": "Franco fabbrica",
-      "health": "Stato",
-      "customer": "Cliente",
-      "inWork": "In lavorazione"
     },
     "col": {
       "line": "Riga"
     },
-    "lineName": "Riga {seq} · {stage}",
     "lineNoStage": "Riga {seq}",
     "lineOpen": "Apri le taglie della riga {seq} · {name}",
     "total_one": "Totale · {count} riga",
     "total_other": "Totale · {count} righe",
-    "madeExtra_one": "{count} pezzo fatto in più",
-    "madeExtra_other": "{count} pezzi fatti in più",
     "sizes": {
       "label": "Spediti e fine prevista per taglia",
       "size": "Taglia",
@@ -1614,8 +1637,6 @@
       "title": "Persone",
       "backup": "Sostituto",
       "answers": "Risponde al cliente",
-      "madeBy": "Creato da",
-      "madeByOn": "{name} · {date}",
       "where": "Dove si produce",
       "notPlanned": "Non ancora pianificato",
       "held": "Chi ci lavora è visibile a chi segue la produzione."
@@ -1647,19 +1668,42 @@
     },
     "facts": {
       "title": "Dati dell'ordine",
-      "customerRef": "Ordine del cliente",
-      "language": "Lingua",
-      "lang": {
-        "it": "Italiano",
-        "en": "Inglese"
-      },
-      "made": "Creato · modificato",
-      "madeValue": "{made} · {changed}"
+      "customerRef": "Ordine del cliente"
     }
   },
   "mtm": {
     "units_one": "Su misura · {count} unità",
     "units_other": "Su misura · {count} unità"
+  },
+  "progress": {
+    "inWork": "Negli ordini di lavoro: {done} di {total}",
+    "madeExtra": "{sizes} in più dell'ordine: tagliati o da tagliare",
+    "noPicture": "Ancora nessuna immagine",
+    "addPicture": "Aggiungila nel modello ›",
+    "addPictureOf": "Aggiungi l'immagine di {name} nel suo modello",
+    "moves": "Azioni per la riga {seq} · {name}",
+    "move": {
+      "make": "Crea ordini di lavoro per questa riga…",
+      "close": "Chiudi in anticipo questa riga…",
+      "reopen": "Riapri questa riga…",
+      "change": "Cambia quantità o taglie…",
+      "discuss": "Discuti questa riga"
+    },
+    "held": {
+      "allInWork": "Ogni pezzo di questa riga è già negli ordini di lavoro",
+      "closedLine": "Questa riga è chiusa in anticipo: prima riaprila",
+      "nothingLeft": "Di questa riga non resta nulla da chiudere: è spedita per intero"
+    },
+    "work": {
+      "title": "I suoi ordini di lavoro",
+      "of_one": "{status} · {count} pezzo di questa riga",
+      "of_other": "{status} · {count} pezzi di questa riga",
+      "none": "Ancora nessun ordine di lavoro per questa riga",
+      "held": "I suoi ordini di lavoro sono visibili a chi segue la produzione."
+    },
+    "final": {
+      "none": "Ancora nessun controllo finale"
+    }
   },
   "files": {
     "title": "File",

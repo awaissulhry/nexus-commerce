@@ -55,7 +55,7 @@ function Picture({ source, recordId, number, picture: own, styleCount: count, si
   const { picture, styleCount, src } = useRecordPicture({ source, recordId, picture: own, styleCount: count, read, demo, held })
   const [broken, setBroken] = useState(false)
   useEffect(() => setBroken(false), [src])
-  const className = `fw-rp fw-rp-${size === 'lineLarge' ? 'line-large' : size}`
+  const className = `fw-rpic fw-rpic-${size === 'lineLarge' ? 'line-large' : size}`
   const face = faceOf(picture, fallback)
 
   if (face === 'picture' && picture) {
@@ -64,16 +64,18 @@ function Picture({ source, recordId, number, picture: own, styleCount: count, si
     const name = `${t('open', { number })} · ${style}`
     const body = (
       <>
-        {src && !broken ? <img src={src} alt={t('alt', { style })} loading="lazy" onError={() => setBroken(true)} /> : <Shirt size={size === 'cell' ? 18 : 24} aria-hidden className={src === undefined ? 'fw-rp-wait' : undefined} />}
-        {more > 0 && <span className="fw-rp-more">{t('more', { count: more })}</span>}
+        {src && !broken ? <img src={src} alt={t('alt', { style })} loading="lazy" onError={() => setBroken(true)} /> : <Shirt size={size === 'cell' ? 18 : 24} aria-hidden className={src === undefined ? 'fw-rpic-wait' : undefined} />}
+        {more > 0 && <span className="fw-rpic-more">{t('more', { count: more })}</span>}
       </>
     )
+    // F-OO-121 (order overview §2.2): a file that does not answer says so in its title ("The picture file is missing"), on every page.
+    const missing = broken ? t('broken') : undefined
     return onOpen ? (
-      <button type="button" className={className} onClick={onOpen} aria-label={name} title={name} aria-busy={src === undefined || undefined} data-picture="">
+      <button type="button" className={className} onClick={onOpen} aria-label={name} title={missing ?? name} aria-busy={src === undefined || undefined} data-picture="">
         {body}
       </button>
     ) : (
-      <span className={className} role="img" aria-label={style} aria-busy={src === undefined || undefined}>
+      <span className={className} role="img" aria-label={style} title={missing} aria-busy={src === undefined || undefined}>
         {body}
       </span>
     )
@@ -83,23 +85,23 @@ function Picture({ source, recordId, number, picture: own, styleCount: count, si
     const kind = fallbackOf(fallback)!
     const words = t(`files.${kind.kind}`, { count: kind.count })
     return (
-      <Link className={`${className} fw-rp-files`} href={fallback.href} aria-label={`${t('files.door')} · ${number} — ${words}`} title={words} data-door="">
+      <Link className={`${className} fw-rpic-files`} href={fallback.href} aria-label={`${t('files.door')} · ${number} — ${words}`} title={words} data-door="">
         {kind.kind === 'photos' ? <ImageIcon size={16} aria-hidden /> : <FileText size={16} aria-hidden />}
-        <span className="fw-rp-more">{kind.count}</span>
+        <span className="fw-rpic-more">{kind.count}</span>
       </Link>
     )
   }
 
   if (face === 'reading') {
     return (
-      <span className={`${className} fw-rp-none`} role="img" aria-label={t('reading', { number })} aria-busy>
-        <Shirt size={size === 'cell' ? 18 : 24} aria-hidden className="fw-rp-wait" />
+      <span className={`${className} fw-rpic-none`} role="img" aria-label={t('reading', { number })} aria-busy>
+        <Shirt size={size === 'cell' ? 18 : 24} aria-hidden className="fw-rpic-wait" />
       </span>
     )
   }
 
   return (
-    <span className={`${className} fw-rp-none`} role="img" aria-label={t('noneOf', { number })} title={t('noneOf', { number })}>
+    <span className={`${className} fw-rpic-none`} role="img" aria-label={t('noneOf', { number })} title={t('noneOf', { number })}>
       <Shirt size={size === 'cell' ? 18 : 24} aria-hidden />
     </span>
   )

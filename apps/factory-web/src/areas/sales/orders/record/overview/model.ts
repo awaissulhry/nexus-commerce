@@ -8,6 +8,8 @@ import type { OpenApproval } from '../../api'
 import { stillRowsOf, type StillRowOf } from '../changes/model'
 import { yesDoorOf } from '../../depth/model' // F-OP-117: the Changes dot
 import { waitsForMe } from '../../../../home/approvals/requests/model' // F-OP-117
+// F-OO-202: ONE place per waiting row, decided by the domain (B-OO-011) — the web stamps it, never a second map
+import { BLOCKER_KINDS, ORDER_YES_KINDS, placeOf, YES_PLACE, type BlockerKind, type BlockerPlace, type OrderYesKind } from '@nexus/factory-domain/production-brand/waiting'
 
 /**
  * F-SA-232 (sales page plan N2, picks P2, P3, P4, P15, R9; 10-order-page §2.1 O1, O2; review OW-6, OW-7) — Overview's rules, without
@@ -17,7 +19,7 @@ import { waitsForMe } from '../../../../home/approvals/requests/model' // F-OP-1
  * F-OO-100 (order overview lane: one file per section): each section's own rules live in its file — where.ts, progress.ts,
  * people.ts, dates.ts, linked.ts, facts.ts. This file keeps what more than one place reads: the API's words, the health chip (the
  * band too), the read's state, the requested date's field id (Lines too) and the ONE waiting list (the header, the cards and the
- * Changes tab).
+ * Changes tab; F-OO-202: each row with its place — Where it is now, Next dates or Requests & changes).
  */
 
 const phrase = (key: string, params?: Record<string, string | number>): Phrase => (params ? { key, params } : { key })
@@ -56,30 +58,9 @@ export function bandHealthOf(input: HealthInput): boolean {
   return input.computed === 'LATE' || input.computed === 'AT_RISK' || !!input.raised
 }
 
-/**
- * F-OP-103: who acts next (office face) is the first row of the ONE waiting list (`waitingOf`), so its "since" is the card's and the
- * band's; with no row, who the read says the work waits on. The view says the row's words (`rowWordsOf`).
- */
-// F-OP-301 (walk #2): with no row it never falls back to the kept `headline.waiting` (a stale "Waiting on us · 5 d" beside a card
-// that says nothing waits): the oldest Still to do row (the card's third list) names who acts, else nobody (`who: null`, the view
-// says the card's own "Nothing waits"); no headline read: not known.
-export interface WhoActsNext {
-  readonly who: WaitingOn | null | undefined
-  readonly since: string | null
-  readonly kind: 'request' | 'record'
-  readonly row: WaitingRow | null
-  /** F-OP-301: the Still to do row it names when no waiting row stands (its words are the view's `what`). */
-  readonly still: StillRowOf | null
-}
-
-export function whoActsNextOf(rows: readonly WaitingRow[], headline: Headline | null | undefined, still: readonly StillRowOf[] = []): WhoActsNext {
-  const first = rows[0] ?? null
-  if (first) return { who: first.on, since: first.since, kind: REQUEST_KINDS.has(first.kind) ? 'request' : 'record', row: first, still: null }
-  if (!headline) return { who: undefined, since: null, kind: 'record', row: null, still: null }
-  const oldest = [...still].sort((a, b) => a.since.localeCompare(b.since))[0] ?? null
-  if (oldest) return { who: oldest.waitingOn === 'CUSTOMER' ? 'BRAND' : 'US', since: oldest.since, kind: 'record', row: null, still: oldest }
-  return { who: null, since: null, kind: 'record', row: null, still: null }
-}
+// F-OO-202 (review F14): "Who acts next" is gone from the office page — `whoActsNextOf` and the state's `next` with it (nobody drew
+// them after F-OO-103). The keeper's `waitingOn` (the domain's production-brand/waiting) stays the ONE rule of who the order waits on,
+// read by the orders list and the portal; the office page groups the requests by who waits instead (Requests & changes).
 
 // ---- the read's state (loading, failed, withheld) ------------------------------------------------------------------------------
 
@@ -115,9 +96,9 @@ export const REQUESTED_FIELD_ID = 'amend-requested-date'
 
 // ---- F-OP-103 (order page plan N1; 10-order-page §3.2; 13-backend B4; review R-21, R-22): the ONE waiting list ----------------------
 /**
- * The order's waiting list, ONE source for Overview's "Who acts next", the "Requests & changes" card and the Changes badge (R-22; the
- * dock does not read it, R-21): each blocker of the production read (`headline.waiting.blockers[]`, its `ref` and `sub`) and each open
- * yes of the order (the order read's `openApprovals`, B-OP-020) is ONE row — who it waits on, since when, its words, and ONE door:
+ * The order's waiting list, ONE source for Overview's cards and the Changes badge (R-22; the dock does not read it, R-21): each blocker
+ * of the production read (`headline.waiting.blockers[]`, its `ref` and `sub`) and each open yes of the order (the order read's
+ * `openApprovals`, B-OP-020) is ONE row — who it waits on, since when, its words, its place (F-OO-202) and ONE door:
  *
  *   BRAND_REQUEST · REQUEST / COUNTER     Answer… (the ONE review window on this page, `?open=`) — an agreed or lapsed counter waits on us
  *   BRAND_REQUEST · PROBLEM               Reply in the thread (This order's conversation at the message it was raised with)
@@ -130,6 +111,10 @@ export const REQUESTED_FIELD_ID = 'amend-requested-date'
  *   MATERIAL_SHORT · GATE                 Production › #dates
  *
  * Oldest first (a row with no known start last). Nothing here names another customer: every row is this order's own read.
+ *
+ * F-OO-202 (review F15; plan §9): each row is stamped with ONE place by the domain (`placeOf` keyed on kind + sub, `YES_PLACE` for an
+ * open yes — B-OO-011): HOLD (Where it is now's strips), DATE (Next dates; a refused new date too, F3) or REQUEST (Requests & changes).
+ * A kind this page does not know yet is a REQUEST: it stays on the card, never hidden.
  */
 export type WaitingDoor =
   | { readonly kind: 'answer'; readonly requestId: string; readonly request: BrandRequest | null }
@@ -154,10 +139,10 @@ export interface WaitingRow {
   readonly since: string | null
   readonly words: WaitingWords
   readonly door: WaitingDoor
+  /** F-OO-202: where the page shows it — HOLD: Where it is now · DATE: Next dates · REQUEST: Requests & changes (and the Changes tab). */
+  readonly place: BlockerPlace
 }
 
-/** The kinds that wait for an answer of a person (a request, a yes, a task) — the rest wait for a record (a payment, a hold …). */
-const REQUEST_KINDS: ReadonlySet<string> = new Set(['APPROVAL', 'PARTNER_TASK', 'BRAND_REQUEST', 'YES'])
 const HOLD_KINDS: ReadonlySet<string> = new Set(['BRAND_PAUSE', 'QUALITY_HOLD', 'NO_MOVE', 'NONCONFORMANCE', 'RELEASE_CHECK', 'SUBCONTRACT', 'CUSTOMER_MATERIAL'])
 const DATE_KINDS: ReadonlySet<string> = new Set(['MATERIAL_SHORT', 'GATE'])
 
@@ -201,6 +186,15 @@ function wordsOf(blocker: Blocker, inputs: WaitingInputs): WaitingWords {
   return api
 }
 
+// ---- F-OO-202: the domain's place of a row (B-OO-011), never a web map of its own ----
+const KNOWN_KINDS: ReadonlySet<string> = new Set<string>(BLOCKER_KINDS)
+const YES_KINDS: ReadonlySet<string> = new Set<string>(ORDER_YES_KINDS)
+/** A blocker's place: its kind and, for a customer request, its sub (a refused new date is a DATE); an unknown kind: a REQUEST. */
+const blockerPlaceOf = (blocker: Blocker): BlockerPlace => (KNOWN_KINDS.has(blocker.kind) ? placeOf({ kind: blocker.kind as BlockerKind, sub: blocker.sub ?? null }) : 'REQUEST')
+/** An open yes's place: the order's own yes and its credit hold stop the order (HOLD); an old change's yes is a REQUEST. */
+const yesPlaceOf = (kind: string): BlockerPlace => (YES_KINDS.has(kind) ? YES_PLACE[kind as OrderYesKind] : 'REQUEST')
+// ---- end F-OO-202
+
 const byOldest = (a: WaitingRow, b: WaitingRow): number => (a.since === null ? 1 : 0) - (b.since === null ? 1 : 0) || (a.since ?? '').localeCompare(b.since ?? '')
 
 export function waitingOf(read: Pick<OrderProduction, 'headline'> | null | undefined, inputs: WaitingInputs): WaitingRow[] {
@@ -214,10 +208,11 @@ export function waitingOf(read: Pick<OrderProduction, 'headline'> | null | undef
     since: blocker.since,
     words: wordsOf(blocker, inputs),
     door: doorOf(blocker, inputs),
+    place: blockerPlaceOf(blocker), // F-OO-202
   }))
   // An open yes of the order waits on us (an office person decides it): its own row with the yes in place.
   for (const task of inputs.approvals ?? []) {
-    rows.push({ key: `YES:${task.taskId}`, kind: 'YES', sub: null, ref: null, on: 'US', since: task.requestedAt, words: { kind: 'phrase', phrase: phrase('waiting.yes', { kind: inputs.locale === 'en' ? task.kindLabel.en : task.kindLabel.it }) }, door: { kind: 'yes', task } })
+    rows.push({ key: `YES:${task.taskId}`, kind: 'YES', sub: null, ref: null, on: 'US', since: task.requestedAt, words: { kind: 'phrase', phrase: phrase('waiting.yes', { kind: inputs.locale === 'en' ? task.kindLabel.en : task.kindLabel.it }) }, door: { kind: 'yes', task }, place: yesPlaceOf(task.kind) /* F-OO-202 */ })
   }
   // Rows of the same start keep the read's order.
   return rows.map((row, index) => ({ row, index })).sort((a, b) => byOldest(a.row, b.row) || a.index - b.index).map((entry) => entry.row)
@@ -230,7 +225,11 @@ export function rowWordsOf(row: Pick<WaitingRow, 'words'>, say: { readonly t: (k
   return say.t(words.key, { ...(words.params ?? {}), customer: say.customer, ...(requestKind ? { what: say.kindWords(requestKind) } : {}) })
 }
 
-/** "Requests & changes": Waiting on us N · Waiting on <Customer> N · Still to do N (top 3) · the latest change; "Nothing waits" only when all three are empty. */
+/**
+ * "Requests & changes": Waiting on us N · Waiting on <Customer> N · Still to do N (top 3) · the latest change; "Nothing waits" only
+ * when all three are empty. F-OO-202: its two lists hold the REQUEST rows only — holds are Where it is now's, dates Next dates' — so
+ * the Changes badge, its dot and the Changes tab (which read this card) count requests and Still to do, nothing twice (D8).
+ */
 export interface WaitingCard {
   readonly onUs: readonly WaitingRow[]
   readonly onCustomer: readonly WaitingRow[]
@@ -240,8 +239,9 @@ export interface WaitingCard {
 }
 
 export function waitingCardOf(rows: readonly WaitingRow[], read: OrderProduction | null | undefined, order: Pick<Order, 'amendments'>): WaitingCard {
-  const onUs = rows.filter((row) => row.on === 'US')
-  const onCustomer = rows.filter((row) => row.on === 'BRAND')
+  const requests = rows.filter((row) => row.place === 'REQUEST') // F-OO-202
+  const onUs = requests.filter((row) => row.on === 'US')
+  const onCustomer = requests.filter((row) => row.on === 'BRAND')
   const still = stillRowsOf(read)
   return {
     onUs,
@@ -252,7 +252,10 @@ export function waitingCardOf(rows: readonly WaitingRow[], read: OrderProduction
   }
 }
 
-/** R-22: the Changes tab's badge counts the card's own rows (waiting on us, on the customer, still to do) — never a second rule. */
+/**
+ * R-22: the Changes tab's badge counts the card's own rows (waiting on us, on the customer, still to do) — never a second rule.
+ * F-OO-202 (D8): the card's rows are requests now, so the badge is request rows + Still to do (SEED-SO-0002: 5 → 3).
+ */
 export const changesBadgeOf = (card: Pick<WaitingCard, 'onUs' | 'onCustomer' | 'still'>): number => card.onUs.length + card.onCustomer.length + card.still.length
 
 /**
@@ -267,16 +270,17 @@ export function changesDotOf(card: Pick<WaitingCard, 'onUs' | 'still'>): boolean
 
 // ---- F-OP-301 (walk #1, #2, #3; plan N1 "Waiting": the header, the card and the Changes badge use the same list) -----------------
 /**
- * The ONE call every reader of the waiting list makes — Overview's "Who acts next" and "Requests & changes", the Changes badge and
- * dot, and the Changes tab's "Waiting on us" / "Waiting on the customer" — so they cannot disagree (the walk saw badge 4, Overview
- * 3 + 1, Changes 1 and "Nothing waits on the customer" on one order). While the production read is not in, nothing is claimed
- * (`loading`: never "Nothing waits" before it); a failed read says so. No production read on the page at all (a design case): the
- * order's own open yes only.
+ * The ONE call every reader of the waiting list makes — Overview's cards, the Changes badge and dot, and the Changes tab's "Waiting on
+ * us" / "Waiting on the customer" — so they cannot disagree (the walk saw badge 4, Overview 3 + 1, Changes 1 and "Nothing waits on the
+ * customer" on one order). While the production read is not in, nothing is claimed (`loading`: never "Nothing waits" before it); a
+ * failed read says so. No production read on the page at all (a design case): the order's own open yes only.
+ * F-OO-202: the same call hands each section its own rows by their place — `card` the requests (Requests & changes, the badge, the
+ * Changes tab), `holds` Where it is now's (its strips group them, F-OO-104), `dates` Next dates' — each row in exactly one of them.
  */
 export type WaitingState =
   | { readonly status: 'loading' }
   | { readonly status: 'failed'; readonly problem: string }
-  | { readonly status: 'ready'; readonly rows: readonly WaitingRow[]; readonly card: WaitingCard; readonly next: WhoActsNext }
+  | { readonly status: 'ready'; readonly rows: readonly WaitingRow[]; readonly card: WaitingCard; readonly holds: readonly WaitingRow[]; readonly dates: readonly WaitingRow[] }
 
 interface WaitingPage {
   readonly production?: ProductionState | null
@@ -291,7 +295,8 @@ export function orderWaitingOf(order: Pick<Order, 'openApprovals' | 'amendments'
   const read = readOf(state)
   const rows = waitingOf(read, { requests: page.requests?.value ?? null, approvals: order.openApprovals, recordPayment: page.can.recordPayment, locale })
   const card = waitingCardOf(rows, read, order)
-  return { status: 'ready', rows, card, next: whoActsNextOf(rows, read?.headline ?? null, card.still) }
+  // F-OO-202: oldest first in each place, as in the list (no folding here: F-OO-104 groups the holds into one strip per kind).
+  return { status: 'ready', rows, card, holds: rows.filter((row) => row.place === 'HOLD'), dates: rows.filter((row) => row.place === 'DATE') }
 }
 // ---- end F-OP-301
 

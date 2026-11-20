@@ -350,12 +350,13 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
 
     // F-SA-212: the ONE picture part at its cell size, with Incoming's file-kinds fallback (a request that names no style); a
     // catalogue order or a change request says its kind in the part's placeholder square.
+    // F-CP-107 (cp-fx14): the picture part's own class family `fw-rpic` (the reading pane keeps `fw-rp`).
     const PictureRender = ({ data }: ICellRendererParams<IncomingRow>) => {
       const request = data?.request ?? null
       if (!data) return null
       if (!request)
         return (
-          <span className="fw-rp fw-rp-cell fw-rp-none" role="img" aria-label={t(`kind.${data.kind}`)} title={t(`kind.${data.kind}`)}>
+          <span className="fw-rpic fw-rpic-cell fw-rpic-none" role="img" aria-label={t(`kind.${data.kind}`)} title={t(`kind.${data.kind}`)}>
             {kindIcon(data.kind)}
           </span>
         )

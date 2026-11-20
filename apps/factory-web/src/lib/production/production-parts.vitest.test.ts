@@ -78,6 +78,60 @@ describe('the five plain stages', () => {
   })
 })
 
+// ---- F-OO-102 (order overview §1.2; review F11): the office's strip state — office only, the portal never passes it ----------------
+describe('F-OO-102: the office strip state — waiting all to come, production over all done, cancelled no strip; the portal unchanged', () => {
+  it('stageSteps per state: WAITING every stage to come (none now), ALL_DONE every stage done (the kept day kept), STOPPED none, CURRENT as before', () => {
+    const waiting = stageSteps({ state: 'WAITING', stage: null, expected: { CUTTING: '2026-12-01' } })
+    expect(waiting.map((step) => [step.id, step.state])).toEqual(PLAIN_STAGES.map((stage) => [stage, 'todo']))
+    expect(waiting[1]).toEqual({ id: 'CUTTING', label: { key: 'parts.stage.CUTTING' }, state: 'todo', date: null, expected: '2026-12-01', note: null })
+    // Production over: every stage done, nothing now; a blocked mark sent by mistake writes no why on a dot.
+    const done = stageSteps({ state: 'ALL_DONE', stage: 'SEWING', reached: { SEWING: '2026-11-13' }, expected: { READY: '2026-11-24' }, blocked: { why: 'Quality hold' }, note: 'ignored' })
+    expect(done.map((step) => step.state)).toEqual(['done', 'done', 'done', 'done', 'done'])
+    expect(done[2]).toMatchObject({ id: 'SEWING', date: '2026-11-13', expected: null, note: null })
+    expect(done.every((step) => step.note === null && step.expected === null)).toBe(true)
+    expect(stageSteps({ state: 'STOPPED', stage: 'CUTTING', reached: { CUTTING: '2026-11-08' } })).toEqual([])
+    // CURRENT is the stage now: the very steps the same input gives without a state (the portal's).
+    const input = { stage: 'SEWING' as const, reached: { PREPARING: '2026-11-03' }, expected: { READY: '2026-11-24' }, note: 'Sewn 80 of 100', blocked: { why: 'PP sample' } }
+    expect(stageSteps({ ...input, state: 'CURRENT' })).toEqual(stageSteps(input))
+  })
+
+  it('the part: all done draws five Done steps and none now; waiting and cancelled draw no strip (never "Preparing · Now"); no state: as before', () => {
+    for (const locale of LOCALES) {
+      const done = draw(locale, createElement(StageStrip, { face: 'office', state: 'ALL_DONE', stage: 'SEWING', reached: { SEWING: '2026-11-13' } }))
+      expect(done.match(/data-state="done"/g), locale).toHaveLength(5)
+      expect(done, locale).not.toContain('aria-current="step"')
+      expect(done, locale).not.toMatch(/data-state="(?:current|todo)"/)
+      // The DS tracker would make the first of five steps to come "now": the part draws nothing instead (the card says why in words).
+      for (const state of ['WAITING', 'STOPPED'] as const) expect(draw(locale, createElement(StageStrip, { face: 'office', state, stage: null, stageHref: '/w/demo/sales/orders/o1?tab=production#work-orders' })), `${locale} ${state}`).toBe('')
+    }
+    // Without a state (the portal's strip, the production pages'): its stage now, "—" when not known — as before.
+    const plain = draw('en', createElement(StageStrip, { face: 'customer', stage: 'SEWING' }))
+    expect(plain).toContain('aria-current="step"')
+    expect(plain.match(/data-state="done"/g)).toHaveLength(2)
+    expect(draw('en', createElement(StageStrip, { face: 'customer', stage: null }))).toContain('Stage not known yet')
+  })
+
+  it("source: the portal's only strip passes no state, so its strip does not change; the office card's state is the domain's", () => {
+    const portal = readFileSync(new URL('../../portal/customer/production/view/ProductionListView.tsx', import.meta.url), 'utf8')
+    const at = portal.indexOf('<StageStrip')
+    expect(at).toBeGreaterThan(-1)
+    expect(portal.slice(at, portal.indexOf('/>', at))).not.toMatch(/\bstate=/)
+    expect(portal).not.toContain('officeStripStateOf')
+    const where = readFileSync(new URL('../../areas/sales/orders/record/overview/where.ts', import.meta.url), 'utf8')
+    expect(where).toContain("from '@nexus/factory-domain/production-brand/stages'")
+    expect(where).toMatch(/export function stageStripOf\([^)]*\): StageStripInput \{\s*const state = officeStripStateOf\(order\.status\)/)
+    // The office card passes the strip as one object (its state among it); the shared part keeps its old door and words.
+    const card = readFileSync(new URL('../../areas/sales/orders/record/view/overview/WhereCard.tsx', import.meta.url), 'utf8')
+    expect(card).toContain('{...strip}')
+  })
+
+  it('the words: the quiet line under the dots, in both languages', () => {
+    expect(productionWordsFor('en')('parts.stage.office.setBy')).toBe('Stages are set by the floor and quality, never by hand')
+    expect(productionWordsFor('it')('parts.stage.office.setBy')).toBe('Le fasi le segnano il reparto e la qualità, mai a mano')
+  })
+})
+// ---- end F-OO-102
+
 describe('waiting on', () => {
   it('counts working days in the company’s zone (a weekend does not count)', () => {
     expect(workingDaysSince('2026-11-13T15:00:00Z', NOW)).toBe(2) // Friday → Monday, Tuesday

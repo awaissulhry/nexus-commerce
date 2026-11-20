@@ -44,6 +44,7 @@ import { artworkOfGroup } from '../production'
 import { DiscussDoor } from './Discuss'
 import { rowAnchor } from '../dock/discuss'
 import { REQUESTED_FIELD_ID } from '../overview/model' // F-OP-104
+import { CUSTOMER_REF_FIELD_ID } from '../record-model' // F-OO-209
 import { addressLineOf, headerChangedOf, SHIP_TO_FIELD_ID } from '../../daily-model' // F-OP-110
 
 /**
@@ -333,10 +334,11 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
       <Card padded>
         <h2 className="fw-so-h2">{t('amend.header')}</h2>
         <div className="fw-so-two">
+          {/* F-OO-209: Overview › Order facts' Customer PO "Change…" lands here with the focus (its id). */}
           <Field label={t('amend.customerRef')}>
-            <Input value={amend.customerRef} onChange={(event) => actions?.onAmendHeader?.('customerRef', event.target.value)} maxLength={100} autoComplete="off" />
+            <Input id={CUSTOMER_REF_FIELD_ID} value={amend.customerRef} onChange={(event) => actions?.onAmendHeader?.('customerRef', event.target.value)} maxLength={100} autoComplete="off" />
           </Field>
-          {/* F-OP-104: Overview's requested date "Change…" lands here with the focus (its id). */}
+          {/* F-OP-104: the field's id (F-OO-144: Overview's requested date "Change…" opens its own small dialog now). */}
           <Field label={t('amend.requestedDate')} hint={t('amend.requestedHint')}>
             <DateField id={REQUESTED_FIELD_ID} value={amend.requestedDate} onChange={(value) => actions?.onAmendHeader?.('requestedDate', value)} min={model.today} locale={INTL_LOCALE[locale]} ariaLabel={t('amend.requestedDate')} />
           </Field>

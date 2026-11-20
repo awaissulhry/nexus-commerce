@@ -320,8 +320,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const ready = order.status === 'ready' ? order.value : null
   const actsBase: RecordActsBase = { api, orderId, current, write, version, setNotice, load, loadParts }
   const band = useBandActs({ ...actsBase, order: ready, permissions: session.permissions, stepUp: { ensureFresh, guard }, setDialog /* F-OP-101: the yes in place */ })
-  // F-OP-104: the requested date's Change… starts the amendment (Lines' acts) and focuses its field (the page's one focus).
-  const overview = useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }) })
+  // F-OO-125: a line's Change quantity or sizes… starts the amendment (Lines' acts) and focuses its style group (the page's one focus);
+  // F-OO-144: the requested date's Change… opens its small dialog in the page's one slot; F-OO-210: the office note writes through
+  // the Orders sheet's own write with the page's one write (the acts base).
+  const overview = useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), setDialog /* F-OO-144 */, base: actsBase /* F-OO-210 */ })
   const lines = useLinesActs({
     ...actsBase,
     order: ready,
@@ -620,6 +622,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     madeFromReading: madeFrom === undefined,
     links: links.model, // B-TH-256
     production: production.state, // F-SA-232
+    stylesManage: session.permissions.includes('product.styles.manage'), // F-OO-121: a line's missing picture is added on its style
     readiness, // F-SA-234
     requests, // F-SA-236
     requestDoor: { parts: door, hrefOf: (id: string) => door.hrefOf(id), open: (id: string) => door.open(id) /* F-SA-244 */ }, // F-SA-243

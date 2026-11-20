@@ -10,6 +10,7 @@
   "openRecord": "Apri {number}",
   "openStyle": "Apri il modello",
   "none": "Ancora nessuna immagine",
+  "broken": "Manca il file dell'immagine",
   "small": "Un'anteprima piccola. L'immagine intera è sul modello.",
   "moreStyles_one": "+{count} altro modello: apri le righe",
   "moreStyles_other": "+{count} altri modelli: apri le righe",

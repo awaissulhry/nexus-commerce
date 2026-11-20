@@ -12,7 +12,7 @@ import { GATE, PEOPLE } from './fixtures' // F-OO-208
 import { datesSchema, peopleSchema, productionSchema } from './api' // F-OO-208
 import { orderSchema, type Order } from '../../api' // F-OO-208
 import { mergeRead } from './model' // F-OO-100: each section's own rules are tested in its file (where, progress, people, dates, linked, facts)
-import { changesBadgeOf, rowWordsOf, waitingCardOf, waitingOf, whoActsNextOf, type WaitingRow } from './model' // F-OP-103
+import { changesBadgeOf, changesDotOf, rowWordsOf, waitingCardOf, waitingOf, type WaitingRow } from './model' // F-OP-103 (F-OO-202: whoActsNextOf is gone)
 import { orderWaitingOf } from './model' // F-OP-301
 
 /**
@@ -48,17 +48,25 @@ describe('the production read on the page: a re-read keeps the other parts', () 
 })
 
 describe('the Overview cases draw in both languages, never a 0 for a step not counted, never a worker', () => {
-  it('in production: the sentence, who acts next, the ex-factory slip, Urgent (customer), the bundles, the stages, "Not counted here"', () => {
+  // F-OO-103: rewritten — who acts next, the ex-factory slip and the bundles left section 1 (each lives in one other place: the F-OO-103
+  // block below proves it); the band keeps At risk and Urgent (customer).
+  it('in production: the sentence, the band\'s At risk and Urgent (customer), the stages, "Not counted here"', () => {
     const text = textOf(draw('overview'))
-    for (const words of ['Where it is now', 'Sewing · 1 line ahead', 'Waiting on us', 'moved 2×', '+6 d since first promised', 'At risk', 'Urgent (customer)', 'Bundles in work: 3 at Sewing', 'Progress by line', 'Cut and bundled', 'Checked', 'Shipped', 'Not counted here', 'Total · 2 lines', 'Pieces as of']) expect(text, words).toContain(words)
+    // F-OO-101: the headline is the status and the stage ("In production · Sewing"); "· 1 line ahead" is not said (F8).
+    expect(text).not.toMatch(/line ahead|riga avanti/)
+    for (const words of ['Where it is now', 'In production · Sewing', 'Waiting on us', 'At risk', 'Urgent (customer)', 'Progress by line', 'Cut and bundled', 'Checked', 'Shipped', 'Not counted here', 'Total · 2 lines', 'Pieces as of']) expect(text, words).toContain(words)
     const it = textOf(draw('overview', 'it'))
-    for (const words of ['A che punto è', 'Confezione · 1 riga avanti', 'Avanzamento per riga', 'Tagliati e in fasci', 'Spediti', 'Non contato qui', 'Urgente (cliente)', 'Fasci in lavorazione: 3 a Confezione']) expect(it, words).toContain(words)
+    for (const words of ['A che punto è', 'In produzione · Confezione', 'Avanzamento per riga', 'Tagliati e in fasci', 'Spediti', 'Non contato qui', 'Urgente (cliente)']) expect(it, words).toContain(words)
     expect(text).not.toMatch(/\b(?:operator|operatore|station|postazione)\b/i)
   })
 
-  it('before any work order: Confirmed · waiting for the deposit, Preparing with why, "Not in work orders yet", "Nothing cut yet"', () => {
+  // F-OO-103: rewritten — the deposit note on Preparing left section 1 (the deposit strip says it, F-OO-105).
+  it('before any work order: Confirmed · Preparing (F-OO-101), "Not in work orders yet" (F-OO-121: no "Nothing cut yet")', () => {
     const text = textOf(draw('overview-confirmed'))
-    for (const words of ['Confirmed · waiting for the deposit', 'Work orders are made after the deposit', 'Not in work orders yet', 'Nothing cut yet']) expect(text, words).toContain(words)
+    for (const words of ['Confirmed · Preparing', 'Not in work orders yet']) expect(text, words).toContain(words)
+    expect(text).not.toContain('Work orders are made after the deposit')
+    // F-OO-121: the card no longer says "Nothing cut yet" (each line's "—" and its pill say it).
+    expect(text).not.toContain('Nothing cut yet')
   })
 
   it('loading says it reads (no figure), a failed read says so in this part only with Try again', () => {
@@ -71,8 +79,11 @@ describe('the Overview cases draw in both languages, never a 0 for a step not co
   it('every overview word exists in both languages', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['tab.overview', 'tab.attention', 'overview.where', 'overview.progress', 'overview.progressHint', 'overview.notInWorkOrders', 'overview.afterDeposit', 'overview.piecesAsOf', 'overview.headline.waitingDeposit', 'overview.headline.shipped', 'overview.headline.delivered', 'overview.fact.who', 'overview.fact.exFactory', 'overview.fact.health', 'overview.fact.customer', 'overview.fact.inWork', 'overview.col.line', 'overview.sizes.label', 'overview.sizes.finish', 'overview.sizes.units', 'overview.sizes.openLines']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
-      for (const key of ['overview.ahead', 'overview.bundles', 'overview.total', 'overview.madeExtra', 'mtm.units']) expect(t(key, { count: 2, stage: 'x' }), `${locale}: ${key}`).not.toBe(key)
+      for (const key of ['tab.overview', 'tab.attention', 'overview.where', 'overview.progress', 'overview.notInWorkOrders', 'overview.piecesAsOf', 'overview.headline.shipped', 'overview.headline.delivered', 'overview.col.line', 'overview.sizes.label', 'overview.sizes.finish', 'overview.sizes.units', 'overview.sizes.openLines']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      for (const key of ['overview.total', 'mtm.units']) expect(t(key, { count: 2, stage: 'x' }), `${locale}: ${key}`).not.toBe(key)
+      // F-OO-103: section 1's own facts left the catalogue with the card's facts (Next dates' Promised row has its own words, F-OO-141).
+      for (const key of ['overview.fact.who', 'overview.fact.exFactory', 'overview.fact.health', 'overview.fact.customer', 'overview.fact.inWork', 'overview.afterDeposit', 'overview.exFactory', 'overview.exFactoryMovedOnly', 'overview.exFactoryMoved']) expect(t(key, { date: 'x', count: 1, days: '+1' }), `${locale}: ${key}`).toBe(key)
+      expect(t('overview.bundles', { count: 2, stage: 'x' }), `${locale}: overview.bundles`).toBe('overview.bundles')
       const p = createTranslator(locale, messagesFor(locale, ['production']).production!)
       expect(p('parts.pieces.stages.SHIPPED')).not.toBe('parts.pieces.stages.SHIPPED')
     }
@@ -81,9 +92,11 @@ describe('the Overview cases draw in both languages, never a 0 for a step not co
 
 // ---- F-SA-233: People, Next dates, Requests & changes, Linked records, Order facts ------------------------------------------------
 describe('Overview’s facts (F-SA-233)', () => {
-  it('requests & changes: the ONE waiting list on us and on the customer (F-OP-103), still to do, the latest amendment', () => {
+  // F-OO-202: rewritten — the deposit is a hold (Where it is now's strip), so the card lists no row of it: it holds requests only.
+  it('requests & changes: the ONE waiting list\'s request rows on us and on the customer (F-OP-103), still to do, the latest amendment', () => {
     const rows = waitingOf(CONFIRMED_READ, { requests: [], approvals: [], recordPayment: false, locale: 'en' })
-    expect(waitingCardOf(rows, CONFIRMED_READ, { amendments: { count: 2, latestRevision: 2, latestAt: '2026-11-12T16:48:00Z' } })).toMatchObject({ onUs: [], onCustomer: [{ kind: 'DEPOSIT', on: 'BRAND' }], still: [], latest: { revision: 2, at: '2026-11-12T16:48:00Z' }, nothing: false })
+    expect(rows).toMatchObject([{ kind: 'DEPOSIT', on: 'BRAND', place: 'HOLD' }])
+    expect(waitingCardOf(rows, CONFIRMED_READ, { amendments: { count: 2, latestRevision: 2, latestAt: '2026-11-12T16:48:00Z' } })).toMatchObject({ onUs: [], onCustomer: [], still: [], latest: { revision: 2, at: '2026-11-12T16:48:00Z' }, nothing: true })
     expect(waitingCardOf([], null, { amendments: { count: 0, latestRevision: null, latestAt: null } })).toEqual({ onUs: [], onCustomer: [], still: [], latest: null, nothing: true })
   })
 
@@ -186,29 +199,31 @@ describe('F-OP-103: the ONE waiting list — every blocker and open yes is one r
     expect(waitingOf(headlineWith([]), { ...inputs, approvals: [yesTask()], locale: 'it' })[0]!.words).toMatchObject({ phrase: { params: { kind: 'Modifica ordine' } } })
   })
 
-  it('oldest first (no known start last); on-us and on-customer counts; who acts next is the card\'s first row', () => {
+  // F-OO-202: rewritten — who acts next is gone (F14: the keeper's `waitingOn` stays the one rule, for the orders list and the portal);
+  // the card counts the request rows only; the holds and the dates are the same call's own lists, oldest first too.
+  it('oldest first (no known start last); the card counts the request rows on us and on the customer; holds and dates apart', () => {
     const rows = waitingOf(all, { ...inputs, approvals: [yesTask()] })
     const since = rows.map((row) => row.since)
     const known = since.filter((value): value is string => value !== null)
     expect(known).toEqual([...known].sort())
     expect(since.slice(-2)).toEqual([null, null])
-    expect(rows[0]).toMatchObject({ kind: 'DEPOSIT', since: '2026-10-28T15:00:00Z' })
+    expect(rows[0]).toMatchObject({ kind: 'DEPOSIT', since: '2026-10-28T15:00:00Z', place: 'HOLD' })
     const card = waitingCardOf(rows, null, { amendments: { count: 0, latestRevision: null, latestAt: null } })
-    expect(card.onUs.length).toBe(rows.filter((row) => row.on === 'US').length)
-    expect(card.onUs.map((row) => row.kind)).toContain('YES')
-    expect(card.onCustomer.map((row) => row.kind)).toEqual(['DEPOSIT', 'BRAND_PAUSE', 'APPROVAL', 'PARTNER_TASK'])
-    // A supplier's or a workshop's wait is production's: in neither count (Who acts next still names it when it comes first).
+    expect(card.onUs.map((row) => [row.kind, row.sub])).toEqual([['BRAND_REQUEST', 'PROBLEM'], ['YES', null], ['BRAND_REQUEST', 'COUNTER'], ['BRAND_REQUEST', 'COUNTER'], ['BRAND_REQUEST', 'REQUEST']])
+    expect(card.onCustomer.map((row) => row.kind)).toEqual(['APPROVAL', 'PARTNER_TASK'])
+    // A supplier's or a workshop's wait is a date (Next dates): in neither count.
     expect([...card.onUs, ...card.onCustomer].some((row) => row.on === 'SUPPLIER' || row.on === 'WORKSHOP')).toBe(false)
-    const next = whoActsNextOf(rows, HEADLINE)
-    expect(next.row).toBe(rows[0])
-    expect(next).toMatchObject({ who: 'BRAND', since: '2026-10-28T15:00:00Z', kind: 'record' })
-    expect(whoActsNextOf(waitingOf(headlineWith([]), { ...inputs, approvals: [yesTask()] }), HEADLINE)).toMatchObject({ who: 'US', kind: 'request' })
+    expect(rows.filter((row) => row.place === 'HOLD').map((row) => row.kind)).toEqual(['DEPOSIT', 'QUALITY_HOLD', 'BRAND_PAUSE', 'NO_MOVE'])
+    expect(rows.filter((row) => row.place === 'DATE').map((row) => [row.kind, row.sub])).toEqual([['SUBCONTRACT', null], ['GATE', null], ['BRAND_REQUEST', 'REPROMISE'], ['MATERIAL_SHORT', null]])
   })
 
-  it('R-22: the Changes badge counts the card\'s own rows — waiting on us, on the customer, still to do', () => {
+  it('R-22: the Changes badge counts the card\'s own rows — waiting on us, on the customer, still to do (F-OO-202: requests only)', () => {
     const rows = waitingOf(all, inputs)
     const card = waitingCardOf(rows, { ...PRODUCTION_READ, changes: { openRequests: [], stillToDo: { rows: [{ kind: 'WORK_ORDER_CHANGE', ref: null, words: { en: 'x', it: 'x' }, since: '2026-11-17T13:02:00Z', waitingOn: 'PLANNER', mayAct: true, requestId: null }], count: 1, workOrdersLeftOut: 0 } } }, { amendments: { count: 0, latestRevision: null, latestAt: null } })
     expect(changesBadgeOf(card)).toBe(card.onUs.length + card.onCustomer.length + 1)
+    // F-OO-202: 4 requests on us, 2 on the customer, 1 still — never a hold or a date (of the 14 rows only the 6 requests count; it was 13).
+    expect(changesBadgeOf(card)).toBe(rows.filter((row) => row.place === 'REQUEST').length + 1)
+    expect(changesBadgeOf(card)).toBe(7)
     expect(changesBadgeOf(waitingCardOf([], null, { amendments: { count: 0, latestRevision: null, latestAt: null } }))).toBe(0)
   })
 
@@ -251,8 +266,11 @@ describe('F-OP-103: the ONE waiting list — every blocker and open yes is one r
     const tab = readFileSync(new URL('../view/OverviewTab.tsx', import.meta.url), 'utf8')
     // F-OP-301: through the ONE call the badge and the Changes tab make too.
     expect(tab).toContain('const waiting = orderWaitingOf(order, model, locale)')
-    // F-OO-100: "Where it is now" is its own file; it reads the state of OverviewTab's one call.
-    expect(read('../view/overview/WhereCard.tsx')).toContain("const next = waiting.status === 'ready' ? waiting.next : null")
+    // F-OO-100: "Where it is now" is its own file. F-OO-103: it says no "who acts next" any more (Requests & changes' groups do), so it
+    // reads neither the list's first row nor the kept `headline.waiting`.
+    const where = read('../view/overview/WhereCard.tsx')
+    expect(where).not.toContain('waiting.next')
+    expect(where).not.toMatch(/headline\??\.waiting/)
     // R-21: the dock does not read this list (its pill names the thread).
     const dock = readFileSync(new URL('../dock/OrderDock.tsx', import.meta.url), 'utf8')
     expect(dock).not.toContain('waitingOf(')
@@ -308,18 +326,21 @@ describe('F-OP-104: Overview doors — the stages a real link, Open in Productio
     expect(source).toContain("onClick={() => frame?.openDoor?.('owner')}")
     expect(source).toContain("onClick={() => actions?.onDialog?.({ kind: 'promise' })}")
     expect(source).toContain('onClick={() => actions?.onRequestedChange?.()}')
-    expect(source).toContain("#line-${row.lineIds[0] ?? row.id}")
+    // F-OO-126: the line window's Open in Production lands on the work orders (was the line's row, #line-<id>).
+    expect(source).toContain("#work-orders`}>{t('doors.openInProduction')}")
     const model = overviewRules() // F-OO-100: model.ts and the section files (linked.ts builds the tab links)
     expect(model).not.toMatch(/`\$\{record\}\?tab=/)
   })
 
-  it('the requested date\'s Change…: edit mode on Lines, its field focused (the container\'s one focus); the field carries the id', async () => {
+  // F-OO-144 (order overview, review F7): the requested date's Change… opens its small dialog in the page's one slot — the hop to Lines
+  // went; the Lines edit mode's field keeps its id.
+  it('the requested date\'s Change…: its small dialog in the page\'s one slot (no hop to Lines); the Lines field keeps its id', async () => {
     const { REQUESTED_FIELD_ID } = await import('./model')
     const acts = readFileSync(new URL('../use-overview-acts.ts', import.meta.url), 'utf8')
-    expect(acts).toContain('input.startAmend?.()')
-    expect(acts).toContain('input.focus?.(REQUESTED_FIELD_ID)')
+    expect(acts).toContain("onRequestedChange: () => input.setDialog?.({ kind: 'requested' })")
+    expect(acts).not.toContain('input.focus?.(REQUESTED_FIELD_ID)')
     const container = readFileSync(new URL('../OrderRecord.tsx', import.meta.url), 'utf8')
-    expect(container).toContain('useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }) })')
+    expect(container).toContain('useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), setDialog /* F-OO-144 */')
     const lines = readFileSync(new URL('../view/LinesTab.tsx', import.meta.url), 'utf8')
     expect(lines).toContain('<DateField id={REQUESTED_FIELD_ID}')
     expect(REQUESTED_FIELD_ID).toBe('amend-requested-date')
@@ -345,30 +366,38 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
     ({ status: 'ready', read: { ...PRODUCTION_READ, headline: { ...HEADLINE, waiting: { ...HEADLINE.waiting, ...waiting, blockers } }, changes: { openRequests: [], stillToDo: { rows: still, count: still.length, workOrdersLeftOut: 0 } } } }) as never
   const page = (production: unknown, requests: unknown[] | null = [so2Request]) => ({ production: production as never, requests: requests ? { value: requests as never } : null, can: { recordPayment: false } })
 
-  it('SO-0002: two gates and a change request wait on us, a yes we asked waits on the customer — 3 + 1 everywhere, the badge 4', () => {
-    const waiting = orderWaitingOf({ openApprovals: [], amendments }, page(readWith(SO2_BLOCKERS, { on: 'BRAND', since: '2026-11-05T09:00:00Z' })), 'en')
+  // F-OO-202: rewritten (D8) — the two gates are dates (Next dates), so the card and the badge count the change request on us, the yes we
+  // asked of the customer and Still to do: SEED-SO-0002's 1 + 1 + 1 = 3 (it was 5: the two gates counted too).
+  it('SO-0002: a change request waits on us, a yes we asked on the customer, one step still to do — the badge 3; its two gates are dates', () => {
+    const still = { kind: 'WORK_ORDER_CHANGE', ref: null, words: { en: 'SEED-WO-0001: make 54 → 0', it: 'SEED-WO-0001: fai 54 → 0' }, since: '2026-11-16T09:00:00Z', waitingOn: 'PLANNER', mayAct: false, requestId: null }
+    const waiting = orderWaitingOf({ openApprovals: [], amendments }, page(readWith(SO2_BLOCKERS, { on: 'BRAND', since: '2026-11-05T09:00:00Z' }, [still])), 'en')
     if (waiting.status !== 'ready') throw new Error('ready')
-    expect(waiting.card.onUs.map((row) => row.kind)).toEqual(['GATE', 'GATE', 'BRAND_REQUEST'])
+    expect(waiting.card.onUs.map((row) => row.kind)).toEqual(['BRAND_REQUEST'])
     expect(waiting.card.onCustomer.map((row) => [row.kind, row.ref])).toEqual([['APPROVAL', { type: 'ApprovalRequest', id: '0190f0e2-6262-7000-8000-000000000001' }]])
-    expect(changesBadgeOf(waiting.card)).toBe(4)
-    // Who acts next is the card's first row (the oldest gate), its since the card's.
-    expect(waiting.next).toMatchObject({ who: 'US', since: '2026-11-02T08:00:00Z', row: waiting.rows[0] })
+    expect(waiting.card.still).toHaveLength(1)
+    expect(changesBadgeOf(waiting.card)).toBe(3)
+    // The old count (every row + still) was 5; the gates are Next dates' own rows now, counted there and only there.
+    expect(waiting.rows.length + waiting.card.still.length).toBe(5)
+    expect(waiting.dates.map((row) => [row.kind, row.ref?.id])).toEqual([['GATE', '0190f0e2-6161-7000-8000-000000000001'], ['GATE', '0190f0e2-6161-7000-8000-000000000002']])
+    expect(waiting.holds).toEqual([])
     // The change request's row opens the review window with the request the page read.
-    expect(waiting.card.onUs[2]!.door).toMatchObject({ kind: 'answer', request: { id: '0190f0e2-3080-7000-8000-000000000821' } })
+    expect(waiting.card.onUs[0]!.door).toMatchObject({ kind: 'answer', request: { id: '0190f0e2-3080-7000-8000-000000000821' } })
   })
 
-  it('SO-0003: nothing waits — Who acts next says nobody (the card\'s "Nothing waits"), never the kept "Waiting on us · 5 d"', () => {
+  // F-OO-202: rewritten — no "who acts next" any more (F14): the call says nothing waits in every place; the kept wait is read by nobody.
+  it('SO-0003: nothing waits — no request, no hold, no date, badge 0 (never the kept "Waiting on us · 5 d"); a step still to do counts', () => {
     const waiting = orderWaitingOf({ openApprovals: [], amendments }, page(readWith([], { on: 'US', since: '2026-11-14T17:00:00Z' }), null), 'en')
     if (waiting.status !== 'ready') throw new Error('ready')
     expect(waiting.card.nothing).toBe(true)
     expect(changesBadgeOf(waiting.card)).toBe(0)
-    expect(waiting.next).toEqual({ who: null, since: null, kind: 'record', row: null, still: null })
-    // A Still to do row (the card's third list) names who acts when no waiting row stands: ours, or the customer's.
+    expect([waiting.rows, waiting.holds, waiting.dates]).toEqual([[], [], []])
+    expect('next' in waiting).toBe(false)
+    // A Still to do row (the card's third list) is something to do: the card is not empty and the badge counts it.
     const still = { kind: 'EXTRA_PIECES', ref: null, words: { en: 'Scrap 2', it: 'Scarta 2' }, since: '2026-11-17T13:02:00Z', waitingOn: 'CUSTOMER', mayAct: false, requestId: null }
     const withStill = orderWaitingOf({ openApprovals: [], amendments }, page(readWith([], { on: 'US', since: '2026-11-14T17:00:00Z' }, [still]), null), 'en')
     if (withStill.status !== 'ready') throw new Error('ready')
     expect(withStill.card.nothing).toBe(false)
-    expect(withStill.next).toMatchObject({ who: 'BRAND', since: '2026-11-17T13:02:00Z', still })
+    expect(changesBadgeOf(withStill.card)).toBe(1)
   })
 
   it('walk #3: before the production read is in, nothing is claimed (loading); a failed read says so; never "Nothing waits"', () => {
@@ -384,23 +413,27 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
     expect(textOf(draw('f-op-301-reading-changes'))).toContain('Loading Waiting on the customer')
   })
 
-  it('the pages agree: Overview says 3 + 1, the Changes tab lists the same 3 and the yes we asked; SO-0003\'s header says nothing waits', () => {
+  // F-OO-202: rewritten — the cards and the Changes tab list the request rows (the two gates went to Next dates): 1 + 1 on both pages.
+  it('the pages agree: Overview says 1 + 1, the Changes tab lists the same request and the yes we asked; SO-0003\'s header says nothing waits', () => {
     const overview = textOf(draw('f-op-301-so2-overview'))
-    expect(overview).toContain('Waiting on us: 3')
+    expect(overview).toContain('Waiting on us: 1')
     expect(overview).toContain('Waiting on Moto Demo S.r.l.: 1')
+    expect(overview).not.toContain('Waiting on us: 3')
     const changes = textOf(draw('f-op-301-so2-changes'))
-    expect(changes).toContain('3 waiting')
-    expect(changes).toContain('1 waiting')
-    expect(changes).toContain('A gate is not passed yet')
+    expect(changes.split('1 waiting').length - 1).toBe(2)
+    expect(changes).not.toContain('3 waiting')
+    expect(changes).not.toContain('A gate is not passed yet')
     expect(changes).toContain("Waiting for the customer's yes")
     expect(changes).not.toContain('Nothing waits on the customer')
     expect(changes).not.toContain('Nothing waits on us')
     // On Changes no row has a door back to Changes itself.
     expect(changes).not.toContain('Changes ›')
     const so3 = textOf(draw('f-op-301-so3-overview')).replace(/\s+/g, ' ')
-    // The header's fact says the card's own words (the kept "Waiting on us · 5 d" is not said); the card says them too.
-    expect(so3).toContain('Who acts next Nothing waits on us or on the customer')
-    expect(so3.split('Nothing waits on us or on the customer').length - 1).toBe(2)
+    // F-OO-103: rewritten — section 1 names no wait any more, so the kept "Waiting on us · 5 d" is said nowhere; the card says its own
+    // words once (it was twice: Who acts next and the card).
+    expect(so3).not.toContain('Who acts next')
+    expect(so3).not.toContain('Waiting on us · 5 d')
+    expect(so3.split('Nothing waits on us or on the customer').length - 1).toBe(1)
     // The badge and the dot read the same call (no second rule in the page).
     const page = readFileSync(new URL('../view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(page).toContain('const waiting = orderWaitingOf(order, model, locale)')
@@ -420,7 +453,8 @@ describe('F-OP-302: Progress by line — the line column has room and its pills 
       expect(html, id).not.toMatch(/class="fw-so-cell-sub"[^>]*>[^<]*<span class="nds-tag/)
     }
     const confirmed = draw('overview-confirmed')
-    expect(confirmed).toMatch(/<span class="fw-so-inline"><span class="nds-tag[^"]*">Not in work orders yet<\/span>/)
+    // F-OO-121: a pill in the line cell keeps its words in its title (one line; the line's window shows them whole).
+    expect(confirmed).toMatch(/<span class="fw-so-inline"><span class="nds-tag[^"]*"[^>]*>Not in work orders yet<\/span>/)
   })
 })
 // ---- end F-OP-302
@@ -432,7 +466,8 @@ describe('F-OP-304: Still to do — "Nothing left to do" only when nothing stand
       const text = textOf(draw('f-op-304-still-extra', locale))
       expect(text).not.toContain(locale === 'en' ? 'Nothing left to do for the accepted changes.' : 'Per le modifiche accettate non resta nulla da fare.')
       expect(text).toContain(locale === 'en' ? 'Made extra' : 'Fatti in più')
-      expect(text).toContain(locale === 'en' ? 'Line 10 · Made extra: 1' : 'Riga 10 · Fatti in più: 1')
+      // F-OO-121: the API's words since B-OO-015 (the floor holds a cut order's planned lines too).
+      expect(text).toContain(locale === 'en' ? 'Line 10 · 1 48 more than ordered: cut or planned to cut' : "Riga 10 · 1 48 in più dell'ordine: tagliati o da tagliare")
     }
     expect(textOf(draw('f-op-301-so2-changes'))).toContain('Nothing left to do for the accepted changes.')
   })
@@ -492,8 +527,11 @@ describe('F-OO-100: OverviewTab keeps the layout, each card is its own file, eac
 
   it('model.ts keeps what more than one place reads (the ONE waiting list among it); each section\'s rules live in its own file', () => {
     const model = read('./model.ts')
-    for (const name of ['export function orderWaitingOf(', 'export function waitingOf(', 'export function whoActsNextOf(', 'export function healthInputOf(', 'export function bandHealthOf(', 'export const readOf', 'export function mergeRead(', 'export const REQUESTED_FIELD_ID', 'export const say']) expect(model, name).toContain(name)
-    const homes = { where: ['headlineOf', 'stageStripOf', 'preparingNote', 'inWorkOf', 'exFactoryOf'], progress: ['lineStageOf', 'lineRowsOf', 'totalOf', 'lineSizesOf', 'walkOf'], people: ['placeLinesOf' /* F-OO-134: replaces placeWords */], dates: ['nextDatesOf'], linked: ['linkedRecordsOf'] } as const
+    for (const name of ['export function orderWaitingOf(', 'export function waitingOf(', 'export function healthInputOf(', 'export function bandHealthOf(', 'export const readOf', 'export function mergeRead(', 'export const REQUESTED_FIELD_ID', 'export const say']) expect(model, name).toContain(name)
+    // F-OO-202 (F14): "who acts next" left with its only drawing — the keeper's waitingOn is the one rule.
+    expect(model).not.toContain('export function whoActsNextOf(')
+    // F-OO-103: where.ts keeps the headline and the stages (the facts' rules left with the facts).
+    const homes = { where: ['headlineOf', 'stageStripOf'], progress: ['lineRowsOf', 'totalOf', 'lineSizesOf', 'figureFaceOf', 'linePillsOf', 'madeExtraSizesOf'] /* F-OO-121: walkOf and lineStageOf went */, people: ['placeLinesOf' /* F-OO-134: replaces placeWords */], dates: ['nextDatesOf'], linked: ['linkedRecordsOf'] } as const
     for (const [section, names] of Object.entries(homes)) {
       const text = read(`./${section}.ts`)
       for (const name of names) {
@@ -627,7 +665,200 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
     // orders.css lost only the old grid rule (the order page lane's file: nothing else of it changed).
     const orders = read('../../orders.css')
     expect(orders).not.toMatch(/\.fw-so-overview-cards \{/)
-    for (const kept of ['.fw-so-overview {', '.fw-so-where {', '.fw-so-datelist {', '.fw-so-linked {', '.fw-so-countbtn {']) expect(orders, kept).toContain(kept)
+    for (const kept of ['.fw-so-overview {', '.fw-so-datelist {', '.fw-so-linked {', '.fw-so-countbtn {']) expect(orders, kept).toContain(kept)
+    // F-OO-103: "Where it is now"'s own rules left it for the card's own file.
+    expect(read('../view/overview/where.css')).toContain('.fw-so-where {')
   })
 })
 // ---- end F-OO-201
+
+// ---- F-OO-102 (order overview §1.2; review F11): the headline and the dots read ONE state — the overview drawn before, after and without production
+describe('F-OO-102: "Where it is now" per state — waiting no dots, shipped every stage done, cancelled where the work had reached', () => {
+  const milestones = (html: string, state: string) => html.match(new RegExp(`class="nds-milestone" data-state="${state}"`, 'g'))?.length ?? 0
+
+  it('in production and shipped: the dots and their quiet line ("set by the floor and quality"); shipped is every stage done, none now', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const setBy = locale === 'en' ? 'Stages are set by the floor and quality, never by hand' : 'Le fasi le segnano il reparto e la qualità, mai a mano'
+      const now = draw('overview', locale)
+      expect(milestones(now, 'current'), locale).toBe(1)
+      expect(textOf(now)).toContain(setBy)
+      const shipped = draw('f-oo-102-shipped', locale)
+      expect(milestones(shipped, 'done'), locale).toBe(5)
+      expect(milestones(shipped, 'current') + milestones(shipped, 'todo'), locale).toBe(0)
+      expect(textOf(shipped)).toMatch(locale === 'en' ? /Shipped \d{2}\/\d{2}\/\d{4}/ : /Spedito il \d{2}\/\d{2}\/\d{4}/)
+      expect(textOf(shipped)).toContain(setBy)
+      // The link never says "now" of a shipped order.
+      expect(shipped).toContain(locale === 'en' ? 'aria-label="Open the work orders in Production · every stage done"' : 'aria-label="Apri gli ordini di lavoro in Produzione · tutte le fasi completate"')
+    }
+  })
+
+  it('waiting for a yes and cancelled: no dots at all (never "Preparing · Now"), the quiet line says why — and no "set by" line', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const waiting = draw('f-oo-102-waiting', locale)
+      expect(waiting, locale).not.toContain('class="nds-milestones')
+      expect(textOf(waiting)).toContain(locale === 'en' ? 'Waiting for a yes' : 'In attesa di approvazione')
+      expect(textOf(waiting)).toContain(locale === 'en' ? 'Production starts once the order is confirmed' : "La produzione parte quando l'ordine è confermato")
+      const cancelled = draw('f-oo-102-cancelled', locale)
+      expect(cancelled, locale).not.toContain('class="nds-milestones')
+      expect(textOf(cancelled)).toContain(locale === 'en' ? 'Work had reached Cutting when it was cancelled' : 'Il lavoro era arrivato a Taglio quando è stato annullato')
+      for (const html of [waiting, cancelled]) expect(textOf(html)).not.toContain(locale === 'en' ? 'Stages are set by the floor' : 'Le fasi le segnano il reparto')
+    }
+  })
+})
+// ---- end F-OO-102
+
+// ---- F-OO-103 (order overview §1.1, §1.6; review F8, F14): the section 1 frame — what it keeps, what left and where each lives on ----
+describe('F-OO-103: "Where it is now" keeps its title, Live, the headline and the stages; the facts left, each to one other place', () => {
+  /** Section 1's own markup: from its card up to the next card's heading (Progress by line). */
+  const sectionOne = (html: string): string => {
+    const from = html.indexOf('fw-so-where')
+    const title = html.indexOf('<h2 class="fw-so-h2">', from)
+    return html.slice(from, html.indexOf('<h2 class="fw-so-h2">', title + 1))
+  }
+  const CASES = ['overview', 'overview-confirmed', 'f-oo-102-waiting', 'f-oo-102-shipped', 'f-oo-102-cancelled', 'f-op-301-so2-overview', 'f-op-301-so3-overview']
+  const GONE = {
+    en: ['Who acts next', 'Waiting on', 'Nothing waits', 'Ex-factory', 'moved', 'Health', 'At risk', 'On track', 'Urgent', 'In work', 'Bundles in work', 'Work orders are made after the deposit'],
+    it: ['Chi deve agire', 'Tocca a', 'Niente aspetta', 'Franco fabbrica', 'spostata', 'A rischio', 'Urgente', 'Fasci in lavorazione', "Gli ordini di lavoro si fanno dopo l'acconto"],
+  } as const
+
+  it('design cases: none of the removed facts in section 1 — Who acts next, Ex-factory, Health, Customer · Urgent, In work, the deposit note', () => {
+    for (const locale of ['en', 'it'] as const) {
+      for (const id of CASES) {
+        const html = sectionOne(draw(id, locale))
+        expect(html, `${locale} ${id}`).toContain(locale === 'en' ? 'Where it is now' : 'A che punto è')
+        const text = textOf(html)
+        for (const words of GONE[locale]) expect(text, `${locale} ${id}: ${words}`).not.toContain(words)
+        // No facts grid (the DS KeyValue) in section 1 any more.
+        expect(html, `${locale} ${id}`).not.toContain('nds-kv')
+      }
+    }
+    // Each fact lives on in ONE other place: the band keeps At risk and the customer's Urgent; Requests & changes says who waits.
+    const page = textOf(draw('overview'))
+    for (const words of ['At risk', 'Urgent (customer)', 'Waiting on us: 1']) expect(page, words).toContain(words)
+  })
+
+  it('it keeps the title, "Live · as of", the headline (with its quiet line) and the stages\' one link, in this order', () => {
+    const html = sectionOne(draw('overview'))
+    const at = ['<h2 class="fw-so-h2">Where it is now</h2>', 'fw-prp-fresh', '<p class="fw-so-headline">In production · Sewing</p>', 'class="fw-prp-strip-go"', 'Stages are set by the floor and quality, never by hand'].map((part) => html.indexOf(part))
+    expect(at.every((index) => index >= 0), at.join(',')).toBe(true)
+    expect([...at].sort((a, b) => a - b)).toEqual(at)
+    // Waiting for a yes and cancelled keep the title, Live and the headline with its quiet line; there are no dots to link.
+    for (const id of ['f-oo-102-waiting', 'f-oo-102-cancelled']) {
+      const frame = sectionOne(draw(id))
+      expect(frame, id).toContain('fw-prp-fresh')
+      expect(frame, id).toMatch(/<p class="fw-so-headline">[^<]+<\/p><p class="fw-so-hint">[^<]+<\/p>/)
+      expect(frame, id).not.toContain('fw-prp-strip')
+    }
+  })
+
+  it('the frame\'s source: a strips slot and a moves slot in place, no fact\'s part left; its own where.css (tokens only, no container of its own)', () => {
+    const card = read('../view/overview/WhereCard.tsx')
+    const strips = card.indexOf('F-OO-103: the strips slot')
+    const stages = card.indexOf('<StageStrip')
+    const moves = card.indexOf('F-OO-103: the moves slot')
+    expect(strips).toBeGreaterThan(card.indexOf('className="fw-so-headline"'))
+    expect(stages).toBeGreaterThan(strips)
+    expect(moves).toBeGreaterThan(stages)
+    for (const gone of ['KeyValue', 'WaitingOnPill', 'HealthPill', 'exFactoryOf', 'inWorkOf', 'preparingNote', 'whoActsNext', "'overview.fact.", 'board.customerUrgent']) expect(card, gone).not.toContain(gone)
+    expect(card).toContain("import './where.css'")
+    const css = read('../view/overview/where.css')
+    for (const rule of ['.fw-so-where {', '.fw-so-where-said {', '.fw-so-headline {', '.fw-so-where-stages {']) expect(css, rule).toContain(rule)
+    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|\bpx\b/)
+    expect(css).not.toMatch(/container(?:-type|-name)?:/)
+    // so/orders.css lost the card's rules (the order page lane's file: only these lines), and keeps a pointer to where they went.
+    const orders = read('../../orders.css')
+    expect(orders).not.toMatch(/\.fw-so-where \{|\.fw-so-headline \{/)
+    expect(orders).toContain('record/view/overview/where.css')
+  })
+})
+// ---- end F-OO-103
+
+// ---- F-OO-202 (review F15, F14; plan §9; Owner D8): ONE waiting call with places — the domain's map; the card holds requests only ----
+describe('F-OO-202: one waiting call, each row in its place — holds to Where it is now, dates to Next dates, requests to the card and the badge', () => {
+  const amendments = { count: 0, latestRevision: null, latestAt: null }
+  const words = (en: string) => ({ en, it: `${en} (it)` })
+  const blocker = (kind: string, on: 'US' | 'BRAND' | 'SUPPLIER' | 'WORKSHOP', since: string | null, ref: { type: string; id: string } | null = null, sub: 'REQUEST' | 'COUNTER' | 'PROBLEM' | 'REPROMISE' | null = null) => ({ kind, on, words: words(kind), since, ref, sub })
+  const task = (kind: string, taskId: string, requestedAt: string) =>
+    ({ taskId, kind, kindLabel: { en: kind, it: kind }, requestedAt, requester: { name: 'Luca Prova', me: false }, approver: { kind: 'ROLE' as const, name: 'Finance', me: false }, version: 1, requireStepUp: false, approve: { allowed: true, why: null }, reject: { allowed: true, why: null }, withdraw: { allowed: false, why: null } })
+  const stateOf = (blockers: ReturnType<typeof blocker>[], approvals: ReturnType<typeof task>[] = [], still: unknown[] = []) => {
+    const production = { status: 'ready', read: { ...PRODUCTION_READ, headline: { ...HEADLINE, waiting: { ...HEADLINE.waiting, blockers } }, changes: { openRequests: [], stillToDo: { rows: still, count: still.length, workOrdersLeftOut: 0 } } } } as never
+    const state = orderWaitingOf({ openApprovals: approvals, amendments }, { production, requests: { value: [] }, can: { recordPayment: true } }, 'en')
+    if (state.status !== 'ready') throw new Error('ready')
+    return state
+  }
+
+  it('each kind lands in the place the domain gives it — keyed on kind + sub (a refused new date is a date), a yes by its kind; an unknown kind stays a request', async () => {
+    const domain = await import('@nexus/factory-domain/production-brand/waiting')
+    const blockers = domain.BLOCKER_KINDS.flatMap((kind) => (kind === 'BRAND_REQUEST' ? domain.BLOCKER_SUBS.map((sub) => blocker(kind, 'US', '2026-11-10T09:00:00Z', { type: 'OrderChangeRequest', id: `r-${sub}` }, sub)) : [blocker(kind, domain.BLOCKER_OWNER[kind], '2026-11-10T09:00:00Z', { type: 'Record', id: kind })]))
+    const state = stateOf(blockers, domain.ORDER_YES_KINDS.map((kind, index) => task(kind, `t-${index}`, '2026-11-10T09:00:00Z')))
+    for (const row of state.rows) {
+      const want = row.door.kind === 'yes' ? domain.YES_PLACE[row.door.task.kind as (typeof domain.ORDER_YES_KINDS)[number]] : domain.placeOf({ kind: row.kind as (typeof domain.BLOCKER_KINDS)[number], sub: row.sub as (typeof domain.BLOCKER_SUBS)[number] | null })
+      expect(row.place, row.key).toBe(want)
+    }
+    const placeOfRow = (kind: string, sub: string | null = null) => state.rows.find((row) => row.kind === kind && row.sub === sub)!.place
+    // The review's settled map (F3, F15): holds stop the work, dates have a day, requests need an answer.
+    for (const kind of ['DEPOSIT', 'BRAND_PAUSE', 'QUALITY_HOLD', 'NONCONFORMANCE', 'RELEASE_CHECK', 'NO_MOVE']) expect(placeOfRow(kind), kind).toBe('HOLD')
+    for (const kind of ['GATE', 'MATERIAL_SHORT', 'SUBCONTRACT', 'CUSTOMER_MATERIAL']) expect(placeOfRow(kind), kind).toBe('DATE')
+    for (const kind of ['APPROVAL', 'PARTNER_TASK']) expect(placeOfRow(kind), kind).toBe('REQUEST')
+    expect(['REQUEST', 'COUNTER', 'PROBLEM', 'REPROMISE'].map((sub) => placeOfRow('BRAND_REQUEST', sub))).toEqual(['REQUEST', 'REQUEST', 'REQUEST', 'DATE'])
+    const yes = state.rows.filter((row) => row.kind === 'YES').map((row) => [row.door.kind === 'yes' ? row.door.task.kind : null, row.place])
+    expect(yes).toEqual([['SALES_ORDER', 'HOLD'], ['SALES_ORDER_CHANGE', 'REQUEST'], ['CREDIT_OVERRIDE', 'HOLD']])
+    // Never hidden: a kind or a yes this page does not know yet is a request (on the card and the badge).
+    const unknown = stateOf([blocker('SOMETHING_NEW', 'US', null)], [task('SOME_OTHER_YES', 't-x', '2026-11-11T09:00:00Z')])
+    expect(unknown.rows.map((row) => row.place)).toEqual(['REQUEST', 'REQUEST'])
+    expect(changesBadgeOf(unknown.card)).toBe(2)
+  })
+
+  it('the card holds the request rows only; the holds and the dates are counted apart, never twice — every row in exactly one place', () => {
+    const blockers = [
+      blocker('BRAND_REQUEST', 'US', '2026-11-18T09:00:00Z', { type: 'OrderChangeRequest', id: 'r-open' }, 'REQUEST'),
+      blocker('BRAND_REQUEST', 'US', '2026-11-12T09:00:00Z', { type: 'ApprovalRequest', id: 'a-refused' }, 'REPROMISE'),
+      blocker('APPROVAL', 'BRAND', '2026-11-14T09:00:00Z', { type: 'ApprovalRequest', id: 'a-1' }),
+      blocker('DEPOSIT', 'BRAND', '2026-10-28T15:00:00Z', { type: 'DepositRequest', id: 'd-1' }),
+      blocker('BRAND_PAUSE', 'BRAND', '2026-11-13T09:00:00Z', { type: 'WorkOrder', id: 'wo-1' }),
+      blocker('BRAND_PAUSE', 'BRAND', '2026-11-13T09:00:00Z', { type: 'WorkOrder', id: 'wo-2' }),
+      blocker('QUALITY_HOLD', 'US', '2026-11-11T09:00:00Z', { type: 'WorkOrder', id: 'wo-3' }),
+      blocker('GATE', 'US', '2026-11-09T09:00:00Z', { type: 'OrderGate', id: 'g-1' }),
+      blocker('MATERIAL_SHORT', 'SUPPLIER', null),
+      blocker('SUBCONTRACT', 'WORKSHOP', '2026-11-08T09:00:00Z', { type: 'WorkOrder', id: 'wo-4' }),
+    ]
+    const still = { kind: 'WORK_ORDER_CHANGE', ref: null, words: { en: 'x', it: 'x' }, since: '2026-11-17T13:02:00Z', waitingOn: 'PLANNER', mayAct: true, requestId: null }
+    const state = stateOf(blockers, [task('CREDIT_OVERRIDE', 't-credit', '2026-11-01T09:00:00Z'), task('SALES_ORDER_CHANGE', 't-change', '2026-11-10T08:00:00Z')], [still])
+    const keys = (rows: readonly WaitingRow[]) => rows.map((row) => row.key)
+    const placed = [...keys(state.card.onUs), ...keys(state.card.onCustomer), ...keys(state.holds), ...keys(state.dates)]
+    expect(new Set(placed).size, 'never twice').toBe(placed.length)
+    expect([...placed].sort(), 'every row once').toEqual([...keys(state.rows)].sort())
+    expect(state.card.onUs.map((row) => [row.kind, row.place])).toEqual([['YES', 'REQUEST'], ['BRAND_REQUEST', 'REQUEST']])
+    expect(state.card.onCustomer.map((row) => row.kind)).toEqual(['APPROVAL'])
+    // No folding here (F-OO-104 groups the holds into one strip per kind): the customer's pause on two work orders is two rows, oldest first.
+    expect(state.holds.map((row) => [row.kind, row.ref?.id ?? null])).toEqual([['DEPOSIT', 'd-1'], ['YES', null], ['QUALITY_HOLD', 'wo-3'], ['BRAND_PAUSE', 'wo-1'], ['BRAND_PAUSE', 'wo-2']])
+    expect(state.dates.map((row) => [row.kind, row.sub])).toEqual([['SUBCONTRACT', null], ['GATE', null], ['BRAND_REQUEST', 'REPROMISE'], ['MATERIAL_SHORT', null]])
+    // changesBadgeOf = request rows + Still to do: 2 on us + 1 on the customer + 1 still (the credit yes, the holds and the dates are not in it).
+    expect(changesBadgeOf(state.card)).toBe(4)
+    // The Changes dot no longer lights for a credit yes this reader decides (it sits with the holds, section 1); an old change's yes still does.
+    expect(state.card.onUs.some((row) => row.door.kind === 'yes' && row.door.task.kind === 'CREDIT_OVERRIDE')).toBe(false)
+    expect(changesDotOf(stateOf([], [task('CREDIT_OVERRIDE', 't-credit', '2026-11-01T09:00:00Z')]).card)).toBe(false)
+    expect(changesDotOf(stateOf([], [task('SALES_ORDER_CHANGE', 't-change', '2026-11-10T08:00:00Z')]).card)).toBe(true)
+    // After production only the requests stay in the read (B-OO-007); the same call then has no hold and no date to hand out.
+    const shipped = stateOf(blockers.filter((row) => row.kind === 'BRAND_REQUEST' && row.sub === 'REQUEST'))
+    expect([shipped.holds, shipped.dates, shipped.card.onUs.map((row) => row.kind)]).toEqual([[], [], ['BRAND_REQUEST']])
+  })
+
+  it('source: no whoActsNextOf and no `next` left; the places come from the domain (no web map); the badge, the tab and the cards call it unchanged', () => {
+    const model = read('./model.ts')
+    for (const gone of ['whoActsNextOf(', 'interface WhoActsNext', 'next: WhoActsNext', 'REQUEST_KINDS']) expect(model, gone).not.toContain(gone)
+    expect(model).toContain("from '@nexus/factory-domain/production-brand/waiting'")
+    expect(model).toMatch(/placeOf\(\{ kind: blocker\.kind as BlockerKind, sub: blocker\.sub \?\? null \}\)/)
+    expect(model).toContain('YES_PLACE[kind as OrderYesKind]')
+    // No place is written by hand in the web: no `GATE: 'DATE'`-like map of its own.
+    expect(model).not.toMatch(/\b[A-Z_]+:\s*'(?:HOLD|DATE|REQUEST)'/)
+    // The keeper's waitingOn stays the ONE rule of who the order waits on (the orders list and the portal read it); the web never copies it.
+    const domain = readFileSync(new URL('../../../../../../../../packages/factory-domain/src/production-brand/waiting.ts', import.meta.url), 'utf8')
+    expect(domain).toContain('export function waitingOn(blockers: readonly Blocker[]): Waiting {')
+    expect(model).not.toContain('waitingOn(')
+    // OrderRecordView (the badge and the dot), RequestsSection (the Changes tab) and OverviewTab (the cards) make the same call as before.
+    for (const file of ['../view/OrderRecordView.tsx', '../view/RequestsSection.tsx', '../view/OverviewTab.tsx']) expect(read(file), file).toContain('const waiting = orderWaitingOf(order, model, locale)')
+    for (const file of ['../view/OrderRecordView.tsx', '../view/RequestsSection.tsx', '../view/OverviewTab.tsx', '../view/overview/WhereCard.tsx', '../view/overview/RequestsCard.tsx']) expect(read(file), file).not.toMatch(/waiting\.next\b|whoActsNext/)
+  })
+})
+// ---- end F-OO-202
