@@ -44,6 +44,7 @@ import { amendBodyOf, amendHeld, draftOf } from '../daily-model' // F-OO-144: Re
 import type { MilestonesActions, MilestonesModel } from '../../../planning/milestones/view-model' // F-OO-145: Planning's gate dialogs in place
 import type { CreditState } from './overview/where' // F-OO-106: the order's own credit hold
 import type { Words } from './overview/api' // F-MS-102: a refusal of the stage set by hand in the domain's own words
+import type { StageByHandAsk } from './overview/stage-by-hand' // F-MS-103: what the stage dialog sends
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -514,6 +515,11 @@ export interface OrderRecordActions {
   gateActs?: MilestonesActions
   /** F-OO-106: the credit strip's own acts — the dialogs' Check again and Ask (the page's one write), read the credit again. */
   credit?: { readonly onCheck?: () => void; readonly onAsk?: (checkId: string, note: string) => void; readonly onRetry?: () => void }
+  /**
+   * F-MS-103 (set the stage by hand): the dialog's Set / Change (the stage, the reason, the note as typed; the headline's production
+   * version is sent) and Clear…'s confirm — each through the page's one write; a refusal stays in its dialog.
+   */
+  stageHand?: { readonly onSet?: (ask: StageByHandAsk & { readonly mode: 'set' | 'change' }) => void; readonly onClear?: () => void }
   /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
   people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
   /** F-CP-142: the Price check card (Customer's price…, Take them over, Try again) and the ONE window's own actions. */

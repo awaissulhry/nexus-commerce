@@ -300,3 +300,35 @@ export type OrderMilestones = z.infer<typeof milestonesSchema>
 export function getOrderMilestones(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<OrderMilestones> {
   return api.get(`/sales/orders/${seg(orderId)}/milestones`, { schema: milestonesSchema, signal })
 }
+
+// ---- F-MS-103 (set the stage by hand; B-MS-005's shape, R1, R9): set, change and clear the order's stage by hand ----------------------
+/**
+ *   PUT    /production/brand-orders/:orderId/stage   {stage: CUTTING | SEWING | QUALITY, reasonCode, note?, version}   production.brand.manage
+ *   DELETE /production/brand-orders/:orderId/stage?version=                                                         production.brand.manage
+ *
+ * `version` is the production row's as the headline read it — a required key, null only when the order has no row yet (the set makes it
+ * under the keeper's lock, R1); a stale one is a 409 ("The stage changed meanwhile"). The API judges against the live floor under the
+ * lock; another customer's order answers 404 in the words of an unknown id (the brand wall). The answer: the floor's stage, the stage
+ * the customer reads now, the hand stage standing (or null) and the row's new version.
+ */
+export const stageByHandAnswerSchema = z.object({
+  orderId: z.string(),
+  floor: z.enum(BRAND_STAGES).nullable(),
+  stage: z.enum(BRAND_STAGES).nullable(),
+  byHand: z.object({ stage: z.enum(BRAND_STAGES), reasonCode: z.string(), note: z.string().nullable(), setAt: instant, setBy: z.object({ id: z.string(), name: z.string() }).nullable() }).nullable(),
+  version: z.number(),
+})
+export type StageByHandAnswer = z.infer<typeof stageByHandAnswerSchema>
+
+const stagePath = (orderId: string) => `/production/brand-orders/${seg(orderId)}/stage`
+
+/** PUT — set the stage by hand, or change it (the note only when typed; the version always, null only without a row). */
+export function setBrandStage(api: ApiClient, orderId: string, body: { readonly stage: string; readonly reasonCode: string; readonly note?: string; readonly version: number | null }, idempotencyKey: string): Promise<StageByHandAnswer> {
+  return api.request('PUT', stagePath(orderId), { body: { stage: body.stage, reasonCode: body.reasonCode, ...(body.note ? { note: body.note } : {}), version: body.version }, schema: stageByHandAnswerSchema, idempotencyKey })
+}
+
+/** DELETE — clear it: the stage goes back to the floor's (its own day), never told. */
+export function clearBrandStage(api: ApiClient, orderId: string, version: number | null, idempotencyKey: string): Promise<StageByHandAnswer> {
+  return api.request('DELETE', stagePath(orderId), { query: version !== null ? { version } : {}, schema: stageByHandAnswerSchema, idempotencyKey })
+}
+// ---- end F-MS-103

@@ -40,8 +40,9 @@ import { Tag } from '@nexus/ui/primitives'
 import { Hand, Lock } from 'lucide-react'
 import { formatDateTime } from '../../../../../../lib/i18n/format'
 import type { PlainStage } from '../../../../../../lib/production/model'
-import { handDoorOf, handRowOf, type HandDoor, type HandRow, type HandWords } from '../../overview/where'
+import { handDoorOf, handRowOf, type HandDoor, type HandRow } from '../../overview/where'
 // ---- end F-MS-102
+import { StageHandDialogs, useSayHand } from './StageByHandDialog' // F-MS-103: the dialog (Set / Change) and Clear…'s confirm
 
 /**
  * F-OO-100 (order overview lane: one file per card) — "Where it is now".
@@ -132,19 +133,14 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
       <Moves order={order} model={model} actions={actions} />
       {/* F-OO-106: the credit strip's dialogs, in the page's one slot (Overview's own: use-overview-acts). */}
       <CreditDialogs order={order} model={model} actions={actions} />
+      {/* F-MS-103: the stage set by hand — Set / Change (one dialog) and Clear…, in the page's one slot (use-overview-acts). */}
+      <StageHandDialogs order={order} model={model} actions={actions} />
     </Card>
   )
 }
 
 // ---- F-MS-102 (set the stage by hand, 04 §2.2–2.5, §8): the hand stage's row — the card's shared row, ONE place ----------------------
-/** The row's and the door's words: the orders catalogue, production's (`ns`), or the domain's own words in the page's language. */
-function useSayHand(): (words: HandWords | null) => string | null {
-  const t = useT('orders')
-  const w = useProductionWords()
-  const locale = useLocale()
-  return (words) => (!words ? null : 'key' in words ? (words.ns === 'production' ? w.t(words.key, words.params) : t(words.key, words.params)) : say(words, locale))
-}
-
+// F-MS-103: its words (useSayHand) are the dialog's, shared from StageByHandDialog.tsx.
 /**
  * The card's shared row (mark | words | doors) under the quiet line, with a left rule in the info tone (warning after 7 days): the DS
  * Tag "Set by hand", then the stage, the office person who set it, when and why; what the floor's counts say (or that no work order
