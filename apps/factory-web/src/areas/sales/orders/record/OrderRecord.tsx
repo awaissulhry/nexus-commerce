@@ -582,7 +582,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // ---- F-SA-239: what a due part reads (the latest closures, through a ref the timer calls) ----
   runPartsRef.current = (parts) => {
     const open = dialogRef.current
-    const typed = !!lines.amendRef.current || (!!open && open.kind !== 'depositLink' && open.kind !== 'depositPayment' && open.kind !== 'compare')
+    // Z02 cleanup (W11's note): the credit's Check again dialog holds nothing typed (it only says what the check does): a live change
+    // reads the order under it, as under the deposit's and Before → after.
+    const typed = !!lines.amendRef.current || (!!open && open.kind !== 'depositLink' && open.kind !== 'depositPayment' && open.kind !== 'compare' && open.kind !== 'creditCheck')
     const orderParts = parts.filter((part) => ORDER_PARTS.includes(part))
     if (orderParts.length > 0) {
       // Under typed work the order is not read under it: "Changed by <name> at hh:mm · Reload" (the draft is kept).

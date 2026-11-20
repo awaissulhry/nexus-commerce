@@ -288,7 +288,8 @@ export interface WaitDate {
   /** Days since the oldest of its rows began to wait; null: not known. */
   readonly age: number | null
   /** Its door, the ONE list's own: the tab ›, at its anchor (#dates for a material, #holds for a workshop). */
-  readonly door: { readonly tab: 'production' | 'money' | 'changes'; readonly anchor: string | null }
+  // Z02 cleanup (W08's note): no DATE row's door names Changes any more (a waiting row's door is Production or Money).
+  readonly door: { readonly tab: 'production' | 'money'; readonly anchor: string | null }
 }
 
 /**

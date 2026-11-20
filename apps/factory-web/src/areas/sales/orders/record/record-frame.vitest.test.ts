@@ -24,6 +24,11 @@ import { base } from './fixtures'
 import { answerHeldOf, OWNER_WORDS_NS } from './overview/people'
 import { rightRef } from '../../../../lib/i18n/rights'
 // ---- end F-OO-111
+// ---- Z02 cleanups (W08's and W11's notes): the ONE waiting call's input, the date rows' door, the credit Check dialog under live ----
+import { orderWaitingOf } from './overview/model'
+import type { WaitDate } from './overview/dates'
+import type { Order } from '../api'
+// ---- end Z02 cleanups
 
 // The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so a dialog's words are checked.
 vi.mock('@nexus/ui/components', async (original) => {
@@ -837,3 +842,22 @@ describe('F-OO-111 — the yes and deposit banners step back on Overview (presen
   })
 })
 // ---- end F-OO-111
+
+// ---- Z02 cleanups (lead notes 7, 8; nothing unused may stay) -------------------------------------------------------------------------
+describe('Z02 cleanups — the waiting call reads the open yeses only; no date row opens Changes; the credit Check dialog holds nothing typed', () => {
+  it('orderWaitingOf takes the order\'s open yeses only (the amendments left the card with F-OO-205)', () => {
+    expectTypeOf<Parameters<typeof orderWaitingOf>[0]>().toEqualTypeOf<Pick<Order, 'openApprovals'>>()
+  })
+
+  it('a Next dates wait opens Production or Money, never Changes (no DATE row makes it since W08)', () => {
+    expectTypeOf<WaitDate['door']['tab']>().toEqualTypeOf<'production' | 'money'>()
+  })
+
+  it('a live change reads the order under the credit\'s Check again dialog (nothing typed in it), as under the deposit\'s and Before → after', () => {
+    const container = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain("open.kind !== 'depositLink' && open.kind !== 'depositPayment' && open.kind !== 'compare' && open.kind !== 'creditCheck'")
+    // Ask for a yes… keeps the typed-work guard (its note is typed).
+    expect(container).not.toContain("open.kind !== 'creditAsk'")
+  })
+})
+// ---- end Z02 cleanups
