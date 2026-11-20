@@ -4,7 +4,7 @@ import { expectNothingOf } from './_harness/brand-scan'
 import { COMPANY, seen, TENANT, type Flow } from './_harness/flow'
 import { defineStage } from './_harness/stages'
 import { ensureBrand, signInToPortal, type PortalDesk } from './_harness/two-brands'
-import { startsWith, words } from './_harness/words'
+import { words } from './_harness/words'
 
 /**
  * F-CP-158 — UI golden flow CP-PORTAL-DRAFT: THE BRAND'S ONE DRAFT ORDER (customer page plan C5, C7; design customer-page 12 §2–§3, §5;
@@ -12,8 +12,9 @@ import { startsWith, words } from './_harness/words'
  * fresh stack (`--stages cp-portal-draft`): it makes the world it needs — the seeded P1 as Brand Alpha with its portal buyer
  * (two-brands.ts), the brand's Designer invited by the office, Sara Sales named the brand's factory designer (Who looks after). Then,
  * KEYBOARD ONLY (focus and Enter / Space; no pointer on the screens the stage proves):
- *   1  the Designer starts a new draft (New order › Describe it: the start's first way, a radio card reached by Tab and picked with
- *      Space, above the brand's drafts to continue — the seed's own among them), types a line in its own words with a total, reads no price anywhere
+ *   1  the Designer starts a new draft (New order › Describe it: the start's first way, an action card — a button — reached by Tab;
+ *      an arrow key starts nothing, Enter starts it — follow-up 22; above the brand's drafts to continue — the seed's own among them),
+ *      types a line in its own words with a total, reads no price anywhere
  *      ("Prices are not part of your access."), finds Send held in words (a colleague who may order sends it);
  *   2  the Designer asks the factory designer in the draft's own conversation (the box "Ask <name>, factory designer"): "We asked
  *      <name>." — the office's thread of the draft carries the office-only note that mentions the designer (never shown in the portal);
@@ -131,14 +132,22 @@ export default defineStage({
     const draftsOfAlpha = async () => ((await flow.read(sales.page, `/sales/order-requests?status=DRAFT&partyId=${alphaId}`)).requests as { id: string }[]).map((row) => row.id)
     const draftId = await flow.step('1 · the Designer starts the draft in its own words (keyboard only) and reads no price; Send held in words', async () => {
       const { page } = designer
-      // F-CP-158 follow-up (cp-fx10): the start's four ways are radio cards, "Describe it" first (design 12 §2 Doors), above the
-      // brand's drafts to continue — the seed's own draft among them, never deleted. A keyboard user Tabs into the ways (the first
-      // radio of a group none is picked in) and picks "Describe it" with Space: a NEW draft, none of those listed.
+      // F-CP-158 follow-up (cp-fx10): the start's four ways, "Describe it" first (design 12 §2 Doors), above the brand's drafts to
+      // continue — the seed's own draft among them, never deleted.
+      // follow-up 22 (cp-fx12): the ways are actions — the design system's Card that is a button, no longer radio cards (an arrow key
+      // moved AND picked there: ArrowDown from "Describe it" started a "Pick styles" draft). A keyboard user Tabs to "Describe it";
+      // an arrow key leaves the focus there and starts nothing; Enter starts it: a NEW draft, none of those listed.
       const before = await draftsOfAlpha()
       await designer.go('/orders/new')
       if (before.length > 0) await seen(page.getByRole('heading', { name: OR('start.drafts'), exact: true }), 60_000)
-      await tabTo(page.getByRole('radio', { name: startsWith(OR('draftPage.start.describe')) }))
-      await page.keyboard.press('Space')
+      const describe = page.getByRole('button', { name: OR('draftPage.start.describe'), exact: true })
+      await tabTo(describe)
+      await page.keyboard.press('ArrowDown')
+      await page.waitForTimeout(1_500) // the old radio started its draft within this
+      await expect(describe, 'an arrow key leaves the focus on "Describe it"').toBeFocused()
+      expect(page.url(), 'an arrow key starts no draft').not.toMatch(/[?&]draft=/)
+      expect(await draftsOfAlpha(), 'an arrow key starts no draft').toEqual(before)
+      await page.keyboard.press('Enter')
       const window = page.getByRole('dialog', { name: OR('draftPage.customLine.titleDescribed') })
       await seen(window, 60_000)
       // F-CP-158 follow-up (cp-fx10): the fields by their accessible names — a required field's label carries the "*" mark the name

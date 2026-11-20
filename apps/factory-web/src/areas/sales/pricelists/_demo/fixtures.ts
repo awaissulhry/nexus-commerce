@@ -30,7 +30,9 @@ export function rolePerms(role: PriceListRole): string[] {
     case 'owner':
       return [...rolePermissions('owner'), 'money.price', 'money.cost', 'money.margin']
     case 'sales':
-      return [...rolePermissions('sales'), 'money.price', 'money.margin']
+      // B-CP-011 (the money wall, Owner O1; follow-up 20): the real Sales role holds no grain and no pricelists.manage — its
+      // template as it is. A case that shows or keeps prices is the Owner's or Finance's.
+      return rolePermissions('sales')
     case 'finance':
       return [...rolePermissions('finance'), 'money.price', 'money.cost', 'money.margin']
     case 'readOnly':

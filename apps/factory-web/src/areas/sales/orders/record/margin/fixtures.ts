@@ -1,4 +1,5 @@
 import { asSeenBy, DETAIL_1043, ROLES } from '../../../../finance/margins/demo/fixtures'
+import { rolePermissions } from '../../../../../shell/design-data' // B-CP-011
 import type { OrderMargin } from '../../../../finance/margins/api'
 import { marginsCanOf } from '../../../../finance/margins/model'
 import type { MarginTabModel } from './model'
@@ -11,7 +12,8 @@ import type { MarginTabModel } from './model'
 
 export const MARGIN = { value: DETAIL_1043, problem: null }
 
-const AS = { finance: ROLES.finance, sales: ROLES.sales, manager: ['home.view', 'orders.view', 'costing.view', 'workorders.view'] } as const
+// B-CP-011 (the money wall, Owner O1): Sales is the real Sales role — no price, no margin (Finance › Margins' own demo roles are theirs).
+const AS = { finance: ROLES.finance, sales: rolePermissions('sales'), manager: ['home.view', 'orders.view', 'costing.view', 'workorders.view'] } as const
 
 /** The tab as a person with these permissions reads it (each figure dropped without its grain, as the API drops it). */
 export function marginAs(role: keyof typeof AS, part: { value: OrderMargin | null; problem: string | null } | null): MarginTabModel {

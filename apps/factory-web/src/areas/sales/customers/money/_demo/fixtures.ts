@@ -1,4 +1,4 @@
-import { DEMO_COMPANIES } from '../../../../../shell/design-data'
+import { DEMO_COMPANIES, rolePermissions } from '../../../../../shell/design-data'
 import type { AgeingRow } from '../../../../finance/receivables/api'
 import { CUSTOMERS, PREFIX } from '../../../../parties/_shared/fixtures'
 import { failed, loaded, loading } from '../../../../parties/_shared/model'
@@ -19,8 +19,11 @@ const by = (code: string) => CUSTOMERS.find((party) => party.code === code)!
 
 export const MONEY_CAN = {
   finance: customerMoneyCanOf(['receivables.view', 'money.price', 'sales.returns.view', 'quality.complaints.view']),
-  /** Sales after B-W2a-81: receivables.view (read), the price grain, returns and complaints. */
-  sales: customerMoneyCanOf(['receivables.view', 'money.price', 'sales.returns.view', 'quality.complaints.view']),
+  /**
+   * B-CP-011 (the money wall, Owner O1): the real Sales role — receivables.view, returns, complaints, orders and credit read, no
+   * price grain (no amount, no currency) and no sales.credit.limits. A case that shows amounts is Finance's.
+   */
+  sales: customerMoneyCanOf(rolePermissions('sales')),
   /** A role without the price grain: the Overdue column is not drawn; the tile counts late invoices. */
   noPrice: customerMoneyCanOf(['receivables.view', 'sales.returns.view']),
   /** No receivables.view: no Overdue anywhere. */

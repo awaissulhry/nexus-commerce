@@ -28,6 +28,9 @@ const partnerRole = z.object({
   admin: z.boolean(),
   capabilities: z.object({ allowed: z.array(capability), byDefault: z.array(capability) }),
   offered: z.boolean(),
+  // B-CP-011: (follow-up 15) only the Owner gives it from the office (a guest's role that sees prices — the Accountant).
+  // Absent from an older answer: nothing held before the click (the API's 403 stays the wall, partnerProblem says it).
+  ownerGives: z.boolean().optional(),
 })
 export type PartnerRole = z.infer<typeof partnerRole>
 
@@ -68,6 +71,8 @@ export const portalAccessSchema = z.object({
   roles: z.array(partnerRole),
   people: z.array(partnerPerson),
   termsInForce: z.boolean().nullable(),
+  // B-CP-011: (follow-up 15) the reader gives a role only the Owner gives: true only for a live holder of the Owner role (a yes/no).
+  mayGivePriceRole: z.boolean().optional(),
 })
 export type PortalAccess = z.infer<typeof portalAccessSchema>
 

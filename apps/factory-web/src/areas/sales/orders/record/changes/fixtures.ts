@@ -29,10 +29,11 @@ export const designScreen = defineDesignScreen<ChangesCase>({
   title: 'Order changes: the amendments since confirmation, before → after',
   view: ChangesDesign,
   cases: [
-    { id: 'list', label: 'Sales · Two amendments: one changed the lines and the net (the customer accepts again), one the customer PO', model: view('sales'), note: '“Before → after” opens the frozen snapshot of that revision.' },
+    // B-CP-011 (the money wall, Owner O1): the ONE "Seen as Sales" case here — no net without the price grain; the Owner's shows it.
+    { id: 'list', label: 'Seen as Sales · Two amendments: one changed the lines (its net only for people who see prices), one the customer PO', model: view('sales'), note: '“Before → after” opens the frozen snapshot of that revision.' }, // B-CP-011
     { id: 'owner', label: 'Owner · The same amendments', model: view('owner') },
     { id: 'manager', label: 'Production manager · No money: lines and pieces only', model: view('manager') },
-    { id: 'compare', label: 'Sales · Before → after of revision 1 (VersionCompare): sizes, unit price and net per line', model: view('sales', { dialog: { kind: 'compare', amendmentId: AMENDMENTS.amendments[0]!.id } }) },
+    { id: 'compare', label: 'Owner · Before → after of revision 1 (VersionCompare): sizes, unit price and net per line', model: view('owner', { dialog: { kind: 'compare', amendmentId: AMENDMENTS.amendments[0]!.id } }) }, // B-CP-011
     { id: 'compare-header', label: 'Sales · Before → after of revision 2: only the customer PO changed', model: view('sales', { dialog: { kind: 'compare', amendmentId: AMENDMENTS.amendments[1]!.id } }) },
     { id: 'compare-manager', label: 'Production manager · Before → after without prices (sizes only)', model: view('manager', { dialog: { kind: 'compare', amendmentId: AMENDMENTS.amendments[0]!.id } }) },
     { id: 'empty', label: 'Sales · No changes since confirmation', model: base('sales', order('CONFIRMED'), { tab: 'changes', amendments: { value: NO_AMENDMENTS, problem: null } }) },

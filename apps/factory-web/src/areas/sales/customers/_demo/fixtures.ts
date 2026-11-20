@@ -4,6 +4,7 @@ import { blankDraft, emptyWizard } from '../../../admin/import/model'
 import type { SheetImport } from '../../../products/styles/import/sheet-import'
 import { EVERY_COMPANY } from '../../../products/styles/import/sheet-import'
 import { LIST_ROWS } from '../../pricelists/_demo/fixtures'
+import { rolePermissions } from '../../../../shell/design-data' // B-CP-011
 import type { CommercialTerms, PaymentTermsRow } from '../terms/api'
 import { termsAbilitiesOf, termsDraftOf, type TermsAbilities, type TermsDraft } from '../terms/model'
 import { CommercialTermsCard, type CommercialTermsModel } from '../terms/view/CommercialTermsCard'
@@ -149,7 +150,8 @@ export const BLANK_TERMS: CommercialTerms = { ...TERMS, code: 'NUOVO-PROVA', pay
 const OWNER: TermsAbilities = { view: true, manage: true, terms: true, lists: true, listsManage: true, price: true }
 export const TERMS_CAN = {
   owner: OWNER,
-  sales: termsAbilitiesOf(['parties.view', 'parties.manage', 'paymentterms.view', 'pricelists.view', 'pricelists.manage', 'money.price']),
+  // B-CP-011 (the money wall, Owner O1): the real Sales role — no price grain, no pricelists.manage (a price holder gives lists).
+  sales: termsAbilitiesOf(rolePermissions('sales')),
   finance: termsAbilitiesOf(['parties.view', 'paymentterms.view', 'pricelists.view', 'money.price']),
   noPrice: { ...OWNER, price: false },
   noLists: { ...OWNER, listsManage: false },

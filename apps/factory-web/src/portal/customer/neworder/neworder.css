@@ -395,6 +395,24 @@
   gap: var(--nds-space-6);
 }
 
+/* follow-up 22 (cp-fx12): a way in is the DS Card that is a button — its title over its hint, as the radio card drew them. */
+.fw-pno-way {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-pno-way .fw-pno-waytitle {
+  font-size: var(--nds-font-size-base);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.fw-pno-wayhint {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
 /* The note to us: two or three lines, it grows when typed into. */
 .fw-pno-notefield textarea {
   min-height: 4.5rem;

@@ -339,7 +339,7 @@ describe('extra pieces: named on the order\'s office reads, never hidden (B-SA-0
     // The order now wants 2 of 52 (a change accepted after cutting): 3 cut, 1 made extra.
     await force(`UPDATE "SalesOrderLineSize" SET quantity = 2 WHERE "lineId" = $1 AND size = '52'`, [order.lineId])
     const materials = await ok('planner', 'GET', `/sales/orders/${order.orderId}/customer-materials`)
-    expect(materials.extra.pieces).toEqual([{ lineId: order.lineId, size: '52', count: 1, words: { en: 'Made extra: 1 52', it: 'Fatti in più: 1 52' } }])
+    expect(materials.extra.pieces).toEqual([{ lineId: order.lineId, size: '52', count: 1, words: { en: '1 52 more than ordered: cut or planned to cut', it: "1 52 in più dell'ordine: tagliati o da tagliare" } }]) // B-OO-015: the words say what they count
     const margin = await ok('planner', 'GET', `/costing/margins/orders/${order.orderId}`)
     expect(margin.extraPieces).toMatchObject({ count: 1, lines: [{ lineId: order.lineId, seq: 10, size: '52', count: 1 }], words: expect.stringContaining('cut beyond what the order now wants') })
     // Another customer's person reads neither.

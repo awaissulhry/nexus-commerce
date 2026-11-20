@@ -621,3 +621,45 @@ describe("B-CP-073 a customer's admin runs its own team: resend, withdraw, pause
   })
 })
 // ---- end B-CP-073
+
+// ---- B-CP-011 (follow-up 15, the money wall; Owner O3): Portal access says BEFORE the click that only the Owner gives a guest's role
+// that sees prices (the Accountant) — `roles[].ownerGives` and the reader's `mayGivePriceRole` (true only for the Owner); the 403 stays.
+describe('B-CP-011 follow-up 15: Portal access says before the click who gives a role only the Owner gives', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('the Owner reads mayGivePriceRole true and Sales false; only the guest Accountant is ownerGives; Sales is still refused 403', async () => {
+    const salesUser = await addUser(h, tenant, { email: 'sara.sales.cpfx12@partners-a.example', role: 'sales' })
+    const sales = new Browser(h.app)
+    await sales.signIn(SLUG, salesUser.email, salesUser.password)
+    const salesSecret = await enrolTotp(h, sales)
+    // An outside adviser (the CONSULTANT role: the GUEST portal), made up.
+    const firm = await party(['CONSULTANT'])
+    const roleFacts = (body: { roles: { key: string; seesPrices: boolean; ownerGives: boolean }[] }) => body.roles.map((role) => [role.key, role.seesPrices, role.ownerGives])
+
+    const ownerTab = await owner.get(`/partners/${firm}`)
+    expect(ownerTab.status, JSON.stringify(ownerTab.body)).toBe(200)
+    expect(ownerTab.body.kinds).toEqual(['GUEST'])
+    expect(ownerTab.body.mayGivePriceRole).toBe(true)
+    expect(roleFacts(ownerTab.body)).toEqual([['guest-accountant', true, true]])
+
+    const salesTab = await sales.get(`/partners/${firm}`)
+    expect(salesTab.status, JSON.stringify(salesTab.body)).toBe(200)
+    expect(salesTab.body.mayGivePriceRole).toBe(false)
+    expect(roleFacts(salesTab.body)).toEqual([['guest-accountant', true, true]])
+
+    // A customer's roles: none is the Owner's — its Buyer sees its own orders' prices and Sales gives it (O4).
+    const customerTab = await sales.get(`/partners/${world.partyId}`)
+    expect(customerTab.status).toBe(200)
+    expect(customerTab.body.mayGivePriceRole).toBe(false)
+    expect(customerTab.body.roles.filter((role: { ownerGives: boolean }) => role.ownerGives)).toEqual([])
+    expect(customerTab.body.roles.find((role: { key: string }) => role.key === 'customer-buyer')).toMatchObject({ seesPrices: true, ownerGives: false })
+    expect((await owner.get(`/partners/${world.partyId}`)).body.mayGivePriceRole).toBe(true)
+
+    // The wall stays the API's: Sales inviting the Accountant anyway is refused in words; nobody is written.
+    const email = 'anna.conti.cpfx12@studio-esempio.example'
+    await stepUp(h, sales, salesSecret)
+    const refused = await sales.post(`/partners/${firm}/people`, { companyId: world.companyId, email, displayName: 'Anna Conti', roleKey: 'guest-accountant', accessUntil: new Date(h.clock.now().getTime() + 30 * 86_400_000).toISOString() })
+    expect(refused.status, JSON.stringify(refused.body)).toBe(403)
+    expect(refused.body.error.issues).toEqual([{ path: 'roleKey/onlyOwnerGivesPrices', message: 'Only the Owner gives a role that sees prices.' }])
+    expect(await inWorld(h, world, (client) => client.user.count({ where: { email } }))).toBe(0)
+  })
+})
+// ---- end B-CP-011 follow-up 15
