@@ -259,7 +259,7 @@ describe('F-SA-243: the order page opens the same review window as Home › Appr
       expect(text).toContain(locale === 'en' ? 'asks: Change · line 10 · 50 6 → 4' : 'chiede: Modifica · riga 10 · 50 6 → 4')
       expect(text).toContain(locale === 'en' ? '1 more request' : '1 altra richiesta')
       expect(text).toContain(locale === 'en' ? 'Answer…' : 'Rispondi…')
-      expect(text).toContain(locale === 'en' ? 'Still to do: 2' : 'Ancora da fare: 2')
+      expect(text).toContain(locale === 'en' ? 'Still to do · 2' : 'Ancora da fare · 2') // F-OO-205: the group's head
     }
     expect(draw('f-sa-243-band')).toMatch(/href="[^"]*\?tab=changes&amp;open=/)
     // Only while a row asks THIS reader (Your turn / Needs a decision) the band says a step needs a decision (R-5).

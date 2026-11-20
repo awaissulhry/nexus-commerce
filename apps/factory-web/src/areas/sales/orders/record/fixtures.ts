@@ -86,6 +86,8 @@ import { releaseCheck, workOrder as productionWorkOrder } from '../../../product
 import { HOLD_REASONS, PRODUCTION_HOLD_REASONS } from '../../../production/work-orders/daily/demo/fixtures'
 // F-SA-243: the order's requests (the shared request fixtures) and its production read with Still to do.
 import type { OfficeRequest } from '../../../../record-panels/approvals/api' // F-OO-204: the approvals we asked the customer
+import { abilitiesOf } from '../model' // F-OO-205: the Read-only reader's rights
+import { rolePermissions } from '../../../../shell/design-data' // F-OO-205
 import { PRODUCTION_READ } from './overview/fixtures'
 import { brandRequest } from '../../../home/approvals/requests/fixtures'
 import { ORDER_ID } from '../_demo/fixtures'
@@ -512,16 +514,20 @@ export const SO2_BLOCKERS = [
   blockerOf('BRAND_REQUEST', 'US', 'A customer request waits for our answer', SO2_REQUEST.askedAt, { type: 'OrderChangeRequest', id: SO2_REQUEST.id }, 'REQUEST'),
   blockerOf('APPROVAL', 'BRAND', "Waiting for the customer's yes", '2026-11-05T09:00:00Z', { type: 'ApprovalRequest', id: '0190f0e2-6262-7000-8000-000000000001' }),
 ]
-const SO2_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'BRAND' as const, words: { en: 'Waiting on customer', it: 'Tocca al cliente' }, since: '2026-11-05T09:00:00Z', blockers: SO2_BLOCKERS } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
+// F-OO-205 (lead note, W03): SO-0002 has one step still to do (planning lowers WO-00021's 54 to 0) — the design screen shows its real
+// Changes count, 3 (1 on us, 1 on the customer, 1 still to do), the same as the unit test.
+const SO2_STILL = [{ kind: 'WORK_ORDER_CHANGE', ref: { type: 'WorkOrderChange', id: '0190f0e2-9090-7000-8000-000000000021', number: 'WO-00021' }, words: { en: 'WO-00021: make 54 → 0', it: 'WO-00021: produci 54 → 0' }, since: '2026-11-16T09:00:00Z', waitingOn: 'PLANNER', mayAct: false, requestId: null }]
+const SO2_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'BRAND' as const, words: { en: 'Waiting on customer', it: 'Tocca al cliente' }, since: '2026-11-05T09:00:00Z', blockers: SO2_BLOCKERS } }, changes: { openRequests: [], stillToDo: { rows: SO2_STILL, count: SO2_STILL.length, workOrdersLeftOut: 0 } } }
 const SO3_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'US' as const, words: { en: 'Waiting on us', it: 'Tocca a noi' }, since: '2026-11-14T17:00:00Z', blockers: [] } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
 // F-OP-304 (walk #7): line 10 cut one piece beyond what its first size now wants. F-OO-121: in the API's words since B-OO-015.
 const EXTRA_READ = {
   ...SO2_READ,
+  changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } }, // F-OO-205: no step left (SO-0002's own is not here)
   lines: PRODUCTION_READ.lines!.map((line, index) => (index === 0 ? { ...line, madeExtra: 1, sizes: line.sizes.map((size, at) => (at === 0 ? { ...size, madeExtra: 1, madeExtraWords: { en: `1 ${size.size ?? ''} more than ordered: cut or planned to cut`, it: `1 ${size.size ?? ''} in più dell'ordine: tagliati o da tagliare` } } : size)) } : line)),
 }
 const F_OP_301: DesignCase<RecordCase>[] = [
-  { id: 'f-op-301-so2-overview', label: 'F-OP-301 · Production manager · Overview: Waiting on us 1 (a change request) and on the customer 1 — the Changes badge says 2; the two gates are dates (F-OO-202)', model: base('manager', production, { tab: 'overview', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
-  { id: 'f-op-301-so2-changes', label: 'F-OP-301 · Production manager · Changes: the same request waiting on us and the yes we asked of the customer (never "Nothing waits on the customer"); the gates are not requests (F-OO-202)', model: base('manager', production, { tab: 'changes', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
+  { id: 'f-op-301-so2-overview', label: 'F-OP-301 · Production manager · Overview: Waiting on us 1 (a change request), on the customer 1, Still to do 1 — "Changes (3) ›", the badge\'s number (F-OO-205); the two gates are dates (F-OO-202)', model: base('manager', production, { tab: 'overview', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
+  { id: 'f-op-301-so2-changes', label: 'F-OP-301 · Production manager · Changes: the same request waiting on us, the yes we asked of the customer and the step still to do (never "Nothing waits on the customer"); the gates are not requests (F-OO-202)', model: base('manager', production, { tab: 'changes', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
   { id: 'f-op-301-so3-overview', label: 'F-OP-301 · Production manager · Overview: nothing waits — Requests & changes says so once, and nothing says the kept "Waiting on us · 5 d" (F-OO-103)', model: base('manager', production, { tab: 'overview', production: ready(SO3_READ), requests: null, liveState: 'live' }) },
   { id: 'f-op-301-reading-changes', label: 'F-OP-301 · Changes while the production read is out: both cards read (never "Nothing waits" before it)', model: base('sales', production, { tab: 'changes', production: LOADING_STATE, liveState: 'connecting' }) },
   // F-OP-304 (walk #7): no step left, but pieces of line 10 were made extra — their own list, never rows under "Nothing left to do".
@@ -602,6 +608,22 @@ const F_OO_204: DesignCase<RecordCase>[] = [
   { id: 'f-oo-204-changes-nothing', label: 'F-OO-204 · Sales · Changes: no request waits — said as such (never "Nothing waits": a quality hold and a gate do, on Overview)', model: requestsWorld('sales', 'changes', RQ_NONE_READ, { requests: { value: [], problem: null }, askedOfCustomer: { value: [], problem: null } }) },
 ]
 // ---- end F-OO-204
+
+// ---- F-OO-205 (order overview §5.2): the Requests & changes card — three groups with their counts (every row on us; the customer's
+// and Still to do: 3, then "N more on Changes ›"), "Changes (N) ›" in the head, "Told about changes: 4 people" at the foot; nothing to
+// answer while a hold and a gate wait; and Read-only (no door). Walk them at 375 / 1440 / 1920, light and dark, the dock open and closed.
+const RQ_TOLD = { value: { order: { id: ORDER_ID, number: 'SO-2026-0088' }, people: 4, changes: [{ batchId: rqId(950), messageId: rqId(951), occurredAt: '2026-11-17T13:02:00Z', at: '2026-11-17T13:02:02Z', eventType: 'order_change_request.answered', requestId: RQ_AGREED.id, people: 4, floor: { at: '2026-11-17T13:02:02Z', workOrders: [{ id: WORK_ORDERS[0]!.id, number: 'WO-00021' }], leftOut: 0 }, workshop: { at: null, told: 0, waiting: 0 } }] }, problem: null }
+/** Read-only: the order's facts and links, no acting right on the page (the page's own rule, readOnlyOnPage). */
+const readOnlyWorld = (read: Parameters<typeof ready>[0] = RQ_READ) => {
+  const world = requestsWorld('manager', 'overview', read, { told: RQ_TOLD })
+  return { ...world, record: { ...world.record, can: abilitiesOf(rolePermissions('read_only')) } }
+}
+const F_OO_205: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-205-requests', label: 'F-OO-205 · Sales · Overview › Requests & changes: Waiting on us · 3 (each with its door), Waiting on Moto Demo · 5 (3, then "2 more on Changes ›"), Still to do · 4 (3, then "1 more"), "Changes (12) ›", "Told about changes: 4 people"', model: requestsWorld('sales', 'overview', RQ_READ, { told: RQ_TOLD }) },
+  { id: 'f-oo-205-nothing', label: 'F-OO-205 · Sales · Overview: no request or change waits — the quality hold and the gate are said where they are (Where it is now, Next dates)', model: requestsWorld('sales', 'overview', RQ_NONE_READ, { requests: { value: [], problem: null }, askedOfCustomer: { value: [], problem: null } }) },
+  { id: 'f-oo-205-read-only', label: 'F-OO-205 · Read-only · Overview › Requests & changes: the same rows with their ages, no door (Their turn is words)', model: readOnlyWorld() },
+]
+// ---- end F-OO-205
 
 // ---- F-OP-129 (order page plan N2, N5, N6; 10-order-page §13 design cases): what the strip says each work order does, per reader
 // (Sales: a released one waits; the Owner: both follow, R-4), the extra pieces' outcome under cut, and the Shipments rows — a typed
@@ -943,6 +965,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     ...F_SA_243,
     ...F_OP_301, // F-OP-301 (walk #1, #2, #3)
     ...F_OO_204, // F-OO-204: the request rows and their doors (Changes)
+    ...F_OO_205, // F-OO-205: the Requests & changes card
     // ---- B-W2b-323: orders in depth (priority, season, the yes, what is frozen, priced changes, materials, confirmation, tech pack, forecast, milestones) ----
     ...W2B_323,
     // ---- F-OP-217: the dock's scopes, each inside the one card (look at them at 1440 with the dock a third and 40 %, and at 375) ----

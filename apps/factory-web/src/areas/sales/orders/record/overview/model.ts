@@ -247,30 +247,24 @@ export function rowWordsOf(
 }
 
 /**
- * "Requests & changes": Waiting on us N · Waiting on <Customer> N · Still to do N (top 3) · the latest change; "Nothing waits" only
- * when all three are empty. F-OO-202: its two lists hold the REQUEST rows only — holds are Where it is now's, dates Next dates' — so
- * the Changes badge, its dot and the Changes tab (which read this card) count requests and Still to do, nothing twice (D8).
+ * "Requests & changes": Waiting on us N · Waiting on <Customer> N · Still to do N; "nothing" only when all three are empty.
+ * F-OO-202: its two lists hold the REQUEST rows only — holds are Where it is now's, dates Next dates' — so the Changes badge, its dot
+ * and the Changes tab (which read this card) count requests and Still to do, nothing twice (D8). F-OO-205: no "latest change" any
+ * more (Changes › History tells it), so the card reads nothing of the order itself.
  */
 export interface WaitingCard {
   readonly onUs: readonly WaitingRow[]
   readonly onCustomer: readonly WaitingRow[]
   readonly still: readonly StillRowOf[]
-  readonly latest: { readonly revision: number; readonly at: string | null } | null
   readonly nothing: boolean
 }
 
-export function waitingCardOf(rows: readonly WaitingRow[], read: OrderProduction | null | undefined, order: Pick<Order, 'amendments'>): WaitingCard {
+export function waitingCardOf(rows: readonly WaitingRow[], read: OrderProduction | null | undefined): WaitingCard {
   const requests = rows.filter((row) => row.place === 'REQUEST') // F-OO-202
   const onUs = requests.filter((row) => row.on === 'US')
   const onCustomer = requests.filter((row) => row.on === 'BRAND')
   const still = stillRowsOf(read)
-  return {
-    onUs,
-    onCustomer,
-    still,
-    latest: order.amendments.latestRevision !== null ? { revision: order.amendments.latestRevision, at: order.amendments.latestAt } : null,
-    nothing: onUs.length === 0 && onCustomer.length === 0 && still.length === 0,
-  }
+  return { onUs, onCustomer, still, nothing: onUs.length === 0 && onCustomer.length === 0 && still.length === 0 }
 }
 
 /**
@@ -315,7 +309,7 @@ export function orderWaitingOf(order: Pick<Order, 'openApprovals' | 'amendments'
   if (state?.status === 'failed') return { status: 'failed', problem: state.problem }
   const read = readOf(state)
   const rows = waitingOf(read, { requests: page.requests?.value ?? null, approvals: order.openApprovals, recordPayment: page.can.recordPayment, locale })
-  const card = waitingCardOf(rows, read, order)
+  const card = waitingCardOf(rows, read) // F-OO-205: no latest change
   // F-OO-202: oldest first in each place, as in the list (no folding here: F-OO-104 groups the holds into one strip per kind).
   return { status: 'ready', rows, card, holds: rows.filter((row) => row.place === 'HOLD'), dates: rows.filter((row) => row.place === 'DATE') }
 }

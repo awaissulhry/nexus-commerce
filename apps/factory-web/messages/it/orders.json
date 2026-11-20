@@ -1646,10 +1646,8 @@
     },
     "requests": {
       "title": "Richieste e modifiche",
-      "changes": "Modifiche ›",
-      "nothing": "Niente aspetta noi o il cliente",
-      "latest": "Ultima modifica: revisione {revision} · {date}",
-      "still": "Ancora da fare: {count}"
+      "nothing": "Nessuna richiesta o modifica in attesa",
+      "still": "Ancora da fare · {count}"
     },
     "linked": {
       "title": "Record collegati",
@@ -2152,6 +2150,11 @@
     }
   },
   "requests": {
-    "changesNote": "I blocchi sono in Panoramica · le date in Prossime date"
+    "changesNote": "I blocchi sono in Panoramica · le date in Prossime date",
+    "changesCount": "Modifiche ({count}) ›",
+    "more_one": "{count} altro in Modifiche ›",
+    "more_other": "Altri {count} in Modifiche ›",
+    "seeHolds": "Cosa ferma l'ordine: vedi A che punto è",
+    "seeDates": "Date in attesa: vedi Prossime date"
   }
 }
