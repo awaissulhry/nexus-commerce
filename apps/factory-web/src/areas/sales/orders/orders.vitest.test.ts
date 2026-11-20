@@ -106,6 +106,10 @@ import { textOf } from '../../../lib/record-thread/parts/testing' // F-SA-231b
 import { orderActions, READY_QUALITY_WORDS, releasedPiecesOf } from '@nexus/factory-domain/sales/orders/orders'
 import { readyHeld } from './model'
 // ---- end F-OO-112
+// ---- F-OO-142 (B-OO-009): the promise dialog's reason list ----
+import { PROMISE_REASON_CODES, PROMISE_REASON_WORDS, promiseReasonOf, promiseReasonText } from '@nexus/factory-domain/sales/portal-orders/promise'
+import { isPromiseReasonCode, promiseBodyOf, promiseReasonChoices, promiseReasonPreview } from './model'
+// ---- end F-OO-142
 
 const params = (query: string) => new URLSearchParams(query)
 
@@ -225,12 +229,16 @@ describe('the record: the next step by state, held with its reason', () => {
     for (const status of ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'] as const) expect(closeHeld(order(status, { settled: true }), canOf('owner'))?.key, status).toBe('held.closeState')
     expect(order('DELIVERED').actions.map((entry) => entry.action)).toEqual(['changePromise', 'close'])
   })
-  it('a promise change: a day from today, a reason, a line when lines are chosen', () => {
-    expect(promiseProblems({ date: '', reason: 'x', today: TODAY, current: null, lineIds: [], allLines: true })).toEqual({ date: 'promise.problem.date' })
-    expect(promiseProblems({ date: '2026-10-28', reason: 'x', today: TODAY, current: null, lineIds: [], allLines: true })).toEqual({ date: 'promise.problem.past' })
-    expect(promiseProblems({ date: '2026-12-15', reason: 'x', today: TODAY, current: '2026-12-15', lineIds: [], allLines: true })).toEqual({ date: 'promise.problem.same' })
-    expect(promiseProblems({ date: '2026-12-15', reason: '  ', today: TODAY, current: null, lineIds: [], allLines: false })).toEqual({ reason: 'promise.problem.reason', lines: 'promise.problem.lines' })
-    expect(promiseProblems({ date: TODAY, reason: 'ok', today: TODAY, current: '2026-12-15', lineIds: [], allLines: true })).toEqual({})
+  // F-OO-142 (B-OO-009): why is a curated reason the customer reads, picked from the list ("Pick why"); the note is the office's own.
+  it('a promise change: a day from today, a picked reason, a line when lines are chosen', () => {
+    expect(promiseProblems({ date: '', reasonCode: 'CAPACITY', today: TODAY, current: null, lineIds: [], allLines: true })).toEqual({ date: 'promise.problem.date' })
+    expect(promiseProblems({ date: '2026-10-28', reasonCode: 'CAPACITY', today: TODAY, current: null, lineIds: [], allLines: true })).toEqual({ date: 'promise.problem.past' })
+    expect(promiseProblems({ date: '2026-12-15', reasonCode: 'CAPACITY', today: TODAY, current: '2026-12-15', lineIds: [], allLines: true })).toEqual({ date: 'promise.problem.same' })
+    expect(promiseProblems({ date: '2026-12-15', reasonCode: '', today: TODAY, current: null, lineIds: [], allLines: false })).toEqual({ reasonCode: 'promise.problem.code', lines: 'promise.problem.lines' })
+    // A code the API does not know is no pick; a typed sentence neither.
+    expect(promiseProblems({ date: TODAY, reasonCode: 'WEATHER', today: TODAY, current: '2026-12-15', lineIds: [], allLines: true })).toEqual({ reasonCode: 'promise.problem.code' })
+    expect(promiseProblems({ date: TODAY, reasonCode: null, today: TODAY, current: '2026-12-15', lineIds: [], allLines: true })).toEqual({ reasonCode: 'promise.problem.code' })
+    expect(promiseProblems({ date: TODAY, reasonCode: 'MATERIAL_LATE', today: TODAY, current: '2026-12-15', lineIds: [], allLines: true })).toEqual({})
   })
   it('tabs from the address; the chain’s ids for live events', () => {
     // F-SA-230: the tabs re-cut — an old tab lands on its new tab (and section); the five stay as they are.
@@ -1950,3 +1958,77 @@ describe('F-OO-112: Mark ready waits for quality — readyHeld reads the API\'s 
   })
 })
 // ---- end F-OO-112
+
+// ---- F-OO-142 (order overview §4.3; B-OO-009): the promise dialog's reason list — a code the customer reads, the office's own note ------
+describe('F-OO-142: the promise dialog picks a curated reason the customer reads (Italian and English); the note never reaches the customer', () => {
+  const promiseCase = (id: string) => recordScreen.cases.find((item) => item.id === id)!.model
+  const draw = (id: string, locale: (typeof LOCALES)[number]) => textOf(render(recordScreen as unknown as DesignScreen<unknown>, promiseCase(id), locale)).replace(/\s+/g, ' ')
+  const NOTE = 'La pelle nera arriva una settimana dopo.'
+
+  it('a code is required; the body is { reasonCode, reason } — the note trimmed (empty allowed), lineIds only for chosen lines', () => {
+    expect(PROMISE_REASON_CODES.every((code) => isPromiseReasonCode(code))).toBe(true)
+    for (const no of ['', 'WEATHER', 'material_late', null, undefined]) expect(isPromiseReasonCode(no), String(no)).toBe(false)
+    expect(promiseBodyOf({ date: '2026-12-29', reasonCode: 'MATERIAL_LATE', note: `  ${NOTE}  `, lineIds: null }, 4)).toEqual({ version: 4, promiseDate: '2026-12-29', reasonCode: 'MATERIAL_LATE', reason: NOTE })
+    expect(promiseBodyOf({ date: '2026-12-29', reasonCode: 'TRANSPORT', note: '   ', lineIds: ['L20'] }, 5)).toEqual({ version: 5, promiseDate: '2026-12-29', reasonCode: 'TRANSPORT', reason: '', lineIds: ['L20'] })
+    // What the API stores from it (B-OO-009) reads back as the picked code — never the note.
+    const stored = promiseReasonText('MATERIAL_LATE', NOTE)
+    expect(stored).toBe(`MATERIAL_LATE: ${NOTE}`)
+    expect(promiseReasonOf(stored)).toBe('MATERIAL_LATE')
+    // The band's write sends that body (one place), then reads the production read's headline and dates again.
+    const band = readFileSync(new URL('./record/use-band-acts.ts', import.meta.url), 'utf8')
+    expect(band).toContain('changePromise(api, orderId, promiseBodyOf(promise, version()))')
+    expect(band).toContain("input.againProduction?.(['headline', 'dates'])")
+    expect(readFileSync(new URL('./record/OrderRecord.tsx', import.meta.url), 'utf8')).toContain('againProduction: production.again')
+  })
+
+  it('the preview shows the code\'s words in Italian AND English (the order\'s language first); null before a pick; the note never in it', () => {
+    expect(promiseReasonPreview('', 'it')).toBeNull()
+    expect(promiseReasonPreview('WEATHER', 'it')).toBeNull()
+    expect(promiseReasonPreview('MATERIAL_LATE', 'it')).toEqual([
+      { locale: 'it', words: 'Consegna dei materiali in ritardo' },
+      { locale: 'en', words: 'Material delivery late' },
+    ])
+    expect(promiseReasonPreview('YOUR_CHANGE', 'en')).toEqual([
+      { locale: 'en', words: PROMISE_REASON_WORDS.YOUR_CHANGE.en },
+      { locale: 'it', words: PROMISE_REASON_WORDS.YOUR_CHANGE.it },
+    ])
+    for (const code of PROMISE_REASON_CODES) expect(promiseReasonPreview(code, 'it')!.map((entry) => entry.words)).toEqual([PROMISE_REASON_WORDS[code].it, PROMISE_REASON_WORDS[code].en])
+    // The list: every curated code, in the office's language — the customer's own words (one wording, no synonym).
+    expect(promiseReasonChoices('en')).toEqual(PROMISE_REASON_CODES.map((code) => ({ value: code, label: PROMISE_REASON_WORDS[code].en })))
+    expect(promiseReasonChoices('it').map((choice) => choice.label)).toEqual(PROMISE_REASON_CODES.map((code) => PROMISE_REASON_WORDS[code].it))
+  })
+
+  it('drawn: "Why (the customer reads it)", the list, "The customer reads:" in Italian and English, "Your note (office only)"; no pick → held "Pick why"', () => {
+    const en = draw('promise-dialog', 'en')
+    for (const words of ['Why (the customer reads it)', 'Pick a reason', 'Material delivery late', 'The customer reads:', 'Italian', '“Consegna dei materiali in ritardo”', 'English', '“Material delivery late”', 'Your note (office only)']) expect(en, words).toContain(words)
+    const it = draw('promise-dialog', 'it')
+    for (const words of ['Perché (lo legge il cliente)', 'Scegli un motivo', 'Il cliente legge:', 'Italiano', 'Inglese', '“Consegna dei materiali in ritardo”', '“Material delivery late”', 'La tua nota (solo ufficio)']) expect(it, words).toContain(words)
+    // The note is the office's: in its own field, never in the customer's preview.
+    const preview = en.slice(en.indexOf('The customer reads:'), en.indexOf('Your note (office only)'))
+    expect(preview).not.toContain(NOTE)
+    // Every curated reason is in the list (a <select>, each <option> the customer's words).
+    const html = render(recordScreen as unknown as DesignScreen<unknown>, promiseCase('promise-dialog'), 'en')
+    for (const code of PROMISE_REASON_CODES) expect(html, code).toContain(`<option value="${code}"`)
+    // Nothing picked yet: no preview, Change the date held with "Pick why".
+    const pick = render(recordScreen as unknown as DesignScreen<unknown>, promiseCase('f-oo-142-promise-pick'), 'en')
+    expect(textOf(pick)).not.toContain('The customer reads:')
+    const go = pick.slice(pick.lastIndexOf('<button', pick.indexOf('>Change the date</button>')), pick.indexOf('>Change the date</button>'))
+    expect(go).toContain('aria-description="Pick why"')
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['promise.why', 'promise.pick', 'promise.customerReads', 'promise.note', 'promise.problem.code']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+    // "Say why" stays for the requested date's own free reason (F-OO-144); the promise says "Pick why".
+    expect(createTranslator('en', messagesFor('en', ['orders']).orders!)('promise.problem.code')).toBe('Pick why')
+    expect(createTranslator('it', messagesFor('it', ['orders']).orders!)('promise.problem.code')).toBe('Scegli il perché')
+  })
+
+  it('one dialog for every door (band, ⋯, Production #dates, Next dates, Decide…): the ONE PromiseDialog sends through the band\'s onPromise', () => {
+    const dialogs = readFileSync(new URL('./record/view/Dialogs.tsx', import.meta.url), 'utf8')
+    expect(dialogs.match(/function PromiseDialog\(/g)).toHaveLength(1)
+    expect(dialogs).toContain('actions?.onPromise?.({ date, reasonCode, note, lineIds: scope === \'lines\' ? lineIds : null })')
+    expect(dialogs).toContain('const followUp = followUpOf(model.dialog)')
+    for (const name of ['export type CommandDialogModel', 'export type CommandDialogActions', 'export /* F-CP-108 */ function ReadyDialog(', 'export /* F-CP-108 */ function CloseDialog(']) expect(dialogs, name).toContain(name)
+  })
+})
+// ---- end F-OO-142

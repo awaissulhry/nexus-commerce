@@ -29,6 +29,8 @@ import type { DockDefault } from '../../_shared/record-frame/model' // F-SA-263
 // ---- F-OP-111: Split into new orders… (the API's own limits; the body the split sends) ----
 import { ORDERS_DEPTH_LIMITS } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { releasedPiecesOf } from '@nexus/factory-domain/sales/orders/orders' // F-OO-112: Mark ready's held counts (B-OO-002's one rule)
+// F-OO-142: the curated reasons a promise move shows the customer (B-OO-009 sends the code; the portal reads these words).
+import { PROMISE_REASON_CODES, PROMISE_REASON_WORDS, type PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise'
 import type { ApiIssue } from '../../../lib/api/errors'
 import type { SplitBody } from './api'
 
@@ -707,15 +709,48 @@ export function promiseHeld(order: Order, can: OrderAbilities): Phrase | null {
 export const linePromisesAllowed = (order: Pick<Order, 'status'>): boolean => ['CONFIRMED', 'IN_PRODUCTION', 'READY'].includes(order.status)
 
 /** Problems of a typed promise change, as message keys (the API holds the same rules). */
-export function promiseProblems(input: { date: string; reason: string; today: string; current: string | null; lineIds: readonly string[]; allLines: boolean }): { date?: string; reason?: string; lines?: string } {
-  const problems: { date?: string; reason?: string; lines?: string } = {}
+// F-OO-142 (order overview §4.3; B-OO-009): why is one of the curated reasons the customer reads — picked, never typed ("Pick why"); the
+// office's own note is optional (it never reaches the customer).
+export function promiseProblems(input: { date: string; reasonCode: string | null; today: string; current: string | null; lineIds: readonly string[]; allLines: boolean }): { date?: string; reasonCode?: string; lines?: string } {
+  const problems: { date?: string; reasonCode?: string; lines?: string } = {}
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) problems.date = 'promise.problem.date'
   else if (input.date < input.today) problems.date = 'promise.problem.past'
   else if (input.allLines && input.date === input.current) problems.date = 'promise.problem.same'
-  if (input.reason.trim() === '') problems.reason = 'promise.problem.reason'
+  if (!isPromiseReasonCode(input.reasonCode)) problems.reasonCode = 'promise.problem.code'
   if (!input.allLines && input.lineIds.length === 0) problems.lines = 'promise.problem.lines'
   return problems
 }
+
+// ---- F-OO-142 (order overview §4.3; B-OO-009): the promise dialog's reason list — the code the customer reads, the office's own note ----
+export const isPromiseReasonCode = (value: string | null | undefined): value is PromiseReasonCode => typeof value === 'string' && (PROMISE_REASON_CODES as readonly string[]).includes(value)
+
+/** The list's choices in the office's language: the customer's own words for each curated reason (one wording, never a synonym). */
+export const promiseReasonChoices = (locale: Locale): { value: PromiseReasonCode; label: string }[] => PROMISE_REASON_CODES.map((code) => ({ value: code, label: PROMISE_REASON_WORDS[code][locale] }))
+
+/**
+ * What the customer reads for the picked reason, in Italian AND English (the portal shows each reader's language: review F10), the
+ * order's language first; null before a pick. The office's note is never in it.
+ */
+export function promiseReasonPreview(code: string | null, orderLanguage: string): { locale: Locale; words: string }[] | null {
+  if (!isPromiseReasonCode(code)) return null
+  const locales: Locale[] = orderLanguage === 'en' ? ['en', 'it'] : ['it', 'en']
+  return locales.map((locale) => ({ locale, words: PROMISE_REASON_WORDS[code][locale] }))
+}
+
+/** What the dialog hands the band's write: the new day, the picked reason, the office's note (may be empty), the lines (null: the order). */
+export interface PromiseInput {
+  readonly date: string
+  readonly reasonCode: PromiseReasonCode
+  readonly note: string
+  readonly lineIds: readonly string[] | null
+}
+
+/** The promise write's body (PUT …/promise, B-OO-009): the order's version, the day, `reasonCode` (what the customer reads) and `reason`
+ * (the office's note, trimmed; empty is allowed with a code); `lineIds` only for chosen lines. */
+export function promiseBodyOf(input: PromiseInput, version: number): { version: number; promiseDate: string; reasonCode: PromiseReasonCode; reason: string; lineIds?: string[] } {
+  return { version, promiseDate: input.date, reasonCode: input.reasonCode, reason: input.note.trim(), ...(input.lineIds ? { lineIds: [...input.lineIds] } : {}) }
+}
+// ---- end F-OO-142
 
 /** The colour lines of an order grouped by style (one size grid per style, colours as its rows). */
 export interface StyleGroup {

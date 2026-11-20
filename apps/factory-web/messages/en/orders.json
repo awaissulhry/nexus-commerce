@@ -786,6 +786,10 @@
     "lines": "Lines",
     "date": "New promise date",
     "dateHint": "From today on. The first promise stays on record.",
+    "why": "Why (the customer reads it)",
+    "pick": "Pick a reason",
+    "customerReads": "The customer reads:",
+    "note": "Your note (office only)",
     "reason": "Why",
     "reasonHint": "Kept in the promise history.",
     "tellCustomer": "Tell the customer in the order's thread (Activity).",
@@ -795,6 +799,7 @@
       "past": "A new promise is a day from today on",
       "same": "It is the promise already",
       "reason": "Say why",
+      "code": "Pick why",
       "lines": "Choose at least one line"
     }
   },

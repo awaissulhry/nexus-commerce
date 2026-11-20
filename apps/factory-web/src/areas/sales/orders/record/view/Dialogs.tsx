@@ -3,7 +3,7 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { Banner, Field, KeyValue } from '@nexus/ui/components'
-import { Button, Checkbox, Input, RadioCard, Spinner } from '@nexus/ui/primitives'
+import { Button, Checkbox, Input, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
 import { DateField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
@@ -17,6 +17,9 @@ import { SplitOrderDialog } from './SplitOrderDialog' // F-OP-111
 import { RequestedDateDialog } from './RequestedDateDialog' // F-OO-144
 import { OrderNoteDialog } from './OrderNoteDialog' // F-OO-210
 import { followUpOf } from '../overview/dates' // F-OO-143: the promise dialog opened by Decide… names the customer's refusal
+// F-OO-142 (order overview §4.3; B-OO-009): the reason list — what the customer reads, in Italian and English; the office's own note.
+import { isPromiseReasonCode, promiseReasonChoices, promiseReasonPreview } from '../../model'
+import { languageName } from '../../../../_shared/reasons/model'
 
 // ---- F-CP-108 (customer page plan C2b; lane agreement (a), the order lead's yes): TYPE ONLY — Mark ready, Close order (and the Cancel
 // in DailyDialogs) are exported with the narrow part of the record's model and actions they read, so the Orders sheet's row mounts
@@ -139,12 +142,18 @@ function PromiseDialog({ order, model, actions }: { order: Order; model: OrderRe
   const linesAllowed = linePromisesAllowed(order)
   const [scope, setScope] = useState<'order' | 'lines'>(model.draft?.scope ?? 'order')
   const [date, setDate] = useState(model.draft?.date ?? '')
-  const [reason, setReason] = useState(model.draft?.reason ?? '')
+  // F-OO-142: why is picked from the curated reasons (the customer reads its words); the note is the office's own.
+  const draftCode = model.draft?.reasonCode
+  const [reasonCode, setReasonCode] = useState<string>(isPromiseReasonCode(draftCode) ? draftCode : '')
+  const [note, setNote] = useState(model.draft?.reason ?? '')
   const [lineIds, setLineIds] = useState<string[]>(model.draft?.lineIds ?? [])
-  const problems = promiseProblems({ date, reason, today: model.today, current: order.promiseDate, lineIds, allLines: scope === 'order' })
-  const firstProblem = problems.date ?? problems.lines ?? problems.reason ?? null
+  const problems = promiseProblems({ date, reasonCode, today: model.today, current: order.promiseDate, lineIds, allLines: scope === 'order' })
+  const firstProblem = problems.date ?? problems.lines ?? problems.reasonCode ?? null
   const held = model.busy ? t('held.busy') : firstProblem ? t(firstProblem) : null
-  const go = () => actions?.onPromise?.({ date, reason: reason.trim(), lineIds: scope === 'lines' ? lineIds : null })
+  const go = () => {
+    if (isPromiseReasonCode(reasonCode)) actions?.onPromise?.({ date, reasonCode, note, lineIds: scope === 'lines' ? lineIds : null })
+  }
+  const preview = promiseReasonPreview(reasonCode, order.language)
   // F-OO-143 (replaces F-OP-105): opened by Next dates' Decide… — the customer's refusal said first; the new date closes its follow-up in
   // the same command (B-OP-025: the whole order's, or with chosen lines only the refused line's). The ONE dialog: no second editor.
   const followUp = followUpOf(model.dialog)
@@ -184,9 +193,27 @@ function PromiseDialog({ order, model, actions }: { order: Order; model: OrderRe
       <Field label={t('promise.date')} hint={t('promise.dateHint')} error={date && problems.date ? t(problems.date) : undefined}>
         <DateField value={date} onChange={setDate} min={model.today} locale={INTL_LOCALE[locale]} ariaLabel={t('promise.date')} />
       </Field>
-      <Field label={t('promise.reason')} hint={t('promise.reasonHint')}>
-        <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={1000} />
+      {/* ---- F-OO-142: why, from the curated list (the customer reads its words, shown in Italian and English); the office's own note ---- */}
+      <Field label={t('promise.why')}>
+        <Select value={reasonCode} onChange={(event) => setReasonCode(event.target.value)}>
+          <option value="">{t('promise.pick')}</option>
+          {promiseReasonChoices(locale).map((choice) => (
+            <option key={choice.value} value={choice.value}>
+              {choice.label}
+            </option>
+          ))}
+        </Select>
       </Field>
+      {preview && (
+        <>
+          <p className="fw-so-hint">{t('promise.customerReads')}</p>
+          <KeyValue dense labelCase="sentence" items={preview.map((entry) => ({ label: languageName(entry.locale, INTL_LOCALE[locale]), value: `“${entry.words}”` }))} />
+        </>
+      )}
+      <Field label={t('promise.note')} hint={t('promise.reasonHint')}>
+        <Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} maxLength={1000} />
+      </Field>
+      {/* ---- end F-OO-142 */}
       <p className="fw-so-hint">{t('promise.tellCustomer')}</p>
     </Frame>
   )

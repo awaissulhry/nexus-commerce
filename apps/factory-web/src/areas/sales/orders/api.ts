@@ -8,6 +8,7 @@ import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
 // F-OP-106: how a work order follows an office change, and the change's kind (factory-domain order-apply: B-OP-012 / B-OP-013).
 import { APPLY_ROUTES } from '@nexus/factory-domain/order-apply/plan'
 import { WORK_ORDER_CHANGE_KINDS, type ApplyRoute } from '@nexus/factory-domain/order-apply/rules'
+import type { PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise' // F-OO-142
 
 /**
  * Every call of the sales order screens (SCR-038 list and board, SCR-039 the order studio), with the answer's shape
@@ -659,7 +660,8 @@ export async function getOrder(api: ApiClient, id: string, signal?: AbortSignal)
 }
 
 /** A new promise date with its reason, for the order or some of its lines (the first promise never changes). */
-export async function changePromise(api: ApiClient, id: string, body: { version: number; promiseDate: string; reason: string; lineIds?: string[] }): Promise<Order> {
+// F-OO-142 (B-OO-009): why = `reasonCode`, the curated reason the customer reads; `reason` = the office's own note (may be empty).
+export async function changePromise(api: ApiClient, id: string, body: { version: number; promiseDate: string; reasonCode: PromiseReasonCode; reason: string; lineIds?: string[] }): Promise<Order> {
   return (await api.request('PUT', `${orderPath(id)}/promise`, { body, schema: one, idempotencyKey: newIdempotencyKey() })).order
 }
 
