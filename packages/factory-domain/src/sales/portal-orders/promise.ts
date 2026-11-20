@@ -11,7 +11,8 @@ import type { Words } from './status'
  * customer: a move shows one of the curated reasons below, in the customer's words, when the office's reason names it —
  * its code (`MATERIAL_LATE`), its code before a note (`MATERIAL_LATE: tannery batch 12 late`: the note stays the
  * office's), or its words in Italian or English — and "Our planning changed" otherwise. The office's dialog offers the
- * list (design sales.orders orders.promise "Reason (list + note)"; a later screen step) and sends the code.
+ * list (design sales.orders orders.promise "Reason (list + note)"; a later screen step) and sends the code: B-OO-009, the
+ * promise route's `reasonCode`, stored by `promiseReasonText`.
  */
 
 export const PROMISE_REASON_CODES = ['MATERIAL_LATE', 'CAPACITY', 'QUALITY', 'YOUR_CHANGE', 'TRANSPORT', 'EARLIER', 'PLANNING'] as const
@@ -38,6 +39,19 @@ export function promiseReasonOf(text: string | null | undefined): PromiseReasonC
   const folded = fold(text)
   return PROMISE_REASON_CODES.find((code) => fold(PROMISE_REASON_WORDS[code].it) === folded || fold(PROMISE_REASON_WORDS[code].en) === folded) ?? 'PLANNING'
 }
+
+// ── B-OO-009 (order overview N10): the promise reason as a field ─────────────────────────────────────────────────────────────
+/**
+ * The reason a promise move stores (the audit row, the lines' promise rows, the closed re-promise follow-ups), from what the
+ * office's dialog sends: the curated code it picked, then the office's own note — `CODE: note`, or `CODE` alone; no code: the
+ * note as typed (the customer then reads PLANNING). `promiseReasonOf` reads the code back; the note never reaches the customer.
+ */
+export function promiseReasonText(code: PromiseReasonCode | null | undefined, note: string | null | undefined): string {
+  const words = typeof note === 'string' ? note.trim() : ''
+  if (!code) return words
+  return words === '' ? code : `${code}: ${words}`
+}
+// ── end B-OO-009 ──
 
 /** One move of the promise as the audit row holds it. */
 export interface PromiseMove {

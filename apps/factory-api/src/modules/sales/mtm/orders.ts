@@ -1,5 +1,6 @@
 import type { CommandTools } from '../../../core/command'
-import { creditHoldOf, orderShapeOf, planOrderApproval } from '../orders-depth/approval'
+import { orderShapeOf, planOrderApproval } from '../orders-depth/approval'
+import { creditHoldOf } from '../credit/check' // B-OO-003: it lives beside the credit check now
 import { waitsForMeasures } from './order-gate'
 
 /**

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { InvalidStateError } from '../../core/errors'
 import { assertTransition, canTransition } from '../../state/machine'
+// B-OO-003: the cancel's impact check reads CANCEL_STATUSES too.
+import { cancelImpact, type CancelFacts } from './daily'
 import {
+  CANCEL_STATUSES,
   daysLate,
   followMoves,
   orderActions,
@@ -9,6 +12,7 @@ import {
   orderProgress,
   promiseProblems,
   promiseStateProblem,
+  reversalMoves,
   salesOrderMachine,
   type AcceptedLine,
   type AcceptedVersion,
@@ -107,6 +111,46 @@ describe('the moves the system follows (workorder.released, shipments, the settl
     expect(canTransition(salesOrderMachine, 'DELIVERED', 'SHIPPED', { shipped: 'ALL' })).toMatchObject({ ok: false, reason: 'not_allowed' })
   })
 })
+
+// ── B-OO-001 (order overview N4, Owner D2): the order follows quality; back to IN_PRODUCTION only on a reversal ─────────────
+describe('the order follows quality: READY after the last release, back only when a release is taken back', () => {
+  it('followMoves plans READY once every piece is released and nothing shipped; READY is skipped once anything shipped', () => {
+    expect(followMoves('IN_PRODUCTION', { releasedWorkOrders: 1, released: true, shipped: 'NONE' })).toEqual(['READY'])
+    expect(followMoves('IN_PRODUCTION', { releasedWorkOrders: 1, released: true, shipped: 'PARTLY' })).toEqual(['PARTLY_SHIPPED'])
+    expect(followMoves('IN_PRODUCTION', { releasedWorkOrders: 1, released: false, shipped: 'NONE' })).toEqual([])
+    expect(followMoves('READY', { releasedWorkOrders: 1, released: true, shipped: 'NONE' })).toEqual([])
+  })
+
+  it('followMoves never plans IN_PRODUCTION from READY: a later partial release or a work order released never undoes it', () => {
+    expect(followMoves('READY', { releasedWorkOrders: 1, released: false, shipped: 'NONE' })).toEqual([])
+    expect(followMoves('READY', { releasedWorkOrders: 2, released: false, shipped: 'NONE', draftWorkOrders: [] })).toEqual([])
+  })
+
+  it('the reversal rule plans IN_PRODUCTION only for a READY order not all released any more, with nothing shipped', () => {
+    expect(reversalMoves('READY', { releasedWorkOrders: 1, released: false, shipped: 'NONE' })).toEqual(['IN_PRODUCTION'])
+    expect(reversalMoves('READY', { releasedWorkOrders: 1 })).toEqual(['IN_PRODUCTION'])
+    expect(reversalMoves('READY', { releasedWorkOrders: 1, released: true, shipped: 'NONE' })).toEqual([])
+    expect(reversalMoves('READY', { releasedWorkOrders: 1, released: false, shipped: 'PARTLY' })).toEqual([])
+    expect(reversalMoves('IN_PRODUCTION', { releasedWorkOrders: 1, released: false, shipped: 'NONE' })).toEqual([])
+    expect(reversalMoves('PARTLY_SHIPPED', { releasedWorkOrders: 1, released: false, shipped: 'PARTLY' })).toEqual([])
+    expect(reversalMoves('CONFIRMED', { releasedWorkOrders: 0, released: false, shipped: 'NONE' })).toEqual([])
+    // A person's reason never takes part.
+    expect(reversalMoves('READY', { releasedWorkOrders: 1, released: true, shipped: 'NONE', reason: 'should not count' })).toEqual([])
+  })
+
+  it('the machine lets READY go back to IN_PRODUCTION only as a reversal leaves it', () => {
+    expect(canTransition(salesOrderMachine, 'READY', 'IN_PRODUCTION', { releasedWorkOrders: 1, released: false, shipped: 'NONE' }).ok).toBe(true)
+    expect(canTransition(salesOrderMachine, 'READY', 'IN_PRODUCTION', { releasedWorkOrders: 1, released: true, shipped: 'NONE' })).toMatchObject({
+      ok: false,
+      missing: ['a quality release taken back, so not every piece is released any more, and nothing shipped yet'],
+    })
+    expect(canTransition(salesOrderMachine, 'READY', 'IN_PRODUCTION', { releasedWorkOrders: 1, released: false, shipped: 'PARTLY' }).ok).toBe(false)
+    // From CONFIRMED the guard is still a released work order of its lines.
+    expect(canTransition(salesOrderMachine, 'CONFIRMED', 'IN_PRODUCTION', { releasedWorkOrders: 0, released: false })).toMatchObject({ ok: false, missing: ['a released work order of its lines'] })
+    expect(canTransition(salesOrderMachine, 'PARTLY_SHIPPED', 'IN_PRODUCTION', { released: false, shipped: 'NONE' })).toMatchObject({ ok: false, reason: 'not_allowed' })
+  })
+})
+// ── end B-OO-001 ──
 
 describe('per line × size progress (the design: Ordered · Made · Shipped · Left)', () => {
   const lines = [
@@ -288,6 +332,23 @@ describe('what a person may do next', () => {
     expect(orderActions('SHIPPED', { settlement: unsettled }).find((action) => action.action === 'close')).toMatchObject({ needsReason: true, held: expect.stringMatching(/^Not settled: A balance/) })
     expect(orderActions('CLOSED', {})).toEqual([])
   })
+  // ── B-OO-003 (order overview N3): an order waiting for a yes is cancelled too ──
+  it('a waiting order offers cancel (a reason asked); its impact check has no STATE block; shipped states keep theirs', () => {
+    expect(CANCEL_STATUSES).toContain('PENDING_APPROVAL')
+    expect(orderActions('PENDING_APPROVAL', {})).toEqual([
+      { action: 'changePromise', allowed: true, needsReason: true, held: null },
+      { action: 'cancel', allowed: true, needsReason: true, held: null },
+    ])
+    expect(canTransition(salesOrderMachine, 'PENDING_APPROVAL', 'CANCELLED', { reason: 'The customer withdrew while it waited.' }).ok).toBe(true)
+    const waiting: CancelFacts = { status: 'PENDING_APPROVAL', workOrders: [], shipments: [], invoices: [], deposits: [{ id: 'd1', status: 'OPEN', amount: 18_300 }], milestones: [], reservations: [], purchaseOrders: [] }
+    const impact = cancelImpact(waiting)
+    expect(impact.blocks).toEqual([])
+    expect(impact.cancellable).toBe(true)
+    expect(impact.touches.map((item) => item.code)).toEqual(['DEPOSITS_CANCELLED'])
+    // An order that shipped keeps its STATE block, in words that say goods left.
+    expect(cancelImpact({ ...waiting, status: 'PARTLY_SHIPPED' }).blocks).toEqual([expect.objectContaining({ code: 'STATE', message: expect.stringMatching(/goods left/) })])
+  })
+  // ── end B-OO-003 ──
   // F-SA-201: a delivered order offers Close order as a shipped one does (settled: no reason; not settled: held, a reason).
   it('a delivered order is closed like a shipped one', () => {
     expect(orderActions('DELIVERED', { settlement: settled })).toEqual([
