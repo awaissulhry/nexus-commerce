@@ -1597,30 +1597,24 @@
     "assignSupervisor": "Assign supervisor…",
     "askSupervisor": "Ask the supervisor…"
   },
+  "where": {
+    "headline": {
+      "closedShipped": "Closed · shipped {shipped}"
+    },
+    "note": {
+      "waiting": "Production starts once the order is confirmed",
+      "reached": "Work had reached {stage} when it was cancelled"
+    },
+    "stagesDone": "Open the work orders in Production · every stage done"
+  },
   "overview": {
     "where": "Where it is now",
     "progress": "Progress by line",
-    "ahead_one": "{count} line ahead",
-    "ahead_other": "{count} lines ahead",
-    "bundles_one": "Bundles in work: {count} at {stage}",
-    "bundles_other": "Bundles in work: {count} at {stage}",
     "notInWorkOrders": "Not in work orders yet",
-    "afterDeposit": "Work orders are made after the deposit",
-    "exFactory": "Ex-factory {date}",
-    "exFactoryMovedOnly": "Ex-factory {date} · moved {count}×",
-    "exFactoryMoved": "Ex-factory {date} · moved {count}× · {days} d since first promised",
     "piecesAsOf": "Pieces as of {time}",
     "headline": {
-      "waitingDeposit": "Confirmed · waiting for the deposit",
       "shipped": "Shipped {shipped}",
       "delivered": "Shipped {shipped} · delivered {delivered}"
-    },
-    "fact": {
-      "who": "Who acts next",
-      "exFactory": "Ex-factory",
-      "health": "Health",
-      "customer": "Customer",
-      "inWork": "In work"
     },
     "col": {
       "line": "Line"

@@ -1597,30 +1597,24 @@
     "assignSupervisor": "Assegna supervisore…",
     "askSupervisor": "Chiedi al supervisore…"
   },
+  "where": {
+    "headline": {
+      "closedShipped": "Chiuso · spedito il {shipped}"
+    },
+    "note": {
+      "waiting": "La produzione parte quando l'ordine è confermato",
+      "reached": "Il lavoro era arrivato a {stage} quando è stato annullato"
+    },
+    "stagesDone": "Apri gli ordini di lavoro in Produzione · tutte le fasi completate"
+  },
   "overview": {
     "where": "A che punto è",
     "progress": "Avanzamento per riga",
-    "ahead_one": "{count} riga avanti",
-    "ahead_other": "{count} righe avanti",
-    "bundles_one": "Fasci in lavorazione: {count} a {stage}",
-    "bundles_other": "Fasci in lavorazione: {count} a {stage}",
     "notInWorkOrders": "Non ancora negli ordini di lavoro",
-    "afterDeposit": "Gli ordini di lavoro si fanno dopo l'acconto",
-    "exFactory": "Franco fabbrica {date}",
-    "exFactoryMovedOnly": "Franco fabbrica {date} · spostata {count} volte",
-    "exFactoryMoved": "Franco fabbrica {date} · spostata {count} volte · {days} g dalla prima promessa",
     "piecesAsOf": "Pezzi alle {time}",
     "headline": {
-      "waitingDeposit": "Confermato · in attesa dell'acconto",
       "shipped": "Spedito il {shipped}",
       "delivered": "Spedito il {shipped} · consegnato il {delivered}"
-    },
-    "fact": {
-      "who": "Chi deve agire",
-      "exFactory": "Franco fabbrica",
-      "health": "Stato",
-      "customer": "Cliente",
-      "inWork": "In lavorazione"
     },
     "col": {
       "line": "Riga"

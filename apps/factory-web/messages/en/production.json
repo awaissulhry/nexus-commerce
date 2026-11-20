@@ -915,7 +915,8 @@
       "failed": "Could not load the stages",
       "office": {
         "planned": "Planned {date}",
-        "promised": "Ex-factory {date}"
+        "promised": "Ex-factory {date}",
+        "setBy": "Stages are set by the floor and quality, never by hand"
       },
       "customer": {
         "expected": "Expected by {date}",
