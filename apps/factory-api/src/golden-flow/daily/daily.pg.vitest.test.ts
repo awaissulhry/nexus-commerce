@@ -2290,6 +2290,11 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
   const l1WorkingDay = async (days: number): Promise<string> => (await ok(P.planner, 'GET', `/calendars/next-working-day?lineId=${H.line()}&after=${today()}&days=${days}`)).date as string
 
   // ---- H01-H04 planning every day ------------------------------------------------------------------------------------------
+  // B-OO-016: the red leather line that carries the seeds' firm red order. planning-depth made it SEED-SO-0001's red line's own
+  // (B-W2b-306), and every order's line is listed first. Since the partly shipped SEED-SO-0002 is planned too (its open
+  // SEED-WO-0001 still needs red leather), the run also has a red line for every order, ahead of it.
+  const so1RedLine = (plan: Json): Json | undefined =>
+    (plan.lines as Json[]).find((line) => line.colour?.id === H.leatherRed() && line.orderSpecific?.orderNumber === 'SEED-SO-0001')
 
   it('H01 the planner runs the daily plan for A1: the seeds’ firm red order rides on it; the planner makes the red leather line firm', async () => {
     const { run } = await ok(P.planner, 'POST', '/planning/runs', { siteId: siteA1(), note: 'Golden daily plan' }, 201)
@@ -2298,7 +2303,7 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     keep(run.id)
     const plan = await ok(P.planner, 'GET', `/planning/runs/latest?siteId=${siteA1()}&itemId=${H.leather()}`)
     expect(plan.run.id).toBe(run.id)
-    const red = (plan.lines as Json[]).find((line) => line.colour?.id === H.leatherRed())
+    const red = so1RedLine(plan) // B-OO-016
     expect(red, 'the run has a red leather line (the seeded firm order, or the open orders’ need)').toBeDefined()
     // B-W2a-22: the seeds' run 1 has a firm red order (4 hides by 16 Nov 2026) and every new run carries it.
     expect(red!.firm).toMatchObject({ quantity: '4.0000', uom: 'HIDE', carried: true })
@@ -2315,7 +2320,7 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     const { run } = await ok(P.planner, 'POST', '/planning/runs', { siteId: siteA1(), note: 'Golden daily plan, after the firm order' }, 201)
     expect(run.status).toBe('DONE')
     const plan = await ok(P.planner, 'GET', `/planning/runs/latest?siteId=${siteA1()}&itemId=${H.leather()}`)
-    const red = (plan.lines as Json[]).find((line) => line.colour?.id === H.leatherRed())!
+    const red = so1RedLine(plan)! // B-OO-016
     expect(red.id).not.toBe(G.firmLine.id)
     expect(red.firm).toMatchObject({ quantity: '4.0000', date: G.firmLine.firm.date, carried: true })
     expect(plan.summary.firm).toBeGreaterThanOrEqual(1)
