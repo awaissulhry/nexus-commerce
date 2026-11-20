@@ -18,6 +18,7 @@ import { viewOpenOf } from '../../../_shared/record-frame/model'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import type { BandDialog, ChangesDialog, LinesDialog, MoneyDialog, OverviewDialog, RecordDialog } from './record-model' // F-OP-134, F-OO-210
+import type { StageHandDialog } from './record-model' // F-MS-102 (ms-fx1): the stage set by hand's dialogs (use-overview-acts)
 // ---- F-OO-111: the banners on Overview and the band's "Who answers the customer…" ----
 import { order } from '../_demo/fixtures'
 import { base } from './fixtures'
@@ -534,13 +535,20 @@ describe('F-OP-134 — one acts hook per tab, mounted by the container, never by
   })
 
   it('RecordDialog is the one slot of every hook\'s dialogs; the dialogs draw by their owner', () => {
-    expectTypeOf<RecordDialog>().toEqualTypeOf<BandDialog | LinesDialog | MoneyDialog | ChangesDialog | OverviewDialog>() // F-OO-210: the office note
+    expectTypeOf<RecordDialog>().toEqualTypeOf<BandDialog | LinesDialog | MoneyDialog | ChangesDialog | OverviewDialog | StageHandDialog>() // F-OO-210: the office note; F-MS-102 (ms-fx1): the stage set by hand
+    // F-MS-102 (ms-fx1): the stage set by hand's dialogs are the Overview hook's (use-overview-acts opens them) and draw in their
+    // owner's card, WhereCard (as the credit check's), never a second time in the record's switch.
+    expect(source('./use-overview-acts.ts')).toContain("act({ kind: 'stageByHand', mode: ask.mode }")
+    expect(source('./use-overview-acts.ts')).toContain("act({ kind: 'stageClear' }")
+    expect(source('./view/overview/WhereCard.tsx')).toContain('<StageHandDialogs order={order} model={model} actions={actions} />')
     const dialogs = source('./view/Dialogs.tsx')
     const at = (words: string) => dialogs.indexOf(words)
     expect(at('// The band (use-band-acts).')).toBeLessThan(at("case 'promise':"))
     // F-OP-106: the amendment has no dialog any more (its strip is the Lines tab's): Lines' first dialog is Close remaining lines.
     expect(at('// Lines (use-lines-acts')).toBeLessThan(at("case 'closeLines':"))
     expect(dialogs).not.toContain("case 'amendReview':")
+    expect(dialogs).not.toContain("case 'stageByHand':") // F-MS-102 (ms-fx1)
+    expect(dialogs).not.toContain("case 'stageClear':")
     expect(at('// Money (use-money-acts).')).toBeLessThan(at("case 'depositLink':"))
   })
 })
