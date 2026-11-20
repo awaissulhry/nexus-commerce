@@ -314,23 +314,27 @@ function LineSizes({ order, row, rows, label, sub, pills, moves, model, actions 
         </span>
       }
     >
-      {sizes.units !== null ? (
-        <p className="fw-so-hint">{t('overview.sizes.units')}</p>
-      ) : (
-        <div className="fw-so-stack">
-          <PiecesGrid colourways={[sizes.colourway]} />
-          <SummaryTable
-            label={t('overview.sizes.label')}
-            columns={[t('overview.sizes.size'), w.t('parts.pieces.stages.SHIPPED'), t('overview.sizes.finish'), t('overview.sizes.extra')]}
-            align={['left', 'right', 'right', 'right']}
-            stackOnPhone
-            rows={sizes.sizes.map((size) => ({ id: size.size, cells: [size.size, String(size.shipped), size.finish ? formatDate(dayInstant(size.finish), { locale }) : t('overview.sizes.noForecast'), extraWords(size.size, size.madeExtra)] }))}
-          />
-        </div>
-      )}
-      {/* F-OO-126: what makes the line, and its final inspections (read only: signed on Quality). */}
-      <LineWorkPart work={work} order={order} model={model} />
-      <LineFinalsPart finals={lineFinalsOf(work, read)} />
+      {/* Walk #15e: the window's three blocks (the sizes, its work orders, its final inspections) one stack apart — no heading touches
+          the table above it. */}
+      <div className="fw-so-stack">
+        {sizes.units !== null ? (
+          <p className="fw-so-hint">{t('overview.sizes.units')}</p>
+        ) : (
+          <div className="fw-so-stack">
+            <PiecesGrid colourways={[sizes.colourway]} />
+            <SummaryTable
+              label={t('overview.sizes.label')}
+              columns={[t('overview.sizes.size'), w.t('parts.pieces.stages.SHIPPED'), t('overview.sizes.finish'), t('overview.sizes.extra')]}
+              align={['left', 'right', 'right', 'right']}
+              stackOnPhone
+              rows={sizes.sizes.map((size) => ({ id: size.size, cells: [size.size, String(size.shipped), size.finish ? formatDate(dayInstant(size.finish), { locale }) : t('overview.sizes.noForecast'), extraWords(size.size, size.madeExtra)] }))}
+            />
+          </div>
+        )}
+        {/* F-OO-126: what makes the line, and its final inspections (read only: signed on Quality). */}
+        <LineWorkPart work={work} order={order} model={model} />
+        <LineFinalsPart finals={lineFinalsOf(work, read)} />
+      </div>
     </DetailModal>
   )
 }
