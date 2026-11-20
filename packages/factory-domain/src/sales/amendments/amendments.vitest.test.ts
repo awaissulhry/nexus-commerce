@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { amendmentDiff, amendmentProblems, amendStateProblem, leftOutOf, nextRevision, snapshotOf, type AmendableLine, type SnapshotHeader, type SnapshotLine } from './amendments'
+import { amendmentDiff, amendmentProblems, amendStateProblem, amountMoves, customerAsked, leftOutOf, nextRevision, snapshotOf, totalGoesUp, type AmendableLine, type SnapshotHeader, type SnapshotLine } from './amendments' // B-OL-005: + amountMoves, customerAsked, totalGoesUp
 import { AUTOMATIC_REASONS, isAutomaticReason, reasonOr } from './reasons' // B-OL-004
 
 const header: SnapshotHeader = { customerRef: 'PO-1', requestedDate: null, promiseDate: '2026-12-20', paymentTerms: 'Bonifico', currency: 'EUR', taxMode: 'IT_B2B', netAmount: 624_000, vatAmount: 137_280, grossAmount: 761_280 }
@@ -102,6 +102,24 @@ describe('what an amendment may do (SAL-209)', () => {
     expect(isAutomaticReason(null)).toBe(false)
   })
   // ── end B-OL-004 ──
+
+  // ── B-OL-005 (order lines plan D3; 18 F10) ──
+  it('B-OL-005: the customer is asked when ticked; not said, only when what it pays goes up (a higher net, or a fee)', () => {
+    const up = { netBefore: 100_000, netAfter: 120_000 }
+    const down = { netBefore: 120_000, netAfter: 100_000 }
+    const same = { netBefore: 100_000, netAfter: 100_000 }
+    // The default: up asks, down and same do not (before, every change of the net asked — a lower one too).
+    expect([customerAsked(undefined, up), customerAsked(undefined, down), customerAsked(null, same)]).toEqual([true, false, false])
+    // A fee (a priced change's, CHARGE's) is what the customer pays too: asked by default, even with a lower net.
+    expect(customerAsked(undefined, { ...down, feeAmount: 2_500 })).toBe(true)
+    expect(customerAsked(undefined, { ...same, feeAmount: null })).toBe(false)
+    // The office's tick decides either way.
+    expect([customerAsked(true, same), customerAsked(false, up), customerAsked(true, down)]).toEqual([true, false, true])
+    // The preview's flags: the amount moves (every writer) and which way (the price grain only).
+    expect([amountMoves(up), amountMoves(down), amountMoves(same), amountMoves({ ...same, feeAmount: 100 })]).toEqual([true, true, false, true])
+    expect([totalGoesUp(up), totalGoesUp(down), totalGoesUp(same), totalGoesUp({ ...same, feeAmount: 100 })]).toEqual([true, false, false, true])
+  })
+  // ── end B-OL-005 ──
 
   it('numbers amendments one after another', () => {
     expect(nextRevision([])).toBe(1)

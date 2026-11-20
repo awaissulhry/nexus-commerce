@@ -12,7 +12,8 @@ import { isAutomaticReason } from '@nexus/factory-domain/sales/amendments/reason
 
 /**
  * The customer's re-acceptance of a revised order (B-W2b-184; SAL-222; W2a's SalesOrderAmendment, B-W2a-30: an amendment
- * that moved the net total sets `reacceptanceNeeded` and the order's `reapprovalNeededAt`). The office asks it with an
+ * that asks the customer — B-OL-005: the office's tick, else a total that went up — sets `reacceptanceNeeded` and the order's
+ * `reapprovalNeededAt`). The office asks it with an
  * approval request of kind REVISED_ORDER on the amendment (platform/approvals-out); the customer reads the order line by
  * line, old → new, with its own prices (the price grain: the link's, the portal person's) and accepts it as it stands or
  * refuses it with its words (a change is a new amendment). Asked only on the order's LATEST amendment that still waits.
@@ -70,8 +71,9 @@ export const REACCEPTANCE_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>(
     if (!row) return null
     const { order } = row
     const latest = await latestRevision(client, order.id)
+    // B-OL-005 (order lines plan D3): a change asks the customer only when the office ticked it (else when the total went up).
     const held = !row.reacceptanceNeeded
-      ? `Revision ${row.revision} did not change the net total: the customer need not accept it again.`
+      ? `Revision ${row.revision} was saved without asking the customer to accept it again.`
       : row.revision !== latest
         ? `Revision ${row.revision} is not the order's latest (${latest}): ask on the latest.`
         : order.reapprovalNeededAt === null

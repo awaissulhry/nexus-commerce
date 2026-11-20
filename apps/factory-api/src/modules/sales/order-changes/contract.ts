@@ -128,6 +128,8 @@ const pricedFields = {
   ),
   /** B-SA-042 (R1): what happens to pieces already cut beyond the new figures; required when the change leaves some. */
   extraOutcome: z.enum(EXTRA_OUTCOMES).nullish(),
+  /** B-OL-005 (order lines plan D3): ask the customer to accept the new order again; left out: only when the total goes up (a fee). */
+  askCustomer: z.boolean().optional(),
 }
 
 const partView = output({ label: z.string(), orderLineId: id().nullable(), amount: money.price(z.number().int()) })
@@ -152,6 +154,11 @@ export const previewPricedChangeContract = defineContract({
       stage: output({ stage, words }).nullable(),
       /** B-OP-013: the extra pieces and what each work order will do (null with the problems of no plan). */
       workOrders: workOrderPreviewView.nullable(),
+      // ── B-OL-005 (order lines plan D3; 18 F10): what the Review window's one tick starts from ──
+      /** The amount changes (the net, or the fee): for every writer, never which way. */
+      amountChanges: notMoney(z.boolean()),
+      /** What the customer pays goes up (a higher net, or a fee): only with the price grain. */
+      totalUp: money.price(z.boolean()),
     }),
   },
 })

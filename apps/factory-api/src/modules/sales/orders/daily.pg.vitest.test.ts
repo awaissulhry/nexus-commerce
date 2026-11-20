@@ -410,6 +410,47 @@ describe('B-OL-004 + B-OL-015: no reason needed (the automatic words are stored)
 })
 // ── end B-OL-004 + B-OL-015 ──
 
+// ── B-OL-005 (order lines plan D3; 18 F10): the customer accepts the new order again only when asked ──
+describe('B-OL-005: the customer is asked only when ticked, else when the total goes up; the preview says if the amount moves, its direction by grain', () => {
+  let typed: Json
+  it('a lower total asks nothing by default; the preview tells every writer the amount moves and only the price grain which way', async () => {
+    // B-CP-011: the typed price of MANUAL is the Owner's.
+    typed = (await ok('owner', 'POST', '/sales/orders/manual', { ...MANUAL, customerRef: 'PO-OL005-1' }, 201)).order
+    const [blk, red] = typed.lines
+    const fewer = { version: typed.version, lines: [{ id: blk.id, sizes: grid([['50', 2], ['52', 1]]) }, { id: red.id }] }
+    const forOwner = await ok('owner', 'POST', `${orderUrl(typed.id)}/amendments/preview`, fewer)
+    expect(forOwner).toMatchObject({ ok: true, amountChanges: true, totalUp: false })
+    // Sales never learns the direction: the amount moves, and nothing more.
+    const forSales = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments/preview`, fewer)
+    expect(forSales).toMatchObject({ ok: true, amountChanges: true })
+    expect(forSales).not.toHaveProperty('totalUp')
+    const more = await ok('owner', 'POST', `${orderUrl(typed.id)}/amendments/preview`, { version: typed.version, lines: [{ id: blk.id, sizes: grid([['50', 2], ['52', 3]]) }, { id: red.id }] })
+    expect(more).toMatchObject({ amountChanges: true, totalUp: true })
+    // Applied without the tick: the total went down, the customer is not asked (it used to be, on any change of the net).
+    const applied = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments`, fewer, 201)
+    expect(applied.amendment).toMatchObject({ reacceptance: 'NOT_NEEDED' })
+    expect(applied.order.reapprovalNeededAt).toBeNull()
+    expect((await events('sales_order.amended', typed.id)).map((event) => event.payload.reacceptanceNeeded)).toEqual([false])
+    typed = applied.order
+  })
+
+  it('a change of words alone with the tick asks the customer; the same tick off on a higher total asks nothing', async () => {
+    const [blk, red] = typed.lines
+    const words = { version: typed.version, askCustomer: true, lines: [{ id: blk.id, note: 'Made-up: logo 2 cm higher.' }, { id: red.id }] }
+    const preview = await ok('owner', 'POST', `${orderUrl(typed.id)}/amendments/preview`, words)
+    expect(preview).toMatchObject({ ok: true, amountChanges: false, totalUp: false })
+    const asked = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments`, words, 201)
+    expect(asked.amendment).toMatchObject({ reacceptance: 'NEEDED' })
+    expect(asked.order.reapprovalNeededAt).not.toBeNull()
+    expect((await events('sales_order.amended', typed.id)).map((event) => event.payload.reacceptanceNeeded)).toEqual([false, true])
+    // The office says the customer need not be asked: a higher total, the tick off.
+    const higher = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments`, { version: asked.order.version, askCustomer: false, lines: [{ id: blk.id, sizes: grid([['50', 3], ['52', 1]]) }, { id: red.id }] }, 201)
+    expect(higher.amendment).toMatchObject({ reacceptance: 'NOT_NEEDED' })
+    expect((await one('SELECT "reacceptanceNeeded" FROM "SalesOrderAmendment" WHERE id = $1', [higher.amendment.id])).reacceptanceNeeded).toBe(false)
+  })
+})
+// ── end B-OL-005 ──
+
 // ── B-OL-012 (order lines plan O12): a charge (fee) line no longer blocks the order ──
 describe('B-OL-012: an order with a charge line takes an amendment; the charge stays as stored and still counts in the totals', () => {
   it('amends the goods; the totals are goods + the charge; the charge row and its snapshot are unchanged', async () => {
@@ -694,7 +735,8 @@ describe('B-OP-014: the put-back of a change that closed a line short reopens it
     // work order in progress waits); the seller may not send it.
     const before = await recordOf(order.id, 'owner')
     const red = before.lines.find((line: Json) => line.id === order.red.id)
-    const body = { reason: 'The customer drops the black jackets; the red ones at a new price.', lines: [{ id: order.red.id, unitPrice: '1.00' }] }
+    // B-OL-005 (order lines plan D3): the total goes down, so the office ticks the customer's re-acceptance itself (else not asked).
+    const body = { reason: 'The customer drops the black jackets; the red ones at a new price.', lines: [{ id: order.red.id, unitPrice: '1.00' }], askCustomer: true }
     await refused('sales', 'POST', `${orderUrl(order.id)}/amendments`, { version: order.version, ...body }, 403)
     const applied = await ok('pricedSales', 'POST', `${orderUrl(order.id)}/amendments`, { version: order.version, ...body }, 201)
     expect(applied.amendment).toMatchObject({ reacceptance: 'NEEDED' })

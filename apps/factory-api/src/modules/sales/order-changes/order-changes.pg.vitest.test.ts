@@ -310,20 +310,28 @@ describe('a priced change may cost nothing — "no charge" (B-OL-016)', () => {
     expect(await one<Json>(`SELECT "priceDeltaLines", "feeAmount", "depositRequestId" FROM "SalesOrderAmendment" WHERE id = $1`, [applied.change.id])).toEqual({ priceDeltaLines: null, feeAmount: null, depositRequestId: null })
     expect(await noChargeAudit()).toMatchObject({ amendmentId: applied.change.id, noCharge: true })
     expect(await outbox('sales_order.change_priced', order.id)).toEqual(expect.arrayContaining([expect.objectContaining({ amendmentId: applied.change.id, hasFee: false, depositRequestId: null })]))
+    // B-OL-005 (order lines plan D3): nothing to pay, no tick — the customer is not asked (a priced change used to ask always).
+    expect(preview).toMatchObject({ amountChanges: false, totalUp: false })
+    expect((await one<Json>(`SELECT "reacceptanceNeeded" FROM "SalesOrderAmendment" WHERE id = $1`, [applied.change.id])).reacceptanceNeeded).toBe(false)
     await refreshLines()
   })
 
   it('Sales (no price grain): the same change with no money field is taken as no charge; a fee or a deposit from Sales is still refused (403)', async () => {
-    const body = moved((await orderRow(order.id)).version, openSize, cutSize)
+    // B-OL-005 + 18 F25: Sales saves it as "no charge, the customer is asked" — its one tick.
+    const body = { ...moved((await orderRow(order.id)).version, openSize, cutSize), askCustomer: true }
     // The grain filter: a money field from a writer without the price grain is refused, nothing written.
     await no('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, { ...body, fee: '10.00' }, 403)
     await no('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, { ...body, deposit: null }, 403)
     const preview = await ok('sales', 'POST', `/sales/orders/${order.id}/priced-changes/preview`, body)
     expect(preview).toMatchObject({ ok: true, problems: [], yes: 'APPLIES_AT_ONCE' })
     for (const field of ['parts', 'feeAmount', 'changeAmount', 'deposit']) expect(preview).not.toHaveProperty(field)
+    expect(preview).toMatchObject({ amountChanges: false })
+    expect(preview).not.toHaveProperty('totalUp')
     const applied = await ok('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, body, 201)
-    expect(applied.change).toMatchObject({ priced: false })
+    // The ask itself is the web's next call (POST /approvals-out, REVISED_ORDER): until then the decision is "not asked yet".
+    expect(applied.change).toMatchObject({ priced: false, customer: { decision: 'NOT_ASKED' } })
     expect(applied.change).not.toHaveProperty('changeAmount')
+    expect((await orderRow(order.id)).reapprovalNeededAt).not.toBeNull()
     expect(await noChargeAudit()).toMatchObject({ amendmentId: applied.change.id, noCharge: true })
     // None unless sent (O9): no extra deposit for a change that sent none.
     expect((await one<Json>(`SELECT "depositRequestId" FROM "SalesOrderAmendment" WHERE id = $1`, [applied.change.id])).depositRequestId).toBeNull()

@@ -3,6 +3,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { addDays } from '@nexus/factory-domain/sales/quotes/quotes'
+import { AUTOMATIC_REASONS } from '@nexus/factory-domain/sales/amendments/reasons' // B-OL-004 (with B-OL-020)
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedReasons } from '../../../../../../packages/factory-db/seed/reasons'
@@ -1217,5 +1218,26 @@ describe('B-OP-015: the office amends the delivery address — an ACTIVE one of 
     expect((await previewAmendment(office(), order.id, ask(seedUuid(NS, 'party-address:P2:office')))).problems).toEqual((await previewAmendment(office(), order.id, ask(newId()))).problems)
     expect(await shipToOf(order.id)).toMatchObject({ line1: 'Via Esempio 99' })
   })
+
+  // ── B-OL-020 (order lines plan D7): the Overview's windows send the order's field alone — no lines, no reason ──
+  it('B-OL-020: no lines sent — the address alone writes no amendment; the customer PO alone writes one, every line kept as it is', async () => {
+    const order = await plantedOrder()
+    const sizesOf = () => admin('SELECT "lineId"::text AS "lineId", size, quantity FROM "SalesOrderLineSize" WHERE "lineId" = ANY($1::uuid[]) ORDER BY "lineId", size', [order.lines])
+    const sizesBefore = await sizesOf()
+    expect(await previewAmendment(office(), order.id, { shipToAddressId: workshop })).toMatchObject({ ok: true, problems: [], diff: null, shipTo: { addressId: workshop, amendment: false }, amountChanges: false })
+    const moved = await applyAmendment(office(), order.id, { version: 1, shipToAddressId: workshop })
+    expect(moved.amendment).toBeNull()
+    expect(await shipToOf(order.id)).toMatchObject({ line1: 'Via Esempio 12' })
+    expect(await admin('SELECT count(*)::int AS n FROM "SalesOrderAmendment" WHERE "orderId" = $1', [order.id])).toEqual([{ n: 0 }])
+    const version = (await one<{ version: number }>('SELECT version FROM "SalesOrder" WHERE id = $1', [order.id])).version
+    const po = await applyAmendment(office(), order.id, { version, customerRef: 'PO-OL020-1' })
+    expect(po.amendment).toMatchObject({ revision: 1, reacceptance: 'NOT_NEEDED', reason: AUTOMATIC_REASONS.amend })
+    expect(po.amendment!.diff).toMatchObject({ lines: [], header: [{ field: 'customerRef', after: 'PO-OL020-1' }] })
+    expect(po.order).toMatchObject({ customerRef: 'PO-OL020-1' })
+    expect(await sizesOf()).toEqual(sizesBefore)
+    // Lines sent are at least one (the route's contract says it too): an empty list is no "keep every line".
+    expect(await thrown(applyAmendment(office(), order.id, { version: po.order.version, customerRef: 'PO-OL020-2', lines: [] }))).toMatchObject({ code: 'validation_failed' })
+  })
+  // ── end B-OL-020 ──
 })
 // ── end B-OP-015 ──
