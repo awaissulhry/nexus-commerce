@@ -11,6 +11,13 @@ import type { OrderRecordModel } from '../record-model'
 import { PeopleCard } from '../view/overview/PeopleCard'
 import { FAILED_STATE, LOADING_STATE, NO_WORK_READ, PEOPLE, PRODUCTION_READ, ready } from './fixtures'
 import { peopleViewOf, placeWords } from './people'
+// ---- F-OO-133: the real answerer, its held door, and the re-read after the owner changed ----
+import type { ComponentType } from 'react'
+import { renderView } from '../../../../../lib/record-thread/parts/testing'
+import { rightRef } from '../../../../../lib/i18n/rights'
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { designScreen } from '../fixtures'
+import { answererWordsOf, answerHeldOf, OWNER_WORDS_NS } from './people'
 
 /** F-OO-100 (order overview lane: one file per section) — People's rules, moved with people.ts out of overview.vitest.test.ts unchanged. */
 
@@ -157,3 +164,105 @@ describe('F-OO-132: People › Supervisor — the row face; Change… held in it
   })
 })
 // ---- end F-OO-132
+
+// ---- F-OO-133 (10-design §3.2, review F1; B-OO-008): Answers the customer — the real answerer and why; Change… held; read again ------
+describe('F-OO-133: People › Answers the customer — who and why in the thread head’s words, Change… held in words, People read again after the owner changed', () => {
+  const value = order('IN_PRODUCTION')
+  const head = (locale: 'en' | 'it') => createTranslator(locale, messagesFor(locale, [OWNER_WORDS_NS])[OWNER_WORDS_NS]!)
+  const bea = { id: '0190f0e2-9191-7000-8000-000000000001', name: 'Bea Esempio', active: true } as const
+  const rights = (mayNote: boolean): NonNullable<OrderRecordModel['people']> => ({ mayAssign: true, mayNote, assign: null, note: null })
+  const answersRow = (html: string, locale: 'en' | 'it' = 'en') => html.split('<li class="fw-so-ov-row">').slice(1).find((row) => textOf(row).startsWith(locale === 'en' ? 'Answers the customer' : 'Risponde al cliente')) ?? ''
+  const people = (answersCustomer: (typeof PEOPLE)['answersCustomer']) => ready({ ...PRODUCTION_READ, people: { ...PEOPLE, answersCustomer } })
+  const band = { back: createElement('a', { href: '/w/DEMO/sales/orders' }, 'Orders'), title: 'SO-2026-0142 · Moto Demo S.r.l.' }
+  /** The card inside the order page's frame: with the conversation docked (the frame's doors), or none for this person. */
+  const inFrame = (record: OrderRecordModel, thread: boolean, locale: 'en' | 'it' = 'en') =>
+    render(createElement(RecordFrame, { recordType: 'SalesOrder', personId: 'u1', band, thread: thread ? createElement('div', null, 'thread') : null, threadLabel: 'The order’s thread', record: { type: 'SalesOrder', id: value.id }, children: createElement(PeopleCard, { order: value, model: record }) }), locale)
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  /** Words as the server writes them inside an attribute. */
+  const attr = (words: string) => words.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;')
+
+  it('who and why: each step of the owner chain in the head’s words, en + it; an inactive person stays named; an older answer: the name; nobody: "No owner yet"', () => {
+    const en = head('en')
+    const it = head('it')
+    expect(answererWordsOf({ ...bea, source: 'SUPERVISOR' }, en)).toBe("Bea Esempio · the order's supervisor")
+    expect(answererWordsOf({ ...bea, source: 'SET' }, en)).toBe('Bea Esempio · chosen')
+    expect(answererWordsOf({ ...bea, source: 'MAKER' }, en)).toBe('Bea Esempio · who made the record')
+    expect(answererWordsOf({ ...bea, source: 'ASSIGNEE' }, en)).toBe("Bea Esempio · the request's assignee")
+    expect(answererWordsOf({ ...bea, source: 'SUPERVISOR' }, it)).toBe("Bea Esempio · supervisore dell'ordine")
+    expect(answererWordsOf({ ...bea, source: 'SET' }, it)).toBe('Bea Esempio · scelto')
+    expect(answererWordsOf({ ...bea, source: 'MAKER' }, it)).toBe('Bea Esempio · chi ha creato il record')
+    expect(answererWordsOf({ ...bea, active: false, source: 'SET' }, en)).toBe('Bea Esempio (inactive) · chosen')
+    expect(answererWordsOf({ ...bea, active: false, source: 'SET' }, it)).toBe('Bea Esempio (non attivo) · scelto')
+    expect(answererWordsOf({ ...bea }, en)).toBe('Bea Esempio')
+    expect(answererWordsOf(null, en)).toBe('No owner yet')
+    expect(answererWordsOf(null, it)).toBe('Nessun responsabile')
+  })
+
+  it('the card: "Bea Esempio · the order’s supervisor" with Change…; nobody reads "No owner yet", never "—"; in Italian too', () => {
+    const owner = (production: ReturnType<typeof ready>) => base('owner', value, { tab: 'overview', production, people: rights(true) }).record
+    expect(textOf(answersRow(render(createElement(PeopleCard, { order: value, model: owner(people(PEOPLE.answersCustomer)) }))))).toBe("Answers the customer Bea Esempio · the order's supervisor Change…")
+    expect(textOf(answersRow(render(createElement(PeopleCard, { order: value, model: owner(people({ ...bea, source: 'SET' })) }), 'it'), 'it'))).toBe('Risponde al cliente Bea Esempio · scelto Cambia…')
+    const nobody = textOf(answersRow(render(createElement(PeopleCard, { order: value, model: owner(people(null)) }))))
+    expect(nobody).toBe('Answers the customer No owner yet Change…')
+    expect(nobody).not.toContain('—')
+    // The words come from the thread head's catalogue, which the card brings itself (the design index draws it without the dock).
+    const view = source('../view/overview/PeopleCard.tsx')
+    expect(view).toContain('<WithMessages namespaces={[OWNER_WORDS_NS]}>')
+    expect(view).toContain('{answererWordsOf(view.people.answersCustomer, head)}')
+    expect(view).not.toContain("answersCustomer?.name ?? '—'")
+  })
+
+  it('Change… held in words, never hidden: no conversation on the page; no right to write in it (the dock’s own words); with both: free', () => {
+    expect(answerHeldOf({ thread: false, mayWrite: true })).toEqual({ ns: 'orders', key: 'waiting.noThread' })
+    expect(answerHeldOf({ thread: true, mayWrite: false })).toEqual({ ns: OWNER_WORDS_NS, key: 'held.noRight', params: { right: rightRef('threads.post') } })
+    expect(answerHeldOf({ thread: true, mayWrite: true })).toBeNull()
+    expect(answerHeldOf({ thread: true, mayWrite: null })).toBeNull()
+    // No conversation for this person on the page (no frame doors): held with the page's sentence.
+    const sales = (mayNote: boolean) => base('sales', value, { tab: 'overview', production: people(PEOPLE.answersCustomer), people: rights(mayNote) }).record
+    expect(answersRow(inFrame(sales(true), false))).toContain('aria-description="The conversation is not on this page"')
+    // The conversation docked, but no right to write in it: the dock's words for the same door ("You need the right “…”"), en + it.
+    for (const locale of ['en', 'it'] as const) {
+      const words = head(locale)('held.noRight', { right: rightRef('threads.post') })
+      expect(words, locale).not.toContain('right:')
+      expect(answersRow(inFrame(sales(false), true, locale), locale), locale).toContain(`aria-description="${attr(words)}"`)
+    }
+    // Docked and allowed: Change… opens the owner door, nothing holds it.
+    const free = answersRow(inFrame(sales(true), true))
+    expect(free).toContain('>Change…</button>')
+    expect(free).not.toContain('aria-disabled')
+    // The dock refuses the same door in the same words when it is asked anyway (one wording).
+    expect(source('../../../../_shared/record-thread/DockedOfficeThread.tsx')).toContain("key: 'held.noRight', params: { right: rightRef('threads.post') }")
+  })
+
+  it('Read-only: the answerer and why, no Change…', () => {
+    const record = base('sales', value, { tab: 'overview', production: people(PEOPLE.answersCustomer), people: rights(false), can: abilitiesOf(['orders.view', 'workorders.view']) }).record
+    const row = answersRow(inFrame(record, true))
+    expect(textOf(row)).toBe("Answers the customer Bea Esempio · the order's supervisor")
+    expect(row).not.toContain('<button')
+  })
+
+  it('a re-read after the owner changed (no event comes): the dock tells its host, the order dock passes it to This order’s conversation only, the page reads People alone', () => {
+    const docked = source('../../../../_shared/record-thread/DockedOfficeThread.tsx')
+    expect(docked).toContain('onOwnerChanged?: () => void')
+    const pick = docked.slice(docked.indexOf('const pickOwner = async'), docked.indexOf('} catch (error) {', docked.indexOf('const pickOwner = async')))
+    // Only after the API took the new owner (a refusal keeps the dialog open with its words; nothing is read again).
+    expect(pick.indexOf('host.onOwnerChanged?.()')).toBeGreaterThan(pick.indexOf('await setThreadOwner(api, key, ownerId)'))
+    const dock = source('../dock/OrderDock.tsx')
+    const mounts = dock.split('\n').filter((line) => line.includes('<OfficeRecordThread key='))
+    expect(mounts).toHaveLength(4)
+    for (const line of mounts) expect(line.includes('onOwnerChanged'), line.slice(0, 60)).toBe(line.includes('key="order"'))
+    const container = source('../OrderRecord.tsx')
+    expect(container).toContain("const rereadPeople = () => production.again(['people'])")
+    // Both of the page's conversations of the order (with a customer: the order dock; without: the thread alone) pass it.
+    expect(container.match(/onOwnerChanged=\{rereadPeople /g)).toHaveLength(2)
+  })
+
+  it('the design index’s overview case draws the real card (W05 follow-up): the four rows, never the withheld sentence', () => {
+    const view = designScreen.view as ComponentType<{ model: unknown }>
+    const html = renderView(view, designScreen.cases.find((item) => item.id === 'overview')!.model)
+    expect(html).toContain('<ul class="fw-so-people-list">')
+    expect(textOf(html)).not.toContain('Who works on it is shown to people who follow production.')
+    expect(textOf(answersRow(html))).toContain("Bea Esempio · the order's supervisor")
+  })
+})
+// ---- end F-OO-133

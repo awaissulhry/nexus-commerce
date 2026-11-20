@@ -1,3 +1,5 @@
+import type { Translate } from '../../../../../lib/i18n/messages'
+import { rightRef } from '../../../../../lib/i18n/rights' // F-OO-133: the right that choosing who answers needs, in words
 import type { OrderProduction, People } from './api'
 import type { ProductionState } from './model'
 
@@ -32,3 +34,37 @@ export function peopleViewOf(state: ProductionState | null | undefined): PeopleV
   return { status: 'ready', people }
 }
 // ---- end F-OO-131
+
+// ---- F-OO-133 (order overview lane; 10-design §3.2, review F1; B-OO-008): Answers the customer — who, and why -------------------------
+/** The thread head's catalogue: "Answers the customer" says who and why in the head's own words (one wording for one fact). */
+export const OWNER_WORDS_NS = 'record-thread-head'
+
+/**
+ * Who answers the customer, in words: the person the conversation's owner chain names (B-OO-008: chosen on the thread, else the
+ * order's supervisor, else who made the order) and why, in the thread head's words (`owner.source.*`; an older answer without its
+ * source: the name alone). An inactive person stays named, marked inactive (`owner.inactive`). Nobody (a portal-made order without a
+ * supervisor): the head's own "No owner yet" — never "—".
+ */
+export function answererWordsOf(person: People['answersCustomer'], head: Translate): string {
+  if (!person) return head('owner.nobody')
+  const name = person.active ? person.name : head('owner.inactive', { name: person.name })
+  return person.source ? `${name} · ${head(`owner.source.${person.source}`)}` : name
+}
+
+/** What holds "Answers the customer · Change…", in its catalogue's words; null: nothing holds it. */
+export type AnswerHeld =
+  | { readonly ns: 'orders'; readonly key: 'waiting.noThread' }
+  | { readonly ns: typeof OWNER_WORDS_NS; readonly key: 'held.noRight'; readonly params: { readonly right: string } }
+
+/**
+ * Change… opens the conversation's owner dialog (the frame's owner door), so it is held where that door cannot save, never hidden:
+ * the page shows this person no conversation ("The conversation is not on this page"), or the person may not write in it — choosing
+ * who answers needs threads.post (the API refuses it, platform/threads/owner.ts), said in the dock's own words for the same door
+ * (record-thread-head `held.noRight` with the right). `mayWrite` null: the page did not say (a design case) — nothing held.
+ */
+export function answerHeldOf(input: { readonly thread: boolean; readonly mayWrite: boolean | null }): AnswerHeld | null {
+  if (!input.thread) return { ns: 'orders', key: 'waiting.noThread' }
+  if (input.mayWrite === false) return { ns: OWNER_WORDS_NS, key: 'held.noRight', params: { right: rightRef('threads.post') } }
+  return null
+}
+// ---- end F-OO-133

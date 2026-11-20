@@ -4,10 +4,12 @@ import Link from 'next/link'
 import { Card } from '@nexus/ui/components'
 import { Button, Skeleton } from '@nexus/ui/primitives'
 import { useT } from '../../../../../../lib/i18n/provider'
+import { WithMessages } from '../../../../../../record-panels/i18n' // F-OO-133: the thread head's words (who answers, and why)
 import type { Order } from '../../../api'
 import { readOnlyOnPage } from '../../../model' // F-OO-131: Read-only sees no moves (the band's own rule)
 import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame' // F-OP-104: the owner door
 import { peopleViewOf, placeWords } from '../../overview/people'
+import { answererWordsOf, answerHeldOf, OWNER_WORDS_NS } from '../../overview/people' // F-OO-133
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { PartState } from '../OrderRecordView' // F-OO-131: a failed read says so (never an empty card)
 // ---- F-SA-233: People (the production lane's SupervisorFact in place) ----
@@ -30,9 +32,20 @@ import './people.css' // F-OO-131: the card's own rows
  * head. "Made by" went to Order facts (F-OO-209) and "Told about changes" to the foot of Requests & changes (F-OO-205): one place
  * per fact. Read-only sees no moves; a failed read says so with Try again.
  */
-export function PeopleCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+export function PeopleCard(props: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  // F-OO-133: "Answers the customer" says who and why in the thread head's words — its catalogue comes with the card (the design index
+  // draws the card without the dock that loads it).
+  return (
+    <WithMessages namespaces={[OWNER_WORDS_NS]}>
+      <People {...props} />
+    </WithMessages>
+  )
+}
+
+function People({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const notes = useT(NOTES_NS)
+  const head = useT(OWNER_WORDS_NS) // F-OO-133
   const frame = useRecordFrame() // F-OP-104: "Answers the customer · Change…" is the conversation's owner door
   const customer = order.party?.legalName ?? ''
   const view = peopleViewOf(model.production)
@@ -40,6 +53,9 @@ export function PeopleCard({ order, model, actions }: { order: Order; model: Ord
   // F-OO-131: Read-only (no acting right on the page) sees the facts and the links, never a door.
   const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
   const askWait = model.people ? noteHeld(model.people.mayNote, 1) : null
+  // F-OO-133: Change… (the owner door) held where it cannot save: no conversation on this page (the frame offers its doors only with
+  // one), or no right to write in it.
+  const answerHeld = answerHeldOf({ thread: !!frame?.discuss && !!frame.openDoor, mayWrite: model.people ? model.people.mayNote : null })
   return (
     <Card padded className="fw-so-people">
       <div className="fw-so-card-head">
@@ -75,13 +91,16 @@ export function PeopleCard({ order, model, actions }: { order: Order; model: Ord
               </Link>
             </span>
           </li>
-          {/* F-OP-104: who answers the customer is the order conversation's owner — its own dialog, opened from here (the frame's door). */}
+          {/* F-OP-104: who answers the customer is the order conversation's owner — its own dialog, opened from here (the frame's door).
+              F-OO-133: the real answerer and why (the owner chain, B-OO-008: "Bea Esempio · the order's supervisor"); Change… held in
+              words where the door cannot save. Once the dock changed the owner the page reads People again (no event: OrderRecord's
+              onOwnerChanged). */}
           <li className="fw-so-ov-row">
             <span className="fw-so-people-label">{t('overview.people.answers')}</span>
-            <span>{view.people.answersCustomer?.name ?? '—'}</span>
+            <span>{answererWordsOf(view.people.answersCustomer, head)}</span>
             {!readOnly && (
               <span className="fw-so-ov-doors">
-                <Button size="sm" variant="quiet" heldReason={frame?.openDoor ? null : t('waiting.noThread')} onClick={() => frame?.openDoor?.('owner')}>
+                <Button size="sm" variant="quiet" heldReason={answerHeld ? (answerHeld.ns === 'orders' ? t(answerHeld.key) : head(answerHeld.key, answerHeld.params)) : null} onClick={() => frame?.openDoor?.('owner')}>
                   {t('doors.change')}
                 </Button>
               </span>

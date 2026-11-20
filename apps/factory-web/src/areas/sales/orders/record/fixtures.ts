@@ -86,6 +86,7 @@ import { releaseCheck, workOrder as productionWorkOrder } from '../../../product
 import { HOLD_REASONS, PRODUCTION_HOLD_REASONS } from '../../../production/work-orders/daily/demo/fixtures'
 // F-SA-243: the order's requests (the shared request fixtures) and its production read with Still to do.
 import { PRODUCTION_READ } from './overview/fixtures'
+import { PEOPLE } from './overview/fixtures' // F-OO-133: the overview case draws the real People card
 import { brandRequest } from '../../../home/approvals/requests/fixtures'
 import { ORDER_ID } from '../_demo/fixtures'
 // F-CP-142: Money's Price check card — the ONE window's made-up check and its states (so/price-check, F-CP-114).
@@ -847,7 +848,9 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'cp-148-files-manager', label: 'F-CP-148 · Seen as Production manager · Files: the same counted lock line; the artwork and the photos open', model: base('manager', production, { tab: 'files', files: { read: PRICED_LOCKED, problem: null, selected: [], canShare: false } }) },
     // ---- end F-CP-148
     // ---- F-SA-232: Overview, the first tab ("where is it now", progress by line — the order's own pieces) ----
-    { id: 'overview', label: 'F-SA-232 · Sales · Overview: Sewing · 1 line ahead, at risk, waiting on us, Urgent (customer), 3 bundles in work; the lines’ own pieces (Rosso: sewing not counted here)', model: base('sales', production, { tab: 'overview', production: ready(), liveState: 'live' }) },
+    // F-OO-133 (W05 follow-up): with the people part read (PEOPLE) and Sales' People rights (Ask; no supervisor right) — the real card,
+    // never the withheld sentence of a part not read.
+    { id: 'overview', label: 'F-SA-232 · Sales · Overview: Sewing · 1 line ahead, at risk, waiting on us, Urgent (customer), 3 bundles in work; the lines’ own pieces (Rosso: sewing not counted here)', model: base('sales', production, { tab: 'overview', production: ready({ ...PRODUCTION_READ, people: PEOPLE }), people: { mayAssign: false, mayNote: true, assign: null, note: null }, liveState: 'live' }) },
     { id: 'overview-confirmed', label: 'F-SA-232 · Sales · Overview before any work order: Confirmed · waiting for the deposit; Preparing — work orders are made after the deposit', model: base('sales', confirmed, { tab: 'overview', production: ready(CONFIRMED_READ), liveState: 'live' }) },
     { id: 'overview-sizes', label: 'F-SA-232 · Sales · Overview: line 10’s sizes in the centred window (PiecesGrid, shipped, the finish forecast)', model: base('sales', production, { tab: 'overview', production: ready(), overviewLine: LINE_BLK, liveState: 'live' }) },
     { id: 'overview-loading', label: 'F-SA-232 · Overview reading (skeletons, never a 0)', model: base('sales', production, { tab: 'overview', production: LOADING_STATE, liveState: 'connecting' }) },
