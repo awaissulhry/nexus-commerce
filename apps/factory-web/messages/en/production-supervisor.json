@@ -53,6 +53,7 @@
     "noRight": "your role does not set this order's production supervisor.",
     "notInProduction": "this order is no longer in production.",
     "noState": "this order has no production state yet: try again in a moment.",
+    "notYet": "this order waits for a yes: its supervisor is set once it is confirmed.",
     "NOT_OFFICE": "only a person of the office can supervise production.",
     "NOT_ACTIVE": "this person is no longer active.",
     "NO_REACH": "this person may not work on this customer's production.",
@@ -70,6 +71,8 @@
   },
   "held": {
     "noRight": "Setting a production supervisor needs the right to manage customers' production.",
+    "notYet": "This order waits for a yes: its supervisor is set once it is confirmed.",
+    "noLonger": "This order is no longer in production: its supervisor stays.",
     "noCustomerOrder": "These work orders have no one customer order: there is no supervisor to set.",
     "nothing": "Select work orders first.",
     "tooMany": "{count} orders: at most {max} at a time."

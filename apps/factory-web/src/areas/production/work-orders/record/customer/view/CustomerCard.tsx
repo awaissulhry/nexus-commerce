@@ -84,7 +84,7 @@ function Block({ block, many, workOrder, model, card, actions }: { block: Custom
     { label: t('customerCard.row.requests'), value: <RequestsRow block={block} part={block.requests} requests={requests} prefix={model.prefix} now={card.now} onRetry={actions?.customerCard?.onRetry} /> },
     { label: t('customerCard.row.approvals'), value: <ApprovalsRow part={block.approvals} onRetry={actions?.customerCard?.onRetry} /> },
     { label: t('customerCard.row.urgency'), value: <UrgencyRow block={block} lines={lines} card={card} actions={actions} /> },
-    ...(supervisor.kind !== 'none' && model.supervisor ? [{ label: t('customerCard.row.supervisor'), value: <SupervisorFact fact={supervisor} can={model.supervisor.can} {...(actions?.supervisor?.onOpen ? { onChange: actions.supervisor.onOpen } : {})} /> }] : []),
+    ...(supervisor.kind !== 'none' && model.supervisor ? [{ label: t('customerCard.row.supervisor'), value: <SupervisorFact face="line" fact={supervisor} held={model.supervisor.can ? null : 'noRight'} /* F-OO-132: the band's face, held only for the right, as before */ {...(actions?.supervisor?.onOpen ? { onChange: actions.supervisor.onOpen } : {})} /> }] : []),
     { label: t('customerCard.row.problems'), value: <ProblemsRow part={block.issues} issues={issues} model={model} actions={actions} /> },
     { label: t('customerCard.row.limits'), value: <LimitsRow block={block} prefix={model.prefix} partiesView={!!model.partiesView} onRetry={actions?.customerCard?.onRetry} /> },
     { label: tl('limits.sees.title', { name }), value: <SeesRow block={block} name={name} model={model} workOrder={workOrder} many={many} actions={actions} /> },
