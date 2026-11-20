@@ -317,13 +317,15 @@ describe('B-SA-046: a design change waiting for our answer is listed and counted
   it('lists the OPEN design change as a change request of its order and counts it in "waiting on us"; another customer\'s person neither', async () => {
     const before = (await count()).count as number
     const beforeP3 = (await countOf('onlyP3')).count as number
-    // A design change asked on the order of the open change request (its customer, its company), its one line as a whole — as the
-    // portal writes it: the request and its line in one transaction (the database wants a line at commit).
+    // A design change asked on P1's SEED-SO-0003 (its customer, its company), its one line as a whole — as the portal writes it: the
+    // request and its line in one transaction (the database wants a line at commit).
+    // B-OO-016: not on the order of the open change request any more — SEED-SO-0002 is seeded PARTLY_SHIPPED (its true status), and a
+    // partly shipped order takes no change (the database's words). SEED-SO-0003 is P1's CONFIRMED order with no open request.
     await h.db.admin.query('BEGIN')
     try {
       const made = await h.db.admin.query(
         `INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, reason)
-         SELECT gen_random_uuid(), "tenantId", "companyId", "partyId", "orderId", 'DESIGN', 'Move the logo to the left sleeve.' FROM "OrderChangeRequest" WHERE "tenantId" = $1 AND status = 'OPEN' AND kind = 'CHANGE' LIMIT 1
+         SELECT gen_random_uuid(), "tenantId", "companyId", "partyId", id, 'DESIGN', 'Move the logo to the left sleeve.' FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'SEED-SO-0003'
          RETURNING id, "orderId", "partyId"`,
         [T],
       )

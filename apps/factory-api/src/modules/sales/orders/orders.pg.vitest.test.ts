@@ -36,6 +36,12 @@ import { askApproval } from '../../../platform/approvals/engine'
 // B-OO-013: the portal's own order contracts (what a customer's answer may carry: zod drops every other key).
 import { listContract as portalListContract, recordContract as portalRecordContract } from '../portal-orders/contract'
 import { orderLinkCountsOf } from '@nexus/factory-domain/sales/orders/linked-counts' // F-OO-206: the one count rule
+// B-OO-016: SEED-SO-0002 seeded with the status its facts give (the portal sales seed writes its moves last).
+import { followMoves } from '@nexus/factory-domain/sales/orders/orders'
+import { seed as seedPortalSales } from '../../../../../../packages/factory-db/seed/portal-sales'
+import { followOrder } from './moves'
+import { orderSettlement } from './settlement'
+import { moveFactsOf, readOrder, readOrderFacts } from './store'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A1 §2.5 "Sales order"; PLAN
@@ -1374,3 +1380,79 @@ describe('the office order read carries the Incoterm, its place and ship complet
   })
 })
 // ── end B-OO-013 ──
+
+// ── B-OO-016 (order overview lane, Owner D9 + his pick A): SEED-SO-0002 is seeded with the status its facts give ───────────────
+/**
+ * Tenant h is seeded up to the customer portal's sales (seed/portal-sales.ts, which runs the pricing, money, shipping, quality and
+ * production seeds first). There, last, SEED-SO-0002 follows its facts as the system does: SEED-WO-0001 released (IN_PRODUCTION),
+ * then SEED-SH-0001 left with 2 of its 7 jackets (PARTLY_SHIPPED), one audit row per move. The status is honest: the facts the
+ * system follows plan no move from it, and the worker's follow writes nothing. (The tenants above are seeded only up to shipping:
+ * there SEED-SO-0002 stays CONFIRMED until a test makes the system follow it.)
+ */
+describe('SEED-SO-0002 is seeded PARTLY_SHIPPED, the status its facts give (B-OO-016)', () => {
+  const NS_H = 'orders-h'
+  const TH = seedUuid(NS_H, 'tenant')
+  const so2 = seedUuid(NS_H, 'production:sales-order:SO-0002')
+  const follows = async () => (await auditsOf(so2)).filter((row) => row.action === 'orders.follow')
+
+  beforeAll(async () => {
+    await seedCore({ db: h.database, namespace: NS_H })
+    await seedPortalSales({ db: h.database, namespace: NS_H })
+  }, 600_000)
+
+  it('the seed wrote both moves as the system writes them, each with its audit row', async () => {
+    expect(await statusOf(so2)).toBe('PARTLY_SHIPPED')
+    expect((await follows()).map((row) => [row.audience, row.before.status, row.after.status, row.reason])).toEqual([
+      ['SYSTEM', 'CONFIRMED', 'IN_PRODUCTION', 'Followed: work order SEED-WO-0001 released.'],
+      ['SYSTEM', 'IN_PRODUCTION', 'PARTLY_SHIPPED', 'Followed: shipment SEED-SH-0001 shipped.'],
+    ])
+    // No status change dated ahead of today (SH-0001 leaves in the seeds' future): the second is the write's, the order's updatedAt.
+    const dated = await admin<{ at: Date; updatedAt: Date }>(`SELECT a.at, o."updatedAt" FROM "AuditLog" a JOIN "SalesOrder" o ON o.id = a."recordId" WHERE a."recordId" = $1 AND a.action = 'orders.follow' ORDER BY a.at`, [so2])
+    expect(dated.every((row) => row.at.getTime() <= Date.now())).toBe(true)
+    expect(dated[1]!.at).toEqual(dated[1]!.updatedAt)
+  })
+
+  it('the status is honest: followMoves over its facts plans nothing; the follow moves nothing and writes nothing', async () => {
+    const system = callerFor(h.database, systemContext(TH, newId()))
+    const read = await system.withClient(async (client) => {
+      const order = (await readOrder(client, so2))!
+      return { status: order.status, facts: moveFactsOf(await readOrderFacts(client, order), await orderSettlement().settlementOf(client, order)) }
+    })
+    // The facts that made it so: a released work order of its lines, part of it shipped and part not.
+    expect(read.status).toBe('PARTLY_SHIPPED')
+    expect(read.facts.shipped).toBe('PARTLY')
+    expect(read.facts.releasedWorkOrders).toBeGreaterThan(0)
+    expect(followMoves(read.status, read.facts)).toEqual([])
+    const before = await one<{ version: number }>('SELECT version FROM "SalesOrder" WHERE id = $1', [so2])
+    expect(await followOrder(system, so2, { what: 'shipment SEED-SH-0001 shipped' })).toEqual({ moved: [] })
+    expect(await follows()).toHaveLength(2)
+    expect(await one<{ version: number }>('SELECT version FROM "SalesOrder" WHERE id = $1', [so2])).toEqual(before)
+  })
+
+  // B-OO-016 (Owner pick A, the material plan): a partly shipped order stays in MRP (factory-domain planning/explode
+  // PLANNED_ORDER_STATUSES). Its open work order SEED-WO-0001 still needs leather, which the release check counts as promised.
+  it('the material plan still plans it: its open work order is bought for; the shipped piece, cut from issued leather, is not bought again', async () => {
+    SESSIONS['h.planner'] = () => ({ audience: 'office', tenantId: TH, actorId: newId(), grants: [grant(['planning.view', 'planning.run'])] })
+    const siteA1 = seedUuid(NS_H, 'site:A1')
+    const leather = seedUuid(NS_H, 'product:item:leather')
+    await ok('h.planner', 'POST', '/planning/runs', { siteId: siteA1, note: 'B-OO-016' }, 201)
+    const plan = await ok('h.planner', 'GET', `/planning/runs/latest?siteId=${siteA1}&itemId=${leather}`)
+    /** SEED-SO-0002's sources of the plan's leather line in a colour: size, pieces to make, made, needed, of it issued, work orders. */
+    const so2Of = (colour: 'BLK' | 'RED'): Json[] =>
+      (((plan.lines as Json[]).find((line) => line.colour?.id === seedUuid(NS_H, `product:item-colour:leather:${colour}`))?.sources ?? []) as Json[])
+        .filter((source) => source.orderNumber === 'SEED-SO-0002')
+        .map((source) => ({ size: source.size, pieces: source.pieces, made: source.made, quantity: source.quantity, issued: source.issued, workOrders: source.workOrders }))
+    expect(await statusOf(so2)).toBe('PARTLY_SHIPPED')
+    // Planned: every size of both lines is a source of the plan, on the open SEED-WO-0001 (no finished work order made one).
+    expect(so2Of('BLK').map((source) => source.size).sort()).toEqual(['50', '52', '54'])
+    expect(so2Of('RED').map((source) => source.size).sort()).toEqual(['50', '52', '54'])
+    expect([...so2Of('BLK'), ...so2Of('RED')].every((source) => source.made === 0 && source.workOrders.includes('SEED-WO-0001'))).toBe(true)
+    // Not left in SEED-SH-0001 and nothing issued for it: RED 54 is bought for in full.
+    expect(so2Of('RED').find((source) => source.size === '54')).toMatchObject({ pieces: 1, quantity: '53.2000', issued: '0.0000' })
+    // BLK 50 left in SEED-SH-0001; it was cut from the 53.2 FT2 of black leather issued to SEED-WO-0001, which covers its need:
+    // nothing more is bought for it.
+    expect(so2Of('BLK').find((source) => source.size === '50')).toMatchObject({ pieces: 1, quantity: '48.1600', issued: '48.1600' })
+    // (SEED-SH-0001's other piece, RED 52, has no red leather issued in the seeds: the plan counts it, as the release check does.)
+  })
+})
+// ── end B-OO-016 ──
