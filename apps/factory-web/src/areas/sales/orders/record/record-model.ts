@@ -352,6 +352,8 @@ export interface OrderRecordModel {
   health?: HealthModel | null
   /** F-SA-232: the line whose sizes the centred window shows (Overview › Progress by line); null: closed. */
   overviewLine?: string | null
+  // F-OO-121: product.styles.manage — a line with no picture offers "Add on the style ›" (anyone else reads the words alone); absent: no.
+  stylesManage?: boolean
   /** F-SA-232: the page's live stream (the freshness line says "Live · as of 10:42" only when pushed). */
   liveState?: LiveState
   // ---- F-CP-142 (customer page plan C3): Money's "Price check" card — a price holder's read (use-price-check-card.ts); without the

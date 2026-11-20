@@ -1610,7 +1610,6 @@
   "overview": {
     "where": "Where it is now",
     "progress": "Progress by line",
-    "progressHint": "This order's own pieces · a line opens its sizes",
     "notInWorkOrders": "Not in work orders yet",
     "piecesAsOf": "Pieces as of {time}",
     "headline": {
@@ -1620,13 +1619,10 @@
     "col": {
       "line": "Line"
     },
-    "lineName": "Line {seq} · {stage}",
     "lineNoStage": "Line {seq}",
     "lineOpen": "Open the sizes of line {seq} · {name}",
     "total_one": "Total · {count} line",
     "total_other": "Total · {count} lines",
-    "madeExtra_one": "{count} piece made extra",
-    "madeExtra_other": "{count} pieces made extra",
     "sizes": {
       "label": "Shipped and the finish forecast by size",
       "size": "Size",
@@ -1678,6 +1674,36 @@
   "mtm": {
     "units_one": "Made to measure · {count} unit",
     "units_other": "Made to measure · {count} units"
+  },
+  "progress": {
+    "inWork": "In work orders: {done} of {total}",
+    "madeExtra": "{sizes} more than ordered: cut or planned to cut",
+    "noPicture": "No picture yet",
+    "addPicture": "Add on the style ›",
+    "addPictureOf": "Add the picture of {name} on its style",
+    "moves": "Actions for line {seq} · {name}",
+    "move": {
+      "make": "Make work orders for this line…",
+      "close": "Close this line short…",
+      "reopen": "Reopen this line…",
+      "change": "Change quantity or sizes…",
+      "discuss": "Discuss this line"
+    },
+    "held": {
+      "allInWork": "Every piece of this line is in work orders",
+      "closedLine": "This line is closed short: reopen it first",
+      "nothingLeft": "Nothing of this line is left to close: it shipped in full"
+    },
+    "work": {
+      "title": "Its work orders",
+      "of_one": "{status} · {count} piece of this line",
+      "of_other": "{status} · {count} pieces of this line",
+      "none": "No work order makes this line yet",
+      "held": "Its work orders are shown to people who follow production."
+    },
+    "final": {
+      "none": "No final inspection yet"
+    }
   },
   "files": {
     "title": "Files",

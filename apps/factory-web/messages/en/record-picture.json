@@ -10,6 +10,7 @@
   "openRecord": "Open {number}",
   "openStyle": "Open style",
   "none": "No picture yet",
+  "broken": "The picture file is missing",
   "small": "A small preview. The full picture is on the style.",
   "moreStyles_one": "+{count} more style: open its lines",
   "moreStyles_other": "+{count} more styles: open its lines",

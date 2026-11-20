@@ -1610,7 +1610,6 @@
   "overview": {
     "where": "A che punto è",
     "progress": "Avanzamento per riga",
-    "progressHint": "I pezzi di questo ordine · una riga apre le sue taglie",
     "notInWorkOrders": "Non ancora negli ordini di lavoro",
     "piecesAsOf": "Pezzi alle {time}",
     "headline": {
@@ -1620,13 +1619,10 @@
     "col": {
       "line": "Riga"
     },
-    "lineName": "Riga {seq} · {stage}",
     "lineNoStage": "Riga {seq}",
     "lineOpen": "Apri le taglie della riga {seq} · {name}",
     "total_one": "Totale · {count} riga",
     "total_other": "Totale · {count} righe",
-    "madeExtra_one": "{count} pezzo fatto in più",
-    "madeExtra_other": "{count} pezzi fatti in più",
     "sizes": {
       "label": "Spediti e fine prevista per taglia",
       "size": "Taglia",
@@ -1678,6 +1674,36 @@
   "mtm": {
     "units_one": "Su misura · {count} unità",
     "units_other": "Su misura · {count} unità"
+  },
+  "progress": {
+    "inWork": "Negli ordini di lavoro: {done} di {total}",
+    "madeExtra": "{sizes} in più dell'ordine: tagliati o da tagliare",
+    "noPicture": "Ancora nessuna immagine",
+    "addPicture": "Aggiungila nel modello ›",
+    "addPictureOf": "Aggiungi l'immagine di {name} nel suo modello",
+    "moves": "Azioni per la riga {seq} · {name}",
+    "move": {
+      "make": "Crea ordini di lavoro per questa riga…",
+      "close": "Chiudi in anticipo questa riga…",
+      "reopen": "Riapri questa riga…",
+      "change": "Cambia quantità o taglie…",
+      "discuss": "Discuti questa riga"
+    },
+    "held": {
+      "allInWork": "Ogni pezzo di questa riga è già negli ordini di lavoro",
+      "closedLine": "Questa riga è chiusa in anticipo: prima riaprila",
+      "nothingLeft": "Di questa riga non resta nulla da chiudere: è spedita per intero"
+    },
+    "work": {
+      "title": "I suoi ordini di lavoro",
+      "of_one": "{status} · {count} pezzo di questa riga",
+      "of_other": "{status} · {count} pezzi di questa riga",
+      "none": "Ancora nessun ordine di lavoro per questa riga",
+      "held": "I suoi ordini di lavoro sono visibili a chi segue la produzione."
+    },
+    "final": {
+      "none": "Ancora nessun controllo finale"
+    }
   },
   "files": {
     "title": "File",

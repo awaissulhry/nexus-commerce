@@ -68,12 +68,14 @@ function Picture({ source, recordId, number, picture: own, styleCount: count, si
         {more > 0 && <span className="fw-rp-more">{t('more', { count: more })}</span>}
       </>
     )
+    // F-OO-121 (order overview §2.2): a file that does not answer says so in its title ("The picture file is missing"), on every page.
+    const missing = broken ? t('broken') : undefined
     return onOpen ? (
-      <button type="button" className={className} onClick={onOpen} aria-label={name} title={name} aria-busy={src === undefined || undefined} data-picture="">
+      <button type="button" className={className} onClick={onOpen} aria-label={name} title={missing ?? name} aria-busy={src === undefined || undefined} data-picture="">
         {body}
       </button>
     ) : (
-      <span className={className} role="img" aria-label={style} aria-busy={src === undefined || undefined}>
+      <span className={className} role="img" aria-label={style} title={missing} aria-busy={src === undefined || undefined}>
         {body}
       </span>
     )
