@@ -14,6 +14,14 @@ import { orderSchema, type Order } from '../../api' // F-OO-208
 import { mergeRead } from './model' // F-OO-100: each section's own rules are tested in its file (where, progress, people, dates, linked, facts)
 import { changesBadgeOf, changesDotOf, rowWordsOf, waitingCardOf, waitingOf, type WaitingRow } from './model' // F-OP-103 (F-OO-202: whoActsNextOf is gone)
 import { orderWaitingOf } from './model' // F-OP-301
+// ---- F-OO-204: the request rows and their doors (the world of the design cases, a row drawn alone, the row's age) ----
+import { createElement } from 'react'
+import { render } from '../../../../../lib/record-thread/parts/testing'
+import { RQ_ASK, RQ_ASKED, RQ_COUNTERED, requestsWorld } from '../fixtures'
+import { askWordsOf, rowAgeOf } from '../changes/model'
+import { WaitingRowItem } from '../view/RequestsSection'
+import type { OrderRecordModel } from '../record-model'
+// ---- end F-OO-204
 
 /**
  * F-SA-232 (sales page plan N2; 10-order-page §2.1 O1, O2; review OW-6, OW-7, C-3) — Overview's rules and its cases: the headline
@@ -93,18 +101,20 @@ describe('the Overview cases draw in both languages, never a 0 for a step not co
 // ---- F-SA-233: People, Next dates, Requests & changes, Linked records, Order facts ------------------------------------------------
 describe('Overview’s facts (F-SA-233)', () => {
   // F-OO-202: rewritten — the deposit is a hold (Where it is now's strip), so the card lists no row of it: it holds requests only.
-  it('requests & changes: the ONE waiting list\'s request rows on us and on the customer (F-OP-103), still to do, the latest amendment', () => {
+  // F-OO-205: rewritten — no "latest change" on the card any more (Changes › History tells it): the card reads nothing of the order.
+  it('requests & changes: the ONE waiting list\'s request rows on us and on the customer (F-OP-103) and still to do — no latest amendment', () => {
     const rows = waitingOf(CONFIRMED_READ, { requests: [], approvals: [], recordPayment: false, locale: 'en' })
     expect(rows).toMatchObject([{ kind: 'DEPOSIT', on: 'BRAND', place: 'HOLD' }])
-    expect(waitingCardOf(rows, CONFIRMED_READ, { amendments: { count: 2, latestRevision: 2, latestAt: '2026-11-12T16:48:00Z' } })).toMatchObject({ onUs: [], onCustomer: [], still: [], latest: { revision: 2, at: '2026-11-12T16:48:00Z' }, nothing: true })
-    expect(waitingCardOf([], null, { amendments: { count: 0, latestRevision: null, latestAt: null } })).toEqual({ onUs: [], onCustomer: [], still: [], latest: null, nothing: true })
+    expect(waitingCardOf(rows, CONFIRMED_READ)).toEqual({ onUs: [], onCustomer: [], still: [], nothing: true })
+    expect(waitingCardOf([], null)).toEqual({ onUs: [], onCustomer: [], still: [], nothing: true })
   })
 
   it('the cards draw in both languages; the custom fields and the record chain moved to Overview', () => {
     for (const locale of ['en', 'it'] as const) {
       const text = textOf(draw('overview', locale))
       // F-OP-103: the case's open request waits on us (the ONE waiting list's row), so "Nothing waits" is not said.
-      for (const words of locale === 'en' ? ['People', 'Next dates', 'Requests & changes', 'Linked records', 'Order facts', 'Waiting on us: 1'] : ['Persone', 'Prossime date', 'Richieste e modifiche', 'Record collegati', "Dati dell'ordine", 'In attesa di noi: 1']) expect(text, words).toContain(words)
+      // F-OO-204: the group's head says "Waiting on us · 1" / "Tocca a noi · 1" (the Changes tab's own words).
+      for (const words of locale === 'en' ? ['People', 'Next dates', 'Requests & changes', 'Linked records', 'Order facts', 'Waiting on us · 1'] : ['Persone', 'Prossime date', 'Richieste e modifiche', 'Record collegati', "Dati dell'ordine", 'Tocca a noi · 1']) expect(text, words).toContain(words)
       expect(text).not.toContain(locale === 'en' ? 'Nothing waits on us or on the customer' : 'Niente aspetta noi o il cliente')
     }
     const container = readFileSync(new URL('../OrderRecord.tsx', import.meta.url), 'utf8')
@@ -172,10 +182,15 @@ describe('F-OP-103: the ONE waiting list — every blocker and open yes is one r
     expect(waitingOf(all, { ...inputs, requests: null }).find((row) => row.sub === 'REQUEST')!.words).toEqual({ kind: 'api', words: words('BRAND_REQUEST') })
   })
 
-  it('every other kind has one door: Changes for what the customer decides, Record the payment (or Money), Production › holds / dates', () => {
+  // F-OO-204: rewritten — what waits on the customer has no dead "Changes ›" any more: our open counter-offer opens the ONE review
+  // window (Open…), what we asked is theirs to answer (Their turn).
+  it('every other kind has one door: Open… for our counter-offer, Their turn for what we asked, Record the payment (or Money), Production › holds / dates', () => {
     const rows = waitingOf(all, inputs)
-    expect(byKind(rows, 'APPROVAL')[0]!.door).toEqual({ kind: 'tab', tab: 'changes', anchor: null })
-    expect(byKind(rows, 'PARTNER_TASK')[0]!.door).toEqual({ kind: 'tab', tab: 'changes', anchor: null })
+    expect(byKind(rows, 'APPROVAL')[0]!.door).toEqual({ kind: 'their' })
+    expect(byKind(rows, 'PARTNER_TASK')[0]!.door).toEqual({ kind: 'their' })
+    const counter = waitingOf(headlineWith([blocker('APPROVAL', 'BRAND', '2026-11-13T09:00:00Z', { type: 'OrderChangeRequest', id: 'r-open' })]), inputs)[0]!
+    expect(counter.door).toMatchObject({ kind: 'open', requestId: 'r-open', request: { id: 'r-open' } })
+    expect(waitingOf(headlineWith([blocker('APPROVAL', 'BRAND', null, { type: 'OrderChangeRequest', id: 'r-open' })]), { ...inputs, requests: null })[0]!.door).toEqual({ kind: 'open', requestId: 'r-open', request: null })
     expect(byKind(rows, 'DEPOSIT')[0]!.door).toEqual({ kind: 'payment', requestId: 'd-1' })
     expect(byKind(waitingOf(all, { ...inputs, recordPayment: false }), 'DEPOSIT')[0]!.door).toEqual({ kind: 'tab', tab: 'money', anchor: null })
     // F-OP-116: the customer's pause on a work order the reader reaches is lifted in place (F-OP-114's Lift); no ref: Production › holds.
@@ -208,7 +223,7 @@ describe('F-OP-103: the ONE waiting list — every blocker and open yes is one r
     expect(known).toEqual([...known].sort())
     expect(since.slice(-2)).toEqual([null, null])
     expect(rows[0]).toMatchObject({ kind: 'DEPOSIT', since: '2026-10-28T15:00:00Z', place: 'HOLD' })
-    const card = waitingCardOf(rows, null, { amendments: { count: 0, latestRevision: null, latestAt: null } })
+    const card = waitingCardOf(rows, null)
     expect(card.onUs.map((row) => [row.kind, row.sub])).toEqual([['BRAND_REQUEST', 'PROBLEM'], ['YES', null], ['BRAND_REQUEST', 'COUNTER'], ['BRAND_REQUEST', 'COUNTER'], ['BRAND_REQUEST', 'REQUEST']])
     expect(card.onCustomer.map((row) => row.kind)).toEqual(['APPROVAL', 'PARTNER_TASK'])
     // A supplier's or a workshop's wait is a date (Next dates): in neither count.
@@ -219,12 +234,12 @@ describe('F-OP-103: the ONE waiting list — every blocker and open yes is one r
 
   it('R-22: the Changes badge counts the card\'s own rows — waiting on us, on the customer, still to do (F-OO-202: requests only)', () => {
     const rows = waitingOf(all, inputs)
-    const card = waitingCardOf(rows, { ...PRODUCTION_READ, changes: { openRequests: [], stillToDo: { rows: [{ kind: 'WORK_ORDER_CHANGE', ref: null, words: { en: 'x', it: 'x' }, since: '2026-11-17T13:02:00Z', waitingOn: 'PLANNER', mayAct: true, requestId: null }], count: 1, workOrdersLeftOut: 0 } } }, { amendments: { count: 0, latestRevision: null, latestAt: null } })
+    const card = waitingCardOf(rows, { ...PRODUCTION_READ, changes: { openRequests: [], stillToDo: { rows: [{ kind: 'WORK_ORDER_CHANGE', ref: null, words: { en: 'x', it: 'x' }, since: '2026-11-17T13:02:00Z', waitingOn: 'PLANNER', mayAct: true, requestId: null }], count: 1, workOrdersLeftOut: 0 } } })
     expect(changesBadgeOf(card)).toBe(card.onUs.length + card.onCustomer.length + 1)
     // F-OO-202: 4 requests on us, 2 on the customer, 1 still — never a hold or a date (of the 14 rows only the 6 requests count; it was 13).
     expect(changesBadgeOf(card)).toBe(rows.filter((row) => row.place === 'REQUEST').length + 1)
     expect(changesBadgeOf(card)).toBe(7)
-    expect(changesBadgeOf(waitingCardOf([], null, { amendments: { count: 0, latestRevision: null, latestAt: null } }))).toBe(0)
+    expect(changesBadgeOf(waitingCardOf([], null))).toBe(0)
   })
 
   it('a row\'s words: the API\'s own in the page\'s language, or the phrase with the customer and the request\'s kind', () => {
@@ -279,9 +294,11 @@ describe('F-OP-103: the ONE waiting list — every blocker and open yes is one r
   it('the overview case draws the open request\'s row with its door in both languages', () => {
     for (const locale of ['en', 'it'] as const) {
       const text = textOf(draw('overview', locale))
-      expect(text).toContain(locale === 'en' ? 'Waiting on us: 1' : 'In attesa di noi: 1')
+      expect(text).toContain(locale === 'en' ? 'Waiting on us · 1' : 'Tocca a noi · 1') // F-OO-204
       expect(text).toContain(locale === 'en' ? 'A customer request waits for our answer' : 'Una richiesta del cliente aspetta la nostra risposta')
       expect(text).toContain(locale === 'en' ? 'Changes ›' : 'Modifiche ›')
+      // F-OO-205: the head's link carries the Changes badge's number.
+      expect(text).toContain(locale === 'en' ? 'Changes (1) ›' : 'Modifiche (1) ›')
     }
   })
 })
@@ -416,9 +433,13 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
   // F-OO-202: rewritten — the cards and the Changes tab list the request rows (the two gates went to Next dates): 1 + 1 on both pages.
   it('the pages agree: Overview says 1 + 1, the Changes tab lists the same request and the yes we asked; SO-0003\'s header says nothing waits', () => {
     const overview = textOf(draw('f-op-301-so2-overview'))
-    expect(overview).toContain('Waiting on us: 1')
-    expect(overview).toContain('Waiting on Moto Demo S.r.l.: 1')
-    expect(overview).not.toContain('Waiting on us: 3')
+    // F-OO-204: the groups' heads in the Changes tab's words ("Waiting on us · 1").
+    expect(overview).toContain('Waiting on us · 1')
+    expect(overview).toContain('Waiting on Moto Demo S.r.l. · 1')
+    expect(overview).not.toContain('Waiting on us · 3')
+    // F-OO-205 (lead note, W03): the design case has SO-0002's step still to do — the card's head says the badge's real 3.
+    expect(overview).toContain('Still to do · 1')
+    expect(overview).toContain('Changes (3) ›')
     const changes = textOf(draw('f-op-301-so2-changes'))
     expect(changes.split('1 waiting').length - 1).toBe(2)
     expect(changes).not.toContain('3 waiting')
@@ -433,7 +454,9 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
     // words once (it was twice: Who acts next and the card).
     expect(so3).not.toContain('Who acts next')
     expect(so3).not.toContain('Waiting on us · 5 d')
-    expect(so3.split('Nothing waits on us or on the customer').length - 1).toBe(1)
+    // F-OO-205: the card's empty words are "No request or change waits" (never "Nothing waits": a hold or a date may).
+    expect(so3.split('No request or change waits').length - 1).toBe(1)
+    expect(so3).not.toContain('Nothing waits')
     // The badge and the dot read the same call (no second rule in the page).
     const page = readFileSync(new URL('../view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(page).toContain('const waiting = orderWaitingOf(order, model, locale)')
@@ -469,7 +492,8 @@ describe('F-OP-304: Still to do — "Nothing left to do" only when nothing stand
       // F-OO-121: the API's words since B-OO-015 (the floor holds a cut order's planned lines too).
       expect(text).toContain(locale === 'en' ? 'Line 10 · 1 48 more than ordered: cut or planned to cut' : "Riga 10 · 1 48 in più dell'ordine: tagliati o da tagliare")
     }
-    expect(textOf(draw('f-op-301-so2-changes'))).toContain('Nothing left to do for the accepted changes.')
+    // F-OO-205: SO-0002's case has its step still to do now; the case with nothing left is the Changes tab with no request waiting.
+    expect(textOf(draw('f-oo-204-changes-nothing'))).toContain('Nothing left to do for the accepted changes.')
   })
 })
 // ---- end F-OP-304
@@ -531,7 +555,7 @@ describe('F-OO-100: OverviewTab keeps the layout, each card is its own file, eac
     // F-OO-202 (F14): "who acts next" left with its only drawing — the keeper's waitingOn is the one rule.
     expect(model).not.toContain('export function whoActsNextOf(')
     // F-OO-103: where.ts keeps the headline and the stages (the facts' rules left with the facts).
-    const homes = { where: ['headlineOf', 'stageStripOf'], progress: ['lineRowsOf', 'totalOf', 'lineSizesOf', 'figureFaceOf', 'linePillsOf', 'madeExtraSizesOf'] /* F-OO-121: walkOf and lineStageOf went */, people: ['placeLinesOf' /* F-OO-134: replaces placeWords */], dates: ['nextDatesOf'], linked: ['linkedRecordsOf'] } as const
+    const homes = { where: ['headlineOf', 'stageStripOf'], progress: ['lineRowsOf', 'totalOf', 'lineSizesOf', 'figureFaceOf', 'linePillsOf', 'madeExtraSizesOf'] /* F-OO-121: walkOf and lineStageOf went */, people: ['placeLinesOf' /* F-OO-134: replaces placeWords */], dates: ['nextDatesOf'], linked: ['linkedRowsOf'] /* F-OO-207: the rows by the one count rule */ } as const
     for (const [section, names] of Object.entries(homes)) {
       const text = read(`./${section}.ts`)
       for (const name of names) {
@@ -665,7 +689,9 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
     // orders.css lost only the old grid rule (the order page lane's file: nothing else of it changed).
     const orders = read('../../orders.css')
     expect(orders).not.toMatch(/\.fw-so-overview-cards \{/)
-    for (const kept of ['.fw-so-overview {', '.fw-so-datelist {', '.fw-so-linked {', '.fw-so-countbtn {']) expect(orders, kept).toContain(kept)
+    for (const kept of ['.fw-so-overview {', '.fw-so-datelist {']) expect(orders, kept).toContain(kept)
+    // F-OO-207: Linked records' count chips left with their card's rows (record/view/overview/linked.css).
+    for (const gone of ['.fw-so-linked {', '.fw-so-countbtn {']) expect(orders, gone).not.toContain(gone)
     // F-OO-103: "Where it is now"'s own rules left it for the card's own file.
     expect(read('../view/overview/where.css')).toContain('.fw-so-where {')
   })
@@ -734,7 +760,7 @@ describe('F-OO-103: "Where it is now" keeps its title, Live, the headline and th
     }
     // Each fact lives on in ONE other place: the band keeps At risk and the customer's Urgent; Requests & changes says who waits.
     const page = textOf(draw('overview'))
-    for (const words of ['At risk', 'Urgent (customer)', 'Waiting on us: 1']) expect(page, words).toContain(words)
+    for (const words of ['At risk', 'Urgent (customer)', 'Waiting on us · 1' /* F-OO-204 */]) expect(page, words).toContain(words)
   })
 
   it('it keeps the title, "Live · as of", the headline (with its quiet line) and the stages\' one link, in this order', () => {
@@ -862,3 +888,236 @@ describe('F-OO-202: one waiting call, each row in its place — holds to Where i
   })
 })
 // ---- end F-OO-202
+
+// ---- F-OO-204 (order overview §5.2, §5.3; review F6): the request rows and their doors — the age, the words, Open…, Their turn ----
+describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our counter-offer, Their turn for what we asked; one Still to do door', () => {
+  const orderOf = (record: OrderRecordModel): Order => (record.order as { status: 'ready'; value: Order }).value
+  const stateOf = (record: OrderRecordModel, locale: 'en' | 'it' = 'en') => {
+    const state = orderWaitingOf(orderOf(record), record, locale)
+    if (state.status !== 'ready') throw new Error('ready')
+    return state
+  }
+  /** One row drawn alone, as Overview's card draws it (or Changes'). */
+  const drawRow = (record: OrderRecordModel, row: WaitingRow, locale: 'en' | 'it' = 'en', more: { here?: 'changes'; readOnly?: boolean } = {}) => render(createElement('ul', null, createElement(WaitingRowItem, { row, order: orderOf(record), model: record, ...more })), locale)
+  /** The list item that holds these words, as drawn. */
+  const itemOf = (html: string, words: string): string => {
+    const at = html.indexOf(words)
+    if (at < 0) throw new Error(`not drawn: ${words}`)
+    return html.slice(html.lastIndexOf('<li', at), html.indexOf('</li>', at))
+  }
+
+  it('the age: counted to the read that listed the row ("15 d"), the shortest for a start after it, "—" without a start; no read: to now', () => {
+    expect(rowAgeOf('2026-11-03T09:00:00Z', '2026-11-18T09:42:00Z')).toEqual({ key: 'parts.age.days', params: { count: 15 } })
+    expect(rowAgeOf('2026-11-18T05:42:00Z', '2026-11-18T09:42:00Z')).toEqual({ key: 'parts.age.hours', params: { count: 4 } })
+    expect(rowAgeOf('2026-11-18T09:12:00Z', '2026-11-18T09:42:00Z')).toEqual({ key: 'parts.age.minutes', params: { count: 30 } })
+    expect(rowAgeOf('2026-11-18T10:00:00Z', '2026-11-18T09:42:00Z')).toEqual({ key: 'parts.age.minutes', params: { count: 1 } })
+    expect(rowAgeOf(null, '2026-11-18T09:42:00Z')).toBeNull()
+    expect(rowAgeOf('2026-11-16T09:42:00Z', null, Date.parse('2026-11-18T09:42:00Z'))).toEqual({ key: 'parts.age.days', params: { count: 2 } })
+  })
+
+  it('the words of §5.2: a request said whole, the agreed counter-offer and our open one name it (never the fee); the holds are not rows here', () => {
+    const { record } = requestsWorld('sales', 'overview')
+    const state = stateOf(record)
+    expect(state.card.onUs.map((row) => [row.kind, row.sub])).toEqual([['BRAND_REQUEST', 'REQUEST'], ['BRAND_REQUEST', 'COUNTER'], ['BRAND_REQUEST', 'PROBLEM']])
+    expect(state.card.onCustomer.map((row) => [row.kind, row.door.kind])).toEqual([['APPROVAL', 'their'], ['APPROVAL', 'their'], ['APPROVAL', 'open'], ['PARTNER_TASK', 'their'], ['APPROVAL', 'their']])
+    const counter = state.card.onCustomer.find((row) => row.door.kind === 'open')!
+    expect(counter.door).toMatchObject({ kind: 'open', requestId: RQ_COUNTERED.id, request: { id: RQ_COUNTERED.id } })
+    expect(counter.words).toEqual({ kind: 'phrase', phrase: { key: 'waiting.counterOpen' }, requestKind: 'CHANGE' })
+    const want = {
+      en: ['Moto Demo S.r.l. asks: Change · line 10 · M 40 → 36', 'Moto Demo S.r.l. agreed to your counter-offer: Change · line 10 · L 30 → 32', 'Our counter-offer: Change · line 20 · L 2 → 3'],
+      it: ['Moto Demo S.r.l. chiede: Modifica · riga 10 · M 40 → 36', 'Moto Demo S.r.l. ha accettato la tua controproposta: Modifica · riga 10 · L 30 → 32', 'La nostra controproposta: Modifica · riga 20 · L 2 → 3'],
+    } as const
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      const p = createTranslator(locale, messagesFor(locale, ['production']).production!)
+      const say = { t, kindWords: (kind: string) => p(`parts.request.kind.${kind}`), locale, customer: 'Moto Demo S.r.l.', askWords: (request: typeof RQ_ASK) => askWordsOf(request, { kind: p(`parts.request.kind.${request.kind}`), say: t, day: String }) }
+      const rows = stateOf(record, locale).card
+      expect([rows.onUs[0]!, rows.onUs[1]!, rows.onCustomer[2]!].map((row) => rowWordsOf(row, say)), locale).toEqual(want[locale])
+      // A priced counter-offer says the same words: the fee is never on the row (the review window shows it to who may see prices).
+      const priced = { ...counter, door: { kind: 'open' as const, requestId: RQ_COUNTERED.id, request: { ...RQ_COUNTERED, counter: { ...RQ_COUNTERED.counter!, fee: 12000, priced: true } } } }
+      expect(rowWordsOf(priced, say)).toBe(want[locale][2])
+      // Without askWords (a reader of the list alone) the kind is said, as before.
+      expect(rowWordsOf(rows.onUs[0]!, { ...say, askWords: undefined })).toBe(locale === 'en' ? 'Moto Demo S.r.l. asks: Change' : 'Moto Demo S.r.l. chiede: Modifica')
+    }
+    // The customer's pause on two work orders and the quality hold are Where it is now's (one strip per kind there): no row on this card.
+    expect(state.holds.map((row) => row.kind)).toEqual(['BRAND_PAUSE', 'BRAND_PAUSE', 'QUALITY_HOLD'])
+    expect([...state.card.onUs, ...state.card.onCustomer].some((row) => row.place !== 'REQUEST')).toBe(false)
+  })
+
+  it('Overview\'s row: words | age | door — Answer… and Open… are real links to the ONE review window; what we asked says "Their turn", no button', () => {
+    const { record } = requestsWorld('sales', 'overview')
+    const state = stateOf(record)
+    const ask = drawRow(record, state.card.onUs[0]!)
+    expect(ask).toContain('<li class="fw-so-ov-row fw-so-rq-row">')
+    expect(textOf(ask)).toContain('Moto Demo S.r.l. asks: Change · line 10 · M 40 → 36')
+    // (the attribute's spelling is React's: matched without case)
+    expect(ask).toMatch(/<time class="fw-so-rq-age" datetime="2026-11-03T09:00:00Z" title="since [^"]+">15 d<\/time>/i)
+    expect(ask).toMatch(new RegExp(`<a [^>]*href="[^"]*\\?tab=changes&amp;open=${RQ_ASK.id}"[^>]*>Answer…</a>`))
+    const counter = drawRow(record, state.card.onCustomer.find((row) => row.door.kind === 'open')!)
+    expect(textOf(counter)).toContain('Our counter-offer: Change · line 20 · L 2 → 3')
+    expect(textOf(counter)).toContain('5 d')
+    expect(counter).toMatch(new RegExp(`<a [^>]*href="[^"]*\\?tab=changes&amp;open=${RQ_COUNTERED.id}"[^>]*>Open…</a>`))
+    for (const locale of ['en', 'it'] as const) {
+      const artwork = drawRow(record, state.card.onCustomer[0]!, locale)
+      expect(textOf(artwork)).toContain(`${RQ_ASKED[0]!.question} · ${locale === 'en' ? 'due' : 'entro il'} `)
+      expect(textOf(artwork)).toContain(locale === 'en' ? 'Their turn' : 'Tocca a loro')
+      expect(artwork).not.toContain('<button')
+      expect(artwork).not.toContain('<a ')
+      // A task on the customer's portal: the API's words, Their turn.
+      const task = textOf(drawRow(record, state.card.onCustomer.find((row) => row.kind === 'PARTNER_TASK')!, locale))
+      expect(task).toContain(locale === 'en' ? "An open task on the customer's portal" : 'Un compito aperto nel portale del cliente')
+      expect(task).toContain(locale === 'en' ? 'Their turn' : 'Tocca a loro')
+    }
+    // Read-only: the words and the age, never a door (Their turn is words, so it stays).
+    for (const row of [...state.card.onUs, ...state.card.onCustomer]) {
+      const html = drawRow(record, row, 'en', { readOnly: true })
+      expect(html, row.key).not.toContain('<button')
+      expect(html, row.key).not.toContain('nds-btn')
+    }
+  })
+
+  it('Changes: the head\'s quiet line; our counter-offer in the card\'s words with Open…; what we asked with its due day and state, no button', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw('f-oo-204-changes', locale)
+      const text = textOf(html)
+      expect(text).toContain(locale === 'en' ? 'Holds are on Overview · dates are in Next dates' : 'I blocchi sono in Panoramica · le date in Prossime date')
+      expect(text).toContain(locale === 'en' ? 'Our counter-offer: Change · line 20 · L 2 → 3' : 'La nostra controproposta: Modifica · riga 20 · L 2 → 3')
+      expect(text).not.toMatch(/Counter-offer sent|Controproposta inviata/)
+      // What we asked: its own question, its due day and its state (the record-approvals' words) — and no door on Changes.
+      const artwork = itemOf(html, RQ_ASKED[0]!.question)
+      expect(textOf(artwork)).toContain(locale === 'en' ? 'Waiting for the answer' : 'In attesa di risposta')
+      expect(artwork).not.toContain('<button')
+      expect(artwork).not.toContain('<a ')
+      // Their turn is the card's word: the Changes tab says it with its list's own title ("Waiting on the customer").
+      expect(text).not.toContain(locale === 'en' ? 'Their turn' : 'Tocca a loro')
+      // Still to do keeps its state pill on Changes (the card leaves it out).
+      expect(text).toContain(locale === 'en' ? 'Waiting for planning' : 'Aspetta la pianificazione')
+    }
+    expect(draw('f-oo-204-changes')).toMatch(new RegExp(`<a [^>]*href="[^"]*\\?tab=changes&amp;open=${RQ_COUNTERED.id}"[^>]*>Open…</a>`))
+    // The head line comes first, before the two lists.
+    const html = draw('f-oo-204-changes')
+    expect(html.indexOf('Holds are on Overview')).toBeLessThan(html.indexOf('<h2 class="fw-so-h2">Waiting on us</h2>'))
+  })
+
+  it('Changes with no request waiting: "No request waits on …" (never "Nothing waits": a hold and a gate wait, on Overview)', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const text = textOf(draw('f-oo-204-changes-nothing', locale))
+      for (const words of locale === 'en' ? ['No request waits on us', 'No request waits on the customer', 'Holds are on Overview · dates are in Next dates'] : ['Nessuna richiesta aspetta noi', 'Nessuna richiesta aspetta il cliente', 'I blocchi sono in Panoramica']) expect(text, words).toContain(words)
+      expect(text).not.toMatch(/Nothing waits|Niente aspetta/)
+    }
+  })
+
+  it('one copy of the Still to do door (Changes\' rows and Overview\'s card); the words exist in both languages', () => {
+    const section = read('../view/RequestsSection.tsx')
+    expect(section).toContain('export function StillDoorView(')
+    expect(section.match(/stillDoorsOf\(/g)).toHaveLength(1)
+    const stillRow = section.slice(section.indexOf('export function StillRow('), section.indexOf('export function StillDoorView('))
+    expect(stillRow).toContain('<StillDoorView row={row} order={order} model={model} actions={actions} />')
+    expect(stillRow).not.toContain("door.kind === 'change'")
+    // The rows' tab doors never point at Changes any more (what waits on the customer has its own door).
+    expect(read('./model.ts')).not.toContain("tab: 'changes'")
+    for (const locale of LOCALES) {
+      const words = messagesFor(locale, ['orders']).orders!
+      for (const key of ['waiting.counterOpen', 'waiting.open', 'waiting.theirTurn', 'requests.changesNote', 'waiting.counterAgreed', 'waiting.counterLapsed', 'waiting.onUs_one', 'waiting.onCustomer_other']) expect(words[key]?.trim(), `${locale} ${key}`).toBeTruthy()
+      expect(words['changes.onUs.countered'], locale).toBeUndefined()
+    }
+    const en = messagesFor('en', ['orders']).orders!
+    const it = messagesFor('it', ['orders']).orders!
+    expect([en['waiting.theirTurn'], it['waiting.theirTurn']]).toEqual(['Their turn', 'Tocca a loro'])
+    expect([en['waiting.onUs_other'], it['waiting.onUs_other']]).toEqual(['Waiting on us · {count}', 'Tocca a noi · {count}'])
+    for (const key of ['waiting.counterOpen', 'waiting.counterAgreed', 'waiting.counterLapsed', 'waiting.onCustomer_one']) expect(it[key]!.match(/\{\w+\}/g)?.sort(), key).toEqual(en[key]!.match(/\{\w+\}/g)?.sort())
+  })
+})
+// ---- end F-OO-204
+
+// ---- F-OO-205 (order overview §5.2; review F15): the Requests & changes card — three groups, their counts, the caps, the foot ------
+describe('F-OO-205: Requests & changes — Waiting on us · N, Waiting on <customer> · N, Still to do · N; "Changes (N) ›"; the Told line; Read-only', () => {
+  /** The card's own markup: from its root up to the next card's heading (Linked records). */
+  const cardOf = (html: string): string => {
+    const from = html.indexOf('fw-so-rq"')
+    if (from < 0) throw new Error('no Requests & changes card')
+    const title = html.indexOf('<h2 class="fw-so-h2">', from)
+    const next = html.indexOf('<h2 class="fw-so-h2">', title + 1)
+    return html.slice(from, next < 0 ? undefined : next)
+  }
+  const WORDS = {
+    en: ['Requests & changes', 'Changes (12) ›', 'Waiting on us · 3', 'Moto Demo S.r.l. asks: Change · line 10 · M 40 → 36', '15 d', 'Moto Demo S.r.l. agreed to your counter-offer: Change · line 10 · L 30 → 32', 'Moto Demo S.r.l. reported a problem', 'Waiting on Moto Demo S.r.l. · 5', 'Our counter-offer: Change · line 20 · L 2 → 3', 'Their turn', '2 more on Changes ›', 'Still to do · 4', 'WO-00021: make 54 → 0 · Planning', '4 d', '1 more on Changes ›', 'Told about changes: 4 people'],
+    it: ['Richieste e modifiche', 'Modifiche (12) ›', 'Tocca a noi · 3', 'Moto Demo S.r.l. chiede: Modifica · riga 10 · M 40 → 36', '15 g', 'Moto Demo S.r.l. ha accettato la tua controproposta: Modifica · riga 10 · L 30 → 32', 'Moto Demo S.r.l. ha segnalato un problema', 'Tocca a Moto Demo S.r.l. · 5', 'La nostra controproposta: Modifica · riga 20 · L 2 → 3', 'Tocca a loro', 'Altri 2 in Modifiche ›', 'Ancora da fare · 4', 'WO-00021: produci 54 → 0 · Pianificazione', '4 g', '1 altro in Modifiche ›', 'Avvisati delle modifiche: 4 persone'],
+  } as const
+
+  it('draws EN + IT: the three groups with their counts, every row on us, 3 of the customer\'s and of Still to do, then "N more on Changes ›"', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const card = cardOf(draw('f-oo-205-requests', locale))
+      const text = textOf(card)
+      for (const words of WORDS[locale]) expect(text, `${locale}: ${words}`).toContain(words)
+      // The groups in their order, each its own list of rows.
+      const heads = WORDS[locale].filter((words) => /· \d$/.test(words)).map((words) => text.indexOf(words))
+      expect([...heads].sort((a, b) => a - b), locale).toEqual(heads)
+      expect(card.match(/<ul class="fw-so-rq-list">/g), locale).toHaveLength(3)
+    }
+    const card = cardOf(draw('f-oo-205-requests'))
+    const text = textOf(card)
+    // Cut at 3: the task on the portal and the print proof (the customer's 4th and 5th), the collar change (the 4th step) are on Changes.
+    for (const words of ["An open task on the customer's portal", RQ_ASKED[2]!.question, 'Change the collar on DEMO-JKT-01']) expect(text, words).not.toContain(words)
+    expect(card.match(/<li class="fw-so-ov-row fw-so-rq-row">/g)).toHaveLength(3 + 3 + 3)
+    // Every row on us has its door in place: Answer… for the change and the agreed counter-offer, Reply in the thread for the problem.
+    expect(text.match(/Answer…/g)).toHaveLength(2)
+    expect(text).toContain('Reply in the thread')
+    // The links: Changes, and Changes › Still to do for the cut steps.
+    expect(card).toMatch(/href="[^"]*\?tab=changes"[^>]*>2 more on Changes ›</)
+    expect(card).toMatch(/href="[^"]*\?tab=changes#still-to-do"[^>]*>1 more on Changes ›</)
+    // No state pill (Changes' own), no Discuss on a row, no "Latest change", and none of the order's holds (the customer's pause on
+    // two work orders is Where it is now's ONE strip).
+    for (const gone of ['Waiting for planning', 'Your turn', 'Latest change', 'The customer paused the work', 'A quality hold stops the work', 'A gate is not passed yet']) expect(text, gone).not.toContain(gone)
+    expect(card).not.toContain('Discuss')
+  })
+
+  it('nothing to answer: "No request or change waits", and where the hold and the date are — never "Nothing waits"', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const text = textOf(cardOf(draw('f-oo-205-nothing', locale)))
+      expect(text).toContain(locale === 'en' ? 'No request or change waits' : 'Nessuna richiesta o modifica in attesa')
+      expect(text).toContain(locale === 'en' ? 'What holds the order: see Where it is now · Dates that wait: see Next dates' : "Cosa ferma l'ordine: vedi A che punto è · Date in attesa: vedi Prossime date")
+      expect(text).toContain(locale === 'en' ? 'Changes (0) ›' : 'Modifiche (0) ›')
+      expect(text).not.toMatch(/Nothing waits|Niente aspetta/)
+    }
+    // Nothing waits at all (SO-0003): the empty words alone, no pointer.
+    const so3 = textOf(cardOf(draw('f-op-301-so3-overview')))
+    expect(so3).toContain('No request or change waits')
+    expect(so3).not.toContain('see Where it is now')
+  })
+
+  it('Read-only: the same rows, their ages and Their turn — no <button>, no door', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const card = cardOf(draw('f-oo-205-read-only', locale))
+      expect(card, locale).not.toContain('<button')
+      expect(card, locale).not.toContain('nds-btn')
+      const text = textOf(card)
+      for (const words of locale === 'en' ? ['Waiting on us · 3', '15 d', 'Their turn', 'Still to do · 4', 'Told about changes: 4 people'] : ['Tocca a noi · 3', '15 g', 'Tocca a loro', 'Ancora da fare · 4']) expect(text, words).toContain(words)
+    }
+    // Who may act sees the doors in the same card (the sales case): held ones too, with their words.
+    expect(cardOf(draw('f-oo-205-requests'))).toContain('nds-btn')
+  })
+
+  it('source and css: the ONE Still to do door, its own requests.css (the shared row, subgrid, the 480 / 360 rules, tokens only, no container)', () => {
+    const card = read('../view/overview/RequestsCard.tsx')
+    expect(card).toContain("import './requests.css'")
+    expect(card).toContain('<StillDoorView row={row} order={order} model={model} actions={actions} />')
+    expect(card).toContain('changesBadgeOf(card)')
+    expect(card).toContain("t('told.aboutChanges', { count: told })")
+    for (const gone of ['card.latest', 'overview.requests.latest', '<StillRow', 'WithMessages']) expect(card, gone).not.toContain(gone)
+    for (const gone of ['readonly latest', 'latestRevision']) expect(read('./model.ts'), gone).not.toContain(gone)
+    const css = read('../view/overview/requests.css')
+    expect(css).toMatch(/\.fw-so-rq-list \{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\) max-content auto;/)
+    expect(css).toMatch(/\.fw-so-rq-list > \.fw-so-ov-row \{\s*grid-column: 1 \/ -1;\s*grid-template-columns: subgrid;/)
+    expect(css).toMatch(/@container fw-so-ov-card \(max-width: 479px\)/)
+    expect(css).toMatch(/@container fw-so-ov-card \(max-width: 359px\)/)
+    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
+    expect(css).not.toContain('container:')
+    for (const locale of LOCALES) {
+      const words = messagesFor(locale, ['orders']).orders!
+      for (const key of ['requests.changesCount', 'requests.more_one', 'requests.more_other', 'requests.seeHolds', 'requests.seeDates', 'overview.requests.nothing', 'overview.requests.still', 'told.aboutChanges_one', 'told.aboutChanges_other']) expect(words[key]?.trim(), `${locale} ${key}`).toBeTruthy()
+      for (const key of ['overview.requests.changes', 'overview.requests.latest']) expect(words[key], `${locale} ${key}`).toBeUndefined()
+    }
+  })
+})
+// ---- end F-OO-205

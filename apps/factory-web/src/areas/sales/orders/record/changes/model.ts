@@ -5,6 +5,7 @@ import type { Amendment } from '../../api'
 import { moneyChange } from '../../daily-model'
 import type { Change, Confirmation } from '../../depth/api'
 import { putBackOffered } from '../../depth/model'
+import { ageOf, type Phrase as PartsPhrase } from '../../../../../lib/production/model' // F-OO-204: the parts' own age words
 
 /**
  * F-SA-236 (sales page plan N2, N3, P5; 10-order-page §2.4) — Changes as ONE newest-first story, without a screen: what waits on us
@@ -149,6 +150,20 @@ export function askWordsOf(request: Pick<BrandRequest, 'kind' | 'cells' | 'whole
   if (request.requestedDate && cells.length === 0) parts.push(words.day(request.requestedDate))
   return parts.join(' · ')
 }
+
+// ---- F-OO-204 (11-design §5.2): how long a waiting row waits ----------------------------------------------------------------------
+/**
+ * A waiting row's age ("15 d", "4 h", "12 min": the parts' `parts.age.*`), counted to the time of the production read that listed it
+ * (its "as of": the rows and their age are one read); no read yet: to now. A start after that time (an open yes the order read named
+ * after it) is the shortest age, never a negative one; no start known: null (the row says "—").
+ */
+export function rowAgeOf(since: string | null | undefined, asOf: string | null | undefined, now: number = Date.now()): PartsPhrase | null {
+  const at = since ? Date.parse(since) : NaN
+  if (!Number.isFinite(at)) return null
+  const read = asOf ? Date.parse(asOf) : NaN
+  return ageOf(since, Math.max(Number.isFinite(read) ? read : now, at))
+}
+// ---- end F-OO-204
 
 /** "Still to do" in the order's production read (none read yet, or no right: none — never claimed). */
 export const stillRowsOf = (read: { readonly changes?: { readonly stillToDo?: { readonly rows: readonly StillRowOf[] } | undefined } | undefined } | null | undefined): StillRowOf[] => [...(read?.changes?.stillToDo?.rows ?? [])]

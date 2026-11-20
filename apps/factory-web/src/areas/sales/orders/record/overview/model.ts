@@ -104,7 +104,8 @@ export const REQUESTED_FIELD_ID = 'amend-requested-date'
  *   BRAND_REQUEST · PROBLEM               Reply in the thread (This order's conversation at the message it was raised with)
  *   BRAND_REQUEST · REPROMISE             Production › #dates (Decide… is F-OP-105: deferred)
  *   an open yes of the order              Confirm / Refuse… for an approver who did not ask; held for the asker; who decides (F-OP-101)
- *   APPROVAL · PARTNER_TASK               Changes › (what we asked the customer: it decides)
+ *   APPROVAL of our counter-offer         Open… (F-OO-204: the ONE review window, `?open=`: our counter and Decide for <customer>)
+ *   APPROVAL · PARTNER_TASK               Their turn (F-OO-204: what we asked the customer — it answers; no door of ours)
  *   DEPOSIT                               Record the payment (payments.record, the request open) or Money ›
  *   BRAND_PAUSE                           Lift the customer's pause… in place (F-OP-116: the shared Lift; no ref: Production › #holds)
  *   holds · quality · work                Production › #holds
@@ -121,9 +122,15 @@ export type WaitingDoor =
   | { readonly kind: 'reply'; readonly messageId: string | null }
   | { readonly kind: 'yes'; readonly task: OpenApproval }
   | { readonly kind: 'payment'; readonly requestId: string }
-  | { readonly kind: 'tab'; readonly tab: 'production' | 'money' | 'changes'; readonly anchor: string | null }
+  | { readonly kind: 'tab'; readonly tab: 'production' | 'money'; readonly anchor: string | null }
   /** F-OP-116: the customer's pause on a work order this reader reaches: "Lift the customer's pause…" (the shared Lift, F-OP-114). */
   | { readonly kind: 'lift'; readonly workOrderId: string }
+  // ---- F-OO-204 (11-design §5.3, §5.4): no dead "Changes ›" door on what waits on the customer ----
+  /** Our counter-offer still open: Open… the ONE review window (it shows our counter and "Decide for <customer>"); it only opens. */
+  | { readonly kind: 'open'; readonly requestId: string; readonly request: BrandRequest | null }
+  /** What we asked the customer (a yes, an approval, a task on its portal): theirs to answer — "Their turn", no button. */
+  | { readonly kind: 'their' }
+  // ---- end F-OO-204
 
 /** A row's words: the API's own (it + en), or the page's phrase (its `{customer}` and the request's kind as `{what}` filled in: rowWordsOf). */
 export type WaitingWords = { readonly kind: 'api'; readonly words: Words } | { readonly kind: 'phrase'; readonly phrase: Phrase; readonly requestKind?: string | null }
@@ -167,7 +174,9 @@ function doorOf(blocker: Blocker, inputs: WaitingInputs): WaitingDoor {
     return { kind: 'tab', tab: 'production', anchor: 'dates' }
   }
   if (blocker.kind === 'DEPOSIT') return inputs.recordPayment && ref?.type === 'DepositRequest' ? { kind: 'payment', requestId: ref.id } : { kind: 'tab', tab: 'money', anchor: null }
-  if (blocker.kind === 'APPROVAL' || blocker.kind === 'PARTNER_TASK') return { kind: 'tab', tab: 'changes', anchor: null }
+  // F-OO-204: our open counter-offer opens the ONE review window; anything else we asked the customer is theirs to answer.
+  if (blocker.kind === 'APPROVAL' && ref?.type === 'OrderChangeRequest') return { kind: 'open', requestId: ref.id, request: (inputs.requests ?? []).find((request) => request.id === ref.id) ?? null }
+  if (blocker.kind === 'APPROVAL' || blocker.kind === 'PARTNER_TASK') return { kind: 'their' }
   // F-OP-116: the customer's pause is lifted in place (a work order the reader does not reach has no ref: Production › holds).
   if (blocker.kind === 'BRAND_PAUSE' && ref?.type === 'WorkOrder') return { kind: 'lift', workOrderId: ref.id }
   if (DATE_KINDS.has(blocker.kind)) return { kind: 'tab', tab: 'production', anchor: 'dates' }
@@ -176,11 +185,14 @@ function doorOf(blocker: Blocker, inputs: WaitingInputs): WaitingDoor {
 
 function wordsOf(blocker: Blocker, inputs: WaitingInputs): WaitingWords {
   const api: WaitingWords = { kind: 'api', words: blocker.words }
-  if (blocker.kind !== 'BRAND_REQUEST') return api
   const request = blocker.ref ? ((inputs.requests ?? []).find((entry) => entry.id === blocker.ref!.id) ?? null) : null
+  // F-OO-204: our open counter-offer, by the request it answers ("Our counter-offer: Change · line 20 · L 2 → 3"); never its fee.
+  if (blocker.kind === 'APPROVAL' && blocker.ref?.type === 'OrderChangeRequest') return request ? { kind: 'phrase', phrase: phrase('waiting.counterOpen'), requestKind: request.kind } : api
+  if (blocker.kind !== 'BRAND_REQUEST') return api
   // "<Customer> asks: <kind>" — the band notice's own words (band.asks).
   if (blocker.sub === 'REQUEST') return request ? { kind: 'phrase', phrase: phrase('band.asks'), requestKind: request.kind } : api
-  if (blocker.sub === 'COUNTER') return request?.counter?.state === 'AGREED' ? { kind: 'phrase', phrase: phrase('waiting.counterAgreed') } : request?.counter?.state === 'LAPSED' ? { kind: 'phrase', phrase: phrase('waiting.counterLapsed') } : api
+  // F-OO-204: an agreed or lapsed counter names the request too (its `{what}`).
+  if (blocker.sub === 'COUNTER') return request?.counter?.state === 'AGREED' ? { kind: 'phrase', phrase: phrase('waiting.counterAgreed'), requestKind: request.kind } : request?.counter?.state === 'LAPSED' ? { kind: 'phrase', phrase: phrase('waiting.counterLapsed'), requestKind: request.kind } : api
   if (blocker.sub === 'PROBLEM') return { kind: 'phrase', phrase: phrase('waiting.problem') }
   if (blocker.sub === 'REPROMISE') return { kind: 'phrase', phrase: phrase('waiting.repromise') }
   return api
@@ -218,38 +230,41 @@ export function waitingOf(read: Pick<OrderProduction, 'headline'> | null | undef
   return rows.map((row, index) => ({ row, index })).sort((a, b) => byOldest(a.row, b.row) || a.index - b.index).map((entry) => entry.row)
 }
 
-/** A row's words in the page's language: the API's own, or the phrase with the customer's name and the request's kind in words. */
-export function rowWordsOf(row: Pick<WaitingRow, 'words'>, say: { readonly t: (key: string, params?: Record<string, string | number>) => string; readonly kindWords: (kind: string) => string; readonly locale: string; readonly customer: string }): string {
+/**
+ * A row's words in the page's language: the API's own, or the phrase with the customer's name and the request's kind in words.
+ * F-OO-204 (11-design §5.2): with `askWords`, a request the page read is said whole — its kind and each size asked old → new, as the
+ * band notice says it ("<Customer> asks: Change · line 10 · M 40 → 36").
+ */
+export function rowWordsOf(
+  row: Pick<WaitingRow, 'words' | 'door'>,
+  say: { readonly t: (key: string, params?: Record<string, string | number>) => string; readonly kindWords: (kind: string) => string; readonly locale: string; readonly customer: string; readonly askWords?: (request: BrandRequest) => string },
+): string {
   if (row.words.kind === 'api') return row.words.words[say.locale === 'en' ? 'en' : 'it']
   const { phrase: words, requestKind } = row.words
-  return say.t(words.key, { ...(words.params ?? {}), customer: say.customer, ...(requestKind ? { what: say.kindWords(requestKind) } : {}) })
+  const request = row.door.kind === 'answer' || row.door.kind === 'open' ? row.door.request : null // F-OO-204
+  const what = request && say.askWords ? say.askWords(request) : requestKind ? say.kindWords(requestKind) : null
+  return say.t(words.key, { ...(words.params ?? {}), customer: say.customer, ...(what !== null ? { what } : {}) })
 }
 
 /**
- * "Requests & changes": Waiting on us N · Waiting on <Customer> N · Still to do N (top 3) · the latest change; "Nothing waits" only
- * when all three are empty. F-OO-202: its two lists hold the REQUEST rows only — holds are Where it is now's, dates Next dates' — so
- * the Changes badge, its dot and the Changes tab (which read this card) count requests and Still to do, nothing twice (D8).
+ * "Requests & changes": Waiting on us N · Waiting on <Customer> N · Still to do N; "nothing" only when all three are empty.
+ * F-OO-202: its two lists hold the REQUEST rows only — holds are Where it is now's, dates Next dates' — so the Changes badge, its dot
+ * and the Changes tab (which read this card) count requests and Still to do, nothing twice (D8). F-OO-205: no "latest change" any
+ * more (Changes › History tells it), so the card reads nothing of the order itself.
  */
 export interface WaitingCard {
   readonly onUs: readonly WaitingRow[]
   readonly onCustomer: readonly WaitingRow[]
   readonly still: readonly StillRowOf[]
-  readonly latest: { readonly revision: number; readonly at: string | null } | null
   readonly nothing: boolean
 }
 
-export function waitingCardOf(rows: readonly WaitingRow[], read: OrderProduction | null | undefined, order: Pick<Order, 'amendments'>): WaitingCard {
+export function waitingCardOf(rows: readonly WaitingRow[], read: OrderProduction | null | undefined): WaitingCard {
   const requests = rows.filter((row) => row.place === 'REQUEST') // F-OO-202
   const onUs = requests.filter((row) => row.on === 'US')
   const onCustomer = requests.filter((row) => row.on === 'BRAND')
   const still = stillRowsOf(read)
-  return {
-    onUs,
-    onCustomer,
-    still,
-    latest: order.amendments.latestRevision !== null ? { revision: order.amendments.latestRevision, at: order.amendments.latestAt } : null,
-    nothing: onUs.length === 0 && onCustomer.length === 0 && still.length === 0,
-  }
+  return { onUs, onCustomer, still, nothing: onUs.length === 0 && onCustomer.length === 0 && still.length === 0 }
 }
 
 /**
@@ -294,7 +309,7 @@ export function orderWaitingOf(order: Pick<Order, 'openApprovals' | 'amendments'
   if (state?.status === 'failed') return { status: 'failed', problem: state.problem }
   const read = readOf(state)
   const rows = waitingOf(read, { requests: page.requests?.value ?? null, approvals: order.openApprovals, recordPayment: page.can.recordPayment, locale })
-  const card = waitingCardOf(rows, read, order)
+  const card = waitingCardOf(rows, read) // F-OO-205: no latest change
   // F-OO-202: oldest first in each place, as in the list (no folding here: F-OO-104 groups the holds into one strip per kind).
   return { status: 'ready', rows, card, holds: rows.filter((row) => row.place === 'HOLD'), dates: rows.filter((row) => row.place === 'DATE') }
 }

@@ -1349,14 +1349,13 @@
     "reacceptance": "Nuova accettazione del cliente",
     "onUs": {
       "title": "Tocca a noi",
-      "nothing": "Niente aspetta noi",
-      "countered": "Controproposta inviata · aspetta il cliente",
+      "nothing": "Nessuna richiesta aspetta noi",
       "count_one": "{count} in attesa",
       "count_other": "{count} in attesa"
     },
     "onCustomer": {
       "title": "Tocca al cliente",
-      "nothing": "Niente aspetta il cliente",
+      "nothing": "Nessuna richiesta aspetta il cliente",
       "reaccept": "L'ordine modificato aspetta il nuovo sì del cliente",
       "since": "dal {date}",
       "due": "entro il {date}"
@@ -1713,10 +1712,8 @@
     },
     "requests": {
       "title": "Richieste e modifiche",
-      "changes": "Modifiche ›",
-      "nothing": "Niente aspetta noi o il cliente",
-      "latest": "Ultima modifica: revisione {revision} · {date}",
-      "still": "Ancora da fare: {count}"
+      "nothing": "Nessuna richiesta o modifica in attesa",
+      "still": "Ancora da fare · {count}"
     },
     "linked": {
       "title": "Record collegati",
@@ -1728,7 +1725,6 @@
       "complaints": "Reclami",
       "returns": "Resi",
       "sameQuote": "Stesso preventivo",
-      "sameQuoteValue": "{number}",
       "leftOut_one": "{count} ordine di lavoro non mostrato",
       "leftOut_other": "{count} ordini di lavoro non mostrati"
     },
@@ -2005,14 +2001,17 @@
     }
   },
   "waiting": {
-    "onUs_one": "In attesa di noi: {count}",
-    "onUs_other": "In attesa di noi: {count}",
-    "onCustomer_one": "In attesa di {customer}: {count}",
-    "onCustomer_other": "In attesa di {customer}: {count}",
+    "onUs_one": "Tocca a noi · {count}",
+    "onUs_other": "Tocca a noi · {count}",
+    "onCustomer_one": "Tocca a {customer} · {count}",
+    "onCustomer_other": "Tocca a {customer} · {count}",
     "reply": "Rispondi nella conversazione",
     "noThread": "La conversazione non è su questa pagina",
-    "counterAgreed": "Hanno accettato la tua controproposta",
-    "counterLapsed": "La tua controproposta è scaduta",
+    "counterAgreed": "{customer} ha accettato la tua controproposta: {what}",
+    "counterLapsed": "La tua controproposta è scaduta: {what}",
+    "counterOpen": "La nostra controproposta: {what}",
+    "open": "Apri…",
+    "theirTurn": "Tocca a loro",
     "problem": "{customer} ha segnalato un problema",
     "repromise": "{customer} ha rifiutato la nuova data",
     "yes": "In attesa di un sì: {kind}",
@@ -2216,6 +2215,48 @@
       "takeOverAction": "Riprendili",
       "taking": "Li riprendo…",
       "takenOver": "I prezzi del cliente di {number} sono ripresi dalla sua richiesta."
+    }
+  },
+  "requests": {
+    "changesNote": "I blocchi sono in Panoramica · le date in Prossime date",
+    "changesCount": "Modifiche ({count}) ›",
+    "more_one": "{count} altro in Modifiche ›",
+    "more_other": "Altri {count} in Modifiche ›",
+    "seeHolds": "Cosa ferma l'ordine: vedi A che punto è",
+    "seeDates": "Date in attesa: vedi Prossime date"
+  },
+  "linked": {
+    "value": "{value} ›",
+    "labelled": "{label}: {value}",
+    "none": "Ancora nessuno: {kinds}",
+    "unread": "Non è stato possibile leggerli",
+    "wo": {
+      "inWork_one": "{count} in lavorazione",
+      "inWork_other": "{count} in lavorazione",
+      "draft_one": "{count} in bozza",
+      "draft_other": "{count} in bozza",
+      "onHold_one": "{count} in sospeso",
+      "onHold_other": "{count} in sospeso",
+      "done_one": "{count} finito",
+      "done_other": "{count} finiti",
+      "cancelled_one": "{count} annullato",
+      "cancelled_other": "{count} annullati"
+    },
+    "ship": {
+      "lastDdt": "ultimo DDT {number}",
+      "noDdt": "nessun DDT ancora",
+      "cancelled_one": "{count} annullata",
+      "cancelled_other": "{count} annullate"
+    },
+    "inv": {
+      "issued_one": "{count} emessa",
+      "issued_other": "{count} emesse",
+      "draft_one": "{count} in bozza",
+      "draft_other": "{count} in bozza",
+      "creditNote_one": "{count} nota di credito",
+      "creditNote_other": "{count} note di credito",
+      "deposit_one": "{count} fattura di acconto",
+      "deposit_other": "{count} fatture di acconto"
     }
   }
 }

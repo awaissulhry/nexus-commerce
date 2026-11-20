@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { CATALOGUE } from '../../../../lib/i18n/messages'
-import { render, textOf } from '../../../../lib/record-thread/parts/testing'
+import { render, renderView, textOf } from '../../../../lib/record-thread/parts/testing'
+import type { ComponentType } from 'react'
+import { designScreen } from './fixtures' // F-OO-205: the card's design cases
 import { askFactsOf, changeFactsOf, floorToldAt, NEAR_MS, toldOfHistory, toldParts, type ToldChange, type WhoWasTold } from './told'
 import { WhoWasToldBody } from './view/WhoWasToldDialog'
 
@@ -136,5 +138,18 @@ describe('F-SA-244: Who was told — office people by name and why, the floor an
     // F-OO-131 (10-design §3; review F15): the count left People for the foot of Requests & changes (F-OO-205): one place per fact.
     const people = readFileSync(new URL('./view/overview/PeopleCard.tsx', import.meta.url), 'utf8') // F-OO-100: People is its own file
     expect(people).not.toContain("t('told.aboutChanges'")
+    // F-OO-205 (review F15): its one place is the quiet foot of Requests & changes — only once a change told someone.
+    const requests = readFileSync(new URL('./view/overview/RequestsCard.tsx', import.meta.url), 'utf8')
+    expect(requests).toContain("t('told.aboutChanges', { count: told })")
+    expect(requests).toContain('model.told.value.changes.length > 0 ? model.told.value.people : null')
+  })
+
+  it('F-OO-205: Requests & changes says "Told about changes: N people" at its foot (it + en); no change told yet: nothing said', () => {
+    const view = designScreen.view as ComponentType<{ model: unknown }>
+    const drawCase = (id: string, locale: 'en' | 'it') => textOf(renderView(view, designScreen.cases.find((item) => item.id === id)!.model, locale))
+    expect(drawCase('f-oo-205-requests', 'en')).toContain('Told about changes: 4 people')
+    expect(drawCase('f-oo-205-requests', 'it')).toContain('Avvisati delle modifiche: 4 persone')
+    // No change told anyone yet (the read has none): no count, never "0 people".
+    expect(drawCase('f-oo-205-nothing', 'en')).not.toContain('Told about changes')
   })
 })

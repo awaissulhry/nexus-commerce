@@ -1,0 +1,70 @@
+/* ── F-OO-205 (order overview lane; 11-design §5.2) — Requests & changes: a to-do list grouped by who waits ─────────────────────
+   Three groups — Waiting on us · Waiting on <customer> · Still to do — each its head with its count and a list of rows
+   `words | age | door`. A group's rows lie on the list's own columns (subgrid), so its ages and its doors line up. Below a 480 px
+   card the door wraps under the words, kept to the right (the shared row's rule, overview.css); below a 360 px card (a phone) the
+   words take their own line and the age and the door share the next one, to the right. "Told about changes" is the quiet foot.
+   Layout only, tokens only. */
+.fw-so-rq-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-so-rq-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-so-rq-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content auto;
+  gap: var(--nds-space-10) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-so-rq-list > .fw-so-ov-row {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.fw-so-rq-age {
+  color: var(--nds-text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-so-rq-more {
+  align-self: flex-end;
+}
+
+.fw-so-rq-foot {
+  margin: 0;
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border);
+}
+
+@container fw-so-ov-card (max-width: 479px) {
+  .fw-so-rq-list {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+}
+
+@container fw-so-ov-card (max-width: 359px) {
+  .fw-so-rq-list > .fw-so-ov-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: baseline;
+    column-gap: var(--nds-space-8);
+  }
+
+  .fw-so-rq-list > .fw-so-ov-row > :first-child {
+    flex: 1 1 100%;
+  }
+}

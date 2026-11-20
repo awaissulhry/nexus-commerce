@@ -20,9 +20,10 @@ export default defineStage({
       await page.waitForURL(new RegExp(`/sales/orders/${order.id}`))
       await expect(page.getByText('Confirmed').first()).toBeVisible()
       // F-SA-232 / F-SA-233 (sales page plan): the order opens on Overview; the deposit's state reads in its Linked records (the
-      // record chain left Lines, its words went).
+      // record chain left Lines, its words went). F-OO-207: a paid deposit is said on the card's quiet line ("Deposit: Paid ›"), by its
+      // whole words (a row may name a deposit invoice too).
       const linked = page.getByRole('list', { name: O('overview.linked.title') })
-      await expect(linked.getByRole('listitem').filter({ hasText: O('overview.linked.deposit') })).toContainText(O('gate.state.PAID'))
+      await expect(linked.getByRole('listitem').filter({ hasText: O('linked.labelled', { label: O('overview.linked.deposit'), value: O('gate.state.PAID') }) })).toBeVisible()
       // op-fx11 (F-OP-302): "From quote …" is a band pill; on a crowded band (the office’s 1440 px) it may fold behind "+N" and is
       // read in Details, as a person reads it — never the folded stand-in left in the band to be measured.
       await expectBandPill(page, new RegExp(`From quote ${flow.state.quote.number}`))
