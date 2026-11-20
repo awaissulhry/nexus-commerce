@@ -1,5 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
-import { ConflictError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors' // B-CP-024: + ConflictError
+import { ConflictError, InvalidStateError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors' // B-CP-024: + ConflictError; B-OL-033: NotFoundError moved to ./pricing.ts
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
@@ -9,12 +9,11 @@ import { isGoodsLine, isIssueList, MAX_TEXT, priceBasisOf, priceText, sizeGrid, 
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { lockOrderLines } from '../../production/work-orders/store'
-import { chainForQuote } from '../quotes/list-price'
 import type { SheetCache } from '../quotes/pricing'
-import { quotePartyOf, storedVat, treatmentOfStored } from '../quotes/store'
+import { storedVat, treatmentOfStored } from '../quotes/store'
 import { officeContextOf } from './access'
 import { officeOrder, recordAfter } from './moves'
-import { newLineDraft, priceLines, scaledCost, snapshotLine, type LineDraft, type PricedLines } from './pricing'
+import { newLineDraft, orderPriceChain, priceLines, scaledCost, snapshotLine, type LineDraft, type PricedLines } from './pricing' // B-OL-033: + orderPriceChain
 import { lockStepRequests, remakeScheduleInCommand } from './schedule'
 import { asDay, dayOrNull, lockOrder, readOrder, readOrderFacts, type LineRecord, type OrderFacts, type OrderRow, type Reader } from './store'
 import type { OrderView } from './views'
@@ -271,11 +270,9 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
     else closing = closePlan.close.map((line) => ({ id: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity, shipped: facts.progress.rows.flatMap((row) => (row.lineId === line.id && row.size !== null && row.shipped > 0 ? [{ size: row.size, quantity: row.shipped }] : [])) }))
   }
 
-  const party = await quotePartyOf(db, order.partyId, businessDate(now), now)
-  if (!party) throw new NotFoundError('Customer not found.')
-  const pinned = order.quoteVersionId ? ((await db.quoteVersion.findUnique({ where: { id: order.quoteVersionId }, select: { priceListVersionId: true } }))?.priceListVersionId ?? null) : null
   const newStyles = [...new Set(body.lines.flatMap((line) => (line.id === undefined && line.styleId ? [line.styleId] : [])))]
-  const chain = await chainForQuote(db, order, { currency: order.currency, priceListVersionId: pinned }, party, now, newStyles)
+  // B-OL-033: the order's price chain, read as the style search for the order reads it (./pricing.ts orderPriceChain).
+  const { party, chain } = await orderPriceChain(db, order, now, newStyles)
   const cache: SheetCache = new Map()
   const byId = new Map(lines.map((line) => [line.id, line]))
   let nextSeq = Math.max(0, ...lines.map((line) => line.seq)) + 10

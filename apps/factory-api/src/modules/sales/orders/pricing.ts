@@ -1,5 +1,6 @@
-import { ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors' // B-OL-033: + NotFoundError
 import { toMinorUnits, type CurrencyCode, type MinorUnits } from '@nexus/factory-domain/core/money'
+import { businessDate } from '@nexus/factory-domain/core/time' // B-OL-033
 import type { SnapshotHeader, SnapshotLine } from '@nexus/factory-domain/sales/amendments/amendments'
 import { isIssueList, piecesOf, priceText, priceVersion, resolvePrice, sizeGrid, type SizeInput, type SizeRow } from '@nexus/factory-domain/sales/quotes/quotes'
 import { QUOTE_RULE_DEFAULTS } from '@nexus/factory-domain/sales/quotes/rules'
@@ -7,12 +8,12 @@ import type { PartyTaxMode } from '@nexus/factory-domain/parties/tax'
 import type { PriceBasis } from '@nexus/factory-domain/tax/vat-summary'
 import type { VatTreatment } from '@nexus/factory-domain/tax/vat-treatment'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
-import { listPriceOf } from '../quotes/list-price'
+import { chainForQuote, listPriceOf } from '../quotes/list-price' // B-OL-033: + chainForQuote
 import { costingCompanyOf, costLine, type SheetCache } from '../quotes/pricing'
 import { defaultLineDescription, lineTarget } from '../quotes/lines'
-import { storedVat, type QuoteParty } from '../quotes/store'
+import { quotePartyOf, storedVat, type QuoteParty } from '../quotes/store' // B-OL-033: + quotePartyOf
 import type { PriceChain } from '../pricelists/store'
-import type { Reader } from './store'
+import type { OrderRow, Reader } from './store' // B-OL-033: + OrderRow
 import { unitPiece } from './amendments/mtm'
 import type { LinePick } from '@nexus/factory-domain/sales/configurator/rules'
 
@@ -76,6 +77,21 @@ export function priceLines(basis: PriceBasis, currency: string, treatment: VatTr
     costAmount: priced.costAmount,
   }
 }
+
+// ── B-OL-033 (order lines plan, 18 F1): the price chain an order reads ──
+/**
+ * The customer's price list chain of an order, read on `now` (quotes `chainForQuote`: the customer's list with the order's
+ * company, else its own, else the company's BASE list; the list version its quote kept), and the customer as the list reads it.
+ * The one rule for what prices a new line of the order (./amend.ts) and what the style search for the order calls priced
+ * (./style-search.ts). `styleIds`: the styles asked (none: every style of the lists).
+ */
+export async function orderPriceChain(db: Reader, order: Pick<OrderRow, 'companyId' | 'partyId' | 'currency' | 'quoteVersionId'>, now: Date, styleIds?: readonly string[]): Promise<{ party: QuoteParty; chain: PriceChain }> {
+  const party = await quotePartyOf(db, order.partyId, businessDate(now), now)
+  if (!party) throw new NotFoundError('Customer not found.')
+  const pinned = order.quoteVersionId ? ((await db.quoteVersion.findUnique({ where: { id: order.quoteVersionId }, select: { priceListVersionId: true } }))?.priceListVersionId ?? null) : null
+  return { party, chain: await chainForQuote(db, order, { currency: order.currency, priceListVersionId: pinned }, party, now, styleIds) }
+}
+// ── end B-OL-033 ──
 
 /** A line's cost at its cost per piece for its new pieces (an existing line keeps what it was sold with). */
 export function scaledCost(unitCost: string | null, pieces: number, currency: string): MinorUnits | null {

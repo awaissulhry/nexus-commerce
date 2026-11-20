@@ -10,6 +10,7 @@ const view = { audiences: ['office'], permission: 'product.styles.view', scope: 
 const manage = { audiences: ['office'], permission: 'product.styles.manage', scope: 'record' } as const
 
 export const manifest = defineManifest({
+  // B-OL-033: `?forOrder=` — the search for an order (also orders.view over its customer, checked by the handler; else 404).
   'GET /product/styles': view,
   'GET /product/styles/:styleId': view,
   'POST /product/styles': manage,

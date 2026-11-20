@@ -86,6 +86,9 @@ const SESSIONS: Record<string, () => SessionContext> = {
   pricesOnly: office(['orders.view', 'orders.manage', 'quotes.view', 'quotes.manage', 'money.price']),
   viewer: office(['orders.view']),
   floor: () => ({ audience: 'floor', tenantId: T, actorId: newId(), siteId: idIn('site:A1'), deviceId: newId(), grants: [{ permissions: ['floor.work', ...SALES], companies: [companyA], sites: [idIn('site:A1')], parties: 'all' }] }),
+  // B-OL-033: the style search for an order — a person who reads orders and styles (every customer, and one limited to P3).
+  styles: office(['orders.view', 'product.styles.view']),
+  stylesP3: () => ({ audience: 'office', tenantId: T, actorId: newId(), grants: [{ permissions: ['orders.view', 'product.styles.view'], companies: 'all', sites: 'all', parties: [P3] }] }),
 }
 
 async function call(session: string, method: 'GET' | 'POST', url: string, body?: unknown) {
@@ -351,6 +354,43 @@ describe('amendments (SAL-209, SAL-217): a confirmed order changes only through 
     expect(removal.workOrders.plan.length).toBeGreaterThan(0)
   })
 })
+
+// ── B-OL-033 (order lines plan, 18 F1 and F24): the style search for an order ("Add a style") ──
+describe('B-OL-033: the style search for an order — our collection and this customer’s own styles, and whether its list prices each colour', () => {
+  it('P1’s order lists P1’s own styles and our own collection, never another customer’s; each colour says whether P1’s list prices it', async () => {
+    // Our own collection's jacket (SEED-JKT-02 copied with no brand: no list prices it) and P3's own private-label jacket.
+    const own = { style: newId(), colourway: newId() }
+    const ofP3 = { style: newId(), colourway: newId() }
+    await planted([
+      copyRow('Style', JKT02, { id: own.style, code: 'T-OL033-OWN', name: 'Made-up own jacket', brandPartyId: null, soldUnderOurName: false }),
+      copyRow('Colourway', JKT02_RED, { id: own.colourway, styleId: own.style }),
+      copyRow('Style', JKT02, { id: ofP3.style, code: 'T-OL033-P3', name: 'Made-up jacket of P3', brandPartyId: P3, soldUnderOurName: false }),
+      copyRow('Colourway', JKT02_RED, { id: ofP3.colourway, styleId: ofP3.style }),
+    ])
+    const listed = await ok('styles', 'GET', `/product/styles?status=ALL&limit=200&forOrder=${manual.id}`)
+    const rows = new Map((listed.styles as Json[]).map((row) => [row.id as string, row]))
+    expect(rows.has(JKT01), "P1's own style").toBe(true)
+    expect(rows.has(own.style), 'our own collection').toBe(true)
+    expect(rows.has(ofP3.style), "P3's private style for P1's order").toBe(false)
+    // P1's list prices SEED-JKT-01 in both colours (420.00, its RED 430.00); no list prices our new jacket. A yes or no, never a price.
+    const jkt01 = (rows.get(JKT01)!.colourways as Json[]).filter((colour) => [JKT01_BLK, JKT01_RED].includes(colour.id))
+    expect(jkt01.map((colour) => [colour.id, colour.listPriced])).toEqual([
+      [JKT01_BLK, true],
+      [JKT01_RED, true],
+    ])
+    expect(rows.get(own.style)!.colourways).toEqual([{ id: own.colourway, code: expect.any(String), name: expect.any(String), listPriced: false }])
+    expect(Object.keys(jkt01[0]!).sort()).toEqual(['code', 'id', 'listPriced', 'name'])
+    // The plain search is unchanged: a person over every customer finds both new jackets, without colourways.
+    const plain = await ok('styles', 'GET', '/product/styles?status=ALL&limit=200&q=T-OL033')
+    expect((plain.styles as Json[]).map((row) => row.id).sort()).toEqual([own.style, ofP3.style].sort())
+    expect(plain.styles[0]).not.toHaveProperty('colourways')
+    // An order the person may not see (another customer's) answers in the words of an unknown one.
+    const hidden = await refused('stylesP3', 'GET', `/product/styles?forOrder=${manual.id}`, undefined, 404)
+    const unknown = await refused('stylesP3', 'GET', `/product/styles?forOrder=${newId()}`, undefined, 404)
+    expect(hidden.message).toBe(unknown.message)
+  })
+})
+// ── end B-OL-033 ──
 
 // ── B-OP-013 (order page plan N2, D1 + D3; 13-backend §1.3): each preview says what the apply then does, for Sales and the Owner ──
 /** Rows written whole, the database's rules off for them (as an import would). */
