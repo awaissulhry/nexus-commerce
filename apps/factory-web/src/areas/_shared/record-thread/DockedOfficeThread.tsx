@@ -781,6 +781,13 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const reportNew = frame?.reportNew
   useEffect(() => reportNew?.(base.newCount), [reportNew, base.newCount])
   useEffect(() => () => reportNew?.(0), [reportNew])
+  // ---- F-OO-135 (order overview §3.1): how many follow this conversation, told to the frame as the new messages are, with its record
+  // (the frame keeps only the page's own: the order's People head says "Followers · 4 ›"); null before the read and once the dock left.
+  const reportFollowers = frame?.reportFollowers
+  const followerCount = followers.data?.count ?? null
+  useEffect(() => reportFollowers?.(followerCount, key), [reportFollowers, followerCount, key])
+  useEffect(() => () => reportFollowers?.(null, key), [reportFollowers, key])
+  // ---- end F-OO-135
 
   // ── B-TH-288 (B-TH-093; T1-F13): Done — a work state apart from Close; whoever may write on the conversation, online ───────────
   const [doneBusy, setDoneBusy] = useState(false)

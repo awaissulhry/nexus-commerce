@@ -40,12 +40,12 @@ export function PeopleCard(props: { order: Order; model: OrderRecordModel; actio
   // draws the card without the dock that loads it).
   return (
     <WithMessages namespaces={[OWNER_WORDS_NS]}>
-      <People {...props} />
+      <PeopleBody {...props} />
     </WithMessages>
   )
 }
 
-function People({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+function PeopleBody({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const notes = useT(NOTES_NS)
   const head = useT(OWNER_WORDS_NS) // F-OO-133
@@ -67,7 +67,8 @@ function People({ order, model, actions }: { order: Order; model: OrderRecordMod
     <Card padded className="fw-so-people">
       <div className="fw-so-card-head">
         <h2 className="fw-so-h2">{t('overview.people.title')}</h2>
-        {/* F-SA-265 / F-SA-266: who is told about this order — the thread's followers (the frame's door); F-OO-131: in the head. */}
+        {/* F-SA-265 / F-SA-266: who is told about this order — the thread's followers (the frame's door); F-OO-131: in the head.
+            F-OO-135: "Followers · 4 ›" — the count the dock reported to the frame; no conversation on the page: no door. */}
         <FollowersDoor />
       </div>
       {view.status === 'loading' ? (

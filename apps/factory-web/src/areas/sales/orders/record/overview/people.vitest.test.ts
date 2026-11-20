@@ -23,6 +23,8 @@ import { formatDate } from '../../../../../lib/i18n/format'
 import { dayInstant } from '../../model'
 import type { WorkOrderActsModel } from '../../../../../lib/production/work-order-acts/use-work-order-acts'
 import { placeLinesOf, placeLineWords, planningWorkOrderOf } from './people'
+// ---- F-OO-135: the Followers count in the card's head ----
+import { FollowersLink } from '../view/Discuss'
 
 /** F-OO-100 (order overview lane: one file per section) — People's rules, moved with people.ts out of overview.vitest.test.ts unchanged. */
 
@@ -107,7 +109,8 @@ describe('F-OO-131: People — one aligned list, label | value | one door; Follo
     expect(view).not.toContain('told.aboutChanges')
     expect(view).not.toContain('KeyValue')
     const door = source('../view/Discuss.tsx')
-    expect(door).toContain("{t('people.followers')}")
+    // F-OO-135: the words with the reported count, or without one while none is known.
+    expect(door).toContain("{count === null ? t('people.followers') : t('people.followersCount', { count })}")
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of ['people.supervisor', 'people.followers']) expect(t(key), `${locale} ${key}`).not.toBe(key)
@@ -351,3 +354,47 @@ describe('F-OO-134: People › Where it is made — a plant line or an outside w
   })
 })
 // ---- end F-OO-134
+
+// ---- F-OO-135 (10-design §3.1): the People head says "Followers · N ›" — the count the dock reported through the frame; no thread: no door ---
+describe('F-OO-135: People › "Followers · N ›" — the reported count shown; before a report "Followers ›"; no conversation here: no door', () => {
+  const value = order('IN_PRODUCTION')
+  const band = { back: createElement('a', { href: '/w/DEMO/sales/orders' }, 'Orders'), title: 'SO-2026-0142 · Moto Demo S.r.l.' }
+  const record = base('sales', value, { tab: 'overview', production: ready({ ...PRODUCTION_READ, people: PEOPLE }), people: { mayAssign: false, mayNote: true, assign: null, note: null } }).record
+  const inFrame = (thread: boolean, locale: 'en' | 'it' = 'en') =>
+    render(createElement(RecordFrame, { recordType: 'SalesOrder', personId: 'u1', band, thread: thread ? createElement('div', null, 'thread') : null, threadLabel: 'The order’s thread', record: { type: 'SalesOrder', id: value.id }, children: createElement(PeopleCard, { order: value, model: record }) }), locale)
+  /** The card's head (title and its link), before the rows. */
+  const headOf = (html: string) => html.slice(html.indexOf('<div class="fw-so-card-head">'), html.indexOf('<ul class="fw-so-people-list">'))
+
+  it('the reported count is shown: "Followers · 4 ›" / "Chi segue · 4 ›"; none known yet: "Followers ›"; a count of 0 is said too', () => {
+    const link = (count: number | null, locale: 'en' | 'it' = 'en') => textOf(render(createElement(FollowersLink, { count, onOpen: () => undefined }), locale))
+    expect(link(4)).toBe('Followers · 4 ›')
+    expect(link(4, 'it')).toBe('Chi segue · 4 ›')
+    expect(link(null)).toBe('Followers ›')
+    expect(link(null, 'it')).toBe('Chi segue ›')
+    expect(link(0)).toBe('Followers · 0 ›')
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      expect(t('people.followersCount', { count: 3 }), locale).toContain('3')
+    }
+  })
+
+  it('in the order page\'s frame with its conversation: the head\'s link (the frame\'s count; on the server none is reported yet); no conversation: no door', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const head = textOf(headOf(inFrame(true, locale)))
+      expect(head, locale).toBe(locale === 'en' ? 'People Followers ›' : 'Persone Chi segue ›')
+    }
+    const none = headOf(inFrame(false))
+    expect(textOf(none)).toBe('People')
+    expect(none).not.toContain('<button')
+    // Outside any frame (a design case without the page): no door either.
+    expect(textOf(headOf(render(createElement(PeopleCard, { order: value, model: record }))))).toBe('People')
+  })
+
+  it('the door reads the frame\'s count (no second read of the followers) and opens the frame\'s followers door', () => {
+    const door = readFileSync(new URL('../view/Discuss.tsx', import.meta.url), 'utf8')
+    expect(door).toContain("if (!frame?.discuss || !frame.openDoor) return null")
+    expect(door).toContain("<FollowersLink count={frame.followers ?? null} onOpen={() => frame.openDoor?.('followers')} />")
+    expect(door).not.toContain('readFollowers')
+  })
+})
+// ---- end F-OO-135

@@ -1696,6 +1696,7 @@
   "people": {
     "supervisor": "Supervisore",
     "followers": "Chi segue ›",
+    "followersCount": "Chi segue · {count} ›",
     "outside": "Esterno: {name}",
     "outsideSince": "Esterno: {name} · dal {date}"
   },

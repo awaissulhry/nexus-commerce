@@ -386,16 +386,17 @@ describe('F-SA-265: the frame\'s doors into the conversation (Discuss, Show in t
     const feed = readFileSync(new URL('../../../lib/record-thread/feed/view/Feed.tsx', import.meta.url), 'utf8')
     expect(feed).toContain('data-event-ids={row.events.map((event) => event.id).join(\' \')}')
   })
-  it('the door words in both languages (Discuti, Mostra nella pagina, Chi segue…)', () => {
+  // F-OO-135: "Followers…" left the frame's words — the order's People head says "Followers · N ›" in its own (orders `people.*`).
+  it('the door words in both languages (Discuti, Mostra nella pagina)', () => {
     // The catalogues are flat keys (`discuss.label`), as every translator reads them.
     for (const locale of ['en', 'it'] as const) {
       const words = CATALOGUE[locale]['record-frame'] ?? {}
-      for (const key of ['label', 'hint', 'of', 'showOnPage', 'showInThread', 'followers', 'notInThread']) expect(words[`discuss.${key}`], `${locale} ${key}`).toBeTruthy()
+      for (const key of ['label', 'hint', 'of', 'showOnPage', 'showInThread', 'notInThread']) expect(words[`discuss.${key}`], `${locale} ${key}`).toBeTruthy()
+      expect(words['discuss.followers'], `${locale}: no unused key`).toBeUndefined()
     }
     const it = CATALOGUE.it['record-frame']!
     expect(it['discuss.label']).toBe('Discuti')
     expect(it['discuss.showOnPage']).toBe('Mostra nella pagina')
-    expect(it['discuss.followers']).toBe('Chi segue…')
   })
 })
 // ---- end F-SA-265
@@ -674,3 +675,45 @@ describe('op-fx11 — a folded pill is hidden, inert and aria-hidden; one that f
   })
 })
 // ---- end op-fx11
+
+// ---- F-OO-135 (order overview §3.1): the frame's `followers` — the docked thread reports how many follow the page's own conversation, as
+// it reports its new messages; the order's People head reads it ("Followers · 4 ›"). Optional: every other page reads nothing new.
+describe('F-OO-135 — the followers count, reported by the dock through the frame', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('the frame keeps the count of the page\'s own conversation only (another record the dock shows is not kept), and offers it only with a conversation', () => {
+    const frame = read('./RecordFrame.tsx')
+    expect(frame).toContain('readonly followers?: number | null')
+    expect(frame).toContain('readonly reportFollowers?: (count: number | null, record: FrameRecord) => void')
+    expect(frame).toContain('if (takesAsk(pageRecordRef.current, about)) setFollowers(count)')
+    expect(frame).toContain('...(hasThread ? { followers, reportFollowers } : {})')
+    // Beside reportNew, which stays as it was.
+    expect(frame).toContain('reportNew: setFresh,')
+  })
+
+  it('the frame offers it only where the page has a conversation: the body\'s door draws the count there, none without one', async () => {
+    const { FollowersDoor } = await import('../../sales/orders/record/view/Discuss')
+    const band = { back: createElement('a', { href: '/w/demo/sales/orders' }, 'Orders'), title: 'SO-2026-0101 · Brand Alpha' }
+    const page = (thread: unknown) => render(createElement(RecordFrame, { recordType: 'SalesOrder', personId: 'u1', band, thread: thread as never, threadLabel: 'The order’s thread', record: { type: 'SalesOrder', id: 'o1' }, children: createElement(FollowersDoor) }))
+    // With a conversation: the door, before any report "Followers ›" (the dock reports once it read them, on the client).
+    expect(textOf(page(createElement('div', null, 'messages')))).toContain('Followers ›')
+    // No conversation for this person: no door.
+    expect(textOf(page(null))).not.toContain('Followers')
+  })
+
+  it('the docked thread reports its followers\' count (null before the read and once it leaves), with its record — as reportNew', () => {
+    const docked = read('../record-thread/DockedOfficeThread.tsx')
+    expect(docked).toContain('const followerCount = followers.data?.count ?? null')
+    expect(docked).toContain('useEffect(() => reportFollowers?.(followerCount, key), [reportFollowers, followerCount, key])')
+    expect(docked).toContain('useEffect(() => () => reportFollowers?.(null, key), [reportFollowers, key])')
+    // The count the Head's Followers popover shows: the same read, no second one.
+    expect(docked).toContain('if (followers.data) counts.followers = { kind: \'followers\', count: followers.data.count')
+    expect(docked.match(/readFollowers\(api, key\)/g)).toHaveLength(1)
+  })
+
+  it('no other record page reads it: only the order\'s Followers door', () => {
+    for (const path of ['../../sales/customers/record/view/CustomerRecordView.tsx', '../../production/work-orders/record/view/WorkOrderRecordView.tsx', '../../sales/customers/record/view/WorkTab.tsx']) expect(read(path), path).not.toMatch(/\.followers\b|reportFollowers/)
+    expect(read('../../sales/orders/record/view/Discuss.tsx')).toContain('<FollowersLink count={frame.followers ?? null}')
+  })
+})
+// ---- end F-OO-135
