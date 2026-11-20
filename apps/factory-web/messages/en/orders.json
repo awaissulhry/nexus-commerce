@@ -996,7 +996,17 @@
         "past": "The requested date is today or later",
         "same": "It is the requested date already"
       }
-    }
+    },
+    "payment": "Payment · currency",
+    "languageTax": "Language · tax mode",
+    "made": "Made",
+    "madeBy": "{date} by {name} · changed {changed}",
+    "madeNoName": "{date} · changed {changed}",
+    "ordered": "ordered {date}",
+    "fixed": "Fixed",
+    "fixedTitle": "Set when the order was made; it does not change.",
+    "set": "Set…",
+    "unread": "Could not be read"
   },
   "editor": {
     "add": {
@@ -1648,14 +1658,7 @@
     },
     "facts": {
       "title": "Order facts",
-      "customerRef": "Customer PO",
-      "language": "Language",
-      "lang": {
-        "it": "Italian",
-        "en": "English"
-      },
-      "made": "Made · changed",
-      "madeValue": "{made} · {changed}"
+      "customerRef": "Customer PO"
     }
   },
   "mtm": {

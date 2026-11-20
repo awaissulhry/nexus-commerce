@@ -996,7 +996,17 @@
         "past": "La data richiesta è da oggi in poi",
         "same": "È già la data richiesta"
       }
-    }
+    },
+    "payment": "Pagamento · valuta",
+    "languageTax": "Lingua · regime fiscale",
+    "made": "Creato",
+    "madeBy": "{date} da {name} · modificato il {changed}",
+    "madeNoName": "{date} · modificato il {changed}",
+    "ordered": "ordinato il {date}",
+    "fixed": "Fisso",
+    "fixedTitle": "Fissato quando l'ordine è stato creato; non cambia.",
+    "set": "Imposta…",
+    "unread": "Non è stato possibile leggerlo"
   },
   "editor": {
     "add": {
@@ -1648,14 +1658,7 @@
     },
     "facts": {
       "title": "Dati dell'ordine",
-      "customerRef": "Ordine del cliente",
-      "language": "Lingua",
-      "lang": {
-        "it": "Italiano",
-        "en": "Inglese"
-      },
-      "made": "Creato · modificato",
-      "madeValue": "{made} · {changed}"
+      "customerRef": "Ordine del cliente"
     }
   },
   "mtm": {

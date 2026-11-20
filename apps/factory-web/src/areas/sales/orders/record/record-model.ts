@@ -84,6 +84,9 @@ export function dialogLinesOf(dialog: RecordDialog | null, kind: 'closeLines' | 
 /** F-OO-125: a style group's card in the Lines edit mode (Overview › Progress by line ⋯ "Change quantity or sizes…" focuses it). */
 export const amendStyleAnchorOf = (styleId: string): string => `amend-style-${styleId}`
 
+/** F-OO-209: the customer PO field of the Lines edit mode (Overview › Order facts' Customer PO "Change…" focuses it: one edit path). */
+export const CUSTOMER_REF_FIELD_ID = 'amend-customer-ref'
+
 // ---- F-OO-144 (order overview 10-design §4.2; review F7): "Requested by customer" — a small dialog, no page hop, no API change ----
 /**
  * The ONE amendment the dialog sends, built by the amend builder the Lines edit mode uses (daily-model amendBodyOf): every line as it
@@ -454,6 +457,8 @@ export interface OrderRecordActions {
   onRequestedDate?: (input: { readonly date: string; readonly reason: string }) => void
   /** F-OO-125: a line's "Change quantity or sizes…" (Overview › Progress by line ⋯) — edit mode on Lines, its style group focused. */
   onLineChange?: (styleId: string) => void
+  /** F-OO-209: Order facts' Customer PO "Change…" — edit mode on Lines, the customer PO focused (the one edit path). */
+  onCustomerRefChange?: () => void
   /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
   people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
   /** F-CP-142: the Price check card (Customer's price…, Take them over, Try again) and the ONE window's own actions. */
