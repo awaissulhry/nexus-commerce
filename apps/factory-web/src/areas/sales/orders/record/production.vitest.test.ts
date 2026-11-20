@@ -480,9 +480,9 @@ describe('the Overview’s doors land on Production: #work-orders, #holds, #line
   })
 
   it('the sources: the Overview links to exactly these, and ProductionTab carries them', () => {
-    const overview = readFileSync(new URL('./view/OverviewTab.tsx', import.meta.url), 'utf8')
-    expect(overview).toContain('#work-orders`')
-    expect(overview).toContain('#line-${row.lineIds[0] ?? row.id}')
+    // F-OO-100: Overview's cards are one file each (view/overview/): "Where it is now" and "Progress by line" hold these links.
+    expect(readFileSync(new URL('./view/overview/WhereCard.tsx', import.meta.url), 'utf8')).toContain('#work-orders`')
+    expect(readFileSync(new URL('./view/overview/ProgressCard.tsx', import.meta.url), 'utf8')).toContain('#line-${row.lineIds[0] ?? row.id}')
     const doors = readFileSync(new URL('./overview/model.ts', import.meta.url), 'utf8')
     expect(doors).toContain("anchor: HOLD_KINDS.has(blocker.kind) ? 'holds' : null")
     const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
