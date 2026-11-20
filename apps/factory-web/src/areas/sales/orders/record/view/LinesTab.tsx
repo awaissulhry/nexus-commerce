@@ -330,7 +330,8 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
         </p>
       </div>
       <WhatChanges order={order} amend={amend} strip={strip} asPriced={asPriced} model={model} actions={actions} />
-      <Banner tone="info" title={t('amend.how')} />
+      {/* F-OP-312 (follow-up 13): a reader without the price grain is never told to change prices (the words follow the grain). */}
+      <Banner tone="info" title={t(model.can.price ? 'amend.how' : 'amend.howNoPrice')} />
       <Card padded>
         <h2 className="fw-so-h2">{t('amend.header')}</h2>
         <div className="fw-so-two">

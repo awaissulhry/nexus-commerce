@@ -379,3 +379,25 @@ describe('F-OO-110: cancel a waiting order — Cancel order… appears through a
   })
 })
 // ---- end F-OO-110
+
+// ---- F-OP-312 (order page follow-up 13): the amendment's "how" never tells a reader without the price grain to change prices ----
+describe('F-OP-312: Amend order says "Change the sizes below…" to a reader who sees no price, "…sizes and prices…" to one who does', () => {
+  const view = designScreen.view as ComponentType<{ model: unknown }>
+  const draw = (id: string, locale: (typeof LOCALES)[number]) => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, locale)
+  it('drawn: Sales (no price grain, B-CP-011) reads the no-price words; the Owner the priced ones — in Italian and English', () => {
+    expect(draw('amend-start', 'en')).toContain('Change the sizes below, add a colour or a style, or set a line to 0 to remove it.')
+    expect(draw('amend-start', 'en')).not.toContain('sizes and prices')
+    expect(draw('amend-start', 'it')).toContain('Cambia qui sotto le taglie, aggiungi un colore o un modello')
+    expect(draw('amend-start', 'it')).not.toContain('taglie e prezzi')
+    expect(draw('amend-draft', 'en')).toContain('Change the sizes and prices below')
+    expect(draw('amend-draft', 'it')).toContain('Cambia qui sotto taglie e prezzi')
+  })
+  it('the two wordings exist in both languages and differ only by the prices', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['amend.how', 'amend.howNoPrice']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('amend.howNoPrice'), locale).not.toMatch(/prezz|price/i)
+    }
+  })
+})
+// ---- end F-OP-312

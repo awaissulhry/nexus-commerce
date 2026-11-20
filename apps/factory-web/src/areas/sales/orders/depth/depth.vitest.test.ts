@@ -273,6 +273,20 @@ describe('materials, the confirmation, the tech pack, the forecast', () => {
     expect(packRows({ inquiry: null })).toEqual([])
   })
 
+  // F-OP-314 (overview walk #15a): the tech pack and the supplied materials are the customer's — "Customer" on screen, "Brand" only
+  // for the garment label (the Owner's words rule), in Italian and English.
+  it('the tech pack and the customer’s materials say "customer", never "brand"', () => {
+    const words: Record<string, Record<string, string>> = {
+      en: { 'pack.title': 'Customer tech pack in force', 'pack.version': 'The customer’s version: 3', 'materials.emptyBody': 'When the customer sends leather, trims or labels, Plan from the BOM lists what each line needs.' },
+      it: { 'pack.title': 'Scheda tecnica del cliente in vigore', 'pack.version': 'Versione del cliente: 3', 'materials.emptyBody': 'Quando il cliente invia pelle, accessori o etichette, Pianifica dalla distinta elenca cosa serve a ogni riga.' },
+    }
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, [NAMESPACE])[NAMESPACE]!)
+      for (const [key, expected] of Object.entries(words[locale]!)) expect(t(key, { version: 3 }), `${locale} ${key}`).toBe(expected)
+      for (const key of Object.keys(words[locale]!)) expect(t(key, { version: 3 }), `${locale} ${key}`).not.toMatch(/\bbrand|marchio/i)
+    }
+  })
+
 })
 
 describe('By promise week (never re-ranked)', () => {

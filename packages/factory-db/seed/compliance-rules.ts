@@ -459,7 +459,9 @@ export async function seed(context: SeedContext): Promise<ComplianceRulesSeed> {
           requirementId: r.labelLanguage,
           styleId: production.styleId,
           marketCode: 'DE',
-          reason: 'The label for Germany cannot print: the warning "warning.class-a" has no approved German words. Who can fix it: compliance. How: approve the German translation in Rules & markets › Phrases.',
+          // F-OP-313 (order page walk #23, overview walk #14): the sentence names the warning by its words, never by its phrase key
+          // ("warning.class-a" read as a raw code on the order page's notice, which draws this stored sentence as it is).
+          reason: 'The label for Germany cannot print: the warning "Class A garment: read the instructions before use." has no approved German words. Who can fix it: compliance. How: approve the German translation in Rules & markets › Phrases.',
           explanation: { code: 'phrase.notApproved', phrase: 'warning.class-a', language: 'de', colourway: 'BLK', size: '52' },
           createdAt: T.refusedLabel,
           createdById: production.operatorId,

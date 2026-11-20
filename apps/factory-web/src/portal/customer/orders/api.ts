@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { CUSTOMER_SHIPMENT_STATUSES, SHIPMENT_MILESTONES } from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { CUSTOMER_ORDER_STATUSES, MILESTONE_STATES, MILESTONES, ORDER_CHIPS } from '@nexus/factory-domain/sales/portal-orders/status'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
+import { browserAddress } from '../../../lib/api/browser-address' // F-OP-317
 // F-PR-13: the production asks (B-PR-25), the freeze states and the sample kinds, as the API names them.
 import { ASK_SAMPLE_KINDS, ASK_VERDICT_CODES } from '@nexus/factory-domain/sales/change-requests/rules'
 // B-SA-046b: which pieces a design change is for.
@@ -351,7 +352,8 @@ export const rulesSchema = z.object({
       // F-PR-23b (B-PR-27a #1626): the other colourways of the line's style a change may ask it in, each with the sizes it is made in.
       colourways: z.array(z.object({ id: z.string(), code: z.string(), name: z.string(), sizes: z.array(z.string()) })).optional(),
       // B-SA-046d: the line's small picture (the portal's own walled read: only the small preview's address; null: none to show).
-      picture: z.object({ small: z.object({ url: z.string(), expiresAt: z.string() }).nullable() }).nullable().optional(),
+      // F-OP-317 (order page walk #22): the local store's path through this app's `/api` (browserAddress), as the office reads do.
+      picture: z.object({ small: z.object({ url: z.string().transform(browserAddress), expiresAt: z.string() }).nullable() }).nullable().optional(),
     }),
   ),
   cancelFee: z.object({ pct: z.string().nullable(), words, currency: z.string(), wholeOrderFee: price }).optional(),

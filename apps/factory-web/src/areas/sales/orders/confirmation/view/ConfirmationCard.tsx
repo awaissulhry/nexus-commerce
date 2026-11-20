@@ -165,8 +165,8 @@ function Confirmation({ order, model, actions, prefix }: { order: Order; model: 
 }
 
 /**
- * Documents and files › Brand tech pack in force (design order.docs.files "Brand tech pack in force (W2b)"; B-W2b-295's read
- * through the order's quote and the inquiry it came from): each file of the brand's tech pack, the version named and whether a
+ * Documents and files › Customer tech pack in force (design order.docs.files "Brand tech pack in force (W2b)"; B-W2b-295's read
+ * through the order's quote and the inquiry it came from): each file of the customer's tech pack, the version named and whether a
  * newer one is in force now (or none is available any more), opened from the file store. Fetches nothing.
  */
 export function TechPackCard({ model, actions }: { model: OrderDepthModel | undefined; actions?: OrderDepthActions }) {

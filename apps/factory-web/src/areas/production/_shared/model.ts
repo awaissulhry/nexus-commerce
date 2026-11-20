@@ -1,4 +1,5 @@
 import type { Tone } from '@nexus/ui/primitives'
+import type { DockDefault } from '../../_shared/record-frame/model' // F-OP-316
 import { isApiError, issuePath } from '../../../lib/api/errors'
 // F-PR-01: the one progress rule lives with the shared production parts (office and portal).
 import { percentOf, progressFigure, type ProgressFigure } from '../../../lib/production/model'
@@ -168,8 +169,13 @@ export function tabOf(value: string | null | undefined): RecordTab {
   return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'overview'
 }
 
-/** A tab whose body is a wide grid (Cutting & bundles: the cut log, the bundles): the docked thread takes one third under 1600 px (PL1, R-18). */
-export const isWideTab = (tab: RecordTab): boolean => tab === 'cutting'
+/**
+ * F-OP-316 (order page follow-up 12): the docked thread's width when the person chose none — ONE per viewport on every tab, the grid
+ * rule the order page has (#1753): a third under 1600 px (Cutting & bundles needs the room), 40 % from 1600. Before, only Cutting &
+ * bundles was a third, so at 1280–1599 px the dock changed its width with the tab. A width the person picks holds on every tab
+ * (RecordFrame keeps one per record type).
+ */
+export const DOCK_DEFAULT: DockDefault = 'grid'
 // ---- end B-TH-265
 
 export type StepKind = 'release' | 'start' | 'complete' | 'close'
