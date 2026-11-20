@@ -788,6 +788,9 @@
     "dateHint": "From today on. The first promise stays on record.",
     "why": "Why (the customer reads it)",
     "pick": "Pick a reason",
+    "officeReason": {
+      "YOUR_CHANGE": "The customer asked for the change"
+    },
     "customerReads": "The customer reads:",
     "note": "Your note (office only)",
     "reason": "Why",

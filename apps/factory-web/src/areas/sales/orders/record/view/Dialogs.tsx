@@ -193,11 +193,12 @@ function PromiseDialog({ order, model, actions }: { order: Order; model: OrderRe
       <Field label={t('promise.date')} hint={t('promise.dateHint')} error={date && problems.date ? t(problems.date) : undefined}>
         <DateField value={date} onChange={setDate} min={model.today} locale={INTL_LOCALE[locale]} ariaLabel={t('promise.date')} />
       </Field>
-      {/* ---- F-OO-142: why, from the curated list (the customer reads its words, shown in Italian and English); the office's own note ---- */}
+      {/* ---- F-OO-142: why, from the curated list (the customer reads its words, shown in Italian and English); the office's own note.
+          Walk follow-up (Z01): the list says each reason in office words; the customer's own words only in "The customer reads:". ---- */}
       <Field label={t('promise.why')}>
         <Select value={reasonCode} onChange={(event) => setReasonCode(event.target.value)}>
           <option value="">{t('promise.pick')}</option>
-          {promiseReasonChoices(locale).map((choice) => (
+          {promiseReasonChoices(locale, (key) => t(key)).map((choice) => (
             <option key={choice.value} value={choice.value}>
               {choice.label}
             </option>

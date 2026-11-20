@@ -788,6 +788,9 @@
     "dateHint": "Da oggi in poi. La prima promessa resta registrata.",
     "why": "Perché (lo legge il cliente)",
     "pick": "Scegli un motivo",
+    "officeReason": {
+      "YOUR_CHANGE": "Il cliente ha chiesto la modifica"
+    },
     "customerReads": "Il cliente legge:",
     "note": "La tua nota (solo ufficio)",
     "reason": "Perché",
