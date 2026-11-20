@@ -581,13 +581,9 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
     locked: true,
     // B-SA-034: the live watch list (the server's) and who changed each part last.
     ...(await liveOf(db, order, facts, deposits.map((row) => row.id), viewer, approvals.openApprovals.map((row) => row.taskId) /* B-OP-020 */)),
-    // ── B-OP-020: the yes in place; the Money and Shipments tabs' counts (the Changes tab counts the ONE waiting list: R-22) ──
+    // ── B-OP-020: the yes in place (F-OO-206, Owner D8: no badges — the web counts `chain` by the one rule, orderLinkCountsOf) ──
     openApprovals: approvals.openApprovals,
     openApprovalsHidden: approvals.openApprovalsHidden,
-    badges: {
-      money: { invoices: facts.invoices.filter((row) => row.status !== 'DRAFT').length, openDeposits: deposits.filter((row) => row.status === 'OPEN').length },
-      shipments: facts.shipments.filter((row) => row.status !== 'CANCELLED').length,
-    },
     // ── end B-OP-020 ──
   }
 }

@@ -11,6 +11,8 @@ import type { OrderRecordActions, OrderRecordModel, Part, RecordActsBase, Record
 // ---- F-OP-101: the approver's yes in place — the approval engine's own routes, the page's step-up ----
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { readProblem } from '../model'
+import { promiseBodyOf } from '../model' // F-OO-142: the picked reason and the office's note (B-OO-009)
+import type { ProductionPart } from './overview/api' // F-OO-142: the production read's parts a promise save reads again
 import { approveTask, listRejectReasons, rejectTask, type RejectReason } from '../../../home/approvals/api'
 import { decidedNoticeOf } from '../depth/model'
 import type { useStepUp } from '../hooks'
@@ -31,6 +33,8 @@ export function useBandActs(
     readonly permissions: readonly string[]
     readonly stepUp: Pick<ReturnType<typeof useStepUp>, 'ensureFresh' | 'guard'>
     readonly setDialog: (dialog: RecordDialog | null) => void
+    /** F-OO-142 (W10's follow-up): read parts of the production read again (its `again`), after a promise save. */
+    readonly againProduction?: (parts?: readonly ProductionPart[]) => void
   },
 ): { model: BandActsModel; actions: BandActsActions; opened: (next: RecordDialog | null) => void } {
   const { api, orderId, current, write, version, setNotice, load, order, permissions, stepUp, setDialog } = input
@@ -119,7 +123,14 @@ export function useBandActs(
       assign: assign.actions,
       note: note.actions,
     },
-    onPromise: ({ date, reason, lineIds }) => void write(() => changePromise(api, orderId, { version: version(), promiseDate: date, reason, ...(lineIds ? { lineIds } : {}) }), 'notice.promise'),
+    // F-OO-142 (B-OO-009): the picked reason (what the customer reads) and the office's note. A saved promise also reads the production
+    // read's headline and dates again (Decide…'s refused-date row, the moves and "Plan says ready"), not only when the live stream hears it.
+    onPromise: (promise) =>
+      void write(async () => {
+        const next = await changePromise(api, orderId, promiseBodyOf(promise, version()))
+        input.againProduction?.(['headline', 'dates'])
+        return next
+      }, 'notice.promise'),
     onReady: (reason) => void write(() => markReady(api, orderId, { version: version(), reason }), 'notice.ready'),
     onClose: (reason) => void write(() => closeOrder(api, orderId, { version: version(), ...(reason ? { reason } : {}) }), 'notice.closed'),
     yes, // F-OP-101

@@ -1,0 +1,41 @@
+/* ── F-OO-207 (order overview lane; 11-design §6.2) — Linked records: one row per kind, label | value | the door when one is due ──
+   Each row is the Overview's shared card row (.fw-so-ov-row, overview.css) laid on the list's own columns (subgrid), so every label,
+   value and door lines up with the rows above it. The quiet lines (None yet, where the order came from, a list held for this
+   reader) span the row. Below a 480 px card the door wraps under the value, to the right (the shared rule); below a 360 px card (a
+   phone) a row stacks: the label above its value, the door under it. The dashed count chips went (orders.css). Layout only,
+   tokens only. */
+.fw-so-linked-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  gap: var(--nds-space-10) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-so-linked-list > .fw-so-ov-row {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.fw-so-linked-label {
+  color: var(--nds-text-muted);
+}
+
+.fw-so-linked-line {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@container fw-so-ov-card (max-width: 479px) {
+  .fw-so-linked-list {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+}
+
+@container fw-so-ov-card (max-width: 359px) {
+  .fw-so-linked-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

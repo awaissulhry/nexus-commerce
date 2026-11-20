@@ -27,6 +27,7 @@ import type { ToldChanges } from './told' // F-SA-244
 import type { ApiClient } from '../../../../lib/api/client' // F-OP-134: the tab acts hooks' base (RecordActsBase)
 import type { ShipToAddress } from '../api' // F-OP-111
 import type { SplitPartDraft, SplitRefusal } from '../model' // F-OP-111
+import type { PromiseInput } from '../model' // F-OO-142: the promise dialog's input (the reason code and the office's note)
 // F-OP-112: Make work orders… in place — the Production page's New work order dialog (its model, its actions, the lane's rights).
 import type { NewWorkOrderModel, WorkOrdersListActions } from '../../../production/work-orders/list-model'
 import type { ProductionCan } from '../../../production/_shared/model'
@@ -434,7 +435,8 @@ export interface OrderRecordActions {
   onReload?: () => void
   onDismissNotice?: () => void
   onDialog?: (dialog: RecordDialog | null) => void
-  onPromise?: (input: { date: string; reason: string; lineIds: string[] | null }) => void
+  // F-OO-142 (B-OO-009): the picked reason the customer reads and the office's own note (so/model.ts PromiseInput, promiseBodyOf).
+  onPromise?: (input: PromiseInput) => void
   onReady?: (reason: string) => void
   onClose?: (reason: string | null) => void
   onSendLink?: (requestId: string, message: string) => void

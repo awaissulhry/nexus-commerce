@@ -331,6 +331,7 @@
     "cancelState": "Only an order that has not shipped anything is cancelled: a return is the way back",
     "cancelWorkOrders": "Its lines have work orders: cancel the drafts first; a released one keeps the order",
     "readyState": "Only an order in production is marked ready",
+    "readyQuality": "Quality releases the garments: {n} of {m} released. The order turns Ready by itself when all are.",
     "final": "A closed or cancelled order never changes",
     "noPayments": "Recording payments needs the finance right",
     "depositNotOpen": "Nothing is left to pay on this deposit",
@@ -785,6 +786,10 @@
     "lines": "Lines",
     "date": "New promise date",
     "dateHint": "From today on. The first promise stays on record.",
+    "why": "Why (the customer reads it)",
+    "pick": "Pick a reason",
+    "customerReads": "The customer reads:",
+    "note": "Your note (office only)",
     "reason": "Why",
     "reasonHint": "Kept in the promise history.",
     "tellCustomer": "Tell the customer in the order's thread (Activity).",
@@ -794,12 +799,13 @@
       "past": "A new promise is a day from today on",
       "same": "It is the promise already",
       "reason": "Say why",
+      "code": "Pick why",
       "lines": "Choose at least one line"
     }
   },
   "ready": {
     "title": "Mark {number} ready to ship",
-    "body": "While quality release is not used for this order, a person says it is ready, with the reason.",
+    "body": "Quality released every piece: the order turns Ready by itself. You can mark it ready now, with the reason, if it has not moved yet.",
     "reason": "Why it is ready",
     "reasonNeeded": "Say why",
     "go": "Mark ready"
@@ -1349,14 +1355,13 @@
     "reacceptance": "Customer re-acceptance",
     "onUs": {
       "title": "Waiting on us",
-      "nothing": "Nothing waits on us",
-      "countered": "Counter-offer sent · waits for the customer",
+      "nothing": "No request waits on us",
       "count_one": "{count} waiting",
       "count_other": "{count} waiting"
     },
     "onCustomer": {
       "title": "Waiting on the customer",
-      "nothing": "Nothing waits on the customer",
+      "nothing": "No request waits on the customer",
       "reaccept": "The changed order waits for the customer's new yes",
       "since": "since {date}",
       "due": "due {date}"
@@ -1800,10 +1805,8 @@
     },
     "requests": {
       "title": "Requests & changes",
-      "changes": "Changes ›",
-      "nothing": "Nothing waits on us or on the customer",
-      "latest": "Latest change: revision {revision} · {date}",
-      "still": "Still to do: {count}"
+      "nothing": "No request or change waits",
+      "still": "Still to do · {count}"
     },
     "linked": {
       "title": "Linked records",
@@ -1815,7 +1818,6 @@
       "complaints": "Complaints",
       "returns": "Returns",
       "sameQuote": "Same quote",
-      "sameQuoteValue": "{number}",
       "leftOut_one": "{count} work order not shown",
       "leftOut_other": "{count} work orders not shown"
     },
@@ -2092,14 +2094,17 @@
     }
   },
   "waiting": {
-    "onUs_one": "Waiting on us: {count}",
-    "onUs_other": "Waiting on us: {count}",
-    "onCustomer_one": "Waiting on {customer}: {count}",
-    "onCustomer_other": "Waiting on {customer}: {count}",
+    "onUs_one": "Waiting on us · {count}",
+    "onUs_other": "Waiting on us · {count}",
+    "onCustomer_one": "Waiting on {customer} · {count}",
+    "onCustomer_other": "Waiting on {customer} · {count}",
     "reply": "Reply in the thread",
     "noThread": "The conversation is not on this page",
-    "counterAgreed": "They agreed to your counter-offer",
-    "counterLapsed": "Your counter-offer lapsed",
+    "counterAgreed": "{customer} agreed to your counter-offer: {what}",
+    "counterLapsed": "Your counter-offer lapsed: {what}",
+    "counterOpen": "Our counter-offer: {what}",
+    "open": "Open…",
+    "theirTurn": "Their turn",
     "problem": "{customer} reported a problem",
     "repromise": "{customer} refused the new date",
     "yes": "Waiting for a yes: {kind}",
@@ -2303,6 +2308,48 @@
       "takeOverAction": "Take them over",
       "taking": "Taking them over…",
       "takenOver": "The customer's prices of {number} are taken over from its request."
+    }
+  },
+  "requests": {
+    "changesNote": "Holds are on Overview · dates are in Next dates",
+    "changesCount": "Changes ({count}) ›",
+    "more_one": "{count} more on Changes ›",
+    "more_other": "{count} more on Changes ›",
+    "seeHolds": "What holds the order: see Where it is now",
+    "seeDates": "Dates that wait: see Next dates"
+  },
+  "linked": {
+    "value": "{value} ›",
+    "labelled": "{label}: {value}",
+    "none": "None yet: {kinds}",
+    "unread": "Could not be read",
+    "wo": {
+      "inWork_one": "{count} in work",
+      "inWork_other": "{count} in work",
+      "draft_one": "{count} draft",
+      "draft_other": "{count} drafts",
+      "onHold_one": "{count} on hold",
+      "onHold_other": "{count} on hold",
+      "done_one": "{count} done",
+      "done_other": "{count} done",
+      "cancelled_one": "{count} cancelled",
+      "cancelled_other": "{count} cancelled"
+    },
+    "ship": {
+      "lastDdt": "last DDT {number}",
+      "noDdt": "no DDT yet",
+      "cancelled_one": "{count} cancelled",
+      "cancelled_other": "{count} cancelled"
+    },
+    "inv": {
+      "issued_one": "{count} issued",
+      "issued_other": "{count} issued",
+      "draft_one": "{count} draft",
+      "draft_other": "{count} drafts",
+      "creditNote_one": "{count} credit note",
+      "creditNote_other": "{count} credit notes",
+      "deposit_one": "{count} deposit invoice",
+      "deposit_other": "{count} deposit invoices"
     }
   }
 }

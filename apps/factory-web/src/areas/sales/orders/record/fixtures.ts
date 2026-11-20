@@ -95,6 +95,7 @@ import { releaseCheck, workOrder as productionWorkOrder } from '../../../product
 import { HOLD_REASONS, PRODUCTION_HOLD_REASONS } from '../../../production/work-orders/daily/demo/fixtures'
 import { CUSTOMER_PAUSE, plainHolds } from '../../../production/work-orders/daily/demo/fixtures' // F-OO-109: each work order's pause as read
 // F-SA-243: the order's requests (the shared request fixtures) and its production read with Still to do.
+import type { OfficeRequest } from '../../../../record-panels/approvals/api' // F-OO-204: the approvals we asked the customer
 import { PRODUCTION_READ } from './overview/fixtures'
 import { PEOPLE } from './overview/fixtures' // F-OO-133: the overview case draws the real People card
 import { brandRequest } from '../../../home/approvals/requests/fixtures'
@@ -234,6 +235,19 @@ const paidDraft = order('CONFIRMED', { chain: { ...confirmed.chain, depositReque
 const noTd02 = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [deposit({ fiscalDocument: 'NONE', fiscalRule: 'DEPOSIT_EU_B2B_GOODS', status: 'PAID', paidAt: at(29, 9), paidAmount: 228384, link: SENT_LINK })] } })
 const noDeposit = order('CONFIRMED', { depositRequired: false, chain: { ...confirmed.chain, depositRequests: [] } })
 const production = order('IN_PRODUCTION')
+// ---- F-OO-112 (order overview N13, Owner D1; B-OO-002): Mark ready only after quality released every piece ----
+/** The order in production as the API answers it now: quality released 7 of the 14 pieces, so Mark ready is held with the counts. */
+const qualityHeld: Order = {
+  ...production,
+  actions: production.actions.map((action) => (action.action === 'markReady' ? { ...action, allowed: false, held: 'Quality releases the garments: 7 of 14 released. The order turns Ready by itself when all are.' } : action)),
+}
+/** …and once quality released every piece (the release handler has not moved it yet): Mark ready… is the by-hand catch-up. */
+const everyReleased: Order = {
+  ...production,
+  lines: production.lines.map((line) => ({ ...line, sizes: line.sizes.map((size) => ({ ...size, progress: { ...size.progress, released: size.progress.ordered } })), progress: { ...line.progress, released: line.progress.ordered } })),
+  progress: { ...production.progress, released: production.progress.ordered },
+}
+// ---- end F-OO-112
 // ---- F-CP-148: the order's files with two priced documents (made up): named for a price holder, counted (pricedLeftOut) for anyone else.
 const PRICED_NAMES = ['Conferma d’ordine SO-2026-0088 v1.pdf', 'Ordine del cliente PO-ESEMPIO-88.pdf'] as const
 const PRICED_FILES: typeof ORDER_FILES = {
@@ -522,22 +536,116 @@ export const SO2_BLOCKERS = [
   blockerOf('BRAND_REQUEST', 'US', 'A customer request waits for our answer', SO2_REQUEST.askedAt, { type: 'OrderChangeRequest', id: SO2_REQUEST.id }, 'REQUEST'),
   blockerOf('APPROVAL', 'BRAND', "Waiting for the customer's yes", '2026-11-05T09:00:00Z', { type: 'ApprovalRequest', id: '0190f0e2-6262-7000-8000-000000000001' }),
 ]
-const SO2_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'BRAND' as const, words: { en: 'Waiting on customer', it: 'Tocca al cliente' }, since: '2026-11-05T09:00:00Z', blockers: SO2_BLOCKERS } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
+// F-OO-205 (lead note, W03): SO-0002 has one step still to do (planning lowers WO-00021's 54 to 0) — the design screen shows its real
+// Changes count, 3 (1 on us, 1 on the customer, 1 still to do), the same as the unit test.
+const SO2_STILL = [{ kind: 'WORK_ORDER_CHANGE', ref: { type: 'WorkOrderChange', id: '0190f0e2-9090-7000-8000-000000000021', number: 'WO-00021' }, words: { en: 'WO-00021: make 54 → 0', it: 'WO-00021: produci 54 → 0' }, since: '2026-11-16T09:00:00Z', waitingOn: 'PLANNER', mayAct: false, requestId: null }]
+const SO2_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'BRAND' as const, words: { en: 'Waiting on customer', it: 'Tocca al cliente' }, since: '2026-11-05T09:00:00Z', blockers: SO2_BLOCKERS } }, changes: { openRequests: [], stillToDo: { rows: SO2_STILL, count: SO2_STILL.length, workOrdersLeftOut: 0 } } }
 const SO3_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, waiting: { on: 'US' as const, words: { en: 'Waiting on us', it: 'Tocca a noi' }, since: '2026-11-14T17:00:00Z', blockers: [] } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
 // F-OP-304 (walk #7): line 10 cut one piece beyond what its first size now wants. F-OO-121: in the API's words since B-OO-015.
 const EXTRA_READ = {
   ...SO2_READ,
+  changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } }, // F-OO-205: no step left (SO-0002's own is not here)
   lines: PRODUCTION_READ.lines!.map((line, index) => (index === 0 ? { ...line, madeExtra: 1, sizes: line.sizes.map((size, at) => (at === 0 ? { ...size, madeExtra: 1, madeExtraWords: { en: `1 ${size.size ?? ''} more than ordered: cut or planned to cut`, it: `1 ${size.size ?? ''} in più dell'ordine: tagliati o da tagliare` } } : size)) } : line)),
 }
 const F_OP_301: DesignCase<RecordCase>[] = [
-  { id: 'f-op-301-so2-overview', label: 'F-OP-301 · Production manager · Overview: Waiting on us 1 (a change request) and on the customer 1 — the Changes badge says 2; the two gates are dates (F-OO-202)', model: base('manager', production, { tab: 'overview', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
-  { id: 'f-op-301-so2-changes', label: 'F-OP-301 · Production manager · Changes: the same request waiting on us and the yes we asked of the customer (never "Nothing waits on the customer"); the gates are not requests (F-OO-202)', model: base('manager', production, { tab: 'changes', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
+  { id: 'f-op-301-so2-overview', label: 'F-OP-301 · Production manager · Overview: Waiting on us 1 (a change request), on the customer 1, Still to do 1 — "Changes (3) ›", the badge\'s number (F-OO-205); the two gates are dates (F-OO-202)', model: base('manager', production, { tab: 'overview', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
+  { id: 'f-op-301-so2-changes', label: 'F-OP-301 · Production manager · Changes: the same request waiting on us, the yes we asked of the customer and the step still to do (never "Nothing waits on the customer"); the gates are not requests (F-OO-202)', model: base('manager', production, { tab: 'changes', production: ready(SO2_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
   { id: 'f-op-301-so3-overview', label: 'F-OP-301 · Production manager · Overview: nothing waits — Requests & changes says so once, and nothing says the kept "Waiting on us · 5 d" (F-OO-103)', model: base('manager', production, { tab: 'overview', production: ready(SO3_READ), requests: null, liveState: 'live' }) },
   { id: 'f-op-301-reading-changes', label: 'F-OP-301 · Changes while the production read is out: both cards read (never "Nothing waits" before it)', model: base('sales', production, { tab: 'changes', production: LOADING_STATE, liveState: 'connecting' }) },
   // F-OP-304 (walk #7): no step left, but pieces of line 10 were made extra — their own list, never rows under "Nothing left to do".
   { id: 'f-op-304-still-extra', label: 'F-OP-304 · Production manager · Changes › Still to do: no step left; "Made extra" lists line 10\'s pieces under its own heading', model: base('manager', production, { tab: 'changes', production: ready(EXTRA_READ), requests: { value: [SO2_REQUEST], problem: null }, requestDoor: DOOR_STUB, liveState: 'live' }) },
 ]
 // ---- end F-OP-301
+
+// ---- F-OO-204 (order overview §5.2, §5.3): the order's requests and changes as one made-up world — Moto Demo's change waits on us
+// (said whole: "Change · line 10 · M 40 → 36", 15 d), its agreed counter-offer too, and a problem it reported; our counter-offer on
+// line 20 waits on the customer (Open…: the ONE review window), so do the artwork, the sample and the proof we asked (each its own
+// question and due day: "Their turn") and a task on its portal; Still to do: four steps. The order's holds (a quality hold, the
+// customer's pause on two work orders) and a gate are not requests: Where it is now and Next dates draw them. ----
+const rqId = (n: number) => `0190f0e2-3131-7000-8000-${String(n).padStart(12, '0')}`
+const rqCell = (seq: 10 | 20, size: string, before: number, asked: number) => ({ ...ASK.cells[0]!, lineId: seq === 10 ? LINE_BLK : LINE_RED, seq, size, before, asked })
+const rqCounter = (n: number, state: 'WAITING' | 'AGREED', at: string) => ({ approvalRequestId: rqId(700 + n), at, date: null, fee: null, note: null, priced: false, offer: { en: 'Our counter-offer', it: 'La nostra controproposta' }, state, words: state === 'AGREED' ? { en: 'The customer said yes: accept to carry it out.', it: 'Il cliente ha detto sì: accetta per eseguirla.' } : { en: "Waits for the customer's answer", it: 'Aspetta la risposta del cliente' } })
+export const RQ_ASK = brandRequest(31, { ...ASK, id: rqId(31), askedAt: '2026-11-03T09:00:00Z', cells: [rqCell(10, 'M', 40, 36)], note: 'Four fewer M: the shop cut its order.' })
+export const RQ_AGREED = brandRequest(32, { ...ASK, id: rqId(32), status: 'COUNTERED', askedAt: '2026-11-08T09:00:00Z', cells: [rqCell(10, 'L', 30, 32)], counter: rqCounter(32, 'AGREED', '2026-11-10T09:00:00Z') })
+export const RQ_COUNTERED = brandRequest(33, { ...ASK, id: rqId(33), status: 'COUNTERED', waitingOn: 'CUSTOMER', askedAt: '2026-11-12T09:00:00Z', cells: [rqCell(20, 'L', 2, 3)], counter: rqCounter(33, 'WAITING', '2026-11-13T09:00:00Z') })
+const rqAsked = (n: number, kind: OfficeRequest['kind'], question: string, dueAt: string, createdAt: string): OfficeRequest => ({
+  id: rqId(600 + n),
+  companyId: COMPANY,
+  kind,
+  record: { type: 'SalesOrder', id: ORDER_ID, words: { it: 'SO-2026-0088', en: 'SO-2026-0088' } },
+  party: { id: PARTY.id, name: 'Moto Demo S.r.l.' },
+  contactId: null,
+  question,
+  dueAt,
+  status: 'OPEN',
+  answer: null,
+  withdrawn: null,
+  askedBy: 'Carlo Prova',
+  createdAt,
+  files: [],
+  links: [],
+  may: { withdraw: true },
+  version: 1,
+})
+export const RQ_ASKED: OfficeRequest[] = [
+  rqAsked(1, 'ARTWORK', 'Artwork for the hang tag', '2026-12-02T16:00:00Z', '2026-11-04T09:00:00Z'),
+  rqAsked(2, 'SAMPLE', 'The second fit sample of the black jacket', '2026-11-28T16:00:00Z', '2026-11-06T09:00:00Z'),
+  rqAsked(3, 'PROOF', 'The print proof of the inner label', '2026-11-30T16:00:00Z', '2026-11-16T09:00:00Z'),
+]
+const rqBlocker = (kind: string, on: 'US' | 'BRAND', en: string, it: string, since: string, ref: { type: string; id: string; messageId?: string } | null, sub: 'REQUEST' | 'COUNTER' | 'PROBLEM' | null = null) => ({ kind, on, words: { en, it }, since, ref, sub })
+export const RQ_BLOCKERS = [
+  rqBlocker('GATE', 'US', 'A gate is not passed yet', 'Un controllo non è ancora superato', '2026-11-02T08:00:00Z', { type: 'OrderGate', id: rqId(801) }),
+  rqBlocker('BRAND_REQUEST', 'US', 'A customer request waits for our answer', 'Una richiesta del cliente aspetta la nostra risposta', RQ_ASK.askedAt, { type: 'OrderChangeRequest', id: RQ_ASK.id }, 'REQUEST'),
+  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes", 'Aspetta il sì del cliente', RQ_ASKED[0]!.createdAt, { type: 'ApprovalRequest', id: RQ_ASKED[0]!.id }),
+  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes", 'Aspetta il sì del cliente', RQ_ASKED[1]!.createdAt, { type: 'ApprovalRequest', id: RQ_ASKED[1]!.id }),
+  rqBlocker('BRAND_REQUEST', 'US', 'A customer request waits for our answer', 'Una richiesta del cliente aspetta la nostra risposta', '2026-11-10T09:00:00Z', { type: 'OrderChangeRequest', id: RQ_AGREED.id }, 'COUNTER'),
+  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes", 'Aspetta il sì del cliente', '2026-11-13T09:00:00Z', { type: 'OrderChangeRequest', id: RQ_COUNTERED.id }),
+  rqBlocker('BRAND_PAUSE', 'BRAND', 'The customer paused the work', 'Il cliente ha messo in pausa il lavoro', '2026-11-13T15:00:00Z', { type: 'WorkOrder', id: WORK_ORDERS[0]!.id }),
+  rqBlocker('BRAND_PAUSE', 'BRAND', 'The customer paused the work', 'Il cliente ha messo in pausa il lavoro', '2026-11-13T15:00:00Z', { type: 'WorkOrder', id: WORK_ORDERS[1]!.id }),
+  rqBlocker('QUALITY_HOLD', 'US', 'A quality hold stops the work', 'Un blocco qualità ferma il lavoro', '2026-11-14T08:30:00Z', { type: 'WorkOrder', id: WORK_ORDERS[1]!.id }),
+  rqBlocker('BRAND_REQUEST', 'US', 'The customer reported a problem', 'Il cliente ha segnalato un problema', '2026-11-14T11:00:00Z', { type: 'ProductionIssue', id: rqId(802), messageId: rqId(803) }, 'PROBLEM'),
+  rqBlocker('PARTNER_TASK', 'BRAND', "An open task on the customer's portal", 'Un compito aperto nel portale del cliente', '2026-11-15T09:00:00Z', { type: 'PartnerTask', id: rqId(804) }),
+  rqBlocker('APPROVAL', 'BRAND', "Waiting for the customer's yes", 'Aspetta il sì del cliente', RQ_ASKED[2]!.createdAt, { type: 'ApprovalRequest', id: RQ_ASKED[2]!.id }),
+]
+const rqStill = (n: number, kind: string, ref: { type: string; id: string; number: string | null; version?: number }, en: string, it: string, since: string, waitingOn: string, mayAct: boolean) => ({ kind, ref, words: { en, it }, since, waitingOn, mayAct, requestId: n <= 2 ? RQ_ASK.id : null })
+export const RQ_STILL = [
+  rqStill(1, 'WORK_ORDER_CHANGE', { type: 'WorkOrderChange', id: rqId(901), number: 'WO-00021' }, 'WO-00021: make 54 → 0', 'WO-00021: produci 54 → 0', '2026-11-14T09:00:00Z', 'PLANNER', false),
+  rqStill(2, 'EXTRA_PIECES', { type: 'WorkOrder', id: WORK_ORDERS[0]!.id, number: 'WO-00021' }, 'Scrap the 2 extra pieces of WO-00021, with their approval', 'Scarta i 2 pezzi in più di WO-00021, con la loro approvazione', '2026-11-15T09:00:00Z', 'PLANNER', false),
+  rqStill(3, 'WORK_IN_PROGRESS_TASK', { type: 'Task', id: rqId(902), number: null, version: 2 }, 'Tell the floor about the new collar', 'Avvisa il reparto del nuovo collo', '2026-11-16T09:00:00Z', 'SALES', true),
+  rqStill(4, 'STYLE_CHANGE', { type: 'Style', id: rqId(903), number: 'DEMO-JKT-01' }, 'Change the collar on DEMO-JKT-01', 'Cambia il collo di DEMO-JKT-01', '2026-11-17T09:00:00Z', 'PRODUCT', false),
+]
+export const RQ_READ = {
+  ...PRODUCTION_READ,
+  headline: { ...PRODUCTION_READ.headline!, waiting: { ...PRODUCTION_READ.headline!.waiting, on: 'BRAND' as const, since: RQ_ASK.askedAt, blockers: RQ_BLOCKERS } },
+  changes: { openRequests: [{ id: RQ_ASK.id, kind: 'CHANGE', status: 'OPEN', since: RQ_ASK.askedAt, batchId: null }], stillToDo: { rows: RQ_STILL, count: RQ_STILL.length, workOrdersLeftOut: 0 } },
+}
+/** Nothing waits for an answer, while the order's quality hold and a gate do (Where it is now and Next dates say them). */
+const RQ_NONE_READ = { ...RQ_READ, headline: { ...RQ_READ.headline, waiting: { ...RQ_READ.headline.waiting, on: 'US' as const, blockers: RQ_BLOCKERS.filter((row) => row.kind === 'QUALITY_HOLD' || row.kind === 'GATE') } }, changes: { openRequests: [], stillToDo: { rows: [], count: 0, workOrdersLeftOut: 0 } } }
+const RQ_DOOR = { ...DOOR_STUB, parts: { ...DOOR_STUB.parts, window: { ...DOOR_STUB.parts.window, nav: { ids: [RQ_ASK.id, RQ_AGREED.id, RQ_COUNTERED.id] } } } }
+/** The world's model on a tab (the reader's own rights; the order's requests, the approvals we asked, the review window's door). */
+export const requestsWorld = (role: Role, tab: 'overview' | 'changes', read: Parameters<typeof ready>[0] = RQ_READ, over: Partial<OrderRecordModel> = {}) =>
+  base(role, production, { tab, production: ready(read), requests: { value: [RQ_ASK, RQ_AGREED, RQ_COUNTERED], problem: null }, askedOfCustomer: { value: RQ_ASKED, problem: null }, requestDoor: RQ_DOOR, liveState: 'live', ...over })
+const F_OO_204: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-204-changes', label: 'F-OO-204 · Sales · Changes: the head says where the holds and dates are; on us the change (Answer…), the agreed counter-offer, the problem; on the customer our counter-offer (Open…: the ONE review window), what we asked (its question, due day, state); Still to do with its state pills', model: requestsWorld('sales', 'changes') },
+  { id: 'f-oo-204-changes-nothing', label: 'F-OO-204 · Sales · Changes: no request waits — said as such (never "Nothing waits": a quality hold and a gate do, on Overview)', model: requestsWorld('sales', 'changes', RQ_NONE_READ, { requests: { value: [], problem: null }, askedOfCustomer: { value: [], problem: null } }) },
+]
+// ---- end F-OO-204
+
+// ---- F-OO-205 (order overview §5.2): the Requests & changes card — three groups with their counts (every row on us; the customer's
+// and Still to do: 3, then "N more on Changes ›"), "Changes (N) ›" in the head, "Told about changes: 4 people" at the foot; nothing to
+// answer while a hold and a gate wait; and Read-only (no door). Walk them at 375 / 1440 / 1920, light and dark, the dock open and closed.
+const RQ_TOLD = { value: { order: { id: ORDER_ID, number: 'SO-2026-0088' }, people: 4, changes: [{ batchId: rqId(950), messageId: rqId(951), occurredAt: '2026-11-17T13:02:00Z', at: '2026-11-17T13:02:02Z', eventType: 'order_change_request.answered', requestId: RQ_AGREED.id, people: 4, floor: { at: '2026-11-17T13:02:02Z', workOrders: [{ id: WORK_ORDERS[0]!.id, number: 'WO-00021' }], leftOut: 0 }, workshop: { at: null, told: 0, waiting: 0 } }] }, problem: null }
+/** Read-only: the order's facts and links, no acting right on the page (the page's own rule, readOnlyOnPage). */
+const readOnlyWorld = (read: Parameters<typeof ready>[0] = RQ_READ) => {
+  const world = requestsWorld('manager', 'overview', read, { told: RQ_TOLD })
+  return { ...world, record: { ...world.record, can: abilitiesOf(rolePermissions('read_only')) } }
+}
+const F_OO_205: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-205-requests', label: 'F-OO-205 · Sales · Overview › Requests & changes: Waiting on us · 3 (each with its door), Waiting on Moto Demo · 5 (3, then "2 more on Changes ›"), Still to do · 4 (3, then "1 more"), "Changes (12) ›", "Told about changes: 4 people"', model: requestsWorld('sales', 'overview', RQ_READ, { told: RQ_TOLD }) },
+  { id: 'f-oo-205-nothing', label: 'F-OO-205 · Sales · Overview: no request or change waits — the quality hold and the gate are said where they are (Where it is now, Next dates)', model: requestsWorld('sales', 'overview', RQ_NONE_READ, { requests: { value: [], problem: null }, askedOfCustomer: { value: [], problem: null } }) },
+  { id: 'f-oo-205-read-only', label: 'F-OO-205 · Read-only · Overview › Requests & changes: the same rows with their ages, no door (Their turn is words)', model: readOnlyWorld() },
+]
+// ---- end F-OO-205
 
 // ---- F-OP-129 (order page plan N2, N5, N6; 10-order-page §13 design cases): what the strip says each work order does, per reader
 // (Sales: a released one waits; the Owner: both follow, R-4), the extra pieces' outcome under cut, and the Shipments rows — a typed
@@ -904,9 +1012,13 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'production-no-right', label: 'Finance · Production: the work orders by number (no floor progress right)', model: base('finance', production, { tab: 'production', production: ready(NO_WORK_READ) }) },
     { id: 'production-error', label: 'Sales · Production: the work orders could not be read (Try again)', model: base('sales', production, { tab: 'production', production: FAILED_STATE }) },
     { id: 'dates', label: 'Sales · Production: first promise kept, two changes with who and why', model: base('sales', late, { tab: 'production', production: ready(LATE_READ) }) },
-    { id: 'promise-dialog', label: 'Sales · Change promise date: the whole order', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { date: '2026-12-29', reason: 'La pelle nera arriva una settimana dopo.' } }) },
-    { id: 'promise-lines', label: 'Sales · Change promise date: chosen lines', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { scope: 'lines', lineIds: [production.lines[1]!.id], date: '2026-12-29', reason: 'Il rosso chiede un secondo bagno di colore.' } }) },
-    { id: 'ready-dialog', label: 'Sales · Mark ready (quality release not used for this order)', model: base('sales', production, { dialog: { kind: 'ready' }, draft: { reason: 'Controllo finale fatto in reparto.' } }) },
+    // F-OO-142 (B-OO-009): why is a curated reason the customer reads (shown in Italian and English); the note stays the office's.
+    { id: 'promise-dialog', label: 'Sales · Change promise date: the whole order — why from the list (the customer reads it, in Italian and English), the office’s own note', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { date: '2026-12-29', reasonCode: 'MATERIAL_LATE', reason: 'La pelle nera arriva una settimana dopo.' } }) },
+    { id: 'promise-lines', label: 'Sales · Change promise date: chosen lines', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { scope: 'lines', lineIds: [production.lines[1]!.id], date: '2026-12-29', reasonCode: 'QUALITY', reason: 'Il rosso chiede un secondo bagno di colore.' } }) },
+    { id: 'f-oo-142-promise-pick', label: 'F-OO-142 · Sales · Change promise date: no reason picked yet — Change the date held “Pick why”', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { date: '2026-12-29' } }) },
+    // F-OO-112 (B-OO-002, Owner D1): Mark ready… opens only once quality released every piece (the catch-up before the system moves it).
+    { id: 'ready-dialog', label: 'Sales · Mark ready: quality released every piece — the catch-up before the system moves it', model: base('sales', everyReleased, { dialog: { kind: 'ready' }, draft: { reason: 'Controllo finale fatto in reparto.' } }) },
+    { id: 'f-oo-112-ready-held', label: 'F-OO-112 · Sales · Overview: quality released 7 of 14 — Mark ready… held with the counts (the moves row and the band ⋯)', model: base('sales', qualityHeld, { tab: 'overview', production: ready({ ...PRODUCTION_READ, people: PEOPLE }), liveState: 'live' }) },
     { id: 'shipments', label: 'Sales · Shipments: left to ship per size, two shipments', model: base('sales', shipped, { tab: 'shipments' }) },
     { id: 'shipments-empty', label: 'Sales · Shipments: nothing shipped yet', model: base('sales', production, { tab: 'shipments' }) },
     { id: 'shipped-close-settled', label: 'Sales · Shipped and settled: Close order', model: base('sales', settled, { tab: 'shipments' }) },
@@ -1036,6 +1148,8 @@ export const designScreen = defineDesignScreen<RecordCase>({
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
     ...F_OP_301, // F-OP-301 (walk #1, #2, #3)
+    ...F_OO_204, // F-OO-204: the request rows and their doors (Changes)
+    ...F_OO_205, // F-OO-205: the Requests & changes card
     // ---- B-W2b-323: orders in depth (priority, season, the yes, what is frozen, priced changes, materials, confirmation, tech pack, forecast, milestones) ----
     ...W2B_323,
     // ---- F-OP-217: the dock's scopes, each inside the one card (look at them at 1440 with the dock a third and 40 %, and at 375) ----
