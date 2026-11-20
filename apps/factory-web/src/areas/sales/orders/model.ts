@@ -658,6 +658,31 @@ export function nextStep(order: Order, can: OrderAbilities): NextStep {
   return { kind: 'changePromise', held: can.manage ? null : phrase('held.noManage') }
 }
 
+// ---- F-OP-311 (oo-walk #10): the band follows the Owner's rule "Read-only sees no buttons" (order overview plan §1) ----------------
+/** The ⋯ items that change nothing: a door to another page (the quote, the customer's portal, Planning) or the number to the clipboard. */
+export const BAND_LOOK_ITEMS = ['quote', 'portal', 'planning', 'copy'] as const
+const NO_STEP: NextStep = { kind: null, held: null }
+/**
+ * The band as this reader sees it. Read-only on the page (readOnlyOnPage: no right that changes anything here) gets no next step
+ * and, in the ⋯, only the open doors and the copy that change nothing — no held move, no Cancel. Everyone else keeps every move,
+ * a move they may not make held with its words. The walk saw Read-only offered a held Make work orders · Ask for a yes · Change
+ * promise date… · Close order… on every order, while the 8 cards already followed the rule.
+ */
+export const bandStepOf = (order: Order, can: OrderAbilities, readOnly: boolean): NextStep => (readOnly ? NO_STEP : nextStep(order, can))
+/** The band's ⋯ for this reader (see bandStepOf): Read-only keeps only BAND_LOOK_ITEMS that are open, and no danger item. */
+export function bandMenuFor<T extends { readonly id: string; readonly disabled?: boolean }>(
+  readOnly: boolean,
+  groups: Partial<Record<MenuGroup, readonly T[]>>,
+  danger: readonly T[],
+): { groups: Partial<Record<MenuGroup, readonly T[]>>; danger: readonly T[] } {
+  if (!readOnly) return { groups, danger }
+  const look = (item: T) => (BAND_LOOK_ITEMS as readonly string[]).includes(item.id) && !item.disabled
+  const shown: Partial<Record<MenuGroup, readonly T[]>> = {}
+  for (const group of MENU_GROUPS) shown[group] = (groups[group] ?? []).filter(look)
+  return { groups: shown, danger: [] }
+}
+// ---- end F-OP-311
+
 /** Why closing waits: no right, or not settled without the right to close it anyway. */
 export function closeHeld(order: Order, can: OrderAbilities): Phrase | null {
   if (!isShippedInFull(order)) return phrase('held.closeState') // F-SA-201
