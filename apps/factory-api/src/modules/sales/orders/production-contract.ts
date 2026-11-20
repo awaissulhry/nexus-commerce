@@ -75,6 +75,12 @@ export const headlineView = output({
       at: instant(),
       note: z.string().nullable(),
       by: person.nullable(),
+      /**
+       * B-MS-008 (ms-fx1; Z01 note 2): the customer's notice of that stage, from the keeper's markers — `told`, or `waitsUntil`: a
+       * notice by hand still inside its 10-minute window goes then (a Clear before it leaves it untold); neither: never told (a
+       * Change going down). null: not read. Office only, like the rest.
+       */
+      notice: output({ told: z.boolean(), waitsUntil: instant().nullable() }).nullable(),
     }).nullable(),
     /** The production state's version: a set, change or clear by hand sends it back; null: no production state yet (a set sends null). */
     version: z.number().int().nullable(),

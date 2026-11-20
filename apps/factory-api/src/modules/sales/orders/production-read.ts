@@ -35,6 +35,7 @@ import { countedUrgencyOf } from '../../production/brand/urgency-of'
 import { readPlanned, readWork, workOf } from '../../production/brand-portal/access'
 import { issueReadWhere, issuesOfOrderWhere, type OrderFilter } from '../../production/issues/list'
 import { brandProductionKey, supervisorOfOrder } from '../../production/supervisor/resolver'
+import { readHandNotice, type HandNotice } from '../../production/brand/keeper' // B-MS-008 (ms-fx1): Clear…'s words read the markers
 import { reachesWorkOrder } from '../../production/work-orders/scope'
 import { ncrsOfOrderWhere } from '../../quality/ncr/reads'
 import { ncrListWhere } from '../../quality/wall'
@@ -64,7 +65,8 @@ import { ownerOf } from '../../../platform/threads/owner'
  * (B-SA-033's filters), and the supervisor resolver.
  *
  *   headline  the plain stage (since, ahead, sewing not counted; B-MS-006: the stage set by hand with its reason, the floor's own
- *             stage and when — its note and who with workorders.view only — and the production row's version), what is in work as
+ *             stage and when — its note and who with workorders.view only — and the production row's version; B-MS-008 (ms-fx1):
+ *             whether the customer was told it or when its notice goes, from the keeper's markers), what is in work as
  *             counts (bundles; pieces between the steps),
  *             the health (its raise: the office's note and who raised it with workorders.view only), who it waits on and each
  *             blocker in words, the holds in words (their office notes with workorders.view), the promise and its slip, the
@@ -303,8 +305,11 @@ export interface HeadlinePerson {
  * floor's own stage from the live facts (null: no goods line open), when; the office's note and who set it only behind the `notes`
  * gate (workorders.view) — and the production row's `version`, which a set, change or clear by hand sends back (R9; null: no row
  * yet, so a set sends null and makes it, R1). null: no stage at all (no row, no goods line open).
+ * B-MS-008 (ms-fx1; Z01 note 2): `byHand.notice` — the customer's notice of that stage as the keeper's markers say it (keeper
+ * readHandNotice): told, or when it goes (`waitsUntil`), or neither (never told); null when not read. Clear… says it, never the set's
+ * time (a Change to the same stage writes a new one and tells nothing).
  */
-export function headlineStageOf(input: { readonly row: HeadlineStageRow | null; readonly live: OrderStage | null; readonly partlyShipped: boolean; readonly notes: boolean; readonly setBy: HeadlinePerson | null }) {
+export function headlineStageOf(input: { readonly row: HeadlineStageRow | null; readonly live: OrderStage | null; readonly partlyShipped: boolean; readonly notes: boolean; readonly setBy: HeadlinePerson | null; readonly notice?: HandNotice | null }) {
   const { row, live, notes } = input
   const code: BrandStage | null = row ? (row.stage as BrandStage) : (live?.stage ?? null)
   if (code === null) return null
@@ -329,6 +334,8 @@ export function headlineStageOf(input: { readonly row: HeadlineStageRow | null; 
           at: toUtcIso(hand.at),
           note: notes ? hand.note : null,
           by: notes ? input.setBy : null,
+          // B-MS-008 (ms-fx1): told, or when its notice goes (null: not read).
+          notice: input.notice ? { told: input.notice.told, waitsUntil: input.notice.waitsUntil ? toUtcIso(input.notice.waitsUntil) : null } : null,
         }
       : null,
     version: row ? row.version : null,
@@ -396,6 +403,7 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
   const row = await db.brandOrderProduction.findFirst({
     where: { key: brandProductionKey(order.id) },
     select: {
+      id: true, // B-MS-008 (ms-fx1): the keeper's stage markers are on the row
       stage: true,
       stageAt: true,
       // B-MS-006: the stage set by hand and the row's version.
@@ -420,7 +428,9 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
   // B-MS-006: the stage set by hand (who only behind the notes gate) and the row's version (./headlineStageOf).
   const live = facts?.stage ?? null
   const handBy = row && notes && row.stageSet !== null && row.stageSetById ? ((await peopleById(db, [row.stageSetById])).get(row.stageSetById) ?? null) : null
-  const stage = headlineStageOf({ row, live, partlyShipped: order.status === 'PARTLY_SHIPPED', notes, setBy: handBy })
+  // B-MS-008 (ms-fx1): the customer's notice of the stage set by hand, from the keeper's markers (only while one stands).
+  const notice = row && row.stageSet !== null ? await readHandNotice(db, row.id, order.id, row.stageSet as BrandStage, now) : null
+  const stage = headlineStageOf({ row, live, partlyShipped: order.status === 'PARTLY_SHIPPED', notes, setBy: handBy, notice })
 
   // What is in work: the order's ACTIVE bundles of work orders past their draft, and its pieces between the steps.
   const cells = await load.cells()

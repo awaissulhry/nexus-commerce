@@ -113,8 +113,9 @@ function StageByHandDialog({ order, model, actions, mode, refused }: { order: Or
 }
 
 /**
- * Clear… — back to the floor's stage (the DS ActionConfirm): inside the 10-minute window the customer has not been told the stage and
- * now never is; after it, it was told and is not told it again; it reads the floor's stage again with no notice. A refusal holds the
+ * Clear… — back to the floor's stage (the DS ActionConfirm): what the customer was told of the stage, as the API's notice says it
+ * (B-MS-008, ms-fx1: a notice still waiting its window — not told yet and now never is; told — not told it again; never told — and not
+ * told now); then the floor's stage it reads now, with no notice. A refusal holds the
  * confirm with its words (the stage was read again: Cancel, and the card says where it stands now).
  */
 function StageClearDialog({ model, actions, refused }: { model: OrderRecordModel; actions?: OrderRecordActions; refused: Phrase | Words | null }) {

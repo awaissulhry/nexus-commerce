@@ -130,7 +130,7 @@ describe('F-MS-103: the lines the dialogs say — R3b and R18 always, never an u
   })
 
   it('every word in both languages (office "tu", "la fase" feminine); the hint says never name a person on the floor; no key hint text', () => {
-    const keys = ['title', 'changeTitle', 'body', 'pick', 'rowDone', 'rowNow', 'rowSet', 'reason', 'noteHint', 'customer', 'told', 'back', 'same', 'cuts', 'clears', 'go', 'changeGo', 'refused', 'notice', 'cleared', 'clearedPlain', 'clearTitle', 'clearTold', 'clearUntold', 'clearFloor', 'clearGo', 'clearGoPlain', 'held.stage']
+    const keys = ['title', 'changeTitle', 'body', 'pick', 'rowDone', 'rowNow', 'rowSet', 'reason', 'noteHint', 'customer', 'told', 'back', 'same', 'cuts', 'clears', 'go', 'changeGo', 'refused', 'notice', 'cleared', 'clearedPlain', 'clearTitle', 'clearTold', 'clearUntold', 'clearNever' /* B-MS-008 (ms-fx1) */, 'clearFloor', 'clearGo', 'clearGoPlain', 'held.stage']
     const params = { number: 'SO-1', max: 200, minutes: 10, customer: 'x', stage: 'x', floor: 'x' }
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
@@ -306,3 +306,42 @@ describe('B-MS-008: the dialog\'s window is the one the API\'s notice waits — 
   })
 })
 // ── end B-MS-008 ──
+
+// ── B-MS-008 (ms-fx1; Z01 note 2): Clear… never says something false — what it says the customer was told is the API's notice ──
+describe('B-MS-008 (ms-fx1): Clear… reads what the customer was told from the notice (the keeper\'s markers), never the set\'s time', () => {
+  const set = Date.parse(HAND_AT)
+  const withNotice = (notice: { told: boolean; waitsUntil: string | null } | null) => at('SEWING', { ...HAND_BY, notice })
+
+  it('Z01 note 2: a Change to the same stage 2 minutes ago (a new set time) after the notice went — told, never "not told yet"', () => {
+    // The set time is now 2 minutes old, but its notice went long ago: the markers say told.
+    const changed = at('SEWING', { ...HAND_BY, at: new Date(set + 30 * 60_000).toISOString(), notice: { told: true, waitsUntil: null } })
+    expect(clearLinesOf(changed, set + 32 * 60_000)![0]).toEqual({ key: 'where.manual.clearTold', customer: { it: 'Cucitura', en: 'Sewing' } })
+    // A set of a stage told before (a re-set inside 10 minutes): told too.
+    expect(clearLinesOf(withNotice({ told: true, waitsUntil: null }), set + 60_000)![0]!.key).toBe('where.manual.clearTold')
+  })
+
+  it('a notice still waiting: not told yet, until the time it goes (the API says when), then told; never told: says so', () => {
+    const goes = new Date(set + 6 * 60_000).toISOString() // a Change to the same stage 4 minutes after the set keeps the set's notice
+    expect(clearLinesOf(withNotice({ told: false, waitsUntil: goes }), set + 5 * 60_000)![0]).toEqual({ key: 'where.manual.clearUntold', customer: { it: 'Cucitura', en: 'Sewing' }, minutes: 10 })
+    expect(clearLinesOf(withNotice({ told: false, waitsUntil: goes }), set + 6 * 60_000)![0]!.key).toBe('where.manual.clearTold')
+    // A Change going down (Sewing → Cutting) is never told: "has not been told Cutting, and is not told it now" — at any time.
+    const down = at('CUTTING', { ...HAND_BY, stage: 'CUTTING', notice: { told: false, waitsUntil: null } })
+    for (const now of [set + 60_000, set + 60 * 60_000]) expect(clearLinesOf(down, now)).toEqual([{ key: 'where.manual.clearNever', customer: { it: 'Taglio', en: 'Cutting' } }, { key: 'where.manual.clearFloor', customer: { it: 'In preparazione', en: 'Preparing' } }])
+  })
+
+  it('no notice read (an older answer): no told line at all — only what the customer reads now', () => {
+    expect(clearLinesOf(withNotice(null), set + 60_000)).toEqual([{ key: 'where.manual.clearFloor', customer: { it: 'In preparazione', en: 'Preparing' } }])
+  })
+
+  it('the words: never told (en + it); going back and the floor\'s stage never claim the customer read it before ("again")', () => {
+    const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    const it_ = createTranslator('it', messagesFor('it', ['orders']).orders!)
+    expect(en('where.manual.clearNever', { customer: 'Cutting' })).toBe('The customer has not been told Cutting, and is not told it now.')
+    expect(it_('where.manual.clearNever', { customer: 'Taglio' })).toBe("Il cliente non ha ricevuto l'avviso di Taglio, e ora non lo riceve.")
+    for (const key of ['back', 'clearFloor']) {
+      expect(en(`where.manual.${key}`, { customer: 'Cutting' }), key).not.toMatch(/\bagain\b/)
+      expect(it_(`where.manual.${key}`, { customer: 'Taglio' }), key).not.toMatch(/di nuovo/)
+    }
+  })
+})
+// ── end B-MS-008 (ms-fx1) ──

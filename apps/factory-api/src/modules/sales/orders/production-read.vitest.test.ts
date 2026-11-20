@@ -223,13 +223,24 @@ describe('B-MS-006: the headline reads the stage set by hand (who and the note b
       sewingNotCountedWords: null,
       next: { code: 'QUALITY', words: { it: 'Controllo qualità', en: 'Quality check' } },
       partlyShipped: false,
-      byHand: { stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { it: 'In preparazione', en: 'Preparing' } }, at: '2026-11-18T09:30:00.000Z', note: 'Made-up: the tablets were down all morning.', by: planner },
+      byHand: { stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { it: 'In preparazione', en: 'Preparing' } }, at: '2026-11-18T09:30:00.000Z', note: 'Made-up: the tablets were down all morning.', by: planner, notice: null },
       version: 4,
     })
   })
 
   it('without workorders.view (the notes gate): why, the floor and when stay; the note and who are null', () => {
-    expect(headlineStageOf({ row: stored(), live: floor, partlyShipped: false, notes: false, setBy: planner })?.byHand).toEqual({ stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { it: 'In preparazione', en: 'Preparing' } }, at: '2026-11-18T09:30:00.000Z', note: null, by: null })
+    expect(headlineStageOf({ row: stored(), live: floor, partlyShipped: false, notes: false, setBy: planner })?.byHand).toEqual({ stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { it: 'In preparazione', en: 'Preparing' } }, at: '2026-11-18T09:30:00.000Z', note: null, by: null, notice: null })
+  })
+
+  // B-MS-008 (ms-fx1; Z01 note 2): what Clear… says comes from the keeper's markers (keeper readHandNotice), never the set's time.
+  it('B-MS-008 (ms-fx1): the notice of the stage set by hand — told, when it goes, or never — behind no gate (no person, no note)', () => {
+    const notice = (value: { told: boolean; waitsUntil: Date | null } | null, notes = false) => headlineStageOf({ row: stored(), live: floor, partlyShipped: false, notes, setBy: planner, notice: value })?.byHand?.notice
+    expect(notice({ told: true, waitsUntil: null })).toEqual({ told: true, waitsUntil: null })
+    expect(notice({ told: false, waitsUntil: new Date('2026-11-18T09:40:00.000Z') })).toEqual({ told: false, waitsUntil: '2026-11-18T09:40:00.000Z' })
+    expect(notice({ told: false, waitsUntil: null }, true)).toEqual({ told: false, waitsUntil: null })
+    expect(notice(null)).toBeNull()
+    // No hand stage: no notice is read or said.
+    expect(headlineStageOf({ row: stored({ stageSet: null, stageSetReason: null, stageSetNote: null, stageSetAt: null }), live: floor, partlyShipped: false, notes: true, setBy: null, notice: { told: true, waitsUntil: null } })?.byHand).toBeNull()
   })
 
   it('no hand stage: byHand null, the version of the row; ahead and "sewing not counted" from live facts that agree', () => {

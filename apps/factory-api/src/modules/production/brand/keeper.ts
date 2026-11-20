@@ -534,6 +534,44 @@ export async function handTellStands(db: Reader, rowId: string, stage: BrandStag
 }
 // ── end B-MS-008 ──
 
+// ── B-MS-008 (ms-fx1; Z01 note 2: the office's Clear… says what the customer was told, read from the markers, never the set's time) ──
+/**
+ * The customer's notice of the stage set by hand that stands, as the office's headline says it (sales/orders/production-read):
+ *   told        the NEWEST marker of the stage is a tell that went — the floor's, a tell by hand whose notice was made (a job run
+ *               early), or one whose window is over (a notice sent stays sent)
+ *   waitsUntil  a tell by hand still inside its window, its notice not made yet: when it goes (a Clear or a Change before then
+ *               leaves it untold — untellWaiting)
+ *   neither     never told: no marker, or the newest is STAGE_UNTOLD (a Change going down is written and never told; a notice
+ *               dropped inside its window)
+ * The set's time cannot say it: a Change to the same stage writes a new stageSetAt but no tell, and a set of a stage told before
+ * tells nothing.
+ */
+export interface HandNotice {
+  readonly told: boolean
+  readonly waitsUntil: Date | null
+}
+
+/** Pure: the notice of a stage from its newest marker (null: none), whether its by-hand notice was made, and now. */
+export function handNoticeOf(newest: Pick<StageMarker, 'action' | 'byHand' | 'at'> | null, made: boolean, now: Date): HandNotice {
+  if (!newest || newest.action !== STAGE_TOLD) return { told: false, waitsUntil: null }
+  const until = newest.at.getTime() + HAND_STAGE_NOTICE_DELAY_MS
+  if (!newest.byHand || made || now.getTime() >= until) return { told: true, waitsUntil: null }
+  return { told: false, waitsUntil: new Date(until) }
+}
+
+/**
+ * The notice of the stage set by hand on a production row (`rowId`, the order `orderId`): its newest marker, and only for a tell by
+ * hand still inside its window whether its notice was made (untellWaiting's own check). Two indexed reads at most.
+ */
+export async function readHandNotice(db: Reader, rowId: string, orderId: string, stage: BrandStage, now: Date): Promise<HandNotice> {
+  const newest = await newestMarkerOf(db, rowId, stage)
+  const key = STAGE_NOTICE_KEYS[stage]
+  if (!newest || newest.action !== STAGE_TOLD || !newest.byHand || !key || now.getTime() - newest.at.getTime() >= HAND_STAGE_NOTICE_DELAY_MS) return handNoticeOf(newest, false, now)
+  const made = (await db.notification.findFirst({ where: { eventType: brandStageReached.type, recordId: orderId, messageKey: key, createdAt: { gte: newest.at } }, select: { id: true } })) !== null
+  return handNoticeOf(newest, made, now)
+}
+// ── end B-MS-008 (ms-fx1) ──
+
 /** A plain JSON object of an audit row (else null). */
 const jsonObject = (value: unknown): Record<string, unknown> | null => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null)
 

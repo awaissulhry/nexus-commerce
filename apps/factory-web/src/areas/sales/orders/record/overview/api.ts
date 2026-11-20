@@ -74,6 +74,10 @@ export const headlineSchema = z.object({
           at: instant,
           note: z.string().nullable(),
           by: z.object({ id: z.string(), name: z.string(), active: z.boolean().optional() }).nullable(),
+          // B-MS-008 (ms-fx1; Z01 note 2): the customer's notice of that stage, from the keeper's markers (B-MS-006's read) — told, or
+          // when a notice by hand still inside its window goes (`waitsUntil`), or neither (never told: a Change going down). null /
+          // absent: not read — Clear… then says nothing of it rather than guess from the set's time.
+          notice: z.object({ told: z.boolean(), waitsUntil: instant.nullable() }).nullable().optional(),
         })
         .nullable()
         .optional(),

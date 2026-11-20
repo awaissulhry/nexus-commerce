@@ -6,6 +6,7 @@ import { planLeaving } from './keeper' // B-MS-004
 import type { BrandStage } from '@nexus/factory-domain/production-brand/stages' // B-MS-004
 import { HAND_STAGE_NOTICE_DELAY_MS } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-008
 import { STAGE_TOLD, STAGE_UNTOLD, waitingTellsOff, type StageMarker } from './keeper' // B-MS-008
+import { handNoticeOf } from './keeper' // B-MS-008 (ms-fx1)
 
 /**
  * B-PR-17 — the keeper's plan, pure (production plan §4; review fixes R-20, R-21, R-35, R-69): what it writes and tells for
@@ -250,3 +251,31 @@ describe('B-MS-008: which stages a move leaves untold — a by-hand tell still i
   })
 })
 // ── end B-MS-008 ──
+
+// ── B-MS-008 (ms-fx1; Z01 note 2: the office's Clear… says what the customer was told, from the markers, never the set's time) ──
+describe('B-MS-008 (ms-fx1): the notice of the stage set by hand that stands — told, waiting its window, or never told', () => {
+  const AT = new Date('2026-11-20T09:00:00.000Z')
+  const later = (minutes: number) => new Date(AT.getTime() + minutes * 60_000)
+  const marker = (action: string, byHand: boolean, at = AT) => ({ action, byHand, at })
+
+  it('a tell by hand inside its window, its notice not made: it waits, and says until when; made (a job run early) or past it: told', () => {
+    expect(handNoticeOf(marker(STAGE_TOLD, true), false, later(4))).toEqual({ told: false, waitsUntil: later(10) })
+    expect(handNoticeOf(marker(STAGE_TOLD, true), false, new Date(later(10).getTime() - 1))).toEqual({ told: false, waitsUntil: later(10) })
+    expect(handNoticeOf(marker(STAGE_TOLD, true), false, later(10))).toEqual({ told: true, waitsUntil: null })
+    expect(handNoticeOf(marker(STAGE_TOLD, true), true, later(1))).toEqual({ told: true, waitsUntil: null })
+  })
+
+  it('Z01 note 2: a Change to the same stage (or a set of a stage told before) writes a new set time but no tell — the markers say told', () => {
+    // The set's tell 30 minutes ago went; the Change 2 minutes ago wrote no marker: the newest is still that tell — told, never "not yet".
+    expect(handNoticeOf(marker(STAGE_TOLD, true, later(-30)), false, later(0))).toEqual({ told: true, waitsUntil: null })
+    // The floor told it before the set by hand (a cut undone, then set by hand): told, at once.
+    expect(handNoticeOf(marker(STAGE_TOLD, false, later(-1)), false, later(0))).toEqual({ told: true, waitsUntil: null })
+  })
+
+  it('never told: no marker (a Change going down is written and never told), or the newest is untold (its notice dropped)', () => {
+    expect(handNoticeOf(null, false, later(1))).toEqual({ told: false, waitsUntil: null })
+    expect(handNoticeOf(marker(STAGE_UNTOLD, false), false, later(1))).toEqual({ told: false, waitsUntil: null })
+    expect(handNoticeOf(marker(STAGE_UNTOLD, false), true, later(30))).toEqual({ told: false, waitsUntil: null })
+  })
+})
+// ── end B-MS-008 (ms-fx1) ──

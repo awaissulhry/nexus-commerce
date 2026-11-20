@@ -232,14 +232,16 @@ const handOver = (stage: 'CUTTING' | 'SEWING' | 'QUALITY', byHand: HandStage | n
   stage: { ...HEADLINE.stage!, code: stage, words: stage === 'CUTTING' ? w('Cutting', 'Taglio') : stage === 'SEWING' ? w('Sewing', 'Cucitura') : w('Quality check', 'Controllo qualità'), ahead: 0, aheadWords: null, byHand, version },
 })
 export const HAND_FREE_READ: OrderProduction = { ...PRODUCTION_READ, headline: handOver('SEWING', null, 3) }
-export const HAND_BY: HandStage = { stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: w('Preparing', 'In preparazione') }, at: HAND_AT, note: 'Tablet del reparto taglio offline dalle 14:00.', by: SETTER }
+// B-MS-008 (ms-fx1): the notice of the stage — set at HAND_AT, its notice by hand goes 10 minutes later; the old one was told long ago.
+export const HAND_NOTICE_AT = '2026-10-29T14:00:00Z'
+export const HAND_BY: HandStage = { stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: w('Preparing', 'In preparazione') }, at: HAND_AT, note: 'Tablet del reparto taglio offline dalle 14:00.', by: SETTER, notice: { told: false, waitsUntil: HAND_NOTICE_AT } }
 export const HAND_READ: OrderProduction = { ...PRODUCTION_READ, headline: handOver('SEWING', HAND_BY, 4) }
-export const HAND_OLD_READ: OrderProduction = { ...PRODUCTION_READ, headline: handOver('SEWING', { ...HAND_BY, at: HAND_OLD_AT }, 4) }
+export const HAND_OLD_READ: OrderProduction = { ...PRODUCTION_READ, headline: handOver('SEWING', { ...HAND_BY, at: HAND_OLD_AT, notice: { told: true, waitsUntil: null } }, 4) }
 /** No work order yet (the lines not in work orders): Cutting set by hand, "Too few people to record the work", no note. */
 export const HAND_NOWORK_READ: OrderProduction = {
   ...CONFIRMED_READ,
   order: { ...PRODUCTION_READ.order, status: 'IN_PRODUCTION' },
-  headline: { ...handOver('CUTTING', { stage: 'CUTTING', reasonCode: 'FEW_PEOPLE', floor: { code: 'PREPARING', words: w('Preparing', 'In preparazione') }, at: HAND_AT, note: null, by: SETTER }, 1), waiting: { on: 'US', words: w('Waiting on us', 'Tocca a noi'), since: null, blockers: [] } },
+  headline: { ...handOver('CUTTING', { stage: 'CUTTING', reasonCode: 'FEW_PEOPLE', floor: { code: 'PREPARING', words: w('Preparing', 'In preparazione') }, at: HAND_AT, note: null, by: SETTER, notice: { told: true, waitsUntil: null } /* B-MS-008 (ms-fx1) */ }, 1), waiting: { on: 'US', words: w('Waiting on us', 'Tocca a noi'), since: null, blockers: [] } },
 }
 /** The customer's own pause stands on the order (a BRAND_PAUSE blocker): Set the stage by hand… is held — lift the pause first. */
 export const HAND_PAUSED_READ: OrderProduction = {

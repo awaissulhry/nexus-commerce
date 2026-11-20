@@ -162,18 +162,35 @@ export function stageDialogLinesOf(input: { readonly hand: BrandStage | null; re
 }
 
 /**
- * Clear…'s lines (null: no hand stage stands): inside the 10-minute window the customer has not been told the stage yet and now never
- * is (Owner D4); after it, it was told and is not told it again; then what it reads again, with no notice.
+ * Clear…'s lines (null: no hand stage stands): what the customer was told of the stage (toldLineOf), then what it reads now, with no
+ * notice.
  */
 export function clearLinesOf(headline: Headline | null | undefined, now: number): DialogLine[] | null {
   const hand = headline?.stage?.byHand ?? null
   if (!hand) return null
-  const at = Date.parse(hand.at)
-  const inside = Number.isFinite(at) && now - at < HAND_STAGE_NOTICE_DELAY_MS // B-MS-008
-  const lines: DialogLine[] = [inside ? { key: 'where.manual.clearUntold', customer: STAGE_WORDS[hand.stage], minutes: NOTICE_WAIT_MINUTES } : { key: 'where.manual.clearTold', customer: STAGE_WORDS[hand.stage] }]
+  const told = toldLineOf(hand, now) // B-MS-008 (ms-fx1)
+  const lines: DialogLine[] = told ? [told] : []
   if (hand.floor) lines.push({ key: 'where.manual.clearFloor', customer: STAGE_WORDS[hand.floor.code] })
   return lines
 }
+
+// ---- B-MS-008 (ms-fx1; Z01 note 2): Clear… says what the customer was told from the API's notice (the keeper's markers), never from
+// the set's time — a Change to the same stage writes a new one and tells nothing, a set of a stage told before tells nothing ----
+/**
+ * The told line: a notice by hand still waiting its window (Owner D4) — not told yet, and now never is; told (the notice went, the
+ * floor told it, or the window is over: a notice sent stays sent) — not told it again; never told (a Change going down is never told;
+ * a notice dropped) — and not told now. No notice read (an older answer): no line — never a guess.
+ */
+function toldLineOf(hand: NonNullable<NonNullable<Headline['stage']>['byHand']>, now: number): DialogLine | null {
+  const notice = hand.notice ?? null
+  if (!notice) return null
+  const customer = STAGE_WORDS[hand.stage]
+  const goes = notice.waitsUntil ? Date.parse(notice.waitsUntil) : Number.NaN
+  if (!notice.told && Number.isFinite(goes) && now < goes) return { key: 'where.manual.clearUntold', customer, minutes: NOTICE_WAIT_MINUTES }
+  if (notice.told || Number.isFinite(goes)) return { key: 'where.manual.clearTold', customer }
+  return { key: 'where.manual.clearNever', customer }
+}
+// ---- end B-MS-008 (ms-fx1)
 
 /**
  * A refused set, change or clear in this page's words, said in its dialog: the domain's own words when the API answers them (the
