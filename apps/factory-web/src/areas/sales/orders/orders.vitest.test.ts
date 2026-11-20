@@ -64,6 +64,8 @@ import { runWithStepUp } from './hooks'
 import { isMadeToMeasure, MENU_GROUPS, RECORD_TABS, tabCountOf } from './model' // F-SA-230
 import { abilitiesOf, PAGE_ACT_RIGHTS, readOnlyOnPage } from './model' // F-OP-303 (walk #6)
 import { ROLES, type Role } from './_demo/fixtures' // F-OP-303
+import { BAND_LOOK_ITEMS, bandMenuFor, bandStepOf } from './model' // F-OP-311 (oo-walk #10)
+import { rolePermissions } from '../../../shell/design-data' // F-OP-311
 import { bandHealthOf, healthInputOf } from './record/overview/model' // F-SA-232: the band's chip
 import { HISTORY_CHIPS, historyFor, historyOf, waitingOnUsOf } from './record/changes/model' // F-SA-236 (F-OP-301: the customer's side is the ONE waiting list's)
 import { designScreen as listScreen } from './list/fixtures'
@@ -1923,6 +1925,49 @@ describe('F-OP-303: the read-only banner only for a reader who can change nothin
 })
 // ---- end F-OP-303
 
+// ---- F-OP-311 (oo-walk #10): the band follows the Owner's rule "Read-only sees no buttons" (order overview plan §1) ----
+describe('F-OP-311: Read-only sees no next step and no move in the band; everyone else keeps the move, held with its words', () => {
+  const readOnly = abilitiesOf(rolePermissions('read_only'))
+  it('no next step for Read-only on any order state; the production manager keeps the held one', () => {
+    expect(readOnlyOnPage(readOnly)).toBe(true)
+    for (const status of ORDER_STATUSES) {
+      expect(bandStepOf(order(status), readOnly, true), status).toEqual({ kind: null, held: null })
+      expect(bandStepOf(order(status), canOf('manager'), false), status).toEqual(nextStep(order(status), canOf('manager')))
+    }
+    // The walk's four: Make work orders (Confirmed), Change promise date… (In production), Close order… (Shipped) — held for the
+    // production manager with their words, never hidden from a reader who may act on the page.
+    expect(bandStepOf(order('CONFIRMED'), canOf('manager'), false).kind).toBe('makeWorkOrders')
+    expect(bandStepOf(order('IN_PRODUCTION'), canOf('manager'), false)).toMatchObject({ kind: 'changePromise', held: { key: 'held.noManage' } })
+    expect(bandStepOf(order('SHIPPED', { settled: true }), canOf('manager'), false)).toMatchObject({ kind: 'close', held: { key: 'held.noClose' } })
+  })
+  it('the ⋯ for Read-only keeps only the open doors and the copy that change nothing; no held move, no Cancel', () => {
+    const item = (id: string, disabled = false) => ({ id, label: id, disabled })
+    const groups = { next: [item('promise', true), item('ready', true)], edit: [item('priority', true)], people: [item('assignSupervisor', true), item('askSupervisor')], goTo: [item('quote'), item('portal', true), item('planning')], copy: [item('copy'), item('copyQuote', true)] }
+    const danger = [item('cancel', true)]
+    const shown = bandMenuFor(true, groups, danger)
+    expect(shown.danger).toEqual([])
+    expect(Object.values(shown.groups).flat().map((entry) => entry.id)).toEqual(['quote', 'planning', 'copy'])
+    expect([...BAND_LOOK_ITEMS]).toEqual(['quote', 'portal', 'planning', 'copy'])
+    // Anyone who may change something on the page keeps every item, held ones with their words.
+    expect(bandMenuFor(false, groups, danger)).toEqual({ groups, danger })
+  })
+  it('drawn: the Read-only band has no primary button; Sales on the same order keeps its held step', () => {
+    const caseOf = (id: string) => recordScreen.cases.find((entry) => entry.id === id)!.model
+    const primaryOf = (html: string) => {
+      const from = html.indexOf('class="fw-rcf-primary"')
+      return from < 0 ? '' : html.slice(from, html.indexOf('</span>', from))
+    }
+    for (const locale of LOCALES) {
+      for (const id of ['f-oo-105-read-only', 'f-oo-205-read-only']) expect(primaryOf(render(recordScreen as unknown as DesignScreen<unknown>, caseOf(id), locale)), `${id} ${locale}`).toBe('')
+      expect(primaryOf(render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-oo-105-holds-sales'), locale)), locale).toContain('<button')
+    }
+    const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('const step = bandStepOf(order, model.can, readOnly)')
+    expect(view).toContain('bandMenuFor(readOnly, groups, cancelItem)')
+  })
+})
+// ---- end F-OP-311
+
 // ---- F-OO-112 (order overview N13, Owner D1; B-OO-002): readyHeld reads the API's markReady — held with the N of M words ------------
 describe('F-OO-112: Mark ready waits for quality — readyHeld reads the API\'s markReady (allowed, else the N of M words from the order read)', () => {
   /** The demo order in production (quality released 7 of its 14 pieces) with its actions as the API's own map gives them. */
@@ -2123,3 +2168,18 @@ describe('F-OO-206: the tab badges count what the Linked records card counts (or
   })
 })
 // ---- end F-OO-206
+
+// ---- F-OP-317 (order page walk #22): a line picture's small preview from the order read opens through this app's /api when the
+// local store answers it as a path on the API (the walk's 404 at the web origin); a store's absolute address is used as it is ----
+describe('F-OP-317: the order read\'s line picture address goes through /api like every other picture read', () => {
+  it('a local-store path gets the /api prefix once; an absolute address and no preview stay as they are', async () => {
+    const { orderLineSchema } = await import('./api')
+    const picture = orderLineSchema.shape.picture
+    const at = '2026-11-20T10:00:00.000Z'
+    expect(picture.parse({ fileId: 'f1', contentType: 'image/jpeg', small: { url: '/local-files?token=abc.def', expiresAt: at } })?.small?.url).toBe('/api/local-files?token=abc.def')
+    expect(picture.parse({ fileId: 'f1', contentType: 'image/jpeg', small: { url: 'https://store.example.com/k?sig=1', expiresAt: at } })?.small?.url).toBe('https://store.example.com/k?sig=1')
+    expect(picture.parse({ fileId: 'f1', contentType: 'image/jpeg', small: null })?.small).toBeNull()
+    expect(picture.parse(undefined)).toBeUndefined()
+  })
+})
+// ---- end F-OP-317

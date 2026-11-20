@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
 import { newIdempotencyKey } from '../../../lib/api/client'
+import { browserAddress } from '../../../lib/api/browser-address' // F-OP-317: a line picture's local-store path through /api
 // B-W2b-374: a typed line's options.
 import type { PickBody } from '../quotes/record/configurator/api'
 // F-OP-107 (B2): the three outcomes of pieces already cut beyond the new figures.
@@ -469,7 +470,9 @@ export const orderLineSchema = z.object({
   progress: progressSchema,
   // ── B-SA-035 / F-SA-232: the colour line's picture (the colourway's, else the style's main picture; files.read) with its small
   // preview's address (60 s), and the artwork files the reader may open. Absent in an older answer or a design case: no picture.
-  picture: z.object({ fileId: z.string(), contentType: z.string(), small: z.object({ url: z.string(), expiresAt: instant }).nullable() }).nullable().optional(),
+  // F-OP-317 (order page walk #22): the local store answers a path on the API (`/local-files?token=…`): opened through this app's
+  // `/api` (browserAddress, as the batch picture read and the thread's previews do); a store's absolute address is used as it is.
+  picture: z.object({ fileId: z.string(), contentType: z.string(), small: z.object({ url: z.string().transform(browserAddress), expiresAt: instant }).nullable() }).nullable().optional(),
   artworkCount: z.number().optional(),
   // ── end B-SA-035 / F-SA-232
   // ── B-SA-035b / F-SA-231b: the artwork files themselves (files.read; Lines opens them in the thread's ONE viewer), and a made-to-measure

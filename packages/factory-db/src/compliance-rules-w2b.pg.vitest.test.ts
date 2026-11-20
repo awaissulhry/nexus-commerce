@@ -225,6 +225,15 @@ describe('gate events', () => {
     await expect(admin(`TRUNCATE "GateEvent"`)).rejects.toThrow(/append-only; TRUNCATE refused/)
   })
 
+  // F-OP-313 (order page walk #23, overview walk #14): the order page's notice draws the refusal's stored sentence as it is.
+  it('the seeded label refusal names the warning by its approved words, never by its phrase key', async () => {
+    const event = await one(`SELECT reason, explanation FROM "GateEvent" WHERE id = $1`, [s.gateEventIds.labelRefused])
+    const words = await one(`SELECT t.text FROM "PhraseTranslation" t JOIN "Phrase" p ON p.id = t."phraseId" WHERE p.key = 'warning.class-a' AND t.language = 'en' AND t.status::text = 'APPROVED'`)
+    expect(event.reason).toContain(`the warning "${words.text}" has no approved German words`)
+    expect(event.reason).not.toContain('warning.class-a')
+    expect(event.explanation).toMatchObject({ phrase: 'warning.class-a', language: 'de' })
+  })
+
   it('refuses only by a switched-on, ACTIVE requirement that blocks the gate', async () => {
     await expect(refusal(s.requirementIds.labelLanguage, 'SHIPMENT')).rejects.toThrow(/does not block SHIPMENT/)
     await expect(refusal(s.requirementIds.textileShareIt, 'LABEL_PRINT')).rejects.toThrow(/does not block LABEL_PRINT/)

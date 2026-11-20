@@ -5,7 +5,7 @@ import { LOCALES } from '../../../../lib/i18n/locales'
 import { leftKeys, renderView, textOf } from '../../../../lib/record-thread/parts/testing'
 import { getBundles, type BundleRow } from '../../_shared/api'
 import { bundlesOf, cutLogOf, workOrder } from '../../_shared/fixtures'
-import { isWideTab, MERGED_TABS, RECORD_TABS, tabOf } from '../../_shared/model'
+import { MERGED_TABS, RECORD_TABS, tabOf } from '../../_shared/model'
 import { getRecuts, type Replacement } from '../../cutting/api'
 import { cutRecordAddress } from '../../cutting/record/redirect'
 import { cutHref } from '../../cutting/model'
@@ -59,7 +59,6 @@ describe('F-PR-06 — the tabs: Cutting and Bundles are ONE tab', () => {
     expect(tabOf('bundles')).toBe('cutting')
     expect(tabOf('cutting')).toBe('cutting')
     expect(tabOf('documents')).toBe('overview')
-    expect(isWideTab('cutting')).toBe(true)
   })
 
   it('the tab counts the bundles live on the floor (a void one is not), nothing while the bundles are not read', () => {

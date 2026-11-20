@@ -918,6 +918,7 @@
     "barLabel": "Bozza della modifica",
     "discard": "Scarta",
     "how": "Cambia qui sotto taglie e prezzi, aggiungi un colore o un modello, o porta una riga a 0 per toglierla. Non cambia nulla finché non applichi la modifica.",
+    "howNoPrice": "Cambia qui sotto le taglie, aggiungi un colore o un modello, o porta una riga a 0 per toglierla. Non cambia nulla finché non applichi la modifica.",
     "header": "Dati dell'ordine",
     "customerRef": "Ordine del cliente",
     "requestedDate": "Data richiesta dal cliente",

@@ -1207,7 +1207,7 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
     ...priceColumns, // F-CP-140
   ]
   // ── end B-TH-244 ──
-  return serverSorted(model.sort ?? null, [
+  const columns = serverSorted(model.sort ?? null, [
     { colId: 'picture', headerName: s('col.picture'), minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureColumn },
     { colId: 'number', headerName: t('col.number'), field: 'number', minWidth: 128, flex: 1, cellRenderer: NumberCell, context: also('customerRef', s('col.customerRef')) },
     { colId: 'customer', headerName: t('col.customer'), field: 'partyName', minWidth: 112, flex: 1.2, cellRenderer: CustomerCell },
@@ -1244,7 +1244,49 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
   ] as ColDef<OrderRow>[])
     .map((column) => withPreset(column, model.preset ?? null, wide, phone)) // F-SA-276; F-CP-107 (cp-fx16): + the phone card
     .map((column) => withMovedMark(column, () => latest.current.model.commands?.moved ?? [])) // F-CP-108
+  // F-OP-315 (order page walk #24): Sales › Orders itself fits its screen (a host's preset and the phone card keep their own rules).
+  return model.preset || phone ? columns : fitToScreen(columns, wide)
 }
+
+// ---- F-OP-315 (order page walk #24, follow-up 10): Sales › Orders reads at 1440 and 1920 ----------------------------------------------
+/**
+ * The grid's width on the narrowest screen of each class (the rail and the page's padding taken off; measured by cp-fx16): 1312 px at
+ * 1440 for the table below 1800 px, 1672 at 1800 for the wide one (1792 at 1920: flex fills the rest, no dead space). The select column
+ * takes 43 px of it.
+ */
+export const LIST_WIDTH = { narrow: 1312, wide: 1672 } as const
+export const SELECT_WIDTH = 43
+/**
+ * What a column of Sales › Orders needs to show its words whole, in Italian and English: its header beside its menu ("Pieces", "Nuovi
+ * messaggi", "Fatturato"), the longest status of the open view and "Waiting for a yes", "Not needed" / "Non chiesto", a seed number
+ * (SEED-SO-W39-01) and name. Applied over the sheet's own minimums, so a host's preset (the customer's Work tab) keeps those.
+ */
+export const LIST_MIN: Readonly<Record<string, number>> = { number: 144, customer: 160, brand: 128, status: 152, newMessages: 152, deposit: 112, units: 96, promised: 112, shipped: 104, invoiced: 116, company: 104, orderDate: 110, quote: 128 }
+/**
+ * The columns that wait for a wider screen, the first first, while the row is wider than the screen (each stays in Customise; a
+ * person's Customise wins). Picture, Number, Customer, Brand, Status, Deposit, Pieces, Promised, Shipped and Net never wait; Invoiced
+ * (TH-1a's own column) waits last. At 1440 the walk saw every column squeezed to its minimum, so most words were cut. So at 1440
+ * Company and New messages wait (and, for a price holder, Invoiced); at 1920 the wide ones join as far as they fit (Margin %, then
+ * Ordered, then Priority), From quote and Season first wait.
+ */
+export const WAIT_FIRST = ['quote', 'season', 'company', 'priority', 'orderDate', 'margin', 'newMessages', 'invoiced'] as const
+
+/** The sum of the shown columns' minimums with the select column: what the row needs. */
+export const rowWidthOf = (columns: readonly ColDef<OrderRow>[]): number => SELECT_WIDTH + columns.filter((column) => !column.hide).reduce((sum, column) => sum + (column.minWidth ?? 0), 0)
+
+/** Sales › Orders on its screen: each column at what its words need, then WAIT_FIRST hidden in turn until the row fits. */
+export function fitToScreen(columns: readonly ColDef<OrderRow>[], wide: boolean): ColDef<OrderRow>[] {
+  let out = columns.map((column) => {
+    const need = LIST_MIN[column.colId ?? '']
+    return need && need > (column.minWidth ?? 0) ? { ...column, minWidth: need } : column
+  })
+  for (const id of WAIT_FIRST) {
+    if (rowWidthOf(out) <= LIST_WIDTH[wide ? 'wide' : 'narrow']) break
+    out = out.map((column) => (column.colId === id && !column.hide ? { ...column, hide: true } : column))
+  }
+  return out
+}
+// ---- end F-OP-315
 
 /** F-CP-109: the bar's bulk commands' marks (lucide, as the bar's other buttons). */
 const MANY_ICON: Readonly<Record<ManyCommand, typeof PackageCheck>> = { ready: PackageCheck, close: Archive, confirm: CheckCheck }

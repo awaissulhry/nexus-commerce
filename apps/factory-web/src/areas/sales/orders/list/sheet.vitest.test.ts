@@ -590,3 +590,84 @@ describe('F-CP-105: Columns: Work · Money', () => {
   })
 })
 // ---- end F-CP-105
+
+// ---- F-OP-315 (order page walk #24, follow-up 10): Sales › Orders reads at 1440 and 1920 — each column at what its words need, the
+// rest wait for a wider screen in a fixed order until the row fits (no sideways scroll; flex fills the rest: no dead space). ----
+describe('F-OP-315: Sales › Orders fits 1440 and 1920 with its words whole', () => {
+  const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+  /** The sheet's own minimum of a column, as its definition says (Priority, Season and Margin %: the view sets them on the shared parts). */
+  const minOf = (id: string): number => {
+    if (id === 'priority') return 108
+    if (id === 'season') return 76
+    if (id === 'margin') return 92 // marginColumn's own, set by the view
+    const match = view.match(new RegExp(`colId: '${id}'[^}]*?minWidth: (\\d+)`))
+    expect(match, id).not.toBeNull()
+    return Number(match![1])
+  }
+  /** Sales › Orders' default columns as the sheet builds them for a reader: wide ones hidden below 1800 px, the later ones always. */
+  const sheetOf = (wide: boolean, more: { price?: boolean; unread?: boolean; companies?: boolean; margin?: boolean; depth?: boolean }): ColDef<OrderRow>[] => {
+    const ids: Array<[string, boolean]> = [
+      ['picture', false], ['number', false], ['customer', false], ['brand', false], ['status', false], ['whereItIs', true],
+      ...(more.unread ? [['newMessages', false] as [string, boolean]] : []),
+      ['deposit', false], ['units', false], ['orderDate', !wide], ['promised', false], ['waitingOn', true], ['shipped', false], ['invoiced', false],
+      ...(more.price ? [['net', false], ['gross', true]] as Array<[string, boolean]> : []),
+      ...(more.margin ? [['margin', !wide] as [string, boolean]] : []),
+      ...(more.depth ? [['priority', !wide], ['season', !wide]] as Array<[string, boolean]> : []),
+      ['quote', !wide],
+      ...(more.companies ? [['company', false] as [string, boolean]] : []),
+      ['supervisor', true], ['more', false],
+    ]
+    return ids.map(([colId, hide]) => ({ colId, minWidth: minOf(colId), hide }))
+  }
+  const shownOf = (columns: ColDef<OrderRow>[]) => columns.filter((column) => !column.hide).map((column) => column.colId)
+  const OWNER = { price: true, unread: true, companies: true, margin: true, depth: true }
+  const SALES = { unread: true, companies: true, depth: true }
+
+  it('before: at 1440 every column sat at its minimum and the Owner\'s row was wider than the screen', async () => {
+    const { LIST_WIDTH, rowWidthOf } = await import('./view/OrdersListView')
+    expect(rowWidthOf(sheetOf(false, SALES))).toBeGreaterThan(LIST_WIDTH.narrow - 30) // 1311 of 1312: nothing left for flex
+    expect(rowWidthOf(sheetOf(true, OWNER))).toBeGreaterThan(LIST_WIDTH.wide)
+  })
+
+  it('1440: Picture · Number · Customer · Brand · Status · Deposit · Pieces · Promised · Shipped stay; Company and New messages wait, then Invoiced for a price holder', async () => {
+    const { fitToScreen, LIST_WIDTH, rowWidthOf } = await import('./view/OrdersListView')
+    const sales = fitToScreen(sheetOf(false, SALES), false)
+    expect(shownOf(sales)).toEqual(['picture', 'number', 'customer', 'brand', 'status', 'deposit', 'units', 'promised', 'shipped', 'invoiced', 'more'])
+    const owner = fitToScreen(sheetOf(false, OWNER), false)
+    expect(shownOf(owner)).toEqual(['picture', 'number', 'customer', 'brand', 'status', 'deposit', 'units', 'promised', 'shipped', 'net', 'more'])
+    const manager = fitToScreen(sheetOf(false, {}), false)
+    expect(shownOf(manager)).toEqual(['picture', 'number', 'customer', 'brand', 'status', 'deposit', 'units', 'promised', 'shipped', 'invoiced', 'more'])
+    for (const fitted of [sales, owner, manager]) expect(rowWidthOf(fitted)).toBeLessThanOrEqual(LIST_WIDTH.narrow)
+  })
+
+  it('1920: the wide ones join as far as they fit — the Owner gets Margin %, Sales Ordered; From quote and Season wait first', async () => {
+    const { fitToScreen, LIST_WIDTH, rowWidthOf } = await import('./view/OrdersListView')
+    const owner = fitToScreen(sheetOf(true, OWNER), true)
+    expect(shownOf(owner)).toEqual(['picture', 'number', 'customer', 'brand', 'status', 'newMessages', 'deposit', 'units', 'promised', 'shipped', 'invoiced', 'net', 'margin', 'more'])
+    const sales = fitToScreen(sheetOf(true, SALES), true)
+    expect(shownOf(sales)).toEqual(['picture', 'number', 'customer', 'brand', 'status', 'newMessages', 'deposit', 'units', 'orderDate', 'promised', 'shipped', 'invoiced', 'more'])
+    for (const fitted of [owner, sales]) expect(rowWidthOf(fitted)).toBeLessThanOrEqual(LIST_WIDTH.wide)
+    // The 1920 screen is wider than the class's budget (1800 px): flex gives the rest out, never an empty band.
+    expect(LIST_WIDTH.wide).toBeLessThan(1792)
+  })
+
+  it('each column at what its words need (cp-fx16 measured SEED-SO-W39-01 at 142 px, "Waiting for a yes" at 151); the order never changes', async () => {
+    const { fitToScreen, LIST_MIN, WAIT_FIRST } = await import('./view/OrdersListView')
+    expect(LIST_MIN.number).toBeGreaterThanOrEqual(142)
+    expect(LIST_MIN.status).toBeGreaterThanOrEqual(151)
+    const fitted = fitToScreen(sheetOf(true, OWNER), true)
+    for (const column of fitted) expect(column.minWidth, column.colId).toBe(Math.max(minOf(column.colId!), LIST_MIN[column.colId!] ?? 0))
+    expect(fitted.map((column) => column.colId)).toEqual(sheetOf(true, OWNER).map((column) => column.colId))
+    expect([...WAIT_FIRST]).toEqual(['quote', 'season', 'company', 'priority', 'orderDate', 'margin', 'newMessages', 'invoiced'])
+    // A column the person showed in Customise is theirs: the fit only sets what shows at first (a hidden column stays hidden).
+    expect(fitToScreen([{ colId: 'invoiced', minWidth: 92, hide: true }], false)[0]!.hide).toBe(true)
+  })
+
+  it('only Sales › Orders itself: a host\'s preset (the customer\'s Work tab) and the phone card keep their own widths', () => {
+    expect(view).toContain('return model.preset || phone ? columns : fitToScreen(columns, wide)')
+    // The sheet's own minimums stay in its definitions (the Work tab's budgets read them).
+    expect(minOf('number')).toBe(128)
+    expect(minOf('status')).toBe(112)
+  })
+})
+// ---- end F-OP-315

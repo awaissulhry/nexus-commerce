@@ -918,6 +918,7 @@
     "barLabel": "Amendment draft",
     "discard": "Discard",
     "how": "Change the sizes and prices below, add a colour or a style, or set a line to 0 to remove it. Nothing changes until you apply the amendment.",
+    "howNoPrice": "Change the sizes below, add a colour or a style, or set a line to 0 to remove it. Nothing changes until you apply the amendment.",
     "header": "Order details",
     "customerRef": "Customer PO",
     "requestedDate": "Requested by the customer",

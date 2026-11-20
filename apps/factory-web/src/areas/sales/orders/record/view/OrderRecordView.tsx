@@ -14,7 +14,7 @@ import type { Order } from '../../api'
 import { amendHeld, closeLinesHeld, copyHeld, reopenHeld } from '../../daily-model'
 import { splitHeld } from '../../model' // F-OP-111
 import { DOCK_DEFAULTS } from '../../model' // F-SA-263
-import { cancelHeld, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, nextStep, promiseHeld, readyHeld, recordTabs, STATUS_TONE, tabCountOf, type MenuGroup } from '../../model'
+import { cancelHeld, dayInstant, depositGate, groupedMenu, isFinal, isMadeToMeasure, promiseHeld, readyHeld, recordTabs, STATUS_TONE, tabCountOf, type MenuGroup } from '../../model'
 import { ChangesTab } from '../changes/view/ChangesTab'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
@@ -39,6 +39,7 @@ import { makeHeldOf } from '../production' // F-OP-102
 import { makeInMenu } from '../../model' // F-OP-102
 import { linesNotInProduction } from '../../model' // F-OP-102
 import { readOnlyOnPage } from '../../model' // F-OP-303 (walk #6)
+import { bandMenuFor, bandStepOf } from '../../model' // F-OP-311 (oo-walk #10): Read-only sees no move in the band
 import { planningHref } from '../../../../../lib/production/work-order-acts/model' // F-OP-102
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-210
@@ -158,7 +159,10 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
   // F-OP-210 (11-dock §4; RC4): every tab link keeps the dock's scope (`thread=`): a pick in the dock survives a change of tab.
   const search = useSearchParams()?.toString() ?? ''
-  const step = nextStep(order, model.can)
+  // F-OP-311 (oo-walk #10): Read-only on the page (the cards' own rule) sees no next step and no move in the ⋯; everyone else keeps
+  // every move, held with its words.
+  const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
+  const step = bandStepOf(order, model.can, readOnly)
   const createDoor = createShipmentDoor(order, model.can, model.prefix, !!actions?.onCreateShipment) // F-OP-121
   const stepHeld = step.held ? t(step.held.key, step.held.params?.date ? { ...step.held.params, date: formatDate(dayInstant(String(step.held.params.date)), { locale }) } : step.held.params) : model.busy ? t('held.busy') : null
   const gate = depositGate(order)
@@ -335,7 +339,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
     ],
   }
   const cancelItem: MenuItemDef[] = !isFinal(order) && model.can.manage ? [{ id: 'cancel', label: t('action.cancel'), tone: 'danger' as const, disabled: !!cancelWait, description: held(cancelWait), onSelect: () => actions?.onDialog?.({ kind: 'cancel' }) }] : []
-  const more: MenuItemDef[] = groupedMenu(groups, cancelItem, (group) => t(`menu.group.${group}`))
+  const shownMenu = bandMenuFor(readOnly, groups, cancelItem) // F-OP-311 (oo-walk #10)
+  const more: MenuItemDef[] = groupedMenu(shownMenu.groups, shownMenu.danger, (group) => t(`menu.group.${group}`))
 
   // ---- end F-SA-230
 

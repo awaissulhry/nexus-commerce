@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { createElement, type ComponentType } from 'react'
 import { render, renderView, textOf } from '../../../../lib/record-thread/parts/testing'
 import { workOrder } from '../../_shared/fixtures'
-import { isWideTab, MERGED_TABS, RECORD_TABS, tabOf } from '../../_shared/model'
+import { DOCK_DEFAULT, MERGED_TABS, RECORD_TABS, tabOf } from '../../_shared/model'
+import { defaultWidthAt } from '../../../_shared/record-frame/model' // F-OP-316
 import { designScreen } from './fixtures'
 import { filesReady, leftOut, orderFilesOf, orderGroup } from './order-files/fixtures'
 import { hasOrderFiles, leftOutOf, orderFilesCount, pickOf, threadChoices, type OrderFilesModel } from './order-files/model'
@@ -48,11 +49,19 @@ describe('B-TH-265 — the work order on RecordFrame', () => {
     expect(tabOf('constructor')).toBe('overview')
   })
 
-  it('a wide grid tab (Cutting & bundles) gives the thread one third under 1600 px; the others 40 %', () => {
-    expect(isWideTab('cutting')).toBe(true)
-    expect(isWideTab('operations')).toBe(false)
-    expect(isWideTab('overview')).toBe(false)
-    expect(isWideTab('labour')).toBe(false)
+  // F-OP-316 (order page follow-up 12): ONE dock width per viewport on every tab (the order page's rule, #1753) — before, only Cutting &
+  // bundles was a third, so at 1280–1599 px the dock changed its width with the tab.
+  it('F-OP-316: one dock width per viewport on every tab — a third under 1600 px, 40 % from 1600 (the grid rule)', () => {
+    expect(DOCK_DEFAULT).toBe('grid')
+    for (const viewport of [1280, 1440, 1599]) expect(defaultWidthAt(DOCK_DEFAULT, viewport), String(viewport)).toBe('third')
+    for (const viewport of [1600, 1920]) expect(defaultWidthAt(DOCK_DEFAULT, viewport), String(viewport)).toBe('forty')
+  })
+
+  it('F-OP-316: the page draws every tab at the same width (nothing chosen yet): Overview, Materials, Cutting, Quality a third at 1440', () => {
+    for (const id of ['thread-docked', 'materials', 'thread-cutting', 'quality', 'w2a-labour']) expect(draw(id), id).toContain('data-width="third"')
+    const view = readFileSync(new URL('./view/WorkOrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('defaultWidth={DOCK_DEFAULT')
+    expect(view).not.toContain('isWideTab')
   })
 
   it('ONE thread on the page: the docked thread, no record panels, no old narrow dock', () => {
