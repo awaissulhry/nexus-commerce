@@ -6,6 +6,7 @@ import { eventFor } from '@nexus/factory-domain/events/define'
 import { assertOneParty, brandHealthChanged, brandHoldChanged, brandStageReached, type BrandHoldKind } from '@nexus/factory-domain/production-brand/events'
 import { effectiveHealth, raiseStands, type BrandHealth, type HealthRaise, type HealthReasonCode } from '@nexus/factory-domain/production-brand/health'
 import { brandStageRank, movedForward, type BrandStage } from '@nexus/factory-domain/production-brand/stages'
+import { handStands } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-004
 import type { Waiting, WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
 import { ForbiddenError } from '@nexus/factory-domain/core/errors'
 import { callerFor, COMMAND_SETTINGS, runCommand, type CommandCaller, type CommandSettings, type CommandTools } from '../../../core/command'
@@ -34,6 +35,21 @@ import { ordersOfShipment } from '../../shipping/shipments/orders-of'
  *                    `production.brandKeeper.stageTold` on the order's BrandOrderProduction row says it was told: on the row,
  *                    so the order's own timeline stays the order's). A stage going back is written (the
  *                    customer reads only true states) and never told. An order with no open goods line keeps its last stage.
+ *   by hand          B-MS-004 (set the stage by hand, design A; review fixes R2, R6, R7, R15, R21): the ONE named exception to
+ *                    "only true states". While the floor cannot record work that is done, an office person may put the stage
+ *                    ahead with a reason (./stage, B-MS-005; the five stageSet… columns, hidden from the customer). The keeper
+ *                    then writes the SHOWN stage into `stage`: the higher of the floor's and the hand stage (production-brand
+ *                    stage-set shownStageOf). The floor's own stage is never stored: every decision of a pass (the plan, the
+ *                    clears, the skip of the high-volume events below) reads the floor's stage computed in THAT pass, never the
+ *                    stored one. The hand stage stands while the floor is below it (nothing written, nothing told); the floor
+ *                    reaching or passing it, no goods line left open, a person's Clear, or the order leaving production
+ *                    (cancelled, closed, shipped: R2, a command of its own, and the nightly run looks for any the events
+ *                    missed) ends it in the SAME write — the five columns cleared (the database's guard: while it stands
+ *                    `stage` equals it), `stage` the floor's or, with no goods line, where the work reached; a step back takes
+ *                    the floor's own day (R15, floorDayOf). The told rule stays the one above (a forward move of `stage`, what
+ *                    the customer reads), so a floor Cutting under a hand Sewing tells nothing. Each end the keeper writes is
+ *                    also one row on the SalesOrder (`production.brandKeeper.handCleared` {stage, floor, why}; never a `status`
+ *                    key, which the portal's order history reads: R6), so the order's History says it.
  *   health           the computed health (facts.ts) and when it changed; the factory's raise to At risk is dropped once 7
  *                    days passed or the computed health changed (health.ts raiseStands). `brand_production.health_changed`
  *                    when the health the customer reads (effectiveHealth) changed, `byNote` when only the raise's drop did it.
@@ -47,22 +63,41 @@ import { ordersOfShipment } from '../../shipping/shipments/orders-of'
  * own customer (PW-P07; a legacy work order of two customers gives each customer an event of its own order only). It never
  * follows `brand_production.urgency_changed` (R-69): one customer's urgency recomputes no order of another customer. High
  * volume first, one indexed read, then skipped: a scan, or a start at an operation, only at a SEWING work centre and only for
- * an order not yet at SEWING; a cut or a bundle only for an order not yet at CUTTING. Stage events read no planning (the
+ * an order not yet at SEWING; a cut or a bundle only for an order not yet at CUTTING (B-MS-004, R7: an order with a stage set
+ * by hand is never skipped — its stored stage is not the floor's, and the floor's event may end it). Stage events read no planning (the
  * health and waiting-on stay as they were); the others and the nightly cron read the planning risk too.
  *
  * The scheduler's clustered cron `production.brandKeeper` (00:35 Europe/Rome, just after the business date turns) recomputes
  * every kept order of every tenant, one by one as an event would: a promise that passed in the night shows LATE, a raise past
- * its 7 days drops, an order confirmed before the keeper existed gets its row.
+ * its 7 days drops, an order confirmed before the keeper existed gets its row (B-MS-004: and a stage set by hand still left on
+ * an order that left production is cleared — the safety net of R2).
  *
  * Each change is ONE system command on the order (an advisory lock per order, the facts read again under it — the planning
  * risk as read just before — then the row written): its audit rows on the BrandOrderProduction row (the change, the stage
- * marker), the events; nothing changed: no command at all. A hold event's command carries a key of the event and the order, so
+ * marker), the events; nothing changed: no command at all. B-MS-004: that command's body is `keepInCommand`, the same body the
+ * set, change and clear by hand run inside their own command (never keepOrder inside another command: it opens its own). A hold event's command carries a key of the event and the order, so
  * a retried job tells the hold once. Safe to repeat: it moves on facts, never on the event.
  */
 
 export const KEEP_COMMAND = 'production.brandKeeper'
 /** The audit marker of a stage told to the customer (once per order and stage). */
 export const STAGE_TOLD = 'production.brandKeeper.stageTold'
+
+// ── B-MS-004: the stage set by hand ──
+/** The office's set or change of the stage by hand (./stage): its command, and the action of its audit rows. */
+export const SET_BRAND_STAGE = 'production.setBrandStage'
+/** The office's Clear of the stage set by hand (./stage). */
+export const CLEAR_BRAND_STAGE = 'production.clearBrandStage'
+/** The SalesOrder's audit row of a hand stage the keeper ended (the order's History; never a `status` key). */
+export const HAND_CLEARED = 'production.brandKeeper.handCleared'
+
+/**
+ * Why a stage set by hand ended: the floor reached or passed it, no goods line is left open, the order left production
+ * (cancelled, closed, shipped), or a person cleared it (./stage).
+ */
+export const HAND_DROPS = ['REACHED', 'NO_LINE', 'LEFT_PRODUCTION', 'CLEARED'] as const
+export type HandDrop = (typeof HAND_DROPS)[number]
+// ── end B-MS-004 ──
 
 /** The events whose facts move an order's stage, health, waiting-on or hold mark. */
 export const STAGE_EVENTS = [
@@ -116,7 +151,10 @@ export interface KeeperRow {
   readonly id: string
   readonly partyId: string
   readonly salesOrderId: string
+  /** The stage the customer reads (B-MS-004: the shown one — the floor's, or the hand stage while it leads). */
   readonly stage: BrandStage
+  // B-MS-004: the stage set by hand (null: none stands; while it stands `stage` equals it, the database's guard).
+  readonly stageSet: BrandStage | null
   readonly health: BrandHealth | null
   readonly healthSet: BrandHealth | null
   readonly healthReasonCode: HealthReasonCode | null
@@ -127,8 +165,13 @@ export interface KeeperRow {
 }
 
 export interface KeeperTarget {
-  /** The plain stage now (null: no open goods line; the row keeps its stage). */
+  /**
+   * The FLOOR's plain stage now, computed in this pass (null: no open goods line; the row keeps its stage). B-MS-004: never the
+   * stored stage — under a hand stage the stored one is the shown one.
+   */
   readonly stage: BrandStage | null
+  /** B-MS-004 (R2): where the work reached, `done` ignored (facts.ts `reached`): the stage a hand stage gives way to with no goods line open. */
+  readonly reached: BrandStage
   /** The computed health now (null: nothing left to make). */
   readonly computed: BrandHealth | null
   readonly waiting: Waiting
@@ -147,6 +190,8 @@ export interface KeepPlan {
     waitingSince?: Date
     /** The raise dropped: every raise column cleared. */
     raiseDropped?: true
+    /** B-MS-004: the stage set by hand ended, and why: its five columns cleared in this same write. */
+    handDropped?: HandDrop
   }
   /** A forward move to tell (still once per order and stage: the command checks the marker). */
   readonly stageReached: { readonly stage: BrandStage; readonly previous: BrandStage | null } | null
@@ -158,18 +203,26 @@ const sameTime = (a: Date | null, b: Date | null): boolean => (a === null ? b ==
 
 /**
  * What the keeper writes and tells for one order: from its row (null: none yet) and its facts now. A new row is made only
- * when the order has a stage (an open goods line).
+ * when the order has a stage (an open goods line). B-MS-004: `clearHand` — a person clears the stage set by hand (./stage).
  */
-export function planKeep(input: { readonly row: KeeperRow | null; readonly target: KeeperTarget; readonly now: Date; readonly today: BusinessDate }): KeepPlan | null {
+export function planKeep(input: { readonly row: KeeperRow | null; readonly target: KeeperTarget; readonly now: Date; readonly today: BusinessDate; readonly clearHand?: boolean }): KeepPlan | null {
   const { row, target, now, today } = input
   if (row === null && target.stage === null) return null
   const data: KeepPlan['data'] = {}
   const previousStage = row?.stage ?? null
-  if (target.stage !== null && target.stage !== previousStage) {
-    data.stage = target.stage
+  // B-MS-004 (design A; R7): every decision reads the FLOOR's stage of this pass (target.stage), never the stored one. A hand stage
+  // stands while the floor is below it (`stage` stays the hand stage); the floor reaching or passing it, no goods line open, or a
+  // person's Clear ends it in this same write: `stage` the floor's — with no goods line, where the work reached.
+  const hand = row?.stageSet ?? null
+  const handStays = hand !== null && input.clearHand !== true && handStands(target.stage, hand)
+  if (hand !== null && !handStays) data.handDropped = input.clearHand === true ? 'CLEARED' : target.stage === null ? 'NO_LINE' : 'REACHED'
+  const shown: BrandStage | null = handStays ? hand : (target.stage ?? (hand !== null ? target.reached : null))
+  if (shown !== null && shown !== previousStage) {
+    data.stage = shown
     data.stageAt = now
   }
-  const stageReached = target.stage !== null && movedForward(previousStage, target.stage) ? { stage: target.stage, previous: previousStage } : null
+  // The told rule as before: a forward move of `stage` (what the customer reads), only while a goods line is open.
+  const stageReached = target.stage !== null && shown !== null && movedForward(previousStage, shown) ? { stage: shown, previous: previousStage } : null
 
   // The health: the computed one, and the factory's raise while it stands.
   const computedBefore = row?.health ?? null
@@ -195,6 +248,20 @@ export function planKeep(input: { readonly row: KeeperRow | null; readonly targe
   return { create: row === null, data, stageReached, healthChanged }
 }
 
+// ── B-MS-004 (R2) ──
+/**
+ * An order the keeper no longer keeps (cancelled, closed, shipped …) whose row still has a stage set by hand: the five columns
+ * cleared, `stage` where the work reached (the command writes back the floor's own day on a step back, R15). Nothing told, the
+ * health and waiting-on left as they were. null: no hand stage (the keeper leaves such an order alone, as before). `why`: CLEARED
+ * when a person's Clear meets it.
+ */
+export function planLeaving(input: { readonly row: KeeperRow; readonly reached: BrandStage; readonly now: Date; readonly why?: Extract<HandDrop, 'LEFT_PRODUCTION' | 'CLEARED'> }): KeepPlan | null {
+  const { row, reached, now } = input
+  if (row.stageSet === null) return null
+  return { create: false, data: { handDropped: input.why ?? 'LEFT_PRODUCTION', ...(reached !== row.stage ? { stage: reached, stageAt: now } : {}) }, stageReached: null, healthChanged: null }
+}
+// ── end B-MS-004 ──
+
 /** Something to write or tell. */
 export const planChanges = (plan: KeepPlan | null): boolean => plan !== null && (plan.create || Object.keys(plan.data).length > 0 || plan.stageReached !== null || plan.healthChanged !== null)
 
@@ -205,6 +272,7 @@ const ROW_SELECT = {
   partyId: true,
   salesOrderId: true,
   stage: true,
+  stageSet: true, // B-MS-004
   health: true,
   healthSet: true,
   healthReasonCode: true,
@@ -220,6 +288,7 @@ async function readRow(db: Reader, orderId: string): Promise<KeeperRow | null> {
   return {
     ...row,
     stage: row.stage as BrandStage,
+    stageSet: row.stageSet as BrandStage | null, // B-MS-004
     health: row.health as BrandHealth | null,
     healthSet: row.healthSet as BrandHealth | null,
     healthReasonCode: row.healthReasonCode as HealthReasonCode | null,
@@ -233,6 +302,7 @@ const targetOf = (facts: OrderProductionFacts, row: KeeperRow | null): KeeperTar
   const planned = facts.computed !== undefined
   return {
     stage: facts.stage?.stage ?? null,
+    reached: facts.reached, // B-MS-004
     computed: planned ? (facts.computed ?? null) : (row?.health ?? null),
     waiting: planned || row === null || row.waitingOn === null ? facts.waiting : { on: row.waitingOn, since: row.waitingSince },
   }
@@ -246,6 +316,8 @@ export interface KeepCause {
   readonly health?: boolean
   /** A hold placed or lifted on the order's work: tell it (once per event and order). */
   readonly hold?: { readonly kind: BrandHoldKind; readonly eventId: string }
+  /** B-MS-004: a person clears the stage set by hand (./stage, inside its own command): the floor's stage counts again. */
+  readonly clearHand?: boolean
 }
 
 export interface KeepResult {
@@ -264,8 +336,10 @@ export async function keepOrder(caller: CommandCaller, orderId: string, cause: K
   const today = businessDate(now)
   const read = await caller.withClient(async (db) => {
     const facts = await readOrderProductionFacts(db, planningContext, orderId, now, { health: cause.health !== false })
-    if (!facts || !facts.kept) return null
+    if (!facts) return null
     const row = await readRow(db, orderId)
+    // B-MS-004 (R2): an order no longer kept is left alone — unless its row still has a stage set by hand (it is cleared).
+    if (!facts.kept) return row !== null && row.stageSet !== null ? { facts, row, plan: planLeaving({ row, reached: facts.reached, now }) } : null
     return { facts, row, plan: planKeep({ row, target: targetOf(facts, row), now, today }) }
   })
   if (!read) return { orderId, changed: false, told: [] }
@@ -281,27 +355,113 @@ export async function keepOrder(caller: CommandCaller, orderId: string, cause: K
       ...(cause.causationId ? { causationId: cause.causationId } : {}),
     },
     async (tools) => {
-      const { tx, now: at } = tools
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.brand-keeper', ${orderId}::uuid), 0))`
-      const facts = await readOrderProductionFacts(tx, planningContext, orderId, at, { health: cause.health !== false, ...(risks ? { risks } : {}) })
-      if (!facts || !facts.kept) return { told: [] as string[], wrote: false }
-      const row = await readRow(tx, orderId)
-      const plan = planKeep({ row, target: targetOf(facts, row), now: at, today: businessDate(at) })
-      return writePlan(tools, facts, row, plan, cause)
+      const kept = await keepInCommand(tools, orderId, cause, risks)
+      if (!kept.wrote) {
+        // Under the lock nothing was left to do (another keeper did it): one audit row says so (every command records one).
+        tools.audit({
+          recordType: kept.rowId ? 'BrandOrderProduction' : 'SalesOrder',
+          recordId: kept.rowId ?? orderId,
+          ...(kept.facts ? { companyId: kept.facts.order.companyId } : {}),
+          after: { salesOrderId: orderId, kept: false },
+          reason: `Kept: ${cause.what}.`,
+        })
+      }
+      return { told: [...kept.told], wrote: kept.wrote }
     },
     settings,
   )
   return { orderId, changed: !replayed && result.wrote, told: replayed ? [] : result.told }
 }
 
-async function writePlan(tools: CommandTools, facts: OrderProductionFacts, row: KeeperRow | null, plan: KeepPlan | null, cause: KeepCause): Promise<{ told: string[]; wrote: boolean }> {
+// ── B-MS-004: the keeper's pass inside a running command; the stage told once; the floor's own day ──
+/** What one keeper pass inside a running command did. */
+export interface KeptInCommand {
+  /** The order's facts as read under the lock (null: no such order). */
+  readonly facts: OrderProductionFacts | null
+  /** The order's production row (null: none, and none made). */
+  readonly rowId: string | null
+  readonly told: readonly string[]
+  /** Something was written or told. */
+  readonly wrote: boolean
+  /** A stage set by hand ended in this pass, and why (null: none ended). */
+  readonly handDropped: HandDrop | null
+}
+
+/**
+ * The keeper's pass INSIDE a running command: keepOrder's own command body, and B-MS-005's set, change and clear by hand (./stage)
+ * — never keepOrder inside another command, which opens its own. It takes the keeper's lock of the order (re-entrant in one
+ * transaction), reads the facts again under it (R12: the live floor; the planning risk only as given in `risks`, or read when the
+ * cause asks for the health — no planning read runs here otherwise), then plans and writes as keepOrder does: with no row it MAKES
+ * it at its first stage, with its marker (R1). An order no longer kept whose row still has a hand stage: that stage cleared, `stage`
+ * where the work reached, nothing told (R2). Nothing to do: nothing written (keepOrder records its own one row then).
+ */
+export async function keepInCommand(tools: CommandTools, orderId: string, cause: KeepCause, risks?: ReadonlyMap<string, LineRisk>): Promise<KeptInCommand> {
+  const context = tools.context
+  if (context.audience !== 'system' && context.audience !== 'office') throw new ForbiddenError()
+  const { tx, now } = tools
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.brand-keeper', ${orderId}::uuid), 0))`
+  const facts = await readOrderProductionFacts(tx, keeperPlanningContext(context.tenantId, context.requestId), orderId, now, { health: cause.health !== false, ...(risks ? { risks } : {}) })
+  if (!facts) return { facts: null, rowId: null, told: [], wrote: false, handDropped: null }
+  const row = await readRow(tx, orderId)
+  const plan = facts.kept
+    ? planKeep({ row, target: targetOf(facts, row), now, today: businessDate(now), ...(cause.clearHand ? { clearHand: true } : {}) })
+    : row !== null
+      ? planLeaving({ row, reached: facts.reached, now, why: cause.clearHand ? 'CLEARED' : 'LEFT_PRODUCTION' })
+      : null
+  // An order no longer kept tells no hold (as before: the keeper did not look at it).
+  const written = await writePlan(tools, facts, row, plan, facts.kept ? cause : { what: cause.what })
+  return { facts, rowId: written.rowId, told: written.told, wrote: written.wrote, handDropped: plan?.data.handDropped ?? null }
+}
+
+/**
+ * Tells the customer a stage it now reads — once per order and stage (the marker STAGE_TOLD on the row: a stage reached, taken back
+ * and reached again is not told again) — in the order's own customer's name (PW-P07: the order's row and its production row agree).
+ * The keeper's tell, and B-MS-005's set by hand (./stage). False: told before.
+ */
+export async function tellStageOnce(
+  tools: CommandTools,
+  order: { readonly id: string; readonly companyId: string; readonly partyId: string },
+  row: { readonly id: string; readonly partyId: string },
+  stage: BrandStage,
+  previous: BrandStage | null,
+): Promise<boolean> {
+  const already = await tools.tx.auditLog.findFirst({ where: { recordType: 'BrandOrderProduction', recordId: row.id, action: STAGE_TOLD, after: { path: ['stage'], equals: stage } }, select: { id: true } })
+  if (already) return false
+  assertOneParty({ partyId: order.partyId, orderIds: [order.id] }, new Map([[order.id, row.partyId]]))
+  tools.audit({ action: STAGE_TOLD, recordType: 'BrandOrderProduction', recordId: row.id, companyId: order.companyId, after: { salesOrderId: order.id, stage, previous } })
+  tools.emit(eventFor(brandStageReached, { subject: order.id, companyId: order.companyId, payload: { orderId: order.id, partyId: order.partyId, stage, previous } }))
+  return true
+}
+
+/** A plain JSON object of an audit row (else null). */
+const jsonObject = (value: unknown): Record<string, unknown> | null => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null)
+
+/**
+ * R15: the day the floor reached `floor`, for a step back from a stage set by hand. The newest set by hand of the row that found no
+ * hand stage before it (its audit `before.hand` null — a Change keeps the chain) recorded the floor's stage and day as they stood;
+ * the same stage now: that day, else `now` (the floor's own day of another stage is not stored).
+ */
+export async function floorDayOf(db: Reader, rowId: string, floor: BrandStage, now: Date): Promise<Date> {
+  const sets = await db.auditLog.findMany({ where: { recordType: 'BrandOrderProduction', recordId: rowId, action: SET_BRAND_STAGE }, select: { before: true }, orderBy: [{ at: 'desc' }, { id: 'desc' }], take: 50 })
+  const first = sets.map((set) => jsonObject(set.before)).find((before) => before !== null && before.hand === null && typeof before.stageAt === 'string')
+  if (!first || first.stage !== floor) return now
+  const day = new Date(first.stageAt as string)
+  return Number.isFinite(day.getTime()) ? day : now
+}
+// ── end B-MS-004 ──
+
+async function writePlan(tools: CommandTools, facts: OrderProductionFacts, row: KeeperRow | null, plan: KeepPlan | null, cause: KeepCause): Promise<{ told: string[]; wrote: boolean; rowId: string | null }> {
   const { tx, now } = tools
   const order = facts.order
   const told: string[] = []
   let rowId = row?.id ?? null
   if (plan !== null && planChanges(plan)) {
-    const { raiseDropped, ...columns } = plan.data
+    const { raiseDropped, handDropped, ...columns } = plan.data
     const raise = raiseDropped ? { healthSet: null, healthReasonCode: null, healthNote: null, healthSetAt: null, healthSetById: null, healthSetUntil: null } : {}
+    // B-MS-004: the stage set by hand ended — its five columns cleared in this same write (the database's guard: while it stands
+    // `stage` equals it); a step back to the floor's stage takes the floor's own day (R15).
+    const hand = handDropped ? { stageSet: null, stageSetReason: null, stageSetNote: null, stageSetAt: null, stageSetById: null } : {}
+    if (handDropped && row !== null && columns.stage !== undefined && brandStageRank(columns.stage) < brandStageRank(row.stage)) columns.stageAt = await floorDayOf(tx, row.id, columns.stage, now)
     if (plan.create) {
       rowId = newId()
       await tx.brandOrderProduction.create({
@@ -320,24 +480,41 @@ async function writePlan(tools: CommandTools, facts: OrderProductionFacts, row: 
         select: { id: true },
       })
     } else if (Object.keys(plan.data).length > 0) {
-      await tx.brandOrderProduction.update({ where: { id: row!.id }, data: { ...columns, ...raise, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
+      await tx.brandOrderProduction.update({ where: { id: row!.id }, data: { ...columns, ...raise, ...hand, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
     }
     if (plan.create || Object.keys(plan.data).length > 0) {
       tools.audit({
+        action: KEEP_COMMAND, // B-MS-004: the keeper's own row, also when it runs inside the set or clear by hand (./stage)
         recordType: 'BrandOrderProduction',
         recordId: rowId!,
         companyId: order.companyId,
-        before: row ? { stage: row.stage, health: row.health, raised: row.healthSet !== null, waitingOn: row.waitingOn, waitingSince: row.waitingSince ? toUtcIso(row.waitingSince) : null } : null,
+        before: row
+          ? { stage: row.stage, health: row.health, raised: row.healthSet !== null, waitingOn: row.waitingOn, waitingSince: row.waitingSince ? toUtcIso(row.waitingSince) : null, ...(row.stageSet !== null ? { hand: row.stageSet } : {}) /* B-MS-004 */ }
+          : null,
         after: {
           salesOrderId: order.id,
           ...(plan.create ? { made: true } : {}),
           ...(columns.stage ? { stage: columns.stage } : {}),
           ...('health' in columns ? { health: columns.health ?? null } : {}),
           ...(raiseDropped ? { raiseDropped: true } : {}),
+          ...(handDropped ? { handDropped } : {}), // B-MS-004
           ...(columns.waitingOn ? { waitingOn: columns.waitingOn, waitingSince: toUtcIso(columns.waitingSince ?? now) } : {}),
           ...(facts.promiseOnly ? { riskFrom: 'PROMISE_ONLY' } : {}),
         },
         reason: `Kept: ${cause.what}.`,
+      })
+    }
+    // B-MS-004 (R6): the order's own History says the hand stage ended — one office row on the SalesOrder, never with a `status`
+    // key (the portal's order history and madeWaiting read that key of every SalesOrder audit row). A person's Clear writes its
+    // own row (./stage).
+    if (handDropped && handDropped !== 'CLEARED' && row !== null) {
+      tools.audit({
+        action: HAND_CLEARED,
+        recordType: 'SalesOrder',
+        recordId: order.id,
+        companyId: order.companyId,
+        before: { stage: row.stage },
+        after: { stage: columns.stage ?? row.stage, floor: handDropped === 'REACHED' && facts.stage !== null ? facts.stage.stage : facts.reached, why: handDropped },
       })
     }
     // The wall (PW-P07): every event below names this one order and its own customer — the order's row and its production row
@@ -345,13 +522,8 @@ async function writePlan(tools: CommandTools, facts: OrderProductionFacts, row: 
     const partyOf = new Map([[order.id, row?.partyId ?? order.partyId]])
     if (plan.stageReached) {
       const { stage, previous } = plan.stageReached
-      const already = await tx.auditLog.findFirst({ where: { recordType: 'BrandOrderProduction', recordId: rowId!, action: STAGE_TOLD, after: { path: ['stage'], equals: stage } }, select: { id: true } })
-      if (!already) {
-        assertOneParty({ partyId: order.partyId, orderIds: [order.id] }, partyOf)
-        tools.audit({ action: STAGE_TOLD, recordType: 'BrandOrderProduction', recordId: rowId!, companyId: order.companyId, after: { salesOrderId: order.id, stage, previous } })
-        tools.emit(eventFor(brandStageReached, { subject: order.id, companyId: order.companyId, payload: { orderId: order.id, partyId: order.partyId, stage, previous } }))
-        told.push('brand_production.stage_reached')
-      }
+      // B-MS-004: the one tell of a stage (tellStageOnce), shared with the set by hand.
+      if (await tellStageOnce(tools, order, { id: rowId!, partyId: row?.partyId ?? order.partyId }, stage, previous)) told.push('brand_production.stage_reached')
     }
     if (plan.healthChanged) {
       assertOneParty({ partyId: order.partyId, orderIds: [order.id] }, partyOf)
@@ -365,12 +537,8 @@ async function writePlan(tools: CommandTools, facts: OrderProductionFacts, row: 
     tools.emit(eventFor(brandHoldChanged, { subject: order.id, companyId: order.companyId, payload: { orderId: order.id, partyId: order.partyId, held: facts.held, kind: cause.hold.kind } }))
     told.push('brand_production.hold_changed')
   }
-  if (told.length === 0 && !(plan !== null && planChanges(plan))) {
-    // Under the lock nothing was left to do (another keeper did it): one audit row says so (every command records one).
-    tools.audit({ recordType: rowId ? 'BrandOrderProduction' : 'SalesOrder', recordId: rowId ?? order.id, companyId: order.companyId, after: { salesOrderId: order.id, kept: false }, reason: `Kept: ${cause.what}.` })
-    return { told, wrote: false }
-  }
-  return { told, wrote: true }
+  // Nothing written nor told (another keeper did it under the lock): the caller records its own one row (keepOrder).
+  return { told, wrote: told.length > 0 || (plan !== null && planChanges(plan)), rowId }
 }
 
 // ---- the worker's handler ----------------------------------------------------------------------------------------------------
@@ -484,14 +652,17 @@ export async function ordersOfEvent(db: Reader, event: Pick<EventEnvelope, 'type
   }
 }
 
-/** The orders whose row is not yet at `stage` (an order with no row yet counts: its row is made). One indexed read. */
+/**
+ * The orders whose row is not yet at `stage` (an order with no row yet counts: its row is made). One indexed read. B-MS-004 (R7):
+ * a row with a stage set by hand always counts — its stored stage is the shown one, not the floor's, and this event may end it.
+ */
 async function notYetAt(db: Reader, orderIds: readonly string[], stage: BrandStage): Promise<string[]> {
   if (orderIds.length === 0) return []
-  const rows = await db.brandOrderProduction.findMany({ where: { key: { in: orderIds.map((id) => `brand-production:${id}`) } }, select: { salesOrderId: true, stage: true } })
-  const at = new Map(rows.map((row) => [row.salesOrderId, row.stage as BrandStage]))
+  const rows = await db.brandOrderProduction.findMany({ where: { key: { in: orderIds.map((id) => `brand-production:${id}`) } }, select: { salesOrderId: true, stage: true, stageSet: true } })
+  const at = new Map(rows.map((row) => [row.salesOrderId, row]))
   return orderIds.filter((id) => {
     const known = at.get(id)
-    return known === undefined || brandStageRank(known) < brandStageRank(stage)
+    return known === undefined || known.stageSet !== null || brandStageRank(known.stage as BrandStage) < brandStageRank(stage)
   })
 }
 
@@ -541,7 +712,15 @@ export async function runBrandKeeperNightly(options: KeeperNightlyOptions): Prom
       const ids = await asSystem(options.database, tenantId, requestId, async (client) =>
         (await client.salesOrder.findMany({ where: { status: { in: [...KEEPER_ORDER_STATES] } }, select: { id: true }, orderBy: { id: 'asc' } })).map((row) => row.id),
       )
-      for (const orderId of ids) {
+      // B-MS-004 (R2): the safety net — a row still with a stage set by hand although its order left production (its status event
+      // missed). One read; each is kept as an event would keep it (keepOrder clears it, `stage` where the work reached).
+      const left = await asSystem(options.database, tenantId, requestId, async (client) =>
+        (await client.brandOrderProduction.findMany({ where: { stageSet: { not: null }, salesOrder: { is: { status: { notIn: [...KEEPER_ORDER_STATES] } } } }, select: { salesOrderId: true, key: true }, orderBy: { salesOrderId: 'asc' } }))
+          .filter((row) => row.key === `brand-production:${row.salesOrderId}`)
+          .map((row) => row.salesOrderId),
+      )
+      const kept = new Set(ids)
+      for (const orderId of [...ids, ...left.filter((id) => !kept.has(id))]) {
         orders++
         try {
           const result = await keepOrder(caller, orderId, { what: 'nightly' }, settings)
