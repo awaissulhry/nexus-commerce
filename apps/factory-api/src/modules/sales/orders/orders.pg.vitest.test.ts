@@ -33,6 +33,8 @@ import { seed as seedAccounting } from '../../../../../../packages/factory-db/se
 import { seed as seedSalesOrdersDepth, type SalesOrdersDepthSeed } from '../../../../../../packages/factory-db/seed/sales-orders-depth'
 import { command } from '../../../core/command'
 import { askApproval } from '../../../platform/approvals/engine'
+// B-OO-013: the portal's own order contracts (what a customer's answer may carry: zod drops every other key).
+import { listContract as portalListContract, recordContract as portalRecordContract } from '../portal-orders/contract'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A1 §2.5 "Sales order"; PLAN
@@ -139,12 +141,19 @@ const PROMISE = addDays(TODAY, 60)
 
 /** A quote for P1 (8 × 450 + 6 × 440 = 6240.00 net, 7612.80 gross, deposit 30 % = 2283.84), sent and accepted by link. */
 // B-CP-011: made, priced and sent by the Owner (a Sales worker may not send unitPrice any more).
-async function acceptedQuote(): Promise<{ quoteId: string; versionId: string; number: string }> {
+// B-OO-013: `terms` (the quote's delivery terms, PUT …/terms on the draft) go with the quote before it is sent.
+async function acceptedQuote(terms?: Json): Promise<{ quoteId: string; versionId: string; number: string }> {
   let quote = (await as(owner, 'POST', '/sales/quotes', { companyId: companyA, partyId: P1, customerRef: 'RFQ-0077', promiseDate: PROMISE }, 201)).quote
   quote = (await as(owner, 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jacket, colourwayId: BLK, sizes: BLK_GRID, unitPrice: '450' }, 201)).quote
   quote = (await as(owner, 'POST', `/sales/quotes/${quote.id}/lines`, { version: quote.version, styleId: jacket, colourwayId: RED, sizes: RED_GRID, unitPrice: '440' }, 201)).quote
+  let sendVersion: number = quote.version
+  if (terms) {
+    const answer = await owner.send('PUT', `/sales/quotes/${quote.id}/terms`, { version: quote.version, ...terms }, { headers: { 'idempotency-key': key('terms') } })
+    expect(answer.status, JSON.stringify(answer.body)).toBe(200)
+    sendVersion = (answer.body as Json).quoteVersion
+  }
   const before = h.ses.mails.length
-  const sent = await as(owner, 'POST', `/sales/quotes/${quote.id}/send`, { version: quote.version }, 200, { 'idempotency-key': key('send') })
+  const sent = await as(owner, 'POST', `/sales/quotes/${quote.id}/send`, { version: sendVersion }, 200, { 'idempotency-key': key('send') })
   const mail = h.ses.mails.slice(before).find((entry) => entry.outboundId === sent.sent?.emailId)!
   const token = decodeURIComponent(/#token=(\S+)/.exec(textOf(mail.raw))?.[1] ?? '')
   const accepted = await h.app.inject({
@@ -1311,3 +1320,34 @@ describe('the order read’s shipments: carrier, tracking, DDT and whether the n
   })
 })
 // ---- end B-OP-023
+
+// ── B-OO-013 (order overview §7): the office order read says the delivery terms; the portal's order read never does ──────────
+describe('the office order read carries the Incoterm, its place and ship complete (B-OO-013; read only, office only)', () => {
+  const TERMS_KEYS = ['incoterm', 'incotermPlace', 'shipComplete'] as const
+
+  it('an order made from a quote with EXW + a place reads them back as accepted; an order with none reads null / false', async () => {
+    const sold = await acceptedQuote({ incoterm: 'EXW', incotermPlace: 'Seedville', shipComplete: true })
+    const made = await one<{ id: string }>('SELECT id FROM "SalesOrder" WHERE "quoteVersionId" = $1', [sold.versionId])
+    const read = (await ok('a.sales', 'GET', orderUrl(made.id))).order
+    expect({ incoterm: read.incoterm, incotermPlace: read.incotermPlace, shipComplete: read.shipComplete }).toEqual({ incoterm: 'EXW', incotermPlace: 'Seedville', shipComplete: true })
+    // The same as the row the carry wrote (quote-terms/carry.ts): the read adds nothing of its own.
+    expect(await one('SELECT incoterm, "incotermPlace", "shipComplete" FROM "SalesOrder" WHERE id = $1', [made.id])).toEqual({ incoterm: 'EXW', incotermPlace: 'Seedville', shipComplete: true })
+    // A reader of orders alone (no money grain) reads them too: they are no money.
+    expect((await ok('a.viewer', 'GET', orderUrl(made.id))).order).toMatchObject({ incoterm: 'EXW', incotermPlace: 'Seedville', shipComplete: true })
+    // The seeded SEED-SO-0002 was typed with none: null, null, ship as ready.
+    const seededOrder = (await ok('a.sales', 'GET', orderUrl(seeded.a.quality.production.salesOrderId))).order
+    expect({ incoterm: seededOrder.incoterm, incotermPlace: seededOrder.incotermPlace, shipComplete: seededOrder.shipComplete }).toEqual({ incoterm: null, incotermPlace: null, shipComplete: false })
+    // Another customer's person: the order is not found, as an unknown id.
+    expect((await call('a.otherParty', 'GET', orderUrl(made.id))).status).toBe(404)
+  })
+
+  it("the portal's order reads (the record and the list) carry no such key: the customer's answer drops what its contract does not name", () => {
+    const record = Object.keys(portalRecordContract.response[200].shape.order.shape)
+    const row = Object.keys(portalListContract.response[200].shape.items.element.shape)
+    for (const name of TERMS_KEYS) {
+      expect(record).not.toContain(name)
+      expect(row).not.toContain(name)
+    }
+  })
+})
+// ── end B-OO-013 ──

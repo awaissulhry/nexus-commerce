@@ -12,6 +12,7 @@ import { command, StaleVersionError, type CommandCaller, type CommandTx } from '
 import { actorOf } from '../../../../core/context'
 import { officeContextOf } from '../../../../modules/sales/orders/access'
 import { customRecordOf, recordFactsOf } from '../../../fields/records'
+import { finalOrderWords } from '../../../fields/records' // B-OO-014: one wording with the record page and the import
 import { fieldsOfModel, fieldsSeen, saidInWords, valuesOfRecords, writeValuesInCommand, type FieldRow } from '../../../fields/registry'
 import { defineBulkTarget, type BulkTargetField } from '../target'
 
@@ -128,7 +129,7 @@ export const salesOrders = defineBulkTarget<Row>({
         const order = await tools.tx.salesOrder.findUnique({ where: { id: row.id }, select: SELECT })
         if (!order || !can(actor, ORDERS_MANAGE, { companyId: order.companyId, partyId: order.partyId })) throw new NotFoundError('Sales order not found.')
         if (order.version !== version) throw new StaleVersionError('SalesOrder', order.id, order.version, version)
-        if (FINAL.includes(order.status)) throw new InvalidStateError(`Sales order ${order.number} is ${order.status.toLowerCase()}: it never changes.`)
+        if (FINAL.includes(order.status)) throw new InvalidStateError(finalOrderWords(order.number, order.status))
         const fields = new Map((await cellFields(tools.tx, caller)).map((field) => [columnIdOf(field), field]))
         // The custom values through platform/fields' own write (W17: a field of another customer is no field of this order).
         const asked = Object.keys(changes).flatMap((column) => (fields.has(column) ? [{ column, field: fields.get(column)! }] : []))
