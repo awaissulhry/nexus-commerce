@@ -2,7 +2,7 @@ import { DomainError, ForbiddenError, InvalidStateError, ValidationError } from 
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { cancelBlocksOf, cancelImpact } from '@nexus/factory-domain/sales/orders/daily'
-import { followMoves, promiseProblems, promiseStateProblem, salesOrderMachine, type SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
+import { followMoves, promiseProblems, promiseStateProblem, reversalMoves, salesOrderMachine, type SalesOrderFacts, type SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
 import { ORDERS_CLOSE, ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
@@ -30,6 +30,10 @@ import { proposeGapsInCommand } from '../../production/work-order-changes/propos
 import { closeRefusedFollowUpsInCommand } from './still-to-do'
 // B-OP-012 (order page plan N2, D1): the work orders follow the cancel in its command where the person may.
 import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../production/work-order-changes/auto'
+// B-OO-003 (order overview N3): a waiting order's standing credit hold (its override request is withdrawn with the cancel).
+import { creditHoldOf } from '../credit/check'
+// B-OO-009 (order overview N10): the promise reason as a field (the curated code, then the office's note).
+import { promiseReasonText, type PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise'
 
 /**
  * The sales order's moves (B-W1-25; SAL-204: one writer per move; factory-domain sales/orders salesOrderMachine), each
@@ -40,13 +44,15 @@ import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../pr
  *
  *   a person (office)   promise date (orders.manage; a reason; the first promise stays), ready by hand (orders.manage; a
  *                       reason, while quality release is not in use), cancel (orders.manage; a reason; B-W2a-30: before
- *                       anything shipped, with the impact check (./impact): no draft work order, no shipment being
+ *                       anything shipped, B-OO-003 also while waiting for a yes (its requests for a yes withdrawn with
+ *                       it), with the impact check (./impact): no draft work order, no shipment being
  *                       packed, no invoice of it; the lines' work-order locks are taken first, so no work order is made
  *                       for them meanwhile; its OPEN deposit requests and payment steps are cancelled with it; what it
  *                       leaves behind is answered), close (settled: orders.manage or orders.close; not settled: a reason
  *                       AND orders.close)
  *   the system          `followOrder`: the moves the facts ask (production started, quality released everything, the
- *                       shipped quantities, a settled order that left in full closes), from the worker's handlers
+ *                       shipped quantities, a settled order that left in full closes), from the worker's handlers;
+ *                       B-OO-001 (Owner D2): READY back to IN_PRODUCTION only on a release taken back (`reversal`)
  */
 
 const today = (tools: Pick<CommandTools, 'now'>): BusinessDate => businessDate(tools.now)
@@ -91,23 +97,35 @@ const reasonOf = (value: string | null | undefined): string | null => (typeof va
 export interface PromiseInput {
   readonly version?: number | undefined
   readonly promiseDate: BusinessDate
+  /** The reason as stored: B-OO-009, the route's `CODE: note` (promiseReasonText), or a caller's own words. */
   readonly reason: string
   /** Only these lines get the new promise (their own date); none: the whole order. */
   readonly lineIds?: readonly string[] | undefined
+}
+
+/** B-OO-009 (order overview N10): the promise route's body — the curated reason code and/or the office's own note. */
+export interface PromiseBody extends Omit<PromiseInput, 'reason'> {
+  readonly reasonCode?: PromiseReasonCode | undefined
+  readonly reason?: string | undefined
 }
 
 /**
  * orders.manage: a new promise date with a reason (SAL-206; the design's "Change promise date"), for the order or for
  * some of its lines. The first promise (originalPromiseDate) is never overwritten: an order promised for the first time
  * gets it set to this date, once (the trigger holds it too). Lines change only before anything shipped.
+ * B-OO-009: the reason is the picked code (the customer reads its curated words) and/or the office's note (never the
+ * customer's), stored as `CODE: note`; neither is refused with the domain's words (400).
  */
-export async function changePromise(caller: CommandCaller, orderId: string, body: PromiseInput, idempotencyKey?: string): Promise<{ order: OrderView }> {
+export async function changePromise(caller: CommandCaller, orderId: string, body: PromiseBody, idempotencyKey?: string): Promise<{ order: OrderView }> {
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
   // B-OP-025: the new date answers the customer's refusal of an earlier one — its follow-up closes in the same command (+ audit).
   const context = officeContextOf(caller)
+  // B-OO-009: one stored reason for the audit row, the lines' promise rows and the closed follow-ups.
+  const reason = promiseReasonText(body.reasonCode, body.reason)
+  const change: PromiseInput = { version: body.version, promiseDate: body.promiseDate, reason, lineIds: body.lineIds }
   await command(caller, { name: 'orders.changePromise', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
-    const done = await changePromiseInCommand(tools, order, body)
-    const followUpsClosed = await closeRefusedFollowUpsInCommand(tools, context, order, done.lineIds, body.reason.trim())
+    const done = await changePromiseInCommand(tools, order, change)
+    const followUpsClosed = await closeRefusedFollowUpsInCommand(tools, context, order, done.lineIds, reason)
     return { ...done, followUpsClosed }
   })
   return { order: await recordAfter(caller, order.id) }
@@ -178,7 +196,7 @@ export async function markReady(caller: CommandCaller, orderId: string, body: { 
 
 /**
  * orders.manage: CONFIRMED, IN_PRODUCTION or READY → CANCELLED with a reason (B-W2a-30, SAL-211; W1 allowed only CONFIRMED
- * without released work orders). The impact check (./impact, factory-domain `cancelImpact`) is read again under the
+ * without released work orders); B-OO-003 (order overview N3): PENDING_APPROVAL too (factory-domain CANCEL_STATUSES). The impact check (./impact, factory-domain `cancelImpact`) is read again under the
  * order's lock and stops it at a draft work order (cancel those first: none is released for a cancelled order), a
  * shipment being packed, or an invoice of the order (a fiscal document is never deleted: a credit note is Finance's).
  * The lines' work-order locks (modules/production/work-orders `lockOrderLines`, the lock a new work order takes on them)
@@ -218,13 +236,19 @@ export async function cancelOrderInCommand(
   options: { readonly workOrders?: 'now' | 'later'; readonly autoApply?: AutoApply } = {},
 ): Promise<{ orderId: string; status: 'CANCELLED'; paidDepositRequestIds: string[]; impact: ReturnType<typeof impactView>; /* B-OP-012 */ workOrders: FollowedWorkOrders }> {
   const { tx, now } = tools
+  const reason = reasonOf(body.reason)
+  // B-OO-003 (order overview N3): a waiting order's credit override request is taken back with it — first, before the order's
+  // locks, as the approver's no always did (the approval engine locks a request before its order). A refused cancel rolls it back.
+  if (order.status === 'PENDING_APPROVAL') {
+    const hold = await creditHoldOf(tx, order.id)
+    if (hold?.pendingTaskId) await withdrawPending(tools, { kind: 'CREDIT_OVERRIDE', recordId: hold.checkId, byId: tools.context.audience === 'office' ? tools.context.actorId : null, words: `Order cancelled: ${reason ?? ''}`.slice(0, 2000) })
+  }
   const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
   await lockOrderLines(tx, tenantId, lineIds)
   const locked = await lockOrder(tx, order.id, body.version)
   if (lineIds.length > 0) await tx.$queryRaw`SELECT w.id FROM "WorkOrder" w WHERE w.id IN (SELECT c."workOrderId" FROM "WorkOrderSize" c WHERE c."salesOrderLineId" = ANY(${lineIds}::uuid[])) ORDER BY w.id FOR SHARE`
   const facts = await readOrderFacts(tx, order)
   const impact = cancelImpact(await readCancelFacts(tx, { id: order.id, status: locked.status, quoteVersionId: order.quoteVersionId }, facts))
-  const reason = reasonOf(body.reason)
   // B-OP-040 (order page N6, lines-derived): garments of the order on a shipment of another of the customer's orders that has
   // not left (DRAFT or PACKED) come off it first, in words (a cancelled order ships nothing). The shipments made for the
   // order itself are the impact's SHIPMENT_IN_PREPARATION. Never a line of another customer (the line's FK carries partyId).
@@ -318,14 +342,22 @@ class NothingToFollow extends DomainError {
  * calls settled → CLOSED. As the system (the worker's handlers) or the office; ONE command on the order (its row locked,
  * the facts read again under the lock), one audit row and one `sales_order.status_changed` (by: system) per move. Nothing
  * to do: no command at all. Safe to repeat: it moves on facts, never on the event.
+ * B-OO-001 (Owner D2): `reversal` (only the quality.release_reversed handler sends it) first lets a READY order whose pieces
+ * are not all released any more, with nothing shipped, go back to IN_PRODUCTION (factory-domain `reversalMoves`); no other
+ * cause moves an order back.
  */
-export async function followOrder(caller: CommandCaller, orderId: string, cause: { readonly what: string; readonly causationId?: string }): Promise<{ moved: SalesOrderStatus[] }> {
+export async function followOrder(caller: CommandCaller, orderId: string, cause: { readonly what: string; readonly causationId?: string; /* B-OO-001 */ readonly reversal?: boolean }): Promise<{ moved: SalesOrderStatus[] }> {
   const context = caller.factoryContext
   if (!context || (context.audience !== 'system' && context.audience !== 'office')) throw new ForbiddenError()
+  // B-OO-001: the move back first (a reversal only), then what the facts ask from there.
+  const plan = (status: SalesOrderStatus, facts: SalesOrderFacts): SalesOrderStatus[] => {
+    const back = cause.reversal === true ? reversalMoves(status, facts) : []
+    return [...back, ...followMoves(back.at(-1) ?? status, facts)]
+  }
   const planned = await caller.withClient(async (client) => {
     const order = await readOrder(client, orderId)
     if (!order) return []
-    return followMoves(order.status, moveFactsOf(await readOrderFacts(client, order), await orderSettlement().settlementOf(client, order)))
+    return plan(order.status, moveFactsOf(await readOrderFacts(client, order), await orderSettlement().settlementOf(client, order)))
   })
   if (planned.length === 0) return { moved: [] }
   try {
@@ -334,7 +366,7 @@ export async function followOrder(caller: CommandCaller, orderId: string, cause:
       const locked = await lockOrder(tx, orderId)
       const order = (await readOrder(tx, orderId))!
       const facts = moveFactsOf(await readOrderFacts(tx, order), await orderSettlement().settlementOf(tx, order))
-      const moves = followMoves(locked.status, facts)
+      const moves = plan(locked.status, facts)
       if (moves.length === 0) throw new NothingToFollow()
       let from = locked.status
       for (const to of moves) {

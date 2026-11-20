@@ -1,0 +1,38 @@
+/* ── F-OO-209 (order overview 11-design §7): Order facts — each fact is the Overview's shared card row (overview.css .fw-so-ov-row:
+   label | value | door, the door under the words below a 480 px card), the facts in two columns from an 800 px card
+   (.fw-so-ov-cols). Here only the list's own reset, the label's quiet colour, a value that wraps, and "Fixed" (quiet words in the
+   door's place, never a control). Tokens only. ── */
+.fw-so-facts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-so-fact-label {
+  color: var(--nds-text-muted);
+}
+
+.fw-so-fact-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-so-fact-fixed {
+  white-space: nowrap;
+}
+
+/* ── F-OO-210 (Owner D4): the office note — the whole row (both columns); its label and door on the first line, the note under them,
+   its own line breaks kept. ── */
+.fw-so-ov-row.fw-so-fact-note {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.fw-so-fact-note > .fw-so-fact-value {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.fw-so-fact-text {
+  white-space: pre-wrap;
+}

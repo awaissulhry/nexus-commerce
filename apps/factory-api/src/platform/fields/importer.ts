@@ -10,6 +10,9 @@ import { ApiError } from '../../core/errors'
 // Types only: platform/imports/registry.ts lists these adapters, so a value import back from it would be a cycle.
 import type { CheckRow, ImportAdapter, ImportScope, WriteRow } from '../imports/registry'
 import { CUSTOM_RECORDS, recordsByKey, recordsOfModel, isCustomModel, type CustomRecord, type RecordFacts } from './records'
+// B-OO-014: a sales order's values keep its version and its freeze (the Orders sheet's rules), in the import too.
+import { ConflictError, InvalidStateError } from '@nexus/factory-domain/core/errors'
+import { recordStateOf, touchRecordInCommand } from './records'
 import { fieldsOfModel, fieldsSeen, valuesOfRecords, writeValuesInCommand, type FieldRow, type ValueRow } from './registry'
 
 /**
@@ -25,6 +28,9 @@ import { fieldsOfModel, fieldsSeen, valuesOfRecords, writeValuesInCommand, type 
  *           its code or number, of the record's company); a money field only through its grain's column
  *   write   the planned value through writeValuesInCommand (the values' one command path: audited, one event)
  *
+ * B-OO-014 (a NEW refusal): a closed or cancelled sales order takes no value any more — the row is refused in the Orders sheet's
+ * words at the dry run (and skipped at the apply if it closed since); a value written into an order moves the order's version (the
+ * sheet's next edit at the old version is stale, never an overwrite).
  * A file field takes no import (a file is added on its record).
  */
 
@@ -114,6 +120,9 @@ function rowWithCurrent(resolved: Resolved, field: FieldRow, row: Pick<CheckRow,
 async function rowIssues(client: Client, record: CustomRecord, resolved: Resolved, row: CheckRow, actor: Actor): Promise<RowIssue[]> {
   if (!resolved.record) return [{ column: 'record', message: `No ${record.labelEn.toLowerCase()} ${String(row.key.record)} here (or two with that code).` }]
   if (!can(actor, record.view, resolved.record) || !can(actor, record.edit, resolved.record)) return [{ column: 'record', message: `Changing ${String(row.key.record)} needs the right to change it.` }]
+  // B-OO-014: a closed or cancelled order never changes (the sheet's words).
+  const final = (await recordStateOf(client, record, resolved.record.id)).final
+  if (final !== null) return [{ column: 'record', message: final }]
   const field = resolved.field
   // B-TH-056: a field for another customer is no field of this record (refused per row as unknown, in words).
   if (!field || fieldsSeen(actor, [field], resolved.record.companyId, resolved.record.partyId ?? null).length === 0) return [{ column: 'field', message: `No custom field ${String(row.key.field)} on this ${record.labelEn.toLowerCase()}.` }]
@@ -150,7 +159,18 @@ export function customValuesImportAdapter(record: CustomRecord): ImportAdapter {
       const value = await valueOfRow(tools.tx, resolved.record, resolved.field, resolved.current, rowWithCurrent(resolved, resolved.field, row))
       if ('issue' in value) throw new ApiError('internal_error', `fields import: ${value.issue.message}`)
       const actor = actorOf(tools.context)
-      await writeValuesInCommand(tools, record, resolved.record, [{ code: resolved.field.code, value: value.value, version: resolved.current?.version ?? null }], actor, 'actorId' in tools.context ? tools.context.actorId : SYSTEM_ACTOR_ID)
+      const facts = resolved.record
+      const field = resolved.field
+      const write = async () => {
+        const written = await writeValuesInCommand(tools, record, facts, [{ code: field.code, value: value.value, version: resolved.current?.version ?? null }], actor, 'actorId' in tools.context ? tools.context.actorId : SYSTEM_ACTOR_ID)
+        return written.set.length > 0 || written.cleared.length > 0
+      }
+      // B-OO-014: the order locked, refused when closed or cancelled, its version moved with the value. The row check above refuses a
+      // closed order first; one closed in between fails the batch in words (a conflict: the worker would take a state refusal for its
+      // own job's and stop silently).
+      await touchRecordInCommand(tools, record, facts, undefined, write).catch((error: unknown) => {
+        throw error instanceof InvalidStateError ? new ConflictError(error.message) : error
+      })
       return { recordId: resolved.current?.id ?? resolved.record.id }
     },
   } satisfies ImportAdapter)

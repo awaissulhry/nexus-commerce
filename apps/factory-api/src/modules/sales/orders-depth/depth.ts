@@ -13,7 +13,7 @@ import { serverClock } from '../../../core/time'
 import { officeContextOf } from '../orders/access'
 import { officeOrder } from '../orders/moves'
 import type { Reader } from '../orders/store'
-import { creditHoldOf } from './approval'
+import { creditHoldOf } from '../credit/check' // B-OO-003: it lives beside the credit check now
 
 /**
  * What W2b adds to an order's record and to the list's rows (B-W2b-303; design sales.orders "Priority (W2b)", "Season (W2b)"

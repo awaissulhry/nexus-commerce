@@ -426,6 +426,18 @@
     "artworkOpen": "Open the artwork in the viewer"
   },
   "dates": {
+    "promisedExFactory": "Promised (ex-factory)",
+    "promisedMoved_one": "{date} · moved {count}× · {days} d since first promised",
+    "promisedMoved_other": "{date} · moved {count}× · {days} d since first promised",
+    "promisedMovedOnly_one": "{date} · moved {count}×",
+    "promisedMovedOnly_other": "{date} · moved {count}×",
+    "planSays": "Plan says ready",
+    "planAfter": "{date} · {days} d after the promise",
+    "planBefore": "{date} · {days} d before the promise",
+    "planSame": "{date} · on the promise day",
+    "planNone": "Nothing plans it yet",
+    "fromPlan": "(from the plan)",
+    "requestedByCustomer": "Requested by customer",
     "title": "Dates & milestones",
     "ordered": "Ordered",
     "requested": "Requested",
@@ -984,6 +996,39 @@
     "pricedHeld": {
       "apply": "A priced change is made by someone who sees prices.",
       "net": "Net: shown to people who see prices"
+    }
+  },
+  "facts": {
+    "requested": {
+      "title": "Change the requested date of {number}",
+      "date": "New requested date",
+      "dateHint": "Today or later. Saved as amendment {revision}.",
+      "reasonHint": "Kept with the amendment on the Changes tab.",
+      "problem": {
+        "past": "The requested date is today or later",
+        "same": "It is the requested date already"
+      }
+    },
+    "payment": "Payment · currency",
+    "languageTax": "Language · tax mode",
+    "made": "Made",
+    "madeBy": "{date} by {name} · changed {changed}",
+    "madeNoName": "{date} · changed {changed}",
+    "ordered": "ordered {date}",
+    "fixed": "Fixed",
+    "fixedTitle": "Set when the order was made; it does not change.",
+    "set": "Set…",
+    "unread": "Could not be read",
+    "note": {
+      "label": "Office note",
+      "tag": "Only the office sees it",
+      "empty": "No note",
+      "title": "Office note · {number}",
+      "hint": "Only the office reads it; the customer never does.",
+      "go": "Save note",
+      "long": "The note is at most {max} characters",
+      "same": "It is the note already",
+      "saved": "Office note saved."
     }
   },
   "editor": {
@@ -1602,16 +1647,13 @@
       "title": "People",
       "backup": "Backup",
       "answers": "Answers the customer",
-      "madeBy": "Made by",
-      "madeByOn": "{name} · {date}",
       "where": "Where it is made",
       "notPlanned": "Not planned yet",
       "held": "Who works on it is shown to people who follow production."
     },
     "dates": {
       "title": "Next dates",
-      "all": "All dates ›",
-      "none": "No dates set yet — Planning sets the gates"
+      "all": "All dates ›"
     },
     "requests": {
       "title": "Requests & changes",
@@ -1636,14 +1678,7 @@
     },
     "facts": {
       "title": "Order facts",
-      "customerRef": "Customer PO",
-      "language": "Language",
-      "lang": {
-        "it": "Italian",
-        "en": "English"
-      },
-      "made": "Made · changed",
-      "madeValue": "{made} · {changed}"
+      "customerRef": "Customer PO"
     }
   },
   "mtm": {
@@ -1681,6 +1716,10 @@
     "revision": "revision {revision}",
     "step": "payment step {seq}",
     "yourOrderSeq": "your order {seq}"
+  },
+  "people": {
+    "supervisor": "Supervisor",
+    "followers": "Followers ›"
   },
   "told": {
     "title": "Who was told",

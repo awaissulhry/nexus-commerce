@@ -185,10 +185,11 @@ function Loaded({ model, actions, thread, row, nav, onClose, onNext, companyName
         <Menu
           label={<MoreHorizontal size={16} aria-hidden />}
           align="right"
-          triggerProps={{ 'aria-label': t('pane.menu', { number }) }}
+          // F-CP-107 (cp-walk): a draft has no number yet — its menu is named by its title, and there is no number to copy.
+          triggerProps={{ 'aria-label': t('pane.menu', { number: number || model.draft?.title || request.party.name }) }}
           items={[
             { id: 'customer', label: t('peek.openCustomer'), href: `${model.prefix}/sales/customers/${encodeURIComponent(request.party.id)}`, target: '_blank' as const },
-            { id: 'copy', label: t('record.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(number).catch(() => undefined) },
+            ...(number ? [{ id: 'copy', label: t('record.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(number).catch(() => undefined) }] : []),
           ]}
         />
         {onClose && (

@@ -8,6 +8,7 @@ import { at, inTransitRead, orderWords, ordersRead, PREFIX, ROWS, shellOf, words
 import { BETA_ROWS, betaInTransitRead, betaOrdersRead } from './design-data'
 // B-TH-223: Orders & requests read by Brand Beta (brand B), the made-up reader of every wall scan.
 import { betaShellOf, PREFIX as BETA, REQUESTS } from '../requests/design-data'
+import { BRAND_BETA } from '../../../lib/testing/two-brands' // cp-walk: the print names its own customer
 import { CLOSED_REQUESTS, listRows } from './model'
 // B-TH-238: the tiles above the list.
 import { listTiles, NEEDS_YOU, OPEN_ORDERS, OPEN_REQUESTS, type TileChip } from './model'
@@ -164,9 +165,11 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     {
       id: 'print',
       label: 'tab:print — Print this list',
+      // cp-walk (brand wall, the customer page review walk): ONE customer per print — REQUESTS are Brand Beta's own (BETA-PO-…), so the
+      // print is Brand Beta's: its shell, its orders, its name (it was "Brand Alpha S.r.l." over Brand Beta's request and PO).
       model: (locale) => ({
-        shell: shellOf(locale, { title: words(locale)('print.title') }),
-        body: { kind: 'print', model: { state: 'ready', rows: listRows('OPEN', '', REQUESTS, ordersRead('OPEN').items, locale), count: ordersRead('OPEN').count + REQUESTS.filter((row) => row.state.open).length, seesPrices: true, filters: { chip: locale === 'it' ? 'Aperti' : 'Open', q: '' }, partyName: 'Brand Alpha S.r.l.', printedBy: 'Anna Esempio', printedAt: at(0), backHref: `${PREFIX}/orders` } },
+        shell: betaShellOf(locale, { title: words(locale)('print.title') }, '/orders'),
+        body: { kind: 'print', model: { state: 'ready', rows: listRows('OPEN', '', REQUESTS, betaOrdersRead('OPEN').items, locale), count: betaOrdersRead('OPEN').count + REQUESTS.filter((row) => row.state.open).length, seesPrices: true, filters: { chip: locale === 'it' ? 'Aperti' : 'Open', q: '' }, partyName: BRAND_BETA.legalName, printedBy: BRAND_BETA.portalPerson.name, printedAt: at(0), backHref: `${BETA}/orders` } },
       }),
       note: 'Its own tab: the filters written at the top, every row, who printed it and when; on paper only the sheet.',
     },

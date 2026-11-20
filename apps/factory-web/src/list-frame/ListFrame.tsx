@@ -36,6 +36,7 @@ import { ListToolsBar, type ExportAbout, type ListBuiltInViews, type WithheldCol
 import { useListTools } from './tools/useListTools'
 import { BulkEditButton, BulkEditFlow, ExportSelected } from './w2b/bulk'
 import { useInlineEdit } from './w2b/edit'
+import { usePlainCellKeys } from './w2b/cell-keys' // B-TH-245 (cp-fx13)
 import { BoardMode, CalendarMode, ModeSwitch } from './w2b/modes'
 import { offeredModes, type ListCards, type ListEdit, type ListModes, type ListQuick } from './w2b/model'
 import { QuickChips, QuickMenu } from './w2b/quick'
@@ -473,6 +474,11 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
   // B-TH-245: the row click reads the cells that edit (they keep their own click).
   const inlineRef = useRef(inline)
   inlineRef.current = inline
+  // ── B-TH-245 (cp-fx13, walk L1): while the cells edit (the tools are mounted) the grid is a spreadsheet, so the DS's reading keys
+  // are off; a cell that does not edit (the row's ⋯, a door) gets them back: Enter / Space press its button, Esc back to the cell ──
+  const [gridEl, setGridEl] = useState<HTMLDivElement | null>(null)
+  usePlainCellKeys<T>(gridEl, inline.active && !printing, { api: () => apiRef.current, edits: (row, colId) => isGroupMarker(row) || inlineRef.current.editableFor(row, colId) })
+  // ── end B-TH-245 (cp-fx13) ──
   // B-TH-225: the rest of the row opens the record; a link, a button, a box or a field in the cell keeps its own click.
   const rowClickRef = useRef(onRowClick)
   rowClickRef.current = onRowClick
@@ -679,6 +685,7 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
     const layout = long ? { domLayout: 'normal' as const, fit: false } : gridLayout(gridRows.length)
     body = (
       <div
+        ref={setGridEl /* B-TH-245 (cp-fx13): the grid whose cells that do not edit get their keys back */}
         className={printing ? 'fw-list-grid printing' : long ? 'fw-list-grid endless' : layout.fit ? 'fw-list-grid fit' : 'fw-list-grid'}
         role="region"
         aria-label={label}

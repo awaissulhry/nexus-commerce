@@ -23,6 +23,7 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { portalOn } from '../../../platform/auth/portal/store'
 import { markersOf, findMarkers, productionTwoBrands, supervisorPeople, supervisorPeopleIds, twoBrandIds, twoBrandSessions, type ProductionTwoBrands } from '../testing/two-brands'
 import { ELIGIBILITY_WORDS } from './eligible'
+import { NOT_CONFIRMED_YET_WORDS } from './assign' // B-OO-008
 import { supervisorOf } from './resolver'
 
 /**
@@ -372,12 +373,19 @@ describe('B-PR-42a an order’s own supervisor, one or many (POST /production/or
     expect(await toldSince(before)).toEqual([])
   })
 
-  it('an order not in production, one not kept yet, and a person without the measurements right are skipped in words; a viewer is forbidden; 101 orders are refused', async () => {
+  it('an order waiting for a yes, one that left production, one not kept yet, and a person without the measurements right are skipped in words; a viewer is forbidden; 101 orders are refused', async () => {
     const draft = await salesOrder(ids.a, 'PENDING_APPROVAL')
     const fresh = await salesOrder(ids.a, 'CONFIRMED')
-    const result = await ok('office.all', 'POST', ORDERS_URL, { orderIds: [draft, fresh], supervisorId: people.backupA })
+    // B-OO-008: an order that left production (shipped), written past the guards as a made-up fact.
+    const gone = await salesOrder(ids.a, 'CONFIRMED')
+    await db.admin.query(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "SalesOrder" SET status = 'SHIPPED' WHERE id = '${gone}'; COMMIT;`)
+    const result = await ok('office.all', 'POST', ORDERS_URL, { orderIds: [draft, fresh, gone], supervisorId: people.backupA })
     expect(result.changed).toEqual([])
-    expect(result.skipped.find((row: Json) => row.orderId === draft).why).toBe('This order is no longer in production.')
+    // B-OO-008 (review F10): the waiting order is not set YET, in the supervisor's own words (assign.ts, never the portal's
+    // urgency or health words); the shipped one keeps "no longer in production".
+    expect(result.skipped.find((row: Json) => row.orderId === draft).why).toBe(NOT_CONFIRMED_YET_WORDS.en)
+    expect(NOT_CONFIRMED_YET_WORDS).toEqual({ it: 'Questo ordine aspetta un sì: il supervisore si sceglie quando è confermato.', en: 'This order waits for a yes: its supervisor is set once it is confirmed.' })
+    expect(result.skipped.find((row: Json) => row.orderId === gone).why).toBe('This order is no longer in production.')
     expect(result.skipped.find((row: Json) => row.orderId === fresh).why).toMatch(/no production state yet/)
     const planner = await ok('office.all', 'POST', ORDERS_URL, { orderIds: [orderB], supervisorId: people.plannerB })
     expect(planner.skipped).toEqual([{ orderId: orderB, number: 'SEED-SO-B001', why: SUPERVISOR_REFUSAL_WORDS.NO_MEASUREMENTS.en }])

@@ -52,7 +52,7 @@ export function OverviewTab({ order, model, actions }: { order: Order; model: Or
       </div>
       {/* Order facts, with Custom fields as the pair's second card (F-OO-211); alone, Order facts takes the row. */}
       <div className="fw-so-ov-pair">
-        <FactsCard order={order} model={model} />
+        <FactsCard order={order} model={model} actions={actions /* F-OO-209: its doors */} />
       </div>
     </div>
   )

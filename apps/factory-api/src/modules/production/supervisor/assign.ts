@@ -6,6 +6,7 @@ import { assertOneParty, sharesPerParty, supervisorChangedEvent, type PartyOrder
 import { PRODUCTION_BRAND_MANAGE } from '@nexus/factory-domain/production-brand/permissions'
 import { backupProblems, effectiveSupervisor } from '@nexus/factory-domain/production-brand/supervisor'
 import { NOT_IN_PRODUCTION_WORDS } from '@nexus/factory-domain/production-brand/words'
+import type { Words } from '@nexus/factory-domain/portal/tasks/kinds' // B-OO-008
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { command, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
@@ -68,6 +69,19 @@ import { brandProductionKey, customerDefaultsOf, type Reader } from './resolver'
 
 const CUSTOMER_NOT_FOUND = 'Customer not found.'
 const ORDER_NOT_FOUND = 'Sales order not found.'
+
+// ── B-OO-008 (order overview, review F10): the supervisor's "not yet" words of an order that waits for a yes ─────────────────────
+/**
+ * An order waiting for a yes (PENDING_APPROVAL) has no production state yet, so no supervisor of its own: it is set once the order
+ * is confirmed. The ONE place of these words (office only): never production/brand urgency.ts or health.ts, whose refusals the
+ * customer's portal reads. An order that LEFT production (shipped, delivered, closed, cancelled) keeps "no longer in production".
+ * The web's catalogue copies them (People's Change… held on a waiting order; SupervisorFact's "not yet").
+ */
+export const NOT_CONFIRMED_YET_WORDS: Words = Object.freeze({
+  it: 'Questo ordine aspetta un sì: il supervisore si sceglie quando è confermato.',
+  en: 'This order waits for a yes: its supervisor is set once it is confirmed.',
+})
+// ── end B-OO-008 ──
 const NOT_THE_PERSON = (path: string, refusals: ReturnType<typeof personRefusals>): ValidationError => {
   const issues = refusalIssues(refusals, path)
   return new ValidationError(issues[0]!.message, issues)
@@ -248,7 +262,8 @@ export async function setOrderSupervisors(caller: CommandCaller, body: OrderSupe
       }
       const status = statuses.get(row.orderId) ?? ''
       if (!(KEEPER_ORDER_STATES as readonly string[]).includes(status)) {
-        skip(row, NOT_IN_PRODUCTION_WORDS.en)
+        // B-OO-008: a waiting order is not set YET (its own words); one that left production keeps the old words.
+        skip(row, status === 'PENDING_APPROVAL' ? NOT_CONFIRMED_YET_WORDS.en : NOT_IN_PRODUCTION_WORDS.en)
         continue
       }
       const state = states.get(row.orderId)

@@ -217,9 +217,22 @@ export const fieldsContract = defineContract({
 
 const recordParams = input({ recordType, recordId: id() })
 
+// ── B-OO-014 (order overview §8.3): a record's own state for its values ──
+/**
+ * Why the values may not change now: FINAL — the record never changes again (a closed or cancelled sales order; the PUT answers 409
+ * with the Orders sheet's words), ROLE — the reader lacks the record's edit right (canEdit false); null: they may.
+ */
+export const EDIT_HELD = ['FINAL', 'ROLE'] as const
+const recordState = {
+  editHeld: z.enum(EDIT_HELD).nullable(),
+  /** The record's own version its values are written at: a sales order's (send it back as `recordVersion`); null: a type that keeps none. */
+  recordVersion: z.number().int().nullable(),
+}
+// ── end B-OO-014 ──
+
 export const recordValuesContract = defineContract({
   params: recordParams,
-  response: { 200: output({ recordType, recordId: id(), fields: z.array(fieldView), values: z.array(valueView), canEdit: z.boolean() }) },
+  response: { 200: output({ recordType, recordId: id(), fields: z.array(fieldView), values: z.array(valueView), canEdit: z.boolean(), ...recordState /* B-OO-014 */ }) },
 })
 
 export const writeValuesContract = defineContract({
@@ -229,8 +242,14 @@ export const writeValuesContract = defineContract({
       .array(input({ code: code(), value: grainedJson(), version: version.nullable() }))
       .min(1)
       .max(FIELD_LIMITS.perRequest),
+    /**
+     * B-OO-014: the record's own version as read (`recordVersion` of the GET): a sales order whose version moved since is refused
+     * (409, "changed since it was read") and nothing is written; left out, only each value's version is checked. A record type
+     * that keeps no version ignores it.
+     */
+    recordVersion: version.optional(),
   }),
-  response: { 200: output({ recordType, recordId: id(), fields: z.array(fieldView), values: z.array(valueView), canEdit: z.boolean(), set: z.array(z.string()), cleared: z.array(z.string()) }) },
+  response: { 200: output({ recordType, recordId: id(), fields: z.array(fieldView), values: z.array(valueView), canEdit: z.boolean(), ...recordState /* B-OO-014 */, set: z.array(z.string()), cleared: z.array(z.string()) }) },
 })
 export type WriteValuesBody = z.infer<typeof writeValuesContract.body>
 

@@ -272,3 +272,109 @@ describe('exports and imports carry them', () => {
     expect(after.values.find((value: Json) => value.code === 'agreed_discount').value).toEqual({ amount: 1250, currency: 'EUR' })
   })
 })
+
+// ── B-OO-014 (order overview §8.3): a sales order's custom values keep the order's version and its freeze ──────────────────────
+describe('B-OO-014: a sales order’s values move its version; a closed or cancelled order refuses; other records unchanged', () => {
+  const FIELD = 't_oo014_note'
+  let closed: { id: string; number: string; status: string; companyId: string }
+  const orderVersion = async (id: string) => (await admin<{ version: number }>(`SELECT version FROM "SalesOrder" WHERE id = $1`, [id]))[0]!.version
+  // A made-up fact written past the order's own rules (its closing and cancel have their own suites).
+  const setStatus = (id: string, status: string) =>
+    admin(
+      `BEGIN; SET LOCAL session_replication_role = replica; UPDATE "SalesOrder" SET status = '${status}', "closedAt" = ${status === 'CLOSED' || status === 'CANCELLED' ? 'now()' : 'NULL'}, "cancelReason" = ${status === 'CANCELLED' ? "'Made-up: the customer withdrew it.'" : 'NULL'} WHERE id = '${id}'; COMMIT;`,
+    )
+  const noteOf = async (orderId: string) => (await ok('seller', 'GET', `/fields/values/ORDER/${orderId}`)).values.find((value: Json) => value.code === FIELD) as Json | undefined
+
+  beforeAll(async () => {
+    // A made-up text field of every company and customer, on orders, work orders and quotes.
+    for (const recordType of ['ORDER', 'WORK_ORDER', 'QUOTE']) await ok('keeper', 'POST', '/fields', { recordType, code: FIELD, type: 'TEXT', labelIt: 'Nota inventata', labelEn: 'Made-up note' }, 201)
+    closed = (await admin<typeof closed>(`SELECT id, number, status::text AS status, "companyId" FROM "SalesOrder" WHERE "tenantId" = $1 AND id <> $2 AND status NOT IN ('CLOSED', 'CANCELLED') ORDER BY number LIMIT 1`, [A.tenant, order.id]))[0]!
+    // Who limits to a customer that is not the order's; who keeps work orders and quotes.
+    SESSIONS.otherCustomer = office([grant([...ORDERS], { parties: [newId()] })])
+    SESSIONS.maker = office([grant(['workorders.view', 'workorders.manage', 'quotes.view', 'quotes.manage'])])
+  })
+
+  afterAll(async () => {
+    if (closed) await setStatus(closed.id, closed.status)
+  })
+
+  it('the GET says the order’s version and why its values may not change (none; the role)', async () => {
+    const seller = await ok('seller', 'GET', `/fields/values/ORDER/${order.id}`)
+    expect({ editHeld: seller.editHeld, recordVersion: seller.recordVersion, canEdit: seller.canEdit }).toEqual({ editHeld: null, recordVersion: await orderVersion(order.id), canEdit: true })
+    expect((await ok('reader', 'GET', `/fields/values/ORDER/${order.id}`)).editHeld).toBe('ROLE')
+  })
+
+  it('a page save moves the order’s version by one (sent or not); a stale recordVersion is refused and writes nothing; a save that changes nothing moves nothing', async () => {
+    const v0 = await orderVersion(order.id)
+    const first = await ok('seller', 'PUT', `/fields/values/ORDER/${order.id}`, { values: [{ code: FIELD, value: 'Made-up: first', version: null }], recordVersion: v0 })
+    expect(first).toMatchObject({ set: [FIELD], recordVersion: v0 + 1, editHeld: null })
+    expect(await orderVersion(order.id)).toBe(v0 + 1)
+    // Left out: only the value's version is checked; the order's version still moves.
+    const kept = (await noteOf(order.id))!
+    const second = await ok('seller', 'PUT', `/fields/values/ORDER/${order.id}`, { values: [{ code: FIELD, value: 'Made-up: second', version: kept.version }] })
+    expect(second.recordVersion).toBe(v0 + 2)
+    // The version the page read before: someone changed the order first — nothing written.
+    const now = (await noteOf(order.id))!
+    const stale = await refused('seller', 'PUT', `/fields/values/ORDER/${order.id}`, { values: [{ code: FIELD, value: 'Made-up: stale', version: now.version }], recordVersion: v0 }, 409)
+    expect(stale.code).toBe('conflict')
+    expect(stale.message).toMatch(/changed since it was read/)
+    expect((await noteOf(order.id))!.value).toBe('Made-up: second')
+    expect(await orderVersion(order.id)).toBe(v0 + 2)
+    // The same value again: nothing set, the version stays.
+    const same = await ok('seller', 'PUT', `/fields/values/ORDER/${order.id}`, { values: [{ code: FIELD, value: 'Made-up: second', version: now.version }], recordVersion: v0 + 2 })
+    expect({ set: same.set, cleared: same.cleared, recordVersion: same.recordVersion }).toEqual({ set: [], cleared: [], recordVersion: v0 + 2 })
+  })
+
+  for (const status of ['CLOSED', 'CANCELLED'] as const) {
+    it(`a ${status.toLowerCase()} order: the GET holds the edit (FINAL), the PUT is refused in the Orders sheet’s words and writes nothing`, async () => {
+      await setStatus(closed.id, status)
+      const read = await ok('seller', 'GET', `/fields/values/ORDER/${closed.id}`)
+      expect({ editHeld: read.editHeld, canEdit: read.canEdit }).toEqual({ editHeld: 'FINAL', canEdit: true })
+      const version = await orderVersion(closed.id)
+      const answer = await refused('seller', 'PUT', `/fields/values/ORDER/${closed.id}`, { values: [{ code: FIELD, value: 'Made-up: too late', version: null }], recordVersion: version }, 409)
+      expect(answer).toMatchObject({ code: 'invalid_state', message: `Sales order ${closed.number} is ${status.toLowerCase()}: it never changes.` })
+      expect(await noteOf(closed.id)).toBeUndefined()
+      expect(await orderVersion(closed.id)).toBe(version)
+      await setStatus(closed.id, closed.status)
+    })
+  }
+
+  it('another customer’s order: not found, as an unknown one', async () => {
+    const answer = await refused('otherCustomer', 'PUT', `/fields/values/ORDER/${order.id}`, { values: [{ code: FIELD, value: 'Made-up: x', version: null }] }, 404)
+    expect(answer.message).toBe((await refused('otherCustomer', 'PUT', `/fields/values/ORDER/${newId()}`, { values: [{ code: FIELD, value: 'Made-up: x', version: null }] }, 404)).message)
+  })
+
+  it('the import: a closed order’s row is refused in words (a NEW refusal); a value imported into an open order moves its version', async () => {
+    const adapter = processImporters().get('fields.orders')!
+    const caller = callerFor(database, { ...(SESSIONS.keeper as Extract<SessionContext, { audience: 'office' }>), requestId: newId() })
+    const actor = { audience: 'office' as const, tenantId: A.tenant, grants: SESSIONS.keeper!.grants }
+    const scope = { companyId: closed.companyId }
+    const row: CheckRow = { rowNumber: 2, key: { record: closed.number, field: FIELD }, values: { value: 'Made-up: imported' } }
+    await setStatus(closed.id, 'CLOSED')
+    const words = `Sales order ${closed.number} is closed: it never changes.`
+    expect(await caller.withClient((client) => adapter.check!(client, [row], scope, actor))).toEqual([[{ column: 'record', message: words }]])
+    // Closed between the check and the write: the write is refused too (a conflict, so the import fails in words, never silently).
+    await expect(command(caller, { name: 'imports.applyBatch', input: { test: 'B-OO-014 closed' } }, async (tools) => adapter.write(tools, { action: 'CREATE', key: row.key, recordId: null, before: {}, values: row.values }, scope))).rejects.toMatchObject({ code: 'conflict', message: words })
+    expect(await noteOf(closed.id)).toBeUndefined()
+    await setStatus(closed.id, closed.status)
+    const before = await orderVersion(closed.id)
+    expect(await caller.withClient((client) => adapter.check!(client, [row], scope, actor))).toEqual([[]])
+    await command(caller, { name: 'imports.applyBatch', input: { test: 'B-OO-014 open' } }, async (tools) => adapter.write(tools, { action: 'CREATE', key: row.key, recordId: null, before: {}, values: row.values }, scope))
+    expect((await noteOf(closed.id))!.value).toBe('Made-up: imported')
+    expect(await orderVersion(closed.id)).toBe(before + 1)
+  })
+
+  it('a work order’s and a quote’s values keep their records’ versions as they were (no recordVersion of their own)', async () => {
+    const workOrder = (await admin<{ id: string; version: number }>(`SELECT id, version FROM "WorkOrder" WHERE "tenantId" = $1 ORDER BY number LIMIT 1`, [A.tenant]))[0]!
+    const quote = (await admin<{ id: string; version: number }>(`SELECT id, version FROM "Quote" WHERE "tenantId" = $1 ORDER BY number LIMIT 1`, [A.tenant]))[0]!
+    for (const [recordType, table, record] of [['WORK_ORDER', 'WorkOrder', workOrder], ['QUOTE', 'Quote', quote]] as const) {
+      const read = await ok('maker', 'GET', `/fields/values/${recordType}/${record.id}`)
+      expect({ editHeld: read.editHeld, recordVersion: read.recordVersion }, recordType).toEqual({ editHeld: null, recordVersion: null })
+      // A recordVersion sent for a record that keeps none is ignored.
+      const written = await ok('maker', 'PUT', `/fields/values/${recordType}/${record.id}`, { values: [{ code: FIELD, value: `Made-up: ${recordType}`, version: null }], recordVersion: 1 })
+      expect({ set: written.set, recordVersion: written.recordVersion }, recordType).toEqual({ set: [FIELD], recordVersion: null })
+      expect((await admin<{ version: number }>(`SELECT version FROM "${table}" WHERE id = $1`, [record.id]))[0]!.version, recordType).toBe(record.version)
+    }
+  })
+})
+// ── end B-OO-014 ──
