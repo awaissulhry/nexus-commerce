@@ -16,6 +16,7 @@ import { CancelDialog, CloseLinesDialog, CompareDialog, CopyQuoteDialog, ReopenL
 import { SplitOrderDialog } from './SplitOrderDialog' // F-OP-111
 import { RequestedDateDialog } from './RequestedDateDialog' // F-OO-144
 import { OrderNoteDialog } from './OrderNoteDialog' // F-OO-210
+import { followUpOf } from '../overview/dates' // F-OO-143: the promise dialog opened by Decide… names the customer's refusal
 
 // ---- F-CP-108 (customer page plan C2b; lane agreement (a), the order lead's yes): TYPE ONLY — Mark ready, Close order (and the Cancel
 // in DailyDialogs) are exported with the narrow part of the record's model and actions they read, so the Orders sheet's row mounts
@@ -144,13 +145,18 @@ function PromiseDialog({ order, model, actions }: { order: Order; model: OrderRe
   const firstProblem = problems.date ?? problems.lines ?? problems.reason ?? null
   const held = model.busy ? t('held.busy') : firstProblem ? t(firstProblem) : null
   const go = () => actions?.onPromise?.({ date, reason: reason.trim(), lineIds: scope === 'lines' ? lineIds : null })
+  // F-OO-143 (replaces F-OP-105): opened by Next dates' Decide… — the customer's refusal said first; the new date closes its follow-up in
+  // the same command (B-OP-025: the whole order's, or with chosen lines only the refused line's). The ONE dialog: no second editor.
+  const followUp = followUpOf(model.dialog)
+  const promised = order.promiseDate ? formatDate(dayInstant(order.promiseDate), { locale }) : '—'
   return (
     <Frame title={t('promise.title', { number: order.number })} held={held} go={go} goLabel={model.busy ? t('common.working') : t('promise.go')} onClose={() => actions?.onDialog?.(null)} problem={<DialogProblem model={model} />}>
+      {followUp && <Banner tone="warning" title={t(scope === 'lines' ? 'dates.refusedDialogLines' : 'dates.refusedDialog', { customer: order.party?.legalName ?? '', current: promised })} />}
       <KeyValue
         dense
         labelCase="sentence"
         items={[
-          { label: t('dates.promised'), value: order.promiseDate ? formatDate(dayInstant(order.promiseDate), { locale }) : '—' },
+          { label: t('dates.promised'), value: promised },
           { label: t('dates.firstPromised'), value: order.originalPromiseDate ? formatDate(dayInstant(order.originalPromiseDate), { locale }) : '—' },
         ]}
       />
