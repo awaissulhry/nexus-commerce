@@ -9,6 +9,7 @@ import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, SegmentedControl, Select, Tag } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
+import { useCardList } from '@nexus/ui/grid/card-list/index' // F-CP-107 (cp-fx16): the phone card keeps a preset's table-wide columns
 import { useListSearch } from '../../../../../list-frame/search/use-list-search' // F-SA-223
 import { listKeys, type ListKey } from '../../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
@@ -126,6 +127,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const wide = useWide(model.wide) // B-TH-225: Ordered, Margin %, Priority, Season and From quote at 1920
   // F-CP-107 (cp-fx16): is the Status column on screen (the frame tells; a person's Customise wins)? Until it tells: the preset's.
   const [statusShown, setStatusShown] = useState(() => statusShownOf(model.preset ?? null))
+  const phone = useCardList() // the list frame's own rule (cards below 720 px)
   // ---- end F-CP-107 (cp-fx16)
   const [viewer, setViewer] = useState<string | null>(model.viewerOpen ?? null)
   const latest = useRef({ model, actions })
@@ -246,9 +248,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // F-SA-212: the phone card's aside is the picture part at its phone size (the DS card's draw override).
   const cardFields = useMemo(() => cardFieldsOf((row) => <RecordPicture source="order" recordId={row.id} number={row.number} picture={row.picture} styleCount={row.styleCount} size="phone" read={latest.current.actions?.readPictures} demo={latest.current.model.demoPictures?.[row.id]} onOpen={() => setViewer(row.id)} />), [])
   const columns = useMemo<ColDef<OrderRow>[]>(
-    () => sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer: setViewer, statusShown /* F-CP-107 (cp-fx16) */ }),
+    () => sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer: setViewer, statusShown, phone /* F-CP-107 (cp-fx16) */ }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
-    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, r /* F-SA-281 */, model.bulkCan?.task /* F-SA-281 */, statusShown /* F-CP-107 (cp-fx16): Where it is redraws when Status comes or goes */],
+    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, r /* F-SA-281 */, model.bulkCan?.task /* F-SA-281 */, statusShown /* F-CP-107 (cp-fx16): Where it is redraws when Status comes or goes */, phone /* F-CP-107 (cp-fx16) */],
   )
 
   // F-SA-276: the host's default view is not a narrowing; the waiting term is.
@@ -842,6 +844,8 @@ interface ColumnsInput {
   onViewer: (id: string) => void
   /** F-CP-107 (cp-fx16): the Status column is on screen — Where it is then never repeats the status of a row with no stage. */
   statusShown?: boolean
+  /** F-CP-107 (cp-fx16): the phone card list (below 720 px) — a preset's table-wide columns show on the cards. */
+  phone?: boolean
 }
 
 /**
@@ -877,8 +881,8 @@ function PictureViewerFor({ row, model, actions, onClose }: { row: OrderRow; mod
  * tab); Brand, Status and Company narrow the sheet (the funnel mark); a cell the reader may not open says why on hover; the
  * rest of the row opens the order. Money columns are absent without their grain, never zero.
  */
-function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown = false }: ColumnsInput): ColDef<OrderRow>[] {
-  const input: ColumnsInput = { t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown }
+function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown = false, phone = false }: ColumnsInput): ColDef<OrderRow>[] {
+  const input: ColumnsInput = { t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown, phone }
   const { prefix, can } = model
   const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
   const act = () => latest.current.actions
@@ -1237,7 +1241,7 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
     ...laterColumns, // B-TH-244
     { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
   ] as ColDef<OrderRow>[])
-    .map((column) => withPreset(column, model.preset ?? null, wide)) // F-SA-276
+    .map((column) => withPreset(column, model.preset ?? null, wide, phone)) // F-SA-276; F-CP-107 (cp-fx16): + the phone card
     .map((column) => withMovedMark(column, () => latest.current.model.commands?.moved ?? [])) // F-CP-108
 }
 
@@ -1253,10 +1257,13 @@ export function withMovedMark(column: ColDef<OrderRow>, moved: () => readonly st
 export const statusShownOf = (preset: OrdersListModel['preset'] | null): boolean => !preset || preset.shown.includes('status')
 
 /** F-SA-276: the host's first columns (its view's preset; from 1800 px its wide ones too); ⋯ always; a person's Customise wins. */
-export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean): ColDef<OrderRow> {
+export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean, phone = false): ColDef<OrderRow> {
   if (!preset || column.colId === 'more') return column
   const id = column.colId ?? ''
-  return { ...column, hide: !(preset.shown.includes(id) || (wide && !!preset.wide?.includes(id))) }
+  // F-CP-107 (cp-fx16): a table-wide column of `shown` leaves the table below 1800 px (the phone card keeps it); the host's own min width.
+  const first = preset.shown.includes(id) && (wide || phone || !preset.tableWide?.includes(id))
+  const min = preset.min?.[id]
+  return { ...column, hide: !(first || (wide && !!preset.wide?.includes(id))), ...(min ? { minWidth: min } : {}) }
 }
 // ── end B-TH-225 ──
 

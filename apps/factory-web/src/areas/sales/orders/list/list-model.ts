@@ -177,7 +177,16 @@ export interface OrdersListModel {
   /** F-CP-103 (review A4): the count beside each Views ▾ item, by view id, from the host's one count read (absent id: no number). */
   viewCounts?: Readonly<Record<string, number>> | null
   /** The columns the host shows at first, and from 1800 px (a person's Customise wins); absent: the sheet's own. */
-  preset?: { readonly shown: readonly string[]; readonly wide?: readonly string[] } | null
+  preset?: {
+    readonly shown: readonly string[]
+    readonly wide?: readonly string[]
+    // ---- F-CP-107 (cp-fx16): the number and the status whole beside the dock (oo-walk 15 b) ----
+    /** Of `shown`, the ones the TABLE shows only from 1800 px (beside the dock their room goes to the number and the status); the phone card keeps them. */
+    readonly tableWide?: readonly string[]
+    /** The host's own minimum widths by column id (the honest room of its longest words), over the sheet's. */
+    readonly min?: Readonly<Record<string, number>>
+    // ---- end F-CP-107 (cp-fx16)
+  } | null
   /** A real link on the toolbar's right ("Work orders of <customer> ›"). */
   toolbarLink?: { readonly href: string; readonly label: string } | null
   /**

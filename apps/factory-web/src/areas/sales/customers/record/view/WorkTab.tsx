@@ -133,15 +133,35 @@ export function columnSetOf(asked: string | null | undefined, notEqual: boolean,
 export const colsTermOf = (set: ColumnSet, notEqual: boolean): ColumnSet | null => (set === viewColumnSet(notEqual) ? null : set)
 // ---- end F-CP-105
 
+// ---- F-CP-107 (cp-fx16; oo-walk 15 b): the number and the status whole on All orders, beside the dock (a third of the page) ----
+/**
+ * The honest room of the longest words, with the cell's padding (measured at 1440): the number — a seed's "SEED-SO-W39-01" 142 px
+ * (a real "SO-2026-0089" 126); the status — "In attesa di approvazione" 195 px ("Waiting for a yes" 151). On this page's sheet
+ * only: Sales › Orders keeps the sheet's own widths (no room there at 1440 for 100 px more).
+ */
+export const WORK_MIN: Readonly<Record<string, number>> = Object.freeze({ number: 144, status: 196 })
+/**
+ * All orders beside the dock: @1440 (the body 863 px) select 43 + Number 144 + Status 196 + Where it is 150 + Promised 108 + New
+ * messages 136 + ⋯ 64 = 841 — Picture shows in the table from 1800 px (the phone card keeps it); @1920 (1183 px) + Picture 76 +
+ * Waiting on 136 + Priority 108 = 1161 (Deposit and Balance in Customise; Balance with the Money columns).
+ */
+export const ALL_ORDERS_PRESET: NonNullable<OrdersListModel['preset']> = Object.freeze({
+  shown: Object.freeze(['picture', 'number', 'status', 'whereItIs', 'promised', 'newMessages']),
+  tableWide: Object.freeze(['picture']),
+  wide: Object.freeze(['waitingOn', 'priority']),
+  min: WORK_MIN,
+})
+// ---- end F-CP-107 (cp-fx16)
+
 /**
  * The columns a view shows at first (11-customer-page §3.5; a person's Customise wins): In production — no Status (every row is in
- * production); All orders — Status, Waiting on from 1800 px; the other views — Status and Waiting on. Customer and Brand never (the
- * customer is the page's). F-CP-141: the money columns (MONEY_PRESET) when `money` — the Not equal view; All orders keeps its own
- * (review E5: money comes with the Not equal view or the Work · Money toggle, never unasked).
+ * production); All orders — Status, Waiting on from 1800 px (F-CP-107 (cp-fx16): ALL_ORDERS_PRESET); the other views — Status and
+ * Waiting on. Customer and Brand never (the customer is the page's). F-CP-141: the money columns (MONEY_PRESET) when `money` — the Not
+ * equal view; All orders keeps its own (review E5: money comes with the Not equal view or the Work · Money toggle, never unasked).
  */
 export function workPreset(rows: RowView, waiting: 'us' | null, money = false): NonNullable<OrdersListModel['preset']> {
   if (money) return MONEY_PRESET // F-CP-141
-  if (rows === 'all' && !waiting) return { shown: ['picture', 'number', 'status', 'whereItIs', 'promised', 'newMessages'], wide: ['waitingOn', 'priority', 'deposit', 'balance'] }
+  if (rows === 'all' && !waiting) return ALL_ORDERS_PRESET // F-CP-107 (cp-fx16)
   if (rows === 'IN_PRODUCTION' && !waiting) return { shown: ['picture', 'number', 'whereItIs', 'promised', 'waitingOn', 'newMessages'], wide: ['priority', 'deposit', 'balance', 'supervisor'] }
   return { shown: ['picture', 'number', 'status', 'whereItIs', 'promised', 'waitingOn', 'newMessages'], wide: ['priority', 'deposit', 'balance', 'supervisor'] }
 }
