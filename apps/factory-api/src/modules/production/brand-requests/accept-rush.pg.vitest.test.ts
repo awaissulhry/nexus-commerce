@@ -4,7 +4,7 @@ import { businessDate } from '@nexus/factory-domain/core/time'
 import { addDays } from '@nexus/factory-domain/sales/quotes/quotes'
 import { freshGuard } from '../../../platform/auth/portal/testing/portal'
 import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
-import { urgencyWorld, type UrgencyWorld } from '../testing/urgency-world'
+import { addOrderPromise, urgencyWorld, type UrgencyWorld } from '../testing/urgency-world' // op-fx13: + the promise addOrder gives
 
 /**
  * B-PR-27b — accepting a customer's "Urgent – asked" and another sample round does the work (production plan §3 "Brand-slot rule":
@@ -121,8 +121,8 @@ describe('B-PR-27b: accepting "Urgent – asked" and another sample round does t
     // A had two Urgent orders (quota 3): this one is the third, last in A's own list, agreed with us.
     expect(accepted.done).toMatchObject({ kind: 'RUSH', urgency: { urgency: 'URGENT', urgentRank: 3, already: false, use: { used: 3, max: 3, agreed: 1, over: false, words: { en: '3 of 3 · 1 agreed with us' } } }, rushed: [], rushSkipped: null })
     expect(await urgencyOf(orders.urgent.orderId)).toMatchObject({ urgency: 'URGENT', urgentRank: 3, urgencySetBy: 'FACTORY', urgencySetById: planner.id })
-    // The date asked, proposed to sales as the re-promise of every open size promised later (the order's 20 Dec).
-    expect(accepted.done.repromise.proposals).toEqual([expect.objectContaining({ orderLineId: orders.urgent.lineId, sizes: [{ size: '50', from: '2026-12-20', to: wanted }, { size: '52', from: '2026-12-20', to: wanted }] })])
+    // The date asked, proposed to sales as the re-promise of every open size promised later (the order's promise, addOrderPromise()).
+    expect(accepted.done.repromise.proposals).toEqual([expect.objectContaining({ orderLineId: orders.urgent.lineId, sizes: [{ size: '50', from: addOrderPromise(), to: wanted }, { size: '52', from: addOrderPromise(), to: wanted }] })])
     const [proposal] = await proposalsOf(orders.urgent.orderId)
     expect(proposal!.after).toMatchObject({ orderLineId: orders.urgent.lineId, reasonCode: 'YOUR_CHANGE' })
     expect((await admin('SELECT "recordType", "recordId"::text AS "recordId" FROM "Task" WHERE id = $1', [proposal!.after.proposalId]))[0]).toEqual({ recordType: 'SalesOrder', recordId: orders.urgent.orderId })
@@ -201,7 +201,7 @@ describe('B-PR-27b: accepting "Urgent – asked" and another sample round does t
     expect((await send(buyerA, 'POST', `/portal/approvals/${approvalId}/answer`, { decision: 'APPROVED', typedName: 'Amy Buyer', version: page.request.version })).status).toBe(200)
     const agreed = (await ok(planner, `/production/brand-requests/${rush.id}`)).request
     const accepted = await accept(planner, rush.id, { version: agreed.version })
-    expect(accepted.done.repromise.proposals[0].sizes).toEqual([{ size: '50', from: '2026-12-20', to: offered }, { size: '52', from: '2026-12-20', to: offered }])
+    expect(accepted.done.repromise.proposals[0].sizes).toEqual([{ size: '50', from: addOrderPromise(), to: offered }, { size: '52', from: addOrderPromise(), to: offered }]) // op-fx13
   })
 
   it('another sample round: a round of the kind asked for A, named on the request; by sales.samples.manage only', async () => {

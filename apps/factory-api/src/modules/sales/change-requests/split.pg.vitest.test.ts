@@ -4,7 +4,7 @@ import { businessDate } from '@nexus/factory-domain/core/time'
 import { addDays } from '@nexus/factory-domain/sales/quotes/quotes'
 import { freshGuard } from '../../../platform/auth/portal/testing/portal'
 import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
-import { urgencyWorld, type UrgencyWorld } from '../../production/testing/urgency-world'
+import { addOrderPromise, urgencyWorld, type UrgencyWorld } from '../../production/testing/urgency-world' // op-fx13: + the promise addOrder gives
 
 /**
  * B-PR-27b — accepting a customer's "ship what is ready" (SPLIT_SHIPMENT) on Sales' accept (production plan §3 "Who answers / sets":
@@ -88,12 +88,12 @@ describe('B-PR-27b: ship what is ready, accepted by Sales', { timeout: SLOW_TEST
     const accepted = await send(sales, 'POST', `/sales/change-requests/${id}/accept`, { version: 1, answer: 'Made-up: the first pieces go next week.' })
     expect(accepted.status, JSON.stringify(accepted.body)).toBe(200)
     expect(accepted.body.request).toMatchObject({ status: 'ACCEPTED' })
-    expect(accepted.body.split).toMatchObject({ shipComplete: false, proposals: [{ orderLineId: orders.split.lineId, sizes: [{ size: '50', from: '2026-12-20', to: first }] }], skipped: [] })
+    expect(accepted.body.split).toMatchObject({ shipComplete: false, proposals: [{ orderLineId: orders.split.lineId, sizes: [{ size: '50', from: addOrderPromise(), to: first }] }], skipped: [] }) // op-fx13
     expect((await shipCompleteOf(orders.split.orderId)).shipComplete).toBe(false)
     expect((await admin(`SELECT after FROM "AuditLog" WHERE action = 'orders.shipAsReady' AND "recordId" = $1`, [orders.split.orderId]))[0]).toMatchObject({ after: { shipComplete: false, requestId: id } })
     // Only the first part's size is re-promised (52 keeps its date).
     const proposal = (await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE action = 'planning.promise.propose' AND "recordId" = $1`, [orders.split.orderId]))[0]!
-    expect(proposal.after.sizes).toEqual([{ size: '50', from: '2026-12-20', to: first }])
+    expect(proposal.after.sizes).toEqual([{ size: '50', from: addOrderPromise(), to: first }]) // op-fx13
     expect((await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'order_change_request.answered' AND payload->>'requestId' = $1`, [id]))[0]!.payload).toMatchObject({ kind: 'SPLIT_SHIPMENT', answer: 'ACCEPTED', partyId: world.ids.a })
     // The customer: its order ships in parts already (no second split asked).
     const rules = await ok(buyerA, `/portal/sales-orders/${orders.split.orderId}/change-requests/rules`)

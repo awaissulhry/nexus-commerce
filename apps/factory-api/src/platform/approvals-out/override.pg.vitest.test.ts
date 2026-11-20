@@ -397,8 +397,8 @@ describe('B-PR-30b put the customer\'s answer back', { timeout: SLOW_TEST_TIMEOU
   it("A's refusal of a new date put back: the date stands, A is asked again (its link once), the order no longer waits on us; a date moved since: HELD", async () => {
     const order = await world.addOrder(world.ids.a, 'RV3', '2026-11-06')
     await world.replica([{ sql: 'UPDATE "SalesOrderLine" SET "siteId" = $1 WHERE id = $2', values: [world.w.siteId, order.lineId] }])
-    // op-fx12: a new date is counted from the order's promise as made (addOrder: a fixed 20 Dec; today once it has passed), never
-    // from today alone: on 20 Nov in Rome "today + 30" WAS that promise, refused 400 "Size 50 is promised for 2026-12-20 already."
+    // op-fx12: a new date is counted from the order's promise as made (addOrder; today once it has passed), never from today alone:
+    // on 20 Nov in Rome "today + 30" WAS the then fixed 20 Dec, refused 400 "Size 50 is promised for 2026-12-20 already."
     const promised = (await one<{ day: string }>('SELECT "promiseDate"::text AS day FROM "SalesOrder" WHERE id = $1', [order.orderId])).day
     const newDate = async (size: string, days: number) => {
       const { proposal } = await session('office.all', 'POST', `/planning/promises/order-lines/${order.lineId}/re-promise`, 200, { sizes: [{ size, date: plusDays(promised > today ? promised : today, days) }], reasonCode: 'CAPACITY' })
