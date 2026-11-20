@@ -12,7 +12,7 @@ import { GATE, PEOPLE } from './fixtures' // F-OO-208
 import { datesSchema, peopleSchema, productionSchema } from './api' // F-OO-208
 import { orderSchema, type Order } from '../../api' // F-OO-208
 import { mergeRead } from './model' // F-OO-100: each section's own rules are tested in its file (where, progress, people, dates, linked, facts)
-import { changesBadgeOf, rowWordsOf, waitingCardOf, waitingOf, whoActsNextOf, type WaitingRow } from './model' // F-OP-103
+import { changesBadgeOf, changesDotOf, rowWordsOf, waitingCardOf, waitingOf, type WaitingRow } from './model' // F-OP-103 (F-OO-202: whoActsNextOf is gone)
 import { orderWaitingOf } from './model' // F-OP-301
 
 /**
@@ -90,9 +90,11 @@ describe('the Overview cases draw in both languages, never a 0 for a step not co
 
 // ---- F-SA-233: People, Next dates, Requests & changes, Linked records, Order facts ------------------------------------------------
 describe('Overview’s facts (F-SA-233)', () => {
-  it('requests & changes: the ONE waiting list on us and on the customer (F-OP-103), still to do, the latest amendment', () => {
+  // F-OO-202: rewritten — the deposit is a hold (Where it is now's strip), so the card lists no row of it: it holds requests only.
+  it('requests & changes: the ONE waiting list\'s request rows on us and on the customer (F-OP-103), still to do, the latest amendment', () => {
     const rows = waitingOf(CONFIRMED_READ, { requests: [], approvals: [], recordPayment: false, locale: 'en' })
-    expect(waitingCardOf(rows, CONFIRMED_READ, { amendments: { count: 2, latestRevision: 2, latestAt: '2026-11-12T16:48:00Z' } })).toMatchObject({ onUs: [], onCustomer: [{ kind: 'DEPOSIT', on: 'BRAND' }], still: [], latest: { revision: 2, at: '2026-11-12T16:48:00Z' }, nothing: false })
+    expect(rows).toMatchObject([{ kind: 'DEPOSIT', on: 'BRAND', place: 'HOLD' }])
+    expect(waitingCardOf(rows, CONFIRMED_READ, { amendments: { count: 2, latestRevision: 2, latestAt: '2026-11-12T16:48:00Z' } })).toMatchObject({ onUs: [], onCustomer: [], still: [], latest: { revision: 2, at: '2026-11-12T16:48:00Z' }, nothing: true })
     expect(waitingCardOf([], null, { amendments: { count: 0, latestRevision: null, latestAt: null } })).toEqual({ onUs: [], onCustomer: [], still: [], latest: null, nothing: true })
   })
 
@@ -195,29 +197,31 @@ describe('F-OP-103: the ONE waiting list — every blocker and open yes is one r
     expect(waitingOf(headlineWith([]), { ...inputs, approvals: [yesTask()], locale: 'it' })[0]!.words).toMatchObject({ phrase: { params: { kind: 'Modifica ordine' } } })
   })
 
-  it('oldest first (no known start last); on-us and on-customer counts; who acts next is the card\'s first row', () => {
+  // F-OO-202: rewritten — who acts next is gone (F14: the keeper's `waitingOn` stays the one rule, for the orders list and the portal);
+  // the card counts the request rows only; the holds and the dates are the same call's own lists, oldest first too.
+  it('oldest first (no known start last); the card counts the request rows on us and on the customer; holds and dates apart', () => {
     const rows = waitingOf(all, { ...inputs, approvals: [yesTask()] })
     const since = rows.map((row) => row.since)
     const known = since.filter((value): value is string => value !== null)
     expect(known).toEqual([...known].sort())
     expect(since.slice(-2)).toEqual([null, null])
-    expect(rows[0]).toMatchObject({ kind: 'DEPOSIT', since: '2026-10-28T15:00:00Z' })
+    expect(rows[0]).toMatchObject({ kind: 'DEPOSIT', since: '2026-10-28T15:00:00Z', place: 'HOLD' })
     const card = waitingCardOf(rows, null, { amendments: { count: 0, latestRevision: null, latestAt: null } })
-    expect(card.onUs.length).toBe(rows.filter((row) => row.on === 'US').length)
-    expect(card.onUs.map((row) => row.kind)).toContain('YES')
-    expect(card.onCustomer.map((row) => row.kind)).toEqual(['DEPOSIT', 'BRAND_PAUSE', 'APPROVAL', 'PARTNER_TASK'])
-    // A supplier's or a workshop's wait is production's: in neither count (Who acts next still names it when it comes first).
+    expect(card.onUs.map((row) => [row.kind, row.sub])).toEqual([['BRAND_REQUEST', 'PROBLEM'], ['YES', null], ['BRAND_REQUEST', 'COUNTER'], ['BRAND_REQUEST', 'COUNTER'], ['BRAND_REQUEST', 'REQUEST']])
+    expect(card.onCustomer.map((row) => row.kind)).toEqual(['APPROVAL', 'PARTNER_TASK'])
+    // A supplier's or a workshop's wait is a date (Next dates): in neither count.
     expect([...card.onUs, ...card.onCustomer].some((row) => row.on === 'SUPPLIER' || row.on === 'WORKSHOP')).toBe(false)
-    const next = whoActsNextOf(rows, HEADLINE)
-    expect(next.row).toBe(rows[0])
-    expect(next).toMatchObject({ who: 'BRAND', since: '2026-10-28T15:00:00Z', kind: 'record' })
-    expect(whoActsNextOf(waitingOf(headlineWith([]), { ...inputs, approvals: [yesTask()] }), HEADLINE)).toMatchObject({ who: 'US', kind: 'request' })
+    expect(rows.filter((row) => row.place === 'HOLD').map((row) => row.kind)).toEqual(['DEPOSIT', 'QUALITY_HOLD', 'BRAND_PAUSE', 'NO_MOVE'])
+    expect(rows.filter((row) => row.place === 'DATE').map((row) => [row.kind, row.sub])).toEqual([['SUBCONTRACT', null], ['GATE', null], ['BRAND_REQUEST', 'REPROMISE'], ['MATERIAL_SHORT', null]])
   })
 
-  it('R-22: the Changes badge counts the card\'s own rows — waiting on us, on the customer, still to do', () => {
+  it('R-22: the Changes badge counts the card\'s own rows — waiting on us, on the customer, still to do (F-OO-202: requests only)', () => {
     const rows = waitingOf(all, inputs)
     const card = waitingCardOf(rows, { ...PRODUCTION_READ, changes: { openRequests: [], stillToDo: { rows: [{ kind: 'WORK_ORDER_CHANGE', ref: null, words: { en: 'x', it: 'x' }, since: '2026-11-17T13:02:00Z', waitingOn: 'PLANNER', mayAct: true, requestId: null }], count: 1, workOrdersLeftOut: 0 } } }, { amendments: { count: 0, latestRevision: null, latestAt: null } })
     expect(changesBadgeOf(card)).toBe(card.onUs.length + card.onCustomer.length + 1)
+    // F-OO-202: 4 requests on us, 2 on the customer, 1 still — never a hold or a date (of the 14 rows only the 6 requests count; it was 13).
+    expect(changesBadgeOf(card)).toBe(rows.filter((row) => row.place === 'REQUEST').length + 1)
+    expect(changesBadgeOf(card)).toBe(7)
     expect(changesBadgeOf(waitingCardOf([], null, { amendments: { count: 0, latestRevision: null, latestAt: null } }))).toBe(0)
   })
 
@@ -357,30 +361,38 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
     ({ status: 'ready', read: { ...PRODUCTION_READ, headline: { ...HEADLINE, waiting: { ...HEADLINE.waiting, ...waiting, blockers } }, changes: { openRequests: [], stillToDo: { rows: still, count: still.length, workOrdersLeftOut: 0 } } } }) as never
   const page = (production: unknown, requests: unknown[] | null = [so2Request]) => ({ production: production as never, requests: requests ? { value: requests as never } : null, can: { recordPayment: false } })
 
-  it('SO-0002: two gates and a change request wait on us, a yes we asked waits on the customer — 3 + 1 everywhere, the badge 4', () => {
-    const waiting = orderWaitingOf({ openApprovals: [], amendments }, page(readWith(SO2_BLOCKERS, { on: 'BRAND', since: '2026-11-05T09:00:00Z' })), 'en')
+  // F-OO-202: rewritten (D8) — the two gates are dates (Next dates), so the card and the badge count the change request on us, the yes we
+  // asked of the customer and Still to do: SEED-SO-0002's 1 + 1 + 1 = 3 (it was 5: the two gates counted too).
+  it('SO-0002: a change request waits on us, a yes we asked on the customer, one step still to do — the badge 3; its two gates are dates', () => {
+    const still = { kind: 'WORK_ORDER_CHANGE', ref: null, words: { en: 'SEED-WO-0001: make 54 → 0', it: 'SEED-WO-0001: fai 54 → 0' }, since: '2026-11-16T09:00:00Z', waitingOn: 'PLANNER', mayAct: false, requestId: null }
+    const waiting = orderWaitingOf({ openApprovals: [], amendments }, page(readWith(SO2_BLOCKERS, { on: 'BRAND', since: '2026-11-05T09:00:00Z' }, [still])), 'en')
     if (waiting.status !== 'ready') throw new Error('ready')
-    expect(waiting.card.onUs.map((row) => row.kind)).toEqual(['GATE', 'GATE', 'BRAND_REQUEST'])
+    expect(waiting.card.onUs.map((row) => row.kind)).toEqual(['BRAND_REQUEST'])
     expect(waiting.card.onCustomer.map((row) => [row.kind, row.ref])).toEqual([['APPROVAL', { type: 'ApprovalRequest', id: '0190f0e2-6262-7000-8000-000000000001' }]])
-    expect(changesBadgeOf(waiting.card)).toBe(4)
-    // Who acts next is the card's first row (the oldest gate), its since the card's.
-    expect(waiting.next).toMatchObject({ who: 'US', since: '2026-11-02T08:00:00Z', row: waiting.rows[0] })
+    expect(waiting.card.still).toHaveLength(1)
+    expect(changesBadgeOf(waiting.card)).toBe(3)
+    // The old count (every row + still) was 5; the gates are Next dates' own rows now, counted there and only there.
+    expect(waiting.rows.length + waiting.card.still.length).toBe(5)
+    expect(waiting.dates.map((row) => [row.kind, row.ref?.id])).toEqual([['GATE', '0190f0e2-6161-7000-8000-000000000001'], ['GATE', '0190f0e2-6161-7000-8000-000000000002']])
+    expect(waiting.holds).toEqual([])
     // The change request's row opens the review window with the request the page read.
-    expect(waiting.card.onUs[2]!.door).toMatchObject({ kind: 'answer', request: { id: '0190f0e2-3080-7000-8000-000000000821' } })
+    expect(waiting.card.onUs[0]!.door).toMatchObject({ kind: 'answer', request: { id: '0190f0e2-3080-7000-8000-000000000821' } })
   })
 
-  it('SO-0003: nothing waits — Who acts next says nobody (the card\'s "Nothing waits"), never the kept "Waiting on us · 5 d"', () => {
+  // F-OO-202: rewritten — no "who acts next" any more (F14): the call says nothing waits in every place; the kept wait is read by nobody.
+  it('SO-0003: nothing waits — no request, no hold, no date, badge 0 (never the kept "Waiting on us · 5 d"); a step still to do counts', () => {
     const waiting = orderWaitingOf({ openApprovals: [], amendments }, page(readWith([], { on: 'US', since: '2026-11-14T17:00:00Z' }), null), 'en')
     if (waiting.status !== 'ready') throw new Error('ready')
     expect(waiting.card.nothing).toBe(true)
     expect(changesBadgeOf(waiting.card)).toBe(0)
-    expect(waiting.next).toEqual({ who: null, since: null, kind: 'record', row: null, still: null })
-    // A Still to do row (the card's third list) names who acts when no waiting row stands: ours, or the customer's.
+    expect([waiting.rows, waiting.holds, waiting.dates]).toEqual([[], [], []])
+    expect('next' in waiting).toBe(false)
+    // A Still to do row (the card's third list) is something to do: the card is not empty and the badge counts it.
     const still = { kind: 'EXTRA_PIECES', ref: null, words: { en: 'Scrap 2', it: 'Scarta 2' }, since: '2026-11-17T13:02:00Z', waitingOn: 'CUSTOMER', mayAct: false, requestId: null }
     const withStill = orderWaitingOf({ openApprovals: [], amendments }, page(readWith([], { on: 'US', since: '2026-11-14T17:00:00Z' }, [still]), null), 'en')
     if (withStill.status !== 'ready') throw new Error('ready')
     expect(withStill.card.nothing).toBe(false)
-    expect(withStill.next).toMatchObject({ who: 'BRAND', since: '2026-11-17T13:02:00Z', still })
+    expect(changesBadgeOf(withStill.card)).toBe(1)
   })
 
   it('walk #3: before the production read is in, nothing is claimed (loading); a failed read says so; never "Nothing waits"', () => {
@@ -396,14 +408,16 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
     expect(textOf(draw('f-op-301-reading-changes'))).toContain('Loading Waiting on the customer')
   })
 
-  it('the pages agree: Overview says 3 + 1, the Changes tab lists the same 3 and the yes we asked; SO-0003\'s header says nothing waits', () => {
+  // F-OO-202: rewritten — the cards and the Changes tab list the request rows (the two gates went to Next dates): 1 + 1 on both pages.
+  it('the pages agree: Overview says 1 + 1, the Changes tab lists the same request and the yes we asked; SO-0003\'s header says nothing waits', () => {
     const overview = textOf(draw('f-op-301-so2-overview'))
-    expect(overview).toContain('Waiting on us: 3')
+    expect(overview).toContain('Waiting on us: 1')
     expect(overview).toContain('Waiting on Moto Demo S.r.l.: 1')
+    expect(overview).not.toContain('Waiting on us: 3')
     const changes = textOf(draw('f-op-301-so2-changes'))
-    expect(changes).toContain('3 waiting')
-    expect(changes).toContain('1 waiting')
-    expect(changes).toContain('A gate is not passed yet')
+    expect(changes.split('1 waiting').length - 1).toBe(2)
+    expect(changes).not.toContain('3 waiting')
+    expect(changes).not.toContain('A gate is not passed yet')
     expect(changes).toContain("Waiting for the customer's yes")
     expect(changes).not.toContain('Nothing waits on the customer')
     expect(changes).not.toContain('Nothing waits on us')
@@ -506,7 +520,9 @@ describe('F-OO-100: OverviewTab keeps the layout, each card is its own file, eac
 
   it('model.ts keeps what more than one place reads (the ONE waiting list among it); each section\'s rules live in its own file', () => {
     const model = read('./model.ts')
-    for (const name of ['export function orderWaitingOf(', 'export function waitingOf(', 'export function whoActsNextOf(', 'export function healthInputOf(', 'export function bandHealthOf(', 'export const readOf', 'export function mergeRead(', 'export const REQUESTED_FIELD_ID', 'export const say']) expect(model, name).toContain(name)
+    for (const name of ['export function orderWaitingOf(', 'export function waitingOf(', 'export function healthInputOf(', 'export function bandHealthOf(', 'export const readOf', 'export function mergeRead(', 'export const REQUESTED_FIELD_ID', 'export const say']) expect(model, name).toContain(name)
+    // F-OO-202 (F14): "who acts next" left with its only drawing — the keeper's waitingOn is the one rule.
+    expect(model).not.toContain('export function whoActsNextOf(')
     const homes = { where: ['headlineOf', 'stageStripOf', 'preparingNote', 'inWorkOf', 'exFactoryOf'], progress: ['lineStageOf', 'lineRowsOf', 'totalOf', 'lineSizesOf', 'walkOf'], people: ['placeWords'], dates: ['nextDatesOf'], linked: ['linkedRecordsOf'] } as const
     for (const [section, names] of Object.entries(homes)) {
       const text = read(`./${section}.ts`)
@@ -748,3 +764,93 @@ describe('F-OO-103: "Where it is now" keeps its title, Live, the headline and th
   })
 })
 // ---- end F-OO-103
+
+// ---- F-OO-202 (review F15, F14; plan §9; Owner D8): ONE waiting call with places — the domain's map; the card holds requests only ----
+describe('F-OO-202: one waiting call, each row in its place — holds to Where it is now, dates to Next dates, requests to the card and the badge', () => {
+  const amendments = { count: 0, latestRevision: null, latestAt: null }
+  const words = (en: string) => ({ en, it: `${en} (it)` })
+  const blocker = (kind: string, on: 'US' | 'BRAND' | 'SUPPLIER' | 'WORKSHOP', since: string | null, ref: { type: string; id: string } | null = null, sub: 'REQUEST' | 'COUNTER' | 'PROBLEM' | 'REPROMISE' | null = null) => ({ kind, on, words: words(kind), since, ref, sub })
+  const task = (kind: string, taskId: string, requestedAt: string) =>
+    ({ taskId, kind, kindLabel: { en: kind, it: kind }, requestedAt, requester: { name: 'Luca Prova', me: false }, approver: { kind: 'ROLE' as const, name: 'Finance', me: false }, version: 1, requireStepUp: false, approve: { allowed: true, why: null }, reject: { allowed: true, why: null }, withdraw: { allowed: false, why: null } })
+  const stateOf = (blockers: ReturnType<typeof blocker>[], approvals: ReturnType<typeof task>[] = [], still: unknown[] = []) => {
+    const production = { status: 'ready', read: { ...PRODUCTION_READ, headline: { ...HEADLINE, waiting: { ...HEADLINE.waiting, blockers } }, changes: { openRequests: [], stillToDo: { rows: still, count: still.length, workOrdersLeftOut: 0 } } } } as never
+    const state = orderWaitingOf({ openApprovals: approvals, amendments }, { production, requests: { value: [] }, can: { recordPayment: true } }, 'en')
+    if (state.status !== 'ready') throw new Error('ready')
+    return state
+  }
+
+  it('each kind lands in the place the domain gives it — keyed on kind + sub (a refused new date is a date), a yes by its kind; an unknown kind stays a request', async () => {
+    const domain = await import('@nexus/factory-domain/production-brand/waiting')
+    const blockers = domain.BLOCKER_KINDS.flatMap((kind) => (kind === 'BRAND_REQUEST' ? domain.BLOCKER_SUBS.map((sub) => blocker(kind, 'US', '2026-11-10T09:00:00Z', { type: 'OrderChangeRequest', id: `r-${sub}` }, sub)) : [blocker(kind, domain.BLOCKER_OWNER[kind], '2026-11-10T09:00:00Z', { type: 'Record', id: kind })]))
+    const state = stateOf(blockers, domain.ORDER_YES_KINDS.map((kind, index) => task(kind, `t-${index}`, '2026-11-10T09:00:00Z')))
+    for (const row of state.rows) {
+      const want = row.door.kind === 'yes' ? domain.YES_PLACE[row.door.task.kind as (typeof domain.ORDER_YES_KINDS)[number]] : domain.placeOf({ kind: row.kind as (typeof domain.BLOCKER_KINDS)[number], sub: row.sub as (typeof domain.BLOCKER_SUBS)[number] | null })
+      expect(row.place, row.key).toBe(want)
+    }
+    const placeOfRow = (kind: string, sub: string | null = null) => state.rows.find((row) => row.kind === kind && row.sub === sub)!.place
+    // The review's settled map (F3, F15): holds stop the work, dates have a day, requests need an answer.
+    for (const kind of ['DEPOSIT', 'BRAND_PAUSE', 'QUALITY_HOLD', 'NONCONFORMANCE', 'RELEASE_CHECK', 'NO_MOVE']) expect(placeOfRow(kind), kind).toBe('HOLD')
+    for (const kind of ['GATE', 'MATERIAL_SHORT', 'SUBCONTRACT', 'CUSTOMER_MATERIAL']) expect(placeOfRow(kind), kind).toBe('DATE')
+    for (const kind of ['APPROVAL', 'PARTNER_TASK']) expect(placeOfRow(kind), kind).toBe('REQUEST')
+    expect(['REQUEST', 'COUNTER', 'PROBLEM', 'REPROMISE'].map((sub) => placeOfRow('BRAND_REQUEST', sub))).toEqual(['REQUEST', 'REQUEST', 'REQUEST', 'DATE'])
+    const yes = state.rows.filter((row) => row.kind === 'YES').map((row) => [row.door.kind === 'yes' ? row.door.task.kind : null, row.place])
+    expect(yes).toEqual([['SALES_ORDER', 'HOLD'], ['SALES_ORDER_CHANGE', 'REQUEST'], ['CREDIT_OVERRIDE', 'HOLD']])
+    // Never hidden: a kind or a yes this page does not know yet is a request (on the card and the badge).
+    const unknown = stateOf([blocker('SOMETHING_NEW', 'US', null)], [task('SOME_OTHER_YES', 't-x', '2026-11-11T09:00:00Z')])
+    expect(unknown.rows.map((row) => row.place)).toEqual(['REQUEST', 'REQUEST'])
+    expect(changesBadgeOf(unknown.card)).toBe(2)
+  })
+
+  it('the card holds the request rows only; the holds and the dates are counted apart, never twice — every row in exactly one place', () => {
+    const blockers = [
+      blocker('BRAND_REQUEST', 'US', '2026-11-18T09:00:00Z', { type: 'OrderChangeRequest', id: 'r-open' }, 'REQUEST'),
+      blocker('BRAND_REQUEST', 'US', '2026-11-12T09:00:00Z', { type: 'ApprovalRequest', id: 'a-refused' }, 'REPROMISE'),
+      blocker('APPROVAL', 'BRAND', '2026-11-14T09:00:00Z', { type: 'ApprovalRequest', id: 'a-1' }),
+      blocker('DEPOSIT', 'BRAND', '2026-10-28T15:00:00Z', { type: 'DepositRequest', id: 'd-1' }),
+      blocker('BRAND_PAUSE', 'BRAND', '2026-11-13T09:00:00Z', { type: 'WorkOrder', id: 'wo-1' }),
+      blocker('BRAND_PAUSE', 'BRAND', '2026-11-13T09:00:00Z', { type: 'WorkOrder', id: 'wo-2' }),
+      blocker('QUALITY_HOLD', 'US', '2026-11-11T09:00:00Z', { type: 'WorkOrder', id: 'wo-3' }),
+      blocker('GATE', 'US', '2026-11-09T09:00:00Z', { type: 'OrderGate', id: 'g-1' }),
+      blocker('MATERIAL_SHORT', 'SUPPLIER', null),
+      blocker('SUBCONTRACT', 'WORKSHOP', '2026-11-08T09:00:00Z', { type: 'WorkOrder', id: 'wo-4' }),
+    ]
+    const still = { kind: 'WORK_ORDER_CHANGE', ref: null, words: { en: 'x', it: 'x' }, since: '2026-11-17T13:02:00Z', waitingOn: 'PLANNER', mayAct: true, requestId: null }
+    const state = stateOf(blockers, [task('CREDIT_OVERRIDE', 't-credit', '2026-11-01T09:00:00Z'), task('SALES_ORDER_CHANGE', 't-change', '2026-11-10T08:00:00Z')], [still])
+    const keys = (rows: readonly WaitingRow[]) => rows.map((row) => row.key)
+    const placed = [...keys(state.card.onUs), ...keys(state.card.onCustomer), ...keys(state.holds), ...keys(state.dates)]
+    expect(new Set(placed).size, 'never twice').toBe(placed.length)
+    expect([...placed].sort(), 'every row once').toEqual([...keys(state.rows)].sort())
+    expect(state.card.onUs.map((row) => [row.kind, row.place])).toEqual([['YES', 'REQUEST'], ['BRAND_REQUEST', 'REQUEST']])
+    expect(state.card.onCustomer.map((row) => row.kind)).toEqual(['APPROVAL'])
+    // No folding here (F-OO-104 groups the holds into one strip per kind): the customer's pause on two work orders is two rows, oldest first.
+    expect(state.holds.map((row) => [row.kind, row.ref?.id ?? null])).toEqual([['DEPOSIT', 'd-1'], ['YES', null], ['QUALITY_HOLD', 'wo-3'], ['BRAND_PAUSE', 'wo-1'], ['BRAND_PAUSE', 'wo-2']])
+    expect(state.dates.map((row) => [row.kind, row.sub])).toEqual([['SUBCONTRACT', null], ['GATE', null], ['BRAND_REQUEST', 'REPROMISE'], ['MATERIAL_SHORT', null]])
+    // changesBadgeOf = request rows + Still to do: 2 on us + 1 on the customer + 1 still (the credit yes, the holds and the dates are not in it).
+    expect(changesBadgeOf(state.card)).toBe(4)
+    // The Changes dot no longer lights for a credit yes this reader decides (it sits with the holds, section 1); an old change's yes still does.
+    expect(state.card.onUs.some((row) => row.door.kind === 'yes' && row.door.task.kind === 'CREDIT_OVERRIDE')).toBe(false)
+    expect(changesDotOf(stateOf([], [task('CREDIT_OVERRIDE', 't-credit', '2026-11-01T09:00:00Z')]).card)).toBe(false)
+    expect(changesDotOf(stateOf([], [task('SALES_ORDER_CHANGE', 't-change', '2026-11-10T08:00:00Z')]).card)).toBe(true)
+    // After production only the requests stay in the read (B-OO-007); the same call then has no hold and no date to hand out.
+    const shipped = stateOf(blockers.filter((row) => row.kind === 'BRAND_REQUEST' && row.sub === 'REQUEST'))
+    expect([shipped.holds, shipped.dates, shipped.card.onUs.map((row) => row.kind)]).toEqual([[], [], ['BRAND_REQUEST']])
+  })
+
+  it('source: no whoActsNextOf and no `next` left; the places come from the domain (no web map); the badge, the tab and the cards call it unchanged', () => {
+    const model = read('./model.ts')
+    for (const gone of ['whoActsNextOf(', 'interface WhoActsNext', 'next: WhoActsNext', 'REQUEST_KINDS']) expect(model, gone).not.toContain(gone)
+    expect(model).toContain("from '@nexus/factory-domain/production-brand/waiting'")
+    expect(model).toMatch(/placeOf\(\{ kind: blocker\.kind as BlockerKind, sub: blocker\.sub \?\? null \}\)/)
+    expect(model).toContain('YES_PLACE[kind as OrderYesKind]')
+    // No place is written by hand in the web: no `GATE: 'DATE'`-like map of its own.
+    expect(model).not.toMatch(/\b[A-Z_]+:\s*'(?:HOLD|DATE|REQUEST)'/)
+    // The keeper's waitingOn stays the ONE rule of who the order waits on (the orders list and the portal read it); the web never copies it.
+    const domain = readFileSync(new URL('../../../../../../../../packages/factory-domain/src/production-brand/waiting.ts', import.meta.url), 'utf8')
+    expect(domain).toContain('export function waitingOn(blockers: readonly Blocker[]): Waiting {')
+    expect(model).not.toContain('waitingOn(')
+    // OrderRecordView (the badge and the dot), RequestsSection (the Changes tab) and OverviewTab (the cards) make the same call as before.
+    for (const file of ['../view/OrderRecordView.tsx', '../view/RequestsSection.tsx', '../view/OverviewTab.tsx']) expect(read(file), file).toContain('const waiting = orderWaitingOf(order, model, locale)')
+    for (const file of ['../view/OrderRecordView.tsx', '../view/RequestsSection.tsx', '../view/OverviewTab.tsx', '../view/overview/WhereCard.tsx', '../view/overview/RequestsCard.tsx']) expect(read(file), file).not.toMatch(/waiting\.next\b|whoActsNext/)
+  })
+})
+// ---- end F-OO-202

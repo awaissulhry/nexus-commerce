@@ -7,11 +7,12 @@ import { BRAND_STAGES, type BrandStage, type Headline } from './api' // F-OO-101
 import { CONFIRMED_READ, HEADLINE, PRODUCTION_READ } from './fixtures'
 import { exFactoryOf, headlineOf, stageStripOf, stagesShown } from './where'
 import * as where from './where' // F-OO-103: what section 1's rules still export
-import { bandHealthOf, healthInputOf, waitingOf, whoActsNextOf } from './model'
+import { bandHealthOf, healthInputOf, waitingOf } from './model'
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Where it is now"'s rules, moved with where.ts out of overview.vitest.test.ts
- * unchanged (F-SA-232: the headline sentence per state, the five stages, who acts next, the health only from the reads).
+ * (F-SA-232: the headline sentence per state, the five stages, the health only from the reads). F-OO-101 / 102 / 103 / 202 rewrote
+ * them: status · stage, the office strip state, the frame, and no "who acts next" (the waiting rows have their places).
  */
 
 // ---- F-OO-101 (order overview §1.2; review F8): the headline is the status AND the stage — rewritten from "one sentence per state" ----
@@ -102,11 +103,14 @@ describe('"Where it is now": the stages and the facts', () => {
 
   // F-OO-103: rewritten — the bundles in work left section 1 (Progress by line counts each step; the design case proves they are not
   // drawn here); the ex-factory slip is the Promised row's (Next dates), the health the band's.
-  it('who acts next, the ex-factory slip, the health from the keeper else the order’s lateness; no bundles rule here any more', () => {
-    // F-OP-103: who acts next is the ONE waiting list's first row.
+  // F-OO-202: rewritten — "who acts next" is gone (F14, the keeper's waitingOn is the one rule): the list's first row is no longer
+  // section 1's; a customer's request is the card's (REQUEST), and section 1 reads only the rows placed HOLD.
+  it('the waiting rows section 1 reads are its holds, the ex-factory slip, the health from the keeper else the order’s lateness', async () => {
     const rows = waitingOf({ headline: HEADLINE }, { requests: [], approvals: [], recordPayment: false, locale: 'it' })
-    expect(whoActsNextOf(rows, HEADLINE)).toMatchObject({ who: 'US', since: '2026-11-17T09:05:00Z', kind: 'request' })
-    expect(whoActsNextOf([], null)).toEqual({ who: undefined, since: null, kind: 'record', row: null, still: null })
+    expect(rows).toMatchObject([{ kind: 'BRAND_REQUEST', on: 'US', since: '2026-11-17T09:05:00Z', place: 'REQUEST' }])
+    expect(rows.filter((row) => row.place === 'HOLD')).toEqual([])
+    expect(waitingOf({ headline: CONFIRMED_READ.headline }, { requests: [], approvals: [], recordPayment: false, locale: 'it' }).map((row) => [row.kind, row.place])).toEqual([['DEPOSIT', 'HOLD']])
+    expect('whoActsNextOf' in (await import('./model'))).toBe(false)
     expect(exFactoryOf(order('IN_PRODUCTION'), HEADLINE)).toEqual({ key: 'overview.exFactoryMoved', params: { date: '2026-12-15', count: 2, days: '+6' } })
     for (const gone of ['inWorkOf', 'preparingNote']) expect(gone in where, gone).toBe(false)
     const atRisk = healthInputOf(order('IN_PRODUCTION'), HEADLINE)
