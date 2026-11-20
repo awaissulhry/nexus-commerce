@@ -368,7 +368,7 @@ describe('F-SA-283 — Work orders: the style picture as a 76 px column and on t
   it('each card draws its work order’s picture part (phone size) — the design reads nothing: the neutral placeholder; the number still titles it', () => {
     for (const locale of LOCALES) {
       const html = asCards(locale)
-      expect(html, locale).toContain('fw-rp fw-rp-phone')
+      expect(html, locale).toContain('fw-rpic fw-rpic-phone')
       for (const entry of RISK_OPEN) {
         expect(html, `${locale} ${entry.number}`).toContain(locale === 'en' ? `aria-label="${entry.number} has no picture yet"` : `aria-label="${entry.number} non ha ancora un&#x27;immagine"`)
         expect(textOf(html), `${locale} ${entry.number}`).toContain(entry.number)
