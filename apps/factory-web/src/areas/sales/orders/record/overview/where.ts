@@ -96,17 +96,3 @@ export function stageStripOf(order: Pick<Order, 'status'>, headline: Headline | 
  * or once it is cancelled (the headline's line says where the work had reached).
  */
 export const stagesShown = (state: OfficeStripState): boolean => state === 'CURRENT' || state === 'ALL_DONE'
-
-/**
- * The ex-factory line: the promise and how it moved ("moved 2× · +6 d since first promised"); null without a promise.
- * F-OO-103: section 1 no longer draws it — the promise lives in Next dates' Promised row (F-OO-141 may read it from here).
- */
-export function exFactoryOf(order: Pick<Order, 'promiseDate'>, headline: Headline | null | undefined): Phrase | null {
-  const date = headline?.promise.date ?? order.promiseDate
-  if (!date) return null
-  const moves = headline?.promise.moves ?? 0
-  const slip = headline?.promise.slipDays ?? null
-  if (moves > 0 && slip !== null && slip !== 0) return phrase('overview.exFactoryMoved', { date, count: moves, days: slip > 0 ? `+${slip}` : String(slip) })
-  if (moves > 0) return phrase('overview.exFactoryMovedOnly', { date, count: moves })
-  return phrase('overview.exFactory', { date })
-}

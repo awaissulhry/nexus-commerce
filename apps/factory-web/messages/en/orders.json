@@ -1612,16 +1612,10 @@
     "progress": "Progress by line",
     "progressHint": "This order's own pieces · a line opens its sizes",
     "notInWorkOrders": "Not in work orders yet",
-    "exFactory": "Ex-factory {date}",
-    "exFactoryMovedOnly": "Ex-factory {date} · moved {count}×",
-    "exFactoryMoved": "Ex-factory {date} · moved {count}× · {days} d since first promised",
     "piecesAsOf": "Pieces as of {time}",
     "headline": {
       "shipped": "Shipped {shipped}",
       "delivered": "Shipped {shipped} · delivered {delivered}"
-    },
-    "fact": {
-      "exFactory": "Ex-factory"
     },
     "col": {
       "line": "Line"

@@ -5,7 +5,7 @@ import { order } from '../../_demo/fixtures'
 import { ORDER_STATUSES, type OrderStatus } from '../../api' // F-OO-101
 import { BRAND_STAGES, type BrandStage, type Headline } from './api' // F-OO-101
 import { CONFIRMED_READ, HEADLINE, PRODUCTION_READ } from './fixtures'
-import { exFactoryOf, headlineOf, stageStripOf, stagesShown } from './where'
+import { headlineOf, stageStripOf, stagesShown } from './where'
 import * as where from './where' // F-OO-103: what section 1's rules still export
 import { bandHealthOf, healthInputOf, waitingOf } from './model'
 
@@ -105,14 +105,14 @@ describe('"Where it is now": the stages and the facts', () => {
   // drawn here); the ex-factory slip is the Promised row's (Next dates), the health the band's.
   // F-OO-202: rewritten — "who acts next" is gone (F14, the keeper's waitingOn is the one rule): the list's first row is no longer
   // section 1's; a customer's request is the card's (REQUEST), and section 1 reads only the rows placed HOLD.
-  it('the waiting rows section 1 reads are its holds, the ex-factory slip, the health from the keeper else the order’s lateness', async () => {
+  it('the waiting rows section 1 reads are its holds; no ex-factory or bundles rule here; the health from the keeper else the order’s lateness', async () => {
     const rows = waitingOf({ headline: HEADLINE }, { requests: [], approvals: [], recordPayment: false, locale: 'it' })
     expect(rows).toMatchObject([{ kind: 'BRAND_REQUEST', on: 'US', since: '2026-11-17T09:05:00Z', place: 'REQUEST' }])
     expect(rows.filter((row) => row.place === 'HOLD')).toEqual([])
     expect(waitingOf({ headline: CONFIRMED_READ.headline }, { requests: [], approvals: [], recordPayment: false, locale: 'it' }).map((row) => [row.kind, row.place])).toEqual([['DEPOSIT', 'HOLD']])
     expect('whoActsNextOf' in (await import('./model'))).toBe(false)
-    expect(exFactoryOf(order('IN_PRODUCTION'), HEADLINE)).toEqual({ key: 'overview.exFactoryMoved', params: { date: '2026-12-15', count: 2, days: '+6' } })
-    for (const gone of ['inWorkOf', 'preparingNote']) expect(gone in where, gone).toBe(false)
+    // The ex-factory line left with section 1's facts: Next dates' Promised row says the promise and its moves (F-OO-141, its own rule).
+    for (const gone of ['inWorkOf', 'preparingNote', 'exFactoryOf']) expect(gone in where, gone).toBe(false)
     const atRisk = healthInputOf(order('IN_PRODUCTION'), HEADLINE)
     expect(atRisk.computed).toBe('AT_RISK')
     expect(bandHealthOf(atRisk)).toBe(true)

@@ -77,10 +77,10 @@ describe('the Overview cases draw in both languages, never a 0 for a step not co
   it('every overview word exists in both languages', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['tab.overview', 'tab.attention', 'overview.where', 'overview.progress', 'overview.progressHint', 'overview.notInWorkOrders', 'overview.piecesAsOf', 'overview.headline.shipped', 'overview.headline.delivered', 'overview.fact.exFactory', 'overview.col.line', 'overview.sizes.label', 'overview.sizes.finish', 'overview.sizes.units', 'overview.sizes.openLines']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      for (const key of ['tab.overview', 'tab.attention', 'overview.where', 'overview.progress', 'overview.progressHint', 'overview.notInWorkOrders', 'overview.piecesAsOf', 'overview.headline.shipped', 'overview.headline.delivered', 'overview.col.line', 'overview.sizes.label', 'overview.sizes.finish', 'overview.sizes.units', 'overview.sizes.openLines']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
       for (const key of ['overview.total', 'overview.madeExtra', 'mtm.units']) expect(t(key, { count: 2, stage: 'x' }), `${locale}: ${key}`).not.toBe(key)
-      // F-OO-103: section 1's own facts left the catalogue with the card's facts (Ex-factory stays: Next dates says it).
-      for (const key of ['overview.fact.who', 'overview.fact.health', 'overview.fact.customer', 'overview.fact.inWork', 'overview.afterDeposit']) expect(t(key), `${locale}: ${key}`).toBe(key)
+      // F-OO-103: section 1's own facts left the catalogue with the card's facts (Next dates' Promised row has its own words, F-OO-141).
+      for (const key of ['overview.fact.who', 'overview.fact.exFactory', 'overview.fact.health', 'overview.fact.customer', 'overview.fact.inWork', 'overview.afterDeposit', 'overview.exFactory', 'overview.exFactoryMovedOnly', 'overview.exFactoryMoved']) expect(t(key, { date: 'x', count: 1, days: '+1' }), `${locale}: ${key}`).toBe(key)
       expect(t('overview.bundles', { count: 2, stage: 'x' }), `${locale}: overview.bundles`).toBe('overview.bundles')
       const p = createTranslator(locale, messagesFor(locale, ['production']).production!)
       expect(p('parts.pieces.stages.SHIPPED')).not.toBe('parts.pieces.stages.SHIPPED')
@@ -525,7 +525,8 @@ describe('F-OO-100: OverviewTab keeps the layout, each card is its own file, eac
     for (const name of ['export function orderWaitingOf(', 'export function waitingOf(', 'export function healthInputOf(', 'export function bandHealthOf(', 'export const readOf', 'export function mergeRead(', 'export const REQUESTED_FIELD_ID', 'export const say']) expect(model, name).toContain(name)
     // F-OO-202 (F14): "who acts next" left with its only drawing — the keeper's waitingOn is the one rule.
     expect(model).not.toContain('export function whoActsNextOf(')
-    const homes = { where: ['headlineOf', 'stageStripOf', 'preparingNote', 'inWorkOf', 'exFactoryOf'], progress: ['lineStageOf', 'lineRowsOf', 'totalOf', 'lineSizesOf', 'walkOf'], people: ['placeWords'], dates: ['nextDatesOf'], linked: ['linkedRecordsOf'] } as const
+    // F-OO-103: where.ts keeps the headline and the stages (the facts' rules left with the facts).
+    const homes = { where: ['headlineOf', 'stageStripOf'], progress: ['lineStageOf', 'lineRowsOf', 'totalOf', 'lineSizesOf', 'walkOf'], people: ['placeWords'], dates: ['nextDatesOf'], linked: ['linkedRecordsOf'] } as const
     for (const [section, names] of Object.entries(homes)) {
       const text = read(`./${section}.ts`)
       for (const name of names) {

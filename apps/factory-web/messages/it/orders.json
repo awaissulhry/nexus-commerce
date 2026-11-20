@@ -1612,16 +1612,10 @@
     "progress": "Avanzamento per riga",
     "progressHint": "I pezzi di questo ordine · una riga apre le sue taglie",
     "notInWorkOrders": "Non ancora negli ordini di lavoro",
-    "exFactory": "Franco fabbrica {date}",
-    "exFactoryMovedOnly": "Franco fabbrica {date} · spostata {count} volte",
-    "exFactoryMoved": "Franco fabbrica {date} · spostata {count} volte · {days} g dalla prima promessa",
     "piecesAsOf": "Pezzi alle {time}",
     "headline": {
       "shipped": "Spedito il {shipped}",
       "delivered": "Spedito il {shipped} · consegnato il {delivered}"
-    },
-    "fact": {
-      "exFactory": "Franco fabbrica"
     },
     "col": {
       "line": "Riga"
