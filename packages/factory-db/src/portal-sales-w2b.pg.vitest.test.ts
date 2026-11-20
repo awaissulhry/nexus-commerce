@@ -174,16 +174,18 @@ describe('grants and the seed', () => {
     ])
     expect(await sql(office(), `SELECT "cancelCutoffStatus"::text AS s, "cancelCutoffDays" AS d, "changeCutoffStatus"::text AS c FROM "SalesSettings" WHERE id = $1::uuid`, a.tenantId)).toEqual([{ s: 'IN_PRODUCTION', d: 14, c: 'READY' }])
     // B-OO-016 (Owner D9): SEED-SO-0002 last follows its facts as the system does — its work order released, then SH-0001 left
-    // with part of it — one audit row per move, at the time of its fact; SEED-SO-0001 and SEED-SO-0003 keep CONFIRMED.
+    // with part of it — one audit row per move: the first at the release, the second at the write (the order's updatedAt), never
+    // ahead of today (SH-0001 leaves in the seeds' future); SEED-SO-0001 and SEED-SO-0003 keep CONFIRMED.
     expect(await sql(office(), `SELECT number, status::text AS status FROM "SalesOrder" WHERE id IN ($1::uuid, $2::uuid, $3::uuid) ORDER BY number`, seeded.orders.so1, seeded.orders.so2, seeded.orders.so3)).toEqual([
       { number: 'SEED-SO-0001', status: 'CONFIRMED' },
       { number: 'SEED-SO-0002', status: 'PARTLY_SHIPPED' },
       { number: 'SEED-SO-0003', status: 'CONFIRMED' },
     ])
-    const facts = (await sql(office(), `SELECT (SELECT "releasedAt" FROM "WorkOrder" WHERE number = 'SEED-WO-0001') AS released, (SELECT "shippedAt" FROM "Shipment" WHERE number = 'SEED-SH-0001') AS shipped`))[0]!
+    const facts = (await sql(office(), `SELECT (SELECT "releasedAt" FROM "WorkOrder" WHERE number = 'SEED-WO-0001') AS released, (SELECT "updatedAt" FROM "SalesOrder" WHERE id = $1::uuid) AS written`, seeded.orders.so2))[0]!
+    expect((facts.written as Date).getTime()).toBeLessThanOrEqual(Date.now())
     expect(await sql(office(), `SELECT at, audience::text AS audience, "actorId"::text AS "actorId", action, before, after, reason FROM "AuditLog" WHERE "recordType" = 'SalesOrder' AND "recordId" = $1::uuid ORDER BY at`, seeded.orders.so2)).toEqual([
       { at: facts.released, audience: 'SYSTEM', actorId: '00000000-0000-7000-8000-000000000000', action: 'orders.follow', before: { status: 'CONFIRMED' }, after: { status: 'IN_PRODUCTION' }, reason: 'Followed: work order SEED-WO-0001 released.' },
-      { at: facts.shipped, audience: 'SYSTEM', actorId: '00000000-0000-7000-8000-000000000000', action: 'orders.follow', before: { status: 'IN_PRODUCTION' }, after: { status: 'PARTLY_SHIPPED' }, reason: 'Followed: shipment SEED-SH-0001 shipped.' },
+      { at: facts.written, audience: 'SYSTEM', actorId: '00000000-0000-7000-8000-000000000000', action: 'orders.follow', before: { status: 'IN_PRODUCTION' }, after: { status: 'PARTLY_SHIPPED' }, reason: 'Followed: shipment SEED-SH-0001 shipped.' },
     ])
   })
 

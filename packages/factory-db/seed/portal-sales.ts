@@ -31,7 +31,8 @@ import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with the
  *   settings     the tenant-wide sales settings' cut-off rules: no cancel from IN_PRODUCTION on nor within 14 days of the
  *                promise date, no change from READY on (made up; the Owner sets them).
  *   status       B-OO-016: last, SEED-SO-0002 follows its facts as the system does: IN_PRODUCTION (SEED-WO-0001 released), then
- *                PARTLY_SHIPPED (SEED-SH-0001 left), each move with its audit row. Seeded only up to shipping, it stays CONFIRMED.
+ *                PARTLY_SHIPPED (SEED-SH-0001 left; dated at the write, never ahead of today), each move with its audit row.
+ *                Seeded only up to shipping, it stays CONFIRMED.
  *
  * The generated isolation tests (src/isolation.pg.vitest.test.ts) copy the FIRST row of each table by id and insert the
  * copy as the office and as P1: so the DRAFT, its first line and size, the OPEN change request and its first cell, the
@@ -410,10 +411,10 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
   // SEED-WO-0001 of its lines was released (seed/production.ts) and SEED-SH-0001 left with its BLK 50 and RED 52
   // (seed/shipping.ts), the rest still to make. The two moves are written as the system's follow writes them (apps/factory-api
   // sales/orders/moves.ts followOrder): one at a time, from the state before it, each with its audit row (orders.follow, by the
-  // system, "Followed: …") at the time of the fact that asked for it; the order's updatedAt is the write's, as the follow's is the
-  // time it followed (SH-0001 leaves in the seeds' future: a later updatedAt would put the order ahead of today). Written HERE,
-  // last: P1's open CHANGE request above is asked only before anything left (the change-request trigger), so a world seeded only
-  // up to shipping keeps CONFIRMED.
+  // system, "Followed: …"). The IN_PRODUCTION row is dated at SEED-WO-0001's release (history); the PARTLY_SHIPPED row and the
+  // order's updatedAt at the write's time, as the follow's are the time it followed: SH-0001 leaves in the seeds' future, and no
+  // status change is dated ahead of today. Written HERE, last: P1's open CHANGE request above is asked only before anything left
+  // (the change-request trigger), so a world seeded only up to shipping keeps CONFIRMED.
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
       const order = await tx.salesOrder.findUniqueOrThrow({ where: { id: known.so2.id }, select: { status: true, companyId: true } })
@@ -421,12 +422,13 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
       const released = await tx.workOrder.findFirst({ where: { companyId: companyA, number: 'SEED-WO-0001', releasedAt: { not: null } }, select: { number: true, releasedAt: true } })
       const left = await tx.shipment.findFirst({ where: { companyId: companyA, number: 'SEED-SH-0001', salesOrderId: known.so2.id, shippedAt: { not: null } }, select: { number: true, shippedAt: true } })
       if (!released?.releasedAt || !left?.shippedAt) return
+      const writtenAt = new Date()
       const moves = [
         { to: 'IN_PRODUCTION', from: 'CONFIRMED', at: released.releasedAt, why: `work order ${released.number} released` },
-        { to: 'PARTLY_SHIPPED', from: 'IN_PRODUCTION', at: left.shippedAt, why: `shipment ${left.number} shipped` },
+        { to: 'PARTLY_SHIPPED', from: 'IN_PRODUCTION', at: writtenAt, why: `shipment ${left.number} shipped` },
       ] as const
       for (const move of moves) {
-        await tx.salesOrder.update({ where: { id: known.so2.id }, data: { status: move.to, version: { increment: 1 } }, select })
+        await tx.salesOrder.update({ where: { id: known.so2.id }, data: { status: move.to, version: { increment: 1 }, updatedAt: writtenAt }, select })
         await tx.auditLog.createMany({
           data: [
             {

@@ -1406,6 +1406,10 @@ describe('SEED-SO-0002 is seeded PARTLY_SHIPPED, the status its facts give (B-OO
       ['SYSTEM', 'CONFIRMED', 'IN_PRODUCTION', 'Followed: work order SEED-WO-0001 released.'],
       ['SYSTEM', 'IN_PRODUCTION', 'PARTLY_SHIPPED', 'Followed: shipment SEED-SH-0001 shipped.'],
     ])
+    // No status change dated ahead of today (SH-0001 leaves in the seeds' future): the second is the write's, the order's updatedAt.
+    const dated = await admin<{ at: Date; updatedAt: Date }>(`SELECT a.at, o."updatedAt" FROM "AuditLog" a JOIN "SalesOrder" o ON o.id = a."recordId" WHERE a."recordId" = $1 AND a.action = 'orders.follow' ORDER BY a.at`, [so2])
+    expect(dated.every((row) => row.at.getTime() <= Date.now())).toBe(true)
+    expect(dated[1]!.at).toEqual(dated[1]!.updatedAt)
   })
 
   it('the status is honest: followMoves over its facts plans nothing; the follow moves nothing and writes nothing', async () => {
