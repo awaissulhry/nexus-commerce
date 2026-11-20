@@ -26,6 +26,9 @@ import { emailOrThrow } from '../users/email'
 import type { ChangeBody, InviteBody, ProductionBody, SettingsBody, StatusBody } from './contract'
 import { partnerMailerOf } from './mail'
 import { changeInCommand, inviteInCommand, revokeInCommand, statusInCommand, STATUS_TARGET, type InvitedResult, type StatusChange } from './people'
+// B-CP-011 (follow-up 15): Portal access says before the click who gives a role only the Owner gives — the commands' own rules.
+import { ownerGivesRole } from './people'
+import { holdsOwnerRole } from '../roles/assignments'
 import { lockParty, namedPeopleOf, partyById, peopleOf, personOf, settingsOf, urgentNowOf, type PartnerParty, type PartnerPerson, type PortalSettingsView } from './store'
 import { clientAddressOf } from '../../../core/client-address'
 
@@ -126,19 +129,26 @@ const partyBody = (party: PartnerParty) => ({ id: party.id, code: party.code, na
 /** GET /partners/:partyId — the party's Portal access tab. */
 export async function portalAccess(auth: OfficeAuth, request: FastifyRequest, partyId: string) {
   const party = await reachParty(request, partyId)
+  const context = officeContextOf(request)
   const now = auth.clock.now()
   return request.withClient(async (client) => {
     const settings = await settingsOf(client, party.id)
     const people = await peopleOf(client, party.id, now)
     const terms = party.companyId === null ? null : (await portalTermsInForce(client, party.companyId)) !== null
+    // ── B-CP-011 (follow-up 15, the money wall; Owner O3): the read says before the click which role only the Owner gives (a guest's
+    // role that sees prices, people.ts ownerGivesRole) and whether the reader gives it (holdsOwnerRole, the commands' own check).
+    // Yes/no only, never an amount; the commands still refuse (403 roleKey/onlyOwnerGivesPrices).
+    const mayGivePriceRole = await holdsOwnerRole(client, context.actorId, now)
+    // ── end B-CP-011 ──
     return {
       party: partyBody(party),
       kinds: [...party.kinds],
       settings: settingsBody(settings),
       seats: { taken: people.filter((person) => person.seat).length, max: settings.maxUsers },
-      roles: rolesView(party.kinds, settings.allowedRoleKeys),
+      roles: rolesView(party.kinds, settings.allowedRoleKeys).map((role) => ({ ...role, ownerGives: ownerGivesRole(role.kind, role.key) })), // B-CP-011 (follow-up 15)
       people: people.map((person) => personView(person, now)),
       termsInForce: terms,
+      mayGivePriceRole, // B-CP-011 (follow-up 15)
     }
   })
 }

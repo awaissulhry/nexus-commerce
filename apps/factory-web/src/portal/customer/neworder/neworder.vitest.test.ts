@@ -1216,3 +1216,66 @@ describe('F-CP-154 — lines of every kind, the People and sizes roster, Your pr
   })
 })
 // ---- end F-CP-154
+
+// ---- follow-up 22 (cp-fx12; design 12 §2 Doors): the start's four ways are actions — the design system's Card that is a button,
+// never a radio (an arrow key moved AND picked there: ArrowDown from "Describe it" started a "Pick styles" draft by mistake) -------
+describe('follow-up 22 — the start’s ways act only on Enter, Space or a click: buttons, never radios', () => {
+  const esc = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;')
+  const waysOf = (html: string) => [...html.matchAll(/<button\b[^>]*\bclass="nds-card btn pad fw-pno-way"[^>]*>/g)].map((match) => match[0])
+  const attr = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1] ?? null
+  const spanOf = (html: string, id: string) => html.match(new RegExp(`<span id="${id}"[^>]*>([\\s\\S]*?)</span>`))?.[1] ?? null
+  const startWith = (over: Partial<{ choosing: 'pick' | 'reorder' | 'upload' | null; describing: boolean }>): OrderingCaseBuilder => {
+    const build = newOrderScreen.cases.find((entry) => entry.id === 'start')!.model as OrderingCaseBuilder
+    return (locale) => {
+      const built = build(locale)
+      return built.body.kind === 'neworder' ? { ...built, body: { ...built.body, model: { ...built.body.model, start: { ...built.body.model.start, ...over } } } } : built
+    }
+  }
+  const draw = (locale: 'it' | 'en', model: OrderingCaseBuilder) => renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(OrderingCase, { model })))
+
+  it('the four ways are the DS Card that is a button, "Describe it" first, each named by its title and described by its hint; no radio', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const html = renderCase(locale, 'start')
+      expect(html, locale).not.toContain('type="radio"')
+      expect(html, locale).not.toContain('nds-radiocard')
+      const ways = waysOf(html)
+      expect(ways.map((tag) => attr(tag, 'type'))).toEqual(['button', 'button', 'button', 'button'])
+      expect(ways.map((tag) => attr(tag, 'aria-labelledby'))).toEqual(['start-way-describe', 'start-way-pick', 'start-way-reorder', 'start-way-upload'])
+      expect(ways.map((tag) => attr(tag, 'aria-describedby'))).toEqual(['start-way-describe-hint', 'start-way-pick-hint', 'start-way-reorder-hint', 'start-way-upload-hint'])
+      // A way that may start is no toggle and no held control: no aria-pressed, no aria-disabled.
+      for (const tag of ways) {
+        expect(attr(tag, 'aria-pressed'), `${tag} (${locale})`).toBeNull()
+        expect(attr(tag, 'aria-disabled'), `${tag} (${locale})`).toBeNull()
+      }
+      expect(spanOf(html, 'start-way-describe'), locale).toContain(esc(t(locale)('draftPage.start.describe')))
+      expect(spanOf(html, 'start-way-describe-hint'), locale).toBe(esc(t(locale)('draftPage.start.describeHint')))
+      for (const way of ['pick', 'reorder', 'upload'] as const) {
+        expect(spanOf(html, `start-way-${way}`), `${way} (${locale})`).toContain(esc(t(locale)(`start.way.${way}`)))
+        expect(spanOf(html, `start-way-${way}-hint`), `${way} (${locale})`).toBe(esc(t(locale)(`start.wayHint.${way}`)))
+      }
+    }
+  })
+
+  it('Reorder held for a reader of no orders: focusable, says why (aria-disabled, its hint the reason), never a disabled button', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const html = renderCase(locale, 'cp152-start-designer')
+      const [describe, pick, reorder, upload] = waysOf(html)
+      expect(attr(reorder!, 'aria-disabled'), locale).toBe('true')
+      expect(reorder, locale).not.toMatch(/\sdisabled=""/)
+      expect(spanOf(html, 'start-way-reorder-hint'), locale).toBe(esc(t(locale)('draftPage.reorderHeld')))
+      for (const tag of [describe, pick, upload]) expect(attr(tag!, 'aria-disabled'), locale).toBeNull()
+    }
+  })
+
+  it('“Saving…” on the way that is making its draft, the others keep their hints', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const picking = draw(locale, startWith({ choosing: 'pick' }))
+      expect(spanOf(picking, 'start-way-pick-hint'), locale).toBe(esc(t(locale)('state.saving')))
+      expect(spanOf(picking, 'start-way-describe-hint'), locale).toBe(esc(t(locale)('draftPage.start.describeHint')))
+      const describing = draw(locale, startWith({ describing: true }))
+      expect(spanOf(describing, 'start-way-describe-hint'), locale).toBe(esc(t(locale)('state.saving')))
+      expect(spanOf(describing, 'start-way-upload-hint'), locale).toBe(esc(t(locale)('start.wayHint.upload')))
+    }
+  })
+})
+// ---- end follow-up 22

@@ -89,6 +89,12 @@ export const organisationsContract = defineContract({
   },
 })
 
+// B-CP-011: (follow-up 15, the money wall) Portal access's roles say which one only the Owner gives from the office.
+const accessRoleView = roleView.extend({
+  /** Only the Owner gives it from the office: a guest's role that sees prices — the Accountant (people.ts ownerGivesRole). */
+  ownerGives: z.boolean(),
+})
+
 export const portalAccessContract = defineContract({
   params: partyParams,
   response: {
@@ -97,10 +103,16 @@ export const portalAccessContract = defineContract({
       kinds: z.array(kind),
       settings: settingsView,
       seats: output({ taken: z.number().int(), max: z.number().int().nullable() }),
-      roles: z.array(roleView),
+      roles: z.array(accessRoleView), // B-CP-011 (follow-up 15)
       people: z.array(personView),
       /** The portal terms of the party's company are published (GATE-PRIVACY: no invitation before). Null: a party of every company. */
       termsInForce: z.boolean().nullable(),
+      // B-CP-011: (follow-up 15) the reader's own right, said before the click.
+      /**
+       * The reader gives a role only the Owner gives (`roles[].ownerGives`): true only for a live holder of the Owner role (the
+       * commands' own check, holdsOwnerRole; they still refuse 403 `roleKey/onlyOwnerGivesPrices`). A yes/no, never a price.
+       */
+      mayGivePriceRole: notMoney(z.boolean()),
     }),
   },
 })
