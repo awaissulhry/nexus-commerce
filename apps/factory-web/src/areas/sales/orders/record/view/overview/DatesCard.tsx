@@ -5,7 +5,7 @@ import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import type { Order } from '../../../api'
-import { dayInstant, promiseHeld, readOnlyOnPage } from '../../../model' // F-OP-104: promiseHeld; F-OO-141: Read-only sees no moves (the band's rule)
+import { dayInstant, promiseHeld, readOnlyOnPage, type Phrase } from '../../../model' // F-OP-104: promiseHeld; F-OO-141: Read-only sees no moves (the band's rule)
 import { amendHeld } from '../../../daily-model' // F-OP-104
 import { NAMESPACE as DEPTH } from '../../../depth/model'
 import { readOf } from '../../overview/model'
@@ -16,6 +16,10 @@ import { tabHref } from '../../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
 import { DiscussDoor } from '../Discuss' // F-SA-266: Discuss on a next date's row
 import './dates.css' // F-OO-141: the card's own rows
+// ---- F-OO-143: the new date the customer refused (the ONE waiting list's DATE row) and Decide… (the ONE promise dialog) ----
+import type { WaitingState } from '../../overview/model'
+import { ageWordsOf, decideDialogOf, refusedDatesOf } from '../../overview/dates'
+// ---- end F-OO-143
 
 /**
  * F-OO-100 (order overview lane: one file per card) — moved out of OverviewTab.tsx unchanged.
@@ -29,8 +33,12 @@ import './dates.css' // F-OO-141: the card's own rows
  * customer with its Change…; then the open gates (late first), parted by a rule. The shipping milestone (its target IS the promise)
  * and "Production start" are not listed; with no open gate the gates' block is left out (no "No dates set yet"). Read-only sees no
  * Change…; a failed read says so with Try again (the order's own dates still show).
+ *
+ * F-OO-143 (10-design §4.2; review F1, F3; replaces F-OP-105): under the promise, each new date the customer refused (the ONE waiting
+ * list's DATE row, `waiting.dates`: OverviewTab's one call) — "{customer} refused the new date · 2 d", no date (F1) — with Decide…:
+ * the ONE promise dialog with the follow-up named (held by promiseHeld, as Change…); a new date closes it in the same command.
  */
-export function DatesCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+export function DatesCard({ order, model, actions, waiting }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; /** F-OO-143: the ONE waiting list (OverviewTab's call). */ waiting?: WaitingState }) {
   const t = useT('orders')
   const d = useT(DEPTH)
   const locale = useLocale()
@@ -45,6 +53,12 @@ export function DatesCard({ order, model, actions }: { order: Order; model: Orde
   const promiseWait = promiseHeld(order, model.can)
   const requestedWait = amendHeld(order, model.can)
   const busy = model.busy ? t('held.busy') : null
+  // F-OO-143: the refused new dates, from the ONE waiting list (nothing claimed while it is read or failed).
+  const dateRows = waiting?.status === 'ready' ? waiting.dates : []
+  const refused = refusedDatesOf(dateRows, model.today)
+  const customer = order.party?.legalName ?? ''
+  const say = (words: Phrase): string => t(words.key, words.params)
+  const age = (days: number | null): string | null => (days === null ? null : say(ageWordsOf(days)))
   const planWords = (value: PlanSays): string => {
     if (value.kind === 'none') return t('dates.planNone')
     if (value.kind === 'plain') return day(value.date)
@@ -80,6 +94,19 @@ export function DatesCard({ order, model, actions }: { order: Order; model: Orde
               <span className="fw-so-ov-doors fw-so-hint">{t('dates.fromPlan')}</span>
             </li>
           )}
+          {/* F-OO-143 (replaces F-OP-105): a new date the customer refused, under the promise; Decide… → the ONE promise dialog. */}
+          {refused.map((row) => (
+            <li key={row.key} className="fw-so-ov-row">
+              <span className="fw-so-dates-wide is-under fw-so-dates-warn">{[t('waiting.repromise', { customer }), age(row.age)].filter(Boolean).join(' · ')}</span>
+              {!readOnly && (
+                <span className="fw-so-ov-doors">
+                  <Button size="sm" variant="quiet" heldReason={busy ?? (promiseWait ? t(promiseWait.key, promiseWait.params) : null)} onClick={() => actions?.onDialog?.(decideDialogOf(row))}>
+                    {t('dates.decide')}
+                  </Button>
+                </span>
+              )}
+            </li>
+          ))}
           <li className="fw-so-ov-row">
             <span className="fw-so-dates-label">{t('dates.requestedByCustomer')}</span>
             <span>{order.requestedDate ? day(order.requestedDate) : '—'}</span>

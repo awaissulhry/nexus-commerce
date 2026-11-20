@@ -44,7 +44,7 @@ export function OverviewTab({ order, model, actions }: { order: Order; model: Or
           below; a card alone takes the whole row; the two cards of a pair stretch to one height (overview.css). */}
       <div className="fw-so-ov-pair">
         <PeopleCard order={order} model={model} actions={actions} />
-        <DatesCard order={order} model={model} actions={actions} />
+        <DatesCard order={order} model={model} actions={actions} waiting={waiting /* F-OO-143: its DATE rows */} />
       </div>
       <div className="fw-so-ov-pair">
         <RequestsCard order={order} model={model} actions={actions} waiting={waiting} />

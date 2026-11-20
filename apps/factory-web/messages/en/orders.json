@@ -472,7 +472,12 @@
     "finish": "Finish",
     "customerSees": "Customer sees {date}",
     "shippedOn": "Shipped {shipped}",
-    "shippedDelivered": "Shipped {shipped} · delivered {delivered}"
+    "shippedDelivered": "Shipped {shipped} · delivered {delivered}",
+    "decide": "Decide…",
+    "age": "{days} d",
+    "ageToday": "today",
+    "refusedDialog": "{customer} refused the new date: the promise stays {current} until you change it. A new date closes this.",
+    "refusedDialogLines": "{customer} refused the new date: the promise stays {current} until you change it. A new date for its line closes this."
   },
   "production": {
     "title": "Work orders",

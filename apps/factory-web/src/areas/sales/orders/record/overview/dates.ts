@@ -2,6 +2,11 @@ import type { Order } from '../../api'
 import type { Phrase } from '../../model'
 import type { Dates, Headline } from './api'
 import { AFTER } from './model'
+// ---- F-OO-143: a refused new date (the ONE waiting list's DATE row) and Decide… (the ONE promise dialog, its follow-up named) ----
+import { romeToday } from '../../model'
+import type { WaitingRow } from './model'
+import type { BandDialog, RecordDialog } from '../record-model'
+// ---- end F-OO-143
 
 /**
  * F-OO-100 (order overview lane: one file per section) — Next dates, its rules moved out of model.ts unchanged (F-SA-233, P16).
@@ -81,3 +86,42 @@ export function planSaysOf(order: Pick<Order, 'status'>, promise: string | null,
 /** The plan's words in amber: it ends after the promise, or nothing plans an order that has one. */
 export const planWarns = (plan: PlanSays): boolean => plan.kind === 'after' || (plan.kind === 'none' && plan.warn)
 // ---- end F-OO-141
+
+// ---- F-OO-143 (order overview 10-design §4.2; review F1, F3; replaces F-OP-105): the new date the customer refused ----------------
+/**
+ * How long a waiting row has waited: whole days from the Rome day it started to today (Rome); 0 the same day; null when the read
+ * does not know when it started. Never negative (a start "after" today is today).
+ */
+export function ageDaysOf(since: string | null, today: string): number | null {
+  if (!since) return null
+  const start = Date.parse(since)
+  if (Number.isNaN(start)) return null
+  return Math.max(0, daysFrom(romeToday(new Date(start)), today))
+}
+
+/** An age in words: "2 d" / "2 g", the same day "today" / "oggi". */
+export const ageWordsOf = (days: number): Phrase => (days === 0 ? phrase('dates.ageToday') : phrase('dates.age', { days }))
+
+/** A new date the customer refused whose follow-up is still open: the waiting list's DATE row BRAND_REQUEST · REPROMISE (F3). */
+export interface RefusedDate {
+  readonly key: string
+  /** The refused REPROMISE request — its follow-up task has the same id (planning/promise-keep brand-answer). */
+  readonly requestId: string
+  /** Days since the customer refused it (the row's `since` = the answer's time); null: not known. */
+  readonly age: number | null
+}
+
+/**
+ * The refused new dates of the ONE waiting list (`waiting.dates`, never a second read): each REPROMISE row with its request. The row
+ * carries no date (review F1: "refused the new date", today's words). It is a date, so it is not in the Changes badge (F3).
+ */
+export function refusedDatesOf(rows: readonly Pick<WaitingRow, 'key' | 'kind' | 'sub' | 'ref' | 'since' | 'place'>[], today: string): RefusedDate[] {
+  return rows.flatMap((row) => (row.place === 'DATE' && row.kind === 'BRAND_REQUEST' && row.sub === 'REPROMISE' && row.ref?.type === 'ApprovalRequest' ? [{ key: row.key, requestId: row.ref.id, age: ageDaysOf(row.since, today) }] : []))
+}
+
+/** Decide…: the ONE promise dialog (BandDialog `promise`) with the refused request named — no "Keep the date" (N14 dropped). */
+export const decideDialogOf = (refused: Pick<RefusedDate, 'requestId'>): BandDialog => ({ kind: 'promise', followUp: { requestId: refused.requestId } })
+
+/** The promise dialog's follow-up when Decide… opened it; null when Change… did (or another dialog is open). */
+export const followUpOf = (dialog: RecordDialog | null | undefined): { readonly requestId: string } | null => (dialog?.kind === 'promise' ? (dialog.followUp ?? null) : null)
+// ---- end F-OO-143

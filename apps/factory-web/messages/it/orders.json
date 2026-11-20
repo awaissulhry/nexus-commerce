@@ -472,7 +472,12 @@
     "finish": "Fine",
     "customerSees": "Il cliente vede {date}",
     "shippedOn": "Spedito il {shipped}",
-    "shippedDelivered": "Spedito il {shipped} · consegnato il {delivered}"
+    "shippedDelivered": "Spedito il {shipped} · consegnato il {delivered}",
+    "decide": "Decidi…",
+    "age": "{days} g",
+    "ageToday": "oggi",
+    "refusedDialog": "{customer} ha rifiutato la nuova data: la promessa resta il {current} finché non la cambi. Una nuova data chiude questa richiesta.",
+    "refusedDialogLines": "{customer} ha rifiutato la nuova data: la promessa resta il {current} finché non la cambi. Una nuova data per la sua riga chiude questa richiesta."
   },
   "production": {
     "title": "Ordini di lavoro",

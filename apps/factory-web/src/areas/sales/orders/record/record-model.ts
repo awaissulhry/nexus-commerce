@@ -57,7 +57,10 @@ export const PART_LOADING = { value: null, problem: null } as const
 // at a time: RecordDialog is the container's one slot, and each hook's `opened` clears what its own dialog showed last.
 /** use-band-acts: the band's primary and its ⋯ (Change promise date, Mark ready, Close order; B-W2a-50: Copy as a new quote). */
 // F-OP-101: Refuse… of an open yes (its task; the words are typed in the dialog).
-export type BandDialog = { kind: 'promise' } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' } | { kind: 'refuseYes'; taskId: string }
+// F-OO-143 (replaces F-OP-105): `followUp` — Next dates' Decide… on a new date the customer refused: the ONE promise dialog with the
+// refused request named (its follow-up task has the request's id); a new date closes it in the same command (B-OP-025). Absent:
+// Change… (the band, Next dates' Promised row, Production › Dates).
+export type BandDialog = { kind: 'promise'; followUp?: { readonly requestId: string } } | { kind: 'ready' } | { kind: 'close' } | { kind: 'copyQuote' } | { kind: 'refuseYes'; taskId: string }
 /** use-lines-acts: the lines (close and reopen lines, the cancel; F-OP-111: the split; F-OP-106: the amendment has no dialog — its strip). */
 // F-OO-124: Close short / Reopen ONE line (Overview › Progress by line ⋯): `lineIds` — the lines the dialog opens ticked (absent: every
 // line it offers, as the band's ⋯ and the Lines tab open it).
