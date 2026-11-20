@@ -3,9 +3,12 @@ import type { SalesOrderStatus } from '../sales/orders/orders' // B-OO-007
 
 /**
  * B-PR-13 (production plan §4 "5 plain stages"; threads rule 8 "only true states"): the stage a customer reads of its order
- * in production, pure. The API reads the facts of the customer's OWN order lines and their own cells only (the freeze stage
- * reader apps/factory-api modules/sales/order-changes/stages.ts: RELEASED < CUT < SEWING < FINISHED < SHIPPED, the furthest
- * any cell of the line reached; the pieces released and still to ship), and these rules say:
+ * in production, pure. B-MS-001 (R21): the one named exception — while the floor cannot record work that is done, a person may
+ * put the stage ahead, with a reason, audited (./stage-set). The stored stage (BrandOrderProduction.stage) is then the SHOWN one
+ * (stage-set shownStageOf); a reader that needs the floor's own stage reads the facts (orderStageOf), never the stored stage.
+ * The API reads the facts of the customer's OWN order lines and their own cells only (the freeze stage reader apps/factory-api
+ * modules/sales/order-changes/stages.ts: RELEASED < CUT < SEWING < FINISHED < SHIPPED, the furthest any cell of the line
+ * reached; the pieces released and still to ship), and these rules say:
  *
  *   PREPARING   the order is confirmed and nothing of the line is cut: a gate, the deposit, material or a draft work order
  *               is still open (a work order released but not cut is still preparing)
@@ -86,6 +89,17 @@ export function orderStageOf(lines: readonly LineStageFacts[]): OrderStage | nul
     sewingNotCounted: slowest === 'CUTTING' && open.some((line) => line.stage === 'CUTTING' && !line.sewingCounted),
   }
 }
+
+// ── B-MS-001 (R2): where the work had reached when the order left production ──
+/**
+ * The floor's stage with `done` ignored: each line by the furthest its cells reached (a shipped, cancelled or closed line too),
+ * the order by its slowest line, as orderStageOf; PREPARING when it has no line. The keeper writes it back when an order with a
+ * stage set by hand leaves production, so "the work had reached …" says only what the floor really did.
+ */
+export function reachedStageOf(lines: readonly LineStageFacts[]): BrandStage {
+  return orderStageOf(lines.map((line) => ({ ...line, done: false })))?.stage ?? 'PREPARING'
+}
+// ── end B-MS-001 ──
 
 /** A forward move only (the keeper's stage notice fires on it; a stage going back never tells the customer). */
 export const movedForward = (previous: BrandStage | null, next: BrandStage | null): boolean =>
