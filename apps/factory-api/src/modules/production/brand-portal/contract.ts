@@ -105,7 +105,8 @@ const count = output({ done: z.number().int(), of: z.number().int(), words })
 // of who moved the stage.
 const cutStarted = z.boolean()
 
-const promiseMoves = z.array(output({ on: day, from: day.nullable(), to: day, lines: z.array(z.number().int()), reason: output({ code: z.enum(PROMISE_REASON_CODES), words }) }))
+// B-OL-004 (18 F23): `reason` null — the office gave none (the customer reads no reason).
+const promiseMoves = z.array(output({ on: day, from: day.nullable(), to: day, lines: z.array(z.number().int()), reason: output({ code: z.enum(PROMISE_REASON_CODES), words }).nullable() }))
 
 const row = output({
   id: id(),

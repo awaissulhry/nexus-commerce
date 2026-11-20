@@ -325,9 +325,10 @@ describe('the customer\'s concession answered in the portal (QHS-085; AP1:01)', 
 })
 
 describe('a revised order re-confirmed by the customer (SAL-222)', () => {
-  it('REFUSED: an amendment that did not move the net total needs no re-acceptance', async () => {
+  it('REFUSED: an amendment saved without asking the customer needs no re-acceptance', async () => {
     const refused = await as(owner, 'POST', '/approvals-out', { kind: 'REVISED_ORDER', recordType: 'SalesOrderAmendment', recordId: pricing.amendmentId, question: 'Confirm the new date.', send: false }, 409)
-    expect(refused.error.message).toMatch(/did not change the net total/)
+    // B-OL-005 (order lines plan D3): the office's choice, in words.
+    expect(refused.error.message).toMatch(/was saved without asking the customer to accept it again/)
   })
 
   it('an amendment that moves the net total: the customer reads it line by line with its prices and accepts; the wait clears', async () => {

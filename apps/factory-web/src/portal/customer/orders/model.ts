@@ -229,7 +229,7 @@ export function transitSteps(row: { status: CustomerShipmentStatus; shippedAt: s
 export function promiseMoves(history: readonly PromiseMoveRead[], locale: Locale, day: (iso: string) => string): PromiseMove[] {
   return [...history]
     .sort((a, b) => a.on.localeCompare(b.on))
-    .map((move) => ({ on: day(move.on), from: move.from ? day(move.from) : null, to: day(move.to), reason: move.reason.words[locale] }))
+    .map((move) => ({ on: day(move.on), from: move.from ? day(move.from) : null, to: day(move.to), reason: move.reason?.words[locale] ?? null /* B-OL-004 */ }))
 }
 
 /** How many times the promise moved (a first date set is not a move). */

@@ -29,6 +29,8 @@ import { requireEditRule } from '../lifecycle/edit-rule'
 import { styleRowRefusal } from '../lifecycle/style-guards'
 import { typeDefaultsForNewStyle } from '../types/types'
 import { afterCursor, decodeCursor, encodeCursor } from './cursor'
+// B-OL-033: the style search for an order (the order's own module reads the order and its price list).
+import { orderStyleSearch } from '../../sales/orders/style-search'
 import { rowExtras } from './row-extras'
 import { applyMatrixPlan, emitSkus } from './skus'
 import {
@@ -70,7 +72,12 @@ import {
 export async function listStyles(caller: CommandCaller, query: ListStylesQuery): Promise<{ styles: StyleRow[]; nextCursor: string | null; count: number }> {
   const context = contextOf(caller)
   const search = query.q?.trim()
+  // B-OL-033 (order lines plan, 18 F1): the search for an order — our own collection and that customer's own styles only, each
+  // row with its active colourways and whether the customer's list prices them (sales/orders/style-search.ts); an order the
+  // person may not see is not found, in the words of an unknown one.
+  const forOrder = query.forOrder ? await orderStyleSearch(caller, query.forOrder) : null
   const filters: Prisma.StyleWhereInput[] = [
+    forOrder ? forOrder.where : {}, // B-OL-033
     scopeWhere(actorOf(context), PRODUCT_STYLES_VIEW, STYLE_SCOPE) as Prisma.StyleWhereInput,
     query.status === 'ALL' ? {} : query.status === 'OPEN' ? { status: { in: ['DRAFT', 'ACTIVE'] } } : { status: query.status },
     search
@@ -102,9 +109,10 @@ export async function listStyles(caller: CommandCaller, query: ListStylesQuery):
     const skuCount = new Map(skus.map((entry) => [entry.styleId, entry._count._all]))
     // W2b (B-W2b-25): thumbnail, certificate coverage and cost per garment, each as far as the caller may see it.
     const extras = await rowExtras(client, actorOf(context), page, query.companyId ?? null)
+    const colourways = forOrder ? await forOrder.colourwaysOf(client, ids) : null // B-OL-033
     const last = page.at(-1)
     return {
-      styles: page.map((row) => ({ ...styleSummaryView(row, { skuCount: skuCount.get(row.id) ?? 0, revisions: revisions.filter((entry) => entry.styleId === row.id) }), ...extras.get(row.id)! })),
+      styles: page.map((row) => ({ ...styleSummaryView(row, { skuCount: skuCount.get(row.id) ?? 0, revisions: revisions.filter((entry) => entry.styleId === row.id) }), ...extras.get(row.id)!, ...(colourways ? { colourways: colourways.get(row.id) ?? [] } : {}) })),
       nextCursor: rows.length > query.limit && last ? encodeCursor(last) : null,
       count,
     }

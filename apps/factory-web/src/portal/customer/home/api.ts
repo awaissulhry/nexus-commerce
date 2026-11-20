@@ -61,7 +61,8 @@ export const fetchNextOrders = (api: ApiClient, signal?: AbortSignal): Promise<O
   api.get('/portal/sales-orders', { query: { chip: 'OPEN', limit: 5, progress: 'true' }, schema: ordersSchema, signal })
 
 const promiseHistorySchema = z.object({
-  promiseHistory: z.array(z.object({ on: z.string(), from: z.string().nullable(), to: z.string(), reason: z.object({ code: z.string(), words }) })),
+  // B-OL-004: `reason` null — the office gave no reason (none is shown).
+  promiseHistory: z.array(z.object({ on: z.string(), from: z.string().nullable(), to: z.string(), reason: z.object({ code: z.string(), words }).nullable() })),
 })
 export type PromiseHistory = z.infer<typeof promiseHistorySchema>['promiseHistory']
 

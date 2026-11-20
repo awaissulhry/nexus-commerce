@@ -18,6 +18,10 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
 import { systemContext } from '../../../platform/outbox/system'
 import { orderHandlers } from './handlers'
+// B-OL-004: the automatic words, and the customer's re-acceptance page read as the portal reads it.
+import { AUTOMATIC_REASONS } from '@nexus/factory-domain/sales/amendments/reasons'
+import type { RequestRef } from '../../../platform/approvals-out/adapter'
+import { REACCEPTANCE_ADAPTER } from './reacceptance'
 // ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
 await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
 
@@ -86,6 +90,9 @@ const SESSIONS: Record<string, () => SessionContext> = {
   pricesOnly: office(['orders.view', 'orders.manage', 'quotes.view', 'quotes.manage', 'money.price']),
   viewer: office(['orders.view']),
   floor: () => ({ audience: 'floor', tenantId: T, actorId: newId(), siteId: idIn('site:A1'), deviceId: newId(), grants: [{ permissions: ['floor.work', ...SALES], companies: [companyA], sites: [idIn('site:A1')], parties: 'all' }] }),
+  // B-OL-033: the style search for an order — a person who reads orders and styles (every customer, and one limited to P3).
+  styles: office(['orders.view', 'product.styles.view']),
+  stylesP3: () => ({ audience: 'office', tenantId: T, actorId: newId(), grants: [{ permissions: ['orders.view', 'product.styles.view'], companies: 'all', sites: 'all', parties: [P3] }] }),
 }
 
 async function call(session: string, method: 'GET' | 'POST', url: string, body?: unknown) {
@@ -283,9 +290,10 @@ describe('amendments (SAL-209, SAL-217): a confirmed order changes only through 
     expect(review.diff).not.toHaveProperty('netAmountBefore')
     const priced = await ok('owner', 'POST', `${orderUrl(manual.id)}/amendments/preview`, { version: manual.version, ...change() })
     expect(priced.diff).toMatchObject({ netAmountBefore: 288_000, netAmountAfter: 415_000, reacceptanceNeeded: true })
+    // B-OL-004 (order lines plan D2): a reason is optional — the review without one is the same review.
     const noReason = await ok('sales', 'POST', `${orderUrl(manual.id)}/amendments/preview`, { ...change(), reason: '' })
-    expect(noReason).toMatchObject({ ok: false, diff: null })
-    expect(noReason.problems.map((issue: Json) => issue.path)).toEqual(['body/reason'])
+    expect(noReason).toMatchObject({ ok: true, problems: [] })
+    expect(noReason.diff.lines.map((line: Json) => [line.change, line.seq])).toEqual(review.diff.lines.map((line: Json) => [line.change, line.seq]))
     const viewer = await ok('viewer', 'GET', `${orderUrl(manual.id)}/amendments`)
     expect(viewer.amendments).toEqual([])
   })
@@ -351,6 +359,175 @@ describe('amendments (SAL-209, SAL-217): a confirmed order changes only through 
     expect(removal.workOrders.plan.length).toBeGreaterThan(0)
   })
 })
+
+// ── B-OL-004 + B-OL-015 (order lines plan D2, §2; 18 F22, F23): a reason is optional; a kept past requested date never blocks ──
+describe('B-OL-004 + B-OL-015: no reason needed (the automatic words are stored); the requested date is checked only when it changes', () => {
+  let typed: Json
+  const linesOf = (order: Json) => order.lines.map((line: Json) => ({ id: line.id }))
+
+  it('an amendment, a close and a reopen without a reason store the automatic words; the customer’s page leaves them out', async () => {
+    // B-CP-011: the typed price of MANUAL is the Owner's.
+    typed = (await ok('owner', 'POST', '/sales/orders/manual', { ...MANUAL, customerRef: 'PO-OL004-1' }, 201)).order
+    const [blk, red] = typed.lines
+    const applied = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments`, { version: typed.version, lines: [{ id: blk.id, sizes: grid([['50', 2], ['52', 3]]) }, { id: red.id }] }, 201)
+    expect(applied.amendment.reason).toBe(AUTOMATIC_REASONS.amend)
+    expect((await one('SELECT reason FROM "SalesOrderAmendment" WHERE id = $1', [applied.amendment.id])).reason).toBe(AUTOMATIC_REASONS.amend)
+    expect((await one(`SELECT reason FROM "AuditLog" WHERE action = 'orders.amend' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 1`, [typed.id])).reason).toBe(AUTOMATIC_REASONS.amend)
+    // The REVISED_ORDER page (B-W2b-184) the customer reads: no "Why it changed" for automatic words, its reason empty.
+    const content = await h.database.withScope({ audience: 'office', tenantId: T, actorId: SALES_ACTOR }, (client) => REACCEPTANCE_ADAPTER.content(client as never, { recordId: applied.amendment.id } as RequestRef, 'en'))
+    expect(content.facts.map((fact) => fact.label)).not.toContain('Why it changed')
+    expect(content.revisedOrder).toMatchObject({ reason: '' })
+    expect(JSON.stringify(content)).not.toContain(AUTOMATIC_REASONS.amend)
+    // A reason typed is stored and shown as typed.
+    const said = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments`, { version: applied.order.version, reason: '  The customer asked by phone.  ', lines: [{ id: blk.id, sizes: grid([['50', 2], ['52', 2]]) }, { id: red.id }] }, 201)
+    expect(said.amendment.reason).toBe('The customer asked by phone.')
+    const saidContent = await h.database.withScope({ audience: 'office', tenantId: T, actorId: SALES_ACTOR }, (client) => REACCEPTANCE_ADAPTER.content(client as never, { recordId: said.amendment.id } as RequestRef, 'en'))
+    expect(saidContent.facts).toEqual(expect.arrayContaining([{ label: 'Why it changed', value: 'The customer asked by phone.' }]))
+    // Close one line and reopen it, neither with a reason.
+    const closed = await ok('sales', 'POST', `${orderUrl(typed.id)}/close-lines`, { version: said.order.version, lineIds: [red.id] })
+    expect(closed.order.lines.find((line: Json) => line.id === red.id).closedShort).toMatchObject({ reason: AUTOMATIC_REASONS.close })
+    expect((await one('SELECT "closeShortReason" FROM "SalesOrderLine" WHERE id = $1', [red.id])).closeShortReason).toBe(AUTOMATIC_REASONS.close)
+    const reopened = await ok('sales', 'POST', `${orderUrl(typed.id)}/reopen-lines`, { version: closed.order.version, lineIds: [red.id] })
+    expect(reopened.reopened).toEqual([red.id])
+    expect((await one(`SELECT reason FROM "AuditLog" WHERE action = 'orders.reopenLines' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 1`, [typed.id])).reason).toBe(AUTOMATIC_REASONS.reopen)
+    typed = reopened.order
+  })
+
+  it('a requested date the order keeps, passed since, never blocks a change; a new one in the past still does', async () => {
+    const past = addDays(TODAY, -3)
+    // The order was asked for three days ago (as an import would leave it): its requested date is in the past now.
+    await planted([{ sql: 'UPDATE "SalesOrder" SET "requestedDate" = $2::date WHERE id = $1', values: [typed.id, past] }])
+    const record = await recordOf(typed.id)
+    expect(record.requestedDate).toBe(past)
+    // The screen sends the date it read with the change: kept as it is, it is no new date.
+    const kept = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments`, { version: record.version, requestedDate: past, customerRef: 'PO-OL004-2', lines: linesOf(record) }, 201)
+    expect(kept.order).toMatchObject({ customerRef: 'PO-OL004-2', requestedDate: past })
+    // Another past day is a new date: refused in words, nothing written.
+    const moved = await refused('sales', 'POST', `${orderUrl(typed.id)}/amendments`, { version: kept.order.version, requestedDate: addDays(TODAY, -2), lines: linesOf(kept.order) }, 400)
+    expect(moved.issues).toEqual([{ path: 'body/requestedDate', message: 'A requested date is today or later.' }])
+    typed = kept.order
+  })
+})
+// ── end B-OL-004 + B-OL-015 ──
+
+// ── B-OL-005 (order lines plan D3; 18 F10): the customer accepts the new order again only when asked ──
+describe('B-OL-005: the customer is asked only when ticked, else when the total goes up; the preview says if the amount moves, its direction by grain', () => {
+  let typed: Json
+  it('a lower total asks nothing by default; the preview tells every writer the amount moves and only the price grain which way', async () => {
+    // B-CP-011: the typed price of MANUAL is the Owner's.
+    typed = (await ok('owner', 'POST', '/sales/orders/manual', { ...MANUAL, customerRef: 'PO-OL005-1' }, 201)).order
+    const [blk, red] = typed.lines
+    const fewer = { version: typed.version, lines: [{ id: blk.id, sizes: grid([['50', 2], ['52', 1]]) }, { id: red.id }] }
+    const forOwner = await ok('owner', 'POST', `${orderUrl(typed.id)}/amendments/preview`, fewer)
+    expect(forOwner).toMatchObject({ ok: true, amountChanges: true, totalUp: false })
+    // Sales never learns the direction: the amount moves, and nothing more.
+    const forSales = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments/preview`, fewer)
+    expect(forSales).toMatchObject({ ok: true, amountChanges: true })
+    expect(forSales).not.toHaveProperty('totalUp')
+    const more = await ok('owner', 'POST', `${orderUrl(typed.id)}/amendments/preview`, { version: typed.version, lines: [{ id: blk.id, sizes: grid([['50', 2], ['52', 3]]) }, { id: red.id }] })
+    expect(more).toMatchObject({ amountChanges: true, totalUp: true })
+    // Applied without the tick: the total went down, the customer is not asked (it used to be, on any change of the net).
+    const applied = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments`, fewer, 201)
+    expect(applied.amendment).toMatchObject({ reacceptance: 'NOT_NEEDED' })
+    expect(applied.order.reapprovalNeededAt).toBeNull()
+    expect((await events('sales_order.amended', typed.id)).map((event) => event.payload.reacceptanceNeeded)).toEqual([false])
+    typed = applied.order
+  })
+
+  it('a change of words alone with the tick asks the customer; the same tick off on a higher total asks nothing', async () => {
+    const [blk, red] = typed.lines
+    const words = { version: typed.version, askCustomer: true, lines: [{ id: blk.id, note: 'Made-up: logo 2 cm higher.' }, { id: red.id }] }
+    const preview = await ok('owner', 'POST', `${orderUrl(typed.id)}/amendments/preview`, words)
+    expect(preview).toMatchObject({ ok: true, amountChanges: false, totalUp: false })
+    const asked = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments`, words, 201)
+    expect(asked.amendment).toMatchObject({ reacceptance: 'NEEDED' })
+    expect(asked.order.reapprovalNeededAt).not.toBeNull()
+    expect((await events('sales_order.amended', typed.id)).map((event) => event.payload.reacceptanceNeeded)).toEqual([false, true])
+    // The office says the customer need not be asked: a higher total, the tick off.
+    const higher = await ok('sales', 'POST', `${orderUrl(typed.id)}/amendments`, { version: asked.order.version, askCustomer: false, lines: [{ id: blk.id, sizes: grid([['50', 3], ['52', 1]]) }, { id: red.id }] }, 201)
+    expect(higher.amendment).toMatchObject({ reacceptance: 'NOT_NEEDED' })
+    expect((await one('SELECT "reacceptanceNeeded" FROM "SalesOrderAmendment" WHERE id = $1', [higher.amendment.id])).reacceptanceNeeded).toBe(false)
+  })
+})
+// ── end B-OL-005 ──
+
+// ── B-OL-012 (order lines plan O12): a charge (fee) line no longer blocks the order ──
+describe('B-OL-012: an order with a charge line takes an amendment; the charge stays as stored and still counts in the totals', () => {
+  it('amends the goods; the totals are goods + the charge; the charge row and its snapshot are unchanged', async () => {
+    // B-CP-011: the typed price of MANUAL is the Owner's.
+    const order = (await ok('owner', 'POST', '/sales/orders/manual', { ...MANUAL, customerRef: 'PO-OL012-1' }, 201)).order
+    const [blk, red] = order.lines
+    // A development charge (50.00 × 1) written whole, as an accepted quote's fee line is, and the order's totals with it:
+    // 2880.00 + 50.00 net, VAT 22 % 644.60, 3574.60 gross.
+    const feeId = newId()
+    await planted([
+      copyRow('SalesOrderLine', red.id, { id: feeId, seq: 90, kind: 'FEE', feeKind: 'DEVELOPMENT', quantity: 1, unitPrice: '50.000000', netAmount: 5_000, vatAmount: 1_100, costAmount: null, unitCost: null, description: 'Made-up development charge', note: null, quoteLineId: null, version: 1 }),
+      { sql: 'UPDATE "SalesOrder" SET "netAmount" = "netAmount" + 5000, "vatAmount" = "vatAmount" + 1100, "grossAmount" = "grossAmount" + 6100 WHERE id = $1', values: [order.id] },
+    ])
+    const record = await recordOf(order.id, 'owner')
+    expect(record).toMatchObject({ netAmount: 293_000, grossAmount: 357_460 })
+    const feeRow = () => one('SELECT kind::text AS kind, "unitPrice"::text AS "unitPrice", quantity, "netAmount", "vatAmount", version FROM "SalesOrderLine" WHERE id = $1', [feeId])
+    const feeBefore = await feeRow()
+    // One more black 52 (P1's list: 420.00): the goods go 2880.00 → 3300.00, the charge stays 50.00.
+    const change = { version: record.version, lines: [{ id: blk.id, sizes: grid([['50', 2], ['52', 3]]) }, { id: red.id }] }
+    const preview = await ok('owner', 'POST', `${orderUrl(order.id)}/amendments/preview`, change)
+    expect(preview).toMatchObject({ ok: true, problems: [] })
+    expect(preview.diff).toMatchObject({ netAmountBefore: 293_000, netAmountAfter: 335_000 })
+    expect(preview.diff.lines.map((line: Json) => line.lineId)).toEqual([blk.id])
+    const applied = await ok('sales', 'POST', `${orderUrl(order.id)}/amendments`, change, 201)
+    expect(await one('SELECT "netAmount", "vatAmount", "grossAmount" FROM "SalesOrder" WHERE id = $1', [order.id])).toMatchObject({ netAmount: 335_000, vatAmount: 73_700, grossAmount: 408_700 })
+    expect(await feeRow()).toEqual(feeBefore)
+    expect(feeBefore).toMatchObject({ kind: 'FEE', unitPrice: '50.000000', quantity: 1, netAmount: 5_000 })
+    // Both snapshots carry the charge as stored; the change names only the black line.
+    const row = await one('SELECT before, after FROM "SalesOrderAmendment" WHERE id = $1', [applied.amendment.id])
+    const feeOf = (snapshot: Json) => (snapshot.lines as Json[]).find((line) => line.id === feeId)
+    expect(feeOf(row.after)).toEqual(feeOf(row.before))
+    expect(feeOf(row.after)).toMatchObject({ kind: 'FEE', quantity: 1, netAmount: 5_000, sizes: [] })
+    expect(applied.amendment.diff.lines.map((line: Json) => line.lineId)).toEqual([blk.id])
+    // The charge never takes a part in the next change either: leaving it out of the body keeps it.
+    const next = await ok('sales', 'POST', `${orderUrl(order.id)}/amendments/preview`, { version: applied.order.version, lines: [{ id: blk.id }, { id: red.id, sizes: grid([['52', 2]]) }] })
+    expect(next).toMatchObject({ ok: true })
+    expect(next.diff.lines.map((line: Json) => [line.lineId, line.change])).toEqual([[red.id, 'CHANGED']])
+  })
+})
+// ── end B-OL-012 ──
+
+// ── B-OL-033 (order lines plan, 18 F1 and F24): the style search for an order ("Add a style") ──
+describe('B-OL-033: the style search for an order — our collection and this customer’s own styles, and whether its list prices each colour', () => {
+  it('P1’s order lists P1’s own styles and our own collection, never another customer’s; each colour says whether P1’s list prices it', async () => {
+    // Our own collection's jacket (SEED-JKT-02 copied with no brand: no list prices it) and P3's own private-label jacket.
+    const own = { style: newId(), colourway: newId() }
+    const ofP3 = { style: newId(), colourway: newId() }
+    await planted([
+      copyRow('Style', JKT02, { id: own.style, code: 'T-OL033-OWN', name: 'Made-up own jacket', brandPartyId: null, soldUnderOurName: false }),
+      copyRow('Colourway', JKT02_RED, { id: own.colourway, styleId: own.style }),
+      copyRow('Style', JKT02, { id: ofP3.style, code: 'T-OL033-P3', name: 'Made-up jacket of P3', brandPartyId: P3, soldUnderOurName: false }),
+      copyRow('Colourway', JKT02_RED, { id: ofP3.colourway, styleId: ofP3.style }),
+    ])
+    const listed = await ok('styles', 'GET', `/product/styles?status=ALL&limit=200&forOrder=${manual.id}`)
+    const rows = new Map((listed.styles as Json[]).map((row) => [row.id as string, row]))
+    expect(rows.has(JKT01), "P1's own style").toBe(true)
+    expect(rows.has(own.style), 'our own collection').toBe(true)
+    expect(rows.has(ofP3.style), "P3's private style for P1's order").toBe(false)
+    // P1's list prices SEED-JKT-01 in both colours (420.00, its RED 430.00); no list prices our new jacket. A yes or no, never a price.
+    const jkt01 = (rows.get(JKT01)!.colourways as Json[]).filter((colour) => [JKT01_BLK, JKT01_RED].includes(colour.id))
+    expect(jkt01.map((colour) => [colour.id, colour.listPriced])).toEqual([
+      [JKT01_BLK, true],
+      [JKT01_RED, true],
+    ])
+    expect(rows.get(own.style)!.colourways).toEqual([{ id: own.colourway, code: expect.any(String), name: expect.any(String), listPriced: false }])
+    expect(Object.keys(jkt01[0]!).sort()).toEqual(['code', 'id', 'listPriced', 'name'])
+    // The plain search is unchanged: a person over every customer finds both new jackets, without colourways.
+    const plain = await ok('styles', 'GET', '/product/styles?status=ALL&limit=200&q=T-OL033')
+    expect((plain.styles as Json[]).map((row) => row.id).sort()).toEqual([own.style, ofP3.style].sort())
+    expect(plain.styles[0]).not.toHaveProperty('colourways')
+    // An order the person may not see (another customer's) answers in the words of an unknown one.
+    const hidden = await refused('stylesP3', 'GET', `/product/styles?forOrder=${manual.id}`, undefined, 404)
+    const unknown = await refused('stylesP3', 'GET', `/product/styles?forOrder=${newId()}`, undefined, 404)
+    expect(hidden.message).toBe(unknown.message)
+  })
+})
+// ── end B-OL-033 ──
 
 // ── B-OP-013 (order page plan N2, D1 + D3; 13-backend §1.3): each preview says what the apply then does, for Sales and the Owner ──
 /** Rows written whole, the database's rules off for them (as an import would). */
@@ -558,7 +735,8 @@ describe('B-OP-014: the put-back of a change that closed a line short reopens it
     // work order in progress waits); the seller may not send it.
     const before = await recordOf(order.id, 'owner')
     const red = before.lines.find((line: Json) => line.id === order.red.id)
-    const body = { reason: 'The customer drops the black jackets; the red ones at a new price.', lines: [{ id: order.red.id, unitPrice: '1.00' }] }
+    // B-OL-005 (order lines plan D3): the total goes down, so the office ticks the customer's re-acceptance itself (else not asked).
+    const body = { reason: 'The customer drops the black jackets; the red ones at a new price.', lines: [{ id: order.red.id, unitPrice: '1.00' }], askCustomer: true }
     await refused('sales', 'POST', `${orderUrl(order.id)}/amendments`, { version: order.version, ...body }, 403)
     const applied = await ok('pricedSales', 'POST', `${orderUrl(order.id)}/amendments`, { version: order.version, ...body }, 201)
     expect(applied.amendment).toMatchObject({ reacceptance: 'NEEDED' })
@@ -668,7 +846,8 @@ describe('close remaining lines (SAL-210) and reopen them', () => {
     const releasedBefore = await released()
     expect(record.dailyActions.find((action: Json) => action.action === 'amend')).toMatchObject({ allowed: false })
     await refused('sales', 'POST', `${orderUrl(so2())}/amendments`, { version: record.version, reason: 'More.', lines: record.lines.map((line: Json) => ({ id: line.id })) }, 409)
-    await refused('sales', 'POST', `${orderUrl(so2())}/close-lines`, { version: record.version, reason: '  ' }, 400)
+    // B-OL-004: words are optional now; too many are still refused (nothing written).
+    await refused('sales', 'POST', `${orderUrl(so2())}/close-lines`, { version: record.version, reason: 'x'.repeat(1001) }, 400)
     const closed = await ok('sales', 'POST', `${orderUrl(so2())}/close-lines`, { version: record.version, reason: 'The customer takes what shipped; the rest is not made.' })
     expect(closed.closed.map((line: Json) => [line.seq, line.closedShortQuantity])).toEqual([
       [10, 3],

@@ -221,7 +221,8 @@ describe('what is frozen on an order in production (SAL-218)', () => {
 describe('a priced change after the start, its extra deposit (SAL-219, SAL-221)', () => {
   it('previews the parts, the fee and the extra deposit of the growth (the order 30 %); writes them on the amendment; the customer is asked again', async () => {
     const row = await orderRow(order.id)
-    const body = { version: row.version, reason: 'Made-up: two more in the cut size, cut on their own.', lines: [{ id: line10.id, sizes: sizesOf(line10, { [cutSize]: 5 }) }, { id: line20.id }], labels: { [line10.id]: 'Two more jackets, cut on their own (made-up)' }, fee: '25.00' }
+    // B-OL-016 (none unless sent): `deposit: {}` asks the order's own percent of the growth.
+    const body = { version: row.version, reason: 'Made-up: two more in the cut size, cut on their own.', lines: [{ id: line10.id, sizes: sizesOf(line10, { [cutSize]: 5 }) }, { id: line20.id }], labels: { [line10.id]: 'Two more jackets, cut on their own (made-up)' }, fee: '25.00', deposit: {} }
     // B-CP-011: the seller may not send the fee (refused, nothing written); the Owner prices the change and reads its parts.
     await no('sales', 'POST', `/sales/orders/${order.id}/priced-changes/preview`, body, 403)
     const preview = await ok('owner', 'POST', `/sales/orders/${order.id}/priced-changes/preview`, body)
@@ -244,13 +245,16 @@ describe('a priced change after the start, its extra deposit (SAL-219, SAL-221)'
     await refreshLines()
   })
 
-  it('refuses a price the rules block even priced, a priced change with no price, and a reader', async () => {
+  it('refuses a price the rules block even priced, and a reader; a priced change with no price is "no charge" (B-OL-016)', async () => {
     const row = await orderRow(order.id)
     // B-CP-011: a new price and a fee are the Owner's to send.
     const blocked = await no('owner', 'POST', `/sales/orders/${order.id}/priced-changes`, { version: row.version, reason: 'Made-up: a new price.', lines: [{ id: line10.id, unitPrice: '90' }, { id: line20.id }], fee: '10.00' }, 409)
     expect(blocked.message).toBe('Line 10: Cut leather is priced: no price change any more (made-up).')
-    const nothing = await no('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, { version: row.version, reason: 'Made-up: a note.', lines: [{ id: line10.id, note: 'Made-up note' }, { id: line20.id }] }, 409)
-    expect(paths(nothing)).toEqual(['body/fee'])
+    // B-OL-016 (order lines plan O8; 18 F25): Sales sends a priced change with no money field — taken as "no charge" (was a 409).
+    const nothing = await ok('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, { version: row.version, reason: 'Made-up: a note.', lines: [{ id: line10.id, note: 'Made-up note' }, { id: line20.id }] }, 201)
+    expect(nothing.change).toMatchObject({ priced: false, diff: { lines: [expect.objectContaining({ lineId: line10.id, textChanged: true })] } })
+    expect(nothing.change).not.toHaveProperty('feeAmount')
+    expect(await one<Json>(`SELECT "priceDeltaLines", "feeAmount", "depositRequestId" FROM "SalesOrderAmendment" WHERE id = $1`, [nothing.change.id])).toEqual({ priceDeltaLines: null, feeAmount: null, depositRequestId: null })
     await no('reader', 'POST', `/sales/orders/${order.id}/priced-changes/preview`, { lines: [{ id: line10.id }] }, 403)
     // The rule switched off again (PATCH): prices are a priced change from the release only.
     const rule = await one<Json>(`SELECT id, version FROM "OrderFreezeRule" WHERE "companyId" = $1 AND field = 'PRICE' AND "frozenFrom" = 'CUT'`, [A.companyA])
@@ -280,6 +284,58 @@ describe('the non-refundable deposit, switched off (SAL-248)', () => {
     row = await orderRow(order.id)
     await refreshLines()
     expect(row.status).toBe('CONFIRMED')
+  })
+})
+
+// ---- B-OL-016 (order lines plan O8, O9; 18 F25): a priced change may cost nothing ------------------------------------------------
+
+describe('a priced change may cost nothing — "no charge" (B-OL-016)', () => {
+  const noChargeAudit = async () => (await one<Json>(`SELECT after FROM "AuditLog" WHERE action = 'orders.amend' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 1`, [order.id])).after
+  /** One piece moved between the cut size and the open one at the line's one price: the net does not move. */
+  const moved = (version: number, from: string, to: string) => {
+    const sizes = line10.sizes as Record<string, number>
+    return { version, lines: [{ id: line10.id, sizes: sizesOf(line10, { [from]: sizes[from]! - 1, [to]: sizes[to]! + 1 }) }, { id: line20.id }] }
+  }
+
+  it('the Owner: a cut size changed with the net unchanged passes the freeze rule priced, with no part, no fee and no deposit', async () => {
+    await refreshLines()
+    const body = moved((await orderRow(order.id)).version, cutSize, openSize)
+    // A plain amendment of the cut size is still refused (a priced change then) …
+    expect((await no('sales', 'POST', `/sales/orders/${order.id}/amendments`, body, 409)).message).toMatch(/send it as a priced change/)
+    // … the priced change of 0 is taken (was a 409 "a priced change carries its price"): no problem, no part, no fee, no deposit.
+    const preview = await ok('owner', 'POST', `/sales/orders/${order.id}/priced-changes/preview`, body)
+    expect(preview).toMatchObject({ ok: true, problems: [], parts: [], feeAmount: null, changeAmount: 0, deposit: null })
+    const applied = await ok('owner', 'POST', `/sales/orders/${order.id}/priced-changes`, body, 201)
+    expect(applied.change).toMatchObject({ priced: false, feeAmount: null, changeAmount: 0, deposit: null })
+    expect(await one<Json>(`SELECT "priceDeltaLines", "feeAmount", "depositRequestId" FROM "SalesOrderAmendment" WHERE id = $1`, [applied.change.id])).toEqual({ priceDeltaLines: null, feeAmount: null, depositRequestId: null })
+    expect(await noChargeAudit()).toMatchObject({ amendmentId: applied.change.id, noCharge: true })
+    expect(await outbox('sales_order.change_priced', order.id)).toEqual(expect.arrayContaining([expect.objectContaining({ amendmentId: applied.change.id, hasFee: false, depositRequestId: null })]))
+    // B-OL-005 (order lines plan D3): nothing to pay, no tick — the customer is not asked (a priced change used to ask always).
+    expect(preview).toMatchObject({ amountChanges: false, totalUp: false })
+    expect((await one<Json>(`SELECT "reacceptanceNeeded" FROM "SalesOrderAmendment" WHERE id = $1`, [applied.change.id])).reacceptanceNeeded).toBe(false)
+    await refreshLines()
+  })
+
+  it('Sales (no price grain): the same change with no money field is taken as no charge; a fee or a deposit from Sales is still refused (403)', async () => {
+    // B-OL-005 + 18 F25: Sales saves it as "no charge, the customer is asked" — its one tick.
+    const body = { ...moved((await orderRow(order.id)).version, openSize, cutSize), askCustomer: true }
+    // The grain filter: a money field from a writer without the price grain is refused, nothing written.
+    await no('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, { ...body, fee: '10.00' }, 403)
+    await no('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, { ...body, deposit: null }, 403)
+    const preview = await ok('sales', 'POST', `/sales/orders/${order.id}/priced-changes/preview`, body)
+    expect(preview).toMatchObject({ ok: true, problems: [], yes: 'APPLIES_AT_ONCE' })
+    for (const field of ['parts', 'feeAmount', 'changeAmount', 'deposit']) expect(preview).not.toHaveProperty(field)
+    expect(preview).toMatchObject({ amountChanges: false })
+    expect(preview).not.toHaveProperty('totalUp')
+    const applied = await ok('sales', 'POST', `/sales/orders/${order.id}/priced-changes`, body, 201)
+    // The ask itself is the web's next call (POST /approvals-out, REVISED_ORDER): until then the decision is "not asked yet".
+    expect(applied.change).toMatchObject({ priced: false, customer: { decision: 'NOT_ASKED' } })
+    expect(applied.change).not.toHaveProperty('changeAmount')
+    expect((await orderRow(order.id)).reapprovalNeededAt).not.toBeNull()
+    expect(await noChargeAudit()).toMatchObject({ amendmentId: applied.change.id, noCharge: true })
+    // None unless sent (O9): no extra deposit for a change that sent none.
+    expect((await one<Json>(`SELECT "depositRequestId" FROM "SalesOrderAmendment" WHERE id = $1`, [applied.change.id])).depositRequestId).toBeNull()
+    await refreshLines()
   })
 })
 

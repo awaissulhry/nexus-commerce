@@ -1,27 +1,27 @@
 import type { Prisma } from '@nexus/factory-db'
-import { ConflictError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors' // B-CP-024: + ConflictError
+import { ConflictError, InvalidStateError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors' // B-CP-024: + ConflictError; B-OL-033: NotFoundError moved to ./pricing.ts
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
-import { amendmentDiff, amendmentProblems, amendStateProblem, leftOutOf, nextRevision, snapshotOf, type AmendableLine, type AmendLineInput, type AmendmentDiff, type OrderSnapshot, type SnapshotHeader, type SnapshotLine } from '@nexus/factory-domain/sales/amendments/amendments'
+import { amendmentDiff, amendmentProblems, amendStateProblem, amountMoves, customerAsked, leftOutOf, nextRevision, snapshotOf, totalGoesUp, type AmendableLine, type AmendLineInput, type AmendmentDiff, type OrderSnapshot, type SnapshotHeader, type SnapshotLine } from '@nexus/factory-domain/sales/amendments/amendments' // B-OL-005: + amountMoves, customerAsked, totalGoesUp
+import { reasonOr } from '@nexus/factory-domain/sales/amendments/reasons' // B-OL-004
 import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
 import { isGoodsLine, isIssueList, MAX_TEXT, priceBasisOf, priceText, sizeGrid, type SizeRow } from '@nexus/factory-domain/sales/quotes/quotes'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { lockOrderLines } from '../../production/work-orders/store'
-import { chainForQuote } from '../quotes/list-price'
 import type { SheetCache } from '../quotes/pricing'
-import { quotePartyOf, storedVat, treatmentOfStored } from '../quotes/store'
+import { storedVat, treatmentOfStored } from '../quotes/store'
 import { officeContextOf } from './access'
 import { officeOrder, recordAfter } from './moves'
-import { newLineDraft, priceLines, scaledCost, snapshotLine, type LineDraft, type PricedLines } from './pricing'
+import { newLineDraft, orderPriceChain, priceLines, scaledCost, snapshotLine, type LineDraft, type PricedLines } from './pricing' // B-OL-033: + orderPriceChain
 import { lockStepRequests, remakeScheduleInCommand } from './schedule'
 import { asDay, dayOrNull, lockOrder, readOrder, readOrderFacts, type LineRecord, type OrderFacts, type OrderRow, type Reader } from './store'
 import type { OrderView } from './views'
 // B-W2b-303 (SO1:02): the line rules on an amendment's lines.
 import { amendedLineProblems } from '../orders-depth/line-rules'
 // B-W2b-309 (SAL-218, SAL-219, SAL-221, SAL-190, SAL-306): the freeze rules, the priced change, its extra deposit (B-OP-010: no yes).
-import type { PricedInput } from '@nexus/factory-domain/sales/order-changes/priced'
+import { feeMinorOf, type PricedInput } from '@nexus/factory-domain/sales/order-changes/priced' // B-OL-005: + feeMinorOf
 import { afterAmendment, amendmentExtras, beforeAmendmentWrites, type ChangeOptions } from '../order-changes/apply'
 import { previewFrozenProblems } from '../order-changes/freeze'
 // B-W2b-374 (XF3:02): a new line's options.
@@ -45,7 +45,7 @@ import { removeBrandPricesOfLines } from '../brand-prices/store'
 /**
  * Order amendments (B-W2a-30; SAL-209, SAL-217; the design's "Amend order" → "Review amendment" → Changes tab). A
  * confirmed order's lines change only here (W1's promise change writes only dates): ONE command on the order
- * (orders.manage; a reason) —
+ * (orders.manage; a reason, B-OL-004: else the automatic words) —
  *
  *   1. the lines' work-order locks (no work order is made for them meanwhile), the money locks of the open
  *      before-shipping steps' deposit requests (B-W2a-F2), then the order's row FOR UPDATE at the version read;
@@ -56,13 +56,14 @@ import { removeBrandPricesOfLines } from '../brand-prices/store'
  *      existing line keeps its cost per piece, a new one is costed from today's sheet);
  *   3. the lines written (a line left out is removed only when nothing refers to it: no work order, reservation,
  *      planning, shipment or invoice line; B-OP-014: one work orders make is closed short instead — the office's own
- *      amendment, `closeLeftOut` — never deleted, its gap proposed to them), the order's totals, reapprovalNeededAt when the net total changed (the
- *      customer accepts again: the re-acceptance link is W2b, SAL-190), the SalesOrderAmendment with the next revision
+ *      amendment, `closeLeftOut` — never deleted, its gap proposed to them), the order's totals, reapprovalNeededAt when the customer is
+ *      asked (B-OL-005: the office's tick, else a total that goes up; the re-acceptance link, SAL-190), the SalesOrderAmendment with the next revision
  *      and both snapshots (append-only), the OPEN payment steps made again for the new total, an audit row and
  *      sales_order.amended.
  *
  * The preview runs steps 1–2 without writing and answers the review dialog: lines old → new by size, the money change,
- * whether the customer must accept again, and the problems in words.
+ * whether the amount moves (B-OL-005: `amountChanges`; which way, `totalUp`, with the price grain only), and the problems in words.
+ * B-OL-020: with no lines sent every goods line is kept as it is (the order's own fields alone).
  */
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
@@ -72,7 +73,10 @@ export interface AmendBody {
   readonly reason?: string | undefined
   readonly customerRef?: string | null | undefined
   readonly requestedDate?: BusinessDate | null | undefined
-  readonly lines: readonly AmendLineInput[]
+  /** B-OL-020 (order lines plan D7): left out — every goods line as it is (the order's fields alone: its PO, its delivery address). */
+  readonly lines?: readonly AmendLineInput[] | undefined
+  /** B-OL-005 (order lines plan D3): ask the customer to accept the new order again; left out: only when the total goes up. */
+  readonly askCustomer?: boolean | undefined
   /** B-SA-042 (R1): what happens to pieces already cut beyond the new figures (CHARGE · LEFTOVER · SCRAP); required when there are some. */
   readonly extraOutcome?: ExtraOutcome | null | undefined
   /** B-OP-015: a new delivery address (an ACTIVE one of the order's customer); none: the order's own stays. */
@@ -235,8 +239,10 @@ export interface PlanOptions {
 export async function planAmendment(db: Reader, order: OrderRow, status: OrderRow['status'], facts: OrderFacts, body: AmendBody, now: Date, /* B-OP-014 */ planOptions: PlanOptions = {}): Promise<AmendmentPlan | Issue[]> {
   const stateProblem = amendStateProblem(status)
   if (stateProblem) return [{ path: 'body', message: stateProblem }]
-  if (facts.lines.some((line) => line.kind === 'FEE')) return [{ path: 'body', message: 'This order has a fee line: a fee is changed on its own line, so the order is not amended here.' }]
   const lines = facts.lines.filter(isGoodsLine)
+  // B-OL-012 (order lines plan O12): a charge (fee) line no longer blocks the order. It is never named nor left out (it is no goods
+  // line), never written: it stays as stored, in both snapshots unchanged, and still counts in the totals (a fixed row of the pricing).
+  const fees = facts.lines.filter((line) => line.kind === 'FEE')
   // B-W2b-368 (XF1:01): an order with a made-to-measure unit is amended too; the unit is kept as it was sold (./amendments/mtm).
   const inWorkOrders = new Map<string, Map<string, number>>()
   for (const row of facts.progress.rows) {
@@ -247,18 +253,21 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
   }
   const reopen = planOptions.reopen ?? new Set<string>()
   const current: AmendableLine[] = lines.map((line) => ({ id: line.id, seq: line.seq, kind: line.kind, closedShort: line.closedShortQuantity !== null && !reopen.has(line.id), sizes: line.sizes.map(({ size, quantity }) => ({ size, quantity })), inWorkOrders: inWorkOrders.get(line.id) ?? new Map() }))
-  const issues = amendmentProblems({ status, reason: body.reason, lines: body.lines, current })
+  // B-OL-020 (order lines plan D7): no lines sent — every goods line is kept as it is (only the order's own fields change).
+  const sent: readonly AmendLineInput[] = body.lines ?? lines.map((line) => ({ id: line.id }))
+  const issues = amendmentProblems({ status, reason: body.reason, lines: sent, current })
   if (body.customerRef !== undefined && body.customerRef !== null && body.customerRef.trim().length > MAX_TEXT.customerRef) issues.push({ path: 'body/customerRef', message: `At most ${MAX_TEXT.customerRef} characters.` })
-  if (body.requestedDate !== undefined && body.requestedDate !== null && body.requestedDate < businessDate(now)) issues.push({ path: 'body/requestedDate', message: 'A requested date is today or later.' })
+  // B-OL-015 (order lines plan §2): checked only when it changes — the order's own requested date, passed since, never blocks a change.
+  if (body.requestedDate !== undefined && body.requestedDate !== null && body.requestedDate !== dayOrNull(order.requestedDate) && body.requestedDate < businessDate(now)) issues.push({ path: 'body/requestedDate', message: 'A requested date is today or later.' })
   if (issues.length > 0) return issues
 
-  const kept = new Set(body.lines.flatMap((line) => (line.id ? [line.id] : [])))
+  const kept = new Set(sent.flatMap((line) => (line.id ? [line.id] : [])))
   const leftOut = lines.filter((line) => !kept.has(line.id)).map((line) => line.id)
   const references = await referencesOf(db, leftOut)
   // B-OP-014 (order page plan N1): the office's own amendment closes short a line left out that work orders make (any cell that
   // points at it, a cancelled work order's too); every other line left out is removed when nothing refers to it.
   const madeByWorkOrders = new Set(leftOut.filter((lineId) => references.get(lineId)?.includes('a work order')))
-  const { remove: removed, close } = planOptions.closeLeftOut ? leftOutOf({ lines: body.lines, current }, madeByWorkOrders) : { remove: leftOut, close: [] as string[] }
+  const { remove: removed, close } = planOptions.closeLeftOut ? leftOutOf({ lines: sent, current }, madeByWorkOrders) : { remove: leftOut, close: [] as string[] }
   for (const lineId of removed) {
     const what = references.get(lineId)
     if (what) issues.push({ path: 'body/lines', message: `Line ${lines.find((line) => line.id === lineId)!.seq} is referred to by ${what.join(', ')}: it cannot be removed; close it short instead, or lower its sizes.` })
@@ -271,11 +280,9 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
     else closing = closePlan.close.map((line) => ({ id: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity, shipped: facts.progress.rows.flatMap((row) => (row.lineId === line.id && row.size !== null && row.shipped > 0 ? [{ size: row.size, quantity: row.shipped }] : [])) }))
   }
 
-  const party = await quotePartyOf(db, order.partyId, businessDate(now), now)
-  if (!party) throw new NotFoundError('Customer not found.')
-  const pinned = order.quoteVersionId ? ((await db.quoteVersion.findUnique({ where: { id: order.quoteVersionId }, select: { priceListVersionId: true } }))?.priceListVersionId ?? null) : null
-  const newStyles = [...new Set(body.lines.flatMap((line) => (line.id === undefined && line.styleId ? [line.styleId] : [])))]
-  const chain = await chainForQuote(db, order, { currency: order.currency, priceListVersionId: pinned }, party, now, newStyles)
+  const newStyles = [...new Set(sent.flatMap((line) => (line.id === undefined && line.styleId ? [line.styleId] : [])))]
+  // B-OL-033: the order's price chain, read as the style search for the order reads it (./pricing.ts orderPriceChain).
+  const { party, chain } = await orderPriceChain(db, order, now, newStyles)
   const cache: SheetCache = new Map()
   const byId = new Map(lines.map((line) => [line.id, line]))
   let nextSeq = Math.max(0, ...lines.map((line) => line.seq)) + 10
@@ -285,7 +292,7 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
   const vat = lines[0] ? storedVat(treatmentOfStored(lines[0])) : null
   const optionsCtx = { companyId: order.companyId, currency: order.currency, basis: priceBasisOf(order.taxMode), vatRatePct: vat && vat.vatNature === null ? vat.vatRatePct : null }
   // B-OP-014: a line closed short stays on the order as it is (its price kept: a closed line is not billed).
-  const inputs: readonly AmendLineInput[] = [...body.lines, ...closing.map((line) => ({ id: line.id }))]
+  const inputs: readonly AmendLineInput[] = [...sent, ...closing.map((line) => ({ id: line.id }))]
   for (const [index, input] of inputs.entries()) {
     const at = `body/lines/${index}`
     if (input.id === undefined) {
@@ -358,19 +365,23 @@ export async function planAmendment(db: Reader, order: OrderRow, status: OrderRo
   if (issues.length === 0) issues.push(...(await amendedLineProblems(db, order, drafts.filter((draft) => draft.changed))))
   if (issues.length > 0) return issues
   drafts.sort((a, b) => a.seq - b.seq)
-  const priced = priceLines(priceBasisOf(order.taxMode), order.currency, treatmentOfStored(lines[0]!), drafts)
+  const fixed = fees.map((line) => ({ seq: line.seq, unitPrice: priceText(line.unitPrice.toString()), quantity: line.quantity, costAmount: line.costAmount })) // B-OL-012
+  const priced = priceLines(priceBasisOf(order.taxMode), order.currency, treatmentOfStored(lines[0]!), drafts, fixed)
   const header = {
     customerRef: body.customerRef === undefined ? order.customerRef : blankToNull(body.customerRef),
     requestedDate: body.requestedDate === undefined ? dayOrNull(order.requestedDate) : body.requestedDate,
   }
-  const before = snapshotOf(headerOf(order, order), lines.map(lineSnapshot))
+  const before = snapshotOf(headerOf(order, order), [...lines, /* B-OL-012 */ ...fees].map(lineSnapshot))
   const closedOf = new Map<string, number | null>([
     ...lines.map((line) => [line.id, reopen.has(line.id) ? null : line.closedShortQuantity] as const),
     /* B-OP-014 */ ...closing.map((line) => [line.id, line.closedShortQuantity] as const),
   ])
   const after = snapshotOf(
     headerOf(order, priced, header),
-    priced.lines.map((line, index) => snapshotLine({ ...line, id: line.id ?? placeholderId(index), closedShortQuantity: line.id ? (closedOf.get(line.id) ?? null) : null })),
+    [
+      ...priced.lines.map((line, index) => snapshotLine({ ...line, id: line.id ?? placeholderId(index), closedShortQuantity: line.id ? (closedOf.get(line.id) ?? null) : null })),
+      /* B-OL-012: the charge lines as stored (no change in the diff) */ ...fees.map(lineSnapshot),
+    ],
   )
   const diff = amendmentDiff(before, after)
   if (diff.empty) return [{ path: 'body/lines', message: NOTHING_CHANGES }]
@@ -425,19 +436,27 @@ export async function previewAmendment(caller: CommandCaller, orderId: string, b
     const address = body.shipToAddressId ? await shipToProblem(client, order, body.shipToAddressId, 'OFFICE') : null
     const addressProblems = address ? [address] : []
     const shipTo = (amendment: boolean) => (body.shipToAddressId ? { addressId: body.shipToAddressId, amendment } : null)
+    // B-OL-005 (order lines plan D3; 18 F10): whether the amount moves (every writer) and whether what the customer pays goes up
+    // (the price grain only: Sales never learns the direction) — the Review window's one tick takes its default from them.
+    const still = { amountChanges: false, totalUp: asMoney('price', false) }
     if (isIssueList(plan)) {
       if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
-      if (body.shipToAddressId && onlyTheAddress(plan)) return { ok: address === null, revision, version: order.version, problems: addressProblems, diff: null, workOrders: null, shipTo: shipTo(false) }
-      return { ok: false, revision, version: order.version, problems: [...plan, ...addressProblems], diff: null, workOrders: null, shipTo: shipTo(true) }
+      if (body.shipToAddressId && onlyTheAddress(plan)) return { ok: address === null, revision, version: order.version, problems: addressProblems, diff: null, workOrders: null, shipTo: shipTo(false), ...still }
+      return { ok: false, revision, version: order.version, problems: [...plan, ...addressProblems], diff: null, workOrders: null, shipTo: shipTo(true), ...still }
     }
     // B-W2b-309 (SAL-218): what the company's freeze rules hold at the stage production reached, said before Apply.
     const frozen = await previewFrozenProblems(client, order, plan.diff, false)
     // B-SA-042 (R1, Round 4): the extra pieces it would leave, shown before Apply; Apply stays held until their outcome is chosen.
     // B-OP-013: and what each work order will do — in the same click or waiting, and why (the command's own rule).
     const context = officeContextOf(caller)
-    const workOrders = await workOrderPreviewOf(client, context, order, await plannedGap(client, context.tenantId, order, plan, facts.lines), { requireOutcome: true, outcomeChosen: Boolean(body.extraOutcome) })
-    if (frozen.length > 0 || addressProblems.length > 0) return { ok: false, revision, version: order.version, problems: [...frozen, ...addressProblems], diff: diffView(plan.diff), workOrders, shipTo: shipTo(true) }
-    return { ok: !workOrders.needsOutcome, revision, version: order.version, problems: [] as Issue[], diff: diffView(plan.diff), workOrders, shipTo: shipTo(true) }
+    const gap = await plannedGap(client, context.tenantId, order, plan, facts.lines)
+    const workOrders = await workOrderPreviewOf(client, context, order, gap, { requireOutcome: true, outcomeChosen: Boolean(body.extraOutcome) })
+    // B-OL-005: B-SA-042's CHARGE charges the extra pieces as a fee (each at its size's price), as the apply does.
+    const chargeFee = body.extraOutcome === 'CHARGE' ? chargeFeeOf(extraOfPlanned(gap.changes), pricesOf(plan.after)) : null
+    const money = { netBefore: plan.diff.netBefore, netAfter: plan.diff.netAfter, feeAmount: feeMinorOf(chargeFee, order.currency) }
+    const moves = { amountChanges: amountMoves(money), totalUp: asMoney('price', totalGoesUp(money)) }
+    if (frozen.length > 0 || addressProblems.length > 0) return { ok: false, revision, version: order.version, problems: [...frozen, ...addressProblems], diff: diffView(plan.diff), workOrders, shipTo: shipTo(true), ...moves }
+    return { ok: !workOrders.needsOutcome, revision, version: order.version, problems: [] as Issue[], diff: diffView(plan.diff), workOrders, shipTo: shipTo(true), ...moves }
   })
 }
 
@@ -459,7 +478,7 @@ export async function applyAmendment(caller: CommandCaller, orderId: string, bod
         const locked = await lockOrder(tools.tx, order.id, body.version)
         const state = amendStateProblem(locked.status)
         if (state) throw new InvalidStateError(state)
-        await moveShipTo(tools, (await readOrder(tools.tx, order.id))!, body.shipToAddressId!, body.reason!.trim(), 'OFFICE')
+        await moveShipTo(tools, (await readOrder(tools.tx, order.id))!, body.shipToAddressId!, reasonOr('amend', body.reason) /* B-OL-004 */, 'OFFICE')
         const none: FollowedWorkOrders = { applied: [], waiting: [] }
         return { amendmentId: null as string | null, workOrders: none }
       }
@@ -504,6 +523,8 @@ export async function amendInCommand(
   } = {} /* B-W2b-303: a split asks no re-acceptance */,
 ): Promise<{ amendmentId: string; /* B-SA-042 */ changedLineIds: string[]; before: Map<string, Map<string, number>>; /* B-OP-012 */ workOrders: FollowedWorkOrders }> {
   const { tx, now } = tools
+  // B-OL-004 (order lines plan D2): the reason typed, else the automatic words (stored as they are; the screen translates them).
+  const reason = reasonOr('amend', body.reason)
   const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
   await lockOrderLines(tx, tenantId, lineIds)
   // B-W2a-F2: the deposit requests of the open before-shipping steps, before the order's row (a payment takes a
@@ -530,7 +551,7 @@ export async function amendInCommand(
   const changeOptions: ChangeOptions = { split: options.reacceptance === false, priced, putBack: options.putBack === true }
   await beforeAmendmentWrites(tools, fresh, plan, changeOptions)
   // B-OP-015: a new delivery address with the amendment (an ACTIVE one of the customer; refused while a shipment is being prepared).
-  if (body.shipToAddressId) await moveShipTo(tools, fresh, body.shipToAddressId, body.reason!.trim(), 'OFFICE')
+  if (body.shipToAddressId) await moveShipTo(tools, fresh, body.shipToAddressId, reason, 'OFFICE')
   const actorId = actorIdOf(tools)
   // Removed lines (nothing refers to them: planAmendment checked).
   // B-CP-024: their customer's prices go first, audited (the foreign key is Restrict); one given meanwhile is named in words.
@@ -591,7 +612,7 @@ export async function amendInCommand(
   // deleted: their cells point at them) with the amendment's reason; an APPROVED reduction of their cells is done with it.
   const closedIds = plan.closing.map((line) => line.id)
   for (const line of plan.closing) {
-    await tx.salesOrderLine.update({ where: { id: line.id }, data: { closedShortQuantity: line.closedShortQuantity, closedShortAt: now, closedShortById: actorId, closeShortReason: body.reason!.trim(), updatedAt: now, version: { increment: 1 } }, select: { id: true } })
+    await tx.salesOrderLine.update({ where: { id: line.id }, data: { closedShortQuantity: line.closedShortQuantity, closedShortAt: now, closedShortById: actorId, closeShortReason: reason, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
   }
   const reducesDone = closedIds.length > 0 ? await reducesDoneInCommand(tools, order, closedIds) : []
   // B-OP-014: a put-back reopens the lines its change closed short, as Reopen lines does (the four columns and the code cleared).
@@ -604,9 +625,11 @@ export async function amendInCommand(
   // The snapshot after names the new lines by the ids they got.
   const newIds = new Map(plan.priced.lines.flatMap((line, index) => (line.id === null ? [[placeholderId(index), finalIds[index]!] as const] : [])))
   const after: OrderSnapshot = { header: plan.after.header, lines: plan.after.lines.map((line) => (newIds.has(line.id) ? { ...line, id: newIds.get(line.id)! } : line)) }
-  // B-W2b-303: a split moves lines to new orders of the same customer and quote: the customer accepts nothing again.
-  // B-W2b-309: a priced change always asks the customer (its price is new); a put-back restores what was accepted.
-  const reacceptanceNeeded = options.reacceptance === false || options.putBack === true ? false : plan.diff.reacceptanceNeeded || priced !== null /* B-SA-042: CHARGE too */
+  // B-W2b-303: a split moves lines to new orders of the same customer and quote: the customer accepts nothing again; a put-back
+  // restores what was accepted. B-OL-005 (order lines plan D3; 18 F10): else the office's tick, `askCustomer`; not said, only when
+  // what the customer pays goes up — a higher net, or a fee (a priced change's, B-SA-042's CHARGE too). It used to ask on every
+  // change of the net, a lower one too, and on every priced change (a priced change of nothing now asks only when ticked).
+  const reacceptanceNeeded = options.reacceptance === false || options.putBack === true ? false : customerAsked(body.askCustomer, { netBefore: plan.diff.netBefore, netAfter: plan.diff.netAfter, feeAmount: feeMinorOf(priced?.fee, order.currency) })
   await tx.salesOrder.update({
     where: { id: order.id },
     data: {
@@ -633,7 +656,7 @@ export async function amendInCommand(
       orderId: order.id,
       partyId: order.partyId,
       revision,
-      reason: body.reason!.trim(),
+      reason,
       before: plan.before as unknown as Prisma.InputJsonValue,
       after: after as unknown as Prisma.InputJsonValue,
       netAmountBefore: plan.diff.netBefore,
@@ -670,11 +693,13 @@ export async function amendInCommand(
       netAmount: markMoney('price', plan.diff.netAfter),
       grossAmount: markMoney('price', plan.diff.grossAfter),
       reacceptanceNeeded,
+      // B-OL-016: a priced change of nothing (no part, no fee) is "no charge".
+      ...(extras.noCharge ? { noCharge: true } : {}),
       scheduleRemade: schedule.inserted.length > 0 || schedule.cancelled.length > 0,
       // B-W2b-374
       ...(optionsWritten.length > 0 ? { options: entryOptionsAudit(optionsWritten) } : {}),
     },
-    reason: body.reason!.trim(),
+    reason,
   })
   // B-SA-001: both name the order's customer (the order row's own, read on the server).
   if (optionLineIds.length > 0) tools.emit({ type: 'sales_order.options_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, lineIds: optionLineIds, change: 'CHOSEN', partyId: order.partyId } })
@@ -689,7 +714,7 @@ export async function amendInCommand(
   const before = sizesOf(plan.before)
   let workOrders: FollowedWorkOrders = { applied: [], waiting: [] }
   if (options.workOrders !== 'later') {
-    const gap = await proposeGapsInCommand(tools, { order: { ...fresh, status: locked.status }, requestId: options.requestId ?? null, amendmentId, reason: body.reason!.trim(), extraOutcome: body.extraOutcome ?? null, requireOutcome: options.putBack !== true /* a put-back leaves them to production */, lineIds: changedLineIds, before }, options.autoApply)
+    const gap = await proposeGapsInCommand(tools, { order: { ...fresh, status: locked.status }, requestId: options.requestId ?? null, amendmentId, reason, extraOutcome: body.extraOutcome ?? null, requireOutcome: options.putBack !== true /* a put-back leaves them to production */, lineIds: changedLineIds, before }, options.autoApply)
     workOrders = { applied: gap.applied, waiting: gap.waiting }
   }
   return { amendmentId, changedLineIds, before, workOrders }

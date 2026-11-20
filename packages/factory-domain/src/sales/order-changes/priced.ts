@@ -11,13 +11,14 @@ import { ORDER_FREEZE_STAGES, STAGE_WORDS, type OrderFreezeStage } from './freez
  *
  *   priced    an amendment (W2a's, B-W2a-30) that carries its price: the parts of the change (factory-db
  *             SalesOrderAmendment.priceDeltaLines: one per line whose net moved — "Line 10: 6 → 7 pieces" — with its signed
- *             amount in minor units, the office's own words when given) and a change fee (feeAmount, net, above 0). A
- *             change of a field a freeze rule holds as CHANGE_REQUEST is only accepted priced. A priced change always asks
+ *             amount in minor units, the office's own words when given) and a change fee (feeAmount, net, above 0) —
+ *             B-OL-016: or neither, "no charge". A change of a field a freeze rule holds as CHANGE_REQUEST is only accepted
+ *             priced. A priced change always asks
  *             the customer to accept it again (reacceptanceNeeded; B-W2b-184's REVISED_ORDER link shows the parts and the
  *             fee).
- *   deposit   a bigger order asks an extra deposit (SAL-221): of the gross growth, the order's own deposit percent unless
- *             the office names a percent or an amount; never more than the growth (the database's rule), never on a change
- *             that does not grow the gross total.
+ *   deposit   a bigger order asks an extra deposit (SAL-221) when the office asks one (B-OL-016: none unless sent): of the
+ *             gross growth, the order's own deposit percent unless the office names a percent or an amount; never more than
+ *             the growth (the database's rule), never on a change that does not grow the gross total.
  *   new yes   SALES_ORDER_CHANGE (the approval engine's kind): an edit of a confirmed order asks a yes again when one of
  *             the company's rules holds on its facts (no rule: nothing is asked, as today). The facts below.
  */
@@ -63,7 +64,10 @@ export interface PricedInput {
   readonly labels?: Readonly<Record<string, string>> | undefined
   /** The change fee, net, in major units ("25.00"); null / absent: none. */
   readonly fee?: string | null | undefined
-  /** The extra deposit: absent = the order's own percent of the growth; null = none; else a percent or an amount. */
+  /**
+   * The extra deposit. B-OL-016 (order lines plan O9: "none unless sent"): absent or null = none; `{}` = the order's own percent of
+   * the growth; else a percent or an amount.
+   */
   readonly deposit?: { readonly pct?: string | undefined; readonly amount?: string | undefined; readonly dueDate?: string | undefined; readonly kind?: string | undefined } | null | undefined
 }
 
@@ -99,12 +103,13 @@ export interface ExtraDepositPlan {
 }
 
 /**
- * The extra deposit of a change (SAL-221): only when the gross total grew; of the growth, by the office's percent or amount,
- * else the order's own deposit percent (null: the order asks no deposit, so none). Never more than the growth.
+ * The extra deposit of a change (SAL-221): only when the gross total grew and the office asks one (B-OL-016: none unless sent —
+ * a writer without the price grain sends no deposit, so its change asks none); of the growth, by the office's percent or amount,
+ * else (`{}`) the order's own deposit percent (null: the order asks no deposit, so none). Never more than the growth.
  * Returns the plan, null (none), or the problem in words.
  */
 export function extraDepositOf(input: { readonly growth: MinorUnits; readonly currency: string; readonly orderPct: string | null; readonly asked: PricedInput['deposit'] }): ExtraDepositPlan | null | Issue {
-  if (input.growth <= 0 || input.asked === null) return null
+  if (input.growth <= 0 || input.asked === null || input.asked === undefined) return null
   const asked = input.asked
   if (asked?.amount !== undefined) {
     const amount = toMinorUnits(asked.amount, input.currency)

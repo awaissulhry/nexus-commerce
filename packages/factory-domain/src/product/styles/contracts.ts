@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { id, input, instant, output } from '../../core/contracts'
-import { money } from '../../money/marked'
+import { money, notMoney } from '../../money/marked'
 import { GARMENT_TRACKINGS } from '../../production/serials/rules'
 import { localisedNames } from '../materials/contracts'
 import { sizeCode } from '../sizes/contracts'
@@ -161,6 +161,13 @@ export const listStylesQuery = input({
   draftRevision: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
   /** Exactly this company's styles and the tenant-wide ones. */
   companyId: id().optional(),
+  // B-OL-033 (order lines plan, 18 F1): the style search for an order ("Add a style").
+  /**
+   * A sales order the person reads: only our own collection and that order's customer's own private-label styles (another
+   * customer's never), of the order's company; each row then names its active colourways and whether the customer's price list
+   * prices each one (`colourways`). An order the person may not see answers like an unknown one (404).
+   */
+  forOrder: id().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   cursor: z.string().max(200).optional(),
 })
@@ -339,6 +346,9 @@ export const styleRow = output({
   coverage: rowCoverage.nullable(),
   /** W2b (B-W2b-25): only with the cost grain (the API drops it otherwise), and null without costing.view over the style's company. */
   cost: money.cost(rowCost.nullable()),
+  // B-OL-033: only with `forOrder` — the style's active colourways, and whether the order's customer's price list prices each one
+  // (a yes or no, never the price: every reader of the search may know it).
+  colourways: z.array(output({ id: id(), code: z.string(), name: z.string(), listPriced: notMoney(z.boolean()) })).optional(),
 })
 export type StyleRow = z.infer<typeof styleRow>
 

@@ -5,6 +5,7 @@ import { orderProgress } from '../orders/orders'
 import { PORTAL_SALES_ORDERS_VIEW } from './permissions'
 import { progressOf, percentOf } from './progress'
 import { customerPromiseHistory, PROMISE_REASON_CODES, promiseReasonOf, promiseReasonText } from './promise'
+import { AUTOMATIC_REASONS } from '../amendments/reasons' // B-OL-004
 import { customerShipmentStatusOf, shipmentMilestonesOf, stillToShipOf } from './shipments'
 import { chipCounts, customerStatusOf, inChip, isStillToShip, milestonesOf, weekOf, type MilestoneFacts } from './status'
 
@@ -141,6 +142,19 @@ describe('the promise in customer words (PLN-178)', () => {
     ])
     expect(JSON.stringify(history)).not.toMatch(/buyer is slow|line 2 down/)
   })
+
+  // ── B-OL-004 (order lines plan D2; 18 F23): no reason given, no reason shown ──
+  it('B-OL-004: a move with no reason given (none, empty, or the automatic words) shows no reason; a typed note still reads PLANNING', () => {
+    const at = new Date('2026-11-03T09:00:00.000Z')
+    const move = (reason: string | null) => customerPromiseHistory([{ at, from: '2026-12-01', to: '2026-12-08', lineIds: [], reason }], () => undefined)[0]!
+    expect(move(AUTOMATIC_REASONS.promise).reason).toBeNull()
+    expect(move(null).reason).toBeNull()
+    expect(move('  ').reason).toBeNull()
+    expect(JSON.stringify(move(AUTOMATIC_REASONS.promise))).not.toMatch(/order page/)
+    expect(move('internal: buyer is slow').reason).toMatchObject({ code: 'PLANNING' })
+    expect(move('TRANSPORT').reason).toMatchObject({ code: 'TRANSPORT' })
+  })
+  // ── end B-OL-004 ──
 })
 
 describe('production progress (SAL-076)', () => {
