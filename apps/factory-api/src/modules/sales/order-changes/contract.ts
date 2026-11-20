@@ -122,7 +122,7 @@ const pricedFields = {
   labels: z.record(id(), z.string().max(PRICED_LIMITS.label + 10)).optional(),
   /** The change fee, net, in the order's currency ("25.00"). */
   fee: money.price(z.string().trim().max(20).nullish()),
-  /** The extra deposit: left out = the order's own percent of the growth; null = none. */
+  /** The extra deposit. B-OL-016 (none unless sent): left out or null = none; `{}` = the order's own percent of the growth. */
   deposit: money.price(
     input({ pct: z.string().trim().max(12).optional(), amount: money.price(z.string().trim().max(20).optional()), dueDate: businessDate().optional(), kind: z.enum(['ACCONTO', 'CAPARRA', 'CAPARRA_PENITENZIALE']).optional() }).nullish(),
   ),

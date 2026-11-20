@@ -98,7 +98,7 @@ export async function previewPricedChange(caller: CommandCaller, orderId: string
     problems.push(...frozenProblems(frozen.changes, true))
     const parts = pricedPartsOf(plan.diff.lines, new Map(Object.entries(priced.labels ?? {})))
     const feeAmount = problems.some((issue) => issue.path === 'body/fee') ? null : feeMinorOf(priced.fee, order.currency)
-    if (parts.length === 0 && feeAmount === null) problems.push({ path: 'body/fee', message: 'A priced change carries its price: a change that moves the net of a line, or a change fee. Send it as a plain amendment otherwise.' })
+    // B-OL-016 (order lines plan O8; 18 F25): no part and no fee is fine — a priced change of nothing is "no charge".
     const own = await client.depositRequest.findFirst({ where: { AND: [{ OR: [{ orderId: order.id }, ...(order.quoteVersionId ? [{ quoteVersionId: order.quoteVersionId }] : [])] }, ORDER_DEPOSIT_ONLY], status: { not: 'CANCELLED' } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { depositPct: true, kind: true } })
     const growth = plan.diff.grossAfter - plan.diff.grossBefore
     let deposit: { amount: number; pct: string; basis: string; kind: string; growth: number } | null = null

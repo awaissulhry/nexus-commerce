@@ -24,12 +24,14 @@ import { pendingChangeYes } from './yes'
  *
  *   before the writes   one change at a time (a change whose yes still waits holds the next one: B-OP-010, a request asked
  *                       before office changes applied at once, until it is decided or taken back); the company's freeze rules
- *                       against the change (BLOCKED refused; CHANGE_REQUEST refused unless the change is priced); the
+ *                       against the change (BLOCKED refused; CHANGE_REQUEST refused unless the change is priced — B-OL-016: a
+ *                       priced change may cost nothing, "no charge"); the
  *                       customer-supplied rows of a line the change removes (removed first, refused when something of them
  *                       was received, used or returned)
  *   the amendment row   a priced change's parts (one per line whose net moved, in the office's words when given) and its
- *                       fee; the extra deposit of a bigger order (the order's own percent of the gross growth unless the
- *                       office names one; its kind the order's deposit's, a caparra penitenziale only while switched on)
+ *                       fee; the extra deposit of a bigger order (B-OL-016: only when the office asks it — the order's own
+ *                       percent of the gross growth for `{}`, else the percent or amount it names; its kind the order's
+ *                       deposit's, a caparra penitenziale only while switched on)
  *                       — named on the append-only row. B-OP-010 (order page plan N2, decision D2): no yes is asked any
  *                       more, an office change applies at once (reapprovalTaskId stays null)
  *   after               sales_order.change_priced; the order's customer-supplied rows of the lines it changed planned again
@@ -74,6 +76,8 @@ export interface AmendmentExtras {
   readonly feeAmount: number | null
   readonly depositRequestId: string | null
   readonly priced: boolean
+  /** B-OL-016 (order lines plan O8; 18 F25): a priced change with no part and no fee — "no charge" (the amendment's audit says so). */
+  readonly noCharge: boolean
 }
 
 /** The order's deposit percent and kind (its first deposit request: the version's or the order's own). */
@@ -135,7 +139,7 @@ export async function amendmentExtras(
   input: { readonly revision: number; readonly before: OrderSnapshot; readonly after: OrderSnapshot },
   options: ChangeOptions,
 ): Promise<AmendmentExtras> {
-  const none: AmendmentExtras = { priceDeltaLines: undefined, feeAmount: null, depositRequestId: null, priced: false }
+  const none: AmendmentExtras = { priceDeltaLines: undefined, feeAmount: null, depositRequestId: null, priced: false, noCharge: false }
   if (options.split) return none
   const diff = amendmentDiff(input.before, input.after)
   let parts: PricedPart[] | null = null
@@ -144,11 +148,12 @@ export async function amendmentExtras(
   if (options.priced) {
     parts = pricedPartsOf(diff.lines, new Map(Object.entries(options.priced.labels ?? {})))
     feeAmount = feeMinorOf(options.priced.fee, order.currency)
-    if (parts.length === 0 && feeAmount === null) throw conflict('A priced change carries its price: a change that moves the net of a line, or a change fee. Send it as a plain amendment otherwise.', 'body/fee')
+    // B-OL-016 (order lines plan O8; 18 F25): a priced change may cost nothing (no part, no fee): it passes a CHANGE_REQUEST freeze
+    // verdict as "no charge" — also from a writer without the price grain, who sends no money field (the grain filter refuses one).
     if (parts.length > 100) throw conflict('A priced change is priced in at most 100 parts: change fewer lines at once.', 'body/lines')
     depositRequestId = await extraDepositInCommand(tools, order, { growth: diff.grossAfter - diff.grossBefore, revision: input.revision, asked: options.priced.deposit })
   }
-  return { priceDeltaLines: parts && parts.length > 0 ? (parts as unknown as Prisma.InputJsonValue) : undefined, feeAmount, depositRequestId, priced: options.priced !== null }
+  return { priceDeltaLines: parts && parts.length > 0 ? (parts as unknown as Prisma.InputJsonValue) : undefined, feeAmount, depositRequestId, priced: options.priced !== null, /* B-OL-016 */ noCharge: options.priced !== null && (parts ?? []).length === 0 && feeAmount === null }
 }
 
 /** After the amendment row (see the file's head). */

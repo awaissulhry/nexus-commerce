@@ -677,6 +677,8 @@ export async function amendInCommand(
       netAmount: markMoney('price', plan.diff.netAfter),
       grossAmount: markMoney('price', plan.diff.grossAfter),
       reacceptanceNeeded,
+      // B-OL-016: a priced change of nothing (no part, no fee) is "no charge".
+      ...(extras.noCharge ? { noCharge: true } : {}),
       scheduleRemade: schedule.inserted.length > 0 || schedule.cancelled.length > 0,
       // B-W2b-374
       ...(optionsWritten.length > 0 ? { options: entryOptionsAudit(optionsWritten) } : {}),
