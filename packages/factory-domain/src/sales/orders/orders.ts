@@ -38,7 +38,8 @@ import { priceBasisOf, type SalesFeeKind, type SalesLineKind } from '../quotes/q
  *   CANCELLED        by a person, with a reason, while CONFIRMED, IN_PRODUCTION or READY (B-W2a-30, SAL-211: the cancel
  *                    impact check, ./daily `cancelImpact`): nothing shipped, no draft work order left on its lines, no
  *                    shipment being packed and no invoice of it; released work orders, cut leather, reservations,
- *                    purchase orders and a paid deposit are left behind and named
+ *                    purchase orders and a paid deposit are left behind and named; B-OO-003 (order overview N3): also while
+ *                    PENDING_APPROVAL (its requests for a yes, the order's and the credit override's, are withdrawn with it)
  *
  * W2a (B-W2a-30): a line closed short (SAL-210) counts as done in the progress: the pieces that will not be made or
  * shipped are `closedShort`, never "to ship".
@@ -73,8 +74,12 @@ export const LINE_CHANGE_STATUSES: readonly SalesOrderStatus[] = Object.freeze([
 /** Final: nothing on the order changes any more. */
 export const FINAL_STATUSES: readonly SalesOrderStatus[] = Object.freeze(['CLOSED', 'CANCELLED'])
 
-/** B-W2a-30 (SAL-211): an order is cancelled only before anything shipped (the …_sales_guards trigger says so too). */
-export const CANCEL_STATUSES: readonly SalesOrderStatus[] = Object.freeze(['CONFIRMED', 'IN_PRODUCTION', 'READY'])
+/**
+ * B-W2a-30 (SAL-211): an order is cancelled only before anything shipped (the …_sales_guards trigger says so too).
+ * B-OO-003 (order overview N3): an order waiting for a yes is cancelled too (the trigger always allowed it; the approver's no
+ * used it): ONE rule for orderActions, cancelImpact, the API's cancel blocks and the customer list's row.
+ */
+export const CANCEL_STATUSES: readonly SalesOrderStatus[] = Object.freeze(['CONFIRMED', 'IN_PRODUCTION', 'READY', /* B-OO-003 */ 'PENDING_APPROVAL'])
 
 export const isSalesOrderStatus = (value: unknown): value is SalesOrderStatus => isState(salesOrderMachine, value)
 

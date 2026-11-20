@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { InvalidStateError } from '../../core/errors'
 import { assertTransition, canTransition } from '../../state/machine'
+// B-OO-003: the cancel's impact check reads CANCEL_STATUSES too.
+import { cancelImpact, type CancelFacts } from './daily'
 import {
+  CANCEL_STATUSES,
   daysLate,
   followMoves,
   orderActions,
@@ -329,6 +332,23 @@ describe('what a person may do next', () => {
     expect(orderActions('SHIPPED', { settlement: unsettled }).find((action) => action.action === 'close')).toMatchObject({ needsReason: true, held: expect.stringMatching(/^Not settled: A balance/) })
     expect(orderActions('CLOSED', {})).toEqual([])
   })
+  // ── B-OO-003 (order overview N3): an order waiting for a yes is cancelled too ──
+  it('a waiting order offers cancel (a reason asked); its impact check has no STATE block; shipped states keep theirs', () => {
+    expect(CANCEL_STATUSES).toContain('PENDING_APPROVAL')
+    expect(orderActions('PENDING_APPROVAL', {})).toEqual([
+      { action: 'changePromise', allowed: true, needsReason: true, held: null },
+      { action: 'cancel', allowed: true, needsReason: true, held: null },
+    ])
+    expect(canTransition(salesOrderMachine, 'PENDING_APPROVAL', 'CANCELLED', { reason: 'The customer withdrew while it waited.' }).ok).toBe(true)
+    const waiting: CancelFacts = { status: 'PENDING_APPROVAL', workOrders: [], shipments: [], invoices: [], deposits: [{ id: 'd1', status: 'OPEN', amount: 18_300 }], milestones: [], reservations: [], purchaseOrders: [] }
+    const impact = cancelImpact(waiting)
+    expect(impact.blocks).toEqual([])
+    expect(impact.cancellable).toBe(true)
+    expect(impact.touches.map((item) => item.code)).toEqual(['DEPOSITS_CANCELLED'])
+    // An order that shipped keeps its STATE block, in words that say goods left.
+    expect(cancelImpact({ ...waiting, status: 'PARTLY_SHIPPED' }).blocks).toEqual([expect.objectContaining({ code: 'STATE', message: expect.stringMatching(/goods left/) })])
+  })
+  // ── end B-OO-003 ──
   // F-SA-201: a delivered order offers Close order as a shipped one does (settled: no reason; not settled: held, a reason).
   it('a delivered order is closed like a shipped one', () => {
     expect(orderActions('DELIVERED', { settlement: settled })).toEqual([

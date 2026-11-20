@@ -1189,6 +1189,41 @@ describe('the order read carries its open requests for a yes, decided in place (
     for (const type of ['approval.requested', 'approval.decided', 'approval.withdrawn', 'approval.stale']) expect(partsOf(type)).toEqual(['order', 'changes'])
     expect(partsOf('approval.rule_changed')).toBeUndefined()
   })
+
+  // ── B-OO-003 (order overview N3): a waiting order is cancelled; its requests for a yes are withdrawn with it ──────────────────
+  it('B-OO-003: a person with orders.manage cancels the waiting order; its SALES_ORDER and CREDIT_OVERRIDE requests are withdrawn', async () => {
+    SESSIONS['f.sales'] = person(newId, ['orders.view', 'orders.manage'])
+    SESSIONS['f.otherSales'] = person(newId, ['orders.view', 'orders.manage'], [seedUuid(NS_F, 'party:P3')])
+    const orderId = depth.waitingOrderId
+    const taskStatus = async (taskId: string) => (await one<{ status: string }>('SELECT status::text AS status FROM "ApprovalTask" WHERE id = $1', [taskId])).status
+    // W39-01 still waits for its credit hold (its yes was said above): the member asks the order's yes once more, as before.
+    const ownerRole = await one<{ id: string }>(`SELECT id FROM "Role" WHERE "tenantId" = $1 AND key = 'owner'`, [TF])
+    const caller = callerFor(h.database, { audience: 'office', tenantId: TF, actorId: depth.memberId, requestId: newId(), grants: [grant(['orders.view', 'orders.manage', 'approvals.request'])] })
+    const { result } = await command(caller, { name: 'approvals.request', input: { kind: 'SALES_ORDER', recordId: orderId } }, (tools) =>
+      askApproval(tools, { kind: 'SALES_ORDER', recordId: orderId, requester: { userId: depth.memberId }, whenNoRule: { approverRoleId: ownerRole.id, requireStepUp: false } }),
+    )
+    if (!result.asked) throw new Error('the second SALES_ORDER request was not asked')
+    expect([await taskStatus(result.taskId), await taskStatus(depth.taskIds.override1)]).toEqual(['PENDING', 'PENDING'])
+
+    const order = await read('f.sales', orderId)
+    expect(order.status).toBe('PENDING_APPROVAL')
+    expect(order.actions.find((action: Json) => action.action === 'cancel')).toMatchObject({ allowed: true, needsReason: true, held: null })
+    // The impact check of a waiting order: no "goods left" STATE block.
+    const check = await ok('f.sales', 'GET', `${orderUrl(orderId)}/cancel-check`)
+    expect(check.impact.blocks.map((item: Json) => item.code)).not.toContain('STATE')
+    // Read-only: 403; a person limited to another customer: the words of an unknown order (404); nothing withdrawn.
+    const body = { version: order.version, reason: 'Made-up: the customer withdrew while it waited.' }
+    await refused('f.reader', 'POST', `${orderUrl(orderId)}/cancel`, body, 403)
+    await refused('f.otherSales', 'POST', `${orderUrl(orderId)}/cancel`, body, 404)
+    expect([await taskStatus(result.taskId), await taskStatus(depth.taskIds.override1)]).toEqual(['PENDING', 'PENDING'])
+
+    const cancelled = (await ok('f.sales', 'POST', `${orderUrl(orderId)}/cancel`, body)).order
+    expect(cancelled).toMatchObject({ status: 'CANCELLED', version: order.version + 1 })
+    expect([await taskStatus(result.taskId), await taskStatus(depth.taskIds.override1)]).toEqual(['WITHDRAWN', 'WITHDRAWN'])
+    expect((await auditsOf(orderId)).find((row) => row.after?.status === 'CANCELLED')).toMatchObject({ before: { status: 'PENDING_APPROVAL' }, reason: body.reason, audience: 'OFFICE' })
+    expect((await statusEvents(orderId)).at(-1)!.payload).toMatchObject({ from: 'PENDING_APPROVAL', to: 'CANCELLED', by: 'person' })
+  })
+  // ── end B-OO-003 ──
 })
 // ---- end B-OP-020
 

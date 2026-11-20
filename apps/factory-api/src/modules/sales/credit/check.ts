@@ -11,6 +11,7 @@ import {
   findingsOf,
   heldWords,
   HOLDING_STEPS,
+  ORDER_STEPS, // B-OO-003
   OVERRIDE_CHANGES,
   type CreditFinding,
   type CreditReading,
@@ -256,6 +257,17 @@ export async function newestCheck(db: Reader, input: { readonly step: CreditStep
   const pending = check.result === 'HOLD' && check.overridesCheckId === null ? await db.approvalTask.findFirst({ where: { kind: 'CREDIT_OVERRIDE', recordType: 'CreditCheck', recordId: check.id, status: 'PENDING' }, select: { id: true } }) : null
   return { ...check, held: check.result === 'HOLD' && check.overridesCheckId === null, pendingTaskId: pending?.id ?? null }
 }
+
+// ── B-OO-003 (order overview N3): the order's standing credit hold, here beside newestCheck (moved from orders-depth/approval.ts, which
+// imports orders/moves.ts: the cancel reads it with no import cycle) ──────────────────────────────────────────────────────────────
+/** The order's credit HOLD that still stands (its newest ORDER / PORTAL / API check, no override row), or null. */
+export async function creditHoldOf(db: Reader, orderId: string): Promise<{ checkId: string; pendingTaskId: string | null } | null> {
+  const step = (await db.creditCheck.findFirst({ where: { recordType: 'SalesOrder', recordId: orderId, step: { in: [...ORDER_STEPS] } }, orderBy: [{ checkedAt: 'desc' }, { id: 'desc' }], select: { step: true } }))?.step
+  if (!step) return null
+  const last = await newestCheck(db, { step: step as CreditStep, recordType: 'SalesOrder', recordId: orderId })
+  return last?.held ? { checkId: last.id, pendingTaskId: last.pendingTaskId } : null
+}
+// ── end B-OO-003 ──
 
 export interface GateInput {
   readonly step: Extract<CreditStep, 'RELEASE' | 'SHIPMENT'>

@@ -30,6 +30,8 @@ import { proposeGapsInCommand } from '../../production/work-order-changes/propos
 import { closeRefusedFollowUpsInCommand } from './still-to-do'
 // B-OP-012 (order page plan N2, D1): the work orders follow the cancel in its command where the person may.
 import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../production/work-order-changes/auto'
+// B-OO-003 (order overview N3): a waiting order's standing credit hold (its override request is withdrawn with the cancel).
+import { creditHoldOf } from '../credit/check'
 
 /**
  * The sales order's moves (B-W1-25; SAL-204: one writer per move; factory-domain sales/orders salesOrderMachine), each
@@ -40,7 +42,8 @@ import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../pr
  *
  *   a person (office)   promise date (orders.manage; a reason; the first promise stays), ready by hand (orders.manage; a
  *                       reason, while quality release is not in use), cancel (orders.manage; a reason; B-W2a-30: before
- *                       anything shipped, with the impact check (./impact): no draft work order, no shipment being
+ *                       anything shipped, B-OO-003 also while waiting for a yes (its requests for a yes withdrawn with
+ *                       it), with the impact check (./impact): no draft work order, no shipment being
  *                       packed, no invoice of it; the lines' work-order locks are taken first, so no work order is made
  *                       for them meanwhile; its OPEN deposit requests and payment steps are cancelled with it; what it
  *                       leaves behind is answered), close (settled: orders.manage or orders.close; not settled: a reason
@@ -179,7 +182,7 @@ export async function markReady(caller: CommandCaller, orderId: string, body: { 
 
 /**
  * orders.manage: CONFIRMED, IN_PRODUCTION or READY → CANCELLED with a reason (B-W2a-30, SAL-211; W1 allowed only CONFIRMED
- * without released work orders). The impact check (./impact, factory-domain `cancelImpact`) is read again under the
+ * without released work orders); B-OO-003 (order overview N3): PENDING_APPROVAL too (factory-domain CANCEL_STATUSES). The impact check (./impact, factory-domain `cancelImpact`) is read again under the
  * order's lock and stops it at a draft work order (cancel those first: none is released for a cancelled order), a
  * shipment being packed, or an invoice of the order (a fiscal document is never deleted: a credit note is Finance's).
  * The lines' work-order locks (modules/production/work-orders `lockOrderLines`, the lock a new work order takes on them)
@@ -219,13 +222,19 @@ export async function cancelOrderInCommand(
   options: { readonly workOrders?: 'now' | 'later'; readonly autoApply?: AutoApply } = {},
 ): Promise<{ orderId: string; status: 'CANCELLED'; paidDepositRequestIds: string[]; impact: ReturnType<typeof impactView>; /* B-OP-012 */ workOrders: FollowedWorkOrders }> {
   const { tx, now } = tools
+  const reason = reasonOf(body.reason)
+  // B-OO-003 (order overview N3): a waiting order's credit override request is taken back with it — first, before the order's
+  // locks, as the approver's no always did (the approval engine locks a request before its order). A refused cancel rolls it back.
+  if (order.status === 'PENDING_APPROVAL') {
+    const hold = await creditHoldOf(tx, order.id)
+    if (hold?.pendingTaskId) await withdrawPending(tools, { kind: 'CREDIT_OVERRIDE', recordId: hold.checkId, byId: tools.context.audience === 'office' ? tools.context.actorId : null, words: `Order cancelled: ${reason ?? ''}`.slice(0, 2000) })
+  }
   const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
   await lockOrderLines(tx, tenantId, lineIds)
   const locked = await lockOrder(tx, order.id, body.version)
   if (lineIds.length > 0) await tx.$queryRaw`SELECT w.id FROM "WorkOrder" w WHERE w.id IN (SELECT c."workOrderId" FROM "WorkOrderSize" c WHERE c."salesOrderLineId" = ANY(${lineIds}::uuid[])) ORDER BY w.id FOR SHARE`
   const facts = await readOrderFacts(tx, order)
   const impact = cancelImpact(await readCancelFacts(tx, { id: order.id, status: locked.status, quoteVersionId: order.quoteVersionId }, facts))
-  const reason = reasonOf(body.reason)
   // B-OP-040 (order page N6, lines-derived): garments of the order on a shipment of another of the customer's orders that has
   // not left (DRAFT or PACKED) come off it first, in words (a cancelled order ships nothing). The shipments made for the
   // order itself are the impact's SHIPMENT_IN_PREPARATION. Never a line of another customer (the line's FK carries partyId).
