@@ -41,10 +41,11 @@ import { STAGE_WORDS } from '@nexus/factory-domain/production-brand/words'
  *      order again (the office note saved next goes through at the new version); the sheet's edit at the version read before is stale.
  *  11  F-MS-106 (set the stage by hand): SEED-SO-W39-02, the Owner's own case (In production, no work order, no production state
  *      yet): the Planner sets Sewing by hand (System or scanners down, a note) — the headline "In production · Sewing", the hand row
- *      with who and why, the Orders list's hand mark, the History line; P1's buyer reads a plain Sewing (no count is claimed: the
+ *      with who and why, the History line, the Orders sheet's hand mark (ms-fx1: in Where it is on the customer page's Work tab, as
+ *      Sales — Sales › Orders' default view has no such column); P1's buyer reads a plain Sewing (no count is claimed: the
  *      floor counts sewing only on a work order), may still mark it Urgent (nothing cut), never "by hand"; Change… down to Cutting
- *      (a correction) — the buyer reads "Cutting · Count to follow"; Clear… → Preparing again; Sales sees the door held in words, and
- *      so does a Confirmed order.
+ *      (a correction) — the buyer reads "Cutting · Count to follow"; Clear… says Cutting was never told (ms-fx1) → Preparing again;
+ *      Sales sees the door held in words, and so does a Confirmed order.
  * Not here, said in the report: cut pieces (the floor's flow: the extra-pieces outcome is held by the design case
  * lines-review-outcome, B-OP-071 O1 and the unit tests of F-OP-107), the record of a shipment made elsewhere whose garments the seeds
  * date in the story's days ahead (B-OP-071 O4 records one), and the invoices of a shared shipment that left (B-OP-045).
@@ -713,12 +714,16 @@ export default defineStage({
       await planner.go(`/sales/orders/${order.id}?tab=overview`)
       await seen(page.locator('aside.fw-rcf-dock').getByText(new RegExp(escape(FEED('verb.setStageByHand')))).first(), 60_000)
 
-      // The Orders list, searched for this one order: the same Sewing, with its small hand mark (its words for a screen reader, the
-      // tip). The list holds that order alone, so its words are read in the list as a whole (a grid row may be split in parts).
-      await planner.go(`/sales/orders?q=${encodeURIComponent(order.number)}`)
-      await seen(page.getByRole('link', { name: order.number, exact: true }), 60_000)
-      await expect(page.locator('main')).toContainText(OD('list.byHand.mark'), { timeout: 60_000 })
-      await flow.shot(page, 'hand-stage-list')
+      // ms-fx1: the Orders sheet's hand mark, read where its "Where it is" column is drawn at first — the customer page's Work tab (the
+      // same sheet and cell, WhereItIsCell; Sales › Orders' own default view has no such column, it is offered in Customise). Searched
+      // for this one order, as Sales (an office fact: the mark only, never who or why): its row's Where it is cell says the same
+      // Sewing with its small hand mark (its words for a screen reader, the tip).
+      await sales.go(`/sales/customers/${alphaId}?tab=work&q=${encodeURIComponent(order.number)}`)
+      const whereCell = sales.page.locator(`.ag-row[row-id="${order.id}"] .ag-cell[col-id="whereItIs"]`).first()
+      await seen(whereCell, 60_000)
+      await expect(whereCell).toContainText(stageWord('SEWING'), { timeout: 60_000 })
+      await expect(whereCell).toContainText(OD('list.byHand.mark'), { timeout: 60_000 })
+      await flow.shot(sales.page, 'hand-stage-list')
 
       // P1's buyer: a plain Sewing on its order — no count is claimed (the floor counts sewing only on a work order: never "0 of 8
       // sewn"), never "by hand", the reason, the note or who; its own "Mark urgent" is still offered (nothing cut: R8).
@@ -765,12 +770,14 @@ export default defineStage({
       await saysNothingOfTheHand('P1’s order at Cutting')
       await flow.shot(alpha.page, 'hand-stage-portal-cutting')
 
-      // Clear… → back to the floor's stage, Preparing: inside the window the customer was not told and is not told now.
+      // Clear… → back to the floor's stage, Preparing. ms-fx1 (Z01 note 2): Clear… says what the keeper's markers say — the Change down
+      // to Cutting is never told (D9) and Sewing's waiting notice was dropped by it, so "has not been told Cutting, and is not told it now".
       await planner.go(`/sales/orders/${order.id}?tab=overview`)
       await press(where.getByRole('button', { name: OD('where.manual.clearAria', { number: order.number }), exact: true }))
       const clear = dialog(page)
       await seen(clear.getByText(OD('where.manual.clearTitle'), { exact: true }), 60_000)
-      await seen(clear.getByText(OD('where.manual.clearUntold', { minutes: 10, customer: STAGE_WORDS.CUTTING.en }), { exact: true }))
+      await seen(clear.getByText(OD('where.manual.clearNever', { customer: STAGE_WORDS.CUTTING.en }), { exact: true }))
+      await seen(clear.getByText(OD('where.manual.clearFloor', { customer: STAGE_WORDS.PREPARING.en }), { exact: true }))
       const cleared = await answerOf(page, 'DELETE', hand, () => press(clear.getByRole('button', { name: OD('where.manual.clearGo', { stage: stageWord('PREPARING') }), exact: true })))
       expect(cleared).toMatchObject({ floor: 'PREPARING', stage: 'PREPARING', byHand: null })
       await expect(headline).toHaveText(`${OD('status.IN_PRODUCTION')} · ${stageWord('PREPARING')}`, { timeout: 60_000 })
