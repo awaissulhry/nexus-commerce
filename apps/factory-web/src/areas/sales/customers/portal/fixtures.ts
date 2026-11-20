@@ -2,11 +2,16 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { STEP_UP_CLOSED } from '../../../admin/shared/model'
 import { blankInvite, settingsDraftOf } from '../../../admin/users/partners/model'
+// L5 (cp-fx14): an adviser's portal seen by Sales and by the Owner (#1767 follow-up 15).
+import { partnerCan } from '../../../admin/users/partners/model'
+import { rolePermissions } from '../../../../shell/design-data'
+import type { Party } from '../../../parties/_shared/api'
 import { CUSTOMERS, inShell, partyThread, RECORD_CAN, recordModel } from '../../../parties/_shared/fixtures'
 // F-SA-270: the customer's own record view (split from the supplier's).
 import { CustomerRecordView } from '../record/view/CustomerRecordView'
 import { dormantMarksWords, PRODUCTION_ROLE_NOT_OFFERED_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { CUSTOMER_PEOPLE, customerAccess, freezeList, limitsModel, OFFICE_PEOPLE, portalModel, productionLimits, READ_ONLY, REQUESTS, rolesOf } from './demo'
+import { ADVISER_PARTY_ID, adviserAccess, ALL_RIGHTS, withOwnerGives } from './demo' // L5 (cp-fx14)
 import { blankFreezeDraft, limitsDraftOf, withPreset } from './limits/model'
 import type { PortalAccessModel } from './model'
 import { PortalAccessView } from './view/PortalAccessView'
@@ -20,14 +25,35 @@ import { PortalAccessView } from './view/PortalAccessView'
 
 const party = CUSTOMERS.find((item) => item.code === 'MODA-DEMO')!
 
+// ---- L5 (cp-fx14; customer page walk; #1767 follow-up 15): an adviser's portal draws its own record (Studio Esempio, made up: no
+// address, contact or tax identity of Moda Demo's), and a read by anyone but the Owner (`mayGivePriceRole` false) is seen as Sales.
+const adviser: Party = { ...party, id: ADVISER_PARTY_ID, code: 'STUDIO-ESEMPIO', legalName: 'Studio Esempio S.r.l.', tradeName: 'Studio Esempio', roles: ['CONSULTANT'], taxMode: null, vatNumber: null, fiscalCode: null, city: null, paymentTerms: null, addresses: [], contacts: [], taxIdentities: [], warnings: [], attention: [], invoiceBlocked: false }
+const recordPartyOf = (model: PortalAccessModel): Party => {
+  if (model.access?.party.id !== ADVISER_PARTY_ID) return party
+  return model.access.kinds.includes('CUSTOMER') ? { ...adviser, roles: ['CUSTOMER', 'CONSULTANT'] } : adviser
+}
+// ---- end L5
+
 export function PortalDesign({ model }: { model: PortalAccessModel }) {
-  const record = recordModel(model.side, party, { tab: 'portal', can: { ...RECORD_CAN, partners: true } })
-  return inShell(`/sales/customers/${party.id}`, createElement(CustomerRecordView, { model: record, thread: partyThread(party, model.side) /* B-TH-260 */, portal: createElement(PortalAccessView, { model }) }))
+  const shown = recordPartyOf(model) // L5 (cp-fx14)
+  const record = recordModel(model.side, shown, { tab: 'portal', can: { ...RECORD_CAN, partners: true } })
+  const permissions = model.access?.mayGivePriceRole === false ? rolePermissions('sales') : undefined // L5 (cp-fx14): seen as Sales
+  return inShell(`/sales/customers/${shown.id}`, createElement(CustomerRecordView, { model: record, thread: partyThread(shown, model.side) /* B-TH-260 */, portal: createElement(PortalAccessView, { model }) }), permissions)
 }
 
 const base = (over: Partial<PortalAccessModel> = {}) => portalModel('customers', over)
 const marco = CUSTOMER_PEOPLE[1]!
 const sara = CUSTOMER_PEOPLE[2]!
+
+// ---- L5 (cp-fx14): an adviser's Portal access — Sales' rights (partners.*), its own name, no requests or production limits (an
+// adviser has none); `ownersAdviser`: read by the Owner (mayGivePriceRole true). A customer that is also an adviser: Sales invites its
+// customer people, the Accountant stays the Owner's.
+const SALES_RIGHTS = partnerCan(rolePermissions('sales'))
+const adviserCase = (access = adviserAccess(), over: Partial<PortalAccessModel> = {}) =>
+  base({ access, partyName: access.party.name, can: SALES_RIGHTS, requests: { items: [], problem: null, selected: [] }, limits: null, ...over })
+const ownersAdviser = adviserAccess({ mayGivePriceRole: true })
+const customerAndAdviser = adviserAccess({ kinds: ['CUSTOMER', 'GUEST'], party: { ...adviserAccess().party, roles: ['CUSTOMER', 'CONSULTANT'] }, roles: withOwnerGives(rolesOf(['CUSTOMER', 'GUEST'])) })
+// ---- end L5
 
 export const designScreen = defineDesignScreen<PortalAccessModel>({
   screen: 'SCR-033-portal',
@@ -83,6 +109,27 @@ export const designScreen = defineDesignScreen<PortalAccessModel>({
     { id: 'limits-step-up', label: 'F-PR-07 · Apply: a fresh code before the limits change', model: base({ limits: limitsModel({ draft: withPreset(limitsDraftOf(productionLimits().production)), busy: true }), stepUp: { ...STEP_UP_CLOSED, open: true, sentence: 'stepUp.sentence.production' } }) },
     { id: 'limits-loading', label: 'F-PR-07 · Limits loading (the rest of the tab is read)', model: base({ limits: limitsModel({ state: 'loading', read: null }) }) },
     { id: 'limits-error', label: "F-PR-07 · Limits couldn't be read: Try again (the rest of the tab works)", model: base({ limits: limitsModel({ state: 'error', read: null, problem: 'problem.unavailable' }) }) },
+    // ---- L5 (cp-fx14; customer page walk; #1767 follow-up 15): the role only the Owner gives — a guest's role that sees prices (the
+    // Accountant) — held before the click in the 403's words for Sales; the Owner picks it. Made-up names only.
+    {
+      id: 'cp-1767-adviser-sales',
+      label: '#1767 · An adviser’s portal (Studio Esempio) seen by Sales: Invite held — "Only the Owner gives a role that sees prices."',
+      model: adviserCase(),
+      note: 'Its only role is the Accountant (it sees prices): only the Owner gives it from the office, so Invite says so before the click; the API’s 403 stays the wall.',
+    },
+    {
+      id: 'cp-1767-adviser-sales-invite',
+      label: '#1767 · Sales inviting on a customer that is also an adviser: Adviser chosen — the guest Accountant card held "Only the Owner gives a role that sees prices.", never taken',
+      model: adviserCase(customerAndAdviser, { dialog: { kind: 'invite' }, inviteDraft: { ...blankInvite(customerAndAdviser), name: 'Bruno Esempio', email: 'bruno.esempio@studio-esempio.example', kind: 'GUEST', roleKey: '', capabilities: [], until: '2026-12-31' } }),
+      note: 'Its customer people are still Sales’ to invite (Buyer first). With Adviser chosen the invitation never starts on the Accountant: its card says why, the role choice says it again, and Invite sends nothing.',
+    },
+    {
+      id: 'cp-1767-adviser-owner',
+      label: '#1767 · The same adviser’s portal seen by the Owner: Invite open, the guest Accountant picked (nothing held)',
+      model: adviserCase(ownersAdviser, { can: ALL_RIGHTS, dialog: { kind: 'invite' }, inviteDraft: { ...blankInvite(ownersAdviser), name: 'Bruno Esempio', email: 'bruno.esempio@studio-esempio.example', until: '2026-12-31' } }),
+      note: 'The Owner gives a role that sees prices: the invitation starts on the Accountant, with its end of access.',
+    },
+    // ---- end L5
     { id: 'no-permission', label: 'No partners.view: the record has no Portal access tab; opened by its address, the view says why', model: base({ can: { view: false, invite: false, manage: false, preview: false, requests: false } }) },
   ],
 })
