@@ -64,7 +64,7 @@ export function BandFacts({ workOrder, model, onChangeSupervisor, ask }: { workO
       {health && health !== 'loading' ? <HealthTag view={healthView('office', health)} say={words.say} unknown={t('parts.health.unknown')} /> : null}
       {waiting && waiting !== 'loading' ? <WaitingTag view={waitingView('office', waiting, Date.now())} say={words.say} unknown={t('parts.waiting.unknown')} /> : null}
       {/* F-PR-21: the supervisor fact (the work order's own read, B-PR-42a: by name inside this one record). */}
-      {model.supervisor && <SupervisorFact fact={supervisorFactOf(workOrder)} can={model.supervisor.can} onChange={onChangeSupervisor} {...(ask ? { ask } : {}) /* F-PR-22 */} />}
+      {model.supervisor && <SupervisorFact face="line" fact={supervisorFactOf(workOrder)} held={model.supervisor.can ? null : 'noRight'} /* F-OO-132: the band's face, held only for the right, as before */ onChange={onChangeSupervisor} {...(ask ? { ask } : {}) /* F-PR-22 */} />}
     </>
   )
 }

@@ -426,6 +426,18 @@
     "artworkOpen": "Apri le grafiche nel visualizzatore"
   },
   "dates": {
+    "promisedExFactory": "Promesso (franco fabbrica)",
+    "promisedMoved_one": "{date} · spostata {count} volta · {days} g dalla prima promessa",
+    "promisedMoved_other": "{date} · spostata {count} volte · {days} g dalla prima promessa",
+    "promisedMovedOnly_one": "{date} · spostata {count} volta",
+    "promisedMovedOnly_other": "{date} · spostata {count} volte",
+    "planSays": "Il piano dice pronto",
+    "planAfter": "{date} · {days} g dopo la promessa",
+    "planBefore": "{date} · {days} g prima della promessa",
+    "planSame": "{date} · il giorno della promessa",
+    "planNone": "Ancora niente lo pianifica",
+    "fromPlan": "(dal piano)",
+    "requestedByCustomer": "Richiesto dal cliente",
     "title": "Date e tappe",
     "ordered": "Ordinato",
     "requested": "Richiesto",
@@ -1643,8 +1655,7 @@
     },
     "dates": {
       "title": "Prossime date",
-      "all": "Tutte le date ›",
-      "none": "Nessuna data ancora: le tappe le fissa la pianificazione"
+      "all": "Tutte le date ›"
     },
     "requests": {
       "title": "Richieste e modifiche",
@@ -1707,6 +1718,10 @@
     "revision": "revisione {revision}",
     "step": "rata {seq}",
     "yourOrderSeq": "il vostro ordine {seq}"
+  },
+  "people": {
+    "supervisor": "Supervisore",
+    "followers": "Chi segue ›"
   },
   "told": {
     "title": "Chi è stato avvisato",

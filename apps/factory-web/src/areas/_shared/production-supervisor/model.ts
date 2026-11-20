@@ -20,6 +20,7 @@ export const ASSIGN_MAX = 100
 /** A list row's supervisor for the reader (the API's SUPERVISOR_MARKS). */
 export { SUPERVISOR_MARKS, type SupervisorMark } from '@nexus/factory-domain/production-brand/supervisor'
 import type { SupervisorMark } from '@nexus/factory-domain/production-brand/supervisor'
+import { SUPERVISED_ORDER_STATES } from '@nexus/factory-domain/production-brand/supervisor' // F-OO-132: the states a supervisor follows
 
 /** The words key of a list row's mark (null: a work order of no customer — no supervisor at all). */
 export const markKeyOf = (mark: SupervisorMark | null | undefined): string | null => (mark ? `mark.${mark}` : null)
@@ -116,9 +117,18 @@ export const API_SKIP_SENTENCES = Object.freeze({
   NO_THREAD: "This person cannot read this customer's order threads: a supervisor follows them and answers there.",
 })
 
+// ---- F-OO-132 (order overview lane; 13-backend B-OO-008; review F10): ONE wording for a waiting order ----------------------------
+/**
+ * B-OO-008's sentence for an order that waits for its yes: the API skips such an order with it (supervisor/assign.ts — never the
+ * customer's urgency or health words, which the portal reads); the catalogue's `held.notYet` says the same in both languages.
+ */
+export const NOT_YET_SENTENCE = 'This order waits for a yes: its supervisor is set once it is confirmed.'
+// ---- end F-OO-132
+
 const SKIP_WORDS: Readonly<Record<string, string>> = Object.freeze({
   [API_SKIP_SENTENCES.noRight]: 'skip.noRight',
   [NOT_IN_PRODUCTION_WORDS.en]: 'skip.notInProduction',
+  [NOT_YET_SENTENCE]: 'skip.notYet', // F-OO-132
   [API_SKIP_SENTENCES.noState]: 'skip.noState',
   ...Object.fromEntries(Object.entries(SUPERVISOR_REFUSAL_WORDS).map(([code, words]) => [words.en, `skip.${code}`])),
   [API_SKIP_SENTENCES.NO_THREAD]: 'skip.NO_THREAD',
@@ -197,6 +207,33 @@ export interface AssignSupervisorActions {
   readonly onRetry?: () => void
   readonly onClose?: () => void
 }
+
+// ---- F-OO-132 (order overview lane; 10-design §3.2): the fact's two faces and why its Change… is held ------------------------------
+/**
+ * How the fact sits: 'line' — the work order band's inline fact (the icon, "Supervisor Bea Esempio · this order", Change…, Ask), the
+ * work order pages' look, unchanged; 'row' — the value and the doors of a label-left row (the order Overview's People: its label
+ * says "Supervisor", so no icon and no word; Change… only where the caller gives it, so Read-only sees none).
+ */
+export type SupervisorFace = 'line' | 'row'
+
+/**
+ * Why Change… is held, each in its own words of this catalogue (`held.<code>`): the reader may not set it (production.brand.manage);
+ * the order waits for its yes (a supervisor is set once it is confirmed); the order left production (its supervisor stays).
+ */
+export const SUPERVISOR_HELDS = ['noRight', 'notYet', 'noLonger'] as const
+export type SupervisorHeld = (typeof SUPERVISOR_HELDS)[number]
+
+/**
+ * An order's Change…, held as the API would skip it (supervisor/assign.ts, in its order): no right first; then a waiting order
+ * (PENDING_APPROVAL, B-OO-008); then an order a supervisor no longer follows (outside the supervised states — the keeper's: shipped
+ * in full, delivered, closed, cancelled). Null: it may. The work order pages hold only for the right (their fact spans orders).
+ */
+export function supervisorHeldOf(can: boolean, status: string): SupervisorHeld | null {
+  if (!can) return 'noRight'
+  if (status === 'PENDING_APPROVAL') return 'notYet'
+  return (SUPERVISED_ORDER_STATES as readonly string[]).includes(status) ? null : 'noLonger'
+}
+// ---- end F-OO-132
 
 /** The band's supervisor fact: the person and where from ("this order" / "customer default"), or "Not set"; nothing for no customer order. */
 export type SupervisorFact =

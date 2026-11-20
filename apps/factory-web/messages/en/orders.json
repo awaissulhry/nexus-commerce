@@ -426,6 +426,18 @@
     "artworkOpen": "Open the artwork in the viewer"
   },
   "dates": {
+    "promisedExFactory": "Promised (ex-factory)",
+    "promisedMoved_one": "{date} · moved {count}× · {days} d since first promised",
+    "promisedMoved_other": "{date} · moved {count}× · {days} d since first promised",
+    "promisedMovedOnly_one": "{date} · moved {count}×",
+    "promisedMovedOnly_other": "{date} · moved {count}×",
+    "planSays": "Plan says ready",
+    "planAfter": "{date} · {days} d after the promise",
+    "planBefore": "{date} · {days} d before the promise",
+    "planSame": "{date} · on the promise day",
+    "planNone": "Nothing plans it yet",
+    "fromPlan": "(from the plan)",
+    "requestedByCustomer": "Requested by customer",
     "title": "Dates & milestones",
     "ordered": "Ordered",
     "requested": "Requested",
@@ -1643,8 +1655,7 @@
     },
     "dates": {
       "title": "Next dates",
-      "all": "All dates ›",
-      "none": "No dates set yet — Planning sets the gates"
+      "all": "All dates ›"
     },
     "requests": {
       "title": "Requests & changes",
@@ -1707,6 +1718,10 @@
     "revision": "revision {revision}",
     "step": "payment step {seq}",
     "yourOrderSeq": "your order {seq}"
+  },
+  "people": {
+    "supervisor": "Supervisor",
+    "followers": "Followers ›"
   },
   "told": {
     "title": "Who was told",

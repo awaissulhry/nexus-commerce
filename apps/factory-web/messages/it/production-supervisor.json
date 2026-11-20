@@ -53,6 +53,7 @@
     "noRight": "il tuo ruolo non imposta il supervisore di produzione di questo ordine.",
     "notInProduction": "questo ordine non è più in produzione.",
     "noState": "questo ordine non ha ancora uno stato di produzione: riprova tra poco.",
+    "notYet": "questo ordine aspetta un sì: il supervisore si sceglie quando è confermato.",
     "NOT_OFFICE": "solo una persona dell'ufficio può supervisionare la produzione.",
     "NOT_ACTIVE": "questa persona non è più attiva.",
     "NO_REACH": "questa persona non può lavorare sulla produzione di questo cliente.",
@@ -70,6 +71,8 @@
   },
   "held": {
     "noRight": "Impostare un supervisore di produzione richiede il permesso di gestire la produzione dei clienti.",
+    "notYet": "Questo ordine aspetta un sì: il supervisore si sceglie quando è confermato.",
+    "noLonger": "Questo ordine non è più in produzione: il supervisore resta.",
     "noCustomerOrder": "Questi ordini di produzione non hanno un solo ordine cliente: non c'è un supervisore da impostare.",
     "nothing": "Seleziona prima degli ordini di produzione.",
     "tooMany": "{count} ordini: al massimo {max} alla volta."
