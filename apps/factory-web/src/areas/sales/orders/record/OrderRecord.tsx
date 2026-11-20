@@ -404,6 +404,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
       const line = value?.lines.find((entry) => entry.id === lineId)
       return value && line ? createElement(OrderLineOptions, { key: `options-${lineId}`, api, order: value, line, permissions: session.permissions, onReload: () => void load(), opened: true, onClose }) : null
     },
+    go: (href) => router.push(href), // F-OL-07: after "Leave and discard"
   })
   // ---- end F-OL-03
   // F-OO-125: a line's Change quantity or sizes… starts the amendment (Lines' acts) and focuses its style group (the page's one focus);

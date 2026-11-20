@@ -79,6 +79,8 @@ export interface LinesTabModel {
   readonly options: ReactNode | null
   /** A save is running. */
   readonly saving: boolean
+  /** F-OL-07: an in-app link away from the order waits for "Stay" or "Leave and discard" (the changes not saved). */
+  readonly leaving: boolean
 }
 
 export interface LinesTabActions {
@@ -123,4 +125,7 @@ export interface LinesTabActions {
   readonly onOptions?: (lineId: string | null) => void
   /** A door lands on a row (Overview's ⋯, the band's "Change the lines", Money's "Change our price ›"): the Lines tab, the box focused. */
   readonly onLand?: (target: { readonly lineId: string | null; readonly box: 'first' | 'price' }) => void
+  // ---- F-OL-07: leaving the order with changes ----
+  readonly onLeaveStay?: () => void
+  readonly onLeaveGo?: () => void
 }

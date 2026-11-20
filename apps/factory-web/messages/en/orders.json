@@ -665,7 +665,11 @@
       "more_other": "and {count} more",
       "keep": "Keep changing",
       "go_one": "Discard {count} change",
-      "go_other": "Discard {count} changes"
+      "go_other": "Discard {count} changes",
+      "leaveTitle_one": "Leave with {count} change not saved?",
+      "leaveTitle_other": "Leave with {count} changes not saved?",
+      "stay": "Stay",
+      "leave": "Leave and discard"
     },
     "done": {
       "plain": "Saved.",
