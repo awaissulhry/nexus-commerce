@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, useMemo, useRef, useState, type ReactNode } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { ARCHIVED_CUSTOMER, at, CUSTOMERS, inShell, NOW, ORDERS, partyThread, QUOTES, RECORD_CAN, recordModel, withoutMoney } from '../../../parties/_shared/fixtures'
 import { loaded, loading, type PartyRecordModel } from '../../../parties/_shared/model'
@@ -51,7 +51,10 @@ import { DRAFTS_VIEW } from './view/WorkTab'
 // ---- end F-CP-107
 import type { OrderRow } from '../../orders/api'
 import type { RowView } from '../../orders/model'
-import type { OrdersListModel } from '../../orders/list/list-model'
+import type { OrdersListActions, OrdersListModel } from '../../orders/list/list-model'
+// cp-walk (F-CP-103): Views ▾, Customise and Export from the list tools in memory, as the Office mounts them for the live sheet.
+import { ListToolsContext } from '../../../../list-frame/tools/transport'
+import { memoryStore, memoryTransport, type MemoryToolsModel } from '../../../_shared/list-tools/memory'
 import { OrdersListView } from '../../orders/list/view/OrdersListView'
 import { WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
 import { priceWindowOf, type PriceWindowCase } from '../../orders/price-check/fixtures' // F-CP-114
@@ -191,7 +194,9 @@ const workRows = (party: Party, over: (row: OrderRow, index: number) => Partial<
     production: { stage: index === 2 ? 'CUTTING' : 'SEWING', stageSince: '2026-10-27', health: index === 1 ? 'LATE' : index === 0 ? 'AT_RISK' : 'ON_TRACK', waitingOn: index === 2 ? 'SUPPLIER' : null, since: index === 2 ? ordersAt(27, 9) : null, held: false, supervisorMark: index === 0 ? 'ME' : index === 1 ? 'SOMEONE_ELSE' : 'NOT_SET', openRequests: index === 0 ? 1 : 0, openIssues: 0, withheld: [] },
     ...over(row, index),
   }))
-const workCase = (code: string, work: WorkCase, over: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record(code, { tab: 'work', ...over }), work })
+// cp-walk (F-CP-104 / F-CP-112): the band's New order open for a person who takes orders (the Owner, Sales), as the live page draws
+// it — RECORD_CAN has no orders.manage, so every Work case held it ("Needs the right Work on sales orders") beside its own window.
+const workCase = (code: string, work: WorkCase, over: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record(code, { tab: 'work', ...over, can: { ...RECORD_CAN, ordersManage: true, ...over.can } }), work })
 
 // ---- F-CP-112 (SCR-033): made-up windows as the sheet mounts them (the order page's own dialogs, A14's rules on the order as read) ----
 /** The rows of the command cases: two in production and one confirmed (the bulk preview runs on 2, not on 1). */
@@ -224,6 +229,30 @@ const newOrderOf = (party: Party, price: boolean): NewOrderDialogModel => ({
   partyLocked: true,
 })
 // ---- end F-CP-112
+
+// ---- cp-walk (review walk, F-CP-108 / F-CP-109 / F-CP-114 / F-CP-103): the sheet's doors and list tools as the live Work tab gives them ----
+/**
+ * The live page hands the sheet its doors (use-orders-sheet): without them the design drew no row ⋯ "Next steps", no "Set
+ * customer's price…" and none of the bar's Reply to N · Mark N ready… · Close N… · Confirm N… — the opposite of the cases' words.
+ * Made-up: a pick does nothing here (each window has its own case). The price door only with the price grain, as live.
+ */
+export function workDoors(work: Pick<WorkCase, 'role'>, price: boolean): OrdersListActions {
+  return {
+    onCommand: () => undefined,
+    onCommandMany: () => undefined,
+    ...(work.role !== 'manager' ? { onReplyMany: () => undefined } : {}),
+    ...(price ? { onPriceCheck: () => undefined } : {}),
+  }
+}
+const workTools: MemoryToolsModel = { pageKey: 'sales.orders', locale: 'en', answer: { views: [], roleDefaultId: null, personalDefaultId: null, roles: [], allRoles: [], can: { save: true, manage: false, export: true }, exports: { formats: ['XLSX', 'CSV'] } }, jobs: [] }
+/** Views ▾ (the customer's built-in views, their counts, Not equal for a price holder), Customise and Export, in memory. */
+function WorkTools({ tools, children }: { tools: MemoryToolsModel; children?: ReactNode }) {
+  const [query, setQuery] = useState('')
+  const store = useRef(memoryStore(tools))
+  const transport = useMemo(() => memoryTransport(tools, store.current, query, setQuery), [tools, query])
+  return createElement(ListToolsContext.Provider, { value: transport }, children)
+}
+// ---- end cp-walk
 
 /** The Work tab as the page draws it: the strip, then the Orders sheet embedded and locked to the customer (its views, its preset). */
 function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
@@ -263,8 +292,10 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
     toolbarLink: { href: `/w/DEMO/production/work-orders?party=${party.id}`, label: t('customers.band.workOrders', { customer: name }) },
     empty: workEmptyOf(view, null, name, t, `/w/DEMO/sales/customers/${party.id}?tab=work&rows=all`), // F-CP-101: per view
     // ---- F-CP-112: the row's Next steps window, the ticked orders and their bulk window, the band's New order window ----
-    ...(work.command || work.many ? { commands: { window: work.command ? commandWindowOf(work.command, work.rows ?? [], can) : null, moved: [], receipt: null, many: work.many ? manyWindowOf(work.many, (work.rows ?? []).slice(0, 3), can) : null, decide: work.role !== 'manager' } } : {}),
+    // cp-walk: the ticked orders' bar decides yeses too (Confirm N…), not only while a window is open.
+    ...(work.command || work.many || work.ticked ? { commands: { window: work.command ? commandWindowOf(work.command, work.rows ?? [], can) : null, moved: [], receipt: null, many: work.many ? manyWindowOf(work.many, (work.rows ?? []).slice(0, 3), can) : null, decide: work.role !== 'manager' } } : {}),
     ...(work.ticked ? { selected: (work.rows ?? []).slice(0, work.ticked).map((row) => row.id) } : {}),
+    ...(work.role !== 'manager' ? { bulkCan: { supervisor: false, note: true, task: null, reply: true } } : {}), // cp-walk: Reply to N (threads.post)
     ...(work.newOrder ? { newOrder: newOrderOf(party, can.price) } : {}),
     // ---- end F-CP-112
   }
@@ -277,7 +308,7 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
       ? createElement(CustomerDraftsList, {
           model: { customer: name, read: { status: 'ready', rows: work.drafts === 'empty' ? [] : draftRowsOf(party, work.price !== false) }, updates: work.drafts === 'list' ? 1 : 0, activeId: null, views: { model: { ...list, hostViews: [{ id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: name }), active: true }], views: workViewsOf({ price: work.price !== false }, { drafts: true }) } } },
         })
-      : createElement(OrdersListView, { model: work.priceWindow && work.price !== false ? { ...list, priceCheck: priceWindowOf(work.priceWindow) } : list /* F-CP-114 */ }),
+      : createElement(WorkTools, { tools: workTools }, createElement(OrdersListView, { model: work.priceWindow && work.price !== false ? { ...list, priceCheck: priceWindowOf(work.priceWindow) } : list /* F-CP-114 */, actions: workDoors(work, can.price) })),
     work.drafts === 'window'
       ? createElement(DraftWindow, {
           model: {
