@@ -87,3 +87,12 @@
 .fw-so-strip-reading {
   align-self: stretch;
 }
+
+/* ── F-OO-107 (order overview §1.5): the order's own moves under the stages — Mark ready…, then More ▾; they wrap at 375. ── */
+.fw-so-where-moves {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}

@@ -2,9 +2,10 @@
 
 import { useState, type ReactNode } from 'react' // F-OO-105: "Show {n} more"
 import Link from 'next/link' // F-OO-105
-import { Card } from '@nexus/ui/components'
+import { Card, Menu } from '@nexus/ui/components' // F-OO-107: Menu (More ▾)
 import { Button, Skeleton } from '@nexus/ui/primitives'
 import { Banknote, CircleAlert, Hourglass, Pause, Ruler, ShieldAlert } from 'lucide-react' // F-OO-105: each strip's mark
+import { ChevronDown } from 'lucide-react' // F-OO-107: More ▾
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useScopedT, useT } from '../../../../../../lib/i18n/provider'
 import { useProductionWords } from '../../../../../../lib/production/words'
@@ -26,6 +27,7 @@ import { TabLink } from '../../../../../../lib/tab-link/TabLink'
 import { dayInstant, readOnlyOnPage } from '../../../model'
 import { STRIPS_SHOWN, stripDoorsOf, whereStripsOf, type StripDoor, type StripDoorsInput, type WhereStrip } from '../../overview/where'
 // ---- end F-OO-105
+import { whereMovesOf, type WhereMove, type WhereMoveId } from '../../overview/where' // F-OO-107: the order's own moves
 
 /**
  * F-OO-100 (order overview lane: one file per card) — "Where it is now".
@@ -87,6 +89,7 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
         </div>
       ) : null}
       {/* ---- F-OO-103: the moves slot — the order's own moves: Mark ready…, Hold the whole order…, More ▾ (F-OO-107, F-OO-108) ---- */}
+      <Moves order={order} model={model} actions={actions} />
     </Card>
   )
 }
@@ -317,3 +320,49 @@ function StripDoorView({ door, order, model, actions }: { door: StripDoor; order
   }
 }
 // ---- end F-OO-105
+
+// ---- F-OO-107 (order overview §1.5; review F8): the order's own moves — the band's dialogs, held with the band's own words ----------
+/**
+ * Mark ready… in view; Record a shipment made elsewhere…, Cancel order…, Close order… under More ▾ — each opening the SAME dialog as
+ * the band (the page's one dialog slot; made elsewhere: its container's dialog, drawn here while open). A move the reader may not run
+ * is held with words (a held menu item says why). Read-only: no row.
+ */
+function Moves({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
+  const moves = whereMovesOf(order, { can: model.can, readOnly, elsewhere: model.elsewhere })
+  if (!moves) return null
+  const heldOf = (move: WhereMove): string | null => (move.held ? t(move.held.key, move.held.params) : model.busy ? t('held.busy') : null)
+  const run = (id: WhereMoveId): void => {
+    if (id === 'elsewhere') return actions?.onRecordElsewhere?.()
+    actions?.onDialog?.({ kind: id })
+  }
+  return (
+    <>
+      <div className="fw-so-where-moves" role="group" aria-label={t('where.moves')}>
+        {moves.shown.map((move) => (
+          <Button key={move.id} size="sm" heldReason={heldOf(move)} onClick={() => run(move.id)}>
+            {t(move.label.key)}
+          </Button>
+        ))}
+        {moves.more.length > 0 && (
+          <Menu
+            label={
+              <>
+                {t('where.more')} <ChevronDown size={14} aria-hidden />
+              </>
+            }
+            triggerProps={{ className: 'nds-btn sm', 'aria-label': t('where.moreOf', { number: order.number }) }}
+            items={moves.more.map((move) => {
+              const held = heldOf(move)
+              return { id: move.id, label: t(move.label.key), ...(move.id === 'cancel' ? { tone: 'danger' as const } : {}), disabled: !!held, ...(held ? { description: held } : { onSelect: () => run(move.id) }) }
+            })}
+          />
+        )}
+      </div>
+      {/* F-OP-123: Record a shipment made elsewhere… — its container's dialog while open (Shipments draws it too; one tab at a time). */}
+      {model.elsewhere?.dialog}
+    </>
+  )
+}
+// ---- end F-OO-107

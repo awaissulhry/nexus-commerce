@@ -20,6 +20,11 @@ import { rowActsOf, type ActsCan } from '../../../../../lib/production/work-orde
 import type { OrderAbilities } from '../../model'
 import type { WorkOrderOwn } from './api'
 // ---- end F-OO-105
+// ---- F-OO-107: the order's own moves, from the band's own rules (none of them changes here)
+import { CANCEL_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
+import { cancelHeld, closeHeld, isShippedInFull, readyHeld } from '../../model'
+import { ELSEWHERE_FROM } from '../shipments/elsewhere/model'
+// ---- end F-OO-107
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Where it is now", its rules moved out of model.ts (F-SA-232). The health
@@ -355,3 +360,47 @@ export function stripDoorsOf(strip: WhereStrip, input: StripDoorsInput): StripDo
   }
 }
 // ---- end F-OO-105
+
+// ---- F-OO-107 (order overview §1.5; review F8): the moves row — the order's own moves only ----
+/**
+ * Under the stages, the order's OWN moves, each where the band offers it and held by the band's own rule (never a second one):
+ *
+ *   Mark ready…                              an order in production (readyHeld)                       a button
+ *   Record a shipment made elsewhere…        while it may still ship (ELSEWHERE_FROM; the door's held)  More ▾
+ *   Cancel order…                            the states a cancel is a move of (the domain's CANCEL_STATUSES, a waiting order
+ *                                            too — B-OO-003; cancelHeld)                                More ▾
+ *   Close order…                             shipped or delivered (closeHeld)                           More ▾
+ *
+ * The SAME dialogs as the band (Ready, Cancel, Close: the page's one dialog slot; made elsewhere: its own container). Hold the whole
+ * order… joins the buttons with F-OO-108; Make work orders… and Create shipment… make the next record: Linked records and the band
+ * (F8), never here; the yes is its strip's. A move the reader may not run shows held with words (the band hides Cancel without
+ * orders.manage: here it is held with why). Read-only: no row at all; a closed or cancelled order: none either (nothing applies).
+ */
+export const WHERE_MOVES = ['ready', 'elsewhere', 'cancel', 'close'] as const
+export type WhereMoveId = (typeof WHERE_MOVES)[number]
+
+export interface WhereMove {
+  readonly id: WhereMoveId
+  readonly label: Phrase
+  /** The band's own rule's words (null: it runs). */
+  readonly held: Phrase | null
+}
+
+/** The buttons in view (at most 2 with Hold the whole order…, F-OO-108) and the rest under More ▾: at most 3 visible in all. */
+export interface WhereMoves {
+  readonly shown: readonly WhereMove[]
+  readonly more: readonly WhereMove[]
+}
+
+export function whereMovesOf(order: Order, input: { readonly can: OrderAbilities; readonly readOnly: boolean; /** The made-elsewhere door (its container's, held with its words); absent: not offered here. */ readonly elsewhere: { readonly held: Phrase | null } | null | undefined }): WhereMoves | null {
+  if (input.readOnly) return null
+  const shown: WhereMove[] = []
+  const more: WhereMove[] = []
+  if (order.status === 'IN_PRODUCTION') shown.push({ id: 'ready', label: phrase('action.ready'), held: readyHeld(order, input.can) })
+  // F-OO-108 (W11): "Hold the whole order…" joins `shown` here.
+  if (input.elsewhere && ELSEWHERE_FROM.includes(order.status)) more.push({ id: 'elsewhere', label: phrase('elsewhere.title'), held: input.elsewhere.held })
+  if (CANCEL_STATUSES.includes(order.status)) more.push({ id: 'cancel', label: phrase('action.cancel'), held: cancelHeld(order, input.can) })
+  if (isShippedInFull(order)) more.push({ id: 'close', label: phrase('step.close'), held: closeHeld(order, input.can) })
+  return shown.length + more.length > 0 ? { shown, more } : null
+}
+// ---- end F-OO-107

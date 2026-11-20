@@ -1651,7 +1651,10 @@
       "failed": "Impossibile leggere i blocchi",
       "showMore": "Mostra altri {count}",
       "showFewer": "Mostra meno"
-    }
+    },
+    "moves": "Le azioni dell'ordine",
+    "more": "Altro",
+    "moreOf": "Altre azioni per {number}"
   },
   "overview": {
     "where": "A che punto è",

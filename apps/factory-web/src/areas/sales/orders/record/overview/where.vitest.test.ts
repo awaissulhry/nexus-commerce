@@ -28,6 +28,11 @@ import { rolePermissions } from '../../../../../shell/design-data'
 import { actsCanOf } from '../../../../../lib/production/work-order-acts/model'
 import { stripDoorsOf, workOrderHref, type StripDoor, type StripDoorsInput } from './where'
 // ---- end F-OO-105
+// ---- F-OO-107: the moves row and the band's own rules it reads
+import { cancelHeld, closeHeld, readOnlyOnPage, readyHeld } from '../../model'
+import { elsewhereDoor } from '../shipments/elsewhere/model'
+import { WHERE_MOVES, whereMovesOf } from './where'
+// ---- end F-OO-107
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Where it is now"'s rules, moved with where.ts out of overview.vitest.test.ts
@@ -495,3 +500,116 @@ describe('F-OO-105: the strips drawn — the yes for its approver, asker and any
   })
 })
 // ---- end F-OO-105
+
+// ---- F-OO-107 (order overview §1.5; review F8): the moves row — the order's own moves only, each held by the band's own rule ----
+describe('F-OO-107: the moves row — Mark ready…, More ▾ (made elsewhere, Cancel, Close): status × role, the band\'s own held words', () => {
+  const ROLES = { Owner: 'owner', Sales: 'sales', Planner: 'planner', Warehouse: 'warehouse', 'Read-only': 'read_only' } as const
+  type RoleName = keyof typeof ROLES
+  /** The order at a state as the API lists its actions (B-OO-003: a waiting order may be cancelled too). */
+  const at = (status: OrderStatus): Order => (status === 'PENDING_APPROVAL' ? { ...order(status), actions: [...order(status).actions, { action: 'cancel', allowed: true, needsReason: true, held: null }] } : order(status))
+  const movesOf = (status: OrderStatus, role: RoleName) => {
+    const permissions = rolePermissions(ROLES[role])
+    const can = abilitiesOf(permissions)
+    const value = at(status)
+    // As the card: Read-only by the band's rule; the made-elsewhere door held by its container's own rule.
+    const readOnly = readOnlyOnPage(can, { assignSupervisor: permissions.includes('production.brand.manage'), qualityHold: permissions.includes('quality.holds.place') })
+    return { value, can, permissions, readOnly, moves: whereMovesOf(value, { can, readOnly, elsewhere: { held: elsewhereDoor(value, permissions) } }) }
+  }
+  const ids = (moves: ReturnType<typeof whereMovesOf>) => (moves ? [moves.shown.map((move) => move.id), moves.more.map((move) => move.id)] : null)
+  const heldOf = (moves: ReturnType<typeof whereMovesOf>, id: (typeof WHERE_MOVES)[number]) => [...(moves?.shown ?? []), ...(moves?.more ?? [])].find((move) => move.id === id)?.held?.key ?? null
+  /** [in view, under More ▾] per state, for every role that changes anything on the page. */
+  const BY_STATUS: Readonly<Record<OrderStatus, readonly [string[], string[]] | null>> = {
+    PENDING_APPROVAL: [[], ['cancel']],
+    CONFIRMED: [[], ['elsewhere', 'cancel']],
+    IN_PRODUCTION: [['ready'], ['elsewhere', 'cancel']],
+    READY: [[], ['elsewhere', 'cancel']],
+    PARTLY_SHIPPED: [[], ['elsewhere']],
+    SHIPPED: [[], ['close']],
+    DELIVERED: [[], ['close']],
+    CLOSED: null,
+    CANCELLED: null,
+  }
+
+  it('status × role (Owner, Sales, Planner, Warehouse, Read-only): which moves, where; Read-only sees none; never more than 3 in view', () => {
+    for (const status of ORDER_STATUSES) {
+      for (const role of Object.keys(ROLES) as RoleName[]) {
+        const { moves, readOnly } = movesOf(status, role)
+        if (role === 'Read-only') {
+          expect(readOnly, status).toBe(true)
+          expect(moves, `${status} ${role}`).toBeNull()
+          continue
+        }
+        expect(readOnly, `${status} ${role}`).toBe(false)
+        expect(ids(moves), `${status} ${role}`).toEqual(BY_STATUS[status])
+        if (moves) expect(moves.shown.length + (moves.more.length > 0 ? 1 : 0), `${status} ${role}`).toBeLessThanOrEqual(3)
+      }
+    }
+    // The labels are the band's own words; Make work orders…, Create shipment…, Change promise and the yes are never here (F8).
+    const { moves } = movesOf('IN_PRODUCTION', 'Owner')
+    expect([...moves!.shown, ...moves!.more].map((move) => move.label.key)).toEqual(['action.ready', 'elsewhere.title', 'action.cancel'])
+    expect(WHERE_MOVES).toEqual(['ready', 'elsewhere', 'cancel', 'close'])
+  })
+
+  it('parity: each move\'s held words are the band\'s own function\'s (readyHeld, cancelHeld, closeHeld, the made-elsewhere door)', () => {
+    for (const status of ORDER_STATUSES) {
+      for (const role of ['Owner', 'Sales', 'Planner', 'Warehouse'] as const) {
+        const { value, can, permissions, moves } = movesOf(status, role)
+        for (const move of [...(moves?.shown ?? []), ...(moves?.more ?? [])]) {
+          const band = move.id === 'ready' ? readyHeld(value, can) : move.id === 'cancel' ? cancelHeld(value, can) : move.id === 'close' ? closeHeld(value, can) : elsewhereDoor(value, permissions)
+          expect(move.held, `${status} ${role} ${move.id}`).toEqual(band)
+        }
+      }
+    }
+    // What each reader reads, in words: Sales marks ready and cancels, a shipment made elsewhere is the warehouse's; the planner and
+    // the warehouse change no order (the band hides Cancel from them: here it is held with why); closing unsettled needs orders.close.
+    expect(['ready', 'elsewhere', 'cancel'].map((id) => heldOf(movesOf('IN_PRODUCTION', 'Sales').moves, id as never))).toEqual([null, 'elsewhere.held.noRight', null])
+    expect(['ready', 'elsewhere', 'cancel'].map((id) => heldOf(movesOf('IN_PRODUCTION', 'Planner').moves, id as never))).toEqual(['held.noManage', 'elsewhere.held.noRight', 'held.noManage'])
+    expect(['ready', 'elsewhere', 'cancel'].map((id) => heldOf(movesOf('IN_PRODUCTION', 'Warehouse').moves, id as never))).toEqual(['held.noManage', null, 'held.noManage'])
+    expect([heldOf(movesOf('SHIPPED', 'Owner').moves, 'close'), heldOf(movesOf('SHIPPED', 'Sales').moves, 'close')]).toEqual([null, 'held.notSettled'])
+    // A waiting order is cancelled too (B-OO-003), from the same dialog.
+    expect(heldOf(movesOf('PENDING_APPROVAL', 'Sales').moves, 'cancel')).toBeNull()
+    // No elsewhere door offered here (a design case without its container): no item for it.
+    expect(whereMovesOf(order('IN_PRODUCTION'), { can: abilitiesOf(rolePermissions('owner')), readOnly: false, elsewhere: null })!.more.map((move) => move.id)).toEqual(['cancel'])
+  })
+
+  it('source: built from the band\'s own functions (none changes here); the same dialogs as the band; the made-elsewhere dialog drawn here', () => {
+    const rules = readFileSync(new URL('./where.ts', import.meta.url), 'utf8')
+    expect(rules).toContain("import { cancelHeld, closeHeld, isShippedInFull, readyHeld } from '../../model'")
+    expect(rules).toContain("import { CANCEL_STATUSES } from '@nexus/factory-domain/sales/orders/orders'")
+    expect(rules).not.toMatch(/function (?:readyHeld|cancelHeld|closeHeld|nextStep)\b/)
+    // Make work orders… and Create shipment… make the next record (Linked records, the band): never in section 1's moves.
+    const from = rules.indexOf('export function whereMovesOf(')
+    const moves = rules.slice(from, rules.indexOf('// ---- end F-OO-107', from))
+    expect(moves).toContain('readyHeld(order, input.can)')
+    for (const gone of ['makeHeldOf', 'makeWorkOrders', 'createShipment', 'promise']) expect(moves, gone).not.toContain(gone)
+    const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8')
+    for (const part of ['actions?.onDialog?.({ kind: id })', 'actions?.onRecordElsewhere?.()', '{model.elsewhere?.dialog}', "'aria-label': t('where.moreOf', { number: order.number })"]) expect(card, part).toContain(part)
+    expect(card.indexOf('<Moves ')).toBeGreaterThan(card.indexOf('F-OO-103: the moves slot'))
+  })
+
+  it('drawn: under the stages, Mark ready… and More ▾ (its name says the order); held with the band\'s words; Read-only and a cancelled order: no row', () => {
+    const view = designScreen.view as ComponentType<{ model: unknown }>
+    const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, locale)
+    const html = draw('overview')
+    const row = html.slice(html.indexOf('class="fw-so-where-moves"'), html.indexOf('</div>', html.indexOf('class="fw-so-where-moves"')))
+    expect(html.indexOf('class="fw-so-where-moves"')).toBeGreaterThan(html.indexOf('Stages are set by the floor and quality, never by hand'))
+    expect(row).toMatch(/<button[^>]*>Mark ready…<\/button>/)
+    expect(row).toContain('aria-label="More moves for SO-2026-0088"')
+    expect(textOf(row)).toContain('More')
+    // The production manager changes no order: Mark ready… held with the band's words.
+    expect(draw('f-op-301-so2-overview')).toMatch(/aria-disabled="true"[^>]*aria-description="Changing an order needs the sales right to manage orders"[^>]*>Mark ready…/)
+    for (const id of ['f-oo-105-read-only', 'f-oo-102-cancelled']) expect(draw(id), id).not.toContain('fw-so-where-moves')
+    // Shipped: no Mark ready…; Close order… waits under More ▾.
+    const shipped = draw('f-oo-102-shipped')
+    expect(shipped).toContain('class="fw-so-where-moves"')
+    expect(shipped).not.toContain('>Mark ready…<')
+    const it = draw('overview', 'it')
+    expect(it).toMatch(/<button[^>]*>Segna come pronto…<\/button>/)
+    expect(it).toContain('aria-label="Altre azioni per SO-2026-0088"')
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['where.moves', 'where.more', 'where.moreOf']) expect(t(key, { number: 'SO-1' }), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-OO-107

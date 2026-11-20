@@ -1651,7 +1651,10 @@
       "failed": "Holds could not be read",
       "showMore": "Show {count} more",
       "showFewer": "Show fewer"
-    }
+    },
+    "moves": "The order's moves",
+    "more": "More",
+    "moreOf": "More moves for {number}"
   },
   "overview": {
     "where": "Where it is now",
