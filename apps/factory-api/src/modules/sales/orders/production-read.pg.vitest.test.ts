@@ -239,8 +239,8 @@ describe('B-SA-031 GET /sales/orders/:orderId/production — the order’s OWN p
     expect(Object.keys(people).sort()).toEqual(['answersCustomer', 'backup', 'places', 'supervisor'])
     expect(people.places.length).toBeGreaterThan(0)
     for (const place of people.places) {
-      // B-OO-008: + kind (PLANT | WORKSHOP) and since (a workshop's issued day).
-      expect(Object.keys(place).sort()).toEqual(['kind', 'line', 'site', 'since', 'team', 'workshop'])
+      // B-OO-008: + kind (PLANT | WORKSHOP) and since (a workshop's issued day). oo-fx3: the six keys in sorted order ('since' < 'site').
+      expect(Object.keys(place).sort()).toEqual(['kind', 'line', 'since', 'site', 'team', 'workshop'])
       if (place.team) expect(Object.keys(place.team).sort()).toEqual(['code', 'name'])
     }
     expect(keysOf(people).filter((key) => /count|output|worker|operator|member/i.test(key))).toEqual([])
