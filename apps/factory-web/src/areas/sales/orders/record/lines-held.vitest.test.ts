@@ -11,6 +11,10 @@ import { closedShort, designScreen } from './fixtures'
 // ---- F-OO-124: the Close / Reopen dialogs drawn with one line asked ----
 import { dialogLinesOf, type OrderRecordModel, type RecordDialog } from './record-model'
 import { CloseLinesDialog, ReopenLinesDialog } from './view/DailyDialogs'
+// ---- F-OO-125: a line's "Change quantity or sizes…" — the Lines edit mode, its style group focused ----
+import { amendStyleAnchorOf, COMPOSER_EMPTY } from './record-model'
+import { useOverviewActs } from './use-overview-acts'
+import { LinesEditor, type LinesEditorModel } from './view/LinesEditor'
 
 // F-OO-124: the DS Modal draws into a portal once hydrated, never on the server: here it draws in place, so the dialog can be read
 // (the page cases below draw no dialog: they are unchanged by it).
@@ -156,3 +160,46 @@ describe('F-OO-124: Close this line short… / Reopen this line… — only that
   })
 })
 // ---- end F-OO-124
+
+// ---- F-OO-125 (order overview 10-design §2.3): Change quantity or sizes… for one line — the ONE edit path, its style group focused ---
+describe('F-OO-125: Change quantity or sizes… — the Lines edit mode with the line\'s style group as the anchor focused', () => {
+  const value = forRole(order('IN_PRODUCTION'), 'sales')
+  const styleId = value.lines[0]!.styleId
+  const editor = (mode: LinesEditorModel['mode']): LinesEditorModel => ({ mode, lines: draftOf(value), order: value, styles: {}, composer: COMPOSER_EMPTY, price: false, currency: 'EUR', priceBasis: 'NET', minimums: {}, busy: false })
+
+  it('the anchor id is drawn on the style group in edit mode (focusable, named by its heading); a typed New order draws none', () => {
+    expect(amendStyleAnchorOf(styleId)).toBe(`amend-style-${styleId}`)
+    for (const locale of LOCALES) {
+      const html = render(createElement(LinesEditor, { model: editor('amend') }), locale)
+      expect(html).toContain(`id="amend-style-${styleId}"`)
+      expect(html).toContain('tabindex="-1"')
+      expect(html).toContain(`aria-labelledby="amend-style-${styleId}-title"`)
+      expect(html).toContain(`id="amend-style-${styleId}-title"`)
+    }
+    expect(render(createElement(LinesEditor, { model: editor('new') }), 'en')).not.toContain('amend-style-')
+  })
+
+  it('the focus is asked: onLineChange starts (or keeps) edit mode, then focuses that style group — no second editor', () => {
+    const calls: string[] = []
+    function Harness() {
+      const acts = useOverviewActs({ startAmend: () => calls.push('edit mode'), focus: (id) => calls.push(`focus ${id}`) })
+      acts.actions.onLineChange?.(styleId)
+      return null
+    }
+    render(createElement(Harness), 'en')
+    expect(calls).toEqual(['edit mode', `focus amend-style-${styleId}`])
+  })
+
+  it('the wiring: an open draft is kept (never started over); the container hands the one focus and edit mode as for the requested date', () => {
+    const acts = readFileSync(new URL('./use-lines-acts.ts', import.meta.url), 'utf8')
+    expect(acts).toContain('onAmendStart: () => (amendRef.current ? showLines() : startAmend()),')
+    const overview = readFileSync(new URL('./use-overview-acts.ts', import.meta.url), 'utf8')
+    expect(overview).toContain('input.focus?.(amendStyleAnchorOf(styleId))')
+    const container = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }) })')
+    expect(container).toContain('...overview.actions,')
+    // The one edit path: the editor stays the Lines tab's; no view opens a second one.
+    expect(readFileSync(new URL('./view/LinesEditor.tsx', import.meta.url), 'utf8')).toContain("const anchor = model.mode === 'amend' ? amendStyleAnchorOf(styleId) : null")
+  })
+})
+// ---- end F-OO-125

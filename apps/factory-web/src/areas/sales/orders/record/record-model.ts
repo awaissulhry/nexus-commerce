@@ -79,6 +79,9 @@ export function dialogLinesOf(dialog: RecordDialog | null, kind: 'closeLines' | 
 }
 // ---- end F-OO-124
 
+/** F-OO-125: a style group's card in the Lines edit mode (Overview › Progress by line ⋯ "Change quantity or sizes…" focuses it). */
+export const amendStyleAnchorOf = (styleId: string): string => `amend-style-${styleId}`
+
 /** One write of the page (the container's): the order it answers replaces the page's; a refusal is said in the dialog or the notice. */
 export type RecordWrite = (run: () => Promise<Order | null>, success: string | null, keepDialog?: boolean) => Promise<void>
 
@@ -419,6 +422,8 @@ export interface OrderRecordActions {
   onOpenLine?: (rowId: string | null) => void
   /** F-OP-104: Next dates' requested date "Change…" — edit mode on Lines with its field focused. */
   onRequestedChange?: () => void
+  /** F-OO-125: a line's "Change quantity or sizes…" (Overview › Progress by line ⋯) — edit mode on Lines, its style group focused. */
+  onLineChange?: (styleId: string) => void
   /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
   people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
   /** F-CP-142: the Price check card (Customer's price…, Take them over, Try again) and the ONE window's own actions. */
