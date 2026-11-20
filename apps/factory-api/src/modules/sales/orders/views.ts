@@ -462,6 +462,10 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
     priceBasis: priceBasisOf(order.taxMode),
     billTo: order.billTo as Record<string, unknown>,
     shipTo: order.shipTo as Record<string, unknown>,
+    // B-OO-013: the Incoterm, its place and ship complete, read only (the office's Order facts; the portal's read has none).
+    incoterm: order.incoterm,
+    incotermPlace: order.incotermPlace,
+    shipComplete: order.shipComplete,
     paymentTerms: order.paymentTerms,
     paymentTermsId: order.paymentTermsId,
     requestedDate: dayOrNull(order.requestedDate),

@@ -201,6 +201,14 @@ export const orderView = output({
   /** The buyer and the delivery address as accepted. */
   billTo: json,
   shipTo: json,
+  // ── B-OO-013 (order overview §7): the delivery terms, read only (office only: the portal's order read has none) ──
+  /** The Incoterms 2020 rule (three capitals: EXW, FCA, DAP …), as accepted from the quote or typed; null: none agreed. */
+  incoterm: z.string().nullable(),
+  /** Its named place (one line); null with no Incoterm (both or neither). */
+  incotermPlace: z.string().nullable(),
+  /** Ship complete (true) or each delivery as it is ready (false). */
+  shipComplete: z.boolean(),
+  // ── end B-OO-013 ──
   paymentTerms: z.string().nullable(),
   /** B-W2a-30: the library terms its payment schedule comes from. */
   paymentTermsId: id().nullable(),

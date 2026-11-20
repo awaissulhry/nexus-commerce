@@ -38,6 +38,10 @@ export const ORDER_COLUMNS = {
   taxMode: true,
   billTo: true,
   shipTo: true,
+  // B-OO-013 (order overview §7): the delivery terms as accepted (copied from the quote, quote-terms/carry.ts) or typed.
+  incoterm: true,
+  incotermPlace: true,
+  shipComplete: true,
   paymentTerms: true,
   // B-W2a-30: the library terms its payment schedule comes from.
   paymentTermsId: true,
