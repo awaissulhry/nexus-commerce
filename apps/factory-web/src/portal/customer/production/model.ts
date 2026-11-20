@@ -1,6 +1,6 @@
 import type { Locale } from '../../../lib/i18n/locales'
 import { isApiError, issuePath } from '../../../lib/api/errors'
-import { countWords } from '@nexus/factory-domain/production-brand/portal-read' // F-PR-12a
+import { COUNT_TO_FOLLOW_WORDS, countWords } from '@nexus/factory-domain/production-brand/portal-read' // F-PR-12a; F-MS-105: + COUNT_TO_FOLLOW_WORDS
 import type { HealthInput, HealthState, HoldInput, PiecesColourway, PlainStage, WaitingInput } from '../../../lib/production/model'
 import { PORTAL_AREAS } from '../../shell/nav/portal-nav' // F-PR-12a
 import { recordHref } from '../orders/model'
@@ -124,12 +124,23 @@ export interface MarkAction {
   readonly held: string | null
 }
 
+// ── F-MS-105 ──
+/**
+ * F-MS-105 (R8, R-61): whether cutting REALLY started on the order — the API's `cutStarted` (the floor's own cut facts: leather
+ * logged or a bundle made). It is the ONE field the three "Mark urgent" hints read (the row's mark, the bulk review, "Ask us"),
+ * never the stage: the stage may be ahead of the cuts (our office may move it on while the floor cannot record the work), and the
+ * mark itself is decided on the cuts. Absent (an answer before it): not started.
+ */
+export const cutStartedOf = (row: Pick<ProductionRow, 'cutStarted'>): boolean => row.cutStarted === true
+// ── end F-MS-105 ──
+
 /**
  * The row's one mark, or null when none is drawn (urgency off, a role that reads, no urgency read). Back to Regular is always
- * free; a mark to Urgent acts at once only inside the quota and before Cutting (the stage we keep: the API decides on the live
- * cut facts and says so if a bundle was made since). A lock from us holds both, with our reason.
+ * free; a mark to Urgent acts at once only inside the quota and before cutting started (F-MS-105: cutStartedOf, the API's rule,
+ * never the stage; the API decides on the live cut facts again and says so if a bundle was made since). A lock from us holds both,
+ * with our reason.
  */
-export function markActionOf(row: Pick<ProductionRow, 'urgency' | 'stage'>, facts: MarkFacts, locale: Locale, t: Translate): MarkAction | null {
+export function markActionOf(row: Pick<ProductionRow, 'urgency' | 'cutStarted'>, facts: MarkFacts, locale: Locale, t: Translate): MarkAction | null {
   const urgency = row.urgency
   if (!facts.urgencyOn || !facts.mayMark || !urgency) return null
   const target: BrandUrgencyCode = urgency.code === 'URGENT' ? 'REGULAR' : 'URGENT'
@@ -140,7 +151,7 @@ export function markActionOf(row: Pick<ProductionRow, 'urgency' | 'stage'>, fact
     if (urgency.locked) return urgency.lockWords ? say(urgency.lockWords, locale) : t('held.locked')
     if (target === 'REGULAR') return null
     if (urgency.asked) return t('held.asked')
-    if (row.stage && row.stage.code !== 'PREPARING') return t('held.cut')
+    if (cutStartedOf(row)) return t('held.cut') // F-MS-105
     if (facts.use && facts.use.max <= 0) return t('held.quotaNone')
     if (facts.use && facts.use.left <= 0) return t('held.quota', { used: facts.use.used, max: facts.use.max })
     return null
@@ -277,7 +288,8 @@ const COUNT_OF: Readonly<Partial<Record<PlainStage, 'cut' | 'sewn' | 'inspected'
 
 /**
  * The note of the order's "In production" step (06-tree §0.2: the plain stage is the step's note): "Sewing · 32 of 40 sewn ·
- * 1 line ahead" — the count only from + Progress (its own cells; "—" never 0 where sewing is not counted).
+ * 1 line ahead" — the count only from + Progress (its own cells; "—" never 0 where sewing is not counted). F-MS-105 (R13): a count
+ * of 0 reads "Sewing · Count to follow" (the domain's COUNT_TO_FOLLOW_WORDS, the list's own rule), never "0 of 40 sewn".
  */
 export function stageNoteOf(read: Pick<ProductionOrder, 'stage' | 'progress'>, locale: Locale): string | null {
   const stage = read.stage
@@ -287,7 +299,7 @@ export function stageNoteOf(read: Pick<ProductionOrder, 'stage' | 'progress'>, l
   const whole = read.progress?.whole ?? null
   const done = key && whole ? whole[key] : null
   // The list's own count words (factory-domain portal-read countWords: "32 of 40 sewn"), so the list and the order say the same.
-  if (key && whole && done !== null && done !== undefined && !(stage.code === 'SEWING' && stage.sewingNotCounted)) parts.push(say(countWords(key, done, whole.ordered), locale))
+  if (key && whole && done !== null && done !== undefined && !(stage.code === 'SEWING' && stage.sewingNotCounted)) parts.push(say(done === 0 ? COUNT_TO_FOLLOW_WORDS : countWords(key, done, whole.ordered), locale)) // F-MS-105: 0 → "Count to follow"
   if (stage.sewingNotCounted && stage.sewingNotCountedWords) parts.push(say(stage.sewingNotCountedWords, locale))
   if (stage.ahead > 0 && stage.aheadWords) parts.push(say(stage.aheadWords, locale))
   return parts.join(' · ')

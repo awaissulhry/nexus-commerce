@@ -83,6 +83,13 @@ export const FOREIGN_ACTIONS: Readonly<Record<string, string>> = Object.freeze({
   'tasks.reopen': 'reopenedTask',
   'tasks.assign': 'assignedTask',
   'files.completeUpload': 'uploaded',
+  // ── F-MS-107 (set the stage by hand; R6, R20): the order's own audit rows of the act (the API's B-MS-005 set / change and clear,
+  // B-MS-004 the keeper's end), office only. Never a `status` key in them, so never a status step; the actor is the office person or
+  // Nexus Factory (whoWords keeps a floor worker behind the site's gate); the values (from → to, the note) only with audit.read.
+  'production.setBrandStage': 'setStageByHand',
+  'production.clearBrandStage': 'clearedStageByHand',
+  'production.brandKeeper.handCleared': 'stageByHandEnded',
+  // ── end F-MS-107
 })
 /** The other modules' verbs that have plural words ("added 5 tasks"). */
 const FOREIGN_VERBS: readonly string[] = Object.values(FOREIGN_ACTIONS)

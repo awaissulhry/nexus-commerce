@@ -1,4 +1,6 @@
 import type { ExportFormat } from '@nexus/factory-domain/views/exports'
+import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time' // F-MS-104
+import { handSetOld } from '@nexus/factory-domain/production-brand/stage-set' // F-MS-104
 import type { OrderRow } from '../../api'
 import type { BrandHealth, BrandStage, SupervisorMark, WaitingOn } from '../../api' // F-SA-275
 import type { OrderAbilities } from '../../model'
@@ -173,15 +175,44 @@ export function answerHrefOf(prefix: string, row: Pick<OrderRow, 'id'>, item: Ex
 /** The keeper's health as the shared health chip names it (lib/production HealthState). */
 export const HEALTH_CHIP: Readonly<Record<BrandHealth, 'LATE' | 'AT_RISK' | 'NOT_PROMISED' | 'ON_TIME'>> = Object.freeze({ LATE: 'LATE', AT_RISK: 'AT_RISK', NO_DATE: 'NOT_PROMISED', ON_TRACK: 'ON_TIME' })
 
-/** The Where it is cell's first line: not read yet, the order's status (no stage kept: waiting for a yes, shipped, …), or the stage + health. */
-export type WhereLine = { readonly kind: 'unread' } | { readonly kind: 'status' } | { readonly kind: 'stage'; readonly stage: BrandStage; readonly health: BrandHealth | null; readonly held: boolean }
+/**
+ * The Where it is cell's first line: not read yet, the order's status (no stage kept: waiting for a yes, shipped, …), or the stage +
+ * health. F-MS-104 (04 §5, R17): `byHand` only while a stage set by hand stands — the stage keeps its place and gains a small mark
+ * (never a third chip: the dense cell keeps the stage and the health), amber once it was set STAGE_SET_CHECK_DAYS days ago or more
+ * (the domain's handSetOld, the order page's rule). No name and no reason in the list: the order says who and why.
+ */
+export type WhereLine =
+  | { readonly kind: 'unread' }
+  | { readonly kind: 'status' }
+  | { readonly kind: 'stage'; readonly stage: BrandStage; readonly health: BrandHealth | null; readonly held: boolean; readonly byHand?: { readonly old: boolean } }
 
-export function whereLineOf(row: Pick<OrderRow, 'production'>): WhereLine {
+export function whereLineOf(row: Pick<OrderRow, 'production'>, today: BusinessDate = businessDate(new Date())): WhereLine {
   const production = row.production
   if (!production) return { kind: 'unread' }
   if (production.stage === null) return { kind: 'status' }
-  return { kind: 'stage', stage: production.stage, health: production.health, held: production.held }
+  const hand = production.stageByHand // F-MS-104
+  return { kind: 'stage', stage: production.stage, health: production.health, held: production.held, ...(hand ? { byHand: { old: handSetOld(hand.since, today) } } : {}) }
 }
+
+// ── F-MS-104 ──
+/** The words the Where it is line is said in (the grid's value and the phone card's line): the host's catalogues. */
+export interface WhereWords {
+  readonly status: (status: OrderRow['status']) => string
+  readonly stage: (stage: BrandStage) => string
+  readonly health: (chip: (typeof HEALTH_CHIP)[BrandHealth]) => string
+  /** "Sewing (by hand)" (the export's own words, STAGE_BY_HAND_WORDS). */
+  readonly byHand: (stage: string) => string
+}
+
+/** The Where it is line in words: "Sewing (by hand) · At risk"; the status when no stage is kept; "" while not read. */
+export function whereTextOf(row: Pick<OrderRow, 'production' | 'status'>, words: WhereWords, today?: BusinessDate): string {
+  const line = whereLineOf(row, today)
+  if (line.kind === 'unread') return ''
+  if (line.kind === 'status') return words.status(row.status)
+  const stage = words.stage(line.stage)
+  return [line.byHand ? words.byHand(stage) : stage, line.health ? words.health(HEALTH_CHIP[line.health]) : null].filter(Boolean).join(' · ')
+}
+// ── end F-MS-104 ──
 
 /**
  * The Where it is cell's second line: this order's OWN pieces in work orders ("120 of 300 sewn"), "Sewing not counted here" where a

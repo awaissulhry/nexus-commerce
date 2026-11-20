@@ -53,7 +53,7 @@ import type { ExtraTerms } from '../../model'
 import type { ListEdit } from '../../../../../list-frame/w2b/model' // B-TH-245
 // ---- F-SA-275 (the API's B-SA-070): Where it is, Waiting on, Supervisor (opt-in here, shown by the customer page's views), ⋯ Add task… / Answer request… ----
 import { SupervisorCell, WaitingOnCell, WhereItIsCell } from '../sheet/parts'
-import { answerHrefOf, HEALTH_CHIP, waitingItemsOf, whereLineOf } from '../sheet/model'
+import { answerHrefOf, waitingItemsOf, whereTextOf } from '../sheet/model' // F-MS-104: whereTextOf (the line's words)
 import { SUPERVISOR_NS } from '../../../../_shared/production-supervisor/model'
 import { productionWordsFor } from '../../../../../lib/production/words'
 // ---- end F-SA-275
@@ -1134,12 +1134,9 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
     const request = waitingItemsOf(row, latest.current.model.marks?.[row.id]).find((item) => item.kind === 'request')
     return request && request.kind === 'request' ? [{ id: 'answer', label: s('row.answer'), href: answerHrefOf(prefix, row, request, latest.current.model.doorHref) }] : []
   }
-  const whereText = (row: OrderRow): string => {
-    const line = whereLineOf(row)
-    if (line.kind === 'unread') return ''
-    if (line.kind === 'status') return t(`status.${row.status}`)
-    return [pw(`parts.stage.${line.stage}`), line.health ? pw(`parts.health.${HEALTH_CHIP[line.health]}`) : null].filter(Boolean).join(' · ')
-  }
+  // F-MS-104: the rule moved to the sheet's model (whereTextOf): "Sewing (by hand) · At risk" while a stage set by hand stands.
+  const whereText = (row: OrderRow): string =>
+    whereTextOf(row, { status: (status) => t(`status.${status}`), stage: (stage) => pw(`parts.stage.${stage}`), health: (chip) => pw(`parts.health.${chip}`), byHand: (stage) => t('list.byHand.phone', { stage }) })
   const WhereCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <WhereItIsCell row={data} t={t} s={s} statusShown={statusShown /* F-CP-107 (cp-fx16) */} /> : null)
   const WaitingCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <WaitingOnCell row={data} mark={latest.current.model.marks?.[data.id]} prefix={prefix} doorHref={latest.current.model.doorHref} s={s} now={now} /> : null)
   const SupervisorColumn = ({ data }: ICellRendererParams<OrderRow>) => (data && m ? <SupervisorCell row={data} s={s} marks={m} /> : null)
