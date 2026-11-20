@@ -45,11 +45,11 @@ export const designScreen = defineDesignScreen<CustomersCase>({
   view: CustomersDesign,
   cases: [
     { id: 'list', label: 'The list: tiles, roles, VIES and SDI columns', model: list(), note: 'Press a VIES mark for the result; a tile is a saved filter (its chip shows in the filter row).' },
-    // B-W2a-81: the Overdue column (price grain, receivables.view; sales reads it too).
-    { id: 'w2a-overdue', label: 'Overdue (W2a): what each customer owes late, per currency, with how late', model: { ...list(), overdue: overdueList(MONEY_CAN.sales) }, note: 'Moda Demo 4,270.00 (38 days late); Beispiel 1,220.00 · CHF 300.00; the others "none".' },
+    // B-W2a-81: the Overdue column (price grain, receivables.view). B-CP-011: Finance holds the grain; Sales sees no amount.
+    { id: 'w2a-overdue', label: 'Overdue (W2a): what each customer owes late, per currency, with how late', model: { ...list(), overdue: overdueList(MONEY_CAN.finance) }, note: 'Moda Demo 4,270.00 (38 days late); Beispiel 1,220.00 · CHF 300.00; the others "none".' }, // B-CP-011
     { id: 'w2a-overdue-reading', label: 'Overdue (W2a) still reading: "—", never 0', model: { ...list(), overdue: overdueList(MONEY_CAN.finance, { byParty: null }) } },
     { id: 'w2a-overdue-failed', label: "Overdue (W2a) couldn't be read: \"—\" with the reason on hover", model: { ...list(), overdue: overdueList(MONEY_CAN.finance, { byParty: null, problem: 'problem.unavailable' }) } },
-    { id: 'w2a-overdue-no-price', label: 'Overdue (W2a) without the price grain: the column is not drawn', model: { ...list(), overdue: overdueList(MONEY_CAN.noPrice) } },
+    { id: 'w2a-overdue-no-price', label: 'Overdue (W2a) seen as Sales (no price grain, B-CP-011): the column is not drawn', model: { ...list(), overdue: overdueList(MONEY_CAN.sales) } },
     {
       id: 'tile-vies',
       label: 'Tile pressed: EU businesses without a valid VIES check',

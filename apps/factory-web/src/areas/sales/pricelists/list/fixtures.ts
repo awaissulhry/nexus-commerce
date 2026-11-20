@@ -11,8 +11,8 @@ import { PriceListImportView } from '../import/view/PriceListImportView'
  * a customer list in force that ends within 30 days with a draft waiting, a group list, a contract that starts within 30
  * days, a draft list in CHF and an expired one; the tiles as saved filters, Rows ▾ and Kind ▾ with their chips, Export N
  * and Archive N held with its reason, New price list (a customer list falling back to the base list; a second base list
- * refused in words) and the page's states. Roles: Owner and Sales keep lists, Finance reads them, Planner has no
- * pricelists.view (the page says so).
+ * refused in words) and the page's states. Roles: the Owner keeps lists; Finance and Sales read them (B-CP-011, the money
+ * wall: Sales holds no grain and no pricelists.manage); Planner has no pricelists.view (the page says so).
  */
 
 interface ListCase {
@@ -33,7 +33,8 @@ export const designScreen = defineDesignScreen<ListCase>({
   title: 'Price lists & contracts',
   view: PriceListsDesign,
   cases: [
-    { id: 'sales', label: 'Sales: every list the company may use', model: listCase('sales'), note: 'Name → the list record; row ⋯ Open, new tab, Versions, Export. No price column: prices are on the record.' },
+    // B-CP-011 (the money wall, Owner O1; follow-up 20): Sales reads the lists; keeping them (New, Archive, Import) is a price holder's.
+    { id: 'sales', label: 'Seen as Sales: every list the company may use, read only (no price grain, no pricelists.manage since B-CP-011)', model: listCase('sales'), note: 'Name → the list record; row ⋯ Open, new tab, Versions, Export. No price column: prices are on the record.' },
     { id: 'owner', label: 'Owner: the same lists', model: listCase('owner') },
     { id: 'tile-active', label: 'Tile pressed: Active (its chip in the toolbar)', model: listCase('sales', { filters: { rows: 'active', soon: null, kind: null, q: '' }, rows: rows((row) => row.state === 'IN_FORCE') }) },
     { id: 'tile-ending', label: 'Tile pressed: Expiring in 30 days', model: listCase('sales', { filters: { rows: 'all', soon: 'ending', kind: null, q: '' } }) },
@@ -44,18 +45,18 @@ export const designScreen = defineDesignScreen<ListCase>({
     {
       id: 'selected',
       label: 'Three lists selected: Export 3, Archive 1 (the others price customers)',
-      model: listCase('sales', { selected: [LIST_ROWS[3]!.id, LIST_ROWS[4]!.id, LIST_ROWS[5]!.id] }),
+      model: listCase('owner', { selected: [LIST_ROWS[3]!.id, LIST_ROWS[4]!.id, LIST_ROWS[5]!.id] }),
       note: 'Archive says its reach: lists that price customers are left out, and the dialog says why.',
     },
-    { id: 'archive', label: 'Archive 2 lists (one left out)', model: listCase('sales', { selected: [LIST_ROWS[2]!.id, LIST_ROWS[4]!.id, LIST_ROWS[5]!.id], dialog: 'archive' }) },
-    { id: 'new', label: 'New price list: a customer list falling back to the base list', model: listCase('sales', { newList: newListModel({}, { code: 'NUOVO-PROVA', name: 'Nuovo Prova S.p.A. — 2027', baseListId: LIST_ROWS[0]!.id, validFrom: '2027-01-01' }) }) },
-    { id: 'new-empty', label: 'New price list: nothing typed yet (Create draft held with the reason)', model: listCase('sales', { newList: newListModel() }) },
+    { id: 'archive', label: 'Archive 2 lists (one left out)', model: listCase('owner', { selected: [LIST_ROWS[2]!.id, LIST_ROWS[4]!.id, LIST_ROWS[5]!.id], dialog: 'archive' }) }, // B-CP-011
+    { id: 'new', label: 'New price list: a customer list falling back to the base list', model: listCase('owner', { newList: newListModel({}, { code: 'NUOVO-PROVA', name: 'Nuovo Prova S.p.A. — 2027', baseListId: LIST_ROWS[0]!.id, validFrom: '2027-01-01' }) }) }, // B-CP-011
+    { id: 'new-empty', label: 'New price list: nothing typed yet (Create draft held with the reason)', model: listCase('owner', { newList: newListModel() }) }, // B-CP-011
     {
       id: 'new-base-refused',
       label: 'New price list refused: a second base list in EUR',
       model: listCase('owner', { newList: newListModel({ problem: { key: 'new.refused.codeOrBase' } }, { code: 'BASE-EUR-2', name: 'Secondo listino base', kind: 'BASE' }) }),
     },
-    { id: 'notice', label: 'After Archive: one notice at a time', model: listCase('sales', { notice: { tone: 'success', words: { key: 'list.bulk.archived', params: { count: 2 } } } }) },
+    { id: 'notice', label: 'After Archive: one notice at a time', model: listCase('owner', { notice: { tone: 'success', words: { key: 'list.bulk.archived', params: { count: 2 } } } }) }, // B-CP-011
     { id: 'updates', label: 'Live: changes wait behind "N updates · Show"', model: listCase('sales', { updates: 2 }) },
     { id: 'offline', label: 'Offline: rows stay readable', model: listCase('sales', { live: 'offline' }) },
     { id: 'finance', label: 'Finance: reads the lists; New price list held with the reason', model: listCase('finance') },
@@ -65,7 +66,7 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'empty', label: 'No price lists yet', model: listCase('sales', { rows: { items: [], problem: null }, tiles: { inForce: 0, startingIn30Days: 0, endingIn30Days: 0 } }) },
     { id: 'no-match', label: 'Nothing matches the search', model: listCase('sales', { filters: { rows: 'all', soon: null, kind: null, q: 'ZZZ' }, rows: { items: [], problem: null } }) },
     { id: 'no-permission', label: 'Planner: no pricelists.view (the page says so)', model: listCase('planner') },
-    { id: 'import', label: 'B-W2b-343 · The band: Import prices beside New price list', model: listCase('sales', { importer: createElement(PriceListImportView, { model: { held: null, sheet: null, button: true } }) }), note: 'Opens Import prices (SCR-419): the rows land in each list\'s draft.' },
+    { id: 'import', label: 'B-W2b-343 · The band: Import prices beside New price list', model: listCase('owner', { importer: createElement(PriceListImportView, { model: { held: null, sheet: null, button: true } }) }), note: 'Opens Import prices (SCR-419): the rows land in each list\'s draft.' }, // B-CP-011
     { id: 'import-held', label: 'B-W2b-343 · Finance: Import prices held with the reason', model: listCase('finance', { importer: createElement(PriceListImportView, { model: { held: 'import.held.manage', sheet: null, button: true } }) }) },
   ],
 })

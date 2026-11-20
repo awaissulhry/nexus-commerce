@@ -8,6 +8,18 @@ import { designScreen as ORDERS } from '../orders/list/fixtures'
 import { designScreen as ORDER } from '../orders/record/fixtures'
 import { canFor as returnsCan, ROLE_PERMISSIONS as RETURNS_ROLES } from '../returns/demo/fixtures'
 import { designScreen as SECURITY } from '../../admin/security/fixtures'
+// ---- B-CP-011 (follow-ups 17 + 20, cp-fx11): the orders', the price lists' and the customer page's design Sales
+import { rolePermissions } from '../../../shell/design-data'
+import { canOf as orderCan, ROLES as ORDER_ROLES } from '../orders/_demo/fixtures'
+import { can as priceListCan, rolePerms } from '../pricelists/_demo/fixtures'
+import { designScreen as PRICE_LIST } from '../pricelists/record/fixtures'
+import { designScreen as PRICE_IMPORT } from '../pricelists/import/fixtures'
+import { designScreen as PRICE_PRINT } from '../pricelists/print/fixtures'
+import { designScreen as ORDER_CHANGES } from '../orders/record/changes/fixtures'
+import { TERMS_CAN } from '../customers/_demo/fixtures'
+import { MONEY_CAN } from '../customers/money/_demo/fixtures'
+import { SALES_CAN } from '../customers/depth/_demo/fixtures'
+// ---- end B-CP-011
 
 /**
  * F-CP-148 (customer page plan C4, the money wall: Owner O1 "Sales sees no price", O2/O3; follow-up 5) — the design index's "Seen as"
@@ -83,3 +95,67 @@ describe('F-CP-148: "Seen as" — every office money screen as the Owner, a Sale
     expect(caseOf<SecurityCase>(SECURITY, 'cp-148-prices-as-manager').permissions).not.toContain('money.price')
   })
 })
+
+// ---- B-CP-011 (the money wall, Owner O1; follow-ups 17 + 20, cp-fx11): the design data's Sales is the real Sales role everywhere
+describe('follow-ups 17 + 20: the orders’, the price lists’ and the customer page’s design Sales is the real Sales role (no grain)', () => {
+  const PRICED = /"(unitPrice|netAmount|grossAmount|vatAmount|marginPct|brandPrice|priceDiff)"/
+
+  it('the orders’ ROLES.sales and the price lists’ rolePerms(sales) are the template’s permissions: no money.*, no pricelists.manage', () => {
+    expect(ORDER_ROLES.sales).toEqual(rolePermissions('sales'))
+    expect(rolePerms('sales')).toEqual(rolePermissions('sales'))
+    for (const permissions of [ORDER_ROLES.sales, rolePerms('sales')]) {
+      expect(money(permissions)).toEqual([])
+      expect(permissions).not.toContain('pricelists.manage')
+    }
+    expect(orderCan('sales')).toMatchObject({ price: false, margin: false, cost: false })
+    expect(priceListCan('sales')).toMatchObject({ price: false, manage: false })
+    // The price holders keep theirs (the control).
+    expect(orderCan('owner')).toMatchObject({ price: true, margin: true })
+    expect(priceListCan('owner')).toMatchObject({ price: true, manage: true })
+  })
+
+  it('the customer page’s Sales personas read no price: commercial terms, money, the customer in depth', () => {
+    expect(TERMS_CAN.sales).toMatchObject({ price: false, listsManage: false })
+    expect(MONEY_CAN.sales).toMatchObject({ price: false, creditLimits: false })
+    expect(SALES_CAN).toMatchObject({ price: false, erase: false })
+  })
+
+  it('every Sales case of Sales › Orders reads no price: no price grain, no money field in its rows', () => {
+    type ListCase = { role: string; list: { can: { price: boolean }; list: { items: unknown } } }
+    const sales = ORDERS.cases.filter((item) => (item.model as ListCase).role === 'sales')
+    expect(sales.length).toBeGreaterThan(40)
+    for (const item of sales) {
+      const { list } = item.model as ListCase
+      expect(list.can.price, item.id).toBe(false)
+      expect(JSON.stringify(list.list.items ?? null), item.id).not.toMatch(PRICED)
+    }
+  })
+
+  it('every Sales case of the order and its changes reads no price; a Sales edit mode starts from what Sales reads (no price typed)', () => {
+    type RecordCase = { role: string; record?: { can: { price: boolean }; order: { status: string; value?: unknown }; amend?: { lines: { price?: string }[] } | null }; draft?: { can: { price: boolean } } }
+    const sales = [...ORDER.cases, ...ORDER_CHANGES.cases].filter((item) => (item.model as RecordCase).role === 'sales')
+    expect(sales.length).toBeGreaterThan(80)
+    for (const item of sales) {
+      const { record, draft } = item.model as RecordCase
+      if (record) {
+        expect(record.can.price, item.id).toBe(false)
+        expect(JSON.stringify(record.order.value ?? null), item.id).not.toMatch(PRICED)
+        for (const line of record.amend?.lines ?? []) expect(line.price ?? '', item.id).toBe('')
+      }
+      if (draft) expect(draft.can.price, item.id).toBe(false)
+    }
+  })
+
+  it('price lists: one "Seen as Sales" case per screen (record, import, PDF), each without the price grain', () => {
+    type RoleCase = { role?: string; can?: { price: boolean }; record?: { can: { price: boolean } } }
+    const salesIds = (screen: { cases: readonly { id: string; model: unknown }[] }) => screen.cases.filter((item) => (item.model as RoleCase).role === 'sales').map((item) => item.id)
+    expect(salesIds(PRICE_LIST)).toEqual(['prices-sales'])
+    expect(caseOf<RoleCase>(PRICE_LIST, 'prices-sales').record?.can.price).toBe(false)
+    expect(salesIds(PRICE_IMPORT)).toEqual(['held-sales'])
+    const salesCan = JSON.stringify(priceListCan('sales'))
+    expect(PRICE_PRINT.cases.filter((item) => JSON.stringify((item.model as RoleCase).can) === salesCan).map((item) => item.id)).toEqual(['no-price'])
+    expect(caseOf<RoleCase>(PRICE_PRINT, 'no-price').can?.price).toBe(false)
+    expect(caseOf<RoleCase>(PRICE_PRINT, 'review').can?.price).toBe(true)
+  })
+})
+// ---- end B-CP-011

@@ -153,7 +153,7 @@ const draftRowsOf = (party: Party, price: boolean): DraftRow[] => {
 /** F-CP-113: the lines window's made-up model (two colour lines, one at the list price, one typed; priced by the API). */
 const linesWindowOf = (kind: 'lines' | 'discard', price: boolean): NewOrderModel => ({
   prefix: '/w/DEMO',
-  can: { ...canOf('sales'), price },
+  can: price ? canOf('owner') : canOf('sales'), // B-CP-011: prices are the Owner's; the real Sales role holds no grain
   today: ORDERS_TODAY,
   header: { companyId: COMPANY, partyId: ORDER_PARTY.id, contactId: ORDER_PARTY.contacts[0]!.id, customerRef: 'PO-ESEMPIO-89' },
   party: { status: 'ready', value: ORDER_PARTY },
@@ -231,7 +231,8 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
   const name = party.tradeName ?? party.legalName
   const view = work.view ?? WORK_DEFAULT_ROWS
   const notEqual = work.notEqual === 'view' && work.price !== false // F-CP-141
-  const can = work.role === 'manager' ? canOf('manager') : { ...canOf('sales'), price: work.price !== false } // F-CP-105: the production manager
+  // F-CP-105: the production manager. B-CP-011: a price holder is the Owner; without prices the real Sales role (no grain).
+  const can = work.role === 'manager' ? canOf('manager') : work.price !== false ? canOf('owner') : canOf('sales')
   const columnSet = columnSetOf(work.cols, notEqual, can.price) // F-CP-105: without the price grain always Work
   const list: OrdersListModel = {
     prefix: '/w/DEMO',
@@ -374,7 +375,7 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     },
     { id: 'overview-fiscal-drawer', label: 'Overview: a brand without SDI code or PEC', model: record('MARCHIO-ESEMPIO') },
     // B-W2a-81: Overdue and Returns this year (key numbers), Open returns and claims (Now), Finance › Receivables.
-    { id: 'w2a-numbers', label: 'Overview (W2a): Overdue, Returns this year, open returns and claims', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.sales) }, note: 'Overdue 4,270.00, oldest 38 days late (opens Finance › Receivables for this customer); 3 returns in 2026, 6 units, 2 open; one complaint being investigated.' },
+    { id: 'w2a-numbers', label: 'Overview (W2a): Overdue, Returns this year, open returns and claims', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.finance) }, note: 'Overdue 4,270.00, oldest 38 days late (opens Finance › Receivables for this customer); 3 returns in 2026, 6 units, 2 open; one complaint being investigated.' }, // B-CP-011
     { id: 'w2a-numbers-no-price', label: 'Overview (W2a) without the price grain: late invoices counted, no amount', model: { ...record('MODA-DEMO', { can: { ...RECORD_CAN, price: false }, quotes: loaded(withoutMoney(QUOTES)), orders: loaded(withoutMoney(ORDERS)) }), money: moneyModel(MONEY_CAN.noPrice) } },
     { id: 'w2a-numbers-nothing', label: 'Overview (W2a): nothing late, no return this year, nothing open', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.finance, { ageing: loaded([]), returns: loaded([]), complaints: loaded([]) }) } },
     { id: 'w2a-numbers-loading', label: 'Overview (W2a) reading: tiles "—"', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.finance, MONEY_STATES.loading) } },
@@ -480,11 +481,11 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'tabs-overview-first', label: 'F-SA-271 · A reader without orders.view lands on the Overview', model: record('MODA-DEMO', { tab: 'overview', can: { ...RECORD_CAN, orders: false } }) },
     { id: 'tab-quotes', label: 'F-SA-277 · Quotes & incoming: the tab (its two lists, Quotes then Incoming requests, are their pages\' own lists mounted by the page; see the Sales › Quotes and Incoming design cases)', model: record('MODA-DEMO', { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
     // F-SA-273: the Money tab with every card's right (the made-up ageing, returns and open orders of money/_demo).
-    { id: 'tab-money', label: 'F-SA-273 · Money: key numbers, credit, open invoices per currency, deposits and balances, payment terms', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.sales, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }) } },
+    { id: 'tab-money', label: 'F-SA-273 · Money: key numbers, credit, open invoices per currency, deposits and balances, payment terms', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.finance, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }) } }, // B-CP-011
     // F-CP-141: "Prices differ on {count} orders ›" — the door to the Work tab's Not equal view; nothing of it without the price grain.
-    { id: 'tab-money-price-differ', label: 'F-CP-141 · Money: "Prices differ on 2 orders ›" under the key numbers (opens Work › Not equal)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.sales, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }), priceDiffer: 2 } },
-    { id: 'tab-money-price-differ-no-price', label: 'F-CP-141 · Money as Sales worker: no line, no count (the page reads none)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel({ ...MONEY_CAN.sales, price: false, orders: true, credit: true, creditLimits: false }, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }), priceDiffer: 2 } },
-    { id: 'tab-money-blind', label: 'F-SA-273 · Money without the price grain and without sales.credit.limits: counts only, Change limit… held', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel({ ...MONEY_CAN.sales, price: false, orders: true, credit: true, creditLimits: false }, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }) } },
+    { id: 'tab-money-price-differ', label: 'F-CP-141 · Money: "Prices differ on 2 orders ›" under the key numbers (opens Work › Not equal)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.finance, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }), priceDiffer: 2 } }, // B-CP-011
+    { id: 'tab-money-price-differ-no-price', label: 'F-CP-141 · Money as Sales worker: no line, no count (the page reads none)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel(MONEY_CAN.sales, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }), priceDiffer: 2 } }, // B-CP-011
+    { id: 'tab-money-blind', label: 'F-SA-273 · Money without the price grain and without sales.credit.limits: counts only, Change limit… held', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel(MONEY_CAN.sales, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }) } }, // B-CP-011
     { id: 'band-held', label: 'F-SA-271 · New order and Add task held with why (no orders.manage, no tasks.manage)', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: false, tasks: false, workorders: true } }) },
     { id: 'band-doors', label: 'F-SA-271 · ⋯ Check VIES, Add task for <customer>…, Import orders…, Open in Sales › Orders, Work orders of <customer> ›', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: true, tasks: true, workorders: true } }) },
     // ---- F-SA-272: the Overview — key numbers as doors, Also open, and who looks after the customer (moved from Portal settings).

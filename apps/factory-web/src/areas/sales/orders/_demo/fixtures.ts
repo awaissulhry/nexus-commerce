@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from 'react'
 import { permissionCheck } from '../../../../lib/session/session'
-import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../../shell/design-data'
+import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS, rolePermissions } from '../../../../shell/design-data'
 import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
 import type { PartyDetail, StyleDetail, StyleRow, VersionsAnswer } from '../../quotes/api'
@@ -27,7 +27,9 @@ export const COMPANY = DEMO_COMPANIES[0].id
 const COMMON = ['home.view', 'threads.read', 'threads.post', 'files.read', 'files.upload']
 export const ROLES = {
   owner: [...OWNER_PERMISSIONS, ...COMMON, 'quotes.view', 'quotes.manage', 'orders.view', 'orders.manage', 'orders.close', 'payments.view', 'payments.record', 'invoices.view', 'invoices.manage', 'invoices.issue', 'workorders.view', 'workorders.manage', 'shipping.manage', 'money.price', 'money.cost', 'money.margin', 'email.send'],
-  sales: [...COMMON, 'parties.view', 'quotes.view', 'quotes.manage', 'orders.view', 'orders.manage', 'invoices.view', 'payments.view', 'workorders.view', 'money.price', 'money.margin', 'email.send'],
+  // B-CP-011 (the money wall, Owner O1; follow-up 17): Sales is the real Sales role — the template's permissions and no grain (no
+  // money.price, no money.margin). A case that shows prices is the Owner's or Finance's; "Seen as Sales" shows none.
+  sales: rolePermissions('sales'),
   finance: [...COMMON, 'parties.view', 'quotes.view', 'orders.view', 'orders.close', 'payments.view', 'payments.record', 'invoices.view', 'invoices.manage', 'invoices.issue', 'money.price', 'money.cost', 'money.margin', 'email.send'],
   /** The production manager follows orders read-only (no money) and makes their work orders. */
   manager: [...COMMON, 'orders.view', 'workorders.view', 'workorders.manage', 'workorders.release'],

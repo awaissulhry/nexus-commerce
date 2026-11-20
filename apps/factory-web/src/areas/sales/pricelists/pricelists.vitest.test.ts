@@ -9,6 +9,7 @@ import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
 import { renderView, textOf } from '../../../lib/record-thread/parts/testing' // B-TH-258
 import { DETAIL, DETAIL_IN_FORCE_ONLY, LIST_ROWS, V1, V2, V2_ENTRIES } from './_demo/fixtures'
+import { can } from './_demo/fixtures' // B-CP-011: the design's roles (Sales: the real role, no grain)
 import { designScreen as listScreen } from './list/fixtures'
 import {
   abilitiesOf,
@@ -210,16 +211,30 @@ describe('every SCR-106 design case draws in both languages with no key left on 
       })
     }
   }
-  it('money by grain: Sales sees margin %, never a cost (Owner S2); a role without the price grain sees no price', () => {
+  // B-CP-011 (the money wall, Owner O1, reversing S2; follow-up 20): Sales holds no grain — the design's Sales is the real role.
+  it('money by grain: a price holder without the cost grain sees margin %, never a cost; Sales and a role without the price grain see no price', () => {
     expect(priceColumnIds(abilitiesOf(['money.price', 'money.cost', 'money.margin']))).toEqual(['style', 'colour', 'price', 'cost', 'margin'])
     expect(priceColumnIds(abilitiesOf(['money.price', 'money.margin']))).toEqual(['style', 'colour', 'price', 'margin'])
     expect(priceColumnIds(abilitiesOf([]))).toEqual(['style', 'colour'])
-    // The design data is what the API answers each role: no cost field for Sales, no money field without grains.
-    const sales = recordScreen.cases.find((item) => item.id === 'prices-sales')!.model as { record: { prices: { answer: { entries: object[] } } } }
-    const readOnly = recordScreen.cases.find((item) => item.id === 'prices-no-money')!.model as { record: { prices: { answer: { entries: object[] } } } }
-    expect(sales.record.prices.answer.entries.every((entry) => !('standardCost' in entry) && 'marginPct' in entry)).toBe(true)
-    expect(readOnly.record.prices.answer.entries.every((entry) => !('unitPrice' in entry) && !('marginPct' in entry))).toBe(true)
+    expect(priceColumnIds(can('sales'))).toEqual(['style', 'colour'])
+    // The design data is what the API answers each role: the Owner's every figure, no money field for Sales or without grains.
+    type PricesCase = { record: { prices: { answer: { entries: object[] } } } }
+    const owner = recordScreen.cases.find((item) => item.id === 'prices-draft')!.model as PricesCase
+    const sales = recordScreen.cases.find((item) => item.id === 'prices-sales')!.model as PricesCase
+    const readOnly = recordScreen.cases.find((item) => item.id === 'prices-no-money')!.model as PricesCase
+    expect(owner.record.prices.answer.entries.every((entry) => 'unitPrice' in entry && 'standardCost' in entry && 'marginPct' in entry)).toBe(true)
+    for (const seen of [sales, readOnly]) expect(seen.record.prices.answer.entries.every((entry) => !('unitPrice' in entry) && !('standardCost' in entry) && !('marginPct' in entry))).toBe(true)
   })
+  it('seen as Sales: no amount (nor a currency with one), the prices held in words — and it is the record\'s only Sales case', () => {
+    const text = textOf(renderView(recordScreen.view as ComponentType<{ model: unknown }>, recordScreen.cases.find((item) => item.id === 'prices-sales')!.model, 'en'))
+    expect(text).not.toMatch(/\d+[.,]\d{2}\b/)
+    // No currency with a figure (the list's own currency, "EUR" in its band and BASE-EUR's code, is the list's, not a price).
+    expect(text).not.toMatch(/€|\d\s?EUR\b|\bEUR\s?\d/)
+    expect(text).toContain('Your role sees no selling prices: the prices are not shown')
+    const salesCases = [...listScreen.cases, ...recordScreen.cases].filter((item) => (item.model as { role: string }).role === 'sales')
+    expect(salesCases.filter((item) => (item.model as { record?: unknown }).record).map((item) => item.id)).toEqual(['prices-sales'])
+  })
+  // ---- end B-CP-011
 })
 
 // ---- B-TH-258: the price list on RecordFrame (the rule of picture 38, the tabs of 08-tabs.tsv) ----
