@@ -1768,6 +1768,28 @@
     },
     "cancel": {
       "yesTakenBack": "The yes asked on it is taken back"
+    },
+    "manual": {
+      "open": "Set the stage by hand…",
+      "tag": "Set by hand",
+      "by": "by {who}",
+      "floor": "The floor's counts say {floor}: it clears by itself when the floor reaches {stage}",
+      "noWork": "No work order records this order: it stands until you clear it or the order ships",
+      "old": "Set by hand {age} ago and the floor has not reached it: check it",
+      "stagesLink": "Open the work orders in Production · now {stage}, set by hand",
+      "change": "Change…",
+      "changeAria": "Change the stage set by hand on {number}",
+      "clear": "Clear…",
+      "clearAria": "Back to the floor's stage on {number}",
+      "held": {
+        "reading": "The stage is still being read"
+      },
+      "reasons": {
+        "OUTAGE": "System or scanners down",
+        "FEW_PEOPLE": "Too few people to record the work",
+        "OUTSIDE": "Work at an outside workshop",
+        "OTHER": "Something else (say it in the note)"
+      }
     }
   },
   "overview": {

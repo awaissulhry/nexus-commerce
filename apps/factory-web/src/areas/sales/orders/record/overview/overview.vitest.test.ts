@@ -769,7 +769,8 @@ describe('F-OO-102: "Where it is now" per state — waiting no dots, shipped eve
 
   it('in production and shipped: the dots and their quiet line ("set by the floor and quality"); shipped is every stage done, none now', () => {
     for (const locale of ['en', 'it'] as const) {
-      const setBy = locale === 'en' ? 'Stages are set by the floor and quality, never by hand' : 'Le fasi le segnano il reparto e la qualità, mai a mano'
+      // F-MS-101 (R21): the quiet line's new words (a stage may be set by hand when the floor cannot record the work).
+      const setBy = locale === 'en' ? 'Stages are set by the floor and quality, or by hand when the floor cannot record them' : 'Le fasi le segnano il reparto e la qualità, o a mano quando il reparto non può registrarle'
       const now = draw('overview', locale)
       expect(milestones(now, 'current'), locale).toBe(1)
       expect(textOf(now)).toContain(setBy)
@@ -830,7 +831,7 @@ describe('F-OO-103: "Where it is now" keeps its title, Live, the headline and th
 
   it('it keeps the title, "Live · as of", the headline (with its quiet line) and the stages\' one link, in this order', () => {
     const html = sectionOne(draw('overview'))
-    const at = ['<h2 class="fw-so-h2">Where it is now</h2>', 'fw-prp-fresh', '<p class="fw-so-headline">In production · Sewing</p>', 'class="fw-prp-strip-go"', 'Stages are set by the floor and quality, never by hand'].map((part) => html.indexOf(part))
+    const at = ['<h2 class="fw-so-h2">Where it is now</h2>', 'fw-prp-fresh', '<p class="fw-so-headline">In production · Sewing</p>', 'class="fw-prp-strip-go"', 'Stages are set by the floor and quality, or by hand when the floor cannot record them' /* F-MS-101 */].map((part) => html.indexOf(part))
     expect(at.every((index) => index >= 0), at.join(',')).toBe(true)
     expect([...at].sort((a, b) => a - b)).toEqual(at)
     // Waiting for a yes and cancelled keep the title, Live and the headline with its quiet line; there are no dots to link.

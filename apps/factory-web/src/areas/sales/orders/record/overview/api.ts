@@ -62,6 +62,23 @@ export const headlineSchema = z.object({
       sewingNotCountedWords: words.nullable(),
       next: z.object({ code: z.enum(BRAND_STAGES), words }).nullable(),
       partlyShipped: z.boolean(),
+      // ---- F-MS-101 (set the stage by hand; B-MS-006's shape, R9, R17): the stage set by hand while it stands — which, why (a reason
+      // code: office only), the floor's own stage read live, when, the office's note and who (both null without workorders.view) —
+      // and the production row's version (every set, change and clear sends it; null: no row yet, the set makes it). Optional: an
+      // older answer without them offers the set as before B-MS-006 (no hand stage, version null).
+      byHand: z
+        .object({
+          stage: z.enum(BRAND_STAGES),
+          reasonCode: z.string(),
+          floor: z.object({ code: z.enum(BRAND_STAGES), words }).nullable(),
+          at: instant,
+          note: z.string().nullable(),
+          by: z.object({ id: z.string(), name: z.string(), active: z.boolean().optional() }).nullable(),
+        })
+        .nullable()
+        .optional(),
+      version: z.number().nullable().optional(),
+      // ---- end F-MS-101
     })
     .nullable(),
   inWork: z.object({ bundles: z.number(), pieces: z.object({ cutting: z.number(), sewing: z.number().nullable(), checking: z.number().nullable(), packing: z.number().nullable() }) }),

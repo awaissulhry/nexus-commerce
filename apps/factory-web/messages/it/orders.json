@@ -1768,6 +1768,28 @@
     },
     "cancel": {
       "yesTakenBack": "Il sì chiesto viene ritirato"
+    },
+    "manual": {
+      "open": "Imposta la fase a mano…",
+      "tag": "Impostata a mano",
+      "by": "da {who}",
+      "floor": "I conteggi del reparto dicono {floor}: si toglie da sola quando il reparto arriva a {stage}",
+      "noWork": "Nessun ordine di lavoro registra questo ordine: resta finché non la togli o l'ordine parte",
+      "old": "Impostata a mano {age} fa e il reparto non ci è ancora arrivato: controllala",
+      "stagesLink": "Apri gli ordini di lavoro in Produzione · ora {stage}, impostata a mano",
+      "change": "Cambia…",
+      "changeAria": "Cambia la fase impostata a mano su {number}",
+      "clear": "Togli…",
+      "clearAria": "Torna alla fase del reparto su {number}",
+      "held": {
+        "reading": "La fase è ancora in lettura"
+      },
+      "reasons": {
+        "OUTAGE": "Sistema o lettori fuori uso",
+        "FEW_PEOPLE": "Troppo poche persone per registrare il lavoro",
+        "OUTSIDE": "Lavoro presso un terzista",
+        "OTHER": "Altro (scrivilo nella nota)"
+      }
     }
   },
   "overview": {

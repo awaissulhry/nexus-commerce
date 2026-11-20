@@ -916,7 +916,7 @@
       "office": {
         "planned": "Pianificato per il {date}",
         "promised": "Franco fabbrica {date}",
-        "setBy": "Le fasi le segnano il reparto e la qualità, mai a mano"
+        "setBy": "Le fasi le segnano il reparto e la qualità, o a mano quando il reparto non può registrarle"
       },
       "customer": {
         "expected": "Previsto entro il {date}",

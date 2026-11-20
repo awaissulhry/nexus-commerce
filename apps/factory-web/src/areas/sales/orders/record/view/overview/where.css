@@ -24,7 +24,8 @@
   overflow-wrap: break-word;
 }
 
-/* The five stages and their quiet line ("set by the floor and quality, never by hand") under them. */
+/* The five stages and their quiet line under them — F-MS-101: "set by the floor and quality, or by hand when the floor cannot record
+   them" (with its door, and the hand stage's row while one stands: F-MS-102). */
 .fw-so-where-stages {
   display: flex;
   flex-direction: column;
