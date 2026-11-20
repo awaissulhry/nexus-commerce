@@ -413,7 +413,11 @@
       "unitGross": "Unit price (VAT incl.)",
       "net": "Net",
       "vat": "VAT",
-      "promise": "Promise"
+      "promise": "Promise",
+      "unitPrice": "Unit price",
+      "exVat": "(excl. VAT)",
+      "lineTotal": "Line total",
+      "readyBy": "Ready by"
     },
     "closedShort_one": "Closed short: {count} piece",
     "closedShort_other": "Closed short: {count} pieces",
@@ -424,7 +428,126 @@
     "closedBy": "Closed short by {name}, {day}",
     "note": "Note: {note}",
     "rider": "Rider: {rider} · {garment}, revision {revision}",
-    "artworkOpen": "Open the artwork in the viewer"
+    "artworkOpen": "Open the artwork in the viewer",
+    "head": {
+      "pieces_one": "{count} piece",
+      "pieces_other": "{count} pieces",
+      "lines_one": "{count} line",
+      "lines_other": "{count} lines",
+      "charges_one": "{count} charge",
+      "charges_other": "{count} charges",
+      "readyBy": "Ready by {date}",
+      "noReadyBy": "No ready-by date yet",
+      "readyByChange": "Change the ready-by date of the whole order",
+      "late_one": "{count} day late",
+      "late_other": "{count} days late",
+      "firstPromised": "first ready by {date}",
+      "total": "Order total {amount}",
+      "totalVat": "Total (VAT incl.) {amount}",
+      "salesHow": "You change pieces, sizes and notes; prices are set by someone who sees them.",
+      "more": "More for the lines"
+    },
+    "menu": {
+      "closeLines": "Close lines with fewer pieces…"
+    },
+    "style": {
+      "open": "Open the style {code}"
+    },
+    "pattern": {
+      "approved": "Pattern v{revision} · approved",
+      "notApproved": "Pattern v{revision} · not approved yet",
+      "none": "Pattern version: chosen by production"
+    },
+    "locks_one": "{count} size locked by your company's rules",
+    "locks_other": "{count} sizes locked by your company's rules",
+    "lockOf": "{colour} {size}: from {stage}",
+    "leaves": "This style leaves the order",
+    "freezeUnread": "We could not read your company's lock rules: they are checked when you review.",
+    "floorsUnread": "We could not read what is cut: it is checked when you review.",
+    "cell": {
+      "label": "{colour}, size {size}",
+      "notOffered": "not offered for this colour",
+      "min": "min {count}",
+      "minShipped": "Lowest {count}: {shipped} already shipped",
+      "minCut": "{count} already cut",
+      "cutBeyond": "{count} cut beyond this: you choose where they go when you review",
+      "was": "was {value}",
+      "locked": "Locked from {stage} by your company's rule: a change here goes to the customer to accept.",
+      "lockedForGood": "Locked for good from {stage}: it cannot change.",
+      "priceShipped_one": "{count} shipped: the price stays. A shipped price changes with a credit note.",
+      "priceShipped_other": "{count} shipped: the price stays. A shipped price changes with a credit note."
+    },
+    "row": {
+      "shipped_one": "{count} shipped",
+      "shipped_other": "{count} shipped",
+      "sizesApart_one": "{count} size priced apart",
+      "sizesApart_other": "{count} sizes priced apart",
+      "new": "New",
+      "removed": "Removed",
+      "closesShort": "Will close with fewer pieces: work orders make it",
+      "newActions": "Actions for the new line · {name}",
+      "orderDate": "The order's date",
+      "listPrice": "Price from {customer}'s price list"
+    },
+    "short": {
+      "tag": "Closed with fewer pieces",
+      "figures": "{ordered} ordered · {make} to make · {cancelled} cancelled",
+      "by": "by {name}, {day}"
+    },
+    "mtm": {
+      "unit_one": "{count} unit · base size {size}",
+      "unit_other": "{count} units · base size {size}",
+      "units_one": "{count} unit",
+      "units_other": "{count} units",
+      "fixed": "A made-to-measure unit keeps its size and price; only its notes change here.",
+      "noRider": "Rider: shown to people who see measurements"
+    },
+    "notes": {
+      "count_one": "{count} note",
+      "count_other": "{count} notes",
+      "files_one": "{count} file",
+      "files_other": "{count} files",
+      "add": "Add a note",
+      "customer": "On the order — the customer sees it",
+      "floor": "For the floor — no prices",
+      "filesLabel": "Files"
+    },
+    "addSize": "Size",
+    "addSizeLabel": "Add a size",
+    "addColour": "Add a colour",
+    "keys": "Keys",
+    "keysList": "Tab next box · Enter down · Esc puts the box back · ⌘Z undo · ⌘S review and save",
+    "total": "Total",
+    "clash": "you {mine} · {name} {theirs}",
+    "keepMine": "Keep mine",
+    "takeTheirs": "Take theirs",
+    "charges": {
+      "title": "Charges",
+      "kind": {
+        "DEVELOPMENT": "Development",
+        "SAMPLE": "Samples",
+        "TOOLING": "Tooling",
+        "other": "Charge"
+      },
+      "forStyle": "for {style}",
+      "once": "billed once",
+      "fromQuote": "A charge changes from the quote"
+    },
+    "sum": {
+      "subtotal": "Subtotal (excl. VAT)",
+      "vat": "VAT {rate} %",
+      "vatNone": {
+        "export": "VAT: none · export outside the EU",
+        "intraEu": "VAT: none · sale to an EU business",
+        "other": "VAT: none"
+      },
+      "code": "Code on the invoice: {code}",
+      "total": "Total (VAT incl.)",
+      "ofWhichVat": "of which VAT {rate} %",
+      "ofWhichVatNoRate": "of which VAT"
+    },
+    "empty": "No lines yet",
+    "emptyHint": "An order keeps at least one line: add a style."
   },
   "save": {
     "held": {

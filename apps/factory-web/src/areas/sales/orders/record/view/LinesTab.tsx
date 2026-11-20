@@ -1,21 +1,17 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useSearchParams } from 'next/navigation' // F-OP-210 (lead, in A08): the artwork link keeps the dock's scope
-import { FileImage, Lock, PencilLine } from 'lucide-react' // F-CP-149: Lock
-import { Banner, Card, Disclosure, Field, KeyValue, MetricStrip, SummaryTable } from '@nexus/ui/components'
-import { SizeGridView } from '@nexus/ui/grid/size-grid/index'
+import { Lock } from 'lucide-react' // F-CP-149: Lock
+import { Banner, Card, Disclosure, EmptyState, Field, KeyValue, MetricStrip, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, Select, Spinner, Tag } from '@nexus/ui/primitives' // F-OP-110: Select
 import { DateField, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
-import { RecordPicture } from '../../../../../lib/record-picture/view/RecordPicture'
-import { money, percent, unitPrice } from '../../../quotes/model'
-import { sizeGridWords } from '../../../quotes/record/view/grid-copy'
-import type { Order, OrderLine } from '../../api'
-import { amendHeld, changeCount, closeLinesHeld, minimumsOf, reopenHeld, reviewHeld } from '../../daily-model'
-import { dayInstant, gridOf, isFinal, styleGroups, type Phrase } from '../../model'
+import { money, unitPrice } from '../../../quotes/model'
+import type { Order } from '../../api'
+import { amendHeld, changeCount, minimumsOf, reviewHeld } from '../../daily-model'
+import { dayInstant, type Phrase } from '../../model'
 // ---- F-OP-106: the "What changes" strip (the preview's pieces, net, work orders), ONE Apply; Review amendment folded in ----
 import { amendKeyOf, amendPairs, changeLabel, namesOf, sizesText, stripHeld, stripOf, workOrderWords, type AmendStrip, type StripChange } from '../../daily-model'
 // ---- F-OP-107 (B2): each cell's floors and the line's figures; the extra-pieces picker (the review window's part) ----
@@ -28,176 +24,89 @@ import { ExtraPieces } from '../../../../home/approvals/requests/view/ExtraPiece
 import { ConversationTick } from '../../../../home/approvals/requests/view/ConversationTick'
 import { tellHeld, tickOn } from '../../../../home/approvals/requests/model'
 import { FrozenOffer } from '../../changes-depth/view/ChangesDepth'
-// ---- F-OP-210 (lead, in A08): an in-page tab link keeps the dock's scope (tabHref + TabLink) ----
-import { tabHref } from '../../../../_shared/record-frame/address'
-import { TabLink } from '../../../../../lib/tab-link/TabLink'
 import type { AmendState, OrderRecordActions, OrderRecordModel } from '../record-model'
 import { readOf } from '../overview/model'
 import { LinesEditor } from './LinesEditor'
 // ---- B-W2b-323 (orders in depth on screen) ----
-import { FrozenSizes, frozenIssues } from '../../depth/view/LinesDepth'
+import { frozenIssues } from '../../depth/view/LinesDepth'
 import { NAMESPACE as DEPTH } from '../../depth/model'
-// ---- F-SA-231b: the artwork chip opens the artwork in the thread's ONE viewer (the frame's openFiles)
-import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
-import { artworkOfGroup } from '../production'
-// F-SA-266: each colour line's Discuss door and its anchor ("Show on the page")
-import { DiscussDoor } from './Discuss'
-import { rowAnchor } from '../dock/discuss'
 import { REQUESTED_FIELD_ID } from '../overview/model' // F-OP-104
 import { CUSTOMER_REF_FIELD_ID } from '../record-model' // F-OO-209
 import { addressLineOf, headerChangedOf, SHIP_TO_FIELD_ID } from '../../daily-model' // F-OP-110
+// ---- F-OL-02 (Order LINES lane): the new tab — one table per style, change in place, the save bar, the ONE line ⋯ ----
+import { EMPTY_DRAFT } from '../lines-draft'
+import { headOf, linesReaderOf, orderTotalOf, ownDatesOf, styleCardsOf, taxBasisOf, totalsOf } from '../lines-table'
+import { useLineMenu } from './LineMenu'
+import { LinesHead } from './lines/LinesHead'
+import { StyleTable, type LinesCtx } from './lines/StyleTable'
+import { ChargesBlock, TotalsBlock } from './lines/LinesMoney'
+import './lines/lines.css'
+// ---- end F-OL-02
 
 /**
- * F-SA-231 (sales page plan N2, picks P2, R9; 10-order-page §2.2) — Lines, the commercial truth: a totals strip (lines · units · net ·
- * VAT · gross by grain) instead of the rail (the money is on Money, the record chain on Overview), the head ("What the customer
- * ordered, as accepted. Changes go through Amend order." with Amend order, Close remaining lines…, Reopen lines…, each held with its
- * reason), and one card per style — its picture (the one picture part, 56 px), its code and name, the revision it is made to, its
- * artwork ("Artwork (2)", the order's Files), the ordered sizes in the DS size grid (no layer switch: what is made is on Overview,
- * Production and Shipments), the frozen sizes, and per colour line its picture (40 px), options, cost mark, closed short (by whom,
- * when, why), the line's note and description, pieces, shipped, price, net and VAT by grain, the promise. Amend mode unchanged
- * (B-W2a-50) — except the floor of a size: what is already CUT (under what work orders make is said; the work order follows).
+ * F-OL-02 (Order LINES lane, plan v2 §1; 10-design-tab; replaces F-SA-231's view mode) — Lines, the commercial truth, changed in
+ * place: the head ("17 pieces · 3 lines · 1 charge · Ready by … ✎", the order total for price readers, Add a style, the tab ⋯), one
+ * card per style with ONE native table (thin DS boxes for who changes lines, plain numbers for everyone else; marks "was 3", New,
+ * struck + Put back; floors "min 3" only where cut or shipped binds; the company lock said before typing), the notes folded under
+ * each row, the charges read-only, the totals in plain words. Sales sees no money anywhere and one line why; Read-only and Warehouse
+ * see no button and no ⋯. What is typed waits in the draft (use-lines-draft.ts) for the save bar. Fetches nothing.
  */
 export function LinesTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
-  const t = useT('orders')
-  const sales = useT('sales')
-  const locale = useLocale()
-  const groups = styleGroups(order.lines)
-  const copy = sizeGridWords(sales)
-  const held = amendHeld(order, model.can)
-  const closeWait = closeLinesHeld(order, model.can)
-  const reopenWait = reopenHeld(order, model.can)
-  const busy = model.busy ? t('held.busy') : null
-  const frame = useRecordFrame() // F-SA-231b
-  const search = useSearchParams()?.toString() ?? '' // F-OP-210
-
   if (model.amend) return <AmendLines order={order} amend={model.amend} model={model} actions={actions} />
+  return <LinesView order={order} model={model} actions={actions} />
+}
 
+function LinesView({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const tab = model.linesTab ?? null
+  const draft = tab?.draft ?? EMPTY_DRAFT
+  const reader = linesReaderOf(model.can)
+  // Held by the order's state (shipped, closed, waiting: today's words); the right is the reader's (no boxes without it).
+  const held = amendHeld(order, model.can)
+  const busy = model.busy || !!tab?.saving
+  const boxes = reader.writes && held === null && !busy
+  const menu = useLineMenu(order, model, actions)
+  const styles = tab?.styles ?? {}
+  const cards = styleCardsOf(order, draft, styles)
+  const basis = taxBasisOf(order)
+  const totals = totalsOf(order, draft, cards)
+  const ctx: LinesCtx = {
+    order,
+    model,
+    actions,
+    draft,
+    reader,
+    boxes,
+    readyBy: ownDatesOf(order),
+    floors: cellFloorsOf(readOf(model.production)?.lines ?? []),
+    freeze: model.depth?.freeze?.value ?? null,
+    menu,
+    clashes: tab?.clashes ?? [],
+    moved: tab?.moved?.lineIds ?? [],
+    styles,
+    basis,
+    colleague: tab?.moved?.by ?? null,
+  }
   return (
-    <div className="fw-so-stack">
-      <Totals order={order} model={model} />
-      <div className="fw-so-card-head">
-        <p className="fw-so-hint">{t('lines.readOnly')}</p>
-        {/* F-OP-305 (walk #16, Lines part): drawn for every reader, held with its words without orders.manage (amendHeld,
-            closeLinesHeld: "Changing an order needs the sales right to manage orders") — held, never hidden. */}
-        {!isFinal(order) && (
-          <span className="fw-so-actions">
-            <Button size="sm" heldReason={held ? t(held.key) : busy} onClick={() => actions?.onAmendStart?.()}>
-              <PencilLine size={14} aria-hidden /> {t('amend.start')}
-            </Button>
-            <Button size="sm" variant="quiet" heldReason={closeWait ? t(closeWait.key) : busy} onClick={() => actions?.onDialog?.({ kind: 'closeLines' })}>
-              {t('action.closeLines')}
-            </Button>
-            {order.lines.some((line) => line.closedShort) && (
-              <Button size="sm" variant="quiet" heldReason={reopenWait ? t(reopenWait.key) : busy} onClick={() => actions?.onDialog?.({ kind: 'reopenLines' })}>
-                {t('action.reopenLines')}
-              </Button>
-            )}
-          </span>
-        )}
-      </div>
-      {groups.map((group) => {
-        const grid = gridOf(group, 'ordered')
-        const currency = order.currency
-        const first = group.lines[0]!
-        // F-SA-231b: the artwork files the order read names (files.read), each once; the count the read gave where it names none.
-        const artwork = artworkOfGroup(group.lines)
-        const rows = group.lines.map((line) => ({
-          id: line.id,
-          cells: [
-            <span key="c" className="fw-so-lineopen is-static" id={rowAnchor('SalesOrderLine', line.id) /* F-SA-266 */} tabIndex={-1}>
-              <LinePicture order={order} line={line} size="line" />
-              <span className="fw-so-cell">
-                <span className="fw-so-inline">
-                  {line.colourway ? `${line.colourway.code} · ${line.colourway.name}` : '—'}
-                  {line.kind === 'MADE_TO_MEASURE' && <Tag tone="neutral">{t('record.madeToMeasure')}</Tag>}
-                  {/* F-SA-231b: the rider (name, garment, revision — never a measurement), only when the read names it (sales.measurements.view). */}
-                  {line.kind === 'MADE_TO_MEASURE' && line.rider && <span className="fw-so-cell-sub">{t('lines.rider', { rider: line.rider.name, garment: line.rider.garmentType, revision: line.rider.revision })}</span>}
-                  {model.lineOptions?.(line) /* B-W2b-340: the line's options */}
-                  {model.lineCost?.(line) /* B-W2b-380: cost changed since priced */}
-                  {/* F-SA-266: discuss this line (the customer reads "your order · line 2 · …": no price, no work-order number). */}
-                  <DiscussDoor order={order} part={t('discuss.line', { seq: line.seq, name: `${line.style?.code ?? '—'} ${line.colourway?.name ?? ''}`.trim() })} target={{ kind: 'SalesOrderLine', id: line.id }} />
-                </span>
-                {line.closedShort && (
-                  <span className="fw-so-closed">
-                    <Tag tone="warning">{t('lines.closedShort', { count: line.closedShort.quantity })}</Tag>
-                    {/* F-SA-231: who closed it and when (loaded, never shown before). */}
-                    {line.closedShort.byId && <span className="fw-so-hint">{t('lines.closedBy', { name: order.people.find((person) => person.id === line.closedShort!.byId)?.name ?? t('dates.someone'), day: line.closedShort.at ? formatDate(line.closedShort.at, { locale }) : '—' })}</span>}
-                    {/* B-W2b-16: the close's CANCEL reason code, in words (the code itself when the list is not read). */}
-                    {line.closedShort.reasonCode && <span className="fw-so-hint">{reasonWords(line.closedShort.reasonCode, model.cancelReasons ?? null, locale)}</span>}
-                    {line.closedShort.reason && <span className="fw-so-hint">{line.closedShort.reason}</span>}
-                  </span>
-                )}
-                {/* F-SA-231: the line's description and note (loaded, never shown before). */}
-                {line.description && <span className="fw-so-cell-sub">{line.description}</span>}
-                {line.note && <span className="fw-so-cell-sub">{t('lines.note', { note: line.note })}</span>}
-              </span>
-            </span>,
-            String(line.quantity),
-            String(line.progress.shipped),
-            ...(model.can.price ? [unitPrice(line.unitPrice, currency, locale), money(line.netAmount, currency, locale), line.vatNature ? t('lines.vatNature', { nature: line.vatNature }) : percent(String(Number(line.vatRatePct)), locale)] : []),
-            line.promiseDate && line.promiseDate !== order.promiseDate ? formatDate(dayInstant(line.promiseDate), { locale }) : t('lines.orderDate'),
-          ],
-        }))
-        const columns = [t('lines.col.colour'), t('lines.col.pieces'), t('lines.col.shipped'), ...(model.can.price ? [t(order.priceBasis === 'GROSS' ? 'lines.col.unitGross' : 'lines.col.unitNet'), t('lines.col.net'), t('lines.col.vat')] : []), t('lines.col.promise')]
-        return (
-          <Card padded key={group.styleId} className="fw-so-block">
-            <div className="fw-so-card-head">
-              <span className="fw-so-lineopen is-static">
-                <LinePicture order={order} line={first} size="lineLarge" />
-                <h2 className="fw-so-h3">
-                  {group.code} · {group.name}
-                </h2>
-              </span>
-              <span className="fw-so-inline">
-                {group.revision ? <Tag tone={group.revision.status === 'RELEASED' ? 'success' : 'warning'}>{t('lines.revision', { revision: group.revision.revision })}</Tag> : <Tag tone="neutral">{t('lines.noRevision')}</Tag>}
-                {/* F-SA-231: the artwork the reader may open (the order read counts it). F-SA-231b: it opens in the thread's ONE viewer
-                    (the files the read names, the first shown; ← / → walk them); with no docked thread, the order's Files as before. */}
-                {artwork.count > 0 &&
-                  (frame?.openFiles && artwork.files.length > 0 ? (
-                    <Button
-                      size="sm"
-                      variant="quiet"
-                      title={t('lines.artworkOpen')}
-                      onClick={(event) => frame.openFiles?.({ files: artwork.files.map((file) => ({ id: file.fileId, name: file.name, contentType: file.contentType, sizeBytes: file.sizeBytes })), fileId: artwork.files[0]!.fileId, returnTo: event.currentTarget })}
-                    >
-                      <FileImage size={13} aria-hidden /> {t('lines.artwork', { count: artwork.count })}
-                    </Button>
-                  ) : (
-                    <Button size="sm" variant="quiet" asChild>
-                      <TabLink href={tabHref(`${model.prefix}/sales/orders/${order.id}`, 'files', search) /* F-OP-210 */}>
-                        <FileImage size={13} aria-hidden /> {t('lines.artwork', { count: artwork.count })}
-                      </TabLink>
-                    </Button>
-                  ))}
-              </span>
-            </div>
-            <div className="fw-so-gridbox">
-              <SizeGridView colours={grid.colours} sizes={grid.sizes} value={grid.value} caption={t('lines.gridCaption', { style: group.code })} locale={INTL_LOCALE[locale]} copy={copy} />
-            </div>
-            {/* B-W2b-323: the size cells already cut, locked with their reason. */}
-            <FrozenSizes model={model.depth} lines={group.lines} />
-            <SummaryTable label={t('lines.pricesOf', { style: group.code })} columns={columns} rows={rows} density="roomy" stackOnPhone align={columns.map((_, index) => (index === 0 ? 'left' : 'right'))} />
-          </Card>
-        )
-      })}
+    <div className="fw-lt">
+      <LinesHead order={order} model={model} actions={actions} head={headOf(order, draft)} total={orderTotalOf(totals)} basis={basis} reader={reader} held={held} busy={busy} />
+      {model.production?.status === 'failed' && reader.writes && <p className="fw-lt-quiet">{t('lines.floorsUnread')}</p>}
+      {cards.length === 0 ? (
+        <Card padded>
+          <EmptyState title={t('lines.empty')} description={t('lines.emptyHint')} />
+        </Card>
+      ) : (
+        cards.map((card, index) => <StyleTable key={card.styleId} card={card} first={index === 0} ctx={ctx} />)
+      )}
+      <ChargesBlock order={order} reader={reader} />
+      {reader.prices && cards.length > 0 && <TotalsBlock order={order} rows={totals} basis={basis} />}
+      {tab?.options}
     </div>
   )
 }
+// ---- end F-OL-02
 
-/** A colour line's (or a style's) picture: the one picture part with the address the order read holds; no file: its placeholder. */
-function LinePicture({ order, line, size }: { order: Order; line: OrderLine; size: 'line' | 'lineLarge' }) {
-  const name = `${line.style?.code ?? '—'}${line.colourway ? ` · ${line.colourway.name}` : ''}`
-  return (
-    <RecordPicture
-      source="order"
-      recordId={order.id}
-      number={name}
-      size={size}
-      picture={line.style ? { styleId: line.styleId, styleCode: line.style.code, styleName: line.style.name, fileId: line.picture?.fileId ?? null, small: !!line.picture?.small } : null}
-      held={line.picture?.small ?? null}
-    />
-  )
-}
+// ---- the old edit mode (F-OP-106 … F-OP-110): F-OL-05 removes it whole ----
 
 /** F-SA-231: the totals strip (it replaces the rail): lines · units, and net · VAT · gross with the price grain. */
 function Totals({ order, model }: { order: Order; model: OrderRecordModel }) {
@@ -504,10 +413,3 @@ function WhatChanges({ order, amend, strip, asPriced, model, actions }: { order:
   )
 }
 // ---- end F-OP-106
-
-
-/** B-W2b-16: a CANCEL reason code in the person's language (the code itself when the list was not read). */
-function reasonWords(code: string, reasons: readonly { code: string; labelIt: string; labelEn: string }[] | null, locale: string): string {
-  const found = reasons?.find((entry) => entry.code === code)
-  return found ? (locale === 'it' ? found.labelIt : found.labelEn) : code
-}

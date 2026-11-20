@@ -413,7 +413,11 @@
       "unitGross": "Prezzo unitario (IVA incl.)",
       "net": "Imponibile",
       "vat": "IVA",
-      "promise": "Promessa"
+      "promise": "Promessa",
+      "unitPrice": "Prezzo unitario",
+      "exVat": "(IVA esclusa)",
+      "lineTotal": "Totale riga",
+      "readyBy": "Pronto entro"
     },
     "closedShort_one": "Chiusa in anticipo: {count} pezzo",
     "closedShort_other": "Chiusa in anticipo: {count} pezzi",
@@ -424,7 +428,126 @@
     "closedBy": "Chiuso in meno da {name}, {day}",
     "note": "Nota: {note}",
     "rider": "Pilota: {rider} · {garment}, revisione {revision}",
-    "artworkOpen": "Apri le grafiche nel visualizzatore"
+    "artworkOpen": "Apri le grafiche nel visualizzatore",
+    "head": {
+      "pieces_one": "{count} capo",
+      "pieces_other": "{count} capi",
+      "lines_one": "{count} riga",
+      "lines_other": "{count} righe",
+      "charges_one": "{count} costo",
+      "charges_other": "{count} costi",
+      "readyBy": "Pronto entro il {date}",
+      "noReadyBy": "Ancora nessuna data di pronto",
+      "readyByChange": "Cambia la data di pronto di tutto l'ordine",
+      "late_one": "{count} giorno di ritardo",
+      "late_other": "{count} giorni di ritardo",
+      "firstPromised": "prima pronto entro il {date}",
+      "total": "Totale ordine {amount}",
+      "totalVat": "Totale (IVA inclusa) {amount}",
+      "salesHow": "Cambi capi, taglie e note; i prezzi li imposta chi li vede.",
+      "more": "Altro per le righe"
+    },
+    "menu": {
+      "closeLines": "Chiudi righe con meno capi…"
+    },
+    "style": {
+      "open": "Apri il modello {code}"
+    },
+    "pattern": {
+      "approved": "Cartamodello v{revision} · approvato",
+      "notApproved": "Cartamodello v{revision} · non ancora approvato",
+      "none": "Versione del cartamodello: la sceglie la produzione"
+    },
+    "locks_one": "{count} taglia bloccata dalle regole dell'azienda",
+    "locks_other": "{count} taglie bloccate dalle regole dell'azienda",
+    "lockOf": "{colour} {size}: da {stage}",
+    "leaves": "Questo modello esce dall'ordine",
+    "freezeUnread": "Non siamo riusciti a leggere le regole di blocco dell'azienda: si controllano quando rivedi.",
+    "floorsUnread": "Non siamo riusciti a leggere cosa è tagliato: si controlla quando rivedi.",
+    "cell": {
+      "label": "{colour}, taglia {size}",
+      "notOffered": "non disponibile per questo colore",
+      "min": "min {count}",
+      "minShipped": "Minimo {count}: {shipped} già spediti",
+      "minCut": "{count} già tagliati",
+      "cutBeyond": "{count} tagliati in più: scegli dove vanno quando rivedi",
+      "was": "era {value}",
+      "locked": "Bloccata da {stage} per regola dell'azienda: un cambio qui va accettato dal cliente.",
+      "lockedForGood": "Bloccata per sempre da {stage}: non può cambiare.",
+      "priceShipped_one": "{count} spedito: il prezzo resta. Un prezzo spedito si cambia con una nota di credito.",
+      "priceShipped_other": "{count} spediti: il prezzo resta. Un prezzo spedito si cambia con una nota di credito."
+    },
+    "row": {
+      "shipped_one": "{count} spedito",
+      "shipped_other": "{count} spediti",
+      "sizesApart_one": "{count} taglia con prezzo a parte",
+      "sizesApart_other": "{count} taglie con prezzo a parte",
+      "new": "Nuova",
+      "removed": "Tolta",
+      "closesShort": "Si chiuderà con meno capi: la fanno ordini di lavoro",
+      "newActions": "Azioni della nuova riga · {name}",
+      "orderDate": "La data dell'ordine",
+      "listPrice": "Prezzo dal listino di {customer}"
+    },
+    "short": {
+      "tag": "Chiusa con meno capi",
+      "figures": "{ordered} ordinati · {make} da fare · {cancelled} annullati",
+      "by": "da {name}, il {day}"
+    },
+    "mtm": {
+      "unit_one": "{count} capo · taglia base {size}",
+      "unit_other": "{count} capi · taglia base {size}",
+      "units_one": "{count} capo",
+      "units_other": "{count} capi",
+      "fixed": "Un capo su misura tiene taglia e prezzo; qui cambiano solo le note.",
+      "noRider": "Pilota: visibile a chi vede le misure"
+    },
+    "notes": {
+      "count_one": "{count} nota",
+      "count_other": "{count} note",
+      "files_one": "{count} file",
+      "files_other": "{count} file",
+      "add": "Aggiungi una nota",
+      "customer": "Sull'ordine — la vede il cliente",
+      "floor": "Per il reparto — senza prezzi",
+      "filesLabel": "File"
+    },
+    "addSize": "Taglia",
+    "addSizeLabel": "Aggiungi una taglia",
+    "addColour": "Aggiungi un colore",
+    "keys": "Tasti",
+    "keysList": "Tab casella dopo · Invio giù · Esc rimette la casella · ⌘Z annulla · ⌘S rivedi e salva",
+    "total": "Totale",
+    "clash": "tu {mine} · {name} {theirs}",
+    "keepMine": "Tieni il mio",
+    "takeTheirs": "Prendi il suo",
+    "charges": {
+      "title": "Costi aggiuntivi",
+      "kind": {
+        "DEVELOPMENT": "Sviluppo",
+        "SAMPLE": "Campionatura",
+        "TOOLING": "Attrezzature",
+        "other": "Costo"
+      },
+      "forStyle": "per {style}",
+      "once": "fatturato una volta",
+      "fromQuote": "Un costo si cambia dal preventivo"
+    },
+    "sum": {
+      "subtotal": "Imponibile",
+      "vat": "IVA {rate} %",
+      "vatNone": {
+        "export": "IVA: nessuna · esportazione fuori UE",
+        "intraEu": "IVA: nessuna · cessione a impresa UE",
+        "other": "IVA: nessuna"
+      },
+      "code": "Codice in fattura: {code}",
+      "total": "Totale (IVA inclusa)",
+      "ofWhichVat": "di cui IVA {rate} %",
+      "ofWhichVatNoRate": "di cui IVA"
+    },
+    "empty": "Ancora nessuna riga",
+    "emptyHint": "Un ordine tiene almeno una riga: aggiungi un modello."
   },
   "save": {
     "held": {
