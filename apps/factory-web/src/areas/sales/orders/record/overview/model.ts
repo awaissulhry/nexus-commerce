@@ -102,7 +102,7 @@ export const REQUESTED_FIELD_ID = 'amend-requested-date'
  *
  *   BRAND_REQUEST · REQUEST / COUNTER     Answer… (the ONE review window on this page, `?open=`) — an agreed or lapsed counter waits on us
  *   BRAND_REQUEST · PROBLEM               Reply in the thread (This order's conversation at the message it was raised with)
- *   BRAND_REQUEST · REPROMISE             Production › #dates (Decide… is F-OP-105: deferred)
+ *   BRAND_REQUEST · REPROMISE             Production › #dates — never drawn as such: Next dates draws the row with Decide… (F-OO-143)
  *   an open yes of the order              Confirm / Refuse… for an approver who did not ask; held for the asker; who decides (F-OP-101)
  *   APPROVAL of our counter-offer         Open… (F-OO-204: the ONE review window, `?open=`: our counter and Decide for <customer>)
  *   APPROVAL · PARTNER_TASK               Their turn (F-OO-204: what we asked the customer — it answers; no door of ours)

@@ -331,6 +331,7 @@
     "cancelState": "Only an order that has not shipped anything is cancelled: a return is the way back",
     "cancelWorkOrders": "Its lines have work orders: cancel the drafts first; a released one keeps the order",
     "readyState": "Only an order in production is marked ready",
+    "readyQuality": "Quality releases the garments: {n} of {m} released. The order turns Ready by itself when all are.",
     "final": "A closed or cancelled order never changes",
     "noPayments": "Recording payments needs the finance right",
     "depositNotOpen": "Nothing is left to pay on this deposit",
@@ -785,6 +786,10 @@
     "lines": "Lines",
     "date": "New promise date",
     "dateHint": "From today on. The first promise stays on record.",
+    "why": "Why (the customer reads it)",
+    "pick": "Pick a reason",
+    "customerReads": "The customer reads:",
+    "note": "Your note (office only)",
     "reason": "Why",
     "reasonHint": "Kept in the promise history.",
     "tellCustomer": "Tell the customer in the order's thread (Activity).",
@@ -794,12 +799,13 @@
       "past": "A new promise is a day from today on",
       "same": "It is the promise already",
       "reason": "Say why",
+      "code": "Pick why",
       "lines": "Choose at least one line"
     }
   },
   "ready": {
     "title": "Mark {number} ready to ship",
-    "body": "While quality release is not used for this order, a person says it is ready, with the reason.",
+    "body": "Quality released every piece: the order turns Ready by itself. You can mark it ready now, with the reason, if it has not moved yet.",
     "reason": "Why it is ready",
     "reasonNeeded": "Say why",
     "go": "Mark ready"

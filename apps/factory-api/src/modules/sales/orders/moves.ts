@@ -43,7 +43,8 @@ import { promiseReasonText, type PromiseReasonCode } from '@nexus/factory-domain
  * audit row per move and `sales_order.status_changed`.
  *
  *   a person (office)   promise date (orders.manage; a reason; the first promise stays), ready by hand (orders.manage; a
- *                       reason, while quality release is not in use), cancel (orders.manage; a reason; B-W2a-30: before
+ *                       reason; B-OO-002, Owner D1: only once quality released every piece — the catch-up before the system's
+ *                       follow; quality release is always in use), cancel (orders.manage; a reason; B-W2a-30: before
  *                       anything shipped, B-OO-003 also while waiting for a yes (its requests for a yes withdrawn with
  *                       it), with the impact check (./impact): no draft work order, no shipment being
  *                       packed, no invoice of it; the lines' work-order locks are taken first, so no work order is made
@@ -174,7 +175,9 @@ export async function changePromiseInCommand(tools: CommandTools, order: Pick<Or
 
 /**
  * orders.manage: IN_PRODUCTION → READY by hand, with a reason (quality release, B-W1-45, moves it by itself once every
- * ordered piece is released; until then a person says so).
+ * ordered piece is released). B-OO-002 (order overview N13, Owner D1): only once quality released every piece too — the machine's
+ * READY guard reads the release under the order's lock, so a reason alone is refused (409 "… (2 of 4 released)"), the customer
+ * list's bulk Mark N ready included; it is the catch-up for an order the system has not moved yet.
  */
 export async function markReady(caller: CommandCaller, orderId: string, body: { readonly version?: number | undefined; readonly reason: string }, idempotencyKey?: string): Promise<{ order: OrderView }> {
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)

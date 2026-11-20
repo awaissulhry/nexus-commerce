@@ -12,6 +12,8 @@ import {
   orderProgress,
   promiseProblems,
   promiseStateProblem,
+  READY_QUALITY_WORDS, // B-OO-002
+  releasedPiecesOf, // B-OO-002
   reversalMoves,
   salesOrderMachine,
   type AcceptedLine,
@@ -34,11 +36,22 @@ describe('the machine: one action per move, each with its guard (SAL-204)', () =
     expect(canTransition(salesOrderMachine, 'CONFIRMED', 'IN_PRODUCTION', { releasedWorkOrders: 1 }).ok).toBe(true)
   })
 
-  it('ready when quality released every piece, or by hand with a reason', () => {
+  // B-OO-002 (order overview N13, Owner D1): quality release is always in use — a reason never opens READY on its own.
+  it('ready only when quality released every piece; a person\'s reason alone is refused (with the counts when read)', () => {
     expect(canTransition(salesOrderMachine, 'IN_PRODUCTION', 'READY', { released: false }).ok).toBe(false)
     expect(canTransition(salesOrderMachine, 'IN_PRODUCTION', 'READY', { released: true }).ok).toBe(true)
-    expect(canTransition(salesOrderMachine, 'IN_PRODUCTION', 'READY', { released: false, reason: 'Quality signed the paper sheet.' }).ok).toBe(true)
+    expect(canTransition(salesOrderMachine, 'IN_PRODUCTION', 'READY', { released: false, reason: 'Quality signed the paper sheet.' })).toMatchObject({
+      ok: false,
+      reason: 'guard',
+      missing: ['every piece still to ship released by quality'],
+    })
     expect(canTransition(salesOrderMachine, 'IN_PRODUCTION', 'READY', { released: false, reason: '   ' }).ok).toBe(false)
+    // Released, with or without a reason (the by-hand catch-up still gives one): allowed.
+    expect(canTransition(salesOrderMachine, 'IN_PRODUCTION', 'READY', { released: true, reason: 'Quality released the last two.' }).ok).toBe(true)
+    // The 409's words carry the counts the API read.
+    const refused = canTransition(salesOrderMachine, 'IN_PRODUCTION', 'READY', { released: false, releasedPieces: { released: 2, toRelease: 4 }, reason: 'All done.' })
+    expect(refused).toMatchObject({ ok: false, missing: ['every piece still to ship released by quality (2 of 4 released)'] })
+    expect(() => assertTransition(salesOrderMachine, 'IN_PRODUCTION', 'READY', { released: false, releasedPieces: { released: 2, toRelease: 4 }, reason: 'All done.' })).toThrow(/2 of 4 released/)
   })
 
   it('partly shipped and shipped come from the shipped quantities only', () => {
@@ -349,6 +362,56 @@ describe('what a person may do next', () => {
     expect(cancelImpact({ ...waiting, status: 'PARTLY_SHIPPED' }).blocks).toEqual([expect.objectContaining({ code: 'STATE', message: expect.stringMatching(/goods left/) })])
   })
   // ── end B-OO-003 ──
+  // ── B-OO-002 (order overview N13, Owner D1): Mark ready listed while in production, allowed only after quality released every piece ──
+  it('B-OO-002: markReady is listed for an order in production; held with the N of M words until quality released every piece', () => {
+    const ready = (facts: Parameters<typeof orderActions>[1]) => orderActions('IN_PRODUCTION', facts).find((action) => action.action === 'markReady')
+    expect(ready({ releasedWorkOrders: 1, released: false, releasedPieces: { released: 3, toRelease: 7 } })).toEqual({
+      action: 'markReady',
+      allowed: false,
+      needsReason: true,
+      held: 'Quality releases the garments: 3 of 7 released. The order turns Ready by itself when all are.',
+    })
+    // Released: the catch-up before the system's follow (a reason is still asked).
+    expect(ready({ releasedWorkOrders: 1, released: true, releasedPieces: { released: 7, toRelease: 7 } })).toEqual({ action: 'markReady', allowed: true, needsReason: true, held: null })
+    // No counts read: the same words without them.
+    expect(ready({ released: false })).toMatchObject({ allowed: false, held: 'Quality releases the garments. The order turns Ready by itself when all are.' })
+    // A reason in the facts never opens it.
+    expect(ready({ released: false, reason: 'Quality signed the paper sheet.' })).toMatchObject({ allowed: false })
+    // Only in production: never for another state.
+    for (const status of ['CONFIRMED', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'PENDING_APPROVAL'] as const) expect(orderActions(status, { released: true }).map((action) => action.action), status).not.toContain('markReady')
+    // The words, it + en (the office web's held.readyQuality says the same).
+    expect(READY_QUALITY_WORDS).toEqual({
+      en: 'Quality releases the garments: {n} of {m} released. The order turns Ready by itself when all are.',
+      it: "Il rilascio lo fa la qualità: {n} su {m} rilasciati. L'ordine diventa Pronto da solo quando lo sono tutti.",
+    })
+  })
+
+  it('B-OO-002: releasedPiecesOf — each size up to what it has to release, closed short left out, fee lines never counted; agrees with orderProgress', () => {
+    const row = (ordered: number, released: number, closedShort = 0) => ({ ordered, released, closedShort })
+    // BLK 50 ×2 released 2, BLK 52 ×2 released 3 (one made extra: it never makes up for another size), RED 52 ×3 released 1.
+    expect(releasedPiecesOf([{ kind: 'SIZE_GRID', rows: [row(2, 2), row(2, 3)] }, { kind: 'SIZE_GRID', rows: [row(3, 1)] }])).toEqual({ released: 5, toRelease: 7 })
+    // A line closed short: what will not be made is not to release (2 ordered, 1 shipped and closed: 1 to release).
+    expect(releasedPiecesOf([{ kind: 'SIZE_GRID', rows: [row(2, 1, 1)] }])).toEqual({ released: 1, toRelease: 1 })
+    // A fee line (B-W2b-330) and a made-to-measure unit (one row, no size).
+    expect(releasedPiecesOf([{ kind: 'FEE', rows: [row(1, 0)] }, { kind: 'MADE_TO_MEASURE', rows: [row(1, 0)] }])).toEqual({ released: 0, toRelease: 1 })
+    // A reversal never counts below zero.
+    expect(releasedPiecesOf([{ kind: 'SIZE_GRID', rows: [row(2, -1)] }])).toEqual({ released: 0, toRelease: 2 })
+    expect(releasedPiecesOf([])).toEqual({ released: 0, toRelease: 0 })
+    // The same answer as orderProgress's `released`: all of them released exactly when it says so.
+    const facts = (released: number) => ({
+      lines: [{ id: 'L1', seq: 10, quantity: 4, sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 2 }] }],
+      inWorkOrders: [],
+      released: [{ lineId: 'L1', size: '50', quantity: 2 }, { lineId: 'L1', size: '52', quantity: released }],
+      shipped: [],
+      invoiced: [],
+    })
+    for (const released of [0, 1, 2, 3]) {
+      const progress = orderProgress(facts(released))
+      const pieces = releasedPiecesOf([{ kind: 'SIZE_GRID', rows: progress.rows }])
+      expect(pieces.released === pieces.toRelease, String(released)).toBe(progress.released)
+    }
+  })
+  // ── end B-OO-002 ──
   // F-SA-201: a delivered order offers Close order as a shipped one does (settled: no reason; not settled: held, a reason).
   it('a delivered order is closed like a shipped one', () => {
     expect(orderActions('DELIVERED', { settlement: settled })).toEqual([

@@ -333,11 +333,8 @@ export const orderView = output({
    */
   openApprovals: z.array(openApprovalView),
   openApprovalsHidden: z.number().int(),
-  /**
-   * The Money and Shipments tabs' counts (orders.view; counts only): issued invoices and credit notes of the order (no drafts),
-   * its deposit requests still OPEN, its shipments not cancelled. The Changes tab counts the ONE waiting list in the page (R-22).
-   */
-  badges: output({ money: output({ invoices: z.number().int(), openDeposits: z.number().int() }), shipments: z.number().int() }),
+  // F-OO-206 (order overview §6; review F5; Owner D8): no tab counts of its own — the page's tabs and its Linked records card count
+  // `chain` by ONE rule (factory-domain sales/orders/linked-counts `orderLinkCountsOf`: live records only).
   // ── end B-OP-020 ──
 })
 

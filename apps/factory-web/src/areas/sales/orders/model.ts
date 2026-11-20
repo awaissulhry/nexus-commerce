@@ -28,6 +28,10 @@ import { PRICE_MATCHES, type PriceMatch } from './api' // F-CP-141: the price ch
 import type { DockDefault } from '../../_shared/record-frame/model' // F-SA-263
 // ---- F-OP-111: Split into new orders… (the API's own limits; the body the split sends) ----
 import { ORDERS_DEPTH_LIMITS } from '@nexus/factory-domain/sales/orders-depth/rules'
+import { releasedPiecesOf } from '@nexus/factory-domain/sales/orders/orders' // F-OO-112: Mark ready's held counts (B-OO-002's one rule)
+import { orderLinkCountsOf } from '@nexus/factory-domain/sales/orders/linked-counts' // F-OO-206: the tabs count as the Linked card (one rule)
+// F-OO-142: the curated reasons a promise move shows the customer (B-OO-009 sends the code; the portal reads these words).
+import { PROMISE_REASON_CODES, PROMISE_REASON_WORDS, type PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise'
 import type { ApiIssue } from '../../../lib/api/errors'
 import type { SplitBody } from './api'
 
@@ -542,18 +546,20 @@ export const DOCK_DEFAULTS: Readonly<Record<RecordTab, DockDefault>> = Object.fr
 
 /** What a tab counts (null draws nothing; 0 is an answer): lines · work orders · amendments · invoices · shipments. */
 // F-OP-117 (10-order-page §6, §7, §8; review R-22): Changes counts the ONE waiting list's rows (`changes`: changesBadgeOf of the card,
-// null before the production read — never a made-up 0); Money and Shipments the order read's own badges (B-OP-020: issued invoices and
-// credit notes + open deposit requests; shipments not cancelled carrying this order's lines), the chain's counts in an older answer.
-export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments' | 'badges'>, counts: { readonly changes?: number | null; /* F-OP-306 */ readonly viewInvoices?: boolean } = {}): number | null {
+// null before the production read — never a made-up 0). F-OO-206 (order overview §6; review F5; Owner D8): Production, Shipments and
+// Money count what the Linked records card counts — the domain's ONE rule on the order read's chain (orderLinkCountsOf: live records
+// only, what was cancelled is said in words on the card); the API sends no badge of its own. Money = issued invoices (credit notes and
+// deposit invoices among them) + the deposit requests still open.
+export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments'>, counts: { readonly changes?: number | null; /* F-OP-306 */ readonly viewInvoices?: boolean } = {}): number | null {
   if (tab === 'lines') return order.lines.length
-  if (tab === 'production') return order.chain.workOrders.length
   if (tab === 'changes') return counts.changes ?? null
-  // F-OP-306 (walk #21): a reader without invoices.view is shown no invoice, so Money counts only its open deposits.
-  if (tab === 'money' && counts.viewInvoices === false) return order.badges ? order.badges.money.openDeposits : null
-  if (tab === 'money') return order.badges ? order.badges.money.invoices + order.badges.money.openDeposits : order.chain.invoices.length
-  if (tab === 'shipments') return order.badges ? order.badges.shipments : order.chain.shipments.length
   // F-SA-237: the files the reader may open come with the files read (none before it: no number that is not true).
-  return null
+  if (tab !== 'production' && tab !== 'shipments' && tab !== 'money') return null
+  const linked = orderLinkCountsOf(order.chain) // F-OO-206
+  if (tab === 'production') return linked.workOrders.live
+  if (tab === 'shipments') return linked.shipments.live
+  // F-OP-306 (walk #21): a reader without invoices.view is shown no invoice, so Money counts only its open deposits.
+  return (counts.viewInvoices === false ? 0 : linked.invoices.issued) + linked.depositRequests.open
 }
 
 /** The ⋯ menu's groups, in their order (10-order-page §1.3); Cancel comes last, after a rule. */
@@ -683,10 +689,19 @@ export function cancelHeld(order: Order, can: OrderAbilities): Phrase | null {
   return null
 }
 
+// ---- F-OO-112 (order overview N13, Owner D1; B-OO-002): Mark ready reads the API's markReady — listed while in production, allowed only
+// once quality released every piece; held with the counts ("Quality releases the garments: 3 of 7 released. …", held.readyQuality), the
+// numbers from the order read's line sizes by the domain's one rule. The signature stays (the customer page lane's row window and bulk
+// Mark N ready read it: their row holds Ready by the right only, as Close — the quality hold is the window's, from the read).
 export function readyHeld(order: Order, can: OrderAbilities): Phrase | null {
   if (!can.manage) return phrase('held.noManage')
-  return actionOf(order, 'markReady') ? null : phrase('held.readyState')
+  const action = actionOf(order, 'markReady')
+  if (!action) return phrase('held.readyState')
+  if (action.allowed) return null
+  const pieces = releasedPiecesOf(order.lines.map((line) => ({ kind: line.kind, rows: line.sizes.map((size) => size.progress) })))
+  return phrase('held.readyQuality', { n: pieces.released, m: pieces.toRelease })
 }
+// ---- end F-OO-112
 
 export function promiseHeld(order: Order, can: OrderAbilities): Phrase | null {
   if (!can.manage) return phrase('held.noManage')
@@ -697,15 +712,48 @@ export function promiseHeld(order: Order, can: OrderAbilities): Phrase | null {
 export const linePromisesAllowed = (order: Pick<Order, 'status'>): boolean => ['CONFIRMED', 'IN_PRODUCTION', 'READY'].includes(order.status)
 
 /** Problems of a typed promise change, as message keys (the API holds the same rules). */
-export function promiseProblems(input: { date: string; reason: string; today: string; current: string | null; lineIds: readonly string[]; allLines: boolean }): { date?: string; reason?: string; lines?: string } {
-  const problems: { date?: string; reason?: string; lines?: string } = {}
+// F-OO-142 (order overview §4.3; B-OO-009): why is one of the curated reasons the customer reads — picked, never typed ("Pick why"); the
+// office's own note is optional (it never reaches the customer).
+export function promiseProblems(input: { date: string; reasonCode: string | null; today: string; current: string | null; lineIds: readonly string[]; allLines: boolean }): { date?: string; reasonCode?: string; lines?: string } {
+  const problems: { date?: string; reasonCode?: string; lines?: string } = {}
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) problems.date = 'promise.problem.date'
   else if (input.date < input.today) problems.date = 'promise.problem.past'
   else if (input.allLines && input.date === input.current) problems.date = 'promise.problem.same'
-  if (input.reason.trim() === '') problems.reason = 'promise.problem.reason'
+  if (!isPromiseReasonCode(input.reasonCode)) problems.reasonCode = 'promise.problem.code'
   if (!input.allLines && input.lineIds.length === 0) problems.lines = 'promise.problem.lines'
   return problems
 }
+
+// ---- F-OO-142 (order overview §4.3; B-OO-009): the promise dialog's reason list — the code the customer reads, the office's own note ----
+export const isPromiseReasonCode = (value: string | null | undefined): value is PromiseReasonCode => typeof value === 'string' && (PROMISE_REASON_CODES as readonly string[]).includes(value)
+
+/** The list's choices in the office's language: the customer's own words for each curated reason (one wording, never a synonym). */
+export const promiseReasonChoices = (locale: Locale): { value: PromiseReasonCode; label: string }[] => PROMISE_REASON_CODES.map((code) => ({ value: code, label: PROMISE_REASON_WORDS[code][locale] }))
+
+/**
+ * What the customer reads for the picked reason, in Italian AND English (the portal shows each reader's language: review F10), the
+ * order's language first; null before a pick. The office's note is never in it.
+ */
+export function promiseReasonPreview(code: string | null, orderLanguage: string): { locale: Locale; words: string }[] | null {
+  if (!isPromiseReasonCode(code)) return null
+  const locales: Locale[] = orderLanguage === 'en' ? ['en', 'it'] : ['it', 'en']
+  return locales.map((locale) => ({ locale, words: PROMISE_REASON_WORDS[code][locale] }))
+}
+
+/** What the dialog hands the band's write: the new day, the picked reason, the office's note (may be empty), the lines (null: the order). */
+export interface PromiseInput {
+  readonly date: string
+  readonly reasonCode: PromiseReasonCode
+  readonly note: string
+  readonly lineIds: readonly string[] | null
+}
+
+/** The promise write's body (PUT …/promise, B-OO-009): the order's version, the day, `reasonCode` (what the customer reads) and `reason`
+ * (the office's note, trimmed; empty is allowed with a code); `lineIds` only for chosen lines. */
+export function promiseBodyOf(input: PromiseInput, version: number): { version: number; promiseDate: string; reasonCode: PromiseReasonCode; reason: string; lineIds?: string[] } {
+  return { version, promiseDate: input.date, reasonCode: input.reasonCode, reason: input.note.trim(), ...(input.lineIds ? { lineIds: [...input.lineIds] } : {}) }
+}
+// ---- end F-OO-142
 
 /** The colour lines of an order grouped by style (one size grid per style, colours as its rows). */
 export interface StyleGroup {

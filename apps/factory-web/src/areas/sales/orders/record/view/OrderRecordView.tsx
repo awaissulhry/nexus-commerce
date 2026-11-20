@@ -250,7 +250,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, fields, deliv
       </Button>
     ) : null
 
-  const held = (phrase: { key: string } | null) => (phrase ? t(phrase.key) : undefined)
+  // F-OO-112: a held phrase says its values too (Mark ready's "3 of 7 released"; before, the ⋯ dropped every phrase's values).
+  const held = (phrase: { key: string; params?: Record<string, string | number> } | null) => (phrase ? t(phrase.key, phrase.params) : undefined)
   const promiseWait = promiseHeld(order, model.can)
   const readyWait = readyHeld(order, model.can)
   // B-W2a-50: the order every day — amend, close and reopen lines, cancel, copy as a new quote (each held with its reason).

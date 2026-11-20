@@ -515,10 +515,13 @@ describe('F-OP-306: no invoice row and no invoice number without invoices.view; 
     const finance = draw('w2a-margin')
     expect(textOf(finance)).not.toContain('Invoices are shown to people who see invoices.')
     expect(finance).toContain('id="about-Invoice-')
-    const badged = { ...order('SHIPPED'), badges: { money: { invoices: 2, openDeposits: 1 }, shipments: 4 } }
-    expect(tabCountOf('money', badged, { viewInvoices: false })).toBe(1)
-    expect(tabCountOf('money', badged, { viewInvoices: true })).toBe(3)
-    expect(tabCountOf('money', order('SHIPPED'), { viewInvoices: false })).toBeNull()
+    // F-OO-206 (Owner D8): the chain by the one rule (no badges) — SO-2026-0088 shipped: 2 issued invoices, its deposit paid; one more
+    // request still open (the balance before shipping) is the only number a reader without invoices.view gets.
+    const shipped = order('SHIPPED')
+    const asked = { ...shipped, chain: { ...shipped.chain, depositRequests: [...shipped.chain.depositRequests, { ...shipped.chain.depositRequests[0]!, id: '0190f0e2-3131-7000-8000-000000000009', status: 'OPEN' as const, stepKind: 'BEFORE_SHIPPING' as const }] } }
+    expect(tabCountOf('money', asked, { viewInvoices: false })).toBe(1)
+    expect(tabCountOf('money', asked, { viewInvoices: true })).toBe(3)
+    expect(tabCountOf('money', shipped, { viewInvoices: false })).toBe(0)
   })
 })
 // ---- end F-OP-306

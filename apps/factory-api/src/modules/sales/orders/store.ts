@@ -3,6 +3,7 @@ import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { orderProgress, type OrderProgress, type PieceCount, type SalesOrderFacts, type SalesOrderStatus, type SettlementAnswer } from '@nexus/factory-domain/sales/orders/orders'
+import { releasedPiecesOf } from '@nexus/factory-domain/sales/orders/orders' // B-OO-002: Mark ready's held counts
 import { StaleVersionError, type CommandTx } from '../../../core/command'
 // B-OP-043 (order page N6, lines-derived): a shipment's orders are its lines' orders (the first order first).
 import { orderRefsOfShipments, shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
@@ -267,6 +268,8 @@ export function moveFactsOf(facts: OrderFacts, settlement?: SettlementAnswer): S
     draftWorkOrders: facts.workOrders.filter((row) => row.status === 'DRAFT').map((row) => row.number),
     shipped: facts.progress.shipped,
     released: facts.progress.released,
+    // B-OO-002 (order overview N13, Owner D1): how many of the pieces to release quality released (Mark ready's held words).
+    releasedPieces: releasedPiecesOf(facts.lines.map((line) => ({ kind: line.kind, rows: facts.progress.rows.filter((row) => row.lineId === line.id) }))),
     // B-W2b-398 (LOG-067): every shipment that left arrived (one DELIVERED at least, none still travelling).
     delivered: facts.shipments.some((row) => row.status === 'DELIVERED') && !facts.shipments.some((row) => row.status === 'SHIPPED'),
     ...(settlement ? { settlement } : {}),

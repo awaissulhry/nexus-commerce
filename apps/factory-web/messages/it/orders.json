@@ -331,6 +331,7 @@
     "cancelState": "Si annulla solo un ordine da cui non è ancora partito nulla: per tornare indietro c'è il reso",
     "cancelWorkOrders": "Le sue righe hanno ordini di lavoro: annulla prima le bozze; uno rilasciato tiene l'ordine",
     "readyState": "Si segna come pronto solo un ordine in produzione",
+    "readyQuality": "Il rilascio lo fa la qualità: {n} su {m} rilasciati. L'ordine diventa Pronto da solo quando lo sono tutti.",
     "final": "Un ordine chiuso o annullato non cambia mai",
     "noPayments": "Registrare pagamenti richiede il diritto dell'amministrazione",
     "depositNotOpen": "Su questo acconto non resta nulla da pagare",
@@ -785,6 +786,10 @@
     "lines": "Righe",
     "date": "Nuova data promessa",
     "dateHint": "Da oggi in poi. La prima promessa resta registrata.",
+    "why": "Perché (lo legge il cliente)",
+    "pick": "Scegli un motivo",
+    "customerReads": "Il cliente legge:",
+    "note": "La tua nota (solo ufficio)",
     "reason": "Perché",
     "reasonHint": "Resta nella cronologia della promessa.",
     "tellCustomer": "Avvisa il cliente nella conversazione dell'ordine (Attività).",
@@ -794,12 +799,13 @@
       "past": "Una nuova promessa è un giorno da oggi in poi",
       "same": "È già la data promessa",
       "reason": "Indica il perché",
+      "code": "Scegli il perché",
       "lines": "Scegli almeno una riga"
     }
   },
   "ready": {
     "title": "Segna {number} come pronto da spedire",
-    "body": "Finché il rilascio qualità non si usa per questo ordine, una persona dice che è pronto, con il motivo.",
+    "body": "La qualità ha rilasciato ogni pezzo: l'ordine diventa Pronto da solo. Puoi segnarlo come pronto ora, con il motivo, se non si è ancora spostato.",
     "reason": "Perché è pronto",
     "reasonNeeded": "Indica il perché",
     "go": "Segna come pronto"

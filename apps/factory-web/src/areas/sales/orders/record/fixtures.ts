@@ -231,6 +231,19 @@ const paidDraft = order('CONFIRMED', { chain: { ...confirmed.chain, depositReque
 const noTd02 = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [deposit({ fiscalDocument: 'NONE', fiscalRule: 'DEPOSIT_EU_B2B_GOODS', status: 'PAID', paidAt: at(29, 9), paidAmount: 228384, link: SENT_LINK })] } })
 const noDeposit = order('CONFIRMED', { depositRequired: false, chain: { ...confirmed.chain, depositRequests: [] } })
 const production = order('IN_PRODUCTION')
+// ---- F-OO-112 (order overview N13, Owner D1; B-OO-002): Mark ready only after quality released every piece ----
+/** The order in production as the API answers it now: quality released 7 of the 14 pieces, so Mark ready is held with the counts. */
+const qualityHeld: Order = {
+  ...production,
+  actions: production.actions.map((action) => (action.action === 'markReady' ? { ...action, allowed: false, held: 'Quality releases the garments: 7 of 14 released. The order turns Ready by itself when all are.' } : action)),
+}
+/** …and once quality released every piece (the release handler has not moved it yet): Mark ready… is the by-hand catch-up. */
+const everyReleased: Order = {
+  ...production,
+  lines: production.lines.map((line) => ({ ...line, sizes: line.sizes.map((size) => ({ ...size, progress: { ...size.progress, released: size.progress.ordered } })), progress: { ...line.progress, released: line.progress.ordered } })),
+  progress: { ...production.progress, released: production.progress.ordered },
+}
+// ---- end F-OO-112
 // ---- F-CP-148: the order's files with two priced documents (made up): named for a price holder, counted (pricedLeftOut) for anyone else.
 const PRICED_NAMES = ['Conferma d’ordine SO-2026-0088 v1.pdf', 'Ordine del cliente PO-ESEMPIO-88.pdf'] as const
 const PRICED_FILES: typeof ORDER_FILES = {
@@ -891,9 +904,13 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'production-no-right', label: 'Finance · Production: the work orders by number (no floor progress right)', model: base('finance', production, { tab: 'production', production: ready(NO_WORK_READ) }) },
     { id: 'production-error', label: 'Sales · Production: the work orders could not be read (Try again)', model: base('sales', production, { tab: 'production', production: FAILED_STATE }) },
     { id: 'dates', label: 'Sales · Production: first promise kept, two changes with who and why', model: base('sales', late, { tab: 'production', production: ready(LATE_READ) }) },
-    { id: 'promise-dialog', label: 'Sales · Change promise date: the whole order', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { date: '2026-12-29', reason: 'La pelle nera arriva una settimana dopo.' } }) },
-    { id: 'promise-lines', label: 'Sales · Change promise date: chosen lines', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { scope: 'lines', lineIds: [production.lines[1]!.id], date: '2026-12-29', reason: 'Il rosso chiede un secondo bagno di colore.' } }) },
-    { id: 'ready-dialog', label: 'Sales · Mark ready (quality release not used for this order)', model: base('sales', production, { dialog: { kind: 'ready' }, draft: { reason: 'Controllo finale fatto in reparto.' } }) },
+    // F-OO-142 (B-OO-009): why is a curated reason the customer reads (shown in Italian and English); the note stays the office's.
+    { id: 'promise-dialog', label: 'Sales · Change promise date: the whole order — why from the list (the customer reads it, in Italian and English), the office’s own note', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { date: '2026-12-29', reasonCode: 'MATERIAL_LATE', reason: 'La pelle nera arriva una settimana dopo.' } }) },
+    { id: 'promise-lines', label: 'Sales · Change promise date: chosen lines', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { scope: 'lines', lineIds: [production.lines[1]!.id], date: '2026-12-29', reasonCode: 'QUALITY', reason: 'Il rosso chiede un secondo bagno di colore.' } }) },
+    { id: 'f-oo-142-promise-pick', label: 'F-OO-142 · Sales · Change promise date: no reason picked yet — Change the date held “Pick why”', model: base('sales', production, { tab: 'production', production: ready(WORK_READ), dialog: { kind: 'promise' }, draft: { date: '2026-12-29' } }) },
+    // F-OO-112 (B-OO-002, Owner D1): Mark ready… opens only once quality released every piece (the catch-up before the system moves it).
+    { id: 'ready-dialog', label: 'Sales · Mark ready: quality released every piece — the catch-up before the system moves it', model: base('sales', everyReleased, { dialog: { kind: 'ready' }, draft: { reason: 'Controllo finale fatto in reparto.' } }) },
+    { id: 'f-oo-112-ready-held', label: 'F-OO-112 · Sales · Overview: quality released 7 of 14 — Mark ready… held with the counts (the moves row and the band ⋯)', model: base('sales', qualityHeld, { tab: 'overview', production: ready({ ...PRODUCTION_READ, people: PEOPLE }), liveState: 'live' }) },
     { id: 'shipments', label: 'Sales · Shipments: left to ship per size, two shipments', model: base('sales', shipped, { tab: 'shipments' }) },
     { id: 'shipments-empty', label: 'Sales · Shipments: nothing shipped yet', model: base('sales', production, { tab: 'shipments' }) },
     { id: 'shipped-close-settled', label: 'Sales · Shipped and settled: Close order', model: base('sales', settled, { tab: 'shipments' }) },
