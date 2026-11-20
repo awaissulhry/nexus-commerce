@@ -233,7 +233,9 @@ export function useLinesActs(
   }
 
   const actions: LinesActsActions = {
-    onAmendStart: startAmend,
+    // F-OO-125: a door that opens edit mode (Overview's line "Change quantity or sizes…", the requested date's Change…) while a draft is
+    // open keeps the draft (Lines shown) — it never starts over on what was typed.
+    onAmendStart: () => (amendRef.current ? showLines() : startAmend()),
     // F-OP-110: ⋯ Change ship-to… — the one edit path: edit mode (kept when already open), Ship to focused.
     onChangeShipTo: () => {
       if (!amendRef.current) startAmend()
