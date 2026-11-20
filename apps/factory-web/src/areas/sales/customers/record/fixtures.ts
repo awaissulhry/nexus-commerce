@@ -42,7 +42,9 @@ import { NewOrderWindow } from '../../orders/new/view/NewOrderView'
 // ---- end F-CP-113
 // ---- F-CP-107: Drafts of <customer> (made-up portal drafts) and one in its read-only window ----
 import { CATALOGUE_RECORD } from '../../inquiries/demo/fixtures'
+import { REQUEST_STATUS_WORDS } from '@nexus/factory-domain/sales/portal-ordering/rules' // cp-walk: a draft's own state words
 import { inquiriesCan } from '../../inquiries/model'
+import type { CatalogueRecord } from '../../inquiries/api' // cp-walk
 import type { DraftRow } from './drafts/api'
 import { draftTitle } from './drafts/model'
 import { CustomerDraftsList } from './drafts/view/CustomerDraftsList'
@@ -153,13 +155,23 @@ const draftRowsOf = (party: Party, price: boolean): DraftRow[] => {
   ]
 }
 
+// ---- cp-walk (F-CP-107): the draft open in its window is THIS customer's — its name, its address, the draft's own state words (the
+// made-up record was Incoming's sent order of another customer: "Demo Rider Shop — … · Request sent" over Moda Demo's draft). ----
+export const draftRequestOf = (party: Party): CatalogueRecord['request'] => {
+  const name = party.tradeName ?? party.legalName
+  const request = CATALOGUE_RECORD.request
+  return { ...request, status: 'DRAFT', words: REQUEST_STATUS_WORDS.DRAFT, number: null, sentAt: null, sentBy: null, party: { id: party.id, code: party.code, name }, customerRef: null, shipTo: request.shipTo ? { ...request.shipTo, name: `${name} · warehouse` } : null }
+}
+// ---- end cp-walk
+
 /** F-CP-113: the lines window's made-up model (two colour lines, one at the list price, one typed; priced by the API). */
-const linesWindowOf = (kind: 'lines' | 'discard', price: boolean): NewOrderModel => ({
+// cp-walk (F-CP-113): the window names the page's customer (it said "New order · Moto Demo S.r.l." over Moda Demo's page).
+export const linesWindowOf = (kind: 'lines' | 'discard', price: boolean, party: Party): NewOrderModel => ({
   prefix: '/w/DEMO',
   can: price ? canOf('owner') : canOf('sales'), // B-CP-011: prices are the Owner's; the real Sales role holds no grain
   today: ORDERS_TODAY,
-  header: { companyId: COMPANY, partyId: ORDER_PARTY.id, contactId: ORDER_PARTY.contacts[0]!.id, customerRef: 'PO-ESEMPIO-89' },
-  party: { status: 'ready', value: ORDER_PARTY },
+  header: { companyId: COMPANY, partyId: party.id, contactId: ORDER_PARTY.contacts[0]!.id, customerRef: 'PO-ESEMPIO-89' },
+  party: { status: 'ready', value: { ...ORDER_PARTY, id: party.id, code: party.code, legalName: party.legalName, tradeName: party.tradeName ?? null } },
   number: 'SO-2026-0089',
   draft: {
     lines: [
@@ -315,11 +327,11 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
             customer: name,
             title: draftTitle(draftRowsOf(party, true)[0]!, t('customers.drafts.untitled')),
             nav: { ids: draftRowsOf(party, true).map((row) => row.id), current: draftRowsOf(party, true)[0]!.id },
-            pane: { prefix: '/w/DEMO', can: inquiriesCan(['orders.view', 'orders.manage', 'quotes.manage', 'threads.read', ...(work.price !== false ? ['money.price'] : [])]), offline: false, loaded: { status: 'ready', value: { ...CATALOGUE_RECORD, request: { ...CATALOGUE_RECORD.request, status: 'DRAFT', number: null, sentAt: null, sentBy: null }, may: { order: false, quote: false, refuse: false } } }, notice: null, dialog: null, handled: null, draft: { title: 'STY-01 Giacca demo' } },
+            pane: { prefix: '/w/DEMO', can: inquiriesCan(['orders.view', 'orders.manage', 'quotes.manage', 'threads.read', ...(work.price !== false ? ['money.price'] : [])]), offline: false, loaded: { status: 'ready', value: { ...CATALOGUE_RECORD, request: draftRequestOf(party), may: { order: false, quote: false, refuse: false } } }, notice: null, dialog: null, handled: null, draft: { title: 'STY-01 Giacca demo' } },
           },
         })
       : null,
-    work.linesWindow ? createElement(NewOrderWindow, { model: linesWindowOf(work.linesWindow, work.price !== false) }) : null, // F-CP-113
+    work.linesWindow ? createElement(NewOrderWindow, { model: linesWindowOf(work.linesWindow, work.price !== false, party) }) : null, // F-CP-113
   )
 }
 // ---- end F-SA-276

@@ -202,3 +202,33 @@ describe('F-CP-141: the Drafts Value column — draft.draftValueAmount, else the
   })
 })
 // ---- end F-CP-141
+
+// ---- cp-walk (customer page review walk, F-CP-107): the draft open in its window is this customer's own, and its ⋯ has a name ----
+describe('cp-walk: the draft window', () => {
+  it('the design\'s draft is the page customer\'s: its name, its address, the draft\'s own state words (never another customer\'s)', async () => {
+    const { draftRequestOf } = await import('../fixtures')
+    const party = { id: ALPHA, code: 'ALPHA', legalName: 'Brand Alpha S.r.l.', tradeName: 'Brand Alpha' } as never
+    const request = draftRequestOf(party)
+    expect(request.party).toEqual({ id: ALPHA, code: 'ALPHA', name: 'Brand Alpha' })
+    expect([request.status, request.words.en, request.words.it, request.number]).toEqual(['DRAFT', 'Draft', 'Bozza', null])
+    expect(request.shipTo?.name).toBe('Brand Alpha · warehouse')
+    expect(JSON.stringify(request)).not.toContain('Rider Shop')
+    // F-CP-113's lines window on the same page names the same customer (never the orders demo's own).
+    const { linesWindowOf } = await import('../fixtures')
+    const lines = linesWindowOf('lines', true, party)
+    expect([lines.header?.partyId, lines.party.status === 'ready' ? lines.party.value.legalName : null]).toEqual([ALPHA, 'Brand Alpha S.r.l.'])
+  })
+  it('a draft has no number yet: its ⋯ is named by its title and offers no "Copy number"', async () => {
+    const { CataloguePane } = await import('../../../inquiries/view/pane/catalogue/CataloguePane')
+    const { CATALOGUE_RECORD } = await import('../../../inquiries/demo/fixtures')
+    const { inquiriesCan } = await import('../../../inquiries/model')
+    const request = { ...CATALOGUE_RECORD.request, status: 'DRAFT', number: null, sentAt: null, sentBy: null }
+    const model = { prefix: '/w/DEMO', can: inquiriesCan(['orders.view', 'threads.read']), offline: false, loaded: { status: 'ready', value: { ...CATALOGUE_RECORD, request, may: { order: false, quote: false, refuse: false } } }, notice: null, dialog: null, handled: null, draft: { title: 'STY-01 Giacca demo' } }
+    const html = render(createElement(CataloguePane, { model: model as never }))
+    expect(html).toContain('aria-label="More for STY-01 Giacca demo"')
+    expect(html).not.toContain('aria-label="More for "')
+    const pane = readFileSync(new URL('../../../inquiries/view/pane/catalogue/CataloguePane.tsx', import.meta.url), 'utf8')
+    expect(pane).toContain("...(number ? [{ id: 'copy', label: t('record.copyNumber')")
+  })
+})
+// ---- end cp-walk
