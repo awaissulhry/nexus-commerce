@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { canOf, LINE_BLK, LINE_RED, order } from '../_demo/fixtures'
+import { AMEND_PREVIEW, AMEND_PREVIEW_PROBLEMS, BRN, canOf, LINE_BLK, LINE_RED, order, STYLE_ID } from '../_demo/fixtures'
 import type { Order } from '../api'
 import type { Freeze } from '../depth/api'
 import { abilitiesOf } from '../model'
@@ -23,6 +24,7 @@ import {
   ownDatesOf,
   patternOf,
   priceCellId,
+  serverFiguresOf,
   priceLockOf,
   styleCardsOf,
   taxBasisOf,
@@ -184,3 +186,58 @@ describe('F-OL-01 (d): totals in plain words, by the order\'s own tax basis', ()
     expect(totalsOf(gross, EMPTY_HISTORY.draft, []).map((row) => row.key)).toEqual(['total', 'ofWhichVat'])
   })
 })
+
+// ---- F-OL-09 (Order LINES lane): honest money while editing ----
+describe('F-OL-09: the server\'s figures once the preview of THIS draft answered; the client estimate only fills the gap', () => {
+  const figures = serverFiguresOf(AMEND_PREVIEW, confirmed)!
+  const brownKey = newLineKey(STYLE_ID, BRN.id)
+
+  it('per row: a saved line by its id, a new row by its style and colour; the order\'s net and gross', () => {
+    expect(figures.lines[LINE_BLK]).toEqual({ before: 360000, after: 450000 })
+    expect(figures.lines[brownKey]).toEqual({ before: 0, after: 180000 })
+    expect(figures.net).toEqual({ before: 624000, after: 894000 })
+    expect(figures.gross).toEqual({ before: 761280, after: 1090680 })
+  })
+
+  it('none for a refused draft or a preview with no prices (Sales: the API sends no money, the table shows none)', () => {
+    expect(serverFiguresOf(AMEND_PREVIEW_PROBLEMS, confirmed)).toBeNull()
+    expect(serverFiguresOf({ ...AMEND_PREVIEW, diff: { ...AMEND_PREVIEW.diff!, prices: undefined } }, confirmed)).toBeNull()
+    expect(serverFiguresOf(null, confirmed)).toBeNull()
+  })
+
+  it('a line total: the server\'s with "was"; a new row on the list price priced by the server; no figures: the estimate', () => {
+    const draft = setCell(EMPTY_HISTORY, confirmed, LINE_BLK, '50', 3).draft
+    expect(lineAmountOf(lineRow(confirmed, LINE_BLK), draft, figures)).toEqual({ now: 450000, was: 360000 })
+    const row: CardRow = { kind: 'new', key: brownKey, row: { key: brownKey, styleId: STYLE_ID, colourwayId: BRN.id, colour: 'BRN · Marrone', style: { code: 'DEMO-JKT-01', name: 'Giacca pelle demo' }, sizes: { '50': 2, '52': 2 }, price: '', description: '', note: '' } }
+    expect(lineAmountOf(row, draft)).toEqual({ now: null, was: null })
+    expect(lineAmountOf(row, draft, figures)).toEqual({ now: 180000, was: null })
+    // A removed row keeps its saved figure (struck), whatever the server says.
+    const saved = confirmed.lines.find((line) => line.id === LINE_BLK)!.netAmount ?? null
+    expect(lineAmountOf(lineRow(confirmed, LINE_BLK, true), draft, figures)).toEqual({ now: saved, was: null })
+  })
+
+  it('the totals: the server\'s net, VAT (gross less net) and total, each with "was"; no figures: the estimate as before', () => {
+    expect(taxBasisOf(confirmed).kind).toBe('vat')
+    const cards = styleCardsOf(confirmed, EMPTY_HISTORY.draft)
+    expect(totalsOf(confirmed, EMPTY_HISTORY.draft, cards, figures)).toEqual([
+      { key: 'subtotal', amount: 894000, was: 624000 },
+      { key: 'vat', amount: 196680, was: 137280 },
+      { key: 'total', amount: 1090680, was: 761280, grand: true },
+    ])
+    expect(totalsOf(confirmed, EMPTY_HISTORY.draft, cards, null)).toEqual(totalsOf(confirmed, EMPTY_HISTORY.draft, cards))
+  })
+
+  it('the container asks the figures for a price reader only, after the last edit, keyed by the draft; the view hands them to every money cell', () => {
+    const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+    const hook = read('./use-lines-draft.ts')
+    expect(hook).toContain('if (!can.price || !order || !key || draftEmpty || reviewOpen || seenKey === key) return')
+    expect(hook).toContain('const FIGURES_AFTER_MS = 600')
+    expect(hook).toContain('const figures = can.price && order && seen && seen.key === key ? serverFiguresOf(seen.preview, order) : null')
+    expect(hook).toContain('setSeen({ key, preview }) // F-OL-09: the table\'s figures too')
+    expect(read('./view/LinesTab.tsx')).toContain('const totals = totalsOf(order, draft, cards, figures)')
+    const table = read('./view/lines/StyleTable.tsx')
+    expect(table).toContain('lineAmountOf(row, draft, ctx.figures) // F-OL-09')
+    expect(table).toContain('lineAmountOf(row, draft, ctx.figures).now) // F-OL-09')
+  })
+})
+// ---- end F-OL-09

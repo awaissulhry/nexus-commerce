@@ -4,6 +4,7 @@ import type { StyleDetail } from '../../quotes/api'
 import type { AmendPreview, OrderStyleRow } from '../api'
 import type { Phrase } from '../model'
 import type { Clash, LinesDraft, NoteField, WhyPick } from './lines-draft'
+import type { ServerFigures } from './lines-table' // F-OL-09
 
 /**
  * F-OL-01 (Order LINES lane, plan v2 §1) — what the Lines tab draws and what it asks, as plain props: the container hook
@@ -81,6 +82,8 @@ export interface LinesTabModel {
   readonly saving: boolean
   /** F-OL-07: an in-app link away from the order waits for "Stay" or "Leave and discard" (the changes not saved). */
   readonly leaving: boolean
+  /** F-OL-09: the server's figures of THIS draft (its preview answered; price readers); null: the table's client estimate. */
+  readonly figures: ServerFigures | null
 }
 
 export interface LinesTabActions {

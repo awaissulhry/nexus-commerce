@@ -77,7 +77,7 @@ describe('F-OL-07: the question — Stay or Leave and discard, what is lost said
     const hook = readFileSync(new URL('./use-lines-draft.ts', import.meta.url), 'utf8')
     expect(hook).toContain("window.addEventListener('click', onClick, true)")
     expect(hook).toContain("window.addEventListener('beforeunload', onUnload)")
-    expect(hook).toContain('if (empty) return')
+    expect(hook).toContain('if (draftEmpty) return')
     expect(hook).toContain('if (href) go(href)')
     expect(readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')).toContain('go: (href) => router.push(href), // F-OL-07')
     expect(readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')).toContain('<LeaveConfirm order={order} tab={model.linesTab} actions={actions?.linesTab} />')
