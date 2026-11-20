@@ -35,6 +35,7 @@ import { command } from '../../../core/command'
 import { askApproval } from '../../../platform/approvals/engine'
 // B-OO-013: the portal's own order contracts (what a customer's answer may carry: zod drops every other key).
 import { listContract as portalListContract, recordContract as portalRecordContract } from '../portal-orders/contract'
+import { orderLinkCountsOf } from '@nexus/factory-domain/sales/orders/linked-counts' // F-OO-206: the one count rule
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A1 §2.5 "Sales order"; PLAN
@@ -1206,19 +1207,22 @@ describe('the order read carries its open requests for a yes, decided in place (
     expect(JSON.stringify(order.openApprovals)).not.toContain(depth.taskIds.override2)
   })
 
-  it('badges: issued invoices and open deposits on the Money tab, shipments not cancelled on the Shipments tab; no Changes count (R-22)', async () => {
+  // F-OO-206 (order overview §6; review F5; Owner D8): ONE count at both ends — the read sends no badge of its own; the page's tabs and
+  // its Linked records card count the chain by orderLinkCountsOf (live only), so they always agree.
+  it('F-OO-206: the order read has no badges; its chain gives the one count (issued invoices, open deposits, live shipments and work orders)', async () => {
     const order = await read('f.owner', depth.orderId)
+    expect(order).not.toHaveProperty('badges')
     const open = (order.chain.depositRequests as Json[]).filter((row) => row.status === 'OPEN')
     expect(open.map((row) => row.id)).toContain(depth.extraDepositId)
-    expect(order.badges).toEqual({
-      money: { invoices: (order.chain.invoices as Json[]).filter((row) => row.status !== 'DRAFT').length, openDeposits: open.length },
-      shipments: (order.chain.shipments as Json[]).filter((row) => row.status !== 'CANCELLED').length,
-    })
-    expect(order.badges).not.toHaveProperty('changes')
-    // An order that shipped: its shipments counted (tenant a's SEED-SO-0002 left with SH-0001).
+    const counts = orderLinkCountsOf(order.chain)
+    expect(counts.depositRequests.open).toBe(open.length)
+    expect(counts.invoices.issued).toBe((order.chain.invoices as Json[]).filter((row) => row.status !== 'DRAFT').length)
+    expect(counts.shipments.live).toBe((order.chain.shipments as Json[]).filter((row) => row.status !== 'CANCELLED').length)
+    expect(counts.workOrders.live).toBe((order.chain.workOrders as Json[]).filter((row) => row.status !== 'CANCELLED').length)
+    // An order that shipped: its shipments counted from the chain (tenant a's SEED-SO-0002 left with SH-0001); no badges there either.
     const shipped = await ok('a.production', 'GET', orderUrl(seeded.a.quality.production.salesOrderId))
-    expect(shipped.order.badges.shipments).toBe((shipped.order.chain.shipments as Json[]).filter((row) => row.status !== 'CANCELLED').length)
-    expect(shipped.order.badges.shipments).toBeGreaterThan(0)
+    expect(shipped.order).not.toHaveProperty('badges')
+    expect(orderLinkCountsOf(shipped.order.chain).shipments.live).toBeGreaterThan(0)
   })
 
   it('B3: what the settlement misses comes in words with the price grain only; without it, the codes alone', async () => {

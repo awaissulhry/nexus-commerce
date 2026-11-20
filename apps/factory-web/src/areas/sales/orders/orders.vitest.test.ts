@@ -110,6 +110,11 @@ import { readyHeld } from './model'
 import { PROMISE_REASON_CODES, PROMISE_REASON_WORDS, promiseReasonOf, promiseReasonText } from '@nexus/factory-domain/sales/portal-orders/promise'
 import { isPromiseReasonCode, promiseBodyOf, promiseReasonChoices, promiseReasonPreview } from './model'
 // ---- end F-OO-142
+// ---- F-OO-206 (Owner D8): one count at both ends ----
+import { orderLinkCountsOf } from '@nexus/factory-domain/sales/orders/linked-counts'
+import { linkedRowsOf } from './record/overview/linked'
+import { orderSchema } from './api'
+// ---- end F-OO-206
 
 const params = (query: string) => new URLSearchParams(query)
 
@@ -829,13 +834,9 @@ describe('F-SA-230: the tab counts, the band’s health chip, Made to measure', 
     expect(tabCountOf('changes', value)).toBeNull()
     expect(tabCountOf('changes', value, { changes: 0 })).toBe(0)
     expect(tabCountOf('changes', value, { changes: 3 })).toBe(3)
-    // An older answer without badges: the chain's own counts.
+    // F-OO-206 (D8): the chain by the one rule — every invoice of this shipped order is issued and its deposit is paid; both shipments stand.
     expect(tabCountOf('money', value)).toBe(value.chain.invoices.length)
     expect(tabCountOf('shipments', value)).toBe(value.chain.shipments.length)
-    // F-OP-117 (B-OP-020): with the read's badges, Money = issued invoices and credit notes + open deposits; Shipments = not cancelled.
-    const badged = { ...value, badges: { money: { invoices: 2, openDeposits: 1 }, shipments: 4 } }
-    expect(tabCountOf('money', badged)).toBe(3)
-    expect(tabCountOf('shipments', badged)).toBe(4)
   })
 
   it('the health chip only for a late order still to ship (never On track), from the order read until the production read comes', () => {
@@ -2032,3 +2033,66 @@ describe('F-OO-142: the promise dialog picks a curated reason the customer reads
   })
 })
 // ---- end F-OO-142
+
+// ---- F-OO-206 (order overview §6; review F5; Owner D8): ONE count at both ends — the tab badges are the Linked card's numbers ----------
+describe('F-OO-206: the tab badges count what the Linked records card counts (orderLinkCountsOf on the chain, live only); no badges anywhere', () => {
+  const shipped = order('SHIPPED')
+  const wo = (n: number, status: string) => ({ id: `0190f0e2-9191-7000-8000-0000000000${n}`, number: `WO-000${n}`, status, siteId: shipped.chain.workOrders[0]!.siteId, releasedAt: status === 'DRAFT' ? null : shipped.chain.workOrders[0]!.releasedAt })
+  const sh = (n: number, status: string, ddt: { number: string; date: string } | null) => ({ ...shipped.chain.shipments[0]!, id: `0190f0e2-8181-7000-8000-0000000000${n}`, number: `SH-2026-00${n}`, status, ddt })
+  const inv = (n: number, docType: string, status: string) => ({ id: `0190f0e2-2121-7000-8000-0000000000${n}`, number: status === 'DRAFT' ? null : `FA-2026-000${n}`, docType, status, issueDate: status === 'DRAFT' ? null : '2026-11-12', depositRequestId: null })
+  // Drafts, cancelled work orders and shipments, a credit note (TD04) and a deposit invoice (TD02), open and cancelled deposit requests.
+  const value = {
+    ...shipped,
+    chain: {
+      ...shipped.chain,
+      workOrders: [wo(31, 'RELEASED'), wo(32, 'DRAFT'), wo(33, 'ON_HOLD'), wo(34, 'COMPLETED'), wo(35, 'CANCELLED')],
+      shipments: [sh(51, 'SHIPPED', { number: '101/2026', date: '2026-11-12' }), sh(52, 'CANCELLED', { number: '102/2026', date: '2026-11-13' }), sh(53, 'DELIVERED', null)],
+      invoices: [inv(71, 'TD01', 'DRAFT'), inv(72, 'TD01', 'ISSUED'), inv(73, 'TD04', 'ISSUED'), inv(74, 'TD02', 'DELIVERED')],
+      depositRequests: [deposit({ status: 'PAID' }), deposit({ id: '0190f0e2-3131-7000-8000-000000000002', status: 'OPEN', stepKind: 'BEFORE_SHIPPING' }), deposit({ id: '0190f0e2-3131-7000-8000-000000000003', status: 'CANCELLED' })],
+    },
+  }
+  const card = (viewInvoices = true) => linkedRowsOf({ order: value, prefix: '/w/demo', can: { ...canOf('owner'), viewInvoices }, complaints: null, returns: null, sameQuote: [], shipInPlace: false, readOnly: false })
+  const row = (kind: string, viewInvoices = true) => card(viewInvoices).rows.find((entry) => entry.kind === kind)!
+
+  it('drafts, cancelled shipments, TD04, TD02 and cancelled work orders: each badge = the card\'s number (both from orderLinkCountsOf)', () => {
+    const counts = orderLinkCountsOf(value.chain)
+    // Production: 4 live (the cancelled one is said in words on the card, never counted).
+    expect(tabCountOf('production', value)).toBe(4)
+    expect(row('workOrders').count).toBe(tabCountOf('production', value))
+    expect(row('workOrders').parts.map((part) => part.key)).toContain('linked.wo.cancelled')
+    // Shipments: 2 live; the cancelled one (and its DDT) apart.
+    expect(tabCountOf('shipments', value)).toBe(2)
+    expect(row('shipments').count).toBe(tabCountOf('shipments', value))
+    expect(counts.shipments.lastDdt?.number).toBe('101/2026')
+    // Money: 3 issued (the credit note and the deposit invoice among them; the draft apart) + 1 open deposit request.
+    expect(tabCountOf('money', value)).toBe(counts.invoices.issued + counts.depositRequests.open)
+    expect(tabCountOf('money', value)).toBe(4)
+    expect(row('invoices').parts).toContainEqual({ key: 'linked.inv.issued', params: { count: 3 } })
+    expect(row('invoices').parts).toContainEqual({ key: 'linked.inv.draft', params: { count: 1 } })
+    expect(row('invoices').parts).toContainEqual({ key: 'linked.inv.creditNote', params: { count: 1 } })
+    expect(row('invoices').parts).toContainEqual({ key: 'linked.inv.deposit', params: { count: 1 } })
+    // Lines and Changes as before; the files and the Overview count nothing here.
+    expect(tabCountOf('lines', value)).toBe(value.lines.length)
+    expect(tabCountOf('changes', value, { changes: 3 })).toBe(3)
+    expect(tabCountOf('overview', value)).toBeNull()
+    expect(tabCountOf('files', value)).toBeNull()
+  })
+
+  it('F-OP-306 unchanged: without invoices.view Money counts the open deposits alone and the card says the Money tab\'s sentence alone', () => {
+    expect(tabCountOf('money', value, { viewInvoices: false })).toBe(1)
+    expect(row('invoices', false)).toMatchObject({ state: 'held', count: null, held: { key: 'money.noInvoiceRight' } })
+  })
+
+  it('no badges at either end: the web schema drops the field; the tab counts call the one rule; nothing else counts the chain', () => {
+    const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
+    expect(api).not.toMatch(/\bbadges\b/)
+    const rules = readFileSync(new URL('./model.ts', import.meta.url), 'utf8')
+    const from = rules.indexOf('export function tabCountOf(')
+    const body = rules.slice(from, rules.indexOf('\n}\n', from))
+    expect(body).toContain('orderLinkCountsOf(order.chain)')
+    expect(body).not.toMatch(/badges|chain\.(?:workOrders|shipments|invoices)\.length/)
+    // The read's own `badges` (an older answer) is dropped by the schema, never read.
+    expect(Object.keys(orderSchema.shape)).not.toContain('badges')
+  })
+})
+// ---- end F-OO-206

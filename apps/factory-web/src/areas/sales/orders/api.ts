@@ -637,8 +637,6 @@ export const orderSchema = z.object({
   // (counted, never named); absent in an older answer.
   openApprovals: z.array(openApprovalSchema).optional(),
   openApprovalsHidden: z.number().optional(),
-  // F-OP-117 (B-OP-020): the Money and Shipments tabs' counts (counts only; the Changes count is the page's ONE waiting list, R-22).
-  badges: z.object({ money: z.object({ invoices: z.number(), openDeposits: z.number() }), shipments: z.number() }).optional(),
   // ---- end F-OP-101
   // ---- F-OO-208 (B-OO-013): the office's own note (the customer never reads it; the Orders sheet writes it) and the delivery terms
   // carried from the quote — the Incoterm, its place, ship complete. Read only; absent in an older answer.

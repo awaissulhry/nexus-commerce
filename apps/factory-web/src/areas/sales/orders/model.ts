@@ -29,6 +29,7 @@ import type { DockDefault } from '../../_shared/record-frame/model' // F-SA-263
 // ---- F-OP-111: Split into new orders… (the API's own limits; the body the split sends) ----
 import { ORDERS_DEPTH_LIMITS } from '@nexus/factory-domain/sales/orders-depth/rules'
 import { releasedPiecesOf } from '@nexus/factory-domain/sales/orders/orders' // F-OO-112: Mark ready's held counts (B-OO-002's one rule)
+import { orderLinkCountsOf } from '@nexus/factory-domain/sales/orders/linked-counts' // F-OO-206: the tabs count as the Linked card (one rule)
 // F-OO-142: the curated reasons a promise move shows the customer (B-OO-009 sends the code; the portal reads these words).
 import { PROMISE_REASON_CODES, PROMISE_REASON_WORDS, type PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise'
 import type { ApiIssue } from '../../../lib/api/errors'
@@ -545,18 +546,20 @@ export const DOCK_DEFAULTS: Readonly<Record<RecordTab, DockDefault>> = Object.fr
 
 /** What a tab counts (null draws nothing; 0 is an answer): lines · work orders · amendments · invoices · shipments. */
 // F-OP-117 (10-order-page §6, §7, §8; review R-22): Changes counts the ONE waiting list's rows (`changes`: changesBadgeOf of the card,
-// null before the production read — never a made-up 0); Money and Shipments the order read's own badges (B-OP-020: issued invoices and
-// credit notes + open deposit requests; shipments not cancelled carrying this order's lines), the chain's counts in an older answer.
-export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments' | 'badges'>, counts: { readonly changes?: number | null; /* F-OP-306 */ readonly viewInvoices?: boolean } = {}): number | null {
+// null before the production read — never a made-up 0). F-OO-206 (order overview §6; review F5; Owner D8): Production, Shipments and
+// Money count what the Linked records card counts — the domain's ONE rule on the order read's chain (orderLinkCountsOf: live records
+// only, what was cancelled is said in words on the card); the API sends no badge of its own. Money = issued invoices (credit notes and
+// deposit invoices among them) + the deposit requests still open.
+export function tabCountOf(tab: RecordTab, order: Pick<Order, 'lines' | 'chain' | 'amendments'>, counts: { readonly changes?: number | null; /* F-OP-306 */ readonly viewInvoices?: boolean } = {}): number | null {
   if (tab === 'lines') return order.lines.length
-  if (tab === 'production') return order.chain.workOrders.length
   if (tab === 'changes') return counts.changes ?? null
-  // F-OP-306 (walk #21): a reader without invoices.view is shown no invoice, so Money counts only its open deposits.
-  if (tab === 'money' && counts.viewInvoices === false) return order.badges ? order.badges.money.openDeposits : null
-  if (tab === 'money') return order.badges ? order.badges.money.invoices + order.badges.money.openDeposits : order.chain.invoices.length
-  if (tab === 'shipments') return order.badges ? order.badges.shipments : order.chain.shipments.length
   // F-SA-237: the files the reader may open come with the files read (none before it: no number that is not true).
-  return null
+  if (tab !== 'production' && tab !== 'shipments' && tab !== 'money') return null
+  const linked = orderLinkCountsOf(order.chain) // F-OO-206
+  if (tab === 'production') return linked.workOrders.live
+  if (tab === 'shipments') return linked.shipments.live
+  // F-OP-306 (walk #21): a reader without invoices.view is shown no invoice, so Money counts only its open deposits.
+  return (counts.viewInvoices === false ? 0 : linked.invoices.issued) + linked.depositRequests.open
 }
 
 /** The ⋯ menu's groups, in their order (10-order-page §1.3); Cancel comes last, after a rule. */
