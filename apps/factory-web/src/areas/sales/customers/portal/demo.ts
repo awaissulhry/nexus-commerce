@@ -94,6 +94,33 @@ export function supplierAccess(over: Partial<PortalAccess> = {}): PortalAccess {
   }
 }
 
+// ---- L5 (cp-fx14; customer page walk; #1767 follow-up 15): an adviser's portal — a party with the CONSULTANT role whose people are
+// guests: the Accountant, a role that sees prices, which only the Owner gives from the office. Made-up: Studio Esempio, Anna Conti.
+export const ADVISER_PARTY_ID = '0190f0e2-1000-7000-8000-000000000021'
+
+export const ADVISER_PEOPLE: PartnerPerson[] = [
+  person(21, { displayName: 'Anna Conti', email: 'anna.conti@studio-esempio.example', kind: 'GUEST', roleKey: 'guest-accountant', roleName: 'Accountant', seesPrices: true, capabilities: ['comment'], accessUntil: at(30, 22, 59, 10), lastSignInAt: at(27, 16, 20) }),
+]
+
+/** The roles as the API's read says them: `ownerGives` for a guest's role that sees prices (the API's people.ts ownerGivesRole). */
+export const withOwnerGives = (roles: readonly PartnerRole[]): PartnerRole[] => roles.map((role) => ({ ...role, ownerGives: role.kind === 'GUEST' && role.seesPrices }))
+
+/** An adviser's Portal access as GET /partners/:partyId answers it; `mayGivePriceRole` false: read by Sales (anyone but the Owner). */
+export function adviserAccess(over: Partial<PortalAccess> = {}): PortalAccess {
+  return {
+    party: { id: ADVISER_PARTY_ID, code: 'STUDIO-ESEMPIO', name: 'Studio Esempio', roles: ['CONSULTANT'], status: 'ACTIVE', companyId: '0190f0e2-0001-7000-8000-000000000001' },
+    kinds: ['GUEST'],
+    settings: { portalOn: true, maxUsers: null, allowedRoleKeys: [], version: 2 },
+    seats: { taken: 1, max: null },
+    roles: withOwnerGives(rolesOf(['GUEST'])),
+    people: ADVISER_PEOPLE,
+    termsInForce: true,
+    mayGivePriceRole: false,
+    ...over,
+  }
+}
+// ---- end L5
+
 export const REQUESTS: RequestRow[] = [
   {
     id: uid(60),

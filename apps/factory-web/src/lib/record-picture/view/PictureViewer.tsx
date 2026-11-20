@@ -84,23 +84,23 @@ function Viewer({ source, recordId, number, picture: own, styleCount: count, rea
         </>
       }
     >
-      <div className="fw-rp-viewer" aria-busy={src === undefined || undefined}>
+      <div className="fw-rpic-viewer" aria-busy={src === undefined || undefined}>
         {src ? (
           <img src={src} alt={t('alt', { style: style ?? number })} />
         ) : (
-          <span className="fw-rp-viewer-none">
+          <span className="fw-rpic-viewer-none">
             <Shirt size={40} aria-hidden />
             {t('none')}
           </span>
         )}
       </div>
-      <p className="fw-rp-note">{t('small')}</p>
+      <p className="fw-rpic-note">{t('small')}</p>
       {/* F-CP-110: the styles of this record, each its own picture (never a price). */}
       {styles.state.status !== 'off' && (
-        <section className="fw-rp-styles" aria-label={t('styles', { number })} aria-busy={styles.state.status === 'reading' || undefined}>
-          <h3 className="fw-rp-styles-h">{t('styles', { number })}</h3>
+        <section className="fw-rpic-styles" aria-label={t('styles', { number })} aria-busy={styles.state.status === 'reading' || undefined}>
+          <h3 className="fw-rpic-styles-h">{t('styles', { number })}</h3>
           {styles.state.status === 'reading' ? (
-            <ul className="fw-rp-strip">
+            <ul className="fw-rpic-strip">
               {Array.from({ length: Math.min(more + 1, 6) }, (_, index) => (
                 <li key={index}>
                   <Skeleton width={40} height={40} />
@@ -108,18 +108,18 @@ function Viewer({ source, recordId, number, picture: own, styleCount: count, rea
               ))}
             </ul>
           ) : styles.state.status === 'failed' ? (
-            <p className="fw-rp-note" role="status">
+            <p className="fw-rpic-note" role="status">
               {t('stylesFailed')}{' '}
               <Button size="sm" variant="quiet" onClick={styles.retry}>
                 {t('retry')}
               </Button>
             </p>
           ) : (
-            <ul className="fw-rp-strip">
+            <ul className="fw-rpic-strip">
               {styles.state.tiles.map((tile) => (
-                <li key={tile.key} className={shown?.key === tile.key ? 'fw-rp-tile is-shown' : 'fw-rp-tile'}>
+                <li key={tile.key} className={shown?.key === tile.key ? 'fw-rpic-tile is-shown' : 'fw-rpic-tile'}>
                   <RecordPicture source={source} recordId={tile.key} number={number} picture={tilePicture(tile)} styleCount={1} size="line" read={null} held={tile.small} onOpen={() => setShown(tile)} />
-                  <span className="fw-rp-tile-words">{tileWords(tile)}</span>
+                  <span className="fw-rpic-tile-words">{tileWords(tile)}</span>
                 </li>
               ))}
             </ul>
@@ -127,8 +127,8 @@ function Viewer({ source, recordId, number, picture: own, styleCount: count, rea
         </section>
       )}
       {more > 0 && lines && (styles.state.status === 'off' || styles.state.status === 'failed') && (
-        <p className="fw-rp-note">
-          <Link className="fw-rp-door" href={lines}>
+        <p className="fw-rpic-note">
+          <Link className="fw-rpic-door" href={lines}>
             {t('moreStyles', { count: more })}
           </Link>
         </p>

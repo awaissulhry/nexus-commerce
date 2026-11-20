@@ -51,6 +51,8 @@ export interface OrderDockProps {
   readonly changeSide?: DockedHost['changeSide']
   /** F-OP-215: the page's ONE order-files container — the files line of This order counts the order's set; All files → the Files tab. */
   readonly orderFiles?: OrderFilesHost
+  /** F-OO-133: This order's conversation got another owner here — the page reads People again (the owner change emits no event). */
+  readonly onOwnerChanged?: () => void
 }
 
 export function OrderDock(props: OrderDockProps) {
@@ -61,7 +63,7 @@ export function OrderDock(props: OrderDockProps) {
   )
 }
 
-function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* F-SA-244 */, orderFiles /* F-OP-215 */ }: OrderDockProps) {
+function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* F-SA-244 */, orderFiles /* F-OP-215 */, onOwnerChanged /* F-OO-133 */ }: OrderDockProps) {
   const t = useT('orders')
   const rt = useT('record-thread') // F-OP-203: the short "All"
   const api = useOfficeApi()
@@ -222,7 +224,7 @@ function Dock({ order, workOrders, prefix, printHref, showOnPage, changeSide /* 
       />
     )
   } else {
-    shown = <OfficeRecordThread key="order" docked record={{ type: 'SalesOrder', id: order.id, companyId: order.companyId, siteId: null }} title={`${order.number} · ${customer}`} recordLabel={order.number} party={{ id: order.partyId, name: customer }} partyRole="customer" {...(printHref ? { printHref } : {})} {...(showOnPage ? { showOnPage } : {}) /* F-SA-265 */} {...(changeSide ? { changeSide } : {}) /* F-SA-244 */} {...(orderFiles ? { orderFiles } : {}) /* F-OP-215 */} />
+    shown = <OfficeRecordThread key="order" docked record={{ type: 'SalesOrder', id: order.id, companyId: order.companyId, siteId: null }} title={`${order.number} · ${customer}`} recordLabel={order.number} party={{ id: order.partyId, name: customer }} partyRole="customer" {...(printHref ? { printHref } : {})} {...(showOnPage ? { showOnPage } : {}) /* F-SA-265 */} {...(changeSide ? { changeSide } : {}) /* F-SA-244 */} {...(orderFiles ? { orderFiles } : {}) /* F-OP-215 */} {...(onOwnerChanged ? { onOwnerChanged } : {}) /* F-OO-133: This order's own conversation only */} />
   }
 
   return (

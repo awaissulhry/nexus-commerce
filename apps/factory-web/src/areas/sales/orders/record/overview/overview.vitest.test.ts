@@ -531,7 +531,7 @@ describe('F-OO-100: OverviewTab keeps the layout, each card is its own file, eac
     // F-OO-202 (F14): "who acts next" left with its only drawing — the keeper's waitingOn is the one rule.
     expect(model).not.toContain('export function whoActsNextOf(')
     // F-OO-103: where.ts keeps the headline and the stages (the facts' rules left with the facts).
-    const homes = { where: ['headlineOf', 'stageStripOf'], progress: ['lineRowsOf', 'totalOf', 'lineSizesOf', 'figureFaceOf', 'linePillsOf', 'madeExtraSizesOf'] /* F-OO-121: walkOf and lineStageOf went */, people: ['placeWords'], dates: ['nextDatesOf'], linked: ['linkedRecordsOf'] } as const
+    const homes = { where: ['headlineOf', 'stageStripOf'], progress: ['lineRowsOf', 'totalOf', 'lineSizesOf', 'figureFaceOf', 'linePillsOf', 'madeExtraSizesOf'] /* F-OO-121: walkOf and lineStageOf went */, people: ['placeLinesOf' /* F-OO-134: replaces placeWords */], dates: ['nextDatesOf'], linked: ['linkedRecordsOf'] } as const
     for (const [section, names] of Object.entries(homes)) {
       const text = read(`./${section}.ts`)
       for (const name of names) {

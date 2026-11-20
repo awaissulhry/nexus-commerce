@@ -283,9 +283,10 @@ p.fw-sod-hint[role='status'] {
   min-width: 0;
 }
 
+/* F-CP-107 (cp-fx14): the record picture's class family is `fw-rpic` (was `fw-rp`: clash with Incoming's reading pane). */
 @media (max-width: 719px) {
-  .fw-sod-card .fw-rp-board {
-    --fw-rp-size: 48px;
+  .fw-sod-card .fw-rpic-board {
+    --fw-rpic-size: 48px;
   }
 }
 
