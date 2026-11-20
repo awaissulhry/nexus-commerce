@@ -12,10 +12,12 @@ import {
   events,
   namesOnlyItsParty,
   sharesPerParty,
+  stageNoticeWaitMs, // B-MS-008
   supervisorChangedEvent,
   urgencyChangedEvent,
   type PartyOrder,
 } from './events'
+import { HAND_STAGE_NOTICE_DELAY_MS } from './stage-set' // B-MS-008
 
 /**
  * B-PR-16 (production plan §2 the brand wall, §6; R-41, R-48; PW-P07, PW-15 events part): the production events of a customer.
@@ -221,3 +223,43 @@ describe('one event per customer (B-PR-16 guard test; R-48, PW-P07, PW-15)', () 
     expect(() => EVENT_CATALOGUE.parse('brand_production.urgency_changed', 1, { ...OF_P1['brand_production.urgency_changed'], orderIds: [] })).toThrow()
   })
 })
+
+// ── B-MS-008 (set the stage by hand: the 10-minute undo window, Owner D4; review R3a) ──
+describe('B-MS-008: a stage set by hand says so with one flag, and its notice waits the 10-minute window', () => {
+  const HAND = { orderId: A1, partyId: P1, stage: 'SEWING', previous: 'PREPARING', byHand: true }
+  const AT = '2026-11-20T10:00:00.000Z'
+  const at = (minutes: number) => new Date(Date.parse(AT) + minutes * 60_000)
+  const reached = (payload: Record<string, unknown>, occurredAt = AT) => ({ type: 'brand_production.stage_reached', payload, occurredAt })
+
+  it('the strict payload takes byHand as an optional boolean, nothing else; the floor\'s stage carries none', () => {
+    expect(() => EVENT_CATALOGUE.parse('brand_production.stage_reached', 1, HAND)).not.toThrow()
+    expect(() => EVENT_CATALOGUE.parse('brand_production.stage_reached', 1, { ...HAND, byHand: false })).not.toThrow()
+    expect(() => EVENT_CATALOGUE.parse('brand_production.stage_reached', 1, OF_P1['brand_production.stage_reached'])).not.toThrow()
+    for (const value of ['true', 1, null, 'Brand Alpha Spa']) expect(() => EVENT_CATALOGUE.parse('brand_production.stage_reached', 1, { ...HAND, byHand: value }), String(value)).toThrow()
+    // Never the reason, the note or who: the strict schema refuses each.
+    for (const key of ['reasonCode', 'note', 'setById', 'stageSet']) expect(() => EVENT_CATALOGUE.parse('brand_production.stage_reached', 1, { ...HAND, [key]: 'OUTAGE' }), key).toThrow()
+  })
+
+  it('byHand is no live field: the screens of the office and the customer get the order, its customer and the stage only', () => {
+    expect(definitionOf('brand_production.stage_reached').live!.fields).toEqual(['orderId', 'partyId', 'stage'])
+    expect(messageOf('brand_production.stage_reached', HAND).fields).toEqual({ orderId: A1, partyId: P1, stage: 'SEWING' })
+  })
+
+  it('the window is 10 minutes; a stage set by hand waits the rest of it from the act; every other event is told at once', () => {
+    expect(HAND_STAGE_NOTICE_DELAY_MS).toBe(600_000)
+    expect(stageNoticeWaitMs(reached(HAND), at(0))).toBe(600_000)
+    expect(stageNoticeWaitMs(reached(HAND), at(4))).toBe(360_000)
+    expect(stageNoticeWaitMs(reached(HAND), at(10))).toBe(0)
+    expect(stageNoticeWaitMs(reached(HAND), at(25))).toBe(0)
+    // A dispatcher's clock behind the act's never waits longer than the window.
+    expect(stageNoticeWaitMs(reached(HAND), at(-3))).toBe(600_000)
+    // An unreadable time waits the whole window.
+    expect(stageNoticeWaitMs(reached(HAND, 'not a time'), at(0))).toBe(600_000)
+    // The floor's own stage (the keeper's: no flag, or false) and every other event: 0.
+    expect(stageNoticeWaitMs(reached(OF_P1['brand_production.stage_reached']!), at(0))).toBe(0)
+    expect(stageNoticeWaitMs(reached({ ...HAND, byHand: false }), at(0))).toBe(0)
+    expect(stageNoticeWaitMs({ type: 'brand_production.stage_reached', payload: null, occurredAt: AT }, at(0))).toBe(0)
+    for (const type of BRAND_EVENTS.filter((name) => name !== 'brand_production.stage_reached')) expect(stageNoticeWaitMs({ type, payload: { ...OF_P1[type], byHand: true }, occurredAt: AT }, at(0)), type).toBe(0)
+  })
+})
+// ── end B-MS-008 ──

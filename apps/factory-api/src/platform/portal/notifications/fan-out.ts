@@ -20,6 +20,7 @@ import { yoursOf } from '@nexus/factory-domain/portal/notifications/messages'
 import { companyValues, fillMail, MAIL_EVENT_DEFINITIONS, type MailWords } from '@nexus/factory-domain/templates/mail'
 import { mailTemplateOf } from '../../templates/active'
 import { PARTNER_RULES } from './rules'
+import { stageNoticeWaitMs } from '@nexus/factory-domain/production-brand/events' // B-MS-008
 import { preferencesOf } from './settings'
 
 /**
@@ -210,12 +211,18 @@ async function messageWords(caller: CommandCaller, row: Made, facts: { readonly 
 }
 // ---- end th-backend-g step 2
 
-/** The worker's handler. `cookieSecret` is read when an event is handled (background.ts loads its env after the lists). */
+/**
+ * The worker's handler. `cookieSecret` is read when an event is handled (background.ts loads its env after the lists). B-MS-008
+ * (Owner D4): a stage set by hand (`brand_production.stage_reached` with `byHand`) waits its 10-minute undo window before its notice
+ * is made — the rule's own check then tells the stage only while the customer still reads it, so a Clear or a Change inside the window
+ * is never told; every other event is handled at once (factory-domain production-brand/events stageNoticeWaitMs).
+ */
 export function partnerNotificationsHandler(options: Omit<PartnerFanOutOptions, 'unsubscribeKey'> & { readonly cookieSecret: () => string }): EventHandler {
   const { cookieSecret, ...rest } = options
   return defineHandler({
     name: PARTNER_FAN_OUT_HANDLER,
     events: partnerFanOutEvents(),
+    delayMs: stageNoticeWaitMs, // B-MS-008
     async handle(event, tools) {
       await partnerFanOut(tools.caller, event, { ...rest, unsubscribeKey: unsubscribeKeyFor(cookieSecret()) })
     },

@@ -33,6 +33,11 @@ import { notificationsHandler } from '../../platform/notifications/fan-out'
 import type { EventHandler } from '../../platform/outbox/dispatch'
 import { systemContext } from '../../platform/outbox/system'
 import { partnerNotificationsHandler } from '../../platform/portal/notifications/fan-out'
+// B-MS-009 (K2): the stage set by hand — the customer's count words and hidden keys, the notice's window, the keeper's History row.
+import { COUNT_TO_FOLLOW_WORDS, forbiddenKeysIn } from '@nexus/factory-domain/production-brand/portal-read'
+import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
+import { PARTNER_FAN_OUT_HANDLER } from '../../platform/portal/notifications/fan-out'
+import { HAND_CLEARED } from '../../modules/production/brand/keeper'
 import { drain, type World } from '../testing/world'
 
 /**
@@ -71,6 +76,10 @@ import { drain, type World } from '../testing/world'
  *        ask again (B-PR-30a/30b, B-PR-40)
  *   K    the stage and at-risk news: cutting starts on A's order (A told "Cutting"); the PP approval can no longer be put back; an
  *        order raised to At risk (A told, never our note) (B-PR-31)
+ *   K2   B-MS-009, the stage set by hand: an order of A at Cutting set to Sewing by the planner — A told "Sewing" once, its list
+ *        reads a plain Sewing (no count is claimed), cut started, no hidden key; the floor's sewing scan ends it with no second
+ *        notice; another order of A with no work order set to Cutting reads "Count to follow", then cancelled reads only where the
+ *        work reached (R2); B told nothing, B's person refused as for an unknown id (the closing sweep, X2, meets both routes)
  *   W    the wall: B's people and an office person limited to B see nothing of A by any door; the production unit sees every
  *        customer (the overview); A is never told who its supervisor is — the reply in its thread signs with its writer's name
  *   Z    no route answered 500 and no handler failed during the flow
@@ -79,7 +88,9 @@ import { drain, type World } from '../testing/world'
  *
  * SQL reads ids and asserts. Three acts are not made through a route, each named where it is done: the world's set-up (back-dated
  * role assignments, as the PG tests do), the files the office shares (the platform's own store call) and the cutting floor's first
- * bundle (a copy of the seed's bundle: cutting itself is the floor's flow, not this one). Every name, address and number is made up.
+ * bundle (a copy of the seed's bundle: cutting itself is the floor's flow, not this one). B-MS-009 (K2) adds two, named there too:
+ * K2's orders placed In production as their first release does (releasing is the planning flow, not this one), and the sewing
+ * floor's first scan (a copy of the seed's sewing step and scan, as K copies the bundle). Every name, address and number is made up.
  * Run with `node scripts/factory/golden-flow.mjs production` (long: alone, nice, one worker).
  */
 
@@ -108,7 +119,10 @@ const DECIDE_REASON = 'Made-up Alpha decision: their buyer approved the size set
 const PUT_BACK = 'Made-up Alpha put back: the size set photos were of another sample.'
 const PUT_BACK_PP = 'Made-up Alpha put back: the PP sample photos were of another jacket.'
 const CARE_NOTES = 'Made-up Alpha care notes.pdf'
-const FLOW_WORDS = [LOCK_REASON, NOTE_BODY, ANSWER_NOTE, PAUSE_REASON, PROBLEM_BODY, REPLY_BODY, HEALTH_NOTE, DECIDE_REASON, PUT_BACK, PUT_BACK_PP, CARE_NOTES]
+// B-MS-009 (K2): the office's note beside a stage set by hand, and the reason an order of A was cancelled.
+const HAND_NOTE = 'Made-up Alpha hand stage: the scanners in the sewing room were down all morning.'
+const CANCEL_REASON = 'Made-up Alpha cancel: the order was keyed in twice.'
+const FLOW_WORDS = [LOCK_REASON, NOTE_BODY, ANSWER_NOTE, PAUSE_REASON, PROBLEM_BODY, REPLY_BODY, HEALTH_NOTE, DECIDE_REASON, PUT_BACK, PUT_BACK_PP, CARE_NOTES, HAND_NOTE, CANCEL_REASON]
 
 let owner: Office
 let adminPerson: Office
@@ -857,6 +871,125 @@ describe('B-PR-36 golden flow production: two customers', { timeout: LONG }, () 
     expect(mailed.n).toBe(0)
     expect(await fresh(productionB)).toEqual([])
   })
+
+  // ── B-MS-009 (set the stage by hand: the golden end test; review R1, R2, R3a, R8, R11, R13) ───────────────────────────────────────
+  it('K2 a stage set by hand: A’s order at Cutting set to Sewing by the planner — told once, a plain Sewing; the floor’s scan ends it, no second notice; another at Cutting reads count to follow, then cancelled reads where the work reached; B told nothing', async () => {
+    const stageUrl = (orderId: string) => `/production/brand-orders/${orderId}/stage`
+    const headlineOf = async (orderId: string) => (await ok(planner, 'GET', `/sales/orders/${orderId}/production?parts=headline`)).headline.stage as Json
+    const handOf = (orderId: string) =>
+      one<Json>(`SELECT stage::text AS stage, "stageSet"::text AS "stageSet", "stageSetReason"::text AS reason, "stageSetNote" AS note, "stageSetAt" AS "setAt", "stageSetById"::text AS "setById" FROM "BrandOrderProduction" WHERE key = $1`, [`brand-production:${orderId}`])
+    const stagesTold = async (orderId: string) => (await fresh(buyerA)).filter((notice) => notice.eventType === 'brand_production.stage_reached' && notice.recordId === orderId).map((notice) => notice.messageKey)
+    const reachedOf = (orderId: string) => admin<{ payload: Json; occurredAt: Date }>('SELECT payload, "occurredAt" FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = $2 AND subject = $3 ORDER BY "occurredAt", id', [T(), 'brand_production.stage_reached', orderId])
+    const waits = handlers.find((handler) => handler.name === PARTNER_FAN_OUT_HANDLER)!.delayMs!
+    const cleared = { stageSet: null, reason: null, note: null, setAt: null, setById: null }
+    /** The planner's name and address: never in anything the customer reads. */
+    const plannerWords = (await admin<{ email: string; name: string }>('SELECT email, "displayName" AS name FROM "User" WHERE id = $1', [planner.id])).flatMap((row) => [row.email, row.name])
+    const saysNothingOfTheHand = (answer: unknown, where: string) => {
+      const text = JSON.stringify(answer)
+      expect(text, where).not.toMatch(/by hand|\(a mano\)|impostat[ao] a mano|stageSet|byHand|stageByHand/i)
+      for (const word of [HAND_NOTE, ...plannerWords]) expect(text, `${where}: ${word}`).not.toContain(word)
+      expect(forbiddenKeysIn(answer), where).toEqual([])
+    }
+
+    // Two made-up orders of A (the world's helper: CONFIRMED, one goods line, its production state at Preparing), placed In
+    // production as their first release does (a world set-up: releasing is the planning flow, not this one). k2 gets a work order
+    // through the planner's route and the cutting floor's first bundle (a copy of the seed's, as K): the keeper tells "Cutting".
+    const k2 = await world.addOrder(world.ids.a, 'PR36-K2', '2026-10-03')
+    const k3 = await world.addOrder(world.ids.a, 'PR36-K3', '2026-10-03')
+    await world.replica([{ sql: `UPDATE "SalesOrder" SET status = 'IN_PRODUCTION' WHERE id = ANY($1::uuid[])`, values: [[k2.orderId, k3.orderId]] }])
+    const wo = await workOrderOf(k2.lineId)
+    const seedWo = (await one<{ id: string }>(`SELECT id::text AS id FROM "WorkOrder" WHERE "tenantId" = $1 AND number = 'SEED-WO-0001'`, [T()])).id
+    const seedBundle = (await one<{ id: string }>(`SELECT id::text AS id FROM "Bundle" WHERE "workOrderId" = $1 ORDER BY id LIMIT 1`, [seedWo])).id
+    const cell = (await one<{ id: string }>(`SELECT id::text AS id FROM "WorkOrderSize" WHERE "workOrderId" = $1 AND size = '50'`, [wo.id])).id
+    const bundle = newId()
+    await world.replica([
+      {
+        sql: `INSERT INTO "Bundle" SELECT (jsonb_populate_record(NULL::"Bundle", to_jsonb(b) || jsonb_build_object('id', $1::text, 'workOrderId', $2::text, 'workOrderSizeId', $3::text, 'code', $4::text, 'replacedCodes', '[]'::jsonb, 'clientEventId', NULL, 'status', 'ACTIVE'))).* FROM "Bundle" b WHERE b.id = $5::uuid`,
+        values: [bundle, wo.id, cell, `T-PR36-BN-${bundle.slice(-8)}`, seedBundle],
+      },
+    ])
+    expect((await keepOrder(system(), k2.orderId, { what: 'production.bundle_created', health: false })).told).toContain('brand_production.stage_reached')
+    await settle()
+    expect(await stagesTold(k2.orderId)).toEqual(['portal.production.cutting'])
+
+    // The planner opens the order's production (the headline: the floor at Cutting, nothing by hand, the row's version) and sets
+    // Sewing by hand: "System or scanners down", with the office's note.
+    const before = await headlineOf(k2.orderId)
+    expect(before).toMatchObject({ code: 'CUTTING', byHand: null })
+    const set = await ok(planner, 'PUT', stageUrl(k2.orderId), { stage: 'SEWING', reasonCode: 'OUTAGE', note: HAND_NOTE, version: before.version })
+    expect(set).toMatchObject({ orderId: k2.orderId, floor: 'CUTTING', stage: 'SEWING', byHand: { stage: 'SEWING', reasonCode: 'OUTAGE', note: HAND_NOTE, setBy: { id: planner.id } } })
+    expect(await headlineOf(k2.orderId)).toMatchObject({ code: 'SEWING', byHand: { stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'CUTTING' }, note: HAND_NOTE, by: { id: planner.id } } })
+    // Its notice says it was set by hand and waits the 10-minute undo window (B-MS-008); the worker here makes it once the window is
+    // over (the flow's drain runs every job at once: the notice's own check — the customer still reads Sewing — is the guard).
+    const told = (await reachedOf(k2.orderId)).at(-1)!
+    expect(told.payload).toEqual({ orderId: k2.orderId, partyId: world.ids.a, stage: 'SEWING', previous: 'CUTTING', byHand: true })
+    const at = new Date(told.occurredAt)
+    expect(waits({ type: 'brand_production.stage_reached', payload: told.payload, occurredAt: at.toISOString() } as EventEnvelope, at)).toBe(600_000)
+    await settle()
+    expect(await stagesTold(k2.orderId)).toEqual(['portal.production.sewing'])
+
+    // A reads a plain Sewing — with no count, never "0 of 4 sewn": the floor counts sewing only on a work order past its draft, so
+    // nothing claims a figure (R13) — its cut started (the real bundle: it may no longer mark it Urgent on that ground, R8), never
+    // "by hand", the reason, the note or who — in the list and in the order.
+    const list = await listOfA()
+    expect(rowIn(list, k2.orderId)).toMatchObject({ stage: { code: 'SEWING', words: { en: 'Sewing' } }, count: null, cutStarted: true })
+    saysNothingOfTheHand(list, 'A’s list')
+    const order = await ok(buyerA, 'GET', `/portal/production/${k2.orderId}`)
+    expect(order.stage).toMatchObject({ code: 'SEWING' })
+    saysNothingOfTheHand(order, 'A’s order')
+
+    // The sewing floor's first scan (a copy of the seed's sewing step and scan, as K copies the bundle), then the keeper on its
+    // event: the floor reached Sewing — the hand stage ends (the five columns empty), Sewing stays, NO second notice.
+    const seedOp = (await one<{ id: string }>(`SELECT o.id::text AS id FROM "WorkOrderOperation" o JOIN "WorkCentre" c ON c.id = o."workCentreId" WHERE o."workOrderId" = $1 AND c.kind = 'SEWING' AND o."scanRequired" ORDER BY o.seq LIMIT 1`, [seedWo])).id
+    const seedScan = (await one<{ id: string }>(`SELECT id::text AS id FROM "OperationScan" WHERE "workOrderOperationId" = $1 AND kind = 'REPORT' AND "correctsId" IS NULL ORDER BY "serverTime", id LIMIT 1`, [seedOp])).id
+    const [operation, scan] = [newId(), newId()]
+    await world.replica([
+      {
+        sql: `INSERT INTO "WorkOrderOperation" SELECT (jsonb_populate_record(NULL::"WorkOrderOperation", to_jsonb(o) || jsonb_build_object('id', $1::text, 'workOrderId', $2::text, 'seq', 20, 'scanRequired', true))).* FROM "WorkOrderOperation" o WHERE o.id = $3::uuid`,
+        values: [operation, wo.id, seedOp],
+      },
+      {
+        sql: `INSERT INTO "OperationScan" SELECT (jsonb_populate_record(NULL::"OperationScan", to_jsonb(s) || jsonb_build_object('id', $1::text, 'workOrderId', $2::text, 'workOrderOperationId', $3::text, 'bundleId', $4::text, 'clientScanId', $5::text, 'correctsId', NULL, 'kind', 'REPORT'))).* FROM "OperationScan" s WHERE s.id = $6::uuid`,
+        values: [scan, wo.id, operation, bundle, `T-PR36-${scan.slice(-8)}`, seedScan],
+      },
+    ])
+    expect((await keepOrder(system(), k2.orderId, { what: 'production.scan_recorded', health: false })).told).not.toContain('brand_production.stage_reached')
+    expect(await handOf(k2.orderId)).toMatchObject({ stage: 'SEWING', ...cleared })
+    expect(await headlineOf(k2.orderId)).toMatchObject({ code: 'SEWING', byHand: null })
+    expect((await admin<{ after: Json }>('SELECT after FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 AND action = $3', ['SalesOrder', k2.orderId, HAND_CLEARED])).map((row) => row.after)).toEqual([{ stage: 'SEWING', floor: 'SEWING', why: 'REACHED' }])
+    await settle()
+    expect(await stagesTold(k2.orderId)).toEqual([])
+    expect(rowIn(await listOfA(), k2.orderId).stage).toMatchObject({ code: 'SEWING' })
+
+    // R2: another order of A with no work order (the floor at Preparing, as SEED-SO-W39-02) set to Cutting by hand: A reads a plain
+    // Cutting and "Count to follow" (R13: nothing cut on the floor's records yet, never "0 of 4 cut"), no cut started; told "Cutting"
+    // once its window is over — then cancelled by the owner: the hand columns empty, the headline says only where the work reached.
+    const k3Before = await headlineOf(k3.orderId)
+    expect(await ok(planner, 'PUT', stageUrl(k3.orderId), { stage: 'CUTTING', reasonCode: 'FEW_PEOPLE', version: k3Before.version })).toMatchObject({ floor: 'PREPARING', stage: 'CUTTING' })
+    const listK3 = await listOfA()
+    expect(rowIn(listK3, k3.orderId)).toMatchObject({ stage: { code: 'CUTTING' }, count: { done: 0, of: 4, words: COUNT_TO_FOLLOW_WORDS }, cutStarted: false })
+    saysNothingOfTheHand(listK3, 'A’s list (k3)')
+    await settle()
+    expect(await stagesTold(k3.orderId)).toEqual(['portal.production.cutting'])
+    const version = (await one<{ version: number }>('SELECT version FROM "SalesOrder" WHERE id = $1', [k3.orderId])).version
+    expect((await ok(owner, 'POST', `/sales/orders/${k3.orderId}/cancel`, { version, reason: CANCEL_REASON })).order.status).toBe('CANCELLED')
+    await settle()
+    expect(await handOf(k3.orderId)).toMatchObject({ stage: 'PREPARING', ...cleared })
+    expect(await headlineOf(k3.orderId)).toMatchObject({ code: 'PREPARING', byHand: null })
+    expect((await admin<{ after: Json }>('SELECT after FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 AND action = $3', ['SalesOrder', k3.orderId, HAND_CLEARED])).map((row) => row.after)).toEqual([{ stage: 'PREPARING', floor: 'PREPARING', why: 'LEFT_PRODUCTION' }])
+    expect(await stagesTold(k3.orderId)).toEqual([])
+
+    // B is told nothing of it; a person limited to B meets A's order as an unknown id, setting or clearing (R11).
+    expect(await fresh(productionB)).toEqual([])
+    for (const [method, url, body] of [
+      ['PUT', stageUrl(k2.orderId), { stage: 'QUALITY', reasonCode: 'OUTAGE', version: null }],
+      ['DELETE', `${stageUrl(k2.orderId)}?version=1`, undefined],
+    ] as const) {
+      expect((await session('office.p2', method, url, body, 404)).error.message, `${method} ${url}`).toBe('Sales order not found.')
+    }
+    expect(await handOf(k2.orderId)).toMatchObject({ stage: 'SEWING', ...cleared })
+  })
+  // ── end B-MS-009
 
   it('W the wall: B’s people and an office person limited to B see nothing of A by any door; the production unit sees it all; A is never told who supervises', async () => {
     // B's own production page: its own orders only.
