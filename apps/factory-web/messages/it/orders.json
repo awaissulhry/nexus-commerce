@@ -1651,7 +1651,20 @@
     "madeExtra": "{sizes} in più dell'ordine: tagliati o da tagliare",
     "noPicture": "Ancora nessuna immagine",
     "addPicture": "Aggiungila nel modello ›",
-    "addPictureOf": "Aggiungi l'immagine di {name} nel suo modello"
+    "addPictureOf": "Aggiungi l'immagine di {name} nel suo modello",
+    "moves": "Azioni per la riga {seq} · {name}",
+    "move": {
+      "make": "Crea ordini di lavoro per questa riga…",
+      "close": "Chiudi in anticipo questa riga…",
+      "reopen": "Riapri questa riga…",
+      "change": "Cambia quantità o taglie…",
+      "discuss": "Discuti questa riga"
+    },
+    "held": {
+      "allInWork": "Ogni pezzo di questa riga è già negli ordini di lavoro",
+      "closedLine": "Questa riga è chiusa in anticipo: prima riaprila",
+      "nothingLeft": "Di questa riga non resta nulla da chiudere: è spedita per intero"
+    }
   },
   "files": {
     "title": "File",

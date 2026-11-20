@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { Card, EmptyState, SummaryTable } from '@nexus/ui/components'
+import { MoreHorizontal } from 'lucide-react' // F-OO-122
+import { Card, EmptyState, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { DetailModal } from '../../../../../../lib/i18n/ds-parts'
 import { formatDate, formatTime } from '../../../../../../lib/i18n/format'
@@ -10,19 +11,23 @@ import { useProductionWords } from '../../../../../../lib/production/words'
 import { PiecesGrid } from '../../../../../../lib/production/view/PiecesGrid'
 import { RecordPicture } from '../../../../../../lib/record-picture/view/RecordPicture'
 import type { Order } from '../../../api'
-import { dayInstant } from '../../../model'
+import { dayInstant, type Phrase } from '../../../model'
 import { readOf } from '../../overview/model'
 import { LINE_COLUMNS, lineRowsOf, lineSizesOf, totalOf, type LineRow } from '../../overview/progress'
 // ---- F-OO-121: the clean line cell — quiet "—", at most two pills, the missing picture ----
 import { figureFaceOf, LINE_PILLS_SHOWN, linePillsOf, madeExtraSizesText, pillToneOf, stylePictureHref, type FigureFace, type LinePill } from '../../overview/progress'
 import './progress.css'
 // ---- end F-OO-121
+// ---- F-OO-122: the row ⋯ — the line's moves through the page's own doors (the line doors of F-OO-123/124/125, the conversation) ----
+import { lineMovesOf, lineMovesShown, type LineMove } from '../../overview/progress'
+import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
+import { discussAboutOf } from '../../dock/discuss'
+// ---- end F-OO-122
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { PartState } from '../OrderRecordView'
 import { useSearchParams } from 'next/navigation'
 import { tabHref } from '../../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
-import { DiscussDoor } from '../Discuss' // F-SA-266: Discuss on a line's row
 
 /**
  * F-OO-100 (order overview lane: one file per card) — "Progress by line", moved out of OverviewTab.tsx unchanged (F-SA-232: the
@@ -34,6 +39,8 @@ import { DiscussDoor } from '../Discuss' // F-SA-266: Discuss on a line's row
 
 /** F-OP-302 (walk #4): Progress by line's column widths — the line a third, the six counts share the rest. */
 const PROGRESS_WIDTHS: readonly (string | undefined)[] = ['34%']
+/** F-OO-122: + the row ⋯ last (its heading "Actions" and the DS button: 72 px). */
+const PROGRESS_WIDTHS_MOVES: readonly (string | undefined)[] = ['34%', undefined, undefined, undefined, undefined, undefined, undefined, '72px']
 
 /** The columns' words: the shared pieces catalogue's (production `parts.pieces.stages.*`, Shipped added there). */
 const COLUMN_STAGE: Readonly<Record<(typeof LINE_COLUMNS)[number], string>> = Object.freeze({ ordered: 'ORDERED', cut: 'CUT', sewn: 'SEWN', checked: 'INSPECTED', packed: 'PACKED', shipped: 'SHIPPED' })
@@ -90,12 +97,66 @@ function Pills({ pills, truncate }: { pills: readonly LinePill[]; truncate?: boo
 }
 // ---- end F-OO-121
 
+// ---- F-OO-122 (10-design §2.3): the line's moves — the menu's items, held with the band's words; what each one opens ----
+interface LineMoves {
+  /** Read-only sees no ⋯ (the column and the window's menu). */
+  readonly shown: boolean
+  /** The menu's items; `first` runs before the move (the window closes first: one dialog at a time). */
+  readonly itemsOf: (row: LineRow, name: string, first?: () => void) => MenuItemDef[]
+}
+
+function useLineMoves(order: Order, model: OrderRecordModel, actions?: OrderRecordActions): LineMoves {
+  const t = useT('orders')
+  const locale = useLocale()
+  const frame = useRecordFrame()
+  const lines = readOf(model.production)?.lines ?? []
+  const heldWords = (held: Phrase) => t(held.key, held.params?.date ? { ...held.params, date: formatDate(dayInstant(String(held.params.date)), { locale }) } : held.params)
+  // F-SA-266: the line's Discuss, as DiscussDoor builds it (one line: its reference; a made-to-measure group: words, an office note).
+  const discuss = (row: LineRow, name: string) => {
+    const yourOrder = order.customerSeq ? t('discuss.yourOrderSeq', { seq: order.customerSeq }) : t('discuss.yourOrder')
+    const about = discussAboutOf(order, { yourOrder, firstLine: (words) => t('discuss.firstLine', { thing: words }) }, { part: t('discuss.line', { seq: row.seq, name }), target: row.lineIds.length === 1 ? { kind: 'SalesOrderLine', id: row.lineIds[0]! } : null })
+    frame?.discuss?.({ record: { type: 'SalesOrder', id: order.id }, about })
+  }
+  const run = (row: LineRow, name: string, move: LineMove) => {
+    if (move.id === 'make') actions?.makeWorkOrders?.onOpenLine?.(move.lineId)
+    else if (move.id === 'close') actions?.onDialog?.({ kind: 'closeLines', lineIds: move.lineIds })
+    else if (move.id === 'reopen') actions?.onDialog?.({ kind: 'reopenLines', lineIds: move.lineIds })
+    else if (move.id === 'change') actions?.onLineChange?.(move.styleId)
+    else discuss(row, name)
+  }
+  const movesOf = (row: LineRow) => lineMovesOf(row, order, model.can, { lines, thread: !!frame?.discuss })
+  return {
+    shown: lineMovesShown(model),
+    itemsOf: (row, name, first) =>
+      movesOf(row).map((move) => ({
+        id: move.id,
+        label: t(`progress.move.${move.id}`),
+        disabled: !!move.held,
+        description: move.held ? heldWords(move.held) : undefined,
+        onSelect: move.held
+          ? undefined
+          : () => {
+              first?.()
+              run(row, name, move)
+            },
+      })),
+  }
+}
+
+/** The row's ⋯ (the DS Menu; its name says the line). */
+function LineMovesMenu({ row, name, moves }: { row: LineRow; name: string; moves: LineMoves }) {
+  const t = useT('orders')
+  return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('progress.moves', { seq: row.seq, name }) }} items={moves.itemsOf(row, name)} />
+}
+// ---- end F-OO-122
+
 export function ProgressCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const w = useProductionWords()
   const locale = useLocale()
   const state = model.production ?? null
   const read = readOf(state)
+  const moves = useLineMoves(order, model, actions) // F-OO-122 (a hook: before the early returns)
   if (!state || state.status === 'loading') {
     return (
       <Card padded aria-busy="true">
@@ -116,7 +177,7 @@ export function ProgressCard({ order, model, actions }: { order: Order; model: O
   // F-OO-121: "Line 10" (made to measure: its units) — no stage word per line.
   const subOf = (row: LineRow) => (row.mtm ? t('mtm.units', { count: row.mtm.units }) : t('overview.lineNoStage', { seq: row.seq }))
   const pillInput = { order, read, today: model.today }
-  const columns = [t('overview.col.line'), ...LINE_COLUMNS.map((column) => w.t(`parts.pieces.stages.${COLUMN_STAGE[column]}`))]
+  const columns = [t('overview.col.line'), ...LINE_COLUMNS.map((column) => w.t(`parts.pieces.stages.${COLUMN_STAGE[column]}`)), ...(moves.shown ? [t('wo.col.acts')] : [])]
   const open = model.overviewLine ? (rows.find((row) => row.id === model.overviewLine) ?? null) : null
   return (
     <Card padded>
@@ -135,7 +196,7 @@ export function ProgressCard({ order, model, actions }: { order: Order; model: O
             align={columns.map((_, index) => (index === 0 ? 'left' : 'right'))}
             // F-OP-302 (walk #4): the table is fixed-layout — an equal seventh left the line (picture, name, stage, pills) too
             // narrow, so its pill ran over the Ordered number; the line gets a third, the six counts share the rest.
-            widths={PROGRESS_WIDTHS}
+            widths={moves.shown ? PROGRESS_WIDTHS_MOVES : PROGRESS_WIDTHS}
             density="roomy"
             stackOnPhone
             rows={[
@@ -144,38 +205,35 @@ export function ProgressCard({ order, model, actions }: { order: Order; model: O
                 return {
                   id: row.id,
                   cells: [
-                    // F-SA-266: the line's own Discuss beside the button that opens its sizes (one line: its reference; a made-to-measure
-                    // group of units: in words, in an office note).
                     // F-OO-121: the button holds the picture, the name and "Line 10"; under them its pills and a missing picture (its
-                    // door is a link: never inside the button).
-                    <span key="l" className="fw-so-inline">
-                    <span className="fw-so-ov-line">
-                    <button type="button" className="fw-so-lineopen" onClick={() => actions?.onOpenLine?.(row.id)} aria-label={t('overview.lineOpen', { seq: row.seq, name: nameOf(row) })}>
-                      <RecordPicture
-                        source="order"
-                        recordId={order.id}
-                        number={nameOf(row)}
-                        size="line"
-                        picture={line?.style ? { styleId: line.styleId, styleCode: line.style.code, styleName: line.style.name, fileId: line.picture?.fileId ?? null, small: !!line.picture?.small } : null}
-                        held={line?.picture?.small ?? null}
-                      />
-                      <span className="fw-so-cell">
-                        <span>{nameOf(row)}</span>
-                        <span className="fw-so-cell-sub">{subOf(row)}</span>
-                      </span>
-                    </button>
-                    {/* F-OP-302 (walk #4, #20): the line's pills on their own wrapping row under its stage — never inside the
-                        one-line sub (cut at 375) and never over the Ordered number. F-OO-121: two at most, in their order. */}
-                    <Pills pills={linePillsOf(row, pillInput, LINE_PILLS_SHOWN)} truncate />
-                    {!line?.picture && <NoPicture row={row} model={model} name={nameOf(row)} />}
-                    </span>
-                    <DiscussDoor order={order} part={t('discuss.line', { seq: row.seq, name: nameOf(row) })} target={row.lineIds.length === 1 ? { kind: 'SalesOrderLine', id: row.lineIds[0]! } : null} />
+                    // door is a link: never inside the button). F-OO-122: the line's Discuss moved into its ⋯ (no speech icon here).
+                    <span key="l" className="fw-so-ov-line">
+                      <button type="button" className="fw-so-lineopen" onClick={() => actions?.onOpenLine?.(row.id)} aria-label={t('overview.lineOpen', { seq: row.seq, name: nameOf(row) })}>
+                        <RecordPicture
+                          source="order"
+                          recordId={order.id}
+                          number={nameOf(row)}
+                          size="line"
+                          picture={line?.style ? { styleId: line.styleId, styleCode: line.style.code, styleName: line.style.name, fileId: line.picture?.fileId ?? null, small: !!line.picture?.small } : null}
+                          held={line?.picture?.small ?? null}
+                        />
+                        <span className="fw-so-cell">
+                          <span>{nameOf(row)}</span>
+                          <span className="fw-so-cell-sub">{subOf(row)}</span>
+                        </span>
+                      </button>
+                      {/* F-OP-302 (walk #4, #20): the line's pills on their own wrapping row under its stage — never inside the
+                          one-line sub (cut at 375) and never over the Ordered number. F-OO-121: two at most, in their order. */}
+                      <Pills pills={linePillsOf(row, pillInput, LINE_PILLS_SHOWN)} truncate />
+                      {!line?.picture && <NoPicture row={row} model={model} name={nameOf(row)} />}
                     </span>,
                     ...LINE_COLUMNS.map((column) => <FigureCell key={column} face={figureFaceOf(row.figures[column], row.quiet, column)} />),
+                    // F-OO-122 (review F8): the line's own moves, last; Read-only has no such column.
+                    ...(moves.shown ? [<LineMovesMenu key="m" row={row} name={nameOf(row)} moves={moves} />] : []),
                   ],
                 }
               }),
-              { id: 'total', cells: [<strong key="t">{t('overview.total', { count: rows.length })}</strong>, ...LINE_COLUMNS.map((column) => <FigureCell key={column} face={figureFaceOf(total[column], totalQuiet, column)} />)] },
+              { id: 'total', cells: [<strong key="t">{t('overview.total', { count: rows.length })}</strong>, ...LINE_COLUMNS.map((column) => <FigureCell key={column} face={figureFaceOf(total[column], totalQuiet, column)} />), ...(moves.shown ? [''] : [])] },
             ]}
           />
         </>

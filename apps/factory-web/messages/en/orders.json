@@ -1651,7 +1651,20 @@
     "madeExtra": "{sizes} more than ordered: cut or planned to cut",
     "noPicture": "No picture yet",
     "addPicture": "Add on the style ›",
-    "addPictureOf": "Add the picture of {name} on its style"
+    "addPictureOf": "Add the picture of {name} on its style",
+    "moves": "Actions for line {seq} · {name}",
+    "move": {
+      "make": "Make work orders for this line…",
+      "close": "Close this line short…",
+      "reopen": "Reopen this line…",
+      "change": "Change quantity or sizes…",
+      "discuss": "Discuss this line"
+    },
+    "held": {
+      "allInWork": "Every piece of this line is in work orders",
+      "closedLine": "This line is closed short: reopen it first",
+      "nothingLeft": "Nothing of this line is left to close: it shipped in full"
+    }
   },
   "files": {
     "title": "Files",

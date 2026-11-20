@@ -17,6 +17,13 @@ import type { OrderProduction, ProductionLine } from './api'
 import type { Order } from '../../api'
 import type { OrderRecordModel } from '../record-model'
 // ---- end F-OO-121
+// ---- F-OO-122 ----
+import { abilitiesOf } from '../../model'
+import { canOf, type Role } from '../../_demo/fixtures'
+import { amendHeld, closeLinesHeld, reopenHeld } from '../../daily-model'
+import { makeHeldOf } from '../production'
+import { lineMovesOf, lineMovesShown, MAKE_STATUSES } from './progress'
+// ---- end F-OO-122
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Progress by line"'s rules, moved with progress.ts out of
@@ -223,3 +230,128 @@ describe('F-OO-121: the card draws the clean line cell', () => {
   })
 })
 // ---- end F-OO-121
+
+// ---- F-OO-122 (10-design §2.3; review F8): the row ⋯ — the line's moves only, each through the page's one door, held in the band's words -
+describe('F-OO-122: lineMovesOf — per state and role; held with the band’s own words, plus the line’s own reason', () => {
+  const movesOf = (value: Order, role: Role | 'readOnly', lines: readonly ProductionLine[], id: string, thread = true) =>
+    lineMovesOf(rowOf(lines, value, id), value, role === 'readOnly' ? abilitiesOf(['orders.view', 'workorders.view']) : canOf(role), { lines, thread })
+  const brief = (moves: ReturnType<typeof lineMovesOf>) => moves.map((move) => [move.id, move.held?.key ?? null])
+
+  it('in production, the Owner: Make held (every piece in work orders), Close, Change, Discuss — the band’s rules decide each one', () => {
+    const value = order('IN_PRODUCTION')
+    const can = canOf('owner')
+    const moves = movesOf(value, 'owner', LINES, LINE_BLK)
+    expect(moves.map((move) => move.id)).toEqual(['make', 'close', 'change', 'discuss'])
+    expect(moves[0]).toEqual({ id: 'make', lineId: LINE_BLK, held: { key: 'progress.held.allInWork' } })
+    expect(moves[1]).toEqual({ id: 'close', lineIds: [LINE_BLK], held: closeLinesHeld(value, can) })
+    expect(moves[2]).toEqual({ id: 'change', styleId: value.lines[0]!.styleId, held: amendHeld(value, can) })
+    expect(moves[3]).toEqual({ id: 'discuss', held: null })
+    // A line not in work orders in full opens the dialog on it (F-OO-123: only this line ticked), held as the band holds it.
+    const short = LINES.map((line) => (line.lineId === LINE_RED ? { ...line, inWorkOrders: 4 } : line))
+    expect(movesOf(value, 'owner', short, LINE_RED)[0]).toEqual({ id: 'make', lineId: LINE_RED, held: makeHeldOf(value, can) })
+    // No conversation on the page: no Discuss.
+    expect(movesOf(value, 'owner', LINES, LINE_BLK, false).map((move) => move.id)).toEqual(['make', 'close', 'change'])
+  })
+
+  it('per role: Sales may not make work orders, the production manager may not change the order — held, never hidden', () => {
+    const value = order('IN_PRODUCTION')
+    const short = LINES.map((line) => ({ ...line, inWorkOrders: 0 }))
+    expect(brief(movesOf(value, 'sales', short, LINE_RED))).toEqual([
+      ['make', 'held.noWorkOrders'],
+      ['close', closeLinesHeld(value, canOf('sales'))?.key ?? null],
+      ['change', amendHeld(value, canOf('sales'))?.key ?? null],
+      ['discuss', null],
+    ])
+    expect(brief(movesOf(value, 'manager', short, LINE_RED))).toEqual([
+      ['make', null],
+      ['close', 'held.noManage'],
+      ['change', 'held.noManage'],
+      ['discuss', null],
+    ])
+  })
+
+  it('confirmed, the deposit not paid: Make is held with its due day (makeHeldOf, the band’s words)', () => {
+    const value = order('CONFIRMED')
+    const move = movesOf(value, 'owner', CONFIRMED_READ.lines!, LINE_BLK)[0]!
+    expect(move.id).toBe('make')
+    expect(move.held).toEqual(makeHeldOf(value, canOf('owner')))
+    expect(move.held).toEqual({ key: 'held.deposit', params: { date: '2026-11-04' } })
+  })
+
+  it('a line closed short: Reopen this line… (no Close), Make held "reopen it first"; a closed or shipped order holds what it may not do', () => {
+    const { order: value } = scene({ closedRed: true })
+    const moves = movesOf(value, 'owner', LINES, LINE_RED)
+    expect(brief(moves)).toEqual([
+      ['make', 'progress.held.closedLine'],
+      ['reopen', reopenHeld(value, canOf('owner'))?.key ?? null],
+      ['change', amendHeld(value, canOf('owner'))?.key ?? null],
+      ['discuss', null],
+    ])
+    expect(moves.find((move) => move.id === 'reopen')).toMatchObject({ lineIds: [LINE_RED] })
+    // Shipped: no work orders are made; closing and changing are held in the band's words.
+    const shipped = order('SHIPPED')
+    expect(MAKE_STATUSES).toEqual(['CONFIRMED', 'IN_PRODUCTION'])
+    const after = movesOf(shipped, 'owner', LINES, LINE_BLK)
+    expect(after.map((move) => move.id)).toEqual(['close', 'change', 'discuss'])
+    expect(after[0]!.held).toEqual(closeLinesHeld(shipped, canOf('owner')) ?? { key: 'progress.held.nothingLeft' })
+    expect(after[1]!.held).toEqual(amendHeld(shipped, canOf('owner')))
+  })
+
+  it('Read-only (no right the page acts on) sees no ⋯; every role that acts on the page does', () => {
+    const model = (permissions: readonly string[]) => ({ can: abilitiesOf(permissions), people: undefined, workOrderActs: undefined })
+    expect(lineMovesShown(model(['orders.view', 'workorders.view']))).toBe(false)
+    for (const role of ['owner', 'sales', 'manager', 'finance'] as const) expect(lineMovesShown({ can: canOf(role) }), role).toBe(true)
+  })
+})
+
+describe('F-OO-122: the card draws the ⋯ last; the column is gone for Read-only; Discuss moved into it', () => {
+  const draw = (model: OrderRecordModel, value: Order, locale: 'en' | 'it' = 'en') => render(createElement(ProgressCard, { order: value, model }), locale)
+  const production = order('IN_PRODUCTION')
+
+  it('the 8th column: "Actions" over a ⋯ per line named for its line; the total row has an empty cell; 72 px', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw(base('manager', production, { tab: 'overview', production: ready() }).record, production, locale)
+      expect(html).toContain(locale === 'en' ? '>Actions</th>' : '>Azioni</th>')
+      expect(html).toContain(locale === 'en' ? 'aria-label="Actions for line 10 · DEMO-JKT-01 · Nero"' : 'aria-label="Azioni per la riga 10 · DEMO-JKT-01 · Nero"')
+      expect(html.match(/aria-haspopup="menu"/g)?.length).toBe(2)
+      expect(html).toContain('style="width:72px"')
+      expect(html).toContain('style="width:34%"')
+    }
+  })
+
+  it('Read-only: no ⋯ column, no menu — the counts and the pills as before', () => {
+    const readOnly = { ...base('manager', production, { tab: 'overview', production: ready() }).record, can: abilitiesOf(['orders.view', 'workorders.view']) }
+    const html = draw(readOnly, production)
+    expect(html).not.toContain('>Actions</th>')
+    expect(html).not.toContain('aria-haspopup="menu"')
+    expect(html).not.toContain('style="width:72px"')
+    expect(textOf(html)).toContain('Total · 2 lines')
+  })
+
+  it('the sources: each move opens the page’s one door (F-OO-123/124/125, the conversation); no speech icon on the row', () => {
+    const card = read('../view/overview/ProgressCard.tsx')
+    for (const door of [
+      'actions?.makeWorkOrders?.onOpenLine?.(move.lineId)',
+      "actions?.onDialog?.({ kind: 'closeLines', lineIds: move.lineIds })",
+      "actions?.onDialog?.({ kind: 'reopenLines', lineIds: move.lineIds })",
+      'actions?.onLineChange?.(move.styleId)',
+      "frame?.discuss?.({ record: { type: 'SalesOrder', id: order.id }, about })",
+    ])
+      expect(card, door).toContain(door)
+    expect(card).not.toContain('<DiscussDoor')
+    // A held move is a held item with its words (keyboard reachable, never run); the view fetches nothing.
+    expect(card).toContain('description: move.held ? heldWords(move.held) : undefined')
+    expect(card).not.toMatch(/from '[^']*\/use-[a-z-]+'/)
+  })
+
+  it('the words exist in both languages (office "tu")', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['progress.move.make', 'progress.move.close', 'progress.move.reopen', 'progress.move.change', 'progress.move.discuss', 'progress.held.allInWork', 'progress.held.closedLine', 'progress.held.nothingLeft', 'wo.col.acts']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+    }
+    const it = createTranslator('it', messagesFor('it', ['orders']).orders!)
+    expect(it('progress.move.close')).toBe('Chiudi in anticipo questa riga…')
+    expect(it('progress.held.closedLine')).toBe('Questa riga è chiusa in anticipo: prima riaprila')
+  })
+})
+// ---- end F-OO-122

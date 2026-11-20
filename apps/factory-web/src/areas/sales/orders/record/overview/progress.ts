@@ -3,6 +3,12 @@ import type { Order } from '../../api'
 import { daysUntil } from '../../model' // F-OO-121: a late line's days
 import { groupMadeToMeasure, unitsOf } from '../../mtm-groups'
 import type { Dates, OrderProduction, ProductionLine } from './api'
+// ---- F-OO-122: the row ⋯ — the band's own held rules, the page's read-only rule ----
+import { amendHeld, closableLines, closeLinesHeld, reopenHeld } from '../../daily-model'
+import { readOnlyOnPage, type OrderAbilities, type Phrase } from '../../model'
+import { makeHeldOf } from '../production'
+import type { OrderRecordModel } from '../record-model'
+// ---- end F-OO-122
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Progress by line", its rules moved out of model.ts unchanged (F-SA-232:
@@ -160,6 +166,56 @@ export const pillToneOf = (pill: LinePill): 'neutral' | 'warning' | 'danger' => 
 /** The style page where a line's missing picture is added (product.styles.manage). */
 export const stylePictureHref = (prefix: string, styleId: string): string => `${prefix}/products/styles/${encodeURIComponent(styleId)}`
 // ---- end F-OO-121
+
+// ---- F-OO-122 (10-design §2.3; review F8: §2's ⋯ holds the LINE moves only) --------------------------------------------------
+/**
+ * A line's moves, each the page's one path for it — never a second editor:
+ *   make     Make work orders for this line…  the Production page's New work order dialog, only this line ticked (F-OO-123)
+ *   close    Close this line short…           Close remaining lines with this line ticked (F-OO-124)
+ *   reopen   Reopen this line…                Reopen lines with this line ticked (F-OO-124)
+ *   change   Change quantity or sizes…        the Lines edit mode at the line's style (F-OO-125)
+ *   discuss  Discuss this line                the order's conversation, about the line (only where the page has one)
+ * A move the reader may not run now is held with the band's own words (makeHeldOf, closeLinesHeld, reopenHeld, amendHeld), plus the
+ * line's own reason (every piece in work orders, closed short, nothing left to close).
+ */
+export type LineMove =
+  | { readonly id: 'make'; readonly lineId: string; readonly held: Phrase | null }
+  | { readonly id: 'close'; readonly lineIds: readonly string[]; readonly held: Phrase | null }
+  | { readonly id: 'reopen'; readonly lineIds: readonly string[]; readonly held: Phrase | null }
+  | { readonly id: 'change'; readonly styleId: string; readonly held: Phrase | null }
+  | { readonly id: 'discuss'; readonly held: null }
+
+/** Work orders are made while the order is confirmed or in production (the band's Make work orders…; other states offer none). */
+export const MAKE_STATUSES: readonly Order['status'][] = ['CONFIRMED', 'IN_PRODUCTION']
+
+const said = (key: string): Phrase => ({ key })
+
+export function lineMovesOf(row: LineRow, order: Order, can: OrderAbilities, input: { readonly lines: readonly ProductionLine[]; readonly thread: boolean }): LineMove[] {
+  const own = order.lines.filter((line) => row.lineIds.includes(line.id))
+  const open = own.filter((line) => !line.closedShort)
+  const closed = own.filter((line) => line.closedShort)
+  const moves: LineMove[] = []
+  if (MAKE_STATUSES.includes(order.status)) {
+    // The line (a made-to-measure group: one unit, still open, not yet in work orders in full) the dialog opens with.
+    const members = input.lines.filter((line) => open.some((entry) => entry.id === line.lineId))
+    const short = members.find((line) => line.inWorkOrders < line.ordered) ?? null
+    const held = !can.makeWorkOrders ? said('held.noWorkOrders') : open.length === 0 ? said('progress.held.closedLine') : !short ? said('progress.held.allInWork') : makeHeldOf(order, can)
+    moves.push({ id: 'make', lineId: short?.lineId ?? open[0]?.id ?? row.lineIds[0]!, held })
+  }
+  if (open.length > 0 || closed.length === 0) {
+    const closable = new Set(closableLines(order).map((entry) => entry.line.id))
+    const lineIds = open.filter((line) => closable.has(line.id)).map((line) => line.id)
+    moves.push({ id: 'close', lineIds, held: closeLinesHeld(order, can) ?? (lineIds.length === 0 ? said('progress.held.nothingLeft') : null) })
+  }
+  if (closed.length > 0) moves.push({ id: 'reopen', lineIds: closed.map((line) => line.id), held: reopenHeld(order, can) })
+  if (row.styleId) moves.push({ id: 'change', styleId: row.styleId, held: amendHeld(order, can) })
+  if (input.thread) moves.push({ id: 'discuss', held: null })
+  return moves
+}
+
+/** Read-only (the page's own rule, F-OP-303: no right the page acts on) sees no ⋯ at all — not the column, not the window's menu. */
+export const lineMovesShown = (model: Pick<OrderRecordModel, 'can' | 'people' | 'workOrderActs'>): boolean => !readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
+// ---- end F-OO-122
 
 // ---- the line's sizes (a centred window; J / K walk the lines) -----------------------------------------------------------------
 
