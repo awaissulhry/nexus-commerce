@@ -25,6 +25,9 @@ import { SHARED_WORK_ORDER_WORDS } from './production-read' // B-OP-021
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { placeOf, waitingOn, type BlockerKind, type BlockerSub } from '@nexus/factory-domain/production-brand/waiting'
+// B-OO-008: the real answerer (the threads' owner chain), the live places, the order read's live rule for People.
+import { supervisorPeople } from '../../production/testing/two-brands'
+import { ORDER_LIVE_EVENTS } from './views'
 
 /**
  * B-SA-031 / B-SA-032 — the office's read of one sales order's production (`GET /sales/orders/:orderId/production`) and its
@@ -236,7 +239,8 @@ describe('B-SA-031 GET /sales/orders/:orderId/production — the order’s OWN p
     expect(Object.keys(people).sort()).toEqual(['answersCustomer', 'backup', 'places', 'supervisor'])
     expect(people.places.length).toBeGreaterThan(0)
     for (const place of people.places) {
-      expect(Object.keys(place).sort()).toEqual(['line', 'site', 'team', 'workshop'])
+      // B-OO-008: + kind (PLANT | WORKSHOP) and since (a workshop's issued day).
+      expect(Object.keys(place).sort()).toEqual(['kind', 'line', 'site', 'since', 'team', 'workshop'])
       if (place.team) expect(Object.keys(place.team).sort()).toEqual(['code', 'name'])
     }
     expect(keysOf(people).filter((key) => /count|output|worker|operator|member/i.test(key))).toEqual([])
@@ -691,3 +695,126 @@ describe('B-OO-010: each gate carries its version and what this reader may do (P
   })
 })
 // ── end B-OO-010 ──
+
+// ── B-OO-008 (order overview N7, N8; review F1, F10) ──
+/**
+ * People: "Answers the customer" is the conversation's owner by the threads' ONE chain — the thread's own owner (SET), else the
+ * order's production supervisor (SUPERVISOR), else the order's maker (MAKER), with the source; nobody at all reads null. Places come
+ * from the LIVE work orders only (a closed or cancelled one names none), each a PLANT or an outside WORKSHOP with the day its job was
+ * issued. The order read re-reads People on every work order event. The test adds a fresh order of Alpha with no audit row, no
+ * thread and no supervisor; the real office people of the supervisor harness; Alpha's default supervisor and the thread's owner
+ * through their real routes; a maker's audit row and a workshop's ISSUED job on Alpha's work order by hand (made-up facts).
+ */
+describe('B-OO-008: the real answerer with its source; places from live work orders, plant or workshop', { timeout: 60_000 }, () => {
+  const fresh = { id: newId(), number: 'T-OO008-SO-1' }
+  const job = newId()
+  let people: Awaited<ReturnType<typeof supervisorPeople>>
+  let workshop: { id: string; name: string }
+  const put = async (sessionName: string, url: string, payload: Json): Promise<Json> => {
+    const answer = await app.inject({ method: 'PUT', url, headers: { 'x-test-session': sessionName, 'idempotency-key': `t-oo008-${newId()}` }, payload })
+    expect(answer.statusCode, `PUT ${url}: ${answer.body.slice(0, 600)}`).toBe(200)
+    return answer.json() as Json
+  }
+  /** Alpha's default production supervisor, through its real route (PortalSettings; no row yet: version 0); the same again: nothing sent. */
+  const setDefault = async (supervisorId: string | null) => {
+    const [row] = await admin<{ version: number; supervisorId: string | null; backupId: string | null }>(`SELECT version, "productionSupervisorId" AS "supervisorId", "productionBackupId" AS "backupId" FROM "PortalSettings" WHERE "partyId" = $1`, [ids.a])
+    if ((row?.supervisorId ?? null) === supervisorId) return
+    await put('office.brand', `/production/brands/${ids.a}/supervisor`, { supervisorId, backupId: row?.backupId ?? null, version: row?.version ?? 0 })
+  }
+  const answerer = async (orderId: string) => (await ok('office.all', production(orderId, 'people'))).people.answersCustomer as Json | null
+  const placesOf = async (orderId: string) => (await ok('office.all', production(orderId, 'people'))).people.places as Json[]
+  const setWorkOrderStatus = (status: string) => admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "WorkOrder" SET status = '${status}' WHERE id = ${lit(alpha.workOrderId)}; COMMIT;`)
+
+  beforeAll(async () => {
+    people = await supervisorPeople({ database, namespace: ns }, w)
+    // Real office people act (a thread and a settings row name who made them).
+    SESSIONS['office.brand'] = { audience: 'office', tenantId: ids.tenantId, actorId: people.backupA, grants: [grant(['production.brand.manage', 'workorders.view', 'orders.view'], 'all')] }
+    SESSIONS['office.threads'] = { audience: 'office', tenantId: ids.tenantId, actorId: people.backupA, grants: [grant(['threads.read', 'threads.post', 'orders.view'], 'all')] }
+    const [owner] = await admin<{ companyId: string }>(`SELECT "companyId" FROM "SalesOrder" WHERE id = $1`, [alpha.so1])
+    await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId: seedUuid(ns, 'actor') }, (client) =>
+      client.salesOrder.create({
+        data: { id: fresh.id, companyId: owner!.companyId, partyId: ids.a, number: fresh.number, customerRef: 'T-OO008-PO-1', status: 'CONFIRMED', orderDate: new Date('2026-11-03T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' } },
+        select: { id: true },
+      }),
+    )
+    await setDefault(null)
+    // The seeds' workshop (P2, the production seed's subcontractor) and a stock location for its made-up job.
+    const [party] = await admin<{ id: string; legalName: string; tradeName: string | null }>(`SELECT id, "legalName", "tradeName" FROM "Party" WHERE id = $1`, [seedUuid(ns, 'party:P2')])
+    expect(party, 'the seeds’ workshop P2').toBeDefined()
+    workshop = { id: party!.id, name: party!.tradeName ?? party!.legalName }
+    const [location] = await admin<{ id: string }>(`SELECT id FROM "Location" WHERE "tenantId" = $1 ORDER BY ("siteId" = $2) DESC, id LIMIT 1`, [ids.tenantId, w.siteId])
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "SubcontractOrder" (id, "tenantId", "companyId", "siteId", number, "partyId", "locationId", "workOrderId", status, "orderDate", "issuedAt", "issuedById")
+         VALUES (${lit(job)}, ${lit(ids.tenantId)}, ${lit(w.companyId)}, ${lit(w.siteId)}, 'T-OO008-SC-1', ${lit(workshop.id)}, ${lit(location!.id)}, ${lit(alpha.workOrderId)}, 'ISSUED', '2026-11-12', '2026-11-12T09:00:00.000Z', ${lit(seedUuid(ns, 'actor'))});
+       COMMIT;`,
+    )
+  })
+
+  afterAll(async () => {
+    await setWorkOrderStatus('DRAFT')
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; DELETE FROM "SubcontractOrder" WHERE id = ${lit(job)}; COMMIT;`)
+    await setDefault(null)
+  })
+
+  it('nobody: no owner set, no supervisor, no office maker — null (the card’s "—" is then true)', async () => {
+    expect(await answerer(fresh.id)).toBeNull()
+  })
+
+  it('no owner set and no supervisor: the order’s maker (MAKER), the office person of its first audit row', async () => {
+    await admin(`INSERT INTO "AuditLog" (id, "tenantId", audience, "actorId", action, "recordType", "recordId", "requestId", at) VALUES ($1, $2, 'OFFICE', $3, 'orders.make', 'SalesOrder', $4, 't-oo008-maker', now() - interval '1 day')`, [newId(), ids.tenantId, people.noThread, fresh.id])
+    expect(await answerer(fresh.id)).toEqual({ id: people.noThread, name: 'T Measurements Only', active: true, source: 'MAKER' })
+  })
+
+  it('no owner set: the order’s production supervisor (SUPERVISOR) — here the customer’s default — before the maker', async () => {
+    await setDefault(people.supervisorA)
+    const read = (await ok('office.all', production(fresh.id, 'people'))).people
+    expect(read.supervisor).toMatchObject({ id: people.supervisorA, from: 'BRAND' })
+    expect(read.answersCustomer).toEqual({ id: people.supervisorA, name: 'T Supervisor Alpha', active: true, source: 'SUPERVISOR' })
+  })
+
+  it('an owner set on the order’s thread (SET) answers first; back to none, the supervisor again', async () => {
+    const set = await put('office.threads', `/threads/SalesOrder/${fresh.id}/owner`, { ownerId: people.backupA })
+    expect(set.owner).toMatchObject({ id: people.backupA, source: 'SET' })
+    expect(await answerer(fresh.id)).toEqual({ id: people.backupA, name: 'T Backup Alpha', active: true, source: 'SET' })
+    await put('office.threads', `/threads/SalesOrder/${fresh.id}/owner`, { ownerId: null })
+    expect(await answerer(fresh.id)).toMatchObject({ id: people.supervisorA, source: 'SUPERVISOR' })
+  })
+
+  it('the answerer is office only: a Beta-limited person gets the unknown id’s answer; no portal module reads it', async () => {
+    const unknown = await call('office.p2', production(newId(), 'people'))
+    const refused = await call('office.p2', production(fresh.id, 'people'))
+    expect([refused.status, refused.body.error?.message]).toEqual([404, unknown.body.error?.message])
+    const root = fileURLToPath(new URL('../../..', import.meta.url))
+    const sources = (readdirSync(root, { recursive: true }) as string[]).filter((path) => path.endsWith('.ts') && /portal/.test(path) && !/\.(vitest\.)?test\.ts$/.test(path))
+    expect(sources.filter((path) => readFileSync(join(root, path), 'utf8').includes('answersCustomer'))).toEqual([])
+  })
+
+  it('places: the plant of a live work order (PLANT, no day) and the workshop its job went to (WORKSHOP, since the issued day)', async () => {
+    const places = await placesOf(alpha.so1)
+    const plant = places.filter((place) => place.kind === 'PLANT')
+    expect(plant.length).toBeGreaterThan(0)
+    for (const place of plant) expect(place).toMatchObject({ workshop: null, since: null, site: expect.objectContaining({ code: expect.any(String) }) })
+    expect(places.filter((place) => place.kind === 'WORKSHOP')).toEqual([{ kind: 'WORKSHOP', site: null, line: null, team: null, workshop: { name: workshop.name }, since: '2026-11-12' }])
+  })
+
+  for (const status of ['CLOSED', 'CANCELLED'] as const) {
+    it(`places: a ${status.toLowerCase()} work order names no place — neither its plant nor its workshop`, async () => {
+      await setWorkOrderStatus(status)
+      const places = await placesOf(alpha.so1)
+      expect(places.filter((place) => place.workshop?.name === workshop.name)).toEqual([])
+      expect(places).toEqual([])
+      await setWorkOrderStatus('DRAFT')
+      expect((await placesOf(alpha.so1)).length).toBeGreaterThan(0)
+    })
+  }
+
+  it('live: every work order event re-reads People (where it is made); the owner change emits none (the page re-reads itself)', () => {
+    const workOrderEvents = ORDER_LIVE_EVENTS.filter((entry) => entry.type.startsWith('workorder.'))
+    expect(workOrderEvents.length).toBeGreaterThan(0)
+    for (const entry of workOrderEvents) expect(entry.parts, entry.type).toEqual(expect.arrayContaining(['work', 'headline', 'people']))
+    expect(ORDER_LIVE_EVENTS.find((entry) => entry.type.startsWith('thread.owner'))).toBeUndefined()
+  })
+})
+// ── end B-OO-008 ──
