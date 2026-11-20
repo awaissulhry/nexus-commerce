@@ -73,6 +73,8 @@ export interface LinesTabModel {
   readonly addColour: AddColourState | null
   /** The ask "accept the new order" failed after a save (the save stands): "Ask again". */
   readonly askFailed: boolean
+  /** The portal said nobody of the customer reads this order there: the conversation tick is held. */
+  readonly portalGone: boolean
   /** The options window of one saved line (today's OrderLineOptions, its own container), while open. */
   readonly options: ReactNode | null
   /** A save is running. */
@@ -100,7 +102,8 @@ export interface LinesTabActions {
   readonly onReviewTell?: (next: { readonly words?: string; readonly chosen?: boolean }) => void
   readonly onReviewOutcome?: (outcome: ExtraOutcome) => void
   readonly onReviewFee?: (text: string) => void
-  readonly onSave?: () => void
+  /** Save changes: the reason in words (none: the server's automatic words) and the question the customer is asked (when ticked). */
+  readonly onSave?: (input: { readonly reason?: string; readonly question: string }) => void
   readonly onAskAgain?: () => void
   readonly onAskDismiss?: () => void
   // ---- two people ----

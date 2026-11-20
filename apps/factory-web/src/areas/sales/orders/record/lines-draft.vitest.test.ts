@@ -208,9 +208,9 @@ describe('F-OL-01: what holds the bar, what Review lists, the Why and the one ti
     expect(askDefaultOf({ totalUp: false, amountChanges: true }, true)).toBe(false)
     expect(askDefaultOf({ amountChanges: true }, false)).toBe(true)
     expect(askDefaultOf({ amountChanges: false }, false)).toBe(false)
-    // An older preview without the new fields: the net before → after (price readers), the re-acceptance flag (Sales).
-    expect(askDefaultOf({ diff: { reacceptanceNeeded: true, netAmountBefore: 100, netAmountAfter: 90 } }, true)).toBe(false)
-    expect(askDefaultOf({ diff: { reacceptanceNeeded: true } }, false)).toBe(true)
+    // Only the preview's own answers decide (the net changing — reacceptanceNeeded — is never the default); no preview: unticked.
+    expect(askDefaultOf({}, true)).toBe(false)
+    expect(askDefaultOf({ totalUp: true }, false)).toBe(false)
     expect(askDefaultOf(null, true)).toBe(false)
   })
 

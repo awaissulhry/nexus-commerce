@@ -41,6 +41,7 @@ import { useProductionActs } from './use-production-acts'
 import { useShipmentsActs } from './use-shipments-acts'
 import { useMoneyActs } from './use-money-acts'
 import { usePriceCheckCard } from './use-price-check-card' // F-CP-142: Money's Price check card
+import { useLinesDraft } from './use-lines-draft' // F-OL-03: the Lines tab's draft, Review and save, two people
 // ---- end F-OP-134
 // ---- B-W2b-323 (orders in depth on screen) ----
 import { useLocale } from '../../../../lib/i18n/provider'
@@ -393,6 +394,21 @@ function RecordContainer({ orderId }: { orderId: string }) {
       setDialog(null)
     },
   })
+  // ---- F-OL-03 (Order LINES lane): the Lines tab's draft of MY changes, Review and save, Add a style, two people — mounted after the
+  // depth read (the company's freeze rules make a change priced); a door lands on a box through the page's one focus.
+  const linesDraft = useLinesDraft({
+    ...actsBase,
+    order: ready,
+    can,
+    freeze: depth.model.freeze?.value ?? null,
+    language: locale === 'en' ? 'en' : 'it',
+    showLines: () => {
+      if (tab !== 'lines') router.replace(tabAddress(pathname, window.location.search, 'lines', { narrow: narrowNow() }))
+    },
+    focus: (anchor) => setFocusRow({ anchor, at: Date.now() }),
+    options: () => null,
+  })
+  // ---- end F-OL-03
   // F-OO-125: a line's Change quantity or sizes… starts the amendment (Lines' acts) and focuses its style group (the page's one focus);
   // F-OO-144: the requested date's Change… opens its small dialog in the page's one slot; F-OO-210: the office note writes through
   // the Orders sheet's own write with the page's one write (the acts base).
@@ -669,6 +685,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     // B-W2b-380 (XF6:02)
     lineCost: order.status === 'ready' ? (line) => createElement(CostChangedMark, { key: `cost-${line.id}`, change: costChanges.get(line.id), currency: order.value.currency }) : undefined,
     // B-W2b-374 (XF3:02): an amendment's new line's options are use-lines-acts' (F-OP-134).
+    linesTab: linesDraft.model, // F-OL-03
   }
 
   const value = order.status === 'ready' ? order.value : null
@@ -733,6 +750,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
         ...shipments.actions, // F-OP-119
         // ---- end F-OP-134
         onRetry: () => void load(),
+        linesTab: linesDraft.actions, // F-OL-03
         onRetryMargin: margin.retry,
         priceCheck: priceCheck.actions, // F-CP-142
         priceCheckDialog: priceCheck.dialog.actions, // F-CP-142

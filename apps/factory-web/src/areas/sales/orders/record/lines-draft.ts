@@ -1,5 +1,5 @@
 import { parsePrice } from '../../quotes/model'
-import type { AmendLineInput, Order, OrderLine } from '../api'
+import type { AmendLineInput, Followed, Order, OrderLine } from '../api'
 import type { PickBody } from '../../quotes/record/configurator/api'
 import type { CellFloors } from '../daily-model'
 import type { Phrase } from '../model'
@@ -156,12 +156,17 @@ function without(edit: LineEdit, field: keyof LineEdit): LineEdit {
   return out
 }
 
-/** New rows (Add a style, + Add a colour): a colour already on the order or in the draft is never added twice. */
-export function addLines(history: DraftHistory, order: Pick<Order, 'lines'>, added: readonly NewLine[]): DraftHistory {
+/**
+ * New rows (Add a style, + Add a colour): a colour already on the order or in the draft is never added twice. `sizes`: the size columns
+ * the new rows' style shows from now on (a new style has none of its own yet) — in the same step, so one Undo takes it all back.
+ */
+export function addLines(history: DraftHistory, order: Pick<Order, 'lines'>, added: readonly NewLine[], sizes: Readonly<Record<string, readonly string[]>> = {}): DraftHistory {
   const have = new Set([...order.lines.map((line) => `${line.styleId}:${line.colourwayId}`), ...history.draft.added.map((line) => `${line.styleId}:${line.colourwayId}`)])
   const fresh = added.filter((line) => !have.has(`${line.styleId}:${line.colourwayId}`))
   if (fresh.length === 0) return history
-  return step(history, null, { ...history.draft, added: [...history.draft.added, ...fresh] })
+  const columns = { ...history.draft.sizes }
+  for (const [styleId, list] of Object.entries(sizes)) columns[styleId] = [...new Set([...(columns[styleId] ?? []), ...list])]
+  return step(history, null, { ...history.draft, added: [...history.draft.added, ...fresh], sizes: columns })
 }
 
 /** A cell, the price or a note of a new row. */
@@ -502,16 +507,29 @@ export function reasonOf(pick: WhyPick | null, words: string, say: (pick: WhyPic
 }
 
 /**
- * The tick "Ask {customer} to accept the new order" before the person touches it (F10): a price reader — on only when the total goes
- * up; Sales (no prices) — on whenever the amount changes (never told which way it moved: the money wall).
+ * The tick "Ask {customer} to accept the new order" before the person touches it (F10; ol-s1's preview): a price reader — on only
+ * when what the customer pays goes up (`totalUp`, the price grain only); Sales — on whenever the amount changes (`amountChanges`;
+ * never told which way it moved: the money wall). `diff.reacceptanceNeeded` only says the net changed: never the default.
  */
-export function askDefaultOf(preview: { readonly amountChanges?: boolean; readonly totalUp?: boolean; readonly diff?: { readonly reacceptanceNeeded: boolean; readonly netAmountBefore?: number; readonly netAmountAfter?: number } | null } | null, seesPrices: boolean): boolean {
+export function askDefaultOf(preview: { readonly amountChanges?: boolean; readonly totalUp?: boolean } | null, seesPrices: boolean): boolean {
   if (!preview) return false
-  if (seesPrices) {
-    if (preview.totalUp !== undefined) return preview.totalUp
-    const diff = preview.diff
-    return !!diff && diff.netAmountBefore !== undefined && diff.netAmountAfter !== undefined && diff.netAmountAfter > diff.netAmountBefore
-  }
-  if (preview.amountChanges !== undefined) return preview.amountChanges
-  return !!preview.diff?.reacceptanceNeeded
+  return seesPrices ? preview.totalUp === true : preview.amountChanges === true
 }
+
+// ---- F-OL-03: the notice after a save ("Saved · WO-0311 changed · WO-0312 waits for production — decide on this page") ----------
+
+/**
+ * The words after Save changes: the work orders that followed in the same command and those that wait (B-OP-012's answer), and
+ * whether the customer is asked to accept the new order (the tick). Never an amendment number, never an amount.
+ */
+export function savedNotice(followed: Followed, asked: boolean): Phrase {
+  const numbers = (entries: readonly { readonly number: string | null }[]) => entries.map((entry) => entry.number ?? 'WO-…').join(', ')
+  const changed = numbers(followed.applied)
+  const waits = numbers(followed.waiting)
+  const which = changed && waits ? 'both' : changed ? 'changed' : waits ? 'waits' : 'plain'
+  return phrase(`save.done.${which}${asked ? 'Asked' : ''}`, { ...(changed ? { changed } : {}), ...(waits ? { waits } : {}) })
+}
+
+/** A change fee as typed (price readers, a priced change): empty, or 0 and more with at most 2 decimals (0 allowed: B-OL-016). */
+export const feeProblem = (fee: string): boolean => fee.trim() !== '' && !/^\d{1,12}([.,]\d{1,2})?$/.test(fee.trim())
+// ---- end F-OL-03

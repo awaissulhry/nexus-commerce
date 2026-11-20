@@ -38,10 +38,18 @@ import { EMPTY_DRAFT } from '../lines-draft'
 import { headOf, linesReaderOf, orderTotalOf, ownDatesOf, styleCardsOf, taxBasisOf, totalsOf } from '../lines-table'
 import { useLineMenu } from './LineMenu'
 import { LinesHead } from './lines/LinesHead'
-import { StyleTable, type LinesCtx } from './lines/StyleTable'
+import { lineNameOf, StyleTable, type LinesCtx } from './lines/StyleTable'
 import { ChargesBlock, TotalsBlock } from './lines/LinesMoney'
 import './lines/lines.css'
 // ---- end F-OL-02
+// ---- F-OL-03: the save bar, Review and save, two people ----
+import { formatTime } from '../../../../../lib/i18n/format'
+import { frozenCells } from '../../depth/model'
+import { rowAnchor } from '../dock/discuss'
+import { draftHoldsOf, holdPhrase } from '../lines-draft'
+import { SaveBar } from './lines/SaveBar'
+import { ReviewSave } from './lines/ReviewSave'
+// ---- end F-OL-03
 
 /**
  * F-OL-02 (Order LINES lane, plan v2 §1; 10-design-tab; replaces F-SA-231's view mode) — Lines, the commercial truth, changed in
@@ -87,9 +95,14 @@ function LinesView({ order, model, actions }: { order: Order; model: OrderRecord
     basis,
     colleague: tab?.moved?.by ?? null,
   }
+  // F-OL-03: what holds "Review and save…", in order, said for its cell (a size locked for good never changes).
+  const lockedForGood = frozenCells(ctx.freeze).filter((cell) => cell.state === 'BLOCKED').map((cell) => ({ lineId: cell.lineId, size: cell.size }))
+  const holds = draftHoldsOf(draft, order, { floors: ctx.floors, clashes: ctx.clashes.length, lockedForGood, unlisted: tab?.unlisted })
+  const say = (phrase: Phrase) => t(phrase.key, phrase.params)
   return (
     <div className="fw-lt">
       <LinesHead order={order} model={model} actions={actions} head={headOf(order, draft)} total={orderTotalOf(totals)} basis={basis} reader={reader} held={held} busy={busy} />
+      <LinesNotices order={order} model={model} actions={actions} />
       {model.production?.status === 'failed' && reader.writes && <p className="fw-lt-quiet">{t('lines.floorsUnread')}</p>}
       {cards.length === 0 ? (
         <Card padded>
@@ -101,7 +114,55 @@ function LinesView({ order, model, actions }: { order: Order; model: OrderRecord
       <ChargesBlock order={order} reader={reader} />
       {reader.prices && cards.length > 0 && <TotalsBlock order={order} rows={totals} basis={basis} />}
       {tab?.options}
+      {/* ---- F-OL-03: the save bar (only while the draft holds a change), the ONE Review window ---- */}
+      {tab && reader.writes && <SaveBar order={order} draft={draft} canUndo={tab.canUndo} held={busy ? t('held.busy') : holds[0] ? say(holdPhrase(holds[0], (key) => lineNameOf(order, draft, key))) : null} saving={tab.saving} actions={actions?.linesTab} />}
+      {tab?.review && <ReviewSave order={order} draft={draft} review={tab.review} seesPrices={reader.prices} freeze={ctx.freeze} floors={ctx.floors} portalGone={tab.portalGone} saving={busy} actions={actions?.linesTab} />}
     </div>
+  )
+}
+
+/** F-OL-03: another person saved while I had changes — who, when, which lines moved; Show scrolls to the first; and a failed ask. */
+function LinesNotices({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  const tab = model.linesTab ?? null
+  if (!tab) return null
+  const moved = tab.moved
+  const name = (lineId: string) => {
+    const line = order.lines.find((entry) => entry.id === lineId)
+    return line ? t('save.lineName', { seq: line.seq, colour: lineNameOf(order, tab.draft, lineId) }) : null
+  }
+  return (
+    <>
+      {moved && (
+        <Banner
+          tone="info"
+          title={moved.lineIds.length > 0 ? t('save.moved', { name: moved.by ?? t('dates.someone'), time: formatTime(moved.at, { locale }), lines: moved.lineIds.map(name).filter(Boolean).join(', ') }) : t('save.movedNone', { name: moved.by ?? t('dates.someone'), time: formatTime(moved.at, { locale }) })}
+          action={
+            moved.lineIds.length > 0 ? (
+              <Button size="sm" variant="quiet" onClick={() => document.getElementById(rowAnchor('SalesOrderLine', moved.lineIds[0]!))?.scrollIntoView({ block: 'center' })}>
+                {t('save.show')}
+              </Button>
+            ) : undefined
+          }
+          onDismiss={() => actions?.linesTab?.onMovedDismiss?.()}
+        >
+          {moved.gone.length > 0 ? t('save.gone', { count: moved.gone.length }) : undefined}
+        </Banner>
+      )}
+      {tab.askFailed && (
+        <Banner
+          tone="warning"
+          title={t('save.askFailed', { customer: order.party?.legalName ?? '' })}
+          action={
+            <Button size="sm" onClick={() => actions?.linesTab?.onAskAgain?.()}>
+              {t('save.askAgain')}
+            </Button>
+          }
+          onDismiss={() => actions?.linesTab?.onAskDismiss?.()}
+        />
+      )}
+    </>
   )
 }
 // ---- end F-OL-02
