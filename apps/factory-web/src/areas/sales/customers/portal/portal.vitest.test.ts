@@ -44,6 +44,10 @@ import { recordTabs, SIDES } from '../../../parties/_shared/model'
 import { RECORD_CAN } from '../../../parties/_shared/fixtures'
 import { ALL_RIGHTS, CUSTOMER_PEOPLE, customerAccess, DEMO_NOW, DEMO_TODAY, READ_ONLY, supplierAccess } from './demo'
 import { showsPrices } from './model'
+// B-CP-011 (follow-up 15): Portal access holds a role only the Owner gives before the click.
+import { firstRole, personProblems, roleHeld } from '../../../admin/users/partners/model'
+import type { PartnerPerson, PortalAccess } from '../../../admin/users/partners/api'
+import { rolesOf } from './demo'
 
 const marco = CUSTOMER_PEOPLE[1]!
 const sara = CUSTOMER_PEOPLE[2]!
@@ -377,3 +381,89 @@ describe('follow-up 14: Portal access says the Owner-only refusals in their own 
   })
 })
 // ---- end follow-up 14
+
+// ---- B-CP-011 (follow-up 15, the money wall; Owner O3): Portal access holds a role only the Owner gives BEFORE the click — the API's
+// read says which role (`roles[].ownerGives`: a guest's role that sees prices, the Accountant) and whether the reader gives it
+// (`mayGivePriceRole`: true only for the Owner); the words are the 403's; the 403 stays the API's wall.
+describe('follow-up 15: Portal access holds a role only the Owner gives before the click, in the 403’s words', () => {
+  const guestAccess = (over: Partial<PortalAccess> = {}): PortalAccess =>
+    customerAccess({
+      party: { ...customerAccess().party, id: '0190f0e2-1000-7000-8000-000000000021', code: 'STUDIO-ESEMPIO', name: 'Studio Esempio', roles: ['CONSULTANT'] },
+      kinds: ['GUEST'],
+      roles: rolesOf(['GUEST']).map((role) => ({ ...role, ownerGives: true })),
+      people: [],
+      seats: { taken: 0, max: null },
+      mayGivePriceRole: false,
+      ...over,
+    })
+  // The API's answer for a customer: no role is the Owner's (its Buyer sees its own orders' prices and Sales gives it, O4).
+  const customerRead = (mayGivePriceRole: boolean) => customerAccess({ roles: rolesOf(['CUSTOMER']).map((role) => ({ ...role, ownerGives: false })), mayGivePriceRole })
+  const anna: PartnerPerson = { ...marco, id: '0190f0e2-a180-7000-8000-000000000071', displayName: 'Anna Conti', email: 'anna.conti@studio-esempio.example', kind: 'GUEST', roleKey: 'guest-accountant', roleName: 'Accountant', seesPrices: true, capabilities: ['comment'], accessUntil: endOfDay('2026-11-30'), version: 2 }
+  const accountant = () => guestAccess().roles.find((role) => role.key === 'guest-accountant')!
+
+  it('a role is held only when the read says the Owner gives it and the reader is not the Owner; an older answer holds nothing', () => {
+    expect(accountant()).toMatchObject({ kind: 'GUEST', seesPrices: true, ownerGives: true })
+    expect(roleHeld(accountant(), { mayGivePriceRole: false })).toBe('moneyWall.ownerGives')
+    expect(roleHeld(accountant(), { mayGivePriceRole: true })).toBeNull()
+    expect(roleHeld(accountant(), {})).toBeNull()
+    expect(roleHeld({ ownerGives: undefined }, { mayGivePriceRole: false })).toBeNull()
+    // A customer's Buyer sees prices, yet it is not the Owner's to give: never held for Sales.
+    const buyer = customerRead(false).roles.find((role) => role.key === 'customer-buyer')!
+    expect(buyer.seesPrices).toBe(true)
+    expect(roleHeld(buyer, customerRead(false))).toBeNull()
+  })
+
+  it('Invite says it before the click for an adviser’s portal (only the Accountant), after the right; never for a customer’s', () => {
+    expect(inviteHeld(guestAccess(), ALL_RIGHTS)).toBe('moneyWall.ownerGives')
+    expect(inviteHeld(guestAccess(), READ_ONLY)).toBe('right.invite')
+    expect(inviteHeld(guestAccess({ mayGivePriceRole: true }), ALL_RIGHTS)).toBeNull()
+    expect(inviteHeld(guestAccess({ mayGivePriceRole: undefined }), ALL_RIGHTS)).toBeNull()
+    expect(inviteHeld(customerRead(false), ALL_RIGHTS)).toBeNull()
+    // A customer that is also an adviser: its customer people are still Sales' to invite.
+    const both = guestAccess({ kinds: ['CUSTOMER', 'GUEST'], roles: [...customerRead(false).roles, accountant()] })
+    expect(inviteHeld(both, ALL_RIGHTS)).toBeNull()
+    expect(firstRole(both, 'CUSTOMER')?.key).toBe('customer-buyer')
+    expect(firstRole(both, 'GUEST')).toBeUndefined()
+  })
+
+  it('the invite never starts on a role the reader cannot give; choosing it anyway is held in the 403’s words', () => {
+    const blank = blankInvite(guestAccess())
+    expect(blank).toMatchObject({ kind: 'GUEST', roleKey: '', capabilities: [] })
+    const typed = { ...blank, name: 'Anna Conti', email: 'anna.conti@studio-esempio.example', until: '2026-12-31' }
+    expect(inviteProblems(typed, guestAccess(), DEMO_TODAY)).toEqual({ roleKey: 'moneyWall.ownerGives' })
+    expect(inviteProblems({ ...typed, roleKey: 'guest-accountant', capabilities: ['comment'] }, guestAccess(), DEMO_TODAY)).toEqual({ roleKey: 'moneyWall.ownerGives' })
+    // The Owner: the Accountant is the first role, nothing held.
+    const owners = guestAccess({ mayGivePriceRole: true })
+    expect(blankInvite(owners)).toMatchObject({ kind: 'GUEST', roleKey: 'guest-accountant', capabilities: ['comment'] })
+    expect(inviteProblems({ ...blankInvite(owners), name: 'Anna Conti', email: 'anna.conti@studio-esempio.example', until: '2026-12-31' }, owners, DEMO_TODAY)).toEqual({})
+    // A customer: Sales still starts on the Buyer (it sees prices; not the Owner's to give) with nothing held.
+    expect(blankInvite(customerRead(false))).toMatchObject({ kind: 'CUSTOMER', roleKey: 'customer-buyer' })
+    expect(inviteProblems({ ...blankInvite(customerRead(false)), name: 'Nadia', email: 'nadia@example.com' }, customerRead(false), DEMO_TODAY)).toEqual({})
+  })
+
+  it('an Accountant’s access: a new role or capability and a later end are the Owner’s (held in words); an earlier end stays free', () => {
+    const access = guestAccess({ people: [anna] })
+    const draft = personDraftOf(anna)
+    expect(draft).toEqual({ roleKey: 'guest-accountant', capabilities: ['comment'], until: '2026-11-30' })
+    expect(personProblems(draft, anna, DEMO_TODAY, access)).toEqual({})
+    expect(personProblems({ ...draft, capabilities: [] }, anna, DEMO_TODAY, access)).toEqual({ roleKey: 'moneyWall.ownerGives' })
+    expect(personProblems({ ...draft, until: '2026-12-15' }, anna, DEMO_TODAY, access)).toEqual({ until: 'moneyWall.ownerLater' })
+    expect(personProblems({ ...draft, until: '2026-11-15' }, anna, DEMO_TODAY, access)).toEqual({})
+    // The Owner moves it as before; without the read's answer nothing is held (the API's 403 says it, partnerProblem).
+    const owners = guestAccess({ people: [anna], mayGivePriceRole: true })
+    expect(personProblems({ ...draft, capabilities: [], until: '2026-12-15' }, anna, DEMO_TODAY, owners)).toEqual({})
+    expect(personProblems({ ...draft, until: '2026-12-15' }, anna, DEMO_TODAY)).toEqual({})
+    // A customer's Buyer: Sales changes the role as before.
+    expect(personProblems({ ...personDraftOf(marco), roleKey: 'customer-finance' }, marco, DEMO_TODAY, customerRead(false))).toEqual({})
+  })
+
+  it('the dialogs pass the hold to every role card; the person’s own role is never said held', () => {
+    const source = readFileSync(new URL('./view/PortalDialogs.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('heldOf={(entry) => roleHeld(entry, access)}')
+    expect(source).toContain('heldOf={(entry) => (entry.key === person.roleKey ? null : roleHeld(entry, access))}')
+    expect(source).toContain('onChange={() => (held ? undefined : onChange(role))}')
+    expect(source).toContain('personProblems(draft, person, model.today, access)')
+    expect(source).toContain('const first = firstRole(access, kind)')
+  })
+})
+// ---- end B-CP-011 follow-up 15

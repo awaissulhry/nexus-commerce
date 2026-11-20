@@ -10,6 +10,7 @@ import { handBackInCommand } from '../../portal/tasks/people'
 import { requirePortalTerms } from '../portal/terms'
 import { assertOwnerGivesPrices, endAllAssignments } from '../roles/assignments'
 import { partnerTemplateOf } from '@nexus/factory-domain/auth/roles/templates'
+import { seesPrices } from '@nexus/factory-domain/auth/roles/roles' // B-CP-011 (follow-up 15): ownerGivesRole
 import { endSessions } from '../sessions/session-store'
 import { userStatus } from '../users/status'
 import { liveAssignment } from '../roles/access'
@@ -201,8 +202,15 @@ export async function changeInCommand({ tx, now, audit, emit }: CommandTools, wo
  * A customer's people (its Buyer sees its own orders' prices, O4) and a partner admin's colleagues are not asked.
  */
 async function assertOwnerGivesGuestPrices(tx: CommandTx, kind: string, roleKey: string, by: Changer, now: Date, path: string): Promise<void> {
-  if (kind !== 'GUEST' || by.byPartner) return
+  if (by.byPartner || !ownerGivesRole(kind, roleKey)) return
   await assertOwnerGivesPrices(tx, partnerTemplateOf(roleKey)?.grains ?? [], by.actorId, now, path)
+}
+
+// B-CP-011: (follow-up 15) the ONE rule of which partner role only the Owner gives from the office — the commands above ask it,
+// and Portal access's read says it before the click (office.ts portalAccess: `roles[].ownerGives` beside `mayGivePriceRole`).
+/** Only the Owner gives this role from the office: a guest's (an outside adviser's) role that sees prices — the Accountant. */
+export function ownerGivesRole(kind: string | null, roleKey: string): boolean {
+  return kind === 'GUEST' && seesPrices(partnerTemplateOf(roleKey)?.grains ?? [])
 }
 // ── end B-CP-011 ──
 

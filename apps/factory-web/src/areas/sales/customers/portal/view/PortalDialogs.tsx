@@ -19,6 +19,8 @@ import {
   personProblems,
   personReach,
   roleChoices,
+  firstRole, // B-CP-011 (follow-up 15)
+  roleHeld, // B-CP-011 (follow-up 15)
   type PartnerInviteDraft,
   type PersonDraft,
 } from '../../../../admin/users/partners/model'
@@ -39,25 +41,32 @@ function DialogProblem({ problem }: { problem: string | null }) {
   return problem ? <Banner tone="danger" title={t(problem)} /> : null
 }
 
-/** One role as a card: its name, what it does in a plain line, whether it sees prices (customers), the admin mark. */
-function RoleCards({ roles, value, onChange, prices, name, error }: { roles: readonly PartnerRole[]; value: string; onChange: (role: PartnerRole) => void; prices: boolean; name: string; error?: string | null }) {
+/**
+ * One role as a card: its name, what it does in a plain line, whether it sees prices (customers), the admin mark.
+ * B-CP-011 (follow-up 15): a role the reader cannot give (`heldOf`: only the Owner gives it) says so in its line and is not taken.
+ */
+function RoleCards({ roles, value, onChange, prices, name, error, heldOf }: { roles: readonly PartnerRole[]; value: string; onChange: (role: PartnerRole) => void; prices: boolean; name: string; error?: string | null; heldOf: (role: PartnerRole) => string | null }) {
   const t = usePortalT()
   return (
     <fieldset className="fw-pa-fieldset" aria-describedby={error ? `${name}-error` : undefined}>
       <legend className="fw-pa-legend">{t('invite.role')}</legend>
       <div className="fw-pa-cards">
-        {roles.map((role) => (
-          <RadioCard
-            key={role.key}
-            name={name}
-            value={role.key}
-            checked={value === role.key}
-            selected={value === role.key}
-            onChange={() => onChange(role)}
-            title={t(`role.${role.key}`)}
-            description={`${t(`roleLine.${role.key}`)}${prices ? ` ${t(role.seesPrices ? 'invite.seesPrices' : 'invite.noPrices')}` : ''}`}
-          />
-        ))}
+        {roles.map((role) => {
+          const held = heldOf(role) // B-CP-011 (follow-up 15)
+          const line = `${t(`roleLine.${role.key}`)}${prices ? ` ${t(role.seesPrices ? 'invite.seesPrices' : 'invite.noPrices')}` : ''}`
+          return (
+            <RadioCard
+              key={role.key}
+              name={name}
+              value={role.key}
+              checked={value === role.key}
+              selected={value === role.key}
+              onChange={() => (held ? undefined : onChange(role))}
+              title={t(`role.${role.key}`)}
+              description={held ? `${line} ${t(held)}` : line}
+            />
+          )
+        })}
       </div>
       {error && (
         <p id={`${name}-error`} className="fw-pa-error">
@@ -153,7 +162,7 @@ export function InviteDialog({ model, actions }: { model: PortalAccessModel; act
               value={draft.kind ?? ''}
               onChange={(event) => {
                 const kind = (event.target.value || null) as PartnerInviteDraft['kind']
-                const first = roleChoices(access.roles, kind).find((entry) => !entry.admin)
+                const first = firstRole(access, kind) // B-CP-011 (follow-up 15): never a role the reader cannot give
                 set({ kind, roleKey: first?.key ?? '', capabilities: capabilitiesFor(first, [], true), until: kind === 'GUEST' && draft.until === '' ? addDays(model.today, 30) : draft.until })
               }}
             >
@@ -169,7 +178,7 @@ export function InviteDialog({ model, actions }: { model: PortalAccessModel; act
         {roles.length === 0 ? (
           <Banner tone="warning" title={t('invite.noRoles')} />
         ) : (
-          <RoleCards roles={roles} value={draft.roleKey} onChange={(next) => set({ roleKey: next.key, capabilities: capabilitiesFor(next, draft.capabilities, next.key !== draft.roleKey) })} prices={showsPrices(access)} name="invite-role" error={shown.roleKey ?? null} />
+          <RoleCards roles={roles} value={draft.roleKey} onChange={(next) => set({ roleKey: next.key, capabilities: capabilitiesFor(next, draft.capabilities, next.key !== draft.roleKey) })} prices={showsPrices(access)} name="invite-role" error={shown.roleKey ?? null} heldOf={(entry) => roleHeld(entry, access)} />
         )}
         <CapabilityCards role={role} value={draft.capabilities} onChange={(capabilities) => set({ capabilities })} />
         <div className="fw-pa-two">
@@ -201,7 +210,7 @@ export function PersonDialog({ model, actions }: { model: PortalAccessModel; act
   if (!person) return null
   const roles = roleChoices(access.roles, person.kind, person.roleKey)
   const role = roles.find((entry) => entry.key === draft.roleKey)
-  const problems = personProblems(draft, person, model.today)
+  const problems = personProblems(draft, person, model.today, access) // B-CP-011 (follow-up 15): + a role only the Owner gives
   const body = personBody(person, draft)
   const held = model.busy ? t('common.saving') : Object.keys(problems).length > 0 ? t('person.fixFirst') : body === null ? t('person.nothing') : null
   const go = () => {
@@ -227,7 +236,7 @@ export function PersonDialog({ model, actions }: { model: PortalAccessModel; act
       <div className="fw-pa-form" onKeyDown={sendOnMetaEnter(go)}>
         <DialogProblem problem={model.dialogProblem} />
         {person.status === 'INVITED' && <Banner tone="info" title={t('person.invitedNote')} />}
-        <RoleCards roles={roles} value={draft.roleKey} onChange={(next) => setDraft((current) => ({ ...current, roleKey: next.key, capabilities: capabilitiesFor(next, current.capabilities, next.key !== current.roleKey) }))} prices={showsPrices(access)} name="person-role" error={problems.roleKey ?? null} />
+        <RoleCards roles={roles} value={draft.roleKey} onChange={(next) => setDraft((current) => ({ ...current, roleKey: next.key, capabilities: capabilitiesFor(next, current.capabilities, next.key !== current.roleKey) }))} prices={showsPrices(access)} name="person-role" error={problems.roleKey ?? null} heldOf={(entry) => (entry.key === person.roleKey ? null : roleHeld(entry, access))} />
         <CapabilityCards role={role} value={draft.capabilities} onChange={(capabilities) => setDraft((current) => ({ ...current, capabilities }))} />
         <Field label={t('invite.until')} hint={person.kind === 'GUEST' ? t('invite.untilGuest') : t('person.untilHint')} error={problems.until ? t(problems.until) : undefined}>
           <DateField value={draft.until} onChange={(value) => setDraft((current) => ({ ...current, until: value }))} locale={INTL_LOCALE[locale]} min={addDays(model.today, 1)} clearable clearLabel={t('invite.untilClear')} ariaLabel={t('invite.until')} />

@@ -110,6 +110,30 @@ export function roleChoices(roles: readonly PartnerRole[], kind: PartnerKind | n
   return roles.filter((role) => role.kind === kind && (role.offered || role.key === current)).sort((a, b) => Number(a.admin) - Number(b.admin))
 }
 
+// ── B-CP-011 (follow-up 15, the money wall; Owner O3): Portal access holds a role only the Owner gives BEFORE the click ─────────
+/**
+ * Why the reader cannot give this role (a key of `portal-access`), or null. The API's read says it: `ownerGives` (only the Owner
+ * gives it from the office — a guest's role that sees prices, the Accountant) and `mayGivePriceRole` (true only for a live holder
+ * of the Owner role, the commands' own check). Its words are the 403's (`roleKey/onlyOwnerGivesPrices`, partnerProblem):
+ * "Only the Owner gives a role that sees prices." An answer without the two holds nothing; the API's 403 stays the wall.
+ */
+export function roleHeld(role: Pick<PartnerRole, 'ownerGives'> | undefined, access: Pick<PortalAccess, 'mayGivePriceRole'>): string | null {
+  return role?.ownerGives === true && access.mayGivePriceRole === false ? 'moneyWall.ownerGives' : null
+}
+
+/** The role an invitation starts with for this kind: its first offered role the reader gives that is not the admin (else the admin). */
+export function firstRole(access: Pick<PortalAccess, 'roles' | 'mayGivePriceRole'>, kind: PartnerKind | null): PartnerRole | undefined {
+  const given = roleChoices(access.roles, kind).filter((role) => roleHeld(role, access) === null)
+  return given.find((role) => !role.admin) ?? given[0]
+}
+
+/** Every role a kind offers is one only the Owner gives (and the reader does not): the kind's invitations are the Owner's. */
+const ownersOnly = (access: Pick<PortalAccess, 'roles' | 'mayGivePriceRole'>, kind: PartnerKind | null): boolean => {
+  const choices = roleChoices(access.roles, kind)
+  return choices.length > 0 && choices.every((role) => roleHeld(role, access) !== null)
+}
+// ── end B-CP-011 ──
+
 /** The seats left before the limit (null: no limit). */
 export const seatsLeft = (seats: Seats): number | null => (seats.max === null ? null : Math.max(0, seats.max - seats.taken))
 
@@ -123,6 +147,8 @@ export function inviteHeld(access: PortalAccess, can: PartnerCan): string | null
   if (access.party.status === 'BLOCKED' || access.party.status === 'ARCHIVED') return 'held.blocked'
   if (access.termsInForce === false) return 'held.noTerms'
   if (seatsLeft(access.seats) === 0) return 'held.seatsFull'
+  // B-CP-011: (follow-up 15) an adviser's portal offers only the Accountant, which only the Owner gives: Invite says so before the click.
+  if (access.kinds.every((kind) => ownersOnly(access, kind))) return 'moneyWall.ownerGives'
   return null
 }
 
@@ -148,10 +174,13 @@ export interface PartnerInviteDraft {
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-/** A blank invite: the party's only portal, its first offered role that is not the admin, that role's capabilities. */
-export function blankInvite(access: Pick<PortalAccess, 'kinds' | 'roles'>, locale: 'it' | 'en' = 'it'): PartnerInviteDraft {
+/**
+ * A blank invite: the party's only portal, its first offered role that is not the admin, that role's capabilities.
+ * B-CP-011 (follow-up 15): never a role the reader cannot give (`firstRole`: a role only the Owner gives starts unchosen).
+ */
+export function blankInvite(access: Pick<PortalAccess, 'kinds' | 'roles' | 'mayGivePriceRole'>, locale: 'it' | 'en' = 'it'): PartnerInviteDraft {
   const kind = access.kinds.length === 1 ? access.kinds[0]! : null
-  const role = roleChoices(access.roles, kind).find((entry) => !entry.admin) ?? roleChoices(access.roles, kind)[0]
+  const role = firstRole(access, kind)
   return { name: '', email: '', kind, roleKey: role?.key ?? '', capabilities: role ? [...role.capabilities.byDefault] : [], until: '', locale }
 }
 
@@ -163,7 +192,7 @@ export function capabilitiesFor(role: PartnerRole | undefined, chosen: readonly 
 }
 
 /** Field → key of `portal-access`. `today` is the site's day; an end of access is a day after it, or none (not a guest). */
-export function inviteProblems(draft: PartnerInviteDraft, access: Pick<PortalAccess, 'kinds' | 'roles' | 'people'>, today: string): Record<string, string> {
+export function inviteProblems(draft: PartnerInviteDraft, access: Pick<PortalAccess, 'kinds' | 'roles' | 'people' | 'mayGivePriceRole'>, today: string): Record<string, string> {
   const out: Record<string, string> = {}
   if (draft.name.trim() === '') out.name = 'form.required'
   const email = draft.email.trim().toLowerCase()
@@ -171,8 +200,10 @@ export function inviteProblems(draft: PartnerInviteDraft, access: Pick<PortalAcc
   else if (access.people.some((person) => person.email.toLowerCase() === email && person.status !== 'DEACTIVATED')) out.email = 'invite.exists'
   if (access.kinds.length > 1 && !draft.kind) out.kind = 'invite.kindNeeded'
   const role = access.roles.find((entry) => entry.key === draft.roleKey && entry.kind === draft.kind)
-  if (!role) out.roleKey = 'invite.roleNeeded'
+  // B-CP-011: (follow-up 15) no role chosen where every role is the Owner's, or a role only the Owner gives: said in the 403's words.
+  if (!role) out.roleKey = draft.kind && ownersOnly(access, draft.kind) ? 'moneyWall.ownerGives' : 'invite.roleNeeded'
   else if (!role.offered) out.roleKey = 'invite.roleNotOffered'
+  else if (roleHeld(role, access)) out.roleKey = roleHeld(role, access)!
   if (draft.until === '') {
     if (draft.kind === 'GUEST') out.until = 'invite.guestNeedsEnd'
   } else if (draft.until <= today) out.until = 'invite.untilFuture'
@@ -201,12 +232,23 @@ export interface PersonDraft {
 
 export const personDraftOf = (person: PartnerPerson): PersonDraft => ({ roleKey: person.roleKey ?? '', capabilities: [...person.capabilities], until: person.accessUntil ? dayOf(person.accessUntil) : '' })
 
-export function personProblems(draft: PersonDraft, person: PartnerPerson, today: string): Record<string, string> {
+export function personProblems(draft: PersonDraft, person: PartnerPerson, today: string, access?: Pick<PortalAccess, 'roles' | 'mayGivePriceRole'>): Record<string, string> {
   const out: Record<string, string> = {}
   if (draft.roleKey === '') out.roleKey = 'invite.roleNeeded'
   if (draft.until === '') {
     if (person.kind === 'GUEST') out.until = 'invite.guestNeedsEnd'
   } else if (draft.until <= today && draft.until !== personDraftOf(person).until) out.until = 'invite.untilFuture'
+  // ── B-CP-011 (follow-up 15): a role only the Owner gives, held before the click as the API refuses it (people.ts change): a new role
+  // or new capabilities (403 roleKey/onlyOwnerGivesPrices), else an end of access moved later (403 accessUntil/onlyOwnerGivesPrices).
+  const role = access?.roles.find((entry) => entry.key === (draft.roleKey || person.roleKey) && entry.kind === person.kind)
+  const owners = access ? roleHeld(role, access) : null
+  if (owners) {
+    const before = personDraftOf(person)
+    const roleChanged = draft.roleKey !== before.roleKey || [...draft.capabilities].sort().join() !== [...before.capabilities].sort().join()
+    if (roleChanged) out.roleKey ??= owners
+    else if (!out.until && draft.until !== '' && draft.until !== before.until && person.accessUntil !== null && Date.parse(endOfDay(draft.until)) > Date.parse(person.accessUntil)) out.until = 'moneyWall.ownerLater'
+  }
+  // ── end B-CP-011 ──
   return out
 }
 
