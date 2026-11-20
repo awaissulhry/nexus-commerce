@@ -30,7 +30,9 @@ import { migratedDatabase, type MigratedDatabase } from './testing/database'
  *   - item 4: WorkOrderChange is office only, of the order's customer and a work order of that customer, its cells of its own
  *     order and work order; PROPOSED → APPLIED | DECLINED | STALE once, then frozen;
  *   - item 7: a RELEASED or IN_PROGRESS work order's cell goes down to what is cut, bundled or on a cut order, never below it and
- *     never up, and goes only when none of that is left; its planned materials follow it down; a DRAFT as before.
+ *     never up, and goes only when none of that is left; its planned materials follow it down; a DRAFT as before. B-OO-015
+ *     (order overview 1/1, …_order_overview_guards): what is on cut orders counts per material, the largest material, never the
+ *     sum of every material (SEED-SO-0002's BLK cells 1 / 2 / 1); two cut orders of one material still add up.
  * The refusals are check_violation (SQLSTATE 23514; a reference a foreign_key_violation, a grant "permission denied"); their
  * messages are read through raw SQL and name no customer. Not run in the build (Owner rule 2026-11-17: checks at the end).
  */
@@ -643,6 +645,67 @@ describe('the work-order cell guard, redefined (item 7, R1 "Lower to the order")
     await plant('CutReconciliation', cutting.reconciliationId, { id: randomUUID(), cutOrderId: planned!.cutOrder, cutOrderLineId: line, key: `reconciliation:${line}`, orderedQuantity: 4, cutQuantity: 2, recutQuantity: 0, varianceReasonCode: 'SHORT' })
     expect(await floorOf(c)).toBe(2)
     expect(await setQuantity(c, 2)).toBe(1)
+  })
+
+  // B-OO-015 (order overview plan N12, D7; schema wave 'order overview 1/1', …_order_overview_guards): the garments on cut orders
+  // count per material (the cut order's kind, item and colour) and the floor takes the LARGEST material — a garment takes its
+  // lining AND its leather, so two materials hold the same garments, never twice as many. Within one material the lines add up.
+  it("B-OO-015: SEED-SO-0002's BLK cells floor at 1 / 2 / 1, what one material holds (lining + leather summed gave 2 / 4 / 2)", async () => {
+    const blk = (['BLK-50', 'BLK-52', 'BLK-54'] as const).map((name) => production.cellIds[name])
+    // The seeds: the lining's SEED-CO-0001 on every BLK cell (1 / 2 / 1) and the leather's SEED-CO-0002 (50: 1 reconciled, 52: 2)
+    // and SEED-CO-0003 (54: 1, PLANNED) — each BLK cell on a FABRIC and a LEATHER cut order.
+    const kinds = await admin(
+      `SELECT l."workOrderSizeId"::text AS cell, array_agg(DISTINCT o.kind::text ORDER BY o.kind::text) AS kinds
+         FROM "CutOrderLine" l JOIN "CutOrder" o ON o.id = l."cutOrderId" AND o.status <> 'CANCELLED'
+        WHERE l."workOrderSizeId" = ANY($1::uuid[]) GROUP BY 1`,
+      [blk],
+    )
+    for (const cellId of blk) expect(kinds.find((row) => row.cell === cellId)?.kinds).toEqual(['FABRIC', 'LEATHER'])
+    const floors = await Promise.all(blk.map((cellId) => floorOf(cellId)))
+    expect(floors).toEqual([1, 2, 1])
+    // Never above the cell: the planner lets one material's live cut orders hold at most the cell's quantity (cellLeft).
+    const cells = await admin(`SELECT id::text AS id, quantity FROM "WorkOrderSize" WHERE id = ANY($1::uuid[])`, [blk])
+    for (const [index, cellId] of blk.entries()) expect(floors[index]).toBeLessThanOrEqual(cells.find((row) => row.id === cellId)!.quantity as number)
+  })
+
+  it('B-OO-015: a lining and a leather cut order on one cell — the floor is the larger material, never their sum', async () => {
+    const wo = await workOrder()
+    const c = await cell(wo, 6)
+    let seq = 100_000 + Math.floor(Math.random() * 800_000)
+    // The lining (FABRIC, SEED-CO-0001's material) cuts 3 garments of the cell.
+    await plant('CutOrderLine', cutting.lineIds.fabric[0]!, { id: randomUUID(), workOrderId: wo, workOrderSizeId: c, seq: ++seq, quantity: 3, ratio: 1, plies: 3 })
+    expect(await floorOf(c)).toBe(3)
+    // The leather (LEATHER, SEED-CO-0003's, PLANNED) plans 4 of the same garments: 4, not 7 (above the cell's 6).
+    await plant('CutOrderLine', cutting.lineIds.planned, { id: randomUUID(), workOrderId: wo, workOrderSizeId: c, seq: ++seq, quantity: 4 })
+    expect(await floorOf(c)).toBe(4)
+    await expect(setQuantity(c, 3)).rejects.toThrow(BELOW(4))
+    // Lowering is open again down to the larger material (the sum refused every step below 7, even the cell's own 6).
+    expect(await setQuantity(c, 5)).toBe(1)
+    expect(await setQuantity(c, 4)).toBe(1)
+  })
+
+  it('B-OO-015: two cut orders (and two lines) of ONE material still add up; the same leather in another colour is another material', async () => {
+    const wo = await workOrder()
+    const c = await cell(wo, 9)
+    let seq = 100_000 + Math.floor(Math.random() * 800_000)
+    // Leather BLK on two cut orders, different garments of the cell: SEED-CO-0002 (CUT) 2, SEED-CO-0003 (PLANNED) 3.
+    await plant('CutOrderLine', cutting.lineIds.leather[1], { id: randomUUID(), workOrderId: wo, workOrderSizeId: c, seq: ++seq, quantity: 2 })
+    await plant('CutOrderLine', cutting.lineIds.planned, { id: randomUUID(), workOrderId: wo, workOrderSizeId: c, seq: ++seq, quantity: 3 })
+    expect(await floorOf(c)).toBe(5)
+    // The lining cuts 4 of those garments: the leather stays the largest material.
+    await plant('CutOrderLine', cutting.lineIds.fabric[0]!, { id: randomUUID(), workOrderId: wo, workOrderSizeId: c, seq: ++seq, quantity: 4, ratio: 1, plies: 4 })
+    expect(await floorOf(c)).toBe(5)
+    // A second line of one cut order for the cell (more garments planned of the same leather: the review's "recut as a new
+    // line" guess — a recut of spoilt panels is a RECUT ticket, never a line): still that material's, still added.
+    await plant('CutOrderLine', cutting.lineIds.planned, { id: randomUUID(), workOrderId: wo, workOrderSizeId: c, seq: ++seq, quantity: 1 })
+    expect(await floorOf(c)).toBe(6)
+    // The same leather item in RED, on a cut order of its own, is another material: its 7 is the largest, never 6 + 7.
+    const red = randomUUID()
+    await plant('CutOrder', cutting.cutOrderIds.planned, { id: red, number: tag('T-CO'), itemColourId: key('product:item-colour:leather:RED') })
+    await plant('CutOrderLine', cutting.lineIds.planned, { id: randomUUID(), cutOrderId: red, workOrderId: wo, workOrderSizeId: c, seq: 10, quantity: 7 })
+    expect(await floorOf(c)).toBe(7)
+    await expect(setQuantity(c, 6)).rejects.toThrow(BELOW(7))
+    expect(await setQuantity(c, 7)).toBe(1)
   })
 
   it('a DRAFT cell behaves as before; a held or completed one stays frozen', async () => {
