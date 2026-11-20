@@ -313,13 +313,15 @@ describe('F-OP-104: Overview doors — the stages a real link, Open in Productio
     expect(model).not.toMatch(/`\$\{record\}\?tab=/)
   })
 
-  it('the requested date\'s Change…: edit mode on Lines, its field focused (the container\'s one focus); the field carries the id', async () => {
+  // F-OO-144 (order overview, review F7): the requested date's Change… opens its small dialog in the page's one slot — the hop to Lines
+  // went; the Lines edit mode's field keeps its id.
+  it('the requested date\'s Change…: its small dialog in the page\'s one slot (no hop to Lines); the Lines field keeps its id', async () => {
     const { REQUESTED_FIELD_ID } = await import('./model')
     const acts = readFileSync(new URL('../use-overview-acts.ts', import.meta.url), 'utf8')
-    expect(acts).toContain('input.startAmend?.()')
-    expect(acts).toContain('input.focus?.(REQUESTED_FIELD_ID)')
+    expect(acts).toContain("onRequestedChange: () => input.setDialog?.({ kind: 'requested' })")
+    expect(acts).not.toContain('input.focus?.(REQUESTED_FIELD_ID)')
     const container = readFileSync(new URL('../OrderRecord.tsx', import.meta.url), 'utf8')
-    expect(container).toContain('useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }) })')
+    expect(container).toContain('useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), setDialog /* F-OO-144 */')
     const lines = readFileSync(new URL('../view/LinesTab.tsx', import.meta.url), 'utf8')
     expect(lines).toContain('<DateField id={REQUESTED_FIELD_ID}')
     expect(REQUESTED_FIELD_ID).toBe('amend-requested-date')

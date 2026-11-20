@@ -336,7 +336,7 @@ function AmendLines({ order, amend, model, actions }: { order: Order; amend: Ame
           <Field label={t('amend.customerRef')}>
             <Input value={amend.customerRef} onChange={(event) => actions?.onAmendHeader?.('customerRef', event.target.value)} maxLength={100} autoComplete="off" />
           </Field>
-          {/* F-OP-104: Overview's requested date "Change…" lands here with the focus (its id). */}
+          {/* F-OP-104: the field's id (F-OO-144: Overview's requested date "Change…" opens its own small dialog now). */}
           <Field label={t('amend.requestedDate')} hint={t('amend.requestedHint')}>
             <DateField id={REQUESTED_FIELD_ID} value={amend.requestedDate} onChange={(value) => actions?.onAmendHeader?.('requestedDate', value)} min={model.today} locale={INTL_LOCALE[locale]} ariaLabel={t('amend.requestedDate')} />
           </Field>

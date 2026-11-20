@@ -986,6 +986,18 @@
       "net": "Net: shown to people who see prices"
     }
   },
+  "facts": {
+    "requested": {
+      "title": "Change the requested date of {number}",
+      "date": "New requested date",
+      "dateHint": "Today or later. Saved as amendment {revision}.",
+      "reasonHint": "Kept with the amendment on the Changes tab.",
+      "problem": {
+        "past": "The requested date is today or later",
+        "same": "It is the requested date already"
+      }
+    }
+  },
   "editor": {
     "add": {
       "title": "Add a style",

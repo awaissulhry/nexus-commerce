@@ -986,6 +986,18 @@
       "net": "Imponibile: visibile a chi vede i prezzi"
     }
   },
+  "facts": {
+    "requested": {
+      "title": "Cambia la data richiesta di {number}",
+      "date": "Nuova data richiesta",
+      "dateHint": "Da oggi in poi. Salvata come modifica {revision}.",
+      "reasonHint": "Resta con la modifica nella scheda Modifiche.",
+      "problem": {
+        "past": "La data richiesta è da oggi in poi",
+        "same": "È già la data richiesta"
+      }
+    }
+  },
   "editor": {
     "add": {
       "title": "Aggiungi un modello",

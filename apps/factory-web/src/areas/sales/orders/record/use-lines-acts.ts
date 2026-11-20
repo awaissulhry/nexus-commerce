@@ -24,6 +24,7 @@ import { NewLineOptions } from '../../_shared/options-entry/NewLineOptions'
 import { postPortalReplyKeyed } from '../../../_shared/record-thread/api'
 import { portalRefusal } from '../../../_shared/record-thread/state'
 import { COMPOSER_EMPTY, PART_LOADING, type AmendState, type OrderRecordActions, type OrderRecordModel, type Part, type RecordActsBase, type RecordDialog } from './record-model'
+import { requestedBodyOf } from './record-model' // F-OO-144: Requested's small dialog (one amendment, the amend builder)
 
 export type LinesActsModel = Pick<OrderRecordModel, 'amend' | 'closedLines' | 'cancelCheck' | 'portalGone' | 'newLineOptions' | 'split' /* F-OP-111 */ | 'closePreview' /* F-OP-107 */>
 export type LinesActsActions = Pick<
@@ -52,6 +53,7 @@ export type LinesActsActions = Pick<
   | 'onPricedOffer'
   | 'onSplit' // F-OP-111
   | 'onChangeShipTo' // F-OP-110
+  | 'onRequestedDate' // F-OO-144
 >
 
 /** The amendment's body as the API reads it (the preview, Apply, and the priced change it may become; daily-model amendBodyOf). */
@@ -347,6 +349,20 @@ export function useLinesActs(
       )
     },
     // ---- end F-OP-111
+    // ---- F-OO-144 (order overview 10-design §4.2; review F7): Requested by customer's small dialog — ONE amendment through the page's
+    // one write (the same route as Apply): every line as it is, the new date, the order's version as read. It applies at once (no
+    // yes asked); the dialog closes and the order the API answers replaces the page's. A refusal is said inside the dialog (a stale
+    // version reads the order again).
+    onRequestedDate: ({ date, reason }) => {
+      const key = newIdempotencyKey()
+      void write(async () => {
+        const value = current.current!
+        const answer = await applyAmendment(api, orderId, requestedBodyOf(value, date, reason), key)
+        setNotice({ tone: 'success', words: appliedNotice(answer.amendment?.revision ?? (value.amendments.latestRevision ?? 0) + 1, answer.workOrders, null) })
+        return answer.order
+      }, null)
+    },
+    // ---- end F-OO-144
     // B-W2b-323: the priced change's own dialog with the draft's lines; F-OP-108: "Deposit and words…" beside the strip's fee.
     onPricedOffer: () => {
       const draft = amendRef.current

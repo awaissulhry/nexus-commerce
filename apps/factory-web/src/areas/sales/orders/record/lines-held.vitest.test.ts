@@ -15,6 +15,10 @@ import { CloseLinesDialog, ReopenLinesDialog } from './view/DailyDialogs'
 import { amendStyleAnchorOf, COMPOSER_EMPTY } from './record-model'
 import { useOverviewActs } from './use-overview-acts'
 import { LinesEditor, type LinesEditorModel } from './view/LinesEditor'
+// ---- F-OO-144: Requested by customer's small dialog — ONE amendment (every line as it is, the new date, the version) ----
+import { requestedBodyOf, requestedHeld, requestedProblem } from './record-model'
+import { RequestedDateDialog } from './view/RequestedDateDialog'
+import { base } from './fixtures'
 
 // F-OO-124: the DS Modal draws into a portal once hydrated, never on the server: here it draws in place, so the dialog can be read
 // (the page cases below draw no dialog: they are unchanged by it).
@@ -196,10 +200,125 @@ describe('F-OO-125: Change quantity or sizes… — the Lines edit mode with the
     const overview = readFileSync(new URL('./use-overview-acts.ts', import.meta.url), 'utf8')
     expect(overview).toContain('input.focus?.(amendStyleAnchorOf(styleId))')
     const container = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
-    expect(container).toContain('useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }) })')
+    // F-OO-144: the container also hands the page's one dialog slot (Requested's small dialog).
+    expect(container).toContain('useOverviewActs({ startAmend: () => lines.actions.onAmendStart?.(), focus: (anchor) => setFocusRow({ anchor, at: Date.now() }), setDialog /* F-OO-144 */')
     expect(container).toContain('...overview.actions,')
     // The one edit path: the editor stays the Lines tab's; no view opens a second one.
     expect(readFileSync(new URL('./view/LinesEditor.tsx', import.meta.url), 'utf8')).toContain("const anchor = model.mode === 'amend' ? amendStyleAnchorOf(styleId) : null")
   })
 })
 // ---- end F-OO-125
+
+// ---- F-OO-144 (order overview 10-design §4.2; review F7): "Requested by customer" — a small dialog, ONE amendment, no API change ----
+describe('F-OO-144: the requested date\'s small dialog — every line as it is, the new date, the version; held by amendHeld', () => {
+  const NEW_DATE = '2026-12-20'
+  const WHY = 'Il cliente apre il negozio una settimana dopo.'
+  /** The order's own sizes of a line (what "as it is" means), as an amendment line sends them. */
+  const sizesOf = (line: Order['lines'][number]) => line.sizes.flatMap((size) => (size.size !== null && size.quantity > 0 ? [{ size: size.size, quantity: size.quantity }] : []))
+  /** The opening tag of the dialog's Go button (its words are its label). */
+  const goTag = (html: string, label: string) => {
+    const at = html.indexOf(`>${label}</button>`)
+    expect(at, label).toBeGreaterThan(-1)
+    return html.slice(html.lastIndexOf('<button', at), at)
+  }
+
+  it('the body carries every line unchanged (its whole size grid, no price, no text), the new date, the version and the reason', () => {
+    for (const role of ['owner', 'sales'] as const) {
+      const value = forRole(order('IN_PRODUCTION'), role)
+      const body = requestedBodyOf(value, NEW_DATE, `  ${WHY}  `)
+      expect(body.version).toBe(value.version)
+      expect(body.reason).toBe(WHY)
+      expect(body.requestedDate).toBe(NEW_DATE)
+      expect(body.lines).toEqual(value.lines.map((line) => ({ id: line.id, sizes: sizesOf(line) })))
+      // Nothing else of the header moves: the customer PO and the delivery address are not sent; no price key (a price holder too).
+      expect(Object.keys(body).sort()).toEqual(['lines', 'reason', 'requestedDate', 'version'])
+      expect(JSON.stringify(body)).not.toMatch(/unitPrice|description|note|customerRef|shipToAddressId/)
+    }
+  })
+
+  it('a line closed short (or made to measure) is kept as it is ({ id } only): no line is removed or closed short by mistake', () => {
+    const value: Order = { ...closedShort, status: 'IN_PRODUCTION' }
+    const body = requestedBodyOf(value, NEW_DATE, WHY)
+    expect(body.lines).toHaveLength(value.lines.length)
+    expect(body.lines.find((entry) => 'id' in entry && entry.id === LINE_RED)).toEqual({ id: LINE_RED })
+    expect(body.lines.find((entry) => 'id' in entry && entry.id === LINE_BLK)).toEqual({ id: LINE_BLK, sizes: sizesOf(value.lines.find((line) => line.id === LINE_BLK)!) })
+  })
+
+  it('the dialog\'s own problems: a date from today on, not the requested date already, then why', () => {
+    const today = '2026-10-29'
+    const current = '2026-12-10'
+    expect(requestedProblem({ date: '', reason: WHY, today, current })).toEqual({ key: 'promise.problem.date' })
+    expect(requestedProblem({ date: '2026-10-28', reason: WHY, today, current })).toEqual({ key: 'facts.requested.problem.past' })
+    expect(requestedProblem({ date: current, reason: WHY, today, current })).toEqual({ key: 'facts.requested.problem.same' })
+    expect(requestedProblem({ date: NEW_DATE, reason: '   ', today, current })).toEqual({ key: 'promise.problem.reason' })
+    expect(requestedProblem({ date: today, reason: WHY, today, current })).toBeNull()
+    expect(requestedProblem({ date: NEW_DATE, reason: WHY, today, current: null })).toBeNull()
+  })
+
+  it('held by the amendment\'s own rule (amendHeld): no right, a closed order, shipped, a fee line; and while a draft is open on Lines', () => {
+    const sales = base('sales', order('IN_PRODUCTION')).record
+    const value = (sales.order as { value: Order }).value
+    expect(requestedHeld(value, sales)).toBeNull()
+    expect(requestedHeld(value, base('manager', order('IN_PRODUCTION')).record)).toEqual({ key: 'held.noManage' })
+    expect(requestedHeld({ ...value, status: 'CLOSED' }, sales)).toEqual({ key: 'held.final' })
+    expect(requestedHeld({ ...value, status: 'SHIPPED' }, sales)).toEqual({ key: 'held.amendShipped' })
+    expect(requestedHeld({ ...value, lines: value.lines.map((line, index) => (index === 0 ? { ...line, kind: 'FEE' as const } : line)) }, sales)).toEqual({ key: 'held.amendFee' })
+    const amend = { revision: 1, lines: draftOf(value), customerRef: '', requestedDate: '', styles: {}, composer: COMPOSER_EMPTY, review: null, reason: '', tell: { words: '', chosen: null }, extraOutcome: null, fee: '' }
+    expect(requestedHeld(value, { ...sales, amend })).toEqual({ key: 'held.amending' })
+  })
+
+  it('drawn (en, it): the date and why, "Saved as amendment 1", "Applies at once — no approval"; Go held in words until both are typed', () => {
+    const sales = base('sales', order('IN_PRODUCTION')).record
+    const value = (sales.order as { value: Order }).value
+    const draw = (model: OrderRecordModel, locale: (typeof LOCALES)[number], on: Order = value) => render(createElement(RequestedDateDialog, { order: on, model: { ...model, dialog: { kind: 'requested' } } }), locale)
+    const en = draw(sales, 'en')
+    for (const words of ['Change the requested date of SO-2026-0088', 'New requested date', 'Today or later. Saved as amendment 1.', 'Applies at once — no approval', 'Why']) expect(en, words).toContain(words)
+    expect(goTag(en, 'Change the date')).toContain('aria-description="Choose a date"')
+    const it = draw(sales, 'it')
+    for (const words of ['Cambia la data richiesta di SO-2026-0088', 'Nuova data richiesta', 'Da oggi in poi. Salvata come modifica 1.', 'Si applica subito — senza approvazione']) expect(it, words).toContain(words)
+    expect(goTag(it, 'Cambia la data')).toContain('aria-description="Scegli una data"')
+    // Typed: Go is live.
+    expect(goTag(draw({ ...sales, draft: { date: NEW_DATE, reason: WHY } }, 'en'), 'Change the date')).not.toContain('aria-disabled')
+    // The requested date already: said at the field and on Go.
+    const same = draw({ ...sales, draft: { date: value.requestedDate!, reason: WHY } }, 'en')
+    expect(same).toContain('It is the requested date already')
+  })
+
+  it('the amendHeld words on Go: the production manager (no orders.manage), a closed order, a draft open on Lines (en, it)', () => {
+    const typed = { draft: { date: NEW_DATE, reason: WHY } }
+    const draw = (model: OrderRecordModel, on: Order, locale: (typeof LOCALES)[number]) => render(createElement(RequestedDateDialog, { order: on, model: { ...model, ...typed, dialog: { kind: 'requested' } } }), locale)
+    const manager = base('manager', order('IN_PRODUCTION')).record
+    const value = (manager.order as { value: Order }).value
+    expect(goTag(draw(manager, value, 'en'), 'Change the date')).toContain('aria-description="Changing an order needs the sales right to manage orders"')
+    expect(goTag(draw(manager, value, 'it'), 'Cambia la data')).toContain('aria-description="Cambiare un ordine richiede il diritto vendite di gestire gli ordini"')
+    const sales = base('sales', order('IN_PRODUCTION')).record
+    expect(goTag(draw(sales, { ...value, status: 'CLOSED' }, 'en'), 'Change the date')).toContain('aria-description="A closed or cancelled order never changes"')
+    const amend = { revision: 1, lines: draftOf(value), customerRef: '', requestedDate: '', styles: {}, composer: COMPOSER_EMPTY, review: null, reason: '', tell: { words: '', chosen: null }, extraOutcome: null, fee: '' }
+    expect(goTag(draw({ ...sales, amend }, value, 'en'), 'Change the date')).toContain('aria-description="The lines are being amended: review or discard the amendment first"')
+  })
+
+  it('the door opens the dialog in the page\'s one slot (no hop to Lines, no focus asked); the wiring', () => {
+    const calls: unknown[] = []
+    function Harness() {
+      const acts = useOverviewActs({ startAmend: () => calls.push('edit mode'), focus: (id) => calls.push(`focus ${id}`), setDialog: (dialog) => calls.push(dialog) })
+      acts.actions.onRequestedChange?.()
+      return null
+    }
+    render(createElement(Harness), 'en')
+    expect(calls).toEqual([{ kind: 'requested' }])
+    const lines = readFileSync(new URL('./use-lines-acts.ts', import.meta.url), 'utf8')
+    expect(lines).toContain('await applyAmendment(api, orderId, requestedBodyOf(value, date, reason), key)')
+    const dialogs = readFileSync(new URL('./view/Dialogs.tsx', import.meta.url), 'utf8')
+    expect(dialogs).toContain("case 'requested': // F-OO-144")
+    // The customer page lane's F-CP-108 exports stay (the Orders sheet's row mounts these dialogs).
+    for (const kept of ['export type CommandDialogModel', 'export type CommandDialogActions', 'export /* F-CP-108 */ function ReadyDialog', 'export /* F-CP-108 */ function CloseDialog', 'export function DialogProblem', 'export function Frame']) expect(dialogs, kept).toContain(kept)
+  })
+
+  it('every new word exists in both languages', () => {
+    for (const locale of LOCALES) {
+      const html = render(createElement(RequestedDateDialog, { order: order('IN_PRODUCTION'), model: { ...base('sales', order('IN_PRODUCTION')).record, dialog: { kind: 'requested' } } }), locale)
+      expect(html).not.toMatch(/\bfacts\.requested\.[a-zA-Z.]+/)
+    }
+  })
+})
+// ---- end F-OO-144
