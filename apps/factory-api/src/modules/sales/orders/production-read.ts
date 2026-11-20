@@ -40,11 +40,14 @@ import { officeProgressFor, type CellCount } from '../portal-orders/progress'
 import { officeContextOf } from './access'
 import { officeOrder } from './moves'
 import { PRODUCTION_PARTS, type ProductionPart, type WithheldKey } from './production-contract'
+import type { PlaceKind } from './production-contract' // B-OO-008
 import { dayOf, dayOrNull, readLines, readOrderFacts, type LineRecord, type OrderRow } from './store'
 // B-SA-043: the order's extra pieces (cut beyond what it now wants), office only.
 import { madeExtraOf } from './made-extra'
 // B-SA-050: Still to do, computed from the records.
 import { stillToDoOf } from './still-to-do'
+// B-OO-008 (order overview N7, N8): who answers the customer by the threads' own owner chain, office only (W08).
+import { ownerOf } from '../../../platform/threads/owner'
 
 /**
  * B-SA-031 / B-SA-032 (Sales page plan P2, P3, P4, P15, P16; 13-backend B1, B12; 10-order-page OR1, OR2; review WP-3): the office's
@@ -71,9 +74,10 @@ import { stillToDoOf } from './still-to-do'
  *                                                                                    orders.view (+ planning.promise.view)
  *   quality   open issues (workorders.view), open NCRs behind the brand wall (quality.ncr.view), final inspections of the work
  *             orders the reader reaches (quality.inspections.view)
- *   people    the supervisor and where from, the customer's backup, who answers the customer (the order thread's owner), the
- *             places — a site and line (a team by name only), an outside workshop; never an operator, a count or an output
- *                                                                                                         workorders.view
+ *   people    the supervisor and where from, the customer's backup, who answers the customer (B-OO-008: the threads' owner chain
+ *             — the thread's own owner, else the order's supervisor, else its maker — and which one), the places of its LIVE work
+ *             orders (B-OO-008: a cancelled or closed one makes nothing) — a site and line (a team by name only) at the plant, or
+ *             an outside workshop since the day its job was issued; never an operator, a count or an output   workorders.view
  *   changes   the customer's requests still waiting; B-SA-050: Still to do after the accepted changes (./still-to-do: each row
  *             names the record that closes it, computed — never ticked)                                      orders.view
  *
@@ -252,6 +256,8 @@ export function promiseMovesOf(befores: readonly unknown[]): number {
 const AT_WORKSHOP = ['ISSUED', 'AT_WORKSHOP', 'PARTLY_RECEIVED'] as const
 /** Work orders whose ACTIVE bundles are in work. */
 const IN_WORK = ['RELEASED', 'IN_PROGRESS', 'ON_HOLD'] as const
+/** B-OO-008 (N8): work orders that make nothing any more, so name no place (the loader already leaves out cancelled cells). */
+const NO_PLACE_WORK_ORDERS: readonly string[] = ['CANCELLED', 'CLOSED']
 
 const isGoods = (line: Pick<LineRecord, 'kind'>): boolean => (GOODS_LINE_KINDS as readonly string[]).includes(line.kind)
 const unique = <T>(values: Iterable<T>): T[] => [...new Set(values)]
@@ -637,32 +643,44 @@ async function peoplePart(db: Db, context: OfficeContext, order: OrderRow, load:
   const actor = actorOf(context)
   const supervisor = await supervisorOfOrder(db, order.id)
   const thread = await db.thread.findFirst({ where: { recordType: 'SalesOrder', recordId: order.id }, select: { ownerId: true } })
-  const people = await peopleById(db, [supervisor?.userId, supervisor?.backupId, thread?.ownerId])
+  // B-OO-008 (N7): "Answers the customer" is the conversation's owner by the threads' ONE chain (platform/threads/owner.ts): the
+  // thread's own owner (SET) → the order's production supervisor (SUPERVISOR, registered by production/supervisor) → the order's
+  // maker (MAKER), with where it comes from. A portal-made order with no supervisor names nobody (null: "—" is then true).
+  const answersCustomer = await ownerOf(db, { type: 'SalesOrder', id: order.id }, thread)
+  const people = await peopleById(db, [supervisor?.userId, supervisor?.backupId])
   // Places: a site and its line (a team by name, never with a count), and the outside workshops — of the work orders it reaches.
-  const reached = (await load.workOrders()).filter((workOrder) => reachesWorkOrder(actor, WORKORDERS_VIEW, workOrder))
+  // B-OO-008 (N8): of its LIVE work orders only — a closed one (and a cancelled one, already left out by the loader) makes nothing.
+  const reached = (await load.workOrders()).filter((workOrder) => !NO_PLACE_WORK_ORDERS.includes(workOrder.status) && reachesWorkOrder(actor, WORKORDERS_VIEW, workOrder))
   const sites = new Map((reached.length === 0 ? [] : await db.site.findMany({ where: { id: { in: unique(reached.map((row) => row.siteId)) } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]))
   const lineIds = unique(reached.flatMap((row) => (row.lineId ? [row.lineId] : [])))
   const floorLines = new Map((lineIds.length === 0 ? [] : await db.line.findMany({ where: { id: { in: lineIds } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]))
   const teams = lineIds.length === 0 ? [] : await db.team.findMany({ where: { lineId: { in: lineIds }, status: 'ACTIVE' }, select: { lineId: true, code: true, name: true }, orderBy: { code: 'asc' } })
-  const outside = reached.length === 0 ? [] : await db.subcontractOrder.findMany({ where: { workOrderId: { in: reached.map((row) => row.id) }, status: { in: [...AT_WORKSHOP] } }, select: { partyId: true } })
-  const workshops = outside.length === 0 ? [] : await db.party.findMany({ where: { id: { in: unique(outside.map((row) => row.partyId)) } }, select: { legalName: true, tradeName: true }, orderBy: { legalName: 'asc' } })
-  const places = new Map<string, { site: ReturnType<typeof named>; line: ReturnType<typeof named>; team: ReturnType<typeof named>; workshop: { name: string } | null }>()
+  const outside = reached.length === 0 ? [] : await db.subcontractOrder.findMany({ where: { workOrderId: { in: reached.map((row) => row.id) }, status: { in: [...AT_WORKSHOP] } }, select: { partyId: true, issuedAt: true } })
+  const workshops = outside.length === 0 ? [] : await db.party.findMany({ where: { id: { in: unique(outside.map((row) => row.partyId)) } }, select: { id: true, legalName: true, tradeName: true }, orderBy: { legalName: 'asc' } })
+  const places = new Map<string, { kind: PlaceKind; site: ReturnType<typeof named>; line: ReturnType<typeof named>; team: ReturnType<typeof named>; workshop: { name: string } | null; since: BusinessDate | null }>()
   for (const workOrder of reached) {
     const key = `${workOrder.siteId}|${workOrder.lineId ?? ''}`
     if (places.has(key)) continue
     places.set(key, {
+      kind: 'PLANT',
       site: named(sites.get(workOrder.siteId)),
       line: named(workOrder.lineId ? floorLines.get(workOrder.lineId) : undefined),
       team: named(workOrder.lineId ? teams.find((team) => team.lineId === workOrder.lineId) : undefined),
       workshop: null,
+      since: null,
     })
   }
-  for (const workshop of workshops) places.set(`workshop|${workshop.tradeName ?? workshop.legalName}`, { site: null, line: null, team: null, workshop: { name: workshop.tradeName ?? workshop.legalName } })
+  for (const workshop of workshops) {
+    // B-OO-008: since the day its first job still out there was issued (null: one not marked issued).
+    const issued = outside.flatMap((row) => (row.partyId === workshop.id && row.issuedAt ? [row.issuedAt.getTime()] : []))
+    const name = workshop.tradeName ?? workshop.legalName
+    places.set(`workshop|${name}`, { kind: 'WORKSHOP', site: null, line: null, team: null, workshop: { name }, since: issued.length > 0 ? businessDate(new Date(Math.min(...issued))) : null })
+  }
   const supervisorPerson = supervisor?.userId ? people.get(supervisor.userId) : undefined
   return {
     supervisor: supervisorPerson && supervisor?.from ? { ...supervisorPerson, from: supervisor.from, me: supervisorPerson.id === context.actorId } : null,
     backup: supervisor?.backupId ? (people.get(supervisor.backupId) ?? null) : null,
-    answersCustomer: thread?.ownerId ? (people.get(thread.ownerId) ?? null) : null,
+    answersCustomer: answersCustomer ? { id: answersCustomer.id, name: answersCustomer.name, active: answersCustomer.active, source: answersCustomer.source } : null,
     places: [...places.values()],
   }
 }

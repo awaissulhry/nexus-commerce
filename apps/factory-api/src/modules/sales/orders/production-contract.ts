@@ -10,6 +10,8 @@ import { FINISH_SOURCES } from '@nexus/factory-domain/planning/promise-keep/risk
 import { gateView as planningGateView } from '../../planning/milestones/contract' // B-OO-010: a gate's version and actions, Planning's own shape
 // B-SA-050: Still to do (its kinds; who it waits on: the apply plan's teams).
 import { APPLY_TEAMS, STILL_KINDS } from '@nexus/factory-domain/sales/change-requests/apply-plan'
+// B-OO-008: where "Answers the customer" comes from — the threads' own owner chain.
+import { OWNER_SOURCES } from '../../../platform/threads/owner'
 
 /**
  * B-SA-031 / B-SA-032 (Sales page plan P2, P3, P4, P15, P16; 13-backend B1, B12; 10-order-page OR1, OR2): the office's read of ONE
@@ -293,15 +295,30 @@ export const qualityView = output({
   final: z.array(output({ workOrderId: id(), number: z.string().nullable(), status: z.string(), sampleSize: z.number().int(), on: businessDate().nullable() })).nullable(),
 })
 
+// ── B-OO-008 (order overview N8): what a place is — our own plant (a site and its line) or an outside workshop ──
+export const PLACE_KINDS = ['PLANT', 'WORKSHOP'] as const
+export type PlaceKind = (typeof PLACE_KINDS)[number]
+
 export const peopleView = output({
   supervisor: output({ id: id(), name: z.string(), active: z.boolean(), from: z.enum(['ORDER', 'BRAND']), me: z.boolean() }).nullable(),
   /** The customer's backup (an order has none of its own). */
   backup: person.nullable(),
-  /** "Answers the customer": the owner of the order's thread (no other sales owner is kept). */
-  answersCustomer: person.nullable(),
-  /** Where it is made: a site and line (a team by name only), or an outside workshop — never an operator, a count or an output. */
-  places: z.array(output({ site: named.nullable(), line: named.nullable(), team: named.nullable(), workshop: output({ name: z.string() }).nullable() })),
+  /**
+   * B-OO-008 (N7): "Answers the customer" — the conversation's owner by the threads' ONE chain (platform/threads/owner.ts) and where
+   * it comes from: the thread's own owner (SET), else the order's production supervisor (SUPERVISOR), else the order's maker (MAKER).
+   * Null: nobody (a portal-made order with no supervisor). Office only: the portal's thread answers never name the owner (W08).
+   */
+  answersCustomer: person.extend({ source: z.enum(OWNER_SOURCES) }).nullable(),
+  /**
+   * Where it is made, from its LIVE work orders only (B-OO-008: a cancelled or closed one names no place): our plant (`kind`
+   * PLANT: a site and line, a team by name only) or an outside workshop (WORKSHOP: its name, and `since` the day its first job
+   * still out there was issued) — never an operator, a count or an output.
+   */
+  places: z.array(
+    output({ kind: z.enum(PLACE_KINDS), site: named.nullable(), line: named.nullable(), team: named.nullable(), workshop: output({ name: z.string() }).nullable(), since: businessDate().nullable() }),
+  ),
 })
+// ── end B-OO-008 ──
 
 export const changesView = output({
   /** The customer's requests still waiting (open, or countered and waiting on the customer). */

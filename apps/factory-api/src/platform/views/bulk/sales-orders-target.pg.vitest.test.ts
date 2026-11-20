@@ -171,3 +171,43 @@ describe('B-TH-060 the sheet’s cells', () => {
     expect((await apply('sellerA', [{ id: orderA.id, version: await versionOf(orderA.id), changes: { 'cf:ship_note': 'Made-up: by seller A' } }]))[0]).toMatchObject({ ok: true })
   })
 })
+
+// ── B-OO-014 (order overview §8.3): the record page's save of a custom value moves the order's version — the lost update ──────
+describe('B-OO-014: the order page’s save of a custom value moves the order’s version, so the sheet never overwrites it', () => {
+  it('a page save after the sheet read: the sheet’s apply at the row version it read is stale, the page’s value stays', async () => {
+    const v0 = await versionOf(orderA.id)
+    // The sheet reads the row (its preview names the version it will apply at) …
+    const shown = await preview('keeper', [orderA.id], { 'cf:ship_note': 'Made-up: from the sheet' })
+    expect(shown.json().rows[0]).toMatchObject({ id: orderA.id, version: v0, refusal: null })
+    // … then the order page saves the same field, at the value's version and the order's.
+    const page = await ok('keeper', 'GET', `/fields/values/ORDER/${orderA.id}`)
+    expect(page).toMatchObject({ recordVersion: v0, editHeld: null })
+    const note = (page.values as Json[]).find((value) => value.code === 'ship_note')
+    const saved = await ok('keeper', 'PUT', `/fields/values/ORDER/${orderA.id}`, { values: [{ code: 'ship_note', value: 'Made-up: from the page', version: note?.version ?? null }], recordVersion: v0 })
+    expect(saved).toMatchObject({ set: ['ship_note'], recordVersion: v0 + 1 })
+    expect(await versionOf(orderA.id)).toBe(v0 + 1)
+    // The sheet applies what it previewed at the version it read: stale, nothing overwritten.
+    const late = await apply('keeper', [{ id: orderA.id, version: v0, changes: { 'cf:ship_note': 'Made-up: from the sheet' } }])
+    expect(late[0]).toMatchObject({ ok: false, refusal: { code: 'stale' } })
+    expect(await valueOf(orderA.id, 'ship_note')).toBe('Made-up: from the page')
+    // Read again, the sheet's edit goes through at the new version (and moves it once more).
+    const again = await apply('keeper', [{ id: orderA.id, version: v0 + 1, changes: { 'cf:ship_note': 'Made-up: from the sheet' } }])
+    expect(again[0]).toMatchObject({ ok: true, version: v0 + 2 })
+    // The page's save at the version it read before the sheet's edit: refused, its value not written.
+    const stale = await call('keeper', 'PUT', `/fields/values/ORDER/${orderA.id}`, { values: [{ code: 'ship_note', value: 'Made-up: page again', version: (await ok('keeper', 'GET', `/fields/values/ORDER/${orderA.id}`)).values.find((value: Json) => value.code === 'ship_note').version }], recordVersion: v0 + 1 })
+    expect(stale.statusCode).toBe(409)
+    expect(await valueOf(orderA.id, 'ship_note')).toBe('Made-up: from the sheet')
+  })
+
+  it('the cancelled order: the page’s GET holds the edit (FINAL) and its save is refused in the sheet’s own words', async () => {
+    const read = await ok('keeper', 'GET', `/fields/values/ORDER/${cancelled.id}`)
+    expect(read.editHeld).toBe('FINAL')
+    const version = await versionOf(cancelled.id)
+    const answer = await call('keeper', 'PUT', `/fields/values/ORDER/${cancelled.id}`, { values: [{ code: 'ship_note', value: 'Made-up: x', version: null }], recordVersion: version })
+    expect(answer.statusCode, answer.body).toBe(409)
+    expect(answer.json().error).toMatchObject({ code: 'invalid_state', message: `Sales order ${cancelled.number} is cancelled: it never changes.` })
+    expect(await valueOf(cancelled.id, 'ship_note')).toBeNull()
+    expect(await versionOf(cancelled.id)).toBe(version)
+  })
+})
+// ── end B-OO-014 ──
