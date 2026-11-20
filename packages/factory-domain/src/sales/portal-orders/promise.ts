@@ -1,5 +1,6 @@
 import { businessDate, type BusinessDate } from '../../core/time'
 import type { Words } from './status'
+import { isAutomaticReason } from '../amendments/reasons' // B-OL-004
 
 /**
  * The promise date as the customer reads it (B-W2b-175, SAL-075 / PLN-178; design portal.customer.orders › Status &
@@ -10,7 +11,8 @@ import type { Words } from './status'
  * and the reason the office person typed. That text is the office's and may say anything, so it NEVER reaches the
  * customer: a move shows one of the curated reasons below, in the customer's words, when the office's reason names it —
  * its code (`MATERIAL_LATE`), its code before a note (`MATERIAL_LATE: tannery batch 12 late`: the note stays the
- * office's), or its words in Italian or English — and "Our planning changed" otherwise. The office's dialog offers the
+ * office's), or its words in Italian or English — and "Our planning changed" otherwise; B-OL-004 (18 F23): a move with no
+ * reason given (none, or the automatic words) shows no reason at all. The office's dialog offers the
  * list (design sales.orders orders.promise "Reason (list + note)"; a later screen step) and sends the code: B-OO-009, the
  * promise route's `reasonCode`, stored by `promiseReasonText`.
  */
@@ -70,7 +72,8 @@ export interface CustomerPromiseMove {
   readonly to: BusinessDate
   /** The line numbers it moved (10, 20 …); empty: the whole order. */
   readonly lines: readonly number[]
-  readonly reason: { readonly code: PromiseReasonCode; readonly words: Words }
+  /** B-OL-004 (18 F23): null when the office gave no reason (none stored, or the automatic words): the customer reads none. */
+  readonly reason: { readonly code: PromiseReasonCode; readonly words: Words } | null
 }
 
 /** The moves in the customer's words, newest first; `seqOf` names a line by its number (a line gone since: left out). */
@@ -79,6 +82,8 @@ export function customerPromiseHistory(moves: readonly PromiseMove[], seqOf: (li
     .sort((a, b) => b.at.getTime() - a.at.getTime())
     .map((move) => {
       const code = promiseReasonOf(move.reason)
+      // B-OL-004 (18 F23): no reason given — no "Our planning changed" either.
+      const given = typeof move.reason === 'string' && move.reason.trim() !== '' && !isAutomaticReason(move.reason)
       return {
         on: businessDate(move.at),
         from: move.from,
@@ -87,7 +92,7 @@ export function customerPromiseHistory(moves: readonly PromiseMove[], seqOf: (li
           const seq = seqOf(lineId)
           return seq === undefined ? [] : [seq]
         }),
-        reason: { code, words: PROMISE_REASON_WORDS[code] },
+        reason: given ? { code, words: PROMISE_REASON_WORDS[code] } : null,
       }
     })
 }

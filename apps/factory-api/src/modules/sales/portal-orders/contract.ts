@@ -156,7 +156,8 @@ export const recordContract = defineContract({
       }),
       milestones: z.array(milestone),
       promiseHistory: z.array(
-        output({ on: day, from: day.nullable(), to: day, lines: z.array(z.number().int()), reason: output({ code: z.enum(PROMISE_REASON_CODES), words }) }),
+        // B-OL-004 (18 F23): `reason` null — the office gave none (the customer reads no reason, never "Our planning changed").
+        output({ on: day, from: day.nullable(), to: day, lines: z.array(z.number().int()), reason: output({ code: z.enum(PROMISE_REASON_CODES), words }).nullable() }),
       ),
       deposits: z.array(output({ id: id(), kind: z.enum(STORED_DEPOSIT_KINDS), status: z.string(), amount: money.price(z.number().int()), currency: z.string(), dueDate: day, paidAt: instant().nullable() })),
       lines: z.array(line),

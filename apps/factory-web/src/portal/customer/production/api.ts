@@ -131,6 +131,8 @@ export const productionRowSchema = z.object({
   next: next.nullable(),
   count: count.nullable(),
   problem: problemState.nullable().optional(), // F-PR-24
+  /** F-MS-105 (the API's B-MS-007, R8): cutting REALLY started (the floor's cut facts, never the stage); absent: an older answer. */
+  cutStarted: z.boolean().optional(),
 })
 export type ProductionRow = z.infer<typeof productionRowSchema>
 
@@ -235,7 +237,8 @@ export const productionOrderSchema = z.object({
   marks,
   holds: z.array(z.object({ kind: z.enum(BRAND_HOLD_READS), since: z.string(), words })),
   urgency: urgency.nullable(),
-  promiseHistory: z.array(z.object({ on: z.string(), from: z.string().nullable(), to: z.string(), lines: z.array(z.number()), reason: z.object({ code: z.enum(PROMISE_REASON_CODES), words }) })),
+  // B-OL-004: `reason` null — the office gave no reason (none is shown).
+  promiseHistory: z.array(z.object({ on: z.string(), from: z.string().nullable(), to: z.string(), lines: z.array(z.number()), reason: z.object({ code: z.enum(PROMISE_REASON_CODES), words }).nullable() })),
   /** + Progress: the pieces of its own cells (F-PR-12a writes the stage's count in the "In production" note; F-PR-12b draws them). */
   progress: z
     .object({

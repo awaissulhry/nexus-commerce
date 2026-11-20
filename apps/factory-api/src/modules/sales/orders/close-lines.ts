@@ -2,6 +2,7 @@ import { InvalidStateError, ValidationError, type Issue } from '@nexus/factory-d
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { closeShortPlan, reopenPlan, type ShortLine } from '@nexus/factory-domain/sales/orders/daily'
 import { MAX_REASON } from '@nexus/factory-domain/sales/orders/orders'
+import { reasonOr } from '@nexus/factory-domain/sales/amendments/reasons' // B-OL-004
 import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { reasonFor } from '../../../platform/reasons/service'
@@ -21,7 +22,7 @@ import { plannedChangesOf, workOrderPreviewOf } from './work-order-plan'
 /**
  * Close remaining lines and reopen them (B-W2a-30; SAL-210; the design's band overflow "Close remaining lines": "Lines
  * and sizes that will not be made or shipped", reversal "Reopen lines"). Each is ONE command on the order (orders.manage;
- * a reason): the lines' work-order locks, then the order's row (FOR UPDATE, at the version read), the facts read again;
+ * a reason, B-OL-004: else the automatic words): the lines' work-order locks, then the order's row (FOR UPDATE, at the version read), the facts read again;
  * then every chosen line's four short-close columns (factory-db SalesOrderLine closedShortQuantity = what is left of it
  * after what shipped, closedShortAt, closedShortById, closeShortReason; the …_sales_w2a_guards trigger takes that change
  * also while PARTLY_SHIPPED). B-W2b-16: the close may name a code of the CANCEL reason list (closedShortReasonCode, an
@@ -37,7 +38,7 @@ import { plannedChangesOf, workOrderPreviewOf } from './work-order-plan'
  * closed line is not refused by the database (named as a gap for the shipping step).
  */
 
-const reasonOf = (value: string): string => value.trim()
+const reasonOf = (value: string | undefined): string => (value ?? '').trim()
 
 function invalid(issues: Issue[]): ValidationError {
   return new ValidationError(issues.length === 1 ? issues[0]!.message : 'The lines cannot be closed like this.', issues)
@@ -54,7 +55,8 @@ function statusChanged(tools: CommandTools, order: Pick<OrderRow, 'id' | 'number
 
 export interface LinesBody {
   readonly version?: number | undefined
-  readonly reason: string
+  /** B-OL-004 (order lines plan D2): optional — none stores the automatic words (amendments/reasons AUTOMATIC_REASONS). */
+  readonly reason?: string | undefined
   /** The lines; none: every open line with something left (close), every closed line (reopen). */
   readonly lineIds?: readonly string[] | undefined
 }
@@ -79,8 +81,8 @@ async function checkReasonCode(tools: Pick<CommandTools, 'tx'>, code: string | u
 export async function closeLines(caller: CommandCaller, orderId: string, body: CloseLinesBody, idempotencyKey?: string): Promise<{ order: OrderView; closed: { lineId: string; seq: number; closedShortQuantity: number }[]; reducesDone: string[]; stillInWorkOrders: { lineId: string; pieces: number }[]; /* B-OP-012 */ workOrders: FollowedWorkOrders }> {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
-  const reason = reasonOf(body.reason)
-  if (reason === '' || reason.length > MAX_REASON) throw invalid([{ path: 'body/reason', message: 'Say why the lines are closed (it stays on each line).' }])
+  // B-OL-004 (order lines plan D2): words are optional (none: the automatic words); typed, they fit the column.
+  if (reasonOf(body.reason).length > MAX_REASON) throw invalid([{ path: 'body/reason', message: `At most ${MAX_REASON} characters.` }])
   const { result } = await withAutoApply((autoApply) => command(caller, { name: 'orders.closeLines', idempotencyKey, input: { orderId, ...body } }, (tools) => closeLinesInCommand(tools, context, order, body, { autoApply })))
   return { order: await recordAfter(caller, order.id), ...result }
 }
@@ -99,12 +101,14 @@ export async function closeLinesInCommand(
   options: { readonly workOrders?: 'now' | 'later'; readonly autoApply?: AutoApply } = {},
 ): Promise<{ closed: { lineId: string; seq: number; closedShortQuantity: number }[]; reducesDone: string[]; stillInWorkOrders: { lineId: string; pieces: number }[]; /* B-OP-012 */ workOrders: FollowedWorkOrders }> {
   const { tx, now } = tools
-  const reason = reasonOf(body.reason)
+  // B-OL-004: a code that asks for detail still wants the typed words (checkReasonCode); stored: the words, else the automatic ones.
+  const typed = reasonOf(body.reason)
+  const reason = reasonOr('close', typed)
   const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
   await lockOrderLines(tx, context.tenantId, lineIds)
   const locked = await lockOrder(tx, order.id, body.version)
   const facts = await readOrderFacts(tx, order)
-  const reasonCode = await checkReasonCode(tools, body.reasonCode, reason)
+  const reasonCode = await checkReasonCode(tools, body.reasonCode, typed)
   const plan = closeShortPlan(locked.status, shortLinesOf(facts), [...(body.lineIds ?? [])])
   if (Array.isArray(plan)) {
     if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
@@ -216,8 +220,9 @@ export async function previewCloseLines(caller: CommandCaller, orderId: string, 
 export async function reopenLines(caller: CommandCaller, orderId: string, body: LinesBody, idempotencyKey?: string): Promise<{ order: OrderView; reopened: string[] }> {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
-  const reason = reasonOf(body.reason)
-  if (reason === '' || reason.length > MAX_REASON) throw invalid([{ path: 'body/reason', message: 'Say why the lines are reopened (it stays in the order history).' }])
+  // B-OL-004 (order lines plan D2): words are optional (none: the automatic words); typed, they fit the column.
+  if (reasonOf(body.reason).length > MAX_REASON) throw invalid([{ path: 'body/reason', message: `At most ${MAX_REASON} characters.` }])
+  const reason = reasonOr('reopen', body.reason)
   const { result } = await command(caller, { name: 'orders.reopenLines', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)

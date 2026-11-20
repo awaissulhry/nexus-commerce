@@ -5,11 +5,14 @@ import { clearHealthContract, customerUrgencyContract, getHealthContract, raiseH
 import { clearBrandHealth, getBrandHealth, raiseBrandHealth } from './health'
 import { manifest } from './manifest'
 import { customerUrgencyCard, setBackUrgency, unlockUrgency } from './urgency'
+// B-MS-005: the stage set by hand.
+import { clearStageContract, setStageContract } from './contract'
+import { clearBrandStage, setBrandStage } from './stage'
 
 /**
  * The customer's production state of its orders, steered by the office (./manifest). The keeper (./keeper, a worker handler and a
  * nightly cron, no route) keeps the stage, health and waiting-on; B-PR-35 adds the factory's raise of the health (./health); B-PR-22b
- * the customer's urgency as the office steers it (./urgency).
+ * the customer's urgency as the office steers it (./urgency); B-MS-005 the stage set by hand (./stage).
  */
 export default defineRoutes('production.brand', manifest, async (app) => {
   app.get('/production/brand-orders/:orderId/health', { schema: getHealthContract }, async (request) => getBrandHealth(request, request.params.orderId))
@@ -24,4 +27,9 @@ export default defineRoutes('production.brand', manifest, async (app) => {
   app.post('/production/brand-orders/urgency/regular', { schema: setBackUrgencyContract }, async (request) => setBackUrgency(officeAuthOf(app), request, request.body, idempotencyKeyFrom(request)))
 
   app.post('/production/brand-orders/urgency/unlock', { schema: unlockUrgencyContract }, async (request) => unlockUrgency(officeAuthOf(app), request, request.body, idempotencyKeyFrom(request)))
+
+  // B-MS-005: the stage set by hand (./stage.ts): set or changed, and cleared.
+  app.put('/production/brand-orders/:orderId/stage', { schema: setStageContract }, async (request) => setBrandStage(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
+
+  app.delete('/production/brand-orders/:orderId/stage', { schema: clearStageContract }, async (request) => clearBrandStage(request, request.params.orderId, request.query.version, idempotencyKeyFrom(request)))
 })

@@ -7,6 +7,8 @@ import { PLANNING_PROMISE_VIEW } from '@nexus/factory-domain/planning/promise/pe
 import { effectiveHealth, type BrandHealth, type HealthRaise } from '@nexus/factory-domain/production-brand/health'
 import { standingRaiseOf } from './production-columns' // B-SA-070
 import { nextStageOf, type BrandStage } from '@nexus/factory-domain/production-brand/stages'
+import type { OrderStage } from '@nexus/factory-domain/production-brand/stages' // B-MS-006
+import type { HandStage, StageSetReasonCode } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-006
 import { isAfterProduction, officeStripStateOf } from '@nexus/factory-domain/production-brand/stages' // B-OO-007
 import type { BrandUrgency } from '@nexus/factory-domain/production-brand/urgency'
 import { BLOCKER_OWNER, type Blocker, type BlockerKind, type BlockerRef, type WaitingOn } from '@nexus/factory-domain/production-brand/waiting' // B-OP-021: + BlockerRef
@@ -61,7 +63,9 @@ import { ownerOf } from '../../../platform/threads/owner'
  * reader may do, by Planning's own rule — the writes stay Planning's routes), the issues and NCRs of the order
  * (B-SA-033's filters), and the supervisor resolver.
  *
- *   headline  the plain stage (since, ahead, sewing not counted), what is in work as counts (bundles; pieces between the steps),
+ *   headline  the plain stage (since, ahead, sewing not counted; B-MS-006: the stage set by hand with its reason, the floor's own
+ *             stage and when — its note and who with workorders.view only — and the production row's version), what is in work as
+ *             counts (bundles; pieces between the steps),
  *             the health (its raise: the office's note and who raised it with workorders.view only), who it waits on and each
  *             blocker in words, the holds in words (their office notes with workorders.view), the promise and its slip, the
  *             three urgencies (the customer's own mark, the factory's rush, the office's priority)                  orders.view
@@ -273,6 +277,65 @@ export function promiseMovesOf(befores: readonly unknown[]): number {
 }
 // ── end B-OO-007 ──
 
+// ── B-MS-006 (set the stage by hand; review fixes R9, R17) ──────────────────────────────────────────────────────────────────────
+/** The production row's stage columns as the headline reads them. */
+export interface HeadlineStageRow {
+  readonly stage: string
+  readonly stageAt: Date
+  readonly stageSet: string | null
+  readonly stageSetReason: string | null
+  readonly stageSetNote: string | null
+  readonly stageSetAt: Date | null
+  readonly version: number
+}
+
+/** An office person as the read names one. */
+export interface HeadlinePerson {
+  readonly id: string
+  readonly name: string
+  readonly active: boolean
+}
+
+/**
+ * The headline's stage: the one the customer reads — the row's (the keeper's SHOWN stage: the floor's, or the one set by hand while
+ * it leads), else the live facts while no row is kept yet — with "ahead" and "sewing not counted" only from live facts that agree
+ * (under a hand stage they never do: both vanish). B-MS-006: `byHand` while a stage set by hand stands — its stage and reason, the
+ * floor's own stage from the live facts (null: no goods line open), when; the office's note and who set it only behind the `notes`
+ * gate (workorders.view) — and the production row's `version`, which a set, change or clear by hand sends back (R9; null: no row
+ * yet, so a set sends null and makes it, R1). null: no stage at all (no row, no goods line open).
+ */
+export function headlineStageOf(input: { readonly row: HeadlineStageRow | null; readonly live: OrderStage | null; readonly partlyShipped: boolean; readonly notes: boolean; readonly setBy: HeadlinePerson | null }) {
+  const { row, live, notes } = input
+  const code: BrandStage | null = row ? (row.stage as BrandStage) : (live?.stage ?? null)
+  if (code === null) return null
+  const agreeing = live && live.stage === code ? live : null
+  const next = nextStageOf(code)
+  const hand = row && row.stageSet !== null && row.stageSetReason !== null && row.stageSetAt !== null ? { stage: row.stageSet as HandStage, reasonCode: row.stageSetReason as StageSetReasonCode, at: row.stageSetAt, note: row.stageSetNote } : null
+  return {
+    code,
+    words: STAGE_WORDS[code],
+    since: row ? businessDate(row.stageAt) : null,
+    ahead: agreeing?.ahead ?? 0,
+    aheadWords: aheadWords(agreeing?.ahead ?? 0),
+    sewingNotCounted: agreeing?.sewingNotCounted ?? false,
+    sewingNotCountedWords: agreeing?.sewingNotCounted ? SEWING_NOT_COUNTED_WORDS : null,
+    next: next ? { code: next, words: STAGE_WORDS[next] } : null,
+    partlyShipped: input.partlyShipped,
+    byHand: hand
+      ? {
+          stage: hand.stage,
+          reasonCode: hand.reasonCode,
+          floor: live ? { code: live.stage, words: STAGE_WORDS[live.stage] } : null,
+          at: toUtcIso(hand.at),
+          note: notes ? hand.note : null,
+          by: notes ? input.setBy : null,
+        }
+      : null,
+    version: row ? row.version : null,
+  }
+}
+// ── end B-MS-006 ──
+
 // ---- the read ---------------------------------------------------------------------------------------------------------------------
 
 /** Subcontract orders whose pieces are out at the workshop (production/brand facts' own set). */
@@ -332,27 +395,32 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
   const facts = await readOrderProductionFacts(db, context, order.id, now, { health: false })
   const row = await db.brandOrderProduction.findFirst({
     where: { key: brandProductionKey(order.id) },
-    select: { stage: true, stageAt: true, health: true, healthSet: true, healthReasonCode: true, healthNote: true, healthSetAt: true, healthSetById: true, healthSetUntil: true, waitingOn: true, waitingSince: true },
+    select: {
+      stage: true,
+      stageAt: true,
+      // B-MS-006: the stage set by hand and the row's version.
+      stageSet: true,
+      stageSetReason: true,
+      stageSetNote: true,
+      stageSetAt: true,
+      stageSetById: true,
+      version: true,
+      health: true,
+      healthSet: true,
+      healthReasonCode: true,
+      healthNote: true,
+      healthSetAt: true,
+      healthSetById: true,
+      healthSetUntil: true,
+      waitingOn: true,
+      waitingSince: true,
+    },
   })
   // The stage the customer reads too (its kept state first), with "ahead" and "sewing not counted" from the live facts that agree.
+  // B-MS-006: the stage set by hand (who only behind the notes gate) and the row's version (./headlineStageOf).
   const live = facts?.stage ?? null
-  const code: BrandStage | null = row ? (row.stage as BrandStage) : (live?.stage ?? null)
-  const agreeing = live && code && live.stage === code ? live : null
-  const next = code ? nextStageOf(code) : null
-  const stage =
-    code === null
-      ? null
-      : {
-          code,
-          words: STAGE_WORDS[code],
-          since: row ? businessDate(row.stageAt) : null,
-          ahead: agreeing?.ahead ?? 0,
-          aheadWords: aheadWords(agreeing?.ahead ?? 0),
-          sewingNotCounted: agreeing?.sewingNotCounted ?? false,
-          sewingNotCountedWords: agreeing?.sewingNotCounted ? SEWING_NOT_COUNTED_WORDS : null,
-          next: next ? { code: next, words: STAGE_WORDS[next] } : null,
-          partlyShipped: order.status === 'PARTLY_SHIPPED',
-        }
+  const handBy = row && notes && row.stageSet !== null && row.stageSetById ? ((await peopleById(db, [row.stageSetById])).get(row.stageSetById) ?? null) : null
+  const stage = headlineStageOf({ row, live, partlyShipped: order.status === 'PARTLY_SHIPPED', notes, setBy: handBy })
 
   // What is in work: the order's ACTIVE bundles of work orders past their draft, and its pieces between the steps.
   const cells = await load.cells()

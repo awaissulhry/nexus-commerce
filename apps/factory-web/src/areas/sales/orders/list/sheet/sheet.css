@@ -230,6 +230,15 @@
   min-width: 0;
   white-space: nowrap;
 }
+/* F-MS-104: the small hand beside a stage set by hand (muted); amber once it was set 7 days ago or more. */
+.fw-sheet-hand {
+  display: inline-flex;
+  align-items: center;
+  color: var(--nds-text-muted);
+}
+.fw-sheet-hand.old {
+  color: var(--nds-warning);
+}
 .fw-sheet-me {
   font-weight: 600;
 }

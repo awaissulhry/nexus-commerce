@@ -216,3 +216,39 @@ export const ORDER_FILES: OrderFilesRead = {
   total: 4,
   truncated: false,
 }
+
+// ---- F-MS-101 (set the stage by hand; B-MS-006's shape, R9): made-up reads of the order's stage set by hand — the floor at Sewing
+// with nothing set (the door open; the production row's version 3); Sewing set over the floor's Preparing by an office person today,
+// "System or scanners down", with the office's note; the same 9 days old (the warning tone, "check it"); Cutting on an order that no
+// work order records yet (as SEED-SO-W39-02), no note; the customer's own pause on the order (the door held). Every name and note is
+// made up; never a person of the floor.
+/** When the demo's hand stages were set: today (the demo's 2026-10-29) and 9 days before it. */
+export const HAND_AT = '2026-10-29T13:50:00Z'
+export const HAND_OLD_AT = '2026-10-20T09:10:00Z'
+const SETTER = { id: '0190f0e2-9191-7000-8000-000000000004', name: 'Bea Esempio', active: true }
+type HandStage = NonNullable<NonNullable<Headline['stage']>['byHand']>
+const handOver = (stage: 'CUTTING' | 'SEWING' | 'QUALITY', byHand: HandStage | null, version: number | null): Headline => ({
+  ...HEADLINE,
+  stage: { ...HEADLINE.stage!, code: stage, words: stage === 'CUTTING' ? w('Cutting', 'Taglio') : stage === 'SEWING' ? w('Sewing', 'Cucitura') : w('Quality check', 'Controllo qualità'), ahead: 0, aheadWords: null, byHand, version },
+})
+export const HAND_FREE_READ: OrderProduction = { ...PRODUCTION_READ, headline: handOver('SEWING', null, 3) }
+export const HAND_BY: HandStage = { stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: w('Preparing', 'In preparazione') }, at: HAND_AT, note: 'Tablet del reparto taglio offline dalle 14:00.', by: SETTER }
+export const HAND_READ: OrderProduction = { ...PRODUCTION_READ, headline: handOver('SEWING', HAND_BY, 4) }
+export const HAND_OLD_READ: OrderProduction = { ...PRODUCTION_READ, headline: handOver('SEWING', { ...HAND_BY, at: HAND_OLD_AT }, 4) }
+/** No work order yet (the lines not in work orders): Cutting set by hand, "Too few people to record the work", no note. */
+export const HAND_NOWORK_READ: OrderProduction = {
+  ...CONFIRMED_READ,
+  order: { ...PRODUCTION_READ.order, status: 'IN_PRODUCTION' },
+  headline: { ...handOver('CUTTING', { stage: 'CUTTING', reasonCode: 'FEW_PEOPLE', floor: { code: 'PREPARING', words: w('Preparing', 'In preparazione') }, at: HAND_AT, note: null, by: SETTER }, 1), waiting: { on: 'US', words: w('Waiting on us', 'Tocca a noi'), since: null, blockers: [] } },
+}
+/** The customer's own pause stands on the order (a BRAND_PAUSE blocker): Set the stage by hand… is held — lift the pause first. */
+export const HAND_PAUSED_READ: OrderProduction = {
+  ...PRODUCTION_READ,
+  headline: {
+    ...handOver('SEWING', null, 3),
+    held: true,
+    holds: [{ kind: 'BRAND', words: w('Paused at your request', 'In pausa su vostra richiesta'), since: '2026-10-27' }],
+    waiting: { on: 'BRAND', words: w('Waiting on customer', 'Tocca al cliente'), since: '2026-10-27T10:00:00Z', blockers: [{ kind: 'BRAND_PAUSE', on: 'BRAND', words: w('Paused at your request', 'In pausa su vostra richiesta'), since: '2026-10-27T10:00:00Z', ref: null, sub: null }] },
+  },
+}
+// ---- end F-MS-101

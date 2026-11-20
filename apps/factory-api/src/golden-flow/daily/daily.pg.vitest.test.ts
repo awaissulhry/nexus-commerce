@@ -247,6 +247,10 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     expect(review.diff).toMatchObject({ lines: [], reacceptanceNeeded: false })
     expect(review.diff).not.toHaveProperty('netAmountBefore')
     expect(review.diff).not.toHaveProperty('netAmountAfter')
+    // B-OL-005 (order lines plan D3; 18 F10): the customer is asked only when ticked, else when the total goes up. Sales reads that
+    // the amount does not move, never which way it would (`totalUp` is the price grain's); nothing ticked, nothing is asked.
+    expect(review).toMatchObject({ amountChanges: false })
+    expect(review).not.toHaveProperty('totalUp')
     expect(review.diff.header.map((entry: STJson) => [entry.field, entry.after])).toEqual([
       ['customerRef', 'PO-GOLDEN-REPEAT-01/B'],
       ['requestedDate', change.requestedDate],

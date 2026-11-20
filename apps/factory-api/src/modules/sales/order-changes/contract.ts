@@ -122,12 +122,14 @@ const pricedFields = {
   labels: z.record(id(), z.string().max(PRICED_LIMITS.label + 10)).optional(),
   /** The change fee, net, in the order's currency ("25.00"). */
   fee: money.price(z.string().trim().max(20).nullish()),
-  /** The extra deposit: left out = the order's own percent of the growth; null = none. */
+  /** The extra deposit. B-OL-016 (none unless sent): left out or null = none; `{}` = the order's own percent of the growth. */
   deposit: money.price(
     input({ pct: z.string().trim().max(12).optional(), amount: money.price(z.string().trim().max(20).optional()), dueDate: businessDate().optional(), kind: z.enum(['ACCONTO', 'CAPARRA', 'CAPARRA_PENITENZIALE']).optional() }).nullish(),
   ),
   /** B-SA-042 (R1): what happens to pieces already cut beyond the new figures; required when the change leaves some. */
   extraOutcome: z.enum(EXTRA_OUTCOMES).nullish(),
+  /** B-OL-005 (order lines plan D3): ask the customer to accept the new order again; left out: only when the total goes up (a fee). */
+  askCustomer: z.boolean().optional(),
 }
 
 const partView = output({ label: z.string(), orderLineId: id().nullable(), amount: money.price(z.number().int()) })
@@ -152,6 +154,11 @@ export const previewPricedChangeContract = defineContract({
       stage: output({ stage, words }).nullable(),
       /** B-OP-013: the extra pieces and what each work order will do (null with the problems of no plan). */
       workOrders: workOrderPreviewView.nullable(),
+      // ── B-OL-005 (order lines plan D3; 18 F10): what the Review window's one tick starts from ──
+      /** The amount changes (the net, or the fee): for every writer, never which way. */
+      amountChanges: notMoney(z.boolean()),
+      /** What the customer pays goes up (a higher net, or a fee): only with the price grain. */
+      totalUp: money.price(z.boolean()),
     }),
   },
 })
@@ -176,7 +183,8 @@ const changeView = output({
 
 export const applyPricedChangeContract = defineContract({
   params: orderParams,
-  body: input({ version, ...pricedFields, reason: z.string().trim().min(1).max(MAX_REASON) }),
+  // B-OL-004 (order lines plan D2): the reason is optional (none: the server stores the automatic words).
+  body: input({ version, ...pricedFields }),
   response: { 201: output({ order: orderView, change: changeView, /* B-OP-012 */ workOrders: followedView }) },
 })
 

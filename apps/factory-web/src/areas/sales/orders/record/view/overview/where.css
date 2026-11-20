@@ -24,7 +24,8 @@
   overflow-wrap: break-word;
 }
 
-/* The five stages and their quiet line ("set by the floor and quality, never by hand") under them. */
+/* The five stages and their quiet line under them — F-MS-101: "set by the floor and quality, or by hand when the floor cannot record
+   them" (with its door, and the hand stage's row while one stands: F-MS-102). */
 .fw-so-where-stages {
   display: flex;
   flex-direction: column;
@@ -94,5 +95,71 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* ── F-MS-102 (set the stage by hand, 04 §2.2–2.4, §8): the quiet line under the dots with its door (a group of its own, at the right
+   edge; at a narrow card it wraps under the words), then the hand stage's row — the card's shared row (overview.css .fw-so-ov-row:
+   mark | words | doors) with a left rule in the info tone, the warning tone after 7 days (DS tone tokens, light and dark). It spans
+   the card at every width (no dead space on the right); every part has min-width 0 and its words wrap (no sideways scroll). ── */
+.fw-so-where-setby {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-so-where-setby > .fw-so-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.fw-so-where-hand-door {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin-inline-start: auto;
+}
+
+.fw-so-hand {
+  align-items: start;
+  padding-block: var(--nds-space-2);
+  padding-inline-start: var(--nds-space-8);
+  border-inline-start: var(--nds-space-3) solid var(--nds-info);
+}
+
+.fw-so-hand[data-tone='warning'] {
+  border-inline-start-color: var(--nds-warning);
+}
+
+.fw-so-hand-mark {
+  display: inline-flex;
+  padding-block-start: var(--nds-space-3);
+  color: var(--nds-text-muted);
+}
+
+.fw-so-hand-said {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.fw-so-hand-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-so-hand-note {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nds-space-4);
   min-width: 0;
 }

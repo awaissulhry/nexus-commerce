@@ -202,6 +202,10 @@ export const orderRowSchema = z.object({
       openRequests: z.number(),
       openIssues: z.number().nullable(),
       withheld: z.array(z.enum(PRODUCTION_WITHHELD)),
+      // F-MS-104 (the API's B-MS-006, R17): the stage it reads was set by hand and still stands (since when it was set; the order
+      // page says who and why), the same for the list, the customer's Work tab and the export; null: the floor's; absent from an
+      // answer before it. Never in a customer's answer.
+      stageByHand: z.object({ since: z.string() }).nullable().optional(),
     })
     .optional(),
   // ── F-CP-140 (customer page plan C2d; the API's B-CP-018): the price check of the row — only in a price holder's answer (the price

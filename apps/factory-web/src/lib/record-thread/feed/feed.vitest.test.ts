@@ -399,3 +399,75 @@ describe('F-OP-214 — feed quality: "Nexus Factory added a task", "5 steps by N
   })
 })
 // ---- end F-OP-214
+
+// ---- F-MS-107 (set the stage by hand; R6, R20): the order's History says it — the set (or a change), the clear and the keeper's end,
+// each in its own words; never a status step; a run of them folds with its plural words; the floor gate stays the backstop.
+describe('F-MS-107 — the History says a stage set by hand, cleared, or ended by the floor', () => {
+  const OFFICE = { who: 'Bea Esempio', actorAudience: 'OFFICE' as const }
+  const act = (id: string, at: string, action: string, more: Partial<FeedEvent> = {}): FeedEvent => ({ id, at, ...OFFICE, verb: action.slice(action.lastIndexOf('.') + 1), action, status: null, values: [], fields: [], ...more })
+  const words = (locale: 'en' | 'it') => createTranslator(locale, messagesFor(locale, ['record-thread-feed'])['record-thread-feed']!)
+
+  it('each act reads in its own words (the API\'s action names, as B-MS-004 / B-MS-005 write them)', () => {
+    expect(FOREIGN_ACTIONS['production.setBrandStage']).toBe('setStageByHand')
+    expect(FOREIGN_ACTIONS['production.clearBrandStage']).toBe('clearedStageByHand')
+    expect(FOREIGN_ACTIONS['production.brandKeeper.handCleared']).toBe('stageByHandEnded')
+    expect(stepVerbKey({ verb: 'setBrandStage', action: 'production.setBrandStage' })).toBe('verb.setStageByHand')
+    expect(stepVerbKey({ verb: 'clearBrandStage', action: 'production.clearBrandStage' })).toBe('verb.clearedStageByHand')
+    expect(stepVerbKey({ verb: 'handCleared', action: 'production.brandKeeper.handCleared' })).toBe('verb.stageByHandEnded')
+    const en = words('en')
+    const it_ = words('it')
+    expect(en('step.text', { who: 'Bea Esempio', verb: en('verb.setStageByHand') })).toBe('Bea Esempio set the stage by hand')
+    expect(it_('step.text', { who: 'Bea Esempio', verb: it_('verb.setStageByHand') })).toBe('Bea Esempio ha impostato la fase a mano')
+    expect(en('step.text', { who: 'Bea Esempio', verb: en('verb.clearedStageByHand') })).toBe('Bea Esempio cleared the stage set by hand')
+    expect(it_('step.text', { who: 'Bea Esempio', verb: it_('verb.clearedStageByHand') })).toBe('Bea Esempio ha tolto la fase impostata a mano')
+    // The keeper's end (the floor reached it, the order left production, no line left): Nexus Factory, true in every case.
+    expect(en('step.text', { who: en('who.SYSTEM'), verb: en('verb.stageByHandEnded') })).toBe("Nexus Factory ended the stage set by hand: the floor's own stage shows again")
+    expect(it_('step.text', { who: it_('who.SYSTEM'), verb: it_('verb.stageByHandEnded') })).toBe('Nexus Factory ha chiuso la fase impostata a mano: si vede di nuovo la fase del reparto')
+  })
+
+  it('no status step is made of them: the audit rows carry no `status` key, so they never stand alone as a status move', () => {
+    const entry = { id: 'h1', at: '2026-11-20T09:00:00.000Z', action: 'production.setBrandStage', actor: { id: 'u1', audience: 'OFFICE' }, actorHidden: false, status: null, before: null, after: { from: 'PREPARING', to: 'SEWING', floor: 'PREPARING', reasonCode: 'OUTAGE', note: 'Made-up: the scanners of hall two are down' }, fields: [] }
+    const event = eventOf(entry as never, new Map([['u1', 'Bea Esempio']]))
+    expect(event).toMatchObject({ verb: 'setBrandStage', action: 'production.setBrandStage', status: null, who: 'Bea Esempio' })
+    expect(isStatusStep(event)).toBe(false)
+    expect(isFieldChange(event)).toBe(false)
+    // Without audit.read the API sends no before / after: no value and no note reach the feed.
+    expect(eventOf({ ...entry, after: null } as never, new Map()).values).toEqual([])
+    const rows = feedRows({ messages: [], events: [act('s', '2026-11-20T09:00:00Z', 'production.setBrandStage'), change('u', '2026-11-20T09:01:00Z')] })
+    expect(kinds(rows)).toEqual(['day', 'step', 'changes'])
+  })
+
+  it('a run of two folds with the plural words; a set then a clear folds as "2 steps by …"; another actor splits', () => {
+    const two = [act('a', '2026-11-20T09:00:00Z', 'production.setBrandStage'), act('b', '2026-11-20T09:20:00Z', 'production.setBrandStage')]
+    const rows = feedRows({ messages: [], events: two })
+    expect(kinds(rows)).toEqual(['day', 'steps'])
+    expect(stepsWordsOf(two)).toEqual({ key: 'steps.many.setStageByHand', count: 2 })
+    expect(words('en')('steps.many.setStageByHand', { count: 2, who: 'Bea Esempio' })).toBe('Bea Esempio set the stage by hand 2 times')
+    expect(words('it')('steps.many.setStageByHand', { count: 2, who: 'Bea Esempio' })).toBe('Bea Esempio ha impostato la fase a mano 2 volte')
+    const ended = [act('k1', '2026-11-20T09:00:00Z', 'production.brandKeeper.handCleared', { who: null, actorAudience: 'SYSTEM' }), act('k2', '2026-11-20T09:05:00Z', 'production.brandKeeper.handCleared', { who: null, actorAudience: 'SYSTEM' })]
+    expect(stepsWordsOf(ended)).toEqual({ key: 'steps.many.stageByHandEnded', count: 2 })
+    expect(words('en')('steps.many.stageByHandEnded', { count: 2, who: 'Nexus Factory' })).toBe('Nexus Factory ended the stage set by hand 2 times')
+    const mixed = [act('a', '2026-11-20T09:00:00Z', 'production.setBrandStage'), act('c', '2026-11-20T09:10:00Z', 'production.clearBrandStage')]
+    expect(stepsWordsOf(mixed)).toEqual({ key: 'steps.text', count: 2 })
+    const split = feedRows({ messages: [], events: [act('a', '2026-11-20T09:00:00Z', 'production.setBrandStage'), act('k', '2026-11-20T09:10:00Z', 'production.brandKeeper.handCleared', { who: null, actorAudience: 'SYSTEM' })] })
+    expect(kinds(split)).toEqual(['day', 'step', 'step'])
+  })
+
+  it('the floor gate stays the backstop (R20): a floor worker behind it is "A person on the floor", never a name', () => {
+    expect(whoWords(act('f', '2026-11-20T09:00:00Z', 'production.setBrandStage', { who: 'Ugo Operaio', whoHidden: true, actorAudience: 'FLOOR' }))).toEqual({ key: 'who.floorPerson' })
+    expect(whoWords(act('o', '2026-11-20T09:00:00Z', 'production.setBrandStage'))).toEqual({ text: 'Bea Esempio' })
+  })
+
+  it('every word in both languages, the plurals in pairs', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const t = words(locale)
+      for (const verb of ['setStageByHand', 'clearedStageByHand', 'stageByHandEnded']) {
+        expect(t(`verb.${verb}`), `${locale} ${verb}`).not.toBe(`verb.${verb}`)
+        expect(t(`steps.many.${verb}`, { count: 1, who: 'W' }), `${locale} ${verb} one`).toMatch(/^W .* 1 \S+$/)
+        expect(t(`steps.many.${verb}`, { count: 3, who: 'W' }), `${locale} ${verb} other`).toMatch(/^W .* 3 \S+$/)
+        expect(Object.keys(CATALOGUE[locale]['record-thread-feed'] ?? {}).filter((key) => key.startsWith(`steps.many.${verb}_`)).sort(), `${locale} ${verb}`).toEqual([`steps.many.${verb}_one`, `steps.many.${verb}_other`])
+      }
+    }
+  })
+})
+// ---- end F-MS-107

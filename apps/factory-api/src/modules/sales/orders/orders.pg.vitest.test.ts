@@ -5,6 +5,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { addDays } from '@nexus/factory-domain/sales/quotes/quotes'
+import { AUTOMATIC_REASONS } from '@nexus/factory-domain/sales/amendments/reasons' // B-OL-004
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedCompliance } from '../../../../../../packages/factory-db/seed/compliance'
@@ -389,11 +390,12 @@ describe('the order from the accepted quote (SAL-200, SAL-203; Owner answer S1: 
   })
 })
 
-describe('dates (SAL-206): a new promise needs a reason; the first promise never changes', () => {
+describe('dates (SAL-206): a new promise keeps its reason (B-OL-004: none needed); the first promise never changes', () => {
   it('changes the promise of the order and of a line, keeps the first promise, lists who and why', async () => {
     const later = addDays(TODAY, 75)
-    const missing = await refused('a.sales', 'PUT', `${orderUrl(order.id)}/promise`, { version: order.version, promiseDate: later, reason: '   ' }, 400)
-    expect(missing.issues.map((issue: Json) => issue.path)).toContain('body/reason')
+    // B-OL-004 (order lines plan D2): a reason is optional now; one too long is still a 400 (nothing written).
+    const tooLong = await refused('a.sales', 'PUT', `${orderUrl(order.id)}/promise`, { version: order.version, promiseDate: later, reason: 'x'.repeat(1001) }, 400)
+    expect(tooLong.issues.map((issue: Json) => issue.path)).toContain('body/reason')
     const past = await refused('a.sales', 'PUT', `${orderUrl(order.id)}/promise`, { version: order.version, promiseDate: addDays(TODAY, -1), reason: 'Leather late.' }, 400)
     expect(past.issues).toEqual([{ path: 'body/promiseDate', message: `A new promise is a day from today (${TODAY}) on.` }])
     const stale = await refused('a.sales', 'PUT', `${orderUrl(order.id)}/promise`, { version: order.version + 5, promiseDate: later, reason: 'Leather late.' }, 409)
@@ -415,12 +417,9 @@ describe('dates (SAL-206): a new promise needs a reason; the first promise never
   })
 
   // ── B-OO-009 (order overview N10): the promise reason as a field — a curated code the customer reads, and/or the office's note ──
-  it('B-OO-009: a reason code with or without a note is stored as CODE: note; neither, or an unknown code, is a 400', async () => {
+  it('B-OO-009: a reason code with or without a note is stored as CODE: note; an unknown code is a 400 (B-OL-004: neither stores the automatic words)', async () => {
     const url = `${orderUrl(order.id)}/promise`
     const later = addDays(TODAY, 100)
-    const neither = await refused('a.sales', 'PUT', url, { version: order.version, promiseDate: later }, 400)
-    expect(neither.issues.map((issue: Json) => issue.path)).toContain('body/reason')
-    expect((await refused('a.sales', 'PUT', url, { version: order.version, promiseDate: later, reason: '   ' }, 400)).issues.map((issue: Json) => issue.path)).toContain('body/reason')
     const unknown = await refused('a.sales', 'PUT', url, { version: order.version, promiseDate: later, reasonCode: 'WEATHER', reason: 'Snow on the pass.' }, 400)
     expect(unknown.issues.map((issue: Json) => issue.path)).toContain('body/reasonCode')
     const coded = (await ok('a.sales', 'PUT', url, { version: order.version, promiseDate: later, reasonCode: 'CAPACITY', reason: '  Line 2 is down for a week.  ' })).order
@@ -430,7 +429,13 @@ describe('dates (SAL-206): a new promise needs a reason; the first promise never
     expect(alone.promiseHistory[0]).toMatchObject({ to: addDays(TODAY, 101), reason: 'TRANSPORT' })
     const stored = await admin<{ reason: string }>(`SELECT reason FROM "AuditLog" WHERE action = 'orders.changePromise' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 2`, [order.id])
     expect(stored.map((row) => row.reason)).toEqual(['TRANSPORT', 'CAPACITY: Line 2 is down for a week.'])
-    order = { ...order, version: alone.version }
+    // B-OL-004 (order lines plan D2; 18 F23): neither a code nor words (none, or blank) — the automatic words are stored.
+    const neither = (await ok('a.sales', 'PUT', url, { version: alone.version, promiseDate: addDays(TODAY, 102) })).order
+    expect(neither.promiseHistory[0]).toMatchObject({ to: addDays(TODAY, 102), lineIds: [], reason: AUTOMATIC_REASONS.promise })
+    const blank = (await ok('a.sales', 'PUT', url, { version: neither.version, promiseDate: addDays(TODAY, 103), reason: '   ' })).order
+    expect(blank.promiseHistory[0]).toMatchObject({ to: addDays(TODAY, 103), reason: AUTOMATIC_REASONS.promise })
+    expect((await admin<{ reason: string }>(`SELECT reason FROM "AuditLog" WHERE action = 'orders.changePromise' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 1`, [order.id]))[0]!.reason).toBe(AUTOMATIC_REASONS.promise)
+    order = { ...order, version: blank.version }
   })
   // ── end B-OO-009 ──
 })

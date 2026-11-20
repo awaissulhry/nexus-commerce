@@ -44,6 +44,8 @@ import { amendBodyOf, amendHeld, draftOf } from '../daily-model' // F-OO-144: Re
 import type { MilestonesActions, MilestonesModel } from '../../../planning/milestones/view-model' // F-OO-145: Planning's gate dialogs in place
 import type { CreditState } from './overview/where' // F-OO-106: the order's own credit hold
 import type { LinesTabActions, LinesTabModel } from './lines-tab-model' // F-OL-01: the Lines tab (use-lines-draft.ts)
+import type { Words } from './overview/api' // F-MS-102: a refusal of the stage set by hand in the domain's own words
+import type { StageByHandAsk } from './overview/stage-by-hand' // F-MS-103: what the stage dialog sends
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -83,7 +85,12 @@ export type ChangesDialog = { kind: 'compare'; amendmentId: string }
 // F-OO-106: "Where it is now"'s credit strip — Check credit again (a confirm) and Ask for a yes… on the hold's check (its id: the
 // lock); `refused`: the API's refusal in this page's words, said in the dialog (nobody to ask, checked meanwhile …).
 export type OverviewDialog = { kind: 'note'; refused?: Phrase } | { kind: 'creditCheck'; refused?: Phrase } | { kind: 'creditAsk'; checkId: string; refused?: Phrase }
-export type RecordDialog = BandDialog | LinesDialog | MoneyDialog | ChangesDialog | OverviewDialog /* F-OO-210 */
+// ---- F-MS-102 (set the stage by hand, 04 §3): "Where it is now"'s door under the dots — Set the stage by hand… and Change… (ONE
+// dialog: `mode`), Clear… (a confirm); `refused`: the API's refusal in this page's words (a phrase, or the domain's own words, it + en),
+// said in the dialog — what was typed stays.
+export type StageHandDialog = { kind: 'stageByHand'; mode: 'set' | 'change'; refused?: Phrase | Words } | { kind: 'stageClear'; refused?: Phrase | Words }
+// ---- end F-MS-102
+export type RecordDialog = BandDialog | LinesDialog | MoneyDialog | ChangesDialog | OverviewDialog /* F-OO-210 */ | StageHandDialog /* F-MS-102 */
 
 // ---- F-OO-124: the lines Close remaining lines / Reopen lines opens with ticked ----
 /**
@@ -385,6 +392,11 @@ export interface OrderRecordModel {
    * absent: not here (a design case without it).
    */
   credit?: CreditState | null
+  /**
+   * F-MS-102 (set the stage by hand): the reader may set the order's stage by hand — production.brand.manage, the health raise's right
+   * (Owner, Admin, Production manager, Planner); anyone else reads the door held with who does it. Absent: not offered here.
+   */
+  stageHand?: { readonly can: boolean } | null
   // F-OO-121: product.styles.manage — a line with no picture offers "Add on the style ›" (anyone else reads the words alone); absent: no.
   stylesManage?: boolean
   /** F-SA-232: the page's live stream (the freshness line says "Live · as of 10:42" only when pushed). */
@@ -510,6 +522,11 @@ export interface OrderRecordActions {
   gateActs?: MilestonesActions
   /** F-OO-106: the credit strip's own acts — the dialogs' Check again and Ask (the page's one write), read the credit again. */
   credit?: { readonly onCheck?: () => void; readonly onAsk?: (checkId: string, note: string) => void; readonly onRetry?: () => void }
+  /**
+   * F-MS-103 (set the stage by hand): the dialog's Set / Change (the stage, the reason, the note as typed; the headline's production
+   * version is sent) and Clear…'s confirm — each through the page's one write; a refusal stays in its dialog.
+   */
+  stageHand?: { readonly onSet?: (ask: StageByHandAsk & { readonly mode: 'set' | 'change' }) => void; readonly onClear?: () => void }
   /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
   people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
   /** F-CP-142: the Price check card (Customer's price…, Take them over, Try again) and the ONE window's own actions. */

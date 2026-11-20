@@ -48,10 +48,12 @@ describe('a priced change and its extra deposit (SAL-219, SAL-221)', () => {
     expect(pricedInputProblems({ fee: '0', deposit: { pct: '10', amount: '5.00' } }, 'EUR').map((issue) => issue.path)).toEqual(['body/fee', 'body/deposit'])
   })
 
-  it('asks an extra deposit only when the order grew: the order percent, the office percent or amount, never above the growth', () => {
-    expect(extraDepositOf({ growth: 0, currency: 'EUR', orderPct: '30', asked: undefined })).toBeNull()
-    expect(extraDepositOf({ growth: 12200, currency: 'EUR', orderPct: '30', asked: undefined })).toEqual({ amount: 3660, pct: '30.0000', basis: 'ORDER_PERCENT' })
-    expect(extraDepositOf({ growth: 12200, currency: 'EUR', orderPct: null, asked: undefined })).toBeNull()
+  it('asks an extra deposit only when the order grew and the office asks one: the order percent, the office percent or amount, never above the growth', () => {
+    expect(extraDepositOf({ growth: 0, currency: 'EUR', orderPct: '30', asked: {} })).toBeNull()
+    expect(extraDepositOf({ growth: 12200, currency: 'EUR', orderPct: '30', asked: {} })).toEqual({ amount: 3660, pct: '30.0000', basis: 'ORDER_PERCENT' })
+    expect(extraDepositOf({ growth: 12200, currency: 'EUR', orderPct: null, asked: {} })).toBeNull()
+    // B-OL-016 (order lines plan O9): none unless sent — a change that sends no deposit (Sales sends no money field) asks none.
+    expect(extraDepositOf({ growth: 12200, currency: 'EUR', orderPct: '30', asked: undefined })).toBeNull()
     expect(extraDepositOf({ growth: 12200, currency: 'EUR', orderPct: '30', asked: null })).toBeNull()
     expect(extraDepositOf({ growth: 12200, currency: 'EUR', orderPct: null, asked: { pct: '50' } })).toEqual({ amount: 6100, pct: '50.0000', basis: 'PERCENT' })
     expect(extraDepositOf({ growth: 12200, currency: 'EUR', orderPct: null, asked: { amount: '61.00' } })).toMatchObject({ amount: 6100, basis: 'AMOUNT' })
