@@ -54,7 +54,8 @@ let sales: Browser
 let owner: Browser
 
 // F-SA-201: tenant e's SEED-SO-0002 ships in full and is delivered, then closed.
-const NS = { a: 'orders-a', b: 'orders-b', c: 'orders-c', d: 'orders-d', e: 'orders-e' } as const
+// B-OO-001: tenant g's SEED-SO-0003 and SEED-SO-0002 follow quality's releases and reversals ('orders-f' is B-OP-020's own).
+const NS = { a: 'orders-a', b: 'orders-b', c: 'orders-c', d: 'orders-d', e: 'orders-e', g: 'orders-g' } as const
 type TenantKey = keyof typeof NS
 const idIn = (tenant: TenantKey, key: string) => seedUuid(NS[tenant], key)
 const T = Object.fromEntries((Object.keys(NS) as TenantKey[]).map((key) => [key, idIn(key, 'tenant')])) as Record<TenantKey, string>
@@ -501,6 +502,92 @@ describe('production and shipping move the order (SAL-204: the system is their o
     expect(record).toMatchObject({ status: 'SHIPPED', daysLate: null, progress: { ordered: 2, shipped: 2, toShip: 0 }, actions: [{ action: 'changePromise' }, { action: 'close', allowed: true, needsReason: true }] })
   })
 })
+
+// ── B-OO-001 (order overview N4, Owner D2): the order follows quality; back to IN_PRODUCTION only on a reversal ──────────────
+describe('the order follows quality (B-OO-001): READY after the last release, back only on a reversal, skipped once anything shipped', () => {
+  const so3 = () => seeded.g.quality.serialSalesOrderId
+  const followQuality = (type: 'quality.garments_released' | 'quality.release_reversed', cellId: string, number: string, attempts = 1) =>
+    (async () => {
+      const event = envelope('g', type, { workOrderSizeId: cellId, number, quantity: 1 })
+      for (let attempt = 1; attempt <= attempts; attempt++) await handler('sales.ordersFollowQuality').handle(event, { caller: systemCaller('g'), attempt })
+    })()
+  const workOrderReleased = () =>
+    handler('sales.ordersFollowWorkOrders').handle(envelope('g', 'workorder.released', { workOrderId: seeded.g.quality.serialWorkOrderId, number: 'SEED-WO-0003', salesOrderIds: [so3()] }), { caller: systemCaller('g'), attempt: 1 })
+  const follows = async (orderId: string) => (await auditsOf(orderId)).filter((row) => row.action === 'orders.follow').map((row) => [row.before.status, row.after.status, row.reason])
+  /** Tenant g's SEED-SO-0003 asks `pieces` × BLK 52 (WO-0003 makes 4; quality released 2 of them, the quality seed). */
+  const orderPieces = async (pieces: number) => {
+    await admin('UPDATE "SalesOrderLineSize" s SET quantity = $2 FROM "SalesOrderLine" l WHERE s."lineId" = l.id AND l."orderId" = $1', [so3(), pieces])
+    await admin('UPDATE "SalesOrderLine" SET quantity = $2 WHERE "orderId" = $1', [so3(), pieces])
+  }
+
+  it('a release while pieces are still to release moves nothing; the last one makes it READY once (a replay: no second command or audit row)', async () => {
+    await workOrderReleased()
+    expect(await statusOf(so3())).toBe('IN_PRODUCTION')
+    const before = (await auditsOf(so3())).length
+    // 2 of the 4 released: nothing to follow, no command.
+    await followQuality('quality.garments_released', seeded.g.quality.serialCellId, 'SEED-WO-0003')
+    expect([await statusOf(so3()), (await auditsOf(so3())).length]).toEqual(['IN_PRODUCTION', before])
+    // The order now asks the 2 quality released: the release's handler moves it, once.
+    await orderPieces(2)
+    await followQuality('quality.garments_released', seeded.g.quality.serialCellId, 'SEED-WO-0003', 2)
+    expect(await statusOf(so3())).toBe('READY')
+    expect(await follows(so3())).toEqual([
+      ['CONFIRMED', 'IN_PRODUCTION', 'Followed: work order SEED-WO-0003 released.'],
+      ['IN_PRODUCTION', 'READY', 'Followed: quality released 1 garment(s) of SEED-WO-0003.'],
+    ])
+    expect((await statusEvents(so3())).map((row) => [row.payload.from, row.payload.to, row.payload.by])).toEqual([
+      ['CONFIRMED', 'IN_PRODUCTION', 'system'],
+      ['IN_PRODUCTION', 'READY', 'system'],
+    ])
+    expect((await auditsOf(so3())).filter((row) => row.action === 'orders.follow').map((row) => row.audience)).toEqual(['SYSTEM', 'SYSTEM'])
+  })
+
+  it('a later release or a work order released never moves a READY order back, even with a piece left to release', async () => {
+    // One more piece asked than quality released (the facts a taken-back release leaves; the reversal row is quality's own).
+    await orderPieces(3)
+    const before = (await auditsOf(so3())).length
+    await followQuality('quality.garments_released', seeded.g.quality.serialCellId, 'SEED-WO-0003')
+    await workOrderReleased()
+    expect([await statusOf(so3()), (await auditsOf(so3())).length]).toEqual(['READY', before])
+  })
+
+  it('a release taken back moves it back to IN_PRODUCTION (the system, once); with every piece still released it stays READY', async () => {
+    await followQuality('quality.release_reversed', seeded.g.quality.serialCellId, 'SEED-WO-0003', 2)
+    expect(await statusOf(so3())).toBe('IN_PRODUCTION')
+    expect((await follows(so3())).at(-1)).toEqual(['READY', 'IN_PRODUCTION', 'Followed: a quality release of SEED-WO-0003 was taken back.'])
+    expect((await statusEvents(so3())).at(-1)!.payload).toMatchObject({ from: 'READY', to: 'IN_PRODUCTION', by: 'system', partyId: idIn('g', 'party:P1') })
+    expect((await follows(so3())).filter(([from, to]) => from === 'READY' && to === 'IN_PRODUCTION')).toHaveLength(1)
+    // Back to 2: READY again; a reversal event while every piece is still released moves nothing.
+    await orderPieces(2)
+    await followQuality('quality.garments_released', seeded.g.quality.serialCellId, 'SEED-WO-0003')
+    expect(await statusOf(so3())).toBe('READY')
+    const before = (await auditsOf(so3())).length
+    await followQuality('quality.release_reversed', seeded.g.quality.serialCellId, 'SEED-WO-0003')
+    expect([await statusOf(so3()), (await auditsOf(so3())).length]).toEqual(['READY', before])
+  })
+
+  it('a piece shipped before the last release: never READY (part shipped instead), and a reversal never moves it back', async () => {
+    // Tenant g's SEED-SO-0002 cut down to what quality released (BLK 50, one BLK 52, RED 52); SH-0001 already left with 2 of them.
+    const so2 = seeded.g.quality.production.salesOrderId
+    await admin(
+      `DELETE FROM "SalesOrderLineSize" s USING "SalesOrderLine" l, "Colourway" c
+        WHERE s."lineId" = l.id AND c.id = l."colourwayId" AND l."orderId" = $1 AND NOT ((c.code = 'BLK' AND s.size IN ('50', '52')) OR (c.code = 'RED' AND s.size = '52'))`,
+      [so2],
+    )
+    await admin(`UPDATE "SalesOrderLineSize" s SET quantity = 1 FROM "SalesOrderLine" l WHERE s."lineId" = l.id AND l."orderId" = $1`, [so2])
+    await admin(`UPDATE "SalesOrderLine" l SET quantity = (SELECT sum(s.quantity) FROM "SalesOrderLineSize" s WHERE s."lineId" = l.id) WHERE l."orderId" = $1`, [so2])
+    const blk52 = seeded.g.quality.production.cellIds['BLK-52']
+    await followQuality('quality.garments_released', blk52, 'SEED-WO-0001')
+    expect(await follows(so2)).toEqual([
+      ['CONFIRMED', 'IN_PRODUCTION', 'Followed: quality released 1 garment(s) of SEED-WO-0001.'],
+      ['IN_PRODUCTION', 'PARTLY_SHIPPED', 'Followed: quality released 1 garment(s) of SEED-WO-0001.'],
+    ])
+    const before = (await auditsOf(so2)).length
+    await followQuality('quality.release_reversed', blk52, 'SEED-WO-0001')
+    expect([await statusOf(so2), (await auditsOf(so2)).length]).toEqual(['PARTLY_SHIPPED', before])
+  })
+})
+// ── end B-OO-001 ──
 
 describe('closing (PLAN §4.7: the close command asks whether every line is shipped, invoiced and paid)', () => {
   it('not settled: refused without a reason, forbidden with one for a person without orders.close, closed by one with it', async () => {

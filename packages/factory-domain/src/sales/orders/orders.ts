@@ -24,9 +24,11 @@ import { priceBasisOf, type SalesFeeKind, type SalesLineKind } from '../quotes/q
  *
  * One writer per move (SAL-204; the design's board: cards never drag, each state changes only through its own action):
  *
- *   IN_PRODUCTION    the system, when the first work order of its lines is released (workorder.released)
- *   READY            the system, when quality has released every ordered piece; by hand with a reason (orders.manage)
- *                    while quality release is not in use
+ *   IN_PRODUCTION    the system, when the first work order of its lines is released (workorder.released); B-OO-001
+ *                    (Owner D2): back from READY by the system ONLY when a quality release is taken back
+ *                    (quality.release_reversed: `reversalMoves`), not every piece is released any more and nothing shipped
+ *   READY            the system, when quality has released every ordered piece (B-OO-001: quality.garments_released, and
+ *                    every follow); by hand with a reason (orders.manage) while quality release is not in use
  *   PARTLY_SHIPPED   the system, from the shipped quantities (shipment.status_changed): part of the order left
  *   SHIPPED          the system, from the shipped quantities: every ordered piece left (a returned shipment brings a
  *                    SHIPPED order back to PARTLY_SHIPPED)
@@ -125,7 +127,8 @@ export const salesOrderMachine = defineMachine<SalesOrderStatus, SalesOrderFacts
   transitions: {
     CONFIRMED: ['IN_PRODUCTION', 'PARTLY_SHIPPED', 'SHIPPED', 'CANCELLED'],
     IN_PRODUCTION: ['READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CANCELLED'],
-    READY: ['PARTLY_SHIPPED', 'SHIPPED', 'CANCELLED'],
+    // B-OO-001 (Owner D2): back to IN_PRODUCTION only when a quality release is taken back (`reversalMoves`; the guard).
+    READY: ['IN_PRODUCTION', 'PARTLY_SHIPPED', 'SHIPPED', 'CANCELLED'],
     PARTLY_SHIPPED: ['SHIPPED'],
     // B-W2b-398 (LOG-067): a shipped order whose shipments all arrived is DELIVERED (the system, from the carrier's delivery).
     SHIPPED: ['PARTLY_SHIPPED', 'CLOSED', 'DELIVERED'],
@@ -134,7 +137,15 @@ export const salesOrderMachine = defineMachine<SalesOrderStatus, SalesOrderFacts
     DELIVERED: ['CLOSED'],
   },
   guards: {
-    IN_PRODUCTION: (facts) => ((facts.releasedWorkOrders ?? 0) > 0 ? [] : ['a released work order of its lines']),
+    IN_PRODUCTION: (facts, move) =>
+      // B-OO-001 (Owner D2): from READY only as a taken-back release leaves it: not every piece released any more, nothing shipped.
+      move.from === 'READY'
+        ? facts.released !== true && (facts.shipped ?? 'NONE') === 'NONE'
+          ? []
+          : ['a quality release taken back, so not every piece is released any more, and nothing shipped yet']
+        : (facts.releasedWorkOrders ?? 0) > 0
+          ? []
+          : ['a released work order of its lines'],
     READY: (facts) => (facts.released === true || hasReason(facts) ? [] : ['every ordered piece released by quality, or a reason (quality release is not in use yet)']),
     PARTLY_SHIPPED: (facts) => (facts.shipped === 'PARTLY' ? [] : ['part of the order shipped and part not']),
     SHIPPED: (facts) => (facts.shipped === 'ALL' ? [] : ['every ordered piece shipped']),
@@ -153,9 +164,11 @@ export const salesOrderMachine = defineMachine<SalesOrderStatus, SalesOrderFacts
 
 /**
  * The moves the facts ask the system to make now, in order (the worker's handlers on workorder.released,
- * shipment.status_changed and the settle events): production started, quality released everything, the shipped
- * quantities, and the close of a settled order that left in full. A person's reason never takes part (the system moves on
- * facts only). Empty: nothing to do.
+ * shipment.status_changed, B-OO-001 quality.garments_released / quality.release_reversed, and the settle events):
+ * production started, quality released everything, the shipped quantities, and the close of a settled order that left in
+ * full. A person's reason never takes part (the system moves on facts only). Empty: nothing to do. It never moves an order
+ * back to IN_PRODUCTION: only a release taken back does (`reversalMoves`), so a later partial release or a work order
+ * released never undoes a READY. READY is skipped once anything shipped.
  */
 export function followMoves(status: SalesOrderStatus, facts: SalesOrderFacts): SalesOrderStatus[] {
   const systemFacts: SalesOrderFacts = { ...facts, reason: null }
@@ -176,6 +189,17 @@ export function followMoves(status: SalesOrderStatus, facts: SalesOrderFacts): S
   if (current === 'SHIPPED' && facts.delivered === true) step('DELIVERED')
   if ((current === 'SHIPPED' || current === 'DELIVERED') && facts.settlement?.settled === true) step('CLOSED')
   return moves
+}
+
+/**
+ * B-OO-001 (order overview N4, Owner D2): the one move back, planned ONLY when quality takes a release back
+ * (quality.release_reversed): a READY order whose pieces are not all released any more, and of which nothing shipped yet,
+ * goes back to IN_PRODUCTION (the system; the customer's "Ready" un-ticks, with no message). Every other follow uses
+ * `followMoves` alone, which never plans it. A person's reason never takes part. Empty: nothing to move back.
+ */
+export function reversalMoves(status: SalesOrderStatus, facts: SalesOrderFacts): SalesOrderStatus[] {
+  if (status !== 'READY' || facts.released === true || (facts.shipped ?? 'NONE') !== 'NONE') return []
+  return canTransition(salesOrderMachine, 'READY', 'IN_PRODUCTION', { ...facts, reason: null }).ok ? ['IN_PRODUCTION'] : []
 }
 
 // ---- per line × size progress -------------------------------------------------------------------------------------------

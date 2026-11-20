@@ -2,7 +2,7 @@ import { DomainError, ForbiddenError, InvalidStateError, ValidationError } from 
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { cancelBlocksOf, cancelImpact } from '@nexus/factory-domain/sales/orders/daily'
-import { followMoves, promiseProblems, promiseStateProblem, salesOrderMachine, type SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
+import { followMoves, promiseProblems, promiseStateProblem, reversalMoves, salesOrderMachine, type SalesOrderFacts, type SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
 import { ORDERS_CLOSE, ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
@@ -46,7 +46,8 @@ import { withAutoApply, type AutoApply, type FollowedWorkOrders } from '../../pr
  *                       leaves behind is answered), close (settled: orders.manage or orders.close; not settled: a reason
  *                       AND orders.close)
  *   the system          `followOrder`: the moves the facts ask (production started, quality released everything, the
- *                       shipped quantities, a settled order that left in full closes), from the worker's handlers
+ *                       shipped quantities, a settled order that left in full closes), from the worker's handlers;
+ *                       B-OO-001 (Owner D2): READY back to IN_PRODUCTION only on a release taken back (`reversal`)
  */
 
 const today = (tools: Pick<CommandTools, 'now'>): BusinessDate => businessDate(tools.now)
@@ -318,14 +319,22 @@ class NothingToFollow extends DomainError {
  * calls settled → CLOSED. As the system (the worker's handlers) or the office; ONE command on the order (its row locked,
  * the facts read again under the lock), one audit row and one `sales_order.status_changed` (by: system) per move. Nothing
  * to do: no command at all. Safe to repeat: it moves on facts, never on the event.
+ * B-OO-001 (Owner D2): `reversal` (only the quality.release_reversed handler sends it) first lets a READY order whose pieces
+ * are not all released any more, with nothing shipped, go back to IN_PRODUCTION (factory-domain `reversalMoves`); no other
+ * cause moves an order back.
  */
-export async function followOrder(caller: CommandCaller, orderId: string, cause: { readonly what: string; readonly causationId?: string }): Promise<{ moved: SalesOrderStatus[] }> {
+export async function followOrder(caller: CommandCaller, orderId: string, cause: { readonly what: string; readonly causationId?: string; /* B-OO-001 */ readonly reversal?: boolean }): Promise<{ moved: SalesOrderStatus[] }> {
   const context = caller.factoryContext
   if (!context || (context.audience !== 'system' && context.audience !== 'office')) throw new ForbiddenError()
+  // B-OO-001: the move back first (a reversal only), then what the facts ask from there.
+  const plan = (status: SalesOrderStatus, facts: SalesOrderFacts): SalesOrderStatus[] => {
+    const back = cause.reversal === true ? reversalMoves(status, facts) : []
+    return [...back, ...followMoves(back.at(-1) ?? status, facts)]
+  }
   const planned = await caller.withClient(async (client) => {
     const order = await readOrder(client, orderId)
     if (!order) return []
-    return followMoves(order.status, moveFactsOf(await readOrderFacts(client, order), await orderSettlement().settlementOf(client, order)))
+    return plan(order.status, moveFactsOf(await readOrderFacts(client, order), await orderSettlement().settlementOf(client, order)))
   })
   if (planned.length === 0) return { moved: [] }
   try {
@@ -334,7 +343,7 @@ export async function followOrder(caller: CommandCaller, orderId: string, cause:
       const locked = await lockOrder(tx, orderId)
       const order = (await readOrder(tx, orderId))!
       const facts = moveFactsOf(await readOrderFacts(tx, order), await orderSettlement().settlementOf(tx, order))
-      const moves = followMoves(locked.status, facts)
+      const moves = plan(locked.status, facts)
       if (moves.length === 0) throw new NothingToFollow()
       let from = locked.status
       for (const to of moves) {
