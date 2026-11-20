@@ -140,6 +140,11 @@ describe('B-PR-10 the brand-wall sweep', () => {
     // B-OO-006 (order overview N5): the one Lift for N work orders is met by the sweep by itself — swept as a write, never EXEMPT.
     expect(swept.has('POST /production/work-orders/holds/lift')).toBe(true)
     expect(EXEMPT['POST /production/work-orders/holds/lift']).toBeUndefined()
+    // B-MS-005 (set the stage by hand, R11): its set and its clear are met by the sweep by themselves — swept as writes, never EXEMPT.
+    for (const key of ['PUT /production/brand-orders/:orderId/stage', 'DELETE /production/brand-orders/:orderId/stage']) {
+      expect(swept.has(key), key).toBe(true)
+      expect(EXEMPT[key], key).toBeUndefined()
+    }
     expect(swept.size).toBeGreaterThan(walked.length)
     // The golden production world's traces of A, here too: its portal people and their mails, stock moves of its work orders,
     // its files and threads (fix-pr-7 found the mail log and the stock card leaks only where they were).
