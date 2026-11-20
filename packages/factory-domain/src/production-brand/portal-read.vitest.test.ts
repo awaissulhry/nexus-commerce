@@ -20,6 +20,8 @@ import {
 } from './portal-read'
 // B-OP-021: the office's blockers (their record and request kind) beside what the customer reads of them.
 import { BLOCKER_SUBS, waitingOn, type Blocker } from './waiting'
+// B-MS-002
+import { COUNT_TO_FOLLOW_WORDS, FORBIDDEN_BRAND_KEYS } from './portal-read'
 
 /**
  * B-PR-18: what a customer reads of its orders in production beyond the stage, health, waiting and urgency rules (production plan
@@ -116,6 +118,26 @@ describe('the next milestone of a list row, by level (06-tree §0.5)', () => {
     expect(nextMilestoneOf({ level: 'GATES', stage: 'READY', counts, gates: [], planned }).next).toBeNull()
     expect(nextMilestoneOf({ level: 'PROGRESS', stage: null, counts, gates, planned })).toEqual({ next: null, count: null })
   })
+
+  // ── B-MS-002 (R13): a stage with no count yet reads "Count to follow", never "0 of 40 sewn" — one neutral rule, no hand fact
+  it('B-MS-002: a count of 0 reads "Count to follow" (en + it); 32 still reads "32 of 40 sewn"; the shape stays', () => {
+    expect(COUNT_TO_FOLLOW_WORDS).toEqual({ it: 'Conteggio in arrivo', en: 'Count to follow' })
+    const started = { ordered: 40, cut: 40, sewn: 0, inspected: 0, packed: 0 }
+    expect(nextMilestoneOf({ level: 'PROGRESS', stage: 'SEWING', counts: started, gates, planned }).count).toEqual({ done: 0, of: 40, words: { it: 'Conteggio in arrivo', en: 'Count to follow' } })
+    expect(nextMilestoneOf({ level: 'QUALITY', stage: 'CUTTING', counts: { ...started, cut: 0 }, gates: [], planned }).count).toEqual({ done: 0, of: 40, words: COUNT_TO_FOLLOW_WORDS })
+    expect(nextMilestoneOf({ level: 'GATES', stage: 'QUALITY', counts: started, gates: [], planned }).count?.words).toEqual(COUNT_TO_FOLLOW_WORDS)
+    expect(nextMilestoneOf({ level: 'PROGRESS', stage: 'SEWING', counts, gates, planned }).count).toEqual({ done: 32, of: 40, words: { it: '32 di 40 cuciti', en: '32 of 40 sewn' } })
+    expect(nextMilestoneOf({ level: 'PROGRESS', stage: 'CUTTING', counts, gates, planned }).count?.words.en).toBe('40 of 40 cut')
+  })
+
+  it('B-MS-002: below + Progress no count, also at 0; Preparing and an unknown figure have no count', () => {
+    const started = { ordered: 40, cut: 40, sewn: 0, inspected: 0, packed: 0 }
+    expect(nextMilestoneOf({ level: 'STATUS', stage: 'SEWING', counts: started, gates, planned }).count).toBeNull()
+    expect(nextMilestoneOf({ level: 'PROGRESS', stage: 'PREPARING', counts: started, gates, planned }).count).toBeNull()
+    expect(nextMilestoneOf({ level: 'PROGRESS', stage: 'SEWING', counts: { ...started, sewn: null }, gates, planned }).count).toBeNull()
+    expect(nextMilestoneOf({ level: 'PROGRESS', stage: 'SEWING', counts: null, gates, planned }).count).toBeNull()
+  })
+  // ── end B-MS-002
 })
 
 describe('the problems a customer reported (R-42, R-43)', () => {
@@ -183,4 +205,21 @@ describe('the wall: keys a customer read never holds (PW-15, PW-P03)', () => {
     expect(forbiddenKeysIn({ order: { waiting: { code: 'US', blockers: office } } })).toEqual(['/order/waiting/blockers'])
   })
   // ── end B-OP-021
+
+  // ── B-MS-002 (R11): that a stage was set by hand, why, when or by whom never reaches a customer read
+  it('B-MS-002: finds each hand-stage key at its path', () => {
+    const hand = ['stageSet', 'stageSetReason', 'stageSetNote', 'stageSetAt', 'stageSetById', 'byHand', 'stageByHand']
+    for (const key of hand) expect(FORBIDDEN_BRAND_KEYS).toContain(key)
+    expect(
+      forbiddenKeysIn({
+        items: [{ stage: { code: 'SEWING', stageSet: 'SEWING', stageSetReason: 'OUTAGE' } }],
+        order: { production: { stageSetNote: 'office words', stageSetAt: '2026-11-20T09:00:00Z', stageSetById: 'x' } },
+        notice: { byHand: true },
+        row: { production: { stageByHand: { since: '2026-11-20' } } },
+      }),
+    ).toEqual(['/items/0/stage/stageSet', '/items/0/stage/stageSetReason', '/order/production/stageSetNote', '/order/production/stageSetAt', '/order/production/stageSetById', '/notice/byHand', '/row/production/stageByHand'])
+    // A plain stage passes, as the customer reads it.
+    expect(forbiddenKeysIn({ stage: { code: 'SEWING', since: '2026-11-20' }, count: { done: 0, of: 40, words: COUNT_TO_FOLLOW_WORDS } })).toEqual([])
+  })
+  // ── end B-MS-002
 })
