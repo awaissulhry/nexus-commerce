@@ -310,7 +310,8 @@ describe('F-OP-104: Overview doors — the stages a real link, Open in Productio
     expect(source).toContain("onClick={() => frame?.openDoor?.('owner')}")
     expect(source).toContain("onClick={() => actions?.onDialog?.({ kind: 'promise' })}")
     expect(source).toContain('onClick={() => actions?.onRequestedChange?.()}')
-    expect(source).toContain("#line-${row.lineIds[0] ?? row.id}")
+    // F-OO-126: the line window's Open in Production lands on the work orders (was the line's row, #line-<id>).
+    expect(source).toContain("#work-orders`}>{t('doors.openInProduction')}")
     const model = overviewRules() // F-OO-100: model.ts and the section files (linked.ts builds the tab links)
     expect(model).not.toMatch(/`\$\{record\}\?tab=/)
   })

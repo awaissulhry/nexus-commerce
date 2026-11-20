@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { MoreHorizontal } from 'lucide-react' // F-OO-122
+import { ChevronDown, MoreHorizontal } from 'lucide-react' // F-OO-122, F-OO-126
 import { Card, EmptyState, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { DetailModal } from '../../../../../../lib/i18n/ds-parts'
@@ -23,6 +23,11 @@ import { lineMovesOf, lineMovesShown, type LineMove } from '../../overview/progr
 import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
 import { discussAboutOf } from '../../dock/discuss'
 // ---- end F-OO-122
+// ---- F-OO-126: the line's window — its work orders (their pages) and their final inspections ----
+import { lineFinalsOf, lineWorkOf, type LineFinals, type LineWork } from '../../overview/progress'
+import { recordAddress } from '../../../../../../lib/records/record-links'
+import { OFFICE_PAGES } from '../../../../../../shell/nav/office-nav'
+// ---- end F-OO-126
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { PartState } from '../OrderRecordView'
 import { useSearchParams } from 'next/navigation'
@@ -238,7 +243,7 @@ export function ProgressCard({ order, model, actions }: { order: Order; model: O
           />
         </>
       )}
-      {open && <LineSizes order={order} row={open} rows={rows} label={nameOf(open)} sub={subOf(open)} pills={linePillsOf(open, pillInput, Number.POSITIVE_INFINITY)} model={model} actions={actions} />}
+      {open && <LineSizes order={order} row={open} rows={rows} label={nameOf(open)} sub={subOf(open)} pills={linePillsOf(open, pillInput, Number.POSITIVE_INFINITY)} moves={moves} model={model} actions={actions} />}
     </Card>
   )
 }
@@ -261,7 +266,9 @@ function NoPicture({ row, model, name }: { row: LineRow; model: OrderRecordModel
 
 /** The line's sizes in a centred DS DetailModal (‹ › and the keys walk the lines): PiecesGrid + shipped + the finish forecast per size. */
 // F-OO-121: the subtitle says "Line 10" (no stage word) and the meta every pill of the line.
-function LineSizes({ order, row, rows, label, sub, pills, model, actions }: { order: Order; row: LineRow; rows: readonly LineRow[]; label: string; sub: string; pills: readonly LinePill[]; model: OrderRecordModel; actions?: OrderRecordActions }) {
+// F-OO-126 (10-design §2.4): + its work orders and their final inspections, the line's moves in the head (a move closes the window
+// first: the page keeps one dialog at a time), and Open in Production lands on the work orders.
+function LineSizes({ order, row, rows, label, sub, pills, moves, model, actions }: { order: Order; row: LineRow; rows: readonly LineRow[]; label: string; sub: string; pills: readonly LinePill[]; moves: LineMoves; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const w = useProductionWords()
   const locale = useLocale()
@@ -271,6 +278,7 @@ function LineSizes({ order, row, rows, label, sub, pills, model, actions }: { or
   const sizes = lineSizesOf(row, read?.lines ?? [], read?.dates ?? null, label)
   // F-OO-121 (B-OO-015): a size's extra pieces in the API's words ("1 48 more than ordered: cut or planned to cut").
   const extraWords = (size: string, count: number) => (count > 0 ? t('progress.madeExtra', { sizes: madeExtraSizesText([{ size, count }]) }) : '—')
+  const work = lineWorkOf(row, read) // F-OO-126
   return (
     <DetailModal
       open
@@ -278,15 +286,30 @@ function LineSizes({ order, row, rows, label, sub, pills, model, actions }: { or
       title={label}
       subtitle={sub}
       meta={pills.length > 0 ? <Pills pills={pills} /> : undefined}
+      // F-OO-126: the same moves as the row's ⋯; each closes the window first (one dialog at a time). Read-only: none.
+      actions={
+        moves.shown ? (
+          <Menu
+            align="right"
+            label={
+              <>
+                {t('wo.col.acts')} <ChevronDown size={14} aria-hidden />
+              </>
+            }
+            triggerProps={{ 'aria-label': t('progress.moves', { seq: row.seq, name: label }) }}
+            items={moves.itemsOf(row, label, () => actions?.onOpenLine?.(null))}
+          />
+        ) : undefined
+      }
       nav={{ ids: rows.map((entry) => entry.id), current: row.id, onGo: (id) => actions?.onOpenLine?.(id), noun: t('overview.sizes.noun') }}
       footer={
-        // F-OP-104: beside Open in Lines, Open in Production (the line's place there); both keep the dock's scope.
+        // F-OP-104: beside Open in Lines, Open in Production; both keep the dock's scope. F-OO-126: it lands on the work orders.
         <span className="fw-so-inline">
           <Button size="sm" asChild>
             <TabLink href={tabHref(recordHref, 'lines', search)}>{t('overview.sizes.openLines')}</TabLink>
           </Button>
           <Button size="sm" asChild>
-            <TabLink href={`${tabHref(recordHref, 'production', search)}#line-${row.lineIds[0] ?? row.id}`}>{t('doors.openInProduction')}</TabLink>
+            <TabLink href={`${tabHref(recordHref, 'production', search)}#work-orders`}>{t('doors.openInProduction')}</TabLink>
           </Button>
         </span>
       }
@@ -305,6 +328,85 @@ function LineSizes({ order, row, rows, label, sub, pills, model, actions }: { or
           />
         </div>
       )}
+      {/* F-OO-126: what makes the line, and its final inspections (read only: signed on Quality). */}
+      <LineWorkPart work={work} order={order} model={model} />
+      <LineFinalsPart finals={lineFinalsOf(work, read)} />
     </DetailModal>
   )
 }
+
+// ---- F-OO-126: "Its work orders" — each a link to its page, its state, its pieces of this line, "On hold" when held ----
+function LineWorkPart({ work, order, model }: { work: LineWork; order: Order; model: OrderRecordModel }) {
+  const t = useT('orders')
+  if (work.kind === 'unread') return null
+  const href = (entry: { id: string; number: string }) => `${model.prefix}${recordAddress({ type: 'WorkOrder', id: entry.id, label: entry.number, companyId: order.companyId }, OFFICE_PAGES)}`
+  return (
+    <section className="fw-so-stack-tight" aria-labelledby="fw-so-line-work">
+      <h3 className="fw-so-h3" id="fw-so-line-work">
+        {t('progress.work.title')}
+      </h3>
+      {work.kind === 'withheld' ? (
+        <p className="fw-so-hint">{t('progress.work.held')}</p>
+      ) : work.kind === 'mtm' ? (
+        work.group ? (
+          <p className="fw-so-cell">
+            <span>{t('production.mtmRow', { style: work.group.style?.code ?? '—', colour: work.group.colourway?.name ?? work.group.colourway?.code ?? '—', units: work.group.units, workOrders: work.group.workOrders })}</span>
+            <span className="fw-so-cell-sub">{work.group.byStatus.map((entry) => `${t(`woStatus.${entry.status}`)} ${entry.count}`).join(' · ')}</span>
+          </p>
+        ) : (
+          <p className="fw-so-hint">{t('progress.work.none')}</p>
+        )
+      ) : (
+        <>
+          {work.rows.length > 0 ? (
+            <ul className="fw-so-datelist">
+              {work.rows.map((entry) => (
+                <li key={entry.id}>
+                  <span className="fw-so-inline">
+                    <Link className="fw-so-link" href={href(entry)}>
+                      {entry.number}
+                    </Link>
+                    <span>{t('progress.work.of', { status: t(`woStatus.${entry.status}`), count: entry.pieces })}</span>
+                    {entry.held && <Tag tone="warning">{t('production.held')}</Tag>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            work.leftOut === 0 && <p className="fw-so-hint">{t('progress.work.none')}</p>
+          )}
+          {work.leftOut > 0 && <p className="fw-so-hint">{t('overview.linked.leftOut', { count: work.leftOut })}</p>}
+        </>
+      )}
+    </section>
+  )
+}
+
+// ---- F-OO-126: "Final inspections" of the line's work orders — the Production tab's own words; withheld without the right ----
+function LineFinalsPart({ finals }: { finals: LineFinals }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  if (finals.kind === 'unread') return null
+  return (
+    <section className="fw-so-stack-tight" aria-labelledby="fw-so-line-finals">
+      <h3 className="fw-so-h3" id="fw-so-line-finals">
+        {t('production.quality.final')}
+      </h3>
+      {finals.kind === 'withheld' ? (
+        <p className="fw-so-hint">{t('production.quality.finalHeld')}</p>
+      ) : finals.rows.length === 0 ? (
+        <p className="fw-so-hint">{t('progress.final.none')}</p>
+      ) : (
+        <ul className="fw-so-datelist">
+          {finals.rows.map((entry) => (
+            <li key={entry.workOrderId}>
+              <span>{t('production.quality.finalRow', { number: entry.number ?? '—', checked: entry.sampleSize })}</span>
+              <span className="fw-so-cell-sub">{t(`production.quality.finalState.${entry.status === 'PASSED' || entry.status === 'FAILED' ? entry.status : 'WAITING'}`, { date: entry.on ? formatDate(dayInstant(entry.on), { locale }) : '—' })}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+// ---- end F-OO-126

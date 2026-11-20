@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { LINE_BLK, LINE_RED, order } from '../../_demo/fixtures'
 import { groupMadeToMeasure } from '../../mtm-groups'
 import { CONFIRMED_READ, LINES, PRODUCTION_READ } from './fixtures'
@@ -17,6 +17,22 @@ import type { OrderProduction, ProductionLine } from './api'
 import type { Order } from '../../api'
 import type { OrderRecordModel } from '../record-model'
 // ---- end F-OO-121
+// ---- F-OO-126 ----
+import { WORK_ORDERS } from '../../_demo/fixtures'
+import { NO_WORK_READ, QUALITY_READ, WORK, WORK_READ } from './fixtures'
+import { lineFinalsOf, lineWorkOf } from './progress'
+import { recordAddress } from '../../../../../lib/records/record-links'
+import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
+
+// The DS DetailModal opens in a portal after mount; drawn on the server it is a section in place (as lines-held.vitest draws Modal).
+vi.mock('../../../../../lib/i18n/ds-parts', async (original) => {
+  const actual = await original<typeof import('../../../../../lib/i18n/ds-parts')>()
+  const { createElement: h } = await import('react')
+  const DetailModal = ({ open, title, subtitle, meta, actions, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; meta?: unknown; actions?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? h('section', { role: 'dialog', 'data-detail': '' }, h('h2', null, title as never), h('p', { 'data-subtitle': '' }, subtitle as never), meta as never, h('div', { 'data-actions': '' }, actions as never), children as never, h('footer', null, footer as never)) : null
+  return { ...actual, DetailModal }
+})
+// ---- end F-OO-126
 // ---- F-OO-122 ----
 import { abilitiesOf } from '../../model'
 import { canOf, type Role } from '../../_demo/fixtures'
@@ -355,3 +371,104 @@ describe('F-OO-122: the card draws the ⋯ last; the column is gone for Read-onl
   })
 })
 // ---- end F-OO-122
+
+// ---- F-OO-126 (10-design §2.4): the line's window — its work orders, their final inspections, the moves, Open in Production --------
+/** The read with the work orders' cells (F-OP-113) and the quality part with WO-00021's final inspection. */
+const WINDOW_READ: OrderProduction = { ...workActsRead({ manage: true, release: true, hold: true }), quality: QUALITY_READ.quality }
+
+describe('F-OO-126: lineWorkOf / lineFinalsOf — from the cells to the work orders; withheld said, never "none"', () => {
+  const value = order('IN_PRODUCTION')
+  const rows = lineRowsOf(LINES, value)
+  const black = rows.find((row) => row.id === LINE_BLK)!
+  const red = rows.find((row) => row.id === LINE_RED)!
+
+  it('the work orders whose cells make the line, by number, with this line’s pieces only (a shared one lends nothing more)', () => {
+    expect(lineWorkOf(black, WINDOW_READ)).toEqual({
+      kind: 'rows',
+      rows: [
+        { id: '0190f0e2-6060-7000-8000-000000000019', number: 'WO-00019', status: 'RELEASED', held: false, pieces: 4 },
+        { id: WORK_ORDERS[0]!.id, number: 'WO-00021', status: 'IN_PROGRESS', held: false, pieces: 8 },
+      ],
+      leftOut: WORK.workOrdersLeftOut,
+    })
+    expect(lineWorkOf(red, WINDOW_READ)).toMatchObject({ kind: 'rows', rows: [{ number: 'WO-00022', held: true, pieces: 6 }] })
+  })
+
+  it('withheld without workorders.view; not read (or an older read without cells): nothing claimed; made to measure: its group', () => {
+    expect(lineWorkOf(black, NO_WORK_READ)).toEqual({ kind: 'withheld' })
+    expect(lineWorkOf(black, null)).toEqual({ kind: 'unread' })
+    expect(lineWorkOf(black, { ...WINDOW_READ, work: undefined })).toEqual({ kind: 'unread' })
+    expect(lineWorkOf(black, WORK_READ)).toEqual({ kind: 'unread' }) // WORK names no cells (an answer before F-OP-113)
+    const unit = { ...LINES[0]!, lineId: 'u1', seq: 30, kind: 'MADE_TO_MEASURE', sizes: [{ size: null, ordered: 1, cut: 1, sewn: 0, checked: 0, packed: 0, shipped: 0, madeExtra: 0, madeExtraWords: null }] }
+    const mtm = lineRowsOf([unit, ...LINES], value).find((row) => row.mtm)!
+    expect(lineWorkOf(mtm, WINDOW_READ)).toEqual({ kind: 'mtm', group: WORK.mtm[0] })
+  })
+
+  it('final inspections of the line’s work orders only; withheld without the right; unknown work orders: none claimed', () => {
+    const work = lineWorkOf(black, WINDOW_READ)
+    expect(lineFinalsOf(work, WINDOW_READ)).toEqual({ kind: 'rows', rows: QUALITY_READ.quality!.final })
+    expect(lineFinalsOf(lineWorkOf(red, WINDOW_READ), WINDOW_READ)).toEqual({ kind: 'rows', rows: [] })
+    expect(lineFinalsOf(lineWorkOf(black, NO_WORK_READ), NO_WORK_READ)).toEqual({ kind: 'withheld' })
+    expect(lineFinalsOf(work, { ...WINDOW_READ, quality: { issues: [], ncrs: [], final: null }, withheld: ['quality.final'] })).toEqual({ kind: 'withheld' })
+    expect(lineFinalsOf({ kind: 'withheld' }, WINDOW_READ)).toEqual({ kind: 'unread' })
+    expect(lineFinalsOf(work, { ...WINDOW_READ, quality: undefined })).toEqual({ kind: 'unread' })
+  })
+})
+
+describe('F-OO-126: the window draws the line’s work, its inspections and its moves; Open in Production lands on #work-orders', () => {
+  const production = order('IN_PRODUCTION')
+  const windowOf = (model: OrderRecordModel, locale: 'en' | 'it' = 'en') => {
+    const html = render(createElement(ProgressCard, { order: production, model }), locale)
+    return html.slice(html.indexOf('<section role="dialog"'))
+  }
+  const model = (line: string, over: Partial<OrderRecordModel> = {}) => base('manager', production, { tab: 'overview', production: ready(WINDOW_READ), overviewLine: line, ...over }).record
+
+  it('the red line: "Line 20", its pill, WO-00022 (a link, Released · 6 pieces of this line, On hold), no final inspection yet', () => {
+    const html = windowOf(model(LINE_RED))
+    const text = textOf(html)
+    expect(html).toContain('<h2>DEMO-JKT-01 · Rosso</h2>')
+    expect(html).toContain('<p data-subtitle="">Line 20</p>')
+    expect(html).not.toMatch(/data-subtitle="">Line 20 · /)
+    for (const words of ['Its work orders', 'WO-00022', 'Released · 6 pieces of this line', 'On hold', '1 work order not shown', 'Final inspections', 'No final inspection yet']) expect(text, words).toContain(words)
+    // The work order's own page (the Production tab's address for it).
+    expect(html).toContain(`href="/w/DEMO${recordAddress({ type: 'WorkOrder', id: WORK_ORDERS[1]!.id, label: 'WO-00022', companyId: production.companyId }, OFFICE_PAGES).replace(/&/g, '&amp;')}"`)
+    const italian = textOf(windowOf(model(LINE_RED), 'it'))
+    for (const words of ['I suoi ordini di lavoro', 'Rilasciato · 6 pezzi di questa riga', 'Controlli finali', 'Ancora nessun controllo finale']) expect(italian, words).toContain(words)
+  })
+
+  it('the black line: its two work orders and FI-2026-0088 waiting; Open in Production → ?tab=production#work-orders', () => {
+    const html = windowOf(model(LINE_BLK))
+    const text = textOf(html)
+    for (const words of ['WO-00019', 'WO-00021', 'In progress · 8 pieces of this line', 'FI-2026-0088 · 8 checked', 'Waiting']) expect(text, words).toContain(words)
+    expect(html).toMatch(/href="[^"]*\?tab=production#work-orders"/)
+    expect(html).not.toContain('#line-')
+  })
+
+  it('the head holds the line’s moves ("Actions ▾"), the same as the row’s ⋯; a move closes the window first; Read-only: none', () => {
+    const html = windowOf(model(LINE_RED))
+    expect(html).toMatch(/<div data-actions="">.*aria-label="Actions for line 20 · DEMO-JKT-01 · Rosso".*>Actions /)
+    const card = read('../view/overview/ProgressCard.tsx')
+    expect(card).toContain('items={moves.itemsOf(row, label, () => actions?.onOpenLine?.(null))}')
+    // `first` runs before the move: the window closes, then the one dialog opens.
+    expect(card.indexOf('first?.()')).toBeLessThan(card.indexOf('run(row, name, move)'))
+    const readOnly = windowOf({ ...model(LINE_RED), can: abilitiesOf(['orders.view', 'workorders.view']) })
+    expect(readOnly).toContain('<div data-actions=""></div>')
+    expect(readOnly).not.toContain('aria-haspopup="menu"')
+  })
+
+  it('without workorders.view: the words say who reads them; no inspection list is guessed', () => {
+    const text = textOf(windowOf(model(LINE_RED, { production: ready(NO_WORK_READ) })))
+    expect(text).toContain('Its work orders are shown to people who follow production.')
+    expect(text).not.toContain('No work order makes this line yet')
+    expect(text).toContain('Final inspections need the inspections right')
+  })
+
+  it('the words exist in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['progress.work.title', 'progress.work.none', 'progress.work.held', 'progress.final.none']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      expect(t('progress.work.of', { status: 'S', count: 1 }), locale).toBe(locale === 'en' ? 'S · 1 piece of this line' : 'S · 1 pezzo di questa riga')
+    }
+  })
+})
+// ---- end F-OO-126

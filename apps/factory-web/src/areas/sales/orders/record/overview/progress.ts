@@ -3,6 +3,7 @@ import type { Order } from '../../api'
 import { daysUntil } from '../../model' // F-OO-121: a late line's days
 import { groupMadeToMeasure, unitsOf } from '../../mtm-groups'
 import type { Dates, OrderProduction, ProductionLine } from './api'
+import type { MtmGroupRead, Quality } from './api' // F-OO-126
 // ---- F-OO-122: the row ⋯ — the band's own held rules, the page's read-only rule ----
 import { amendHeld, closableLines, closeLinesHeld, reopenHeld } from '../../daily-model'
 import { readOnlyOnPage, type OrderAbilities, type Phrase } from '../../model'
@@ -242,3 +243,56 @@ export function lineSizesOf(row: LineRow, lines: readonly ProductionLine[], date
     units: null,
   }
 }
+
+// ---- F-OO-126 (10-design §2.4): the line's window — the work orders that make it and their final inspections ------------------
+export interface LineWorkRow {
+  readonly id: string
+  readonly number: string
+  readonly status: string
+  readonly held: boolean
+  /** Its pieces of THIS line (the line's cells it makes; a shared work order lends nothing of another customer). */
+  readonly pieces: number
+}
+
+/**
+ * The work orders of a line, from the read's cells (F-OP-113):
+ *   unread    not read yet, or an older read without the cells — nothing is claimed (never "none")
+ *   withheld  the reader may not read work orders (workorders.view): the words say who reads them
+ *   mtm       made to measure: one work order per unit — the group's count and states (Production lists the units)
+ *   rows      the work orders, by number; `leftOut`: the order's work orders the reader does not reach (so "none" is not said)
+ */
+export type LineWork =
+  | { readonly kind: 'unread' }
+  | { readonly kind: 'withheld' }
+  | { readonly kind: 'mtm'; readonly group: MtmGroupRead | null }
+  | { readonly kind: 'rows'; readonly rows: readonly LineWorkRow[]; readonly leftOut: number }
+
+export function lineWorkOf(row: LineRow, read: Pick<OrderProduction, 'work' | 'withheld'> | null): LineWork {
+  if (!read) return { kind: 'unread' }
+  if (read.work === null || read.withheld.includes('work')) return { kind: 'withheld' }
+  if (read.work === undefined) return { kind: 'unread' }
+  if (row.mtm) return { kind: 'mtm', group: read.work.mtm.find((group) => group.style?.code === row.style?.code && group.colourway?.code === row.colourway?.code) ?? null }
+  const rows = read.work.workOrders.flatMap((workOrder) => {
+    const mine = (workOrder.cells ?? []).filter((cell) => row.lineIds.includes(cell.salesOrderLineId))
+    return mine.length === 0 ? [] : [{ id: workOrder.id, number: workOrder.number, status: workOrder.status, held: workOrder.held, pieces: mine.reduce((sum, cell) => sum + cell.quantity, 0) }]
+  })
+  if (rows.length === 0 && read.work.workOrders.some((workOrder) => workOrder.cells === undefined)) return { kind: 'unread' }
+  return { kind: 'rows', rows: rows.sort((a, b) => a.number.localeCompare(b.number)), leftOut: read.work.workOrdersLeftOut }
+}
+
+export type FinalInspection = NonNullable<Quality['final']>[number]
+
+/**
+ * The final inspections of the line's work orders (read only: an inspection is signed on Quality). Withheld without the inspections
+ * right; unread when the line's work orders are not known (withheld, made to measure, not read) — never "none" then.
+ */
+export type LineFinals = { readonly kind: 'unread' } | { readonly kind: 'withheld' } | { readonly kind: 'rows'; readonly rows: readonly FinalInspection[] }
+
+export function lineFinalsOf(work: LineWork, read: Pick<OrderProduction, 'quality' | 'withheld'> | null): LineFinals {
+  const finals = read?.quality?.final
+  if (read && (finals === null || read.withheld.includes('quality.final'))) return { kind: 'withheld' }
+  if (!finals || work.kind !== 'rows') return { kind: 'unread' }
+  const ids = new Set(work.rows.map((entry) => entry.id))
+  return { kind: 'rows', rows: finals.filter((entry) => ids.has(entry.workOrderId)) }
+}
+// ---- end F-OO-126

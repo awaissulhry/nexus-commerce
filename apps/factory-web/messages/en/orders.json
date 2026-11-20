@@ -1664,6 +1664,16 @@
       "allInWork": "Every piece of this line is in work orders",
       "closedLine": "This line is closed short: reopen it first",
       "nothingLeft": "Nothing of this line is left to close: it shipped in full"
+    },
+    "work": {
+      "title": "Its work orders",
+      "of_one": "{status} · {count} piece of this line",
+      "of_other": "{status} · {count} pieces of this line",
+      "none": "No work order makes this line yet",
+      "held": "Its work orders are shown to people who follow production."
+    },
+    "final": {
+      "none": "No final inspection yet"
     }
   },
   "files": {

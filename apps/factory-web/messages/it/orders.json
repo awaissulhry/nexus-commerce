@@ -1664,6 +1664,16 @@
       "allInWork": "Ogni pezzo di questa riga è già negli ordini di lavoro",
       "closedLine": "Questa riga è chiusa in anticipo: prima riaprila",
       "nothingLeft": "Di questa riga non resta nulla da chiudere: è spedita per intero"
+    },
+    "work": {
+      "title": "I suoi ordini di lavoro",
+      "of_one": "{status} · {count} pezzo di questa riga",
+      "of_other": "{status} · {count} pezzi di questa riga",
+      "none": "Ancora nessun ordine di lavoro per questa riga",
+      "held": "I suoi ordini di lavoro sono visibili a chi segue la produzione."
+    },
+    "final": {
+      "none": "Ancora nessun controllo finale"
     }
   },
   "files": {
