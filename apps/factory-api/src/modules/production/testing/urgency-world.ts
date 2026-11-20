@@ -4,6 +4,8 @@ import { expect } from 'vitest'
 import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
+import type { BusinessDate } from '@nexus/factory-domain/core/time'
+import { seedDay } from '@nexus/factory-db/testing' // op-fx13: addOrder's promise follows the seeds' calendar (B-W2b-F53)
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedFiles } from '../../../../../../packages/factory-db/seed/files'
@@ -55,6 +57,14 @@ export interface UrgencyWorldOptions {
 }
 // ── end fix-pr-9 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * op-fx13: the day `addOrder` promises an order for, unless told another: 20 Dec 2026 as a day of the seeds' future (seedDay), so
+ * moved on by whole weeks as the seeded orders' days are. It stays 35 to 41 days ahead and on a Sunday, whatever day the test runs.
+ * Before, the fixed 20 Dec met a test's "today + 30" on 20 Nov (end check run 8) and would have met a rush asked for today + 8 to
+ * 20 from early December. A test that names this promise reads it here.
+ */
+export const addOrderPromise = (): BusinessDate => seedDay('2026-12-20')
+
 export interface UrgencyWorld {
   readonly h: Harness
   readonly officeApp: FastifyInstance
@@ -67,7 +77,8 @@ export interface UrgencyWorld {
   replica(statements: readonly { readonly sql: string; readonly values?: unknown[] }[]): Promise<void>
   /**
    * A CONFIRMED order of a brand (one goods line of the harness's own jacket, 4 pieces) with its production state, Regular; promised
-   * for 2026-12-20 unless `promiseDate` says another day, or null: never promised (fix-pr-7, B-PR-36: a computed health of NO_DATE).
+   * for addOrderPromise() (op-fx13: 20 Dec 2026 as the seeds' calendar moves it) unless `promiseDate` says another day, or null:
+   * never promised (fix-pr-7, B-PR-36: a computed health of NO_DATE).
    */
   addOrder(partyId: string, label: string, orderDate: string, options?: { readonly promiseDate?: string | null }): Promise<{ readonly orderId: string; readonly number: string; readonly lineId: string }>
   /** A portal person of a brand with these portal roles, signed in by code (company A's portal). */
@@ -178,7 +189,7 @@ export async function urgencyWorld(label: string, namespace: string, options: Ur
 
   const colourway = (await admin<{ colourwayId: string }>('SELECT "colourwayId" FROM "SalesOrderLine" WHERE id = $1', [w.b.salesOrderLineId]))[0]!.colourwayId
   const addOrder: UrgencyWorld['addOrder'] = async (partyId, orderLabel, orderDate, options) => {
-    const promised = options?.promiseDate === null ? null : new Date(`${options?.promiseDate ?? '2026-12-20'}T00:00:00.000Z`) // fix-pr-7
+    const promised = options?.promiseDate === null ? null : new Date(`${options?.promiseDate ?? addOrderPromise()}T00:00:00.000Z`) // fix-pr-7, op-fx13
     const orderId = newId()
     const lineId = newId()
     const number = `T-URG-${orderLabel}-${orderId.slice(-4)}`
