@@ -657,6 +657,16 @@ const CANCEL_CUT = {
   atWorkshop: [],
 }
 // ---- end F-OP-114 / F-OP-115
+// ---- F-OO-102 (order overview §1.2; review F11): "Where it is now" before, after and without production — the headline and the dots
+// read ONE state (the domain's officeStripStateOf): waiting for a yes (no dots: none is now; the quiet line says when production
+// starts), shipped (every stage done), cancelled at Cutting (no dots; where the work had reached). Light and dark, 375 / 1440 / 1920. ----
+const CUT_READ = { ...PRODUCTION_READ, headline: { ...PRODUCTION_READ.headline!, stage: { ...PRODUCTION_READ.headline!.stage!, code: 'CUTTING' as const, words: { en: 'Cutting', it: 'Taglio' } } } }
+const F_OO_102: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-102-waiting', label: 'F-OO-102 · Sales · Overview of an order waiting for a yes: "Waiting for a yes" and when production starts — no dots (no stage is now)', model: base('sales', waitingOrder, { tab: 'overview', production: ready(CONFIRMED_READ), liveState: 'live' }) },
+  { id: 'f-oo-102-shipped', label: 'F-OO-102 · Sales · Overview of a shipped order: "Shipped 20/11/2026", every stage done, "set by the floor and quality"', model: base('sales', shipped, { tab: 'overview', production: ready(), liveState: 'live' }) },
+  { id: 'f-oo-102-cancelled', label: 'F-OO-102 · Sales · Overview of a cancelled order: "Cancelled", the work had reached Cutting — no dots', model: base('sales', order('CANCELLED'), { tab: 'overview', production: ready(CUT_READ), liveState: 'live' }) },
+]
+// ---- end F-OO-102
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-039',
@@ -852,6 +862,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'overview-sizes', label: 'F-SA-232 · Sales · Overview: line 10’s sizes in the centred window (PiecesGrid, shipped, the finish forecast)', model: base('sales', production, { tab: 'overview', production: ready(), overviewLine: LINE_BLK, liveState: 'live' }) },
     { id: 'overview-loading', label: 'F-SA-232 · Overview reading (skeletons, never a 0)', model: base('sales', production, { tab: 'overview', production: LOADING_STATE, liveState: 'connecting' }) },
     { id: 'overview-failed', label: "F-SA-232 · Overview: the production couldn't be read (this part only, Try again)", model: base('sales', production, { tab: 'overview', production: FAILED_STATE, liveState: 'offline' }) },
+    ...F_OO_102, // F-OO-102: the headline and the dots before, after and without production
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
     ...F_OP_301, // F-OP-301 (walk #1, #2, #3)

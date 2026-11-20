@@ -1559,7 +1559,8 @@
     "note": {
       "waiting": "Production starts once the order is confirmed",
       "reached": "Work had reached {stage} when it was cancelled"
-    }
+    },
+    "stagesDone": "Open the work orders in Production · every stage done"
   },
   "overview": {
     "where": "Where it is now",

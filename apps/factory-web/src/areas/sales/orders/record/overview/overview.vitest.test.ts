@@ -633,3 +633,38 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
   })
 })
 // ---- end F-OO-201
+
+// ---- F-OO-102 (order overview §1.2; review F11): the headline and the dots read ONE state — the overview drawn before, after and without production
+describe('F-OO-102: "Where it is now" per state — waiting no dots, shipped every stage done, cancelled where the work had reached', () => {
+  const milestones = (html: string, state: string) => html.match(new RegExp(`class="nds-milestone" data-state="${state}"`, 'g'))?.length ?? 0
+
+  it('in production and shipped: the dots and their quiet line ("set by the floor and quality"); shipped is every stage done, none now', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const setBy = locale === 'en' ? 'Stages are set by the floor and quality, never by hand' : 'Le fasi le segnano il reparto e la qualità, mai a mano'
+      const now = draw('overview', locale)
+      expect(milestones(now, 'current'), locale).toBe(1)
+      expect(textOf(now)).toContain(setBy)
+      const shipped = draw('f-oo-102-shipped', locale)
+      expect(milestones(shipped, 'done'), locale).toBe(5)
+      expect(milestones(shipped, 'current') + milestones(shipped, 'todo'), locale).toBe(0)
+      expect(textOf(shipped)).toMatch(locale === 'en' ? /Shipped \d{2}\/\d{2}\/\d{4}/ : /Spedito il \d{2}\/\d{2}\/\d{4}/)
+      expect(textOf(shipped)).toContain(setBy)
+      // The link never says "now" of a shipped order.
+      expect(shipped).toContain(locale === 'en' ? 'aria-label="Open the work orders in Production · every stage done"' : 'aria-label="Apri gli ordini di lavoro in Produzione · tutte le fasi completate"')
+    }
+  })
+
+  it('waiting for a yes and cancelled: no dots at all (never "Preparing · Now"), the quiet line says why — and no "set by" line', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const waiting = draw('f-oo-102-waiting', locale)
+      expect(waiting, locale).not.toContain('class="nds-milestones')
+      expect(textOf(waiting)).toContain(locale === 'en' ? 'Waiting for a yes' : 'In attesa di approvazione')
+      expect(textOf(waiting)).toContain(locale === 'en' ? 'Production starts once the order is confirmed' : "La produzione parte quando l'ordine è confermato")
+      const cancelled = draw('f-oo-102-cancelled', locale)
+      expect(cancelled, locale).not.toContain('class="nds-milestones')
+      expect(textOf(cancelled)).toContain(locale === 'en' ? 'Work had reached Cutting when it was cancelled' : 'Il lavoro era arrivato a Taglio quando è stato annullato')
+      for (const html of [waiting, cancelled]) expect(textOf(html)).not.toContain(locale === 'en' ? 'Stages are set by the floor' : 'Le fasi le segnano il reparto')
+    }
+  })
+})
+// ---- end F-OO-102

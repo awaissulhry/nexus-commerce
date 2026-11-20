@@ -3,7 +3,6 @@ import { officeStripStateOf, type OfficeStripState } from '@nexus/factory-domain
 import type { Order } from '../../api'
 import { depositGate, type Phrase } from '../../model'
 import type { BrandStage, Dates, Headline } from './api'
-import { say } from './model'
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Where it is now", its rules moved out of model.ts unchanged (F-SA-232:
@@ -66,19 +65,34 @@ export function headlineOf(order: Pick<Order, 'status' | 'chain'>, headline: Hea
 }
 // ---- end F-OO-101
 
-/** The five plain stages for the StageStrip (office face): the stage now, its day, the working plan's days, blocked with why. */
-export function stageStripOf(order: Pick<Order, 'status' | 'depositRequired' | 'chain'>, headline: Headline | null | undefined, dates: Dates | null | undefined, locale: string): StageStripInput & { readonly note?: string | null } {
+/**
+ * The five plain stages for the StageStrip (office face): the stage now, its day, the working plan's days, the blocked mark.
+ * F-OO-102 (order overview §1.2; review F11): with the office's strip state — the domain's `officeStripStateOf`, the headline's own —
+ * so the dots never disagree with the words: waiting for a yes, every stage to come; production over, every stage done (the kept
+ * stage keeps its day); cancelled, no strip. The blocked mark stays while the work is current, but its why leaves the current dot's
+ * note: the strips say it (one place per fact). Derived: the floor and quality set the stages, never a hand.
+ */
+export function stageStripOf(order: Pick<Order, 'status'>, headline: Headline | null | undefined, dates: Dates | null | undefined): StageStripInput {
+  const state = officeStripStateOf(order.status)
   const stage = headline?.stage ?? null
+  if (state === 'WAITING' || state === 'STOPPED') return { state, stage: null }
+  if (state === 'ALL_DONE') return { state, stage: stage ? plainStageOf(stage.code) : null, reached: stage?.since ? { [stage.code]: stage.since } : {} }
   const planned = dates?.planned ?? null
   const expected: Partial<Record<PlainStage, string | null>> = { CUTTING: planned?.cutStart ?? null, SEWING: planned?.sewStart ?? null, QUALITY: planned?.finish ?? null }
-  const blocked = headline?.held ? { why: headline.holds[0] ? say(headline.holds[0].words, locale) : null } : null
+  const blocked = headline?.held ? { why: null } : null
   if (!stage) {
     // Before any work order the order is preparing (never "step 1" by default once it is in work).
-    if (order.status === 'CONFIRMED') return { stage: 'PREPARING', expected, blocked }
-    return { stage: null }
+    if (order.status === 'CONFIRMED') return { state, stage: 'PREPARING', expected, blocked }
+    return { state, stage: null }
   }
-  return { stage: plainStageOf(stage.code), reached: stage.since ? { [stage.code]: stage.since } : {}, expected, sewingCounted: !stage.sewingNotCounted, blocked }
+  return { state, stage: plainStageOf(stage.code), reached: stage.since ? { [stage.code]: stage.since } : {}, expected, sewingCounted: !stage.sewingNotCounted, blocked }
 }
+
+/**
+ * F-OO-102: the quiet line under the dots ("Stages are set by the floor and quality, never by hand", the production parts' words)
+ * shows where the dots are drawn — never while the order waits for a yes or once it is cancelled.
+ */
+export const stagesNoteShown = (state: OfficeStripState): boolean => state === 'CURRENT' || state === 'ALL_DONE'
 
 /** Why the StageStrip waits at Preparing: work orders are made after the deposit. */
 export function preparingNote(order: Pick<Order, 'status' | 'depositRequired' | 'chain'>, headline: Headline | null | undefined): Phrase | null {

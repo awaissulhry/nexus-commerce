@@ -1559,7 +1559,8 @@
     "note": {
       "waiting": "La produzione parte quando l'ordine è confermato",
       "reached": "Il lavoro era arrivato a {stage} quando è stato annullato"
-    }
+    },
+    "stagesDone": "Apri gli ordini di lavoro in Produzione · tutte le fasi completate"
   },
   "overview": {
     "where": "A che punto è",

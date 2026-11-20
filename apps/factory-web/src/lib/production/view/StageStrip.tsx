@@ -58,6 +58,13 @@ export function StageStrip({ face, layout = 'auto', label, promise, loading, pro
     return <EmptyState title={w.t('parts.stage.failed')} action={onRetry ? <Button size="sm" onClick={onRetry}>{w.t('common.retry')}</Button> : undefined} />
   }
   const steps = stageSteps(input)
+  // ---- F-OO-102 (office only: the portal never passes `state`, so nothing below changes for it) ----
+  // Stopped (a cancelled order): no strip — the office card says where the work had reached. Waiting for a yes: every stage is to come
+  // and none is now, but the DS MilestoneTracker always marks one step current (with nothing reached, the first: "Preparing · Now"),
+  // so no strip is drawn rather than a wrong one (DS gap: a tracker with nothing current yet); the card says production starts once
+  // the order is confirmed.
+  if (input.state === 'STOPPED' || (steps.length > 0 && steps.every((step) => step.state === 'todo'))) return null
+  // ---- end F-OO-102
   if (steps.length === 0) {
     return (
       <div className="fw-prp-strip fw-prp-unknown" data-layout={layout}>

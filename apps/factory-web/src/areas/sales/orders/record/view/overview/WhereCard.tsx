@@ -12,7 +12,7 @@ import { WaitingOnPill } from '../../../../../../lib/production/view/WaitingOnPi
 import type { Order } from '../../../api'
 import { dayInstant, type Phrase } from '../../../model'
 import { healthInputOf, readOf, rowWordsOf, type WaitingState } from '../../overview/model' // F-OP-301 (walk #1–#3): the ONE waiting list's state
-import { exFactoryOf, headlineOf, inWorkOf, preparingNote, stageStripOf } from '../../overview/where'
+import { exFactoryOf, headlineOf, inWorkOf, preparingNote, stageStripOf, stagesNoteShown } from '../../overview/where'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { said } from '../../../../../home/approvals/requests/model' // F-OP-301: a Still to do row's words in Who acts next
 import { useSearchParams } from 'next/navigation'
@@ -38,7 +38,7 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
   const dated = (phrase: Phrase): string => t(phrase.key, Object.fromEntries(Object.entries(phrase.params ?? {}).map(([key, value]) => [key, typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? formatDate(value, { locale }) : value])))
   const sentence = [words.status ? dated(words.status) : null, words.stage ? w.t(`parts.stage.${words.stage}`) : null].filter(Boolean).join(' · ')
   const quiet = words.note ? t(words.note.key, words.note.stage ? { stage: w.t(`parts.stage.${words.note.stage}`) } : undefined) : null
-  const strip = stageStripOf(order, headline, read?.dates ?? null, locale)
+  const strip = stageStripOf(order, headline, read?.dates ?? null) // F-OO-102: the dots in the headline's own state
   const preparing = preparingNote(order, headline)
   const exFactory = exFactoryOf(order, headline)
   const health = healthInputOf(order, headline, read?.dates ?? null)
@@ -77,13 +77,15 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
         layout="auto"
         label={t('overview.where')}
         {...strip}
-        note={preparing ? t(preparing.key) : (strip.note ?? null)}
+        note={preparing ? t(preparing.key) : null}
         stageHref={`${tabHref(`${model.prefix}/sales/orders/${order.id}`, 'production', search)}#work-orders`}
-        stageLinkLabel={t('doors.stages', { stage: strip.stage ? w.t(`parts.stage.${strip.stage}`) : w.t('parts.stage.unknown') })}
+        stageLinkLabel={words.state === 'ALL_DONE' ? t('where.stagesDone') : t('doors.stages', { stage: strip.stage ? w.t(`parts.stage.${strip.stage}`) : w.t('parts.stage.unknown') })}
         loading={loading}
         problem={state?.status === 'failed'}
         onRetry={() => actions?.onRetryProduction?.()}
       />
+      {/* F-OO-102: derived, and it says so — under the dots, only where they are drawn. */}
+      {!loading && state?.status !== 'failed' && stagesNoteShown(words.state) ? <p className="fw-so-hint">{w.t('parts.stage.office.setBy')}</p> : null}
     </Card>
   )
 }
