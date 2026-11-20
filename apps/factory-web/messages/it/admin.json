@@ -2134,7 +2134,7 @@
     "partners_manage": "Cambiare ruolo e fine accesso delle persone del portale, sospenderle o disattivarle; attivare un portale, i suoi limiti e l’avanzamento produzione",
     "partners_preview": "Aprire il portale di un partner come lo vede lui, in sola lettura",
     "partners_production_manage": "Decidere cosa vede un cliente della sua produzione e cosa può fare: livello di condivisione, urgenze sì o no e quante, richieste di produzione, approvatore indicato, seconda persona per le decisioni al suo posto",
-    "production_brand_manage": "Rispondere alle richieste di produzione di un cliente (Urgente – richiesto, pausa, ripresa), portare un suo ordine a A rischio con un motivo, scegliere il supervisore di produzione del cliente e dei suoi ordini",
+    "production_brand_manage": "Rispondere alle richieste di produzione di un cliente (Urgente – richiesto, pausa, ripresa), portare un suo ordine a A rischio con un motivo, impostare a mano la fase di un suo ordine con un motivo (mai Pronto per la spedizione), scegliere il supervisore di produzione del cliente e dei suoi ordini",
     "production_brand_override": "Decidere al posto di un cliente o annullare ciò che ha fatto, con un motivo che legge (una seconda persona se il suo interruttore è acceso, mai chi ha chiesto); riportare un suo ordine a Normale, bloccarlo o sbloccarlo",
     "projects_manage": "Creare progetti (lavoro su più modelli, campioni e ordini, o senza ancora un record), modificarli, metterli in pausa, chiuderli con il loro esito e riaprirli, collegarne i record e aggiungerne o toglierne le persone, comprese quelle del portale dell'azienda esterna",
     "portal_colleagues_view": "Vedere gli utenti del portale della propria organizzazione e i loro ruoli",

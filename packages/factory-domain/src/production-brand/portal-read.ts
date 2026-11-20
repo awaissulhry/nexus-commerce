@@ -21,8 +21,8 @@ import { STAGE_WORDS } from './words'
  *   planned     the cut start, sewing start and finish of its own work orders in the PUBLISHED plan only (Owner P3: the
  *               working plan never reaches a customer); dates only, never a line, a lane, minutes or a load
  *   next        the next milestone a list row shows, by level: Status only the next stage; + Progress the count of the stage
- *               it is at ("32 of 40 sewn"); + Gates & dates the next waiting gate with its target date, else the next stage
- *               with its planned start
+ *               it is at ("32 of 40 sewn"; "Count to follow" while it is 0, B-MS-002); + Gates & dates the next waiting gate
+ *               with its target date, else the next stage with its planned start
  *   problem     the state of the problems it reported on an order: "Waiting on us since 16 Nov" until we write to it in the
  *               order's thread, then "Answered 17 Nov"; for the other orders of a batch answered in one order's thread,
  *               "Answered in your order 13" (R-43, the fallback of threads ask T11; fix-pr-5, lead decision: the customer's own
@@ -175,6 +175,11 @@ export function countWords(count: 'cut' | 'sewn' | 'inspected' | 'packed', done:
   return { it: `${done} di ${of} ${COUNT_WORDS[count].it}`, en: `${done} of ${of} ${COUNT_WORDS[count].en}` }
 }
 
+// B-MS-002 (R13): the stage it is at has no count yet (its first scan only started the work, or the stage was set by hand while
+// the floor could not record it): "Count to follow", never "0 of 40 sewn". One neutral rule: it never says why, so no customer
+// read learns that a stage was set by hand. No verb, so the portal's "voi" never comes up.
+export const COUNT_TO_FOLLOW_WORDS: Words = Object.freeze({ it: 'Conteggio in arrivo', en: 'Count to follow' })
+
 export type NextMilestone =
   | { readonly kind: 'STAGE'; readonly stage: BrandStage; readonly date: BusinessDate | null; readonly words: Words }
   | { readonly kind: 'GATE'; readonly gate: BrandGateKind; readonly date: BusinessDate | null; readonly words: Words }
@@ -208,7 +213,11 @@ export function nextMilestoneOf(input: {
   if (input.stage === null) return { next: null, count: null }
   const key = COUNT_OF_STAGE[input.stage]
   const figure = key && input.counts ? input.counts[key] : null
-  const count = shares(input.level, 'progress') && key && input.counts && figure !== null ? { done: figure, of: input.counts.ordered, words: countWords(key, figure, input.counts.ordered) } : null
+  // B-MS-002: a count of 0 reads "Count to follow" (the same shape, so no contract changes).
+  const count =
+    shares(input.level, 'progress') && key && input.counts && figure !== null
+      ? { done: figure, of: input.counts.ordered, words: figure === 0 ? COUNT_TO_FOLLOW_WORDS : countWords(key, figure, input.counts.ordered) }
+      : null
   const nextStage = nextStageOf(input.stage)
   if (shares(input.level, 'gates')) {
     const waiting = [...input.gates].filter((gate) => isWaitingGate(gate.state)).sort(gateOrder)[0]
@@ -314,7 +323,8 @@ export const CHANGE_PENDING_WORDS: Words = Object.freeze({ it: 'Modifica in atte
 /**
  * Keys no brand read may hold (PW-15, PW-P03): who supervises or answers, an office person or note, a place in our queue, a
  * production line, a lane, a load or a lot, a work order, a site (`lineId` of a read is the customer's own ORDER line, as the portal's
- * progress has always named it). The PG wall tests walk every answer with `forbiddenKeysIn`.
+ * progress has always named it), that a stage was set by hand, why, when or by whom (B-MS-002). The PG wall tests walk every
+ * answer with `forbiddenKeysIn`.
  */
 export const FORBIDDEN_BRAND_KEYS = Object.freeze([
   'supervisor',
@@ -348,6 +358,14 @@ export const FORBIDDEN_BRAND_KEYS = Object.freeze([
   'siteId',
   // B-OP-021: the office's list of what an order waits for, record by record (each with its record's id and the office's door).
   'blockers',
+  // B-MS-002 (R11): a stage set by hand — its five hidden columns and the office's marks. The customer reads a plain stage only.
+  'stageSet',
+  'stageSetReason',
+  'stageSetNote',
+  'stageSetAt',
+  'stageSetById',
+  'byHand',
+  'stageByHand',
 ] as const)
 
 /** The forbidden keys found anywhere in a value (paths like `items/0/health/note`), in the order met. */

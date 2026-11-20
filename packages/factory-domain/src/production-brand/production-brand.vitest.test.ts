@@ -50,6 +50,8 @@ import { BLOCKER_PLACE, BLOCKER_PLACES, BLOCKER_SUBS, BRAND_REQUEST_PLACE, ORDER
 // B-OO-007
 import { SALES_ORDER_STATUSES } from '../sales/orders/orders'
 import { isAfterProduction, OFFICE_STRIP_STATES, officeStripStateOf } from './stages'
+// B-MS-001
+import { reachedStageOf } from './stages'
 
 const line = (facts: Partial<LineStageFacts> = {}): LineStageFacts => ({ reached: null, allReleased: false, done: false, sewingCounted: true, ...facts })
 
@@ -772,3 +774,26 @@ describe('B-OO-007 the office strip state: waiting, current, all done, stopped',
   })
 })
 // ── end B-OO-007 ──
+
+// ── B-MS-001 (set the stage by hand; R2): where the work had reached when the order left production ──
+describe('B-MS-001 reachedStageOf: the floor’s stage with done lines read where they reached', () => {
+  it("a cancelled order's lines (done) still read where they reached; the slowest line decides", () => {
+    expect(reachedStageOf([line({ reached: 'SEWING', done: true }), line({ reached: 'CUT', done: true })])).toBe('CUTTING')
+    expect(reachedStageOf([line({ reached: 'SEWING', done: true })])).toBe('SEWING')
+    expect(reachedStageOf([line({ reached: 'FINISHED', done: true }), line({ reached: 'SHIPPED', done: true })])).toBe('QUALITY')
+    expect(reachedStageOf([line({ reached: 'RELEASED', done: true })])).toBe('PREPARING')
+    // The order's own stage (open lines only) has none for it: the order left production.
+    expect(orderStageOf([line({ reached: 'SEWING', done: true })])).toBeNull()
+  })
+
+  it('open and done lines alike; a shipped line counts where it reached', () => {
+    expect(reachedStageOf([line({ reached: 'SHIPPED', done: true }), line({ reached: 'SEWING' })])).toBe('SEWING')
+    expect(reachedStageOf([line({ reached: 'CUT' }), line({ reached: 'FINISHED', allReleased: true })])).toBe('CUTTING')
+  })
+
+  it('nothing reached, or no line at all: Preparing', () => {
+    expect(reachedStageOf([line({ done: true })])).toBe('PREPARING')
+    expect(reachedStageOf([])).toBe('PREPARING')
+  })
+})
+// ── end B-MS-001 ──
