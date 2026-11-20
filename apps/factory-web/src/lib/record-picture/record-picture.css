@@ -1,7 +1,12 @@
+/* F-CP-107 (cp-fx14): class family renamed (clash with Incoming's reading pane `.fw-rp`, inquiries/view/pane/pane.css, TH-1b):
+   the record picture is `fw-rpic` / `fw-rpic-*` and its sizes `--fw-rpic-size` / `--fw-rpic-fit`. Both families loaded at once made
+   this part's `all: unset; flex: none; align-items / justify-content: center; background; border` land on the reading pane (and the
+   pane's `container-type`, `height: 100%`, `.fw-rp-wait` on this part). The reading pane keeps `fw-rp`. */
+
 /* F-SA-211 (sales page plan N8, picks P13, P18; 12-lists-board §2.3): the ONE picture part — layout only, design-system tokens.
    A cell crops (today's look); a board card, a phone card and an order line fit (a garment photo is portrait). */
 
-.fw-rp {
+.fw-rpic {
   all: unset;
   box-sizing: border-box;
   position: relative;
@@ -9,8 +14,8 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: var(--fw-rp-size);
-  height: var(--fw-rp-size);
+  width: var(--fw-rpic-size);
+  height: var(--fw-rpic-size);
   border-radius: var(--nds-radius-md);
   border: 1px solid var(--nds-border-subtle);
   background: var(--nds-surface-sunken);
@@ -18,59 +23,59 @@
   overflow: visible;
   vertical-align: middle;
 }
-button.fw-rp {
+button.fw-rpic {
   cursor: zoom-in;
 }
-.fw-rp:focus-visible {
+.fw-rpic:focus-visible {
   outline: 2px solid var(--nds-primary);
   outline-offset: 1px;
 }
-.fw-rp img {
+.fw-rpic img {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: var(--fw-rp-fit);
+  object-fit: var(--fw-rpic-fit);
   border-radius: inherit;
 }
 
-.fw-rp-cell {
-  --fw-rp-size: 36px;
-  --fw-rp-fit: cover;
+.fw-rpic-cell {
+  --fw-rpic-size: 36px;
+  --fw-rpic-fit: cover;
 }
-.fw-rp-board {
-  --fw-rp-size: 64px;
-  --fw-rp-fit: contain;
+.fw-rpic-board {
+  --fw-rpic-size: 64px;
+  --fw-rpic-fit: contain;
   align-self: start;
 }
 @media (min-width: 1680px) {
-  .fw-rp-board {
-    --fw-rp-size: 72px;
+  .fw-rpic-board {
+    --fw-rpic-size: 72px;
   }
 }
-.fw-rp-phone {
-  --fw-rp-size: 48px;
-  --fw-rp-fit: contain;
+.fw-rpic-phone {
+  --fw-rpic-size: 48px;
+  --fw-rpic-fit: contain;
 }
-.fw-rp-line {
-  --fw-rp-size: 40px;
-  --fw-rp-fit: contain;
+.fw-rpic-line {
+  --fw-rpic-size: 40px;
+  --fw-rpic-fit: contain;
 }
-.fw-rp-line-large {
-  --fw-rp-size: 56px;
-  --fw-rp-fit: contain;
+.fw-rpic-line-large {
+  --fw-rpic-size: 56px;
+  --fw-rpic-fit: contain;
 }
 
-.fw-rp-wait {
+.fw-rpic-wait {
   opacity: 0.4;
 }
-.fw-rp-none {
+.fw-rpic-none {
   color: var(--nds-placeholder);
 }
-.fw-rp-files {
+.fw-rpic-files {
   color: var(--nds-text-link);
   cursor: pointer;
 }
-.fw-rp-more {
+.fw-rpic-more {
   position: absolute;
   right: -6px;
   bottom: -4px;
@@ -84,7 +89,7 @@ button.fw-rp {
   font-weight: var(--nds-font-weight-medium);
 }
 
-.fw-rp-viewer {
+.fw-rpic-viewer {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -92,48 +97,48 @@ button.fw-rp {
   border-radius: var(--nds-radius-lg);
   background: var(--nds-surface-sunken);
 }
-.fw-rp-viewer img {
+.fw-rpic-viewer img {
   max-width: 100%;
   max-height: 60vh;
   object-fit: contain;
   border-radius: var(--nds-radius-md);
 }
-.fw-rp-viewer-none {
+.fw-rpic-viewer-none {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   gap: var(--nds-space-8);
   color: var(--nds-text-muted);
 }
-.fw-rp-note {
+.fw-rpic-note {
   margin: var(--nds-space-8) 0 0;
   color: var(--nds-text-muted);
   font-size: var(--nds-font-size-sm);
 }
-.fw-rp-door {
+.fw-rpic-door {
   color: var(--nds-text-link);
   font-weight: var(--nds-font-weight-semibold);
   text-decoration: none;
 }
-.fw-rp-door:hover,
-.fw-rp-door:focus-visible {
+.fw-rpic-door:hover,
+.fw-rpic-door:focus-visible {
   text-decoration: underline;
 }
 
 /* F-CP-110: the viewer's styles strip — each line's picture with its style and colour under it (layout only, DS tokens). */
-.fw-rp-styles {
+.fw-rpic-styles {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-8);
   margin-top: var(--nds-space-10);
 }
-.fw-rp-styles-h {
+.fw-rpic-styles-h {
   margin: 0;
   font-size: var(--nds-font-size-sm);
   font-weight: var(--nds-font-weight-semibold);
   color: var(--nds-text-strong);
 }
-.fw-rp-strip {
+.fw-rpic-strip {
   display: flex;
   flex-wrap: wrap;
   gap: var(--nds-space-10);
@@ -141,18 +146,18 @@ button.fw-rp {
   padding: 0;
   list-style: none;
 }
-.fw-rp-tile {
+.fw-rpic-tile {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--nds-space-4);
   max-width: 112px;
 }
-.fw-rp-tile.is-shown .fw-rp {
+.fw-rpic-tile.is-shown .fw-rpic {
   outline: 2px solid var(--nds-text-link);
   outline-offset: 2px;
 }
-.fw-rp-tile-words {
+.fw-rpic-tile-words {
   font-size: var(--nds-font-size-xs);
   color: var(--nds-text-muted);
   text-align: center;

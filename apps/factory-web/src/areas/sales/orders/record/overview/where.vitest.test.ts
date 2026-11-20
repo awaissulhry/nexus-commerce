@@ -8,6 +8,31 @@ import { CONFIRMED_READ, HEADLINE, PRODUCTION_READ } from './fixtures'
 import { headlineOf, stageStripOf, stagesShown } from './where'
 import * as where from './where' // F-OO-103: what section 1's rules still export
 import { bandHealthOf, healthInputOf, waitingOf } from './model'
+// ---- F-OO-104: the strips
+import { deposit, PAID } from '../../_demo/fixtures'
+import { APPROVAL_NOBODY, APPROVAL_PENDING } from '../../depth/demo/fixtures'
+import type { OpenApproval, Order } from '../../api'
+import type { Approval } from '../../depth/api'
+import type { OrderProduction } from './api'
+import { FAILED_STATE, LOADING_STATE, ready, WORK } from './fixtures'
+import { orderWaitingOf, type ProductionState } from './model'
+import { STRIP_KINDS, STRIPS_SHOWN, whereStripsOf, type WhereStrip } from './where'
+// ---- end F-OO-104
+// ---- F-OO-105: the strips' doors and their draws
+import { readFileSync } from 'node:fs'
+import type { ComponentType } from 'react'
+import { renderView, textOf } from '../../../../../lib/record-thread/parts/testing'
+import { designScreen } from '../fixtures'
+import { abilitiesOf } from '../../model'
+import { rolePermissions } from '../../../../../shell/design-data'
+import { actsCanOf } from '../../../../../lib/production/work-order-acts/model'
+import { stripDoorsOf, workOrderHref, type StripDoor, type StripDoorsInput } from './where'
+// ---- end F-OO-105
+// ---- F-OO-107: the moves row and the band's own rules it reads
+import { cancelHeld, closeHeld, readOnlyOnPage, readyHeld } from '../../model'
+import { elsewhereDoor } from '../shipments/elsewhere/model'
+import { WHERE_MOVES, whereMovesOf } from './where'
+// ---- end F-OO-107
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Where it is now"'s rules, moved with where.ts out of overview.vitest.test.ts
@@ -123,3 +148,468 @@ describe('"Where it is now": the stages and the facts', () => {
     expect(healthInputOf(order('IN_PRODUCTION'), null).computed).toBeUndefined()
   })
 })
+
+// ---- F-OO-104 (order overview §1.3; review F1, F13; Owner D6): the strips model — one per hold or wait, most blocking first ----
+describe('F-OO-104: the strips — the yes, the credit, the review, the deposit, then one strip per hold kind "on N work orders"', () => {
+  const words = (en: string) => ({ en, it: `${en} (it)` })
+  type Ref = { type: string; id: string } | null
+  const blocker = (kind: string, on: 'US' | 'BRAND', since: string | null, ref: Ref) => ({ kind, on, words: words(kind), since, ref, sub: null })
+  const wo = (id: string, number: string, shared = false) => ({ ...WORK.workOrders[0]!, id, number, sharedWithOtherCustomers: shared })
+  const task = (kind: string, taskId: string, requestedAt: string, approver = 'Finance'): OpenApproval => ({ taskId, kind, kindLabel: { en: kind, it: kind }, requestedAt, requester: { name: 'Luca Prova', me: false }, approver: { kind: 'ROLE', name: approver, me: false }, version: 1, requireStepUp: false, approve: { allowed: true, why: null }, reject: { allowed: true, why: null }, withdraw: { allowed: false, why: null } })
+  type Hold = NonNullable<OrderProduction['headline']>['holds'][number]
+  const readWith = (blockers: ReturnType<typeof blocker>[], holds: Hold[] = [], workOrders: ReturnType<typeof wo>[] = [], leftOut = 0): OrderProduction => ({ ...PRODUCTION_READ, headline: { ...HEADLINE, held: holds.length > 0, holds, waiting: { ...HEADLINE.waiting, blockers } }, work: { ...WORK, workOrders, workOrdersLeftOut: leftOut } })
+  /** The strips as the card makes them: from the ONE waiting call (OverviewTab's own), the production read, the yes's read. */
+  const stripsOf = (value: Order, read: OrderProduction | null, approval: Approval | null = null, state?: ProductionState) => {
+    const production = state ?? (read ? ready(read) : null)
+    return whereStripsOf(value, read, approval, orderWaitingOf(value, { production, requests: { value: [] }, can: { recordPayment: true } }, 'en'))
+  }
+  const kinds = (strips: readonly WhereStrip[]) => strips.map((strip) => strip.kind)
+  const held = (strips: readonly WhereStrip[], kind: WhereStrip['kind']) => strips.find((strip) => strip.kind === kind) as Extract<WhereStrip, { kind: 'quality' | 'production' | 'pause' | 'other' }>
+
+  it('the order of strips, most blocking first: the yes, the credit, the review, the deposit, quality, production, the pause, another kind', () => {
+    const open = deposit()
+    const waiting: Order = {
+      ...order('PENDING_APPROVAL'),
+      waits: ['REQUEST_PENDING', 'CREDIT_HOLD', 'MEASUREMENTS'],
+      madeToMeasure: { units: 2, waitingReview: 1, riders: null },
+      openApprovals: [task('CREDIT_OVERRIDE', 't-credit', '2026-11-02T09:00:00Z'), task('SALES_ORDER', 't-own', '2026-11-03T09:00:00Z', 'Marco Demo')],
+      chain: { ...order('PENDING_APPROVAL').chain, depositRequests: [open] },
+    }
+    const read = readWith([
+      blocker('BRAND_PAUSE', 'BRAND', '2026-11-12T09:00:00Z', { type: 'WorkOrder', id: 'wo-1' }),
+      blocker('NONCONFORMANCE', 'US', '2026-11-09T09:00:00Z', { type: 'WorkOrder', id: 'wo-3' }),
+      blocker('NO_MOVE', 'US', '2026-11-11T09:00:00Z', { type: 'WorkOrder', id: 'wo-2' }),
+      blocker('DEPOSIT', 'BRAND', '2026-10-28T15:00:00Z', { type: 'DepositRequest', id: open.id }),
+      blocker('QUALITY_HOLD', 'US', '2026-11-14T09:00:00Z', { type: 'WorkOrder', id: 'wo-3' }),
+      blocker('BRAND_REQUEST', 'US', '2026-11-08T09:00:00Z', { type: 'OrderChangeRequest', id: 'r-1' }),
+    ], [], [wo('wo-1', 'WO-00021'), wo('wo-2', 'WO-00022'), wo('wo-3', 'WO-00023')])
+    const { strips, holds } = stripsOf(waiting, read)
+    expect(kinds(strips)).toEqual(['yes', 'credit', 'review', 'deposit', 'quality', 'production', 'pause', 'other'])
+    expect(STRIP_KINDS).toEqual(['yes', 'credit', 'review', 'deposit', 'quality', 'production', 'pause', 'other'])
+    expect(holds).toBe('read')
+    // Each with what it says: who decides each yes and since when, how many units wait, the deposit's request and due day.
+    expect(strips[0]).toMatchObject({ kind: 'yes', asked: true, who: 'Marco Demo', since: '2026-11-03T09:00:00Z', task: { taskId: 't-own' } })
+    expect(strips[1]).toMatchObject({ kind: 'credit', asked: true, who: 'Finance', since: '2026-11-02T09:00:00Z', task: { taskId: 't-credit' } })
+    expect(strips[2]).toMatchObject({ kind: 'review', count: 1 })
+    expect(strips[3]).toMatchObject({ kind: 'deposit', state: 'WAITING', requestId: open.id, due: open.dueDate, since: '2026-10-28T15:00:00Z' })
+    // Another kind the list places with the holds keeps its own strip with the API's own words (never hidden); a request is not a strip.
+    expect(held(strips, 'other')).toMatchObject({ blocker: 'NONCONFORMANCE', reasons: [words('NONCONFORMANCE')] })
+    expect(JSON.stringify(strips)).not.toContain('r-1')
+    // At most four show; the rest fold behind "Show {n} more" (the card's).
+    expect(STRIPS_SHOWN).toBe(4)
+  })
+
+  it('one strip per hold kind with its N: a work order held twice counts once; by number; each reason once; the earliest since', () => {
+    const read = readWith(
+      [
+        blocker('BRAND_PAUSE', 'BRAND', '2026-11-13T09:00:00Z', { type: 'WorkOrder', id: 'wo-2' }),
+        blocker('BRAND_PAUSE', 'BRAND', '2026-11-12T09:00:00Z', { type: 'WorkOrder', id: 'wo-1' }),
+        blocker('NO_MOVE', 'US', '2026-11-11T09:00:00Z', { type: 'WorkOrder', id: 'wo-1' }),
+        blocker('NO_MOVE', 'US', '2026-11-10T09:00:00Z', { type: 'WorkOrder', id: 'wo-1' }),
+      ],
+      [
+        { kind: 'PRODUCTION', words: words('Leather check'), since: '2026-11-10' },
+        { kind: 'PRODUCTION', words: words('Trims missing'), since: '2026-11-11' },
+        { kind: 'QUALITY', words: words('Shade difference'), since: '2026-11-09' },
+        { kind: 'BRAND', words: words("Paused at the customer's request"), since: '2026-11-12' },
+      ],
+      [wo('wo-2', 'WO-00022'), wo('wo-1', 'WO-00021')],
+    )
+    const { strips } = stripsOf(order('IN_PRODUCTION'), read)
+    // The quality words have no blocker row here (no work order of the order is held by quality): no quality strip is made up.
+    expect(kinds(strips)).toEqual(['production', 'pause'])
+    expect(held(strips, 'production')).toEqual({ key: 'production', kind: 'production', blocker: 'NO_MOVE', reasons: [words('Leather check'), words('Trims missing')], workOrders: { reached: [{ id: 'wo-1', number: 'WO-00021', shared: false }], notReached: 0 }, since: '2026-11-10T09:00:00Z' })
+    // One customer pause on two work orders = ONE strip "on 2 work orders" (its words are the strip's own: no reason list).
+    expect(held(strips, 'pause')).toEqual({ key: 'pause', kind: 'pause', blocker: 'BRAND_PAUSE', reasons: [], workOrders: { reached: [{ id: 'wo-1', number: 'WO-00021', shared: false }, { id: 'wo-2', number: 'WO-00022', shared: false }], notReached: 0 }, since: '2026-11-12T09:00:00Z' })
+  })
+
+  it('F13: a shared work order (reached, it makes other customers\' work) and one not reached — two cases, never confused', () => {
+    const read = readWith(
+      [
+        blocker('NO_MOVE', 'US', '2026-11-10T09:00:00Z', { type: 'WorkOrder', id: 'wo-s' }),
+        blocker('NO_MOVE', 'US', '2026-11-11T09:00:00Z', null),
+        blocker('NO_MOVE', 'US', '2026-11-12T09:00:00Z', null),
+        blocker('QUALITY_HOLD', 'US', '2026-11-12T09:00:00Z', null),
+      ],
+      [],
+      [wo('wo-s', 'WO-00019', true)],
+      1,
+    )
+    const { strips } = stripsOf(order('IN_PRODUCTION'), read)
+    // The shared one is named (the reader reaches it) and marked; those not reached are counted, never more than the read leaves out.
+    expect(held(strips, 'production').workOrders).toEqual({ reached: [{ id: 'wo-s', number: 'WO-00019', shared: true }], notReached: 1 })
+    expect(held(strips, 'quality').workOrders).toEqual({ reached: [], notReached: 1 })
+    // Without the work part (withheld) the not-reached rows are counted as they come; a number comes from the order read's chain.
+    const chained = order('IN_PRODUCTION')
+    const first = chained.chain.workOrders[0]!
+    const withheld = { ...readWith([blocker('NO_MOVE', 'US', '2026-11-10T09:00:00Z', { type: 'WorkOrder', id: first.id }), blocker('NO_MOVE', 'US', null, null), blocker('NO_MOVE', 'US', null, null)]), work: null }
+    expect(held(stripsOf(chained, withheld).strips, 'production').workOrders).toEqual({ reached: [{ id: first.id, number: first.number, shared: false }], notReached: 2 })
+  })
+
+  it('a failed (or reading) production read keeps the yes, the credit and the deposit from the order read; holds are said apart', () => {
+    const waiting: Order = { ...order('PENDING_APPROVAL'), waits: ['REQUEST_PENDING', 'CREDIT_HOLD'], openApprovals: [task('SALES_ORDER', 't-own', '2026-11-03T09:00:00Z'), task('CREDIT_OVERRIDE', 't-credit', '2026-11-02T09:00:00Z')] }
+    for (const [state, holds] of [[FAILED_STATE, 'failed'], [LOADING_STATE, 'reading']] as const) {
+      const failed = stripsOf(waiting, null, null, state)
+      expect(kinds(failed.strips), holds).toEqual(['yes', 'credit'])
+      expect(failed.holds).toBe(holds)
+      expect(failed.strips[0]).toMatchObject({ task: { taskId: 't-own' } })
+      // Confirmed and its deposit open: the order read's own gate (the request, its due day) while the production read is out.
+      const confirmed = stripsOf(order('CONFIRMED'), null, null, state)
+      expect(confirmed.strips, holds).toEqual([{ key: 'deposit', kind: 'deposit', state: 'WAITING', requestId: deposit().id, due: deposit().dueDate, since: deposit().createdAt }])
+      // Paid: nothing waits; a deposit never asked: production waits for one (no request to record a payment on).
+      expect(stripsOf(order('CONFIRMED', { chain: { ...order('CONFIRMED').chain, depositRequests: [PAID] } }), null, null, state).strips).toEqual([])
+      expect(stripsOf(order('CONFIRMED', { chain: { ...order('CONFIRMED').chain, depositRequests: [] } }), null, null, state).strips).toMatchObject([{ kind: 'deposit', state: 'MISSING', requestId: null }])
+    }
+    // Read: the deposit is the list's own row (the production read decides whether it still holds the release).
+    expect(stripsOf(order('CONFIRMED'), { ...CONFIRMED_READ, work: null }).strips).toMatchObject([{ kind: 'deposit', state: 'WAITING', requestId: '0190f0e2-1818-7000-8000-000000000001' }])
+    expect(stripsOf(order('CONFIRMED'), readWith([])).strips).toEqual([])
+  })
+
+  it('the yes: asked of whom (its task, or a request the reader sees no task of), nobody asked yet; the credit hold alone; a credit yes in work', () => {
+    const nobody = stripsOf({ ...order('PENDING_APPROVAL'), waits: ['NO_REQUEST'] }, null, APPROVAL_NOBODY, FAILED_STATE).strips
+    expect(nobody).toEqual([{ key: 'yes', kind: 'yes', task: null, asked: false, who: null, since: null }])
+    const asked = stripsOf({ ...order('PENDING_APPROVAL'), waits: ['REQUEST_PENDING'] }, null, APPROVAL_PENDING, FAILED_STATE).strips
+    expect(asked).toEqual([{ key: 'yes', kind: 'yes', task: null, asked: true, who: APPROVAL_PENDING.requests[0]!.approver, since: APPROVAL_PENDING.requests[0]!.requestedAt }])
+    // An older answer without `waits`: the yes's own read says why.
+    expect(kinds(stripsOf({ ...order('PENDING_APPROVAL'), waits: undefined }, null, APPROVAL_PENDING, FAILED_STATE).strips)).toEqual(['yes'])
+    // Held by its credit only: the credit strip, nobody asked for the override yet; no yes strip of the order's own.
+    expect(stripsOf({ ...order('PENDING_APPROVAL'), waits: ['CREDIT_HOLD'] }, null, null, FAILED_STATE).strips).toEqual([{ key: 'credit', kind: 'credit', task: null, asked: false, who: null, since: null }])
+    // A release held by the credit while the order is in work: its override's yes is a strip too (never hidden: it is no request).
+    const inWork = stripsOf({ ...order('IN_PRODUCTION'), openApprovals: [task('CREDIT_OVERRIDE', 't-release', '2026-11-15T09:00:00Z')] }, readWith([]))
+    expect(inWork.strips).toMatchObject([{ kind: 'credit', asked: true, task: { taskId: 't-release' } }])
+    // An old change's yes is a request (Requests & changes), never a strip.
+    expect(stripsOf({ ...order('IN_PRODUCTION'), openApprovals: [task('SALES_ORDER_CHANGE', 't-change', '2026-11-15T09:00:00Z')] }, readWith([])).strips).toEqual([])
+  })
+
+  it('after production nothing stops the work: no strip, though the office read still sends the live holds (B-OO-007, plan §5)', () => {
+    const read = readWith([blocker('QUALITY_HOLD', 'US', '2026-11-12T09:00:00Z', { type: 'WorkOrder', id: 'wo-1' })], [{ kind: 'QUALITY', words: words('Shade difference'), since: '2026-11-12' }], [wo('wo-1', 'WO-00021')])
+    for (const status of ['SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'] as const) {
+      const value = { ...order(status), openApprovals: [task('CREDIT_OVERRIDE', 't-credit', '2026-11-02T09:00:00Z')] }
+      expect(stripsOf(value, read), status).toEqual({ strips: [], holds: 'read' })
+      expect(stripsOf(value, null, null, FAILED_STATE), status).toEqual({ strips: [], holds: 'read' })
+    }
+    // Before and during production the same hold is a strip.
+    expect(kinds(stripsOf(order('PARTLY_SHIPPED'), read).strips)).toEqual(['quality'])
+  })
+})
+// ---- end F-OO-104
+
+// ---- F-OO-105 (order overview §1.3; review F1, F8, F13): each strip's real doors — held with words, ≤ 3 buttons, Read-only words only ----
+describe('F-OO-105: the strips\' doors — the band\'s yes, the payment, the row\'s Lift, Quality, the review; held with words', () => {
+  const words = (en: string) => ({ en, it: `${en} (it)` })
+  const task = (over: Partial<OpenApproval> = {}): OpenApproval => ({ taskId: 't-1', kind: 'SALES_ORDER', kindLabel: { en: 'Sales order', it: 'Ordine di vendita' }, requestedAt: '2026-11-18T09:30:00Z', requester: { name: 'Luca Prova', me: false }, approver: { kind: 'ROLE', name: 'Finance', me: false }, version: 1, requireStepUp: false, approve: { allowed: true, why: null }, reject: { allowed: true, why: null }, withdraw: { allowed: false, why: null }, ...over })
+  const OTHER = 'This request waits for another approver: it is not addressed to you or to a role you hold over its company.'
+  const SELF = 'You asked for this: nobody approves their own request, the Owner included.'
+  const askedByOther: Approval = { ...APPROVAL_PENDING, requests: APPROVAL_PENDING.requests.map((request) => ({ ...request, mine: false })), may: { ask: false, withdraw: false } }
+  const owner = rolePermissions('owner')
+  const input = (over: Partial<StripDoorsInput> = {}): StripDoorsInput => ({ prefix: '/w/DEMO', order: order('IN_PRODUCTION'), can: abilitiesOf(owner), readOnly: false, busy: false, approval: null, depthCan: { manage: true }, work: [], acts: actsCanOf(owner), ...over })
+  const yes = (strip: Partial<Extract<WhereStrip, { kind: 'yes' | 'credit' }>> = {}): WhereStrip => ({ key: 'yes', kind: 'yes', task: null, asked: false, who: null, since: null, ...strip })
+  const hold = (kind: 'quality' | 'production' | 'pause' | 'other', reached: { id: string; number: string; shared?: boolean }[], notReached = 0): WhereStrip => ({ key: kind, kind, blocker: 'NO_MOVE', reasons: [words('x')], workOrders: { reached: reached.map((entry) => ({ shared: false, ...entry })), notReached }, since: null })
+  const kindsOf = (doors: readonly StripDoor[]) => doors.map((door) => (door.kind === 'yes' ? `yes:${door.door.kind}` : door.kind))
+  const heldOf = (doors: readonly StripDoor[]) => doors.map((door) => ('held' in door ? (door.held?.key ?? null) : door.kind === 'yes' && door.door.kind === 'decide' ? (door.door.confirmHeld?.key ?? null) : null))
+  /** The visible buttons a strip draws: the yes as YesDoorView draws it (decide 2, the asker's held yes 1), every other door 1. */
+  const buttons = (doors: readonly StripDoor[]) => doors.reduce((sum, door) => sum + (door.kind === 'yes' ? (door.door.kind === 'decide' ? 2 : door.door.kind === 'selfAsked' ? 1 : 0) : 1), 0)
+  const all: StripDoor[][] = []
+  const doorsOf = (strip: WhereStrip, over: Partial<StripDoorsInput> = {}) => {
+    const doors = stripDoorsOf(strip, input(over))
+    all.push(doors)
+    return doors
+  }
+
+  it('the order\'s yes, as the band\'s banner: the approver decides here; the asker sees it held and takes it back; anyone else reads who decides', () => {
+    // The approver who did not ask: Confirm the order + Refuse… (YesDoorView), nothing else.
+    expect(kindsOf(doorsOf(yes({ task: task(), asked: true, who: 'Finance' }), { approval: askedByOther }))).toEqual(['yes:decide'])
+    // The asker: the yes held ("another person decides") and Take the request back (theirs).
+    const asker = doorsOf(yes({ task: task({ requester: { name: 'Giulia Esempio', me: true }, approve: { allowed: false, why: SELF }, reject: { allowed: false, why: SELF } }), asked: true, who: 'Finance' }), { approval: APPROVAL_PENDING })
+    expect([kindsOf(asker), heldOf(asker)]).toEqual([['yes:selfAsked', 'withdraw'], [null, null]])
+    // Anyone else: who decides is the strip's own words; Take the request back held with why (not theirs; no right to change orders).
+    const other = task({ approve: { allowed: false, why: OTHER }, reject: { allowed: false, why: OTHER } })
+    expect([kindsOf(doorsOf(yes({ task: other, asked: true, who: 'Finance' }), { approval: askedByOther })), heldOf(doorsOf(yes({ task: other, asked: true, who: 'Finance' }), { approval: askedByOther }))]).toEqual([['withdraw'], ['held.withdrawNotYours']])
+    expect(heldOf(doorsOf(yes({ task: other, asked: true }), { approval: askedByOther, depthCan: { manage: false } }))).toEqual(['held.noManage'])
+    // Nobody asked yet: Ask for a yes (held with the depth's words for who may not); the yes's read not in: no door to guess.
+    expect([kindsOf(doorsOf(yes(), { approval: APPROVAL_NOBODY })), heldOf(doorsOf(yes(), { approval: APPROVAL_NOBODY }))]).toEqual([['ask'], [null]])
+    expect(heldOf(doorsOf(yes(), { approval: APPROVAL_NOBODY, depthCan: { manage: false } }))).toEqual(['held.noManage'])
+    expect(doorsOf(yes(), { approval: null })).toEqual([])
+    // A write running: the approver's yes held with its words.
+    expect(heldOf(doorsOf(yes({ task: task(), asked: true }), { busy: true, approval: askedByOther }))).toEqual(['held.busy'])
+  })
+
+  it('the credit hold: its override\'s yes the same way (Approve: Credit override + Refuse…); nobody asked: no door here yet (F-OO-106)', () => {
+    const credit = task({ kind: 'CREDIT_OVERRIDE', kindLabel: { en: 'Credit override', it: 'Sblocco fido' } })
+    expect(kindsOf(doorsOf(yes({ key: 'credit', kind: 'credit', task: credit, asked: true, who: 'Finance' })))).toEqual(['yes:decide'])
+    expect(doorsOf(yes({ key: 'credit', kind: 'credit', task: { ...credit, approve: { allowed: false, why: OTHER }, reject: { allowed: false, why: OTHER } }, asked: true, who: 'Finance' }))).toEqual([])
+    expect(doorsOf(yes({ key: 'credit', kind: 'credit' }))).toEqual([])
+  })
+
+  it('the deposit: Record the payment (held without the finance right, beside Money ›); none asked: Money ›', () => {
+    const waiting: WhereStrip = { key: 'deposit', kind: 'deposit', state: 'WAITING', requestId: 'd-1', due: '2026-11-04', since: null }
+    expect(doorsOf(waiting)).toEqual([{ kind: 'payment', requestId: 'd-1', held: null }])
+    expect(doorsOf(waiting, { can: abilitiesOf(rolePermissions('sales')) })).toEqual([{ kind: 'payment', requestId: 'd-1', held: { key: 'held.noPayments' } }, { kind: 'tab', tab: 'money', anchor: null }])
+    expect(doorsOf(waiting, { busy: true })).toEqual([{ kind: 'payment', requestId: 'd-1', held: { key: 'held.busy' } }])
+    expect(doorsOf({ ...waiting, state: 'MISSING', requestId: null, due: null })).toEqual([{ kind: 'tab', tab: 'money', anchor: null }])
+  })
+
+  it('quality: Release on Quality › — Quality\'s holds of the work order (its work-order filter); none reached: words only', () => {
+    expect(doorsOf(hold('quality', [{ id: '0190f0e2-9191-7000-8000-000000000022', number: 'WO-00022' }]))).toEqual([{ kind: 'quality', href: '/w/DEMO/quality/holds?subjectType=WorkOrder&subjectId=0190f0e2-9191-7000-8000-000000000022', number: 'WO-00022' }])
+    expect(doorsOf(hold('quality', [], 2))).toEqual([])
+  })
+
+  it('production and the pause: Lift… on ONE work order (its row\'s own rule and words); several: Production › holds; only a shared one: its page', () => {
+    const row = (id: string, rights: { hold: boolean }) => ({ ...WORK.workOrders[0]!, id, number: 'WO-00021', status: 'ON_HOLD', held: true, version: 7, rights: { manage: rights.hold, release: rights.hold, hold: rights.hold, why: null } })
+    const lift = doorsOf(hold('production', [{ id: 'wo-1', number: 'WO-00021' }]), { work: [row('wo-1', { hold: true })] })
+    expect(lift).toMatchObject([{ kind: 'lift', label: 'wo.act.lift', held: null, row: { id: 'wo-1' } }])
+    expect(doorsOf(hold('pause', [{ id: 'wo-1', number: 'WO-00021' }]), { work: [row('wo-1', { hold: true })] })).toMatchObject([{ kind: 'lift', label: 'wo.liftPause', held: null }])
+    // Sales: the row's own words — production does it (a planner or the production manager).
+    expect(doorsOf(hold('production', [{ id: 'wo-1', number: 'WO-00021' }]), { work: [row('wo-1', { hold: false })], acts: actsCanOf(rolePermissions('sales')) })).toMatchObject([{ kind: 'lift', held: { key: 'wo.heldHold' } }])
+    // Several, or one beside a work order not reached, or the row not read: Production › holds (each row's own Lift; one Lift for N is F-OO-109).
+    const tab = [{ kind: 'tab', tab: 'production', anchor: 'holds' }]
+    expect(doorsOf(hold('production', [{ id: 'wo-1', number: 'WO-00021' }, { id: 'wo-2', number: 'WO-00022' }]), { work: [row('wo-1', { hold: true })] })).toEqual(tab)
+    expect(doorsOf(hold('pause', [{ id: 'wo-1', number: 'WO-00021' }], 1), { work: [row('wo-1', { hold: true })] })).toEqual(tab)
+    expect(doorsOf(hold('production', [{ id: 'wo-1', number: 'WO-00021' }]), { work: [] })).toEqual(tab)
+    // Only a shared one: its own page (it is lifted there); nothing reached: words only.
+    expect(doorsOf(hold('pause', [{ id: 'wo-s', number: 'WO-00019', shared: true }], 1))).toEqual([{ kind: 'workOrder', href: workOrderHref('/w/DEMO', 'wo-s'), number: 'WO-00019' }])
+    expect(workOrderHref('/w/DEMO', 'wo-s')).toBe('/w/DEMO/production/work-orders/wo-s')
+    expect(doorsOf(hold('pause', [], 1))).toEqual([])
+    expect(doorsOf(hold('other', [{ id: 'wo-1', number: 'WO-00021' }]))).toEqual(tab)
+  })
+
+  it('the review: Open the review › on its one unit (the review banner\'s own door), held without the measurements right; several: none here', () => {
+    const unit = { ...order('PENDING_APPROVAL').lines[0]!, kind: 'MADE_TO_MEASURE', rider: { profileId: 'p-1', name: 'Demo Rider', garmentType: 'JACKET', revision: 2 } }
+    const one = { ...order('PENDING_APPROVAL'), lines: [unit] }
+    const review: WhereStrip = { key: 'review', kind: 'review', count: 1, since: null }
+    expect(doorsOf(review, { order: one })).toEqual([{ kind: 'review', href: '/w/DEMO/sales/made-to-measure/p-1?do=review', held: null }])
+    expect(doorsOf(review, { order: one, can: abilitiesOf(rolePermissions('finance')) })).toEqual([{ kind: 'review', href: null, held: { key: 'where.strip.reviewDoor.noRight' } }])
+    expect(doorsOf(review, { order: { ...one, lines: [unit, { ...unit, id: 'line-2' }] } })).toEqual([])
+  })
+
+  it('Read-only: words only — no door on any strip; never more than 3 buttons in a strip', () => {
+    const strips: WhereStrip[] = [
+      yes({ task: task(), asked: true }),
+      yes({ key: 'credit', kind: 'credit', task: task({ kind: 'CREDIT_OVERRIDE' }), asked: true }),
+      { key: 'review', kind: 'review', count: 1, since: null },
+      { key: 'deposit', kind: 'deposit', state: 'WAITING', requestId: 'd-1', due: null, since: null },
+      hold('quality', [{ id: 'wo-1', number: 'WO-00021' }]),
+      hold('production', [{ id: 'wo-1', number: 'WO-00021' }, { id: 'wo-2', number: 'WO-00022' }]),
+      hold('pause', [{ id: 'wo-s', number: 'WO-00019', shared: true }]),
+    ]
+    const readOnly = rolePermissions('read_only')
+    for (const strip of strips) expect(stripDoorsOf(strip, input({ readOnly: true, can: abilitiesOf(readOnly), acts: actsCanOf(readOnly), approval: APPROVAL_NOBODY })), strip.key).toEqual([])
+    // Every door list this block made: the budget of the plan (at most 3 visible buttons per row group, F8).
+    expect(all.length).toBeGreaterThan(10)
+    for (const doors of all) expect(buttons(doors), JSON.stringify(kindsOf(doors))).toBeLessThanOrEqual(3)
+  })
+
+  it('the words exist in both languages, office "tu" in Italian', () => {
+    const KEYS = ['where.strips', 'where.strip.yes.waits', 'where.strip.yes.asked', 'where.strip.yes.nobody', 'where.strip.credit.waits', 'where.strip.credit.nobody', 'where.strip.reviewUnits', 'where.strip.reviewDoor.open', 'where.strip.reviewDoor.noRight', 'where.strip.reviewDoor.several', 'where.strip.deposit.waiting', 'where.strip.deposit.overdue', 'where.strip.deposit.open', 'where.strip.quality', 'where.strip.qualityPlain', 'where.strip.production', 'where.strip.productionPlain', 'where.strip.pause', 'where.strip.andMore', 'where.strip.qualityWho', 'where.strip.release', 'where.strip.releaseOf', 'where.strip.openWo', 'where.strip.failed', 'where.strip.showMore', 'where.strip.showFewer']
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of KEYS) expect(t(key, { who: 'X', date: 'D', reasons: 'R', numbers: 'N', number: 'N', count: 2 }), `${locale} ${key}`).not.toBe(key)
+      for (const key of ['where.strip.review', 'where.strip.on', 'where.strip.notReached', 'where.strip.onlyNotReached', 'where.strip.shared']) for (const count of [1, 2]) expect(t(key, { count, numbers: 'N' }), `${locale} ${key} ${count}`).not.toBe(key)
+    }
+    const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    const it = createTranslator('it', messagesFor('it', ['orders']).orders!)
+    expect(en('where.strip.on', { count: 2, numbers: 'WO-00021, WO-00022' })).toBe('on 2 work orders: WO-00021, WO-00022')
+    expect(it('where.strip.on', { count: 1, numbers: 'WO-00021' })).toBe('su 1 ordine di lavoro: WO-00021')
+    expect([en('where.strip.notReached', { count: 1 }), it('where.strip.notReached', { count: 1 })]).toEqual(['and 1 work order outside what you can open', 'e 1 ordine di lavoro fuori da ciò che puoi aprire'])
+    expect([en('where.strip.credit.waits', { who: 'Finance' }), it('where.strip.credit.waits', { who: 'Finance' })]).toEqual(["Credit hold — waits for Finance's yes", 'Blocco fido — aspetta il sì di Finance'])
+    expect([en('where.strip.release'), it('where.strip.release')]).toEqual(['Release on Quality ›', 'Sblocca in Qualità ›'])
+    // Office "tu": the Italian never says "voi" / "vostro" (the portal's).
+    const strip = JSON.stringify(messagesFor('it', ['orders']).orders!.where)
+    expect(strip).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
+  })
+})
+
+describe('F-OO-105: the strips drawn — the yes for its approver, asker and anyone else; the holds for the Owner, Sales and Read-only', () => {
+  const view = designScreen.view as ComponentType<{ model: unknown }>
+  const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, locale)
+  /** The strips' own markup (section 1's list). */
+  const stripsOf = (html: string): string => {
+    const from = html.indexOf('class="fw-so-strips"')
+    return from < 0 ? '' : html.slice(from, html.indexOf('</ul>', from))
+  }
+
+  it('the yes: the approver gets Confirm the order and Refuse…; the asker the held yes and Take the request back; anyone else who decides', () => {
+    const approver = stripsOf(draw('f-op-101-approver-yes'))
+    expect(textOf(approver)).toContain("Waits for Finance's yes")
+    for (const words of ['Confirm the order', 'Refuse…']) expect(textOf(approver), words).toContain(words)
+    expect(approver).toMatch(/<time datetime="2026-11-18T09:30:00Z"/i)
+    const asker = stripsOf(draw('f-op-101-self-asked'))
+    expect(asker).toContain('aria-description="You asked for this yes: another person decides"')
+    expect(textOf(asker)).toContain('Take the request back')
+    const other = stripsOf(draw('f-op-101-who-decides'))
+    expect(textOf(other)).toContain("Waits for Finance's yes")
+    expect(textOf(other)).not.toContain('Confirm the order')
+    // Its Take back is held with why (only the asker; the production manager changes no order).
+    expect(other).toMatch(/aria-disabled="true"[^>]*aria-description="Changing an order needs the sales right to manage orders"[^>]*>Take the request back/)
+    const it = textOf(stripsOf(draw('f-op-101-approver-yes', 'it')))
+    for (const words of ['Aspetta il sì di Finance', 'Conferma l', 'Rifiuta']) expect(it, words).toContain(words)
+  })
+
+  it('the holds (Owner): one strip per kind with its work orders, who releases quality, the shared one and the one not reached; each its door', () => {
+    const html = stripsOf(draw('f-oo-105-holds'))
+    const text = textOf(html)
+    for (const words of ['Quality hold — Shade difference on the leather', 'on 1 work order: WO-00022', 'Quality releases it: a quality inspector or the Owner, with a code', 'Release on Quality ›', 'Production hold — Leather check with the tannery', 'on 1 work order: WO-00021', 'Lift the hold…', "Paused at the customer's request", 'on 2 work orders: WO-00019 and 1 work order outside what you can open', "WO-00019 also makes another customer's work: it is lifted on its own page", 'Open WO-00019 ›']) expect(text, words).toContain(words)
+    // Most blocking first: quality, production, the customer's pause.
+    const at = ['Quality hold', 'Production hold', 'Paused at the customer'].map((words) => text.indexOf(words))
+    expect([...at].sort((a, b) => a - b)).toEqual(at)
+    expect(html).toContain('href="/w/DEMO/quality/holds?subjectType=WorkOrder&amp;subjectId=')
+    expect(html).toContain('aria-label="Release on Quality: the holds of WO-00022"')
+    expect(html).toMatch(/data-tone="danger"/)
+    // The Owner may lift: the button is live.
+    expect(html).not.toMatch(/aria-description="[^"]*"[^>]*>Lift the hold…/)
+    const it = textOf(stripsOf(draw('f-oo-105-holds', 'it')))
+    for (const words of ['Blocco qualità — Differenza di tonalità della pelle', 'su 1 ordine di lavoro: WO-00022', 'Sblocca in Qualità ›', 'Fermo di produzione — Verifica della pelle con la conceria', 'Togli il blocco…', 'In pausa su richiesta del cliente', 'e 1 ordine di lavoro fuori da ciò che puoi aprire', 'Apri WO-00019 ›']) expect(it, words).toContain(words)
+  })
+
+  it('Sales: Lift the hold… held with who does it; Read-only: the same words, no button at all (and the deposit, the credit, "Show 1 more")', () => {
+    expect(stripsOf(draw('f-oo-105-holds-sales'))).toMatch(/aria-disabled="true"[^>]*aria-description="Production does this — a planner or the production manager"[^>]*>Lift the hold…/)
+    const readOnly = stripsOf(draw('f-oo-105-read-only'))
+    expect(textOf(readOnly)).toContain('Quality hold — Shade difference on the leather')
+    expect(readOnly).not.toContain('<button')
+    expect(readOnly).not.toContain('<a ')
+    // The deposit: Finance records it; the production manager reads it held beside Money ›.
+    const finance = stripsOf(draw('f-oo-105-deposit'))
+    expect(textOf(finance)).toContain('Deposit not paid yet · due 04/11/2026')
+    expect(finance).toMatch(/<button[^>]*>Record the payment<\/button>/)
+    const manager = stripsOf(draw('f-oo-105-deposit-manager'))
+    expect(manager).toMatch(/aria-description="Recording payments needs the finance right"[^>]*>Record the payment/)
+    expect(textOf(manager)).toContain('Money ›')
+    // The credit hold's yes for its approver.
+    const credit = textOf(stripsOf(draw('f-oo-105-credit')))
+    for (const words of ["Credit hold — waits for Finance's yes", 'Approve: Credit override', 'Refuse…']) expect(credit, words).toContain(words)
+    // Five strips: four drawn, "Show 1 more" under them.
+    const more = draw('f-oo-105-more')
+    expect(stripsOf(more).match(/<li class="fw-so-ov-row fw-so-strip"/g) ?? []).toHaveLength(4)
+    expect(textOf(more)).toContain('Show 1 more')
+  })
+
+  it('source: the yes door is DepthBand\'s YesDoorView (imported, never copied); Lift is the row\'s own act; the strips read the ONE waiting list', () => {
+    const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8')
+    expect(card).toContain("import { YesDoorView } from '../../../depth/view/DepthBand'")
+    expect(card).toContain('<YesDoorView door={door.door} onYes={actions?.yes} />')
+    expect(card).toContain("actions?.workOrderActs?.onAct?.(door.row, 'lift')")
+    expect(card).toContain("actions?.onDialog?.({ kind: 'depositPayment', requestId: door.requestId })")
+    expect(card).toContain('whereStripsOf(order, read, approval, waiting)')
+    // where.ts takes the yes rule from the depth (yesDoorOf, askHeld, withdrawHeld) and the Lift rule from the row's acts — no copy.
+    const rules = readFileSync(new URL('./where.ts', import.meta.url), 'utf8')
+    for (const part of ["from '../../depth/model'", 'rowActsOf(row, input.acts)', 'yesDoorOf(strip.task, input.busy)', "holdsAddress({ view: 'open', subjectType: 'WorkOrder', subjectId: first.id })"]) expect(rules, part).toContain(part)
+    // The strips' CSS: DS tone tokens only (light and dark), no raw colour.
+    const css = readFileSync(new URL('../view/overview/where.css', import.meta.url), 'utf8')
+    for (const rule of ['.fw-so-strips {', '.fw-so-strip {', ".fw-so-strip[data-tone='danger'] {", '.fw-so-strip-said {']) expect(css, rule).toContain(rule)
+    expect(css).toContain('var(--nds-danger)')
+  })
+})
+// ---- end F-OO-105
+
+// ---- F-OO-107 (order overview §1.5; review F8): the moves row — the order's own moves only, each held by the band's own rule ----
+describe('F-OO-107: the moves row — Mark ready…, More ▾ (made elsewhere, Cancel, Close): status × role, the band\'s own held words', () => {
+  const ROLES = { Owner: 'owner', Sales: 'sales', Planner: 'planner', Warehouse: 'warehouse', 'Read-only': 'read_only' } as const
+  type RoleName = keyof typeof ROLES
+  /** The order at a state as the API lists its actions (B-OO-003: a waiting order may be cancelled too). */
+  const at = (status: OrderStatus): Order => (status === 'PENDING_APPROVAL' ? { ...order(status), actions: [...order(status).actions, { action: 'cancel', allowed: true, needsReason: true, held: null }] } : order(status))
+  const movesOf = (status: OrderStatus, role: RoleName) => {
+    const permissions = rolePermissions(ROLES[role])
+    const can = abilitiesOf(permissions)
+    const value = at(status)
+    // As the card: Read-only by the band's rule; the made-elsewhere door held by its container's own rule.
+    const readOnly = readOnlyOnPage(can, { assignSupervisor: permissions.includes('production.brand.manage'), qualityHold: permissions.includes('quality.holds.place') })
+    return { value, can, permissions, readOnly, moves: whereMovesOf(value, { can, readOnly, elsewhere: { held: elsewhereDoor(value, permissions) } }) }
+  }
+  const ids = (moves: ReturnType<typeof whereMovesOf>) => (moves ? [moves.shown.map((move) => move.id), moves.more.map((move) => move.id)] : null)
+  const heldOf = (moves: ReturnType<typeof whereMovesOf>, id: (typeof WHERE_MOVES)[number]) => [...(moves?.shown ?? []), ...(moves?.more ?? [])].find((move) => move.id === id)?.held?.key ?? null
+  /** [in view, under More ▾] per state, for every role that changes anything on the page. */
+  const BY_STATUS: Readonly<Record<OrderStatus, readonly [string[], string[]] | null>> = {
+    PENDING_APPROVAL: [[], ['cancel']],
+    CONFIRMED: [[], ['elsewhere', 'cancel']],
+    IN_PRODUCTION: [['ready'], ['elsewhere', 'cancel']],
+    READY: [[], ['elsewhere', 'cancel']],
+    PARTLY_SHIPPED: [[], ['elsewhere']],
+    SHIPPED: [[], ['close']],
+    DELIVERED: [[], ['close']],
+    CLOSED: null,
+    CANCELLED: null,
+  }
+
+  it('status × role (Owner, Sales, Planner, Warehouse, Read-only): which moves, where; Read-only sees none; never more than 3 in view', () => {
+    for (const status of ORDER_STATUSES) {
+      for (const role of Object.keys(ROLES) as RoleName[]) {
+        const { moves, readOnly } = movesOf(status, role)
+        if (role === 'Read-only') {
+          expect(readOnly, status).toBe(true)
+          expect(moves, `${status} ${role}`).toBeNull()
+          continue
+        }
+        expect(readOnly, `${status} ${role}`).toBe(false)
+        expect(ids(moves), `${status} ${role}`).toEqual(BY_STATUS[status])
+        if (moves) expect(moves.shown.length + (moves.more.length > 0 ? 1 : 0), `${status} ${role}`).toBeLessThanOrEqual(3)
+      }
+    }
+    // The labels are the band's own words; Make work orders…, Create shipment…, Change promise and the yes are never here (F8).
+    const { moves } = movesOf('IN_PRODUCTION', 'Owner')
+    expect([...moves!.shown, ...moves!.more].map((move) => move.label.key)).toEqual(['action.ready', 'elsewhere.title', 'action.cancel'])
+    expect(WHERE_MOVES).toEqual(['ready', 'elsewhere', 'cancel', 'close'])
+  })
+
+  it('parity: each move\'s held words are the band\'s own function\'s (readyHeld, cancelHeld, closeHeld, the made-elsewhere door)', () => {
+    for (const status of ORDER_STATUSES) {
+      for (const role of ['Owner', 'Sales', 'Planner', 'Warehouse'] as const) {
+        const { value, can, permissions, moves } = movesOf(status, role)
+        for (const move of [...(moves?.shown ?? []), ...(moves?.more ?? [])]) {
+          const band = move.id === 'ready' ? readyHeld(value, can) : move.id === 'cancel' ? cancelHeld(value, can) : move.id === 'close' ? closeHeld(value, can) : elsewhereDoor(value, permissions)
+          expect(move.held, `${status} ${role} ${move.id}`).toEqual(band)
+        }
+      }
+    }
+    // What each reader reads, in words: Sales marks ready and cancels, a shipment made elsewhere is the warehouse's; the planner and
+    // the warehouse change no order (the band hides Cancel from them: here it is held with why); closing unsettled needs orders.close.
+    expect(['ready', 'elsewhere', 'cancel'].map((id) => heldOf(movesOf('IN_PRODUCTION', 'Sales').moves, id as never))).toEqual([null, 'elsewhere.held.noRight', null])
+    expect(['ready', 'elsewhere', 'cancel'].map((id) => heldOf(movesOf('IN_PRODUCTION', 'Planner').moves, id as never))).toEqual(['held.noManage', 'elsewhere.held.noRight', 'held.noManage'])
+    expect(['ready', 'elsewhere', 'cancel'].map((id) => heldOf(movesOf('IN_PRODUCTION', 'Warehouse').moves, id as never))).toEqual(['held.noManage', null, 'held.noManage'])
+    expect([heldOf(movesOf('SHIPPED', 'Owner').moves, 'close'), heldOf(movesOf('SHIPPED', 'Sales').moves, 'close')]).toEqual([null, 'held.notSettled'])
+    // A waiting order is cancelled too (B-OO-003), from the same dialog.
+    expect(heldOf(movesOf('PENDING_APPROVAL', 'Sales').moves, 'cancel')).toBeNull()
+    // No elsewhere door offered here (a design case without its container): no item for it.
+    expect(whereMovesOf(order('IN_PRODUCTION'), { can: abilitiesOf(rolePermissions('owner')), readOnly: false, elsewhere: null })!.more.map((move) => move.id)).toEqual(['cancel'])
+  })
+
+  it('source: built from the band\'s own functions (none changes here); the same dialogs as the band; the made-elsewhere dialog drawn here', () => {
+    const rules = readFileSync(new URL('./where.ts', import.meta.url), 'utf8')
+    expect(rules).toContain("import { cancelHeld, closeHeld, isShippedInFull, readyHeld } from '../../model'")
+    expect(rules).toContain("import { CANCEL_STATUSES } from '@nexus/factory-domain/sales/orders/orders'")
+    expect(rules).not.toMatch(/function (?:readyHeld|cancelHeld|closeHeld|nextStep)\b/)
+    // Make work orders… and Create shipment… make the next record (Linked records, the band): never in section 1's moves.
+    const from = rules.indexOf('export function whereMovesOf(')
+    const moves = rules.slice(from, rules.indexOf('// ---- end F-OO-107', from))
+    expect(moves).toContain('readyHeld(order, input.can)')
+    for (const gone of ['makeHeldOf', 'makeWorkOrders', 'createShipment', 'promise']) expect(moves, gone).not.toContain(gone)
+    const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8')
+    for (const part of ['actions?.onDialog?.({ kind: id })', 'actions?.onRecordElsewhere?.()', '{model.elsewhere?.dialog}', "'aria-label': t('where.moreOf', { number: order.number })"]) expect(card, part).toContain(part)
+    expect(card.indexOf('<Moves ')).toBeGreaterThan(card.indexOf('F-OO-103: the moves slot'))
+  })
+
+  it('drawn: under the stages, Mark ready… and More ▾ (its name says the order); held with the band\'s words; Read-only and a cancelled order: no row', () => {
+    const view = designScreen.view as ComponentType<{ model: unknown }>
+    const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, locale)
+    const html = draw('overview')
+    const row = html.slice(html.indexOf('class="fw-so-where-moves"'), html.indexOf('</div>', html.indexOf('class="fw-so-where-moves"')))
+    expect(html.indexOf('class="fw-so-where-moves"')).toBeGreaterThan(html.indexOf('Stages are set by the floor and quality, never by hand'))
+    expect(row).toMatch(/<button[^>]*>Mark ready…<\/button>/)
+    expect(row).toContain('aria-label="More moves for SO-2026-0088"')
+    expect(textOf(row)).toContain('More')
+    // The production manager changes no order: Mark ready… held with the band's words.
+    expect(draw('f-op-301-so2-overview')).toMatch(/aria-disabled="true"[^>]*aria-description="Changing an order needs the sales right to manage orders"[^>]*>Mark ready…/)
+    for (const id of ['f-oo-105-read-only', 'f-oo-102-cancelled']) expect(draw(id), id).not.toContain('fw-so-where-moves')
+    // Shipped: no Mark ready…; Close order… waits under More ▾.
+    const shipped = draw('f-oo-102-shipped')
+    expect(shipped).toContain('class="fw-so-where-moves"')
+    expect(shipped).not.toContain('>Mark ready…<')
+    const it = draw('overview', 'it')
+    expect(it).toMatch(/<button[^>]*>Segna come pronto…<\/button>/)
+    expect(it).toContain('aria-label="Altre azioni per SO-2026-0088"')
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['where.moves', 'where.more', 'where.moreOf']) expect(t(key, { number: 'SO-1' }), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-OO-107

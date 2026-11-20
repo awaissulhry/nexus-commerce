@@ -81,14 +81,19 @@ import { workActsRead, type WorkRights } from './overview/fixtures'
 import { ROLES } from '../_demo/fixtures'
 import { actsCanOf } from '../../../../lib/production/work-order-acts/model'
 import type { ActsDialog, WorkOrderActsModel } from '../../../../lib/production/work-order-acts/use-work-order-acts'
+// ---- F-OO-105: the strips' cases — a work order shared with another customer, the deposit the order asked, a Read-only reader ----
+import { SHARED_WO_ID } from './overview/fixtures'
+import { DEPOSIT_ID } from '../_demo/fixtures'
+import { abilitiesOf } from '../model'
+import { rolePermissions } from '../../../../shell/design-data'
+// ---- end F-OO-105
 // F-OP-114 / F-OP-115: the row's dialogs on a work order read afresh (the production lane's own fixtures).
 import { releaseCheck, workOrder as productionWorkOrder } from '../../../production/_shared/fixtures'
 import { HOLD_REASONS, PRODUCTION_HOLD_REASONS } from '../../../production/work-orders/daily/demo/fixtures'
 // F-SA-243: the order's requests (the shared request fixtures) and its production read with Still to do.
 import type { OfficeRequest } from '../../../../record-panels/approvals/api' // F-OO-204: the approvals we asked the customer
-import { abilitiesOf } from '../model' // F-OO-205: the Read-only reader's rights
-import { rolePermissions } from '../../../../shell/design-data' // F-OO-205
 import { PRODUCTION_READ } from './overview/fixtures'
+import { PEOPLE } from './overview/fixtures' // F-OO-133: the overview case draws the real People card
 import { brandRequest } from '../../../home/approvals/requests/fixtures'
 import { ORDER_ID } from '../_demo/fixtures'
 // F-CP-142: Money's Price check card — the ONE window's made-up check and its states (so/price-check, F-CP-114).
@@ -766,6 +771,53 @@ const F_OO_102: DesignCase<RecordCase>[] = [
 ]
 // ---- end F-OO-102
 
+// ---- F-OO-105 (order overview §1.3; review F1, F8, F13): the strips with their real doors. An order in work: a quality hold on
+// WO-00022 (Release on Quality ›), our production hold on WO-00021 (Lift the hold…), the customer's pause on WO-00019 — shared with
+// another customer (its own page) — and on one work order this reader does not reach (counted, never named). Seen by the Owner, by
+// Sales (Lift held: production does it) and Read-only (the words only). A confirmed order's deposit: Finance records the payment, the
+// production manager reads it held beside Money ›. The credit hold's yes for its approver. Five strips: four, then "Show 1 more".
+// The yes for its approver, its asker and anyone else: the F-OP-101 cases (on Overview already). Look at 375 / 1440 / 1920, light + dark.
+const W105 = (en: string, it: string) => ({ en, it })
+const HOLD_BLOCKERS = [
+  blockerOf('QUALITY_HOLD', 'US', 'On a quality hold', '2026-11-14T08:30:00Z', { type: 'WorkOrder', id: WORK_ORDERS[1]!.id }),
+  blockerOf('NO_MOVE', 'US', 'Production hold', '2026-11-12T09:00:00Z', { type: 'WorkOrder', id: WORK_ORDERS[0]!.id }),
+  blockerOf('BRAND_PAUSE', 'BRAND', "Paused at the customer's request", '2026-11-13T09:00:00Z', { type: 'WorkOrder', id: SHARED_WO_ID }),
+  blockerOf('BRAND_PAUSE', 'BRAND', "Paused at the customer's request", '2026-11-13T09:00:00Z', null),
+]
+const holdsRead = (rights: WorkRights, more: ReturnType<typeof blockerOf>[] = []) => {
+  const read = workActsRead(rights)
+  return {
+    ...read,
+    headline: {
+      ...read.headline!,
+      held: true,
+      holds: [
+        { kind: 'QUALITY' as const, words: W105('Shade difference on the leather', 'Differenza di tonalità della pelle'), since: '2026-11-14' },
+        { kind: 'PRODUCTION' as const, words: W105('Leather check with the tannery', 'Verifica della pelle con la conceria'), since: '2026-11-12' },
+        { kind: 'BRAND' as const, words: W105("Paused at the customer's request", 'In pausa su richiesta del cliente'), since: '2026-11-13' },
+      ],
+      waiting: { ...read.headline!.waiting, blockers: [...HOLD_BLOCKERS, ...more] },
+    },
+    // WO-00021 is on our production hold (its row's ⋯ offers Lift… to who may).
+    work: { ...read.work!, workOrders: read.work!.workOrders.map((row) => (row.id === WORK_ORDERS[0]!.id ? { ...row, held: true, status: 'ON_HOLD' } : row)) },
+  }
+}
+const DEPOSIT_READ = { ...CONFIRMED_READ, headline: { ...CONFIRMED_READ.headline!, waiting: { ...CONFIRMED_READ.headline!.waiting, blockers: [blockerOf('DEPOSIT', 'BRAND', 'Deposit not paid yet', '2026-10-28T15:00:00Z', { type: 'DepositRequest', id: DEPOSIT_ID })] } } }
+const CREDIT_TASK: OpenApproval = { ...YES_TASK, taskId: '0190f0e2-9595-7000-8000-000000000002', kind: 'CREDIT_OVERRIDE', kindLabel: { en: 'Credit override', it: 'Sblocco fido' } }
+const READ_ONLY_PERMISSIONS = rolePermissions('read_only')
+/** A case seen by a Read-only person: no right that changes anything on the page (the band's readOnlyOnPage). */
+const readOnlyCase = (item: RecordCase): RecordCase => (item.record ? { ...item, record: { ...item.record, can: abilitiesOf(READ_ONLY_PERMISSIONS), workOrderActs: item.record.workOrderActs ? { ...item.record.workOrderActs, can: actsCanOf(READ_ONLY_PERMISSIONS) } : null } } : item)
+const F_OO_105: DesignCase<RecordCase>[] = [
+  { id: 'f-oo-105-holds', label: 'F-OO-105 · Owner · Overview in work: Quality hold on WO-00022 (Release on Quality ›), Production hold on WO-00021 (Lift the hold…), the customer’s pause on WO-00019 — shared (Open WO-00019 ›) — and on 1 work order outside what you can open', model: base('owner', production, { tab: 'overview', production: ready(holdsRead(MANAGE_ALL)), workOrderActs: woActs('owner'), liveState: 'live' }) },
+  { id: 'f-oo-105-holds-sales', label: 'F-OO-105 · Sales · the same holds: Lift the hold… held — production does it (a planner or the production manager)', model: base('sales', production, { tab: 'overview', production: ready(holdsRead(NO_RIGHTS)), workOrderActs: woActs('sales'), liveState: 'live' }) },
+  { id: 'f-oo-105-read-only', label: 'F-OO-105 · Read-only · the same holds: the words only — no door, no button', model: readOnlyCase(base('sales', production, { tab: 'overview', production: ready(holdsRead(NO_RIGHTS)), workOrderActs: woActs('sales'), liveState: 'live' })) },
+  { id: 'f-oo-105-deposit', label: 'F-OO-105 · Finance · a confirmed order: "Deposit not paid yet · due 04/11/2026" — Record the payment', model: base('finance', confirmed, { tab: 'overview', production: ready(DEPOSIT_READ), liveState: 'live' }) },
+  { id: 'f-oo-105-deposit-manager', label: 'F-OO-105 · Production manager · the same deposit: Record the payment held (the finance right) beside Money ›', model: base('manager', confirmed, { tab: 'overview', production: ready(DEPOSIT_READ), liveState: 'live' }) },
+  { id: 'f-oo-105-credit', label: 'F-OO-105 · Owner · a credit hold: "Credit hold — waits for Finance’s yes" — Approve: Credit override and Refuse…', model: d323('owner', { ...waitingOrder, waits: ['CREDIT_HOLD'], openApprovals: [CREDIT_TASK] }, { tab: 'overview' }, { approval: { value: { ...APPROVAL_CREDIT, reasons: [{ reason: 'CREDIT_HOLD' }] }, problem: null } }) },
+  { id: 'f-oo-105-more', label: 'F-OO-105 · Owner · five strips (a release held by the credit, the three holds, an open nonconformance): four, then "Show 1 more"', model: base('owner', { ...production, openApprovals: [CREDIT_TASK] }, { tab: 'overview', production: ready(holdsRead(MANAGE_ALL, [blockerOf('NONCONFORMANCE', 'US', 'An open nonconformance', '2026-11-15T10:00:00Z', { type: 'WorkOrder', id: WORK_ORDERS[1]!.id })])), workOrderActs: woActs('owner'), liveState: 'live' }) },
+]
+// ---- end F-OO-105
+
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-039',
   title: 'Order studio: lines, dates, production, shipments, invoices & payments with the deposit, documents',
@@ -955,12 +1007,15 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'cp-148-files-manager', label: 'F-CP-148 · Seen as Production manager · Files: the same counted lock line; the artwork and the photos open', model: base('manager', production, { tab: 'files', files: { read: PRICED_LOCKED, problem: null, selected: [], canShare: false } }) },
     // ---- end F-CP-148
     // ---- F-SA-232: Overview, the first tab ("where is it now", progress by line — the order's own pieces) ----
-    { id: 'overview', label: 'F-SA-232 · Sales · Overview: In production · Sewing (F-OO-101: status · stage); at risk and Urgent (customer) in the band, waiting on us in Requests & changes (F-OO-103); the lines’ own pieces (Rosso: sewing not counted here)', model: base('sales', production, { tab: 'overview', production: ready(), liveState: 'live' }) },
+    // F-OO-133 (W05 follow-up): with the people part read (PEOPLE) and Sales' People rights (Ask; no supervisor right) — the real card,
+    // never the withheld sentence of a part not read.
+    { id: 'overview', label: 'F-SA-232 · Sales · Overview: In production · Sewing (F-OO-101: status · stage); at risk and Urgent (customer) in the band, waiting on us in Requests & changes (F-OO-103); the lines’ own pieces (Rosso: sewing not counted here)', model: base('sales', production, { tab: 'overview', production: ready({ ...PRODUCTION_READ, people: PEOPLE }), people: { mayAssign: false, mayNote: true, assign: null, note: null }, liveState: 'live' }) },
     { id: 'overview-confirmed', label: 'F-SA-232 · Sales · Overview before any work order: Confirmed · Preparing (F-OO-101); the deposit it waits for is the deposit strip’s (F-OO-105)', model: base('sales', confirmed, { tab: 'overview', production: ready(CONFIRMED_READ), liveState: 'live' }) },
     { id: 'overview-sizes', label: 'F-SA-232 · Sales · Overview: line 10’s sizes in the centred window (PiecesGrid, shipped, the finish forecast)', model: base('sales', production, { tab: 'overview', production: ready(), overviewLine: LINE_BLK, liveState: 'live' }) },
     { id: 'overview-loading', label: 'F-SA-232 · Overview reading (skeletons, never a 0)', model: base('sales', production, { tab: 'overview', production: LOADING_STATE, liveState: 'connecting' }) },
     { id: 'overview-failed', label: "F-SA-232 · Overview: the production couldn't be read (this part only, Try again)", model: base('sales', production, { tab: 'overview', production: FAILED_STATE, liveState: 'offline' }) },
     ...F_OO_102, // F-OO-102: the headline and the dots before, after and without production
+    ...F_OO_105, // F-OO-105: the strips with their real doors (holds, the deposit, the credit; Owner, Sales, Read-only)
     // ---- F-SA-243: the order page's doors to the ONE review window, Still to do ----
     ...F_SA_243,
     ...F_OP_301, // F-OP-301 (walk #1, #2, #3)

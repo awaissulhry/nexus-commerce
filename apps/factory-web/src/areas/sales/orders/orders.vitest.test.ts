@@ -998,7 +998,8 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     const requests = read('./record/view/RequestsSection.tsx')
     expect(requests).toContain("target={{ kind: 'OrderChangeRequest', id: request.id }} />")
     // F-OO-100: Overview's cards are one file each (view/overview/): Next dates and People hold these doors.
-    expect(read('./record/view/overview/DatesCard.tsx')).toContain("target={gateId ? { kind: 'OrderGate', id: gateId } : null} />")
+    // F-OO-145: a gate's Discuss is an item of its More ▾ now — still by the gate's reference.
+    expect(read('./record/view/overview/DatesCard.tsx')).toContain("target: row.gateId ? { kind: 'OrderGate', id: row.gateId } : null")
     expect(read('./record/view/overview/PeopleCard.tsx')).toContain('<FollowersDoor />')
     const changes = read('./record/changes/view/ChangesTab.tsx')
     expect(changes).toContain('<ShowInThreadDoor order={order} at={entry.at} />')

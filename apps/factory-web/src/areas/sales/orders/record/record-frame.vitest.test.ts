@@ -17,7 +17,7 @@ import { tabAddress, tabHref } from '../../../_shared/record-frame/address' // F
 import { viewOpenOf } from '../../../_shared/record-frame/model'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
-import type { BandDialog, ChangesDialog, LinesDialog, MoneyDialog, RecordDialog } from './record-model' // F-OP-134
+import type { BandDialog, ChangesDialog, LinesDialog, MoneyDialog, OverviewDialog, RecordDialog } from './record-model' // F-OP-134, F-OO-210
 
 // The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so a dialog's words are checked.
 vi.mock('@nexus/ui/components', async (original) => {
@@ -520,7 +520,7 @@ describe('F-OP-134 — one acts hook per tab, mounted by the container, never by
   })
 
   it('RecordDialog is the one slot of every hook\'s dialogs; the dialogs draw by their owner', () => {
-    expectTypeOf<RecordDialog>().toEqualTypeOf<BandDialog | LinesDialog | MoneyDialog | ChangesDialog>()
+    expectTypeOf<RecordDialog>().toEqualTypeOf<BandDialog | LinesDialog | MoneyDialog | ChangesDialog | OverviewDialog>() // F-OO-210: the office note
     const dialogs = source('./view/Dialogs.tsx')
     const at = (words: string) => dialogs.indexOf(words)
     expect(at('// The band (use-band-acts).')).toBeLessThan(at("case 'promise':"))
