@@ -100,6 +100,11 @@ const next = output({
 
 const count = output({ done: z.number().int(), of: z.number().int(), words })
 
+// B-MS-007 (R8, R-61): whether cutting REALLY started on the order (the floor's cut facts: leather logged or a bundle made of one of
+// its cells), never read from the stage. The portal's "Mark urgent" hints read it, as the mark itself does. Neutral: it says nothing
+// of who moved the stage.
+const cutStarted = z.boolean()
+
 const promiseMoves = z.array(output({ on: day, from: day.nullable(), to: day, lines: z.array(z.number().int()), reason: output({ code: z.enum(PROMISE_REASON_CODES), words }) }))
 
 const row = output({
@@ -118,6 +123,7 @@ const row = output({
   originalPromiseDate: day.nullable(),
   promiseMoved: z.boolean(),
   stage: stage.nullable(),
+  cutStarted,
   health: health.nullable(),
   waiting,
   marks,
@@ -225,6 +231,7 @@ export const orderContract = defineContract({
           sewingNotCountedWords: words.nullable(),
         })
         .nullable(),
+      cutStarted, // B-MS-007
       health: health.nullable(),
       waiting,
       marks,
