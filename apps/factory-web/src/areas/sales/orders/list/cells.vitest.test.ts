@@ -11,6 +11,7 @@ import { LIST_ROWS, canOf } from '../_demo/fixtures'
 import type { OrderRow } from '../api'
 import { NAMESPACE } from './sheet/model'
 import { heldCell, orderEditOf } from './view/OrdersListView'
+import { I18nProvider } from '../../../../lib/i18n/provider' // F-CP-107 (cp-fx16)
 
 /**
  * B-TH-245 (threads plan TH-4, picture 27; features SHEET.brand-fields-F03 edit a custom value in a cell, -F08 Edit N,
@@ -198,6 +199,44 @@ describe('F-SA-275: the production columns', () => {
   })
 })
 // ---- end F-SA-275
+
+// ---- F-CP-107 (cp-fx16; oo-walk 15 b): the same fact never twice in one row — the customer page's All orders showed "Waiting for a
+// yes" in Status AND in Where it is (a row with no stage kept draws the order's status there, F-SA-275).
+describe('F-CP-107 (cp-fx16): Where it is never repeats the Status the row shows', () => {
+  const textOfHtml = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&#x27;/g, "'").replace(/\s+/g, ' ').trim()
+  const part = (over: Partial<NonNullable<OrderRow['production']>> = {}): NonNullable<OrderRow['production']> => ({ stage: null, stageSince: null, health: null, waitingOn: null, since: null, held: false, supervisorMark: 'NOT_SET', openRequests: 0, openIssues: 0, withheld: [], ...over })
+  const waiting: OrderRow = { ...LIST_ROWS[0]!, number: 'SEED-SO-W39-01', status: 'PENDING_APPROVAL', progress: null, production: part() }
+  const draw = async (row: OrderRow, statusShown?: boolean) => {
+    const { WhereItIsCell } = await import('./sheet/parts')
+    const cell = createElement(WhereItIsCell, { row, t, s, ...(statusShown === undefined ? {} : { statusShown }) })
+    return textOfHtml(renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: {} }, cell)))
+  }
+
+  it('no stage kept, Status on screen: only this order\'s pieces ("Not in work yet"), "—" while not read; Status hidden: the status stays', async () => {
+    expect(await draw(waiting, true)).toBe('Not in work yet')
+    expect(await draw({ ...waiting, progress: undefined }, true)).toBe('—')
+    // Status hidden (Customise, a view without it): the fact is never lost — the status pill, then the pieces (as before).
+    expect(await draw(waiting, false)).toBe('Waiting for a yes Not in work yet')
+    expect(await draw(waiting)).toBe('Waiting for a yes Not in work yet')
+    // A row with a stage keeps its stage and pieces whatever Status does; a row not read stays "—".
+    const sewing: OrderRow = { ...waiting, status: 'IN_PRODUCTION', progress: { inWork: 300, cut: 300, sewn: 120, finished: 0 }, production: part({ stage: 'SEWING', health: 'ON_TRACK' }) }
+    expect(await draw(sewing, true)).toBe(await draw(sewing, false))
+    expect(await draw(sewing, true)).toContain('120 of 300 sewn')
+    expect(await draw({ ...waiting, production: undefined }, true)).toBe('—')
+  })
+
+  it('the view tells the cell whether Status is on screen: the frame\'s shown columns (a person\'s Customise wins), until then the preset', async () => {
+    const { statusShownOf } = await import('./view/OrdersListView')
+    expect(statusShownOf(null)).toBe(true) // Sales › Orders: Status is the sheet's own column
+    expect(statusShownOf({ shown: ['picture', 'number', 'status', 'whereItIs'] })).toBe(true)
+    expect(statusShownOf({ shown: ['picture', 'number', 'whereItIs'] })).toBe(false) // In production
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("setStatusShown(ids.includes('status'))")
+    expect(view).toContain('actions?.onShownColumns?.(ids)') // B-TH-244 still told
+    expect(view).toContain('statusShown={statusShown')
+  })
+})
+// ---- end F-CP-107 (cp-fx16)
 
 // ---- F-CP-140 (customer page plan C2d; design 11-money §3.1; review G1): the Price check cell and the Difference — three states,
 // never "Equal" without the customer's price; a mark beside each word (never colour alone); a signed difference in words.
