@@ -65,6 +65,7 @@ import { WaitingStrip } from './view/WaitingStrip'
 import { workEmptyOf, workPreset, workViewsOf } from './view/WorkTab' // F-CP-101: the views and empty states per view
 import { NOT_EQUAL_VIEW } from './view/WorkTab' // F-CP-141: the Not equal view
 import { columnSetOf, type ColumnSet } from './view/WorkTab' // F-CP-105: Columns: Work · Money
+import type { UnreadMap } from '../../../../lib/last-message-cell/model' // F-CP-107 (cp-fx16): the New messages column, as live
 // ---- end F-SA-276
 // ---- F-CP-112 (SCR-033): the row's Next steps window, the bulk window over the ticked orders, the band's New order window ----
 import { order as demoOrder } from '../../orders/_demo/fixtures'
@@ -128,6 +129,8 @@ interface WorkCase {
   /** F-CP-105: the person's pick of "Columns: Work · Money" (`cols=`); and the production manager's page (no price grain, no orders.manage). */
   readonly cols?: ColumnSet
   readonly role?: 'manager'
+  /** F-CP-107 (cp-fx16): the reader's new messages per order — the live Work tab's New messages column (threads.read). */
+  readonly unread?: UnreadMap
   // ---- F-CP-112 (SCR-033) ----
   /** A row's ⋯ "Next steps" window over the sheet (the order page's own dialog on the order as read): Mark ready…, Close order… on a
    *  shipped order not settled, held (the row is older than the order), or the order being read. */
@@ -206,6 +209,16 @@ const workRows = (party: Party, over: (row: OrderRow, index: number) => Partial<
     production: { stage: index === 2 ? 'CUTTING' : 'SEWING', stageSince: '2026-10-27', health: index === 1 ? 'LATE' : index === 0 ? 'AT_RISK' : 'ON_TRACK', waitingOn: index === 2 ? 'SUPPLIER' : null, since: index === 2 ? ordersAt(27, 9) : null, held: false, supervisorMark: index === 0 ? 'ME' : index === 1 ? 'SOMEONE_ELSE' : 'NOT_SET', openRequests: index === 0 ? 1 : 0, openIssues: 0, withheld: [] },
     ...over(row, index),
   }))
+// ---- F-CP-107 (cp-fx16): All orders as live with a waiting-for-a-yes row (no stage kept, no piece in work yet) on the longest seed
+// number, beside a real number in production; the New messages column on (threads.read), as the live Work tab draws it. ----
+const W39_ID = 'd0000000-0000-4000-8000-000000000391'
+const waitingYesRows = (party: Party): OrderRow[] => {
+  const [first, ...rest] = workRows(party)
+  const waiting: OrderRow = { ...first!, id: W39_ID, number: 'SEED-SO-W39-01', status: 'PENDING_APPROVAL', customerRef: 'SEED-PO-W39-1', progress: null, production: { ...first!.production!, stage: null, stageSince: null, health: null, waitingOn: null, since: null, supervisorMark: 'NOT_SET', openRequests: 0 } }
+  return [waiting, { ...first!, number: 'SO-2026-0089' }, ...rest]
+}
+const waitingYesUnread = (party: Party): UnreadMap => ({ [workRows(party)[0]!.id]: { newCount: 2, lastAt: '2026-11-17T09:42:00.000Z' } })
+// ---- end F-CP-107 (cp-fx16)
 // cp-walk (F-CP-104 / F-CP-112): the band's New order open for a person who takes orders (the Owner, Sales), as the live page draws
 // it — RECORD_CAN has no orders.manage, so every Work case held it ("Needs the right Work on sales orders") beside its own window.
 const workCase = (code: string, work: WorkCase, over: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record(code, { tab: 'work', ...over, can: { ...RECORD_CAN, ordersManage: true, ...over.can } }), work })
@@ -310,6 +323,7 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
     ...(work.role !== 'manager' ? { bulkCan: { supervisor: false, note: true, task: null, reply: true } } : {}), // cp-walk: Reply to N (threads.post)
     ...(work.newOrder ? { newOrder: newOrderOf(party, can.price) } : {}),
     // ---- end F-CP-112
+    ...(work.unread ? { unread: work.unread } : {}), // F-CP-107 (cp-fx16)
   }
   return createElement(
     'div',
@@ -467,6 +481,8 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     // ---- F-SA-276: Work — the waiting strip and the Orders sheet locked to the customer. F-CP-101: All orders first (the default) ·
     // In production · Waiting on us · Late.
     { id: 'quotes-orders', label: 'F-CP-101 · Work opens on All orders: the strip (two groups and the tasks) and every order (Status shown)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')) }) },
+    // F-CP-107 (cp-fx16): the status once (Where it is says "Not in work yet"); the number and the status whole at 1440 beside the dock.
+    { id: 'work-waiting-yes', label: 'F-CP-107 · Work: All orders — a waiting-for-a-yes row on a long number (SEED-SO-W39-01): its status once, "Not in work yet" under Where it is; number and status whole at 1440 beside the dock', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: waitingYesRows(by('MODA-DEMO')), unread: waitingYesUnread(by('MODA-DEMO')) }) },
     { id: 'quotes-orders-all', label: 'F-CP-101 · Work: the view In production (no Status column: every row is in production)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ status: 'IN_PRODUCTION' })), view: 'IN_PRODUCTION' }) },
     {
       id: 'quotes-orders-no-price',
