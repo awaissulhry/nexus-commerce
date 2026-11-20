@@ -3,6 +3,15 @@ import { officeStripStateOf, type OfficeStripState } from '@nexus/factory-domain
 import type { Order } from '../../api'
 import type { Phrase } from '../../model'
 import type { BrandStage, Dates, Headline } from './api'
+// ---- F-OO-104: the strips read the ONE waiting list's HOLD rows (the order read's own yes and deposit when the production read is not in)
+import { isAfterProduction } from '@nexus/factory-domain/production-brand/stages'
+import type { OpenApproval } from '../../api'
+import type { Approval } from '../../depth/api'
+import { openRequest } from '../../depth/model'
+import { depositGate } from '../../model'
+import type { OrderProduction, Words } from './api'
+import { waitingOf, type WaitingRow, type WaitingState } from './model'
+// ---- end F-OO-104
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Where it is now", its rules moved out of model.ts (F-SA-232). The health
@@ -96,3 +105,140 @@ export function stageStripOf(order: Pick<Order, 'status'>, headline: Headline | 
  * or once it is cancelled (the headline's line says where the work had reached).
  */
 export const stagesShown = (state: OfficeStripState): boolean => state === 'CURRENT' || state === 'ALL_DONE'
+
+// ---- F-OO-104 (order overview §1.3; review F1, F13; Owner D6): the strips — one per hold or wait, most blocking first ----
+/**
+ * What stops the order now, one strip each, most blocking first: the order's own yes, its credit hold, the factory review of its
+ * made-to-measure units, the deposit, then ONE strip per hold kind — quality, our production hold, the customer's pause — "on N work
+ * orders" with the reasons' words (`headline.holds`) and the earliest since (any other kind the list places with the holds keeps its
+ * own strip, never hidden). They read the ONE waiting list's HOLD rows (`waiting.holds`, F-OO-202), so the header, the cards and the
+ * Changes tab cannot disagree with them; while the production read is out (reading, failed) the same call over the order read alone
+ * gives the order's own yes, and the deposit is the order read's gate — a failed read keeps the yes, the credit and the deposit.
+ *
+ * Two cases a work order can be in (F13), two sets of words: one this reader reaches that also makes other customers' work (named,
+ * `shared`: lifted on its own page), and one this reader does not reach (never named, only counted: `notReached`).
+ * After production (shipped, delivered, closed, cancelled) nothing stops the work: no strip at all, though the office read still
+ * sends the live holds in `headline.held` / `holds` (B-OO-007 emptied only the blockers, F11; plan §5). No account-hold strip (D6).
+ */
+export const STRIP_KINDS = ['yes', 'credit', 'review', 'deposit', 'quality', 'production', 'pause', 'other'] as const
+export type StripKind = (typeof STRIP_KINDS)[number]
+
+/** A work order a hold strip names: this reader reaches it; `shared`: it also makes other customers' work. */
+export interface StripWorkOrder {
+  readonly id: string
+  /** Its number; null when neither read names it. */
+  readonly number: string | null
+  readonly shared: boolean
+}
+
+/** The work orders a hold strip stops: those reached, by number, and those this reader does not reach (counted, never named). */
+export interface StripWorkOrders {
+  readonly reached: readonly StripWorkOrder[]
+  readonly notReached: number
+}
+
+type StripBase = {
+  readonly key: string
+  /** When it started (an instant, or a day for a hold the read dates only by day); null: not known. */
+  readonly since: string | null
+}
+
+export type WhereStrip =
+  /** The order's yes (SALES_ORDER) or its credit hold's (CREDIT_OVERRIDE): its open task when one is asked; who decides. */
+  | (StripBase & { readonly kind: 'yes' | 'credit'; readonly task: OpenApproval | null; readonly asked: boolean; readonly who: string | null })
+  /** The factory review of the made-to-measure units (MEASUREMENTS): how many wait (null: not said). */
+  | (StripBase & { readonly kind: 'review'; readonly count: number | null })
+  /** The deposit production waits for: an open request (its id, due day) or one never asked. */
+  | (StripBase & { readonly kind: 'deposit'; readonly state: 'WAITING' | 'MISSING'; readonly requestId: string | null; readonly due: string | null })
+  /** One hold kind: the reasons' words, the work orders it stops; `blocker` is the list's kind (another kind: its own words). */
+  | (StripBase & { readonly kind: 'quality' | 'production' | 'pause' | 'other'; readonly blocker: string; readonly reasons: readonly Words[]; readonly workOrders: StripWorkOrders })
+
+export interface WhereStrips {
+  readonly strips: readonly WhereStrip[]
+  /** The production read's own part of them (the holds): reading (one quiet row), failed (said, with Try again) or read. */
+  readonly holds: 'reading' | 'failed' | 'read'
+}
+
+/** At most this many strips show; the rest fold behind "Show {n} more". */
+export const STRIPS_SHOWN = 4
+
+/** Each hold kind of the waiting list that has a strip of its own, in its blocking order; any other HOLD kind is `other`. */
+const HOLD_STRIPS: Readonly<Record<string, 'quality' | 'production' | 'pause'>> = Object.freeze({ QUALITY_HOLD: 'quality', NO_MOVE: 'production', BRAND_PAUSE: 'pause' })
+/** The headline's hold words (`headline.holds[].kind`) each strip reads its reasons from. */
+const REASON_KIND = Object.freeze({ quality: 'QUALITY', production: 'PRODUCTION', pause: 'BRAND' } as const)
+const ORDER_OF: readonly StripKind[] = STRIP_KINDS
+
+/** Oldest first; a start not known last. */
+const byStart = (a: string | null, b: string | null): number => (a === null || b === null ? (a === null ? 1 : 0) - (b === null ? 1 : 0) : Date.parse(a) - Date.parse(b))
+/** The earliest of some instants or days (null: none known). */
+const earliestOf = (values: readonly (string | null | undefined)[]): string | null => values.filter((value): value is string => !!value).sort(byStart)[0] ?? null
+
+type StripOrder = Pick<Order, 'status' | 'openApprovals' | 'waits' | 'madeToMeasure' | 'depositRequired' | 'chain'>
+
+export function whereStripsOf(order: StripOrder, read: Pick<OrderProduction, 'headline' | 'work'> | null | undefined, approval: Pick<Approval, 'reasons' | 'creditHold' | 'requests'> | null | undefined, waiting: WaitingState): WhereStrips {
+  const holds = waiting.status === 'loading' ? 'reading' : waiting.status === 'failed' ? 'failed' : 'read'
+  if (isAfterProduction(officeStripStateOf(order.status))) return { strips: [], holds: 'read' }
+  // The ONE list's HOLD rows; without the production read the same call over the order read alone (its own open yes, no blocker).
+  const rows: readonly WaitingRow[] = waiting.status === 'ready' ? waiting.holds : waitingOf(null, { requests: null, approvals: order.openApprovals, recordPayment: false, locale: 'en' }).filter((row) => row.place === 'HOLD')
+  const tasks = rows.flatMap((row) => (row.door.kind === 'yes' ? [row.door.task] : []))
+  const reasons: readonly string[] = order.waits ?? approval?.reasons.map((entry) => entry.reason) ?? []
+  const waits = order.status === 'PENDING_APPROVAL'
+  const strips: WhereStrip[] = []
+
+  // The order's own yes: asked (its task, or a request open the reader does not see as a task) or nobody asked yet.
+  const own = tasks.find((task) => task.kind === 'SALES_ORDER') ?? null
+  const request = approval ? openRequest(approval) : null
+  if (own || (waits && (reasons.includes('REQUEST_PENDING') || reasons.includes('NO_REQUEST')))) {
+    strips.push({ key: 'yes', kind: 'yes', task: own, asked: !!own || !!request, who: own?.approver.name ?? request?.approver ?? null, since: own?.requestedAt ?? request?.requestedAt ?? null })
+  }
+  // The credit hold: its override's yes when one is asked (it may also hold a release while the order is in work).
+  const credit = tasks.find((task) => task.kind === 'CREDIT_OVERRIDE') ?? null
+  if (credit || (waits && (reasons.includes('CREDIT_HOLD') || !!approval?.creditHold))) {
+    strips.push({ key: 'credit', kind: 'credit', task: credit, asked: !!credit, who: credit?.approver.name ?? null, since: credit?.requestedAt ?? null })
+  }
+  if (waits && reasons.includes('MEASUREMENTS')) strips.push({ key: 'review', kind: 'review', count: order.madeToMeasure?.waitingReview ?? null, since: null })
+
+  // The deposit: the list's row (an open request, or none asked) — or, without the production read, the order read's gate while confirmed.
+  const depositRow = rows.find((row) => row.kind === 'DEPOSIT') ?? null
+  const gate = depositGate(order)
+  if (depositRow) {
+    const requestId = depositRow.ref?.type === 'DepositRequest' ? depositRow.ref.id : null
+    const due = requestId ? (order.chain.depositRequests.find((entry) => entry.id === requestId)?.dueDate ?? null) : null
+    strips.push({ key: 'deposit', kind: 'deposit', state: requestId ? 'WAITING' : 'MISSING', requestId, due, since: depositRow.since })
+  } else if (waiting.status !== 'ready' && order.status === 'CONFIRMED' && (gate.state === 'WAITING' || gate.state === 'MISSING')) {
+    strips.push({ key: 'deposit', kind: 'deposit', state: gate.state, requestId: gate.request?.id ?? null, due: gate.request?.dueDate ?? null, since: gate.request?.createdAt ?? null })
+  }
+
+  // ONE strip per hold kind, "on N work orders" (a work order held twice counts once; one not reached is counted, never named).
+  const work = read?.work?.workOrders ?? []
+  const leftOut = read?.work ? read.work.workOrdersLeftOut : null
+  const groups = new Map<string, { kind: 'quality' | 'production' | 'pause' | 'other'; blocker: string; rows: WaitingRow[] }>()
+  for (const row of rows) {
+    if (row.kind === 'YES' || row.kind === 'DEPOSIT') continue
+    const kind = HOLD_STRIPS[row.kind] ?? 'other'
+    const key = kind === 'other' ? `other:${row.kind}` : kind
+    const group = groups.get(key) ?? { kind, blocker: row.kind, rows: [] }
+    group.rows.push(row)
+    groups.set(key, group)
+  }
+  const holdStrips = [...groups.entries()].map(([key, group]): WhereStrip => {
+    const ids = [...new Set(group.rows.flatMap((row) => (row.ref?.type === 'WorkOrder' ? [row.ref.id] : [])))]
+    const reached = ids
+      .map((id): StripWorkOrder => {
+        const known = work.find((entry) => entry.id === id)
+        return { id, number: known?.number ?? order.chain.workOrders.find((entry) => entry.id === id)?.number ?? null, shared: known?.sharedWithOtherCustomers ?? false }
+      })
+      .sort((a, b) => (a.number ?? '').localeCompare(b.number ?? '', 'en', { numeric: true }))
+    // A row with no work order named is one this reader does not reach — never more than the read says are left out.
+    const hidden = group.rows.filter((row) => !row.ref).length
+    const notReached = leftOut === null ? hidden : Math.min(hidden, leftOut)
+    const said = group.kind === 'other' ? group.rows.flatMap((row) => (row.words.kind === 'api' ? [row.words.words] : [])) : (read?.headline?.holds ?? []).filter((hold) => hold.kind === REASON_KIND[group.kind as keyof typeof REASON_KIND]).map((hold) => hold.words)
+    const words = said.filter((entry, index) => said.findIndex((other) => other.en === entry.en) === index)
+    const since = earliestOf(group.rows.map((row) => row.since)) ?? (group.kind === 'other' ? null : earliestOf((read?.headline?.holds ?? []).filter((hold) => hold.kind === REASON_KIND[group.kind as keyof typeof REASON_KIND]).map((hold) => hold.since)))
+    return { key, kind: group.kind, blocker: group.blocker, reasons: group.kind === 'pause' ? [] : words, workOrders: { reached, notReached }, since }
+  })
+  // Most blocking first: quality, production, the customer's pause; other kinds after them, the oldest first (no known start last).
+  holdStrips.sort((a, b) => ORDER_OF.indexOf(a.kind) - ORDER_OF.indexOf(b.kind) || byStart(a.since, b.since))
+  return { strips: [...strips, ...holdStrips], holds }
+}
+// ---- end F-OO-104

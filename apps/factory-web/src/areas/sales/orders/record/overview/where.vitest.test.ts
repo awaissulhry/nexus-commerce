@@ -8,6 +8,16 @@ import { CONFIRMED_READ, HEADLINE, PRODUCTION_READ } from './fixtures'
 import { headlineOf, stageStripOf, stagesShown } from './where'
 import * as where from './where' // F-OO-103: what section 1's rules still export
 import { bandHealthOf, healthInputOf, waitingOf } from './model'
+// ---- F-OO-104: the strips
+import { deposit, PAID } from '../../_demo/fixtures'
+import { APPROVAL_NOBODY, APPROVAL_PENDING } from '../../depth/demo/fixtures'
+import type { OpenApproval, Order } from '../../api'
+import type { Approval } from '../../depth/api'
+import type { OrderProduction } from './api'
+import { FAILED_STATE, LOADING_STATE, ready, WORK } from './fixtures'
+import { orderWaitingOf, type ProductionState } from './model'
+import { STRIP_KINDS, STRIPS_SHOWN, whereStripsOf, type WhereStrip } from './where'
+// ---- end F-OO-104
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Where it is now"'s rules, moved with where.ts out of overview.vitest.test.ts
@@ -123,3 +133,148 @@ describe('"Where it is now": the stages and the facts', () => {
     expect(healthInputOf(order('IN_PRODUCTION'), null).computed).toBeUndefined()
   })
 })
+
+// ---- F-OO-104 (order overview §1.3; review F1, F13; Owner D6): the strips model — one per hold or wait, most blocking first ----
+describe('F-OO-104: the strips — the yes, the credit, the review, the deposit, then one strip per hold kind "on N work orders"', () => {
+  const words = (en: string) => ({ en, it: `${en} (it)` })
+  type Ref = { type: string; id: string } | null
+  const blocker = (kind: string, on: 'US' | 'BRAND', since: string | null, ref: Ref) => ({ kind, on, words: words(kind), since, ref, sub: null })
+  const wo = (id: string, number: string, shared = false) => ({ ...WORK.workOrders[0]!, id, number, sharedWithOtherCustomers: shared })
+  const task = (kind: string, taskId: string, requestedAt: string, approver = 'Finance'): OpenApproval => ({ taskId, kind, kindLabel: { en: kind, it: kind }, requestedAt, requester: { name: 'Luca Prova', me: false }, approver: { kind: 'ROLE', name: approver, me: false }, version: 1, requireStepUp: false, approve: { allowed: true, why: null }, reject: { allowed: true, why: null }, withdraw: { allowed: false, why: null } })
+  type Hold = NonNullable<OrderProduction['headline']>['holds'][number]
+  const readWith = (blockers: ReturnType<typeof blocker>[], holds: Hold[] = [], workOrders: ReturnType<typeof wo>[] = [], leftOut = 0): OrderProduction => ({ ...PRODUCTION_READ, headline: { ...HEADLINE, held: holds.length > 0, holds, waiting: { ...HEADLINE.waiting, blockers } }, work: { ...WORK, workOrders, workOrdersLeftOut: leftOut } })
+  /** The strips as the card makes them: from the ONE waiting call (OverviewTab's own), the production read, the yes's read. */
+  const stripsOf = (value: Order, read: OrderProduction | null, approval: Approval | null = null, state?: ProductionState) => {
+    const production = state ?? (read ? ready(read) : null)
+    return whereStripsOf(value, read, approval, orderWaitingOf(value, { production, requests: { value: [] }, can: { recordPayment: true } }, 'en'))
+  }
+  const kinds = (strips: readonly WhereStrip[]) => strips.map((strip) => strip.kind)
+  const held = (strips: readonly WhereStrip[], kind: WhereStrip['kind']) => strips.find((strip) => strip.kind === kind) as Extract<WhereStrip, { kind: 'quality' | 'production' | 'pause' | 'other' }>
+
+  it('the order of strips, most blocking first: the yes, the credit, the review, the deposit, quality, production, the pause, another kind', () => {
+    const open = deposit()
+    const waiting: Order = {
+      ...order('PENDING_APPROVAL'),
+      waits: ['REQUEST_PENDING', 'CREDIT_HOLD', 'MEASUREMENTS'],
+      madeToMeasure: { units: 2, waitingReview: 1, riders: null },
+      openApprovals: [task('CREDIT_OVERRIDE', 't-credit', '2026-11-02T09:00:00Z'), task('SALES_ORDER', 't-own', '2026-11-03T09:00:00Z', 'Marco Demo')],
+      chain: { ...order('PENDING_APPROVAL').chain, depositRequests: [open] },
+    }
+    const read = readWith([
+      blocker('BRAND_PAUSE', 'BRAND', '2026-11-12T09:00:00Z', { type: 'WorkOrder', id: 'wo-1' }),
+      blocker('NONCONFORMANCE', 'US', '2026-11-09T09:00:00Z', { type: 'WorkOrder', id: 'wo-3' }),
+      blocker('NO_MOVE', 'US', '2026-11-11T09:00:00Z', { type: 'WorkOrder', id: 'wo-2' }),
+      blocker('DEPOSIT', 'BRAND', '2026-10-28T15:00:00Z', { type: 'DepositRequest', id: open.id }),
+      blocker('QUALITY_HOLD', 'US', '2026-11-14T09:00:00Z', { type: 'WorkOrder', id: 'wo-3' }),
+      blocker('BRAND_REQUEST', 'US', '2026-11-08T09:00:00Z', { type: 'OrderChangeRequest', id: 'r-1' }),
+    ], [], [wo('wo-1', 'WO-00021'), wo('wo-2', 'WO-00022'), wo('wo-3', 'WO-00023')])
+    const { strips, holds } = stripsOf(waiting, read)
+    expect(kinds(strips)).toEqual(['yes', 'credit', 'review', 'deposit', 'quality', 'production', 'pause', 'other'])
+    expect(STRIP_KINDS).toEqual(['yes', 'credit', 'review', 'deposit', 'quality', 'production', 'pause', 'other'])
+    expect(holds).toBe('read')
+    // Each with what it says: who decides each yes and since when, how many units wait, the deposit's request and due day.
+    expect(strips[0]).toMatchObject({ kind: 'yes', asked: true, who: 'Marco Demo', since: '2026-11-03T09:00:00Z', task: { taskId: 't-own' } })
+    expect(strips[1]).toMatchObject({ kind: 'credit', asked: true, who: 'Finance', since: '2026-11-02T09:00:00Z', task: { taskId: 't-credit' } })
+    expect(strips[2]).toMatchObject({ kind: 'review', count: 1 })
+    expect(strips[3]).toMatchObject({ kind: 'deposit', state: 'WAITING', requestId: open.id, due: open.dueDate, since: '2026-10-28T15:00:00Z' })
+    // Another kind the list places with the holds keeps its own strip with the API's own words (never hidden); a request is not a strip.
+    expect(held(strips, 'other')).toMatchObject({ blocker: 'NONCONFORMANCE', reasons: [words('NONCONFORMANCE')] })
+    expect(JSON.stringify(strips)).not.toContain('r-1')
+    // At most four show; the rest fold behind "Show {n} more" (the card's).
+    expect(STRIPS_SHOWN).toBe(4)
+  })
+
+  it('one strip per hold kind with its N: a work order held twice counts once; by number; each reason once; the earliest since', () => {
+    const read = readWith(
+      [
+        blocker('BRAND_PAUSE', 'BRAND', '2026-11-13T09:00:00Z', { type: 'WorkOrder', id: 'wo-2' }),
+        blocker('BRAND_PAUSE', 'BRAND', '2026-11-12T09:00:00Z', { type: 'WorkOrder', id: 'wo-1' }),
+        blocker('NO_MOVE', 'US', '2026-11-11T09:00:00Z', { type: 'WorkOrder', id: 'wo-1' }),
+        blocker('NO_MOVE', 'US', '2026-11-10T09:00:00Z', { type: 'WorkOrder', id: 'wo-1' }),
+      ],
+      [
+        { kind: 'PRODUCTION', words: words('Leather check'), since: '2026-11-10' },
+        { kind: 'PRODUCTION', words: words('Trims missing'), since: '2026-11-11' },
+        { kind: 'QUALITY', words: words('Shade difference'), since: '2026-11-09' },
+        { kind: 'BRAND', words: words("Paused at the customer's request"), since: '2026-11-12' },
+      ],
+      [wo('wo-2', 'WO-00022'), wo('wo-1', 'WO-00021')],
+    )
+    const { strips } = stripsOf(order('IN_PRODUCTION'), read)
+    // The quality words have no blocker row here (no work order of the order is held by quality): no quality strip is made up.
+    expect(kinds(strips)).toEqual(['production', 'pause'])
+    expect(held(strips, 'production')).toEqual({ key: 'production', kind: 'production', blocker: 'NO_MOVE', reasons: [words('Leather check'), words('Trims missing')], workOrders: { reached: [{ id: 'wo-1', number: 'WO-00021', shared: false }], notReached: 0 }, since: '2026-11-10T09:00:00Z' })
+    // One customer pause on two work orders = ONE strip "on 2 work orders" (its words are the strip's own: no reason list).
+    expect(held(strips, 'pause')).toEqual({ key: 'pause', kind: 'pause', blocker: 'BRAND_PAUSE', reasons: [], workOrders: { reached: [{ id: 'wo-1', number: 'WO-00021', shared: false }, { id: 'wo-2', number: 'WO-00022', shared: false }], notReached: 0 }, since: '2026-11-12T09:00:00Z' })
+  })
+
+  it('F13: a shared work order (reached, it makes other customers\' work) and one not reached — two cases, never confused', () => {
+    const read = readWith(
+      [
+        blocker('NO_MOVE', 'US', '2026-11-10T09:00:00Z', { type: 'WorkOrder', id: 'wo-s' }),
+        blocker('NO_MOVE', 'US', '2026-11-11T09:00:00Z', null),
+        blocker('NO_MOVE', 'US', '2026-11-12T09:00:00Z', null),
+        blocker('QUALITY_HOLD', 'US', '2026-11-12T09:00:00Z', null),
+      ],
+      [],
+      [wo('wo-s', 'WO-00019', true)],
+      1,
+    )
+    const { strips } = stripsOf(order('IN_PRODUCTION'), read)
+    // The shared one is named (the reader reaches it) and marked; those not reached are counted, never more than the read leaves out.
+    expect(held(strips, 'production').workOrders).toEqual({ reached: [{ id: 'wo-s', number: 'WO-00019', shared: true }], notReached: 1 })
+    expect(held(strips, 'quality').workOrders).toEqual({ reached: [], notReached: 1 })
+    // Without the work part (withheld) the not-reached rows are counted as they come; a number comes from the order read's chain.
+    const chained = order('IN_PRODUCTION')
+    const first = chained.chain.workOrders[0]!
+    const withheld = { ...readWith([blocker('NO_MOVE', 'US', '2026-11-10T09:00:00Z', { type: 'WorkOrder', id: first.id }), blocker('NO_MOVE', 'US', null, null), blocker('NO_MOVE', 'US', null, null)]), work: null }
+    expect(held(stripsOf(chained, withheld).strips, 'production').workOrders).toEqual({ reached: [{ id: first.id, number: first.number, shared: false }], notReached: 2 })
+  })
+
+  it('a failed (or reading) production read keeps the yes, the credit and the deposit from the order read; holds are said apart', () => {
+    const waiting: Order = { ...order('PENDING_APPROVAL'), waits: ['REQUEST_PENDING', 'CREDIT_HOLD'], openApprovals: [task('SALES_ORDER', 't-own', '2026-11-03T09:00:00Z'), task('CREDIT_OVERRIDE', 't-credit', '2026-11-02T09:00:00Z')] }
+    for (const [state, holds] of [[FAILED_STATE, 'failed'], [LOADING_STATE, 'reading']] as const) {
+      const failed = stripsOf(waiting, null, null, state)
+      expect(kinds(failed.strips), holds).toEqual(['yes', 'credit'])
+      expect(failed.holds).toBe(holds)
+      expect(failed.strips[0]).toMatchObject({ task: { taskId: 't-own' } })
+      // Confirmed and its deposit open: the order read's own gate (the request, its due day) while the production read is out.
+      const confirmed = stripsOf(order('CONFIRMED'), null, null, state)
+      expect(confirmed.strips, holds).toEqual([{ key: 'deposit', kind: 'deposit', state: 'WAITING', requestId: deposit().id, due: deposit().dueDate, since: deposit().createdAt }])
+      // Paid: nothing waits; a deposit never asked: production waits for one (no request to record a payment on).
+      expect(stripsOf(order('CONFIRMED', { chain: { ...order('CONFIRMED').chain, depositRequests: [PAID] } }), null, null, state).strips).toEqual([])
+      expect(stripsOf(order('CONFIRMED', { chain: { ...order('CONFIRMED').chain, depositRequests: [] } }), null, null, state).strips).toMatchObject([{ kind: 'deposit', state: 'MISSING', requestId: null }])
+    }
+    // Read: the deposit is the list's own row (the production read decides whether it still holds the release).
+    expect(stripsOf(order('CONFIRMED'), { ...CONFIRMED_READ, work: null }).strips).toMatchObject([{ kind: 'deposit', state: 'WAITING', requestId: '0190f0e2-1818-7000-8000-000000000001' }])
+    expect(stripsOf(order('CONFIRMED'), readWith([])).strips).toEqual([])
+  })
+
+  it('the yes: asked of whom (its task, or a request the reader sees no task of), nobody asked yet; the credit hold alone; a credit yes in work', () => {
+    const nobody = stripsOf({ ...order('PENDING_APPROVAL'), waits: ['NO_REQUEST'] }, null, APPROVAL_NOBODY, FAILED_STATE).strips
+    expect(nobody).toEqual([{ key: 'yes', kind: 'yes', task: null, asked: false, who: null, since: null }])
+    const asked = stripsOf({ ...order('PENDING_APPROVAL'), waits: ['REQUEST_PENDING'] }, null, APPROVAL_PENDING, FAILED_STATE).strips
+    expect(asked).toEqual([{ key: 'yes', kind: 'yes', task: null, asked: true, who: APPROVAL_PENDING.requests[0]!.approver, since: APPROVAL_PENDING.requests[0]!.requestedAt }])
+    // An older answer without `waits`: the yes's own read says why.
+    expect(kinds(stripsOf({ ...order('PENDING_APPROVAL'), waits: undefined }, null, APPROVAL_PENDING, FAILED_STATE).strips)).toEqual(['yes'])
+    // Held by its credit only: the credit strip, nobody asked for the override yet; no yes strip of the order's own.
+    expect(stripsOf({ ...order('PENDING_APPROVAL'), waits: ['CREDIT_HOLD'] }, null, null, FAILED_STATE).strips).toEqual([{ key: 'credit', kind: 'credit', task: null, asked: false, who: null, since: null }])
+    // A release held by the credit while the order is in work: its override's yes is a strip too (never hidden: it is no request).
+    const inWork = stripsOf({ ...order('IN_PRODUCTION'), openApprovals: [task('CREDIT_OVERRIDE', 't-release', '2026-11-15T09:00:00Z')] }, readWith([]))
+    expect(inWork.strips).toMatchObject([{ kind: 'credit', asked: true, task: { taskId: 't-release' } }])
+    // An old change's yes is a request (Requests & changes), never a strip.
+    expect(stripsOf({ ...order('IN_PRODUCTION'), openApprovals: [task('SALES_ORDER_CHANGE', 't-change', '2026-11-15T09:00:00Z')] }, readWith([])).strips).toEqual([])
+  })
+
+  it('after production nothing stops the work: no strip, though the office read still sends the live holds (B-OO-007, plan §5)', () => {
+    const read = readWith([blocker('QUALITY_HOLD', 'US', '2026-11-12T09:00:00Z', { type: 'WorkOrder', id: 'wo-1' })], [{ kind: 'QUALITY', words: words('Shade difference'), since: '2026-11-12' }], [wo('wo-1', 'WO-00021')])
+    for (const status of ['SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'] as const) {
+      const value = { ...order(status), openApprovals: [task('CREDIT_OVERRIDE', 't-credit', '2026-11-02T09:00:00Z')] }
+      expect(stripsOf(value, read), status).toEqual({ strips: [], holds: 'read' })
+      expect(stripsOf(value, null, null, FAILED_STATE), status).toEqual({ strips: [], holds: 'read' })
+    }
+    // Before and during production the same hold is a strip.
+    expect(kinds(stripsOf(order('PARTLY_SHIPPED'), read).strips)).toEqual(['quality'])
+  })
+})
+// ---- end F-OO-104
