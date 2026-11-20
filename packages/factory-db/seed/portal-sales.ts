@@ -30,6 +30,8 @@ import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with the
  *                shown before the first field, three body photos; the link counts the use (evidence SUBMITTED).
  *   settings     the tenant-wide sales settings' cut-off rules: no cancel from IN_PRODUCTION on nor within 14 days of the
  *                promise date, no change from READY on (made up; the Owner sets them).
+ *   status       B-OO-016: last, SEED-SO-0002 follows its facts as the system does: IN_PRODUCTION (SEED-WO-0001 released), then
+ *                PARTLY_SHIPPED (SEED-SH-0001 left), each move with its audit row. Seeded only up to shipping, it stays CONFIRMED.
  *
  * The generated isolation tests (src/isolation.pg.vitest.test.ts) copy the FIRST row of each table by id and insert the
  * copy as the office and as P1: so the DRAFT, its first line and size, the OPEN change request and its first cell, the
@@ -57,6 +59,8 @@ const T = {
   submitted: seedAt('2026-11-18T10:00:00.000Z'),
 } as const
 const DAY_MS = 86_400_000
+/** B-OO-016: the system's actor, as apps/factory-api's worker writes its audit rows (core/context.ts SYSTEM_ACTOR_ID). */
+const SYSTEM_ACTOR_ID = '00000000-0000-7000-8000-000000000000'
 
 /** Today in Europe/Rome as a UTC midnight. */
 function romeToday(): Date {
@@ -399,6 +403,50 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
     client.salesSettings.updateMany({
       where: { id: tenantId, cancelCutoffStatus: null, cancelCutoffDays: null, changeCutoffStatus: null },
       data: { cancelCutoffStatus: 'IN_PRODUCTION', cancelCutoffDays: 14, changeCutoffStatus: 'READY', version: { increment: 1 } },
+    }),
+  )
+
+  // B-OO-016 (order overview lane, Owner D9 + his pick A): SEED-SO-0002 carries the status its facts give, PARTLY_SHIPPED.
+  // SEED-WO-0001 of its lines was released (seed/production.ts) and SEED-SH-0001 left with its BLK 50 and RED 52
+  // (seed/shipping.ts), the rest still to make. The two moves are written as the system's follow writes them (apps/factory-api
+  // sales/orders/moves.ts followOrder): one at a time, from the state before it, each with its audit row (orders.follow, by the
+  // system, "Followed: …") at the time of the fact that asked for it; the order's updatedAt is the write's, as the follow's is the
+  // time it followed (SH-0001 leaves in the seeds' future: a later updatedAt would put the order ahead of today). Written HERE,
+  // last: P1's open CHANGE request above is asked only before anything left (the change-request trigger), so a world seeded only
+  // up to shipping keeps CONFIRMED.
+  await db.withScope(office, (client) =>
+    client.$transaction(async (tx) => {
+      const order = await tx.salesOrder.findUniqueOrThrow({ where: { id: known.so2.id }, select: { status: true, companyId: true } })
+      if (order.status !== 'CONFIRMED') return
+      const released = await tx.workOrder.findFirst({ where: { companyId: companyA, number: 'SEED-WO-0001', releasedAt: { not: null } }, select: { number: true, releasedAt: true } })
+      const left = await tx.shipment.findFirst({ where: { companyId: companyA, number: 'SEED-SH-0001', salesOrderId: known.so2.id, shippedAt: { not: null } }, select: { number: true, shippedAt: true } })
+      if (!released?.releasedAt || !left?.shippedAt) return
+      const moves = [
+        { to: 'IN_PRODUCTION', from: 'CONFIRMED', at: released.releasedAt, why: `work order ${released.number} released` },
+        { to: 'PARTLY_SHIPPED', from: 'IN_PRODUCTION', at: left.shippedAt, why: `shipment ${left.number} shipped` },
+      ] as const
+      for (const move of moves) {
+        await tx.salesOrder.update({ where: { id: known.so2.id }, data: { status: move.to, version: { increment: 1 } }, select })
+        await tx.auditLog.createMany({
+          data: [
+            {
+              id: lateId(`portal-sales:SO-0002:follow:${move.to}`),
+              companyId: order.companyId,
+              at: move.at,
+              audience: 'SYSTEM',
+              actorId: SYSTEM_ACTOR_ID,
+              action: 'orders.follow',
+              recordType: 'SalesOrder',
+              recordId: known.so2.id,
+              before: { status: move.from },
+              after: { status: move.to },
+              reason: `Followed: ${move.why}.`,
+              requestId: `seed-portal-sales-${namespace}-so2-follow-${move.to}`,
+            },
+          ],
+          skipDuplicates: true,
+        })
+      }
     }),
   )
 
