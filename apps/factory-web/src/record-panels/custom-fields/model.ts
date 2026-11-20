@@ -8,7 +8,7 @@ import type { Locale } from '../../lib/i18n/locales'
 import type { Field, RecordKey } from '../../areas/admin/fields/api'
 import { labelIn } from '../../areas/admin/fields/model'
 import { previewSections } from '../../areas/admin/fields/model' // F-OO-212
-import type { RecordValue, ValueEntry } from './api'
+import type { RecordValue, RecordValues, ValueEntry } from './api'
 
 /**
  * The custom-fields section on every record (B-W2b-431; design admin.fields "The record panels show a custom-fields
@@ -270,12 +270,21 @@ export function portalTagOf(recordType: RecordKey | null): string | null {
 }
 // ---- end F-OO-212
 
-/** A refused or failed save in our words, and the field it points at (by the order of the entries sent). */
-export function saveFaultOf(error: unknown, sent: readonly ValueEntry[]): { key: string; code: string | null } {
+/**
+ * A refused or failed save in our words, and the field it points at (by the order of the entries sent).
+ * F-OO-213 (B-OO-014): and the RECORD's own refusals (`record`): 'stale' — its own version moved since it was read (a sales order
+ * someone changed first: the panel offers Save again / Discard mine, the draft kept), 'final' — it never changes again (a closed or
+ * cancelled order: said in the words that hold Edit).
+ */
+export function saveFaultOf(error: unknown, sent: readonly ValueEntry[]): { key: string; code: string | null; record?: 'stale' | 'final' } {
   if (!isApiError(error)) return { key: 'cf.fault.failed', code: null }
   const paths = error.issues.map((issue) => issuePath(issue).replace(/\./g, '/'))
   const indexed = paths.map((path) => /^body\/values\/(\d+)\/(code|value|version)$/.exec(path)).find((match) => match !== null)
   const code = indexed ? (sent[Number(indexed[1])]?.code ?? null) : null
+  // ---- F-OO-213: the record's own refusals come first (a closed order: invalid_state; the order's version: the issue `version`) ----
+  if (error.kind === 'conflict' && error.code === 'invalid_state') return { key: 'cf.heldFinal', code: null, record: 'final' }
+  if (error.kind === 'conflict' && paths.includes('version')) return { key: 'cf.recordChanged', code: null, record: 'stale' }
+  // ---- end F-OO-213
   switch (error.kind) {
     case 'conflict':
       return { key: paths.includes('refusal/FIELDS') ? 'cf.fault.database' : 'cf.fault.stale', code }
@@ -293,3 +302,33 @@ export function saveFaultOf(error: unknown, sent: readonly ValueEntry[]): { key:
       return { key: 'cf.fault.failed', code: null }
   }
 }
+
+// ---- F-OO-213 (order overview 11-design §8.3; B-OO-014): the record's own version with its values — the lost update vs the Orders sheet --
+
+/**
+ * The record version a save sends: none unless the page gives one (only the order page does: every other record page behaves as
+ * before); else the newer of the page's read of the record and the section's own last read of it (both this person's reads, and a
+ * version only grows) — so a save right after the page's own change (Set priority…) or after Discard mine is not refused for nothing.
+ */
+export function sentRecordVersion(given: number | undefined, read: number | null | undefined): number | undefined {
+  if (given === undefined) return undefined
+  return typeof read === 'number' && read > given ? read : given
+}
+
+/** What Save again does, after "Someone changed {record} first": send the same changes at the version read again, or why not. */
+export type SaveAgain = { readonly kind: 'send'; readonly recordVersion: number | undefined } | { readonly kind: 'changed'; readonly codes: readonly string[] } | { readonly kind: 'final' }
+
+/**
+ * Save again (Keep mine): the record read again (`fresh`) — closed or cancelled meanwhile: 'final'; one of the fields this edit changes
+ * was saved by someone meanwhile (its value's version moved, or the field is gone): 'changed', naming them (the draft is never sent over
+ * a colleague's value); else 'send' — the same entries (each at the version first read, unchanged since) at the record's new version.
+ */
+export function saveAgainOf(sent: readonly ValueEntry[], fresh: Pick<RecordValues, 'fields' | 'values' | 'editHeld' | 'recordVersion'>): SaveAgain {
+  if (fresh.editHeld === 'FINAL') return { kind: 'final' }
+  const known = new Set(fresh.fields.map((field) => field.code))
+  const versions = new Map(fresh.values.map((value) => [value.code, value.version]))
+  const codes = sent.filter((entry) => !known.has(entry.code) || (versions.get(entry.code) ?? null) !== entry.version).map((entry) => entry.code)
+  if (codes.length > 0) return { kind: 'changed', codes }
+  return { kind: 'send', recordVersion: typeof fresh.recordVersion === 'number' ? fresh.recordVersion : undefined }
+}
+// ---- end F-OO-213

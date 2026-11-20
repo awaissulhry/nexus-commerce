@@ -416,6 +416,12 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // read again (Answers the customer and why); the other parts keep their figures.
   const rereadPeople = () => production.again(['people'])
   // ---- end F-OO-133
+  // ---- F-OO-213 (B-OO-014): a custom value saved on Overview moved the order's version (no live message says it) — the order is read
+  // again, quietly (no loading state: the page keeps what it shows), so its next command is sent at the new version, never refused.
+  const fieldsSaved = (saved: number) => {
+    if ((current.current?.version ?? 0) < saved) void load()
+  }
+  // ---- end F-OO-213
   // ---- F-SA-234: the materials' readiness of the work orders the production read names (Production › Work orders, while it shows) ----
   const [readiness, setReadiness] = useState<Part<ReadinessRow[]> | null>(null)
   const readWork = production.state?.status === 'ready' ? production.state.read.work : null
@@ -704,7 +710,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
       }
       printThread={value ? <ThreadPrint record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party?.legalName ?? ''}`} party={value.party ? { id: value.partyId, name: value.party.legalName } : null} /> : null}
       // B-TH-280: the order's custom fields at the end of its first tab; F-SA-233: Overview (they moved from Lines).
-      fields={value && tab === 'overview' ? <RecordCustomFields record={{ type: 'SalesOrder', id: value.id }} title={value.number} /> : null}
+      fields={value && tab === 'overview' ? <RecordCustomFields record={{ type: 'SalesOrder', id: value.id }} title={value.number} version={value.version /* F-OO-213 */} onSaved={fieldsSaved} /> : null}
       actions={{
         // ---- F-OP-134: each tab's acts (the band; Overview; Lines; Production; Money) ----
         ...band.actions,

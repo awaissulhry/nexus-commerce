@@ -16,8 +16,11 @@ type Choice = { readonly id: string; readonly name: string }
  * that applies). The choices a person field and a file field offer are read only when the person starts editing: the
  * record's people (`GET …/people`) with threads.post, its files (`GET /files`) with files.read (without it the file field says
  * so: `files` null). A failed read of either leaves the choices empty; a value already set still shows its own words.
+ * F-OO-213 (B-OO-014): `version` and `onSaved` — a page whose record's values are part of the record (the order page: a sales order)
+ * gives the version it read (sent with each save) and hears the version a save moved it to (it reads the record again, quietly).
+ * Every other record page gives neither and behaves as before.
  */
-export function RecordCustomFields({ record, title }: { record: { type: string; id: string }; title: string }) {
+export function RecordCustomFields({ record, title, version, onSaved }: { record: { type: string; id: string }; title: string; /* F-OO-213 */ version?: number; onSaved?: (version: number) => void }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const key = useMemo(() => ({ type: record.type, id: record.id }), [record.type, record.id])
@@ -49,7 +52,7 @@ export function RecordCustomFields({ record, title }: { record: { type: string; 
     }
   }, [api, key, mayPeople, mayFiles])
 
-  const section = useCustomFields({ api, record: key, title, people, files })
+  const section = useCustomFields({ api, record: key, title, people, files, version, onSaved }) // F-OO-213: the record's version
   // Edit first reads the choices (once per record), then opens the section's edit as before.
   const actions: CustomFieldsActions = {
     ...section.actions,

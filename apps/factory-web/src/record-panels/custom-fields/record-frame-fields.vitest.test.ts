@@ -63,7 +63,8 @@ describe('B-TH-280 — RecordCustomFields, the container', () => {
   const source = readFileSync(new URL('./RecordCustomFields.tsx', import.meta.url), 'utf8')
 
   it('draws the section with the same hook and view the old panels used; nothing at all when there is no section', () => {
-    expect(source).toContain('useCustomFields({ api, record: key, title, people, files })')
+    // F-OO-213: the record's version and the page's onSaved go with it (only the order page gives them).
+    expect(source).toContain('useCustomFields({ api, record: key, title, people, files, version, onSaved })')
     expect(source).toContain('<CustomFieldsPanel model={section.model} actions={actions} />')
     expect(source).toContain('if (!section.model) return null')
   })
