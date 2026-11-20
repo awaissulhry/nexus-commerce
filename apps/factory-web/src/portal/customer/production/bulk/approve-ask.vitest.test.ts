@@ -119,7 +119,11 @@ describe('the bar: Approve and Ask ▾ (at most five actions)', () => {
   it('"Ask us" on one row opens the order’s Ask dialog at Urgent, only over the limit or from Cutting; never on our lock or an ask waiting', () => {
     const use = { used: 1, max: 3, agreed: 0, left: 2, over: false, words: w('1 of 3 urgent used') }
     const facts = { urgencyOn: true, mayAsk: true, use }
-    expect(askUsHrefOf(`/p/${BRAND_BETA.code}`, row(B1, 1), facts)).toBe(`/p/${BRAND_BETA.code}/orders/${B1}?tab=status&ask=RUSH`)
+    // F-MS-105: "from Cutting" is the floor's real cut (the API's cutStarted), never the stage.
+    expect(askUsHrefOf(`/p/${BRAND_BETA.code}`, row(B1, 1, { cutStarted: true }), facts)).toBe(`/p/${BRAND_BETA.code}/orders/${B1}?tab=status&ask=RUSH`)
+    expect(askUsHrefOf('/p/X', row(B1, 1, { cutStarted: false }), facts)).toBeNull() // Sewing on screen, nothing cut: Mark urgent acts at once
+    expect(askUsHrefOf('/p/X', row(B1, 1), facts)).toBeNull() // an answer before the field: not started
+    expect(askUsHrefOf('/p/X', row(B1, 1, { stage: { code: 'PREPARING', words: w('Preparing'), since: null, next: null }, cutStarted: true }), facts)).toBe(`/p/X/orders/${B1}?tab=status&ask=RUSH`)
     expect(askUsHrefOf('/p/X', row(B1, 1, { stage: { code: 'PREPARING', words: w('Preparing'), since: null, next: null } }), facts)).toBeNull()
     expect(askUsHrefOf('/p/X', row(B1, 1, { stage: { code: 'PREPARING', words: w('Preparing'), since: null, next: null } }), { ...facts, use: { ...use, used: 3, left: 0 } })).toBe(`/p/X/orders/${B1}?tab=status&ask=RUSH`)
     expect(askUsHrefOf('/p/X', row(B1, 1, { urgency: urgency({ locked: true }) }), facts)).toBeNull()

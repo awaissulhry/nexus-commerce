@@ -5,7 +5,7 @@ import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/cata
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
-import { forbiddenKeysIn } from '@nexus/factory-domain/production-brand/portal-read'
+import { forbiddenKeysIn, nextMilestoneOf } from '@nexus/factory-domain/production-brand/portal-read'
 import { PROMISE_REASON_WORDS } from '@nexus/factory-domain/sales/portal-orders/promise'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
@@ -49,6 +49,9 @@ import { findMarkers, markersOf, productionTwoBrands, twoBrandIds, twoBrandSessi
  *   PW-15   no portal read or file carries a supervisor, an office person, the office's note or another customer's figure
  *   and     the list order, urgency off (no urgency in the read, marks kept), the reported problem's states ("Waiting on us since",
  *           "Answered", "Answered in your order N"), the CSV export of every own row with urgency.
+ *   B-MS-007 a stage set by hand (written directly, as the keeper's tests write rows) reads as a plain stage in the list, the file
+ *           and the order; `cutStarted` follows the floor's real cuts (A's SEED-SO-0002: the seed's cut and bundles), never the
+ *           stage; no answer says "by hand", names who or carries the office's note or a hidden key; B reads nothing of it.
  *
  * Every answer B got is scanned for A's names, codes, numbers and ids and for every office word written here. Every name and number
  * is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/production/brand-portal`.
@@ -97,6 +100,7 @@ const OFFICE_WORDS = {
   gateLabel: 'Made-up office gate: Zeta tannery visit',
   overrideReason: 'Made-up override: planner Pietro decided',
   swatchNote: 'Made-up swatch note: lot Zeta-12',
+  handNote: 'Made-up office note: the scanners of hall two are down', // B-MS-007
 }
 const BETA_HOLD_WORDS = 'Made-up: we wait for the lining to arrive'
 const office = { supervisorId: newId() }
@@ -140,6 +144,42 @@ async function get(who: keyof typeof people, url: string, status = 200): Promise
 }
 
 const day = (offsetDays: number) => businessDate(new Date(Date.now() + offsetDays * 86_400_000))
+
+// ── B-MS-007 ──
+/**
+ * A stage set by hand, written directly as the keeper's tests write rows (the office's set is B-MS-005's route): the shown stage
+ * in `stage` and the five hidden columns beside it (the guard: `stage` = `stageSet` while it stands, set by an active office
+ * person: B's supervisor here). Cleared the same way, back to the stage and day the row had (as a Clear puts back the floor's).
+ */
+async function handSet(salesOrderId: string, stage: 'CUTTING' | 'SEWING' | 'QUALITY'): Promise<{ readonly stage: string; readonly stageAt: Date }> {
+  const key = `brand-production:${salesOrderId}`
+  const before = await one<{ stage: string; stageAt: Date }>('SELECT stage::text, "stageAt" FROM "BrandOrderProduction" WHERE key = $1', [key])
+  await admin(
+    `UPDATE "BrandOrderProduction" SET stage = $2::"BrandStage", "stageAt" = now(), "stageSet" = $2::"BrandStage", "stageSetReason" = 'OUTAGE', "stageSetNote" = $3,
+       "stageSetAt" = now(), "stageSetById" = $4, version = version + 1
+     WHERE key = $1`,
+    [key, stage, OFFICE_WORDS.handNote, office.supervisorId],
+  )
+  return before
+}
+async function handCleared(salesOrderId: string, back: { readonly stage: string; readonly stageAt: Date }): Promise<void> {
+  await admin(
+    `UPDATE "BrandOrderProduction" SET stage = $2::"BrandStage", "stageAt" = $3, "stageSet" = NULL, "stageSetReason" = NULL, "stageSetNote" = NULL, "stageSetAt" = NULL,
+       "stageSetById" = NULL, version = version + 1
+     WHERE key = $1`,
+    [`brand-production:${salesOrderId}`, back.stage, back.stageAt],
+  )
+}
+/** Nothing in a customer's answer says a stage was set by hand, who set it or why (the words, the note, the person, a hidden key). */
+function saysNothingOfTheHand(answer: unknown): void {
+  const text = typeof answer === 'string' ? answer : JSON.stringify(answer)
+  expect(text).not.toMatch(/by hand|\(a mano\)|impostat[ao] a mano|stageSet|byHand|stageByHand/i)
+  expect(text).not.toMatch(/"OUTAGE"|"FEW_PEOPLE"|"OUTSIDE"/)
+  expect(text).not.toContain(OFFICE_WORDS.handNote)
+  expect(text).not.toContain(office.supervisorId)
+  if (typeof answer === 'object' && answer !== null) expect(forbiddenKeysIn(answer)).toEqual([])
+}
+// ── end B-MS-007 ──
 const setLimits = (partyId: string, level: string, urgencyOn: boolean, max: number) =>
   admin(`UPDATE "PortalSettings" SET "productionLevel" = $2::"ProductionShareLevel", "productionUrgencyOn" = $3, "productionUrgentMax" = $4, version = version + 1 WHERE "partyId" = $1`, [partyId, level, urgencyOn, max]) // B-PR-40: the level alone
 
@@ -369,6 +409,52 @@ describe('B-PR-18 My production (GET /portal/production)', { timeout: SLOW_TEST_
     expect(second.next).toMatchObject({ kind: 'STAGE', stage: 'CUTTING', date: null })
   })
 
+  // ── B-MS-007 ──
+  it('B-MS-007: a stage set by hand reads as a plain Sewing in the list and the file; cutStarted follows the real cuts, never the stage', async () => {
+    const before = await handSet(w.a.salesOrderId, 'SEWING')
+    expect(before.stage).toBe('PREPARING')
+    try {
+      const list = await get('alpha', '/portal/production')
+      const row = (list.items as Json[]).find((item) => item.id === w.a.salesOrderId)
+      if (!row) throw new Error(`A lists its new order: ${JSON.stringify(list.items).slice(0, 300)}`)
+      // The plain stage the customer reads, from the row; nothing was cut on its work order (a draft), so no cut started.
+      expect(row).toMatchObject({ stage: { code: 'SEWING', words: { it: 'Cucitura', en: 'Sewing' }, next: { code: 'QUALITY' } }, cutStarted: false })
+      expect(row.stage.since).not.toBeNull()
+      // The count of the stage it reads is the order's own figure (+ Progress), by the one rule: never "0 of 10 sewn".
+      const order = await get('alpha', `/portal/production/${w.a.salesOrderId}`)
+      expect(row.count).toEqual(nextMilestoneOf({ level: 'PROGRESS', stage: 'SEWING', counts: order.progress.whole, gates: [], planned: null }).count)
+      expect(JSON.stringify(row.count)).not.toMatch(/"0 (of|di) /)
+      // SEED-SO-0002: the seed cut its hide and made its bundles: cutting really started, whatever its stored stage says.
+      expect((list.items as Json[]).find((item) => item.id === w.production.urgent[0])).toMatchObject({ cutStarted: true })
+      saysNothingOfTheHand(list)
+      saysNothingOfTheHand(order)
+
+      // The file: the same plain stage, no word of the hand.
+      const file = await browsers.alpha.get('/portal/production?format=csv')
+      expect(file.status).toBe(200)
+      const content = String(file.response.body)
+      const line = content.split(/\r?\n/).find((entry) => entry.includes(String(row.customerRef)))
+      expect(line, content.slice(0, 400)).toBeDefined()
+      expect(line).toContain('Sewing')
+      saysNothingOfTheHand(content)
+
+      // B reads nothing of A's hand stage: its own rows only, read as before (its second order with no row: Preparing, no cut).
+      const beta = await get('beta', '/portal/production')
+      expect((beta.items as Json[]).map((item) => item.id)).toEqual([beta2.orderId, w.b.salesOrderId])
+      expect((beta.items as Json[]).map((item) => [item.stage.code, item.cutStarted])).toEqual([
+        ['PREPARING', false],
+        ['QUALITY', false],
+      ])
+      saysNothingOfTheHand(beta)
+    } finally {
+      await handCleared(w.a.salesOrderId, before)
+    }
+    // Cleared: Preparing again, still no cut.
+    const after = ((await get('alpha', '/portal/production')).items as Json[]).find((item) => item.id === w.a.salesOrderId)
+    expect(after).toMatchObject({ stage: { code: 'PREPARING' }, cutStarted: false })
+  })
+  // ── end B-MS-007 ──
+
   it('PW-11 (read part): "n of max used" counts only the customer’s own open orders — A 2 of 3, B 0 of 2 — and no answer holds a place', async () => {
     const alpha = await get('alpha', '/portal/production')
     expect(alpha.urgentUse).toEqual({ used: 2, max: 3, agreed: 0, left: 1, over: false, words: { it: '2 urgenti su 3', en: '2 of 3 urgent used' } })
@@ -454,6 +540,34 @@ describe('B-PR-18 one order (GET /portal/production/:orderId)', { timeout: SLOW_
     expect(Array.isArray(order.promiseHistory)).toBe(true)
     expect(order.gates.gates).toEqual([])
   })
+
+  // ── B-MS-007 ──
+  it('B-MS-007: the order reads a stage set by hand as a plain Cutting; cutStarted from the real cuts; never who, why or the note', async () => {
+    const before = await handSet(w.a.salesOrderId, 'CUTTING')
+    try {
+      const order = await get('alpha', `/portal/production/${w.a.salesOrderId}`)
+      // The live floor (Preparing) is not the stage it reads, so no "1 line ahead" and no "sewing not counted" is drawn beside it.
+      expect(order).toMatchObject({
+        stage: { code: 'CUTTING', words: { it: 'Taglio', en: 'Cutting' }, next: { code: 'SEWING' }, ahead: 0, aheadWords: null, sewingNotCounted: false, sewingNotCountedWords: null },
+        cutStarted: false,
+      })
+      saysNothingOfTheHand(order)
+      // Cutting really started on SEED-SO-0002 (the seed's cut and bundles), and on none of B's orders.
+      expect(await get('alpha', `/portal/production/${w.production.urgent[0]}`)).toMatchObject({ cutStarted: true })
+      expect(await get('beta', `/portal/production/${w.b.salesOrderId}`)).toMatchObject({ stage: { code: 'QUALITY' }, cutStarted: false })
+      expect(await get('beta', `/portal/production/${beta2.orderId}`)).toMatchObject({ stage: { code: 'PREPARING' }, cutStarted: false })
+      // A's order is as unknown to B as a wrong id while its stage is set by hand: the same 404, the same words.
+      const foreign = await browsers.beta.get(`/portal/production/${w.a.salesOrderId}`)
+      seenByB.push({ url: 'A order (stage set by hand)', body: foreign.body })
+      const unknown = await browsers.beta.get(`/portal/production/${newId()}`)
+      expect([foreign.status, unknown.status]).toEqual([404, 404])
+      expect(refusalOf(foreign.body)).toEqual(refusalOf(unknown.body))
+    } finally {
+      await handCleared(w.a.salesOrderId, before)
+    }
+    expect(await get('alpha', `/portal/production/${w.a.salesOrderId}`)).toMatchObject({ stage: { code: before.stage }, cutStarted: false })
+  })
+  // ── end B-MS-007 ──
 })
 
 describe('B-PR-18 the problems B reported (R-42, R-43)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {

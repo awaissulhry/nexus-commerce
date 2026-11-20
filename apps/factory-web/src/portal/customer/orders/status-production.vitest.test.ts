@@ -163,6 +163,23 @@ describe('the rules behind it (production/model, F-PR-12a block)', () => {
     expect(stageNoteOf(production({ stage: null }), 'en')).toBeNull()
   })
 
+  // ---- F-MS-105 (R13): a stage whose own count is 0 reads "Count to follow" (the domain's COUNT_TO_FOLLOW_WORDS, the list's rule),
+  // never "0 of 40 sewn"; honest for a stage the floor only started, and it says nothing of who moved the stage.
+  it('F-MS-105: a count of 0 reads "count to follow", never "0 of 40"; "sewing not counted" and the other counts as before', () => {
+    const counts = (whole: Partial<NonNullable<ProductionOrder['progress']>['whole']>) => ({ progress: { ...production().progress!, whole: { ...production().progress!.whole, ...whole } } })
+    expect(stageNoteOf(production(counts({ sewn: 0 })), 'en')).toBe('Sewing · Count to follow · 1 line ahead')
+    expect(stageNoteOf(production(counts({ sewn: 0 })), 'it')).toBe('Confezione · Conteggio in arrivo · 1 riga avanti')
+    const cutting = production({ ...counts({ cut: 0 }), stage: { ...production().stage!, code: 'CUTTING', words: { it: 'Taglio', en: 'Cutting' }, ahead: 0, aheadWords: null } })
+    expect(stageNoteOf(cutting, 'en')).toBe('Cutting · Count to follow')
+    expect(stageNoteOf(cutting, 'it')).toBe('Taglio · Conteggio in arrivo')
+    for (const locale of ['en', 'it'] as const) expect(stageNoteOf(production(counts({ sewn: 0 })), locale)).not.toMatch(/\b0 (of|di) /)
+    // Sewing not scanned there: still no count at all (never 0), as before.
+    const notCounted = production({ ...counts({ sewn: 0 }), stage: { ...production().stage!, sewingNotCounted: true, sewingNotCountedWords: { it: 'Confezione non contata qui', en: 'Sewing not counted here' } } })
+    expect(stageNoteOf(notCounted, 'en')).toBe('Sewing · Sewing not counted here · 1 line ahead')
+    expect(stageNoteOf(production(counts({ sewn: 1 })), 'en')).toBe('Sewing · 1 of 40 sewn · 1 line ahead')
+  })
+  // ---- end F-MS-105
+
   it('holds keep only our curated words; Waiting for you once built (F-PR-14: built), else Home', () => {
     expect(holdsOf(production().holds, 'it').map((hold) => [hold.kind, hold.customerWords])).toEqual([
       ['BRAND', 'In pausa su vostra richiesta'],

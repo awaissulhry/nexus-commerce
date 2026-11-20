@@ -131,6 +131,8 @@ export const productionRowSchema = z.object({
   next: next.nullable(),
   count: count.nullable(),
   problem: problemState.nullable().optional(), // F-PR-24
+  /** F-MS-105 (the API's B-MS-007, R8): cutting REALLY started (the floor's cut facts, never the stage); absent: an older answer. */
+  cutStarted: z.boolean().optional(),
 })
 export type ProductionRow = z.infer<typeof productionRowSchema>
 
