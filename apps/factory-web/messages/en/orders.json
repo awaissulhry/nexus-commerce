@@ -998,6 +998,39 @@
       "net": "Net: shown to people who see prices"
     }
   },
+  "facts": {
+    "requested": {
+      "title": "Change the requested date of {number}",
+      "date": "New requested date",
+      "dateHint": "Today or later. Saved as amendment {revision}.",
+      "reasonHint": "Kept with the amendment on the Changes tab.",
+      "problem": {
+        "past": "The requested date is today or later",
+        "same": "It is the requested date already"
+      }
+    },
+    "payment": "Payment · currency",
+    "languageTax": "Language · tax mode",
+    "made": "Made",
+    "madeBy": "{date} by {name} · changed {changed}",
+    "madeNoName": "{date} · changed {changed}",
+    "ordered": "ordered {date}",
+    "fixed": "Fixed",
+    "fixedTitle": "Set when the order was made; it does not change.",
+    "set": "Set…",
+    "unread": "Could not be read",
+    "note": {
+      "label": "Office note",
+      "tag": "Only the office sees it",
+      "empty": "No note",
+      "title": "Office note · {number}",
+      "hint": "Only the office reads it; the customer never does.",
+      "go": "Save note",
+      "long": "The note is at most {max} characters",
+      "same": "It is the note already",
+      "saved": "Office note saved."
+    }
+  },
   "editor": {
     "add": {
       "title": "Add a style",
@@ -1614,8 +1647,6 @@
       "title": "People",
       "backup": "Backup",
       "answers": "Answers the customer",
-      "madeBy": "Made by",
-      "madeByOn": "{name} · {date}",
       "where": "Where it is made",
       "notPlanned": "Not planned yet",
       "held": "Who works on it is shown to people who follow production."
@@ -1647,14 +1678,7 @@
     },
     "facts": {
       "title": "Order facts",
-      "customerRef": "Customer PO",
-      "language": "Language",
-      "lang": {
-        "it": "Italian",
-        "en": "English"
-      },
-      "made": "Made · changed",
-      "madeValue": "{made} · {changed}"
+      "customerRef": "Customer PO"
     }
   },
   "mtm": {

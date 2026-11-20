@@ -998,6 +998,39 @@
       "net": "Imponibile: visibile a chi vede i prezzi"
     }
   },
+  "facts": {
+    "requested": {
+      "title": "Cambia la data richiesta di {number}",
+      "date": "Nuova data richiesta",
+      "dateHint": "Da oggi in poi. Salvata come modifica {revision}.",
+      "reasonHint": "Resta con la modifica nella scheda Modifiche.",
+      "problem": {
+        "past": "La data richiesta è da oggi in poi",
+        "same": "È già la data richiesta"
+      }
+    },
+    "payment": "Pagamento · valuta",
+    "languageTax": "Lingua · regime fiscale",
+    "made": "Creato",
+    "madeBy": "{date} da {name} · modificato il {changed}",
+    "madeNoName": "{date} · modificato il {changed}",
+    "ordered": "ordinato il {date}",
+    "fixed": "Fisso",
+    "fixedTitle": "Fissato quando l'ordine è stato creato; non cambia.",
+    "set": "Imposta…",
+    "unread": "Non è stato possibile leggerlo",
+    "note": {
+      "label": "Nota dell'ufficio",
+      "tag": "Solo l'ufficio la vede",
+      "empty": "Nessuna nota",
+      "title": "Nota dell'ufficio · {number}",
+      "hint": "La legge solo l'ufficio; il cliente mai.",
+      "go": "Salva la nota",
+      "long": "La nota è al massimo di {max} caratteri",
+      "same": "È già questa la nota",
+      "saved": "Nota dell'ufficio salvata."
+    }
+  },
   "editor": {
     "add": {
       "title": "Aggiungi un modello",
@@ -1614,8 +1647,6 @@
       "title": "Persone",
       "backup": "Sostituto",
       "answers": "Risponde al cliente",
-      "madeBy": "Creato da",
-      "madeByOn": "{name} · {date}",
       "where": "Dove si produce",
       "notPlanned": "Non ancora pianificato",
       "held": "Chi ci lavora è visibile a chi segue la produzione."
@@ -1647,14 +1678,7 @@
     },
     "facts": {
       "title": "Dati dell'ordine",
-      "customerRef": "Ordine del cliente",
-      "language": "Lingua",
-      "lang": {
-        "it": "Italiano",
-        "en": "Inglese"
-      },
-      "made": "Creato · modificato",
-      "madeValue": "{made} · {changed}"
+      "customerRef": "Ordine del cliente"
     }
   },
   "mtm": {

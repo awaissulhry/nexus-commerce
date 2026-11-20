@@ -14,6 +14,8 @@ import { amountText, closeHeld, closeNeedsReason, dayInstant, linePromisesAllowe
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { CancelDialog, CloseLinesDialog, CompareDialog, CopyQuoteDialog, ReopenLinesDialog } from './DailyDialogs'
 import { SplitOrderDialog } from './SplitOrderDialog' // F-OP-111
+import { RequestedDateDialog } from './RequestedDateDialog' // F-OO-144
+import { OrderNoteDialog } from './OrderNoteDialog' // F-OO-210
 
 // ---- F-CP-108 (customer page plan C2b; lane agreement (a), the order lead's yes): TYPE ONLY — Mark ready, Close order (and the Cancel
 // in DailyDialogs) are exported with the narrow part of the record's model and actions they read, so the Orders sheet's row mounts
@@ -53,6 +55,8 @@ export function OrderDialogs({ order, model, actions }: { order: Order; model: O
       return <CancelDialog order={order} model={model} actions={actions} />
     case 'split': // F-OP-111
       return <SplitOrderDialog order={order} model={model} actions={actions} />
+    case 'requested': // F-OO-144: Next dates' "Requested by customer" — one amendment (every line as it is + the new date)
+      return <RequestedDateDialog order={order} model={model} actions={actions} />
     // Money (use-money-acts).
     case 'depositLink':
       return <LinkDialog order={order} requestId={dialog.requestId} model={model} actions={actions} />
@@ -60,6 +64,9 @@ export function OrderDialogs({ order, model, actions }: { order: Order; model: O
       return <PaymentDialog order={order} requestId={dialog.requestId} model={model} actions={actions} />
     case 'sdiSend':
       return <SdiDialog order={order} invoiceId={dialog.invoiceId} model={model} actions={actions} />
+    // Overview (use-overview-acts; F-OO-210: Order facts' office note — the Orders sheet's own write).
+    case 'note':
+      return <OrderNoteDialog order={order} model={model} actions={actions} />
     // Changes (the container's own read).
     case 'compare':
       return <CompareDialog order={order} amendmentId={dialog.amendmentId} model={model} actions={actions} />

@@ -39,6 +39,7 @@ import type { ChangeReviewActions, ChangeReviewModel } from '../../../home/appro
 // F-CP-142: Money's "Price check" card and the ONE customer's-price window it opens (so/price-check, F-CP-114).
 import type { PriceCheckCardActions, PriceCheckCardModel } from './price-check-card'
 import type { PriceCheckDialogActions, PriceCheckDialogModel } from '../price-check/use-price-check'
+import { amendBodyOf, amendHeld, draftOf } from '../daily-model' // F-OO-144: Requested's small dialog (the amend builder, its rule)
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -60,12 +61,18 @@ export type BandDialog = { kind: 'promise' } | { kind: 'ready' } | { kind: 'clos
 /** use-lines-acts: the lines (close and reopen lines, the cancel; F-OP-111: the split; F-OP-106: the amendment has no dialog — its strip). */
 // F-OO-124: Close short / Reopen ONE line (Overview › Progress by line ⋯): `lineIds` — the lines the dialog opens ticked (absent: every
 // line it offers, as the band's ⋯ and the Lines tab open it).
-export type LinesDialog = { kind: 'closeLines'; lineIds?: readonly string[] } | { kind: 'reopenLines'; lineIds?: readonly string[] } | { kind: 'cancel' } | { kind: 'split' }
+// F-OO-144: `requested` — Next dates' "Requested by customer" Change…: a small dialog, ONE amendment (every line as it is + the new date).
+export type LinesDialog = { kind: 'closeLines'; lineIds?: readonly string[] } | { kind: 'reopenLines'; lineIds?: readonly string[] } | { kind: 'cancel' } | { kind: 'split' } | { kind: 'requested' }
 /** use-money-acts: the deposits and payments (the bank-details page, the payment, the TD02's send to SDI). */
 export type MoneyDialog = { kind: 'depositLink'; requestId: string } | { kind: 'depositPayment'; requestId: string } | { kind: 'sdiSend'; invoiceId: string }
 /** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
 export type ChangesDialog = { kind: 'compare'; amendmentId: string }
-export type RecordDialog = BandDialog | LinesDialog | MoneyDialog | ChangesDialog
+/**
+ * F-OO-210: use-overview-acts — Order facts' office note (the sheet's own write). `refused`: its refusal in this page's words, said in
+ * the dialog (what was typed stays; a new opening starts without it).
+ */
+export type OverviewDialog = { kind: 'note'; refused?: Phrase }
+export type RecordDialog = BandDialog | LinesDialog | MoneyDialog | ChangesDialog | OverviewDialog /* F-OO-210 */
 
 // ---- F-OO-124: the lines Close remaining lines / Reopen lines opens with ticked ----
 /**
@@ -81,6 +88,35 @@ export function dialogLinesOf(dialog: RecordDialog | null, kind: 'closeLines' | 
 
 /** F-OO-125: a style group's card in the Lines edit mode (Overview › Progress by line ⋯ "Change quantity or sizes…" focuses it). */
 export const amendStyleAnchorOf = (styleId: string): string => `amend-style-${styleId}`
+
+/** F-OO-209: the customer PO field of the Lines edit mode (Overview › Order facts' Customer PO "Change…" focuses it: one edit path). */
+export const CUSTOMER_REF_FIELD_ID = 'amend-customer-ref'
+
+// ---- F-OO-144 (order overview 10-design §4.2; review F7): "Requested by customer" — a small dialog, no page hop, no API change ----
+/**
+ * The ONE amendment the dialog sends, built by the amend builder the Lines edit mode uses (daily-model amendBodyOf): every line as it
+ * is (its whole size grid, no price, no text: so no line can be removed or closed short by mistake), the new requested date, the
+ * order's version as read and the reason. The customer PO and the delivery address stay as they are (not sent).
+ */
+export function requestedBodyOf(order: Order, date: string, reason: string) {
+  const body = amendBodyOf({ lines: draftOf(order), customerRef: order.customerRef ?? '', requestedDate: date }, order)
+  return { version: order.version, reason: reason.trim(), ...body }
+}
+
+/** The dialog's own problem with what is typed, or null: a date from today on, not the requested date already; a reason. */
+export function requestedProblem(input: { readonly date: string; readonly reason: string; readonly today: string; readonly current: string | null }): Phrase | null {
+  if (input.date === '') return { key: 'promise.problem.date' }
+  if (input.date < input.today) return { key: 'facts.requested.problem.past' }
+  if (input.date === input.current) return { key: 'facts.requested.problem.same' }
+  if (input.reason.trim() === '') return { key: 'promise.problem.reason' }
+  return null
+}
+
+/** Why the dialog's Change the date waits: the amendment's own rule (amendHeld), else a draft open on Lines (review or discard it first). */
+export function requestedHeld(order: Order, model: Pick<OrderRecordModel, 'can' | 'amend'>): Phrase | null {
+  return amendHeld(order, model.can) ?? (model.amend ? { key: 'held.amending' } : null)
+}
+// ---- end F-OO-144
 
 /** One write of the page (the container's): the order it answers replaces the page's; a refusal is said in the dialog or the notice. */
 export type RecordWrite = (run: () => Promise<Order | null>, success: string | null, keepDialog?: boolean) => Promise<void>
@@ -420,10 +456,16 @@ export interface OrderRecordActions {
   /** F-SA-232: read the production again (Try again); open a line's sizes (null closes the window). */
   onRetryProduction?: () => void
   onOpenLine?: (rowId: string | null) => void
-  /** F-OP-104: Next dates' requested date "Change…" — edit mode on Lines with its field focused. */
+  /** F-OP-104: Next dates' requested date "Change…"; F-OO-144: it opens the small dialog (`{ kind: 'requested' }`), no page hop. */
   onRequestedChange?: () => void
+  /** F-OO-144: the dialog's Change the date — ONE amendment: every line as it is, the new date, the version, the reason. */
+  onRequestedDate?: (input: { readonly date: string; readonly reason: string }) => void
   /** F-OO-125: a line's "Change quantity or sizes…" (Overview › Progress by line ⋯) — edit mode on Lines, its style group focused. */
   onLineChange?: (styleId: string) => void
+  /** F-OO-209: Order facts' Customer PO "Change…" — edit mode on Lines, the customer PO focused (the one edit path). */
+  onCustomerRefChange?: () => void
+  /** F-OO-210: the office note dialog's Save note — the Orders sheet's own write (sales.orders.editCells) with the order's version. */
+  onNoteSave?: (note: string) => void
   /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
   people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
   /** F-CP-142: the Price check card (Customer's price…, Take them over, Try again) and the ONE window's own actions. */
