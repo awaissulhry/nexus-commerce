@@ -124,7 +124,7 @@ async function orderSources(db: Reader, site: SiteRow, onlyPlant: boolean): Prom
         : line.sizes.map((size) => ({ size: size.size, ordered: size.quantity, shipped: shipped.get(`${line.id}|${size.size}`) ?? 0 })),
       deliveries: line.deliveries.map((delivery) => ({ date: dayOf(delivery.deliveryDate), sizeQuantities: sizeQuantitiesOf(delivery.sizeQuantities), quantity: delivery.quantity })),
     })
-    // B-W2a-22's readDemand: the plan counts CONFIRMED and IN_PRODUCTION orders only.
+    // B-W2a-22's readDemand: the plan counts CONFIRMED and IN_PRODUCTION orders, and (B-OO-016) PARTLY_SHIPPED ones.
     const planned = (PLANNED_ORDER_STATUSES as readonly string[]).includes(line.order.status)
     for (const part of parts) {
       sources.push({

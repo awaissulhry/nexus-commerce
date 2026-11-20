@@ -199,8 +199,9 @@ export interface DemandPiece {
   readonly date: BusinessDate | null
   readonly pieces: number
   /**
-   * Today's material plan (MRP, B-W1-29 / B-W2a-22) buys for it: an order line of a CONFIRMED or IN_PRODUCTION order placed at the
-   * site (a made-to-measure unit as one base-size unit, PLN-063). Everything else takes machines but no material is planned for it.
+   * Today's material plan (MRP, B-W1-29 / B-W2a-22) buys for it: an order line of a CONFIRMED, IN_PRODUCTION or (B-OO-016)
+   * PARTLY_SHIPPED order placed at the site (a made-to-measure unit as one base-size unit, PLN-063). Everything else takes
+   * machines but no material is planned for it.
    */
   readonly planned: boolean
 }

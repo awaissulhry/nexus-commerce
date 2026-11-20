@@ -1428,5 +1428,31 @@ describe('SEED-SO-0002 is seeded PARTLY_SHIPPED, the status its facts give (B-OO
     expect(await follows()).toHaveLength(2)
     expect(await one<{ version: number }>('SELECT version FROM "SalesOrder" WHERE id = $1', [so2])).toEqual(before)
   })
+
+  // B-OO-016 (Owner pick A, the material plan): a partly shipped order stays in MRP (factory-domain planning/explode
+  // PLANNED_ORDER_STATUSES). Its open work order SEED-WO-0001 still needs leather, which the release check counts as promised.
+  it('the material plan still plans it: its open work order is bought for; the shipped piece, cut from issued leather, is not bought again', async () => {
+    SESSIONS['h.planner'] = () => ({ audience: 'office', tenantId: TH, actorId: newId(), grants: [grant(['planning.view', 'planning.run'])] })
+    const siteA1 = seedUuid(NS_H, 'site:A1')
+    const leather = seedUuid(NS_H, 'product:item:leather')
+    await ok('h.planner', 'POST', '/planning/runs', { siteId: siteA1, note: 'B-OO-016' }, 201)
+    const plan = await ok('h.planner', 'GET', `/planning/runs/latest?siteId=${siteA1}&itemId=${leather}`)
+    /** SEED-SO-0002's sources of the plan's leather line in a colour: size, pieces to make, made, needed, of it issued, work orders. */
+    const so2Of = (colour: 'BLK' | 'RED'): Json[] =>
+      (((plan.lines as Json[]).find((line) => line.colour?.id === seedUuid(NS_H, `product:item-colour:leather:${colour}`))?.sources ?? []) as Json[])
+        .filter((source) => source.orderNumber === 'SEED-SO-0002')
+        .map((source) => ({ size: source.size, pieces: source.pieces, made: source.made, quantity: source.quantity, issued: source.issued, workOrders: source.workOrders }))
+    expect(await statusOf(so2)).toBe('PARTLY_SHIPPED')
+    // Planned: every size of both lines is a source of the plan, on the open SEED-WO-0001 (no finished work order made one).
+    expect(so2Of('BLK').map((source) => source.size).sort()).toEqual(['50', '52', '54'])
+    expect(so2Of('RED').map((source) => source.size).sort()).toEqual(['50', '52', '54'])
+    expect([...so2Of('BLK'), ...so2Of('RED')].every((source) => source.made === 0 && source.workOrders.includes('SEED-WO-0001'))).toBe(true)
+    // Not left in SEED-SH-0001 and nothing issued for it: RED 54 is bought for in full.
+    expect(so2Of('RED').find((source) => source.size === '54')).toMatchObject({ pieces: 1, quantity: '53.2000', issued: '0.0000' })
+    // BLK 50 left in SEED-SH-0001; it was cut from the 53.2 FT2 of black leather issued to SEED-WO-0001, which covers its need:
+    // nothing more is bought for it.
+    expect(so2Of('BLK').find((source) => source.size === '50')).toMatchObject({ pieces: 1, quantity: '48.1600', issued: '48.1600' })
+    // (SEED-SH-0001's other piece, RED 52, has no red leather issued in the seeds: the plan counts it, as the release check does.)
+  })
 })
 // ── end B-OO-016 ──

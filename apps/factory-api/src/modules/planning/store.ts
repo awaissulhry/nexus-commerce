@@ -103,7 +103,8 @@ export interface DemandRead {
 }
 
 /**
- * The open order lines planned at the site (CONFIRMED and IN_PRODUCTION orders of its company): those made at the site,
+ * The open order lines planned at the site (CONFIRMED, IN_PRODUCTION and, B-OO-016, PARTLY_SHIPPED orders of its company,
+ * factory-domain planning/explode `PLANNED_ORDER_STATUSES`): those made at the site,
  * and those with no making site yet when the site is its company's only ACTIVE plant (else they are listed, not planned).
  * Each with the revision to explode: the line's own, else the style's RELEASED one.
  */

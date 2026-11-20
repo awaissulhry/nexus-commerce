@@ -17,9 +17,10 @@ import type { PlanLevel } from './lot-sizing/parameters'
  * explode the open orders through their BOMs per size and colour, take off what their work orders already hold, net
  * against usable stock and open purchase orders (./netting), and suggest what to buy or make (./buy).
  *
- * Demand. Every size-grid line (and made-to-measure unit) of a CONFIRMED or IN_PRODUCTION order planned at the site is
- * exploded through ONE revision: the line's own (the order fixes it), else the style's RELEASED one; a line with
- * neither is not planned (warning NO_RELEASED_BOM). Per garment of each size in the line's colourway the BOM math is the
+ * Demand. Every size-grid line (and made-to-measure unit) of a CONFIRMED, IN_PRODUCTION or PARTLY_SHIPPED order planned at
+ * the site (B-OO-016: a partly shipped order's open work still needs its material) is exploded through ONE revision: the
+ * line's own (the order fixes it), else the style's RELEASED one; a line with neither is not planned (warning
+ * NO_RELEASED_BOM). Per garment of each size in the line's colourway the BOM math is the
  * product module's (product/bom/requirements `exactRequirements`: quantity per size × (1 + wastage), in each material's
  * base unit, exact); times the pieces, rounded UP to four decimals once per order line and size (never plan less).
  *
@@ -49,7 +50,10 @@ import type { PlanLevel } from './lot-sizing/parameters'
  * order whose material has no demand any more is still carried, as a line of its own with nothing needed.
  */
 
-export const PLANNED_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION'] as const
+// B-OO-016 (Owner pick A): PARTLY_SHIPPED too. Its open work orders still need material (the release check counts it as
+// promised), so the plan buys for them. A shipped piece is not bought again: a finished work order made it (taken off the
+// pieces), or it was cut from material issued to its open work order (taken off the need). READY stays out: its pieces are made.
+export const PLANNED_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'PARTLY_SHIPPED'] as const
 // W2a wave 5 (factory-db production.prisma): ON_HOLD.
 export const WORK_ORDER_STATUSES = ['DRAFT', 'RELEASED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED', 'ON_HOLD'] as const
 export type WorkOrderStatus = (typeof WORK_ORDER_STATUSES)[number]
