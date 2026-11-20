@@ -21,24 +21,20 @@
   color: var(--nds-text-muted);
 }
 
-/* The supervisor's fact takes the value and the doors' columns. */
-.fw-so-people-wide {
-  grid-column: 2 / -1;
-  min-width: 0;
-}
-
 @container fw-so-ov-card (max-width: 479px) {
   .fw-so-people-list {
     grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  /* F-OO-132: the supervisor's doors (SupervisorFact's row face) wrap under the words as every row's doors do. */
+  .fw-so-people-list > .fw-so-ov-row > .fw-psv-doors {
+    grid-column: 1 / -1;
+    justify-self: end;
   }
 }
 
 @container fw-so-ov-card (max-width: 359px) {
   .fw-so-people-list {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .fw-so-people-wide {
-    grid-column: 1 / -1;
   }
 }

@@ -119,3 +119,41 @@ describe('F-OO-131: People — one aligned list, label | value | one door; Follo
   })
 })
 // ---- end F-OO-131
+
+// ---- F-OO-132 (10-design §3.2; 13-backend B-OO-008): the supervisor row is SupervisorFact's row face, held by the order's status ----
+describe('F-OO-132: People › Supervisor — the row face; Change… held in its own words by the order’s status; Read-only: no door', () => {
+  const withPeople = ready({ ...PRODUCTION_READ, people: PEOPLE })
+  const people = { mayAssign: true, mayNote: true, assign: null, note: null }
+  const supervisorRow = (status: Parameters<typeof order>[0], over: Partial<OrderRecordModel> = {}, locale: 'en' | 'it' = 'en') => {
+    const value = order(status)
+    const html = render(createElement(PeopleCard, { order: value, model: base('owner', value, { tab: 'overview', production: withPeople, people, ...over }).record }), locale)
+    return html.split('<li class="fw-so-ov-row">').slice(1).find((row) => textOf(row).startsWith(locale === 'en' ? 'Supervisor' : 'Supervisore')) ?? ''
+  }
+
+  it('the value without the icon or a second "Supervisor"; Change… and Ask as doors; in production nothing holds Change…', () => {
+    const row = supervisorRow('IN_PRODUCTION')
+    expect(textOf(row)).toBe('Supervisor Bea Esempio · this order Change… Ask')
+    expect(row).toContain('<span class="fw-psv-doors">')
+    expect(row).not.toContain('<svg')
+    expect(row).not.toContain('aria-disabled')
+  })
+
+  it('a waiting order: "not yet" (B-OO-008’s words); after production: "no longer"; no right: the right’s words — never hidden', () => {
+    expect(supervisorRow('PENDING_APPROVAL')).toContain('aria-description="This order waits for a yes: its supervisor is set once it is confirmed."')
+    expect(supervisorRow('PENDING_APPROVAL', {}, 'it')).toContain('aria-description="Questo ordine aspetta un sì: il supervisore si sceglie quando è confermato."')
+    for (const status of ['SHIPPED', 'CLOSED', 'CANCELLED'] as const) expect(supervisorRow(status), status).toContain('aria-description="This order is no longer in production: its supervisor stays."')
+    expect(supervisorRow('IN_PRODUCTION', { people: { ...people, mayAssign: false } })).toContain('aria-description="Setting a production supervisor needs the right to manage customers')
+  })
+
+  it('Read-only: the supervisor’s value alone — no Change…, no Ask', () => {
+    const row = supervisorRow('IN_PRODUCTION', { people: { ...people, mayAssign: false }, can: abilitiesOf(['orders.view', 'workorders.view']) })
+    expect(textOf(row)).toBe('Supervisor Bea Esempio · this order')
+    expect(row).not.toContain('<button')
+  })
+
+  it('the css: the supervisor’s doors wrap under the words below a 480 px card, as every row’s doors', () => {
+    const css = readFileSync(new URL('../view/overview/people.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/@container fw-so-ov-card \(max-width: 479px\) \{[^@]*\.fw-so-people-list > \.fw-so-ov-row > \.fw-psv-doors \{\s*grid-column: 1 \/ -1;\s*justify-self: end;/)
+  })
+})
+// ---- end F-OO-132

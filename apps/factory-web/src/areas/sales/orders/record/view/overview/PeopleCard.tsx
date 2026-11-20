@@ -12,6 +12,7 @@ import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { PartState } from '../OrderRecordView' // F-OO-131: a failed read says so (never an empty card)
 // ---- F-SA-233: People (the production lane's SupervisorFact in place) ----
 import { SupervisorFact } from '../../../../../_shared/production-supervisor/view/SupervisorFact'
+import { supervisorHeldOf } from '../../../../../_shared/production-supervisor/model' // F-OO-132: why Change… waits
 import { NOTES_NS, openHeld as noteHeld } from '../../../../../production/_shared/notes/model'
 import { FollowersDoor } from '../Discuss' // F-SA-266
 import './people.css' // F-OO-131: the card's own rows
@@ -54,14 +55,15 @@ export function PeopleCard({ order, model, actions }: { order: Order; model: Ord
         <ul className="fw-so-people-list">
           <li className="fw-so-ov-row">
             <span className="fw-so-people-label">{t('people.supervisor')}</span>
-            <span className="fw-so-people-wide">
-              <SupervisorFact
-                fact={view.people.supervisor ? { kind: 'person', name: view.people.supervisor.name, active: view.people.supervisor.active, from: view.people.supervisor.from, me: view.people.supervisor.me, muted: false } : { kind: 'notSet' }}
-                can={!!model.people?.mayAssign}
-                onChange={() => actions?.people?.onAssign?.()}
-                ask={model.people && !readOnly ? { label: notes('open.askFact'), held: askWait ? notes(askWait.key, askWait.params) : null, onAsk: () => actions?.people?.onAsk?.() } : undefined}
-              />
-            </span>
+            {/* F-OO-132: the row face — the value and the doors in this row's columns; Change… held in its own words (no right, the
+                order waits for its yes, the order left production); Read-only gets no door. */}
+            <SupervisorFact
+              face="row"
+              fact={view.people.supervisor ? { kind: 'person', name: view.people.supervisor.name, active: view.people.supervisor.active, from: view.people.supervisor.from, me: view.people.supervisor.me, muted: false } : { kind: 'notSet' }}
+              held={supervisorHeldOf(!!model.people?.mayAssign, order.status)}
+              {...(readOnly ? {} : { onChange: () => actions?.people?.onAssign?.() })}
+              {...(model.people && !readOnly ? { ask: { label: notes('open.askFact'), held: askWait ? notes(askWait.key, askWait.params) : null, onAsk: () => actions?.people?.onAsk?.() } } : {})}
+            />
           </li>
           {/* F-OP-104: the backup is the customer's own setting (for every order of it): read here, changed on its page. */}
           <li className="fw-so-ov-row">
