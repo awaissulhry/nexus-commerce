@@ -147,6 +147,8 @@ export interface MakeWorkOrdersModel {
 export interface MakeWorkOrdersActions {
   /** Open the dialog with the order fixed (on the next style when one is offered). */
   readonly onOpen?: () => void
+  /** F-OO-123: open it for one line (Overview › Progress by line ⋯): the line's style, only that line ticked (still open). */
+  readonly onOpenLine?: (lineId: string) => void
   /** The dialog's own actions (Cancel, the style step, the lines and sizes, Create). */
   readonly dialog?: Pick<WorkOrdersListActions, 'onNew' | 'newOrder'>
 }
