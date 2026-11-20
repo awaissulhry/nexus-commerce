@@ -133,7 +133,7 @@ describe('F-SA-244: Who was told — office people by name and why, the floor an
     expect(changes).toContain('actions?.onWhoWasTold?.(change.messageId)')
     const production = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
     expect(production).toContain("t('told.floorAt', { time: formatTime(floorAt, { locale }) })")
-    const overview = readFileSync(new URL('./view/OverviewTab.tsx', import.meta.url), 'utf8')
+    const overview = readFileSync(new URL('./view/overview/PeopleCard.tsx', import.meta.url), 'utf8') // F-OO-100: People is its own file
     expect(overview).toContain("t('told.aboutChanges', { count: model.told.value.people })")
   })
 })

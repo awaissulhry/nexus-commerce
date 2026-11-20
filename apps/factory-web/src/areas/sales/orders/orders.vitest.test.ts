@@ -995,9 +995,9 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     expect(shipments).toContain("target={{ kind: 'Shipment', id: row.id }} />")
     const requests = read('./record/view/RequestsSection.tsx')
     expect(requests).toContain("target={{ kind: 'OrderChangeRequest', id: request.id }} />")
-    const overview = read('./record/view/OverviewTab.tsx')
-    expect(overview).toContain("target={gateId ? { kind: 'OrderGate', id: gateId } : null} />")
-    expect(overview).toContain('<FollowersDoor />')
+    // F-OO-100: Overview's cards are one file each (view/overview/): Next dates and People hold these doors.
+    expect(read('./record/view/overview/DatesCard.tsx')).toContain("target={gateId ? { kind: 'OrderGate', id: gateId } : null} />")
+    expect(read('./record/view/overview/PeopleCard.tsx')).toContain('<FollowersDoor />')
     const changes = read('./record/changes/view/ChangesTab.tsx')
     expect(changes).toContain('<ShowInThreadDoor order={order} at={entry.at} />')
     expect(changes).toContain('id={`change-${entry.id}`}')

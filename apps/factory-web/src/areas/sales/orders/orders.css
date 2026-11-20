@@ -684,13 +684,7 @@ fieldset.fw-so-colours {
   outline-offset: 2px;
   border-radius: var(--nds-radius-sm);
 }
-/* F-SA-233: People · Next dates · Requests & changes · Linked records · Order facts — a card grid that follows the body's width. */
-.fw-so-overview-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: var(--nds-space-16);
-  min-width: 0;
-}
+/* F-OO-201: the card grid (.fw-so-overview-cards) went: the Overview's pairs are record/view/overview/overview.css. */
 .fw-so-datelist {
   margin: 0;
   padding: 0;
