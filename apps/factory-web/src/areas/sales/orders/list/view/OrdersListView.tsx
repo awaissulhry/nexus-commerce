@@ -126,7 +126,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const locale = useLocale()
   const wide = useWide(model.wide) // B-TH-225: Ordered, Margin %, Priority, Season and From quote at 1920
   // F-CP-107 (cp-fx16): is the Status column on screen (the frame tells; a person's Customise wins)? Until it tells: the preset's.
-  const [statusShown, setStatusShown] = useState(() => statusShownOf(model.preset ?? null))
+  // F-CP-107 (cp-fx17): the setter is setShowsStatus — commands.vitest F-CP-108 guards this view against any status-editor name.
+  const [statusShown, setShowsStatus] = useState(() => statusShownOf(model.preset ?? null))
   const phone = useCardList() // the list frame's own rule (cards below 720 px)
   // ---- end F-CP-107 (cp-fx16)
   const [viewer, setViewer] = useState<string | null>(model.viewerOpen ?? null)
@@ -499,7 +500,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           custom={{ recordType: 'ORDER', companyId: model.company?.id ?? null, partyId: model.customer?.id ?? null, partyOf: (row) => row.partyId, partyFieldsOnPartySheet: true, edit: { held: cellHeld } } /* B-TH-241 / B-TH-242 / B-TH-245: a customer's own columns on its sheet only, edited in their cells */}
           edit={orderEdit /* B-TH-245: the order note and the custom values in their cells; Edit N with the preview; lines never */}
           onShownColumns={(ids) => {
-            setStatusShown(ids.includes('status')) // F-CP-107 (cp-fx16)
+            setShowsStatus(ids.includes('status')) // F-CP-107 (cp-fx16)
             actions?.onShownColumns?.(ids) // B-TH-244: Progress reads the floor only while shown
           }}
           builtInViews={{ items: builtInViewsOf(model, t, s, (value) => formatNumber(value, locale) /* F-CP-103 */), active: builtInActive(model), onPick: (id) => pickBuiltIn(id, model, actions) /* F-SA-221, F-SA-276 */ }}
