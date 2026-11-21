@@ -970,7 +970,7 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     const workOrders = read('./record/view/production/WorkOrdersSection.tsx')
     expect(workOrders).toContain("id={rowAnchor('WorkOrder', row.id)}")
     expect(workOrders).toContain("label={t('productionTab.wo.ask', { number: row.number })} onClick={() => ask(row)}")
-    expect(workOrders).toContain('actions?.people?.onAsk?.({ title:')
+    expect(workOrders).toContain('actions?.people?.onAsk?.(askPresetOf(t, askStarterOf(')
     const money = read('./record/view/MoneyTab.tsx')
     for (const door of ["target={{ kind: 'DepositRequest', id: request.id }} officeOnly", "target={{ kind: 'Invoice', id: invoice.id }} officeOnly", 'target={null} officeOnly']) expect(money).toContain(door)
     const shipments = read('./record/view/ShipmentsTab.tsx')

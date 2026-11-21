@@ -70,7 +70,7 @@ import { MilestoneDialog } from '../../../../planning/milestones/view/MilestoneD
 import { NAMESPACE as PLANNING } from '../../../../planning/milestones/model'
 import type { MilestonesActions, MilestonesModel } from '../../../../planning/milestones/view-model'
 // ---- end F-PT-202
-import { askStarterOf } from '../production/asks' // F-PT-103: the band's "Ask for an update…" is a ready ask
+import { askPresetOf, askStarterOf } from '../production/asks' // F-PT-103: the band's "Ask for an update…" is a ready ask
 // ---- end F-SA-232
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'
@@ -282,8 +282,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
   const people = model.people ?? null
   const askWait = people ? noteHeld(people.mayNote, 1) : null
   // ---- F-PT-103: the ready ask (its title, the starter question naming the promise, Needs an answer ticked), said in the page's words ----
-  const starter = askStarterOf({ number: order.number, promise: production?.headline?.promise.date ?? order.promiseDate }, (value) => formatDate(dayInstant(value), { locale }))
-  const askPreset = { title: t(starter.title.key, starter.title.params), body: t(starter.body.key, starter.body.params), needsAnswer: true, send: t(starter.send.key) }
+  const askPreset = askPresetOf(t, askStarterOf({ number: order.number, promise: production?.headline?.promise.date ?? order.promiseDate }, (value) => formatDate(dayInstant(value), { locale })))
   // ---- end F-PT-103
   // ---- F-OO-111 (BC-2, 10-design §1.7): "Who answers the customer…" is held without threads.post — the People card's own rule and words
   // for the same door (answerHeldOf: choosing who answers needs the right to write in the conversation), never hidden.

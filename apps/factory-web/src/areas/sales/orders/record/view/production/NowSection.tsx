@@ -22,7 +22,7 @@ import { NAMESPACE as DEPTH } from '../../../depth/model'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { healthInputOf, readOf, say } from '../../overview/model'
 import { handRowOf, headlineOf, stageStripOf, stagesShown } from '../../overview/where'
-import { askStarterOf, asksOf, onItOf } from '../../production/asks'
+import { askPresetOf, askStarterOf, asksOf, onItOf } from '../../production/asks'
 import { healthWhyOf, nextStepOf, nowStateOf, piecesOf, placeAnchorOf, urgencyOf, type HealthWhy } from '../../production/now'
 import { ShowInThreadDoor } from '../Discuss'
 import { LineMenuButton } from '../LineMenu'
@@ -48,8 +48,7 @@ export function NowSection({ order, model, actions }: { order: Order; model: Ord
   const stateNow = nowStateOf(order, headline)
   const people = model.people ?? null
   const mayAsk = !!people?.mayNote && stateNow !== 'after'
-  const starter = askStarterOf({ number: order.number, promise: headline?.promise.date ?? order.promiseDate }, day)
-  const ask = () => actions?.people?.onAsk?.({ title: t(starter.title.key, starter.title.params), body: t(starter.body.key, starter.body.params), needsAnswer: true, send: t(starter.send.key) })
+  const ask = () => actions?.people?.onAsk?.(askPresetOf(t, askStarterOf({ number: order.number, promise: headline?.promise.date ?? order.promiseDate }, day)))
 
   // ---- the ⋯: the mark (production.brand.manage — hidden without it, not offered while the dates already say it), Assign
   // supervisor…, Set priority… (the depth's own dialog, held by the order's state with its words). The stage set by hand keeps its ONE

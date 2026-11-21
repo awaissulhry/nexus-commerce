@@ -368,3 +368,19 @@ describe('F-PT-103: a ready ask — the starter question typed in, Needs an answ
   })
 })
 // ---- end F-PT-103
+
+// ---- F-PT-103b (lead): a sales order's band ask names the order in its title; every order door opens the SAME ready ask ----------
+describe('F-PT-103b: the title names the order; Overview’s People card opens the same ready ask', () => {
+  it('a band ask on a sales order (no work order in its targets) says its number', async () => {
+    const { titleOf } = await import('./model')
+    const order = { type: 'SalesOrder' as const, id: 'so1', label: 'SO-2026-0088', partyId: 'p1', partyName: 'Moto Demo', companyId: 'c1' }
+    expect(titleOf({ from: 'band', targets: { workOrders: [], salesOrders: [order], withoutOrder: 0 }, draft: { ...NEW_DRAFT, on: 'salesOrders' } })).toEqual({ key: 'title.ask', params: { number: 'SO-2026-0088' } })
+  })
+
+  it('the People card and the order page build the ask with the one helper', () => {
+    const people = readFileSync(new URL('../../../sales/orders/record/view/overview/PeopleCard.tsx', import.meta.url), 'utf8')
+    expect(people).toContain('actions?.people?.onAsk?.(askPresetOf(t, askStarterOf(')
+    for (const file of ['../../../sales/orders/record/view/production/NowSection.tsx', '../../../sales/orders/record/view/production/WorkOrdersSection.tsx', '../../../sales/orders/record/view/OrderRecordView.tsx']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).toContain('askPresetOf(t, askStarterOf(')
+  })
+})
+// ---- end F-PT-103b
