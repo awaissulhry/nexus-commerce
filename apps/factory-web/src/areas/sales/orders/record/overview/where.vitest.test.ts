@@ -400,7 +400,8 @@ describe('F-OO-105: the strips\' doors — the band\'s yes, the payment, the row
     expect(lift).toMatchObject([{ kind: 'lift', label: 'wo.act.lift', held: null, row: { id: 'wo-1' } }])
     expect(doorsOf(hold('pause', [{ id: 'wo-1', number: 'WO-00021' }]), { work: [row('wo-1', { hold: true })] })).toMatchObject([{ kind: 'lift', label: 'wo.liftPause', held: null }])
     // Sales: the row's own words — production does it (a planner or the production manager).
-    expect(doorsOf(hold('production', [{ id: 'wo-1', number: 'WO-00021' }]), { work: [row('wo-1', { hold: false })], acts: actsCanOf(rolePermissions('sales')) })).toMatchObject([{ kind: 'lift', held: { key: 'wo.heldHold' } }])
+    // F-PT-301 (plan D2 / L9): without the hold right the Lift… door is not drawn (never a grey one) — on Overview as on Production.
+    expect(doorsOf(hold('production', [{ id: 'wo-1', number: 'WO-00021' }]), { work: [row('wo-1', { hold: false })], acts: actsCanOf(rolePermissions('sales')) })).toEqual([])
     // Several, or one beside a work order not reached, or the row not read: Production › holds (each row's own Lift; one Lift for N is F-OO-109).
     const tab = [{ kind: 'tab', tab: 'production', anchor: 'holds' }]
     expect(doorsOf(hold('production', [{ id: 'wo-1', number: 'WO-00021' }, { id: 'wo-2', number: 'WO-00022' }]), { work: [row('wo-1', { hold: true })] })).toEqual(tab)
@@ -526,7 +527,7 @@ describe('F-OO-105: the strips drawn — the yes for its approver, asker and any
   })
 
   it('source: the yes door is DepthBand\'s YesDoorView (imported, never copied); Lift is the row\'s own act; the strips read the ONE waiting list', () => {
-    const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8')
+    const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8') + readFileSync(new URL('../view/overview/StripRow.tsx', import.meta.url), 'utf8') /* F-PT-301: the strip row moved to its own file */
     expect(card).toContain("import { YesDoorView } from '../../../depth/view/DepthBand'")
     expect(card).toContain('<YesDoorView door={door.door} onYes={actions?.yes} />')
     expect(card).toContain("actions?.workOrderActs?.onAct?.(door.row, 'lift')")
@@ -908,7 +909,7 @@ describe('F-OO-106: the credit strip — Check credit again, Ask for a yes… on
     })
 
     it('source: the view fetches nothing (the hook reads the credit, with sales.credit.view only); the client reads no amount', () => {
-      const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8')
+      const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8') + readFileSync(new URL('../view/overview/StripRow.tsx', import.meta.url), 'utf8') /* F-PT-301: the strip row moved to its own file */
       expect(card).not.toMatch(/from '[^']*credit\/api'/)
       expect(card).toContain("actions?.onDialog?.({ kind: 'creditAsk', checkId: door.checkId })")
       const hook = readFileSync(new URL('../use-overview-acts.ts', import.meta.url), 'utf8')
@@ -971,7 +972,8 @@ describe('F-OO-108: Hold the whole order… in the moves row — the domain plan
   it('Release on Quality ›: held with who releases it for a reader without quality.holds.view (Sales, Planner, Finance); a link for Quality and the Owner', () => {
     const strip: WhereStrip = { key: 'quality', kind: 'quality', blocker: 'QUALITY_HOLD', reasons: [], workOrders: { reached: [{ id: 'w-1', number: 'WO-00022', shared: false }], notReached: 0 }, since: null }
     const input = (acts: ReturnType<typeof actsCanOf>): StripDoorsInput => ({ prefix: '/w/DEMO', order: order('IN_PRODUCTION'), can: abilitiesOf(rolePermissions('owner')), readOnly: false, busy: false, approval: null, depthCan: { manage: true }, work: [], acts })
-    for (const role of ['sales', 'planner', 'finance'] as const) expect(stripDoorsOf(strip, input(actsCanOf(rolePermissions(role)))), role).toMatchObject([{ kind: 'quality', held: { key: 'where.hold.qualityNoRight' } }])
+    // F-PT-301 (L9): without quality.holds.view, no Release door at all (the strip's line says who releases it).
+    for (const role of ['sales', 'planner', 'finance'] as const) expect(stripDoorsOf(strip, input(actsCanOf(rolePermissions(role)))), role).toEqual([])
     for (const permissions of [rolePermissions('owner'), ['workorders.view', 'quality.holds.view']]) expect(stripDoorsOf(strip, input(actsCanOf(permissions))), permissions.length > 2 ? 'owner' : 'quality').toEqual([{ kind: 'quality', href: '/w/DEMO/quality/holds?subjectType=WorkOrder&subjectId=w-1', number: 'WO-00022' }])
   })
 
@@ -993,7 +995,7 @@ describe('F-OO-108: Hold the whole order… in the moves row — the domain plan
     it('the words exist in both languages, office "tu" in Italian', () => {
       for (const locale of LOCALES) {
         const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-        for (const key of ['label', 'reading', 'onlyUnits', 'qualityNoRight', 'leftTitle', 'left']) expect(t(`where.hold.${key}`, { number: 'N', words: 'W' }), `${locale} ${key}`).not.toBe(`where.hold.${key}`)
+        for (const key of ['label', 'reading', 'onlyUnits', 'leftTitle', 'left'] /* F-PT-301: qualityNoRight went with the held door */) expect(t(`where.hold.${key}`, { number: 'N', words: 'W' }), `${locale} ${key}`).not.toBe(`where.hold.${key}`)
         for (const key of ['notReached', 'units', 'stale', 'notice']) for (const count of [1, 2]) expect(t(`where.hold.${key}`, { count, numbers: 'N', number: 'SO-1' }), `${locale} ${key} ${count}`).not.toBe(`where.hold.${key}`)
       }
       expect(itWordsUnder('where.hold.')).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
@@ -1016,7 +1018,8 @@ describe('F-OO-109: the strip\'s Lift… on several of its own work orders opens
     const production: WhereStrip = { ...pause(TWO), key: 'production', kind: 'production', blocker: 'NO_MOVE' } as WhereStrip
     expect(stripDoorsOf(production, input({ work }))).toMatchObject([{ kind: 'liftMany', holdKind: 'PRODUCTION', label: 'wo.act.lift', held: null }])
     // Sales (no hold right on a row): held with who does it; a write running: held with its words.
-    expect(stripDoorsOf(pause(TWO), input({ work: [row('w-1', 'WO-00021', true), row('w-2', 'WO-00022', false)] }))).toMatchObject([{ kind: 'liftMany', held: { key: 'wo.heldHold' } }])
+    // F-PT-301 (L9): one of them not liftable by this reader: no ONE Lift (hidden, not held).
+    expect(stripDoorsOf(pause(TWO), input({ work: [row('w-1', 'WO-00021', true), row('w-2', 'WO-00022', false)] }))).toEqual([])
     expect(stripDoorsOf(pause(TWO), input({ work, busy: true }))).toMatchObject([{ kind: 'liftMany', held: { key: 'held.busy' } }])
     // A row not read, or the acts not here: Production › holds (each row's own Lift there), as before.
     expect(stripDoorsOf(pause(TWO), input({ work: [work[0]!] }))).toEqual([{ kind: 'tab', tab: 'production', anchor: 'holds' }])
@@ -1035,7 +1038,7 @@ describe('F-OO-109: the strip\'s Lift… on several of its own work orders opens
     expect(textOf(owner)).toContain('on 4 work orders: WO-00019, WO-00021 and 1 more and 1 work order outside what you can open')
     expect(owner).toMatch(/<button[^>]*>Lift the customer&#x27;s pause…<\/button>/)
     expect(stripsOf(draw('f-oo-109-lift-sales'))).toMatch(/aria-disabled="true"[^>]*aria-description="Production does this — a planner or the production manager"[^>]*>Lift the customer&#x27;s pause…/)
-    const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8')
+    const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8') + readFileSync(new URL('../view/overview/StripRow.tsx', import.meta.url), 'utf8') /* F-PT-301: the strip row moved to its own file */
     expect(card).toContain('actions?.workOrderActs?.onLiftMany?.({ kind: door.holdKind, workOrders: door.workOrders, shared: door.shared, notReached: door.notReached })')
   })
 

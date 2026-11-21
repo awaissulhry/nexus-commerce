@@ -176,9 +176,15 @@ function doorOf(blocker: Blocker, inputs: WaitingInputs): WaitingDoor {
   if (blocker.kind === 'APPROVAL' || blocker.kind === 'PARTNER_TASK') return { kind: 'their' }
   // F-OP-116: the customer's pause is lifted in place (a work order the reader does not reach has no ref: Production › holds).
   if (blocker.kind === 'BRAND_PAUSE' && ref?.type === 'WorkOrder') return { kind: 'lift', workOrderId: ref.id }
+  // F-PT-301 (10-design §6): each door lands where the thing is answered — the subcontractor's work on its work order's row, the
+  // customer's goods and what we buy short on Materials.
+  const place = PLACE_OF[blocker.kind]
+  if (place) return { kind: 'tab', tab: 'production', anchor: place }
   if (DATE_KINDS.has(blocker.kind)) return { kind: 'tab', tab: 'production', anchor: 'dates' }
   return { kind: 'tab', tab: 'production', anchor: HOLD_KINDS.has(blocker.kind) ? 'holds' : null }
 }
+/** F-PT-301: the blockers whose door lands on another section of Production than Problems & holds. */
+const PLACE_OF: Readonly<Record<string, string>> = Object.freeze({ SUBCONTRACT: 'work-orders', CUSTOMER_MATERIAL: 'materials', MATERIAL_SHORT: 'materials' })
 
 function wordsOf(blocker: Blocker, inputs: WaitingInputs): WaitingWords {
   const api: WaitingWords = { kind: 'api', words: blocker.words }

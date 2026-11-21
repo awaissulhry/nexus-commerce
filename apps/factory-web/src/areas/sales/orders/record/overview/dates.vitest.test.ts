@@ -585,8 +585,8 @@ describe('F-OO-146: material and workshop rows from the ONE waiting list’s DAT
 
   it('one row per kind from the DATE rows (oldest first), its age the oldest; a refused date, a hold and an open gate’s wait are not here', () => {
     expect(waitDatesOf(dates, DATES, { numberOf, today: TODAY })).toEqual([
-      { key: expect.stringMatching(/^SUBCONTRACT:/), kind: 'SUBCONTRACT', words: WORKSHOP, workOrders: [WO.number], age: 5, door: { tab: 'production', anchor: 'holds' } },
-      { key: expect.stringMatching(/^MATERIAL_SHORT:/), kind: 'MATERIAL_SHORT', words: MATERIAL, workOrders: [], age: null, door: { tab: 'production', anchor: 'dates' } },
+      { key: expect.stringMatching(/^SUBCONTRACT:/), kind: 'SUBCONTRACT', words: WORKSHOP, workOrders: [WO.number], age: 5, door: { tab: 'production', anchor: 'work-orders' } }, // F-PT-301
+      { key: expect.stringMatching(/^MATERIAL_SHORT:/), kind: 'MATERIAL_SHORT', words: MATERIAL, workOrders: [], age: null, door: { tab: 'production', anchor: 'materials' } }, // F-PT-301
     ])
     // The dates not read: the gate's wait keeps its own row (never hidden) — it joins Material short, with its age.
     expect(waitDatesOf(dates, null, { numberOf, today: TODAY }).find((row) => row.kind === 'MATERIAL_SHORT')?.age).toBe(9)

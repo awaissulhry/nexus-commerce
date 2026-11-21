@@ -1954,7 +1954,6 @@
       "label": "Metti in sospeso tutto l'ordine…",
       "reading": "Gli ordini di lavoro dell'ordine sono ancora in lettura",
       "onlyUnits": "In lavorazione ci sono solo capi su misura: ognuno si mette in sospeso dalla sua pagina",
-      "qualityNoRight": "Lo sblocca la qualità: i blocchi qualità si aprono per un ispettore qualità o il titolare",
       "leftTitle": "Non messi in sospeso da qui",
       "left": "{number} — {words}",
       "notReached_one": "{count} ordine di lavoro fuori da ciò che puoi aprire non si mette in sospeso da qui: lo fa la Produzione",

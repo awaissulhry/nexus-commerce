@@ -1954,7 +1954,6 @@
       "label": "Hold the whole order…",
       "reading": "The order's work orders are still being read",
       "onlyUnits": "Only made-to-measure units are in work: each is held from its own page",
-      "qualityNoRight": "Quality releases it: Quality's holds open for a quality inspector or the Owner",
       "leftTitle": "Not held from here",
       "left": "{number} — {words}",
       "notReached_one": "{count} work order outside what you can open is not held from here: Production holds it",
