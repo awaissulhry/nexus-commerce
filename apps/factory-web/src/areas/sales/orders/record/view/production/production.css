@@ -197,3 +197,8 @@
 /* ── fx5 #1: a tooltip the reader does not see is not in the layout — a door at a row's end never widens the page (the DS bubble is
    in-flow and only faded out; .fw-office-page would scroll into its empty room). Shown on hover or focus, as before. ── */
 .fw-pt .nds-tooltip:not(:hover):not(:focus-within) > .tip { display: none; }
+
+/* fx5 #11: the steps once on a phone — the cards; the tracker from 720 px of the tab. */
+@container pt (max-width: 719px) {
+  .fw-pt-steps-track { display: none; }
+}
