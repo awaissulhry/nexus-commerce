@@ -2873,7 +2873,8 @@
       "seesNone": "The customer does not see these steps: only the promise.",
       "added": "Gate added.",
       "removed": "Gate removed.",
-      "more": "More for {step}"
+      "more": "More for {step}",
+      "decide": "Decide for {customer}…"
     },
     "byLine": {
       "title": "By line · worst first",

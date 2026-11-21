@@ -115,18 +115,23 @@ export const STEP_ACT_ACTION: Readonly<Record<StepAct, 'pass' | 'edit' | 'startB
 export const offeredOf = (action: GateAction | undefined): boolean => !!action && !action.needs && (action.allowed || !!action.refusal)
 
 export interface StepActs {
-  /** The ONE primary: Mark done… while the gate is open and the reader may pass it. */
-  readonly primary: 'done' | null
+  /**
+   * The ONE primary: Mark done… while the gate is open and the reader may pass it — or, on a gate waiting on the customer's own sample
+   * round, "Decide for {customer}…" (Planning's MilestoneDialog holds the act; production.brand.override — hidden without it, L9).
+   */
+  readonly primary: 'done' | 'decide' | null
   /** The ⋯: the gate's other acts this reader is offered (each held in words when the state refuses it). */
   readonly more: readonly StepAct[]
   /** The reader has no gate act at all: "Ask {planner} for an update" instead (threads.post). */
   readonly askOnly: boolean
 }
 
-export function stepActsOf(row: StepRow): StepActs {
+export function stepActsOf(row: StepRow, options: { readonly decide?: boolean } = {}): StepActs {
   if (row.kind !== 'GATE' || !row.gate?.actions || row.status.kind === 'done') return { primary: null, more: [], askOnly: row.kind === 'GATE' && row.status.kind !== 'done' }
   const actions = row.gate.actions
-  const primary = actions.pass.allowed ? ('done' as const) : null
-  const more = (['move', 'startBefore', 'remove', 'done'] as const).filter((act) => (act === 'done' ? !primary && offeredOf(actions.pass) : offeredOf(actions[STEP_ACT_ACTION[act]])))
+  // W3 extra (lead's point 3): the round the gate waits for is not decided yet and this reader may decide it for the customer.
+  const decide = !!options.decide && row.who.kind === 'customerSample' && !!row.milestoneId && !!row.gate.sampleRound && row.gate.sampleRound.decision === null
+  const primary = decide ? ('decide' as const) : actions.pass.allowed ? ('done' as const) : null
+  const more = (['move', 'startBefore', 'remove', 'done'] as const).filter((act) => (act === 'done' ? primary !== 'done' && offeredOf(actions.pass) : offeredOf(actions[STEP_ACT_ACTION[act]])))
   return { primary, more, askOnly: !primary && more.length === 0 }
 }

@@ -58,6 +58,22 @@ describe('F-PT-202: what the reader may do with a step (L9)', () => {
     expect(stepActsOf(row({ pass: allowed, startBefore: allowed, edit: allowed, remove: allowed }, 'DONE'))).toEqual({ primary: null, more: [], askOnly: false })
   })
 
+  it('W3 extra: a gate waiting on the customer’s own sample round — the primary is Decide for {customer}… (with the right only)', () => {
+    const round = { id: 'r1', number: 'SR-2026-0007', kind: 'PP', decision: null }
+    const sample = (decision: string | null): StepRow => ({ ...row({ pass: allowed, startBefore: needs, edit: allowed, remove: needs }), who: { kind: 'customerSample' }, gate: { ...GATE, actions: { pass: allowed, startBefore: needs, edit: allowed, remove: needs }, sampleRound: { ...round, decision } } })
+    expect(stepActsOf(sample(null), { decide: true })).toEqual({ primary: 'decide', more: ['move', 'done'], askOnly: false })
+    // Without production.brand.override: no Decide (hidden, L9) — Mark done… as before.
+    expect(stepActsOf(sample(null))).toEqual({ primary: 'done', more: ['move'], askOnly: false })
+    // The round decided already: nothing to decide.
+    expect(stepActsOf(sample('APPROVED'), { decide: true }).primary).toBe('done')
+    // A planner's gate never offers it.
+    expect(stepActsOf(row({ pass: allowed, startBefore: needs, edit: needs, remove: needs }), { decide: true }).primary).toBe('done')
+    const block = readFileSync(new URL('../view/production/StepsBlock.tsx', import.meta.url), 'utf8')
+    expect(block).toContain("acts.primary === 'decide' && opens")
+    expect(block).toContain('onClick={() => gateActs?.onOpen?.(opens)}')
+    for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['orders']).orders!)('productionTab.steps.decide', { customer: 'Brand Alpha' }), locale).toContain('Brand Alpha')
+  })
+
   it('the wiring: Planning’s dialogs mounted once for the page; each gate row its anchor (B18); the planner asked by a mention', () => {
     const block = readFileSync(new URL('../view/production/StepsBlock.tsx', import.meta.url), 'utf8')
     expect(block).toContain("id={row.gateId ? rowAnchor('OrderGate', row.gateId) : undefined}")

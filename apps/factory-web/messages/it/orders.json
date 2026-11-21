@@ -2873,7 +2873,8 @@
       "seesNone": "Il cliente non vede queste fasi: solo la promessa.",
       "added": "Via libera aggiunto.",
       "removed": "Via libera rimosso.",
-      "more": "Altro per {step}"
+      "more": "Altro per {step}",
+      "decide": "Decidi per {customer}…"
     },
     "byLine": {
       "title": "Per riga · prima la peggiore",

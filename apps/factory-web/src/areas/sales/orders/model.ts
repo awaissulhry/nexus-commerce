@@ -78,6 +78,8 @@ export interface OrderAbilities {
   measurements: boolean
   /** F-PT-302: raise a nonconformance from the order's final check (quality.ncr.raise; Quality's own New NCR). */
   raiseNcr?: boolean
+  /** Lead's W3 extra: decide a gate's sample round for the customer (production.brand.override; Planning's MilestoneDialog). */
+  decideForCustomer?: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
@@ -101,6 +103,7 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     margin: held.has('money.margin'),
     measurements: held.has('sales.measurements.view'), // F-SA-214
     raiseNcr: held.has('quality.ncr.raise'), // F-PT-302
+    decideForCustomer: held.has('production.brand.override'), // W3 extra: Decide for {customer}…
   }
 }
 
