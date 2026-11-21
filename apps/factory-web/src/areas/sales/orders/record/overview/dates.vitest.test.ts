@@ -311,7 +311,7 @@ describe('F-OO-143: a refused new date under the promise, and Decide… → the 
       // The F-CP-108 exports stay (the Orders sheet mounts them).
       for (const name of ['export type CommandDialogModel', 'export type CommandDialogActions', 'export /* F-CP-108 */ function ReadyDialog(', 'export /* F-CP-108 */ function CloseDialog(']) expect(dialogs, name).toContain(name)
       const model = readFileSync(new URL('../record-model.ts', import.meta.url), 'utf8')
-      expect(model).toContain("{ kind: 'promise'; followUp?: { readonly requestId: string } }")
+      expect(model).toContain("{ kind: 'promise'; followUp?: { readonly requestId: string }") // F-OL-04: + lineIds (a line's Ready-by date)
     })
   })
 })

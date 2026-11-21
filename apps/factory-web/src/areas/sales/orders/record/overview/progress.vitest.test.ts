@@ -370,8 +370,10 @@ describe('F-OO-126: the window draws the line’s work, its inspections and its 
     expect(html).toMatch(/<div data-actions="">.*aria-label="Actions for line 20 · DEMO-JKT-01 · Rosso".*>Actions /)
     const card = read('../view/overview/ProgressCard.tsx')
     expect(card).toContain('items={moves.itemsOf(row, label, () => actions?.onOpenLine?.(null))}')
-    // `first` runs before the move: the window closes, then the one dialog opens.
-    expect(card.indexOf('first?.()')).toBeLessThan(card.indexOf('run(row, name, move)'))
+    // `first` runs before the move: the window closes, then the one dialog opens (F-OL-01 c: in the ONE LineMenu shared with Lines).
+    const menu = read('../view/LineMenu.tsx')
+    expect(menu.indexOf('first?.()')).toBeGreaterThan(-1)
+    expect(menu.indexOf('first?.()')).toBeLessThan(menu.indexOf('run(move, row)'))
     const readOnly = windowOf({ ...model(LINE_RED), can: abilitiesOf(['orders.view', 'workorders.view']) })
     expect(readOnly).toContain('<div data-actions=""></div>')
     expect(readOnly).not.toContain('aria-haspopup="menu"')

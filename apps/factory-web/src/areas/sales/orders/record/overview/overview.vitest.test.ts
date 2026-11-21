@@ -554,7 +554,7 @@ describe('F-OO-100: OverviewTab keeps the layout, each card is its own file, eac
 
   it('model.ts keeps what more than one place reads (the ONE waiting list among it); each section\'s rules live in its own file', () => {
     const model = read('./model.ts')
-    for (const name of ['export function orderWaitingOf(', 'export function waitingOf(', 'export function healthInputOf(', 'export function bandHealthOf(', 'export const readOf', 'export function mergeRead(', 'export const REQUESTED_FIELD_ID', 'export const say']) expect(model, name).toContain(name)
+    for (const name of ['export function orderWaitingOf(', 'export function waitingOf(', 'export function healthInputOf(', 'export function bandHealthOf(', 'export const readOf', 'export function mergeRead(', 'export const say'] /* F-OL-05: REQUESTED_FIELD_ID left with the old edit mode */) expect(model, name).toContain(name)
     // F-OO-202 (F14): "who acts next" left with its only drawing — the keeper's waitingOn is the one rule.
     expect(model).not.toContain('export function whoActsNextOf(')
     // F-OO-103: where.ts keeps the headline and the stages (the facts' rules left with the facts).
