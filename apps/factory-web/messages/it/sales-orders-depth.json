@@ -170,23 +170,6 @@
     "blockedHow": "Non si può più cambiare.",
     "label": "Taglie bloccate dalla fase di produzione"
   },
-  "freeze": {
-    "title": "Cosa si può ancora cambiare",
-    "open": "Ancora modificabile",
-    "priced": "Da «{stage}»: una modifica con prezzo che il cliente accetta",
-    "blocked": "Da «{stage}»: non si può più cambiare",
-    "stage": "L’ordine è arrivato a «{stage}» il {date}.",
-    "notStarted": "Non ancora in produzione: è tutto ancora modificabile.",
-    "noRules": "L’azienda non ha regole di blocco: ogni campo resta modificabile.",
-    "failed": "Impossibile leggere cosa è bloccato",
-    "reading": "Lettura di cosa è bloccato…"
-  },
-  "offer": {
-    "priced": "Bloccato dalla fase di produzione: invialo come modifica con prezzo che il cliente accetta.",
-    "blocked": "Bloccato definitivamente: questa modifica non si può più fare.",
-    "line": "{line}: {field}",
-    "order": "L’ordine: {field}"
-  },
   "priced": {
     "title": "Modifica con prezzo {revision} di {number}",
     "how": "La modifica viene registrata ora; poi il cliente ne accetta il prezzo dal link che inviamo.",

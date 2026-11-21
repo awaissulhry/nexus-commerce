@@ -466,8 +466,8 @@
       "minCut": "{count} già tagliati",
       "cutBeyond": "{count} tagliati in più: scegli dove vanno quando rivedi",
       "was": "era {value}",
-      "locked": "Bloccata da {stage} per regola dell'azienda: un cambio qui va accettato dal cliente.",
-      "lockedForGood": "Bloccata per sempre da {stage}: non può cambiare.",
+      "locked": "Serve il sì del cliente da {stage} (regola dell'azienda): un cambio qui va accettato dal cliente.",
+      "lockedForGood": "Non si può più cambiare da {stage}.",
       "priceShipped_one": "{count} spedito: il prezzo resta. Un prezzo spedito si cambia con una nota di credito.",
       "priceShipped_other": "{count} spediti: il prezzo resta. Un prezzo spedito si cambia con una nota di credito."
     },
@@ -3060,6 +3060,51 @@
       "revision": "Revisione {revision} · {when}",
       "newDates": "Vedi le nuove date ›",
       "seeYes": "Vedi il sì ›"
+    },
+    "freeze": {
+      "title": "Si può ancora cambiare?",
+      "info": "Cosa richiede ora una modifica di questo ordine: in base alla fase raggiunta e alle regole di blocco (dell'azienda, o del cliente). La scheda Righe è l'unico posto dove cambiare l'ordine; il cliente può anche chiedere dal suo portale.",
+      "reading": "Lettura di cosa si può ancora cambiare…",
+      "verdict": {
+        "cancelled": "Ordine annullato: non cambia nulla.",
+        "closed": "Ordine chiuso: non cambia più nulla.",
+        "goodsLeft": "Della merce è partita: le righe non cambiano più. Un cambio successivo è un reso.",
+        "firstYes": "Attende il primo sì: cambia le righe nella scheda Righe.",
+        "blocked": "Bloccato: la revisione {revision} attende l'approvazione dal {date}. Nient'altro cambia finché non è decisa.",
+        "blockedAny": "Bloccato: una modifica attende l'approvazione dal {date}. Nient'altro cambia finché non è decisa.",
+        "nothingOnFloor": "Niente è ancora in reparto: si può cambiare tutto.",
+        "needsYes": "Ora serve il sì del cliente (può avere un costo): {parts}.",
+        "cantChange": "Non si può più cambiare: {parts}.",
+        "allOpen": "Si può ancora cambiare tutto."
+      },
+      "seeIt": "Vedi ↑",
+      "lines": "Cambia le righe ›",
+      "heldRevision": "Si apre quando la revisione {revision} è decisa.",
+      "heldAny": "Si apre quando la modifica in attesa di approvazione è decisa.",
+      "floor": "In reparto: {stage} · dal {date}",
+      "floorStage": "In reparto: {stage}",
+      "floorNothing": "In reparto: ancora niente",
+      "portal": "Il cliente può anche chiedere una modifica dal portale.",
+      "changesUnread": "Impossibile leggere se una modifica attende l'approvazione.",
+      "noRules": "L'azienda non tiene regole di blocco: ogni parte resta aperta.",
+      "parts": "Parte per parte",
+      "col": {
+        "part": "Parte",
+        "now": "Ora",
+        "next": "Dopo"
+      },
+      "word": {
+        "canChange": "Si può cambiare",
+        "needsYes": "Serve il sì del cliente",
+        "cantChange": "Non si può più cambiare"
+      },
+      "of": {
+        "sizes": "{count} di {total} taglie",
+        "lines": "{count} di {total} righe"
+      },
+      "customerRule": "Regola di {customer}",
+      "shipToChecked": "Controllato quando chiede il cliente",
+      "next": "Da {stage}: {word}"
     }
   }
 }

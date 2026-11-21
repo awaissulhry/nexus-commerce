@@ -154,8 +154,6 @@ export function withdrawHeld(approval: Pick<Approval, 'may'>, can: Pick<DepthCan
 
 // ---- what is frozen ---------------------------------------------------------------------------------------------------------
 
-export const FREEZE_TONE: Readonly<Record<FreezeState, Tone>> = Object.freeze({ OPEN: 'success', CHANGE_REQUEST: 'warning', BLOCKED: 'danger' })
-
 /** A frozen size cell: the line, the size, the stage it reached and what a change needs. */
 export interface FrozenCell {
   lineId: string
@@ -171,29 +169,7 @@ export function frozenCells(freeze: Freeze | null): FrozenCell[] {
   return freeze.lines.flatMap((line) => line.sizes.filter((size) => size.locked && size.state !== 'OPEN').map((size) => ({ lineId: line.lineId, seq: line.seq, size: size.size, stage: size.stage, state: size.state })))
 }
 
-/** The frozen cells of one line, grouped by what they need and the stage reached ("Cutting started — size frozen: 48, 50"). */
-export function frozenGroups(cells: readonly FrozenCell[], lineId: string): Array<{ stage: FreezeStage | null; state: FreezeState; sizes: string[] }> {
-  const groups: Array<{ stage: FreezeStage | null; state: FreezeState; sizes: string[] }> = []
-  for (const cell of cells.filter((entry) => entry.lineId === lineId)) {
-    const group = groups.find((entry) => entry.stage === cell.stage && entry.state === cell.state)
-    if (group) group.sizes.push(cell.size)
-    else groups.push({ stage: cell.stage, state: cell.state, sizes: [cell.size] })
-  }
-  return groups
-}
-
-/** "What is frozen" (order.changes.freeze): each field at the order's furthest stage, in the fields' order. */
-export function freezeRows(freeze: Freeze): Array<{ field: FreezeField; state: FreezeState; frozenFrom: FreezeStage | null }> {
-  return FREEZE_FIELDS.map((field) => {
-    const verdict = freeze.order.fields.find((entry) => entry.field === field)
-    // A field read per line or per size: the strictest verdict any line reached.
-    const lineVerdicts = freeze.lines.flatMap((line) => [...line.fields.filter((entry) => entry.field === field), ...(field === 'SIZE_QUANTITY' ? line.sizes.map((size) => ({ field, state: size.state, frozenFrom: size.stage })) : [])])
-    const all = [...(verdict ? [verdict] : []), ...lineVerdicts]
-    const strictest = all.reduce<{ state: FreezeState; frozenFrom: FreezeStage | null } | null>((worst, entry) => (!worst || STATE_RANK[entry.state] > STATE_RANK[worst.state] ? { state: entry.state, frozenFrom: entry.frozenFrom } : worst), null)
-    return { field, state: strictest?.state ?? 'OPEN', frozenFrom: strictest?.frozenFrom ?? null }
-  })
-}
-const STATE_RANK: Readonly<Record<FreezeState, number>> = Object.freeze({ OPEN: 0, CHANGE_REQUEST: 1, BLOCKED: 2 })
+// F-OC-202: the freeze panel's rows (freezeRows) went with it — Changes › Can it still change? reads each part (record/changes/freeze.ts).
 
 /** An amendment's refusals that are the freeze rules': `body/lines/<seq>/<FIELD>` and `body/<FIELD>`. */
 export function frozenProblemsOf(problems: ReadonlyArray<{ path: string }>): Array<{ seq: number | null; field: FreezeField }> {

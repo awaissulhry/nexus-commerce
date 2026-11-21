@@ -170,23 +170,6 @@
     "blockedHow": "It cannot change any more.",
     "label": "Sizes locked by the production stage"
   },
-  "freeze": {
-    "title": "What can still change",
-    "open": "Still open",
-    "priced": "From “{stage}”: a priced change the customer accepts",
-    "blocked": "From “{stage}”: it cannot change any more",
-    "stage": "The order reached “{stage}” on {date}.",
-    "notStarted": "Not in production yet: everything is still open.",
-    "noRules": "The company keeps no freeze rule: every field stays open.",
-    "failed": "Couldn’t read what is frozen",
-    "reading": "Reading what is frozen…"
-  },
-  "offer": {
-    "priced": "Frozen by the production stage: send it as a priced change the customer accepts.",
-    "blocked": "Frozen for good: this change cannot be made any more.",
-    "line": "{line}: {field}",
-    "order": "The order: {field}"
-  },
   "priced": {
     "title": "Priced change {revision} of {number}",
     "how": "The change is written now; the customer then accepts its price on the link we send.",

@@ -466,8 +466,8 @@
       "minCut": "{count} already cut",
       "cutBeyond": "{count} cut beyond this: you choose where they go when you review",
       "was": "was {value}",
-      "locked": "Locked from {stage} by your company's rule: a change here goes to the customer to accept.",
-      "lockedForGood": "Locked for good from {stage}: it cannot change.",
+      "locked": "Needs the customer's yes from {stage} (your company's rule): a change here goes to the customer to accept.",
+      "lockedForGood": "Can't change any more from {stage}.",
       "priceShipped_one": "{count} shipped: the price stays. A shipped price changes with a credit note.",
       "priceShipped_other": "{count} shipped: the price stays. A shipped price changes with a credit note."
     },
@@ -3060,6 +3060,51 @@
       "revision": "Revision {revision} · {when}",
       "newDates": "See the new dates ›",
       "seeYes": "See the yes ›"
+    },
+    "freeze": {
+      "title": "Can it still change?",
+      "info": "What a change of this order needs now: by the stage the order reached and the freeze rules (the company's, or the customer's own). The Lines tab is the one place to change the order; the customer can also ask in its portal.",
+      "reading": "Reading what can still change…",
+      "verdict": {
+        "cancelled": "This order is cancelled: nothing changes.",
+        "closed": "This order is closed: nothing changes any more.",
+        "goodsLeft": "Goods have left: the lines no longer change. A later change is a return.",
+        "firstYes": "It waits for its first yes: change the lines on the Lines tab.",
+        "blocked": "Blocked: revision {revision} waits for approval since {date}. Nothing else changes until it is decided.",
+        "blockedAny": "Blocked: a change waits for approval since {date}. Nothing else changes until it is decided.",
+        "nothingOnFloor": "Nothing is on the floor yet: everything can change.",
+        "needsYes": "Now needs the customer's yes (may cost a fee): {parts}.",
+        "cantChange": "Can't change any more: {parts}.",
+        "allOpen": "Everything can still change."
+      },
+      "seeIt": "See it ↑",
+      "lines": "Change the lines ›",
+      "heldRevision": "Opens once revision {revision} is decided.",
+      "heldAny": "Opens once the change that waits for approval is decided.",
+      "floor": "On the floor: {stage} · since {date}",
+      "floorStage": "On the floor: {stage}",
+      "floorNothing": "On the floor: nothing yet",
+      "portal": "The customer can also ask for a change in the portal.",
+      "changesUnread": "Couldn't read whether a change waits for approval.",
+      "noRules": "The company keeps no freeze rule: every part stays open.",
+      "parts": "Each part",
+      "col": {
+        "part": "Part",
+        "now": "Now",
+        "next": "Next"
+      },
+      "word": {
+        "canChange": "Can change",
+        "needsYes": "Needs the customer's yes",
+        "cantChange": "Can't change any more"
+      },
+      "of": {
+        "sizes": "{count} of {total} sizes",
+        "lines": "{count} of {total} lines"
+      },
+      "customerRule": "Rule of {customer}",
+      "shipToChecked": "Checked when the customer asks",
+      "next": "From {stage}: {word}"
     }
   }
 }
