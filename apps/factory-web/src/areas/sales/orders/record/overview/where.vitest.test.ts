@@ -1206,6 +1206,12 @@ describe('F-MS-101: the stage set by hand — the row under the dots (who, when,
     expect(en('where.manual.floorBack', { floor: 'Quality check', stage: 'Cutting', past: 'Quality check' })).toBe("The floor's counts say Quality check: it clears by itself when the floor's counts come back to Cutting or pass Quality check")
     expect(en('where.manual.old', { age: '9 d' })).toBe('Set by hand 9 d ago: check it')
     expect(en('where.manual.stepAria', { number: 'SO-1', stage: 'Sewing' })).toBe('Set the stage of SO-1 to Sewing…')
+    // The right's words in Admin's role matrix say the new rule (never "never Ready to ship").
+    const adminEn = createTranslator('en', messagesFor('en', ['admin']).admin!)
+    const adminIt = createTranslator('it', messagesFor('it', ['admin']).admin!)
+    expect(adminEn('perm.production_brand_manage')).toContain("set its order's stage by hand with a reason, forward or back")
+    expect(adminIt('perm.production_brand_manage')).toContain('impostare a mano la fase di un suo ordine con un motivo, avanti o indietro')
+    for (const words of [adminEn('perm.production_brand_manage'), adminIt('perm.production_brand_manage')]) expect(words).not.toMatch(/never Ready to ship|mai Pronto per la spedizione/)
     expect(itWordsUnder('where.manual.')).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
   })
 

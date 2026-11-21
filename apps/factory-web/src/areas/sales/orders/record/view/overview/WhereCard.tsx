@@ -46,7 +46,8 @@ import { CREDIT_NS, StripRow } from './StripRow' // F-PT-301: the ONE strip row 
  *
  * F-OO-103 (order overview §1.1, §1.6; review F8, F14): the section 1 frame. It keeps the title, "Live · as of 10:42", the headline
  * (the status and the stage, F-OO-101) with its quiet line, and the five stages with their link to Production's work orders and their
- * quiet line (F-OO-102) — F-SC-W3: for who may set the stage by hand, the steps are buttons into the stage dialog instead of the link. Between the headline and the stages sits the strips slot (one strip per hold or wait, most blocking first,
+ * quiet line (F-OO-102) — F-SC-W3: for who may set the stage by hand, the steps are buttons into the stage dialog instead of the
+ * link. Between the headline and the stages sits the strips slot (one strip per hold or wait, most blocking first,
  * F-OO-104 / F-OO-105: they read OverviewTab's ONE waiting list, `waiting.holds`); under the stages the moves slot (the order's own
  * moves, F-OO-107). What left, each living on in ONE other place: Who acts next (Requests & changes' groups), Ex-factory and how it
  * moved (Next dates' Promised row), Health and the customer's Urgent (the band's chip and tag), Bundles in work (Progress by line's
@@ -118,8 +119,8 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
             problem={state?.status === 'failed'}
             onRetry={() => actions?.onRetryProduction?.()}
           />
-          {/* F-OO-102: derived, and it says so. F-MS-102: or set by hand when the floor cannot record it — the door on the same quiet line
-              (a group of its own, outside the strip's one link), then the hand stage's row while one stands; the moves row is untouched. */}
+          {/* F-OO-102: derived, and it says so. F-MS-102 / F-SC-W3: or set by hand when the records are wrong or missing — the door on the
+              same quiet line (a group of its own, outside the strip), then the hand stage's row while one stands; the moves row is untouched. */}
           {!loading && state?.status !== 'failed' ? (
             <>
               <div className="fw-so-where-setby">
