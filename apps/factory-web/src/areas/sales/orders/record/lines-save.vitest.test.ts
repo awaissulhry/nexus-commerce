@@ -116,8 +116,14 @@ describe('F-OL-03: the container — only my changes sent, the ask after a ticke
     const hook = read('./use-lines-draft.ts')
     expect(hook).toContain('lines: bodyLinesOf(historyRef.current.draft, order)')
     expect(hook).toContain('askCustomer: ask }, idempotency)')
-    expect(hook).toContain("kind: 'REVISED_ORDER', recordType: 'SalesOrder'")
-    expect(hook).toContain('if (ask && !priced) void askCustomer(customerQuestionOf(value, question), value)')
+    // F-OC-201 (R1, L5): flipped — the ask was made on the ORDER (`recordType: 'SalesOrder'`), which the server refuses ("A revised order
+    // is asked on SalesOrderAmendment."), and a priced change asked nobody. Now ONE helper asks on the revision the save made, a plain
+    // change with the tick and a priced change always.
+    expect(hook).not.toContain("recordType: 'SalesOrder'")
+    expect(hook).toContain('const target = askTargetOf(done)')
+    expect(hook).toContain('if (ask && target) void askCustomer(target, customerQuestionOf(value, question), value)')
+    expect(hook).toContain('await askRevisedOrder(api, value, amendmentId, question, { quotes: can.viewQuotes })')
+    expect(read('./revised-order-ask.ts')).toContain("recordType: 'SalesOrderAmendment'")
     expect(hook).toContain("if (words.key === 'problem.write.moved')")
     expect(hook).toContain('const rebased = rebaseDraft(base, order, historyRef.current.draft)')
     // The draft empties before the answered order lands: my own save is never "rebased".

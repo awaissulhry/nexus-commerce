@@ -8,7 +8,7 @@ import { applyAmendment, findStylesForOrder, previewAmendment, type AmendPreview
 import { applyPricedChange, type Freeze } from '../depth/api'
 import { frozenOffer, frozenProblemsOf, PRICED_EMPTY, pricedBodyOf } from '../depth/model'
 import { readProblem, writeProblem, type OrderAbilities } from '../model'
-import { askApproval } from '../../../../record-panels/approvals/api'
+import { askRevisedOrder, askTargetOf } from './revised-order-ask' // F-OC-201: the customer's new yes, asked on the revision
 import { postPortalReplyKeyed } from '../../../_shared/record-thread/api'
 import { portalRefusal } from '../../../_shared/record-thread/state'
 import { tellHeld, tickOn } from '../../../home/approvals/requests/model'
@@ -19,7 +19,6 @@ import {
   addSize,
   askDefaultOf,
   bodyLinesOf,
-  customerLocaleOf,
   customerQuestionOf,
   draftKeyOf,
   EMPTY_HISTORY,
@@ -76,8 +75,6 @@ export interface LinesDraftInput extends RecordActsBase {
 
 const REVIEW_EMPTY = { phase: 'reading', preview: null, problem: null, why: null, words: '', ask: null, tell: { words: '', chosen: null }, extraOutcome: null, fee: '', changedMeanwhile: false } as const
 const ADD_EMPTY: AddStyleState = Object.freeze({ query: '', results: null, searching: false, problem: null, row: null, chosen: null, picked: [] }) as AddStyleState
-/** The customer's answer is asked for within a week (the ask's own default otherwise). */
-const ASK_DAYS = 7
 /** F-OL-09: the server's figures of the draft are asked this long after the last edit (one call at a time; a stale answer dropped). */
 const FIGURES_AFTER_MS = 600
 
@@ -103,7 +100,8 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
   }, [])
   const [addStyle, setAddStyle] = useState<AddStyleState | null>(null)
   const [addColour, setAddColour] = useState<{ styleId: string } | null>(null)
-  const [askFailed, setAskFailed] = useState<string | null>(null)
+  // F-OC-201: the ask that could not be sent — its revision and the question, for "Ask again".
+  const [askFailed, setAskFailed] = useState<{ readonly amendmentId: string; readonly question: string } | null>(null)
   const [portalGone, setPortalGone] = useState(false)
   const [optionsFor, setOptionsFor] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -290,9 +288,11 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
           setMoved(null)
           setReview(null)
           setNotice({ tone: 'success', words: savedNotice(done.workOrders, ask) })
-          // The ask (a plain change: a priced change asks through its own link): its failure never undoes the save. F-OL-08: the
-          // question in the customer's language (the words typed, else the default in the order's language), never the office's.
-          if (ask && !priced) void askCustomer(customerQuestionOf(value, question), value)
+          // F-OC-201 (L5, R1): the ask on the REVISION the save made — a plain change with the tick, a priced change always (nobody else
+          // asks it); its failure never undoes the save. F-OL-08: the question in the customer's language (the words typed, else the
+          // default in the order's language), never the office's.
+          const target = askTargetOf(done)
+          if (ask && target) void askCustomer(target, customerQuestionOf(value, question), value)
           if (tell) void tellCustomer(tell, value)
           return done.order
         } catch (error) {
@@ -313,12 +313,13 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
     )
   }
 
-  const askCustomer = async (question: string, value: Order) => {
+  // F-OC-201: ONE helper asks (revised-order-ask.ts): on the revision, to the confirmation's own recipient (no e-mail: the portal only).
+  const askCustomer = async (amendmentId: string, question: string, value: Order) => {
     try {
-      await askApproval(api, { kind: 'REVISED_ORDER', recordType: 'SalesOrder', recordId: value.id, question, dueAt: new Date(Date.now() + ASK_DAYS * 86_400_000).toISOString(), fileIds: [], send: true, language: customerLocaleOf(value) })
+      await askRevisedOrder(api, value, amendmentId, question, { quotes: can.viewQuotes })
       setAskFailed(null)
     } catch {
-      setAskFailed(question)
+      setAskFailed({ amendmentId, question })
     }
   }
 
@@ -395,7 +396,7 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
     onSave: ({ reason, question }) => save(reason, question),
     onAskAgain: () => {
       const value = order0()
-      if (value && askFailed !== null) void askCustomer(askFailed, value)
+      if (value && askFailed !== null) void askCustomer(askFailed.amendmentId, askFailed.question, value)
     },
     onAskDismiss: () => setAskFailed(null),
     // ---- two people ----
