@@ -2643,7 +2643,8 @@
       "answeredFor": "Risposta valida anche per {orders}",
       "answeredForMore": "Risposta valida anche per {orders} e altri {count}",
       "answeredForCount_one": "Risposta valida anche per {count} altro ordine",
-      "answeredForCount_other": "Risposta valida anche per altri {count} ordini"
+      "answeredForCount_other": "Risposta valida anche per altri {count} ordini",
+      "countOf": "{count} su {of}"
     },
     "ask": {
       "button": "Chiedi un aggiornamento",

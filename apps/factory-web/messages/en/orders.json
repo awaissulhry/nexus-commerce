@@ -2643,7 +2643,8 @@
       "answeredFor": "Answered for {orders}",
       "answeredForMore": "Answered for {orders} and {count} more",
       "answeredForCount_one": "Answered for {count} other order",
-      "answeredForCount_other": "Answered for {count} other orders"
+      "answeredForCount_other": "Answered for {count} other orders",
+      "countOf": "{count} of {of}"
     },
     "ask": {
       "button": "Ask for an update",

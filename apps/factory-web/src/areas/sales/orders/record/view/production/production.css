@@ -221,3 +221,18 @@
   .fw-pt-miss-row { grid-template-columns: minmax(0, 1fr) minmax(9rem, auto) minmax(0, auto); }
   .fw-pt-miss-do { justify-content: flex-end; }
 }
+
+/* ── fx5 #4: Production now's stage as the picture's horizontal segmented bar (done · now · to come) and each count's mini bar ── */
+.fw-pt-segbar { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; }
+.fw-pt-segs { list-style: none; margin: 0; padding: 0; display: flex; min-width: 0; }
+.fw-pt-seg { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: var(--nds-space-4); font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); }
+.fw-pt-seg > span:last-child { overflow-wrap: anywhere; padding-right: var(--nds-space-4); line-height: 1.25; }
+.fw-pt-seg-bar { height: 6px; margin-right: 3px; border-radius: var(--nds-radius-xs); background: var(--nds-surface-sunken); box-shadow: inset 0 0 0 1px var(--nds-border-subtle); }
+.fw-pt-seg.is-done .fw-pt-seg-bar { background: var(--nds-success); box-shadow: none; }
+.fw-pt-seg.is-current .fw-pt-seg-bar { background: var(--nds-primary); box-shadow: none; }
+.fw-pt-seg.is-current { color: var(--nds-text); font-weight: var(--nds-font-weight-semibold); }
+.fw-pt-count .nds-progress { margin-top: var(--nds-space-2); }
+
+/* ── fx5 #5: a paired section's card stretches to the pair's height — no hole under the shorter one ── */
+.fw-pt-pairs > .fw-pt-sec { display: flex; flex-direction: column; }
+.fw-pt-pairs > .fw-pt-sec > .nds-card { flex: 1 1 auto; }
