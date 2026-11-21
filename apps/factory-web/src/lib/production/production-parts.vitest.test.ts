@@ -158,7 +158,9 @@ describe('F-SC-W3: StageStrip with picks — each step a named real button, no l
     expect(html).not.toContain('<details')
     // The tracker itself is unchanged (the DS part; its five steps, the current one marked) and comes before the buttons.
     expect(html.match(/class="nds-milestone"/g)?.length).toBe(5)
-    expect(html.indexOf('class="nds-milestones"')).toBeLessThan(html.indexOf('fw-prp-strip-pick'))
+    // pt-sc-fx1: the first BUTTON (its exact class), never the wrapper's class `fw-prp-strip-picks` that holds the tracker.
+    expect(html.indexOf('class="nds-milestones"')).toBeLessThan(html.indexOf('class="fw-prp-strip-pick"'))
+    expect(html.indexOf('class="fw-prp-strip-picks"')).toBeLessThan(html.indexOf('class="nds-milestones"'))
     // Never a div posing as a button.
     expect(html).not.toMatch(/role="button"/)
   })
