@@ -5,7 +5,7 @@ import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
 import { eventFor } from '@nexus/factory-domain/events/define'
 import { assertOneParty, brandHealthChanged, brandHoldChanged, brandStageReached, type BrandHoldKind } from '@nexus/factory-domain/production-brand/events'
 import { effectiveHealth, raiseStands, type BrandHealth, type HealthRaise, type HealthReasonCode } from '@nexus/factory-domain/production-brand/health'
-import { brandStageRank, movedForward, type BrandStage } from '@nexus/factory-domain/production-brand/stages'
+import { BRAND_STAGES, brandStageRank, movedForward, type BrandStage } from '@nexus/factory-domain/production-brand/stages' // B-SC-003: BRAND_STAGES
 import { HAND_STAGE_NOTICE_DELAY_MS, handStands } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-004, B-MS-008
 import { STAGE_NOTICE_KEYS } from '@nexus/factory-domain/production-brand/notices' // B-MS-008
 import type { Waiting, WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
@@ -37,20 +37,24 @@ import { ordersOfShipment } from '../../shipping/shipments/orders-of'
  *                    so the order's own timeline stays the order's). A stage going back is written (the
  *                    customer reads only true states) and never told. An order with no open goods line keeps its last stage.
  *   by hand          B-MS-004 (set the stage by hand, design A; review fixes R2, R6, R7, R15, R21): the ONE named exception to
- *                    "only true states". While the floor cannot record work that is done, an office person may put the stage
- *                    ahead with a reason (./stage, B-MS-005; the five stageSet… columns, hidden from the customer). The keeper
- *                    then writes the SHOWN stage into `stage`: the higher of the floor's and the hand stage (production-brand
- *                    stage-set shownStageOf). The floor's own stage is never stored: every decision of a pass (the plan, the
- *                    clears, the skip of the high-volume events below) reads the floor's stage computed in THAT pass, never the
- *                    stored one. The hand stage stands while the floor is below it (nothing written, nothing told); the floor
- *                    reaching or passing it, no goods line left open, a person's Clear, or the order leaving production
- *                    (cancelled, closed, shipped: R2, a command of its own, and the nightly run looks for any the events
- *                    missed) ends it in the SAME write — the five columns cleared (the database's guard: while it stands
- *                    `stage` equals it), `stage` the floor's or, with no goods line, where the work reached; a step back takes
- *                    the floor's own day (R15, floorDayOf). The told rule stays the one above (a forward move of `stage`, what
- *                    the customer reads), so a floor Cutting under a hand Sewing tells nothing. Each end the keeper writes is
- *                    also one row on the SalesOrder (`production.brandKeeper.handCleared` {stage, floor, why}; never a `status`
- *                    key, which the portal's order history reads: R6), so the order's History says it.
+ *                    "only true states". An office person may set the stage where the work really is, with a reason (./stage,
+ *                    B-MS-005; the five stageSet… columns, hidden from the customer; B-SC-003, stage control B: any stage,
+ *                    forward or back, also below the floor). The keeper then writes the SHOWN stage into `stage`: the hand
+ *                    stage while it stands, higher or lower than the floor's (production-brand stage-set shownStageOf). The
+ *                    floor's own stage is never stored: every decision of a pass (the plan, the clears, the skip of the
+ *                    high-volume events below) reads the floor's stage computed in THAT pass, never the stored one. The hand
+ *                    stage stands until the floor agrees or moves on (end rule E1, stage-set handStands, against `floorAtSet`
+ *                    — the floor's stage at the newest set or change, readHandFloor: the set's own audit row): set ahead, until
+ *                    the floor reaches or passes it; set back, until the floor equals it or moves past where it stood at the
+ *                    set (a real release after a wrong scan: quality's truth takes over, and is told). Nothing is written or
+ *                    told while it stands. That end, no goods line left open, a person's Clear, or the order leaving
+ *                    production (cancelled, closed, shipped: R2, a command of its own, and the nightly run looks for any the
+ *                    events missed) ends it in the SAME write — the five columns cleared (the database's guard: while it
+ *                    stands `stage` equals it), `stage` the floor's or, with no goods line, where the work reached; a step back
+ *                    takes the floor's own day (R15, floorDayOf). The told rule stays the one above (a forward move of
+ *                    `stage`, what the customer reads), so a floor Cutting under a hand Sewing tells nothing. Each end the
+ *                    keeper writes is also one row on the SalesOrder (`production.brandKeeper.handCleared` {stage, floor, why};
+ *                    never a `status` key, which the portal's order history reads: R6), so the order's History says it.
  *   undo window      B-MS-008 (Owner D4; review R3a): a stage set by hand is told with `byHand`, and its notice waits 10 minutes
  *                    (the partner fan-out's delayMs). When the stage the customer reads moves off a stage whose by-hand notice
  *                    still waits — a Clear, a Change, the floor passing it, the order leaving production — that stage gets the
@@ -102,8 +106,8 @@ export const CLEAR_BRAND_STAGE = 'production.clearBrandStage'
 export const HAND_CLEARED = 'production.brandKeeper.handCleared'
 
 /**
- * Why a stage set by hand ended: the floor reached or passed it, no goods line is left open, the order left production
- * (cancelled, closed, shipped), or a person cleared it (./stage).
+ * Why a stage set by hand ended: the floor reached or passed it (B-SC-003, end rule E1: the floor agrees or moved on), no goods
+ * line is left open, the order left production (cancelled, closed, shipped), or a person cleared it (./stage).
  */
 export const HAND_DROPS = ['REACHED', 'NO_LINE', 'LEFT_PRODUCTION', 'CLEARED'] as const
 export type HandDrop = (typeof HAND_DROPS)[number]
@@ -168,6 +172,8 @@ export interface KeeperRow {
   readonly stage: BrandStage
   // B-MS-004: the stage set by hand (null: none stands; while it stands `stage` equals it, the database's guard).
   readonly stageSet: BrandStage | null
+  // B-SC-003 (end rule E1): the floor's stage when it was set or changed (readHandFloor; null: none stands, or not known).
+  readonly handFloor: BrandStage | null
   readonly health: BrandHealth | null
   readonly healthSet: BrandHealth | null
   readonly healthReasonCode: HealthReasonCode | null
@@ -224,10 +230,11 @@ export function planKeep(input: { readonly row: KeeperRow | null; readonly targe
   const data: KeepPlan['data'] = {}
   const previousStage = row?.stage ?? null
   // B-MS-004 (design A; R7): every decision reads the FLOOR's stage of this pass (target.stage), never the stored one. A hand stage
-  // stands while the floor is below it (`stage` stays the hand stage); the floor reaching or passing it, no goods line open, or a
-  // person's Clear ends it in this same write: `stage` the floor's — with no goods line, where the work reached.
+  // stands until the floor agrees or moves on (B-SC-003, end rule E1 against the floor at the set: `stage` stays the hand stage,
+  // higher or lower than the floor's); that end, no goods line open, or a person's Clear ends it in this same write: `stage` the
+  // floor's — with no goods line, where the work reached.
   const hand = row?.stageSet ?? null
-  const handStays = hand !== null && input.clearHand !== true && handStands(target.stage, hand)
+  const handStays = hand !== null && input.clearHand !== true && handStands(target.stage, hand, row?.handFloor ?? null)
   if (hand !== null && !handStays) data.handDropped = input.clearHand === true ? 'CLEARED' : target.stage === null ? 'NO_LINE' : 'REACHED'
   const shown: BrandStage | null = handStays ? hand : (target.stage ?? (hand !== null ? target.reached : null))
   if (shown !== null && shown !== previousStage) {
@@ -302,6 +309,8 @@ async function readRow(db: Reader, orderId: string): Promise<KeeperRow | null> {
     ...row,
     stage: row.stage as BrandStage,
     stageSet: row.stageSet as BrandStage | null, // B-MS-004
+    // B-SC-003: the floor at the set, read only while a hand stage stands (one indexed audit read).
+    handFloor: row.stageSet !== null ? await readHandFloor(db, row.id) : null,
     health: row.health as BrandHealth | null,
     healthSet: row.healthSet as BrandHealth | null,
     healthReasonCode: row.healthReasonCode as HealthReasonCode | null,
@@ -574,6 +583,20 @@ export async function readHandNotice(db: Reader, rowId: string, orderId: string,
   return handNoticeOf(newest, made, now)
 }
 // ── end B-MS-008 (ms-fx1) ──
+
+// ── B-SC-003 (stage control B, end rule E1) ──
+/**
+ * The floor's stage when the hand stage standing was set or changed: `after.floor` of the row's NEWEST set by hand (./stage writes
+ * it on every Set and Change; newest by id, as the markers). null: none, or no floor in it — a row written before B or by hand
+ * outside the command: the keeper reads it as set ahead (today's rule). One indexed read. The keeper's end rule and the office's
+ * headline (sales/orders production-read `byHand.floorAtSet`) share it.
+ */
+export async function readHandFloor(db: Reader, rowId: string): Promise<BrandStage | null> {
+  const set = await db.auditLog.findFirst({ where: { recordType: 'BrandOrderProduction', recordId: rowId, action: SET_BRAND_STAGE }, select: { after: true }, orderBy: { id: 'desc' } })
+  const floor = set ? jsonObject(set.after)?.floor : undefined
+  return typeof floor === 'string' && (BRAND_STAGES as readonly string[]).includes(floor) ? (floor as BrandStage) : null
+}
+// ── end B-SC-003 ──
 
 /** A plain JSON object of an audit row (else null). */
 const jsonObject = (value: unknown): Record<string, unknown> | null => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null)

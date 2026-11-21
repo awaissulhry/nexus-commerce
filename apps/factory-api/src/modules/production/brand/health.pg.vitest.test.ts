@@ -309,6 +309,7 @@ describe('the keeper drops what the raise wrote (B-PR-17 planKeep, pure)', () =>
     salesOrderId: newId(),
     stage: 'PREPARING',
     stageSet: null, // B-MS-004: no stage set by hand
+    handFloor: null, // B-SC-003
     health: 'ON_TRACK',
     healthSet: 'AT_RISK',
     healthReasonCode: 'CAPACITY',
