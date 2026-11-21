@@ -102,7 +102,7 @@ describe('F-PT-404: the mark reads the headline (no second GET) and re-reads it 
   const at = (over: Partial<NonNullable<Headline['health']>>): Headline => ({ ...HEADLINE, health: { ...HEADLINE.health!, version: 7, ...over } })
 
   it('the headline as the mark rule reads it: kept, the stored and computed words, a standing raise, the version', () => {
-    const view = healthViewOf(so, at({ code: 'AT_RISK', computed: 'ON_TRACK', raise: { reasonCode: 'MATERIAL_LATE', words: w('Material late', 'Materiale in ritardo'), until: '2026-11-30', note: 'Pelle in ritardo.', by: { id: 'u1', name: 'Sara Prova' }, at: '2026-11-20T09:00:00Z' } }))
+    const view = healthViewOf(so, at({ code: 'AT_RISK', computed: 'ON_TRACK', raise: { reasonCode: 'MATERIAL_LATE', words: w('Material late', 'Materiale in ritardo'), until: '2026-11-30', note: 'Pelle in ritardo.', by: { id: 'u1', name: 'Sara Prova', active: true }, at: '2026-11-20T09:00:00Z' } }))
     expect(view).toMatchObject({ orderId: so.id, kept: true, health: 'AT_RISK', computed: 'ON_TRACK', version: 7, raise: { reasonCode: 'MATERIAL_LATE', stands: true, until: '2026-11-30', setBy: { name: 'Sara Prova' } } })
     // A standing mark over dates that say On track: Change… and Remove the mark (the one rule of both pages).
     expect(markActsOf(view, true)).toEqual({ mark: 'change', remove: true })
