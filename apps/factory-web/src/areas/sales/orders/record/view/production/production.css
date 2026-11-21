@@ -169,3 +169,17 @@
 .fw-pt-move { display: flex; flex-direction: column; gap: var(--nds-space-2); font-size: var(--nds-font-size-sm); min-width: 0; padding-left: var(--nds-space-12); border-left: 2px solid var(--nds-warning-border); scroll-margin-top: var(--nds-space-4); }
 .fw-pt-move.is-set { border-left-color: var(--nds-border-strong); }
 .fw-pt-move-doors { display: flex; gap: var(--nds-space-2); flex-wrap: wrap; align-items: center; }
+
+/* ── 3 · Problems & holds (F-PT-301 / 302) ── */
+.fw-pt-ph { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16) var(--nds-space-22); min-width: 0; }
+@container sec (min-width: 960px) {
+  .fw-pt-ph { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+  .fw-pt-ph-q { padding-left: var(--nds-space-22); border-left: 1px solid var(--nds-border-subtle); }
+}
+
+/* ── 5 · Materials (F-PT-303) ── */
+.fw-pt-mat { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16) var(--nds-space-22); min-width: 0; padding-top: var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); }
+@container sec (min-width: 1200px) {
+  .fw-pt-mat { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+  .fw-pt-mat-buy { padding-left: var(--nds-space-22); border-left: 1px solid var(--nds-border-subtle); }
+}

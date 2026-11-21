@@ -1954,7 +1954,6 @@
       "label": "Metti in sospeso tutto l'ordine…",
       "reading": "Gli ordini di lavoro dell'ordine sono ancora in lettura",
       "onlyUnits": "In lavorazione ci sono solo capi su misura: ognuno si mette in sospeso dalla sua pagina",
-      "qualityNoRight": "Lo sblocca la qualità: i blocchi qualità si aprono per un ispettore qualità o il titolare",
       "leftTitle": "Non messi in sospeso da qui",
       "left": "{number} — {words}",
       "notReached_one": "{count} ordine di lavoro fuori da ciò che puoi aprire non si mette in sospeso da qui: lo fa la Produzione",
@@ -2708,7 +2707,11 @@
       "changeMark": "Cambia il segno…",
       "removeMark": "Togli il segno",
       "notKept": "Non ancora seguito: la produzione parte quando l'ordine è confermato.",
-      "infoBody": "Dove si trova l'ordine ora, quanti dei suoi capi hanno passato ogni fase, se mantiene la promessa e a chi chiedere. I conteggi sono del reparto e della qualità, al minuto indicato. Il cliente non legge mai le richieste."
+      "infoBody": "Dove si trova l'ordine ora, quanti dei suoi capi hanno passato ogni fase, se mantiene la promessa e a chi chiedere. I conteggi sono del reparto e della qualità, al minuto indicato. Il cliente non legge mai le richieste.",
+      "answeredFor": "Risposta valida anche per {orders}",
+      "answeredForMore": "Risposta valida anche per {orders} e altri {count}",
+      "answeredForCount_one": "Risposta valida anche per {count} altro ordine",
+      "answeredForCount_other": "Risposta valida anche per altri {count} ordini"
     },
     "ask": {
       "button": "Chiedi un aggiornamento",
@@ -2870,7 +2873,8 @@
       "seesNone": "Il cliente non vede queste fasi: solo la promessa.",
       "added": "Via libera aggiunto.",
       "removed": "Via libera rimosso.",
-      "more": "Altro per {step}"
+      "more": "Altro per {step}",
+      "decide": "Decidi per {customer}…"
     },
     "byLine": {
       "title": "Per riga · prima la peggiore",
@@ -2907,10 +2911,73 @@
       "earlier_one": "Mostra {count} spostamento precedente",
       "earlier_other": "Mostra {count} spostamenti precedenti",
       "tell": "Avvisa il cliente…",
-      "pointer": "Gli spostamenti della promessa sono in Produzione › Date e piano ›"
+      "pointer": "Gli spostamenti della promessa sono nella scheda Produzione, in Date e piano ›"
     },
     "promise": {
       "hint": "Il cliente riceve un avviso nel portale (e un'e-mail se l'ha scelto). Il reparto non viene avvisato."
+    },
+    "problems": {
+      "title": "Problemi e blocchi",
+      "stops_one": "{count} cosa blocca l'ordine",
+      "stops_other": "{count} cose bloccano l'ordine",
+      "stopsNothing": "Niente blocca l'ordine",
+      "noQuestions": "Nessuna domanda aspetta una risposta",
+      "final": {
+        "PASSED": "Controllo finale superato",
+        "FAILED": "Controllo finale non superato",
+        "WAITING": "Controllo finale in attesa",
+        "none": "Controllo finale: non ancora"
+      },
+      "stopsTitle": "Cosa lo blocca",
+      "answersTitle": "Aspetta una risposta",
+      "late": "in ritardo",
+      "answers": {
+        "ME": "Rispondi tu",
+        "SOMEONE_ELSE": "Risponde un'altra persona",
+        "NOT_SET": "Ancora nessuno risponde"
+      },
+      "reply": "Rispondi nella conversazione",
+      "qualityTitle": "Qualità",
+      "inspected": "{inspected} su {lot} controllati",
+      "defects": "{critical} critici · {major} maggiori · {minor} minori",
+      "sharedCheck": "Copre anche altro lavoro — non per il cliente",
+      "qualityWithheld": "Non visibile per te: controlli finali, non conformità (li vedono Produzione e Qualità)",
+      "noFinal": "Ancora nessun controllo finale.",
+      "liftHint": "Togliere un blocco: lo fa la produzione — un pianificatore o il responsabile di produzione.",
+      "infoBody": "Cosa blocca l'ordine adesso, chi agisce e l'unico pulsante per agire; le domande che aspettano una risposta; poi la sua qualità in parole semplici. Il cliente legge le parole del blocco, mai la nota dell'ufficio.",
+      "raiseNcr": "Apri una non conformità…"
+    },
+    "materials": {
+      "title": "Materiali",
+      "allHere": "C'è tutto per gli ordini di lavoro creati",
+      "missing_one": "Manca {count} cosa",
+      "missing_other": "Mancano {count} cose",
+      "noWork": "Crea gli ordini di lavoro per controllare cosa compriamo.",
+      "missingTitle": "Manca",
+      "waitsCustomer": "Aspetta il cliente",
+      "waitsSupplier": "Aspetta il fornitore",
+      "stillToCome": "ancora da arrivare {quantity} ({arrived} su {expected} arrivati)",
+      "toCome": "ancora da arrivare {quantity}",
+      "allArrived": "Tutto arrivato",
+      "arrivedOf": "{arrived} su {expected}",
+      "customerTitle": "Dal cliente",
+      "buyTitle": "Cosa compriamo",
+      "col": {
+        "material": "Materiale",
+        "arrived": "Arrivato",
+        "used": "Usato",
+        "left": "Rimasto",
+        "state": "Stato"
+      },
+      "lots": "Lotti: {lots}",
+      "nothingFromCustomer": "Il cliente non manda niente per questo ordine.",
+      "needed": "necessario {quantity}",
+      "folded": "{word} ({count})",
+      "askCustomer": "Chiedi al cliente",
+      "openPo": "Apri {number}",
+      "howTitle": "Come si conta",
+      "howBody": "Mai valorizzato. I materiali del cliente vanno prima al suo ordine più vecchio. Ciò che compriamo è pronto quando è riservato o consegnato all'ordine di lavoro; le riserve seguono la priorità degli ordini di lavoro.",
+      "infoBody": "Abbiamo tutto per produrre questo ordine: i materiali del cliente (Arrivato) e ciò che compriamo — prima quello che manca, con chi lo aspetta."
     }
   }
 }

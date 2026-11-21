@@ -47,11 +47,15 @@ describe('F-PT-103: the asks line of the order', () => {
 
   it('answered by a reply (B-PT-010): "Latest update" with who, when and the first line; without the reply only when', () => {
     const replied = issue({ status: 'ANSWERED', answeredAt: '2026-11-20T13:10:00Z', reply: { at: '2026-11-20T13:10:00Z', messageId: 'm2', by: { id: 'u2', name: 'Carlo Prova' }, excerpt: 'Cutting done for all 244.\nSewing line 2 at 212.' } })
-    expect(asksOf([replied]).latest).toEqual({ at: '2026-11-20T13:10:00Z', by: 'Carlo Prova', text: 'Cutting done for all 244.', messageId: 'm2' })
+    expect(asksOf([replied]).latest).toEqual({ at: '2026-11-20T13:10:00Z', by: 'Carlo Prova', text: 'Cutting done for all 244.', messageId: 'm2', answeredFor: null })
     expect(asksOf([replied]).open).toBeNull()
     expect(asksOf([replied]).waiting).toBe(0)
     const ticked = issue({ status: 'ANSWERED', answeredAt: '2026-11-20T13:10:00Z' })
-    expect(asksOf([ticked]).latest).toEqual({ at: '2026-11-20T13:10:00Z', by: null, text: null, messageId: null })
+    expect(asksOf([ticked]).latest).toEqual({ at: '2026-11-20T13:10:00Z', by: null, text: null, messageId: null, answeredFor: null })
+    // L8 (B-PT-010b): one reply answered the asks of other orders too — those the reader may open by number, the rest counted.
+    const batch = { id: 'b1', issues: 3, orders: [{ id: 'o2', number: 'SEED-SO-0090' }], more: 1 }
+    expect(asksOf([{ ...ticked, batch }]).latest?.answeredFor).toEqual({ orders: ['SEED-SO-0090'], more: 1 })
+    expect(asksOf([{ ...ticked, batch: { id: 'b1', issues: 1, orders: [], more: 0 } }]).latest?.answeredFor).toBeNull()
   })
 
   it('the customer’s questions count as waiting but are never an update ask', () => {

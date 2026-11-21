@@ -92,19 +92,24 @@ describe('F-SA-234: Production › Work orders — the order’s own pieces', ()
 const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(designScreen.view as ComponentType<{ model: unknown }>, designScreen.cases.find((item) => item.id === id)!.model, locale)
 
 // ---- F-SA-235: Holds, quality & problems; Materials; Specs in force (the HealthCard moved to lib, one card) -------------------------
-describe('F-SA-235: Production’s holds, quality & problems — each block held in words without its right', () => {
-  it('a quality hold in plain words, the office note marked office only, a problem that needs an answer, the NCR, the final inspection', () => {
+describe('F-SA-235 / F-PT-301…302: Production’s Problems & holds — each block held in words without its right', () => {
+  it('a quality hold in plain words, the office note marked office only, a question that needs an answer, the NCR, the final inspection', () => {
     const text = textOf(draw('production-quality'))
-    for (const words of ['Holds, quality & problems', 'On hold since', 'Shade difference on the leather', 'Goes back to In progress when quality releases it.', 'WO-00022', 'Lotto pelle in verifica col fornitore.', 'Office only', 'Needs an answer: 1', 'Escalated 1×', 'NCR-2026-0041', 'FI-2026-0088', 'Specs in force']) expect(text, words).toContain(words)
-    expect(text).not.toContain('No holds, problems or quality findings')
+    // F-PT-301: the hold is Overview's own strip; F-PT-302: the asks come from the ONE issues list, the final check and NCR in words.
+    for (const words of ['Problems & holds', 'What stops it', 'Shade difference on the leather', 'WO-00022', 'Lotto pelle in verifica col fornitore.', 'Office only', 'Needs an answer', 'Question for production', 'Escalated 1× — now with the backup', 'When does the leather come back from the supplier?', 'Sara Prova', 'NCR-2026-0041', 'Minor', 'Loose stitching on the collar', 'FI-2026-0088', '5 of 40 inspected', '0 critical · 1 major · 2 minor', 'Final check waiting', 'Specs in force']) expect(text, words).toContain(words)
+    expect(text).not.toContain('Nothing stops this order')
+    expect(text).not.toContain('Holds, quality & problems')
   })
 
   it('without the rights: each block says what it needs (never "none"); everything read and empty: one sentence', () => {
     const held = textOf(draw('production-no-right'))
     // F-PT-104: the work orders' progress withheld says what and who sees it, never a right's name (10-design §2).
-    for (const words of ['Problems need the work orders right', 'Nonconformities need the quality right', 'Final inspections need the inspections right', 'Not shown to you: the progress (Production and Sales see it)']) expect(held, words).toContain(words)
-    expect(held).not.toContain('No holds, problems or quality findings')
-    expect(textOf(draw('production-progress'))).toContain('No holds, problems or quality findings')
+    // F-PT-302: the quality withheld in ONE line of words — what is not shown and who sees it, never a right's name.
+    for (const words of ['Not shown to you: final checks, nonconformances (Production and Quality see them)', 'Not shown to you: the progress (Production and Sales see it)']) expect(held, words).toContain(words)
+    expect(held).not.toMatch(/the (work orders|quality|inspections) right/)
+    expect(held).not.toContain('No final check yet.')
+    expect(textOf(draw('production-progress'))).toContain('Nothing stops this order')
+    expect(textOf(draw('production-progress'))).toContain('No final check yet.')
   })
 
   it('the work order record’s HealthCard is the one card (moved to lib/production/health); Materials and the tech pack moved to Production', () => {
@@ -114,7 +119,9 @@ describe('F-SA-235: Production’s holds, quality & problems — each block held
     const now = readFileSync(new URL('./view/production/NowSection.tsx', import.meta.url), 'utf8')
     expect(now).toContain("import { RaiseDialog } from '../../../../../../lib/production/health/view/HealthCard'")
     expect(now).toContain('markActsOf(view, !!health?.can)')
-    expect(tab).toContain('<MaterialsCard order={order} model={model.depth}')
+    // F-PT-303: the materials card gave way to Production's own Materials section (the customer's goods and what we buy, missing first).
+    expect(tab).toContain('<MaterialsSection order={order} model={model} actions={actions} />')
+    expect(tab).not.toContain('<MaterialsCard')
     expect(tab).toContain('<TechPackCard model={model.depth} actions={actions?.depth} />')
     const workOrder = readFileSync(new URL('../../../production/work-orders/record/view/OverviewTab.tsx', import.meta.url), 'utf8')
     expect(workOrder).toContain("from '../../../../../lib/production/health/view/HealthCard'")
@@ -560,7 +567,10 @@ describe('the Overview’s doors land on Production: #work-orders, #holds, #line
     expect(readFileSync(new URL('./view/production/WorkOrdersSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="work-orders"')
     expect(readFileSync(new URL('./view/production/NowSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="now"')
     expect(readFileSync(new URL('./view/production/Kit.tsx', import.meta.url), 'utf8')).toContain('<section id={id} className="fw-pt-sec fw-so-anchor" aria-labelledby={headId}>')
-    expect(tab).toContain('<Card padded id="holds" className="fw-so-anchor">')
+    // F-PT-301 / 303: Problems & holds and Materials are kit sections with their old addresses.
+    expect(tab).toContain('<ProblemsSection order={order} model={model} actions={actions} />')
+    expect(readFileSync(new URL('./view/production/ProblemsSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="holds"')
+    expect(readFileSync(new URL('./view/production/MaterialsSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="materials"')
     // F-PT-203: by line keeps the older #line-<lineId> address on each line's row (and the row's about-SalesOrderLine-<id>).
     expect(readFileSync(new URL('./view/production/DatesSection.tsx', import.meta.url), 'utf8')).toContain('id={`line-${row.lineId}`}')
   })

@@ -22,6 +22,11 @@ describe('F-PT-202: the steps', () => {
     expect(rows.find((row) => row.kind === 'START')?.who).toEqual({ kind: 'production' })
     expect(rows.find((row) => row.kind === 'SHIP')?.who).toEqual({ kind: 'shipping' })
     expect(rows.find((row) => row.kind === 'GATE')?.who).toEqual({ kind: 'planner', name: 'Dora Campione' })
+    // The deposit's paidAt is an instant: the step's done is its Rome day (the view formats a day; an instant there threw).
+    const deposit = rows.find((row) => row.kind === 'DEPOSIT')
+    if (deposit?.done) expect(deposit.done).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    const paid = stepsOf({ ...so, depositRequired: true, chain: { ...so.chain, depositRequests: [{ ...so.chain.depositRequests[0]!, status: 'PAID', paidAt: '2026-11-02T23:30:00Z' }] } }, datesWith([]), TODAY)[0]!
+    expect(paid).toMatchObject({ kind: 'DEPOSIT', done: '2026-11-03', status: { kind: 'done' } })
   })
 
   it('one status word set: late (open past its day) · waiting soon (≤ 3 days, warning) · waiting · started before · to come · done', () => {
@@ -56,6 +61,22 @@ describe('F-PT-202: what the reader may do with a step (L9)', () => {
     expect(stepActsOf(row({ pass: needs, startBefore: needs, edit: needs, remove: needs }))).toEqual({ primary: null, more: [], askOnly: true })
     // A done step offers nothing and asks nothing.
     expect(stepActsOf(row({ pass: allowed, startBefore: allowed, edit: allowed, remove: allowed }, 'DONE'))).toEqual({ primary: null, more: [], askOnly: false })
+  })
+
+  it('W3 extra: a gate waiting on the customer’s own sample round — the primary is Decide for {customer}… (with the right only)', () => {
+    const round = { id: 'r1', number: 'SR-2026-0007', kind: 'PP', decision: null }
+    const sample = (decision: string | null): StepRow => ({ ...row({ pass: allowed, startBefore: needs, edit: allowed, remove: needs }), who: { kind: 'customerSample' }, gate: { ...GATE, actions: { pass: allowed, startBefore: needs, edit: allowed, remove: needs }, sampleRound: { ...round, decision } } })
+    expect(stepActsOf(sample(null), { decide: true })).toEqual({ primary: 'decide', more: ['move', 'done'], askOnly: false })
+    // Without production.brand.override: no Decide (hidden, L9) — Mark done… as before.
+    expect(stepActsOf(sample(null))).toEqual({ primary: 'done', more: ['move'], askOnly: false })
+    // The round decided already: nothing to decide.
+    expect(stepActsOf(sample('APPROVED'), { decide: true }).primary).toBe('done')
+    // A planner's gate never offers it.
+    expect(stepActsOf(row({ pass: allowed, startBefore: needs, edit: needs, remove: needs }), { decide: true }).primary).toBe('done')
+    const block = readFileSync(new URL('../view/production/StepsBlock.tsx', import.meta.url), 'utf8')
+    expect(block).toContain("acts.primary === 'decide' && opens")
+    expect(block).toContain('onClick={() => gateActs?.onOpen?.(opens)}')
+    for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['orders']).orders!)('productionTab.steps.decide', { customer: 'Brand Alpha' }), locale).toContain('Brand Alpha')
   })
 
   it('the wiring: Planning’s dialogs mounted once for the page; each gate row its anchor (B18); the planner asked by a mention', () => {

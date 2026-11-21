@@ -392,7 +392,10 @@ export function whereStripsOf(order: StripOrder, read: Pick<OrderProduction, 'he
 
 // ---- F-OO-105 (order overview §1.3; review F1, F8, F13): each strip's real doors — at most 3 visible buttons per strip ----
 /**
- * What a strip lets this reader do, each door the real one, held with words when the reader may not (never hidden without why):
+ * What a strip lets this reader do, each door the real one, held with words when the reader may not (never hidden without why) —
+ * F-PT-301 (plan D2 / L9): except the HOLD doors (Release on Quality ›, Lift…, Lift for N…), hidden without their right on both tabs
+ * (Overview and Production › Problems & holds); held with words only while a write runs. Set the stage by hand… is not a strip door
+ * (its held case stays, F-MS-104):
  *
  *   the order's yes    the band's own door (YesDoorView): Confirm the order + Refuse… for an approver who did not ask; held for the
  *                      asker, with Take the request back; anyone else reads who decides (in the strip's words) and the Take back
@@ -425,8 +428,8 @@ export type StripDoor =
   | { readonly kind: 'liftMany'; readonly holdKind: 'PRODUCTION' | 'BRAND'; readonly workOrders: readonly { readonly id: string; readonly number: string }[]; readonly shared: readonly string[]; readonly notReached: number; readonly label: 'wo.act.lift' | 'wo.liftPause'; readonly held: Phrase | null }
   /** A shared work order's own page (it makes other customers' work: lifted there). */
   | { readonly kind: 'workOrder'; readonly href: string; readonly number: string }
-  /** F-OO-108 (W07's note): `held` — Quality's holds do not open for this reader (quality.holds.view): the door is held with who does it. */
-  | { readonly kind: 'quality'; readonly href: string; readonly number: string; readonly held?: Phrase | null }
+  /** Release on Quality ›: only for who may open Quality's holds (quality.holds.view; F-PT-301 — hidden otherwise). */
+  | { readonly kind: 'quality'; readonly href: string; readonly number: string }
   | { readonly kind: 'review'; readonly href: string | null; readonly held: Phrase | null }
   // ---- F-OO-106: the order's own credit hold — Check credit again (held without the credit right), Ask for a yes… (only when one may
   // be asked: its check id is the lock), Try again when its read failed ----
@@ -492,8 +495,10 @@ export function stripDoorsOf(strip: WhereStrip, input: StripDoorsInput): StripDo
       const first = strip.workOrders.reached[0]
       if (!first) return []
       const href = `${input.prefix}/quality/holds${holdsAddress({ view: 'open', subjectType: 'WorkOrder', subjectId: first.id })}`
-      // F-OO-108: without quality.holds.view the Quality page refuses the reader: held with who releases it (Sales, Planner, Finance).
-      return [input.acts && !input.acts.qualityView ? { kind: 'quality', href, number: first.number ?? '—', held: phrase('where.hold.qualityNoRight') } : { kind: 'quality', href, number: first.number ?? '—' }]
+      // F-PT-301 (plan D2 / L9; was F-OO-108's held door): without quality.holds.view the door is not drawn — the strip's own line says
+      // who releases it (Sales, Planner, Finance), never a grey button.
+      if (input.acts && !input.acts.qualityView) return []
+      return [{ kind: 'quality', href, number: first.number ?? '—' }]
     }
     case 'production':
     case 'pause': {
@@ -502,15 +507,18 @@ export function stripDoorsOf(strip: WhereStrip, input: StripDoorsInput): StripDo
       if (own.length === 1 && shared.length === 0 && strip.workOrders.notReached === 0) {
         const row = input.work.find((entry) => entry.id === own[0]!.id) ?? null
         const lift = row && input.acts ? (rowActsOf(row, input.acts).menu.find((entry) => entry.act === 'lift') ?? null) : null
-        if (row && lift) return [{ kind: 'lift', row, label: strip.kind === 'pause' ? 'wo.liftPause' : 'wo.act.lift', held: lift.held ?? busy }]
+        // F-PT-301 (L9): Lift… only for who may lift it (the row's own hold right); held only while a write runs.
+        if (row && lift && lift.held) return []
+        if (row && lift) return [{ kind: 'lift', row, label: strip.kind === 'pause' ? 'wo.liftPause' : 'wo.act.lift', held: busy }]
       }
       // ---- F-OO-109: two or more of its own — ONE Lift (each row read with its version and rights; held with who does it) ----
       const label = strip.kind === 'pause' ? 'wo.liftPause' : 'wo.act.lift'
       const rows = own.map((entry) => input.work.find((row) => row.id === entry.id) ?? null)
       if (own.length > 1 && input.acts?.view && rows.every((row) => row && row.version !== undefined && row.rights)) {
-        const held = rows.some((row) => !row!.rights!.hold || !!row!.rights!.why) ? HELD_FOR_SALES : busy
+        // F-PT-301 (L9): ONE Lift only for who may lift every one of them; else no door (the section's hint says who does it).
+        if (rows.some((row) => !row!.rights!.hold || !!row!.rights!.why)) return []
         const numbers = (entries: readonly StripWorkOrder[]) => entries.map((entry) => entry.number ?? '—')
-        return [{ kind: 'liftMany', holdKind: strip.kind === 'pause' ? 'BRAND' : 'PRODUCTION', workOrders: own.map((entry) => ({ id: entry.id, number: entry.number ?? '—' })), shared: numbers(shared), notReached: strip.workOrders.notReached, label, held }]
+        return [{ kind: 'liftMany', holdKind: strip.kind === 'pause' ? 'BRAND' : 'PRODUCTION', workOrders: own.map((entry) => ({ id: entry.id, number: entry.number ?? '—' })), shared: numbers(shared), notReached: strip.workOrders.notReached, label, held: busy }]
       }
       // ---- end F-OO-109
       if (own.length > 0) return [{ kind: 'tab', tab: 'production', anchor: 'holds' }]

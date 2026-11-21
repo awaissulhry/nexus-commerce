@@ -166,10 +166,10 @@ function Steps({ order, model, actions }: { order: Order; model: OrderRecordMode
           <div role="columnheader" />
         </div>
         {rows.map((row) => {
-          const acts = stepActsOf(row)
+          const opens = row.milestoneId && model.gateActs ? row.milestoneId : null
+          const acts = stepActsOf(row, { decide: !!model.can.decideForCustomer && !!opens })
           const name = nameOf(row)
           const items = itemsOf(row, acts.more)
-          const opens = row.milestoneId && model.gateActs ? row.milestoneId : null
           return (
             <div key={row.id} role="row" className="fw-pt-step" id={row.gateId ? rowAnchor('OrderGate', row.gateId) : undefined} tabIndex={row.gateId ? -1 : undefined}>
               <div role="cell">
@@ -215,9 +215,15 @@ function Steps({ order, model, actions }: { order: Order; model: OrderRecordMode
                     <TabLink href={tabHref(`${model.prefix}/sales/orders/${order.id}`, 'money', search)}>{t('gate.money')}</TabLink>
                   </Button>
                 ) : null}
-                {acts.primary && row.gateId ? (
+                {acts.primary === 'done' && row.gateId ? (
                   <Button size="sm" heldReason={busy ? t('held.busy') : null} onClick={() => gateActs?.onPass?.([row.gateId!])}>
                     {p('row.done')}
+                  </Button>
+                ) : null}
+                {/* W3 extra: a gate waiting on the customer's sample round — Planning's MilestoneDialog, which holds Decide for {customer}. */}
+                {acts.primary === 'decide' && opens ? (
+                  <Button size="sm" heldReason={busy ? t('held.busy') : null} onClick={() => gateActs?.onOpen?.(opens)}>
+                    {t('productionTab.steps.decide', { customer: order.partyName })}
                   </Button>
                 ) : null}
                 {acts.askOnly && mayAsk && row.who.kind === 'planner' && row.who.name ? (

@@ -33,7 +33,16 @@ export const orderIssueSchema = z.object({
   escalation: z.object({ step: z.number().int(), at: z.string(), words }).nullable(),
   task: z.object({ id: z.string(), assignee: z.enum(SUPERVISOR_MARKS) }).nullable(),
   /** Its batch (one note to N records: answered together) and how many issues it holds. */
-  batch: z.object({ id: z.string(), issues: z.number().int() }).nullable().optional(),
+  batch: z
+    .object({
+      id: z.string(),
+      issues: z.number().int(),
+      // F-PT-302 (L8, B-PT-010b; optional): the OTHER orders of the asks on the same task the reader may open, and the rest counted.
+      orders: z.array(z.object({ id: z.string(), number: z.string() })).optional(),
+      more: z.number().int().optional(),
+    })
+    .nullable()
+    .optional(),
   /** The words it was raised with, only for a reader of the record's thread. */
   excerpt: z.string().nullable(),
   // ---- F-PT-103 (B-PT-010; optional until the server's S2 lands) ----
