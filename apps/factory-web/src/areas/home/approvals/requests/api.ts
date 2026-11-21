@@ -77,6 +77,8 @@ const counterSchema = z.object({
   offer: words,
   state: z.enum(COUNTER_STATES),
   words,
+  // F-OC-103 (B-OC-003): the day our counter-offer lapses (its approval's due) — absent until the server sends it: no lapse day said.
+  dueAt: z.string().nullable().optional(),
 })
 
 /** One customer request as the office reads it (the customer's view of it + who answers its kind, where, what this reader may do). */

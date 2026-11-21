@@ -23,6 +23,10 @@ import { rowWordsOf } from '../../overview/model'
 import { askWordsOf } from '../model'
 import { mineCountOf, waitingItemOf, type WaitingItem } from '../waiting'
 // ---- end F-OC-102
+// ---- F-OC-103: Waiting on {customer} — by when, how late, what they see, and Manage in the thread… ----
+import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
+import { lateDaysOf } from '../waiting'
+// ---- end F-OC-103
 import './changes.css'
 // ---- F-OP-117: the work-order changes of this order (its card stays until F-OC-105 takes it out) ----
 import { Card, EmptyState } from '@nexus/ui/components'
@@ -37,6 +41,8 @@ import { changeFiguresOf, changeHeldOf, floorToldOfChange, workOrderChangeRowsOf
 /** The catalogues Waiting's rows say their words in (Your turn, an approval's state, the old change's approval body). */
 const APPROVALS_NS = 'approvals'
 const RECORD_APPROVALS_NS = 'record-approvals'
+/** F-OC-103: what the customer reads in its portal's "Waiting for you" (`row.<KIND>`: "Approve the artwork SEED-SO-0002"). */
+const PORTAL_WAITING_NS = 'portal-waiting'
 
 /**
  * F-OC-101 … 104 (order CHANGES tab, 10-design §3; 18-lead-settles L1, L2, L4, L11) — section 1, Waiting (#waiting; #still-to-do and
@@ -48,7 +54,7 @@ const RECORD_APPROVALS_NS = 'record-approvals'
  */
 export function WaitingSection(props: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   return (
-    <WithMessages namespaces={[APPROVALS_NS, RECORD_APPROVALS_NS, DEPTH]}>
+    <WithMessages namespaces={[APPROVALS_NS, RECORD_APPROVALS_NS, DEPTH, PORTAL_WAITING_NS /* F-OC-103 */]}>
       <Waiting {...props} />
     </WithMessages>
   )
@@ -57,6 +63,7 @@ export function WaitingSection(props: { order: Order; model: OrderRecordModel; a
 function Waiting({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const locale = useLocale()
+  const frame = useRecordFrame() // F-OC-103: Manage in the thread… opens the dock's Approvals window
   const search = useSearchParams()?.toString() ?? ''
   const waiting = orderWaitingOf(order, model, locale)
   const title = t('changesTab.waiting.title')
@@ -151,6 +158,15 @@ function Waiting({ order, model, actions }: { order: Order; model: OrderRecordMo
           <div className="fw-oc-grp" role="group" aria-labelledby="fw-oc-g-customer">
             <div className="fw-oc-grp-h">
               <h3 id="fw-oc-g-customer">{t('waiting.onCustomer', { count: onCustomer.length, customer })}</h3>
+              {/* F-OC-103: ask, see and take back what we asked them — the dock's Approvals window (partners.approvals.ask only). */}
+              {model.can.askCustomer && frame?.openDoor ? (
+                <>
+                  <span className="fw-oc-sp" />
+                  <Button size="sm" variant="link" inline onClick={() => frame.openDoor?.('approve')}>
+                    {t('changesTab.waiting.manage')}
+                  </Button>
+                </>
+              ) : null}
             </div>
             {onCustomer.map(rowOf)}
           </div>
@@ -175,6 +191,7 @@ function WaitingItemRow({ item, order, model, actions, asOf, when }: { item: Wai
   const a = useT(APPROVALS_NS)
   const ra = useT(RECORD_APPROVALS_NS)
   const d = useT(DEPTH)
+  const p = useT(PORTAL_WAITING_NS) // F-OC-103
   const w = useProductionWords()
   const locale = useLocale()
   const search = useSearchParams()?.toString() ?? ''
@@ -201,14 +218,26 @@ function WaitingItemRow({ item, order, model, actions, asOf, when }: { item: Wai
     detail.push({ key: 'by', text: t('changesTab.row.askedBy', { name: door.task.requester.name, when: when(door.task.requestedAt) }) })
     detail.push({ key: 'body', text: d('changeYes.waitingBody') })
   }
-  // An approval we asked: by when, and where it stands (the record's own approvals' words).
-  if (approval) detail.push({ key: 'due', text: t('changes.onCustomer.due', { date: formatDate(approval.dueAt, { locale }) }) })
+  // ---- F-OC-103: what waits on the customer — by when (the read's `due`, else the approval's own), how late, what they see ----
+  const counter = door.kind === 'open' ? (door.request?.counter ?? null) : null
+  const due = row.due ?? approval?.dueAt ?? null
+  const late = item.face === 'asked' ? lateDaysOf(due, asOf) : null
+  if (counter) {
+    // Our counter-offer: what we offered, and the day it lapses (B-OC-003; not said until the server sends it).
+    detail.push({ key: 'offer', text: said(counter.offer, locale) })
+    if (counter.dueAt) detail.push({ key: 'lapses', text: t('changesTab.row.lapses', { date: formatDate(counter.dueAt, { locale }) }) })
+  } else if (due && item.face === 'asked') detail.push({ key: 'due', text: t('changes.onCustomer.due', { date: formatDate(due, { locale }) }) })
+  if (row.task?.label) detail.push({ key: 'task', text: row.task.label }) // a portal task: the record it is about
+  const sees = approval ? p(`row.${approval.kind}`, { label: locale === 'en' ? approval.record.words.en : approval.record.words.it }) : null
+  if (approval && sees && sees !== `row.${approval.kind}`) detail.push({ key: 'sees', text: t('changesTab.row.theySee', { words: sees }), quote: true })
+  // ---- end F-OC-103
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
   return (
     <div className="fw-oc-row" id={item.anchor ?? undefined} tabIndex={item.anchor ? -1 : undefined}>
       <div className="fw-oc-row-h">
         <b>{words}</b>
         {approval && <Pill tone="warning">{ra(`status.${approval.status}`)}</Pill>}
+        {late !== null && <Tag tone="danger">{t('changesTab.row.late', { count: late })}</Tag>}
       </div>
       <div className="fw-oc-row-x">
         {detail.map((line) => (

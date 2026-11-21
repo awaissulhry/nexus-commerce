@@ -116,6 +116,10 @@ export const headlineSchema = z.object({
         since: instant.nullable(),
         ref: z.object({ type: z.string(), id: z.string(), messageId: z.string().optional() }).nullable().optional(),
         sub: z.enum(BLOCKER_SUBS).nullable().optional(),
+        // F-OC-103 (B-OC-004): by when the customer answers (an approval, a portal task) and what a portal task asks — absent until the
+        // server sends them: the row then says its kind only (no due day, no "late").
+        due: instant.nullable().optional(),
+        task: z.object({ kind: z.string(), label: z.string() }).nullable().optional(),
       }),
     ),
   }),

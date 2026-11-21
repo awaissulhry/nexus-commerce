@@ -1078,6 +1078,10 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
       expect(textOf(artwork)).toContain(locale === 'en' ? 'Waiting for the answer' : 'In attesa di risposta')
       expect(artwork).not.toContain('<button')
       expect(artwork).not.toContain('<a ')
+      // F-OC-103: by when (every time with its day), and what the customer reads in its portal's "Waiting for you"; not late yet.
+      expect(textOf(artwork)).toContain(locale === 'en' ? 'due 02/12/2026' : 'entro il 02/12/2026')
+      if (locale === 'en') expect(textOf(artwork)).toContain('They see: Approve the artwork SO-2026-0088')
+      expect(textOf(artwork)).not.toMatch(/d late|in ritardo/)
       // L2: the problem the customer reported is a counted pointer row — "Production ›" to Problems & holds, never Reply here.
       const problem = rowOf(html, locale === 'en' ? 'reported a problem' : 'ha segnalato un problema')
       expect(problem).toMatch(/href="[^"]*\?tab=production[^"]*#holds"/)

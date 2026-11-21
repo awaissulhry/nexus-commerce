@@ -3036,14 +3036,17 @@
       "mine_one": "{count} tocca a te",
       "mine_other": "{count} toccano a te",
       "noneUs": "Niente tocca a noi.",
-      "noneCustomer": "Niente tocca a {customer}."
+      "noneCustomer": "Niente tocca a {customer}.",
+      "manage": "Gestisci nella conversazione…"
     },
     "open": "Apri ›",
     "row": {
       "approval": "Attende l'approvazione: {kind}",
       "askedBy": "Chiesta da {name} · {when}",
       "whenAsked": "Al momento della richiesta: {words}",
-      "theySee": "Il cliente vede: {words}"
+      "theySee": "Il cliente vede: {words}",
+      "lapses": "scade il {date}",
+      "late": "in ritardo di {count} g"
     },
     "who": {
       "sales": "Rispondono le vendite",

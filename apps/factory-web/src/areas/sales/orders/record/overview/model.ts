@@ -149,6 +149,10 @@ export interface WaitingRow {
   readonly door: WaitingDoor
   /** F-OO-202: where the page shows it — HOLD: Where it is now · DATE: Next dates · REQUEST: Requests & changes (and the Changes tab). */
   readonly place: BlockerPlace
+  // ---- F-OC-103 (B-OC-004): by when the customer answers, and what a portal task asks; absent: not read (an older answer) ----
+  readonly due?: string | null
+  readonly task?: { readonly kind: string; readonly label: string } | null
+  // ---- end F-OC-103
 }
 
 const HOLD_KINDS: ReadonlySet<string> = new Set(['BRAND_PAUSE', 'QUALITY_HOLD', 'NO_MOVE', 'NONCONFORMANCE', 'RELEASE_CHECK', 'SUBCONTRACT', 'CUSTOMER_MATERIAL'])
@@ -230,6 +234,8 @@ export function waitingOf(read: Pick<OrderProduction, 'headline'> | null | undef
     words: wordsOf(blocker, inputs),
     door: doorOf(blocker, inputs),
     place: blockerPlaceOf(blocker), // F-OO-202
+    due: blocker.due ?? null, // F-OC-103
+    task: blocker.task ?? null, // F-OC-103
   }))
   // An open yes of the order waits on us (an office person decides it): its own row with the yes in place.
   for (const task of inputs.approvals ?? []) {

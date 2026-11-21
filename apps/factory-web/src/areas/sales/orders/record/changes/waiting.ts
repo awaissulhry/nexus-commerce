@@ -107,3 +107,17 @@ export function waitingItemOf(row: WaitingRow, can: { readonly manage: boolean }
 /** "3 are your turn" (the head's tag): the rows this reader acts on now — the ones above and every Still to do row that asks them. */
 export const mineCountOf = (items: readonly Pick<WaitingItem, 'mine'>[], still: readonly { readonly mayAct: boolean }[]): number => items.filter((item) => item.mine).length + still.filter((row) => row.mayAct).length
 // ---- end F-OC-102
+
+// ---- F-OC-103 (10-design §3): Waiting on {customer} — by when, and how late ----------------------------------------------------
+/**
+ * Whole days a row is past its due day, counted to the read's own time ("1 d late"); null: not late, or no due day known (the server
+ * sends `due` with B-OC-004 — until then nothing is said, never a fake 0).
+ */
+export function lateDaysOf(due: string | null | undefined, asOf: string | null | undefined, now: number = Date.now()): number | null {
+  const at = due ? Date.parse(due) : NaN
+  if (!Number.isFinite(at)) return null
+  const read = asOf ? Date.parse(asOf) : NaN
+  const days = Math.floor(((Number.isFinite(read) ? read : now) - at) / 86_400_000)
+  return days >= 1 ? days : null
+}
+// ---- end F-OC-103

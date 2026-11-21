@@ -3036,14 +3036,17 @@
       "mine_one": "{count} is your turn",
       "mine_other": "{count} are your turn",
       "noneUs": "Nothing waits on us.",
-      "noneCustomer": "Nothing waits on {customer}."
+      "noneCustomer": "Nothing waits on {customer}.",
+      "manage": "Manage in the thread…"
     },
     "open": "Open ›",
     "row": {
       "approval": "Waits for approval: {kind}",
       "askedBy": "Asked by {name} · {when}",
       "whenAsked": "When they asked: {words}",
-      "theySee": "They see: {words}"
+      "theySee": "They see: {words}",
+      "lapses": "lapses {date}",
+      "late": "{count} d late"
     },
     "who": {
       "sales": "Sales answers it",
