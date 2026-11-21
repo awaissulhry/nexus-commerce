@@ -251,3 +251,6 @@
 @container pt (min-width: 720px) and (max-width: 1279px) {
   .fw-pt-c-no > .fw-pt-inline > .fw-pt-wo-id { flex-basis: 100%; }
 }
+
+/* fx9 N3: one divider between the missing things and "From the customer" (the last row's own border went with .fw-pt-mat's). */
+.fw-pt-miss-row:last-child { border-bottom: 0; }
