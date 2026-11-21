@@ -457,10 +457,10 @@
     "SAMPLE_APPROVED": "Sample approved",
     "LEATHER_APPROVED": "Leather approved",
     "TRIMS_IN": "Trims in",
-    "PP_SAMPLE": "Pre-production sample",
+    "PP_SAMPLE": "Pre-production sample approved",
     "LAB_PASSED": "Lab test passed",
     "OTHER": "Gate",
-    "SIZE_SET": "Size set"
+    "SIZE_SET": "Size set approved"
   },
   "list": {
     "col": {

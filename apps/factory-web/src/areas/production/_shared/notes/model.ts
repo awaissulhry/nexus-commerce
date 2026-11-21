@@ -365,11 +365,13 @@ export interface NotePreset {
   readonly body: string
   readonly needsAnswer: boolean
   readonly send: string
+  /** F-PT-202: false — a note to someone the text @mentions (a gate's planner), not the record's supervisor; absent: the supervisor. */
+  readonly askSupervisor?: boolean
 }
 
-/** The draft a preset opens with: its text and "Needs an answer"; the supervisor asked (the dialog's own default). */
+/** The draft a preset opens with: its text and "Needs an answer"; the supervisor asked (the dialog's own default) unless it says not. */
 export function presetDraftOf(draft: NoteDraft, preset: NotePreset | null | undefined): NoteDraft {
-  return preset ? { ...draft, body: preset.body, needsAnswer: preset.needsAnswer, askSupervisor: true } : draft
+  return preset ? { ...draft, body: preset.body, needsAnswer: preset.needsAnswer, askSupervisor: preset.askSupervisor ?? true } : draft
 }
 // ---- end F-PT-103
 

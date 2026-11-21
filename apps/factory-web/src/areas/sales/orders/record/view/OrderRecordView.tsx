@@ -64,6 +64,12 @@ import { bandHealthOf, healthInputOf, readOf } from '../overview/model'
 import { changesBadgeOf, changesDotOf, orderWaitingOf } from '../overview/model' // F-OP-117: the Changes count, R-22 (F-OP-301: the ONE call)
 import { createShipmentDoor } from '../shipments/model' // F-OP-121
 import { answerHeldOf, OWNER_WORDS_NS } from '../overview/people' // F-OO-111 (BC-2): "Who answers the customer…" held in the card's words
+// ---- F-PT-202: Planning's gate dialogs and a step's window, mounted once for the page ----
+import { GateDialogs } from '../../../../planning/milestones/view/GateDialogs'
+import { MilestoneDialog } from '../../../../planning/milestones/view/MilestoneDialog'
+import { NAMESPACE as PLANNING } from '../../../../planning/milestones/model'
+import type { MilestonesActions, MilestonesModel } from '../../../../planning/milestones/view-model'
+// ---- end F-PT-202
 import { askStarterOf } from '../production/asks' // F-PT-103: the band's "Ask for an update…" is a ready ask
 // ---- end F-SA-232
 
@@ -482,7 +488,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
             />
           )}
           {/* B-TH-256: planning proposes new dates: Accept / Decline (orders.manage, never the proposer), "Tell the customer" only ticked. */}
-          <RePromiseNotices model={model.links} actions={actions?.links} />
+          {/* F-PT-201: on Production the proposals live in Dates & plan (Accept / Decline… there); on every other tab here. */}
+          {model.tab !== 'production' && <RePromiseNotices model={model.links} actions={actions?.links} />}
           {gate.state === 'WAITING' && !depositOverdue && depositRequest && notOverview /* F-OO-111 */ && <Banner tone="info" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toMoney} />}
           {model.changed && (
             <Banner
@@ -557,6 +564,9 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
         />
       )}
       <DeclineDialog model={model.links} actions={actions?.links} />
+      {/* F-PT-202: Planning's own gate dialogs and a step's window (MilestoneDialog), mounted ONCE for the page — Overview › Next dates
+          and Production › Dates & plan open the same ones (use-gate-acts' one-order model). */}
+      {model.gateActs && (model.gateActs.dialog || model.gateActs.controls.open) ? <GateWindows model={model.gateActs} actions={actions?.gateActs} /> : null}
       {/* F-SA-230: the production lane's own dialogs, mounted as they are. */}
       {model.people?.assign && <AssignSupervisorDialog model={model.people.assign} actions={actions?.people?.assign} />}
       {model.people?.note && <NoteDialog model={model.people.note} actions={actions?.people?.note} />}
@@ -576,6 +586,26 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
 }
 
 const ordersHref = (prefix: string) => `${prefix}/sales/orders`
+
+/** F-PT-202: Planning's dialogs in Planning's own words (its catalogue), for the page's one gate model (exported for its tests). */
+export function GateWindows({ model, actions }: { model: MilestonesModel; actions?: MilestonesActions }) {
+  return (
+    <WithMessages namespaces={[PLANNING]}>
+      <GateWindowsInner model={model} actions={actions} />
+    </WithMessages>
+  )
+}
+
+function GateWindowsInner({ model, actions }: { model: MilestonesModel; actions?: MilestonesActions }) {
+  const p = useT(PLANNING)
+  const locale = useLocale()
+  return (
+    <>
+      <GateDialogs model={model} actions={actions} words={{ t: p, locale }} />
+      <MilestoneDialog model={model} actions={actions} words={{ t: p, locale }} />
+    </>
+  )
+}
 
 /** F-OP-102: hands the frame around the page to the band's ⋯ (its items are made outside the frame's context); draws nothing. */
 function FrameBridge({ into }: { into: { current: RecordFrameState | null } }) {
