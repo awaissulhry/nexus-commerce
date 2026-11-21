@@ -152,12 +152,12 @@ export function decisionSentenceOf(change: Pick<WorkOrderChange, 'kind' | 'cells
   const what = line ? [line.style?.code ?? null, line.colourway ? line.colourway.name || line.colourway.code : null].filter(Boolean).join(' · ') : ''
   const delta = change.cells.reduce((sum, cell) => sum + (cell.to - cell.from), 0)
   const count = Math.abs(delta)
-  const verb =
+  const verb: DecisionSentence['verb'] =
     change.kind === 'MAKE_MORE' || delta > 0
       ? { key: what ? 'productionTab.wo.decision.more' : 'productionTab.wo.decision.moreLines', params: { count, what, lines: seqs.length } }
       : { key: what ? 'productionTab.wo.decision.fewer' : 'productionTab.wo.decision.fewerLines', params: { count, what, lines: seqs.length, number: change.workOrder?.number ?? '—' } }
   const who = change.requestId ? 'Customer' : 'Order'
-  const why = seqs.length === 0 ? null : seqs.length === 1 ? { key: `productionTab.wo.decision.by${who}`, params: { seq: seqs[0]! } } : { key: `productionTab.wo.decision.by${who}Lines`, params: { count: seqs.length } }
+  const why: DecisionSentence['why'] = seqs.length === 0 ? null : seqs.length === 1 ? { key: `productionTab.wo.decision.by${who}`, params: { seq: seqs[0]! } } : { key: `productionTab.wo.decision.by${who}Lines`, params: { count: seqs.length } }
   return { verb, why }
 }
 
