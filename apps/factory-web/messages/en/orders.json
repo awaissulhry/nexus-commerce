@@ -3171,6 +3171,107 @@
       "go": "Ask {customer}",
       "doneEmail": "Asked {customer}: an e-mail went to {email}, and the task is in its portal.",
       "donePortal": "Asked in {customer}'s portal: no e-mail address on file."
+    },
+    "menu": {
+      "label": "More for this row",
+      "told": "Who was told…",
+      "copyLink": "Copy link to this row"
+    },
+    "history": {
+      "title": "What changed",
+      "info": "Every change since the order was confirmed, one row each: what changed and why, the customer's answer, what it did on the floor, who and when. The chips filter the list (a row may be in two); Before → after shows the change line by line.",
+      "reading": "Reading what changed…",
+      "count_one": "{count} change",
+      "count_other": "{count} changes",
+      "empty": "No changes since the order was confirmed.",
+      "emptyFinal": "No changes before the order was closed.",
+      "revisionsPart": "the order's revisions",
+      "chipsLabel": "Show in What changed",
+      "chips": {
+        "all": "All",
+        "requests": "Customer requests",
+        "revisions": "Revisions",
+        "workOrders": "Work orders",
+        "confirmations": "Confirmations"
+      },
+      "emptyChip": {
+        "all": "No changes since the order was confirmed.",
+        "requests": "No customer requests on this order.",
+        "revisions": "No revisions on this order.",
+        "workOrders": "No work-order changes on this order.",
+        "confirmations": "No confirmation made yet."
+      },
+      "earlier_one": "Show {count} earlier change",
+      "earlier_other": "Show {count} earlier changes",
+      "dates_one": "Date changes: {count}",
+      "dates_other": "Date changes: {count}",
+      "request": "Customer asked: {what}",
+      "doneAs": "Done as revision {revision}",
+      "ourAnswer": "Customer reads our answer: “{answer}”",
+      "revision": "We changed the order · Revision {revision}",
+      "restoreRow": "Restored as before revision {restores} · Revision {revision}",
+      "restoredBy": "Restored as before in revision {revision}",
+      "why": "Why: {reason}",
+      "noWhy": "No reason given",
+      "whyRequest": "Done for the customer's request",
+      "whyPutBack": "Restores revision {revision} as before",
+      "whyPutBackAny": "Restores an earlier revision as before",
+      "saidYes": "Customer said yes · {when}",
+      "saidNo": "Customer said no · {when}",
+      "via": {
+        "LINK": "on the customer's link",
+        "PORTAL": "in the portal"
+      },
+      "money": "Money: {words}",
+      "made": "Confirmation v{version} made",
+      "sent": "Confirmation v{version} sent to the customer",
+      "sentTo": "To {to}",
+      "woDraft": "The floor was not told: {number} is a draft",
+      "woMade": "New work order (draft): {number}",
+      "aWorkOrder": "a work order",
+      "cancelled": "Order cancelled",
+      "linesClosed": "Lines closed with fewer pieces",
+      "linesReopened": "Lines reopened",
+      "paused": "Work order paused: {what}",
+      "pauseLifted": "Pause lifted: {what}",
+      "styleReleased": "Style change released ({number})",
+      "styleReleasedAny": "Style change released",
+      "compare": "Before → after",
+      "compareOf": "Before → after of revision {revision}",
+      "restore": "Restore as before…",
+      "restoreOf": "Restore revision {revision} as before…",
+      "tag": {
+        "yesWaiting": "Waits for approval",
+        "yesRefused": "Approval refused",
+        "NOT_NEEDED": "No yes needed",
+        "NOT_ASKED": "Not asked yet",
+        "WAITING": "Waiting for their yes",
+        "ACCEPTED": "Customer said yes",
+        "REFUSED": "Customer said no",
+        "EXPIRED": "No answer in time",
+        "WITHDRAWN": "Ask taken back",
+        "priced": "Priced change",
+        "sent": "Sent",
+        "cancelled": "Cancelled",
+        "linesClosed": "Closed short",
+        "linesReopened": "Reopened",
+        "paused": "Paused",
+        "pauseLifted": "Pause lifted",
+        "styleReleased": "Released"
+      }
+    },
+    "compare": {
+      "titleAny": "Before → after · {number}",
+      "reading": "Reading the change…",
+      "failed": "Couldn't read the change",
+      "gone": "This change is not in the order's list any more.",
+      "none": "none",
+      "answer": "The customer's answer",
+      "headerLabel": "The order's details before and after",
+      "col": {
+        "field": "Field"
+      },
+      "noPrice": "Not shown to you: the amounts (people who see prices see them)."
     }
   }
 }

@@ -231,9 +231,20 @@ export const changeSchema = z.object({
   feeAmount: z.number().nullable().optional(),
   changeAmount: z.number().optional(),
   deposit: z.object({ id: z.string(), kind: z.string(), amount: z.number().optional(), pct: z.string().nullable(), status: z.string(), dueDate: day }).nullable(),
-  yes: z.object({ state: z.enum(CHANGE_YES_STATES), taskId: z.string().nullable(), reason: z.string().nullable() }),
-  customer: z.object({ decision: z.enum(CUSTOMER_DECISIONS), requestId: z.string().nullable(), answeredAt: instant.nullable() }),
-  putBack: z.object({ may: z.boolean() }),
+  yes: z.object({ state: z.enum(CHANGE_YES_STATES), taskId: z.string().nullable(), reason: z.string().nullable(), decidedAt: instant.nullable().optional() /* F-OC-302 (B-OC-010) */, decidedBy: z.string().nullable().optional() }),
+  // F-OC-302 (B-OC-011): how the customer answered the newest ask — its typed name, by its link or in its portal, its own words
+  // (only with partners.approvals.view).
+  customer: z.object({ decision: z.enum(CUSTOMER_DECISIONS), requestId: z.string().nullable(), answeredAt: instant.nullable(), by: z.string().nullable().optional(), via: z.enum(['LINK', 'PORTAL']).nullable().optional(), answer: z.string().nullable().optional() }),
+  // F-OC-303 (B-OC-010, B-OC-013): Restore as before… offered by the server (the latest change, a refused yes, a customer's no or an
+  // expired yes; orders.manage), and why it may not in words.
+  putBack: z.object({ may: z.boolean(), offered: z.boolean().optional(), why: z.object({ en: z.string(), it: z.string() }).nullable().optional() }),
+  // ---- F-OC-302 (B-OC-010, B-OC-012): certain links — the request it carried out, the revision it restored or that restored it — and
+  // which server words its reason is; absent in an older answer (two rows, never grouped on a guess).
+  reasonCode: z.enum(['AUTOMATIC', 'REQUEST', 'PUT_BACK']).nullable().optional(),
+  changeRequestId: z.string().nullable().optional(),
+  restores: z.number().nullable().optional(),
+  restoredBy: z.number().nullable().optional(),
+  // ---- end F-OC-302
 })
 export type Change = z.infer<typeof changeSchema>
 

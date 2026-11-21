@@ -3171,6 +3171,107 @@
       "go": "Chiedi a {customer}",
       "doneEmail": "Chiesto a {customer}: è partita un'e-mail a {email}, e il compito è nel suo portale.",
       "donePortal": "Chiesto nel portale di {customer}: nessun indirizzo e-mail in archivio."
+    },
+    "menu": {
+      "label": "Altro per questa riga",
+      "told": "Chi è stato avvisato…",
+      "copyLink": "Copia il link a questa riga"
+    },
+    "history": {
+      "title": "Cosa è cambiato",
+      "info": "Ogni modifica dalla conferma dell'ordine, una riga ciascuna: cosa è cambiato e perché, la risposta del cliente, cosa ha fatto in reparto, chi e quando. I filtri restringono l'elenco (una riga può stare in due); Prima → dopo mostra la modifica riga per riga.",
+      "reading": "Lettura di cosa è cambiato…",
+      "count_one": "{count} modifica",
+      "count_other": "{count} modifiche",
+      "empty": "Nessuna modifica dalla conferma dell'ordine.",
+      "emptyFinal": "Nessuna modifica prima della chiusura dell'ordine.",
+      "revisionsPart": "le revisioni dell'ordine",
+      "chipsLabel": "Mostra in Cosa è cambiato",
+      "chips": {
+        "all": "Tutto",
+        "requests": "Richieste del cliente",
+        "revisions": "Revisioni",
+        "workOrders": "Ordini di lavoro",
+        "confirmations": "Conferme"
+      },
+      "emptyChip": {
+        "all": "Nessuna modifica dalla conferma dell'ordine.",
+        "requests": "Nessuna richiesta del cliente in questo ordine.",
+        "revisions": "Nessuna revisione in questo ordine.",
+        "workOrders": "Nessuna modifica agli ordini di lavoro in questo ordine.",
+        "confirmations": "Nessuna conferma ancora creata."
+      },
+      "earlier_one": "Mostra {count} modifica precedente",
+      "earlier_other": "Mostra {count} modifiche precedenti",
+      "dates_one": "Cambi di data: {count}",
+      "dates_other": "Cambi di data: {count}",
+      "request": "Il cliente ha chiesto: {what}",
+      "doneAs": "Fatta come revisione {revision}",
+      "ourAnswer": "Il cliente legge la nostra risposta: “{answer}”",
+      "revision": "Abbiamo modificato l'ordine · Revisione {revision}",
+      "restoreRow": "Ripristinato com'era prima della revisione {restores} · Revisione {revision}",
+      "restoredBy": "Ripristinata com'era nella revisione {revision}",
+      "why": "Perché: {reason}",
+      "noWhy": "Nessun motivo indicato",
+      "whyRequest": "Fatta per la richiesta del cliente",
+      "whyPutBack": "Ripristina com'era la revisione {revision}",
+      "whyPutBackAny": "Ripristina com'era una revisione precedente",
+      "saidYes": "Il cliente ha detto sì · {when}",
+      "saidNo": "Il cliente ha detto no · {when}",
+      "via": {
+        "LINK": "dal link del cliente",
+        "PORTAL": "nel portale"
+      },
+      "money": "Importi: {words}",
+      "made": "Conferma v{version} creata",
+      "sent": "Conferma v{version} inviata al cliente",
+      "sentTo": "A {to}",
+      "woDraft": "Il reparto non è stato avvisato: {number} è una bozza",
+      "woMade": "Nuovo ordine di lavoro (bozza): {number}",
+      "aWorkOrder": "un ordine di lavoro",
+      "cancelled": "Ordine annullato",
+      "linesClosed": "Righe chiuse con meno pezzi",
+      "linesReopened": "Righe riaperte",
+      "paused": "Ordine di lavoro in pausa: {what}",
+      "pauseLifted": "Pausa tolta: {what}",
+      "styleReleased": "Modifica dello stile rilasciata ({number})",
+      "styleReleasedAny": "Modifica dello stile rilasciata",
+      "compare": "Prima → dopo",
+      "compareOf": "Prima → dopo della revisione {revision}",
+      "restore": "Ripristina com'era…",
+      "restoreOf": "Ripristina com'era la revisione {revision}…",
+      "tag": {
+        "yesWaiting": "Attende l'approvazione",
+        "yesRefused": "Approvazione respinta",
+        "NOT_NEEDED": "Nessun sì necessario",
+        "NOT_ASKED": "Non ancora chiesto",
+        "WAITING": "In attesa del loro sì",
+        "ACCEPTED": "Il cliente ha detto sì",
+        "REFUSED": "Il cliente ha detto no",
+        "EXPIRED": "Nessuna risposta in tempo",
+        "WITHDRAWN": "Richiesta ritirata",
+        "priced": "Modifica a pagamento",
+        "sent": "Inviata",
+        "cancelled": "Annullato",
+        "linesClosed": "Chiusa con meno pezzi",
+        "linesReopened": "Riaperte",
+        "paused": "In pausa",
+        "pauseLifted": "Pausa tolta",
+        "styleReleased": "Rilasciata"
+      }
+    },
+    "compare": {
+      "titleAny": "Prima → dopo · {number}",
+      "reading": "Lettura della modifica…",
+      "failed": "Impossibile leggere la modifica",
+      "gone": "Questa modifica non è più nell'elenco dell'ordine.",
+      "none": "nessuno",
+      "answer": "La risposta del cliente",
+      "headerLabel": "I dati dell'ordine prima e dopo",
+      "col": {
+        "field": "Campo"
+      },
+      "noPrice": "Non visibile per te: gli importi (li vede chi vede i prezzi)."
     }
   }
 }
