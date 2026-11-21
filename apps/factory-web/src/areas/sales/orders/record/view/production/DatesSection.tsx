@@ -18,6 +18,7 @@ import { keyDatesOf, type ReadyTile } from '../../production/dates'
 import { promiseHistoryOf } from '../../production/history'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { DiscussDoor } from '../Discuss'
+import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
 import { LineMenuButton } from '../LineMenu'
 import { Quiet, Section } from './Kit'
 import { PromiseHistory } from './PromiseHistory'
@@ -162,7 +163,11 @@ function ByLine({ order, model, actions }: { order: Order; model: OrderRecordMod
   const withheld = !read || read.withheld.includes('dates.forecast')
   const view = byLineOf(order, read?.dates ?? null, withheld)
   const promiseWait = promiseHeld(order, model.can)
+  const frame = useRecordFrame()
   const dayOf = (value: { date: string; own: boolean } | null) => (value ? (value.own ? day(value.date) : t('dates.asOrder', { date: day(value.date) })) : '—')
+  // fx9 N2: the Actions column only when a row has something in it (a Discuss door or a ⋯) — Read-only has neither.
+  const mayDiscuss = !!frame?.discuss && model.people?.mayNote !== false
+  const withActs = mayDiscuss || !!model.can.manage
   return (
     <div className="fw-pt-blk">
       <h3 className="fw-pt-h3">
@@ -176,9 +181,11 @@ function ByLine({ order, model, actions }: { order: Order; model: OrderRecordMod
             <th scope="col">{t('productionTab.byLine.col.promised')}</th>
             {!view.withheld ? <th scope="col">{t('productionTab.byLine.col.ready')}</th> : null}
             {!view.withheld ? <th scope="col">{t('dates.col.state')}</th> : null}
-            <th scope="col" className="fw-pt-x">
-              <span className="fw-pt-sub">{t('wo.col.acts')}</span>
-            </th>
+            {withActs ? (
+              <th scope="col" className="fw-pt-x">
+                <span className="fw-pt-sub">{t('wo.col.acts')}</span>
+              </th>
+            ) : null}
           </tr>
         </thead>
         <tbody>
@@ -204,11 +211,13 @@ function ByLine({ order, model, actions }: { order: Order; model: OrderRecordMod
                   </td>
                 ) : null}
                 {!view.withheld ? <td data-label={t('dates.col.state')}>{onTime ? <Tag tone={onTime.kind === 'short' ? 'danger' : 'success'}>{d(onTime.kind === 'short' ? 'forecast.short' : 'forecast.spare', { count: onTime.days })}</Tag> : null}</td> : null}
-                <td className="fw-pt-x">
-                  {/* A line's dates are discussed by its reference (the customer reads its own words, never a price). */}
-                  {model.people?.mayNote !== false ? <DiscussDoor order={order} part={name} target={{ kind: 'SalesOrderLine', id: row.lineId }} align="end" /> : null}
-                  {items.length > 0 ? <LineMenuButton label={t('productionTab.byLine.more', { seq: row.seq })} items={items} /> : null}
-                </td>
+                {withActs ? (
+                  <td className="fw-pt-x">
+                    {/* A line's dates are discussed by its reference (the customer reads its own words, never a price). */}
+                    {mayDiscuss ? <DiscussDoor order={order} part={name} target={{ kind: 'SalesOrderLine', id: row.lineId }} align="end" /> : null}
+                    {items.length > 0 ? <LineMenuButton label={t('productionTab.byLine.more', { seq: row.seq })} items={items} /> : null}
+                  </td>
+                ) : null}
               </tr>
             )
           })}
