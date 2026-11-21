@@ -86,6 +86,23 @@ describe('F-PT-301: one strip rule on both tabs', () => {
     expect(view).toContain('model.can.raiseNcr')
   })
 
+  it('F-SC-W4: the gates that stop the order are Problems & holds rows (the notice\'s own parts), and the notice stays on top of every tab', () => {
+    const view = readFileSync(new URL('../view/production/ProblemsSection.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("import { GateRows } from '../../links/view/OrderLinks'")
+    expect(view).toContain('<GateRows model={model.links} prefix={model.prefix} />')
+    expect(view).toContain('const stops = strips.length + gates')
+    expect(view).toContain("t('productionTab.problems.stops', { count: stops })")
+    const links = readFileSync(new URL('../links/view/OrderLinks.tsx', import.meta.url), 'utf8')
+    // One title, one sentence, one door for the notice and the row (never a second copy of their words).
+    expect(links.match(/t\('links\.gate\.title'/g)?.length).toBe(1)
+    expect(links.match(/t\('links\.gate\.open'\)/g)?.length).toBe(1)
+    expect(links).toContain('id={gateAnchorOf(gate)}')
+    // The page notice: drawn for every tab (no tab condition in front of it), inside the page's notices.
+    const page = readFileSync(new URL('../view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(page).toMatch(/\n\s*<GateNotices model=\{model\.links\} prefix=\{model\.prefix\} \/>/)
+    expect(page.match(/<GateNotices /g)?.length).toBe(1)
+  })
+
   it('its words exist in both languages', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)

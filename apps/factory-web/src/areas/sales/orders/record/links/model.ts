@@ -84,5 +84,13 @@ export function gateHref(prefix: string, gate: Pick<OrderGate, 'eventId' | 'gate
   return `${prefix}/compliance/status?${query.toString()}`
 }
 
+// ---- F-SC-W4 (stage control B; plan-stage-control "the red notice"): the refusals as rows of Production › Problems & holds ----
+/** The gates' refusals that still block the order (none while the links are not read). */
+export const gatesOf = (model: LinksModel | null | undefined): readonly OrderGate[] => (model?.state === 'ready' ? model.links.gates : [])
+
+/** A refusal's row anchor: `about-GateEvent-<the event's id>`, or the blocked work order's / shipment's id when the event is not sent. */
+export const gateAnchorOf = (gate: Pick<OrderGate, 'eventId' | 'subject'>): string => `about-GateEvent-${gate.eventId ?? gate.subject.id}`
+// ---- end F-SC-W4
+
 /** The ready model of a fresh read (no write running, nothing ticked, nothing said). */
 export const readyLinks = (links: OrderLinks): LinksModel => ({ state: 'ready', links, busy: null, tell: {}, decline: null, said: null })
