@@ -209,3 +209,15 @@
 .fw-pt-own-n { white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* fx5 #11: the detail window's title wraps instead of losing the order's number (the DS keeps a detail title to one line on a phone). */
 .nds-modal.detail .nds-modal-h .t .fw-pt-dt-t { display: flex; flex-wrap: wrap; column-gap: 0.35em; white-space: normal; }
+
+/* ── fx5 #3: Materials' missing things — one row each, as the picture: what · how much · when | who it waits on | ≤ 2 doors at the right;
+   stacked when the section is narrow. ── */
+.fw-pt-miss { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.fw-pt-miss-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-6) var(--nds-space-16); align-items: center; padding: var(--nds-space-10) 0; border-bottom: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); scroll-margin-top: var(--nds-space-4); }
+.fw-pt-miss-row:first-child { padding-top: 0; }
+.fw-pt-miss-what { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.fw-pt-miss-do { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
+@container sec (min-width: 640px) {
+  .fw-pt-miss-row { grid-template-columns: minmax(0, 1fr) minmax(9rem, auto) minmax(0, auto); }
+  .fw-pt-miss-do { justify-content: flex-end; }
+}

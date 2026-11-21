@@ -2925,7 +2925,9 @@
       "howBody": "Never valued. The customer's goods count to its oldest order first. What we buy is ready when it is reserved for or issued to the work order; reservations follow the work orders' priority.",
       "infoBody": "Do we have everything to make this order: the customer's own goods (Arrived) and what we buy — the missing things first, with who they wait on.",
       "askBuyers": "Ask the buyers…",
-      "asked": "Asked {date}"
+      "asked": "Asked {date}",
+      "forWorkOrders": "for {numbers}",
+      "buyNothing": "Nothing to buy for the work orders made so far."
     },
     "specs": {
       "title": "What we make it to",
