@@ -26,7 +26,8 @@ const uid = (block: string, n: number) => `0190f0e2-${block}-7000-8000-${String(
 const WO1 = WORK_ORDERS[0]!.id
 const WO2 = WORK_ORDERS[1]!.id
 
-// ---- holds: a production hold (with the office's note), the customer's pause, a quality hold ----------------------------------------
+// ---- holds: a production hold (with the office's note), the customer's pause, a quality hold — all on WO-00022, the work order the read
+// marks held (fx6: as the server sends it — a hold names a held work order; the cases give its rows their rights, workActsRead) --------
 export const HOLDS_READ: OrderProduction = {
   ...WORK_READ,
   headline: {
@@ -37,12 +38,12 @@ export const HOLDS_READ: OrderProduction = {
       { kind: 'BRAND', words: w('Paused at your request', 'In pausa su vostra richiesta'), since: '2026-11-16' },
       { kind: 'QUALITY', words: w('Shade difference on the leather', 'Differenza di tonalità della pelle'), since: '2026-11-14' },
     ],
-    holdNotes: [{ workOrderId: WO1, number: 'WO-00021', kind: 'PRODUCTION', note: 'Made-up: rotolo di fodera in arrivo giovedì.', since: '2026-11-15T09:10:00Z' }],
+    holdNotes: [{ workOrderId: WO2, number: 'WO-00022', kind: 'PRODUCTION', note: 'Made-up: rotolo di fodera in arrivo giovedì.', since: '2026-11-15T09:10:00Z' }],
     waiting: {
       ...HEADLINE.waiting,
       blockers: [
         ...HEADLINE.waiting.blockers,
-        { kind: 'NO_MOVE', on: 'US', words: w('Production hold — the lining roll is short', 'Fermo di produzione — manca il rotolo di fodera'), since: '2026-11-15T09:10:00Z', ref: { type: 'WorkOrder', id: WO1 }, sub: null },
+        { kind: 'NO_MOVE', on: 'US', words: w('Production hold — the lining roll is short', 'Fermo di produzione — manca il rotolo di fodera'), since: '2026-11-15T09:10:00Z', ref: { type: 'WorkOrder', id: WO2 }, sub: null },
         { kind: 'BRAND_PAUSE', on: 'BRAND', words: w('Paused at your request', 'In pausa su vostra richiesta'), since: '2026-11-16T10:00:00Z', ref: { type: 'WorkOrder', id: WO2 }, sub: null },
         { kind: 'QUALITY_HOLD', on: 'US', words: w('Shade difference on the leather', 'Differenza di tonalità della pelle'), since: '2026-11-14T08:30:00Z', ref: { type: 'WorkOrder', id: WO2 }, sub: null },
       ],
