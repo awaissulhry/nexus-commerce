@@ -67,6 +67,11 @@ import { NOTES_NS } from '../../../production/_shared/notes/model'
 import { useOrderProduction } from './overview/use-order-production' // F-SA-232: Overview's production read (the order's own pieces)
 import { useOrderAsks } from './production/use-order-asks' // F-PT-103: the order's asks (the issues list)
 import { healthViewOf } from './production/now' // F-PT-404: the health mark through the page's one read
+import { useStyleSpecs } from './production/use-style-specs' // F-PT-401: the order's styles (What we make it to)
+import { styleIdsOf } from './production/specs' // F-PT-401
+import { useCustomerReceipt } from './production/use-customer-receipt' // F-PT-304: Record what the customer sent…
+import { useAskBuyers } from './production/use-ask-buyers' // F-PT-304: Ask the buyers…
+import { customerGoodsOf } from './production/materials' // F-PT-304
 import { getReadiness, type ReadinessRow } from '../../../production/work-orders/daily/api' // F-SA-234: the work orders' materials
 // F-SA-236: this order's customer requests and the approvals we asked it (Changes).
 import { listOrderRequests, type BrandRequest } from '../../../home/approvals/requests/api'
@@ -256,14 +261,19 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const runPartsRef = useRef<(parts: readonly OrderPagePart[]) => void>(() => undefined)
   const toldSoonRef = useRef<() => void>(() => undefined) // F-SA-244
   const reconnectRef = useRef<() => void>(() => void load())
+  // F-PT-402: the customer's tech pack hangs on the order's inquiry — its file events are the page's too (read again on Production).
+  const packRef = useRef<{ readonly inquiryId: string | null; readonly again: () => void }>({ inquiryId: null, again: () => undefined })
   const liveState = useLive(
     (change) => {
       const value = current.current
       if (!value) return
       // F-SA-244: a new message on the order's conversation may be a change's line: its told lines are read again (a moment later).
       if (change.type === 'thread.message_posted' && change.fields.recordType === 'SalesOrder' && change.fields.recordId === value.id) toldSoonRef.current()
-      const parts = partsOf(change, value.live, watchedIds(value, value.live))
+      const ids = watchedIds(value, value.live)
+      if (packRef.current.inquiryId) ids.add(packRef.current.inquiryId) // F-PT-402
+      const parts = partsOf(change, value.live, ids)
       if (parts.length === 0) return
+      if (parts.includes('files') && tabRef.current === 'production') packRef.current.again() // F-PT-402: the pack on Production
       queueRef.current = enqueue(queueRef.current, change.type, parts, Date.now(), tabRef.current)
       setQueueTick((count) => count + 1)
     },
@@ -327,6 +337,14 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // ---- F-PT-103: the order's asks and questions (the ONE issues list, orders.view), read while Production shows ----
   const asks = useOrderAsks(api, order.status === 'ready' ? order.value.id : null, tab === 'production')
   // ---- end F-PT-103
+  // ---- F-PT-401 (L6): the order's styles, read once "What we make it to" came into view (product.styles.view) ----
+  const [specsSeen, setSpecsSeen] = useState(false)
+  const specsOrder = order.status === 'ready' ? order.value.id : null
+  useEffect(() => setSpecsSeen(false), [specsOrder])
+  const mayStyles = session.permissions.includes('product.styles.view')
+  const specStyles = order.status === 'ready' ? styleIdsOf(order.value) : { ids: [], more: 0 }
+  const styleSpecs = useStyleSpecs(api, specsOrder, specStyles.ids, mayStyles && specsSeen && tab === 'production')
+  // ---- end F-PT-401
   // ---- F-OP-134 (N-5): the tabs' acts, one container hook per tab, each with the one write and the order as last read ----------------
   const ready = order.status === 'ready' ? order.value : null
   const actsBase: RecordActsBase = { api, orderId, current, write, version, setNotice, load, loadParts }
@@ -393,6 +411,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
       setDialog(null)
     },
   })
+  packRef.current = { inquiryId: depth.model.techPack?.value?.inquiry?.id ?? null, again: () => depth.actions.onRetry?.('techPack') } // F-PT-402
   // ---- F-OL-03 (Order LINES lane): the Lines tab's draft of MY changes, Review and save, Add a style, two people — mounted after the
   // depth read (the company's freeze rules make a change priced); a door lands on a box through the page's one focus.
   const linesDraft = useLinesDraft({
@@ -461,6 +480,21 @@ function RecordContainer({ orderId }: { orderId: string }) {
     return () => abort.abort()
   }, [api, tab, workIds, readinessAgain])
   // ---- end F-SA-234
+  // ---- F-PT-304: Record what the customer sent… (inventory.receive) and Ask the buyers… (the Material plan's own dialog) ----
+  const mayReceive = session.permissions.includes('inventory.receive')
+  const receipt = useCustomerReceipt({
+    api,
+    order: order.status === 'ready' ? order.value : null,
+    may: mayReceive,
+    goods: customerGoodsOf(depth.model.materials?.value),
+    onDone: (number) => {
+      setNotice({ tone: 'success', words: { key: 'productionTab.receipt.done', params: { number } } })
+      depth.actions.onRetry?.('materials')
+      setReadinessAgain((count) => count + 1)
+    },
+  })
+  const askBuyers = useAskBuyers({ api, prefix, permissions: session.permissions, enabled: tab === 'production', workOrders: order.status === 'ready' ? order.value.chain.workOrders : [] })
+  // ---- end F-PT-304
   // F-SA-235: the order's health (raise to At risk / clear) is use-production-acts' (F-OP-134).
   // ---- F-SA-236: the order's customer requests (every state; the API's wall) and the approvals we asked it (partners.approvals.view),
   // read while Changes shows, again after each change of the order.
@@ -667,6 +701,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
     links: links.model, // B-TH-256
     production: production.state, // F-SA-232
     asks: asks.state, // F-PT-103
+    styleSpecs: mayStyles ? { parts: styleSpecs.parts, more: specStyles.more } : null, // F-PT-401
+    receipt: mayReceive ? { dialog: receipt.model } : null, // F-PT-304
+    askBuyers: askBuyers.model, // F-PT-304
+    specCan: { versions: session.permissions.includes('product.bom.view'), changeRequest: session.permissions.includes('product.changes.request') && session.permissions.includes('product.changes.view') }, // F-PT-401 (L11)
     stylesManage: session.permissions.includes('product.styles.manage'), // F-OO-121: a line's missing picture is added on its style
     readiness, // F-SA-234
     requests, // F-SA-236
@@ -771,6 +809,11 @@ function RecordContainer({ orderId }: { orderId: string }) {
         // ---- F-SA-232 ----
         onRetryProduction: () => production.again(),
         onRetryAsks: asks.again, // F-PT-103
+        onSpecsSeen: () => setSpecsSeen(true), // F-PT-401 (L6)
+        onRetrySpec: styleSpecs.again, // F-PT-401
+        onOpenOrderFile: orderFilesHost.onOpen, // F-PT-402: the ONE viewer through the order's open route
+        receipt: receipt.actions, // F-PT-304
+        onAskBuyers: askBuyers.open, // F-PT-304
         files: orderFiles.actions, // F-SA-237
         // ---- B-W2b-323 ----
         depth: depth.actions,

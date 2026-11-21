@@ -64,3 +64,25 @@ export type OrderIssues = z.infer<typeof orderIssuesSchema>
 export function listOrderIssues(api: ApiClient, salesOrderId: string, signal?: AbortSignal): Promise<OrderIssues> {
   return api.get('/production/issues', { query: { salesOrderId, status: 'ALL', limit: 50 }, schema: orderIssuesSchema, signal })
 }
+
+// ---- F-PT-304 (order PRODUCTION tab, 10-design §9 D3): record what the customer sent — the EXISTING command, a new face -----------
+const customerReceiptSchema = z.object({
+  receipt: z.object({ id: z.string(), number: z.string(), lines: z.array(z.object({ id: z.string(), itemId: z.string(), lotCode: z.string().nullable() })) }),
+})
+export type CustomerReceiptAnswer = z.infer<typeof customerReceiptSchema>
+
+export interface CustomerReceiptBody {
+  readonly siteId: string
+  readonly partyId: string
+  readonly orderId: string
+  readonly locationId: string
+  readonly supplierDdtNumber: string | null
+  readonly supplierDdtDate: string | null
+  readonly lines: readonly { readonly itemId: string; readonly itemColourId: string | null; readonly quantity: string; readonly supplierLotRef: string | null }[]
+}
+
+/** POST /inventory/receipts/customer (inventory.receive): each line one lot of the customer's own, then their materials counted again. */
+export function recordCustomerReceipt(api: ApiClient, body: CustomerReceiptBody, idempotencyKey: string): Promise<CustomerReceiptAnswer> {
+  return api.post('/inventory/receipts/customer', { body, schema: customerReceiptSchema, idempotencyKey })
+}
+// ---- end F-PT-304

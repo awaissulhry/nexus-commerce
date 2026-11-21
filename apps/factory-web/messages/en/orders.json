@@ -399,8 +399,6 @@
   "lines": {
     "readOnly": "What the customer ordered, as accepted. Changes go through Amend order.",
     "vatNature": "VAT {nature}",
-    "revision": "Made to rev {revision}",
-    "noRevision": "Revision chosen by the work order",
     "gridCaption": "{style}: ordered pieces by colour and size",
     "pricesOf": "Prices of {style}",
     "col": {
@@ -789,9 +787,6 @@
         "FAILED": "Failed {date}",
         "WAITING": "Waiting"
       }
-    },
-    "specs": {
-      "title": "Specs in force"
     }
   },
   "woStatus": {
@@ -2914,7 +2909,86 @@
       "openPo": "Open {number}",
       "howTitle": "How this is counted",
       "howBody": "Never valued. The customer's goods count to its oldest order first. What we buy is ready when it is reserved for or issued to the work order; reservations follow the work orders' priority.",
-      "infoBody": "Do we have everything to make this order: the customer's own goods (Arrived) and what we buy — the missing things first, with who they wait on."
+      "infoBody": "Do we have everything to make this order: the customer's own goods (Arrived) and what we buy — the missing things first, with who they wait on.",
+      "askBuyers": "Ask the buyers…",
+      "asked": "Asked {date}"
+    },
+    "specs": {
+      "title": "What we make it to",
+      "styles_one": "{count} style",
+      "styles_other": "{count} styles",
+      "needDecision_one": "{count} needs a decision",
+      "needDecision_other": "{count} need a decision",
+      "packNewerShort": "the customer's tech pack is newer than the request",
+      "ourTitle": "Our pattern",
+      "noStyle": "No style on this order yet.",
+      "state": {
+        "inForce": "Pattern v{revision} · in force",
+        "replaced": "Pattern v{revision} · replaced by v{by} on {date}",
+        "replacedNoDay": "Pattern v{revision} · replaced by v{by}",
+        "replacedNoNumber": "Pattern v{revision} · replaced",
+        "withdrawn": "Pattern v{revision} · withdrawn, no pattern version in force: ask Product",
+        "notFixedUses": "Not fixed · {number} uses v{revision}",
+        "notFixedWill": "Not fixed yet · the work order will take v{revision}"
+      },
+      "changeNote": "v{revision} changed: {note}",
+      "older": "{number} is made to v{revision}; v{newer} is in force since {date}",
+      "olderNoDay": "{number} is made to v{revision}; v{newer} is in force",
+      "olderNoNewer": "{number} is made to v{revision}",
+      "decision": "{changeOrder}: {what}",
+      "noDecision": "no decision yet (Product decides)",
+      "disposition": {
+        "FINISH_OLD": "finish on v{revision}",
+        "REWORK": "rework to the new pattern",
+        "SCRAP": "scrap",
+        "HOLD": "on hold until Product decides"
+      },
+      "partStyle": "the style {code}",
+      "versions": "Versions & changes ›",
+      "askChange": "Ask for a design change…",
+      "moreStyles_one": "{count} more style: open it on its page.",
+      "moreStyles_other": "{count} more styles: open them on their pages.",
+      "packTitle": "Customer's tech pack",
+      "noPack": "No customer tech pack on this order.",
+      "packNewer": "Newer than the request: we make to the version in force.",
+      "askCustomer": "Ask the customer…",
+      "infoBody": "For each style, the pattern we make it to and whether that is still the right one; then the customer's own files behind it. A pattern never moves here: Product decides on the style's page."
+    },
+    "receipt": {
+      "open": "Record what the customer sent…",
+      "openRow": "Record what arrived…",
+      "title": "Record what the customer sent · {number}",
+      "go": "Record the receipt",
+      "sites": "the sites",
+      "site": "Site",
+      "sitePick": "Pick the site",
+      "place": "Where the goods go",
+      "placePick": "Pick the place",
+      "noPlace": "This site has no goods-in dock or store place.",
+      "ddt": "Their delivery note no. (DDT)",
+      "ddtDate": "Delivery note date",
+      "col": {
+        "quantity": "Arrived now",
+        "lot": "Their lot ref."
+      },
+      "quantityOf": "Quantity of {material}",
+      "lotOf": "Lot reference of {material}",
+      "hide": "Leather received hide by hide goes through a purchase receipt.",
+      "hint": "Each line becomes a lot of the customer's own, released. The customer's materials are counted again for this order first.",
+      "held": {
+        "site": "Pick the site",
+        "place": "Pick where the goods go",
+        "nothing": "Tick at least one material",
+        "quantity": "A quantity above 0 with at most 4 decimals"
+      },
+      "refused": {
+        "hide": "{material} is tracked hide by hide: it is received through a purchase receipt, not as the customer's lot.",
+        "lot": "{material} is not tracked by lot: it cannot be the customer's own lot.",
+        "quantity": "{material}: a quantity above 0 with at most 4 decimals.",
+        "place": "That place takes no stock now: pick another.",
+        "right": "Recording the customer's goods at this site needs the right to receive goods."
+      },
+      "done": "Receipt {number} recorded"
     }
   }
 }

@@ -267,8 +267,9 @@ describe('materials, the confirmation, the tech pack, the forecast', () => {
   // for the garment label (the Owner's words rule), in Italian and English.
   it('the tech pack and the customer’s materials say "customer", never "brand"', () => {
     const words: Record<string, Record<string, string>> = {
-      en: { 'pack.title': 'Customer tech pack in force', 'pack.version': 'The customer’s version: 3', 'materials.emptyBody': 'When the customer sends leather, trims or labels, Plan from the BOM lists what each line needs.' },
-      it: { 'pack.title': 'Scheda tecnica del cliente in vigore', 'pack.version': 'Versione del cliente: 3', 'materials.emptyBody': 'Quando il cliente invia pelle, accessori o etichette, Pianifica dalla distinta elenca cosa serve a ogni riga.' },
+      // F-PT-403: the pack's title is Production's own now (orders productionTab.specs.packTitle, record/production/specs.vitest).
+      en: { 'pack.version': 'The customer’s version: 3', 'materials.emptyBody': 'When the customer sends leather, trims or labels, Plan from the BOM lists what each line needs.' },
+      it: { 'pack.version': 'Versione del cliente: 3', 'materials.emptyBody': 'Quando il cliente invia pelle, accessori o etichette, Pianifica dalla distinta elenca cosa serve a ogni riga.' },
     }
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, [NAMESPACE])[NAMESPACE]!)

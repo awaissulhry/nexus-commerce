@@ -399,8 +399,6 @@
   "lines": {
     "readOnly": "Cosa ha ordinato il cliente, come accettato. Le modifiche passano da Modifica ordine.",
     "vatNature": "IVA {nature}",
-    "revision": "Fatto sulla rev. {revision}",
-    "noRevision": "Revisione scelta dall'ordine di lavoro",
     "gridCaption": "{style}: capi ordinati per colore e taglia",
     "pricesOf": "Prezzi di {style}",
     "col": {
@@ -789,9 +787,6 @@
         "FAILED": "Non superato il {date}",
         "WAITING": "In attesa"
       }
-    },
-    "specs": {
-      "title": "Specifiche in vigore"
     }
   },
   "woStatus": {
@@ -2914,7 +2909,86 @@
       "openPo": "Apri {number}",
       "howTitle": "Come si conta",
       "howBody": "Mai valorizzato. I materiali del cliente vanno prima al suo ordine più vecchio. Ciò che compriamo è pronto quando è riservato o consegnato all'ordine di lavoro; le riserve seguono la priorità degli ordini di lavoro.",
-      "infoBody": "Abbiamo tutto per produrre questo ordine: i materiali del cliente (Arrivato) e ciò che compriamo — prima quello che manca, con chi lo aspetta."
+      "infoBody": "Abbiamo tutto per produrre questo ordine: i materiali del cliente (Arrivato) e ciò che compriamo — prima quello che manca, con chi lo aspetta.",
+      "askBuyers": "Chiedi agli acquisti…",
+      "asked": "Chiesto il {date}"
+    },
+    "specs": {
+      "title": "Su quali specifiche produciamo",
+      "styles_one": "{count} modello",
+      "styles_other": "{count} modelli",
+      "needDecision_one": "{count} da decidere",
+      "needDecision_other": "{count} da decidere",
+      "packNewerShort": "la scheda tecnica del cliente è più recente della richiesta",
+      "ourTitle": "Il nostro cartamodello",
+      "noStyle": "Ancora nessun modello in questo ordine.",
+      "state": {
+        "inForce": "Cartamodello v{revision} · in vigore",
+        "replaced": "Cartamodello v{revision} · sostituito dalla v{by} il {date}",
+        "replacedNoDay": "Cartamodello v{revision} · sostituito dalla v{by}",
+        "replacedNoNumber": "Cartamodello v{revision} · sostituito",
+        "withdrawn": "Cartamodello v{revision} · ritirato, nessuna versione in vigore: chiedi al Prodotto",
+        "notFixedUses": "Non fissato · {number} usa la v{revision}",
+        "notFixedWill": "Non ancora fissato · l'ordine di lavoro prenderà la v{revision}"
+      },
+      "changeNote": "La v{revision} cambia: {note}",
+      "older": "{number} si produce sulla v{revision}; la v{newer} è in vigore dal {date}",
+      "olderNoDay": "{number} si produce sulla v{revision}; la v{newer} è in vigore",
+      "olderNoNewer": "{number} si produce sulla v{revision}",
+      "decision": "{changeOrder}: {what}",
+      "noDecision": "ancora nessuna decisione (decide il Prodotto)",
+      "disposition": {
+        "FINISH_OLD": "finire sulla v{revision}",
+        "REWORK": "rilavorare sul nuovo cartamodello",
+        "SCRAP": "scartare",
+        "HOLD": "fermo finché decide il Prodotto"
+      },
+      "partStyle": "il modello {code}",
+      "versions": "Versioni e modifiche ›",
+      "askChange": "Chiedi una modifica al modello…",
+      "moreStyles_one": "Ancora {count} modello: aprilo dalla sua pagina.",
+      "moreStyles_other": "Ancora {count} modelli: aprili dalle loro pagine.",
+      "packTitle": "Scheda tecnica del cliente",
+      "noPack": "Nessuna scheda tecnica del cliente per questo ordine.",
+      "packNewer": "Più recente della richiesta: produciamo sulla versione in vigore.",
+      "askCustomer": "Chiedi al cliente…",
+      "infoBody": "Per ogni modello, il cartamodello su cui lo produciamo e se è ancora quello giusto; poi i file del cliente dietro. Il cartamodello non si cambia qui: decide il Prodotto dalla pagina del modello."
+    },
+    "receipt": {
+      "open": "Registra cosa ha mandato il cliente…",
+      "openRow": "Registra cosa è arrivato…",
+      "title": "Registra cosa ha mandato il cliente · {number}",
+      "go": "Registra il ricevimento",
+      "sites": "gli stabilimenti",
+      "site": "Stabilimento",
+      "sitePick": "Scegli lo stabilimento",
+      "place": "Dove va la merce",
+      "placePick": "Scegli il posto",
+      "noPlace": "Questo stabilimento non ha un posto di ricevimento o di magazzino.",
+      "ddt": "Il loro DDT n.",
+      "ddtDate": "Data del DDT",
+      "col": {
+        "quantity": "Arrivato ora",
+        "lot": "Il loro lotto"
+      },
+      "quantityOf": "Quantità di {material}",
+      "lotOf": "Riferimento lotto di {material}",
+      "hide": "La pelle ricevuta pelle per pelle passa da un ricevimento d'acquisto.",
+      "hint": "Ogni riga diventa un lotto del cliente, rilasciato. I materiali del cliente si ricontano prima per questo ordine.",
+      "held": {
+        "site": "Scegli lo stabilimento",
+        "place": "Scegli dove va la merce",
+        "nothing": "Spunta almeno un materiale",
+        "quantity": "Una quantità sopra 0 con al massimo 4 decimali"
+      },
+      "refused": {
+        "hide": "{material} si gestisce pelle per pelle: si riceve con un ricevimento d'acquisto, non come lotto del cliente.",
+        "lot": "{material} non si gestisce a lotti: non può essere un lotto del cliente.",
+        "quantity": "{material}: una quantità sopra 0 con al massimo 4 decimali.",
+        "place": "Quel posto ora non prende merce: scegline un altro.",
+        "right": "Registrare la merce del cliente in questo stabilimento richiede il diritto di ricevere merce."
+      },
+      "done": "Ricevimento {number} registrato"
     }
   }
 }

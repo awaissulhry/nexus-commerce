@@ -184,6 +184,18 @@ export const workSchema = z.object({
       // Production list's own facts (null: finished, or shared with other customers).
       risk: workOrderRisk.nullable().optional(),
       // ---- end F-PT-104
+      // ---- F-PT-401 (B-PT-004; optional in an older answer): the pattern this work order is made to, whether a newer one is in force
+      // and the change order's decision; null for a work order shared with other customers. Revision numbers only, never words.
+      spec: z
+        .object({
+          revision: z.object({ revision: z.number().int(), status: z.string() }).nullable(),
+          state: z.string(),
+          newer: z.object({ revision: z.number().int(), releasedOn: day.nullable() }).nullable(),
+          decision: z.object({ disposition: z.string(), changeOrder: z.string() }).nullable(),
+        })
+        .nullable()
+        .optional(),
+      // ---- end F-PT-401
     }),
   ),
   mtm: z.array(

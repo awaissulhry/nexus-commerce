@@ -57,7 +57,7 @@ describe('F-SA-235 / F-PT-301…302: Production’s Problems & holds — each bl
   it('a quality hold in plain words, the office note marked office only, a question that needs an answer, the NCR, the final inspection', () => {
     const text = textOf(draw('production-quality'))
     // F-PT-301: the hold is Overview's own strip; F-PT-302: the asks come from the ONE issues list, the final check and NCR in words.
-    for (const words of ['Problems & holds', 'What stops it', 'Shade difference on the leather', 'WO-00022', 'Lotto pelle in verifica col fornitore.', 'Office only', 'Needs an answer', 'Question for production', 'Escalated 1× — now with the backup', 'When does the leather come back from the supplier?', 'Sara Prova', 'NCR-2026-0041', 'Minor', 'Loose stitching on the collar', 'FI-2026-0088', '5 of 40 inspected', '0 critical · 1 major · 2 minor', 'Final check waiting', 'Specs in force']) expect(text, words).toContain(words)
+    for (const words of ['Problems & holds', 'What stops it', 'Shade difference on the leather', 'WO-00022', 'Lotto pelle in verifica col fornitore.', 'Office only', 'Needs an answer', 'Question for production', 'Escalated 1× — now with the backup', 'When does the leather come back from the supplier?', 'Sara Prova', 'NCR-2026-0041', 'Minor', 'Loose stitching on the collar', 'FI-2026-0088', '5 of 40 inspected', '0 critical · 1 major · 2 minor', 'Final check waiting', 'What we make it to', 'Our pattern']) expect(text, words).toContain(words)
     expect(text).not.toContain('Nothing stops this order')
     expect(text).not.toContain('Holds, quality & problems')
   })
@@ -83,7 +83,9 @@ describe('F-SA-235 / F-PT-301…302: Production’s Problems & holds — each bl
     // F-PT-303: the materials card gave way to Production's own Materials section (the customer's goods and what we buy, missing first).
     expect(tab).toContain('<MaterialsSection order={order} model={model} actions={actions} />')
     expect(tab).not.toContain('<MaterialsCard')
-    expect(tab).toContain('<TechPackCard model={model.depth} actions={actions?.depth} />')
+    // F-PT-402 / 403: the customer's tech pack is What we make it to's own half (the old TechPackCard is gone).
+    expect(tab).toContain('<MakeToSection order={order} model={model} actions={actions} />')
+    expect(tab).not.toContain('TechPackCard')
     const workOrder = readFileSync(new URL('../../../production/work-orders/record/view/OverviewTab.tsx', import.meta.url), 'utf8')
     expect(workOrder).toContain("from '../../../../../lib/production/health/view/HealthCard'")
     expect(readFileSync(new URL('./view/LinesTab.tsx', import.meta.url), 'utf8')).not.toContain('<MaterialsCard')

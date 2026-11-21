@@ -396,11 +396,7 @@
     }
   },
   "pack": {
-    "title": "Customer tech pack in force",
     "from": "From inquiry {number}",
-    "failed": "Couldn’t read the tech pack",
-    "reading": "Reading the tech pack…",
-    "noInquiry": "The order did not come from an inquiry with a tech pack.",
     "none": "The inquiry names no tech pack file.",
     "version": "The customer’s version: {version}",
     "inForce": "Version {version}, in force",

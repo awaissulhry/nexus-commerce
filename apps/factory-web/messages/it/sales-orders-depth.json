@@ -396,11 +396,7 @@
     }
   },
   "pack": {
-    "title": "Scheda tecnica del cliente in vigore",
     "from": "Dalla richiesta {number}",
-    "failed": "Impossibile leggere la scheda tecnica",
-    "reading": "Lettura della scheda tecnica…",
-    "noInquiry": "L’ordine non viene da una richiesta con scheda tecnica.",
     "none": "La richiesta non indica file della scheda tecnica.",
     "version": "Versione del cliente: {version}",
     "inForce": "Versione {version}, in vigore",

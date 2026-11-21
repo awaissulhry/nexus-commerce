@@ -86,8 +86,9 @@ describe('the order on RecordFrame', () => {
     expect(tab).toMatch(/<NowSection order=\{order\} model=\{model\} actions=\{actions\} \/>\s*<WorkOrdersSection order=\{order\} model=\{model\} actions=\{actions\} \/>\s*<DatesSection order=\{order\} model=\{model\} actions=\{actions\} \/>/)
     expect(html.indexOf('id="now"')).toBeLessThan(html.indexOf('id="work-orders"'))
     expect(html.indexOf('id="work-orders"')).toBeLessThan(html.indexOf('id="dates"'))
-    // F-SA-235: the tech pack in force is Production's "Specs in force" (inside the tab, no longer at its foot).
-    expect(tab).toContain('<TechPackCard model={model.depth} actions={actions?.depth} />')
+    // F-SA-235 → F-PT-402: the tech pack in force is What we make it to's own half (#specs), inside the tab.
+    expect(tab).toContain('<MakeToSection order={order} model={model} actions={actions} />')
+    expect(html).toContain('id="specs"')
     // F-SA-234: today's Dates card merged into Production and deleted.
     expect(() => readFileSync(new URL('./view/DatesTab.tsx', import.meta.url), 'utf8')).toThrow()
   })

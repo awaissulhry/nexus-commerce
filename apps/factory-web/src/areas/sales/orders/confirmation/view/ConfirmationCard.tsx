@@ -2,14 +2,13 @@
 
 import { ExternalLink, FileSignature, FileText, Send } from 'lucide-react'
 import { Banner, Card, Disclosure, EmptyState, KeyValue } from '@nexus/ui/components'
-import { FileRow } from '../../../../../lib/i18n/ds-parts'
 import { Button, Spinner } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame' // F-SA-236: the thread's one viewer
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { Order } from '../../api'
-import { confirmationHeld, confirmationHref, confirmationState, NAMESPACE, packRows } from '../../depth/model'
+import { confirmationHeld, confirmationHref, confirmationState, NAMESPACE } from '../../depth/model'
 import type { OrderDepthActions, OrderDepthModel } from '../../depth/use-order-depth'
 import '../../depth/depth.css'
 
@@ -158,77 +157,6 @@ function Confirmation({ order, model, actions, prefix }: { order: Order; model: 
               />
             </Disclosure>
           )}
-        </>
-      )}
-    </Card>
-  )
-}
-
-/**
- * Documents and files › Customer tech pack in force (design order.docs.files "Brand tech pack in force (W2b)"; B-W2b-295's read
- * through the order's quote and the inquiry it came from): each file of the customer's tech pack, the version named and whether a
- * newer one is in force now (or none is available any more), opened from the file store. Fetches nothing.
- */
-export function TechPackCard({ model, actions }: { model: OrderDepthModel | undefined; actions?: OrderDepthActions }) {
-  if (!model?.techPack) return null
-  return (
-    <WithMessages namespaces={[NAMESPACE]}>
-      <TechPack model={model} actions={actions} />
-    </WithMessages>
-  )
-}
-
-function TechPack({ model, actions }: { model: OrderDepthModel; actions?: OrderDepthActions }) {
-  const d = useT(NAMESPACE)
-  const part = model.techPack!
-  const rows = packRows(part.value)
-  return (
-    <Card padded>
-      <div className="fw-sod-head">
-        <h2 className="fw-sod-h2">{d('pack.title')}</h2>
-        {part.value?.inquiry && <span className="fw-sod-hint">{d('pack.from', { number: part.value.inquiry.number })}</span>}
-      </div>
-      {part.problem ? (
-        <Banner
-          tone="danger"
-          title={d('pack.failed')}
-          action={
-            <Button size="sm" onClick={() => actions?.onRetry?.('techPack')}>
-              {d('common.retry')}
-            </Button>
-          }
-        >
-          {d(part.problem)}
-        </Banner>
-      ) : !part.value ? (
-        <p className="fw-sod-hint" role="status">
-          <Spinner size={14} /> {d('pack.reading')}
-        </p>
-      ) : !part.value.inquiry ? (
-        <p className="fw-sod-hint">{d('pack.noInquiry')}</p>
-      ) : rows.length === 0 ? (
-        <p className="fw-sod-hint">{d('pack.none')}</p>
-      ) : (
-        <>
-          {part.value.inquiry.techPack.version && <p className="fw-sod-hint">{d('pack.version', { version: part.value.inquiry.techPack.version })}</p>}
-          <div className="fw-sod-files">
-            {rows.map((row) => (
-              <FileRow
-                key={row.id}
-                name={row.name}
-                size={row.size}
-                status={row.state === 'gone' ? d('pack.gone') : row.state === 'newer' ? d('pack.newer', { named: row.named, current: row.current ?? row.named }) : d('pack.inForce', { version: row.named })}
-                tone={row.state === 'gone' ? 'danger' : 'neutral'}
-                actions={
-                  model.can.files && row.available ? (
-                    <Button size="sm" variant="quiet" onClick={() => actions?.onOpenFile?.(row.openId)}>
-                      {d('pack.open')}
-                    </Button>
-                  ) : null
-                }
-              />
-            ))}
-          </div>
         </>
       )}
     </Card>
