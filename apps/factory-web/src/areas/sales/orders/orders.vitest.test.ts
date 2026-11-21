@@ -983,7 +983,8 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     // F-OO-145: a gate's Discuss is an item of its More ▾ now — still by the gate's reference.
     expect(read('./record/view/overview/DatesCard.tsx')).toContain("target: row.gateId ? { kind: 'OrderGate', id: row.gateId } : null")
     expect(read('./record/view/overview/PeopleCard.tsx')).toContain('<FollowersDoor />')
-    const changes = read('./record/changes/view/ChangesTab.tsx')
+    // F-OC-101: What changed is its own section file (the tab is its layout only).
+    const changes = read('./record/changes/view/HistorySection.tsx')
     expect(changes).toContain('<ShowInThreadDoor order={order} at={entry.at} />')
     expect(changes).toContain('id={`change-${entry.id}`}')
     // A thread card jumps back to its row: a replace (no history entry), then the row in view with the focus.
@@ -1561,9 +1562,10 @@ describe('F-OP-117: the Changes tab — work-order changes of this order, the Hi
     const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(view).toContain('const changesCount = waitingCard ? changesBadgeOf(waitingCard) : null')
     expect(view).toContain('tabCountOf(tab, order, { changes: changesCount /* F-OP-117 */, viewInvoices: model.can.viewInvoices /* F-OP-306 */ })')
+    // F-OC-101: the tab is its layout only — What changed (HistorySection) reads the work-order changes for its chip.
     const tab = readFileSync(new URL('./record/changes/view/ChangesTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain('<WorkOrderChanges order={order} model={model} actions={actions} />')
-    expect(tab).toContain('workOrderChanges: model.orderChanges?.list?.value ?? null')
+    expect(tab).toContain('<HistorySection order={order} model={model} actions={actions} />')
+    expect(readFileSync(new URL('./record/changes/view/HistorySection.tsx', import.meta.url), 'utf8')).toContain('workOrderChanges: model.orderChanges?.list?.value ?? null')
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of ['wocs.title', 'wocs.none', 'wocs.newDraft', 'badge.yourTurn', 'changes.history.chips.workOrders']) expect(t(key), `${locale} ${key}`).not.toBe(key)

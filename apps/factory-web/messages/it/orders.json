@@ -3013,5 +3013,26 @@
       },
       "done": "Ricevimento {number} registrato"
     }
+  },
+  "changesTab": {
+    "today": "oggi {time}",
+    "dayTime": "{date} {time}",
+    "waiting": {
+      "title": "In attesa",
+      "info": "Cosa aspetta una risposta o un passo su questo ordine: a chi tocca, da quanto aspetta e la sua unica porta. È lo stesso elenco di Richieste e modifiche in Panoramica e del conteggio della scheda. Le età contano fino al minuto in cui l'elenco è stato letto.",
+      "asOf": "Alle {when}",
+      "reading": "Lettura di cosa è in attesa…",
+      "nothing": "Niente in attesa.",
+      "lastRevision": "Ultima modifica: revisione {revision}, {date}.",
+      "total_one": "{count} cosa in attesa: {parts}.",
+      "total_other": "{count} cose in attesa: {parts}.",
+      "partUs": "{count} da noi",
+      "partCustomer": "{count} da {customer}",
+      "partSteps_one": "{count} passo ancora da fare",
+      "partSteps_other": "{count} passi ancora da fare",
+      "onlySteps_one": "{count} passo ancora da fare.",
+      "onlySteps_other": "{count} passi ancora da fare.",
+      "holdsAndDates": "Blocchi e date sono in Produzione ›"
+    }
   }
 }

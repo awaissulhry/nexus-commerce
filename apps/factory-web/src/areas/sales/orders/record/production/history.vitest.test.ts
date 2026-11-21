@@ -59,7 +59,7 @@ describe('F-PT-204: why, split (B22)', () => {
       for (const key of ['productionTab.history.title', 'productionTab.history.never', 'productionTab.history.neverNoSince', 'productionTab.history.noPromise', 'productionTab.history.later', 'productionTab.history.sooner', 'productionTab.history.lines', 'productionTab.history.reasonAutomatic', 'productionTab.history.reasonNone', 'productionTab.history.officeNote', 'productionTab.history.customerReads', 'productionTab.history.by', 'productionTab.history.set', 'productionTab.history.setNote', 'productionTab.history.earlier', 'productionTab.history.tell', 'productionTab.history.pointer'])
         expect(t(key, { date: 'd', since: 's', count: 2, lines: 'l', note: 'n', words: 'w', name: 'n', at: 'a' }), `${locale} ${key}`).not.toMatch(/^productionTab\.|\{/)
     }
-    const changes = readFileSync(new URL('../changes/view/ChangesTab.tsx', import.meta.url), 'utf8')
+    const changes = readFileSync(new URL('../changes/view/HistorySection.tsx', import.meta.url), 'utf8') // F-OC-101: What changed's own file
     expect(changes).toContain("{t('productionTab.history.pointer')}")
     expect(changes).toContain("'production', search)}#promise-moves`}")
   })

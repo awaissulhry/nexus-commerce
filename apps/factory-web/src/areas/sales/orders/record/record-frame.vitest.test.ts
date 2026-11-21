@@ -104,12 +104,16 @@ describe('the order on RecordFrame', () => {
     expect(shipments).not.toContain('Invoices and credit notes')
   })
 
-  it('F-SA-236: Changes — waiting on us / on the customer, the confirmation as a row at #confirmation, the history, what can still change', () => {
+  // F-OC-101: rewritten — four sections: Waiting (nothing waits here: its head's one line), Can it still change?, What changed, the
+  // customer's agreement at #confirmation; Waiting first and the confirmation last.
+  it('F-SA-236: Changes — Waiting, what can still change, the history, the confirmation as a row at #confirmation', () => {
     for (const locale of ['en', 'it'] as const) {
       const html = draw('w2b-323-documents', locale)
-      expect(html).toContain('id="confirmation"')
+      for (const id of ['id="waiting"', 'id="freeze"', 'id="history"', 'id="confirmation"']) expect(html, id).toContain(id)
+      expect(html.indexOf('id="waiting"')).toBeLessThan(html.indexOf('id="freeze"'))
+      expect(html.indexOf('id="history"')).toBeLessThan(html.indexOf('id="confirmation"'))
       const text = textOf(html)
-      for (const words of locale === 'en' ? ['Waiting on us', 'Waiting on the customer', "Confirmation & the customer's yes", 'Order confirmation v2', 'How the customer said yes', 'History', 'What can still change'] : ['Tocca a noi', 'Tocca al cliente', 'Conferma e sì del cliente', "Conferma d'ordine v2", 'Cronologia', 'Cosa si può ancora cambiare']) expect(text, words).toContain(words)
+      for (const words of locale === 'en' ? ['Waiting', 'Nothing waits.', "Confirmation & the customer's yes", 'Order confirmation v2', 'How the customer said yes', 'History', 'What can still change'] : ['In attesa', 'Niente in attesa.', 'Conferma e sì del cliente', "Conferma d'ordine v2", 'Cronologia', 'Cosa si può ancora cambiare']) expect(text, words).toContain(words)
     }
     expect(draw('w2b-323-documents')).not.toMatch(/min\(70vh/)
     expect(landingOf('documents')).toMatchObject({ tab: 'changes', anchor: 'confirmation' })
@@ -841,7 +845,7 @@ describe('F-OO-111 — the yes and deposit banners step back on Overview (presen
   it('W07\'s follow-up: "Record a shipment made elsewhere…" is mounted ONCE, by the page — the band\'s ⋯ opens it on every tab', () => {
     const dialogOn = (file: string) => (readFileSync(new URL(file, import.meta.url), 'utf8').match(/model\.elsewhere\?\.dialog\b/g) ?? []).length
     expect(dialogOn('./view/OrderRecordView.tsx')).toBe(1)
-    for (const tab of ['./view/overview/WhereCard.tsx', './view/ShipmentsTab.tsx', './view/OverviewTab.tsx', './view/LinesTab.tsx', './view/ProductionTab.tsx', './view/MoneyTab.tsx', './view/FilesTab.tsx', './changes/view/ChangesTab.tsx']) expect(dialogOn(tab), tab).toBe(0)
+    for (const tab of ['./view/overview/WhereCard.tsx', './view/ShipmentsTab.tsx', './view/OverviewTab.tsx', './view/LinesTab.tsx', './view/ProductionTab.tsx', './view/MoneyTab.tsx', './view/FilesTab.tsx', './changes/view/ChangesTab.tsx', /* F-OC-101: its section files */ './changes/view/WaitingSection.tsx', './changes/view/FreezeSection.tsx', './changes/view/HistorySection.tsx', './changes/view/AgreementSection.tsx']) expect(dialogOn(tab), tab).toBe(0)
     // Outside the tabs' bodies: beside the page's other dialogs.
     const view_ = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(view_.indexOf('{model.elsewhere?.dialog}')).toBeGreaterThan(view_.indexOf('<OrderDialogs order={order} model={model} actions={actions} />'))

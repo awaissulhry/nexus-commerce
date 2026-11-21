@@ -428,7 +428,13 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
       }
     }
     expect(textOf(draw('overview-loading'))).toContain('Loading Requests & changes')
-    expect(textOf(draw('f-op-301-reading-changes'))).toContain('Loading Waiting on the customer')
+    // F-OC-101: the Changes tab's Waiting says it reads (its skeleton rows under it), never "Nothing waits" before the read.
+    for (const locale of ['en', 'it'] as const) {
+      const text = textOf(draw('f-op-301-reading-changes', locale))
+      expect(text).toContain(locale === 'en' ? 'Reading what waits…' : 'Lettura di cosa è in attesa…')
+      expect(text).not.toMatch(locale === 'en' ? /Nothing waits/ : /Niente in attesa/)
+    }
+    expect(draw('f-op-301-reading-changes')).toMatch(/<section id="waiting"[\s\S]*?aria-busy="true"/)
   })
 
   // F-OO-202: rewritten — the cards and the Changes tab list the request rows (the two gates went to Next dates): 1 + 1 on both pages.
@@ -495,8 +501,8 @@ describe('F-OP-304: Still to do — "Nothing left to do" only when nothing stand
       // Walk follow-up (W04): the size named before its count.
       expect(text).toContain(locale === 'en' ? 'Line 10 · Size 48: 1 more than ordered (cut or planned to cut)' : "Riga 10 · Taglia 48: 1 in più dell'ordine (tagliati o da tagliare)")
     }
-    // F-OO-205: SO-0002's case has its step still to do now; the case with nothing left is the Changes tab with no request waiting.
-    expect(textOf(draw('f-oo-204-changes-nothing'))).toContain('Nothing left to do for the accepted changes.')
+    // F-OO-205: SO-0002's case has its step still to do now. F-OC-101: the case with nothing left says it in Waiting's one line.
+    expect(textOf(draw('f-oo-204-changes-nothing'))).toContain('Nothing waits.')
   })
 })
 // ---- end F-OP-304
@@ -1072,11 +1078,16 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
     expect(html.indexOf('Holds are on Overview')).toBeLessThan(html.indexOf('<h2 class="fw-so-h2">Waiting on us</h2>'))
   })
 
-  it('Changes with no request waiting: "No request waits on …" (never "Nothing waits": a hold and a gate wait, on Overview)', () => {
+  // F-OC-101 (L4): rewritten — nothing waits on the Changes tab is ONE line, and it says where the hold and the gate are: on
+  // Production (they live there since 11-21), never "on Overview".
+  it('Changes with nothing waiting: "Nothing waits." with the one pointer "Holds and dates are on Production ›"', () => {
     for (const locale of ['en', 'it'] as const) {
-      const text = textOf(draw('f-oo-204-changes-nothing', locale))
-      for (const words of locale === 'en' ? ['No request waits on us', 'No request waits on the customer', 'Holds are on Overview · dates are in Next dates'] : ['Nessuna richiesta aspetta noi', 'Nessuna richiesta aspetta il cliente', 'I blocchi sono in Panoramica']) expect(text, words).toContain(words)
-      expect(text).not.toMatch(/Nothing waits|Niente aspetta/)
+      const html = draw('f-oo-204-changes-nothing', locale)
+      const text = textOf(html)
+      for (const words of locale === 'en' ? ['Nothing waits.', 'Holds and dates are on Production ›'] : ['Niente in attesa.', 'Blocchi e date sono in Produzione ›']) expect(text, words).toContain(words)
+      expect(text).not.toMatch(/Holds are on Overview|I blocchi sono in Panoramica/)
+      // The pointer lands on Production's holds (the quality hold is one).
+      expect(html).toMatch(/href="[^"]*\?tab=production[^"]*#holds"/)
     }
   })
 
