@@ -425,8 +425,8 @@ describe('F-OP-113: the work-order rows act in place; a work order shared with o
     expect(text).toContain('Production does this — a planner or the production manager.')
     expect(html).not.toContain('aria-label="Priority of WO-00021"')
     expect(html).not.toContain('aria-label="Due date of WO-00021"')
-    // The ⋯ stays for its read door (Open the work order); no act is in it (shownActsOf, work.vitest).
-    expect(html).toContain('aria-label="Actions for WO-00021"')
+    // F-PT-104b (lead): no act and no other link — no ⋯ at all (the row's window opens the work order).
+    expect(html).not.toContain('aria-label="Actions for WO-00021"')
     expect(textOf(draw('wo-acts-sales', 'it'))).toContain('lo fa la produzione — un pianificatore o il responsabile di produzione')
   })
 

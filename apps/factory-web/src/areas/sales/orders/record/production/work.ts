@@ -119,6 +119,12 @@ export function shownActsOf(offer: RowActs): ShownActs {
   return { acts: offer.menu.filter((entry) => entry.held === null).map((entry) => entry.act), links: offer.links ?? [], inline: !!offer.inline && offer.inline.held === null, hidden }
 }
 
+/**
+ * F-PT-104b (lead): the row's ⋯ only when it holds something the row does not already give — an act, Priority and rush…, or a link
+ * other than "Open the work order" (the row's own window opens it). Sales with no act and no Planning: no ⋯ at all.
+ */
+export const rowMenuShown = (shown: ShownActs): boolean => shown.inline || shown.acts.length > 0 || shown.links.some((link) => link !== 'open')
+
 // ---- the waiting decisions (F-PT-105: the strip above the rows; B5 — one Decide… each, MAKE_MORE too) ---------------------------
 
 /** At most this many waiting decisions in the strip; the rest: "+N more on Changes ›". */

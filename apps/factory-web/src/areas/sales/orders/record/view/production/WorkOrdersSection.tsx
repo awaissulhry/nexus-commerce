@@ -23,7 +23,7 @@ import type { WorkOrderOwn } from '../../overview/api'
 import { readOf, say } from '../../overview/model'
 import { madeForOf, makeHeldOf, ownProgress } from '../../production'
 import { askPresetOf, askStarterOf } from '../../production/asks'
-import { decisionsOf, priorityShownOf, shownActsOf, statusKeyOf, workDatesOf, workProgressOf, workSummaryOf, WO_TONE } from '../../production/work'
+import { decisionsOf, priorityShownOf, rowMenuShown, shownActsOf, statusKeyOf, workDatesOf, workProgressOf, workSummaryOf, WO_TONE } from '../../production/work'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { floorToldAt } from '../../told'
 import { LineMenuButton } from '../LineMenu'
@@ -154,6 +154,7 @@ function Rows({ order, model, actions, href }: { order: Order; model: OrderRecor
   // The row's ⋯: its open acts (the lib's dialogs), Priority and rush…, then the links. `before` closes a window first (one at a time).
   const menuOf = (row: WorkOrderOwn, before?: () => void): MenuItemDef[] => {
     const shown = shownActsOf(offers.get(row.id)!)
+    if (!rowMenuShown(shown)) return [] // F-PT-104b: nothing the row (and its window) does not already give
     const run = (go: () => void) => () => {
       before?.()
       go()
