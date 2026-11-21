@@ -31,7 +31,8 @@ export const ROLES = {
  * F-OP-129: people a later stage adds beside the nine (16-close walks the nine only): the Owner, who decides the yes the order page
  * asks of the Owner's role.
  */
-export const MORE_ROLES = { owner: 'owner' } as const
+// F-PT T.2: a Read-only person (the role template read_only) for th9's step 12 — not in ROLES (no stage makes every role).
+export const MORE_ROLES = { owner: 'owner', reader: 'read_only' } as const
 export type PersonKey = keyof typeof ROLES | keyof typeof MORE_ROLES
 const ROLE_OF: Record<PersonKey, string> = { ...ROLES, ...MORE_ROLES }
 const NAMES: Record<PersonKey, string> = {
@@ -45,6 +46,7 @@ const NAMES: Record<PersonKey, string> = {
   supervisor: 'Silvio Supervisor',
   admin: 'Ada Admin',
   owner: 'Olga Owner', // F-OP-129
+  reader: 'Rita Reader', // F-PT T.2
 }
 
 export const TENANT = 'golden'
