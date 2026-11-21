@@ -163,6 +163,9 @@ describe('F-SC-W3: StageStrip with picks — each step a named real button, no l
     expect(html.indexOf('class="fw-prp-strip-picks"')).toBeLessThan(html.indexOf('class="nds-milestones"'))
     // Never a div posing as a button.
     expect(html).not.toMatch(/role="button"/)
+    // pt-sc-fx3 (stage walk #2): at rest each step button shows its pencil (hidden from a screen reader: the name says it).
+    expect(html.match(/<button type="button" class="fw-prp-strip-pick"[^>]*><svg[^>]*fw-prp-strip-pick-mark/g)?.length).toBe(4)
+    for (const mark of html.match(/<svg[^>]*fw-prp-strip-pick-mark[^>]*>/g) ?? []) expect(mark).toContain('aria-hidden="true"')
   })
 
   it('no picks, none to pick, no onPick, or the row form: the strip as before (the ONE link when it has a door)', () => {
@@ -182,6 +185,10 @@ describe('F-SC-W3: StageStrip with picks — each step a named real button, no l
     const picksCss = css.slice(css.indexOf('.fw-prp-strip-picks {'), css.indexOf('.fw-prp-strip-pick:focus-visible {') + 120)
     expect(picksCss).toContain('pointer-events: none')
     expect(picksCss).toContain('background: var(--nds-surface-hover)')
+    // pt-sc-fx3: the resting cue — the pencil in the step's lower corner, muted; not drawn before the button is measured.
+    expect(css).toMatch(/\.fw-prp-strip-pick \{[^}]*align-items: flex-end;[^}]*justify-content: flex-end;[^}]*color: var\(--nds-text-muted\);/)
+    expect(css).toMatch(/\.fw-prp-strip-pick:not\(\[style\]\) \{\s*visibility: hidden;/)
+    expect(css).toContain('.fw-prp-strip-pick-mark {')
     expect(picksCss).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
     const part = readFileSync(new URL('./view/StageStrip.tsx', import.meta.url), 'utf8')
     expect(part).toContain('new ResizeObserver(measure)')

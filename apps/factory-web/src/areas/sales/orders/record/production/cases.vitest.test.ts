@@ -59,12 +59,17 @@ describe('T.1: the Production tab’s states, by role', () => {
     const planner = now('f-sc-production-steps')
     const bar = planner.slice(planner.indexOf('class="fw-pt-segs"'), planner.indexOf('</ol>', planner.indexOf('class="fw-pt-segs"')))
     expect(bar.match(/<button type="button" class="fw-pt-seg-go"/g)?.length).toBe(4)
+    // pt-sc-fx3 (stage walk #2): at rest each step button shows its pencil after its word (as Overview's strip); words-only steps none.
+    expect(bar.match(/class="[^"]*fw-pt-seg-mark[^"]*"/g)?.length).toBe(4)
+    expect(bar).toMatch(/<span>Preparing<svg[^>]*fw-pt-seg-mark/)
+    for (const mark of bar.match(/<svg[^>]*fw-pt-seg-mark[^>]*>/g) ?? []) expect(mark).toContain('aria-hidden="true"')
     for (const stage of ['Preparing', 'Cutting', 'Quality check', 'Ready to ship']) expect(bar, stage).toContain(`aria-label="Set the stage of SO-2026-0088 to ${stage}…"`)
     // The current step (what the customer reads) stays words, never a button.
     expect(bar).toMatch(/<li class="fw-pt-seg is-current" aria-current="step"><span class="fw-pt-seg-bar"/)
     expect(planner).not.toContain('Production does this — a planner or the production manager')
     const sales = now('f-sc-production-held')
     expect(sales).not.toContain('fw-pt-seg-go')
+    expect(sales).not.toContain('fw-pt-seg-mark')
     expect(sales).toContain('Production does this — a planner or the production manager')
     // The hint to the hand row on Overview stays.
     expect(textOf(sales)).toContain('Set by hand')

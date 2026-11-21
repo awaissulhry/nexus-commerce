@@ -63,10 +63,27 @@
   border-radius: var(--nds-radius-xs);
   background: transparent;
   cursor: pointer;
+  /* pt-sc-fx3 (stage walk #2): the pencil at rest, in the step's lower corner (clear of the tracker's connector and words). */
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  color: var(--nds-text-muted);
+}
+
+/* Not measured yet (the server's markup, the first frame): no size, so its pencil is not drawn either. */
+.fw-prp-strip-pick:not([style]) {
+  visibility: hidden;
+}
+
+.fw-prp-strip-pick-mark {
+  flex: none;
+  margin: var(--nds-space-4);
 }
 
 .fw-prp-strip-pick:hover {
   background: var(--nds-surface-hover);
+  color: var(--nds-text);
 }
 
 .fw-prp-strip-pick:focus-visible {
