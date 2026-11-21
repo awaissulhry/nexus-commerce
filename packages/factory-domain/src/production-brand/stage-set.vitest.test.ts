@@ -147,7 +147,11 @@ describe('B-SC-001 every refusal, in words (en + it)', () => {
       expect(STAGE_SET_REFUSAL_WORDS[refusal].en.length).toBeGreaterThan(0)
       expect(STAGE_SET_REFUSAL_WORDS[refusal].it.length).toBeGreaterThan(0)
     }
-    expect([...STAGE_SET_REFUSALS]).toEqual(['NOT_STARTED', 'ALREADY_READY', 'PRODUCTION_OVER', 'NOTHING_LEFT', 'PAUSED', 'UNKNOWN_STAGE', 'UNKNOWN_REASON', 'NOTE_NEEDED', 'NOTE_TOO_LONG'])
+    expect([...STAGE_SET_REFUSALS]).toEqual(['NOT_STARTED', 'ALREADY_READY', 'PRODUCTION_OVER', 'NOTHING_LEFT', 'PAUSED', 'NOTHING_TO_CHANGE', 'UNKNOWN_STAGE', 'UNKNOWN_REASON', 'NOTE_NEEDED', 'NOTE_TOO_LONG'])
+    expect(STAGE_SET_REFUSAL_WORDS.NOTHING_TO_CHANGE).toEqual({
+      it: 'Niente da cambiare: la fase impostata a mano è già questa, con lo stesso motivo e la stessa nota.',
+      en: 'Nothing to change: the stage set by hand already reads so, with the same reason and note.',
+    })
     expect(sameStageWords('SEWING')).toEqual({ it: 'Il cliente legge già Cucitura.', en: 'The customer already reads Sewing.' })
     expect(floorStageWords('CUTTING')).toEqual({
       it: 'Taglio è la fase del reparto: togli la fase impostata a mano per tornarci.',
@@ -196,13 +200,24 @@ describe('B-SC-001 every refusal, in words (en + it)', () => {
     expect(problems({ stage: 'PACKING' })).toEqual([{ path: 'body/stage', message: 'Expected one of PREPARING, CUTTING, SEWING, QUALITY, READY.' }])
   })
 
-  it('the stage the customer reads already: "The customer already reads …" (409)', () => {
+  it('a Set at the stage the customer reads already: "The customer already reads …" (409)', () => {
     expect(problems({ stage: 'PREPARING' })).toEqual([{ path: 'body/stage', message: 'The customer already reads Preparing.' }])
     expect(problems({ floor: 'SEWING', shown: 'SEWING', stage: 'SEWING' })).toEqual([{ path: 'body/stage', message: 'The customer already reads Sewing.' }])
-    // A hand stage standing: it is the one the customer reads (a Change of its words alone is no move).
-    expect(problems({ floor: 'CUTTING', shown: 'SEWING', hand: 'SEWING', stage: 'SEWING', reasonCode: 'FEW_PEOPLE' })).toEqual([{ path: 'body/stage', message: 'The customer already reads Sewing.' }])
     // No row read yet (shown null): the floor's stage is the one it reads.
     expect(problems({ floor: 'CUTTING', shown: null, stage: 'CUTTING' })).toEqual([{ path: 'body/stage', message: 'The customer already reads Cutting.' }])
+  })
+
+  it('a Change at the stage set by hand: another reason or note is taken (office fields only); all three unchanged — nothing to change (409)', () => {
+    const standing = { floor: 'CUTTING', shown: 'SEWING', hand: 'SEWING', handReason: 'OUTAGE', handNote: 'Made-up: the tablets were down.' } as const
+    expect(problems({ ...standing, stage: 'SEWING', reasonCode: 'FEW_PEOPLE', note: 'Made-up: the tablets were down.' })).toEqual([])
+    expect(problems({ ...standing, stage: 'SEWING', reasonCode: 'OUTAGE', note: 'Made-up: two people off sick.' })).toEqual([])
+    expect(problems({ ...standing, stage: 'SEWING', reasonCode: 'OUTAGE', note: null })).toEqual([])
+    expect(problems({ ...standing, stage: 'SEWING', reasonCode: 'OUTAGE', note: 'Made-up: the tablets were down.' })).toEqual([{ path: 'body/stage', message: 'Nothing to change: the stage set by hand already reads so, with the same reason and note.' }])
+    // The note as compared: trimmed, empty = none.
+    expect(problems({ ...standing, stage: 'SEWING', reasonCode: 'OUTAGE', note: '  Made-up: the tablets were down.  ' })).toEqual([{ path: 'body/stage', message: words('NOTHING_TO_CHANGE') }])
+    expect(problems({ ...standing, handNote: null, stage: 'SEWING', reasonCode: 'OUTAGE', note: '   ' })).toEqual([{ path: 'body/stage', message: words('NOTHING_TO_CHANGE') }])
+    // A Set (no hand stage stands) at the stage the customer reads is never a Change of words.
+    expect(problems({ floor: 'SEWING', shown: 'SEWING', hand: null, stage: 'SEWING', reasonCode: 'FEW_PEOPLE', note: 'Made-up: new words.' })).toEqual([{ path: 'body/stage', message: 'The customer already reads Sewing.' }])
   })
 
   it("the floor's own stage while a hand stage stands: Clear goes back to it (409)", () => {

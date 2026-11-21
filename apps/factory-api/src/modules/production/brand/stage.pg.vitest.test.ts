@@ -441,19 +441,42 @@ describe('B-SC-004: any stage by hand, forward or back', () => {
     expect((await one<{ n: number }>(`SELECT count(*)::int AS n FROM "QualityRelease" r JOIN "WorkOrderSize" s ON s.id = r."workOrderSizeId" JOIN "SalesOrderLine" l ON l.id = s."salesOrderLineId" WHERE l."orderId" = $1`, [orderId])).n).toBe(0)
   })
 
-  it('the stage the customer reads and the floor’s own stage while a hand stage stands: 409 in words; nothing written, nothing told', async () => {
+  it('a Change at the same stage with stage, reason and note unchanged, and the floor’s own stage while a hand stage stands: 409 in words; nothing written, nothing told', async () => {
     const { orderId, lineId } = await newOrder(ids.a, 'SAME')
     const { workOrderId, cellId } = await workOrderOf(lineId)
     await bundleOn(workOrderId, cellId)
     await keepOrder(system(), orderId, { what: 'test' })
     expect((await rowOf(orderId)).stage).toBe('CUTTING')
-    await set('office.planner', orderId, { stage: 'SEWING', reasonCode: 'OUTAGE', version: await versionOf(orderId) })
+    await set('office.planner', orderId, { stage: 'SEWING', reasonCode: 'OUTAGE', note: NOTE, version: await versionOf(orderId) })
     const version = await versionOf(orderId)
     const before = await told()
-    expect((await refused('office.planner', 'PUT', stageUrl(orderId), { stage: 'SEWING', reasonCode: 'FEW_PEOPLE', version }, 409)).message).toBe('The customer already reads Sewing.')
+    expect((await refused('office.planner', 'PUT', stageUrl(orderId), { stage: 'SEWING', reasonCode: 'OUTAGE', note: `  ${NOTE} `, version }, 409)).message).toBe('Nothing to change: the stage set by hand already reads so, with the same reason and note.')
     expect((await refused('office.planner', 'PUT', stageUrl(orderId), { stage: 'CUTTING', reasonCode: 'OUTAGE', version }, 409)).message).toBe("Cutting is the floor's own stage: clear the stage set by hand to go back to it.")
-    expect(await rowOf(orderId)).toMatchObject({ stage: 'SEWING', stageSet: 'SEWING', reason: 'OUTAGE', version })
+    expect(await rowOf(orderId)).toMatchObject({ stage: 'SEWING', stageSet: 'SEWING', reason: 'OUTAGE', note: NOTE, version })
     expect(await toldSince(before, orderId)).toEqual([])
+  })
+
+  it('a Change at the same stage with another reason or note is taken: audited, the floor at the set kept, the customer told nothing', async () => {
+    const orderId = (await one<{ id: string }>(`SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND number LIKE 'T-MS005-SAME-%'`, [ids.tenantId])).id
+    const before = await told()
+    const markers = await stageMarkersOf(orderId)
+    const stageAt = new Date((await rowOf(orderId)).stageAt).toISOString()
+    const reason = await set('office.planner2', orderId, { stage: 'SEWING', reasonCode: 'FEW_PEOPLE', note: NOTE, version: await versionOf(orderId) })
+    expect(reason).toMatchObject({ floor: 'CUTTING', stage: 'SEWING', byHand: { stage: 'SEWING', reasonCode: 'FEW_PEOPLE', note: NOTE, setBy: { id: member } } })
+    const words = await set('office.planner', orderId, { stage: 'SEWING', reasonCode: 'FEW_PEOPLE', note: 'Made-up: two people off sick in the sewing room.', version: reason.version })
+    expect(words).toMatchObject({ stage: 'SEWING', byHand: { reasonCode: 'FEW_PEOPLE', note: 'Made-up: two people off sick in the sewing room.', setBy: { id: owner } }, version: reason.version + 1 })
+    // Only office fields changed: the stage and its day stay, no notice, no marker.
+    expect(new Date((await rowOf(orderId)).stageAt).toISOString()).toBe(stageAt)
+    expect(await toldSince(before, orderId)).toEqual([])
+    expect(await stageMarkersOf(orderId)).toEqual(markers)
+    // Audited on the order's History (Sewing → Sewing, the reason in `after`), never a `status` key; the floor at the set is the first set's.
+    expect((await orderAudits(orderId)).slice(-2).map((row) => [row.before.stage, row.after.stage, row.after.reasonCode])).toEqual([
+      ['SEWING', 'SEWING', 'FEW_PEOPLE'],
+      ['SEWING', 'SEWING', 'FEW_PEOPLE'],
+    ])
+    const rowId = (await rowOf(orderId)).id as string
+    const sets = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "recordType" = 'BrandOrderProduction' AND "recordId" = $1 AND action = $2 ORDER BY id`, [rowId, SET_BRAND_STAGE])
+    expect(sets.map((row) => row.after.floorAtSet)).toEqual(['CUTTING', 'CUTTING', 'CUTTING'])
   })
 
   it('Preparing set back over a told Cutting (a wrong cut): one correction, the stages above untold; the hand Preparing stands over the floor’s Cutting', async () => {

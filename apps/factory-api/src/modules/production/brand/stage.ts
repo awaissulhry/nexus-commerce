@@ -10,7 +10,7 @@ import { officeContextOf } from '../work-orders/access'
 import type { Reader } from '../work-orders/store'
 import { lockOrder, officeOrder } from './health'
 import { CLEAR_BRAND_STAGE, keepInCommand, SET_BRAND_STAGE, tellStageOnce, untellWaiting } from './keeper' // B-MS-008: untellWaiting
-import { tellCorrection } from './keeper' // B-SC-004
+import { readHandFloor, tellCorrection } from './keeper' // B-SC-004
 
 /**
  * B-MS-005 — the office sets an order's stage by hand (set-the-stage-by-hand plan.md D1–D9, design A; review fixes R1, R4, R6, R9,
@@ -23,9 +23,10 @@ import { tellCorrection } from './keeper' // B-SC-004
  * stay on the floor's records (factory-domain production-brand/stage-set).
  *
  *   set     PUT /production/brand-orders/:orderId/stage {stage, reasonCode, note?, version} (production.brand.manage): only an order
- *           In production or Partly shipped (R4), never while the customer's own pause stands (R19), never the stage the customer
- *           reads already, and never the LIVE floor's own stage while a hand stage stands (R12; Clear goes back to it). A Change is
- *           the same call while one stands: it replaces it, forward or back.
+ *           In production or Partly shipped (R4), never while the customer's own pause stands (R19), a Set never at the stage the
+ *           customer reads already, and never the LIVE floor's own stage while a hand stage stands (R12; Clear goes back to it). A
+ *           Change is the same call while one stands: it replaces it, forward or back; at the same stage it changes only the reason
+ *           or the note (audited, nothing told, the floor at the set kept) — all three unchanged: nothing to change (409).
  *   clear   DELETE the same ?version (production.brand.manage): the stage goes back to the live floor's (a step back on the floor's
  *           own day, R15).
  *   told    one rule for Set, Change and Clear (handMoveOf on the stage the customer reads): a forward move is told once
@@ -147,13 +148,16 @@ export async function setBrandStage(caller: CommandCaller, orderId: string, body
     const floor = facts.stage?.stage ?? null
     const row = await readHand(tools.tx, orderId)
     const paused = facts.blockers.some((blocker) => blocker.kind === 'BRAND_PAUSE')
-    // B-SC-004: `shown` — the stage the customer reads after the keeper's pass (the stage asked must move it).
-    const refused = stageSetStateProblems({ status: facts.order.status as SalesOrderStatus, floor, shown: row?.stage ?? null, hand: row?.stageSet ?? null, paused, stage })
+    // B-SC-004: `shown` — the stage the customer reads after the keeper's pass (a Set must move it; a Change at the same stage must
+    // change its reason or note).
+    const refused = stageSetStateProblems({ status: facts.order.status as SalesOrderStatus, floor, shown: row?.stage ?? null, hand: row?.stageSet ?? null, handReason: row?.stageSetReason ?? null, handNote: row?.stageSetNote ?? null, paused, stage, reasonCode, note })
     if (refused.length > 0) throw new InvalidStateError(refused[0]!.message)
     // A kept order with a goods line open has its row now (the keeper's pass made it).
     if (!row) throw new InvalidStateError(STAGE_SET_REFUSAL_WORDS.NOTHING_LEFT.en)
 
     const changed = row.stageSet !== null
+    // B-SC-004: a Change of the office's words only (the same stage) keeps the floor at the set, so the end rule stays as it was.
+    const floorAtSet = changed && row.stageSet === stage ? ((await readHandFloor(tools.tx, row.id)) ?? floor) : floor
     await tools.tx.brandOrderProduction.update({
       where: { id: row.id },
       data: {
@@ -176,7 +180,7 @@ export async function setBrandStage(caller: CommandCaller, orderId: string, body
       recordId: row.id,
       companyId: facts.order.companyId,
       before: { stage: row.stage, stageAt: toUtcIso(row.stageAt), hand: row.stageSet },
-      after: { salesOrderId: orderId, stage, hand: stage, floor, reasonCode, note },
+      after: { salesOrderId: orderId, stage, hand: stage, floor, floorAtSet /* B-SC-004: the keeper's readHandFloor */, reasonCode, note },
       reason,
     })
     // R6: the order's own History — from → to as `stage`, the note in `after`; never a `status` key.

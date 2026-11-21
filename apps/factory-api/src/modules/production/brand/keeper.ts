@@ -640,14 +640,16 @@ export async function readHandNotice(db: Reader, rowId: string, orderId: string,
 
 // ── B-SC-003 (stage control B, end rule E1) ──
 /**
- * The floor's stage when the hand stage standing was set or changed: `after.floor` of the row's NEWEST set by hand (./stage writes
- * it on every Set and Change; newest by id, as the markers). null: none, or no floor in it — a row written before B or by hand
- * outside the command: the keeper reads it as set ahead (today's rule). One indexed read. The keeper's end rule and the office's
- * headline (sales/orders production-read `byHand.floorAtSet`) share it.
+ * The floor's stage when the hand stage standing was set or changed: `after.floorAtSet` (else `after.floor`) of the row's NEWEST set
+ * by hand (./stage writes both on every Set and Change — a Change of the reason or note only keeps the earlier floorAtSet; newest by
+ * id, as the markers). null: none, or no floor in it — a row written before B or by hand outside the command: the keeper reads it as
+ * set ahead (today's rule). One indexed read. The keeper's end rule and the office's headline (sales/orders production-read
+ * `byHand.floorAtSet`) share it.
  */
 export async function readHandFloor(db: Reader, rowId: string): Promise<BrandStage | null> {
   const set = await db.auditLog.findFirst({ where: { recordType: 'BrandOrderProduction', recordId: rowId, action: SET_BRAND_STAGE }, select: { after: true }, orderBy: { id: 'desc' } })
-  const floor = set ? jsonObject(set.after)?.floor : undefined
+  const after = set ? jsonObject(set.after) : null
+  const floor = after?.floorAtSet ?? after?.floor
   return typeof floor === 'string' && (BRAND_STAGES as readonly string[]).includes(floor) ? (floor as BrandStage) : null
 }
 // ── end B-SC-003 ──

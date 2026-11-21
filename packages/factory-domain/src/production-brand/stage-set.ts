@@ -17,8 +17,8 @@ import { STAGE_WORDS } from './words'
  *
  *   which      any of the five stages (HAND_STAGES = BRAND_STAGES), forward or back of the stage the customer reads, also below
  *              the floor and also Ready to ship (READY_UNRELEASED_WORDS warns while quality has not released every piece: the
- *              order's status stays quality's); never the stage it reads already (sameStageWords), never the floor's own stage
- *              while a hand stage stands (floorStageWords: Clear is the one way back to the floor)
+ *              order's status stays quality's); never the stage it reads already (sameStageWords: a Set), never the floor's own
+ *              stage while a hand stage stands (floorStageWords: Clear is the one way back to the floor)
  *   where      an order In production or Partly shipped only (R4: a Confirmed order has no released work order yet), never
  *              while the customer's own pause stands (R19: our own production or quality hold allows it)
  *   shown      while it stands the keeper writes the hand stage into BrandOrderProduction.stage, higher or lower than the
@@ -29,7 +29,9 @@ import { STAGE_WORDS } from './words'
  *              quality's truth takes over; with no `floorAtSet` (never for a command-made set), as ahead. Also when no goods
  *              line is left open (handStands), by Clear, or when the order leaves production. No time limit: the office's tag
  *              turns amber after 7 days (handSetOld)
- *   Change     replaces it, forward or back (handMoveOf: a move back of what the customer reads is told as a correction)
+ *   Change     replaces it, forward or back (handMoveOf: a move back of what the customer reads is told as a correction); at
+ *              the same stage it changes only the reason or the note (office fields: the customer is told nothing), and with
+ *              stage, reason and note all unchanged there is nothing to change (NOTHING_TO_CHANGE)
  *
  * The customer reads a plain stage and the usual notice (a move back: one "Correction: …" notice), never "by hand", the reason,
  * the note or who set it (the five columns are hidden from the partner role and are portal-read FORBIDDEN_BRAND_KEYS). No reason
@@ -86,7 +88,7 @@ export function handMoveOf(from: BrandStage, to: BrandStage): HandMove {
 
 // ---- the refusals, in words -----------------------------------------------------------------------------------------------
 
-export const STAGE_SET_REFUSALS = ['NOT_STARTED', 'ALREADY_READY', 'PRODUCTION_OVER', 'NOTHING_LEFT', 'PAUSED', 'UNKNOWN_STAGE', 'UNKNOWN_REASON', 'NOTE_NEEDED', 'NOTE_TOO_LONG'] as const
+export const STAGE_SET_REFUSALS = ['NOT_STARTED', 'ALREADY_READY', 'PRODUCTION_OVER', 'NOTHING_LEFT', 'PAUSED', 'NOTHING_TO_CHANGE', 'UNKNOWN_STAGE', 'UNKNOWN_REASON', 'NOTE_NEEDED', 'NOTE_TOO_LONG'] as const
 export type StageSetRefusal = (typeof STAGE_SET_REFUSALS)[number]
 
 /** The office's words of each refusal (IT "tu"; "la fase" is feminine). The API answers the English; the web maps it. */
@@ -109,6 +111,11 @@ export const STAGE_SET_REFUSAL_WORDS: Readonly<Record<StageSetRefusal, Words>> =
     en: 'Nothing is left to make on this order: there is no stage to set by hand.',
   },
   PAUSED: { it: 'In pausa su richiesta del cliente: togli prima la pausa.', en: "Paused at the customer's request: lift the pause first." },
+  // B-SC-001: a Change at the stage set by hand with the same reason and the same note.
+  NOTHING_TO_CHANGE: {
+    it: 'Niente da cambiare: la fase impostata a mano è già questa, con lo stesso motivo e la stessa nota.',
+    en: 'Nothing to change: the stage set by hand already reads so, with the same reason and note.',
+  },
   UNKNOWN_STAGE: { it: `Atteso uno tra ${HAND_STAGES.join(', ')}.`, en: `Expected one of ${HAND_STAGES.join(', ')}.` },
   UNKNOWN_REASON: { it: `Atteso uno tra ${STAGE_SET_REASON_CODES.join(', ')}.`, en: `Expected one of ${STAGE_SET_REASON_CODES.join(', ')}.` },
   NOTE_NEEDED: { it: 'Per «Altro» serve una nota.', en: 'Something else needs a note.' },
@@ -144,6 +151,9 @@ export interface StageSetState {
   readonly shown: BrandStage | null
   /** The hand stage standing now (null: a Set; else a Change, forward or back). */
   readonly hand: BrandStage | null
+  /** B-SC-001: the standing hand stage's reason and office note (a Change at the same stage must change one of them). */
+  readonly handReason?: string | null
+  readonly handNote?: string | null
   /** The customer's own pause stands (a BRAND_PAUSE blocker). */
   readonly paused: boolean
 }
@@ -168,13 +178,16 @@ export function stageSetAskProblems(input: StageSetAsk, at = 'body'): Issue[] {
   return issues
 }
 
+/** One line of the office's note as compared: trimmed, empty = none. */
+const noteOf = (note: string | null | undefined): string | null => note?.trim() || null
+
 /**
  * What the order now refuses of a stage asked (paths under `at`): only In production or Partly shipped (R4), something left to
- * make, not while the customer's own pause stands (R19); B-SC-001: never the stage the customer reads already, and never the live
- * floor's own stage while a hand stage stands (Clear goes back to it). A stage that is no stage at all is the ask's problem
- * (stageSetAskProblems), not the order's.
+ * make, not while the customer's own pause stands (R19); B-SC-001: a Set never at the stage the customer reads already; a Change at
+ * the stage set by hand only with another reason or note (else nothing to change); never the live floor's own stage while a hand
+ * stage stands (Clear goes back to it). A stage that is no stage at all is the ask's problem (stageSetAskProblems), not the order's.
  */
-export function stageSetStateProblems(input: StageSetState & { readonly stage: string }, at = 'body'): Issue[] {
+export function stageSetStateProblems(input: StageSetState & { readonly stage: string; readonly reasonCode?: string; readonly note?: string | null | undefined }, at = 'body'): Issue[] {
   const words = (refusal: StageSetRefusal) => STAGE_SET_REFUSAL_WORDS[refusal].en
   const path = `${at}/stage`
   if (!(STAGE_SET_STATUSES as readonly string[]).includes(input.status)) {
@@ -187,8 +200,12 @@ export function stageSetStateProblems(input: StageSetState & { readonly stage: s
   if (input.paused) issues.push({ path, message: words('PAUSED') })
   if (!isHandStage(input.stage)) return issues
   const shown = input.shown ?? input.floor
-  if (input.stage === shown) issues.push({ path, message: sameStageWords(shown).en })
-  else if (input.hand !== null && input.stage === input.floor) issues.push({ path, message: floorStageWords(input.floor).en })
+  if (input.stage === shown) {
+    // A Change of the office's words at the standing hand stage is taken (the customer is told nothing); unchanged, refused.
+    const change = input.hand !== null && input.stage === input.hand
+    if (!change) issues.push({ path, message: sameStageWords(shown).en })
+    else if ((input.reasonCode ?? null) === (input.handReason ?? null) && noteOf(input.note) === noteOf(input.handNote)) issues.push({ path, message: words('NOTHING_TO_CHANGE') })
+  } else if (input.hand !== null && input.stage === input.floor) issues.push({ path, message: floorStageWords(input.floor).en })
   return issues
 }
 
