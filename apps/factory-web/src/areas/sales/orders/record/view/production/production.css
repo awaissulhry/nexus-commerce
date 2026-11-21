@@ -168,7 +168,9 @@
 .fw-pt-moves { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--nds-space-10); }
 .fw-pt-move { display: flex; flex-direction: column; gap: var(--nds-space-2); font-size: var(--nds-font-size-sm); min-width: 0; padding-left: var(--nds-space-12); border-left: 2px solid var(--nds-warning-border); scroll-margin-top: var(--nds-space-4); }
 .fw-pt-move.is-set { border-left-color: var(--nds-border-strong); }
-.fw-pt-move-doors { display: flex; gap: var(--nds-space-2); flex-wrap: wrap; align-items: center; }
+/* fx9 N5: "Versions & changes ›" and "Ask for a design change…" are two doors of one group — 2 px ran them together; 16 px apart on a
+   line, 4 px when they wrap. */
+.fw-pt-move-doors { display: flex; column-gap: var(--nds-space-16); row-gap: var(--nds-space-4); flex-wrap: wrap; align-items: center; margin-top: var(--nds-space-2); }
 
 /* ── 3 · Problems & holds (F-PT-301 / 302) ── */
 .fw-pt-ph { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16) var(--nds-space-22); min-width: 0; }
@@ -209,6 +211,8 @@
 .fw-pt-own-n { white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* fx5 #11: the detail window's title wraps instead of losing the order's number (the DS keeps a detail title to one line on a phone). */
 .nds-modal.detail .nds-modal-h .t .fw-pt-dt-t { display: flex; flex-wrap: wrap; column-gap: 0.35em; white-space: normal; }
+/* fx9 N4: the title wraps between its parts, never inside a record number ("SEED-SO- / 0002" broke at the hyphen at 375). */
+.nds-modal.detail .nds-modal-h .t .fw-pt-dt-t > span { white-space: nowrap; }
 
 /* ── fx5 #3: Materials' missing things — one row each, as the picture: what · how much · when | who it waits on | ≤ 2 doors at the right;
    stacked when the section is narrow. ── */
@@ -218,7 +222,10 @@
 .fw-pt-miss-what { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
 .fw-pt-miss-do { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
 @container sec (min-width: 640px) {
-  .fw-pt-miss-row { grid-template-columns: minmax(0, 1fr) minmax(9rem, auto) minmax(0, auto); }
+  /* fx9 N1: ONE set of columns for every row (the list's grid, the rows its subgrid): the doors column keeps its width on a row with no
+     door, so each row's "Waits on …" pill lines up with the others. */
+  .fw-pt-miss { display: grid; grid-template-columns: minmax(0, 1fr) minmax(9rem, auto) minmax(0, auto); }
+  .fw-pt-miss-row { grid-column: 1 / -1; grid-template-columns: subgrid; }
   .fw-pt-miss-do { justify-content: flex-end; }
 }
 
@@ -242,3 +249,12 @@
 .fw-pt-qrow-b { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
 .fw-pt-dt-lines { display: flex; flex-direction: column; gap: var(--nds-space-4); }
 .fw-pt-dt-lines > p { margin: 0; }
+
+/* fx9 #10: at M (720–1279 px of the tab) the number and its Ask door take the cell's first line on EVERY row, the status and tags the
+   second — one row shape (at 865 the pill wrapped under on some rows only). */
+@container pt (min-width: 720px) and (max-width: 1279px) {
+  .fw-pt-c-no > .fw-pt-inline > .fw-pt-wo-id { flex-basis: 100%; }
+}
+
+/* fx9 N3: one divider between the missing things and "From the customer" (the last row's own border went with .fw-pt-mat's). */
+.fw-pt-miss-row:last-child { border-bottom: 0; }

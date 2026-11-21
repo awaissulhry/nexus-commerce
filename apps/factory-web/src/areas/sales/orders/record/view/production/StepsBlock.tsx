@@ -174,7 +174,10 @@ function Steps({ order, model, actions }: { order: Order; model: OrderRecordMode
           const opens = row.milestoneId && model.gateActs ? row.milestoneId : null
           const acts = stepActsOf(row, { decide: !!model.can.decideForCustomer && !!opens })
           const name = nameOf(row)
-          const items = itemsOf(row, acts.more)
+          // fx9 N2 (the work orders' rule): no ⋯ whose only item is the Planning link when the step's name already opens the step in
+          // Planning's dialog — a ⋯ holds an act, Discuss, or a way the row does not give.
+          const all = itemsOf(row, acts.more)
+          const items = opens && all.every((item) => item.id === 'planning') ? [] : all
           return (
             <div key={row.id} role="row" className="fw-pt-step" id={row.gateId ? rowAnchor('OrderGate', row.gateId) : undefined} tabIndex={row.gateId ? -1 : undefined}>
               <div role="cell">

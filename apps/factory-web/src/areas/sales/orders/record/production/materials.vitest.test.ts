@@ -87,7 +87,8 @@ describe('fx5: Materials as the picture', () => {
     expect(view).not.toContain('className="fw-pt-moves"')
     expect(view).toContain('material.purchaseOrders.slice(0, 1)')
     const css = readFileSync(new URL('../view/production/production.css', import.meta.url), 'utf8')
-    expect(css).toMatch(/@container sec \(min-width: 640px\) \{\s*\.fw-pt-miss-row \{ grid-template-columns:/)
+    // fx9 N1: the list holds the columns, every row is its subgrid.
+    expect(css).toMatch(/@container sec \(min-width: 640px\) \{[^}]*\.fw-pt-miss \{ display: grid; grid-template-columns:/)
   })
 
   it('#12, #14: units in the catalogue’s words; read and nothing to buy says so', () => {
