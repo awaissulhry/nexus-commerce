@@ -228,3 +228,13 @@ describe('F-OO-109: Lift… for N work orders — each one\'s holds read, ONE ca
   })
 })
 // ---- end F-OO-109
+
+// ---- fx6 (end check 2, th9 step 12): ONE right for the Lift door and its dialog — the row's own workorders.hold ------------------------
+describe('fx6: Lift… opens its dialog with the right that drew the door', () => {
+  it('the dialog of Hold… and of Lift… both carry the row’s hold right (the lift read “needs the production hold right” before)', () => {
+    const hook = readFileSync(new URL('./use-work-order-acts.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("...(act === 'hold' || act === 'lift' ? { holdRight: row.rights?.hold ?? false } : {})")
+    const dialogs = readFileSync(new URL('./view/WorkOrderActsDialogs.tsx', import.meta.url), 'utf8')
+    expect(dialogs).toContain('productionHold: dialog.holdRight ?? false')
+  })
+})

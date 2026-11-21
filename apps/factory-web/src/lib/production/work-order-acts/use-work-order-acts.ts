@@ -46,7 +46,7 @@ export interface ActsDialog {
   /** A refused write, said inside the dialog (what was typed stays). */
   readonly problem: Phrase | null
   // ---- F-OP-114 ----
-  /** Hold…: the row's own hold right (a production hold) — the quality reasons come with quality.holds.place. */
+  /** Hold… and Lift… (fx6): the row's own hold right (a production hold) — the quality reasons come with quality.holds.place. */
   readonly holdRight?: boolean
   /** Lift…: the work order's plain holds (its standing one is lifted). */
   readonly holds?: Part<ProductionHolds>
@@ -261,7 +261,9 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
 
   const open = useCallback(
     (row: ActsRow, act: MenuAct) => {
-      setDialog({ kind: act, workOrderId: row.id, number: row.number, workOrder: READING, busy: false, problem: null, ...(act === 'hold' ? { holdRight: row.rights?.hold ?? false } : {}) })
+      // fx6: ONE right for the door and its dialog — the row's own workorders.hold, for Hold… and for Lift… alike (Lift… opened
+      // without it read "needs the production hold right" behind a door the same right had drawn).
+      setDialog({ kind: act, workOrderId: row.id, number: row.number, workOrder: READING, busy: false, problem: null, ...(act === 'hold' || act === 'lift' ? { holdRight: row.rights?.hold ?? false } : {}) })
       readFor(row.id)
       // ---- F-OP-114 ----
       if (act === 'lift') readHolds(row.id)
