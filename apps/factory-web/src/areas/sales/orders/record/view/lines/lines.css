@@ -209,6 +209,16 @@
 .fw-lt-size .fw-lt-box input {
   text-align: center;
 }
+.fw-lt-plainnum {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.fw-lt-plainnum > svg {
+  position: absolute;
+  right: 100%;
+  margin-right: var(--nds-space-4);
+}
 /* The row's ⋯ stays at the right edge while a narrow table scrolls under it (as the colour column stays at the left). */
 .fw-lt-table .fw-lt-more {
   position: sticky;

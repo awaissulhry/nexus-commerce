@@ -404,7 +404,6 @@ function SizeCell({ row, size, ctx, offered, typeable, below, above }: { row: Ca
     <td className={`fw-lt-size${cell.was !== null ? ' fw-lt-changed' : ''}`} data-label={size} title={lockTitle ?? (box ? floorTitle : undefined)}>
       <span className="fw-lt-cell">
         <span className="fw-lt-cell-value">
-          {cell.lock && !box && <Lock size={12} aria-label={lockTitle} />}
           {box ? (
             <Box
               id={id}
@@ -420,7 +419,11 @@ function SizeCell({ row, size, ctx, offered, typeable, below, above }: { row: Ca
               invalid={under === 'shipped'}
             />
           ) : (
-            <span aria-label={label}>{cell.value === 0 ? '–' : cell.value}</span>
+            // OL fix 4: the 🔒 hangs left of the number, so the number stays on the column's centre (as the size above it).
+            <span className="fw-lt-plainnum">
+              {cell.lock && <Lock size={12} aria-label={lockTitle} />}
+              <span aria-label={label}>{cell.value === 0 ? '–' : cell.value}</span>
+            </span>
           )}
         </span>
         {clash ? (
