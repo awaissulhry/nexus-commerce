@@ -235,15 +235,6 @@ export function stillDoorOf(row: Pick<StillRowOf, 'kind' | 'ref'>, place: { read
 // ---- end F-SA-243
 
 // ---- F-OP-116 (10-order-page §5.2, §5.3; review R-12): decide in place ------------------------------------------------------------
-/** A change's pieces before → after (its cells summed: what the work order makes now for them, what it would make). */
-export function changeFiguresOf(change: Pick<WorkOrderChange, 'cells'>): { readonly before: number; readonly after: number } {
-  return change.cells.reduce((sum, cell) => ({ before: sum.before + cell.from, after: sum.after + cell.to }), { before: 0, after: 0 })
-}
-
-/** Why a change cannot be decided by this reader: a planner decides it (told when it was proposed); null: this reader may. */
-export function changeHeldOf(change: Pick<WorkOrderChange, 'mayDecide' | 'proposedAt'>): { readonly key: string; readonly params: { readonly at: string } } | null {
-  return change.mayDecide ? null : { key: 'wo.waitsPlanner', params: { at: change.proposedAt } }
-}
 
 /** One Still to do row's door, in place where it can be: a work-order change decided here, a re-promise answered here, a task done
  * here (its own right, R-12), else a real link to where it is done (Scrap, Products, Subcontracting, Changes). */
@@ -267,15 +258,6 @@ export function stillDoorsOf(row: Pick<StillRowOf, 'kind' | 'ref' | 'mayAct'>, p
 }
 // ---- end F-OP-116
 
-// ---- F-OP-117 (10-order-page §6): the Changes tab's "Work-order changes of this order" ---------------------------------------------
-/** The section's rows: the PROPOSED first (oldest first: they wait), then the decided ones newest first; nothing of another order. */
-export function workOrderChangeRowsOf(list: readonly WorkOrderChange[] | null | undefined, orderId: string): WorkOrderChange[] {
-  const own = (list ?? []).filter((change) => change.salesOrder.id === orderId)
-  const waiting = own.filter((change) => change.status === 'PROPOSED').sort((a, b) => a.proposedAt.localeCompare(b.proposedAt) || a.id.localeCompare(b.id))
-  const decided = own.filter((change) => change.status !== 'PROPOSED').sort((a, b) => (b.decidedAt ?? b.proposedAt).localeCompare(a.decidedAt ?? a.proposedAt) || a.id.localeCompare(b.id))
-  return [...waiting, ...decided]
-}
-
-/** When the floor was told of an applied change (the floor note goes with it: change-notes); null for one not carried out. */
-export const floorToldOfChange = (change: Pick<WorkOrderChange, 'status' | 'decidedAt' | 'workOrder'>): string | null => (change.status === 'APPLIED' && change.workOrder && change.decidedAt ? change.decidedAt : null)
-// ---- end F-OP-117
+// F-OC-105 (10-design §3, §5): the Changes tab's own "Work-order changes of this order" card went — a waiting one is ONE row of
+// Waiting › Still to do (Decide…), a decided one a row of What changed. Its "Told the floor at hh:mm" was a guess from the decision's
+// time (C3-B1): "Told" is said only where the told read names it (WhoWasTold, the History row's Told line).

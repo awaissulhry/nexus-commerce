@@ -525,42 +525,12 @@ describe('the Overview’s doors land on Production: #work-orders, #holds, #line
 
 // ---- F-OP-116 (order page N1; 10-order-page §5.2, §5.3; review R-12, R-17): decide in place -------------------------------------
 describe('F-OP-116: decide in place — a change waiting under its row, Still to do doors, the customer\'s pause lifted from the list', () => {
-  const change = (over: Record<string, unknown> = {}) =>
-    ({
-      id: 'c1',
-      status: 'PROPOSED',
-      kind: 'LOWER_TO_ORDER',
-      partyId: 'p1',
-      salesOrder: { id: 'o1', number: 'SO-DEMO-0150' },
-      workOrder: { id: 'wo-1', number: 'WO-DEMO-0311', status: 'RELEASED' },
-      requestId: null,
-      amendmentId: null,
-      cells: [
-        { salesOrderLineId: 'l1', lineSeq: 10, size: 'M', from: 30, to: 20, workOrderSizeId: 's1' },
-        { salesOrderLineId: 'l1', lineSeq: 10, size: 'L', from: 10, to: 8, workOrderSizeId: 's2' },
-      ],
-      extra: [],
-      extraOutcome: null,
-      reason: 'x',
-      lastError: null,
-      proposedBy: null,
-      proposedAt: '2026-11-18T09:30:00Z',
-      decidedAt: null,
-      decidedBy: null,
-      decisionNote: null,
-      madeWorkOrder: null,
-      version: 2,
-      mayDecide: true,
-      words: { title: { en: 'x', it: 'x' }, status: { en: 'x', it: 'x' }, cells: 'M 30 → 20' },
-      ...over,
-    }) as never
-
-  // F-PT-403: the row's own "Change waits" list went with F-PT-105's ONE strip (waitingChangesOf removed); the figures and the hold stay.
-  it('a change: "40 → 28"; held for who may not decide', async () => {
-    const { changeFiguresOf, changeHeldOf } = await import('./changes/model')
-    expect(changeFiguresOf(change())).toEqual({ before: 40, after: 28 })
-    expect(changeHeldOf(change())).toBeNull()
-    expect(changeHeldOf(change({ mayDecide: false }))).toEqual({ key: 'wo.waitsPlanner', params: { at: '2026-11-18T09:30:00Z' } })
+  // F-PT-403: the row's own "Change waits" list went with F-PT-105's ONE strip (waitingChangesOf removed). F-OC-105: the Changes tab's
+  // card went too (its figures and its hold with it): a waiting change is ONE Decide… in Waiting › Still to do, the planner's words else.
+  it('F-OC-105: no second copy of a waiting change — the old card\'s figures and hold are gone; the strip and Waiting say it once each', async () => {
+    const model = await import('./changes/model')
+    for (const gone of ['changeFiguresOf', 'changeHeldOf', 'workOrderChangeRowsOf', 'floorToldOfChange']) expect(gone in model, gone).toBe(false)
+    expect(readFileSync(new URL('./changes/view/WaitingSection.tsx', import.meta.url), 'utf8')).not.toContain('function WorkOrderChanges(')
   })
 
   it('Still to do doors in place: the change\'s window, the re-promise\'s Accept / Decline…, the task\'s Done by its own right (R-12), links else', async () => {
@@ -597,7 +567,7 @@ describe('F-OP-116: decide in place — a change waiting under its row, Still to
 
   it('the wiring: one read of the order\'s changes, the ONE decide window by the page\'s state (no address word), the dialogs once for the page', () => {
     const acts = readFileSync(new URL('./use-production-acts.ts', import.meta.url), 'utf8')
-    expect(acts).toContain("listWorkOrderChanges(api, { salesOrderId: orderId, status: 'ALL', limit: 50 })")
+    expect(acts).toContain("listWorkOrderChanges(api, { salesOrderId: orderId, status: 'ALL', limit: 200 /* F-OC-105: the contract's most (an order's whole story) */ })")
     expect(acts).toContain('openId: openChange')
     expect(acts).not.toContain('router')
     const container = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')

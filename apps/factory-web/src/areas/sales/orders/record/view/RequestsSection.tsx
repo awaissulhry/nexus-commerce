@@ -2,12 +2,10 @@
 
 import Link from 'next/link'
 import { Banner } from '@nexus/ui/components'
-import { Button, Pill } from '@nexus/ui/primitives'
+import { Button } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useScopedT, useT } from '../../../../../lib/i18n/provider' // F-OP-116: useScopedT
 import { useProductionWords } from '../../../../../lib/production/words'
-// F-SA-266: each request's Discuss (its reference: the customer reads its own words)
-import { DiscussDoor } from './Discuss'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { answerHeld, waitsForMe } from '../../../../home/approvals/requests/model'
 import type { BrandRequest } from '../../../../home/approvals/requests/api'
@@ -31,8 +29,6 @@ import { rowActsOf } from '../../../../../lib/production/work-order-acts/model' 
 
 /** The words the request card's lines are written with (Home › Approvals' own: `approvals` customerRequest.*). */
 const APPROVALS_NS = 'approvals'
-/** The approvals-out states' words (the record's own approvals panel's). */
-const RECORD_APPROVALS_NS = 'record-approvals'
 
 // F-OC-102 (order CHANGES tab, 10-design §3): the two cards "Waiting on us" and "Waiting on the customer" went into Changes › Waiting
 // (changes/view/WaitingSection.tsx: the ONE waiting list's rows, each with who does it, its age and its one door). This file keeps
@@ -172,15 +168,13 @@ export function StillDoorView({ row, order, model, actions }: { row: StillRowOf;
 // ---- end F-SA-243
 
 // ---- F-OP-103 (10-order-page §3.2): one row of the ONE waiting list — its words, since when, and its ONE door ---------------------
-/** A waiting row: what waits (the API's words or the page's), since when, its door; an answer row keeps its Discuss (F-SA-266). */
-// F-OP-301 (walk #1): the Changes tab draws the same rows — `here` (the tab it is drawn on: no door back to itself); an approval we
-// asked says its own question, then its due day and state after the since.
+/** A waiting row: what waits (the API's words or the page's), since when, its door. */
 // F-OO-204 (11-design §5.2, §5.4): on Overview's card a row is `words | age | door` — the age ("15 d") with its exact day in the
-// title, no Discuss (it stays on Changes' request cards), and Read-only (`readOnly`) sees the words and the age, no door. A request
-// is said whole as the band says it ("<Customer> asks: Change · line 10 · M 40 → 36").
-export function WaitingRowItem({ row, order, model, actions, here, readOnly = false }: { row: WaitingRow; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; here?: 'changes'; readOnly?: boolean }) {
+// title, no Discuss, and Read-only (`readOnly`) sees the words and the age, no door. A request is said whole as the band says it
+// ("<Customer> asks: Change · line 10 · M 40 → 36"); an approval we asked says its own question and its due day.
+// F-OC-105: Overview's face only — the Changes tab draws its own rows of the same list (changes/view/WaitingSection.tsx).
+export function WaitingRowItem({ row, order, model, actions, readOnly = false }: { row: WaitingRow; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; readOnly?: boolean }) {
   const t = useT('orders')
-  const ra = useT(RECORD_APPROVALS_NS)
   const w = useProductionWords()
   const locale = useLocale()
   const approval = row.ref?.type === 'ApprovalRequest' ? ((model.askedOfCustomer?.value ?? []).find((entry) => entry.id === row.ref!.id) ?? null) : null
@@ -194,36 +188,13 @@ export function WaitingRowItem({ row, order, model, actions, here, readOnly = fa
       customer: order.party?.legalName ?? '',
       askWords: (request) => askWordsOf(request, { kind: w.t(`parts.request.kind.${request.kind}`), say: t, day: w.day }), // F-OO-204
     })
-  if (here !== 'changes') {
-    // F-OO-204: Overview's card row (the shared card row's columns: requests.css lays them out).
-    return (
-      <li className="fw-so-ov-row fw-so-rq-row">
-        <span>{due ? `${words} · ${due}` : words}</span>
-        <RowAge since={row.since} asOf={readOf(model.production)?.asOf ?? null} />
-        <span className="fw-so-ov-doors">
-          <WaitingDoorView door={row.door} order={order} model={model} actions={actions} readOnly={readOnly} />
-        </span>
-      </li>
-    )
-  }
+  // F-OO-204: Overview's card row (the shared card row's columns: requests.css lays them out).
   return (
-    <li className="fw-so-still">
-      <span className="fw-so-stack-tight">
-        <span>{words}</span>
-        {(row.since || approval) && (
-          <span className="fw-so-cell-sub">
-            {row.since ? t('changes.still.since', { when: formatDateTime(row.since, { locale }) }) : null}
-            {approval ? (
-              <>
-                {due ? ` · ${due}` : ''} <Pill tone="warning">{ra(`status.${approval.status}`)}</Pill>
-              </>
-            ) : null}
-          </span>
-        )}
-      </span>
-      <span className="fw-so-inline">
-        <WaitingDoorView door={row.door} order={order} model={model} actions={actions} here={here} />
-        {row.door.kind === 'answer' && <DiscussDoor order={order} part={row.door.request ? t('discuss.request', { kind: w.t(`parts.request.kind.${row.door.request.kind}`) }) : words} target={{ kind: 'OrderChangeRequest', id: row.door.requestId }} />}
+    <li className="fw-so-ov-row fw-so-rq-row">
+      <span>{due ? `${words} · ${due}` : words}</span>
+      <RowAge since={row.since} asOf={readOf(model.production)?.asOf ?? null} />
+      <span className="fw-so-ov-doors">
+        <WaitingDoorView door={row.door} order={order} model={model} actions={actions} readOnly={readOnly} />
       </span>
     </li>
   )

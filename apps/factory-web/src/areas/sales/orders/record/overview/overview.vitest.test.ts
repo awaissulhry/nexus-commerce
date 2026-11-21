@@ -973,7 +973,7 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
     return state
   }
   /** One row drawn alone, as Overview's card draws it (or Changes'). */
-  const drawRow = (record: OrderRecordModel, row: WaitingRow, locale: 'en' | 'it' = 'en', more: { here?: 'changes'; readOnly?: boolean } = {}) => render(createElement('ul', null, createElement(WaitingRowItem, { row, order: orderOf(record), model: record, ...more })), locale)
+  const drawRow = (record: OrderRecordModel, row: WaitingRow, locale: 'en' | 'it' = 'en', more: { readOnly?: boolean } = {}) => render(createElement('ul', null, createElement(WaitingRowItem, { row, order: orderOf(record), model: record, ...more })), locale)
   /** The list item that holds these words, as drawn. */
   const itemOf = (html: string, words: string): string => {
     const at = html.indexOf(words)
@@ -1102,6 +1102,8 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
       expect(text).not.toMatch(/Holds are on Overview|I blocchi sono in Panoramica/)
       // The pointer lands on Production's holds (the quality hold is one).
       expect(html).toMatch(/href="[^"]*\?tab=production[^"]*#holds"/)
+      // F-OC-105: the two cards that went into Waiting keep their addresses (the band's "Open", Overview's "N more on Changes ›").
+      for (const alias of ['still-to-do', 'work-order-changes']) expect(html, alias).toMatch(new RegExp(`<section id="waiting"[\\s\\S]*?id="${alias}"`))
     }
   })
 

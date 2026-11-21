@@ -163,8 +163,10 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
       case 'workOrderChange':
         return {
           tone: entry.change.status === 'APPLIED' ? ('success' as const) : ('neutral' as const),
-          label: `${entry.change.workOrder?.number ?? entry.change.madeWorkOrder?.number ?? '—'} · ${said(entry.change.words.status, locale)}`,
-          detail: [when(entry.at), entry.change.decidedBy ? t('changes.history.by', { name: entry.change.decidedBy.name }) : null, entry.change.words.cells].filter(Boolean).join(' · '),
+          // F-OC-105: a change for a work order still to be made says so (never a bare "—"); one left as is keeps its why (the card that
+          // said it went into Waiting).
+          label: `${entry.change.workOrder?.number ?? entry.change.madeWorkOrder?.number ?? t('wocs.newDraft')} · ${said(entry.change.words.status, locale)}`,
+          detail: [when(entry.at), entry.change.decidedBy ? t('changes.history.by', { name: entry.change.decidedBy.name }) : null, entry.change.words.cells, entry.change.status === 'DECLINED' && entry.change.decisionNote ? `“${entry.change.decisionNote}”` : null].filter(Boolean).join(' · '),
         }
     }
   }

@@ -1,48 +1,29 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
+import { TEAM_WORDS, type ApplyTeam } from '@nexus/factory-domain/sales/change-requests/apply-plan'
+import { Button, Pill, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
-import { TabLink } from '../../../../../../lib/tab-link/TabLink'
-import { tabHref } from '../../../../../_shared/record-frame/address'
-import type { Order } from '../../../api'
-import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
-import { orderWaitingOf, readOf } from '../../overview/model'
-import { PartFailed, PartReading, Section } from '../../view/production/Kit'
-import { AnswerDoor, RowAge, StillDoorView, WaitingDoorView } from '../../view/RequestsSection'
-import { dayTimeOf } from '../layout'
-import { countsOf, holdsPointerOf, lastRevisionOf, waitingAnswerOf, type WaitingAnswer } from '../waiting'
-// ---- F-OC-102: Waiting on us / on {customer} — the ONE list's rows, each with who does it, its age and its one door ----
-import { Tag } from '@nexus/ui/primitives'
 import { useProductionWords } from '../../../../../../lib/production/words'
+import { TabLink } from '../../../../../../lib/tab-link/TabLink'
 import { WithMessages } from '../../../../../../record-panels/i18n'
+import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
+import { tabHref } from '../../../../../_shared/record-frame/address'
+import { said } from '../../../../../home/approvals/requests/model'
+import type { Order } from '../../../api'
 import { NAMESPACE as DEPTH, yesDoorOf } from '../../../depth/model'
 import { YesDoorView } from '../../../depth/view/DepthBand'
+import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
+import { orderWaitingOf, readOf, rowWordsOf } from '../../overview/model'
+import { decisionSentenceOf } from '../../production/work' // F-OC-104: the ONE sentence of a work-order change (Production's strip's)
 import { DiscussDoor } from '../../view/Discuss'
-import { rowWordsOf } from '../../overview/model'
-import { askWordsOf } from '../model'
-import { mineCountOf, waitingItemOf, type WaitingItem } from '../waiting'
-// ---- end F-OC-102
-// ---- F-OC-103: Waiting on {customer} — by when, how late, what they see, and Manage in the thread… ----
-import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
-import { lateDaysOf } from '../waiting'
-// ---- end F-OC-103
-// ---- F-OC-104: Still to do — grouped per accepted change; a work-order change in ONE sentence with ONE Decide… ----
-import { TEAM_WORDS, type ApplyTeam } from '@nexus/factory-domain/sales/change-requests/apply-plan'
-import { decisionSentenceOf } from '../../production/work'
-import { stillGroupsOf, type StillGroup } from '../model'
-import { stillItemsOf, type StillItem } from '../waiting'
-// ---- end F-OC-104
+import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OC-101 (L6): the Production kit, in place
+import { AnswerDoor, RowAge, StillDoorView, WaitingDoorView } from '../../view/RequestsSection' // the rows' doors, shared with Overview
+import { dayTimeOf, WAITING_ALIASES } from '../layout'
+import { askWordsOf, stillGroupsOf, type StillGroup } from '../model'
+import { countsOf, holdsPointerOf, lastRevisionOf, lateDaysOf, mineCountOf, stillItemsOf, waitingAnswerOf, waitingItemOf, type StillItem, type WaitingAnswer, type WaitingItem } from '../waiting'
 import './changes.css'
-// ---- F-OP-117: the work-order changes of this order (its card stays until F-OC-105 takes it out) ----
-import { Card, EmptyState } from '@nexus/ui/components'
-import { Button, Pill } from '@nexus/ui/primitives'
-import { formatTime } from '../../../../../../lib/i18n/format'
-import { said } from '../../../../../home/approvals/requests/model'
-import { outcomeWordsOf } from '../../../../../home/approvals/work-order-changes/model'
-import { PartState } from '../../view/OrderRecordView'
-import { changeFiguresOf, changeHeldOf, floorToldOfChange, workOrderChangeRowsOf } from '../model'
-// ---- end F-OP-117
 
 /** The catalogues Waiting's rows say their words in (Your turn, an approval's state, the old change's approval body). */
 const APPROVALS_NS = 'approvals'
@@ -98,9 +79,13 @@ function Waiting({ order, model, actions }: { order: Order; model: OrderRecordMo
     </>
   )
   const stamp = asOf ? <span className="fw-pt-asof">{t('changesTab.waiting.asOf', { when: when(asOf) })}</span> : null
+  // F-OC-105: the two cards that went into Waiting keep their addresses (the band's "Open", Overview's "N more on Changes ›", the
+  // dock's change lines): an element at its top; Still to do's own group carries #still-to-do when it is drawn.
+  const aliases = (stillDrawn: boolean) => WAITING_ALIASES.filter((alias) => !(stillDrawn && alias === 'still-to-do')).map((alias) => <span key={alias} id={alias} className="fw-oc-alias" tabIndex={-1} />)
   if (waiting.status !== 'ready') {
     return (
       <Section id="waiting" title={title} answer={waiting.status === 'loading' ? t('changesTab.waiting.reading') : null} info={info}>
+        {aliases(false)}
         {waiting.status === 'loading' ? <PartReading rows={3} height={44} /> : <PartFailed part={title} problem={waiting.problem} onRetry={() => actions?.onRetryProduction?.()} />}
       </Section>
     )
@@ -123,7 +108,7 @@ function Waiting({ order, model, actions }: { order: Order; model: OrderRecordMo
         info={info}
         more={stamp}
       >
-        <WorkOrderChanges order={order} model={model} actions={actions} />
+        {aliases(false)}
       </Section>
     )
   }
@@ -153,6 +138,7 @@ function Waiting({ order, model, actions }: { order: Order; model: OrderRecordMo
       info={info}
       more={stamp}
     >
+      {aliases(waiting.card.still.length > 0)}
       <div className="fw-oc-groups">
         {onUs.length > 0 && (
           <div className="fw-oc-grp" role="group" aria-labelledby="fw-oc-g-us">
@@ -190,7 +176,6 @@ function Waiting({ order, model, actions }: { order: Order; model: OrderRecordMo
             ))}
           </div>
         )}
-        <WorkOrderChanges order={order} model={model} actions={actions} />
       </div>
       {leftOut > 0 ? <p className="fw-pt-quiet">{t('changes.still.leftOut', { count: leftOut })}</p> : null}
       {none.length > 0 || pointerLink ? (
@@ -368,72 +353,3 @@ function StillItemRow({ item, order, model, actions, asOf }: { item: StillItem; 
   )
 }
 // ---- end F-OC-104
-
-// ---- F-OP-117 (10-order-page §6): "Work-order changes of this order" ---------------------------------------------------------------
-/**
- * The work-order changes an accepted change or an office change of this order proposed — waiting ones first (oldest first), then the
- * decided ones newest first: the work order, its cells before → after, the extra pieces' outcome, "Told the floor at hh:mm" once
- * carried out, and for a waiting one Apply… / Leave as is… in place (the ONE decide window here), held for who may not decide. Only
- * this order's changes (the API's wall); a planner's words are never the customer's.
- */
-function WorkOrderChanges({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
-  const t = useT('orders')
-  const locale = useLocale()
-  const part = model.orderChanges?.list ?? null
-  // Not read here (a design case, no right): nothing is claimed — no card.
-  if (!part) return null
-  if (part.value === null) return part.problem ? <PartState problem={part.problem} label={t('wocs.title')} /> : null
-  const rows = workOrderChangeRowsOf(part.value, order.id)
-  const customer = order.party?.legalName ?? null
-  return (
-    <section id="work-order-changes" className="fw-so-anchor" aria-labelledby="fw-so-wocs-title">
-      <Card padded>
-        <div className="fw-so-card-head">
-          <h2 className="fw-so-h2" id="fw-so-wocs-title">
-            {t('wocs.title')}
-          </h2>
-        </div>
-        {rows.length === 0 ? (
-          <EmptyState title={t('wocs.none')} />
-        ) : (
-          <ul className="fw-so-datelist">
-            {rows.map((change) => {
-              const figures = changeFiguresOf(change)
-              const held = changeHeldOf(change)
-              const heldWords = held ? t(held.key, { time: formatTime(held.params.at, { locale }) }) : model.busy ? t('held.busy') : null
-              const outcome = outcomeWordsOf(change, customer)
-              const floor = floorToldOfChange(change)
-              return (
-                <li key={change.id} className="fw-so-still">
-                  <span className="fw-so-stack-tight">
-                    <span className="fw-so-inline">
-                      <strong>{change.workOrder?.number ?? change.madeWorkOrder?.number ?? t('wocs.newDraft')}</strong>
-                      <Pill tone={WOC_TONE[change.status]}>{said(change.words.status, locale)}</Pill>
-                    </span>
-                    <span className="fw-so-cell-sub">{[change.words.cells, t('wo.changeWaits', { before: figures.before, after: figures.after })].join(' · ')}</span>
-                    {outcome && <span className="fw-so-cell-sub">{said(outcome, locale)}</span>}
-                    {floor && <span className="fw-so-cell-sub">{t('told.floorAt', { time: formatTime(floor, { locale }) })}</span>}
-                    {change.status === 'DECLINED' && change.decisionNote && <span className="fw-so-cell-sub">{`“${change.decisionNote}”`}</span>}
-                  </span>
-                  {change.status === 'PROPOSED' && (
-                    <span className="fw-so-inline">
-                      <Button size="sm" heldReason={heldWords} onClick={() => actions?.orderChanges?.onOpen?.(change.id)}>
-                        {t('wo.changeApply')}
-                      </Button>
-                      <Button size="sm" variant="quiet" heldReason={heldWords} onClick={() => actions?.orderChanges?.onOpen?.(change.id)}>
-                        {t('wo.changeLeave')}
-                      </Button>
-                    </span>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </Card>
-    </section>
-  )
-}
-
-const WOC_TONE: Readonly<Record<string, 'warning' | 'success' | 'neutral'>> = Object.freeze({ PROPOSED: 'warning', APPLIED: 'success', DECLINED: 'neutral', STALE: 'neutral' })
-// ---- end F-OP-117
