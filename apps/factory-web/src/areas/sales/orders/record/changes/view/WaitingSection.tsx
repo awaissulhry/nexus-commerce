@@ -172,7 +172,7 @@ function Waiting({ order, model, actions }: { order: Order; model: OrderRecordMo
               <h3 id="fw-oc-g-still">{t('overview.requests.still', { count: waiting.card.still.length })}</h3>
             </div>
             {stillGroupsOf(waiting.card.still, model.requests?.value ?? []).map((group) => (
-              <StillGroupView key={group.requestId ?? `revision:${group.revision ?? 'office'}`} group={group} order={order} model={model} actions={actions} asOf={asOf} when={when} />
+              <StillGroupView key={`${group.requestId ?? 'office'}:${group.revision ?? ''}:${group.since}`} group={group} order={order} model={model} actions={actions} asOf={asOf} when={when} />
             ))}
           </div>
         )}
