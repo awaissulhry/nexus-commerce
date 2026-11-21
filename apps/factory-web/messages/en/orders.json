@@ -2798,6 +2798,119 @@
       "save": "Save",
       "problem": "A whole number from {min} to {max}.",
       "same": "Nothing changed yet."
+    },
+    "dates": {
+      "title": "Dates & plan",
+      "answerPromised": "Promised {date}",
+      "answerReady": "Plan says ready {date}",
+      "answerNoPromise": "No promise date yet",
+      "asked": "Customer asked",
+      "promised": "We promised",
+      "neverMoved": "never moved",
+      "first": "first {date}",
+      "readyWithheld": "Not shown to you: when the plan says ready (Planning and Sales see it).",
+      "sees": "Customer sees",
+      "seesDays": "cut {cut} · sewing {sew} · finish {finish}",
+      "seesPromise": "The customer sees the promise only",
+      "shipped": "Shipped",
+      "nothingShipped": "Nothing shipped yet",
+      "planning": "Planning ›",
+      "partPlan": "the plan",
+      "infoBody": "When it will be ready, whether that is what we promised, the steps on the way and how the promise moved — each date with its own door. Plan says ready is the planning board's forecast per line.",
+      "moved_one": "moved {count}×",
+      "moved_other": "moved {count}×"
+    },
+    "steps": {
+      "title": "Steps to shipping",
+      "deposit": "Deposit",
+      "startHint": "(working plan)",
+      "shipHint": "(the promise)",
+      "now": "Now: {step}",
+      "col": {
+        "step": "Step",
+        "planned": "Planned",
+        "done": "Done",
+        "status": "Status",
+        "who": "Who acts"
+      },
+      "status": {
+        "done": "Done",
+        "late_one": "{count} day late",
+        "late_other": "{count} days late",
+        "soon_one": "Waiting · in {count} day",
+        "soon_other": "Waiting · in {count} days",
+        "soonToday": "Waiting · due today",
+        "waiting": "Waiting",
+        "startedBefore": "Started before the gate",
+        "toCome": "To come"
+      },
+      "who": {
+        "customerDeposit": "The customer: pay the deposit",
+        "customerSample": "The customer (their sample answer)",
+        "planner": "Planner {name}",
+        "plannerNobody": "A planner",
+        "production": "Production",
+        "shipping": "Shipping"
+      },
+      "chip": {
+        "late_one": "{count} late",
+        "late_other": "{count} late",
+        "allDone": "All done",
+        "onTrack": "On track"
+      },
+      "add": "Add a gate…",
+      "remove": "Remove…",
+      "ask": "Ask {name} for an update",
+      "askTitle": "Ask about {step}",
+      "askStarter": "@{name} Where is “{step}” now? When will it be done? Is the promise of {promise} still safe?",
+      "askStarterNoPromise": "@{name} Where is “{step}” now? When will it be done?",
+      "askSend": "Send the note",
+      "noGate": "No gate set: the board does not wait for anything before production.",
+      "seesGates": "The customer sees these steps and their days (its sharing level).",
+      "seesNone": "The customer does not see these steps: only the promise.",
+      "added": "Gate added.",
+      "removed": "Gate removed.",
+      "more": "More for {step}"
+    },
+    "byLine": {
+      "title": "By line · worst first",
+      "col": {
+        "line": "Line",
+        "asked": "Asked",
+        "promised": "Promised",
+        "ready": "Ready"
+      },
+      "charges_one": "{count} charge line has no date.",
+      "charges_other": "{count} charge lines have no date.",
+      "sizes": "Sizes: {sizes}",
+      "sizeDay": "{sizes} {date}",
+      "changeLine": "Change this line's promise…",
+      "more": "More for line {seq}"
+    },
+    "history": {
+      "title": "Promise history",
+      "never": "Never moved. Promised {date} since {since}.",
+      "neverNoSince": "Never moved. Promised {date}.",
+      "noPromise": "No promise date yet.",
+      "later_one": "+{count} d later",
+      "later_other": "+{count} d later",
+      "sooner_one": "{count} d sooner",
+      "sooner_other": "{count} d sooner",
+      "lines": "Lines: {lines}",
+      "reasonAutomatic": "Changed on the order page (no reason given)",
+      "reasonNone": "No reason given",
+      "officeNote": "Office only: {note}",
+      "customerReads": "Customer reads: “{words}”",
+      "by": "{name} · {at}",
+      "set": "Date set {date}",
+      "setNote": "never counted as a move",
+      "earlier_one": "Show {count} earlier move",
+      "earlier_other": "Show {count} earlier moves",
+      "tell": "Tell the customer…",
+      "pointer": "Promise moves are on Production › Dates & plan ›"
+    },
+    "promise": {
+      "hint": "The customer gets a notice in the portal (and an e-mail if they chose it). The floor is not told."
     }
   }
 }

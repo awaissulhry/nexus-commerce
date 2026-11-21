@@ -77,9 +77,21 @@ export type PlanSays =
 /** Days from one calendar day to another (`YYYY-MM-DD`, whole days; a later `to` is positive). */
 const daysFrom = (from: string, to: string): number => Math.round((Date.parse(`${to.slice(0, 10)}T00:00:00Z`) - Date.parse(`${from.slice(0, 10)}T00:00:00Z`)) / 86_400_000)
 
-export function planSaysOf(order: Pick<Order, 'status'>, promise: string | null, dates: Pick<Dates, 'planned'> | null | undefined): PlanSays | null {
+// ---- F-PT-204 (order PRODUCTION tab O5, B13): ONE "ready" on every screen — the plan's forecast per line (the latest of the goods
+// lines the plan says, the Production tab's own), the published plan's finish only where the reader may not read the forecast
+// (planning.promise.view: Finance, Warehouse keep the published day). Nothing planned for a line: no day (never the others' alone).
+/** When the plan says the order is ready: the latest line forecast, or (forecast not read) the published finish; null: not planned. */
+export function readyDayOf(dates: Pick<Dates, 'planned'> & { readonly forecast?: Dates['forecast'] }): string | null {
+  const forecast = dates.forecast ?? null
+  if (!forecast || forecast.length === 0) return dates.planned.finish
+  if (forecast.some((line) => line.finish === null)) return null
+  return forecast.reduce<string | null>((latest, line) => (latest === null || line.finish! > latest ? line.finish : latest), null)
+}
+// ---- end F-PT-204
+
+export function planSaysOf(order: Pick<Order, 'status'>, promise: string | null, dates: (Pick<Dates, 'planned'> & { readonly forecast?: Dates['forecast'] }) | null | undefined): PlanSays | null {
   if (!dates || AFTER.includes(order.status)) return null
-  const finish = dates.planned.finish
+  const finish = readyDayOf(dates) // F-PT-204: the line forecast (published finish as the fallback)
   // Nothing plans an order that has a promise: amber, the cause of "At risk" (a waiting order is not planned yet: plain words).
   if (!finish) return { kind: 'none', warn: !!promise && order.status !== 'PENDING_APPROVAL' }
   if (!promise) return { kind: 'plain', date: finish }
@@ -191,16 +203,17 @@ export function planningGateOf(gate: Gate, orderId: string): PlanningGate | null
     targetDate: gate.targetDate,
     sampleRound: gate.sampleRound,
     owner: gate.owner,
-    ownerId: null,
-    makerId: null,
+    // F-PT-202 (B-PT-006): the read now sends what Planning's dialogs read (an older answer: as before).
+    ownerId: gate.ownerId ?? null,
+    makerId: gate.makerId ?? null,
     state: gate.state,
     passedOn: gate.passedOn,
-    passedAt: null,
-    passedBy: null,
+    passedAt: gate.passedAt ?? null,
+    passedBy: gate.passedBy ?? null,
     via: isOf(PASS_VIAS, gate.via) ? gate.via : null,
     startedBefore: gate.startedBefore,
     leather: isOf(LEATHER_STATES, gate.leather) ? gate.leather : null,
-    holds: 0,
+    holds: gate.holds ?? 0,
     version: gate.version,
     actions: gate.actions,
   }
@@ -227,10 +240,11 @@ export function gateWorldOf(order: Pick<Order, 'id' | 'number' | 'companyId' | '
     workOrders: { count: 0, notStarted: 0, byKind: [] },
     gates: dates.gates.flatMap((gate) => planningGateOf(gate, order.id) ?? []),
     milestones,
-    waiting: [],
+    // F-PT-202 (B-PT-006): Planning's own order fields when the read sends them (Add a gate… on Production › Dates & plan).
+    waiting: (dates.waiting ?? []).filter((kind): kind is (typeof GATE_KINDS)[number] => isOf(GATE_KINDS, kind)),
     late: dates.late,
     next: dates.next,
-    mayAddGate: { allowed: false, needs: null, refusal: null },
+    mayAddGate: dates.mayAddGate ?? { allowed: false, needs: null, refusal: null },
   }
   return { today, timeZone: 'Europe/Rome', tiles: Object.fromEntries(WAITING_TILES.map((tile) => [tile, 0])) as Milestones['tiles'], orders: [one], truncated: false }
 }

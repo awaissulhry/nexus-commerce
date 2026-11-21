@@ -457,10 +457,10 @@
     "SAMPLE_APPROVED": "Campione approvato",
     "LEATHER_APPROVED": "Pelle approvata",
     "TRIMS_IN": "Accessori arrivati",
-    "PP_SAMPLE": "Campione di preproduzione",
-    "LAB_PASSED": "Prova di laboratorio superata",
+    "PP_SAMPLE": "Campione di pre-produzione approvato",
+    "LAB_PASSED": "Test di laboratorio superato",
     "OTHER": "Controllo",
-    "SIZE_SET": "Set di taglie"
+    "SIZE_SET": "Set di taglie approvato"
   },
   "list": {
     "col": {

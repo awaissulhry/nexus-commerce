@@ -154,6 +154,8 @@ function PromiseDialog({ order, model, actions }: { order: Order; model: OrderRe
   const [reasonCode, setReasonCode] = useState<string>(isPromiseReasonCode(draftCode) ? draftCode : '')
   const [note, setNote] = useState(model.draft?.reason ?? '')
   const [lineIds, setLineIds] = useState<string[]>(model.draft?.lineIds ?? (asked ? [...asked] : [])) // F-OL-04
+  // F-PT-201 (B9): a charge line (FEE) has no date: it is never offered as a line to promise.
+  const promiseLines = order.lines.filter((line) => line.kind !== 'FEE')
   const problems = promiseProblems({ date, reasonCode, today: model.today, current: order.promiseDate, lineIds, allLines: scope === 'order' })
   const firstProblem = problems.date ?? problems.lines ?? problems.reasonCode ?? null
   const held = model.busy ? t('held.busy') : firstProblem ? t(firstProblem) : null
@@ -175,7 +177,7 @@ function PromiseDialog({ order, model, actions }: { order: Order; model: OrderRe
           { label: t('dates.firstPromised'), value: order.originalPromiseDate ? formatDate(dayInstant(order.originalPromiseDate), { locale }) : '—' },
         ]}
       />
-      {linesAllowed && order.lines.length > 1 && (
+      {linesAllowed && promiseLines.length > 1 && (
         <fieldset className="fw-so-choices">
           <legend className="fw-so-legend">{t('promise.scope')}</legend>
           <RadioCard variant="row" name="fw-so-scope" value="order" checked={scope === 'order'} selected={scope === 'order'} onChange={() => setScope('order')} title={t('promise.scopeOrder')} description={t('promise.scopeOrderHint')} />
@@ -185,7 +187,7 @@ function PromiseDialog({ order, model, actions }: { order: Order; model: OrderRe
       {scope === 'lines' && (
         <fieldset className="fw-so-choices">
           <legend className="fw-so-legend">{t('promise.lines')}</legend>
-          {order.lines.map((line) => (
+          {promiseLines.map((line) => (
             <Checkbox
               key={line.id}
               checked={lineIds.includes(line.id)}
@@ -222,7 +224,8 @@ function PromiseDialog({ order, model, actions }: { order: Order; model: OrderRe
         <Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} maxLength={1000} />
       </Field>
       {/* ---- end F-OO-142 */}
-      <p className="fw-so-hint">{t('promise.tellCustomer')}</p>
+      {/* F-PT-201 (B14): what really happens — the portal tells the customer; the floor is not told. */}
+      <p className="fw-so-hint">{t('productionTab.promise.hint')}</p>
     </Frame>
   )
 }

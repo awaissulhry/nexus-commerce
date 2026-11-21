@@ -69,6 +69,14 @@ describe('F-PT-104: the row’s acts — hidden without the right (L9), held onl
     expect(shown.hidden).toBe(true)
   })
 
+  it('F-PT-104b: the ⋯ only with an act, Priority and rush… or a link the row does not give (Open in Planning)', async () => {
+    const { rowMenuShown } = await import('./work')
+    expect(rowMenuShown({ acts: [], links: ['open'], inline: false, hidden: true })).toBe(false)
+    expect(rowMenuShown({ acts: [], links: ['planning', 'open'], inline: false, hidden: true })).toBe(true)
+    expect(rowMenuShown({ acts: ['note'], links: ['open'], inline: false, hidden: false })).toBe(true)
+    expect(rowMenuShown({ acts: [], links: ['open'], inline: true, hidden: false })).toBe(true)
+  })
+
   it('a shared work order: nothing but its link and its words (R-11)', () => {
     const row = read({ manage: true, release: true, hold: true }).find((entry) => entry.sharedWithOtherCustomers)!
     expect(shownActsOf(rowActsOf(row, planner))).toEqual({ acts: [], links: [], inline: false, hidden: false })

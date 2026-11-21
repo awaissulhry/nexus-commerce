@@ -365,11 +365,13 @@ export interface NotePreset {
   readonly body: string
   readonly needsAnswer: boolean
   readonly send: string
+  /** F-PT-202: false — a note to someone the text @mentions (a gate's planner), not the record's supervisor; absent: the supervisor. */
+  readonly askSupervisor?: boolean
 }
 
-/** The draft a preset opens with: its text and "Needs an answer"; the supervisor asked (the dialog's own default). */
+/** The draft a preset opens with: its text and "Needs an answer"; the supervisor asked (the dialog's own default) unless it says not. */
 export function presetDraftOf(draft: NoteDraft, preset: NotePreset | null | undefined): NoteDraft {
-  return preset ? { ...draft, body: preset.body, needsAnswer: preset.needsAnswer, askSupervisor: true } : draft
+  return preset ? { ...draft, body: preset.body, needsAnswer: preset.needsAnswer, askSupervisor: preset.askSupervisor ?? true } : draft
 }
 // ---- end F-PT-103
 
@@ -402,7 +404,8 @@ export interface NoteDialogActions {
 /** The dialog's title: Ask the supervisor (the band), or the office note on N records of the kind written on. */
 export function titleOf(model: Pick<NoteDialogModel, 'from' | 'targets' | 'draft'>): Phrase {
   const records = recordsOf(model.targets, model.draft.on)
-  if (model.from === 'band') return { key: 'title.ask', params: { number: model.targets.workOrders[0]?.label ?? '' } }
+  // F-PT-103b (lead): a sales order's band names the order (it has no work order in its targets): never "Ask the supervisor · ".
+  if (model.from === 'band') return { key: 'title.ask', params: { number: model.targets.workOrders[0]?.label ?? model.targets.salesOrders[0]?.label ?? '' } }
   if (records.length === 1) return { key: 'title.one', params: { number: records[0]!.label } }
   return { key: model.draft.on === 'salesOrders' ? 'title.salesOrders' : 'title.workOrders', params: { count: records.length } }
 }

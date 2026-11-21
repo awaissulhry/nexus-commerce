@@ -157,10 +157,11 @@ describe('F-SA-234b — the by-line finish forecast from the order’s own produ
     const depth = readFileSync(new URL('../depth/use-order-depth.ts', import.meta.url), 'utf8')
     expect(depth).not.toContain('listPromiseLines')
     expect(depth).not.toContain('forecasts')
-    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain('const forecast = forecastPart(model.production)')
-    expect(tab).toContain('<ForecastCell key="f" part={forecast} lineId={line.id} />')
-    expect(tab).not.toContain('ForecastNote')
+    // F-PT-203: Dates & plan's By line reads the same production read's `dates.forecast` (byLineOf), no wide read either.
+    const dates = readFileSync(new URL('./view/production/DatesSection.tsx', import.meta.url), 'utf8')
+    expect(dates).toContain('const view = byLineOf(order, read?.dates ?? null, withheld)')
+    expect(dates).not.toContain('listPromiseLines')
+    expect(dates).not.toContain('ForecastNote')
   })
 })
 // ---- end F-SA-234b
@@ -424,8 +425,8 @@ describe('F-OP-113: the work-order rows act in place; a work order shared with o
     expect(text).toContain('Production does this — a planner or the production manager.')
     expect(html).not.toContain('aria-label="Priority of WO-00021"')
     expect(html).not.toContain('aria-label="Due date of WO-00021"')
-    // The ⋯ stays for its read door (Open the work order); no act is in it (shownActsOf, work.vitest).
-    expect(html).toContain('aria-label="Actions for WO-00021"')
+    // F-PT-104b (lead): no act and no other link — no ⋯ at all (the row's window opens the work order).
+    expect(html).not.toContain('aria-label="Actions for WO-00021"')
     expect(textOf(draw('wo-acts-sales', 'it'))).toContain('lo fa la produzione — un pianificatore o il responsabile di produzione')
   })
 
@@ -521,7 +522,8 @@ describe('F-OP-115: Split…, Cancel…, Close… · Reopen…, Open in Planning
   })
 
   it('the gate’s Money door is a tab link (F-OP-210: the dock’s scope kept), no plain ?tab= link', () => {
-    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
+    // F-PT-202 (B11): the deposit is the first step of Dates & plan's steps; its door is Money.
+    const tab = readFileSync(new URL('./view/production/StepsBlock.tsx', import.meta.url), 'utf8')
     expect(codeOf(tab)).not.toContain('?tab=money') // op-fx1: the code, not the note that says what it was
     expect(tab).toContain("<TabLink href={tabHref(`${model.prefix}/sales/orders/${order.id}`, 'money', search)}>{t('gate.money')}</TabLink>")
   })
@@ -559,7 +561,8 @@ describe('the Overview’s doors land on Production: #work-orders, #holds, #line
     expect(readFileSync(new URL('./view/production/NowSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="now"')
     expect(readFileSync(new URL('./view/production/Kit.tsx', import.meta.url), 'utf8')).toContain('<section id={id} className="fw-pt-sec fw-so-anchor" aria-labelledby={headId}>')
     expect(tab).toContain('<Card padded id="holds" className="fw-so-anchor">')
-    expect(tab).toContain('id={`line-${line.id}`}')
+    // F-PT-203: by line keeps the older #line-<lineId> address on each line's row (and the row's about-SalesOrderLine-<id>).
+    expect(readFileSync(new URL('./view/production/DatesSection.tsx', import.meta.url), 'utf8')).toContain('id={`line-${row.lineId}`}')
   })
 })
 // ---- end F-OP-115 (A11's anchors)

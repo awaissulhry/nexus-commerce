@@ -614,7 +614,8 @@ export const orderSchema = z.object({
     ),
     invoices: z.array(z.object({ id: z.string(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable(), depositRequestId: z.string().nullable().default(null) })),
   }),
-  promiseHistory: z.array(z.object({ at: instant, actorId: z.string(), from: z.string().nullable(), to: z.string(), lineIds: z.array(z.string()), reason: z.string().nullable() })),
+  // F-PT-204 (B-PT-011, optional): + SET (the first promise: never a move) or MOVED, and each line's own day before a lines' move.
+  promiseHistory: z.array(z.object({ at: instant, actorId: z.string(), from: z.string().nullable(), to: z.string(), lineIds: z.array(z.string()), reason: z.string().nullable(), kind: z.enum(['SET', 'MOVED']).optional(), fromByLine: z.array(z.object({ lineId: z.string(), from: z.string().nullable() })).nullable().optional() })),
   people: z.array(z.object({ id: z.string(), name: z.string() })).default([]),
   // B-OP-020 (B3): the words may name amounts, so they come only with the price grain; the page shows its own words per code.
   settlement: z.object({ settled: z.boolean(), missing: z.array(z.object({ code: z.string(), message: z.string().optional() })), source: z.string() }),

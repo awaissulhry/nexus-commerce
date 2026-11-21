@@ -27,6 +27,11 @@ import type { DiscussPart } from '../../dock/discuss'
 // F-SA-244: each change's Told line ("Told: conversation · bell to 6 people · floor note on WO-0311 · workshop notice") → Who was told.
 import { toldOfHistory, toldParts } from '../../told'
 import { autoReasonOf } from '../../lines-draft' // F-OL-03: the automatic reasons in words
+// ---- F-PT-204: History's one pointer to Production › Dates & plan (the promise history) ----
+import { useSearchParams } from 'next/navigation'
+import { tabHref } from '../../../../../_shared/record-frame/address'
+import { TabLink } from '../../../../../../lib/tab-link/TabLink'
+// ---- end F-PT-204
 
 /**
  * F-SA-236 (sales page plan N2, N3, P5; 10-order-page §2.4) — Changes, one newest-first story:
@@ -65,6 +70,7 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
   const w = useProductionWords()
   const locale = useLocale()
   const [chip, setChip] = useState<HistoryChip>('all')
+  const search = useSearchParams()?.toString() ?? '' // F-PT-204: the pointer keeps the dock's scope
   const changes = model.depth?.changes ?? null
   const amendments = model.amendments ?? null
   // The ONE changes read when the page has it; a design case or an older page draws the amendments read.
@@ -196,6 +202,12 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
       ) : (
         <Timeline label={t('changes.history.title')} steps={shown.map((entry) => withDoors(entry, step(entry)))} />
       )}
+      {/* F-PT-204: the promise's own history lives in Production › Dates & plan — one pointer, never a second copy. */}
+      <p className="fw-so-hint">
+        <TabLink className="fw-so-link" href={`${tabHref(`${model.prefix}/sales/orders/${order.id}`, 'production', search)}#promise-moves`}>
+          {t('productionTab.history.pointer')}
+        </TabLink>
+      </p>
     </Card>
   )
 }

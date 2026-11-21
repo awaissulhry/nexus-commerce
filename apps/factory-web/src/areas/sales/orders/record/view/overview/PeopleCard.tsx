@@ -20,6 +20,8 @@ import { SupervisorFact } from '../../../../../_shared/production-supervisor/vie
 import { supervisorHeldOf } from '../../../../../_shared/production-supervisor/model' // F-OO-132: why Change… waits
 import { NOTES_NS, openHeld as noteHeld } from '../../../../../production/_shared/notes/model'
 import { FollowersDoor } from '../Discuss' // F-SA-266
+import { askPresetOf, askStarterOf } from '../../production/asks' // F-PT-103b: the ready ask
+import { readOf } from '../../overview/model' // F-PT-103b: the promise the starter names
 import './people.css' // F-OO-131: the card's own rows
 
 /**
@@ -86,7 +88,8 @@ function PeopleBody({ order, model, actions }: { order: Order; model: OrderRecor
               fact={view.people.supervisor ? { kind: 'person', name: view.people.supervisor.name, active: view.people.supervisor.active, from: view.people.supervisor.from, me: view.people.supervisor.me, muted: false } : { kind: 'notSet' }}
               held={supervisorHeldOf(!!model.people?.mayAssign, order.status)}
               {...(readOnly ? {} : { onChange: () => actions?.people?.onAssign?.() })}
-              {...(model.people && !readOnly ? { ask: { label: notes('open.askFact'), held: askWait ? notes(askWait.key, askWait.params) : null, onAsk: () => actions?.people?.onAsk?.() } } : {})}
+              /* F-PT-103b (lead): one path per job — the SAME ready ask as Production now and the band ⋯ ("Ask for an update…"). */
+              {...(model.people && !readOnly ? { ask: { label: notes('open.askFact'), held: askWait ? notes(askWait.key, askWait.params) : null, onAsk: () => actions?.people?.onAsk?.(askPresetOf(t, askStarterOf({ number: order.number, promise: readOf(model.production)?.headline?.promise.date ?? order.promiseDate }, day))) } } : {})}
             />
           </li>
           {/* F-OP-104: the backup is the customer's own setting (for every order of it): read here, changed on its page.

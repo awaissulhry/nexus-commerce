@@ -1,4 +1,5 @@
 import type { Phrase } from '../../model'
+import type { NotePreset } from '../../../../production/_shared/notes/model'
 import type { OrderIssue } from './api'
 
 /**
@@ -119,6 +120,14 @@ export function askStarterOf(input: { readonly number: string; readonly promise:
     body: input.promise ? { key: 'productionTab.ask.starter', params: { number: input.number, promise: day(input.promise) } } : { key: 'productionTab.ask.starterNoPromise', params: { number: input.number } },
     send,
   }
+}
+
+/**
+ * F-PT-103b (lead, one path per job): the ready ask in the page's words — ONE builder for every door that opens it (Production now,
+ * a work order's row, the band ⋯, Overview's People card): its title, the starter question, Needs an answer ticked, its Send word.
+ */
+export function askPresetOf(t: (key: string, params?: Readonly<Record<string, string | number>>) => string, starter: AskStarter): NotePreset {
+  return { title: t(starter.title.key, starter.title.params), body: t(starter.body.key, starter.body.params), needsAnswer: true, send: t(starter.send.key) }
 }
 
 /**

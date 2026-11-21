@@ -10,6 +10,7 @@ import { abilitiesOf, dayInstant, romeToday } from '../../model'
 import { base } from '../fixtures'
 import type { OrderRecordModel } from '../record-model'
 import { DatesCard } from '../view/overview/DatesCard'
+import { GateWindows } from '../view/OrderRecordView' // F-PT-202: the page's one mount of Planning's gate dialogs
 import type { Order } from '../../api'
 import type { Headline, OrderProduction } from './api'
 import { FAILED_STATE, HEADLINE, LOADING_STATE, PRODUCTION_READ, ready } from './fixtures'
@@ -128,13 +129,15 @@ describe('F-OO-141: Next dates — the promise first, what the plan says against
     const value = order('IN_PRODUCTION') // promised 15/12/2026, requested 10/12/2026
     const day = (date: string, locale: 'en' | 'it' = 'en') => formatDate(dayInstant(date), { locale })
     const card = (over: Partial<OrderRecordModel> = {}, locale: 'en' | 'it' = 'en', of = value) => render(createElement(DatesCard, { order: of, model: base('sales', of, { tab: 'overview', production: ready(), ...over }).record }), locale)
-    const withPlan = (finish: string | null, extra: Partial<OrderProduction['dates'] & object> = {}) => ready({ ...PRODUCTION_READ, dates: { ...PRODUCTION_READ.dates!, planned: { ...PRODUCTION_READ.dates!.planned, finish }, ...extra } })
+    // F-PT-204: the published finish is what a reader without the forecast reads (forecast null); with the forecast, its latest line.
+    const withPlan = (finish: string | null, extra: Partial<OrderProduction['dates'] & object> = {}) => ready({ ...PRODUCTION_READ, dates: { ...PRODUCTION_READ.dates!, planned: { ...PRODUCTION_READ.dates!.planned, finish }, forecast: null, ...extra } })
 
     it('Promised (ex-factory) first with its moves and Change…, Plan says ready under it "(from the plan)", then Requested by customer', () => {
       const text = textOf(card())
       const at = (words: string) => text.indexOf(words)
       expect(text).toContain(`Promised (ex-factory) ${day('2026-12-15')} · moved 2× · +6 d since first promised Change…`)
-      expect(text).toContain(`Plan says ready ${day('2026-12-10')} · 5 d before the promise (from the plan)`)
+      // F-PT-204 (O5): ONE "ready" — the plan's line forecast (its latest line: Rosso, 29/12), the same day as Production › Dates & plan.
+      expect(text).toContain(`Plan says ready ${day('2026-12-29')} · 14 d after the promise (from the plan)`)
       expect(text).toContain(`Requested by customer ${day('2026-12-10')} Change…`)
       expect(at('Promised (ex-factory)')).toBeLessThan(at('Plan says ready'))
       expect(at('Plan says ready')).toBeLessThan(at('Requested by customer'))
@@ -142,7 +145,9 @@ describe('F-OO-141: Next dates — the promise first, what the plan says against
       for (const gone of ['Shipping', 'Production start', 'No dates set yet', 'Ex-factory']) expect(text, gone).not.toContain(gone)
       expect(card()).not.toContain('is-gates')
       const it = textOf(card({}, 'it'))
-      for (const words of ['Promesso (franco fabbrica)', 'spostata 2 volte', 'Il piano dice pronto', '5 g prima della promessa', '(dal piano)', 'Richiesto dal cliente', 'Cambia…']) expect(it, words).toContain(words)
+      for (const words of ['Promesso (franco fabbrica)', 'spostata 2 volte', 'Il piano dice pronto', '14 g dopo la promessa', '(dal piano)', 'Richiesto dal cliente', 'Cambia…']) expect(it, words).toContain(words)
+      // Without the forecast (planning.promise.view: Finance, Warehouse): the published finish, as before.
+      expect(textOf(card({ production: withPlan('2026-12-10') }))).toContain(`Plan says ready ${day('2026-12-10')} · 5 d before the promise (from the plan)`)
     })
 
     it('the plan after the promise is amber (the cause of "At risk"); nothing planned: "Nothing plans it yet", amber', () => {
@@ -155,14 +160,14 @@ describe('F-OO-141: Next dates — the promise first, what the plan says against
       expect(none).toContain('<span class="fw-so-dates-value is-under fw-so-dates-warn">')
       // Walk #11: no "(from the plan)" beside "Nothing plans it yet" — there is no plan it comes from.
       expect(textOf(none)).not.toContain('(from the plan)')
-      expect(card()).not.toContain('fw-so-dates-warn')
+      expect(card({ production: withPlan('2026-12-10') })).not.toContain('fw-so-dates-warn')
     })
 
     it('the open gates after a rule, late first, each with its target and lateness (Discuss stays the gate’s by its reference)', () => {
       const html = card({ production: withPlan('2026-12-10', { milestones: [...PRODUCTION_READ.dates!.milestones, milestone('late', 'GATE', '2026-11-20', 3)] }) })
       expect(html).toContain('<ul class="fw-so-dates-rows is-gates"')
       // F-OO-145: + the gate's state between (Planning's words); its Discuss is an item of More ▾ (F-OO-145's tests).
-      expect(textOf(html)).toContain(`Pre-production sample target ${day('2026-11-20')} · To come · 3 days late`)
+      expect(textOf(html)).toContain(`Pre-production sample approved target ${day('2026-11-20')} · To come · 3 days late`) // B19: one gate name
     })
 
     it('Read-only: the dates and what the plan says, no Change…; reading: the own dates and a line; failed: said, with Try again', () => {
@@ -486,10 +491,10 @@ describe('F-OO-145: gate rows and More ▾ — Planning’s own dialogs from a o
     it('each gate: target · state · late (or how long it waits) · More ▾ named for the gate; then "1 more in All dates ›"', () => {
       const text = textOf(card())
       expect(text).toContain(`Trims in target ${day('2026-10-20')} · Waiting · 9 days late More`)
-      expect(text).toContain(`Pre-production sample target ${day('2026-11-05')} · Waiting · waits 3 d More`)
+      expect(text).toContain(`Pre-production sample approved target ${day('2026-11-05')} · Waiting · waits 3 d More`) // B19
       expect(text).toContain(`target ${day('2026-11-01')} · Started before More`)
       expect(text).toContain('1 more in All dates ›')
-      expect(card()).toContain(`aria-label="${en('row.menu', { name: 'Pre-production sample', order: value.number })}"`)
+      expect(card()).toContain(`aria-label="${en('row.menu', { name: 'Pre-production sample approved', order: value.number })}"`)
       const italian = textOf(card('owner', {}, 'it'))
       for (const words of ['In attesa · aspetta da 3 g Altro', 'Partito prima', 'Ancora 1 in Tutte le date ›']) expect(italian, words).toContain(words)
     })
@@ -503,17 +508,19 @@ describe('F-OO-145: gate rows and More ▾ — Planning’s own dialogs from a o
       expect(none).not.toContain('<button')
     })
 
+    // F-PT-202: the dialogs are the page's ONE mount (GateWindows in OrderRecordView), opened from Next dates' moves.
+    const windows = (gateActs: NonNullable<OrderRecordModel['gateActs']>, locale: 'en' | 'it' = 'en') => textOf(render(createElement(GateWindows, { model: gateActs }), locale))
     it('Planning’s own dialogs open in place from the one-order model (Change the gate, Mark done, Start before the gate)', () => {
       const world = gateWorldOf(value, DATES, TODAY)!
       const model = (dialog: NonNullable<OrderRecordModel['gateActs']>['dialog']) => ({ prefix: '/w/DEMO', can: { view: true, manage: true, override: true }, me: 'me', controls: DEFAULT_CONTROLS, world: { status: 'ready' as const, value: world }, live: 'live' as const, updates: 0, notice: null, dialog })
       const gate = world.orders[0]!.gates.find((entry) => entry.id === 'g1')!
-      const edit = textOf(card('owner', { gateActs: model({ kind: 'edit', gateId: 'g1', draft: gateDraftOf(gate), choices: null, busy: false, problem: null }) }))
+      const edit = windows(model({ kind: 'edit', gateId: 'g1', draft: gateDraftOf(gate), choices: null, busy: false, problem: null }))
       expect(edit).toContain(en('form.editTitle', { name: en('kind.PP_SAMPLE') }))
       expect(edit).toContain(en('form.subtitle', { order: value.number, customer: 'Moto Demo S.r.l.' }))
-      const pass = textOf(card('owner', { gateActs: model({ kind: 'pass', gateIds: ['g1'], on: TODAY, busy: false, problem: 'refusal.changed' }) }))
+      const pass = windows(model({ kind: 'pass', gateIds: ['g1'], on: TODAY, busy: false, problem: 'refusal.changed' }))
       expect(pass).toContain(en('pass.title', { count: 1 }))
       expect(pass).toContain(en('refusal.changed'))
-      const start = textOf(card('owner', { gateActs: model({ kind: 'startBefore', gateIds: ['g1'], reason: '', busy: false, problem: null }) }, 'it'))
+      const start = windows(model({ kind: 'startBefore', gateIds: ['g1'], reason: '', busy: false, problem: null }), 'it')
       expect(start).toContain(ita('start.title', { count: 1 }))
       expect(textOf(card('owner', { gateActs: model(null) }))).not.toContain(en('form.editTitle', { name: en('kind.PP_SAMPLE') }))
     })
@@ -529,15 +536,21 @@ describe('F-OO-145: gate rows and More ▾ — Planning’s own dialogs from a o
           return /\.tsx?$/.test(name) && !name.includes('.vitest.') && at.pathname.includes('/view/') ? [fileURLToPath(at)] : []
         })
       for (const file of views(new URL('../', import.meta.url))) expect(readFileSync(file, 'utf8'), file).not.toMatch(/from '[^']*\/use-gate-acts'/)
+      // F-PT-202: Planning's dialogs are mounted ONCE for the page (OrderRecordView) — Next dates and Production › Dates & plan open them.
       const view = here('../view/overview/DatesCard.tsx')
-      expect(view).toContain("import { GateDialogs } from '../../../../../planning/milestones/view/GateDialogs'")
-      expect(view).toContain('<GateDialogs model={model.gateActs} actions={gateActs} words={{ t: p, locale }} />')
+      expect(view).not.toContain('<GateDialogs')
+      const page = here('../view/OrderRecordView.tsx')
+      expect(page).toContain("import { GateDialogs } from '../../../../planning/milestones/view/GateDialogs'")
+      expect(page).toContain('<GateDialogs model={model} actions={actions} words={{ t: p, locale }} />')
+      expect(page).toContain('<MilestoneDialog model={model} actions={actions} words={{ t: p, locale }} />')
+      expect(page.match(/<GateWindows /g)?.length).toBe(1)
       // ONE GateDialogs for Planning's gates: no copy of it under the order page.
       expect(views(new URL('../', import.meta.url)).some((file) => /GateDialogs/.test(file))).toBe(false)
-      // The hook opens only Change the gate, Mark done and Start before (never Add, Remove or the keys); its writes are Planning's api.
+      // The hook opens Change the gate, Mark done, Start before — F-PT-202: + Add a gate and Remove (Production › Dates & plan) — never
+      // the keys; its writes are Planning's api.
       const hook = here('../use-gate-acts.ts')
-      for (const kind of ["kind: 'add'", "kind: 'remove'", "kind: 'keys'"]) expect(hook, kind).not.toContain(kind)
-      for (const call of ['editGate(', 'passGates(', 'startBefore(', 'base.write(']) expect(hook, call).toContain(call)
+      expect(hook).not.toContain("kind: 'keys'")
+      for (const call of ['editGate(', 'passGates(', 'startBefore(', 'addGate(', 'removeGate(', 'base.write(']) expect(hook, call).toContain(call)
       expect(hook).not.toMatch(/api\.(post|request|get)\(/)
       expect(hook).not.toContain('.message')
     })

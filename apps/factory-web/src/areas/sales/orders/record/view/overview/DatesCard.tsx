@@ -22,7 +22,6 @@ import { ageWordsOf, decideDialogOf, refusedDatesOf } from '../../overview/dates
 // ---- F-OO-145: the steps before production in place — Planning's own dialogs (GateDialogs) and words, the gate's moves held by its read ----
 import { ChevronDown } from 'lucide-react'
 import { WithMessages } from '../../../../../../record-panels/i18n'
-import { GateDialogs } from '../../../../../planning/milestones/view/GateDialogs'
 import { NAMESPACE as PLANNING } from '../../../../../planning/milestones/model'
 import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
 import { discussAboutOf } from '../../dock/discuss'
@@ -261,8 +260,7 @@ function Dates({ order, model, actions, waiting }: { order: Order; model: OrderR
           </ul>
         ) : null}
       </div>
-      {/* F-OO-145: Planning's own gate dialogs (Change the gate, Mark done, Start before the gate), from use-gate-acts' one-order model. */}
-      {model.gateActs?.dialog && <GateDialogs model={model.gateActs} actions={gateActs} words={{ t: p, locale }} />}
+      {/* F-PT-202: Planning's own gate dialogs are mounted ONCE for the page (OrderRecordView): this card opens them (gateActs). */}
     </Card>
   )
 }

@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import type { LiveState } from '../../../../shell/live/bus'
-import { editGate, getChoices, passGates, startBefore, type Gate } from '../../../planning/milestones/api'
-import { canOf, DEFAULT_CONTROLS, readProblemOf, reasonHeld, refusalOf, type GateDraft } from '../../../planning/milestones/model'
+import { addGate, editGate, getChoices, passGates, removeGate, startBefore, type Gate } from '../../../planning/milestones/api'
+import { bodyOf, canOf, DEFAULT_CONTROLS, emptyDraft, kindsLeft, readProblemOf, reasonHeld, refusalOf, type GateDraft } from '../../../planning/milestones/model'
 import type { Loaded, MilestonesActions, MilestonesDialog, MilestonesModel } from '../../../planning/milestones/view-model'
 import { romeToday, type Phrase } from '../model'
 import type { ProductionPart } from './overview/api'
@@ -40,6 +40,8 @@ export interface GateActsInput {
 
 /** The page's notice after a gate write (the `orders` catalogue: the page says its notices in its own words). */
 const NOTICE: Readonly<Record<'edit' | 'pass' | 'startBefore', string>> = Object.freeze({ edit: 'dates.gateEdited', pass: 'dates.gatePassed', startBefore: 'dates.gateStarted' })
+// F-PT-202: Add a gate… and Remove… (Production › Dates & plan), in the page's own words.
+const NOTICE_MORE: Readonly<Record<'add' | 'remove', string>> = Object.freeze({ add: 'productionTab.steps.added', remove: 'productionTab.steps.removed' })
 
 /**
  * One gate write of Planning's own routes, each with its gate's version as read: Change the gate (only what the person changed,
@@ -48,10 +50,23 @@ const NOTICE: Readonly<Record<'edit' | 'pass' | 'startBefore', string>> = Object
  */
 export async function sendGateDialog(
   api: RecordActsBase['api'],
-  dialog: Extract<MilestonesDialog, { kind: 'edit' | 'pass' | 'startBefore' }>,
+  dialog: Extract<MilestonesDialog, { kind: 'edit' | 'pass' | 'startBefore' | 'add' | 'remove' }>,
   input: { readonly gates: readonly Gate[]; readonly initial: GateDraft | null; readonly today: string },
 ): Promise<Phrase> {
   const gateOf = (id: string): Gate | undefined => input.gates.find((gate) => gate.id === id)
+  // ---- F-PT-202: Add a gate (Planning's POST, the whole draft) and Remove it (its version) ----
+  if (dialog.kind === 'add') {
+    if (!dialog.orderId) throw new Error('no order')
+    await addGate(api, dialog.orderId, bodyOf(dialog.draft))
+    return { key: NOTICE_MORE.add }
+  }
+  if (dialog.kind === 'remove') {
+    const gate = gateOf(dialog.gateId)
+    if (!gate) throw new Error('gate not read')
+    await removeGate(api, gate.id, gate.version)
+    return { key: NOTICE_MORE.remove }
+  }
+  // ---- end F-PT-202
   if (dialog.kind === 'edit') {
     const gate = gateOf(dialog.gateId)
     if (!gate) throw new Error('gate not read')
@@ -69,6 +84,8 @@ export async function sendGateDialog(
 
 export function useGateActs(input: GateActsInput | undefined, base: RecordActsBase | undefined): { model: MilestonesModel | null; actions: MilestonesActions } {
   const [dialog, setDialog] = useState<MilestonesDialog | null>(null)
+  // F-PT-202: the step whose window (Planning's MilestoneDialog) is open — its milestone id; null: none.
+  const [open, setOpen] = useState<string | null>(null)
   // The Change the gate draft as it opened (Save sends only what changed from it).
   const [initial, setInitial] = useState<GateDraft | null>(null)
   const order = base?.current.current ?? null
@@ -79,29 +96,32 @@ export function useGateActs(input: GateActsInput | undefined, base: RecordActsBa
   const gateOf = (id: string): Gate | undefined => gates.find((gate) => gate.id === id)
   const can = canOf(input?.permissions ?? [])
   const loaded: Loaded<NonNullable<typeof world>> = world ? { status: 'ready', value: world } : state?.status === 'failed' ? { status: 'error', problem: 'error.failed' } : { status: 'loading' }
-  const model: MilestonesModel | null = input && order ? { prefix: input.prefix, can, me: input.me, controls: DEFAULT_CONTROLS, world: loaded, live: input.live, updates: 0, notice: null, dialog } : null
+  const model: MilestonesModel | null = input && order ? { prefix: input.prefix, can, me: input.me, controls: { ...DEFAULT_CONTROLS, open }, world: loaded, live: input.live, updates: 0, notice: null, dialog } : null
 
   // Planning's own choices for Change the gate (its rounds and planners; planning.view): without the right, the dialog says it saves without them.
+  // F-PT-202: Add a gate… reads the same choices.
+  const withChoices = (current: MilestonesDialog | null): current is Extract<MilestonesDialog, { kind: 'edit' | 'add' }> => current?.kind === 'edit' || current?.kind === 'add'
   const loadChoices = (orderId: string) => {
-    if (!base || !can.view) return setDialog((current) => (current?.kind === 'edit' ? { ...current, choices: { status: 'error', problem: 'error.forbidden' } } : current))
-    setDialog((current) => (current?.kind === 'edit' ? { ...current, choices: { status: 'loading' } } : current))
+    if (!base || !can.view) return setDialog((current) => (withChoices(current) ? { ...current, choices: { status: 'error', problem: 'error.forbidden' } } : current))
+    setDialog((current) => (withChoices(current) ? { ...current, choices: { status: 'loading' } } : current))
     getChoices(base.api, orderId)
-      .then((value) => setDialog((current) => (current?.kind === 'edit' ? { ...current, choices: { status: 'ready', value } } : current)))
-      .catch((error: unknown) => setDialog((current) => (current?.kind === 'edit' ? { ...current, choices: { status: 'error', problem: readProblemOf(error) } } : current)))
+      .then((value) => setDialog((current) => (withChoices(current) ? { ...current, choices: { status: 'ready', value } } : current)))
+      .catch((error: unknown) => setDialog((current) => (withChoices(current) ? { ...current, choices: { status: 'error', problem: readProblemOf(error) } } : current)))
   }
 
   // The page's one write: the dialog says it saves; taken — it closes and the page's notice says so; refused — Planning's words in it.
-  const send = (open: Extract<MilestonesDialog, { kind: 'edit' | 'pass' | 'startBefore' }>) => {
-    if (!base || open.busy) return
+  const send = (sent: Extract<MilestonesDialog, { kind: 'edit' | 'pass' | 'startBefore' | 'add' | 'remove' }>) => {
+    if (!base || sent.busy) return
     void base.write(
       async () => {
-        setDialog({ ...open, busy: true, problem: null })
+        setDialog({ ...sent, busy: true, problem: null })
         try {
-          const words = await sendGateDialog(base.api, open, { gates, initial, today })
+          const words = await sendGateDialog(base.api, sent, { gates, initial, today })
           setDialog(null)
+          if (sent.kind === 'remove') setOpen(null) // F-PT-202: its window closes with it
           base.setNotice({ tone: 'success', words })
         } catch (error) {
-          setDialog({ ...open, busy: false, problem: refusalOf(error) })
+          setDialog({ ...sent, busy: false, problem: refusalOf(error) })
         }
         input?.again(['dates', 'headline'])
         return null
@@ -122,10 +142,23 @@ export function useGateActs(input: GateActsInput | undefined, base: RecordActsBa
         setDialog({ kind: 'edit', gateId, draft, choices: null, busy: false, problem: null })
         loadChoices(gate.salesOrderId)
       },
-      onDraft: (draft) => setDialog((current) => (current?.kind === 'edit' ? { ...current, draft, problem: null } : current)),
+      onDraft: (draft) => setDialog((current) => (withChoices(current) ? { ...current, draft, problem: null } : current)),
       onSaveGate: () => {
-        if (dialog?.kind === 'edit') send(dialog)
+        if (dialog?.kind === 'edit' || dialog?.kind === 'add') send(dialog)
       },
+      // ---- F-PT-202 (Production › Dates & plan): a step's window, Add a gate…, Remove… — Planning's own dialogs ----
+      onOpen: (milestoneId) => setOpen(milestoneId),
+      onAdd: (orderId) => {
+        const planning = world?.orders[0] ?? null
+        if (!orderId || !planning || planning.id !== orderId) return
+        setDialog({ kind: 'add', orderId, draft: emptyDraft(kindsLeft(planning)[0] ?? 'OTHER'), choices: null, busy: false, problem: null })
+        loadChoices(orderId)
+      },
+      onRemove: (gateId) => setDialog({ kind: 'remove', gateId, busy: false, problem: null }),
+      onRemoveConfirm: () => {
+        if (dialog?.kind === 'remove') send(dialog)
+      },
+      // ---- end F-PT-202
       onPass: (gateIds) => setDialog({ kind: 'pass', gateIds, on: today, busy: false, problem: null }),
       onPassDay: (on) => setDialog((current) => (current?.kind === 'pass' ? { ...current, on, problem: null } : current)),
       onPassConfirm: () => {
