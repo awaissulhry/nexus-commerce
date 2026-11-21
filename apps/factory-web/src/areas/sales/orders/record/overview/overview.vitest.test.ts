@@ -974,12 +974,6 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
   }
   /** One row drawn alone, as Overview's card draws it (or Changes'). */
   const drawRow = (record: OrderRecordModel, row: WaitingRow, locale: 'en' | 'it' = 'en', more: { readOnly?: boolean } = {}) => render(createElement('ul', null, createElement(WaitingRowItem, { row, order: orderOf(record), model: record, ...more })), locale)
-  /** The list item that holds these words, as drawn. */
-  const itemOf = (html: string, words: string): string => {
-    const at = html.indexOf(words)
-    if (at < 0) throw new Error(`not drawn: ${words}`)
-    return html.slice(html.lastIndexOf('<li', at), html.indexOf('</li>', at))
-  }
 
   it('the age: counted to the read that listed the row ("15 d"), the shortest for a start after it, "—" without a start; no read: to now', () => {
     expect(rowAgeOf('2026-11-03T09:00:00Z', '2026-11-18T09:42:00Z')).toEqual({ key: 'parts.age.days', params: { count: 15 } })

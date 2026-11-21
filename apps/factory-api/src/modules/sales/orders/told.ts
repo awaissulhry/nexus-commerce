@@ -13,6 +13,7 @@ import { customerDefaultsOf, orderSupervisorsOf } from '../../production/supervi
 import { reachesWorkOrder } from '../../production/work-orders/scope'
 import { officeContextOf } from './access'
 import { ORDER_CHANGE_NOTES_HANDLER } from './change-notes'
+import type { Speaker } from './change-notes' // B-OC-009
 import { officeOrder } from './moves'
 
 /**
@@ -85,6 +86,8 @@ interface NotesRecord {
   readonly alreadyTold?: readonly string[]
   readonly floor?: readonly { readonly workOrderId: string; readonly messageId: string }[]
   readonly workshops?: readonly { readonly subcontractOrderId: string; readonly workOrderId: string }[]
+  /** B-OC-009: what spoke for the change (read with storedSpeakerOf; absent on a row written before). */
+  readonly speaker?: unknown
 }
 
 /** GET /sales/orders/:orderId/told. */
@@ -192,6 +195,101 @@ export async function whoWasTold(caller: CommandCaller, orderId: string, query: 
 /** The newest changes the page reads at once (older ones keep their line in the conversation; Who was told still reads each). */
 export const TOLD_CHANGES_LIMIT = 50
 
+// ── B-OC-009 (order changes tab R5 + R7; 13-backend §4): what spoke for each change, as the handler's audit row keeps it ──
+export const SPEAKER_KINDS = ['REQUEST', 'AMENDED', 'LINES', 'CANCELLED', 'PROMISE', 'WORK_ORDER_CHANGE', 'HOLD', 'ECO'] as const
+
+/**
+ * The change's speaker (null: a line written before the row kept it): the customer's request it carried out (REQUEST), the office's
+ * own revision (AMENDED), lines closed short or reopened (LINES), the order cancelled (CANCELLED), a new promise (PROMISE, from → to),
+ * a work-order change applied or left as is (WORK_ORDER_CHANGE), a pause placed or lifted (HOLD: its work order named only when the
+ * reader reaches it, else counted in `leftOut`), a change order released (ECO, by its number). Ids, codes and dates: never a person.
+ */
+const speakerView = output({
+  kind: z.enum(SPEAKER_KINDS),
+  requestId: id().optional(),
+  amendmentId: id().optional(),
+  change: z.enum(['CLOSED', 'REOPENED']).optional(),
+  lineIds: z.array(id()).optional(),
+  workOrderChangeId: id().optional(),
+  from: z.string().nullable().optional(),
+  to: z.string().optional(),
+  hold: output({ placed: z.boolean(), workOrder: workOrderRef.nullable(), leftOut: z.number().int() }).optional(),
+  changeOrder: output({ number: z.string() }).nullable().optional(),
+})
+
+const textOf = (row: Readonly<Record<string, unknown>>, key: string): string | null => (typeof row[key] === 'string' ? (row[key] as string) : null)
+
+/** A speaker as the audit row kept it (null: none kept — a row written before — or one this read does not know). Pure. */
+export function storedSpeakerOf(value: unknown): Speaker | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const row = value as Readonly<Record<string, unknown>>
+  const requestId = textOf(row, 'requestId')
+  const amendmentId = textOf(row, 'amendmentId')
+  const changeId = textOf(row, 'changeId')
+  const holdId = textOf(row, 'holdId')
+  const changeOrderId = textOf(row, 'changeOrderId')
+  const to = textOf(row, 'to')
+  const change = row.change
+  const lineIds = row.lineIds
+  const placed = row.placed
+  switch (row.kind) {
+    case 'REQUEST':
+      return requestId ? { kind: 'REQUEST', requestId } : null
+    case 'AMENDED':
+      return amendmentId ? { kind: 'AMENDED', amendmentId } : null
+    case 'LINES':
+      return (change === 'CLOSED' || change === 'REOPENED') && Array.isArray(lineIds) ? { kind: 'LINES', change, lineIds: lineIds.filter((entry): entry is string => typeof entry === 'string') } : null
+    case 'CANCELLED':
+      return { kind: 'CANCELLED' }
+    case 'PROMISE':
+      return to ? { kind: 'PROMISE', from: textOf(row, 'from'), to } : null
+    case 'WORK_ORDER_CHANGE':
+      return changeId ? { kind: 'WORK_ORDER_CHANGE', changeId } : null
+    case 'HOLD':
+      return holdId && typeof placed === 'boolean' ? { kind: 'HOLD', holdId, placed } : null
+    case 'ECO':
+      return changeOrderId ? { kind: 'ECO', changeOrderId } : null
+    default:
+      return null
+  }
+}
+
+/** What the speaker's view reads beside it: a hold's work order, whether the reader reaches it, a change order's number. */
+export interface SpeakerFacts {
+  readonly holdWorkOrderOf: (holdId: string) => string | undefined
+  readonly reached: (workOrderId: string) => { readonly id: string; readonly number: string } | null
+  readonly changeOrderNumberOf: (changeOrderId: string) => string | undefined
+}
+
+/** The speaker as the read answers it (null: none kept). Pure. */
+export function speakerViewOf(speaker: Speaker | null, facts: SpeakerFacts) {
+  if (!speaker) return null
+  switch (speaker.kind) {
+    case 'REQUEST':
+      return { kind: speaker.kind, requestId: speaker.requestId }
+    case 'AMENDED':
+      return { kind: speaker.kind, amendmentId: speaker.amendmentId }
+    case 'LINES':
+      return { kind: speaker.kind, change: speaker.change, lineIds: [...speaker.lineIds] }
+    case 'CANCELLED':
+      return { kind: speaker.kind }
+    case 'PROMISE':
+      return { kind: speaker.kind, from: speaker.from, to: speaker.to }
+    case 'WORK_ORDER_CHANGE':
+      return { kind: speaker.kind, workOrderChangeId: speaker.changeId }
+    case 'HOLD': {
+      const workOrderId = facts.holdWorkOrderOf(speaker.holdId)
+      const workOrder = workOrderId ? facts.reached(workOrderId) : null
+      return { kind: speaker.kind, hold: { placed: speaker.placed, workOrder, leftOut: workOrderId && !workOrder ? 1 : 0 } }
+    }
+    case 'ECO': {
+      const number = facts.changeOrderNumberOf(speaker.changeOrderId)
+      return { kind: speaker.kind, changeOrder: number ? { number } : null }
+    }
+  }
+}
+// ── end B-OC-009 ──
+
 export const toldChangesContract = defineContract({
   params: input({ orderId: id() }),
   response: {
@@ -214,6 +312,8 @@ export const toldChangesContract = defineContract({
           people: z.number().int(),
           floor: output({ at: instant().nullable(), workOrders: z.array(workOrderRef), leftOut: z.number().int() }),
           workshop: output({ at: instant().nullable(), told: z.number().int(), waiting: z.number().int() }),
+          /** B-OC-009: what spoke for the change (null: a line written before the row kept it). */
+          speaker: speakerView.nullable(),
         }),
       ),
     }),
@@ -243,10 +343,17 @@ export async function toldChanges(caller: CommandCaller, orderId: string) {
     const lines = new Map((written.length > 0 ? await db.message.findMany({ where: { id: { in: written.map((entry) => entry.messageId) } }, select: { id: true, at: true } }) : []).map((line) => [line.id, line.at]))
     const changes = written.filter((entry) => lines.has(entry.messageId))
 
-    // The work orders the notes went on, read once (named only when the reader reaches them).
+    // B-OC-009: what spoke for each change; a pause's work order and a change order's number, read once.
+    const speakers = changes.map((entry) => storedSpeakerOf(entry.notes.speaker))
+    const holdIds = [...new Set(speakers.flatMap((speaker) => (speaker?.kind === 'HOLD' ? [speaker.holdId] : [])))]
+    const holdWorkOrder = new Map((holdIds.length > 0 ? await db.workOrderHold.findMany({ where: { id: { in: holdIds } }, select: { id: true, workOrderId: true } }) : []).map((hold) => [hold.id, hold.workOrderId]))
+    const changeOrderIds = [...new Set(speakers.flatMap((speaker) => (speaker?.kind === 'ECO' ? [speaker.changeOrderId] : [])))]
+    const changeOrderNumber = new Map((changeOrderIds.length > 0 ? await db.changeOrder.findMany({ where: { id: { in: changeOrderIds } }, select: { id: true, number: true } }) : []).map((eco) => [eco.id, eco.number]))
+
+    // The work orders the notes went on (B-OC-009: and the pauses' work orders), read once (named only when the reader reaches them).
     const floorRows = changes.flatMap((entry) => entry.notes.floor ?? [])
     const shopRows = changes.flatMap((entry) => entry.notes.workshops ?? [])
-    const workOrderIds = [...new Set([...floorRows.map((entry) => entry.workOrderId), ...shopRows.map((entry) => entry.workOrderId)])]
+    const workOrderIds = [...new Set([...floorRows.map((entry) => entry.workOrderId), ...shopRows.map((entry) => entry.workOrderId), ...holdWorkOrder.values()])]
     const workOrders = new Map((workOrderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, number: true, companyId: true, siteId: true, partyId: true } }) : []).map((entry) => [entry.id, entry]))
     const reached = (workOrderId: string) => {
       const workOrder = workOrders.get(workOrderId)
@@ -267,7 +374,7 @@ export async function toldChanges(caller: CommandCaller, orderId: string) {
     const shopIds = [...new Set(shopRows.map((entry) => entry.subcontractOrderId))]
     const notices = shopIds.length > 0 && oldest ? await db.notification.findMany({ where: { recordType: 'SubcontractOrder', recordId: { in: shopIds }, partyId: { not: null }, eventType: 'production.floor_note_posted', createdAt: { gte: oldest } }, select: { recordId: true, createdAt: true } }) : []
 
-    const out = changes.map((entry) => {
+    const out = changes.map((entry, index) => {
       const lineAt = lines.get(entry.messageId)!
       const key = keyOf(entry.batchId)
       const people = new Set([...told.filter((row) => row.groupKey === key).map((row) => row.userId), ...(entry.notes.alreadyTold ?? [])].filter((userId) => office.has(userId)))
@@ -298,6 +405,8 @@ export async function toldChanges(caller: CommandCaller, orderId: string) {
         people: people.size,
         floor: { at: floorFirst ? toUtcIso(floorFirst) : null, workOrders: named, leftOut: floor.length - named.length },
         workshop: { at: shopFirst ? toUtcIso(shopFirst) : null, told: shopTimes.length, waiting: shops.length - shopTimes.length },
+        // B-OC-009
+        speaker: speakerViewOf(speakers[index] ?? null, { holdWorkOrderOf: (holdId) => holdWorkOrder.get(holdId), reached, changeOrderNumberOf: (changeOrderId) => changeOrderNumber.get(changeOrderId) }),
       }
     })
     return { order: { id: order.id, number: order.number }, people: everyone.size, changes: out }

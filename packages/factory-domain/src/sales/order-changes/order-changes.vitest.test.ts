@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { apportion, expectedRows, leftOf, shareReceived } from '../customer-materials/rules'
 import { freezeVerdict, frozenProblems, furthestStage, looseningProblem, type FreezeRuleFacts } from './freeze'
+import { customerRuleOf, nextVerdictOf } from './freeze' // B-OC-017
 import { changeYesStateOf, customerDecisionOf, extraDepositOf, pricedInputProblems, pricedPartsOf, salesOrderChangeFacts } from './priced'
 
 const rule = (over: Partial<FreezeRuleFacts>): FreezeRuleFacts => ({ id: over.id ?? 'r', field: 'SIZE_QUANTITY', frozenFrom: 'CUT', action: 'CHANGE_REQUEST', active: true, note: null, ...over })
@@ -90,3 +91,35 @@ describe("the customer's own materials (SAL-306)", () => {
     expect(leftOf({ received: '10', used: '4', returned: '1' })).toBe('5.0000')
   })
 })
+
+// ── B-OC-017 (order changes tab R13b): what freezes next, and whose rule decides ──
+describe('B-OC-017: nextVerdictOf — the first later stage whose verdict differs; customerRuleOf — the customer’s own set decides', () => {
+  const rules = [
+    rule({ id: 'cut', frozenFrom: 'CUT', action: 'CHANGE_REQUEST' }),
+    rule({ id: 'sewing', frozenFrom: 'SEWING', action: 'CHANGE_REQUEST' }),
+    rule({ id: 'finished', frozenFrom: 'FINISHED', action: 'BLOCKED' }),
+    rule({ id: 'off', frozenFrom: 'RELEASED', action: 'BLOCKED', active: false }),
+    rule({ id: 'colour', field: 'COLOURWAY', frozenFrom: 'RELEASED', action: 'BLOCKED', partyId: 'party-a' }),
+  ]
+
+  it('nothing reached: the first rule; CUT reached: past the same-verdict SEWING to FINISHED; the last rule: null; a switched-off rule never', () => {
+    expect(nextVerdictOf(rules, 'SIZE_QUANTITY', null)).toEqual({ stage: 'CUT', action: 'CHANGE_REQUEST' })
+    expect(nextVerdictOf(rules, 'SIZE_QUANTITY', 'RELEASED')).toEqual({ stage: 'CUT', action: 'CHANGE_REQUEST' })
+    expect(nextVerdictOf(rules, 'SIZE_QUANTITY', 'CUT')).toEqual({ stage: 'FINISHED', action: 'BLOCKED' })
+    expect(nextVerdictOf(rules, 'SIZE_QUANTITY', 'SEWING')).toEqual({ stage: 'FINISHED', action: 'BLOCKED' })
+    expect(nextVerdictOf(rules, 'SIZE_QUANTITY', 'FINISHED')).toBeNull()
+    expect(nextVerdictOf(rules, 'SIZE_QUANTITY', 'SHIPPED')).toBeNull()
+    // A field with no rule: nothing comes.
+    expect(nextVerdictOf(rules, 'PRICE', null)).toBeNull()
+    // CUT reached with a SEWING block next.
+    expect(nextVerdictOf([rule({ id: 'c', frozenFrom: 'CUT' }), rule({ id: 's', frozenFrom: 'SEWING', action: 'BLOCKED' })], 'SIZE_QUANTITY', 'CUT')).toEqual({ stage: 'SEWING', action: 'BLOCKED' })
+  })
+
+  it('the deciding rule of the customer’s own set reads as the customer’s; the company’s, or none, does not', () => {
+    expect(customerRuleOf(rules, freezeVerdict(rules, 'COLOURWAY', 'CUT').ruleId)).toBe(true)
+    expect(customerRuleOf(rules, freezeVerdict(rules, 'SIZE_QUANTITY', 'CUT').ruleId)).toBe(false)
+    expect(customerRuleOf(rules, freezeVerdict(rules, 'SIZE_QUANTITY', null).ruleId)).toBe(false)
+    expect(customerRuleOf(rules, 'unknown')).toBe(false)
+  })
+})
+// ── end B-OC-017 ──

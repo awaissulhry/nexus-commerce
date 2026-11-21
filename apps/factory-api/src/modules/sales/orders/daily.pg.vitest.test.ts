@@ -751,6 +751,8 @@ describe('B-OP-014: the put-back of a change that closed a line short reopens it
       },
     ])
     expect((await ok('sales', 'GET', `${orderUrl(order.id)}/changes`)).changes[0]).toMatchObject({ id: applied.amendment.id, putBack: { may: true, why: null } })
+    // B-OC-010 (order changes tab R6a): the customer's no offers the restore to a reader with orders.manage; B-OC-011: how it said no.
+    expect((await ok('sales', 'GET', `${orderUrl(order.id)}/changes`)).changes[0]).toMatchObject({ putBack: { offered: true }, customer: { decision: 'REFUSED', via: null } })
     const put = await ok('sales', 'POST', `${orderUrl(order.id)}/changes/${applied.amendment.id}/put-back`, { version: applied.order.version }, 201)
     // Reopened as Reopen lines reopens it: the four columns and the code cleared; the order as it was before the change.
     expect(await one('SELECT "closedShortQuantity" AS closed, "closedShortAt" AS at, "closedShortById" AS by, "closeShortReason" AS reason, "closedShortReasonCode" AS code FROM "SalesOrderLine" WHERE id = $1', [order.blk.id])).toEqual({ closed: null, at: null, by: null, reason: null, code: null })

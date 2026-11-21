@@ -22,6 +22,10 @@ import { linkProofView, shownProofsField } from '../quote-proofs/contract'
 import { INQUIRY_STATUSES } from '@nexus/factory-domain/sales/inquiries/rules'
 import { pictureIds, smallPicturesView } from '../../product/images/small-pictures' // B-SA-011
 
+// B-OC-015 (order changes tab R11): the signed PDF's check, in words (quotes/versions.ts documentCheckOf).
+export const DOCUMENT_CHECKS = ['MATCHES', 'PDF_MISSING', 'DIFFERS'] as const
+export type DocumentCheck = (typeof DOCUMENT_CHECKS)[number]
+
 /**
  * The quotes routes' contracts (B-W1-21; A2 SCR-030 "Quotes", SCR-034 "Quote record", SCR-035 the line and the approval
  * pop-ups). Money is marked: prices and totals money.price, costs money.cost, margins money.margin (the margin AMOUNT is
@@ -613,6 +617,8 @@ export const versionsContract = defineContract({
             emailCheck: z.enum(['MATCHED', 'NOT_KNOWN', 'NOT_ASKED']).nullable(),
             documentSha256: z.string(),
             documentMatches: z.boolean(),
+            /** B-OC-015: the check in words — MATCHES, PDF_MISSING (no stored PDF: not "differs"), DIFFERS. */
+            documentCheck: z.enum(DOCUMENT_CHECKS),
             termsVersion: z.string().nullable(),
             noWithdrawalAccepted: z.boolean(),
             acceptedAt: instant(),

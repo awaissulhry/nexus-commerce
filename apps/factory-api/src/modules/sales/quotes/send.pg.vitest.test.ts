@@ -347,6 +347,32 @@ describe('the link: open, accept with a typed name, the evidence, the deposit (S
     const bySales = (await as(sales, 'GET', `${quoteUrl(first.id)}/versions`)).versions
     expect(bySales[0]).toMatchObject({ revision: 1, status: 'ACCEPTED', deposit: { status: 'OPEN' } })
     expect(bySales[0].deposit).not.toHaveProperty('amount')
+    // ── B-OC-015 (order changes tab R11): the check in words — the PDF accepted is the one stored (MATCHES); with no stored PDF it
+    // is PDF_MISSING, never "differs" (documentMatches stays for the quote page) ──
+    expect(versions[0].acceptance.documentCheck).toBe('MATCHES')
+    const fileId = firstSent.sent.documentFileId as string
+    const stored = await one<{ recordId: string }>('SELECT "recordId"::text AS "recordId" FROM "StoredFile" WHERE id = $1', [fileId])
+    /** The stored PDF moved to another record and back, with the database's rules off (only the read is under test). */
+    const moveFile = async (recordId: string) => {
+      await h.db.admin.query('BEGIN')
+      try {
+        await h.db.admin.query("SET LOCAL session_replication_role = 'replica'")
+        await h.db.admin.query('UPDATE "StoredFile" SET "recordId" = $1 WHERE id = $2', [recordId, fileId])
+        await h.db.admin.query('COMMIT')
+      } catch (error) {
+        await h.db.admin.query('ROLLBACK')
+        throw error
+      }
+    }
+    await moveFile(newId())
+    try {
+      const missing = (await as(owner, 'GET', `${quoteUrl(first.id)}/versions`)).versions[0]
+      expect(missing).toMatchObject({ document: null, acceptance: { documentCheck: 'PDF_MISSING', documentMatches: false } })
+    } finally {
+      await moveFile(stored.recordId)
+    }
+    expect((await as(owner, 'GET', `${quoteUrl(first.id)}/versions`)).versions[0].acceptance.documentCheck).toBe('MATCHES')
+    // ── end B-OC-015 ──
   })
 
   it('a deposit received through payments still marks the request PAID (markDepositPaid moved to sales)', async () => {

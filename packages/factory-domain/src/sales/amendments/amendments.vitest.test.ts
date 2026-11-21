@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { amendmentDiff, amendmentProblems, amendStateProblem, amountMoves, customerAsked, leftOutOf, nextRevision, snapshotOf, totalGoesUp, type AmendableLine, type SnapshotHeader, type SnapshotLine } from './amendments' // B-OL-005: + amountMoves, customerAsked, totalGoesUp
 import { AUTOMATIC_REASONS, isAutomaticReason, reasonOr } from './reasons' // B-OL-004
+import { putBackReasonWords, requestReasonWords, serverReasonOf, SERVER_REASON_CODES } from './reasons' // B-OC-012
 
 const header: SnapshotHeader = { customerRef: 'PO-1', requestedDate: null, promiseDate: '2026-12-20', paymentTerms: 'Bonifico', currency: 'EUR', taxMode: 'IT_B2B', netAmount: 624_000, vatAmount: 137_280, grossAmount: 761_280 }
 const blk: SnapshotLine = {
@@ -201,3 +202,36 @@ describe('B-OP-014: a line left out of an amendment', () => {
   })
 })
 // ── end B-OP-014 ──
+
+// ── B-OC-012 (order changes tab R8): the server's own reason words, read back by one recognizer (no column) ──
+describe('B-OC-012: serverReasonOf — the automatic words, an accepted request, a put-back; anything typed is null', () => {
+  it('reads the writers’ own templates back', () => {
+    const table: readonly (readonly [string | null | undefined, string | null])[] = [
+      [AUTOMATIC_REASONS.amend, 'AUTOMATIC'],
+      [`  ${AUTOMATIC_REASONS.promise}  `, 'AUTOMATIC'],
+      [requestReasonWords({ kind: 'CHANGE', reasonCode: null, askedOn: '2026-11-19', reason: null }), 'REQUEST'],
+      [requestReasonWords({ kind: 'CHANGE', reasonCode: null, askedOn: '2026-11-19', reason: 'Made-up: two fewer in 52.' }), 'REQUEST'],
+      [requestReasonWords({ kind: 'CANCEL', reasonCode: 'NO_LONGER_NEEDED', askedOn: '2026-11-19', reason: null }), 'REQUEST'],
+      [putBackReasonWords(2, 'CUSTOMER_REFUSED'), 'PUT_BACK'],
+      [putBackReasonWords(12, 'YES_REFUSED'), 'PUT_BACK'],
+      [putBackReasonWords(3, 'CUSTOMER_SILENT'), 'PUT_BACK'], // B-OC-013
+      ['Made-up: the customer phoned, one more jacket.', null],
+      ["The customer's change request came by phone", null],
+      ['', null],
+      [null, null],
+      [undefined, null],
+    ]
+    for (const [reason, code] of table) expect(serverReasonOf(reason), String(reason)).toBe(code)
+    expect(SERVER_REASON_CODES).toEqual(['AUTOMATIC', 'REQUEST', 'PUT_BACK'])
+  })
+
+  it('the templates say what the writers wrote before (one source, the words unchanged)', () => {
+    expect(requestReasonWords({ kind: 'CHANGE', reasonCode: null, askedOn: '2026-11-19', reason: 'Made-up: two fewer.' })).toBe("The customer's change request of 2026-11-19 from the portal: Made-up: two fewer.")
+    expect(requestReasonWords({ kind: 'CANCEL', reasonCode: 'NO_LONGER_NEEDED', askedOn: '2026-11-19', reason: null })).toBe("The customer's cancel request (NO_LONGER_NEEDED) of 2026-11-19 from the portal")
+    expect(putBackReasonWords(2, 'YES_REFUSED')).toBe('Put back as before revision 2: its yes was refused.')
+    expect(putBackReasonWords(2, 'CUSTOMER_REFUSED')).toBe('Put back as before revision 2: the customer refused it.')
+    // B-OC-013 (Owner D5): silence is not a yes — restored after the customer's ask expired.
+    expect(putBackReasonWords(2, 'CUSTOMER_SILENT')).toBe('Put back as before revision 2: the customer did not answer in time.')
+  })
+})
+// ── end B-OC-012 ──

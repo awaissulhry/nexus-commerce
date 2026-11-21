@@ -7,6 +7,7 @@ import { depositViewOf, DEPOSIT_COLUMNS } from '../deposits/deposits'
 import { acceptLinksOf } from './accept-links'
 import { dayOf } from './frozen'
 import { officeQuote } from './store'
+import type { DocumentCheck } from './contract' // B-OC-015
 
 /**
  * A quote's versions and their documents (B-W1-24; A2 SCR-034 "Versions" and "Documents": the accept link, the
@@ -81,6 +82,8 @@ export async function listVersions(caller: CommandCaller, quoteId: string) {
                 documentSha256: acceptance.documentSha256,
                 /** The SHA-256 accepted is the stored PDF's: the customer accepted exactly this document. */
                 documentMatches: file !== null && file.sha256 === acceptance.documentSha256,
+                // B-OC-015 (order changes tab R11): the check in words — no stored PDF is PDF_MISSING (it read "differs" before).
+                documentCheck: documentCheckOf(file, acceptance.documentSha256),
                 termsVersion: acceptance.termsVersion,
                 noWithdrawalAccepted: acceptance.noWithdrawalAccepted,
                 acceptedAt: toUtcIso(acceptance.acceptedAt),
@@ -94,3 +97,11 @@ export async function listVersions(caller: CommandCaller, quoteId: string) {
     }
   })
 }
+
+// ── B-OC-015 (order changes tab R11; 13-backend §5) ──
+/** The signed PDF against the one the customer accepted: the same SHA-256, no stored file, or a different one. Pure. */
+export function documentCheckOf(file: { readonly sha256: string } | null, acceptedSha256: string): DocumentCheck {
+  if (file === null) return 'PDF_MISSING'
+  return file.sha256 === acceptedSha256 ? 'MATCHES' : 'DIFFERS'
+}
+// ── end B-OC-015 ──
