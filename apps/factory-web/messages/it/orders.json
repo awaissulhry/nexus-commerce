@@ -3055,6 +3055,11 @@
       "decides": "Decide {who}",
       "youAsked": "Hai chiesto tu questa approvazione: decide {who}",
       "salesDecides": "Decidono le vendite"
+    },
+    "still": {
+      "revision": "Revisione {revision} · {when}",
+      "newDates": "Vedi le nuove date ›",
+      "seeYes": "Vedi il sì ›"
     }
   }
 }

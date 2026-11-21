@@ -177,6 +177,11 @@ export interface StillRowOf {
   readonly waitingOn: string
   readonly mayAct: boolean
   readonly requestId: string | null
+  // ---- F-OC-104 (B-OC-006, B-OC-007; absent in an older answer): the office revision it belongs to, the change a workshop's row waits on
+  readonly amendmentId?: string | null
+  readonly revision?: number | null
+  readonly waitsOn?: string | null
+  // ---- end F-OC-104
 }
 
 /** The rows that ask THIS reader now (Your turn / Needs a decision): the only ones the band may name (R-5). */
@@ -195,16 +200,24 @@ export interface StillGroup {
   readonly request: BrandRequest | null
   readonly since: string
   readonly rows: readonly StillRowOf[]
+  /** F-OC-104 (B-OC-006): an office change's own revision ("Revision 3 · 19/11/2026 10:40"); null: a request's, or not sent yet. */
+  readonly revision: number | null
 }
 
-/** The rows under each change, the oldest change first; inside, the order the API gave (its own: by kind, then since). */
+/**
+ * The rows under each change, the oldest change first; inside, the order the API gave (its own: by kind, then since). F-OC-104: the
+ * office's rows one group per revision once the read names it (B-OC-006); until then, as before, one "Office change" group.
+ */
 export function stillGroupsOf(rows: readonly StillRowOf[], requests: readonly BrandRequest[]): StillGroup[] {
+  const keyOf = (row: StillRowOf): string => row.requestId ?? (row.amendmentId ? `amendment:${row.amendmentId}` : '')
   const groups = new Map<string, StillRowOf[]>()
-  for (const row of rows) groups.set(row.requestId ?? '', [...(groups.get(row.requestId ?? '') ?? []), row])
+  for (const row of rows) groups.set(keyOf(row), [...(groups.get(keyOf(row)) ?? []), row])
   return [...groups.entries()]
-    .map(([key, list]) => {
-      const request = key ? (requests.find((entry) => entry.id === key) ?? null) : null
-      return { requestId: key || null, request, since: request?.answeredAt ?? list.map((row) => row.since).sort()[0]!, rows: list }
+    .map(([, list]) => {
+      const requestId = list[0]!.requestId
+      const request = requestId ? (requests.find((entry) => entry.id === requestId) ?? null) : null
+      const revision = requestId ? null : (list.find((row) => typeof row.revision === 'number')?.revision ?? null)
+      return { requestId, request, since: request?.answeredAt ?? list.map((row) => row.since).sort()[0]!, rows: list, revision }
     })
     .sort((a, b) => a.since.localeCompare(b.since))
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { countsOf, holdsPointerOf, lastRevisionOf, lateDaysOf, mineCountOf, waitingAnswerOf, waitingItemOf } from './waiting'
+import { countsOf, holdsPointerOf, lastRevisionOf, lateDaysOf, mineCountOf, stillItemsOf, waitingAnswerOf, waitingItemOf } from './waiting'
+import { stillGroupsOf } from './model'
 import { readFileSync } from 'node:fs'
 import { orderWaitingOf } from '../overview/model'
 
@@ -113,5 +114,47 @@ describe('F-OC-103: Waiting on {customer}', () => {
     const view = readFileSync(new URL('./view/WaitingSection.tsx', import.meta.url), 'utf8')
     expect(view).toContain('{model.can.askCustomer && frame?.openDoor ? (')
     expect(view).toContain("onClick={() => frame.openDoor?.('approve')}")
+  })
+})
+
+// ---- F-OC-104: Still to do — per accepted change; office rows per revision; a workshop under the change it waits on ----
+const still = (kind: string, id: string, over: Record<string, unknown> = {}) => ({ kind, ref: { type: kind === 'WORK_ORDER_CHANGE' ? 'WorkOrderChange' : 'Subcontract', id, number: null }, words: { en: kind, it: kind }, since: '2026-11-20T09:40:00Z', waitingOn: 'PLANNER', mayAct: false, requestId: null, ...over })
+
+describe('F-OC-104: Still to do', () => {
+  it('the office\'s rows: one group per revision once the read names it (B-OC-006); before, one "Office change" group', () => {
+    const rows = [still('WORK_ORDER_CHANGE', 'c1', { amendmentId: 'a2', revision: 2 }), still('EXTRA_PIECES', 'x1', { amendmentId: 'a3', revision: 3, since: '2026-11-21T09:00:00Z' }), still('WORK_ORDER_CHANGE', 'c2', { requestId: 'r1' })]
+    const groups = stillGroupsOf(rows, [])
+    // The oldest change first (the request's group and revision 2 began at the same minute: the read's order).
+    expect(groups.map((group) => [group.requestId, group.revision, group.rows.length])).toEqual([
+      [null, 2, 1],
+      ['r1', null, 1],
+      [null, 3, 1],
+    ])
+    // An older answer: no amendment named — one office group, as before.
+    expect(stillGroupsOf([still('WORK_ORDER_CHANGE', 'c1'), still('EXTRA_PIECES', 'x1')], []).map((group) => [group.requestId, group.revision, group.rows.length])).toEqual([[null, null, 2]])
+  })
+
+  it('B-OC-007: a workshop\'s row that names its change is that change\'s sub-line; one that names none (not reached) stays its own row', () => {
+    const change = still('WORK_ORDER_CHANGE', 'c1')
+    const told = still('TELL_WORKSHOP', 's1', { waitsOn: 'c1' })
+    const unreached = still('TELL_WORKSHOP', 's2', { waitsOn: null })
+    const items = stillItemsOf([change, told, unreached])
+    expect(items.map((item) => [item.row.ref?.id, item.workshops.map((workshop) => workshop.ref?.id)])).toEqual([
+      ['c1', ['s1']],
+      ['s2', []],
+    ])
+    // A change not in this group: the workshop's row stays a row.
+    expect(stillItemsOf([still('TELL_WORKSHOP', 's3', { waitsOn: 'c9' })]).map((item) => item.row.ref?.id)).toEqual(['s3'])
+  })
+
+  it('the rows\' doors: ONE Decide… for who may decide (else the planner\'s words), the new date on Production, the charged pieces\' yes', () => {
+    const view = readFileSync(new URL('./view/WaitingSection.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('decisionSentenceOf(change, order.lines)')
+    expect(view).toContain("<TabLink href={`${tabHref(recordHref, 'production', search)}#dates`}>{t('changesTab.still.newDates')}</TabLink>")
+    expect(view).toContain('<a href="#confirmation">{t(\'changesTab.still.seeYes\')}</a>')
+    expect(view).toContain('id="still-to-do" tabIndex={-1}')
+    const door = readFileSync(new URL('../view/RequestsSection.tsx', import.meta.url), 'utf8')
+    expect(door).toContain("t('productionTab.wo.waitsPlanner', { time: formatDateTime(row.since, { locale }) })")
+    expect(door).toContain("{door.kind === 'task' && !door.held && (")
   })
 })

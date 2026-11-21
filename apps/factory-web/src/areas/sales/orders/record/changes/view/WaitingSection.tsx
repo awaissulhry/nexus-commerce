@@ -9,7 +9,7 @@ import type { Order } from '../../../api'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { orderWaitingOf, readOf } from '../../overview/model'
 import { PartFailed, PartReading, Section } from '../../view/production/Kit'
-import { AnswerDoor, RowAge, StillToDo, WaitingDoorView } from '../../view/RequestsSection'
+import { AnswerDoor, RowAge, StillDoorView, WaitingDoorView } from '../../view/RequestsSection'
 import { dayTimeOf } from '../layout'
 import { countsOf, holdsPointerOf, lastRevisionOf, waitingAnswerOf, type WaitingAnswer } from '../waiting'
 // ---- F-OC-102: Waiting on us / on {customer} — the ONE list's rows, each with who does it, its age and its one door ----
@@ -27,6 +27,12 @@ import { mineCountOf, waitingItemOf, type WaitingItem } from '../waiting'
 import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
 import { lateDaysOf } from '../waiting'
 // ---- end F-OC-103
+// ---- F-OC-104: Still to do — grouped per accepted change; a work-order change in ONE sentence with ONE Decide… ----
+import { TEAM_WORDS, type ApplyTeam } from '@nexus/factory-domain/sales/change-requests/apply-plan'
+import { decisionSentenceOf } from '../../production/work'
+import { stillGroupsOf, type StillGroup } from '../model'
+import { stillItemsOf, type StillItem } from '../waiting'
+// ---- end F-OC-104
 import './changes.css'
 // ---- F-OP-117: the work-order changes of this order (its card stays until F-OC-105 takes it out) ----
 import { Card, EmptyState } from '@nexus/ui/components'
@@ -125,7 +131,9 @@ function Waiting({ order, model, actions }: { order: Order; model: OrderRecordMo
   const onCustomer = waiting.card.onCustomer.map((row) => waitingItemOf(row, model.can))
   const mine = mineCountOf([...onUs, ...onCustomer], waiting.card.still)
   // The groups with nothing in them: one quiet line at the foot (never an empty box), then L4's pointer.
-  const none = [counts.onUs === 0 ? t('changesTab.waiting.noneUs') : null, counts.onCustomer === 0 ? t('changesTab.waiting.noneCustomer', { customer }) : null].filter(Boolean)
+  const none = [counts.onUs === 0 ? t('changesTab.waiting.noneUs') : null, counts.onCustomer === 0 ? t('changesTab.waiting.noneCustomer', { customer }) : null, counts.still === 0 ? t('changes.still.none') : null].filter(Boolean)
+  // F-OC-104: the work orders of the order this reader does not reach — counted, never named (a shared work order is "a work order").
+  const leftOut = readOf(model.production)?.changes?.stillToDo?.workOrdersLeftOut ?? 0
   const rowOf = (item: WaitingItem) => <WaitingItemRow key={item.row.key} item={item} order={order} model={model} actions={actions} asOf={asOf} when={when} />
   return (
     <Section
@@ -171,9 +179,20 @@ function Waiting({ order, model, actions }: { order: Order; model: OrderRecordMo
             {onCustomer.map(rowOf)}
           </div>
         )}
-        <StillToDo order={order} model={model} actions={actions} />
+        {/* F-OC-104: Still to do, one group per accepted change (#still-to-do lands here: the band's "Open"). */}
+        {waiting.card.still.length > 0 && (
+          <div className="fw-oc-grp" role="group" aria-labelledby="fw-oc-g-still" id="still-to-do" tabIndex={-1}>
+            <div className="fw-oc-grp-h">
+              <h3 id="fw-oc-g-still">{t('overview.requests.still', { count: waiting.card.still.length })}</h3>
+            </div>
+            {stillGroupsOf(waiting.card.still, model.requests?.value ?? []).map((group) => (
+              <StillGroupView key={group.requestId ?? `revision:${group.revision ?? 'office'}`} group={group} order={order} model={model} actions={actions} asOf={asOf} when={when} />
+            ))}
+          </div>
+        )}
         <WorkOrderChanges order={order} model={model} actions={actions} />
       </div>
+      {leftOut > 0 ? <p className="fw-pt-quiet">{t('changes.still.leftOut', { count: leftOut })}</p> : null}
       {none.length > 0 || pointerLink ? (
         <p className="fw-pt-quiet fw-oc-foot">
           {none.join(' ')}
@@ -274,6 +293,81 @@ function WaitingItemRow({ item, order, model, actions, asOf, when }: { item: Wai
   )
 }
 // ---- end F-OC-102
+
+// ---- F-OC-104 (10-design §3; L1): Still to do — the head of each accepted change, its rows under it ----------------------------
+function StillGroupView({ group, order, model, actions, asOf, when }: { group: StillGroup; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; asOf: string | null; when: (at: string) => string }) {
+  const t = useT('orders')
+  const w = useProductionWords()
+  // "Change accepted · 20/11/2026 10:40" (the customer's request it carries out) · "Revision 3 · 19/11/2026 10:40" (the office's own,
+  // B-OC-006) · "Office change · …" until the read names the revision.
+  const head = group.request
+    ? t('changes.still.changeOf', { kind: w.t(`parts.request.kind.${group.request.kind}`), when: when(group.since) })
+    : group.revision !== null
+      ? t('changesTab.still.revision', { revision: group.revision, when: when(group.since) })
+      : t('changes.still.office', { when: when(group.since) })
+  return (
+    <>
+      <div className="fw-oc-chg-h">
+        <span>{head}</span>
+      </div>
+      {stillItemsOf(group.rows).map((item) => (
+        <StillItemRow key={`${item.row.kind}:${item.row.ref?.id ?? item.index}`} item={item} order={order} model={model} actions={actions} asOf={asOf} />
+      ))}
+    </>
+  )
+}
+
+function StillItemRow({ item, order, model, actions, asOf }: { item: StillItem; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; asOf: string | null }) {
+  const t = useT('orders')
+  const a = useT(APPROVALS_NS)
+  const locale = useLocale()
+  const search = useSearchParams()?.toString() ?? ''
+  const { row } = item
+  const team = TEAM_WORDS[row.waitingOn as ApplyTeam]
+  // A work-order change in ONE sentence — the same builder as Production's strip ("Make 1 fewer on SEED-WO-0411: SEED-JKT-02 · Red —
+  // the customer changed line 2"); the read's words when the change itself is not read here.
+  const change = row.kind === 'WORK_ORDER_CHANGE' && row.ref ? ((model.orderChanges?.list?.value ?? []).find((entry) => entry.id === row.ref!.id) ?? null) : null
+  const sentence = change ? decisionSentenceOf(change, order.lines) : null
+  const words = sentence ? [t(sentence.verb.key, sentence.verb.params), sentence.why ? t(sentence.why.key, sentence.why.params) : null].filter(Boolean).join(' — ') : said(row.words, locale)
+  const recordHref = `${model.prefix}/sales/orders/${order.id}`
+  const anchor = row.ref ? `still-${row.kind}-${row.ref.id}` : undefined
+  return (
+    <div className="fw-oc-row" id={anchor} tabIndex={anchor ? -1 : undefined}>
+      <div className="fw-oc-row-h">
+        <b>{words}</b>
+      </div>
+      <div className="fw-oc-row-x">
+        {/* B-OC-007: the workshop told by itself when this change is applied — its sub-line, never a row of its own. */}
+        {item.workshops.map((workshop, index) => (
+          <span key={workshop.ref?.id ?? index} className="fw-oc-q">
+            {said(workshop.words, locale)}
+          </span>
+        ))}
+      </div>
+      <div className="fw-oc-row-m">
+        {row.mayAct && <Tag tone="warning">{a('customerRequest.next.state.yourTurn')}</Tag>}
+        {team && <span>{said(team, locale)}</span>}
+        <RowAge since={row.since} asOf={asOf} />
+      </div>
+      <div className="fw-oc-row-d">
+        {row.kind === 'REPROMISE' ? (
+          // A new date from planning: THE path is Production › Dates & plan (accepted or declined there, with the dates and the tick).
+          <Button size="sm" variant="quiet" asChild>
+            <TabLink href={`${tabHref(recordHref, 'production', search)}#dates`}>{t('changesTab.still.newDates')}</TabLink>
+          </Button>
+        ) : row.kind === 'EXTRA_PIECES' && row.ref?.type === 'SalesOrderAmendment' ? (
+          // Charged extra pieces wait for the customer's new yes: see it in the customer's agreement (no amount here).
+          <Button size="sm" variant="quiet" asChild>
+            <a href="#confirmation">{t('changesTab.still.seeYes')}</a>
+          </Button>
+        ) : (
+          <StillDoorView row={row} order={order} model={model} actions={actions} />
+        )}
+      </div>
+    </div>
+  )
+}
+// ---- end F-OC-104
 
 // ---- F-OP-117 (10-order-page §6): "Work-order changes of this order" ---------------------------------------------------------------
 /**

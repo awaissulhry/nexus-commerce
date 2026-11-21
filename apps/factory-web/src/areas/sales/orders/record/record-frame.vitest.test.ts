@@ -300,15 +300,16 @@ describe('F-SA-243: the order page opens the same review window as Home › Appr
   it('Changes: Answer… on each waiting request (no more "Answer in Approvals ›"), Still to do under its change with state, owner and door', () => {
     for (const locale of ['en', 'it'] as const) {
       const text = textOf(draw('f-sa-243-changes', locale))
-      for (const words of locale === 'en' ? ['Still to do', 'Your turn', 'Waiting for planning', 'Planning', 'WO-00021: make 50 6 → 4'] : ['Ancora da fare', 'Tocca a te', 'Aspetta la pianificazione', 'Pianificazione']) expect(text, words).toContain(words)
+      // F-OC-104: each row says who does it (the team's words) beside "Your turn" — the old state pill went.
+      for (const words of locale === 'en' ? ['Still to do · 2', 'Your turn', 'Planning', 'WO-00021: make 50 6 → 4'] : ['Ancora da fare · 2', 'Tocca a te', 'Pianificazione']) expect(text, words).toContain(words)
       expect(text).not.toContain(locale === 'en' ? 'Answer in Approvals' : 'Rispondi in Approvazioni')
     }
     const html = draw('f-sa-243-changes')
     expect(html).toContain('id="still-to-do"')
-    // op-fx1: F-OP-116 — the work-order change is decided in place (Apply… / Leave as is…, the ONE decide window on this page), no
-    // longer a link to Home › Approvals.
-    expect(textOf(html)).toContain('Apply…')
-    expect(textOf(html)).toContain('Leave as is…')
+    // op-fx1: F-OP-116 — the work-order change is decided in place (the ONE decide window on this page), no longer a link to Home ›
+    // Approvals. F-OC-104 (L1): ONE Decide… for who may decide (the same door as Production's strip); the scrap's link stays.
+    expect(textOf(html).match(/Decide…/g)).toHaveLength(1)
+    expect(textOf(html)).not.toMatch(/Apply…|Leave as is…/)
     expect(html).not.toContain('/home/approvals?open=0190f0e2-9090-7000-8000-000000000001')
     expect(textOf(draw('f-sa-243-nothing-mine'))).toContain('1 work order not shown')
   })

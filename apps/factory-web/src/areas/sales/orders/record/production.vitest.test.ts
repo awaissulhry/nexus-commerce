@@ -614,6 +614,9 @@ describe('F-OP-116: decide in place — a change waiting under its row, Still to
     expect(section).toContain('decisionsOf(model.orderChanges?.list?.value, order.lines)')
     expect(section).toContain("t('productionTab.wo.decision.proposed', { date: formatDate(row.at, { locale }) })")
     expect(section).toContain('onClick={() => actions?.orderChanges?.onOpen?.(row.id)}')
+    // F-OC-104: "+N more on Changes ›" lands on Changes › Waiting, where the same ONE Decide… waits (Still to do).
+    expect(section).toContain("href={`${tabHref(recordHref, 'changes', search)}#waiting`")
+    expect(readFileSync(new URL('./view/production/NowSection.tsx', import.meta.url), 'utf8')).toContain("`${tabHref(recordHref, 'changes', search)}${place.anchor ? `#${place.anchor}` : ''}`")
   })
 
   it('the words exist in both languages (office "tu")', () => {

@@ -338,6 +338,11 @@ const stillRowSchema = z.object({
   waitingOn: z.string(),
   mayAct: z.boolean(),
   requestId: z.string().nullable(),
+  // F-OC-104 (B-OC-006, B-OC-007): the office revision a row belongs to, and the work-order change a workshop's row waits on —
+  // absent until the server sends them: the office's rows are one "Office change" group and a workshop's row its own row.
+  amendmentId: z.string().nullable().optional(),
+  revision: z.number().int().nullable().optional(),
+  waitsOn: z.string().nullable().optional(),
 })
 export type StillRow = z.infer<typeof stillRowSchema>
 export const changesSchema = z.object({

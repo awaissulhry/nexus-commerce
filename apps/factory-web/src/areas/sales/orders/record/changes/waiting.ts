@@ -5,6 +5,7 @@ import { waitsForMe } from '../../../../home/approvals/requests/model'
 import { yesDoorOf } from '../../depth/model'
 import { rowAnchor } from '../dock/discuss'
 // ---- end F-OC-102
+import type { StillRowOf } from './model' // F-OC-104
 
 /**
  * F-OC-101 … 104 (order CHANGES tab, 10-design §3; 18-lead-settles L1, L2, L4, L11) — section 1, Waiting, without a screen.
@@ -121,3 +122,24 @@ export function lateDaysOf(due: string | null | undefined, asOf: string | null |
   return days >= 1 ? days : null
 }
 // ---- end F-OC-103
+
+// ---- F-OC-104 (10-design §3; B-OC-007): Still to do — a workshop's row under the change it waits on -----------------------------
+export interface StillItem {
+  readonly row: StillRowOf
+  /** Its place in the group (a key when the row names no record). */
+  readonly index: number
+  /** The workshops told by themselves when this work-order change is applied (their rows name it: `waitsOn`). */
+  readonly workshops: readonly StillRowOf[]
+}
+
+/**
+ * The rows of one accepted change as drawn: a workshop's row that names the work-order change it waits on (B-OC-007) is that change's
+ * sub-line, never a row of its own; a workshop's row that names none (an older answer, or its change is not in this group) stays a
+ * row. Every row is still counted (the badge and the group's head count the read's rows).
+ */
+export function stillItemsOf(rows: readonly StillRowOf[]): StillItem[] {
+  const changes = new Set(rows.flatMap((row) => (row.kind === 'WORK_ORDER_CHANGE' && row.ref ? [row.ref.id] : [])))
+  const folded = (row: StillRowOf): boolean => row.kind === 'TELL_WORKSHOP' && !!row.waitsOn && changes.has(row.waitsOn)
+  return rows.flatMap((row, index) => (folded(row) ? [] : [{ row, index, workshops: row.kind === 'WORK_ORDER_CHANGE' && row.ref ? rows.filter((other) => folded(other) && other.waitsOn === row.ref!.id) : [] }]))
+}
+// ---- end F-OC-104

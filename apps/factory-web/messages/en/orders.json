@@ -3055,6 +3055,11 @@
       "decides": "{who} decides",
       "youAsked": "You asked for this approval: {who} decides",
       "salesDecides": "Sales decides"
+    },
+    "still": {
+      "revision": "Revision {revision} · {when}",
+      "newDates": "See the new dates ›",
+      "seeYes": "See the yes ›"
     }
   }
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Banner, Card, EmptyState } from '@nexus/ui/components'
+import { Banner } from '@nexus/ui/components'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useScopedT, useT } from '../../../../../lib/i18n/provider' // F-OP-116: useScopedT
@@ -9,14 +9,13 @@ import { useProductionWords } from '../../../../../lib/production/words'
 // F-SA-266: each request's Discuss (its reference: the customer reads its own words)
 import { DiscussDoor } from './Discuss'
 import { WithMessages } from '../../../../../record-panels/i18n'
-import { answerHeld, said, stillStateOf, waitsForMe } from '../../../../home/approvals/requests/model'
+import { answerHeld, waitsForMe } from '../../../../home/approvals/requests/model'
 import type { BrandRequest } from '../../../../home/approvals/requests/api'
-import { TEAM_WORDS, type ApplyTeam } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { readOf } from '../overview/model'
 import type { Order } from '../../api'
-import { askingOf, askWordsOf, decisionBandOf, stillGroupsOf, stillRowsOf, type StillRowOf } from '../changes/model'
+import { askingOf, askWordsOf, decisionBandOf, stillRowsOf, type StillRowOf } from '../changes/model'
 import { stillDoorsOf } from '../changes/model' // F-OP-116
 import { rowAgeOf } from '../changes/model' // F-OO-204: a waiting row's age
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
@@ -121,55 +120,30 @@ function BandNotices({ order, model }: { order: Order; model: OrderRecordModel }
 }
 
 /**
- * One Still to do row: the step, who acts (the team), its state in the window's own words, since when, its door.
- * F-OP-116 (10-order-page §5.3; R-12): the door in place where it can be — a work-order change: Apply… / Leave as is… (the ONE decide
- * window here); planning's re-promise: Accept / Decline…; a production task: Done by the task's own right, else held "Production does
- * this"; a scrap, a style change, a workshop: a real link (Scrap ›, Products ›, Subcontracting ›).
- */
-export function StillRow({ row, order, model, actions }: { row: StillRowOf; order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
-  const t = useT('orders')
-  const a = useT(APPROVALS_NS)
-  const locale = useLocale()
-  const state = stillStateOf(row)
-  const team = TEAM_WORDS[row.waitingOn as ApplyTeam]
-  return (
-    <li className="fw-so-still">
-      <span className="fw-so-stack-tight">
-        <span>{said(row.words, locale)}</span>
-        <span className="fw-so-cell-sub">{[team ? said(team, locale) : null, t('changes.still.since', { when: formatDateTime(row.since, { locale }) })].filter(Boolean).join(' · ')}</span>
-      </span>
-      <span className="fw-so-inline">
-        {/* F-OO-204: the state pill is Changes' own (Overview's card says whose turn it is in the held words). */}
-        <Pill tone={state.tone}>{a(state.key)}</Pill>
-        <StillDoorView row={row} order={order} model={model} actions={actions} />
-      </span>
-    </li>
-  )
-}
-
-/**
- * F-OO-204 (11-design §5.3): a Still to do row's door, in place — ONE copy, drawn by Changes' rows and by Overview's card (F-OP-116's
- * doors, unchanged): Apply… / Leave as is… (the ONE decide window), Accept / Decline… (planning's re-promise), Done (a task, its own
- * right), or a real link (Scrap ›, Products ›, Subcontracting ›). Each held in its own words; every write sends its version.
+ * F-OO-204 (11-design §5.3): a Still to do row's door, in place — ONE copy, drawn by Changes' rows and by Overview's card: Decide…
+ * (the ONE decide window), Accept / Decline… (planning's re-promise), Done (a task, its own right), or a real link (Scrap ›,
+ * Products ›, Subcontracting ›). Every write sends its version.
+ * F-OC-104 (18-lead-settles L1; Production D2): a work-order change is ONE Decide… for who may decide it — the same door as
+ * Production's strip — and words for everyone else ("Waits for a planner · told 20/11/2026, 10:40"), no button, no Details door; a
+ * production task's Done is hidden without its right (the row's own team words say who does it).
  */
 export function StillDoorView({ row, order, model, actions }: { row: StillRowOf; order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
+  const locale = useLocale() // F-OC-104: the planner's words say the day
   const search = useSearchParams()?.toString() ?? '' // F-OP-116: the order's own tabs keep the dock's scope
   const door = stillDoorsOf(row, { prefix: model.prefix, record: `${model.prefix}/sales/orders/${order.id}`, address: (ref) => recordAddress({ type: ref.type, id: ref.id, label: ref.number ?? undefined, companyId: order.companyId, siteId: null }, OFFICE_PAGES), search })
   const busy = model.busy ? t('held.busy') : null
   return (
     <>
-      {/* F-OP-116: the door in place. */}
-      {door.kind === 'change' && (
-        <>
-          <Button size="sm" heldReason={door.held ? t('wo.waitsPlannerShort') : busy} onClick={() => actions?.orderChanges?.onOpen?.(door.changeId)}>
-            {t('wo.changeApply')}
+      {/* F-OP-116: the door in place. F-OC-104 (L1): ONE Decide… for who may decide; words for everyone else. */}
+      {door.kind === 'change' &&
+        (door.held ? (
+          <span className="fw-so-hint">{t('productionTab.wo.waitsPlanner', { time: formatDateTime(row.since, { locale }) })}</span>
+        ) : (
+          <Button size="sm" heldReason={busy} onClick={() => actions?.orderChanges?.onOpen?.(door.changeId)}>
+            {t('productionTab.wo.decide')}
           </Button>
-          <Button size="sm" variant="quiet" heldReason={door.held ? t('wo.waitsPlannerShort') : busy} onClick={() => actions?.orderChanges?.onOpen?.(door.changeId)}>
-            {t('wo.changeLeave')}
-          </Button>
-        </>
-      )}
+        ))}
       {door.kind === 'repromise' && (
         <>
           <Button size="sm" heldReason={door.held ? t('wo.repromiseHeld') : busy} onClick={() => actions?.links?.onAccept?.(door.proposalId)}>
@@ -180,8 +154,9 @@ export function StillDoorView({ row, order, model, actions }: { row: StillRowOf;
           </Button>
         </>
       )}
-      {door.kind === 'task' && (
-        <Button size="sm" heldReason={door.held ? t('wo.heldHold') : door.version === null ? t('held.busy') : busy} onClick={() => door.version !== null && actions?.onTaskDone?.(door.taskId, door.version)}>
+      {/* F-OC-104: the task's Done only for who may tick it (its assignee or a work-order manager, B-OC-005); hidden otherwise. */}
+      {door.kind === 'task' && !door.held && (
+        <Button size="sm" heldReason={door.version === null ? t('held.busy') : busy} onClick={() => door.version !== null && actions?.onTaskDone?.(door.taskId, door.version)}>
           {t('wo.done')}
         </Button>
       )}
@@ -194,78 +169,6 @@ export function StillDoorView({ row, order, model, actions }: { row: StillRowOf;
   )
 }
 
-/**
- * Changes › Still to do: under each accepted change (the customer's request it carries out, or the office's own) its rows, until
- * each is done or left as is; the order's own "Made extra: 4 M" (office only); work orders the reader does not reach counted.
- */
-export function StillToDo({ order, model, actions }: { order: Order; model: OrderRecordModel; /* F-OP-116 */ actions?: OrderRecordActions }) {
-  return (
-    <WithMessages namespaces={[APPROVALS_NS]}>
-      <Still order={order} model={model} actions={actions} />
-    </WithMessages>
-  )
-}
-
-function Still({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
-  const t = useT('orders')
-  const w = useProductionWords()
-  const locale = useLocale()
-  const read = readOf(model.production)
-  const still = read?.changes?.stillToDo ?? null
-  const groups = stillGroupsOf(stillRowsOf(read), model.requests?.value ?? [])
-  // Not read (no production read yet, or no right): nothing is claimed — no card at all.
-  if (!still) return null
-  const extra = (read?.lines ?? []).flatMap((line) => line.sizes.flatMap((size) => (size.madeExtraWords ? [{ key: `${line.lineId}:${size.size ?? ''}`, seq: line.seq, words: size.madeExtraWords }] : [])))
-  return (
-    <section id="still-to-do" className="fw-so-anchor" aria-labelledby="fw-so-still-title" tabIndex={-1 /* F-SA-244: a change line's "Still to do: N" lands here with the focus */}>
-      <Card padded>
-        <div className="fw-so-card-head">
-          <h2 className="fw-so-h2" id="fw-so-still-title">
-            {t('changes.still.title')}
-          </h2>
-          {still.count > 0 && <span className="fw-so-hint">{t('overview.requests.still', { count: still.count })}</span>}
-        </div>
-        {/* F-OP-304 (walk #7): "Nothing left to do" only when no row stands AND no piece was made extra — the pieces made extra
-            are their own list under their own heading, never rows under "nothing". */}
-        {groups.length === 0 && extra.length === 0 ? (
-          <EmptyState title={t('changes.still.none')} />
-        ) : groups.length === 0 ? null : (
-          <div className="fw-so-stack">
-            {groups.map((group) => (
-              <div key={group.requestId ?? 'office'} className="fw-so-stack-tight">
-                <p className="fw-so-h3">
-                  {group.request
-                    ? t('changes.still.changeOf', { kind: w.t(`parts.request.kind.${group.request.kind}`), when: formatDateTime(group.since, { locale }) })
-                    : t('changes.still.office', { when: formatDateTime(group.since, { locale }) })}
-                </p>
-                <ul className="fw-so-datelist">
-                  {group.rows.map((row, index) => (
-                    <StillRow key={`${row.kind}:${row.ref?.id ?? index}`} row={row} order={order} model={model} actions={actions /* F-OP-116 */} />
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
-        {extra.length > 0 && (
-          <div className="fw-so-stack-tight">
-            <p className="fw-so-h3" id="fw-so-still-extra">
-              {t('changes.still.madeExtra')}
-            </p>
-            <ul className="fw-so-datelist" aria-labelledby="fw-so-still-extra">
-              {extra.map((entry) => (
-                <li key={entry.key} className="fw-so-hint">
-                  {t('changes.still.extraLine', { line: entry.seq, words: said(entry.words, locale) })}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {still.workOrdersLeftOut > 0 && <p className="fw-so-hint">{t('changes.still.leftOut', { count: still.workOrdersLeftOut })}</p>}
-      </Card>
-    </section>
-  )
-}
 // ---- end F-SA-243
 
 // ---- F-OP-103 (10-order-page §3.2): one row of the ONE waiting list — its words, since when, and its ONE door ---------------------

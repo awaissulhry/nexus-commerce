@@ -493,15 +493,16 @@ describe('F-OP-302: Progress by line — the line column has room and its pills 
 // ---- end F-OP-302
 
 // ---- F-OP-304 (walk #7): Changes › Still to do never says "Nothing left to do" above rows ------------------------------------------
-describe('F-OP-304: Still to do — "Nothing left to do" only when nothing stands and nothing was made extra', () => {
-  it('pieces made extra with no step left: their own heading and list, no "Nothing left to do"; nothing at all: the empty words', () => {
+// F-OC-104 (10-design §3): rewritten — "Made extra" left the Changes tab (one place per fact: Overview › Progress by line says the
+// pieces made extra); with no step left, Waiting's foot says "Nothing left to do" once, and never above a Still to do row.
+describe('F-OP-304: Still to do — "Nothing left to do" only when no step stands; the pieces made extra are Overview\'s', () => {
+  it('no step left: no Still to do group, the foot says it once; no "Made extra" list on Changes', () => {
     for (const locale of ['en', 'it'] as const) {
-      const text = textOf(draw('f-op-304-still-extra', locale))
-      expect(text).not.toContain(locale === 'en' ? 'Nothing left to do for the accepted changes.' : 'Per le modifiche accettate non resta nulla da fare.')
-      expect(text).toContain(locale === 'en' ? 'Made extra' : 'Fatti in più')
-      // F-OO-121: the API's words since B-OO-015 (the floor holds a cut order's planned lines too).
-      // Walk follow-up (W04): the size named before its count.
-      expect(text).toContain(locale === 'en' ? 'Line 10 · Size 48: 1 more than ordered (cut or planned to cut)' : "Riga 10 · Taglia 48: 1 in più dell'ordine (tagliati o da tagliare)")
+      const html = draw('f-op-304-still-extra', locale)
+      const text = textOf(html)
+      expect(text.split(locale === 'en' ? 'Nothing left to do for the accepted changes.' : 'Per le modifiche accettate non resta nulla da fare.').length - 1).toBe(1)
+      expect(html).not.toContain('id="fw-oc-g-still"')
+      expect(text).not.toContain(locale === 'en' ? 'Made extra' : 'Fatti in più')
     }
     // F-OO-205: SO-0002's case has its step still to do now. F-OC-101: the case with nothing left says it in Waiting's one line.
     expect(textOf(draw('f-oo-204-changes-nothing'))).toContain('Nothing waits.')
@@ -1108,9 +1109,13 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
     const section = read('../view/RequestsSection.tsx')
     expect(section).toContain('export function StillDoorView(')
     expect(section.match(/stillDoorsOf\(/g)).toHaveLength(1)
-    const stillRow = section.slice(section.indexOf('export function StillRow('), section.indexOf('export function StillDoorView('))
+    // F-OC-104: Changes' Still to do rows are Waiting's own (changes/view/WaitingSection.tsx) and draw the same door.
+    const stillRow = read('../changes/view/WaitingSection.tsx')
     expect(stillRow).toContain('<StillDoorView row={row} order={order} model={model} actions={actions} />')
     expect(stillRow).not.toContain("door.kind === 'change'")
+    // L1: ONE Decide… for who may decide, words for everyone else — never Apply… / Leave as is… beside each other.
+    expect(section).toContain("{t('productionTab.wo.decide')}")
+    expect(section).not.toMatch(/wo\.changeApply|wo\.changeLeave/)
     // The rows' tab doors never point at Changes any more (what waits on the customer has its own door).
     expect(read('./model.ts')).not.toContain("tab: 'changes'")
     for (const locale of LOCALES) {
