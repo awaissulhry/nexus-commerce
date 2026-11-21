@@ -219,9 +219,11 @@ export function sendsOf(rows: readonly { readonly at: Date; readonly actorId: st
   return rows
     .flatMap((row) => {
       const after = (row.after ?? {}) as Record<string, unknown>
-      if (typeof after.confirmationVersion !== 'number') return []
-      const to = Array.isArray(after.to) ? after.to.filter((entry): entry is string => typeof entry === 'string') : []
-      return [{ version: after.confirmationVersion, at: row.at, to, byId: row.audience === 'OFFICE' ? row.actorId : null }]
+      const version = after.confirmationVersion
+      const sentTo = after.to
+      if (typeof version !== 'number') return []
+      const to = Array.isArray(sentTo) ? sentTo.filter((entry): entry is string => typeof entry === 'string') : []
+      return [{ version, at: row.at, to, byId: row.audience === 'OFFICE' ? row.actorId : null }]
     })
     .sort((a, b) => b.at.getTime() - a.at.getTime())
 }

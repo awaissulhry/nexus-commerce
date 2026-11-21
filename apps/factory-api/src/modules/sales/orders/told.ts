@@ -229,13 +229,16 @@ export function storedSpeakerOf(value: unknown): Speaker | null {
   const holdId = textOf(row, 'holdId')
   const changeOrderId = textOf(row, 'changeOrderId')
   const to = textOf(row, 'to')
+  const change = row.change
+  const lineIds = row.lineIds
+  const placed = row.placed
   switch (row.kind) {
     case 'REQUEST':
       return requestId ? { kind: 'REQUEST', requestId } : null
     case 'AMENDED':
       return amendmentId ? { kind: 'AMENDED', amendmentId } : null
     case 'LINES':
-      return (row.change === 'CLOSED' || row.change === 'REOPENED') && Array.isArray(row.lineIds) ? { kind: 'LINES', change: row.change, lineIds: row.lineIds.filter((entry): entry is string => typeof entry === 'string') } : null
+      return (change === 'CLOSED' || change === 'REOPENED') && Array.isArray(lineIds) ? { kind: 'LINES', change, lineIds: lineIds.filter((entry): entry is string => typeof entry === 'string') } : null
     case 'CANCELLED':
       return { kind: 'CANCELLED' }
     case 'PROMISE':
@@ -243,7 +246,7 @@ export function storedSpeakerOf(value: unknown): Speaker | null {
     case 'WORK_ORDER_CHANGE':
       return changeId ? { kind: 'WORK_ORDER_CHANGE', changeId } : null
     case 'HOLD':
-      return holdId && typeof row.placed === 'boolean' ? { kind: 'HOLD', holdId, placed: row.placed } : null
+      return holdId && typeof placed === 'boolean' ? { kind: 'HOLD', holdId, placed } : null
     case 'ECO':
       return changeOrderId ? { kind: 'ECO', changeOrderId } : null
     default:
