@@ -14,6 +14,7 @@ import type { BrandUrgency } from '@nexus/factory-domain/production-brand/urgenc
 import { BLOCKER_OWNER, type Blocker, type BlockerKind, type BlockerRef, type WaitingOn } from '@nexus/factory-domain/production-brand/waiting' // B-OP-021: + BlockerRef
 import { placeOf, waitingOn } from '@nexus/factory-domain/production-brand/waiting' // B-OO-007
 import type { SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders' // B-OO-007
+import { isFirstPromise } from '@nexus/factory-domain/sales/orders/promise-moves' // B-PT-011: one rule for a first promise
 import { aheadWords, customerUrgencyChipWords, HEALTH_REASON_WORDS, HEALTH_WORDS, OFFICE_WAITING_WORDS, SEWING_NOT_COUNTED_WORDS, STAGE_WORDS, URGENCY_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { daysLate, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_HOLD, WORKORDERS_MANAGE, WORKORDERS_RELEASE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions' // B-OP-021: + manage, release, hold
@@ -366,11 +367,11 @@ export function officeBlockersOf(status: SalesOrderStatus, blockers: readonly Bl
 /**
  * How many times the promise MOVED: the order's `orders.changePromise` audit rows (their `before`), less the ones that set a first
  * promise — an order with no promise yet records `before.originalPromiseDate: null` (sales/orders moves.ts, the order's and the
- * lines' change alike). A row that does not say counts, as before.
+ * lines' change alike). A row that does not say counts, as before. B-PT-011: the ONE rule (sales/orders promise-moves
+ * isFirstPromise), the order read's promise history says SET / MOVED by it too.
  */
 export function promiseMovesOf(befores: readonly unknown[]): number {
-  const first = (before: unknown): boolean => before !== null && typeof before === 'object' && 'originalPromiseDate' in before && (before as { originalPromiseDate: unknown }).originalPromiseDate === null
-  return befores.filter((before) => !first(before)).length
+  return befores.filter((before) => !isFirstPromise(before)).length
 }
 // ── end B-OO-007 ──
 

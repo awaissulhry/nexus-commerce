@@ -1271,3 +1271,74 @@ describe('B-PT-005…009: the customer’s level, Planning’s gate fields, the 
   })
 })
 // ── end B-PT-005 … B-PT-009 ──
+
+// ── B-PT-011 (order production tab R11) ──
+/**
+ * The order read's promise history tells the first promise (SET) from a move (MOVED) by the production read's own rule (one
+ * isFirstPromise: the headline's "moved N×" counts the same rows), and a lines' move says each line's own day before it — so a move
+ * of two lines on different days never reads "— → …". A new order of Alpha with two lines and no promise gets, through the real
+ * route, its first promise, a move of line 10 alone, then a move of both lines.
+ */
+describe('B-PT-011: the promise history says SET or MOVED by one rule, and a lines’ move each line’s day before it', { timeout: 60_000 }, () => {
+  const order = { id: newId(), lines: [newId(), newId()] }
+  const later = (days: number) => businessDate(new Date(Date.now() + days * 86_400_000))
+  let version = 0
+  const promise = async (promiseDate: string, lineIds?: string[]) => {
+    const answer = await app.inject({ method: 'PUT', url: `/sales/orders/${order.id}/promise`, headers: { 'x-test-session': 'pt.manage' }, payload: { version, promiseDate, reason: 'Made-up: the lining comes later.', ...(lineIds ? { lineIds } : {}) } })
+    expect(answer.statusCode, answer.body).toBe(200)
+    const body = answer.json() as { order: Json }
+    version = body.order.version as number
+    return body.order
+  }
+
+  beforeAll(async () => {
+    SESSIONS['pt.manage'] = session(grant(['orders.view', 'orders.manage', 'workorders.view'], 'all'))
+    const [harnessLine] = await admin<{ colourwayId: string; companyId: string }>(`SELECT "colourwayId", "companyId" FROM "SalesOrderLine" WHERE id = $1`, [w.a.salesOrderLineId])
+    await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId: seedUuid(ns, 'actor') }, (client) =>
+      client.$transaction(async (tx) => {
+        await tx.salesOrder.create({
+          data: { id: order.id, companyId: harnessLine!.companyId, partyId: ids.a, number: 'T-PT011-SO-1', customerRef: 'T-PT011-PO-1', status: 'CONFIRMED', orderDate: new Date('2026-11-03T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' } },
+          select: { id: true },
+        })
+        for (const [index, lineId] of order.lines.entries()) {
+          await tx.salesOrderLine.create({
+            data: { id: lineId, companyId: harnessLine!.companyId, orderId: order.id, partyId: ids.a, seq: (index + 1) * 10, kind: 'SIZE_GRID', styleId: w.styleId, colourwayId: harnessLine!.colourwayId, quantity: 2, unitPrice: '100.000000', netAmount: 20_000, vatRatePct: '22.00', vatAmount: 4_400 },
+            select: { id: true },
+          })
+          await tx.salesOrderLineSize.create({ data: { id: newId(), lineId, partyId: ids.a, size: '50', quantity: 2 }, select: { id: true } })
+        }
+      }),
+    )
+    const [stored] = await admin<{ version: number }>(`SELECT version FROM "SalesOrder" WHERE id = $1`, [order.id])
+    version = stored!.version
+  })
+
+  it('the first promise: SET, no line days; the headline counts no move', async () => {
+    const set = await promise(later(30))
+    expect(set.promiseHistory).toEqual([expect.objectContaining({ to: later(30), lineIds: [], kind: 'SET', fromByLine: null })])
+    expect((await ok('office.all', production(order.id, 'headline'))).headline.promise).toMatchObject({ moves: 0 })
+  })
+
+  it('line 10 moved alone: MOVED, its day before it (the order’s)', async () => {
+    const moved = await promise(later(34), [order.lines[0]!])
+    expect(moved.promiseHistory[0]).toMatchObject({ to: later(34), lineIds: [order.lines[0]], kind: 'MOVED', fromByLine: [{ lineId: order.lines[0], from: later(30) }] })
+    expect(moved.promiseHistory[1]).toMatchObject({ kind: 'SET' })
+  })
+
+  it('both lines moved together from different days: each line’s own day before it (never "— → …"); the headline counts two moves', async () => {
+    const mixed = await promise(later(40), [...order.lines])
+    expect(mixed.promiseHistory[0]).toMatchObject({ to: later(40), from: null, kind: 'MOVED', fromByLine: [{ lineId: order.lines[0], from: later(34) }, { lineId: order.lines[1], from: later(30) }] })
+    expect((mixed.promiseHistory as Json[]).map((row) => row.kind)).toEqual(['MOVED', 'MOVED', 'SET'])
+    // One rule: the headline's "moved N×" counts the MOVED rows of the same history.
+    const { headline } = await ok('office.all', production(order.id, 'headline'))
+    expect(headline.promise.moves).toBe((mixed.promiseHistory as Json[]).filter((row) => row.kind === 'MOVED').length)
+  })
+
+  it('the wall: a Beta-limited person reads neither the order nor its history (the unknown id’s answer)', async () => {
+    const unknown = await call('office.p2', `/sales/orders/${newId()}`)
+    const refused = await call('office.p2', `/sales/orders/${order.id}`)
+    expect([refused.status, refused.body.error?.message]).toEqual([unknown.status, unknown.body.error?.message])
+    expect(refused.raw).not.toContain('T-PT011-SO-1')
+  })
+})
+// ── end B-PT-011 ──

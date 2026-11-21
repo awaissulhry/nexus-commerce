@@ -16,6 +16,9 @@ import { productionWords, whereText } from '../../../platform/exports/sources/sa
 import { MTM_UNITS_LIMIT, mtmUnitsOf, workshopsOf } from './production-read'
 import { workOrderSpecOf, type SpecRevision } from './production-read' // B-PT-004
 import { finalDefectsOf, NCR_TITLE_LIMIT, ncrTitleOf } from './production-read' // B-PT-008, B-PT-009
+// B-PT-017: the order page's live rules and parts.
+import { ORDER_LIVE_EVENTS } from './views'
+import { ORDER_PAGE_PARTS } from './contract'
 
 /**
  * B-SA-031 / B-SA-032 — the office's read of one order's production, its pure parts (the PG suite production-read.pg.vitest.test.ts
@@ -364,3 +367,23 @@ describe('B-PT-009: an NCR title is at most 80 characters, cut with "…"', () =
   })
 })
 // ── end B-PT-008 / B-PT-009 ──
+
+// ── B-PT-017 (order production tab C3) ──
+describe('B-PT-017: the order page re-reads the Production tab’s dates, headline and materials on the events that move them', () => {
+  const partsOf = (type: string) => ORDER_LIVE_EVENTS.find((entry) => entry.type === type)?.parts ?? []
+
+  it('a promise moved: + dates and headline (beside the order, its lines and changes)', () => {
+    expect(partsOf('sales_order.promise_changed')).toEqual(expect.arrayContaining(['order', 'lines', 'changes', 'dates', 'headline']))
+  })
+
+  it('a work order made, changed or moved on: + dates (its forecast); a floor scan does not re-read the dates', () => {
+    for (const type of ['workorder.created', 'workorder.changed', 'workorder.status_changed']) expect(partsOf(type), type).toEqual(expect.arrayContaining(['work', 'headline', 'people', 'dates']))
+    expect(partsOf('production.scan_recorded')).not.toContain('dates')
+  })
+
+  it('the customer’s own materials planned or counted again: the new materials part alone', () => {
+    expect(ORDER_PAGE_PARTS).toContain('materials')
+    expect(partsOf('customer_material.changed')).toEqual(['materials'])
+  })
+})
+// ── end B-PT-017 ──

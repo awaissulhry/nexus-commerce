@@ -39,6 +39,8 @@ import { APPROVALS_VIEW } from '@nexus/factory-domain/approvals/permissions'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { approverRolesOf, customerWall, TASK_COLUMNS, visibleTasks, type TaskRow } from '../../../platform/approvals/store'
 import { openTaskRows, type ViewContext } from '../../../platform/approvals/views'
+// B-PT-011 (order production tab R11): a first promise or a move, and each line's day before a lines' move — one rule.
+import { fromByLineOf, promiseMoveKindOf } from '@nexus/factory-domain/sales/orders/promise-moves'
 
 /**
  * The order record as the office reads it (A2 SCR-039; the design's Order record): the header with its dates (the
@@ -59,12 +61,16 @@ interface PromiseAudit {
   originalPromiseDate?: unknown
 }
 
-/** Every promise change of the order, newest first (from its audit rows: who, when, from → to, which lines, why). */
+/**
+ * Every promise change of the order, newest first (from its audit rows: who, when, from → to, which lines, why). B-PT-011: + its
+ * kind — SET (the order's first promise: never counted as a move) or MOVED, by the production read's own rule — and, for a lines'
+ * move, each line's own day before it (`fromByLine`; null: a move of the whole order).
+ */
 async function promiseHistory(db: Reader, orderId: string) {
   const rows = await db.auditLog.findMany({
     where: { recordType: 'SalesOrder', recordId: orderId, action: 'orders.changePromise' },
     orderBy: [{ at: 'desc' }, { id: 'desc' }],
-    select: { at: true, actorId: true, after: true, reason: true },
+    select: { at: true, actorId: true, after: true, reason: true, /* B-PT-011 */ before: true },
   })
   return rows.map((row) => {
     const after = (row.after ?? {}) as PromiseAudit
@@ -75,6 +81,10 @@ async function promiseHistory(db: Reader, orderId: string) {
       to: typeof after.promiseDate === 'string' ? after.promiseDate : '',
       lineIds: Array.isArray(after.lineIds) ? after.lineIds.filter((id): id is string => typeof id === 'string') : [],
       reason: row.reason,
+      // ── B-PT-011 ──
+      kind: promiseMoveKindOf(row.before),
+      fromByLine: fromByLineOf(row.before),
+      // ── end B-PT-011 ──
     }
   })
 }
@@ -131,6 +141,14 @@ const LIVE_RULES: readonly { readonly match: (type: string) => boolean; readonly
   // B-OP-020: a request for a yes of the order asked, decided, taken back or found changed (matched by `approvalTaskIds`, and a new
   // one by its record). These name no customer: only readers of every customer get them; a limited approver re-reads by sales_order.*.
   { match: (type) => type.startsWith('approval.') && type !== 'approval.rule_changed', parts: ['order', 'changes'] },
+  // ── B-PT-017 (order production tab C3) ──
+  // A promise moved: the Production tab's dates and the headline's "moved N×" re-read too (not only the order, lines and changes).
+  { match: (type) => type === 'sales_order.promise_changed', parts: ['dates', 'headline'] },
+  // A work order made, changed (its due day) or moved on: the dates' forecast re-reads. Office acts, never the floor's scans.
+  { match: (type) => ['workorder.created', 'workorder.changed', 'workorder.status_changed'].includes(type), parts: ['dates'] },
+  // The customer's own materials planned or counted again: the Production tab's Materials re-reads (its live fields: orderId, number).
+  { match: (type) => type === 'customer_material.changed', parts: ['materials'] },
+  // ── end B-PT-017 ──
 ]
 
 /** Each declared event the order page re-reads on, with its parts (declared types only, sorted). */
