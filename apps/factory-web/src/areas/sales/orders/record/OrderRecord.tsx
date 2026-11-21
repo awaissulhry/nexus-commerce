@@ -65,6 +65,7 @@ import { useOrderLinks } from './links/use-order-links'
 import { SUPERVISOR_NS } from '../../../_shared/production-supervisor/model'
 import { NOTES_NS } from '../../../production/_shared/notes/model'
 import { useOrderProduction } from './overview/use-order-production' // F-SA-232: Overview's production read (the order's own pieces)
+import { useOrderAsks } from './production/use-order-asks' // F-PT-103: the order's asks (the issues list)
 import { getReadiness, type ReadinessRow } from '../../../production/work-orders/daily/api' // F-SA-234: the work orders' materials
 // F-SA-236: this order's customer requests and the approvals we asked it (Changes).
 import { listOrderRequests, type BrandRequest } from '../../../home/approvals/requests/api'
@@ -322,10 +323,13 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // use-overview-acts' (F-OP-134). F-OO-145: read before the tabs' acts — Overview's gate acts build Planning's model from it ----
   const production = useOrderProduction(api, order.status === 'ready' ? order.value.id : null)
   // ---- end F-SA-232
+  // ---- F-PT-103: the order's asks and questions (the ONE issues list, orders.view), read while Production shows ----
+  const asks = useOrderAsks(api, order.status === 'ready' ? order.value.id : null, tab === 'production')
+  // ---- end F-PT-103
   // ---- F-OP-134 (N-5): the tabs' acts, one container hook per tab, each with the one write and the order as last read ----------------
   const ready = order.status === 'ready' ? order.value : null
   const actsBase: RecordActsBase = { api, orderId, current, write, version, setNotice, load, loadParts }
-  const band = useBandActs({ ...actsBase, order: ready, permissions: session.permissions, stepUp: { ensureFresh, guard }, setDialog /* F-OP-101: the yes in place */, againProduction: production.again /* F-OO-142: a promise save reads the headline and dates again */ })
+  const band = useBandActs({ ...actsBase, order: ready, permissions: session.permissions, stepUp: { ensureFresh, guard }, setDialog /* F-OP-101: the yes in place */, againProduction: production.again /* F-OO-142: a promise save reads the headline and dates again */, againAsks: asks.again /* F-PT-103 */ })
   // F-OL-05: the lines' own windows (close, reopen, cancel, split, the order fields); the old amendment draft went (use-lines-draft.ts).
   const lines = useLinesActs({
     ...actsBase,
@@ -626,6 +630,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
         .catch(() => undefined)
     if (parts.includes('changes') && (tabRef.current === 'changes' || wantsRef.current /* F-SA-243 */)) readRequests()
     if (parts.includes('changes')) productionActs.rereadChanges() // F-OP-116: a work-order change proposed, applied or left as is
+    if (parts.includes('quality')) asks.again() // F-PT-103: an ask raised, answered or escalated (production_issue.*)
     if (parts.includes('files')) orderFiles.reload() // F-OP-125: read again when shown, else the next time it is wanted
   }
   reconnectRef.current = () => {
@@ -652,6 +657,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     madeFromReading: madeFrom === undefined,
     links: links.model, // B-TH-256
     production: production.state, // F-SA-232
+    asks: asks.state, // F-PT-103
     stylesManage: session.permissions.includes('product.styles.manage'), // F-OO-121: a line's missing picture is added on its style
     readiness, // F-SA-234
     requests, // F-SA-236
@@ -755,6 +761,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
         links: links.actions, // B-TH-256
         // ---- F-SA-232 ----
         onRetryProduction: () => production.again(),
+        onRetryAsks: asks.again, // F-PT-103
         files: orderFiles.actions, // F-SA-237
         // ---- B-W2b-323 ----
         depth: depth.actions,

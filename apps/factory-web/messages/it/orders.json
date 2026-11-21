@@ -1848,8 +1848,7 @@
       "goTo": "Vai a",
       "copy": "Copia"
     },
-    "assignSupervisor": "Assegna supervisore…",
-    "askSupervisor": "Chiedi al supervisore…"
+    "assignSupervisor": "Assegna supervisore…"
   },
   "where": {
     "headline": {
@@ -2638,6 +2637,167 @@
       "creditNote_other": "{count} note di credito",
       "deposit_one": "{count} fattura di acconto",
       "deposit_other": "{count} fatture di acconto"
+    }
+  },
+  "productionTab": {
+    "countsAsOf": "Conteggi delle {time}",
+    "info": "Informazioni su {section}",
+    "more": "Altro per {section}",
+    "partAsks": "le richieste",
+    "now": {
+      "title": "Produzione ora",
+      "stageLabel": "Fase",
+      "next": "poi: {stage}",
+      "since": "dal {date}",
+      "byHand": "Impostata a mano · i conteggi sono del reparto",
+      "byHandLink": "Cambia in Panoramica ›",
+      "piecesLabel": "Capi di questo ordine",
+      "of": "su {of}",
+      "step": {
+        "cut": "Tagliati",
+        "sewn": "Cuciti",
+        "checked": "Controllati",
+        "packed": "Imballati",
+        "shipped": "Spediti"
+      },
+      "healthLabel": "Andamento",
+      "why": {
+        "late_one": "Promesso il {promise}; {count} capo ancora da spedire.",
+        "late_other": "Promesso il {promise}; {count} capi ancora da spedire.",
+        "lineLate_one": "{line} è pianificato pronto il {finish}, {count} giorno dopo la promessa ({promise}).",
+        "lineLate_other": "{line} è pianificato pronto il {finish}, {count} giorni dopo la promessa ({promise}).",
+        "lineNoDate": "Non c'è ancora una data di fine per {line}. Promesso il {promise}.",
+        "gateLate": "{gate} ha superato il suo giorno ({target}). Promesso il {promise}.",
+        "marked": "Segnato da {name}, {day}: {reason}. Le date da sole dicono {health}.",
+        "markedNoName": "Segnato il {day}: {reason}. Le date da sole dicono {health}.",
+        "noDate": "Nessuna data promessa ancora.",
+        "onTrack_one": "Pronto previsto il {finish}, {count} giorno prima della promessa ({promise}).",
+        "onTrack_other": "Pronto previsto il {finish}, {count} giorni prima della promessa ({promise}).",
+        "onTrackOnDay": "Pronto previsto il {finish}, il giorno della promessa."
+      },
+      "markLapses": "Scade il {date}, o prima se cambiano le date.",
+      "nextDoor": "Prossimo: {words}",
+      "nextPlace": {
+        "holds": "Problemi e blocchi ›",
+        "dates": "Date e piano ›",
+        "changes": "Modifiche ›"
+      },
+      "nextAsk": "Chiedi un aggiornamento a {name}…",
+      "nextAskNobody": "Chiedi un aggiornamento…",
+      "urgentCustomer": "Urgente (cliente)",
+      "rush": "Urgente (fabbrica)",
+      "priority": "Priorità: {words}",
+      "urgencyLabel": "Urgenza",
+      "peopleLabel": "Chi se ne occupa",
+      "supervisor": "supervisore di produzione",
+      "supervisorMe": "supervisore di produzione (tu)",
+      "backup": "Sostituto: {name}",
+      "nobody": "Nessun supervisore di produzione ancora",
+      "asked": "Chiesto il {at}",
+      "askedBy": "Chiesto da {by} · {at}",
+      "answersBy": "{name} risponde entro il {due}",
+      "answerBy": "risposta entro il {due}",
+      "about": "su {number}",
+      "latest": "Ultimo aggiornamento · {by} · {at}",
+      "latestNoName": "Ultimo aggiornamento · {at}",
+      "answered": "Ultima richiesta con risposta il {at}",
+      "none": "Nessun aggiornamento chiesto ancora.",
+      "questions_one": "{count} domanda aspetta una risposta",
+      "questions_other": "{count} domande aspettano una risposta",
+      "markAtRisk": "Segna a rischio…",
+      "changeMark": "Cambia il segno…",
+      "removeMark": "Togli il segno",
+      "notKept": "Non ancora seguito: la produzione parte quando l'ordine è confermato.",
+      "infoBody": "Dove si trova l'ordine ora, quanti dei suoi capi hanno passato ogni fase, se mantiene la promessa e a chi chiedere. I conteggi sono del reparto e della qualità, al minuto indicato. Il cliente non legge mai le richieste."
+    },
+    "ask": {
+      "button": "Chiedi un aggiornamento",
+      "menu": "Chiedi un aggiornamento…",
+      "title": "Chiedi un aggiornamento · {number}",
+      "titleAbout": "Chiedi di {number}",
+      "starter": "A che punto è {number}? Cosa è tagliato, cucito e imballato? Qualche problema? La promessa del {promise} è ancora sicura?",
+      "starterNoPromise": "A che punto è {number}? Cosa è tagliato, cucito e imballato? Qualche problema? Quando sarà pronto?",
+      "starterWo": "A che punto è {number}? Cosa è tagliato, cucito e controllato? Qualche problema? La sua scadenza del {due} è ancora sicura?",
+      "starterWoNoDue": "A che punto è {number}? Cosa è tagliato, cucito e controllato? Qualche problema? Quando sarà finito?",
+      "send": "Chiedi un aggiornamento",
+      "noSupervisor": "Nessun responsabile ancora: lo ricevono i responsabili di produzione dopo 1 giorno lavorativo"
+    },
+    "wo": {
+      "title": "Ordini di lavoro",
+      "summary_one": "{count} ordine di lavoro",
+      "summary_other": "{count} ordini di lavoro",
+      "pieces_one": "{count} capo per questo ordine",
+      "pieces_other": "{count} capi per questo ordine",
+      "onHoldCount_one": "{count} in sospeso",
+      "onHoldCount_other": "{count} in sospeso",
+      "afterDueCount_one": "{count} dopo la scadenza",
+      "afterDueCount_other": "{count} dopo la scadenza",
+      "onHold": "In sospeso",
+      "rush": "Urgente (fabbrica)",
+      "figure": "{step} {done} su {total}",
+      "toldAt": "Reparto avvisato il {time}",
+      "due": "Scadenza {date}",
+      "noDue": "Nessuna scadenza",
+      "planEnds": "Fine prevista {date}",
+      "notPlanned": "Non ancora pianificato",
+      "afterDue": "dopo la scadenza",
+      "priority": "Priorità {value}",
+      "priorityRush": "Priorità e urgenza…",
+      "ask": "Chiedi di {number}",
+      "decisions": "In attesa di una decisione",
+      "decide": "Decidi…",
+      "decisionLine": "{title} · {cells} · proposta il {date}",
+      "decisionsMore_one": "+{count} altra in Modifiche ›",
+      "decisionsMore_other": "+{count} altre in Modifiche ›",
+      "waitsPlanner": "Attende un pianificatore · avvisato il {time}",
+      "unitDraft": "Bozza · non ancora rilasciato",
+      "details": "Dettagli ›",
+      "openDetail": "Apri il dettaglio di {number}",
+      "emptyLines_one": "Ancora nessun ordine di lavoro · {count} riga aspetta un ordine di lavoro",
+      "emptyLines_other": "Ancora nessun ordine di lavoro · {count} righe aspettano un ordine di lavoro",
+      "withheld": "Non visibile per te: l'avanzamento (lo vedono Produzione e Vendite)",
+      "col": {
+        "making": "Cosa fa",
+        "dates": "Date"
+      },
+      "infoBody": "Ogni ordine di lavoro di questo ordine, con i soli capi di questo ordine. Una riga apre le sue taglie; Invio la apre da tastiera, ‹ › passano tra gli ordini di lavoro. Urgente (fabbrica) è la nostra urgenza; l'urgenza del cliente è in Produzione ora."
+    },
+    "step": {
+      "cut": "Tagliati",
+      "sewn": "Cuciti",
+      "checked": "Controllati"
+    },
+    "detail": {
+      "title": "{number} — per {order}",
+      "sizes": "I capi di questo ordine",
+      "step": {
+        "ordered": "Ordinati",
+        "cut": "Tagliati",
+        "sewn": "Cuciti",
+        "checked": "Controllati"
+      },
+      "total": "Totale",
+      "workshop": "Laboratorio esterno: {name}",
+      "workshopBack": "{name} · dal {since} · rientro {back}",
+      "plan": "Fine prevista {end} · scadenza {due}",
+      "held": "In sospeso",
+      "units_one": "{count} unità · un ordine di lavoro per unità",
+      "units_other": "{count} unità · un ordine di lavoro per unità",
+      "unitsMore_one": "e altra {count}",
+      "unitsMore_other": "e altre {count}",
+      "noRider": "Il pilota non è mai mostrato qui.",
+      "open": "Apri l’ordine di lavoro",
+      "noun": "ordine di lavoro"
+    },
+    "priority": {
+      "title": "Priorità e urgenza · {number}",
+      "label": "Priorità",
+      "hint": "Più alto viene prima ({min} … {max}); 0 è normale.",
+      "rush": "Urgente (fabbrica)",
+      "rushHint": "La nostra urgenza: il reparto la mette prima. Non è l'urgenza del cliente.",
+      "save": "Salva",
+      "problem": "Un numero intero da {min} a {max}.",
+      "same": "Non è cambiato ancora niente."
     }
   }
 }

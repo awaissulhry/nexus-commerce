@@ -357,10 +357,28 @@ export function writeProblemOf(error: unknown): { readonly key: string; readonly
 
 export type PeopleState = { readonly status: 'loading' } | { readonly status: 'ready'; readonly people: readonly MentionPerson[]; readonly complete: boolean } | { readonly status: 'error' }
 
+// ---- F-PT-103 (order PRODUCTION tab: "Ask for an update"): a ready ask — the dialog opened with its title, the starter question
+// typed in, "Needs an answer" ticked ("Each record's supervisor" is ticked anyway) and its Send word; the caller's words, already
+// said in the page's language. Everything else is the dialog as it is (the check, the @ list, the result).
+export interface NotePreset {
+  readonly title: string
+  readonly body: string
+  readonly needsAnswer: boolean
+  readonly send: string
+}
+
+/** The draft a preset opens with: its text and "Needs an answer"; the supervisor asked (the dialog's own default). */
+export function presetDraftOf(draft: NoteDraft, preset: NotePreset | null | undefined): NoteDraft {
+  return preset ? { ...draft, body: preset.body, needsAnswer: preset.needsAnswer, askSupervisor: true } : draft
+}
+// ---- end F-PT-103
+
 export interface NoteDialogModel {
   readonly from: NoteFrom
   readonly targets: NoteTargets
   readonly draft: NoteDraft
+  /** F-PT-103: the ready ask it was opened with (its title and Send word); absent: the dialog's own. */
+  readonly preset?: NotePreset | null
   readonly people: PeopleState
   /** The check of the draft as it stands (checkOf: an answer of another draft is "checking"). */
   readonly check: CheckState
