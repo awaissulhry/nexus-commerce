@@ -13,6 +13,7 @@ import { callerFor, command } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
+import { quotedPhraseKeyOf, sayPhraseWords } from './record-links' // B-SC-005
 
 /**
  * B-TH-077 (threads plan TH-6; X-G02, ORD-G04, ORD-G09; wall W27): GET /sales/orders/:orderId/links — what points at an order —
@@ -23,7 +24,9 @@ import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
  *   - planning's re-promise still waiting for sales: accept and decline with orders.manage, never by who proposed it, read only
  *     for the production manager; declined, it is gone;
  *   - the gates' refusals that still block its work orders: words for every order reader, the event with the compliance right;
- *     a refusal of another customer's work order never.
+ *     a refusal of another customer's work order never;
+ *   - B-SC-005 (the red notice in plain words): an older sentence that quotes its phrase key (the seeds' label refusal as it was
+ *     written before F-OP-313) reads the warning's own words, never the key; nothing stored changes.
  * Run with `node scripts/factory/run-pg-tests.mjs record-links`.
  */
 
@@ -192,3 +195,44 @@ describe('the gates’ refusals', () => {
     expect(words).toMatchObject({ eventId: null, place: expect.any(String) })
   })
 })
+
+// ── B-SC-005 (stage control B: the red notice in plain words) ──
+describe('B-SC-005: a refusal that quotes its phrase key reads in plain words', () => {
+  const OLD = 'The label for Germany cannot print: the warning "warning.class-a" has no approved German words. Who can fix it: compliance. How: approve the German translation in Rules & markets › Phrases.'
+
+  it('the seeds’ label refusal as first written: the warning’s approved English words in its place, never "warning.class-a"; the stored row unchanged', async () => {
+    const cells = await admin<{ workOrderId: string }>(
+      `SELECT DISTINCT s."workOrderId" FROM "WorkOrderSize" s JOIN "SalesOrderLine" l ON l.id = s."salesOrderLineId" WHERE l."orderId" = $1
+         AND NOT EXISTS (SELECT 1 FROM "WorkOrderSize" x WHERE x."workOrderId" = s."workOrderId" AND (x."partyId" IS NULL OR x."partyId" <> $2))`,
+      [order.id, order.partyId],
+    )
+    const workOrder = cells[0]!.workOrderId
+    const label = await one(`SELECT id, explanation FROM "GateEvent" WHERE "tenantId" = $1 AND outcome = 'REFUSED' AND gate = 'LABEL_PRINT' ORDER BY "createdAt" LIMIT 1`, [A.tenant])
+    expect(label.explanation).toMatchObject({ phrase: 'warning.class-a' })
+    const eventId = newId()
+    await admin(
+      `INSERT INTO "GateEvent" (id, "tenantId", "companyId", "siteId", gate, "subjectType", "subjectId", outcome, "requirementId", "styleId", "marketCode", reason, explanation, "createdAt")
+       SELECT $1, "tenantId", "companyId", "siteId", gate, 'WorkOrder', $2, 'REFUSED', "requirementId", "styleId", "marketCode", $3, explanation,
+              GREATEST(now(), (SELECT max("createdAt") FROM "GateEvent"), coalesce((SELECT "releasedAt" FROM "WorkOrder" WHERE id = $2), now())) + interval '1 minute'
+         FROM "GateEvent" WHERE id = $4`,
+      [eventId, workOrder, OLD, label.id],
+    )
+    const gate = ((await links('sales')).gates as Json[]).find((row) => row.eventId === eventId)
+    expect(gate).toMatchObject({ gate: 'LABEL_PRINT', subject: { type: 'WorkOrder', id: workOrder } })
+    expect(gate!.reason).toBe('The label for Germany cannot print: the warning "Class A garment: read the instructions before use." has no approved German words. Who can fix it: compliance. How: approve the German translation in Rules & markets › Phrases.')
+    expect(JSON.stringify(await links('manager'))).not.toContain('warning.class-a')
+    // Read time only: the stored sentence is as it was.
+    expect((await one(`SELECT reason FROM "GateEvent" WHERE id = $1`, [eventId])).reason).toBe(OLD)
+  })
+
+  it('the rule, pure: only a quoted key its facts name; no words found — the quoted key goes', () => {
+    expect(quotedPhraseKeyOf(OLD, { code: 'phrase.notApproved', phrase: 'warning.class-a', language: 'de' })).toBe('warning.class-a')
+    expect(quotedPhraseKeyOf(OLD, { code: 'phrase.notApproved' })).toBeNull()
+    expect(quotedPhraseKeyOf(OLD, null)).toBeNull()
+    expect(quotedPhraseKeyOf('Made-up refusal: the release waits for the certificate.', { phrase: 'warning.class-a' })).toBeNull()
+    expect(sayPhraseWords(OLD, 'warning.class-a', null)).toBe('The label for Germany cannot print: the warning has no approved German words. Who can fix it: compliance. How: approve the German translation in Rules & markets › Phrases.')
+    expect(sayPhraseWords(OLD, 'warning.class-a', '  ')).not.toContain('warning.class-a')
+    expect(sayPhraseWords(OLD, 'warning.class-a', 'Made-up warning words.')).toContain('the warning "Made-up warning words." has')
+  })
+})
+// ── end B-SC-005 ──
