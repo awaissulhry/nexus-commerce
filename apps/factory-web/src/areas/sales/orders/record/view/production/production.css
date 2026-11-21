@@ -242,3 +242,9 @@
 .fw-pt-qrow-b { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
 .fw-pt-dt-lines { display: flex; flex-direction: column; gap: var(--nds-space-4); }
 .fw-pt-dt-lines > p { margin: 0; }
+
+/* fx9 #10: at M (720–1279 px of the tab) the number and its Ask door take the cell's first line on EVERY row, the status and tags the
+   second — one row shape (at 865 the pill wrapped under on some rows only). */
+@container pt (min-width: 720px) and (max-width: 1279px) {
+  .fw-pt-c-no > .fw-pt-inline > .fw-pt-wo-id { flex-basis: 100%; }
+}
