@@ -113,7 +113,8 @@ describe('the order on RecordFrame', () => {
       expect(html.indexOf('id="waiting"')).toBeLessThan(html.indexOf('id="freeze"'))
       expect(html.indexOf('id="history"')).toBeLessThan(html.indexOf('id="confirmation"'))
       const text = textOf(html)
-      for (const words of locale === 'en' ? ['Waiting', 'Nothing waits.', "Confirmation & the customer's yes", 'Order confirmation v2', 'How the customer said yes', 'History', 'Can it still change?'] : ['In attesa', 'Niente in attesa.', 'Conferma e sì del cliente', "Conferma d'ordine v2", 'Cronologia', 'Si può ancora cambiare?']) expect(text, words).toContain(words)
+      // F-OC-203: the last section is the Customer's agreement — their yes and our confirmation.
+      for (const words of locale === 'en' ? ['Waiting', 'Nothing waits.', "Customer's agreement", 'Their yes', 'Our confirmation', 'Order confirmation v2', 'History', 'Can it still change?'] : ['In attesa', 'Niente in attesa.', 'Accordo del cliente', 'Il loro sì', 'La nostra conferma', "Conferma d'ordine v2", 'Cronologia', 'Si può ancora cambiare?']) expect(text, words).toContain(words)
     }
     expect(draw('w2b-323-documents')).not.toMatch(/min\(70vh/)
     expect(landingOf('documents')).toMatchObject({ tab: 'changes', anchor: 'confirmation' })
@@ -175,7 +176,8 @@ describe('the order on RecordFrame', () => {
     const container = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
     expect(container).toMatch(/<OfficeRecordThread\s+docked/)
     expect(container).not.toContain('useThreadDock')
-    const documents = readFileSync(new URL('./view/DocumentsTab.tsx', import.meta.url), 'utf8')
+    // F-OC-203: the customer's yes and our confirmation are the Changes tab's Customer's agreement (the old Documents card went).
+    const documents = readFileSync(new URL('./changes/view/AgreementSection.tsx', import.meta.url), 'utf8')
     expect(documents).not.toContain('?tab=activity')
     expect(documents).not.toContain('TechPackCard')
   })

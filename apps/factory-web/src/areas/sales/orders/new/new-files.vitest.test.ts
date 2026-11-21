@@ -179,13 +179,16 @@ describe('F-CP-146: the New order sends no price key without the price grain', (
     expect(textOf(render(createElement(NewOrderView, { model: model(canOf('owner')) })))).not.toContain('Priced from')
   })
 
-  it('the confirmation PDF is sent by someone who sees prices (its Send held with the words); the words in both languages', () => {
+  // F-OC-203 (L10): rewritten — for a reader without the price grain Open, Make and Send are HIDDEN (never a held button) and one line
+  // of words says who sends it.
+  it('the confirmation PDF is sent by someone who sees prices: hidden for others, one line of words; the words in both languages', () => {
     const card = readFileSync(new URL('../confirmation/view/ConfirmationCard.tsx', import.meta.url), 'utf8')
-    expect(card).toContain("const pricedHeld = model.can.price ? null : o('pricedPdf.held')")
-    expect(card).toContain('heldReason={pricedHeld ?? (held ? d(held.key) : busy)}')
+    expect(card).toContain('const priced = model.can.price')
+    expect(card).toContain("{!priced && <p className=\"fw-pt-quiet\">{t('changesTab.agreement.noPrice')}</p>}")
+    expect(card).not.toContain('pricedPdf.held')
     for (const locale of ['en', 'it'] as const) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      expect(t('pricedPdf.held'), locale).not.toBe('pricedPdf.held')
+      expect(t('changesTab.agreement.noPrice'), locale).not.toBe('changesTab.agreement.noPrice')
       expect(t('priced.fromList', { customer: 'Brand Alpha' }), locale).toContain('Brand Alpha')
     }
   })

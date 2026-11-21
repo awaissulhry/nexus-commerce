@@ -16,6 +16,7 @@ import { Frame } from '../../record/view/Dialogs'
 import { PRIORITY_LEVELS, type FreezeField, type PriorityLevel } from '../api'
 import { confirmationHref, depositKindChoices, frozenProblemsOf, NAMESPACE, pricedProblems, sizeMoves, urgentReasonProblem, URGENT_REASON_MAX, type DepositMode } from '../model'
 import type { OrderDepthActions, OrderDepthModel } from '../use-order-depth'
+import { ASK_DAYS } from '../../record/revised-order-ask' // F-OC-203: the ask's own answer-by
 
 type Translate = (key: string, params?: Record<string, string | number>) => string
 
@@ -43,6 +44,7 @@ function Dialogs({ order, model, actions, prefix }: { order: Order; model: Order
   if (dialog.kind === 'putBack') return <PutBackDialog order={order} model={model} actions={actions} />
   if (dialog.kind === 'send') return <SendDialog order={order} model={model} actions={actions} prefix={prefix} />
   if (dialog.kind === 'priced') return <PricedDialog order={order} model={model} actions={actions} />
+  if (dialog.kind === 'askRevision') return <AskRevisionDialog order={order} model={model} actions={actions} /> // F-OC-203 (L5)
   return null
 }
 
@@ -168,11 +170,53 @@ function PutBackDialog({ order, model, actions }: { order: Order; model: OrderDe
   )
 }
 
+// ---- F-OC-203 (10-design §7 D5; 18-lead-settles L5): Ask {customer} to re-confirm revision N? -------------------------------------
+/**
+ * The customer re-confirms a revision whose ask was never sent (or expired): a task in its portal and, with an e-mail address on
+ * file (the confirmation's own recipient), an e-mail; they answer with their typed name. Until they answer, the row waits under
+ * Waiting on {customer}. After the ask: where it went, and Done.
+ */
+function AskRevisionDialog({ order, model, actions }: { order: Order; model: OrderDepthModel; actions?: OrderDepthActions }) {
+  const t = useT('orders')
+  const d = useT(NAMESPACE)
+  const locale = useLocale()
+  const dialog = model.dialog
+  if (dialog?.kind !== 'askRevision') return null
+  const customer = order.party?.legalName ?? ''
+  const ask = model.askRevision ?? null
+  const recipient = ask?.recipient
+  const reach = ask?.reach ?? null
+  const due = formatDate(new Date(Date.now() + ASK_DAYS * 86_400_000), { locale })
+  return (
+    <Frame
+      title={t('changesTab.ask.title', { customer, revision: dialog.revision })}
+      held={model.busy ? d('held.busy') : recipient === undefined ? t('changesTab.ask.reading') : null}
+      go={() => actions?.onAskRevision?.()}
+      goLabel={model.busy ? d('common.working') : t('changesTab.ask.go', { customer })}
+      onClose={closeOf(actions)}
+      problem={<Problem model={model} />}
+      size="md"
+      done={reach ? <Banner tone="success" title={reach.reach === 'email' ? t('changesTab.ask.doneEmail', { customer, email: reach.email }) : t('changesTab.ask.donePortal', { customer })} /> : undefined}
+    >
+      <p className="fw-sod-hint">{t('changesTab.ask.body', { customer, number: order.number })}</p>
+      <KeyValue
+        dense
+        labelCase="sentence"
+        items={[
+          { label: t('changesTab.ask.dueLabel'), value: due },
+          { label: t('changesTab.ask.toLabel'), value: recipient === undefined ? t('changesTab.ask.reading') : recipient ? `${recipient.name} · ${recipient.email}` : t('changesTab.ask.portalOnly', { customer }) },
+        ]}
+      />
+      <p className="fw-sod-hint">{t('changesTab.ask.until', { customer })}</p>
+    </Frame>
+  )
+}
+// ---- end F-OC-203
+
 // ---- Send the confirmation (SCR-037's one send dialog) --------------------------------------------------------------------------
 
 function SendDialog({ order, model, actions, prefix }: { order: Order; model: OrderDepthModel; actions?: OrderDepthActions; prefix: string }) {
   const d = useT(NAMESPACE)
-  const locale = useLocale()
   const dialog = model.dialog
   const send = model.send
   const confirmation = model.confirmation?.value ?? null
@@ -188,7 +232,7 @@ function SendDialog({ order, model, actions, prefix }: { order: Order; model: Or
         title: d('send.title', { number: order.number }),
         documentLabel: newest ? d('send.document', { number: order.number, version: newest.version }) : d('send.documentNew', { number: order.number }),
         recipient: recipient ? { name: recipient.name, email: recipient.email } : null,
-        language: locale === 'en' ? 'en' : 'it',
+        language: order.language === 'en' ? 'en' : 'it', // F-OC-203 (L9): the order's language, the one the PDF is made in
         how: { kind: 'pdfOnly' },
         freezeNote: outdated ? d('send.freezeNew') : d('send.freeze', { version: newest?.version ?? 1 }),
         recipientCan: [d('send.can')],

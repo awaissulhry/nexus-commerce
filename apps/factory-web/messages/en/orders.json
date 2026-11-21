@@ -1063,7 +1063,6 @@
   },
   "docs": {
     "acceptedTitle": "Accepted quote",
-    "openQuote": "Open quote {number}",
     "noQuote": {
       "title": "Typed by the office — no quote"
     },
@@ -1074,9 +1073,6 @@
       "LINK": "On the customer's link",
       "OFFICE": "Recorded by the office"
     },
-    "document": "The signed PDF",
-    "matches": "Matches the PDF sent",
-    "differs": "Differs from the PDF sent",
     "terms": "Terms version",
     "fromRequest": {
       "title": "Made from request {number} — no quote"
@@ -1533,10 +1529,6 @@
       "reaccept": "The changed order waits for the customer's new yes",
       "since": "since {date}",
       "due": "due {date}"
-    },
-    "confirmation": {
-      "title": "Confirmation & the customer's yes",
-      "yes": "How the customer said yes"
     },
     "history": {
       "title": "History",
@@ -2430,9 +2422,6 @@
   "priced": {
     "fromList": "Priced from {customer}'s price list"
   },
-  "pricedPdf": {
-    "held": "It shows prices: it is sent by someone who sees prices."
-  },
   "priceCheck": {
     "EQUAL": "Equal",
     "NOT_EQUAL": "Not equal",
@@ -3105,6 +3094,83 @@
       "customerRule": "Rule of {customer}",
       "shipToChecked": "Checked when the customer asks",
       "next": "From {stage}: {word}"
+    },
+    "agreement": {
+      "title": "Customer's agreement",
+      "info": "How the customer said yes, and whether our confirmation prints the order as it is now. The confirmation shows prices: someone who sees prices opens and sends it. It is made and sent in the order's language.",
+      "tag": {
+        "cancelled": "Cancelled",
+        "afterApproval": "After our approval",
+        "saidNo": "They said no",
+        "waiting": "Waiting for their yes",
+        "notAsked": "Not asked yet",
+        "sendNew": "Send a new confirmation",
+        "notSent": "Not sent yet",
+        "agreed": "Agreed · confirmed"
+      },
+      "answer": {
+        "cancelled": "Nothing is sent for a cancelled order.",
+        "afterApproval": "The confirmation is made once we approve the order.",
+        "saidNo": "{customer} said no to revision {revision} on {date}: decide in Waiting — restore it as before, or change it again.",
+        "saidNoNoDate": "{customer} said no to revision {revision}: decide in Waiting — restore it as before, or change it again.",
+        "waiting": "Revision {revision} waits for their yes since {date}: it is listed in Waiting on {customer}.",
+        "notAsked": "Revision {revision} needs their yes, but it was never asked: ask {customer} now.",
+        "expired": "Revision {revision} needs their yes, and the ask expired: ask {customer} again.",
+        "sendNew": "Send a new confirmation: the order changed after v{version} was sent.",
+        "notSent": "The confirmation is not sent yet.",
+        "agreed": "Agreed and confirmed: v{version} sent {date}."
+      },
+      "toWaiting": "Waiting ↑",
+      "theirs": "Their yes",
+      "ours": "Our confirmation",
+      "quote": "Quote {number} ›",
+      "accepted": "Accepted quote {quote}",
+      "emailChecked": "e-mail checked",
+      "signed": {
+        "kept": "Signed PDF kept",
+        "missing": "We can't find the PDF they signed",
+        "differs": "The signed PDF differs",
+        "unchecked": "We can't check the signed PDF"
+      },
+      "noWithdrawal": "Made to measure: no right of withdrawal, accepted on the quote.",
+      "portal": "Placed in the portal as {number} on {date}",
+      "portalBy": "Placed in the portal by {name} as {number} on {date}",
+      "revision": {
+        "waiting": "Revision {revision}: asked, waiting for their yes since {date}",
+        "saidNo": "Revision {revision}: they said no",
+        "notAsked": "Revision {revision}: their yes was never asked",
+        "expired": "Revision {revision}: the ask expired without an answer"
+      },
+      "ask": "Ask {customer}…",
+      "state": {
+        "upToDate": "Up to date",
+        "outdated": "Out of date",
+        "none": "Not made yet",
+        "notYet": "Not possible yet"
+      },
+      "sentTo": "v{version} sent {date} to {to}",
+      "language": "In {language}, the order's language",
+      "lang": {
+        "it": "Italian",
+        "en": "English"
+      },
+      "send": "Send version {version}…",
+      "more": "More for the confirmation",
+      "makeOnly": "Make only (to print)",
+      "openToPrint": "Open to print",
+      "noPrice": "The confirmation shows prices: someone who sees prices sends it."
+    },
+    "ask": {
+      "title": "Ask {customer} to re-confirm revision {revision}?",
+      "body": "{customer} gets a task in its portal and, with an e-mail address on file, an e-mail: “Re-confirm the revised order {number}”. They answer with their typed name.",
+      "dueLabel": "Answer by",
+      "toLabel": "To",
+      "reading": "Reading who it goes to…",
+      "portalOnly": "No e-mail address on file: asked in {customer}'s portal only",
+      "until": "Until they answer, the row waits under Waiting on {customer}.",
+      "go": "Ask {customer}",
+      "doneEmail": "Asked {customer}: an e-mail went to {email}, and the task is in its portal.",
+      "donePortal": "Asked in {customer}'s portal: no e-mail address on file."
     }
   }
 }

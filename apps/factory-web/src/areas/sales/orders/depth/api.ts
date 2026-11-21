@@ -162,6 +162,8 @@ export const confirmationSchema = z.object({
   upToDate: z.boolean().nullable(),
   mayMake: z.boolean(),
   versions: z.array(z.object({ id: z.string(), version: z.number(), number: z.string().nullable(), language: z.string(), fileId: z.string(), createdAt: instant, createdBy: z.string().nullable(), sent: z.boolean() })),
+  // F-OC-203 (B-OC-014): every send, newest first (the version, when, to whom, by which office person); absent: the last send only.
+  sends: z.array(z.object({ version: z.number(), at: instant, to: z.array(z.string()), by: z.string().nullable() })).optional(),
 })
 export type Confirmation = z.infer<typeof confirmationSchema>
 

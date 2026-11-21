@@ -323,12 +323,10 @@
   },
   "confirmation": {
     "title": "Conferma d’ordine",
-    "newTab": "Apri in una nuova scheda",
     "failed": "Impossibile leggere la conferma",
     "reading": "Lettura della conferma…",
     "make": "Crea la conferma",
     "makeNew": "Crea la versione {version}",
-    "send": "Invia…",
     "none": "Non ancora creata",
     "noneBody": "La conferma riporta le righe con taglie, prezzi, date, termini e la classe di certificazione di ogni modello.",
     "outdated": "L’ordine è cambiato dalla versione {version}: crea una nuova versione prima di inviarla.",
@@ -344,7 +342,6 @@
       "notYet": "Non ancora possibile"
     },
     "notSent": "Non ancora inviata",
-    "sentTag": "Conferma v{version} inviata",
     "rowTitle": "Conferma d'ordine v{version}",
     "rowMade": "fatta il {date}",
     "rowSent": "inviata il {date} (v{version})",

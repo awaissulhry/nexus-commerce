@@ -304,6 +304,9 @@ export const versionSchema = z.object({
       termsVersion: z.string().nullable(),
       noWithdrawalAccepted: z.boolean(),
       acceptedAt: instant,
+      // F-OC-203 (B-OC-015): the signed PDF's check in words — kept, missing (no stored file: it read "differs" before) or different;
+      // absent in an older answer (the order's agreement then says it cannot check it, never red).
+      documentCheck: z.enum(['MATCHES', 'PDF_MISSING', 'DIFFERS']).optional(),
     })
     .nullable(),
   deposit: depositSchema.nullable(),

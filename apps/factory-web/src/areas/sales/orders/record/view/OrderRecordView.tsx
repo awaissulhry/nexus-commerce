@@ -480,7 +480,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
               action={
                 order.amendments.count > 0 && order.amendments.latestRevision !== null ? (
                   <Button size="sm" variant="quiet" asChild>
-                    <TabLink href={tabHref(recordHref, 'changes', search) /* F-OP-210 */}>{t('record.amended', { revision: order.amendments.latestRevision })}</TabLink>
+                    <TabLink href={`${tabHref(recordHref, 'changes', search)}#confirmation` /* F-OP-210 · F-OC-203: the Customer's agreement */}>{t('record.amended', { revision: order.amendments.latestRevision })}</TabLink>
                   </Button>
                 ) : undefined
               }

@@ -63,9 +63,12 @@ export async function askRecipientOf(api: ApiClient, order: Pick<Order, 'partyId
   }
 }
 
-/** Ask the customer to re-confirm the revision; a refusal throws (the caller says "the ask could not be sent", the save stands). */
-export async function askRevisedOrder(api: ApiClient, order: Pick<Order, 'language' | 'partyId' | 'chain'>, amendmentId: string, question: string, read: { readonly quotes: boolean }): Promise<AskReach> {
-  const recipient = await askRecipientOf(api, order, read)
+/**
+ * Ask the customer to re-confirm the revision; a refusal throws (the caller says "the ask could not be sent", the save stands). The
+ * recipient as a window already read it (`known`, null: none), else read now.
+ */
+export async function askRevisedOrder(api: ApiClient, order: Pick<Order, 'language' | 'partyId' | 'chain'>, amendmentId: string, question: string, read: { readonly quotes: boolean }, known?: { readonly name: string; readonly email: string } | null): Promise<AskReach> {
+  const recipient = known !== undefined ? known : await askRecipientOf(api, order, read)
   await askApproval(api, revisedOrderAskBody(order, amendmentId, question, recipient))
   return recipient ? { reach: 'email', email: recipient.email } : { reach: 'portal' }
 }

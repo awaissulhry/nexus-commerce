@@ -44,6 +44,10 @@ import {
 import { outsideRefusalOf } from '../../../_shared/document-send/model'
 import { confirmationRecipient, confirmationSendBody, depthCanOf, PRICED_EMPTY, pricedBodyOf, pricedProblems, priorityBody, readProblemOf, writeProblemOf, type DepthCan, type PricedDraft } from './model'
 import type { Phrase } from '../model'
+// ---- F-OC-201 / 203 (L5, L9): the confirmation in the order's language; "Ask {customer}…" on a revision never asked ----
+import { customerLocaleOf, customerQuestionOf } from '../record/lines-draft'
+import { askRecipientOf, askRevisedOrder, type AskReach } from '../record/revised-order-ask'
+// ---- end F-OC-201 / 203
 
 /** One part the depth reads: null value while it loads; a problem when the read failed (never drawn as empty). */
 export interface DepthPart<T> {
@@ -60,6 +64,8 @@ export type DepthDialog =
   | { kind: 'priced' }
   | { kind: 'putBack'; changeId: string; reason: string }
   | { kind: 'plan' }
+  /** F-OC-203 (L5): "Ask {customer}…" — the customer re-confirms this revision (its ask was never sent, or expired). */
+  | { kind: 'askRevision'; amendmentId: string; revision: number }
 
 /** The priced change's dialog: the amendment it prices, the draft, the preview as last read. */
 export interface PricedState {
@@ -74,6 +80,12 @@ export interface SendState {
   result: { to: string; at: string } | null
   /** TH-0 follow-up (B-TH-004): the API named an address of another customer — its lines and the person's tick. */
   outside?: { lines: string[]; checked: boolean } | null
+}
+
+/** F-OC-203 (L5): who the ask goes to (read when the window opens; null: no e-mail on file — the portal only) and where it went. */
+export interface AskRevisionState {
+  recipient: { name: string; email: string } | null | undefined
+  reach: AskReach | null
 }
 
 export interface OrderDepthModel {
@@ -98,6 +110,8 @@ export interface OrderDepthModel {
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
   priced: PricedState | null
   send: SendState | null
+  /** F-OC-203: the "Ask {customer}…" window's state; absent: not open. */
+  askRevision?: AskRevisionState | null
 }
 
 export interface OrderDepthActions {
@@ -115,6 +129,8 @@ export interface OrderDepthActions {
   onPricedStart?: (amendment: PricedState['amendment']) => void
   onPricedDraft?: (next: Partial<PricedDraft>) => void
   onPricedApply?: () => void
+  /** F-OC-203 (L5): send the revision's ask (the ONE helper, revised-order-ask.ts). */
+  onAskRevision?: () => void
   onRetry?: (part: 'depth' | 'approval' | 'freeze' | 'changes' | 'materials' | 'confirmation' | 'techPack') => void
   onDismissNotice?: () => void
 }
@@ -152,7 +168,7 @@ function usePart<T>(key: string | null, read: (signal: AbortSignal) => Promise<T
  * moves (every write moves it), and does the writes, one at a time, each with the order's version as read and one
  * Idempotency-Key per dialog. A write that answers the order hands it to the studio (`onOrder`).
  */
-export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; order: Order | null; tab: RecordTab; language: 'it' | 'en'; onOrder: (order: Order) => void; onReload: () => void; onAmendDone: () => void }): { model: OrderDepthModel; actions: OrderDepthActions } {
+export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; order: Order | null; tab: RecordTab; onOrder: (order: Order) => void; onReload: () => void; onAmendDone: () => void }): { model: OrderDepthModel; actions: OrderDepthActions } {
   const { api, session, order, tab } = input
   const can = useMemo(() => depthCanOf(session.permissions), [session.permissions])
   const id = order?.id ?? null
@@ -227,6 +243,22 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
     }
     // The order's id is what the recipient depends on.
   }, [sendOpen, id])
+
+  // ---- F-OC-203 (L5): "Ask {customer}…" — who it goes to, read when the window opens (the confirmation's own rule) ----
+  const [askRevision, setAskRevision] = useState<AskRevisionState | null>(null)
+  const readsQuotes = session.permissions.includes('quotes.view')
+  const askingRevision = dialog?.kind === 'askRevision' ? dialog.amendmentId : null
+  useEffect(() => {
+    if (!askingRevision || !order) return
+    let gone = false
+    setAskRevision({ recipient: undefined, reach: null })
+    void askRecipientOf(api, order, { quotes: readsQuotes }).then((recipient) => !gone && setAskRevision((known) => (known ? { ...known, recipient } : known)))
+    return () => {
+      gone = true
+    }
+    // The revision asked about and the order are what the recipient depends on.
+  }, [askingRevision, id])
+  // ---- end F-OC-203
 
   /** One write at a time; a refusal is said in the dialog (or as a notice when none is open). */
   const write = useCallback(
@@ -318,7 +350,7 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
     onMakeConfirmation: () => {
       if (!order) return
       void write(async (key) => {
-        const answer = await makeConfirmation(api, order.id, input.language, key)
+        const answer = await makeConfirmation(api, order.id, customerLocaleOf(order) /* F-OC-203 (L9): the order's language */, key)
         putConfirmation(answer.confirmation)
         if (!answer.made) setNotice({ tone: 'info', words: { key: 'notice.confirmationSame', params: { version: answer.version } } })
         againDepth()
@@ -331,7 +363,7 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
       void write(
         async (key) => {
           // TH-0 follow-up (B-TH-004): an address of another customer is refused until the person ticks "Send outside this customer".
-          const body = confirmationSendBody({ to: recipient.email, cc: now.cc, subject: now.subject, message: now.message, language: input.language, outsideTicked: send?.outside?.checked === true })
+          const body = confirmationSendBody({ to: recipient.email, cc: now.cc, subject: now.subject, message: now.message, language: customerLocaleOf(order) /* F-OC-203 (L9) */, outsideTicked: send?.outside?.checked === true })
           const answer = await sendConfirmation(api, order.id, body, key).catch((error: unknown) => {
             const outside = outsideRefusalOf(error)
             if (!outside || outside.hidden) throw error
@@ -390,6 +422,22 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
         setNotice({ tone: 'success', words: { key: 'notice.priced', params: { revision: answer.change.revision } } })
       }, null)
     },
+    // F-OC-203 (L5): the customer re-confirms the revision — asked on it, to the recipient read when the window opened; the window
+    // stays open with where it went, and the changes are read again (Waiting on {customer} lists the ask).
+    onAskRevision: () => {
+      const now = dialogRef.current
+      if (now?.kind !== 'askRevision' || !order) return
+      const recipient = askRevision?.recipient
+      void write(
+        async () => {
+          const reach = await askRevisedOrder(api, order, now.amendmentId, customerQuestionOf(order, ''), { quotes: readsQuotes }, recipient)
+          setAskRevision((known) => ({ recipient: known?.recipient, reach }))
+          againChanges()
+        },
+        null,
+        true,
+      )
+    },
     // F-PT-402 (B-PT-013): the tech pack's files open through the order's own open route (the ONE viewer), never a bare download.
   }
 
@@ -398,6 +446,7 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
     setDialog(null)
     setPriced(null)
     setSend(null)
+    setAskRevision(null) // F-OC-203
   }, [id])
 
   return {
@@ -419,6 +468,7 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
       notice,
       priced,
       send: send ? { ...send, pdf: send.pdf ?? confirmationPdf?.value ?? null } : null,
+      askRevision: dialog?.kind === 'askRevision' ? askRevision : null, // F-OC-203
     },
     actions: { ...actions, onRetry: (part) => (part === 'confirmation' ? (againConfirmation(), againPdf()) : actions.onRetry?.(part)) },
   }

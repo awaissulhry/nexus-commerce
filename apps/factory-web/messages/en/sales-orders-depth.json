@@ -323,12 +323,10 @@
   },
   "confirmation": {
     "title": "Order confirmation",
-    "newTab": "Open in new tab",
     "failed": "Couldn’t read the confirmation",
     "reading": "Reading the confirmation…",
     "make": "Make confirmation",
     "makeNew": "Make version {version}",
-    "send": "Send…",
     "none": "Not made yet",
     "noneBody": "The confirmation prints the lines with sizes, prices, dates, terms and each style’s certificate class.",
     "outdated": "The order changed since version {version}: make a new version before sending it.",
@@ -344,7 +342,6 @@
       "notYet": "Not possible yet"
     },
     "notSent": "Not sent yet",
-    "sentTag": "Confirmation v{version} sent",
     "rowTitle": "Order confirmation v{version}",
     "rowMade": "made {date}",
     "rowSent": "sent {date} (v{version})",
