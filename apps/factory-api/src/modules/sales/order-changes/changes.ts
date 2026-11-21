@@ -65,7 +65,8 @@ import { putBackReasonWords, serverReasonOf } from '@nexus/factory-domain/sales/
  *                                                        decision in words, and whether it may be put back
  *   POST /sales/orders/:orderId/changes/:amendmentId/put-back
  *                                                        orders.manage: the order written back as it was before that change
- *                                                        (its latest), when the yes was refused or the customer refused it:
+ *                                                        (its latest), when the yes was refused or the customer refused it
+ *                                                        (B-OC-013: or its ask expired unanswered):
  *                                                        a new amendment (no yes asked, no re-acceptance), its extra deposit
  *                                                        cancelled while nothing is paid on it
  *   GET  /sales/deposit-kinds?companyId=                 orders.view: the deposit kinds with their words and whether the
@@ -168,7 +169,8 @@ async function namesOf(db: Reader, ids: readonly (string | null)[]): Promise<Map
 // ── B-OC-010 (order changes tab R6a; 13-backend §4): why a change is not restored as before, in the office's words (EN + IT) ──
 export const PUT_BACK_WHY = Object.freeze({
   notLatest: { en: 'Only the latest change can be restored as before.', it: "Si può ripristinare com'era solo l'ultima modifica." },
-  noRefusal: { en: 'A change is restored as before when its yes was refused or the customer refused it.', it: "Una modifica si ripristina com'era quando il suo sì è stato rifiutato o il cliente l'ha rifiutata." },
+  // B-OC-013 (Owner D5): + the customer's silence (its ask expired).
+  noRefusal: { en: 'A change is restored as before when its yes was refused, or the customer refused it or did not answer in time.', it: "Una modifica si ripristina com'era quando il suo sì è stato rifiutato, o il cliente l'ha rifiutata o non ha risposto in tempo." },
 } as const satisfies Record<string, Words>)
 
 /** "The order is partly shipped: its lines no longer change." (the order's status in the change requests' own words). */
@@ -180,8 +182,12 @@ export function putBackStatusWhy(status: string): Words {
 /** The order's states in which a change may be restored as before (its lines still change). */
 const PUT_BACK_STATES: readonly string[] = ['CONFIRMED', 'IN_PRODUCTION', 'READY']
 
-/** B-OC-010: a reason to restore it — our yes refused, or the customer's no to it (its newest ask). Pure. */
-export const putBackCause = (yesStatus: string | null, customerStatus: string | null): boolean => yesStatus === 'REJECTED' || customerStatus === 'REFUSED'
+/**
+ * B-OC-010: a reason to restore it — our yes refused, or the customer's no to it (its NEWEST ask: one asked again and open, or
+ * answered, wins). B-OC-013 (order changes tab R9; Owner D5 2026-11-22): or that newest ask EXPIRED — silence is not a yes, and
+ * without this there is no way back (our undo, never a yes for the customer). Pure.
+ */
+export const putBackCause = (yesStatus: string | null, customerStatus: string | null): boolean => yesStatus === 'REJECTED' || customerStatus === 'REFUSED' || /* B-OC-013 */ customerStatus === 'EXPIRED'
 
 /** What may be put back: the latest change, when its yes was refused or the customer refused it (B-OC-010: in words, EN + IT). */
 function putBackWhy(latest: boolean, yesStatus: string | null, customerStatus: string | null, order: Pick<OrderRow, 'status'>): Words | null {
@@ -319,7 +325,9 @@ export async function putBackChange(caller: CommandCaller, orderId: string, amen
     const before = row.before as unknown as OrderSnapshot
     const linesNow = new Set((await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id))
     // B-OC-012: the default words are the domain's template (serverReasonOf reads them back as PUT_BACK).
-    const reason = (body.reason?.trim() || putBackReasonWords(row.revision, target.yes.state === 'TURNED_DOWN' ? 'YES_REFUSED' : 'CUSTOMER_REFUSED')).slice(0, 500)
+    // B-OC-013: after the customer's silence (its ask expired), "…: the customer did not answer in time."
+    const cause = target.yes.state === 'TURNED_DOWN' ? 'YES_REFUSED' : target.customer.decision === 'EXPIRED' ? 'CUSTOMER_SILENT' : 'CUSTOMER_REFUSED'
+    const reason = (body.reason?.trim() || putBackReasonWords(row.revision, cause)).slice(0, 500)
     const amend = putBackBody(before, linesNow, body.version, reason)
     // The yes still waiting on the change (the customer refused first) is taken back: the change goes away.
     if (target.yes.state === 'WAITING' && target.yes.taskId) {

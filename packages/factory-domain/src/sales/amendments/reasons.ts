@@ -46,12 +46,16 @@ export function requestReasonWords(request: RequestReasonFacts): string {
   return `The customer's ${what} of ${request.askedOn} from the portal${request.reason ? `: ${request.reason}` : ''}`
 }
 
-/** Why a change was put back as it was (sales/order-changes changes.ts putBackChange): our yes refused, or the customer's no. */
-export const PUT_BACK_CAUSES = ['YES_REFUSED', 'CUSTOMER_REFUSED'] as const
+/**
+ * Why a change was put back as it was (sales/order-changes changes.ts putBackChange): our yes refused, or the customer's no —
+ * B-OC-013 (order changes tab R9; Owner D5 2026-11-22): or the customer's silence (its ask expired: silence is not a yes).
+ */
+export const PUT_BACK_CAUSES = ['YES_REFUSED', 'CUSTOMER_REFUSED', /* B-OC-013 */ 'CUSTOMER_SILENT'] as const
 export type PutBackCause = (typeof PUT_BACK_CAUSES)[number]
 const PUT_BACK_CAUSE_WORDS: Readonly<Record<PutBackCause, string>> = Object.freeze({
   YES_REFUSED: 'its yes was refused',
   CUSTOMER_REFUSED: 'the customer refused it',
+  CUSTOMER_SILENT: 'the customer did not answer in time', // B-OC-013
 })
 
 /** The put-back's own amendment, with no typed reason: "Put back as before revision 2: the customer refused it." */

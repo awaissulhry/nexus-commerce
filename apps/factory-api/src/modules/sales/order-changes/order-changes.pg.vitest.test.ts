@@ -622,3 +622,38 @@ describe('B-OC-010 / B-OC-011: a change names the customer request it carried ou
   })
 })
 // ── end B-OC-010 / B-OC-011 ──
+
+// ── B-OC-013 (order changes tab R9; Owner D5 2026-11-22: silence is not a yes) ──
+describe('B-OC-013: a change the customer did not answer in time may be restored as before; asked again, it waits again', () => {
+  it('expired → offered and may, restored with the server’s words; asked again (open) → not offered', async () => {
+    await refreshLines()
+    const row = await orderRow(order.id)
+    const changed = await ok('sales', 'POST', `/sales/orders/${order.id}/amendments`, { version: row.version, reason: 'Made-up: one more on line 20, the customer to confirm.', askCustomer: true, lines: [{ id: line10.id }, { id: line20.id, sizes: sizesOf(line20, { [redSize]: (line20.sizes as Record<string, number>)[redSize]! + 1 }) }] }, 201)
+    expect(changed.amendment.reacceptance).toBe('NEEDED')
+    const plant = (status: 'EXPIRED' | 'OPEN', ago: string) =>
+      force(
+        `INSERT INTO "ApprovalRequest" (id, "tenantId", "companyId", "recordType", "recordId", "partyId", kind, question, "dueAt", status, "createdAt") VALUES ($1, $2, $3, 'SalesOrderAmendment', $4, $5, 'REVISED_ORDER', 'Made-up: please confirm the order as revised.', now() + interval '1 day', $6, now() - interval '${ago}')`,
+        [newId(), A.tenant, A.companyA, changed.amendment.id, p1, status],
+      )
+    await plant('EXPIRED', '3 days')
+    const expired = (await ok('sales', 'GET', `/sales/orders/${order.id}/changes`)).changes[0]
+    expect(expired).toMatchObject({ id: changed.amendment.id, customer: { decision: 'EXPIRED' }, putBack: { offered: true, may: true, why: null } })
+    // A reader without orders.manage is offered nothing.
+    expect((await ok('reader', 'GET', `/sales/orders/${order.id}/changes`)).changes[0].putBack).toMatchObject({ offered: false, may: false })
+    // Asked again: the open ask is the newest — it waits for the customer again, nothing to restore.
+    await plant('OPEN', '1 hour')
+    const again = (await ok('sales', 'GET', `/sales/orders/${order.id}/changes`)).changes[0]
+    expect(again).toMatchObject({ customer: { decision: 'WAITING' }, putBack: { offered: false, may: false } })
+    expect(again.putBack.why.en).toMatch(/did not answer in time/)
+    await no('sales', 'POST', `/sales/orders/${order.id}/changes/${changed.amendment.id}/put-back`, { version: (await orderRow(order.id)).version }, 409)
+    // That one lapses too: restored as before, with the server's words; the next revision restores it.
+    await force(`UPDATE "ApprovalRequest" SET status = 'EXPIRED' WHERE "recordId" = $1 AND status = 'OPEN'`, [changed.amendment.id])
+    const back = await ok('sales', 'POST', `/sales/orders/${order.id}/changes/${changed.amendment.id}/put-back`, { version: (await orderRow(order.id)).version }, 201)
+    expect(back.change).toMatchObject({ revision: changed.amendment.revision + 1, restores: changed.amendment.revision, reasonCode: 'PUT_BACK' })
+    expect(back.change.reason).toBe(`Put back as before revision ${changed.amendment.revision}: the customer did not answer in time.`)
+    const [, now20] = await linesOf(order.id)
+    expect(now20!.sizes).toEqual(line20.sizes)
+    await refreshLines()
+  })
+})
+// ── end B-OC-013 ──

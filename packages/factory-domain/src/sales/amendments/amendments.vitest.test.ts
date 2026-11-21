@@ -214,6 +214,7 @@ describe('B-OC-012: serverReasonOf — the automatic words, an accepted request,
       [requestReasonWords({ kind: 'CANCEL', reasonCode: 'NO_LONGER_NEEDED', askedOn: '2026-11-19', reason: null }), 'REQUEST'],
       [putBackReasonWords(2, 'CUSTOMER_REFUSED'), 'PUT_BACK'],
       [putBackReasonWords(12, 'YES_REFUSED'), 'PUT_BACK'],
+      [putBackReasonWords(3, 'CUSTOMER_SILENT'), 'PUT_BACK'], // B-OC-013
       ['Made-up: the customer phoned, one more jacket.', null],
       ["The customer's change request came by phone", null],
       ['', null],
@@ -229,6 +230,8 @@ describe('B-OC-012: serverReasonOf — the automatic words, an accepted request,
     expect(requestReasonWords({ kind: 'CANCEL', reasonCode: 'NO_LONGER_NEEDED', askedOn: '2026-11-19', reason: null })).toBe("The customer's cancel request (NO_LONGER_NEEDED) of 2026-11-19 from the portal")
     expect(putBackReasonWords(2, 'YES_REFUSED')).toBe('Put back as before revision 2: its yes was refused.')
     expect(putBackReasonWords(2, 'CUSTOMER_REFUSED')).toBe('Put back as before revision 2: the customer refused it.')
+    // B-OC-013 (Owner D5): silence is not a yes — restored after the customer's ask expired.
+    expect(putBackReasonWords(2, 'CUSTOMER_SILENT')).toBe('Put back as before revision 2: the customer did not answer in time.')
   })
 })
 // ── end B-OC-012 ──
