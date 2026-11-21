@@ -100,3 +100,17 @@ export function PartFailed({ part, problem, onRetry }: { part: string; problem: 
 export function Quiet({ children }: { children: ReactNode }) {
   return <p className="fw-pt-quiet">{children}</p>
 }
+
+/**
+ * fx5 #12: a unit in words — "pcs", "m", "ft²" — the catalogue's own (stock `uom.*`, the stock pages' words), never the code; a unit the
+ * catalogue does not know: the code in small letters.
+ */
+export function useUnitWords(): (uom: string | null | undefined) => string {
+  const s = useT('stock')
+  return (uom) => {
+    if (!uom) return ''
+    const key = `uom.${uom}`
+    const words = s(key)
+    return words === key ? uom.toLowerCase() : words
+  }
+}

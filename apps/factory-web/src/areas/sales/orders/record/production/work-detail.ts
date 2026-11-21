@@ -1,3 +1,4 @@
+import { sizeOrder } from '@nexus/factory-domain/insights/sales-reports/rules'
 import type { WorkOrderOwn } from '../overview/api'
 
 /**
@@ -21,7 +22,7 @@ type Cell = NonNullable<WorkOrderOwn['cells']>[number]
 
 const sum = (values: readonly (number | null)[]): number | null => (values.some((value) => value === null) ? null : values.reduce<number>((total, value) => total + (value ?? 0), 0))
 
-/** The cells of this order per size (in the order they come; several lines of one size are summed); null: no cells read (an older read). */
+/** The cells of this order per size (in wearing order — fx5 #14: 50 · 52 · 54, never as they came; several lines of one size are summed); null: no cells read (an older read). */
 export function sizeTableOf(cells: readonly Cell[] | undefined): SizeTable | null {
   if (!cells || cells.length === 0) return null
   const sizes: string[] = []
@@ -33,6 +34,7 @@ export function sizeTableOf(cells: readonly Cell[] | undefined): SizeTable | nul
     }
     bySize.get(cell.size)!.push(cell)
   }
+  sizes.sort(sizeOrder)
   const valueOf = (step: SizeStep, size: string): number | null => {
     const group = bySize.get(size) ?? []
     if (step === 'ordered') return group.reduce((total, cell) => total + cell.quantity, 0)

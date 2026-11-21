@@ -84,21 +84,26 @@ export function stepsOf(order: Pick<Order, 'depositRequired' | 'chain'>, dates: 
             gate: null,
           },
         ]
+  // fx5 #2: the path's own order — gates (as the read sends them), then production start, then shipping — whatever a date says (a step
+  // with no planned day never sorts last).
+  const PATH: Readonly<Record<StepRow['kind'], number>> = { DEPOSIT: 0, GATE: 1, START: 2, SHIP: 3 }
   const rows = (dates?.milestones ?? []).map((row): StepRow => {
     const own = row.gateId ? (dates?.gates.find((entry) => entry.id === row.gateId) ?? null) : null
     return { id: row.id, kind: row.kind === 'START' || row.kind === 'SHIP' ? row.kind : 'GATE', milestoneId: row.id, gateId: row.gateId, gateKind: row.gateKind, label: row.label, planned: row.target, done: row.actual, status: statusOf(row, today), who: whoOf(row, own), gate: own }
   })
-  return [...deposit, ...rows]
+  return [...deposit, ...rows.map((row, index) => ({ row, index })).sort((a, b) => PATH[a.row.kind] - PATH[b.row.kind] || a.index - b.index).map((entry) => entry.row)]
 }
 
 /** The block's chip: "N late" (OPEN steps past their day only — a step done late is no longer late, B15), "All done", or "On track". */
 export type StepsChip = { readonly kind: 'late'; readonly count: number } | { readonly kind: 'allDone' } | { readonly kind: 'onTrack' } | null
 
-export function stepsChipOf(rows: readonly StepRow[]): StepsChip {
+export function stepsChipOf(rows: readonly StepRow[], health: string | null = null): StepsChip {
   if (rows.length === 0) return null
   const late = rows.filter((row) => row.status.kind === 'late').length
   if (late > 0) return { kind: 'late', count: late }
-  return rows.every((row) => row.status.kind === 'done') ? { kind: 'allDone' } : { kind: 'onTrack' }
+  if (rows.every((row) => row.status.kind === 'done')) return { kind: 'allDone' }
+  // fx5 #7: ONE verdict — never "On track" beside an order Production now calls At risk or Late (the stored health word wins).
+  return health === 'AT_RISK' || health === 'LATE' ? null : { kind: 'onTrack' }
 }
 
 /** "Now: Trims in · waits on the planner · 3 days late (target 18 Nov)": the first open step (late first), else none. */

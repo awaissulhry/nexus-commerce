@@ -18,7 +18,7 @@ import { readOf } from '../../overview/model'
 import { askOf, boughtOf, customerGoodsOf, isThere, materialsAnswerOf } from '../../production/materials'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../LineMenu'
-import { PartFailed, PartReading, Quiet, Section } from './Kit'
+import { PartFailed, PartReading, Quiet, Section, useUnitWords } from './Kit'
 import { ReceiptDialog } from './ReceiptDialog' // F-PT-304
 
 const WORK_ORDERS_NS = 'production-work-orders'
@@ -53,7 +53,8 @@ function Materials({ order, model, actions }: { order: Order; model: OrderRecord
   // What we buy is planned on the work orders made from stock lines (made-to-measure units read their own materials on their page).
   const workOrders = read?.work?.workOrders.length ?? order.chain.workOrders.length
   const answer = materialsAnswerOf(goods, bought, workOrders)
-  const q = (value: number, uom: string | null) => `${quantityText(String(value), locale)}${uom ? ` ${uom}` : ''}`
+  const unit = useUnitWords() // fx5 #12: "pcs", "m" — never PCS, M
+  const q = (value: number, uom: string | null) => `${quantityText(String(value), locale)}${uom ? ` ${unit(uom)}` : ''}`
   const day = (value: string) => formatDate(dayInstant(value), { locale })
   const poHref = (id: string, number: string) => `${model.prefix}${recordAddress({ type: 'PurchaseOrder', id, label: number, companyId: order.companyId }, OFFICE_PAGES)}`
   const mayAsk = !!model.people?.mayNote && !!frame?.compose
@@ -76,29 +77,45 @@ function Materials({ order, model, actions }: { order: Order; model: OrderRecord
   return (
     <Section id="materials" title={t('productionTab.materials.title')} answer={answerWords} buttons={model.receipt && goods && goods.length > 0 ? [record(null, t('productionTab.receipt.open'))] : undefined} more={items.length > 0 ? <LineMenuButton label={t('productionTab.more', { section: t('productionTab.materials.title') })} items={items} /> : null} info={<p>{t('productionTab.materials.infoBody')}</p>}>
       {missingGoods.length + missingBought.length > 0 ? (
-        <ul className="fw-pt-moves" aria-label={t('productionTab.materials.missingTitle')}>
+        // fx5 #3: ONE row per missing thing, as the picture: what · how much · when | who it waits on | at most two doors at the right.
+        <ul className="fw-pt-miss" aria-label={t('productionTab.materials.missingTitle')}>
           {missingGoods.map((good) => (
-            <li key={good.id} className="fw-pt-move" id={`about-CustomerMaterial-${good.id}`}>
-              <b>{[good.item, good.colour].filter(Boolean).join(' · ')}</b>
-              <span className="fw-pt-sub">{t('productionTab.materials.stillToCome', { quantity: q(good.toCome, good.uom), arrived: q(good.arrived, null), expected: q(good.expected, good.uom) })}</span>
-              <span className="fw-pt-inline">
+            <li key={good.id} className="fw-pt-miss-row" id={`about-CustomerMaterial-${good.id}`}>
+              <span className="fw-pt-miss-what">
+                <b>{[good.item, good.colour].filter(Boolean).join(' · ')}</b>
+                <span className="fw-pt-sub">{t('productionTab.materials.stillToCome', { quantity: q(good.toCome, good.uom), arrived: q(good.arrived, null), expected: q(good.expected, good.uom) })}</span>
+              </span>
+              <span className="fw-pt-miss-who">
                 <Tag tone="warning">{t('productionTab.materials.waitsCustomer')}</Tag>
-                {mayAsk ? <ToolbarButton icon={<Reply size={14} aria-hidden />} label={t('productionTab.materials.askCustomer')} onClick={() => frame?.compose?.({ messageId: null, mode: 'reply' })} /> : null}
+              </span>
+              <span className="fw-pt-miss-do">
+                {mayAsk ? <ToolbarButton icon={<Reply size={14} aria-hidden />} label={t('productionTab.materials.askCustomer')} tooltipAlign="end" onClick={() => frame?.compose?.({ messageId: null, mode: 'reply' })} /> : null}
                 {record(good.id, t('productionTab.receipt.openRow'))}
               </span>
             </li>
           ))}
           {missingBought.map((material) => (
-            <li key={material.key} className="fw-pt-move">
-              <b>{material.label ?? '—'}</b>
-              <span className="fw-pt-inline">
-                <ReadinessPill word={material.word} date={material.date} />
-                {material.short !== null && material.short > 0 ? <span className="fw-pt-sub">{r('readiness.short', { quantity: quantityText(String(material.short), locale), uom: material.uom ?? '' })}</span> : null}
-                {material.workOrders.length > 0 ? <span className="fw-pt-sub">{material.workOrders.join(', ')}</span> : null}
+            <li key={material.key} className="fw-pt-miss-row">
+              <span className="fw-pt-miss-what">
+                <b>{material.label ?? '—'}</b>
+                <span className="fw-pt-inline">
+                  <ReadinessPill word={material.word} date={material.date} />
+                  <span className="fw-pt-sub">
+                    {[
+                      material.short !== null && material.short > 0 ? r('readiness.short', { quantity: quantityText(String(material.short), locale), uom: unit(material.uom) }) : null,
+                      material.workOrders.length > 0 ? t('productionTab.materials.forWorkOrders', { numbers: material.workOrders.join(', ') }) : null,
+                      ...material.purchaseOrders.slice(1).map((po) => po.number),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </span>
               </span>
-              <span className="fw-pt-inline">
+              <span className="fw-pt-miss-who">
                 <Tag tone="neutral">{t('productionTab.materials.waitsSupplier')}</Tag>
-                {material.purchaseOrders.map((po) => (
+              </span>
+              <span className="fw-pt-miss-do">
+                {material.purchaseOrders.slice(0, 1).map((po) => (
                   <Link key={po.id} className="fw-pt-link" href={poHref(po.id, po.number)}>
                     {t('productionTab.materials.openPo', { number: po.number })}
                     {po.dueDate ? ` · ${day(po.dueDate)}` : ''}
@@ -167,6 +184,8 @@ function Materials({ order, model, actions }: { order: Order; model: OrderRecord
           {workOrders === 0 ? <Quiet>{t('productionTab.materials.noWork')}</Quiet> : null}
           {model.readiness && !model.readiness.value && !model.readiness.problem ? <PartReading rows={2} height={22} /> : null}
           {model.readiness?.problem ? <PartFailed part={t('productionTab.materials.buyTitle')} problem={model.readiness.problem} /> : null}
+          {/* fx5 #14: read and nothing to buy: one quiet line, never an empty heading. */}
+          {bought && bought.length === 0 && workOrders > 0 ? <Quiet>{t('productionTab.materials.buyNothing')}</Quiet> : null}
           {bought && bought.length > 0 ? (
             <>
               {missingBought.length > 0 ? (

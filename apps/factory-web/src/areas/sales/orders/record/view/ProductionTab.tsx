@@ -25,7 +25,7 @@ const WORK_ORDERS_NS = 'production-work-orders'
  */
 export function ProductionTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   return (
-    <WithMessages namespaces={[WORK_ORDERS_NS, 'production' /* F-SA-235 · F-PT-102: the health's and the stages' words */]}>
+    <WithMessages namespaces={[WORK_ORDERS_NS, 'production' /* F-SA-235 · F-PT-102: the health's and the stages' words */, 'stock' /* fx5 #12: the unit words */]}>
       <div className="fw-pt">
         <NowSection order={order} model={model} actions={actions} />
         <WorkOrdersSection order={order} model={model} actions={actions} />

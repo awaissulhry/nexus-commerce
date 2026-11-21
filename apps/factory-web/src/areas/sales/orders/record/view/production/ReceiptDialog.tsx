@@ -8,7 +8,7 @@ import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import type { Order } from '../../../api'
 import { isHide, receivePlacesOf, type ReceiptActions, type ReceiptModel } from '../../production/receipt'
 import { Frame } from '../Dialogs'
-import { PartFailed, PartReading } from './Kit'
+import { PartFailed, PartReading, useUnitWords } from './Kit'
 import './receipt.css' // F-PT-304: laid out by the screen (the dialog is outside the tab's size container)
 
 /**
@@ -23,6 +23,7 @@ export function ReceiptDialog({ order, model, actions }: { order: Order; model: 
   const sites = model.sites.value ?? []
   const site = sites.find((entry) => entry.id === model.draft.siteId) ?? null
   const places = receivePlacesOf(site)
+  const unit = useUnitWords() // fx5 #12
   return (
     <Frame
       title={t('productionTab.receipt.title', { number: order.number })}
@@ -92,7 +93,7 @@ export function ReceiptDialog({ order, model, actions }: { order: Order; model: 
                 <td data-label={t('productionTab.receipt.col.quantity')}>
                   <span className="fw-pt-inline">
                     <Input inputMode="decimal" value={line.quantity} disabled={!line.take} onChange={(event) => actions?.onLine(line.key, { quantity: event.target.value })} aria-label={t('productionTab.receipt.quantityOf', { material: line.label })} autoComplete="off" />
-                    <span className="fw-pt-sub">{line.uom}</span>
+                    <span className="fw-pt-sub">{unit(line.uom)}</span>
                   </span>
                 </td>
                 <td data-label={t('productionTab.receipt.col.lot')}>

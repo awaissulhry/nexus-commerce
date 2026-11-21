@@ -78,3 +78,30 @@ describe('F-PT-303: the answer line', () => {
     }
   })
 })
+
+// ---- fx5 (30-walk.md #3, #12, #14): one row per missing thing, unit words, never an empty heading ----------------------------------------
+describe('fx5: Materials as the picture', () => {
+  it('#3: one row each — what · how much · when | who it waits on | at most two doors at the right', () => {
+    const view = readFileSync(new URL('../view/production/MaterialsSection.tsx', import.meta.url), 'utf8')
+    for (const part of ['className="fw-pt-miss"', 'className="fw-pt-miss-what"', 'className="fw-pt-miss-who"', 'className="fw-pt-miss-do"']) expect(view, part).toContain(part)
+    expect(view).not.toContain('className="fw-pt-moves"')
+    expect(view).toContain('material.purchaseOrders.slice(0, 1)')
+    const css = readFileSync(new URL('../view/production/production.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/@container sec \(min-width: 640px\) \{\s*\.fw-pt-miss-row \{ grid-template-columns:/)
+  })
+
+  it('#12, #14: units in the catalogue’s words; read and nothing to buy says so', () => {
+    for (const locale of LOCALES) {
+      const s = createTranslator(locale, messagesFor(locale, ['stock']).stock!)
+      expect(s('uom.PCS'), locale).toBe(locale === 'en' ? 'pcs' : 'pz')
+      expect(s('uom.FT2'), locale).toBe('ft²')
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      for (const key of ['forWorkOrders', 'buyNothing']) expect(t(`productionTab.materials.${key}`, { numbers: 'N' }), `${locale} ${key}`).not.toMatch(/productionTab\.|\{/)
+    }
+    const kit = readFileSync(new URL('../view/production/Kit.tsx', import.meta.url), 'utf8')
+    expect(kit).toContain('export function useUnitWords()')
+    const view = readFileSync(new URL('../view/production/MaterialsSection.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('const unit = useUnitWords()')
+    expect(view).toContain("t('productionTab.materials.buyNothing')")
+  })
+})

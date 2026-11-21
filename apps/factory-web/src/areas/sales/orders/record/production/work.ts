@@ -1,7 +1,7 @@
 import type { ProgressFigure } from '../../../../../lib/production/model'
 import { HELD_FOR_SALES, HELD_REOPEN, type MenuAct, type MenuLink, type RowActs } from '../../../../../lib/production/work-order-acts/model'
 import type { WorkOrderChange } from '../../../../home/approvals/work-order-changes/api'
-import type { MtmGroupRead, MtmUnitRead, Work, WorkOrderOwn, Words } from '../overview/api'
+import type { MtmGroupRead, MtmUnitRead, Work, WorkOrderOwn } from '../overview/api'
 import { ownProgress, type CountedStep } from '../production'
 
 /**
@@ -132,17 +132,40 @@ export const DECISIONS_SHOWN = 3
 
 export interface DecisionRow {
   readonly id: string
-  readonly title: Words
-  readonly cells: string
   readonly at: string
   readonly mayDecide: boolean
+  /** fx5 #13: the change as a sentence — "Make 6 more SEED-JKT-02 · Red — the customer changed line 2" (never "54 1 → 0"). */
+  readonly sentence: DecisionSentence
+}
+
+export interface DecisionSentence {
+  readonly verb: { readonly key: string; readonly params: Record<string, string | number> }
+  readonly why: { readonly key: string; readonly params: Record<string, string | number> } | null
+}
+
+type SentenceLine = { readonly seq: number; readonly style?: { readonly code: string } | null; readonly colourway?: { readonly code: string; readonly name: string | null } | null }
+
+/** fx5 #13: what a change does, in a sentence: how many more or fewer of what (the line's style · colour), and who changed which line. */
+export function decisionSentenceOf(change: Pick<WorkOrderChange, 'kind' | 'cells' | 'workOrder' | 'requestId'>, lines: readonly SentenceLine[]): DecisionSentence {
+  const seqs = [...new Set(change.cells.flatMap((cell) => (cell.lineSeq === null ? [] : [cell.lineSeq])))].sort((a, b) => a - b)
+  const line = seqs.length === 1 ? (lines.find((entry) => entry.seq === seqs[0]) ?? null) : null
+  const what = line ? [line.style?.code ?? null, line.colourway ? line.colourway.name || line.colourway.code : null].filter(Boolean).join(' · ') : ''
+  const delta = change.cells.reduce((sum, cell) => sum + (cell.to - cell.from), 0)
+  const count = Math.abs(delta)
+  const verb =
+    change.kind === 'MAKE_MORE' || delta > 0
+      ? { key: what ? 'productionTab.wo.decision.more' : 'productionTab.wo.decision.moreLines', params: { count, what, lines: seqs.length } }
+      : { key: what ? 'productionTab.wo.decision.fewer' : 'productionTab.wo.decision.fewerLines', params: { count, what, lines: seqs.length, number: change.workOrder?.number ?? '—' } }
+  const who = change.requestId ? 'Customer' : 'Order'
+  const why = seqs.length === 0 ? null : seqs.length === 1 ? { key: `productionTab.wo.decision.by${who}`, params: { seq: seqs[0]! } } : { key: `productionTab.wo.decision.by${who}Lines`, params: { count: seqs.length } }
+  return { verb, why }
 }
 
 /** The order's work-order changes that wait for a decision (any kind, a work order or none — MAKE_MORE), the oldest first. */
-export function decisionsOf(list: readonly WorkOrderChange[] | null | undefined): { readonly shown: readonly DecisionRow[]; readonly more: number } {
+export function decisionsOf(list: readonly WorkOrderChange[] | null | undefined, lines: readonly SentenceLine[] = []): { readonly shown: readonly DecisionRow[]; readonly more: number } {
   const waiting = [...(list ?? [])].filter((change) => change.status === 'PROPOSED').sort((a, b) => a.proposedAt.localeCompare(b.proposedAt))
   return {
-    shown: waiting.slice(0, DECISIONS_SHOWN).map((change) => ({ id: change.id, title: change.words.title, cells: change.words.cells, at: change.proposedAt, mayDecide: change.mayDecide })),
+    shown: waiting.slice(0, DECISIONS_SHOWN).map((change) => ({ id: change.id, at: change.proposedAt, mayDecide: change.mayDecide, sentence: decisionSentenceOf(change, lines) })),
     more: Math.max(0, waiting.length - DECISIONS_SHOWN),
   }
 }

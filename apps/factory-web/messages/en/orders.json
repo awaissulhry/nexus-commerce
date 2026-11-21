@@ -762,7 +762,7 @@
       "status": "State",
       "progress": "Progress",
       "released": "Released",
-      "own": "Made for this order",
+      "own": "For this order",
       "materials": "Materials"
     },
     "held": "On hold",
@@ -2643,7 +2643,8 @@
       "answeredFor": "Answered for {orders}",
       "answeredForMore": "Answered for {orders} and {count} more",
       "answeredForCount_one": "Answered for {count} other order",
-      "answeredForCount_other": "Answered for {count} other orders"
+      "answeredForCount_other": "Answered for {count} other orders",
+      "countOf": "{count} of {of}"
     },
     "ask": {
       "button": "Ask for an update",
@@ -2681,7 +2682,6 @@
       "ask": "Ask about {number}",
       "decisions": "Waiting for a decision",
       "decide": "Decide…",
-      "decisionLine": "{title} · {cells} · proposed {date}",
       "decisionsMore_one": "+{count} more on Changes ›",
       "decisionsMore_other": "+{count} more on Changes ›",
       "waitsPlanner": "Waits for a planner · told {time}",
@@ -2695,7 +2695,23 @@
         "making": "Making",
         "dates": "Dates"
       },
-      "infoBody": "Each work order of this order, with only this order's own pieces. A row opens its sizes; Enter opens it from the keyboard, ‹ › walk the work orders. Rush is our own factory rush; the customer's urgency is shown in Production now."
+      "infoBody": "Each work order of this order, with only this order's own pieces. A row opens its sizes; Enter opens it from the keyboard, ‹ › walk the work orders. Rush is our own factory rush; the customer's urgency is shown in Production now.",
+      "ownOf": "{own} of {total}",
+      "decision": {
+        "more_one": "Make {count} more {what}",
+        "more_other": "Make {count} more {what}",
+        "moreLines_one": "Make {count} more on {lines} lines",
+        "moreLines_other": "Make {count} more on {lines} lines",
+        "fewer_one": "Make {count} fewer on {number}: {what}",
+        "fewer_other": "Make {count} fewer on {number}: {what}",
+        "fewerLines_one": "Make {count} fewer on {number}",
+        "fewerLines_other": "Make {count} fewer on {number}",
+        "byCustomer": "the customer changed line {seq}",
+        "byCustomerLines": "the customer changed {count} lines",
+        "byOrder": "the order changed line {seq}",
+        "byOrderLines": "the order changed {count} lines",
+        "proposed": "proposed {date}"
+      }
     },
     "step": {
       "cut": "Cut",
@@ -2703,7 +2719,6 @@
       "checked": "Checked"
     },
     "detail": {
-      "title": "{number} — for {order}",
       "sizes": "This order's pieces",
       "step": {
         "ordered": "Ordered",
@@ -2722,7 +2737,8 @@
       "unitsMore_other": "and {count} more",
       "noRider": "The rider is never shown here.",
       "open": "Open the work order",
-      "noun": "work order"
+      "noun": "work order",
+      "forOrder": "— for {order}"
     },
     "priority": {
       "title": "Priority and rush · {number}",
@@ -2910,7 +2926,9 @@
       "howBody": "Never valued. The customer's goods count to its oldest order first. What we buy is ready when it is reserved for or issued to the work order; reservations follow the work orders' priority.",
       "infoBody": "Do we have everything to make this order: the customer's own goods (Arrived) and what we buy — the missing things first, with who they wait on.",
       "askBuyers": "Ask the buyers…",
-      "asked": "Asked {date}"
+      "asked": "Asked {date}",
+      "forWorkOrders": "for {numbers}",
+      "buyNothing": "Nothing to buy for the work orders made so far."
     },
     "specs": {
       "title": "What we make it to",

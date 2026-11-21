@@ -63,7 +63,7 @@ function Steps({ order, model, actions }: { order: Order; model: OrderRecordMode
   if (state.status === 'failed') return <PartFailed part={t('productionTab.dates.partPlan')} problem={state.problem} onRetry={() => actions?.onRetryProduction?.()} />
 
   const rows = stepsOf(order, dates, model.today)
-  const chip = stepsChipOf(rows)
+  const chip = stepsChipOf(rows, read?.headline?.health?.code ?? null) // fx5 #7: the same verdict as Production now
   const now = nowStepOf(rows)
   const nameOf = (row: StepRow): string => (row.kind === 'DEPOSIT' ? t('productionTab.steps.deposit') : row.kind === 'GATE' ? (row.label ?? d(`gate.${row.gateKind ?? 'OTHER'}`)) : d(`milestone.kind.${row.kind}`))
   const statusWords = (status: StepStatus): string => {
@@ -104,7 +104,8 @@ function Steps({ order, model, actions }: { order: Order; model: OrderRecordMode
         const why = held(act)
         return { id: act, label: actWords[act], disabled: !!why, description: why ?? undefined, onSelect: why ? undefined : () => run(act, gateId) }
       }),
-      ...(frame?.discuss ? [{ id: 'discuss', label: t('dates.gateDiscuss'), onSelect: () => discuss(row) }] : []),
+      // fx5 (L7): Discuss this date only for who may write in the thread (threads.post).
+      ...(frame?.discuss && model.people?.mayNote !== false ? [{ id: 'discuss', label: t('dates.gateDiscuss'), onSelect: () => discuss(row) }] : []),
       ...(model.gateActs?.can.view ? [{ id: 'planning', label: t('wo.link.planning'), href: planningGateHref(model.prefix, order.number, gateId) }] : []),
     ]
   }
@@ -138,10 +139,13 @@ function Steps({ order, model, actions }: { order: Order; model: OrderRecordMode
       </h3>
       {now ? (
         <p className="fw-pt-hint">
-          {[t('productionTab.steps.now', { step: nameOf(now) }), whoWords(now.who), statusWords(now.status), now.planned && now.status.kind !== 'done' ? d('milestone.target', { date: day(now.planned) }) : null].filter(Boolean).join(' · ')}
+          {/* fx5 #7: production start and shipping name who acts already ("Shipping · Shipping" never). */}
+          {[t('productionTab.steps.now', { step: nameOf(now) }), now.kind === 'GATE' || now.kind === 'DEPOSIT' ? whoWords(now.who) : null, statusWords(now.status), now.planned && now.status.kind !== 'done' ? d('milestone.target', { date: day(now.planned) }) : null].filter(Boolean).join(' · ')}
         </p>
       ) : null}
+      {/* fx5 #11: on a phone the steps are drawn once — the cards below; the tracker shows from 720 px of the tab. */}
       {rows.length > 0 ? (
+        <div className="fw-pt-steps-track">
         <MilestoneTracker
           label={t('productionTab.steps.title')}
           labels={labels}
@@ -154,6 +158,7 @@ function Steps({ order, model, actions }: { order: Order; model: OrderRecordMode
             expected: row.status.kind !== 'done' && row.planned ? day(row.planned) : null,
           }))}
         />
+        </div>
       ) : null}
       {!hasGate ? <Quiet>{t('productionTab.steps.noGate')}</Quiet> : null}
       <div className="fw-pt-steps" role="table" aria-label={t('productionTab.steps.title')}>

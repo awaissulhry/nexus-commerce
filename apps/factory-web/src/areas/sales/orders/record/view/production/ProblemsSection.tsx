@@ -65,6 +65,8 @@ function Problems({ order, model, actions }: { order: Order; model: OrderRecordM
   const now = Date.now()
   // F-PT-302: Raise a nonconformance… — Quality's own New NCR, from the newest final check (its right; hidden without it, L9).
   const raiseFrom = !readOnly && model.can.raiseNcr ? (finals ?? []).find((check) => check.inspectionId)?.inspectionId ?? null : null
+  // fx5 (L7): Discuss only for who may write in the order's thread (threads.post) — Read-only gets no door that leads nowhere.
+  const mayDiscuss = model.people?.mayNote !== false
   const ncrHref = (id: string, number: string) => `${model.prefix}${recordAddress({ type: 'Nonconformance', id, label: number, companyId: order.companyId }, OFFICE_PAGES)}`
 
   const answer = [
@@ -100,7 +102,7 @@ function Problems({ order, model, actions }: { order: Order; model: OrderRecordM
                   <span className="fw-pt-inline">
                     <Lock size={12} aria-hidden /> <b>{note.number}</b> {note.note}
                     {/* F-SA-266: a hold is discussed in an office note only. */}
-                    <DiscussDoor order={order} part={t('discuss.hold', { number: note.number })} target={{ kind: 'WorkOrder', id: note.workOrderId }} officeOnly />
+                    {mayDiscuss ? <DiscussDoor order={order} part={t('discuss.hold', { number: note.number })} target={{ kind: 'WorkOrder', id: note.workOrderId }} officeOnly align="end" /> : null}
                   </span>
                   <span className="fw-pt-sub">{t('production.quality.officeOnly', { date: formatDate(note.since, { locale }) })}</span>
                 </li>
@@ -136,7 +138,7 @@ function Problems({ order, model, actions }: { order: Order; model: OrderRecordM
                   <span className="fw-pt-move-doors">
                     {/* A customer's report is answered in the thread (a reply); an office ask is opened at its note (office only). */}
                     {entry.source === 'BRAND' && model.people?.mayNote && frame?.compose ? <ToolbarButton icon={<Reply size={14} aria-hidden />} label={t('productionTab.problems.reply')} onClick={() => frame.compose?.({ messageId: entry.messageId, mode: 'reply' })} /> : null}
-                    {entry.messageId ? <ShowInThreadDoor order={order} at={entry.at} /> : null}
+                    {entry.messageId ? <ShowInThreadDoor order={order} at={entry.at} align="end" /> : null}
                   </span>
                 </li>
               ))}
@@ -153,16 +155,19 @@ function Problems({ order, model, actions }: { order: Order; model: OrderRecordM
           {finals && finals.length > 0 ? (
             <ul className="fw-pt-units">
               {finals.map((check) => (
-                <li key={check.key}>
-                  <span className="fw-pt-inline">
-                    <Tag tone={check.status === 'PASSED' ? 'success' : check.status === 'FAILED' ? 'danger' : 'neutral'}>{t(`production.quality.finalState.${check.status}`, { date: check.on ? day(check.on) : '—' })}</Tag>
-                    <span>{t('production.quality.finalRow', { number: check.number ?? '—', checked: check.checked })}</span>
-                    {/* F-SA-266: quality is discussed in an office note only. */}
-                    <DiscussDoor order={order} part={t('discuss.quality', { number: check.number ?? '—' })} target={{ kind: 'WorkOrder', id: check.workOrderId }} officeOnly />
+                // fx5 #14: one row shape — the check's words at the left, its Discuss door always at the row's end (never wrapped under).
+                <li key={check.key} className="fw-pt-qrow">
+                  <span className="fw-pt-qrow-b">
+                    <span className="fw-pt-inline">
+                      <Tag tone={check.status === 'PASSED' ? 'success' : check.status === 'FAILED' ? 'danger' : 'neutral'}>{t(`production.quality.finalState.${check.status}`, { date: check.on ? day(check.on) : '—' })}</Tag>
+                      <span>{t('production.quality.finalRow', { number: check.number ?? '—', checked: check.checked })}</span>
+                    </span>
+                    {check.inspected !== null && check.lot !== null ? <span className="fw-pt-sub">{t('productionTab.problems.inspected', { inspected: check.inspected, lot: check.lot })}</span> : null}
+                    {check.defects ? <span className="fw-pt-sub">{t('productionTab.problems.defects', check.defects)}</span> : null}
+                    {check.shared ? <span className="fw-pt-sub">{t('productionTab.problems.sharedCheck')}</span> : null}
                   </span>
-                  {check.inspected !== null && check.lot !== null ? <span className="fw-pt-sub">{t('productionTab.problems.inspected', { inspected: check.inspected, lot: check.lot })}</span> : null}
-                  {check.defects ? <span className="fw-pt-sub">{t('productionTab.problems.defects', check.defects)}</span> : null}
-                  {check.shared ? <span className="fw-pt-sub">{t('productionTab.problems.sharedCheck')}</span> : null}
+                  {/* F-SA-266: quality is discussed in an office note only. */}
+                  {mayDiscuss ? <DiscussDoor order={order} part={t('discuss.quality', { number: check.number ?? '—' })} target={{ kind: 'WorkOrder', id: check.workOrderId }} officeOnly align="end" /> : null}
                 </li>
               ))}
             </ul>

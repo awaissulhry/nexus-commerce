@@ -40,6 +40,12 @@ describe('F-PT-202: the steps', () => {
     expect(stepsChipOf(rows([milestone('d', 'GATE', 'DONE', '2026-11-10', 2), milestone('t', 'GATE', 'TO_COME', '2026-12-01', null)]))).toEqual({ kind: 'onTrack' })
     expect(stepsChipOf(rows([milestone('l', 'GATE', 'WAITING', '2026-11-18', 3), milestone('t', 'GATE', 'TO_COME', '2026-12-01', null)]))).toEqual({ kind: 'late', count: 1 })
     expect(stepsChipOf(rows([milestone('d', 'GATE', 'DONE', '2026-11-10', null)]))).toEqual({ kind: 'allDone' })
+    // fx5 #7: ONE verdict — no "On track" chip beside an order the stored health calls At risk or Late; facts (late steps) still show.
+    const open = rows([milestone('d', 'GATE', 'DONE', '2026-11-10', null), milestone('t', 'GATE', 'TO_COME', '2026-12-01', null)])
+    expect(stepsChipOf(open, 'AT_RISK')).toBeNull()
+    expect(stepsChipOf(open, 'LATE')).toBeNull()
+    expect(stepsChipOf(open, 'ON_TRACK')).toEqual({ kind: 'onTrack' })
+    expect(stepsChipOf(rows([milestone('l', 'GATE', 'WAITING', '2026-11-18', 3)]), 'AT_RISK')).toEqual({ kind: 'late', count: 1 })
     expect(nowStepOf(rows([milestone('t', 'GATE', 'TO_COME', '2026-12-01', null), milestone('l', 'GATE', 'WAITING', '2026-11-18', 3)]))?.id).toBe('l')
   })
 })
@@ -96,5 +102,23 @@ describe('F-PT-202: what the reader may do with a step (L9)', () => {
     const depth = messagesFor('it', ['sales-orders-depth'])['sales-orders-depth']!
     const planning = messagesFor('it', ['planning-milestones'])['planning-milestones']!
     for (const kind of ['SAMPLE_APPROVED', 'LEATHER_APPROVED', 'TRIMS_IN', 'PP_SAMPLE', 'LAB_PASSED', 'SIZE_SET']) expect(depth[`gate.${kind}`], kind).toBe(planning[`kind.${kind}`])
+  })
+})
+
+// ---- fx5 (the look-only walk on :3300, 30-walk.md #2, #7, #11) ----------------------------------------------------------------------
+describe('fx5: the steps keep their path; the Now line never repeats; one drawing on a phone', () => {
+  it('#2: deposit → gates → production start → shipping, whatever the read’s order or a missing day', () => {
+    const so = order('IN_PRODUCTION')
+    const out = stepsOf(so, datesWith([milestone('x', 'SHIP', 'TO_COME', '2026-12-18', null), milestone('s', 'START', 'DONE', null, null), milestone('g', 'GATE', 'DONE', '2026-11-10', null)]), TODAY)
+    expect(out.map((row) => row.kind)).toEqual(['DEPOSIT', 'GATE', 'START', 'SHIP'].filter((kind) => kind !== 'DEPOSIT' || so.depositRequired))
+  })
+
+  it('#7, #11: the Now line names who acts only for a gate or the deposit; the tracker is the cards’ twin from 720 px only', () => {
+    const block = readFileSync(new URL('../view/production/StepsBlock.tsx', import.meta.url), 'utf8')
+    expect(block).toContain("now.kind === 'GATE' || now.kind === 'DEPOSIT' ? whoWords(now.who) : null")
+    expect(block).toContain('stepsChipOf(rows, read?.headline?.health?.code ?? null)')
+    expect(block).toContain('<div className="fw-pt-steps-track">')
+    const css = readFileSync(new URL('../view/production/production.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/@container pt \(max-width: 719px\) \{\s*\.fw-pt-steps-track \{ display: none; \}/)
   })
 })

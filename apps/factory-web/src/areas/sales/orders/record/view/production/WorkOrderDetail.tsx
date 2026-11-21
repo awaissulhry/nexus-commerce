@@ -53,7 +53,7 @@ export function WorkOrderDetail({ entries, openId, orderNumber, readiness, toldA
     <DetailModal
       open
       onClose={onClose}
-      title={t('productionTab.detail.title', { number: row.number, order: orderNumber })}
+      title={<DetailTitle number={row.number} order={orderNumber} />}
       subtitle={[row.style?.code ?? null, row.colourways.map((colour) => colour.name || colour.code).join(', ') || null, row.site?.name ?? null, row.line?.name ?? null].filter(Boolean).join(' · ')}
       meta={
         <span className="fw-pt-inline">
@@ -93,6 +93,8 @@ function WorkOrderBody({ row, readiness, toldAt }: { row: WorkOrderOwn; readines
   return (
     <div className="fw-pt-detail">
       {row.sharedWithOtherCustomers && row.rights?.why ? <p className="fw-pt-hint">{say(row.rights.why as Words, locale)}</p> : null}
+      {/* fx5 #14: the plan's line and the materials' word sit together (no gap between them). */}
+      <div className="fw-pt-dt-lines">
       <p className="fw-pt-inline">
         {dates.planEnd ? t('productionTab.detail.plan', { end: day(dates.planEnd), due: dates.due ? day(dates.due) : '—' }) : dates.due ? t('productionTab.wo.due', { date: day(dates.due) }) : t('productionTab.wo.noDue')}
         {dates.afterDue ? <Tag tone="danger">{t('productionTab.wo.afterDue')}</Tag> : null}
@@ -103,6 +105,7 @@ function WorkOrderBody({ row, readiness, toldAt }: { row: WorkOrderOwn; readines
           <ReadinessPill word={readiness.word} date={readiness.date} /> <span className="fw-pt-sub">{r(`readiness.hint.${readiness.word}`)}</span>
         </p>
       ) : null}
+      </div>
       {table ? (
         <div className="fw-pt-sizes">
           <table aria-label={t('productionTab.detail.sizes')}>
@@ -149,7 +152,7 @@ function UnitsDetail({ group, orderNumber, nav, onClose }: { group: MtmGroupRead
   const units = unitsOf(group)
   const name = `${group.style?.code ?? '—'} · ${group.colourway?.name ?? group.colourway?.code ?? '—'}`
   return (
-    <DetailModal open onClose={onClose} title={t('productionTab.detail.title', { number: name, order: orderNumber })} subtitle={t('productionTab.detail.units', { count: group.units })} nav={nav}>
+    <DetailModal open onClose={onClose} title={<DetailTitle number={name} order={orderNumber} />} subtitle={t('productionTab.detail.units', { count: group.units })} nav={nav}>
       <div className="fw-pt-detail">
         {units ? (
           <ul className="fw-pt-units">
@@ -211,5 +214,18 @@ export function PriorityRushDialog({ row, busy, onSave, onClose }: { row: WorkOr
         <p className="fw-pt-hint">{t('productionTab.priority.rushHint')}</p>
       </form>
     </Modal>
+  )
+}
+
+/**
+ * fx5 #11: the window's title, the work order and the order it is for — two parts that wrap on a phone (the DS cuts a detail's title
+ * to one line there: "SEED-WO-0001 …" lost the order's number). Its accessible name reads them with a space between.
+ */
+function DetailTitle({ number, order }: { number: string; order: string }) {
+  const t = useT('orders')
+  return (
+    <span className="fw-pt-dt-t">
+      <span>{number}</span> <span>{t('productionTab.detail.forOrder', { order })}</span>
+    </span>
   )
 }

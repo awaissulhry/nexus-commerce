@@ -1,7 +1,7 @@
 'use client'
 
 import { AlertTriangle, Hourglass, Lock, MessageSquare, Send, User } from 'lucide-react'
-import { Banner, type MenuItemDef } from '@nexus/ui/components'
+import { Banner, ProgressBar, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Tag } from '@nexus/ui/primitives'
 import { useSearchParams } from 'next/navigation'
 import { formatDate, formatDateTime } from '../../../../../../lib/i18n/format'
@@ -9,7 +9,7 @@ import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { healthStateOf, markActsOf } from '../../../../../../lib/production/health/model'
 import { RaiseDialog } from '../../../../../../lib/production/health/view/HealthCard'
 import { HealthPill } from '../../../../../../lib/production/view/HealthPill'
-import { StageStrip } from '../../../../../../lib/production/view/StageStrip'
+import { stageSteps, type StageStripInput } from '../../../../../../lib/production/model'
 import { WaitingOnPill } from '../../../../../../lib/production/view/WaitingOnPill'
 import { useProductionWords } from '../../../../../../lib/production/words'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
@@ -120,7 +120,7 @@ function StageBlock({ order, model, recordHref, search, day }: { order: Order; m
           </TabLink>
         </p>
       ) : null}
-      {stagesShown(words.state) ? <StageStrip face="office" layout="auto" label={t('productionTab.now.stageLabel')} {...strip} note={hand ? t(hand.stripNote.key) : strip.note} /> : null}
+      {stagesShown(words.state) ? <StageBar strip={strip} label={t('productionTab.now.stageLabel')} note={hand ? t(hand.stripNote.key) : strip.note ?? null} /> : null}
       {pieces ? (
         <>
           <span className="fw-pt-label">
@@ -135,7 +135,11 @@ function StageBlock({ order, model, recordHref, search, day }: { order: Order; m
                     —
                   </b>
                 ) : (
-                  <b>{entry.value}</b>
+                  <>
+                    <b>{entry.value}</b>
+                    {/* fx5 #4: each count with its share of the order's pieces, as the picture. */}
+                    <ProgressBar value={pieces.of > 0 ? Math.min(100, Math.round((entry.value / pieces.of) * 100)) : null} ariaLabel={`${t(`productionTab.now.step.${entry.step}`)}: ${t('productionTab.now.countOf', { count: entry.value, of: pieces.of })}`} height={4} />
+                  </>
                 )}
               </div>
             ))}
@@ -345,6 +349,36 @@ function PeopleBlock({ order, model, actions, onAsk }: { order: Order; model: Or
           ) : null}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * fx5 #4: the five stages as the picture's ONE horizontal segmented bar (done · now · to come), the same steps as Overview's strip
+ * (lib/production stageSteps) — never a tall vertical list beside two short columns. Nothing reached yet or a stopped order: no bar
+ * (the stage line above says it); blocked: the mark beside it.
+ */
+function StageBar({ strip, label, note }: { strip: StageStripInput; label: string; note: string | null }) {
+  const w = useProductionWords()
+  const steps = stageSteps(strip)
+  if (steps.length === 0 || steps.every((step) => step.state === 'todo')) return null
+  return (
+    <div className="fw-pt-segbar">
+      <ol className="fw-pt-segs" aria-label={label}>
+        {steps.map((step) => (
+          <li key={step.id} className={`fw-pt-seg is-${step.state}`} aria-current={step.state === 'current' ? 'step' : undefined}>
+            <span className="fw-pt-seg-bar" aria-hidden />
+            <span>{w.say(step.label)}</span>
+          </li>
+        ))}
+      </ol>
+      {strip.blocked ? (
+        <span className="fw-pt-inline">
+          <Tag tone="warning">{w.t('parts.stage.blocked')}</Tag>
+          {strip.blocked.why ? <span className="fw-pt-sub">{strip.blocked.why}</span> : null}
+        </span>
+      ) : null}
+      {note ? <span className="fw-pt-sub">{note}</span> : null}
     </div>
   )
 }

@@ -2643,7 +2643,8 @@
       "answeredFor": "Risposta valida anche per {orders}",
       "answeredForMore": "Risposta valida anche per {orders} e altri {count}",
       "answeredForCount_one": "Risposta valida anche per {count} altro ordine",
-      "answeredForCount_other": "Risposta valida anche per altri {count} ordini"
+      "answeredForCount_other": "Risposta valida anche per altri {count} ordini",
+      "countOf": "{count} su {of}"
     },
     "ask": {
       "button": "Chiedi un aggiornamento",
@@ -2681,7 +2682,6 @@
       "ask": "Chiedi di {number}",
       "decisions": "In attesa di una decisione",
       "decide": "Decidi…",
-      "decisionLine": "{title} · {cells} · proposta il {date}",
       "decisionsMore_one": "+{count} altra in Modifiche ›",
       "decisionsMore_other": "+{count} altre in Modifiche ›",
       "waitsPlanner": "Attende un pianificatore · avvisato il {time}",
@@ -2695,7 +2695,23 @@
         "making": "Cosa fa",
         "dates": "Date"
       },
-      "infoBody": "Ogni ordine di lavoro di questo ordine, con i soli capi di questo ordine. Una riga apre le sue taglie; Invio la apre da tastiera, ‹ › passano tra gli ordini di lavoro. Urgente (fabbrica) è la nostra urgenza; l'urgenza del cliente è in Produzione ora."
+      "infoBody": "Ogni ordine di lavoro di questo ordine, con i soli capi di questo ordine. Una riga apre le sue taglie; Invio la apre da tastiera, ‹ › passano tra gli ordini di lavoro. Urgente (fabbrica) è la nostra urgenza; l'urgenza del cliente è in Produzione ora.",
+      "ownOf": "{own} di {total}",
+      "decision": {
+        "more_one": "Produrre {count} in più: {what}",
+        "more_other": "Produrre {count} in più: {what}",
+        "moreLines_one": "Produrre {count} in più su {lines} righe",
+        "moreLines_other": "Produrre {count} in più su {lines} righe",
+        "fewer_one": "Produrre {count} in meno su {number}: {what}",
+        "fewer_other": "Produrre {count} in meno su {number}: {what}",
+        "fewerLines_one": "Produrre {count} in meno su {number}",
+        "fewerLines_other": "Produrre {count} in meno su {number}",
+        "byCustomer": "il cliente ha cambiato la riga {seq}",
+        "byCustomerLines": "il cliente ha cambiato {count} righe",
+        "byOrder": "l'ordine ha cambiato la riga {seq}",
+        "byOrderLines": "l'ordine ha cambiato {count} righe",
+        "proposed": "proposta il {date}"
+      }
     },
     "step": {
       "cut": "Tagliati",
@@ -2703,7 +2719,6 @@
       "checked": "Controllati"
     },
     "detail": {
-      "title": "{number} — per {order}",
       "sizes": "I capi di questo ordine",
       "step": {
         "ordered": "Ordinati",
@@ -2722,7 +2737,8 @@
       "unitsMore_other": "e altre {count}",
       "noRider": "Il pilota non è mai mostrato qui.",
       "open": "Apri l’ordine di lavoro",
-      "noun": "ordine di lavoro"
+      "noun": "ordine di lavoro",
+      "forOrder": "— per {order}"
     },
     "priority": {
       "title": "Priorità e urgenza · {number}",
@@ -2910,7 +2926,9 @@
       "howBody": "Mai valorizzato. I materiali del cliente vanno prima al suo ordine più vecchio. Ciò che compriamo è pronto quando è riservato o consegnato all'ordine di lavoro; le riserve seguono la priorità degli ordini di lavoro.",
       "infoBody": "Abbiamo tutto per produrre questo ordine: i materiali del cliente (Arrivato) e ciò che compriamo — prima quello che manca, con chi lo aspetta.",
       "askBuyers": "Chiedi agli acquisti…",
-      "asked": "Chiesto il {date}"
+      "asked": "Chiesto il {date}",
+      "forWorkOrders": "per {numbers}",
+      "buyNothing": "Niente da comprare per gli ordini di lavoro creati."
     },
     "specs": {
       "title": "Su quali specifiche produciamo",

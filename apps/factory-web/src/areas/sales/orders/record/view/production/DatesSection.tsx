@@ -206,7 +206,7 @@ function ByLine({ order, model, actions }: { order: Order; model: OrderRecordMod
                 {!view.withheld ? <td data-label={t('dates.col.state')}>{onTime ? <Tag tone={onTime.kind === 'short' ? 'danger' : 'success'}>{d(onTime.kind === 'short' ? 'forecast.short' : 'forecast.spare', { count: onTime.days })}</Tag> : null}</td> : null}
                 <td className="fw-pt-x">
                   {/* A line's dates are discussed by its reference (the customer reads its own words, never a price). */}
-                  <DiscussDoor order={order} part={name} target={{ kind: 'SalesOrderLine', id: row.lineId }} />
+                  {model.people?.mayNote !== false ? <DiscussDoor order={order} part={name} target={{ kind: 'SalesOrderLine', id: row.lineId }} align="end" /> : null}
                   {items.length > 0 ? <LineMenuButton label={t('productionTab.byLine.more', { seq: row.seq })} items={items} /> : null}
                 </td>
               </tr>

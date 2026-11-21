@@ -32,7 +32,7 @@
 .fw-pt-inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); min-width: 0; }
 .fw-pt-skel { display: flex; flex-direction: column; gap: var(--nds-space-10); }
 .fw-pt-sub { display: block; font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; margin-top: var(--nds-space-2); overflow-wrap: anywhere; }
-.fw-pt-link { color: var(--nds-text-link); font-weight: var(--nds-font-weight-semibold); text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+.fw-pt-link { color: var(--nds-text-link); font-weight: var(--nds-font-weight-semibold); text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-align: start; /* fx5 #8: a wrapped name starts at the left, as the names around it */ }
 .fw-pt-link:hover { text-decoration: underline; }
 .fw-pt-link:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-xs); }
 
@@ -193,3 +193,52 @@
 .fw-pt-specs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--nds-space-12); }
 .fw-pt-spec { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--nds-space-10); align-items: start; min-width: 0; scroll-margin-top: var(--nds-space-4); }
 .fw-pt-spec-b { display: flex; flex-direction: column; gap: var(--nds-space-4); min-width: 0; font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+
+/* ── fx5 #1: a tooltip the reader does not see is not in the layout — a door at a row's end never widens the page (the DS bubble is
+   in-flow and only faded out; .fw-office-page would scroll into its empty room). Shown on hover or focus, as before. ── */
+.fw-pt .nds-tooltip:not(:hover):not(:focus-within) > .tip { display: none; }
+
+/* fx5 #11: the steps once on a phone — the cards; the tracker from 720 px of the tab. */
+@container pt (max-width: 719px) {
+  .fw-pt-steps-track { display: none; }
+}
+
+/* fx5 #10: the work order's number and its Ask door stay together on every row (the pill and the tags wrap after them). */
+.fw-pt-wo-id { display: inline-flex; align-items: center; gap: var(--nds-space-2); white-space: nowrap; }
+/* fx5 #6: "160 of 160" on one line. */
+.fw-pt-own-n { white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* fx5 #11: the detail window's title wraps instead of losing the order's number (the DS keeps a detail title to one line on a phone). */
+.nds-modal.detail .nds-modal-h .t .fw-pt-dt-t { display: flex; flex-wrap: wrap; column-gap: 0.35em; white-space: normal; }
+
+/* ── fx5 #3: Materials' missing things — one row each, as the picture: what · how much · when | who it waits on | ≤ 2 doors at the right;
+   stacked when the section is narrow. ── */
+.fw-pt-miss { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.fw-pt-miss-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-6) var(--nds-space-16); align-items: center; padding: var(--nds-space-10) 0; border-bottom: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); scroll-margin-top: var(--nds-space-4); }
+.fw-pt-miss-row:first-child { padding-top: 0; }
+.fw-pt-miss-what { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.fw-pt-miss-do { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
+@container sec (min-width: 640px) {
+  .fw-pt-miss-row { grid-template-columns: minmax(0, 1fr) minmax(9rem, auto) minmax(0, auto); }
+  .fw-pt-miss-do { justify-content: flex-end; }
+}
+
+/* ── fx5 #4: Production now's stage as the picture's horizontal segmented bar (done · now · to come) and each count's mini bar ── */
+.fw-pt-segbar { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; }
+.fw-pt-segs { list-style: none; margin: 0; padding: 0; display: flex; min-width: 0; }
+.fw-pt-seg { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: var(--nds-space-4); font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); }
+.fw-pt-seg > span:last-child { overflow-wrap: anywhere; padding-right: var(--nds-space-4); line-height: 1.25; }
+.fw-pt-seg-bar { height: 6px; margin-right: 3px; border-radius: var(--nds-radius-xs); background: var(--nds-surface-sunken); box-shadow: inset 0 0 0 1px var(--nds-border-subtle); }
+.fw-pt-seg.is-done .fw-pt-seg-bar { background: var(--nds-success); box-shadow: none; }
+.fw-pt-seg.is-current .fw-pt-seg-bar { background: var(--nds-primary); box-shadow: none; }
+.fw-pt-seg.is-current { color: var(--nds-text); font-weight: var(--nds-font-weight-semibold); }
+.fw-pt-count .nds-progress { margin-top: var(--nds-space-2); }
+
+/* ── fx5 #5: a paired section's card stretches to the pair's height — no hole under the shorter one ── */
+.fw-pt-pairs > .fw-pt-sec { display: flex; flex-direction: column; }
+.fw-pt-pairs > .fw-pt-sec > .nds-card { flex: 1 1 auto; }
+
+/* fx5 #14: a final check's row keeps one shape (its Discuss door at the end); the detail's plan and materials lines sit together. */
+.fw-pt-qrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--nds-space-8); align-items: start; }
+.fw-pt-qrow-b { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.fw-pt-dt-lines { display: flex; flex-direction: column; gap: var(--nds-space-4); }
+.fw-pt-dt-lines > p { margin: 0; }

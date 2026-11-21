@@ -12,7 +12,7 @@ import { discussAboutOf, type DiscussPart } from '../dock/discuss'
  * the chip) and, on a history row, Show in the thread (its step in the feed). Drawn only where the page has a conversation (the
  * frame's doors); nothing else on the row changes.
  */
-export function DiscussDoor({ order, thing, ...part }: { order: { readonly id: string; readonly number: string; /* B-SA-070b */ readonly customerSeq?: number | null | undefined }; /** The button's words ("Discuss line 2 in the thread"); default the part. */ thing?: string } & DiscussPart) {
+export function DiscussDoor({ order, thing, align, ...part }: { order: { readonly id: string; readonly number: string; /* B-SA-070b */ readonly customerSeq?: number | null | undefined }; /** The button's words ("Discuss line 2 in the thread"); default the part. */ thing?: string; /** fx5: the tooltip opens towards the row's start (a door at a row's end never widens the page). */ align?: 'end' } & DiscussPart) {
   const frame = useRecordFrame()
   const t = useT('orders')
   const f = useT('record-frame')
@@ -20,15 +20,15 @@ export function DiscussDoor({ order, thing, ...part }: { order: { readonly id: s
   // B-SA-070b: the customer reads its own number of the order ("your order 12"), never the office's SO-….
   const yourOrder = order.customerSeq ? t('discuss.yourOrderSeq', { seq: order.customerSeq }) : t('discuss.yourOrder')
   const about = discussAboutOf(order, { yourOrder, firstLine: (words) => t('discuss.firstLine', { thing: words }) }, part)
-  return <ToolbarButton icon={<MessageSquarePlus size={14} aria-hidden />} label={f('discuss.of', { thing: thing ?? part.part })} onClick={() => frame.discuss?.({ record: { type: 'SalesOrder', id: order.id }, about })} />
+  return <ToolbarButton icon={<MessageSquarePlus size={14} aria-hidden />} label={f('discuss.of', { thing: thing ?? part.part })} tooltipAlign={align} onClick={() => frame.discuss?.({ record: { type: 'SalesOrder', id: order.id }, about })} />
 }
 
 /** A history row's step in the order's conversation (the change nearest its time). */
-export function ShowInThreadDoor({ order, at }: { order: { readonly id: string }; at: string }) {
+export function ShowInThreadDoor({ order, at, align }: { order: { readonly id: string }; at: string; /** fx5: the tooltip towards the row's start. */ align?: 'end' }) {
   const frame = useRecordFrame()
   const f = useT('record-frame')
   if (!frame?.showInThread) return null
-  return <ToolbarButton icon={<History size={14} aria-hidden />} label={f('discuss.showInThread')} onClick={() => frame.showInThread?.({ record: { type: 'SalesOrder', id: order.id }, at })} />
+  return <ToolbarButton icon={<History size={14} aria-hidden />} label={f('discuss.showInThread')} tooltipAlign={align} onClick={() => frame.showInThread?.({ record: { type: 'SalesOrder', id: order.id }, at })} />
 }
 
 /**
