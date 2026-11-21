@@ -101,14 +101,19 @@ describe('F-SA-235: Production’s holds, quality & problems — each block held
 
   it('without the rights: each block says what it needs (never "none"); everything read and empty: one sentence', () => {
     const held = textOf(draw('production-no-right'))
-    for (const words of ['Problems need the work orders right', 'Nonconformities need the quality right', 'Final inspections need the inspections right', 'Progress needs the work orders right']) expect(held, words).toContain(words)
+    // F-PT-104: the work orders' progress withheld says what and who sees it, never a right's name (10-design §2).
+    for (const words of ['Problems need the work orders right', 'Nonconformities need the quality right', 'Final inspections need the inspections right', 'Not shown to you: the progress (Production and Sales see it)']) expect(held, words).toContain(words)
     expect(held).not.toContain('No holds, problems or quality findings')
     expect(textOf(draw('production-progress'))).toContain('No holds, problems or quality findings')
   })
 
   it('the work order record’s HealthCard is the one card (moved to lib/production/health); Materials and the tech pack moved to Production', () => {
     const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain("import { HealthCard } from '../../../../../lib/production/health/view/HealthCard'")
+    // F-PT-102: the order's health is Production now's strip — the lib's one rule (markActsOf) and its Raise dialog, no second card.
+    expect(tab).not.toContain('<HealthCard')
+    const now = readFileSync(new URL('./view/production/NowSection.tsx', import.meta.url), 'utf8')
+    expect(now).toContain("import { RaiseDialog } from '../../../../../../lib/production/health/view/HealthCard'")
+    expect(now).toContain('markActsOf(view, !!health?.can)')
     expect(tab).toContain('<MaterialsCard order={order} model={model.depth}')
     expect(tab).toContain('<TechPackCard model={model.depth} actions={actions?.depth} />')
     const workOrder = readFileSync(new URL('../../../production/work-orders/record/view/OverviewTab.tsx', import.meta.url), 'utf8')
@@ -293,7 +298,8 @@ describe('F-OP-112: Make work orders… in place — the style step, the next st
     expect(acts).toContain('const make = useNewWorkOrder(api, {')
     expect(acts).toContain("setNotice({ tone: 'success', words: { key: 'wo.made', params: { number: made.number } } })")
     expect(acts).toContain('setNext(nextStyleOf(asked.lines, asked.styleId))')
-    const tab = read('./view/ProductionTab.tsx')
+    // F-PT-104: the Work orders section holds the door now (its own file).
+    const tab = read('./view/ProductionTab.tsx') + read('./view/production/WorkOrdersSection.tsx')
     expect(tab).not.toContain('?new=1&order=')
     // F-OP-102: the dialog is mounted once for the page (the band's primary opens it from any tab).
     expect(tab).not.toContain('<NewWorkOrderDialog')
@@ -379,19 +385,24 @@ describe('F-OO-123: Make work orders for this line… — pickOfStyle with a lin
 describe('F-OP-113: the work-order rows act in place; a work order shared with other customers offers nothing but its link', () => {
   const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
-  it('a planner: rows by number, Due · Priority · Rush in place on each own work order, the row ⋯; the floor’s told time', () => {
+  // F-PT-104 / F-PT-105: Due stays in place; Priority and Rush moved into the row ⋯'s "Priority and rush…" (one write for both).
+  it('a planner: rows by number, Due in place on each own work order, the row ⋯; the floor’s told time with its day (B2)', () => {
     const html = draw('wo-acts-manager')
     const text = textOf(html)
     // Stable by number, whatever order the read gave (WO-00022 came first).
     expect(text.indexOf('WO-00019')).toBeLessThan(text.indexOf('WO-00021'))
     expect(text.indexOf('WO-00021')).toBeLessThan(text.indexOf('WO-00022'))
     for (const number of ['WO-00021', 'WO-00022']) {
-      expect(html, number).toContain(`aria-label="Priority of ${number}"`)
-      expect(html, number).toContain(`aria-label="Rush for ${number}"`)
+      expect(html, number).toContain(`aria-label="Due date of ${number}"`)
       expect(html, number).toContain(`aria-label="Actions for ${number}"`)
+      expect(html, number).not.toContain(`aria-label="Priority of ${number}"`)
     }
-    expect(html).toMatch(/aria-label="Rush for WO-00022"[^>]*aria-pressed="true"|aria-pressed="true"[^>]*aria-label="Rush for WO-00022"/)
-    expect(text).toContain('Told the floor at 10:42')
+    // Rush is our factory's word ("Rush"), never the customer's "Urgent" (B3); priority 100 is said, 0 is not.
+    expect(text).toContain('Rush')
+    expect(text).toContain('Priority 100')
+    expect(text).not.toContain('Priority 0')
+    expect(text).toMatch(/Told the floor \S+.*10:42/)
+    expect(text).not.toContain('Told the floor at')
     expect(text).not.toContain('Production does this')
   })
 
@@ -406,13 +417,14 @@ describe('F-OP-113: the work-order rows act in place; a work order shared with o
     expect(textOf(draw('wo-acts-manager', 'it'))).toContain('Condiviso con altri clienti: cambialo dalla sua pagina.')
   })
 
-  it('Sales: the rows as they are, every act held in words — "Production does this — …" (never hidden, never a dead field)', () => {
+  // F-PT-104 (plan D2 / L9): hidden without the right, never a grey door — one line says who does it.
+  it('Sales: the rows as they are, no act and no field — one line "Production does this — …"; the ⋯ keeps only the read doors', () => {
     const html = draw('wo-acts-sales')
     const text = textOf(html)
     expect(text).toContain('Production does this — a planner or the production manager.')
     expect(html).not.toContain('aria-label="Priority of WO-00021"')
-    expect(html).not.toContain('aria-label="Rush for WO-00021"')
-    // The ⋯ stays (its acts held with the same words inside): the reader learns who does it.
+    expect(html).not.toContain('aria-label="Due date of WO-00021"')
+    // The ⋯ stays for its read door (Open the work order); no act is in it (shownActsOf, work.vitest).
     expect(html).toContain('aria-label="Actions for WO-00021"')
     expect(textOf(draw('wo-acts-sales', 'it'))).toContain('lo fa la produzione — un pianificatore o il responsabile di produzione')
   })
@@ -432,7 +444,7 @@ describe('F-OP-113: the work-order rows act in place; a work order shared with o
   it('N-5: the hook is mounted by the container; the view draws the lib’s dialogs and imports no fetching hook', () => {
     const acts = source('./use-production-acts.ts')
     expect(acts).toContain('useWorkOrderActs(api, permissions,')
-    const tab = source('./view/ProductionTab.tsx')
+    const tab = source('./view/ProductionTab.tsx') + source('./view/production/WorkOrdersSection.tsx') + source('./view/production/WorkOrderDetail.tsx') // F-PT-104
     expect(tab).not.toMatch(/from '[^']*use-work-order-acts'/)
     // op-fx1: F-OP-116 mounts the rows' dialogs once for the page (a row's ⋯ and the waiting list's Lift…): the record view draws them.
     expect(source('./view/OrderRecordView.tsx')).toContain('{model.workOrderActs && <WorkOrderActsDialogs model={model.workOrderActs} actions={actions?.workOrderActs} />}')
@@ -479,7 +491,7 @@ describe('F-OP-115: Split…, Cancel…, Close… · Reopen…, Open in Planning
     expect(rowActsOf(row({ status: 'CLOSED' }), planner).links).toEqual(['open'])
     expect(rowActsOf(row({ sharedWithOtherCustomers: true, rights: { manage: false, release: false, hold: false, why: { en: 'x', it: 'x' } } }), planner).links ?? []).toEqual([])
     expect(planningHref('/w/demo', 'wo-1')).toBe('/w/demo/planning/board?wo=wo-1')
-    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
+    const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8') + readFileSync(new URL('./view/production/WorkOrdersSection.tsx', import.meta.url), 'utf8') // F-PT-104
     expect(tab).not.toMatch(/dispatch/i)
   })
 
@@ -542,7 +554,10 @@ describe('the Overview’s doors land on Production: #work-orders, #holds, #line
     const doors = readFileSync(new URL('./overview/model.ts', import.meta.url), 'utf8')
     expect(doors).toContain("anchor: HOLD_KINDS.has(blocker.kind) ? 'holds' : null")
     const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain('<Card padded id="work-orders" className="fw-so-anchor">')
+    // F-PT-101: each new section is its own file; the kit gives every section its address and the room above it.
+    expect(readFileSync(new URL('./view/production/WorkOrdersSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="work-orders"')
+    expect(readFileSync(new URL('./view/production/NowSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="now"')
+    expect(readFileSync(new URL('./view/production/Kit.tsx', import.meta.url), 'utf8')).toContain('<section id={id} className="fw-pt-sec fw-so-anchor" aria-labelledby={headId}>')
     expect(tab).toContain('<Card padded id="holds" className="fw-so-anchor">')
     expect(tab).toContain('id={`line-${line.id}`}')
   })
@@ -635,7 +650,11 @@ describe('F-OP-116: decide in place — a change waiting under its row, Still to
     expect(view).toContain('<WorkOrderChangeReview')
     const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
     expect(tab).not.toContain('<WorkOrderActsDialogs')
-    expect(tab).toContain("t('wo.changeWaits', { before: figures.before, after: figures.after })")
+    // F-PT-105 (B5): the waiting changes moved into ONE strip above the rows — one Decide… each (the same ONE decide window).
+    const section = readFileSync(new URL('./view/production/WorkOrdersSection.tsx', import.meta.url), 'utf8')
+    expect(section).not.toContain('<WorkOrderActsDialogs')
+    expect(section).toContain("t('productionTab.wo.decisionLine', { title: say(row.title, locale), cells: row.cells, date: formatDate(row.at, { locale }) })")
+    expect(section).toContain('onClick={() => actions?.orderChanges?.onOpen?.(row.id)}')
   })
 
   it('the words exist in both languages (office "tu")', () => {
@@ -697,22 +716,22 @@ describe('F-OP-306: the New work order dialog — field groups, a line\'s sizes 
 })
 // ---- end F-OP-306
 
-// ---- F-OP-309 (order page walk #15): the work-order table beside the dock — its columns' widths, the number whole, sub lines wrap ----
-describe('F-OP-309: the work-order table keeps the number whole, the Due field clear of Priority, and wraps instead of cutting', () => {
-  it('each column its width (Materials takes what is left); the Actions width only with the row ⋯', () => {
+// ---- F-OP-309 → F-PT-104 (10-design §4; B46): the work orders are app rows whose columns follow the TAB'S ROOM (row cards at S,
+// 5 columns at M, 7 at L) — never a fixed-layout DS table that wrapped the number beside the dock -------------------------------
+describe('F-PT-104: the work-order rows follow the tab’s room; the number stays whole', () => {
+  it('app rows, no DS table colgroup; the number its own button that opens the window', () => {
     const acts = draw('wo-acts-manager')
-    expect(acts).toContain('<div class="fw-so-wotable"><table')
-    expect(acts).toContain('<colgroup><col style="width:15%"/><col style="width:15%"/><col style="width:12%"/><col style="width:13%"/><col style="width:144px"/><col style="width:96px"/><col/><col style="width:64px"/></colgroup>')
-    const reader = draw('production-progress')
-    expect(reader).toContain('<colgroup><col style="width:15%"/><col style="width:15%"/><col style="width:12%"/><col style="width:13%"/><col style="width:144px"/><col style="width:96px"/><col/></colgroup>')
+    expect(acts).toContain('class="fw-pt-wo"')
+    expect(acts).not.toContain('<div class="fw-so-wotable">')
+    expect(acts).toContain('class="fw-pt-link fw-pt-wo-num"')
+    expect(draw('production-progress')).not.toContain('fw-so-wotable')
   })
 
-  it('the number on one line; the sub lines wrap in this table only', () => {
-    const css = readFileSync(new URL('../orders.css', import.meta.url), 'utf8')
-    expect(css).toMatch(/\.fw-so-wotable \.fw-so-link \{\s*white-space: nowrap;\s*\}/)
-    expect(css).toMatch(/\.fw-so-wotable \.fw-so-cell-sub \{\s*white-space: normal;\s*overflow-wrap: anywhere;\s*\}/)
-    // Elsewhere a sub line still ends in "…" (the order page's other tables keep their one-line cells).
-    expect(css).toMatch(/\.fw-so-cell-sub,\s*\.fw-so-card-sub \{[^}]*white-space: nowrap;/)
+  it('the columns by the room (production.css): 5 from 720 px, 7 from 1280 px; the number never wraps', () => {
+    const css = readFileSync(new URL('./view/production/production.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/@container pt \(min-width: 720px\) \{\s*\.fw-pt-wo \{ --fw-pt-wo-cols: minmax\(0, 1\.55fr\) 112px minmax\(0, 1\.45fr\) 184px 72px; \}/)
+    expect(css).toMatch(/@container pt \(min-width: 1280px\) \{\s*\.fw-pt-wo \{ --fw-pt-wo-cols: minmax\(0, 1fr\) minmax\(0, 1\.25fr\) 112px minmax\(0, 1\.4fr\) 184px minmax\(96px, 0\.6fr\) 72px; \}/)
+    expect(css).toMatch(/\.fw-pt-wo-num \{[^}]*white-space: nowrap;/)
   })
 })
 // ---- end F-OP-309

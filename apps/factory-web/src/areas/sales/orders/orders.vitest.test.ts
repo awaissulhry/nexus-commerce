@@ -814,7 +814,7 @@ describe('F-SA-230: the tab counts, the band’s health chip, Made to measure', 
     expect(isMadeToMeasure({ lines: [{ ...order().lines[0]!, kind: 'MADE_TO_MEASURE' }] })).toBe(true)
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['record.madeToMeasure', 'menu.assignSupervisor', 'menu.askSupervisor', 'ship.moneyDoor', 'money.section.totals', 'money.section.deposit', 'money.section.margin', ...MENU_GROUPS.map((group) => `menu.group.${group}`), ...RECORD_TABS.map((tab) => `tab.${tab}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      for (const key of ['record.madeToMeasure', 'menu.assignSupervisor', 'productionTab.ask.menu' /* F-PT-103: was menu.askSupervisor */, 'ship.moneyDoor', 'money.section.totals', 'money.section.deposit', 'money.section.margin', ...MENU_GROUPS.map((group) => `menu.group.${group}`), ...RECORD_TABS.map((tab) => `tab.${tab}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
     }
     expect(createTranslator('it', messagesFor('it', ['orders']).orders!)('tab.money')).toBe('Importi')
   })
@@ -965,8 +965,12 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     expect(read('./record/view/LineMenu.tsx')).toContain("target: move.lineIds.length === 1 ? { kind: 'SalesOrderLine'")
     expect(lines).toContain("id={line ? rowAnchor('SalesOrderLine', line.id) : undefined}")
     const production = read('./record/view/ProductionTab.tsx')
-    for (const door of ["target={{ kind: 'WorkOrder', id: row.id }} officeOnly", "target={{ kind: 'WorkOrder', id: note.workOrderId }} officeOnly", "target={{ kind: 'WorkOrder', id: entry.workOrderId }} officeOnly"]) expect(production).toContain(door)
-    expect(production).toContain("id={rowAnchor('WorkOrder', row.id) /* F-SA-266 */}")
+    for (const door of ["target={{ kind: 'WorkOrder', id: note.workOrderId }} officeOnly", "target={{ kind: 'WorkOrder', id: entry.workOrderId }} officeOnly"]) expect(production).toContain(door)
+    // F-PT-104: a work order's row door is "Ask about WO-…" — the ONE office note on this order (never a reply), its anchor kept.
+    const workOrders = read('./record/view/production/WorkOrdersSection.tsx')
+    expect(workOrders).toContain("id={rowAnchor('WorkOrder', row.id)}")
+    expect(workOrders).toContain("label={t('productionTab.wo.ask', { number: row.number })} onClick={() => ask(row)}")
+    expect(workOrders).toContain('actions?.people?.onAsk?.({ title:')
     const money = read('./record/view/MoneyTab.tsx')
     for (const door of ["target={{ kind: 'DepositRequest', id: request.id }} officeOnly", "target={{ kind: 'Invoice', id: invoice.id }} officeOnly", 'target={null} officeOnly']) expect(money).toContain(door)
     const shipments = read('./record/view/ShipmentsTab.tsx')
