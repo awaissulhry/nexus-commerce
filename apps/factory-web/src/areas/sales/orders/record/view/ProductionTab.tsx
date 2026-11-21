@@ -1,96 +1,79 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarClock, CheckCircle2, Clock, Factory, XCircle } from 'lucide-react'
-import { Card, Disclosure, EmptyState, KeyValue, ProgressBar, SummaryTable } from '@nexus/ui/components'
-import { Button, Pill, Skeleton, Tag } from '@nexus/ui/primitives'
-import { formatDate, formatDateTime, formatTime /* F-SA-244 */ } from '../../../../../lib/i18n/format'
+import { CalendarClock, CheckCircle2, Clock, XCircle } from 'lucide-react'
+import { Card, Disclosure, EmptyState, KeyValue, SummaryTable } from '@nexus/ui/components'
+import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
+import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { money } from '../../../quotes/model'
 import type { Order } from '../../api'
-import { productionWordsFor } from '../../../../../lib/production/words'
-import { dayInstant, daysUntil, depositGate, isFinal, isShippedInFull, linesNotInProduction, nextStep, promiseHeld } from '../../model'
-import { madeForOf, ownProgress } from '../production'
-// F-OP-112: Make work orders… in place — why it waits, and the Production page's own New work order dialog (its view, as it is).
-import { makeHeldOf } from '../production'
+import { dayInstant, daysUntil, depositGate, isFinal, isShippedInFull, nextStep, promiseHeld } from '../../model'
 import { forecastPart } from '../production' // F-SA-234b
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
-import { PartState } from './OrderRecordView'
 import { readOf } from '../overview/model'
-import type { Work } from '../overview/api'
 // ---- B-W2b-323 (orders in depth on screen): the finish forecast per line; the milestones' card, fed by the order's own read ----
 import { ForecastCell, MilestonesCard } from '../../depth/view/DatesDepth'
 import { NAMESPACE as DEPTH } from '../../depth/model'
-// ---- F-SA-235: Holds, quality & problems (the work order record's HealthCard, moved to lib/production/health: one card), Materials
-// (the customer-supplied materials card, moved from Lines), Specs in force (the tech pack in force, moved from the tab's foot) ----
+// ---- F-SA-235: Holds, quality & problems, Materials (the customer-supplied materials card, moved from Lines), Specs in force (the
+// tech pack in force, moved from the tab's foot). F-PT-102: the order's health moved into Production now (one strip, shared rule). ----
 import { Lock } from 'lucide-react'
-import { HealthCard } from '../../../../../lib/production/health/view/HealthCard'
 import { useProductionWords } from '../../../../../lib/production/words'
 import { MaterialsCard } from '../../materials/view/MaterialsCard'
 import { TechPackCard } from '../../confirmation/view/ConfirmationCard'
 import { say } from '../overview/model'
 // ---- end F-SA-235
+// F-SA-266: Discuss on Production's rows — holds and quality in office notes only (never a reply), a line's dates by its reference.
+import { DiscussDoor } from './Discuss'
+// ---- F-OP-115: the gate's Money door is a tab link (F-OP-210: the dock's scope kept, no prefetch) ----
+import { useSearchParams } from 'next/navigation'
+import { tabHref } from '../../../../_shared/record-frame/address'
+import { TabLink } from '../../../../../lib/tab-link/TabLink'
+// ---- end F-OP-115
+// ---- F-PT-101 … F-PT-105 (order PRODUCTION tab, W1): the layout, Production now, Work orders (one file per section, view/production) ----
+import { NowSection } from './production/NowSection'
+import { WorkOrdersSection } from './production/WorkOrdersSection'
+import './production/production.css'
+// ---- end F-PT-101
 
-const WO_TONE = { DRAFT: 'neutral', RELEASED: 'info', IN_PROGRESS: 'info', COMPLETED: 'success', CLOSED: 'neutral', CANCELLED: 'danger' } as const
 /** The readiness words are the production lane's (`production-work-orders` readiness.*), reused in place. */
 const WORK_ORDERS_NS = 'production-work-orders'
 
 /**
- * F-SA-234 (sales page plan N2, N7, picks P2, P3, P12, P16, R9; 10-order-page §2.3 P1, P2) — Production, the work behind the order:
+ * F-PT-101 (order PRODUCTION tab, 10-design §1; 18-lead-settles L10) — the tab's LAYOUT: its root is a size container (production.css:
+ * every section chooses by the room the tab has, never the screen — the thread dock opening or closing re-lays it at once), the six
+ * sections top to bottom with their addresses: Production now (#now) · Work orders (#work-orders) · Dates & plan (#dates) · Problems &
+ * holds (#holds) | What we make it to (#specs) — side by side from 900 px — · Materials (#materials). Each section is its own file
+ * (view/production/*); the cards below that W2 – W4 replace stay here until then (one path per job: each goes when its section lands).
  *
- *   Work orders     the work orders with the order's OWN pieces (the production read, B-SA-031): where (site · line · an outside
- *                   workshop), "Made for this order 40 of 100 · also makes SO-…" (only this customer's orders the reader reaches; a
- *                   work order of several customers says "also makes work of other orders", a shared cut "cut together with other
- *                   work" — no other number, name or count), status with the hold mark, ONE progress figure of its own cells, due,
- *                   the materials' readiness; made to measure grouped per style × colourway (one row, its units in a centred list).
- *                   Without workorders.view: the chain's numbers and states, and why the progress is not shown.
  *   Dates & …       (#dates) the deposit gate (door: Money), the order's dates, the published plan's days ("Customer sees …"), the
  *                   shipments, the gates and milestones under the order's own right (P16), by line with the finish forecast, and
- *                   every promise move with who and why. Today's Dates card lives here now.
+ *                   every promise move with who and why.
  */
-// F-SA-266: Discuss on Production's rows — the work orders, holds and quality in office notes only (never a reply), a line's dates by
-// its reference; each row its anchor ("Show on the page").
-import { DiscussDoor } from './Discuss'
-import { floorToldAt } from '../told' // F-SA-244: "Told the floor at hh:mm" per work order (never who saw it)
-import { rowAnchor } from '../dock/discuss'
-// ---- F-OP-113 (10-order-page §5.2; R-11): the work-order rows' acts — Due · Priority · Rush in place, the row ⋯ (DS Menu), a
-// shared row read-only with its words; the dialogs are the lib's (lib/production/work-order-acts/view), fed by the container ----
-import { MoreHorizontal } from 'lucide-react'
-import { Menu } from '@nexus/ui/components'
-import { FilterChip, Select } from '@nexus/ui/primitives'
-import { CellSaveMark, DateField } from '../../../../../lib/i18n/ds-parts'
-import { useScopedT } from '../../../../../lib/i18n/provider'
-import { laterOf, priorityChoices, rowActsOf, stableRows, type RowActs } from '../../../../../lib/production/work-order-acts/model'
-// F-OP-116: a row's waiting work-order changes ("Change waits: 40 → 28 · Apply… / Leave as is…").
-import { changeFiguresOf, changeHeldOf, waitingChangesOf } from '../changes/model'
-// ---- end F-OP-113
-// ---- F-OP-115: the row ⋯'s links (the planning board at the work order, the work order's own page); the gate's Money door is a
-// tab link (F-OP-210: the dock's scope kept, no prefetch) ----
-import { useSearchParams } from 'next/navigation'
-import { HELD_FOR_SALES, planningHref } from '../../../../../lib/production/work-order-acts/model'
-import { tabHref } from '../../../../_shared/record-frame/address'
-import { TabLink } from '../../../../../lib/tab-link/TabLink'
-// ---- end F-OP-115
-
 export function ProductionTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   return (
-    <WithMessages namespaces={[WORK_ORDERS_NS, 'production' /* F-SA-235: the HealthCard's words */]}>
-      <div className="fw-so-stack">
-        <WorkOrdersCard order={order} model={model} actions={actions} />
+    <WithMessages namespaces={[WORK_ORDERS_NS, 'production' /* F-SA-235 · F-PT-102: the health's and the stages' words */]}>
+      <div className="fw-pt">
+        <NowSection order={order} model={model} actions={actions} />
+        <WorkOrdersSection order={order} model={model} actions={actions} />
         <section id="dates" className="fw-so-anchor fw-so-stack" aria-labelledby="fw-so-dates-title">
           <DatesCard order={order} model={model} actions={actions} />
           <MilestonesCard part={milestonesPart(model)} onRetry={() => actions?.onRetryProduction?.()} />
           <PromiseMoves order={order} />
         </section>
-        {/* F-SA-235: what holds it, its quality and its problems; the materials; the specs it is made to. */}
-        <div className="fw-so-cards fw-so-cards--wide">
-          <HoldsQualityCard order={order} model={model} actions={actions} />
-          <SpecsCard order={order} model={model} actions={actions} />
+        {/* F-SA-235: what holds it, its quality and its problems; the specs it is made to — F-PT-101 (L10): a pair by the tab's room. */}
+        <div className="fw-pt-pairs">
+          <HoldsQualityCard order={order} model={model} />
+          <div id="specs" className="fw-so-anchor">
+            <SpecsCard order={order} model={model} actions={actions} />
+          </div>
         </div>
-        <MaterialsCard order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />
+        <section id="materials" className="fw-so-anchor">
+          <MaterialsCard order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />
+        </section>
       </div>
     </WithMessages>
   )
@@ -105,300 +88,6 @@ function milestonesPart(model: OrderRecordModel) {
   if (!dates) return { value: null, problem: null }
   return { value: { milestones: dates.milestones.map((row) => ({ id: row.id, kind: row.kind as 'GATE' | 'START' | 'SHIP', gateKind: row.gateKind, label: row.label, target: row.target, actual: row.actual, state: row.state as 'DONE' | 'WAITING' | 'STARTED_BEFORE' | 'TO_COME', late: row.late })), next: dates.next, late: dates.late }, problem: null }
 }
-
-function WorkOrdersCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
-  const t = useT('orders')
-  const locale = useLocale()
-  const state = model.production ?? null
-  const read = readOf(state)
-  const work = read?.work ?? null
-  const withheld = !!read && read.withheld.includes('work')
-  const uncovered = work ? work.notInProduction.lines : linesNotInProduction(order)
-  const mayMake = order.status === 'CONFIRMED' || order.status === 'IN_PRODUCTION'
-  // F-OP-112: Make work orders… opens in place (the order fixed); held in words: no right, the deposit waiting or missing.
-  const makeWait = makeHeldOf(order, model.can)
-  const makeHeld = makeWait ? t(makeWait.key, makeWait.params?.date ? { date: formatDate(dayInstant(String(makeWait.params.date)), { locale }) } : makeWait.params) : null
-  const make = model.makeWorkOrders ?? null
-  const makeLabel = make?.next ? t('wo.makeNext', { style: make.next.code }) : t('step.makeWorkOrders')
-  const workOrderHref = (row: { id: string; number: string }) => `${model.prefix}${recordAddress({ type: 'WorkOrder', id: row.id, label: row.number, companyId: order.companyId }, OFFICE_PAGES)}`
-
-  return (
-    // F-OP-115 (A11's Overview doors): the address #work-orders lands here.
-    <Card padded id="work-orders" className="fw-so-anchor">
-      <div className="fw-so-card-head">
-        <h2 className="fw-so-h2">{t('production.title')}</h2>
-        {mayMake && (
-          <Button size="sm" variant="primary" heldReason={makeHeld} onClick={() => actions?.makeWorkOrders?.onOpen?.()}>
-            <Factory size={14} aria-hidden /> {makeLabel}
-          </Button>
-        )}
-      </div>
-      {/* F-OP-112: the Production page's New work order dialog, its order fixed — F-OP-102: mounted once for the page (OrderRecordView):
-          the band's primary opens it from any tab. */}
-      {/* F-OP-113: the dialog a work-order row's ⋯ opened (on the work order read afresh) — F-OP-116: mounted once for the page
-          (OrderRecordView), so the waiting list's "Lift the customer's pause…" opens it from any tab. */}
-      {!state || state.status === 'loading' ? (
-        <div className="fw-so-stack" aria-busy="true">
-          {[0, 1].map((index) => (
-            <Skeleton key={index} height={22} />
-          ))}
-        </div>
-      ) : state.status === 'failed' ? (
-        <PartState problem={state.problem} label={t('production.title')} onRetry={() => actions?.onRetryProduction?.()} />
-      ) : work ? (
-        work.workOrders.length === 0 && work.mtm.length === 0 ? (
-          <EmptyState title={t('production.empty.title')} description={t('production.empty.body')} />
-        ) : (
-          <OwnWorkOrders work={work} model={model} actions={actions /* F-OP-113 */} href={workOrderHref} order={order /* F-SA-266 */} />
-        )
-      ) : order.chain.workOrders.length === 0 ? (
-        <EmptyState title={t('production.empty.title')} description={t('production.empty.body')} />
-      ) : (
-        // Without workorders.view: the chain's numbers and states only, and why the progress is not shown.
-        <SummaryTable
-          label={t('production.title')}
-          columns={[t('production.col.number'), t('production.col.status'), t('production.col.released')]}
-          rows={order.chain.workOrders.map((row) => ({
-            id: row.id,
-            cells: [
-              <Link key="n" className="fw-so-link" href={workOrderHref(row)}>
-                {row.number}
-              </Link>,
-              <Pill key="s" tone={WO_TONE[row.status as keyof typeof WO_TONE] ?? 'neutral'}>{t(`woStatus.${row.status}`)}</Pill>,
-              row.releasedAt ? formatDate(row.releasedAt, { locale }) : '—',
-            ],
-          }))}
-          density="roomy"
-          stackOnPhone
-        />
-      )}
-      {uncovered > 0 && mayMake && <p className="fw-so-hint">{t('production.uncovered', { count: uncovered })}</p>}
-      {work && work.workOrdersLeftOut > 0 && <p className="fw-so-hint">{t('overview.linked.leftOut', { count: work.workOrdersLeftOut })}</p>}
-      {(withheld || (read && !work)) && <p className="fw-so-hint">{t('production.progressHeld')}</p>}
-    </Card>
-  )
-}
-
-/**
- * The work orders with the order's own pieces, and the made-to-measure groups (one row per style × colourway).
- * F-OP-113: rows stable by number; Due, Priority and Rush in place (with workorders.manage over the work order; held otherwise, the
- * row's ⋯ saying who does it); the row ⋯ (DS Menu); "Told the floor at hh:mm" after a write that reaches the floor; a work order
- * shared with other customers is read-only here — its link and "Shared with other customers: change it on its page" (R-11).
- */
-function OwnWorkOrders({ work, model, actions, href, order }: { work: Work; model: OrderRecordModel; actions?: OrderRecordActions; href: (row: { id: string; number: string }) => string; order: Order }) {
-  const t = useT('orders')
-  const r = useT(WORK_ORDERS_NS)
-  const scoped = useScopedT('orders') // F-OP-113: a phrase may name another catalogue (production:error.changed)
-  const locale = useLocale()
-  // ---- F-OP-113 ----
-  const acts = model.workOrderActs ?? null
-  const act = actions?.workOrderActs
-  const offers = new Map<string, RowActs>(work.workOrders.map((row) => [row.id, acts ? rowActsOf(row, acts.can) : { shared: row.sharedWithOtherCustomers ? (row.rights?.why ?? null) : null, inline: null, menu: [] }]))
-  // F-OP-115: the hint speaks of Production's people only (a planner reading "only the production manager reopens" sees it on the ⋯).
-  const heldForReader = [...offers.values()].some((offer) => offer.inline?.held || offer.menu.some((entry) => entry.held?.key === HELD_FOR_SALES.key))
-  // ---- end F-OP-113
-  const words = productionWordsFor(locale)
-  const totals = new Map((model.workOrders?.value ?? []).map((row) => [row.id, row.pieces]))
-  const readiness = new Map((model.readiness?.value ?? []).map((row) => [row.workOrderId, row]))
-  const named = (entry: { code: string; name: string } | null) => (entry ? entry.name || entry.code : null)
-  const toldChanges = model.told?.value?.changes ?? [] // F-SA-244
-  const rows = stableRows(work.workOrders).map((row) => {
-    const { figure, notCounted } = ownProgress(row.own, row.status)
-    const figureWords = words(figure.words.key, figure.words.params)
-    const where = [named(row.site), named(row.line), ...row.workshops.map((shop) => shop.name)].filter((part): part is string => !!part).join(' · ')
-    const madeFor = madeForOf(row.own, totals.get(row.id) ?? null, row.alsoMakes, row.sharedWithOtherCustomers, row.cutWithOtherWork)
-    const ready = readiness.get(row.id) ?? null
-    // F-SA-244; F-OP-113: + a write of this page that reached the floor (the later of the two).
-    const floorAt = laterOf(floorToldAt(toldChanges, row.id), acts?.toldAt[row.id])
-    // ---- F-OP-113: what the row offers its reader, its in-place save ----
-    const offer = offers.get(row.id)!
-    const inline = offer.inline && !offer.inline.held ? offer.inline : null
-    const save = acts?.saves[row.id] ?? null
-    const saving = (field: 'due' | 'priority' | 'rush') => <CellSaveMark state={save?.field === field ? 'saving' : null} />
-    // ---- end F-OP-113
-    return {
-      id: row.id,
-      cells: [
-        <span key="n" className="fw-so-cell" id={rowAnchor('WorkOrder', row.id) /* F-SA-266 */} tabIndex={-1}>
-          <span className="fw-so-inline">
-            <Link className="fw-so-link" href={href(row)}>
-              {row.number}
-            </Link>
-            {/* F-SA-266: a work order is discussed in an office note only (its number never reaches a customer). */}
-            <DiscussDoor order={order} part={row.number} target={{ kind: 'WorkOrder', id: row.id }} officeOnly />
-          </span>
-          <span className="fw-so-inline">
-            <Pill tone={WO_TONE[row.status as keyof typeof WO_TONE] ?? 'neutral'}>{t(`woStatus.${row.status}`)}</Pill>
-            {row.held && <Tag tone="warning">{t('production.held')}</Tag>}
-            {row.rush && !inline /* F-OP-113: in place it is the Rush chip */ && <Tag tone="danger">{t('production.rush')}</Tag>}
-          </span>
-          {/* F-SA-244 (R2): when the floor of this work order was last told about a change of the order — never who saw it. */}
-          {floorAt && <span className="fw-so-cell-sub">{t('told.floorAt', { time: formatTime(floorAt, { locale }) })}</span>}
-          {/* F-OP-116 (10-order-page §5.2): a change waiting on this work order, decided in place (the ONE decide window); a reader who
-              may not decide it reads who does and when they were told. */}
-          {waitingChangesOf(model.orderChanges?.list?.value, row.id).map((change) => {
-            const figures = changeFiguresOf(change)
-            const held = changeHeldOf(change)
-            const heldWords = held ? t(held.key, { time: formatTime(held.params.at, { locale }) }) : model.busy ? t('held.busy') : null
-            return (
-              <span key={change.id} className="fw-so-inline fw-so-cell-sub">
-                <span>{t('wo.changeWaits', { before: figures.before, after: figures.after })}</span>
-                <Button size="sm" heldReason={heldWords} onClick={() => actions?.orderChanges?.onOpen?.(change.id)}>
-                  {t('wo.changeApply')}
-                </Button>
-                <Button size="sm" variant="quiet" heldReason={heldWords} onClick={() => actions?.orderChanges?.onOpen?.(change.id)}>
-                  {t('wo.changeLeave')}
-                </Button>
-              </span>
-            )
-          })}
-          {/* F-OP-113 (R-11): a work order shared with other customers is changed on its own page only. */}
-          {offer.shared && <span className="fw-so-cell-sub">{say(offer.shared, locale)}</span>}
-          {save?.problem && (
-            <span className="fw-so-cell-sub" role="alert">
-              {scoped(save.problem.key, save.problem.params)}
-            </span>
-          )}
-        </span>,
-        <span key="st" className="fw-so-cell">
-          <span>{row.style?.code ?? '—'}</span>
-          <span className="fw-so-cell-sub">{row.colourways.map((colour) => colour.name || colour.code).join(', ')}</span>
-          {where && <span className="fw-so-cell-sub">{where}</span>}
-        </span>,
-        <span key="own" className="fw-so-cell">
-          {madeFor.map((entry, index) => (
-            <span key={entry.key} className={index === 0 ? undefined : 'fw-so-cell-sub'}>
-              {t(entry.key, entry.params)}
-            </span>
-          ))}
-        </span>,
-        <span key="p" className="fw-so-progress">
-          <ProgressBar value={figure.percent} ariaLabel={t('production.progressLabel', { number: row.number, figure: figureWords })} height={6} />
-          <span className="fw-so-cell-sub">{row.status === 'DRAFT' ? t('production.notReleased') : figureWords}</span>
-          {notCounted.map((step) => (
-            <span key={step} className="fw-so-cell-sub" title={t(`production.notCounted.${step}`)} aria-label={`${t(`production.step.${step}`)}: ${t(`production.notCounted.${step}`)}`}>
-              {t(`production.step.${step}`)} —
-            </span>
-          ))}
-        </span>,
-        // F-OP-113: Due in place (a day; empty: no due date), marked while it saves.
-        inline ? (
-          <span key="d" className="fw-so-inline">
-            <DateField value={row.due ?? ''} onChange={(day) => act?.onDue?.(row, day || null)} clearable ariaLabel={t('wo.dueOf', { number: row.number })} />
-            {saving('due')}
-            {row.daysLate !== null && row.daysLate > 0 && <Tag tone="danger">{t('list.daysLate', { count: row.daysLate })}</Tag>}
-          </span>
-        ) : row.due ? (
-          <span key="d" className="fw-so-inline">
-            {formatDate(dayInstant(row.due), { locale })}
-            {row.daysLate !== null && row.daysLate > 0 && <Tag tone="danger">{t('list.daysLate', { count: row.daysLate })}</Tag>}
-          </span>
-        ) : (
-          '—'
-        ),
-        // F-OP-113: Priority (higher comes first) and the Rush chip in place; read-only words otherwise.
-        inline ? (
-          <span key="pr" className="fw-so-inline">
-            <Select size="sm" value={String(row.priority ?? 0)} onChange={(event) => act?.onPriority?.(row, Number(event.target.value))} aria-label={t('wo.priorityOf', { number: row.number })} title={t('wo.priorityHint')}>
-              {priorityChoices(row.priority).map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </Select>
-            {saving('priority')}
-            <FilterChip pressed={row.rush} onClick={() => act?.onRush?.(row, !row.rush)} aria-label={t('wo.rushOf', { number: row.number })}>
-              {t('production.rush')}
-            </FilterChip>
-            {saving('rush')}
-          </span>
-        ) : (
-          <span key="pr">{row.priority ?? '—'}</span>
-        ),
-        ready ? r(ready.word === 'EXPECTED' && ready.date ? 'readiness.EXPECTED_on' : `readiness.${ready.word}`, ready.date ? { date: formatDate(dayInstant(ready.date), { locale }) } : undefined) : '—',
-        // F-OP-113: the row ⋯ — each act open, or held with who does it (a shared row has none: its link only).
-        ...(acts
-          ? [
-              offer.menu.length > 0 ? (
-                <Menu
-                  key="acts"
-                  align="right"
-                  label={<MoreHorizontal size={16} aria-hidden />}
-                  triggerProps={{ 'aria-label': t('wo.acts', { number: row.number }) }}
-                  items={[
-                    ...offer.menu.map((entry) => ({
-                      id: entry.act,
-                      label: t(`wo.act.${entry.act}`),
-                      disabled: !!entry.held,
-                      description: entry.held ? scoped(entry.held.key, entry.held.params) : undefined,
-                      onSelect: entry.held ? undefined : () => act?.onAct?.(row, entry.act),
-                    })),
-                    // F-OP-115: line, workshop, start and outside operations are Planning's (its board, at this work order); the
-                    // work order's own page. Real links (⌘-click opens a tab).
-                    ...((offer.links ?? []).length > 0 ? [{ id: 'links', separator: true }] : []),
-                    ...(offer.links ?? []).map((link) => ({ id: `link-${link}`, label: t(`wo.link.${link}`), href: link === 'planning' ? planningHref(model.prefix, row.id) : href(row) })),
-                  ]}
-                />
-              ) : (
-                ''
-              ),
-            ]
-          : []),
-      ],
-    }
-  })
-  const mtm = work.mtm.map((group, index) => ({
-    id: `mtm-${index}`,
-    cells: [
-      <span key="n" className="fw-so-cell">
-        <span>{t('production.mtmRow', { style: group.style?.code ?? '—', colour: group.colourway?.name ?? group.colourway?.code ?? '—', units: group.units, workOrders: group.workOrders })}</span>
-        <span className="fw-so-cell-sub">{group.byStatus.map((entry) => `${t(`woStatus.${entry.status}`)} ${entry.count}`).join(' · ')}</span>
-      </span>,
-      <span key="st">{group.style?.code ?? '—'}</span>,
-      <span key="own">{t('production.own.all', { own: group.own.pieces })}</span>,
-      (() => {
-        const { figure } = ownProgress(group.own, 'RELEASED')
-        const figureWords = words(figure.words.key, figure.words.params)
-        return (
-          <span key="p" className="fw-so-progress">
-            <ProgressBar value={figure.percent} ariaLabel={figureWords} height={6} />
-            <span className="fw-so-cell-sub">{figureWords}</span>
-          </span>
-        )
-      })(),
-      '—',
-      '—', // F-OP-113: a made-to-measure group is many work orders: each is changed on its own page
-      '—',
-      ...(acts ? [''] : []),
-    ],
-  }))
-  return (
-    <>
-      {/* F-OP-309 (walk #15): the DS table is fixed-layout, so eight equal shares beside the dock (a third at 1440) wrapped the work
-          order's number, ran the Due date field into Priority and cut the cells. Each column its width (Materials takes what is left);
-          the number stays on one line and the sub lines wrap (orders.css .fw-so-wotable). */}
-      <div className="fw-so-wotable">
-        <SummaryTable
-          label={t('production.title')}
-          columns={[t('production.col.number'), t('production.col.style'), t('production.col.own'), t('production.col.progress'), t('production.col.due'), t('wo.col.priority') /* F-OP-113 */, t('production.col.materials'), ...(acts ? [t('wo.col.acts')] : [])]}
-          rows={[...rows, ...mtm]}
-          density="roomy"
-          stackOnPhone
-          align={['left', 'left', 'left', 'left', 'right', 'left', 'left', ...(acts ? (['right'] as const) : [])]}
-          widths={WO_WIDTHS.slice(0, acts ? WO_WIDTHS.length : WO_WIDTHS.length - 1)}
-        />
-      </div>
-      {/* F-OP-113: a reader who may not change them reads who does (the row ⋯ says it again per act). */}
-      {heldForReader && <p className="fw-so-hint">{t('wo.heldHint')}</p>}
-    </>
-  )
-}
-
-/**
- * F-OP-309 (walk #15): the work-order table's column widths — Work order · Style · Made for this order · Progress · Due (a day field) ·
- * Priority (a select and Rush) · Materials (what is left) · Actions (the row ⋯; absent without acts).
- */
-const WO_WIDTHS: readonly (string | undefined)[] = ['15%', '15%', '12%', '13%', '144px', '96px', undefined, '64px']
 
 /**
  * Dates & milestones (#dates; today's Dates card merged in): the deposit gate first (production waits for it; its door: Money), the
@@ -564,13 +253,12 @@ function PromiseMoves({ order }: { order: Order }) {
 // ---- F-SA-235 (10-order-page §2.3 P3, P4, P5) ------------------------------------------------------------------------------------
 
 /**
- * P3 Holds, quality & problems: the order's health (the work order record's HealthCard — computed + shown, Raise to At risk with a
- * curated reason and an office note, Clear; production.brand.manage), what holds its work (in plain words; the office's note per work
+ * P3 Holds, quality & problems (F-PT-102: the order's health moved into Production now — one strip, the shared mark rule): what holds its work (in plain words; the office's note per work
  * order with workorders.view, never shared), the open problems that need an answer, the final inspections and the NCRs of its own
  * work orders. Each block without its right is held in one line of words — never an empty list that looks like "none". A hold that
  * serves several customers names none of the others (the read's own words).
  */
-function HoldsQualityCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+function HoldsQualityCard({ order, model }: { order: Order; model: OrderRecordModel }) {
   const t = useT('orders')
   const w = useProductionWords()
   const locale = useLocale()
@@ -589,7 +277,6 @@ function HoldsQualityCard({ order, model, actions }: { order: Order; model: Orde
   const ncrHref = (id: string, number: string) => `${model.prefix}${recordAddress({ type: 'Nonconformance', id, label: number, companyId: order.companyId }, OFFICE_PAGES)}`
   return (
     <div className="fw-so-stack">
-      {model.health && model.health.orders.length > 0 && <HealthCard model={model.health} daysLate={order.daysLate} actions={actions?.health} />}
       {/* F-OP-115 (A11's Overview doors): the address #holds lands here. */}
       <Card padded id="holds" className="fw-so-anchor">
         <h2 className="fw-so-h2">{t('production.quality.title')}</h2>
