@@ -407,10 +407,20 @@ describe('an office change applies at once; an old request for a yes is still de
     const after = await ok('sales', 'GET', `/sales/orders/${order.id}/changes`)
     const turnedDown = after.changes[0]
     expect(turnedDown).toMatchObject({ yes: { state: 'TURNED_DOWN', reason: 'Made-up: not this season.' }, putBack: { may: true, why: null } })
-    expect(after.changes[1].putBack).toMatchObject({ may: false, why: 'Only the latest change is put back.' })
+    // B-OC-010 (order changes tab R6a): offered (the latest, our yes refused, a reader with orders.manage), who decided our yes and
+    // when; an older change is not offered, held in words EN + IT; a reader without orders.manage is offered nothing.
+    expect(turnedDown.putBack).toEqual({ offered: true, may: true, why: null })
+    expect(turnedDown.yes).toMatchObject({ decidedBy: 'Made-up finance', decidedAt: expect.any(String) })
+    expect(after.changes[1].putBack).toEqual({ offered: false, may: false, why: { en: 'Only the latest change can be restored as before.', it: "Si può ripristinare com'era solo l'ultima modifica." } })
+    expect((await ok('reader', 'GET', `/sales/orders/${order.id}/changes`)).changes[0].putBack).toMatchObject({ offered: false, may: false })
+    expect(turnedDown.reasonCode).toBeNull()
     const back = await ok('sales', 'POST', `/sales/orders/${order.id}/changes/${turnedDown.id}/put-back`, { version: (await orderRow(order.id)).version }, 201)
     expect(back.change).toMatchObject({ yes: { state: 'NOT_ASKED' }, customer: { decision: 'NOT_NEEDED' } })
     expect(back.change.reason).toMatch(/^Put back as before revision \d+: its yes was refused\.$/)
+    // B-OC-010 / B-OC-012: the put-back pair names each other; its own reason is the server's PUT_BACK words.
+    expect(back.change).toMatchObject({ restores: turnedDown.revision, restoredBy: null, reasonCode: 'PUT_BACK', changeRequestId: null })
+    const restored = (await ok('sales', 'GET', `/sales/orders/${order.id}/changes`)).changes.find((entry: Json) => entry.id === turnedDown.id)
+    expect(restored).toMatchObject({ restoredBy: back.change.revision, restores: null })
     const [, now20] = await linesOf(order.id)
     expect(now20!.sizes).toEqual(line20.sizes)
     expect(await changeTasks(order.id)).toHaveLength(1)
@@ -584,3 +594,31 @@ describe("a customer's own freeze rules beat the company's for that customer (B-
     expect(field(reading, 'DELIVERY_DATE').ruleId).not.toBe(p1Rule.id)
   })
 })
+
+// ── B-OC-010 / B-OC-011 (order changes tab R6a, R6b; 13-backend §4) ──
+describe('B-OC-010 / B-OC-011: a change names the customer request it carried out, and how the customer answered its revision', () => {
+  it('a revision a customer request carried names that request; answered by its link: who typed it and how — its words only with partners.approvals.view', async () => {
+    const latest = await one<{ id: string; revision: number }>(`SELECT id, revision FROM "SalesOrderAmendment" WHERE "orderId" = $1 ORDER BY revision DESC LIMIT 1`, [order.id])
+    const request = newId()
+    const asked = newId()
+    // Planted whole as the accept and the customer's link would leave them (only the read is under test).
+    await force(
+      `INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status, "answeredAt", "answeredById", "amendmentId", version, "createdAt") VALUES ($1, $2, $3, $4, $5, 'CHANGE', 'ACCEPTED', now(), $6, $7, 2, now() - interval '1 day')`,
+      [request, A.tenant, A.companyA, p1, order.id, PEOPLE.owner, latest.id],
+    )
+    await force(
+      `INSERT INTO "ApprovalRequest" (id, "tenantId", "companyId", "recordType", "recordId", "partyId", kind, question, "dueAt", status, "answeredAt", "typedName", answer, "answeredViaLinkId", "createdAt") VALUES ($1, $2, $3, 'SalesOrderAmendment', $4, $5, 'REVISED_ORDER', 'Made-up: please confirm the order as revised.', now() + interval '5 days', 'APPROVED', now(), 'Made-up Buyer', 'Made-up: fine for us.', $6, now() - interval '1 hour')`,
+      [asked, A.tenant, A.companyA, latest.id, p1, newId()],
+    )
+    const owner = (await ok('owner', 'GET', `/sales/orders/${order.id}/changes`)).changes.find((entry: Json) => entry.id === latest.id)
+    expect(owner).toMatchObject({ changeRequestId: request, customer: { requestId: asked, by: 'Made-up Buyer', via: 'LINK', answer: 'Made-up: fine for us.' } })
+    // The planner reads the changes (orders.view) but not the approvals list: who answered and how, never their words.
+    const planner = (await ok('planner', 'GET', `/sales/orders/${order.id}/changes`)).changes.find((entry: Json) => entry.id === latest.id)
+    expect(planner.customer).toMatchObject({ by: 'Made-up Buyer', via: 'LINK', answer: null })
+    // An office change carried no request; a change never asked of the customer has no answer.
+    const others = (await ok('owner', 'GET', `/sales/orders/${order.id}/changes`)).changes.filter((entry: Json) => entry.id !== latest.id)
+    for (const entry of others) expect(entry.changeRequestId, String(entry.revision)).toBeNull()
+    for (const entry of others.filter((change: Json) => change.customer.requestId === null)) expect(entry.customer).toMatchObject({ by: null, via: null, answer: null })
+  })
+})
+// ── end B-OC-010 / B-OC-011 ──

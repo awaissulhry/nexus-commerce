@@ -40,6 +40,11 @@ import { frozenProblems } from '@nexus/factory-domain/sales/order-changes/freeze
 import { staleChangesInCommand } from '../../production/work-order-changes/decide'
 // B-OP-012 (order page plan N2, D1): the work orders follow a priced change and a put-back in their command where the person may.
 import { withAutoApply } from '../../production/work-order-changes/auto'
+// B-OC-010 / B-OC-011 / B-OC-012 (order changes tab R6a, R6b, R8): each change linked, the customer's answer, the server's reasons.
+import { PARTNERS_APPROVALS_VIEW } from '@nexus/factory-domain/approvals-out/permissions'
+import { STATUS_NAMES, type Words } from '@nexus/factory-domain/sales/change-requests/rules'
+import type { SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
+import { putBackReasonWords, serverReasonOf } from '@nexus/factory-domain/sales/amendments/reasons'
 
 /**
  * Priced change requests after the start, their extra deposit, the new yes and the put-back (B-W2b-309; SAL-219, SAL-221,
@@ -160,22 +165,65 @@ async function namesOf(db: Reader, ids: readonly (string | null)[]): Promise<Map
   return new Map((await db.user.findMany({ where: { id: { in: wanted } }, select: { id: true, displayName: true } })).map((row) => [row.id, row.displayName]))
 }
 
-/** What may be put back: the latest change, when its yes was refused or the customer refused it. */
-function putBackWhy(latest: boolean, yesStatus: string | null, customerStatus: string | null, order: Pick<OrderRow, 'status'>): string | null {
-  if (!latest) return 'Only the latest change is put back.'
-  if (!['CONFIRMED', 'IN_PRODUCTION', 'READY'].includes(order.status)) return `The order is ${order.status.toLowerCase()}: its lines no longer change.`
-  if (yesStatus !== 'REJECTED' && customerStatus !== 'REFUSED') return 'A change is put back when its yes was refused or the customer refused it.'
+// ── B-OC-010 (order changes tab R6a; 13-backend §4): why a change is not restored as before, in the office's words (EN + IT) ──
+export const PUT_BACK_WHY = Object.freeze({
+  notLatest: { en: 'Only the latest change can be restored as before.', it: "Si può ripristinare com'era solo l'ultima modifica." },
+  noRefusal: { en: 'A change is restored as before when its yes was refused or the customer refused it.', it: "Una modifica si ripristina com'era quando il suo sì è stato rifiutato o il cliente l'ha rifiutata." },
+} as const satisfies Record<string, Words>)
+
+/** "The order is partly shipped: its lines no longer change." (the order's status in the change requests' own words). */
+export function putBackStatusWhy(status: string): Words {
+  const name = STATUS_NAMES[status as SalesOrderStatus] ?? { en: status.toLowerCase(), it: status.toLowerCase() }
+  return { en: `The order is ${name.en}: its lines no longer change.`, it: `L'ordine è ${name.it}: le sue righe non cambiano più.` }
+}
+
+/** The order's states in which a change may be restored as before (its lines still change). */
+const PUT_BACK_STATES: readonly string[] = ['CONFIRMED', 'IN_PRODUCTION', 'READY']
+
+/** B-OC-010: a reason to restore it — our yes refused, or the customer's no to it (its newest ask). Pure. */
+export const putBackCause = (yesStatus: string | null, customerStatus: string | null): boolean => yesStatus === 'REJECTED' || customerStatus === 'REFUSED'
+
+/** What may be put back: the latest change, when its yes was refused or the customer refused it (B-OC-010: in words, EN + IT). */
+function putBackWhy(latest: boolean, yesStatus: string | null, customerStatus: string | null, order: Pick<OrderRow, 'status'>): Words | null {
+  if (!latest) return PUT_BACK_WHY.notLatest
+  if (!PUT_BACK_STATES.includes(order.status)) return putBackStatusWhy(order.status)
+  if (!putBackCause(yesStatus, customerStatus)) return PUT_BACK_WHY.noRefusal
   return null
 }
+
+/** B-OC-011: how the customer answered a request — by its one-use link or in its portal (null: not answered). */
+const answeredViaOf = (request: { readonly answeredViaLinkId: string | null; readonly answeredByUserId: string | null }): 'LINK' | 'PORTAL' | null =>
+  request.answeredViaLinkId ? 'LINK' : request.answeredByUserId ? 'PORTAL' : null
+
+/** B-OC-010: each put-back of the order (its `orders.putBackChange` audit rows): the change put back and the one that did it. */
+function putBacksOf(rows: readonly { readonly after: unknown }[]): { restores: Map<string, number>; restoredBy: Map<string, number> } {
+  const restores = new Map<string, number>()
+  const restoredBy = new Map<string, number>()
+  for (const row of rows) {
+    const after = (row.after ?? {}) as Record<string, unknown>
+    const { amendmentId, revision, putBackAmendmentId, putBackRevision } = after
+    if (typeof putBackAmendmentId === 'string' && typeof revision === 'number') restores.set(putBackAmendmentId, revision)
+    if (typeof amendmentId === 'string' && typeof putBackRevision === 'number') restoredBy.set(amendmentId, putBackRevision)
+  }
+  return { restores, restoredBy }
+}
+// ── end B-OC-010 ──
 
 async function changesOf(db: Reader, order: OrderRow, context: ReturnType<typeof officeContextOf>) {
   const rows = await db.salesOrderAmendment.findMany({ where: { orderId: order.id }, orderBy: { revision: 'desc' }, select: AMENDMENT_CHANGE_COLUMNS })
   if (rows.length === 0) return []
-  const tasks = await db.approvalTask.findMany({ where: { kind: 'SALES_ORDER_CHANGE', recordType: 'SalesOrder', recordId: order.id }, orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }], select: { id: true, status: true, requestedAt: true, decidedAt: true, rejectReason: true } })
-  const requests = await db.approvalRequest.findMany({ where: { recordType: 'SalesOrderAmendment', recordId: { in: rows.map((row) => row.id) }, kind: 'REVISED_ORDER' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true, recordId: true, status: true, answeredAt: true } })
+  const tasks = await db.approvalTask.findMany({ where: { kind: 'SALES_ORDER_CHANGE', recordType: 'SalesOrder', recordId: order.id }, orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }], select: { id: true, status: true, requestedAt: true, decidedAt: true, rejectReason: true, /* B-OC-010 */ decidedById: true } })
+  // B-OC-011: + how the customer answered (its typed name, its words, by link or in its portal).
+  const requests = await db.approvalRequest.findMany({ where: { recordType: 'SalesOrderAmendment', recordId: { in: rows.map((row) => row.id) }, kind: 'REVISED_ORDER' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true, recordId: true, status: true, answeredAt: true, typedName: true, answer: true, answeredViaLinkId: true, answeredByUserId: true } })
   const deposits = await db.depositRequest.findMany({ where: { id: { in: rows.flatMap((row) => (row.depositRequestId ? [row.depositRequestId] : [])) } }, select: { id: true, kind: true, amount: true, status: true, dueDate: true, depositPct: true } })
-  const names = await namesOf(db, rows.map((row) => row.createdById))
+  // ── B-OC-010: the customer's request each change carried out, and the put-backs (each names the change it restored) ──
+  const carried = new Map((await db.orderChangeRequest.findMany({ where: { orderId: order.id, amendmentId: { in: rows.map((row) => row.id) } }, select: { id: true, amendmentId: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).flatMap((request) => (request.amendmentId ? [[request.amendmentId, request.id] as const] : [])))
+  const putBacks = putBacksOf(await db.auditLog.findMany({ where: { recordType: 'SalesOrder', recordId: order.id, action: 'orders.putBackChange' }, select: { after: true } }))
+  // ── end B-OC-010 ──
+  const names = await namesOf(db, [...rows.map((row) => row.createdById), /* B-OC-010 */ ...tasks.map((task) => task.decidedById)])
   const mayManage = can(actorOf(context), ORDERS_MANAGE, { companyId: order.companyId, partyId: order.partyId })
+  // B-OC-011: the customer's own words only with the approvals list's right (partners.approvals.view over its company and customer).
+  const seesWords = can(actorOf(context), PARTNERS_APPROVALS_VIEW, { companyId: order.companyId, partyId: order.partyId })
   return rows.map((row, index) => {
     const next = index > 0 ? rows[index - 1]! : null
     // The yes of this change: the request it names, else the newest asked while it was the latest.
@@ -193,6 +241,13 @@ async function changesOf(db: Reader, order: OrderRow, context: ReturnType<typeof
       id: row.id,
       revision: row.revision,
       reason: row.reason,
+      /** B-OC-012: which server words the reason is (AUTOMATIC · REQUEST · PUT_BACK); null: typed by a person. */
+      reasonCode: serverReasonOf(row.reason),
+      // ── B-OC-010: the customer's request it carried out; the revision it restored, and the one that restored it ──
+      changeRequestId: carried.get(row.id) ?? null,
+      restores: putBacks.restores.get(row.id) ?? null,
+      restoredBy: putBacks.restoredBy.get(row.id) ?? null,
+      // ── end B-OC-010 ──
       createdAt: toUtcIso(row.createdAt),
       createdBy: row.createdById ? (names.get(row.createdById) ?? null) : null,
       /** A priced change request (parts or a fee). */
@@ -202,9 +257,21 @@ async function changesOf(db: Reader, order: OrderRow, context: ReturnType<typeof
       feeAmount: asMoney('price', facts.feeAmount),
       changeAmount: asMoney('price', diff.netAfter - diff.netBefore + (facts.feeAmount ?? 0)),
       deposit: deposit ? { id: deposit.id, kind: deposit.kind, kindWords: DEPOSIT_KIND_WORDS[deposit.kind as keyof typeof DEPOSIT_KIND_WORDS], amount: asMoney('price', deposit.amount), pct: deposit.depositPct ? new Dec(deposit.depositPct.toString()).toFixed(4) : null, status: deposit.status, dueDate: businessDate(deposit.dueDate) } : null,
-      yes: { state: yesState, words: CHANGE_YES_WORDS[yesState], taskId: yesTask?.id ?? null, reason: yesTask?.status === 'REJECTED' ? yesTask.rejectReason : null },
-      customer: { decision, words: CUSTOMER_DECISION_WORDS[decision], requestId: request?.id ?? null, answeredAt: request?.answeredAt ? toUtcIso(request.answeredAt) : null },
-      putBack: { may: why === null && mayManage, why },
+      // B-OC-010: + when and by whom (an office person) our yes was decided.
+      yes: { state: yesState, words: CHANGE_YES_WORDS[yesState], taskId: yesTask?.id ?? null, reason: yesTask?.status === 'REJECTED' ? yesTask.rejectReason : null, decidedAt: yesTask?.decidedAt ? toUtcIso(yesTask.decidedAt) : null, decidedBy: yesTask?.decidedById ? (names.get(yesTask.decidedById) ?? null) : null },
+      customer: {
+        decision,
+        words: CUSTOMER_DECISION_WORDS[decision],
+        requestId: request?.id ?? null,
+        answeredAt: request?.answeredAt ? toUtcIso(request.answeredAt) : null,
+        // ── B-OC-011 (R6b): the name the customer typed, how it answered, its own words (with partners.approvals.view) ──
+        by: request?.typedName ?? null,
+        via: request ? answeredViaOf(request) : null,
+        answer: seesWords ? (request?.answer ?? null) : null,
+        // ── end B-OC-011 ──
+      },
+      // B-OC-010: `offered` — the latest change with a reason to restore it, to a reader who may (orders.manage); `why` in words.
+      putBack: { offered: index === 0 && putBackCause(yesTask?.status ?? null, request?.status ?? null) && mayManage, may: why === null && mayManage, why },
     }
   })
 }
@@ -247,11 +314,12 @@ export async function putBackChange(caller: CommandCaller, orderId: string, amen
     const all = await changesOf(tx, fresh, context)
     const target = all.find((entry) => entry.id === amendmentId)
     if (!target) throw new NotFoundError('Change not found.')
-    if (!target.putBack.may) throw new InvalidStateError(target.putBack.why ?? 'You may not put this change back.')
+    if (!target.putBack.may) throw new InvalidStateError(target.putBack.why?.en ?? 'You may not put this change back.')
     const row = await tx.salesOrderAmendment.findUniqueOrThrow({ where: { id: amendmentId }, select: AMENDMENT_CHANGE_COLUMNS })
     const before = row.before as unknown as OrderSnapshot
     const linesNow = new Set((await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id))
-    const reason = (body.reason?.trim() || `Put back as before revision ${row.revision}: ${target.yes.state === 'TURNED_DOWN' ? 'its yes was refused' : 'the customer refused it'}.`).slice(0, 500)
+    // B-OC-012: the default words are the domain's template (serverReasonOf reads them back as PUT_BACK).
+    const reason = (body.reason?.trim() || putBackReasonWords(row.revision, target.yes.state === 'TURNED_DOWN' ? 'YES_REFUSED' : 'CUSTOMER_REFUSED')).slice(0, 500)
     const amend = putBackBody(before, linesNow, body.version, reason)
     // The yes still waiting on the change (the customer refused first) is taken back: the change goes away.
     if (target.yes.state === 'WAITING' && target.yes.taskId) {

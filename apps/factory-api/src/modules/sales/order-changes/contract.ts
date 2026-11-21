@@ -5,6 +5,7 @@ import { MAX_REASON } from '@nexus/factory-domain/sales/orders/orders'
 import { MAX_QUOTE_LINES, MAX_SIZE_QUANTITY, MAX_TEXT } from '@nexus/factory-domain/sales/quotes/quotes'
 import { FREEZE_LIMITS, FREEZE_STATES, ORDER_FREEZE_ACTIONS, ORDER_FREEZE_FIELDS, ORDER_FREEZE_STAGES } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { CHANGE_YES_STATES, CUSTOMER_DECISIONS, PRICED_LIMITS } from '@nexus/factory-domain/sales/order-changes/priced'
+import { SERVER_REASON_CODES } from '@nexus/factory-domain/sales/amendments/reasons' // B-OC-012
 import { diffView, workOrderPreviewView } from '../orders/daily-contract'
 import { orderView } from '../orders/contract'
 // B-OP-012: what the office change's work orders did in its command, and what waits.
@@ -167,6 +168,16 @@ const changeView = output({
   id: id(),
   revision: z.number().int(),
   reason: z.string(),
+  /** B-OC-012 (order changes tab R8): which server words `reason` is (AUTOMATIC · REQUEST · PUT_BACK); null: typed by a person. */
+  reasonCode: z.enum(SERVER_REASON_CODES).nullable(),
+  // ── B-OC-010 (R6a): certain links only — the web groups by these, never by time ──
+  /** The customer's request this change carried out (its OrderChangeRequest); null: the office's own. */
+  changeRequestId: id().nullable(),
+  /** A put-back: the revision it restored as before; null: not a put-back. */
+  restores: z.number().int().nullable(),
+  /** The revision that restored this change as before; null: not restored. */
+  restoredBy: z.number().int().nullable(),
+  // ── end B-OC-010 ──
   createdAt: instant(),
   createdBy: z.string().nullable(),
   /** A priced change request (its parts or a fee): a yes/no, not money. */
@@ -176,9 +187,27 @@ const changeView = output({
   feeAmount: money.price(z.number().int().nullable()),
   changeAmount: money.price(z.number().int()),
   deposit: output({ id: id(), kind: z.string(), kindWords: words, amount: money.price(z.number().int()), pct: z.string().nullable(), status: z.string(), dueDate: businessDate() }).nullable(),
-  yes: output({ state: z.enum(CHANGE_YES_STATES), words, taskId: id().nullable(), reason: z.string().nullable() }),
-  customer: output({ decision: z.enum(CUSTOMER_DECISIONS), words, requestId: id().nullable(), answeredAt: instant().nullable() }),
-  putBack: output({ may: z.boolean(), why: z.string().nullable() }),
+  // B-OC-010: + when and by whom (an office person) our yes was decided.
+  yes: output({ state: z.enum(CHANGE_YES_STATES), words, taskId: id().nullable(), reason: z.string().nullable(), decidedAt: instant().nullable(), decidedBy: z.string().nullable() }),
+  customer: output({
+    decision: z.enum(CUSTOMER_DECISIONS),
+    words,
+    requestId: id().nullable(),
+    answeredAt: instant().nullable(),
+    // ── B-OC-011 (R6b): how the customer answered its newest ask ──
+    /** The full name it typed to sign the answer (null: not answered). */
+    by: z.string().nullable(),
+    /** By its one-use link or in its portal (null: not answered). No "for the customer": the database refuses it on a revised order. */
+    via: z.enum(['LINK', 'PORTAL']).nullable(),
+    /** Its own words with the answer — only with partners.approvals.view (the approvals list's rule), else null. */
+    answer: z.string().nullable(),
+    // ── end B-OC-011 ──
+  }),
+  /**
+   * B-OC-010: `offered` — the latest change with a reason to restore it (our yes refused or the customer's no), to a reader with
+   * orders.manage; `may` as before; `why` in words (EN + IT) when it may not (was English only).
+   */
+  putBack: output({ offered: z.boolean(), may: z.boolean(), why: words.nullable() }),
 })
 
 export const applyPricedChangeContract = defineContract({
