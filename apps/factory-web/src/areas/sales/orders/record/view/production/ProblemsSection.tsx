@@ -155,16 +155,19 @@ function Problems({ order, model, actions }: { order: Order; model: OrderRecordM
           {finals && finals.length > 0 ? (
             <ul className="fw-pt-units">
               {finals.map((check) => (
-                <li key={check.key}>
-                  <span className="fw-pt-inline">
-                    <Tag tone={check.status === 'PASSED' ? 'success' : check.status === 'FAILED' ? 'danger' : 'neutral'}>{t(`production.quality.finalState.${check.status}`, { date: check.on ? day(check.on) : '—' })}</Tag>
-                    <span>{t('production.quality.finalRow', { number: check.number ?? '—', checked: check.checked })}</span>
-                    {/* F-SA-266: quality is discussed in an office note only. */}
-                    {mayDiscuss ? <DiscussDoor order={order} part={t('discuss.quality', { number: check.number ?? '—' })} target={{ kind: 'WorkOrder', id: check.workOrderId }} officeOnly align="end" /> : null}
+                // fx5 #14: one row shape — the check's words at the left, its Discuss door always at the row's end (never wrapped under).
+                <li key={check.key} className="fw-pt-qrow">
+                  <span className="fw-pt-qrow-b">
+                    <span className="fw-pt-inline">
+                      <Tag tone={check.status === 'PASSED' ? 'success' : check.status === 'FAILED' ? 'danger' : 'neutral'}>{t(`production.quality.finalState.${check.status}`, { date: check.on ? day(check.on) : '—' })}</Tag>
+                      <span>{t('production.quality.finalRow', { number: check.number ?? '—', checked: check.checked })}</span>
+                    </span>
+                    {check.inspected !== null && check.lot !== null ? <span className="fw-pt-sub">{t('productionTab.problems.inspected', { inspected: check.inspected, lot: check.lot })}</span> : null}
+                    {check.defects ? <span className="fw-pt-sub">{t('productionTab.problems.defects', check.defects)}</span> : null}
+                    {check.shared ? <span className="fw-pt-sub">{t('productionTab.problems.sharedCheck')}</span> : null}
                   </span>
-                  {check.inspected !== null && check.lot !== null ? <span className="fw-pt-sub">{t('productionTab.problems.inspected', { inspected: check.inspected, lot: check.lot })}</span> : null}
-                  {check.defects ? <span className="fw-pt-sub">{t('productionTab.problems.defects', check.defects)}</span> : null}
-                  {check.shared ? <span className="fw-pt-sub">{t('productionTab.problems.sharedCheck')}</span> : null}
+                  {/* F-SA-266: quality is discussed in an office note only. */}
+                  {mayDiscuss ? <DiscussDoor order={order} part={t('discuss.quality', { number: check.number ?? '—' })} target={{ kind: 'WorkOrder', id: check.workOrderId }} officeOnly align="end" /> : null}
                 </li>
               ))}
             </ul>

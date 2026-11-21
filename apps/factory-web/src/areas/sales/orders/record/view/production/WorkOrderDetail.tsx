@@ -93,6 +93,8 @@ function WorkOrderBody({ row, readiness, toldAt }: { row: WorkOrderOwn; readines
   return (
     <div className="fw-pt-detail">
       {row.sharedWithOtherCustomers && row.rights?.why ? <p className="fw-pt-hint">{say(row.rights.why as Words, locale)}</p> : null}
+      {/* fx5 #14: the plan's line and the materials' word sit together (no gap between them). */}
+      <div className="fw-pt-dt-lines">
       <p className="fw-pt-inline">
         {dates.planEnd ? t('productionTab.detail.plan', { end: day(dates.planEnd), due: dates.due ? day(dates.due) : '—' }) : dates.due ? t('productionTab.wo.due', { date: day(dates.due) }) : t('productionTab.wo.noDue')}
         {dates.afterDue ? <Tag tone="danger">{t('productionTab.wo.afterDue')}</Tag> : null}
@@ -103,6 +105,7 @@ function WorkOrderBody({ row, readiness, toldAt }: { row: WorkOrderOwn; readines
           <ReadinessPill word={readiness.word} date={readiness.date} /> <span className="fw-pt-sub">{r(`readiness.hint.${readiness.word}`)}</span>
         </p>
       ) : null}
+      </div>
       {table ? (
         <div className="fw-pt-sizes">
           <table aria-label={t('productionTab.detail.sizes')}>

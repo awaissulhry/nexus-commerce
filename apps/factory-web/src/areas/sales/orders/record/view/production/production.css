@@ -236,3 +236,9 @@
 /* ── fx5 #5: a paired section's card stretches to the pair's height — no hole under the shorter one ── */
 .fw-pt-pairs > .fw-pt-sec { display: flex; flex-direction: column; }
 .fw-pt-pairs > .fw-pt-sec > .nds-card { flex: 1 1 auto; }
+
+/* fx5 #14: a final check's row keeps one shape (its Discuss door at the end); the detail's plan and materials lines sit together. */
+.fw-pt-qrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--nds-space-8); align-items: start; }
+.fw-pt-qrow-b { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.fw-pt-dt-lines { display: flex; flex-direction: column; gap: var(--nds-space-4); }
+.fw-pt-dt-lines > p { margin: 0; }

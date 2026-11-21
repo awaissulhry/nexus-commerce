@@ -270,8 +270,9 @@ function Rows({ order, model, actions, href }: { order: Order; model: OrderRecor
                 {pill ? <span className="fw-pt-sub fw-pt-sub-mat">{pill}</span> : null}
               </div>
               <div className="fw-pt-c-dt">
-                {/* F-OP-113: Due in place (a day; empty: no due date), marked while it saves — with the right, the row open. */}
-                {shown.inline ? (
+                {/* F-OP-113: Due in place (a day; empty: no due date), marked while it saves — with the right, the row open; fx5 #14: never on
+                    a completed work order (its due day is history). */}
+                {shown.inline && row.status !== 'COMPLETED' ? (
                   <span className="fw-pt-inline">
                     <DateField value={row.due ?? ''} onChange={(next) => act?.onDue?.(row, next || null)} clearable ariaLabel={t('wo.dueOf', { number: row.number })} />
                     <CellSaveMark state={save?.field === 'due' ? 'saving' : null} />
