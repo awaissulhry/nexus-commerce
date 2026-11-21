@@ -81,6 +81,11 @@ export const headlineView = output({
       stage: z.enum(HAND_STAGES),
       reasonCode: z.enum(STAGE_SET_REASON_CODES),
       floor: output({ code: z.enum(BRAND_STAGES), words }).nullable(),
+      /**
+       * B-SC-004 (stage control B): the floor's stage when it was set or changed (null: not known). Set back (below it), the
+       * stage clears by itself when the floor's counts come back to it or pass this one (the keeper's end rule E1).
+       */
+      floorAtSet: z.enum(BRAND_STAGES).nullable(),
       at: instant(),
       note: z.string().nullable(),
       by: person.nullable(),

@@ -62,7 +62,7 @@ const escalationStep = () => z.number().int().min(1).max(2)
 export const brandStageReached = defineEvent({
   type: 'brand_production.stage_reached',
   context: 'production-brand',
-  description: "An order's plain stage for its customer moved forward (preparing, cutting, sewing, quality, ready).",
+  description: "An order's plain stage for its customer moved forward (preparing, cutting, sewing, quality, ready), or back by hand as a correction of a stage it was told.",
   payload: z.strictObject({
     /** The sales order. */
     orderId: z.uuid(),
@@ -73,6 +73,10 @@ export const brandStageReached = defineEvent({
     // B-MS-008: a stage set by hand (true; absent: the floor's) — its notice waits the undo window (stageNoticeWaitMs). A flag only:
     // never the reason, the note or who, never a live field, never a notice param (the customer never reads "by hand").
     byHand: z.boolean().optional(),
+    // B-SC-004 (stage control B): a move BACK by hand of a stage the customer was told (true; absent: a forward move) — told once
+    // as a correction ("Correction: your order 12 is at the sewing stage", production-brand/notices stageNoticeKey), with
+    // `byHand` (its notice waits the same window). A flag only: never a live field, never a notice param.
+    correction: z.boolean().optional(),
   }),
   live: live(['orderId', 'partyId', 'stage']),
 })

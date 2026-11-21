@@ -2,30 +2,36 @@ import { InvalidStateError, NotFoundError, ValidationError } from '@nexus/factor
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { Words } from '@nexus/factory-domain/portal/tasks/kinds'
 import { PRODUCTION_BRAND_MANAGE } from '@nexus/factory-domain/production-brand/permissions'
-import { STAGE_SET_REFUSAL_WORDS, stageSetAskProblems, stageSetStateProblems, type HandStage, type StageSetReasonCode } from '@nexus/factory-domain/production-brand/stage-set'
-import { movedForward, type BrandStage } from '@nexus/factory-domain/production-brand/stages'
+import { handMoveOf, STAGE_SET_REFUSAL_WORDS, stageSetAskProblems, stageSetStateProblems, type HandStage, type StageSetReasonCode } from '@nexus/factory-domain/production-brand/stage-set'
+import type { BrandStage } from '@nexus/factory-domain/production-brand/stages'
 import type { SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
 import { command, StaleVersionError, type CommandCaller } from '../../../core/command'
 import { officeContextOf } from '../work-orders/access'
 import type { Reader } from '../work-orders/store'
 import { lockOrder, officeOrder } from './health'
 import { CLEAR_BRAND_STAGE, keepInCommand, SET_BRAND_STAGE, tellStageOnce, untellWaiting } from './keeper' // B-MS-008: untellWaiting
+import { readHandFloor, tellCorrection } from './keeper' // B-SC-004
 
 /**
  * B-MS-005 — the office sets an order's stage by hand (set-the-stage-by-hand plan.md D1–D9, design A; review fixes R1, R4, R6, R9,
  * R11, R12, R15, R19; the Owner rule 2026-11-16: "One brand must not be able to see anything related to any other brand. But we, as
  * the production unit, should be able to see it all. And manage it all as well."). The ONE named exception to "a stage is only the
- * floor's and quality's": when the floor cannot record work that is done (the system or the scanners are down, too few people to
- * record it, the work is at an outside workshop, something else), a person of the office puts the stage ahead — Cutting, Sewing or
- * Quality check, never Ready — with a reason and an office-only note. Only the stage: the counts, Ready, the change cut-offs, Mark
- * urgent and planning stay on the floor's records (factory-domain production-brand/stage-set).
+ * floor's and quality's". B-SC-004 (stage control B, "full control", the Owner's pick 2026-11-21): a person of the office sets the
+ * stage the customer reads where the work really is — ANY of the five, forward or back, also below what the floor recorded (a wrong
+ * scan) and Ready to ship (the dialog warns while quality has not released every piece) — with a reason and an office-only note.
+ * Only the stage: the counts, quality's records, the order's status, the shipments, the change cut-offs, Mark urgent and planning
+ * stay on the floor's records (factory-domain production-brand/stage-set).
  *
  *   set     PUT /production/brand-orders/:orderId/stage {stage, reasonCode, note?, version} (production.brand.manage): only an order
- *           In production or Partly shipped (R4), never while the customer's own pause stands (R19), and only ahead of the LIVE floor
- *           (R12). A Change is the same call while one stands: it replaces it, and may go lower while it stays above the floor (D9:
- *           a correction, written and never told).
- *   clear   DELETE the same ?version (production.brand.manage): the stage goes back to the live floor's, on the floor's own day
- *           (R15); never told (a notice already sent stays sent).
+ *           In production or Partly shipped (R4), never while the customer's own pause stands (R19), a Set never at the stage the
+ *           customer reads already, and never the LIVE floor's own stage while a hand stage stands (R12; Clear goes back to it). A
+ *           Change is the same call while one stands: it replaces it, forward or back; at the same stage it changes only the reason
+ *           or the note (audited, nothing told, the floor at the set kept) — all three unchanged: nothing to change (409).
+ *   clear   DELETE the same ?version (production.brand.manage): the stage goes back to the live floor's (a step back on the floor's
+ *           own day, R15).
+ *   told    one rule for Set, Change and Clear (handMoveOf on the stage the customer reads): a forward move is told once
+ *           (./keeper tellStageOnce, by hand); a move back is told once as a correction when the stage it leaves was told
+ *           (./keeper tellCorrection), else nothing — every notice by hand waits the 10-minute undo window.
  *
  * The wall first (R11): the order is found by its id and the caller must reach its company AND its customer (./health officeOrder),
  * before anything about its state is read — another customer's order is "Sales order not found.", the words of an unknown id, and
@@ -35,7 +41,8 @@ import { CLEAR_BRAND_STAGE, keepInCommand, SET_BRAND_STAGE, tellStageOnce, untel
  * lock; with no row it MAKES it at Preparing with its first-stage marker, R1), the state judged against that live floor (409, in
  * words), then `stage` = the hand stage and the five columns (the database's guard: while it stands `stage` equals it; the setter an
  * active office person). Each write is audited twice: on the BrandOrderProduction row (before: stage, its day, the hand stage; after:
- * the stage, the hand stage, the floor, the reason, the note — the floor's day the Clear restores) and on the SalesOrder (R6: the
+ * the stage, the hand stage, the floor — B-SC-004: the keeper's floorAtSet, ./keeper readHandFloor — the reason, the note; the
+ * floor's day the Clear restores) and on the SalesOrder (R6: the
  * order's History reads only its own rows; `production.setBrandStage` / `production.clearBrandStage`, from → to as `stage`, the note
  * in `after` and never in `reason`, and NEVER a `status` key — the portal's order history and madeWaiting read that key). A forward
  * move of the stage the customer reads is told once (./keeper tellStageOnce), in the order's own customer's name, with the stage
@@ -111,7 +118,7 @@ async function viewOf(db: Reader, orderId: string, floor: BrandStage | null) {
 }
 
 export interface StageSetBody {
-  /** Any stage: only Cutting, Sewing and Quality check are taken, the others refused in words (400). */
+  /** B-SC-004: any of the five stages (the one the customer reads already, or the floor's while a hand stage stands: 409). */
   readonly stage: BrandStage
   readonly reasonCode: StageSetReasonCode
   /** The office's own words: one line of at most 200 characters (required for OTHER); never the customer's to read. */
@@ -141,12 +148,16 @@ export async function setBrandStage(caller: CommandCaller, orderId: string, body
     const floor = facts.stage?.stage ?? null
     const row = await readHand(tools.tx, orderId)
     const paused = facts.blockers.some((blocker) => blocker.kind === 'BRAND_PAUSE')
-    const refused = stageSetStateProblems({ status: facts.order.status as SalesOrderStatus, floor, hand: row?.stageSet ?? null, paused, stage })
+    // B-SC-004: `shown` — the stage the customer reads after the keeper's pass (a Set must move it; a Change at the same stage must
+    // change its reason or note).
+    const refused = stageSetStateProblems({ status: facts.order.status as SalesOrderStatus, floor, shown: row?.stage ?? null, hand: row?.stageSet ?? null, handReason: row?.stageSetReason ?? null, handNote: row?.stageSetNote ?? null, paused, stage, reasonCode, note })
     if (refused.length > 0) throw new InvalidStateError(refused[0]!.message)
     // A kept order with a goods line open has its row now (the keeper's pass made it).
     if (!row) throw new InvalidStateError(STAGE_SET_REFUSAL_WORDS.NOTHING_LEFT.en)
 
     const changed = row.stageSet !== null
+    // B-SC-004: a Change of the office's words only (the same stage) keeps the floor at the set, so the end rule stays as it was.
+    const floorAtSet = changed && row.stageSet === stage ? ((await readHandFloor(tools.tx, row.id)) ?? floor) : floor
     await tools.tx.brandOrderProduction.update({
       where: { id: row.id },
       data: {
@@ -169,7 +180,7 @@ export async function setBrandStage(caller: CommandCaller, orderId: string, body
       recordId: row.id,
       companyId: facts.order.companyId,
       before: { stage: row.stage, stageAt: toUtcIso(row.stageAt), hand: row.stageSet },
-      after: { salesOrderId: orderId, stage, hand: stage, floor, reasonCode, note },
+      after: { salesOrderId: orderId, stage, hand: stage, floor, floorAtSet /* B-SC-004: the keeper's readHandFloor */, reasonCode, note },
       reason,
     })
     // R6: the order's own History — from → to as `stage`, the note in `after`; never a `status` key.
@@ -178,14 +189,21 @@ export async function setBrandStage(caller: CommandCaller, orderId: string, body
     // above already left untold what it moved off).
     if (row.stage !== stage) await untellWaiting(tools, facts.order, row.id, stage, kept.untold)
     // A forward move of what the customer reads: told once, from the stage before the set (Preparing for a row just made, R1),
-    // B-MS-008: by hand — its notice waits the undo window. A Change going down is written and never told.
-    if (movedForward(row.stage, stage)) await tellStageOnce(tools, facts.order, row, stage, row.stage, true)
+    // B-MS-008: by hand — its notice waits the undo window. B-SC-004: a move back is told once as a correction when the stage it
+    // leaves was told (inside its window it was just left untold: nothing to correct).
+    const move = handMoveOf(row.stage, stage)
+    if (move === 'FORWARD') await tellStageOnce(tools, facts.order, row, stage, row.stage, true)
+    else if (move === 'BACK') await tellCorrection(tools, facts.order, row, stage, row.stage)
     return viewOf(tools.tx, orderId, floor)
   })
   return result
 }
 
-/** DELETE /production/brand-orders/:orderId/stage?version= (production.brand.manage): back to the floor's stage, never told. */
+/**
+ * DELETE /production/brand-orders/:orderId/stage?version= (production.brand.manage): back to the floor's stage. B-SC-004: a Clear
+ * that lowers what the customer reads is a move back (told as a correction when the stage it leaves was told); one that raises it
+ * (a set back cleared) gets the usual forward notice, by hand (the keeper's pass).
+ */
 export async function clearBrandStage(caller: CommandCaller, orderId: string, version: number, idempotencyKey?: string) {
   // R11: the wall before anything about the order's state.
   await officeOrder(caller, orderId, PRODUCTION_BRAND_MANAGE)
@@ -195,13 +213,17 @@ export async function clearBrandStage(caller: CommandCaller, orderId: string, ve
     checkVersion(before, orderId, version)
     if (before === null || before.stageSet === null) throw new InvalidStateError(NO_HAND_STAGE_WORDS.en)
     // R12, R15: the keeper's own pass with the hand stage cleared, in this command — the five columns cleared and `stage` back to the
-    // live floor's (no goods line: where the work reached) in one write, on the floor's own day; a step back is never told.
-    // B-MS-008: inside the window the stage cleared is left untold in that same pass (./keeper untellWaiting).
+    // live floor's (no goods line: where the work reached) in one write, on the floor's own day. B-MS-008: inside the window the
+    // stage cleared is left untold in that same pass (./keeper untellWaiting). B-SC-004: a forward move it makes is told there, by
+    // hand; a step back is told below as a correction.
     const kept = await keepInCommand(tools, orderId, { what: CLEAR_BRAND_STAGE, health: false, clearHand: true })
     if (!kept.facts) throw new NotFoundError('Sales order not found.')
     const { facts } = kept
     const floor = facts.stage?.stage ?? null
     const after = (await readHand(tools.tx, orderId))!
+    // B-SC-004: the Clear lowered what the customer reads — a correction when the stage it leaves was told (only while the order is
+    // kept with a goods line open: one that left production, or has nothing left to make, reads no stage any more).
+    if (facts.kept && floor !== null && handMoveOf(before.stage, after.stage) === 'BACK') await tellCorrection(tools, facts.order, before, after.stage, before.stage)
     const reason = `The stage set by hand was cleared: ${before.stageSet} (${before.stageSetReason ?? 'no reason'}).`
     tools.audit({
       recordType: 'BrandOrderProduction',

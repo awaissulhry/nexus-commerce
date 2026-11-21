@@ -19,6 +19,8 @@ import { officeOrder } from './moves'
 import type { Reader } from './store'
 // B-OP-043 (order page N6, lines-derived): an order's shipments through their lines.
 import { shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
+// B-SC-005 (stage control B, the red notice in plain words): what a phrase key prints, to say a refusal without its code.
+import { approvedTexts } from '../../compliance/phrases/store'
 
 /**
  * What points at a sales order (B-TH-077; threads plan TH-6, gaps X-G02, ORD-G04, ORD-G09; design O-SAL-ORD-REC.body and
@@ -34,7 +36,10 @@ import { shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
  *               manager reads them only
  *   gates       the compliance gates' refusals that still block the order's work orders and shipments (GateEvent REFUSED,
  *               not overridden, not passed since): the place and the gate's own sentence for every order reader; the event
- *               (to open in Compliance › Gate refusals, where an override is made) only with compliance.certificates.view
+ *               (to open in Compliance › Gate refusals, where an override is made) only with compliance.certificates.view.
+ *               B-SC-005: the sentence in plain words, never a code — an older stored sentence that quotes its phrase key
+ *               ('the warning "warning.class-a" has no approved German words', explanation.phrase) says the phrase's own
+ *               words in its place (sayPhraseWords), else drops the quoted key; nothing stored is changed
  *
  * Wall W27: only what is the order's own customer's — a complaint or a return names the order AND its customer and company
  * (one that names the order but another customer never shows), a work order counts only when every one of its cells is of
@@ -92,6 +97,44 @@ export const recordLinksContract = defineContract({
     }),
   },
 })
+
+// ── B-SC-005 (stage control B: the red notice in plain words) ──
+/**
+ * The phrase key a refusal's facts name (`explanation.phrase`) when its stored sentence quotes that very key — an older sentence,
+ * written before the gate named a warning by its words (seed fix F-OP-313). null: nothing to say again.
+ */
+export function quotedPhraseKeyOf(reason: string, explanation: unknown): string | null {
+  const facts = explanation !== null && typeof explanation === 'object' && !Array.isArray(explanation) ? (explanation as Record<string, unknown>) : null
+  const key = typeof facts?.phrase === 'string' ? facts.phrase.trim() : ''
+  return key !== '' && reason.includes(`"${key}"`) ? key : null
+}
+
+/** The sentence with its quoted phrase key said in the phrase's own words — with none found, the quoted key dropped. Never a code. */
+export function sayPhraseWords(reason: string, key: string, words: string | null): string {
+  const quoted = `"${key}"`
+  const text = words?.trim() ?? ''
+  if (text !== '') return reason.split(quoted).join(`"${text}"`)
+  return reason.split(` ${quoted}`).join('').split(quoted).join('')
+}
+
+/** A refusal's sentence as the order page says it (B-SC-005). */
+function plainReasonOf(reason: string, explanation: unknown, words: ReadonlyMap<string, string>): string {
+  const key = quotedPhraseKeyOf(reason, explanation)
+  return key === null ? reason : sayPhraseWords(reason, key, words.get(key) ?? null)
+}
+
+/** What each key prints in English (the approved words: the source or its approved translation), else its source words; once. */
+async function phraseWordsOf(db: Reader, keys: readonly string[]): Promise<ReadonlyMap<string, string>> {
+  const words = new Map<string, string>()
+  if (keys.length === 0) return words
+  for (const row of await approvedTexts(db, keys, ['en'])) if (row.text && row.text.trim() !== '') words.set(row.key, row.text)
+  const missing = keys.filter((key) => !words.has(key))
+  if (missing.length > 0) {
+    for (const row of await db.phrase.findMany({ where: { key: { in: missing } }, select: { key: true, sourceText: true } })) if (row.sourceText.trim() !== '') words.set(row.key, row.sourceText)
+  }
+  return words
+}
+// ── end B-SC-005 ──
 
 /** Has the subject passed this gate since the refusal (compliance/gates events.ts says the same for its feed)? */
 async function passedSince(db: Reader, row: { readonly gate: string; readonly subjectId: string; readonly createdAt: Date }): Promise<boolean> {
@@ -197,7 +240,7 @@ export async function orderLinks(caller: CommandCaller, orderId: string) {
       subjects.length > 0
         ? await db.gateEvent.findMany({
             where: { outcome: 'REFUSED', companyId: order.companyId, createdAt: { gte: new Date(now.getTime() - GATE_DAYS * DAY_MS) }, OR: subjects },
-            select: { id: true, companyId: true, gate: true, subjectType: true, subjectId: true, requirementId: true, styleId: true, reason: true, createdAt: true },
+            select: { id: true, companyId: true, gate: true, subjectType: true, subjectId: true, requirementId: true, styleId: true, reason: true, explanation: true /* B-SC-005 */, createdAt: true },
             orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
             take: 200,
           })
@@ -207,6 +250,8 @@ export async function orderLinks(caller: CommandCaller, orderId: string) {
     const styleIds = [...new Set(refusals.flatMap((row) => (row.styleId ? [row.styleId] : [])))]
     const styles = new Map((styleIds.length > 0 ? await db.style.findMany({ where: { id: { in: styleIds } }, select: { id: true, code: true } }) : []).map((row) => [row.id, row.code]))
     const opens = can(actor, CERTIFICATES_VIEW, { companyId: order.companyId })
+    // B-SC-005: the phrase keys older sentences quote, read once.
+    const phraseWords = await phraseWordsOf(db, [...new Set(refusals.flatMap((row) => quotedPhraseKeyOf(row.reason, row.explanation) ?? []))])
     const seen = new Set<string>()
     const gates = []
     for (const row of refusals) {
@@ -223,7 +268,8 @@ export async function orderLinks(caller: CommandCaller, orderId: string) {
         at: toUtcIso(row.createdAt),
         subject: { type: row.subjectType as 'WorkOrder' | 'Shipment', id: row.subjectId, number: numbers.get(row.subjectId) ?? null },
         styleCode: row.styleId ? (styles.get(row.styleId) ?? null) : null,
-        reason: row.reason,
+        // B-SC-005: in plain words — a quoted phrase key says the phrase's words (or goes).
+        reason: plainReasonOf(row.reason, row.explanation, phraseWords),
       })
     }
     return { order: { id: head.id, number: head.number }, complaints, returns, rePromises, gates, asOf: toUtcIso(now) }

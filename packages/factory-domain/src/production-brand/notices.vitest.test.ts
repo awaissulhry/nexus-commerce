@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { isPartnerMessageKey, PARTNER_MESSAGE_KEYS, PARTNER_MESSAGE_TEMPLATES, partnerSentence, productionWordsOf, topicOfNotice } from '../portal/notifications/messages'
 import { defaultFrequencyOf, frequencyOf, isTransactional, NON_ESSENTIAL_TOPICS, PARTNER_EMAIL_TOPICS, TOPIC_WORDS, type PartnerEmailFrequency, type PartnerEmailTopic } from '../portal/notifications/topics'
 import { HEALTH_NOTICE_KEYS, HOLD_CAUSE_OF_EVENT, healthNoticeKey, holdNoticeKey, problemNotice, STAGE_NOTICE_KEYS, stageNoticeKey, URGENCY_NOTICE_KEYS, urgencyNoticeKey } from './notices'
+import { STAGE_CORRECTION_KEYS } from './notices' // B-SC-004
 // B-PR-31 (F-PR-15's ask): a gate passed or started before, a final inspection's result — each at the level that shares it.
 import { GATE_NOTICE_KEYS, gateNoticeKey, QUALITY_NOTICE_KEYS, qualityNoticeKey } from './notices'
 import { BRAND_GATE_KINDS } from './portal-read'
@@ -33,6 +34,23 @@ describe('B-PR-31 which production event is news for the customer', () => {
     expect(stageNoticeKey({ stage: 'CUTTING', previous: 'PREPARING' }, 'SEWING')).toBeNull()
     expect(stageNoticeKey({ stage: 'CUTTING', previous: 'PREPARING' }, null)).toBeNull()
     expect(Object.keys(STAGE_NOTICE_KEYS).sort()).toEqual(['CUTTING', 'QUALITY', 'READY', 'SEWING'])
+  })
+
+  // ── B-SC-004 (stage control B) ──
+  it('a correction: a move back by hand, to Preparing … Quality check, while the order still reads it; never a forward move, never without the flag', () => {
+    expect(stageNoticeKey({ stage: 'PREPARING', previous: 'CUTTING', correction: true }, 'PREPARING')).toBe('portal.production.corrected_preparing')
+    expect(stageNoticeKey({ stage: 'CUTTING', previous: 'SEWING', correction: true }, 'CUTTING')).toBe('portal.production.corrected_cutting')
+    expect(stageNoticeKey({ stage: 'SEWING', previous: 'READY', correction: true }, 'SEWING')).toBe('portal.production.corrected_sewing')
+    expect(stageNoticeKey({ stage: 'QUALITY', previous: 'READY', correction: true }, 'QUALITY')).toBe('portal.production.corrected_quality')
+    // Moved on (or back again) before the worker told it: dropped.
+    expect(stageNoticeKey({ stage: 'CUTTING', previous: 'SEWING', correction: true }, 'SEWING')).toBeNull()
+    expect(stageNoticeKey({ stage: 'CUTTING', previous: 'SEWING', correction: true }, null)).toBeNull()
+    // A forward move or the same stage is no correction; a move back without the flag is never told (the keeper's own).
+    expect(stageNoticeKey({ stage: 'SEWING', previous: 'CUTTING', correction: true }, 'SEWING')).toBeNull()
+    expect(stageNoticeKey({ stage: 'SEWING', previous: 'SEWING', correction: true }, 'SEWING')).toBeNull()
+    expect(stageNoticeKey({ stage: 'SEWING', previous: null, correction: true }, 'SEWING')).toBeNull()
+    expect(stageNoticeKey({ stage: 'CUTTING', previous: 'SEWING', correction: false }, 'CUTTING')).toBeNull()
+    expect(Object.keys(STAGE_CORRECTION_KEYS).sort()).toEqual(['CUTTING', 'PREPARING', 'QUALITY', 'SEWING'])
   })
 
   it('a health changed: only worse, to At risk or Late, while the order still reads it; never the first health', () => {
@@ -98,6 +116,11 @@ describe('B-PR-31 the words: Italian in "voi", the customer\'s own number, never
     const it_ = (messageKey: string, params: Record<string, unknown> = order12.params) => partnerSentence({ messageKey, recordLabel: '#12', params }, 'it', 'Factory Spa')
     expect([en('portal.production.cutting'), it_('portal.production.cutting')]).toEqual(['Cutting has started on your order 12', 'È iniziato il taglio per il vostro ordine 12'])
     expect([en('portal.production.ready'), it_('portal.production.ready')]).toEqual(['Your order 12 is ready to ship', 'Il vostro ordine 12 è pronto per la spedizione'])
+    // B-SC-004: the corrections — the plain stage only.
+    expect([en('portal.production.corrected_preparing'), it_('portal.production.corrected_preparing')]).toEqual(['Correction: your order 12 is still being prepared', 'Correzione: il vostro ordine 12 è ancora in preparazione'])
+    expect([en('portal.production.corrected_cutting'), it_('portal.production.corrected_cutting')]).toEqual(['Correction: your order 12 is at the cutting stage', 'Correzione: il vostro ordine 12 è alla fase di taglio'])
+    expect([en('portal.production.corrected_sewing'), it_('portal.production.corrected_sewing')]).toEqual(['Correction: your order 12 is at the sewing stage', 'Correzione: il vostro ordine 12 è alla fase di cucitura'])
+    expect([en('portal.production.corrected_quality'), it_('portal.production.corrected_quality')]).toEqual(['Correction: your order 12 is at the quality check', 'Correzione: il vostro ordine 12 è al controllo qualità'])
     expect([en('portal.production.at_risk'), it_('portal.production.at_risk')]).toEqual(['Your order 12 is at risk of missing its date', 'Il vostro ordine 12 rischia di non rispettare la data'])
     expect([en('portal.production.late'), it_('portal.production.late')]).toEqual(['Your order 12 is late', 'Il vostro ordine 12 è in ritardo'])
     expect([en('portal.production.on_hold'), it_('portal.production.hold_lifted')]).toEqual(['Work on your order 12 is on hold', 'La lavorazione per il vostro ordine 12 è ripresa'])
@@ -154,7 +177,7 @@ describe('B-PR-31 the words: Italian in "voi", the customer\'s own number, never
     }
     expect(topicOfNotice({ messageKey: 'portal.order.countered', recordLabel: '#12', params: {} }, () => null)).toBe('ORDERS')
     // Every key a decision gives is a production notice.
-    for (const key of [...Object.values(STAGE_NOTICE_KEYS), ...Object.values(HEALTH_NOTICE_KEYS), ...Object.values(URGENCY_NOTICE_KEYS)]) expect(PRODUCTION_KEYS).toContain(key)
+    for (const key of [...Object.values(STAGE_NOTICE_KEYS), ...Object.values(STAGE_CORRECTION_KEYS) /* B-SC-004 */, ...Object.values(HEALTH_NOTICE_KEYS), ...Object.values(URGENCY_NOTICE_KEYS)]) expect(PRODUCTION_KEYS).toContain(key)
   })
 })
 

@@ -25,6 +25,7 @@ import { findMarkers, markersOf, productionTwoBrands, twoBrandIds, twoBrandSessi
 import { keeperPlanningContext, readOrderProductionFacts } from './facts'
 import { brandKeeperHandler, keepOrder, ordersOfEvent, runBrandKeeperNightly, STAGE_TOLD } from './keeper'
 import { HAND_CLEARED } from './keeper' // B-MS-004
+import { readHandFloor, SET_BRAND_STAGE } from './keeper' // B-SC-003
 
 /**
  * B-PR-17 — the customer's stage and health keeper, PW-P07 (production plan §4; review fixes R-20, R-21, R-31, R-35, R-69; the
@@ -52,6 +53,9 @@ import { HAND_CLEARED } from './keeper' // B-MS-004
  *     scan ends it with no second notice; set by hand, then cancelled: the hand columns empty, the stage where the work reached,
  *     one SalesOrder audit row with no `status` key (R2, R6); the nightly run clears one whose status event was missed. The hand
  *     stage is written by the admin pool as B-MS-005's command writes it (the database's guard is real).
+ *   - B-SC-003 (stage control B, end rule E1): set back to Preparing over a floor at Cutting (its set's audit row names the floor
+ *     then), a bundle under it is followed and it stands — the customer reads Preparing, nothing told; a sewing scan moves the
+ *     floor past where it stood at the set: it ends, Sewing written and told from Preparing, one History row.
  *
  * Every name and number is made up. Run with `env -u FACTORY_REDIS_URL node scripts/factory/run-pg-tests.mjs modules/production/brand`.
  */
@@ -414,6 +418,60 @@ describe('B-MS-004: the stage set by hand (design A; R2, R6, R7)', () => {
     // At Sewing with no hand stage, a scan is skipped again.
     expect(await reader.withClient((client) => ordersOfEvent(client, { type: 'production.scan_recorded', payload: { workOrderId, operationId: op } }))).toEqual({ orderIds: [], hold: null })
   })
+
+  // ── B-SC-003 (stage control B, end rule E1) ──
+  describe('B-SC-003: a stage set back (below the floor) stands until the floor agrees or moves on', () => {
+    let orderId = ''
+    let workOrderId = ''
+    let bundle = ''
+    /**
+     * A stage set by hand BACK, as B-MS-005's command writes it: the row (`stage` equals it) and its set's audit row on the
+     * production row, `after.floor` the floor's stage then (the keeper's floorAtSet, readHandFloor).
+     */
+    async function setBack(stage: string, floor: string): Promise<void> {
+      await setByHand(orderId, stage)
+      const row = await rowOf(orderId)
+      await raw(`INSERT INTO "AuditLog" (id, "tenantId", "companyId", at, audience, "actorId", action, "recordType", "recordId", before, after, reason, "requestId")
+        VALUES (${lit(newId())}, ${lit(ids.tenantId)}, ${lit(w.companyId)}, now(), 'OFFICE', ${lit(owner)}, '${SET_BRAND_STAGE}', 'BrandOrderProduction', ${lit(row.id)},
+          '{"stage": "${floor}", "hand": null}'::jsonb, '{"salesOrderId": "${orderId}", "stage": "${stage}", "hand": "${stage}", "floor": "${floor}", "reasonCode": "OTHER", "note": "Made-up: a wrong cut was logged."}'::jsonb,
+          'Stage set by hand: ${stage} (OTHER).', 't-${newId()}');`)
+    }
+
+    it('set back to Preparing over a floor at Cutting: a bundle under it is followed and it stands — Preparing read, nothing told', async () => {
+      const made = await newOrder(ids.a, 'BACK')
+      orderId = made.orderId
+      const created = await app.inject({ method: 'POST', url: '/production/work-orders', headers: { 'x-test-session': 'office.all' }, payload: { siteId: w.siteId, lines: [{ salesOrderLineId: made.lineId, sizes: [{ size: '50', quantity: 2 }, { size: '52', quantity: 2 }] }] } })
+      expect(created.statusCode, created.body).toBe(201)
+      workOrderId = (created.json() as { workOrder: { id: string } }).workOrder.id
+      const cell = (await one<{ id: string }>(`SELECT id FROM "WorkOrderSize" WHERE "workOrderId" = $1 AND size = '50'`, [workOrderId])).id
+      bundle = await bundleOn(workOrderId, cell)
+      await keepOrder(system(), orderId, { what: 'production.bundle_created', health: false })
+      expect((await handOf(orderId)).stage).toBe('CUTTING')
+      await setBack('PREPARING', 'CUTTING')
+      // The keeper reads the floor at the set back from the set's own audit row.
+      const rowId = (await rowOf(orderId)).id as string
+      expect(await system().withClient((client) => readHandFloor(client, rowId))).toBe('CUTTING')
+      const before = await told()
+      // Another bundle of the same cut: the floor still at Cutting, where it stood at the set — the hand Preparing stands.
+      await bundleOn(workOrderId, cell)
+      await run('production.bundle_created', { workOrderId })
+      expect((await factsOf(orderId))!.stage?.stage).toBe('CUTTING')
+      expect(await handOf(orderId)).toMatchObject({ stage: 'PREPARING', stageSet: 'PREPARING', reason: 'OUTAGE' })
+      expect(await stagesTold(orderId, before)).toEqual([])
+      expect(await ended(orderId)).toEqual([])
+    })
+
+    it('a sewing scan moves the floor past where it stood at the set: it ends — Sewing written and told from Preparing, one History row', async () => {
+      const before = await told()
+      const op = await sewingOperationOn(workOrderId)
+      await sewingScan(workOrderId, op, bundle)
+      await run('production.scan_recorded', { workOrderId, operationId: op })
+      expect(await handOf(orderId)).toMatchObject({ stage: 'SEWING', ...cleared })
+      expect((await stagesTold(orderId, before)).map((event) => event.payload)).toEqual([{ orderId, partyId: ids.a, stage: 'SEWING', previous: 'PREPARING' }])
+      expect(await ended(orderId)).toEqual([{ before: { stage: 'PREPARING' }, after: { stage: 'SEWING', floor: 'SEWING', why: 'REACHED' } }])
+    })
+  })
+  // ── end B-SC-003 ──
 
   it('R2: set by hand, then cancelled — the hand columns empty, the stage where the work reached; one History row, no status key; nothing told', async () => {
     const { orderId } = await newOrder(ids.a, 'GONE')

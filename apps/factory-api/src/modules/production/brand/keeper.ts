@@ -5,9 +5,9 @@ import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
 import { eventFor } from '@nexus/factory-domain/events/define'
 import { assertOneParty, brandHealthChanged, brandHoldChanged, brandStageReached, type BrandHoldKind } from '@nexus/factory-domain/production-brand/events'
 import { effectiveHealth, raiseStands, type BrandHealth, type HealthRaise, type HealthReasonCode } from '@nexus/factory-domain/production-brand/health'
-import { brandStageRank, movedForward, type BrandStage } from '@nexus/factory-domain/production-brand/stages'
+import { BRAND_STAGES, brandStageRank, movedForward, type BrandStage } from '@nexus/factory-domain/production-brand/stages' // B-SC-003: BRAND_STAGES
 import { HAND_STAGE_NOTICE_DELAY_MS, handStands } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-004, B-MS-008
-import { STAGE_NOTICE_KEYS } from '@nexus/factory-domain/production-brand/notices' // B-MS-008
+import { STAGE_CORRECTION_KEYS, STAGE_NOTICE_KEYS } from '@nexus/factory-domain/production-brand/notices' // B-MS-008; B-SC-004: corrections
 import type { Waiting, WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
 import { ForbiddenError } from '@nexus/factory-domain/core/errors'
 import { callerFor, COMMAND_SETTINGS, runCommand, type CommandCaller, type CommandSettings, type CommandTools } from '../../../core/command'
@@ -37,26 +37,37 @@ import { ordersOfShipment } from '../../shipping/shipments/orders-of'
  *                    so the order's own timeline stays the order's). A stage going back is written (the
  *                    customer reads only true states) and never told. An order with no open goods line keeps its last stage.
  *   by hand          B-MS-004 (set the stage by hand, design A; review fixes R2, R6, R7, R15, R21): the ONE named exception to
- *                    "only true states". While the floor cannot record work that is done, an office person may put the stage
- *                    ahead with a reason (./stage, B-MS-005; the five stageSet… columns, hidden from the customer). The keeper
- *                    then writes the SHOWN stage into `stage`: the higher of the floor's and the hand stage (production-brand
- *                    stage-set shownStageOf). The floor's own stage is never stored: every decision of a pass (the plan, the
- *                    clears, the skip of the high-volume events below) reads the floor's stage computed in THAT pass, never the
- *                    stored one. The hand stage stands while the floor is below it (nothing written, nothing told); the floor
- *                    reaching or passing it, no goods line left open, a person's Clear, or the order leaving production
- *                    (cancelled, closed, shipped: R2, a command of its own, and the nightly run looks for any the events
- *                    missed) ends it in the SAME write — the five columns cleared (the database's guard: while it stands
- *                    `stage` equals it), `stage` the floor's or, with no goods line, where the work reached; a step back takes
- *                    the floor's own day (R15, floorDayOf). The told rule stays the one above (a forward move of `stage`, what
- *                    the customer reads), so a floor Cutting under a hand Sewing tells nothing. Each end the keeper writes is
- *                    also one row on the SalesOrder (`production.brandKeeper.handCleared` {stage, floor, why}; never a `status`
- *                    key, which the portal's order history reads: R6), so the order's History says it.
+ *                    "only true states". An office person may set the stage where the work really is, with a reason (./stage,
+ *                    B-MS-005; the five stageSet… columns, hidden from the customer; B-SC-003, stage control B: any stage,
+ *                    forward or back, also below the floor). The keeper then writes the SHOWN stage into `stage`: the hand
+ *                    stage while it stands, higher or lower than the floor's (production-brand stage-set shownStageOf). The
+ *                    floor's own stage is never stored: every decision of a pass (the plan, the clears, the skip of the
+ *                    high-volume events below) reads the floor's stage computed in THAT pass, never the stored one. The hand
+ *                    stage stands until the floor agrees or moves on (end rule E1, stage-set handStands, against `floorAtSet`
+ *                    — the floor's stage at the newest set or change, readHandFloor: the set's own audit row): set ahead, until
+ *                    the floor reaches or passes it; set back, until the floor equals it or moves past where it stood at the
+ *                    set (a real release after a wrong scan: quality's truth takes over, and is told). Nothing is written or
+ *                    told while it stands. That end, no goods line left open, a person's Clear, or the order leaving
+ *                    production (cancelled, closed, shipped: R2, a command of its own, and the nightly run looks for any the
+ *                    events missed) ends it in the SAME write — the five columns cleared (the database's guard: while it
+ *                    stands `stage` equals it), `stage` the floor's or, with no goods line, where the work reached; a step back
+ *                    takes the floor's own day (R15, floorDayOf). The told rule stays the one above (a forward move of
+ *                    `stage`, what the customer reads), so a floor Cutting under a hand Sewing tells nothing. Each end the
+ *                    keeper writes is also one row on the SalesOrder (`production.brandKeeper.handCleared` {stage, floor, why};
+ *                    never a `status` key, which the portal's order history reads: R6), so the order's History says it.
  *   undo window      B-MS-008 (Owner D4; review R3a): a stage set by hand is told with `byHand`, and its notice waits 10 minutes
  *                    (the partner fan-out's delayMs). When the stage the customer reads moves off a stage whose by-hand notice
  *                    still waits — a Clear, a Change, the floor passing it, the order leaving production — that stage gets the
  *                    marker `production.brandKeeper.stageUntold` (untellWaiting): the notice's own check drops it, and the stage
  *                    counts as never told, so the floor reaching it later tells it. A stage counts as told only while its NEWEST
  *                    marker is stageTold (tellStageOnce).
+ *   correction       B-SC-004 (stage control B): a person moving the stage the customer reads BACK (a Set or Change lower, a
+ *                    Clear that lowers it: ./stage) tells it once as a correction when the stage it leaves WAS told
+ *                    (tellCorrection: a STAGE_TOLD marker with `correction`, STAGE_UNTOLD for every told stage above, so the
+ *                    real one is told again when the order reaches it; the event's `correction` flag, with `byHand`, waits the
+ *                    same window). Inside the window the stage it leaves is left untold silently (untellWaiting). A Clear that
+ *                    raises it (a set back cleared) tells the usual forward notice, by hand (the same window). The keeper's own
+ *                    passes never tell a move back.
  *   health           the computed health (facts.ts) and when it changed; the factory's raise to At risk is dropped once 7
  *                    days passed or the computed health changed (health.ts raiseStands). `brand_production.health_changed`
  *                    when the health the customer reads (effectiveHealth) changed, `byNote` when only the raise's drop did it.
@@ -102,8 +113,8 @@ export const CLEAR_BRAND_STAGE = 'production.clearBrandStage'
 export const HAND_CLEARED = 'production.brandKeeper.handCleared'
 
 /**
- * Why a stage set by hand ended: the floor reached or passed it, no goods line is left open, the order left production
- * (cancelled, closed, shipped), or a person cleared it (./stage).
+ * Why a stage set by hand ended: the floor reached or passed it (B-SC-003, end rule E1: the floor agrees or moved on), no goods
+ * line is left open, the order left production (cancelled, closed, shipped), or a person cleared it (./stage).
  */
 export const HAND_DROPS = ['REACHED', 'NO_LINE', 'LEFT_PRODUCTION', 'CLEARED'] as const
 export type HandDrop = (typeof HAND_DROPS)[number]
@@ -168,6 +179,8 @@ export interface KeeperRow {
   readonly stage: BrandStage
   // B-MS-004: the stage set by hand (null: none stands; while it stands `stage` equals it, the database's guard).
   readonly stageSet: BrandStage | null
+  // B-SC-003 (end rule E1): the floor's stage when it was set or changed (readHandFloor; null: none stands, or not known).
+  readonly handFloor: BrandStage | null
   readonly health: BrandHealth | null
   readonly healthSet: BrandHealth | null
   readonly healthReasonCode: HealthReasonCode | null
@@ -224,10 +237,11 @@ export function planKeep(input: { readonly row: KeeperRow | null; readonly targe
   const data: KeepPlan['data'] = {}
   const previousStage = row?.stage ?? null
   // B-MS-004 (design A; R7): every decision reads the FLOOR's stage of this pass (target.stage), never the stored one. A hand stage
-  // stands while the floor is below it (`stage` stays the hand stage); the floor reaching or passing it, no goods line open, or a
-  // person's Clear ends it in this same write: `stage` the floor's — with no goods line, where the work reached.
+  // stands until the floor agrees or moves on (B-SC-003, end rule E1 against the floor at the set: `stage` stays the hand stage,
+  // higher or lower than the floor's); that end, no goods line open, or a person's Clear ends it in this same write: `stage` the
+  // floor's — with no goods line, where the work reached.
   const hand = row?.stageSet ?? null
-  const handStays = hand !== null && input.clearHand !== true && handStands(target.stage, hand)
+  const handStays = hand !== null && input.clearHand !== true && handStands(target.stage, hand, row?.handFloor ?? null)
   if (hand !== null && !handStays) data.handDropped = input.clearHand === true ? 'CLEARED' : target.stage === null ? 'NO_LINE' : 'REACHED'
   const shown: BrandStage | null = handStays ? hand : (target.stage ?? (hand !== null ? target.reached : null))
   if (shown !== null && shown !== previousStage) {
@@ -302,6 +316,8 @@ async function readRow(db: Reader, orderId: string): Promise<KeeperRow | null> {
     ...row,
     stage: row.stage as BrandStage,
     stageSet: row.stageSet as BrandStage | null, // B-MS-004
+    // B-SC-003: the floor at the set, read only while a hand stage stands (one indexed audit read).
+    handFloor: row.stageSet !== null ? await readHandFloor(db, row.id) : null,
     health: row.health as BrandHealth | null,
     healthSet: row.healthSet as BrandHealth | null,
     healthReasonCode: row.healthReasonCode as HealthReasonCode | null,
@@ -329,7 +345,10 @@ export interface KeepCause {
   readonly health?: boolean
   /** A hold placed or lifted on the order's work: tell it (once per event and order). */
   readonly hold?: { readonly kind: BrandHoldKind; readonly eventId: string }
-  /** B-MS-004: a person clears the stage set by hand (./stage, inside its own command): the floor's stage counts again. */
+  /**
+   * B-MS-004: a person clears the stage set by hand (./stage, inside its own command): the floor's stage counts again. B-SC-004: a
+   * forward move it makes (a set back cleared) is told by hand — its notice waits the undo window, as every person's move.
+   */
   readonly clearHand?: boolean
 }
 
@@ -452,6 +471,42 @@ export async function tellStageOnce(
   return true
 }
 
+// ── B-SC-004 (stage control B: a move back by hand, told as a correction) ──
+/**
+ * A person moved the stage the customer reads BACK, from `previous` to `stage` (./stage: a Set or Change lower, a Clear that lowers
+ * it). Told once as a correction — only when `previous` WAS told (readHandNotice: the floor's tell, a tell by hand whose notice was
+ * made or whose window is over); inside its window it is left untold silently (the caller's untellWaiting, nothing more here). One
+ * chain: `previous` is itself a correction still waiting its window (two moves back inside 10 minutes) — that one is dropped by
+ * untellWaiting, so this one is told in its place (the customer was told the stage above it). It writes STAGE_UNTOLD for every stage
+ * above `stage` the customer counts as told (so the real one is told again when the order reaches it), the marker STAGE_TOLD
+ * {stage, previous, byHand, correction} and `brand_production.stage_reached` with `correction` and `byHand` (its notice waits the
+ * same 10 minutes; the partner rule tells it only while its own tell is the newest word on that stage: handTellStands) — in the
+ * order's own customer's name (PW-P07). False: nothing to correct.
+ */
+export async function tellCorrection(
+  tools: CommandTools,
+  order: { readonly id: string; readonly companyId: string; readonly partyId: string },
+  row: { readonly id: string; readonly partyId: string },
+  stage: BrandStage,
+  previous: BrandStage,
+): Promise<boolean> {
+  if (brandStageRank(stage) >= brandStageRank(previous)) return false
+  const left = await readHandNotice(tools.tx, row.id, order.id, previous, tools.now)
+  const chained = !left.told && left.waitsUntil !== null && (await newestMarkerOf(tools.tx, row.id, previous))?.correction === true
+  if (!left.told && !chained) return false
+  assertOneParty({ partyId: order.partyId, orderIds: [order.id] }, new Map([[order.id, row.partyId]]))
+  for (const above of BRAND_STAGES.filter((other) => brandStageRank(other) > brandStageRank(stage))) {
+    // A waiting tell (the chained correction too) is left untold by the caller's untellWaiting already.
+    const told = above === previous ? left.told : (await readHandNotice(tools.tx, row.id, order.id, above, tools.now)).told
+    if (!told) continue
+    tools.audit({ action: STAGE_UNTOLD, recordType: 'BrandOrderProduction', recordId: row.id, companyId: order.companyId, after: { salesOrderId: order.id, stage: above } })
+  }
+  tools.audit({ action: STAGE_TOLD, recordType: 'BrandOrderProduction', recordId: row.id, companyId: order.companyId, after: { salesOrderId: order.id, stage, previous, byHand: true, correction: true } })
+  tools.emit(eventFor(brandStageReached, { subject: order.id, companyId: order.companyId, payload: { orderId: order.id, partyId: order.partyId, stage, previous, byHand: true, correction: true } }))
+  return true
+}
+// ── end B-SC-004 ──
+
 // ── B-MS-008 (Owner D4: the 10-minute undo window; review R3a) ──
 /** One stage marker of a production row, as read (STAGE_TOLD or STAGE_UNTOLD): its stage, a tell by hand, when, by which request. */
 export interface StageMarker {
@@ -460,14 +515,21 @@ export interface StageMarker {
   readonly byHand: boolean
   readonly at: Date
   readonly requestId: string
+  /** B-SC-004: a tell of a correction (a move back by hand): its notice has the correction's key. */
+  readonly correction?: boolean
 }
 
 const STAGE_MARKERS = [STAGE_TOLD, STAGE_UNTOLD]
 const MARKER_SELECT = { action: true, after: true, at: true, requestId: true } as const
 const markerOf = (row: { readonly action: string; readonly after: unknown; readonly at: Date; readonly requestId: string }): StageMarker | null => {
   const after = jsonObject(row.after)
-  return after && typeof after.stage === 'string' ? { action: row.action, stage: after.stage as BrandStage, byHand: after.byHand === true, at: row.at, requestId: row.requestId } : null
+  return after && typeof after.stage === 'string'
+    ? { action: row.action, stage: after.stage as BrandStage, byHand: after.byHand === true, at: row.at, requestId: row.requestId, ...(after.correction === true ? { correction: true } : {}) }
+    : null
 }
+
+/** B-SC-004: the partner notice a stage marker's tell makes — the stage's usual one, or its correction's. */
+const noticeKeyOf = (marker: Pick<StageMarker, 'stage' | 'correction'>) => (marker.correction === true ? STAGE_CORRECTION_KEYS : STAGE_NOTICE_KEYS)[marker.stage]
 
 /**
  * The newest marker of one stage on a row (null: none). Newest by id — ids are made in order when the command's rows are written,
@@ -484,15 +546,16 @@ async function newestMarkerOf(db: Reader, rowId: string, stage: BrandStage): Pro
  * marker of the stage is a tell by hand of less than HAND_STAGE_NOTICE_DELAY_MS before `now` — in stage order, each with its tell's
  * time. `markers`: the row's, newest first.
  */
-export function waitingTellsOff(markers: readonly StageMarker[], shown: BrandStage, now: Date): { readonly stage: BrandStage; readonly at: Date }[] {
+export function waitingTellsOff(markers: readonly StageMarker[], shown: BrandStage, now: Date): { readonly stage: BrandStage; readonly at: Date; readonly correction?: boolean }[] {
   const seen = new Set<BrandStage>()
-  const waiting: { stage: BrandStage; at: Date }[] = []
+  const waiting: { stage: BrandStage; at: Date; correction?: boolean }[] = []
   for (const marker of markers) {
     if (seen.has(marker.stage)) continue
     seen.add(marker.stage)
     if (marker.action !== STAGE_TOLD || !marker.byHand || marker.stage === shown) continue
     if (now.getTime() - marker.at.getTime() >= HAND_STAGE_NOTICE_DELAY_MS) continue
-    waiting.push({ stage: marker.stage, at: marker.at })
+    // B-SC-004: a correction's tell waits too; its notice has the correction's key.
+    waiting.push({ stage: marker.stage, at: marker.at, ...(marker.correction === true ? { correction: true } : {}) })
   }
   return waiting.sort((a, b) => brandStageRank(a.stage) - brandStageRank(b.stage))
 }
@@ -514,9 +577,9 @@ export async function untellWaiting(
   const since = new Date(tools.now.getTime() - HAND_STAGE_NOTICE_DELAY_MS)
   const rows = await tools.tx.auditLog.findMany({ where: { recordType: 'BrandOrderProduction', recordId: rowId, action: { in: STAGE_MARKERS }, at: { gte: since } }, select: MARKER_SELECT, orderBy: { id: 'desc' }, take: 50 })
   const untold: BrandStage[] = []
-  for (const { stage, at } of waitingTellsOff(rows.flatMap((row) => markerOf(row) ?? []), shown, tools.now)) {
+  for (const { stage, at, correction } of waitingTellsOff(rows.flatMap((row) => markerOf(row) ?? []), shown, tools.now)) {
     if (skip.includes(stage)) continue
-    const key = STAGE_NOTICE_KEYS[stage]
+    const key = noticeKeyOf({ stage, correction }) // B-SC-004
     const made = key ? await tools.tx.notification.findFirst({ where: { eventType: brandStageReached.type, recordId: order.id, messageKey: key, createdAt: { gte: at } }, select: { id: true } }) : null
     if (made) continue
     tools.audit({ action: STAGE_UNTOLD, recordType: 'BrandOrderProduction', recordId: rowId, companyId: order.companyId, after: { salesOrderId: order.id, stage } })
@@ -568,12 +631,28 @@ export function handNoticeOf(newest: Pick<StageMarker, 'action' | 'byHand' | 'at
  */
 export async function readHandNotice(db: Reader, rowId: string, orderId: string, stage: BrandStage, now: Date): Promise<HandNotice> {
   const newest = await newestMarkerOf(db, rowId, stage)
-  const key = STAGE_NOTICE_KEYS[stage]
+  const key = newest ? noticeKeyOf(newest) : undefined // B-SC-004: a correction's tell has the correction's key
   if (!newest || newest.action !== STAGE_TOLD || !newest.byHand || !key || now.getTime() - newest.at.getTime() >= HAND_STAGE_NOTICE_DELAY_MS) return handNoticeOf(newest, false, now)
   const made = (await db.notification.findFirst({ where: { eventType: brandStageReached.type, recordId: orderId, messageKey: key, createdAt: { gte: newest.at } }, select: { id: true } })) !== null
   return handNoticeOf(newest, made, now)
 }
 // ── end B-MS-008 (ms-fx1) ──
+
+// ── B-SC-003 (stage control B, end rule E1) ──
+/**
+ * The floor's stage when the hand stage standing was set or changed: `after.floorAtSet` (else `after.floor`) of the row's NEWEST set
+ * by hand (./stage writes both on every Set and Change — a Change of the reason or note only keeps the earlier floorAtSet; newest by
+ * id, as the markers). null: none, or no floor in it — a row written before B or by hand outside the command: the keeper reads it as
+ * set ahead (today's rule). One indexed read. The keeper's end rule and the office's headline (sales/orders production-read
+ * `byHand.floorAtSet`) share it.
+ */
+export async function readHandFloor(db: Reader, rowId: string): Promise<BrandStage | null> {
+  const set = await db.auditLog.findFirst({ where: { recordType: 'BrandOrderProduction', recordId: rowId, action: SET_BRAND_STAGE }, select: { after: true }, orderBy: { id: 'desc' } })
+  const after = set ? jsonObject(set.after) : null
+  const floor = after?.floorAtSet ?? after?.floor
+  return typeof floor === 'string' && (BRAND_STAGES as readonly string[]).includes(floor) ? (floor as BrandStage) : null
+}
+// ── end B-SC-003 ──
 
 /** A plain JSON object of an audit row (else null). */
 const jsonObject = (value: unknown): Record<string, unknown> | null => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null)
@@ -668,8 +747,9 @@ async function writePlan(tools: CommandTools, facts: OrderProductionFacts, row: 
     const partyOf = new Map([[order.id, row?.partyId ?? order.partyId]])
     if (plan.stageReached) {
       const { stage, previous } = plan.stageReached
-      // B-MS-004: the one tell of a stage (tellStageOnce), shared with the set by hand.
-      if (await tellStageOnce(tools, order, { id: rowId!, partyId: row?.partyId ?? order.partyId }, stage, previous)) told.push('brand_production.stage_reached')
+      // B-MS-004: the one tell of a stage (tellStageOnce), shared with the set by hand. B-SC-004: a person's Clear that raises it (a
+      // set back cleared) tells it by hand — its notice waits the undo window.
+      if (await tellStageOnce(tools, order, { id: rowId!, partyId: row?.partyId ?? order.partyId }, stage, previous, cause.clearHand === true)) told.push('brand_production.stage_reached')
     }
     if (plan.healthChanged) {
       assertOneParty({ partyId: order.partyId, orderIds: [order.id] }, partyOf)

@@ -23,6 +23,7 @@ import { systemContext } from '../../../platform/outbox/system'
 import { orderHistory } from '../../sales/portal-orders/store'
 import { productionTwoBrands, twoBrandIds, twoBrandSessions, type OfficeSession, type ProductionTwoBrands } from '../testing/two-brands'
 import { brandKeeperHandler, CLEAR_BRAND_STAGE, keepOrder, SET_BRAND_STAGE, STAGE_TOLD } from './keeper'
+import { STAGE_UNTOLD } from './keeper' // B-SC-004
 
 /**
  * B-MS-005 — the office sets an order's stage by hand, changes it and clears it (set-the-stage-by-hand plan.md D1–D9, design A;
@@ -41,13 +42,18 @@ import { brandKeeperHandler, CLEAR_BRAND_STAGE, keepOrder, SET_BRAND_STAGE, STAG
  *     the stage Cutting, the customer told once ("Cutting has started": the first stage Preparing is never news).
  *   - a Planner sets Sewing over Preparing: one stage_reached, one STAGE_TOLD marker; the partner role reads the plain Sewing and
  *     never the hand columns.
- *   - refusals in words: Ready or Preparing, Something else without a note (400); at or below the LIVE floor — the keeper's stored
- *     stage lagging behind (R12) — a Confirmed order (R4), the customer's own pause (R19; our own hold allows it), a stale version
- *     and a null version beside a row (R9), a Clear with none (409); Sales (403); nothing written, nothing told.
+ *   - refusals in words: Something else without a note, a note of two lines or too long (400); the stage the customer reads
+ *     already — also the LIVE floor's while the keeper's stored stage lags behind (R12) — the floor's own stage while a hand stage
+ *     stands, a Confirmed order (R4), the customer's own pause (R19; our own hold allows it), a stale version and a null version
+ *     beside a row (R9), a Clear with none (409); Sales (403); nothing written, nothing told.
+ *   - B-SC-004 (stage control B): Ready to ship by hand taken (told by hand, the status stays quality's); Preparing set back over
+ *     a told Cutting — one correction, the stages above untold, and Clear back to Cutting tells it again by hand; a stage moved
+ *     back inside its window is left untold silently, never corrected.
  *   - the wall (R11): office.p2 on A's order and on an unknown id — PUT and DELETE — "Sales order not found.", word for word; no
  *     audit row about A's order.
- *   - Change higher: told; Change lower (still above the floor): written, not told; Clear: the live floor's stage on its own day
- *     (R15), nothing told; set → cancelled → the keeper gives back where the work reached, on the floor's own day.
+ *   - Change higher: told; Change lower inside the window: written, the stage it leaves untold (never corrected); Clear: the live
+ *     floor's stage on its own day (R15), nothing told; set → cancelled → the keeper gives back where the work reached, on the
+ *     floor's own day.
  *   - R6: the SalesOrder audit rows carry from → to as `stage` and never a `status` key; the portal's order history reads nothing new.
  *
  * Every name and note is made up. Run with `env -u FACTORY_REDIS_URL node scripts/factory/run-pg-tests.mjs modules/production/brand/stage`.
@@ -250,13 +256,13 @@ describe('B-MS-005: set the stage by hand (production.brand.manage)', () => {
     }
   })
 
-  it('refused in words: Ready, Preparing, Something else without a note (400); nothing written, nothing told', async () => {
+  it('refused in words: the stage the customer reads already (409), Something else without a note, a note of two lines or too long (400); nothing written, nothing told', async () => {
     const { orderId } = await newOrder(ids.a, 'ASK')
     await keepOrder(system(), orderId, { what: 'test' })
     const version = await versionOf(orderId)
     const before = await told()
-    expect((await refused('office.planner', 'PUT', stageUrl(orderId), { stage: 'READY', reasonCode: 'OUTAGE', version }, 400)).message).toBe("Only quality's release of every piece makes it Ready to ship.")
-    expect((await refused('office.planner', 'PUT', stageUrl(orderId), { stage: 'PREPARING', reasonCode: 'OUTAGE', version }, 400)).message).toBe('Preparing is never set by hand: pick Cutting, Sewing or Quality check.')
+    // B-SC-004: Preparing is no longer refused as such — here it is the stage the customer reads already.
+    expect((await refused('office.planner', 'PUT', stageUrl(orderId), { stage: 'PREPARING', reasonCode: 'OUTAGE', version }, 409)).message).toBe('The customer already reads Preparing.')
     const other = await refused('office.planner', 'PUT', stageUrl(orderId), { stage: 'SEWING', reasonCode: 'OTHER', note: '   ', version }, 400)
     expect(other.issues).toEqual([{ path: 'body/note', message: 'Something else needs a note.' }])
     await refused('office.planner', 'PUT', stageUrl(orderId), { stage: 'SEWING', reasonCode: 'OUTAGE', note: 'Made-up first line\nand a second one', version }, 400)
@@ -265,7 +271,7 @@ describe('B-MS-005: set the stage by hand (production.brand.manage)', () => {
     expect(await toldSince(before, orderId)).toEqual([])
   })
 
-  it('R12: at or below the LIVE floor — the keeper has not followed the cut yet — 409 in words; nothing written, nothing told', async () => {
+  it('R12: the LIVE floor’s stage — the keeper has not followed the cut yet — is the one the customer reads: 409 in words; nothing written, nothing told', async () => {
     const { orderId, lineId } = await newOrder(ids.a, 'FLOOR')
     const { workOrderId, cellId } = await workOrderOf(lineId)
     await keepOrder(system(), orderId, { what: 'test' })
@@ -274,7 +280,7 @@ describe('B-MS-005: set the stage by hand (production.brand.manage)', () => {
     const stored = await rowOf(orderId)
     expect(stored.stage).toBe('PREPARING')
     const before = await told()
-    expect((await refused('office.planner', 'PUT', stageUrl(orderId), { stage: 'CUTTING', reasonCode: 'OUTAGE', version: stored.version }, 409)).message).toBe('The floor already shows Cutting.')
+    expect((await refused('office.planner', 'PUT', stageUrl(orderId), { stage: 'CUTTING', reasonCode: 'OUTAGE', version: stored.version }, 409)).message).toBe('The customer already reads Cutting.')
     expect(await rowOf(orderId)).toMatchObject({ stage: 'PREPARING', stageSet: null, version: stored.version })
     expect(await toldSince(before, orderId)).toEqual([])
     // Ahead of the live floor it is taken; the floor's own Cutting, reached in this same command, is told first.
@@ -347,7 +353,7 @@ describe('B-MS-005: change and clear', () => {
   let before: Told[] = []
   let history: string[][] = []
 
-  it('Change higher: told; Change lower, still above the floor: written, never told; who and why follow the last act', async () => {
+  it('Change higher: told; Change lower inside the window (B-SC-004): written, never told nor corrected; who and why follow the last act', async () => {
     ;({ orderId } = await newOrder(ids.a, 'CHG'))
     await keepOrder(system(), orderId, { what: 'test' })
     const made = await rowOf(orderId)
@@ -408,3 +414,122 @@ describe('B-MS-005: change and clear', () => {
     expect(await toldSince(since, gone)).toEqual([])
   })
 })
+
+// ── B-SC-004 (stage control B, "full control": any stage, forward or back; Ready by hand; a move back told as a correction) ──
+describe('B-SC-004: any stage by hand, forward or back', () => {
+  /** The stage markers of an order's production row, oldest first: [told | untold, stage, correction]. */
+  const stageMarkersOf = async (orderId: string) =>
+    (
+      await admin<{ action: string; after: Json }>(
+        `SELECT a.action, a.after FROM "AuditLog" a JOIN "BrandOrderProduction" p ON p.id = a."recordId" WHERE a."recordType" = 'BrandOrderProduction' AND a.action = ANY($2::text[]) AND p.key = $1 ORDER BY a.id`,
+        [`brand-production:${orderId}`, [STAGE_TOLD, STAGE_UNTOLD]],
+      )
+    ).map((row) => [row.action === STAGE_TOLD ? 'told' : 'untold', row.after.stage, row.after.correction === true])
+
+  it('Ready to ship by hand is taken: the customer reads it, told by hand (its notice waits the window); the order’s status stays quality’s', async () => {
+    const { orderId } = await newOrder(ids.a, 'READY')
+    await keepOrder(system(), orderId, { what: 'test' })
+    const before = await told()
+    const answer = await set('office.planner', orderId, { stage: 'READY', reasonCode: 'OUTSIDE', note: 'Made-up: packed at the outside workshop.', version: await versionOf(orderId) })
+    expect(answer).toMatchObject({ floor: 'PREPARING', stage: 'READY', byHand: { stage: 'READY', reasonCode: 'OUTSIDE' } })
+    expect(await rowOf(orderId)).toMatchObject({ stage: 'READY', stageSet: 'READY' })
+    const events = await toldSince(before, orderId)
+    expect(events).toEqual([{ orderId, partyId: ids.a, stage: 'READY', previous: 'PREPARING', byHand: true }])
+    expect(stageNoticeKey(events[0] as { stage: BrandStage; previous: BrandStage | null }, 'READY')).toBe('portal.production.ready')
+    // Only the stage moves: the order is still In production (Ready is quality's status), nothing is released.
+    expect((await one<{ status: string }>(`SELECT status::text AS status FROM "SalesOrder" WHERE id = $1`, [orderId])).status).toBe('IN_PRODUCTION')
+    expect((await one<{ n: number }>(`SELECT count(*)::int AS n FROM "QualityRelease" r JOIN "WorkOrderSize" s ON s.id = r."workOrderSizeId" JOIN "SalesOrderLine" l ON l.id = s."salesOrderLineId" WHERE l."orderId" = $1`, [orderId])).n).toBe(0)
+  })
+
+  it('a Change at the same stage with stage, reason and note unchanged, and the floor’s own stage while a hand stage stands: 409 in words; nothing written, nothing told', async () => {
+    const { orderId, lineId } = await newOrder(ids.a, 'SAME')
+    const { workOrderId, cellId } = await workOrderOf(lineId)
+    await bundleOn(workOrderId, cellId)
+    await keepOrder(system(), orderId, { what: 'test' })
+    expect((await rowOf(orderId)).stage).toBe('CUTTING')
+    await set('office.planner', orderId, { stage: 'SEWING', reasonCode: 'OUTAGE', note: NOTE, version: await versionOf(orderId) })
+    const version = await versionOf(orderId)
+    const before = await told()
+    expect((await refused('office.planner', 'PUT', stageUrl(orderId), { stage: 'SEWING', reasonCode: 'OUTAGE', note: `  ${NOTE} `, version }, 409)).message).toBe('Nothing to change: the stage set by hand already reads so, with the same reason and note.')
+    expect((await refused('office.planner', 'PUT', stageUrl(orderId), { stage: 'CUTTING', reasonCode: 'OUTAGE', version }, 409)).message).toBe("Cutting is the floor's own stage: clear the stage set by hand to go back to it.")
+    expect(await rowOf(orderId)).toMatchObject({ stage: 'SEWING', stageSet: 'SEWING', reason: 'OUTAGE', note: NOTE, version })
+    expect(await toldSince(before, orderId)).toEqual([])
+  })
+
+  it('a Change at the same stage with another reason or note is taken: audited, the floor at the set kept, the customer told nothing', async () => {
+    const orderId = (await one<{ id: string }>(`SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND number LIKE 'T-MS005-SAME-%'`, [ids.tenantId])).id
+    const before = await told()
+    const markers = await stageMarkersOf(orderId)
+    const stageAt = new Date((await rowOf(orderId)).stageAt).toISOString()
+    const reason = await set('office.planner2', orderId, { stage: 'SEWING', reasonCode: 'FEW_PEOPLE', note: NOTE, version: await versionOf(orderId) })
+    expect(reason).toMatchObject({ floor: 'CUTTING', stage: 'SEWING', byHand: { stage: 'SEWING', reasonCode: 'FEW_PEOPLE', note: NOTE, setBy: { id: member } } })
+    const words = await set('office.planner', orderId, { stage: 'SEWING', reasonCode: 'FEW_PEOPLE', note: 'Made-up: two people off sick in the sewing room.', version: reason.version })
+    expect(words).toMatchObject({ stage: 'SEWING', byHand: { reasonCode: 'FEW_PEOPLE', note: 'Made-up: two people off sick in the sewing room.', setBy: { id: owner } }, version: reason.version + 1 })
+    // Only office fields changed: the stage and its day stay, no notice, no marker.
+    expect(new Date((await rowOf(orderId)).stageAt).toISOString()).toBe(stageAt)
+    expect(await toldSince(before, orderId)).toEqual([])
+    expect(await stageMarkersOf(orderId)).toEqual(markers)
+    // Audited on the order's History (Sewing → Sewing, the reason in `after`), never a `status` key; the floor at the set is the first set's.
+    expect((await orderAudits(orderId)).slice(-2).map((row) => [row.before.stage, row.after.stage, row.after.reasonCode])).toEqual([
+      ['SEWING', 'SEWING', 'FEW_PEOPLE'],
+      ['SEWING', 'SEWING', 'FEW_PEOPLE'],
+    ])
+    const rowId = (await rowOf(orderId)).id as string
+    const sets = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "recordType" = 'BrandOrderProduction' AND "recordId" = $1 AND action = $2 ORDER BY id`, [rowId, SET_BRAND_STAGE])
+    expect(sets.map((row) => row.after.floorAtSet)).toEqual(['CUTTING', 'CUTTING', 'CUTTING'])
+  })
+
+  it('Preparing set back over a told Cutting (a wrong cut): one correction, the stages above untold; the hand Preparing stands over the floor’s Cutting', async () => {
+    const { orderId, lineId } = await newOrder(ids.b, 'BACK')
+    const { workOrderId, cellId } = await workOrderOf(lineId)
+    await keepOrder(system(), orderId, { what: 'test' })
+    await bundleOn(workOrderId, cellId)
+    // The floor's own Cutting, told at once (no window).
+    await keepOrder(system(), orderId, { what: 'production.bundle_created', health: false })
+    expect((await rowOf(orderId)).stage).toBe('CUTTING')
+    const before = await told()
+    const answer = await set('office.planner', orderId, { stage: 'PREPARING', reasonCode: 'OTHER', note: 'Made-up: the cut was logged on the wrong order.', version: await versionOf(orderId) })
+    expect(answer).toMatchObject({ floor: 'CUTTING', stage: 'PREPARING', byHand: { stage: 'PREPARING', reasonCode: 'OTHER' } })
+    const events = await toldSince(before, orderId)
+    expect(events).toEqual([{ orderId, partyId: ids.b, stage: 'PREPARING', previous: 'CUTTING', byHand: true, correction: true }])
+    expect(stageNoticeKey(events[0] as { stage: BrandStage; previous: BrandStage | null; correction?: boolean }, 'PREPARING')).toBe('portal.production.corrected_preparing')
+    // Cutting counts as never told now (told again when the floor's Cutting stands again); the correction is the newest word.
+    expect((await stageMarkersOf(orderId)).slice(-2)).toEqual([
+      ['untold', 'CUTTING', false],
+      ['told', 'PREPARING', true],
+    ])
+    // The keeper follows another bundle: the floor still at Cutting, where it stood at the set — the hand Preparing stands, nothing told.
+    await bundleOn(workOrderId, cellId)
+    await keepOrder(system(), orderId, { what: 'production.bundle_created', health: false })
+    expect(await rowOf(orderId)).toMatchObject({ stage: 'PREPARING', stageSet: 'PREPARING' })
+    expect(await toldSince(before, orderId)).toHaveLength(1)
+  })
+
+  it('Clear raises it back to the floor’s Cutting: the usual forward notice, by hand (its window)', async () => {
+    const orderId = (await one<{ id: string }>(`SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND number LIKE 'T-MS005-BACK-%'`, [ids.tenantId])).id
+    const before = await told()
+    expect(await clear('office.planner', orderId, await versionOf(orderId))).toMatchObject({ floor: 'CUTTING', stage: 'CUTTING', byHand: null })
+    expect(await toldSince(before, orderId)).toEqual([{ orderId, partyId: ids.b, stage: 'CUTTING', previous: 'PREPARING', byHand: true }])
+    const history = await orderAudits(orderId)
+    expect(history.map((row) => [row.action, row.before.stage, row.after.stage]).slice(-2)).toEqual([
+      [SET_BRAND_STAGE, 'CUTTING', 'PREPARING'],
+      [CLEAR_BRAND_STAGE, 'PREPARING', 'CUTTING'],
+    ])
+    for (const row of history) expect([...Object.keys(row.before), ...Object.keys(row.after)]).not.toContain('status')
+  })
+
+  it('a stage moved back inside its window (its notice not made yet): left untold silently, never corrected', async () => {
+    const { orderId } = await newOrder(ids.a, 'WIN')
+    await keepOrder(system(), orderId, { what: 'test' })
+    const before = await told()
+    const first = await set('office.planner', orderId, { stage: 'QUALITY', reasonCode: 'OUTAGE', version: await versionOf(orderId) })
+    await set('office.planner', orderId, { stage: 'CUTTING', reasonCode: 'OTHER', note: 'Made-up: Quality check was a slip.', version: first.version })
+    expect((await toldSince(before, orderId)).map((event) => [event.stage, event.previous, event.correction ?? false])).toEqual([['QUALITY', 'PREPARING', false]])
+    expect(await stageMarkersOf(orderId)).toEqual([
+      ['told', 'PREPARING', false],
+      ['told', 'QUALITY', false],
+      ['untold', 'QUALITY', false],
+    ])
+  })
+})
+// ── end B-SC-004 ──

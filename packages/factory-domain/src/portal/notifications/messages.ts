@@ -34,6 +34,12 @@ export const PARTNER_MESSAGE_TEMPLATES = {
   'portal.production.sewing': { topic: 'PRODUCTION', category: 'FOLLOWING', en: 'Sewing has started on {yours}', it: 'È iniziata la cucitura per {yours}' },
   'portal.production.quality': { topic: 'PRODUCTION', category: 'FOLLOWING', en: '{Yours} is at the quality check', it: '{Yours} è al controllo qualità' },
   'portal.production.ready': { topic: 'PRODUCTION', category: 'FOLLOWING', en: '{Yours} is ready to ship', it: '{Yours} è pronto per la spedizione' },
+  // B-SC-004 (stage control B): a person moved the stage back of a stage the customer was told (production-brand/notices
+  // STAGE_CORRECTION_KEYS): one correction, the plain stage only — never "by hand", a reason, a note or who.
+  'portal.production.corrected_preparing': { topic: 'PRODUCTION', category: 'FOLLOWING', en: 'Correction: {yours} is still being prepared', it: 'Correzione: {yours} è ancora in preparazione' },
+  'portal.production.corrected_cutting': { topic: 'PRODUCTION', category: 'FOLLOWING', en: 'Correction: {yours} is at the cutting stage', it: 'Correzione: {yours} è alla fase di taglio' },
+  'portal.production.corrected_sewing': { topic: 'PRODUCTION', category: 'FOLLOWING', en: 'Correction: {yours} is at the sewing stage', it: 'Correzione: {yours} è alla fase di cucitura' },
+  'portal.production.corrected_quality': { topic: 'PRODUCTION', category: 'FOLLOWING', en: 'Correction: {yours} is at the quality check', it: 'Correzione: {yours} è al controllo qualità' },
   'portal.production.at_risk': { topic: 'PRODUCTION', category: 'FOLLOWING', en: '{Yours} is at risk of missing its date', it: '{Yours} rischia di non rispettare la data' },
   'portal.production.late': { topic: 'PRODUCTION', category: 'FOLLOWING', en: '{Yours} is late', it: '{Yours} è in ritardo' },
   'portal.production.on_hold': { topic: 'PRODUCTION', category: 'FOLLOWING', en: 'Work on {yours} is on hold', it: 'La lavorazione per {yours} è sospesa' },

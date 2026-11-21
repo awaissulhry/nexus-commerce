@@ -870,7 +870,8 @@ describe('B-MS-006: the office reads who, why and the floor of a stage set by ha
     const answer = await ok('sales.all', production(handOrder, 'headline'))
     expect(answer.withheld).toContain('headline.notes')
     // B-MS-008 (ms-fx1): the row was written with no tell (no stage marker): never told, nothing waits.
-    expect(answer.headline.stage.byHand).toEqual({ stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { en: 'Preparing', it: 'In preparazione' } }, at: expect.any(String), note: null, by: null, notice: { told: false, waitsUntil: null } })
+    // B-SC-004: the row was written with no set's audit row: the floor at the set is not known (null).
+    expect(answer.headline.stage.byHand).toEqual({ stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { en: 'Preparing', it: 'In preparazione' } }, floorAtSet: null, at: expect.any(String), note: null, by: null, notice: { told: false, waitsUntil: null } })
     expect(JSON.stringify(answer)).not.toContain(HAND_NOTE)
   })
 
