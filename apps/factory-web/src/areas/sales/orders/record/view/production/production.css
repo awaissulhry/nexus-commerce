@@ -32,7 +32,7 @@
 .fw-pt-inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); min-width: 0; }
 .fw-pt-skel { display: flex; flex-direction: column; gap: var(--nds-space-10); }
 .fw-pt-sub { display: block; font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; margin-top: var(--nds-space-2); overflow-wrap: anywhere; }
-.fw-pt-link { color: var(--nds-text-link); font-weight: var(--nds-font-weight-semibold); text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+.fw-pt-link { color: var(--nds-text-link); font-weight: var(--nds-font-weight-semibold); text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-align: start; /* fx5 #8: a wrapped name starts at the left, as the names around it */ }
 .fw-pt-link:hover { text-decoration: underline; }
 .fw-pt-link:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-xs); }
 
@@ -193,3 +193,7 @@
 .fw-pt-specs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--nds-space-12); }
 .fw-pt-spec { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--nds-space-10); align-items: start; min-width: 0; scroll-margin-top: var(--nds-space-4); }
 .fw-pt-spec-b { display: flex; flex-direction: column; gap: var(--nds-space-4); min-width: 0; font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+
+/* ── fx5 #1: a tooltip the reader does not see is not in the layout — a door at a row's end never widens the page (the DS bubble is
+   in-flow and only faded out; .fw-office-page would scroll into its empty room). Shown on hover or focus, as before. ── */
+.fw-pt .nds-tooltip:not(:hover):not(:focus-within) > .tip { display: none; }

@@ -104,7 +104,8 @@ function Steps({ order, model, actions }: { order: Order; model: OrderRecordMode
         const why = held(act)
         return { id: act, label: actWords[act], disabled: !!why, description: why ?? undefined, onSelect: why ? undefined : () => run(act, gateId) }
       }),
-      ...(frame?.discuss ? [{ id: 'discuss', label: t('dates.gateDiscuss'), onSelect: () => discuss(row) }] : []),
+      // fx5 (L7): Discuss this date only for who may write in the thread (threads.post).
+      ...(frame?.discuss && model.people?.mayNote !== false ? [{ id: 'discuss', label: t('dates.gateDiscuss'), onSelect: () => discuss(row) }] : []),
       ...(model.gateActs?.can.view ? [{ id: 'planning', label: t('wo.link.planning'), href: planningGateHref(model.prefix, order.number, gateId) }] : []),
     ]
   }
