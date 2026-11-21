@@ -200,3 +200,13 @@
   .fw-pt-rc-ddt { grid-template-columns: minmax(0, 1fr) minmax(0, 12rem); }
 }
 .fw-pt-rc input { min-width: 0; max-width: 12rem; }
+/* F-PT-404: the dialog draws outside the tab's size container (a centred modal): on a phone its rows fold by the screen instead. */
+@media (max-width: 639px) {
+  .fw-pt-rc thead { display: none; }
+  .fw-pt-rc, .fw-pt-rc tbody { display: block; }
+  .fw-pt-rc tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--nds-space-4) var(--nds-space-12); padding: var(--nds-space-10); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); margin-bottom: var(--nds-space-8); }
+  .fw-pt-rc td { display: block; padding: 0; border: 0; }
+  .fw-pt-rc td.fw-pt-first { grid-column: 1 / -1; font-weight: var(--nds-font-weight-semibold); }
+  .fw-pt-rc td[data-label]::before { content: attr(data-label); display: block; font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); }
+  .fw-pt-rc input { max-width: none; width: 100%; }
+}

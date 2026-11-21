@@ -52,8 +52,7 @@ p.fw-sod-hint[role='status'] {
 }
 
 .fw-sod-inline,
-.fw-sod-actions,
-.fw-sod-links {
+.fw-sod-actions {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
@@ -96,16 +95,6 @@ p.fw-sod-hint[role='status'] {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-4);
-}
-
-.fw-sod-legend-list {
-  margin: var(--nds-space-8) 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--nds-space-8) var(--nds-space-16);
-  font-size: var(--nds-font-size-sm);
 }
 
 /* The size cells a rule froze, under a style's grid. */
@@ -156,12 +145,6 @@ p.fw-sod-hint[role='status'] {
   gap: var(--nds-space-12);
   align-items: start;
   min-width: 0;
-}
-
-.fw-sod-files {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-8);
 }
 
 /* The confirmation PDF beside its facts on wide screens; one under the other on a phone. */
