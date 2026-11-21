@@ -125,10 +125,11 @@ describe('F-OO-102: the office strip state — waiting all to come, production o
     expect(card).toContain('{...strip}')
   })
 
-  // F-MS-101 (R21): rewritten — the Owner's one named exception: a stage may be set by hand when the floor cannot record the work.
+  // F-MS-101 (R21) / F-SC-W1 (stage control B): rewritten — the Owner's one named exception: a stage may be set by hand when the
+  // floor's or quality's records are wrong or missing.
   it('the words: the quiet line under the dots, in both languages', () => {
-    expect(productionWordsFor('en')('parts.stage.office.setBy')).toBe('Stages are set by the floor and quality, or by hand when the floor cannot record them')
-    expect(productionWordsFor('it')('parts.stage.office.setBy')).toBe('Le fasi le segnano il reparto e la qualità, o a mano quando il reparto non può registrarle')
+    expect(productionWordsFor('en')('parts.stage.office.setBy')).toBe('Stages are set by the floor and quality, or by hand when their records are wrong or missing')
+    expect(productionWordsFor('it')('parts.stage.office.setBy')).toBe('Le fasi le segnano il reparto e la qualità, o a mano quando le registrazioni sono sbagliate o mancano')
     for (const locale of ['en', 'it'] as const) expect(productionWordsFor(locale)('parts.stage.office.setBy')).not.toMatch(/never by hand|mai a mano/)
   })
 })

@@ -150,7 +150,7 @@ function HandRowView({ order, row, door, actions }: { order: Order; row: HandRow
   const sayHand = useSayHand()
   const stage = (code: PlainStage) => w.t(`parts.stage.${code}`)
   const reason = row.reason ? t(row.reason.key) : null
-  const lines = row.lines.map((line) => t(line.key, { ...(line.stage ? { stage: stage(line.stage) } : {}), ...(line.floor ? { floor: stage(line.floor) } : {}), ...(line.days !== undefined ? { age: w.t('parts.age.days', { count: line.days }) } : {}) }))
+  const lines = row.lines.map((line) => t(line.key, { ...(line.stage ? { stage: stage(line.stage) } : {}), ...(line.floor ? { floor: stage(line.floor) } : {}), ...(line.past ? { past: stage(line.past) } : {}) /* F-SC-W1: a set back */, ...(line.days !== undefined ? { age: w.t('parts.age.days', { count: line.days }) } : {}) }))
   return (
     <div className="fw-so-ov-row fw-so-hand" data-tone={row.tone}>
       <span className="fw-so-hand-mark">

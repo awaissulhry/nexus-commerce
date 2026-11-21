@@ -40,6 +40,11 @@ import { STAGE_SET_REASON_CODES, STAGE_SET_REFUSAL_WORDS, STAGE_SET_STATUSES, ha
 import { daysFrom } from '@nexus/factory-domain/calendars/dates'
 import { businessDate } from '@nexus/factory-domain/core/time'
 // ---- end F-MS-101
+// ---- F-SC-W1 (stage control B): the steps of the stages open the ONE dialog (record-model's StageHandDialog) — a set back's row ----
+import { BRAND_STAGES } from './api'
+import type { StageHandDialog } from '../record-model'
+import { handMoveOf } from '@nexus/factory-domain/production-brand/stage-set'
+// ---- end F-SC-W1
 
 /**
  * F-OO-100 (order overview lane: one file per section) — "Where it is now", its rules moved out of model.ts (F-SA-232). The health
@@ -62,8 +67,8 @@ export const plainStageOf = (stage: BrandStage): PlainStage => stage
  * starts once the order is confirmed). Shipped: "Shipped 12/11", "· delivered 14/11" once the order is delivered; closed: "Closed ·
  * shipped 12/11". Cancelled: "Cancelled" and, when work had begun, where it had reached. No "· 1 line ahead" (F8: not in the sketch,
  * never explained). The state is the domain's `officeStripStateOf` — the dots read the same one (`stageStripOf`), so the two never
- * disagree. Derived: the stage is the floor's and quality's — F-MS-101: or, while the floor cannot record work that is done, set by
- * hand by the office (the keeper's shown stage: the higher of the two; handRowOf says so, under the dots).
+ * disagree. Derived: the stage is the floor's and quality's — F-MS-101 / F-SC-W1: or set by hand by the office when their records are
+ * wrong or missing (the keeper's shown stage: the hand stage while it stands, ahead or back; handRowOf says so, under the dots).
  */
 export interface HeadlineWords {
   /** The office strip state (the domain's): the headline and the dots read the same one. */
@@ -110,8 +115,9 @@ export function headlineOf(order: Pick<Order, 'status' | 'chain'>, headline: Hea
  * F-OO-102 (order overview §1.2; review F11): with the office's strip state — the domain's `officeStripStateOf`, the headline's own —
  * so the dots never disagree with the words: waiting for a yes, every stage to come; production over, every stage done (the kept
  * stage keeps its day); cancelled, no strip. The blocked mark stays while the work is current, but its why leaves the current dot's
- * note: the strips say it (one place per fact). Derived: the floor and quality set the stages — F-MS-101: or the office by hand,
- * when the floor cannot record them (the stage here is the one the customer reads; the current dot's note says "Set by hand").
+ * note: the strips say it (one place per fact). Derived: the floor and quality set the stages — F-MS-101 / F-SC-W1: or the office by
+ * hand, when their records are wrong or missing (the stage here is the one the customer reads; the current dot's note says "Set by
+ * hand").
  */
 export function stageStripOf(order: Pick<Order, 'status'>, headline: Headline | null | undefined, dates: Dates | null | undefined): StageStripInput {
   const state = officeStripStateOf(order.status)
@@ -130,8 +136,8 @@ export function stageStripOf(order: Pick<Order, 'status'>, headline: Headline | 
 }
 
 /**
- * F-OO-102: the dots are drawn — with their quiet line ("Stages are set by the floor and quality, or by hand when the floor cannot
- * record them", F-MS-101) — only where they say
+ * F-OO-102: the dots are drawn — with their quiet line ("Stages are set by the floor and quality, or by hand when their records are
+ * wrong or missing", F-MS-101 / F-SC-W1) — only where they say
  * something true: while the work is current and once production is over; never while the order waits for a yes (no stage is now)
  * or once it is cancelled (the headline's line says where the work had reached).
  */
@@ -139,13 +145,14 @@ export const stagesShown = (state: OfficeStripState): boolean => state === 'CURR
 
 // ---- F-MS-101 (set the stage by hand, 04 §2; review R4, R5, R19, R21): the hand stage's row under the dots and its ONE door --------
 /**
- * The ONE named exception to "a stage is the floor's and quality's" (Owner, plan.md D1–D9; the domain's production-brand/stage-set):
- * when the floor cannot record work that is done, an office person with production.brand.manage sets the order's stage ahead of the
- * floor — Cutting, Sewing or Quality check, never Ready to ship — with a reason and an office-only note. The headline and the dots
- * show the stage the customer reads (the keeper writes the higher of the floor's and the hand stage); this row says it was set by
- * hand, by whom (an office person: the right is never a floor role), when and why, and what the floor's own counts say. The tag and
- * its doors (Set the stage by hand…, Change…, Clear…) live ONLY under the dots: one place. The door is not a move: the moves row
- * (WHERE_MOVES, at most 3 in view) is untouched.
+ * The ONE named exception to "a stage is the floor's and quality's" (Owner, manual-stage plan; the domain's production-brand/stage-set).
+ * F-SC-W1 (stage control B, the Owner's pick 2026-11-21): an office person with production.brand.manage sets the order's stage by hand
+ * — any of the five, forward or back, also below what the floor recorded (a wrong scan), Ready to ship with a warning — with a reason
+ * and an office-only note; only the stage moves. The headline and the dots show the stage the customer reads (the keeper writes the
+ * hand stage while it stands); this row says it was set by hand, by whom (an office person: the right is never a floor role), when and
+ * why, and what the floor's own counts say. The tag and its doors (Set the stage by hand…, Change…, Clear…) live under the dots; the
+ * steps of the stages open the same dialog (stagePicksOf). The door is not a move: the moves row (WHERE_MOVES, at most 3 in view) is
+ * untouched.
  */
 /** What the row and its doors say: a phrase of the orders catalogue, one of production's (`ns`), or the domain's own words (it + en). */
 export type HandWords = (Phrase & { readonly ns?: 'production' }) | Words
@@ -159,6 +166,8 @@ export interface HandLine {
   readonly floor?: PlainStage
   /** Days since it was set (the 7-day "check it" line). */
   readonly days?: number
+  /** F-SC-W1: a set back — the floor's stage when it was set; it clears once the floor's counts pass it. */
+  readonly past?: PlainStage
 }
 
 export interface HandRow {
@@ -185,9 +194,11 @@ export const pausedByCustomer = (headline: Headline | null | undefined): boolean
 
 /**
  * The row while a stage set by hand stands, else null: the tag, '{stage} · by {who} · {when} · {reason}', "The floor's counts say
- * {floor}: it clears by itself when the floor reaches {stage}" — or, with no work order on the order (SEED-SO-W39-02), "No work order
- * records this order: it stands until you clear it or the order ships" — and after 7 days "check it", in the warning tone. Only while
- * the work is current: after production the keeper has cleared it (a late read never draws it on a finished order, R5).
+ * {floor}: it clears by itself when the floor reaches {stage}" — F-SC-W1: set below where the floor was (the headline's floorAtSet; an
+ * older answer without it: the floor now), "… when the floor's counts come back to {stage} or pass {past}" (the keeper's end rule E1) —
+ * or, with no work order on the order (SEED-SO-W39-02), "No work order records this order: it stands until you clear it or the order
+ * ships" — and after 7 days "Set by hand {age} ago: check it", in the warning tone. Only while the work is current: after production
+ * the keeper has cleared it (a late read never draws it on a finished order, R5).
  */
 export function handRowOf(order: Pick<Order, 'status' | 'chain'>, headline: Headline | null | undefined, today: string): HandRow | null {
   const hand = headline?.stage?.byHand ?? null
@@ -195,7 +206,7 @@ export function handRowOf(order: Pick<Order, 'status' | 'chain'>, headline: Head
   const stage = plainStageOf(hand.stage)
   const floor = hand.floor ? plainStageOf(hand.floor.code) : null
   const noWork = order.chain.workOrders.every((workOrder) => workOrder.status === 'CANCELLED')
-  const lines: HandLine[] = noWork ? [{ key: 'where.manual.noWork' }] : floor ? [{ key: 'where.manual.floor', stage, floor }] : []
+  const lines: HandLine[] = noWork ? [{ key: 'where.manual.noWork' }] : floor ? [floorLineOf(stage, floor, hand.floorAtSet ?? null)] : []
   const old = handSetOld(hand.at, today)
   if (old) lines.push({ key: 'where.manual.old', days: daysFrom(businessDate(new Date(hand.at)), today) })
   const known = (STAGE_SET_REASON_CODES as readonly string[]).includes(hand.reasonCode)
@@ -211,6 +222,12 @@ export function handRowOf(order: Pick<Order, 'status' | 'chain'>, headline: Head
   }
 }
 
+/** F-SC-W1: the floor's line — a set ahead clears when the floor reaches it; a set back when the floor comes back to it or passes `past`. */
+function floorLineOf(stage: PlainStage, floor: PlainStage, floorAtSet: BrandStage | null): HandLine {
+  const past = floorAtSet ?? floor
+  return handMoveOf(past, stage) === 'BACK' ? { key: 'where.manual.floorBack', stage, floor, past: plainStageOf(past) } : { key: 'where.manual.floor', stage, floor }
+}
+
 /** Set the stage by hand… (no hand stage stands) or, while one stands, Change… and Clear… — each held with words, never hidden. */
 export type HandDoor =
   | { readonly kind: 'set'; readonly held: HandWords | null }
@@ -218,12 +235,13 @@ export type HandDoor =
 
 /**
  * The door under the dots. Drawn ONLY while the strip state is CURRENT and the order is In production or Partly shipped (R5: never on
- * a shipped, delivered, closed or cancelled order; a Ready order has nothing ahead) — and, held, on a Confirmed one (R4: "Production
- * has not started yet…"). Read-only: no door (the tag and its lines still show). Held, in this order: without production.brand.manage
- * "Production does this — a planner or the production manager" (wo.heldHold); the stage still being read; nothing left to make; the
- * customer's own pause (R19: "lift the pause first"; our own hold allows it); at Quality check only quality's release is ahead (the
- * Ready words); at Ready to ship nothing is; a write running (held.busy). While a hand stage stands: Change… (held by the right, the
- * pause, a write) and Clear… (the right, a write). The words of the state are the domain's own (the API refuses with the same).
+ * a shipped, delivered, closed or cancelled order; an order quality made Ready to ship is quality's) — and, held, on a Confirmed one
+ * (R4: "Production has not started yet…"). Read-only: no door (the tag and its lines still show). Held, in this order: without
+ * production.brand.manage "Production does this — a planner or the production manager" (wo.heldHold, manual-stage D6: Sales reads it
+ * held); the stage still being read; nothing left to make; the customer's own pause (R19: "lift the pause first"; our own hold allows
+ * it); a write running (held.busy). F-SC-W1: no stage holds it any more — at Quality check Ready to ship may be set by hand (warned),
+ * at Ready to ship a stage back. While a hand stage stands: Change… (held by the right, the pause, a write) and Clear… (the right, a
+ * write). The words of the state are the domain's own (the API refuses with the same).
  */
 export function handDoorOf(order: Pick<Order, 'status'>, headline: Headline | null | undefined, can: boolean, readOnly: boolean, busy: boolean): HandDoor | null {
   if (readOnly || officeStripStateOf(order.status) !== 'CURRENT') return null
@@ -242,11 +260,40 @@ function setHeldOf(order: Pick<Order, 'status'>, headline: Headline | null | und
   if (!headline) return phrase('where.manual.held.reading')
   if (!headline.stage) return STAGE_SET_REFUSAL_WORDS.NOTHING_LEFT
   if (paused) return STAGE_SET_REFUSAL_WORDS.PAUSED
-  if (headline.stage.code === 'QUALITY') return STAGE_SET_REFUSAL_WORDS.NEVER_READY
-  if (headline.stage.code === 'READY') return STAGE_SET_REFUSAL_WORDS.ALREADY_READY
   return null
 }
 // ---- end F-MS-101
+
+// ---- F-SC-W1 (stage control B, 40-stage-plan §3): the steps of the stages are buttons into the ONE dialog ---------------------------
+/** A step of the stages a person may pick: `set` opens the stage dialog with it picked; `clear` (the floor's own step) opens Clear…. */
+export interface StagePick {
+  readonly stage: PlainStage
+  readonly kind: 'set' | 'clear'
+  readonly dialog: StageHandDialog
+}
+
+/**
+ * The steps of the stages (Overview's strip, Production's stage bar) that open the dialog — null while the door is not open (Read-only,
+ * after production, held by the right, the order's state, the customer's pause or a write: the stages stay as they were, Overview's ONE
+ * link; the door says why). Every stage but the one the customer reads; while a hand stage stands the floor's own step opens Clear… (the
+ * one way back to the floor) and every other one Change… with that step picked; else Set with it picked. The door "Set the stage by
+ * hand…" stays: the keyboard, phone and screen-reader path into the same dialog, and the one place its held words live.
+ */
+export function stagePicksOf(headline: Headline | null | undefined, door: HandDoor | null): readonly StagePick[] | null {
+  const shown = headline?.stage?.code ?? null
+  if (!door || !shown) return null
+  if (door.kind === 'set') return door.held ? null : BRAND_STAGES.filter((stage) => stage !== shown).map((stage): StagePick => ({ stage, kind: 'set', dialog: { kind: 'stageByHand', mode: 'set', pick: stage } }))
+  if (door.change || door.clear) return null
+  const floor = headline?.stage?.byHand?.floor?.code ?? null
+  return BRAND_STAGES.filter((stage) => stage !== shown).map((stage): StagePick => (stage === floor ? { stage, kind: 'clear', dialog: { kind: 'stageClear' } } : { stage, kind: 'set', dialog: { kind: 'stageByHand', mode: 'change', pick: stage } }))
+}
+
+/** Why the steps are not buttons, said once beside them (Production's stage bar): the door's own held words (null: open, or no door). */
+export function stagePicksHeldOf(door: HandDoor | null): HandWords | null {
+  if (!door) return null
+  return door.kind === 'set' ? door.held : door.change
+}
+// ---- end F-SC-W1
 
 // ---- F-OO-104 (order overview §1.3; review F1, F13; Owner D6): the strips — one per hold or wait, most blocking first ----
 /**
