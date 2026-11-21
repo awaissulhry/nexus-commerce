@@ -12,6 +12,8 @@ import type { Blocker } from '@nexus/factory-domain/production-brand/waiting'
 // B-MS-006: the headline's stage block with a stage set by hand, and the export's words for it.
 import { headlineStageOf, type HeadlineStageRow } from './production-read'
 import { productionWords, whereText } from '../../../platform/exports/sources/sales-orders'
+// B-PT-001 / B-PT-003: a work order's workshops with their days; a made-to-measure row's units.
+import { MTM_UNITS_LIMIT, mtmUnitsOf, workshopsOf } from './production-read'
 
 /**
  * B-SA-031 / B-SA-032 — the office's read of one order's production, its pure parts (the PG suite production-read.pg.vitest.test.ts
@@ -267,3 +269,46 @@ describe('B-MS-006: the headline reads the stage set by hand (who and the note b
   })
 })
 // ── end B-MS-006 ──
+
+// ── B-PT-001 / B-PT-003 (order production tab R1, R3) ──
+describe('B-PT-001: the outside workshops of a work order, with the day it went and the day it comes back', () => {
+  const names = new Map([
+    ['p-1', 'Made-up Stitching Lab'],
+    ['p-2', 'Made-up Embroidery Lab'],
+  ])
+  const job = (partyId: string, issuedAt: string | null, back: string | null) => ({ partyId, issuedAt: issuedAt ? new Date(issuedAt) : null, expectedBackDate: back ? new Date(`${back}T00:00:00.000Z`) : null })
+
+  it('each workshop once, in the order met: since its first job was issued, back on its latest expected day', () => {
+    const jobs = [job('p-1', '2026-11-14T09:00:00.000Z', '2026-12-01'), job('p-2', null, null), job('p-1', '2026-11-12T09:00:00.000Z', '2026-12-04')]
+    expect(workshopsOf(jobs, names, false)).toEqual([
+      { name: 'Made-up Stitching Lab', since: '2026-11-12', expectedBack: '2026-12-04' },
+      { name: 'Made-up Embroidery Lab', since: null, expectedBack: null },
+    ])
+  })
+
+  it('a work order shared with other customers: the names only, as before (no day)', () => {
+    expect(workshopsOf([job('p-1', '2026-11-12T09:00:00.000Z', '2026-12-04')], names, true)).toEqual([{ name: 'Made-up Stitching Lab', since: null, expectedBack: null }])
+    expect(workshopsOf([], names, false)).toEqual([])
+  })
+})
+
+describe('B-PT-003: a made-to-measure row lists its units by number, at most 50, the rest counted', () => {
+  const unit = (n: number) => ({ id: `id-${n}`, number: `T-MTM-${n}`, status: 'DRAFT', lineSeq: n * 10 })
+
+  it('three units: all three, in number order (9 before 10)', () => {
+    const { unitList, unitsMore } = mtmUnitsOf([unit(10), unit(9), unit(11)])
+    expect(unitList.map((row) => row.number)).toEqual(['T-MTM-9', 'T-MTM-10', 'T-MTM-11'])
+    expect(unitsMore).toBe(0)
+  })
+
+  it('sixty units: the first 50 by number, 10 more counted (never listed)', () => {
+    const { unitList, unitsMore } = mtmUnitsOf(Array.from({ length: 60 }, (_, index) => unit(60 - index)))
+    expect(MTM_UNITS_LIMIT).toBe(50)
+    expect(unitList).toHaveLength(50)
+    expect(unitList[0]!.number).toBe('T-MTM-1')
+    expect(unitList[49]!.number).toBe('T-MTM-50')
+    expect(unitsMore).toBe(10)
+    expect(mtmUnitsOf([])).toEqual({ unitList: [], unitsMore: 0 })
+  })
+})
+// ── end B-PT-001 / B-PT-003 ──

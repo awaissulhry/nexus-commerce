@@ -902,3 +902,160 @@ describe('B-MS-006: the office reads who, why and the floor of a stage set by ha
   })
 })
 // ── end B-MS-006 ──
+
+// ── B-PT-001 / B-PT-002 / B-PT-003 (order production tab R1–R3) ──
+/**
+ * The work part says of each work order what the Production list says (its risk by the list's own rule, riskFactsOf), where its
+ * pieces are at an outside workshop and when they come back, each cell's sewn and checked pieces, and a made-to-measure row's units
+ * by number. A work order shared with other customers keeps no risk and its workshops' names only. The test moves Alpha's work order
+ * (due day, status), puts a bar of it on the site's WORKING plan, a job of it and one of the mixed work order at the seeds' workshop,
+ * and three made-to-measure work orders of a new order of Alpha — by hand (made-up facts: only the read is under test) — and puts
+ * the work order, the bar and the jobs back after.
+ */
+describe('B-PT-001…003: each work order’s risk and workshop days, sewn and checked per cell, the made-to-measure units by number', { timeout: 60_000 }, () => {
+  const day = (offset: number) => businessDate(new Date(Date.now() + offset * 86_400_000))
+  const SLOT_NOTE = 'T-PT001 made-up bar'
+  const jobs = { alpha: newId(), mixed: newId() }
+  const mtm = { order: newId(), lines: [newId(), newId(), newId()], workOrders: [newId(), newId(), newId()] }
+  let before: { status: string; dueDate: string | null }
+  let workshop: { id: string; name: string }
+  const setWorkOrder = async (status: string, due: string | null) => {
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "WorkOrder" SET status = '${status}', "dueDate" = ${due ? `'${due}'` : 'NULL'} WHERE id = ${lit(alpha.workOrderId)}; COMMIT;`)
+    forgetProgress()
+  }
+  const rowOf = async (sessionName = 'office.all') => workOrderOf(await ok(sessionName, production(alpha.so1, 'work')), alpha.workOrderId)!
+  const listRisk = async () => ((await ok('office.all', `/production/work-orders?q=${encodeURIComponent(alpha.workOrderNumber)}&limit=10`)).workOrders as Json[]).find((row) => row.id === alpha.workOrderId)!.risk
+
+  beforeAll(async () => {
+    const [stored] = await admin<{ status: string; dueDate: Date | null }>(`SELECT status::text AS status, "dueDate" FROM "WorkOrder" WHERE id = $1`, [alpha.workOrderId])
+    before = { status: stored!.status, dueDate: stored!.dueDate ? stored!.dueDate.toISOString().slice(0, 10) : null }
+    const [party] = await admin<{ id: string; legalName: string; tradeName: string | null }>(`SELECT id, "legalName", "tradeName" FROM "Party" WHERE id = $1`, [seedUuid(ns, 'party:P2')])
+    workshop = { id: party!.id, name: party!.tradeName ?? party!.legalName }
+    const [location] = await admin<{ id: string }>(`SELECT id FROM "Location" WHERE "tenantId" = $1 ORDER BY ("siteId" = $2) DESC, id LIMIT 1`, [ids.tenantId, w.siteId])
+    const t = lit(ids.tenantId)
+    const site = lit(w.siteId)
+    // A bar of Alpha's work order on every WORKING plan of the site (one made when the seeds have none), ending in 10 days; a job of
+    // Alpha's work order (issued 12 Nov, back 4 Dec) and one of the mixed work order at the seeds' workshop.
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "PlanVersion" (id, "tenantId", "companyId", "siteId", kind)
+         SELECT ${lit(newId())}, ${t}, ${lit(w.companyId)}, ${site}, 'WORKING' WHERE NOT EXISTS (SELECT 1 FROM "PlanVersion" WHERE "siteId" = ${site} AND kind = 'WORKING');
+       INSERT INTO "ScheduleSlot" (id, "tenantId", "siteId", "planVersionId", "planKind", "workOrderId", "startAt", "endAt", minutes, note)
+         SELECT gen_random_uuid(), ${t}, ${site}, id, 'WORKING', ${lit(alpha.workOrderId)}, '${day(8)}T08:00:00.000Z', '${day(10)}T12:00:00.000Z', 60, '${SLOT_NOTE}' FROM "PlanVersion" WHERE "siteId" = ${site} AND kind = 'WORKING';
+       INSERT INTO "SubcontractOrder" (id, "tenantId", "companyId", "siteId", number, "partyId", "locationId", "workOrderId", status, "orderDate", "expectedBackDate", "issuedAt", "issuedById") VALUES
+         (${lit(jobs.alpha)}, ${t}, ${lit(w.companyId)}, ${site}, 'T-PT001-SC-1', ${lit(workshop.id)}, ${lit(location!.id)}, ${lit(alpha.workOrderId)}, 'ISSUED', '2026-11-12', '2026-12-04', '2026-11-12T09:00:00.000Z', ${lit(seedUuid(ns, 'actor'))}),
+         (${lit(jobs.mixed)}, ${t}, ${lit(w.companyId)}, ${site}, 'T-PT001-SC-2', ${lit(workshop.id)}, ${lit(location!.id)}, ${lit(w.mixed.workOrderId)}, 'ISSUED', '2026-11-12', '2026-12-04', '2026-11-12T09:00:00.000Z', ${lit(seedUuid(ns, 'actor'))});
+       COMMIT;`,
+    )
+    // A new order of Alpha with three one-piece lines, each made by a made-to-measure work order of its own (numbers 10, 9, 11).
+    const [harnessLine] = await admin<{ colourwayId: string; companyId: string }>(`SELECT "colourwayId", "companyId" FROM "SalesOrderLine" WHERE id = $1`, [w.a.salesOrderLineId])
+    await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId: seedUuid(ns, 'actor') }, (client) =>
+      client.$transaction(async (tx) => {
+        await tx.salesOrder.create({
+          data: { id: mtm.order, companyId: harnessLine!.companyId, partyId: ids.a, number: 'T-PT003-SO-MTM', customerRef: 'T-PT003-PO-MTM', status: 'CONFIRMED', orderDate: new Date('2026-11-03T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' }, promiseDate: new Date('2026-12-20T00:00:00.000Z') },
+          select: { id: true },
+        })
+        for (const [index, lineId] of mtm.lines.entries()) {
+          await tx.salesOrderLine.create({
+            data: { id: lineId, companyId: harnessLine!.companyId, orderId: mtm.order, partyId: ids.a, seq: (index + 1) * 10, kind: 'SIZE_GRID', styleId: w.styleId, colourwayId: harnessLine!.colourwayId, quantity: 1, unitPrice: '100.000000', netAmount: 10_000, vatRatePct: '22.00', vatAmount: 2_200 },
+            select: { id: true },
+          })
+          await tx.salesOrderLineSize.create({ data: { id: newId(), lineId, partyId: ids.a, size: '50', quantity: 1 }, select: { id: true } })
+        }
+      }),
+    )
+    const numbers = ['T-PT003-MTM-10', 'T-PT003-MTM-9', 'T-PT003-MTM-11']
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       ${mtm.workOrders
+         .map(
+           (workOrderId, index) =>
+             `INSERT INTO "WorkOrder" (id, "tenantId", "companyId", "siteId", number, kind, "styleId", status, "partyId") VALUES (${lit(workOrderId)}, ${t}, ${lit(w.companyId)}, ${site}, '${numbers[index]}', 'MADE_TO_MEASURE', ${lit(w.styleId)}, 'DRAFT', ${lit(ids.a)});
+              INSERT INTO "WorkOrderSize" (id, "tenantId", "siteId", "workOrderId", "styleId", "colourwayId", size, quantity, "salesOrderLineId", "partyId") VALUES (${lit(newId())}, ${t}, ${site}, ${lit(workOrderId)}, ${lit(w.styleId)}, ${lit(harnessLine!.colourwayId)}, '50', 1, ${lit(mtm.lines[index]!)}, ${lit(ids.a)});`,
+         )
+         .join('\n')}
+       COMMIT;`,
+    )
+    forgetProgress()
+  })
+
+  afterAll(async () => {
+    await setWorkOrder(before.status, before.dueDate)
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; DELETE FROM "ScheduleSlot" WHERE note = '${SLOT_NOTE}'; DELETE FROM "SubcontractOrder" WHERE id IN (${lit(jobs.alpha)}, ${lit(jobs.mixed)}); COMMIT;`)
+  })
+
+  it('at risk: open, its bar on the WORKING plan ends after its due day — the same risk the Production list reads', async () => {
+    await setWorkOrder('RELEASED', day(5))
+    const row = await rowOf()
+    expect(row.risk).toEqual({ state: 'AT_RISK', daysLate: null, plannedEnd: day(10), planAfterDue: true, raised: null, blockedBy: null })
+    expect(await listRisk()).toEqual(row.risk)
+  })
+
+  it('late: open past its due day, with the days late (the list says the same)', async () => {
+    await setWorkOrder('RELEASED', day(-3))
+    const row = await rowOf()
+    expect(row.risk).toMatchObject({ state: 'LATE', daysLate: 3, plannedEnd: day(10), planAfterDue: true })
+    expect(await listRisk()).toEqual(row.risk)
+  })
+
+  it('on hold, due after its bar: blocked by the hold', async () => {
+    await setWorkOrder('ON_HOLD', day(20))
+    expect((await rowOf()).risk).toEqual({ state: 'BLOCKED', daysLate: null, plannedEnd: day(10), planAfterDue: false, raised: null, blockedBy: 'HOLD' })
+  })
+
+  it('finished: no risk (null); a person limited to Alpha reads the same risk of Alpha’s own work order', async () => {
+    await setWorkOrder('RELEASED', day(5))
+    expect((await rowOf('office.p1')).risk).toMatchObject({ state: 'AT_RISK', planAfterDue: true })
+    await setWorkOrder('COMPLETED', day(5))
+    expect((await rowOf()).risk).toBeNull()
+    await setWorkOrder('RELEASED', day(5))
+  })
+
+  it('a work order shared with other customers: no risk, and its workshops by name only; Alpha’s own: since and back', async () => {
+    const answer = await ok('office.all', production(w.a.salesOrderId, 'work'))
+    const mixed = workOrderOf(answer, w.mixed.workOrderId)!
+    expect(mixed.sharedWithOtherCustomers).toBe(true)
+    expect(mixed.risk).toBeNull()
+    expect(mixed.workshops).toEqual([{ name: workshop.name, since: null, expectedBack: null }])
+    expect((await rowOf()).workshops).toEqual([{ name: workshop.name, since: '2026-11-12', expectedBack: '2026-12-04' }])
+    expect(findMarkers(answer.work, bMarkers)).toEqual([])
+  })
+
+  it('each cell says sewn and checked from the same counts as the work order’s own share (null: not counted, never a made-up 0)', async () => {
+    await setWorkOrder('DRAFT', day(5))
+    const row = await rowOf()
+    for (const cell of row.cells as Json[]) {
+      expect(cell.sewn === null || typeof cell.sewn === 'number').toBe(true)
+      expect(cell.checked === null || typeof cell.checked === 'number').toBe(true)
+    }
+    // A draft: nothing sewn counted (null); the cells add up to the work order's own share.
+    expect((row.cells as Json[]).map((cell) => cell.sewn)).toEqual((row.cells as Json[]).map(() => null))
+    const sum = (key: 'sewn' | 'checked') => (row.cells as Json[]).reduce<number | null>((total, cell) => (cell[key] === null ? total : (total ?? 0) + (cell[key] as number)), null)
+    expect({ sewn: sum('sewn'), checked: sum('checked') }).toEqual({ sewn: row.own.sewn, checked: row.own.checked })
+  })
+
+  it('made to measure: one row with its three units by number (9, 10, 11), each with its line, none more', async () => {
+    const answer = await ok('office.all', production(mtm.order, 'work'))
+    expect(answer.work.mtm).toHaveLength(1)
+    const group = answer.work.mtm[0]
+    expect(group).toMatchObject({ units: 3, workOrders: 3, unitsMore: 0 })
+    expect(group.unitList).toEqual([
+      { id: mtm.workOrders[1], number: 'T-PT003-MTM-9', status: 'DRAFT', lineSeq: 20 },
+      { id: mtm.workOrders[0], number: 'T-PT003-MTM-10', status: 'DRAFT', lineSeq: 10 },
+      { id: mtm.workOrders[2], number: 'T-PT003-MTM-11', status: 'DRAFT', lineSeq: 30 },
+    ])
+    // A unit work order is in the group, never a row of its own; a unit names no rider and no measurement (four keys only).
+    expect(answer.work.workOrders).toEqual([])
+    for (const unit of group.unitList as Json[]) expect(Object.keys(unit).sort()).toEqual(['id', 'lineSeq', 'number', 'status'])
+  })
+
+  it('the wall: a Beta-limited person gets the unknown id’s answer, never Alpha’s risk or workshop', async () => {
+    const unknown = await call('office.p2', production(newId(), 'work'))
+    const refused = await call('office.p2', production(alpha.so1, 'work'))
+    expect([refused.status, refused.body.error?.message]).toEqual([404, unknown.body.error?.message])
+    expect(refused.raw).not.toContain(workshop.name)
+  })
+})
+// ── end B-PT-001 / B-PT-002 / B-PT-003 ──

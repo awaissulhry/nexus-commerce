@@ -13,6 +13,8 @@ import { gateView as planningGateView } from '../../planning/milestones/contract
 import { APPLY_TEAMS, STILL_KINDS } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 // B-OO-008: where "Answers the customer" comes from — the threads' own owner chain.
 import { OWNER_SOURCES } from '../../../platform/threads/owner'
+// B-PT-001: a work order's risk, the Production list's own shape (one rule for both screens).
+import { riskFacts } from '../../production/work-orders/contract'
 
 /**
  * B-SA-031 / B-SA-032 (Sales page plan P2, P3, P4, P15, P16; 13-backend B1, B12; 10-order-page OR1, OR2): the office's read of ONE
@@ -203,8 +205,12 @@ export const workView = output({
       colourways: z.array(named),
       site: named.nullable(),
       line: named.nullable(),
-      /** The outside workshops its operations are at now (office only: never told to the customer). */
-      workshops: z.array(output({ name: z.string() })),
+      /**
+       * The outside workshops its operations are at now (office only: never told to the customer). B-PT-001: + `since` the day its
+       * first job still out there was issued, `expectedBack` the latest day a job there is due back (null: not given); a work order
+       * shared with other customers keeps the names only (both null).
+       */
+      workshops: z.array(output({ name: z.string(), since: businessDate().nullable(), expectedBack: businessDate().nullable() })),
       /** What it makes for THIS order (its cells of this order's lines). */
       own: ownShare,
       /** Other orders of this order's customer it also makes, that the reader reaches; `more`: this customer's others, counted. */
@@ -221,8 +227,11 @@ export const workView = output({
       kind: z.string(),
       releasedAt: instant().nullable(),
       priority: z.number().int(),
-      /** Its cells of THIS order's lines only (never another order's or another customer's), each with its pieces cut (null: none counted). */
-      cells: z.array(output({ id: id(), salesOrderLineId: id(), size: z.string(), quantity: z.number().int(), cut: z.number().int().nullable() })),
+      /**
+       * Its cells of THIS order's lines only (never another order's or another customer's), each with its pieces cut (null: none
+       * counted). B-PT-002: + sewn and checked, from the same counts (null: not counted there — never a made-up 0).
+       */
+      cells: z.array(output({ id: id(), salesOrderLineId: id(), size: z.string(), quantity: z.number().int(), cut: z.number().int().nullable(), sewn: z.number().int().nullable(), checked: z.number().int().nullable() })),
       /**
        * What the reader may do to it from here, by its own rights over the work order (can(): its company, site and customer). One
        * shared with other customers (`sharedWithOtherCustomers`, made before the one-customer rule) is changed on its own page only:
@@ -230,6 +239,15 @@ export const workView = output({
        */
       rights: output({ manage: z.boolean(), release: z.boolean(), hold: z.boolean(), why: words.nullable() }),
       // ── end B-OP-021 ──
+      // ── B-PT-001 (order production tab R1): its risk, the Production list's own rule (production/work-orders/risk riskFactsOf) ──
+      /**
+       * LATE, AT_RISK (its bars on the site's WORKING plan end after its due: `planAfterDue`, `plannedEnd`; or a standing raise),
+       * BLOCKED (`blockedBy`: on hold, the customer, material) or ON_TRACK — what the Production list says of the same work order.
+       * null: finished, or shared with other customers (its waiting merges other customers' orders). A board drag emits nothing to
+       * this page: the row is as of the read.
+       */
+      risk: riskFacts.nullable(),
+      // ── end B-PT-001 ──
     }),
   ),
   /** Made to measure: one work order per unit, grouped per style × colourway (one row, never twelve). */
@@ -241,6 +259,14 @@ export const workView = output({
       workOrders: z.number().int(),
       byStatus: z.array(output({ status: z.string(), count: z.number().int() })),
       own: ownShare,
+      // ── B-PT-003 (order production tab R3): its units by number (at most MTM_UNITS_LIMIT, number order), the rest counted ──
+      /**
+       * Each unit's work order and the seq of the line its first own cell makes (null: none). Never the rider (the order read's).
+       * Named `unitList` (13-backend said `units`): `units` above is already the row's count and the web reads it as one.
+       */
+      unitList: z.array(output({ id: id(), number: z.string(), status: z.string(), lineSeq: z.number().int().nullable() })),
+      unitsMore: z.number().int(),
+      // ── end B-PT-003 ──
     }),
   ),
   /** Live work orders of the order's lines the reader does not reach: counted, never named ("1 work order not shown"). */
