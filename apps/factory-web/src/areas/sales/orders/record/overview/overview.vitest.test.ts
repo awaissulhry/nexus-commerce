@@ -447,9 +447,10 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
     // F-OO-205 (lead note, W03): the design case has SO-0002's step still to do — the card's head says the badge's real 3.
     expect(overview).toContain('Still to do · 1')
     expect(overview).toContain('Changes (3) ›')
+    // F-OC-102: the Changes tab's Waiting says the same 1 + 1 + 1 in Overview's group words, and once in its answer.
     const changes = textOf(draw('f-op-301-so2-changes'))
-    expect(changes.split('1 waiting').length - 1).toBe(2)
-    expect(changes).not.toContain('3 waiting')
+    for (const words of ['Waiting on us · 1', 'Waiting on Moto Demo S.r.l. · 1', '3 things wait: 1 on us, 1 on Moto Demo S.r.l., 1 step still to do.']) expect(changes, words).toContain(words)
+    expect(changes).not.toContain('Waiting on us · 3')
     expect(changes).not.toContain('A gate is not passed yet')
     // Walk #3: an approval we asked whose question this reader does not read says what it asks — the API's words name its kind.
     expect(changes).toContain("Waiting for the customer's yes: Artwork")
@@ -468,7 +469,8 @@ describe('F-OP-301: one waiting list for the header, the card, the Changes badge
     // The badge and the dot read the same call (no second rule in the page).
     const page = readFileSync(new URL('../view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(page).toContain('const waiting = orderWaitingOf(order, model, locale)')
-    const section = readFileSync(new URL('../view/RequestsSection.tsx', import.meta.url), 'utf8')
+    // F-OC-102: the Changes tab's Waiting makes the call (its own file).
+    const section = readFileSync(new URL('../changes/view/WaitingSection.tsx', import.meta.url), 'utf8')
     expect(section).toContain('const waiting = orderWaitingOf(order, model, locale)')
     expect(section).not.toContain('waitingOnCustomerOf')
   })
@@ -954,9 +956,9 @@ describe('F-OO-202: one waiting call, each row in its place — holds to Where i
     const domain = readFileSync(new URL('../../../../../../../../packages/factory-domain/src/production-brand/waiting.ts', import.meta.url), 'utf8')
     expect(domain).toContain('export function waitingOn(blockers: readonly Blocker[]): Waiting {')
     expect(model).not.toContain('waitingOn(')
-    // OrderRecordView (the badge and the dot), RequestsSection (the Changes tab) and OverviewTab (the cards) make the same call as before.
-    for (const file of ['../view/OrderRecordView.tsx', '../view/RequestsSection.tsx', '../view/OverviewTab.tsx']) expect(read(file), file).toContain('const waiting = orderWaitingOf(order, model, locale)')
-    for (const file of ['../view/OrderRecordView.tsx', '../view/RequestsSection.tsx', '../view/OverviewTab.tsx', '../view/overview/WhereCard.tsx', '../view/overview/RequestsCard.tsx']) expect(read(file), file).not.toMatch(/waiting\.next\b|whoActsNext/)
+    // OrderRecordView (the badge and the dot), WaitingSection (the Changes tab, F-OC-102) and OverviewTab (the cards) make the same call.
+    for (const file of ['../view/OrderRecordView.tsx', '../changes/view/WaitingSection.tsx', '../view/OverviewTab.tsx']) expect(read(file), file).toContain('const waiting = orderWaitingOf(order, model, locale)')
+    for (const file of ['../view/OrderRecordView.tsx', '../view/RequestsSection.tsx', '../changes/view/WaitingSection.tsx', '../view/OverviewTab.tsx', '../view/overview/WhereCard.tsx', '../view/overview/RequestsCard.tsx']) expect(read(file), file).not.toMatch(/waiting\.next\b|whoActsNext/)
   })
 })
 // ---- end F-OO-202
@@ -1048,34 +1050,41 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
     }
   })
 
-  it('Changes: the head\'s quiet line; our counter-offer in the card\'s words with Open…; what we asked with its due day and state, no button', () => {
+  /** F-OC-102: the Changes tab's Waiting row that holds these words, as drawn (up to the next row, group or Still to do). */
+  const rowOf = (html: string, words: string): string => {
+    const at = html.indexOf(words)
+    if (at < 0) throw new Error(`not drawn: ${words}`)
+    const ends = ['class="fw-oc-row"', 'class="fw-oc-grp"', 'id="still-to-do"'].map((mark) => html.indexOf(mark, at)).filter((index) => index > -1)
+    return html.slice(html.lastIndexOf('class="fw-oc-row"', at), ends.length > 0 ? Math.min(...ends) : undefined)
+  }
+
+  // F-OC-102: rewritten — the Changes tab's Waiting: on us the change (Answer…), the agreed counter-offer, the problem (a counted pointer
+  // to Production, L2); on the customer our counter-offer (Open…: the ONE review window) and what we asked (its question, due day and
+  // state, no button), each "Their turn"; the one pointer to the holds and dates at the foot (L4), never "on Overview".
+  it('Changes: Overview\'s groups and words; our counter-offer with Open…; what we asked with its due day and state, no button; the problem points to Production', () => {
     for (const locale of ['en', 'it'] as const) {
       const html = draw('f-oo-204-changes', locale)
       const text = textOf(html)
-      expect(text).toContain(locale === 'en' ? 'Holds are on Overview · dates are in Next dates' : 'I blocchi sono in Panoramica · le date in Prossime date')
-      expect(text).toContain(locale === 'en' ? 'Our counter-offer: Change · line 20 · L 2 → 3' : 'La nostra controproposta: Modifica · riga 20 · L 2 → 3')
-      // End check fix wave: our OPEN counter-offer waits on the customer, so it is said in "Waiting on the customer" in the card's words,
-      // never "Counter-offer sent". The agreed counter-offer waits on us and keeps the shared RequestCard with its state pill (F-OP-301:
-      // a request waiting on us keeps its card; F-OO-204: Changes keeps the state pill), so the check reads that list, not the whole tab.
-      const onCustomerAt = html.indexOf(`<h2 class="fw-so-h2">${locale === 'en' ? 'Waiting on the customer' : 'Tocca al cliente'}</h2>`)
+      expect(text).toContain(locale === 'en' ? 'Holds and dates are on Production ›' : 'Blocchi e date sono in Produzione ›')
+      expect(text).not.toMatch(/Holds are on Overview|I blocchi sono in Panoramica/)
+      const onCustomerAt = html.indexOf('id="fw-oc-g-customer"')
       expect(onCustomerAt).toBeGreaterThan(-1)
-      const onCustomer = textOf(html.slice(onCustomerAt, html.indexOf('</ul>', onCustomerAt)))
+      const onCustomer = textOf(html.slice(onCustomerAt, html.indexOf('id="still-to-do"', onCustomerAt)))
       expect(onCustomer).toContain(locale === 'en' ? 'Our counter-offer: Change · line 20 · L 2 → 3' : 'La nostra controproposta: Modifica · riga 20 · L 2 → 3')
       expect(onCustomer).not.toMatch(/Counter-offer sent|Controproposta inviata/)
+      expect(onCustomer).toContain(locale === 'en' ? 'Their turn' : 'Tocca a loro')
       // What we asked: its own question, its due day and its state (the record-approvals' words) — and no door on Changes.
-      const artwork = itemOf(html, RQ_ASKED[0]!.question)
+      const artwork = rowOf(html, RQ_ASKED[0]!.question)
       expect(textOf(artwork)).toContain(locale === 'en' ? 'Waiting for the answer' : 'In attesa di risposta')
       expect(artwork).not.toContain('<button')
       expect(artwork).not.toContain('<a ')
-      // Their turn is the card's word: the Changes tab says it with its list's own title ("Waiting on the customer").
-      expect(text).not.toContain(locale === 'en' ? 'Their turn' : 'Tocca a loro')
-      // Still to do keeps its state pill on Changes (the card leaves it out).
-      expect(text).toContain(locale === 'en' ? 'Waiting for planning' : 'Aspetta la pianificazione')
+      // L2: the problem the customer reported is a counted pointer row — "Production ›" to Problems & holds, never Reply here.
+      const problem = rowOf(html, locale === 'en' ? 'reported a problem' : 'ha segnalato un problema')
+      expect(problem).toMatch(/href="[^"]*\?tab=production[^"]*#holds"/)
+      expect(textOf(problem)).toContain(locale === 'en' ? 'Answered on Production › Problems & holds' : 'Si risponde in Produzione › Problemi e blocchi')
+      expect(textOf(problem)).not.toContain(locale === 'en' ? 'Reply in the thread' : 'Rispondi nella conversazione')
     }
     expect(draw('f-oo-204-changes')).toMatch(new RegExp(`<a [^>]*href="[^"]*\\?tab=changes&amp;open=${RQ_COUNTERED.id}"[^>]*>Open…</a>`))
-    // The head line comes first, before the two lists.
-    const html = draw('f-oo-204-changes')
-    expect(html.indexOf('Holds are on Overview')).toBeLessThan(html.indexOf('<h2 class="fw-so-h2">Waiting on us</h2>'))
   })
 
   // F-OC-101 (L4): rewritten — nothing waits on the Changes tab is ONE line, and it says where the hold and the gate are: on

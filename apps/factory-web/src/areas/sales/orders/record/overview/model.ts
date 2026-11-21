@@ -128,6 +128,10 @@ export type WaitingDoor =
   /** What we asked the customer (a yes, an approval, a task on its portal): theirs to answer — "Their turn", no button. */
   | { readonly kind: 'their' }
   // ---- end F-OO-204
+  // ---- F-OC-102 (18-lead-settles L11): the customer said no to the order's latest revision while its wait still stands — it waits on
+  // us (restore it as before, or change it again): its row opens the revision's own row in Changes › What changed (`#change-<id>`).
+  | { readonly kind: 'refused'; readonly amendmentId: string }
+  // ---- end F-OC-102
 
 /** A row's words: the API's own (it + en), or the page's phrase (its `{customer}` and the request's kind as `{what}` filled in: rowWordsOf). */
 export type WaitingWords = { readonly kind: 'api'; readonly words: Words } | { readonly kind: 'phrase'; readonly phrase: Phrase; readonly requestKind?: string | null }
@@ -165,6 +169,8 @@ type Blocker = Headline['waiting']['blockers'][number]
 
 function doorOf(blocker: Blocker, inputs: WaitingInputs): WaitingDoor {
   const ref = blocker.ref ?? null
+  // F-OC-102 (L11): a revision the customer said no to (the waiting read names the amendment), whatever kind the read calls it.
+  if (ref?.type === 'SalesOrderAmendment' && blocker.on === 'US') return { kind: 'refused', amendmentId: ref.id }
   if (blocker.kind === 'BRAND_REQUEST') {
     if ((blocker.sub === 'REQUEST' || blocker.sub === 'COUNTER') && ref) return { kind: 'answer', requestId: ref.id, request: (inputs.requests ?? []).find((request) => request.id === ref.id) ?? null }
     if (blocker.sub === 'PROBLEM') return { kind: 'reply', messageId: ref?.messageId ?? null }

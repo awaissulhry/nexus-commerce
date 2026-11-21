@@ -3032,7 +3032,26 @@
       "partSteps_other": "{count} steps still to do",
       "onlySteps_one": "{count} step is still to do.",
       "onlySteps_other": "{count} steps are still to do.",
-      "holdsAndDates": "Holds and dates are on Production ›"
+      "holdsAndDates": "Holds and dates are on Production ›",
+      "mine_one": "{count} is your turn",
+      "mine_other": "{count} are your turn",
+      "noneUs": "Nothing waits on us.",
+      "noneCustomer": "Nothing waits on {customer}."
+    },
+    "open": "Open ›",
+    "row": {
+      "approval": "Waits for approval: {kind}",
+      "askedBy": "Asked by {name} · {when}",
+      "whenAsked": "When they asked: {words}",
+      "theySee": "They see: {words}"
+    },
+    "who": {
+      "sales": "Sales answers it",
+      "production": "The production manager or the planner answers it",
+      "problem": "Answered on Production › Problems & holds",
+      "decides": "{who} decides",
+      "youAsked": "You asked for this approval: {who} decides",
+      "salesDecides": "Sales decides"
     }
   }
 }

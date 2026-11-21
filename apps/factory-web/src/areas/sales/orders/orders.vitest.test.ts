@@ -977,8 +977,9 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     for (const door of ["target={{ kind: 'DepositRequest', id: request.id }} officeOnly", "target={{ kind: 'Invoice', id: invoice.id }} officeOnly", 'target={null} officeOnly']) expect(money).toContain(door)
     const shipments = read('./record/view/ShipmentsTab.tsx')
     expect(shipments).toContain("target={{ kind: 'Shipment', id: row.id }} />")
-    const requests = read('./record/view/RequestsSection.tsx')
-    expect(requests).toContain("target={{ kind: 'OrderChangeRequest', id: request.id }} />")
+    // F-OC-102: a request waiting on us is a row of Changes › Waiting — its Discuss by the request's reference.
+    const requests = read('./record/changes/view/WaitingSection.tsx')
+    expect(requests).toContain("target={{ kind: 'OrderChangeRequest', id: request.id }} align=\"end\" />")
     // F-OO-100: Overview's cards are one file each (view/overview/): Next dates and People hold these doors.
     // F-OO-145: a gate's Discuss is an item of its More ▾ now — still by the gate's reference.
     expect(read('./record/view/overview/DatesCard.tsx')).toContain("target: row.gateId ? { kind: 'OrderGate', id: row.gateId } : null")

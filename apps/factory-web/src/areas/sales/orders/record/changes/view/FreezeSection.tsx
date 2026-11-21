@@ -12,7 +12,7 @@ import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 export function FreezeSection({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   return (
     <section id="freeze" className="fw-pt-sec fw-so-anchor">
-      <ChangesDepth order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />
+      <ChangesDepth order={order} model={model.depth} actions={actions?.depth} />
     </section>
   )
 }

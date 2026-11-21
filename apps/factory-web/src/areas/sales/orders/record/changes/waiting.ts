@@ -1,5 +1,10 @@
 import type { Order } from '../../api'
-import type { WaitingCard, WaitingState } from '../overview/model'
+import type { WaitingCard, WaitingRow, WaitingState } from '../overview/model'
+// ---- F-OC-102: whose turn a row is and who does it ----
+import { waitsForMe } from '../../../../home/approvals/requests/model'
+import { yesDoorOf } from '../../depth/model'
+import { rowAnchor } from '../dock/discuss'
+// ---- end F-OC-102
 
 /**
  * F-OC-101 … 104 (order CHANGES tab, 10-design §3; 18-lead-settles L1, L2, L4, L11) — section 1, Waiting, without a screen.
@@ -53,3 +58,52 @@ export function holdsPointerOf(state: WaitingState, status: Order['status']): 'h
   if (state.holds.length > 0) return 'holds'
   return state.dates.length > 0 ? 'dates' : null
 }
+
+// ---- F-OC-102 (10-design §3; L1, L2, L11): one row of Waiting — its face, whose turn, who does it, its address ----------------------
+/**
+ * How a row of the ONE list is drawn on this tab:
+ *
+ *   request    a customer request waiting on us (or our counter-offer they agreed to, or that lapsed): one line, Answer… (the ONE
+ *              review window) only for the team that answers its kind — "Sales answers it" / "The production manager or the planner
+ *              answers it" for everyone else, no button
+ *   problem    L2: a problem the customer reported — a COUNTED pointer row ("Production ›"); it is answered on Production › Problems &
+ *              holds, never here
+ *   approval   our approval of an old change (D2): Confirm / Refuse… for its approver only — THE place for it on this tab
+ *   refused    L11: a revision the customer said no to — "Open ›" its row in What changed (restore it as before, or change it again)
+ *   counter    our counter-offer still open: Open… (the same window, read only); their turn
+ *   asked      what we asked the customer (an approval, a task on its portal, the revised order's yes): their turn, no button
+ */
+export type WaitingFace = 'request' | 'problem' | 'approval' | 'refused' | 'counter' | 'asked' | 'other'
+
+export interface WaitingItem {
+  readonly row: WaitingRow
+  readonly face: WaitingFace
+  /** Your turn: this reader acts on it now (the team that answers the request, the approver, Sales for a refused revision). */
+  readonly mine: boolean
+  /** Who does it, in words; null: nothing to say (the row's own words say it). */
+  readonly who: Phrase | null
+  /** The row's address ("Show on the page" and the band land here); null: none. */
+  readonly anchor: string | null
+}
+
+export function waitingItemOf(row: WaitingRow, can: { readonly manage: boolean }): WaitingItem {
+  const door = row.door
+  if (door.kind === 'answer') {
+    const request = door.request
+    const who = request ? { key: request.answeredIn === 'SALES' ? 'changesTab.who.sales' : 'changesTab.who.production' } : null
+    return { row, face: 'request', mine: !!request && waitsForMe(request), who, anchor: rowAnchor('OrderChangeRequest', door.requestId) }
+  }
+  if (row.kind === 'BRAND_REQUEST' && row.sub === 'PROBLEM') return { row, face: 'problem', mine: false, who: { key: 'changesTab.who.problem' }, anchor: row.ref ? `about-ProductionIssue-${row.ref.id}` : null }
+  if (door.kind === 'yes') {
+    const yes = yesDoorOf(door.task)
+    return { row, face: 'approval', mine: yes.kind === 'decide', who: { key: yes.kind === 'selfAsked' ? 'changesTab.who.youAsked' : 'changesTab.who.decides', params: { who: door.task.approver.name } }, anchor: `about-Approval-${door.task.taskId}` }
+  }
+  if (door.kind === 'refused') return { row, face: 'refused', mine: can.manage, who: { key: 'changesTab.who.salesDecides' }, anchor: rowAnchor('Amendment', door.amendmentId) }
+  if (door.kind === 'open') return { row, face: 'counter', mine: false, who: { key: 'waiting.theirTurn' }, anchor: rowAnchor('OrderChangeRequest', door.requestId) }
+  if (door.kind === 'their') return { row, face: 'asked', mine: false, who: { key: 'waiting.theirTurn' }, anchor: row.ref ? `about-${row.ref.type}-${row.ref.id}` : null }
+  return { row, face: 'other', mine: false, who: null, anchor: null }
+}
+
+/** "3 are your turn" (the head's tag): the rows this reader acts on now — the ones above and every Still to do row that asks them. */
+export const mineCountOf = (items: readonly Pick<WaitingItem, 'mine'>[], still: readonly { readonly mayAct: boolean }[]): number => items.filter((item) => item.mine).length + still.filter((row) => row.mayAct).length
+// ---- end F-OC-102

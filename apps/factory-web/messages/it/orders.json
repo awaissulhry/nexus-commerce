@@ -3032,7 +3032,26 @@
       "partSteps_other": "{count} passi ancora da fare",
       "onlySteps_one": "{count} passo ancora da fare.",
       "onlySteps_other": "{count} passi ancora da fare.",
-      "holdsAndDates": "Blocchi e date sono in Produzione ›"
+      "holdsAndDates": "Blocchi e date sono in Produzione ›",
+      "mine_one": "{count} tocca a te",
+      "mine_other": "{count} toccano a te",
+      "noneUs": "Niente tocca a noi.",
+      "noneCustomer": "Niente tocca a {customer}."
+    },
+    "open": "Apri ›",
+    "row": {
+      "approval": "Attende l'approvazione: {kind}",
+      "askedBy": "Chiesta da {name} · {when}",
+      "whenAsked": "Al momento della richiesta: {words}",
+      "theySee": "Il cliente vede: {words}"
+    },
+    "who": {
+      "sales": "Rispondono le vendite",
+      "production": "Risponde il responsabile di produzione o il pianificatore",
+      "problem": "Si risponde in Produzione › Problemi e blocchi",
+      "decides": "Decide {who}",
+      "youAsked": "Hai chiesto tu questa approvazione: decide {who}",
+      "salesDecides": "Decidono le vendite"
     }
   }
 }
