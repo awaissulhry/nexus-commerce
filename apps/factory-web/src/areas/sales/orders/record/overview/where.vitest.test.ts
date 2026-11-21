@@ -1198,7 +1198,7 @@ describe('F-MS-101: the stage set by hand — the row under the dots (who, when,
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       const keys = ['open', 'tag', 'noWork', 'change', 'clear', 'held.reading', 'reasons.OUTAGE', 'reasons.FEW_PEOPLE', 'reasons.OUTSIDE', 'reasons.OTHER']
       for (const key of keys) expect(t(`where.manual.${key}`), `${locale} ${key}`).not.toBe(`where.manual.${key}`)
-      for (const key of ['by', 'floor', 'floorBack' /* F-SC-W1 */, 'old', 'stagesLink', 'changeAria', 'clearAria', 'stepAria' /* F-SC-W1 */]) expect(t(`where.manual.${key}`, { who: 'x', floor: 'x', stage: 'x', age: 'x', number: 'x', past: 'x' }), `${locale} ${key}`).not.toMatch(/^where\.manual\.|\{\w+\}/)
+      for (const key of ['by', 'floor', 'floorBack' /* F-SC-W1 */, 'old', 'stagesLink', 'changeAria', 'clearAria', 'stepAria' /* F-SC-W1 */, 'stepFloorAria' /* pt-sc-fx1 */]) expect(t(`where.manual.${key}`, { who: 'x', floor: 'x', stage: 'x', age: 'x', number: 'x', past: 'x' }), `${locale} ${key}`).not.toMatch(/^where\.manual\.|\{\w+\}/)
     }
     const it = createTranslator('it', messagesFor('it', ['orders']).orders!)
     expect([it('where.manual.tag'), it('where.manual.noWork'), it('where.manual.old', { age: '9 g' })]).toEqual(['Impostata a mano', "Nessun ordine di lavoro registra questo ordine: resta finché non la togli o l'ordine parte", 'Impostata a mano 9 g fa: controllala'])
@@ -1206,6 +1206,10 @@ describe('F-MS-101: the stage set by hand — the row under the dots (who, when,
     expect(en('where.manual.floorBack', { floor: 'Quality check', stage: 'Cutting', past: 'Quality check' })).toBe("The floor's counts say Quality check: it clears by itself when the floor's counts come back to Cutting or pass Quality check")
     expect(en('where.manual.old', { age: '9 d' })).toBe('Set by hand 9 d ago: check it')
     expect(en('where.manual.stepAria', { number: 'SO-1', stage: 'Sewing' })).toBe('Set the stage of SO-1 to Sewing…')
+    // pt-sc-fx1: the floor's own step — its stage first (the visible word in its name), never the Clear… door's name.
+    expect(en('where.manual.stepFloorAria', { number: 'SO-1', stage: 'Preparing' })).toBe("Preparing: back to the floor's stage — clears the stage set by hand on SO-1…")
+    expect(it('where.manual.stepFloorAria', { number: 'SO-1', stage: 'In preparazione' })).toBe('In preparazione: torna alla fase del reparto — toglie la fase impostata a mano su SO-1…')
+    expect(en('where.manual.stepFloorAria', { number: 'SO-1', stage: 'Preparing' })).not.toBe(en('where.manual.clearAria', { number: 'SO-1' }))
     // The right's words in Admin's role matrix say the new rule (never "never Ready to ship").
     const adminEn = createTranslator('en', messagesFor('en', ['admin']).admin!)
     const adminIt = createTranslator('it', messagesFor('it', ['admin']).admin!)

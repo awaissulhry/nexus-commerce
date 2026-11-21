@@ -109,7 +109,8 @@ function StageBlock({ order, model, actions, recordHref, search, day }: { order:
   const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
   const door = model.stageHand ? handDoorOf(order, headline, model.stageHand.can, readOnly, model.busy) : null
   const picks = stagePicksOf(headline, door)
-  const pickLabel = (pick: StagePick) => (pick.kind === 'clear' ? t('where.manual.clearAria', { number: order.number }) : t('where.manual.stepAria', { number: order.number, stage: w.t(`parts.stage.${pick.stage}`) }))
+  // pt-sc-fx1: the floor's own step named as Overview's (its stage first, never the Clear… door's name).
+  const pickLabel = (pick: StagePick) => t(pick.kind === 'clear' ? 'where.manual.stepFloorAria' : 'where.manual.stepAria', { number: order.number, stage: w.t(`parts.stage.${pick.stage}`) })
   const stepPicks = picks?.map((pick) => ({ stage: pick.stage, label: pickLabel(pick), open: () => actions?.onDialog?.(pick.dialog) })) ?? null
   const held = picks ? null : sayHand(stagePicksHeldOf(door))
   // ---- end F-SC-W3
