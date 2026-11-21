@@ -132,17 +132,17 @@ function TheirYes({ order, model, actions }: { order: Order; model: OrderRecordM
           : null
   return (
     <div className="fw-pt-blk fw-oc-ag-half">
-      <h3 className="fw-pt-h3">
-        <FileCheck2 size={15} aria-hidden /> {t('changesTab.agreement.theirs')}
+      {/* F-OC-204: the heading holds words only; the quote's door sits beside it (never inside an h3). */}
+      <div className="fw-oc-ag-row">
+        <h3 className="fw-pt-h3">
+          <FileCheck2 size={15} aria-hidden /> {t('changesTab.agreement.theirs')}
+        </h3>
         {quote && model.can.viewQuotes && (
-          <>
-            <span className="fw-pt-h3-sp" />
-            <Button size="sm" variant="quiet" asChild>
-              <Link href={`${model.prefix}/sales/quotes/${quote.id}?tab=approval`}>{/* TH-6 part B: the quote's Documents live in Approval & sending (B-TH-257) */}{t('changesTab.agreement.quote', { number: quote.number })}</Link>
-            </Button>
-          </>
+          <Button size="sm" variant="quiet" asChild>
+            <Link href={`${model.prefix}/sales/quotes/${quote.id}?tab=approval`}>{/* TH-6 part B: the quote's Documents live in Approval & sending (B-TH-257) */}{t('changesTab.agreement.quote', { number: quote.number })}</Link>
+          </Button>
         )}
-      </h3>
+      </div>
       {body}
       {revisionLine && (
         <div className="fw-oc-ag-row">
