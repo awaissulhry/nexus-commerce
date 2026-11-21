@@ -3,6 +3,7 @@ import type { ApiClient } from '../../../../../lib/api/client'
 import { FINISH_SOURCES } from '../../depth/api' // F-SA-234b
 import { GATE_REFUSALS } from '@nexus/factory-domain/planning/milestones/rules' // F-OO-208: a gate's refusal codes, as Planning reads them
 import { BLOCKED_BY, WORK_ORDER_RISKS } from '../../../../production/_shared/api' // F-PT-104: the Production list's risk words
+import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels' // F-PT-201: what the customer is shown
 
 /**
  * F-SA-232 (sales page plan N2; 10-order-page §3 OR1, OR2) — the order page's reads of production, the office twin of the portal's
@@ -226,6 +227,14 @@ const gateRow = z.object({
   // F-OO-208 (B-OO-010): + the gate's version (every write sends it) and this reader's moves; absent in an older answer.
   version: z.number().optional(),
   actions: z.object({ pass: gateAction, startBefore: gateAction, edit: gateAction, remove: gateAction }).optional(),
+  // ---- F-PT-202 (B-PT-006): what Planning's own dialogs read — the work orders it holds, who passed it and when, its planner and
+  // maker (who may not start before it); optional: an older answer fills them as before ----
+  holds: z.number().optional(),
+  passedAt: instant.nullable().optional(),
+  passedBy: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+  ownerId: z.string().nullable().optional(),
+  makerId: z.string().nullable().optional(),
+  // ---- end F-PT-202
 })
 export const datesSchema = z.object({
   gates: z.array(gateRow),
@@ -250,6 +259,14 @@ export const datesSchema = z.object({
     // F-SA-234b: + source (what sets the day): the by-line finish forecast on Production reads it from here.
     .array(z.object({ lineId: z.string(), seq: z.number(), finish: day.nullable(), risk: z.string().nullable(), slackDays: z.number().nullable(), source: z.enum(FINISH_SOURCES), sizes: z.array(z.object({ size: z.string().nullable(), finish: day.nullable(), risk: z.string().nullable() })) }))
     .nullable(),
+  // ---- F-PT-201 / F-PT-202 (B-PT-005, B-PT-006; optional — absent: no "Customer sees" claim, no Add a gate…) ----
+  /** What this order's customer is shown (STATUS · PROGRESS · GATES · QUALITY): the plan's days only from GATES on. */
+  customer: z.object({ level: z.enum(PRODUCTION_SHARE_LEVELS) }).optional(),
+  /** Planning's own: whether this reader may add a gate (the right it needs, or its refusal). */
+  mayAddGate: z.object({ allowed: z.boolean(), needs: z.string().nullable(), refusal: gateRefusal.nullable() }).optional(),
+  /** The kinds of its gates that wait. */
+  waiting: z.array(z.string()).optional(),
+  // ---- end F-PT-201 / F-PT-202
 })
 export type Dates = z.infer<typeof datesSchema>
 export type Gate = Dates['gates'][number]

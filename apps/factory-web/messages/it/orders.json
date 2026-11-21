@@ -2798,6 +2798,119 @@
       "save": "Salva",
       "problem": "Un numero intero da {min} a {max}.",
       "same": "Non è cambiato ancora niente."
+    },
+    "dates": {
+      "title": "Date e piano",
+      "answerPromised": "Promesso il {date}",
+      "answerReady": "Il piano dice pronto il {date}",
+      "answerNoPromise": "Ancora nessuna data promessa",
+      "asked": "Chiesto dal cliente",
+      "promised": "Abbiamo promesso",
+      "neverMoved": "mai spostata",
+      "first": "prima il {date}",
+      "readyWithheld": "Non visibile per te: quando il piano dice pronto (lo vedono Pianificazione e Vendite).",
+      "sees": "Il cliente vede",
+      "seesDays": "taglio {cut} · confezione {sew} · fine {finish}",
+      "seesPromise": "Il cliente vede solo la promessa",
+      "shipped": "Spedito",
+      "nothingShipped": "Ancora niente spedito",
+      "planning": "Pianificazione ›",
+      "partPlan": "il piano",
+      "infoBody": "Quando sarà pronto, se è ciò che abbiamo promesso, le fasi lungo la strada e come si è spostata la promessa — ogni data con la sua porta. Il piano dice pronto è la previsione per riga della pianificazione.",
+      "moved_one": "spostata {count} volta",
+      "moved_other": "spostata {count} volte"
+    },
+    "steps": {
+      "title": "Fasi fino alla spedizione",
+      "deposit": "Acconto",
+      "startHint": "(piano di lavoro)",
+      "shipHint": "(la promessa)",
+      "now": "Ora: {step}",
+      "col": {
+        "step": "Fase",
+        "planned": "Previsto",
+        "done": "Fatto",
+        "status": "Stato",
+        "who": "Chi agisce"
+      },
+      "status": {
+        "done": "Fatta",
+        "late_one": "{count} giorno di ritardo",
+        "late_other": "{count} giorni di ritardo",
+        "soon_one": "In attesa · tra {count} giorno",
+        "soon_other": "In attesa · tra {count} giorni",
+        "soonToday": "In attesa · scade oggi",
+        "waiting": "In attesa",
+        "startedBefore": "Avviato prima del via libera",
+        "toCome": "Da fare"
+      },
+      "who": {
+        "customerDeposit": "Il cliente: pagare l'acconto",
+        "customerSample": "Il cliente (la sua risposta sul campione)",
+        "planner": "Pianificatore {name}",
+        "plannerNobody": "Un pianificatore",
+        "production": "Produzione",
+        "shipping": "Spedizione"
+      },
+      "chip": {
+        "late_one": "{count} in ritardo",
+        "late_other": "{count} in ritardo",
+        "allDone": "Tutto fatto",
+        "onTrack": "In linea"
+      },
+      "add": "Aggiungi un via libera…",
+      "remove": "Rimuovi…",
+      "ask": "Chiedi un aggiornamento a {name}",
+      "askTitle": "Chiedi di {step}",
+      "askStarter": "@{name} A che punto è “{step}”? Quando sarà fatto? La promessa del {promise} è ancora sicura?",
+      "askStarterNoPromise": "@{name} A che punto è “{step}”? Quando sarà fatto?",
+      "askSend": "Invia la nota",
+      "noGate": "Nessun via libera: la pianificazione non aspetta niente prima della produzione.",
+      "seesGates": "Il cliente vede queste fasi e i loro giorni (il suo livello di condivisione).",
+      "seesNone": "Il cliente non vede queste fasi: solo la promessa.",
+      "added": "Via libera aggiunto.",
+      "removed": "Via libera rimosso.",
+      "more": "Altro per {step}"
+    },
+    "byLine": {
+      "title": "Per riga · prima la peggiore",
+      "col": {
+        "line": "Riga",
+        "asked": "Chiesto",
+        "promised": "Promesso",
+        "ready": "Pronto"
+      },
+      "charges_one": "{count} riga di addebito non ha data.",
+      "charges_other": "{count} righe di addebito non hanno data.",
+      "sizes": "Taglie: {sizes}",
+      "sizeDay": "{sizes} {date}",
+      "changeLine": "Cambia la promessa di questa riga…",
+      "more": "Altro per la riga {seq}"
+    },
+    "history": {
+      "title": "Storia della promessa",
+      "never": "Mai spostata. Promessa del {date} dal {since}.",
+      "neverNoSince": "Mai spostata. Promessa del {date}.",
+      "noPromise": "Ancora nessuna data promessa.",
+      "later_one": "+{count} g più tardi",
+      "later_other": "+{count} g più tardi",
+      "sooner_one": "{count} g prima",
+      "sooner_other": "{count} g prima",
+      "lines": "Righe: {lines}",
+      "reasonAutomatic": "Cambiata dalla pagina dell'ordine (nessun motivo indicato)",
+      "reasonNone": "Nessun motivo indicato",
+      "officeNote": "Solo ufficio: {note}",
+      "customerReads": "Il cliente legge: “{words}”",
+      "by": "{name} · {at}",
+      "set": "Data fissata {date}",
+      "setNote": "non conta come spostamento",
+      "earlier_one": "Mostra {count} spostamento precedente",
+      "earlier_other": "Mostra {count} spostamenti precedenti",
+      "tell": "Avvisa il cliente…",
+      "pointer": "Gli spostamenti della promessa sono in Produzione › Date e piano ›"
+    },
+    "promise": {
+      "hint": "Il cliente riceve un avviso nel portale (e un'e-mail se l'ha scelto). Il reparto non viene avvisato."
     }
   }
 }
