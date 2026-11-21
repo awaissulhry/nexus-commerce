@@ -255,8 +255,9 @@ export const PRODUCTION_RULES: readonly PartnerRule[] = Object.freeze([
     name: 'portalProduction.stageReached',
     events: ['brand_production.stage_reached'],
     async drafts(context, raw) {
-      const event = payloadOf<{ orderId: string; partyId: string; stage: BrandStage; previous: BrandStage | null; byHand?: boolean }>('brand_production.stage_reached')(raw)
-      // Decided on the payload first (a first stage, a move back: nothing to read).
+      // B-SC-004: `correction` — a move back by hand of a stage it was told: its correction words (stageNoticeKey), by hand too.
+      const event = payloadOf<{ orderId: string; partyId: string; stage: BrandStage; previous: BrandStage | null; byHand?: boolean; correction?: boolean }>('brand_production.stage_reached')(raw)
+      // Decided on the payload first (a first stage, a move back that is no correction: nothing to read).
       if (stageNoticeKey(event, event.stage) === null) return []
       const order = await ownOrder(context.tx, event.orderId, event.partyId)
       if (!order) return []

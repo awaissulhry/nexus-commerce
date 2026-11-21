@@ -25,9 +25,10 @@ import { seedSecondBrand, type SecondBrand } from './testing/second-brand'
  *     a message of its record's own thread, answeredAt exactly when ANSWERED, escalation step 0-2, never deleted; the hold's
  *     life; WorkOrder_production_holds: no leaving ON_HOLD while an ACTIVE WorkOrderHold names it.
  *   - T-MS-001 (set the stage by hand, design A; review R10, R11; …_brand_production_stage_set_guards): the partner role reads
- *     none of the five stageSet… columns (the customer never learns a stage was set by hand), only the plain stage; the hand
- *     stage CUTTING, SEWING or QUALITY only, and `stage` equal to it while it stands; its reason, when and by whom all or none;
- *     the note only beside it, one line of at most 200, required for OTHER; set or changed by an active office person only.
+ *     none of the five stageSet… columns (the customer never learns a stage was set by hand), only the plain stage; T-SC-001
+ *     (stage control B; …_brand_production_stage_any_guards): the hand stage any of the five, PREPARING and READY too, and
+ *     `stage` equal to it while it stands; its reason, when and by whom all or none; the note only beside it, one line of at
+ *     most 200, required for OTHER; set or changed by an active office person only.
  * The refusals are check_violation (SQLSTATE 23514); their messages are read through raw SQL.
  */
 
@@ -257,16 +258,24 @@ describe('BrandOrderProduction (…_brand_production_guards)', () => {
   })
 
   // T-MS-001: the stage set by hand (design A; review R10).
-  it('T-MS-001: sets the stage by hand to Cutting, Sewing or Quality only, and shows it while it stands; its reason, when and by whom, all or none', async () => {
+  it('T-MS-001, T-SC-001: sets the stage by hand to any of the five stages, and shows it while it stands; its reason, when and by whom, all or none', async () => {
     const SET_AT = '2026-11-20T08:00:00.000Z'
     const row = await productionRow(await newOrder(), { stage: 'CUTTING', stageAt: SET_AT })
     const hand = { stage: 'SEWING', stageAt: SET_AT, stageSet: 'SEWING', stageSetReason: 'OUTAGE', stageSetAt: SET_AT, stageSetById: a.actorId }
-    // Never PREPARING, never READY (only quality's release of every piece makes an order Ready).
-    await expect(update('BrandOrderProduction', row, { ...hand, stage: 'READY', stageSet: 'READY' })).rejects.toThrow(/CUTTING, SEWING or QUALITY only/)
-    await expect(update('BrandOrderProduction', row, { ...hand, stage: 'PREPARING', stageSet: 'PREPARING' })).rejects.toThrow(/CUTTING, SEWING or QUALITY only/)
-    // While it stands the order shows it (the keeper writes the higher of the floor's and the hand's into `stage`).
+    // T-SC-001 (stage control B): Ready to ship and Preparing by hand are taken too — the stage shown equals them.
+    expect(await update('BrandOrderProduction', row, { ...hand, stage: 'READY', stageSet: 'READY' })).toBe(1)
+    expect(await update('BrandOrderProduction', row, { ...hand, stage: 'PREPARING', stageSet: 'PREPARING', stageSetReason: 'OTHER', stageSetNote: 'Made-up: the cut was logged on the wrong order.' })).toBe(1)
+    expect(await update('BrandOrderProduction', row, { ...hand, stageSetNote: null })).toBe(1)
+    // Back to no hand stage (the five cleared with the stage in one write), for the refusals below.
+    expect(await update('BrandOrderProduction', row, { stage: 'CUTTING', stageAt: SET_AT, stageSet: null, stageSetReason: null, stageSetNote: null, stageSetAt: null, stageSetById: null })).toBe(1)
+    expect(await productionRow(await newOrder(), { stage: 'READY', stageSet: 'READY', stageSetReason: 'OUTSIDE', stageSetAt: SET_AT, stageSetById: a.actorId })).toBeTruthy()
+    expect(await productionRow(await newOrder(), { stage: 'PREPARING', stageSet: 'PREPARING', stageSetReason: 'FEW_PEOPLE', stageSetAt: SET_AT, stageSetById: a.actorId })).toBeTruthy()
+    // While it stands the order shows it (the keeper writes the hand stage into `stage`, higher or lower than the floor's).
     await expect(update('BrandOrderProduction', row, { ...hand, stage: 'CUTTING' })).rejects.toThrow(/shows its stage set by hand/)
     await expect(update('BrandOrderProduction', row, { ...hand, stage: 'QUALITY' })).rejects.toThrow(/shows its stage set by hand/)
+    await expect(update('BrandOrderProduction', row, { ...hand, stage: 'SEWING', stageSet: 'READY' })).rejects.toThrow(/shows its stage set by hand/)
+    await expect(update('BrandOrderProduction', row, { ...hand, stage: 'CUTTING', stageSet: 'PREPARING' })).rejects.toThrow(/shows its stage set by hand/)
+    await expect(productionRow(await newOrder(), { stage: 'PREPARING', stageSet: 'READY', stageSetReason: 'OUTSIDE', stageSetAt: SET_AT, stageSetById: a.actorId })).rejects.toThrow(/shows its stage set by hand/)
     // Its reason code, when and by whom: all four or none.
     for (const column of ['stageSetReason', 'stageSetAt', 'stageSetById']) {
       await expect(update('BrandOrderProduction', row, { ...hand, [column]: null }), column).rejects.toThrow(/reason code, when and by whom, or there is none/)

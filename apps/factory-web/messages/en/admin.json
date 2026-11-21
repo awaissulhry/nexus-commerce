@@ -2134,7 +2134,7 @@
     "partners_manage": "Change portal people's roles and end of access, suspend or deactivate them; switch a portal on, its limits and production progress",
     "partners_preview": "Open a partner's portal as it shows to them, read-only",
     "partners_production_manage": "Set what a customer sees of its production and what it may do there: share level, urgency switch and urgent quota, production asks, named approver, second person for overrides",
-    "production_brand_manage": "Answer a customer's production asks (Urgent – asked, pause, resume), raise its order to At risk with a reason, set its order's stage by hand with a reason (never Ready to ship), set the production supervisor of the customer and of its orders",
+    "production_brand_manage": "Answer a customer's production asks (Urgent – asked, pause, resume), raise its order to At risk with a reason, set its order's stage by hand with a reason, forward or back, set the production supervisor of the customer and of its orders",
     "production_brand_override": "Decide for a customer or undo what it did, with a reason it reads (a second person when its switch is on, never who asked); set its order back to Regular, lock or unlock it",
     "projects_manage": "Make projects (work on several styles, samples and orders, or with no record yet), change them, put them on hold, close them with their outcome and reopen them, link their records and add or remove their people, the outside company's portal people included",
     "portal_colleagues_view": "See your organisation's portal users and their roles",

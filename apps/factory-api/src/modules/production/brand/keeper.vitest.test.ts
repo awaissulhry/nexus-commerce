@@ -25,6 +25,7 @@ const row = (over: Partial<KeeperRow> = {}): KeeperRow => ({
   salesOrderId: '0195a000-0000-7000-8000-0000000000bb',
   stage: 'PREPARING',
   stageSet: null, // B-MS-004: no stage set by hand (every plan below stays as it was)
+  handFloor: null, // B-SC-003: the floor at the set (none known: read as set ahead)
   health: 'ON_TRACK',
   healthSet: null,
   healthReasonCode: null,
@@ -207,6 +208,47 @@ describe('B-MS-004: the stage set by hand (design A: `stage` is the shown one; e
     expect(planChanges(planKeep({ row: row(), target: target(), now: NOW, today: TODAY, clearHand: true }))).toBe(false)
   })
 
+  // ── B-SC-003 (stage control B, end rule E1: the floor agrees or moves on) ──
+  it('B-SC-003: set ahead with the floor known at the set — as before: stands below it, ends when the floor reaches or passes it', () => {
+    expect(planChanges(plan(hand('QUALITY', { handFloor: 'CUTTING' }), target({ stage: 'SEWING', reached: 'SEWING' })))).toBe(false)
+    expect(plan(hand('QUALITY', { handFloor: 'CUTTING' }), target({ stage: 'QUALITY', reached: 'QUALITY' }))!.data).toEqual({ handDropped: 'REACHED' })
+    // Ready by hand over a floor at Quality check: stands until quality releases every piece; then the floor's Ready, untold (same stage).
+    expect(planChanges(plan(hand('READY', { handFloor: 'QUALITY' }), target({ stage: 'QUALITY', reached: 'QUALITY' })))).toBe(false)
+    const released = plan(hand('READY', { handFloor: 'QUALITY' }), target({ stage: 'READY', reached: 'READY' }))!
+    expect(released.data).toEqual({ handDropped: 'REACHED' })
+    expect(released.stageReached).toBeNull()
+  })
+
+  it('B-SC-003: set back (a wrong scan) — stands under an equal or lower floor; nothing written, nothing told', () => {
+    // Quality check by the floor, set back to Sewing: the customer reads Sewing while the floor still counts Quality check.
+    expect(planChanges(plan(hand('SEWING', { handFloor: 'QUALITY' }), target({ stage: 'QUALITY', reached: 'QUALITY' })))).toBe(false)
+    // The floor drops below it (a release reversed down to Cutting): it still stands.
+    expect(planChanges(plan(hand('SEWING', { handFloor: 'QUALITY' }), target({ stage: 'CUTTING', reached: 'CUTTING' })))).toBe(false)
+    // Preparing back from Cutting.
+    expect(planChanges(plan(hand('PREPARING', { handFloor: 'CUTTING' }), target({ stage: 'CUTTING', reached: 'CUTTING' })))).toBe(false)
+  })
+
+  it("B-SC-003: set back — ends when the floor equals it (nothing told) or moves past where it stood at the set (the floor's stage written and told)", () => {
+    const agrees = plan(hand('SEWING', { handFloor: 'QUALITY' }), target({ stage: 'SEWING', reached: 'SEWING' }))!
+    expect(agrees.data).toEqual({ handDropped: 'REACHED' })
+    expect(agrees.stageReached).toBeNull()
+    const past = plan(hand('SEWING', { handFloor: 'QUALITY' }), target({ stage: 'READY', reached: 'READY' }))!
+    expect(past.data).toEqual({ handDropped: 'REACHED', stage: 'READY', stageAt: NOW })
+    expect(past.stageReached).toEqual({ stage: 'READY', previous: 'SEWING' })
+    const prepared = plan(hand('PREPARING', { handFloor: 'CUTTING' }), target({ stage: 'SEWING', reached: 'SEWING' }))!
+    expect(prepared.data).toEqual({ handDropped: 'REACHED', stage: 'SEWING', stageAt: NOW })
+    expect(prepared.stageReached).toEqual({ stage: 'SEWING', previous: 'PREPARING' })
+    // Without the floor at the set (a row written before B): read as set ahead — a hand Sewing under a floor at Quality check ends.
+    expect(plan(hand('SEWING'), target({ stage: 'QUALITY', reached: 'QUALITY' }))!.data).toEqual({ handDropped: 'REACHED', stage: 'QUALITY', stageAt: NOW })
+  })
+
+  it('B-SC-003: a set back cleared by a person: the floor\'s stage again, a forward move (told as the usual notice)', () => {
+    const cleared = planKeep({ row: hand('SEWING', { handFloor: 'QUALITY' }), target: target({ stage: 'QUALITY', reached: 'QUALITY' }), now: NOW, today: TODAY, clearHand: true })!
+    expect(cleared.data).toEqual({ handDropped: 'CLEARED', stage: 'QUALITY', stageAt: NOW })
+    expect(cleared.stageReached).toEqual({ stage: 'QUALITY', previous: 'SEWING' })
+  })
+  // ── end B-SC-003 ──
+
   it('the order left production (planLeaving): it ends, the stage is where the work reached, nothing told; no hand stage: nothing', () => {
     expect(planLeaving({ row: hand('SEWING'), reached: 'CUTTING', now: NOW })).toEqual({ create: false, data: { handDropped: 'LEFT_PRODUCTION', stage: 'CUTTING', stageAt: NOW }, stageReached: null, healthChanged: null })
     expect(planLeaving({ row: hand('SEWING'), reached: 'SEWING', now: NOW })!.data).toEqual({ handDropped: 'LEFT_PRODUCTION' })
@@ -249,6 +291,14 @@ describe('B-MS-008: which stages a move leaves untold — a by-hand tell still i
       { stage: 'CUTTING', at: AT },
       { stage: 'QUALITY', at: later(2) },
     ])
+  })
+
+  // B-SC-004 (stage control B): a correction's tell waits the window too, and says so (its notice has the correction's key).
+  it('B-SC-004: a correction still in its window, no longer read, is left untold with its flag; the floor never moved it', () => {
+    const correction: StageMarker = { action: STAGE_TOLD, stage: 'CUTTING', byHand: true, at: later(1), requestId: 'req-back', correction: true }
+    expect(waitingTellsOff([correction, untold('SEWING', later(1)), told('SEWING')], 'PREPARING', later(3))).toEqual([{ stage: 'CUTTING', at: later(1), correction: true }])
+    expect(waitingTellsOff([correction], 'CUTTING', later(3))).toEqual([])
+    expect(waitingTellsOff([correction], 'PREPARING', later(11))).toEqual([])
   })
 })
 // ── end B-MS-008 ──

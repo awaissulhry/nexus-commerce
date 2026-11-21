@@ -3,9 +3,10 @@ import type { SalesOrderStatus } from '../sales/orders/orders' // B-OO-007
 
 /**
  * B-PR-13 (production plan §4 "5 plain stages"; threads rule 8 "only true states"): the stage a customer reads of its order
- * in production, pure. B-MS-001 (R21): the one named exception — while the floor cannot record work that is done, a person may
- * put the stage ahead, with a reason, audited (./stage-set). The stored stage (BrandOrderProduction.stage) is then the SHOWN one
- * (stage-set shownStageOf); a reader that needs the floor's own stage reads the facts (orderStageOf), never the stored stage.
+ * in production, pure. B-MS-001 (R21): the one named exception — a person may set the stage where the work really is, with a
+ * reason, audited (./stage-set; B-SC-001: any stage, forward or back, also below the floor). The stored stage
+ * (BrandOrderProduction.stage) is then the SHOWN one (stage-set shownStageOf); a reader that needs the floor's own stage reads
+ * the facts (orderStageOf), never the stored stage.
  * The API reads the facts of the customer's OWN order lines and their own cells only (the freeze stage reader apps/factory-api
  * modules/sales/order-changes/stages.ts: RELEASED < CUT < SEWING < FINISHED < SHIPPED, the furthest any cell of the line
  * reached; the pieces released and still to ship), and these rules say:

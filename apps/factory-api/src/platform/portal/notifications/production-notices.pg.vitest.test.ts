@@ -469,22 +469,32 @@ describe('B-PR-31: the customer is told of its own production', { timeout: SLOW_
     await fanOut()
     expect(await toldA(cleared.orderId)).toEqual(['portal.production.sewing'])
 
-    // 2. Set to Cutting by hand and left: the worker makes the notice after the window — told once. A Clear after it takes nothing
-    // back and leaves nothing untold: set again, it is not told twice.
+    // 2. Set to Cutting by hand and left: the worker makes the notice after the window — told once. B-SC-004 (stage control B): a
+    // Clear after it is a move back of a stage the customer was told — a correction ("still being prepared"), Cutting untold; set
+    // again inside the correction's window, the correction is dropped (the customer reads Cutting again) and Cutting is told again
+    // (40-stage-plan §6 risk 2, accepted: a rare double act by a person; every notice is true when sent).
     await set(left.orderId, 'CUTTING')
     await fanOut()
     expect(await toldA(left.orderId)).toEqual(['portal.production.cutting'])
     await fanOut()
     expect(await toldA(left.orderId)).toEqual([])
     await byHand('DELETE', left.orderId)
+    expect((await reachedOf(left.orderId)).at(-1)!.payload).toEqual({ orderId: left.orderId, partyId: world.ids.a, stage: 'PREPARING', previous: 'CUTTING', byHand: true, correction: true })
     await set(left.orderId, 'CUTTING')
-    expect(await markersOf(left.orderId)).toEqual([['told', 'CUTTING', true]])
-    // B-MS-008 (ms-fx1; Z01 note 2): set again it has a new set time, yet the customer WAS told Cutting — the office's headline (what
-    // Clear… says) reads the keeper's markers and the notice made, never the set's time.
+    expect(await markersOf(left.orderId)).toEqual([
+      ['told', 'CUTTING', true],
+      ['untold', 'CUTTING', false],
+      ['told', 'PREPARING', true],
+      ['untold', 'PREPARING', false],
+      ['told', 'CUTTING', true],
+    ])
+    // B-MS-008 (ms-fx1; Z01 note 2): the office's headline (what Clear… says) reads the keeper's markers and the notice made, never
+    // the set's time: set again, Cutting's newest tell waits its window.
     const noticeOf = async (orderId: string) => (await office('GET', `/sales/orders/${orderId}/production?parts=headline`)).headline.stage.byHand.notice
-    expect(await noticeOf(left.orderId)).toEqual({ told: true, waitsUntil: null })
+    expect(await noticeOf(left.orderId)).toEqual({ told: false, waitsUntil: expect.any(String) })
     await fanOut()
-    expect(await toldA(left.orderId)).toEqual([])
+    expect(await toldA(left.orderId)).toEqual(['portal.production.cutting'])
+    expect(await noticeOf(left.orderId)).toEqual({ told: true, waitsUntil: null })
 
     // 3. Set, cleared and set again inside the window: the customer reads Sewing, and is told it ONCE — the first tell's notice gives
     // way to the newer one (its own tell no longer stands).
@@ -508,13 +518,66 @@ describe('B-PR-31: the customer is told of its own production', { timeout: SLOW_
 
     // Never "by hand", the reason, the note or who in what A was told; B was told nothing; the finance person sees no production.
     const toA = (await noticesOf(alphaBuyer.id)).filter((notice) => [cleared.orderId, left.orderId, again.orderId].includes(notice.recordId))
-    expect(toA).toHaveLength(3)
+    expect(toA).toHaveLength(4) // B-SC-004: the second Cutting of `left`
     expect(JSON.stringify(toA)).not.toMatch(/by hand|\(a mano\)|impostat[ao] a mano|byHand|OUTAGE|scanners|office only/i)
     for (const notice of toA) expect(notice.params).toEqual({ yourKind: 'ORDER', yourSeq: notice.params.yourSeq })
     expect(await fresh(betaProduction)).toEqual([])
     expect(await fresh(alphaFinance)).toEqual([])
   })
   // ── end B-MS-008
+
+  // ── B-SC-004 (stage control B: a move back by hand of a stage the customer was told, told once as a correction) ─────────────────
+  it('B-SC-004 a correction: a told Sewing set back to Cutting is told once as "Correction: …"; two moves back inside the window tell the last one only', async () => {
+    const stageUrl = (orderId: string) => `/production/brand-orders/${orderId}/stage`
+    const versionOf = async (orderId: string) => (await admin<{ version: number }>('SELECT version FROM "BrandOrderProduction" WHERE key = $1', [`brand-production:${orderId}`]))[0]!.version
+    async function byHand(method: 'PUT' | 'DELETE', orderId: string, body?: Json): Promise<Json> {
+      const url = method === 'PUT' ? stageUrl(orderId) : `${stageUrl(orderId)}?version=${await versionOf(orderId)}`
+      const answer = await planner.browser.send(method, url, method === 'PUT' ? { ...body, version: await versionOf(orderId) } : undefined, key())
+      expect(answer.status, `${method} ${url}: ${JSON.stringify(answer.body).slice(0, 600)}`).toBe(200)
+      return answer.body as Json
+    }
+    const set = (orderId: string, stage: string) => byHand('PUT', orderId, { stage, reasonCode: 'OTHER', note: 'Made-up: a wrong scan on the line (office only).' })
+    const reachedOf = async (orderId: string) => (await outbox('brand_production.stage_reached')).filter((row) => row.subject === orderId)
+    const toldA = async (orderId: string) => (await fresh(alphaBuyer)).filter((notice) => notice.eventType === 'brand_production.stage_reached' && notice.recordId === orderId).map((notice) => notice.messageKey)
+
+    // Two made-up orders of A in production with no work order (the floor at Preparing).
+    const [once, twice] = [await world.addOrder(world.ids.a, 'C1', '2026-10-04'), await world.addOrder(world.ids.a, 'C2', '2026-10-04')]
+    await world.replica([{ sql: `UPDATE "SalesOrder" SET status = 'IN_PRODUCTION' WHERE id = ANY($1::uuid[])`, values: [[once.orderId, twice.orderId]] }])
+
+    // 1. Sewing set by hand and told (the worker makes the notice: here, now); then set back to Cutting — one correction.
+    await set(once.orderId, 'SEWING')
+    await fanOut()
+    expect(await toldA(once.orderId)).toEqual(['portal.production.sewing'])
+    expect(await byHand('PUT', once.orderId, { stage: 'CUTTING', reasonCode: 'OTHER', note: 'Made-up: sewing was scanned on the wrong bundle.' })).toMatchObject({ stage: 'CUTTING', byHand: { stage: 'CUTTING' } })
+    const correction = (await reachedOf(once.orderId)).at(-1)!
+    expect(correction.payload).toEqual({ orderId: once.orderId, partyId: world.ids.a, stage: 'CUTTING', previous: 'SEWING', byHand: true, correction: true })
+    await fanOut()
+    const corrected = (await noticesOf(alphaBuyer.id)).filter((notice) => notice.recordId === once.orderId && notice.messageKey === 'portal.production.corrected_cutting')
+    expect(corrected).toHaveLength(1)
+    expect(await toldA(once.orderId)).toEqual(['portal.production.corrected_cutting'])
+
+    // 2. Quality check told; set back to Sewing and, inside that correction's window, cleared back to the floor's Preparing: the first
+    // correction is dropped (the customer no longer reads Sewing), the second is told in its place.
+    await set(twice.orderId, 'QUALITY')
+    await fanOut()
+    expect(await toldA(twice.orderId)).toEqual(['portal.production.quality'])
+    await set(twice.orderId, 'SEWING')
+    expect(await byHand('DELETE', twice.orderId)).toMatchObject({ floor: 'PREPARING', stage: 'PREPARING', byHand: null })
+    expect((await reachedOf(twice.orderId)).slice(-2).map((row) => [row.payload.stage, row.payload.previous, row.payload.correction === true])).toEqual([
+      ['SEWING', 'QUALITY', true],
+      ['PREPARING', 'SEWING', true],
+    ])
+    await fanOut()
+    expect(await toldA(twice.orderId)).toEqual(['portal.production.corrected_preparing'])
+
+    // The words: the plain stage, "voi" in Italian; never "by hand", the reason, the note or who; B and the finance person got nothing.
+    const toA = (await noticesOf(alphaBuyer.id)).filter((notice) => [once.orderId, twice.orderId].includes(notice.recordId))
+    expect(JSON.stringify(toA)).not.toMatch(/by hand|\(a mano\)|impostat[ao] a mano|byHand|correction"|wrong scan|wrong bundle|office only/i)
+    for (const notice of toA) expect(notice.params).toEqual({ yourKind: 'ORDER', yourSeq: notice.params.yourSeq })
+    expect(await fresh(betaProduction)).toEqual([])
+    expect(await fresh(alphaFinance)).toEqual([])
+  })
+  // ── end B-SC-004
 
   it('a problem it reported on two orders, answered in one order’s conversation: "answered" and "answered in your order N", one bell group; an office issue tells nothing', async () => {
     const batchId = newId()

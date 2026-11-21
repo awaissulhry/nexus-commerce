@@ -10,9 +10,10 @@
 //                         foreign key). Its customer reads it through the partner role, its own rows only (the party key),
 //                         never the office's note on a raise, who raised it, who set or locked an urgency, nor the
 //                         supervisor and since when (PW-15). The old "rank" columns are not made: urgency replaces them.
-//                         T-MS-001 (set the stage by hand, design A; review R10, R11): an office person may put the stage
-//                         ahead while the floor cannot record the work (the five stageSet… columns); the customer reads
-//                         the plain stage only and never learns it was set by hand (all five hidden from its role).
+//                         T-MS-001 (set the stage by hand, design A; review R10, R11): an office person may set the stage
+//                         where the work really is (the five stageSet… columns; T-SC-001, stage control B: any stage,
+//                         forward or back); the customer reads the plain stage only and never learns it was set by hand
+//                         (all five hidden from its role).
 //   ProductionIssue       an issue that needs an answer (L24): a note of the office with "Needs an answer" (OFFICE) or a
 //                         customer's "Report a problem" (BRAND), on a sales order or a work order of ONE customer, with its
 //                         Task and its message (plain ids: collab.prisma and threads.prisma stay untouched); one Task per
@@ -22,7 +23,7 @@
 // The hand-written …_brand_production_guards hold the shape for every login, the owner included (the urgent place exactly
 // while Urgent, a locked order Regular, the supervisor with since when, an issue answered exactly when ANSWERED, its
 // escalation step 0 to 2; T-MS-001: …_brand_production_stage_set_guards redefines the row's function whole, + the stage set
-// by hand); neither table is ever deleted from. WorkOrderHold (the plain production hold of the same wave) lives in
+// by hand; T-SC-001: …_brand_production_stage_any_guards widens it to any of the five stages); neither table is ever deleted from. WorkOrderHold (the plain production hold of the same wave) lives in
 // production.prisma.
 
 /// The production state of one sales order for its customer (B-PR-15): the plain stage, the health and what it waits on (the
@@ -40,16 +41,16 @@ model BrandOrderProduction {
   /// `brand-production:<salesOrderId>`: one row per order (the unique key; the isolation tests' copies add a `-…` suffix).
   key                  String
   /// The plain stage the customer reads (PREPARING, CUTTING, SEWING, QUALITY, READY) and since when: the floor's (its slowest
-  /// unfinished line, factory-domain production-brand/stages), or the one set by hand while it leads (T-MS-001: stageSet;
-  /// the keeper writes the higher of the two, production-brand/stage-set shownStageOf). The floor's own stage is not stored
+  /// unfinished line, factory-domain production-brand/stages), or the one set by hand while it stands (T-MS-001: stageSet;
+  /// T-SC-001: higher or lower than the floor's, production-brand/stage-set shownStageOf). The floor's own stage is not stored
   /// here: a reader that needs it reads the floor's facts.
   stage                BrandStage    @default(PREPARING)
   stageAt              DateTime      @default(now()) @db.Timestamptz(3)
   // ── T-MS-001: the stage set by hand (set-the-stage-by-hand plan, design A; review R10, R11, R21) ──
-  /// The stage an office person set by hand while the floor cannot record the work: CUTTING, SEWING or QUALITY only (never
-  /// PREPARING, never READY), ahead of the floor's; while it stands, `stage` equals it. It ends when the floor reaches it
-  /// (the keeper clears the five columns in the same write that moves `stage`), by Clear, or when the order leaves
-  /// production. Hidden from the customer's role, as are the four below: the customer never learns a stage was set by hand.
+  /// The stage an office person set by hand where the work really is (T-SC-001, stage control B: any of the five, forward or
+  /// back of the floor's, Ready to ship too); while it stands, `stage` equals it. It ends when the floor agrees or moves on
+  /// (end rule E1: the keeper clears the five columns in the same write that moves `stage`), by Clear, or when the order
+  /// leaves production. Hidden from the customer's role, as are the four below: the customer never learns a stage was set by hand.
   stageSet             BrandStage?
   /// Why (production-brand/stage-set STAGE_SET_REASON_CODES), when and by whom (an active office person; a plain id, no
   /// foreign key, as healthSetById): all four with the hand stage, or none.

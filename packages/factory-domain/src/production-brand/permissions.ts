@@ -20,8 +20,8 @@ import { PORTAL_SALES_ORDERS_ASK } from '../sales/change-requests/permissions'
  *                                what it sees, its urgency switch and urgent quota, the production asks it may make, its
  *                                named approver, whether overrides need a second person (step-up)
  *   production.brand.manage      answer its production asks (Urgent – asked, pause, resume), raise an order's health to At
- *                                risk with a reason, set an order's stage by hand with a reason while the floor cannot record
- *                                the work (never Ready to ship; B-MS-003, ./stage-set), set the production supervisor of the
+ *                                risk with a reason, set an order's stage by hand with a reason, forward or back (B-MS-003;
+ *                                B-SC-001: any stage, Ready to ship too; ./stage-set), set the production supervisor of the
  *                                customer and of its orders
  *   production.brand.override    decide for the customer or undo its act, with a reason it reads (a second person when its
  *                                switch is on); set its order back to Regular, lock or unlock it (step-up, never the person
@@ -47,9 +47,9 @@ export const PRODUCTION_BRAND_DEFINITIONS = [
   ...definePermissions('production', {
     'brand.manage': {
       risk: 'write',
-      // B-MS-003 (R21): the right also sets an order's stage by hand (no new permission; Owner D6).
+      // B-MS-003 (R21): the right also sets an order's stage by hand (no new permission; Owner D6). B-SC-001: forward or back.
       description:
-        "Answer a customer's production asks (Urgent – asked, pause, resume), raise one of its orders to At risk with a reason it reads, set its order's stage by hand with a reason (never Ready to ship), and set the production supervisor of the customer and of its orders.",
+        "Answer a customer's production asks (Urgent – asked, pause, resume), raise one of its orders to At risk with a reason it reads, set its order's stage by hand with a reason, forward or back, and set the production supervisor of the customer and of its orders.",
     },
     'brand.override': {
       risk: 'stepUp',

@@ -20,7 +20,9 @@ import { isBrandGate } from './portal-read'
  *                       stage (a stage that moved on before the worker told it is not stale news: the next one is told). Never
  *                       the order's FIRST stage (previous null): the keeper makes the row with it — a new order was just told
  *                       "confirmed", and the keeper's first nightly run over the orders made before it must not flood every
- *                       customer with a notice per order. Never a move back (the keeper never tells one either).
+ *                       customer with a notice per order. Never a move back of the floor's (the keeper never tells one either);
+ *                       B-SC-004 (stage control B): a move back BY HAND of a stage it was told comes with `correction` and is
+ *                       told once as a correction (STAGE_CORRECTION_KEYS, Preparing too), while the order still reads it.
  *   health_changed      worse, to At risk or Late, while the order still reads it; never its first health (previous null, as
  *                       above), never a better one (the page shows it), never No date or On track.
  *   hold_changed        placed: the order is on hold (a lift that leaves another hold standing tells nothing: it was on hold
@@ -45,6 +47,16 @@ export const STAGE_NOTICE_KEYS: Readonly<Partial<Record<BrandStage, PartnerMessa
   READY: 'portal.production.ready',
 })
 
+// ── B-SC-004 (stage control B: a move back by hand of a stage the customer was told) ──
+/** The correction a customer is told when a person moves the stage it reads back (Preparing included: "still being prepared"). */
+export const STAGE_CORRECTION_KEYS: Readonly<Partial<Record<BrandStage, PartnerMessageKey>>> = Object.freeze({
+  PREPARING: 'portal.production.corrected_preparing',
+  CUTTING: 'portal.production.corrected_cutting',
+  SEWING: 'portal.production.corrected_sewing',
+  QUALITY: 'portal.production.corrected_quality',
+})
+// ── end B-SC-004 ──
+
 /** The healths a customer is told of when its order gets worse. */
 export const HEALTH_NOTICE_KEYS: Readonly<Partial<Record<BrandHealth, PartnerMessageKey>>> = Object.freeze({
   AT_RISK: 'portal.production.at_risk',
@@ -58,8 +70,18 @@ export const URGENCY_NOTICE_KEYS: Readonly<Partial<Record<UrgencyChange, Partner
   UNLOCK: 'portal.production.unlocked',
 })
 
-/** The notice of a stage reached; `now`: the stage the order's production row reads when the worker tells it. */
-export function stageNoticeKey(event: { readonly stage: BrandStage; readonly previous: BrandStage | null }, now: BrandStage | null): PartnerMessageKey | null {
+/**
+ * The notice of a stage reached; `now`: the stage the order's production row reads when the worker tells it. B-SC-004: with
+ * `correction`, a move back by hand — its correction words, only for a real move back and while the order still reads it.
+ */
+export function stageNoticeKey(event: { readonly stage: BrandStage; readonly previous: BrandStage | null; readonly correction?: boolean | undefined }, now: BrandStage | null): PartnerMessageKey | null {
+  // ── B-SC-004 ──
+  if (event.correction === true) {
+    if (event.previous === null || !movedForward(event.stage, event.previous)) return null
+    if (now !== event.stage) return null
+    return STAGE_CORRECTION_KEYS[event.stage] ?? null
+  }
+  // ── end B-SC-004 ──
   if (event.previous === null || !movedForward(event.previous, event.stage)) return null
   if (now !== event.stage) return null
   return STAGE_NOTICE_KEYS[event.stage] ?? null
