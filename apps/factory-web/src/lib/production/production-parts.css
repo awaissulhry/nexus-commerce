@@ -36,6 +36,44 @@
   outline-offset: 2px;
 }
 
+/* F-SC-W3 (stage control B): the steps as buttons (the order page's Overview, with the right) — real <button>s laid UNDER the tracker,
+   each over its step, measured by StageStrip; the tracker stays on top with its own look and lets the pointer through. The hover and the
+   focus ring show around the words; tokens only. */
+.fw-prp-strip-picks {
+  position: relative;
+  min-width: 0;
+}
+
+.fw-prp-strip-picks > .nds-milestones {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.fw-prp-strip-pick {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--nds-radius-xs);
+  background: transparent;
+  cursor: pointer;
+}
+
+.fw-prp-strip-pick:hover {
+  background: var(--nds-surface-hover);
+}
+
+.fw-prp-strip-pick:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 2px;
+}
+
 .fw-prp-unknown {
   color: var(--nds-text-muted);
 }

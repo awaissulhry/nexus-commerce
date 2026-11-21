@@ -47,6 +47,8 @@ import type { RecordActsBase, RecordDialog } from '../record-model'
 // ---- F-MS-101: the stage set by hand — the row under the dots, its one door, the domain's words
 import { HAND_AT, HAND_BY, HAND_FREE_READ, HAND_NOWORK_READ, HAND_OLD_READ, HAND_PAUSED_READ, HAND_READ } from './fixtures'
 import { handDoorOf, handRowOf, pausedByCustomer } from './where'
+import { HAND_BACK_BY, HAND_BACK_READ } from './fixtures' // F-SC-W1: a set back below the floor
+import { stagePicksHeldOf, stagePicksOf } from './where' // F-SC-W1: the steps of the stages into the ONE dialog
 import { STAGE_SET_REFUSAL_WORDS } from '@nexus/factory-domain/production-brand/stage-set'
 // ---- end F-MS-101
 
@@ -648,8 +650,9 @@ describe('F-OO-107: the moves row — Mark ready…, More ▾ (made elsewhere, C
     const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, locale)
     const html = draw('overview')
     const row = html.slice(html.indexOf('class="fw-so-where-moves"'), html.indexOf('</div>', html.indexOf('class="fw-so-where-moves"')))
-    // F-MS-101 (R21): the quiet line's new words; the moves row still comes after it (the door is not a move).
-    expect(html.indexOf('class="fw-so-where-moves"')).toBeGreaterThan(html.indexOf('Stages are set by the floor and quality, or by hand when the floor cannot record them'))
+    // F-MS-101 (R21) / F-SC-W1: the quiet line's words; the moves row still comes after it (the door is not a move).
+    expect(html.indexOf('Stages are set by the floor and quality, or by hand when their records are wrong or missing')).toBeGreaterThan(-1)
+    expect(html.indexOf('class="fw-so-where-moves"')).toBeGreaterThan(html.indexOf('Stages are set by the floor and quality, or by hand when their records are wrong or missing'))
     expect(row).toMatch(/<button[^>]*>Mark ready…<\/button>/)
     expect(row).toContain('aria-label="More moves for SO-2026-0088"')
     expect(textOf(row)).toContain('More')
@@ -1105,6 +1108,17 @@ describe('F-MS-101: the stage set by hand — the row under the dots (who, when,
     expect(JSON.stringify(handRowOf(order('IN_PRODUCTION'), HAND_READ.headline, TODAY))).not.toMatch(/operator|operatore|station|postazione/i)
   })
 
+  it('F-SC-W1: set back below the floor (a wrong scan): the floor\'s counts, and it clears when they come back to it or pass where the floor was', () => {
+    expect(handRowOf(order('IN_PRODUCTION'), HAND_BACK_READ.headline, TODAY)).toMatchObject({ stage: 'CUTTING', reason: { key: 'where.manual.reasons.OTHER' }, lines: [{ key: 'where.manual.floorBack', stage: 'CUTTING', floor: 'QUALITY', past: 'QUALITY' }], note: HAND_BACK_BY.note })
+    // The floor moved on since the set (Sewing → Quality check): `past` is where it was at the set (floorAtSet), not where it is now.
+    expect(handRowOf(order('IN_PRODUCTION'), at('CUTTING', { ...HAND_BACK_BY, floorAtSet: 'SEWING' }), TODAY)?.lines).toEqual([{ key: 'where.manual.floorBack', stage: 'CUTTING', floor: 'QUALITY', past: 'SEWING' }])
+    // An older answer without floorAtSet: judged against the floor now (below it: back; above it: ahead, today's line).
+    expect(handRowOf(order('IN_PRODUCTION'), at('CUTTING', { ...HAND_BACK_BY, floorAtSet: undefined }), TODAY)?.lines).toEqual([{ key: 'where.manual.floorBack', stage: 'CUTTING', floor: 'QUALITY', past: 'QUALITY' }])
+    expect(handRowOf(order('IN_PRODUCTION'), at('SEWING', { ...HAND_BY, floorAtSet: null }), TODAY)?.lines).toEqual([{ key: 'where.manual.floor', stage: 'SEWING', floor: 'PREPARING' }])
+    // A set ahead keeps today's line, Ready to ship included.
+    expect(handRowOf(order('IN_PRODUCTION'), at('READY', { ...HAND_BY, stage: 'READY', floor: { code: 'QUALITY', words: { en: 'Quality check', it: 'Controllo qualità' } }, floorAtSet: 'QUALITY' }), TODAY)?.lines).toEqual([{ key: 'where.manual.floor', stage: 'READY', floor: 'QUALITY' }])
+  })
+
   it('after 7 days (the domain\'s handSetOld): the warning tone and "check it" with its days; 6 days stays info', () => {
     expect(handRowOf(order('IN_PRODUCTION'), HAND_OLD_READ.headline, TODAY)).toMatchObject({ tone: 'warning', lines: [{ key: 'where.manual.floor', stage: 'SEWING', floor: 'PREPARING' }, { key: 'where.manual.old', days: 9 }] })
     expect(handRowOf(order('IN_PRODUCTION'), at('SEWING', { ...HAND_BY, at: '2026-10-23T09:00:00Z' }), TODAY)).toMatchObject({ tone: 'info', lines: [{ key: 'where.manual.floor' }] })
@@ -1146,15 +1160,14 @@ describe('F-MS-101: the stage set by hand — the row under the dots (who, when,
     expect(STAGE_SET_REFUSAL_WORDS.NOT_STARTED.en).toBe('Production has not started yet: a stage is set by hand only once the order is in production.')
   })
 
-  it('the door by the stage: Preparing to Sewing open; Quality check — only quality\'s release is ahead; Ready — nothing; no stage, still reading; a write', () => {
-    for (const code of ['PREPARING', 'CUTTING', 'SEWING'] as const) expect(handDoorOf(order('IN_PRODUCTION'), at(code), true, false, false), code).toEqual({ kind: 'set', held: null })
-    expect(handDoorOf(order('IN_PRODUCTION'), at('QUALITY'), true, false, false)).toEqual({ kind: 'set', held: STAGE_SET_REFUSAL_WORDS.NEVER_READY })
-    expect(handDoorOf(order('PARTLY_SHIPPED'), at('READY'), true, false, false)).toEqual({ kind: 'set', held: STAGE_SET_REFUSAL_WORDS.ALREADY_READY })
+  it('F-SC-W1: the door by the stage — open at every stage (Quality check: Ready by hand, warned; Ready to ship: back); no stage, still reading; a write', () => {
+    for (const code of BRAND_STAGES) expect(handDoorOf(order('IN_PRODUCTION'), at(code), true, false, false), code).toEqual({ kind: 'set', held: null })
+    expect(handDoorOf(order('PARTLY_SHIPPED'), at('READY'), true, false, false)).toEqual({ kind: 'set', held: null })
     expect(handDoorOf(order('IN_PRODUCTION'), { ...HEADLINE, stage: null }, true, false, false)).toEqual({ kind: 'set', held: STAGE_SET_REFUSAL_WORDS.NOTHING_LEFT })
     for (const headline of [null, undefined]) expect(handDoorOf(order('IN_PRODUCTION'), headline, true, false, false)).toEqual({ kind: 'set', held: { key: 'where.manual.held.reading' } })
     // A write running: held.busy — after the state's own words; without the right, the right's words first.
     expect(handDoorOf(order('IN_PRODUCTION'), at('SEWING'), true, false, true)).toEqual({ kind: 'set', held: { key: 'held.busy' } })
-    expect(handDoorOf(order('IN_PRODUCTION'), at('QUALITY'), true, false, true)).toEqual({ kind: 'set', held: STAGE_SET_REFUSAL_WORDS.NEVER_READY })
+    expect(handDoorOf(order('IN_PRODUCTION'), at('QUALITY'), true, false, true)).toEqual({ kind: 'set', held: { key: 'held.busy' } })
     expect(handDoorOf(order('IN_PRODUCTION'), at('QUALITY'), false, false, true)).toEqual({ kind: 'set', held: { key: 'wo.heldHold' } })
   })
 
@@ -1185,11 +1198,44 @@ describe('F-MS-101: the stage set by hand — the row under the dots (who, when,
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       const keys = ['open', 'tag', 'noWork', 'change', 'clear', 'held.reading', 'reasons.OUTAGE', 'reasons.FEW_PEOPLE', 'reasons.OUTSIDE', 'reasons.OTHER']
       for (const key of keys) expect(t(`where.manual.${key}`), `${locale} ${key}`).not.toBe(`where.manual.${key}`)
-      for (const key of ['by', 'floor', 'old', 'stagesLink', 'changeAria', 'clearAria']) expect(t(`where.manual.${key}`, { who: 'x', floor: 'x', stage: 'x', age: 'x', number: 'x' }), `${locale} ${key}`).not.toBe(`where.manual.${key}`)
+      for (const key of ['by', 'floor', 'floorBack' /* F-SC-W1 */, 'old', 'stagesLink', 'changeAria', 'clearAria', 'stepAria' /* F-SC-W1 */]) expect(t(`where.manual.${key}`, { who: 'x', floor: 'x', stage: 'x', age: 'x', number: 'x', past: 'x' }), `${locale} ${key}`).not.toMatch(/^where\.manual\.|\{\w+\}/)
     }
     const it = createTranslator('it', messagesFor('it', ['orders']).orders!)
-    expect([it('where.manual.tag'), it('where.manual.noWork'), it('where.manual.old', { age: '9 g' })]).toEqual(['Impostata a mano', "Nessun ordine di lavoro registra questo ordine: resta finché non la togli o l'ordine parte", 'Impostata a mano 9 g fa e il reparto non ci è ancora arrivato: controllala'])
+    expect([it('where.manual.tag'), it('where.manual.noWork'), it('where.manual.old', { age: '9 g' })]).toEqual(['Impostata a mano', "Nessun ordine di lavoro registra questo ordine: resta finché non la togli o l'ordine parte", 'Impostata a mano 9 g fa: controllala'])
+    const en = createTranslator('en', messagesFor('en', ['orders']).orders!)
+    expect(en('where.manual.floorBack', { floor: 'Quality check', stage: 'Cutting', past: 'Quality check' })).toBe("The floor's counts say Quality check: it clears by itself when the floor's counts come back to Cutting or pass Quality check")
+    expect(en('where.manual.old', { age: '9 d' })).toBe('Set by hand 9 d ago: check it')
+    expect(en('where.manual.stepAria', { number: 'SO-1', stage: 'Sewing' })).toBe('Set the stage of SO-1 to Sewing…')
+    // The right's words in Admin's role matrix say the new rule (never "never Ready to ship").
+    const adminEn = createTranslator('en', messagesFor('en', ['admin']).admin!)
+    const adminIt = createTranslator('it', messagesFor('it', ['admin']).admin!)
+    expect(adminEn('perm.production_brand_manage')).toContain("set its order's stage by hand with a reason, forward or back")
+    expect(adminIt('perm.production_brand_manage')).toContain('impostare a mano la fase di un suo ordine con un motivo, avanti o indietro')
+    for (const words of [adminEn('perm.production_brand_manage'), adminIt('perm.production_brand_manage')]) expect(words).not.toMatch(/never Ready to ship|mai Pronto per la spedizione/)
     expect(itWordsUnder('where.manual.')).not.toMatch(/\b(?:voi|vostr[oaie])\b/i)
+  })
+
+  it('F-SC-W1: the steps of the stages — every one but the stage shown; while a hand stage stands the floor\'s own opens Clear…; none while the door is held', () => {
+    const picks = (headline: Headline | null | undefined, can = true, readOnly = false, busy = false) => stagePicksOf(headline, handDoorOf(order('IN_PRODUCTION'), headline, can, readOnly, busy))?.map((pick) => `${pick.stage}:${pick.kind}`) ?? null
+    // Nothing set, the floor at Sewing: the four other stages, each opening Set with it picked.
+    expect(picks(HAND_FREE_READ.headline)).toEqual(['PREPARING:set', 'CUTTING:set', 'QUALITY:set', 'READY:set'])
+    expect(stagePicksOf(HAND_FREE_READ.headline, { kind: 'set', held: null })![3]).toEqual({ stage: 'READY', kind: 'set', dialog: { kind: 'stageByHand', mode: 'set', pick: 'READY' } })
+    // Sewing set over the floor's Preparing: Preparing opens Clear…; the others Change… with that step picked.
+    expect(picks(HAND_READ.headline)).toEqual(['PREPARING:clear', 'CUTTING:set', 'QUALITY:set', 'READY:set'])
+    const standing = stagePicksOf(HAND_READ.headline, { kind: 'standing', change: null, clear: null })!
+    expect(standing[0]).toEqual({ stage: 'PREPARING', kind: 'clear', dialog: { kind: 'stageClear' } })
+    expect(standing[1]).toEqual({ stage: 'CUTTING', kind: 'set', dialog: { kind: 'stageByHand', mode: 'change', pick: 'CUTTING' } })
+    // Cutting set back below the floor's Quality check: Quality check opens Clear….
+    expect(picks(HAND_BACK_READ.headline)).toEqual(['PREPARING:set', 'SEWING:set', 'QUALITY:clear', 'READY:set'])
+    // Held (the right, the customer's pause, a write), Read-only, no stage read, after production: no steps — the stages stay as they were.
+    for (const [name, value] of [['Sales', picks(HAND_READ.headline, false)], ['busy', picks(HAND_FREE_READ.headline, true, false, true)], ['paused', picks(HAND_PAUSED_READ.headline)], ['Read-only', picks(HAND_READ.headline, true, true)], ['no stage', picks({ ...HEADLINE, stage: null })], ['not read', picks(null)]] as const) expect(value, name).toBeNull()
+    expect(stagePicksOf(HAND_READ.headline, handDoorOf(order('SHIPPED'), HAND_READ.headline, true, false, false))).toBeNull()
+    expect(stagePicksOf(HAND_FREE_READ.headline, handDoorOf(order('CONFIRMED'), HAND_FREE_READ.headline, true, false, false))).toBeNull()
+    // Why they are not buttons, said once (Production's stage bar): the door's own held words.
+    expect(stagePicksHeldOf(handDoorOf(order('IN_PRODUCTION'), HAND_READ.headline, false, false, false))).toEqual({ key: 'wo.heldHold' })
+    expect(stagePicksHeldOf(handDoorOf(order('CONFIRMED'), HAND_FREE_READ.headline, true, false, false))).toEqual(STAGE_SET_REFUSAL_WORDS.NOT_STARTED)
+    expect(stagePicksHeldOf(handDoorOf(order('IN_PRODUCTION'), HAND_FREE_READ.headline, true, false, false))).toBeNull()
+    expect(stagePicksHeldOf(null)).toBeNull()
   })
 
   it('source: the rules and words are the domain\'s (stage-set), never a web copy; the comments say the new rule (R21)', () => {

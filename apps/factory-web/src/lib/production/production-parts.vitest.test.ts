@@ -30,6 +30,7 @@ import { PiecesGrid } from './view/PiecesGrid'
 import { ProductionHoldBanner } from './view/ProductionHoldBanner'
 import { RequestCard } from './view/RequestCard'
 import { StageStrip } from './view/StageStrip'
+import type { StageStripProps } from './view/StageStrip' // F-SC-W3
 import { WaitingOnPill } from './view/WaitingOnPill'
 // F-OP-113: the work-order acts' rules (lib/production/work-order-acts)
 import { actsCanOf, laterOf, priorityChoices, reachesFloor, rowActsOf, stableRows, versionOf, type ActsRow } from './work-order-acts/model'
@@ -125,14 +126,67 @@ describe('F-OO-102: the office strip state — waiting all to come, production o
     expect(card).toContain('{...strip}')
   })
 
-  // F-MS-101 (R21): rewritten — the Owner's one named exception: a stage may be set by hand when the floor cannot record the work.
+  // F-MS-101 (R21) / F-SC-W1 (stage control B): rewritten — the Owner's one named exception: a stage may be set by hand when the
+  // floor's or quality's records are wrong or missing.
   it('the words: the quiet line under the dots, in both languages', () => {
-    expect(productionWordsFor('en')('parts.stage.office.setBy')).toBe('Stages are set by the floor and quality, or by hand when the floor cannot record them')
-    expect(productionWordsFor('it')('parts.stage.office.setBy')).toBe('Le fasi le segnano il reparto e la qualità, o a mano quando il reparto non può registrarle')
+    expect(productionWordsFor('en')('parts.stage.office.setBy')).toBe('Stages are set by the floor and quality, or by hand when their records are wrong or missing')
+    expect(productionWordsFor('it')('parts.stage.office.setBy')).toBe('Le fasi le segnano il reparto e la qualità, o a mano quando le registrazioni sono sbagliate o mancano')
     for (const locale of ['en', 'it'] as const) expect(productionWordsFor(locale)('parts.stage.office.setBy')).not.toMatch(/never by hand|mai a mano/)
   })
 })
 // ---- end F-OO-102
+
+// ---- F-SC-W3 (stage control B, 40-stage-plan §3): the steps as buttons into the office's stage dialog --------------------------------
+describe('F-SC-W3: StageStrip with picks — each step a named real button, no link; without picks the link as before', () => {
+  const HREF = '/w/demo/sales/orders/o1?tab=production#work-orders'
+  const picks = [
+    { stage: 'PREPARING', label: 'Set the stage of SO-2026-0088 to Preparing…' },
+    { stage: 'CUTTING', label: 'Set the stage of SO-2026-0088 to Cutting…' },
+    { stage: 'QUALITY', label: 'Set the stage of SO-2026-0088 to Quality check…' },
+    { stage: 'READY', label: 'Set the stage of SO-2026-0088 to Ready to ship…' },
+  ] as const
+  const strip = (over: Partial<StageStripProps> = {}) => draw('en', createElement(StageStrip, { face: 'office', stage: 'SEWING', stageHref: HREF, stageLinkLabel: 'Open the work orders in Production · now Sewing', picks, onPick: () => undefined, ...over }))
+
+  it('picks: one <button type="button"> per step picked, in step order, each named; the current step has none; no link, no promise inside', () => {
+    const html = strip({ promise: { date: '2026-12-15', history: [{ on: '2026-11-10', from: '2026-12-09', to: '2026-12-15', reason: null }] } })
+    const buttons = html.match(/<button type="button" class="fw-prp-strip-pick"[^>]*>/g) ?? []
+    expect(buttons.map((button) => button.match(/data-stage="([A-Z]+)"/)?.[1])).toEqual(['PREPARING', 'CUTTING', 'QUALITY', 'READY'])
+    for (const pick of picks) expect(html, pick.label).toContain(`aria-label="${pick.label}"`)
+    expect(html).not.toContain('data-stage="SEWING"')
+    expect(html).not.toContain('<a ')
+    expect(html).not.toContain('fw-prp-strip-go')
+    expect(html).not.toContain('<details')
+    // The tracker itself is unchanged (the DS part; its five steps, the current one marked) and comes before the buttons.
+    expect(html.match(/class="nds-milestone"/g)?.length).toBe(5)
+    expect(html.indexOf('class="nds-milestones"')).toBeLessThan(html.indexOf('fw-prp-strip-pick'))
+    // Never a div posing as a button.
+    expect(html).not.toMatch(/role="button"/)
+  })
+
+  it('no picks, none to pick, no onPick, or the row form: the strip as before (the ONE link when it has a door)', () => {
+    for (const over of [{ picks: null }, { picks: [] }, { onPick: undefined }]) {
+      const html = strip(over)
+      expect(html, JSON.stringify(over)).toContain('class="fw-prp-strip-go"')
+      expect(html, JSON.stringify(over)).not.toContain('fw-prp-strip-pick')
+    }
+    expect(strip({ layout: 'compact' })).not.toContain('fw-prp-strip-pick')
+    // The portal never passes picks: its strip is unchanged.
+    expect(draw('en', createElement(StageStrip, { face: 'customer', stage: 'SEWING' }))).not.toContain('fw-prp-strip-pick')
+  })
+
+  it('the stylesheet: the tracker on top lets the pointer through to the buttons laid under it; hover and focus ring in tokens', () => {
+    const css = readFileSync(new URL('./production-parts.css', import.meta.url), 'utf8')
+    for (const rule of ['.fw-prp-strip-picks {', '.fw-prp-strip-picks > .nds-milestones {', '.fw-prp-strip-pick {', '.fw-prp-strip-pick:hover {', '.fw-prp-strip-pick:focus-visible {']) expect(css, rule).toContain(rule)
+    const picksCss = css.slice(css.indexOf('.fw-prp-strip-picks {'), css.indexOf('.fw-prp-strip-pick:focus-visible {') + 120)
+    expect(picksCss).toContain('pointer-events: none')
+    expect(picksCss).toContain('background: var(--nds-surface-hover)')
+    expect(picksCss).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
+    const part = readFileSync(new URL('./view/StageStrip.tsx', import.meta.url), 'utf8')
+    expect(part).toContain('new ResizeObserver(measure)')
+    expect(part).toContain("querySelectorAll<HTMLElement>('li.nds-milestone')")
+  })
+})
+// ---- end F-SC-W3
 
 describe('waiting on', () => {
   it('counts working days in the company’s zone (a weekend does not count)', () => {

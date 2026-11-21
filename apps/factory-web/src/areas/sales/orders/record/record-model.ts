@@ -45,6 +45,7 @@ import type { CreditState } from './overview/where' // F-OO-106: the order's own
 import type { LinesTabActions, LinesTabModel } from './lines-tab-model' // F-OL-01: the Lines tab (use-lines-draft.ts)
 import type { Words } from './overview/api' // F-MS-102: a refusal of the stage set by hand in the domain's own words
 import type { StageByHandAsk } from './overview/stage-by-hand' // F-MS-103: what the stage dialog sends
+import type { PlainStage } from '../../../../lib/production/model' // F-SC-W2: the step picked on the stages
 import type { OrderIssues } from './production/api' // F-PT-103: the order's asks (the issues list)
 import type { StyleView } from '../../../products/styles/api' // F-PT-401: the order's styles (What we make it to)
 import type { ReceiptActions, ReceiptModel } from './production/receipt' // F-PT-304
@@ -91,8 +92,9 @@ export type ChangesDialog = { kind: 'compare'; amendmentId: string }
 export type OverviewDialog = { kind: 'note'; refused?: Phrase } | { kind: 'creditCheck'; refused?: Phrase } | { kind: 'creditAsk'; checkId: string; refused?: Phrase }
 // ---- F-MS-102 (set the stage by hand, 04 §3): "Where it is now"'s door under the dots — Set the stage by hand… and Change… (ONE
 // dialog: `mode`), Clear… (a confirm); `refused`: the API's refusal in this page's words (a phrase, or the domain's own words, it + en),
-// said in the dialog — what was typed stays.
-export type StageHandDialog = { kind: 'stageByHand'; mode: 'set' | 'change'; refused?: Phrase | Words } | { kind: 'stageClear'; refused?: Phrase | Words }
+// said in the dialog — what was typed stays. F-SC-W2 (stage control B): `pick` — the step of the stages clicked (Overview's strip,
+// Production's stage bar), the dialog opens with it picked; both tabs open the SAME dialog, mounted once (OrderDialogs).
+export type StageHandDialog = { kind: 'stageByHand'; mode: 'set' | 'change'; pick?: PlainStage; refused?: Phrase | Words } | { kind: 'stageClear'; refused?: Phrase | Words }
 // ---- end F-MS-102
 export type RecordDialog = BandDialog | LinesDialog | MoneyDialog | ChangesDialog | OverviewDialog /* F-OO-210 */ | StageHandDialog /* F-MS-102 */
 

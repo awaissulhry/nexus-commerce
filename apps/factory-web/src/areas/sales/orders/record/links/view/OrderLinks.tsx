@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Banner, Card, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
 import { Button, Checkbox, Pill, Spinner } from '@nexus/ui/primitives'
+import { ShieldAlert } from 'lucide-react' // F-SC-W4: the gate row's mark (Problems & holds)
 import { Textarea } from '../../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import type { Locale } from '../../../../../../lib/i18n/locales'
@@ -12,6 +13,7 @@ import { Frame } from '../../view/Dialogs'
 import type { OrderGate, OrderRePromise } from '../api'
 import '../links.css'
 import { COMPLAINT_TONE, complaintHref, declineHeld, decideHeld, gateHref, RETURN_TONE, returnHref, showsPointers, type LinksActions, type LinksModel } from '../model'
+import { gateAnchorsOf, gatesOf } from '../model' // F-SC-W4 (+ W7: each row's anchor its gate's own id)
 
 /**
  * B-TH-256 — what points at the order, drawn (O-SAL-ORD-REC.notice-F04, -F06, .body-F07; picture 29):
@@ -23,6 +25,8 @@ import { COMPLAINT_TONE, complaintHref, declineHeld, decideHeld, gateHref, RETUR
  * - `PointsAtOrder`: the order's complaints and returns in "Shipments & invoices" — each list only with its right, each row a real link
  *   to its record; no right to either: nothing drawn.
  * - `DeclineDialog`: "Decline the new dates?" with the reason the planner reads.
+ * - F-SC-W4 `GateRows`: the same refusals as rows of Production › Problems & holds ("What stops it") — the SAME title, style code,
+ *   sentence and door; the page notice stays on top of every tab while it blocks (OrderRecordView draws GateNotices for every tab).
  */
 
 const day = (value: string | null, locale: Locale): string => (value ? formatDate(dayInstant(value), { locale }) : '—')
@@ -71,30 +75,78 @@ export function RePromiseNotices({ model, actions }: { model: LinksModel | null 
 }
 
 function GateNotice({ gate, prefix }: { gate: OrderGate; prefix: string }) {
-  const t = useT('orders')
   const href = gateHref(prefix, gate)
-  const subject = gate.subject.number ?? t(`links.gate.subject.${gate.subject.type}`)
+  const title = useGateTitle()
   return (
-    <Banner
-      tone="danger"
-      title={t('links.gate.title', { place: t(`links.gate.place.${gate.gate}`), subject })}
-      action={
-        href ? (
-          <Button size="sm" variant="quiet" asChild>
-            <Link href={href}>{t('links.gate.open')}</Link>
-          </Button>
-        ) : undefined
-      }
-    >
-      <span className="fw-so-links-gate">
-        {gate.styleCode && <span className="fw-so-links-style">{gate.styleCode}</span>}
-        {/* The gate's own sentence (same words as Compliance › Gate refusals): who can fix it and how. */}
-        <span>{gate.reason}</span>
-        {!href && <span className="fw-so-hint">{t('links.gate.wordsOnly')}</span>}
-      </span>
+    <Banner tone="danger" title={title(gate)} action={href ? <GateDoor href={href} /> : undefined}>
+      <GateSaid gate={gate} href={href} />
     </Banner>
   )
 }
+
+// ---- F-SC-W4 (stage control B; plan-stage-control "the red notice"): the notice's parts, shared with Problems & holds' rows ----
+/** "Label printing blocked: SEED-WO-0001" (a subject not named: "a work order of this order"). */
+function useGateTitle(): (gate: OrderGate) => string {
+  const t = useT('orders')
+  return (gate) => t('links.gate.title', { place: t(`links.gate.place.${gate.gate}`), subject: gate.subject.number ?? t(`links.gate.subject.${gate.subject.type}`) })
+}
+
+/** The style code, the gate's own sentence (same words as Compliance › Gate refusals: who can fix it and how), the words-only hint. */
+function GateSaid({ gate, href }: { gate: OrderGate; href: string | null }) {
+  const t = useT('orders')
+  return (
+    <span className="fw-so-links-gate">
+      {gate.styleCode && <span className="fw-so-links-style">{gate.styleCode}</span>}
+      <span>{gate.reason}</span>
+      {!href && <span className="fw-so-hint">{t('links.gate.wordsOnly')}</span>}
+    </span>
+  )
+}
+
+/** Open in Compliance (only with the compliance view right: the API sends the event's id then). */
+function GateDoor({ href }: { href: string }) {
+  const t = useT('orders')
+  return (
+    <Button size="sm" variant="quiet" asChild>
+      <Link href={href}>{t('links.gate.open')}</Link>
+    </Button>
+  )
+}
+
+/**
+ * Production › Problems & holds: each refusal still blocking the order, one row of "What stops it" in the strips' own row shape (mark |
+ * words | door, the danger tone) — the notice's title, style code, sentence and door, its anchor `about-GateEvent-…`. Items of the
+ * section's strips list (<li>): the section counts them in its answer line.
+ */
+export function GateRows({ model, prefix }: { model: LinksModel | null | undefined; prefix: string }) {
+  const title = useGateTitle()
+  const gates = gatesOf(model)
+  const anchors = gateAnchorsOf(gates) // F-SC-W7: one anchor per row, never shared (two gates on one work order included)
+  return (
+    <>
+      {gates.map((gate, index) => {
+        const href = gateHref(prefix, gate)
+        return (
+          <li key={anchors[index]} className="fw-so-ov-row fw-so-strip" data-tone="danger" id={anchors[index]} tabIndex={-1}>
+            <span className="fw-so-strip-mark">
+              <ShieldAlert size={14} aria-hidden />
+            </span>
+            <span className="fw-so-strip-said">
+              <span>{title(gate)}</span>
+              <GateSaid gate={gate} href={href} />
+            </span>
+            {href ? (
+              <span className="fw-so-ov-doors">
+                <GateDoor href={href} />
+              </span>
+            ) : null}
+          </li>
+        )
+      })}
+    </>
+  )
+}
+// ---- end F-SC-W4
 
 function RePromiseNotice({ proposal, model, actions }: { proposal: OrderRePromise; model: Extract<LinksModel, { state: 'ready' }>; actions?: LinksActions }) {
   const t = useT('orders')

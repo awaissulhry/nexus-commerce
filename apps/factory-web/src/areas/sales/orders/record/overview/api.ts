@@ -80,6 +80,10 @@ export const headlineSchema = z.object({
           // when a notice by hand still inside its window goes (`waitsUntil`), or neither (never told: a Change going down). null /
           // absent: not read — Clear… then says nothing of it rather than guess from the set's time.
           notice: z.object({ told: z.boolean(), waitsUntil: instant.nullable() }).nullable().optional(),
+          // F-SC-W1 (stage control B, 40-stage-plan §2): the floor's stage when the hand stage was set or changed (office only) — a set
+          // below it is a correction and stands until the floor's counts come back to it or pass this one. Optional: an older answer
+          // without it judges against the floor now.
+          floorAtSet: z.enum(BRAND_STAGES).nullable().optional(),
         })
         .nullable()
         .optional(),
@@ -374,7 +378,7 @@ export function getOrderMilestones(api: ApiClient, orderId: string, signal?: Abo
 
 // ---- F-MS-103 (set the stage by hand; B-MS-005's shape, R1, R9): set, change and clear the order's stage by hand ----------------------
 /**
- *   PUT    /production/brand-orders/:orderId/stage   {stage: CUTTING | SEWING | QUALITY, reasonCode, note?, version}   production.brand.manage
+ *   PUT    /production/brand-orders/:orderId/stage   {stage: any of the five, reasonCode, note?, version}             production.brand.manage
  *   DELETE /production/brand-orders/:orderId/stage?version=                                                         production.brand.manage
  *
  * `version` is the production row's as the headline read it — a required key, null only when the order has no row yet (the set makes it

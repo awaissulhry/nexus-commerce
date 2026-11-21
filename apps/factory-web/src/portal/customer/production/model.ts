@@ -128,8 +128,8 @@ export interface MarkAction {
 /**
  * F-MS-105 (R8, R-61): whether cutting REALLY started on the order — the API's `cutStarted` (the floor's own cut facts: leather
  * logged or a bundle made). It is the ONE field the three "Mark urgent" hints read (the row's mark, the bulk review, "Ask us"),
- * never the stage: the stage may be ahead of the cuts (our office may move it on while the floor cannot record the work), and the
- * mark itself is decided on the cuts. Absent (an answer before it): not started.
+ * never the stage: the stage may differ from the cuts (our office may set it, ahead or back, when the floor's records are wrong or
+ * missing — F-SC-W1), and the mark itself is decided on the cuts. Absent (an answer before it): not started.
  */
 export const cutStartedOf = (row: Pick<ProductionRow, 'cutStarted'>): boolean => row.cutStarted === true
 // ── end F-MS-105 ──

@@ -9,7 +9,7 @@ import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { healthStateOf, markActsOf } from '../../../../../../lib/production/health/model'
 import { RaiseDialog } from '../../../../../../lib/production/health/view/HealthCard'
 import { HealthPill } from '../../../../../../lib/production/view/HealthPill'
-import { stageSteps, type StageStripInput } from '../../../../../../lib/production/model'
+import { stageSteps, type PlainStage, type StageStripInput } from '../../../../../../lib/production/model'
 import { WaitingOnPill } from '../../../../../../lib/production/view/WaitingOnPill'
 import { useProductionWords } from '../../../../../../lib/production/words'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
@@ -17,11 +17,14 @@ import { tabHref } from '../../../../../_shared/record-frame/address'
 import type { BrandHealth } from '@nexus/factory-domain/production-brand/health'
 import type { Order } from '../../../api'
 import { dayInstant } from '../../../model'
+import { readOnlyOnPage } from '../../../model' // F-SC-W3: Read-only — no step is a button
 import { depthMenuItems } from '../../../depth/view/DepthBand'
 import { NAMESPACE as DEPTH } from '../../../depth/model'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { healthInputOf, readOf, say } from '../../overview/model'
 import { handRowOf, headlineOf, stageStripOf, stagesShown } from '../../overview/where'
+import { handDoorOf, stagePicksHeldOf, stagePicksOf, type StagePick } from '../../overview/where' // F-SC-W3: the steps open the stage dialog
+import { useSayHand } from '../overview/StageByHandDialog' // F-SC-W3: the door's held words, as on Overview
 import { askPresetOf, askStarterOf, asksOf, onItOf } from '../../production/asks'
 import { healthWhyOf, nextStepOf, nowStateOf, piecesOf, placeAnchorOf, urgencyOf, type HealthWhy } from '../../production/now'
 import { ShowInThreadDoor } from '../Discuss'
@@ -51,8 +54,8 @@ export function NowSection({ order, model, actions }: { order: Order; model: Ord
   const ask = () => actions?.people?.onAsk?.(askPresetOf(t, askStarterOf({ number: order.number, promise: headline?.promise.date ?? order.promiseDate }, day)))
 
   // ---- the ⋯: the mark (production.brand.manage — hidden without it, not offered while the dates already say it), Assign
-  // supervisor…, Set priority… (the depth's own dialog, held by the order's state with its words). The stage set by hand keeps its ONE
-  // place on Overview (the stage block's link). ----
+  // supervisor…, Set priority… (the depth's own dialog, held by the order's state with its words). The stage set by hand: its row and
+  // door live on Overview (the stage block's link); F-SC-W3: the stage bar's steps open the same dialog. ----
   const health = model.health ?? null
   const view = health?.orders[0]?.read.value ?? null
   const mark = stateNow === 'kept' ? markActsOf(view, !!health?.can) : { mark: null, remove: false }
@@ -71,7 +74,7 @@ export function NowSection({ order, model, actions }: { order: Order; model: Ord
   else {
     body = (
       <div className="fw-pt-now">
-        <StageBlock order={order} model={model} recordHref={recordHref} search={search} day={day} />
+        <StageBlock order={order} model={model} actions={actions} recordHref={recordHref} search={search} day={day} />
         {stateNow === 'kept' ? <HealthBlock order={order} model={model} recordHref={recordHref} search={search} day={day} onAsk={mayAsk ? ask : null} /> : stateNow === 'notKept' ? <div className="fw-pt-now-blk fw-pt-now-health"><Quiet>{t('productionTab.now.notKept')}</Quiet></div> : null}
         {stateNow !== 'after' ? <PeopleBlock order={order} model={model} actions={actions} onAsk={mayAsk ? ask : null} /> : null}
       </div>
@@ -85,8 +88,12 @@ export function NowSection({ order, model, actions }: { order: Order; model: Ord
   )
 }
 
-/** Where it is: the stage (→ next · since), set by hand (its one place is Overview), the five stages, the pieces per step. */
-function StageBlock({ order, model, recordHref, search, day }: { order: Order; model: OrderRecordModel; recordHref: string; search: string; day: (value: string) => string }) {
+/**
+ * Where it is: the stage (→ next · since), set by hand (its row lives on Overview), the five stages, the pieces per step. F-SC-W3 (stage
+ * control B): with the right and the door not held each stage but the one the customer reads is a button into the SAME stage dialog as
+ * Overview's (the floor's own step while a hand stage stands: Clear…); held: no button, one quiet line says why (the door's words).
+ */
+function StageBlock({ order, model, actions, recordHref, search, day }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; recordHref: string; search: string; day: (value: string) => string }) {
   const t = useT('orders')
   const w = useProductionWords()
   const locale = useLocale()
@@ -97,6 +104,15 @@ function StageBlock({ order, model, recordHref, search, day }: { order: Order; m
   const hand = handRowOf(order, headline, model.today)
   const stage = headline?.stage ?? null
   const pieces = piecesOf(order, read?.lines)
+  // ---- F-SC-W3: the steps of the bar — Overview's own rules (handDoorOf, stagePicksOf), the page's one dialog slot ----
+  const sayHand = useSayHand()
+  const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
+  const door = model.stageHand ? handDoorOf(order, headline, model.stageHand.can, readOnly, model.busy) : null
+  const picks = stagePicksOf(headline, door)
+  const pickLabel = (pick: StagePick) => (pick.kind === 'clear' ? t('where.manual.clearAria', { number: order.number }) : t('where.manual.stepAria', { number: order.number, stage: w.t(`parts.stage.${pick.stage}`) }))
+  const stepPicks = picks?.map((pick) => ({ stage: pick.stage, label: pickLabel(pick), open: () => actions?.onDialog?.(pick.dialog) })) ?? null
+  const held = picks ? null : sayHand(stagePicksHeldOf(door))
+  // ---- end F-SC-W3
   // The headline's own words otherwise (Overview's sentence: the status, its days, the stage word).
   const dated = (key: string, params?: Readonly<Record<string, string | number>>) => t(key, Object.fromEntries(Object.entries(params ?? {}).map(([name, value]) => [name, typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? formatDate(value, { locale }) : value])))
   const sentence = [words.status ? dated(words.status.key, words.status.params) : null, words.stage ? w.t(`parts.stage.${words.stage}`) : null].filter(Boolean).join(' · ')
@@ -120,7 +136,7 @@ function StageBlock({ order, model, recordHref, search, day }: { order: Order; m
           </TabLink>
         </p>
       ) : null}
-      {stagesShown(words.state) ? <StageBar strip={strip} label={t('productionTab.now.stageLabel')} note={hand ? t(hand.stripNote.key) : strip.note ?? null} /> : null}
+      {stagesShown(words.state) ? <StageBar strip={strip} label={t('productionTab.now.stageLabel')} note={hand ? t(hand.stripNote.key) : strip.note ?? null} picks={stepPicks} held={held} /> : null}
       {pieces ? (
         <>
           <span className="fw-pt-label">
@@ -356,22 +372,38 @@ function PeopleBlock({ order, model, actions, onAsk }: { order: Order; model: Or
 /**
  * fx5 #4: the five stages as the picture's ONE horizontal segmented bar (done · now · to come), the same steps as Overview's strip
  * (lib/production stageSteps) — never a tall vertical list beside two short columns. Nothing reached yet or a stopped order: no bar
- * (the stage line above says it); blocked: the mark beside it.
+ * (the stage line above says it); blocked: the mark beside it. F-SC-W3: a step that may be picked wraps its content in a real <button>
+ * (its name says what it does; 44 px to tap), the rest stay words; held, one quiet line says why.
  */
-function StageBar({ strip, label, note }: { strip: StageStripInput; label: string; note: string | null }) {
+function StageBar({ strip, label, note, picks, held }: { strip: StageStripInput; label: string; note: string | null; picks: readonly { readonly stage: PlainStage; readonly label: string; readonly open: () => void }[] | null; held: string | null }) {
   const w = useProductionWords()
   const steps = stageSteps(strip)
   if (steps.length === 0 || steps.every((step) => step.state === 'todo')) return null
   return (
     <div className="fw-pt-segbar">
       <ol className="fw-pt-segs" aria-label={label}>
-        {steps.map((step) => (
-          <li key={step.id} className={`fw-pt-seg is-${step.state}`} aria-current={step.state === 'current' ? 'step' : undefined}>
-            <span className="fw-pt-seg-bar" aria-hidden />
-            <span>{w.say(step.label)}</span>
-          </li>
-        ))}
+        {steps.map((step) => {
+          const pick = picks?.find((entry) => entry.stage === step.id) ?? null
+          const content = (
+            <>
+              <span className="fw-pt-seg-bar" aria-hidden />
+              <span>{w.say(step.label)}</span>
+            </>
+          )
+          return (
+            <li key={step.id} className={`fw-pt-seg is-${step.state}`} aria-current={step.state === 'current' ? 'step' : undefined}>
+              {pick ? (
+                <button type="button" className="fw-pt-seg-go" aria-label={pick.label} onClick={pick.open}>
+                  {content}
+                </button>
+              ) : (
+                content
+              )}
+            </li>
+          )
+        })}
       </ol>
+      {held ? <span className="fw-pt-sub">{held}</span> : null}
       {strip.blocked ? (
         <span className="fw-pt-inline">
           <Tag tone="warning">{w.t('parts.stage.blocked')}</Tag>

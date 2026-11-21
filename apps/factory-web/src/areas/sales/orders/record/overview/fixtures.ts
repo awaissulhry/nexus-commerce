@@ -271,6 +271,13 @@ export const HAND_NOTICE_AT = '2026-10-29T14:00:00Z'
 export const HAND_BY: HandStage = { stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: w('Preparing', 'In preparazione') }, at: HAND_AT, note: 'Tablet del reparto taglio offline dalle 14:00.', by: SETTER, notice: { told: false, waitsUntil: HAND_NOTICE_AT } }
 export const HAND_READ: OrderProduction = { ...PRODUCTION_READ, headline: handOver('SEWING', HAND_BY, 4) }
 export const HAND_OLD_READ: OrderProduction = { ...PRODUCTION_READ, headline: handOver('SEWING', { ...HAND_BY, at: HAND_OLD_AT, notice: { told: true, waitsUntil: null } }, 4) }
+// ---- F-SC-W1 (stage control B): a set BACK — the floor's counts say Quality check (a wrong scan), Cutting set by hand below it with
+// "Something else" and the office's note, the floor at Quality check when it was set (floorAtSet); and the floor at Quality check with
+// nothing set (Ready to ship may be set by hand, with the warning). Made up.
+export const HAND_BACK_BY: HandStage = { stage: 'CUTTING', reasonCode: 'OTHER', floor: { code: 'QUALITY', words: w('Quality check', 'Controllo qualità') }, floorAtSet: 'QUALITY', at: HAND_AT, note: 'Scansione sbagliata: i capi sono ancora al taglio.', by: SETTER, notice: { told: false, waitsUntil: null } }
+export const HAND_BACK_READ: OrderProduction = { ...PRODUCTION_READ, headline: handOver('CUTTING', HAND_BACK_BY, 5) }
+export const HAND_QUALITY_READ: OrderProduction = { ...PRODUCTION_READ, headline: handOver('QUALITY', null, 3) }
+// ---- end F-SC-W1
 /** No work order yet (the lines not in work orders): Cutting set by hand, "Too few people to record the work", no note. */
 export const HAND_NOWORK_READ: OrderProduction = {
   ...CONFIRMED_READ,

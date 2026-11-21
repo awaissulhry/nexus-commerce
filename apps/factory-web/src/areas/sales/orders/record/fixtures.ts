@@ -106,6 +106,7 @@ import type { OfficeRequest } from '../../../../record-panels/approvals/api' // 
 import { PRODUCTION_READ } from './overview/fixtures'
 import { PEOPLE } from './overview/fixtures' // F-OO-133: the overview case draws the real People card
 import { HAND_FREE_READ, HAND_NOWORK_READ, HAND_OLD_READ, HAND_PAUSED_READ, HAND_READ } from './overview/fixtures' // F-MS-102
+import { HAND_BACK_READ, HAND_QUALITY_READ } from './overview/fixtures' // F-SC-W1: a set back; the floor at Quality check (Ready by hand)
 // ---- F-OO-211 / F-OO-213: the order's custom fields beside Order facts (the shared panel and its own design data, SCR-520) ----
 import { CustomFieldsPanel, type CustomFieldsModel } from '../../../../record-panels/custom-fields/view/CustomFieldsPanel'
 import { designScreen as fieldsScreen } from '../../../../record-panels/custom-fields/fixtures'
@@ -971,6 +972,9 @@ const noWorkYet = order('IN_PRODUCTION', { chain: { ...production.chain, workOrd
 const F_MS_102: DesignCase<RecordCase>[] = [
   { id: 'f-ms-door', label: 'F-MS-102 · Planner · In production at Sewing: "Set the stage by hand…" beside the quiet line under the dots', model: plannerCase(production, { production: ready(HAND_FREE_READ) }) },
   { id: 'f-ms-hand', label: 'F-MS-102 · Planner · Sewing set by hand over the floor\'s Preparing: the tag, who, when, why, the floor\'s counts, the office\'s note — Change… Clear…', model: plannerCase(production, { production: ready(HAND_READ) }) },
+  // F-SC-W1 (stage control B): Cutting set back below the floor's Quality check (a wrong scan) — it clears when the floor's counts come
+  // back to Cutting or pass Quality check.
+  { id: 'f-ms-hand-back', label: 'F-SC-W1 · Planner · Cutting set by hand below the floor\'s Quality check (a wrong scan): "it clears by itself when the floor\'s counts come back to Cutting or pass Quality check"', model: plannerCase(production, { production: ready(HAND_BACK_READ) }) },
   { id: 'f-ms-hand-old', label: 'F-MS-102 · Planner · the same, set 9 days ago: the amber rule and tag, "check it"', model: plannerCase(production, { production: ready(HAND_OLD_READ) }) },
   { id: 'f-ms-hand-nowork', label: 'F-MS-102 · Planner · Cutting set by hand on an order no work order records yet (as SEED-SO-W39-02): "it stands until you clear it or the order ships"', model: plannerCase(noWorkYet, { production: ready(HAND_NOWORK_READ) }) },
   { id: 'f-ms-confirmed', label: 'F-MS-102 · Planner · a Confirmed order: the door held — production has not started yet (R4)', model: plannerCase(confirmed, { production: ready(CONFIRMED_READ) }) },
@@ -978,17 +982,28 @@ const F_MS_102: DesignCase<RecordCase>[] = [
   { id: 'f-ms-shipped', label: 'F-MS-102 · Planner · a shipped order: every stage done, no door (R5)', model: plannerCase(shipped, { production: ready() }) },
   { id: 'f-ms-sales', label: 'F-MS-102 · Sales · the row, Change… and Clear… held — production does this (a planner or the production manager)', model: base('sales', production, { tab: 'overview', production: ready(HAND_READ), liveState: 'live', ...handCan(rolePermissions('sales')) }) },
   { id: 'f-ms-read-only', label: 'F-MS-102 · Read-only · the row says it, no door', model: readOnlyCase(base('sales', production, { tab: 'overview', production: ready(HAND_READ), liveState: 'live', ...handCan(READ_ONLY_PERMISSIONS) })) },
+  // F-SC-W3 (stage control B): Production now's stage bar — a Planner's steps are buttons into the same dialog; Sales reads them as words
+  // with one quiet line (production does this).
+  { id: 'f-sc-production-steps', label: 'F-SC-W3 · Planner · Production now: every stage but Sewing (what the customer reads) a button into the stage dialog', model: plannerCase(production, { tab: 'production', production: ready(HAND_FREE_READ) }) },
+  { id: 'f-sc-production-held', label: 'F-SC-W3 · Sales · Production now: the stages as words, one quiet line — production does this (a planner or the production manager)', model: base('sales', production, { tab: 'production', production: ready(HAND_READ), liveState: 'live', ...handCan(rolePermissions('sales')) }) },
 ]
 // ---- end F-MS-102
-// ---- F-MS-103 (set the stage by hand, 04 §3; R3b, R18, R20): the ONE dialog — Set (nothing picked yet), Change… (the stage, reason
-// and note pre-filled), "Something else" without a note (Go held), a refusal said inside it (what was typed stays) — and Clear…'s confirm.
+// ---- F-MS-103 (set the stage by hand, 04 §3; R3b, R18, R20): the ONE dialog — Set (nothing picked yet), Change… (the reason and note
+// pre-filled), "Something else" without a note (Go held), a refusal said inside it (what was typed stays) — and Clear…'s confirm.
+// F-SC-W2 (stage control B): a step of the stages clicked opens it with that step picked (back below the floor: told as a correction;
+// Ready to ship while quality has not released every piece: the warning); Clear… up to the floor (a set back cleared): the usual notice.
 // Keyboard only: Tab, the arrow keys in the radios, Esc, ⌘↵ / Ctrl↵ (no key hint text anywhere).
 const F_MS_103: DesignCase<RecordCase>[] = [
-  { id: 'f-ms-dialog-set', label: 'F-MS-103 · Planner · Set the stage by hand…: the floor\'s Sewing and what it did held, Ready to ship never; the reason, the note; what the customer reads and when', model: plannerCase(production, { production: ready(HAND_FREE_READ), dialog: { kind: 'stageByHand', mode: 'set' } }) },
-  { id: 'f-ms-dialog-change', label: 'F-MS-103 · Planner · Change…: Sewing set by hand pre-picked with its reason and note; Cutting above the floor may be picked (a correction, not told)', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageByHand', mode: 'change' } }) },
-  { id: 'f-ms-dialog-other', label: 'F-MS-103 · Planner · Change… to "Something else" without a note: Change the stage held — it needs a note', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageByHand', mode: 'change' }, draft: { reasonCode: 'OTHER', reason: '' } }) },
+  { id: 'f-ms-dialog-set', label: 'F-MS-103 · Planner · Set the stage by hand…: the floor\'s Sewing, what the customer reads (never picked); every other stage ahead or back, Ready to ship warned; the reason, the note; what the customer reads and when', model: plannerCase(production, { production: ready(HAND_FREE_READ), dialog: { kind: 'stageByHand', mode: 'set' } }) },
+  { id: 'f-ms-dialog-pick', label: 'F-SC-W2 · Planner · Cutting clicked on the stages (the floor at Sewing): the dialog opens on Cutting — below what the customer reads, told as a correction; it clears when the floor\'s counts come back to Cutting or pass Sewing', model: plannerCase(production, { production: ready(HAND_FREE_READ), dialog: { kind: 'stageByHand', mode: 'set', pick: 'CUTTING' } }) },
+  { id: 'f-ms-dialog-ready', label: 'F-SC-W2 · Planner · Ready to ship clicked (the floor at Quality check): "Quality has not released every piece" — a warning, never a hold', model: plannerCase(production, { production: ready(HAND_QUALITY_READ), dialog: { kind: 'stageByHand', mode: 'set', pick: 'READY' } }) },
+  { id: 'f-ms-dialog-keep', label: 'F-SC-W6 · Planner · Change…: Sewing set by hand pre-picked (its reason and note as set) — Change the stage held until the stage, the reason or the note differs; keeping Sewing tells the customer nothing', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageByHand', mode: 'change' } }) },
+  { id: 'f-ms-dialog-change', label: 'F-MS-103 · Planner · Change…: Sewing set by hand over the floor\'s Preparing, its reason and note pre-filled; Sewing and the floor\'s Preparing (Clear…) never picked; Cutting picked — told as a correction', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageByHand', mode: 'change', pick: 'CUTTING' } }) },
+  { id: 'f-ms-dialog-other', label: 'F-MS-103 · Planner · Change… to "Something else" without a note: Change the stage held — it needs a note', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageByHand', mode: 'change', pick: 'CUTTING' }, draft: { reasonCode: 'OTHER', reason: '' } }) },
   { id: 'f-ms-dialog-refused', label: 'F-MS-103 · Planner · Change… refused: "The stage changed meanwhile: it was read again." — what was typed stays', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageByHand', mode: 'change', refused: { key: 'where.manual.refused' } } }) },
-  { id: 'f-ms-clear', label: 'F-MS-103 · Planner · Clear…: back to the floor\'s Preparing — the customer was told Sewing and is not told it again; it reads Preparing, with no notice', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageClear' } }) },
+  { id: 'f-ms-clear', label: 'F-MS-103 · Planner · Clear…: back to the floor\'s Preparing — the customer was told Sewing, so it is told the correction after 10 minutes', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageClear' } }) },
+  { id: 'f-ms-dialog-production', label: 'F-SC-W2 · Planner · Production tab: Quality check clicked on Production now\'s stage bar — the SAME dialog as Overview\'s, on Quality check', model: plannerCase(production, { tab: 'production', production: ready(HAND_FREE_READ), dialog: { kind: 'stageByHand', mode: 'set', pick: 'QUALITY' } }) },
+  { id: 'f-ms-clear-back', label: 'F-SC-W2 · Planner · Clear… of Cutting set back below the floor\'s Quality check: back to Quality check — the customer reads it and gets the usual notice', model: plannerCase(production, { production: ready(HAND_BACK_READ), dialog: { kind: 'stageClear' } }) },
 ]
 // ---- end F-MS-103
 
@@ -1125,6 +1140,11 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'th-256-repromise-manager', label: 'TH-6 · Production manager · The proposal read-only (held with why); the gate in words only; no complaints or returns', model: base('manager', production, { tab: 'shipments', links: linksModel(LINKS_MANAGER) }) },
     { id: 'th-256-decline', label: 'TH-6 · Sales · Decline the new dates? (the reason the planner reads)', model: base('sales', production, { tab: 'production', links: linksModel({ ...LINKS_FULL, gates: [] }, { decline: { proposalId: LINKS_FULL.rePromises[0]!.id, reason: 'Il cliente ha già promesso la consegna al negozio.', problem: null } }) }) },
     { id: 'th-256-gate', label: 'TH-6 · Sales · A compliance gate blocks a work order: the gate’s own words, Open in Compliance', model: base('sales', production, { tab: 'production', links: linksModel({ ...LINKS_FULL, rePromises: [] }) }), note: 'Same words as Compliance › Gate refusals; the link only with the compliance view right.' },
+    // F-SC-W4 (stage control B): the refusal as a row of Production › Problems & holds (the production read in) — with the compliance view
+    // right (its door), the same order with nothing blocked (the count), and a reader without the right (words only).
+    { id: 'f-sc-gate-rows', label: 'F-SC-W4 · Sales · Problems & holds: the gate that blocks a work order is one more thing that stops the order — the notice\'s words, Open in Compliance', model: base('sales', production, { tab: 'production', production: ready(), links: linksModel({ ...LINKS_FULL, rePromises: [] }) }) },
+    { id: 'f-sc-gate-none', label: 'F-SC-W4 · Sales · Problems & holds: the same order with no gate blocking', model: base('sales', production, { tab: 'production', production: ready(), links: linksModel(LINKS_NONE) }) },
+    { id: 'f-sc-gate-words', label: 'F-SC-W4 · Production manager · Problems & holds: the gate that blocks a work order, in words only (no compliance view right)', model: base('manager', production, { tab: 'production', production: ready(), links: linksModel({ ...LINKS_MANAGER, rePromises: [] }) }) },
     { id: 'th-256-accepted', label: 'TH-6 · Sales · New dates accepted, the customer told', model: base('sales', production, { tab: 'production', links: linksModel(LINKS_NONE, { said: { key: 'links.done.acceptedTold', tone: 'success' } }) }) },
     { id: 'changed', label: 'Sales · Someone changed the order while a dialog was open', model: base('sales', production, { changed: { at: at(29, 10, 42) } }) },
     { id: 'notice', label: 'Sales · After a write: a notice', model: base('sales', production, { tab: 'production', notice: { tone: 'success', words: { key: 'notice.promise' } } }) },

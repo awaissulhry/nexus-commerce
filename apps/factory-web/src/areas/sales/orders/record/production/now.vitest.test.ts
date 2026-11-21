@@ -95,6 +95,25 @@ describe('F-PT-102: one door per blocker, the state, the urgency', () => {
   })
 })
 
+// ---- F-SC-W3 (stage control B): the stage bar's steps — Overview's own rules, the page's one dialog, never a copy -------------------
+describe('F-SC-W3: the stage bar\'s steps open the stage dialog by Overview\'s rules', () => {
+  it('source: handDoorOf + stagePicksOf (where.ts), the page\'s one dialog slot; held words from the door; real buttons, no link of their own', () => {
+    const view = readFileSync(new URL('../view/production/NowSection.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('const door = model.stageHand ? handDoorOf(order, headline, model.stageHand.can, readOnly, model.busy) : null')
+    expect(view).toContain('const picks = stagePicksOf(headline, door)')
+    expect(view).toContain('actions?.onDialog?.(pick.dialog)')
+    expect(view).toContain('const held = picks ? null : sayHand(stagePicksHeldOf(door))')
+    expect(view).toContain('<button type="button" className="fw-pt-seg-go" aria-label={pick.label} onClick={pick.open}>')
+    expect(view).not.toMatch(/role="button"/)
+    // The hint to Overview's hand row stays.
+    expect(view).toContain("t('productionTab.now.byHandLink')")
+    const css = readFileSync(new URL('../view/production/production.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-pt-seg-go \{[^}]*min-height: 44px;/)
+    expect(css).toContain('.fw-pt-seg-go:focus-visible {')
+  })
+})
+// ---- end F-SC-W3
+
 // ---- F-PT-404 (B-PT-007): the health mark through the page's ONE read --------------------------------------------------------------
 describe('F-PT-404: the mark reads the headline (no second GET) and re-reads it after a write', () => {
   const so = order('IN_PRODUCTION')

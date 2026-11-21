@@ -18,6 +18,8 @@ import { finalChecksOf, ncrsOf, qualityVerdictOf, waitingAnswersOf } from '../..
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { DiscussDoor, ShowInThreadDoor } from '../Discuss'
 import { CREDIT_NS, StripRow } from '../overview/StripRow'
+import { GateRows } from '../../links/view/OrderLinks' // F-SC-W4: the compliance gates that stop the order, the notice's own rows
+import { gatesOf } from '../../links/model' // F-SC-W4
 import { PartFailed, PartReading, Quiet, Section } from './Kit'
 
 const NCR_NS = 'ncr'
@@ -26,7 +28,9 @@ const NCR_NS = 'ncr'
  * F-PT-301 / F-PT-302 (order PRODUCTION tab, 10-design §6; plan D2 / L9) — "Problems & holds" (#holds): one line of answer ("1 thing
  * stops this order · 2 questions wait for an answer · Final check passed"), then
  *   What stops it    the SAME strips and doors as Overview's "Where it is now" (StripRow, whereStripsOf, stripDoorsOf — a hold door the
- *                    reader may not use is not drawn, on both tabs); the office's hold notes under them (office only)
+ *                    reader may not use is not drawn, on both tabs); F-SC-W4: then each compliance gate refusal still blocking the
+ *                    order (GateRows — the page notice's own title, sentence and "Open in Compliance", only with its right), counted
+ *                    in the answer line; the office's hold notes under them (office only)
  *   Needs an answer  the order's open issues from the ONE issues list (orders.view — B31): what kind, who asked, the excerpt, the due
  *                    day and "late", how far it escalated, who answers; Reply in the thread (a customer's report) / Open the note
  *   Quality          the final checks, the verdict first, each its own inspection (B28) with its defects; the NCRs with severity,
@@ -54,6 +58,8 @@ function Problems({ order, model, actions }: { order: Order; model: OrderRecordM
   const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
   const input: StripDoorsInput = { prefix: model.prefix, order, can: model.can, readOnly, busy: model.busy, approval, depthCan: model.depth?.can ?? null, work: read?.work?.workOrders ?? [], acts: model.workOrderActs?.can ?? null, credit: model.credit ?? null }
   const doors = strips.map((strip) => ({ strip, doors: stripDoorsOf(strip, input) }))
+  const gates = gatesOf(model.links).length // F-SC-W4: each refusal is one more thing that stops the order
+  const stops = strips.length + gates
   const notes = read?.headline?.holdNotes ?? null
   const asks = model.asks ?? null
   const answers = asks?.value ? waitingAnswersOf(asks.value.issues, model.today) : null
@@ -70,7 +76,7 @@ function Problems({ order, model, actions }: { order: Order; model: OrderRecordM
   const ncrHref = (id: string, number: string) => `${model.prefix}${recordAddress({ type: 'Nonconformance', id, label: number, companyId: order.companyId }, OFFICE_PAGES)}`
 
   const answer = [
-    strips.length > 0 ? t('productionTab.problems.stops', { count: strips.length }) : t('productionTab.problems.stopsNothing'),
+    stops > 0 ? t('productionTab.problems.stops', { count: stops }) : t('productionTab.problems.stopsNothing'),
     answers ? (answers.length > 0 ? t('productionTab.now.questions', { count: answers.length }) : t('productionTab.problems.noQuestions')) : null,
     verdict ? t(`productionTab.problems.final.${verdict}`) : finals ? t('productionTab.problems.final.none') : null,
   ]
@@ -85,12 +91,13 @@ function Problems({ order, model, actions }: { order: Order; model: OrderRecordM
       <div className="fw-pt-ph">
         <div className="fw-pt-now-blk">
           <h3 className="fw-pt-h3">{t('productionTab.problems.stopsTitle')}</h3>
-          {strips.length === 0 && holds === 'read' ? <Quiet>{t('productionTab.problems.stopsNothing')}</Quiet> : null}
-          {strips.length > 0 || holds !== 'read' ? (
+          {stops === 0 && holds === 'read' ? <Quiet>{t('productionTab.problems.stopsNothing')}</Quiet> : null}
+          {stops > 0 || holds !== 'read' ? (
             <ul className="fw-so-strips" aria-label={t('productionTab.problems.stopsTitle')}>
               {doors.map(({ strip, doors: shown }) => (
                 <StripRow key={strip.key} strip={strip} doors={shown} order={order} model={model} actions={actions} now={now} />
               ))}
+              <GateRows model={model.links} prefix={model.prefix} />
             </ul>
           ) : null}
           {holds === 'reading' ? <PartReading rows={1} height={22} /> : null}

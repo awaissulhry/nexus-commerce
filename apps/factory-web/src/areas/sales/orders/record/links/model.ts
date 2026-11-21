@@ -84,5 +84,31 @@ export function gateHref(prefix: string, gate: Pick<OrderGate, 'eventId' | 'gate
   return `${prefix}/compliance/status?${query.toString()}`
 }
 
+// ---- F-SC-W4 (stage control B; plan-stage-control "the red notice"): the refusals as rows of Production › Problems & holds ----
+/** The gates' refusals that still block the order (none while the links are not read). */
+export const gatesOf = (model: LinksModel | null | undefined): readonly OrderGate[] => (model?.state === 'ready' ? model.links.gates : [])
+
+/**
+ * A refusal's own id: the gate event's (sent with the compliance view right), else its own gate, its subject and its instant — so two
+ * gates on one work order never read as one.
+ */
+export function gateIdOf(gate: Pick<OrderGate, 'eventId' | 'gate' | 'subject' | 'at'>): string {
+  if (gate.eventId) return gate.eventId
+  const at = Date.parse(gate.at)
+  return `${gate.subject.id}-${gate.gate}-${Number.isFinite(at) ? at : 0}`
+}
+
+/** Each refusal row's anchor `about-GateEvent-<its own id>`, in the list's order — never shared within the list (a repeat gets -2, -3 …). */
+export function gateAnchorsOf(gates: readonly Pick<OrderGate, 'eventId' | 'gate' | 'subject' | 'at'>[]): string[] {
+  const seen = new Map<string, number>()
+  return gates.map((gate) => {
+    const anchor = `about-GateEvent-${gateIdOf(gate)}`
+    const count = (seen.get(anchor) ?? 0) + 1
+    seen.set(anchor, count)
+    return count === 1 ? anchor : `${anchor}-${count}`
+  })
+}
+// ---- end F-SC-W4
+
 /** The ready model of a fresh read (no write running, nothing ticked, nothing said). */
 export const readyLinks = (links: OrderLinks): LinksModel => ({ state: 'ready', links, busy: null, tell: {}, decline: null, said: null })

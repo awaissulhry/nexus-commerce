@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react' // F-SC-W3: the steps' buttons, measured
 import NextLink from 'next/link'
 import { PauseCircle } from 'lucide-react'
 import { EmptyState } from '@nexus/ui/components'
@@ -7,7 +8,7 @@ import { MilestoneTracker, type MilestonePromise, type MilestoneStep } from '@ne
 import { Button, Pill, Skeleton } from '@nexus/ui/primitives'
 import type { PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise'
 import { useDsWords } from '../../i18n/ds-parts'
-import { stageSteps, type Face, type StageStripInput } from '../model'
+import { stageSteps, type Face, type PlainStage, type StageStripInput } from '../model'
 import { useProductionWords } from '../words'
 import '../production-parts.css'
 
@@ -34,6 +35,20 @@ export interface StageStripProps extends StageStripInput {
   stageHref?: string | null
   /** The link's name for a screen reader ("Open the work orders in Production · now Sewing"). */
   stageLinkLabel?: string
+  /**
+   * F-SC-W3 (stage control B, 40-stage-plan §3): the steps a person may pick (the order page's Overview, with the right and the door
+   * not held) — each a real <button> over its step, named ("Set the stage of SO-2026-0088 to Sewing…"); a click opens the office's
+   * stage dialog on it (`onPick`). With picks the ONE link (stageHref) is not drawn; without them the strip is as before. Never on the
+   * row form (`compact`).
+   */
+  picks?: readonly StageStripPick[] | null
+  onPick?: (stage: PlainStage) => void
+}
+
+/** F-SC-W3: a step a person may pick, and its button's name for a screen reader. */
+export interface StageStripPick {
+  readonly stage: PlainStage
+  readonly label: string
 }
 
 /**
@@ -42,11 +57,12 @@ export interface StageStripProps extends StageStripInput {
  * width). A blocked stage keeps the tracker's current step and adds a blocked mark with why in words beside it (DS gap G1,
  * plan §8: the tracker has no blocked state; until the Owner's word the mark lives here). Unknown stage: "—", never step
  * 1. Office dates read "Planned"; the customer's "Expected by". Never interactive except the date's history.
- * F-MS-101: a stage set by hand (the office's one named exception, when the floor cannot record the work) is SHOWN here, never set
- * here: the office card passes the stage the customer reads and the current step's note "Set by hand" (`note`); its door lives on
- * the card, outside this part (a link holds no other control). The portal passes no note: its strip is unchanged.
+ * F-MS-101: a stage set by hand (the office's one named exception) is SHOWN here, never set here: the office card passes the stage the
+ * customer reads and the current step's note "Set by hand" (`note`). F-SC-W3 (stage control B): the office card may pass `picks` —
+ * then each step but the current one is a button that opens the card's stage dialog (the dialog sets it, this part never does); the
+ * card's door "Set the stage by hand…" stays the keyboard and phone path. The portal passes neither: its strip is unchanged.
  */
-export function StageStrip({ face, layout = 'auto', label, promise, loading, problem, onRetry, stageHref, stageLinkLabel, ...input }: StageStripProps) {
+export function StageStrip({ face, layout = 'auto', label, promise, loading, problem, onRetry, stageHref, stageLinkLabel, picks, onPick, ...input }: StageStripProps) {
   const w = useProductionWords()
   const ds = useDsWords()
   const name = label ?? w.t('parts.stage.label')
@@ -99,11 +115,15 @@ export function StageStrip({ face, layout = 'auto', label, promise, loading, pro
   ) : null
   // The full form puts the mark above the steps (the current step's line says why); the row form puts it after the dots.
   // F-OP-104: with a door the stages are one real link (no prefetch: a record page's tab address changes with the dock's scope).
-  const tracker = <MilestoneTracker steps={milestones} promise={layout === 'compact' || stageHref ? null : milestonePromise} layout={layout} label={name} labels={labels} />
+  // F-SC-W3: with picks each step is its own button instead (the link is not drawn; the promise is the page's, as with the link).
+  const pickable = layout !== 'compact' && !!onPick && !!picks && picks.length > 0
+  const tracker = <MilestoneTracker steps={milestones} promise={layout === 'compact' || stageHref || pickable ? null : milestonePromise} layout={layout} label={name} labels={labels} />
   return (
     <div className="fw-prp-strip" data-layout={layout} data-blocked={input.blocked ? 'true' : undefined}>
       {layout === 'compact' ? null : blocked}
-      {stageHref ? (
+      {pickable ? (
+        <StepPicks tracker={tracker} steps={steps.map((step) => step.id)} picks={picks!} onPick={onPick!} />
+      ) : stageHref ? (
         <NextLink href={stageHref} prefetch={false} className="fw-prp-strip-go" aria-label={stageLinkLabel ?? name}>
           {tracker}
         </NextLink>
@@ -114,3 +134,48 @@ export function StageStrip({ face, layout = 'auto', label, promise, loading, pro
     </div>
   )
 }
+
+// ---- F-SC-W3 (stage control B, 40-stage-plan §3): the steps as buttons over the DS MilestoneTracker (frozen: its steps take no click) ----
+/**
+ * Real <button>s laid UNDER the tracker, each over its own step (li.nds-milestone), measured with a ResizeObserver — the stretched-button
+ * idea of the DS PressableRow, never a div with a role. The tracker sits on top and lets the pointer through (production-parts.css), so
+ * its own look stays and a click on a step reaches its button; the hover and the focus ring show through around the words. Tab goes
+ * through the steps in order, Enter opens; across (wide box) or down (narrow, a phone) each step is one target. Before the first measure
+ * (the server's markup) the buttons are there, named, with no size.
+ */
+function StepPicks({ tracker, steps, picks, onPick }: { tracker: ReactNode; steps: readonly PlainStage[]; picks: readonly StageStripPick[]; onPick: (stage: PlainStage) => void }) {
+  const box = useRef<HTMLDivElement>(null)
+  const [rects, setRects] = useState<Readonly<Partial<Record<PlainStage, CSSProperties>>>>({})
+  const order = steps.join(' ')
+  useEffect(() => {
+    const root = box.current
+    if (!root) return
+    const measure = () => {
+      const at = root.getBoundingClientRect()
+      const next: Partial<Record<PlainStage, CSSProperties>> = {}
+      root.querySelectorAll<HTMLElement>('li.nds-milestone').forEach((item, index) => {
+        const stage = steps[index]
+        if (!stage) return
+        const r = item.getBoundingClientRect()
+        next[stage] = { top: r.top - at.top, left: r.left - at.left, width: r.width, height: r.height }
+      })
+      setRects(next)
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(root)
+    root.querySelectorAll('li.nds-milestone').forEach((item) => observer.observe(item))
+    return () => observer.disconnect()
+    // The steps' order is the only input the measure reads besides the box itself (`steps` is a new array each render).
+  }, [order])
+  return (
+    <div ref={box} className="fw-prp-strip-picks">
+      {tracker}
+      {picks.map((pick) => (
+        <button key={pick.stage} type="button" className="fw-prp-strip-pick" data-stage={pick.stage} style={rects[pick.stage]} aria-label={pick.label} onClick={() => onPick(pick.stage)} />
+      ))}
+    </div>
+  )
+}
+// ---- end F-SC-W3

@@ -771,7 +771,7 @@ describe('F-OO-102: "Where it is now" per state — waiting no dots, shipped eve
   it('in production and shipped: the dots and their quiet line ("set by the floor and quality"); shipped is every stage done, none now', () => {
     for (const locale of ['en', 'it'] as const) {
       // F-MS-101 (R21): the quiet line's new words (a stage may be set by hand when the floor cannot record the work).
-      const setBy = locale === 'en' ? 'Stages are set by the floor and quality, or by hand when the floor cannot record them' : 'Le fasi le segnano il reparto e la qualità, o a mano quando il reparto non può registrarle'
+      const setBy = locale === 'en' ? 'Stages are set by the floor and quality, or by hand when their records are wrong or missing' : 'Le fasi le segnano il reparto e la qualità, o a mano quando le registrazioni sono sbagliate o mancano'
       const now = draw('overview', locale)
       expect(milestones(now, 'current'), locale).toBe(1)
       expect(textOf(now)).toContain(setBy)
@@ -832,7 +832,7 @@ describe('F-OO-103: "Where it is now" keeps its title, Live, the headline and th
 
   it('it keeps the title, "Live · as of", the headline (with its quiet line) and the stages\' one link, in this order', () => {
     const html = sectionOne(draw('overview'))
-    const at = ['<h2 class="fw-so-h2">Where it is now</h2>', 'fw-prp-fresh', '<p class="fw-so-headline">In production · Sewing</p>', 'class="fw-prp-strip-go"', 'Stages are set by the floor and quality, or by hand when the floor cannot record them' /* F-MS-101 */].map((part) => html.indexOf(part))
+    const at = ['<h2 class="fw-so-h2">Where it is now</h2>', 'fw-prp-fresh', '<p class="fw-so-headline">In production · Sewing</p>', 'class="fw-prp-strip-go"', 'Stages are set by the floor and quality, or by hand when their records are wrong or missing' /* F-MS-101 */].map((part) => html.indexOf(part))
     expect(at.every((index) => index >= 0), at.join(',')).toBe(true)
     expect([...at].sort((a, b) => a - b)).toEqual(at)
     // Waiting for a yes and cancelled keep the title, Live and the headline with its quiet line; there are no dots to link.
@@ -1205,24 +1205,53 @@ describe('F-MS-102: "Where it is now" draws a stage set by hand — the door on 
   }
   /** The hand stage's row: from its row up to the moves row. */
   const rowOf = (html: string): string => html.slice(html.indexOf('class="fw-so-ov-row fw-so-hand"'), html.indexOf('class="fw-so-where-moves"'))
-  const SET_BY = { en: 'Stages are set by the floor and quality, or by hand when the floor cannot record them', it: 'Le fasi le segnano il reparto e la qualità, o a mano quando il reparto non può registrarle' } as const
+  const SET_BY = { en: 'Stages are set by the floor and quality, or by hand when their records are wrong or missing', it: 'Le fasi le segnano il reparto e la qualità, o a mano quando le registrazioni sono sbagliate o mancano' } as const
   const HELD_SALES = 'Production does this — a planner or the production manager'
 
-  it('section 1 keeps its order: the headline, the strip\'s one link, the quiet line, the hand row, the moves row', () => {
+  it('section 1 keeps its order: the headline, the strip\'s steps (F-SC-W3: buttons for a Planner), the quiet line, the hand row, the moves row', () => {
     const html = sectionOf(draw('f-ms-hand'))
-    const at = ['<p class="fw-so-headline">In production · Sewing</p>', 'class="fw-prp-strip-go"', SET_BY.en, 'class="fw-so-ov-row fw-so-hand"', 'class="fw-so-where-moves"'].map((part) => html.indexOf(part))
+    const at = ['<p class="fw-so-headline">In production · Sewing</p>', 'class="fw-prp-strip-picks"', SET_BY.en, 'class="fw-so-ov-row fw-so-hand"', 'class="fw-so-where-moves"'].map((part) => html.indexOf(part))
     expect(at.every((index) => index >= 0), at.join(',')).toBe(true)
     expect([...at].sort((a, b) => a - b)).toEqual(at)
-    // The strip stays ONE link holding no control; its current dot says "Set by hand" (shown, never set there), and its name too.
-    const from = html.indexOf('class="fw-prp-strip-go"')
-    const link = html.slice(from, html.indexOf('</a>', from))
-    expect(link).not.toContain('<button')
-    expect(link).toContain('<span class="nds-milestone-note">Set by hand</span>')
-    expect(html).toContain('aria-label="Open the work orders in Production · now Sewing, set by hand"')
-    // Tab order: the strip's link, then Change… and Clear…, then the moves.
+    // F-SC-W3: no link for who may set the stage; the current dot still says "Set by hand"; each other step a named button — the
+    // floor's own Preparing opens Clear…, the others Change… on that step.
+    expect(html).not.toContain('class="fw-prp-strip-go"')
+    expect(html).toContain('<span class="nds-milestone-note">Set by hand</span>')
+    expect(html).toContain('data-stage="PREPARING" aria-label="Clear the stage set by hand on SO-2026-0088: back to the floor&#x27;s stage"')
+    for (const stage of ['Cutting', 'Quality check', 'Ready to ship']) expect(html, stage).toContain(`aria-label="Set the stage of SO-2026-0088 to ${stage}…"`)
+    expect(html).not.toContain('data-stage="SEWING"')
+    // Tab order: the strip's steps, then Change… and Clear…, then the moves.
+    expect(html.indexOf('>Change…<')).toBeGreaterThan(html.lastIndexOf('fw-prp-strip-pick'))
     expect(html.indexOf('>Change…<')).toBeGreaterThan(html.indexOf('class="fw-so-ov-row fw-so-hand"'))
     expect(html.indexOf('>Clear…<')).toBeGreaterThan(html.indexOf('>Change…<'))
     expect(html.indexOf('>Clear…<')).toBeLessThan(html.indexOf('class="fw-so-where-moves"'))
+  })
+
+  it('F-SC-W3: the strip\'s ONE link stays only without the right or while the door is held (Sales, Read-only, Confirmed, the customer\'s pause)', () => {
+    // Sales: the link with its name (now Sewing, set by hand) holding no control; the door held in words (manual-stage D6).
+    const sales = sectionOf(draw('f-ms-sales'))
+    const from = sales.indexOf('class="fw-prp-strip-go"')
+    expect(from).toBeGreaterThan(-1)
+    const link = sales.slice(from, sales.indexOf('</a>', from))
+    expect(link).not.toContain('<button')
+    expect(link).toContain('<span class="nds-milestone-note">Set by hand</span>')
+    expect(sales).toContain('aria-label="Open the work orders in Production · now Sewing, set by hand"')
+    for (const id of ['f-ms-sales', 'f-ms-read-only', 'f-ms-confirmed', 'f-ms-paused']) {
+      const html = sectionOf(draw(id))
+      expect(html, id).not.toContain('fw-prp-strip-pick')
+      if (id !== 'f-ms-confirmed') expect(html, id).toContain('class="fw-prp-strip-go"')
+    }
+    // A Planner, nothing set: four step buttons (every stage but the floor's Sewing), each opening Set on it — Ready to ship included.
+    for (const locale of ['en', 'it'] as const) {
+      const door = sectionOf(draw('f-ms-door', locale))
+      expect(door.match(/class="fw-prp-strip-pick"/g)?.length, locale).toBe(4)
+      expect(door, locale).toContain(locale === 'en' ? 'aria-label="Set the stage of SO-2026-0088 to Ready to ship…"' : 'aria-label="Imposta la fase di SO-2026-0088 su Pronto per la spedizione…"')
+      // The door stays (the keyboard, phone and screen-reader path).
+      expect(door, locale).toMatch(locale === 'en' ? />Set the stage by hand…<\/button>/ : />Imposta la fase a mano…<\/button>/)
+    }
+    const card = read('../view/overview/WhereCard.tsx')
+    expect(card).toContain('picks={stepPicks}')
+    expect(card).toContain('actions?.onDialog?.(pick.dialog)')
   })
 
   it('a Planner, nothing set: "Set the stage by hand…" open on the quiet line under the dots, no row', () => {
@@ -1263,9 +1292,22 @@ describe('F-MS-102: "Where it is now" draws a stage set by hand — the door on 
       const row = rowOf(sectionOf(draw('f-ms-hand-old', locale)))
       expect(row, locale).toContain('data-tone="warning"')
       expect(row, locale).toContain('class="nds-tag warning"')
-      expect(textOf(row), locale).toContain(locale === 'en' ? 'Set by hand 9 d ago and the floor has not reached it: check it' : 'Impostata a mano 9 g fa e il reparto non ci è ancora arrivato: controllala')
+      expect(textOf(row), locale).toContain(locale === 'en' ? 'Set by hand 9 d ago: check it' : 'Impostata a mano 9 g fa: controllala')
     }
     expect(rowOf(sectionOf(draw('f-ms-hand')))).not.toContain('check it')
+  })
+
+  it('F-SC-W1: set back below the floor (a wrong scan): the row says when it clears — the floor\'s counts back to it, or past where the floor was', () => {
+    const words = {
+      en: ['Set by hand', 'Cutting · by Bea Esempio', 'Something else (say it in the note)', "The floor's counts say Quality check: it clears by itself when the floor's counts come back to Cutting or pass Quality check", 'Office only — Scansione sbagliata: i capi sono ancora al taglio.'],
+      it: ['Impostata a mano', 'Taglio · da Bea Esempio', 'Altro (scrivilo nella nota)', 'I conteggi del reparto dicono Controllo qualità: si toglie da sola quando i conteggi del reparto tornano a Taglio o superano Controllo qualità'],
+    } as const
+    for (const locale of ['en', 'it'] as const) {
+      const text = textOf(rowOf(sectionOf(draw('f-ms-hand-back', locale))))
+      for (const word of words[locale]) expect(text, `${locale}: ${word}`).toContain(word)
+      expect(text, locale).not.toContain(locale === 'en' ? 'when the floor reaches' : 'quando il reparto arriva a')
+    }
+    expect(textOf(sectionOf(draw('f-ms-hand-back')))).toContain('In production · Cutting')
   })
 
   it('no work order on the order (as SEED-SO-W39-02): Cutting, "No work order records this order…", never the floor\'s line', () => {
@@ -1287,6 +1329,18 @@ describe('F-MS-102: "Where it is now" draws a stage set by hand — the door on 
     const readOnly = sectionOf(draw('f-ms-read-only'))
     expect(textOf(rowOf(readOnly))).toContain("The floor's counts say Preparing")
     for (const door of ['Set the stage by hand…', '>Change…<', '>Clear…<']) expect(readOnly, door).not.toContain(door)
+  })
+
+  it('F-SC-W2: the dialog is the page\'s, mounted ONCE (OrderDialogs) — the card opens it (door, Change…, Clear…, a step) and never mounts it', () => {
+    const card = read('../view/overview/WhereCard.tsx')
+    expect(card).not.toContain('<StageHandDialogs')
+    expect(card).toContain("actions?.onDialog?.({ kind: 'stageByHand', mode: 'set' })")
+    const dialogs = read('../view/Dialogs.tsx')
+    expect(dialogs).toContain("import { StageHandDialogs } from './overview/StageByHandDialog'")
+    expect(dialogs.match(/<StageHandDialogs /g)?.length).toBe(1)
+    // The step picked reaches the dialog: the slot carries it, the dialog starts on it.
+    expect(read('../record-model.ts')).toContain("{ kind: 'stageByHand'; mode: 'set' | 'change'; pick?: PlainStage; refused?: Phrase | Words }")
+    expect(read('../view/overview/StageByHandDialog.tsx')).toContain('stageByHandStartOf(mode, readOf(model.production)?.headline ?? null, picked)')
   })
 
   it('the moves row is untouched (the door is not a move); the frame\'s source keeps the row and its door under the dots, where.css tokens only', () => {
