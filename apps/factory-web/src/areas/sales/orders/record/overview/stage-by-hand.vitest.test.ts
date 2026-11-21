@@ -19,11 +19,14 @@ import { HAND_AT, HAND_BACK_READ, HAND_BY, HAND_FREE_READ, HAND_READ, HEADLINE, 
 import { NOTICE_WAIT_MINUTES, clearLinesOf, clearNoticeOf, readyWarningOf, setNoticeOf, stageByHandBodyOf, stageByHandHeld, stageByHandStartOf, stageChoicesOf, stageDialogLinesOf, stageRefusalOf, versionOf } from './stage-by-hand'
 
 // The DS Modal draws only after it mounts in a browser — here a plain section, so the dialog's words are read on the server too (as the
-// credit dialogs' tests do in where.vitest). Only an open dialog draws.
+// credit dialogs' tests do in where.vitest). Only an open dialog draws. pt-sc-fx1: the DS ActionConfirm (Clear…) opens its own Modal
+// from inside packages/ui, which the line above does not reach — so here it draws in its own inline mode: the same title,
+// consequences, refusal and confirm label, in place.
 vi.mock('@nexus/ui/components', async (original) => {
   const actual = await original<typeof import('@nexus/ui/components')>()
   const Modal = ({ open, title, children, footer }: { open: boolean; title?: unknown; children?: unknown; footer?: unknown }) => (open ? createElement('section', { role: 'dialog', 'data-modal': '' }, createElement('h2', null, title as never), children as never, footer as never) : null)
-  return { ...actual, Modal }
+  const ActionConfirm = (props: Parameters<typeof actual.ActionConfirm>[0]) => createElement(actual.ActionConfirm, { ...props, mode: 'inline' })
+  return { ...actual, Modal, ActionConfirm }
 })
 
 /**
