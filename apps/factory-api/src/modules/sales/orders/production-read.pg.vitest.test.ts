@@ -1344,3 +1344,145 @@ describe('B-PT-011: the promise history says SET or MOVED by one rule, and a lin
   })
 })
 // ── end B-PT-011 ──
+
+// ── B-OC-002 / B-OC-004 (order changes tab R2, R3b; 13-backend §2; lead settle L11) ──
+/**
+ * The waiting list names the customer's new yes for a revised order — asked on the order's AMENDMENT — and, once the customer said
+ * no to the order's latest revision while the order still waits for the yes, a row waiting on us. Each approval we asked and each
+ * open portal task says by when it is due; a portal task what it asks. Two made-up orders: Alpha's T-OC002-SO-A (revisions 1 and 2,
+ * waiting for the yes) and Beta's T-OC002-SO-B (its own revision asked). Rows are planted with the database's rules off (only the
+ * read is under test); the asks go through the real route in reacceptance.pg.vitest.test.ts (B-OC-001).
+ */
+describe('B-OC-002 / B-OC-004: the revised order asked of the customer, a revision it said no to, and when each ask is due', { timeout: 60_000 }, () => {
+  const orderA = newId()
+  const orderB = newId()
+  const rev = { a1: newId(), a2: newId(), b1: newId() }
+  const ask = { open: newId(), answered: newId(), expired: newId(), beta: newId(), betaOnA: newId(), again: newId() }
+  const counter = { request: newId(), approval: newId() }
+  const task = newId()
+  const due = { ask: new Date(Date.now() + 5 * 86_400_000), counter: new Date(Date.now() + 4 * 86_400_000), task: new Date(Date.now() + 2 * 86_400_000) }
+  const t = () => lit(ids.tenantId)
+  const blockersOf = async (sessionName: string, orderId: string): Promise<Json[]> => {
+    forgetProgress()
+    return (await ok(sessionName, production(orderId, 'headline'))).headline.waiting.blockers as Json[]
+  }
+  const ofRef = (blockers: readonly Json[], id: string) => blockers.find((blocker) => blocker.ref?.id === id)
+  /** Statements with the database's rules off (an answer, a status set by hand: only the read is under test). */
+  const rulesOff = (statements: string) => admin(`BEGIN; SET LOCAL session_replication_role = replica; ${statements} COMMIT;`)
+
+  beforeAll(async () => {
+    const [harnessLine] = await admin<{ colourwayId: string; companyId: string }>(`SELECT "colourwayId", "companyId" FROM "SalesOrderLine" WHERE id = $1`, [w.a.salesOrderLineId])
+    await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId: seedUuid(ns, 'actor') }, (client) =>
+      client.$transaction(async (tx) => {
+        for (const [orderId, partyId, tag] of [[orderA, ids.a, 'A'], [orderB, ids.b, 'B']] as const) {
+          await tx.salesOrder.create({
+            data: { id: orderId, companyId: harnessLine!.companyId, partyId, number: `T-OC002-SO-${tag}`, customerRef: `T-OC002-PO-${tag}`, status: 'CONFIRMED', orderDate: new Date('2026-11-03T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' }, reapprovalNeededAt: new Date() },
+            select: { id: true },
+          })
+          const lineId = newId()
+          await tx.salesOrderLine.create({
+            data: { id: lineId, companyId: harnessLine!.companyId, orderId, partyId, seq: 10, kind: 'SIZE_GRID', styleId: w.styleId, colourwayId: harnessLine!.colourwayId, quantity: 2, unitPrice: '100.000000', netAmount: 20_000, vatRatePct: '22.00', vatAmount: 4_400 },
+            select: { id: true },
+          })
+          await tx.salesOrderLineSize.create({ data: { id: newId(), lineId, partyId, size: '50', quantity: 2 }, select: { id: true } })
+        }
+      }),
+    )
+    const company = lit(harnessLine!.companyId)
+    const amendment = (id: string, orderId: string, partyId: string, revision: number) =>
+      `(${lit(id)}, ${t()}, ${company}, ${lit(orderId)}, ${lit(partyId)}, ${revision}, 'T-OC002 made-up revision', '{}'::jsonb, '{}'::jsonb, 20000, 22000, 24400, 26840, true, 'T-OC002-request', now() - interval '${4 - revision} days')`
+    const revised = (id: string, recordId: string, partyId: string, status: string, createdAgo: string, answered: boolean, dueAt: Date) =>
+      `(${lit(id)}, ${t()}, ${company}, 'SalesOrderAmendment', ${lit(recordId)}, ${lit(partyId)}, 'REVISED_ORDER', 'T-OC002 please confirm the revised order (made up)', '${dueAt.toISOString()}', '${status}', ${answered ? `now() - interval '1 hour'` : 'NULL'}, now() - interval '${createdAgo}')`
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "SalesOrderAmendment" (id, "tenantId", "companyId", "orderId", "partyId", revision, reason, before, after, "netAmountBefore", "netAmountAfter", "grossAmountBefore", "grossAmountAfter", "reacceptanceNeeded", "requestId", "createdAt") VALUES
+         ${amendment(rev.a1, orderA, ids.a, 1)}, ${amendment(rev.a2, orderA, ids.a, 2)}, ${amendment(rev.b1, orderB, ids.b, 1)};
+       INSERT INTO "ApprovalRequest" (id, "tenantId", "companyId", "recordType", "recordId", "partyId", kind, question, "dueAt", status, "answeredAt", "createdAt") VALUES
+         ${revised(ask.answered, rev.a1, ids.a, 'APPROVED', '3 days', true, due.ask)},
+         ${revised(ask.expired, rev.a1, ids.a, 'EXPIRED', '2 days', false, new Date(Date.now() - 86_400_000))},
+         ${revised(ask.open, rev.a2, ids.a, 'OPEN', '1 day', false, due.ask)},
+         ${revised(ask.beta, rev.b1, ids.b, 'OPEN', '1 day', false, due.ask)},
+         ${revised(ask.betaOnA, rev.a2, ids.b, 'OPEN', '2 hours', false, due.ask)},
+         (${lit(counter.approval)}, ${t()}, ${company}, 'OrderChangeRequest', ${lit(counter.request)}, ${lit(ids.a)}, 'COUNTER_OFFER', 'T-OC002 counter-offer (made up)', '${due.counter.toISOString()}', 'OPEN', NULL, now() - interval '1 day');
+       INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status, "createdAt", "counterApprovalId", "counteredAt") VALUES
+         (${lit(counter.request)}, ${t()}, ${company}, ${lit(ids.a)}, ${lit(orderA)}, 'CHANGE', 'COUNTERED', now() - interval '2 days', ${lit(counter.approval)}, now() - interval '1 day');
+       INSERT INTO "PartnerTask" (id, "tenantId", "companyId", "partyId", kind, "recordType", "recordId", "recordLabel", "sourceKey", "dueAt", status, "createdAt") VALUES
+         (${lit(task)}, ${t()}, ${company}, ${lit(ids.a)}, 'ANSWER_MESSAGE', 'SalesOrder', ${lit(orderA)}, 'T-OC002-SO-A', 'T-OC002:${task}', '${due.task.toISOString()}', 'OPEN', now() - interval '1 day');
+       COMMIT;`,
+    )
+  })
+
+  it('an OPEN revised-order ask on the order’s amendment waits on the customer: one APPROVAL row naming the request, its kind in words, by when it is due', async () => {
+    const blockers = await blockersOf('office.all', orderA)
+    expect(ofRef(blockers, ask.open)).toEqual({ kind: 'APPROVAL', on: 'BRAND', words: { en: "Waiting for the customer's yes: Revised order", it: 'In attesa del sì del cliente: Ordine modificato' }, since: expect.any(String), ref: { type: 'ApprovalRequest', id: ask.open }, sub: null, due: due.ask.toISOString(), task: null })
+    // A request (Overview's card, the Changes badge, Waiting on {customer}: one list).
+    expect(placeOf({ kind: 'APPROVAL' })).toBe('REQUEST')
+    // Never the question, never an amount.
+    expect(JSON.stringify(blockers)).not.toContain('please confirm the revised order')
+    // The Sales template reads it the same (orders.view): the row names no amount for a reader without prices either.
+    expect(ofRef(await blockersOf('sales.all', orderA), ask.open)).toMatchObject({ kind: 'APPROVAL', on: 'BRAND', due: due.ask.toISOString() })
+  })
+
+  it('answered or expired asks are none; only this order’s own customer’s ask counts — Beta’s revision never on Alpha’s read', async () => {
+    const blockers = await blockersOf('office.all', orderA)
+    for (const id of [ask.answered, ask.expired, ask.beta, ask.betaOnA]) expect(ofRef(blockers, id), id).toBeUndefined()
+    expect(blockers.filter((blocker) => blocker.ref?.type === 'ApprovalRequest').map((blocker) => blocker.ref.id)).toEqual([ask.open])
+    // Beta's own order lists Beta's ask; a person limited to Beta reads nothing of Alpha's order (the unknown id's answer).
+    expect(ofRef(await blockersOf('office.p2', orderB), ask.beta)).toMatchObject({ kind: 'APPROVAL', on: 'BRAND' })
+    const walled = await call('office.p2', production(orderA, 'headline'))
+    const unknown = await call('office.p2', production(newId(), 'headline'))
+    expect([walled.status, walled.body.error?.message]).toEqual([unknown.status, unknown.body.error?.message])
+    expect(walled.raw).not.toContain(ask.open)
+  })
+
+  it('B-OC-004: an open counter-offer is due when its approval is; a portal task says its kind, its label and when it is due; every other row: null', async () => {
+    const blockers = await blockersOf('office.all', orderA)
+    expect(ofRef(blockers, counter.request)).toMatchObject({ kind: 'APPROVAL', on: 'BRAND', ref: { type: 'OrderChangeRequest', id: counter.request }, due: due.counter.toISOString(), task: null })
+    expect(ofRef(blockers, task)).toMatchObject({ kind: 'PARTNER_TASK', on: 'BRAND', ref: { type: 'PartnerTask', id: task }, due: due.task.toISOString(), task: { kind: 'ANSWER_MESSAGE', label: 'T-OC002-SO-A' } })
+    for (const blocker of blockers) if (blocker.kind !== 'APPROVAL' && blocker.kind !== 'PARTNER_TASK') expect([blocker.due, blocker.task], blocker.kind).toEqual([null, null])
+  })
+
+  it('L11: the customer said no to the latest revision while the order still waits for its yes — a row waiting on US naming the amendment, no amount', async () => {
+    await rulesOff(`UPDATE "ApprovalRequest" SET status = 'REFUSED', "answeredAt" = now(), answer = 'T-OC002 made up: not at this price.' WHERE id = ${lit(ask.open)};`)
+    const blockers = await blockersOf('office.all', orderA)
+    expect(ofRef(blockers, ask.open)).toBeUndefined()
+    const refused = ofRef(blockers, rev.a2)
+    expect(refused).toEqual({ kind: 'REVISION_REFUSED', on: 'US', words: { en: 'The customer said no to revision 2 · decide: restore or change again', it: 'Il cliente ha detto no alla revisione 2 · decidi: ripristina o cambia di nuovo' }, since: expect.any(String), ref: { type: 'SalesOrderAmendment', id: rev.a2 }, sub: null, due: null, task: null })
+    // A request: counted with the card's rows, so "Nothing waits" never sits above "They said no".
+    expect(placeOf({ kind: 'REVISION_REFUSED' })).toBe('REQUEST')
+    // Never their words, never an amount.
+    expect(JSON.stringify(blockers)).not.toContain('not at this price')
+    // Beta's order never reads it.
+    expect(ofRef(await blockersOf('office.p2', orderB), rev.a2)).toBeUndefined()
+  })
+
+  it('L11: asked again after the no — the new ask wins (waits on the customer); no wait any more, an older revision or a cancelled order — no row', async () => {
+    await rulesOff(
+      `INSERT INTO "ApprovalRequest" (id, "tenantId", "companyId", "recordType", "recordId", "partyId", kind, question, "dueAt", status, "createdAt") VALUES
+         (${lit(ask.again)}, ${t()}, ${lit(w.companyId)}, 'SalesOrderAmendment', ${lit(rev.a2)}, ${lit(ids.a)}, 'REVISED_ORDER', 'T-OC002 asked again (made up)', '${due.ask.toISOString()}', 'OPEN', now());`,
+    )
+    let blockers = await blockersOf('office.all', orderA)
+    expect(ofRef(blockers, rev.a2)).toBeUndefined()
+    expect(ofRef(blockers, ask.again)).toMatchObject({ kind: 'APPROVAL', on: 'BRAND' })
+    // Refused again: the row is back; once the order no longer waits for the yes it is gone.
+    await rulesOff(`UPDATE "ApprovalRequest" SET status = 'REFUSED', "answeredAt" = now() WHERE id = ${lit(ask.again)};`)
+    expect(ofRef(await blockersOf('office.all', orderA), rev.a2)).toMatchObject({ kind: 'REVISION_REFUSED' })
+    await rulesOff(`UPDATE "SalesOrder" SET status = 'CANCELLED' WHERE id = ${lit(orderA)};`)
+    expect(ofRef(await blockersOf('office.all', orderA), rev.a2)).toBeUndefined()
+    await rulesOff(`UPDATE "SalesOrder" SET status = 'CONFIRMED', "reapprovalNeededAt" = NULL WHERE id = ${lit(orderA)};`)
+    blockers = await blockersOf('office.all', orderA)
+    expect(blockers.filter((blocker) => blocker.kind === 'REVISION_REFUSED')).toEqual([])
+    // The newest ask on the latest revision decides (withdrawn after the no: nothing to decide yet, it may be asked again), and a no
+    // to an older revision never waits: only the latest one is ours to decide.
+    await rulesOff(
+      `UPDATE "SalesOrder" SET "reapprovalNeededAt" = now() WHERE id = ${lit(orderA)};
+       UPDATE "ApprovalRequest" SET status = 'WITHDRAWN', "answeredAt" = NULL, "withdrawnAt" = now() WHERE id = ${lit(ask.again)};
+       UPDATE "ApprovalRequest" SET status = 'REFUSED' WHERE id = ${lit(ask.answered)};`,
+    )
+    blockers = await blockersOf('office.all', orderA)
+    expect(blockers.filter((blocker) => blocker.kind === 'REVISION_REFUSED')).toEqual([])
+    expect(blockers.filter((blocker) => blocker.ref?.type === 'ApprovalRequest')).toEqual([])
+  })
+})
+// ── end B-OC-002 / B-OC-004 ──

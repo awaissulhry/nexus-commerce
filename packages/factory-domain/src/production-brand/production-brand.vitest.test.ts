@@ -703,7 +703,9 @@ describe('B-OO-011 one place per waiting row: HOLD, DATE or REQUEST, keyed on ki
     const kindsIn = (place: string) => BLOCKER_KINDS.filter((kind) => placeOf({ kind }) === place).sort()
     expect(kindsIn('HOLD')).toEqual(['BRAND_PAUSE', 'DEPOSIT', 'NONCONFORMANCE', 'NO_MOVE', 'QUALITY_HOLD', 'RELEASE_CHECK'])
     expect(kindsIn('DATE')).toEqual(['CUSTOMER_MATERIAL', 'GATE', 'MATERIAL_SHORT', 'SUBCONTRACT'])
-    expect(kindsIn('REQUEST')).toEqual(['APPROVAL', 'BRAND_REQUEST', 'PARTNER_TASK'])
+    // B-OC-002 (L11): a revision the customer said no to waits on us, a request (the one list with Overview's card).
+    expect(kindsIn('REQUEST')).toEqual(['APPROVAL', 'BRAND_REQUEST', 'PARTNER_TASK', 'REVISION_REFUSED'])
+    expect(BLOCKER_OWNER.REVISION_REFUSED).toBe('US')
   })
 
   it('a customer request by its sub: a refused new date (REPROMISE) is a date (F3); an open request, a counter-offer and a problem are requests', () => {
