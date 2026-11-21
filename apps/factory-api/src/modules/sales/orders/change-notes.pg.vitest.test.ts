@@ -158,6 +158,8 @@ describe('B-SA-052: ONE system line per change, whichever event runs first; a re
     expect(event).not.toHaveProperty('alreadyTold')
     const [audit] = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'sales.orderChangeNotes' AND "recordId" = $2 AND after->>'written' = 'true'`, [T, world.order])
     expect(audit!.after).toMatchObject({ messageId: line!.id, people: 2, stillToDo: 1, floor: [{ workOrderId: world.workOrder }] })
+    // B-OC-009 (order changes tab R5 + R7): the row keeps what spoke for the change — the customer's request here (ids only).
+    expect(audit!.after.speaker).toEqual({ kind: 'REQUEST', requestId: world.request })
 
     // A replay of every event of the change (and of the handler's own) writes nothing more.
     await tellEveryone(correlation)

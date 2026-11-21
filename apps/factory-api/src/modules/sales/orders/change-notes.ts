@@ -92,7 +92,8 @@ const ON_THE_FLOOR = ['RELEASED', 'IN_PROGRESS', 'ON_HOLD'] as const
 type Envelope = Pick<EventEnvelope, 'eventId' | 'type' | 'payload' | 'correlationId' | 'occurredAt'>
 
 /** Which fact of the change speaks for one order (read from the event, then the records of its instant). */
-type Speaker =
+// B-OC-009 (order changes tab R5 + R7): exported — the audit row keeps it (`after.speaker`) and the told read names it (./told.ts).
+export type Speaker =
   | { readonly kind: 'REQUEST'; readonly requestId: string }
   | { readonly kind: 'AMENDED'; readonly amendmentId: string }
   | { readonly kind: 'LINES'; readonly change: 'CLOSED' | 'REOPENED'; readonly lineIds: readonly string[] }
@@ -109,6 +110,13 @@ interface Spoken {
 
 const asDate = (value: unknown): Date => (value instanceof Date ? value : new Date(String(value)))
 const sameInstant = (a: Date | null | undefined, b: Date): boolean => a instanceof Date && a.getTime() === b.getTime()
+
+// ── B-OC-009 (order changes tab R5 + R7; 13-backend §4) ──
+/** The speaker as the audit row keeps it (plain JSON: a copy of its ids, codes and dates). */
+export function speakerRecordOf(speaker: Speaker): Record<string, unknown> {
+  return speaker.kind === 'LINES' ? { kind: speaker.kind, change: speaker.change, lineIds: [...speaker.lineIds] } : { ...speaker }
+}
+// ── end B-OC-009 ──
 
 /** The idempotency key of one change of one order (a correlation may hold any safe characters: hashed). */
 export const changeNotesKey = (correlationId: string, orderId: string): string => `ocn:${createHash('sha256').update(correlationId).digest('hex').slice(0, 32)}:${orderId}`
@@ -725,6 +733,9 @@ async function writeNotes(tools: CommandTools, tenantId: string, spoken: Spoken,
       alreadyTold,
       floor: floorWritten,
       workshops: workshops.map((entry) => ({ subcontractOrderId: entry.id, workOrderId: entry.workOrderId })),
+      // B-OC-009 (order changes tab R5 + R7): what spoke for the change — the told read names each kind by it (ids, codes and dates
+      // only: never a person, never a name).
+      speaker: speakerRecordOf(spoken.speaker),
     },
   })
   return { messageId: line.id, floorNotes: floorWritten.length, workshops: workshops.length, stillToDo }
