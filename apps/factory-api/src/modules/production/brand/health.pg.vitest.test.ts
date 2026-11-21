@@ -231,6 +231,45 @@ describe('the factory raises an order’s health to At risk (production.brand.ma
   })
 })
 
+// ── B-PT-012 (order production tab R12) ──
+/**
+ * Once production is over the health GET reads "not followed" (kept false, no health, raise or wait), as the order page's production
+ * read already does after production — the strip shared with the work order page hides the same way on both. The production state's
+ * row stays as it was (the customer's history); a raise is refused in words (409). The test sets B's order SHIPPED by hand (the guards
+ * off: only the read is under test), with a raise standing, and puts it back.
+ */
+describe('B-PT-012: after production the health GET says not followed; a raise is refused', { timeout: 60_000 }, () => {
+  const setStatus = (status: string) => admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "SalesOrder" SET status = '${status}' WHERE id = '${orderB}'::uuid; COMMIT;`)
+  let status = ''
+
+  beforeAll(async () => {
+    status = (await one<{ status: string }>(`SELECT status::text AS status FROM "SalesOrder" WHERE id = $1`, [orderB])).status
+    await setComputed(orderB, 'ON_TRACK')
+    await ok('office.all', 'PUT', healthUrl(orderB), { reasonCode: 'CAPACITY', note: 'Made-up: B-PT-012 raise.' })
+  })
+
+  afterAll(async () => {
+    await setStatus(status)
+    await ok('office.all', 'DELETE', healthUrl(orderB))
+  })
+
+  it('in production: kept, with its health and raise', async () => {
+    expect((await ok('office.all', 'GET', healthUrl(orderB))).health).toMatchObject({ kept: true, health: 'AT_RISK', raise: { reasonCode: 'CAPACITY' } })
+  })
+
+  for (const after of ['SHIPPED', 'CANCELLED'] as const) {
+    it(`${after}: kept false, no health, raise or wait (as for an order not kept); the row is untouched; a raise is refused in words`, async () => {
+      const row = await stateOf(orderB)
+      await setStatus(after)
+      expect((await ok('office.all', 'GET', healthUrl(orderB))).health).toEqual({ orderId: orderB, number: 'SEED-SO-B001', partyId: w.b.partyId, kept: false, computed: null, health: null, reasonCode: null, raise: null, waitingOn: null, waitingSince: null, version: null })
+      expect(await refused('office.all', 'PUT', healthUrl(orderB), { reasonCode: 'QUALITY' }, 409)).toBe('This order is no longer in production.')
+      expect(await stateOf(orderB)).toEqual(row)
+      await setStatus(status)
+    })
+  }
+})
+// ── end B-PT-012 ──
+
 describe('the wall: office.p2 cannot write P1’s health (404); portal.p2 never reads the note', { timeout: 60_000 }, () => {
   it('office.p2 on A’s order: GET, PUT and DELETE are not found, in the words of an unknown id; nothing written or told', async () => {
     const before = await told()

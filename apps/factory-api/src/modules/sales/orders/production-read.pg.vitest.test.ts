@@ -324,7 +324,8 @@ describe('B-SA-032 work, dates and quality: what is made together with other wor
       edit: { allowed: false, needs: 'planning.milestones.manage' },
       remove: { allowed: false, needs: 'planning.milestones.manage' },
     })
-    expect(answer.dates).not.toHaveProperty('mayAddGate')
+    // B-PT-006: the dates part now carries Planning's own mayAddGate — for the Sales template refused by the right it lacks.
+    expect(answer.dates.mayAddGate).toEqual({ allowed: false, needs: 'planning.milestones.manage', refusal: null })
     expect((answer.dates.milestones as Json[]).map((row) => row.kind)).toEqual(expect.arrayContaining(['GATE', 'SHIP']))
     expect(answer.dates.planned).toEqual({ cutStart: null, sewStart: null, finish: null })
     expect(answer.withheld).toEqual(['dates.forecast'])
@@ -902,3 +903,442 @@ describe('B-MS-006: the office reads who, why and the floor of a stage set by ha
   })
 })
 // ── end B-MS-006 ──
+
+// ── B-PT-001 / B-PT-002 / B-PT-003 (order production tab R1–R3) ──
+/**
+ * The work part says of each work order what the Production list says (its risk by the list's own rule, riskFactsOf), where its
+ * pieces are at an outside workshop and when they come back, each cell's sewn and checked pieces, and a made-to-measure row's units
+ * by number. A work order shared with other customers keeps no risk and its workshops' names only. The test moves Alpha's work order
+ * (due day, status), puts a bar of it on the site's WORKING plan, a job of it and one of the mixed work order at the seeds' workshop,
+ * and three made-to-measure work orders of a new order of Alpha — by hand (made-up facts: only the read is under test) — and puts
+ * the work order, the bar and the jobs back after.
+ */
+describe('B-PT-001…003: each work order’s risk and workshop days, sewn and checked per cell, the made-to-measure units by number', { timeout: 60_000 }, () => {
+  const day = (offset: number) => businessDate(new Date(Date.now() + offset * 86_400_000))
+  const SLOT_NOTE = 'T-PT001 made-up bar'
+  const jobs = { alpha: newId(), mixed: newId() }
+  const mtm = { order: newId(), lines: [newId(), newId(), newId()], workOrders: [newId(), newId(), newId()] }
+  let before: { status: string; dueDate: string | null }
+  let workshop: { id: string; name: string }
+  const setWorkOrder = async (status: string, due: string | null) => {
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "WorkOrder" SET status = '${status}', "dueDate" = ${due ? `'${due}'` : 'NULL'} WHERE id = ${lit(alpha.workOrderId)}; COMMIT;`)
+    forgetProgress()
+  }
+  const rowOf = async (sessionName = 'office.all') => workOrderOf(await ok(sessionName, production(alpha.so1, 'work')), alpha.workOrderId)!
+  const listRisk = async () => ((await ok('office.all', `/production/work-orders?q=${encodeURIComponent(alpha.workOrderNumber)}&limit=10`)).workOrders as Json[]).find((row) => row.id === alpha.workOrderId)!.risk
+
+  beforeAll(async () => {
+    const [stored] = await admin<{ status: string; dueDate: Date | null }>(`SELECT status::text AS status, "dueDate" FROM "WorkOrder" WHERE id = $1`, [alpha.workOrderId])
+    before = { status: stored!.status, dueDate: stored!.dueDate ? stored!.dueDate.toISOString().slice(0, 10) : null }
+    const [party] = await admin<{ id: string; legalName: string; tradeName: string | null }>(`SELECT id, "legalName", "tradeName" FROM "Party" WHERE id = $1`, [seedUuid(ns, 'party:P2')])
+    workshop = { id: party!.id, name: party!.tradeName ?? party!.legalName }
+    const [location] = await admin<{ id: string }>(`SELECT id FROM "Location" WHERE "tenantId" = $1 ORDER BY ("siteId" = $2) DESC, id LIMIT 1`, [ids.tenantId, w.siteId])
+    const t = lit(ids.tenantId)
+    const site = lit(w.siteId)
+    // A bar of Alpha's work order on every WORKING plan of the site (one made when the seeds have none), ending in 10 days; a job of
+    // Alpha's work order (issued 12 Nov, back 4 Dec) and one of the mixed work order at the seeds' workshop.
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "PlanVersion" (id, "tenantId", "companyId", "siteId", kind)
+         SELECT ${lit(newId())}, ${t}, ${lit(w.companyId)}, ${site}, 'WORKING' WHERE NOT EXISTS (SELECT 1 FROM "PlanVersion" WHERE "siteId" = ${site} AND kind = 'WORKING');
+       INSERT INTO "ScheduleSlot" (id, "tenantId", "siteId", "planVersionId", "planKind", "workOrderId", "startAt", "endAt", minutes, note)
+         SELECT gen_random_uuid(), ${t}, ${site}, id, 'WORKING', ${lit(alpha.workOrderId)}, '${day(8)}T08:00:00.000Z', '${day(10)}T12:00:00.000Z', 60, '${SLOT_NOTE}' FROM "PlanVersion" WHERE "siteId" = ${site} AND kind = 'WORKING';
+       INSERT INTO "SubcontractOrder" (id, "tenantId", "companyId", "siteId", number, "partyId", "locationId", "workOrderId", status, "orderDate", "expectedBackDate", "issuedAt", "issuedById") VALUES
+         (${lit(jobs.alpha)}, ${t}, ${lit(w.companyId)}, ${site}, 'T-PT001-SC-1', ${lit(workshop.id)}, ${lit(location!.id)}, ${lit(alpha.workOrderId)}, 'ISSUED', '2026-11-12', '2026-12-04', '2026-11-12T09:00:00.000Z', ${lit(seedUuid(ns, 'actor'))}),
+         (${lit(jobs.mixed)}, ${t}, ${lit(w.companyId)}, ${site}, 'T-PT001-SC-2', ${lit(workshop.id)}, ${lit(location!.id)}, ${lit(w.mixed.workOrderId)}, 'ISSUED', '2026-11-12', '2026-12-04', '2026-11-12T09:00:00.000Z', ${lit(seedUuid(ns, 'actor'))});
+       COMMIT;`,
+    )
+    // A new order of Alpha with three one-piece lines, each made by a made-to-measure work order of its own (numbers 10, 9, 11).
+    const [harnessLine] = await admin<{ colourwayId: string; companyId: string }>(`SELECT "colourwayId", "companyId" FROM "SalesOrderLine" WHERE id = $1`, [w.a.salesOrderLineId])
+    await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId: seedUuid(ns, 'actor') }, (client) =>
+      client.$transaction(async (tx) => {
+        await tx.salesOrder.create({
+          data: { id: mtm.order, companyId: harnessLine!.companyId, partyId: ids.a, number: 'T-PT003-SO-MTM', customerRef: 'T-PT003-PO-MTM', status: 'CONFIRMED', orderDate: new Date('2026-11-03T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' }, promiseDate: new Date('2026-12-20T00:00:00.000Z') },
+          select: { id: true },
+        })
+        for (const [index, lineId] of mtm.lines.entries()) {
+          await tx.salesOrderLine.create({
+            data: { id: lineId, companyId: harnessLine!.companyId, orderId: mtm.order, partyId: ids.a, seq: (index + 1) * 10, kind: 'SIZE_GRID', styleId: w.styleId, colourwayId: harnessLine!.colourwayId, quantity: 1, unitPrice: '100.000000', netAmount: 10_000, vatRatePct: '22.00', vatAmount: 2_200 },
+            select: { id: true },
+          })
+          await tx.salesOrderLineSize.create({ data: { id: newId(), lineId, partyId: ids.a, size: '50', quantity: 1 }, select: { id: true } })
+        }
+      }),
+    )
+    const numbers = ['T-PT003-MTM-10', 'T-PT003-MTM-9', 'T-PT003-MTM-11']
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       ${mtm.workOrders
+         .map(
+           (workOrderId, index) =>
+             `INSERT INTO "WorkOrder" (id, "tenantId", "companyId", "siteId", number, kind, "styleId", status, "partyId") VALUES (${lit(workOrderId)}, ${t}, ${lit(w.companyId)}, ${site}, '${numbers[index]}', 'MADE_TO_MEASURE', ${lit(w.styleId)}, 'DRAFT', ${lit(ids.a)});
+              INSERT INTO "WorkOrderSize" (id, "tenantId", "siteId", "workOrderId", "styleId", "colourwayId", size, quantity, "salesOrderLineId", "partyId") VALUES (${lit(newId())}, ${t}, ${site}, ${lit(workOrderId)}, ${lit(w.styleId)}, ${lit(harnessLine!.colourwayId)}, '50', 1, ${lit(mtm.lines[index]!)}, ${lit(ids.a)});`,
+         )
+         .join('\n')}
+       COMMIT;`,
+    )
+    forgetProgress()
+  })
+
+  afterAll(async () => {
+    await setWorkOrder(before.status, before.dueDate)
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; DELETE FROM "ScheduleSlot" WHERE note = '${SLOT_NOTE}'; DELETE FROM "SubcontractOrder" WHERE id IN (${lit(jobs.alpha)}, ${lit(jobs.mixed)}); COMMIT;`)
+  })
+
+  it('at risk: open, its bar on the WORKING plan ends after its due day — the same risk the Production list reads', async () => {
+    await setWorkOrder('RELEASED', day(5))
+    const row = await rowOf()
+    expect(row.risk).toEqual({ state: 'AT_RISK', daysLate: null, plannedEnd: day(10), planAfterDue: true, raised: null, blockedBy: null })
+    expect(await listRisk()).toEqual(row.risk)
+  })
+
+  it('late: open past its due day, with the days late (the list says the same)', async () => {
+    await setWorkOrder('RELEASED', day(-3))
+    const row = await rowOf()
+    expect(row.risk).toMatchObject({ state: 'LATE', daysLate: 3, plannedEnd: day(10), planAfterDue: true })
+    expect(await listRisk()).toEqual(row.risk)
+  })
+
+  it('on hold, due after its bar: blocked by the hold', async () => {
+    await setWorkOrder('ON_HOLD', day(20))
+    expect((await rowOf()).risk).toEqual({ state: 'BLOCKED', daysLate: null, plannedEnd: day(10), planAfterDue: false, raised: null, blockedBy: 'HOLD' })
+  })
+
+  it('finished: no risk (null); a person limited to Alpha reads the same risk of Alpha’s own work order', async () => {
+    await setWorkOrder('RELEASED', day(5))
+    expect((await rowOf('office.p1')).risk).toMatchObject({ state: 'AT_RISK', planAfterDue: true })
+    await setWorkOrder('COMPLETED', day(5))
+    expect((await rowOf()).risk).toBeNull()
+    await setWorkOrder('RELEASED', day(5))
+  })
+
+  it('a work order shared with other customers: no risk, and its workshops by name only; Alpha’s own: since and back', async () => {
+    const answer = await ok('office.all', production(w.a.salesOrderId, 'work'))
+    const mixed = workOrderOf(answer, w.mixed.workOrderId)!
+    expect(mixed.sharedWithOtherCustomers).toBe(true)
+    expect(mixed.risk).toBeNull()
+    expect(mixed.workshops).toEqual([{ name: workshop.name, since: null, expectedBack: null }])
+    expect((await rowOf()).workshops).toEqual([{ name: workshop.name, since: '2026-11-12', expectedBack: '2026-12-04' }])
+    expect(findMarkers(answer.work, bMarkers)).toEqual([])
+  })
+
+  it('each cell says sewn and checked from the same counts as the work order’s own share (null: not counted, never a made-up 0)', async () => {
+    await setWorkOrder('DRAFT', day(5))
+    const row = await rowOf()
+    for (const cell of row.cells as Json[]) {
+      expect(cell.sewn === null || typeof cell.sewn === 'number').toBe(true)
+      expect(cell.checked === null || typeof cell.checked === 'number').toBe(true)
+    }
+    // A draft: nothing sewn counted (null); the cells add up to the work order's own share.
+    expect((row.cells as Json[]).map((cell) => cell.sewn)).toEqual((row.cells as Json[]).map(() => null))
+    const sum = (key: 'sewn' | 'checked') => (row.cells as Json[]).reduce<number | null>((total, cell) => (cell[key] === null ? total : (total ?? 0) + (cell[key] as number)), null)
+    expect({ sewn: sum('sewn'), checked: sum('checked') }).toEqual({ sewn: row.own.sewn, checked: row.own.checked })
+  })
+
+  it('made to measure: one row with its three units by number (9, 10, 11), each with its line, none more', async () => {
+    const answer = await ok('office.all', production(mtm.order, 'work'))
+    expect(answer.work.mtm).toHaveLength(1)
+    const group = answer.work.mtm[0]
+    expect(group).toMatchObject({ units: 3, workOrders: 3, unitsMore: 0 })
+    expect(group.unitList).toEqual([
+      { id: mtm.workOrders[1], number: 'T-PT003-MTM-9', status: 'DRAFT', lineSeq: 20 },
+      { id: mtm.workOrders[0], number: 'T-PT003-MTM-10', status: 'DRAFT', lineSeq: 10 },
+      { id: mtm.workOrders[2], number: 'T-PT003-MTM-11', status: 'DRAFT', lineSeq: 30 },
+    ])
+    // A unit work order is in the group, never a row of its own; a unit names no rider and no measurement (four keys only).
+    expect(answer.work.workOrders).toEqual([])
+    for (const unit of group.unitList as Json[]) expect(Object.keys(unit).sort()).toEqual(['id', 'lineSeq', 'number', 'status'])
+  })
+
+  it('the wall: a Beta-limited person gets the unknown id’s answer, never Alpha’s risk or workshop', async () => {
+    const unknown = await call('office.p2', production(newId(), 'work'))
+    const refused = await call('office.p2', production(alpha.so1, 'work'))
+    expect([refused.status, refused.body.error?.message]).toEqual([404, unknown.body.error?.message])
+    expect(refused.raw).not.toContain(workshop.name)
+  })
+})
+// ── end B-PT-001 / B-PT-002 / B-PT-003 ──
+
+// ── B-PT-004 (order production tab R4) ──
+/**
+ * Each work order says the spec it is made to, as GET /production/work-orders/:id/spec/versions says it (the domain's newerSpecOf
+ * and the change order's decision): the revision in force (CURRENT); a newer one released after it (NEWER_RELEASED, with the newer
+ * number and day); a change order's decision for it; a draft revision (NOT_RELEASED). A work order shared with other customers has
+ * none. The test moves the style's revisions and pins Alpha's work order by hand (made-up facts: only the read is under test), and
+ * puts the pin and the released revision back after.
+ */
+describe('B-PT-004: each work order’s spec — in force, replaced by a newer one (with a change order’s decision), a draft; shared: none', { timeout: 60_000 }, () => {
+  const revisions = { newer: newId(), draft: newId() }
+  const eco = { id: newId(), item: newId(), number: 'T-PT004-ECO-1' }
+  let pin: string | null = null
+  let inForce: { id: string; revision: number }
+  let top = 0
+  const specOf = async () => workOrderOf(await ok('office.all', production(alpha.so1, 'work')), alpha.workOrderId)!.spec
+  const pinTo = (revisionId: string | null) => admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "WorkOrder" SET "styleRevisionId" = ${revisionId ? lit(revisionId) : 'NULL'} WHERE id = ${lit(alpha.workOrderId)}; COMMIT;`)
+
+  beforeAll(async () => {
+    const [stored] = await admin<{ styleRevisionId: string | null }>(`SELECT "styleRevisionId" FROM "WorkOrder" WHERE id = $1`, [alpha.workOrderId])
+    pin = stored!.styleRevisionId
+    const all = await admin<{ id: string; revision: number; status: string }>(`SELECT id, revision, status::text AS status FROM "StyleRevision" WHERE "styleId" = $1 ORDER BY revision`, [w.styleId])
+    top = Math.max(0, ...all.map((row) => row.revision))
+    const released = all.find((row) => row.status === 'RELEASED')
+    if (released) inForce = { id: released.id, revision: released.revision }
+    else {
+      // No revision in force on the harness's style: one made here (released yesterday).
+      inForce = { id: newId(), revision: ++top }
+      await admin(`BEGIN; SET LOCAL session_replication_role = replica; INSERT INTO "StyleRevision" (id, "tenantId", "styleId", revision, status, "releasedAt") VALUES (${lit(inForce.id)}, ${lit(ids.tenantId)}, ${lit(w.styleId)}, ${inForce.revision}, 'RELEASED', now() - interval '1 day'); COMMIT;`)
+    }
+    await pinTo(inForce.id)
+  })
+
+  afterAll(async () => {
+    await pinTo(pin)
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       DELETE FROM "ChangeOrderItem" WHERE id = ${lit(eco.item)};
+       DELETE FROM "ChangeOrder" WHERE id = ${lit(eco.id)};
+       UPDATE "StyleRevision" SET status = 'OBSOLETE' WHERE id = ${lit(revisions.newer)};
+       UPDATE "StyleRevision" SET status = 'RELEASED' WHERE id = ${lit(inForce.id)};
+       COMMIT;`,
+    )
+  })
+
+  it('made to the revision in force: CURRENT, no newer, no decision', async () => {
+    expect(await specOf()).toEqual({ revision: { revision: inForce.revision, status: 'RELEASED' }, state: 'CURRENT', newer: null, decision: null })
+  })
+
+  it('a newer revision released on 12 Nov: NEWER_RELEASED with the newer number and day — what …/spec/versions says', async () => {
+    top += 1
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       UPDATE "StyleRevision" SET status = 'OBSOLETE' WHERE id = ${lit(inForce.id)};
+       INSERT INTO "StyleRevision" (id, "tenantId", "styleId", revision, status, "releasedAt") VALUES (${lit(revisions.newer)}, ${lit(ids.tenantId)}, ${lit(w.styleId)}, ${top}, 'RELEASED', '2026-11-12T10:00:00.000Z');
+       COMMIT;`,
+    )
+    const spec = await specOf()
+    expect(spec).toEqual({ revision: { revision: inForce.revision, status: 'OBSOLETE' }, state: 'NEWER_RELEASED', newer: { revision: top, releasedOn: '2026-11-12' }, decision: null })
+    const versions = (await ok('office.all', `/production/work-orders/${alpha.workOrderId}/spec/versions`)).newer
+    expect({ state: spec.state, newer: spec.newer }).toEqual({ state: versions.state, newer: { revision: versions.newer.revision, releasedOn: versions.newer.releasedOn } })
+    // The rule's English message is never sent: the screen says the state in its own words.
+    expect(JSON.stringify(spec)).not.toContain(versions.message)
+  })
+
+  it('a change order decided for it: its disposition and number', async () => {
+    const [company] = await admin<{ companyId: string }>(`SELECT "companyId" FROM "WorkOrder" WHERE id = $1`, [alpha.workOrderId])
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "ChangeOrder" (id, "tenantId", "companyId", number, "styleId", "fromRevisionId", "toRevisionId", title, reason, status, "authorId", "decidedAt")
+         VALUES (${lit(eco.id)}, ${lit(ids.tenantId)}, ${lit(company!.companyId)}, '${eco.number}', ${lit(w.styleId)}, ${lit(inForce.id)}, ${lit(revisions.newer)}, 'Made-up: a longer zip', 'Made-up reason', 'APPROVED', ${lit(seedUuid(ns, 'actor'))}, now());
+       INSERT INTO "ChangeOrderItem" (id, "tenantId", "changeOrderId", seq, kind, "workOrderId", disposition) VALUES (${lit(eco.item)}, ${lit(ids.tenantId)}, ${lit(eco.id)}, 1, 'WORK_IN_PROGRESS', ${lit(alpha.workOrderId)}, 'FINISH_OLD');
+       COMMIT;`,
+    )
+    expect(await specOf()).toMatchObject({ state: 'NEWER_RELEASED', decision: { disposition: 'FINISH_OLD', changeOrder: eco.number } })
+  })
+
+  it('pinned to a draft revision: NOT_RELEASED (no newer, no decision)', async () => {
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; INSERT INTO "StyleRevision" (id, "tenantId", "styleId", revision, status) VALUES (${lit(revisions.draft)}, ${lit(ids.tenantId)}, ${lit(w.styleId)}, ${top + 1}, 'DRAFT'); COMMIT;`)
+    await pinTo(revisions.draft)
+    expect(await specOf()).toEqual({ revision: { revision: top + 1, status: 'DRAFT' }, state: 'NOT_RELEASED', newer: null, decision: null })
+    await pinTo(inForce.id)
+  })
+
+  it('a work order shared with other customers: no spec (null) — no plan or spec detail of shared work', async () => {
+    const mixed = workOrderOf(await ok('office.all', production(w.a.salesOrderId, 'work')), w.mixed.workOrderId)!
+    expect(mixed.sharedWithOtherCustomers).toBe(true)
+    expect(mixed.spec).toBeNull()
+  })
+})
+// ── end B-PT-004 ──
+
+// ── B-PT-005 … B-PT-009 (order production tab R5–R9) ──
+/**
+ * The dates part says what the order's customer is shown (its sharing level) and carries Planning's own gate fields and mayAddGate
+ * (the order page then opens Planning's dialogs unchanged); the headline's health carries the production state's version (Mark at
+ * risk… sends it back from this one read); each final check has its id, lot, units inspected and the garments with a defect per
+ * class (never the inspector); each NCR its title, cut at 80. The test sets Alpha's sharing level, adds three final checks of
+ * Alpha's work order (failed, re-inspected and passed, one open), one of the mixed work order, and an NCR with a long title — by
+ * hand (made-up facts: only the read is under test) — and puts the level back after.
+ */
+describe('B-PT-005…009: the customer’s level, Planning’s gate fields, the health version, final checks with totals, NCR titles', { timeout: 60_000 }, () => {
+  const PLANNER = newId()
+  const checks = { failed: newId(), passed: newId(), open: newId(), mixed: newId() }
+  const ncr = newId()
+  const LONG_TITLE = `Made-up: the left sleeve seam opens under load ${'and the binding frays '.repeat(4)}`.trim()
+  const DESCRIPTION = 'T-PT009 made-up description, never sent to the order page'
+  let level: string | null = null
+
+  beforeAll(async () => {
+    SESSIONS['pt.planner'] = { audience: 'office', tenantId: ids.tenantId, actorId: PLANNER, grants: [grant(['orders.view', 'planning.view', 'planning.milestones.manage', 'planning.milestones.override'], 'all')] }
+    const [stored] = await admin<{ level: string }>(`SELECT "productionLevel"::text AS level FROM "PortalSettings" WHERE id = $1 AND "partyId" = $1`, [ids.a])
+    level = stored?.level ?? null
+    const t = lit(ids.tenantId)
+    const inspector = lit(seedUuid(ns, 'actor'))
+    const check = (id: string, workOrderId: string, number: string, status: string, inspected: number | null, createdAt: string) =>
+      `INSERT INTO "Inspection" (id, "tenantId", "companyId", "siteId", "workOrderId", number, "lotSize", "sampleSize", "inspectionLevel", "aqlMajor", "aqlMinor", "acceptMajor", "acceptMinor", status, "inspectorUserId", "decidedAt", "signatureSha256", "computedResult", "inspectedCount", version, "createdAt", "updatedAt")
+         SELECT ${lit(id)}, ${t}, "companyId", "siteId", id, '${number}', 100, 32, 'II', 2.5, 4.0, 1, 2, '${status}'::"InspectionStatus", ${status === 'OPEN' ? 'NULL' : inspector}, ${status === 'OPEN' ? 'NULL' : `'${createdAt}'`}, ${status === 'OPEN' ? 'NULL' : `'${'a'.repeat(64)}'`}, ${status === 'OPEN' ? 'NULL' : status === 'PASSED' ? `'PASS'::"InspectionResult"` : `'FAIL'::"InspectionResult"`}, ${inspected === null ? 'NULL' : inspected}, 1, '${createdAt}', '${createdAt}'
+         FROM "WorkOrder" WHERE id = ${lit(workOrderId)};`
+    const defect = (inspectionId: string, defectClass: string, code: string, quantity: number) =>
+      `INSERT INTO "InspectionDefect" (id, "tenantId", "siteId", "workOrderId", "inspectionId", "defectClass", code, quantity)
+         SELECT ${lit(newId())}, ${t}, "siteId", "workOrderId", id, '${defectClass}', '${code}', ${quantity} FROM "Inspection" WHERE id = ${lit(inspectionId)};`
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       ${check(checks.failed, alpha.workOrderId, 'T-PT008-INS-1', 'FAILED', 32, '2026-11-18T09:00:00.000Z')}
+       ${check(checks.passed, alpha.workOrderId, 'T-PT008-INS-2', 'PASSED', null, '2026-11-19T09:00:00.000Z')}
+       ${check(checks.open, alpha.workOrderId, 'T-PT008-INS-3', 'OPEN', 5, '2026-11-20T09:00:00.000Z')}
+       ${check(checks.mixed, w.mixed.workOrderId, 'T-PT008-INS-4', 'PASSED', 32, '2026-11-19T10:00:00.000Z')}
+       ${defect(checks.failed, 'MAJOR', 'SEAM-OPEN', 2)}
+       ${defect(checks.failed, 'MINOR', 'THREAD-END', 1)}
+       ${defect(checks.passed, 'MINOR', 'THREAD-END', 1)}
+       ${defect(checks.open, 'CRITICAL', 'CE-MISSING', 1)}
+       INSERT INTO "Nonconformance" (id, "tenantId", "companyId", "siteId", number, title, description, source, "foundAt", "foundOn", "foundById", "quantityAffected", uom, severity, "workOrderId", stage)
+         SELECT ${lit(ncr)}, ${t}, "companyId", "siteId", 'T-PT009-NCR-1', '${LONG_TITLE}', '${DESCRIPTION}', 'INSPECTION', 'FINAL', now(), ${inspector}, 2, 'PCS', 'MAJOR', id, 'OPEN' FROM "WorkOrder" WHERE id = ${lit(alpha.workOrderId)};
+       COMMIT;`,
+    )
+  })
+
+  afterAll(async () => {
+    const restore = level === null ? `DELETE FROM "PortalSettings" WHERE id = ${lit(ids.a)};` : `UPDATE "PortalSettings" SET "productionLevel" = '${level}' WHERE id = ${lit(ids.a)};`
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; ${restore} COMMIT;`)
+  })
+
+  it('B-PT-005: the customer’s sharing level — its stored one (none stored: STATUS), then GATES once it is set', async () => {
+    const beta = await ok('office.p2', production(w.b.salesOrderId, 'dates'))
+    const [betaLevel] = await admin<{ level: string }>(`SELECT "productionLevel"::text AS level FROM "PortalSettings" WHERE id = $1 AND "partyId" = $1`, [ids.b])
+    expect(beta.dates.customer).toEqual({ level: betaLevel?.level ?? 'STATUS' })
+    expect((await ok('office.all', production(alpha.so1, 'dates'))).dates.customer).toEqual({ level: level ?? 'STATUS' })
+    await admin(
+      `BEGIN; SET LOCAL session_replication_role = replica;
+       INSERT INTO "PortalSettings" (id, "tenantId", "partyId", "productionLevel") VALUES (${lit(ids.a)}, ${lit(ids.tenantId)}, ${lit(ids.a)}, 'GATES') ON CONFLICT (id) DO UPDATE SET "productionLevel" = 'GATES';
+       COMMIT;`,
+    )
+    expect((await ok('office.all', production(alpha.so1, 'dates'))).dates.customer).toEqual({ level: 'GATES' })
+    // The Sales template reads it too (orders.view: the dates part); Beta's person never reads Alpha's.
+    expect((await ok('sales.p1', production(alpha.so1, 'dates'))).dates.customer).toEqual({ level: 'GATES' })
+    expect((await call('office.p2', production(alpha.so1, 'dates'))).status).toBe(404)
+  })
+
+  it('B-PT-006: each gate carries Planning’s own holds, passed at and by, planner and maker; mayAddGate and waiting are Planning’s', async () => {
+    const office = await ok('pt.planner', production(alpha.so1, 'dates'))
+    const planning = ((await ok('pt.planner', `/planning/milestones?orderId=${alpha.so1}`)).orders as Json[]).find((row) => row.id === alpha.so1)!
+    const pick = (gate: Json) => ({ id: gate.id, holds: gate.holds, passedAt: gate.passedAt, passedBy: gate.passedBy, ownerId: gate.ownerId, makerId: gate.makerId })
+    expect((office.dates.gates as Json[]).map(pick).sort((a, b) => a.id.localeCompare(b.id))).toEqual((planning.gates as Json[]).map(pick).sort((a, b) => a.id.localeCompare(b.id)))
+    expect(office.dates.mayAddGate).toEqual(planning.mayAddGate)
+    expect(office.dates.mayAddGate).toEqual({ allowed: true, needs: null, refusal: null })
+    expect(office.dates.waiting).toEqual(planning.waiting)
+    // A passed gate names when and the office person who passed it (B-OO-010 passed one by hand as the seeds' owner).
+    const passed = (office.dates.gates as Json[]).find((gate) => gate.state === 'PASSED')
+    expect(passed).toMatchObject({ passedAt: expect.any(String), passedBy: { id: seedUuid(ns, 'actor'), name: expect.any(String) } })
+    for (const gate of office.dates.gates as Json[]) expect(typeof gate.holds).toBe('number')
+    // The Sales template: mayAddGate refused by the right it lacks, in Planning's own words.
+    expect((await ok('sales.p1', production(alpha.so1, 'dates'))).dates.mayAddGate).toEqual({ allowed: false, needs: 'planning.milestones.manage', refusal: null })
+  })
+
+  it('B-PT-007: the headline’s health carries the production state’s version (what Mark at risk… sends back)', async () => {
+    const { headline } = await ok('office.all', production(w.a.salesOrderId, 'headline'))
+    const [row] = await admin<{ version: number }>(`SELECT version FROM "BrandOrderProduction" WHERE "salesOrderId" = $1`, [w.a.salesOrderId])
+    expect(headline.health).toMatchObject({ code: 'AT_RISK', version: row!.version })
+    // The health GET of the same order names the same version.
+    expect((await ok('office.all', `/production/brand-orders/${w.a.salesOrderId}/health`)).health.version).toBe(row!.version)
+  })
+
+  it('B-PT-008: a failed, a re-inspected and an open final check: three rows by id, each with lot, units and the defects per class; never the inspector', async () => {
+    const finals = (await ok('office.all', production(alpha.so1, 'quality'))).quality.final as Json[]
+    const byId = new Map(finals.map((row) => [row.id as string, row]))
+    expect(new Set(finals.map((row) => row.id)).size).toBe(finals.length)
+    expect(byId.get(checks.failed)).toEqual({ id: checks.failed, workOrderId: alpha.workOrderId, number: 'T-PT008-INS-1', status: 'FAILED', lotSize: 100, sampleSize: 32, inspectedCount: 32, on: '2026-11-18', defects: { critical: 0, major: 2, minor: 1 }, sharedWorkOrder: false })
+    expect(byId.get(checks.passed)).toMatchObject({ number: 'T-PT008-INS-2', status: 'PASSED', inspectedCount: null, defects: { critical: 0, major: 0, minor: 1 }, sharedWorkOrder: false })
+    expect(byId.get(checks.open)).toMatchObject({ status: 'OPEN', inspectedCount: 5, defects: null, on: null })
+    expect(keysOf(finals).filter((key) => /inspector|worker|operator/i.test(key))).toEqual([])
+    // The mixed work order's check: shown to an every-customer reader as shared; a person limited to Alpha does not reach it.
+    expect((((await ok('office.all', production(w.a.salesOrderId, 'quality'))).quality.final) as Json[]).find((row) => row.id === checks.mixed)).toMatchObject({ sharedWorkOrder: true })
+    expect(JSON.stringify(await ok('office.p1', production(w.a.salesOrderId, 'quality')))).not.toContain(checks.mixed)
+  })
+
+  it('B-PT-009: an NCR says its title, cut at 80 with "…"; never its description or who found it', async () => {
+    const answer = await ok('office.all', production(alpha.so1, 'quality'))
+    const row = (answer.quality.ncrs as Json[]).find((entry) => entry.id === ncr)!
+    expect(Array.from(row.title as string)).toHaveLength(80)
+    expect(row.title.endsWith('…')).toBe(true)
+    expect(LONG_TITLE.startsWith((row.title as string).slice(0, -1))).toBe(true)
+    expect(Object.keys(row).sort()).toEqual(['id', 'number', 'severity', 'sharedWorkOrder', 'stage', 'title'])
+    expect(JSON.stringify(answer)).not.toContain(DESCRIPTION)
+  })
+})
+// ── end B-PT-005 … B-PT-009 ──
+
+// ── B-PT-011 (order production tab R11) ──
+/**
+ * The order read's promise history tells the first promise (SET) from a move (MOVED) by the production read's own rule (one
+ * isFirstPromise: the headline's "moved N×" counts the same rows), and a lines' move says each line's own day before it — so a move
+ * of two lines on different days never reads "— → …". A new order of Alpha with two lines and no promise gets, through the real
+ * route, its first promise, a move of line 10 alone, then a move of both lines.
+ */
+describe('B-PT-011: the promise history says SET or MOVED by one rule, and a lines’ move each line’s day before it', { timeout: 60_000 }, () => {
+  const order = { id: newId(), lines: [newId(), newId()] }
+  const later = (days: number) => businessDate(new Date(Date.now() + days * 86_400_000))
+  let version = 0
+  const promise = async (promiseDate: string, lineIds?: string[]) => {
+    const answer = await app.inject({ method: 'PUT', url: `/sales/orders/${order.id}/promise`, headers: { 'x-test-session': 'pt.manage' }, payload: { version, promiseDate, reason: 'Made-up: the lining comes later.', ...(lineIds ? { lineIds } : {}) } })
+    expect(answer.statusCode, answer.body).toBe(200)
+    const body = answer.json() as { order: Json }
+    version = body.order.version as number
+    return body.order
+  }
+
+  beforeAll(async () => {
+    SESSIONS['pt.manage'] = session(grant(['orders.view', 'orders.manage', 'workorders.view'], 'all'))
+    const [harnessLine] = await admin<{ colourwayId: string; companyId: string }>(`SELECT "colourwayId", "companyId" FROM "SalesOrderLine" WHERE id = $1`, [w.a.salesOrderLineId])
+    await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId: seedUuid(ns, 'actor') }, (client) =>
+      client.$transaction(async (tx) => {
+        await tx.salesOrder.create({
+          data: { id: order.id, companyId: harnessLine!.companyId, partyId: ids.a, number: 'T-PT011-SO-1', customerRef: 'T-PT011-PO-1', status: 'CONFIRMED', orderDate: new Date('2026-11-03T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' } },
+          select: { id: true },
+        })
+        for (const [index, lineId] of order.lines.entries()) {
+          await tx.salesOrderLine.create({
+            data: { id: lineId, companyId: harnessLine!.companyId, orderId: order.id, partyId: ids.a, seq: (index + 1) * 10, kind: 'SIZE_GRID', styleId: w.styleId, colourwayId: harnessLine!.colourwayId, quantity: 2, unitPrice: '100.000000', netAmount: 20_000, vatRatePct: '22.00', vatAmount: 4_400 },
+            select: { id: true },
+          })
+          await tx.salesOrderLineSize.create({ data: { id: newId(), lineId, partyId: ids.a, size: '50', quantity: 2 }, select: { id: true } })
+        }
+      }),
+    )
+    const [stored] = await admin<{ version: number }>(`SELECT version FROM "SalesOrder" WHERE id = $1`, [order.id])
+    version = stored!.version
+  })
+
+  it('the first promise: SET, no line days; the headline counts no move', async () => {
+    const set = await promise(later(30))
+    expect(set.promiseHistory).toEqual([expect.objectContaining({ to: later(30), lineIds: [], kind: 'SET', fromByLine: null })])
+    expect((await ok('office.all', production(order.id, 'headline'))).headline.promise).toMatchObject({ moves: 0 })
+  })
+
+  it('line 10 moved alone: MOVED, its day before it (the order’s)', async () => {
+    const moved = await promise(later(34), [order.lines[0]!])
+    expect(moved.promiseHistory[0]).toMatchObject({ to: later(34), lineIds: [order.lines[0]], kind: 'MOVED', fromByLine: [{ lineId: order.lines[0], from: later(30) }] })
+    expect(moved.promiseHistory[1]).toMatchObject({ kind: 'SET' })
+  })
+
+  it('both lines moved together from different days: each line’s own day before it (never "— → …"); the headline counts two moves', async () => {
+    const mixed = await promise(later(40), [...order.lines])
+    expect(mixed.promiseHistory[0]).toMatchObject({ to: later(40), from: null, kind: 'MOVED', fromByLine: [{ lineId: order.lines[0], from: later(34) }, { lineId: order.lines[1], from: later(30) }] })
+    expect((mixed.promiseHistory as Json[]).map((row) => row.kind)).toEqual(['MOVED', 'MOVED', 'SET'])
+    // One rule: the headline's "moved N×" counts the MOVED rows of the same history.
+    const { headline } = await ok('office.all', production(order.id, 'headline'))
+    expect(headline.promise.moves).toBe((mixed.promiseHistory as Json[]).filter((row) => row.kind === 'MOVED').length)
+  })
+
+  it('the wall: a Beta-limited person reads neither the order nor its history (the unknown id’s answer)', async () => {
+    const unknown = await call('office.p2', `/sales/orders/${newId()}`)
+    const refused = await call('office.p2', `/sales/orders/${order.id}`)
+    expect([refused.status, refused.body.error?.message]).toEqual([unknown.status, unknown.body.error?.message])
+    expect(refused.raw).not.toContain('T-PT011-SO-1')
+  })
+})
+// ── end B-PT-011 ──

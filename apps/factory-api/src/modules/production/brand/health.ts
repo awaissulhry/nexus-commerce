@@ -124,7 +124,11 @@ const standingRaise = (row: StateRow, today: BusinessDate): HealthRaise | null =
 }
 
 async function viewOf(db: Reader, order: OrderRow, row: StateRow | null, today: BusinessDate) {
-  if (row === null) {
+  // B-PT-012 (order production tab R12): kept only while the keeper keeps the order (confirmed, not yet shipped in full); once
+  // production is over (shipped, delivered, closed, cancelled) it reads as an order not kept — no health, raise or wait — as the
+  // order page's production read already does (headline.health null after production), so the strip shared with the work order
+  // page hides the same way on both. The keeper's last row stays the customer's history, untouched; a raise is refused (409).
+  if (row === null || !isKeptState(order.status)) {
     return { orderId: order.id, number: order.number, partyId: order.partyId, kept: false, computed: null, health: null, reasonCode: null, raise: null, waitingOn: null, waitingSince: null, version: null }
   }
   const effective = effectiveHealth(row.health, standingRaise(row, today))

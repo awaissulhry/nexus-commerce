@@ -296,8 +296,11 @@ export async function styleDrift(caller: CommandCaller, styleId: string): Promis
   })
 }
 
-/** The change order's decision for this work order (an APPROVED or RELEASED order's work-in-progress line), newest first. */
-async function decisionFor(db: Db, workOrderId: string): Promise<Decision | null> {
+/**
+ * The change order's decision for this work order (an APPROVED or RELEASED order's work-in-progress line), newest first.
+ * B-PT-004: exported — the order page's work orders read the same decision (sales/orders production-read), never a copy.
+ */
+export async function decisionFor(db: Db, workOrderId: string): Promise<Decision | null> {
   const items = await db.changeOrderItem.findMany({ where: { workOrderId, kind: 'WORK_IN_PROGRESS', disposition: { not: null } }, select: { changeOrderId: true, disposition: true } })
   if (items.length === 0) return null
   const orders = await db.changeOrder.findMany({ where: { id: { in: items.map((item) => item.changeOrderId) }, status: { in: ['APPROVED', 'RELEASED'] } }, select: { id: true, number: true, decidedAt: true, releasedAt: true } })
