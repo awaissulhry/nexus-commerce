@@ -168,7 +168,9 @@
 .fw-pt-moves { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--nds-space-10); }
 .fw-pt-move { display: flex; flex-direction: column; gap: var(--nds-space-2); font-size: var(--nds-font-size-sm); min-width: 0; padding-left: var(--nds-space-12); border-left: 2px solid var(--nds-warning-border); scroll-margin-top: var(--nds-space-4); }
 .fw-pt-move.is-set { border-left-color: var(--nds-border-strong); }
-.fw-pt-move-doors { display: flex; gap: var(--nds-space-2); flex-wrap: wrap; align-items: center; }
+/* fx9 N5: "Versions & changes ›" and "Ask for a design change…" are two doors of one group — 2 px ran them together; 16 px apart on a
+   line, 4 px when they wrap. */
+.fw-pt-move-doors { display: flex; column-gap: var(--nds-space-16); row-gap: var(--nds-space-4); flex-wrap: wrap; align-items: center; margin-top: var(--nds-space-2); }
 
 /* ── 3 · Problems & holds (F-PT-301 / 302) ── */
 .fw-pt-ph { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16) var(--nds-space-22); min-width: 0; }
