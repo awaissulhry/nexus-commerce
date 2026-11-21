@@ -12,7 +12,7 @@ import { useProductionWords } from '../../../../../../lib/production/words'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
 import { tabHref } from '../../../../../_shared/record-frame/address'
 import type { Order } from '../../../api'
-import { dayInstant } from '../../../model'
+import { dayInstant, readOnlyOnPage } from '../../../model'
 import { YesDoorView } from '../../../depth/view/DepthBand'
 import { NAMESPACE as DEPTH } from '../../../depth/model'
 import { say } from '../../overview/model'
@@ -94,6 +94,10 @@ export function StripRow({ strip, doors, order, model, actions, now }: { strip: 
     const shared = reached.flatMap((entry) => (entry.shared && entry.number && strip.kind !== 'quality' ? [entry.number] : []))
     if (shared.length > 0) lines.push(t('where.strip.shared', { count: shared.length, numbers: numbersOf(t, shared) }))
     if (strip.kind === 'quality') lines.push(t('where.strip.qualityWho'))
+    // F-PT-301 (plan D2 / L9): a hold of this order's own work orders this reader may not lift — no grey door (stripDoorsOf leaves it
+    // out), ONE line says who does it; on Overview and on Production alike. Read-only reads the strip's words only.
+    const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
+    if ((strip.kind === 'production' || strip.kind === 'pause') && doors.length === 0 && !readOnly && reached.some((entry) => !entry.shared)) lines.push(t('wo.heldHold'))
   }
   if (strip.kind === 'review' && order.lines.filter((line) => line.kind === 'MADE_TO_MEASURE').length > 1) lines.push(t('where.strip.reviewDoor.several'))
   // ---- F-OO-106: the credit strip's own lines — what was found, the last answer to a yes, who checks it; never an amount ----

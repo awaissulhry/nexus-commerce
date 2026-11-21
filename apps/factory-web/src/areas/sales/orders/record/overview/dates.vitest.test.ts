@@ -599,7 +599,7 @@ describe('F-OO-146: material and workshop rows from the ONE waiting list’s DAT
   describe('drawn', () => {
     const card = (over: Partial<OrderRecordModel> = {}, locale: 'en' | 'it' = 'en', production = ready(read)) => render(createElement(DatesCard, { order: value, model: base('owner', value, { tab: 'overview', production, ...over }).record, waiting: orderWaitingOf(value, { production, requests: null, can: { recordPayment: false } }, locale) }), locale)
 
-    it('after the gates: "At an outside workshop WO-00021 · 5 d", "Material short waits on the supplier", each with Production › at its anchor', () => {
+    it('after the gates: "At an outside workshop WO-00021 · 5 d", "Material short waits on the supplier", each with Production › at its own section', () => {
       const html = card()
       const text = textOf(html)
       expect(text).toContain(`At an outside workshop ${WO.number} · 5 d Production ›`)
@@ -607,8 +607,11 @@ describe('F-OO-146: material and workshop rows from the ONE waiting list’s DAT
       expect(text.indexOf('Trims in')).toBeLessThan(text.indexOf('At an outside workshop'))
       // The Trims in gate says its own age; its wait is not drawn twice.
       expect(text.match(/Material short/g)).toHaveLength(1)
-      expect(html).toMatch(/href="[^"]*production[^"]*#holds"/)
-      expect(html).toMatch(/href="[^"]*production[^"]*#dates"/)
+      // F-PT-301: each door lands where it is answered — the outside workshop on its work order's row (#work-orders), material short on
+      // Materials (#materials); none of these goes to Problems & holds or to Dates & plan any more.
+      expect(html).toMatch(/href="[^"]*production[^"]*#work-orders"/)
+      expect(html).toMatch(/href="[^"]*production[^"]*#materials"/)
+      expect(html).not.toMatch(/href="[^"]*production[^"]*#holds"/)
       const italian = textOf(card({}, 'it'))
       expect(italian).toContain(`Presso un laboratorio esterno ${WO.number} · 5 g Produzione ›`)
       expect(italian).toContain('Materiale mancante aspetta il fornitore Produzione ›')

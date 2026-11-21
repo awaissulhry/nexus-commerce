@@ -504,8 +504,13 @@ describe('F-OO-105: the strips drawn — the yes for its approver, asker and any
     for (const words of ['Blocco qualità — Differenza di tonalità della pelle', 'su 1 ordine di lavoro: WO-00022', 'Sblocca in Qualità ›', 'Fermo di produzione — Verifica della pelle con la conceria', 'Togli il blocco…', 'In pausa su richiesta del cliente', 'e 1 ordine di lavoro fuori da ciò che puoi aprire', 'Apri WO-00019 ›']) expect(it, words).toContain(words)
   })
 
-  it('Sales: Lift the hold… held with who does it; Read-only: the same words, no button at all (and the deposit, the credit, "Show 1 more")', () => {
-    expect(stripsOf(draw('f-oo-105-holds-sales'))).toMatch(/aria-disabled="true"[^>]*aria-description="Production does this — a planner or the production manager"[^>]*>Lift the hold…/)
+  // Plan D2 / L9 (F-PT-301): hidden without the right, on Overview too — Sales sees no Lift door (never a grey one) and ONE line says
+  // who does it; Read-only reads the same words without that line and without any button.
+  it('Sales: no Lift the hold… (hidden), one line says who does it; Read-only: the same words, no button at all (and the deposit, the credit, "Show 1 more")', () => {
+    const sales = stripsOf(draw('f-oo-105-holds-sales'))
+    expect(sales).not.toMatch(/>Lift the hold…/)
+    expect(sales).not.toMatch(/aria-disabled="true"[^>]*>Lift/)
+    expect(textOf(sales)).toContain('Production does this — a planner or the production manager')
     const readOnly = stripsOf(draw('f-oo-105-read-only'))
     expect(textOf(readOnly)).toContain('Quality hold — Shade difference on the leather')
     expect(readOnly).not.toContain('<button')
@@ -982,14 +987,17 @@ describe('F-OO-108: Hold the whole order… in the moves row — the domain plan
     const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, locale)
     const rowOf = (html: string) => html.slice(html.indexOf('class="fw-so-where-moves"'), html.indexOf('</div>', html.indexOf('class="fw-so-where-moves"')))
 
-    it('the Owner: Hold the whole order… live beside Mark ready…; Sales: held — Production does it; nothing yet: the plan\'s words', () => {
+    it('the Owner: Hold the whole order… live beside Mark ready…; Sales: held — Production does it; nothing yet: the plan\'s words; no Release door for Sales', () => {
       expect(rowOf(draw('f-oo-108-moves'))).toMatch(/<button[^>]*>Hold the whole order…<\/button>/)
       expect(rowOf(draw('f-oo-108-moves'))).not.toMatch(/aria-description="[^"]*"[^>]*>Hold the whole order…/)
       expect(rowOf(draw('f-oo-108-moves-sales'))).toMatch(/aria-disabled="true"[^>]*aria-description="Production does this — a planner or the production manager"[^>]*>Hold the whole order…/)
       expect(rowOf(draw('f-oo-108-nothing'))).toMatch(/aria-description="Nothing to hold yet: no work order is made for this order\."[^>]*>Hold the whole order…/)
       expect(rowOf(draw('f-oo-108-moves', 'it'))).toContain("Metti in sospeso tutto l'ordine…".replace("'", '&#x27;'))
-      // Sales' Release on Quality › is held with who releases it (the Quality page would refuse it).
-      expect(draw('f-oo-105-holds-sales')).toMatch(/aria-description="Quality releases it: Quality&#x27;s holds open for a quality inspector or the Owner"[^>]*>Release on Quality ›/)
+      // F-PT-301 (L9): Sales' Release on Quality › is not drawn (the Quality page would refuse it); the strip's own line says who
+      // releases it. Hold the whole order… stays a move held in words (whereMovesOf, not a strip door).
+      const sales = draw('f-oo-105-holds-sales')
+      expect(sales).not.toContain('Release on Quality ›')
+      expect(textOf(sales)).toContain(createTranslator('en', messagesFor('en', ['orders']).orders!)('where.strip.qualityWho'))
     })
 
     it('the words exist in both languages, office "tu" in Italian', () => {
@@ -1030,14 +1038,17 @@ describe('F-OO-109: the strip\'s Lift… on several of its own work orders opens
     expect(stripDoorsOf(pause(TWO), input({ work, readOnly: true }))).toEqual([])
   })
 
-  it('drawn: the Owner\'s Lift the customer\'s pause… is live; Sales\' is held — Production does it', () => {
+  it('drawn: the Owner\'s Lift the customer\'s pause… is live; Sales\' is hidden — one line: Production does it', () => {
     const view = designScreen.view as ComponentType<{ model: unknown }>
     const draw = (id: string) => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, 'en')
     const stripsOf = (html: string): string => html.slice(html.indexOf('class="fw-so-strips"'), html.indexOf('</ul>', html.indexOf('class="fw-so-strips"')))
     const owner = stripsOf(draw('f-oo-109-lift'))
     expect(textOf(owner)).toContain('on 4 work orders: WO-00019, WO-00021 and 1 more and 1 work order outside what you can open')
     expect(owner).toMatch(/<button[^>]*>Lift the customer&#x27;s pause…<\/button>/)
-    expect(stripsOf(draw('f-oo-109-lift-sales'))).toMatch(/aria-disabled="true"[^>]*aria-description="Production does this — a planner or the production manager"[^>]*>Lift the customer&#x27;s pause…/)
+    // F-PT-301 (L9): Sales has no lift door (hidden, never grey); the strip's one line says who does it.
+    const sales = stripsOf(draw('f-oo-109-lift-sales'))
+    expect(sales).not.toContain('Lift the customer&#x27;s pause…')
+    expect(textOf(sales)).toContain('Production does this — a planner or the production manager')
     const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8') + readFileSync(new URL('../view/overview/StripRow.tsx', import.meta.url), 'utf8') /* F-PT-301: the strip row moved to its own file */
     expect(card).toContain('actions?.workOrderActs?.onLiftMany?.({ kind: door.holdKind, workOrders: door.workOrders, shared: door.shared, notReached: door.notReached })')
   })

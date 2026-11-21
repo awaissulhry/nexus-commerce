@@ -2875,7 +2875,6 @@
       "sharedCheck": "Covers other work too — not for the customer",
       "qualityWithheld": "Not shown to you: final checks, nonconformances (Production and Quality see them)",
       "noFinal": "No final check yet.",
-      "liftHint": "Lifting a hold: Production does this — a planner or the production manager.",
       "infoBody": "What stops this order right now, who acts and the one button to act; the questions that wait for an answer; then its quality in plain words. The customer reads a hold's own words, never the office's note.",
       "raiseNcr": "Raise a nonconformance…"
     },

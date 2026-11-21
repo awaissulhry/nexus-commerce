@@ -964,8 +964,10 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     const lines = read('./record/view/lines/StyleTable.tsx')
     expect(read('./record/view/LineMenu.tsx')).toContain("target: move.lineIds.length === 1 ? { kind: 'SalesOrderLine'")
     expect(lines).toContain("id={line ? rowAnchor('SalesOrderLine', line.id) : undefined}")
-    const production = read('./record/view/ProductionTab.tsx')
-    for (const door of ["target={{ kind: 'WorkOrder', id: note.workOrderId }} officeOnly", "target={{ kind: 'WorkOrder', id: entry.workOrderId }} officeOnly"]) expect(production).toContain(door)
+    // F-PT-301 / 302: a hold note and a final check are discussed in an office note only, on Problems & holds (the old card went).
+    const problems = read('./record/view/production/ProblemsSection.tsx')
+    for (const door of ["target={{ kind: 'WorkOrder', id: note.workOrderId }} officeOnly", "target={{ kind: 'WorkOrder', id: check.workOrderId }} officeOnly"]) expect(problems).toContain(door)
+    expect(problems).toContain("id={`about-ProductionIssue-${entry.id}`}")
     // F-PT-104: a work order's row door is "Ask about WO-…" — the ONE office note on this order (never a reply), its anchor kept.
     const workOrders = read('./record/view/production/WorkOrdersSection.tsx')
     expect(workOrders).toContain("id={rowAnchor('WorkOrder', row.id)}")

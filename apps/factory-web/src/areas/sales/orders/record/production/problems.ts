@@ -53,6 +53,8 @@ type Ncr = NonNullable<NonNullable<OrderProduction['quality']>['ncrs']>[number]
 
 export interface FinalCheck {
   readonly key: string
+  /** Its work order (an office note about the check is on it, F-SA-266). */
+  readonly workOrderId: string
   /** The inspection's id (B-PT-008; null: an older answer) — a nonconformance is raised from it. */
   readonly inspectionId: string | null
   readonly number: string | null
@@ -74,6 +76,7 @@ export function finalChecksOf(final: readonly Final[] | null | undefined): Final
     .sort((a, b) => (b.on ?? '').localeCompare(a.on ?? ''))
     .map((row, index) => ({
       key: row.id ?? `${row.workOrderId}-${index}`,
+      workOrderId: row.workOrderId,
       inspectionId: row.id ?? null,
       number: row.number,
       status: row.status === 'PASSED' || row.status === 'FAILED' ? row.status : 'WAITING',

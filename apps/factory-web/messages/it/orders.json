@@ -2875,7 +2875,6 @@
       "sharedCheck": "Copre anche altro lavoro — non per il cliente",
       "qualityWithheld": "Non visibile per te: controlli finali, non conformità (li vedono Produzione e Qualità)",
       "noFinal": "Ancora nessun controllo finale.",
-      "liftHint": "Togliere un blocco: lo fa la produzione — un pianificatore o il responsabile di produzione.",
       "infoBody": "Cosa blocca l'ordine adesso, chi agisce e l'unico pulsante per agire; le domande che aspettano una risposta; poi la sua qualità in parole semplici. Il cliente legge le parole del blocco, mai la nota dell'ufficio.",
       "raiseNcr": "Apri una non conformità…"
     },
